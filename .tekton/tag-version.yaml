@@ -1,0 +1,61 @@
+apiVersion: tekton.dev/v1
+kind: Task
+metadata:
+  name: tag-version-task
+spec:
+  params:
+    - name: source-branch
+      description: "The Git branch name (e.g., main or dev)"
+    - name: dev-version
+      description: "The dev version tag"
+    - name: prod-version
+      description: "The prod version tag"
+  workspaces:
+    - name: source
+    - name: git-auth
+  steps:
+    - name: tag-commit
+      image: registry.access.redhat.com/ubi8/toolbox
+      imagePullPolicy: IfNotPresent
+      workingDir: $(workspaces.source.path)
+      script: |
+        #!/bin/sh
+        set -e
+
+        echo "🧠 Determining version tag from branch..."
+        BRANCH="$(params.source-branch)"
+        if [ "$BRANCH" = "main" ]; then
+          VERSION="$(params.prod-version)"
+        else
+          VERSION="$(params.dev-version)"
+        fi
+        echo "🏷 Tagging commit with version: $VERSION"
+
+        echo "🔐 Extracting Git credentials from workspace..."
+        GIT_USER=$(cat /workspace/git-auth/username)
+        GIT_TOKEN=$(cat /workspace/git-auth/token)
+
+        if [ -z "$GIT_USER" ] || [ -z "$GIT_TOKEN" ]; then
+          echo "❌ Error: Missing git-auth credentials"
+          exit 1
+        fi
+
+        echo "🔐 Configuring Git..."
+        git config --global user.email "ci-tag-bot@example.com"
+        git config --global user.name "ci-tag-bot"
+        git config --global url."https://${GIT_USER}:${GIT_TOKEN}@github.com".insteadOf "https://github.com"
+        git config --global --add safe.directory "$(pwd)"
+
+        # echo "🔍 Current Git remote:"
+        # git remote -v
+
+        echo "🏷 Creating or replacing local tag..."
+        git tag -f "$VERSION"
+
+        echo "🏷 Existing tags:"
+        git tag --list
+
+        echo "🚀 Pushing tag $VERSION to remote..."
+        git push --force origin "refs/tags/$VERSION"
+
+        echo "✅ Tag $VERSION pushed successfully!"

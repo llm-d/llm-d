@@ -1,0 +1,46 @@
+apiVersion: tekton.dev/v1
+kind: Task
+metadata:
+  name: extract-version-and-registry-task
+spec:
+  params:
+    - name: source-branch
+      type: string
+      description: "The Git branch name"
+  workspaces:
+    - name: source
+  results:
+    - name: prod-image-tag-base
+      description: "Selected image prod registry based on branch"
+    - name: dev-image-tag-base
+      description: "Selected image dev registry based on branch"
+    - name: dev-version
+      description: "Extracted dev-version from .version.json file"
+    - name: prod-version
+      description: "Extracted prod-version from .version.json file"
+  steps:
+    - name: get-version-and-registry
+      image: registry.access.redhat.com/ubi8/ubi-minimal
+      imagePullPolicy: IfNotPresent
+      script: |
+        #!/bin/sh
+        set -e
+
+        echo "🧩 Installing dependencies..."
+        microdnf install -y make jq bash
+        microdnf clean all
+
+        echo "📦 Running Makefile logic to extract version info..."
+        cd $(workspaces.source.path)
+
+        eval $(make extract-version-info | sed 's/^/export /')
+
+        echo "✅ Extracted DEV_VERSION: $DEV_VERSION"
+        echo "✅ Extracted DEV_IMAGE_TAG_BASE: $DEV_IMAGE_TAG_BASE"
+        echo "✅ Extracted PROD_VERSION: $PROD_VERSION"
+        echo "✅ Extracted PROD_IMAGE_TAG_BASE: $PROD_IMAGE_TAG_BASE"
+
+        echo -n "$DEV_VERSION" > /tekton/results/dev-version
+        echo -n "$DEV_IMAGE_TAG_BASE" > /tekton/results/dev-image-tag-base
+        echo -n "$PROD_VERSION" > /tekton/results/prod-version
+        echo -n "$PROD_IMAGE_TAG_BASE" > /tekton/results/prod-image-tag-base

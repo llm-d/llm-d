@@ -1,0 +1,43 @@
+apiVersion: tekton.dev/v1
+kind: Task
+metadata:
+  name: promote-to-prod-task
+spec:
+  params:
+    - name: dev-version
+      description: "Version to promote from - development"
+    - name: prod-version
+      description: "Version to promote to - production"
+    - name: prod_image_tag_base
+      description: "Production image tag base"
+    - name: dev_image_tag_base
+      description: "Development image tag base"
+  workspaces:
+    - name: registry-secret
+      description: "Registry secret workspace (must include .dockerconfigjson)"
+  steps:
+    - name: promote
+      image: quay.io/skopeo/stable:latest
+      imagePullPolicy: IfNotPresent
+      workingDir: /workspace/registry-secret
+      script: |
+        #!/bin/sh
+        set -e
+
+        echo "📦 Promoting dev image to prod..."
+        DEV_VERSION="$(params.dev-version)"
+        PROD_VERSION="$(params.prod-version)"
+        DEV_IMAGE="$(params.dev_image_tag_base):$DEV_VERSION"
+        PROD_IMAGE="$(params.prod_image_tag_base):$PROD_VERSION"
+
+        echo "🔐 Setting up registry auth config..."
+        mkdir -p /root/.docker
+        cp .dockerconfigjson /root/.docker/config.json
+
+        echo "🚀 Promoting image: $DEV_IMAGE → $PROD_IMAGE"
+        skopeo copy \
+          --authfile /root/.docker/config.json \
+          docker://$DEV_IMAGE \
+          docker://$PROD_IMAGE
+
+        echo "✅ Promotion complete!"

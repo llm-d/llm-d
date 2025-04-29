@@ -1,0 +1,12 @@
+apiVersion: tekton.dev/v1
+kind: Task
+metadata:
+  name: noop-task
+spec:
+  steps:
+    - name: noop
+      image: registry.access.redhat.com/ubi8/ubi-minimal
+      imagePullPolicy: IfNotPresent
+      script: |
+        #!/bin/sh
+        echo "✅ NOOP task complete"

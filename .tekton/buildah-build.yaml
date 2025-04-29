@@ -1,0 +1,63 @@
+apiVersion: tekton.dev/v1
+kind: Task
+metadata:
+  name: buildah-build-task
+spec:
+  params:
+    - name: dev-version
+      description: "Application version"
+    - name: image_tag_base
+      description: "Image tag base"
+  results:
+    - name: image-url
+      description: "The full image URL including tag"
+  workspaces:
+    - name: source
+    - name: registry
+    - name: container-storage
+      mountPath: /var/lib/containers
+  steps:
+    - name: build
+      image: quay.io/buildah/stable:latest
+      imagePullPolicy: IfNotPresent
+      workingDir: $(workspaces.source.path)
+      securityContext:
+        privileged: true
+      env:
+        - name: STORAGE_DRIVER
+          value: overlay
+      script: |
+        #!/bin/sh
+        set -e
+
+        echo "🔧 DEV_VERSION: $(params.dev-version)"
+        echo "🔧 IMAGE_TAG_BASE: $(params.image_tag_base)"
+
+        echo "📦 Installing dependencies: make, jq..."
+        dnf install -y make jq && dnf clean all
+
+        echo "📁 Setting up registry credentials..."
+        mkdir -p /root/.docker
+        cp /workspace/registry/.dockerconfigjson /root/.docker/config.json
+
+        echo "🔐 Extracting credentials..."
+        USERNAME=$(jq -r '.auths["quay.io"].username' /root/.docker/config.json)
+        PASSWORD=$(jq -r '.auths["quay.io"].password' /root/.docker/config.json)
+
+        if [ "$USERNAME" = "null" ] || [ "$PASSWORD" = "null" ]; then
+          echo "❌ Error: Missing registry credentials"
+          exit 1
+        fi
+
+        echo "🔓 Logging in to registry with Buildah..."
+        buildah logout quay.io || true
+        buildah login --username "$USERNAME" --password "$PASSWORD" quay.io
+
+        export DOCKER_CONFIG=/root/.docker
+        export BUILDER=buildah
+        export IMG=$(params.image_tag_base):$(params.dev-version)
+
+        echo "🚀 Calling make buildah-build with IMG=$IMG..."
+        make buildah-build IMG=$IMG
+
+        echo "$IMG" > /tekton/results/image-url

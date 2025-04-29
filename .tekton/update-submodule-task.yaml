@@ -1,0 +1,70 @@
+apiVersion: tekton.dev/v1
+kind: Task
+metadata:
+  name: update-submodule-task
+spec:
+  workspaces:
+    - name: source
+    - name: git-auth
+  params:
+    - name: UPSTREAM_REPO_URL
+      description: "URL of the upstream repository"
+      default: "github.ibm.com/ai-foundation/inference-platform.git"
+    - name: BRANCH
+      description: "Branch to update the submodule in"
+      default: "dev"
+    - name: SUBMODULE_PATH
+      description: "Path to the submodule in the upstream repo"
+      default: "services/{{ repo_name }}"
+  steps:
+    - name: update-submodule
+      image: registry.access.redhat.com/ubi8:latest
+      imagePullPolicy: IfNotPresent
+      script: |
+        #!/bin/sh
+        set -e
+
+        echo "🧩 Installing dependencies..."
+        dnf install -y git jq
+        dnf clean all
+
+        echo "Fetching GitHub credentials..."
+        GITHUB_USER=$(cat /workspace/git-auth/username)
+        GITHUB_PAT=$(cat /workspace/git-auth/token)
+
+        echo "Cloning upstream repo https://$(params.UPSTREAM_REPO_URL)"
+        git config --global user.email "ci-bot@example.com"
+        git config --global user.name "CI Bot"
+
+        # Clone the upstream repository with authentication
+        git clone --branch $(params.BRANCH) https://$GITHUB_USER:$GITHUB_PAT@$(params.UPSTREAM_REPO_URL) upstream-repo
+        cd upstream-repo
+
+        # Update Git submodule URLs to use authentication
+        git config --global url."https://$GITHUB_USER:$GITHUB_PAT@github.ibm.com".insteadOf "https://github.ibm.com"
+
+        # Ensure all submodules are initialized and updated with authentication
+        git submodule update --init --recursive -- $(params.SUBMODULE_PATH)
+
+        # Ensure submodule exists
+        if [ ! -d "$(params.SUBMODULE_PATH)" ]; then
+          echo "Submodule path does not exist: $(params.SUBMODULE_PATH)"
+          exit 1
+        fi
+
+        # Always pull the latest submodule commit
+        cd $(params.SUBMODULE_PATH)
+        echo "Fetching latest commits for submodule..."
+        git fetch origin main
+        git reset --hard origin/main  # Force update to latest commit
+        cd ../..
+
+        # Ensure submodule commit update
+        git add $(params.SUBMODULE_PATH)
+        if git diff --staged --quiet; then
+          echo "No changes detected in submodule, skipping commit."
+        else
+          git commit -m "Update submodule $(params.SUBMODULE_PATH) to latest commit from hc4ai"
+          git push origin $(params.BRANCH)
+          echo "Submodule $(params.SUBMODULE_PATH) updated successfully"
+        fi

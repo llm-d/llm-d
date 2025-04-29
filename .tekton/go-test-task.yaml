@@ -1,0 +1,22 @@
+apiVersion: tekton.dev/v1
+kind: Task
+metadata:
+  name: go-test-task
+spec:
+  workspaces:
+    - name: source
+  steps:
+    - name: install-deps
+      image: quay.io/projectquay/golang:1.24
+      imagePullPolicy: IfNotPresent
+      script: |
+        #!/bin/bash
+        echo "Installing Ginkgo..."
+        go install github.com/onsi/ginkgo/ginkgo@latest
+        export PATH=$PATH:$(go env GOPATH)/bin
+        echo "Ginkgo installed:"
+        ginkgo version
+        cd $(workspaces.source.path)
+        echo "Running tests with Ginkgo..."
+        go env -w GOFLAGS=-buildvcs=false
+        make test

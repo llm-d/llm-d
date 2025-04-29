@@ -1,0 +1,30 @@
+apiVersion: tekton.dev/v1
+kind: Task
+metadata:
+  name: go-lint-task
+spec:
+  podTemplate:
+    imagePullSecrets:
+      - name: icr-secret
+  workspaces:
+    - name: source
+  steps:
+    - name: run-lint
+      image: us.icr.io/ibm-hc4ai-operator/golangci-lint:v2.0.3
+      imagePullPolicy: IfNotPresent
+      script: |
+        #!/bin/bash
+        set -e
+
+        echo "Running golangci-lint..."
+        cd $(workspaces.source.path)
+
+        # Verify config file exists
+        if [ -f .golangci.yml ] || [ -f .golangci.yaml ] || [ -f .golangci.toml ]; then
+          echo "✅ Found golangci-lint config file"
+        else
+          echo "⚠️ No golangci-lint config file found. Using default linters"
+        fi
+
+        # Run lint
+        make lint

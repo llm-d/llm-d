@@ -1,0 +1,86 @@
+apiVersion: tekton.dev/v1
+kind: Task
+metadata:
+  name: openshift-redeploy-task
+spec:
+  params:
+    - name: source-branch
+      type: string
+      description: "Git branch name"
+    - name: prod-version
+      type: string
+    - name: dev-version
+      type: string
+    - name: prod_image_tag_base
+      type: string
+    - name: dev_image_tag_base
+      type: string
+  workspaces:
+    - name: source
+  steps:
+  - name: redeploy
+    image: quay.io/projectquay/golang:1.24
+    imagePullPolicy: IfNotPresent
+    securityContext:
+      privileged: true
+    workingDir: $(workspaces.source.path)
+    env:
+      - name: STORAGE_DRIVER
+        value: vfs
+    script: |
+      #!/bin/bash
+      set -e
+
+      echo "📦 Installing dependencies with dnf..."
+      dnf install -y make jq curl gettext && dnf clean all
+
+      echo "📥 Installing kubectl..."
+      curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
+      install -o root -g root -m 0755 kubectl /usr/local/bin/kubectl
+
+      echo "📥 Installing kustomize..."
+      KUSTOMIZE_TAG=$(curl -s https://api.github.com/repos/kubernetes-sigs/kustomize/releases/latest | jq -r '.tag_name')
+      KUSTOMIZE_VERSION="${KUSTOMIZE_TAG##*/}"  # strips prefix like 'kustomize/' from tag
+
+      curl -LO "https://github.com/kubernetes-sigs/kustomize/releases/download/${KUSTOMIZE_TAG}/kustomize_${KUSTOMIZE_VERSION}_linux_amd64.tar.gz"
+
+      tar -xzf "kustomize_${KUSTOMIZE_VERSION}_linux_amd64.tar.gz" -C /usr/local/bin
+      chmod +x /usr/local/bin/kustomize
+      kustomize version
+
+      echo "🔧 Getting namespace and project_name from Makefile..."
+      DEFAULT_NAMESPACE=$(make -s print-namespace)
+      PROJECT_NAME=$(make -s print-project-name)
+
+      if [ "$(params.source-branch)" = "main" ]; then
+        NS="${DEFAULT_NAMESPACE}"
+        IMAGE_TAG_BASE=$(params.prod_image_tag_base)
+        VERSION=$(params.prod-version)
+      else
+        NS="${DEFAULT_NAMESPACE}-dev"
+        IMAGE_TAG_BASE=$(params.dev_image_tag_base)
+        VERSION=$(params.dev-version)
+      fi
+
+      echo "🔧 Using namespace: $NS"
+      echo "🔧 Using project_name: $PROJECT_NAME"
+      echo "🔧 Using image_tag_base: $IMAGE_TAG_BASE"
+      echo "🔧 Using version: $VERSION"
+
+      echo "🧹 Uninstalling existing deployment..."
+      make uninstall-openshift NAMESPACE=$NS PROJECT_NAME=$PROJECT_NAME IMAGE_TAG_BASE=$IMAGE_TAG_BASE VERSION=$VERSION || echo "❗️ Failed to uninstall deployment"
+
+      echo "⏳ Waiting 3 seconds before reinstall..."
+      sleep 3
+
+      echo "🚀 Reinstalling OpenShift deployment..."
+      make install-openshift NAMESPACE=$NS PROJECT_NAME=$PROJECT_NAME IMAGE_TAG_BASE=$IMAGE_TAG_BASE VERSION=$VERSION
+
+      echo "⏳ Waiting 20 seconds before verifying resources..."
+      sleep 20
+
+      echo "🔍 Checking status of resources in namespace: $NS"
+      kubectl get pods -n $NS || echo "❗️ Failed to get pods"
+      kubectl get deploy -n $NS || echo "❗️ Failed to get deployments"
+      kubectl get svc -n $NS || echo "❗️ Failed to get services"
+      kubectl get routes -n $NS || echo "❗️ Failed to get routes"

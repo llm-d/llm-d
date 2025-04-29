@@ -1,0 +1,16 @@
+apiVersion: tekton.dev/v1
+kind: Task
+metadata:
+  name: go-build-task
+spec:
+  workspaces:
+    - name: source
+  steps:
+    - name: build
+      image: quay.io/projectquay/golang:1.24
+      imagePullPolicy: IfNotPresent
+      script: |
+        #!/bin/bash
+        cd $(workspaces.source.path)
+        go env -w GOFLAGS=-buildvcs=false
+        make build

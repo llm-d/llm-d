@@ -1,0 +1,20 @@
+apiVersion: tekton.dev/v1
+kind: Task
+metadata:
+  name: read-cluster-name
+spec:
+  results:
+    - name: cluster-name
+  steps:
+    - name: get-cluster-name
+      image: registry.access.redhat.com/ubi8/ubi-minimal
+      script: |
+        #!/bin/sh
+        cat /etc/config/cluster-name | tee $(results.cluster-name.path)
+      volumeMounts:
+        - name: config-vol
+          mountPath: /etc/config
+  volumes:
+    - name: config-vol
+      configMap:
+        name: cluster-info

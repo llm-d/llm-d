@@ -1,0 +1,15 @@
+apiVersion: tekton.dev/v1
+kind: Task
+metadata:
+  name: print-branch-task
+spec:
+  params:
+    - name: source-branch
+      description: "The Git branch the pipeline is running on"
+  steps:
+    - name: print-branch
+      image: registry.access.redhat.com/ubi8/ubi-minimal
+      imagePullPolicy: IfNotPresent
+      script: |
+        #!/bin/sh
+        echo "🔍 Pipeline is running on branch: $(params.source-branch)"

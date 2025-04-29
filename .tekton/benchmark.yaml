@@ -1,0 +1,43 @@
+apiVersion: tekton.dev/v1
+kind: Task
+metadata:
+  name: benchmark-task
+spec:
+  params:
+    - name: openshift_host
+      description: "The OpenShift API server URL"
+      type: string
+    - name: openshift_namespace
+      description: "The OpenShift namespace to use"
+      type: string
+  steps:
+    - name: clone-and-install-fmperf
+      image: continuumio/miniconda3:latest
+      script: |
+        #!/bin/bash
+        set -ex
+
+        # Initialize conda (this sets up the environment for conda commands)
+        source /opt/conda/etc/profile.d/conda.sh
+
+        echo "Cloning fmperf repository..."
+        git clone https://github.com/fmperf-project/fmperf.git
+        cd fmperf
+
+        echo "Creating conda environment 'fmperf-env' with Python 3.11..."
+        conda create -y -n fmperf-env python=3.11
+
+        echo "Activating the conda environment..."
+        conda activate fmperf-env
+
+        echo "Installing required dependencies..."
+        pip install -r requirements.txt
+        pip install -e .
+
+        echo "Setting up environment variables for OpenShift connection..."
+        export OPENSHIFT_HOST="$(params.openshift_host)"
+        export OPENSHIFT_TOKEN=$(cat /var/run/secrets/kubernetes.io/serviceaccount/token)
+        export OPENSHIFT_NAMESPACE="$(params.openshift_namespace)"
+
+        echo "Running fmperf benchmark..."
+        python examples/example_vllm.py || true

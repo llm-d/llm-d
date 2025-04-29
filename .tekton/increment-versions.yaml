@@ -1,0 +1,69 @@
+apiVersion: tekton.dev/v1
+kind: Task
+metadata:
+  name: increment-versions-task
+spec:
+  workspaces:
+    - name: source
+      description: "Workspace with the .version.json file"
+    - name: git-auth
+      description: "GitHub credentials"
+  params:
+    - name: url
+      description: "GitHub repository URL (e.g., github.com/your-org/your-repo)"
+  steps:
+    - name: promote-and-increment
+      image: registry.access.redhat.com/ubi8/ubi:latest
+      imagePullPolicy: IfNotPresent
+      workingDir: $(workspaces.source.path)
+      script: |
+        #!/bin/bash
+        set -e
+
+        echo "🧩 Installing dependencies..."
+        dnf install -y git jq
+        dnf clean all
+
+        echo "📖 Reading .version.json..."
+        cat .version.json
+
+        DEV_VERSION=$(jq -r '.["dev-version"]' .version.json)
+
+        bump_patch() {
+          IFS='.' read -r major minor patch <<< "$1"
+          echo "$major.$minor.$((patch + 1))"
+        }
+
+        NEW_DEV_VERSION=$(bump_patch "$DEV_VERSION")
+
+        jq --arg dev "$NEW_DEV_VERSION" --arg prod "$DEV_VERSION" \
+          '.["prod-version"] = $prod | .["dev-version"] = $dev' \
+          .version.json > tmp.json && mv tmp.json .version.json
+
+        echo "✅ Updated .version.json:"
+        cat .version.json
+
+        echo "📦 Setting up Git..."
+        GITHUB_USER=$(cat /workspace/git-auth/username)
+        GITHUB_PAT=$(cat /workspace/git-auth/token)
+        git config --global user.email "ci-tag-bot@example.com"
+        git config --global user.name "ci-tag-bot"
+
+        echo "🔃 Cloning repo..."
+        FULL_URL="$(params.url)"
+        STRIPPED_URL="${FULL_URL#https://}"
+
+        echo "🔃 Cloning repo..."
+        echo "Using URL: https://$GITHUB_USER:$GITHUB_PAT@$STRIPPED_URL"
+        git clone "https://$GITHUB_USER:$GITHUB_PAT@$STRIPPED_URL" repo
+        cd repo
+
+        echo "🔄 Updating both main and dev branches..."
+        for BRANCH in main dev; do
+          git checkout $BRANCH
+          cp $(workspaces.source.path)/.version.json ./
+          git add .version.json
+          git commit -m "[version bump] Promote $DEV_VERSION to prod, bump dev to $NEW_DEV_VERSION"
+          git push origin $BRANCH
+          echo "✅ Pushed to $BRANCH"
+        done
