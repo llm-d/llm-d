@@ -174,6 +174,9 @@ RUN rm -rf /usr/local/src/* /opt/nixl/build /workspace/gdrcopy /root/.cache /tmp
 # Git clone repos
 # LMCache commit: https://github.com/tlrmchlsmth/LMCache/commit/2002a769f082f75c338faa6038bb91b92f2264f2
 
+# Env to force rebuilding all layers below
+ENV LMCACHE_COMMIT_SHA=4fd7435
+
 WORKDIR /workspace
 RUN git clone --depth 1 -b pin-torch https://github.com/lionelvillard/torchac_cuda.git
 RUN git clone --depth 1 -b async_pd https://github.com/tlrmchlsmth/LMCache.git
