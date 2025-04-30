@@ -172,14 +172,16 @@ RUN mkdir -p /workspace/tmp
 RUN rm -rf /usr/local/src/* /opt/nixl/build /workspace/gdrcopy /root/.cache /tmp/* /var/tmp/*
 
 # Git clone repos
-# LMCache commit: https://github.com/tlrmchlsmth/LMCache/commit/2002a769f082f75c338faa6038bb91b92f2264f2
 
 # Env to force rebuilding all layers below
-ENV LMCACHE_COMMIT_SHA=4fd7435
+ENV LMCACHE_COMMIT_SHA=71d41f0f9161b2d2362157d3c1bbf185e2d3a807
 
 WORKDIR /workspace
 RUN git clone --depth 1 -b pin-torch https://github.com/lionelvillard/torchac_cuda.git
-RUN git clone --depth 1 -b async_pd https://github.com/tlrmchlsmth/LMCache.git
+RUN git clone --depth 1 -b async_pd https://github.com/tlrmchlsmth/LMCache.git && \
+    cd LMCache && \
+    git checkout -q $LMCACHE_COMMIT_SHA && \
+    cd ..
 RUN git clone --depth 1 -b pd_scheduling_lmcache https://github.com/tlrmchlsmth/vllm.git
 
 # Set up Python virtual environment with uv
