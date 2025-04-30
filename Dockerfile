@@ -196,6 +196,9 @@ RUN . .vllm/bin/activate && \
     uv pip install --upgrade pip && \
     uv pip install torch==2.6.0
 
+ENV VLLM_COMMIT=7a1f25f714525c867fbf88401b81bbdd93b75d16
+ENV VLLM_PRECOMPILED_WHEEL_LOCATION=https://wheels.vllm.ai/${VLLM_COMMIT}/vllm-1.0.0.dev-cp38-abi3-manylinux1_x86_64.whl
+
 # Install vllm editable
 RUN . .vllm/bin/activate && \
     VLLM_USE_PRECOMPILED=1 pip install --editable .
