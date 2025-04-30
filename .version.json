@@ -1,6 +1,6 @@
 {
-  "dev-version": "0.0.3",
+  "dev-version": "0.0.4",
   "dev-registry": "quay.io/llm-d/llm-d-dev",
-  "prod-version": "0.0.2",
+  "prod-version": "0.0.3",
   "prod-registry": "quay.io/llm-d/llm-d"
 }
