@@ -1,7 +1,14 @@
-# Dev Container Images
+# Container Images
+
+## Prod
 
 | Name | Connectors | LMCache commit SHA | vLLM commit SHA
 |-|-|-|-|
 | `quay.io/llm-d/llm-d:0.0.3` | LMCache only | 71d41f0f9161b2d2362157d3c1bbf185e2d3a807 | - |
+
+## Dev
+
+| Name | Connectors | LMCache commit SHA | vLLM commit SHA
+|-|-|-|-|
+| `quay.io/llm-d/llm-d:0.0.5` | None | LMCache not used (incompatible) | f6d0ac54db5c5d4fa7c2c81aa23d24c519171bea |
 | `quay.io/llm-d/llm-d:0.0.4` | LMCache only | 71d41f0f9161b2d2362157d3c1bbf185e2d3a807 | 1c2bc7ead019cdf5b04b2f1d07b00982352f85ef |
-| `quay.io/llm-d/llm-d:0.0.5` | None | LMCache not used | 81ecf425f0a645e6d6f1c339ba79ef37e95a9569 |
