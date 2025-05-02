@@ -55,7 +55,7 @@ spec:
         IMAGE=$(echo "$IMAGE" | tr -d '\n\r' | xargs)
 
         echo "🔍 Running Trivy remote scan on: $IMAGE"
-        if ! trivy image \
+        if ! trivy image --timeout 30m \
           --severity "$(params.SEVERITY)" \
           --format json \
           $(params.ARGS) \
