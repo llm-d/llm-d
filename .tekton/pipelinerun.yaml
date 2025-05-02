@@ -311,6 +311,13 @@ spec:
           - input: "$(tasks.read-cluster-name.results.cluster-name)"
             operator: in
             values: ["cluster-platform-eval"]
+        matrix:
+            params:
+              - name: dockerfile
+                value:
+                  - "Dockerfile.lmcache"
+                  - "Dockerfile.lmcache-nixl"
+                  - "Dockerfile.vllm-nixl"
         params:
           - name: dev-version
             value: "$(tasks.extract-version-and-registry.results.dev-version)"
@@ -338,13 +345,20 @@ spec:
           - input: "$(tasks.read-cluster-name.results.cluster-name)"
             operator: in
             values: ["cluster-platform-eval"]
+        matrix:
+          params:
+            - name: dockerfile
+              value:
+                - "Dockerfile.lmcache"
+                - "Dockerfile.lmcache-nixl"
+                - "Dockerfile.vllm-nixl"
         runAfter:
           - buildah-build
         taskRef:
           name: trivy-scan
         params:
           - name: IMAGE_URL
-            value: "$(tasks.buildah-build.results.image-url)"
+            value: "$(tasks.buildah-build.results.image-url-$(params.dockerfile))"
           - name: SEVERITY
             value: "CRITICAL,HIGH,MEDIUM,LOW"
           - name: ARGS
