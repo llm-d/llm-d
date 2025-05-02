@@ -174,17 +174,14 @@ RUN rm -rf /usr/local/src/* /opt/nixl/build /workspace/gdrcopy /root/.cache /tmp
 # Git clone repos
 
 # Env to force rebuilding all layers below
-ENV LMCACHE_COMMIT_SHA=a78c935896187c981d0e759fb16e9d126cb4792f
+ENV LMCACHE_COMMIT_SHA=a3a7d7fe0f3a349227cb1cfbe8ccc16eb560a06b
 ENV VLLM_COMMIT_SHA=latest
 
 WORKDIR /workspace
-# RUN git clone --depth 1 https://github.com/neuralmagic/LMCache.git && \
-#     cd LMCache && \
-#     git fetch origin pull/2/head:disagg_pd_dev && \
-#     git switch disagg_pd_dev && \
-#     cd ..
-
-RUN git clone --depth 1 https://github.com/LMCache/LMCache.git
+RUN git clone --depth 1 https://github.com/neuralmagic/LMCache.git && \
+    cd LMCache && \
+    git checkout -q $LMCACHE_COMMIT_SHA && \
+    cd ..
 RUN git clone --depth 1 -b nixl_integration https://github.com/tlrmchlsmth/vllm.git
 
 # Set up Python virtual environment with uv
@@ -198,9 +195,6 @@ ENV TORCH_CUDA_ARCH_LIST="8.0;8.6;8.9+PTX;9.0"
 RUN . .vllm/bin/activate && \
     uv pip install --upgrade pip && \
     uv pip install torch==2.7.0
-
-# ENV VLLM_COMMIT=1c2bc7ead019cdf5b04b2f1d07b00982352f85ef
-# ENV VLLM_PRECOMPILED_WHEEL_LOCATION=https://wheels.vllm.ai/${VLLM_COMMIT}/vllm-1.0.0.dev-cp38-abi3-manylinux1_x86_64.whl
 
 # Install vllm editable
 RUN . .vllm/bin/activate && \

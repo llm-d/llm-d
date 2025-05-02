@@ -11,6 +11,6 @@
 
 | Name | Connectors | LMCache commit SHA | vLLM branch | vLLM commit SHA | Changes
 |-|-|-|-|-|-|
-| `quay.io/llm-d/llm-d:0.0.6` | LMCache only |71d41f0f9161b2d2362157d3c1bbf185e2d3a807 | pd_scheduling_lmcache | - | - |
+| `quay.io/llm-d/llm-d:0.0.6` | LMCache/NIXL | a3a7d7fe0f3a349227cb1cfbe8ccc16eb560a06b | nixl_integration | - | - |
 | `quay.io/llm-d/llm-d:0.0.5` | LMCache only |71d41f0f9161b2d2362157d3c1bbf185e2d3a807 | pd_scheduling_lmcache | - | H100 support |
 | `quay.io/llm-d/llm-d:0.0.4` | LMCache only | 71d41f0f9161b2d2362157d3c1bbf185e2d3a807 | - | 1c2bc7ead019cdf5b04b2f1d07b00982352f85ef |
