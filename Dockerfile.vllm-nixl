@@ -180,8 +180,8 @@ ENV LMCACHE_COMMIT_SHA=a3a7d7fe0f3a349227cb1cfbe8ccc16eb560a06b
 ENV VLLM_COMMIT_SHA=latest
 
 WORKDIR /workspace
-RUN git clone --depth 1 https://github.com/neuralmagic/LMCache.git
-RUN git clone --depth 1 -b diagg_pd_v0.0.1 https://github.com/neuralmagic/vllm.git
+RUN git clone --depth 1 https://github.com/LMCache/LMCache.git
+RUN git clone --depth 1 -b v0.0.1+pd https://github.com/neuralmagic/vllm.git
 
 # Set up Python virtual environment with uv
 WORKDIR /workspace/vllm
@@ -197,7 +197,7 @@ RUN . .vllm/bin/activate && \
 
 # Install vllm editable
 RUN . .vllm/bin/activate && \
-    VLLM_USE_PRECOMPILED=1 pip install --editable .
+    VLLM_USE_PRECOMPILED=1 uv pip install --editable .
 
 # Install related packages
 RUN . .vllm/bin/activate && \
