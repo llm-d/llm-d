@@ -49,7 +49,6 @@ Key features of `llm-d` include:
 - **Variant Autoscaling over Hardware, Workload, and Traffic** (🚧): We plan to implement a traffic- and hardware-aware autoscaler that (a) measures the capacity of each model server instance, (b) derive a load function that takes into account different request shapes and QoS, and (c) assesses recent traffic mix (QPS, QoS, and shapes)
 Using the recent traffic mix to calculate the optimal mix of instances to handle prefill, decode, and latency-tolerant requests, enabling use of HPA for SLO-level efficiency. [See our Northstar design](https://docs.google.com/document/d/1inTneLEZTv3rDEBB9KLOB9K6oMq8c3jkogARJqdt_58/edit?tab=t.0)
 
-
 ## 🚀 Getting Started
 
 `llm-d` can be installed as a full solution, customizing enabled features, or through its individual components for experimentation.
@@ -60,6 +59,11 @@ llm-d's deployer can be used to that installed it as a solution using a single H
 
 > [!TIP]
 > See the guided experience with our [quickstart](https://github.com/neuralmagic/llm-d-deployer/blob/main/quickstart/README.md).
+
+## Observability
+
+For information on monitoring and observability of llm-d resources, including dashboards, Kubernetes configurations, and OpenShift-specific setups,
+refer to the [Observability Guide](observability/README.md). For a detailed overview of available metrics and their usage, see the [Metrics Overview](observability/metrics-overview.md).
 
 ### Experimenting and developing with llm-d
 
