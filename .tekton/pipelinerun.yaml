@@ -33,7 +33,7 @@ spec:
     results:
       - description: The common vulnerabilities and exposures (CVE) result
         name: SCAN_OUTPUT
-        value: $(tasks.vulnerability-scan.results.SCAN_OUTPUT)
+        value: $(tasks.vulnerability-scan-lmcache.results.SCAN_OUTPUT)
     params:
       - name: repo_url
       - name: revision
@@ -362,7 +362,7 @@ spec:
           - name: container-storage
             workspace: container-storage
 
-      - name: vulnerability-scan
+      - name: vulnerability-scan-lmcache
         when:
           - input: "$(params.runOptional)"
             operator: in
@@ -387,7 +387,7 @@ spec:
           - name: output
             workspace: output
 
-      - name: vulnerability-scan
+      - name: vulnerability-scan-nixl
         when:
           - input: "$(params.runOptional)"
             operator: in
@@ -455,7 +455,7 @@ spec:
           - name: dev-version
             value: "$(tasks.extract-version-and-registry.results.dev-version)"
         runAfter:
-          - vulnerability-scan
+          - vulnerability-scan-lmcache
         workspaces:
           - name: source
             workspace: source
