@@ -330,7 +330,7 @@ spec:
           - name: container-storage
             workspace: container-storage
 
-      - name: buildah-build-vllm-nixl
+      - name: buildah-build-nixl
         when:
           - input: "$(params.runOptional)"
             operator: in
@@ -371,12 +371,12 @@ spec:
             operator: in
             values: [ "cluster-platform-eval" ]
         runAfter:
-          - buildah-build-vllm-lmcache
+          - buildah-build-lmcache
         taskRef:
           name: trivy-scan
         params:
           - name: IMAGE_URL
-            value: "$(tasks.buildah-build-vllm-lmcache.results.image-url[*])"
+            value: "$(tasks.buildah-build-lmcache.results.image-url[*])"
           - name: SEVERITY
             value: "CRITICAL,HIGH,MEDIUM,LOW"
           - name: ARGS
@@ -396,12 +396,12 @@ spec:
             operator: in
             values: [ "cluster-platform-eval" ]
         runAfter:
-          - buildah-build-vllm-nixl
+          - buildah-build-nixl
         taskRef:
           name: trivy-scan
         params:
           - name: IMAGE_URL
-            value: "$(tasks.buildah-build-vllm-nixl.results.image-url[*])"
+            value: "$(tasks.buildah-build-nixl.results.image-url[*])"
           - name: SEVERITY
             value: "CRITICAL,HIGH,MEDIUM,LOW"
           - name: ARGS
