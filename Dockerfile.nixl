@@ -1,5 +1,3 @@
-# NeuralMagic vLLM + LMCache forks, dev branches
-
 ARG BASE_IMAGE="nvcr.io/nvidia/cuda"
 ARG BASE_IMAGE_TAG="12.5.1-devel-ubuntu24.04"
 
@@ -176,30 +174,33 @@ RUN rm -rf /usr/local/src/* /opt/nixl/build /workspace/gdrcopy /root/.cache /tmp
 # Git clone repos
 
 # Env to force rebuilding all layers below
-ENV LMCACHE_COMMIT_SHA=60c9af130b98569e03543110fa441c36f9708ed9
-ENV VLLM_COMMIT_SHA=9b70e2b4c147ea650f9b943e6aecd977377fbbfd
+ENV LMCACHE_COMMIT_SHA=a78c935896187c981d0e759fb16e9d126cb4792f
+ENV VLLM_COMMIT_SHA=latest
 
 WORKDIR /workspace
-RUN git clone --depth 1 https://github.com/neuralmagic/LMCache.git && \
-    cd LMCache && \
-    git checkout -q $LMCACHE_COMMIT_SHA && \
-    cd ..
-RUN git clone --depth 1 https://github.com/neuralmagic/vllm.git && \
-    cd vllm && \
-    git checkout -q $VLLM_COMMIT_SHA && \
-    cd ..
+# RUN git clone --depth 1 https://github.com/neuralmagic/LMCache.git && \
+#     cd LMCache && \
+#     git fetch origin pull/2/head:disagg_pd_dev && \
+#     git switch disagg_pd_dev && \
+#     cd ..
+
+RUN git clone --depth 1 https://github.com/LMCache/LMCache.git
+RUN git clone --depth 1 -b nixl_integration https://github.com/tlrmchlsmth/vllm.git
 
 # Set up Python virtual environment with uv
 WORKDIR /workspace/vllm
 RUN uv venv .vllm --python 3.12
 
 # Supported archs
-ENV TORCH_CUDA_ARCH_LIST="8.0;8.6;8.9+PTX;9.0+PTX"
+ENV TORCH_CUDA_ARCH_LIST="8.0;8.6;8.9+PTX;9.0"
 
 # Install core dependencies (Torch first)
 RUN . .vllm/bin/activate && \
     uv pip install --upgrade pip && \
     uv pip install torch==2.7.0
+
+# ENV VLLM_COMMIT=1c2bc7ead019cdf5b04b2f1d07b00982352f85ef
+# ENV VLLM_PRECOMPILED_WHEEL_LOCATION=https://wheels.vllm.ai/${VLLM_COMMIT}/vllm-1.0.0.dev-cp38-abi3-manylinux1_x86_64.whl
 
 # Install vllm editable
 RUN . .vllm/bin/activate && \
@@ -208,9 +209,9 @@ RUN . .vllm/bin/activate && \
 # Install related packages
 RUN . .vllm/bin/activate && \
     uv pip install ../LMCache/ && \
-    uv pip install ../torchac_cuda/ && \
     uv pip install nixl && \
     uv cache clean
+
 
 # Final environment setup
 ENV PATH="/workspace/vllm/.vllm/bin:${PATH}"
