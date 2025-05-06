@@ -42,16 +42,21 @@ build: ##
 
 ##@ Container Build/Push
 
+# The Dockerfile the build task should use.
+# Default is the canonical “Dockerfile” so local `make buildah-build`
+# still works without extra flags.
+DOCKERFILE ?= Dockerfile
+
 .PHONY: buildah-build
 buildah-build: check-builder load-version-json ## Build and push image (multi-arch if supported)
 	@echo "✅ Using builder: $(BUILDER)"
 	@if [ "$(BUILDER)" = "buildah" ]; then \
-	  echo "🔧 Buildah detected: Performing multi-arch build..."; \
+	  echo "🔧 Buildah detected: Performing multi-arch build with $(DOCKERFILE)…"; \
 	  FINAL_TAG=$(IMG); \
 	  for arch in amd64; do \
 		ARCH_TAG=$$FINAL_TAG-$$arch; \
 	    echo "📦 Building for architecture: $$arch"; \
-		buildah build --arch=$$arch --os=linux --layers -t $(IMG)-$$arch . || exit 1; \
+		buildah build --file $(DOCKERFILE) --arch=$$arch --os=linux --layers -t $(IMG)-$$arch . || exit 1; \
 	    echo "🚀 Pushing image: $(IMG)-$$arch"; \
 	    buildah push $(IMG)-$$arch docker://$(IMG)-$$arch || exit 1; \
 	  done; \
@@ -66,7 +71,7 @@ buildah-build: check-builder load-version-json ## Build and push image (multi-ar
 	  buildah manifest push --all $(IMG) docker://$(IMG); \
 	elif [ "$(BUILDER)" = "docker" ]; then \
 	  echo "🐳 Docker detected: Building with buildx..."; \
-	  sed -e '1 s/\(^FROM\)/FROM --platform=$${BUILDPLATFORM}/' Dockerfile > Dockerfile.cross; \
+	  sed -e '1 s/\(^FROM\)/FROM --platform=$${BUILDPLATFORM}/' $(DOCKERFILE) > Dockerfile.cross; \
 	  - docker buildx create --use --name image-builder || true; \
 	  docker buildx use image-builder; \
 	  docker buildx build --push --platform=$(PLATFORMS) --tag $(IMG) -f Dockerfile.cross . || exit 1; \
@@ -74,7 +79,7 @@ buildah-build: check-builder load-version-json ## Build and push image (multi-ar
 	  rm Dockerfile.cross; \
 	elif [ "$(BUILDER)" = "podman" ]; then \
 	  echo "⚠️ Podman detected: Building single-arch image..."; \
-	  podman build --format=docker -t $(IMG) . || exit 1; \
+	  podman build --format=docker -f $(DOCKERFILE) -t $(IMG) . || exit 1; \
 	  podman push $(IMG) || exit 1; \
 	else \
 	  echo "❌ No supported container tool available."; \
