@@ -14,13 +14,13 @@ TBD.
 | [Dockerfile.nixl](./Dockerfile.nixl) | [Downstream vLLM](https://github.com/neuralmagic/vllm) | disagg_pd_dev | [Upstream LMCache](https://github.com/LMCache/LMCache) | dev | P/D via NIXL connector
 
 
-### Latest Dev Releases
+### Latest Stable Dev Releases
 
-| Container File Name | Tag | Digest
-|-|-|-|
-| [Dockerfile.lmcache](./Dockerfile.lmcache)| lmcache-0.0.6 | sha256:281e7ee67c8993d3f3f69ac27030fca3735be083056dd877b71861153d8da1e4 |
-| [Dockerfile.nixl](./Dockerfile.nixl) | vllm-nixl-0.0.6 | sha256:d6d212de0d1dc0f6da9877eab21800f62d7dd32d825bae9bf1692c4f6e017109 |
-| [Dockerfile.lmcache-nixl](./Dockerfile.lmcache-nixl)  | lmcache-nixl-0.0.6 | sha256:281e7ee67c8993d3f3f69ac27030fca3735be083056dd877b71861153d8da1e4 |
+| Container File Name | Name | Tag | Digest
+|-|-|-|-|
+| [Dockerfile.lmcache](./Dockerfile.lmcache)| `quay.io/llm-d/llm-d-dev` | lmcache-0.0.6 | sha256:281e7ee67c8993d3f3f69ac27030fca3735be083056dd877b71861153d8da1e4 |
+| [Dockerfile.nixl](./Dockerfile.nixl) | `quay.io/llm-d/llm-d-dev` | vllm-nixl-0.0.6 | sha256:d6d212de0d1dc0f6da9877eab21800f62d7dd32d825bae9bf1692c4f6e017109 |
+| [Dockerfile.lmcache-nixl](./Dockerfile.lmcache-nixl)  | `quay.io/llm-d/llm-d-dev` |lmcache-nixl-0.0.6 | sha256:281e7ee67c8993d3f3f69ac27030fca3735be083056dd877b71861153d8da1e4 |
 
 
 ### Deprecated Images
