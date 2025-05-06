@@ -177,11 +177,11 @@ RUN rm -rf /usr/local/src/* /opt/nixl/build /workspace/gdrcopy /root/.cache /tmp
 
 # Env to force rebuilding all layers below
 ENV LMCACHE_COMMIT_SHA=a3a7d7fe0f3a349227cb1cfbe8ccc16eb560a06b
-ENV VLLM_COMMIT_SHA=latest
+ENV VLLM_COMMIT_SHA=8beac5e4bd912c167342a76b06d1adc06861258d
 
 WORKDIR /workspace
 RUN git clone --depth 1 https://github.com/LMCache/LMCache.git
-RUN git clone --depth 1 -b v0.0.1+pd https://github.com/neuralmagic/vllm.git
+RUN git clone --depth 1 -b disagg_pd_dev https://github.com/neuralmagic/vllm.git
 
 # Set up Python virtual environment with uv
 WORKDIR /workspace/vllm
