@@ -330,37 +330,37 @@ spec:
           - name: container-storage
             workspace: container-storage-lmcache
 
-      - name: buildah-build-nixl
-        when:
-          - input: "$(params.runOptional)"
-            operator: in
-            values: [ "true" ]
-          - input: "$(params.source_branch)"
-            operator: in
-            values: [ "dev" ]
-          - input: "$(tasks.read-cluster-name.results.cluster-name)"
-            operator: in
-            values: [ "cluster-platform-eval" ]
-        taskRef:
-          name: buildah-build-task
-        params:
-          - name: dockerfile
-            value: "Dockerfile.vllm-nixl"
-          - name: dev-version
-            value: "$(tasks.extract-version-and-registry.results.dev-version)"
-          - name: prod-version
-            value: "$(tasks.extract-version-and-registry.results.prod-version)"
-          - name: image_tag_base
-            value: "$(tasks.extract-version-and-registry.results.dev-image-tag-base)"
-        runAfter:
-          - buildah-build-lmcache
-        workspaces:
-          - name: source
-            workspace: source
-          - name: registry
-            workspace: registry-secret
-          - name: container-storage
-            workspace: container-storage-nixl
+      # - name: buildah-build-nixl
+      #   when:
+      #     - input: "$(params.runOptional)"
+      #       operator: in
+      #       values: [ "true" ]
+      #     - input: "$(params.source_branch)"
+      #       operator: in
+      #       values: [ "dev" ]
+      #     - input: "$(tasks.read-cluster-name.results.cluster-name)"
+      #       operator: in
+      #       values: [ "cluster-platform-eval" ]
+      #   taskRef:
+      #     name: buildah-build-task
+      #   params:
+      #     - name: dockerfile
+      #       value: "Dockerfile.vllm-nixl"
+      #     - name: dev-version
+      #       value: "$(tasks.extract-version-and-registry.results.dev-version)"
+      #     - name: prod-version
+      #       value: "$(tasks.extract-version-and-registry.results.prod-version)"
+      #     - name: image_tag_base
+      #       value: "$(tasks.extract-version-and-registry.results.dev-image-tag-base)"
+      #   runAfter:
+      #     - buildah-build-lmcache
+      #   workspaces:
+      #     - name: source
+      #       workspace: source
+      #     - name: registry
+      #       workspace: registry-secret
+      #     - name: container-storage
+      #       workspace: container-storage-nixl
 
       - name: buildah-build
         when:
@@ -385,7 +385,7 @@ spec:
           - name: image_tag_base
             value: "$(tasks.extract-version-and-registry.results.dev-image-tag-base)"
         runAfter:
-          - buildah-build-nixl
+          - buildah-build-lmcache
         workspaces:
           - name: source
             workspace: source
@@ -419,30 +419,30 @@ spec:
           - name: output
             workspace: output
 
-      - name: vulnerability-scan-nixl
-        when:
-          - input: "$(params.runOptional)"
-            operator: in
-            values: [ "true" ]
-          - input: "$(tasks.read-cluster-name.results.cluster-name)"
-            operator: in
-            values: [ "cluster-platform-eval" ]
-        runAfter:
-          - buildah-build-nixl
-        taskRef:
-          name: trivy-scan
-        params:
-          - name: IMAGE_URL
-            value: "$(tasks.buildah-build-nixl.results.image-url[*])"
-          - name: SEVERITY
-            value: "CRITICAL,HIGH,MEDIUM,LOW"
-          - name: ARGS
-            value: "--exit-code 0"
-        workspaces:
-          - name: registry-secret
-            workspace: registry-secret
-          - name: output
-            workspace: output
+      # - name: vulnerability-scan-nixl
+      #   when:
+      #     - input: "$(params.runOptional)"
+      #       operator: in
+      #       values: [ "true" ]
+      #     - input: "$(tasks.read-cluster-name.results.cluster-name)"
+      #       operator: in
+      #       values: [ "cluster-platform-eval" ]
+      #   runAfter:
+      #     - buildah-build-nixl
+      #   taskRef:
+      #     name: trivy-scan
+      #   params:
+      #     - name: IMAGE_URL
+      #       value: "$(tasks.buildah-build-nixl.results.image-url[*])"
+      #     - name: SEVERITY
+      #       value: "CRITICAL,HIGH,MEDIUM,LOW"
+      #     - name: ARGS
+      #       value: "--exit-code 0"
+      #   workspaces:
+      #     - name: registry-secret
+      #       workspace: registry-secret
+      #     - name: output
+      #       workspace: output
 
       - name: vulnerability-scan
         when:
