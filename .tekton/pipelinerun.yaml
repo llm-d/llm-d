@@ -13,6 +13,13 @@ metadata:
 spec:
   timeout: "2h0m0s"
   podTemplate:
+    affinity:
+      nodeAffinity:
+        requiredDuringSchedulingIgnoredDuringExecution:
+          nodeSelectorTerms:
+            - matchExpressions:
+                - key: nvidia.com/gpu
+                  operator: DoesNotExist
     serviceAccountName: pipeline
     securityContext:
       fsGroup: 0
