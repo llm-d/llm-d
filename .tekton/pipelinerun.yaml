@@ -362,6 +362,38 @@ spec:
           - name: container-storage
             workspace: container-storage
 
+      - name: buildah-build
+        when:
+          - input: "$(params.runOptional)"
+            operator: in
+            values: [ "true" ]
+          - input: "$(params.source_branch)"
+            operator: in
+            values: [ "dev" ]
+          - input: "$(tasks.read-cluster-name.results.cluster-name)"
+            operator: in
+            values: [ "cluster-platform-eval" ]
+        taskRef:
+          name: buildah-build-task
+        params:
+          - name: dockerfile
+            value: "Dockerfile"
+          - name: dev-version
+            value: "$(tasks.extract-version-and-registry.results.dev-version)"
+          - name: prod-version
+            value: "$(tasks.extract-version-and-registry.results.prod-version)"
+          - name: image_tag_base
+            value: "$(tasks.extract-version-and-registry.results.dev-image-tag-base)"
+        runAfter:
+          - buildah-build-nixl
+        workspaces:
+          - name: source
+            workspace: source
+          - name: registry
+            workspace: registry-secret
+          - name: container-storage
+            workspace: container-storage
+
       - name: vulnerability-scan-lmcache
         when:
           - input: "$(params.runOptional)"
@@ -397,6 +429,31 @@ spec:
             values: [ "cluster-platform-eval" ]
         runAfter:
           - buildah-build-nixl
+        taskRef:
+          name: trivy-scan
+        params:
+          - name: IMAGE_URL
+            value: "$(tasks.buildah-build-nixl.results.image-url[*])"
+          - name: SEVERITY
+            value: "CRITICAL,HIGH,MEDIUM,LOW"
+          - name: ARGS
+            value: "--exit-code 0"
+        workspaces:
+          - name: registry-secret
+            workspace: registry-secret
+          - name: output
+            workspace: output
+
+      - name: vulnerability-scan
+        when:
+          - input: "$(params.runOptional)"
+            operator: in
+            values: [ "true" ]
+          - input: "$(tasks.read-cluster-name.results.cluster-name)"
+            operator: in
+            values: [ "cluster-platform-eval" ]
+        runAfter:
+          - buildah-build
         taskRef:
           name: trivy-scan
         params:

@@ -10,9 +10,11 @@ TBD.
 
 | Name | vLLM Repository | vLLM branch | LMCache Repository | LMCache branch | Description |
 |-|-|-|-|-|-|
+| [Dockerfile](./Dockerfile) | [Downstream vLLM](https://github.com/neuralmagic/vllm) | disagg_pd_dev [pinned](https://github.com/neuralmagic/llm-d/blob/dev/Dockerfile#L178) | [Downstream LMCache](https://github.com/neuralmagic/LMCache) | dev [pinned](https://github.com/neuralmagic/llm-d/blob/dev/Dockerfile#L177) | main llm-d image
 | [Dockerfile.lmcache](./Dockerfile.lmcache) | [Downstream vLLM](https://github.com/neuralmagic/vllm) | dev [pinned](https://github.com/neuralmagic/llm-d/blob/dev/Dockerfile.lmcache#L180) | [Downstream LMCache](https://github.com/neuralmagic/LMCache) | dev [pinned](https://github.com/neuralmagic/llm-d/blob/dev/Dockerfile.lmcache#L179) | KV Cache distribution/Offloading
 | [Dockerfile.nixl](./Dockerfile.nixl) | [Downstream vLLM](https://github.com/neuralmagic/vllm) | disagg_pd_dev | [Upstream LMCache](https://github.com/LMCache/LMCache) | dev | P/D via NIXL connector
 
+### Unstable Dev Release Tag: 0.0.7
 
 ### Latest Stable Dev Releases
 
