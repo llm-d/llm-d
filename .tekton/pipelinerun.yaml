@@ -328,7 +328,7 @@ spec:
           - name: registry
             workspace: registry-secret
           - name: container-storage
-            workspace: container-storage
+            workspace: container-storage-lmcache
 
       - name: buildah-build-nixl
         when:
@@ -360,7 +360,7 @@ spec:
           - name: registry
             workspace: registry-secret
           - name: container-storage
-            workspace: container-storage
+            workspace: container-storage-nixl
 
       - name: buildah-build
         when:
@@ -724,9 +724,12 @@ spec:
           name: noop-task
 
   workspaces:
-    - name: container-storage
+    - name: container-storage-lmcache
       persistentVolumeClaim:
-        claimName: buildah-cache11
+        claimName: buildah-cache12
+    - name: container-storage-nixl
+      persistentVolumeClaim:
+        claimName: buildah-cache13
     - name: source
       volumeClaimTemplate:
         spec:
