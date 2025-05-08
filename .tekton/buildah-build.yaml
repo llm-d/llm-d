@@ -8,9 +8,6 @@ spec:
       description: "Application version"
     - name: image_tag_base
       description: "Image tag base"
-    - name: dockerfile
-      description: "Path to the Dockerfile to build"
-      default: "Dockerfile"
   results:
     - name: image-url
       description: "The full image URL including tag"
@@ -56,15 +53,11 @@ spec:
         buildah logout quay.io || true
         buildah login --username "$USERNAME" --password "$PASSWORD" quay.io
 
-        # params.dockerfile looks like Dockerfile.name
-        # extract the name into a variable
-        TAG_NAME=$(echo $(params.dockerfile) | cut -d '.' -f 2)
-        
         export DOCKER_CONFIG=/root/.docker
         export BUILDER=buildah
-        export IMG=$(params.image_tag_base):$TAG_NAME-$(params.dev-version)
+        export IMG=$(params.image_tag_base):$(params.dev-version)
 
         echo "🚀 Calling make buildah-build with IMG=$IMG..."
-        make buildah-build IMG=$IMG DOCKERFILE=$(params.dockerfile)
+        make buildah-build IMG=$IMG
 
-        echo "$IMG" > /tekton/results/image-url-$(params.dockerfile)
+        echo "$IMG" > /tekton/results/image-url
