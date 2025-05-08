@@ -178,12 +178,12 @@ ENV LMCACHE_COMMIT_SHA=3126d053f3dc0243bb7d8650f77ea0100d3f925c
 ENV VLLM_COMMIT_SHA=5449cf0760463a068e07b82410851e5006fc6ce0
 
 WORKDIR /workspace
-RUN git clone --depth 10 https://github.com/neuralmagic/LMCache.git && \
+RUN git clone https://github.com/neuralmagic/LMCache.git && \
     cd LMCache && \
     git checkout -q $LMCACHE_COMMIT_SHA && \
     cd ..
 
-RUN git clone --depth 10 -b disagg_pd_dev https://github.com/neuralmagic/vllm.git && \
+RUN git clone -b disagg_pd_dev https://github.com/neuralmagic/vllm.git && \
     cd vllm && \
     git checkout -q $VLLM_COMMIT_SHA && \
     cd ..
