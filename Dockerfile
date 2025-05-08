@@ -174,7 +174,7 @@ RUN rm -rf /usr/local/src/* /opt/nixl/build /workspace/gdrcopy /root/.cache /tmp
 # Git clone repos
 
 # Env to force rebuilding all layers below
-ENV LMCACHE_COMMIT_SHA=4c842ad3a309bc33a07505f178ffd471dbb8c430
+ENV LMCACHE_COMMIT_SHA=3126d053f3dc0243bb7d8650f77ea0100d3f925c
 ENV VLLM_COMMIT_SHA=5449cf0760463a068e07b82410851e5006fc6ce0
 
 WORKDIR /workspace
