@@ -176,15 +176,15 @@ RUN rm -rf /usr/local/src/* /opt/nixl/build /workspace/gdrcopy /root/.cache /tmp
 # Git clone repos
 
 # Env to force rebuilding all layers below
-ENV LMCACHE_COMMIT_SHA=60c9af130b98569e03543110fa441c36f9708ed9
-ENV VLLM_COMMIT_SHA=9b70e2b4c147ea650f9b943e6aecd977377fbbfd
+ENV LMCACHE_COMMIT_SHA=3126d053f3dc0243bb7d8650f77ea0100d3f925c
+ENV VLLM_COMMIT_SHA=5941e0b7ea5f5204f01ed3ff69d0965bdf9106a8
 
 WORKDIR /workspace
-RUN git clone --depth 1 https://github.com/neuralmagic/LMCache.git && \
+RUN git clone https://github.com/neuralmagic/LMCache.git && \
     cd LMCache && \
     git checkout -q $LMCACHE_COMMIT_SHA && \
     cd ..
-RUN git clone --depth 1 https://github.com/neuralmagic/vllm.git && \
+RUN git clone https://github.com/neuralmagic/vllm.git && \
     cd vllm && \
     git checkout -q $VLLM_COMMIT_SHA && \
     cd ..
@@ -208,7 +208,6 @@ RUN . .vllm/bin/activate && \
 # Install related packages
 RUN . .vllm/bin/activate && \
     uv pip install ../LMCache/ && \
-    uv pip install ../torchac_cuda/ && \
     uv pip install nixl && \
     uv cache clean
 
