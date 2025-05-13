@@ -20,7 +20,7 @@ Powering Distributed Gen AI Inference at Scale
 
 llm-d is a Kubernetes-native, high-performance distributed LLM inference framework designed to unlock production-scale AI inference. It takes you from your first inference response to full-scale production, emphasizing diverse hardware options and increased operational efficiency. The project focuses on providing efficient distributed inferencing on any Kubernetes cluster, building on proven production-grade standards. Its architecture is built for high performance and scalability, enhancing efficiency through intelligent resource orchestration with optimizations like prefill-decode disaggregation, advanced KV management, and AI-aware scheduling and routing.
 
-llm-d prioritizes ease of deployment and use, addressing the operational needs of running large GPU clusters, including SRE concerns and day-2 operations. It is designed to be an expandable inference platform, featuring a set of core proven functionalities and incubating features. llm-d can be deployed as a production solution or used as components for experimentation to evolve distributed inference capabilities.
+llm-d prioritizes ease of deployment and use, addressing the operational needs of running large GPU clusters, including SRE concerns and day-2 operations. It is designed to be an expandable and evolving inference platform, featuring a set of core functionalities and experimental features. llm-d can be deployed as a production solution or used as components for experimentation to evolve distributed inference capabilities.
 
 
 ## 🧱 Architecture
