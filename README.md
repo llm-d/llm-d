@@ -28,7 +28,7 @@ llm-d prioritizes ease of deployment and use, addressing the operational needs o
 llm-d includes the following main components:
 
 - **Prefill/Decode Disaggregation:** separates the prefill and decode stages to optimize inference performance
-- **KV Cache, Prefix, and Session-Aware Router and scheduler:** Incorporates plug points for customizable scorers to enhance routing and scheduling efficiency
+- *ßß*KV Cache, Prefix, and Session-Aware Router and scheduler:** Incorporates plug points for customizable scorers to enhance routing and scheduling efficiency
 - **KV Cache Manager:** Orchestrates KV offloading and transfer (using NIXL-based KV transfer)
 - **Operational Telemetry:** Provides production-level monitoring and metrics through Prometheus and Grafana
 
