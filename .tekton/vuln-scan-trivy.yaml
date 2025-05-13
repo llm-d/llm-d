@@ -10,7 +10,7 @@ spec:
   params:
     - name: IMAGE_URL
       type: string
-      description: Full image URL (e.g., quay.io/org/image:tag)
+      description: Full image URL (e.g., ghcr.io/org/image:tag)
     - name: SEVERITY
       type: string
       default: "CRITICAL,HIGH,MEDIUM"

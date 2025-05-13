@@ -2,7 +2,7 @@
 
 <!-- NOTE TO CONTRIBUTORS: every repo in the hc4ai organization is intended to have the same contents in this file. The origin is the copy in https://github.ibm.com/mspreitz/hc4ai-hello-neural/blob/dev/.tekton/README.md; submit PRs against that one -->
 
-This pipeline is designed to support safe, efficient, and traceable development and deployment workflows using [OpenShift Pipelines-as-Code](https://pipelinesascode.com/), [Tekton](https://tekton.dev/), [buildah](https://buildah.io/), GitHub, and Quay.io.
+This pipeline is designed to support safe, efficient, and traceable development and deployment workflows using [OpenShift Pipelines-as-Code](https://pipelinesascode.com/), [Tekton](https://tekton.dev/), [buildah](https://buildah.io/), GitHub, and ghcr.io.
 
 This pipeline is used for CI/CD of the `dev` and `main` branches. This pipeline runs from source through container image build to deployment and testing in the hc4ai cluster.
 
@@ -20,9 +20,9 @@ Each repo includes a `.version.json` file at its root. This file controls:
 ```json
 {
   "dev-version": "0.0.5",
-  "dev-registry": "quay.io/llm-d/<your project name>-dev",
+  "dev-registry": "ghcr.io/llm-d/<your project name>-dev",
   "prod-version": "0.0.4",
-  "prod-registry": "quay.io/llm-d/<your project name>"
+  "prod-registry": "ghcr.io/llm-d/<your project name>"
 }
 ```
 
@@ -43,8 +43,8 @@ The pipeline reads this file to:
 
 This pipeline maintains two container repositories for this GitHub repository, as follows.
 
-- `quay.io/llm-d/<repoName>-dev`. Hold builds from the `dev` branch as described below.
-- `quay.io/llm-d/<repoName>`. Holds promotions to prod, as described below.
+- `ghcr.io/llm-d/<repoName>-dev`. Hold builds from the `dev` branch as described below.
+- `ghcr.io/llm-d/<repoName>`. Holds promotions to prod, as described below.
 
 ---
 
