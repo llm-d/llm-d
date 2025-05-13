@@ -44,6 +44,8 @@ See a detailed architecture [here](https://...).
 
 ### Core features 
 
+- [**Prefill/Decode Disaggregation**](): 
+
 - [**Dynamic and pluggable AI-aware inference scheduler**](): Provides scheduler components for routing AI inference requests within the LLM-d framework, including an "Endpoint Picker (EPP)" for optimized routing via Envoy's ext-proc feature. Built on Gateway API and GIE projects, it extends support with custom plugins like custom scorers and P/D Disaggregation.
 
 - [**KV Cache Manager**](): A pluggable KVCache Manager for KVCache-aware routing in vLLM-based serving platforms. It aims to improve user experience by reducing Time-To-First-Token (TTFT) through higher KVCache hit rates and smart routing. It reduces serving costs by improving compute utilization and minimizing re-compute. It also enables system scalability with a distributed KVCache pool, allowing cache offloading, reuse, and seamless load balancing. See docs for more information.
@@ -107,6 +109,13 @@ We invite you to join our growing community of developers, researchers, and enth
 - [**GitHub Issues**](https://github.com/llm-d/llm0d/issues) - Report bugs, request features, or browse existing issues. Your feedback helps us improve GuideLLM.
 - [**Subscribe to Updates**](https://...) - Sign up for the latest news, announcements, and updates about GuideLLM, webinars, events, and more.
 - [**Contact Us**](http://...) - Use our contact form for general questions about Neural Magic or GuideLLM.
+
+<div>
+<h3><font size="4"><img src="https://raw.githubusercontent.com/Tarikul-Islam-Anik/Animated-Fluent-Emojis/master/Emojis/Smilies/Red%20Heart.png" alt="Red Heart" width="40" height="40" /> Contributors </font></h3>
+</div>
+<br>
+
+\<coming...\>
 
 ## License
 
