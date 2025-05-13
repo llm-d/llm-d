@@ -28,7 +28,7 @@ llm-d prioritizes ease of deployment and use, addressing the operational needs o
 llm-d includes the following main components:
 
 - **Prefill/Decode Disaggregation:** separates the prefill and decode stages to optimize inference performance
-- *ßß*KV Cache, Prefix, and Session-Aware Router and scheduler:** Incorporates plug points for customizable scorers to enhance routing and scheduling efficiency
+- **KV Cache, Prefix, and Session-Aware Router and scheduler:** Incorporates plug points for customizable scorers to enhance routing and scheduling efficiency
 - **KV Cache Manager:** Orchestrates KV offloading and transfer (using NIXL-based KV transfer)
 - **Operational Telemetry:** Provides production-level monitoring and metrics through Prometheus and Grafana
 
@@ -50,10 +50,10 @@ See a detailed architecture [here](https://...).
 
 - [**Model service**](): ModelService: Declaratively provisions and maintains Kubernetes resources needed to serve a base model for inference, automating management of prefill and decode deployments, inference pool, endpoint picker (EPP) deployment, relevant RBAC permissions, and optionally referencing BaseConfig for shared behavior presets. It supports disaggregated workloads, integrates with Gateway API for routing, enables auto-scaling, allows independent scaling, supports model loading from various sources, and includes value templating.
 
-### Incubating 
+### Experimental 
 
 - [**llm-sim**](): A tool for testing and development that mimics an ingerence engine responses (currently implementing vLLM's API) without running actual inference. It supports basic API endpoints and Prometheus metrics, and can operate in echo mode (returns received text) or random mode (returns predefined sentences). Timing of responses can be adjusted, and it can be run standalone or in a Pod for testing.
-- [**llm-d-benchmarking**] 
+- [**llm-d-benchmarking**](): Tooling integrating fmperf: A cloud-native, Kubernetes-based benchmarking tool that automates deployment and performance testing of LLM inference systems. It streamlines benchmarking by orchestrating end-to-end workflows, allowing organizations to efficiently measure inference throughput and latency without the overhead of prolonged GPU cluster configuration and load tester setup. 
 
 ## 🚀 Getting Started
 
