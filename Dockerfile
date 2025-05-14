@@ -175,7 +175,7 @@ RUN rm -rf /usr/local/src/* /opt/nixl/build /workspace/gdrcopy /root/.cache /tmp
 
 # Env to force rebuilding all layers below
 ENV LMCACHE_COMMIT_SHA=3126d053f3dc0243bb7d8650f77ea0100d3f925c
-ENV VLLM_COMMIT_SHA=032ca77c3505835bd5421550ae7e352caf3ecdb5
+ENV VLLM_COMMIT_SHA=6a0c5cd7f507ad0efc8eacf9998df0ce6c43e292
 
 WORKDIR /workspace
 RUN git clone https://github.com/neuralmagic/LMCache.git && \
@@ -183,7 +183,7 @@ RUN git clone https://github.com/neuralmagic/LMCache.git && \
     git checkout -q $LMCACHE_COMMIT_SHA && \
     cd ..
 
-RUN git clone -b disagg_pd_dev2 https://github.com/neuralmagic/vllm.git && \
+RUN git clone -b pd-launch-branch https://github.com/neuralmagic/vllm.git && \
     cd vllm && \
     git checkout -q $VLLM_COMMIT_SHA && \
     cd ..
