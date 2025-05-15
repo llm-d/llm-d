@@ -4,7 +4,7 @@ SHELL := /usr/bin/env bash
 PROJECT_NAME ?= llm-d
 DEV_VERSION ?= 0.0.1
 PROD_VERSION ?= 0.0.0
-IMAGE_TAG_BASE ?= quay.io/llm-d/$(PROJECT_NAME)
+IMAGE_TAG_BASE ?= ghcr.io/llm-d/$(PROJECT_NAME)
 IMG = $(IMAGE_TAG_BASE):$(DEV_VERSION)
 NAMESPACE ?= hc4ai-operator
 
