@@ -1,5 +1,5 @@
-# Based on: https://github.com/llm-d/llm-d-routing-sidecar/tree/dev/test/config/nixl
-#
+# A universal baseconfig for models that can be downloaded from Hugging Face
+
 # Requirements:
 # Any consuming ModelService should define ports labeled:
 #    - app_port - the external port number for the prefill and decode pods
@@ -7,7 +7,7 @@
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: universal-base-config
+  name: universal-base-config-hf
 immutable: true
 data:
   decodeDeployment: |

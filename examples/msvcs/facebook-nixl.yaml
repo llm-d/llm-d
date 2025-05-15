@@ -6,7 +6,7 @@ spec:
   decoupleScaling: false
 
   baseConfigMapRef:
-    name: universal-base-config
+    name: universal-base-config-hf
 
   routing: 
     # This is the model name for the OpenAI request

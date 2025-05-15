@@ -131,3 +131,7 @@ kubectl apply -f examples/msvcs/llama4.yaml
 ```
 
 This should drastically shorten the wait time for pod creation. 
+
+## Limitations
+- **HttpRoute dependency on InferencePool**: for each base model (MSVC) you deploy with EPP enabled, one must configure HttpRoute to the InferencePool name that the ModelService controller creates. This is counter-intuitive and not user-friendly. This is a known issue and we can resolve it by enabling ModelService to create this resource as a children.
+- The idea of "universal" BaseConfigs is to provide configuration for deploying multiple base models. We provide two universal BaseConfigs in our examples, conditioned on how the model artifacts are retrieved. In theory, this layer should be abstracted from BaseConfigs and the BaseConfigs for these two scenarios should be the same. This is a known issue and we have issues in our repository to track this.

@@ -34,8 +34,6 @@ data:
               volumeMounts:
                 - name: model-cache
                   mountPath: /cache
-              
-              # TODO: do we need this section for granite3.2 model?
               resources:
                 limits:
                   nvidia.com/gpu: 1
