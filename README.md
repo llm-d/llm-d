@@ -9,7 +9,7 @@
 Powering Distributed Gen AI Inference at Scale
 </h3>
 
- [![Documentation](https://img.shields.io/badge/Documentation-8A2BE2?logo=read-the-docs&logoColor=%23ffffff&color=%231BC070)](https://...) [![License](https://img.shields.io/github/license/neuralmagic/guidellm.svg)](https://github.com/neuralmagic/guidellm/blob/main/LICENSE) 
+ [![Documentation](https://img.shields.io/badge/Documentation-8A2BE2?logo=read-the-docs&logoColor=%23ffffff&color=%231BC070)](https://...) [![License](https://img.shields.io/github/license/llm-d/llm-d.svg)](https://github.com/llm-d/llm-d/blob/main/LICENSE) 
   <a href="...">
     <img alt="Join Slack" src="https://img.shields.io/badge/Join%20Slack-blue?logo=slack">
   </a>
@@ -105,10 +105,10 @@ A community meeting for llm-d will be hosted weekly. Meeting Details:
 
 We invite you to join our growing community of developers, researchers, and enthusiasts passionate about scalinng and optimizing inference. Whether you're looking for help, want to share your own experiences, or stay up to date with the latest developments, there are plenty of ways to get involved:
 
-- [**llm-d Community Slack**](https://...) - Join our Slack channel to connect with other GuideLLM users and developers. Ask questions, share your work, and get real-time support.
-- [**GitHub Issues**](https://github.com/llm-d/llm0d/issues) - Report bugs, request features, or browse existing issues. Your feedback helps us improve GuideLLM.
-- [**Subscribe to Updates**](https://...) - Sign up for the latest news, announcements, and updates about GuideLLM, webinars, events, and more.
-- [**Contact Us**](http://...) - Use our contact form for general questions about Neural Magic or GuideLLM.
+- [**llm-d Community Slack**](https://...) - Join our Slack channel to connect with other llm-d users and developers. Ask questions, share your work, and get real-time support.
+- [**GitHub Issues**](https://github.com/llm-d/llm-d/issues) - Report bugs, request features, or browse existing issues. Your feedback helps us improve llm-d.
+- [**Subscribe to Updates**](https://...) - Sign up for the latest news, announcements, and updates about llm-d, webinars, events, and more.
+- [**Contact Us**](http://...) - Use our contact form for general questions about llm-d.
 
 <div>
 <h3><font size="4"><img src="https://raw.githubusercontent.com/Tarikul-Islam-Anik/Animated-Fluent-Emojis/master/Emojis/Smilies/Red%20Heart.png" alt="Red Heart" width="40" height="40" /> Contributors </font></h3>
