@@ -1,0 +1,66 @@
+# A simple baseconfig to serve a model downloaded from Hugging Face without a token on a pod
+# Make sure that the model can fit on the sizeLimit specified
+#
+# Requirements:
+# Any consuming ModelService should define ports labeled:
+#    - app_port - the external port number for the prefill and decode pods
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: simple-base-config
+immutable: true
+data:
+  decodeDeployment: |
+    apiVersion: apps/v1
+    kind: Deployment
+    spec:
+      template:
+        spec:
+          containers:
+            - name: vllm
+              image: ghcr.io/llm-d/llm-d:0.0.8
+              command:
+                - vllm
+                - serve
+              securityContext:
+                allowPrivilegeEscalation: false
+              args:
+                - "--port"
+                - "{{ "app_port" | getPort }}"
+              env:
+                # TODO (Lionel): are these env vars needed?
+                # - name: CUDA_VISIBLE_DEVICES
+                #   value: "0"
+                # - name: UCX_TLS
+                #   value: "cuda_ipc,cuda_copy,tcp"
+                - name: HF_HUB_CACHE
+                  value: /cache
+              volumeMounts:
+                - name: model-cache
+                  mountPath: /cache
+              
+              # TODO: do we need this section for granite3.2 model?
+              resources:
+                limits:
+                  nvidia.com/gpu: 1
+                requests:
+                  cpu: "16"
+                  memory: 16Gi
+                  nvidia.com/gpu: 1
+          volumes:
+            - name: model-cache
+              emptyDir:
+                sizeLimit: 5Gi
+
+  # A service for the deployment is optional
+  decodeService: |
+    apiVersion: v1
+    kind: Service
+    spec:
+      clusterIP: None
+      ports:
+      - name: vllm
+        port: {{ "app_port" | getPort }}
+        protocol: TCP
+  

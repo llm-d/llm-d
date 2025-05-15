@@ -1,0 +1,52 @@
+apiVersion: llm-d.ai/v1alpha1
+kind: ModelService
+metadata:
+  name: facebook-opt-125m-nixl
+spec:
+  decoupleScaling: false
+
+  baseConfigMapRef:
+    name: universal-base-config
+
+  routing: 
+    # This is the model name for the OpenAI request
+    modelName: facebook/opt-125m
+    ports:
+    - name: app_port
+      port: 8000
+    - name: internal_port
+      port: 8200
+
+  modelArtifacts:
+    # When specfying the URI with `hf` prefix, the <repo-id>/<model-id> string
+    # is extracted and exposed as a template variable that can be used as {{ .HFModelName }}
+    uri: hf://facebook/opt-125m
+
+  # describe decode pods
+  decode:
+    replicas: 1
+    # acceleratorTypes:
+    #   labelKey: nvidia.com/gpu.product
+    #   labelValues:
+    #     - NVIDIA-A100-SXM4-80GB
+    initContainers:
+    - name: "routing-proxy"
+      image: ghcr.io/llm-d/llm-d-routing-sidecar@sha256:7f3db0d03f3b3b16ec2a0e8d0d855bb7db83ef8d670dd9027f194e772a87856b
+    containers:
+    - name: "vllm"
+      # The baseconfig image includes LMCache and multiconnector support
+      args:
+        - "{{ .HFModelName }}"
+  
+  # describe the prefill pods 
+  prefill:
+    replicas: 1
+    # acceleratorTypes:
+    #   labelKey: nvidia.com/gpu.product
+    #   labelValues:
+    #     - NVIDIA-A100-SXM4-80GB
+    containers:
+      - name: "vllm"
+        args:
+          - "{{ .HFModelName }}"
+      
