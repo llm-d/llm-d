@@ -21,10 +21,6 @@ spec:
   # describe decode pods
   decode:
     replicas: 1
-    # acceleratorTypes:
-    #   labelKey: nvidia.com/gpu.product
-    #   labelValues:
-    #     - NVIDIA-A100-SXM4-80GB
     containers:
     - name: "vllm"
       args:
