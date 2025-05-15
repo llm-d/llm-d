@@ -47,7 +47,7 @@ data:
                 - "{{ "internal_port" | getPort }}"
                 - "--enforce-eager"
                 - "--kv-transfer-config"
-                - '{"kv_connector":"MultiConnector","kv_role":"kv_both","kv_connector_extra_config":{"connectors":[{"kv_connector":"NixlConnector", "kv_role":"kv_both"},{"kv_connector":"LMCacheConnectorV1","kv_role":"kv_both"}]}}'
+                - '{"kv_connector":"NixlConnector", "kv_role":"kv_both"}'
               env:
                 - name: CUDA_VISIBLE_DEVICES
                   value: "0"
@@ -101,7 +101,7 @@ data:
                 - "{{ "app_port" | getPort }}"
                 - "--enforce-eager"
                 - "--kv-transfer-config"
-                - '{"kv_connector":"MultiConnector","kv_role":"kv_both","kv_connector_extra_config":{"connectors":[{"kv_connector":"NixlConnector", "kv_role":"kv_both"},{"kv_connector":"LMCacheConnectorV1","kv_role":"kv_both"}]}}'
+                - '{"kv_connector":"NixlConnector", "kv_role":"kv_both"}'
               env:
                 - name: CUDA_VISIBLE_DEVICES
                   value: "0"

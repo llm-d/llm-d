@@ -29,11 +29,6 @@ data:
                 - "--port"
                 - "{{ "app_port" | getPort }}"
               env:
-                # TODO (Lionel): are these env vars needed?
-                # - name: CUDA_VISIBLE_DEVICES
-                #   value: "0"
-                # - name: UCX_TLS
-                #   value: "cuda_ipc,cuda_copy,tcp"
                 - name: HF_HUB_CACHE
                   value: /cache
               volumeMounts:

@@ -25,26 +25,15 @@ spec:
   # describe decode pods
   decode:
     replicas: 1
-    # acceleratorTypes:
-    #   labelKey: nvidia.com/gpu.product
-    #   labelValues:
-    #     - NVIDIA-A100-SXM4-80GB
-    initContainers:
-    - name: "routing-proxy"
-      image: ghcr.io/llm-d/llm-d-routing-sidecar@sha256:7f3db0d03f3b3b16ec2a0e8d0d855bb7db83ef8d670dd9027f194e772a87856b
+ 
     containers:
     - name: "vllm"
-      # The baseconfig image includes LMCache and multiconnector support
       args:
         - "{{ .HFModelName }}"
   
   # describe the prefill pods 
   prefill:
     replicas: 1
-    # acceleratorTypes:
-    #   labelKey: nvidia.com/gpu.product
-    #   labelValues:
-    #     - NVIDIA-A100-SXM4-80GB
     containers:
       - name: "vllm"
         args:

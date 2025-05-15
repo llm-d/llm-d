@@ -32,7 +32,7 @@ You may port-forward the pod or service at port 8000 (because that is the port f
 
 ```
 kubectl port-forward svc/granite-base-model-service-decode 8000:8000
-curl  http://localhost:8000/v1/completions \
+curl -vvv http://localhost:8000/v1/completions \
     -H "Content-Type: application/json" \
     -d '{
     "model": "ibm-granite/granite-3.3-2b-base",
