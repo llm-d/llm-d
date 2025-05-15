@@ -44,12 +44,12 @@ curl -vvv http://localhost:8000/v1/completions \
 The platform owner may create another baseconfig used to serve models with routing enabled, useful for P/D disaggregation. We will continue to use a model that can be downloaded from Hugging Face: `facebook/opt-125m`.
 
 - [msvcs/facebook-nixl.yaml](./msvcs/facebook-nixl.yaml)
-- [baseconfigs/universal-baseconfig.yaml](./baseconfigs/universal-baseconfig.yaml)
+- [baseconfigs/universal-baseconfig-hf.yaml](./baseconfigs/universal-baseconfig-hf.yaml)
 
 Apply the baseconfig and CR to a Kubernetes cluster.
 
 ```
-kubectl apply -f examples/baseconfigs/universal-baseconfig.yaml
+kubectl apply -f examples/baseconfigs/universal-baseconfig-hf.yaml
 kubectl apply -f examples/msvcs/facebook-nixl.yaml
 ```
 
