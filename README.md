@@ -38,13 +38,13 @@ Built by leaders in the Kubernetes and vLLM projects, `llm-d` is a community-dri
 
 Key features of `llm-d` include:
 
-- **vLLM-Optimized Inference Scheduler:** `llm-d` builds on IGW's pattern for customizable “smart” load-balancing via the Endpoint Picker Protocol (EPP) to define vLLM-optimized scheduling. Leveraging operational telemetry exposed by vLLM, Scheduler implements filtering and scoring algorithms necessary to make decisions with P/D-, KV-cache-, SLA-, and load-awareness. Advanced teams can implement their own scorers and filterers to further customize for their use cases, while benefiting from othr features in IGW, like flow control and latency-aware balancing. [For more details, see our Northstar design](https://docs.google.com/document/d/1kE1LY8OVjiOgKVD9-9Po96HODbTIbgHp4qgvw06BCOc/edit?tab=t.0#heading=h.4rgkvvo5gnle)
+- **vLLM-Optimized Inference Scheduler:** `llm-d` builds on IGW's pattern for customizable “smart” load-balancing via the Endpoint Picker Protocol (EPP) to define vLLM-optimized scheduling. Leveraging operational telemetry exposed by vLLM, Scheduler implements filtering and scoring algorithms necessary to make decisions with P/D-, KV-cache-, SLA-, and load-awareness. Advanced teams can implement their own scorers and filterers to further customize for their use cases, while benefiting from other features in IGW, like flow control and latency-aware balancing. [For more details, see our Northstar design](https://docs.google.com/document/d/1kE1LY8OVjiOgKVD9-9Po96HODbTIbgHp4qgvw06BCOc/edit?tab=t.0#heading=h.4rgkvvo5gnle)
 
-- **Disaggregated Serving with vLLM:** `llm-d` leverages vLLM’s recently enabled support for disaggregated serving via a pluggable KV Connector API to run prefill and decode on independent instances, using high-performance transport libraries like NVIDIA’s NIXL. In `llm-d`, we plan to support latency-optimized implementation using fast interconnects (IB, RDMA, ICI) and throughput optimized implementation using data-center netwokring. [For more details, see our Northstar design](https://docs.google.com/document/d/1FNN5snmipaTxEA1FGEeSH7Z_kEqskouKD1XYhVyTHr8/edit?tab=t.0)
+- **Disaggregated Serving with vLLM:** `llm-d` leverages vLLM’s recently enabled support for disaggregated serving via a pluggable KV Connector API to run prefill and decode on independent instances, using high-performance transport libraries like NVIDIA’s NIXL. In `llm-d`, we plan to support latency-optimized implementation using fast interconnects (IB, RDMA, ICI) and throughput-optimized implementation using data-center networking. [For more details, see our Northstar design](https://docs.google.com/document/d/1FNN5snmipaTxEA1FGEeSH7Z_kEqskouKD1XYhVyTHr8/edit?tab=t.0)
 
-- **Disaggregated Prefix Caching with vLLM:** `llm-d` uses the same vLLM KV connector API used in disaggregated serving to provide a pluggable cache for previous calculations, including offloading KVs to host, remote storage, and systems like LMCache. In llm-d, we plan to support two KV caching schemes. *Independent* (north-soutch) caching with basic offloading to host memory and disk, providing a zero operational cost mechanism that utilizes all system resources. *Shared* (east-west) caching with KV transfer between instances and shared storage with global indexing, providing potential for higher performance at the cost of a more operationally complex system. [For more details, see our Northstar design](https://docs.google.com/document/d/1inTneLEZTv3rDEBB9KLOB9K6oMq8c3jkogARJqdt_58/edit?tab=t.0)
+- **Disaggregated Prefix Caching with vLLM:** `llm-d` uses the same vLLM KV connector API used in disaggregated serving to provide a pluggable cache for previous calculations, including offloading KVs to host, remote storage, and systems like LMCache. In llm-d, we plan to support two KV caching schemes. *Independent* (north-south) caching with basic offloading to host memory and disk, providing a zero operational cost mechanism that utilizes all system resources. *Shared* (east-west) caching with KV transfer between instances and shared storage with global indexing, providing potential for higher performance at the cost of a more operationally complex system. [For more details, see our Northstar design](https://docs.google.com/document/d/1inTneLEZTv3rDEBB9KLOB9K6oMq8c3jkogARJqdt_58/edit?tab=t.0)
 
-- **Variant Autoscaling over Hardware, Workload, and Traffic** (🚧): We plan to implement a traffic- and hardware-aware autoscaler that (a) measures the capacity of each model server instance, (b) derive a load function that takes into account different request shapes and QoS, and (c) asseses recent traffic mix (QPS, QoS, and shapes)
+- **Variant Autoscaling over Hardware, Workload, and Traffic** (🚧): We plan to implement a traffic- and hardware-aware autoscaler that (a) measures the capacity of each model server instance, (b) derive a load function that takes into account different request shapes and QoS, and (c) assesses recent traffic mix (QPS, QoS, and shapes)
 Using the recent traffic mix to calculate the optimal mix of instances to handle prefill, decode, and latency-tolerant requests, enabling use of HPA for SLO-level efficiency. [For more details, see our Northstar design](https://docs.google.com/document/d/1inTneLEZTv3rDEBB9KLOB9K6oMq8c3jkogARJqdt_58/edit?tab=t.0)
 
 
@@ -57,11 +57,11 @@ Using the recent traffic mix to calculate the optimal mix of instances to handle
 llm-d's deployer can be used to that installed it as a solution using a single Helm chart on Kubernetes.
 
 > [!TIP]
-> See the guided expericience with our [quickstart](https://github.com/neuralmagic/llm-d-deployer/blob/main/quickstart/README.md).
+> See the guided experience with our [quickstart](https://github.com/neuralmagic/llm-d-deployer/blob/main/quickstart/README.md).
 
 ### Experimenting and developing with llm-d
 
-llm-d is repo is a metaproject with subcomponents can that can be cloned indvidually. 
+llm-d is repo is a metaproject with subcomponents can that can be cloned individually.
 
 To clone all the components:
 ```
@@ -69,7 +69,7 @@ To clone all the components:
 ``` 
 
 > [!TIP]
-> As a customizatoin example, see [here]() a template for adding a scheduler scorer.
+> As a customization example, see [here]() a template for adding a scheduler scorer.
 
 ## 📦 Releases
 
