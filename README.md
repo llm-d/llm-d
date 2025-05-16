@@ -21,9 +21,9 @@ Latest News 🔥
 
 `llm-d` is a Kubernetes-native distributed inference serving stack - a well-lit path for anyone to serve at scale, with the fastest time-to-value and competitive performance per dollar for most models across most hardware accelerators.
 
-With `llm-d` users can operationalize GenAI deployments with a modular, high-performance, end-to-end solution that leverages the latest distributed inference optimizations like KV-cache aware routing and disaggregated serving, co-designed and integrated with the Kubernetes operational tooling in [Inference Gateway (IGW)](https://github.com/kubernetes-sigs/gateway-api-inference-extension).
+With `llm-d`, users can operationalize GenAI deployments with a modular, high-performance, end-to-end solution that leverages the latest distributed inference optimizations like KV-cache aware routing and disaggregated serving, co-designed and integrated with the Kubernetes operational tooling in [Inference Gateway (IGW)](https://github.com/kubernetes-sigs/gateway-api-inference-extension).
 
-Developed by leaders in the Hardware Accelerator, Kubernetes, and vLLM ecosystems, `llm-d` is a community-driven, Apache-2 licensed project with an open development model.
+Built by leaders in the Kubernetes and vLLM projects, `llm-d` is a community-driven, Apache-2 licensed project with an open development model.
 
 ## 🧱 Architecture
 
@@ -54,7 +54,7 @@ Using the recent traffic mix to calculate the optimal mix of instances to handle
 
 ### Deploying as as solution
 
-llm-d-deployer's deployer can be used to that installed it as a solution using a single Helm chart on Kubernetes.
+llm-d's deployer can be used to that installed it as a solution using a single Helm chart on Kubernetes.
 
 > [!TIP]
 > See the guided expericience with our [quickstart](https://github.com/neuralmagic/llm-d-deployer/blob/main/quickstart/README.md).
@@ -78,26 +78,13 @@ Visit our [GitHub Releases page](https://github.com/llm-d/llm-d-deployer/release
 
 ## Contribute
 
-### Slack
-`llm-d` uses Slack to discuss development across organizations. Please join to discuss major features:
-- [Link to Slack - UPDATE](https://...)
-
-### Weekly Standup
-`llm-d` host a weekly contributors standup on Wednesdays at 1230pm ET. Please join to discuss active projects:
-- [Meeting Details](https://calendar.google.com/calendar/event?action=TEMPLATE&tmeid=NG9yZ3AyYTN0N3VlaW01b21xbWV2c21uNjRfMjAyNTA1MjhUMTYzMDAwWiByb2JzaGF3QHJlZGhhdC5jb20&tmsrc=robshaw%40redhat.com&scp=ALL)
-
-### Google Groups
-`llm-d` uses Google Groups to share architecture diagrams and other content. Please join to view:
-- [Google Group](https://groups.google.com/g/llm-d-contributors)
-
 ### Guidelines
+- See [our project overview](PROJECT.md) for more details on our development process and governance.
 
-We appreciate contributions to the code, examples, integrations, documentation, bug reports, and feature requests! Your feedback and involvement are crucial in helping llm-d grow and improve. Below are some ways you can get involved:
-
-- [**DEVELOPING**](https://github.com/llm-d/llm-d/blob/main/DEVELOPING.md) - Development guide for setting up your environment and making contributions.
-- [**CONTRIBUTING**](https://github.com/llm-d/llm-d/blob/main/CONTRIBUTING.md) - Guidelines for contributing to the project, including code standards, pull request processes, and more.
-- [**CODE_OF_CONDUCT**](https://github.com/llm-d/llm-d/blob/main/CODE_OF_CONDUCT.md) - Our expectations for community behavior to ensure a welcoming and inclusive environment.
-
+### Connect
+- We use Slack to discuss development across organizations. Please join: [Link to Slack - UPDATE](https://...)
+- We host a weekly standup for contributors on Wednesdays at 1230pm ET. Please join: [Meeting Details](https://calendar.google.com/calendar/event?action=TEMPLATE&tmeid=NG9yZ3AyYTN0N3VlaW01b21xbWV2c21uNjRfMjAyNTA1MjhUMTYzMDAwWiByb2JzaGF3QHJlZGhhdC5jb20&tmsrc=robshaw%40redhat.com&scp=ALL)
+- We use Google Groups to share architecture diagrams and other content. Please join: [Google Group](https://groups.google.com/g/llm-d-contributors)
 
 ## License
 
