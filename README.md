@@ -23,7 +23,7 @@ Latest News 🔥
 
 With `llm-d` users can operationalize GenAI deployments with a modular, high-performance, end-to-end solution that leverages the latest distributed inference optimizations like KV-cache aware routing and disaggregated serving, co-designed and integrated with the Kubernetes operational tooling in [Inference Gateway (IGW)](https://github.com/kubernetes-sigs/gateway-api-inference-extension).
 
-Developed by leaders in the Hardware Accelerator, Kuberentes, and vLLM ecosystems, `llm-d` is a community-driven, Apache-2 licensed project with an open development model.
+Developed by leaders in the Hardware Accelerator, Kubernetes, and vLLM ecosystems, `llm-d` is a community-driven, Apache-2 licensed project with an open development model.
 
 ## 🧱 Architecture
 
