@@ -6,7 +6,7 @@
 </p>
 
 <h3 align="center">
-Powering Distributed Gen AI Inference at Scale
+Kubernetes-Native Distributed Inference at Scale
 </h3>
 
  [![Documentation](https://img.shields.io/badge/Documentation-8A2BE2?logo=read-the-docs&logoColor=%23ffffff&color=%231BC070)](https://...) [![License](https://img.shields.io/github/license/llm-d/llm-d.svg)](https://github.com/llm-d/llm-d/blob/main/LICENSE) 
@@ -14,56 +14,47 @@ Powering Distributed Gen AI Inference at Scale
     <img alt="Join Slack" src="https://img.shields.io/badge/Join%20Slack-blue?logo=slack">
   </a>
 
+Latest News 🔥
+- [2025-05] Coreweave, Google, IBM Research, NVIDIA, and Red Hat launched the `llm-d` community. Check out [our blog post - UPDATE]() and [press release - UPDATE]().
 
+## 📄 About
 
-## 📄 Overview
+`llm-d` is a Kubernetes-native distributed inference serving stack - a well-lit path for anyone to serve at scale, with the fastest time-to-value and competitive performance per dollar for most models across most hardware accelerators.
 
-llm-d is a Kubernetes-native, high-performance distributed LLM inference framework designed to unlock production-scale AI inference. It takes you from your first inference response to full-scale production, emphasizing diverse hardware options and increased operational efficiency. The project focuses on providing efficient distributed inferencing on any Kubernetes cluster, building on proven production-grade standards. Its architecture is built for high performance and scalability, enhancing efficiency through intelligent resource orchestration with optimizations like prefill-decode disaggregation, advanced KV management, and AI-aware scheduling and routing.
+With `llm-d` users can operationalize GenAI deployments with a modular, high-performance, end-to-end solution that leverages the latest distributed inference optimizations like KV-cache aware routing and disaggregated serving, co-designed and integrated with the Kubernetes operational tooling in [Inference Gateway (IGW)](https://github.com/kubernetes-sigs/gateway-api-inference-extension).
 
-llm-d prioritizes ease of deployment and use, addressing the operational needs of running large GPU clusters, including SRE concerns and day-2 operations. It is designed to be an expandable and evolving inference platform, featuring a set of core functionalities and experimental features. llm-d can be deployed as a production solution or used as components for experimentation to evolve distributed inference capabilities.
-
+Developed by leaders in the Hardware Accelerator, Kuberentes, and vLLM ecosystems, `llm-d` is a community-driven, Apache-2 licensed project with an open development model.
 
 ## 🧱 Architecture
 
-llm-d includes the following main components:
-
-- **Prefill/Decode Disaggregation:** separates the prefill and decode stages to optimize inference performance
-- **KV Cache, Prefix, and Session-Aware Router and scheduler:** Incorporates plug points for customizable scorers to enhance routing and scheduling efficiency
-- **KV Cache Manager:** Orchestrates KV offloading and transfer (using NIXL-based KV transfer)
-- **Operational Telemetry:** Provides production-level monitoring and metrics through Prometheus and Grafana
-
+`llm-d` adopts a layered architecture on top of industry-standard open technologies: vLLM, Kubernetes, and Inference Gateway.
 
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)">
-    <img alt="llm-d Logo" src="./docs/assets/images/llm-d-arch.png" width=95%>
+    <img alt="llm-d Arch" src="./docs/assets/images/llm-d-arch.svg" width=95%>
   </picture>
 </p>
 
-See a detailed architecture [here](https://...).
+Key features of `llm-d` include:
 
-### Core features 
+- **vLLM-Optimized Inference Scheduler:** `llm-d` builds on IGW's pattern for customizable “smart” load-balancing via the Endpoint Picker Protocol (EPP) to define vLLM-optimized scheduling. Leveraging operational telemetry exposed by vLLM, Scheduler implements filtering and scoring algorithms necessary to make decisions with P/D-, KV-cache-, SLA-, and load-awareness. Advanced teams can implement their own scorers and filterers to further customize for their use cases, while benefiting from othr features in IGW, like flow control and latency-aware balancing. [For more details, see our Northstar design](https://docs.google.com/document/d/1kE1LY8OVjiOgKVD9-9Po96HODbTIbgHp4qgvw06BCOc/edit?tab=t.0#heading=h.4rgkvvo5gnle)
 
-- [**Prefill/Decode Disaggregation**](): 
+- **Disaggregated Serving with vLLM:** `llm-d` leverages vLLM’s recently enabled support for disaggregated serving via a pluggable KV Connector API to run prefill and decode on independent instances, using high-performance transport libraries like NVIDIA’s NIXL. In `llm-d`, we plan to support latency-optimized implementation using fast interconnects (IB, RDMA, ICI) and throughput optimized implementation using data-center netwokring. [For more details, see our Northstar design](https://docs.google.com/document/d/1FNN5snmipaTxEA1FGEeSH7Z_kEqskouKD1XYhVyTHr8/edit?tab=t.0)
 
-- [**Dynamic and pluggable AI-aware inference scheduler**](): Provides scheduler components for routing AI inference requests within the LLM-d framework, including an "Endpoint Picker (EPP)" for optimized routing via Envoy's ext-proc feature. Built on Gateway API and GIE projects, it extends support with custom plugins like custom scorers and P/D Disaggregation.
+- **Disaggregated Prefix Caching with vLLM:** `llm-d` uses the same vLLM KV connector API used in disaggregated serving to provide a pluggable cache for previous calculations, including offloading KVs to host, remote storage, and systems like LMCache. In llm-d, we plan to support two KV caching schemes. *Independent* (north-soutch) caching with basic offloading to host memory and disk, providing a zero operational cost mechanism that utilizes all system resources. *Shared* (east-west) caching with KV transfer between instances and shared storage with global indexing, providing potential for higher performance at the cost of a more operationally complex system. [For more details, see our Northstar design](https://docs.google.com/document/d/1inTneLEZTv3rDEBB9KLOB9K6oMq8c3jkogARJqdt_58/edit?tab=t.0)
 
-- [**KV Cache Manager**](): A pluggable KVCache Manager for KVCache-aware routing in vLLM-based serving platforms. It aims to improve user experience by reducing Time-To-First-Token (TTFT) through higher KVCache hit rates and smart routing. It reduces serving costs by improving compute utilization and minimizing re-compute. It also enables system scalability with a distributed KVCache pool, allowing cache offloading, reuse, and seamless load balancing. See docs for more information.
+- **Variant Autoscaling over Hardware, Workload, and Traffic** (🚧): We plan to implement a traffic- and hardware-aware autoscaler that (a) measures the capacity of each model server instance, (b) derive a load function that takes into account different request shapes and QoS, and (c) asseses recent traffic mix (QPS, QoS, and shapes)
+Using the recent traffic mix to calculate the optimal mix of instances to handle prefill, decode, and latency-tolerant requests, enabling use of HPA for SLO-level efficiency. [For more details, see our Northstar design](https://docs.google.com/document/d/1inTneLEZTv3rDEBB9KLOB9K6oMq8c3jkogARJqdt_58/edit?tab=t.0)
 
-- [**Model service**](): ModelService: Declaratively provisions and maintains Kubernetes resources needed to serve a base model for inference, automating management of prefill and decode deployments, inference pool, endpoint picker (EPP) deployment, relevant RBAC permissions, and optionally referencing BaseConfig for shared behavior presets. It supports disaggregated workloads, integrates with Gateway API for routing, enables auto-scaling, allows independent scaling, supports model loading from various sources, and includes value templating.
-
-### Experimental 
-
-- [**llm-sim**](): A tool for testing and development that mimics an ingerence engine responses (currently implementing vLLM's API) without running actual inference. It supports basic API endpoints and Prometheus metrics, and can operate in echo mode (returns received text) or random mode (returns predefined sentences). Timing of responses can be adjusted, and it can be run standalone or in a Pod for testing.
-- [**llm-d-benchmarking**](): Tooling integrating fmperf: A cloud-native, Kubernetes-based benchmarking tool that automates deployment and performance testing of LLM inference systems. It streamlines benchmarking by orchestrating end-to-end workflows, allowing organizations to efficiently measure inference throughput and latency without the overhead of prolonged GPU cluster configuration and load tester setup. 
 
 ## 🚀 Getting Started
 
-llm-d can be installed as a full solution, customizing enabled features, or through its individual components for experimentation.
+`llm-d` can be installed as a full solution, customizing enabled features, or through its individual components for experimentation.
 
 ### Deploying as as solution
 
-llm-d's deployer can be used to that installed it as a solution using a single Helm chart on Kubernetes.
+llm-d-deployer's deployer can be used to that installed it as a solution using a single Helm chart on Kubernetes.
 
 > [!TIP]
 > See the guided expericience with our [quickstart](https://github.com/neuralmagic/llm-d-deployer/blob/main/quickstart/README.md).
@@ -80,14 +71,26 @@ To clone all the components:
 > [!TIP]
 > As a customizatoin example, see [here]() a template for adding a scheduler scorer.
 
- ## 📦 Releases
+## 📦 Releases
 
-Visit our [GitHub Releases page](https://github.com/llm-d/llm-d/releases) and review the release notes to stay updated with the latest releases.
+Visit our [GitHub Releases page](https://github.com/llm-d/llm-d-deployer/releases) and review the release notes to stay updated with the latest releases.
 
 
- ## 👋 Community
+## Contribute
 
-### Contribute
+### Slack
+`llm-d` uses Slack to discuss development across organizations. Please join to discuss major features:
+- [Link to Slack - UPDATE](https://...)
+
+### Weekly Standup
+`llm-d` host a weekly contributors standup on Wednesdays at 1230pm ET. Please join to discuss active projects:
+- [Meeting Details](https://calendar.google.com/calendar/event?action=TEMPLATE&tmeid=NG9yZ3AyYTN0N3VlaW01b21xbWV2c21uNjRfMjAyNTA1MjhUMTYzMDAwWiByb2JzaGF3QHJlZGhhdC5jb20&tmsrc=robshaw%40redhat.com&scp=ALL)
+
+### Google Groups
+`llm-d` uses Google Groups to share architecture diagrams and other content. Please join to view:
+- [Google Group](https://groups.google.com/g/llm-d-contributors)
+
+### Guidelines
 
 We appreciate contributions to the code, examples, integrations, documentation, bug reports, and feature requests! Your feedback and involvement are crucial in helping llm-d grow and improve. Below are some ways you can get involved:
 
@@ -95,35 +98,6 @@ We appreciate contributions to the code, examples, integrations, documentation, 
 - [**CONTRIBUTING**](https://github.com/llm-d/llm-d/blob/main/CONTRIBUTING.md) - Guidelines for contributing to the project, including code standards, pull request processes, and more.
 - [**CODE_OF_CONDUCT**](https://github.com/llm-d/llm-d/blob/main/CODE_OF_CONDUCT.md) - Our expectations for community behavior to ensure a welcoming and inclusive environment.
 
-### Community meeting
-
-A community meeting for llm-d will be hosted weekly. Meeting Details:
-
-\<TBD\>
-
-### Join
-
-We invite you to join our growing community of developers, researchers, and enthusiasts passionate about scalinng and optimizing inference. Whether you're looking for help, want to share your own experiences, or stay up to date with the latest developments, there are plenty of ways to get involved:
-
-- [**llm-d Community Slack**](https://...) - Join our Slack channel to connect with other llm-d users and developers. Ask questions, share your work, and get real-time support.
-- [**GitHub Issues**](https://github.com/llm-d/llm-d/issues) - Report bugs, request features, or browse existing issues. Your feedback helps us improve llm-d.
-- [**Subscribe to Updates**](https://...) - Sign up for the latest news, announcements, and updates about llm-d, webinars, events, and more.
-- [**Contact Us**](http://...) - Use our contact form for general questions about llm-d.
-
-<div>
-<h3><font size="4"><img src="https://raw.githubusercontent.com/Tarikul-Islam-Anik/Animated-Fluent-Emojis/master/Emojis/Smilies/Red%20Heart.png" alt="Red Heart" width="40" height="40" /> Contributors </font></h3>
-</div>
-<br>
-
-<center>
-<a href="https://github.com/llm-d/llm-d/graphs/contributors">
-  <img src="https://contrib.rocks/image?repo=llm-d/llm-d" />
-</a>
-</center>
-<br>
-<br>
-
-\<coming...\>
 
 ## License
 
