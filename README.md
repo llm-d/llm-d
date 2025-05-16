@@ -9,7 +9,7 @@
 Powering Distributed Gen AI Inference at Scale
 </h3>
 
- [![Documentation](https://img.shields.io/badge/Documentation-8A2BE2?logo=read-the-docs&logoColor=%23ffffff&color=%231BC070)](https://...) [![License](https://img.shields.io/github/license/neuralmagic/guidellm.svg)](https://github.com/neuralmagic/guidellm/blob/main/LICENSE) 
+ [![Documentation](https://img.shields.io/badge/Documentation-8A2BE2?logo=read-the-docs&logoColor=%23ffffff&color=%231BC070)](https://...) [![License](https://img.shields.io/github/license/llm-d/llm-d.svg)](https://github.com/llm-d/llm-d/blob/main/LICENSE) 
   <a href="...">
     <img alt="Join Slack" src="https://img.shields.io/badge/Join%20Slack-blue?logo=slack">
   </a>
@@ -89,6 +89,7 @@ We appreciate contributions to the code, examples, integrations, documentation, 
 - [**DEVELOPING**](https://github.com/llm-d/llm-d/blob/main/DEVELOPING.md) - Development guide for setting up your environment and making contributions.
 - [**CONTRIBUTING**](https://github.com/llm-d/llm-d/blob/main/CONTRIBUTING.md) - Guidelines for contributing to the project, including code standards, pull request processes, and more.
 - [**CODE_OF_CONDUCT**](https://github.com/llm-d/llm-d/blob/main/CODE_OF_CONDUCT.md) - Our expectations for community behavior to ensure a welcoming and inclusive environment.
+
 
 ## License
 
