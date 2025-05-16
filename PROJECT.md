@@ -12,6 +12,11 @@
 6. vLLM-first but not vLLM-only - build the modular architecture for most people and collaborate with other projects  
 7. [Hyrum’s Law](https://www.hyrumslaw.com/) is real - we do not regress published APIs or ship breaking changes, only new APIs
 
+## Code of Conduct
+This project adheres to the llm-d - [Code of Conduct and Covenant](CODE_OF_CONDUCT.md). By participating, you are expected to uphold this code.
+
+Review the [Contribution Guidelines](CONTRIBUTING.md) for more information.
+
 ## People
 
 ### Code Ownership
