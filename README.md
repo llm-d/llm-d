@@ -24,7 +24,7 @@ With `llm-d`, users can operationalize GenAI deployments with a modular, high-pe
 
 ## 🧱 Architecture
 
-`llm-d` adopts a modular and layered architecture on top of industry-standard open-source technologies - vLLM, Kubernetes, and Inference Gateway.
+`llm-d` adopts a layered architecture on top of industry-standard open technologies: vLLM, Kubernetes, and Inference Gateway.
 
 <p align="center">
   <picture>
