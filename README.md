@@ -6,7 +6,7 @@
 </p>
 
 <h3 align="center">
-Powering Distributed Gen AI Inference at Scale
+Kubernetes-Native Distributed Inference at Scale
 </h3>
 
  [![Documentation](https://img.shields.io/badge/Documentation-8A2BE2?logo=read-the-docs&logoColor=%23ffffff&color=%231BC070)](https://...) [![License](https://img.shields.io/github/license/llm-d/llm-d.svg)](https://github.com/llm-d/llm-d/blob/main/LICENSE) 
@@ -14,13 +14,16 @@ Powering Distributed Gen AI Inference at Scale
     <img alt="Join Slack" src="https://img.shields.io/badge/Join%20Slack-blue?logo=slack">
   </a>
 
+Latest News 🔥
+- [2025-05] Coreweave, Google, IBM Research, NVIDIA, and Red Hat officially launched `llm-d`. Check out [our blog post - UPDATE]() and [press release - UPDATE]().
 
-## 📄 Overview
+## 📄 About
 
 `llm-d` is a Kubernetes-native distributed inference serving stack - a well-lit path for anyone to serve at scale, with the fastest time-to-value and competitive performance per dollar for most models across most hardware accelerators.
 
-With `llm-d`, users can operationalize GenAI deployments with a modular, high-performance, end-to-end serving solution that leverages the latest distributed inference optimizations like KV-cache aware routing and disaggregated serving, co-designed and integrated with the Kubernetes operational tooling in [Inference Gateway (IGW)](https://github.com/kubernetes-sigs/gateway-api-inference-extension).
+With `llm-d` users can operationalize GenAI deployments with a modular, high-performance, end-to-end solution that leverages the latest distributed inference optimizations like KV-cache aware routing and disaggregated serving, co-designed and integrated with the Kubernetes operational tooling in [Inference Gateway (IGW)](https://github.com/kubernetes-sigs/gateway-api-inference-extension).
 
+Developed by leaders in the Hardware Accelerator, Kuberentes, and vLLM ecosystems, `llm-d` is a community-driven, Apache-2 licensed project with an open development model.
 
 ## 🧱 Architecture
 
