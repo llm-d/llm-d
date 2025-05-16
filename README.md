@@ -15,7 +15,7 @@ Kubernetes-Native Distributed Inference at Scale
   </a>
 
 Latest News 🔥
-- [2025-05] Coreweave, Google, IBM Research, NVIDIA, and Red Hat officially launched `llm-d`. Check out [our blog post - UPDATE]() and [press release - UPDATE]().
+- [2025-05] Coreweave, Google, IBM Research, NVIDIA, and Red Hat launched the `llm-d` community. Check out [our blog post - UPDATE]() and [press release - UPDATE]().
 
 ## 📄 About
 
@@ -72,18 +72,22 @@ To clone all the components:
 
 ## 📦 Releases
 
-Visit our [GitHub Releases page](https://github.com/llm-d/llm-d/releases) and review the release notes to stay updated with the latest releases.
+Visit our [GitHub Releases page](https://github.com/llm-d/llm-d-deployer/releases) and review the release notes to stay updated with the latest releases.
 
 
 ## Contribute
 
 ### Slack
-`llm-d` uses Slack to discuss development across organizations. Please join to discuss major features.
+`llm-d` uses Slack to discuss development across organizations. Please join to discuss major features:
 - [Link to Slack - UPDATE](https://...)
 
-### Weekly Sync
-`llm-d` host a weekly contributors sync on Wednesdays at 1230pm ET. We run a standup-style session:
+### Weekly Standup
+`llm-d` host a weekly contributors standup on Wednesdays at 1230pm ET. Please join to discuss active projects:
 - [Meeting Details](https://calendar.google.com/calendar/event?action=TEMPLATE&tmeid=NG9yZ3AyYTN0N3VlaW01b21xbWV2c21uNjRfMjAyNTA1MjhUMTYzMDAwWiByb2JzaGF3QHJlZGhhdC5jb20&tmsrc=robshaw%40redhat.com&scp=ALL)
+
+### Google Groups
+`llm-d` uses Google Groups to share architecture diagrams and other content. Please join to view:
+- [Google Group](https://groups.google.com/g/llm-d-contributors)
 
 ### Guidelines
 
