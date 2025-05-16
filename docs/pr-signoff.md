@@ -148,7 +148,7 @@ For Windows users, **Git Bash** is also highly recommended.
 
 This is not recommended for individual contributors, because the commits that it produces are not "signed-off" (as defined by Git) and thus do not carry assent to the DCO; see [Repairing commits](#repairing-commits) below for a way to recover if you have inadvertently made such a PR. For corporate contributors the DCO assent is indicated differently.
 
-Whether it's editing files from llm-d.ai or directly from the LLM-d Github, there are a couple steps to follow that streamlines the workflow of your PR:
+Whether it's editing files from llm-d.ai or directly from the llm-d Github, there are a couple steps to follow that streamlines the workflow of your PR:
 
 1. Changes made to any file are automatically committed to a new branch in your fork.
     - After clicking **Commit changes...**, write your commit message summary line and any extended description that you want. Then click **Propose changes**, review your changes, and then create the PR.
@@ -170,7 +170,7 @@ more than one commit then you can extrapolate using `git cherry-pick
 
 The following instructions provide a basic walk-through if you have already created your own fork of the repository but yet not made a clone on your workstation.
 
-1. Navigate to the **Code** page of the LLM-d github.
+1. Navigate to the **Code** page of the llm-d github.
    
 2. Click the **Fork** dropdown in the top right corner of the page.
     - Under "Existing Forks" click your fork (should look something like "your_username/llm-d")
@@ -179,7 +179,7 @@ The following instructions provide a basic walk-through if you have already crea
     - Copy the SSH repo URL to your clipboard
 4. Open Git Bash (or your CLI of choice), create or change to a different directory if desired.
 5. Clone the repository using `git clone` followed by pasting the URL you just copied.
-6. Change your directory to the LLM-d repo using `cd llm-d`.
+6. Change your directory to the llm-d repo using `cd llm-d`.
 7. `git checkout` to the branch in your fork where the changes were committed.
     - The branch name should be written at the top of your submitted PR page and looks something like "patch-*X*" (where "X" should be the number of PRs made on your fork to date)
 8. Once in your branch, type `git commit -s --amend` to sign off your PR.

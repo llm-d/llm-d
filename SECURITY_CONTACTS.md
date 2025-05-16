@@ -1,7 +1,7 @@
 Defined below are the security contacts for this repo.
 
 They are the contact point for the Product Security Committee to reach out
-to for triaging and handling of incoming issues.
+to for triage and handling of incoming issues.
 
 The below names agree to address security concerns if and when they arise.
 
