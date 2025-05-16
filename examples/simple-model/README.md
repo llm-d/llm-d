@@ -44,7 +44,7 @@ kubectl apply -f examples/simple-model/granite3.2.yaml
 
 ## Simulate client request
 
-You may port-forward the pod or service at port 8000 (because that is the port for the [vLLM container](./simple-baseconfig.yaml#L30) and [decode service]((./simple-baseconfig.yaml#L64)) specified in the baseconfig) and query the vLLM container. The following command port-forwards the service and sends a request.
+You may port-forward the pod or service at port 8000 (because that is the port for the [vLLM container](./simple-baseconfig.yaml#L30) and [decode service](./simple-baseconfig.yaml#L57) specified in the baseconfig) and query the vLLM container. The following command port-forwards the service and sends a request.
 
 ```
 kubectl port-forward svc/granite-base-model-service-decode 8000:8000
@@ -58,10 +58,4 @@ curl http://localhost:8000/v1/completions \
     "model": "ibm-granite/granite-3.3-2b-base",
     "prompt": "New York is"
 }'
-```
-
-You should expect to see something like the following:
-
-```
-
 ```

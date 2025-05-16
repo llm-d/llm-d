@@ -18,5 +18,4 @@ Navigate to each scenario's README, which not only proivides detail commands to 
 [`llm-d-model-service`](https://github.com/llm-d/llm-d-model-service/) additional more patterns, details, and documentation on ModelService.
 
 ## Limitations 
-- Try the scenarios sequentially, and re-deploy `llm-d` for each becuase of a routing dependency. This will be fixed soon by `llm-d`.
-- The idea of "universal" BaseConfigs is to provide configuration for deploying multiple base models. We provide two universal BaseConfigs in our examples, conditioned on how the model artifacts are retrieved (HF vs. PVC vs. OCI). In theory, this layer should be abstracted from BaseConfigs and the BaseConfigs for these two scenarios would be the same as ModelService will take care of volume and volume mounting behind the scenes. This feature is currently work in progress.
+- Try the scenarios one at a time and re-deploy `llm-d` for each becuase of a routing dependency. This will be fixed soon by `llm-d`.
