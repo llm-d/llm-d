@@ -37,6 +37,7 @@ Developed by leaders in the Hardware Accelerator, Kuberentes, and vLLM ecosystem
 </p>
 
 Key features of `llm-d` include:
+
 - **vLLM-Optimized Inference Scheduler:** `llm-d` builds on IGW's pattern for customizable “smart” load-balancing via the Endpoint Picker Protocol (EPP) to define vLLM-optimized scheduling. Leveraging operational telemetry exposed by vLLM, Scheduler implements filtering and scoring algorithms necessary to make decisions with P/D-, KV-cache-, SLA-, and load-awareness. Advanced teams can implement their own scorers and filterers to further customize for their use cases, while benefiting from othr features in IGW, like flow control and latency-aware balancing. [For more details, see our Northstar design](https://docs.google.com/document/d/1kE1LY8OVjiOgKVD9-9Po96HODbTIbgHp4qgvw06BCOc/edit?tab=t.0#heading=h.4rgkvvo5gnle)
 
 - **Disaggregated Serving with vLLM:** `llm-d` leverages vLLM’s recently enabled support for disaggregated serving via a pluggable KV Connector API to run prefill and decode on independent instances, using high-performance transport libraries like NVIDIA’s NIXL. In `llm-d`, we plan to support latency-optimized implementation using fast interconnects (IB, RDMA, ICI) and throughput optimized implementation using data-center netwokring. [For more details, see our Northstar design](https://docs.google.com/document/d/1FNN5snmipaTxEA1FGEeSH7Z_kEqskouKD1XYhVyTHr8/edit?tab=t.0)
@@ -53,7 +54,7 @@ Using the recent traffic mix to calculate the optimal mix of instances to handle
 
 ### Deploying as as solution
 
-llm-d's deployer can be used to that installed it as a solution using a single Helm chart on Kubernetes.
+llm-d-deployer's deployer can be used to that installed it as a solution using a single Helm chart on Kubernetes.
 
 > [!TIP]
 > See the guided expericience with our [quickstart](https://github.com/neuralmagic/llm-d-deployer/blob/main/quickstart/README.md).
