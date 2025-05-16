@@ -67,7 +67,7 @@ llm-d is repo is a metaproject with subcomponents can that can be cloned individ
 
 To clone all the components:
 ```
-    git clone --recurse-submodules https://github.com/llm-d/llm-d.git 
+    curl -s https://api.github.com/orgs/llm-d/repos?per_page=100 | jq -r '.[].clone_url' | xargs git clone
 ``` 
 
 > [!TIP]
