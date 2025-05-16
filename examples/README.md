@@ -11,7 +11,7 @@ Navigate to each scenario's README, which not only proivides detail commands to 
 1. [Serving a base model on vLLM on one pod](./simple-model/)
 2. [Serving a model with routing and P/D disaggregation support](./nixl-xpyd/README.md#scenario-2-serving-a-model-with-routing-and-pd-disaggregation-support)
 3. [Serving a model with xPyD disaggregation](./nixl-xpyd/README.md#scenario-3-serving-a-model-with-xpyd-disaggregation)
-4. [Loading a large model from a PVC](./pvc/)
+4. [Loading a large model from a PVC](./pvc/) (disabled for now)
 
 ## Questions
 

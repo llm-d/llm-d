@@ -7,7 +7,7 @@
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: universal-base-config
+  name: universal-base-config-pvc
 immutable: true
 data:
   decodeDeployment: |
@@ -68,7 +68,7 @@ data:
                   protocol: TCP
               volumeMounts:
                 - name: model-storage
-                  mountPath: /cache
+                  mountPath: /model-cache
               resources:
                 limits:
                   nvidia.com/gpu: 1

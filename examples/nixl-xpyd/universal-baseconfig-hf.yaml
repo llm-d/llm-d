@@ -53,7 +53,7 @@ data:
                   value: "0"
                 - name: UCX_TLS
                   value: "cuda_ipc,cuda_copy,tcp"
-                - name: HF_HUB_CACHE
+                - name: HF_HOME
                   value: /model-cache
                 - name: VLLM_NIXL_SIDE_CHANNEL_HOST
                   valueFrom:
@@ -115,7 +115,7 @@ data:
                       fieldPath: status.podIP
                 - name: VLLM_LOGGING_LEVEL
                   value: DEBUG
-                - name: HF_HUB_CACHE
+                - name: HF_HOME
                   value: /model-cache
               ports:
                 - containerPort: {{ "app_port" | getPort }}

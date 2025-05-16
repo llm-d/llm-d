@@ -29,7 +29,7 @@ data:
                 - "--port"
                 - "{{ "app_port" | getPort }}"
               env:
-                - name: HF_HUB_CACHE
+                - name: HF_HOME
                   value: /cache
               volumeMounts:
                 - name: model-cache
