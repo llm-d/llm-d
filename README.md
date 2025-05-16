@@ -49,6 +49,11 @@ Key features of llm-d include:
 
 For more see the [project proposal](./docs/proposals/llm-d.md).
 
+## ✨ Component Capabilities
+
+### Inference Scheduler Features
+- **Prefix Aware Routing** 🎯: Optimize inference performance by intelligently routing requests based on their input prefixes. This feature enables efficient request distribution across model instances by considering the similarity of input prefixes, reducing redundant computations and improving overall system throughput. [Learn more about prefix aware routing](./docs/inference-scheduler.md)
+
 ## 🚀 Getting Started
 
 llm-d can be installed as a full solution, customizing enabled features, or through its individual components for experimentation.
@@ -66,8 +71,10 @@ llm-d can be installed as a full solution, customizing enabled features, or thro
 
 To clone all main components:
 ```
+    curl -s https://api.github.com/orgs/llm-d/repos?per_page=100 | jq -r '.[].clone_url' | xargs git clone
+```
 repos="llm-d llm-d-deployer llm-d-inference-scheduler llm-d-kv-cache-manager llm-d-routing-sidecar llm-d-model-service llm-d-benchmark llm-d-inference-sim"; for r in $repos; do git clone https://github.com/llm-d/$r.git; done
-``` 
+```
 
 > [!TIP]
 > As a customization example, see [here](https://github.com/llm-d/llm-d-inference-scheduler/blob/main/docs/create_new_filter.md) a template for adding a scheduler scorer.
