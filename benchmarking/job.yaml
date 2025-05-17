@@ -1,0 +1,181 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: fmperf-benchmark
+  namespace: fmperf
+spec:
+  backoffLimit: 0
+  template:
+    spec:
+      serviceAccountName: fmperf-runner
+      containers:
+      - name: fmperf
+        image: quay.io/sallyom/fmperf:llmd
+        imagePullPolicy: Always
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+              - ALL
+          runAsNonRoot: true
+          seccompProfile:
+            type: RuntimeDefault
+        command: ["python", "/app/run_benchmark.py"]
+        env:
+        - name: FMPERF_RESULTS_DIR
+          value: "/requests"
+        - name: FMPERF_NAMESPACE
+          value: "fmperf"
+        - name: FMPERF_WORKLOAD_FILE
+          value: "lmbench_llama32b_instruct.yaml"  # Default to Llama-3.2-3B-Instruct
+        - name: FMPERF_STACK_NAME
+          value: "llm-d-32b-instruct"
+        - name: FMPERF_STACK_TYPE
+          value: "llm-d"
+        - name: FMPERF_ENDPOINT_URL
+          value: "http://llm-d-inference-gateway.llm-d.svc.cluster.local:80"  # Internal service URL
+        - name: FMPERF_REPETITION
+          value: "1"
+        # Add HF_TOKEN_SECRET to be used by the injection script
+        - name: HF_TOKEN_SECRET
+          value: "huggingface-secret"  # Update with your actual secret name
+        # Optional: Add these if you need to configure the model further
+        - name: FMPERF_BATCH_SIZE
+          value: "1"
+        - name: FMPERF_SEQUENCE_LENGTH
+          value: "256"
+        - name: FMPERF_MAX_TOKENS
+          value: "32"
+        # New benchmark parameters
+        - name: FMPERF_NUM_USERS_WARMUP
+          value: "5"
+        - name: FMPERF_NUM_USERS
+          value: "3"
+        - name: FMPERF_NUM_ROUNDS
+          value: "5"
+        - name: FMPERF_SYSTEM_PROMPT
+          value: "256"
+        - name: FMPERF_CHAT_HISTORY
+          value: "1024"
+        - name: FMPERF_ANSWER_LEN
+          value: "32"
+        - name: FMPERF_TEST_DURATION
+          value: "60"
+        volumeMounts:
+        - name: workload-config
+          mountPath: /app/yamls
+        - name: results
+          mountPath: /requests
+        - name: logs
+          mountPath: /app/logs
+      - name: retriever
+        image: registry.redhat.io/ubi9/ubi:latest
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+              - ALL
+          runAsNonRoot: true
+          seccompProfile:
+            type: RuntimeDefault
+        command: ["sh", "-c"]
+        args:
+        - |
+          # Wait for benchmark results and organize them
+          echo "Starting results monitor"
+          
+          # Wait for the main container to finish or for benchmark results
+          MAIN_CONTAINER="fmperf"
+          MAX_WAIT=7200  # 2 hour maximum wait
+          
+          START_TIME=$(date +%s)
+          echo "Starting to monitor for new benchmark results after $(date -d @$START_TIME)"
+          
+          while true; do
+            # Get current time for timeout check
+            CURRENT_TIME=$(date +%s)
+            ELAPSED_TIME=$((CURRENT_TIME - START_TIME))
+            
+            # Check if we've exceeded max wait time
+            if [ ${ELAPSED_TIME} -gt ${MAX_WAIT} ]; then
+              echo "Maximum wait time of ${MAX_WAIT}s exceeded. Exiting."
+              exit 0
+            fi
+            
+            # Check for CSV files to appear
+            if ls /requests/*/LMBench_long_input_output_*.csv 1> /dev/null 2>&1; then
+              echo "Found CSV files in /requests/"
+              # Wait a bit more to ensure all files are written
+              sleep 30
+              break
+            fi
+            
+            # Check if main container is still running
+            CONTAINER_RUNNING=$(cat /proc/1/cgroup | grep -c docker || echo 1)
+            if [ ${CONTAINER_RUNNING} -eq 0 ]; then
+              echo "Main container appears to have completed. Checking for available results."
+              break
+            fi
+            
+            echo "Waiting for CSV files or main container completion... (checking every 30s)"
+            sleep 30
+          done
+          
+          # Create a timestamped results directory
+          TIMESTAMP=$(date +%Y%m%d_%H%M%S)
+          RESULTS_DIR="/requests/run_${TIMESTAMP}"
+          
+          # Check if we have any results to organize
+          if find /requests -type f -name "*.csv" | grep -q .; then
+            echo "Benchmark completed, organizing results in ${RESULTS_DIR}..."
+            mkdir -p "${RESULTS_DIR}"
+            
+            # Copy CSV files and any other result files to the timestamped directory
+            find /requests -type f -name "*.csv" -o -name "*.json" | while read file; do
+              # Skip files that are already in a run_* directory
+              if echo "$file" | grep -q "run_"; then
+                continue
+              fi
+              # Get just the filename without the path
+              filename=$(basename "$file")
+              echo "Copying $file to ${RESULTS_DIR}/$filename"
+              cp "$file" "${RESULTS_DIR}/"
+            done
+            
+            # Also copy any existing result directories
+            find /requests -type d -name "LM*" | while read dir; do
+              # Skip directories that are already in a run_* directory
+              if echo "$dir" | grep -q "run_"; then
+                continue
+              fi
+              # Get just the dirname without the path
+              dirname=$(basename "$dir")
+              echo "Copying directory $dir to ${RESULTS_DIR}/$dirname"
+              cp -r "$dir" "${RESULTS_DIR}/"
+            done
+            
+            echo "Results organized in ${RESULTS_DIR}"
+            ls -la "${RESULTS_DIR}"
+          else
+            echo "No results files found in /requests"
+            ls -la /requests
+          fi
+            
+          # Keep the container running for a while to allow for direct copying
+          echo "Results ready for copying. Container will remain running for 6 hours"
+          echo "You can copy results with: kubectl cp fmperf/$(hostname):/requests/ ./fmperf-results/ -c retriever"
+          echo "Container will automatically exit after 6 hours"
+          sleep 21600
+        volumeMounts:
+        - name: results
+          mountPath: /requests
+      volumes:
+      - name: workload-config
+        configMap:
+          name: fmperf-workload-config
+      - name: results
+        persistentVolumeClaim:
+          claimName: fmperf-results-pvc
+      - name: logs
+        emptyDir: {}
+      restartPolicy: Never

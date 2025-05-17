@@ -72,6 +72,16 @@ To clone all the components:
 > [!TIP]
 > As a customization example, see [here]() a template for adding a scheduler scorer.
 
+## 🔍 Benchmarking
+
+The `llm-d/benchmarking` directory contains tools for benchmarking LLM deployments in Kubernetes:
+
+- **Single Deployment Benchmarking**: Run comprehensive performance tests against your LLM deployment with configurable workloads and parameters
+- **Comparative Benchmarking**: Compare two different deployments side-by-side (e.g., baseline vs optimized LLM-D configuration)
+- **Visualization & Analysis**: Generate detailed performance metrics, latency/throughput visualizations, and statistical summaries
+
+These tools help quantify the performance benefits of LLM-D optimizations under various workload conditions. See [benchmarking/README.md](benchmarking/README.md) for detailed instructions.
+
 ## 📦 Releases
 
 Visit our [GitHub Releases page](https://github.com/llm-d/llm-d-deployer/releases) and review the release notes to stay updated with the latest releases.

@@ -1,0 +1,284 @@
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: baseline-fmperf-benchmark
+  namespace: fmperf
+spec:
+  backoffLimit: 0
+  template:
+    spec:
+      serviceAccountName: fmperf-runner
+      containers:
+      - name: fmperf
+        image: quay.io/sallyom/fmperf:llmd-patch
+        imagePullPolicy: Always
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+              - ALL
+          runAsNonRoot: true
+          seccompProfile:
+            type: RuntimeDefault
+        command: ["python", "/app/run_benchmark.py"]
+        env:
+        - name: FMPERF_RESULTS_DIR
+          value: "/baseline-requests"
+        - name: FMPERF_NAMESPACE
+          value: "fmperf"
+        - name: FMPERF_WORKLOAD_FILE
+          value: "baseline_lmbench_llama32b_instruct.yaml"  # Default to Llama-3.2-3B-Instruct
+        - name: FMPERF_STACK_NAME
+          value: "baseline-32b"
+        - name: FMPERF_STACK_TYPE
+          value: "vllm"
+        - name: FMPERF_ENDPOINT_URL
+          value: "http://llama32-3b.vanilla-vllm.svc.cluster.local:8000"  # Internal service URL
+        - name: FMPERF_REPETITION
+          value: "1"
+        # Add HF_TOKEN_SECRET to be used by the injection script
+        - name: HF_TOKEN_SECRET
+          value: "huggingface-secret"  # Update with your actual secret name
+        # Optional: Add these if you need to configure the model further
+        - name: FMPERF_BATCH_SIZE
+          value: "1"
+        - name: FMPERF_SEQUENCE_LENGTH
+          value: "256"
+        - name: FMPERF_MAX_TOKENS
+          value: "32"
+        # New benchmark parameters
+        - name: FMPERF_NUM_USERS_WARMUP
+          value: "5"
+        - name: FMPERF_NUM_USERS
+          value: "3"
+        - name: FMPERF_NUM_ROUNDS
+          value: "5"
+        - name: FMPERF_SYSTEM_PROMPT
+          value: "256"
+        - name: FMPERF_CHAT_HISTORY
+          value: "1024"
+        - name: FMPERF_ANSWER_LEN
+          value: "32"
+        - name: FMPERF_TEST_DURATION
+          value: "60"
+        # Add this to ensure the job has a unique ID for evaluation job name
+        - name: FMPERF_JOB_ID
+          value: "baseline-32b"
+        volumeMounts:
+        - name: workload-config
+          mountPath: /app/yamls
+        - name: logs
+          mountPath: /app/logs
+      - name: retriever
+        image: registry.redhat.io/ubi9/ubi:latest
+        imagePullPolicy: IfNotPresent
+        env:
+        - name: STACK_NAME
+          value: "baseline-vllm"
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+              - ALL
+          runAsNonRoot: true
+          seccompProfile:
+            type: RuntimeDefault
+        command: ["sh", "-c"]
+        args:
+        - |
+          # Just sleep for a while and then exit cleanly
+          echo "Retriever container staying ready while benchmark runs"
+          echo "Results will be stored in the evaluation job"
+          
+          # Wait for the main container to finish by watching for container termination
+          MAIN_CONTAINER="fmperf"
+          MAX_WAIT=7200  # 2 hour maximum wait
+          
+          echo "Waiting for ${MAIN_CONTAINER} container to complete (max ${MAX_WAIT}s)..."
+          START_TIME=$(date +%s)
+          
+          while true; do
+            # Get current time for timeout check
+            CURRENT_TIME=$(date +%s)
+            ELAPSED_TIME=$((CURRENT_TIME - START_TIME))
+            
+            # Check if we've exceeded max wait time
+            if [ ${ELAPSED_TIME} -gt ${MAX_WAIT} ]; then
+              echo "Maximum wait time of ${MAX_WAIT}s exceeded. Exiting."
+              exit 0
+            fi
+            
+            # Get container status
+            CONTAINER_RUNNING=$(cat /proc/1/cgroup | grep -c docker)
+            if [ ${CONTAINER_RUNNING} -eq 0 ]; then
+              # If this condition is not reliable, we can just exit after a fixed time
+              echo "Main container appears to have completed. Exiting retriever container."
+              exit 0
+            fi
+            
+            # Wait for a bit before checking again
+            echo "Main container still running. Waiting... (${ELAPSED_TIME}s elapsed)"
+            sleep 60
+          done
+        volumeMounts:
+        - name: results
+          mountPath: /baseline-requests
+      volumes:
+      - name: workload-config
+        configMap:
+          name: fmperf-workload-config
+      - name: results
+        persistentVolumeClaim:
+          claimName: baseline-results-pvc
+      - name: logs
+        emptyDir: {}
+      restartPolicy: Never
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: llmd-fmperf-benchmark
+  namespace: fmperf
+spec:
+  backoffLimit: 0
+  template:
+    spec:
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            podAffinityTerm:
+              labelSelector:
+                matchExpressions:
+                - key: job-name
+                  operator: In
+                  values:
+                  - baseline-fmperf-benchmark
+              topologyKey: kubernetes.io/hostname
+      serviceAccountName: fmperf-runner
+      containers:
+      - name: fmperf
+        image: quay.io/sallyom/fmperf:llmd-patch
+        imagePullPolicy: Always
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+              - ALL
+          runAsNonRoot: true
+          seccompProfile:
+            type: RuntimeDefault
+        command: ["python", "/app/run_benchmark.py"]
+        env:
+        - name: FMPERF_RESULTS_DIR
+          value: "/llmd-requests"
+        - name: FMPERF_NAMESPACE
+          value: "fmperf"
+        - name: FMPERF_WORKLOAD_FILE
+          value: "llmd_lmbench_llama32b_instruct.yaml"  # Default to Llama-3.2-3B-Instruct
+        - name: FMPERF_STACK_NAME
+          value: "llmd-32b"
+        - name: FMPERF_STACK_TYPE
+          value: "llm-d"
+        - name: FMPERF_ENDPOINT_URL
+          value: "http://llm-d-inference-gateway.llm-d.svc.cluster.local:80"  # Internal service URL
+        - name: FMPERF_REPETITION
+          value: "1"
+        # Add HF_TOKEN_SECRET to be used by the injection script
+        - name: HF_TOKEN_SECRET
+          value: "huggingface-secret"  # Update with your actual secret name
+        # Optional: Add these if you need to configure the model further
+        - name: FMPERF_BATCH_SIZE
+          value: "1"
+        - name: FMPERF_SEQUENCE_LENGTH
+          value: "256"
+        - name: FMPERF_MAX_TOKENS
+          value: "32"
+        # New benchmark parameters
+        - name: FMPERF_NUM_USERS_WARMUP
+          value: "5"
+        - name: FMPERF_NUM_USERS
+          value: "3"
+        - name: FMPERF_NUM_ROUNDS
+          value: "5"
+        - name: FMPERF_SYSTEM_PROMPT
+          value: "256"
+        - name: FMPERF_CHAT_HISTORY
+          value: "1024"
+        - name: FMPERF_ANSWER_LEN
+          value: "32"
+        - name: FMPERF_TEST_DURATION
+          value: "60"
+        # Add this to ensure the job has a unique ID for evaluation job name
+        - name: FMPERF_JOB_ID
+          value: "llmd-32b"
+        volumeMounts:
+        - name: workload-config
+          mountPath: /app/yamls
+        - name: logs
+          mountPath: /app/logs
+      - name: retriever
+        image: registry.redhat.io/ubi9/ubi:latest
+        imagePullPolicy: IfNotPresent
+        env:
+        - name: STACK_NAME
+          value: "llm-d"
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+              - ALL
+          runAsNonRoot: true
+          seccompProfile:
+            type: RuntimeDefault
+        command: ["sh", "-c"]
+        args:
+        - |
+          # Just sleep for a while and then exit cleanly
+          echo "Retriever container staying ready while benchmark runs"
+          echo "Results will be stored in the evaluation job"
+          
+          # Wait for the main container to finish by watching for container termination
+          MAIN_CONTAINER="fmperf"
+          MAX_WAIT=7200  # 2 hour maximum wait
+          
+          echo "Waiting for ${MAIN_CONTAINER} container to complete (max ${MAX_WAIT}s)..."
+          START_TIME=$(date +%s)
+          
+          while true; do
+            # Get current time for timeout check
+            CURRENT_TIME=$(date +%s)
+            ELAPSED_TIME=$((CURRENT_TIME - START_TIME))
+            
+            # Check if we've exceeded max wait time
+            if [ ${ELAPSED_TIME} -gt ${MAX_WAIT} ]; then
+              echo "Maximum wait time of ${MAX_WAIT}s exceeded. Exiting."
+              exit 0
+            fi
+            
+            # Get container status - try a simple approach
+            CONTAINER_RUNNING=$(cat /proc/1/cgroup | grep -c docker)
+            if [ ${CONTAINER_RUNNING} -eq 0 ]; then
+              # If this condition is not reliable, we can just exit after a fixed time
+              echo "Main container appears to have completed. Exiting retriever container."
+              exit 0
+            fi
+            
+            # Wait for a bit before checking again
+            echo "Main container still running. Waiting... (${ELAPSED_TIME}s elapsed)"
+            sleep 60
+          done
+        volumeMounts:
+        - name: results
+          mountPath: /llmd-requests
+      volumes:
+      - name: workload-config
+        configMap:
+          name: fmperf-workload-config
+      - name: results
+        persistentVolumeClaim:
+          claimName: llm-d-results-pvc
+      - name: logs
+        emptyDir: {}
+      restartPolicy: Never

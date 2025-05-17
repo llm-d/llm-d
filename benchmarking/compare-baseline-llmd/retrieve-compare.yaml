@@ -1,0 +1,89 @@
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: compare-retriever
+  namespace: fmperf
+spec:
+  serviceAccountName: fmperf-runner
+  containers:
+  - name: compare-retriever
+    image: registry.redhat.io/ubi9/ubi:latest
+    imagePullPolicy: IfNotPresent
+    securityContext:
+      allowPrivilegeEscalation: false
+      capabilities:
+        drop: ["ALL"]
+      runAsNonRoot: true
+      seccompProfile:
+        type: RuntimeDefault
+    command: ["/bin/sh", "-c"]
+    args:
+      - |
+        set -e
+        echo "Waiting for parent benchmark jobs to complete..."
+        
+        # Function to check if a job exists
+        job_exists() {
+          kubectl get pod "$1" -n fmperf &>/dev/null
+          return $?
+        }
+        
+        # Wait until the baseline and llmd jobs are no longer running
+        echo "Waiting for baseline-fmperf-benchmark to complete..."
+        while job_exists "$(kubectl get pods -n fmperf -l job-name=baseline-fmperf-benchmark -o name 2>/dev/null | head -1 | sed 's|pod/||')"; do
+          echo "  baseline job still running, waiting 30s..."
+          sleep 30
+        done
+        echo "Baseline job no longer exists or completed."
+        
+        echo "Waiting for llmd-fmperf-benchmark to complete..."
+        while job_exists "$(kubectl get pods -n fmperf -l job-name=llmd-fmperf-benchmark -o name 2>/dev/null | head -1 | sed 's|pod/||')"; do
+          echo "  llmd job still running, waiting 30s..."
+          sleep 30
+        done
+        echo "LLMD job no longer exists or completed."
+        
+        echo "Both parent jobs completed, proceeding with result collection..."
+        sleep 10  # Give system time to release PVC locks
+        
+        mkdir -p /results/compare-run-$(date +%Y%m%d_%H%M%S)
+        cd /results/compare-run-$(date +%Y%m%d_%H%M%S)
+        
+        echo "Looking for baseline benchmark results..."
+        find /baseline-results -type d -name "run_*" -o -name "LMBench_*" 2>/dev/null | while read dir; do
+          echo "Found results in $dir"
+          cp -r "$dir" ./baseline-$(basename "$dir") 2>/dev/null || echo "Failed to copy $dir"
+        done
+        
+        echo "Looking for llmd benchmark results..."
+        find /llmd-results -type d -name "run_*" -o -name "LMBench_*" 2>/dev/null | while read dir; do
+          echo "Found results in $dir"
+          cp -r "$dir" ./llmd-$(basename "$dir") 2>/dev/null || echo "Failed to copy $dir"
+        done
+        
+        echo "All benchmark results collected to /results/compare-run-$(date +%Y%m%d_%H%M%S)"
+        ls -la /results/compare-run-$(date +%Y%m%d_%H%M%S)
+        
+        echo "Waiting for 6 hours to allow inspection of results"
+        sleep 21600  # keep pod alive for manual inspection/copy
+    volumeMounts:
+    - name: baseline-results
+      mountPath: /baseline-results
+      readOnly: true
+    - name: llmd-results
+      mountPath: /llmd-results
+      readOnly: true
+    - name: consolidated-results
+      mountPath: /results
+  volumes:
+  - name: baseline-results
+    persistentVolumeClaim:
+      claimName: baseline-results-pvc
+  - name: llmd-results
+    persistentVolumeClaim:
+      claimName: llm-d-results-pvc
+  - name: consolidated-results
+    persistentVolumeClaim:
+      claimName: fmperf-results-pvc
+  restartPolicy: Never

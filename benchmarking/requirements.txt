@@ -1,0 +1,14 @@
+kubernetes==24.2.0
+black~=24.0
+pandas>=2.0.0
+pyyaml
+pytest
+wheel
+scikit-learn
+durations
+transformers
+sentencepiece
+matplotlib>=3.7.0
+seaborn>=0.12.0
+grip>=4.6.0
+numpy>=1.22.0
