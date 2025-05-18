@@ -83,9 +83,9 @@ Our current Northstar designs lay out the initial scope (join llm-d-contributors
 
 ## Alternatives
 
-### Use nVidia Dynamo on GPUs
+### Use NVIDIA Dynamo on GPUs
 
-nVidia Dynamo offers an excellent integrated stack for low-latency and high scale serving. llm-d intends to work closely with the Dynamo team on finding the best way to integrate TensorRT-LLM, offer operational flexibility for multiple workloads via priority and fairness, and leveraging NIXL. We are prioritizing the inference scheduler as the key component to enhance Dynamo.
+NVIDIA Dynamo offers an excellent integrated stack for low-latency and high scale serving. llm-d intends to work closely with the Dynamo team on finding the best way to integrate TensorRT-LLM, offer operational flexibility for multiple workloads via priority and fairness, and leveraging NIXL. We are prioritizing the inference scheduler as the key component to enhance Dynamo.
 
 ### Use AIBrix
 
