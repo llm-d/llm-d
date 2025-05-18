@@ -15,8 +15,6 @@
 ## Code of Conduct
 This project adheres to the llm-d - [Code of Conduct and Covenant](CODE_OF_CONDUCT.md). By participating, you are expected to uphold this code.
 
-Review the [Contribution Guidelines](CONTRIBUTING.md) for more information.
-
 ## People
 
 ### Code Ownership
