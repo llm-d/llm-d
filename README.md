@@ -52,7 +52,7 @@ For more see the [project proposal](./docs/proposals/llm-d.md).
 ## ✨ Component Capabilities
 
 ### Inference Scheduler Features
-- **Prefix Aware Routing** 🎯: Optimize inference performance by intelligently routing requests based on their input prefixes. This feature enables efficient request distribution across model instances by considering the similarity of input prefixes, reducing redundant computations and improving overall system throughput. [Learn more about prefix aware routing](./docs/inference-scheduler.md)
+- **Prefix Aware Routing** 🎯: Optimize inference performance by intelligently routing requests based on their input prefixes. This feature enables efficient request distribution across model instances by considering the similarity of input prefixes, reducing redundant computations and improving overall system throughput. [Learn more about prefix aware routing](./docs/inference-scheduler/prefix-aware-routing.md)
 
 ## 🚀 Getting Started
 
