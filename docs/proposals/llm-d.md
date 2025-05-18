@@ -9,62 +9,29 @@ integrating with Kubernetes and composing with existing infrastructure choices. 
 vLLM - the model server with the broadest ecosystem and most accessible extensibility - to rapidly
 enable new distributed inference protocols.
 
-<!--
-This section is incredibly important for producing high-quality, user-focused
-documentation such as release notes or a development roadmap. It should be
-possible to collect this information before implementation begins, in order to
-avoid requiring implementors to split their attention between writing release
-notes and implementing the feature itself. Proposal authors and reviewers
-should help to ensure that the tone and content of the `Summary` section is
-useful for a wide audience.
-
-A good summary is probably at least a paragraph in length.
-
-In this section and below, wrap lines to a reasonable length to make it
-easier for reviewers to cite specific portions, and to minimize diff churn on
-updates.
--->
-
 ## Motivation
 
 Generative AI inference serving for large language models (LLM) is complex at scale and the key techniques enabling that scale are broadly understood but sparsely implemented and yield high operational toil. 
 
-A significant fraction of accelerators that host LLM inference run atop Kubernetes and are managed by inference platform teams who lack a well-lit path to deploy, scale, and customize efficient serving. These teams also seek high capacity utilization of their general purpose models across multiple client workloads including chat, summarization, search, agents, and emerging multi-modal applications, all of which exhibit high variance in cost, tolerance of latency, and operational priority.
+A significant fraction of accelerators that host LLM inference run atop Kubernetes and are managed by inference platform teams who lack a well-lit path to deploy, scale, and customize efficient serving. These teams also seek high capacity utilization of their general purpose models across multiple client workloads including chat, summarization, search, agents, and emerging multimodal applications, all of which exhibit high variance in cost, tolerance of latency, and operational priority.
 
 The high cost of emerging prompt-heavy use cases means that many primary workload serving deployments must optimize multiple parts of the stack, especially prefix caching, to reach both latency and cost objectives. Workload authors need the flexibility to shape their architecture from standard components that do not limit future growth.
 
-<!--
-This section is for explicitly listing the motivation, goals, and non-goals of
-this proposal.  Describe why the change is important and the benefits to users. The
-motivation section can optionally provide links to [experience reports] to
-demonstrate the interest in a proposal within the wider project.
-
-[experience reports]: https://go.dev/wiki/ExperienceReports
--->
-
 ### Goals
 
-* Well-lit paths for anyone to serve LLM at scale
-* Bring ML ecosystem expertise into production-ready components for high scale serving
-* Provide vLLM-native protocols for distributed inference across multiple accelerator families
-* Offer an extensible and flexible inference scheduler to balance traffic
-* Support multiple new workloads (agents, multi-modal, RAG/search) with clear reference architectures
-* Compose with existing Kubernetes infrastructure choices
+llm-d is successful if it:
 
-<!--
-List the specific goals of the proposal. What is it trying to achieve? How will we
-know that this has succeeded?
--->
+* Provides well-lit paths for anyone to serve LLM at scale
+* Brings ML ecosystem expertise into production-ready components for high scale serving
+* Provides vLLM-native protocols for distributed inference across multiple accelerator families
+* Offers an extensible and flexible inference scheduler to balance traffic
+* Supports multiple emerging LLM workloads (agents, multimodal, RAG/search) with clear reference architectures
+* Composes with existing Kubernetes infrastructure choices
 
 ### Non-Goals
 
 * Prioritize non-Transformer model architectures (initially)
-* Fork and carry changes that are not in our upstreams
-
-<!--
-What is out of scope for this proposal? Listing non-goals helps to focus discussion
-and make progress.
--->
+* Fork upstream repositories or carry unmerged upstream changes
 
 ## Proposal
 
@@ -103,6 +70,8 @@ As an inference platform team, I can autoscale disaggregated serving roles, diff
 
 ## Design Details
 
+The [unified architecture diagram](https://docs.google.com/drawings/d/1PNGNsicSFiFJjSBThgg6zhxAQMdJp9LqqExQ-8lmmUY/edit) below shows all of the key components of the system, as well as the basic flow of for request flow.
+
 ![Architecture diagram](../assets/images/llm-d-arch-initial-large.svg)
 
 Our current Northstar designs lay out the initial scope (join llm-d-contributors@googlegroups.com to comment). They will be converted into project proposals:
@@ -124,4 +93,4 @@ AIBrix provides a strong research-focused and fast iterating integrated serving 
 
 ### Use Production Stack
 
-production-stack is the easiest way to deploy vLLM onto Kubernetes. llm-d intends to work closely with the production-stack team to find common components and patterns to integrate, especially around prefix cache configuration.
+production-stack is the easiest way to deploy vLLM on Kubernetes. llm-d intends to work closely with the production-stack team to find common components and patterns to integrate, especially around prefix cache configuration.
