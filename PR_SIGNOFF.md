@@ -124,14 +124,20 @@ For Windows users, **Git Bash** is also highly recommended.
     clip < ~/.ssh/id_ed25519.pub
     ```
 
-4. After copying or saving your SSH key, navigate to **Settings** in your Github.
-5. Navigate to the **SSH and GPG keys** page under the Access section in the sidebar.
-6. Under SSH keys, select **New SSH key**.
+    Note: If you are in a WSL shell, use instead
+
+   ```shell
+   clip.exe < ~/.ssh/id_ed25519.pub
+   ```
+
+5. After copying or saving your SSH key, navigate to **Settings** in your Github.
+6. Navigate to the **SSH and GPG keys** page under the Access section in the sidebar.
+7. Under SSH keys, select **New SSH key**.
     - Enter a suitable name for your key under "Title"
     - Open the dropdown menu under "Key type" and select **Signing Key**
     - Paste your SSH key that you copied/saved in **Step 3** under "Key"
-7. Your new SSH key should now be displayed under SSH keys.
-8. **Optional**: To test if your SSH key is connecting properly or not, run the following command in your CLI (more specific instructions can be found in the [Github documentation](https://docs.github.com/en/authentication/connecting-to-github-with-ssh/testing-your-ssh-connection)):
+8. Your new SSH key should now be displayed under SSH keys.
+9. **Optional**: To test if your SSH key is connecting properly or not, run the following command in your CLI (more specific instructions can be found in the [Github documentation](https://docs.github.com/en/authentication/connecting-to-github-with-ssh/testing-your-ssh-connection)):
 
     ```shell
     ssh -T git@github.com
@@ -140,6 +146,7 @@ For Windows users, **Git Bash** is also highly recommended.
     - If given a warning saying something like `The authenticity of the host '[host IP]' can't be established` along with a key fingerprint and a prompt to continue, verify if the provided key fingerprint matches any of those listed [here](https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/githubs-ssh-key-fingerprints)
     - Once you've verified the match, type `yes`
     - If the resulting message says something along the lines of `Hi [User]! You've successfully authenticated, but GitHub does not provide shell access.`, then it means your SSH key is up and ready.
+    - If you get an error saying something like `Error: Permission denied (publickey)` repeat the procedure in step 6 _with the same key_ only select **Authentication Key**. Then try the test command again.
 
 
 <br />
