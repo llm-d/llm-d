@@ -107,6 +107,7 @@ We require lightweight code review:
 * Rebase and squash before merging
 * Use the minimal number of commits, and break large changes up into distinct commits
 * Commits should have short titles and a description of why the change was needed and enough detail that someone looking at the git history can determine the scope of the change.
+* All commits must include a valid DCO sign-off line (i.e., Signed-off-by: Name <email@domain.com>). You can add this automatically by appending -s to your git commit commands. This indicates agreement with the [Developer Certificate of Origin](https://developercertificate.org/), and is required for all contributions. See [this document](https://github.com/llm-d/llm-d/blob/dev/docs/pr-signoff.md) for more information on how to configure DCO for your development environment.
 
 ### API Changes and Deprecation
 
