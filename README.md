@@ -58,7 +58,7 @@ llm-d can be installed as a full solution, customizing enabled features, or thro
 llm-d's deployer can be used to that installed it as a solution using a single Helm chart on Kubernetes.
 
 > [!TIP]
-> See the guided experience with our [quickstart](https://github.com/neuralmagic/llm-d-deployer/blob/main/quickstart/README.md).
+> See the guided experience with our [quickstart](https://github.com/llm-d/llm-d-deployer/blob/main/quickstart/README.md).
 
 ### Experimenting and developing with llm-d
 
