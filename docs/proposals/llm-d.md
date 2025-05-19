@@ -85,7 +85,7 @@ Our current Northstar designs lay out the initial scope (join llm-d-contributors
 
 ### Use NVIDIA Dynamo
 
-NVIDIA Dynamo offers an excellent integrated stack for low-latency and high scale serving. llm-d intends to work closely with the Dynamo team on intergrating compontents of Dynamo into the operational framework of Kubernetes. We are prioritizing the inference scheduler as the key component to enhance Dynamo.
+NVIDIA Dynamo offers an excellent integrated stack for low-latency and high scale serving. llm-d intends to work closely with the Dynamo team on intergrating components of Dynamo into the operational framework of Kubernetes. We are prioritizing the inference scheduler as the key component to enhance Dynamo.
 
 ### Use AIBrix
 
