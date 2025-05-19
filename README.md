@@ -14,7 +14,7 @@ Kubernetes-Native Distributed Inference at Scale
  [![Join Slack](https://img.shields.io/badge/Join_Slack-blue?logo=slack)](https://inviter.co/llm-d-slack)
 
 Latest News 🔥
-- [2025-05] CoreWeave, Google, IBM Research, NVIDIA, and Red Hat launched the llm-d community. Check out [our blog post - UPDATE]() and [press release - UPDATE]().
+- [2025-05] CoreWeave, Google, IBM Research, NVIDIA, and Red Hat launched the llm-d community. Check out [our blog post - UPDATE]() and [press release](https://www.redhat.com/en/about/press-releases/red-hat-launches-llm-d-community-powering-distributed-gen-ai-inference-scale).
 
 ## 📄 About
 
@@ -70,7 +70,7 @@ repos="llm-d llm-d-deployer llm-d-inference-scheduler llm-d-kv-cache-manager llm
 ``` 
 
 > [!TIP]
-> As a customization example, see [here](https://github.com/llm-d/llm-d-inference-scheduler/blob/main/docs/create_new_filter.md) a template for adding a scheduler scorer.
+> As a customization example, see this [template](https://github.com/llm-d/llm-d-inference-scheduler/blob/main/docs/create_new_filter.md) for adding a custom scheduler filter.
 
 ## 📦 Releases
 
