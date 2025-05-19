@@ -9,13 +9,12 @@
 Kubernetes-Native Distributed Inference at Scale
 </h3>
 
- [![Documentation](https://img.shields.io/badge/Documentation-8A2BE2?logo=read-the-docs&logoColor=%23ffffff&color=%231BC070)](https://...) [![License](https://img.shields.io/github/license/llm-d/llm-d.svg)](https://github.com/llm-d/llm-d/blob/main/LICENSE) 
-  <a href="https://inviter.co/llm-d-slack">
-    <img alt="Join Slack" src="https://img.shields.io/badge/Join%20Slack-blue?logo=slack">
-  </a>
+ [![Documentation](https://img.shields.io/badge/Documentation-8A2BE2?logo=readthedocs&logoColor=white&color=1BC070)](https://www.llm-d.ai)
+ [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](./LICENSE)
+ [![Join Slack](https://img.shields.io/badge/Join_Slack-blue?logo=slack)](https://your-slack-invite-url)
 
 Latest News 🔥
-- [2025-05] Coreweave, Google, IBM Research, NVIDIA, and Red Hat launched the llm-d community. Check out [our blog post - UPDATE]() and [press release - UPDATE]().
+- [2025-05] CoreWeave, Google, IBM Research, NVIDIA, and Red Hat launched the llm-d community. Check out [our blog post - UPDATE]() and [press release - UPDATE]().
 
 ## 📄 About
 
@@ -42,7 +41,7 @@ Key features of llm-d include:
 
 - **Disaggregated Serving with vLLM:** llm-d leverages vLLM’s support for disaggregated serving to run prefill and decode on independent instances, using high-performance transport libraries like NIXL. In llm-d, we plan to support latency-optimized implementation using fast interconnects (IB, RDMA, ICI) and throughput optimized implementation using data-center networking. [See our Northstar design](https://docs.google.com/document/d/1FNN5snmipaTxEA1FGEeSH7Z_kEqskouKD1XYhVyTHr8/edit?tab=t.0)
 
-- **Disaggregated Prefix Caching with vLLM:** llm-d uses vLLM's KVConnector to provide a pluggable KV cache hierarchy, including offloading KVs to host, remote storage, and systems like LMCache. We plan to support two KV caching schemes. [See our Northstar design](https://docs.google.com/document/d/1inTneLEZTv3rDEBB9KLOB9K6oMq8c3jkogARJqdt_58/edit?tab=t.0)
+- **Disaggregated Prefix Caching with vLLM:** llm-d uses vLLM's KVConnector to provide a pluggable KV cache hierarchy, including offloading KVs to host, remote storage, and systems like LMCache. We plan to support two KV caching schemes. [See our Northstar design](https://docs.google.com/document/d/1d-jKVHpTJ_tkvy6Pfbl3q2FM59NpfnqPAh__Uz_bEZ8/edit?tab=t.0#heading=h.6qazyl873259)
     - *Independent (N/S)* caching with offloading to local memory and disk, providing a zero operational cost mechanism for offloading.
     - *Shared (E/W)* caching with KV transfer between instances and shared storage with global indexing, providing potential for higher performance at the cost of a more operationally complex system.
 
@@ -55,22 +54,22 @@ llm-d can be installed as a full solution, customizing enabled features, or thro
 
 ### Deploying as as solution
 
-llm-d's deployer can be used to that installed it as a solution using a single Helm chart on Kubernetes.
+`llm-d`'s deployer can be used to install all main components using a single Helm chart on Kubernetes.
 
 > [!TIP]
-> See the guided experience with our [quickstart](https://github.com/neuralmagic/llm-d-deployer/blob/main/quickstart/README.md).
+> See the guided experience with our [quickstart](https://github.com/llm-d/llm-d-deployer/blob/main/quickstart/README.md).
 
 ### Experimenting and developing with llm-d
 
-llm-d is repo is a metaproject with subcomponents can that can be cloned individually.
+`llm-d` is a metaproject composed of subcomponent repositories that can be cloned individually.
 
-To clone all the components:
+To clone all main components:
 ```
-    curl -s https://api.github.com/orgs/llm-d/repos?per_page=100 | jq -r '.[].clone_url' | xargs git clone
+repos="llm-d llm-d-deployer llm-d-inference-scheduler llm-d-kv-cache-manager llm-d-routing-sidecar llm-d-model-service llm-d-benchmark llm-d-inference-sim"; for r in $repos; do git clone https://github.com/llm-d/$r.git; done
 ``` 
 
 > [!TIP]
-> As a customization example, see [here]() a template for adding a scheduler scorer.
+> As a customization example, see [here](https://github.com/llm-d/llm-d-inference-scheduler/blob/main/docs/create_new_filter.md) a template for adding a scheduler scorer.
 
 ## 📦 Releases
 
@@ -81,7 +80,7 @@ Visit our [GitHub Releases page](https://github.com/llm-d/llm-d-deployer/release
 
 - See [our project overview](PROJECT.md) for more details on our development process and governance.
 - We use Slack to discuss development across organizations. Please join: [Slack](https://inviter.co/llm-d-slack)
-- We host a weekly standup for contributors on Wednesdays at 1230pm ET. Please join: [Meeting Details](https://calendar.google.com/calendar/event?action=TEMPLATE&tmeid=NG9yZ3AyYTN0N3VlaW01b21xbWV2c21uNjRfMjAyNTA1MjhUMTYzMDAwWiByb2JzaGF3QHJlZGhhdC5jb20&tmsrc=robshaw%40redhat.com&scp=ALL)
+- We host a weekly standup for contributors on Wednesdays at 12:30pm ET. Please join: [Meeting Details](https://calendar.google.com/calendar/event?action=TEMPLATE&tmeid=NG9yZ3AyYTN0N3VlaW01b21xbWV2c21uNjRfMjAyNTA1MjhUMTYzMDAwWiByb2JzaGF3QHJlZGhhdC5jb20&tmsrc=robshaw%40redhat.com&scp=ALL)
 - We use Google Groups to share architecture diagrams and other content. Please join: [Google Group](https://groups.google.com/g/llm-d-contributors)
 
 ## License
