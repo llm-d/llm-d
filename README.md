@@ -14,7 +14,7 @@ Kubernetes-Native Distributed Inference at Scale
  [![Join Slack](https://img.shields.io/badge/Join_Slack-blue?logo=slack)](https://inviter.co/llm-d-slack)
 
 Latest News 🔥
-- [2025-05] CoreWeave, Google, IBM Research, NVIDIA, and Red Hat launched the llm-d community. Check out [our blog post - UPDATE]() and [press release](https://www.redhat.com/en/about/press-releases/red-hat-launches-llm-d-community-powering-distributed-gen-ai-inference-scale).
+- [2025-05] CoreWeave, Google, IBM Research, NVIDIA, and Red Hat launched the llm-d community. Check out [our blog post](https://llm-d.ai/blog/llm-d-announce) and [press release](https://www.redhat.com/en/about/press-releases/red-hat-launches-llm-d-community-powering-distributed-gen-ai-inference-scale).
 
 ## 📄 About
 
