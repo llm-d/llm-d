@@ -1,0 +1,39 @@
+name: Docker Build - ghcr
+description: Build image using buildx
+inputs:
+  image-name:
+    required: true
+    description: Image name
+  tag:
+    required: true
+    description: Image tag
+  github-token:
+    required: true
+    description: GitHub token for login
+  registry:
+    required: true
+    description: Container registry (e.g., ghcr.io/llm-d)
+runs:
+  using: "composite"
+  steps:
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+
+    - name: Login to GitHub Container Registry
+      run: echo "${{ inputs.github-token }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+      shell: bash
+
+    - name: Print image info
+      run: |
+        echo "Image name: ${{ inputs.image-name }}"
+        echo "Tag: ${{ inputs.tag }}"
+        echo "Registry: ${{ inputs.registry }}"
+      shell: bash
+      
+    - name: Build image
+      run: |
+        docker buildx build \
+          --platform linux/amd64 \
+          -t ${{ inputs.registry }}/${{ inputs.image-name }}:${{ inputs.tag }} \
+          --push .
+      shell: bash

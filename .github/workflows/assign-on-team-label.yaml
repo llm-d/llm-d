@@ -1,0 +1,44 @@
+name: Assign Based on Team Label
+
+on:
+  issues:
+    types:
+      - labeled
+
+jobs:
+  assign:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Assign based on label
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const label = context.payload.label.name;
+
+            const teamAssignees = {
+              'team-inf-sim': ['elevran','mayabar','shmuelk','manoelmarques'],
+              'team-inf-sched': ['elevran','irar2','kfirtoledo','mayabar'],
+              'team-deploy': ['cfchase','cooktheryan','Gregory-Pereira','nerdalert','tumido','vishnoianil'],
+              'team-routing': ['lionelvillard','sriumcp'],
+              'team-model': ['sriumcp'],
+              'team-socials': ['caradelia','jessicachitas','KPRoche','robertgshaw2-redhat'],
+              'team-bench': ['bbenshab','diegocastanibm','maugustosilva','mnmehta'],
+              'team-cicd': ['clubanderson'],
+              'team-kv': ['kfirtoledo','nirrozenbaum','shmuelk','vMaroon','nilig'],
+              'team-web': ['caradelia','jessicachitas','KPRoche'],
+              'team-pd-utils': ['user12']
+            };
+
+            const assignees = teamAssignees[label];
+
+            if (assignees) {
+              await github.rest.issues.addAssignees({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                assignees: assignees
+              });
+              console.log(`Assigned ${assignees.join(', ')} to issue.`);
+            } else {
+              console.log(`Label '${label}' does not match any known team.`);
+            }
