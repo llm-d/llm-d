@@ -1,0 +1,16 @@
+name: Push Docker Image
+description: Push built image to container registry
+inputs:
+  image-name:
+    required: true
+  tag:
+    required: true
+  registry:
+    required: true
+runs:
+  using: "composite"
+  steps:
+    - name: Push image
+      run: |
+        docker push ${{ inputs.registry }}/${{ inputs.image-name }}:${{ inputs.tag }}
+      shell: bash
