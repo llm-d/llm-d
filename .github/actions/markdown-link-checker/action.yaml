@@ -1,0 +1,23 @@
+name: Markdown Link Checker
+description: Checks all Markdown files for broken links
+inputs:
+  github-token:
+    description: GitHub token (not used, but kept for interface compatibility)
+    required: false
+  args:
+    description: Arguments to pass to markdown-link-check
+    required: false
+    default: "--quiet --retry"
+
+runs:
+  using: "composite"
+  steps:
+    - name: Install markdown-link-check
+      shell: bash
+      run: npm install -g markdown-link-check
+
+    - name: Run link check on all Markdown files
+      shell: bash
+      run: |
+        set -e
+        find . -type f -name "*.md" -print0 | xargs -0 -n1 markdown-link-check ${{ inputs.args }}

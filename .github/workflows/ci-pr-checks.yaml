@@ -28,6 +28,12 @@ jobs:
           version: 'v2.1.6'
           args: "--config=./.golangci.yml"
 
+      - name: Run markdown link checker
+        uses: ./.github/actions/markdown-link-checker
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          args: "--quiet --retry"
+          
       - name: Run go test
         shell: bash 
         run: |
