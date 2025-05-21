@@ -19,5 +19,31 @@ runs:
     - name: Run link check on all Markdown files
       shell: bash
       run: |
-        set -e
-        find . -type f -name "*.md" -print0 | xargs -0 -n1 markdown-link-check ${{ inputs.args }}
+        set -euo pipefail
+        echo "🔍 Scanning all Markdown files for broken links..."
+        failed=0
+        total_dead_links=0
+
+        while IFS= read -r -d '' file; do
+          echo "------------------------------------------------------------"
+          echo "📄 Checking: $file"
+          output=$(markdown-link-check ${{ inputs.args }} "$file" 2>&1)
+          echo "$output"
+
+          if echo "$output" | grep -q '✖'; then
+            num_file_dead_links=$(echo "$output" | grep '✖' | wc -l)
+            echo "❌ $num_file_dead_links broken links in $file"
+            total_dead_links=$((total_dead_links + num_file_dead_links))
+            failed=1
+          else
+            echo "✅ No broken links in $file"
+          fi
+        done < <(find . -type f -name "*.md" -print0)
+
+        echo "------------------------------------------------------------"
+        if [ "$failed" -ne 0 ]; then
+          echo "❌ Total broken links found: $total_dead_links"
+          exit 1
+        else
+          echo "✅ All Markdown files passed link checks."
+        fi
