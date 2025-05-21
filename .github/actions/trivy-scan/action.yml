@@ -1,3 +1,4 @@
+---
 name: Trivy Scan
 description: Scan container image with Trivy
 inputs:
@@ -11,7 +12,6 @@ runs:
         wget https://github.com/aquasecurity/trivy/releases/download/v0.44.1/trivy_0.44.1_Linux-64bit.deb
         sudo dpkg -i trivy_0.44.1_Linux-64bit.deb
       shell: bash
-
 
     - name: Scan image
       run: |
