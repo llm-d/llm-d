@@ -193,7 +193,7 @@ WORKDIR /workspace/vllm
 RUN uv venv .vllm --python 3.12
 
 # Supported archs
-ENV TORCH_CUDA_ARCH_LIST="8.0;8.6;8.9+PTX;9.0+PTX"
+ENV TORCH_CUDA_ARCH_LIST="8.0;8.6;8.9;9.0;10.0;12.0"
 
 # Install core dependencies (Torch first)
 RUN . .vllm/bin/activate && \
@@ -202,9 +202,7 @@ RUN . .vllm/bin/activate && \
 
 # Install vllm editable
 RUN . .vllm/bin/activate && \
-    VLLM_COMMIT=$(git merge-base HEAD origin/main) \
-    VLLM_PRECOMPILED_WHEEL_LOCATION=https://wheels.vllm.ai/${VLLM_COMMIT}/vllm-1.0.0.dev-cp38-abi3-manylinux1_x86_64.whl \
-    VLLM_USE_PRECOMPILED=1 uv pip install --editable .
+    uv pip install --editable .
 
 # Install related packages and cleanup
 RUN . .vllm/bin/activate && \
