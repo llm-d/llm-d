@@ -22,17 +22,17 @@ jobs:
           go-version: '1.24.0'
           cache-dependency-path: ./go.sum
 
+      - name: Run markdown link checker
+        uses: ./.github/actions/markdown-link-checker
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          args: "--quiet --retry"  
+
       - name: Run lint checks
         uses: golangci/golangci-lint-action@v8
         with:
           version: 'v2.1.6'
           args: "--config=./.golangci.yml"
-
-      - name: Run markdown link checker
-        uses: ./.github/actions/markdown-link-checker
-        with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          args: "--quiet --retry"
           
       - name: Run go test
         shell: bash 
