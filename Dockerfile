@@ -198,11 +198,11 @@ ENV TORCH_CUDA_ARCH_LIST="8.0;8.6;8.9;9.0;10.0;12.0"
 # Install core dependencies (Torch first)
 RUN . .vllm/bin/activate && \
     uv pip install --upgrade pip && \
-    uv pip install torch==2.7.0 --index-url https://download.pytorch.org/whl/cu128
+    uv pip install torch==2.7.0 --torch-backend=cu128
 
 # Install vllm editable
 RUN . .vllm/bin/activate && \
-    uv pip install --editable .
+    uv pip install --editable . --torch-backend=cu128
 
 # Install related packages and cleanup
 RUN . .vllm/bin/activate && \
