@@ -1,0 +1,23 @@
+---
+name: Update Semver
+
+on:
+  push:
+    tags:
+      - "*.*.*"
+  release:
+    types:
+      - published
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  update-semver:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: haya14busa/action-update-semver@v1.3.0
+        with:
+          major_version_tag_only: false # (optional, default is "false")
