@@ -35,7 +35,7 @@ llm-d is successful if it:
 
 ## Proposal
 
-The `llm-d` project will start with the [Kubernetes Inference Gateway project](github.com/kubernetes-sigs/gateway-api-inference-extension) and the [vLLM model server](github.com/vllm-project/vllm) ecosystem to enable the four primary high-scale techniques:
+The `llm-d` project will start with the [Kubernetes Gateway API Inference Extension project](github.com/kubernetes-sigs/gateway-api-inference-extension) and the [vLLM model server](github.com/vllm-project/vllm) ecosystem to enable the four primary high-scale techniques:
 
 * Tiered prefix cache hierarchy to improve request latency and throughput
 * Disaggregated serving to reduce time-to-first-token latency
