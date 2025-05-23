@@ -41,7 +41,7 @@ For other tools, consult their documentation.
 
 ## Signing Commits
 
-Before signing any commits, you must have a GPG and SSH key. Basic setup instructions can be found below (For more detailed instructions, refer to the Github [GPG](https://docs.github.com/en/authentication/managing-commit-signature-verification/generating-a-new-gpg-key) and [SSH](https://docs.github.com/en/authentication/connecting-to-github-with-ssh/generating-a-new-ssh-key-and-adding-it-to-the-ssh-agent#generating-a-new-ssh-key) setup pages.)
+Before signing any commits, you must have a GPG or SSH key. Basic setup instructions can be found below (For more detailed instructions, refer to the Github [GPG](https://docs.github.com/en/authentication/managing-commit-signature-verification/generating-a-new-gpg-key) and [SSH](https://docs.github.com/en/authentication/connecting-to-github-with-ssh/generating-a-new-ssh-key-and-adding-it-to-the-ssh-agent#generating-a-new-ssh-key) setup pages.)
 
 To sign a particular commit, you must either include `-S` on the `git commit` command line (see the command exhibited above for an example) or have configured automatic signing (see ["Everyone Must Sign" in the Git Book](https://git-scm.com/book/en/v2/Git-Tools-Signing-Your-Work#_everyone_must_sign) for a hint about that).
 
@@ -118,7 +118,7 @@ For Windows users, **Git Bash** is also highly recommended.
    
 2. Press `Enter` to select the default option if prompted to set a save-file or passphrase for the key (you may choose to enter a passphrase if desired; this will prompt you to enter the passphrase every time you perform a DCO sign-off).
    - The following output should generate a `randomart` image 
-3. Use the following command to copy the new SSH key to your clipboard:
+3. Use the following command to copy the **public** part of the new SSH key to your clipboard:
 
     ```shell
     clip < ~/.ssh/id_ed25519.pub
@@ -133,11 +133,12 @@ For Windows users, **Git Bash** is also highly recommended.
 5. After copying or saving your SSH key, navigate to **Settings** in your Github.
 6. Navigate to the **SSH and GPG keys** page under the Access section in the sidebar.
 7. Under SSH keys, select **New SSH key**.
-    - Enter a suitable name for your key under "Title"
+    - Enter a suitable name for your key under "Title" (it'll pick up the email address if left empty)
     - Open the dropdown menu under "Key type" and select **Signing Key**
-    - Paste your SSH key that you copied/saved in **Step 3** under "Key"
-8. Your new SSH key should now be displayed under SSH keys.
-9. **Optional**: To test if your SSH key is connecting properly or not, run the following command in your CLI (more specific instructions can be found in the [Github documentation](https://docs.github.com/en/authentication/connecting-to-github-with-ssh/testing-your-ssh-connection)):
+    - Paste your SSH public key that you copied/saved in **Step 3** under "Key"
+8. Your new SSH key should now be displayed under SSH keys, in the **Signing Key** section.
+9. **Optional**: If you want to use the same SSH or GPG key for authentication as well, repeat steps above, selecting **Authentication** as the "Key type".
+10. **Optional**: To test if your SSH key is connecting properly or not, run the following command in your CLI (more specific instructions can be found in the [Github documentation](https://docs.github.com/en/authentication/connecting-to-github-with-ssh/testing-your-ssh-connection)):
 
     ```shell
     ssh -T git@github.com
@@ -147,7 +148,6 @@ For Windows users, **Git Bash** is also highly recommended.
     - Once you've verified the match, type `yes`
     - If the resulting message says something along the lines of `Hi [User]! You've successfully authenticated, but GitHub does not provide shell access.`, then it means your SSH key is up and ready.
     - If you get an error saying something like `Error: Permission denied (publickey)` repeat the procedure in step 6 _with the same key_ only select **Authentication Key**. Then try the test command again.
-
 
 <br />
 
@@ -172,8 +172,9 @@ lack of signing, if you choose) by adding the signoff to each using
 commits signed then you would use `git commit -s -S --amend` or
 configure automatic signing. Following is an outline of how to do it
 for a branch that adds **exactly one** commit. If your branch adds
-more than one commit then you can extrapolate using `git cherry-pick
--s -S` to build up a revised series of commits one-by-one.
+more than one commit then you can extrapolate using `git cherry-pick -s -S`
+(or `git rebase -i HEAD~NN` and setting commits to `edit`) to build up a
+revised series of commits one-by-one.
 
 The following instructions provide a basic walk-through if you have already created your own fork of the repository but yet not made a clone on your workstation.
 
@@ -190,7 +191,7 @@ The following instructions provide a basic walk-through if you have already crea
 7. `git checkout` to the branch in your fork where the changes were committed.
     - The branch name should be written at the top of your submitted PR page and looks something like "patch-*X*" (where "X" should be the number of PRs made on your fork to date)
 8. Once in your branch, type `git commit -s --amend` to sign off your PR.
-    - The commit will also be signed if either you have set up automatic signing or both include the `-S` flag on that command and have set up your GPG key.
+    - The commit will also be signed if either you have set up automatic signing or both include the `-S` flag on that command and have set up your SSH or GPG key.
     - You may extend that command with `-m` followed by a quoted commit message if you desire. Otherwise `git` will pop up an editor for you to use in making any desired adjustment to the commit message. After making any desired changes, save and exit the editor. FYI: in `vi` (which GitBash uses), when it is in Command mode (which is the normal mode, and contrasts with Insert mode) the keystrokes `:wq!` will attempt to save and then will exit no matter what.
 9. Type `git push -f origin [branch_name]`, replacing `[branch_name]` with the actual name of your branch.
 10. Navigate back to your PR github page.
