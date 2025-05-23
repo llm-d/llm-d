@@ -15,7 +15,6 @@ You can also email the private [llm-d-security-announce@googlegroups.com](mailto
 - You think you discovered a vulnerability in another project that llm-d depends on
   - For projects with their own vulnerability reporting and disclosure process, please report it directly there
 
-
 ### When Should I NOT Report a Vulnerability?
 
 - You need help tuning llm-d components for security

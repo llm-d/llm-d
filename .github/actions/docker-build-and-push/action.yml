@@ -1,3 +1,4 @@
+---
 name: Docker Build - ghcr
 description: Build image using buildx
 inputs:
@@ -29,7 +30,7 @@ runs:
         echo "Tag: ${{ inputs.tag }}"
         echo "Registry: ${{ inputs.registry }}"
       shell: bash
-      
+
     - name: Build image
       run: |
         docker buildx build \

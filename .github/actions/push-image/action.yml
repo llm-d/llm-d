@@ -1,3 +1,4 @@
+---
 name: Push Docker Image
 description: Push built image to container registry
 inputs:

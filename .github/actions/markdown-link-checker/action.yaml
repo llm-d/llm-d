@@ -1,3 +1,4 @@
+---
 name: Markdown Link Checker
 description: Checks all Markdown files for broken links
 inputs:
