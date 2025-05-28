@@ -81,7 +81,7 @@ Visit our [GitHub Releases page](https://github.com/llm-d/llm-d-deployer/release
 
 - See [our project overview](PROJECT.md) for more details on our development process and governance.
 - We use Slack to discuss development across organizations. Please join: [Slack](https://inviter.co/llm-d-slack)
-- We host a weekly standup for contributors on Wednesdays at 12:30pm ET. Please join: [Meeting Details](https://calendar.google.com/calendar/event?action=TEMPLATE&tmeid=MmFmbHVldWE1anJyMHNlcHIwbmZpNThnaG5fMjAyNTA1MjFUMTYzMDAwWiBzbWFydGVyY2xheXRvbkBt&tmsrc=smarterclayton%40gmail.com)
+- We host a weekly standup for contributors on Wednesdays at 12:30pm ET. Please join: [Meeting Details](https://calendar.google.com/calendar/u/0?cid=NzA4ZWNlZDY0NDBjYjBkYzA3NjdlZTNhZTk2NWQ2ZTc1Y2U5NTZlMzA5MzhmYTAyZmQ3ZmU1MDJjMDBhNTRiNEBncm91cC5jYWxlbmRhci5nb29nbGUuY29t)
 - We use Google Groups to share architecture diagrams and other content. Please join: [Google Group](https://groups.google.com/g/llm-d-contributors)
 
 ## License
