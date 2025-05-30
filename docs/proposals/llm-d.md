@@ -138,6 +138,6 @@ AIBrix provides a strong research-focused and fast iterating integrated serving 
 
 production-stack is the easiest way to deploy vLLM on Kubernetes. llm-d intends to work closely with the production-stack team to find common components and patterns to integrate, especially around prefix cache configuration.
 
-### Use kServe
+### Use KServe
 
-kServe assists platform teams in running large numbers of traditional and generative models on Kubernetes densely. Consider kServe if you have lots of LLM deployments smaller than several hosts or if you have many teams that need distinct deployments of models. llm-d focuses on operationalizing large models in very large deployments, as well as having multiple teams using a single shared deployment efficiently.
+KServe assists platform teams in running large numbers of traditional and generative models on Kubernetes densely. Consider KServe if you have lots of LLM deployments smaller than several hosts or if you have many teams that need distinct deployments of models. llm-d focuses on operationalizing large models in very large deployments, as well as having multiple teams using a single shared deployment efficiently.
