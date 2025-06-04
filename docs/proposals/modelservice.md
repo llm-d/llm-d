@@ -72,15 +72,18 @@ KServe provides a general-purpose model serving abstraction but was originally d
 
 ## Acknowledgements
 
-This proposal has been shaped by inputs from several members of llm-d and kserve communities. (See [the original gdoc for a few comments](https://docs.google.com/document/d/1HA-2yNZpc1F4KhyeYA30shjZpYEDqGIJXqVgDVv3SWU/edit?usp=sharing)).
+This proposal has been shaped by inputs from several members of llm-d and kserve communities in the leadup to llm-d launch and beyond. (See [this gdoc for a some comments](https://docs.google.com/document/d/1HA-2yNZpc1F4KhyeYA30shjZpYEDqGIJXqVgDVv3SWU/edit?usp=sharing)).
 
 A partial list of these members (in alphabetical order) is as follows.
 
 1. Abhishek Malvankar
 2. Chen Wang
-3. Jing Chen
-4. Lionel Villard
-5. Michael Kalantar
-6. Pravein Govindan Kannan
-7. Tamar Eilam
-8. Yuan Tang
+3. Greg Pereira
+4. Jing Chen
+5. Lionel Villard
+6. Michael Kalantar
+7. Pravein Govindan Kannan
+8. Srinivasan Parthasarathy
+9. Tamar Eilam
+10. Tom Coufal
+11. Yuan Tang
