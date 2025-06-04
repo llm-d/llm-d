@@ -27,11 +27,14 @@ llm-d is successful if it:
 * Offers an extensible and flexible inference scheduler to balance traffic
 * Supports multiple emerging LLM workloads (agents, multimodal, RAG/search) with clear reference architectures
 * Composes with existing Kubernetes infrastructure choices
+* Is not opinionated about model server deployment orchestration and model server lifecycle
+* Is reliably and consistently tested for performance in our development and testing and in end-user production 
 
 ### Non-Goals
 
 * Prioritize non-Transformer model architectures (initially)
 * Fork upstream repositories or carry unmerged upstream changes
+* Control the exact configuration of the end-user vLLM deployments
 
 ## Proposal
 
@@ -78,8 +81,48 @@ Our current Northstar designs lay out the initial scope (join llm-d-contributors
 
 * [vLLM-Optimized Inference Scheduler](https://docs.google.com/document/d/1kE1LY8OVjiOgKVD9-9Po96HODbTIbgHp4qgvw06BCOc/edit)
 * [Disaggregated Serving with vLLM](https://docs.google.com/document/d/1FNN5snmipaTxEA1FGEeSH7Z_kEqskouKD1XYhVyTHr8/edit)
-* [Prefix Cache Hierarchy](https://docs.google.com/document/d/1inTneLEZTv3rDEBB9KLOB9K6oMq8c3jkogARJqdt_58/edit)
+* [Prefix Cache Hierarchy](https://docs.google.com/document/d/1d-jKVHpTJ_tkvy6Pfbl3q2FM59NpfnqPAh__Uz_bEZ8/edit?tab=t.0#heading=h.6qazyl873259)
 * [Variant Autoscaling over Hardware, Workload, and Traffic](https://docs.google.com/document/d/1inTneLEZTv3rDEBB9KLOB9K6oMq8c3jkogARJqdt_58/edit)
+
+### Components
+
+llm-d streamlines deployment and integration of the following components:
+
+1. An **inference scheduler** directing traffic to model servers
+    1. Integrates with the Kubernetes [inference gateway API project](https://gateway-api-inference-extension.sigs.k8s.io/) to have Kubernetes control plane API
+    2. Performing model routing and rollout, flow control, kv- and prefix- cache aware load balancing
+    3. Balances traffic to the optimal model server based on the request, workload type, and current load
+2. **vLLM model servers** deployed onto Kubernetes
+    1. In single host or multi-host (using [LeaderWorkerSets](https://lws.sigs.k8s.io/) and [Ray](https://docs.vllm.ai/en/latest/serving/distributed_serving.html#running-vllm-on-multiple-nodes) as best practice) configurations
+    2. With native support for disaggregated serving and optional curated plugins for advanced features
+    3. Using project recommended defaults or highly customized user settings
+    4. May be deployed in multiple deployment **variants** (hardware, software, topology) that offer different performance tradeoffs
+    5. Can be rapidly repurposed as load shifts and started/restarted to reduce wasted capacity
+    6. Can dynamically load new LoRA adapters or even new models with low configuration / coordination
+3. vLLM default prefix caching and zero or more **prefix cache integrations**
+    1. At least one remote prefix cache option
+    2. At least one prefix cache option using the local SSD drives for each replica efficiently
+4. A **variant autoscaler** working with the inference scheduler and Kubernetes horizontal pod autoscaling
+    1. Can reassign prefill and decode roles between model server instances dynamically
+    2. Is aware of multiple deployment variants and their performance and can optimize across them
+    3. Can perform more advanced bucketization of traffic on latency or throughput objectives
+
+### APIs
+
+llm-d intends to drive the following APIs in our upstreams:
+
+1. vLLM public workload APIs to support inference scheduler-driven disaggregated serving
+2. vLLM management APIs to support rapid reconfiguration of vLLM where appropriate
+2. vLLM internal APIs to support point-to-point disaggregated serving, remote prefix cache, and testing
+3. Kubernetes Gateway APIs to support static or dynamic tuning of disaggregation
+4. Kubernetes Gateway APIs to enable latency or throughput optimization and autoscaling
+5. vLLM/[LMCache](https://lmcache.ai) remote prefix cache APIs that are interoperable across implementations
+
+llm-d may incubate new Kubernetes APIs via custom resources or new vLLM APIs, but our primary path is to land APIs upstream.
+
+### Dependencies
+
+llm-d intends to use [NIXL](https://github.com/ai-dynamo/nixl) to optimize GPU originating and terminating transfers. A follow-on proposal will identify gaps across accelerators and in host to host scenarios and recommend a solution.
 
 ## Alternatives
 
@@ -94,3 +137,7 @@ AIBrix provides a strong research-focused and fast iterating integrated serving 
 ### Use Production Stack
 
 production-stack is the easiest way to deploy vLLM on Kubernetes. llm-d intends to work closely with the production-stack team to find common components and patterns to integrate, especially around prefix cache configuration.
+
+### Use KServe
+
+KServe assists platform teams in running large numbers of traditional and generative models on Kubernetes densely. Consider KServe if you have lots of LLM deployments smaller than several hosts or if you have many teams that need distinct deployments of models. llm-d focuses on operationalizing large models in very large deployments, as well as having multiple teams using a single shared deployment efficiently.
