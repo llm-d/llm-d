@@ -13,7 +13,7 @@
 7. [Hyrum’s Law](https://www.hyrumslaw.com/) is real - we do not regress published APIs or ship breaking changes, only new APIs
 
 ## Code of Conduct
-This project adheres to the llm-d - [Code of Conduct and Covenant](CODE_OF_CONDUCT.md). By participating, you are expected to uphold this code.
+This project adheres to the llm-d [Code of Conduct and Covenant](CODE_OF_CONDUCT.md). By participating, you are expected to uphold this code.
 
 ## People
 
@@ -67,7 +67,7 @@ All important changes should be documented in a public location (code / docs in 
 
 ### Design and Code Review
 
-We use a lightweight change approval process process:
+We use a lightweight change approval process:
 
 #### Features that include public APIs, behavior between components, or new core components / subsystems
 
@@ -78,16 +78,16 @@ The project proposal is a pull-request that adds a markdown file under [./docs/p
 * Summary: A sentence or two suitable for any contributor or any user to understand the change proposed and the outcome  
 * Motivation: for the change which includes the problem to be solved, including Goals / Non-Goals, and any necessary background  
 * Proposal: Can include User Stories (“As a User I want to X”), should have enough detail that reviewers can understand exactly what you're proposing, but should not include things like API designs or implementation. What is the desired outcome and how do we measure success?  
-* Design Details: Should contain enough information that the specifics of your change are understandable. This may include API specs (though not always required) or even code snippets. If there's any ambiguity about HOW your proposal will be implemented, this is the place to discuss them.   
+* Design Details: Should contain enough information that the specifics of your change are understandable. This may include API specs (though not always required) or even code snippets. If there's any ambiguity about HOW your proposal will be implemented, this is the place to discuss them.  
 * Alternatives: Provide alternative implementations / proposals and a short summary of why they were rejected.  
 
 The proposal must be reviewed by the impacted component maintainers and approved by a project maintainers. Proposal review should enforce overall principles and ensure consistency and coherence of the project. See the [process on experimentation](#experimentation-and-incubation) for how proposals differ when they are for experimental features. Approval of a proposal should reflect lazy consensus that the proposal is the right path, and the proposal should have high priority for review.
 
 #### Fixes, Issues, and Bugs
 
-Changes intended to fix broken code or to add small clear changes that do not cross out of a component
+Changes intended to fix broken code or to add small clear changes that do not cross out of a component:
 
-* All bugs and commits must have a clear description of the bug, how to reproduce, and how the change is made.  
+* All bugs and commits must have a clear description of the bug, how to reproduce, and how the change is made  
 * Any other changes can be proposed in a pull-request to a component or an issue in llm-d/llm-d, a maintainer must approve the change (within the spirit of the component design and scope of change)  
   * A good way to bring attention for moderate size changes is to create a RFC issue in GitHub, then engage in Slack  
   * Within components, use project proposals when scope of change is large or impact to users is high
@@ -101,7 +101,7 @@ We require lightweight code review:
 * All repos must gate merges of pull-requests on compilation and running tests at minimum  
 * All experimental features must be off by default and require explicit opt-in
 
-#### Commit and Pull-request Style
+#### Commit and Pull-Request Style
 
 * Pull-requests should describe the problem succinctly
 * Rebase and squash before merging
@@ -149,7 +149,7 @@ Normal process:
    2. Describe what will be required for graduation (success criteria)  
    3. The component can be widely used with the experimental label by others  
 5. Once the component graduates, it moves to the core github org and follows the core process  
-6. If the component does not graduate or stops being maintained, it will be archived for at least 3 months before being moved out of the incubation org.
+6. If the component does not graduate or stops being maintained, it will be archived for at least 3 months before being moved out of the incubation org
 
 #### Experimental Features and APIs
 
@@ -160,7 +160,7 @@ Normal process:
 1. Open a pull request to an existing core component  
 2. Maintainer classifies the PR as experimental, enforces “off-by-default” via flag gating or code use  
 3. Contributor provides additional tests for when the code is on, but adds unit tests verifying the code is inert when off  
-4. When the feature graduates, the gating defaults to on and the conditional logic can be removed after one release where it is on by default.
+4. When the feature graduates, the gating defaults to on and the conditional logic can be removed after one release where it is on by default
 
 Experiments must be behind flags and have the word `experimental` in their name, i.e. `--experimental-disaggregation-v2=true` for a CLI flag.
 
@@ -176,9 +176,9 @@ llm-d utilizes the three tiers of testing:
   * May not model interactions between components as they are deployed  
 * End to end (e2e) testing of the whole system (including benchmarking)  
   * Best for preventing end to end regression and verifying overall correctness  
-  * Slow
+  * Execution can be slow
 
-We seek strong e2e coverage for the deployed system and to prevent regression of performance changes. Appropriate test coverage of core components is an important part of review.
+We seek strong e2e coverage for the deployed system to prevent regression of performance changes. Appropriate test coverage of core components is an important part of review.
 
 ### Security
 
@@ -202,7 +202,7 @@ We will leverage elements of Kubernetes automation (OWNERS files, GitHub sync, /
 
 CI/CD biases towards GHA.  For more involved e2e testing and benchmarking we will explore alignment with the Kube ecosystem, since we will need that for testing e2e scenarios llm-d adds to the inference gateway components.
 
-### Test infrastructure is provided by sponsors
+### Test Infrastructure Sponsorship
 
 Red Hat and Google will provide initial hardware for testing.
 
@@ -218,7 +218,7 @@ Located on GitHub as two top level organizations:
     * If/when we need midstream repos, we will consider them in this repo  
 * `llm-d-incubation`
   * Description: All components that are experimental and not yet fully supported  
-  * Purpose  
+  * Purpose:  
     * Reduce the scope of code in the llm-d org to our minimum viable project  
     * Provide a clear place to experiment and stage projects with lower overhead for end users  
   * Rules:  
