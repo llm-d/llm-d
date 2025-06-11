@@ -4,7 +4,7 @@ Copy this file as a template for a proposal. Inspired by the Kubernetes
 enhancement proposal process at https://github.com/kubernetes/enhancements/blob/3d467242870c26d24cfcb44e0c394ea599e08d02/keps/NNNN-kep-template/README.md
 
 -->
-# Your short, descriptive title
+Variant AutoScaler Proposal 
 
 ## Summary
 
