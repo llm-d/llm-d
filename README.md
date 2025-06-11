@@ -66,7 +66,7 @@ llm-d can be installed as a full solution, customizing enabled features, or thro
 
 To clone all main components:
 ```
-repos="llm-d llm-d-deployer llm-d-inference-scheduler llm-d-kv-cache-manager llm-d-routing-sidecar llm-d-model-service llm-d-benchmark llm-d-inference-sim"; for r in $repos; do git clone https://github.com/llm-d/$r.git; done
+repos=(llm-d llm-d-deployer llm-d-inference-scheduler llm-d-kv-cache-manager llm-d-routing-sidecar llm-d-model-service llm-d-benchmark llm-d-inference-sim); for r in $repos; do git clone https://github.com/llm-d/$r.git; done
 ``` 
 
 > [!TIP]
