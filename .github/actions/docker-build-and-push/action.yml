@@ -33,7 +33,7 @@ runs:
     - name: Build image
       run: |
         docker buildx build \
-          --platform linux/amd64 \
+          --platform linux/amd64,linux/arm64 \
           -t ${{ inputs.registry }}/${{ inputs.image-name }}:${{ inputs.tag }} \
           --push .
       shell: bash
