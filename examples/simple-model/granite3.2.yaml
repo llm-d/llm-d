@@ -1,0 +1,28 @@
+apiVersion: llm-d.ai/v1alpha1
+kind: ModelService
+metadata:
+  name: granite-base-model
+spec:
+  decoupleScaling: false
+
+  baseConfigMapRef:
+    name: simple-base-config
+
+  routing: 
+    # TODO: Verify if we need a token for this
+    modelName: ibm-granite/granite-3.3-2b-base
+    ports:
+    - name: app_port
+      port: 8000
+
+  modelArtifacts:
+    uri: hf://ibm-granite/granite-3.3-2b-base
+
+  # describe decode pods
+  decode:
+    replicas: 1
+    containers:
+    - name: "vllm"
+      args:
+        - "{{ .HFModelName }}"
+  
