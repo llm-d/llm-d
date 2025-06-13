@@ -1,0 +1,8 @@
+---
+site_name: LLM-D Documentation
+docs_dir: docs
+theme:
+  name: readthedocs
+
+nav:
+  - LLM-D: proposals/llm-d.md
