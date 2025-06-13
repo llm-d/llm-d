@@ -1,0 +1,16 @@
+---
+# Add 'repo' label to any root file changes
+repo:
+  - ./*
+
+documentation:
+  - docs/**/*
+
+risu:
+  - risuclient/**/*
+
+magui:
+  - maguiclient/**/*
+
+ci:
+  - tests/**/*
