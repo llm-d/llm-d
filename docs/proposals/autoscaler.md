@@ -4,7 +4,7 @@ Copy this file as a template for a proposal. Inspired by the Kubernetes
 enhancement proposal process at https://github.com/kubernetes/enhancements/blob/3d467242870c26d24cfcb44e0c394ea599e08d02/keps/NNNN-kep-template/README.md
 
 -->
-Variant AutoScaler Proposal 
+# Variant AutoScaler Proposal
 
 ## Summary
 
@@ -62,15 +62,16 @@ List the specific goals of the proposal. What is it trying to achieve? How will 
 know that this has succeeded?
 -->
 
-1. Method to adjust the accelerator and configuration set to serve requests in a performant way with the least amount of resources and cost. 
-2. Show the advantages of the approach relative to the baseline, and additionally, the benefits of a heterogeneous set of resources and topology.  
-3. The method should work independently of KVCache configuration (it is orthogonal).
-4. The method should work for different and dynamically changing traffic patterns. 
-5. Architecture should be extensible, allowing for experimentation with new auto-scalers or the use of different auto-scalers for different models. 
-6. The method should minimize changes and avoid oscillations and identify the sequence of steps to get to the desired state without any disruptions. 
-7. The technique will be able to work with or without offline profiling.
-8. The method can handle disaggregation, i,e when different instances are dynamically tagged and used for prefill only, or for decode only, or as both. 
-9. The method should be able to respect GLOBAL constraints on the availability of each accelerator type, and other global constraints (e.g., cap on energy). 
+1. Method to adjust the accelerator and configuration set to serve requests in a performant way with the least amount of resources and cost
+2. Show the advantages of the approach relative to the baseline, and additionally, the benefits of a heterogeneous set of resources and topology
+3. The method should work independently of KVCache configuration (it is orthogonal)
+4. The method should work for different and dynamically changing traffic patterns
+5. Architecture should be extensible, allowing for experimentation with new auto-scalers or the use of different auto-scalers for different models
+6. The autoscaler must integrate with existing user monitoring infrastructure and generate HPA compatible scaling metrics
+7. The method should minimize changes and avoid oscillations and identify the sequence of steps to get to the desired state without any disruptions. 
+8. The technique will be able to work with or without offline profiling
+9. The method can handle disaggregation, i,e when different instances are dynamically tagged and used for prefill only, or for decode only, or as both
+10. The method should be able to respect GLOBAL constraints on the availability of each accelerator type, and other global constraints (e.g., cap on energy)
 
 ### Non-Goals
 
@@ -80,13 +81,14 @@ and make progress.
 -->
 
 * This project is not concerned with KVCache optimization. However, it must be able to adjust and work well with different caching scenarios. 
-* For the next 3-6 months other constraints such as energy are out of scope. 
-* For the next 3-6 months we can start with assuming that only partial offline data is available
-* For the next 3-6 months we rely on Kubernetes to actuate the change with no further optimization (such as ordering)
-* For next 3-6 months we do not consider agentic use cases where models are connected in a topology
-* For the next 3-6 months not considering dynamic  LORA loading or just assuming it is registered across all instances 
-* Next 3-6 month not focused on anything but transformer based LLMs 
-* Next 3-6 months not focused on anything but the following SLOs TTFT, ITL, and TTLT in some cases
+* The following advanced scenarios are out of scope until after MVP (3-6 months):
+  * Other constraints such as energy are out of scope
+  * Assuming that only partial offline data is available
+  * Rely on Kubernetes to actuate the change with no further optimization (such as ordering)
+  * Agentic use cases where models are connected in a topology
+  * Dynamic LORA loading - we assume it is registered across all instances 
+  * Non-transformer based LLMs 
+  * Any SLOs beyond TTFT, ITL/TPOT, and TTLT
 
 ## Proposal
 
@@ -107,7 +109,7 @@ The optimizer receives as input historical profiled data, as well as the current
 1. Provide scheduling guidance to the Request Scheduler
 2. Calculate a new optimal desired state (number and types of instances and configuration)
  
-Optimization control loop: The control loop comprises (1) a Collector to get data about the inference servers through Prometheus and server deployments, (2) an Optimizer to make decisions, (3) an Actuator to realize such decisions by updating server deployments or by writing directly to Prometheus relying on HPA to affect changes, and (4) a periodic Controller that has access to static and dynamic data
+Optimization control loop: The control loop comprises (1) a Collector to get data about the inference servers through Prometheus and server deployments, (2) an Optimizer to make decisions, (3) an Actuator to realize such decisions by updating server deployments or by exposing metrics readible by HPA and other existing autoscalers, and (4) a periodic Controller that has access to static and dynamic data
 
 ### User Stories (Optional)
 
