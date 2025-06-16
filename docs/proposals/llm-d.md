@@ -57,6 +57,16 @@ The project will measure success against:
 * Efficiency of serving (perf/$ at target latency)
 * Reduction of operational toil, especially with increasing workload density
 
+The key design choices in `llm-d` are:
+
+1. Assume multiple workloads are consuming a shared model server pool and standardize those workload APIs via Kubernetes
+2. Leverage scheduler-directed RPC for disaggregated serving to allow latency and throughput to be traded off dynamically
+3. Strongly separate in-memory and scheduler-directed prefix-caching per replica from durable disaggregated prefix caching to prevent replicas from becoming stateful and to support key sets larger than replica working memory
+4. Use NIXL to abstract high performance point to point KV-cache transfer without a metadata sidechannel
+5. Adapt to existing user deployment patterns and infrastructure vs creating a single monolithic solution
+6. Integrate APIs and core capabilities into upstreams to enforce modularity
+7. Support multiple accelerator hardware architectures with a single set of abstractions, including multiple GPU vendors and systolic architectures like Google TPUs
+
 ### User Stories (Optional)
 
 #### Story 1
@@ -77,7 +87,7 @@ The [unified architecture diagram](https://docs.google.com/drawings/d/1PNGNsicSF
 
 ![Architecture diagram](../assets/images/llm-d-arch-initial-large.svg)
 
-Our current Northstar designs lay out the initial scope (join llm-d-contributors@googlegroups.com to comment). They will be converted into project proposals:
+Our current north star designs lay out the initial scope (join llm-d-contributors@googlegroups.com to comment). They will be converted into project proposals:
 
 * [vLLM-Optimized Inference Scheduler](https://docs.google.com/document/d/1kE1LY8OVjiOgKVD9-9Po96HODbTIbgHp4qgvw06BCOc/edit)
 * [Disaggregated Serving with vLLM](https://docs.google.com/document/d/1FNN5snmipaTxEA1FGEeSH7Z_kEqskouKD1XYhVyTHr8/edit)
@@ -128,16 +138,33 @@ llm-d intends to use [NIXL](https://github.com/ai-dynamo/nixl) to optimize GPU o
 
 ### Use NVIDIA Dynamo
 
-NVIDIA Dynamo offers an excellent integrated stack for low-latency and high scale serving. llm-d intends to work closely with the Dynamo team on intergrating components of Dynamo into the operational framework of Kubernetes. We are prioritizing the inference scheduler as the key component to enhance Dynamo.
+NVIDIA Dynamo offers an excellent integrated stack for low-latency and high scale serving. llm-d intends to work closely with the Dynamo team on integrating components of Dynamo into the operational framework of Kubernetes. We are prioritizing the inference scheduler as the key component to enhance Dynamo.
+
+Unlike Dynamo, llm-d:
+* Prefers to make the prefill/decode disaggregation decision within the scheduler to more precisely control placement and latency vs throughput tradeoffs
+* Uses RPC for disaggregation rather than an [async queue in the Distributed Runtime](https://docs.nvidia.com/dynamo/latest/architecture/distributed_runtime.html) to provide stronger cancellation semantics
+* Prioritizes a strong operational boundary between in-memory prefix cache tiers and local or remote storage tiers rather than a unified memory API like the[KV Block Manager](https://docs.nvidia.com/dynamo/latest/architecture/kvbm_intro.html)
 
 ### Use AIBrix
 
 AIBrix provides a strong research-focused and fast iterating integrated serving platform. llm-d intends to work closely with the AIBrix team to leverage their experience in autoscaling and serving to standardize components and best practices.
 
+Unlike AIBrix, llm-d:
+* Prefers to adapt serving to existing user infrastructure vs providing an opinionated serving platform
+* Prioritizes standardizing Kubernetes upstream APIs in the Gateway ecosystem to drive alignment across many deployments
+
 ### Use Production Stack
 
 production-stack is the easiest way to deploy vLLM on Kubernetes. llm-d intends to work closely with the production-stack team to find common components and patterns to integrate, especially around prefix cache configuration.
 
+Unlike production-stack, llm-d:
+* Is focused on the needs of large scale production serving and expects users to have significant opinions about the rest of the infrastructure.
+
 ### Use KServe
 
-KServe assists platform teams in running large numbers of traditional and generative models on Kubernetes densely. Consider KServe if you have lots of LLM deployments smaller than several hosts or if you have many teams that need distinct deployments of models. llm-d focuses on operationalizing large models in very large deployments, as well as having multiple teams using a single shared deployment efficiently.
+KServe offers a comprehensive platform for teams in running large numbers of traditional and generative models on Kubernetes. Consider KServe when you have high numbers of model deployments or if you have many teams that need distinct deployments of models. llm-d intends to expose [large model optimizations into KServe](https://docs.google.com/document/d/11ZQJ2VhTc42S9K4yau2dMs3Q3f4jqWJL_7Sq14C3hzY/edit?usp=sharing).
+
+Unlike KServe, llm-d:
+* Is focused on reducing the operational friction for serving single workloads and enabling large-model-as-a-service offerings with core capabilities rather than offering an integrated and broad platform
+* Does not orchestrate inference workloads directly
+* Does not attempt to solve problems related to traditional ML serving or models that consume less than 1 accelerator
