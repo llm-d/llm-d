@@ -53,7 +53,7 @@ For more see the [project proposal](./docs/proposals/llm-d.md).
 
 llm-d can be installed as a full solution, customizing enabled features, or through its individual components for experimentation.
 
-### Deploying as as solution
+### Deploying as a solution
 
 `llm-d`'s deployer can be used to install all main components using a single Helm chart on Kubernetes.
 
