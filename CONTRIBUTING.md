@@ -29,21 +29,24 @@ All features involving public APIs, behavior between core components, or new cor
 **Process:**
 1. Create a pull request adding a markdown file under `./docs/proposals` with a descriptive name (e.g., `docs/proposals/disaggregated_serving.md`)
 2. Use the template at `./docs/proposals/PROPOSAL_TEMPLATE.md` with these sections:
-   - **Summary**: A sentence or two explaining the change and outcome
-   - **Motivation**: Problem to be solved, goals/non-goals, background
-   - **Proposal**: User stories, desired outcome, success metrics
-   - **Design Details**: Specific implementation details, API specs if needed
-   - **Alternatives**: Other approaches considered and why they were rejected
+   - **Summary**: A sentence or two suitable for any contributor or any user to understand the change proposed and the outcome
+   - **Motivation**: Problem to be solved, including Goals/Non-Goals, and any necessary background
+   - **Proposal**: Can include User Stories ("As a User I want to X"), should have enough detail that reviewers can understand exactly what you're proposing, but should not include things like API designs or implementation. What is the desired outcome and how do we measure success?
+   - **Design Details**: Should contain enough information that the specifics of your change are understandable. This may include API specs (though not always required) or even code snippets. If there's any ambiguity about HOW your proposal will be implemented, this is the place to discuss them.
+   - **Alternatives**: Provide alternative implementations/proposals and a short summary of why they were rejected
 3. Get review from impacted component maintainers
 4. Get approval from project maintainers
+
+The proposal must be reviewed by the impacted component maintainers and approved by project maintainers. Proposal review should enforce overall principles and ensure consistency and coherence of the project. Approval of a proposal should reflect lazy consensus that the proposal is the right path, and the proposal should have high priority for review.
 
 #### 2. Fixes, Issues, and Bugs
 
 For changes that fix broken code or add small changes within a component:
 
-- Clearly describe the bug, how to reproduce, and how the change fixes it
-- For moderate size changes, create an RFC issue in GitHub and engage in Slack
-- Get approval from a component maintainer
+- All bugs and commits must have a clear description of the bug, how to reproduce, and how the change is made
+- Any other changes can be proposed in a pull-request to a component or an issue in llm-d/llm-d, a maintainer must approve the change (within the spirit of the component design and scope of change)
+  - A good way to bring attention for moderate size changes is to create an RFC issue in GitHub, then engage in Slack
+  - Within components, use project proposals when scope of change is large or impact to users is high
 
 ### Code Review Requirements
 
@@ -118,8 +121,8 @@ We encourage fast iteration and exploration with these constraints:
 
 - **No breaking changes**: Once an API/protocol is in GA release (non-experimental), it cannot be removed or behavior changed
 - **Includes**: All protocols, API endpoints, internal APIs, command line flags/arguments
-- **Exception**: Bug fixes that don't impact significant number of consumers
-- **Versioning**: All protocols and APIs should be versionable with clear compatibility requirements
+- **Exception**: Bug fixes that don't impact significant number of consumers (As the project matures, we will be stricter about such changes - Hyrum's Law is real)
+- **Versioning**: All protocols and APIs should be versionable with clear forward and backward compatibility requirements. A new version may change behavior and fields.
 - **Documentation**: All APIs must have documented specs describing expected behavior
 
 ## Testing Requirements
@@ -127,14 +130,20 @@ We encourage fast iteration and exploration with these constraints:
 We use three tiers of testing:
 
 1. **Unit tests**: Fast verification of code parts, testing different arguments
+   - Best for fast verification of parts of code, testing different arguments
+   - Doesn't cover interactions between code
 2. **Integration tests**: Testing protocols between components and built artifacts
+   - Best for testing protocols and agreements between components
+   - May not model interactions between components as they are deployed
 3. **End-to-end (e2e) tests**: Whole system testing including benchmarking
+   - Best for preventing end to end regression and verifying overall correctness
+   - Execution can be slow
 
 Strong e2e coverage is required for deployed systems to prevent performance regression. Appropriate test coverage is an important part of code review.
 
 ## Security
 
-Maintain appropriate security mindset for production serving. A project email address for responsible disclosure will be established and reviewed by project maintainers.
+Maintain appropriate security mindset for production serving. The project will establish a project email address for responsible disclosure of security issues that will be reviewed by the project maintainers. Prior to the first GA release we will formalize a security component and process.
 
 ## Project Structure
 
