@@ -1,0 +1,232 @@
+ARG BASE_IMAGE=ransmith_vllm_ubuntu_24_04_complete
+ARG BASE_IMAGE_TAG=latest
+ARG COMMON_WORKDIR=/app
+ARG MANYLINUX_IMAGE="quay.io/pypa/manylinux_2_28_x86_64"
+ARG LEGACY_HIPBLASLT_OPTION=
+ARG NIXL_REPO=AnzhongHuang/nixl-hip.git
+ARG NIXL_COMMIT="10ce96405f07c3c965a421f581451a74295cbf63"
+ARG VLLM_COMMIT_SHA="ca2f6b9c301df6dbe2e5c83c705051f478140695"
+
+FROM ${BASE_IMAGE}:${BASE_IMAGE_TAG} AS base
+
+ENV PATH=/opt/rocm/llvm/bin:$PATH
+ENV ROCM_PATH=/opt/rocm
+ENV LD_LIBRARY_PATH=/opt/rocm/lib:/usr/local/lib:
+ARG PYTORCH_ROCM_ARCH=gfx90a;gfx942;gfx1030;gfx1100;gfx1101;gfx1200;gfx1201
+ENV PYTORCH_ROCM_ARCH=${PYTORCH_ROCM_ARCH}
+
+ARG PYTHON_VERSION=3.12
+
+WORKDIR /app
+ENV DEBIAN_FRONTEND=noninteractive
+
+ARG ARG_PYTORCH_ROCM_ARCH
+ENV PYTORCH_ROCM_ARCH=${ARG_PYTORCH_ROCM_ARCH:-${PYTORCH_ROCM_ARCH}}
+
+# Install some basic utilities
+RUN apt-get update -q -y && apt-get install -q -y \
+    sqlite3 libsqlite3-dev libfmt-dev libmsgpack-dev libsuitesparse-dev \
+    apt-transport-https ca-certificates wget curl
+
+# Remove sccache    
+RUN apt-get purge -y sccache; python3 -m pip uninstall -y sccache; rm -f "$(which sccache)"
+ARG COMMON_WORKDIR
+WORKDIR ${COMMON_WORKDIR}
+
+# Install Python and other dependencies
+#RUN apt-get update -y && \
+    #apt-get install -y software-properties-common git curl sudo vim less libgfortran5
+
+
+#RUN apt-get update -y && apt-get -y install curl \
+    #git \
+    #libnuma-dev \
+    #numactl \
+    #wget \
+    #autotools-dev \
+    #automake \
+    #libtool \
+    #libz-dev \
+    #libiberty-dev \
+    #flex \
+    #build-essential \
+    #cmake \
+    #libibverbs-dev \
+    #libgoogle-glog-dev \
+    #libgtest-dev \
+    #libjsoncpp-dev \
+    #libpython3-dev \
+    #libboost-all-dev \
+    #libssl-dev \
+    #libgrpc-dev \
+    #libgrpc++-dev \
+    #libprotobuf-dev \
+    #libclang-dev \
+    #protobuf-compiler-grpc \
+    #pybind11-dev \
+    #python3-full \
+    #python3-pip \
+    #python3-numpy \
+    #etcd-server \
+    #net-tools \
+    #pciutils \
+    #libpci-dev \
+    #vim \
+    #tmux \
+    #screen \
+    #ibverbs-utils \
+    #libibmad-dev
+
+# Install uv and create virtualenv
+#RUN python3 -m venv /opt/dynamo/venv
+#ENV PATH="/opt/dynamo/venv/bin:$PATH"
+#ENV VIRTUAL_ENV=/opt/dynamo/venv
+#RUN pip install --upgrade pip
+
+RUN pip install -U packaging 'cmake<4' Cython lm_eval[api]==0.4.4
+
+##################################
+########## Base Image ############
+##################################
+
+
+ENV LD_LIBRARY_PATH=/usr/lib:$LD_LIBRARY_PATH
+ENV CPATH=/usr/include:$CPATH
+ENV PATH=/usr/bin:$PATH
+ENV PKG_CONFIG_PATH=/usr/lib/pkgconfig:$PKG_CONFIG_PATH
+
+
+ENV LD_LIBRARY_PATH=/opt/rocm/lib:$LD_LIBRARY_PATH
+ENV CPATH=/opt/rocm/include:$CPATH
+ENV PATH=/opt/rocm/bin:$PATH
+ENV PKG_CONFIG_PATH=/opt/rocm/lib/pkgconfig:/usr/local/ucx/lib/pkgconfig:$PKG_CONFIG_PATH
+#============================================
+
+#-----------------> NEW STUFF HERE <------------------------
+
+# NIXL ====================================
+
+ENV LD_LIBRARY_PATH=/usr/local/nixl/lib/x86_64-linux-gnu/:$LD_LIBRARY_PATH
+ENV PYTHONPATH=/usr/local/nixl/lib/python3/dist-packages/:/opt/nixl/test/python/:$PYTHONPATH
+ENV UCX_TLS=^cuda_ipc
+ENV NIXL_PLUGIN_DIR=/usr/local/nixl/lib/x86_64-linux-gnu/plugins
+
+# ✅ Ensure uv is in PATH BEFORE trying to use it
+ENV PATH="/root/.local/bin:$PATH"
+RUN curl -LsSf https://astral.sh/uv/install.sh | sh
+
+
+#================ VLLM build ==================== 
+FROM base AS build_vllm
+WORKDIR /app
+
+ARG VLLM_REPO="https://github.com/vllm-project/vllm.git"
+ARG VLLM_BRANCH="main"
+RUN git clone ${VLLM_REPO} \
+      && cd vllm \
+      && git checkout ${VLLM_BRANCH} 
+
+# -----------------------
+# vLLM build stages
+# Build vLLM
+RUN cd vllm \
+    && python3 -m pip install -r requirements/rocm.txt \
+    && python3 setup.py clean --all  \
+    && python3 setup.py bdist_wheel --dist-dir=dist
+
+FROM scratch AS export_vllm
+ARG COMMON_WORKDIR
+COPY --from=build_vllm ${COMMON_WORKDIR}/vllm/dist/*.whl /
+COPY --from=build_vllm ${COMMON_WORKDIR}/vllm/requirements /requirements
+COPY --from=build_vllm ${COMMON_WORKDIR}/vllm/benchmarks /benchmarks
+COPY --from=build_vllm ${COMMON_WORKDIR}/vllm/tests /tests
+COPY --from=build_vllm ${COMMON_WORKDIR}/vllm/examples /examples
+COPY --from=build_vllm ${COMMON_WORKDIR}/vllm/.buildkite /.buildkite
+
+# ------------------------
+# NIXL build stage
+FROM base AS build_nixl
+
+### NIXL SETUP ###
+RUN apt-get update && apt-get install -y linux-tools-common linux-tools-generic ethtool iproute2
+RUN apt-get install -y dkms linux-headers-generic
+RUN apt-get install -y ninja-build uuid-dev gdb
+RUN pip install meson
+
+ENV LIBRARY_PATH=$LIBRARY_PATH:/usr/local/lib \
+    LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/usr/local/lib
+ARG UCX_VERSION=v1.18.0
+
+RUN cd /usr/local/src && \
+    curl -fSsL "https://github.com/openucx/ucx/releases/download/v1.18.0/ucx-1.18.0.tar.gz" | tar xz && \
+    cd ucx-1.18.0 && \
+    ./configure     \
+    --enable-shared             \
+    --disable-static            \
+    --disable-doxygen-doc       \
+    --enable-optimizations      \
+    --enable-cma                \
+    --enable-devel-headers      \
+    --with-rocm=/opt/rocm       \
+    --with-verbs                \
+    --with-dm                   \
+    --enable-mt                 \
+    --prefix=/usr/local/ucx  && \
+    make -j &&                      \
+    make -j install-strip &&        \
+    ldconfig
+
+ #NIXL custom build, should be replaced later once patches are merged upstream
+RUN git clone https://github.com/AnzhongHuang/nixl-hip.git && \
+    cd nixl-hip && mkdir build && \
+    meson setup build/ --prefix=/usr/local/nixl \
+    -Ducx_path=/usr/local/ucx \
+    -Ddisable_gds_backend=true \
+    -Dcudapath_inc=/opt/rocm/include \
+    -Dcudapath_lib=/opt/rocm/lib && \
+    cd build/ && \
+    ninja && \
+    ninja install
+
+# -----------------------
+# Final image
+FROM base AS final
+
+# Error related to odd state for numpy 1.20.3 where there is no METADATA etc,
+# but an extra LICENSES_bundled.txt.
+# Manually remove it so that later steps of numpy upgrade can continue
+RUN case "$(which python3)" in \
+        *"/opt/conda/envs/py_3.9"*) \
+            rm -rf /opt/conda/envs/py_3.9/lib/python3.9/site-packages/numpy-1.20.3.dist-info/;; \
+        *) ;; esac
+
+RUN python3 -m pip install --upgrade huggingface-hub[cli]
+
+# Install vLLM
+RUN --mount=type=bind,from=export_vllm,src=/,target=/install \
+    cd /install \
+    && pip install -U -r requirements/rocm.txt \
+    && pip uninstall -y vllm \
+    && pip install *.whl
+
+ARG COMMON_WORKDIR
+
+# Copy over the benchmark scripts as well
+COPY --from=export_vllm /benchmarks ${COMMON_WORKDIR}/vllm/benchmarks
+COPY --from=export_vllm /examples ${COMMON_WORKDIR}/vllm/examples
+COPY --from=build_nixl /usr/local/nixl /usr/local/nixl
+COPY --from=build_nixl /usr/local/ucx /usr/local/ucx
+
+
+ENV RAY_EXPERIMENTAL_NOSET_ROCR_VISIBLE_DEVICES=1
+ENV TOKENIZERS_PARALLELISM=false
+
+# ENV that can improve safe tensor loading, and end-to-end time
+ENV SAFETENSORS_FAST_GPU=1
+
+# Performance environment variable.
+ENV HIP_FORCE_DEV_KERNARG=1
+
+ENV LD_LIBRARY_PATH="$LD_LIBRARY_PATH:/usr/local/ucx/lib"
+
+
