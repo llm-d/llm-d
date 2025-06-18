@@ -1,6 +1,17 @@
-# Contributing to llm-d
+# Contributing Guidelines
 
-Thank you for your interest in contributing to llm-d! This document outlines the guidelines and processes for contributing to the project.
+Thank you for your interest in contributing to llm-d. Community involvement is highly valued and crucial for the project's growth and success. The llm-d project accepts contributions via GitHub pull requests. This outlines the process to help get your contribution accepted.
+
+To ensure a clear direction and cohesive vision for the project, the project leads have the final decision on all contributions. However, these guidelines outline how you can contribute effectively to llm-d.
+
+## How You Can Contribute
+
+There are several ways you can contribute to llm-d:
+
+* **Reporting Issues:** Help us identify and fix bugs by reporting them clearly and concisely.
+* **Suggesting Features:** Share your ideas for new features or improvements.
+* **Improving Documentation:** Help make the project more accessible by enhancing the documentation.
+* **Submitting Code Contributions (with consideration):** While the project leads maintain final say, code contributions that align with the project's vision are always welcome.
 
 ## Code of Conduct
 
@@ -158,8 +169,12 @@ Maintain appropriate security mindset for production serving. The project will e
 - Each repo must have README describing purpose and goal
 - Graduated components move to `llm-d` org
 
-## Questions?
+## Community and Communication
 
-- For immediate help: Join [llm-d.slack.com](https://llm-d.slack.com)
-- For issues: Create an issue in [llm-d/llm-d](https://github.com/llm-d/llm-d)
-- For collaboration: Contact [llm-d-contributors@googlegroups.com](mailto:llm-d-contributors@googlegroups.com)
+* **Developer Slack:** [Join our developer Slack workspace](https://inviter.co/llm-d-slack) to connect with the core maintainers and other contributors, ask questions, and participate in discussions.
+* **Weekly Meetings:** Project updates, ongoing work discussions, and Q&A will be covered in our weekly project meeting every Wednesday at 12:30 PM ET. Please join by [adding the shared calendar](https://calendar.google.com/calendar/u/0?cid=NzA4ZWNlZDY0NDBjYjBkYzA3NjdlZTNhZTk2NWQ2ZTc1Y2U5NTZlMzA5MzhmYTAyZmQ3ZmU1MDJjMDBhNTRiNEBncm91cC5jYWxlbmRhci5nb29nbGUuY29t). You can also [join our Google Group](https://groups.google.com/g/llm-d-contributors) for access to shared diagrams and other content.
+* **Social Media:** Follow us on social media for the latest news, announcements, and updates:
+  * **X:** [https://x.com/\_llm_d\_](https://x.com/_llm_d_)
+  * **LinkedIn:** [https://linkedin.com/company/llm-d ](https://linkedin.com/company/llm-d)
+  * **Reddit:** [https://www.reddit.com/r/llm_d/](https://www.reddit.com/r/llm_d/)
+  * **YouTube** [@llm-d-project](https://youtube.com/@llm-d-project)
