@@ -11,6 +11,7 @@ This project adheres to the llm-d [Code of Conduct and Covenant](CODE_OF_CONDUCT
 ### Community
 
 - **Slack**: Join our public discussion at [llm-d.slack.com](https://llm-d.slack.com) for immediate response and collaboration
+- **Join Slack**: You can join the [llm-d Slack at Inviter](https://inviter.co/llm-d-slack)
 - **Code**: Hosted in the [llm-d](https://github.com/llm-d) GitHub organization
 - **Issues**: Project-scoped bugs or issues should be reported in [llm-d/llm-d](https://github.com/llm-d/llm-d)
 - **Mailing List**: [llm-d-contributors@googlegroups.com](mailto:llm-d-contributors@googlegroups.com) for document sharing and collaboration
