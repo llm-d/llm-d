@@ -1,5 +1,5 @@
-ARG BASE_IMAGE=ransmith_vllm_ubuntu_24_04_complete
-ARG BASE_IMAGE_TAG=latest
+ARG BASE_IMAGE=rocm/vllm-dev
+ARG BASE_IMAGE_TAG=base
 ARG COMMON_WORKDIR=/app
 ARG MANYLINUX_IMAGE="quay.io/pypa/manylinux_2_28_x86_64"
 ARG LEGACY_HIPBLASLT_OPTION=
@@ -27,6 +27,11 @@ ENV PYTORCH_ROCM_ARCH=${ARG_PYTORCH_ROCM_ARCH:-${PYTORCH_ROCM_ARCH}}
 RUN apt-get update -q -y && apt-get install -q -y \
     sqlite3 libsqlite3-dev libfmt-dev libmsgpack-dev libsuitesparse-dev \
     apt-transport-https ca-certificates wget curl
+
+# Install just file for convenience
+RUN mkdir -p /app/bin \
+    && curl --proto '=https' --tlsv1.2 -sSf https://just.systems/install.sh | bash -s \
+    && export PATH="$PATH:/app/bin"
 
 # Remove sccache    
 RUN apt-get purge -y sccache; python3 -m pip uninstall -y sccache; rm -f "$(which sccache)"
@@ -188,6 +193,35 @@ RUN git clone https://github.com/AnzhongHuang/nixl-hip.git && \
     ninja && \
     ninja install
 
+# Build libamdhip64.so
+
+FROM base AS build_libamdhip64
+
+WORKDIR /app
+
+ENV HIPCC_BIN_DIR=/opt/rocm/bin
+ENV HIP_COMMON_DIR=/app/hip
+RUN pip3 install CppHeaderParser
+RUN apt-get install rocm-llvm-dev -y
+
+ENV CMAKE_PREFIX_PATH=/opt/rocm-6.4.1/lib/llvm/lib/cmake
+ENV CHERRY_PICK_HASH=b434fbe2bd4416b09a9932c2ba47823b118e266c
+
+RUN git clone https://github.com/ROCm/hip.git && cd hip \
+    && git checkout tags/rocm-6.4.1 -b rocm-6.4.1
+
+RUN git clone https://github.com/ROCm/clr.git && cd clr \
+    && git checkout tags/rocm-6.4.1 -b rocm-6.4.1 \
+    && git config --global user.email "nope@nope.com" \
+    && git config --global user.name "Tardar Sauce" \
+    && git cherry-pick $CHERRY_PICK_HASH \
+    && mkdir build && cd build \
+    && cmake .. -DCLR_BUILD_HIP=ON -DHIP_COMMON_DIR=$HIP_COMMON_DIR \
+    -DHIPCC_BIN_DIR=$HIPCC_BIN_DIR -DCMAKE_PREFIX_PATH=$CMAKE_PREFIX_PATH \
+    && make
+RUN mkdir -p /app/install \
+    && cp clr/build/hipamd/lib/libamdhip64.so.6 /app/install
+
 # -----------------------
 # Final image
 FROM base AS final
@@ -217,6 +251,12 @@ COPY --from=export_vllm /examples ${COMMON_WORKDIR}/vllm/examples
 COPY --from=build_nixl /usr/local/nixl /usr/local/nixl
 COPY --from=build_nixl /usr/local/ucx /usr/local/ucx
 
+# Copy tests for llmd testing
+COPY --from=export_vllm /tests ${COMMON_WORKDIR}/vllm/tests
+
+# Copy libamdhip64
+RUN rm /opt/rocm-6.4.1/lib/libamdhip64.so.6
+COPY --from=build_libamdhip64 /app/install/libamdhip64.so.6 /opt/rocm-6.4.1/lib/libamdhip64.so.6
 
 ENV RAY_EXPERIMENTAL_NOSET_ROCR_VISIBLE_DEVICES=1
 ENV TOKENIZERS_PARALLELISM=false
