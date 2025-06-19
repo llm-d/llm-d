@@ -38,79 +38,23 @@ RUN apt-get purge -y sccache; python3 -m pip uninstall -y sccache; rm -f "$(whic
 ARG COMMON_WORKDIR
 WORKDIR ${COMMON_WORKDIR}
 
-# Install Python and other dependencies
-#RUN apt-get update -y && \
-    #apt-get install -y software-properties-common git curl sudo vim less libgfortran5
-
-
-#RUN apt-get update -y && apt-get -y install curl \
-    #git \
-    #libnuma-dev \
-    #numactl \
-    #wget \
-    #autotools-dev \
-    #automake \
-    #libtool \
-    #libz-dev \
-    #libiberty-dev \
-    #flex \
-    #build-essential \
-    #cmake \
-    #libibverbs-dev \
-    #libgoogle-glog-dev \
-    #libgtest-dev \
-    #libjsoncpp-dev \
-    #libpython3-dev \
-    #libboost-all-dev \
-    #libssl-dev \
-    #libgrpc-dev \
-    #libgrpc++-dev \
-    #libprotobuf-dev \
-    #libclang-dev \
-    #protobuf-compiler-grpc \
-    #pybind11-dev \
-    #python3-full \
-    #python3-pip \
-    #python3-numpy \
-    #etcd-server \
-    #net-tools \
-    #pciutils \
-    #libpci-dev \
-    #vim \
-    #tmux \
-    #screen \
-    #ibverbs-utils \
-    #libibmad-dev
-
-# Install uv and create virtualenv
-#RUN python3 -m venv /opt/dynamo/venv
-#ENV PATH="/opt/dynamo/venv/bin:$PATH"
-#ENV VIRTUAL_ENV=/opt/dynamo/venv
-#RUN pip install --upgrade pip
-
 RUN pip install -U packaging 'cmake<4' Cython lm_eval[api]==0.4.4
 
 ##################################
 ########## Base Image ############
 ##################################
 
-
 ENV LD_LIBRARY_PATH=/usr/lib:$LD_LIBRARY_PATH
 ENV CPATH=/usr/include:$CPATH
 ENV PATH=/usr/bin:$PATH
 ENV PKG_CONFIG_PATH=/usr/lib/pkgconfig:$PKG_CONFIG_PATH
 
-
 ENV LD_LIBRARY_PATH=/opt/rocm/lib:$LD_LIBRARY_PATH
 ENV CPATH=/opt/rocm/include:$CPATH
 ENV PATH=/opt/rocm/bin:$PATH
 ENV PKG_CONFIG_PATH=/opt/rocm/lib/pkgconfig:/usr/local/ucx/lib/pkgconfig:$PKG_CONFIG_PATH
-#============================================
-
-#-----------------> NEW STUFF HERE <------------------------
 
 # NIXL ====================================
-
 ENV LD_LIBRARY_PATH=/usr/local/nixl/lib/x86_64-linux-gnu/:$LD_LIBRARY_PATH
 ENV PYTHONPATH=/usr/local/nixl/lib/python3/dist-packages/:/opt/nixl/test/python/:$PYTHONPATH
 ENV UCX_TLS=^cuda_ipc
@@ -119,7 +63,6 @@ ENV NIXL_PLUGIN_DIR=/usr/local/nixl/lib/x86_64-linux-gnu/plugins
 # ✅ Ensure uv is in PATH BEFORE trying to use it
 ENV PATH="/root/.local/bin:$PATH"
 RUN curl -LsSf https://astral.sh/uv/install.sh | sh
-
 
 #================ VLLM build ==================== 
 FROM base AS build_vllm
@@ -268,5 +211,3 @@ ENV SAFETENSORS_FAST_GPU=1
 ENV HIP_FORCE_DEV_KERNARG=1
 
 ENV LD_LIBRARY_PATH="$LD_LIBRARY_PATH:/usr/local/ucx/lib"
-
-
