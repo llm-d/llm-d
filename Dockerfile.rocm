@@ -29,9 +29,10 @@ RUN apt-get update -q -y && apt-get install -q -y \
     apt-transport-https ca-certificates wget curl
 
 # Install just file for convenience
-RUN mkdir -p /app/bin \
-    && curl --proto '=https' --tlsv1.2 -sSf https://just.systems/install.sh | bash -s \
-    && export PATH="$PATH:/app/bin"
+RUN mkdir -p ~/bin \
+    && curl --proto '=https' --tlsv1.2 -sSf https://just.systems/install.sh \
+    | bash -s
+ENV PATH="$PATH:~/bin"
 
 # Remove sccache    
 RUN apt-get purge -y sccache; python3 -m pip uninstall -y sccache; rm -f "$(which sccache)"
@@ -194,7 +195,7 @@ COPY --from=export_vllm /examples ${COMMON_WORKDIR}/vllm/examples
 COPY --from=build_nixl /usr/local/nixl /usr/local/nixl
 COPY --from=build_nixl /usr/local/ucx /usr/local/ucx
 
-# Copy tests for llmd testing
+# Copy tests for toy proxy server
 COPY --from=export_vllm /tests ${COMMON_WORKDIR}/vllm/tests
 
 # Copy libamdhip64
