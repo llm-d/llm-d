@@ -1,4 +1,4 @@
-# Contributing Guidelines
+## Contributing Guidelines
 
 Thank you for your interest in contributing to llm-d. Community involvement is highly valued and crucial for the project's growth and success. The llm-d project accepts contributions via GitHub pull requests. This outlines the process to help get your contribution accepted.
 
