@@ -32,7 +32,7 @@ RUN apt-get update -q -y && apt-get install -q -y \
 RUN mkdir -p ~/bin \
     && curl --proto '=https' --tlsv1.2 -sSf https://just.systems/install.sh \
     | bash -s
-ENV PATH="$PATH:~/bin"
+ENV PATH="$PATH:/root/bin"
 
 # Remove sccache    
 RUN apt-get purge -y sccache; python3 -m pip uninstall -y sccache; rm -f "$(which sccache)"
