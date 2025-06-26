@@ -214,6 +214,7 @@ RUN . .vllm/bin/activate && \
     rm -rf .git ../LMCache
 
 # Final environment setup
-ENV PATH="/workspace/vllm/.vllm/bin:${PATH}"
+ENV PATH="/workspace/vllm/.vllm/bin:/usr/local/nvidia/bin:${PATH}"
+ENV LD_LIBRARY_PATH="/usr/local/nvidia/lib:/usr/local/nvidia/lib64:${LD_LIBRARY_PATH}"
 
 ENTRYPOINT ["python3", "-m", "vllm.entrypoints.openai.api_server"]
