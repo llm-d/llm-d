@@ -5,7 +5,6 @@ ARG MANYLINUX_IMAGE="quay.io/pypa/manylinux_2_28_x86_64"
 ARG LEGACY_HIPBLASLT_OPTION=
 ARG NIXL_REPO=AnzhongHuang/nixl-hip.git
 ARG NIXL_COMMIT="10ce96405f07c3c965a421f581451a74295cbf63"
-ARG VLLM_COMMIT_SHA="ca2f6b9c301df6dbe2e5c83c705051f478140695"
 
 FROM ${BASE_IMAGE}:${BASE_IMAGE_TAG} AS base
 
@@ -27,12 +26,6 @@ ENV PYTORCH_ROCM_ARCH=${ARG_PYTORCH_ROCM_ARCH:-${PYTORCH_ROCM_ARCH}}
 RUN apt-get update -q -y && apt-get install -q -y \
     sqlite3 libsqlite3-dev libfmt-dev libmsgpack-dev libsuitesparse-dev \
     apt-transport-https ca-certificates wget curl
-
-# Install just file for convenience
-RUN mkdir -p ~/bin \
-    && curl --proto '=https' --tlsv1.2 -sSf https://just.systems/install.sh \
-    | bash -s
-ENV PATH="$PATH:/root/bin"
 
 # Remove sccache    
 RUN apt-get purge -y sccache; python3 -m pip uninstall -y sccache; rm -f "$(which sccache)"
@@ -71,9 +64,11 @@ WORKDIR /app
 
 ARG VLLM_REPO="https://github.com/vllm-project/vllm.git"
 ARG VLLM_BRANCH="main"
+ARG VLLM_COMMIT_SHA="0bceac9810a5f51b06bf3e4cace182b639326ed2"
 RUN git clone ${VLLM_REPO} \
       && cd vllm \
-      && git checkout ${VLLM_BRANCH} 
+      && git checkout ${VLLM_COMMIT_SHA} -b llmd-deployment \
+      && git show --summary
 
 # -----------------------
 # vLLM build stages
