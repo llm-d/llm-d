@@ -1,4 +1,4 @@
-# Code of Conduct and Covenant
+## Code of Conduct and Covenant
 
 ## Our Pledge  
 
