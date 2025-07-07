@@ -72,7 +72,7 @@ repos=(
   "llm-d-inference-scheduler"
   "llm-d-kv-cache-manager"
   "llm-d-routing-sidecar"
-  "llm-d-model-service"
+  "llm-d-modelservice"
   "llm-d-benchmark"
   "llm-d-inference-sim"
 )
