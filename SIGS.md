@@ -1,4 +1,4 @@
-# Special Interest Groups (SIGs)
+## Special Interest Groups (SIGs)
 
 ## Overview
 
