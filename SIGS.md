@@ -171,7 +171,7 @@ SIGs may evolve, merge, or be archived based on project needs and community enga
 - **Project Calendar**: [llm-d Public Calendar](https://red.ht/llm-d-public-calendar)
 - **Slack Workspace**: [https://llm-d.slack.com](https://llm-d.slack.com)
 - **Google Groups**: [https://groups.google.com/g/llm-d-contributors](https://groups.google.com/g/llm-d-contributors)
-- **Project Overview**: [PROJECT.md](PROJECT.md)
+- **Community Governance**: [PROJECT.md](PROJECT.md)
 - **Contributing Guidelines**: [CONTRIBUTING.md](CONTRIBUTING.md)
 
 ## Maintenance
