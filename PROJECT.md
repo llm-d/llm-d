@@ -73,7 +73,7 @@ Published to the website [https://llm-d.github.io/](https://llm-d.github.io/).
 
 ### Container Images
 
-Images are published to [ghcr.io/llm-d](http://ghcr.io/llm-d).
+Images are published to [ghcr.io/llm-d](https://github.com/llm-d/llm-d/pkgs/container/llm-d).
 
 ### Project Automation
 
