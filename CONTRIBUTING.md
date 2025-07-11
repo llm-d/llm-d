@@ -172,7 +172,7 @@ Maintain appropriate security mindset for production serving. The project will e
 ## Community and Communication
 
 * **Developer Slack:** [Join our developer Slack workspace](https://inviter.co/llm-d-slack) to connect with the core maintainers and other contributors, ask questions, and participate in discussions.
-* **Weekly Meetings:** Project updates, ongoing work discussions, and Q&A will be covered in our weekly project meeting every Wednesday at 12:30 PM ET. Please join by [adding the shared calendar](https://calendar.google.com/calendar/u/0?cid=NzA4ZWNlZDY0NDBjYjBkYzA3NjdlZTNhZTk2NWQ2ZTc1Y2U5NTZlMzA5MzhmYTAyZmQ3ZmU1MDJjMDBhNTRiNEBncm91cC5jYWxlbmRhci5nb29nbGUuY29t). You can also [join our Google Group](https://groups.google.com/g/llm-d-contributors) for access to shared diagrams and other content.
+* **Weekly Meetings:** Project updates, ongoing work discussions, and Q&A will be covered in our weekly project meeting every Wednesday at 12:30 PM ET. Please join by [adding the shared calendar](https://red.ht/llm-d-public-calendar ). You can also [join our Google Group](https://groups.google.com/g/llm-d-contributors) for access to shared diagrams and other content.
 * **Social Media:** Follow us on social media for the latest news, announcements, and updates:
   * **X:** [https://x.com/\_llm_d\_](https://x.com/_llm_d_)
   * **LinkedIn:** [https://linkedin.com/company/llm-d ](https://linkedin.com/company/llm-d)

@@ -148,7 +148,7 @@ SIGs operate within the broader llm-d project governance framework defined in [P
 
 ### SIG Communication Channels
 - **Slack**: Each SIG has dedicated channels in the [llm-d Slack workspace](https://llm-d.slack.com)
-- **Google Groups**: Join [llm-d-contributors](https://groups.google.com/g/llm-d-contributors) for commenter access to SIG documents
+- **Google Groups**: Join [llm-d-contributors](https://groups.google.com/g/llm-d-contributors) for comment access to SIG documents
 - **GitHub**: Issues and discussions are labeled by SIG area
 - **Calendar**: All SIG meetings are on the [shared project calendar](https://red.ht/llm-d-public-calendar)
 
