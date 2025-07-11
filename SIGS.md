@@ -1,6 +1,4 @@
-## Special Interest Groups (SIGs)
-
-## Overview
+## SIG Overview
 
 Special Interest Groups (SIGs) are the primary organizational units for coordinating work across the llm-d project. Each SIG focuses on a specific area of the project's technology stack and is responsible for driving design, implementation, and maintenance of their respective components.
 
