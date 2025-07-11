@@ -35,19 +35,19 @@ SIGs operate within the broader llm-d project governance framework defined in [P
 
 | SIG | Focus Area | Meeting Schedule | Documentation |
 |-----|------------|------------------|---------------|
-| **[SIG Inference Scheduler](#sig-inference-scheduler)** | Intelligent request routing, load balancing, and traffic management | Weekly Tuesdays 12:00 PM ET<br>([Convert to your TZ](https://dateful.com/convert/eastern-time-et?t=12pm)) | • [Meeting Recordings and Docs](https://drive.google.com/drive/folders/1aKTJru43krjHP2ORayEEp4JP-N7dJL8S)<br>• [Project Repository](https://github.com/llm-d/llm-d-inference-scheduler/) |
-| **[SIG Benchmarking](#sig-benchmarking)** | Performance testing, benchmarking frameworks, and optimization | Weekly Thursdays 1:00 PM ET<br>([Convert to your TZ](https://dateful.com/convert/eastern-time-et?t=1pm)) | • [Meeting Recordings and Docs](https://drive.google.com/drive/folders/1Hd-rCRLDbucl-LD0RlQwOCLqERWF-obT?usp=drive_link)<br>• [Project Repository](https://github.com/llm-d/llm-d-benchmark) |
-| **[SIG PD-Disaggregation](#sig-pd-disaggregation)** | Prefill/decode separation, distributed serving, and workload disaggregation | Weekly Tuesdays 1:30 PM ET<br>([Convert to your TZ](https://dateful.com/convert/eastern-time-et?t=130pm)) | • [Meeting Recordings and Docs](https://drive.google.com/drive/folders/1jk7wtojsWNbYQVf7BY8BEvIg8FMRZV0q?usp=drive_link) |
-| **[SIG KV-Disaggregation](#sig-kv-disaggregation)** | KV caching, prefix caching, and distributed storage systems | Weekly Tuesdays 12:00 PM ET<br>([Convert to your TZ](https://dateful.com/convert/eastern-time-et?t=12pm)) | • [Meeting Recordings and Docs](https://drive.google.com/drive/folders/1mFbzwEWL2-LvD21owgxlKRcQD0eSmcz6?usp=drive_link)<br>• [Project Repository](https://github.com/llm-d/llm-d-kv-cache-manager) |
-| **[SIG Installation](#sig-installation)** | Kubernetes integration, deployment tooling, and platform operations | Weekly Thursdays 11:00 AM ET<br>([Convert to your TZ](https://dateful.com/convert/eastern-time-et?t=11am)) | • [Meeting Recordings and Docs](https://drive.google.com/drive/folders/1H-0Y8fXepzrYpcaUOBfuphn1Cl-gU0xr?usp=drive_link) |
-| **[SIG Autoscaling](#sig-autoscaling)** | Traffic-aware autoscaling, resource management, and capacity planning | Weekly Wednesdays 2:00 PM ET<br>([Convert to your TZ](https://dateful.com/convert/eastern-time-et?t=2pm)) | • [Meeting Recordings and Docs](https://drive.google.com/drive/folders/1iDlTgpFPOrSQn7dWR3uCQLtqhz86HTAi?usp=drive_link) |
-| **[SIG Observability](#sig-observability)** | Monitoring, logging, metrics, and operational visibility | Weekly Thursdays 12:30 PM ET<br>([Convert to your TZ](https://dateful.com/convert/eastern-time-et?t=12:30pm)) | • [Meeting Recordings and Docs](https://drive.google.com/drive/folders/1H-TVTCKYVxUn4fER7xuTPmscNttZCutN?usp=drive_link) |
+| **[SIG Inference Scheduler](#sig-inference-scheduler)** | Intelligent request routing, load balancing, and traffic management | Weekly Tuesdays 12:00 PM ET<br>([Convert to your TZ](https://dateful.com/convert/eastern-time-et?t=12pm)) | • [Meeting Recordings and Docs](https://drive.google.com/drive/folders/1aKTJru43krjHP2ORayEEp4JP-N7dJL8S)<br>• [llm-d-inference-scheduler Repository](https://github.com/llm-d/llm-d-inference-scheduler/) |
+| **[SIG Benchmarking](#sig-benchmarking)** | Performance testing, benchmarking frameworks, and optimization | Weekly Thursdays 1:00 PM ET<br>([Convert to your TZ](https://dateful.com/convert/eastern-time-et?t=1pm)) | • [Meeting Recordings and Docs](https://drive.google.com/drive/folders/1Hd-rCRLDbucl-LD0RlQwOCLqERWF-obT)<br>• [llm-d-benchmark Repository](https://github.com/llm-d/llm-d-benchmark) |
+| **[SIG PD-Disaggregation](#sig-pd-disaggregation)** | Prefill/decode separation, distributed serving, and workload disaggregation | Weekly Tuesdays 1:30 PM ET<br>([Convert to your TZ](https://dateful.com/convert/eastern-time-et?t=130pm)) | • [Meeting Recordings and Docs](https://drive.google.com/drive/folders/1jk7wtojsWNbYQVf7BY8BEvIg8FMRZV0q) |
+| **[SIG KV-Disaggregation](#sig-kv-disaggregation)** | KV caching, prefix caching, and distributed storage systems | Weekly Tuesdays 12:00 PM ET<br>([Convert to your TZ](https://dateful.com/convert/eastern-time-et?t=12pm)) | • [Meeting Recordings and Docs](https://drive.google.com/drive/folders/1mFbzwEWL2-LvD21owgxlKRcQD0eSmcz6)<br>• [llm-d-kv-cache-manager Repository](https://github.com/llm-d/llm-d-kv-cache-manager) |
+| **[SIG Installation](#sig-installation)** | Kubernetes integration, deployment tooling, and platform operations | Weekly Thursdays 11:00 AM ET<br>([Convert to your TZ](https://dateful.com/convert/eastern-time-et?t=11am)) | • [Meeting Recordings and Docs](https://drive.google.com/drive/folders/1H-0Y8fXepzrYpcaUOBfuphn1Cl-gU0xr) |
+| **[SIG Autoscaling](#sig-autoscaling)** | Traffic-aware autoscaling, resource management, and capacity planning | Weekly Wednesdays 2:00 PM ET<br>([Convert to your TZ](https://dateful.com/convert/eastern-time-et?t=2pm)) | • [Meeting Recordings and Docs](https://drive.google.com/drive/folders/1iDlTgpFPOrSQn7dWR3uCQLtqhz86HTAi) |
+| **[SIG Observability](#sig-observability)** | Monitoring, logging, metrics, and operational visibility | Weekly Thursdays 12:30 PM ET<br>([Convert to your TZ](https://dateful.com/convert/eastern-time-et?t=12:30pm)) | • [Meeting Recordings and Docs](https://drive.google.com/drive/folders/1H-TVTCKYVxUn4fER7xuTPmscNttZCutN) |
 
 ## SIG Detailed Descriptions
 
 ### SIG Inference Scheduler
 
-> **👥 Leadership:** Nili Guy, Abdullah Gharaibeh, Vita Bortnikov
+> **👥 Leadership:** [Nili Guy](https://github.com/nilig), [Abdullah Gharaibeh](https://github.com/ahg-g), [Vita Bortnikov](https://github.com/vitabortnikov)
 
 **Charter**: Develop and maintain intelligent request routing and load balancing systems that optimize for latency, throughput, and resource utilization across distributed inference workloads.
 
@@ -58,9 +58,13 @@ SIGs operate within the broader llm-d project governance framework defined in [P
 - Flow control and traffic shaping
 - SLA-aware request prioritization
 
+**💬 Communication**:
+- **Slack Channel**: [#sig-inference-scheduler](https://llm-d.slack.com/archives/C08SBNRRSBD)
+- **Meeting Recordings and Docs**: [Public Google Drive](https://drive.google.com/drive/folders/1aKTJru43krjHP2ORayEEp4JP-N7dJL8S)
+
 ### SIG Benchmarking
 
-> **👥 Leadership:** Marcio A L Silva, Ashok Chandrasekar
+> **👥 Leadership:** [Marcio A L Silva](https://github.com/maugustosilva), [Ashok Chandrasekar](https://github.com/achandrasekar)
 
 **Charter**: Establish comprehensive performance testing and benchmarking frameworks to ensure llm-d delivers optimal performance across diverse workloads and hardware configurations.
 
@@ -71,9 +75,14 @@ SIGs operate within the broader llm-d project governance framework defined in [P
 - Hardware-specific optimization
 - Performance analysis and profiling tools
 
+**💬 Communication**:
+- **Slack Channel**: [#sig-benchmarking](https://llm-d.slack.com/archives/C08TSFYMSCQ)
+- **Meeting Recordings and Docs**: [Public Google Drive](https://drive.google.com/drive/folders/1Hd-rCRLDbucl-LD0RlQwOCLqERWF-obT)
+
+
 ### SIG PD-Disaggregation
 
-> **👥 Leadership:** Robert Shaw
+> **👥 Leadership:** [Robert Shaw](https://github.com/robertgshaw2-redhat)
 
 **Charter**: Design and implement prefill/decode disaggregation patterns that enable efficient separation of inference workloads across heterogeneous hardware and scaling requirements.
 
@@ -82,11 +91,16 @@ SIGs operate within the broader llm-d project governance framework defined in [P
 - Disaggregated serving architecture
 - Cross-instance communication protocols
 - Heterogeneous hardware optimization
-- Dynamic workload balancing between P and D instances
+- Dynamic workload balancing between Prefill and Decode instances
+
+**💬 Communication**:
+- **Slack Channel**: [#sig-pd-disaggregation](https://llm-d.slack.com/archives/C08T1E128PK)
+- **Meeting Recordings and Docs**: [Public Google Drive](https://drive.google.com/drive/folders/1jk7wtojsWNbYQVf7BY8BEvIg8FMRZV0q)
+
 
 ### SIG KV-Disaggregation
 
-> **👥 Leadership:** Maroon Aoyub, Danny Harnik
+> **👥 Leadership:** [Maroon Aoyub](https://github.com/vMaroon), [Danny Harnik](https://github.com/dannyharnik)
 
 **Charter**: Design and implement distributed KV caching solutions that improve inference performance through intelligent cache management, prefix sharing, and disaggregated storage.
 
@@ -97,9 +111,13 @@ SIGs operate within the broader llm-d project governance framework defined in [P
 - Storage optimization for inference workloads
 - Integration with vLLM's KVConnector
 
+**💬 Communication**:
+- **Slack Channel**: [#sig-kv-disaggregation](https://llm-d.slack.com/archives/C08TB7ZDV7S)
+- **Meeting Recordings and Docs**: [Public Google Drive](https://drive.google.com/drive/folders/1mFbzwEWL2-LvD21owgxlKRcQD0eSmcz6)
+
 ### SIG Installation
 
-> **👥 Leadership:** Brent Salisbury, Greg Pereira
+> **👥 Leadership:** [Brent Salisbury](https://github.com/nerdalert), [Greg Pereira](https://github.com/Gregory-Pereira)
 
 **Charter**: Ensure llm-d integrates seamlessly with Kubernetes and provides robust deployment, scaling, and operational capabilities for production environments.
 
@@ -110,9 +128,13 @@ SIGs operate within the broader llm-d project governance framework defined in [P
 - Multi-node orchestration with LeaderWorkerSet
 - Platform integration and operational best practices
 
+**💬 Communication**:
+- **Slack Channel**: [#sig-installation](https://llm-d.slack.com/archives/C08SLBGKBEZ)
+- **Meeting Recordings and Docs**: [Public Google Drive](https://drive.google.com/drive/folders/1H-0Y8fXepzrYpcaUOBfuphn1Cl-gU0xr)
+
 ### SIG Autoscaling
 
-> **👥 Leadership:** Tamar Eilam, Abhishek Malvankar
+> **👥 Leadership:** [Tamar Eilam](https://github.com/eilamt), [Abhishek Malvankar](https://github.com/asm582)
 
 **Charter**: Develop intelligent autoscaling solutions that automatically adjust llm-d deployments based on traffic patterns, workload characteristics, and hardware utilization.
 
@@ -123,9 +145,13 @@ SIGs operate within the broader llm-d project governance framework defined in [P
 - Integration with Kubernetes HPA/VPA
 - Cost-optimized scaling strategies
 
+**💬 Communication**:
+- **Slack Channel**: [#sig-autoscaling](https://llm-d.slack.com/archives/C08T899332A)
+- **Meeting Recordings and Docs**: [Public Google Drive](https://drive.google.com/drive/folders/1iDlTgpFPOrSQn7dWR3uCQLtqhz86HTAi)
+
 ### SIG Observability
 
-> **👥 Leadership:** Sally O'Malley
+> **👥 Leadership:** [Sally O'Malley](https://github.com/sallyom)
 
 **Charter**: Provide comprehensive monitoring, logging, and observability capabilities that enable operators to understand system behavior, diagnose issues, and optimize performance.
 
@@ -135,6 +161,10 @@ SIGs operate within the broader llm-d project governance framework defined in [P
 - Performance monitoring and alerting
 - Operational dashboards and reporting
 - Integration with monitoring ecosystems (Prometheus, Grafana, etc.)
+
+**💬 Communication**:
+- **Slack Channel**: [#sig-observability](https://llm-d.slack.com/archives/C09305NHZ45)
+- **Meeting Recordings and Docs**: [Public Google Drive](https://drive.google.com/drive/folders/1H-TVTCKYVxUn4fER7xuTPmscNttZCutN)
 
 ## Getting Involved
 
