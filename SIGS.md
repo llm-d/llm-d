@@ -48,7 +48,8 @@ SIGs operate within the broader llm-d project governance framework defined in [P
 ## SIG Detailed Descriptions
 
 ### SIG Inference Scheduler
-**Leadership:** Nili Guy, Abdullah Gharaibeh, Vita Bortnikov
+
+> **👥 Leadership:** Nili Guy, Abdullah Gharaibeh, Vita Bortnikov
 
 **Charter**: Develop and maintain intelligent request routing and load balancing systems that optimize for latency, throughput, and resource utilization across distributed inference workloads.
 
@@ -60,7 +61,8 @@ SIGs operate within the broader llm-d project governance framework defined in [P
 - SLA-aware request prioritization
 
 ### SIG Benchmarking
-**Leadership:** Marcio A L Silva, Ashok Chandrasekar
+
+> **👥 Leadership:** Marcio A L Silva, Ashok Chandrasekar
 
 **Charter**: Establish comprehensive performance testing and benchmarking frameworks to ensure llm-d delivers optimal performance across diverse workloads and hardware configurations.
 
@@ -72,7 +74,8 @@ SIGs operate within the broader llm-d project governance framework defined in [P
 - Performance analysis and profiling tools
 
 ### SIG PD-Disaggregation
-**Leadership:** Robert Shaw
+
+> **👥 Leadership:** Robert Shaw
 
 **Charter**: Design and implement prefill/decode disaggregation patterns that enable efficient separation of inference workloads across heterogeneous hardware and scaling requirements.
 
@@ -84,7 +87,8 @@ SIGs operate within the broader llm-d project governance framework defined in [P
 - Dynamic workload balancing between P and D instances
 
 ### SIG KV-Disaggregation
-**Leadership:** Maroon Aoyub, Danny Harnik
+
+> **👥 Leadership:** Maroon Aoyub, Danny Harnik
 
 **Charter**: Design and implement distributed KV caching solutions that improve inference performance through intelligent cache management, prefix sharing, and disaggregated storage.
 
@@ -96,7 +100,8 @@ SIGs operate within the broader llm-d project governance framework defined in [P
 - Integration with vLLM's KVConnector
 
 ### SIG Installation
-**Leadership:** Brent Salisbury, Greg Pereira
+
+> **👥 Leadership:** Brent Salisbury, Greg Pereira
 
 **Charter**: Ensure llm-d integrates seamlessly with Kubernetes and provides robust deployment, scaling, and operational capabilities for production environments.
 
@@ -108,7 +113,8 @@ SIGs operate within the broader llm-d project governance framework defined in [P
 - Platform integration and operational best practices
 
 ### SIG Autoscaling
-**Leadership:** Tamar Eilam, Abhishek Malvankar
+
+> **👥 Leadership:** Tamar Eilam, Abhishek Malvankar
 
 **Charter**: Develop intelligent autoscaling solutions that automatically adjust llm-d deployments based on traffic patterns, workload characteristics, and hardware utilization.
 
@@ -120,7 +126,8 @@ SIGs operate within the broader llm-d project governance framework defined in [P
 - Cost-optimized scaling strategies
 
 ### SIG Observability
-**Leadership:** Sally O'Malley
+
+> **👥 Leadership:** Sally O'Malley
 
 **Charter**: Provide comprehensive monitoring, logging, and observability capabilities that enable operators to understand system behavior, diagnose issues, and optimize performance.
 
