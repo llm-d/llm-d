@@ -100,7 +100,7 @@ SIGs operate within the broader llm-d project governance framework defined in [P
 
 ### SIG KV-Disaggregation
 
-> **👥 Leadership:** [Maroon Aoyub](https://github.com/vMaroon), [Danny Harnik](https://github.com/dannyharnik)
+> **👥 Leadership:** [Maroon Ayoub](https://github.com/vMaroon), [Danny Harnik](https://github.com/dannyharnik)
 
 **Charter**: Design and implement distributed KV caching solutions that improve inference performance through intelligent cache management, prefix sharing, and disaggregated storage.
 
