@@ -163,7 +163,7 @@ SIGs operate within the broader llm-d project governance framework defined in [P
 
 ### SIG Observability
 
-> **👥 Leadership:** [Sally O'Malley](https://github.com/sallyom)
+> **👥 Leadership:** [Sally O'Malley](https://github.com/sallyom), [Roy Nissim](https://www.linkedin.com/in/roy-nissim/), [Benedikt Bongartz](https://github.com/frzifus)
 
 > [**⭐️ North Star Design Document** ↗️](https://docs.google.com/document/d/1UNa75BBzoMFZgImAnqd89KyT-W1MmO0VKLRqgF9ikWA) *(Google Docs)*
 
