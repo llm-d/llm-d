@@ -1,0 +1,372 @@
+ARG CUDA_MAJOR=12
+ARG CUDA_MINOR=8
+ARG CUDA_PATCH=1
+
+# ============================================================================
+# BUILD STAGE - Install build dependencies and create wheels
+# ============================================================================
+FROM nvcr.io/nvidia/cuda:${CUDA_MAJOR}.${CUDA_MINOR}.${CUDA_PATCH}-devel-ubi9 AS builder
+
+ARG CUDA_MAJOR=12
+ARG CUDA_MINOR=8
+ARG CUDA_PATCH=1
+ARG PYTHON_VERSION
+
+WORKDIR /workspace
+
+ENV LANG=C.UTF-8 \
+    LC_ALL=C.UTF-8 \
+    UV_LINK_MODE=copy \
+    TORCH_CUDA_ARCH_LIST="9.0a;10.0+PTX" \
+    PYTHON_VERSION=${PYTHON_VERSION:-3.12} \
+    UV_TORCH_BACKEND=${UV_TORCH_BACKEND:-cu${CUDA_MAJOR}${CUDA_MINOR}} \
+    VIRTUAL_ENV=/opt/vllm 
+
+# Update base packages
+RUN dnf update -y && dnf clean all
+
+# Install base packages and EPEL in single layer
+RUN dnf install -y dnf-plugins-core && \
+    dnf install -y https://dl.fedoraproject.org/pub/epel/epel-release-latest-9.noarch.rpm && \
+    dnf config-manager --set-enabled epel && \
+    dnf config-manager --add-repo https://developer.download.nvidia.com/compute/cuda/repos/rhel9/x86_64/cuda-rhel9.repo && \
+    dnf install -y --allowerasing \
+        python${PYTHON_VERSION} python${PYTHON_VERSION}-pip python${PYTHON_VERSION}-wheel \
+        python${PYTHON_VERSION}-devel \
+        python3.9-devel \
+        which procps findutils tar \
+        gcc gcc-c++ \
+        make cmake \
+        autoconf automake libtool \
+        git \
+        curl wget \
+        gzip \
+        zlib-devel \
+        openssl-devel \
+        pkg-config \
+        libuuid-devel \
+        glibc-devel \
+        rdma-core-devel \
+        numactl-libs \
+        subunit \
+        pciutils \
+        pciutils-libs \
+        ninja-build \
+    && dnf clean all
+
+# Setup Python virtual environment
+RUN python${PYTHON_VERSION} -m venv /opt/vllm && \
+    ${VIRTUAL_ENV}/bin/pip install --no-cache -U pip wheel uv meson-python ninja pybind11 build
+
+ENV LIBRARY_PATH="/usr/local/cuda/lib64:/usr/local/lib:/usr/local/lib64" \
+CPATH="/usr/include:/usr/local/include:/usr/local/cuda/include" \
+PKG_CONFIG_PATH="/usr/lib/pkgconfig:/usr/local/lib/pkgconfig:/usr/local/lib64/pkgconfig"
+
+ARG NVSHMEM_VERSION=3.3.9
+
+# Set NVSHMEM paths for CMake discovery
+ENV NVSHMEM_DIR="/opt/nvshmem-${NVSHMEM_VERSION}" \
+    PATH="/opt/nvshmem-${NVSHMEM_VERSION}/bin:${PATH}" \
+    CPATH="/opt/nvshmem-${NVSHMEM_VERSION}/include:${CPATH}" \
+    LIBRARY_PATH="/opt/nvshmem-${NVSHMEM_VERSION}/lib:${LIBRARY_PATH}"
+
+# Build and install gdrcopy
+RUN --mount=type=cache,target=/var/cache/git \
+    git clone https://github.com/NVIDIA/gdrcopy.git && \
+    cd gdrcopy && \
+    PREFIX=/usr/local DESTLIB=/usr/local/lib make lib_install && \
+    cp src/libgdrapi.so.2.* /usr/lib64/ && \
+    ldconfig && \
+    cd .. && rm -rf gdrcopy
+
+# Build and install UCX
+ARG UCX_VERSION="v1.19.0-rc1"
+RUN --mount=type=cache,target=/var/cache/git \
+    git clone https://github.com/openucx/ucx.git && \
+    cd ucx && \
+    git checkout ${UCX_VERSION} && \
+    ./autogen.sh && \
+    ./contrib/configure-release \
+        --enable-shared \
+        --disable-static \
+        --disable-doxygen-doc \
+        --enable-cma \
+        --enable-devel-headers \
+        --with-cuda=/usr/local/cuda \
+        --with-verbs \
+        --with-dm \
+        --with-gdrcopy=/usr/local \
+        --enable-mt \
+        --with-mlx5 \
+        --prefix=/usr/local && \
+    make -j$(nproc) && \
+    make install-strip && \
+    ldconfig && \
+    cd .. && rm -rf ucx
+
+# Copy patches before build
+COPY patches/ /tmp/patches/
+
+# Build and install NVSHMEM from source with coreweave patch
+RUN cd /tmp && \
+    wget https://developer.nvidia.com/downloads/assets/secure/nvshmem/nvshmem_src_cuda12-all && \
+    tar -xf nvshmem_src_cuda12-all && \
+    cd nvshmem_src && \
+    git apply /tmp/patches/cks_nvshmem.patch && \
+    mkdir build && \
+    cd build && \
+    cmake \
+    -G Ninja \
+    -DNVSHMEM_PREFIX=${NVSHMEM_DIR} \
+    -DCMAKE_CUDA_ARCHITECTURES="90a;100" \
+    -DNVSHMEM_PMIX_SUPPORT=0 \
+    -DNVSHMEM_LIBFABRIC_SUPPORT=0 \
+    -DNVSHMEM_IBRC_SUPPORT=1 \
+    -DNVSHMEM_IBGDA_SUPPORT=1 \
+    -DNVSHMEM_IBDEVX_SUPPORT=1 \
+    -DNVSHMEM_SHMEM_SUPPORT=0 \
+    -DNVSHMEM_USE_GDRCOPY=1 \
+    -DNVSHMEM_MPI_SUPPORT=0 \
+    -DNVSHMEM_USE_NCCL=0 \
+    -DNVSHMEM_BUILD_TESTS=0 \
+    -DNVSHMEM_BUILD_EXAMPLES=0 \
+    -DGDRCOPY_HOME=/usr/local \
+    -DNVSHMEM_DISABLE_CUDA_VMM=1 \
+    .. && \
+    ninja -j$(nproc) && \
+    ninja install && \
+    cd /tmp && rm -rf nvshmem_src*
+
+
+# Pin torch, so all deps are built against the same version 
+# as vllm itself
+RUN --mount=type=cache,target=/root/.cache/uv \
+  source ${VIRTUAL_ENV}/bin/activate && \
+  uv pip install \
+    # global
+    numpy torch==2.7.1 \ 
+    # nixl 
+    pyyaml \
+    types-PyYAML \
+    pytest \ 
+    patchelf>=0.11.0
+
+# https://github.com/ai-dynamo/nixl/tree/ucx_thread_pool
+# Temporarily use hotfix on 0.4 to avoid NIXL launch OH
+# via threadpool w/ UCX workers - to be fixed in nixl=0.5.
+ARG NIXL_REPO_URL="https://github.com/ai-dynamo/nixl.git"
+ARG NIXL_COMMIT_SHA="ba7e40760027796890ad17e95620526c3c5560ee"
+RUN --mount=type=cache,target=/tmp/nixl-cache \
+    ln -s /usr/local/cuda/lib64/stubs/libcuda.so /usr/lib64/ && \
+    mkdir /opt/nixl && cd /opt/nixl && \
+    git clone ${NIXL_REPO_URL} . && \
+    git checkout ${NIXL_COMMIT_SHA} && \
+    export PATH="${VIRTUAL_ENV}/bin:$PATH" && \
+    export PYTHON="${VIRTUAL_ENV}/bin/python" && \
+    export PKG_CONFIG_PATH="/usr/lib64/pkgconfig:/usr/share/pkgconfig:${PKG_CONFIG_PATH}" && \
+    export CUDA_HOME="/usr/local/cuda" && \
+    export LD_LIBRARY_PATH="/usr/local/cuda/lib64:/usr/local/cuda/lib64/stubs/:/usr/local/cuda/extras/CUPTI/lib64:/usr/local/lib:/usr/local/lib64:/usr/lib64:${LD_LIBRARY_PATH}" && \
+    meson setup build --prefix=/usr/local -Dbuildtype=release && \
+    cd build && \
+    ninja && \
+    ninja install && \
+    cd .. && \
+    # Build nixl wheel and install locally
+    source ${VIRTUAL_ENV}/bin/activate && \
+    python -m build --no-isolation --wheel -o /wheels && \
+    uv pip install --no-cache-dir . && \
+    rm -rf build
+
+RUN echo "/usr/local/lib" > /etc/ld.so.conf.d/local.conf && \
+    echo "/usr/local/lib64" >> /etc/ld.so.conf.d/local.conf && \
+    ldconfig
+
+WORKDIR /workspace
+
+# Define commit SHAs as build args to avoid layer invalidation
+ARG LMCACHE_COMMIT_SHA=c1563bc9c72ea0d71156a3d9a6cd643170828acf
+ARG VLLM_COMMIT_SHA=8dfb45ca3379b3a789ec529af4bf725daa07f10d
+
+# Clone repositories with cache mounts
+RUN --mount=type=cache,target=/var/cache/git \
+    git clone https://github.com/neuralmagic/LMCache.git && \
+    cd LMCache && \
+    git checkout -q $LMCACHE_COMMIT_SHA && \
+    cd .. && \
+    # Build LMCache wheel
+    cd LMCache && \
+    source ${VIRTUAL_ENV}/bin/activate && \
+    python -m build --wheel --no-isolation -o /wheels && \
+    cd ..
+
+
+# Use existing virtual environment at /opt/vllm
+WORKDIR /workspace/vllm
+
+# Install DeepEP and DeepGEMM dependencies
+ARG DEEPEP_URL="https://github.com/neuralmagic/DeepEP"
+ARG DEEPGEMM_URL="https://github.com/neuralmagic/DeepGEMM"
+ARG PPLX_KERNELS_URL="https://github.com/neuralmagic/pplx-kernels"
+
+# Create wheels directory
+RUN mkdir -p /wheels
+
+# Build compiled packages as wheels (only ones that need build tools)
+RUN --mount=type=cache,target=/root/.cache/uv \
+    source ${VIRTUAL_ENV}/bin/activate && \
+    \
+    # Install build tools
+    uv pip install build cuda-python numpy setuptools-scm && \
+    \
+    # Build DeepEP wheel
+    cd /tmp && \
+    git clone "${DEEPEP_URL}" deepep && \
+    cd deepep && \
+    python -m build --no-isolation --wheel -o /wheels && \
+    cd .. && rm -rf deepep && \
+    \
+    # Build DeepGEMM wheel
+    git clone "${DEEPGEMM_URL}" deepgemm && \
+    cd deepgemm && \
+    # git checkout multi_arch_support && \
+    git submodule update --init --recursive && \
+    python -m build --no-isolation --wheel -o /wheels && \
+    cd .. && rm -rf deepgemm && \
+    \
+    # Build pplx-kernels wheel
+    git clone ${PPLX_KERNELS_URL} pplx-kernels && \
+    cd pplx-kernels && \
+    git checkout build-fixes && \
+    NVSHMEM_PREFIX=${NVSHMEM_DIR} python -m build --no-isolation --wheel -o /wheels && \
+    cd .. && rm -rf pplx-kernels
+
+# ============================================================================
+# RUNTIME STAGE - Minimal runtime image
+# ============================================================================
+FROM nvcr.io/nvidia/cuda:${CUDA_MAJOR}.${CUDA_MINOR}.${CUDA_PATCH}-devel-ubi9 AS runtime
+
+ARG CUDA_MAJOR=12
+ARG CUDA_MINOR=8
+ARG CUDA_PATCH=1
+ARG PYTHON_VERSION
+ARG NVSHMEM_VERSION=3.3.9
+
+ENV LANG=C.UTF-8 \
+    LC_ALL=C.UTF-8 \
+    PYTHON_VERSION=${PYTHON_VERSION:-3.12} \
+    UV_TORCH_BACKEND=${UV_TORCH_BACKEND:-cu${CUDA_MAJOR}${CUDA_MINOR}} \
+    VIRTUAL_ENV=/opt/vllm \
+    NVSHMEM_DIR="/opt/nvshmem-${NVSHMEM_VERSION}" \
+    LD_LIBRARY_PATH="/usr/local/cuda/lib64:/usr/local/lib:/usr/local/lib64:/opt/nvshmem-${NVSHMEM_VERSION}/lib:${LD_LIBRARY_PATH}" \
+    PATH="/opt/nvshmem-${NVSHMEM_VERSION}/bin:${PATH}" \
+    CPATH="/opt/nvshmem-${NVSHMEM_VERSION}/include:${CPATH}"
+
+# Update base packages
+RUN dnf update -y && dnf clean all
+
+# Install only runtime dependencies
+RUN dnf install -y --allowerasing \
+        python${PYTHON_VERSION} python${PYTHON_VERSION}-pip python${PYTHON_VERSION}-devel \
+        rdma-core-devel \
+        numactl-libs \
+        pciutils \
+        procps-ng \
+        git \
+        curl \
+        gcc && dnf clean all
+
+# Copy UCX libraries from builder
+COPY --from=builder /usr/local/lib/libucp* /usr/local/lib/
+COPY --from=builder /usr/local/lib/libucs* /usr/local/lib/
+COPY --from=builder /usr/local/lib/libuct* /usr/local/lib/
+COPY --from=builder /usr/local/lib/libucm* /usr/local/lib/
+COPY --from=builder /usr/local/lib/ucx/ /usr/local/lib/ucx/
+COPY --from=builder /usr/local/lib64/libucx_utils.so /usr/local/lib64/
+
+
+# Copy gdrcopy libraries from builder
+COPY --from=builder /usr/lib64/libgdrapi.so.2.* /usr/lib64/
+COPY --from=builder /usr/local/lib/libgdrapi.so* /usr/local/lib/
+
+# Copy nixl libraries from builder
+COPY --from=builder /usr/local/lib64/libnixl* /usr/local/lib64/
+COPY --from=builder /usr/local/lib64/libstream.so /usr/local/lib64/
+COPY --from=builder /usr/local/lib64/libserdes.so /usr/local/lib64/
+COPY --from=builder /usr/local/lib64/plugins/ /usr/local/lib64/plugins/
+COPY --from=builder /usr/local/include/nixl* /usr/local/include/
+
+# Copy compiled NVSHMEM libraries from builder
+COPY --from=builder /opt/nvshmem-${NVSHMEM_VERSION}/ /opt/nvshmem-${NVSHMEM_VERSION}/
+
+# Setup ldconfig and library paths
+RUN echo "/usr/local/lib" > /etc/ld.so.conf.d/local.conf && \
+    echo "/usr/local/lib64" >> /etc/ld.so.conf.d/local.conf && \
+    echo "/opt/nvshmem-${NVSHMEM_VERSION}/lib" >> /etc/ld.so.conf.d/local.conf && \
+    echo "/opt/vllm/lib64/python3.12/site-packages/.nixl.mesonpy.libs/plugins" >> /etc/ld.so.conf.d/local.conf && \
+    ldconfig
+
+# Setup Python virtual environment
+RUN python${PYTHON_VERSION} -m venv /opt/vllm && \
+    ${VIRTUAL_ENV}/bin/pip install --no-cache -U pip wheel uv
+
+# Copy compiled wheels
+COPY --from=builder /wheels/*.whl /tmp/wheels/
+
+# Define commit SHAs as build args to avoid layer invalidation
+ARG LMCACHE_COMMIT_SHA=c1563bc9c72ea0d71156a3d9a6cd643170828acf
+ARG VLLM_COMMIT_SHA=8dfb45ca3379b3a789ec529af4bf725daa07f10d
+
+
+# Install all packages
+RUN --mount=type=cache,target=/var/cache/git \
+    source /opt/vllm/bin/activate && \
+    \
+    # Install PyTorch and cuda-python
+    uv pip install cuda-python huggingface_hub[hf_xet] && \
+    \
+    # Install all compiled wheels (DeepEP, DeepGEMM, pplx-kernels, LMCache, nixl)
+    uv pip install /tmp/wheels/*.whl && \
+    \
+    # Clone and install vLLM
+    git clone https://github.com/vllm-project/vllm.git /tmp/vllm-${VLLM_COMMIT_SHA} && \
+    cd /tmp/vllm-${VLLM_COMMIT_SHA} && \
+    git checkout -q $VLLM_COMMIT_SHA && \
+    VLLM_COMMIT=$(git merge-base HEAD origin/main) \
+    VLLM_PRECOMPILED_WHEEL_LOCATION=https://wheels.vllm.ai/${VLLM_COMMIT}/vllm-1.0.0.dev-cp38-abi3-manylinux1_x86_64.whl \
+    VLLM_USE_PRECOMPILED=1 uv pip install --editable . && \
+    \
+    # Cleanup (keep /tmp/vllm-${VLLM_COMMIT_SHA} for editable install)
+    rm -rf /tmp/wheels
+
+
+RUN dnf remove -y git && dnf autoremove -y && dnf clean all
+
+# setup non-root user for OpenShift
+RUN umask 002 && \
+    useradd --uid 2000 --gid 0 vllm && \
+    rm -rf /home/vllm && \
+    mkdir -p /home/vllm && \
+    chown vllm:root /home/vllm && \
+    chmod g+rwx /home/vllm
+
+
+ENV PATH="${VIRTUAL_ENV}/bin:${PATH}" \
+    HOME=/home/vllm \
+    VLLM_USAGE_SOURCE=production-docker-image \
+    VLLM_WORKER_MULTIPROC_METHOD=fork \
+    OUTLINES_CACHE_DIR=/tmp/outlines \
+    NUMBA_CACHE_DIR=/tmp/numba \
+    TRITON_CACHE_DIR=/tmp/triton \
+    TRITON_LIBCUDA_PATH=/usr/lib64 \
+    TORCH_NCCL_HEARTBEAT_TIMEOUT_SEC=15 \
+    TORCH_NCCL_DUMP_ON_TIMEOUT=0 \
+    VLLM_SKIP_P2P_CHECK=1 \
+    VLLM_CACHE_ROOT=/tmp/vllm \
+    # NOTE: workaround for hang with XET. This should be removed 
+    # in a future release when we get to the bottom of the issue.
+    HF_HUB_DISABLE_XET=1
+
+USER 2000
+WORKDIR /home/vllm
+
+ENTRYPOINT ["python", "-m", "vllm.entrypoints.openai.api_server"]
