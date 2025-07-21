@@ -49,6 +49,8 @@ SIGs operate within the broader llm-d project governance framework defined in [P
 
 > **👥 Leadership:** [Nili Guy](https://github.com/nilig), [Abdullah Gharaibeh](https://github.com/ahg-g), [Vita Bortnikov](https://github.com/vitabortnikov)
 
+> [**⭐️ North Star Design Document** ↗️](https://docs.google.com/document/d/1kE1LY8OVjiOgKVD9-9Po96HODbTIbgHp4qgvw06BCOc) *(Google Docs)*
+
 **Charter**: Develop and maintain intelligent request routing and load balancing systems that optimize for latency, throughput, and resource utilization across distributed inference workloads.
 
 **Key Areas**:
@@ -65,6 +67,8 @@ SIGs operate within the broader llm-d project governance framework defined in [P
 ### SIG Benchmarking
 
 > **👥 Leadership:** [Marcio A L Silva](https://github.com/maugustosilva), [Ashok Chandrasekar](https://github.com/achandrasekar)
+
+> [**⭐️ North Star Design Document** ↗️](https://docs.google.com/document/d/1DtSEMRu3ann5M43TVB3vENPRoRkqBr_UiuwFnzit8mw) *(Google Docs)*
 
 **Charter**: Establish comprehensive performance testing and benchmarking frameworks to ensure llm-d delivers optimal performance across diverse workloads and hardware configurations.
 
@@ -84,6 +88,8 @@ SIGs operate within the broader llm-d project governance framework defined in [P
 
 > **👥 Leadership:** [Robert Shaw](https://github.com/robertgshaw2-redhat)
 
+> [**⭐️ North Star Design Document** ↗️](https://docs.google.com/document/d/1FNN5snmipaTxEA1FGEeSH7Z_kEqskouKD1XYhVyTHr8) *(Google Docs)*
+
 **Charter**: Design and implement prefill/decode disaggregation patterns that enable efficient separation of inference workloads across heterogeneous hardware and scaling requirements.
 
 **Key Areas**:
@@ -102,6 +108,8 @@ SIGs operate within the broader llm-d project governance framework defined in [P
 
 > **👥 Leadership:** [Maroon Ayoub](https://github.com/vMaroon), [Danny Harnik](https://github.com/dannyharnik)
 
+> [**⭐️ North Star Design Document** ↗️](https://docs.google.com/document/d/1EM1QtDUaw7pVRkbHQFTSCQhmWqAcRPJugJgqPbvzGTA) *(Google Docs)*
+
 **Charter**: Design and implement distributed KV caching solutions that improve inference performance through intelligent cache management, prefix sharing, and disaggregated storage.
 
 **Key Areas**:
@@ -118,6 +126,8 @@ SIGs operate within the broader llm-d project governance framework defined in [P
 ### SIG Installation
 
 > **👥 Leadership:** [Brent Salisbury](https://github.com/nerdalert), [Greg Pereira](https://github.com/Gregory-Pereira)
+
+> [**⭐️ North Star Design Document** ↗️](https://docs.google.com/document/d/1Y0fJGhELfdXj-Xkznhrl48sDOp_dUvuy5sX4lf9g63o) *(Google Docs)*
 
 **Charter**: Ensure llm-d integrates seamlessly with Kubernetes and provides robust deployment, scaling, and operational capabilities for production environments.
 
@@ -136,6 +146,8 @@ SIGs operate within the broader llm-d project governance framework defined in [P
 
 > **👥 Leadership:** [Tamar Eilam](https://github.com/eilamt), [Abhishek Malvankar](https://github.com/asm582)
 
+> [**⭐️ North Star Design Document** ↗️](https://docs.google.com/document/d/1inTneLEZTv3rDEBB9KLOB9K6oMq8c3jkogARJqdt_58) *(Google Docs)*
+
 **Charter**: Develop intelligent autoscaling solutions that automatically adjust llm-d deployments based on traffic patterns, workload characteristics, and hardware utilization.
 
 **Key Areas**:
@@ -152,6 +164,8 @@ SIGs operate within the broader llm-d project governance framework defined in [P
 ### SIG Observability
 
 > **👥 Leadership:** [Sally O'Malley](https://github.com/sallyom)
+
+> [**⭐️ North Star Design Document** ↗️](https://docs.google.com/document/d/1UNa75BBzoMFZgImAnqd89KyT-W1MmO0VKLRqgF9ikWA) *(Google Docs)*
 
 **Charter**: Provide comprehensive monitoring, logging, and observability capabilities that enable operators to understand system behavior, diagnose issues, and optimize performance.
 
