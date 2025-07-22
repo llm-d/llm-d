@@ -93,8 +93,10 @@ Visit our [GitHub Releases page](https://github.com/llm-d/llm-d-deployer/release
 ## Contribute
 
 - See [our project overview](PROJECT.md) for more details on our development process and governance.
+- Review [our contributing guidelines](CONTRIBUTING.md) for detailed information on how to contribute to the project.
+- Join one of our [Special Interest Groups (SIGs)](SIGS.md) to contribute to specific areas of the project and collaborate with domain experts.
 - We use Slack to discuss development across organizations. Please join: [Slack](https://inviter.co/llm-d-slack)
-- We host a weekly standup for contributors on Wednesdays at 12:30pm ET as well as meetings for various SIGs. You can find them in the [shared llm-d calendar](https://calendar.google.com/calendar/u/0?cid=NzA4ZWNlZDY0NDBjYjBkYzA3NjdlZTNhZTk2NWQ2ZTc1Y2U5NTZlMzA5MzhmYTAyZmQ3ZmU1MDJjMDBhNTRiNEBncm91cC5jYWxlbmRhci5nb29nbGUuY29t)
+- We host a weekly standup for contributors on Wednesdays at 12:30 PM ET, as well as meetings for various SIGs. You can find them in the [shared llm-d calendar](https://red.ht/llm-d-public-calendar)
 - We use Google Groups to share architecture diagrams and other content. Please join: [Google Group](https://groups.google.com/g/llm-d-contributors)
 
 ## License

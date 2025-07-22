@@ -17,15 +17,22 @@ There are several ways you can contribute to llm-d:
 
 This project adheres to the llm-d [Code of Conduct and Covenant](CODE_OF_CONDUCT.md). By participating, you are expected to uphold this code.
 
-## Getting Started
+## Community and Communication
 
-### Community
+* **Developer Slack:** [Join our developer Slack workspace](https://inviter.co/llm-d-slack) to connect with the core maintainers and other contributors, ask questions, and participate in discussions.
+* **Weekly Meetings:** Project updates, ongoing work discussions, and Q&A will be covered in our weekly project meeting every Wednesday at 12:30 PM ET. Please join by [adding the shared calendar](https://red.ht/llm-d-public-calendar). You can also [join our Google Group](https://groups.google.com/g/llm-d-contributors) for access to shared diagrams and other content.
+  * Access meeting recordings and meeting notes on the [llm-d Public Google Drive](https://drive.google.com/drive/folders/1Y9ahJ9BhhDuwnPK6QHmKTi8uoz1FTqvA)
+* **SIGs:** Join one of our [Special Interest Groups (SIGs)](SIGS.md) to contribute to specific areas of the project and collaborate with domain experts.
+  * Access SIG meeting recordings and project documentation on the [Public SIG Documentation Google Drive](https://drive.google.com/drive/folders/13PVmYoIJitt5iZyaFTZiAgp_o66qAS8t)
+* **Code**: Hosted in the [llm-d](https://github.com/llm-d) GitHub organization
+* **Issues**: Project-scoped bugs or issues should be reported in [llm-d/llm-d](https://github.com/llm-d/llm-d)
+* **Mailing List**: [llm-d-contributors@googlegroups.com](mailto:llm-d-contributors@googlegroups.com) for document sharing and collaboration
+* **Social Media:** Follow us on social media for the latest news, announcements, and updates:
+  * **X:** [https://x.com/\_llm_d\_](https://x.com/_llm_d_)
+  * **LinkedIn:** [https://linkedin.com/company/llm-d ](https://linkedin.com/company/llm-d)
+  * **Reddit:** [https://www.reddit.com/r/llm_d/](https://www.reddit.com/r/llm_d/)
+  * **YouTube** [@llm-d-project](https://youtube.com/@llm-d-project)
 
-- **Slack**: Join our public discussion at [llm-d.slack.com](https://llm-d.slack.com) for immediate response and collaboration
-- **Join Slack**: You can join the [llm-d Slack at Inviter](https://inviter.co/llm-d-slack)
-- **Code**: Hosted in the [llm-d](https://github.com/llm-d) GitHub organization
-- **Issues**: Project-scoped bugs or issues should be reported in [llm-d/llm-d](https://github.com/llm-d/llm-d)
-- **Mailing List**: [llm-d-contributors@googlegroups.com](mailto:llm-d-contributors@googlegroups.com) for document sharing and collaboration
 
 ## Contributing Process
 
@@ -168,13 +175,3 @@ Maintain appropriate security mindset for production serving. The project will e
 - Bias towards accepting experimentation with clear goals
 - Each repo must have README describing purpose and goal
 - Graduated components move to `llm-d` org
-
-## Community and Communication
-
-* **Developer Slack:** [Join our developer Slack workspace](https://inviter.co/llm-d-slack) to connect with the core maintainers and other contributors, ask questions, and participate in discussions.
-* **Weekly Meetings:** Project updates, ongoing work discussions, and Q&A will be covered in our weekly project meeting every Wednesday at 12:30 PM ET. Please join by [adding the shared calendar](https://calendar.google.com/calendar/u/0?cid=NzA4ZWNlZDY0NDBjYjBkYzA3NjdlZTNhZTk2NWQ2ZTc1Y2U5NTZlMzA5MzhmYTAyZmQ3ZmU1MDJjMDBhNTRiNEBncm91cC5jYWxlbmRhci5nb29nbGUuY29t). You can also [join our Google Group](https://groups.google.com/g/llm-d-contributors) for access to shared diagrams and other content.
-* **Social Media:** Follow us on social media for the latest news, announcements, and updates:
-  * **X:** [https://x.com/\_llm_d\_](https://x.com/_llm_d_)
-  * **LinkedIn:** [https://linkedin.com/company/llm-d ](https://linkedin.com/company/llm-d)
-  * **Reddit:** [https://www.reddit.com/r/llm_d/](https://www.reddit.com/r/llm_d/)
-  * **YouTube** [@llm-d-project](https://youtube.com/@llm-d-project)
