@@ -10,23 +10,53 @@ Kubernetes-Native Distributed Inference at Scale
 </h3>
 
  [![Documentation](https://img.shields.io/badge/Documentation-8A2BE2?logo=readthedocs&logoColor=white&color=1BC070)](https://www.llm-d.ai)
+ [![Release Status](https://img.shields.io/badge/Version-0.2-yellow)](https://github.com/llm-d/llm-d/releases)
  [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](./LICENSE)
  [![Join Slack](https://img.shields.io/badge/Join_Slack-blue?logo=slack)](https://inviter.co/llm-d-slack)
 
 Latest News 🔥
+- [2025-07] Release of our first three well-lit paths in [v0.2](https://llm-d.ai/blog/llm-d-v0.2-our-first-well-lit-paths): intelligent inference scheduling, simple disaggregated serving, and wide expert-parallelism.
 - [2025-05] CoreWeave, Google, IBM Research, NVIDIA, and Red Hat launched the llm-d community. Check out [our blog post](https://llm-d.ai/blog/llm-d-announce) and [press release](https://llm-d.ai/blog/llm-d-press-release).
 
 ## 📄 About
 
-llm-d is a Kubernetes-native distributed inference serving stack - a well-lit path for anyone to serve large language models at scale, with the fastest time-to-value and competitive performance per dollar for most models across most hardware accelerators.
+llm-d is a Kubernetes-native distributed inference serving stack, providing well-lit paths for anyone to serve large generative AI models at scale, with the fastest time-to-value and competitive performance per dollar for most models across most hardware accelerators.
 
-With llm-d, users can operationalize GenAI deployments with a modular solution that leverages the latest distributed inference optimizations like KV-cache aware routing and disaggregated serving, co-designed and integrated with the Kubernetes operational tooling in [Inference Gateway (IGW)](https://github.com/kubernetes-sigs/gateway-api-inference-extension).
+Our [well-lit paths](https://github.com/llm-d-incubation/llm-d-infra/tree/main/quickstart/examples) provide tested and benchmarked recipes and Helm charts to start serving quickly with best practices common to production deployments. They are extensible and customizable for particulars of your models and use cases, using popular open source components like Kubernetes, Envoy proxy, NIXL, and vLLM. Our intent is to eliminate the heavy lifting common in deploying inference at scale so users can focus on building.
 
-Built by leaders in the Kubernetes and vLLM projects, llm-d is a community-driven, Apache-2 licensed project with an open development model.
+We currently offer three tested and benchmarked paths to help deploying large models:
+
+1. [Intelligent Inference Scheduling](https://github.com/llm-d-incubation/llm-d-infra/tree/main/quickstart/examples/inference-scheduling) - Deploy [vLLM](https://docs.vllm.ai) behind the [Inference Gateway (IGW)](https://github.com/kubernetes-sigs/gateway-api-inference-extension) to decrease latency and increase throughput via [precise prefix-cache aware routing](https://github.com/llm-d-incubation/llm-d-infra/tree/main/quickstart/examples/precise-prefix-cache-aware) and [customizable scheduling policies](https://github.com/llm-d/llm-d-inference-scheduler/blob/main/docs/architecture.md).
+2. [Prefill/Decode Disaggregation](https://github.com/llm-d-incubation/llm-d-infra/tree/main/quickstart/examples/pd-disaggregation) - Reduce time to first token (TTFT) and get more predictable time per output token (TPOT) by splitting inference into prefill servers handling prompts and decode servers handling responses, primarily on large models such as Llama-70B and when processing very long prompts.
+3. [Wide Expert-Parallelism](https://github.com/llm-d-incubation/llm-d-infra/tree/main/quickstart/examples/wide-ep-lws) - Deploy very large Mixture-of-Experts (MoE) models like [DeepSeek-R1](https://github.com/vllm-project/vllm/issues/16037) and significantly reduce end-to-end latency and increase throughput by scaling up with [Data Parallelism and Expert Parallelism](https://docs.vllm.ai/en/latest/serving/data_parallel_deployment.html) over fast accelerator networks.
+
+See the path descriptions for more details about the accelerators, networks, and configurations tested and our [roadmap](https://github.com/llm-d/llm-d/issues/146) for what is coming next.
+
+### Where we focus
+
+`llm-d` currently targets improving the production serving experience around:
+
+* Generative models running in PyTorch or JAX
+  * Large language models (LLMs) with 1 billion or more parameters
+  * Using most or all of the capacity of one or more hardware accelerators
+* On recent generation datacenter-class accelerators
+  * NVIDIA H100 or newer for larger models and L4, A100 for smaller models
+  * AMD MI250 or newer
+  * Google TPU v5e, v6e, and newer
+* With extremely fast accelerator interconnect and datacenter networking
+  * 600-16,000 Gbps per accelerator NVLINK on host or across narrow domains like NVL72
+  * 1,600-5,000 Gbps per chip TPU OCS links within TPU pods
+  * 100-1,600 Gbps per host datacenter networking across broad (>128 host) domains
+* Kubernetes 1.29+ running
+  * in large (100-100k node) reserved cloud capacity or datacenters, overlapping with AI batch and training
+  * in medium (10-1k node) cloud deployments with a mix of reserved, on-demand, or spot capacity
+  * in small (1-10 node) test and qualification environments with a static footprint, often time shared
+
+Our upstream projects – particularly vLLM, and Kubernetes – support a broader array of models, accelerators, and networks that may also benefit from our work, but we concentrate on optimizing and standardizing the operational and automation challenges of the leading edge inference workloads.
 
 ## 🧱 Architecture
 
-llm-d adopts a layered architecture on top of industry-standard open technologies: vLLM, Kubernetes, and Inference Gateway.
+llm-d accelerates distributed inference by integrating industry-standard open technologies: vLLM as model server and engine, Inference Gateway as request scheduler and balancer, and Kubernetes as infrastructure orchestrator and workload control plane.
 
 <p align="center">
   <picture>
@@ -51,44 +81,38 @@ For more see the [project proposal](./docs/proposals/llm-d.md).
 
 ## 🚀 Getting Started
 
-llm-d can be installed as a full solution, customizing enabled features, or through its individual components for experimentation.
+`llm-d` can be installed as a full solution, customizing enabled features, or through its individual components for experimentation.
 
-### Deploying as a solution
+### Pre-requisites
 
-`llm-d`'s deployer can be used to install all main components using a single Helm chart on Kubernetes.
+`llm-d` currently focuses on the problems involved in
+
+* Large generative models running in PyTorch or JAX
+  * Transformer derived
+* Recent generation datacenter accelerators
+  * NVIDIA L4, A100, H100, and newer
+  * AMD 
+
+### Deploying llm-d
+
+`llm-d` provides Helm charts that deploy the [inference scheduler](https://github.com/llm-d-incubation/llm-d-infra/blob/main/charts/llm-d-infra/README.md#tldr) and an optional [modelservice](https://github.com/llm-d-incubation/llm-d-modelservice/blob/main/README.md#getting-started) that accelerates deploying vLLM in a [number of different configurations](https://github.com/llm-d-incubation/llm-d-modelservice/tree/main/examples).
+
+We bundle these together for our well-lit paths as [quickstart examples](https://github.com/llm-d-incubation/llm-d-infra/blob/main/quickstart/examples/) with usage guidance, benchmarks, and recommended configuration.
+
+We suggest the [inference scheduling](https://github.com/llm-d-incubation/llm-d-infra/tree/main/quickstart/examples/inference-scheduling) quickstart if you need a simple, production ready deployment of vLLM with optimized load balancing.
 
 > [!TIP]
-> See the guided experience with our [quickstart](https://github.com/llm-d/llm-d-deployer/blob/main/quickstart/README.md).
+> For a guided introduction to the whole system, try our [step-by-step quickstart](https://github.com/llm-d-incubation/llm-d-infra/blob/main/quickstart/README-step-by-step.md).
 
 ### Experimenting and developing with llm-d
 
-`llm-d` is a metaproject composed of subcomponent repositories that can be cloned individually.
-
-To clone all main components:
-```
-repos=(
-  "llm-d"
-  "llm-d-deployer"
-  "llm-d-inference-scheduler"
-  "llm-d-kv-cache-manager"
-  "llm-d-routing-sidecar"
-  "llm-d-model-service"
-  "llm-d-benchmark"
-  "llm-d-inference-sim"
-)
-
-for repo in "${repos[@]}"; do
-  git clone "https://github.com/llm-d/${repo}.git"
-done
-``` 
-
-> [!TIP]
-> As a customization example, see this [template](https://github.com/llm-d/llm-d-inference-scheduler/blob/main/docs/create_new_filter.md) for adding a custom scheduler filter.
+`llm-d` is composed of multiple component repositories and derives from both vLLM and Inference Gateway upstreams. Please see the individual repositories for more guidance on development.
 
 ## 📦 Releases
 
-Visit our [GitHub Releases page](https://github.com/llm-d/llm-d-deployer/releases) and review the release notes to stay updated with the latest releases.
+Visit our [GitHub Releases page](https://github.com/llm-d/llm-d/releases) and review the release notes to stay updated with the latest releases.
 
+Check out our [roadmap for upcoming releases](https://github.com/llm-d/llm-d/issues/146).
 
 ## Contribute
 
