@@ -45,7 +45,7 @@ build: ##
 # The Dockerfile the build task should use.
 # Default is the canonical “Dockerfile” so local `make buildah-build`
 # still works without extra flags.
-DOCKERFILE ?= Dockerfile
+DOCKERFILE ?= Dockerfile.ubi
 
 .PHONY: buildah-build
 buildah-build: check-builder load-version-json ## Build and push image (multi-arch if supported)
