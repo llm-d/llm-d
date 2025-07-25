@@ -165,7 +165,7 @@ RUN --mount=type=cache,target=/tmp/nixl-cache \
     export PYTHON="${VIRTUAL_ENV}/bin/python" && \
     export PKG_CONFIG_PATH="/usr/lib64/pkgconfig:/usr/share/pkgconfig:${PKG_CONFIG_PATH}" && \
     export CUDA_HOME="/usr/local/cuda" && \
-    export LD_LIBRARY_PATH="/usr/local/cuda/lib64:/usr/local/cuda/lib64/stubs/:/usr/local/cuda/extras/CUPTI/lib64:/usr/local/lib:/usr/local/lib64:/usr/lib64:${LD_LIBRARY_PATH}" && \
+    export LD_LIBRARY_PATH="/usr/local/nvidia/lib:/usr/local/nvidia/lib64:/usr/local/cuda/lib64:/usr/local/cuda/lib64/stubs/:/usr/local/cuda/extras/CUPTI/lib64:/usr/local/lib:/usr/local/lib64:/usr/lib64:${LD_LIBRARY_PATH}" && \
     meson setup build --prefix=/usr/local -Dbuildtype=release && \
     cd build && \
     ninja && \
@@ -344,7 +344,7 @@ RUN umask 002 && \
     chmod g+rwx /home/vllm
 
 
-ENV PATH="${VIRTUAL_ENV}/bin:${PATH}" \
+ENV PATH="${VIRTUAL_ENV}/bin:/usr/local/nvidia/bin:${PATH}" \
     HOME=/home/vllm \
     VLLM_USAGE_SOURCE=production-docker-image \
     VLLM_WORKER_MULTIPROC_METHOD=fork \
