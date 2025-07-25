@@ -327,17 +327,11 @@ RUN --mount=type=cache,target=/var/cache/git \
     # Install all compiled wheels (DeepEP, DeepGEMM, pplx-kernels, LMCache, nixl)
     uv pip install /tmp/wheels/*.whl && \
     \
-    # Clone and install vLLM
-    git clone https://github.com/vllm-project/vllm.git /tmp/vllm-${VLLM_COMMIT_SHA} && \
-    cd /tmp/vllm-${VLLM_COMMIT_SHA} && \
-    git checkout -q $VLLM_COMMIT_SHA && \
-    VLLM_COMMIT=$(git merge-base HEAD origin/main) \
-    VLLM_PRECOMPILED_WHEEL_LOCATION=https://wheels.vllm.ai/${VLLM_COMMIT}/vllm-1.0.0.dev-cp38-abi3-manylinux1_x86_64.whl \
-    VLLM_USE_PRECOMPILED=1 uv pip install --editable . && \
-    \
     # Cleanup (keep /tmp/vllm-${VLLM_COMMIT_SHA} for editable install)
-    rm -rf /tmp/wheels
-
+    rm -rf /tmp/wheels && \
+    \
+    # Instlal vllm
+    uv pip install --pre -U vllm==0.10.0 --torch-backend=cu128
 
 RUN dnf remove -y git && dnf autoremove -y && dnf clean all
 
