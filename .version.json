@@ -1,6 +1,6 @@
 {
-  "dev-version": "v0.1.0-rc.1",
+  "dev-version": "v0.2.0-rc.1",
   "dev-registry": "ghcr.io/llm-d/llm-d-dev",
-  "prod-version": "0.0.10",
+  "prod-version": "v0.2.0-rc.0",
   "prod-registry": "ghcr.io/llm-d/llm-d"
 }
