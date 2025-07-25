@@ -174,6 +174,51 @@ Users see a familiar documentation site with:
 4. **Automatic inclusion**: Documentation appears on next website build (daily automated builds)
 5. **No configuration needed**: System automatically discovers and includes new content
 
+### Documentation Standards for llm-d Contributors
+
+To ensure your repository documentation renders correctly on the llm-d website, please follow these guidelines when creating markdown files in your `docs/` directory:
+
+**✅ Recommended Practices**
+
+**HTML Elements**: Use standard markdown syntax instead of HTML when possible. If you must use HTML tags, ensure they are self-closing:
+```markdown
+<!-- Good -->
+<img src="image.png" alt="Description" />
+
+<!-- Avoid -->
+<img src="image.png" alt="Description">
+```
+
+**Internal Links**: Reference other documentation files by their relative paths within your repository's `docs/` folder:
+```markdown
+[Configuration Guide](./configuration/basic.md)
+[API Reference](../api/endpoints.md)
+```
+
+**External Repository References**: When linking to files in other llm-d repositories, use full GitHub URLs:
+```markdown
+[llm-d Architecture](https://github.com/llm-d/llm-d/blob/main/docs/architecture.md)
+```
+
+**📁 File Organization**
+- Place all documentation in your repository's `docs/` directory
+- Use descriptive filenames (they become URL slugs)
+- Organize subdirectories logically (they preserve hierarchy on the website)
+- Include a README.md in your repository root for component overview
+
+**🔗 Cross-References**
+- Link to other sections within your component's documentation freely
+- For links to other llm-d components, use the format: `[Component Name](/docs/components/repo-name/page)`
+- For links to general llm-d documentation, use: `[Guide Name](/docs/guide/page-name)`
+
+**⚠️ Elements That May Need Adjustment**
+- Complex HTML structures may not render correctly
+- Embedded videos or interactive content should use standard markdown image/link syntax
+- Tables with complex formatting should use standard markdown table syntax
+- Code blocks should specify language for proper syntax highlighting
+
+Following these standards ensures your documentation automatically appears correctly on the llm-d website without requiring manual intervention from the documentation team.
+
 ### Core Goals & Scope
 **Primary Goals (In Scope)**:
 - Standardize on `docs/` directory structure across all component repositories
