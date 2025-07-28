@@ -45,6 +45,8 @@ This proposal outlines a comprehensive strategy for automatically aggregating an
 3. Add minimal Docusaurus frontmatter (metadata headers that control how pages appear) and source attribution
 4. Build-time integration with existing remote content system
 5. Support custom configurations for edge cases
+6. Automatically discover and fetch image assets from `docs/assets/images/` directories
+7. Rewrite image paths in markdown content to work on aggregated site
 
 ### Technical Constraints
 1. Must respect GitHub API rate limits
@@ -80,6 +82,12 @@ Here are examples of what component repositories would contain in their `docs/` 
 Repository: llm-d/llm-d-inference-scheduler (example)
 docs/
 ├── README.md                    # Overview and quick start
+├── assets/
+│   └── images/                  # Store all images here
+│       ├── architecture.png
+│       ├── setup-flow.jpg
+│       └── api/
+│           └── request-flow.svg
 ├── installation/
 │   ├── requirements.md
 │   └── setup.md
@@ -94,6 +102,13 @@ docs/
 Repository: llm-d/llm-d-kv-cache-manager (example)
 docs/
 ├── README.md
+├── assets/
+│   └── images/                  # Store all images here
+│       ├── cache-diagram.png
+│       ├── performance/
+│       │   └── benchmark-results.png
+│       └── monitoring/
+│           └── metrics-dashboard.png
 ├── architecture.md
 ├── configuration/
 │   └── cache-settings.md
@@ -200,11 +215,23 @@ To ensure your repository documentation renders correctly on the llm-d website, 
 [llm-d Architecture](https://github.com/llm-d/llm-d/blob/main/docs/architecture.md)
 ```
 
+**🖼️ Image Assets**: Store and reference images using standardized paths to ensure proper aggregation:
+```markdown
+<!-- Store images in docs/assets/images/ directory -->
+![Architecture Diagram](./assets/images/architecture.png)
+![Setup Screenshot](../assets/images/setup-flow.jpg)
+
+<!-- For images in subdirectories, maintain relative paths -->
+![API Flow](./assets/images/api/request-flow.svg)
+```
+
 **📁 File Organization**
 - Place all documentation in your repository's `docs/` directory
+- Store images in `docs/assets/images/` directory (required for automatic fetching)
 - Use descriptive filenames (they become URL slugs)
 - Organize subdirectories logically (they preserve hierarchy on the website)
 - Include a README.md in your repository root for component overview
+- Supported image formats: `.png`, `.jpg`, `.jpeg`, `.svg`, `.gif`, `.webp`
 
 **🔗 Cross-References**
 - Link to other sections within your component's documentation freely
@@ -216,6 +243,9 @@ To ensure your repository documentation renders correctly on the llm-d website, 
 - Embedded videos or interactive content should use standard markdown image/link syntax
 - Tables with complex formatting should use standard markdown table syntax
 - Code blocks should specify language for proper syntax highlighting
+- **Images outside `docs/assets/images/`** will not be automatically fetched (use external URLs for these)
+- **Absolute image paths** should be avoided - use relative paths from markdown file location
+- **External images** (URLs to other domains) will work but may have loading/availability issues
 
 Following these standards ensures your documentation automatically appears correctly on the llm-d website without requiring manual intervention from the documentation team.
 
@@ -269,11 +299,72 @@ const documentationSources = {
 - Latest: `repo/docs/path/file.md` → `/docs/latest/components/repo-name/path/file`
 - Versioned: `repo/docs/path/file.md` → `/docs/0.2/components/repo-name/path/file`
 
+### Image Asset Handling Strategy
+
+**Asset Discovery and Fetching**:
+```javascript
+// Scan markdown content for image references
+const imagePattern = /!\[([^\]]*)\]\(([^)]+)\)/g;
+const assetPattern = /^\.\/(assets\/images\/|\.\.\/assets\/images\/)/;
+
+function extractImageAssets(markdownContent, repoName, version) {
+  const images = [];
+  let match;
+  
+  while ((match = imagePattern.exec(markdownContent)) !== null) {
+    const [fullMatch, altText, imagePath] = match;
+    
+    // Only process local images in assets/images directory
+    if (assetPattern.test(imagePath)) {
+      images.push({
+        originalPath: imagePath,
+        repoPath: resolveImagePath(imagePath, repoName),
+        targetPath: `/docs/${version}/components/${repoName}/assets/images/`,
+        altText: altText
+      });
+    }
+  }
+  
+  return images;
+}
+```
+
+**Path Rewriting**: 
+- Source: `![Diagram](./assets/images/arch.png)` 
+- Target: `![Diagram](/docs/latest/components/repo-name/assets/images/arch.png)`
+
+**Asset Storage Structure**:
+```
+Website assets:
+├── /docs/latest/components/
+│   ├── llm-d-inference-scheduler/assets/images/
+│   └── llm-d-kv-cache-manager/assets/images/
+└── /docs/0.2/components/
+    ├── llm-d-inference-scheduler/assets/images/
+    └── llm-d-kv-cache-manager/assets/images/
+```
+
+**Processing Workflow**:
+1. **Scan markdown files**: Extract all image references using regex patterns
+2. **Filter local assets**: Only process images that reference `./assets/images/` paths
+3. **Fetch from GitHub API**: Download images from the same repository/branch/tag as the markdown
+4. **Store with versioning**: Save images in version-specific directories on the website
+5. **Rewrite paths**: Update markdown content to use new absolute paths for the aggregated site
+6. **Handle missing images**: Log warnings for broken image references, continue build process
+
+**Edge Cases**:
+- **Missing images**: Referenced but not found in repository → log warning, keep original reference
+- **External images**: URLs to other domains → leave unchanged (may have availability issues)
+- **Large assets**: Images over 5MB → log warning, may need optimization
+- **Binary formats**: Unsupported formats → log warning, skip processing
+
 ### Technical Constraints
 - Must respect GitHub API rate limits
 - Work within existing Docusaurus + `docusaurus-plugin-remote-content` architecture
 - Maintain backward compatibility with current individual file configurations
 - Generate standard Docusaurus `versions.json` and versioned content structure
+- Handle image asset fetching and storage within build process limits
+- Support common image formats while managing file size constraints
 
 ## References
 
