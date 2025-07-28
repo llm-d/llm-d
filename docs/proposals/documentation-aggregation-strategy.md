@@ -73,88 +73,50 @@ Our project has multiple versions (v0.2 and latest), and each component reposito
 
 ### Current vs. Proposed Navigation
 **Current**: `What is llm-d? | User Guide | Community | News`  
-**Proposed**: `What is llm-d? | Start Here | Components | Community | News`
+**Proposed**: `llm-d Architecture | Start Here | Community | News`
 
 ### Individual Repository Documentation Structure
-Here are examples of what component repositories would contain in their `docs/` folder (these are sample structures for illustration):
+Here's how component repositories would be structured for automatic documentation aggregation:
 
 ```
-Repository: llm-d/llm-d-inference-scheduler (example)
-docs/
-├── README.md                    # Overview and quick start
-├── assets/
-│   └── images/                  # Store all images here
-│       ├── architecture.png
-│       ├── setup-flow.jpg
-│       └── api/
-│           └── request-flow.svg
-├── installation/
-│   ├── requirements.md
-│   └── setup.md
-├── configuration/
-│   ├── basic.md
-│   └── advanced.md
-├── api/
-│   ├── endpoints.md
-│   └── authentication.md
-└── troubleshooting.md
-
-Repository: llm-d/llm-d-kv-cache-manager (example)
-docs/
-├── README.md
-├── assets/
-│   └── images/                  # Store all images here
-│       ├── cache-diagram.png
-│       ├── performance/
-│       │   └── benchmark-results.png
-│       └── monitoring/
-│           └── metrics-dashboard.png
-├── architecture.md
-├── configuration/
-│   └── cache-settings.md
-├── performance/
-│   ├── benchmarks.md
-│   └── tuning.md
-└── monitoring/
-    └── metrics.md
+Any llm-d component repository:
+├── README.md                    # Becomes the main component landing page
+└── docs/                        # Any files/folders here get rendered as sub-pages
+    ├── assets/images/           # Images automatically fetched and rewritten
+    ├── [any-folder]/            # Folder structure preserved in sidebar
+    └── [any-file].md            # Individual documentation pages
 ```
+
+**Key Points:**
+- **README.md**: Automatically becomes the main overview page for that component
+- **docs/ directory**: Any markdown files and folders are automatically discovered and rendered
+- **Folder structure**: Preserved exactly in the website sidebar navigation  
+- **Zero configuration**: Just commit files to these locations and they appear on the website
 
 ### Unified Website Structure (Latest Version)
-The system automatically combines all repository documentation into this structure (using example repositories for illustration):
+The system automatically combines all repository documentation into this structure:
 
 ```
 llm-d.ai website structure:
-├── What is llm-d?               # Manual content (unchanged)
-│   ├── Architecture
-│   └── Overview
-├── Start Here                   # Points to llm-d-incubation/llm-d-infra for onboarding
-│   ├── Quick Start              # Sourced from llm-d-infra project
-│   └── Well-Lit Paths           # Sourced from llm-d-infra project
-├── Components/                  # Auto-generated from repositories
-│   ├── llm-d-inference-scheduler/  # From llm-d/llm-d-inference-scheduler/docs/
-│   │   ├── README
-│   │   ├── installation/
-│   │   │   ├── requirements
-│   │   │   └── setup
-│   │   ├── configuration/
-│   │   │   ├── basic
-│   │   │   └── advanced
-│   │   ├── api/
-│   │   │   ├── endpoints
-│   │   │   └── authentication
-│   │   └── troubleshooting
-│   └── llm-d-kv-cache-manager/     # From llm-d/llm-d-kv-cache-manager/docs/
-│       ├── README
-│       ├── architecture
-│       ├── configuration/
-│       │   └── cache-settings
-│       ├── performance/
-│       │   ├── benchmarks
-│       │   └── tuning
-│       └── monitoring/
-│           └── metrics
-├── Community                    # (unchanged)
-└── News                         # (unchanged)
+├── llm-d Architecture                   # Combined architecture and component documentation
+│   ├── Overview                         # From llm-d/llm-d README.md
+│   ├── llm-d-inference-scheduler/       # From llm-d/llm-d-inference-scheduler
+│   │   ├── Overview                     # README.md content
+│   │   └── [docs/ tree structure]       # From docs/ directory
+│   ├── llm-d-kv-cache-manager/         # From llm-d/llm-d-kv-cache-manager
+│   │   ├── Overview                     # README.md content
+│   │   └── [docs/ tree structure]       # From docs/ directory
+│   ├── llm-d-inference-sim/            # From llm-d/llm-d-inference-sim
+│   │   ├── Overview                     # README.md content
+│   │   └── [docs/ tree structure]       # From docs/ directory
+│   └── llm-d-routing-sidecar/          # From llm-d/llm-d-routing-sidecar
+│       ├── Overview                     # README.md content
+│       └── [docs/ tree structure]       # From docs/ directory
+├── Start Here                           # From llm-d-incubation/llm-d-infra
+│   ├── Overview                         # llm-d-infra/README.md content
+│   └── [docs/ tree structure]           # From llm-d-infra/docs/ directory
+├── Community                            # (unchanged)
+└── News                                 # (unchanged)
 ```
 
 ### Versioned Website Structure
@@ -162,16 +124,22 @@ The system creates separate documentation trees for each version per the require
 
 ```
 llm-d.ai with versions:
-├── /docs/latest/                       # Latest development version
-│   ├── start-here/
-│   └── components/
-│       ├── llm-d-inference-scheduler/  # From main branch
-│       └── llm-d-kv-cache-manager/     # From main branch
-└── /docs/0.2/                         # Version 0.2 release
-    ├── start-here/
-    └── components/
-        ├── llm-d-inference-scheduler/  # From v0.2 tag
-        └── llm-d-kv-cache-manager/     # From v0.2 tag
+├── /docs/latest/                                    # Latest development version
+│   ├── llm-d-architecture/                         # Combined architecture and components
+│   │   ├── overview/                               # From llm-d/llm-d main branch README.md
+│   │   ├── llm-d-inference-scheduler/              # From main branch
+│   │   ├── llm-d-kv-cache-manager/                 # From main branch  
+│   │   ├── llm-d-inference-sim/                    # From main branch
+│   │   └── llm-d-routing-sidecar/                  # From main branch
+│   └── start-here/                                 # From llm-d-infra main branch
+└── /docs/0.2/                                      # Version 0.2 release
+    ├── llm-d-architecture/                         # Combined architecture and components
+    │   ├── overview/                               # From llm-d/llm-d v0.2 tag README.md
+    │   ├── llm-d-inference-scheduler/              # From v0.2 tag
+    │   ├── llm-d-kv-cache-manager/                 # From v0.2 tag
+    │   ├── llm-d-inference-sim/                    # From v0.2 tag (if available)
+    │   └── llm-d-routing-sidecar/                  # From v0.2 tag (if available)
+    └── start-here/                                 # From llm-d-infra v0.2 tag
         # Note: If a repository doesn't have v0.2 tag, it's skipped for that version
 ```
 
@@ -180,10 +148,13 @@ Users see a familiar documentation site with:
 - **Version dropdown**: Latest, 0.2
 - **Automatic navigation**: Folder structure becomes sidebar menu
 - **Source links**: Each page shows "Edit this page" linking back to the original repository
-- **Consistent URLs**: `/docs/latest/components/llm-d-inference-scheduler/api/endpoints`
+- **Consistent URLs**: 
+  - `/docs/latest/llm-d-architecture/overview` (from llm-d/llm-d README.md)
+  - `/docs/latest/llm-d-architecture/llm-d-inference-scheduler/api/endpoints` (from component repos)
+  - `/docs/latest/start-here/deployment/prerequisites` (from llm-d-infra)
 
 ### Developer Workflow
-1. **Create documentation**: Add markdown files to `docs/` folder in any component repository
+1. **Create documentation**: Add markdown files to `docs/` folder in any component repository, or update README.md for main landing pages
 2. **Organize content**: Use folders to create logical groupings (e.g., `installation/`, `api/`, `troubleshooting/`)
 3. **Commit changes**: Standard git workflow - commit and push to main branch
 4. **Automatic inclusion**: Documentation appears on next website build (daily automated builds)
@@ -253,13 +224,14 @@ Following these standards ensures your documentation automatically appears corre
 **Primary Goals (In Scope)**:
 - Standardize on `docs/` directory structure across all component repositories
 - Automatically sync documentation to versioned Docusaurus website (latest and v0.2 tags)
+- Organize all component documentation under the "llm-d Architecture" header for unified technical documentation
 - Maintain zero-configuration setup for new repositories
 
 **Future Enhancements (Out of Scope for Initial Implementation)**:
-- Custom sidebar ordering and organization strategies
+- Custom sidebar ordering and organization strategies within the llm-d Architecture section
 - Advanced content organization beyond folder structure mirroring
 
-*Note: While the system supports sidebar customization capabilities, the initial focus is on documentation synchronization and standardization. Content organization strategies will be addressed in future phases.*
+*Note: While the system supports sidebar customization capabilities, the initial focus is on documentation synchronization and standardization. Content organization strategies within the llm-d Architecture section will be addressed in future phases.*
 
 ## Alternatives Considered
 
@@ -281,14 +253,30 @@ Following these standards ensures your documentation automatically appears corre
 ```javascript
 const documentationSources = {
   versions: ['latest', '0.2'],
-  autoDiscovery: [
-    'llm-d/llm-d-inference-scheduler',
-    'llm-d/llm-d-kv-cache-manager'
-  ],
+  llmdArchitecture: {
+    mainOverview: {
+      repo: 'llm-d/llm-d',
+      file: 'README.md',
+      target: 'llm-d-architecture/overview'
+    },
+    components: [
+      'llm-d/llm-d-inference-scheduler',
+      'llm-d/llm-d-kv-cache-manager',
+      'llm-d/llm-d-inference-sim',
+      'llm-d/llm-d-routing-sidecar'
+    ]
+  },
+  startHere: {
+    repo: 'llm-d-incubation/llm-d-infra',
+    readme: 'README.md',
+    docsPath: 'docs/',
+    target: 'start-here'
+  },
   customConfigurations: {
+    // For any repositories that need non-standard handling
     'llm-d/llm-d': {
-      branch: 'dev',
-      paths: ['docs/', 'README.md'],
+      branch: 'main',
+      paths: ['README.md'],
       exclude: ['docs/internal/']
     }
   }
@@ -296,8 +284,12 @@ const documentationSources = {
 ```
 
 ### Path Mapping Examples
-- Latest: `repo/docs/path/file.md` → `/docs/latest/components/repo-name/path/file`
-- Versioned: `repo/docs/path/file.md` → `/docs/0.2/components/repo-name/path/file`
+- Architecture Overview: `llm-d/llm-d/README.md` → `/docs/latest/llm-d-architecture/overview`
+- Component Main: `llm-d-inference-scheduler/README.md` → `/docs/latest/llm-d-architecture/llm-d-inference-scheduler`
+- Component Docs: `llm-d-inference-scheduler/docs/path/file.md` → `/docs/latest/llm-d-architecture/llm-d-inference-scheduler/path/file`
+- Start Here: `llm-d-infra/README.md` → `/docs/latest/start-here`
+- Start Here Docs: `llm-d-infra/docs/path/file.md` → `/docs/latest/start-here/path/file`
+- Versioned: Same pattern but with `/docs/0.2/` prefix for version 0.2
 
 ### Image Asset Handling Strategy
 
