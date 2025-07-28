@@ -1,5 +1,5 @@
 {
-  "dev-version": "v0.2.0",
+  "dev-version": "v0.2.1",
   "dev-registry": "ghcr.io/llm-d/llm-d-dev",
   "prod-version": "v0.2.0",
   "prod-registry": "ghcr.io/llm-d/llm-d"
