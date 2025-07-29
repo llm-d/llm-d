@@ -85,13 +85,7 @@ For more see the [project proposal](./docs/proposals/llm-d.md).
 
 ### Pre-requisites
 
-`llm-d` currently focuses on the problems involved in
-
-* Large generative models running in PyTorch or JAX
-  * Transformer derived
-* Recent generation datacenter accelerators
-  * NVIDIA L4, A100, H100, and newer
-  * AMD 
+`llm-d` requires a Kubernetes 1.29+ cluster and accelerators capable of running large models supported by vLLM. Our well-lit paths are focused on datacenter accelerators and networks and issues encountered outside these may not receive the same level of attention.
 
 ### Deploying llm-d
 
