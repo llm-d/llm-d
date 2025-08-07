@@ -257,7 +257,7 @@ ENV LANG=C.UTF-8 \
     UV_TORCH_BACKEND=${UV_TORCH_BACKEND:-cu${CUDA_MAJOR}${CUDA_MINOR}} \
     VIRTUAL_ENV=/opt/vllm \
     NVSHMEM_DIR="/opt/nvshmem-${NVSHMEM_VERSION}" \
-    LD_LIBRARY_PATH="/usr/local/cuda/lib64:/usr/local/lib:/usr/local/lib64:/opt/nvshmem-${NVSHMEM_VERSION}/lib:${LD_LIBRARY_PATH}" \
+    LD_LIBRARY_PATH="/usr/local/nvidia/lib:/usr/local/nvidia/lib64:/usr/local/cuda/lib64:/usr/local/lib:/usr/local/lib64:/opt/nvshmem-${NVSHMEM_VERSION}/lib:${LD_LIBRARY_PATH}" \
     PATH="/opt/nvshmem-${NVSHMEM_VERSION}/bin:${PATH}" \
     CPATH="/opt/nvshmem-${NVSHMEM_VERSION}/include:${CPATH}"
 
