@@ -14,23 +14,23 @@ on:
           - "3.11"
           - "3.12"
       VLLM_COMMIT_SHA:
-        description: 'Log level'
+        description: 'The VLLM commit SHA used for the LLM-D image build'
         required: false
         type: string
       NIXL_COMMIT_SHA:
-        description: 'Log level'
+        description: 'The NIXL commit SHA used for the LLM-D image build'
         required: false
         type: string
       NVSHMEM_VERSION:
-        description: 'Log level'
+        description: 'The NVShMem version used for the LLM-D image build'
         required: false
         type: string
       UCX_VERSION:
-        description: 'Log level'
+        description: 'The UCX version used for the LLM-D image build'
         required: false
         type: string
       LMCACHE_COMMIT_SHA:
-        description: 'Log level'
+        description: 'The LMCache commit SHA used for the LLM-D image build'
         required: false
         type: string
   push:
@@ -82,11 +82,11 @@ jobs:
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ${{ env.REGISTRY }}/${{ github.repository }}
+          images: ${{ env.REGISTRY }}/${{ github.repository }}-dev # For anything short of release always update dev
           tags: |
             type=ref,event=branch
             type=ref,event=pr
-            type=sha            # yields sha-<shortsha>
+            type=sha
             type=raw,value=latest,enable={{is_default_branch}}
 
       - name: Build and push image
