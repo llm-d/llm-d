@@ -1,0 +1,225 @@
+- name: Build vLLM from source for Nvidia GPUs
+  hosts: test_environments
+  remote_user: ubuntu
+  become: true
+  gather_facts: false
+
+  tasks:
+
+    - name: Wait until the instance is ready
+      ansible.builtin.wait_for_connection:
+        delay: 15
+        timeout: 180
+
+    - name: Install Python, GCC 10, AWS CLI, and dev Deps
+      shell: |
+        export DEBIAN_FRONTEND=noninteractive
+        sudo ln -fs /usr/share/zoneinfo/Etc/UTC /etc/localtime
+        sudo apt update
+        sudo apt install -y tzdata && \
+        sudo dpkg-reconfigure -f noninteractive tzdata && \
+        sudo apt install -y python{{ PYTHON_VERSION }} python{{ PYTHON_VERSION }}-dev python{{ PYTHON_VERSION }}-venv
+        # Upgrade to GCC 10 to avoid https://gcc.gnu.org/bugzilla/show_bug.cgi?id=92519
+        sudo apt-get install -y gcc-10 g++-10
+        sudo apt install -y git cmake ninja-build
+        # install dev tools in case something goes wrong
+        sudo apt install -y vim tree curl unzip
+        # install AWS CLI
+        curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
+        unzip awscliv2.zip
+        sudo ./aws/install --bin-dir /usr/local/bin --install-dir /usr/local/aws-cli --update
+      args:
+        executable: /bin/bash
+        chdir: /home/ubuntu
+
+    - name: Gather facts for first time
+      ansible.builtin.setup:
+
+    - name: Install SCCache
+      shell: |
+        sudo apt update
+        sudo apt install -y build-essential pkg-config libssl-dev 
+        curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+        source $HOME/.cargo/env
+        cargo install sccache
+        sudo mv $HOME/.cargo/bin/sccache /usr/local/bin/sccache
+      args:
+        executable: /bin/bash
+        chdir: /home/ubuntu
+
+    - name: Start sccache backed by S3
+      shell: |
+        mkdir -p $HOME/.local/share/sccache/logs
+        touch $HOME/.local/share/sccache/logs/sccache_log.txt
+        mkdir -p $HOME/.config/sccache
+        touch $HOME/.config/sccache/config.toml
+        cat > $HOME/.config/sccache/config.toml <<EOF
+        [cache.s3]
+        bucket = "vllm-nightly-sccache"
+        key_prefix = "vllm-cache/"
+        region = "us-west-2"
+        endpoint = "s3.us-west-2.amazonaws.com"
+        use_ssl = true
+        no_credentials = false
+        EOF
+
+        mkdir -p $HOME/.aws
+        touch $HOME/.aws/credentials
+        cat > $HOME/.aws/credentials <<EOF
+        [default]
+        region = us-west-2
+        aws_access_key_id = {{ AWS_ACCESS_KEY_ID_S3_BUCKET_ONLY }}
+        aws_secret_access_key = {{ AWS_SECRET_ACCESS_KEY_S3_BUCKET_ONLY }}
+        EOF
+
+        SCCACHE_IDLE_TIMEOUT=0 \
+        SCCACHE_ERROR_LOG=$HOME/.local/share/sccache/logs/sccache_log.txt \
+        SCCACHE_LOG=debug \
+        SCCACHE_CONF=$HOME/.config/sccache/config.toml \
+        AWS_PROFILE=default \
+        /usr/local/bin/sccache --start-server
+      args:
+        executable: /bin/bash
+
+    - name: Install cuda deps
+      shell: | 
+        if [[ "$(uname -m)" == "arm64" || "$(uname -m)" == "aarch64" ]]; then
+          wget https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2404/arm64/cuda-keyring_1.1-1_all.deb
+        elif [[ "$(uname -m)" == "amd64" || "$(uname -m)" == "x86_64" ]]; then
+          wget https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2404/x86_64/cuda-keyring_1.1-1_all.deb
+        fi
+        sudo dpkg -i cuda-keyring_1.1-1_all.deb
+        sudo apt-get update
+        sudo apt-get install -y cuda-toolkit-$(echo {{ CUDA_VERSION }} | cut -d. -f1,2 | sed 's/\./-/g') nvidia-open nvtop nload
+      args:
+        executable: /bin/bash
+        chdir: /home/ubuntu
+
+    - name: Reboot
+      ansible.builtin.shell: systemctl reboot
+      ignore_errors: false
+      ignore_unreachable: false
+
+    - name: Reconnect after reboot
+      ansible.builtin.wait_for_connection:
+      delay: 45
+      timeout: 180
+
+    - name: Build workarounds
+      shell: |
+        # Workaround for https://github.com/openai/triton/issues/2507
+        sudo ldconfig /usr/local/cuda-$(echo {{ CUDA_VERSION }} | cut -d. -f1,2)/compat/
+      args:
+        executable: /bin/bash
+
+    - name: Clone vLLM repo
+      git:
+        repo: https://github.com/vllm-project/vllm.git
+        dest: "/home/ubuntu/vllm"
+        version: "{{ VLLM_COMMIT }}"
+
+    - name: Create virtualenv
+      command: "python{{ PYTHON_VERSION }} -m venv /home/ubuntu/vllm/venv"
+      args:
+        creates: "/home/ubuntu/vllm/venv/bin/activate"
+
+    - name: Install Python dependencies
+      shell: |
+        /home/ubuntu/vllm/venv/bin/pip install --upgrade pip setuptools setuptools_scm wheel
+        /home/ubuntu/vllm/venv/bin/pip install -r /home/ubuntu/vllm/requirements/build.txt --extra-index-url {{ PYTORCH_CUDA_INDEX_BASE_URL }}/{{ CUDA_SHORT }}
+        /home/ubuntu/vllm/venv/bin/pip install -r /home/ubuntu/vllm/requirements/cuda.txt --extra-index-url {{ PYTORCH_CUDA_INDEX_BASE_URL }}/{{ CUDA_SHORT }}
+
+        if [[ "$(uname -m)" == "arm64" || "$(uname -m)" == "aarch64" ]]; then
+          /home/ubuntu/vllm/venv/bin/pip install \
+            --index-url {{ PYTORCH_CUDA_NIGHTLY_INDEX_BASE_URL }}/{{ CUDA_SHORT }} \
+            "torch==2.8.0.dev20250318+cu128" "torchvision==0.22.0.dev20250319"
+          /home/ubuntu/vllm/venv/bin/pip install \
+            --index-url {{ PYTORCH_CUDA_NIGHTLY_INDEX_BASE_URL }}/{{ CUDA_SHORT }} \
+            --pre pytorch_triton==3.3.0+gitab727c40
+        fi
+      args:
+        executable: /bin/bash
+        chdir: /home/ubuntu
+
+    - name: Start VLLM wheel build
+      shell: |
+        source /home/ubuntu/vllm/venv/bin/activate
+
+        export ATUO_MAX_JOBS=$(($(nproc)-4)) #default for ec2s
+        export MAX_JOBS={{ MAX_JOBS }}
+        if [[ -z "${MAX_JOBS}" ]]; then
+          MAX_JOBS=$AUTO_MAX_JOBS
+        fi
+        export NVCC_THREADS=8
+        export CUDA_HOME=/usr/local/cuda
+        export PATH=$CUDA_HOME/bin:$PATH
+        export LD_LIBRARY_PATH=$CUDA_HOME/lib64:$LD_LIBRARY_PATH
+        
+        export RUSTC_WRAPPER="sccache"
+        export CC="gcc"
+        export CXX="g++"
+        export SCCACHE_BUCKET="vllm-nightly-sccache"
+        export SCCACHE_REGION="us-west-2"
+        export SCCACHE_IDLE_TIMEOUT=0
+        export SCCACHE_S3_KEY_PREFIX="vllm-cache/"
+        export VLLM_TARGET_DEVICE="cuda"
+        
+        # MOST_RECENT_TAG="$(git describe --tags --abbrev=0 || true)"
+        # [[ "${MOST_RECENT_TAG:0:1}" == "v" ]] && MOST_RECENT_TAG="${MOST_RECENT_TAG:1}"
+        MOST_RECENT_TAG=0.0.0 # set tag as 0 so wheel is unique to only the commit sha and not release timeline
+
+        COMMIT_SHA_TAG="g$(git rev-parse --short HEAD)"
+        
+        export TORCH_CUDA_ARCH_LIST='7.0;7.5;8.0;8.6;8.9;9.0+PTX'
+        
+        python -m pip install -U twine pkginfo packaging importlib_metadata readme_renderer requests-toolbelt
+        
+        export SETUPTOOLS_SCM_PRETEND_VERSION="${MOST_RECENT_TAG}+${COMMIT_SHA_TAG}.{{ CUDA_SHORT }}"
+
+        python setup.py bdist_wheel --dist-dir=dist --py-limited-api=cp38 > /tmp/vllm-build.log 2>&1
+
+        wheel="${wheel_files[0]}"
+        new_wheel="${wheel/linux/manylinux1}"
+        mv -- "$wheel" "$new_wheel"
+        wheel="$new_wheel"
+
+      args:
+        executable: /bin/bash
+        chdir: /home/ubuntu/vllm
+
+    - name: Build PYPIRC
+      shell: |
+        touch $HOME/.pypirc
+        cat > $HOME/.pypirc <<EOF
+        [distutils]
+        index-servers =
+            llm-d-vllm
+
+        [llm-d-vllm]
+        repository: https://gitlab.com/api/v4/projects/72716844/packages/pypi
+        username: {{ PYPIRC_USER }}
+        password: {{ PYPIRC_TOKEN }}
+        EOF
+        chmod 600 $HOME/.pypirc
+      args:
+        executable: /bin/bash
+    
+    - name: Twine Upload and S3 upload
+      shell: |
+        source /home/ubuntu/vllm/venv/bin/activate
+
+        python -m twine check /home/ubuntu/vllm/dist/*.whl
+        python -m twine upload \
+          --verbose \
+          --non-interactive \
+          --config-file $HOME/.pypirc \
+          --skip-existing \
+          --repository llm-d-vllm \
+          /home/ubuntu/vllm/dist/*.whl
+        wheel_files=(/home/ubuntu/vllm/dist/*.whl)
+        wheel="${wheel_files[0]}"
+
+        aws s3 cp "$wheel" "s3://vllm-nightly-sccache/wheels/"
+      args:
+        executable: /bin/bash
+        chdir: /home/ubuntu/vllm
