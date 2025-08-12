@@ -188,21 +188,17 @@ ARG LMCACHE_COMMIT_SHA=0db8ae4746a207a72483d716b5f82545a2ead24b
 ARG VLLM_COMMIT_SHA=6d8d0a24c02bfd84d46b3016b865a44f048ae84b
 
 # Define if lmcache should be built 
-ARG LMCACHE_PREBUILT=0
-ARG LMCACHE_WHEEL_URL=""
-
 # Clone repositories with cache mounts
 RUN --mount=type=cache,target=/var/cache/git \
-    if [ "${LMCACHE_PREBUILT}" == "1" ] && [ -n "${LMCACHE_WHEEL_URL}" ]; then \
-        curl -fsSL "${LMCACHE_WHEEL_URL}" -o /wheels \
-    else \
-        git clone https://github.com/neuralmagic/LMCache.git && \
-        cd LMCache && \
-        git checkout -q $LMCACHE_COMMIT_SHA && \
-        source ${VIRTUAL_ENV}/bin/activate && \
-        python -m build --wheel --no-isolation -o /wheels && \
-        cd .. \
-    fi;
+    git clone https://github.com/neuralmagic/LMCache.git && \
+    cd LMCache && \
+    git checkout -q $LMCACHE_COMMIT_SHA && \
+    cd .. && \
+    # Build LMCache wheel
+    cd LMCache && \
+    source ${VIRTUAL_ENV}/bin/activate && \
+    python -m build --wheel --no-isolation -o /wheels && \
+    cd ..
 
 
 # Use existing virtual environment at /opt/vllm
@@ -325,32 +321,27 @@ ARG VLLM_PREBUILT=0
 # Public LLM-D vllm wheels index
 ARG VLLM_WHEEL_URL="https://gitlab.com/api/v4/projects/72482892/packages/pypi/simple"
 
+
+# Install PyTorch and cuda-python
+# Install all compiled wheels (DeepEP, DeepGEMM, pplx-kernels, LMCache, nixl)
 RUN --mount=type=cache,target=/var/cache/git \
     source /opt/vllm/bin/activate && \
-    \
-    # Install PyTorch and cuda-python
     uv pip install cuda-python huggingface_hub[hf_xet] && \
-    \
-    # Install all compiled wheels (DeepEP, DeepGEMM, pplx-kernels, LMCache, nixl)
     uv pip install /tmp/wheels/*.whl && \
-    \
     git clone https://github.com/vllm-project/vllm.git /tmp/vllm-${VLLM_COMMIT_SHA} && \
     cd /tmp/vllm-${VLLM_COMMIT_SHA} && \
-    git checkout -q $VLLM_COMMIT_SHA && \
-    if [ "${VLLM_PREBUILT}" == "1" ] && [ -n "${VLLM_WHEEL_URL}"]; then \
+    git checkout -q $VLLM_COMMIT_SHA; \
+    if [ "${VLLM_PREBUILT}" = "1" ] && [ -n "${VLLM_WHEEL_URL}" ]; then \
         VLLM_COMMIT_SHA_SHORT="g$(git rev-parse --short HEAD)" && \
         CUDA_SHORT="cu${CUDA_MAJOR}${CUDA_MINOR}" && \
         export VLLM_WHEEL_VERSION="0.0.0+${VLLM_COMMIT_SHA_SHORT}.${CUDA_SHORT}" && \
         VLLM_USE_PRECOMPILED=1 uv pip install --index-url "${VLLM_WHEEL_URL}" "vllm==${VLLM_WHEEL_VERSION}"  && \
-        rm -rf /tmp/vllm-${VLLM_COMMIT_SHA} \
+        rm -rf /tmp/vllm-${VLLM_COMMIT_SHA}; \
     else \
-        # Clone and install vLLM
         VLLM_COMMIT=$(git merge-base HEAD origin/main) && \
         VLLM_PRECOMPILED_WHEEL_LOCATION=https://wheels.vllm.ai/${VLLM_COMMIT}/vllm-1.0.0.dev-cp38-abi3-manylinux1_x86_64.whl && \
         VLLM_USE_PRECOMPILED=1 uv pip install --editable . && \
-        \
-        # Cleanup (keep /tmp/vllm-${VLLM_COMMIT_SHA} for editable install)
-        rm -rf /tmp/wheels \
+        rm -rf /tmp/wheels; \
     fi
 
 RUN dnf remove -y git && dnf autoremove -y && dnf clean all
