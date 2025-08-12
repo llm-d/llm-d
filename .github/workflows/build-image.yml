@@ -2,6 +2,37 @@ name: Build LLM-D Image
 
 on:
   workflow_dispatch:
+    inputs:
+      PYTHON_VERSION:
+        description: 'Python version in the llm-d image'
+        required: false
+        default: '3.12'
+        type: choice
+        options:
+          - "3.9"
+          - "3.10"
+          - "3.11"
+          - "3.12"
+      VLLM_COMMIT_SHA:
+        description: 'Log level'
+        required: false
+        type: string
+      NIXL_COMMIT_SHA:
+        description: 'Log level'
+        required: false
+        type: string
+      NVSHMEM_VERSION:
+        description: 'Log level'
+        required: false
+        type: string
+      UCX_VERSION:
+        description: 'Log level'
+        required: false
+        type: string
+      LMCACHE_COMMIT_SHA:
+        description: 'Log level'
+        required: false
+        type: string
   push:
     branches:
       - main
@@ -37,17 +68,6 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Extract metadata
-        id: meta
-        uses: docker/metadata-action@v5
-        with:
-          images: ${{ env.REGISTRY }}/${{ github.repository }}
-          tags: |
-            type=ref,event=branch
-            type=ref,event=pr
-            type=sha,prefix={{branch}}-
-            type=raw,value=latest,enable={{is_default_branch}}
-
       - name: Load version from .version.json
         id: version
         run: |
@@ -57,6 +77,17 @@ jobs:
           echo "dev_registry=$DEV_REGISTRY" >> $GITHUB_OUTPUT
           echo "Loaded version: $DEV_VERSION"
           echo "Loaded registry: $DEV_REGISTRY"
+
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ github.repository }}
+          tags: |
+            type=ref,event=branch
+            type=ref,event=pr
+            type=sha            # yields sha-<shortsha>
+            type=raw,value=latest,enable={{is_default_branch}}
 
       - name: Build and push image
         uses: docker/build-push-action@v5
