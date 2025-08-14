@@ -137,6 +137,11 @@ RUN cd /tmp && \
     ninja install && \
     cd /tmp && rm -rf nvshmem_src*
 
+RUN find /usr/local -type f -name "*.a" -delete && \
+    find /usr/local -type f -name "*.la" -delete && \
+    find /usr/local -type f -executable -exec strip --strip-unneeded {} + || true && \
+    rm -rf /usr/local/share/{man,doc,info} /opt/nvshmem-${NVSHMEM_VERSION}/share
+
 
 # Pin torch, so all deps are built against the same version 
 # as vllm itself
@@ -321,7 +326,6 @@ ARG VLLM_PREBUILT=0
 # Public LLM-D vllm wheels index
 ARG VLLM_WHEEL_URL="https://gitlab.com/api/v4/projects/72482892/packages/pypi/simple"
 
-
 # Install PyTorch and cuda-python
 # Install all compiled wheels (DeepEP, DeepGEMM, pplx-kernels, LMCache, nixl)
 RUN --mount=type=cache,target=/var/cache/git \
@@ -335,14 +339,14 @@ RUN --mount=type=cache,target=/var/cache/git \
         VLLM_COMMIT_SHA_SHORT="g$(git rev-parse --short HEAD)" && \
         CUDA_SHORT="cu${CUDA_MAJOR}${CUDA_MINOR}" && \
         export VLLM_WHEEL_VERSION="0.0.0+${VLLM_COMMIT_SHA_SHORT}.${CUDA_SHORT}" && \
-        VLLM_USE_PRECOMPILED=1 uv pip install --index-url "${VLLM_WHEEL_URL}" "vllm==${VLLM_WHEEL_VERSION}"  && \
-        rm -rf /tmp/vllm-${VLLM_COMMIT_SHA}; \
+        VLLM_USE_PRECOMPILED=1 uv pip install --index-url "${VLLM_WHEEL_URL}" "vllm==${VLLM_WHEEL_VERSION}"; \
     else \
         VLLM_COMMIT=$(git merge-base HEAD origin/main) && \
         VLLM_PRECOMPILED_WHEEL_LOCATION=https://wheels.vllm.ai/${VLLM_COMMIT}/vllm-1.0.0.dev-cp38-abi3-manylinux1_x86_64.whl && \
         VLLM_USE_PRECOMPILED=1 uv pip install --editable . && \
-        rm -rf /tmp/wheels; \
-    fi
+    fi; \
+    rm -rf /tmp/wheels && \
+    rm -rf /tmp/vllm-${VLLM_COMMIT_SHA}
 
 RUN dnf remove -y git && dnf autoremove -y && dnf clean all
 
@@ -353,7 +357,6 @@ RUN umask 002 && \
     mkdir -p /home/vllm && \
     chown vllm:root /home/vllm && \
     chmod g+rwx /home/vllm
-
 
 ENV PATH="${VIRTUAL_ENV}/bin:/usr/local/nvidia/bin:${PATH}" \
     HOME=/home/vllm \
