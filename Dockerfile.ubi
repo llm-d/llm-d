@@ -109,7 +109,7 @@ COPY patches/ /tmp/patches/
 
 # Build and install NVSHMEM from source with coreweave patch
 RUN cd /tmp && \
-    wget https://developer.nvidia.com/downloads/assets/secure/nvshmem/nvshmem_src_cuda12-all && \
+    wget https://developer.download.nvidia.com/assets/secure/nvshmem/nvshmem_src_cuda12-all && \
     tar -xf nvshmem_src_cuda12-all && \
     cd nvshmem_src && \
     git apply /tmp/patches/cks_nvshmem.patch && \

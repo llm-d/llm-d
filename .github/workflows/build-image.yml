@@ -45,6 +45,14 @@ on:
 env:
   REGISTRY: ghcr.io
   IMAGE_NAME: llm-d
+  TF_VAR_aws_region: "us-west-2"
+  TF_VAR_aws_ami_name: '["*ubuntu-noble-24.04*"]'
+  TF_VAR_aws_ami_owners: '["099720109477"]'
+  TF_VAR_aws_volume_size: 100
+  TF_VAR_aws_access_key: ${{ secrets.AWS_ACCESS_KEY_ID }}
+  TF_VAR_aws_secret_key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+  PYTORCH_CUDA_NIGHTLY_INDEX_BASE_URL: "https://download.pytorch.org/whl/nightly"
+  PYTORCH_CUDA_INDEX_BASE_URL: "https://download.pytorch.org/whl"
 
 jobs:
   build-and-scan:
