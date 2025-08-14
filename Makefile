@@ -4,8 +4,10 @@ SHELL := /usr/bin/env bash
 PROJECT_NAME ?= llm-d
 DEV_VERSION ?= 0.0.1
 PROD_VERSION ?= 0.0.0
+VLLM_VERSION ?= v0.10.0
+DEVICE ?= 
 IMAGE_TAG_BASE ?= ghcr.io/llm-d/$(PROJECT_NAME)
-IMG = $(IMAGE_TAG_BASE):$(DEV_VERSION)
+IMG = $(IMAGE_TAG_BASE)$(if $(DEVICE),-$(DEVICE)):$(DEV_VERSION)
 NAMESPACE ?= hc4ai-operator
 
 CONTAINER_TOOL := $(shell (command -v docker >/dev/null 2>&1 && echo docker) || (command -v podman >/dev/null 2>&1 && echo podman) || echo "")
@@ -18,6 +20,11 @@ SRC = $(shell find . -type f -name '*.go')
 .PHONY: help
 help: ## Print help
 	@awk 'BEGIN {FS = ":.*##"; printf "\nUsage:\n  make \033[36m<target>\033[0m\n"} /^[a-zA-Z_0-9-]+:.*?##/ { printf "  \033[36m%-15s\033[0m %s\n", $$1, $$2 } /^##@/ { printf "\n\033[1m%s\033[0m\n", substr($$0, 5) } ' $(MAKEFILE_LIST)
+	@printf "\n\033[1mXPU Build Examples:\033[0m\n"
+	@printf "  \033[36mmake image-build DEVICE=xpu\033[0m                    # Build Intel XPU Docker image\n"
+	@printf "  \033[36mmake image-build DEVICE=xpu DEV_VERSION=v0.2.0\033[0m # Build with specific version\n"
+	@printf "  \033[36mmake image-push DEVICE=xpu\033[0m                     # Push Intel XPU Docker image\n"
+	@printf "  \033[36mmake env DEVICE=xpu\033[0m                            # Show XPU environment variables\n"
 
 ##@ Development
 
@@ -87,9 +94,14 @@ buildah-build: check-builder load-version-json ## Build and push image (multi-ar
 	fi
 
 .PHONY:	image-build
-image-build: check-container-tool load-version-json ## Build Docker image ## Build Docker image using $(CONTAINER_TOOL)
+image-build: check-container-tool load-version-json ## Build Docker image using $(CONTAINER_TOOL)
 	@printf "\033[33;1m==== Building Docker image $(IMG) ====\033[0m\n"
-	$(CONTAINER_TOOL) build --progress=plain --build-arg TARGETOS=$(TARGETOS) --build-arg TARGETARCH=$(TARGETARCH) -t $(IMG) .
+	@if [ "$(DEVICE)" = "xpu" ]; then \
+		chmod +x build-xpu.sh; \
+		./build-xpu.sh $(IMG) $(VLLM_VERSION); \
+	else \
+		$(CONTAINER_TOOL) build --progress=plain --build-arg TARGETOS=$(TARGETOS) --build-arg TARGETARCH=$(TARGETARCH) -t $(IMG) .; \
+	fi
 
 .PHONY: image-push
 image-push: check-container-tool load-version-json ## Push Docker image $(IMG) to registry
@@ -238,6 +250,7 @@ load-version-json: check-jq
 env: load-version-json ## Print environment variables
 	@echo "DEV_VERSION=$(DEV_VERSION)"
 	@echo "PROD_VERSION=$(PROD_VERSION)"
+	@echo "VLLM_VERSION=$(VLLM_VERSION)"
 	@echo "IMAGE_TAG_BASE=$(IMAGE_TAG_BASE)"
 	@echo "IMG=$(IMG)"
 	@echo "CONTAINER_TOOL=$(CONTAINER_TOOL)"
