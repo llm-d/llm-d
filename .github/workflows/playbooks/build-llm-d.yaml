@@ -1,0 +1,78 @@
+- name: Build llm-d image
+  hosts: test_environments
+  remote_user: ubuntu
+  become: true
+  gather_facts: false
+
+  vars:
+    # Change if your repo lives elsewhere
+    repo_url: "https://github.com/llm-d/llm-d.git"
+
+    # Optional extra-vars that may be passed from the workflow_dispatch step
+    # (If not passed, they’ll be empty strings and get omitted from buildargs.)
+    python_version:     "{{ PYTHON_VERSION     | default('', true) }}"
+    vllm_commit_sha:    "{{ VLLM_COMMIT_SHA    | default('', true) }}"
+    nixl_commit_sha:    "{{ NIXL_COMMIT_SHA    | default('', true) }}"
+    nvshmem_version:    "{{ NVSHMEM_VERSION    | default('', true) }}"
+    ucx_version:        "{{ UCX_VERSION        | default('', true) }}"
+    lmcache_commit_sha: "{{ LMCACHE_COMMIT_SHA | default('', true) }}"
+    ref:                "{{ LLM_D_REF          | default('dev', true) }}"
+
+  tasks:
+    - name: Wait until the instance is ready
+      ansible.builtin.wait_for_connection:
+        delay: 15
+        timeout: 180
+
+    - name: Ensure apt cache present (Ubuntu)
+      ansible.builtin.apt:
+        update_cache: yes
+        cache_valid_time: 600
+
+    - name: Ensure Docker is installed (Ubuntu)
+      ansible.builtin.apt:
+        name:
+          - docker.io
+          - ca-certificates
+          - git
+        state: present
+
+    - name: Ensure Docker service is running
+      ansible.builtin.service:
+        name: docker
+        state: started
+        enabled: yes
+
+    - name: Clone llm-d repo
+      git:
+        repo: https://github.com/llm-d/llm-d.git
+        dest: "/home/ubuntu/llm-d"
+        version: "{{ ref }}"
+
+    # Build Dockerfile.ubi; pass only non-empty build args so Dockerfile ARG defaults apply when omitted
+    - name: Build llm-d image (Dockerfile.ubi)
+      community.docker.docker_image:
+        name: "llm-d:dev"
+        build:
+          path: "{{ repo_dest }}"
+          dockerfile: "Dockerfile.ubi"
+          pull: true
+          no_cache: false
+          buildargs:
+            PYTHON_VERSION:     "{{ (python_version     | length > 0) | ternary(python_version,     omit) }}"
+            VLLM_COMMIT_SHA:    "{{ (vllm_commit_sha    | length > 0) | ternary(vllm_commit_sha,    omit) }}"
+            NIXL_COMMIT_SHA:    "{{ (nixl_commit_sha    | length > 0) | ternary(nixl_commit_sha,    omit) }}"
+            NVSHMEM_VERSION:    "{{ (nvshmem_version    | length > 0) | ternary(nvshmem_version,    omit) }}"
+            UCX_VERSION:        "{{ (ucx_version        | length > 0) | ternary(ucx_version,        omit) }}"
+            LMCACHE_COMMIT_SHA: "{{ (lmcache_commit_sha | length > 0) | ternary(lmcache_commit_sha, omit) }}"
+      vars:
+        ansible_python_interpreter: "{{ ansible_playbook_python }}"
+
+    # Optional: tag with the short SHA / branch
+    - name: Tag image with branch-or-sha
+      ansible.builtin.shell: |
+        set -euo pipefail
+        ref="{{ env_ref_name if env_ref_name|length > 0 else env_sha[0:12] if env_sha|length > 0 else 'local' }}"
+        docker tag llm-d:dev "ghcr.io/llm-d/llm-d-dev:${ref}"
+      args:
+        executable: /bin/bash

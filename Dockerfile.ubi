@@ -109,9 +109,9 @@ COPY patches/ /tmp/patches/
 
 # Build and install NVSHMEM from source with coreweave patch
 RUN cd /tmp && \
-    wget https://developer.download.nvidia.com/assets/secure/nvshmem/nvshmem_src_cuda12-all && \
-    tar -xf nvshmem_src_cuda12-all && \
-    cd nvshmem_src && \
+    wget https://developer.download.nvidia.com/compute/nvshmem/redist/nvshmem_python/source/nvshmem_python-source-0.1.1.36309404_cuda12-archive.tar.xz && \
+    tar -xf nvshmem_python-source-0.1.1.36309404_cuda12-archive.tar.xz && \
+    cd nvshmem_python-source-0.1.1.36309404_cuda12-archive && \
     git apply /tmp/patches/cks_nvshmem.patch && \
     mkdir build && \
     cd build && \
@@ -135,13 +135,7 @@ RUN cd /tmp && \
     .. && \
     ninja -j$(nproc) && \
     ninja install && \
-    cd /tmp && rm -rf nvshmem_src*
-
-RUN find /usr/local -type f -name "*.a" -delete && \
-    find /usr/local -type f -name "*.la" -delete && \
-    find /usr/local -type f -executable -exec strip --strip-unneeded {} + || true && \
-    rm -rf /usr/local/share/{man,doc,info} /opt/nvshmem-${NVSHMEM_VERSION}/share
-
+    cd /tmp && rm -rf nvshmem_python-source-0.1.1.36309404_cuda12-archive*
 
 # Pin torch, so all deps are built against the same version 
 # as vllm itself

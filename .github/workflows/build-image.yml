@@ -33,6 +33,10 @@ on:
         description: 'The LMCache commit SHA used for the LLM-D image build'
         required: false
         type: string
+      REF:
+        description: 'If running as a workflow dispatch, what ref to use to bulid the image. Usually Dev or main.'
+        required: false
+        type: string
   push:
     branches:
       - main
@@ -51,101 +55,152 @@ env:
   TF_VAR_aws_volume_size: 100
   TF_VAR_aws_access_key: ${{ secrets.AWS_ACCESS_KEY_ID }}
   TF_VAR_aws_secret_key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-  PYTORCH_CUDA_NIGHTLY_INDEX_BASE_URL: "https://download.pytorch.org/whl/nightly"
-  PYTORCH_CUDA_INDEX_BASE_URL: "https://download.pytorch.org/whl"
+  TF_VAR_aws_instance_type:  "c7i.4xlarge"
 
 jobs:
   build-and-scan:
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      packages: write
-      security-events: write
-    
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - ARCH: amd64
+            AWS_AMI_ARCHITECTURE: x86_64
+          # - ARCH: arm64
+          #   AWS_AMI_ARCHITECTURE: arm64
+    runs-on: ubuntu-24.04
     steps:
-      - name: Free disk space
-        uses: jlumbroso/free-disk-space@v1.3.1
+      - name: Checkout
+        uses: actions/checkout@v4.1.7
         with:
-          tool-cache: true
-          android: true
-          dotnet: true
-          haskell: true
-          large-packages: true
-          docker-images: true
-          swap-storage: true
+          path: main
 
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-        with:
-          driver-opts: |
-            image=moby/buildkit:latest
-          buildkitd-flags: --oci-worker-gc --oci-worker-gc-keepstorage=8192
-
-      - name: Log in to Container Registry
-        uses: docker/login-action@v3
-        with:
-          registry: ${{ env.REGISTRY }}
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Load version from .version.json
-        id: version
+      - name: Resolve llm-d ref
+        id: ref
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
-          DEV_VERSION=$(jq -r '."dev-version"' .version.json)
-          DEV_REGISTRY=$(jq -r '."dev-registry"' .version.json)
-          echo "dev_version=$DEV_VERSION" >> $GITHUB_OUTPUT
-          echo "dev_registry=$DEV_REGISTRY" >> $GITHUB_OUTPUT
-          echo "Loaded version: $DEV_VERSION"
-          echo "Loaded registry: $DEV_REGISTRY"
+          set -euo pipefail
 
-      - name: Extract metadata
-        id: meta
-        uses: docker/metadata-action@v5
+          # Defaults
+          OWNER_REPO="llm-d/llm-d"
+          REF_OUT="dev"
+
+          case "${{ github.event_name }}" in
+            pull_request|pull_request_target|merge_group)
+              # Use the PR head sha (most precise)
+              REF_OUT="${{ github.event.pull_request.head.sha }}"
+              ;;
+            push)
+              REF_OUT="${{ github.sha }}"
+              ;;
+            workflow_dispatch)
+              IN="${{ github.event.inputs.REF }}"
+              if [[ -z "${IN}" ]]; then
+                REF_OUT="dev"
+              elif [[ "${IN}" =~ ^(pr/)?([0-9]+)$ ]]; then
+                N="${BASH_REMATCH[2]}"
+                # Resolve PR -> head.sha
+                REF_OUT="$(gh api repos/${OWNER_REPO}/pulls/${N} --jq '.head.sha')"
+                if [[ -z "${REF_OUT}" || "${REF_OUT}" == "null" ]]; then
+                  echo "Failed to resolve PR #${N} to a head SHA" >&2
+                  exit 1
+                fi
+              else
+                # Allow branch/tag/sha literals
+                REF_OUT="${IN}"
+              fi
+              ;;
+            *)
+              REF_OUT="main"
+              ;;
+          esac
+
+          echo "ref=${REF_OUT}" >> "$GITHUB_OUTPUT"
+          echo "event_type=${{ github.event_name }}" >> "$GITHUB_OUTPUT"
+
+      - name: Checkout terraform module
+        id: checkout-module
+        uses: actions/checkout@v4.1.7
         with:
-          images: ${{ env.REGISTRY }}/${{ github.repository }}-dev # For anything short of release always update dev
-          tags: |
-            type=ref,event=branch
-            type=ref,event=pr
-            type=sha
-            type=raw,value=latest,enable={{is_default_branch}}
+          repository: containers/terraform-test-environment-module
+          path: terraform-test-environment-module
+          ref: 'main'
 
-      - name: Build & push image
-        uses: docker/build-push-action@v5
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3.1.2
         with:
-          context: .
-          file: ./Dockerfile.ubi
-          platforms: linux/amd64
-          push: true         # << push directly; don't load
-          load: false        # << avoid duplicating the image on disk
-          tags: |
-            ${{ env.REGISTRY }}/${{ github.repository }}:${{ steps.version.outputs.dev_version }}
-            ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=min
-          provenance: false  # tiny space/timing win, optional
+          terraform_version: "1.7.5"
+          terraform_wrapper: false
 
-      - name: Run Trivy vulnerability scanner
-        uses: aquasecurity/trivy-action@master
-        with:
-          image-ref: ${{ env.REGISTRY }}/${{ github.repository }}:${{ steps.version.outputs.dev_version }}
-          format: 'sarif'
-          output: 'trivy-results.sarif'
-          severity: 'CRITICAL,HIGH,MEDIUM'
+      - name: Init
+        run: terraform init
+        working-directory: terraform-test-environment-module
 
-      - name: Upload Trivy scan results to GitHub Security tab
-        uses: github/codeql-action/upload-sarif@v3
-        with:
-          sarif_file: 'trivy-results.sarif'
+      - name: Bootstrap
+        id: up
+        run: terraform apply -auto-approve -lock=false
+        working-directory: terraform-test-environment-module
+        env:
+          TF_VAR_aws_instance_type: ${{ env.TF_VAR_aws_instance_type }}
+          TF_VAR_aws_ami_architecture: ${{ matrix.AWS_AMI_ARCHITECTURE }}
 
-      - name: Display vulnerability summary
+      - name: Terraform Output
+        id: terraform-output
         run: |
-          echo "=== Vulnerability Scan Summary ==="
-          if [ -f trivy-results.sarif ]; then
-            echo "Scan completed. Check the Security tab for detailed results."
-          else
-            echo "No vulnerabilities found or scan failed."
+          echo "id=$(terraform output id | xargs)" >> $GITHUB_OUTPUT
+          echo "url=$(terraform output host | xargs)" >> $GITHUB_OUTPUT
+          echo "ssh_public_key=$(terraform output ssh_public_key | xargs)" >> $GITHUB_OUTPUT
+          echo "pem_filename=$(terraform output pem_filename | xargs)" >> $GITHUB_OUTPUT
+        working-directory: terraform-test-environment-module
+
+      - name: Build JSON --extra-vars
+        id: exjson
+        shell: bash
+        run: |
+          extra_args=""
+
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            add_if_set () {
+              local key="$1" val="$2"
+              if [[ -n "$val" ]]; then
+                # Append with backslash + newline for pretty printing
+                extra_args+="-e $key=$val \\\n"
+              fi
+            }
+
+            add_if_set "PYTHON_VERSION"   "${{ github.event.inputs.PYTHON_VERSION }}"
+            add_if_set "VLLM_COMMIT_SHA"  "${{ github.event.inputs.VLLM_COMMIT_SHA }}"
+            add_if_set "NIXL_COMMIT_SHA"  "${{ github.event.inputs.NIXL_COMMIT_SHA }}"
+            add_if_set "NVSHMEM_VERSION"  "${{ github.event.inputs.NVSHMEM_VERSION }}"
+            add_if_set "UCX_VERSION"      "${{ github.event.inputs.UCX_VERSION }}"
+            add_if_set "LMCACHE_COMMIT_SHA" "${{ github.event.inputs.LMCACHE_COMMIT_SHA }}"
           fi
+
+          # Trim trailing newline/backslash
+          extra_args=$(echo -e "$extra_args" | sed '/^$/d')
+
+          # Save with escapes so Actions treats it as one string
+          echo "extra=$(echo -e "$extra_args")" >> "$GITHUB_OUTPUT"
+
+      - name: Provision
+        id: provision
+        timeout-minutes: 180
+        run: |
+          ansible-playbook ./main/.github/workflows/playbooks/build-llm-d.yaml \
+            -i terraform-test-environment-module/hosts.ini \
+            --private-key=terraform-test-environment-module/${{ steps.terraform-output.outputs.pem_filename }} \
+            ${{ steps.exjson.outputs.extra }} \
+            -e LLM_D_REF=${{ steps.ref.outputs.ref }}
+
+        env:
+          ANSIBLE_CONFIG: ./main/.github/workflows/playbooks/ansible.cfg
+
+      - name: Destroy Test Environment
+        id: down
+        if: always()
+        run: terraform destroy -auto-approve -lock=false
+        working-directory: terraform-test-environment-module
+        env:
+          TF_VAR_aws_instance_type: ${{ env.AWS_IMAGE_TYPE }}
+          TF_VAR_aws_ami_architecture: ${{ matrix.AWS_AMI_ARCHITECTURE }}
