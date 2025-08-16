@@ -27,7 +27,7 @@ runs:
         while IFS= read -r -d '' file; do
           echo "------------------------------------------------------------"
           echo "📄 Checking: $file"
-          output=$(markdown-link-check ${{ inputs.args }} "$file" 2>&1)
+          output=$(markdown-link-check -c .markdownlinkcheck.json ${{ inputs.args }} "$file" 2>&1)
           echo "$output"
 
           if echo "$output" | grep -q '✖'; then

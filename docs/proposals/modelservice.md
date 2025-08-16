@@ -68,7 +68,7 @@ Manual composition via raw Kubernetes resources:  One possible approach is for p
 
 ## Alternative: Extending KServe
 
-KServe provides a general-purpose model serving abstraction but was originally designed for traditional predictive models; it now provides several LLM specific features as of release 0.15 (see [this blogpost](https://kserve.github.io/website/master/blog/articles/2025-05-27-KServe-0.15-release/) for details). As we evolve the ModelService Helm chart, we also plan to collaborate with the KServe community to develop production-grade KServe mechanisms that integrate well with llm-d. This collaboration will support a variety of useful features, including prefill/decode disaggregation, dynamic LoRA loading, and configuration search and tuning.
+KServe provides a general-purpose model serving abstraction but was originally designed for traditional predictive models; it now provides several LLM specific features as of release 0.15 (see [this blogpost](https://kserve.github.io/website/blog/kserve-0.15-release) for details). As we evolve the ModelService Helm chart, we also plan to collaborate with the KServe community to develop production-grade KServe mechanisms that integrate well with llm-d. This collaboration will support a variety of useful features, including prefill/decode disaggregation, dynamic LoRA loading, and configuration search and tuning.
 
 ## Acknowledgements
 
