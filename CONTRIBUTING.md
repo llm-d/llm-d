@@ -29,7 +29,7 @@ This project adheres to the llm-d [Code of Conduct and Covenant](CODE_OF_CONDUCT
 * **Mailing List**: [llm-d-contributors@googlegroups.com](mailto:llm-d-contributors@googlegroups.com) for document sharing and collaboration
 * **Social Media:** Follow us on social media for the latest news, announcements, and updates:
   * **X:** [https://x.com/\_llm_d\_](https://x.com/_llm_d_)
-  * **LinkedIn:** [https://linkedin.com/company/llm-d ](https://linkedin.com/company/llm-d)
+  * **LinkedIn:** [https://linkedin.com/company/llm-d](https://linkedin.com/company/llm-d)
   * **Reddit:** [https://www.reddit.com/r/llm_d/](https://www.reddit.com/r/llm_d/)
   * **YouTube** [@llm-d-project](https://youtube.com/@llm-d-project)
 

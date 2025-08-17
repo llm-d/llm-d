@@ -1,0 +1,10 @@
+{
+  "ignorePatterns": [
+    {
+      "pattern": "linkedin.com"
+    },
+    { 
+      "pattern": "^(https?://)?(www\\.)?(old\\.)?reddit\\.com/" 
+    }
+  ]
+}
