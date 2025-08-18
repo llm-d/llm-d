@@ -35,4 +35,3 @@ jobs:
         uses: ./.github/actions/markdown-link-checker
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
-          # args: "--retry"  
