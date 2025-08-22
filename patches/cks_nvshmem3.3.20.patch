@@ -1,7 +1,7 @@
-diff --git a/share/src/transport-plugins/ibgda/ibgda.cpp b/share/src/transport-plugins/ibgda/ibgda.cpp
+diff --git a/src/modules/transport/ibgda/ibgda.cpp b/src/modules/transport/ibgda/ibgda.cpp
 index d037ccc..924626c 100644
---- a/share/src/transport-plugins/ibgda/ibgda.cpp
-+++ b/share/src/transport-plugins/ibgda/ibgda.cpp
+--- a/src/modules/transport/ibgda/ibgda.cpp
++++ b/src/modules/transport/ibgda/ibgda.cpp
 @@ -3709,11 +3709,21 @@ int nvshmemt_init(nvshmem_transport_t *t, struct nvshmemi_cuda_fn_table *table,
          const char *name = ftable.get_device_name(device->dev);
          NVSHMEMI_NULL_ERROR_JMP(name, status, NVSHMEMX_ERROR_INTERNAL, out,
