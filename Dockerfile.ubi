@@ -362,8 +362,8 @@ RUN --mount=type=cache,target=/var/cache/git \
     source /opt/vllm/bin/activate && \
     uv pip install cuda-python 'huggingface_hub[hf_xet]' && \
     uv pip install /tmp/wheels/*.whl && \
-    git clone https://github.com/vllm-project/vllm.git /tmp/vllm-${VLLM_COMMIT_SHA} && \
-    cd /tmp/vllm-${VLLM_COMMIT_SHA} && \
+    git clone https://github.com/vllm-project/vllm.git /opt/vllm-source && \
+    cd /opt/vllm-source && \
     git checkout -q ${VLLM_COMMIT_SHA}; \
     VLLM_WHEEL_ARCH=""; \
     if [ "$(uname -m)" = "amd64" ] || [ "$(uname -m)" = "x86_64" ]; then \
@@ -379,7 +379,8 @@ RUN --mount=type=cache,target=/var/cache/git \
         VLLM_PRECOMPILED_WHEEL_LOCATION="https://wheels.vllm.ai/${VLLM_COMMIT}/vllm-1.0.0.dev-cp38-abi3-manylinux1_${VLLM_WHEEL_ARCH}.whl"; \
         VLLM_USE_PRECOMPILED=1 uv pip install --editable .; \
     fi; \
-    rm -rf /tmp/wheels /tmp/vllm-${VLLM_COMMIT_SHA}
+    rm -rf /tmp/wheels
+    # leaving vllm source arround at path /opt/vllm-source for editable install for debugging purposes
 
 RUN dnf remove -y git && dnf autoremove -y && dnf clean all
 
