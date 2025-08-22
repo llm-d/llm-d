@@ -295,7 +295,8 @@ ENV LANG=C.UTF-8 \
     NVSHMEM_DIR="/opt/nvshmem-${NVSHMEM_VERSION}" \
     LD_LIBRARY_PATH="/usr/local/nvidia/lib:/usr/local/nvidia/lib64:/usr/local/cuda/lib64:/usr/local/lib:/usr/local/lib64:/opt/nvshmem-${NVSHMEM_VERSION}/lib:${LD_LIBRARY_PATH}" \
     PATH="/opt/nvshmem-${NVSHMEM_VERSION}/bin:${PATH}" \
-    CPATH="/opt/nvshmem-${NVSHMEM_VERSION}/include:${CPATH}"
+    CPATH="/opt/nvshmem-${NVSHMEM_VERSION}/include:${CPATH}" \
+    TORCH_CUDA_ARCH_LIST="9.0a;10.0+PTX"
 
 # Update base packages
 RUN dnf update -y && dnf clean all
@@ -391,6 +392,19 @@ RUN umask 002 && \
     mkdir -p /home/vllm && \
     chown vllm:root /home/vllm && \
     chmod g+rwx /home/vllm
+
+# default openionated env vars for HF_HOME and TRANSFORMERS_CACHE, over-writeable
+ENV LLM_D_MODELS_DIR=/var/lib/llm-d/models \
+    HF_HOME=/var/lib/llm-d/.hf \
+    TRANSFORMERS_CACHE=/var/lib/llm-d/.cache/huggingface
+
+# creates default models directory and makes path writeable for both root and default user, with symlink for convenience
+# find command keeps group=0 on all new subdirs created later
+RUN mkdir -p "$LLM_D_MODELS_DIR" "$HF_HOME" "$TRANSFORMERS_CACHE" && \
+    chown -R root:0 /var/lib/llm-d && \
+    chmod -R g+rwX /var/lib/llm-d && \
+    find /var/lib/llm-d -type d -exec chmod g+s {} \; && \
+    ln -snf /var/lib/llm-d/models /models
 
 ENV PATH="${VIRTUAL_ENV}/bin:/usr/local/nvidia/bin:${PATH}" \
     HOME=/home/vllm \
