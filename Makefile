@@ -4,10 +4,10 @@ SHELL := /usr/bin/env bash
 PROJECT_NAME ?= llm-d
 DEV_VERSION ?= 0.0.1
 PROD_VERSION ?= 0.0.0
-VLLM_VERSION ?= v0.10.0
 DEVICE ?= 
 IMAGE_TAG_BASE ?= ghcr.io/llm-d/$(PROJECT_NAME)
 IMG = $(IMAGE_TAG_BASE)$(if $(DEVICE),-$(DEVICE)):$(DEV_VERSION)
+DOCKERFILE ?= Dockerfile.ubi$(if $(DEVICE),.$(DEVICE))
 NAMESPACE ?= hc4ai-operator
 
 CONTAINER_TOOL := $(shell (command -v docker >/dev/null 2>&1 && echo docker) || (command -v podman >/dev/null 2>&1 && echo podman) || echo "")
@@ -96,12 +96,7 @@ buildah-build: check-builder load-version-json ## Build and push image (multi-ar
 .PHONY:	image-build
 image-build: check-container-tool load-version-json ## Build Docker image using $(CONTAINER_TOOL)
 	@printf "\033[33;1m==== Building Docker image $(IMG) ====\033[0m\n"
-	@if [ "$(DEVICE)" = "xpu" ]; then \
-		chmod +x build-xpu.sh; \
-		./build-xpu.sh $(IMG) $(VLLM_VERSION); \
-	else \
-		$(CONTAINER_TOOL) build --progress=plain --build-arg TARGETOS=$(TARGETOS) --build-arg TARGETARCH=$(TARGETARCH) -t $(IMG) .; \
-	fi
+	$(CONTAINER_TOOL) build --progress=plain --build-arg TARGETOS=$(TARGETOS) --build-arg TARGETARCH=$(TARGETARCH) -t $(IMG) -f $(DOCKERFILE) .
 
 .PHONY: image-push
 image-push: check-container-tool load-version-json ## Push Docker image $(IMG) to registry
@@ -250,7 +245,6 @@ load-version-json: check-jq
 env: load-version-json ## Print environment variables
 	@echo "DEV_VERSION=$(DEV_VERSION)"
 	@echo "PROD_VERSION=$(PROD_VERSION)"
-	@echo "VLLM_VERSION=$(VLLM_VERSION)"
 	@echo "IMAGE_TAG_BASE=$(IMAGE_TAG_BASE)"
 	@echo "IMG=$(IMG)"
 	@echo "CONTAINER_TOOL=$(CONTAINER_TOOL)"
