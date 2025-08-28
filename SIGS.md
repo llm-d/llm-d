@@ -184,7 +184,7 @@ SIGs operate within the broader llm-d project governance framework defined in [P
 
 ### Joining a SIG
 1. **Attend a meeting**: Check the [project calendar](https://red.ht/llm-d-public-calendar) for SIG meeting times
-2. **Join the conversation**: Participate in SIG-specific channels on [Slack](https://inviter.co/llm-d-slack)
+2. **Join the conversation**: Participate in SIG-specific channels on [Slack](https://llm-d.ai/slack)
 3. **Review documentation**: Read the SIG's charter and current initiatives
 4. **Start contributing**: Look for "good first issues" labeled with the SIG's area
 
