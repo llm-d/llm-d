@@ -96,7 +96,7 @@ We bundle these together for our well-lit paths as [quickstart examples](https:/
 We suggest the [inference scheduling](https://github.com/llm-d-incubation/llm-d-infra/tree/main/quickstart/examples/inference-scheduling) quickstart if you need a simple, production ready deployment of vLLM with optimized load balancing.
 
 > [!TIP]
-> For a guided introduction to the whole system, try our [step-by-step quickstart](https://github.com/llm-d-incubation/llm-d-infra/blob/main/quickstart/README-step-by-step.md).
+> For a guided introduction to the whole system, try our [step-by-step quickstart](https://github.com/llm-d-incubation/llm-d-infra/blob/main/quickstart/README.md).
 
 ### Experimenting and developing with llm-d
 
