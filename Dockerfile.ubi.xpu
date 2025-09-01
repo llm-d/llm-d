@@ -138,7 +138,8 @@ RUN --mount=type=cache,target=/root/.cache/uv \
     pyyaml \
     types-PyYAML \
     pytest \ 
-    patchelf>=0.11.0
+    patchelf>=0.11.0 \
+    torch==2.8.0+xpu --extra-index-url=https://download.pytorch.org/whl/xpu
 
 # https://github.com/ai-dynamo/nixl/tree/ucx_thread_pool
 # Temporarily use hotfix on 0.4 to avoid NIXL launch OH
@@ -316,6 +317,7 @@ RUN --mount=type=cache,target=/var/cache/git \
     # Install PyTorch and cuda-python
     uv pip install huggingface_hub[hf_xet] && \
     uv pip install nixl==0.3.0 && \
+    uv pip install /tmp/wheels/*.whl && \
     \
     # Cleanup (keep /tmp/vllm-${VLLM_COMMIT_SHA} for editable install)
     rm -rf /tmp/wheels
