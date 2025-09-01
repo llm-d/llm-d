@@ -1,0 +1,52 @@
+From 9b706ad1cd168b4f6d89f167488886d9da540e73 Mon Sep 17 00:00:00 2001
+From: yuanwu <yuan.wu@intel.com>
+Date: Mon, 25 Aug 2025 02:31:14 -0700
+Subject: [PATCH] Add the xpu torch version
+
+Signed-off-by: yuanwu <yuan.wu@intel.com>
+---
+ CMakeLists.txt | 6 ++++++
+ pyproject.toml | 3 ++-
+ 2 files changed, 8 insertions(+), 1 deletion(-)
+
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index aca42c3fe..7f45dd3e3 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -47,6 +47,7 @@ set(HIP_SUPPORTED_ARCHS "gfx906;gfx908;gfx90a;gfx942;gfx950;gfx1030;gfx1100;gfx1
+ #
+ set(TORCH_SUPPORTED_VERSION_CUDA "2.7.1")
+ set(TORCH_SUPPORTED_VERSION_ROCM "2.7.0")
++set(TORCH_SUPPORTED_VERSION_XPU "2.8.0")
+ 
+ #
+ # Try to find python package with an executable that exactly matches
+@@ -126,6 +127,11 @@ elseif(HIP_FOUND)
+     message(WARNING "Pytorch version >= ${TORCH_SUPPORTED_VERSION_ROCM} "
+       "expected for ROCm build, saw ${Torch_VERSION} instead.")
+   endif()
++elseif(VLLM_TARGET_DEVICE STREQUAL "xpu")
++  if (NOT Torch_VERSION VERSION_EQUAL ${TORCH_SUPPORTED_VERSION_XPU})
++    message(WARNING "Pytorch version ${TORCH_SUPPORTED_VERSION_XPU} "
++      "expected for XPU build, saw ${Torch_VERSION} instead.")
++  endif()
+ else()
+   message(FATAL_ERROR "Can't find CUDA or HIP installation.")
+ endif()
+diff --git a/pyproject.toml b/pyproject.toml
+index 013f2a6cd..594d514c3 100644
+--- a/pyproject.toml
++++ b/pyproject.toml
+@@ -6,7 +6,8 @@ requires = [
+     "packaging>=24.2",
+     "setuptools>=77.0.3,<80.0.0",
+     "setuptools-scm>=8.0",
+-    "torch == 2.7.1",
++    "torch >= 2.7.1, != 2.7.2; platform_machine != 'xpu'",
++    "torch >= 2.8.0; platform_machine == 'xpu'",
+     "wheel",
+     "jinja2",
+ ]
+-- 
+2.34.1
+
