@@ -1,18 +1,18 @@
-From 6c4366f7e579287b5c8c79f37648a5d25e4ab2af Mon Sep 17 00:00:00 2001
+From 9ebfc3934354eb75b41d239da8636da70f5c4158 Mon Sep 17 00:00:00 2001
 From: zhenwei <zhenweiliu@habana.ai>
 Date: Fri, 25 Jul 2025 11:42:15 +0300
-Subject: [PATCH] Add XPU support to Nixl connector
+Subject: [PATCH 1/2] [XPU][P/D] Add XPU support to Nixl connector
 
 Signed-off-by: zhenwei <zhenwei.liu@intel.com>
 ---
  requirements/xpu.txt                          |  1 +
  .../kv_transfer/kv_connector/utils.py         | 50 ++++++++++++-
  .../kv_connector/v1/nixl_connector.py         |  1 +
- vllm/platforms/tpu.py                         | 25 +++++++
- vllm/platforms/xpu.py                         | 37 ++++++++++
+ vllm/platforms/tpu.py                         | 26 +++++++
+ vllm/platforms/xpu.py                         | 31 ++++++++
  vllm/v1/worker/gpu_model_runner.py            |  4 ++
  vllm/v1/worker/tpu_model_runner.py            | 72 +------------------
- 7 files changed, 119 insertions(+), 71 deletions(-)
+ 7 files changed, 114 insertions(+), 71 deletions(-)
 
 diff --git a/requirements/xpu.txt b/requirements/xpu.txt
 index 4607c3efd..c44a2a9c7 100644
@@ -92,7 +92,7 @@ index 2364400b3..f4dc248a1 100644
 +        dst_tensor = dst_kv_caches[layer_name]
 +        copy_fn(src_tensor, dst_tensor, src_indices, dst_indices)
 diff --git a/vllm/distributed/kv_transfer/kv_connector/v1/nixl_connector.py b/vllm/distributed/kv_transfer/kv_connector/v1/nixl_connector.py
-index 4f51229ff..c0695ca76 100644
+index 6608d2a4a..bb23cc007 100644
 --- a/vllm/distributed/kv_transfer/kv_connector/v1/nixl_connector.py
 +++ b/vllm/distributed/kv_transfer/kv_connector/v1/nixl_connector.py
 @@ -60,6 +60,7 @@ except ImportError:
@@ -104,11 +104,11 @@ index 4f51229ff..c0695ca76 100644
  
  
 diff --git a/vllm/platforms/tpu.py b/vllm/platforms/tpu.py
-index ba06abd07..8248dc2fd 100644
+index d7468d74b..6a061956d 100644
 --- a/vllm/platforms/tpu.py
 +++ b/vllm/platforms/tpu.py
-@@ -197,6 +197,31 @@ class TpuPlatform(Platform):
-     def is_kv_cache_dtype_supported(cls, kv_cache_dtype: str) -> bool:
+@@ -200,6 +200,32 @@ class TpuPlatform(Platform):
+                                     model_config: "ModelConfig") -> bool:
          return True
  
 +    @classmethod
@@ -136,27 +136,15 @@ index ba06abd07..8248dc2fd 100644
 +        """ tpu blocks to cpu blocks"""
 +        torch.ops.xla.dynamo_set_buffer_donor_(src_cache, True)
 +        dst_cache[dst_block_indices] = src_cache[src_block_indices].cpu()
++
  
  try:
      from tpu_commons.platforms import TpuPlatform as TpuCommonsPlatform
 diff --git a/vllm/platforms/xpu.py b/vllm/platforms/xpu.py
-index af24437f6..943196d8d 100644
+index 84f4cd725..5e06a7123 100644
 --- a/vllm/platforms/xpu.py
 +++ b/vllm/platforms/xpu.py
-@@ -107,6 +107,12 @@ class XPUPlatform(Platform):
-         # lazy import to avoid circular import
-         from vllm.config import CUDAGraphMode
-         compilation_config = vllm_config.compilation_config
-+
-+        # Initialize compile_sizes if None
-+        if compilation_config.compile_sizes is None:
-+            compilation_config.compile_sizes = []
-+            logger.info("Initialized empty compile_sizes for XPU platform.")
-+
-         if compilation_config.cudagraph_mode is None or \
-                 compilation_config.cudagraph_mode.max_cudagraph_mode() \
-                     != CUDAGraphMode.NONE:
-@@ -151,6 +157,13 @@ class XPUPlatform(Platform):
+@@ -137,6 +137,13 @@ class XPUPlatform(Platform):
                  vllm_config.scheduler_config.max_model_len,
                  DEFAULT_MAX_NUM_BATCHED_TOKENS)
  
@@ -170,11 +158,11 @@ index af24437f6..943196d8d 100644
      @classmethod
      def is_pin_memory_available(cls):
          return True
-@@ -197,3 +210,27 @@ class XPUPlatform(Platform):
+@@ -179,3 +186,27 @@ class XPUPlatform(Platform):
      @classmethod
-     def device_count(cls) -> int:
-         return torch.xpu.device_count()
-+
+     def opaque_attention_op(cls) -> bool:
+         return True
++    
 +    @classmethod
 +    def insert_blocks_to_device(
 +        cls,
@@ -199,7 +187,7 @@ index af24437f6..943196d8d 100644
 +        _src_cache = src_cache[:, src_block_indices]
 +        dst_cache[:, dst_block_indices] = _src_cache.cpu()
 diff --git a/vllm/v1/worker/gpu_model_runner.py b/vllm/v1/worker/gpu_model_runner.py
-index adaa1306f..f1a3a1e59 100644
+index 08e13ab88..a69951d65 100644
 --- a/vllm/v1/worker/gpu_model_runner.py
 +++ b/vllm/v1/worker/gpu_model_runner.py
 @@ -28,6 +28,7 @@ from vllm.config import (CompilationLevel, CUDAGraphMode, VllmConfig,
@@ -210,7 +198,7 @@ index adaa1306f..f1a3a1e59 100644
  from vllm.distributed.parallel_state import (
      get_pp_group, get_tp_group, graph_capture, is_global_first_rank,
      prepare_communication_buffer_for_model)
-@@ -3197,6 +3198,9 @@ class GPUModelRunner(LoRAModelRunnerMixin, KVConnectorModelRunnerMixin):
+@@ -3150,6 +3151,9 @@ class GPUModelRunner(LoRAModelRunnerMixin, KVConnectorModelRunnerMixin):
  
          if has_kv_transfer_group():
              get_kv_transfer_group().register_kv_caches(kv_caches)
@@ -218,10 +206,10 @@ index adaa1306f..f1a3a1e59 100644
 +                get_kv_transfer_group().set_host_xfer_buffer_ops(
 +                    copy_kv_blocks)
  
-     def get_kv_cache_spec(self) -> dict[str, KVCacheSpec]:
+     def may_add_encoder_only_layers_to_kv_cache_config(self) -> None:
          """
 diff --git a/vllm/v1/worker/tpu_model_runner.py b/vllm/v1/worker/tpu_model_runner.py
-index f7e68edba..bbd275692 100644
+index 985d5ba58..5947b54d3 100644
 --- a/vllm/v1/worker/tpu_model_runner.py
 +++ b/vllm/v1/worker/tpu_model_runner.py
 @@ -3,7 +3,7 @@
@@ -241,7 +229,7 @@ index f7e68edba..bbd275692 100644
  from vllm.forward_context import set_forward_context
  from vllm.logger import init_logger
  from vllm.lora.layers import BaseLayerWithLoRA
-@@ -1899,75 +1900,6 @@ def _get_padded_token_len(paddings: list[int], x: int) -> int:
+@@ -1887,75 +1888,6 @@ def _get_padded_token_len(paddings: list[int], x: int) -> int:
      return paddings[index]
  
  
@@ -318,5 +306,5 @@ index f7e68edba..bbd275692 100644
                                             page_size: int) -> int:
      """Calculates the padded number of KV cache update slices to avoid
 -- 
-2.34.1
+2.43.0
 
