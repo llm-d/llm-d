@@ -43,12 +43,9 @@ jobs:
         include:
           - ARCH: amd64
             AWS_AMI_ARCHITECTURE: x86_64
-            AWS_IMAGE_TYPE: g6.8xlarge
+            AWS_IMAGE_TYPE: c7i.8xlarge
             MAX_JOBS: 28
-            # AWS_IMAGE_TYPE: g6.4xlarge
-            # MAX_JOBS 12
           # - ARCH: arm64
-          #   AWS_IMAGE_TYPE: g5g.4xlarge
           #   AWS_AMI_ARCHITECTURE: arm64
     runs-on: ubuntu-24.04
     steps:
@@ -94,7 +91,7 @@ jobs:
 
       - name: Provision
         id: provision
-        timeout-minutes: 180
+        timeout-minutes: 360
         run: |
           export CUDA_SHORT="cu$(echo ${{ inputs.CUDA_VERSION }} | cut -d. -f1,2 | tr -d '.')"
           ansible-playbook ./main/.github/workflows/playbooks/build-vllm-nvidia.yml \
