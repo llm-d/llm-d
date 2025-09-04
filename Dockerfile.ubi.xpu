@@ -167,22 +167,25 @@ RUN --mount=type=cache,target=/var/cache/git \
 
 RUN dnf remove -y git && dnf autoremove -y && dnf clean all
 
-# setup non-root user for OpenShift
-RUN umask 002 && \
-    useradd --uid 2000 --gid 0 vllm && \
-    rm -rf /home/vllm && \
-    mkdir -p /home/vllm && \
-    chown vllm:root /home/vllm && \
-    chmod g+rwx /home/vllm
+# setup non-root user for OpenShift with GPU access
+# RUN umask 002 && \
+#     # Create render group for GPU access (if not exists)
+#     groupadd -r render || true && \
+#     groupadd -r video || true && \
+#     # Add user to groups needed for GPU access
+#     useradd --uid 2000 --gid 0 --groups render,video vllm && \
+#     rm -rf /home/vllm && \
+#     mkdir -p /home/vllm && \
+#     chown vllm:root /home/vllm && \
+#     chmod g+rwx /home/vllm
 
 
 ENV PATH="${VIRTUAL_ENV}/bin:${PATH}" \
-    HOME=/home/vllm \
     VLLM_USAGE_SOURCE=production-docker-image \
     TRITON_XPU_PROFILE=1
 
 
-USER 2000
-WORKDIR /home/vllm
+# USER 2000
+# WORKDIR /home/vllm
 
 ENTRYPOINT ["python", "-m", "vllm.entrypoints.openai.api_server"]
