@@ -2,13 +2,13 @@
 multinode: false
 
 modelArtifacts:
-  uri: "hf://meta-llama/Llama-3.1-70B"
+  uri: "hf://meta-llama/Llama-3.1-70B-Instruct"
   size: 160Gi
   authSecretName: "llm-d-hf-token"
   name: meta-llama/Llama-3.1-70B
 
 routing:
-  modelName: meta-llama/Llama-3.1-70B
+  modelName: meta-llama/Llama-3.1-70B-Instruct
   servicePort: 8000
   parentRefs:
     - group: gateway.networking.k8s.io
