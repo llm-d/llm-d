@@ -1,0 +1,250 @@
+name: E2E Simulation Test
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths-ignore:
+      - '**/*.md'
+
+  workflow_dispatch:
+    inputs:
+      pr_or_branch:
+        description: "Pull‑request number **or** branch name to test (default: main)"
+        required: false
+        default: "main"
+      gateway_type:
+        description: "Gateway type to use"
+        required: false
+        default: "kgateway"
+        type: choice
+        options:
+          - kgateway
+          - istio
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  e2e-sim-test:
+    name: End-to-End Simulation Test
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    env:
+      NAMESPACE: llm-d-sim
+      GATEWAY_TYPE: ${{ inputs.gateway_type || 'kgateway' }}
+      HF_TOKEN: dummy_token_for_sim
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Determine if pr_or_branch is a PR number
+        id: check_pr
+        env:
+          PR_OR_BRANCH: ${{ github.event.inputs.pr_or_branch }}
+        shell: bash
+        run: |
+          echo "PR_OR_BRANCH=${PR_OR_BRANCH:-main}" >> "$GITHUB_ENV"
+          if [[ "$PR_OR_BRANCH" =~ ^[0-9]+$ ]]; then
+            echo "is_pr=true" >> "$GITHUB_OUTPUT"
+          elif [[ "${{ github.event_name }}" = "pull_request" ]]; then
+            echo "PR_OR_BRANCH=${{ github.event.pull_request.number }}" >> $GITHUB_ENV
+            echo "is_pr=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "is_pr=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Fetch and checkout PR
+        if: steps.check_pr.outputs.is_pr == 'true'
+        shell: bash
+        run: |
+          git fetch origin pull/"$PR_OR_BRANCH"/merge:pr-"$PR_OR_BRANCH"
+          git checkout pr-"$PR_OR_BRANCH"
+
+      - name: Checkout branch
+        if: steps.check_pr.outputs.is_pr == 'false'
+        shell: bash
+        run: |
+          git fetch --all --tags
+          git checkout "$PR_OR_BRANCH"
+
+      - name: Create kind config
+        run: |
+          mkdir -p helpers/kind-testing
+          cat <<EOF > helpers/kind-testing/kind-config.yaml
+          kind: Cluster
+          apiVersion: kind.x-k8s.io/v1alpha4
+          nodes:
+          - role: control-plane
+            kubeadmConfigPatches:
+            - |
+              kind: InitConfiguration
+              nodeRegistration:
+                kubeletExtraArgs:
+                  node-labels: "ingress-ready=true"
+          EOF
+
+      - name: Create kind cluster
+        uses: helm/kind-action@a1b0e391336a6ee6713a0583f8c6240d70863de3 # v1.12.0
+        with:
+          config: helpers/kind-testing/kind-config.yaml
+          cluster_name: llm-d-test
+          wait: 120s
+
+      - name: Install dependencies
+        run: |
+          cd guides
+          ./prereq/client-setup/install-deps.sh
+
+      - name: Install chart dependencies (CRDs and Gateway provider)
+        env:
+          GATEWAY_TYPE: ${{ env.GATEWAY_TYPE }}
+        run: |
+          cd guides/gateway-provider
+          ./install-gateway-provider-dependencies.sh
+          helmfile apply -f ${GATEWAY_TYPE}.helmfile.yaml
+
+      - name: Create namespace
+        run: |
+          kubectl create namespace "${{ env.NAMESPACE }}" || echo "Namespace already exists"
+
+      - name: Deploy llm-d infra
+        env:
+          GATEWAY_TYPE: ${{ env.GATEWAY_TYPE }}
+        run: |
+          cd guides/simulated-accelerators
+          helmfile apply -e ${GATEWAY_TYPE}
+
+      - name: Wait for infrastructure pods to be ready
+        run: |
+          echo "Waiting for infrastructure pods to be ready…"
+          kubectl wait --for=condition=ready pod \
+            --selector=app.kubernetes.io/managed-by=Helm \
+            --namespace "${{ env.NAMESPACE }}" \
+            --timeout=300s || true
+
+      - name: Deploy simulation services with helmfile
+        env:
+          GATEWAY_TYPE: ${{ env.GATEWAY_TYPE }}
+        run: |
+          cd guides/simulated-accelerators
+          helmfile apply -e ${GATEWAY_TYPE}
+
+      - name: Wait for all simulation pods to be ready
+        run: |
+          echo "⏳ Waiting for all pods in namespace '${{ env.NAMESPACE }}' to become ready..."
+          kubectl wait pod \
+            --for=condition=Ready \
+            --all \
+            -n "${{ env.NAMESPACE }}" \
+            --timeout=2m
+
+          echo "✅ All pods are ready."
+          kubectl get pods -n "${{ env.NAMESPACE }}"
+
+      - name: Show deployment status
+        run: |
+          echo "=== Pods ==="
+          kubectl get pods -n "${NAMESPACE}"
+          echo ""
+          echo "=== Services ==="
+          kubectl get svc -n "${NAMESPACE}"
+          echo ""
+          echo "=== Helm releases ==="
+          helm list --all-namespaces
+
+      - name: Locate inference‑gateway Service
+        id: gateway
+        run: |
+          echo "🔍 Searching for inference gateway service…"
+          GATEWAY_SERVICE=$(kubectl get svc -n "${NAMESPACE}" -o jsonpath='{.items[*].metadata.name}' \
+                            | tr ' ' '\n' | grep 'inference-gateway' | head -n1)
+          if [[ -z "$GATEWAY_SERVICE" ]]; then
+            echo "❌ Could not find inference gateway service"
+            exit 1
+          fi
+          echo "✅ Found gateway service: $GATEWAY_SERVICE"
+          echo "service_name=$GATEWAY_SERVICE" >> "$GITHUB_OUTPUT"
+
+      - name: Port-forward gateway service
+        env:
+          SERVICE_NAME: ${{ steps.gateway.outputs.service_name }}
+        run: |
+          set -euo pipefail
+
+          echo "🌐 Service definition:"
+          kubectl get svc "$SERVICE_NAME" -n "${NAMESPACE}" -o yaml
+
+          echo "📡 Starting port-forward on service/$SERVICE_NAME (8000 ➜ 80)"
+          kubectl port-forward "service/${SERVICE_NAME}" 8000:80 -n "${NAMESPACE}" >/tmp/pf.log 2>&1 &
+          PORT_FORWARD_PID=$!
+          echo "PORT_FORWARD_PID=$PORT_FORWARD_PID" >> "$GITHUB_ENV"
+
+          # Wait for the tunnel to be ready (fail fast if it exits)
+          echo "Waiting for port-forward tunnel..."
+          for i in {1..10}; do
+            if ! kill -0 "$PORT_FORWARD_PID" 2>/dev/null; then
+              echo "❌ port-forward process died; log:"
+              cat /tmp/pf.log
+              exit 1
+            fi
+            if grep -q "Forwarding from" /tmp/pf.log; then
+              echo "Tunnel is ready."
+              break
+            fi
+            sleep 1
+          done
+
+          echo "🧪 Sanity check: /v1/models"
+          # Use --fail to exit with an error on non-200 responses.
+          # The output will be printed directly to the log.
+          curl --silent --fail --show-error http://localhost:8000/v1/models
+
+          echo "✅ Port‑forward working"
+
+      - name: Test /v1/models endpoint
+        run: |
+          echo "🧪 Testing /v1/models…"
+          response=$(curl --silent --fail http://localhost:8000/v1/models)
+          echo "Response: $response"
+          echo "$response" | yq -p=json -e '.data' > /dev/null
+          echo "✅ /v1/models passed"
+
+      - name: Test /v1/chat/completions endpoint
+        run: |
+          echo "🧪 Testing /v1/chat/completions…"
+          response=$(curl --silent --fail -X POST http://localhost:8000/v1/chat/completions \
+                   -H "Content-Type: application/json" \
+                   -H "x-model-name: random" \
+                   -d '{ "model":"random","messages":[{ "role":"user","content":"How are you?" }] }')
+          echo "Response: $response"
+          echo "$response" | yq -p=json -e '.choices[0].message.content' > /dev/null
+          echo "✅ /v1/chat/completions passed"
+
+      - name: Test /v1/completions endpoint
+        run: |
+          echo "🧪 Testing /v1/completions…"
+          response=$(curl --silent --fail -X POST http://localhost:8000/v1/completions \
+                   -H "Content-Type: application/json" \
+                   -d '{ "model":"random","prompt":"Cats or Dogs?" }')
+          echo "Response: $response"
+          echo "$response" | yq -p=json -e '.choices[0].text' > /dev/null
+          echo "✅ /v1/completions passed"
+
+      - name: Validate Uninstall
+        if: always()
+        env:
+          GATEWAY_TYPE: ${{ env.GATEWAY_TYPE }}
+        run: |
+          echo "🧹 Validating Cleanup…"
+          cd guides/simulated-accelerators
+          helmfile destroy -e ${GATEWAY_TYPE}
