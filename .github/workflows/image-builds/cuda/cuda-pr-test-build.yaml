@@ -10,30 +10,19 @@ on:
       - docker/Dockerfile.cuda
       - patches/cks_nvshmem3.3.20.patch
       - patches/cks_nvshmem3.3.9.patch
-  pull_request_target:
-    types: [labeled, synchronize, reopened]
-    branches:
-      - main
-      - dev
-    paths:
-      - .github/workflows/image-builds/cuda/cuda-pr-test-build.yaml
-      - docker/Dockerfile.cuda
-      - patches/cks_nvshmem3.3.20.patch
-      - patches/cks_nvshmem3.3.9.patch
 
 permissions:
   contents: read
 
 env:
-  REGISTRY: ghcr.io
+  REGISTRY: ttl.sh
   SAFE_LABEL: ok-to-push
-  # IMAGE_BASENAME: llm-d-cuda-dev
+  IMAGE_ORG: llm-d
+  IMAGE_BASENAME: llm-d-cuda-dev
 
 jobs:
   build-public:
-    if: >
-      (github.event_name == 'pull_request' || github.event_name == 'pull_request_target') &&
-      !contains(github.event.pull_request.labels.*.name, 'ok-to-push')
+    if: github.event_name == 'pull_request' && !contains(github.event.pull_request.labels.*.name, 'ok-to-push')
     runs-on: vllm-runner
     environment: build # use for sccache creds
     steps:
@@ -44,19 +33,28 @@ jobs:
       - uses: docker/setup-buildx-action@v3
         with: { buildkitd-flags: --oci-worker-gc }
 
-      - name: Build secretless target
+      - name: Compute tag
+        id: tag
+        run: echo "TAG=${{ env.REGISTRY }}/${{ env.IMAGE_ORG }}/${{ env.IMAGE_BASENAME }}/pr-${{ github.event.pull_request.number }}:8h" >> $GITHUB_OUTPUT
+
+      - name: Build image (no push)
         uses: docker/build-push-action@v5
         with:
           context: .
-          file: ./docker/Dockerfile.cuda
+          file: docker/Dockerfile.cuda
           platforms: linux/amd64
-          push: false
-          provenance: false
+          load: true                    # makes image available to `docker push` below
+          tags: ${{ steps.ttl.outputs.TAG }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+          provenance: false
           secrets: |
             aws_access_key_id=${{ secrets.AWS_ACCESS_KEY_ID_S3_BUCKET_ONLY }}
             aws_secret_access_key=${{ secrets.AWS_SECRET_ACCESS_KEY_S3_BUCKET_ONLY }}
+
+      - name: Push to ttl.sh (best-effort)
+        run: docker push ${{ steps.ttl.outputs.TAG }}
+        continue-on-error: true
 
       - run: |
           echo "Maintainers can apply '${{ env.SAFE_LABEL }}' to trigger gated publish."
