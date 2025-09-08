@@ -6,7 +6,7 @@ on:
       - main
       - dev
     paths:
-      - .github/workflows/build-cuda-image.yml
+      - .github/workflows/image-builds/cuda/cuda-pr-test-build.yaml
       - docker/Dockerfile.cuda
       - patches/cks_nvshmem3.3.20.patch
       - patches/cks_nvshmem3.3.9.patch
@@ -16,7 +16,7 @@ on:
       - main
       - dev
     paths:
-      - .github/workflows/build-cuda-image.yml
+      - .github/workflows/image-builds/cuda/cuda-pr-test-build.yaml
       - docker/Dockerfile.cuda
       - patches/cks_nvshmem3.3.20.patch
       - patches/cks_nvshmem3.3.9.patch
@@ -60,5 +60,3 @@ jobs:
 
       - run: |
           echo "Maintainers can apply '${{ env.SAFE_LABEL }}' to trigger gated publish."
-
-  
