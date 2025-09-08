@@ -1,0 +1,64 @@
+name: Test Build CUDA Dev Image
+
+on:
+  pull_request:
+    branches:
+      - main
+      - dev
+    paths:
+      - .github/workflows/build-cuda-image.yml
+      - docker/Dockerfile.cuda
+      - patches/cks_nvshmem3.3.20.patch
+      - patches/cks_nvshmem3.3.9.patch
+  pull_request_target:
+    types: [labeled, synchronize, reopened]
+    branches:
+      - main
+      - dev
+    paths:
+      - .github/workflows/build-cuda-image.yml
+      - docker/Dockerfile.cuda
+      - patches/cks_nvshmem3.3.20.patch
+      - patches/cks_nvshmem3.3.9.patch
+
+permissions:
+  contents: read
+
+env:
+  REGISTRY: ghcr.io
+  SAFE_LABEL: ok-to-push
+  # IMAGE_BASENAME: llm-d-cuda-dev
+
+jobs:
+  build-public:
+    if: >
+      (github.event_name == 'pull_request' || github.event_name == 'pull_request_target') &&
+      !contains(github.event.pull_request.labels.*.name, 'ok-to-push')
+    runs-on: vllm-runner
+    environment: build # use for sccache creds
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - uses: docker/setup-buildx-action@v3
+        with: { buildkitd-flags: --oci-worker-gc }
+
+      - name: Build secretless target
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./docker/Dockerfile.cuda
+          platforms: linux/amd64
+          push: false
+          provenance: false
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          secrets: |
+            aws_access_key_id=${{ secrets.AWS_ACCESS_KEY_ID_S3_BUCKET_ONLY }}
+            aws_secret_access_key=${{ secrets.AWS_SECRET_ACCESS_KEY_S3_BUCKET_ONLY }}
+
+      - run: |
+          echo "Maintainers can apply '${{ env.SAFE_LABEL }}' to trigger gated publish."
+
+  

@@ -1,0 +1,106 @@
+name: Publish CUDA Dev Image from PR
+
+on:
+  pull_request:
+    branches:
+      - main
+      - dev
+    paths:
+      - .github/workflows/build-cuda-image.yml
+      - docker/Dockerfile.cuda
+      - patches/cks_nvshmem3.3.20.patch
+      - patches/cks_nvshmem3.3.9.patch
+  pull_request_target:
+    types: [labeled, synchronize, reopened]
+    branches:
+      - main
+      - dev
+    paths:
+      - .github/workflows/build-cuda-image.yml
+      - docker/Dockerfile.cuda
+      - patches/cks_nvshmem3.3.20.patch
+      - patches/cks_nvshmem3.3.9.patch
+
+permissions:
+  contents: read
+  packages: write
+  security-events: write
+
+env:
+  REGISTRY: ghcr.io
+  ORG: llm-d
+  IMAGE_NAME: llm-d-cuda-dev
+  IMAGE_REPO: ${{ env.REGISTRY }}/${{ env.ORG }}/${{ env.IMAGE_NAME }}
+  SAFE_LABEL: ok-to-push
+
+jobs:
+  gated-publish:
+    if: >
+      github.event_name == 'pull_request_target' &&
+      contains(github.event.pull_request.labels.*.name, 'ok-to-push')
+    runs-on: vllm-runner
+    environment: publish   # need to add GHCR_TOKEN here!!!
+    steps:
+      - name: Checkout PR HEAD from fork
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ github.event.pull_request.head.repo.full_name }}
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - uses: docker/setup-buildx-action@v3
+        with: { buildkitd-flags: --oci-worker-gc }
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GHCR_TOKEN }} # add this secret to the publish ENV
+
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.IMAGE_REPO }}
+          tags: |
+            type=ref,event=pr
+            type=sha
+            type=raw,value=pr-${{ github.event.pull_request.number }}
+
+      - name: Build & Push (full/private target)
+        id: build-and-push
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./docker/Dockerfile.cuda
+          # target: final                   # <--- private target
+          platforms: linux/amd64
+          push: true
+          provenance: true
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          secrets: |
+            aws_access_key_id=${{ secrets.AWS_ACCESS_KEY_ID_S3_BUCKET_ONLY }}
+            aws_secret_access_key=${{ secrets.AWS_SECRET_ACCESS_KEY_S3_BUCKET_ONLY }}
+
+      - name: Trivy scan
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: ${{ env.IMAGE_REPO }}@${{ steps.build-and-push.outputs.digest }}
+          format: sarif
+          output: trivy-results.sarif
+          severity: CRITICAL,HIGH,MEDIUM
+          scanners: vuln
+          timeout: 30m
+          skip-dirs: /root/.cache/uv
+        env:
+          # Match whichever auth you used above:
+          TRIVY_USERNAME: ${{ secrets.GHCR_TOKEN && secrets.GHCR_USERNAME || github.actor }}
+          TRIVY_PASSWORD: ${{ secrets.GHCR_TOKEN || secrets.GITHUB_TOKEN }}
+
+      - name: Upload SARIF
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: trivy-results.sarif
