@@ -12,6 +12,9 @@ environments:
   gke: &GKE
       values:
       - ../common/gateway-configurations/gke.yaml
+  digitalocean: &DO
+    values:
+      - ../common/gateway-configurations/istio.yaml
   default:
     <<: *IB
 
@@ -72,6 +75,9 @@ releases:
       - {{ printf "gaie-%s" $rn | quote }}
     values:
       - ms-pd/values.yaml
+      {{- if eq .Environment.Name "digitalocean" }}
+      - ms-pd/digitalocean-values.yaml
+      {{- end }}
     {{- if or (eq .Environment.Name "istioBench") (eq .Environment.Name "default") }}
       - routing:
           proxy:
@@ -85,7 +91,7 @@ releases:
         value: {{ printf "gaie-%s" $rn | quote }}
       - name: "routing.parentRefs[0].name"
         value: {{ printf "infra-%s-inference-gateway" $rn | quote }}
-    {{- if eq .Environment.Name "gke" }}
+    {{- if or (eq .Environment.Name "gke") (eq .Environment.Name "digitalocean") }}
       - name: "decode.containers[0].resources.limits.rdma/ib"
         value: null
       - name: "decode.containers[0].resources.requests.rdma/ib"
