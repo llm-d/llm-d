@@ -1,0 +1,496 @@
+name: E2E Accelerator EC2 Test
+
+on:
+#  schedule: # TODO: enable once validated functional
+#    - cron: '0 8 * * *'  # 4AM Eastern (08:00 UTC)
+  workflow_dispatch:
+    inputs:
+      pr_or_branch:
+        description: 'Pull-request number or branch name to test'
+        required: true
+        default: 'main'
+        type: string
+      gateway_type:
+        description: 'Gateway type to use'
+        required: false
+        default: 'kgateway'
+        type: choice
+        options:
+          - kgateway
+          - istio
+      wait_for_termination:
+        description: 'Wait time (in minutes) before terminating for debugging'
+        required: true
+        default: 0
+        type: number
+
+permissions:
+  packages: read
+
+jobs:
+  setup:
+    if: >
+      github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    outputs:
+      instance_id: ${{ steps.launch.outputs.instance_id }}
+      instance_ip: ${{ steps.launch.outputs.instance_ip }}
+    env:
+      # g6.12xlarge-4xL4-24GB-GPU; 2 GPUs per matrix deployment
+      INSTANCE_TYPE: g6.12xlarge
+      AMI_ID: ami-020cba7c55df1f615
+      KEY_NAME: ${{ secrets.SSH_KEY_NAME_BOTH }}
+      REGION: ${{ secrets.AWS_REGION }}
+      HF_TOKEN: ${{secrets.HF_TOKEN}}
+      TERMINATION_TIMEOUT: ${{ github.event.inputs.wait_for_termination }}
+      DISK_SIZE: "300"
+      PR_OR_BRANCH: ${{ github.event.inputs.pr_or_branch || github.event.issue.number }}
+      NAMESPACE: ${{ github.event.inputs.namespace }}
+      GATEWAY_TYPE: ${{ github.event.inputs.gateway_type || 'kgateway' }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Determine if pr_or_branch is a PR number
+        id: check_pr
+        run: |
+          if [[ "$PR_OR_BRANCH" =~ ^[0-9]+$ ]]; then
+            echo "is_pr=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "is_pr=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Fetch and checkout PR
+        if: steps.check_pr.outputs.is_pr == 'true'
+        run: |
+          git fetch origin pull/"$PR_OR_BRANCH"/head:pr-"$PR_OR_BRANCH"
+          git checkout pr-"$PR_OR_BRANCH"
+
+      - name: Checkout branch
+        if: steps.check_pr.outputs.is_pr == 'false'
+        run: git checkout "$PR_OR_BRANCH"
+
+      - name: Install AWS CLI
+        run: |
+          sudo apt-get update
+          curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
+          unzip awscliv2.zip
+          sudo ./aws/install --update
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@7474bc4690e29a8392af63c5b98e7449536d5c3a
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID_ET }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY_ET }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: Launch EC2 instance
+        id: launch
+        run: |
+          INSTANCE_ID=$(aws ec2 run-instances \
+            --image-id $AMI_ID \
+            --count 1 \
+            --instance-type $INSTANCE_TYPE \
+            --key-name $KEY_NAME \
+            --block-device-mappings "[{
+                \"DeviceName\": \"/dev/sda1\",
+                \"Ebs\": {
+                  \"VolumeSize\": ${DISK_SIZE},
+                  \"VolumeType\": \"gp3\",
+                  \"DeleteOnTermination\": true
+                }
+              }]" \
+            --tag-specifications "ResourceType=instance,Tags=[{Key=Name,Value=llmd-github-ci-runner}]" \
+            --query 'Instances[0].InstanceId' \
+            --output text)
+
+          echo "instance_id=$INSTANCE_ID" >> "$GITHUB_OUTPUT"
+          echo "INSTANCE_ID=$INSTANCE_ID" >> $GITHUB_ENV
+
+          echo "Waiting for instance to be running..."
+          aws ec2 wait instance-running --instance-ids $INSTANCE_ID
+
+          PUBLIC_IP=$(aws ec2 describe-instances \
+            --instance-ids $INSTANCE_ID \
+            --query "Reservations[0].Instances[0].PublicIpAddress" \
+            --output text)
+
+          echo "instance_ip=$PUBLIC_IP" >> "$GITHUB_OUTPUT"
+          echo "INSTANCE_IP=$PUBLIC_IP" >> $GITHUB_ENV
+
+          SECURITY_GROUP_ID=$(aws ec2 describe-instances \
+            --instance-ids $INSTANCE_ID \
+            --query "Reservations[0].Instances[0].SecurityGroups[0].GroupId" \
+            --output text)
+          echo "Authorizing SSH in security group $SECURITY_GROUP_ID..."
+          aws ec2 authorize-security-group-ingress \
+            --group-id $SECURITY_GROUP_ID \
+            --protocol tcp \
+            --port 22 \
+            --cidr 0.0.0.0/0 || echo "SSH rule may already exist — continuing"
+
+      - name: Wait for SSH to be ready
+        run: |
+          echo "${{ secrets.SSH_PRIVATE_KEY_BOTH }}" > key.pem
+          chmod 600 key.pem
+
+          echo "Waiting for SSH on $INSTANCE_IP..."
+          for i in {1..30}; do
+            ssh -o StrictHostKeyChecking=no -i key.pem ubuntu@$INSTANCE_IP "echo connected" && break
+            sleep 10
+          done
+
+      - name: Setup installer pre-requisites (clone + checkout)
+        id: setup-pre-requisite
+        run: |
+          # pass PR_OR_BRANCH into the remote shell’s env, keep heredoc single‑quoted
+          ssh -o StrictHostKeyChecking=no -i key.pem \
+              ubuntu@$INSTANCE_IP \
+              "PR_OR_BRANCH=$PR_OR_BRANCH bash -s" <<'EOF'
+            set -euo pipefail
+            set -x
+
+            sudo apt-get update -y
+            sudo apt-get install -y git
+
+            REPO_URL="https://github.com/llm-d/llm-d.git"
+            REPO_DIR=$(basename "$REPO_URL" .git)
+
+            echo "🛠️  Cloning: $REPO_URL"
+            git clone --depth 1 "$REPO_URL"
+            cd "$REPO_DIR"
+
+            if [[ "$PR_OR_BRANCH" =~ ^[0-9]+$ ]]; then
+              echo "🛠️  Checking out PR #$PR_OR_BRANCH"
+              git fetch origin "pull/$PR_OR_BRANCH/head:pr-$PR_OR_BRANCH"
+              git checkout "pr-$PR_OR_BRANCH"
+            else
+              echo "🛠️  Checking out branch $PR_OR_BRANCH"
+              git checkout "$PR_OR_BRANCH"
+            fi
+          EOF
+
+      - name: Install prerequisites
+        id: prerequisites
+        run: |
+          ssh -o StrictHostKeyChecking=no -i key.pem ubuntu@$INSTANCE_IP <<'EOF'
+            set -euo pipefail
+            set -x
+            ./llm-d/guides/prereq/client-setup/install-deps.sh | tee ~/install-deps.log
+          EOF
+
+      - name: Setup container runtime
+        id: setup-docker
+        run: |
+          ssh -o StrictHostKeyChecking=no -i key.pem ubuntu@$INSTANCE_IP << EOF
+            set -e
+            sudo apt-get -y install ca-certificates curl
+            sudo install -m 0755 -d /etc/apt/keyrings
+            sudo curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
+            sudo chmod a+r /etc/apt/keyrings/docker.asc
+            echo \
+              "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu \
+              $(. /etc/os-release && echo "${UBUNTU_CODENAME:-$VERSION_CODENAME}") stable" | \
+              sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+
+              sudo apt-get update
+
+              sudo apt-get -y install docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+
+              sudo usermod -aG docker ubuntu
+              mkdir -p ~/.config/containers/
+          EOF
+
+      - name: Copy docker auth configuration file
+        id: docker-auth
+        run: |
+          echo "${{ secrets.CR_AUTH_JSON }}" > auth.json
+          chmod +x auth.json
+          rsync -avz -e "ssh -o StrictHostKeyChecking=no -i key.pem" auth.json ubuntu@$INSTANCE_IP:~/
+          ssh -o StrictHostKeyChecking=no -i key.pem ubuntu@$INSTANCE_IP << EOF
+          mv ~/auth.json ~/.config/containers/
+          EOF
+
+      - name: Setup nvidia cuda toolkit
+        id: setup-cuda-toolkit
+        run: |
+          ssh -o StrictHostKeyChecking=no -i key.pem ubuntu@$INSTANCE_IP << EOF
+            set -e
+            wget https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2404/x86_64/cuda-keyring_1.1-1_all.deb
+            sudo dpkg -i cuda-keyring_1.1-1_all.deb
+            sudo apt-get update
+            sudo apt-get -y install cuda-toolkit-12-8 nvidia-open nvtop nload
+          EOF
+
+      - name: Reboot the aws instance
+        id: reboot-instance
+        run: |
+          echo "Rebooting instance..."
+          aws ec2 reboot-instances --instance-ids $INSTANCE_ID
+          sleep 60
+          echo "Waiting for instance to become healthy again..."
+          aws ec2 wait instance-status-ok --instance-ids $INSTANCE_ID
+
+      - name: Wait for SSH to be ready after reboot
+        run: |
+          echo "${{ secrets.SSH_PRIVATE_KEY_BOTH }}" > key.pem
+          chmod 600 key.pem
+
+          echo "Waiting for SSH on $INSTANCE_IP..."
+          for i in {1..30}; do
+            ssh -o StrictHostKeyChecking=no -i key.pem ubuntu@$INSTANCE_IP "echo connected" && break
+            sleep 10
+          done
+
+      - name: Setup nvidia container toolkit
+        id: setup-container-toolkit
+        run: |
+          ssh -o StrictHostKeyChecking=no -i key.pem ubuntu@$INSTANCE_IP << EOF
+            set -e
+            curl -fsSL https://nvidia.github.io/libnvidia-container/gpgkey | sudo gpg --dearmor -o /usr/share/keyrings/nvidia-container-toolkit-keyring.gpg \
+              && curl -s -L https://nvidia.github.io/libnvidia-container/stable/deb/nvidia-container-toolkit.list | \
+                sed 's#deb https://#deb [signed-by=/usr/share/keyrings/nvidia-container-toolkit-keyring.gpg] https://#g' | \
+                sudo tee /etc/apt/sources.list.d/nvidia-container-toolkit.list
+
+            sudo apt-get update
+            sudo apt-get install -y nvidia-container-toolkit
+
+            sudo sysctl net.core.bpf_jit_harden
+            echo "net.core.bpf_jit_harden=0" | sudo tee -a /etc/sysctl.conf
+            sudo sysctl -p
+            sudo nvidia-ctk runtime configure --runtime=docker && sudo systemctl restart docker
+          EOF
+
+      - name: Install minikube
+        id: install-minikube
+        run: |
+          ssh -o StrictHostKeyChecking=no -i key.pem ubuntu@$INSTANCE_IP << EOF
+            set -e
+            curl -LO https://github.com/kubernetes/minikube/releases/latest/download/minikube-linux-amd64
+            sudo install minikube-linux-amd64 /usr/local/bin/minikube && rm minikube-linux-amd64
+          EOF
+
+      - name: Start Shared Minikube Cluster
+        run: |
+          ssh -o StrictHostKeyChecking=no -i key.pem ubuntu@${{ env.INSTANCE_IP }} <<'EOF'
+            set -euo pipefail
+            set -x
+            echo "Starting minikube with gpu support enabled..."
+            minikube start --driver docker --container-runtime docker --gpus all --memory no-limit
+            sleep 10
+            echo "✅ Minikube started."
+          EOF
+
+  deploy-and-validate:
+    needs: setup
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        deployment:
+          - name: precise-prefix-cache-aware
+            namespace: llm-d-precise
+            installer_args: "-r infra-kv-events"
+            guide_dir: precise-prefix-cache-aware
+            log_file: llmd-precise-installer.log
+            helm_log_file: precise-prefix-deployment.log
+            release_names:
+              - infra-kv-events
+              - gaie-kv-events
+              - ms-kv-events
+
+          - name: inference-scheduling
+            namespace: llm-d-inference-scheduling
+            installer_args: "-r infra-inference-scheduling"
+            guide_dir: inference-scheduling
+            log_file: llmd-inference-installer.log
+            helm_log_file: inference-scheduling-deployment.log
+            release_names:
+              - infra-inference-scheduling
+              - gaie-inference-scheduling
+              - ms-inference-scheduling
+
+    env:
+      INSTANCE_IP: ${{ needs.setup.outputs.instance_ip }}
+      HF_TOKEN: ${{ secrets.HF_TOKEN }}
+      NAMESPACE: ${{ matrix.deployment.namespace }}
+      GATEWAY_TYPE: ${{ github.event.inputs.gateway_type || 'kgateway' }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Setup SSH Key
+        run: |
+          echo "${{ secrets.SSH_PRIVATE_KEY_BOTH }}" > key.pem
+          chmod 600 key.pem
+
+      - name: Install chart dependencies (CRDs and Gateway provider)
+        env:
+          GATEWAY_TYPE: ${{ env.GATEWAY_TYPE }}
+        run: |
+          ssh -o StrictHostKeyChecking=no -i key.pem ubuntu@$INSTANCE_IP GATEWAY_TYPE=$GATEWAY_TYPE bash -s" <<'EOF'
+            set -euo pipefail
+            set -x
+            cd llm-d/guides/prereq/gateway-provider
+            ./install-gateway-provider-dependencies.sh
+            helmfile apply -f ${GATEWAY_TYPE}.helmfile.yaml
+          EOF
+
+      - name: Deploy guide
+        env:
+          GATEWAY_TYPE: ${{ env.GATEWAY_TYPE }}
+        run: |
+          ssh -o StrictHostKeyChecking=no -i key.pem ubuntu@$INSTANCE_IP << EOF
+            set -euo pipefail
+            set -x
+            cd llm-d/guides/${{ matrix.deployment.guide_dir }}
+            echo "Deploying ${{ matrix.deployment.name }} guide..."
+            helmfile apply -e ${GATEWAY_TYPE} | tee ~/${{ matrix.deployment.helm_log_file }}
+            echo "---------------------------------------" >> ~/${{ matrix.deployment.helm_log_file }}
+          EOF
+
+      - name: Deploy HTTPRoute
+        run: |
+          ssh -o StrictHostKeyChecking=no -i key.pem ubuntu@$INSTANCE_IP << EOF
+            set -euo pipefail
+            set -x
+            cd llm-d/guides/${{ matrix.deployment.guide_dir }}
+            echo "Deploying HTTPRoute..."
+            kubectl apply -f httproute.yaml | tee ~/${{ matrix.deployment.helm_log_file }}
+            echo "---------------------------------------" >> ~/${{ matrix.deployment.helm_log_file }}
+          EOF
+
+      - name: Upload helm get all
+        run: |
+          ssh -o StrictHostKeyChecking=no -i key.pem ubuntu@$INSTANCE_IP << EOF
+            set -euo pipefail
+            set -x
+            for release_name in ${{ join(matrix.deployment.release_names, ' ') }}; do
+              ./bin/sh llm-d/.github/scripts/e2e/helm-get-all.sh \
+                ~/${{ matrix.deployment.helm_log_file }} \
+                "$release_name" \
+                "${{ matrix.deployment.namespace}}"
+            done
+          EOF
+
+      - name: Wait for all pods to be ready
+        run: |
+          echo "⏳ Waiting for all pods in namespace to become ready..."
+          ssh -o StrictHostKeyChecking=no -i key.pem ubuntu@$INSTANCE_IP "NAMESPACE=$NAMESPACE bash -s" <<'EOF'
+            set -euo pipefail
+            kubectl wait pod \
+              --for=condition=Ready \
+              --all \
+              -n "${NAMESPACE}" \
+              --timeout=6m
+            sleep 120 # TODO: remove this once examples have readiness probes
+            echo "✅ All pods are ready."
+            kubectl get pods -n "${NAMESPACE}"
+          EOF
+
+      - name: Show deployment status
+        run: |
+          ssh -o StrictHostKeyChecking=no -i key.pem ubuntu@$INSTANCE_IP <<EOF
+            set -euo pipefail
+            echo "=== Deployments ==="
+            kubectl get deployments -n "${NAMESPACE}"
+            echo ""
+            echo "=== Replica Sets ==="
+            kubectl get replicasets -n "${NAMESPACE}"
+            echo ""
+            echo "=== Pods ==="
+            kubectl get pods -n "${NAMESPACE}"
+            echo ""
+            echo "=== Services ==="
+            kubectl get svc -n "${NAMESPACE}"
+            echo ""
+            echo "=== Helm releases ==="
+            helm list -n "${NAMESPACE}" || true
+            echo ""
+            echo "=== Inference Pools ==="
+            kubectl get inferencepools -n "${NAMESPACE}" || true
+            echo ""
+            echo "=== HTTPRoutes ==="
+            kubectl get httproutes -n "${NAMESPACE}" || true
+            echo ""
+          EOF
+
+      - name: Inference test
+        run: |
+          ssh -o StrictHostKeyChecking=no -i key.pem ubuntu@"$INSTANCE_IP" <<EOF
+            set -euo pipefail
+            set -x
+            cd llm-d/.github/scripts/e2e
+            ./e2e-validate.sh -n "${NAMESPACE}"
+          EOF
+
+      - name: Collect and upload Kubernetes pod logs
+        if: always()
+        run: |
+          echo "Collecting logs for namespace: ${NAMESPACE}"
+          REMOTE_TARBALL="pod-logs-${{ matrix.deployment.name }}.tar.gz"
+          ssh -o StrictHostKeyChecking=no -i key.pem ubuntu@$INSTANCE_IP << EOF
+            mkdir -p pod-logs-${{ matrix.deployment.name }}
+            cd pod-logs-${{ matrix.deployment.name }}
+            echo "Fetching ${NAMESPACE} pods log..."
+            kubectl get pods -n "${NAMESPACE}" --no-headers -o custom-columns=":metadata.name" \
+            | xargs -I{} sh -c 'kubectl logs --all-containers=true -n "${NAMESPACE}" {} > "{}.log" 2>&1'
+            echo "Fetching ${NAMESPACE} pods descriptions..."
+            kubectl get pods -n "${NAMESPACE}" --no-headers -o custom-columns=":metadata.name" \
+            | xargs -I{} sh -c 'kubectl describe pod -n "${NAMESPACE}" {} > "{}-describe.log" 2>&1'
+            mv ~/${{ matrix.deployment.log_file }} . || true
+            mv ~/${{ matrix.deployment.helm_log_file }} . || true
+            mv ~/install-deps.log . || true
+            cd ..
+            tar -czf "$REMOTE_TARBALL" pod-logs-${{ matrix.deployment.name }}
+          EOF
+          scp -o StrictHostKeyChecking=no -i key.pem ubuntu@$INSTANCE_IP:"$REMOTE_TARBALL" .
+          mkdir -p extracted-logs-${{ matrix.deployment.name }}
+          tar -xzf "$REMOTE_TARBALL" -C extracted-logs-${{ matrix.deployment.name }}
+          echo "Logs downloaded from the AWS instance."
+
+      - name: Upload pod logs as artifact
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: llmd-pod-logs-${{ matrix.deployment.name }}
+          path: extracted-logs-${{ matrix.deployment.name }}
+
+  terminate:
+    needs: [setup, deploy-and-validate]
+    if: always()
+    runs-on: ubuntu-latest
+    env:
+      INSTANCE_ID: ${{ needs.setup.outputs.instance_id }}
+      REGION: ${{ secrets.AWS_REGION }}
+      TERMINATION_TIMEOUT: ${{ github.event.inputs.wait_for_termination }}
+
+    steps:
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@7474bc4690e29a8392af63c5b98e7449536d5c3a
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID_ET }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY_ET }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: Pause before termination (debug window)
+        if: env.TERMINATION_TIMEOUT != '0'
+        run: |
+          echo "⏳  Debug pause enabled for $TERMINATION_TIMEOUT minute(s)…"
+          for ((i=1; i<=TERMINATION_TIMEOUT; i++)); do
+            printf "  ⏳  %02d/%02d minute(s) elapsed\n" "$i" "$TERMINATION_TIMEOUT"
+            sleep 60
+          done
+
+      - name: Terminate EC2 instance
+        run: |
+          echo "Terminating instance $INSTANCE_ID..."
+          aws ec2 terminate-instances --instance-ids $INSTANCE_ID
+          echo "Waiting for instance to be terminated..."
+          aws ec2 wait instance-terminated --instance-ids $INSTANCE_ID
