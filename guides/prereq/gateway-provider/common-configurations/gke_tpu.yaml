@@ -1,0 +1,5 @@
+gateway:
+  gatewayClassName: gke-l7-regional-external-managed
+
+provider:
+  name: gke

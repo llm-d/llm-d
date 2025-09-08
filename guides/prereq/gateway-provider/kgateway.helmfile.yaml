@@ -1,0 +1,31 @@
+releases:
+  - name: kgateway-crds
+    chart: oci://cr.kgateway.dev/kgateway-dev/charts/kgateway-crds
+    namespace: kgateway-system
+    version: v2.0.4
+    installed: true
+    labels:
+      type: gateway-provider
+      kind: gateway-crds
+
+  - name: kgateway
+    chart: oci://cr.kgateway.dev/kgateway-dev/charts/kgateway
+    version: v2.0.4
+    namespace: kgateway-system
+    installed: true
+    needs:
+      - kgateway-system/kgateway-crds
+    values:
+      - inferenceExtension:
+          enabled: true
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop: ["ALL"]
+        podSecurityContext:
+          seccompProfile:
+            type: "RuntimeDefault"
+          runAsNonRoot: true
+    labels:
+      type: gateway-provider
+      kind: gateway-control-plane
