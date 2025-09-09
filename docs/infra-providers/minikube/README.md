@@ -1,4 +1,4 @@
-# llm-d-infra Quick Start for minikube
+# llm-d on minikube
 
 ## Prerequisites
 

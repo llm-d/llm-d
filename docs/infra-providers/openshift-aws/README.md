@@ -1,4 +1,4 @@
-# Red Hat OpenShift on AWS with GPU Support - Documentation References (ROSA Focus)
+# llm-d on Red Hat OpenShift on AWS
 
 This document serves as a reference guide, pointing you to the official Red Hat and AWS documentation, as well as NVIDIA documentation, for setting up a Red Hat OpenShift Service on AWS (ROSA) cluster with NVIDIA GPU support.
 

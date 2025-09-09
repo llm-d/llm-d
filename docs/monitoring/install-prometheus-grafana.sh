@@ -157,6 +157,32 @@ check_servicemonitor_crd() {
   fi
 }
 
+check_existing_node_exporter() {
+  log_info "🔍 Checking for existing node-exporter installations..."
+  # Shared clusters with existing monitoring commonly have pre-existing node-exporters,
+  # and it's not necessary to have multiple of these running (they would conflict on port 9100)
+  # Check for existing node-exporter pods in other namespaces
+  local existing_exporters=$($KCMD get pods --all-namespaces -l app=node-exporter -o name 2>/dev/null | wc -l)
+
+  if [[ $existing_exporters -eq 0 ]]; then
+    # Also check for common node-exporter naming patterns
+    existing_exporters=$($KCMD get pods --all-namespaces | grep -E "node-exporter|nodeexporter" | grep -v "prometheus-${MONITORING_NAMESPACE}" | wc -l)
+  fi
+
+  if [[ $existing_exporters -gt 0 ]]; then
+    log_info "⚠️ Found $existing_exporters existing node-exporter pod(s) in other namespaces"
+    log_info "ℹ️ Node-exporter will be disabled to avoid port conflicts (port 9100)"
+    # Show which namespaces have node-exporters
+    log_info "📋 Existing node-exporter pods:"
+    $KCMD get pods --all-namespaces | grep -E "node-exporter|nodeexporter" | grep -v "prometheus-${MONITORING_NAMESPACE}" | head -3
+    return 0  # Existing node-exporters found, should disable
+  else
+    log_info "✅ No existing node-exporter installations detected"
+    return 1  # No existing node-exporters, can enable
+  fi
+
+}
+
 check_openshift_monitoring() {
   if ! is_openshift; then
     return 0
@@ -247,6 +273,12 @@ install_prometheus_grafana() {
     CRD_INSTALL_FLAG=""
   fi
 
+  # Check for existing node-exporters and determine if we should disable them
+  local DISABLE_NODE_EXPORTER=""
+  if check_existing_node_exporter; then
+    DISABLE_NODE_EXPORTER="nodeExporter:\n  enabled: false"
+  fi
+
   log_info "🚀 Installing Prometheus stack in namespace ${MONITORING_NAMESPACE}..."
 
   if [[ "$CENTRAL_MODE" == "true" ]]; then
@@ -276,6 +308,7 @@ prometheus:
       requests:
         memory: 4Gi
         cpu: 1000m
+$(if [[ -n "$DISABLE_NODE_EXPORTER" ]]; then echo -e "$DISABLE_NODE_EXPORTER"; fi)
 EOF
   else
     # Individual mode: Monitor only user's labeled namespaces
@@ -312,6 +345,7 @@ prometheus:
       requests:
         memory: 2Gi
         cpu: 500m
+$(if [[ -n "$DISABLE_NODE_EXPORTER" ]]; then echo -e "$DISABLE_NODE_EXPORTER"; fi)
 EOF
   fi
 
