@@ -13,6 +13,7 @@ This example out of the box requires 2 Nvidia GPUs of any kind (support determin
 ## Prerequisites
 
 - Have the [proper client tools installed on your local system](../prereq/client-setup/README.md) to use this guide.
+- Ensure your cluster infrastructure is sufficient to [deploy high scale inference](../prereq/infrastructure)
 - Configure and deploy your [Gateway control plane](../prereq/gateway-provider/README.md).
 - [Create the `llm-d-hf-token` secret in your target namespace with the key `HF_TOKEN` matching a valid HuggingFace token](../prereq/client-setup/README.md#huggingface-token) to pull models.
 

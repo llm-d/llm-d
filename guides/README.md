@@ -13,7 +13,7 @@ These guides are targeted to startups and enterprises to deploy production LLM s
 * Deploying a self-hosted LLM behind a single workload across tens or hundreds of nodes
 * Running a production model-as-a-service platform that supports many users and workloads sharing one or more LLM deployments
 
-## Our Well-Lit Path Guides
+## Well-Lit Path Guides
 
 A well-lit path is a documented, tested, and benchmarked solution of choice to reduce risk and maintenance cost. These are the central best practices common to production deployments of large language model serving.
 
@@ -28,3 +28,11 @@ We currently offer three tested and benchmarked paths to help you deploy large m
 Our supporting guides address common operational challenges with model serving at scale:
 
 - [Simulating model servers](./simulated-accelerators) can deploy a vLLM model server simulator that allows testing inference scheduling and orchestration at scale as each instance does not need accelerators.
+
+## Other Guides
+
+The following guides have been provided by the community but do not fully integrate into the llm-d configuration structure yet and are not fully supported as well-lit paths:
+
+* TBD
+
+Note: New guides added to this list must enable at least one of the core well-lit paths but may directly include prerequisite steps specific to new hardware or infrastructure providers without full abstraction. A guide added here is expected to eventually become path of an existing well-lit path.

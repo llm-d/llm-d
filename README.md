@@ -40,9 +40,9 @@ See the path descriptions for more details about the accelerators, networks, and
   * Large language models (LLMs) with 1 billion or more parameters
   * Using most or all of the capacity of one or more hardware accelerators
 * On recent generation datacenter-class accelerators
-  * NVIDIA H100 or newer for larger models and L4, A100 for smaller models
+  * NVIDIA A100 / L4 or newer
   * AMD MI250 or newer
-  * Google TPU v5e, v6e, and newer
+  * Google TPU v5e or newer
 * With extremely fast accelerator interconnect and datacenter networking
   * 600-16,000 Gbps per accelerator NVLINK on host or across narrow domains like NVL72
   * 1,600-5,000 Gbps per chip TPU OCS links within TPU pods
@@ -85,7 +85,9 @@ For more see the [project proposal](./docs/proposals/llm-d.md).
 
 ### Pre-requisites
 
-`llm-d` requires a Kubernetes 1.29+ cluster and accelerators capable of running large models supported by vLLM. Our well-lit paths are focused on datacenter accelerators and networks and issues encountered outside these may not receive the same level of attention.
+`llm-d` requires accelerators capable of running large models supported by vLLM. Our well-lit paths are focused on datacenter accelerators and networks and issues encountered outside these may not receive the same level of attention.
+
+See the [prerequisites for our guides](./guides/prereq/) for more details on supported hardware, networking, Kubernetes cluster configuration, and client tooling.
 
 ### Deploying llm-d
 
