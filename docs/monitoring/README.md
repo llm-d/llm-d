@@ -44,7 +44,7 @@ The vLLM metrics from prefill and decode pods will be visible from the Prometheu
 
 Grafana dashboard raw JSON files can be imported manually into a Grafana UI. Here is a current list of community dashboards:
 
-- [llm-d dashboard](./dashboards/grafana/llm-d-vllm-dashboard.json)
+- [llm-d dashboard](./grafana/dashboards/llm-d-dashboard.json)
   - vLLM metrics
 - [inference-gateway dashboard](https://github.com/kubernetes-sigs/gateway-api-inference-extension/blob/main/tools/dashboards/inference_gateway.json)
   - EPP pod metrics, requires additional setup to collect metrics. See [GAIE doc](https://github.com/kubernetes-sigs/gateway-api-inference-extension/blob/main/tools/dashboards/README.md)
