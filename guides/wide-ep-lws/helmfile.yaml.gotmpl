@@ -1,17 +1,17 @@
 environments:
   istio: &I
     values:
-      - ../common/gateway-configurations/istio.yaml
+      - ../prereq/gateway-provider/common-configurations/istio.yaml
   istioBench: &IB
     values:
-      - ../common/gateway-configurations/istio.yaml
-      - ../common/gateway-configurations/benchmarking.yaml
+      - ../prereq/gateway-provider/common-configurations/istio.yaml
+      - ../prereq/gateway-provider/common-configurations/benchmarking.yaml
   kgateway: &KG
     values:
-      - ../common/gateway-configurations/kgateway.yaml
+      - ../prereq/gateway-provider/common-configurations/kgateway.yaml
   gke: &GKE
       values:
-      - ../common/gateway-configurations/gke.yaml
+      - ../prereq/gateway-provider/common-configurations/gke.yaml
   default:
     <<: *IB
 

@@ -9,7 +9,7 @@ This guide demonstrates how to deploy DeepSeek-R1-0528 using vLLM's P/D disaggre
 In this example, we will demonstrate a deployment of `DeepSeek-R1-0528` with:
 
 - 1 DP=8 Prefill Workers
-- 2 DP=4 Decode Workers
+- 2 DP=8 Decode Workers
 
 ## Hardware Requirements
 
