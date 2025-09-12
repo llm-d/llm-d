@@ -19,7 +19,7 @@ This project adheres to the llm-d [Code of Conduct and Covenant](CODE_OF_CONDUCT
 
 ## Community and Communication
 
-* **Developer Slack:** [Join our developer Slack workspace](https://inviter.co/llm-d-slack) to connect with the core maintainers and other contributors, ask questions, and participate in discussions.
+* **Developer Slack:** [Join our developer Slack workspace](https://llm-d.ai/slack) to connect with the core maintainers and other contributors, ask questions, and participate in discussions.
 * **Weekly Meetings:** Project updates, ongoing work discussions, and Q&A will be covered in our weekly project meeting every Wednesday at 12:30 PM ET. Please join by [adding the shared calendar](https://red.ht/llm-d-public-calendar). You can also [join our Google Group](https://groups.google.com/g/llm-d-contributors) for access to shared diagrams and other content.
   * Access meeting recordings and meeting notes on the [llm-d Public Google Drive](https://drive.google.com/drive/folders/1Y9ahJ9BhhDuwnPK6QHmKTi8uoz1FTqvA)
 * **SIGs:** Join one of our [Special Interest Groups (SIGs)](SIGS.md) to contribute to specific areas of the project and collaborate with domain experts.
