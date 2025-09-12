@@ -71,11 +71,11 @@ Use the [LWS installation guide](https://lws.sigs.k8s.io/docs/installation/) to 
 
 The following documentation describes llm-d tested setup for cluster infrastructure providers as well as specific deployment settings that will impact how model servers is expected to access accelerators.
 
-* [CoreWeave Kubernetes Service (CKS)](../../docs/infra-providers/cks/README.md)
+* [CoreWeave Kubernetes Service (CKS)](../../../docs/infra-providers/cks/README.md)
 <!-- * [Digital Ocean (DO)](../../docs/infra-providers/digitalocean/README.md) -->
-* [Google Kubernetes Engine (GKE)](../../docs/infra-providers/gke/README.md)
-* [OpenShift (OCP)](../../docs/infra-providers/openshift/README.md), [OpenShift on AWS]((../../docs/infra-providers/openshift-aws/README.md))
-* [minikube](../../docs/infra-providers/minikube/README.md) for single-host development
+* [Google Kubernetes Engine (GKE)](../../../docs/infra-providers/gke/README.md)
+* [OpenShift (OCP)](../../../docs/infra-providers/openshift/README.md), [OpenShift on AWS](../../../docs/infra-providers/openshift-aws/README.md)
+* [minikube](../../../docs/infra-providers/minikube/README.md) for single-host development
 
 These provider configurations are tested regularly.
 
@@ -85,7 +85,7 @@ Please follow the provider-specific documentation to ensure your Kubernetes clus
 
 To add a new infrastructure provider to our well-lit paths, we request the following support:
 
-* Documentation on configuring the platform to support one or more [well-lit path guides](../README.md#well-lit-path-guides)
+* Documentation on configuring the platform to support one or more [well-lit path guides](../../README.md#well-lit-path-guides)
 * The appropriate configuration contributed to the guide to deal with provider specific variation
 * An automated test environment that validates the supported guides
 * At least one documented platform maintainer who responds to GitHub issues and is available for regular discussion in the llm-d slack channel `#sig-installation`.

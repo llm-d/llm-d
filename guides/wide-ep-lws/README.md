@@ -21,7 +21,7 @@ This guide requires 24 Nvidia H200 GPUs and InfiniBand RDMA. It requires 1024 Gi
 - Ensure your cluster infrastructure is sufficient to [deploy high scale inference](../prereq/infrastructure/README.md)
   - You must have high speed inter-accelerator networking
   - The pods leveraging inter-node EP must be deployed within the same networking domain
-  - You have deployed the [LeaderWorkerSet optional controller](../prereq/infrastructure/README.md#optional-install-leaderworkerset-for-multi-host inference)
+  - You have deployed the [LeaderWorkerSet optional controller](../prereq/infrastructure/README.md#optional-install-leaderworkerset-for-multi-host-inference)
 - Configure and deploy your [Gateway control plane](../prereq/gateway-provider/README.md).
 - [Create the `llm-d-hf-token` secret in your target namespace with the key `HF_TOKEN` matching a valid HuggingFace token](../prereq/client-setup/README.md#huggingface-token) to pull models.
 
