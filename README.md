@@ -93,9 +93,9 @@ See the [prerequisites for our guides](./guides/prereq/) for more details on sup
 
 `llm-d` provides Helm charts that deploy the [inference scheduler](https://github.com/llm-d-incubation/llm-d-infra/blob/main/charts/llm-d-infra/README.md#tldr) and a parameterized [deployment of vLLM](https://github.com/llm-d-incubation/llm-d-modelservice/blob/main/README.md#getting-started) that demonstrates [a number of different production configurations](https://github.com/llm-d-incubation/llm-d-modelservice/tree/main/examples).
 
-We bundle these with guides to our [well-lit paths](./guides/) with key decisions, tradeoffs, benchmarks, and recommended configuration.
+We bundle these with guides to our [well-lit paths](./guides/README.md) with key decisions, tradeoffs, benchmarks, and recommended configuration.
 
-We suggest the [inference scheduling](./guides/inference-scheduling/) well-lit path if you need a simple, production ready deployment of vLLM with optimized load balancing.
+We suggest the [inference scheduling](./guides/inference-scheduling/README.md) well-lit path if you need a simple, production ready deployment of vLLM with optimized load balancing.
 
 > [!TIP]
 > For a more in-depth introduction to llm-d, try our [step-by-step quickstart](./guides/QUICKSTART.md).
@@ -106,7 +106,7 @@ We suggest the [inference scheduling](./guides/inference-scheduling/) well-lit p
 
 ## 📦 Releases
 
-Our [guides](./guides) are living docs and kept current. For details about the Helm charts and component releases, visit our [GitHub Releases page](https://github.com/llm-d/llm-d/releases) to review release notes.
+Our [guides](./guides/README.md) are living docs and kept current. For details about the Helm charts and component releases, visit our [GitHub Releases page](https://github.com/llm-d/llm-d/releases) to review release notes.
 
 Check out our [roadmap for upcoming releases](https://github.com/llm-d/llm-d/issues/146).
 

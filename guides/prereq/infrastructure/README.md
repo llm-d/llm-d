@@ -1,6 +1,6 @@
 # Infrastructure Prerequisite
 
-This document will guide you through choosing the Kubernetes infrastructure to run the llm-d guides. It covers both the fundamental hardware and software requirements for llm-d, cluster configuration, as well as configuration specific to infrastructure providers (clouds, specific distributions).
+This document will guide you through choosing the Kubernetes infrastructure to run llm-d. It covers both the fundamental hardware and software requirements for llm-d, cluster configuration, as well as configuration specific to infrastructure providers (clouds, specific distributions).
 
 ## llm-d infrastructure
 
@@ -72,10 +72,10 @@ Use the [LWS installation guide](https://lws.sigs.k8s.io/docs/installation/) to 
 The following documentation describes llm-d tested setup for cluster infrastructure providers as well as specific deployment settings that will impact how model servers is expected to access accelerators.
 
 * [CoreWeave Kubernetes Service (CKS)](../../../docs/infra-providers/cks/README.md)
-<!-- * [Digital Ocean (DO)](../../docs/infra-providers/digitalocean/README.md) -->
 * [Google Kubernetes Engine (GKE)](../../../docs/infra-providers/gke/README.md)
 * [OpenShift (OCP)](../../../docs/infra-providers/openshift/README.md), [OpenShift on AWS](../../../docs/infra-providers/openshift-aws/README.md)
 * [minikube](../../../docs/infra-providers/minikube/README.md) for single-host development
+<!-- * [Digital Ocean (DO)](../../docs/infra-providers/digitalocean/README.md) -->
 
 These provider configurations are tested regularly.
 
