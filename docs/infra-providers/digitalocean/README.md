@@ -1,329 +1,171 @@
-# llm-d-infra DigitalOcean Deployment Guide
+# llm-d on DigitalOcean Kubernetes Service (DOKS)
 
-## Prefill/Decode (P/D) Disaggregation for DigitalOcean GPU Clusters
+This document covers configuring DOKS clusters for running high performance LLM inference with llm-d.
 
-## Overview
+## Prerequisites
 
-This script provides a **minimal Prefill/Decode (P/D) Disaggregation** deployment optimized for DigitalOcean GPU clusters.
+llm-d on DOKS is tested with the following configurations:
 
-### Architecture
+* GPU types: H100, RTX 6000 Ada, RTX 4000 Ada, L40S
+* Versions: DOKS 1.28+
+* Networking: VPC-native clusters (required)
 
-```text
-┌─────────────────────┐    ┌─────────────────────┐
-│   Prefill Pod       │    │   Decode Pod        │
-│   (GPU Node 1)      │    │   (GPU Node 2)      │
-│   ┌───────────────┐ │    │   ┌───────────────┐ │
-│   │   1 GPU       │ │    │   │   1 GPU       │ │
-│   │   Process     │ │    │   │   Generate    │ │
-│   │   Input       │ │    │   │   Output      │ │
-│   └───────────────┘ │    │   └───────────────┘ │
-└─────────────────────┘    └─────────────────────┘
-            │                          │
-            └──────────┬─────────────────┘
-                      │
-            ┌─────────▼─────────┐
-            │   EPP (Router)    │
-            │   Smart Request   │
-            │   Scheduling      │
-            └───────────────────┘
-                      │
-            ┌─────────▼─────────┐
-            │  Istio Gateway    │
-            │  External Access  │
-            └───────────────────┘
+## Cluster Configuration
+
+The DOKS cluster should be configured with the following settings:
+
+* [GPU-enabled node pools](https://docs.digitalocean.com/products/kubernetes/details/supported-gpus/) with at least 2 GPU nodes for P/D disaggregation
+* [VPC-native networking](https://docs.digitalocean.com/products/kubernetes/details/networking/) (default for new clusters)
+* [kubectl configured](https://docs.digitalocean.com/products/kubernetes/how-to/connect-to-cluster/) for cluster access
+
+### GPU Driver Management
+
+DigitalOcean automatically installs and manages GPU drivers on DOKS clusters:
+
+* **NVIDIA Device Plugin**: Automatic installation for GPU discovery and scheduling
+* **Driver Updates**: Managed alongside cluster updates
+* **GPU Monitoring**: Built-in metrics collection via DCGM Exporter
+
+Verify automatic GPU setup:
+```bash
+kubectl get pods -n nvidia-device-plugin-system
+kubectl get nodes -o custom-columns="NAME:.metadata.name,GPU:.status.allocatable.nvidia\.com/gpu"
 ```
 
-**Total GPU Usage**: 2 GPUs (1 per node)
+### Cluster Validation
 
-### Features
-
-- **Minimal Deployment**: P/D separation using only 2 GPUs
-- **DigitalOcean Optimized**: Automatically disables RDMA for DOKS compatibility
-- **Intelligent Routing**: EPP automatically routes requests to prefill or decode pods based on request type
-- **Fully Automated**: One-command complete deployment with integrated GPU setup
-
-## Quick Start
-
-### Prerequisites
-
-1. **DigitalOcean Kubernetes cluster** with GPU nodes
-2. **kubectl** configured and connected to your cluster
-3. **HuggingFace Token** for model downloads
-4. **Required tools**: kubectl, helm, helmfile
-
-### One-Command Deployment
+Before deploying workloads, validate your cluster setup:
 
 ```bash
-cd quickstart/docs/infra-providers/digitalocean
-./deploy-pd-disaggregation.sh -t your_hf_token_here
+# Verify cluster access
+kubectl cluster-info
+kubectl get nodes -l doks.digitalocean.com/gpu-brand=nvidia
 
-# Deploy with monitoring (Prometheus + Grafana)
-./deploy-pd-disaggregation.sh -t your_hf_token_here -m
+# Run comprehensive validation
+./verify-do-prerequisites.sh
 ```
 
-This command automatically:
+The validation script checks:
+- DOKS cluster detection
+- GPU nodes availability (minimum 2 required)
+- NVIDIA Device Plugin status
+- VPC-native networking configuration
+- Storage classes and network policies
 
-1. Checks prerequisites
-2. Sets up GPU environment (installs NVIDIA Device Plugin if needed)
-3. Sets up Gateway infrastructure (Istio)
-4. Creates HuggingFace token secret
-5. Deploys minimal P/D disaggregation using static DigitalOcean configuration
-6. Optionally installs monitoring stack with P/D specific dashboards
-7. Waits for deployment completion and displays status
+## Workload Configuration
 
-### Verify Deployment
+### Deploy llm-d Workloads
+
+Navigate to the appropriate guide and deploy with DigitalOcean-specific configurations:
 
 ```bash
-./test-deployment.sh
+
+# For inference scheduling
+cd ../../../guides/inference-scheduling
+helmfile apply -e digitalocean
+
+# For P/D disaggregation
+cd ../../../guides/pd-disaggregation
+helmfile apply -e digitalocean
+
 ```
 
-## Testing Inference
+### GPU Configurations
 
-### Setup Port Forwarding
+Each GPU type has optimized settings in `gpu-configs/` automatically selected based on detected hardware:
 
-```bash
-kubectl port-forward -n llm-d-pd svc/infra-pd-inference-gateway-istio 8080:80
-```
+#### RTX 4000 Ada (20GB VRAM)
+- Memory utilization: 85% (~17GB available)
+- Host memory: 32Gi limits, 16Gi requests
+- Chunked prefill enabled for memory efficiency
 
-### Send Test Request
+#### RTX 6000 Ada / L40S (48GB VRAM)
+- Memory utilization: 85% (~40GB available)
+- Conservative host memory limits for stability
+- Optimized for inference workloads
 
-```bash
-curl -X POST http://localhost:8080/v1/chat/completions \
-  -H "Content-Type: application/json" \
-  -d '{
-    "model": "meta-llama/Llama-3.2-3B-Instruct",
-    "messages": [{"role": "user", "content": "Hello P/D!"}],
-    "max_tokens": 50
-  }'
-```
+#### H100 (80GB VRAM)
+- Memory utilization: 90% (~72GB available)
+- Higher memory and CPU allocations
+- Tensor parallel support for large models
 
-### Expected Response
+### Networking and Storage
 
-```json
-{
-  "id": "chatcmpl-xxx",
-  "object": "chat.completion",
-  "created": 1234567890,
-  "model": "meta-llama/Llama-3.2-3B-Instruct",
-  "choices": [
-    {
-      "index": 0,
-      "message": {
-        "role": "assistant",
-        "content": "Hello! I'm running on P/D disaggregation..."
-      },
-      "finish_reason": "stop"
-    }
-  ]
-}
-```
+DOKS provides managed components for llm-d deployments:
 
-## Advanced Configuration
+* **VPC-native networking**: eBPF-based routing for optimal performance
+* **Block Storage CSI**: `do-block-storage` storage class pre-configured
+* **Load Balancers**: Managed Load Balancer integration for inference endpoints
 
-### Custom Model
+## Monitoring (Optional)
 
-To deploy a different model, edit the DigitalOcean values file:
-
-```bash
-# Edit the static configuration file
-cd quickstart/examples/pd-disaggregation
-vim ms-pd/digitalocean-values.yaml
-```
-
-Modify the `modelArtifacts` section:
-
-```yaml
-modelArtifacts:
-  uri: "hf://your-model/name"
-  size: 30Gi
-  name: "your-model/name"
-
-routing:
-  modelName: your-model/name
-```
-
-### Resource Adjustment
-
-Adjust resource limits in `ms-pd/digitalocean-values.yaml`:
-
-```yaml
-decode:
-  containers:
-  - resources:
-      limits:
-        memory: 32Gi      # Increase memory
-        cpu: "8"          # Increase CPU
-        nvidia.com/gpu: "1"
-```
-
-### Performance Tuning
-
-Adjust vLLM parameters in `ms-pd/digitalocean-values.yaml`:
-
-```yaml
-decode:
-  containers:
-  - args:
-      - "--max-model-len"
-      - "16384"           # Increase context length
-      - "--gpu-memory-utilization"
-      - "0.9"             # Increase GPU memory utilization
-```
-
-### Manual Deployment
-
-If you prefer manual control, you can deploy directly with helmfile:
-
-```bash
-cd quickstart/examples/pd-disaggregation
-
-# Deploy using DigitalOcean environment
-export NAMESPACE=llm-d-pd
-NAMESPACE=${NAMESPACE} helmfile apply -e digitalocean
-
-# Uninstall
-NAMESPACE=${NAMESPACE} helmfile destroy -e digitalocean
-```
-
-## Monitoring
-
-### Automatic Monitoring Setup
-
-Deploy with built-in monitoring using the `-m` flag:
-
-```bash
-./deploy-pd-disaggregation.sh -t your_hf_token_here -m
-```
-
-This installs:
-
-- **Prometheus**: Metrics collection with P/D specific scraping
-- **Grafana**: Inference Gateway dashboard for EPP routing analysis
-- **AlertManager**: Alert notifications
-- **ServiceMonitors**: Automated discovery of vLLM, EPP metrics
-
-### Manual Monitoring Setup
+Deploy Prometheus and Grafana for observability:
 
 ```bash
 cd monitoring
 ./setup-monitoring.sh
 
-# Uninstall monitoring
-./setup-monitoring.sh -u
-```
-
-### Access Monitoring
-
-```bash
-# Grafana (Inference Gateway Dashboard)
+# Access Grafana dashboard
 kubectl port-forward -n llm-d-monitoring svc/prometheus-grafana 3000:80
-# URL: http://localhost:3000
-# Username: admin
-# Password: kubectl get secret prometheus-grafana -n llm-d-monitoring -o jsonpath="{.data.admin-password}" | base64 -d
-
-# Prometheus (Raw Metrics)
-kubectl port-forward -n llm-d-monitoring svc/prometheus-kube-prometheus-prometheus 9090:9090
-# URL: http://localhost:9090
 ```
 
-### Key Metrics Monitored
+We recommend enabling the monitoring stack to track:
+- GPU utilization per deployment
+- Inference request latency and throughput
+- Memory usage and KV cache efficiency
+- Network performance between prefill/decode pods
 
-**Inference Gateway (EPP Router):**
+## Known Issues
 
-- KV Cache utilization analysis
-- Request routing decisions and performance
-- Endpoint selection and load balancing
-- Queue management and optimization
+### Pod Scheduling on GPU Nodes
 
-**Model Service Performance:**
+**Issue**: Pods fail to schedule with `untolerated taint {nvidia.com/gpu}`
 
-- vLLM prefill and decode metrics
-- GPU utilization per pod role
-- Request latency and throughput
-- Memory usage and resource allocation
-
-**Infrastructure:**
-
-- DigitalOcean GPU node utilization
-- Kubernetes cluster health
-- Network performance between components
-- Resource consumption patterns
-
-## Troubleshooting
-
-### Pods Stuck in Pending State
-
-**Symptom**: Pods show `Pending` status
-
-**Cause**: GPU nodes may not have proper labels or tolerations
-
-**Solution**:
-
-```bash
-# Check GPU nodes
-kubectl get nodes -l doks.digitalocean.com/gpu-brand=nvidia
-
-# Check node resources
-kubectl describe nodes | grep nvidia.com/gpu
-```
-
-### CUDA Out of Memory Errors
-
-**Symptom**: `CUDA out of memory` errors
-
-**Solution**: Reduce `gpu-memory-utilization` or `max-model-len`:
+**Solution**: Ensure GPU tolerations are configured (automatically handled by llm-d deployments):
 
 ```yaml
-args:
-  - "--gpu-memory-utilization"
-  - "0.7"             # Reduce from 0.85 to 0.7
-  - "--max-model-len"
-  - "4096"            # Reduce context length
+tolerations:
+- key: nvidia.com/gpu
+  operator: Exists
+  effect: NoSchedule
 ```
 
-### Inference Requests Failing
+### VPC-Native Networking Requirements
 
-**Check Steps**:
+**Issue**: Legacy DOKS clusters may experience networking limitations
 
-1. Confirm pods are running:
+**Solution**: VPC-native networking is required and enabled by default on new clusters. Legacy clusters cannot be upgraded to VPC-native.
 
-   ```bash
-   kubectl get pods -n llm-d-pd
-   ```
+Verify your cluster configuration:
+```bash
+kubectl get nodes -o jsonpath='{.items[0].metadata.labels.doks\.digitalocean\.com/vpc-native}'
+```
 
-1. Check pod logs:
+Must return `"true"`.
 
-   ```bash
-   kubectl logs -n llm-d-pd -l llm-d.ai/role=prefill
-   kubectl logs -n llm-d-pd -l llm-d.ai/role=decode
-   ```
+### GPU Memory Management
 
-1. Check gateway status:
+**Issue**: CUDA out of memory errors on smaller GPU types
 
-   ```bash
-   kubectl get gateway -n llm-d-pd
-   ```
+**Solution**: Use GPU-specific configurations which automatically adjust memory utilization based on detected hardware. Manual override available in deployment values.
 
-## Uninstall
+## Testing and Validation
+
+Verify deployment success:
 
 ```bash
-./deploy-pd-disaggregation.sh -u
+# Check deployment status
+kubectl get pods -n llm-d-pd
+kubectl get gateway -n llm-d-pd
+
+# Test inference endpoint
+kubectl port-forward -n llm-d-pd svc/infra-pd-inference-gateway-istio 8080:80
+
+curl -X POST http://localhost:8080/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -d '{"model": "Qwen/Qwen2.5-3B-Instruct", "messages": [{"role": "user", "content": "hello"}], "max_tokens": 20}'
 ```
 
-This will clean up all related resources including:
+Expected response includes successful P/D routing with sub-200ms latency.
 
-- P/D disaggregation pods
-- HuggingFace secrets
-- Gateway infrastructure
-- Istio configuration
-
-## Performance Expectations
-
-On a DigitalOcean 2-GPU setup:
-
-- **Latency**: ~100-200ms (first token)
-- **Throughput**: ~10-20 tokens/second (depending on model and hardware)
-- **Memory Usage**: ~14-16GB VRAM per GPU
-- **CPU Usage**: ~3-4 cores per pod
-
-Actual performance will vary based on your specific model, input length, and GPU type.
+For detailed configuration options and advanced setups, see the main [llm-d guides](../../../guides/).

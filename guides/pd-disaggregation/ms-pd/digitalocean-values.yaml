@@ -2,14 +2,15 @@
 # This file contains ONLY the values that need to be overridden for DigitalOcean
 # Architecture: 1 Prefill Pod (1 GPU) + 1 Decode Pod (1 GPU) = 2 GPUs total
 
-# Use smaller model optimized for DigitalOcean GPU nodes
+# Use Qwen public model - no HuggingFace token required
 modelArtifacts:
-  uri: "hf://meta-llama/Llama-3.2-3B-Instruct"
-  size: 30Gi
-  name: "meta-llama/Llama-3.2-3B-Instruct"
+  uri: "hf://Qwen/Qwen2.5-3B-Instruct"
+  size: 8Gi  # Qwen 2.5-3B is smaller than LLaMA 3.2-3B
+  name: "Qwen/Qwen2.5-3B-Instruct"
+  authSecretName: ""  # Disable HF token for public model
 
 routing:
-  modelName: meta-llama/Llama-3.2-3B-Instruct
+  modelName: Qwen/Qwen2.5-3B-Instruct
 
 # Decode Pod: Override to single GPU setup optimized for DigitalOcean
 decode:
