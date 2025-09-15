@@ -1,13 +1,13 @@
 environments:
   istio: &I
     values:
-      - ../common/gateway-configurations/istio.yaml
+      - ../prereq/gateway-provider/common-configurations/istio.yaml
   kgateway: &KG
     values:
-      - ../common/gateway-configurations/kgateway.yaml
+      - ../prereq/gateway-provider/common-configurations/kgateway.yaml
   gke: &GKE
     values:
-      - ../common/gateway-configurations/gke.yaml
+      - ../prereq/gateway-provider/common-configurations/gke.yaml
   default:
     <<: *I
 
