@@ -38,6 +38,14 @@ To see specify your gateway choice you can use the `-e <gateway option>` flag, e
 helmfile apply -e kgateway -n ${NAMESPACE}
 ```
 
+For DigitalOcean Kubernetes Service (DOKS):
+
+```bash
+helmfile apply -e digitalocean -n ${NAMESPACE}
+```
+
+**Note:** DigitalOcean deployment uses public Qwen/Qwen3-0.6B model (no HuggingFace token required) and is optimized for DOKS GPU nodes with automatic tolerations and node selectors. Gateway API v1 compatibility fixes are automatically included.
+
 To see what gateway options are supported refer to our [gateway provider prereq doc](../prereq/gateway-provider/README.md#supported-providers). Gateway configurations per provider are tracked in the [gateway-configurations directory](../prereq/gateway-provider/common-configurations/).
 
 You can also customize your gateway, for more information on how to do that see our [gateway customization docs](../../docs/customizing-your-gateway.md).
@@ -56,6 +64,12 @@ kubectl apply -f httproute.yaml
 
 ```bash
 kubectl apply -f httproute.gke.yaml
+```
+
+#### Install for "digitalocean"
+
+```bash
+kubectl apply -f httproute.digitalocean.yaml
 ```
 
 ## Verify the Installation
@@ -134,6 +148,12 @@ kubectl delete -f httproute.yaml
 
 ```bash
 kubectl delete -f httproute.gke.yaml
+```
+
+#### Cleanup for "digitalocean"
+
+```bash
+kubectl delete -f httproute.digitalocean.yaml
 ```
 
 ## Customization
