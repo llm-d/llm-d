@@ -1,0 +1,60 @@
+# GPU Memory Optimized Configuration for NVIDIA RTX 6000 Ada (48GB VRAM)
+# Optimized for DigitalOcean Kubernetes clusters
+# Memory allocation: ~40GB available (85% of 48GB)
+
+sampleApplication:
+  # Resource requests and limits for RTX 6000 Ada
+  resources:
+    limits:
+      nvidia.com/gpu: "1"
+      memory: "48Gi" # Host memory for RTX 6000 Ada nodes
+      cpu: "7"
+    requests:
+      nvidia.com/gpu: "1"
+      memory: "24Gi"
+      cpu: "6"
+  tolerations:
+    - key: nvidia.com/gpu
+      operator: Exists
+      effect: NoSchedule
+
+  # Decode configuration with memory optimizations
+  decode:
+    extraArgs:
+      - "--max-model-len"
+      - "16384" # Larger sequence length for 48GB VRAM
+      - "--gpu-memory-utilization"
+      - "0.85" # Use 85% of GPU memory
+      - "--enforce-eager" # Stable scheduling
+      - "--tensor-parallel-size"
+      - "1" # Single GPU setup
+      - "--block-size"
+      - "32" # Larger block size for better memory efficiency
+
+  # Prefill configuration with memory optimizations
+  prefill:
+    extraArgs:
+      - "--max-model-len"
+      - "16384"
+      - "--gpu-memory-utilization"
+      - "0.85"
+      - "--enforce-eager"
+      - "--tensor-parallel-size"
+      - "1"
+      - "--block-size"
+      - "32"
+
+# Enable comprehensive metrics collection
+modelservice:
+  metrics:
+    enabled: true
+    serviceMonitor:
+      interval: 15s
+  epp:
+    metrics:
+      enabled: true
+      serviceMonitor:
+        interval: 10s
+  vllm:
+    metrics:
+      enabled: true

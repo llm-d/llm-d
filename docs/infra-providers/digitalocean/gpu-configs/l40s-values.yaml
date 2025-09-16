@@ -1,0 +1,60 @@
+# GPU Memory Optimized Configuration for NVIDIA L40S (48GB VRAM)
+# Optimized for DigitalOcean Kubernetes clusters
+# Memory allocation: ~40GB available (85% of 48GB)
+
+sampleApplication:
+  # Resource requests and limits for L40S
+  resources:
+    limits:
+      nvidia.com/gpu: "1"
+      memory: "96Gi" # High host memory for L40S nodes
+      cpu: "16"
+    requests:
+      nvidia.com/gpu: "1"
+      memory: "48Gi"
+      cpu: "8"
+  tolerations:
+    - key: nvidia.com/gpu
+      operator: Exists
+      effect: NoSchedule
+
+  # Decode configuration with memory optimizations
+  decode:
+    extraArgs:
+      - "--max-model-len"
+      - "20480" # Large sequence length for L40S
+      - "--gpu-memory-utilization"
+      - "0.85" # Use 85% of GPU memory
+      - "--enable-chunked-prefill" # Enable chunked prefill for efficiency
+      - "--tensor-parallel-size"
+      - "1" # Single GPU setup
+      - "--block-size"
+      - "32" # Optimized block size
+
+  # Prefill configuration with memory optimizations
+  prefill:
+    extraArgs:
+      - "--max-model-len"
+      - "20480"
+      - "--gpu-memory-utilization"
+      - "0.85"
+      - "--enable-chunked-prefill"
+      - "--tensor-parallel-size"
+      - "1"
+      - "--block-size"
+      - "32"
+
+# Enable comprehensive metrics collection
+modelservice:
+  metrics:
+    enabled: true
+    serviceMonitor:
+      interval: 15s
+  epp:
+    metrics:
+      enabled: true
+      serviceMonitor:
+        interval: 10s
+  vllm:
+    metrics:
+      enabled: true

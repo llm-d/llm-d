@@ -1,0 +1,76 @@
+# DigitalOcean Inference Scheduling Override
+# This file contains ONLY the values that need to be overridden for DigitalOcean DOKS
+# Architecture: 2 Decode Pods for intelligent scheduling (no P/D disaggregation)
+
+# Use Qwen public model - no HuggingFace token required
+modelArtifacts:
+  uri: "hf://Qwen/Qwen3-0.6B"
+  name: "Qwen/Qwen3-0.6B"
+  size: 8Gi  # Reduced size for public model
+  authSecretName: ""  # Disable HF token for public model
+
+routing:
+  modelName: Qwen/Qwen3-0.6B
+
+# Decode Pods: Override to single GPU setup optimized for DigitalOcean
+decode:
+  replicas: 2  # Keep 2 replicas for scheduling demo
+  containers:
+  - name: "vllm"
+    image: "ghcr.io/llm-d/llm-d:v0.2.0"  # Use stable release
+    modelCommand: vllmServe
+    args:
+      - "--enforce-eager"
+      - "--kv-transfer-config"
+      - '{"kv_connector":"NixlConnector", "kv_role":"kv_both"}'
+      - "--gpu-memory-utilization"
+      - "0.85"  # Optimize for RTX 6000 Ada
+      - "--max-model-len"
+      - "4096"  # Smaller context for 0.6B model
+    env:
+      - name: CUDA_VISIBLE_DEVICES
+        value: "0"
+      - name: UCX_TLS
+        value: "cuda_ipc,cuda_copy,tcp"
+      - name: VLLM_NIXL_SIDE_CHANNEL_HOST
+        valueFrom:
+          fieldRef:
+            fieldPath: status.podIP
+      - name: VLLM_NIXL_SIDE_CHANNEL_PORT
+        value: "54321"
+      - name: NIXL_SIDE_CHANNEL_DIR
+        value: "/nixl_sideband"
+    resources:
+      requests:
+        nvidia.com/gpu: 1
+        memory: "8Gi"
+        cpu: "2"
+      limits:
+        nvidia.com/gpu: 1
+        memory: "16Gi"
+        cpu: "4"
+    volumeMounts:
+    - name: nixl-sideband
+      mountPath: /nixl_sideband
+    - name: shared-temp
+      mountPath: /tmp
+    ports:
+    - containerPort: 8000
+      name: http
+    - containerPort: 54321
+      name: sideband
+  volumes:
+  - name: nixl-sideband
+    emptyDir: {}
+  - name: shared-temp
+    emptyDir: {}
+  tolerations:
+  - key: nvidia.com/gpu
+    operator: Exists
+    effect: NoSchedule
+  nodeSelector:
+    doks.digitalocean.com/gpu-brand: nvidia
+
+# No prefill pods for inference scheduling architecture
+prefill:
+  replicas: 0
