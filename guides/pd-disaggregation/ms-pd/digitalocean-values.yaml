@@ -37,63 +37,52 @@ decode:
         valueFrom:
           fieldRef:
             fieldPath: status.podIP
-      - name: VLLM_NIXL_SIDE_CHANNEL_PORT
-        value: "54321"
-      - name: NIXL_SIDE_CHANNEL_DIR
-        value: "/nixl_sideband"
-      - name: CUDA_VISIBLE_DEVICES
-        value: "0"
-      - name: UCX_TLS
-        value: "cuda_ipc,cuda_copy,tcp"
-    resources:
-      requests:
-        nvidia.com/gpu: 1
-        memory: "16Gi"
-        cpu: "4"
-      limits:
-        nvidia.com/gpu: 1
-        memory: "32Gi"
-        cpu: "8"
-    volumeMounts:
-    - name: nixl-sideband
-      mountPath: /nixl_sideband
-    - name: shared-temp
-      mountPath: /tmp
     ports:
-    - containerPort: 8000
-      name: http
-    - containerPort: 54321
-      name: sideband
+      - containerPort: 8200
+        name: metrics
+        protocol: TCP
+    resources:
+      limits:
+        memory: 16Gi
+        cpu: "4"
+        nvidia.com/gpu: "1"  # Single GPU, no RDMA for DOKS compatibility
+      requests:
+        memory: 16Gi
+        cpu: "4" 
+        nvidia.com/gpu: "1"
+    mountModelVolume: true
+    volumeMounts:
+    - name: shm
+      mountPath: /dev/shm
   volumes:
-  - name: nixl-sideband
-    emptyDir: {}
-  - name: shared-temp
-    emptyDir: {}
+  - name: shm
+    emptyDir:
+      medium: Memory
+      sizeLimit: "4Gi"
+  # DigitalOcean GPU node tolerations
   tolerations:
-  - key: nvidia.com/gpu
-    operator: Exists
-    effect: NoSchedule
-  nodeSelector:
-    doks.digitalocean.com/gpu-brand: nvidia
+  - key: "nvidia.com/gpu"
+    operator: "Exists"
+    effect: "NoSchedule"
 
-# Prefill Pod: Override to single GPU setup
+# Prefill Pod: Override to single replica optimized for DigitalOcean
 prefill:
-  replicas: 1
+  replicas: 1  # Single prefill pod instead of 4
   containers:
   - name: "vllm"
     image: "ghcr.io/llm-d/llm-d:v0.2.0"
     modelCommand: vllmServe
     args:
       - "--tensor-parallel-size"
-      - "1"  # Single GPU instead of 4
+      - "1"  # Single GPU
       - "--block-size"
       - "128"
       - "--kv-transfer-config"
-      - '{"kv_connector":"NixlConnector", "kv_role":"kv_producer"}'
+      - '{"kv_connector":"NixlConnector", "kv_role":"kv_both"}'
       - "--disable-log-requests"
       - "--disable-uvicorn-access-log"
       - "--max-model-len"
-      - "8192"  # Smaller context for less VRAM
+      - "8192"
       - "--gpu-memory-utilization"
       - "0.85"
     env:
@@ -101,41 +90,30 @@ prefill:
         valueFrom:
           fieldRef:
             fieldPath: status.podIP
-      - name: VLLM_NIXL_SIDE_CHANNEL_PORT
-        value: "54321"
-      - name: NIXL_SIDE_CHANNEL_DIR
-        value: "/nixl_sideband"
-      - name: CUDA_VISIBLE_DEVICES
-        value: "0"
-      - name: UCX_TLS
-        value: "cuda_ipc,cuda_copy,tcp"
-    resources:
-      requests:
-        nvidia.com/gpu: 1
-        memory: "16Gi"
-        cpu: "4"
-      limits:
-        nvidia.com/gpu: 1
-        memory: "32Gi"
-        cpu: "8"
-    volumeMounts:
-    - name: nixl-sideband
-      mountPath: /nixl_sideband
-    - name: shared-temp
-      mountPath: /tmp
     ports:
-    - containerPort: 8000
-      name: http
-    - containerPort: 54321
-      name: sideband
+      - containerPort: 8000
+        name: metrics
+        protocol: TCP
+    resources:
+      limits:
+        memory: 16Gi
+        cpu: "4" 
+        nvidia.com/gpu: "1"  # Single GPU, no RDMA for DOKS compatibility
+      requests:
+        memory: 16Gi
+        cpu: "4"
+        nvidia.com/gpu: "1"
+    mountModelVolume: true
+    volumeMounts:
+    - name: shm
+      mountPath: /dev/shm
   volumes:
-  - name: nixl-sideband
-    emptyDir: {}
-  - name: shared-temp
-    emptyDir: {}
+  - name: shm
+    emptyDir:
+      medium: Memory
+      sizeLimit: "4Gi"
+  # DigitalOcean GPU node tolerations
   tolerations:
-  - key: nvidia.com/gpu
-    operator: Exists
-    effect: NoSchedule
-  nodeSelector:
-    doks.digitalocean.com/gpu-brand: nvidia
+  - key: "nvidia.com/gpu"
+    operator: "Exists"
+    effect: "NoSchedule"

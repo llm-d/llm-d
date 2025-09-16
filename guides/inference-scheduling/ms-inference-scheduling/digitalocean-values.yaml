@@ -37,40 +37,30 @@ decode:
           fieldRef:
             fieldPath: status.podIP
       - name: VLLM_NIXL_SIDE_CHANNEL_PORT
-        value: "54321"
-      - name: NIXL_SIDE_CHANNEL_DIR
-        value: "/nixl_sideband"
+        value: "5557"
     resources:
-      requests:
-        nvidia.com/gpu: 1
-        memory: "8Gi"
-        cpu: "2"
       limits:
-        nvidia.com/gpu: 1
-        memory: "16Gi"
+        memory: 16Gi
         cpu: "4"
+        nvidia.com/gpu: "1"  # Single GPU, no RDMA for DOKS compatibility
+      requests:
+        memory: 16Gi
+        cpu: "4"
+        nvidia.com/gpu: "1"
     volumeMounts:
-    - name: nixl-sideband
-      mountPath: /nixl_sideband
-    - name: shared-temp
-      mountPath: /tmp
-    ports:
-    - containerPort: 8000
-      name: http
-    - containerPort: 54321
-      name: sideband
+    - name: shm
+      mountPath: /dev/shm
   volumes:
-  - name: nixl-sideband
-    emptyDir: {}
-  - name: shared-temp
-    emptyDir: {}
+  - name: shm
+    emptyDir:
+      medium: Memory
+      sizeLimit: "4Gi"
+  # DigitalOcean GPU node tolerations
   tolerations:
-  - key: nvidia.com/gpu
-    operator: Exists
-    effect: NoSchedule
-  nodeSelector:
-    doks.digitalocean.com/gpu-brand: nvidia
+  - key: "nvidia.com/gpu"
+    operator: "Exists"
+    effect: "NoSchedule"
 
-# No prefill pods for inference scheduling architecture
+# Prefill disabled in inference-scheduling scenario
 prefill:
-  replicas: 0
+  create: false

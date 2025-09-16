@@ -3,46 +3,35 @@
 # Memory allocation: ~40GB available (85% of 48GB)
 
 sampleApplication:
-  # Resource requests and limits for RTX 6000 Ada
   resources:
     limits:
       nvidia.com/gpu: "1"
-      memory: "48Gi" # Host memory for RTX 6000 Ada nodes
-      cpu: "7"
+      memory: "48Gi" # Conservative limit for 64Gi host memory
+      cpu: "7" # Conservative limit leaving room for system processes
     requests:
       nvidia.com/gpu: "1"
-      memory: "24Gi"
-      cpu: "6"
+      memory: "24Gi" # Conservative request for stable scheduling
+      cpu: "6" # Conservative request for stable scheduling
   tolerations:
     - key: nvidia.com/gpu
       operator: Exists
       effect: NoSchedule
-
-  # Decode configuration with memory optimizations
   decode:
     extraArgs:
       - "--max-model-len"
-      - "16384" # Larger sequence length for 48GB VRAM
+      - "16384" # Higher sequence length for 48GB VRAM
       - "--gpu-memory-utilization"
       - "0.85" # Use 85% of GPU memory
-      - "--enforce-eager" # Stable scheduling
       - "--tensor-parallel-size"
       - "1" # Single GPU setup
-      - "--block-size"
-      - "32" # Larger block size for better memory efficiency
-
-  # Prefill configuration with memory optimizations
   prefill:
     extraArgs:
       - "--max-model-len"
       - "16384"
       - "--gpu-memory-utilization"
       - "0.85"
-      - "--enforce-eager"
       - "--tensor-parallel-size"
       - "1"
-      - "--block-size"
-      - "32"
 
 # Enable comprehensive metrics collection
 modelservice:

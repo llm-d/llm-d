@@ -2,18 +2,11 @@ environments:
   istio: &I
     values:
       - ../prereq/gateway-provider/common-configurations/istio.yaml
-  istioBench: &IB
+  digitalocean: &DO
     values:
       - ../prereq/gateway-provider/common-configurations/istio.yaml
-      - ../prereq/gateway-provider/common-configurations/benchmarking.yaml
-  kgateway: &KG
-    values:
-      - ../prereq/gateway-provider/common-configurations/kgateway.yaml
-  gke: &GKE
-      values:
-      - ../prereq/gateway-provider/common-configurations/gke.yaml
   default:
-    <<: *IB
+    <<: *I
 
 ---
 
@@ -27,6 +20,7 @@ repositories:
     url: https://llm-d-incubation.github.io/llm-d-infra/
 
 releases:
+  # Infrastructure (Gateway only)
   - name: {{ printf "infra-%s" $rn | quote }}
     namespace: {{ $ns }}
     chart: llm-d-infra/llm-d-infra
@@ -38,30 +32,8 @@ releases:
     values:
       - gateway:
         {{ .Environment.Values.gateway | toYaml | nindent 10 }}
-      - gateway:
-          destinationRule:
-            host: {{ printf "gaie-%s-epp.%s.svc.cluster.local" $ns | quote }}
 
-  - name: {{ printf "gaie-%s" $rn | quote }}
-    namespace: {{ $ns }}
-    chart: oci://registry.k8s.io/gateway-api-inference-extension/charts/inferencepool
-    version: v0.5.1
-    installed: true
-    needs:
-      - {{ printf "infra-%s" $rn | quote }}
-    values:
-      - gaie-pd/values.yaml
-    {{- if eq .Environment.Name "gke" }}
-      - provider:
-          name: {{ .Environment.Values.provider.name }}
-    {{- end }}
-    {{- if or (eq .Environment.Name "istioBench") (eq .Environment.Name "default") }}
-      - inferenceExtension:
-          logVerbosity: {{ .Environment.Values.inferenceExtension.logVerbosity }}
-    {{- end}}
-    labels:
-      kind: inference-stack
-
+  # Model Service (Simplified P/D Disaggregation)
   - name: {{ printf "ms-%s" $rn | quote }}
     namespace: {{ $ns }}
     chart: llm-d-modelservice/llm-d-modelservice
@@ -69,23 +41,17 @@ releases:
     installed: true
     needs:
       - {{ printf "infra-%s" $rn | quote }}
-      - {{ printf "gaie-%s" $rn | quote }}
     values:
       - ms-pd/values.yaml
-    {{- if or (eq .Environment.Name "istioBench") (eq .Environment.Name "default") }}
-      - routing:
-          proxy:
-            debugLevel: {{ .Environment.Values.routing.proxy.debugLevel }}
-          epp:
-            debugLevel: {{ .Environment.Values.routing.epp.debugLevel }}
-    {{- end }}
+      {{- if eq .Environment.Name "digitalocean" }}
+      - ms-pd/digitalocean-values.yaml
+      {{- end }}
     set:
-    # apply release name derived values
-      - name: "routing.inferencePool.name"
-        value: {{ printf "gaie-%s" $rn | quote }}
+      # Direct routing without InferencePool
       - name: "routing.parentRefs[0].name"
         value: {{ printf "infra-%s-inference-gateway" $rn | quote }}
-    {{- if eq .Environment.Name "gke" }}
+      # Remove RDMA for DigitalOcean compatibility
+      {{- if eq .Environment.Name "digitalocean" }}
       - name: "decode.containers[0].resources.limits.rdma/ib"
         value: null
       - name: "decode.containers[0].resources.requests.rdma/ib"
@@ -94,6 +60,6 @@ releases:
         value: null
       - name: "prefill.containers[0].resources.requests.rdma/ib"
         value: null
-    {{- end }}
+      {{- end }}
     labels:
       kind: inference-stack

@@ -3,35 +3,28 @@
 # Memory allocation: ~40GB available (85% of 48GB)
 
 sampleApplication:
-  # Resource requests and limits for L40S
   resources:
     limits:
       nvidia.com/gpu: "1"
-      memory: "96Gi" # High host memory for L40S nodes
-      cpu: "16"
+      memory: "96Gi" # Host memory for L40S nodes
+      cpu: "24"
     requests:
       nvidia.com/gpu: "1"
       memory: "48Gi"
-      cpu: "8"
+      cpu: "12"
   tolerations:
     - key: nvidia.com/gpu
       operator: Exists
       effect: NoSchedule
-
-  # Decode configuration with memory optimizations
   decode:
     extraArgs:
       - "--max-model-len"
-      - "20480" # Large sequence length for L40S
+      - "20480" # Higher sequence length for 48GB VRAM
       - "--gpu-memory-utilization"
       - "0.85" # Use 85% of GPU memory
-      - "--enable-chunked-prefill" # Enable chunked prefill for efficiency
+      - "--enable-chunked-prefill" # Enable chunked prefill for better memory usage
       - "--tensor-parallel-size"
       - "1" # Single GPU setup
-      - "--block-size"
-      - "32" # Optimized block size
-
-  # Prefill configuration with memory optimizations
   prefill:
     extraArgs:
       - "--max-model-len"
@@ -41,8 +34,6 @@ sampleApplication:
       - "--enable-chunked-prefill"
       - "--tensor-parallel-size"
       - "1"
-      - "--block-size"
-      - "32"
 
 # Enable comprehensive metrics collection
 modelservice:
