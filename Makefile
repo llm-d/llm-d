@@ -2,8 +2,12 @@ SHELL := /usr/bin/env bash
 
 # Defaults
 PROJECT_NAME ?= llm-d
-
-# Maybe we break out version per image because they share no common bits --> independent releas cycles
+DOCKERFILE_DIR = docker
+ifeq ($(DEVICE), xpu)
+	DOCKERFILE ?= Dockerfile.xpu
+else
+	DOCKERFILE ?= Dockerfile.cuda
+endif Maybe we break out version per image because they share no common bits --> independent releas cycles
 VERSION ?= v0.2.1
 
 # New tag to use if you would like to use `make image-retag`
@@ -59,8 +63,6 @@ build: ##
 # The Dockerfile the build task should use.
 # Default is the canonical “Dockerfile” so local `make buildah-build`
 # still works without extra flags.
-DOCKERFILE_DIR = docker
-DOCKERFILE ?= Dockerfile.cuda
 
 .PHONY: buildah-build
 buildah-build: check-builder ## Build and push image (multi-arch if supported)

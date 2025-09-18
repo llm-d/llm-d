@@ -7,14 +7,12 @@ on:
       - .github/workflows/build-image.yml
       - docker/**
       - patches/**
-      - build-xpu.sh
   pull_request:
     branches: [ main, dev ]
     paths:
       - .github/workflows/build-image.yml
       - docker/**
       - patches/**
-      - build-xpu.sh
 
 permissions:
   contents: read
@@ -43,9 +41,6 @@ jobs:
               - 'patches/cks_nvshmem3.3.9.patch'
             xpu:
               - docker/Dockerfile.xpu'
-              - 'patches/0001-XPU-P-D-Add-XPU-support-to-Nixl-connector.patch'
-              - 'patches/0002-fix-pre-commit.patch'
-              - 'build-xpu.sh'
 
   cuda-build-llm-d:
     needs: detect-changes
