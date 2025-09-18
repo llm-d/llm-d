@@ -87,7 +87,7 @@ For more see the [project proposal](./docs/proposals/llm-d.md).
 
 `llm-d` requires accelerators capable of running large models supported by vLLM. Our well-lit paths are focused on datacenter accelerators and networks and issues encountered outside these may not receive the same level of attention.
 
-See the [prerequisites for our guides](./guides/prereq/) for more details on supported hardware, networking, Kubernetes cluster configuration, and client tooling.
+See the [prerequisites for our guides](./guides/QUICKSTART.md#prerequisites) for more details on supported hardware, networking, Kubernetes cluster configuration, and client tooling.
 
 ### Deploying llm-d
 
