@@ -96,9 +96,7 @@ decode:
   - name: metrics-volume
     emptyDir: {}
   - name: shm
-    emptyDir:
-      medium: Memory
-      sizeLimit: "16Gi"
+    emptyDir: {}
   - name: torch-compile-cache
     emptyDir: {}
 
@@ -160,8 +158,6 @@ prefill:
   - name: metrics-volume
     emptyDir: {}
   - name: shm
-    emptyDir:
-      medium: Memory
-      sizeLimit: "16Gi"
+    emptyDir: {}
   - name: torch-compile-cache
     emptyDir: {}
