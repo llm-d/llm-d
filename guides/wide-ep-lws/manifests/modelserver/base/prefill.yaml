@@ -36,7 +36,7 @@ spec:
               - SYS_RAWIO
             runAsGroup: 0
             runAsUser: 0
-          imagePullPolicy: Always
+          imagePullPolicy: IfNotPresent
           
           command:
             - /bin/bash
