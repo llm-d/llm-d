@@ -109,7 +109,7 @@ jobs:
         env:
           GATEWAY_TYPE: ${{ env.GATEWAY_TYPE }}
         run: |
-          cd guides/gateway-provider
+          cd guides/prereq/gateway-provider
           ./install-gateway-provider-dependencies.sh
           helmfile apply -f ${GATEWAY_TYPE}.helmfile.yaml
 

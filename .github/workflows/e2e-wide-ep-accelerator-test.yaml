@@ -364,7 +364,7 @@ jobs:
           ssh -o StrictHostKeyChecking=no -i key.pem ubuntu@$INSTANCE_IP "GATEWAY_TYPE=$GATEWAY_TYPE bash -s" <<'EOF'
             set -euo pipefail
             set -x
-            cd llm-d/guides/gateway-provider
+            cd llm-d/guides/prereq/gateway-provider
             ./install-gateway-provider-dependencies.sh
             helmfile apply -f ${GATEWAY_TYPE}.helmfile.yaml
           EOF
