@@ -145,32 +145,6 @@ RUN --mount=type=cache,target=/var/cache/git \
     ldconfig && \
     cd .. && rm -rf gdrcopy
 
-# Build and install UCX
-# TODO: CUSTOM LOGGING
-ARG UCX_VERSION="v1.19.0-rc1"
-RUN --mount=type=cache,target=/var/cache/git \
-    git clone https://github.com/openucx/ucx.git && \
-    cd ucx && \
-    git checkout ${UCX_VERSION} && \
-    ./autogen.sh && \
-    ./contrib/configure-release \
-        --enable-shared \
-        --disable-static \
-        --disable-doxygen-doc \
-        --enable-cma \
-        --enable-devel-headers \
-        --with-cuda=/usr/local/cuda \
-        --with-verbs \
-        --with-dm \
-        --with-gdrcopy=/usr/local \
-        --enable-mt \
-        --with-mlx5 \
-        --prefix=/usr/local && \
-    make -j$(nproc) && \
-    make install-strip && \
-    ldconfig && \
-    cd .. && rm -rf ucx
-
 ENV CPPFLAGS="-I$NVSHMEM_DIR/include ${CPPFLAGS}" \
     LDFLAGS="-L$NVSHMEM_DIR/lib ${LDFLAGS}"
 
@@ -214,37 +188,11 @@ RUN --mount=type=cache,target=/root/.cache/uv \
   uv pip install \
     # global
     numpy torch==2.7.1 \ 
-    # nixl 
+    nixl \
     pyyaml \
     types-PyYAML \
     pytest \ 
     patchelf>=0.11.0
-
-# https://github.com/ai-dynamo/nixl/tree/ucx_thread_pool
-# Temporarily use hotfix on 0.4 to avoid NIXL launch OH
-# via threadpool w/ UCX workers - to be fixed in nixl=0.5.
-ARG NIXL_REPO_URL="https://github.com/ai-dynamo/nixl.git"
-ARG NIXL_COMMIT_SHA="ba7e40760027796890ad17e95620526c3c5560ee"
-RUN --mount=type=cache,target=/tmp/nixl-cache \
-    ln -s /usr/local/cuda/lib64/stubs/libcuda.so /usr/lib64/ && \
-    mkdir /opt/nixl && cd /opt/nixl && \
-    git clone ${NIXL_REPO_URL} . && \
-    git checkout ${NIXL_COMMIT_SHA} && \
-    export PATH="${VIRTUAL_ENV}/bin:$PATH" && \
-    export PYTHON="${VIRTUAL_ENV}/bin/python" && \
-    export PKG_CONFIG_PATH="/usr/lib64/pkgconfig:/usr/share/pkgconfig:${PKG_CONFIG_PATH}" && \
-    export CUDA_HOME="/usr/local/cuda" && \
-    export LD_LIBRARY_PATH="/usr/local/nvidia/lib:/usr/local/nvidia/lib64:/usr/local/cuda/lib64:/usr/local/cuda/lib64/stubs/:/usr/local/cuda/extras/CUPTI/lib64:/usr/local/lib:/usr/local/lib64:/usr/lib64:${LD_LIBRARY_PATH}" && \
-    meson setup build --prefix=/usr/local -Dbuildtype=release && \
-    cd build && \
-    ninja && \
-    ninja install && \
-    cd .. && \
-    # Build nixl wheel and install locally
-    source ${VIRTUAL_ENV}/bin/activate && \
-    python -m build --no-isolation --wheel -o /wheels && \
-    uv pip install --no-cache-dir . && \
-    rm -rf build
 
 RUN echo "/usr/local/lib" > /etc/ld.so.conf.d/local.conf && \
     echo "/usr/local/lib64" >> /etc/ld.so.conf.d/local.conf && \
@@ -363,24 +311,9 @@ RUN dnf install -y --allowerasing \
         curl \
         gcc && dnf clean all
 
-# Copy UCX libraries from builder
-COPY --from=builder /usr/local/lib/libucp* /usr/local/lib/
-COPY --from=builder /usr/local/lib/libucs* /usr/local/lib/
-COPY --from=builder /usr/local/lib/libuct* /usr/local/lib/
-COPY --from=builder /usr/local/lib/libucm* /usr/local/lib/
-COPY --from=builder /usr/local/lib/ucx/ /usr/local/lib/ucx/
-COPY --from=builder /usr/local/lib64/libucx_utils.so /usr/local/lib64/
-
 # Copy gdrcopy libraries from builder
 COPY --from=builder /usr/lib64/libgdrapi.so.2.* /usr/lib64/
 COPY --from=builder /usr/local/lib/libgdrapi.so* /usr/local/lib/
-
-# Copy nixl libraries from builder
-COPY --from=builder /usr/local/lib64/libnixl* /usr/local/lib64/
-COPY --from=builder /usr/local/lib64/libstream.so /usr/local/lib64/
-COPY --from=builder /usr/local/lib64/libserdes.so /usr/local/lib64/
-COPY --from=builder /usr/local/lib64/plugins/ /usr/local/lib64/plugins/
-COPY --from=builder /usr/local/include/nixl* /usr/local/include/
 
 # Copy compiled NVSHMEM libraries from builder
 COPY --from=builder /opt/nvshmem-${NVSHMEM_VERSION}/ /opt/nvshmem-${NVSHMEM_VERSION}/
@@ -389,7 +322,6 @@ COPY --from=builder /opt/nvshmem-${NVSHMEM_VERSION}/ /opt/nvshmem-${NVSHMEM_VERS
 RUN echo "/usr/local/lib" > /etc/ld.so.conf.d/local.conf && \
     echo "/usr/local/lib64" >> /etc/ld.so.conf.d/local.conf && \
     echo "/opt/nvshmem-${NVSHMEM_VERSION}/lib" >> /etc/ld.so.conf.d/local.conf && \
-    echo "/opt/vllm/lib64/python3.12/site-packages/.nixl.mesonpy.libs/plugins" >> /etc/ld.so.conf.d/local.conf && \
     ldconfig
 
 # Setup Python virtual environment
