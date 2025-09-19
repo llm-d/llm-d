@@ -45,9 +45,36 @@ GKE recommends using [Topology Aware Scheduling with Kueue and LeaderWorkerSet](
 
 ### `Undetected platform` on vLLM 0.10.0 on GKE
 
-The 12.8 and 12.9 NVIDIA CUDA Docker images used as a base for vLLM moved the location of the installed CUDA drivers from `/usr/local/nvidia` to `/usr/local/cuda`, which prevents GKE managed GPU drivers from being detected.
+The GKE managed GPU driver automatically mounts the configured node CUDA driver at `/usr/local/nvidia`. CUDA applications like vLLM must have `/usr/local/nvidia` in their `LD_LIBRARY_PATH` or they will not be able to locate the necessary CUDA libraries.
 
-Until [vLLM issue #18859](https://github.com/vllm-project/vllm/issues/18859) is resolved by updating vLLM to the CUDA 13 base image, users will need to ensure their LD_LIBRARY_PATH in their vLLM image includes `/usr/local/nvidia/lib64`.
+In vLLM, this causes startup to fail with the following logging:
+
+```
+INFO 05-28 14:02:21 [__init__.py:247] No platform detected, vLLM is running on UnspecifiedPlatform
+...
+INFO 05-28 14:02:26 [config.py:1909] Disabled the custom all-reduce kernel because it is not supported on current platform.
+Traceback (most recent call last):
+  File "<frozen runpy>", line 198, in _run_module_as_main
+  File "<frozen runpy>", line 88, in _run_code
+  File "/usr/local/lib/python3.12/dist-packages/vllm/entrypoints/openai/api_server.py", line 1372, in <module>
+    parser = make_arg_parser(parser)
+  File "/usr/local/lib/python3.12/dist-packages/vllm/entrypoints/openai/cli_args.py", line 246, in make_arg_parser
+    parser = AsyncEngineArgs.add_cli_args(parser)
+  File "/usr/local/lib/python3.12/dist-packages/vllm/engine/arg_utils.py", line 1565, in add_cli_args
+    parser = EngineArgs.add_cli_args(parser)
+  File "/usr/local/lib/python3.12/dist-packages/vllm/engine/arg_utils.py", line 825, in add_cli_args
+    vllm_kwargs = get_kwargs(VllmConfig)
+  File "/usr/local/lib/python3.12/dist-packages/vllm/engine/arg_utils.py", line 174, in get_kwargs
+    default = field.default_factory()
+  File "<string>", line 4, in __init__
+  File "/usr/local/lib/python3.12/dist-packages/vllm/config.py", line 2245, in __post_init__
+    raise RuntimeError(
+RuntimeError: Failed to infer device type, please set the environment variable `VLLM_LOGGING_LEVEL=DEBUG` to turn on verbose logging to help debug the issue.
+```
+
+The root cause of this issue is that the CUDA 12.8 and 12.9 NVIDIA Docker images that are used as a base for vLLM container images changed the location of the installed CUDA drivers from `/usr/local/nvidia` to `/usr/local/cuda` and altered `LD_LIBRARY_PATH`. As a result, the libraries from the driver mount are not found by vLLM.
+
+The llm-d container image contains a workaround. Until [vLLM issue #18859](https://github.com/vllm-project/vllm/issues/18859) is resolved, users who customize their vLLM image will need to ensure their LD_LIBRARY_PATH in their vLLM image includes `/usr/local/nvidia/lib64`.
 
 #### Google InfiniBand 1.10 required for vLLM 0.11.0 (gIB)
 
