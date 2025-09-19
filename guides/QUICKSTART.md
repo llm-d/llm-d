@@ -39,7 +39,8 @@ Specific requirements, workarounds, and any other documentation relevant to thes
 
 llm-d integrates with the [Kubernetes Gateway API](https://gateway-api.sigs.k8s.io/) to optimize load balancing to your model server replicas and have access to the full set of service management features you are likely to need in production, such as traffic splitting and authentication / authorization.
 
-You must select an [appropriate Gateway implementation for your infrastructure and deploy the Gateway control plane and its prerequisite CRDs]((./prereq/gateway-provider/README.md)).
+You must select an [appropriate Gateway implementation for your infrastructure and deploy the Gateway control plane and its prerequisite CRDs](./prereq/gateway-provider/README.md).
+
 
 > [!IMPORTANT]
 > We recommend selecting a Gateway implementation provided by your infrastructure, if available. If not, we test and verify our guides with both [kgateway](https://kgateway.dev/docs/main/quickstart/) and [istio](https://istio.io/latest/docs/setup/getting-started/).
