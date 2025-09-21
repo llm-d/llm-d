@@ -55,7 +55,7 @@ spec:
             type: File 
       containers:
         - name: vllm
-          image: ghcr.io/llm-d/llm-d-dev:pr-246@sha256:41219315abda2cdf61121c6bc8a747795dfc8872568d21a392d335e7361e350a
+          image: ghcr.io/llm-d/llm-d-dev:pr-246@sha256:41219315abda2cdf61121c6bc8a747795dfc8872568d21a392d335e7361e350a # This image has updated LMCache with upstream but not new vLLM for support
           command: ["vllm", "serve"]
           args:
             - RedHatAI/Llama-3.3-70B-Instruct-FP8-dynamic
@@ -68,7 +68,7 @@ spec:
             - --block-size
             - "128"
             - --kv-transfer-config
-            - '{"kv_connector":"NixlConnector", "kv_role":"kv_both"}'
+            - '{"kv_connector":"MultiConnector","kv_role":"kv_both","kv_connector_extra_config":{"connectors":[{"kv_connector":"NixlConnector","kv_role":"kv_both"},{"kv_connector":"LMCacheConnectorV1","kv_role":"kv_both"}]}}'
             - --disable-log-requests
             - --disable-uvicorn-access-log
             - --max-model-len
@@ -92,6 +92,17 @@ spec:
               value: "INFO"
             - name: NVIDIA_GDRCOPY
               value: "enabled"
+            # LMCache GPU Direct Vars
+            - name: LMCACHE_USE_EXPERIMENTAL
+              value: true
+            - name: LMCACHE_CHUNK_SIZE
+              value: 256
+            - name: LMCACHE_GDS_PATH
+              value: /mnt/weka
+            - name: LMCACHE_CUFILE_BUFFER_SIZE
+              value: "8192"
+            - name: LMCACHE_LOCAL_CPU
+              value: false
           ports:
             - containerPort: 8200
               name: metrics
