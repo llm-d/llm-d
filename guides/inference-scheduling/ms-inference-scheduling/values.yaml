@@ -7,7 +7,6 @@ modelArtifacts:
   authSecretName: "llm-d-hf-token"
 
 routing:
-  modelName: Qwen/Qwen3-0.6B
   servicePort: 8000
   parentRefs:
     - group: gateway.networking.k8s.io
