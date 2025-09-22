@@ -1,0 +1,123 @@
+name: Build upstream vLLM Wheel
+
+on:
+  workflow_dispatch:
+    inputs:
+      VLLM_COMMIT:
+        description: 'vLLM commit hash to build'
+        required: true
+      PYTHON_VERSION:
+        description: "Python version"
+        required: false
+        default: "3.12"
+        type: choice
+        options: ["3.9", "3.10", "3.11", "3.12"]
+      CUDA_VERSION:
+        description: "CUDA toolkit version"
+        required: false
+        default: "12.8"
+        type: choice
+        options: ["11.8", "12.6", "12.8"]
+
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: false
+
+env:
+  TF_VAR_aws_region: "us-west-2"
+  TF_VAR_aws_ami_name: '["*ubuntu-noble-24.04*"]'
+  TF_VAR_aws_ami_owners: '["099720109477"]'
+  TF_VAR_aws_volume_size: 300
+  TF_VAR_aws_access_key: ${{ secrets.AWS_ACCESS_KEY_ID }}
+  TF_VAR_aws_secret_key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+  PYTORCH_CUDA_NIGHTLY_INDEX_BASE_URL: "https://download.pytorch.org/whl/nightly"
+  PYTORCH_CUDA_INDEX_BASE_URL: "https://download.pytorch.org/whl"
+
+jobs:
+  build-vllm-cuda:
+    if: github.event_name == 'workflow_dispatch'
+    strategy:
+      fail-fast: false
+      max-parallel: 1
+      matrix:
+        include:
+          - ARCH: amd64
+            AWS_AMI_ARCHITECTURE: x86_64
+            AWS_IMAGE_TYPE: c7i.8xlarge
+            MAX_JOBS: 28
+          # - ARCH: arm64
+          #   AWS_AMI_ARCHITECTURE: arm64
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4.1.7
+        with:
+          path: main
+
+      - name: Checkout terraform module
+        id: checkout-module
+        uses: actions/checkout@v4.1.7
+        with:
+          repository: containers/terraform-test-environment-module
+          path: terraform-test-environment-module
+          ref: 'main'
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3.1.2
+        with:
+          terraform_version: "1.7.5"
+          terraform_wrapper: false
+
+      - name: Init
+        run: terraform init
+        working-directory: terraform-test-environment-module
+
+      - name: Bootstrap
+        id: up
+        run: terraform apply -auto-approve -lock=false
+        working-directory: terraform-test-environment-module
+        env:
+          TF_VAR_aws_instance_type: ${{ matrix.AWS_IMAGE_TYPE }}
+          TF_VAR_aws_ami_architecture: ${{ matrix.AWS_AMI_ARCHITECTURE }}
+
+      - name: Terraform Output
+        id: terraform-output
+        run: |
+          echo "id=$(terraform output id | xargs)" >> $GITHUB_OUTPUT
+          echo "url=$(terraform output host | xargs)" >> $GITHUB_OUTPUT
+          echo "ssh_public_key=$(terraform output ssh_public_key | xargs)" >> $GITHUB_OUTPUT
+          echo "pem_filename=$(terraform output pem_filename | xargs)" >> $GITHUB_OUTPUT
+        working-directory: terraform-test-environment-module
+
+      - name: Provision
+        id: provision
+        timeout-minutes: 360
+        run: |
+          export CUDA_SHORT="cu$(echo ${{ inputs.CUDA_VERSION }} | cut -d. -f1,2 | tr -d '.')"
+          ansible-playbook ./main/.github/workflows/playbooks/build-vllm-nvidia.yml \
+            -i terraform-test-environment-module/hosts.ini \
+            --private-key=terraform-test-environment-module/${{ steps.terraform-output.outputs.pem_filename }} \
+            --extra-vars "ssh_public_key='${{ steps.terraform-output.outputs.ssh_public_key }}'" \
+            --extra-vars "VLLM_COMMIT='${{ inputs.VLLM_COMMIT }}'" \
+            --extra-vars "PYTHON_VERSION='${{ inputs.PYTHON_VERSION }}'" \
+            --extra-vars "CUDA_VERSION='${{ inputs.CUDA_VERSION }}'" \
+            --extra-vars "CUDA_SHORT='"${CUDA_SHORT}"'" \
+            --extra-vars "MAX_JOBS='${{ matrix.MAX_JOBS}}'" \
+            --extra-vars "ARCH='${{ matrix.AWS_AMI_ARCHITECTURE }}'" \
+            --extra-vars "PYPIRC_USER='${{ secrets.LLMD_GITLAB_USER }}'" \
+            --extra-vars "PYPIRC_TOKEN='${{ secrets.LLMD_GITLAB_PAT }}'" \
+            --extra-vars "AWS_ACCESS_KEY_ID_S3_BUCKET_ONLY='${{ secrets.AWS_ACCESS_KEY_ID_S3_BUCKET_ONLY }}'" \
+            --extra-vars "AWS_SECRET_ACCESS_KEY_S3_BUCKET_ONLY='${{ secrets.AWS_SECRET_ACCESS_KEY_S3_BUCKET_ONLY }}'" \
+            --extra-vars "PYTORCH_CUDA_NIGHTLY_INDEX_BASE_URL='${{ env.PYTORCH_CUDA_NIGHTLY_INDEX_BASE_URL }}'" \
+            --extra-vars "PYTORCH_CUDA_INDEX_BASE_URL='${{ env.PYTORCH_CUDA_INDEX_BASE_URL }}'"
+        env:
+          ANSIBLE_CONFIG: ./main/.github/workflows/playbooks/ansible.cfg
+
+      - name: Destroy Test Environment
+        id: down
+        if: always()
+        run: terraform destroy -auto-approve -lock=false
+        working-directory: terraform-test-environment-module
+        env:
+          TF_VAR_aws_instance_type: ${{ matrix.AWS_IMAGE_TYPE }}
+          TF_VAR_aws_ami_architecture: ${{ matrix.AWS_AMI_ARCHITECTURE }}

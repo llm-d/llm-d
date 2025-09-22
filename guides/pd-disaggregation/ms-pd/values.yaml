@@ -1,0 +1,160 @@
+multinode: false
+
+modelArtifacts:
+  uri: "hf://RedHatAI/Llama-3.3-70B-Instruct-FP8-dynamic"
+  size: 100Gi
+  authSecretName: "llm-d-hf-token"
+  name: "RedHatAI/Llama-3.3-70B-Instruct-FP8-dynamic"
+
+routing:
+  modelName: RedHatAI/Llama-3.3-70B-Instruct-FP8-dynamic
+  servicePort: 8000
+  parentRefs:
+    - group: gateway.networking.k8s.io
+      kind: Gateway
+      # name: infra-pd-inference-gateway # set in helmfile
+
+  proxy:
+    image: ghcr.io/llm-d/llm-d-routing-sidecar:v0.2.0
+    connector: nixlv2
+    secure: false
+
+  inferenceModel:
+    criticality: Critical
+    create: true
+
+  inferencePool:
+    create: false
+    # name: gaie-pd # set in helmfile
+
+  httpRoute:
+    create: false
+
+  epp:
+    create: false
+
+decode:
+  create: true
+  replicas: 1
+  monitoring:
+    podmonitor:
+      enabled: false
+      portName: "metrics" # decode vLLM service port (from routing.proxy.targetPort)
+      path: "/metrics"
+      interval: "30s"
+  containers:
+  - name: "vllm"
+    image: "ghcr.io/llm-d/llm-d-dev:pr-170"
+    modelCommand: vllmServe
+    args:
+      - "--tensor-parallel-size"
+      - "4"
+      - "--block-size"
+      - "128"
+      - "--kv-transfer-config"
+      - '{"kv_connector":"NixlConnector", "kv_role":"kv_both"}'
+      - "--disable-log-requests"
+      - "--disable-uvicorn-access-log"
+      - "--max-model-len"
+      - "32000"
+    env:
+      - name: VLLM_NIXL_SIDE_CHANNEL_HOST
+        valueFrom:
+          fieldRef:
+            fieldPath: status.podIP
+      - name: VLLM_LOGGING_LEVEL
+        value: DEBUG
+    ports:
+      - containerPort: 8200
+        name: metrics
+        protocol: TCP
+    resources:
+      limits:
+        memory: 64Gi
+        cpu: "16"
+        nvidia.com/gpu: "4"
+        rdma/ib: 1
+      requests:
+        memory: 64Gi
+        cpu: "16"
+        nvidia.com/gpu: "4"
+        rdma/ib: 1
+    mountModelVolume: true
+    volumeMounts:
+    - name: metrics-volume
+      mountPath: /.config
+    - name: shm
+      mountPath: /dev/shm
+    - name: torch-compile-cache
+      mountPath: /.cache
+  volumes:
+  - name: metrics-volume
+    emptyDir: {}
+  - name: shm
+    emptyDir:
+      medium: Memory
+      sizeLimit: "16Gi"
+  - name: torch-compile-cache
+    emptyDir: {}
+
+prefill:
+  create: true
+  replicas: 4
+  monitoring:
+    podmonitor:
+      enabled: false
+      portName: "metrics" # prefill vLLM service port (from routing.servicePort)
+      path: "/metrics"
+      interval: "30s"
+  containers:
+  - name: "vllm"
+    image: "ghcr.io/llm-d/llm-d-dev:pr-170"
+    modelCommand: vllmServe
+    args:
+      - "--block-size"
+      - "128"
+      - "--kv-transfer-config"
+      - '{"kv_connector":"NixlConnector", "kv_role":"kv_both"}'
+      - "--disable-log-requests"
+      - "--disable-uvicorn-access-log"
+      - "--max-model-len"
+      - "32000"
+    env:
+      - name: VLLM_NIXL_SIDE_CHANNEL_HOST
+        valueFrom:
+          fieldRef:
+            fieldPath: status.podIP
+      - name: VLLM_LOGGING_LEVEL
+        value: DEBUG
+    ports:
+      - containerPort: 8000
+        name: metrics
+        protocol: TCP
+    resources:
+      limits:
+        memory: 64Gi
+        cpu: "8"
+        nvidia.com/gpu: "1"
+        rdma/ib: 1
+      requests:
+        memory: 64Gi
+        cpu: "8"
+        nvidia.com/gpu: "1"
+        rdma/ib: 1
+    mountModelVolume: true
+    volumeMounts:
+    - name: metrics-volume
+      mountPath: /.config
+    - name: shm
+      mountPath: /dev/shm
+    - name: torch-compile-cache
+      mountPath: /.cache
+  volumes:
+  - name: metrics-volume
+    emptyDir: {}
+  - name: shm
+    emptyDir:
+      medium: Memory
+      sizeLimit: "16Gi"
+  - name: torch-compile-cache
+    emptyDir: {}

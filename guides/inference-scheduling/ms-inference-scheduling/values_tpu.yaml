@@ -1,0 +1,80 @@
+# This values.yaml file creates the resources for Qwen/Qwen3-0.6B
+multinode: false
+
+modelArtifacts:
+  uri: "hf://meta-llama/Llama-3.1-70B-Instruct"
+  size: 160Gi
+  authSecretName: "llm-d-hf-token"
+  name: meta-llama/Llama-3.1-70B
+
+routing:
+  modelName: meta-llama/Llama-3.1-70B-Instruct
+  servicePort: 8000
+  parentRefs:
+    - group: gateway.networking.k8s.io
+      kind: Gateway
+      # name: infra-inference-scheduling-inference-gateway # set in helmfile
+
+  proxy:
+    image: ghcr.io/llm-d/llm-d-routing-sidecar:v0.2.0
+    connector: nixlv2
+    secure: false
+
+  inferenceModel:
+    create: false
+
+  inferencePool:
+    create: false
+    # name: gaie-inference-scheduling # set in helmfile
+
+  httpRoute:
+    create: false
+
+  epp:
+    create: false
+
+decode:
+  create: true
+  replicas: 2
+  extraConfig:
+    nodeSelector:
+      cloud.google.com/gke-tpu-topology: "2x4"
+      cloud.google.com/gke-tpu-accelerator: "tpu-v6e-slice"
+  monitoring:
+    podmonitor:
+      enabled: false
+      portName: "metrics"  # decode vLLM service port (from routing.proxy.targetPort)
+      path: "/metrics"
+      interval: "30s"
+  containers:
+  - name: "vllm"
+    image: "vllm/vllm-tpu:e92694b6fe264a85371317295bca6643508034ef"
+    modelCommand: vllmServe
+    args:
+      - "--tensor-parallel-size=8"
+      - "--max-model-len=4096"
+    ports:
+      - containerPort: 5557
+        protocol: TCP
+      - containerPort: 8200
+        name: metrics
+        protocol: TCP
+    resources:
+      limits:
+        google.com/tpu: 8
+      requests:
+        google.com/tpu: 8
+    mountModelVolume: true
+    volumeMounts:
+    - name: metrics-volume
+      mountPath: /.config
+    - name: torch-compile-cache
+      mountPath: /.cache
+  volumes:
+  - name: metrics-volume
+    emptyDir: {}
+  - name: torch-compile-cache
+    emptyDir: {}
+
+prefill:
+  create: false

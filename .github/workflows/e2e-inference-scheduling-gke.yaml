@@ -1,0 +1,206 @@
+name: GKE Inference Scheduling Test
+
+on:
+  # Runs with a PR comment /run-gke-inference-scheduling
+  issue_comment:
+    types: [created]
+  schedule: # TODO: enable once validated functional
+    - cron: '0 10 * * *'  # 3AM PST (10:00 UTC)
+  workflow_dispatch:
+    inputs:
+      pr_or_branch:
+        description: 'Pull-request number or branch name to test'
+        required: true
+        default: 'main'
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  deploy_and_validate:
+    if: >
+      github.event_name == 'schedule' ||
+      github.event_name == 'pull_request' ||
+      github.event_name == 'workflow_dispatch' ||
+      (
+        github.event_name == 'issue_comment' &&
+        github.event.issue.pull_request &&
+        (
+          contains(github.event.comment.body, '/run-gke-inference-scheduling')
+        ) &&
+        (
+          github.event.comment.author_association == 'OWNER' ||
+          github.event.comment.author_association == 'MEMBER' ||
+          github.event.comment.author_association == 'COLLABORATOR'
+        )
+      )
+    name: Test on ${{ matrix.accelerator.name }}
+    runs-on: ubuntu-latest
+
+    strategy:
+      fail-fast: false
+      max-parallel: 1
+      matrix:
+        accelerator:
+          - name: GPU
+            helmfile_env: gke
+            pod_readiness_sleep_seconds: 180
+          - name: TPU
+            helmfile_env: gke_tpu
+            pod_readiness_sleep_seconds: 1080
+
+    env:
+      GCP_PROJECT_ID: llm-d-scale
+      GKE_CLUSTER_NAME: llm-d-e2e-us-east5
+      GKE_CLUSTER_ZONE: us-east5
+      NAMESPACE: llm-d-inference-scheduling
+      GATEWAY: gke-l7-regional-external-managed
+      GATEWAY_TYPE: gke
+      PR_OR_BRANCH: ${{ github.event.inputs.pr_or_branch || github.event.issue.number || github.event.number }}
+      HF_TOKEN: ${{ secrets.HF_TOKEN }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Determine if pr_or_branch is a PR number
+        id: check_pr
+        run: |
+          if [[ "$PR_OR_BRANCH" =~ ^[0-9]+$ ]]; then
+            echo "is_pr=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "is_pr=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Fetch and checkout PR
+        if: steps.check_pr.outputs.is_pr == 'true'
+        run: |
+          git fetch origin pull/"$PR_OR_BRANCH"/head:pr-"$PR_OR_BRANCH"
+          git checkout pr-"$PR_OR_BRANCH"
+
+      - name: Checkout branch
+        if: steps.check_pr.outputs.is_pr == 'false'
+        run: git checkout "$PR_OR_BRANCH"
+
+      - name: Authenticate to Google Cloud
+        id: auth
+        uses: google-github-actions/auth@b7593ed2efd1c1617e1b0254da33b86225adb2a5
+        with:
+          credentials_json: ${{ secrets.GKE_SA_KEY }}
+
+      - name: Set up gcloud CLI and kubectl
+        uses: google-github-actions/setup-gcloud@cb1e50a9932213ecece00a606661ae9ca44f3397
+        with:
+          project_id: ${{ env.GCP_PROJECT_ID }}
+          install_components: 'kubectl,gke-gcloud-auth-plugin'
+
+      - name: Get GKE credentials
+        run: |
+          gcloud container clusters get-credentials "${{ env.GKE_CLUSTER_NAME }}" --zone "${{ env.GKE_CLUSTER_ZONE }}"
+
+      - name: Install prerequisites
+        run: |
+          ./guides/prereq/client-setup/install-deps.sh | tee ~/install-deps.log
+
+      - name: Deploy model service and GIE with Helmfile
+        run: |
+          cd guides/inference-scheduling
+          helmfile apply -e ${{ matrix.accelerator.helmfile_env }} | tee ~/inference-scheduling-deployment.log
+          echo "---------------------------------------" >> ~/inference-scheduling-deployment.log
+
+      - name: Deploy HTTPRoute
+        run: |
+          cd guides/inference-scheduling
+          echo "Deploying HTTPRoute..."
+          kubectl apply -f httproute.gke.yaml | tee ~/inference-scheduling-deployment.log
+          echo "---------------------------------------" >> ~/inference-scheduling-deployment.log
+
+      - name: Upload helm get all
+        run: |
+          for release_name in infra-inference-scheduling gaie-inference-scheduling ms-inference-scheduling; do
+            /bin/sh .github/scripts/e2e/helm-get-all.sh \
+              ~/inference-scheduling-deployment.log \
+              "$release_name" \
+              "$NAMESPACE"
+          done
+
+      - name: Wait for all pods to be ready
+        run: |
+          kubectl wait pod \
+            --for=condition=Ready \
+            --all \
+            -n "${NAMESPACE}" \
+            --timeout=10m
+          sleep ${{ matrix.accelerator.pod_readiness_sleep_seconds }} # TODO: remove this once examples have readiness probes
+          echo "✅ All pods are ready."
+          kubectl get pods -n "${NAMESPACE}"
+
+      - name: Wait for gateway to be ready
+        run: |
+          GATEWAY_NAME=infra-inference-scheduling-inference-gateway
+          kubectl wait gateway/${GATEWAY_NAME} \
+            --for=condition=Programmed=True \
+            -n "${NAMESPACE}" \
+            --timeout=300s
+          echo "✅ Gateway is ready."
+          kubectl get gateway -n "${NAMESPACE}"
+
+      - name: Show deployment status
+        run: |
+          echo "=== Deployments ==="
+          kubectl get deployments -n "${NAMESPACE}"
+          echo ""
+          echo "=== Replica Sets ==="
+          kubectl get replicasets -n "${NAMESPACE}"
+          echo ""
+          echo "=== Pods ==="
+          kubectl get pods -n "${NAMESPACE}"
+          echo ""
+          echo "=== Services ==="
+          kubectl get svc -n "${NAMESPACE}"
+          echo ""
+          echo "=== Helm releases ==="
+          helm list -n "${NAMESPACE}" || true
+          echo ""
+          echo "=== Inference Pools ==="
+          kubectl get inferencepools -n "${NAMESPACE}" || true
+          echo ""
+          echo "=== HTTPRoutes ==="
+          kubectl get httproutes -n "${NAMESPACE}" || true
+          echo ""
+
+      - name: Verify installation and run inference tests
+        run: |
+          cd .github/scripts/e2e
+          ./e2e-validate.sh -n "${NAMESPACE}"
+
+      - name: Collect and upload Kubernetes pod logs
+        if: always()
+        run: |
+            mkdir -p pod-logs-inference-scheduling
+            cd pod-logs-inference-scheduling
+            echo "Fetching ${NAMESPACE} pods log..."
+            kubectl get pods -n "${NAMESPACE}" --no-headers -o custom-columns=":metadata.name" \
+            | xargs -I{} sh -c 'kubectl logs --all-containers=true -n "${NAMESPACE}" {} > "{}.log" 2>&1'
+            echo "Fetching ${NAMESPACE} pods descriptions..."
+            kubectl get pods -n "${NAMESPACE}" --no-headers -o custom-columns=":metadata.name" \
+            | xargs -I{} sh -c 'kubectl describe pod -n "${NAMESPACE}" {} > "{}-describe.log" 2>&1'
+            mv ~/inference-scheduling-deployment.log . || true
+            mv ~/install-deps.log . || true
+
+      - name: Upload pod logs as artifact
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: llmd-pod-logs-inference-scheduling-${{ matrix.accelerator.name }}
+          path: pod-logs-inference-scheduling
+
+      - name: Cleanup deployment
+        if: always()
+        run: |
+          cd guides/inference-scheduling
+          helmfile destroy -e ${{ matrix.accelerator.helmfile_env }}
+          kubectl delete -f httproute.gke.yaml

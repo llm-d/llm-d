@@ -1,0 +1,72 @@
+environments:
+  istio: &I
+    values:
+      - ../prereq/gateway-provider/common-configurations/istio.yaml
+  kgateway: &KG
+    values:
+      - ../prereq/gateway-provider/common-configurations/kgateway.yaml
+  gke: &GKE
+    values:
+      - ../prereq/gateway-provider/common-configurations/gke.yaml
+  default:
+    <<: *I
+
+---
+
+{{- $ns := .Namespace | default "llm-d-precise" -}}
+{{- $rn := (env "RELEASE_NAME_POSTFIX") | default "kv-events" -}}
+
+repositories:
+  - name: llm-d-modelservice
+    url: https://llm-d-incubation.github.io/llm-d-modelservice/
+  - name: llm-d-infra
+    url: https://llm-d-incubation.github.io/llm-d-infra/
+
+releases:
+  - name: {{ printf "infra-%s" $rn | quote }}
+    namespace: {{ $ns }}
+    chart: llm-d-infra/llm-d-infra
+    version: v1.3.0
+    installed: true
+    labels:
+      type: infrastructure
+      kind: inference-stack
+    values:
+      - {{ .Environment.Values | toYaml | nindent 8  }}
+      - gateway:
+          destinationRule:
+            host: {{ printf "gaie-%s-epp.%s.svc.cluster.local" $rn $ns | quote }}
+
+  - name: {{ printf "gaie-%s" $rn | quote }}
+    namespace: {{ $ns }}
+    chart: oci://registry.k8s.io/gateway-api-inference-extension/charts/inferencepool
+    version: v0.5.1
+    installed: true
+    needs:
+      - {{ printf "infra-%s" $rn | quote }}
+    values:
+      - gaie-kv-events/values.yaml
+    {{- if eq .Environment.Name "gke" }}
+      - provider: {{ .Environment.Values.provider }}
+    {{- end }}
+    labels:
+      kind: inference-stack
+
+  - name: {{ printf "ms-%s" $rn | quote }}
+    namespace: {{ $ns }}
+    chart: llm-d-modelservice/llm-d-modelservice
+    version: v0.2.7
+    installed: true
+    needs:
+      - {{ printf "infra-%s" $rn | quote }}
+      - {{ printf "gaie-%s" $rn | quote }}
+    values:
+      - ms-kv-events/values.yaml
+    set:
+    # apply release name derived values
+      - name: "routing.inferencePool.name"
+        value: {{ printf "gaie-%s" $rn | quote }}
+      - name: "routing.parentRefs[0].name"
+        value: {{ printf "infra-%s-inference-gateway" $rn | quote }}
+    labels:
+      kind: inference-stack

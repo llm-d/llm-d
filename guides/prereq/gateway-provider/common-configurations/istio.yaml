@@ -1,0 +1,8 @@
+gateway:
+  gatewayClassName: istio
+  destinationRule:
+    enabled: true
+    trafficPolicy:
+      tls:
+        mode: SIMPLE
+        insecureSkipVerify: true
