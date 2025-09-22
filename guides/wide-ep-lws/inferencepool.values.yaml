@@ -1,0 +1,66 @@
+inferenceExtension:
+  replicas: 1
+  image:
+    name: llm-d-inference-scheduler
+    hub: ghcr.io/llm-d
+    tag: v0.3.0-rc.1
+  extProcPort: 9002
+  monitoring:
+    interval: "10s"
+    # Service account token secret for authentication
+    secret:
+      name: inference-gateway-sa-metrics-reader-secret
+    # Prometheus ServiceMonitor will be created when enabled for EPP metrics collection
+    prometheus:
+      enabled: false
+    gke:
+      enable: false
+  flags:
+    - name: "pool-group"
+      value: "inference.networking.x-k8s.io" # This should match the inferencePool.apiVersion below.
+  pluginsConfigFile: "custom-plugins.yaml"
+  pluginsCustomConfig:
+    custom-plugins.yaml: |
+      # ALWAYS DO PD IN THIS EXAMPLE (THRESHOLD 0)
+      apiVersion: inference.networking.x-k8s.io/v1alpha1
+      kind: EndpointPickerConfig
+      plugins:
+      - type: prefill-header-handler
+      - type: prefill-filter
+      - type: decode-filter
+      - type: max-score-picker
+      - type: queue-scorer
+      - type: kv-cache-utilization-scorer
+      - type: prefix-cache-scorer
+        parameters:
+          hashBlockSize: 64
+          maxPrefixBlocksToMatch: 256
+          lruCapacityPerServer: 31250 # TODO: Calculate the ideal cache size for deepseek.
+      - type: pd-profile-handler
+        parameters:
+          threshold: 0
+          hashBlockSize: 5
+      schedulingProfiles:
+      - name: prefill
+        plugins:
+        - pluginRef: prefill-filter
+        - pluginRef: queue-scorer
+          weight: 1
+        - pluginRef: prefix-cache-scorer
+          weight: 1
+        - pluginRef: max-score-picker
+      - name: decode
+        plugins:
+        - pluginRef: decode-filter
+        - pluginRef: queue-scorer
+          weight: 1
+        - pluginRef: prefix-cache-scorer
+          weight: 1
+        - pluginRef: kv-cache-utilization-scorer
+          weight: 1
+        - pluginRef: max-score-picker
+inferencePool:
+  apiVersion: inference.networking.x-k8s.io/v1alpha2
+  modelServers:
+    matchLabels:
+      llm-d.ai/model: DeepSeek-R1-0528

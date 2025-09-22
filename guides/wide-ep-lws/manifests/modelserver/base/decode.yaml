@@ -1,0 +1,150 @@
+apiVersion: leaderworkerset.x-k8s.io/v1
+kind: LeaderWorkerSet
+metadata:
+  name: wide-ep-llm-d-decode
+  labels:
+    llm-d.ai/inferenceServing: "true"
+    llm-d.ai/model: DeepSeek-R1-0528
+    llm-d.ai/role: decode
+spec:
+  replicas: 1
+  leaderWorkerTemplate:
+    size: 2
+    workerTemplate:
+      metadata:
+        labels:
+          llm-d.ai/inferenceServing: "true"
+          llm-d.ai/model: DeepSeek-R1-0528
+          llm-d.ai/role: decode
+      spec:
+        initContainers:
+          - name: routing-proxy
+            args:
+              - --port=8000
+              - --vllm-port=8200
+              - --connector=nixlv2
+              - -v=5
+              - --secure-proxy=false
+            image: ghcr.io/llm-d/llm-d-routing-sidecar:v0.2.0
+            imagePullPolicy: Always
+            ports:
+              - containerPort: 8000
+            resources: {}
+            restartPolicy: Always
+            securityContext:
+              allowPrivilegeEscalation: false
+              runAsNonRoot: true
+        volumes:
+          - emptyDir:
+              medium: Memory
+              sizeLimit: 2Gi # 2Gi for NCCL 2.27 to be safe
+            name: dshm
+          
+        containers:
+        - name: vllm-worker
+          image: ghcr.io/llm-d/llm-d:v0.2.0
+          securityContext:
+            capabilities:
+              add:
+              - IPC_LOCK
+              - SYS_RAWIO
+            runAsGroup: 0
+            runAsUser: 0
+          imagePullPolicy: Always
+          
+          command:
+            - /bin/bash
+            - -c
+          args:
+            - |-
+              #################
+              # RUN vLLM decode worker
+              #################
+              START_RANK=$(( ${LWS_WORKER_INDEX:-0} * DP_SIZE_LOCAL ))
+            
+              source /opt/vllm/bin/activate
+              exec vllm serve \
+                deepseek-ai/DeepSeek-R1-0528 \
+                --port 8200 \
+                --disable-log-requests \
+                --disable-uvicorn-access-log \
+                --enable-expert-parallel \
+                --data-parallel-hybrid-lb \
+                --tensor-parallel-size $TP_SIZE \
+                --data-parallel-size $((LWS_GROUP_SIZE * DP_SIZE_LOCAL)) \
+                --data-parallel-size-local $DP_SIZE_LOCAL \
+                --data-parallel-address ${LWS_LEADER_ADDRESS} \
+                --data-parallel-rpc-port 5555 \
+                --data-parallel-start-rank $START_RANK \
+                --trust-remote-code \
+                --kv_transfer_config '{"kv_connector":"NixlConnector","kv_role":"kv_both"}'
+          env:
+          - name: VLLM_FUSED_MOE_CHUNK_SIZE
+            value: "1024"
+          - name: DP_SIZE_LOCAL
+            value: "8"
+          - name: TRITON_LIBCUDA_PATH
+            value: /usr/lib64
+          - name: HF_HUB_DISABLE_XET
+            value: "1"
+          - name: VLLM_SKIP_P2P_CHECK
+            value: "1"
+          - name: VLLM_RANDOMIZE_DP_DUMMY_INPUTS
+            value: "1"
+          - name: VLLM_USE_DEEP_GEMM
+            value: "1"
+          - name: VLLM_ALL2ALL_BACKEND
+            value: deepep_low_latency
+            # Currently disabled as we don't mount /dev/gdrdrv into the container
+          - name: NVIDIA_GDRCOPY
+            value: disabled
+          - name: NVSHMEM_DEBUG
+            value: INFO
+          - name: NVSHMEM_REMOTE_TRANSPORT
+            value: ibgda
+          - name: NVSHMEM_IB_ENABLE_IBGDA
+            value: "true"
+          - name: NVSHMEM_BOOTSTRAP_UID_SOCK_IFNAME
+            value: eth0
+          - name: GLOO_SOCKET_IFNAME
+            value: eth0
+          - name: NCCL_SOCKET_IFNAME
+            value: eth0
+          - name: NCCL_IB_HCA
+            value: ibp
+          - name: VLLM_LOGGING_LEVEL
+            value: INFO
+          - name: HF_HUB_CACHE
+            value: /huggingface-cache
+          - name: VLLM_NIXL_SIDE_CHANNEL_HOST
+            valueFrom:
+              fieldRef:
+                fieldPath: status.podIP
+          - name: TP_SIZE
+            value: "1"
+          ports:
+          - containerPort: 8200
+            name: metrics
+            protocol: TCP
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8200
+          
+          resources:
+            limits:
+              ephemeral-storage: 64Gi
+              memory: 512Gi
+              nvidia.com/gpu: "8"
+            requests:
+              cpu: 32
+              ephemeral-storage: 64Gi
+              memory: 512Gi
+              nvidia.com/gpu: "8"
+          
+          volumeMounts:
+            - mountPath: /dev/shm
+              name: dshm
+            - mountPath: /huggingface-cache
+              name: hf-cache
+          workingDir: /code

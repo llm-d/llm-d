@@ -364,7 +364,7 @@ jobs:
           ssh -o StrictHostKeyChecking=no -i key.pem ubuntu@$INSTANCE_IP "GATEWAY_TYPE=$GATEWAY_TYPE bash -s" <<'EOF'
             set -euo pipefail
             set -x
-            cd llm-d/guides/gateway-provider
+            cd llm-d/guides/prereq/gateway-provider
             ./install-gateway-provider-dependencies.sh
             helmfile apply -f ${GATEWAY_TYPE}.helmfile.yaml
           EOF
@@ -462,8 +462,6 @@ jobs:
             helm list -n "${NAMESPACE}" || true
             echo ""
             echo "=== Wide-EP-specific resources ==="
-            echo "Inference Models:"
-            kubectl get inferencemodels -n "${NAMESPACE}" || true
             echo "Inference Pools:"
             kubectl get inferencepools -n "${NAMESPACE}" || true
             echo "HTTP Routes:"

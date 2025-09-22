@@ -1,0 +1,20 @@
+apiVersion: networking.istio.io/v1beta1
+kind: DestinationRule
+metadata:
+  name: wide-ep-inference-gateway
+spec:
+  host: deepseek-r1-epp.cluster.svc.local
+  trafficPolicy:
+    connectionPool:
+      http:
+        http1MaxPendingRequests: 256000
+        http2MaxRequests: 256000
+        idleTimeout: 900s
+        maxRequestsPerConnection: 256000
+      tcp:
+        connectTimeout: 900s
+        maxConnectionDuration: 1800s
+        maxConnections: 256000
+    tls:
+      insecureSkipVerify: true
+      mode: SIMPLE

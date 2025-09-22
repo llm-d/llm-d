@@ -64,7 +64,7 @@ The project should graduate from “incubation” to “core” after demonstrat
 
 ## Alternative: Manual Deployment
 
-Manual composition via raw Kubernetes resources:  One possible approach is for platform or model owners to hand-craft Deployments, Services, ConfigMaps, InferencePool, InferenceModel, HTTPRoute, and RBAC configurations. While this provides flexibility, it significantly increases complexity and error surface, especially for PD-disaggregated and multi-node inference deployments.
+Manual composition via raw Kubernetes resources:  One possible approach is for platform or model owners to hand-craft Deployments, Services, ConfigMaps, InferencePool, HTTPRoute, and RBAC configurations. While this provides flexibility, it significantly increases complexity and error surface, especially for PD-disaggregated and multi-node inference deployments.
 
 ## Alternative: Extending KServe
 

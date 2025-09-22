@@ -18,9 +18,6 @@ routing:
     connector: nixlv2
     secure: false
 
-  inferenceModel:
-    create: false
-
   inferencePool:
     create: false
     # name: gaie-sim # set in helmfile

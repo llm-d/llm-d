@@ -20,9 +20,6 @@ routing:
     connector: nixlv2
     secure: false
 
-  inferenceModel:
-    create: false
-
   inferencePool:
     create: false
     # name: gaie-inference-scheduling # set in helmfile

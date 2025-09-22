@@ -12,7 +12,7 @@ High Performance Distributed Inference on Kubernetes
  [![Documentation](https://img.shields.io/badge/Documentation-8A2BE2?logo=readthedocs&logoColor=white&color=1BC070)](https://www.llm-d.ai)
  [![Release Status](https://img.shields.io/badge/Version-0.2-yellow)](https://github.com/llm-d/llm-d/releases)
  [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](./LICENSE)
- [![Join Slack](https://img.shields.io/badge/Join_Slack-blue?logo=slack)](https://inviter.co/llm-d-slack)
+ [![Join Slack](https://img.shields.io/badge/Join_Slack-blue?logo=slack)](https://llm-d.ai/slack)
 
 Latest News 🔥
 - [2025-07] Release of our first three well-lit paths in [v0.2](https://llm-d.ai/blog/llm-d-v0.2-our-first-well-lit-paths): intelligent inference scheduling, simple disaggregated serving, and wide expert-parallelism.
@@ -93,9 +93,9 @@ See the [prerequisites for our guides](./guides/prereq/) for more details on sup
 
 `llm-d` provides Helm charts that deploy the [inference scheduler](https://github.com/llm-d-incubation/llm-d-infra/blob/main/charts/llm-d-infra/README.md#tldr) and a parameterized [deployment of vLLM](https://github.com/llm-d-incubation/llm-d-modelservice/blob/main/README.md#getting-started) that demonstrates [a number of different production configurations](https://github.com/llm-d-incubation/llm-d-modelservice/tree/main/examples).
 
-We bundle these with guides to our [well-lit paths](./guides/) with key decisions, tradeoffs, benchmarks, and recommended configuration.
+We bundle these with guides to our [well-lit paths](./guides/README.md) with key decisions, tradeoffs, benchmarks, and recommended configuration.
 
-We suggest the [inference scheduling](./guides/inference-scheduling/) well-lit path if you need a simple, production ready deployment of vLLM with optimized load balancing.
+We suggest the [inference scheduling](./guides/inference-scheduling/README.md) well-lit path if you need a simple, production ready deployment of vLLM with optimized load balancing.
 
 > [!TIP]
 > For a more in-depth introduction to llm-d, try our [step-by-step quickstart](./guides/QUICKSTART.md).
@@ -106,7 +106,7 @@ We suggest the [inference scheduling](./guides/inference-scheduling/) well-lit p
 
 ## 📦 Releases
 
-Our [guides](./guides) are living docs and kept current. For details about the Helm charts and component releases, visit our [GitHub Releases page](https://github.com/llm-d/llm-d/releases) to review release notes.
+Our [guides](./guides/README.md) are living docs and kept current. For details about the Helm charts and component releases, visit our [GitHub Releases page](https://github.com/llm-d/llm-d/releases) to review release notes.
 
 Check out our [roadmap for upcoming releases](https://github.com/llm-d/llm-d/issues/146).
 
@@ -115,7 +115,7 @@ Check out our [roadmap for upcoming releases](https://github.com/llm-d/llm-d/iss
 - See [our project overview](PROJECT.md) for more details on our development process and governance.
 - Review [our contributing guidelines](CONTRIBUTING.md) for detailed information on how to contribute to the project.
 - Join one of our [Special Interest Groups (SIGs)](SIGS.md) to contribute to specific areas of the project and collaborate with domain experts.
-- We use Slack to discuss development across organizations. Please join: [Slack](https://inviter.co/llm-d-slack)
+- We use Slack to discuss development across organizations. Please join: [Slack](https://llm-d.ai/slack)
 - We host a weekly standup for contributors on Wednesdays at 12:30 PM ET, as well as meetings for various SIGs. You can find them in the [shared llm-d calendar](https://red.ht/llm-d-public-calendar)
 - We use Google Groups to share architecture diagrams and other content. Please join: [Google Group](https://groups.google.com/g/llm-d-contributors)
 

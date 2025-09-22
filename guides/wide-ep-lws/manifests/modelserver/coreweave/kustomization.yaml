@@ -1,0 +1,35 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ../base
+patches:
+  - target:
+      kind: LeaderWorkerSet
+    patch: |-
+      # We add the volume for different providers since the hostPath can be different.
+      - op: add
+        path: /spec/leaderWorkerTemplate/workerTemplate/spec/volumes/-
+        value: 
+          name: hf-cache
+          hostPath:
+                path: /mnt/local/hf-cache
+                type: DirectoryOrCreate
+      # Add RMDA config.
+      - op: add
+        path: /spec/leaderWorkerTemplate/workerTemplate/spec/containers/0/resources/limits/rdma~1ib
+        value: "1"
+      - op: add
+        path: /spec/leaderWorkerTemplate/workerTemplate/spec/containers/0/resources/requests/rdma~1ib
+        value: "1"
+      # Add GPU affinity.
+      - op: add
+        path: /spec/leaderWorkerTemplate/workerTemplate/spec/affinity
+        value:
+          nodeAffinity:
+            requiredDuringSchedulingIgnoredDuringExecution:
+              nodeSelectorTerms:
+                - matchExpressions:
+                  - key: gpu.nvidia.com/model
+                    operator: In
+                    values:
+                      - H200

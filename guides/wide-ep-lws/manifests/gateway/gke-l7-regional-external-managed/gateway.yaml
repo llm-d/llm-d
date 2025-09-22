@@ -1,0 +1,6 @@
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: wide-ep-inference-gateway
+spec:
+  gatewayClassName: "gke-l7-regional-external-managed"

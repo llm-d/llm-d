@@ -1,0 +1,26 @@
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: deepseek-r1
+spec:
+  parentRefs:
+  - group: gateway.networking.k8s.io
+    kind: Gateway
+    name: wide-ep-inference-gateway
+  rules:
+    - backendRefs:
+      - group: inference.networking.x-k8s.io
+        kind: InferencePool
+        name: deepseek-r1
+        port: 8000
+        weight: 1
+      # Inference requests can take a very long time to finish.
+      # Explicitly setting to 0s to disable timeout on the HTTPRoute.
+      timeouts:
+        backendRequest: 0s
+        request: 0s
+      matches:
+      - path:
+          type: PathPrefix
+          value: /
+      
