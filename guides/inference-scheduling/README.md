@@ -39,6 +39,7 @@ To see specify your gateway choice you can use the `-e <gateway option>` flag, e
 helmfile apply -e kgateway -n ${NAMESPACE}
 ```
 
+
 For DigitalOcean Kubernetes Service (DOKS):
 
 ```bash
@@ -72,7 +73,6 @@ kubectl apply -f httproute.gke.yaml
 ```bash
 kubectl apply -f httproute.yaml
 ```
-
 ## Verify the Installation
 
 - Firstly, you should be able to list all helm releases to view the 3 charts got installed into your chosen namespace:
