@@ -157,7 +157,7 @@ helm uninstall infra-pd -n ${NAMESPACE}
 
 **_NOTE:_** If you set the `$RELEASE_NAME_POSTFIX` environment variable, your release names will be different from the command above: `infra-$RELEASE_NAME_POSTFIX`, `gaie-$RELEASE_NAME_POSTFIX` and `ms-$RELEASE_NAME_POSTFIX`.
 
-**_NOTE:_** You need to specify your `environment` with the `-e <environment>` flag to `helmfile` for removing a installation of the guide when using a non-default option. IE if you deploy with `-e istio` and undeploy `-e istioBench` or vice versa, it may fail. If you encounter this it is recomended to manually uninstall all 3 releases with `helm` as shown above.
+**_NOTE:_** You need to specify your `environment` with the `-e <environment>` flag to `helmfile` for removing a installation of the guide when using a non-default option. IE if you deploy with `-e istio` and undeploy `-e istioBench` or vice versa, it may fail. If you encounter this it is recommended to manually uninstall all 3 releases with `helm` as shown above.
 
 ### Cleanup HTTPRoute
 
