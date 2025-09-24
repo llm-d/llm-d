@@ -76,6 +76,19 @@ replicaset.apps/ms-kv-events-llm-d-modelservice-decode-b874d48d9    2         2 
 
 **_NOTE:_** This assumes no other guide deployments in your given `${NAMESPACE}` and you have not changed the default release names via the `${RELEASE_NAME}` environment variable.
 
+## Important: Warming Up KV Cache
+Before testing prefix cache scoring or inspecting pod_score, you must ensure that the KV cache has been populated with relevant blocks. This is done by sending a valid inference request that causes KV blocks to be stored.
+
+If the cache has not been warmed up, the pod_score will be null, even after multiple requests, as described in vLLM RFC [#16669](https://github.com/vllm-project/vllm/issues/16669).
+
+You can verify that cache events are being published correctly by inspecting the logs from the EPP (gaie-kv-events-epp) pod:
+
+```bash
+kubectl logs -l inferencepool=gaie-kv-events-epp -n ${NAMESPACE} --tail 500 | grep "BlockStored"
+```
+
+If you do not see BlockStored events, try sending a new, unique inference request with a long prompt to populate the cache.
+
 ## Testing this "well lit path"
 
 We have docs on getting started sending inference requests [available here](../../docs/getting-started-inferencing.md) that are general to all examples. However, this example has unique instructions to interact with it which will be provided here:
