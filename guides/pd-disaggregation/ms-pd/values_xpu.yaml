@@ -14,7 +14,6 @@ modelArtifacts:
   name: "deepseek-ai/DeepSeek-R1-Distill-Qwen-1.5B"
 
 routing:
-  enabled: false
   servicePort: 8000
   parentRefs:
     - group: gateway.networking.k8s.io
