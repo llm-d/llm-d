@@ -11,7 +11,7 @@ enable new distributed inference protocols.
 
 ## Motivation
 
-Generative AI inference serving for large language models (LLM) is complex at scale and the key techniques enabling that scale are broadly understood but sparsely implemented and yield high operational toil. 
+Generative AI inference serving for large language models (LLMs) is complex at scale, and the key techniques enabling that scale are broadly understood but sparsely implemented and yield high operational toil. 
 
 A significant fraction of accelerators that host LLM inference run atop Kubernetes and are managed by inference platform teams who lack a well-lit path to deploy, scale, and customize efficient serving. These teams also seek high capacity utilization of their general purpose models across multiple client workloads including chat, summarization, search, agents, and emerging multimodal applications, all of which exhibit high variance in cost, tolerance of latency, and operational priority.
 
@@ -21,7 +21,7 @@ The high cost of emerging prompt-heavy use cases means that many primary workloa
 
 llm-d is successful if it:
 
-* Provides well-lit paths for anyone to serve LLM at scale
+* Provides well-lit paths for anyone to serve LLMs at scale
 * Brings ML ecosystem expertise into production-ready components for high scale serving
 * Provides vLLM-native protocols for distributed inference across multiple accelerator families
 * Offers an extensible and flexible inference scheduler to balance traffic
@@ -48,7 +48,7 @@ The `llm-d` project will start with the [Kubernetes Inference Gateway project (I
 The three initial layers of the runtime infrastructure are:
 
 * Inference Scheduler - apply Kubernetes-native model routing, handle flow control, and orchestrate disaggregation
-* vLLM - support point to point disaggregated serving as a native protocol over multiple hardware architectures
+* vLLM - support point-to-point disaggregated serving as a native protocol over multiple hardware architectures
 * Remote Prefix Cache - separate the operational scaling of replicas from the achievable hit rate
 
 The project will measure success against:
@@ -61,9 +61,9 @@ The key design choices in `llm-d` are:
 
 1. Assume multiple workloads are consuming a shared model server pool and standardize those workload APIs via Kubernetes
 2. Leverage scheduler-directed RPC for disaggregated serving to allow latency and throughput to be traded off dynamically
-3. Strongly separate in-memory and scheduler-directed prefix-caching per replica from durable disaggregated prefix caching to prevent replicas from becoming stateful and to support key sets larger than replica working memory
-4. Use NIXL to abstract high performance point to point KV-cache transfer without a metadata sidechannel
-5. Adapt to existing user deployment patterns and infrastructure vs creating a single monolithic solution
+3. Strongly separate in-memory and scheduler-directed prefix caching per replica from durable disaggregated prefix caching to prevent replicas from becoming stateful and to support key sets larger than replica working memory
+4. Use NIXL to abstract high-performance point-to-point KV-cache transfer without a metadata side channel
+5. Adapt to existing user deployment patterns and infrastructure vs. creating a single monolithic solution
 6. Integrate APIs and core capabilities into upstreams to enforce modularity
 7. Support multiple accelerator hardware architectures with a single set of abstractions, including multiple GPU vendors and systolic architectures like Google TPUs
 
@@ -71,7 +71,7 @@ The key design choices in `llm-d` are:
 
 #### Story 1
 
-As an inference platform team, I can rapidly deploy a shared-nothing serving stack for most LLMs that can be scaled up with prefix caching on both HBM and host memory, fast prefix-cache aware routing, and independently scalable (often called `xPyD`) disaggregated serving. The stack has clear operational metrics and I can measure a significant throughput improvement over round-robin load balancing. The operational and reliability aspects of my stack varies across accelerator hardware only on characteristics tied to the intrinsic hardware, host, and networking configuration.
+As an inference platform team, I can rapidly deploy a shared-nothing serving stack for most LLMs that can be scaled up with prefix caching on both HBM and host memory, fast prefix-cache-aware routing, and independently scalable (often called `xPyD`) disaggregated serving. The stack has clear operational metrics and I can measure a significant throughput improvement over round-robin load balancing. The operational and reliability aspects of my stack vary across accelerator hardware only on characteristics tied to the intrinsic hardware, host, and networking configuration.
 
 #### Story 2
 
@@ -83,7 +83,7 @@ As an inference platform team, I can autoscale disaggregated serving roles, diff
 
 ## Design Details
 
-The [unified architecture diagram](https://docs.google.com/drawings/d/1PNGNsicSFiFJjSBThgg6zhxAQMdJp9LqqExQ-8lmmUY/edit) below shows all of the key components of the system, as well as the basic flow of for request flow.
+The [unified architecture diagram](https://docs.google.com/drawings/d/1PNGNsicSFiFJjSBThgg6zhxAQMdJp9LqqExQ-8lmmUY/edit) below shows all of the key components of the system, as well as the basic flow for request flow.
 
 ![Architecture diagram](../assets/images/llm-d-arch-initial-large.svg)
 
@@ -100,15 +100,15 @@ llm-d streamlines deployment and integration of the following components:
 
 1. An **inference scheduler** directing traffic to model servers
     1. Integrates with the Kubernetes [inference gateway API project](https://gateway-api-inference-extension.sigs.k8s.io/) to have Kubernetes control plane API
-    2. Performing model routing and rollout, flow control, kv- and prefix- cache aware load balancing
+    2. Performs model routing and rollout, flow control, KV- and prefix-cache-aware load balancing
     3. Balances traffic to the optimal model server based on the request, workload type, and current load
 2. **vLLM model servers** deployed onto Kubernetes
-    1. In single host or multi-host (using [LeaderWorkerSets](https://lws.sigs.k8s.io/) and [Ray](https://docs.vllm.ai/en/latest/serving/distributed_serving.html#running-vllm-on-multiple-nodes) as best practice) configurations
+    1. In single-host or multi-host (using [LeaderWorkerSets](https://lws.sigs.k8s.io/) and [Ray](https://docs.vllm.ai/en/latest/serving/distributed_serving.html#running-vllm-on-multiple-nodes) as best practice) configurations
     2. With native support for disaggregated serving and optional curated plugins for advanced features
-    3. Using project recommended defaults or highly customized user settings
+    3. Using project-recommended defaults or highly customized user settings
     4. May be deployed in multiple deployment **variants** (hardware, software, topology) that offer different performance tradeoffs
     5. Can be rapidly repurposed as load shifts and started/restarted to reduce wasted capacity
-    6. Can dynamically load new LoRA adapters or even new models with low configuration / coordination
+    6. Can dynamically load new LoRA adapters or even new models with low configuration/coordination
 3. vLLM default prefix caching and zero or more **prefix cache integrations**
     1. At least one remote prefix cache option
     2. At least one prefix cache option using the local SSD drives for each replica efficiently
@@ -123,34 +123,34 @@ llm-d intends to drive the following APIs in our upstreams:
 
 1. vLLM public workload APIs to support inference scheduler-driven disaggregated serving
 2. vLLM management APIs to support rapid reconfiguration of vLLM where appropriate
-2. vLLM internal APIs to support point-to-point disaggregated serving, remote prefix cache, and testing
-3. Kubernetes Gateway APIs to support static or dynamic tuning of disaggregation
-4. Kubernetes Gateway APIs to enable latency or throughput optimization and autoscaling
-5. vLLM/[LMCache](https://lmcache.ai) remote prefix cache APIs that are interoperable across implementations
+3. vLLM internal APIs to support point-to-point disaggregated serving, remote prefix cache, and testing
+4. Kubernetes Gateway APIs to support static or dynamic tuning of disaggregation
+5. Kubernetes Gateway APIs to enable latency or throughput optimization and autoscaling
+6. vLLM/[LMCache](https://lmcache.ai) remote prefix cache APIs that are interoperable across implementations
 
 llm-d may incubate new Kubernetes APIs via custom resources or new vLLM APIs, but our primary path is to land APIs upstream.
 
 ### Dependencies
 
-llm-d intends to use [NIXL](https://github.com/ai-dynamo/nixl) to optimize GPU originating and terminating transfers. A follow-on proposal will identify gaps across accelerators and in host to host scenarios and recommend a solution.
+llm-d intends to use [NIXL](https://github.com/ai-dynamo/nixl) to optimize GPU-originating and GPU-terminating transfers. A follow-on proposal will identify gaps across accelerators and in host-to-host scenarios and recommend a solution.
 
 ## Alternatives
 
 ### Use NVIDIA Dynamo
 
-NVIDIA Dynamo offers an excellent integrated stack for low-latency and high scale serving. llm-d intends to work closely with the Dynamo team on integrating components of Dynamo into the operational framework of Kubernetes. We are prioritizing the inference scheduler as the key component to enhance Dynamo.
+NVIDIA Dynamo offers an excellent integrated stack for low-latency and high-scale serving. llm-d intends to work closely with the Dynamo team on integrating components of Dynamo into the operational framework of Kubernetes. We are prioritizing the inference scheduler as the key component to enhance Dynamo.
 
 Unlike Dynamo, llm-d:
-* Prefers to make the prefill/decode disaggregation decision within the scheduler to more precisely control placement and latency vs throughput tradeoffs
+* Prefers to make the prefill/decode disaggregation decision within the scheduler to more precisely control placement and latency vs. throughput tradeoffs
 * Uses RPC for disaggregation rather than an [async queue in the Distributed Runtime](https://docs.nvidia.com/dynamo/latest/architecture/distributed_runtime.html) to provide stronger cancellation semantics
-* Prioritizes a strong operational boundary between in-memory prefix cache tiers and local or remote storage tiers rather than a unified memory API like the[KV Block Manager](https://docs.nvidia.com/dynamo/latest/architecture/kvbm_intro.html)
+* Prioritizes a strong operational boundary between in-memory prefix cache tiers and local or remote storage tiers rather than a unified memory API like the [KV Block Manager](https://docs.nvidia.com/dynamo/latest/architecture/kvbm_intro.html)
 
 ### Use AIBrix
 
-AIBrix provides a strong research-focused and fast iterating integrated serving platform. llm-d intends to work closely with the AIBrix team to leverage their experience in autoscaling and serving to standardize components and best practices.
+AIBrix provides a strong research-focused and fast-iterating integrated serving platform. llm-d intends to work closely with the AIBrix team to leverage their experience in autoscaling and serving to standardize components and best practices.
 
 Unlike AIBrix, llm-d:
-* Prefers to adapt serving to existing user infrastructure vs providing an opinionated serving platform
+* Prefers to adapt serving to existing user infrastructure vs. providing an opinionated serving platform
 * Prioritizes standardizing Kubernetes upstream APIs in the Gateway ecosystem to drive alignment across many deployments
 
 ### Use Production Stack
@@ -158,11 +158,11 @@ Unlike AIBrix, llm-d:
 production-stack is the easiest way to deploy vLLM on Kubernetes. llm-d intends to work closely with the production-stack team to find common components and patterns to integrate, especially around prefix cache configuration.
 
 Unlike production-stack, llm-d:
-* Is focused on the needs of large scale production serving and expects users to have significant opinions about the rest of the infrastructure.
+* Is focused on the needs of large-scale production serving and expects users to have significant opinions about the rest of the infrastructure
 
 ### Use KServe
 
-KServe offers a comprehensive platform for teams in running large numbers of traditional and generative models on Kubernetes. Consider KServe when you have high numbers of model deployments or if you have many teams that need distinct deployments of models. llm-d intends to expose [large model optimizations into KServe](https://docs.google.com/document/d/11ZQJ2VhTc42S9K4yau2dMs3Q3f4jqWJL_7Sq14C3hzY/edit?usp=sharing).
+KServe offers a comprehensive platform for teams running large numbers of traditional and generative models on Kubernetes. Consider KServe when you have high numbers of model deployments or if you have many teams that need distinct deployments of models. llm-d intends to expose [large model optimizations into KServe](https://docs.google.com/document/d/11ZQJ2VhTc42S9K4yau2dMs3Q3f4jqWJL_7Sq14C3hzY/edit?usp=sharing).
 
 Unlike KServe, llm-d:
 * Is focused on reducing the operational friction for serving single workloads and enabling large-model-as-a-service offerings with core capabilities rather than offering an integrated and broad platform
