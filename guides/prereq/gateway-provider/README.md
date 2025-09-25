@@ -22,7 +22,7 @@ We have provided the [`install-gateway-provider-dependencies.sh`](./install-gate
 To remove the created dependencies: 
 
 ```bash
-./install-gateway-provider-dependencies.sh delete`
+./install-gateway-provider-dependencies.sh delete
 ```
 
 You may specify any valid git source control reference for versions as `GATEWAY_API_CRD_REVISION` and `GATEWAY_API_INFERENCE_EXTENSION_CRD_REVISION`:
