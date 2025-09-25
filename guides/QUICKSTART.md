@@ -8,12 +8,12 @@ This quick start will walk you through the steps to install and deploy llm-d on 
 
 ### Run with sufficient permissions to deploy
 
-Before running any deployment, ensure you have have sufficient permissions to deploy new custom resource definitions (CRDs), alter roles. Our guides are written for cluster administrators, especially for the prerequisites. Once prerequisites are configured, deploying model servers and new InferencePools typically requires only namespace editor permissions.
+Before running any deployment, ensure you have sufficient permissions to deploy new custom resource definitions (CRDs) and alter roles. Our guides are written for cluster administrators, especially for the prerequisites. Once prerequisites are configured, deploying model servers and new InferencePools typically requires only namespace editor permissions.
 
 > [!IMPORTANT]
 > llm-d recommends separating infrastructure configuration -- like the inference gateway -- from workload deployment. Inference platform administrators are responsible for managing the cluster and dependencies while inference workload owners deploy and manage the lifecycle of the self-hosted model servers.
 >
-> The separation between these roles depends on the number of workloads present in your environment. A single production workload might see the same team managing all the software. A large Internal Model as a Service deployment the platform team might manage shared inference gateways and allow individual workload teams to directly manage the configuration and deployment of large model servers. See [the Inference Gateway docs](https://gateway-api-inference-extension.sigs.k8s.io/concepts/roles-and-personas/) for more examples of the role archetypes.
+> The separation between these roles depends on the number of workloads present in your environment. A single production workload might see the same team managing all the software. In a large Internal Model as a Service deployment, the platform team might manage shared inference gateways and allow individual workload teams to directly manage the configuration and deployment of large model servers. See [the Inference Gateway docs](https://gateway-api-inference-extension.sigs.k8s.io/concepts/roles-and-personas/) for more examples of the role archetypes.
 
 ### Tool Dependencies
 
@@ -41,7 +41,6 @@ llm-d integrates with the [Kubernetes Gateway API](https://gateway-api.sigs.k8s.
 
 You must select an [appropriate Gateway implementation for your infrastructure and deploy the Gateway control plane and its prerequisite CRDs](./prereq/gateway-provider/README.md).
 
-
 > [!IMPORTANT]
 > We recommend selecting a Gateway implementation provided by your infrastructure, if available. If not, we test and verify our guides with both [kgateway](https://kgateway.dev/docs/main/quickstart/) and [istio](https://istio.io/latest/docs/setup/getting-started/).
 
@@ -50,7 +49,7 @@ You must select an [appropriate Gateway implementation for your infrastructure a
 Select an appropriate guide from the list in the [README.md](./README.md).
 
 > [!IMPORTANT]
-> We recommend starting with the [inference scheduling](./inference-scheduling/README.md) well-lit path if you are looking to deploy vLLM in a recommended production serving configuration. Use of an intelligent load balancer is broadly applicable to all environments and streamlines the gathering the most critical operational metrics.
+> We recommend starting with the [inference scheduling](./inference-scheduling/README.md) well-lit path if you are looking to deploy vLLM in a recommended production serving configuration. Use of an intelligent load balancer is broadly applicable to all environments and streamlines gathering the most critical operational metrics.
 
 Navigate to the desired guide directory and follow its README instructions. For example:
 
@@ -63,7 +62,7 @@ When you complete the deployment successfully, return here.
 
 ### Validation
 
-You should be able to list all Helm releases to view the charts installed installed by the guide:
+You should be able to list all Helm releases to view the charts installed by the guide:
 
 ```bash
 helm list -n ${NAMESPACE}
