@@ -30,6 +30,11 @@ inferenceExtension:
         secretKeyRef:
           name: llm-d-hf-token
           key: HF_TOKEN
+  flags:
+    # Log verbosity
+    - name: v
+      value: 4
+  
   pluginsConfigFile: "prefix-cache-tracking-config.yaml"
   pluginsCustomConfig: # THIS CONFIG NEEDS TO BE CHECKED FOR INF SCHEDULER NEW IMAGE, ALMOST CERTAIN THERE IS A NEW API HERE
     prefix-cache-tracking-config.yaml: |
