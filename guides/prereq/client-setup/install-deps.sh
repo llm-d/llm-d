@@ -174,12 +174,7 @@ fi
 ########################################
 if ! command -v helmfile &> /dev/null; then
   echo "📦 helmfile not found. Installing ${HELMFILE_VERSION}..."
-  if [[ "$OS" == "darwin" && "$ARCH" == "arm64" ]]; then
-    ARCHIVE="helmfile_${HELMFILE_VERSION}_darwin_arm64.tar.gz"
-  else
-    ARCHIVE="helmfile_${HELMFILE_VERSION}_${OS}_${ARCH}.tar.gz"
-  fi
-
+  ARCHIVE="helmfile_${HELMFILE_VERSION}_${OS}_${ARCH}.tar.gz"
   URL="https://github.com/helmfile/helmfile/releases/download/v${HELMFILE_VERSION}/${ARCHIVE}"
   curl -sSL -o "/tmp/helmfile.tar.gz" "$URL"
   tar -xzf /tmp/helmfile.tar.gz -C /tmp
