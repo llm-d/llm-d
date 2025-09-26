@@ -2,13 +2,13 @@ name: Dev LLM-D Image Build
 
 on:
   push:
-    branches: [ main, dev ]
+    branches: [ main ]
     paths:
       - .github/workflows/build-image.yml
       - docker/**
       - patches/**
   pull_request:
-    branches: [ main, dev ]
+    branches: [ main ]
     paths:
       - .github/workflows/build-image.yml
       - docker/**

@@ -1,11 +1,11 @@
-name: Release LLM-D Image Build
+name: Release LLM-D Images
 
 on:
   push:
     tags:
-      - 'v*'  # Runs when a tag like v0.1.0 is pushed
+      - 'v*'
   release:
-    types: [published]  # Also runs when a GitHub release is published
+    types: [published]
 
 permissions:
   contents: read
@@ -15,13 +15,95 @@ permissions:
 env:
   REGISTRY: ghcr.io
   IMAGE_NAME: llm-d
+  TAG: ${{ github.event.release.tag_name != '' && github.event.release.tag_name || github.ref_name }}
 
 jobs:
-  build-llm-d-for-release:
+  release-cuda-llm-d:
     strategy:
       fail-fast: false
     runs-on: vllm-runner
-    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.TAG }}
+          fetch-depth: 0
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+        with:
+          buildkitd-flags: --oci-worker-gc
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GHCR_TOKEN }}
+
+      - name: Extract Docker metadata (tags/labels)
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ github.repository }}-cuda
+          tags: |
+            type=ref,event=tag
+            type=raw,value=${{ github.event.release.tag_name }},enable=${{ github.event_name == 'release' && github.event.action == 'published' }}
+            type=semver,pattern={{version}},value=${{ github.event.release.tag_name }},enable=${{ github.event_name == 'release' && github.event.action == 'published' }}
+            type=semver,pattern={{major}}.{{minor}},value=${{ github.event.release.tag_name }},enable=${{ github.event_name == 'release' && github.event.action == 'published' }}
+            type=semver,pattern={{major}},value=${{ github.event.release.tag_name }},enable=${{ github.event_name == 'release' && github.event.action == 'published' }}
+            type=raw,value=latest,enable=${{ github.event_name == 'release' && github.event.action == 'published' }}
+
+      - name: Build & Push image
+        id: build-and-push
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./docker/Dockerfile.cuda
+          platforms: linux/amd64
+          push: true
+          provenance: true
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          github-token: ${{ secrets.GHCR_TOKEN }}
+          secrets: |
+            aws_access_key_id=${{ secrets.AWS_ACCESS_KEY_ID_S3_BUCKET_ONLY }}
+            aws_secret_access_key=${{ secrets.AWS_SECRET_ACCESS_KEY_S3_BUCKET_ONLY }}
+
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: ${{ env.REGISTRY }}/${{ github.repository }}-cuda@${{ steps.build-and-push.outputs.digest }}
+          format: 'sarif'
+          output: 'trivy-results.sarif'
+          severity: 'CRITICAL,HIGH,MEDIUM'
+          scanners: vuln
+          timeout: 30m
+          skip-dirs: /root/.cache/uv
+        env:
+          TRIVY_USERNAME: ${{ github.actor }}
+          TRIVY_PASSWORD: ${{ secrets.GHCR_TOKEN }}
+
+      - name: Upload Trivy scan results to GitHub Security tab
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: 'trivy-results.sarif'
+
+      - name: Display vulnerability summary
+        run: |
+          echo "=== Vulnerability Scan Summary ==="
+          if [ -f trivy-results.sarif ]; then
+            echo "Scan completed. Check the Security tab for detailed results."
+          else
+            echo "No vulnerabilities found or scan failed."
+          fi
+  
+  release-xpu-llm-d:
+    strategy:
+      fail-fast: false
+    runs-on: vllm-runner
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -41,41 +123,23 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GHCR_TOKEN }}
 
-      - name: Extract Docker metadata (tags/labels)
-        id: meta
-        uses: docker/metadata-action@v5
-        with:
-          images: ${{ env.REGISTRY }}/${{ github.repository }}
-          tags: |
-            type=ref,event=tag
-            type=raw,value=latest,enable=${{ github.event_name == 'release' && github.event.action == 'published' }}
-          # Do we want to add semver as well?
-            # type=semver,pattern={{version}}
-            # type=semver,pattern={{major}}.{{minor}}
-            # type=semver,pattern={{major}}
-
-      - name: Build & Push image
+      - name: Build and push the image
         id: build-and-push
-        uses: docker/build-push-action@v5
-        with:
-          context: .
-          file: ./Dockerfile.ubi
-          platforms: linux/amd64
-          push: true
-          provenance: true
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
-          github-token: ${{ secrets.GHCR_TOKEN }}
+        run: |
+          export DEVICE=xpu
+          export BUILD_TYPE=prod
+          export DOCKERFILE=Dockerfile.xpu
+          export VERSION="${{ env.TAG }}"
+          make image-build
+          make image-push
 
       - name: Run Trivy vulnerability scanner
         uses: aquasecurity/trivy-action@master
         with:
-          image-ref: ${{ env.REGISTRY }}/${{ github.repository }}@${{ steps.build-and-push.outputs.digest }}
-          format: sarif
-          output: trivy-results.sarif
-          severity: CRITICAL,HIGH,MEDIUM
+          image-ref: ${{ env.REGISTRY }}/${{ github.repository }}-xpu@${{ env.TAG }}
+          format: 'sarif'
+          output: 'trivy-results.sarif'
+          severity: 'CRITICAL,HIGH,MEDIUM'
           scanners: vuln
           timeout: 30m
           skip-dirs: /root/.cache/uv
@@ -86,7 +150,7 @@ jobs:
       - name: Upload Trivy scan results to GitHub Security tab
         uses: github/codeql-action/upload-sarif@v3
         with:
-          sarif_file: trivy-results.sarif
+          sarif_file: 'trivy-results.sarif'
 
       - name: Display vulnerability summary
         run: |
