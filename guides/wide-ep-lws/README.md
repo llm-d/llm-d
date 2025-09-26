@@ -96,17 +96,7 @@ You can also customize your gateway, for more information on how to do that see 
 
 ## Tuning Selective PD
 
-Selective PD is a feature in the `inference-scheduler` within the context of prefill-decode dissagregation, although it is disabled by default. To enable it, you will need to set `threshold` value for the `pd-profile-handler` plugin, in the [GAIE values file](./inferencepool.values.yaml). You can see the value of this here:
-
-```bash
-cat inferencepool.values.yaml | yq '.inferenceExtension.pluginsCustomConfig."custom-plugins.yaml"' | yq '.plugins[] | select(.type == "pd-profile-handler")'
-type: pd-profile-handler
-parameters:
-  threshold: 0 # update this
-  hashBlockSize: 5
-```
-
-For information on this plugin, see our [`pd-profile-handler` docs in the inference-scheduler](https://github.com/llm-d/llm-d-inference-scheduler/blob/v0.3.0/docs/architecture.md?plain=1#L205-L210)
+As with PD, the `wide-ep-lws` guide supports selective PD. For information on this refer to [this section of the PD docs](../pd-disaggregation/README.md#tuning-selective-pd).
 
 ## Verifying the installation
 
