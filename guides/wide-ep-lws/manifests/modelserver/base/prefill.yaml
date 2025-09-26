@@ -71,8 +71,6 @@ spec:
             value: "1"
           - name: VLLM_ALL2ALL_BACKEND
             value: deepep_high_throughput
-          # - name: VLLM_ALL2ALL_BACKEND
-          #   value: naive
           - name: NVIDIA_GDRCOPY
             value: enabled
           - name: NVSHMEM_DEBUG

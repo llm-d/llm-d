@@ -90,8 +90,6 @@ spec:
             value: "1"
           - name: VLLM_ALL2ALL_BACKEND
             value: deepep_low_latency
-          # - name: VLLM_ALL2ALL_BACKEND
-          #   value: pplx
           - name: NVIDIA_GDRCOPY
             value: enabled
           - name: NVSHMEM_DEBUG
