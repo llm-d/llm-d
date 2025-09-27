@@ -9,7 +9,7 @@ metadata:
 spec:
   replicas: 1
   leaderWorkerTemplate:
-    size: 2
+    size: 1
     workerTemplate:
       metadata:
         labels:
@@ -42,7 +42,11 @@ spec:
               sizeLimit: 2Gi # 2Gi for NCCL 2.27 to be safe
         containers:
         - name: vllm-worker
+<<<<<<< HEAD
           image: ghcr.io/llm-d/llm-d-dev:pr-245@sha256:06ba310cd557b7762c391ac11fe0bf20307851769bcf42973608ddcc3b4b47cf
+=======
+          image: ghcr.io/llm-d/llm-d-dev:pr-230@sha256:4e3415aa78693a50f792dffb5f28e9a107331226f90911c7a4449ab60447cf1f
+>>>>>>> f24a4f8 (testing new deepep verison)
           securityContext:
             capabilities:
               add:
