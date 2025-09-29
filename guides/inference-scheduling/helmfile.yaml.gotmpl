@@ -41,10 +41,8 @@ releases:
       type: infrastructure
       kind: inference-stack
     values:
-    {{- if or (eq .Environment.Name "gke") (eq .Environment.Name "gke_tpu") }}
       - gateway: 
           {{ .Environment.Values.gateway | toYaml | nindent 10 }}
-    {{- end }}
 
   - name: {{ printf "gaie-%s" $rn | quote }}
     namespace: {{ $ns }}

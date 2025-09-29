@@ -36,10 +36,8 @@ releases:
       type: infrastructure
       kind: inference-stack
     values:
-    {{- if (eq .Environment.Name "gke") }}
       - gateway: 
           {{ .Environment.Values.gateway | toYaml | nindent 10 }}
-    {{- end }}
 
   - name: {{ printf "gaie-%s" $rn | quote }}
     namespace: {{ $ns }}
