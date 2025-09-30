@@ -53,6 +53,8 @@ jobs:
     if: ${{ needs.detect-changes.outputs.cuda == 'true' }}
     strategy:
       fail-fast: false
+      matrix:
+        debug: [0, 1]
     runs-on: vllm-runner
     steps:
       - name: Checkout code
@@ -76,10 +78,10 @@ jobs:
         with:
           images: ${{ env.REGISTRY }}/${{ github.repository }}-cuda-dev
           tags: |
-            type=ref,event=branch
-            type=ref,event=pr
-            type=sha
-            type=raw,value=latest,enable={{is_default_branch}}
+            type=ref,event=branch,suffix=${{ matrix.debug == 1 && '-debug' || '' }}
+            type=ref,event=pr,suffix=${{ matrix.debug == 1 && '-debug' || '' }}
+            type=sha,suffix=${{ matrix.debug == 1 && '-debug' || '' }}
+            type=raw,value=latest${{ matrix.debug == 1 && '-debug' || '' }},enable={{is_default_branch}}
 
       - name: Build & Push (official action)
         id: build-and-push
@@ -92,6 +94,8 @@ jobs:
           provenance: true
           cache-from: type=gha
           cache-to: type=gha,mode=max
+          build-args: |
+            DEBUG=${{ matrix.debug }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           github-token: ${{ secrets.GHCR_TOKEN }}
@@ -293,6 +297,8 @@ jobs:
     if: ${{ needs.detect-changes.outputs.xpu == 'true' }}
     strategy:
       fail-fast: false
+      matrix:
+        debug: [0, 1]
     runs-on: vllm-runner
     steps:
       - name: Checkout push ref
@@ -317,15 +323,20 @@ jobs:
         run: |
           TAG=$(git rev-parse --short HEAD)
           PR_TAG=${{ github.event.pull_request.number }}
+          DEBUG_SUFFIX=""
+          if [ "${{ matrix.debug }}" = "1" ]; then
+            DEBUG_SUFFIX="-debug"
+          fi
           export DEVICE=xpu
           export DOCKERFILE=Dockerfile.xpu
-          export VERSION="${TAG}"
+          export VERSION="${TAG}${DEBUG_SUFFIX}"
+          export BUILD_ARGS="--build-arg DEBUG=${{ matrix.debug }}"
           make image-build
-          echo "tag=${TAG}" >> $GITHUB_OUTPUT
+          echo "tag=${TAG}${DEBUG_SUFFIX}" >> $GITHUB_OUTPUT
           if [ -n ${PR_TAG} ]; then
-            export NEW_TAG="${PR_TAG}"
+            export NEW_TAG="${PR_TAG}${DEBUG_SUFFIX}"
             make image-retag
-            echo "pr_tag=${PR_TAG}"  >> $GITHUB_OUTPUT
+            echo "pr_tag=${PR_TAG}${DEBUG_SUFFIX}"  >> $GITHUB_OUTPUT
           fi;
 
       - name: Run Trivy vulnerability scanner

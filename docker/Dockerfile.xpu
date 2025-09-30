@@ -9,6 +9,9 @@ ARG ONEAPI_VERSION=2025.1.3-0
 ARG PYTHON_VERSION
 ARG VLLM_VERSION=v0.11.0
 
+# Debug build argument - set to 1 to enable debug symbols and logging
+ARG DEBUG=0
+
 WORKDIR /workspace
 
 ENV LANG=C.UTF-8 \
@@ -112,6 +115,11 @@ RUN --mount=type=cache,target=/var/cache/git \
     source ${VIRTUAL_ENV}/bin/activate && \
     pip install -v -r requirements/xpu.txt && \
     export VLLM_TARGET_DEVICE=xpu && \
+    if [ "${DEBUG}" = "1" ]; then \
+        export CFLAGS="-g -O0"; \
+        export CXXFLAGS="-g -O0"; \
+        export CMAKE_BUILD_TYPE="Debug"; \
+    fi && \
     python setup.py install && \
     cd /workspace && rm -rf vllm
 
@@ -121,6 +129,9 @@ RUN --mount=type=cache,target=/var/cache/git \
 FROM intel/deep-learning-essentials:${ONEAPI_VERSION}-devel-rockylinux9 AS runtime
 
 ARG PYTHON_VERSION
+
+# Debug build argument - set to 1 to enable debug symbols and logging
+ARG DEBUG=0
 
 ENV LANG=C.UTF-8 \
     LC_ALL=C.UTF-8 \
@@ -180,6 +191,14 @@ ENV PATH="${VIRTUAL_ENV}/bin:${PATH}" \
     VLLM_WORKER_MULTIPROC_METHOD=spawn \
     VLLM_TARGET_DEVICE=xpu
 
+# Enable debug logging if DEBUG=1
+RUN if [ "${DEBUG}" = "1" ]; then \
+        echo "export SYCL_PI_LEVEL_ZERO_USE_IMMEDIATE_COMMANDLISTS=0" >> /etc/profile.d/debug.sh && \
+        echo "export SYCL_PI_TRACE=2" >> /etc/profile.d/debug.sh && \
+        echo "export ZE_ENABLE_VALIDATION_LAYER=1" >> /etc/profile.d/debug.sh && \
+        echo "export TORCH_DISTRIBUTED_DEBUG=DETAIL" >> /etc/profile.d/debug.sh && \
+        echo "Debug build: Intel XPU debugging enabled" > /DEBUG_BUILD; \
+    fi
 
 # USER 2000
 # WORKDIR /home/vllm

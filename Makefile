@@ -31,6 +31,7 @@ IMG := $(IMAGE_BASE):$(VERSION)
 CONTAINER_TOOL := $(shell (command -v docker >/dev/null 2>&1 && echo docker) || (command -v podman >/dev/null 2>&1 && echo podman) || echo "")
 BUILDER := $(shell command -v buildah >/dev/null 2>&1 && echo buildah || echo $(CONTAINER_TOOL))
 PLATFORMS ?= linux/amd64 # linux/arm64 # linux/s390x,linux/ppc64le
+BUILD_ARGS ?= # Optional build arguments like --build-arg DEBUG=1
 
 .PHONY: help
 help: ## Print help
@@ -41,6 +42,9 @@ help: ## Print help
 	@printf "  \033[36mmake image-push DEVICE=xpu\033[0m                     # Push Intel XPU Docker image\n"
 	@printf "  \033[36mmake image-retag DEVICE=xpu NEW_TAG=test\033[0m                     # Re-Tag Intel XPU Docker image\n"
 	@printf "  \033[36mmake env DEVICE=xpu\033[0m                            # Show XPU environment variables\n"
+	@printf "\n\033[1mDebug Build Examples:\033[0m\n"
+	@printf "  \033[36mmake image-build BUILD_ARGS='--build-arg DEBUG=1'\033[0m                    # Build with debug symbols\n"
+	@printf "  \033[36mmake image-build DEVICE=xpu BUILD_ARGS='--build-arg DEBUG=1'\033[0m         # Build XPU debug variant\n"
 
 ##@ Development
 
@@ -75,7 +79,7 @@ buildah-build: check-builder ## Build and push image (multi-arch if supported)
 	  for arch in amd64; do \
 		ARCH_TAG=$$FINAL_TAG-$$arch; \
 	    echo "📦 Building for architecture: $$arch"; \
-		buildah build --file $(DOCKERFILE_DIR)/$(DOCKERFILE) --arch=$$arch --os=linux --layers -t $(IMG)-$$arch . || exit 1; \
+		buildah build --file $(DOCKERFILE_DIR)/$(DOCKERFILE) --arch=$$arch --os=linux --layers $(BUILD_ARGS) -t $(IMG)-$$arch . || exit 1; \
 	    echo "🚀 Pushing image: $(IMG)-$$arch"; \
 	    buildah push $(IMG)-$$arch docker://$(IMG)-$$arch || exit 1; \
 	  done; \
@@ -93,12 +97,12 @@ buildah-build: check-builder ## Build and push image (multi-arch if supported)
 	  sed -e '1 s/\(^FROM\)/FROM --platform=$${BUILDPLATFORM}/' $(DOCKERFILE_DIR)/$(DOCKERFILE) >$(DOCKERFILE_DIR)/Dockerfile.cross; \
 	  - docker buildx create --use --name image-builder || true; \
 	  docker buildx use image-builder; \
-	  docker buildx build --push --platform=$(PLATFORMS) --tag $(IMG) -f $(DOCKERFILE_DIR)/Dockerfile.cross . || exit 1; \
+	  docker buildx build --push --platform=$(PLATFORMS) $(BUILD_ARGS) --tag $(IMG) -f $(DOCKERFILE_DIR)/Dockerfile.cross . || exit 1; \
 	  docker buildx rm image-builder || true; \
 	  rm $(DOCKERFILE_DIR)/Dockerfile.cross; \
 	elif [ "$(BUILDER)" = "podman" ]; then \
 	  echo "⚠️ Podman detected: Building single-arch image..."; \
-	  podman build --format=docker -f $(DOCKERFILE_DIR)/$(DOCKERFILE) -t $(IMG) . || exit 1; \
+	  podman build --format=docker -f $(DOCKERFILE_DIR)/$(DOCKERFILE) $(BUILD_ARGS) -t $(IMG) . || exit 1; \
 	  podman push $(IMG) || exit 1; \
 	else \
 	  echo "❌ No supported container tool available."; \
@@ -108,7 +112,7 @@ buildah-build: check-builder ## Build and push image (multi-arch if supported)
 .PHONY:	image-build
 image-build: check-container-tool ## Build Docker image using $(CONTAINER_TOOL)
 	@printf "\033[33;1m==== Building Docker image $(IMG) ====\033[0m\n"
-	$(CONTAINER_TOOL) build --progress=plain --platform $(PLATFORMS) -t $(IMG) -f $(DOCKERFILE_DIR)/$(DOCKERFILE) .
+	$(CONTAINER_TOOL) build --progress=plain --platform $(PLATFORMS) $(BUILD_ARGS) -t $(IMG) -f $(DOCKERFILE_DIR)/$(DOCKERFILE) .
 
 .PHONY: image-push
 image-push: check-container-tool ## Push Docker image $(IMG) to registry

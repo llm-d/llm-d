@@ -12,6 +12,9 @@ ARG CUDA_MINOR=9
 ARG CUDA_PATCH=1
 ARG PYTHON_VERSION
 
+# Debug build argument - set to 1 to enable debug symbols and logging
+ARG DEBUG=0
+
 ARG USE_SCCACHE=true
 
 RUN cat > /usr/local/bin/setup-sccache <<'EOF'
@@ -154,7 +157,16 @@ RUN --mount=type=cache,target=/var/cache/git \
     source /usr/local/bin/setup-sccache && \
     git clone https://github.com/NVIDIA/gdrcopy.git && \
     cd gdrcopy && \
-    CC="sccache gcc" CXX="sccache g++" PREFIX=/usr/local DESTLIB=/usr/local/lib make lib_install && \
+    if [ "${USE_SCCACHE}" = "true" ]; then \
+        CC_PREFIX="sccache "; \
+    else \
+        CC_PREFIX=""; \
+    fi && \
+    if [ "${DEBUG}" = "1" ]; then \
+        CFLAGS="-g -O0" CXXFLAGS="-g -O0" CC="${CC_PREFIX}gcc" CXX="${CC_PREFIX}g++" PREFIX=/usr/local DESTLIB=/usr/local/lib make lib_install; \
+    else \
+        CC="${CC_PREFIX}gcc" CXX="${CC_PREFIX}g++" PREFIX=/usr/local DESTLIB=/usr/local/lib make lib_install; \
+    fi && \
     cp src/libgdrapi.so.2.* /usr/lib64/ && \
     ldconfig && \
     cd .. && rm -rf gdrcopy && \
@@ -183,24 +195,49 @@ RUN --mount=type=secret,id=aws_access_key_id \
     git apply /tmp/patches/cks_nvshmem${NVSHMEM_VERSION}.patch && \
     mkdir build && \
         cd build && \
-        cmake \
-        -G Ninja \
-        -DNVSHMEM_PREFIX=${NVSHMEM_DIR} \
-        -DCMAKE_CUDA_ARCHITECTURES="90a;100" \
-        -DNVSHMEM_PMIX_SUPPORT=0 \
-        -DNVSHMEM_LIBFABRIC_SUPPORT=0 \
-        -DNVSHMEM_IBRC_SUPPORT=1 \
-        -DNVSHMEM_IBGDA_SUPPORT=1 \
-        -DNVSHMEM_IBDEVX_SUPPORT=1 \
-        -DNVSHMEM_SHMEM_SUPPORT=0 \
-        -DNVSHMEM_USE_GDRCOPY=1 \
-        -DNVSHMEM_MPI_SUPPORT=0 \
-        -DNVSHMEM_USE_NCCL=0 \
-        -DNVSHMEM_BUILD_TESTS=0 \
-        -DNVSHMEM_BUILD_EXAMPLES=0 \
-        -DGDRCOPY_HOME=/usr/local \
-        -DNVSHMEM_DISABLE_CUDA_VMM=1 \
-        .. && \
+        if [ "${DEBUG}" = "1" ]; then \
+            cmake \
+            -G Ninja \
+            -DCMAKE_BUILD_TYPE=Debug \
+            -DCMAKE_C_FLAGS="-g -O0" \
+            -DCMAKE_CXX_FLAGS="-g -O0" \
+            -DCMAKE_CUDA_FLAGS="-g -G -O0" \
+            -DNVSHMEM_PREFIX=${NVSHMEM_DIR} \
+            -DCMAKE_CUDA_ARCHITECTURES="90a;100" \
+            -DNVSHMEM_PMIX_SUPPORT=0 \
+            -DNVSHMEM_LIBFABRIC_SUPPORT=0 \
+            -DNVSHMEM_IBRC_SUPPORT=1 \
+            -DNVSHMEM_IBGDA_SUPPORT=1 \
+            -DNVSHMEM_IBDEVX_SUPPORT=1 \
+            -DNVSHMEM_SHMEM_SUPPORT=0 \
+            -DNVSHMEM_USE_GDRCOPY=1 \
+            -DNVSHMEM_MPI_SUPPORT=0 \
+            -DNVSHMEM_USE_NCCL=0 \
+            -DNVSHMEM_BUILD_TESTS=0 \
+            -DNVSHMEM_BUILD_EXAMPLES=0 \
+            -DGDRCOPY_HOME=/usr/local \
+            -DNVSHMEM_DISABLE_CUDA_VMM=1 \
+            ..; \
+        else \
+            cmake \
+            -G Ninja \
+            -DNVSHMEM_PREFIX=${NVSHMEM_DIR} \
+            -DCMAKE_CUDA_ARCHITECTURES="90a;100" \
+            -DNVSHMEM_PMIX_SUPPORT=0 \
+            -DNVSHMEM_LIBFABRIC_SUPPORT=0 \
+            -DNVSHMEM_IBRC_SUPPORT=1 \
+            -DNVSHMEM_IBGDA_SUPPORT=1 \
+            -DNVSHMEM_IBDEVX_SUPPORT=1 \
+            -DNVSHMEM_SHMEM_SUPPORT=0 \
+            -DNVSHMEM_USE_GDRCOPY=1 \
+            -DNVSHMEM_MPI_SUPPORT=0 \
+            -DNVSHMEM_USE_NCCL=0 \
+            -DNVSHMEM_BUILD_TESTS=0 \
+            -DNVSHMEM_BUILD_EXAMPLES=0 \
+            -DGDRCOPY_HOME=/usr/local \
+            -DNVSHMEM_DISABLE_CUDA_VMM=1 \
+            ..; \
+        fi && \
         ninja -j$(nproc) && \
         ninja install &&  \
         cp ${NVSHMEM_DIR}/lib/python/dist/nvshmem4py_cu${CUDA_MAJOR}-*-cp${PYTHON_VERSION/./}-cp${PYTHON_VERSION/./}-manylinux_*.whl /wheels/ && \
@@ -268,6 +305,14 @@ RUN --mount=type=cache,target=/root/.cache/uv \
     source ${VIRTUAL_ENV}/bin/activate && \
     source /usr/local/bin/setup-sccache && \
     \
+    # Set debug flags if needed
+    if [ "${DEBUG}" = "1" ]; then \
+        export CFLAGS="-g -O0"; \
+        export CXXFLAGS="-g -O0"; \
+        export NVCC_FLAGS="-g -G -O0"; \
+        export CMAKE_BUILD_TYPE="Debug"; \
+    fi && \
+    \
     # Install build tools
     uv pip install build cuda-python numpy setuptools-scm ninja && \
     uv pip install /wheels/nvshmem4py_cu${CUDA_MAJOR}-*.whl && \
@@ -318,6 +363,9 @@ ARG CUDA_MINOR=9
 ARG CUDA_PATCH=1
 ARG PYTHON_VERSION
 ARG NVSHMEM_VERSION=3.3.20
+
+# Debug build argument - set to 1 to enable debug symbols and logging
+ARG DEBUG=0
 
 RUN cat > /tmp/constraints.txt <<'EOF'
 torch==2.8.0
@@ -479,6 +527,16 @@ ENV PATH="${VIRTUAL_ENV}/bin:/usr/local/nvidia/bin:${PATH}" \
     VLLM_SKIP_P2P_CHECK=1 \
     VLLM_CACHE_ROOT=/tmp/vllm \
     UCX_MEM_MMAP_HOOK_MODE=none
+
+# Enable debug logging if DEBUG=1
+RUN if [ "${DEBUG}" = "1" ]; then \
+        echo "export NVSHMEM_DEBUG=1" >> /etc/profile.d/debug.sh && \
+        echo "export NVSHMEM_DEBUG_SUBSYS=ALL" >> /etc/profile.d/debug.sh && \
+        echo "export NVSHMEM_DEBUG_FILE=/tmp/nvshmem_debug.log" >> /etc/profile.d/debug.sh && \
+        echo "export CUDA_LAUNCH_BLOCKING=1" >> /etc/profile.d/debug.sh && \
+        echo "export TORCH_DISTRIBUTED_DEBUG=DETAIL" >> /etc/profile.d/debug.sh && \
+        echo "Debug build: NVSHMEM and CUDA debugging enabled" > /DEBUG_BUILD; \
+    fi
 
 USER 2000
 WORKDIR /home/vllm
