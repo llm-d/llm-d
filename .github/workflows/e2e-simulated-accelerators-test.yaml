@@ -4,8 +4,12 @@ on:
   pull_request:
     branches:
       - main
-    paths-ignore:
-      - '**/*.md'
+    paths:
+      - 'guides/prereq/**/*.sh'
+      - 'guides/prereq/**/*.yaml'
+      - 'guides/simulated-accelerators/**/*.yaml'
+      - 'guides/simulated-accelerators/**/helmfile*'
+      - 'docs/monitoring/install-prometheus-grafana.sh'
 
   workflow_dispatch:
     inputs:
