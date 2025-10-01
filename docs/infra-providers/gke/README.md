@@ -7,7 +7,15 @@ This document covers configuring GKE clusters for running high performance LLM i
 llm-d on GKE is tested with the following configurations:
 
   * Machine types: A3, A4, ct5p, ct5lp, ct6e
-  * Versions: GKE 1.32.3+
+  * Versions: GKE 1.33.4+
+
+For the well lit paths, we specifically recommend the following machine types:
+
+| Path | GPU | TPU |
+| --- | --- | --- |
+| [Inference Scheduling](../../../guides/inference-scheduling/README.md) | Large models (13B+) with Hopper or newer (A3 or newer)<br>Small or highly quantized models (1-7B) with Ampere, L4, or newer (A2, G2, or newer) | ct5e (v5e) or newer |
+| [Prefill / Decode Disaggregation](../../../guides/pd-disaggregation/README.md) | RDMA-enabled machine types (A3U, A4, or newer) | coming soon |
+| [Wide Expert Parallelism](../../../guides/wide-ep-lws/README.md) | RDMA-enabled machine types (A3U, A4, or newer) | coming soon |
 
 ## Cluster Configuration
 
@@ -33,13 +41,43 @@ GCP provides CX-7 support on A3 Ultra+ GPU hosts via RoCE.
 
 Model servers that need to use fast internode networking for P/D disaggregation or wide expert parallelism will need to request RDMA resources on your workload pods. The cluster creation guide describes the required changes to a pod to access the RDMA devices (e.g. [for A3 Ultra / A4](https://cloud.google.com/ai-hypercomputer/docs/create/gke-ai-hypercompute-custom#configure-pod-manifests-rdma)).
 
+In addition, expert parallel deployments leveraging DeepEP with NVIDIA NVSHMEM will need to run their pods with `privileged: true` in order to perform GPU-initiated RDMA connections, or enable `PeerMappingOverride=1` in your NVIDIA kernel settings with a [manual GPU driver installation](https://cloud.google.com/kubernetes-engine/docs/how-to/gpus#installing_drivers).
+
+**_NOTE:_** While GDRCopy allows CPU-initiated RDMA connections, at the current time we have not measured a benefit to this configuration and instead recommend the default GPU-initiated setting. You can disable the GDRCopy warning in NVSHMEM initialization by setting the `NVSHMEM_DISABLE_GDRCOPY=1` environment variable on your container.
+
 #### Ensuring network topology aware scheduling of pod replicas with RDMA
 
 Select appropriate node selectors to ensure multi-host replicas are all colocated on the same network fabric. For many deployments, your A3 Ultra or newer reservation will be within a single zone. This ensures reachability but may not achieve the desired aggregate throughput.
 
-On RDMA enabled instances the `cloud.google.com/gce-topology-block` label identifies machines within the same fast network and can be used as the primitive for higher level orchestration to group the pods within a multi-host replica.
+On RDMA-enabled GKE nodes the `cloud.google.com/gce-topology-block` label identifies machines within the same fast network and can be used as the primitive for higher level orchestration to group the pods within a multi-host replica into the same RDMA network.
 
 GKE recommends using [Topology Aware Scheduling with Kueue and LeaderWorkerSet](https://cloud.google.com/ai-hypercomputer/docs/workloads/schedule-gke-workloads-tas) for multi-host training and inference workloads.
+
+For smaller scale expert parallel deployments (2 or 4 node replicas) we have not observed significant wins in requiring all nodes in the replica to be within the same `cloud.google.com/gce-topology-subblock`. We do recommend setting a pod affinity rule to place all pods within the same `cloud.google.com/gce-topology-block`:
+
+```
+  affinity:
+    podAffinity:
+      # Subblock affinity cannot guarantee all pods in the replica
+      # are in the same subblock, but is better than random spreading
+      preferredDuringSchedulingIgnoredDuringExecution:
+      - weight: 2
+        podAffinityTerm:
+          labelSelector:
+            matchLabels:
+              app: vllm-deepseek-ep
+          matchLabelKeys:
+          - component
+          topologyKey: cloud.google.com/gce-topology-block
+      - weight: 1
+        podAffinityTerm:
+          labelSelector:
+            matchLabels:
+              app: vllm-deepseek-ep
+          matchLabelKeys:
+          - component
+          topologyKey: cloud.google.com/gce-topology-subblock
+```
 
 ## Known Issues
 
@@ -74,7 +112,7 @@ RuntimeError: Failed to infer device type, please set the environment variable `
 
 The root cause of this issue is that the CUDA 12.8 and 12.9 NVIDIA Docker images that are used as a base for vLLM container images changed the location of the installed CUDA drivers from `/usr/local/nvidia` to `/usr/local/cuda` and altered `LD_LIBRARY_PATH`. As a result, the libraries from the driver mount are not found by vLLM.
 
-The llm-d container image contains a workaround. Until [vLLM issue #18859](https://github.com/vllm-project/vllm/issues/18859) is resolved, users who customize their vLLM image will need to ensure their LD_LIBRARY_PATH in their vLLM image includes `/usr/local/nvidia/lib64`.
+A workaround exists in llm-d container images and vLLM after commit [5546acb463243ce](https://github.com/vllm-project/vllm/commit/5546acb463243ce3c166dc620c764a93351b7c69). Users who customize their vLLM image will need to ensure their LD_LIBRARY_PATH in their vLLM image includes `/usr/local/nvidia/lib64`.
 
 #### Google InfiniBand 1.10 required for vLLM 0.11.0 (gIB)
 
