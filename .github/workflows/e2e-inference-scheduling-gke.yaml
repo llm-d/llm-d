@@ -57,7 +57,7 @@ jobs:
       NAMESPACE: llm-d-inference-scheduling
       GATEWAY: gke-l7-regional-external-managed
       GATEWAY_TYPE: gke
-      PR_OR_BRANCH: ${{ github.event.inputs.pr_or_branch || github.event.issue.number || github.event.number }}
+      PR_OR_BRANCH: ${{ github.event.inputs.pr_or_branch || github.event.issue.number || github.event.number || 'main' }}
       HF_TOKEN: ${{ secrets.HF_TOKEN }}
 
     steps:
@@ -68,8 +68,15 @@ jobs:
 
       - name: Determine if pr_or_branch is a PR number
         id: check_pr
+        env:
+          PR_OR_BRANCH: ${{ github.event.inputs.pr_or_branch }}
+        shell: bash
         run: |
+          echo "PR_OR_BRANCH=${PR_OR_BRANCH:-main}" >> "$GITHUB_ENV"
           if [[ "$PR_OR_BRANCH" =~ ^[0-9]+$ ]]; then
+            echo "is_pr=true" >> "$GITHUB_OUTPUT"
+          elif [[ "${{ github.event_name }}" = "pull_request" ]]; then
+            echo "PR_OR_BRANCH=${{ github.event.pull_request.number }}" >> $GITHUB_ENV
             echo "is_pr=true" >> "$GITHUB_OUTPUT"
           else
             echo "is_pr=false" >> "$GITHUB_OUTPUT"
@@ -105,17 +112,31 @@ jobs:
         run: |
           ./guides/prereq/client-setup/install-deps.sh | tee ~/install-deps.log
 
+      - name: Create namespace
+        run: |
+          kubectl create namespace "${NAMESPACE}" || echo "Namespace already exists"
+
+      - name: Create llm-d-hf-token secret
+        run: |
+          kubectl create secret generic llm-d-hf-token \
+            --from-literal="HF_TOKEN=${{ secrets.HF_TOKEN }}" \
+            --namespace "${NAMESPACE}" \
+            --dry-run=client -o yaml | kubectl apply -f -
+
       - name: Deploy model service and GIE with Helmfile
         run: |
           cd guides/inference-scheduling
-          helmfile apply -e ${{ matrix.accelerator.helmfile_env }} | tee ~/inference-scheduling-deployment.log
+          helmfile apply -e ${{ matrix.accelerator.helmfile_env }} \
+            --set "gateway.service.type=LoadBalancer" \
+            --skip-schema-validation \
+            | tee ~/inference-scheduling-deployment.log
           echo "---------------------------------------" >> ~/inference-scheduling-deployment.log
 
       - name: Deploy HTTPRoute
         run: |
           cd guides/inference-scheduling
           echo "Deploying HTTPRoute..."
-          kubectl apply -f httproute.gke.yaml | tee ~/inference-scheduling-deployment.log
+          kubectl apply -f httproute.gke.yaml -n ${NAMESPACE} | tee ~/inference-scheduling-deployment.log
           echo "---------------------------------------" >> ~/inference-scheduling-deployment.log
 
       - name: Upload helm get all
@@ -133,7 +154,7 @@ jobs:
             --for=condition=Ready \
             --all \
             -n "${NAMESPACE}" \
-            --timeout=10m
+            --timeout=15m
           sleep ${{ matrix.accelerator.pod_readiness_sleep_seconds }} # TODO: remove this once examples have readiness probes
           echo "✅ All pods are ready."
           kubectl get pods -n "${NAMESPACE}"
@@ -171,11 +192,14 @@ jobs:
           echo "=== HTTPRoutes ==="
           kubectl get httproutes -n "${NAMESPACE}" || true
           echo ""
+          echo "=== Gateway ==="
+          kubectl get Gateway -n "${NAMESPACE}" || true
+          echo ""
 
       - name: Verify installation and run inference tests
         run: |
           cd .github/scripts/e2e
-          ./e2e-validate.sh -n "${NAMESPACE}"
+          ./e2e-validate.sh -n "${NAMESPACE}" -v
 
       - name: Collect and upload Kubernetes pod logs
         if: always()
@@ -198,9 +222,17 @@ jobs:
           name: llmd-pod-logs-inference-scheduling-${{ matrix.accelerator.name }}
           path: pod-logs-inference-scheduling
 
+      - name: Send Google Chat notification on failure
+        if: failure()
+        uses: SimonScholz/google-chat-action@3b3519e5102dba8aa5046fd711c4b553586409bb
+        with:
+          webhookUrl: ${{ secrets.GOOGLE_CHAT_WEBHOOK }}
+          jobStatus: ${{ job.status }}
+          title: '${{ github.workflow }} - ${{ matrix.accelerator.name }}'
+
       - name: Cleanup deployment
         if: always()
         run: |
           cd guides/inference-scheduling
           helmfile destroy -e ${{ matrix.accelerator.helmfile_env }}
-          kubectl delete -f httproute.gke.yaml
+          kubectl delete -f httproute.gke.yaml -n ${NAMESPACE}

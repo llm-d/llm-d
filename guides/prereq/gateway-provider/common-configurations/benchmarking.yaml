@@ -9,6 +9,24 @@ gateway:
       requests:
         cpu: "1"
         memory: 1Gi
+
+# MS values
+routing:
+  proxy:
+    debugLevel: 1
+  # IF epp is created through ms, set its debugLevel
+  epp:
+    debugLevel: 1
+
+# GAIE values
+inferenceExtension:
+  flags:
+    - name: v
+      value: 1
+  # include pool group, whole flags get overwritten
+    - name: "pool-group"
+      value: "inference.networking.x-k8s.io"
+istio:
   destinationRule:
     trafficPolicy:
       connectionPool:
@@ -21,16 +39,3 @@ gateway:
           maxConnections: 256000
           maxConnectionDuration: "1800s"
           connectTimeout: "900s"
-
-# MS values
-routing:
-  proxy:
-    debugLevel: 1
-  # IF epp is created through ms, set its debugLevel
-  epp:
-    debugLevel: 1
-
-# GAIE values
-inferenceExtension:
-  # IF epp is created through gaie, set its debugLevel
-  logVerbosity: 1

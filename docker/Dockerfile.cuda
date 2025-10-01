@@ -1,5 +1,5 @@
 ARG CUDA_MAJOR=12
-ARG CUDA_MINOR=8
+ARG CUDA_MINOR=9
 ARG CUDA_PATCH=1
 
 # ============================================================================
@@ -8,20 +8,54 @@ ARG CUDA_PATCH=1
 FROM nvcr.io/nvidia/cuda:${CUDA_MAJOR}.${CUDA_MINOR}.${CUDA_PATCH}-devel-ubi9 AS builder
 
 ARG CUDA_MAJOR=12
-ARG CUDA_MINOR=8
+ARG CUDA_MINOR=9
 ARG CUDA_PATCH=1
 ARG PYTHON_VERSION
 
 ARG USE_SCCACHE=true
 
-COPY sccache.config.toml /tmp
+RUN cat > /usr/local/bin/setup-sccache << 'EOF'
+#!/bin/bash
+if [ "${USE_SCCACHE}" = "true" ]; then
+    # Set up AWS credentials if secrets are available
+    if [ -f "/run/secrets/aws_access_key_id" ] && [ -f "/run/secrets/aws_secret_access_key" ]; then
+        export AWS_ACCESS_KEY_ID="$(cat /run/secrets/aws_access_key_id)"
+        export AWS_SECRET_ACCESS_KEY="$(cat /run/secrets/aws_secret_access_key)"
+        export AWS_DEFAULT_REGION="us-west-2"
+    fi
+
+    export CMAKE_C_COMPILER_LAUNCHER=sccache
+    export CMAKE_CXX_COMPILER_LAUNCHER=sccache
+    export CMAKE_CUDA_COMPILER_LAUNCHER=sccache
+
+    # Configure sccache via environment variables
+    export SCCACHE_BUCKET="vllm-nightly-sccache"
+    export SCCACHE_REGION="us-west-2"
+    export SCCACHE_S3_KEY_PREFIX="llm-d-cache/"
+    export SCCACHE_IDLE_TIMEOUT=0
+
+    if ! /usr/local/bin/sccache --start-server; then
+        echo "Warning: sccache failed to start, continuing without cache" >&2
+        unset CMAKE_C_COMPILER_LAUNCHER CMAKE_CXX_COMPILER_LAUNCHER CMAKE_CUDA_COMPILER_LAUNCHER
+        return 1
+    fi
+
+    if ! /usr/local/bin/sccache --show-stats >/dev/null 2>&1; then
+        echo "Warning: sccache not responding properly, disabling cache" >&2
+        /usr/local/bin/sccache --stop-server 2>/dev/null || true
+        unset CMAKE_C_COMPILER_LAUNCHER CMAKE_CXX_COMPILER_LAUNCHER CMAKE_CUDA_COMPILER_LAUNCHER
+        return 1
+    fi
+
+    echo "sccache successfully configured with cache prefix: ${SCCACHE_S3_KEY_PREFIX}"
+fi
+EOF
+RUN chmod +x /usr/local/bin/setup-sccache
 
 RUN --mount=type=secret,id=aws_access_key_id \
     --mount=type=secret,id=aws_secret_access_key \
-    --mount=type=tmpfs,target=/root/.aws \
     if [ "${USE_SCCACHE}" = "true" ]; then \
         set -Eeuo pipefail && \
-        # install sccache
         dnf install -y openssl-devel && \
         mkdir -p /tmp/sccache && \
         cd /tmp/sccache && \
@@ -30,43 +64,20 @@ RUN --mount=type=secret,id=aws_access_key_id \
         mv sccache-v0.10.0-x86_64-unknown-linux-musl/sccache /usr/local/bin/sccache && \
         cd /tmp && \
         rm -rf /tmp/sccache && \
-        # sccache configurations
-        mkdir -p $HOME/.config/sccache && \
-        mv /tmp/sccache.config.toml $HOME/.config/sccache/config.toml && \
-        export SCCACHE_CONF=$HOME/.config/sccache/config.toml && \
-        # build out AWS creds and configs
-        umask 077 && \
-        AKI="$(cat /run/secrets/aws_access_key_id)" && \
-        SAK="$(cat /run/secrets/aws_secret_access_key)" && \
-        { \
-        echo "[default]"; \
-        echo "region=us-west-2"; \
-        echo "aws_access_key_id=${AKI}"; \
-        echo "aws_secret_access_key=${SAK}"; \
-        } > /root/.aws/credentials && \
-        { \
-        echo "[default]"; \
-        echo "region=us-west-2"; \
-        echo "output=json"; \
-        } > /root/.aws/config && \
-        export AWS_SHARED_CREDENTIALS_FILE=/root/.aws/credentials AWS_CONFIG_FILE=/root/.aws/config AWS_DEFAULT_REGION="us-west-2" AWS_PROFILE=default && \
-        export SCCACHE_IDLE_TIMEOUT=0 && \
-        export SCCACHE_LOG=debug && \
-        export RUSTC_WRAPPER="sccache" && \
-        /usr/local/bin/sccache --start-server && \
-        # verify sccache is working with the s3 backend
-        /usr/local/bin/sccache --show-stats; \
+        source /usr/local/bin/setup-sccache && \
+        echo "int main() { return 0; }" | sccache gcc -x c - -o /dev/null && \
+        echo "sccache installation and S3 connectivity verified"; \
     fi
 
 WORKDIR /workspace
 
 # Create UV constraint files
 RUN cat > /tmp/build-constraints.txt <<'EOF'
-torch==2.7.1
+torch==2.8.0
 EOF
 
 RUN cat > /tmp/constraints.txt <<'EOF'
-torch==2.7.1
+torch==2.8.0
 EOF
 
 ENV LANG=C.UTF-8 \
@@ -138,38 +149,19 @@ ENV NVSHMEM_DIR="/opt/nvshmem-${NVSHMEM_VERSION}" \
 # Build and install gdrcopy
 # TODO: CUSTOM LOGGING
 RUN --mount=type=cache,target=/var/cache/git \
+    --mount=type=secret,id=aws_access_key_id \
+    --mount=type=secret,id=aws_secret_access_key \
+    source /usr/local/bin/setup-sccache && \
     git clone https://github.com/NVIDIA/gdrcopy.git && \
     cd gdrcopy && \
-    PREFIX=/usr/local DESTLIB=/usr/local/lib make lib_install && \
+    CC="sccache gcc" CXX="sccache g++" PREFIX=/usr/local DESTLIB=/usr/local/lib make lib_install && \
     cp src/libgdrapi.so.2.* /usr/lib64/ && \
     ldconfig && \
-    cd .. && rm -rf gdrcopy
-
-# Build and install UCX
-# TODO: CUSTOM LOGGING
-ARG UCX_VERSION="v1.19.0-rc1"
-RUN --mount=type=cache,target=/var/cache/git \
-    git clone https://github.com/openucx/ucx.git && \
-    cd ucx && \
-    git checkout ${UCX_VERSION} && \
-    ./autogen.sh && \
-    ./contrib/configure-release \
-        --enable-shared \
-        --disable-static \
-        --disable-doxygen-doc \
-        --enable-cma \
-        --enable-devel-headers \
-        --with-cuda=/usr/local/cuda \
-        --with-verbs \
-        --with-dm \
-        --with-gdrcopy=/usr/local \
-        --enable-mt \
-        --with-mlx5 \
-        --prefix=/usr/local && \
-    make -j$(nproc) && \
-    make install-strip && \
-    ldconfig && \
-    cd .. && rm -rf ucx
+    cd .. && rm -rf gdrcopy && \
+    if [ "${USE_SCCACHE}" = "true" ]; then \
+        echo "=== gdrcopy build complete - sccache stats ===" && \
+        sccache --show-stats; \
+    fi
 
 ENV CPPFLAGS="-I$NVSHMEM_DIR/include ${CPPFLAGS}" \
     LDFLAGS="-L$NVSHMEM_DIR/lib ${LDFLAGS}"
@@ -178,7 +170,10 @@ ENV CPPFLAGS="-I$NVSHMEM_DIR/include ${CPPFLAGS}" \
 COPY patches/ /tmp/patches/
 
 # Build and install NVSHMEM from source with coreweave patch
-RUN cd /tmp && \
+RUN --mount=type=secret,id=aws_access_key_id \
+    --mount=type=secret,id=aws_secret_access_key \
+    cd /tmp && \
+    source /usr/local/bin/setup-sccache && \
     wget https://developer.download.nvidia.com/compute/redist/nvshmem/${NVSHMEM_VERSION}/source/nvshmem_src_cuda12-all-all-${NVSHMEM_VERSION}.tar.gz -O nvshmem_src_cuda${CUDA_MAJOR}.tar.gz && \
     tar -xf nvshmem_src_cuda${CUDA_MAJOR}.tar.gz && \
     cd nvshmem_src && \
@@ -205,7 +200,11 @@ RUN cd /tmp && \
         .. && \
         ninja -j$(nproc) && \
         ninja install && \
-        cd /tmp && rm -rf nvshmem_src*
+        cd /tmp && rm -rf nvshmem_src* && \
+        if [ "${USE_SCCACHE}" = "true" ]; then \
+            echo "=== NVSHMEM build complete - sccache stats ===" && \
+            sccache --show-stats; \
+        fi
 
 # Pin torch, so all deps are built against the same version 
 # as vllm itself
@@ -213,38 +212,11 @@ RUN --mount=type=cache,target=/root/.cache/uv \
   source ${VIRTUAL_ENV}/bin/activate && \
   uv pip install \
     # global
-    numpy torch==2.7.1 \ 
-    # nixl 
+    numpy torch \
     pyyaml \
     types-PyYAML \
     pytest \ 
     patchelf>=0.11.0
-
-# https://github.com/ai-dynamo/nixl/tree/ucx_thread_pool
-# Temporarily use hotfix on 0.4 to avoid NIXL launch OH
-# via threadpool w/ UCX workers - to be fixed in nixl=0.5.
-ARG NIXL_REPO_URL="https://github.com/ai-dynamo/nixl.git"
-ARG NIXL_COMMIT_SHA="ba7e40760027796890ad17e95620526c3c5560ee"
-RUN --mount=type=cache,target=/tmp/nixl-cache \
-    ln -s /usr/local/cuda/lib64/stubs/libcuda.so /usr/lib64/ && \
-    mkdir /opt/nixl && cd /opt/nixl && \
-    git clone ${NIXL_REPO_URL} . && \
-    git checkout ${NIXL_COMMIT_SHA} && \
-    export PATH="${VIRTUAL_ENV}/bin:$PATH" && \
-    export PYTHON="${VIRTUAL_ENV}/bin/python" && \
-    export PKG_CONFIG_PATH="/usr/lib64/pkgconfig:/usr/share/pkgconfig:${PKG_CONFIG_PATH}" && \
-    export CUDA_HOME="/usr/local/cuda" && \
-    export LD_LIBRARY_PATH="/usr/local/nvidia/lib:/usr/local/nvidia/lib64:/usr/local/cuda/lib64:/usr/local/cuda/lib64/stubs/:/usr/local/cuda/extras/CUPTI/lib64:/usr/local/lib:/usr/local/lib64:/usr/lib64:${LD_LIBRARY_PATH}" && \
-    meson setup build --prefix=/usr/local -Dbuildtype=release && \
-    cd build && \
-    ninja && \
-    ninja install && \
-    cd .. && \
-    # Build nixl wheel and install locally
-    source ${VIRTUAL_ENV}/bin/activate && \
-    python -m build --no-isolation --wheel -o /wheels && \
-    uv pip install --no-cache-dir . && \
-    rm -rf build
 
 RUN echo "/usr/local/lib" > /etc/ld.so.conf.d/local.conf && \
     echo "/usr/local/lib64" >> /etc/ld.so.conf.d/local.conf && \
@@ -254,7 +226,7 @@ WORKDIR /workspace
 
 # Define commit SHAs as build args to avoid layer invalidation
 ARG LMCACHE_COMMIT_SHA=0db8ae4746a207a72483d716b5f82545a2ead24b
-ARG VLLM_COMMIT_SHA=53415653ff24be03e7c90f5b42ef9cb3f72aad71
+ARG VLLM_COMMIT_SHA=e017120ed146cc3069d18428322d67881cb95e67
 
 # Define if lmcache should be built 
 # Clone repositories with cache mounts
@@ -275,17 +247,20 @@ WORKDIR /workspace/vllm
 # Install DeepEP and DeepGEMM dependencies
 ARG DEEPEP_URL="https://github.com/deepseek-ai/DeepEP"
 ARG DEEPGEMM_URL="https://github.com/deepseek-ai/DeepGEMM"
-ARG PPLX_KERNELS_URL="https://github.com/ppl-ai/pplx-kernels"
+ARG PPLX_KERNELS_URL="https://github.com/perplexityai/pplx-kernels"
 
 # Create wheels directory
 RUN mkdir -p /wheels
 
 # Build compiled packages as wheels (only ones that need build tools)
 RUN --mount=type=cache,target=/root/.cache/uv \
+    --mount=type=secret,id=aws_access_key_id \
+    --mount=type=secret,id=aws_secret_access_key \
     source ${VIRTUAL_ENV}/bin/activate && \
+    source /usr/local/bin/setup-sccache && \
     \
     # Install build tools
-    uv pip install build cuda-python numpy setuptools-scm ninja && \
+    uv pip install build cuda-python numpy setuptools-scm ninja "nvshmem4py-cu${CUDA_MAJOR}" && \
     \
     # Build FlashInfer wheel
     cd /tmp && \
@@ -316,7 +291,11 @@ RUN --mount=type=cache,target=/root/.cache/uv \
     cd pplx-kernels && \
     # git checkout build-fixes && \
     NVSHMEM_PREFIX=${NVSHMEM_DIR} uv build --wheel --out-dir /wheels && \
-    cd .. && rm -rf pplx-kernels
+    cd .. && rm -rf pplx-kernels && \
+    if [ "${USE_SCCACHE}" = "true" ]; then \
+        echo "=== Compiled wheels build complete - sccache stats ===" && \
+        sccache --show-stats; \
+    fi
 
 # verify builds are hitting the cache
 RUN sccache --show-stats
@@ -332,8 +311,8 @@ ARG CUDA_PATCH=1
 ARG PYTHON_VERSION
 ARG NVSHMEM_VERSION=3.3.20
 
-RUN cat > /tmp/constraints.txt << 'EOF'
-torch==2.7.1
+RUN cat > /tmp/constraints.txt <<'EOF'
+torch==2.8.0
 EOF
 
 ENV LANG=C.UTF-8 \
@@ -363,24 +342,9 @@ RUN dnf install -y --allowerasing \
         curl \
         gcc && dnf clean all
 
-# Copy UCX libraries from builder
-COPY --from=builder /usr/local/lib/libucp* /usr/local/lib/
-COPY --from=builder /usr/local/lib/libucs* /usr/local/lib/
-COPY --from=builder /usr/local/lib/libuct* /usr/local/lib/
-COPY --from=builder /usr/local/lib/libucm* /usr/local/lib/
-COPY --from=builder /usr/local/lib/ucx/ /usr/local/lib/ucx/
-COPY --from=builder /usr/local/lib64/libucx_utils.so /usr/local/lib64/
-
 # Copy gdrcopy libraries from builder
 COPY --from=builder /usr/lib64/libgdrapi.so.2.* /usr/lib64/
 COPY --from=builder /usr/local/lib/libgdrapi.so* /usr/local/lib/
-
-# Copy nixl libraries from builder
-COPY --from=builder /usr/local/lib64/libnixl* /usr/local/lib64/
-COPY --from=builder /usr/local/lib64/libstream.so /usr/local/lib64/
-COPY --from=builder /usr/local/lib64/libserdes.so /usr/local/lib64/
-COPY --from=builder /usr/local/lib64/plugins/ /usr/local/lib64/plugins/
-COPY --from=builder /usr/local/include/nixl* /usr/local/include/
 
 # Copy compiled NVSHMEM libraries from builder
 COPY --from=builder /opt/nvshmem-${NVSHMEM_VERSION}/ /opt/nvshmem-${NVSHMEM_VERSION}/
@@ -389,7 +353,6 @@ COPY --from=builder /opt/nvshmem-${NVSHMEM_VERSION}/ /opt/nvshmem-${NVSHMEM_VERS
 RUN echo "/usr/local/lib" > /etc/ld.so.conf.d/local.conf && \
     echo "/usr/local/lib64" >> /etc/ld.so.conf.d/local.conf && \
     echo "/opt/nvshmem-${NVSHMEM_VERSION}/lib" >> /etc/ld.so.conf.d/local.conf && \
-    echo "/opt/vllm/lib64/python3.12/site-packages/.nixl.mesonpy.libs/plugins" >> /etc/ld.so.conf.d/local.conf && \
     ldconfig
 
 # Setup Python virtual environment
@@ -401,7 +364,7 @@ COPY --from=builder /wheels/*.whl /tmp/wheels/
 
 # Define commit SHAs as build args to avoid layer invalidation
 ARG LMCACHE_COMMIT_SHA=0db8ae4746a207a72483d716b5f82545a2ead24b
-ARG VLLM_COMMIT_SHA=53415653ff24be03e7c90f5b42ef9cb3f72aad71
+ARG VLLM_COMMIT_SHA=e017120ed146cc3069d18428322d67881cb95e67
 
 ARG VLLM_PREBUILT=0
 
@@ -413,7 +376,7 @@ ARG VLLM_WHEEL_URL="https://gitlab.com/api/v4/projects/72482892/packages/pypi/si
 # Installs vllm source editably (unless using custom prebuilt) for dev experience
 RUN --mount=type=cache,target=/var/cache/git \
     source /opt/vllm/bin/activate && \
-    uv pip install cuda-python 'huggingface_hub[hf_xet]' && \
+    uv pip install nixl "nvshmem4py-cu${CUDA_MAJOR}" cuda-python 'huggingface_hub[hf_xet]' && \
     uv pip install /tmp/wheels/*.whl && \
     git clone https://github.com/vllm-project/vllm.git /opt/vllm-source && \
     cd /opt/vllm-source && \
@@ -445,14 +408,13 @@ RUN umask 002 && \
     chown vllm:root /home/vllm && \
     chmod g+rwx /home/vllm
 
-# default openionated env vars for HF_HOME and TRANSFORMERS_CACHE, over-writeable
+# default openionated env var for HF_HOME, over-writeable
 ENV LLM_D_MODELS_DIR=/var/lib/llm-d/models \
-    HF_HOME=/var/lib/llm-d/.hf \
-    TRANSFORMERS_CACHE=/var/lib/llm-d/.cache/huggingface
+    HF_HOME=/var/lib/llm-d/.hf
 
 # creates default models directory and makes path writeable for both root and default user, with symlink for convenience
 # find command keeps group=0 on all new subdirs created later
-RUN mkdir -p "$LLM_D_MODELS_DIR" "$HF_HOME" "$TRANSFORMERS_CACHE" && \
+RUN mkdir -p "$LLM_D_MODELS_DIR" "$HF_HOME" && \
     chown -R root:0 /var/lib/llm-d && \
     chmod -R g+rwX /var/lib/llm-d && \
     find /var/lib/llm-d -type d -exec chmod g+s {} \; && \

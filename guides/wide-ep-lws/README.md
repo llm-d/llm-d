@@ -24,6 +24,7 @@ This guide requires 24 Nvidia H200 GPUs and InfiniBand RDMA. It requires 1024 Gi
   - You have deployed the [LeaderWorkerSet optional controller](../prereq/infrastructure/README.md#optional-install-leaderworkerset-for-multi-host-inference)
 - Configure and deploy your [Gateway control plane](../prereq/gateway-provider/README.md).
 - [Create the `llm-d-hf-token` secret in your target namespace with the key `HF_TOKEN` matching a valid HuggingFace token](../prereq/client-setup/README.md#huggingface-token) to pull models.
+- Have the [Monitoring stack](../../docs/monitoring/README.md) installed on your system.
 
 ## Installation
 
@@ -53,14 +54,24 @@ kubectl apply -k ./manifests/modelserver/coreweave  -n ${NAMESPACE}
 helm install deepseek-r1 \
   -n ${NAMESPACE} \
   -f inferencepool.values.yaml \
-  --set provider.name=gke \
-  oci://us-central1-docker.pkg.dev/k8s-staging-images/gateway-api-inference-extension/charts/inferencepool --version v1.0.0
+  --set "provider.name=gke" \
+  --set "inferencePool.apiVersion=inference.networking.k8s.io/v1" \
+  --set "inferenceExtension.monitoring.gke.enable=true" \
+  oci://us-central1-docker.pkg.dev/k8s-staging-images/gateway-api-inference-extension/charts/inferencepool --version v1.0.1
 
-# For non-GKE
+# For Istio
 helm install deepseek-r1 \
   -n ${NAMESPACE} \
   -f inferencepool.values.yaml \
-  oci://us-central1-docker.pkg.dev/k8s-staging-images/gateway-api-inference-extension/charts/inferencepool --version v1.0.0
+  --set "provider.name=istio" \
+  --set "inferenceExtension.monitoring.prometheus.enable=true" \
+  oci://us-central1-docker.pkg.dev/k8s-staging-images/gateway-api-inference-extension/charts/inferencepool --version v1.0.1
+
+# For Kgateway
+helm install deepseek-r1 \
+  -n ${NAMESPACE} \
+  -f inferencepool.values.yaml \
+  oci://us-central1-docker.pkg.dev/k8s-staging-images/gateway-api-inference-extension/charts/inferencepool --version v1.0.1
 ```
 
 ### Deploy Gateway and HTTPRoute
@@ -85,6 +96,10 @@ To see what gateway options are supported refer to our [gateway provider prereq 
 
 You can also customize your gateway, for more information on how to do that see our [gateway customization docs](../../docs/customizing-your-gateway.md).
 
+## Tuning Selective PD
+
+As with PD, the `wide-ep-lws` guide supports selective PD. For information on this refer to [this section of the PD docs](../pd-disaggregation/README.md#tuning-selective-pd).
+
 ## Verifying the installation
 
 - Firstly, you should be able to list all helm releases installed into your chosen namespace:
@@ -107,11 +122,11 @@ pod/deepseek-r1-epp-84dd98f75b-r6lvh         1/1     Running   0          2m14s
 pod/wide-ep-llm-d-prefill-0                  1/1     Running   0          2m13s
 
 NAME                                            TYPE           CLUSTER-IP    EXTERNAL-IP   PORT(S)                        AGE
-service/infra-wide-ep-inference-gateway-istio   LoadBalancer   10.16.1.34    10.16.4.2     15021:30312/TCP,80:33662/TCP   2m22s
-service/wide-ep-ip-1e480070                  ClusterIP      None          <none>        54321/TCP                      2d4h
-service/wide-ep-llm-d-decode    ClusterIP      None          <none>        <none>                         2m13s
-service/deepseek-r1-epp         ClusterIP      10.16.1.137   <none>        9002/TCP                       2d4h
-service/wide-ep-llm-d-prefill   ClusterIP      None          <none>        <none>                         2m13s
+service/infra-wide-ep-inference-gateway-istio   ClusterIP      10.16.1.34    10.16.4.2     15021:30312/TCP,80:33662/TCP   2m22s
+service/wide-ep-ip-1e480070                     ClusterIP      None          <none>        54321/TCP                      2d4h
+service/wide-ep-llm-d-decode                    ClusterIP      None          <none>        <none>                         2m13s
+service/deepseek-r1-epp                         ClusterIP      10.16.1.137   <none>        9002/TCP                       2d4h
+service/wide-ep-llm-d-prefill                   ClusterIP      None          <none>        <none>                         2m13s
 
 NAME                                                    READY   UP-TO-DATE   AVAILABLE   AGE
 deployment.apps/infra-wide-ep-inference-gateway-istio   1/1     1            1           2m22s

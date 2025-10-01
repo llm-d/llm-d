@@ -1,8 +1,21 @@
+# Infra values
 gateway:
   gatewayClassName: istio
+
+# GAIE values
+inferenceExtension:
+  flags: # empty flag overrides, so key always exists to pull values from, its just empty
+provider:
+  name: istio
+istio:
   destinationRule:
-    enabled: true
     trafficPolicy:
       tls:
         mode: SIMPLE
         insecureSkipVerify: true
+
+routing:  # empty debugLevel overrides, so keys always exist to pull values from, its just empty
+  proxy:
+    debugLevel:
+  epp:
+    debugLevel:

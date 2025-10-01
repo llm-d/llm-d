@@ -54,8 +54,15 @@ jobs:
 
       - name: Determine if pr_or_branch is a PR number
         id: check_pr
+        env:
+          PR_OR_BRANCH: ${{ github.event.inputs.pr_or_branch }}
+        shell: bash
         run: |
+          echo "PR_OR_BRANCH=${PR_OR_BRANCH:-main}" >> "$GITHUB_ENV"
           if [[ "$PR_OR_BRANCH" =~ ^[0-9]+$ ]]; then
+            echo "is_pr=true" >> "$GITHUB_OUTPUT"
+          elif [[ "${{ github.event_name }}" = "pull_request" ]]; then
+            echo "PR_OR_BRANCH=${{ github.event.pull_request.number }}" >> $GITHUB_ENV
             echo "is_pr=true" >> "$GITHUB_OUTPUT"
           else
             echo "is_pr=false" >> "$GITHUB_OUTPUT"
@@ -435,7 +442,9 @@ jobs:
             set -x
             cd llm-d/guides/pd-disaggregation
             echo "Deploying HTTPRoute..."
-            kubectl apply -f httproute.yaml | tee ~/${{ matrix.deployment.helm_log_file }}
+            kubectl apply -f httproute.yaml \
+              -n "${{ matrix.deployment.namespace }}" \
+              | tee ~/${{ matrix.deployment.helm_log_file }}
             echo "---------------------------------------" >> ~/${{ matrix.deployment.helm_log_file }}
           EOF
 

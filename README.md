@@ -1,13 +1,13 @@
-<p>
+<p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)">
-    <img alt="llm-d Logo" src="./docs/assets/images/llm-d-logo.png" width=38%>
+    <img alt="llm-d Logo" src="./docs/assets/images/llm-d-logo.png" width=37%>
   </picture>
 </p>
 
-<h1>
+<h2 align="center">
 High Performance Distributed Inference on Kubernetes
-</h1>
+</h2>
 
  [![Documentation](https://img.shields.io/badge/Documentation-8A2BE2?logo=readthedocs&logoColor=white&color=1BC070)](https://www.llm-d.ai)
  [![Release Status](https://img.shields.io/badge/Version-0.2-yellow)](https://github.com/llm-d/llm-d/releases)
@@ -30,6 +30,9 @@ We currently offer three tested and benchmarked paths to help deploying large mo
 2. [Prefill/Decode Disaggregation](./guides/pd-disaggregation/README.md) - Reduce time to first token (TTFT) and get more predictable time per output token (TPOT) by splitting inference into prefill servers handling prompts and decode servers handling responses, primarily on large models such as Llama-70B and when processing very long prompts.
 3. [Wide Expert-Parallelism](./guides/wide-ep-lws/README.md) - Deploy very large Mixture-of-Experts (MoE) models like [DeepSeek-R1](https://github.com/vllm-project/vllm/issues/16037) and significantly reduce end-to-end latency and increase throughput by scaling up with [Data Parallelism and Expert Parallelism](https://docs.vllm.ai/en/latest/serving/data_parallel_deployment.html) over fast accelerator networks.
 
+### Hardware Support
+llm-d supports multiple accelerator types including NVIDIA GPUs, AMD GPUs, Google TPUs, and Intel XPUs, providing a unified interface for multi-vendor deployments.
+
 See the guides for more details about the accelerators, networks, and configurations tested and our [roadmap](https://github.com/llm-d/llm-d/issues/146) for what is coming next.
 
 ### Where we focus
@@ -43,6 +46,7 @@ See the guides for more details about the accelerators, networks, and configurat
   * NVIDIA A100 / L4 or newer
   * AMD MI250 or newer
   * Google TPU v5e or newer
+  * Intel Data Center GPU Max (XPU/Ponte Vecchio) series or newer
 * With extremely fast accelerator interconnect and datacenter networking
   * 600-16,000 Gbps per accelerator NVLINK on host or across narrow domains like NVL72
   * 1,600-5,000 Gbps per chip TPU OCS links within TPU pods
@@ -67,7 +71,7 @@ llm-d accelerates distributed inference by integrating industry-standard open te
 
 Key features of llm-d include:
 
-- **vLLM-Optimized Inference Scheduler:** llm-d builds on IGW's pattern for customizable “smart” load-balancing via the Endpoint Picker Protocol (EPP) to define vLLM-optimized scheduling. Leveraging operational telemetry, the Inference Scheduler implements the filtering and scoring algorithms to make decisions with P/D-, KV-cache-, SLA-, and load-awareness. Advanced teams can implement their own scorers to further customize, while benefiting from other features in IGW, like flow control and latency-aware balancing. [See our Northstar design](https://docs.google.com/document/d/1kE1LY8OVjiOgKVD9-9Po96HODbTIbgHp4qgvw06BCOc/edit?tab=t.0#heading=h.4rgkvvo5gnle)
+- **vLLM-Optimized Inference Scheduler:** llm-d builds on IGW's pattern for customizable “smart” load-balancing via the Endpoint Picker (EPP) to define vLLM-optimized scheduling. Leveraging operational telemetry, the Inference Scheduler implements the filtering and scoring algorithms to make decisions with P/D-, KV-cache-, SLA-, and load-awareness. Advanced teams can implement their own scorers to further customize, while benefiting from other features in IGW, like flow control and latency-aware balancing. [See our Northstar design](https://docs.google.com/document/d/1kE1LY8OVjiOgKVD9-9Po96HODbTIbgHp4qgvw06BCOc/edit?tab=t.0#heading=h.4rgkvvo5gnle)
 
 - **Disaggregated Serving with vLLM:** llm-d leverages vLLM’s support for disaggregated serving to run prefill and decode on independent instances, using high-performance transport libraries like NIXL. In llm-d, we plan to support a latency-optimized implementation using fast interconnects (IB, RDMA, ICI) and a throughput optimized implementation using data-center networking. [See our Northstar design](https://docs.google.com/document/d/1FNN5snmipaTxEA1FGEeSH7Z_kEqskouKD1XYhVyTHr8/edit?tab=t.0)
 

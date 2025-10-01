@@ -1,6 +1,6 @@
 # Quickstart Prometheus Grafana Stack
 
-The [prometheus-grafana setup script](./install-prometheus-grafana.sh) can be used to deploy a simple observability stack on Kubernetes.
+The [prometheus-grafana setup script](./scripts/install-prometheus-grafana.sh) can be used to deploy a simple observability stack on Kubernetes.
 
 ## Step 1: Install Monitoring Stack
 
@@ -8,13 +8,13 @@ Skip if using OpenShift, GKE, or any other Kubernetes environment where Promethe
 
 ```bash
 # Central monitoring (default - Prometheus monitors all namespaces)
-./install-prometheus-grafana.sh
+./scripts/install-prometheus-grafana.sh
 
 # Central monitoring in custom namespace
-./install-prometheus-grafana.sh -n monitoring
+./scripts/install-prometheus-grafana.sh -n monitoring
 
 # Individual user monitoring (isolated - Prometheus only monitors selected namespaces based on namespace labels)
-./install-prometheus-grafana.sh --individual -n my-monitoring-namespace
+./scripts/install-prometheus-grafana.sh --individual -n my-monitoring-namespace
 ```
 
 ## Step 2: Enable Monitoring for Your Deployments
@@ -68,5 +68,5 @@ kubectl port-forward -n <your-monitoring-namespace> svc/prometheus-grafana 3000:
 To remove the Prometheus and Grafana stack:
 
 ```bash
-./install-prometheus-grafana.sh -u -n <your-monitoring-namespace>
+./scripts/install-prometheus-grafana.sh -u -n <your-monitoring-namespace>
 ```

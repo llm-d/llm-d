@@ -17,18 +17,15 @@ spec:
           llm-d.ai/model: DeepSeek-R1-0528
           llm-d.ai/role: prefill
       spec:
+        serviceAccountName: deepseek-r1
         volumes:
-          - emptyDir:
+          - name: dshm
+            emptyDir:
               medium: Memory
               sizeLimit: 2Gi # 2Gi for NCCL 2.27 to be safe
-            name: dshm
-          - name: model-storage
-            emptyDir:
-              sizeLimit: 100Gi
-          
         containers:
         - name: vllm-worker
-          image: ghcr.io/llm-d/llm-d:v0.2.0
+          image: ghcr.io/llm-d/llm-d-dev:pr-245@sha256:06ba310cd557b7762c391ac11fe0bf20307851769bcf42973608ddcc3b4b47cf
           securityContext:
             capabilities:
               add:
@@ -37,7 +34,6 @@ spec:
             runAsGroup: 0
             runAsUser: 0
           imagePullPolicy: Always
-          
           command:
             - /bin/bash
             - -c
@@ -52,11 +48,9 @@ spec:
               exec vllm serve \
                 deepseek-ai/DeepSeek-R1-0528 \
                 --port 8000 \
-                --disable-log-requests \
                 --disable-uvicorn-access-log \
                 --enable-expert-parallel \
                 --data-parallel-hybrid-lb \
-                --tensor-parallel-size $TP_SIZE \
                 --data-parallel-size $((LWS_GROUP_SIZE * DP_SIZE_LOCAL)) \
                 --data-parallel-size-local $DP_SIZE_LOCAL \
                 --data-parallel-address ${LWS_LEADER_ADDRESS} \
@@ -69,8 +63,6 @@ spec:
             value: "8"
           - name: TRITON_LIBCUDA_PATH
             value: /usr/lib64
-          - name: HF_HUB_DISABLE_XET
-            value: "1"
           - name: VLLM_SKIP_P2P_CHECK
             value: "1"
           - name: VLLM_RANDOMIZE_DP_DUMMY_INPUTS
@@ -97,14 +89,10 @@ spec:
             value: ibp
           - name: VLLM_LOGGING_LEVEL
             value: INFO
-          - name: HF_HUB_CACHE
-            value: /huggingface-cache
           - name: VLLM_NIXL_SIDE_CHANNEL_HOST
             valueFrom:
               fieldRef:
                 fieldPath: status.podIP
-          - name: TP_SIZE
-            value: "1"
           ports:
           - containerPort: 8000
             name: metrics
@@ -113,7 +101,6 @@ spec:
             httpGet:
               path: /health
               port: 8000
-          
           resources:
             limits:
               ephemeral-storage: 64Gi
@@ -124,10 +111,7 @@ spec:
               ephemeral-storage: 64Gi
               memory: 512Gi
               nvidia.com/gpu: "8"
-          
           volumeMounts:
             - mountPath: /dev/shm
               name: dshm
-            - mountPath: /huggingface-cache
-              name: hf-cache
           workingDir: /code

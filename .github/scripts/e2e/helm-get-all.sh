@@ -1,5 +1,5 @@
 #!/usr/bin/env sh
-set -eu
+set -eux
 
 if [ ! $(command -v helm) ]; then
   echo "\`helm\` is required for this script, please install helm"
@@ -20,9 +20,7 @@ if [ ! -f "${LOG_FILE}" ]; then
   exit 1
 fi
 
-helm get all ${RELEASE_NAME} -n ${NAMESPACE} &> /dev/null
-
-if [ "${$?}" = "0" ]; then
+if helm status "$RELEASE_NAME" -n "$NAMESPACE" >/dev/null 2>&1; then
   echo "==============================================================" >> "${LOG_FILE}"
   echo "             Logging ${NAMESPACE}/${RELEASE_NAME}..." >> "${LOG_FILE}"
   echo "==============================================================" >> "${LOG_FILE}"

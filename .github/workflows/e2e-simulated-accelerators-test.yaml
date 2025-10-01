@@ -16,7 +16,7 @@ on:
       gateway_type:
         description: "Gateway type to use"
         required: false
-        default: "kgateway"
+        default: "istio"
         type: choice
         options:
           - kgateway
@@ -38,8 +38,7 @@ jobs:
 
     env:
       NAMESPACE: llm-d-sim
-      GATEWAY_TYPE: ${{ inputs.gateway_type || 'kgateway' }}
-      HF_TOKEN: dummy_token_for_sim
+      GATEWAY_TYPE: ${{ inputs.gateway_type || 'istio' }}
 
     steps:
       - name: Checkout repository
@@ -65,9 +64,8 @@ jobs:
 
       - name: Fetch and checkout PR
         if: steps.check_pr.outputs.is_pr == 'true'
-        shell: bash
         run: |
-          git fetch origin pull/"$PR_OR_BRANCH"/merge:pr-"$PR_OR_BRANCH"
+          git fetch origin pull/"$PR_OR_BRANCH"/head:pr-"$PR_OR_BRANCH"
           git checkout pr-"$PR_OR_BRANCH"
 
       - name: Checkout branch
@@ -109,28 +107,22 @@ jobs:
         env:
           GATEWAY_TYPE: ${{ env.GATEWAY_TYPE }}
         run: |
-          cd guides/gateway-provider
+          cd guides/prereq/gateway-provider
           ./install-gateway-provider-dependencies.sh
           helmfile apply -f ${GATEWAY_TYPE}.helmfile.yaml
 
-      - name: Create namespace
+      - name: Wait for gateway control plane to be ready
         run: |
-          kubectl create namespace "${{ env.NAMESPACE }}" || echo "Namespace already exists"
-
-      - name: Deploy llm-d infra
-        env:
-          GATEWAY_TYPE: ${{ env.GATEWAY_TYPE }}
-        run: |
-          cd guides/simulated-accelerators
-          helmfile apply -e ${GATEWAY_TYPE}
-
-      - name: Wait for infrastructure pods to be ready
-        run: |
-          echo "Waiting for infrastructure pods to be ready…"
+          echo "Waiting for gateway control plane pods to be ready…"
           kubectl wait --for=condition=ready pod \
             --selector=app.kubernetes.io/managed-by=Helm \
-            --namespace "${{ env.NAMESPACE }}" \
+            --namespace "${{ env.GATEWAY_TYPE }}-system" \
             --timeout=300s || true
+
+      - name: Install monitoring stack
+        run: |
+          cd docs/monitoring
+          ./scripts/install-prometheus-grafana.sh
 
       - name: Deploy simulation services with helmfile
         env:
@@ -138,6 +130,12 @@ jobs:
         run: |
           cd guides/simulated-accelerators
           helmfile apply -e ${GATEWAY_TYPE}
+
+      - name: Deploy simulation services with helmfile
+        run: |
+          cd guides/simulated-accelerators
+          echo "Deploying HTTPRoute..."
+          kubectl apply -f httproute.yaml -n ${{ env.NAMESPACE }}
 
       - name: Wait for all simulation pods to be ready
         run: |
