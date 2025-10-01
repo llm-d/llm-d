@@ -44,16 +44,19 @@ spec:
               #################
               START_RANK=$(( ${LWS_WORKER_INDEX:-0} * DP_SIZE_LOCAL ))
             
+              # --data-parallel-hybrid-lb: Use exernal load balancing across nodes, and internal load balancing within a node
+              # --enable-expert-parallel: Use TPxDP in attention, EP in MoE layers
+              # --async-scheduling: Reduce white space between engine steps
+              # --enable-dbo: Dual batch overlap (DBO) overlaps compute with collective communication.
+              # --enable-eplb:  Expert-parallel load balancing reduces EP load imbalance by replicating heavily-used experts Performance-memory tradeoff: on DeepSeekV3 eplb uses an extra 2GB per redundant expert per GPU Divisibility constraint: num_routed_experts (256 for DSv3) + num_redundant_experts must be divisible by the number of GPUs.
+
               source /opt/vllm/bin/activate
               exec vllm serve \
                 deepseek-ai/DeepSeek-R1-0528 \
                 --port 8000 \
                 --trust-remote-code \
                 --disable-uvicorn-access-log \
-                # Use exernal load balancing across nodes, \
-                # and internal load balancing within a node \
                 --data-parallel-hybrid-lb \
-                # Use TPxDP in attention, EP in MoE layers \
                 --enable-expert-parallel \
                 --tensor-parallel-size $TP_SIZE \
                 --data-parallel-size $((LWS_GROUP_SIZE * DP_SIZE_LOCAL)) \
@@ -61,18 +64,11 @@ spec:
                 --data-parallel-address ${LWS_LEADER_ADDRESS} \
                 --data-parallel-rpc-port 5555 \
                 --data-parallel-start-rank $START_RANK \
-                # configure P/D disaggregation \
                 --kv_transfer_config '{"kv_connector":"NixlConnector",
                                         "kv_role":"kv_both"}' \
-                # Reduce white space between engine steps \
                 --async-scheduling \
-                # Dual batch overlap (DBO) overlaps compute with collective communication. \
                 --enable-dbo \
                 --dbo-prefill-token-threshold 32 \
-                # Expert-parallel load balancing reduces EP load imbalance by replicating heavily-used experts \
-                # Performance-memory tradeoff: on DeepSeekV3 eplb uses an extra 2GB per redundant expert per GPU \
-                # Divisibility constraint: num_routed_experts (256 for DSv3) + num_redundant_experts must be \
-                # divisible by the number of GPUs. \
                 --enable-eplb \
                 --eplb-config '{"window_size":"1000",
                                 "step_interval":"3000",
