@@ -199,6 +199,8 @@ RUN --mount=type=secret,id=aws_access_key_id \
             cmake \
             -G Ninja \
             -DCMAKE_BUILD_TYPE=Debug \
+            -DNVSHMEM_DEBUG=ON \
+            -DNVSHMEM_DEVEL=1 \
             -DCMAKE_C_FLAGS="-g -O0" \
             -DCMAKE_CXX_FLAGS="-g -O0" \
             -DCMAKE_CUDA_FLAGS="-g -G -O0" \
