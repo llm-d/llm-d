@@ -200,6 +200,8 @@ RUN --mount=type=secret,id=aws_access_key_id \
             -G Ninja \
             -DCMAKE_BUILD_TYPE=Debug \
             -DNVSHMEM_DEBUG=ON \
+            -DNVSHMEM_TRACE=ON \
+            -DNVSHMEM_VERBOSE=ON \
             -DNVSHMEM_DEVEL=1 \
             -DCMAKE_C_FLAGS="-g -O0" \
             -DCMAKE_CXX_FLAGS="-g -O0" \
