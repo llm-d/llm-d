@@ -30,42 +30,60 @@ releases:
   - name: {{ printf "infra-%s" $rn | quote }}
     namespace: {{ $ns }}
     chart: llm-d-infra/llm-d-infra
-    version: v1.3.0
+    version: v1.3.3
     installed: true
     labels:
       type: infrastructure
       kind: inference-stack
     values:
-      - gateway:
-        {{ .Environment.Values.gateway | toYaml | nindent 10 }}
-      - gateway:
-          destinationRule:
-            host: {{ printf "gaie-%s-epp.%s.svc.cluster.local" $rn $ns | quote }}
+      - gateway: 
+          {{ .Environment.Values.gateway | toYaml | nindent 10 }}
 
   - name: {{ printf "gaie-%s" $rn | quote }}
     namespace: {{ $ns }}
     chart: oci://registry.k8s.io/gateway-api-inference-extension/charts/inferencepool
-    version: v0.5.1
+    version: v1.0.1
     installed: true
     needs:
       - {{ printf "infra-%s" $rn | quote }}
     values:
       - gaie-pd/values.yaml
-    {{- if eq .Environment.Name "gke" }}
+    # Apply provider name if on GKE
+    {{- if or (eq .Environment.Name "gke") (eq .Environment.Name "gke_tpu") }}
       - provider:
           name: {{ .Environment.Values.provider.name }}
+        inferencePool:
+          apiVersion: {{ .Environment.Values.inferencePool.apiVersion }}
+        inferenceExtension:
+          monitoring:
+            gke:
+              enabled: true
+            prometheus:
+              enabled: false
     {{- end }}
+    # Apply destination rule for anything istio
+    {{- if or (eq .Environment.Name "istio") (eq .Environment.Name "default") (eq .Environment.Name "istioBench") }}
+      - provider:
+          name: {{ .Environment.Values.provider.name }}
+      - istio:
+        {{ .Environment.Values.istio | toYaml | nindent 10 }}
+      - istio:
+          destinationRule:
+            host: {{ printf "gaie-%s-epp.%s.svc.cluster.local" $rn $ns | quote }}
+    {{- end }}
+    # Apply log level only in bench setting
     {{- if or (eq .Environment.Name "istioBench") (eq .Environment.Name "default") }}
       - inferenceExtension:
-          logVerbosity: {{ .Environment.Values.inferenceExtension.logVerbosity }}
-    {{- end}}
+          flags: 
+            {{ .Environment.Values.inferenceExtension.flags | toYaml | nindent 12 }}
+    {{- end }}
     labels:
       kind: inference-stack
 
   - name: {{ printf "ms-%s" $rn | quote }}
     namespace: {{ $ns }}
     chart: llm-d-modelservice/llm-d-modelservice
-    version: v0.2.7
+    version: v0.2.11
     installed: true
     needs:
       - {{ printf "infra-%s" $rn | quote }}
@@ -73,11 +91,8 @@ releases:
     values:
       - ms-pd/values.yaml
     {{- if or (eq .Environment.Name "istioBench") (eq .Environment.Name "default") }}
-      - routing:
-          proxy:
-            debugLevel: {{ .Environment.Values.routing.proxy.debugLevel }}
-          epp:
-            debugLevel: {{ .Environment.Values.routing.epp.debugLevel }}
+      - routing: 
+          {{ .Environment.Values.routing | toYaml | nindent 10 }}
     {{- end }}
     set:
     # apply release name derived values
@@ -86,14 +101,18 @@ releases:
       - name: "routing.parentRefs[0].name"
         value: {{ printf "infra-%s-inference-gateway" $rn | quote }}
     {{- if eq .Environment.Name "gke" }}
-      - name: "decode.containers[0].resources.limits.rdma/ib"
-        value: null
-      - name: "decode.containers[0].resources.requests.rdma/ib"
-        value: null
-      - name: "prefill.containers[0].resources.limits.rdma/ib"
-        value: null
-      - name: "prefill.containers[0].resources.requests.rdma/ib"
-        value: null
+      - name: 'decode.containers[0].resources.limits.rdma/ib'
+        value: "null"
+      - name: 'decode.containers[0].resources.requests.rdma/ib'
+        value: "null"
+      - name: 'prefill.containers[0].resources.limits.rdma/ib'
+        value: "null"
+      - name: 'prefill.containers[0].resources.requests.rdma/ib'
+        value: "null"
+      - name: "decode.monitoring.podmonitor.enabled"
+        value: false
+      - name: "prefill.monitoring.podmonitor.enabled"
+        value: false
     {{- end }}
     labels:
       kind: inference-stack

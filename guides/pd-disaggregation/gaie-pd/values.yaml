@@ -1,14 +1,13 @@
 inferenceExtension:
   replicas: 1
   image:
-    # upstream GIE epp image does NOT support PD, have to use `llm-d-inference-scheduler`
     name: llm-d-inference-scheduler
     hub: ghcr.io/llm-d
-    tag: v0.2.1
+    tag: v0.3.1-rc.1
     pullPolicy: Always
   extProcPort: 9002
   pluginsConfigFile: "pd-config.yaml"
-  pluginsCustomConfig:
+  pluginsCustomConfig: # THIS CONFIG NEEDS TO BE CHECKED FOR INF SCHEDULER NEW IMAGE
     pd-config.yaml: |
       # ALWAYS DO PD IN THIS EXAMPLE (THRESHOLD 0)
       apiVersion: inference.networking.x-k8s.io/v1alpha1
@@ -40,9 +39,22 @@ inferenceExtension:
         - pluginRef: queue-scorer
           weight: 1.0
         - pluginRef: max-score-picker
+
+  # Monitoring configuration for EPP
+  monitoring:
+    interval: "10s"
+    # Service account token secret for authentication
+    secret:
+      name: pd-gateway-sa-metrics-reader-secret
+    # Prometheus ServiceMonitor will be created when enabled for EPP metrics collection
+    prometheus:
+      enabled: true
+
 inferencePool:
+  apiVersion: inference.networking.x-k8s.io/v1alpha2 # use old API version for inference
   targetPortNumber: 8000
   modelServerType: vllm
   modelServers:
     matchLabels:
       llm-d.ai/inferenceServing: "true"
+      llm-d.ai/model: ms-pd-llm-d-modelservice

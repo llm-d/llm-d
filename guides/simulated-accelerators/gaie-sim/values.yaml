@@ -1,23 +1,33 @@
 inferenceExtension:
   replicas: 1
   image:
-    # Either image will work, you just need to bring the correct plugins per image. In this example we will bring the upstream default plugin
+    # both downstream infernece-scheduler and upstream epp image can support simulated-accelerators example
     ###################
-    # name: llm-d-inference-scheduler
-    # hub: ghcr.io/llm-d
-    # tag: v0.2.1
+    name: llm-d-inference-scheduler
+    hub: ghcr.io/llm-d
+    tag: v0.3.1-rc.1
     ###################
-    name: epp
-    hub: registry.k8s.io/gateway-api-inference-extension
-    tag:  v0.5.1
+    # name: epp
+    # hub: registry.k8s.io/gateway-api-inference-extension
+    # tag: v1.0.1
     ###################
     pullPolicy: Always
   extProcPort: 9002
   pluginsConfigFile: "default-plugins.yaml" # using upstream GIE default-plugins, see: https://github.com/kubernetes-sigs/gateway-api-inference-extension/blob/main/config/charts/inferencepool/templates/epp-config.yaml#L7C3-L56C33
+
+  # Monitoring configuration for EPP
+  monitoring:
+    interval: "10s"
+    # Service account token secret for authentication
+    secret:
+      name: sim-gateway-sa-metrics-reader-secret
+    # Prometheus ServiceMonitor will be created when enabled for EPP metrics collection
+    prometheus:
+      enabled: true
 inferencePool:
   targetPortNumber: 8000
+  apiVersion: inference.networking.x-k8s.io/v1alpha2 # use old API version for inference
   modelServerType: vllm
   modelServers:
     matchLabels:
       llm-d.ai/inferenceServing: "true"
-      llm-d.ai/model: ms-sim-llm-d-modelservice

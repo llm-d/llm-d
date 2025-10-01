@@ -7,24 +7,14 @@ modelArtifacts:
   authSecretName: "llm-d-hf-token"
 
 routing:
-  modelName: Qwen/Qwen3-0.6B
   servicePort: 8000
-  parentRefs:
-    - group: gateway.networking.k8s.io
-      kind: Gateway
-      # name: infra-inference-scheduling-inference-gateway # set in helmfile
-
   proxy:
-    image: ghcr.io/llm-d/llm-d-routing-sidecar:v0.2.0
+    image: ghcr.io/llm-d/llm-d-routing-sidecar:v0.3.0
     connector: nixlv2
     secure: false
 
-  inferenceModel:
-    create: false
-
   inferencePool:
     create: false
-    # name: gaie-inference-scheduling # set in helmfile
 
   httpRoute:
     create: false
@@ -37,13 +27,13 @@ decode:
   replicas: 2
   monitoring:
     podmonitor:
-      enabled: false
+      enabled: true
       portName: "metrics"  # decode vLLM service port (from routing.proxy.targetPort)
       path: "/metrics"
       interval: "30s"
   containers:
   - name: "vllm"
-    image: "ghcr.io/llm-d/llm-d-dev:pr-170"
+    image: "ghcr.io/llm-d/llm-d-dev:pr-245@sha256:06ba310cd557b7762c391ac11fe0bf20307851769bcf42973608ddcc3b4b47cf"
     modelCommand: vllmServe
     args:
       - "--enforce-eager"

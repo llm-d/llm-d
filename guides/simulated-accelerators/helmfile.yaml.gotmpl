@@ -26,28 +26,43 @@ releases:
   - name: {{ printf "infra-%s" $rn | quote }}
     namespace: {{ $ns }}
     chart: llm-d-infra/llm-d-infra
-    version: v1.3.0
+    version: v1.3.3
     installed: true
     labels:
       type: infrastructure
       kind: inference-stack
     values:
-      - {{ .Environment.Values | toYaml | nindent 8  }}
-      - gateway:
-          destinationRule:
-            host: {{ printf "gaie-%s-epp.%s.svc.cluster.local" $rn $ns | quote }}
+      - gateway: 
+          {{ .Environment.Values.gateway | toYaml | nindent 10 }}
 
   - name: {{ printf "gaie-%s" $rn | quote }}
     namespace: {{ $ns }}
     chart: oci://registry.k8s.io/gateway-api-inference-extension/charts/inferencepool
-    version: v0.5.1
+    version: v1.0.1
     installed: true
     needs:
       - {{ printf "infra-%s" $rn | quote }}
     values:
       - gaie-sim/values.yaml
     {{- if eq .Environment.Name "gke" }}
-      - provider: {{ .Environment.Values.provider }}
+      - provider:
+          name: {{ .Environment.Values.provider.name }}
+        inferencePool:
+          apiVersion: {{ .Environment.Values.inferencePool.apiVersion }}
+        inferenceExtension:
+          monitoring:
+            gke:
+              enabled: true
+            prometheus:
+              enabled: false
+    {{- else if or (eq .Environment.Name "istio") (eq .Environment.Name "default") }}
+      - provider:
+          name: {{ .Environment.Values.provider.name }}
+      - istio:
+        {{ .Environment.Values.istio | toYaml | nindent 10 }}
+      - istio:
+          destinationRule:
+            host: {{ printf "gaie-%s-epp.%s.svc.cluster.local" $rn $ns | quote }}
     {{- end }}
     labels:
       kind: inference-stack
@@ -55,7 +70,7 @@ releases:
   - name: {{ printf "ms-%s" $rn | quote }}
     namespace: {{ $ns }}
     chart: llm-d-modelservice/llm-d-modelservice
-    version: v0.2.7
+    version: v0.2.11
     installed: true
     needs:
       - {{ printf "infra-%s" $rn | quote }}
@@ -68,5 +83,9 @@ releases:
         value: {{ printf "gaie-%s" $rn | quote }}
       - name: "routing.parentRefs[0].name"
         value: {{ printf "infra-%s-inference-gateway" $rn | quote }}
+    {{- if (eq .Environment.Name "gke") }}  
+      - name: "decode.monitoring.podmonitor.enabled"
+        value: false
+    {{- end }}
     labels:
       kind: inference-stack

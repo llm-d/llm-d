@@ -2,27 +2,45 @@ SHELL := /usr/bin/env bash
 
 # Defaults
 PROJECT_NAME ?= llm-d
-DEV_VERSION ?= 0.0.1
-PROD_VERSION ?= 0.0.0
-IMAGE_TAG_BASE ?= ghcr.io/llm-d/$(PROJECT_NAME)
-IMG = $(IMAGE_TAG_BASE):$(DEV_VERSION)
-NAMESPACE ?= hc4ai-operator
+DOCKERFILE_DIR = docker
+ifeq ($(DEVICE), xpu)
+	DOCKERFILE ?= Dockerfile.xpu
+else
+	DOCKERFILE ?= Dockerfile.cuda
+endif # Maybe we break out version per image because they share no common bits --> independent releas cycles
+VERSION ?= v0.2.1
+
+# New tag to use if you would like to use `make image-retag`
+NEW_TAG ?= sha256...
+
+# DEVICE, options: ['cuda', 'xpu']
+DEVICE ?= cuda
+
+IMAGE_BASE ?= ghcr.io/llm-d/$(PROJECT_NAME)-$(DEVICE)
+
+# BUILD_TYPE, options ['dev', 'prod']
+BUILD_TYPE ?= dev
+ifeq ($(BUILD_TYPE), dev)
+	IMAGE_BASE := $(IMAGE_BASE)-dev
+endif
+
+IMG := $(IMAGE_BASE):$(VERSION)
 
 CONTAINER_TOOL := $(shell (command -v docker >/dev/null 2>&1 && echo docker) || (command -v podman >/dev/null 2>&1 && echo podman) || echo "")
 BUILDER := $(shell command -v buildah >/dev/null 2>&1 && echo buildah || echo $(CONTAINER_TOOL))
 PLATFORMS ?= linux/amd64 # linux/arm64 # linux/s390x,linux/ppc64le
 
-# go source files
-SRC = $(shell find . -type f -name '*.go')
-
 .PHONY: help
 help: ## Print help
 	@awk 'BEGIN {FS = ":.*##"; printf "\nUsage:\n  make \033[36m<target>\033[0m\n"} /^[a-zA-Z_0-9-]+:.*?##/ { printf "  \033[36m%-15s\033[0m %s\n", $$1, $$2 } /^##@/ { printf "\n\033[1m%s\033[0m\n", substr($$0, 5) } ' $(MAKEFILE_LIST)
+	@printf "\n\033[1mXPU Build Examples:\033[0m\n"
+	@printf "  \033[36mmake image-build DEVICE=xpu\033[0m                    # Build Intel XPU Docker image\n"
+	@printf "  \033[36mmake image-build DEVICE=xpu VERSION=v0.2.0\033[0m     # Build with specific version\n"
+	@printf "  \033[36mmake image-push DEVICE=xpu\033[0m                     # Push Intel XPU Docker image\n"
+	@printf "  \033[36mmake image-retag DEVICE=xpu NEW_TAG=test\033[0m                     # Re-Tag Intel XPU Docker image\n"
+	@printf "  \033[36mmake env DEVICE=xpu\033[0m                            # Show XPU environment variables\n"
 
 ##@ Development
-
-.PHONY: format
-format: ## Format Go source files
 
 .PHONY: test
 test: ## Run tests
@@ -45,18 +63,17 @@ build: ##
 # The Dockerfile the build task should use.
 # Default is the canonical “Dockerfile” so local `make buildah-build`
 # still works without extra flags.
-DOCKERFILE ?= Dockerfile.ubi
 
 .PHONY: buildah-build
-buildah-build: check-builder load-version-json ## Build and push image (multi-arch if supported)
+buildah-build: check-builder ## Build and push image (multi-arch if supported)
 	@echo "✅ Using builder: $(BUILDER)"
 	@if [ "$(BUILDER)" = "buildah" ]; then \
-	  echo "🔧 Buildah detected: Performing multi-arch build with $(DOCKERFILE)…"; \
+	  echo "🔧 Buildah detected: Performing multi-arch build with $(DOCKERFILE_DIR)/$(DOCKERFILE)…"; \
 	  FINAL_TAG=$(IMG); \
 	  for arch in amd64; do \
 		ARCH_TAG=$$FINAL_TAG-$$arch; \
 	    echo "📦 Building for architecture: $$arch"; \
-		buildah build --file $(DOCKERFILE) --arch=$$arch --os=linux --layers -t $(IMG)-$$arch . || exit 1; \
+		buildah build --file $(DOCKERFILE_DIR)/$(DOCKERFILE) --arch=$$arch --os=linux --layers -t $(IMG)-$$arch . || exit 1; \
 	    echo "🚀 Pushing image: $(IMG)-$$arch"; \
 	    buildah push $(IMG)-$$arch docker://$(IMG)-$$arch || exit 1; \
 	  done; \
@@ -71,15 +88,15 @@ buildah-build: check-builder load-version-json ## Build and push image (multi-ar
 	  buildah manifest push --all $(IMG) docker://$(IMG); \
 	elif [ "$(BUILDER)" = "docker" ]; then \
 	  echo "🐳 Docker detected: Building with buildx..."; \
-	  sed -e '1 s/\(^FROM\)/FROM --platform=$${BUILDPLATFORM}/' $(DOCKERFILE) > Dockerfile.cross; \
+	  sed -e '1 s/\(^FROM\)/FROM --platform=$${BUILDPLATFORM}/' $(DOCKERFILE_DIR)/$(DOCKERFILE) >$(DOCKERFILE_DIR)/Dockerfile.cross; \
 	  - docker buildx create --use --name image-builder || true; \
 	  docker buildx use image-builder; \
-	  docker buildx build --push --platform=$(PLATFORMS) --tag $(IMG) -f Dockerfile.cross . || exit 1; \
+	  docker buildx build --push --platform=$(PLATFORMS) --tag $(IMG) -f $(DOCKERFILE_DIR)/Dockerfile.cross . || exit 1; \
 	  docker buildx rm image-builder || true; \
-	  rm Dockerfile.cross; \
+	  rm $(DOCKERFILE_DIR)/Dockerfile.cross; \
 	elif [ "$(BUILDER)" = "podman" ]; then \
 	  echo "⚠️ Podman detected: Building single-arch image..."; \
-	  podman build --format=docker -f $(DOCKERFILE) -t $(IMG) . || exit 1; \
+	  podman build --format=docker -f $(DOCKERFILE_DIR)/$(DOCKERFILE) -t $(IMG) . || exit 1; \
 	  podman push $(IMG) || exit 1; \
 	else \
 	  echo "❌ No supported container tool available."; \
@@ -87,14 +104,19 @@ buildah-build: check-builder load-version-json ## Build and push image (multi-ar
 	fi
 
 .PHONY:	image-build
-image-build: check-container-tool load-version-json ## Build Docker image ## Build Docker image using $(CONTAINER_TOOL)
+image-build: check-container-tool ## Build Docker image using $(CONTAINER_TOOL)
 	@printf "\033[33;1m==== Building Docker image $(IMG) ====\033[0m\n"
-	$(CONTAINER_TOOL) build --progress=plain --build-arg TARGETOS=$(TARGETOS) --build-arg TARGETARCH=$(TARGETARCH) -t $(IMG) .
+	$(CONTAINER_TOOL) build --progress=plain --platform $(PLATFORMS) -t $(IMG) -f $(DOCKERFILE_DIR)/$(DOCKERFILE) .
 
 .PHONY: image-push
-image-push: check-container-tool load-version-json ## Push Docker image $(IMG) to registry
+image-push: check-container-tool ## Push Docker image $(IMG) to registry
 	@printf "\033[33;1m==== Pushing Docker image $(IMG) ====\033[0m\n"
 	$(CONTAINER_TOOL) push $(IMG)
+
+.PHONY: image-retag
+image-retag: check-container-tool ## Push Docker image $(IMG) to registry
+	@printf "\033[33;1m==== Pushing Docker image $(IMG) to $(IMAGE_BASE):$(NEW_TAG) ====\033[0m\n"
+	$(CONTAINER_TOOL) tag $(IMG) $(IMAGE_BASE):$(NEW_TAG)
 
 ##@ Install/Uninstall Targets
 
@@ -155,12 +177,12 @@ uninstall-k8s: check-kubectl check-kustomize check-envsubst ## Uninstall from Ku
 
 .PHONY: install-openshift
 install-openshift: check-kubectl check-kustomize check-envsubst ## Install on OpenShift
-	@echo $$PROJECT_NAME $$NAMESPACE $$IMAGE_TAG_BASE $$VERSION
+	@echo $$PROJECT_NAME $$NAMESPACE $$IMAGE_BASE $$VERSION
 	@echo "Creating namespace $(NAMESPACE)..."
 	kubectl create namespace $(NAMESPACE) 2>/dev/null || true
 	@echo "Deploying common resources from deploy/ ..."
 	# Build and substitute the base manifests from deploy, then apply them
-	kustomize build deploy | envsubst '$$PROJECT_NAME $$NAMESPACE $$IMAGE_TAG_BASE $$VERSION' | kubectl apply -n $(NAMESPACE) -f -
+	kustomize build deploy | envsubst '$$PROJECT_NAME $$NAMESPACE $$IMAGE_BASE $$VERSION' | kubectl apply -n $(NAMESPACE) -f -
 	@echo "Waiting for pod to become ready..."
 	sleep 5
 	@POD=$$(kubectl get pod -l app=$(PROJECT_NAME)-statefulset -n $(NAMESPACE) -o jsonpath='{.items[0].metadata.name}'); \
@@ -171,9 +193,9 @@ install-openshift: check-kubectl check-kustomize check-envsubst ## Install on Op
 .PHONY: uninstall-openshift
 uninstall-openshift: check-kubectl check-kustomize check-envsubst ## Uninstall from OpenShift
 	@echo "Removing resources from OpenShift..."
-	kustomize build deploy | envsubst '$$PROJECT_NAME $$NAMESPACE $$IMAGE_TAG_BASE $$VERSION' | kubectl delete --force -f - || true
+	kustomize build deploy | envsubst '$$PROJECT_NAME $$NAMESPACE $$IMAGE_BASE $$VERSION' | kubectl delete --force -f - || true
 	# @if kubectl api-resources --api-group=route.openshift.io | grep -q Route; then \
-	#   envsubst '$$PROJECT_NAME $$NAMESPACE $$IMAGE_TAG_BASE $$VERSION' < deploy/openshift/route.yaml | kubectl delete --force -f - || true; \
+	#   envsubst '$$PROJECT_NAME $$NAMESPACE $$IMAGE_BASE $$VERSION' < deploy/openshift/route.yaml | kubectl delete --force -f - || true; \
 	# fi
 	@POD=$$(kubectl get pod -l app=$(PROJECT_NAME)-statefulset -n $(NAMESPACE) -o jsonpath='{.items[0].metadata.name}'); \
 	echo "Deleting pod: $$POD"; \
@@ -185,63 +207,19 @@ uninstall-openshift: check-kubectl check-kustomize check-envsubst ## Uninstall f
 .PHONY: install-rbac
 install-rbac: check-kubectl check-kustomize check-envsubst ## Install RBAC
 	@echo "Applying RBAC configuration from deploy/rbac..."
-	kustomize build deploy/rbac | envsubst '$$PROJECT_NAME $$NAMESPACE $$IMAGE_TAG_BASE $$VERSION' | kubectl apply -f -
+	kustomize build deploy/rbac | envsubst '$$PROJECT_NAME $$NAMESPACE $$IMAGE_BASE $$VERSION' | kubectl apply -f -
 
 .PHONY: uninstall-rbac
 uninstall-rbac: check-kubectl check-kustomize check-envsubst ## Uninstall RBAC
 	@echo "Removing RBAC configuration from deploy/rbac..."
-	kustomize build deploy/rbac | envsubst '$$PROJECT_NAME $$NAMESPACE $$IMAGE_TAG_BASE $$VERSION' | kubectl delete -f - || true
-
-
-##@ Version Extraction
-.PHONY: version dev-registry prod-registry extract-version-info
-
-dev-version: check-jq
-	@jq -r '.dev-version' .version.json
-
-prod-version: check-jq
-	@jq -r '.prod-version' .version.json
-
-dev-registry: check-jq
-	@jq -r '."dev-registry"' .version.json
-
-prod-registry: check-jq
-	@jq -r '."prod-registry"' .version.json
-
-extract-version-info: check-jq
-	@echo "DEV_VERSION=$$(jq -r '."dev-version"' .version.json)"
-	@echo "PROD_VERSION=$$(jq -r '."prod-version"' .version.json)"
-	@echo "DEV_IMAGE_TAG_BASE=$$(jq -r '."dev-registry"' .version.json)"
-	@echo "PROD_IMAGE_TAG_BASE=$$(jq -r '."prod-registry"' .version.json)"
-
-##@ Load Version JSON
-
-.PHONY: load-version-json
-load-version-json: check-jq
-	@if [ "$(DEV_VERSION)" = "0.0.1" ]; then \
-	  DEV_VERSION=$$(jq -r '."dev-version"' .version.json); \
-	  PROD_VERSION=$$(jq -r '."dev-version"' .version.json); \
-	  echo "✔ Loaded DEV_VERSION from .version.json: $$DEV_VERSION"; \
-	  echo "✔ Loaded PROD_VERSION from .version.json: $$PROD_VERSION"; \
-	  export DEV_VERSION; \
-	  export PROD_VERSION; \
-	fi && \
-	CURRENT_DEFAULT="us.icr.io/ibm-hc4ai-operator/$(PROJECT_NAME)"; \
-	if [ "$(IMAGE_TAG_BASE)" = "$$CURRENT_DEFAULT" ]; then \
-	  IMAGE_TAG_BASE=$$(jq -r '."dev-registry"' .version.json); \
-	  echo "✔ Loaded IMAGE_TAG_BASE from .version.json: $$IMAGE_TAG_BASE"; \
-	  export IMAGE_TAG_BASE; \
-	fi && \
-	echo "🛠 Final values: DEV_VERSION=$$DEV_VERSION, PROD_VERSION=$$PROD_VERSION, IMAGE_TAG_BASE=$$IMAGE_TAG_BASE"
+	kustomize build deploy/rbac | envsubst '$$PROJECT_NAME $$NAMESPACE $$IMAGE_BASE $$VERSION' | kubectl delete -f - || true
 
 .PHONY: env
-env: load-version-json ## Print environment variables
-	@echo "DEV_VERSION=$(DEV_VERSION)"
-	@echo "PROD_VERSION=$(PROD_VERSION)"
-	@echo "IMAGE_TAG_BASE=$(IMAGE_TAG_BASE)"
+env:
+	@echo "IMAGE_BASE=$(IMAGE_BASE)"
+	@echo "VERSION=$(VERSION)"
 	@echo "IMG=$(IMG)"
 	@echo "CONTAINER_TOOL=$(CONTAINER_TOOL)"
-
 
 ##@ Tools
 

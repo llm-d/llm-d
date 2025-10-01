@@ -120,6 +120,11 @@ The first path we can hit is `/v1/models`. This endpoint is only dependent on a 
 ```bash
 curl -s ${ENDPOINT}/v1/models \
   -H "Content-Type: application/json" | jq
+```
+
+Expected output:
+
+```json
 {
   "data": [
     {
@@ -154,6 +159,11 @@ curl -X POST ${ENDPOINT}/v1/completions \
         "model": "random",
         "prompt": "How are you today?"
       }' | jq
+```
+
+Expected output:
+
+```json
 {
   "choices": [
     {

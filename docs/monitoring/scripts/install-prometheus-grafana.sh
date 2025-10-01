@@ -288,9 +288,11 @@ grafana:
   adminPassword: admin
   service:
     type: ClusterIP
+    sessionAffinity: ""
 prometheus:
   service:
     type: ClusterIP
+    sessionAffinity: ""
   prometheusSpec:
     # Central monitoring: watch all ServiceMonitors and PodMonitors in all namespaces
     serviceMonitorSelectorNilUsesHelmValues: false
@@ -317,9 +319,11 @@ grafana:
   adminPassword: admin
   service:
     type: ClusterIP
+    sessionAffinity: ""
 prometheus:
   service:
     type: ClusterIP
+    sessionAffinity: ""
   prometheusSpec:
     # Limit monitoring to user's namespaces for multi-tenancy
     serviceMonitorSelectorNilUsesHelmValues: false
@@ -352,10 +356,17 @@ EOF
   # Use unique release name based on namespace to avoid conflicts
   RELEASE_NAME="prometheus-${MONITORING_NAMESPACE}"
 
+  # Apply CRDs first without validation for int32 v int64 unrecognized format
+  if [ "${CRD_INSTALL_FLAG:-}" != "--skip-crds" ]; then
+    "$HCMD" show crds prometheus-community/kube-prometheus-stack \
+    | "$KCMD" apply --server-side --validate=false -f -
+  fi
+
+  # Always apply without CRDs because they were conditionally installed before
   $HCMD install "${RELEASE_NAME}" prometheus-community/kube-prometheus-stack \
     --namespace "${MONITORING_NAMESPACE}" \
     ${DEBUG} \
-    ${CRD_INSTALL_FLAG} \
+    --skip-crds \
     -f /tmp/prometheus-values.yaml
 
   rm -f /tmp/prometheus-values.yaml

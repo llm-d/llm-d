@@ -44,7 +44,7 @@ jobs:
       NAMESPACE: llm-d-pd
       GATEWAY: gke-l7-regional-external-managed
       GATEWAY_TYPE: gke
-      PR_OR_BRANCH: ${{ github.event.inputs.pr_or_branch || github.event.issue.number || github.event.number }}
+      PR_OR_BRANCH: ${{ github.event.inputs.pr_or_branch || github.event.issue.number || github.event.number || 'main' }}
       HF_TOKEN: ${{ secrets.HF_TOKEN }}
 
     steps:
@@ -55,8 +55,15 @@ jobs:
 
       - name: Determine if pr_or_branch is a PR number
         id: check_pr
+        env:
+          PR_OR_BRANCH: ${{ github.event.inputs.pr_or_branch }}
+        shell: bash
         run: |
+          echo "PR_OR_BRANCH=${PR_OR_BRANCH:-main}" >> "$GITHUB_ENV"
           if [[ "$PR_OR_BRANCH" =~ ^[0-9]+$ ]]; then
+            echo "is_pr=true" >> "$GITHUB_OUTPUT"
+          elif [[ "${{ github.event_name }}" = "pull_request" ]]; then
+            echo "PR_OR_BRANCH=${{ github.event.pull_request.number }}" >> $GITHUB_ENV
             echo "is_pr=true" >> "$GITHUB_OUTPUT"
           else
             echo "is_pr=false" >> "$GITHUB_OUTPUT"
@@ -94,11 +101,12 @@ jobs:
           echo "Applying pd-disaggregation slim values..."
           # Transform ms-pd/values.yaml to a scaled-down deployment
 
-          yq e 'del(.decode.containers[0].resources.limits."rdma/ib")' -i guides/pd-disaggregation/ms-pd/values.yaml
-          yq e 'del(.decode.containers[0].resources.requests."rdma/ib")' -i guides/pd-disaggregation/ms-pd/values.yaml
-          yq e 'del(.prefill.containers[0].resources.limits."rdma/ib")' -i guides/pd-disaggregation/ms-pd/values.yaml
-          yq e 'del(.prefill.containers[0].resources.requests."rdma/ib")' -i guides/pd-disaggregation/ms-pd/values.yaml
+          # Set Prefill to 1 GPU
           yq e '.prefill.replicas = 1' -i guides/pd-disaggregation/ms-pd/values.yaml
+
+          # Reduce model length to 3200
+          yq e '.decode.containers[].args |= ( (.. | select(. == "--max-model-len") | key) as $idx | .[$idx + 1] = "3200" )' -i guides/pd-disaggregation/ms-pd/values.yaml
+          yq e '.prefill.containers[].args |= ( (.. | select(. == "--max-model-len") | key) as $idx | .[$idx + 1] = "3200" )' -i guides/pd-disaggregation/ms-pd/values.yaml
 
           # Verify the slimmed down values
           echo "📋 Verifying transformation results..."
@@ -131,25 +139,41 @@ jobs:
           cd guides
           ./prereq/client-setup/install-deps.sh | tee ~/install-deps.log
 
+      - name: Create namespace
+        run: |
+          kubectl create namespace "${NAMESPACE}" || echo "Namespace already exists"
+
+      - name: Create llm-d-hf-token secret
+        run: |
+          kubectl create secret generic llm-d-hf-token \
+            --from-literal="HF_TOKEN=${{ secrets.HF_TOKEN }}" \
+            --namespace "${NAMESPACE}" \
+            --dry-run=client -o yaml | kubectl apply -f -
+
       - name: Deploy model service and GIE with Helmfile
         run: |
           cd guides/pd-disaggregation
-          helmfile apply -e ${GATEWAY_TYPE} | tee ~/pd-disaggregation-deployment.log
+          helmfile apply -e ${GATEWAY_TYPE} \
+            --set "gateway.service.type=LoadBalancer" \
+            --skip-schema-validation \
+            | tee ~/pd-disaggregation-deployment.log
           echo "---------------------------------------" >> ~/pd-disaggregation-deployment.log
 
       - name: Deploy HTTPRoute
         run: |
           cd guides/pd-disaggregation
           echo "Deploying HTTPRoute..."
-          kubectl apply -f httproute.gke.yaml | tee ~/pd-disaggregation-deployment.log
+          kubectl apply -f httproute.gke.yaml -n ${NAMESPACE} | tee ~/pd-disaggregation-deployment.log
           echo "---------------------------------------" >> ~/pd-disaggregation-deployment.log
 
       - name: Upload helm get all
+        shell: bash
         run: |
-          for release_name in infra-pd gaie-pd ms-pd; do
+          release_names=(infra-pd gaie-pd ms-pd)
+          for release_name in ${release_names[@]}; do
             /bin/sh .github/scripts/e2e/helm-get-all.sh \
               ~/pd-disaggregation-deployment.log \
-              "$release_name" \
+              "${release_name}" \
               "llm-d-pd"
           done
 
@@ -159,10 +183,19 @@ jobs:
             --for=condition=Ready \
             --all \
             -n "${NAMESPACE}" \
-            --timeout=10m
+            --timeout=15m
           sleep 480 # Allow extra time for model loading in PD setup
           echo "✅ All pods are ready."
           kubectl get pods -n "${NAMESPACE}"
+
+      - name: Debug gateway
+        run: |
+          kubectl -n ${NAMESPACE} get gateway
+          kubectl -n ${NAMESPACE} describe gateway
+          kubectl -n ${NAMESPACE} get gateway -o yaml
+          kubectl -n ${NAMESPACE} describe httpRoute
+          kubectl -n ${NAMESPACE} get httpRoute -o yaml
+          kubectl -n ${NAMESPACE} get inferencepool -o yaml
 
       - name: Wait for gateway to be ready
         run: |
@@ -196,6 +229,9 @@ jobs:
           echo ""
           echo "=== HTTPRoutes ==="
           kubectl get httproutes -n "${NAMESPACE}" || true
+          echo ""
+          echo "=== Gateway ==="
+          kubectl get Gateway -n "${NAMESPACE}" || true
           echo ""
 
       - name: PD-Disaggregation inference test
@@ -244,9 +280,17 @@ jobs:
           name: llmd-pod-logs-pd-disaggregation
           path: pod-logs-pd-disaggregation
 
+      - name: Send Google Chat notification on failure
+        if: failure()
+        uses: SimonScholz/google-chat-action@3b3519e5102dba8aa5046fd711c4b553586409bb
+        with:
+          webhookUrl: ${{ secrets.GOOGLE_CHAT_WEBHOOK }}
+          jobStatus: ${{ job.status }}
+          title: ${{ github.workflow }}
+
       - name: Cleanup deployment
         if: always()
         run: |
           cd guides/pd-disaggregation
           helmfile destroy
-          kubectl delete -f httproute.gke.yaml
+          kubectl delete -f httproute.gke.yaml -n ${NAMESPACE}

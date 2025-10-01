@@ -56,8 +56,15 @@ jobs:
 
       - name: Determine if pr_or_branch is a PR number
         id: check_pr
+        env:
+          PR_OR_BRANCH: ${{ github.event.inputs.pr_or_branch }}
+        shell: bash
         run: |
+          echo "PR_OR_BRANCH=${PR_OR_BRANCH:-main}" >> "$GITHUB_ENV"
           if [[ "$PR_OR_BRANCH" =~ ^[0-9]+$ ]]; then
+            echo "is_pr=true" >> "$GITHUB_OUTPUT"
+          elif [[ "${{ github.event_name }}" = "pull_request" ]]; then
+            echo "PR_OR_BRANCH=${{ github.event.pull_request.number }}" >> $GITHUB_ENV
             echo "is_pr=true" >> "$GITHUB_OUTPUT"
           else
             echo "is_pr=false" >> "$GITHUB_OUTPUT"
@@ -364,7 +371,7 @@ jobs:
           ssh -o StrictHostKeyChecking=no -i key.pem ubuntu@$INSTANCE_IP "GATEWAY_TYPE=$GATEWAY_TYPE bash -s" <<'EOF'
             set -euo pipefail
             set -x
-            cd llm-d/guides/gateway-provider
+            cd llm-d/guides/prereq/gateway-provider
             ./install-gateway-provider-dependencies.sh
             helmfile apply -f ${GATEWAY_TYPE}.helmfile.yaml
           EOF
@@ -462,8 +469,6 @@ jobs:
             helm list -n "${NAMESPACE}" || true
             echo ""
             echo "=== Wide-EP-specific resources ==="
-            echo "Inference Models:"
-            kubectl get inferencemodels -n "${NAMESPACE}" || true
             echo "Inference Pools:"
             kubectl get inferencepools -n "${NAMESPACE}" || true
             echo "HTTP Routes:"
