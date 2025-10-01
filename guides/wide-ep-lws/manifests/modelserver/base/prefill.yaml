@@ -83,6 +83,8 @@ spec:
           env:
           - name: DP_SIZE_LOCAL
             value: "8"
+          - name: TP_SIZE
+            value: "8"
           - name: TRITON_LIBCUDA_PATH
             value: /usr/lib64
           - name: VLLM_SKIP_P2P_CHECK
