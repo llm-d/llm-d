@@ -3,8 +3,8 @@
 Full doc coming soon, this is just meant to track the changes in this PR for now.
 
 1. Add a readiness prob script to the `llm-d` image to detect if the cufile exists on the node and is properly formatted
-2. InitContainer added to run `amgctl` to create the cufile on the node (only implemented for decode so far, will need to add this for prefill too)
-3. Mount the cufile.json from ~/amg_stable/cufile.json on the host to ~/amg_stable/cufile.json on the container
+2. InitContainer added to run `amgctl` to create the cufile on the node (implemented for decode & prefill)
+3. Mount the cufile.json from /opt/weka/amg/cufile.json on the host to /etc/cufile.json on the container
 
 ## Usage
 

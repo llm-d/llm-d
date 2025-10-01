@@ -22,7 +22,6 @@ spec:
           args:
             - --port=8000
             - --vllm-port=8200
-            - --connector=nixlv2
             - -v=1
             - --secure-proxy=false
           image: ghcr.io/llm-d/llm-d-routing-sidecar:v0.2.0
@@ -34,14 +33,22 @@ spec:
           securityContext:
             allowPrivilegeEscalation: false
             runAsNonRoot: true
-        - name: create-cufile-on-node # this init container will create the cufile on the node and runs before vllm
-          image: quay.io/grpereir/amg-utils:latest # using my temporary image
-          command: # k8s command overwrites docker entrypoint
-            - /usr/local/bin/entrypoint.sh
-          args: # k8s args overwrites docker command
-            - /bin/bash
-            - -lc
-            - true
+        # gds-setup-on-node:
+        # In order for GDS to work we need to configure CuFile appropriately.
+        # The crucial step in this is populating the list of IB IPs in the
+        # configuration file. `amgctl` automates this for us. Additionally,
+        # it performs various preflight checks to ensure that we can issue
+        # GDS requests in this node.
+        - name: gds-setup-on-node
+          image: sdimitro509/amg-vanilla:latest
+          command:
+            - amgctl
+          args:
+            - host
+            - gds
+            - setup
+            - --pre-flight
+            - --config-dir=/etc/wekaio/amg
       serviceAccountName: llama-3-3-70b-instruct-fp8-dynamic
       volumes:
         - name: weka-storage # gets patched in overlays
@@ -51,7 +58,7 @@ spec:
             sizeLimit: 16Gi
         - name: host-node-cufile
           hostPath:
-            path: ~/amg_stable/cufile.json # Load the file on Host (~/amg_stable/cufile.json)
+            path: /etc/wekaio/amg/weka-cufile.json
             type: File 
       containers:
         - name: vllm
@@ -68,11 +75,13 @@ spec:
             - --block-size
             - "128"
             - --kv-transfer-config
-            - '{"kv_connector":"MultiConnector","kv_role":"kv_both","kv_connector_extra_config":{"connectors":[{"kv_connector":"NixlConnector","kv_role":"kv_both"},{"kv_connector":"LMCacheConnectorV1","kv_role":"kv_both"}]}}'
+            - '{"kv_connector":"LMCacheConnectorV1","kv_role":"kv_both","kv_connector_extra_config": {}}'
             - --disable-log-requests
             - --disable-uvicorn-access-log
-            - --max-model-len
-            - "32000"
+            # (Serapheim): I commented this out below. Isn't the default 131072 or something?
+            #              We could start with that.
+            # - --max-model-len
+            # - "32000"
           env:
             - name: VLLM_NIXL_SIDE_CHANNEL_HOST
               valueFrom:
@@ -97,12 +106,16 @@ spec:
               value: true
             - name: LMCACHE_CHUNK_SIZE
               value: 256
-            - name: LMCACHE_GDS_PATH
-              value: /mnt/weka
+            - name: LMCACHE_WEKA_PATH
+              value: /mnt/weka/cache
             - name: LMCACHE_CUFILE_BUFFER_SIZE
               value: "8192"
             - name: LMCACHE_LOCAL_CPU
               value: false
+            - name: LMCACHE_EXTRA_CONFIG
+              value: '{"gds_io_threads": 16}'
+            - name: PROMETHEUS_MULTIPROC_DIR # Needed currently for LMCache metrics
+              value: /tmp/lmcache_prometheus
           ports:
             - containerPort: 8200
               name: metrics
@@ -130,6 +143,6 @@ spec:
             - name: weka-storage
               mountPath: /mnt/weka
             - name: host-node-cufile
-              mountPath: /etc/cufile.json # Mount from ~/amg_stable/cufile.json to /etc/cufile.json in container
+              mountPath: /etc/cufile.json # [Host] /etc/wekaio/amg/weka-cufile.json -> [Container] /etc/cufile.json
               mountPropagation: HostToContainer
               readOnly: true # is this acurate? Not required
