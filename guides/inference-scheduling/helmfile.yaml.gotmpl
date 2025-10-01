@@ -15,6 +15,9 @@ environments:
   gke_tpu: &GKE_TPU
     values:
       - ../prereq/gateway-provider/common-configurations/gke_tpu.yaml
+  xpu: &XPU
+    values:
+      - ../prereq/gateway-provider/common-configurations/istio.yaml
   digitalocean: &DO
     <<: *I
   default:
@@ -88,7 +91,7 @@ releases:
   - name: {{ printf "ms-%s" $rn | quote }}
     namespace: {{ $ns }}
     chart: llm-d-modelservice/llm-d-modelservice
-    version: v0.2.11
+    version: v0.2.10
     installed: true
     needs:
       - {{ printf "infra-%s" $rn | quote }}
@@ -97,7 +100,7 @@ releases:
     {{- if eq .Environment.Name "gke_tpu" }}
       - ms-inference-scheduling/values_tpu.yaml
     {{- else if eq .Environment.Name "xpu" }}
-      - ms-inference-scheduling/values-xpu.yaml
+      - ms-inference-scheduling/values_xpu.yaml
     {{- else if eq .Environment.Name "digitalocean" }}
       - ms-inference-scheduling/digitalocean-values.yaml
     {{- else }}
