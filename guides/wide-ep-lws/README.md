@@ -32,6 +32,7 @@ Use the helmfile to compose and install the stack. The Namespace in which the st
 
 ```bash
 export NAMESPACE=llm-d-wide-ep # or any other namespace
+cd guides/wide-ep-lws/
 kubectl create namespace ${NAMESPACE}
 ```
 
