@@ -5,14 +5,14 @@ on:
     branches:
       - main
     paths:
-      - ./**.md
+      - ./**/*.md
       - .github/workflows/ci-pr-checks.yaml
       - .github/actions/markdown-link-checker/action.yaml
   pull_request:
     branches:
       - main
     paths:
-      - ./**.md
+      - ./**/*.md
       - .github/workflows/ci-pr-checks.yaml
       - .github/actions/markdown-link-checker/action.yaml
 jobs:
