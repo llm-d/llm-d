@@ -1,14 +1,19 @@
 name: XPU Inference Scheduling Test
 
 on:
-  push:
-    branches:
-      - main
-  pull_request:
-    branches:
-      - main
+  schedule:
+    - cron: '0 10 * * *'  # 3AM PST (10:00 UTC)
+  workflow_dispatch:
+    inputs:
+      pr_or_branch:
+        description: 'Pull-request number or branch name to test'
+        required: true
+        default: 'main'
+        type: string
 jobs:
   deploy_and_validate:
+    if: >
+      github.event_name == 'workflow_dispatch'
     runs-on: xpu
     env:
       NAMESPACE: "llm-d-xpu-is"
