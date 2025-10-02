@@ -28,7 +28,7 @@ This approach ensures:
 The DOKS cluster should be configured with the following settings:
 
 * [GPU-enabled node pools](https://docs.digitalocean.com/products/kubernetes/details/supported-gpus/) with at least 2 GPU nodes
-* [VPC-native networking](https://docs.digitalocean.com/products/kubernetes/details/networking/) (default for new clusters)
+* [VPC-native networking](https://docs.digitalocean.com/products/kubernetes/details/features/#vpc-native-networking) (default for new clusters)
 * [kubectl configured](https://docs.digitalocean.com/products/kubernetes/how-to/connect-to-cluster/) for cluster access
 
 ### GPU Driver Management
