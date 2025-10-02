@@ -32,7 +32,9 @@ helmfile apply -n ${NAMESPACE}
 
 **_NOTE:_** This uses Istio as the default provider, see [Gateway Options](./README.md#gateway-options) for installing with a specific provider.
 
-### Gateway options
+### Gateway and Hardware Options
+
+#### Gateway Options
 
 To see specify your gateway choice you can use the `-e <gateway option>` flag, ex:
 
@@ -52,6 +54,16 @@ helmfile apply -e digitalocean -n ${NAMESPACE}
 To see what gateway options are supported refer to our [gateway provider prereq doc](../prereq/gateway-provider/README.md#supported-providers). Gateway configurations per provider are tracked in the [gateway-configurations directory](../prereq/gateway-provider/common-configurations/).
 
 You can also customize your gateway, for more information on how to do that see our [gateway customization docs](../../docs/customizing-your-gateway.md).
+
+#### Hardware Backends
+
+Currently in the `inference-scheduling` example we suppport configurations for `xpu`, `tpu` and `cuda` GPUs. By default we use modelserver values supporting `cuda` gpus, but to deploy on one of the these other speciality hardware backends you may use:
+
+```bash
+helmfile apply -e xpu  -n ${NAMESPACE} # targets istio as gateway provider with XPU hardware
+# or
+helmfile apply -e gke_tpu  -n ${NAMESPACE} # targets GKE externally managed as gateway provider with TPU hardware
+```
 
 ### Install HTTPRoute
 
