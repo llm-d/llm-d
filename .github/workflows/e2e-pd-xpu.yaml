@@ -1,0 +1,186 @@
+name: XPU PD Test
+
+on:
+  schedule:
+    - cron: '0 10 * * *'  # 3AM PST (10:00 UTC)
+  workflow_dispatch:
+    inputs:
+      pr_or_branch:
+        description: 'Pull-request number or branch name to test'
+        required: true
+        default: 'main'
+        type: string
+
+jobs:
+  deploy_and_validate:
+    runs-on: xpu
+    env:
+      NAMESPACE: "llm-d-xpu-pd"
+      GATEWAY_TYPE: "istio"
+      RELEASE_NAME_POSTFIX: "pd-xpu"
+      INFRA_RELEASE_NAME: "infra-pd-xpu"
+      GAIE_RELEASE_NAME: "gaie-pd-xpu"
+      MS_RELEASE_NAME: "ms-pd-xpu"
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Determine if pr_or_branch is a PR number
+        id: check_pr
+        env:
+          PR_OR_BRANCH: ${{ github.event.inputs.pr_or_branch }}
+        shell: bash
+        run: |
+          echo "PR_OR_BRANCH=${PR_OR_BRANCH:-main}" >> "$GITHUB_ENV"
+          if [[ "$PR_OR_BRANCH" =~ ^[0-9]+$ ]]; then
+            echo "is_pr=true" >> "$GITHUB_OUTPUT"
+          elif [[ "${{ github.event_name }}" = "pull_request" ]]; then
+            echo "PR_OR_BRANCH=${{ github.event.pull_request.number }}" >> $GITHUB_ENV
+            echo "is_pr=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "is_pr=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Fetch and checkout PR
+        if: steps.check_pr.outputs.is_pr == 'true'
+        run: |
+          git fetch origin pull/"$PR_OR_BRANCH"/head:pr-"$PR_OR_BRANCH"
+          git checkout pr-"$PR_OR_BRANCH"
+
+      - name: Checkout branch
+        if: steps.check_pr.outputs.is_pr == 'false'
+        run: git checkout "$PR_OR_BRANCH"
+
+      - name: Install prerequisites idempotently
+        run: |
+          ./guides/prereq/client-setup/install-deps.sh | tee ~/install-deps.log
+
+      - name: Install chart dependencies (CRDs and Istio)
+        run: |
+          cd guides/prereq/gateway-provider
+          ./install-gateway-provider-dependencies.sh
+          helmfile apply -f istio.helmfile.yaml
+
+      - name: Install monitoring stack
+        run: |
+          cd docs/monitoring
+          ./scripts/install-prometheus-grafana.sh || true
+
+      - name: Create namespace
+        run: |
+          kubectl create namespace "${NAMESPACE}" || echo "Namespace already exists"
+
+      - name: Create llm-d-hf-token secret
+        run: |
+          kubectl create secret generic llm-d-hf-token \
+            --from-literal="HF_TOKEN=${{ secrets.HF_TOKEN }}" \
+            --namespace "${NAMESPACE}" \
+            --dry-run=client -o yaml | kubectl apply -f -
+
+      - name: Deploy guide
+        run: |
+          cd guides/pd-disaggregation
+          RELEASE_NAME_POSTFIX=${RELEASE_NAME_POSTFIX} \
+          helmfile apply -e xpu -n "${NAMESPACE}" \
+            | tee ~/pd-xpu-deployment.log
+          echo "---------------------------------------" >> ~/pd-xpu-deployment.log
+
+      - name: fetch helm manifests - prepare for upload
+        run: |
+          for release_name in "${INFRA_RELEASE_NAME}" "${GAIE_RELEASE_NAME}" "${MS_RELEASE_NAME}"; do
+            /bin/sh .github/scripts/e2e/helm-get-all.sh \
+              ~/pd-xpu-deployment.log \
+              "$release_name" \
+              "$NAMESPACE"
+          done
+
+      - name: Wait for all pods to be ready
+        run: |
+          kubectl wait pod \
+            --for=condition=Ready \
+            --all \
+            -n "${NAMESPACE}" \
+            --timeout=10m
+          echo "✅ All pods are ready."
+          kubectl get pods -n "${NAMESPACE}"
+
+      - name: Check gateway pod is up
+        run: |
+          GATEWAY_POD_READY=$(kubectl get pods -n "${NAMESPACE}" | grep "inference-gateway" | awk '{print $2}')
+          if [ "${GATEWAY_POD_READY}" = "1/1" ]; then
+              echo "✅ Gateway pod ready."
+          else
+              echo "❌ Missing gateway pod"
+          fi
+
+      - name: Show deployment status
+        run: |
+          echo "=== Deployments ==="
+          kubectl get deployments -n "${NAMESPACE}"
+          echo ""
+          echo "=== Replica Sets ==="
+          kubectl get replicasets -n "${NAMESPACE}"
+          echo ""
+          echo "=== Pods ==="
+          kubectl get pods -n "${NAMESPACE}"
+          echo ""
+          echo "=== Services ==="
+          kubectl get svc -n "${NAMESPACE}"
+          echo ""
+          echo "=== Helm releases ==="
+          helm list -n "${NAMESPACE}" || true
+          echo ""
+          echo "=== Inference Pools ==="
+          kubectl get InferencePool.inference.networking.x-k8s.io -n "${NAMESPACE}" || true
+          echo ""
+          echo "=== HTTPRoutes ==="
+          kubectl get httproutes -n "${NAMESPACE}" || true
+          echo ""
+          echo "=== Gateway ==="
+          kubectl get Gateway -n "${NAMESPACE}" || true
+          echo ""
+          echo "=== Destination Rule ==="
+          kubectl get destinationrule -n "${NAMESPACE}" || true
+          echo ""
+
+      - name: Sleep to wait for vLLM to be ready to respond to requests
+        run: sleep 360
+
+      - name: Verify installation and run inference tests
+        run: |
+          cd .github/scripts/e2e
+          ./e2e-validate.sh -n "${NAMESPACE}" -v
+
+      - name: Collect and upload Kubernetes pod logs
+        if: always()
+        run: |
+            mkdir -p pod-logs-pd-xpu
+            cd pod-logs-pd-xpu
+            echo "Fetching ${NAMESPACE} pods log..."
+            kubectl get pods -n "${NAMESPACE}" -l "llm-d.ai/inferenceServing" -o yaml > ./inference-pods.yaml
+            kubectl logs -n "${NAMESPACE}" -l "llm-d.ai/inferenceServing" | grep -v "waiting for vLLM to be ready" > ./inference-pod-logs.log
+            kubectl describe pod -n "${NAMESPACE}" -l "llm-d.ai/inferenceServing" > ./inference-describe-pod-logs.log
+            kubectl get pods -n "${NAMESPACE}" --no-headers -o custom-columns=":metadata.name" \
+            | xargs -I{} sh -c 'kubectl logs --all-containers=true -n "${NAMESPACE}" {} > "{}.log" 2>&1' || true
+            echo "Fetching ${NAMESPACE} pods descriptions..."
+            kubectl get pods -n "${NAMESPACE}" --no-headers -o custom-columns=":metadata.name" \
+            | xargs -I{} sh -c 'kubectl describe pod -n "${NAMESPACE}" {} > "{}-describe.log" 2>&1' || true
+            mv ~/pd-xpu-deployment.log . || true
+            mv ~/install-deps.log . || true
+
+      - name: Upload pod logs as artifact
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: llmd-pod-logs-pd-xpu
+          path: pod-logs-pd-xpu
+
+      - name: Cleanup deployment
+        if: always()
+        run: |
+          cd guides/pd-disaggregation
+          helmfile destroy -e xpu -n "${NAMESPACE}"
+          kubectl delete ns ${NAMESPACE}

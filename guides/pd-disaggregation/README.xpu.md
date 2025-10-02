@@ -25,7 +25,7 @@ cd llm-d
 #### Intel Data Center GPU Max 1550
 ```shell
 # Build with default vLLM version (v0.11.0)
-make image-build DEVICE=xpu VERSION=v0.2.1
+make image-build DEVICE=xpu VERSION=v0.3.0
 ```
 
 #### Intel Corporation Battlemage G21

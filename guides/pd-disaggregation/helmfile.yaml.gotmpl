@@ -67,7 +67,7 @@ releases:
               enabled: false
     {{- end }}
     # Apply destination rule for anything istio
-    {{- if or (eq .Environment.Name "istio") (eq .Environment.Name "default") (eq .Environment.Name "istioBench") (eq .Environment.Name "aks") }}
+    {{- if or (eq .Environment.Name "istio") (eq .Environment.Name "default") (eq .Environment.Name "istioBench") (eq .Environment.Name "aks") (eq .Environment.Name "xpu") }}
       - provider:
           name: {{ .Environment.Values.provider.name }}
       - istio:
