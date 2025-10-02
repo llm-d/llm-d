@@ -83,7 +83,7 @@ For instructions on getting started with making inference requests, see [getting
 ### Metrics collection
 
 llm-d charts include support for metrics collection from vLLM pods. llm-d applies PodMonitors to trigger Prometheus
-scrape targets when enabled with the appropriate Helm chart values. See [MONITORING.md](/docs/monitoring/README.md) for details.
+scrape targets when enabled with the appropriate Helm chart values. See [MONITORING.md](../docs/monitoring/README.md) for details.
 
 In Kubernetes, Prometheus and Grafana can be installed from the prometheus-community
 [kube-prometheus-stack helm charts](https://github.com/prometheus-community/helm-charts/tree/main/charts/kube-prometheus-stack). In OpenShift, the built-in user workload monitoring Prometheus stack can be utilized to collect metrics.
