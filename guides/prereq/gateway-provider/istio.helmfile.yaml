@@ -22,7 +22,7 @@ releases:
               SUPPORT_GATEWAY_API_INFERENCE_EXTENSION: "true"
         pilot:
           env:
-            SUPPORT_GATEWAY_API_INFERENCE_EXTENSION: true
+            SUPPORT_GATEWAY_API_INFERENCE_EXTENSION: "true"
         tag: 1.28-alpha.89f30b26ba71bf5e538083a4720d0bc2d8c06401
         hub: "gcr.io/istio-testing"
     labels:
