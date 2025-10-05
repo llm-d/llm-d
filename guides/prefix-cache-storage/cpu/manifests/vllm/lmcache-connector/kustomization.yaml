@@ -1,0 +1,49 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+- ../base
+
+patches:
+- target:
+    kind: Deployment
+    name: llm-d-model-server
+  patch: |-
+    - op: replace
+      path: /spec/template/spec/containers/0/image
+      value: "lmcache/vllm-openai:v0.3.7"
+    - op: replace
+      path: /spec/template/spec/containers/0/command
+      value: 
+        - "/opt/venv/bin/vllm"
+    - op: replace
+      path: /spec/template/spec/containers/0/args
+      value:
+          - "serve"
+          - "Qwen/Qwen3-32B"
+          - "--tensor-parallel-size"
+          - "2"
+          - "--port"
+          - "8000"
+          - "--max-num-seq"
+          - "1024"
+          - "--kv-transfer-config"
+          - '{"kv_connector":"LMCacheConnectorV1","kv_role":"kv_both"}'
+          - "--enable_prefix_caching"
+    - op: add
+      path: /spec/template/spec/containers/0/env/-
+      value:
+        name: LMCACHE_MAX_LOCAL_CPU_SIZE
+        value: "200.0"
+    - op: add
+      path: /spec/template/spec/containers/0/env/-
+      value:
+        name: PYTHONHASHSEED
+        value: "123"
+    - op: add
+      path: /spec/template/spec/containers/0/resources
+      value:
+        limits:
+          nvidia.com/gpu: 2
+        requests:
+          nvidia.com/gpu: 2
+          memory: 400G  

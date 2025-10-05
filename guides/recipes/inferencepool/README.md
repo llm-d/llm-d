@@ -7,6 +7,7 @@ This directory contains a standard `values.yaml` for deploying an `InferencePool
 To deploy the `InferencePool`, select your provider below.
 
 === "GKE"
+    [Prepare your environment](https://cloud.google.com/kubernetes-engine/docs/how-to/deploy-gke-inference-gateway#prepare-environment)
 
     This command deploys the `InferencePool` on GKE with GKE-specific monitoring enabled.
 

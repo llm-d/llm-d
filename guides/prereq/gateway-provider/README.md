@@ -44,11 +44,14 @@ GKE automatically enables an inference-compatible Gateway control plane when you
 
 The key choice for deployment is whether you want to create a regional internal Application Load Balancer - accessible only workloads within your VPC (class name: `gke-l7-rilb`) - or a regional external Application Load Balancer - accessible to the internet (class name: `gke-l7-regional-external-managed`).
 
-The following steps from the [GKE Inference Gateway deployment documentation](https://cloud.google.com/kubernetes-engine/docs/how-to/deploy-gke-inference-gateway) should be run:
+The following steps from the [GKE Gateways deployment documentation](https://cloud.google.com/kubernetes-engine/docs/how-to/deploy-gke-inference-gateway) and [GKE Inference Gateway deployment documentation](https://cloud.google.com/kubernetes-engine/docs/how-to/deploy-gke-inference-gateway) should be run:
 
 1. [Verify your prerequisites](https://cloud.google.com/kubernetes-engine/docs/how-to/deploy-gke-inference-gateway#before-you-begin)
-2. [Prepare your environment](https://cloud.google.com/kubernetes-engine/docs/how-to/deploy-gke-inference-gateway#prepare-environment)
-3. [Create the Gateway](https://cloud.google.com/kubernetes-engine/docs/how-to/deploy-gke-inference-gateway#create-gateway)
+2. [Enable Gateway API in your cluster](https://cloud.google.com/kubernetes-engine/docs/how-to/deploying-gateways#enable-gateway)
+3. [Verify your cluster](https://cloud.google.com/kubernetes-engine/docs/how-to/deploying-gateways#verify-internal)
+4. [Configure a proxy-only subnet](https://cloud.google.com/kubernetes-engine/docs/how-to/deploying-gateways#configure_a_proxy-only_subnet)
+5. [Prepare your environment](https://cloud.google.com/kubernetes-engine/docs/how-to/deploy-gke-inference-gateway#prepare-environment)
+6. [Create the Gateway](https://cloud.google.com/kubernetes-engine/docs/how-to/deploy-gke-inference-gateway#create-gateway)
 
 The other steps are optional and are not necessary to continue with your guide.
 
