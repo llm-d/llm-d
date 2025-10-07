@@ -1,6 +1,11 @@
 name: E2E Wide EP Test
 
 on:
+  # Runs with a PR comment /run-gke-wide-ep
+  issue_comment:
+    types: [created]
+  schedule: # TODO: enable once validated functional
+    - cron: '0 12 * * *'  # 5AM PST (12:00 UTC)
   workflow_dispatch:
     inputs:
       pr_or_branch:
