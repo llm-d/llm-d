@@ -231,14 +231,14 @@ DECODE_PODS=$(kubectl get pods --no-headers -n ${NAMESPACE} -l "llm-d.ai/role=de
 Then you can view those logs together using stern:
 
 ```bash
-stern "$(echo "$DECODE_PODS" | paste -sd'|' -)"
+stern -n ${NAMESPACE} "$(echo "$DECODE_PODS" | paste -sd'|' -)"
 ```
 
 Just with `kubectl logs` you can specify the container name following your pod names to only grab logs from specific containers (`stern` by default will print logs for all containers in a pod). You can do so as follows:
 
 ```bash
-stern "$(echo "$DECODE_PODS" | paste -sd'|' -)" -c routing-proxy # for routing sidecar logs
-stern "$(echo "$DECODE_PODS" | paste -sd'|' -)" -c vllm # for vllm logs
+stern -n ${NAMESPACE} "$(echo "$DECODE_PODS" | paste -sd'|' -)" -c routing-proxy # for routing sidecar logs
+stern -n ${NAMESPACE} "$(echo "$DECODE_PODS" | paste -sd'|' -)" -c vllm # for vllm logs
 ```
 
 For grabbing the prefill pods you can re-use our same command from earlier just swap the role label:
