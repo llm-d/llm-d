@@ -44,13 +44,13 @@ Follow provider specific instructions for installing HTTPRoute.
 #### Install for "kgateway" or "istio"
 
 ```bash
-kubectl apply -f httproute.yaml
+kubectl apply -f httproute.yaml -n ${NAMESPACE}
 ```
 
 #### Install for "gke"
 
 ```bash
-kubectl apply -f httproute.gke.yaml
+kubectl apply -f httproute.gke.yaml -n ${NAMESPACE}
 ```
 
 ## Verify the Installation
