@@ -16,9 +16,10 @@ Coming soon: as we progress as a community we aim to increase our requirements t
 
 ## TPU
 
-### TPU LLM-D Point sof Contact
+### TPU LLM-D Points of Contact
 
 Points of contact:
+- Edwin Hernandez (@Edwinhr716)
 - Cong Liu (@liu-cong, congliu.thu@gmail.com)
 - Clayton Coleman (@smarterclayton)
 
@@ -26,10 +27,13 @@ Points of contact:
 
 We support TPU backend in the [`inference-scheduling` guide](../../guides/inference-scheduling/) via the [TPU modelservice values file](../../guides/inference-scheduling/ms-inference-scheduling/values_tpu.yaml).
 
+> For more information on TPU, see the [GKE infrastructure provider docs](https://github.com/llm-d/llm-d/tree/main/docs/infra-providers/gke#prerequisites)
+
 ## XPU
 
 ### XPU LLM-D Points of Contact
 
+Points of contact:
 - Yuan Wu (@yuanwu2017, yuan.wu@intel.com)
 
 ### XPU Guide Support
