@@ -57,7 +57,7 @@ You can also customize your gateway, for more information on how to do that see 
 
 #### Hardware Backends
 
-Currently in the `inference-scheduling` example we suppport configurations for `xpu`, `tpu` and `cuda` GPUs. By default we use modelserver values supporting `cuda` gpus, but to deploy on one of the these other speciality hardware backends you may use:
+Currently in the `inference-scheduling` example we suppport configurations for `xpu`, `tpu` and `cuda` GPUs. By default we use modelserver values supporting `cuda` GPUs, but to deploy on one of the other speciality hardware backends you may use:
 
 ```bash
 helmfile apply -e xpu  -n ${NAMESPACE} # targets istio as gateway provider with XPU hardware
