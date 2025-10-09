@@ -4,7 +4,7 @@ Some of our examples support additional specialized hardware backends. This docu
 
 ## Hardware Backend Extensibility Requirements
 
-In the llm-d community we welcome contributions from hardware providers, with the bare minimum requirement of having publicly  container images, which is enough to be referenced in hardware and platform support documentation. 
+In the llm-d community we welcome contributions from hardware providers, with the bare minimum requirement of having publicly available container images, which is enough to be referenced in hardware and platform support documentation. 
 
 For integration into guides in our main repo our standard for contribution is higher, **requiring**:
 - A point of contact responsible for maintaining that hardware flavor of the guide
