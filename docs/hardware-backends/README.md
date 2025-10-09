@@ -1,6 +1,6 @@
 # Hardware Backends
 
-Some of our examples support additional specialized hardware backends. This document should track hardware support throughout the various guides, points of contact for each hardware vendor and document any workarounds to use specialty hardware.
+Some of our examples support additional specialized hardware backends. This document should track hardware support throughout the various guides, points of contact for each hardware vendor, and document any workarounds to use specialty hardware.
 
 ## Hardware Backend Extensibility Requirements
 
