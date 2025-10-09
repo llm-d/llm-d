@@ -1,16 +1,6 @@
 # Intel XPU PD Disaggregation Deployment Guide
 This document provides complete steps for deploying Intel XPU PD (Prefill-Decode) disaggregation service on Kubernetes cluster using DeepSeek-R1-Distill-Qwen-1.5B model. PD disaggregation separates the prefill and decode phases of inference, allowing for more efficient resource utilization and improved throughput.
 
-Important
-
-**Current Development Status**: This guide requires three pending patches for Intel XPU support that are not yet merged into the main branch:
-
-* [PR #161](https://github.com/llm-d/llm-d/pull/161): Intel XPU infrastructure support
-* [PR #237](https://github.com/llm-d/llm-d/pull/237): PD disaggregation patches
-* [PR #239](https://github.com/llm-d/llm-d/pull/239): Enable the intel XPU in inference scheduling example
-
-Please apply these patches as shown in Step 0 before proceeding with the deployment.
-
 ## Prerequisites
 ### Hardware Requirements
 * Intel Data Center GPU Max 1550 or compatible Intel XPU device
@@ -30,34 +20,7 @@ If you need to customize the vLLM version or build the image from source, you ca
 # Clone the llm-d repository
 git clone https://github.com/llm-d/llm-d
 cd llm-d
-
-# Checkout to the latest main branch commit
-git checkout aaed339be19bfdec1310ac68eead0c37afab2846
 ```
-
-### Apply Required Patches
-**Recommended Method: Apply All Patches**
-
-```shell
-# Create a branch to combine all three PRs
-git checkout -b intel-xpu
-
-# Fetch and merge PR #161 (Intel XPU infrastructure support)
-git fetch origin pull/161/head:pr-161
-git merge pr-161 --no-edit
-
-# Fetch and merge PR #237 (PD disaggregation patches)
-git fetch origin pull/237/head:pr-237
-git merge pr-237 --no-edit
-
-# Fetch and merge PR #239 (Additional XPU optimizations)
-git fetch origin pull/239/head:pr-239
-git merge pr-239 --no-edit
-
-# Verify all patches are applied
-git log --oneline -10
-```
-
 ### Build Default Image
 #### Intel Data Center GPU Max 1550
 ```shell
@@ -69,12 +32,12 @@ make image-build DEVICE=xpu VERSION=v0.2.1
 ```shell
 # Build with default vLLM version (v0.10.2)
 git clone https://github.com/vllm-project/vllm.git
-git checkout v0.10.2
-docker build -f docker/Dockerfile.xpu -t ghcr.io/llm-d/llm-d-xpu-dev:v0.2.1 --shm-size=4g . --build-arg http_proxy=${http_proxy}   --build-arg https_proxy=${https_proxy} --build-arg no_proxy=${no_proxy}
+git checkout v0.11.0
+docker build -f docker/Dockerfile.xpu -t ghcr.io/llm-d/llm-d-xpu-dev:v0.2.1 --shm-size=4g .
 ```
 
 ### Available Build Arguments
-* `VLLM_VERSION`: vLLM version to build (default: v0.10.2)
+* `VLLM_VERSION`: vLLM version to build (default: v0.11.0)
 * `PYTHON_VERSION`: Python version (default: 3.12)
 * `ONEAPI_VERSION`: Intel OneAPI toolkit version (default: 2025.1.3-0)
 
@@ -246,7 +209,7 @@ Expected output:
 NAME       NAMESPACE   REVISION   STATUS     CHART                     
 gaie-pd    llm-d-pd    1          deployed   inferencepool-v0.5.1      
 infra-pd   llm-d-pd    1          deployed   llm-d-infra-v1.3.0        
-ms-pd      llm-d-pd    1          deployed   llm-d-modelservice-v0.2.7 
+ms-pd      llm-d-pd    1          deployed   llm-d-modelservice-v0.2.11 
 ```
 
 ### Check All Resources
