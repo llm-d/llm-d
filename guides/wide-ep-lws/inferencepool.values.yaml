@@ -3,7 +3,7 @@ inferenceExtension:
   image:
     name: llm-d-inference-scheduler
     hub: ghcr.io/llm-d
-    tag: v0.3.2-rc.1
+    tag: v0.3.2
   extProcPort: 9002
   monitoring:
     interval: "10s"
