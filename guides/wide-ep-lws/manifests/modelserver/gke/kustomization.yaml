@@ -101,20 +101,20 @@ patches:
           mountPath: /usr/local/gib
           name: gib
       # Env vars 
-      - op: add
-        path: /spec/leaderWorkerTemplate/workerTemplate/spec/containers/0/env/-
-        value:
-          # GCP pairs GPU NICs to PCIe bridges (https://cloud.google.com/compute/docs/gpus/gpu-network-bandwidth#h200-gpus),
-          # which can lead to NVSHMEM's automatic distance assignment algorithm selecting NICs
-          # inefficiently. Instead, instruct NVSHMEM to select the NIC that aligns to the
-          # index of the GPU on the node.
-          name: NVSHMEM_ENABLE_NIC_PE_MAPPING
-          value: "1"
-      - op: add
-        path: /spec/leaderWorkerTemplate/workerTemplate/spec/containers/0/env/-
-        value:
-          name: NVSHMEM_HCA_LIST
-          value: "mlx5_0:1,mlx5_1:1,mlx5_2:1,mlx5_3:1,mlx5_4:1,mlx5_5:1,mlx5_6:1,mlx5_7:1"
+      # - op: add
+      #   path: /spec/leaderWorkerTemplate/workerTemplate/spec/containers/0/env/-
+      #   value:
+      #     # GCP pairs GPU NICs to PCIe bridges (https://cloud.google.com/compute/docs/gpus/gpu-network-bandwidth#h200-gpus),
+      #     # which can lead to NVSHMEM's automatic distance assignment algorithm selecting NICs
+      #     # inefficiently. Instead, instruct NVSHMEM to select the NIC that aligns to the
+      #     # index of the GPU on the node.
+      #     name: NVSHMEM_ENABLE_NIC_PE_MAPPING
+      #     value: "1"
+      # - op: add
+      #   path: /spec/leaderWorkerTemplate/workerTemplate/spec/containers/0/env/-
+      #   value:
+      #     name: NVSHMEM_HCA_LIST
+      #     value: "mlx5_0:1,mlx5_1:1,mlx5_2:1,mlx5_3:1,mlx5_4:1,mlx5_5:1,mlx5_6:1,mlx5_7:1"
       # https://cloud.google.com/ai-hypercomputer/docs/create/gke-ai-hypercompute-custom#configure-pod-manifests-rdma
       - op: add
         path: /spec/leaderWorkerTemplate/workerTemplate/spec/containers/0/env/-
