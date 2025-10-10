@@ -152,4 +152,4 @@ patches:
       # Replace container image
       - op: replace
         path: /spec/leaderWorkerTemplate/workerTemplate/spec/containers/0/image
-        value: ghcr.io/llm-d/llm-d-gke-dev:pr-320@sha256:4e6e2ddfacd469c8e030a8d4ab58357d467cf1e852a9c0c128cf4b74136691a1
+        value: ghcr.io/llm-d/llm-d-gke:v0.3.0
