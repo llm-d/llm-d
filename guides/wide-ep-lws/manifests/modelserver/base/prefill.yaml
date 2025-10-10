@@ -39,6 +39,30 @@ spec:
             - -c
           args:
             - |-
+              set -e
+
+              patch -d /app/venv/lib/python3.12/site-packages -lup0 <<'EOF'
+              --- deep_ep/buffer.py
+              +++ deep_ep/buffer.py
+              @@ -114,6 +114,15 @@ class Buffer:
+                              # Disable multi-node NVLink detection
+                              os.environ['NVSHMEM_DISABLE_MNNVL'] = '1'
+              
+              +            # GCP specific patch
+              +            if 'DISABLE_GCP_PATCH' not in os.environ or os.environ['DISABLE_GCP_PATCH'] != '1':
+              +                os.environ['NVSHMEM_ENABLE_NIC_PE_MAPPING'] = '1'
+              +                local_rank = os.environ['LOCAL_RANK'] if 'LOCAL_RANK' in os.environ else self.rank % 8
+              +                os.environ['NVSHMEM_HCA_LIST'] = f'mlx5_{local_rank}:1'
+              +                print(f"GCP patch enabled: Setting {self.rank} to use {local_rank}", flush=True)
+              +            else:
+              +                print("GCP patch disabled", flush=True)
+              +
+                          # Synchronize using the root ID
+                          if (low_latency_mode and self.rank == 0) or (not low_latency_mode and self.runtime.get_rdma_rank() == 0):
+                              root_unique_id = self.runtime.get_local_nvshmem_unique_id()
+              EOF
+              export NVSHMEM_DEBUG=INFO NVSHMEM_INFO=true DISABLE_GCP_PATCH=
+
               #################
               # RUN vLLM prefill worker
               #################
