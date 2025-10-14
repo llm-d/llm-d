@@ -23,9 +23,6 @@ routing:
       kind: Gateway
       name: infra-r1-inference-gateway
 
-  inferenceModel:
-    create: false
-
   inferencePool:
     create: false
 

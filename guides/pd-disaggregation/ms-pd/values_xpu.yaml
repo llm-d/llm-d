@@ -25,10 +25,6 @@ routing:
     connector: nixlv2
     secure: false
 
-  inferenceModel:
-    criticality: Critical
-    create: true
-
   inferencePool:
     create: false
     # name: gaie-pd # set in helmfile
