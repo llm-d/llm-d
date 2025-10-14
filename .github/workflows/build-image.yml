@@ -66,6 +66,7 @@ jobs:
           buildkitd-flags: --oci-worker-gc
 
       - name: Log in to Container Registry
+        if: github.event_name != 'pull_request'
         uses: docker/login-action@v3
         with:
           registry: ${{ env.REGISTRY }}
@@ -90,12 +91,13 @@ jobs:
           context: .
           file: ./docker/Dockerfile.cuda
           platforms: linux/amd64
-          push: true
+          push: ${{ github.event_name != 'pull_request' }}
           provenance: true
           cache-from: type=gha
           cache-to: type=gha,mode=max
           build-args: |
             DEBUG=${{ matrix.debug }}
+            USE_SCCACHE=${{ github.event_name != 'pull_request' && 'true' || 'false' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           github-token: ${{ secrets.GHCR_TOKEN }}
@@ -107,6 +109,7 @@ jobs:
           BUILDKIT_PROGRESS: "plain"
 
       - name: Run Trivy vulnerability scanner
+        if: github.event_name != 'pull_request'
         uses: aquasecurity/trivy-action@master
         with:
           image-ref: ${{ env.REGISTRY }}/${{ github.repository }}-cuda-dev@${{ steps.build-and-push.outputs.digest }}
@@ -121,11 +124,13 @@ jobs:
           TRIVY_PASSWORD: ${{ secrets.GHCR_TOKEN }}
 
       - name: Upload Trivy scan results to GitHub Security tab
+        if: github.event_name != 'pull_request'
         uses: github/codeql-action/upload-sarif@v3
         with:
           sarif_file: 'trivy-results.sarif'
 
       - name: Display vulnerability summary
+        if: github.event_name != 'pull_request'
         run: |
           echo "=== Vulnerability Scan Summary ==="
           if [ -f trivy-results.sarif ]; then
@@ -150,6 +155,7 @@ jobs:
           buildkitd-flags: --oci-worker-gc
 
       - name: Log in to Container Registry
+        if: github.event_name != 'pull_request'
         uses: docker/login-action@v3
         with:
           registry: ${{ env.REGISTRY }}
@@ -174,10 +180,12 @@ jobs:
           context: .
           file: ./docker/Dockerfile.aws
           platforms: linux/amd64
-          push: true
+          push: ${{ github.event_name != 'pull_request' }}
           provenance: true
           cache-from: type=gha
           cache-to: type=gha,mode=max
+          build-args: |
+            USE_SCCACHE=${{ github.event_name != 'pull_request' && 'true' || 'false' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           github-token: ${{ secrets.GHCR_TOKEN }}
@@ -186,6 +194,7 @@ jobs:
             aws_secret_access_key=${{ secrets.AWS_SECRET_ACCESS_KEY_S3_BUCKET_ONLY }}
 
       - name: Run Trivy vulnerability scanner
+        if: github.event_name != 'pull_request'
         uses: aquasecurity/trivy-action@master
         with:
           image-ref: ${{ env.REGISTRY }}/${{ github.repository }}-aws-dev@${{ steps.build-and-push.outputs.digest }}
@@ -200,11 +209,13 @@ jobs:
           TRIVY_PASSWORD: ${{ secrets.GHCR_TOKEN }}
 
       - name: Upload Trivy scan results to GitHub Security tab
+        if: github.event_name != 'pull_request'
         uses: github/codeql-action/upload-sarif@v3
         with:
           sarif_file: 'trivy-results.sarif'
 
       - name: Display vulnerability summary
+        if: github.event_name != 'pull_request'
         run: |
           echo "=== Vulnerability Scan Summary ==="
           if [ -f trivy-results.sarif ]; then
@@ -229,6 +240,7 @@ jobs:
           buildkitd-flags: --oci-worker-gc
 
       - name: Log in to Container Registry
+        if: github.event_name != 'pull_request'
         uses: docker/login-action@v3
         with:
           registry: ${{ env.REGISTRY }}
@@ -253,10 +265,12 @@ jobs:
           context: .
           file: ./docker/Dockerfile.gke
           platforms: linux/amd64
-          push: true
+          push: ${{ github.event_name != 'pull_request' }}
           provenance: true
           cache-from: type=gha
           cache-to: type=gha,mode=max
+          build-args: |
+            USE_SCCACHE=${{ github.event_name != 'pull_request' && 'true' || 'false' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           github-token: ${{ secrets.GHCR_TOKEN }}
@@ -265,6 +279,7 @@ jobs:
             aws_secret_access_key=${{ secrets.AWS_SECRET_ACCESS_KEY_S3_BUCKET_ONLY }}
 
       - name: Run Trivy vulnerability scanner
+        if: github.event_name != 'pull_request'
         uses: aquasecurity/trivy-action@master
         with:
           image-ref: ${{ env.REGISTRY }}/${{ github.repository }}-gke-dev@${{ steps.build-and-push.outputs.digest }}
@@ -279,11 +294,13 @@ jobs:
           TRIVY_PASSWORD: ${{ secrets.GHCR_TOKEN }}
 
       - name: Upload Trivy scan results to GitHub Security tab
+        if: github.event_name != 'pull_request'
         uses: github/codeql-action/upload-sarif@v3
         with:
           sarif_file: 'trivy-results.sarif'
 
       - name: Display vulnerability summary
+        if: github.event_name != 'pull_request'
         run: |
           echo "=== Vulnerability Scan Summary ==="
           if [ -f trivy-results.sarif ]; then
@@ -312,6 +329,7 @@ jobs:
           ref: ${{ github.event.pull_request.head.sha }}
 
       - name: Log in to Container Registry
+        if: github.event_name != 'pull_request'
         uses: docker/login-action@v3
         with:
           registry: ${{ env.REGISTRY }}
@@ -319,6 +337,7 @@ jobs:
           password: ${{ secrets.GHCR_TOKEN }}
 
       - name: Build and push the image
+        if: github.event_name != 'pull_request'
         id: build-and-push
         run: |
           TAG=$(git rev-parse --short HEAD)
@@ -340,6 +359,7 @@ jobs:
           fi;
 
       - name: Run Trivy vulnerability scanner
+        if: github.event_name != 'pull_request'
         uses: aquasecurity/trivy-action@master
         with:
           image-ref: ${{ env.REGISTRY }}/${{ github.repository }}-xpu-dev:${{ steps.build-and-push.outputs.tag }}
@@ -354,11 +374,13 @@ jobs:
           TRIVY_PASSWORD: ${{ secrets.GHCR_TOKEN }}
 
       - name: Upload Trivy scan results to GitHub Security tab
+        if: github.event_name != 'pull_request'
         uses: github/codeql-action/upload-sarif@v3
         with:
           sarif_file: 'trivy-results.sarif'
 
       - name: Display vulnerability summary
+        if: github.event_name != 'pull_request'
         run: |
           echo "=== Vulnerability Scan Summary ==="
           if [ -f trivy-results.sarif ]; then
