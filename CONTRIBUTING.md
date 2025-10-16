@@ -66,26 +66,28 @@ For changes that fix broken code or add small changes within a component:
   - A good way to bring attention for moderate size changes is to create an RFC issue in GitHub, then engage in Slack
   - Within components, use project proposals when scope of change is large or impact to users is high
 
-##### How to test
+## Feature testing
 
 The first key step in testing a feature, or bugfix is to identify what layer of the stack are you testing. Here are some test cases:
 
-Deployment related changes:
+### Deployment related changes:
+
 - Swapping GIE helm chart version and `inference-scheduler` image upgrades - check `inference-scheduler` container logs
-  - check your `InferencePool` exists (`kubectl get InferencePool.inference.networking.x-k8s.io`)
+  - Check that your `InferencePool` exists (`kubectl get InferencePool.inference.networking.x-k8s.io`)
 - Upgrading Infra helmchart or anything affecting Gateway infrastructure
   - Check the `gateway` object (`kubectl get gateway -o yaml`)
     - Check the `status` seciton, make sure it has an `address` and that there is a message saying `"Resource programmed, assigned to service(s) <gateway_service_address>"`
     - Check the `parametersRef` for the `gateway` `infrastructure` exists (`kubectl get gateway wide-ep-inference-gateway -o yaml | yq .spec.infrastructure.parametersRef`, and then check to ensure that resource itself exists)
   - If using `istio` also check that your `DestinationRule` exists
 - Check the `httpRoute` object `status` section (`kubectl get httpRoute -o yaml | yq '.status.parents[]'`)
-  - ensure there is a message in the conditions stating: `"Route was valid"`
-  - ensure there is a parent ref on the `httpRoute`, pointing to the `httpRoute` being attached properly to the `gateway`
+  - Ensure there is a message in the conditions stating: `"Route was valid"`
+  - Ensure there is a parent ref on the `httpRoute`, pointing to the `httpRoute` being attached properly to the `gateway`
 - Modelservice helm chart upgrades
-  - ensure `vLLM` pods up
+  - Ensure `vLLM` pods up
   - `prefill` and `decode` `podmonitor`s are deployed if metrics are enabled 
 
-Container Image Build Changes and Upgrades
+### Container Image Build Changes and Upgrades:
+
 - Kernel upgrades and changes (`pplx`, `deepep`, `deepgemm`) - Ignore `flash-infer`
   - To test these ensure you use the proper vLLM backend via the `VLLM_ALL2ALL_BACKEND` environment variable
     - For `pplx` you can set both `prefill` and `decode` `VLLM_ALL2ALL_BACKEND` to `pplx`
@@ -113,7 +115,8 @@ Container Image Build Changes and Upgrades
     vpc.amazonaws.com/efa: 1
 ```
 
-Container Image Checklist:
+### Container Image Checklist:
+
 - [ ] `inference-scheduler` guide
 - [ ] `precise-kv-cache-aware` example
 - [ ] `pd-dissagregation` example (also covers deepseek kernels)
