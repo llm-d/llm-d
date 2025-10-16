@@ -86,7 +86,7 @@ SIGs operate within the broader llm-d project governance framework defined in [P
 
 ### SIG PD-Disaggregation
 
-> **👥 Leadership:** [Robert Shaw](https://github.com/robertgshaw2-redhat), [Tyler Michel Smith](https://github.com/tlrmchlsmth)
+> **👥 Leadership:** [Robert Shaw](https://github.com/robertgshaw2-redhat), [Tyler Michael Smith](https://github.com/tlrmchlsmth)
 
 > [**⭐️ North Star Design Document** ↗️](https://docs.google.com/document/d/1FNN5snmipaTxEA1FGEeSH7Z_kEqskouKD1XYhVyTHr8) *(Google Docs)*
 
