@@ -49,9 +49,6 @@ inferenceExtension:
     # Prometheus ServiceMonitor will be created when enabled for EPP metrics collection
     prometheus:
       enabled: true
-  flags:
-    - name: "v"
-      value: 4
 
 inferencePool:
   apiVersion: inference.networking.x-k8s.io/v1alpha2 # use old API version for inference
