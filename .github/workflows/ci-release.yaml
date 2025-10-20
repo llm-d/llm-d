@@ -47,11 +47,7 @@ jobs:
         with:
           images: ${{ env.REGISTRY }}/${{ github.repository }}-cuda
           tags: |
-            type=ref,event=tag
             type=raw,value=${{ github.event.release.tag_name }},enable=${{ github.event_name == 'release' && github.event.action == 'published' }}
-            type=semver,pattern={{version}},value=${{ github.event.release.tag_name }},enable=${{ github.event_name == 'release' && github.event.action == 'published' }}
-            type=semver,pattern={{major}}.{{minor}},value=${{ github.event.release.tag_name }},enable=${{ github.event_name == 'release' && github.event.action == 'published' }}
-            type=semver,pattern={{major}},value=${{ github.event.release.tag_name }},enable=${{ github.event_name == 'release' && github.event.action == 'published' }}
             type=raw,value=latest,enable=${{ github.event_name == 'release' && github.event.action == 'published' }}
 
       - name: Build & Push image
@@ -129,11 +125,7 @@ jobs:
         with:
           images: ${{ env.REGISTRY }}/${{ github.repository }}-aws
           tags: |
-            type=ref,event=tag
             type=raw,value=${{ github.event.release.tag_name }},enable=${{ github.event_name == 'release' && github.event.action == 'published' }}
-            type=semver,pattern={{version}},value=${{ github.event.release.tag_name }},enable=${{ github.event_name == 'release' && github.event.action == 'published' }}
-            type=semver,pattern={{major}}.{{minor}},value=${{ github.event.release.tag_name }},enable=${{ github.event_name == 'release' && github.event.action == 'published' }}
-            type=semver,pattern={{major}},value=${{ github.event.release.tag_name }},enable=${{ github.event_name == 'release' && github.event.action == 'published' }}
             type=raw,value=latest,enable=${{ github.event_name == 'release' && github.event.action == 'published' }}
 
       - name: Build & Push image
@@ -214,6 +206,8 @@ jobs:
           export VERSION="${{ env.TAG }}"
           make image-build
           make image-push
+          export NEW_TAG="${latest}"
+          make image-retag
 
       - name: Run Trivy vulnerability scanner
         uses: aquasecurity/trivy-action@master
@@ -272,11 +266,7 @@ jobs:
         with:
           images: ${{ env.REGISTRY }}/${{ github.repository }}-gke
           tags: |
-            type=ref,event=tag
             type=raw,value=${{ github.event.release.tag_name }},enable=${{ github.event_name == 'release' && github.event.action == 'published' }}
-            type=semver,pattern={{version}},value=${{ github.event.release.tag_name }},enable=${{ github.event_name == 'release' && github.event.action == 'published' }}
-            type=semver,pattern={{major}}.{{minor}},value=${{ github.event.release.tag_name }},enable=${{ github.event_name == 'release' && github.event.action == 'published' }}
-            type=semver,pattern={{major}},value=${{ github.event.release.tag_name }},enable=${{ github.event_name == 'release' && github.event.action == 'published' }}
             type=raw,value=latest,enable=${{ github.event_name == 'release' && github.event.action == 'published' }}
 
       - name: Build & Push image
