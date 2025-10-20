@@ -526,7 +526,7 @@ jobs:
           if [ -n ${PR_TAG} ]; then
             export NEW_TAG="pr-${PR_TAG}"
             make image-retag
-            make image-push VERSION="pr-${PR_TAG}"
+            VERSION="${NEW_TAG}" make image-push
             echo "pr_tag=pr-${PR_TAG}"  >> $GITHUB_OUTPUT
           fi;
 

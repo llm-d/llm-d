@@ -21,57 +21,181 @@ jobs:
   release-cuda-llm-d:
     strategy:
       fail-fast: false
-    runs-on: vllm-runner
+      matrix:
+        include:
+          - platform: linux/amd64
+            runner: vllm-runner
+            os: rhel
+            base_image_suffix: ubi9
+            image_suffix: ""
+          - platform: linux/arm64
+            runner: vllm-runner-arm
+            os: rhel
+            base_image_suffix: ubi9
+            image_suffix: ""
+          - platform: linux/amd64
+            runner: vllm-runner
+            os: ubuntu
+            base_image_suffix: ubuntu24.04
+            image_suffix: "-ubuntu"
+          - platform: linux/arm64
+            runner: vllm-runner-arm
+            os: ubuntu
+            base_image_suffix: ubuntu24.04
+            image_suffix: "-ubuntu"
+    runs-on: ${{ matrix.runner }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-        with:
-          ref: ${{ env.TAG }}
-          fetch-depth: 0
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
-        with:
-          buildkitd-flags: --oci-worker-gc
 
-      - name: Log in to GHCR
+      - name: Log in to Container Registry
         uses: docker/login-action@v3
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
           password: ${{ secrets.GHCR_TOKEN }}
 
-      - name: Extract Docker metadata (tags/labels)
+      - name: Extract metadata
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ${{ env.REGISTRY }}/${{ github.repository }}-cuda
+          images: ${{ env.REGISTRY }}/${{ github.repository }}-cuda${{ matrix.image_suffix }}
           tags: |
             type=raw,value=${{ github.event.release.tag_name }},enable=${{ github.event_name == 'release' && github.event.action == 'published' }}
             type=raw,value=latest,enable=${{ github.event_name == 'release' && github.event.action == 'published' }}
 
-      - name: Build & Push image
-        id: build-and-push
+      - name: Build & Push
+        id: build
         uses: docker/build-push-action@v5
         with:
           context: .
           file: ./docker/Dockerfile.cuda
-          platforms: linux/amd64
+          platforms: ${{ matrix.platform }}
           push: true
-          provenance: true
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-          tags: ${{ steps.meta.outputs.tags }}
+          provenance: false
+          build-args: |
+            TARGETOS=${{ matrix.os }}
+            BUILD_BASE_IMAGE_SUFFIX=${{ matrix.os == 'ubuntu' && 'ubuntu20.04' || matrix.base_image_suffix }}
+            FINAL_BASE_IMAGE_SUFFIX=${{ matrix.base_image_suffix }}
+            VLLM_REPO=${{ inputs.vllm_repo || 'https://github.com/vllm-project/vllm.git' }}
+            VLLM_COMMIT_SHA=${{ inputs.vllm_commit_sha || 'b8b302cde434df8c9289a2b465406b47ebab1c2d' }}
+            VLLM_PRECOMPILED_WHEEL_COMMIT=${{ inputs.vllm_precompiled_wheel_commit || inputs.vllm_commit_sha || '' }}
+          cache-from: >-
+            type=gha,scope=cuda-${{ matrix.os }}-${{
+            matrix.platform == 'linux/arm64' && 'arm64' || 'amd64' }}
+          cache-to: >-
+            type=gha,mode=max,scope=cuda-${{ matrix.os }}-${{
+            matrix.platform == 'linux/arm64' && 'arm64' || 'amd64' }}
           labels: ${{ steps.meta.outputs.labels }}
+          outputs: >-
+            type=image,name=${{ env.REGISTRY }}/${{ github.repository }}-cuda${{ matrix.image_suffix }},
+            push-by-digest=true,name-canonical=true,push=true
           github-token: ${{ secrets.GHCR_TOKEN }}
           secrets: |
             aws_access_key_id=${{ secrets.AWS_ACCESS_KEY_ID_S3_BUCKET_ONLY }}
             aws_secret_access_key=${{ secrets.AWS_SECRET_ACCESS_KEY_S3_BUCKET_ONLY }}
+        env:
+          DOCKER_BUILDKIT: "1"
+          BUILDKIT_PROGRESS: "plain"
+
+      - name: Export digest
+        run: |
+          mkdir -p /tmp/digests
+          digest="${{ steps.build.outputs.digest }}"
+          touch "/tmp/digests/${digest#sha256:}"
+
+      - name: Upload digest
+        uses: actions/upload-artifact@v4
+        with:
+          name: digests-cuda-${{ matrix.os }}-${{ matrix.platform == 'linux/arm64' && 'arm64' || 'amd64' }}
+          path: /tmp/digests/*
+          if-no-files-found: error
+          retention-days: 1
+
+  release-cuda-manifest:
+    needs: release-cuda-llm-d
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        os: [rhel, ubuntu]
+        include:
+          # RHEL is the default image (no suffix in image name)
+          - os: rhel
+            image_suffix: ""
+          # Ubuntu images are tagged with -ubuntu suffix
+          - os: ubuntu
+            image_suffix: "-ubuntu"
+    steps:
+      - name: Download digests
+        uses: actions/download-artifact@v4
+        with:
+          path: /tmp/digests
+          pattern: digests-cuda-${{ matrix.os }}-*
+          merge-multiple: true
+
+      - name: Debug digest files
+        run: |
+          echo "=== Contents of /tmp/digests ==="
+          ls -la /tmp/digests
+          echo "=== Files matched by glob * ==="
+          cd /tmp/digests && printf '%s\n' *
+          echo "=== Test manifest command construction ==="
+          cd /tmp/digests && \
+            printf '${{ env.REGISTRY }}/${{ github.repository }}-cuda${{ matrix.image_suffix }}@sha256:%s ' *
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GHCR_TOKEN }}
+
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ github.repository }}-cuda${{ matrix.image_suffix }}
+          tags: |
+            type=raw,value=${{ github.event.release.tag_name }},enable=${{ github.event_name == 'release' && github.event.action == 'published' }}
+            type=raw,value=latest,enable=${{ github.event_name == 'release' && github.event.action == 'published' }}
+
+      - name: Create and push manifest
+        id: manifest
+        working-directory: /tmp/digests
+        run: |
+          SHORT_SHA="${{ github.event.pull_request.head.sha || github.sha }}"
+          # build the list of source images (by digest)
+          sources=""
+          for digest in *; do
+            image="${{ env.REGISTRY }}/${{ github.repository }}-cuda${{ matrix.image_suffix }}"
+            sources="$sources ${image}@sha256:$digest"
+          done
+
+          # create manifest and tag it
+          docker buildx imagetools create \
+            -t ${{ env.REGISTRY }}/${{ github.repository }}-cuda${{ matrix.image_suffix }}:pr-${{
+              github.event.pull_request.number }} \
+            -t ${{ env.REGISTRY }}/${{ github.repository }}-cuda${{ matrix.image_suffix }}:sha-${SHORT_SHA} \
+            $sources
+
+          # extract final manifest digest
+          MANIFEST_DIGEST=$(docker buildx imagetools inspect \
+            ${{ env.REGISTRY }}/${{ github.repository }}-cuda${{ matrix.image_suffix }}:sha-${SHORT_SHA} \
+            | awk '/^Digest:/ {print $2}')
+          echo "digest=${MANIFEST_DIGEST}" >> $GITHUB_OUTPUT
 
       - name: Run Trivy vulnerability scanner
         uses: aquasecurity/trivy-action@master
         with:
-          image-ref: ${{ env.REGISTRY }}/${{ github.repository }}-cuda@${{ steps.build-and-push.outputs.digest }}
+          image-ref: >-
+            ${{ env.REGISTRY }}/${{ github.repository }}-cuda${{ matrix.image_suffix }}@${{
+              steps.manifest.outputs.digest }}
           format: 'sarif'
           output: 'trivy-results.sarif'
           severity: 'CRITICAL,HIGH,MEDIUM'
@@ -206,8 +330,9 @@ jobs:
           export VERSION="${{ env.TAG }}"
           make image-build
           make image-push
-          export NEW_TAG="${latest}"
+          export NEW_TAG="latest"
           make image-retag
+          VERSION="${NEW_TAG}" make image-push
 
       - name: Run Trivy vulnerability scanner
         uses: aquasecurity/trivy-action@master
