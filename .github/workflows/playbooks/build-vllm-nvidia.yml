@@ -38,7 +38,7 @@
     - name: Install SCCache
       shell: |
         sudo apt update
-        sudo apt install -y build-essential pkg-config libssl-dev 
+        sudo apt install -y build-essential pkg-config libssl-dev
         curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
         source $HOME/.cargo/env
         cargo install sccache
@@ -82,7 +82,7 @@
         executable: /bin/bash
 
     - name: Install cuda deps
-      shell: | 
+      shell: |
         if [[ "$(uname -m)" == "arm64" || "$(uname -m)" == "aarch64" ]]; then
           wget https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2404/arm64/cuda-keyring_1.1-1_all.deb
         elif [[ "$(uname -m)" == "amd64" || "$(uname -m)" == "x86_64" ]]; then
@@ -90,7 +90,9 @@
         fi
         sudo dpkg -i cuda-keyring_1.1-1_all.deb
         sudo apt-get update
-        sudo apt-get install -y cuda-toolkit-$(echo {{ CUDA_VERSION }} | cut -d. -f1,2 | sed 's/\./-/g') nvidia-open nvtop nload
+        sudo apt-get install -y \
+          cuda-toolkit-$(echo {{ CUDA_VERSION }} | cut -d. -f1,2 | sed 's/\./-/g') \
+          nvidia-open nvtop nload
       args:
         executable: /bin/bash
         chdir: /home/ubuntu
@@ -126,8 +128,10 @@
     - name: Install Python dependencies
       shell: |
         /home/ubuntu/vllm/venv/bin/pip install --upgrade pip setuptools setuptools_scm wheel
-        /home/ubuntu/vllm/venv/bin/pip install -r /home/ubuntu/vllm/requirements/build.txt --extra-index-url {{ PYTORCH_CUDA_INDEX_BASE_URL }}/{{ CUDA_SHORT }}
-        /home/ubuntu/vllm/venv/bin/pip install -r /home/ubuntu/vllm/requirements/cuda.txt --extra-index-url {{ PYTORCH_CUDA_INDEX_BASE_URL }}/{{ CUDA_SHORT }}
+        /home/ubuntu/vllm/venv/bin/pip install -r /home/ubuntu/vllm/requirements/build.txt \
+          --extra-index-url {{ PYTORCH_CUDA_INDEX_BASE_URL }}/{{ CUDA_SHORT }}
+        /home/ubuntu/vllm/venv/bin/pip install -r /home/ubuntu/vllm/requirements/cuda.txt \
+          --extra-index-url {{ PYTORCH_CUDA_INDEX_BASE_URL }}/{{ CUDA_SHORT }}
 
         if [[ "$(uname -m)" == "arm64" || "$(uname -m)" == "aarch64" ]]; then
           /home/ubuntu/vllm/venv/bin/pip install \
@@ -154,7 +158,7 @@
         export CUDA_HOME=/usr/local/cuda
         export PATH=$CUDA_HOME/bin:$PATH
         export LD_LIBRARY_PATH=$CUDA_HOME/lib64:$LD_LIBRARY_PATH
-        
+
         export RUSTC_WRAPPER="sccache"
         export CC="gcc"
         export CXX="g++"
@@ -163,17 +167,17 @@
         export SCCACHE_IDLE_TIMEOUT=0
         export SCCACHE_S3_KEY_PREFIX="vllm-cache/"
         export VLLM_TARGET_DEVICE="cuda"
-        
+
         # MOST_RECENT_TAG="$(git describe --tags --abbrev=0 || true)"
         # [[ "${MOST_RECENT_TAG:0:1}" == "v" ]] && MOST_RECENT_TAG="${MOST_RECENT_TAG:1}"
         MOST_RECENT_TAG=0.0.0 # set tag as 0 so wheel is unique to only the commit sha and not release timeline
 
         COMMIT_SHA_TAG="g$(git rev-parse --short HEAD)"
-        
+
         export TORCH_CUDA_ARCH_LIST='7.0;7.5;8.0;8.6;8.9;9.0+PTX'
-        
+
         python -m pip install -U twine pkginfo packaging importlib_metadata readme_renderer requests-toolbelt
-        
+
         export SETUPTOOLS_SCM_PRETEND_VERSION="${MOST_RECENT_TAG}+${COMMIT_SHA_TAG}.{{ CUDA_SHORT }}"
 
         python setup.py bdist_wheel --dist-dir=dist --py-limited-api=cp38 > /tmp/vllm-build.log 2>&1
@@ -203,7 +207,7 @@
         chmod 600 $HOME/.pypirc
       args:
         executable: /bin/bash
-    
+
     - name: Twine Upload and S3 upload
       shell: |
         source /home/ubuntu/vllm/venv/bin/activate

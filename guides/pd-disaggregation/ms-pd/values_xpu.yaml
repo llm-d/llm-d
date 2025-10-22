@@ -15,22 +15,22 @@ modelArtifacts:
 
 routing:
   servicePort: 8000
-  parentRefs:
-    - group: gateway.networking.k8s.io
-      kind: Gateway
-      # name: infra-pd-inference-gateway # set in helmfile
-
   proxy:
-    image: ghcr.io/llm-d/llm-d-routing-sidecar:v0.2.0
+    image: ghcr.io/llm-d/llm-d-routing-sidecar:v0.3.0
     connector: nixlv2
     secure: false
 
+  parentRefs:
+    - group: gateway.networking.k8s.io
+      kind: Gateway
+      # name: # set in helmfile
+
   inferencePool:
     create: false
-    # name: gaie-pd # set in helmfile
 
+  # create httpRoute via MS for using release name xpu-pd override
   httpRoute:
-    create: false
+    create: true
 
   epp:
     create: false
@@ -40,17 +40,15 @@ decode:
   replicas: 1
   monitoring:
     podmonitor:
-      enabled: false
+      enabled: true
       portName: "metrics" # decode vLLM service port (from routing.proxy.targetPort)
       path: "/metrics"
       interval: "30s"
   containers:
   - name: "vllm"
-    image: ghcr.io/llm-d/llm-d-xpu:v0.3.0
+    image: ghcr.io/llm-d/llm-d-xpu-dev:pr-357
     modelCommand: vllmServe
     args:
-      - "--tensor-parallel-size"
-      - "1"
       - "--block-size"
       - "128"
       - "--kv-transfer-config"
@@ -59,18 +57,19 @@ decode:
       - "--disable-uvicorn-access-log"
       - "--max-model-len"
       - "32000"
+    securityContext:
+      fsGroup: 107
+      supplementalGroups:
+        - 107
     env:
+      - name: UCX_TLS
+        value: "tcp"
       - name: VLLM_NIXL_SIDE_CHANNEL_HOST
         valueFrom:
           fieldRef:
             fieldPath: status.podIP
-      - name: UCX_TLS
-        value: "tcp"
-      - name: VLLM_WORKER_MULTIPROC_METHOD
-        value: "spawn"
-      - name: VLLM_USE_V1
-        value: "1"
-
+      - name: VLLM_NIXL_SIDE_CHANNEL_PORT
+        value: "5557"
     ports:
       - containerPort: 8200
         name: metrics
@@ -86,32 +85,26 @@ decode:
         gpu.intel.com/i915: "1"
     mountModelVolume: true
     volumeMounts:
-    - name: metrics-volume
-      mountPath: /.config
-    - name: shm
-      mountPath: /dev/shm
-    - name: torch-compile-cache
-      mountPath: /.cache
+      - name: dshm
+        mountPath: /dev/shm
   volumes:
-  - name: metrics-volume
-    emptyDir: {}
-  - name: shm
-    emptyDir: {}
-  - name: torch-compile-cache
-    emptyDir: {}
+    - name: dshm
+      emptyDir:
+        medium: Memory
+        sizeLimit: 4Gi
 
 prefill:
   create: true
   replicas: 3
   monitoring:
     podmonitor:
-      enabled: false
+      enabled: true
       portName: "metrics" # prefill vLLM service port (from routing.servicePort)
       path: "/metrics"
       interval: "30s"
   containers:
   - name: "vllm"
-    image: ghcr.io/llm-d/llm-d-xpu:v0.3.0
+    image: ghcr.io/llm-d/llm-d-xpu-dev:pr-357
     modelCommand: vllmServe
     args:
       - "--block-size"
@@ -122,17 +115,19 @@ prefill:
       - "--disable-uvicorn-access-log"
       - "--max-model-len"
       - "32000"
+    securityContext:
+      fsGroup: 107
+      supplementalGroups:
+        - 107
     env:
+      - name: UCX_TLS
+        value: "tcp"
       - name: VLLM_NIXL_SIDE_CHANNEL_HOST
         valueFrom:
           fieldRef:
             fieldPath: status.podIP
-      - name: UCX_TLS
-        value: "tcp"
-      - name: VLLM_WORKER_MULTIPROC_METHOD
-        value: "spawn"
-      - name: VLLM_USE_V1
-        value: "1"
+      - name: VLLM_NIXL_SIDE_CHANNEL_PORT
+        value: "5557"
     ports:
       - containerPort: 8000
         name: metrics
@@ -148,16 +143,10 @@ prefill:
         gpu.intel.com/i915: "1"
     mountModelVolume: true
     volumeMounts:
-    - name: metrics-volume
-      mountPath: /.config
-    - name: shm
-      mountPath: /dev/shm
-    - name: torch-compile-cache
-      mountPath: /.cache
+      - name: dshm
+        mountPath: /dev/shm
   volumes:
-  - name: metrics-volume
-    emptyDir: {}
-  - name: shm
-    emptyDir: {}
-  - name: torch-compile-cache
-    emptyDir: {}
+    - name: dshm
+      emptyDir:
+        medium: Memory
+        sizeLimit: 4Gi

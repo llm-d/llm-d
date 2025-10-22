@@ -1,0 +1,48 @@
+apiVersion: mellanox.com/v1alpha1
+kind: NicClusterPolicy
+metadata:
+  name: nic-cluster-policy
+spec:
+  ofedDriver:
+    env:
+    - name: OFED_BLACKLIST_MODULES_FILE
+      value: /host/etc/modprobe.d/blacklist-ofed-modules.conf
+    forcePrecompiled: false
+    image: doca-driver
+    livenessProbe:
+      initialDelaySeconds: 30
+      periodSeconds: 30
+    readinessProbe:
+      initialDelaySeconds: 10
+      periodSeconds: 30
+    repository: nvcr.io/nvidia/mellanox
+    startupProbe:
+      initialDelaySeconds: 10
+      periodSeconds: 20
+    upgradePolicy:
+      autoUpgrade: true
+      drain:
+        deleteEmptyDir: true
+        enable: true
+        force: true
+        timeoutSeconds: 300
+      maxParallelUpgrades: 1
+    version: doca3.1.0-25.07-0.9.7.0-0
+  rdmaSharedDevicePlugin:
+    config: |
+      {
+        "configList": [
+          {
+            "resourceName": "ib",
+            "rdmaHcaMax": 8,
+            "selectors": {
+              "vendors": ["15b3"],
+              "linkTypes": ["infiniband"],
+              "isRdma": true
+            }
+          }
+        ]
+      }
+    image: k8s-rdma-shared-dev-plugin
+    repository: ghcr.io/mellanox
+    version: v1.5.3

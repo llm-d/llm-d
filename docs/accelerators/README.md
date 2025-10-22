@@ -27,3 +27,16 @@ For integration into the well-lit paths our standard for contribution is higher,
 
 > [!NOTE] 
 > The community can assist but is not responsible for keeping hardware guide variants updated. We reserve the right to remove stale examples and documentation with regard to hardware support.
+
+## Hardware-Specific Setup
+
+### Intel XPU
+
+Intel XPU deployments require the Intel GPU Device Plugin to be installed in your Kubernetes cluster:
+
+```bash
+# Deploy Intel GPU Device Plugin v0.32.1
+kubectl apply -k 'https://github.com/intel/intel-device-plugins-for-kubernetes/deployments/gpu_plugin?ref=v0.32.1'
+```
+
+This plugin enables Kubernetes to discover and schedule workloads on Intel GPUs. Make sure to install this before deploying any XPU-based inference workloads.

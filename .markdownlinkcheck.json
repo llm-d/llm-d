@@ -3,8 +3,8 @@
     {
       "pattern": "linkedin.com"
     },
-    { 
-      "pattern": "^(https?://)?(www\\.)?(old\\.)?reddit\\.com/" 
+    {
+      "pattern": "^(https?://)?(www\\.)?(old\\.)?reddit\\.com/"
     },
     {
       "pattern": "^https://platform\\.openai\\.com/docs/api-reference/"

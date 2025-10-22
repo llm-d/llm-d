@@ -57,4 +57,3 @@ inferencePool:
   modelServers:
     matchLabels:
       llm-d.ai/inferenceServing: "true"
-      llm-d.ai/model: ms-pd-llm-d-modelservice

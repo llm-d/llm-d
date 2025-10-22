@@ -2,8 +2,8 @@
 # This configuration lets the chart handle most vLLM parameters automatically
 
 modelArtifacts:
-  name: deepseek-ai/DeepSeek-R1-Distill-Qwen-1.5B
-  uri: "hf://deepseek-ai/DeepSeek-R1-Distill-Qwen-1.5B"
+  name: Qwen/Qwen3-0.6B
+  uri: "hf://Qwen/Qwen3-0.6B"
   size: 10Gi
   authSecretName: "llm-d-hf-token"
 
@@ -45,7 +45,7 @@ decode:
   containers:
   - name: "vllm"
     # Use Intel latest published xpu image
-    image: ghcr.io/llm-d/llm-d-xpu:v0.3.0
+    image: ghcr.io/llm-d/llm-d-xpu-dev:pr-357
     modelCommand: "vllmServe"
     args:
       - "--enforce-eager"
@@ -59,10 +59,7 @@ decode:
     env:
       - name: VLLM_LOGGING_LEVEL
         value: DEBUG
-      - name: CCL_ZE_IPC_EXCHANGE
-        value: "pidfd"
-      - name: ZE_AFFINITY_MASK
-        value: "0"
+
     ports:
       - containerPort: 8200
         protocol: TCP
@@ -87,14 +84,6 @@ decode:
     emptyDir: {}
   - name: torch-compile-cache
     emptyDir: {}
-
-      
-  # XPU-specific node affinity
-  acceleratorTypes:
-    labelKey: "accelerator"
-    labelValues:
-      - "intel-xpu"
-      - "intel-gpu-max"
 
 # Disable prefill for simple XPU example
 prefill:

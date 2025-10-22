@@ -8,6 +8,7 @@ llm-d tests on the following configurations, supporting leading-edge AI accelera
 
 * Kubernetes: 1.29 or newer
   * Your cluster scheduler must support placing multiple pods within the same networking domain for running multi-host inference
+  * Kubernetes v1.33.0+ is recommended for complete sidecar init container support (restartPolicy: Always). If using Kubernetes v1.28.x or below, pods may get stuck in Init:0/1 state due to incomplete sidecar support.
 * Recent generation datacenter-class accelerators
   * AMD MI250X or newer
   * Google TPU v5e, v6e, and newer
@@ -71,6 +72,7 @@ Use the [LWS installation guide](https://lws.sigs.k8s.io/docs/installation/) to 
 
 The following documentation describes llm-d tested setup for cluster infrastructure providers as well as specific deployment settings that will impact how model servers is expected to access accelerators.
 
+* [Azure Kubernetes Service (AKS)](../../../docs/infra-providers/aks/README.md)
 * [DigitalOcean Kubernetes (DOKS)](../../../docs/infra-providers/digitalocean/README.md)
 * [Google Kubernetes Engine (GKE)](../../../docs/infra-providers/gke/README.md)
 * [OpenShift (OCP)](../../../docs/infra-providers/openshift/README.md), [OpenShift on AWS](../../../docs/infra-providers/openshift-aws/README.md)

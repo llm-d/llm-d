@@ -1,0 +1,125 @@
+name: Hardware or Platform Support
+description: Request or contribute support for new hardware accelerators or Kubernetes platforms
+title: "[HARDWARE/PLATFORM]: "
+labels: ["hardware", "platform-support", "documentation"]
+assignees: []
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ## Hardware and Platform Support Request/Contribution
+        
+        Thank you for your interest in expanding llm-d's hardware and platform support!
+        
+        Please provide detailed information about the hardware accelerator or Kubernetes platform you're interested in supporting.
+  
+  - type: dropdown
+    id: support-type
+    attributes:
+      label: Support Type
+      description: Are you requesting support or contributing support for this hardware/platform?
+      options:
+        - Requesting support
+        - Contributing support
+    validations:
+      required: true
+      
+  - type: dropdown
+    id: component-type
+    attributes:
+      label: Component Type
+      description: What type of component are you requesting/contributing support for?
+      options:
+        - Hardware Accelerator
+        - Kubernetes Platform/Distribution
+        - Cloud Provider
+        - Network Infrastructure
+        - Other
+    validations:
+      required: true
+      
+  - type: input
+    id: component-name
+    attributes:
+      label: Component Name and Version
+      description: Specify the name and version of the hardware or platform
+      placeholder: "e.g., NVIDIA H200, GKE 1.30, Azure AKS 1.29"
+    validations:
+      required: true
+      
+  - type: textarea
+    id: specifications
+    attributes:
+      label: Specifications
+      description: |
+        For hardware: Memory, Interconnect, Architecture, etc.
+        For platforms: Features, Limitations, etc.
+      placeholder: "Please provide detailed specifications..."
+    validations:
+      required: true
+      
+  - type: textarea
+    id: current-status
+    attributes:
+      label: Current Support Status
+      description: What's the current state of support in llm-d? Unsupported, Partially Working, etc.
+      placeholder: "e.g., Currently unsupported, or partially working with known issues..."
+    validations:
+      required: true
+      
+  - type: checkboxes
+    id: implementation-plan
+    attributes:
+      label: Implementation Plan
+      description: If you're contributing support, what components will you be updating?
+      options:
+        - label: Documentation updates
+        - label: Dockerfile changes
+        - label: Helm chart modifications
+        - label: Testing on the hardware/platform
+        - label: CI/CD integration
+        - label: Well-lit path guide creation/update
+        
+  - type: textarea
+    id: testing-environment
+    attributes:
+      label: Testing Environment
+      description: Describe the testing environment you have access to for this hardware/platform
+      placeholder: "e.g., We have access to 4 nodes with 8 GPUs each in our test environment..."
+    validations:
+      required: false
+      
+  - type: textarea
+    id: maintainer-info
+    attributes:
+      label: Maintainer Information
+      description: |
+        If you're contributing support, please provide maintainer information.
+        As per our [requirements](https://github.com/llm-d/llm-d/blob/main/guides/prereq/infrastructure/README.md#other-providers), we need at least one documented platform maintainer.
+      placeholder: "Name, Email, GitHub username, Organization"
+    validations:
+      required: false
+      
+  - type: textarea
+    id: additional-info
+    attributes:
+      label: Additional Information
+      description: Any other relevant information about this hardware/platform support request or contribution
+      placeholder: "Any additional context, links, or information..."
+    validations:
+      required: false
+      
+  - type: checkboxes
+    id: requirements
+    attributes:
+      label: Support Requirements
+      description: Please confirm you understand the requirements for hardware/platform support
+      options:
+        - label: For hardware vendors, I understand a publicly available container image that launches vLLM in the recommended configuration is required
+          required: false
+        - label: For well-lit path integration, I understand a named maintainer responsible for keeping guide contents up to date is required
+          required: false
+        - label: For well-lit path integration, I understand manual or automated verification of the guide deployment for each release is required
+          required: false
+        - label: I understand the community can assist but is not responsible for keeping hardware/platform guide variants updated
+          required: false

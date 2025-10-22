@@ -8,7 +8,10 @@ This profile defaults to the approximate prefix cache aware scorer, which only o
 
 ## Hardware Requirements
 
-This example out of the box requires 2 Nvidia GPUs of any kind (support determined by the inferencing image used).
+This example out of the box requires 2 GPUs of any supported kind:
+- **NVIDIA GPUs**: Any NVIDIA GPU (support determined by the inferencing image used)
+- **Intel XPU/GPUs**: Intel Data Center GPU Max 1550 or compatible Intel XPU device
+- **TPUs**: Google Cloud TPUs (when using GKE TPU configuration)
 
 ## Prerequisites
 
@@ -18,12 +21,15 @@ This example out of the box requires 2 Nvidia GPUs of any kind (support determin
 - [Create the `llm-d-hf-token` secret in your target namespace with the key `HF_TOKEN` matching a valid HuggingFace token](../prereq/client-setup/README.md#huggingface-token) to pull models.
 - Have the [Monitoring stack](../../docs/monitoring/README.md) installed on your system.
 
+
 ## Installation
 
 Use the helmfile to compose and install the stack. The Namespace in which the stack will be deployed will be derived from the `${NAMESPACE}` environment variable. If you have not set this, it will default to `llm-d-inference-scheduler` in this example.
 
+**_IMPORTANT:_** When using long namespace names (like `llm-d-inference-scheduler`), the generated pod hostnames may become too long and cause issues due to Linux hostname length limitations (typically 64 characters maximum). It's recommended to use shorter namespace names (like `llm-d`) and set `RELEASE_NAME_POSTFIX` to generate shorter hostnames and avoid potential networking or vLLM startup problems.
+
 ```bash
-export NAMESPACE=llm-d-inference-scheduler # or any other namespace
+export NAMESPACE=llm-d-inference-scheduler # or any other namespace (shorter names recommended)
 cd guides/inference-scheduling
 helmfile apply -n ${NAMESPACE}
 ```
@@ -36,7 +42,7 @@ helmfile apply -n ${NAMESPACE}
 
 #### Gateway Options
 
-To see specify your gateway choice you can use the `-e <gateway option>` flag, ex:
+To specify your gateway choice you can use the `-e <gateway option>` flag, ex:
 
 ```bash
 helmfile apply -e kgateway -n ${NAMESPACE}
@@ -49,7 +55,7 @@ For DigitalOcean Kubernetes Service (DOKS):
 helmfile apply -e digitalocean -n ${NAMESPACE}
 ```
 
-**Note:** DigitalOcean deployment uses public Qwen/Qwen3-0.6B model (no HuggingFace token required) and is optimized for DOKS GPU nodes with automatic tolerations and node selectors. Gateway API v1 compatibility fixes are automatically included.
+ **_NOTE:_** DigitalOcean deployment uses public Qwen/Qwen3-0.6B model (no HuggingFace token required) and is optimized for DOKS GPU nodes with automatic tolerations and node selectors. Gateway API v1 compatibility fixes are automatically included.
 
 To see what gateway options are supported refer to our [gateway provider prereq doc](../prereq/gateway-provider/README.md#supported-providers). Gateway configurations per provider are tracked in the [gateway-configurations directory](../prereq/gateway-provider/common-configurations/).
 

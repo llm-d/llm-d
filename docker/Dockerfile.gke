@@ -192,6 +192,6 @@ RUN curl -LsSf https://astral.sh/uv/install.sh | env UV_INSTALL_DIR="/usr/local/
     upip flashinfer-python && \
     # vLLM
     git_clone_and_cd https://github.com/vllm-project/vllm.git /app/vllm releases/v0.11.0 && \
-    VLLM_PRECOMPILED_WHEEL_LOCATION=https://wheels.vllm.ai/f71952c1c49fb86686b0b300b727b26282362bf4/vllm-0.11.0%2Bcu129-cp38-abi3-manylinux1_x86_64.whl VLLM_USE_PRECOMPILED=1 upip . 
+    VLLM_PRECOMPILED_WHEEL_LOCATION=https://wheels.vllm.ai/b8b302cde434df8c9289a2b465406b47ebab1c2d/vllm-0.11.0%2Bcu129-cp38-abi3-manylinux1_x86_64.whl VLLM_USE_PRECOMPILED=1 upip . 
 
 ENTRYPOINT ["/app/code/venv/bin/vllm", "serve"]

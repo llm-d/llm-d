@@ -39,7 +39,7 @@ spec:
           - name: dshm
             emptyDir:
               medium: Memory
-              sizeLimit: 3Gi # 3Gi for NCCL 2.27 to be safe
+              sizeLimit: 1Gi # roughly 32MB per local DP plus scratch space
         containers:
         - name: vllm-worker
           image: ghcr.io/llm-d/llm-d-cuda:v0.3.0
@@ -56,6 +56,10 @@ spec:
             - -c
           args:
             - |-
+              # Clear /dev/shm on start to prevent running out of space when crashes occur
+              # https://github.com/llm-d/llm-d/issues/352
+              find /dev/shm -type f -delete
+
               #################
               # RUN vLLM decode worker
               #################

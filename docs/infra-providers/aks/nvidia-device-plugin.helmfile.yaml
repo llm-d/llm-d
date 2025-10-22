@@ -1,0 +1,9 @@
+repositories:
+  - name: nvdp
+    url: https://nvidia.github.io/k8s-device-plugin
+
+releases:
+  - name: nvidia-device-plugin
+    namespace: kube-system
+    chart: nvdp/nvidia-device-plugin
+    version: 0.17.4

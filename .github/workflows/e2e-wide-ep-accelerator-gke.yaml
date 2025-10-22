@@ -1,0 +1,251 @@
+name: GKE Wide-EP Test
+
+on:
+  # Runs with a PR comment /run-gke-wide-ep
+  issue_comment:
+    types: [created]
+  schedule: # TODO: enable once validated functional
+    - cron: '0 12 * * *'  # 5AM PST (11:00 UTC)
+  workflow_dispatch:
+    inputs:
+      pr_or_branch:
+        description: 'Pull-request number or branch name to test'
+        required: true
+        default: 'main'
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  deploy_and_validate:
+    if: >
+      github.event_name == 'schedule' ||
+      github.event_name == 'pull_request' ||
+      github.event_name == 'workflow_dispatch' ||
+      (
+        github.event_name == 'issue_comment' &&
+        github.event.issue.pull_request &&
+        (
+          contains(github.event.comment.body, '/run-gke-wide-ep')
+        ) &&
+        (
+          github.event.comment.author_association == 'OWNER' ||
+          github.event.comment.author_association == 'MEMBER' ||
+          github.event.comment.author_association == 'COLLABORATOR'
+        )
+      )
+    runs-on: ubuntu-latest
+
+    env:
+      GCP_PROJECT_ID: llm-d-scale
+      GKE_CLUSTER_NAME: llm-d-e2e-us-south1-2
+      GKE_CLUSTER_ZONE: us-south1
+      NAMESPACE: llm-d-wide-ep
+      GATEWAY: gke-l7-regional-external-managed
+      GATEWAY_TYPE: gke
+      PR_OR_BRANCH: ${{ github.event.inputs.pr_or_branch || github.event.issue.number || github.event.number || 'main' }}
+      HF_TOKEN: ${{ secrets.HF_TOKEN }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Determine if pr_or_branch is a PR number
+        id: check_pr
+        env:
+          PR_OR_BRANCH: ${{ github.event.inputs.pr_or_branch }}
+        shell: bash
+        run: |
+          echo "PR_OR_BRANCH=${PR_OR_BRANCH:-main}" >> "$GITHUB_ENV"
+          if [[ "$PR_OR_BRANCH" =~ ^[0-9]+$ ]]; then
+            echo "is_pr=true" >> "$GITHUB_OUTPUT"
+          elif [[ "${{ github.event_name }}" = "pull_request" ]]; then
+            echo "PR_OR_BRANCH=${{ github.event.pull_request.number }}" >> $GITHUB_ENV
+            echo "is_pr=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "is_pr=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Fetch and checkout PR
+        if: steps.check_pr.outputs.is_pr == 'true'
+        run: |
+          git fetch origin pull/"$PR_OR_BRANCH"/head:pr-"$PR_OR_BRANCH"
+          git checkout pr-"$PR_OR_BRANCH"
+
+      - name: Checkout branch
+        if: steps.check_pr.outputs.is_pr == 'false'
+        run: git checkout "$PR_OR_BRANCH"
+
+      - name: Authenticate to Google Cloud
+        id: auth
+        uses: google-github-actions/auth@b7593ed2efd1c1617e1b0254da33b86225adb2a5
+        with:
+          credentials_json: ${{ secrets.GKE_SA_KEY }}
+
+      - name: Set up gcloud CLI and kubectl
+        uses: google-github-actions/setup-gcloud@cb1e50a9932213ecece00a606661ae9ca44f3397
+        with:
+          project_id: ${{ env.GCP_PROJECT_ID }}
+          install_components: 'kubectl,gke-gcloud-auth-plugin'
+
+      - name: Get GKE credentials
+        run: |
+          gcloud container clusters get-credentials "${{ env.GKE_CLUSTER_NAME }}" --zone "${{ env.GKE_CLUSTER_ZONE }}"
+
+      - name: Install dependencies
+        run: |
+          cd guides
+          ./prereq/client-setup/install-deps.sh | tee ~/install-deps.log
+
+      - name: Create namespace
+        run: |
+          kubectl create namespace "${NAMESPACE}" || echo "Namespace already exists"
+
+      - name: Create llm-d-hf-token secret
+        run: |
+          kubectl create secret generic llm-d-hf-token \
+            --from-literal="HF_TOKEN=${{ secrets.HF_TOKEN }}" \
+            --namespace "${NAMESPACE}" \
+            --dry-run=client -o yaml | kubectl apply -f -
+
+      - name: Deploy model server
+        run: |
+          cd guides/wide-ep-lws
+          echo "Deploying Model Server..."
+          kubectl apply -k ./manifests/modelserver/gke -n ${NAMESPACE} | tee ~/wide-ep-deployment.log
+          echo "---------------------------------------" >> ~/wide-ep-deployment.log
+
+      - name: Deploy InferencePool
+        shell: bash
+        run: |
+          cd guides/wide-ep-lws
+          echo "Deploying InferencePool..."
+          helm install deepseek-r1 \
+          --namespace ${NAMESPACE} \
+          --set "provider.name=gke" \
+          --set "inferencePool.apiVersion=inference.networking.k8s.io/v1" \
+          --set "inferenceExtension.monitoring.gke.enable=true" \
+          -f inferencepool.values.yaml \
+          oci://us-central1-docker.pkg.dev/k8s-staging-images/gateway-api-inference-extension/charts/inferencepool \
+          --version v1.0.1
+          echo "---------------------------------------" >> ~/wide-ep-deployment.log
+
+      - name: Deploy Gateway and HTTPRoute
+        run: |
+          cd guides/wide-ep-lws
+          echo "Deploying Gateway and HTTPRoute..."
+          kubectl apply -k ./manifests/gateway/gke-l7-regional-external-managed -n ${NAMESPACE} | tee ~/wide-ep-deployment.log
+          echo "---------------------------------------" >> ~/wide-ep-deployment.log
+
+      - name: Wait for all pods to be ready
+        run: |
+          kubectl wait pod \
+            --for=condition=Ready \
+            --all \
+            -n "${NAMESPACE}" \
+            --timeout=35m
+          sleep 480 # Allow extra time for model loading in Wide EP setup
+          echo "✅ All pods are ready."
+          kubectl get pods -n "${NAMESPACE}"
+
+      - name: Wait for gateway to be ready
+        run: |
+          GATEWAY_NAME=wide-ep-inference-gateway
+          kubectl wait gateway/${GATEWAY_NAME} \
+            --for=condition=Programmed=True \
+            -n "${NAMESPACE}"
+            # --timeout=300s
+          echo "✅ Gateway is ready."
+          kubectl get gateway -n "${NAMESPACE}"
+
+      - name: Show deployment status
+        run: |
+          echo "=== Deployments ==="
+          kubectl get deployments -n "${NAMESPACE}"
+          echo ""
+          echo "=== Replica Sets ==="
+          kubectl get replicasets -n "${NAMESPACE}"
+          echo ""
+          echo "=== Pods ==="
+          kubectl get pods -n "${NAMESPACE}"
+          echo ""
+          echo "=== Services ==="
+          kubectl get svc -n "${NAMESPACE}"
+          echo ""
+          echo "=== Helm releases ==="
+          helm list -n "${NAMESPACE}" || true
+          echo ""
+          echo "=== Inference Pools ==="
+          kubectl get inferencepools -n "${NAMESPACE}" || true
+          echo ""
+          echo "=== HTTPRoutes ==="
+          kubectl get httproutes -n "${NAMESPACE}" || true
+          echo ""
+          echo "=== Gateway ==="
+          kubectl get Gateway -n "${NAMESPACE}" || true
+          echo ""
+
+      - name: wide-ep inference test
+        run: |
+          cd .github/scripts/e2e
+
+          echo "🧪 Running Wide-EP specific tests..."
+          # Test the specific model and endpoints for Wide EP setup
+          ./e2e-validate.sh -n "${NAMESPACE}"
+
+          # Additional Wide-EP-specific validation
+          echo "🔍 Verifying Wide-EP specific functionality..."
+
+          # Check that we have both prefill and decode pods
+          PREFILL_PODS=$(kubectl get pods -n "${NAMESPACE}" -l llm-d.ai/role=prefill --no-headers | wc -l)
+          DECODE_PODS=$(kubectl get pods -n "${NAMESPACE}" -l llm-d.ai/role=decode --no-headers | wc -l)
+
+          echo "Prefill pods: $PREFILL_PODS"
+          echo "Decode pods: $DECODE_PODS"
+
+          if [ "$PREFILL_PODS" -lt 1 ] || [ "$DECODE_PODS" -lt 1 ]; then
+            echo "❌ Missing prefill or decode pods for Wide EP setup"
+            exit 1
+          fi
+
+          echo "✅ Wide-EP validation completed successfully"
+
+      - name: Collect and upload Kubernetes pod logs
+        if: always()
+        run: |
+            mkdir -p pod-logs-wide-ep
+            cd pod-logs-wide-ep
+            echo "Fetching ${NAMESPACE} pods log..."
+            kubectl get pods -n "${NAMESPACE}" --no-headers -o custom-columns=":metadata.name" \
+            | xargs -I{} sh -c 'kubectl logs --all-containers=true -n "${NAMESPACE}" {} > "{}.log" 2>&1'
+            echo "Fetching ${NAMESPACE} pods descriptions..."
+            kubectl get pods -n "${NAMESPACE}" --no-headers -o custom-columns=":metadata.name" \
+            | xargs -I{} sh -c 'kubectl describe pod -n "${NAMESPACE}" {} > "{}-describe.log" 2>&1'
+            mv ~/wide-ep-deployment.log . || true
+            mv ~/install-deps.log . || true
+
+      - name: Upload pod logs as artifact
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: llmd-pod-logs-wide-ep
+          path: pod-logs-wide-ep
+
+      - name: Send Google Chat notification on failure
+        if: failure()
+        uses: SimonScholz/google-chat-action@3b3519e5102dba8aa5046fd711c4b553586409bb
+        with:
+          webhookUrl: ${{ secrets.GOOGLE_CHAT_WEBHOOK }}
+          jobStatus: ${{ job.status }}
+          title: ${{ github.workflow }}
+
+      - name: Cleanup deployment
+        if: always()
+        run: |
+          cd guides/wide-ep-lws
+          helm uninstall deepseek-r1 -n ${NAMESPACE}
+          kubectl delete -k ./manifests/modelserver/gke -n ${NAMESPACE}
+          kubectl delete -k ./manifests/gateway/gke-l7-regional-external-managed -n ${NAMESPACE}

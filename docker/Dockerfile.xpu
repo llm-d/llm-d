@@ -1,187 +1,85 @@
 ARG ONEAPI_VERSION=2025.1.3-0
-
-# ============================================================================
-# BUILD STAGE - Install build dependencies and create wheels
-# ============================================================================
-FROM intel/deep-learning-essentials:${ONEAPI_VERSION}-devel-rockylinux9 AS builder
-
-ARG ONEAPI_VERSION=2025.1.3-0
-ARG PYTHON_VERSION
 ARG VLLM_VERSION=v0.11.0
 
+FROM intel/deep-learning-essentials:${ONEAPI_VERSION}-devel-ubuntu24.04 AS vllm-base
+
+RUN wget -O- https://apt.repos.intel.com/intel-gpg-keys/GPG-PUB-KEY-INTEL-SW-PRODUCTS.PUB | gpg --dearmor | tee /usr/share/keyrings/oneapi-archive-keyring.gpg > /dev/null && \
+    echo "deb [signed-by=/usr/share/keyrings/oneapi-archive-keyring.gpg] https://apt.repos.intel.com/oneapi all main" | tee /etc/apt/sources.list.d/oneAPI.list && \
+    add-apt-repository -y ppa:kobuk-team/intel-graphics
+
+RUN apt clean && apt-get update -y && \
+    apt-get install -y --no-install-recommends --fix-missing \
+    curl \
+    ffmpeg \
+    git \
+    libsndfile1 \
+    libsm6 \
+    libxext6 \
+    libgl1 \
+    lsb-release \
+    numactl \
+    wget \
+    vim \
+    python3.12 \
+    python3.12-dev \
+    python3-pip
+
+RUN update-alternatives --install /usr/bin/python3 python3 /usr/bin/python3.12 1
+RUN update-alternatives --install /usr/bin/python python /usr/bin/python3.12 1
+
+RUN apt install -y libze1 libze-dev libze-intel-gpu1 intel-opencl-icd libze-intel-gpu-raytracing
+
+RUN wget https://github.com/uxlfoundation/oneCCL/releases/download/2021.15.4/intel-oneccl-2021.15.4.11_offline.sh
+RUN bash intel-oneccl-2021.15.4.11_offline.sh -a --silent --eula accept && echo "source /opt/intel/oneapi/setvars.sh --force" >> /root/.bashrc
+SHELL ["bash", "-c"]
+CMD ["bash", "-c", "source /root/.bashrc && exec bash"]
+
+# Clone vLLM and build for XPU
 WORKDIR /workspace
-
-ENV LANG=C.UTF-8 \
-    LC_ALL=C.UTF-8 \
-    UV_LINK_MODE=copy \
-    PYTHON_VERSION=${PYTHON_VERSION:-3.12} \
-    VIRTUAL_ENV=/opt/vllm \
-    SYCL_PI_LEVEL_ZERO_USE_IMMEDIATE_COMMANDLISTS=1 \
-    SYCL_CACHE_PERSISTENT=1 \
-    VLLM_TARGET_DEVICE=xpu
-
-
-# Update base packages
-#RUN dnf update -y && dnf clean all
-
-# Install base packages and EPEL in single layer
-RUN dnf install -y dnf-plugins-core && \
-    dnf config-manager --enable crb && \
-    dnf install -y https://dl.fedoraproject.org/pub/epel/epel-release-latest-9.noarch.rpm && \
-    dnf config-manager --set-enabled epel && \
-    dnf install -y --allowerasing \
-        python${PYTHON_VERSION} python${PYTHON_VERSION}-pip python${PYTHON_VERSION}-wheel \
-        python${PYTHON_VERSION}-devel \
-        python3.9-devel \
-        which procps findutils tar \
-        gcc gcc-c++ \
-        make cmake \
-        autoconf automake libtool \
-        git \
-        curl wget \
-        gzip \
-        zlib-devel \
-        openssl-devel \
-        pkg-config \
-        libuuid-devel \
-        glibc-devel \
-        rdma-core-devel \
-        numactl-libs \
-        subunit \
-        pciutils \
-        pciutils-libs \
-        ninja-build \
-        gh \
-    && dnf clean all
-
-# Setup Python virtual environment
-RUN python${PYTHON_VERSION} -m venv /opt/vllm && \
-    ${VIRTUAL_ENV}/bin/pip install --no-cache -U pip wheel uv meson-python ninja pybind11 build
-
-ENV LIBRARY_PATH="/usr/local/cuda/lib64:/usr/local/lib:/usr/local/lib64" \
-CPATH="/usr/include:/usr/local/include" \
-PKG_CONFIG_PATH="/usr/lib/pkgconfig:/usr/local/lib/pkgconfig:/usr/local/lib64/pkgconfig"
-
-# Pin torch, so all deps are built against the same version 
-# as vllm itself
-RUN --mount=type=cache,target=/root/.cache/uv \
-  source ${VIRTUAL_ENV}/bin/activate && \
-  uv pip install \
-    # global
-    numpy \ 
-    # nixl 
-    pyyaml \
-    types-PyYAML \
-    pytest \ 
-    patchelf>=0.11.0
-
-
-RUN echo "/usr/local/lib" > /etc/ld.so.conf.d/local.conf && \
-    echo "/usr/local/lib64" >> /etc/ld.so.conf.d/local.conf && \
-    ldconfig
-
-WORKDIR /workspace
-
-#RUN mkdir -p /wheels
-# Define commit SHAs as build args to avoid layer invalidation
-#ARG LMCACHE_COMMIT_SHA=c1563bc9c72ea0d71156a3d9a6cd643170828acf
-
-# Clone repositories with cache mounts
-# RUN --mount=type=cache,target=/var/cache/git \
-#     git clone https://github.com/neuralmagic/LMCache.git && \
-#     cd LMCache && \
-#     git checkout -q $LMCACHE_COMMIT_SHA && \
-#     cd .. && \
-#     # Build LMCache wheel
-#     cd LMCache && \
-#     source ${VIRTUAL_ENV}/bin/activate && \
-#     NO_CUDA_EXT=1 python -m build --wheel --no-isolation -o /wheels && \
-#     cd ..
-
-
-# Use existing virtual environment at /opt/vllm
-WORKDIR /workspace/
-
-
-# Clone vLLM and build for XPU following official documentation
 RUN --mount=type=cache,target=/var/cache/git \
-    --mount=type=bind,source=.git,target=.git \
     git clone https://github.com/vllm-project/vllm.git && \
     cd vllm && \
-    git checkout ${VLLM_VERSION} && \
-    source ${VIRTUAL_ENV}/bin/activate && \
-    pip install -v -r requirements/xpu.txt && \
-    export VLLM_TARGET_DEVICE=xpu && \
-    python setup.py install && \
-    cd /workspace && rm -rf vllm
-
-# ============================================================================
-# RUNTIME STAGE - Minimal runtime image
-# ============================================================================
-FROM intel/deep-learning-essentials:${ONEAPI_VERSION}-devel-rockylinux9 AS runtime
-
-ARG PYTHON_VERSION
-
-ENV LANG=C.UTF-8 \
-    LC_ALL=C.UTF-8 \
-    UV_LINK_MODE=copy \
-    PYTHON_VERSION=${PYTHON_VERSION:-3.12} \
-    VIRTUAL_ENV=/opt/vllm \
-    SYCL_PI_LEVEL_ZERO_USE_IMMEDIATE_COMMANDLISTS=1 \
-    SYCL_CACHE_PERSISTENT=1 \
-    VLLM_TARGET_DEVICE=xpu
-
-# Install only runtime dependencies
-RUN dnf install -y --allowerasing \
-        python${PYTHON_VERSION} python${PYTHON_VERSION}-pip python${PYTHON_VERSION}-devel \
-        rdma-core-devel \
-        numactl-libs \
-        pciutils \
-        procps-ng \
-        git \
-        curl \
-        gcc && dnf clean all
-
-# Setup ldconfig and library paths
-RUN echo "/usr/local/lib" > /etc/ld.so.conf.d/local.conf && \
-    echo "/usr/local/lib64" >> /etc/ld.so.conf.d/local.conf && \
-    ldconfig
-
-# Copy the complete virtual environment from builder
-COPY --from=builder /opt/vllm /opt/vllm
+    git checkout ${VLLM_VERSION}
 
 
-# Install all packages
-RUN --mount=type=cache,target=/var/cache/git \
-    source /opt/vllm/bin/activate && \
-    \
-    # Install PyTorch and cuda-python
-    uv pip install huggingface_hub[hf_xet] && \
-    uv pip install nixl==0.3.0
+WORKDIR /workspace/vllm
 
-RUN dnf remove -y git && dnf autoremove -y && dnf clean all
+# suppress the python externally managed environment error
+RUN python3 -m pip config set global.break-system-packages true
 
-# setup non-root user for OpenShift with GPU access
-# RUN umask 002 && \
-#     # Create render group for GPU access (if not exists)
-#     groupadd -r render || true && \
-#     groupadd -r video || true && \
-#     # Add user to groups needed for GPU access
-#     useradd --uid 2000 --gid 0 --groups render,video vllm && \
-#     rm -rf /home/vllm && \
-#     mkdir -p /home/vllm && \
-#     chown vllm:root /home/vllm && \
-#     chmod g+rwx /home/vllm
+RUN --mount=type=cache,target=/root/.cache/pip \
+    pip install --no-cache-dir \
+    -r requirements/xpu.txt
 
+ENV LD_LIBRARY_PATH="$LD_LIBRARY_PATH:/usr/local/lib/"
 
-ENV PATH="${VIRTUAL_ENV}/bin:${PATH}" \
-    VLLM_USAGE_SOURCE=production-docker-image \
-    TRITON_XPU_PROFILE=1 \
-    VLLM_WORKER_MULTIPROC_METHOD=spawn \
-    VLLM_TARGET_DEVICE=xpu
+ENV VLLM_TARGET_DEVICE=xpu
+ENV VLLM_WORKER_MULTIPROC_METHOD=spawn
 
+RUN --mount=type=cache,target=/root/.cache/pip \
+    pip install -v .
 
-# USER 2000
-# WORKDIR /home/vllm
+CMD ["/bin/bash"]
+
+FROM vllm-base AS runtime
+
+# install additional dependencies for openai api server
+RUN --mount=type=cache,target=/root/.cache/pip \
+    pip install accelerate hf_transfer pytest pytest_asyncio lm_eval[api] modelscope
+
+RUN --mount=type=cache,target=/root/.cache/pip \
+    pip uninstall oneccl oneccl-devel -y
+
+# install development dependencies (for testing)
+RUN python3 -m pip install -e tests/vllm_test_utils
+
+# install nixl from source code
+RUN if [ -f /workspace/vllm/tools/install_nixl_from_source_ubuntu.py ]; then \
+        python3 /workspace/vllm/tools/install_nixl_from_source_ubuntu.py; \
+    else \
+        echo "ERROR: /workspace/vllm/tools/install_nixl_from_source_ubuntu.py not found!" >&2; \
+        exit 1; \
+    fi
+ENV LD_LIBRARY_PATH="$LD_LIBRARY_PATH:/usr/local/lib/python3.12/dist-packages/.nixl.mesonpy.libs/plugins/"
 
 ENTRYPOINT ["python", "-m", "vllm.entrypoints.openai.api_server"]

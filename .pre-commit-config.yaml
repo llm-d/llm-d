@@ -1,0 +1,70 @@
+repos:
+  # general pre-commit hooks
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-yaml
+        args: [--unsafe]  # allows custom YAML tags used in k8s
+      - id: check-json
+      - id: check-added-large-files
+        args: [--maxkb=1000]
+      - id: check-merge-conflict
+      - id: mixed-line-ending
+      - id: check-case-conflict
+
+  # shell script linting
+  - repo: local
+    hooks:
+      - id: shellcheck
+        name: shellcheck
+        language: system
+        entry: shellcheck
+        args: [-x, --severity=warning]
+        files: ^docker/scripts/.*\.sh$
+        types: [shell]
+
+      - id: lint-envvars
+        name: lint environment variables
+        language: script
+        entry: scripts/lint-envvars.py
+        files: ^docker/scripts/.*\.sh$
+        types: [shell]
+
+  # dockerfile linting
+  - repo: local
+    hooks:
+      - id: hadolint-docker
+        name: hadolint
+        language: system
+        entry: hadolint
+        args: [--failure-threshold, error]
+        files: Dockerfile.*
+        types: [file]
+
+      - id: lint-dockerfile-envvars
+        name: lint dockerfile environment variables
+        language: script
+        entry: scripts/lint-dockerfile-envvars.py
+        args: [docker/scripts]
+        files: ^docker/Dockerfile\.
+        pass_filenames: true
+
+  # markdown linting
+  - repo: https://github.com/igorshubovych/markdownlint-cli
+    rev: v0.42.0
+    hooks:
+      - id: markdownlint
+        args: [--fix]
+
+  # yaml linting
+  - repo: https://github.com/adrienverge/yamllint
+    rev: v1.35.1
+    hooks:
+      - id: yamllint
+        args:
+          - -d
+          - >-
+            {extends: default, rules: {line-length: {max: 120},
+            document-start: disable, truthy: {check-keys: false}}}

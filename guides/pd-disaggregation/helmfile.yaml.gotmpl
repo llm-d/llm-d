@@ -10,11 +10,13 @@ environments:
     values:
       - ../prereq/gateway-provider/common-configurations/kgateway.yaml
   gke: &GKE
-      values:
+    values:
       - ../prereq/gateway-provider/common-configurations/gke.yaml
   xpu: &XPU
     values:
       - ../prereq/gateway-provider/common-configurations/istio.yaml
+  aks: &AKS
+    <<: *IB
   default:
     <<: *IB
 
@@ -39,7 +41,7 @@ releases:
       type: infrastructure
       kind: inference-stack
     values:
-      - gateway: 
+      - gateway:
           {{ .Environment.Values.gateway | toYaml | nindent 10 }}
 
   - name: {{ printf "gaie-%s" $rn | quote }}
@@ -65,7 +67,7 @@ releases:
               enabled: false
     {{- end }}
     # Apply destination rule for anything istio
-    {{- if or (eq .Environment.Name "istio") (eq .Environment.Name "default") (eq .Environment.Name "istioBench") }}
+    {{- if or (eq .Environment.Name "istio") (eq .Environment.Name "default") (eq .Environment.Name "istioBench") (eq .Environment.Name "aks") (eq .Environment.Name "xpu") }}
       - provider:
           name: {{ .Environment.Values.provider.name }}
       - istio:
@@ -77,7 +79,7 @@ releases:
     # Apply log level only in bench setting
     {{- if or (eq .Environment.Name "istioBench") (eq .Environment.Name "default") }}
       - inferenceExtension:
-          flags: 
+          flags:
             {{ .Environment.Values.inferenceExtension.flags | toYaml | nindent 12 }}
     {{- end }}
     labels:
@@ -98,8 +100,23 @@ releases:
       - ms-pd/values.yaml
     {{- end }}
     {{- if or (eq .Environment.Name "istioBench") (eq .Environment.Name "default") }}
-      - routing: 
+      - routing:
           {{ .Environment.Values.routing | toYaml | nindent 10 }}
+    {{- end }}
+    {{- if eq .Environment.Name "aks" }}
+      # Set pod annotations for ulimits on AKS (16GiB memlock)
+      - decode:
+          podAnnotations:
+            ulimits.nri.containerd.io/container.vllm: |
+              - type: memlock
+                hard: 17179869184
+                soft: 17179869184
+        prefill:
+          podAnnotations:
+            ulimits.nri.containerd.io/container.vllm: |
+              - type: memlock
+                hard: 17179869184
+                soft: 17179869184
     {{- end }}
     set:
     # apply release name derived values
