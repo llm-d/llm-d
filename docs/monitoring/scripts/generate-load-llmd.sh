@@ -32,7 +32,7 @@ send_request() {
     echo "Prompt: $prompt"
     echo "Sending..."
 
-    local start_time=$(date +%s%N)
+    local start_time=$(date +%s)
 
     local response=$(curl -s -X POST "$ENDPOINT/chat/completions" \
         -H "Content-Type: application/json" \
@@ -46,8 +46,8 @@ send_request() {
             \"stream\": false
         }")
 
-    local end_time=$(date +%s%N)
-    local duration_ms=$(( (end_time - start_time) / 1000000 ))
+    local end_time=$(date +%s)
+    local duration_ms=$(( (end_time - start_time) * 1000 ))
 
     if [ -n "$response" ]; then
         echo "Response (${duration_ms}ms):"
@@ -68,7 +68,7 @@ send_malformed_request() {
     echo "Request #$request_num (MALFORMED - $error_type)"
     echo "Sending..."
 
-    local start_time=$(date +%s%N)
+    local start_time=$(date +%s)
     local response=""
 
     case $error_type in
@@ -154,8 +154,8 @@ send_malformed_request() {
             ;;
     esac
 
-    local end_time=$(date +%s%N)
-    local duration_ms=$(( (end_time - start_time) / 1000000 ))
+    local end_time=$(date +%s)
+    local duration_ms=$(( (end_time - start_time) * 1000 ))
 
     echo "Error Response (${duration_ms}ms):"
     echo "$response" | jq . 2>/dev/null || echo "$response"

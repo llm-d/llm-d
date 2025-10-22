@@ -31,7 +31,7 @@ The provided [load generation script](./scripts/generate-load-llmd.sh) will popu
 |-------------|--------------|
 | **KV Cache Utilization** | `avg by(pod, model_name) (vllm:kv_cache_usage_perc)` |
 | **Request Queue Lengths** | `sum by(pod, model_name) (vllm:num_requests_waiting)` |
-| **Model Throughput** (Tokens/sec) | `sum by(model_name, pod) (rate(vllm:prompt_tokens[5m]) + rate(vllm:generation_tokens[5m]))` |
+| **Model Throughput** (Tokens/sec) | `sum by(model_name, pod) (rate(vllm:prompt_tokens_total[5m]) + rate(vllm:generation_tokens_total[5m]))` |
 | **Generation Token Rate** | `sum by(model_name, pod) (rate(vllm:generation_tokens[5m]))` |
 | **Queue Utilization** | `avg by(pod) (vllm:num_requests_running)` |
 
@@ -48,8 +48,8 @@ The provided [load generation script](./scripts/generate-load-llmd.sh) will popu
 
 | Metric Need | PromQL Query |
 |-------------|--------------|
-| **Prefix Cache Hit Rate** | `sum(rate(vllm:prefix_cache_hits[5m])) / sum(rate(vllm:prefix_cache_queries[5m]))` |
-| **Per-Instance Hit Rate** | `sum by(pod) (rate(vllm:prefix_cache_hits[5m])) / sum by(pod) (rate(vllm:prefix_cache_queries[5m]))` |
+| **Prefix Cache Hit Rate** | `sum(rate(vllm:prefix_cache_hits_total[5m])) / sum(rate(vllm:prefix_cache_queries_total[5m]))` |
+| **Per-Instance Hit Rate** | `sum by(pod) (rate(vllm:prefix_cache_hits_total[5m])) / sum by(pod) (rate(vllm:prefix_cache_queries_total[5m]))` |
 | **Cache Utilization** (% full) | `avg by(pod, model_name) (vllm:kv_cache_usage_perc * 100)` |
 
 ### Path D: P/D Disaggregation
