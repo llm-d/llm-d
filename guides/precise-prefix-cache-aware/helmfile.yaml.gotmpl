@@ -38,6 +38,8 @@ releases:
     values:
       - gateway: 
           {{ .Environment.Values.gateway | toYaml | nindent 10 }}
+          service:
+            type: LoadBalancer
 
   - name: {{ printf "gaie-%s" $rn | quote }}
     namespace: {{ $ns }}

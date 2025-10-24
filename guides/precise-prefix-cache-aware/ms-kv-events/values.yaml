@@ -17,7 +17,7 @@ routing:
     create: false
 
   httpRoute:
-    create: false
+    create: true
 
   epp:
     create: false
