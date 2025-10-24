@@ -195,7 +195,7 @@ RUN dnf update -y && dnf clean all
 # hadolint ignore=DL3041
 RUN dnf install -y --allowerasing \
         python${PYTHON_VERSION} python${PYTHON_VERSION}-pip python${PYTHON_VERSION}-devel \
-        rdma-core-devel \
+        libibverbs-devel \
         numactl-libs \
         pciutils \
         procps-ng \
