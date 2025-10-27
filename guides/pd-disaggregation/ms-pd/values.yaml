@@ -23,11 +23,8 @@ routing:
     create: false
 
 decode:
-  parallelism:
-    tensor: 4
-    data: 1
   create: true
-  replicas: 1
+  replicas: 4
   monitoring:
     podmonitor:
       enabled: true
@@ -40,8 +37,6 @@ decode:
     modelCommand: vllmServe
     args:
       # Keep tensor-parallelism as the first set of arguments
-      - "--tensor-parallel-size"
-      - "4"
       - "--block-size"
       - "128"
       - "--kv-transfer-config"
@@ -63,13 +58,13 @@ decode:
     resources:
       limits:
         memory: 64Gi
-        cpu: "16"
-        nvidia.com/gpu: "4"
+        cpu: "8"
+        nvidia.com/gpu: "1"
         rdma/ib: 1
       requests:
         memory: 64Gi
-        cpu: "16"
-        nvidia.com/gpu: "4"
+        cpu: "8"
+        nvidia.com/gpu: "1"
         rdma/ib: 1
     mountModelVolume: true
     volumeMounts:
@@ -112,8 +107,11 @@ decode:
     emptyDir: {}
 
 prefill:
+  parallelism:
+    tensor: 4
+    data: 1
   create: true
-  replicas: 4
+  replicas: 1
   monitoring:
     podmonitor:
       enabled: true
@@ -125,6 +123,8 @@ prefill:
     image: ghcr.io/llm-d/llm-d-cuda-dev:sha-6225536
     modelCommand: vllmServe
     args:
+      - "--tensor-parallel-size"
+      - "4"
       - "--block-size"
       - "128"
       - "--kv-transfer-config"
@@ -146,13 +146,13 @@ prefill:
     resources:
       limits:
         memory: 64Gi
-        cpu: "8"
-        nvidia.com/gpu: "1"
+        cpu: "16"
+        nvidia.com/gpu: "4"
         rdma/ib: 1
       requests:
         memory: 64Gi
-        cpu: "8"
-        nvidia.com/gpu: "1"
+        cpu: "16"
+        nvidia.com/gpu: "4"
         rdma/ib: 1
     mountModelVolume: true
     volumeMounts:
