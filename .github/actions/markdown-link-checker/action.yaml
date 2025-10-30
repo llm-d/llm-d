@@ -19,7 +19,6 @@ runs:
     - name: Run link check on all Markdown files
       shell: bash
       run: |
-        set -euo pipefail
         echo "🔍 Scanning all Markdown files for broken links..."
         failed=0
         total_dead_links=0
