@@ -117,3 +117,30 @@ A workaround exists in llm-d container images and vLLM after commit [5546acb4632
 #### Google InfiniBand 1.10 required for vLLM 0.11.0 (gIB)
 
 vLLM v0.11.0 and newer require NCCL 2.27, which is supported in gIB 1.10+. See the appropriate section in cluster configuration for installing the RDMA binary and configuring NCCL (e.g. [for A3 Ultra / A4](https://cloud.google.com/ai-hypercomputer/docs/create/gke-ai-hypercompute-custom#install-rdma-configure-nccl)).  To get 1.10, use at least the version of the RDMA installer DaemonSet described in this [1.10 pull request](https://github.com/GoogleCloudPlatform/container-engine-accelerators/pull/511).
+
+#### NVSHMEM reports `Unable to create ah.` on initialization for DeepEP
+
+Some versions (3.3.20 to 3.4.5) of NVSHMEM contain a bug where the `ibv_ah_attr` struct passed to device initialization was not zeroed out in code. Versions of the Linux kernel that validate the value of the `static_rate` field could fail to start due to an `EINVAL` and reporting `Unable to create ah.` when using the DeepEP kernels for wide expert parallelism.
+
+To work around this issue llm-d applies a [patch to NVSHMEM](https://github.com/llm-d/llm-d/pull/407) that invokes `memset(..., 0, ...)` on the struct before it is passed to the kernel.
+
+#### NVSHMEM fails to initialize IBGDA transport due to `no active IB device that supports GPU-initiated communication` for DeepEP
+
+When starting wide expert parallel deployments using the DeepEP kernels, container images (especially Ubuntu) that are not compiled against the Mellanox OFED drivers as recommended by NVIDIA may fail to start with the following error:
+
+```
+/tmp/nvshmem_src/src/modules/transport/ibgda/ibgda.cpp 3888 no active IB device that supports GPU-initiated communication is found, exiting...
+
+/tmp/nvshmem_src/src/host/transport/transport.cpp:nvshmemi_transport_init:282: init failed for transport: IBGDA
+```
+
+The default llm-d images based on RHEL UBI are not impacted. [Issue 412](https://github.com/llm-d/llm-d/issues/412) tracks updating our Ubuntu based images.
+
+To resolve this issue in custom built images add the Mellanox OFED apt repository
+
+```
+wget -qO - https://www.mellanox.com/downloads/ofed/RPM-GPG-KEY-Mellanox | apt-key add -
+cd /etc/apt/sources.list.d/ && wget https://linux.mellanox.com/public/repo/mlnx_ofed/24.10-0.7.0.0/ubuntu22.04/mellanox_mlnx_ofed.list
+```
+
+before installing `libibverbs-dev` or other `rdma-core-devel` packages.
