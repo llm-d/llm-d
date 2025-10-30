@@ -1,10 +1,7 @@
 name: Bug Report
 description: File a bug report.
-title: "[Bug]: "
+title: "[Bug :bug:]: "
 labels: ["bug", "triage"]
-# projects: ["octo-org/1", "octo-org/44"]
-assignees:
-  - clubanderson
 body:
   - type: markdown
     attributes:
@@ -33,20 +30,15 @@ body:
       label: Version
       description: What version of our software are you running?
       options:
-        - 0.0.1
-      default: 0
+        - v0.2.0
+        - v0.2.1
+        - v0.2.2
+        - v0.3.0
+        - v0.3.1
+        - v0.4.0
+      default: v0.3.0
     validations:
       required: true
-  - type: dropdown
-    id: browsers
-    attributes:
-      label: What browsers are you seeing the problem on?
-      multiple: true
-      options:
-        - Firefox
-        - Chrome
-        - Safari
-        - Microsoft Edge
   - type: textarea
     id: logs
     attributes:
