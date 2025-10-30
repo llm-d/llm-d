@@ -1,0 +1,18 @@
+diff --git a/src/modules/transport/ibgda/ibgda.cpp b/src/modules/transport/ibgda/ibgda.cpp
+index 4c69cce..bfe1009 100644
+--- a/src/modules/transport/ibgda/ibgda.cpp
++++ b/src/modules/transport/ibgda/ibgda.cpp
+@@ -2336,6 +2336,13 @@ static int ibgda_create_dct_shared_objects(nvshmemt_ibgda_state_t *ibgda_state,
+     struct ibv_ah_attr ah_attr;
+     struct mlx5dv_obj dv;
+ 
++    // static_rate must be a known value and is passed directly to the device - and is not
++    // validated prior to https://github.com/torvalds/linux/commit/c534ffda781f44a1c6ac25ef6e0e444da38ca8af
++    // which leads to different behavior depending on kernel version.
++    // Always clear the memory.
++    memset(&ah_attr, 0, sizeof(ah_attr));
++    NVSHMEMI_WARN_PRINT("Zeroing ah_attr to avoid 'Unable to create ah' error on RoCE devices\n");
++
+     bool support_half_av_seg;
+     int hca_support_compact_address_vector;
+ 
