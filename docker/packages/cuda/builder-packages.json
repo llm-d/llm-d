@@ -1,7 +1,5 @@
 {
   "rhel_to_ubuntu": {
-    "libnvshmem3-cuda-${CUDA_MAJOR}-3.4.5-1": "libnvshmem3-cuda-${CUDA_MAJOR}=3.4.5-1",
-    "libnvshmem3-devel-cuda-${CUDA_MAJOR}-3.4.5-1": "libnvshmem3-dev-cuda-${CUDA_MAJOR}=3.4.5-1",
-    "libnvshmem3-static-cuda-${CUDA_MAJOR}-3.4.5-1": "libnvshmem3-static-cuda-${CUDA_MAJOR}=3.4.5-1"
+    "python3.9-devel": null
   }
 }

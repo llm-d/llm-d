@@ -35,6 +35,7 @@ uv pip uninstall flashinfer-python || true
 git clone https://github.com/flashinfer-ai/flashinfer.git
 cd flashinfer
 git checkout -q "${FLASHINFER_VERSION}"
+git submodule update --init --recursive
 uv build --wheel --no-build-isolation --out-dir /wheels
 cd ..
 rm -rf flashinfer

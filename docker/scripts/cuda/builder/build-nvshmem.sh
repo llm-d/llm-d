@@ -1,5 +1,5 @@
 #!/bin/bash
-set -Eeu
+set -Eeux
 
 # builds and installs NVSHMEM from source with coreweave patch
 #
@@ -24,6 +24,7 @@ tar -xf "nvshmem_src_cuda${CUDA_MAJOR}.tar.gz"
 cd nvshmem_src
 
 git apply /tmp/patches/cks_nvshmem"${NVSHMEM_VERSION}".patch
+git apply /tmp/patches/nvshmem_zero_ibv_ah_attr_"${NVSHMEM_VERSION}".patch
 
 mkdir build
 cd build
@@ -51,7 +52,7 @@ ninja -j"$(nproc)"
 ninja install
 
 # copy python wheel to /wheels
-cp "${NVSHMEM_DIR}"/lib/python/dist/nvshmem4py_cu"${CUDA_MAJOR}"-*-cp"${PYTHON_VERSION/./}"-cp"${PYTHON_VERSION/./}"-manylinux_*.whl /wheels/
+cp "${NVSHMEM_DIR}"/lib/python/dist/nvshmem4py_cu"${CUDA_MAJOR}"-*-cp"${PYTHON_VERSION/./}"-cp"${PYTHON_VERSION/./}"-manylinux*.whl /wheels/
 
 cd /tmp
 rm -rf nvshmem_src*

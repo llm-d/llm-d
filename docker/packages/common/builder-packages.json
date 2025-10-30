@@ -11,7 +11,6 @@
     "gcc": "gcc",
     "gcc-c++": "g++",
     "make": "make",
-    "cmake": "cmake",
     "autoconf": "autoconf",
     "automake": "automake",
     "libtool": "libtool",
