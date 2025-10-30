@@ -24,6 +24,7 @@ tar -xf "nvshmem_src_cuda${CUDA_MAJOR}.tar.gz"
 cd nvshmem_src
 
 git apply /tmp/patches/cks_nvshmem"${NVSHMEM_VERSION}".patch
+git apply /tmp/patches/nvshmem_zero_ib_ah_attr_"${NVSHMEM_VERSION}".patch
 
 mkdir build
 cd build
