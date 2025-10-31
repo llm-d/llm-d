@@ -68,7 +68,8 @@ jobs:
           images: ${{ env.REGISTRY }}/${{ github.repository }}-cuda${{ matrix.image_suffix }}
           tags: |
             type=raw,value=${{ github.event.release.tag_name }},enable=${{ github.event_name == 'release' && github.event.action == 'published' }}
-            type=raw,value=latest,enable=${{ github.event_name == 'release' && github.event.action == 'published' }}
+            type=raw,value=${{ github.ref_name }},enable=${{ github.event_name == 'push' && startsWith(github.ref, 'refs/tags/') }}
+            type=raw,value=latest,enable=true
 
       - name: Build & Push
         id: build
@@ -166,7 +167,8 @@ jobs:
           images: ${{ env.REGISTRY }}/${{ github.repository }}-cuda${{ matrix.image_suffix }}
           tags: |
             type=raw,value=${{ github.event.release.tag_name }},enable=${{ github.event_name == 'release' && github.event.action == 'published' }}
-            type=raw,value=latest,enable=${{ github.event_name == 'release' && github.event.action == 'published' }}
+            type=raw,value=${{ github.ref_name }},enable=${{ github.event_name == 'push' && startsWith(github.ref, 'refs/tags/') }}
+            type=raw,value=latest,enable=true
 
       - name: Create and push manifest
         id: manifest
@@ -253,7 +255,8 @@ jobs:
           images: ${{ env.REGISTRY }}/${{ github.repository }}-aws
           tags: |
             type=raw,value=${{ github.event.release.tag_name }},enable=${{ github.event_name == 'release' && github.event.action == 'published' }}
-            type=raw,value=latest,enable=${{ github.event_name == 'release' && github.event.action == 'published' }}
+            type=raw,value=${{ github.ref_name }},enable=${{ github.event_name == 'push' && startsWith(github.ref, 'refs/tags/') }}
+            type=raw,value=latest,enable=true
 
       - name: Build & Push image
         id: build-and-push
@@ -395,7 +398,8 @@ jobs:
           images: ${{ env.REGISTRY }}/${{ github.repository }}-gke
           tags: |
             type=raw,value=${{ github.event.release.tag_name }},enable=${{ github.event_name == 'release' && github.event.action == 'published' }}
-            type=raw,value=latest,enable=${{ github.event_name == 'release' && github.event.action == 'published' }}
+            type=raw,value=${{ github.ref_name }},enable=${{ github.event_name == 'push' && startsWith(github.ref, 'refs/tags/') }}
+            type=raw,value=latest,enable=true
 
       - name: Build & Push image
         id: build-and-push
