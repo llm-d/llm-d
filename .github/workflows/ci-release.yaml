@@ -185,7 +185,7 @@ jobs:
 
           # create manifest and tag it
           docker buildx imagetools create \
-            -t ${{ env.REGISTRY }}/${{ github.repository }}-cuda${{ matrix.image_suffix }}:${{ github.event.release.tag_name }} \
+            -t ${{ env.REGISTRY }}/${{ github.repository }}-cuda${{ matrix.image_suffix }}:${{ github.event.release.tag_name || github.ref_name }} \
             -t ${{ env.REGISTRY }}/${{ github.repository }}-cuda${{ matrix.image_suffix }}:sha-${SHORT_SHA} \
             $sources
 
