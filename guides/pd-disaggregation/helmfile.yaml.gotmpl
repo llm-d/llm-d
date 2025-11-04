@@ -45,6 +45,9 @@ releases:
     values:
       - gateway:
           {{ .Environment.Values.gateway | toYaml | nindent 10 }}
+    {{- if hasKey .Environment.Values "llmdInfra" }}
+      - {{ .Environment.Values.llmdInfra | toYaml | nindent 10 }}
+    {{- end }}
 
   - name: {{ printf "gaie-%s" $rn | quote }}
     namespace: {{ $ns }}
@@ -85,6 +88,9 @@ releases:
           flags:
             {{ .Environment.Values.inferenceExtension.flags | toYaml | nindent 12 }}
     {{- end }}
+    {{- if hasKey .Environment.Values "gatewayInferenceExtension" }}
+      - {{ .Environment.Values.gatewayInferenceExtension | toYaml | nindent 10 }}
+    {{- end }}
     labels:
       kind: inference-stack
 
@@ -122,6 +128,9 @@ releases:
               - type: memlock
                 hard: 17179869184
                 soft: 17179869184
+    {{- end }}
+    {{- if hasKey .Environment.Values "modelService" }}
+      - {{ .Environment.Values.modelService | toYaml | nindent 10 }}
     {{- end }}
     set:
     {{- if or (eq .Environment.Name "gke") (eq .Environment.Name "gke_tpu") }}

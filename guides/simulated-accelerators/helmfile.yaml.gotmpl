@@ -34,7 +34,9 @@ releases:
     values:
       - gateway: 
           {{ .Environment.Values.gateway | toYaml | nindent 10 }}
-
+    {{- if hasKey .Environment.Values "llmdInfra" }}
+      - {{ .Environment.Values.llmdInfra | toYaml | nindent 10 }}
+    {{- end }}
   - name: {{ printf "gaie-%s" $rn | quote }}
     namespace: {{ $ns }}
     chart: oci://registry.k8s.io/gateway-api-inference-extension/charts/inferencepool
@@ -65,6 +67,9 @@ releases:
             destinationRule:
               host: {{ printf "gaie-%s-epp.%s.svc.cluster.local" $rn $ns | quote }}
     {{- end }}
+    {{- if hasKey .Environment.Values "gatewayInferenceExtension" }}
+      - {{ .Environment.Values.gatewayInferenceExtension | toYaml | nindent 10 }}
+    {{- end }}
     labels:
       kind: inference-stack
 
@@ -78,6 +83,9 @@ releases:
       - {{ printf "gaie-%s" $rn | quote }}
     values:
       - ms-sim/values.yaml
+    {{- if hasKey .Environment.Values "modelService" }}
+      - {{ .Environment.Values.modelService | toYaml | nindent 10 }}
+    {{- end }}
     set:
     {{- if (eq .Environment.Name "gke") }}  
       - name: "decode.monitoring.podmonitor.enabled"
