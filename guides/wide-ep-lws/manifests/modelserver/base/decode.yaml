@@ -101,10 +101,13 @@ spec:
           # Higher values increase the memory footprint of the hidden states in the MoE layers,
           # which decreases the available memory for KV Cache.
           # Lower values may cause poor performance, especially in load-imbalanced scenarios.
-          # The value 512 was chosen to be greater than the concurrency expected to see on any DP rank.
+          # The value 384 was chosen to be greater than the concurrency expected to see on any DP rank.
+          # If you increase the VLLM_MOE_DP_CHUNK_SIZE above 510 you will also need to increase the
+          # default NVSHMEM_QP_DEPTH to be at least 2 * (chunk_size + 1), which will increase the
+          # memory NVSHMEM allocates up front.
           # Has no effect when VLLM_ALL2ALL_BACKEND=deepep_high_throughput.
           - name: VLLM_MOE_DP_CHUNK_SIZE
-            value: "512" # vLLM default is 256
+            value: "384" # vLLM default is 256
           - name: DP_SIZE_LOCAL
             value: "8"
           - name: TP_SIZE
