@@ -30,6 +30,8 @@ spec:
             imagePullPolicy: Always
             ports:
               - containerPort: 8000
+                name: sidecar
+                protocol: TCP
             resources: {}
             restartPolicy: Always
             securityContext:
@@ -146,23 +148,23 @@ spec:
             protocol: TCP
           startupProbe:
             httpGet:
-              path: /v1/models
-              port: 8200
-            initialDelaySeconds: 30
-            periodSeconds: 10
+              path: /health
+              port: metrics
+            initialDelaySeconds: 0
+            periodSeconds: 1
             timeoutSeconds: 5
-            failureThreshold: 60
+            failureThreshold: 1800
           livenessProbe:
             httpGet:
               path: /health
-              port: 8200
+              port: metrics
             periodSeconds: 30
             timeoutSeconds: 5
             failureThreshold: 3
           readinessProbe:
             httpGet:
               path: /v1/models
-              port: 8200
+              port: metrics
             periodSeconds: 10
             timeoutSeconds: 5
             failureThreshold: 3
