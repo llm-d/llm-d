@@ -44,7 +44,7 @@ spec:
               sizeLimit: 2Gi # roughly 32MB per local DP plus scratch space
         containers:
         - name: vllm
-          image: image: ghcr.io/llm-d/llm-d-cuda:v0.3.1
+          image: ghcr.io/llm-d/llm-d-cuda:v0.3.1
           securityContext:
             capabilities:
               add:
