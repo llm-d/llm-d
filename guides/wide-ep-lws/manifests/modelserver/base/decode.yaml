@@ -42,7 +42,7 @@ spec:
               sizeLimit: 2Gi # roughly 32MB per local DP plus scratch space
         containers:
         - name: vllm-worker
-          image: ghcr.io/llm-d/llm-d-cuda-dev:sha-6225536
+          image: ghcr.io/llm-d/llm-d-cuda-dev:pr-429
           securityContext:
             capabilities:
               add:
@@ -71,10 +71,6 @@ spec:
               # --enable-dbo:  Dual batch overlap (DBO) overlaps compute with collective communication.
               # --enable-eplb: Expert-parallel load balancing reduces EP load imbalance by replicating heavily-used experts Performance-memory tradeoff: on DeepSeekV3 eplb uses an extra 2GB per redundant expert per GPU Divisibility constraint: num_routed_experts (256 for DSv3) + num_redundant_experts must be divisible by the number of GPUs.
 
-              # Create an environment variable for the vllm venv path so we can
-              # override it for the GKE image as a temporary workaround.
-              # TODO: Once we consolidate the images, we can just hard-code it.
-              source ${VENV_PATH}/bin/activate
               exec vllm serve \
                 deepseek-ai/DeepSeek-R1-0528 \
                 --port 8200 \
@@ -98,7 +94,8 @@ spec:
                                 "step_interval":"3000",
                                 "num_redundant_experts":"32",
                                 "log_balancedness":"False"}' \
-                --compilation_config '{"cudagraph_mode": "FULL_DECODE_ONLY"}'
+                --compilation_config '{"cudagraph_mode": "FULL_DECODE_ONLY"}' \
+                --kv-cache-memory-bytes=${KV_CACHE_MEMORY_BYTES-}
           env:
           # VLLM_MOE_DP_CHUNK_SIZE is a tunable parameter.
           # Higher values increase the memory footprint of the hidden states in the MoE layers,

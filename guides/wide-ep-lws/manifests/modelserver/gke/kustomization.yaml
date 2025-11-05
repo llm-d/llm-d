@@ -65,7 +65,7 @@ patches:
   - target:
       kind: LeaderWorkerSet
     patch: |-
-      # Enable privileged container  on GKE to perform GPU initiated RDMA.
+      # Enable privileged container on GKE to perform GPU initiated RDMA.
       # See https://github.com/llm-d/llm-d/tree/main/docs/infra-providers/gke#configuring-support-for-rdma-on-gke-workload-pods.
       - op: add
         path: /spec/leaderWorkerTemplate/workerTemplate/spec/containers/0/securityContext/privileged
@@ -107,20 +107,9 @@ patches:
           # GCP pairs GPU NICs to PCIe bridges (https://cloud.google.com/compute/docs/gpus/gpu-network-bandwidth#h200-gpus),
           # which can lead to NVSHMEM's automatic distance assignment algorithm selecting NICs
           # inefficiently. Instead, instruct NVSHMEM to select the NIC that aligns to the
-          # index of the GPU on the node.
-          name: NVSHMEM_ENABLE_NIC_PE_MAPPING
-          value: "1"
-      - op: add
-        path: /spec/leaderWorkerTemplate/workerTemplate/spec/containers/0/env/-
-        value:
-          name: NVSHMEM_HCA_LIST
-          value: "mlx5_0:1,mlx5_1:1,mlx5_2:1,mlx5_3:1,mlx5_4:1,mlx5_5:1,mlx5_6:1,mlx5_7:1"
-      # https://cloud.google.com/ai-hypercomputer/docs/create/gke-ai-hypercompute-custom#configure-pod-manifests-rdma
-      - op: add
-        path: /spec/leaderWorkerTemplate/workerTemplate/spec/containers/0/env/-
-        value:
-          name: LD_LIBRARY_PATH
-          value: "/usr/local/nvidia/lib64"
+          # index of the GPU on the node. Relies on https://github.com/deepseek-ai/DeepEP/pull/466
+          name: DEEP_EP_DEVICE_TO_HCA_MAPPING
+          value: "0:mlx5_0:1,1:mlx5_1:1,2:mlx5_2:1,3:mlx5_3:1,4:mlx5_4:1,5:mlx5_5:1,6:mlx5_6:1,7:mlx5_7:1"
       # Source nccl env at startup.
       # https://cloud.google.com/ai-hypercomputer/docs/create/gke-ai-hypercompute-custom#configure-pod-manifests-rdma
       - op: add
@@ -128,12 +117,6 @@ patches:
         value:
           name: BASH_ENV
           value: "/usr/local/gib/scripts/set_nccl_env.sh"
-      # Disable GCP NCCL telemetry due to failures to upload blocking
-      - op: add
-        path: /spec/leaderWorkerTemplate/workerTemplate/spec/containers/0/env/-
-        value:
-          name: NCCL_TELEMETRY_MODE
-          value: "0"
       # This is recommended on gke.
       # https://github.com/llm-d/llm-d/tree/main/docs/infra-providers/gke#configuring-support-for-rdma-on-gke-workload-pods
       - op: add
@@ -141,15 +124,3 @@ patches:
         value:
           name: NVSHMEM_DISABLED_GDRCOPY
           value: "true"
-      # TODO: Remove this once we have the llm-d image working on GKE.
-      - op: add
-        path: /spec/leaderWorkerTemplate/workerTemplate/spec/containers/0/env/-
-        value:
-          name: VENV_PATH
-          value: "/app/venv"
-      # Override the image to be the GKE workaround image.
-      # TODO: Remove this once we have the llm-d image working on GKE.
-      # Replace container image
-      - op: replace
-        path: /spec/leaderWorkerTemplate/workerTemplate/spec/containers/0/image
-        value: ghcr.io/llm-d/llm-d-gke:v0.3.0

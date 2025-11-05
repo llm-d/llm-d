@@ -43,12 +43,6 @@ patches:
         value:
           name: NVSHMEM_HCA_PREFIX
           value: "ibp"
-      # TODO: Remove this once we have the llm-d image working on GKE.
-      - op: add
-        path: /spec/leaderWorkerTemplate/workerTemplate/spec/containers/0/env/-
-        value:
-          name: VENV_PATH
-          value: "/opt/vllm"
       # Add RMDA config.
       - op: add
         path: /spec/leaderWorkerTemplate/workerTemplate/spec/containers/0/resources/limits/rdma~1ib

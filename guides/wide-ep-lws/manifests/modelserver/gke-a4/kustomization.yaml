@@ -1,0 +1,16 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ../gke
+patches:
+  - target:
+      kind: LeaderWorkerSet
+      name: wide-ep-llm-d-decode
+    patch: |-
+      # As per https://github.com/vllm-project/vllm/issues/25597 B200 devices may need
+      # to set a lower value for gpu-memory-utilization bytes to avoid OOMs
+      - op: add
+        path: /spec/leaderWorkerTemplate/workerTemplate/spec/containers/0/env/-
+        value:
+          name: KV_CACHE_MEMORY_BYTES
+          value: "63000000000"
