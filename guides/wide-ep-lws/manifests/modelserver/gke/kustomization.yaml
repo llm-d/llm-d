@@ -124,3 +124,18 @@ patches:
         value:
           name: NVSHMEM_DISABLED_GDRCOPY
           value: "true"
+      # We add the volume for different providers since the hostPath can be different.
+      - op: replace
+        path: /spec/leaderWorkerTemplate/workerTemplate/spec/volumes/1
+        value:
+          name: hf-cache
+          hostPath:
+            path: /mnt/stateful_partition/kube-ephemeral-ssd/shared_disk/vllm-hf-cache/
+            type: DirectoryOrCreate
+      - op: replace
+        path: /spec/leaderWorkerTemplate/workerTemplate/spec/volumes/2
+        value:
+          name: jit-cache
+          hostPath:
+            path: /mnt/stateful_partition/kube-ephemeral-ssd/shared_disk/vllm-jit-cache/
+            type: DirectoryOrCreate

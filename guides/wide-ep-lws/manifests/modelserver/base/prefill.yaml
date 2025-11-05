@@ -23,6 +23,10 @@ spec:
             emptyDir:
               medium: Memory
               sizeLimit: 2Gi # roughly 32MB per local DP plus scratch space
+          - name: hf-cache
+            emptyDir: {}
+          - name: jit-cache
+            emptyDir: {}
         containers:
         - name: vllm
           image: ghcr.io/llm-d/llm-d-cuda:v0.3.1
@@ -112,6 +116,21 @@ spec:
             valueFrom:
               fieldRef:
                 fieldPath: status.podIP
+
+          # Use cache directories from the mounted volume under one easy to mount
+          # root directory.
+          - name: CUDA_CACHE_PATH
+            value: /var/cache/vllm/cuda
+          - name: CCACHE_DIR
+            value: /var/cache/vllm/ccache
+          - name: VLLM_CACHE_ROOT
+            value: /var/cache/vllm/vllm
+          - name: FLASHINFER_WORKSPACE_BASE
+            value: /var/cache/vllm/flashinfer
+          # HuggingFace is likely to be quite a bit larger, give it its own cache
+          - name: HF_HUB_CACHE
+            value: /var/cache/huggingface
+
           ports:
           - containerPort: 8000
             name: metrics
@@ -151,3 +170,7 @@ spec:
           volumeMounts:
             - name: dshm
               mountPath: /dev/shm
+            - name: hf-cache
+              mountPath: /var/cache/huggingface
+            - name: jit-cache
+              mountPath: /var/cache/vllm
