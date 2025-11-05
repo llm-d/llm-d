@@ -19,7 +19,7 @@ decode:
   replicas: 2
   containers:
   - name: "vllm"
-    image: ghcr.io/llm-d/llm-d-cuda-dev:sha-6225536
+    image: ghcr.io/llm-d/llm-d-cuda:v0.3.1
     modelCommand: vllmServe  # Required by chart
     args:
       - "--kv-transfer-config"

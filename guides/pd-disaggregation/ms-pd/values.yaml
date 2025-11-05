@@ -36,7 +36,7 @@ decode:
       interval: "30s"
   containers:
   - name: "vllm"
-    image: ghcr.io/llm-d/llm-d-cuda-dev:sha-6225536
+    image: ghcr.io/llm-d/llm-d-cuda:v0.3.1
     modelCommand: vllmServe
     args:
       # Keep tensor-parallelism as the first set of arguments
@@ -122,7 +122,7 @@ prefill:
       interval: "30s"
   containers:
   - name: "vllm"
-    image: ghcr.io/llm-d/llm-d-cuda-dev:sha-6225536
+    image: ghcr.io/llm-d/llm-d-cuda:v0.3.1
     modelCommand: vllmServe
     args:
       - "--block-size"
