@@ -1,0 +1,166 @@
+# This file demonstrates how to enable SLO prediction with prefill-decode disaggregation
+
+inferenceExtension:
+  replicas: 1
+  image:
+    name: llm-d-inference-scheduler
+    hub: quay.io/rh_ee_rsaini
+    tag: slo-pd-experimental
+    pullPolicy: Always
+  extProcPort: 9002
+  pluginsConfigFile: "pd-slo-config.yaml"
+
+  flags:
+    secure-serving: false
+    v: 4
+
+  pluginsCustomConfig:
+    pd-slo-config.yaml: |
+      apiVersion: inference.networking.x-k8s.io/v1alpha1
+      kind: EndpointPickerConfig
+      plugins:
+      # Filters
+      - type: prefill-filter
+        name: prefill-filter
+      - type: decode-filter
+        name: decode-filter
+
+      # Prefill header handler (required for P/D disaggregation)
+      - type: prefill-header-handler
+        name: prefill-header-handler
+
+      # Prefix cache scorer
+      - type: prefix-cache-scorer
+        name: prefix-cache-scorer
+        parameters:
+          blockSizeTokens: 5
+
+      # P/D-aware SLO scorer
+      - type: pd-slo-aware-scorer
+        name: pd-slo-scorer
+        parameters:
+          sloBufferFactor: 1.0
+          headroomSelectionStrategy: "least"
+
+      # Picker
+      - type: max-score-picker
+        name: max-score-picker
+
+      # Profile handler
+      - type: pd-profile-handler
+        name: pd-handler
+        parameters:
+          threshold: 0
+          decodeProfile: "decode"
+          prefillProfile: "prefill"
+          hashBlockSize: 5
+
+      schedulingProfiles:
+      - name: decode
+        plugins:
+        - pluginRef: decode-filter
+        - pluginRef: prefix-cache-scorer
+        - pluginRef: pd-slo-scorer
+          weight: 100
+        - pluginRef: max-score-picker
+
+      - name: prefill
+        plugins:
+        - pluginRef: prefill-filter
+        - pluginRef: prefix-cache-scorer
+        - pluginRef: pd-slo-scorer
+          weight: 100
+        - pluginRef: max-score-picker
+
+  # Monitoring configuration for EPP
+  monitoring:
+    interval: "10s"
+    # Service account token secret for authentication
+    secret:
+      name: pd-gateway-sa-metrics-reader-secret
+    # Prometheus ServiceMonitor will be created when enabled for EPP metrics collection
+    prometheus:
+      enabled: true
+
+  latencyPredictor:
+    enabled: true
+    trainingServer:
+      port: 8000
+      image:
+        hub: quay.io/rh_ee_rsaini
+        name: latency-training
+        tag: slo-experimental
+        pullPolicy: Always
+      resources:
+        requests:
+          cpu: "1000m"
+          memory: "2Gi"
+        limits:
+          cpu: "2000m"
+          memory: "4Gi"
+      livenessProbe:
+        httpGet:
+          path: /healthz
+          port: 8000
+        initialDelaySeconds: 30
+        periodSeconds: 20
+      readinessProbe:
+        httpGet:
+          path: /readyz
+          port: 8000
+        initialDelaySeconds: 45
+        periodSeconds: 10
+      volumeSize: "20Gi"
+      config:
+        LATENCY_RETRAINING_INTERVAL_SEC: "30"  # Increased from 1 to reduce unnecessary retraining overhead
+        LATENCY_MIN_SAMPLES_FOR_RETRAIN: "100"
+        LATENCY_TTFT_MODEL_PATH: "/models/ttft.joblib"
+        LATENCY_TPOT_MODEL_PATH: "/models/tpot.joblib"
+        LATENCY_TTFT_SCALER_PATH: "/models/ttft_scaler.joblib"
+        LATENCY_TPOT_SCALER_PATH: "/models/tpot_scaler.joblib"
+        LATENCY_MODEL_TYPE: "xgboost"
+        LATENCY_MAX_TRAINING_DATA_SIZE_PER_BUCKET: "5000"
+        LATENCY_QUANTILE_ALPHA: "0.9"
+    predictionServers:
+      count: 1
+      startPort: 8001
+      image:
+        hub: quay.io/rh_ee_rsaini
+        name: latency-prediction
+        tag: slo-experimental
+        pullPolicy: Always
+      resources:
+        requests:
+          cpu: "500m"
+          memory: "1Gi"
+        limits:
+          cpu: "1000m"
+          memory: "2Gi"
+      livenessProbe:
+        httpGet:
+          path: /healthz
+        initialDelaySeconds: 15
+        periodSeconds: 15
+      readinessProbe:
+        httpGet:
+          path: /readyz
+        initialDelaySeconds: 10
+        periodSeconds: 5
+        failureThreshold: 10
+      volumeSize: "10Gi"
+      config:
+        LATENCY_MODEL_TYPE: "xgboost"
+        PREDICT_HOST: "0.0.0.0"
+        LOCAL_TTFT_MODEL_PATH: "/server_models/ttft.joblib"
+        LOCAL_TPOT_MODEL_PATH: "/server_models/tpot.joblib"
+        LOCAL_TTFT_SCALER_PATH: "/server_models/ttft_scaler.joblib"
+        LOCAL_TPOT_SCALER_PATH: "/server_models/tpot_scaler.joblib"
+
+
+inferencePool:
+  apiVersion: inference.networking.k8s.io/v1
+  targetPortNumber: 8000
+  modelServerType: vllm
+  modelServers:
+    matchLabels:
+      llm-d.ai/inferenceServing: "true"

@@ -15,7 +15,7 @@ modelArtifacts:
 routing:
   servicePort: 8000
   proxy:
-    image: ghcr.io/llm-d/llm-d-routing-sidecar:v0.5.0
+    image: quay.io/rh_ee_rsaini/llm-d-routing-sidecar:dev
     connector: nixlv2
     secure: false
 
@@ -38,15 +38,19 @@ decode:
         - "--block-size"
         - "128"
         - "--kv-transfer-config"
-        - '{"kv_connector":"NixlConnector", "kv_role":"kv_both"}'
+        - '{"kv_connector":"NixlConnector", "kv_role":"kv_both", "kv_load_failure_policy":"fail"}'
         - "--disable-uvicorn-access-log"
         - "--max-model-len"
-        - "32000"
+        - "4096"
       env:
         - name: VLLM_NIXL_SIDE_CHANNEL_HOST
           valueFrom:
             fieldRef:
               fieldPath: status.podIP
+        - name: VLLM_LOGGING_LEVEL
+          value: DEBUG
+        - name: UCX_LOG_LEVEL
+          value: DEBUG
       ports:
         - containerPort: 8200
           name: vllm
@@ -109,7 +113,7 @@ prefill:
   parallelism:
     tensor: 1
   create: true
-  replicas: 4
+  replicas: 2
   monitoring:
     podmonitor:
       enabled: true
@@ -124,15 +128,21 @@ prefill:
         - "--block-size"
         - "128"
         - "--kv-transfer-config"
-        - '{"kv_connector":"NixlConnector", "kv_role":"kv_both"}'
+        - '{"kv_connector":"NixlConnector", "kv_role":"kv_both", "kv_load_failure_policy":"fail"}'
         - "--disable-uvicorn-access-log"
         - "--max-model-len"
-        - "32000"
+        - "4096"
+        - "--gpu-memory-utilization"
+        - "0.95"
       env:
         - name: VLLM_NIXL_SIDE_CHANNEL_HOST
           valueFrom:
             fieldRef:
               fieldPath: status.podIP
+        - name: VLLM_LOGGING_LEVEL
+          value: DEBUG
+        - name: UCX_LOG_LEVEL
+          value: DEBUG
       ports:
         - containerPort: 8000
           name: vllm
