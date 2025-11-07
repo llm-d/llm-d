@@ -1,0 +1,126 @@
+# Example values file for SLO-aware routing with latency prediction
+# This file demonstrates how to enable and configure the SLO prediction sidecars
+
+inferenceExtension:
+  replicas: 1
+  image:
+    name: llm-d-inference-scheduler
+    hub: quay.io/rh_ee_rsaini
+    tag: slo-experimental
+    pullPolicy: Always
+  extProcPort: 9002
+  pluginsConfigFile: "slo-plugins.yaml"  # Use custom SLO plugins config
+
+  # Enable latency prediction flag
+  flags:
+    - name: enable-latency-predictor
+      value: "true"
+    - name: v
+      value: "4"
+
+  # EPP environment variables for SLO prediction
+  env:
+    - name: PREDICTION_SERVER_URL
+      value: http://localhost:8001
+    - name: TRAINING_SERVER_URL
+      value: "http://localhost:8000"
+    - name: LATENCY_MAX_SAMPLE_SIZE
+      value: "10000"
+    - name: NEG_HEADROOM_TPOT_WEIGHT
+      value: "0.2"
+    - name: NEG_HEADROOM_TTFT_WEIGHT
+      value: "0.8"
+
+  # Custom plugins configuration for SLO routing
+  pluginsCustomConfig:
+    slo-plugins.yaml: |
+      apiVersion: inference.networking.x-k8s.io/v1alpha1
+      kind: EndpointPickerConfig
+      plugins:
+      - type: queue-scorer
+      - type: kv-cache-utilization-scorer
+      - type: prefix-cache-scorer
+      - type: slo-request-tracker
+      - type: slo-scorer
+      - type: slo-aware-profile-handler
+      - type: max-score-picker
+      schedulingProfiles:
+      - name: default
+        plugins:
+        - pluginRef: slo-request-tracker
+        - pluginRef: queue-scorer
+        - pluginRef: kv-cache-utilization-scorer
+        - pluginRef: max-score-picker
+      - name: slo
+        plugins:
+        - pluginRef: slo-request-tracker
+        - pluginRef: prefix-cache-scorer
+        - pluginRef: slo-scorer
+        - pluginRef: max-score-picker
+
+  # Enable SLO prediction sidecars
+  sidecars:
+    trainingServer:
+      enabled: true
+      image:
+        hub: quay.io/rh_ee_rsaini
+        name: latency-training
+        tag: slo-experimental
+        pullPolicy: Always
+      resources:
+        requests:
+          cpu: "2000m"
+          memory: "4Gi"
+        limits:
+          cpu: "4000m"
+          memory: "8Gi"
+      config:
+        retrainingIntervalSec: "1"
+        minSamplesForRetrain: "100"
+        ttftModelPath: "/models/ttft.joblib"
+        tpotModelPath: "/models/tpot.joblib"
+        ttftScalerPath: "/models/ttft_scaler.joblib"
+        tpotScalerPath: "/models/tpot_scaler.joblib"
+        modelType: "xgboost"
+      persistence:
+        enabled: false  # Set to true if you want persistent model storage
+        # claimName: "training-models-pvc"
+
+    predictionServers:
+      enabled: true
+      replicas: 1  # Number of prediction server replicas
+      image:
+        hub: quay.io/rh_ee_rsaini
+        name: latency-prediction
+        tag: slo-experimental
+        pullPolicy: Always
+      resources:
+        requests:
+          cpu: "500m"
+          memory: "1Gi"
+        limits:
+          cpu: "1000m"
+          memory: "2Gi"
+      config:
+        modelSyncIntervalSec: "10"
+        modelType: "xgboost"
+        host: "0.0.0.0"
+        port: "8001"
+        trainingServerUrl: "http://localhost:8000"
+        localTtftModelPath: "/local_models/ttft.joblib"
+        localTpotModelPath: "/local_models/tpot.joblib"
+        localTtftScalerPath: "/local_models/ttft_scaler.joblib"
+        localTpotScalerPath: "/local_models/tpot_scaler.joblib"
+        httpTimeout: "30"
+
+inferencePool:
+  targetPorts:
+    - number: 8000
+  modelServerType: vllm
+  apiVersion: inference.networking.x-k8s.io/v1alpha2
+  # modelServers:
+  #   matchLabels:
+  #     app: vllm-llama3-8b-instruct
+
+provider:
+  name: none

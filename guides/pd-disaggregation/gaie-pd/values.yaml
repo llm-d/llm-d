@@ -11,6 +11,9 @@ inferenceExtension:
     pullPolicy: Always
   extProcPort: 9002
   pluginsConfigFile: "pd-config.yaml"
+  flags:
+    - name: "secure-serving"
+      value: false
   pluginsCustomConfig: # THIS CONFIG NEEDS TO BE CHECKED FOR INF SCHEDULER NEW IMAGE
     pd-config.yaml: |
       # ALWAYS DO PD IN THIS EXAMPLE (THRESHOLD 0)

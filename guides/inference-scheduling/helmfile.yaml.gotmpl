@@ -61,8 +61,8 @@ releases:
 
   - name: {{ printf "gaie-%s" $rn | quote }}
     namespace: {{ $ns }}
-    chart: oci://registry.k8s.io/gateway-api-inference-extension/charts/inferencepool
-    version: v1.2.0
+    chart: oci://quay.io/rh_ee_rsaini/charts/inferencepool
+    version: v1.0.1-slo
     installed: true
     needs:
       {{- if ne .Environment.Name "standalone" }}
@@ -71,6 +71,7 @@ releases:
     values:
       {{- if ne .Environment.Name "standalone" }}
       - gaie-inference-scheduling/values.yaml
+      - gaie-inference-scheduling/values-slo.yaml
       {{- else }}
       - standalone-inference-scheduling/values.yaml
       {{- end }}
