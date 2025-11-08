@@ -78,6 +78,10 @@ WORKDIR /app/vllm/benchmarks
 RUN wget https://huggingface.co/datasets/anon8231489123/ShareGPT_Vicuna_unfiltered/resolve/main/ShareGPT_V3_unfiltered_cleaned_split.json
 
 ADD README.md /app/README.md
+ADD gaie_slo_benchmark.py /app/gaie_slo_benchmark.py
+ADD run-slo-benchmark.sh /app/run-slo-benchmark.sh
+
+RUN mkdir -p /results
 
 WORKDIR /app
 ENTRYPOINT ["/bin/bash"]

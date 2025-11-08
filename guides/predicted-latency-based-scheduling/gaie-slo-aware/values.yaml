@@ -1,0 +1,133 @@
+# Example values file for SLO-aware routing with latency prediction
+# This file demonstrates how to enable and configure the SLO prediction sidecars
+
+inferenceExtension:
+  replicas: 1
+  image:
+    hub: quay.io/grpereir
+    name: slo-aware-epp
+    tag: latest
+    pullPolicy: Always
+  extProcPort: 9002
+  pluginsConfigFile: "slo-plugins.yaml"  # Use custom SLO plugins config
+
+  # Enable latency prediction flag
+  flags:
+    enable-latency-predictor: "true"
+    v: "4"
+
+  # EPP environment variables for SLO prediction
+  env:
+    - name: PREDICTION_SERVER_URL
+      value: "http://localhost:8001,http://localhost:8002,http://localhost:8003"
+    - name: TRAINING_SERVER_URL
+      value: "http://localhost:8000"
+    - name: LATENCY_MAX_SAMPLE_SIZE
+      value: "10000"
+    - name: NEG_HEADROOM_TPOT_WEIGHT
+      value: "0.2"
+    - name: NEG_HEADROOM_TTFT_WEIGHT
+      value: "0.8"
+    - name: HF_TOKEN
+      valueFrom:
+        secretKeyRef:
+          name: llm-d-hf-token
+          key: HF_TOKEN
+
+  # Custom plugins configuration for SLO routing
+  pluginsCustomConfig:
+    slo-plugins.yaml: |
+      apiVersion: inference.networking.x-k8s.io/v1alpha1
+      kind: EndpointPickerConfig
+      plugins:
+      - type: queue-scorer
+      - type: prefix-cache-scorer
+      - type: kv-cache-utilization-scorer
+      - type: slo-request-tracker
+      - type: slo-scorer
+      - type: slo-aware-profile-handler
+      - type: max-score-picker
+      schedulingProfiles:
+      - name: default
+        plugins:
+        - pluginRef: slo-request-tracker
+        - pluginRef: queue-scorer
+        - pluginRef: kv-cache-utilization-scorer
+        - pluginRef: max-score-picker
+      - name: slo
+        plugins:
+        - pluginRef: prefix-cache-scorer
+        - pluginRef: slo-request-tracker
+        - pluginRef: slo-scorer
+        - pluginRef: max-score-picker
+
+  # Enable SLO prediction sidecars
+  latencyPredictor:
+    enabled: true
+    trainingServer:
+      image:
+        hub: quay.io/grpereir
+        name: slo-predicter-trainer
+        tag: v0.0.10
+        pullPolicy: Always
+      resources:
+        requests:
+          cpu: "2000m"
+          memory: "4Gi"
+        limits:
+          cpu: "4000m"
+          memory: "8Gi"
+      config:
+        retrainingIntervalSec: "1"
+        minSamplesForRetrain: "100"
+        ttftModelPath: "/models/ttft.joblib"
+        tpotModelPath: "/models/tpot.joblib"
+        ttftScalerPath: "/models/ttft_scaler.joblib"
+        tpotScalerPath: "/models/tpot_scaler.joblib"
+        ttftTreelitePath: "/models/ttft.so"
+        tpotTreelitePath: "/models/tpot.so"
+      persistence:
+        enabled: false  # Set to true if you want persistent model storage
+        # claimName: "training-models-pvc"
+
+    predictionServers:
+      enabled: true
+      count: 10  # Number of prediction server replicas
+      image:
+        hub: quay.io/grpereir
+        name: slo-predicter
+        tag: v0.0.10
+        pullPolicy: Always
+      resources:
+        requests:
+          cpu: "500m"
+          memory: "1Gi"
+        limits:
+          cpu: "1000m"
+          memory: "2Gi"
+      config:
+        modelSyncIntervalSec: "10"
+        modelType: "treelite"
+        host: "0.0.0.0"
+        port: "8001"
+        trainingServerUrl: "http://localhost:8000"
+        localTtftModelPath: "/local_models/ttft.so"
+        localTpotModelPath: "/local_models/tpot.so"
+        localTtftScalerPath: "/local_models/ttft_scaler.joblib"
+        localTpotScalerPath: "/local_models/tpot_scaler.joblib"
+        httpTimeout: "30"
+      env:
+        - name: USE_TREELITE
+          value: "true"
+        # - name: LATENCY_MODEL_TYPE
+        #   value: "xgboost"
+    eppEnv:
+      LATENCY_MAX_SAMPLE_SIZE: "10000"
+
+inferencePool:
+  targetPorts:
+    - number: 8000
+  modelServerType: vllm
+  modelServers:
+    matchLabels:
+      llm-d.ai/inferenceServing: "true"

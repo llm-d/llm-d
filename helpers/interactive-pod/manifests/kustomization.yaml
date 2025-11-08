@@ -4,3 +4,4 @@ resources:
   - sa.yaml
   - deployment.yaml
   - rbac.yaml
+  - pvc.yaml

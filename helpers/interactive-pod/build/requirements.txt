@@ -7,3 +7,6 @@ datasets
 pillow
 rust-just
 lm_eval[api]
+genai-perf
+matplotlib
+seaborn

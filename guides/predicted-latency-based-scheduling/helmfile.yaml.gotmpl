@@ -1,0 +1,100 @@
+environments:
+  istio: &I
+    values:
+      - ../prereq/gateway-provider/common-configurations/istio.yaml
+  istioBench: &IB
+    values:
+      - ../prereq/gateway-provider/common-configurations/istio.yaml
+      - ../prereq/gateway-provider/common-configurations/benchmarking.yaml
+  kgateway: &KG
+    values:
+      - ../prereq/gateway-provider/common-configurations/kgateway.yaml
+  gke: &GKE
+    values:
+      - ../prereq/gateway-provider/common-configurations/gke.yaml
+  default:
+    <<: *I
+
+---
+
+{{- $ns := .Namespace | default "greg-slo-aware" -}}
+{{- $rn := (env "RELEASE_NAME_POSTFIX") | default "slo-aware" -}}
+
+repositories:
+  - name: llm-d-infra
+    url: https://llm-d-incubation.github.io/llm-d-infra/
+
+releases:
+  - name: {{ printf "infra-%s" $rn | quote }}
+    namespace: {{ $ns }}
+    chart: llm-d-infra/llm-d-infra
+    version: v1.3.5
+    installed: true
+    labels:
+      type: infrastructure
+      kind: inference-stack
+    values:
+      - gateway: 
+          {{ .Environment.Values.gateway | toYaml | nindent 10 }}
+
+  - name: {{ printf "gaie-%s" $rn | quote }}
+    namespace: {{ $ns }}
+    chart: oci://registry.k8s.io/gateway-api-inference-extension/charts/inferencepool
+    version: v1.2.1
+    installed: true
+    needs:
+      - {{ printf "infra-%s" $rn | quote }}
+    values:
+      - gaie-slo-aware/values.yaml
+    # Apply provider name if on GKE
+    {{- if eq .Environment.Name "gke" }}
+      - provider:
+          name: {{ .Environment.Values.provider.name }}
+        inferenceExtension:
+          monitoring:
+            gke:
+              enabled: true
+            prometheus:
+              enabled: false
+    {{- end }}
+    # Apply destination rule for anything istio
+    {{- if or (eq .Environment.Name "istio") (eq .Environment.Name "default") (eq .Environment.Name "istioBench") }}
+      - provider:
+          name: {{ .Environment.Values.provider.name }}
+          istio:
+            {{ .Environment.Values.provider.istio | toYaml | nindent 12 }}
+      - provider:
+          istio:
+            destinationRule:
+              host: {{ printf "gaie-%s-epp.%s.svc.cluster.local" $rn $ns | quote }}
+    {{- end }}
+    # Apply log level only in bench setting
+    {{- if (eq .Environment.Name "istioBench") }}
+      - inferenceExtension:
+          flags: 
+            {{ .Environment.Values.inferenceExtension.flags | toYaml | nindent 12 }}
+    {{- end }}
+    labels:
+      kind: inference-stack
+
+  - name: {{ printf "ms-%s" $rn | quote }}
+    namespace: {{ $ns }}
+    chart: llm-d-modelservice/llm-d-modelservice
+    version: v0.3.15
+    installed: true
+    needs:
+      - {{ printf "infra-%s" $rn | quote }}
+      - {{ printf "gaie-%s" $rn | quote }}
+    values:
+      - ms-slo-aware/values.yaml
+    {{- if (eq .Environment.Name "istioBench") }}
+      - routing: 
+          {{ .Environment.Values.routing | toYaml | nindent 10 }}
+    {{- end }}
+    set:
+    {{- if (eq .Environment.Name "gke") }}  
+      - name: "decode.monitoring.podmonitor.enabled"
+        value: false
+    {{- end }}
+    labels:
+      kind: inference-stack
