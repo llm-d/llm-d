@@ -91,7 +91,7 @@ fi
 echo "DEBUG: Installing packages: ${INSTALL_PACKAGES[*]}"
 
 # install all packages in one command with verbose output to prevent GHA timeouts
-uv pip install -v "${INSTALL_PACKAGES[@]}"
+uv pip install --no-cache-dir -v "${INSTALL_PACKAGES[@]}"
 
 # cleanup
 rm -rf /tmp/wheels
