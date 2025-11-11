@@ -52,11 +52,11 @@ kubectl port-forward -n ${NAMESPACE} service/${GATEWAY_SVC} 8000:80
 ### External IP (LoadBalancer)
 >
 > [!REQUIREMENTS]
-> This requires that the release of the `llm-d-infra` chart must have `.gateway.serviceType` set to `LoadBalancer`. Currently this is the [default value](https://github.com/llm-d-incubation/llm-d-infra/blob/main/charts/llm-d-infra/values.yaml#L167), however it's worth noting.
+> This requires that the release of the `llm-d-infra` chart must have `.gateway.serviceType` set to `LoadBalancer`. Currently this is the [default value](https://github.com/llm-d-incubation/llm-d-infra/blob/main/charts/llm-d-infra/values.yaml#L252), is `ClusterIP`.
 >
-> This requires your K8s cluster is deployed on a cloud provider with LB integration (EKS/GKE/AKS/AWS/…).
+> This requires your K8s cluster is deployed on a cloud provider with LB integration (EKS/GKE/AKS/AWS/…) or a bare-metal cluster with MetalLB.
 
-If you are using the GKE gateway or are using the default service type of `LoadBalancer` for your gateway and you are on a cloud platform with load balancing, you can use the `External IP` of your gateway service (you should see the same thing under your gateway with `kubectl get gateway`)
+If you are using the GKE gateway or are using the service type of `LoadBalancer` for your gateway and you are on a platform with load balancing, you can use the `External IP` of your gateway service (you should see the same thing under your gateway with `kubectl get gateway`)
 
 ```bash
 export ENDPOINT=$(kubectl get gateway --no-headers -n ${NAMESPACE} -o jsonpath='{.items[].status.addresses[0].value}')
@@ -123,18 +123,18 @@ Expected output:
   "data": [
     {
       "created": 1752727169,
-      "id": "random",
+      "id": "Qwen/Qwen3-32B",
       "object": "model",
       "owned_by": "vllm",
       "parent": null,
-      "root": "random"
+      "root": "Qwen/Qwen3-32B"
     },
     {
       "created": 1752727169,
       "id": "",
       "object": "model",
       "owned_by": "vllm",
-      "parent": "random",
+      "parent": "Qwen/Qwen3-32B",
       "root": ""
     }
   ],
