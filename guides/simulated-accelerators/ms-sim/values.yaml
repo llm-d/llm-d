@@ -48,23 +48,23 @@ decode:
       httpGet:
         path: /v1/models
         port: 8200
-      initialDelaySeconds: 15
-      periodSeconds: 30
-      timeoutSeconds: 5
-      failureThreshold: 60
+      initialDelaySeconds: 5
+      periodSeconds: 5
+      timeoutSeconds: 3
+      failureThreshold: 360
     livenessProbe:
       httpGet:
         path: /health
         port: 8200
-      periodSeconds: 10
-      timeoutSeconds: 5
+      periodSeconds: 5
+      timeoutSeconds: 3
       failureThreshold: 3
     readinessProbe:
       httpGet:
         path: /v1/models
         port: 8200
-      periodSeconds: 5
-      timeoutSeconds: 2
+      periodSeconds: 1
+      timeoutSeconds: 1
       failureThreshold: 3
   volumes:
   - name: metrics-volume
@@ -97,23 +97,24 @@ prefill:
       httpGet:
         path: /v1/models
         port: 8000
-      initialDelaySeconds: 15
-      periodSeconds: 30
-      timeoutSeconds: 5
-      failureThreshold: 60
+      initialDelaySeconds: 5
+      periodSeconds: 5
+      timeoutSeconds: 3
+      failureThreshold: 360
     livenessProbe:
       httpGet:
         path: /health
         port: 8000
-      periodSeconds: 10
-      timeoutSeconds: 5
+      periodSeconds: 5
+      timeoutSeconds: 3
       failureThreshold: 3
     readinessProbe:
       httpGet:
         path: /v1/models
         port: 8000
-      periodSeconds: 5
-      timeoutSeconds: 2
+      periodSeconds: 1
+      timeoutSeconds: 1
+      failureThreshold: 3
   volumes:
   - name: metrics-volume
     emptyDir: {}

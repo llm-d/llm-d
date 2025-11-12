@@ -148,25 +148,25 @@ spec:
             protocol: TCP
           startupProbe:
             httpGet:
-              path: /health
-              port: metrics
-            initialDelaySeconds: 0
-            periodSeconds: 1
-            timeoutSeconds: 5
-            failureThreshold: 1800
+              path: /v1/models
+              port: 8200
+            initialDelaySeconds: 5
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 360
           livenessProbe:
             httpGet:
               path: /health
-              port: metrics
-            periodSeconds: 30
-            timeoutSeconds: 5
+              port: 8200
+            periodSeconds: 5
+            timeoutSeconds: 3
             failureThreshold: 3
           readinessProbe:
             httpGet:
               path: /v1/models
-              port: metrics
-            periodSeconds: 10
-            timeoutSeconds: 5
+              port: 8200
+            periodSeconds: 1
+            timeoutSeconds: 1
             failureThreshold: 3
           resources:
             limits:

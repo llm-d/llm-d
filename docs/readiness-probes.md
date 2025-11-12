@@ -40,10 +40,10 @@ containers:
     httpGet:
       path: /v1/models
       port: 8000
-    initialDelaySeconds: 15    # Time before first probe
-    periodSeconds: 30           # How often to probe during startup
-    timeoutSeconds: 5           # HTTP request timeout
-    failureThreshold: 60        # Max attempts (30s * 60 = 30min max startup time)
+    initialDelaySeconds: 5    # Time before first probe (reduced for faster response)
+    periodSeconds: 5         # How often to probe during startup (increased frequency)
+    timeoutSeconds: 3        # HTTP request timeout
+    failureThreshold: 360    # Max attempts (5s * 360 = 30min max startup time)
   
   # Liveness Probe: Is the server process alive?
   # Simple health check, restarts container if failing
@@ -51,9 +51,9 @@ containers:
     httpGet:
       path: /health
       port: 8000
-    periodSeconds: 10           # Check every 10s
-    timeoutSeconds: 5
-    failureThreshold: 3         # Restart after 3 failures
+    periodSeconds: 5         # Check more frequently (every 5s)
+    timeoutSeconds: 3        # Shorter timeout
+    failureThreshold: 3      # Restart after 3 failures
   
   # Readiness Probe: Is the model loaded and ready?
   # Controls traffic routing, removes from service if failing
@@ -61,9 +61,9 @@ containers:
     httpGet:
       path: /v1/models
       port: 8000
-    periodSeconds: 5            # Check frequently for fast recovery
-    timeoutSeconds: 2
-    failureThreshold: 3
+    periodSeconds: 1         # Check every second for rapid detection
+    timeoutSeconds: 1        # Short timeout for quick response
+    failureThreshold: 3      # Remove from service after 3 failures
 ```
 
 ### Port Configuration by Role
@@ -124,11 +124,11 @@ $ curl http://localhost:8000/v1/models
 Container Start
       ↓
 [startupProbe on /v1/models]
-  ↓ (30s intervals, up to 30min)
+  ↓ (5s intervals, up to 30min)
   ✓ Model loaded → Startup complete
       ↓
-[livenessProbe on /health] ← Restarts if server crashes
-[readinessProbe on /v1/models] ← Routes traffic when ready
+[livenessProbe on /health] ← Restarts if server crashes (every 5s)
+[readinessProbe on /v1/models] ← Routes traffic when ready (checks every 1s)
 ```
 
 ## Benefits
@@ -180,25 +180,25 @@ decode:
       httpGet:
         path: /v1/models
         port: 8200
-      initialDelaySeconds: 15
-      periodSeconds: 30
-      timeoutSeconds: 5
-      failureThreshold: 60
+      initialDelaySeconds: 5
+      periodSeconds: 5
+      timeoutSeconds: 3
+      failureThreshold: 360
     
     livenessProbe:
       httpGet:
         path: /health
         port: 8200
-      periodSeconds: 10
-      timeoutSeconds: 5
+      periodSeconds: 5
+      timeoutSeconds: 3
       failureThreshold: 3
     
     readinessProbe:
       httpGet:
         path: /v1/models
         port: 8200
-      periodSeconds: 5
-      timeoutSeconds: 2
+      periodSeconds: 1
+      timeoutSeconds: 1
       failureThreshold: 3
 ```
 
@@ -223,25 +223,25 @@ spec:
       httpGet:
         path: /v1/models
         port: 8200
-      initialDelaySeconds: 30
-      periodSeconds: 10
-      timeoutSeconds: 5
-      failureThreshold: 60
+      initialDelaySeconds: 5
+      periodSeconds: 5
+      timeoutSeconds: 3
+      failureThreshold: 360
     
     livenessProbe:
       httpGet:
         path: /health
         port: 8200
-      periodSeconds: 30
-      timeoutSeconds: 5
+      periodSeconds: 5
+      timeoutSeconds: 3
       failureThreshold: 3
     
     readinessProbe:
       httpGet:
         path: /v1/models
         port: 8200
-      periodSeconds: 10
-      timeoutSeconds: 5
+      periodSeconds: 1
+      timeoutSeconds: 1
       failureThreshold: 3
 ```
 
@@ -279,11 +279,11 @@ kubectl get events -n llm-d --field-selector involvedObject.name=${POD##*/}
 
 Expected behavior:
 1. Pod starts, enters `Running` state
-2. Startup probe checks `/v1/models` repeatedly (30s intervals)
+2. Startup probe checks `/v1/models` repeatedly (5s intervals)
 3. Once model loads, startup probe succeeds
-4. Readiness probe takes over, pod becomes `Ready`
+4. Readiness probe takes over, pod becomes `Ready` (checking every 1s) 
 5. Traffic is routed to pod
-6. Liveness probe monitors server health continuously
+6. Liveness probe monitors server health continuously (checking every 5s)
 
 ## Troubleshooting
 
@@ -339,3 +339,13 @@ kubectl logs -n llm-d $POD --tail=100
 
 - [vLLM #6073](https://github.com/vllm-project/vllm/issues/6073) - Request for dedicated `/ready` endpoint
 - vLLM currently relies on `/v1/models` for model-aware readiness checking
+
+## Future Improvements
+
+While the optimized probe timings improve detection speed, there are further improvements that would be beneficial:
+
+- A dedicated `/health/ready` endpoint in vLLM that can check model readiness without the overhead of listing all models/adapters
+- More efficient health checks that aren't blocked by JIT compilation or other intensive operations
+- Adaptive probe timing based on deployment size and environment
+
+Contributions to upstream vLLM for health check improvements would benefit the entire ecosystem.
