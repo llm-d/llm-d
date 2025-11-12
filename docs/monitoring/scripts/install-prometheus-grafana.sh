@@ -348,15 +348,10 @@ grafana:
   service:
     type: ClusterIP
     sessionAffinity: ""
-  datasources:
-    datasources.yaml:
-      apiVersion: 1
-      datasources:
-      - name: Prometheus
-        type: prometheus
-        url: http://${RELEASE_NAME}-kube-prometheus-stack-prometheus.${MONITORING_NAMESPACE}.svc.cluster.local:9090
-        access: proxy
-        isDefault: true
+  sidecar:
+    datasources:
+      enabled: true
+      defaultDatasourceEnabled: false
 prometheus:
   service:
     type: ClusterIP
@@ -387,15 +382,10 @@ grafana:
   service:
     type: ClusterIP
     sessionAffinity: ""
-  datasources:
-    datasources.yaml:
-      apiVersion: 1
-      datasources:
-      - name: Prometheus
-        type: prometheus
-        url: http://${RELEASE_NAME}-kube-prometheus-stack-prometheus.${MONITORING_NAMESPACE}.svc.cluster.local:9090
-        access: proxy
-        isDefault: true
+  sidecar:
+    datasources:
+      enabled: true
+      defaultDatasourceEnabled: true
 prometheus:
   service:
     type: ClusterIP
