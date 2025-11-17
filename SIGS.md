@@ -39,11 +39,11 @@ SIGs operate within the broader llm-d project governance framework defined in [P
 |-----|------------|---------------|
 | **[SIG Inference Scheduler](#sig-inference-scheduler)** | Intelligent request routing, load balancing, and traffic management | • [Meeting Recordings and Docs](https://drive.google.com/drive/folders/1aKTJru43krjHP2ORayEEp4JP-N7dJL8S)<br>• [llm-d-inference-scheduler Repository](https://github.com/llm-d/llm-d-inference-scheduler/) |
 | **[SIG Benchmarking](#sig-benchmarking)** | Performance testing, benchmarking frameworks, and optimization | • [Meeting Recordings and Docs](https://drive.google.com/drive/folders/1Hd-rCRLDbucl-LD0RlQwOCLqERWF-obT)<br>• [llm-d-benchmark Repository](https://github.com/llm-d/llm-d-benchmark) |
-| **[SIG PD-Disaggregation](#sig-pd-disaggregation)** | Prefill/decode separation, distributed serving, and workload disaggregation | • [Meeting Recordings and Docs](https://drive.google.com/drive/folders/1jk7wtojsWNbYQVf7BY8BEvIg8FMRZV0q) |
+| **[SIG PD-Disaggregation](#sig-pd-disaggregation)** | Prefill/decode separation, distributed serving, and workload disaggregation | • [Meeting Recordings and Docs](https://drive.google.com/drive/folders/1jk7wtojsWNbYQVf7BY8BEvIg8FMRZV0q)<br>• [llm-d-routing-sidecar Repository](https://github.com/llm-d/llm-d-routing-sidecar) |
 | **[SIG KV-Disaggregation](#sig-kv-disaggregation)** | KV caching, prefix caching, and distributed storage systems | • [Meeting Recordings and Docs](https://drive.google.com/drive/folders/1mFbzwEWL2-LvD21owgxlKRcQD0eSmcz6)<br>• [llm-d-kv-cache-manager Repository](https://github.com/llm-d/llm-d-kv-cache-manager) |
-| **[SIG Installation](#sig-installation)** | Kubernetes integration, deployment tooling, and platform operations | • [Meeting Recordings and Docs](https://drive.google.com/drive/folders/1H-0Y8fXepzrYpcaUOBfuphn1Cl-gU0xr) |
-| **[SIG Autoscaling](#sig-autoscaling)** | Traffic-aware autoscaling, resource management, and capacity planning | • [Meeting Recordings and Docs](https://drive.google.com/drive/folders/1iDlTgpFPOrSQn7dWR3uCQLtqhz86HTAi) |
-| **[SIG Observability](#sig-observability)** | Monitoring, logging, metrics, and operational visibility | • [Meeting Recordings and Docs](https://drive.google.com/drive/folders/1H-TVTCKYVxUn4fER7xuTPmscNttZCutN) |
+| **[SIG Installation](#sig-installation)** | Kubernetes integration, deployment tooling, and platform operations | • [Meeting Recordings and Docs](https://drive.google.com/drive/folders/1H-0Y8fXepzrYpcaUOBfuphn1Cl-gU0xr)<br>• [llm-d-modelservice Repository](https://github.com/llm-d-incubation/llm-d-modelservice)<br>• [llm-d-infra Repository](https://github.com/llm-d-incubation/llm-d-infra) |
+| **[SIG Autoscaling](#sig-autoscaling)** | Traffic-aware autoscaling, resource management, and capacity planning | • [Meeting Recordings and Docs](https://drive.google.com/drive/folders/1iDlTgpFPOrSQn7dWR3uCQLtqhz86HTAi)<br>• [workload-variant-autoscaler Repository](https://github.com/llm-d-incubation/workload-variant-autoscaler) |
+| **[SIG Observability](#sig-observability)** | Monitoring, logging, metrics, and operational visibility | • [Meeting Recordings and Docs](https://drive.google.com/drive/folders/1H-TVTCKYVxUn4fER7xuTPmscNttZCutN)<br>• [llm-d Observability Documentation](https://github.com/llm-d/llm-d/tree/main/docs/monitoring) |
 
 ## SIG Detailed Descriptions
 
@@ -65,6 +65,7 @@ SIGs operate within the broader llm-d project governance framework defined in [P
 **💬 Communication**:
 - **Slack Channel**: [#sig-inference-scheduler](https://llm-d.slack.com/archives/C08SBNRRSBD)
 - **Meeting Recordings and Docs**: [Public Google Drive](https://drive.google.com/drive/folders/1aKTJru43krjHP2ORayEEp4JP-N7dJL8S)
+- **GitHub Issues**: [github.com/llm-d/llm-d-inference-scheduler](https://github.com/llm-d/llm-d-inference-scheduler/issues)
 
 ### SIG Benchmarking
 
@@ -84,6 +85,7 @@ SIGs operate within the broader llm-d project governance framework defined in [P
 **💬 Communication**:
 - **Slack Channel**: [#sig-benchmarking](https://llm-d.slack.com/archives/C08TSFYMSCQ)
 - **Meeting Recordings and Docs**: [Public Google Drive](https://drive.google.com/drive/folders/1Hd-rCRLDbucl-LD0RlQwOCLqERWF-obT)
+- **GitHub Issues**: [github.com/llm-d/llm-d-benchmark](https://github.com/llm-d/llm-d-benchmark/issues)
 
 
 ### SIG PD-Disaggregation
@@ -104,6 +106,7 @@ SIGs operate within the broader llm-d project governance framework defined in [P
 **💬 Communication**:
 - **Slack Channel**: [#sig-pd-disaggregation](https://llm-d.slack.com/archives/C08T1E128PK)
 - **Meeting Recordings and Docs**: [Public Google Drive](https://drive.google.com/drive/folders/1jk7wtojsWNbYQVf7BY8BEvIg8FMRZV0q)
+- **GitHub Issues**: [github.com/llm-d/llm-d-routing-sidecar](https://github.com/llm-d/llm-d-routing-sidecar/issues)
 
 
 ### SIG KV-Disaggregation
@@ -124,6 +127,7 @@ SIGs operate within the broader llm-d project governance framework defined in [P
 **💬 Communication**:
 - **Slack Channel**: [#sig-kv-disaggregation](https://llm-d.slack.com/archives/C08TB7ZDV7S)
 - **Meeting Recordings and Docs**: [Public Google Drive](https://drive.google.com/drive/folders/1mFbzwEWL2-LvD21owgxlKRcQD0eSmcz6)
+- **GitHub Issues**: [github.com/llm-d/llm-d-kv-cache-manager](https://github.com/llm-d/llm-d-kv-cache-manager/issues)
 
 ### SIG Installation
 
@@ -143,6 +147,7 @@ SIGs operate within the broader llm-d project governance framework defined in [P
 **💬 Communication**:
 - **Slack Channel**: [#sig-installation](https://llm-d.slack.com/archives/C08SLBGKBEZ)
 - **Meeting Recordings and Docs**: [Public Google Drive](https://drive.google.com/drive/folders/1H-0Y8fXepzrYpcaUOBfuphn1Cl-gU0xr)
+- **GitHub Issues**: [github.com/llm-d-incubation/llm-d-modelservice](https://github.com/llm-d-incubation/llm-d-modelservice/issues) | [github.com/llm-d-incubation/llm-d-infra](https://github.com/llm-d-incubation/llm-d-infra/issues)
 
 ### SIG Autoscaling
 
@@ -162,6 +167,7 @@ SIGs operate within the broader llm-d project governance framework defined in [P
 **💬 Communication**:
 - **Slack Channel**: [#sig-autoscaling](https://llm-d.slack.com/archives/C08T899332A)
 - **Meeting Recordings and Docs**: [Public Google Drive](https://drive.google.com/drive/folders/1iDlTgpFPOrSQn7dWR3uCQLtqhz86HTAi)
+- **GitHub Issues**: [github.com/llm-d-incubation/workload-variant-autoscaler](https://github.com/llm-d-incubation/workload-variant-autoscaler/issues)
 
 ### SIG Observability
 
