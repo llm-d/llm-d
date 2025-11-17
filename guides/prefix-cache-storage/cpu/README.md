@@ -29,7 +29,7 @@ Deploy the Gateway and HTTPRoute using the [gateway recipe](../../recipes/gatewa
 
 ### 2. Deploy InferencePool
 
-Deploy the InferencePool using the [InferencePool recipe](../../../recipes/inferencepool/README.md).
+Deploy the InferencePool using the [InferencePool recipe](../../recipes/inferencepool/README.md).
 
 ### 3. Deploy vLLM Model Server
 
