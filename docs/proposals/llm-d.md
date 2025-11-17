@@ -103,7 +103,7 @@ llm-d streamlines deployment and integration of the following components:
     2. Performs model routing and rollout, flow control, KV- and prefix-cache-aware load balancing
     3. Balances traffic to the optimal model server based on the request, workload type, and current load
 2. **vLLM model servers** deployed onto Kubernetes
-    1. In single-host or multi-host (using [LeaderWorkerSets](https://lws.sigs.k8s.io/) and [Ray](https://docs.vllm.ai/en/latest/serving/distributed_serving.html#running-vllm-on-multiple-nodes) as best practice) configurations
+    1. In single-host or multi-host (using [LeaderWorkerSets](https://lws.sigs.k8s.io/) and [Ray](https://docs.vllm.ai/en/latest/serving/parallelism_scaling.html#running-vllm-on-multiple-nodes) as best practice) configurations
     2. With native support for disaggregated serving and optional curated plugins for advanced features
     3. Using project-recommended defaults or highly customized user settings
     4. May be deployed in multiple deployment **variants** (hardware, software, topology) that offer different performance tradeoffs
