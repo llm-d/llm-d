@@ -6,6 +6,7 @@ This guide demonstrates how to deploy DeepSeek-R1-0528 using vLLM's P/D disaggre
 
 * a 32xH200 cluster with InfiniBand networking
 * a 32xH200 cluster on GKE with RoCE networking
+* a 32xB200 cluster on GKE with RoCE networking
 
 > WARNING: We are still investigating and optimizing performance for other hardware and networking configurations
 
@@ -16,7 +17,7 @@ In this example, we will demonstrate a deployment of `DeepSeek-R1-0528` with:
 
 ## Hardware Requirements
 
-This guide requires 32 Nvidia H200 GPUs and InfiniBand or RoCE RDMA networking. Check `modelserver/base/decode.yaml` and `modelserver/base/prefill.yaml` for detailed resource requirements.
+This guide requires 32 Nvidia H200 or B200 GPUs and InfiniBand or RoCE RDMA networking. Check `modelserver/base/decode.yaml` and `modelserver/base/prefill.yaml` for detailed resource requirements.
 
 ## Prerequisites
 
@@ -44,8 +45,11 @@ kubectl create namespace ${NAMESPACE}
 GKE and CoreWeave are tested Kubernetes providers for this well-lit path. You can customize the manifests if you run on other Kubernetes providers.
 
 ```bash
-# Deploy on GKE
+# Deploy on GKE for H200
 kubectl apply -k ./manifests/modelserver/gke -n ${NAMESPACE}
+
+# Deploy on GKE for B200 on the a4 instance type to work around a known vLLM memory issue
+kubectl apply -k ./manifests/modelserver/gke-a4 -n ${NAMESPACE}
 
 # OR, deploy on CoreWeave
 kubectl apply -k ./manifests/modelserver/coreweave  -n ${NAMESPACE}

@@ -15,7 +15,7 @@ Achieve SOTA Inference Performance On Any Accelerator
  [![Join Slack](https://img.shields.io/badge/Join_Slack-blue?logo=slack)](https://llm-d.ai/slack)
 
 Latest News 🔥
-- [2025-10] Our [v0.3](https://llm-d.ai/blog/llm-d-v0.3-expanded-hardware-faster-perf-and-igw-ga) release delivers Intel XPU and Google TPU support, TCP and RDMA over RoCE tested with disaggregation, new experimental predicted latency balancing for up to 3x better P90 latency on long prefill, DeepSeek Expert Parallel serving reaching 2.2k output tokens/s/gpu on H200, and integrates the Inference Gateway v1.0 GA release.
+- [2025-10] Our [v0.3](https://llm-d.ai/blog/llm-d-v0.3-expanded-hardware-faster-perf-and-igw-ga) release delivers Intel XPU and Google TPU support, TCP and RDMA over RoCE tested with disaggregation, new experimental predicted latency balancing for up to 3x better P90 latency on long prefill, DeepSeek Expert Parallel serving reaching 2.2k output tokens/s/gpu on H200 and 2.9k output tokens/s/gpu on B200, and integrates the Inference Gateway v1.0 GA release.
 - [2025-08] Read more about the [intelligent inference scheduler](https://llm-d.ai/blog/intelligent-inference-scheduling-with-llm-d), including a deep dive on how different balancing techniques are composed to improve throughput without overloading replicas.
 
 ## 📄 About
