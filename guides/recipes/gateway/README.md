@@ -7,7 +7,6 @@ This directory contains recipes for deploying the `llm-d-inference-gateway` and 
 The following recipes are available for deploying the gateway and httproute.
 
 === "GKE L7 Regional External Managed Gateway"
-    [Enable Gateway API in your cluster](https://docs.cloud.google.com/kubernetes-engine/docs/how-to/deploying-gateways#enable-gateway)
 
     This deploys a gateway suitable for GKE, using the `gke-l7-regional-external-managed` gateway class.
 
