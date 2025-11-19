@@ -34,15 +34,20 @@ Deploy the InferencePool using the [InferencePool recipe](../../recipes/inferenc
 ### 3. Deploy vLLM Model Server
 
 === "LMCache"
-    Deploy the vLLM model server with the `LMCache` connector enabled.
-    ```bash
-    kubectl apply -k ./manifests/vllm/lmcache-connector -n ${NAMESPACE}
-    ```
-=== "Offloading"
-    Deploy the vLLM model server with the `OffloadingConnector` enabled.
-    ```bash
-    kubectl apply -k ./manifests/vllm/offloading-connector -n ${NAMESPACE}
-    ```
+
+        Deploy the vLLM model server with the `LMCache` connector enabled.
+
+        ```bash
+        kubectl apply -k ./manifests/vllm/lmcache-connector -n ${NAMESPACE}
+        ```
+
+=== "CPU Offloading"
+
+        Deploy the vLLM model server with the `OffloadingConnector` enabled.
+
+        ```bash
+        kubectl apply -k ./manifests/vllm/offloading-connector -n ${NAMESPACE}
+        ```
 
 ## Verifying the installation
 
@@ -108,3 +113,70 @@ kubectl delete -k ./manifests/vllm/offloading-connector -n ${NAMESPACE}
 kubectl delete -k ../../../../recipes/gateway/gke-l7-regional-external-managed -n ${NAMESPACE}
 kubectl delete namespace ${NAMESPACE}
 ```
+
+## Appendix
+
+### Benchmark
+
+The following benchmark results demonstrate the performance improvements of using vLLM's native CPU offloading.
+
+#### Benchmark Setup
+
+*   **Hardware:**
+    *   A total of 16 H100 GPUs, each with 80GB of HBM, were used.
+    *   The GPUs were distributed across 4 `a3-highgpu-4g` instances, with 4 GPUs per instance.
+
+*   **vLLM Configuration:**
+    *   `gpu_memory_utilization` was set to `0.65`.
+    *   CPU offloading was enabled with `num_cpu_blocks` set to `41000`, which provides approximately 100GB of CPU cache.
+
+The benchmark was conducted using the [inference-perf](https://github.com/kubernetes-sigs/inference-perf) tool with the following hardware, memory, and workload configurations:
+
+
+*   **Workload:**
+    *   The two different workloads (Memory-Bound and Compute-Bound) were tested with a constant concurrency of 45 requests.
+    *   **Memory-Bound (High Cache):**
+        *   `num_groups`: 45
+        *   `system_prompt_len`: 30,000
+        *   `question_len`: 256
+        *   `output_len`: 1024
+        *   `num_prompts_per_group`: 10
+    *   **Compute-Bound (Low Cache):**
+        *   `num_groups`: 45
+        *   `system_prompt_len`: 8000
+        *   `question_len`: 256
+        *   `output_len`: 1024
+        *   `num_prompts_per_group`: 10
+
+*   **Memory Calculation:**
+    *   The KVCache size for the `Qwen/Qwen3-32B` model is approximately 0.0002 GB per token.
+    *   With `gpu_memory_utilization` at 0.65, there are 9271 GPU blocks available per engine.
+    *   The available HBM for KVCache per engine is approximately 24.3GB (9271block * 2.62 MB/block).
+    *   The total available HBM for the KVCache across the entire system was 193.4 GB (8 engines * 24.3 GB/engine ).
+
+#### Key Findings
+
+*   In **memory-bound scenarios**, where the KVCache size exceeds the available HBM, the vLLM native CPU offloading connector significantly enhances performance:
+    *   Mean Time to First Token (TTFT) decreased by 25%.
+    *   Mean End-to-End (E2E) latency decreased by 18%.
+    *   Overall throughput increased by 21.1%.
+*   In **compute-bound scenarios**, where the KVCache fits entirely within the GPU's HBM, all offloading configurations perform similarly to the baseline. This indicates that enabling CPU offloading does not negatively impact performance when it is not actively utilized.
+
+#### Memory-Bound Performance
+
+The following table compares the performance of the baseline vLLM with the vLLM using the CPU offloading connector when the KVCache size is larger than the available HBM.
+
+| HBM < KVCache < HBM + CPU RAM | Mean TTFT (second) | P90 TTFT (second) | Mean E2E Latency (second) | P90 E2E Latency (second) | Overall Throughput (token per second) |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| **Baseline vllm** | 9.0 | 20.9 | 37.8 | 49.7 | 38534.8 |
+| **vllm + CPU offloading 100GB** | 6.7 (-25%) | 15.9 (-24%) | 31.0 (-18%) | 40.0 (-24%) | 46662.5 (+21.1%) |
+
+#### Compute-Bound Performance
+
+The following table shows that when the KVCache fits within the HBM, the performance of all configurations is similar, indicating negligible overhead from the CPU offloading mechanism.
+
+| KVCache < HBM | Mean TTFT (second) | P90 TTFT (second) | Mean E2E Latency (second) | P90 E2E Latency (second) | Overall Throughput (token per second) |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| **Baseline vllm** | 0.12 | 0.09 | 18.4 | 19.6 | 23389.6 |
+| **vllm + CPU offloading 100GB** | 0.13 | 0.11 | 18.6 | 20.6 | 23032.6 |
+

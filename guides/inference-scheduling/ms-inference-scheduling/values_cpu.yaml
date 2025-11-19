@@ -1,0 +1,123 @@
+# Simplified Intel CPU configuration using imageDefault mode
+# This configuration lets the chart handle most vLLM parameters automatically
+
+modelArtifacts:
+  uri: "hf://meta-llama/Llama-3.2-3B-Instruct"
+  size: 100Gi
+  authSecretName: "llm-d-hf-token"
+  name: "meta-llama/Llama-3.2-3B-Instruct"
+
+
+accelerator:
+  type: cpu
+
+# Routing configuration - required for inference-scheduling
+routing:
+  servicePort: 8000
+  proxy:
+    image: ghcr.io/llm-d/llm-d-routing-sidecar:v0.3.0
+    connector: nixlv2
+    secure: false
+
+  parentRefs:
+    - group: gateway.networking.k8s.io
+      kind: Gateway
+      name: infra-r1-inference-gateway
+
+  inferencePool:
+    create: false
+
+  # create httpRoute via MS for using release name r1 override
+  httpRoute:
+    create: true
+
+  epp:
+    create: false
+
+decode:
+  create: true
+  replicas: 2
+  monitoring:
+    podmonitor:
+      enabled: true
+      portName: "metrics"
+      path: "/metrics"
+      interval: "30s"
+  containers:
+  - name: "vllm"
+    image: docker.io/library/vllm-cpu-env:latest
+    imagePullPolicy: IfNotPresent
+    securityContext:
+      privileged: true
+    command: ["/bin/bash", "-c"]
+    args:
+      - |
+          VLLM_SKIP_WARMUP=True vllm serve meta-llama/Llama-3.2-3B-Instruct \
+          --port 8200 \
+          --gpu-memory-utilization 0.9 \
+          --enforce-eager \
+          --disable-hybrid-kv-cache-manager \
+          --tensor-parallel-size 1 --max_model_len 32768 
+    env:
+      - name: VLLM_LOGGING_LEVEL
+        value: DEBUG
+      - name: OMP_NUM_THREADS
+        value: "64"
+      - name: LD_LIBRARY_PATH
+        value: "/usr/local/lib:/usr/lib:/opt/amazon/openmpi/lib"
+
+    ports:
+      - containerPort: 8200
+        protocol: TCP
+    resources:
+      limits:
+        memory: 64G
+        cpu: "64"
+      requests:
+        cpu: "64"
+        memory: 64G
+    device: "cpu"
+    mountModelVolume: true
+    volumeMounts:
+    - name: metrics-volume
+      mountPath: /.config
+    - name: torch-compile-cache
+      mountPath: /.cache
+    startupProbe:
+      httpGet:
+        path: /v1/models
+        port: 8200
+      initialDelaySeconds: 15
+      periodSeconds: 30
+      timeoutSeconds: 5
+      failureThreshold: 60
+    livenessProbe:
+      httpGet:
+        path: /health
+        port: 8200
+      periodSeconds: 10
+      timeoutSeconds: 5
+      failureThreshold: 3
+    readinessProbe:
+      httpGet:
+        path: /v1/models
+        port: 8200
+      periodSeconds: 5
+      timeoutSeconds: 2
+      failureThreshold: 3
+  volumes:
+    - name: metrics-volume
+      emptyDir: {}
+    - name: shm
+      emptyDir:
+        medium: Memory
+        sizeLimit: "100Gi"
+    - name: torch-compile-cache
+      emptyDir: {}
+
+# Disable prefill for simple CPU example
+prefill:
+  create: false
+
+# When true, use LeaderWorkerSet for multi-node CPU setups
+multinode: false

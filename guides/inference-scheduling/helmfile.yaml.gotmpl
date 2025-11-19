@@ -17,6 +17,9 @@ environments:
       - ../prereq/gateway-provider/common-configurations/gke_tpu.yaml
   xpu: &XPU
     <<: *I
+  cpu: &CPU
+    values:
+      - ../prereq/gateway-provider/common-configurations/istio.yaml
   digitalocean: &DO
     <<: *I
   default: &DEFAULT
@@ -69,7 +72,7 @@ releases:
               enabled: false
     {{- end }}
     # Apply destination rule for anything istio
-    {{- if or (eq .Environment.Name "istio") (eq .Environment.Name "default") (eq .Environment.Name "istioBench") (eq .Environment.Name "xpu") }}
+    {{- if or (eq .Environment.Name "istio") (eq .Environment.Name "default") (eq .Environment.Name "istioBench") (eq .Environment.Name "xpu") (eq .Environment.Name "cpu") }}
       - provider:
           name: {{ .Environment.Values.provider.name }}
       - istio:
@@ -100,6 +103,8 @@ releases:
       - ms-inference-scheduling/values_tpu.yaml
     {{- else if eq .Environment.Name "xpu" }}
       - ms-inference-scheduling/values_xpu.yaml
+    {{- else if eq .Environment.Name "cpu" }}
+      - ms-inference-scheduling/values_cpu.yaml
     {{- else if eq .Environment.Name "digitalocean" }}
       - ms-inference-scheduling/digitalocean-values.yaml
     {{- else if eq .Environment.Name "xpu" }}
