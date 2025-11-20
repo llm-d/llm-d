@@ -36,6 +36,8 @@ repositories:
     url: https://llm-d-incubation.github.io/llm-d-modelservice/
   - name: llm-d-infra
     url: https://llm-d-incubation.github.io/llm-d-infra/
+  - name: workload-autoscaling
+    url: https://llm-d-incubation.github.io/workload-variant-autoscaler/
 
 releases:
   - name: {{ printf "infra-%s" $rn | quote }}
@@ -125,3 +127,28 @@ releases:
     {{- end }}
     labels:
       kind: inference-stack
+  - name: {{ printf "workload-variant-autoscaler-%s" $rn | quote }}
+    namespace: {{ $ns }}
+    chart: workload-variant-autoscaler/workload-variant-autoscaler
+    version: v0.0.4
+    installed: true
+    needs:
+      - {{ printf "gaie-%s" $rn | quote }}
+      - {{ printf "ms-%s" $rn | quote }}
+    values:
+      - workload-variant-autoscaler/values.yaml
+    {{- if or (eq .Environment.Name "gke") (eq .Environment.Name "gke_tpu") }}
+      - gke:
+          enabled: true
+    {{- end }}
+    set:
+      # Link to the InferencePool
+      - name: "targetInferencePool"
+        value: {{ printf "gaie-%s" $rn | quote }}
+      # Link to model service
+      - name: "targetModelService"
+        value: {{ printf "ms-%s" $rn | quote }}
+    labels:
+      kind: inference-stack
+
+  - name: {{ printf "ms-%s" $rn | quote }}
