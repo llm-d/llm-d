@@ -68,6 +68,8 @@ GKE and CoreWeave are tested Kubernetes providers for this well-lit path. You ca
 
 ### Deploy InferencePool
 
+This guide uses a custom release name `deepseek-r1` and values file `inferencepool.values.yaml`. For standard InferencePool installation instructions, see the [inferencepool recipe](../../recipes/inferencepool/README.md#install-inferencepool).
+
 Select the provider-specific Helm command using the tabs below.
 
 <Tabs>
@@ -203,6 +205,8 @@ To remove the deployment:
 
 ```bash
 # From examples/wide-ep-lws
+# Remove InferencePool - see [inferencepool recipe cleanup instructions](../../recipes/inferencepool/README.md#cleanup-inferencepool)
+# Note: This guide uses release name 'deepseek-r1' instead of 'llm-d-infpool'
 helm uninstall deepseek-r1 -n ${NAMESPACE}
 kubectl delete -k ./manifests/modelserver/<gke|coreweave> -n ${NAMESPACE}
 kubectl delete -k ./manifests/gateway/<gke-l7-regional-external-managed|istio|kgateway|kgateway-openshift> -n ${NAMESPACE}

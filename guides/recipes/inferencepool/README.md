@@ -5,7 +5,7 @@ import TabItem from '@theme/TabItem';
 
 This directory contains a standard `values.yaml` for deploying an `InferencePool`.
 
-## Installation
+## Install InferencePool {#install-inferencepool}
 
 To deploy the `InferencePool`, select your provider below.
 
@@ -51,7 +51,7 @@ To deploy the `InferencePool`, select your provider below.
   </TabItem>
 </Tabs>
 
-## Verification
+## Verify InferencePool Installation {#verify-inferencepool-installation}
 
 You can verify the installation by checking the status of the created resources.
 
@@ -79,7 +79,7 @@ NAME                                  READY   STATUS    RESTARTS   AGE
 llm-d-infpool-epp-xxxxxxxx-xxxxx     1/1     Running   0          1m
 ```
 
-## Cleanup
+## Cleanup InferencePool {#cleanup-inferencepool}
 
 To remove the `InferencePool`, use the following command:
 

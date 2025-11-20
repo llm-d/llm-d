@@ -81,14 +81,7 @@ llm-d-route               17m
 
 ### Check the InferencePool
 
-```bash
-kubectl get inferencepool -n ${NAMESPACE}
-```
-
-```
-NAME            AGE
-llm-d-infpool   16m
-```
+See [InferencePool verification steps](../../recipes/inferencepool/README.md#verify-inferencepool-installation) in the inferencepool recipe.
 
 ### Check the Pods
 
@@ -110,6 +103,7 @@ llm-d-model-server-xxxxxxxx-xxxxx   1/1     Running   0          11m
 To remove the deployment:
 
 ```bash
+# Remove InferencePool - see [inferencepool recipe cleanup instructions](../../recipes/inferencepool/README.md#cleanup-inferencepool)
 helm uninstall llm-d-infpool -n ${NAMESPACE}
 kubectl delete -k ./manifests/vllm/offloading-connector -n ${NAMESPACE}
 kubectl delete -k ../../../../recipes/gateway/gke-l7-regional-external-managed -n ${NAMESPACE}
