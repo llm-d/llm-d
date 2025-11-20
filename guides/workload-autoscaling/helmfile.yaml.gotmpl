@@ -160,7 +160,7 @@ releases:
     {{- else }}
     chart: oci://ghcr.io/llm-d-incubation/workload-variant-autoscaler/charts/workload-variant-autoscaler
     {{- end }}
-    version: {{ env "WVA_RELEASE" | default "v0.0.4" }}
+    version: {{ env "WVA_RELEASE" | default "v0.0.5" }}
     installed: true
     needs:
       - {{ printf "ms-%s" $rn | quote }}
