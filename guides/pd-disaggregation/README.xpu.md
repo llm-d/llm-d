@@ -272,12 +272,7 @@ Note
 **HTTPRoute Auto-Creation**: When using `llm-d-modelservice` Chart v0.2.9+, the HTTPRoute is typically created automatically during deployment. If you see `ms-pd-llm-d-modelservice` HTTPRoute listed, you can skip the manual creation step below.
 
 ### Manual HTTPRoute Creation (If Not Auto-Created)
-If no HTTPRoute was found, create one manually:
-
-```shell
-# Apply the HTTPRoute configuration from the PD disaggregation guide
-kubectl apply -f httproute.yaml
-```
+If no HTTPRoute was found, create one manually. See the [gateway recipe HTTPRoute installation instructions](../../recipes/gateway/README.md#install-httproute-only) for provider-specific commands.
 
 ### Verify HTTPRoute Configuration
 Verify the HTTPRoute is properly configured:

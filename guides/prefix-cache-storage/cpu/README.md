@@ -57,27 +57,11 @@ You can verify the installation by checking the status of the created resources.
 
 ### Check the Gateway
 
-```bash
-kubectl get gateway -n ${NAMESPACE}
-```
-
-You should see output similar to the following, with the `PROGRAMMED` status as `True`.
-
-```
-NAME                      CLASS                              ADDRESS     PROGRAMMED   AGE
-llm-d-inference-gateway   gke-l7-regional-external-managed   <redacted>  True         16m
-```
+See [Gateway verification steps](../../recipes/gateway/README.md#verify-gateway-installation) in the gateway recipe.
 
 ### Check the HTTPRoute
 
-```bash
-kubectl get httproute -n ${NAMESPACE}
-```
-
-```
-NAME          HOSTNAMES   AGE
-llm-d-route               17m
-```
+See [HTTPRoute verification steps](../../recipes/gateway/README.md#verify-httproute-installation) in the gateway recipe.
 
 ### Check the InferencePool
 
@@ -115,6 +99,8 @@ kubectl delete -k ./manifests/vllm/offloading-connector -n ${NAMESPACE}
 kubectl delete -k ../../../../recipes/gateway/gke-l7-regional-external-managed -n ${NAMESPACE}
 kubectl delete namespace ${NAMESPACE}
 ```
+
+**Note:** For gateway cleanup instructions, see [Gateway and HTTPRoute cleanup instructions](../../recipes/gateway/README.md#cleanup-gateway-and-httproute) in the gateway recipe.
 
 ## Appendix
 

@@ -73,25 +73,7 @@ helmfile apply -e gke_tpu  -n ${NAMESPACE} # targets GKE externally managed as g
 
 ### Install HTTPRoute
 
-Follow provider specific instructions for installing HTTPRoute.
-
-#### Install for "kgateway" or "istio"
-
-```bash
-kubectl apply -f httproute.yaml -n ${NAMESPACE}
-```
-
-#### Install for "gke"
-
-```bash
-kubectl apply -f httproute.gke.yaml -n ${NAMESPACE}
-```
-
-#### Install for "digitalocean"
-
-```bash
-kubectl apply -f httproute.yaml -n ${NAMESPACE}
-```
+When the Gateway is deployed via Helmfile (as in this guide), deploy the HTTPRoute separately. See the [gateway recipe HTTPRoute installation instructions](../../recipes/gateway/README.md#install-httproute-only) for provider-specific commands.
 ## Verify the Installation
 
 - Firstly, you should be able to list all helm releases to view the 3 charts got installed into your chosen namespace:
@@ -154,25 +136,7 @@ helm uninstall ms-inference-scheduling -n ${NAMESPACE}
 
 ### Cleanup HTTPRoute
 
-Follow provider specific instructions for deleting HTTPRoute.
-
-#### Cleanup for "kgateway" or "istio"
-
-```bash
-kubectl delete -f httproute.yaml -n ${NAMESPACE}
-```
-
-#### Cleanup for "gke"
-
-```bash
-kubectl delete -f httproute.gke.yaml -n ${NAMESPACE}
-```
-
-#### Cleanup for "digitalocean"
-
-```bash
-kubectl delete -f httproute.yaml -n ${NAMESPACE}
-```
+See [HTTPRoute cleanup instructions](../../recipes/gateway/README.md#cleanup-httproute-only) in the gateway recipe.
 
 ## Customization
 

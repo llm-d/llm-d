@@ -107,7 +107,9 @@ Select the provider-specific Helm command using the tabs below.
 
 ### Deploy Gateway and HTTPRoute
 
-Choose the gateway manifest that matches your environment.
+This guide uses custom gateway manifests in `./manifests/gateway/`. For standard deployments, you can use the [gateway recipe](../../recipes/gateway/README.md#install-gateway-and-httproute) directly.
+
+Choose the gateway manifest that matches your environment:
 
 <Tabs>
   <TabItem value="gke" label="GKE (Regional External)" default>
@@ -207,6 +209,8 @@ helm uninstall deepseek-r1 -n ${NAMESPACE}
 kubectl delete -k ./manifests/modelserver/<gke|coreweave> -n ${NAMESPACE}
 kubectl delete -k ./manifests/gateway/<gke-l7-regional-external-managed|istio|kgateway|kgateway-openshift> -n ${NAMESPACE}
 ```
+
+**Note:** For standard gateway deployments, see [Gateway and HTTPRoute cleanup instructions](../../recipes/gateway/README.md#cleanup-gateway-and-httproute) in the gateway recipe.
 
 ## Customization
 

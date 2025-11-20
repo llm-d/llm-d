@@ -42,19 +42,7 @@ You can also customize your gateway, for more information on how to do that see 
 
 ### Install HTTPRoute
 
-Follow provider specific instructions for installing HTTPRoute.
-
-#### Install for "kgateway" or "istio"
-
-```bash
-kubectl apply -f httproute.yaml -n ${NAMESPACE}
-```
-
-#### Install for "gke"
-
-```bash
-kubectl apply -f httproute.gke.yaml -n ${NAMESPACE}
-```
+When the Gateway is deployed via Helmfile (as in this guide), deploy the HTTPRoute separately. See the [gateway recipe HTTPRoute installation instructions](../../recipes/gateway/README.md#install-httproute-only) for provider-specific commands.
 
 ## Verify the Installation
 

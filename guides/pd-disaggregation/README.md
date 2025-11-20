@@ -78,19 +78,7 @@ This guide uses RDMA via InfiniBand or RoCE for disaggregated serving kv-cache t
 
 ### Install HTTPRoute
 
-Follow provider specific instructions for installing HTTPRoute.
-
-#### Install for "kgateway" or "istio"
-
-```bash
-kubectl apply -f httproute.yaml -n ${NAMESPACE}
-```
-
-#### Install for "gke"
-
-```bash
-kubectl apply -f httproute.gke.yaml -n ${NAMESPACE}
-```
+When the Gateway is deployed via Helmfile (as in this guide), deploy the HTTPRoute separately. See the [gateway recipe HTTPRoute installation instructions](../../recipes/gateway/README.md#install-httproute-only) for provider-specific commands.
 
 ## Verify the Installation
 
@@ -177,19 +165,7 @@ helm uninstall infra-pd -n ${NAMESPACE}
 
 ### Cleanup HTTPRoute
 
-Follow provider specific instructions for deleting HTTPRoute.
-
-#### Cleanup for "kgateway" or "istio"
-
-```bash
-kubectl delete -f httproute.yaml -n ${NAMESPACE}
-```
-
-#### Cleanup for "gke"
-
-```bash
-kubectl delete -f httproute.gke.yaml -n ${NAMESPACE}
-```
+See [HTTPRoute cleanup instructions](../../recipes/gateway/README.md#cleanup-httproute-only) in the gateway recipe.
 
 ## Customization
 
