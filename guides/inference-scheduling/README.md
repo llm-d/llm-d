@@ -13,6 +13,8 @@ This example out of the box requires 2 GPUs of any supported kind:
 - **Intel XPU/GPUs**: Intel Data Center GPU Max 1550 or compatible Intel XPU device
 - **TPUs**: Google Cloud TPUs (when using GKE TPU configuration)
 
+**Alternative CPU Deployment**: For CPU-only deployment (no GPUs required), see the [Hardware Backends](#hardware-backends) section for CPU-specific deployment instructions. CPU deployment requires Intel/AMD CPUs with 64 cores and 64GB RAM per replica.
+
 ## Prerequisites
 
 - Have the [proper client tools installed on your local system](../prereq/client-setup/README.md) to use this guide.
@@ -28,6 +30,7 @@ Use the helmfile to compose and install the stack. The Namespace in which the st
 
 **_IMPORTANT:_** When using long namespace names (like `llm-d-inference-scheduler`), the generated pod hostnames may become too long and cause issues due to Linux hostname length limitations (typically 64 characters maximum). It's recommended to use shorter namespace names (like `llm-d`) and set `RELEASE_NAME_POSTFIX` to generate shorter hostnames and avoid potential networking or vLLM startup problems.
 
+**For GPU deployment (default):**
 ```bash
 export NAMESPACE=llm-d-inference-scheduler # or any other namespace (shorter names recommended)
 kubectl create namespace ${NAMESPACE}
@@ -38,6 +41,13 @@ git clone https://github.com/llm-d/llm-d.git && cd llm-d && git checkout "$tag"
 
 cd guides/inference-scheduling
 helmfile apply -n ${NAMESPACE}
+```
+
+**For CPU-only deployment:**
+```bash
+export NAMESPACE=llm-d-inference-scheduler # or any other namespace (shorter names recommended)
+cd guides/inference-scheduling
+helmfile apply -e cpu -n ${NAMESPACE}
 ```
 
 **_NOTE:_** You can set the `$RELEASE_NAME_POSTFIX` env variable to change the release names. This is how we support concurrent installs. Ex: `RELEASE_NAME_POSTFIX=inference-scheduling-2 helmfile apply -n ${NAMESPACE}`
@@ -69,14 +79,14 @@ You can also customize your gateway, for more information on how to do that see 
 
 #### Hardware Backends
 
-Currently in the `inference-scheduling` example we suppport configurations for `xpu`, `tpu` and `cuda` GPUs. By default we use modelserver values supporting `cuda` GPUs, but to deploy on one of the other speciality hardware backends you may use:
+Currently in the `inference-scheduling` example we suppport configurations for `xpu`, `tpu`, `cpu`, and `cuda` GPUs. By default we use modelserver values supporting `cuda` GPUs, but to deploy on one of the other hardware backends you may use:
 
 ```bash
 helmfile apply -e xpu  -n ${NAMESPACE} # targets istio as gateway provider with XPU hardware
 # or
 helmfile apply -e gke_tpu  -n ${NAMESPACE} # targets GKE externally managed as gateway provider with TPU hardware
 # or
-helmfile apply -e cpu  -n ${NAMESPACE} # targets CPU inferencing with istio gateway
+helmfile apply -e cpu  -n ${NAMESPACE} # targets istio as gateway provider with CPU hardware
 ```
 
 ##### CPU Inferencing
