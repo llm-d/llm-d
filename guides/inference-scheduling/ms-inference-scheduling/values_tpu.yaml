@@ -62,10 +62,9 @@ decode:
       mountPath: /.cache
     startupProbe:
       httpGet:
-        path: /v1/models
+        path: /health
         port: 8200
-      initialDelaySeconds: 5
-      periodSeconds: 5
+      periodSeconds: 1
       timeoutSeconds: 3
       failureThreshold: 360
     livenessProbe:
