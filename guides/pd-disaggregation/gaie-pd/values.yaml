@@ -3,7 +3,7 @@ inferenceExtension:
   image:
     name: llm-d-inference-scheduler
     hub: ghcr.io/llm-d
-    tag: v0.3.2
+    tag: v0.4.0-rc.1
     pullPolicy: Always
   extProcPort: 9002
   pluginsConfigFile: "pd-config.yaml"

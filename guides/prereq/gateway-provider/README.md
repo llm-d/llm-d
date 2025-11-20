@@ -69,10 +69,10 @@ llm-d provides a Helm chart that installs and configures the `kgateway` or `isti
 
 Prior to deploying a Gateway control plane, you must install the custom resource definitions (CRDs) configuration that adds the Kubernetes API objects:
 
-- [Gateway API v1.3.0 CRDs](https://github.com/kubernetes-sigs/gateway-api/tree/v1.3.0/config/crd)
-  - for more information see their [docs](https://gateway-api.sigs.k8s.io/guides/)
-- [Gateway API Inference Extension CRDs v1.0.1](https://github.com/kubernetes-sigs/gateway-api-inference-extension/tree/v1.0.1/config/crd)
-  - for more information see their [docs](https://gateway-api-inference-extension.sigs.k8s.io/)
+    - [Gateway API v1.3.0 CRDs](https://github.com/kubernetes-sigs/gateway-api/tree/v1.3.0/config/crd)
+      - for more information see their [docs](https://gateway-api.sigs.k8s.io/guides/)
+    - [Gateway API Inference Extension CRDs v1.2.0-rc.1](https://github.com/kubernetes-sigs/gateway-api-inference-extension/tree/v1.2.0-rc.1/config/crd)
+      - for more information see their [docs](https://gateway-api-inference-extension.sigs.k8s.io/)
 
 We have provided the [`install-gateway-provider-dependencies.sh`](./install-gateway-provider-dependencies.sh) script:
 
