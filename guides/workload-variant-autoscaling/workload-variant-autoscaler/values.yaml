@@ -1,0 +1,51 @@
+wva:
+  enabled: true
+
+  image:
+    repository: ghcr.io/llm-d/workload-variant-autoscaler
+    tag: latest
+  imagePullPolicy: Always
+
+  metrics:
+    enabled: true
+    port: 8443
+    secure: true
+  
+  reconcileInterval: 60s
+    
+  prometheus:
+    monitoringNamespace: openshift-user-workload-monitoring
+    baseURL: "https://thanos-querier.openshift-monitoring.svc.cluster.local:9091"
+    # Development security configuration (relaxed for easier development)
+    tls:
+      insecureSkipVerify: true   # Development: true, Production: false
+      caCertPath: "/etc/ssl/certs/prometheus-ca.crt"
+    # caCert: |  # Uncomment and provide your CA certificate
+    #   -----BEGIN CERTIFICATE-----
+    #   YOUR_CA_CERTIFICATE_HERE
+    #   -----END CERTIFICATE-----
+
+  experimentalProactiveModel: false  # Enable experimental proactive scaling model (default: false)
+  scaleToZero: false  # Enable scaling variants to zero replicas (default: false)
+
+llmd:
+  namespace: llm-d-inference-scheduler
+  modelName: ms-inference-scheduling-llm-d-modelservice
+  modelID: "Qwen/Qwen3-0.6B"
+
+va:
+  enabled: true
+  accelerator: H100
+  sloTpot: 10
+  sloTtft: 1000
+
+hpa:
+  enabled: true
+  maxReplicas: 10
+  targetAverageValue: "1"
+
+vllmService:
+  enabled: true
+  nodePort: 30000
+  interval: 15s
+  scheme: http  # vLLM emulator runs on HTTP

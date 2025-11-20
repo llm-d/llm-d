@@ -22,6 +22,8 @@ environments:
       - ../prereq/gateway-provider/common-configurations/istio.yaml
   digitalocean: &DO
     <<: *I
+  wva: &WVA
+    <<: *I
   default: &DEFAULT
     <<: *I
 
@@ -35,6 +37,10 @@ repositories:
     url: https://llm-d-incubation.github.io/llm-d-modelservice/
   - name: llm-d-infra
     url: https://llm-d-incubation.github.io/llm-d-infra/
+  - name: prometheus-community
+    url: https://prometheus-community.github.io/helm-charts
+  - name: workload-variant-autoscaler
+    url: https://llm-d-incubation.github.io/workload-variant-autoscaler/
 
 releases:
   - name: {{ printf "infra-%s" $rn | quote }}
@@ -128,3 +134,58 @@ releases:
     {{- end }}
     labels:
       kind: inference-stack
+{{- if eq .Environment.Name "wva" }}
+  # Prometheus Adapter - Required for WVA to expose custom metrics
+  - name: prometheus-adapter
+    namespace: {{ env "MON_NS" | default "monitoring" }}
+    chart: prometheus-community/prometheus-adapter
+    version: 4.0.1
+    installed: true
+    needs:
+      - {{ printf "ms-%s" $rn | quote }}
+    labels:
+      kind: autoscaling
+    {{- if env "PROMETHEUS_ADAPTER_VALUES" }}
+    values:
+      - {{ env "PROMETHEUS_ADAPTER_VALUES" }}
+    {{- end }}
+  # Workload Variant Autoscaler - Dynamic autoscaling for llm-d
+  # Note: WVA chart can be installed from a local path or OCI registry
+  # Set WVA_CHART_PATH to use a local chart (e.g., after cloning the repo)
+  # Otherwise, it will attempt to use the OCI registry path
+  - name: workload-variant-autoscaler
+    namespace: workload-variant-autoscaler-system
+    {{- if env "WVA_CHART_PATH" }}
+    chart: {{ env "WVA_CHART_PATH" }}
+    {{- else }}
+    chart: oci://ghcr.io/llm-d-incubation/workload-variant-autoscaler/charts/workload-variant-autoscaler
+    {{- end }}
+    version: {{ env "WVA_RELEASE" | default "v0.0.4" }}
+    installed: true
+    needs:
+      - {{ printf "ms-%s" $rn | quote }}
+      - prometheus-adapter
+    labels:
+      kind: autoscaling
+    set:
+      - name: va.accelerator
+        value: {{ env "WVA_ACCELERATOR" | default "L40S" | quote }}
+      - name: llmd.modelID
+        value: {{ env "WVA_MODEL_ID" | default "Qwen/Qwen3-0.6B" | quote }}
+      - name: vllmService.enabled
+        value: true
+      {{- if env "WVA_NODE_PORT" }}
+      - name: vllmService.nodePort
+        value: {{ env "WVA_NODE_PORT" }}
+      {{- end }}
+      - name: llmd.namespace
+        value: {{ $ns | quote }}
+      {{- if env "PROMETHEUS_CA_CERT_PATH" }}
+      - name: wva.prometheus.caCert
+        value: {{ env "PROMETHEUS_CA_CERT_PATH" | quote }}
+      {{- end }}
+    {{- if env "WVA_VALUES_FILE" }}
+    values:
+      - {{ env "WVA_VALUES_FILE" }}
+    {{- end }}
+{{- end }}
