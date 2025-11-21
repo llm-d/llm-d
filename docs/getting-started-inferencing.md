@@ -64,7 +64,7 @@ export ENDPOINT=$(kubectl get gateway ${GATEWAY_NAME} --no-headers -n ${NAMESPAC
 ```
 
 <!-- TAB:Ingress Controller -->
-## Ingress Controller
+### Ingress Controller
 > [!REQUIREMENTS]
 > This requires that the release of the `llm-d-infra` chart must have `.ingress.enabled` set to `true`, and the `.gateway.service.type` to `ClusterIP`.
 > This requires some load-balancer configuration for your cluster / ingress-controller. This could be either cloud-provider integration or something like MetalLB
