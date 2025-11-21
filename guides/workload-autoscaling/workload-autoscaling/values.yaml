@@ -14,7 +14,7 @@ wva:
   reconcileInterval: 60s
     
   prometheus:
-    monitoringNamespace: openshift-user-workload-monitoring # Namespace for Prometheus monitoring for OpenShift
+    monitoringNamespace: openshift-user-workload-monitoring # Namespace for Prometheus monitoring for OpenShift 
     baseURL: "https://thanos-querier.openshift-monitoring.svc.cluster.local:9091"
     # Development security configuration (relaxed for easier development)
     tls:
@@ -25,7 +25,11 @@ wva:
     #   YOUR_CA_CERTIFICATE_HERE
     #   -----END CERTIFICATE-----
 
-  experimentalProactiveModel: false  # Enable experimental proactive scaling model (default: false)
+  # Environment variable to enable experimental hybrid-based optimization
+	## When "on", runs both capacity analyzer and model-based optimizer with arbitration
+	## When "model-only" runs model-based optimizer only
+	## When "off" or unset, runs capacity analyzer only (default, reactive mode)
+  experimentalHybridOptimization: false  # Enable experimental hybrid optimization (default: false)
   scaleToZero: false  # Enable scaling variants to zero replicas (default: false)
 
 llmd:
