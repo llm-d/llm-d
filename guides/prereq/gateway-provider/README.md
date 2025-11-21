@@ -60,7 +60,7 @@ The following steps from the [GKE Gateways deployment documentation](https://clo
 The other steps are optional and are not necessary to continue with your guide.
 
 <!-- TAB:Self-installed (Istio/Kgateway) -->
-## Self-installed (Istio/Kgateway)
+### Self-installed (Istio/Kgateway)
 #### Self-installed Gateway implementations
 
 llm-d provides a Helm chart that installs and configures the `kgateway` or `istio` Gateway implementations.
