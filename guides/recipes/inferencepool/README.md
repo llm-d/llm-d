@@ -25,7 +25,7 @@ helm install llm-d-infpool \
 ```
 
 <!-- TAB:Istio -->
-## Istio
+### Istio
 
 This command deploys the `InferencePool` with Istio, enabling Prometheus monitoring.
 
