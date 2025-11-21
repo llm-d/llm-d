@@ -40,7 +40,7 @@ helm install llm-d-infpool \
 ```
 
 <!-- TAB:KGateway -->
-## KGateway
+### KGateway
 
 This command deploys the `InferencePool` with Kgateway.
 
