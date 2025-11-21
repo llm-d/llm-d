@@ -119,7 +119,6 @@ If you wish to bump versions or customize your installs, check out our helmfiles
 <!-- TAB:Other providers -->
 ## Other providers
 
-#### Other Gateway implementations
 
 For other [compatible Gateway implementations](https://gateway-api-inference-extension.sigs.k8s.io/implementations/gateways/) follow the instructions for your selected Gateway. Ensure the necessary CRDs for Gateway API and the Gateway API Inference Extension are installed.
 
