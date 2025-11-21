@@ -122,24 +122,28 @@ Choose the gateway manifest that matches your environment.
 <Tabs>
 
   <TabItem value="gke" label="GKE (Regional External)" default>
+
     ```bash
     kubectl apply -k ./manifests/gateway/gke-l7-regional-external-managed -n ${NAMESPACE}
     ```
   </TabItem>
 
   <TabItem value="istio" label="Istio">
+
     ```bash
     kubectl apply -k ./manifests/gateway/istio -n ${NAMESPACE}
     ```
   </TabItem>
 
   <TabItem value="kgateway" label="Kgateway">
+  
     ```bash
     kubectl apply -k ./manifests/gateway/kgateway -n ${NAMESPACE}
     ```
   </TabItem>
 
   <TabItem value="kgateway-ocp" label="Kgateway on OCP">
+  
     ```bash
     kubectl apply -k ./manifests/gateway/kgateway-openshift -n ${NAMESPACE}
     ```
