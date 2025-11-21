@@ -39,10 +39,6 @@ decode:
       - "--kv-transfer-config"
       - '{"kv_connector":"NixlConnector", "kv_role":"kv_both"}'
     env:
-      - name: CUDA_VISIBLE_DEVICES
-        value: "0"
-      - name: UCX_TLS
-        value: "cuda_ipc,cuda_copy,tcp"
       - name: VLLM_NIXL_SIDE_CHANNEL_HOST
         valueFrom:
           fieldRef:
