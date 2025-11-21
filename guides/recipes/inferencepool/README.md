@@ -9,6 +9,8 @@ To deploy the `InferencePool`, select your provider below.
 <!-- TABS:START -->
 
 <!-- TAB:GKE:default -->
+## GKE
+
 This command deploys the `InferencePool` on GKE with GKE-specific monitoring enabled.
 
 ```bash
@@ -23,6 +25,8 @@ helm install llm-d-infpool \
 ```
 
 <!-- TAB:Istio -->
+## Istio
+
 This command deploys the `InferencePool` with Istio, enabling Prometheus monitoring.
 
 ```bash
@@ -36,6 +40,8 @@ helm install llm-d-infpool \
 ```
 
 <!-- TAB:KGateway -->
+## KGateway
+
 This command deploys the `InferencePool` with Kgateway.
 
 ```bash

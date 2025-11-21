@@ -37,6 +37,7 @@ llm-d requires you select a [Gateway implementation that supports the inference-
 <!-- TABS:START -->
 
 <!-- TAB:Cloud-managed (GKE):default -->
+## Cloud-managed (GKE)
 #### Use an infrastructure provided Gateway implementation
 
 We recommend using the infrastructure provided Gateway with our guides if available.
@@ -59,6 +60,7 @@ The following steps from the [GKE Gateways deployment documentation](https://clo
 The other steps are optional and are not necessary to continue with your guide.
 
 <!-- TAB:Self-installed (Istio/Kgateway) -->
+## Self-installed (Istio/Kgateway)
 #### Self-installed Gateway implementations
 
 llm-d provides a Helm chart that installs and configures the `kgateway` or `istio` Gateway implementations.
@@ -115,6 +117,8 @@ helmfile destroy -f <your_gateway_choice> --selector kind=gateway-control-plane
 If you wish to bump versions or customize your installs, check out our helmfiles for [istio](./istio.helmfile.yaml), and [kgateway](./kgateway.helmfile.yaml) respectively.
 
 <!-- TAB:Other providers -->
+## Other providers
+
 #### Other Gateway implementations
 
 For other [compatible Gateway implementations](https://gateway-api-inference-extension.sigs.k8s.io/implementations/gateways/) follow the instructions for your selected Gateway. Ensure the necessary CRDs for Gateway API and the Gateway API Inference Extension are installed.

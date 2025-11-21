@@ -47,17 +47,20 @@ GKE and CoreWeave are tested Kubernetes providers for this well-lit path. You ca
 <!-- TABS:START -->
 
 <!-- TAB:GKE (H200):default -->
+### GKE (H200)
 ```bash
 kubectl apply -k ./manifests/modelserver/gke -n ${NAMESPACE}
 ```
 
 <!-- TAB:GKE (B200) -->
+### GKE (B200)
 ```bash
 # Deploy on GKE for B200 on the a4 instance type to work around a known vLLM memory issue
 kubectl apply -k ./manifests/modelserver/gke-a4 -n ${NAMESPACE}
 ```
 
 <!-- TAB:CoreWeave -->
+### CoreWeave
 ```bash
 kubectl apply -k ./manifests/modelserver/coreweave  -n ${NAMESPACE}
 ```
@@ -71,6 +74,7 @@ Select the provider-specific Helm command using the tabs below.
 <!-- TABS:START -->
 
 <!-- TAB:GKE:default -->
+### GKE
 ```bash
 helm install deepseek-r1 \
   -n ${NAMESPACE} \
@@ -83,6 +87,7 @@ helm install deepseek-r1 \
 ```
 
 <!-- TAB:Istio -->
+### Istio
 ```bash
 helm install deepseek-r1 \
   -n ${NAMESPACE} \
@@ -94,6 +99,7 @@ helm install deepseek-r1 \
 ```
 
 <!-- TAB:Kgateway -->
+### Kgateway
 ```bash
 helm install deepseek-r1 \
   -n ${NAMESPACE} \
@@ -111,21 +117,25 @@ Choose the gateway manifest that matches your environment.
 <!-- TABS:START -->
 
 <!-- TAB:GKE (Regional External):default -->
+### GKE (Regional External)
 ```bash
 kubectl apply -k ./manifests/gateway/gke-l7-regional-external-managed -n ${NAMESPACE}
 ```
 
 <!-- TAB:Istio -->
+### Istio
 ```bash
 kubectl apply -k ./manifests/gateway/istio -n ${NAMESPACE}
 ```
 
 <!-- TAB:Kgateway -->
+### Kgateway
 ```bash
 kubectl apply -k ./manifests/gateway/kgateway -n ${NAMESPACE}
 ```
 
 <!-- TAB:Kgateway on OCP -->
+### Kgateway on OCP
 ```bash
 kubectl apply -k ./manifests/gateway/kgateway-openshift -n ${NAMESPACE}
 ```
