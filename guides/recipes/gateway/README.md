@@ -33,7 +33,7 @@ kubectl apply -k ./kgateway -n ${NAMESPACE}
 ```
 
 <!-- TAB:KGateway (OpenShift) -->
-## KGateway (OpenShift)
+### KGateway (OpenShift)
  
 This deploys a gateway suitable for OpenShift, using the `openshift` gateway class.
 
