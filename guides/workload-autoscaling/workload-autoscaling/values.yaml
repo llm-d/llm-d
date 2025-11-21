@@ -49,7 +49,7 @@ hpa:
   targetAverageValue: "1"
 
 vllmService:
-  enabled: true
+  enabled: false
   nodePort: 30000
   interval: 15s
   scheme: http  # vLLM emulator runs on HTTP
