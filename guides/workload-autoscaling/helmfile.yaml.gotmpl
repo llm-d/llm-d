@@ -9,8 +9,6 @@ environments:
   kgateway: &KG
     values:
       - ../prereq/gateway-provider/common-configurations/kgateway.yaml
-  wva: &WVA
-    <<: *I
   default: &DEFAULT
     <<: *I
 
@@ -49,6 +47,7 @@ releases:
     installed: true
     needs:
       - {{ printf "infra-%s" $rn | quote }}
+      - prometheus-adapter
     values:
       - gaie-inference-scheduling/values.yaml
     # Apply provider name if on GKE
@@ -124,18 +123,10 @@ releases:
 {{- if eq .Environment.Name "wva" }}
   # Prometheus Adapter - Required for WVA to expose custom metrics
   - name: prometheus-adapter
-    namespace: {{ env "MON_NS" | default "monitoring" }}
+    namespace: llm-d-monitoring
     chart: prometheus-community/prometheus-adapter
     version: 4.0.1
     installed: true
-    needs:
-      - {{ printf "ms-%s" $rn | quote }}
-    labels:
-      kind: autoscaling
-    {{- if env "PROMETHEUS_ADAPTER_VALUES" }}
-    values:
-      - {{ env "PROMETHEUS_ADAPTER_VALUES" }}
-    {{- end }}
   # Workload Variant Autoscaler - Dynamic autoscaling for llm-d
   # Note: WVA chart can be installed from a local path or OCI registry
   # Set WVA_CHART_PATH to use a local chart (e.g., after cloning the repo)

@@ -14,7 +14,7 @@ wva:
   reconcileInterval: 60s
     
   prometheus:
-    monitoringNamespace: openshift-user-workload-monitoring # Namespace for Prometheus monitoring for OpenShift 
+    monitoringNamespace: llm-d-monitoring
     baseURL: "https://thanos-querier.openshift-monitoring.svc.cluster.local:9091"
     # Development security configuration (relaxed for easier development)
     tls:
