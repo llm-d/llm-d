@@ -9,19 +9,6 @@ environments:
   kgateway: &KG
     values:
       - ../prereq/gateway-provider/common-configurations/kgateway.yaml
-  gke: &GKE
-    values:
-      - ../prereq/gateway-provider/common-configurations/gke.yaml
-  gke_tpu: &GKE_TPU
-    values:
-      - ../prereq/gateway-provider/common-configurations/gke_tpu.yaml
-  xpu: &XPU
-    <<: *I
-  cpu: &CPU
-    values:
-      - ../prereq/gateway-provider/common-configurations/istio.yaml
-  digitalocean: &DO
-    <<: *I
   wva: &WVA
     <<: *I
   default: &DEFAULT
