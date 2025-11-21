@@ -68,7 +68,9 @@ GKE and CoreWeave are tested Kubernetes providers for this well-lit path. You ca
 
 ### Deploy InferencePool
 
-This guide uses a custom release name `deepseek-r1` and values file `inferencepool.values.yaml`. For standard InferencePool installation instructions, see the [inferencepool recipe](../../recipes/inferencepool/README.md#install-inferencepool).
+This guide uses a custom release name `deepseek-r1` and references the [PD recipe values file](../../recipes/inferencepool/inferencepool-pd.values.yaml) with a local override file for wide-ep-lws specific configuration. For standard InferencePool installation instructions, see the [inferencepool recipe](../../recipes/inferencepool/README.md#install-inferencepool).
+
+This example uses `random-picker` instead of `max-score-picker` since it's not yet possible to route to individual DP ranks in wide-ep deployments. The model-specific label and Istio destination rule are configured in the override file.
 
 Select the provider-specific Helm command using the tabs below.
 
@@ -77,7 +79,8 @@ Select the provider-specific Helm command using the tabs below.
         ```bash
         helm install deepseek-r1 \
           -n ${NAMESPACE} \
-          -f inferencepool.values.yaml \
+          -f ../../recipes/inferencepool/inferencepool-pd.values.yaml \
+          -f inferencepool-pd-override.values.yaml \
           --set "provider.name=gke" \
           --set "inferencePool.apiVersion=inference.networking.k8s.io/v1" \
           --set "inferenceExtension.monitoring.gke.enable=true" \
@@ -89,7 +92,8 @@ Select the provider-specific Helm command using the tabs below.
         ```bash
         helm install deepseek-r1 \
           -n ${NAMESPACE} \
-          -f inferencepool.values.yaml \
+          -f ../../recipes/inferencepool/inferencepool-pd.values.yaml \
+          -f inferencepool-pd-override.values.yaml \
           --set "provider.name=istio" \
           --set "inferenceExtension.monitoring.prometheus.enable=true" \
           oci://us-central1-docker.pkg.dev/k8s-staging-images/gateway-api-inference-extension/charts/inferencepool \
@@ -100,7 +104,9 @@ Select the provider-specific Helm command using the tabs below.
         ```bash
         helm install deepseek-r1 \
           -n ${NAMESPACE} \
-          -f inferencepool.values.yaml \
+          -f ../../recipes/inferencepool/inferencepool-pd.values.yaml \
+          -f inferencepool-pd-override.values.yaml \
+          --set "provider.name=kgateway" \
           oci://us-central1-docker.pkg.dev/k8s-staging-images/gateway-api-inference-extension/charts/inferencepool \
           --version v1.0.1
         ```

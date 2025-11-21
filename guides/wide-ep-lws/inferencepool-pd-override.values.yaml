@@ -1,0 +1,59 @@
+inferenceExtension:
+  monitoring:
+    secret:
+      name: wide-ep-gateway-sa-metrics-reader-secret
+  pluginsConfigFile: "custom-plugins.yaml"
+  pluginsCustomConfig:
+    custom-plugins.yaml: |
+      # ALWAYS DO PD IN THIS EXAMPLE (THRESHOLD 0)
+      # This example uses random routing 
+      # since it's not yet possible to route to individual DP ranks
+      apiVersion: inference.networking.x-k8s.io/v1alpha1
+      kind: EndpointPickerConfig
+      plugins:
+      - type: prefill-header-handler
+      - type: prefill-filter
+      - type: decode-filter
+      - type: random-picker
+        parameters:
+          maxNumOfEndpoints: 1
+      - type: pd-profile-handler
+        parameters:
+          threshold: 0
+          hashBlockSize: 5
+      schedulingProfiles:
+      - name: prefill
+        plugins:
+        - pluginRef: prefill-filter
+        - pluginRef: random-picker
+      - name: decode
+        plugins:
+        - pluginRef: decode-filter
+        - pluginRef: random-picker
+  flags:
+    - name: v
+      value: 1
+
+inferencePool:
+  modelServers:
+    matchLabels:
+      llm-d.ai/model: DeepSeek-R1-0528
+
+istio:
+  destinationRule:
+    host: deepseek-r1-epp
+    trafficPolicy:
+      tls:
+        mode: SIMPLE
+        insecureSkipVerify: true
+      connectionPool:
+        http:
+          http1MaxPendingRequests: 256000
+          maxRequestsPerConnection: 256000
+          http2MaxRequests: 256000
+          idleTimeout: "900s"
+        tcp:
+          maxConnections: 256000
+          maxConnectionDuration: "1800s"
+          connectTimeout: "900s"
+
