@@ -37,7 +37,7 @@ llm-d requires you select a [Gateway implementation that supports the inference-
 <!-- TABS:START -->
 
 <!-- TAB:Cloud-managed (GKE):default -->
-## Cloud-managed (GKE)
+### Cloud-managed (GKE)
 #### Use an infrastructure provided Gateway implementation
 
 We recommend using the infrastructure provided Gateway with our guides if available.
