@@ -36,7 +36,7 @@ Deploy the InferencePool using the [InferencePool recipe](../../recipes/inferenc
 <!-- TABS:START -->
 
 <!-- TAB:Offloading Connector -->
-## Offloading Connector
+#### Offloading Connector
 Deploy the vLLM model server with the `OffloadingConnector` enabled.
 ```bash
 kubectl apply -k ./manifests/vllm/offloading-connector -n ${NAMESPACE}
