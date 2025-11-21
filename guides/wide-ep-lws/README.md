@@ -117,7 +117,7 @@ Choose the gateway manifest that matches your environment.
 <!-- TABS:START -->
 
 <!-- TAB:GKE (Regional External):default -->
-### GKE (Regional External)
+#### GKE (Regional External)
 ```bash
 kubectl apply -k ./manifests/gateway/gke-l7-regional-external-managed -n ${NAMESPACE}
 ```
