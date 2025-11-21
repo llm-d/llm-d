@@ -74,7 +74,7 @@ Select the provider-specific Helm command using the tabs below.
 <!-- TABS:START -->
 
 <!-- TAB:GKE:default -->
-### GKE
+#### GKE
 ```bash
 helm install deepseek-r1 \
   -n ${NAMESPACE} \
