@@ -9,7 +9,7 @@ The following recipes are available for deploying the gateway and httproute.
 <!-- TABS:START -->
 
 <!-- TAB:GKE L7 Regional External Managed:default -->
-## GKE L7 Regional External Managed  
+### GKE L7 Regional External Managed  
 This deploys a gateway suitable for GKE, using the `gke-l7-regional-external-managed` gateway class.
 
 ```bash
