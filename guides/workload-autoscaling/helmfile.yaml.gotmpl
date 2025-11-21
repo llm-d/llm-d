@@ -155,11 +155,7 @@ releases:
   # Otherwise, it will attempt to use the OCI registry path
   - name: workload-variant-autoscaler
     namespace: workload-variant-autoscaler-system
-    {{- if env "WVA_CHART_PATH" }}
-    chart: {{ env "WVA_CHART_PATH" }}
-    {{- else }}
     chart: oci://ghcr.io/llm-d-incubation/workload-variant-autoscaler/charts/workload-variant-autoscaler
-    {{- end }}
     version: "v0.0.5"
     installed: true
     needs:
