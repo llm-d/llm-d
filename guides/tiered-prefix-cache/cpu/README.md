@@ -43,7 +43,7 @@ kubectl apply -k ./manifests/vllm/offloading-connector -n ${NAMESPACE}
 ```
 
 <!-- TAB:LMCache Connector:default -->
-## LMCache Connector
+#### LMCache Connector
 
 Deploy the vLLM model server with the `LMCache` connector enabled.
 ```bash
