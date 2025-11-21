@@ -117,7 +117,7 @@ helmfile destroy -f <your_gateway_choice> --selector kind=gateway-control-plane
 If you wish to bump versions or customize your installs, check out our helmfiles for [istio](./istio.helmfile.yaml), and [kgateway](./kgateway.helmfile.yaml) respectively.
 
 <!-- TAB:Other providers -->
-## Other providers
+### Other providers
 
 
 For other [compatible Gateway implementations](https://gateway-api-inference-extension.sigs.k8s.io/implementations/gateways/) follow the instructions for your selected Gateway. Ensure the necessary CRDs for Gateway API and the Gateway API Inference Extension are installed.
