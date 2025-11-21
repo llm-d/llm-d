@@ -25,7 +25,7 @@ kubectl apply -k ./istio -n ${NAMESPACE}
 ```
 
 <!-- TAB:KGateway -->
-## KGateway
+### KGateway
 This deploys a gateway suitable for KGateway, using the `kgateway` gateway class.
 
 ```bash
