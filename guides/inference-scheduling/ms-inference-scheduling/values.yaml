@@ -38,6 +38,7 @@ decode:
     args:
       - "--kv-transfer-config"
       - '{"kv_connector":"NixlConnector", "kv_role":"kv_both"}'
+      - "--disable-uvicorn-access-log"
     env:
       - name: CUDA_VISIBLE_DEVICES
         value: "0"
@@ -50,7 +51,7 @@ decode:
       - name: VLLM_NIXL_SIDE_CHANNEL_PORT
         value: "5557"
       - name: VLLM_LOGGING_LEVEL
-        value: DEBUG
+        value: INFO
     ports:
       - containerPort: 5557
         protocol: TCP

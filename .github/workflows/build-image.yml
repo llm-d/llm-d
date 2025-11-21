@@ -158,7 +158,7 @@ jobs:
         uses: docker/login-action@v3
         with:
           registry: ${{ env.REGISTRY }}
-          username: ${{ github.actor }}
+          username: ${{ secrets.GHCR_USER }}
           password: ${{ secrets.GHCR_TOKEN }}
 
       - name: Extract metadata
@@ -258,7 +258,7 @@ jobs:
         uses: docker/login-action@v3
         with:
           registry: ${{ env.REGISTRY }}
-          username: ${{ github.actor }}
+          username: ${{ secrets.GHCR_USER }}
           password: ${{ secrets.GHCR_TOKEN }}
 
       - name: Extract metadata
@@ -310,7 +310,7 @@ jobs:
           timeout: 30m
           skip-dirs: /root/.cache/uv
         env:
-          TRIVY_USERNAME: ${{ github.actor }}
+          TRIVY_USERNAME: ${{ secrets.GHCR_USER }}
           TRIVY_PASSWORD: ${{ secrets.GHCR_TOKEN }}
 
       - name: Upload Trivy scan results to GitHub Security tab
@@ -346,7 +346,7 @@ jobs:
         uses: docker/login-action@v3
         with:
           registry: ${{ env.REGISTRY }}
-          username: ${{ github.actor }}
+          username: ${{ secrets.GHCR_USER }}
           password: ${{ secrets.GHCR_TOKEN }}
 
       - name: Extract metadata
@@ -389,7 +389,7 @@ jobs:
           timeout: 30m
           skip-dirs: /root/.cache/uv
         env:
-          TRIVY_USERNAME: ${{ github.actor }}
+          TRIVY_USERNAME: ${{ secrets.GHCR_USER }}
           TRIVY_PASSWORD: ${{ secrets.GHCR_TOKEN }}
 
       - name: Upload Trivy scan results to GitHub Security tab
@@ -427,7 +427,7 @@ jobs:
         uses: docker/login-action@v3
         with:
           registry: ${{ env.REGISTRY }}
-          username: ${{ github.actor }}
+          username: ${{ secrets.GHCR_USER }}
           password: ${{ secrets.GHCR_TOKEN }}
 
       - name: Build and push the image
@@ -459,7 +459,7 @@ jobs:
           timeout: 30m
           skip-dirs: /root/.cache/uv
         env:
-          TRIVY_USERNAME: ${{ github.actor }}
+          TRIVY_USERNAME: ${{ secrets.GHCR_USER }}
           TRIVY_PASSWORD: ${{ secrets.GHCR_TOKEN }}
 
       - name: Upload Trivy scan results to GitHub Security tab
