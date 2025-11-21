@@ -50,20 +50,17 @@ GKE and CoreWeave are tested Kubernetes providers for this well-lit path. You ca
 ```bash
 kubectl apply -k ./manifests/modelserver/gke -n ${NAMESPACE}
 ```
-<!-- ENDTAB -->
 
 <!-- TAB:GKE (B200) -->
 ```bash
 # Deploy on GKE for B200 on the a4 instance type to work around a known vLLM memory issue
 kubectl apply -k ./manifests/modelserver/gke-a4 -n ${NAMESPACE}
 ```
-<!-- ENDTAB -->
 
 <!-- TAB:CoreWeave -->
 ```bash
 kubectl apply -k ./manifests/modelserver/coreweave  -n ${NAMESPACE}
 ```
-<!-- ENDTAB -->
 
 <!-- TABS:END -->
 
@@ -84,7 +81,6 @@ helm install deepseek-r1 \
   oci://us-central1-docker.pkg.dev/k8s-staging-images/gateway-api-inference-extension/charts/inferencepool \
   --version v1.0.1
 ```
-<!-- ENDTAB -->
 
 <!-- TAB:Istio -->
 ```bash
@@ -96,7 +92,6 @@ helm install deepseek-r1 \
   oci://us-central1-docker.pkg.dev/k8s-staging-images/gateway-api-inference-extension/charts/inferencepool \
   --version v1.0.1
 ```
-<!-- ENDTAB -->
 
 <!-- TAB:Kgateway -->
 ```bash
@@ -106,7 +101,6 @@ helm install deepseek-r1 \
   oci://us-central1-docker.pkg.dev/k8s-staging-images/gateway-api-inference-extension/charts/inferencepool \
   --version v1.0.1
 ```
-<!-- ENDTAB -->
 
 <!-- TABS:END -->
 
@@ -120,25 +114,21 @@ Choose the gateway manifest that matches your environment.
 ```bash
 kubectl apply -k ./manifests/gateway/gke-l7-regional-external-managed -n ${NAMESPACE}
 ```
-<!-- ENDTAB -->
 
 <!-- TAB:Istio -->
 ```bash
 kubectl apply -k ./manifests/gateway/istio -n ${NAMESPACE}
 ```
-<!-- ENDTAB -->
 
 <!-- TAB:Kgateway -->
 ```bash
 kubectl apply -k ./manifests/gateway/kgateway -n ${NAMESPACE}
 ```
-<!-- ENDTAB -->
 
 <!-- TAB:Kgateway on OCP -->
 ```bash
 kubectl apply -k ./manifests/gateway/kgateway-openshift -n ${NAMESPACE}
 ```
-<!-- ENDTAB -->
 
 <!-- TABS:END -->
 

@@ -14,7 +14,6 @@ This deploys a gateway suitable for GKE, using the `gke-l7-regional-external-man
 ```bash
 kubectl apply -k ./gke-l7-regional-external-managed -n ${NAMESPACE}
 ```
-<!-- ENDTAB -->
 
 <!-- TAB:Istio -->
 This deploys a gateway suitable for Istio, using the `istio` gateway class.
@@ -22,7 +21,6 @@ This deploys a gateway suitable for Istio, using the `istio` gateway class.
 ```bash
 kubectl apply -k ./istio -n ${NAMESPACE}
 ```
-<!-- ENDTAB -->
 
 <!-- TAB:KGateway -->
 This deploys a gateway suitable for KGateway, using the `kgateway` gateway class.
@@ -30,7 +28,6 @@ This deploys a gateway suitable for KGateway, using the `kgateway` gateway class
 ```bash
 kubectl apply -k ./kgateway -n ${NAMESPACE}
 ```
-<!-- ENDTAB -->
 
 <!-- TAB:KGateway (OpenShift) -->
 This deploys a gateway suitable for OpenShift, using the `openshift` gateway class.
@@ -38,7 +35,6 @@ This deploys a gateway suitable for OpenShift, using the `openshift` gateway cla
 ```bash
 kubectl apply -k ./kgateway-openshift -n ${NAMESPACE}
 ```
-<!-- ENDTAB -->
 
 <!-- TABS:END -->
 

@@ -43,7 +43,6 @@ For gateway providers that install into the cluster you can port forward to the 
     ```
 
     **_NOTE:_** Port 8000 is the default gateway service port in our guides. You can change this by altering the values for the `llm-d-infra` helm chart and updating your port-forward command appropriately.
-<!-- ENDTAB -->
 
 <!-- TAB:External IP (LoadBalancer) -->
     > [!REQUIREMENTS]
@@ -67,7 +66,6 @@ For gateway providers that install into the cluster you can port forward to the 
     GATEWAY_NAME=infra-inference-scheduling-inference-gateway
     export ENDPOINT=$(kubectl get gateway ${GATEWAY_NAME} --no-headers -n ${NAMESPACE} -o jsonpath='{.status.addresses[0].value}')
     ```
-<!-- ENDTAB -->
 
 <!-- TAB:Ingress Controller -->
     > [!REQUIREMENTS]
@@ -91,7 +89,6 @@ For gateway providers that install into the cluster you can port forward to the 
     INGRESS_NAME=infra-inference-scheduling-inference-gateway
     export ENDPOINT=$(kubectl get ingress ${GATEWAY_NAME} --no-headers -n ${NAMESPACE} -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
     ```
-<!-- ENDTAB -->
 
 <!-- TABS:END -->
 

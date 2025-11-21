@@ -21,7 +21,6 @@ helm install llm-d-infpool \
   oci://us-central1-docker.pkg.dev/k8s-staging-images/gateway-api-inference-extension/charts/inferencepool \
   --version v1.0.1
 ```
-<!-- ENDTAB -->
 
 <!-- TAB:Istio -->
 This command deploys the `InferencePool` with Istio, enabling Prometheus monitoring.
@@ -35,7 +34,6 @@ helm install llm-d-infpool \
   oci://us-central1-docker.pkg.dev/k8s-staging-images/gateway-api-inference-extension/charts/inferencepool \
   --version v1.0.1
 ```
-<!-- ENDTAB -->
 
 <!-- TAB:KGateway -->
 This command deploys the `InferencePool` with Kgateway.
@@ -48,7 +46,6 @@ helm install llm-d-infpool \
   oci://us-central1-docker.pkg.dev/k8s-staging-images/gateway-api-inference-extension/charts/inferencepool \
   --version v1.0.1
 ```
-<!-- ENDTAB -->
 
 <!-- TABS:END -->
 

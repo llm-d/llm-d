@@ -57,7 +57,6 @@ The following steps from the [GKE Gateways deployment documentation](https://clo
 6. [Create the Gateway](https://cloud.google.com/kubernetes-engine/docs/how-to/deploy-gke-inference-gateway#create-gateway)
 
 The other steps are optional and are not necessary to continue with your guide.
-<!-- ENDTAB -->
 
 <!-- TAB:Self-installed (Istio/Kgateway) -->
 #### Self-installed Gateway implementations
@@ -114,13 +113,11 @@ helmfile destroy -f <your_gateway_choice> --selector kind=gateway-control-plane
 ```
 
 If you wish to bump versions or customize your installs, check out our helmfiles for [istio](./istio.helmfile.yaml), and [kgateway](./kgateway.helmfile.yaml) respectively.
-<!-- ENDTAB -->
 
 <!-- TAB:Other providers -->
 #### Other Gateway implementations
 
 For other [compatible Gateway implementations](https://gateway-api-inference-extension.sigs.k8s.io/implementations/gateways/) follow the instructions for your selected Gateway. Ensure the necessary CRDs for Gateway API and the Gateway API Inference Extension are installed.
-<!-- ENDTAB -->
 
 <!-- TABS:END -->
 
