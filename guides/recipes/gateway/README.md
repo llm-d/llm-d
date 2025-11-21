@@ -17,7 +17,7 @@ kubectl apply -k ./gke-l7-regional-external-managed -n ${NAMESPACE}
 ```
 
 <!-- TAB:Istio -->
-## Istio
+### Istio
 This deploys a gateway suitable for Istio, using the `istio` gateway class.
 
 ```bash
