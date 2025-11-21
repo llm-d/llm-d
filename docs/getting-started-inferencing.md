@@ -17,78 +17,70 @@ First we need to choose what strategy we are going to use to expose / interact w
 <!-- TAB:Port-forward (Cluster Internal):default -->
 For gateway providers that install into the cluster you can port forward to the gateway deployment directly.
 
-    ```bash
-    GATEWAY_SVC=$(kubectl get svc -n "${NAMESPACE}" -o yaml | yq '.items[] | select(.metadata.name | test(".*-inference-gateway(-.*)?$")).metadata.name' | head -n1)
-    ```
+```bash
+GATEWAY_SVC=$(kubectl get svc -n "${NAMESPACE}" -o yaml | yq '.items[] | select(.metadata.name | test(".*-inference-gateway(-.*)?$")).metadata.name' | head -n1)
+```
+**_NOTE:_** This command assumes you have one gateway in your given `${NAMESPACE}`, even if you have multiple it will only grab the name of the first gateway service in alphabetical order. If you are running multiple gateway deployments in a single namespace, you will have to explicitly set your `$GATEWAY_SVC` to the appropriate gateway endpoint
+```bash
+k get services
+NAME                                                 TYPE           CLUSTER-IP    EXTERNAL-IP   PORT(S)                        AGE
+gaie-inference-scheduling-epp                        ClusterIP      10.16.3.250   <none>        9002/TCP,9090/TCP              18s
+gaie-inference-scheduling-ip-18c12339                ClusterIP      None          <none>        54321/TCP                      12s
+gaie-sim-epp                                         ClusterIP      10.16.1.220   <none>        9002/TCP,9090/TCP              80m
+infra-inference-scheduling-inference-gateway-istio   LoadBalancer   10.16.3.226   10.16.4.3     15021:34529/TCP,80:35734/TCP   22s
+infra-sim-inference-gateway                          LoadBalancer   10.16.1.62    10.16.4.2     80:38348/TCP                   81
+export GATEWAY_SVC="infra-inference-scheduling-inference-gateway-istio"
+```
+After we have our gateway service name, we can port forward it
+```bash
+export ENDPOINT="http://localhost:8000"
+kubectl port-forward -n ${NAMESPACE} service/${GATEWAY_SVC} 8000:80
+```
 
-    **_NOTE:_** This command assumes you have one gateway in your given `${NAMESPACE}`, even if you have multiple it will only grab the name of the first gateway service in alphabetical order. If you are running multiple gateway deployments in a single namespace, you will have to explicitly set your `$GATEWAY_SVC` to the appropriate gateway endpoint.
-
-    ```bash
-    k get services
-    NAME                                                 TYPE           CLUSTER-IP    EXTERNAL-IP   PORT(S)                        AGE
-    gaie-inference-scheduling-epp                        ClusterIP      10.16.3.250   <none>        9002/TCP,9090/TCP              18s
-    gaie-inference-scheduling-ip-18c12339                ClusterIP      None          <none>        54321/TCP                      12s
-    gaie-sim-epp                                         ClusterIP      10.16.1.220   <none>        9002/TCP,9090/TCP              80m
-    infra-inference-scheduling-inference-gateway-istio   LoadBalancer   10.16.3.226   10.16.4.3     15021:34529/TCP,80:35734/TCP   22s
-    infra-sim-inference-gateway                          LoadBalancer   10.16.1.62    10.16.4.2     80:38348/TCP                   81m
-
-    export GATEWAY_SVC="infra-inference-scheduling-inference-gateway-istio"
-    ```
-
-    After we have our gateway service name, we can port forward it:
-
-    ```bash
-    export ENDPOINT="http://localhost:8000"
-    kubectl port-forward -n ${NAMESPACE} service/${GATEWAY_SVC} 8000:80
-    ```
-
-    **_NOTE:_** Port 8000 is the default gateway service port in our guides. You can change this by altering the values for the `llm-d-infra` helm chart and updating your port-forward command appropriately.
+**_NOTE:_** Port 8000 is the default gateway service port in our guides. You can change this by altering the values for the `llm-d-infra` helm chart and updating your port-forward command appropriately.
 
 <!-- TAB:External IP (LoadBalancer) -->
-    > [!REQUIREMENTS]
-    > This requires that the release of the `llm-d-infra` chart must have `.gateway.serviceType` set to `LoadBalancer`. Currently this is the [default value](https://github.com/llm-d-incubation/llm-d-infra/blob/main/charts/llm-d-infra/values.yaml#L167), however it's worth noting.
-    > This requires your K8s cluster is deployed on a cloud provider with LB integration (EKS/GKE/AKS/AWS/…).
+> [!REQUIREMENTS]
+> This requires that the release of the `llm-d-infra` chart must have `.gateway.serviceType` set to `LoadBalancer`. Currently this is the [default value](https://github.com/llm-d-incubation/llm-d-infra/blob/main/charts/llm-d-infra/values.yaml#L167), however it's worth noting.
+> 
+> This requires your K8s cluster is deployed on a cloud provider with LB integration (EKS/GKE/AKS/AWS/…).
 
-    If you are using the GKE gateway or are using the default service type of `LoadBalancer` for your gateway and you are on a cloud platform with load balancing, you can use the `External IP` of your gateway service (you should see the same thing under your gateway with `kubectl get gateway`).
+If you are using the GKE gateway or are using the default service type of `LoadBalancer` for your gateway and you are on a cloud platform with load balancing, you can use the `External IP` of your gateway service (you should see the same thing under your gateway with `kubectl get gateway`)
+```bash
+export ENDPOINT=$(kubectl get gateway --no-headers -n ${NAMESPACE} -o jsonpath='{.items[].status.addresses[0].value}')
+```
 
-    ```bash
-    export ENDPOINT=$(kubectl get gateway --no-headers -n ${NAMESPACE} -o jsonpath='{.items[].status.addresses[0].value}')
-    ```
+**_NOTE:_** This command assumes you have one gateway in your given `${NAMESPACE}`, if you have multiple, it will just grab one. Therefore, in the case you do have multiple gateways, you should find the correct gateway and target that specifically
 
-    **_NOTE:_** This command assumes you have one gateway in your given `${NAMESPACE}`, if you have multiple, it will just grab one. Therefore, in the case you do have multiple gateways, you should find the correct gateway and target that specifically:
-
-    ```bash
-    kubectl get gateway -n ${NAMESPACE}
-    NAME                                           CLASS      ADDRESS                                                                   PROGRAMMED   AGE
-    infra-inference-scheduling-inference-gateway   kgateway   af805bef3ec444a558da28061b487dd5-2012676366.us-east-1.elb.amazonaws.com   True         11m
-    infra-sim-inference-gateway                    kgateway   a67ad245358e34bba9cb274bc220169e-1351042165.us-east-1.elb.amazonaws.com   True         45s
-
-    GATEWAY_NAME=infra-inference-scheduling-inference-gateway
-    export ENDPOINT=$(kubectl get gateway ${GATEWAY_NAME} --no-headers -n ${NAMESPACE} -o jsonpath='{.status.addresses[0].value}')
-    ```
+```bash
+kubectl get gateway -n ${NAMESPACE}
+NAME                                           CLASS      ADDRESS                                                                   PROGRAMMED   AGE
+infra-inference-scheduling-inference-gateway   kgateway   af805bef3ec444a558da28061b487dd5-2012676366.us-east-1.elb.amazonaws.com   True         11m
+infra-sim-inference-gateway                    kgateway   a67ad245358e34bba9cb274bc220169e-1351042165.us-east-1.elb.amazonaws.com   True         45
+GATEWAY_NAME=infra-inference-scheduling-inference-gateway
+export ENDPOINT=$(kubectl get gateway ${GATEWAY_NAME} --no-headers -n ${NAMESPACE} -o jsonpath='{.status.addresses[0].value}')
+```
 
 <!-- TAB:Ingress Controller -->
-    > [!REQUIREMENTS]
-    > This requires that the release of the `llm-d-infra` chart must have `.ingress.enabled` set to `true`, and the `.gateway.service.type` to `ClusterIP`.
-    > This requires some load-balancer configuration for your cluster / ingress-controller. This could be either cloud-provider integration or something like MetalLB.
+> [!REQUIREMENTS]
+> This requires that the release of the `llm-d-infra` chart must have `.ingress.enabled` set to `true`, and the `.gateway.service.type` to `ClusterIP`.
+> This requires some load-balancer configuration for your cluster / ingress-controller. This could be either cloud-provider integration or something like MetalLB
 
-    This is the most environment dependent of all the options, and can be tricky to set up. For more information on this see [our gateway customization docs](../docs/customizing-your-gateway.md#using-an-ingress). You should be able to get your endpoint from your ingress with the following:
+This is the most environment dependent of all the options, and can be tricky to set up. For more information on this see [our gateway customization docs](../docs/customizing-your-gateway.md#using-an-ingress). You should be able to get your endpoint from your ingress with the following
+```bash
+export ENDPOINT=$(kubectl get ingress --no-headers -o jsonpath='{.items[].status.loadBalancer.ingress[0].ip}')
+```
 
-    ```bash
-    export ENDPOINT=$(kubectl get ingress --no-headers -o jsonpath='{.items[].status.loadBalancer.ingress[0].ip}')
-    ```
+**_NOTE:_** This command assumes you have one ingress in your given `${NAMESPACE}`, if you have multiple, it will just grab one. Therefore, in the case you do have multiple gateways, you should find the correct gateway and target that specifically
 
-    **_NOTE:_** This command assumes you have one ingress in your given `${NAMESPACE}`, if you have multiple, it will just grab one. Therefore, in the case you do have multiple gateways, you should find the correct gateway and target that specifically:
-
-    ```bash
-    kubectl get ingress -n ${NAMESPACE}
-    NAME                                           CLASS     HOSTS   ADDRESS         PORTS   AGE
-    infra-inference-scheduling-inference-gateway   traefik   *       166.19.16.120   80      21m
-    infra-sim-inference-gateway                    traefik   *       166.19.16.132   80      7m
-
-    INGRESS_NAME=infra-inference-scheduling-inference-gateway
-    export ENDPOINT=$(kubectl get ingress ${GATEWAY_NAME} --no-headers -n ${NAMESPACE} -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
-    ```
+```bash
+kubectl get ingress -n ${NAMESPACE}
+NAME                                           CLASS     HOSTS   ADDRESS         PORTS   AGE
+infra-inference-scheduling-inference-gateway   traefik   *       166.19.16.120   80      21m
+infra-sim-inference-gateway                    traefik   *       166.19.16.132   80      7
+INGRESS_NAME=infra-inference-scheduling-inference-gateway
+export ENDPOINT=$(kubectl get ingress ${GATEWAY_NAME} --no-headers -n ${NAMESPACE} -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
+```
 
 <!-- TABS:END -->
 
