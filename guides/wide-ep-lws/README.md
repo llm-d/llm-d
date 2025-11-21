@@ -87,7 +87,7 @@ helm install deepseek-r1 \
 ```
 
 <!-- TAB:Istio -->
-### Istio
+#### Istio
 ```bash
 helm install deepseek-r1 \
   -n ${NAMESPACE} \
