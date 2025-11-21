@@ -9,7 +9,7 @@ To deploy the `InferencePool`, select your provider below.
 <!-- TABS:START -->
 
 <!-- TAB:GKE:default -->
-## GKE
+### GKE
 
 This command deploys the `InferencePool` on GKE with GKE-specific monitoring enabled.
 
