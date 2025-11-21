@@ -129,7 +129,7 @@ kubectl apply -k ./manifests/gateway/istio -n ${NAMESPACE}
 ```
 
 <!-- TAB:Kgateway -->
-### Kgateway
+#### Kgateway
 ```bash
 kubectl apply -k ./manifests/gateway/kgateway -n ${NAMESPACE}
 ```
