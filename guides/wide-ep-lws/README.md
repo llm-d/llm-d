@@ -123,7 +123,7 @@ kubectl apply -k ./manifests/gateway/gke-l7-regional-external-managed -n ${NAMES
 ```
 
 <!-- TAB:Istio -->
-### Istio
+#### Istio
 ```bash
 kubectl apply -k ./manifests/gateway/istio -n ${NAMESPACE}
 ```
