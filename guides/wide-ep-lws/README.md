@@ -135,7 +135,7 @@ kubectl apply -k ./manifests/gateway/kgateway -n ${NAMESPACE}
 ```
 
 <!-- TAB:Kgateway on OCP -->
-### Kgateway on OCP
+#### Kgateway on OCP
 ```bash
 kubectl apply -k ./manifests/gateway/kgateway-openshift -n ${NAMESPACE}
 ```
