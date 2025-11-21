@@ -99,7 +99,7 @@ helm install deepseek-r1 \
 ```
 
 <!-- TAB:Kgateway -->
-### Kgateway
+#### Kgateway
 ```bash
 helm install deepseek-r1 \
   -n ${NAMESPACE} \
