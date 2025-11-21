@@ -15,6 +15,7 @@ First we need to choose what strategy we are going to use to expose / interact w
 <!-- TABS:START -->
 
 <!-- TAB:Port-forward (Cluster Internal):default -->
+## Port-forward (Cluster Internal)  
 For gateway providers that install into the cluster you can port forward to the gateway deployment directly.
 
 ```bash
@@ -40,6 +41,7 @@ kubectl port-forward -n ${NAMESPACE} service/${GATEWAY_SVC} 8000:80
 **_NOTE:_** Port 8000 is the default gateway service port in our guides. You can change this by altering the values for the `llm-d-infra` helm chart and updating your port-forward command appropriately.
 
 <!-- TAB:External IP (LoadBalancer) -->
+## External IP (LoadBalancer)
 > [!REQUIREMENTS]
 > This requires that the release of the `llm-d-infra` chart must have `.gateway.serviceType` set to `LoadBalancer`. Currently this is the [default value](https://github.com/llm-d-incubation/llm-d-infra/blob/main/charts/llm-d-infra/values.yaml#L167), however it's worth noting.
 > 
@@ -62,6 +64,7 @@ export ENDPOINT=$(kubectl get gateway ${GATEWAY_NAME} --no-headers -n ${NAMESPAC
 ```
 
 <!-- TAB:Ingress Controller -->
+## Ingress Controller
 > [!REQUIREMENTS]
 > This requires that the release of the `llm-d-infra` chart must have `.ingress.enabled` set to `true`, and the `.gateway.service.type` to `ClusterIP`.
 > This requires some load-balancer configuration for your cluster / ingress-controller. This could be either cloud-provider integration or something like MetalLB
