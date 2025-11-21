@@ -15,6 +15,7 @@ First we need to choose what strategy we are going to use to expose / interact w
 <Tabs>
 
   <TabItem value="port-forward" label="Port-forward (Cluster Internal)" default>
+
     For gateway providers that install into the cluster you can port forward to the gateway deployment directly.
 
     ```bash
@@ -43,14 +44,17 @@ First we need to choose what strategy we are going to use to expose / interact w
     ```
 
     **_NOTE:_** Port 8000 is the default gateway service port in our guides. You can change this by altering the values for the `llm-d-infra` helm chart and updating your port-forward command appropriately.
+
   </TabItem>
 
   <TabItem value="load-balancer" label="External IP (LoadBalancer)">
+    
+    If you are using the GKE gateway or are using the default service type of `LoadBalancer` for your gateway and you are on a cloud platform with load balancing, you can use the `External IP` of your gateway service (you should see the same thing under your gateway with `kubectl get gateway`).
+
     > [!REQUIREMENTS]
     > This requires that the release of the `llm-d-infra` chart must have `.gateway.serviceType` set to `LoadBalancer`. Currently this is the [default value](https://github.com/llm-d-incubation/llm-d-infra/blob/main/charts/llm-d-infra/values.yaml#L167), however it's worth noting.
     > This requires your K8s cluster is deployed on a cloud provider with LB integration (EKS/GKE/AKS/AWS/…).
 
-    If you are using the GKE gateway or are using the default service type of `LoadBalancer` for your gateway and you are on a cloud platform with load balancing, you can use the `External IP` of your gateway service (you should see the same thing under your gateway with `kubectl get gateway`).
 
     ```bash
     export ENDPOINT=$(kubectl get gateway --no-headers -n ${NAMESPACE} -o jsonpath='{.items[].status.addresses[0].value}')
@@ -67,14 +71,18 @@ First we need to choose what strategy we are going to use to expose / interact w
     GATEWAY_NAME=infra-inference-scheduling-inference-gateway
     export ENDPOINT=$(kubectl get gateway ${GATEWAY_NAME} --no-headers -n ${NAMESPACE} -o jsonpath='{.status.addresses[0].value}')
     ```
+
   </TabItem>
 
   <TabItem value="ingress" label="Ingress Controller">
+
+    Ingress Controller is the most environment dependent of all the options, and can be tricky to set up. For more information on this see [our gateway customization docs](../docs/customizing-your-gateway.md#using-an-ingress).
+
     > [!REQUIREMENTS]
     > This requires that the release of the `llm-d-infra` chart must have `.ingress.enabled` set to `true`, and the `.gateway.service.type` to `ClusterIP`.
     > This requires some load-balancer configuration for your cluster / ingress-controller. This could be either cloud-provider integration or something like MetalLB.
 
-    This is the most environment dependent of all the options, and can be tricky to set up. For more information on this see [our gateway customization docs](../docs/customizing-your-gateway.md#using-an-ingress). You should be able to get your endpoint from your ingress with the following:
+     You should be able to get your endpoint from your ingress with the following:
 
     ```bash
     export ENDPOINT=$(kubectl get ingress --no-headers -o jsonpath='{.items[].status.loadBalancer.ingress[0].ip}')
