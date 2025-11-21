@@ -60,7 +60,7 @@ kubectl apply -k ./manifests/modelserver/gke-a4 -n ${NAMESPACE}
 ```
 
 <!-- TAB:CoreWeave -->
-### CoreWeave
+#### CoreWeave
 ```bash
 kubectl apply -k ./manifests/modelserver/coreweave  -n ${NAMESPACE}
 ```
