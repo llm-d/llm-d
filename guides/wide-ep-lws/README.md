@@ -1,6 +1,3 @@
-import Tabs from '@theme/Tabs';
-import TabItem from '@theme/TabItem';
-
 # Well-lit Path: Wide Expert Parallelism (EP/DP) with LeaderWorkerSet
 
 ## Overview
@@ -47,90 +44,103 @@ kubectl create namespace ${NAMESPACE}
 
 GKE and CoreWeave are tested Kubernetes providers for this well-lit path. You can customize the manifests if you run on other Kubernetes providers.
 
-<Tabs>
-    <TabItem value="gke" label="GKE (H200)" default>
-      ```bash
-      kubectl apply -k ./manifests/modelserver/gke -n ${NAMESPACE}
-      ```
-    </TabItem>
-    <TabItem value="gke-b200" label="GKE (B200)">
-      ```bash
-      # Deploy on GKE for B200 on the a4 instance type to work around a known vLLM memory issue
-      kubectl apply -k ./manifests/modelserver/gke-a4 -n ${NAMESPACE}
-      ```
-    </TabItem>
-    <TabItem value="coreweave" label="CoreWeave">
-      ```bash
-      kubectl apply -k ./manifests/modelserver/coreweave  -n ${NAMESPACE}
-      ```
-    </TabItem>
-</Tabs>
+<!-- TABS:START -->
+
+<!-- TAB:GKE (H200):default -->
+```bash
+kubectl apply -k ./manifests/modelserver/gke -n ${NAMESPACE}
+```
+<!-- ENDTAB -->
+
+<!-- TAB:GKE (B200) -->
+```bash
+# Deploy on GKE for B200 on the a4 instance type to work around a known vLLM memory issue
+kubectl apply -k ./manifests/modelserver/gke-a4 -n ${NAMESPACE}
+```
+<!-- ENDTAB -->
+
+<!-- TAB:CoreWeave -->
+```bash
+kubectl apply -k ./manifests/modelserver/coreweave  -n ${NAMESPACE}
+```
+<!-- ENDTAB -->
+
+<!-- TABS:END -->
 
 ### Deploy InferencePool
 
 Select the provider-specific Helm command using the tabs below.
 
-<Tabs>
-    <TabItem value="gke" label="GKE" default>
-        ```bash
-        helm install deepseek-r1 \
-          -n ${NAMESPACE} \
-          -f inferencepool.values.yaml \
-          --set "provider.name=gke" \
-          --set "inferencePool.apiVersion=inference.networking.k8s.io/v1" \
-          --set "inferenceExtension.monitoring.gke.enable=true" \
-          oci://us-central1-docker.pkg.dev/k8s-staging-images/gateway-api-inference-extension/charts/inferencepool \
-          --version v1.0.1
-        ```
-    </TabItem>
-    <TabItem value="istio" label="Istio">
-        ```bash
-        helm install deepseek-r1 \
-          -n ${NAMESPACE} \
-          -f inferencepool.values.yaml \
-          --set "provider.name=istio" \
-          --set "inferenceExtension.monitoring.prometheus.enable=true" \
-          oci://us-central1-docker.pkg.dev/k8s-staging-images/gateway-api-inference-extension/charts/inferencepool \
-          --version v1.0.1
-        ```
-    </TabItem>
-    <TabItem value="kgateway" label="Kgateway">
-        ```bash
-        helm install deepseek-r1 \
-          -n ${NAMESPACE} \
-          -f inferencepool.values.yaml \
-          oci://us-central1-docker.pkg.dev/k8s-staging-images/gateway-api-inference-extension/charts/inferencepool \
-          --version v1.0.1
-        ```
-    </TabItem>
-</Tabs>
+<!-- TABS:START -->
+
+<!-- TAB:GKE:default -->
+```bash
+helm install deepseek-r1 \
+  -n ${NAMESPACE} \
+  -f inferencepool.values.yaml \
+  --set "provider.name=gke" \
+  --set "inferencePool.apiVersion=inference.networking.k8s.io/v1" \
+  --set "inferenceExtension.monitoring.gke.enable=true" \
+  oci://us-central1-docker.pkg.dev/k8s-staging-images/gateway-api-inference-extension/charts/inferencepool \
+  --version v1.0.1
+```
+<!-- ENDTAB -->
+
+<!-- TAB:Istio -->
+```bash
+helm install deepseek-r1 \
+  -n ${NAMESPACE} \
+  -f inferencepool.values.yaml \
+  --set "provider.name=istio" \
+  --set "inferenceExtension.monitoring.prometheus.enable=true" \
+  oci://us-central1-docker.pkg.dev/k8s-staging-images/gateway-api-inference-extension/charts/inferencepool \
+  --version v1.0.1
+```
+<!-- ENDTAB -->
+
+<!-- TAB:Kgateway -->
+```bash
+helm install deepseek-r1 \
+  -n ${NAMESPACE} \
+  -f inferencepool.values.yaml \
+  oci://us-central1-docker.pkg.dev/k8s-staging-images/gateway-api-inference-extension/charts/inferencepool \
+  --version v1.0.1
+```
+<!-- ENDTAB -->
+
+<!-- TABS:END -->
 
 ### Deploy Gateway and HTTPRoute
 
 Choose the gateway manifest that matches your environment.
 
-<Tabs>
-  <TabItem value="gke" label="GKE (Regional External)" default>
-    ```bash
-    kubectl apply -k ./manifests/gateway/gke-l7-regional-external-managed -n ${NAMESPACE}
-    ```
-  </TabItem>
-  <TabItem value="istio" label="Istio">
-    ```bash
-    kubectl apply -k ./manifests/gateway/istio -n ${NAMESPACE}
-    ```
-  </TabItem>
-  <TabItem value="kgateway" label="Kgateway">
-    ```bash
-    kubectl apply -k ./manifests/gateway/kgateway -n ${NAMESPACE}
-    ```
-  </TabItem>
-  <TabItem value="kgateway-ocp" label="Kgateway on OCP">
-    ```bash
-    kubectl apply -k ./manifests/gateway/kgateway-openshift -n ${NAMESPACE}
-    ```
-  </TabItem>
-</Tabs>
+<!-- TABS:START -->
+
+<!-- TAB:GKE (Regional External):default -->
+```bash
+kubectl apply -k ./manifests/gateway/gke-l7-regional-external-managed -n ${NAMESPACE}
+```
+<!-- ENDTAB -->
+
+<!-- TAB:Istio -->
+```bash
+kubectl apply -k ./manifests/gateway/istio -n ${NAMESPACE}
+```
+<!-- ENDTAB -->
+
+<!-- TAB:Kgateway -->
+```bash
+kubectl apply -k ./manifests/gateway/kgateway -n ${NAMESPACE}
+```
+<!-- ENDTAB -->
+
+<!-- TAB:Kgateway on OCP -->
+```bash
+kubectl apply -k ./manifests/gateway/kgateway-openshift -n ${NAMESPACE}
+```
+<!-- ENDTAB -->
+
+<!-- TABS:END -->
 
 ### Gateway options
 

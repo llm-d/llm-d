@@ -1,6 +1,3 @@
-import Tabs from '@theme/Tabs';
-import TabItem from '@theme/TabItem';
-
 # Gateway Provider Prerequisite
 
 This document will guide you through configuring a [Kubernetes Gateway](https://gateway-api.sigs.k8s.io/) provider that can support the llm-d [`inference-scheduler`](https://github.com/llm-d/llm-d-inference-scheduler) component.
@@ -37,17 +34,18 @@ By integrating with a Gateway -- instead of developing an llm-d specific proxy l
 
 llm-d requires you select a [Gateway implementation that supports the inference-scheduler](https://gateway-api-inference-extension.sigs.k8s.io/implementations/gateways/). Your infrastructure may provide a default compatible implementation, or you may choose to deploy a gateway implementation onto your cluster. Pick the guidance that matches your environment:
 
-<Tabs>
-  <TabItem value="gke" label="Cloud-managed (GKE)" default>
-    #### Use an infrastructure provided Gateway implementation
+<!-- TABS:START -->
 
-    We recommend using the infrastructure provided Gateway with our guides if available.
+<!-- TAB:Cloud-managed (GKE):default -->
+#### Use an infrastructure provided Gateway implementation
 
-    ##### Google Kubernetes Engine (GKE)
+We recommend using the infrastructure provided Gateway with our guides if available.
 
-    GKE automatically enables an inference-compatible Gateway control plane when you enable the `HttpLoadBalancing` addon.
+##### Google Kubernetes Engine (GKE)
 
-    The key choice for deployment is whether you want to create a regional internal Application Load Balancer - accessible only workloads within your VPC (class name: `gke-l7-rilb`) - or a regional external Application Load Balancer - accessible to the internet (class name: `gke-l7-regional-external-managed`).
+GKE automatically enables an inference-compatible Gateway control plane when you enable the `HttpLoadBalancing` addon.
+
+The key choice for deployment is whether you want to create a regional internal Application Load Balancer - accessible only workloads within your VPC (class name: `gke-l7-rilb`) - or a regional external Application Load Balancer - accessible to the internet (class name: `gke-l7-regional-external-managed`).
 
 The following steps from the [GKE Gateways deployment documentation](https://cloud.google.com/kubernetes-engine/docs/how-to/deploy-gke-inference-gateway) and [GKE Inference Gateway deployment documentation](https://cloud.google.com/kubernetes-engine/docs/how-to/deploy-gke-inference-gateway) should be run:
 
@@ -59,70 +57,72 @@ The following steps from the [GKE Gateways deployment documentation](https://clo
 6. [Create the Gateway](https://cloud.google.com/kubernetes-engine/docs/how-to/deploy-gke-inference-gateway#create-gateway)
 
 The other steps are optional and are not necessary to continue with your guide.
+<!-- ENDTAB -->
 
-  </TabItem>
-  <TabItem value="self" label="Self-installed (Istio/Kgateway)">
-    #### Self-installed Gateway implementations
+<!-- TAB:Self-installed (Istio/Kgateway) -->
+#### Self-installed Gateway implementations
 
-    llm-d provides a Helm chart that installs and configures the `kgateway` or `istio` Gateway implementations.
+llm-d provides a Helm chart that installs and configures the `kgateway` or `istio` Gateway implementations.
 
-    ##### Before you begin
+##### Before you begin
 
-    Prior to deploying a Gateway control plane, you must install the custom resource definitions (CRDs) configuration that adds the Kubernetes API objects:
+Prior to deploying a Gateway control plane, you must install the custom resource definitions (CRDs) configuration that adds the Kubernetes API objects:
 
-    - [Gateway API v1.3.0 CRDs](https://github.com/kubernetes-sigs/gateway-api/tree/v1.3.0/config/crd)
-      - for more information see their [docs](https://gateway-api.sigs.k8s.io/guides/)
-    - [Gateway API Inference Extension CRDs v1.0.1](https://github.com/kubernetes-sigs/gateway-api-inference-extension/tree/v1.0.1/config/crd)
-      - for more information see their [docs](https://gateway-api-inference-extension.sigs.k8s.io/)
+- [Gateway API v1.3.0 CRDs](https://github.com/kubernetes-sigs/gateway-api/tree/v1.3.0/config/crd)
+  - for more information see their [docs](https://gateway-api.sigs.k8s.io/guides/)
+- [Gateway API Inference Extension CRDs v1.0.1](https://github.com/kubernetes-sigs/gateway-api-inference-extension/tree/v1.0.1/config/crd)
+  - for more information see their [docs](https://gateway-api-inference-extension.sigs.k8s.io/)
 
-    We have provided the [`install-gateway-provider-dependencies.sh`](./install-gateway-provider-dependencies.sh) script:
+We have provided the [`install-gateway-provider-dependencies.sh`](./install-gateway-provider-dependencies.sh) script:
 
-    ```bash
-    ./install-gateway-provider-dependencies.sh
-    ```
+```bash
+./install-gateway-provider-dependencies.sh
+```
 
-    To remove the created dependencies:
+To remove the created dependencies:
 
-    ```bash
-    ./install-gateway-provider-dependencies.sh delete
-    ```
+```bash
+./install-gateway-provider-dependencies.sh delete
+```
 
-    You may specify any valid git source control reference for versions as `GATEWAY_API_CRD_REVISION` and `GATEWAY_API_INFERENCE_EXTENSION_CRD_REVISION`:
+You may specify any valid git source control reference for versions as `GATEWAY_API_CRD_REVISION` and `GATEWAY_API_INFERENCE_EXTENSION_CRD_REVISION`:
 
-    ```bash
-    export GATEWAY_API_CRD_REVISION="v1.2.0"
-    export GATEWAY_API_INFERENCE_EXTENSION_CRD_REVISION="v0.5.0"
-    ./install-gateway-provider-dependencies.sh
-    ```
+```bash
+export GATEWAY_API_CRD_REVISION="v1.2.0"
+export GATEWAY_API_INFERENCE_EXTENSION_CRD_REVISION="v0.5.0"
+./install-gateway-provider-dependencies.sh
+```
 
-    ##### Installation
+##### Installation
 
-    To install the gateway control plane:
+To install the gateway control plane:
 
-    ```bash
-    helmfile apply -f <your_gateway_choice>.helmfile.yaml # options: [`istio`, `kgateway`]
-    # ex: helmfile apply -f istio.helmfile.yaml
-    ```
+```bash
+helmfile apply -f <your_gateway_choice>.helmfile.yaml # options: [`istio`, `kgateway`]
+# ex: helmfile apply -f istio.helmfile.yaml
+```
 
-    ##### Targeted install
+##### Targeted install
 
-    If the CRDs already exist in your cluster and you do not wish to re-apply them, use the `--selector kind=gateway-control-plane` selector to limit your changes to the infrastructure:
+If the CRDs already exist in your cluster and you do not wish to re-apply them, use the `--selector kind=gateway-control-plane` selector to limit your changes to the infrastructure:
 
-    ```bash
-    # Install
-    helmfile apply -f <your_gateway_choice> --selector kind=gateway-control-plane
-    # Uninstall
-    helmfile destroy -f <your_gateway_choice> --selector kind=gateway-control-plane
-    ```
+```bash
+# Install
+helmfile apply -f <your_gateway_choice> --selector kind=gateway-control-plane
+# Uninstall
+helmfile destroy -f <your_gateway_choice> --selector kind=gateway-control-plane
+```
 
-    If you wish to bump versions or customize your installs, check out our helmfiles for [istio](./istio.helmfile.yaml), and [kgateway](./kgateway.helmfile.yaml) respectively.
-  </TabItem>
-  <TabItem value="other" label="Other providers">
-    #### Other Gateway implementations
+If you wish to bump versions or customize your installs, check out our helmfiles for [istio](./istio.helmfile.yaml), and [kgateway](./kgateway.helmfile.yaml) respectively.
+<!-- ENDTAB -->
 
-    For other [compatible Gateway implementations](https://gateway-api-inference-extension.sigs.k8s.io/implementations/gateways/) follow the instructions for your selected Gateway. Ensure the necessary CRDs for Gateway API and the Gateway API Inference Extension are installed.
-  </TabItem>
-</Tabs>
+<!-- TAB:Other providers -->
+#### Other Gateway implementations
+
+For other [compatible Gateway implementations](https://gateway-api-inference-extension.sigs.k8s.io/implementations/gateways/) follow the instructions for your selected Gateway. Ensure the necessary CRDs for Gateway API and the Gateway API Inference Extension are installed.
+<!-- ENDTAB -->
+
+<!-- TABS:END -->
 
 ## Verify your installation
 

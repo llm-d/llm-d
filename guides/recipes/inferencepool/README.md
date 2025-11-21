@@ -1,6 +1,3 @@
-import Tabs from '@theme/Tabs';
-import TabItem from '@theme/TabItem';
-
 # InferencePool Recipe
 
 This directory contains a standard `values.yaml` for deploying an `InferencePool`.
@@ -9,47 +6,51 @@ This directory contains a standard `values.yaml` for deploying an `InferencePool
 
 To deploy the `InferencePool`, select your provider below.
 
-<Tabs>
-  <TabItem value="gke" label="GKE" default>
-    This command deploys the `InferencePool` on GKE with GKE-specific monitoring enabled.
+<!-- TABS:START -->
 
-    ```bash
-    helm install llm-d-infpool \
-      -n ${NAMESPACE} \
-      -f ./values.yaml \
-      --set "provider.name=gke" \
-      --set "inferencePool.apiVersion=inference.networking.k8s.io/v1" \
-      --set "inferenceExtension.monitoring.gke.enable=true" \
-      oci://us-central1-docker.pkg.dev/k8s-staging-images/gateway-api-inference-extension/charts/inferencepool \
-      --version v1.0.1
-    ```
-  </TabItem>
-  <TabItem value="istio" label="Istio">
-    This command deploys the `InferencePool` with Istio, enabling Prometheus monitoring.
+<!-- TAB:GKE:default -->
+This command deploys the `InferencePool` on GKE with GKE-specific monitoring enabled.
 
-    ```bash
-    helm install llm-d-infpool \
-      -n ${NAMESPACE} \
-      -f ./values.yaml \
-      --set "provider.name=istio" \
-      --set "inferenceExtension.monitoring.prometheus.enable=true" \
-      oci://us-central1-docker.pkg.dev/k8s-staging-images/gateway-api-inference-extension/charts/inferencepool \
-      --version v1.0.1
-    ```
-  </TabItem>
-  <TabItem value="kgateway" label="KGateway">
-    This command deploys the `InferencePool` with Kgateway.
+```bash
+helm install llm-d-infpool \
+  -n ${NAMESPACE} \
+  -f ./values.yaml \
+  --set "provider.name=gke" \
+  --set "inferencePool.apiVersion=inference.networking.k8s.io/v1" \
+  --set "inferenceExtension.monitoring.gke.enable=true" \
+  oci://us-central1-docker.pkg.dev/k8s-staging-images/gateway-api-inference-extension/charts/inferencepool \
+  --version v1.0.1
+```
+<!-- ENDTAB -->
 
-    ```bash
-    helm install llm-d-infpool \
-      -n ${NAMESPACE} \
-      -f ./values.yaml \
-      --set "provider.name=kgateway" \
-      oci://us-central1-docker.pkg.dev/k8s-staging-images/gateway-api-inference-extension/charts/inferencepool \
-      --version v1.0.1
-    ```
-  </TabItem>
-</Tabs>
+<!-- TAB:Istio -->
+This command deploys the `InferencePool` with Istio, enabling Prometheus monitoring.
+
+```bash
+helm install llm-d-infpool \
+  -n ${NAMESPACE} \
+  -f ./values.yaml \
+  --set "provider.name=istio" \
+  --set "inferenceExtension.monitoring.prometheus.enable=true" \
+  oci://us-central1-docker.pkg.dev/k8s-staging-images/gateway-api-inference-extension/charts/inferencepool \
+  --version v1.0.1
+```
+<!-- ENDTAB -->
+
+<!-- TAB:KGateway -->
+This command deploys the `InferencePool` with Kgateway.
+
+```bash
+helm install llm-d-infpool \
+  -n ${NAMESPACE} \
+  -f ./values.yaml \
+  --set "provider.name=kgateway" \
+  oci://us-central1-docker.pkg.dev/k8s-staging-images/gateway-api-inference-extension/charts/inferencepool \
+  --version v1.0.1
+```
+<!-- ENDTAB -->
+
+<!-- TABS:END -->
 
 ## Verification
 

@@ -1,6 +1,3 @@
-import Tabs from '@theme/Tabs';
-import TabItem from '@theme/TabItem';
-
 # Gateway Recipes
 
 This directory contains recipes for deploying the `llm-d-inference-gateway` and `llm-d-route`.
@@ -9,36 +6,41 @@ This directory contains recipes for deploying the `llm-d-inference-gateway` and 
 
 The following recipes are available for deploying the gateway and httproute.
 
-<Tabs>
-    <TabItem value="gke" label="GKE L7 Regional External Managed" default>
-        This deploys a gateway suitable for GKE, using the `gke-l7-regional-external-managed` gateway class.
+<!-- TABS:START -->
 
-        ```bash
-        kubectl apply -k ./gke-l7-regional-external-managed -n ${NAMESPACE}
-        ```
-    </TabItem>
-    <TabItem value="istio" label="Istio">
-        This deploys a gateway suitable for Istio, using the `istio` gateway class.
+<!-- TAB:GKE L7 Regional External Managed:default -->
+This deploys a gateway suitable for GKE, using the `gke-l7-regional-external-managed` gateway class.
 
-        ```bash
-        kubectl apply -k ./istio -n ${NAMESPACE}
-        ```
-    </TabItem>
-    <TabItem value="kgateway" label="KGateway">
-        This deploys a gateway suitable for KGateway, using the `kgateway` gateway class.
+```bash
+kubectl apply -k ./gke-l7-regional-external-managed -n ${NAMESPACE}
+```
+<!-- ENDTAB -->
 
-        ```bash
-        kubectl apply -k ./kgateway -n ${NAMESPACE}
-        ```
-    </TabItem>
-    <TabItem value="kgateway-ocp" label="KGateway (OpenShift)">
-        This deploys a gateway suitable for OpenShift, using the `openshift` gateway class.
+<!-- TAB:Istio -->
+This deploys a gateway suitable for Istio, using the `istio` gateway class.
 
-        ```bash
-        kubectl apply -k ./kgateway-openshift -n ${NAMESPACE}
-        ```
-    </TabItem>
-</Tabs>
+```bash
+kubectl apply -k ./istio -n ${NAMESPACE}
+```
+<!-- ENDTAB -->
+
+<!-- TAB:KGateway -->
+This deploys a gateway suitable for KGateway, using the `kgateway` gateway class.
+
+```bash
+kubectl apply -k ./kgateway -n ${NAMESPACE}
+```
+<!-- ENDTAB -->
+
+<!-- TAB:KGateway (OpenShift) -->
+This deploys a gateway suitable for OpenShift, using the `openshift` gateway class.
+
+```bash
+kubectl apply -k ./kgateway-openshift -n ${NAMESPACE}
+```
+<!-- ENDTAB -->
+
+<!-- TABS:END -->
 
 ## Verification
 
