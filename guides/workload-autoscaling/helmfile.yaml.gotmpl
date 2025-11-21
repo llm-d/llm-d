@@ -160,7 +160,7 @@ releases:
     {{- else }}
     chart: oci://ghcr.io/llm-d-incubation/workload-variant-autoscaler/charts/workload-variant-autoscaler
     {{- end }}
-    version: {{ env "WVA_RELEASE" | default "v0.0.5" }}
+    version: "v0.0.5"
     installed: true
     needs:
       - {{ printf "ms-%s" $rn | quote }}
@@ -169,23 +169,13 @@ releases:
       kind: autoscaling
     set:
       - name: va.accelerator
-        value: {{ env "WVA_ACCELERATOR" | default "L40S" | quote }}
+        value: "L40S"
       - name: llmd.modelID
-        value: {{ env "WVA_MODEL_ID" | default "Qwen/Qwen3-0.6B" | quote }}
+        value: "Qwen/Qwen3-0.6B"
       - name: vllmService.enabled
         value: true
-      {{- if env "WVA_NODE_PORT" }}
       - name: vllmService.nodePort
-        value: {{ env "WVA_NODE_PORT" }}
-      {{- end }}
+        value: 30000
       - name: llmd.namespace
         value: {{ $ns | quote }}
-      {{- if env "PROMETHEUS_CA_CERT_PATH" }}
-      - name: wva.prometheus.caCert
-        value: {{ env "PROMETHEUS_CA_CERT_PATH" | quote }}
-      {{- end }}
-    {{- if env "WVA_VALUES_FILE" }}
-    values:
-      - {{ env "WVA_VALUES_FILE" }}
-    {{- end }}
 {{- end }}
