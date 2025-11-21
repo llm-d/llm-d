@@ -41,7 +41,7 @@ kubectl port-forward -n ${NAMESPACE} service/${GATEWAY_SVC} 8000:80
 **_NOTE:_** Port 8000 is the default gateway service port in our guides. You can change this by altering the values for the `llm-d-infra` helm chart and updating your port-forward command appropriately.
 
 <!-- TAB:External IP (LoadBalancer) -->
-## External IP (LoadBalancer)
+### External IP (LoadBalancer)
 > [!REQUIREMENTS]
 > This requires that the release of the `llm-d-infra` chart must have `.gateway.serviceType` set to `LoadBalancer`. Currently this is the [default value](https://github.com/llm-d-incubation/llm-d-infra/blob/main/charts/llm-d-infra/values.yaml#L167), however it's worth noting.
 > 
