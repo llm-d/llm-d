@@ -21,6 +21,8 @@ Enabling prefix cache offloading to CPU is recommended for the following reasons
 
 In low cache size scenario where HBM is primarily used, async CPU offloading should incur little overhead. In high cache size scenario loading cache from CPU RAM offers significantly higher cache hit and thus better performance than HBM only.
 
+See the [CPU offloading guide](./cpu/README.md) to learn how to enable CPU RAM offloading with llm-d.
+
 ### Local Disk
 
 Utilizing local disk storage can significantly increase the cache capacity. However disks are typically significantly slower than CPU RAM. 

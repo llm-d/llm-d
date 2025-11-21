@@ -250,7 +250,7 @@ WORKDIR /workspace
 
 # Define commit SHAs as build args to avoid layer invalidation
 ARG LMCACHE_COMMIT_SHA="0db8ae4746a207a72483d716b5f82545a2ead24b"
-ARG VLLM_COMMIT_SHA="b8b302cde434df8c9289a2b465406b47ebab1c2d"
+ARG VLLM_COMMIT_SHA="439368496db48d8f992ba8c606a0c0b1eebbfa69"
 
 # Build LMCache wheel (skip on ARM64 - infinistore dependency has no ARM wheels)
 RUN --mount=type=cache,target=/var/cache/git \
@@ -404,7 +404,7 @@ COPY --from=builder /wheels/*.whl /tmp/wheels/
 
 # Define commit SHAs as build args to avoid layer invalidation
 ARG LMCACHE_COMMIT_SHA="0db8ae4746a207a72483d716b5f82545a2ead24b"
-ARG VLLM_COMMIT_SHA="b8b302cde434df8c9289a2b465406b47ebab1c2d"
+ARG VLLM_COMMIT_SHA="439368496db48d8f992ba8c606a0c0b1eebbfa69"
 
 ARG VLLM_PREBUILT=0
 
