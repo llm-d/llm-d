@@ -15,7 +15,7 @@ environments:
 ---
 
 {{- $ns := .Namespace | default "llm-d-inference-scheduler" -}}
-{{- $rn := (env "RELEASE_NAME_POSTFIX") | default "inference-scheduler" -}}
+{{- $rn := (env "RELEASE_NAME_POSTFIX") | default "workload-autoscaling" -}}
 
 repositories:
   - name: llm-d-modelservice
