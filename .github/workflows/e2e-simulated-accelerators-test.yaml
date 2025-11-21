@@ -20,6 +20,7 @@ on:
         type: choice
         options:
           - kgateway
+          - agentgateway
           - istio
 
 concurrency:
