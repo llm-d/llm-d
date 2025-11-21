@@ -43,7 +43,6 @@ releases:
     installed: true
     needs:
       - {{ printf "infra-%s" $rn | quote }}
-      #- prometheus-adapter
     values:
       - gaie-workload-autoscaling/values.yaml
     # Apply provider name if on GKE
@@ -116,12 +115,6 @@ releases:
     {{- end }}
     labels:
       kind: inference-stack
-  # Prometheus Adapter - Required for WVA to expose custom metrics
-#  - name: prometheus-adapter
-#    namespace: llm-d-monitoring
-#    chart: prometheus-community/prometheus-adapter
-#    version: 4.0.1
-#    installed: true
   # Workload Variant Autoscaler - Dynamic autoscaling for llm-d
   # Note: WVA chart can be installed from a local path or OCI registry
   # Set WVA_CHART_PATH to use a local chart (e.g., after cloning the repo)
@@ -133,7 +126,6 @@ releases:
     installed: true
     needs:
       - {{ printf "ms-%s" $rn | quote }}
-      #- prometheus-adapter
     labels:
       kind: autoscaling
     set:
