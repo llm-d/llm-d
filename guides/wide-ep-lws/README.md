@@ -53,7 +53,7 @@ kubectl apply -k ./manifests/modelserver/gke -n ${NAMESPACE}
 ```
 
 <!-- TAB:GKE (B200) -->
-### GKE (B200)
+#### GKE (B200)
 ```bash
 # Deploy on GKE for B200 on the a4 instance type to work around a known vLLM memory issue
 kubectl apply -k ./manifests/modelserver/gke-a4 -n ${NAMESPACE}
