@@ -47,7 +47,7 @@ GKE and CoreWeave are tested Kubernetes providers for this well-lit path. You ca
 <!-- TABS:START -->
 
 <!-- TAB:GKE (H200):default -->
-### GKE (H200)
+#### GKE (H200)
 ```bash
 kubectl apply -k ./manifests/modelserver/gke -n ${NAMESPACE}
 ```
