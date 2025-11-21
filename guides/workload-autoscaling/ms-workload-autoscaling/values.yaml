@@ -45,8 +45,6 @@ decode:
             fieldPath: status.podIP
       - name: VLLM_NIXL_SIDE_CHANNEL_PORT
         value: "5557"
-      - name: VLLM_LOGGING_LEVEL
-        value: DEBUG
     ports:
       - containerPort: 5557
         protocol: TCP
