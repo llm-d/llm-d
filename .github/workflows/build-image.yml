@@ -85,6 +85,8 @@ jobs:
       xpu: ${{ steps.filter.outputs.xpu || steps.dispatch.outputs.xpu }}
       cpu: ${{ steps.filter.outputs.cpu || steps.dispatch.outputs.cpu }}
       aws: ${{ steps.filter.outputs.aws || steps.dispatch.outputs.aws }}
+      aws: ${{ steps.filter.outputs.aws || steps.dispatch.outputs.aws }}
+      image_repo_suffix: ${{ steps.determine_suffix.outputs.suffix }}
     steps:
       - uses: actions/checkout@v4
       - uses: dorny/paths-filter@v3
@@ -120,6 +122,14 @@ jobs:
           echo "xpu=$(echo $platforms | grep -q xpu && echo true || echo false)" >> $GITHUB_OUTPUT
           echo "cpu=$(echo $platforms | grep -q cpu && echo true || echo false)" >> $GITHUB_OUTPUT
 
+      - name: Determine Image Repository Suffix
+        id: determine_suffix
+        run: |
+          if [[ "${{ github.event_name }}" == "pull_request" ]]; then
+            echo "suffix=-pr" >> $GITHUB_OUTPUT
+          else
+            echo "suffix=-dev" >> $GITHUB_OUTPUT
+          fi
   cuda-build-llm-d:
     needs: [detect-changes]
     if: ${{ needs.detect-changes.outputs.cuda == 'true' }}
