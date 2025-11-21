@@ -15,7 +15,7 @@ First we need to choose what strategy we are going to use to expose / interact w
 <!-- TABS:START -->
 
 <!-- TAB:Port-forward (Cluster Internal):default -->
-## Port-forward (Cluster Internal)  
+### Port-forward (Cluster Internal)  
 For gateway providers that install into the cluster you can port forward to the gateway deployment directly.
 
 ```bash
