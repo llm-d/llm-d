@@ -80,42 +80,50 @@ jobs:
 
   detect-changes:
     runs-on: ubuntu-latest
-    outputs:
-      cuda: ${{ steps.filter.outputs.cuda || steps.dispatch.outputs.cuda }}
-      xpu: ${{ steps.filter.outputs.xpu || steps.dispatch.outputs.xpu }}
-      aws: ${{ steps.filter.outputs.aws || steps.dispatch.outputs.aws }}
-    steps:
-      - uses: actions/checkout@v4
-      - uses: dorny/paths-filter@v3
-        if: github.event_name != 'workflow_dispatch'
-        id: filter
-        with:
-          filters: |
-            cuda:
-              - 'docker/Dockerfile.cuda'
-              - 'docker/scripts/**'
-              - 'docker/packages/common/**'
-              - 'docker/packages/cuda/**'
-              - 'patches/cks_nvshmem3.3.20.patch'
-              - 'patches/cks_nvshmem3.3.9.patch'
-            xpu:
-              - 'docker/Dockerfile.xpu'
-              - 'docker/scripts/**'
-            aws:
-              - 'docker/Dockerfile.aws'
-              - 'docker/scripts/**'
-      # shim to convert comma-separated platforms input into same boolean outputs as path filter
-      - name: Parse dispatch platforms
-        if: github.event_name == 'workflow_dispatch'
-        id: dispatch
-        run: |
-          platforms="${{ inputs.platforms }}"
-          echo "cuda=$(echo $platforms | grep -q cuda && echo true || echo false)" >> $GITHUB_OUTPUT
-          echo "aws=$(echo $platforms | grep -q aws && echo true || echo false)" >> $GITHUB_OUTPUT
-          echo "gke=$(echo $platforms | grep -q gke && echo true || echo false)" >> $GITHUB_OUTPUT
-          echo "xpu=$(echo $platforms | grep -q xpu && echo true || echo false)" >> $GITHUB_OUTPUT
-
-  cuda-build-llm-d:
+            outputs:
+              cuda: ${{ steps.filter.outputs.cuda || steps.dispatch.outputs.cuda }}
+              xpu: ${{ steps.filter.outputs.xpu || steps.dispatch.outputs.xpu }}
+              aws: ${{ steps.filter.outputs.aws || steps.dispatch.outputs.aws }}
+              image_repo_suffix: ${{ steps.determine_suffix.outputs.suffix }}
+            steps:
+              - uses: actions/checkout@v4
+              - uses: dorny/paths-filter@v3
+                if: github.event_name != 'workflow_dispatch'
+                id: filter
+                with:
+                  filters: |
+                    cuda:
+                      - 'docker/Dockerfile.cuda'
+                      - 'docker/scripts/**'
+                      - 'docker/packages/common/**'
+                      - 'docker/packages/cuda/**'
+                      - 'patches/cks_nvshmem3.3.20.patch'
+                      - 'patches/cks_nvshmem3.3.9.patch'
+                    xpu:
+                      - 'docker/Dockerfile.xpu'
+                      - 'docker/scripts/**'
+                    aws:
+                      - 'docker/Dockerfile.aws'
+                      - 'docker/scripts/**'
+              # shim to convert comma-separated platforms input into same boolean outputs as path filter
+              - name: Parse dispatch platforms
+                if: github.event_name == 'workflow_dispatch'
+                id: dispatch
+                run: |
+                  platforms="${{ inputs.platforms }}"
+                  echo "cuda=$(echo $platforms | grep -q cuda && echo true || echo false)" >> $GITHUB_OUTPUT
+                  echo "aws=$(echo $platforms | grep -q aws && echo true || echo false)" >> $GITHUB_OUTPUT
+                  echo "gke=$(echo $platforms | grep -q gke && echo true || echo false)" >> $GITHUB_OUTPUT
+                  echo "xpu=$(echo $platforms | grep -q xpu && echo true || echo false)" >> $GITHUB_OUTPUT
+              - name: Determine Image Repository Suffix
+                id: determine_suffix
+                run: |
+                  if [[ "${{ github.event_name }}" == "pull_request" ]]; then
+                    echo "suffix=-pr" >> $GITHUB_OUTPUT
+                  else
+                    echo "suffix=-dev" >> $GITHUB_OUTPUT
+                  fi
+      cuda-build-llm-d:
     needs: [detect-changes]
     if: ${{ needs.detect-changes.outputs.cuda == 'true' }}
     strategy:
@@ -165,12 +173,13 @@ jobs:
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ${{ env.REGISTRY }}/${{ github.repository }}-cuda-dev${{ matrix.image_suffix }}
+          images: ${{ env.REGISTRY }}/${{ github.repository }}-cuda${{ needs.detect-changes.outputs.image_repo_suffix }}${{ matrix.image_suffix }}
           tags: |
-            type=ref,event=branch
-            type=ref,event=pr
-            type=sha
-            type=raw,value=latest,enable={{is_default_branch}}
+            type=ref,event=branch,pattern={{branch}},enable=${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+            type=ref,event=pr,pattern=pr-{{pr.number}},enable=${{ github.event_name == 'pull_request' }}
+            type=sha,enable=${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+            type=raw,value=latest,enable=${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+            type=raw,value=sha-${{ github.sha }},enable=${{ github.event_name == 'pull_request' }}
 
       - name: Build & Push
         id: build
@@ -265,12 +274,13 @@ jobs:
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ${{ env.REGISTRY }}/${{ github.repository }}-cuda-dev${{ matrix.image_suffix }}
+          images: ${{ env.REGISTRY }}/${{ github.repository }}-cuda${{ needs.detect-changes.outputs.image_repo_suffix }}${{ matrix.image_suffix }}
           tags: |
-            type=ref,event=branch
-            type=ref,event=pr
-            type=sha
-            type=raw,value=latest,enable={{is_default_branch}}
+            type=ref,event=branch,pattern={{branch}},enable=${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+            type=ref,event=pr,pattern=pr-{{pr.number}},enable=${{ github.event_name == 'pull_request' }}
+            type=sha,enable=${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+            type=raw,value=latest,enable=${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+            type=raw,value=sha-${{ github.sha }},enable=${{ github.event_name == 'pull_request' }}
 
       - name: Create and push manifest
         id: manifest
@@ -286,9 +296,7 @@ jobs:
 
           # create manifest and tag it
           docker buildx imagetools create \
-            -t ${{ env.REGISTRY }}/${{ github.repository }}-cuda-dev${{ matrix.image_suffix }}:pr-${{
-              github.event.pull_request.number }} \
-            -t ${{ env.REGISTRY }}/${{ github.repository }}-cuda-dev${{ matrix.image_suffix }}:sha-${SHORT_SHA} \
+            ${{ steps.meta.outputs.tags }} \
             $sources
 
           # extract final manifest digest
@@ -353,12 +361,13 @@ jobs:
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ${{ env.REGISTRY }}/${{ github.repository }}-aws-dev
+          images: ${{ env.REGISTRY }}/${{ github.repository }}-aws${{ needs.detect-changes.outputs.image_repo_suffix }}
           tags: |
-            type=ref,event=branch
-            type=ref,event=pr
-            type=sha
-            type=raw,value=latest,enable={{is_default_branch}}
+            type=ref,event=branch,pattern={{branch}},enable=${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+            type=ref,event=pr,pattern=pr-{{pr.number}},enable=${{ github.event_name == 'pull_request' }}
+            type=sha,enable=${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+            type=raw,value=latest,enable=${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+            type=raw,value=sha-${{ github.sha }},enable=${{ github.event_name == 'pull_request' }}
 
       - name: Build & Push (official action)
         id: build-and-push
@@ -433,20 +442,40 @@ jobs:
       - name: Build and push the image
         id: build-and-push
         run: |
-          TAG="sha-$(git rev-parse --short HEAD)"
-          PR_TAG="${{ github.event.pull_request.number }}"
+          # Set common environment variables for Makefile
           export DEVICE=xpu
           export DOCKERFILE=Dockerfile.xpu
-          export VERSION="${TAG}"
+          export PROJECT_NAME=${{ env.IMAGE_NAME }} # Ensure PROJECT_NAME is set for Makefile
+
+          # Determine IMAGE_REPO_SUFFIX based on event type
+          if [[ "${{ github.event_name }}" == "pull_request" ]]; then
+            export IMAGE_REPO_SUFFIX="-pr"
+            export VERSION="pr-${{ github.event.pull_request.number }}"
+          else
+            export IMAGE_REPO_SUFFIX="-dev"
+            # For main branch, tag with main branch name if it's a push to main, otherwise sha
+            if [[ "${{ github.event_name }}" == "push" && "${{ github.ref }}" == "refs/heads/main" ]]; then
+              export VERSION="main"
+            else
+              SHORT_SHA=$(git rev-parse --short HEAD)
+              export VERSION="sha-${SHORT_SHA}"
+            fi
+          fi
+
+          # Build and push the image
           make image-build
           make image-push
-          echo "tag=${TAG}" >> $GITHUB_OUTPUT
-          if [ -n ${PR_TAG} ]; then
-            export NEW_TAG="pr-${PR_TAG}"
+
+          # Also push a 'latest' tag for main branch pushes
+          if [[ "${{ github.event_name }}" == "push" && "${{ github.ref }}" == "refs/heads/main" ]]; then
+            export NEW_TAG="latest"
             make image-retag
-            VERSION="${NEW_TAG}" make image-push
-            echo "pr_tag=pr-${PR_TAG}"  >> $GITHUB_OUTPUT
-          fi;
+            make image-push # Push the retagged image
+          fi
+
+          # Export tags for Trivy
+          echo "tag=${VERSION}" >> $GITHUB_OUTPUT
+          echo "repo_suffix=${IMAGE_REPO_SUFFIX}" >> $GITHUB_OUTPUT
 
       - name: Run Trivy vulnerability scanner
         uses: aquasecurity/trivy-action@master

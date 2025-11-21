@@ -18,13 +18,8 @@ NEW_TAG ?= sha256...
 # DEVICE, options: ['cuda', 'xpu', 'cuda-efa']
 DEVICE ?= cuda
 
-IMAGE_BASE ?= ghcr.io/llm-d/$(PROJECT_NAME)-$(DEVICE)
-
-# BUILD_TYPE, options ['dev', 'prod']
-BUILD_TYPE ?= dev
-ifeq ($(BUILD_TYPE), dev)
-	IMAGE_BASE := $(IMAGE_BASE)-dev
-endif
+IMAGE_REPO_SUFFIX ?= -dev # Default to -dev for local builds, overridden by CI
+IMAGE_BASE ?= ghcr.io/llm-d/$(PROJECT_NAME)-$(DEVICE)$(IMAGE_REPO_SUFFIX)
 
 IMG := $(IMAGE_BASE):$(VERSION)
 
