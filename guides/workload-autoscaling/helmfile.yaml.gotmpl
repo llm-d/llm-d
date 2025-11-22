@@ -15,7 +15,7 @@ environments:
 ---
 
 {{- $ns := .Namespace | default "llm-d-autoscaler" -}}
-{{- $rn := (env "RELEASE_NAME_POSTFIX") | default "llm-d-autoscaler" -}}
+{{- $rn := (env "RELEASE_NAME_POSTFIX") | default "workload-autoscaler" -}}
 
 repositories:
   - name: llm-d-modelservice
