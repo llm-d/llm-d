@@ -213,6 +213,8 @@ Login with admin/admin and set the password.
 
 Open up the LLM-D Performance Dashboard.
 
+![Grafana dashboard empty of data](images/grafana_empty.png)
+
 ## Configure AnythingLLM
 
 In AnythingLLM, configure Settings -> AI Providers -> LLMProvider to `LocalAI`.
@@ -223,4 +225,9 @@ Use this for the AnythingLLM local base url in this format: `http://localhost:80
 
 Choose the Qwen3-0.6B model.
 
+![AnythingLLM Configuration](images/anythingllm.png)
+
+
 You are now ready to test llm-d.  Start some conversations with AnythingLLM and watch the Grafana dashboard light up.
+
+![Grafana dashboard full of data](images/grafana_full.png)
