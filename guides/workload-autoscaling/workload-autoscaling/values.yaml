@@ -33,7 +33,7 @@ wva:
   scaleToZero: false  # Enable scaling variants to zero replicas (default: false)
 
 llmd:
-  namespace: llm-d-inference-scheduler
+  namespace: llm-d-autoscaler
   modelName: ms-workload-autoscaler-llm-d-modelservice
   modelID: "Qwen/Qwen3-0.6B"
 

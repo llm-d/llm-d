@@ -13,15 +13,6 @@ routing:
     connector: nixlv2
     secure: false
 
-  inferencePool:
-    create: false
-
-  httpRoute:
-    create: false
-
-  epp:
-    create: false
-
 decode:
   create: true
   replicas: 2
