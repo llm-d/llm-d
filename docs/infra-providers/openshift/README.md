@@ -34,4 +34,128 @@ cd gateway-provider
 helmfile apply -f istio.helmfile.yaml
 ```
 
+### Deploy the example `precise prefix cache aware`
 
+Go to the `guides/precise-prefix-cache-aware` example directory.
+```sh
+cd ../../precise-prefix-cache-aware
+```
+
+Create a namespace for your deployment.
+```sh
+export NAMESPACE=llm-d
+oc new-project ${NAMESPACE}
+```
+
+Set Hugging Face credentials. See https://huggingface.co/settings/tokens
+```sh
+export HF_TOKEN=<token from hugginface>
+export HF_TOKEN_NAME=${HF_TOKEN_NAME:-llm-d-hf-token}
+```
+
+Create a Kubernetes secret for the Hugging Face token:
+```sh
+oc create secret generic ${HF_TOKEN_NAME} \
+  --from-literal="HF_TOKEN=${HF_TOKEN}" \
+  --namespace "${NAMESPACE}" \
+  --dry-run=client -o yaml | oc apply -f -
+```
+
+Apply Helmfile in the namespace.
+```sh
+helmfile apply -n ${NAMESPACE}
+```
+
+### Handle GPU node taints. 
+
+At this point, the ms-kv-events-llm-d-modelservice-decode pods might be stuck in a Pending state. 
+This typically happens when GPU nodes have taints applied; for example, for NVIDIA-L40S-PRIVATE (the GPUs we're using in this example).
+
+To allow scheduling, add the proper tolerations:
+```sh
+oc patch deployment ms-kv-events-llm-d-modelservice-decode \
+  -p '{"spec":{"template":{"spec":{"tolerations":[{"key":"nvidia.com/gpu","operator":"Equal","value":"NVIDIA-L40S-PRIVATE","effect":"NoSchedule"}]}}}}'
+```
+
+### Create the HTTPRoute
+
+In the same directory, run
+```sh
+oc apply -f httproute.yaml -n ${NAMESPACE}
+```
+
+### Verify pods are running
+
+After a few minutes, your pods should be running. Confirm with:
+```sh
+oc get pods -n ${NAMESPACE}
+```
+Example output:
+```
+NAME                                                      READY   STATUS    RESTARTS   AGE
+gaie-kv-events-epp-588f77495f-8fn7q                       1/1     Running   0          24m
+infra-kv-events-inference-gateway-istio-799c7b8f-nwvwl    1/1     Running   0          24m
+ms-kv-events-llm-d-modelservice-decode-5888b4ff9f-dw6hk   2/2     Running   0          24m
+ms-kv-events-llm-d-modelservice-decode-5888b4ff9f-vtb2b   2/2     Running   0          18m
+```
+
+### Test deployment
+
+#### Setup port forwarding
+
+```sh
+oc port-forward -n ${NAMESPACE} service/infra-kv-events-inference-gateway-istio 8000:80
+```
+#### Test KV cache-aware routing
+
+```
+curl localhost:8000/v1/models | jq
+```
+
+Output:
+```
+{
+  "data": [
+    {
+      "created": 1764013724,
+      "id": "Qwen/Qwen3-0.6B",
+      "max_model_len": 40960,
+      "object": "model",
+      "owned_by": "vllm",
+      "parent": null,
+      "permission": [
+        {
+          "allow_create_engine": false,
+          "allow_fine_tuning": false,
+          "allow_logprobs": true,
+          "allow_sampling": true,
+          "allow_search_indices": false,
+          "allow_view": true,
+          "created": 1764013724,
+          "group": null,
+          "id": "modelperm-806876f87f384832a29200d2e93d1295",
+          "is_blocking": false,
+          "object": "model_permission",
+          "organization": "*"
+        }
+      ],
+      "root": "Qwen/Qwen3-0.6B"
+    }
+  ],
+  "object": "list"
+}
+```
+
+#### Send prompts through inference gateway
+```sh
+curl -X POST  localhost:8000/v1/completions     -H "Content-Type: application/json"     -d '{
+      "model": "Qwen/Qwen3-0.6B",
+      "prompt": "Hello, how are you?",
+      "max_tokens": 50
+    }'
+```
+
+Output:
+```
+{"choices":[{"finish_reason":"length","index":0,"logprobs":null,"prompt_logprobs":null,"prompt_token_ids":null,"stop_reason":null,"text":" I'm sorry to hear about the incident. I'm sorry to hear about the incident, and I'm sorry to hear about the incident again. I'm sorry to hear about the incident, and I'm sorry to hear about the incident again. I","token_ids":null}],"created":1764013750,"id":"cmpl-29ce2940-8500-4c81-95e7-acc26f81fb2c","kv_transfer_params":null,"model":"Qwen/Qwen3-0.6B","object":"text_completion","service_tier":null,"system_fingerprint":null,"usage":{"completion_tokens":50,"prompt_tokens":6,"prompt_tokens_details":null,"total_tokens":56}}
+```
