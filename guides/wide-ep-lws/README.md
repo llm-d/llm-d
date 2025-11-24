@@ -35,6 +35,10 @@ This guide requires 32 Nvidia H200 or B200 GPUs and InfiniBand or RoCE RDMA netw
 Use the helmfile to compose and install the stack. The Namespace in which the stack will be deployed will be derived from the `${NAMESPACE}` environment variable. If you have not set this, it will default to `llm-d-wide-ep` in this example.
 
 ```bash
+# Clone the repo and switch to the latest release tag 
+tag=$(curl -s https://api.github.com/repos/llm-d/llm-d/releases/latest | jq -r '.tag_name')
+git clone https://github.com/llm-d/llm-d.git && cd llm-d && git checkout "$tag"
+
 export NAMESPACE=llm-d-wide-ep # or any other namespace
 cd guides/wide-ep-lws/
 kubectl create namespace ${NAMESPACE}

@@ -17,6 +17,12 @@ Use the helmfile to compose and install the stack. The Namespace in which the st
 
 ```bash
 export NAMESPACE=llm-d-precise # Or any namespace your heart desires
+kubectl create namespace ${NAMESPACE}
+
+# Clone the repo and switch to the latest release tag 
+tag=$(curl -s https://api.github.com/repos/llm-d/llm-d/releases/latest | jq -r '.tag_name')
+git clone https://github.com/llm-d/llm-d.git && cd llm-d && git checkout "$tag"
+
 cd guides/precise-prefix-cache-aware
 helmfile apply -n ${NAMESPACE}
 ```

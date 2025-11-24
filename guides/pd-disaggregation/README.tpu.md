@@ -27,8 +27,11 @@ Please refer to [llm-d on GKE Documentation](../../docs/infra-providers/gke/READ
 Create the namespace for the deployment. You may use a custom namespace if preferred.
 
 ```bash
-export NAMESPACE=llm-d-pd # Or any namespace your heart desires
+# Clone the repo and switch to the latest release tag 
+tag=$(curl -s https://api.github.com/repos/llm-d/llm-d/releases/latest | jq -r '.tag_name')
+git clone https://github.com/llm-d/llm-d.git && cd llm-d && git checkout "$tag"
 
+export NAMESPACE=llm-d-pd # Or any namespace your heart desires
 kubectl create namespace ${NAMESPACE}
 ```
 

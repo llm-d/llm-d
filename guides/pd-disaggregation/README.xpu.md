@@ -17,10 +17,11 @@ If you need to customize the vLLM version or build the image from source, you ca
 
 ### Clone Repository
 ```shell
-# Clone the llm-d repository
-git clone https://github.com/llm-d/llm-d
-cd llm-d
+# Clone the repo and switch to the latest release tag 
+tag=$(curl -s https://api.github.com/repos/llm-d/llm-d/releases/latest | jq -r '.tag_name')
+git clone https://github.com/llm-d/llm-d.git && cd llm-d && git checkout "$tag"
 ```
+
 ### Build Default Image
 #### Intel Data Center GPU Max 1550
 ```shell

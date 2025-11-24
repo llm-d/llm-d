@@ -1,6 +1,3 @@
-import Tabs from '@theme/Tabs';
-import TabItem from '@theme/TabItem';
-
 # Offloading Prefix Cache to CPU Memory
 
 ## Overview
@@ -18,6 +15,10 @@ This guide provides recipes to offload prefix cache to CPU RAM via the vLLM nati
 First, set up a namespace for the deployment and create the HuggingFace token secret.
 
 ```bash
+# Clone the repo and switch to the latest release tag 
+tag=$(curl -s https://api.github.com/repos/llm-d/llm-d/releases/latest | jq -r '.tag_name')
+git clone https://github.com/llm-d/llm-d.git && cd llm-d && git checkout "$tag"
+
 export NAMESPACE=llm-d-pfc-cpu # or any other namespace
 kubectl create namespace ${NAMESPACE}
 
