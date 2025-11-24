@@ -71,6 +71,12 @@ helmfile apply -n ${NAMESPACE}
 At this point, the ms-kv-events-llm-d-modelservice-decode pods might be stuck in a Pending state. 
 This typically happens when GPU nodes have taints applied; for example, for NVIDIA-L40S-PRIVATE (the GPUs we're using in this example).
 
+```
+Handle GPU Node taints
+
+0/9 nodes are available: 2 node(s) had untolerated taint {nvidia.com/gpu: NVIDIA-L40S-PRIVATE}, 7 Insufficient nvidia.com/gpu. preemption: 0/9 nodes are available: 2 Preemption is not helpful for scheduling, 7 No preemption victims found for incoming pod.
+```
+
 To allow scheduling, add the proper tolerations:
 ```sh
 oc patch deployment ms-kv-events-llm-d-modelservice-decode \
@@ -159,3 +165,62 @@ Output:
 ```
 {"choices":[{"finish_reason":"length","index":0,"logprobs":null,"prompt_logprobs":null,"prompt_token_ids":null,"stop_reason":null,"text":" I'm sorry to hear about the incident. I'm sorry to hear about the incident, and I'm sorry to hear about the incident again. I'm sorry to hear about the incident, and I'm sorry to hear about the incident again. I","token_ids":null}],"created":1764013750,"id":"cmpl-29ce2940-8500-4c81-95e7-acc26f81fb2c","kv_transfer_params":null,"model":"Qwen/Qwen3-0.6B","object":"text_completion","service_tier":null,"system_fingerprint":null,"usage":{"completion_tokens":50,"prompt_tokens":6,"prompt_tokens_details":null,"total_tokens":56}}
 ```
+
+## Promethus and Grafana
+
+Clone the monitoring repo from:  https://github.com/deewhyweb/hello-chris-llm-d.git
+
+```
+git clone https://github.com/deewhyweb/hello-chris-llm-d.git
+cd hello-chris-llm-d
+```
+
+### Deploy prometheus and grafana
+
+```sh
+oc create namespace llm-d-monitoring || true
+
+oc apply -f monitoring/grafana.yaml
+
+oc apply -f monitoring/grafana-service.yaml
+
+oc apply -f monitoring/prometheus.yaml
+
+oc apply -f monitoring/grafana-datasources.yaml
+
+oc apply -f monitoring/grafana-dashboards-config.yaml
+
+oc apply -f monitoring/grafana-config.yaml
+
+oc apply -f monitoring/prometheus-config.yaml
+
+oc create configmap grafana-dashboard-llm-performance --from-file=monitoring/grafana-dashboard-llm-performance.json -n  llm-d-monitoring --dry-run=client -o yaml | oc apply -f -
+```
+
+### Add Prometheus annotations to model service pods for metrics discovery
+
+```
+for pod in $(oc get pods -n llm-d -l llm-d.ai/inferenceServing=true -o name); do
+  oc annotate $pod prometheus.io/scrape=true prometheus.io/port=8000 prometheus.io/path=/metrics -n llm-d
+done
+```
+
+### Login and configure dashboard
+
+Open the Grafana route from Networking -> Routes. 
+
+Login with admin/admin and set the password. 
+
+Open up the LLM-D Performance Dashboard.
+
+## Configure AnythingLLM
+
+In AnythingLLM, configure Settings -> AI Providers -> LLMProvider to `LocalAI`.
+
+Copy the service ingres:
+
+Use this for the AnythingLLM local base url in this format: `http://localhost:8000/v1`
+
+Choose the Qwen3-0.6B model.
+
+You are now ready to test llm-d.  Start some conversations with AnythingLLM and watch the Grafana dashboard light up.
