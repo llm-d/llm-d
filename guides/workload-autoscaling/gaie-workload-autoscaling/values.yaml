@@ -1,7 +1,7 @@
 inferenceExtension:
   replicas: 1
   image:
-    # both downstream infernece-scheduler and upstream epp image can support workload-autoscaling example
+    # both downstream inference-scheduler and upstream epp image can support workload-autoscaling example
     ###################
     name: llm-d-autoscaler
     hub: ghcr.io/llm-d
