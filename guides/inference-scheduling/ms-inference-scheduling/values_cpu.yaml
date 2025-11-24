@@ -43,8 +43,6 @@ decode:
       - "--max_model_len"
       - "8192"
     env:
-      - name: LD_LIBRARY_PATH
-        value: "/usr/local/lib:/usr/lib"
       - name: VLLM_CPU_NUM_OF_RESERVED_CPU
         value: "1"
       - name: VLLM_CPU_KVCACHE_SPACE
