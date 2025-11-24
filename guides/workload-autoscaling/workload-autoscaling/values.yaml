@@ -14,8 +14,8 @@ wva:
   reconcileInterval: 60s
     
   prometheus:
-    monitoringNamespace: llm-d-monitoring
-    baseURL: "https://thanos-querier.openshift-monitoring.svc.cluster.local:9091"
+    monitoringNamespace: llm-d-monitoring # Namespace for Prometheus monitoring
+    baseURL: "http://llmd-kube-prometheus-stack-prometheus.monitoring.svc.cluster.local:9090"
     # Development security configuration (relaxed for easier development)
     tls:
       insecureSkipVerify: true   # Development: true, Production: false
@@ -34,7 +34,7 @@ wva:
 
 llmd:
   namespace: llm-d-inference-scheduler
-  modelName: ms-inference-scheduling-llm-d-modelservice
+  modelName: ms-workload-autoscaler-llm-d-modelservice
   modelID: "Qwen/Qwen3-0.6B"
 
 va:
