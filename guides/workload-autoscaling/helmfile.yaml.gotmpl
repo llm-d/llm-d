@@ -129,6 +129,9 @@ releases:
     labels:
       kind: autoscaling
     set:
+        # kubectl get secret thanos-querier-tls -n openshift-monitoring -o jsonpath='{.data.tls\.crt}' | base64 -d > /tmp/prometheus-ca.crt
+      - name: foo.config
+        file: /tmp/prometheus-ca.crt
       - name: va.accelerator
         value: "L40S"
       - name: llmd.modelID
