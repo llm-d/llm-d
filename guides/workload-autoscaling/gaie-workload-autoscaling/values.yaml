@@ -3,7 +3,7 @@ inferenceExtension:
   image:
     # both downstream inference-scheduler and upstream epp image can support workload-autoscaling example
     ###################
-    name: llm-d-autoscaler
+    name: llm-d-inference-scheduler
     hub: ghcr.io/llm-d
     tag: v0.3.2
     ###################
