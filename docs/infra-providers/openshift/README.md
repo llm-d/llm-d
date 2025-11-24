@@ -217,7 +217,7 @@ Open up the LLM-D Performance Dashboard.
 
 In AnythingLLM, configure Settings -> AI Providers -> LLMProvider to `LocalAI`.
 
-Copy the service ingres:
+Copy the service ingress:
 
 Use this for the AnythingLLM local base url in this format: `http://localhost:8000/v1`
 
