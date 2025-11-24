@@ -37,7 +37,11 @@ cd flashinfer
 git checkout -q "${FLASHINFER_VERSION}"
 git submodule update --init --recursive
 uv build --wheel --no-build-isolation --out-dir /wheels
-cd ..
+cd flashinfer-cubin && \
+uv build --wheel --no-build-isolation --out-dir /wheels
+cd ../flashinfer-jit-cache && \
+FLASHINFER_CUDA_ARCH_LIST="9.0a 10.0a" uv build --wheel --no-build-isolation --out-dir /wheels
+cd ../../ && \
 rm -rf flashinfer
 
 # build DeepEP wheel
