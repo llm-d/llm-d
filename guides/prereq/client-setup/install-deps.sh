@@ -11,7 +11,7 @@ HELM_VER="v3.17.3"
 # Helmdiff version
 HELMDIFF_VERSION="v3.11.0"
 # Helmfile version
-HELMFILE_VERSION="1.1.3"
+HELMFILE_VERSION="1.2.1"
 # chart-testing version
 CT_VERSION="3.12.0"
 
