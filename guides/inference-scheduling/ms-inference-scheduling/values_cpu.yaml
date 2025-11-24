@@ -32,7 +32,7 @@ decode:
     image: ghcr.io/llm-d/llm-d-cpu-dev:sha-1b3416d
     imagePullPolicy: IfNotPresent
     modelCommand: vllmServe
-    securityContext:
+    securityContext: # NUMA cross-node related
       seccompProfile:
         type: Unconfined
       capabilities:
@@ -43,14 +43,12 @@ decode:
       - "--max_model_len"
       - "8192"
     env:
-      - name: VLLM_SKIP_WARMUP
-        value: "True"
-      - name: OMP_NUM_THREADS
-        value: "64"
       - name: LD_LIBRARY_PATH
         value: "/usr/local/lib:/usr/lib"
+      - name: VLLM_CPU_NUM_OF_RESERVED_CPU
+        value: "1"
       - name: VLLM_CPU_KVCACHE_SPACE
-        value: "40"
+        value: "32"
     ports:
       - containerPort: 8200
         protocol: TCP
@@ -93,10 +91,6 @@ decode:
   volumes:
     - name: metrics-volume
       emptyDir: {}
-    - name: shm
-      emptyDir:
-        medium: Memory
-        sizeLimit: "4Gi"
     - name: torch-compile-cache
       emptyDir: {}
 
