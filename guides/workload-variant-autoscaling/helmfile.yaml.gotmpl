@@ -63,7 +63,7 @@ releases:
       - provider:
           name: {{ .Environment.Values.provider.name }}
           istio:
-            {{ .Environment.Values.istio | toYaml | nindent 12 }}
+            {{ .Environment.Values.provider.istio | toYaml | nindent 12 }}
       - provider:
           istio:
             destinationRule:

@@ -11,10 +11,10 @@ wva:
   reconcileInterval: 60s
   prometheus:
     monitoringNamespace: llm-d-monitoring
-    baseURL: "http://llmd-kube-prometheus-stack-prometheus.monitoring.svc.cluster.local:9090"
+    baseURL: "https://llmd-kube-prometheus-stack-prometheus.llm-d-monitoring.svc.cluster.local:9090"
     tls:
       insecureSkipVerify: true
-      caCertPath: "/etc/ssl/certs/prometheus-ca.crt"
+      caCertPath: "/var/run/secrets/kubernetes.io/serviceaccount/ca.crt"
   experimentalHybridOptimization: false
   scaleToZero: false
 
