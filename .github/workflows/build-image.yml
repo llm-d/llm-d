@@ -16,7 +16,7 @@ on:
   workflow_dispatch:
     inputs:
       platforms:
-        description: 'Platforms to build (comma-separated: cuda,aws,gke,xpu)'
+        description: 'Platforms to build (comma-separated: cuda,aws,gke,xpu,cpu)'
         required: false
         default: 'cuda'
         type: string
@@ -83,6 +83,7 @@ jobs:
     outputs:
       cuda: ${{ steps.filter.outputs.cuda || steps.dispatch.outputs.cuda }}
       xpu: ${{ steps.filter.outputs.xpu || steps.dispatch.outputs.xpu }}
+      cpu: ${{ steps.filter.outputs.cpu || steps.dispatch.outputs.cpu }}
       aws: ${{ steps.filter.outputs.aws || steps.dispatch.outputs.aws }}
     steps:
       - uses: actions/checkout@v4
@@ -101,6 +102,9 @@ jobs:
             xpu:
               - 'docker/Dockerfile.xpu'
               - 'docker/scripts/**'
+            cpu:
+              - 'docker/Dockerfile.cpu'
+              - 'docker/scripts/**'
             aws:
               - 'docker/Dockerfile.aws'
               - 'docker/scripts/**'
@@ -114,6 +118,7 @@ jobs:
           echo "aws=$(echo $platforms | grep -q aws && echo true || echo false)" >> $GITHUB_OUTPUT
           echo "gke=$(echo $platforms | grep -q gke && echo true || echo false)" >> $GITHUB_OUTPUT
           echo "xpu=$(echo $platforms | grep -q xpu && echo true || echo false)" >> $GITHUB_OUTPUT
+          echo "cpu=$(echo $platforms | grep -q cpu && echo true || echo false)" >> $GITHUB_OUTPUT
 
   cuda-build-llm-d:
     needs: [detect-changes]
@@ -460,6 +465,76 @@ jobs:
           skip-dirs: /root/.cache/uv
         env:
           TRIVY_USERNAME: ${{ secrets.GHCR_USER }}
+          TRIVY_PASSWORD: ${{ secrets.GHCR_TOKEN }}
+
+      - name: Upload Trivy scan results to GitHub Security tab
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: 'trivy-results.sarif'
+
+      - name: Display vulnerability summary
+        run: |
+          echo "=== Vulnerability Scan Summary ==="
+          if [ -f trivy-results.sarif ]; then
+            echo "Scan completed. Check the Security tab for detailed results."
+          else
+            echo "No vulnerabilities found or scan failed."
+          fi
+
+  cpu-build-llm-d:
+    needs: [detect-changes]
+    if: ${{ needs.detect-changes.outputs.cpu == 'true' }}
+    strategy:
+      fail-fast: false
+    runs-on: vllm-runner
+    steps:
+      - name: Checkout push ref
+        if: github.event_name == 'push'
+        uses: Actions/checkout@v4
+
+      - name: Checkout PR branch
+        if: github.event_name == 'pull_request'
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - name: Log in to Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ secrets.GHCR_USER }}
+          password: ${{ secrets.GHCR_TOKEN }}
+
+      - name: Build and push the image
+        id: build-and-push
+        run: |
+          TAG="sha-$(git rev-parse --short HEAD)"
+          PR_TAG="${{ github.event.pull_request.number }}"
+          export DEVICE=cpu
+          export DOCKERFILE=Dockerfile.cpu
+          export VERSION="${TAG}"
+          make image-build
+          make image-push
+          echo "tag=${TAG}" >> $GITHUB_OUTPUT
+          if [ -n ${PR_TAG} ]; then
+            export NEW_TAG="pr-${PR_TAG}"
+            make image-retag
+            VERSION="${NEW_TAG}" make image-push
+            echo "pr_tag=pr-${PR_TAG}"  >> $GITHUB_OUTPUT
+          fi;
+
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: ${{ env.REGISTRY }}/${{ github.repository }}-cpu-dev:${{ steps.build-and-push.outputs.tag }}
+          format: 'sarif'
+          output: 'trivy-results.sarif'
+          severity: 'CRITICAL,HIGH,MEDIUM'
+          scanners: vuln              # skip secrets/config/license analyzers
+          timeout: 30m
+          skip-dirs: /root/.cache/uv
+        env:
+          TRIVY_USERNAME: ${{ github.actor }}
           TRIVY_PASSWORD: ${{ secrets.GHCR_TOKEN }}
 
       - name: Upload Trivy scan results to GitHub Security tab
