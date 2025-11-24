@@ -1,0 +1,41 @@
+wva:
+  enabled: true
+  image:
+    repository: ghcr.io/llm-d/workload-variant-autoscaler
+    tag: v0.0.5
+  imagePullPolicy: Always
+  metrics:
+    enabled: true
+    port: 8443
+    secure: true
+  reconcileInterval: 60s
+  prometheus:
+    monitoringNamespace: llm-d-monitoring
+    baseURL: "http://llmd-kube-prometheus-stack-prometheus.monitoring.svc.cluster.local:9090"
+    tls:
+      insecureSkipVerify: true
+      caCertPath: "/etc/ssl/certs/prometheus-ca.crt"
+  experimentalHybridOptimization: false
+  scaleToZero: false
+
+llmd:
+  namespace: llm-d-autoscaling
+  modelName: ms-autoscaling-llm-d-modelservice
+  modelID: "Qwen/Qwen3-0.6B"
+
+va:
+  enabled: true
+  accelerator: H100
+  sloTpot: 10
+  sloTtft: 1000
+
+hpa:
+  enabled: true
+  maxReplicas: 10
+  targetAverageValue: "1"
+
+vllmService:
+  enabled: false
+  nodePort: 30000
+  interval: 15s
+  scheme: http  # vLLM emulator runs on HTTP
