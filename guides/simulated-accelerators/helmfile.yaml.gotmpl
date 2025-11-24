@@ -60,7 +60,7 @@ releases:
           name: {{ .Environment.Values.provider.name }}
           istio:
             {{ .Environment.Values.provider.istio | toYaml | nindent 12 }}
-      - proivder:
+      - provider:
           istio:
             destinationRule:
               host: {{ printf "gaie-%s-epp.%s.svc.cluster.local" $rn $ns | quote }}
