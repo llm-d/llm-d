@@ -15,6 +15,6 @@ provider:
           insecureSkipVerify: true
 
 # MS values
-routing:  # empty debugLevel overrides, so keys always exist to pull values from, its just empty
+routing:
   proxy:
-    debugLevel:
+    zapLogLevel: debug

@@ -14,7 +14,7 @@ gateway:
 # MS values
 routing:
   proxy:
-    debugLevel: 1
+    zapLogLevel: error
 
 # GAIE values
 inferenceExtension:
