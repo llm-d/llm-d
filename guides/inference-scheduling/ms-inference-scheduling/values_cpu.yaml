@@ -19,21 +19,6 @@ routing:
     connector: nixlv2
     secure: false
 
-  parentRefs:
-    - group: gateway.networking.k8s.io
-      kind: Gateway
-      name: infra-r1-inference-gateway
-
-  inferencePool:
-    create: false
-
-  # create httpRoute via MS for using release name r1 override
-  httpRoute:
-    create: true
-
-  epp:
-    create: false
-
 decode:
   create: true
   replicas: 2
@@ -45,37 +30,40 @@ decode:
       interval: "30s"
   containers:
   - name: "vllm"
-    image: docker.io/library/vllm-cpu-env:latest
+    image: quay.io/aneeshkp/vllm-d-cpu-dev:v5
     imagePullPolicy: IfNotPresent
-    securityContext:
-      privileged: true
-    command: ["/bin/bash", "-c"]
+    modelCommand: vllmServe
     args:
-      - |
-          VLLM_SKIP_WARMUP=True vllm serve meta-llama/Llama-3.2-3B-Instruct \
-          --port 8200 \
-          --gpu-memory-utilization 0.9 \
-          --enforce-eager \
-          --disable-hybrid-kv-cache-manager \
-          --tensor-parallel-size 1 --max_model_len 32768 
+      - "--enforce-eager" 
+      - "--disable-hybrid-kv-cache-manager"
+      - "--max_model_len"
+      - "32768"
     env:
+      - name: VLLM_SKIP_WARMUP
+        value: "True"
       - name: VLLM_LOGGING_LEVEL
         value: DEBUG
       - name: OMP_NUM_THREADS
         value: "64"
+      - name: MKL_NUM_THREADS
+        value: "64"
+      - name: VLLM_CPU_KVCACHE_SPACE
+        value: "40"
       - name: LD_LIBRARY_PATH
         value: "/usr/local/lib:/usr/lib:/opt/amazon/openmpi/lib"
+      - name: VLLM_TARGET_DEVICE
+        value: "cpu"
 
     ports:
       - containerPort: 8200
         protocol: TCP
     resources:
       limits:
-        memory: 64G
+        memory: 64Gi
         cpu: "64"
       requests:
         cpu: "64"
-        memory: 64G
+        memory: 64Gi
     device: "cpu"
     mountModelVolume: true
     volumeMounts:
@@ -108,10 +96,6 @@ decode:
   volumes:
     - name: metrics-volume
       emptyDir: {}
-    - name: shm
-      emptyDir:
-        medium: Memory
-        sizeLimit: "100Gi"
     - name: torch-compile-cache
       emptyDir: {}
 
