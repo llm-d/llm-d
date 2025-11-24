@@ -1,9 +1,9 @@
 inferenceExtension:
   replicas: 1
   image:
-    # both downstream infernece-scheduler and upstream epp image can support inference-scheduling example
+    # both downstream infernece-scheduler and upstream epp image can support workload-autoscaling example
     ###################
-    name: llm-d-inference-scheduler
+    name: llm-d-autoscaler
     hub: ghcr.io/llm-d
     tag: v0.3.2
     ###################
@@ -18,7 +18,7 @@ inferenceExtension:
     interval: "10s"
     # Service account token secret for authentication
     secret:
-      name: inference-scheduling-gateway-sa-metrics-reader-secret
+      name: workload-autoscaler-gateway-sa-metrics-reader-secret
     # Prometheus ServiceMonitor will be created when enabled for EPP metrics collection
     prometheus:
       enabled: true
