@@ -11,6 +11,7 @@ ACTION="install"
 KUBERNETES_CONTEXT=""
 DEBUG=""
 CENTRAL_MODE=true
+ENABLE_TLS=false
 
 ### HELP & LOGGING ###
 print_help() {
@@ -25,6 +26,7 @@ Options:
   -d, --debug                 Add debug mode to the helm install
   -g, --context               Supply a specific Kubernetes context
   -i, --individual            Enable individual user monitoring mode (requires -n or MONITORING_NAMESPACE)
+  -t, --enable-tls            Enable HTTPS/TLS for Prometheus (generates self-signed certificates)
   -h, --help                  Show this help and exit
 
 Environment Variables:
@@ -33,6 +35,7 @@ Environment Variables:
 Examples:
   $(basename "$0")                              # Install central monitoring in llm-d-monitoring (watches all namespaces)
   $(basename "$0") -n monitoring                # Install central monitoring in 'monitoring' namespace
+  $(basename "$0") -t                           # Install with HTTPS/TLS enabled
   $(basename "$0") -u                           # Uninstall Prometheus/Grafana stack
   $(basename "$0") -i -n my-monitoring          # Install individual monitoring in specified namespace
   MONITORING_NAMESPACE=my-monitoring $(basename "$0") -i  # Individual mode via env var
@@ -89,6 +92,7 @@ parse_args() {
       -d|--debug)                      DEBUG="--debug"; shift;;
       -g|--context)                    KUBERNETES_CONTEXT="$2"; shift 2 ;;
       -i|--individual)                 CENTRAL_MODE=false; shift ;;
+      -t|--enable-tls)                 ENABLE_TLS=true; shift ;;
       -h|--help)                       print_help; exit 0 ;;
       *)                               fail "Unknown option: $1" ;;
     esac
@@ -214,6 +218,43 @@ check_prometheus_operator() {
   fi
 }
 
+setup_tls_certificates() {
+  if [[ "$ENABLE_TLS" != "true" ]]; then
+    return 0
+  fi
+
+  log_info "🔐 Setting up TLS certificates for Prometheus..."
+
+  # Get the directory where this script is located
+  SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+  CERT_SCRIPT="${SCRIPT_DIR}/generate-prometheus-tls-certs.sh"
+
+  if [[ ! -f "$CERT_SCRIPT" ]]; then
+    log_error "TLS certificate generation script not found at: $CERT_SCRIPT"
+    fail "Please ensure generate-prometheus-tls-certs.sh exists in the scripts directory"
+  fi
+
+  # Check if certificates already exist
+  if $KCMD get secret prometheus-web-tls -n "${MONITORING_NAMESPACE}" &>/dev/null; then
+    log_info "✅ TLS certificates already exist in namespace ${MONITORING_NAMESPACE}"
+    return 0
+  fi
+
+  # Generate certificates
+  log_info "📜 Generating TLS certificates..."
+  if [[ ! -z $KUBERNETES_CONTEXT ]]; then
+    MONITORING_NAMESPACE="${MONITORING_NAMESPACE}" "$CERT_SCRIPT" -g "$KUBERNETES_CONTEXT"
+  else
+    MONITORING_NAMESPACE="${MONITORING_NAMESPACE}" "$CERT_SCRIPT"
+  fi
+
+  if [[ $? -ne 0 ]]; then
+    fail "Failed to generate TLS certificates"
+  fi
+
+  log_success "TLS certificates generated and stored in Kubernetes secret"
+}
+
 check_openshift_monitoring() {
   if ! is_openshift; then
     return 0
@@ -275,6 +316,9 @@ install_prometheus_grafana() {
   else
     log_info "📦 Monitoring namespace already exists"
   fi
+
+  # Setup TLS certificates if enabled
+  setup_tls_certificates
 
   if ! $HCMD repo list 2>/dev/null | grep -q "prometheus-community"; then
     log_info "📚 Adding prometheus-community helm repo..."
@@ -341,6 +385,25 @@ install_prometheus_grafana() {
 
   log_info "🚀 Installing Prometheus stack in namespace ${MONITORING_NAMESPACE}..."
 
+  # Determine protocol and port for Grafana datasource based on TLS setting
+  if [[ "$ENABLE_TLS" == "true" ]]; then
+    PROMETHEUS_PROTOCOL="https"
+    PROMETHEUS_PORT="9090"
+    WEB_TLS_CONFIG="    web:
+      tlsConfig:
+        cert:
+          secret:
+            name: prometheus-web-tls
+            key: tls.crt
+        keySecret:
+          name: prometheus-web-tls
+          key: tls.key"
+  else
+    PROMETHEUS_PROTOCOL="http"
+    PROMETHEUS_PORT="9090"
+    WEB_TLS_CONFIG=""
+  fi
+
   if [[ "$CENTRAL_MODE" == "true" ]]; then
     cat <<EOF > /tmp/prometheus-values.yaml
 grafana:
@@ -354,15 +417,18 @@ grafana:
       datasources:
       - name: Prometheus
         type: prometheus
-        url: http://${RELEASE_NAME}-kube-prometheus-stack-prometheus.${MONITORING_NAMESPACE}.svc.cluster.local:9090
+        url: ${PROMETHEUS_PROTOCOL}://${RELEASE_NAME}-kube-prometheus-stack-prometheus.${MONITORING_NAMESPACE}.svc.cluster.local:${PROMETHEUS_PORT}
         access: proxy
         isDefault: true
+$(if [[ "$ENABLE_TLS" == "true" ]]; then echo "        jsonData:
+          tlsSkipVerify: true"; fi)
 prometheus:
   service:
     type: ClusterIP
     sessionAffinity: ""
   prometheusSpec:
 $(if [[ -n "$PROMETHEUS_IMAGE_CONFIG" ]]; then echo -e "$PROMETHEUS_IMAGE_CONFIG"; fi)
+$(if [[ -n "$WEB_TLS_CONFIG" ]]; then echo -e "$WEB_TLS_CONFIG"; fi)
     serviceMonitorSelectorNilUsesHelmValues: false
     serviceMonitorSelector: {}
     serviceMonitorNamespaceSelector: {}
@@ -393,15 +459,18 @@ grafana:
       datasources:
       - name: Prometheus
         type: prometheus
-        url: http://${RELEASE_NAME}-kube-prometheus-stack-prometheus.${MONITORING_NAMESPACE}.svc.cluster.local:9090
+        url: ${PROMETHEUS_PROTOCOL}://${RELEASE_NAME}-kube-prometheus-stack-prometheus.${MONITORING_NAMESPACE}.svc.cluster.local:${PROMETHEUS_PORT}
         access: proxy
         isDefault: true
+$(if [[ "$ENABLE_TLS" == "true" ]]; then echo "        jsonData:
+          tlsSkipVerify: true"; fi)
 prometheus:
   service:
     type: ClusterIP
     sessionAffinity: ""
   prometheusSpec:
 $(if [[ -n "$PROMETHEUS_IMAGE_CONFIG" ]]; then echo -e "$PROMETHEUS_IMAGE_CONFIG"; fi)
+$(if [[ -n "$WEB_TLS_CONFIG" ]]; then echo -e "$WEB_TLS_CONFIG"; fi)
     serviceMonitorSelectorNilUsesHelmValues: false
     serviceMonitorSelector:
       matchLabels:
@@ -453,7 +522,15 @@ EOF
   log_success "🚀 Prometheus and Grafana installed."
 
   log_info "📊 Access Information:"
-  log_info "   Prometheus: kubectl port-forward -n ${MONITORING_NAMESPACE} svc/${PROMETHEUS_SVC} 9090:9090"
+  if [[ "$ENABLE_TLS" == "true" ]]; then
+    log_info "   Prometheus (HTTPS): kubectl port-forward -n ${MONITORING_NAMESPACE} svc/${PROMETHEUS_SVC} 9090:9090"
+    log_info "   Access via: https://localhost:9090"
+    log_info "   🔐 TLS is enabled - clients must use HTTPS and trust the CA certificate"
+    log_info "   Extract CA cert: kubectl get configmap prometheus-web-tls-ca -n ${MONITORING_NAMESPACE} -o jsonpath='{.data.ca\.crt}' > prometheus-ca.crt"
+  else
+    log_info "   Prometheus (HTTP): kubectl port-forward -n ${MONITORING_NAMESPACE} svc/${PROMETHEUS_SVC} 9090:9090"
+    log_info "   Access via: http://localhost:9090"
+  fi
   log_info "   Grafana: kubectl port-forward -n ${MONITORING_NAMESPACE} svc/${RELEASE_NAME}-grafana 3000:80"
   log_info "   Grafana admin password: admin"
   log_info ""
