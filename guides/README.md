@@ -34,7 +34,15 @@ Our supporting guides address common operational challenges with model serving a
 - [Simulating model servers](./simulated-accelerators/README.md) can deploy a vLLM model server simulator that allows testing inference scheduling and orchestration at scale as each instance does not need accelerators.
 
 ## Benchmarking
-Each one of the tested and supported guides are covered by the project's [benchmarking tooling](https://github.com/llm-d/llm-d-benchmark). The folder names under `guides` here have a corresponding [scenario](https://github.com/llm-d/llm-d-benchmark/tree/main/scenarios/guides) on `llm-d-benchmark`.
+The [llm-d-benchmark](https://github.com/llm-d/llm-d-benchmark) project contains end-to-end automation for benchmarking scenarios.
+
+For usage instructions, please refer to the following guides:
+
+* [How to standup stacks automatically](https://github.com/llm-d/llm-d-benchmark/blob/main/docs/lifecycle.md)
+* [How to run against a pre-existing stack](https://github.com/llm-d/llm-d-benchmark/blob/main/docs/tutorials/run/run_against_existing_example.md)
+* [How to run benchmarks in an interactive manner](https://github.com/llm-d/llm-d-benchmark/blob/main/docs/tutorials/run/run_interactively_example.md)
+
+Each folder under `guides` present here has a corresponding [scenario](https://github.com/llm-d/llm-d-benchmark/tree/main/scenarios/guides) on `llm-d-benchmark`.
 
 ## Other Guides
 
