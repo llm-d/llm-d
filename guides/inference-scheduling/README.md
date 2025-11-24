@@ -75,7 +75,13 @@ Currently in the `inference-scheduling` example we suppport configurations for `
 helmfile apply -e xpu  -n ${NAMESPACE} # targets istio as gateway provider with XPU hardware
 # or
 helmfile apply -e gke_tpu  -n ${NAMESPACE} # targets GKE externally managed as gateway provider with TPU hardware
+# or
+helmfile apply -e cpu  -n ${NAMESPACE} # targets CPU inferencing with istio gateway
 ```
+
+##### CPU Inferencing
+
+This case expects using 4th Gen Intel Xeon processors (Sapphire Rapids) or later. 
 
 ### Install HTTPRoute
 
