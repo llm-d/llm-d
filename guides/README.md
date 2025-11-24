@@ -34,13 +34,7 @@ Our supporting guides address common operational challenges with model serving a
 - [Simulating model servers](./simulated-accelerators/README.md) can deploy a vLLM model server simulator that allows testing inference scheduling and orchestration at scale as each instance does not need accelerators.
 
 ## Benchmarking
-Each one of the tested and supported guides are covered by the project's [benchmarking tooling](https://github.com/llm-d/llm-d-benchmark). This is a separate repository, with several examples and plenty of documentation on itself.
-
-The folder names under `guides` here have a corresponding [scenario](https://github.com/llm-d/llm-d-benchmark/tree/main/scenarios/guides) on `llm-d-benchmark`. There is a fully automated way to deploy the guides directly (e.g., `cd ~/llm-d-benchmark; ./setup/standup.sh -c pd-disaggregation`) or alternatively, just run a selected workload against a stack which is already stood up following the guides here (`cd ~/llm-d-benchmark; ./run.sh -t <url of endpoint> -k <name of a pvc to hold performance data> -l <load generator> -w <load profile>`).
-
-It is important to note that `llm-d-benchmark` supports multiple load generators (also termed "harnesses") - [inference-perf](https://github.com/kubernetes-sigs/inference-perf), [guidellm](https://github.com/vllm-project/guidellm.git), the benchmarks found on the `benchmarks` folder on [vllm](https://github.com/vllm-project/vllm.git), [inferencemax](https://github.com/InferenceMAX/InferenceMAX.git) and "no op" (internally designed "nop") for users interested in benchmarking mostly model load times - with multiple [example workload profiles already available](https://github.com/llm-d/llm-d-benchmark/tree/main/workload/profiles)
-
-There are detailed guides on [how to standup stacks automatically](https://github.com/llm-d/llm-d-benchmark/blob/main/docs/lifecycle.md), on [how to run against a pre-existing stack](https://github.com/llm-d/llm-d-benchmark/blob/main/docs/tutorials/run/run_against_existing_example.md) and even [how to run benchmarks in an interactive manner](https://github.com/llm-d/llm-d-benchmark/blob/main/docs/tutorials/run/run_interactively_example.md)
+Each one of the tested and supported guides are covered by the project's [benchmarking tooling](https://github.com/llm-d/llm-d-benchmark). The folder names under `guides` here have a corresponding [scenario](https://github.com/llm-d/llm-d-benchmark/tree/main/scenarios/guides) on `llm-d-benchmark`.
 
 ## Other Guides
 
