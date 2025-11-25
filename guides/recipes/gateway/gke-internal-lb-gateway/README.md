@@ -4,6 +4,15 @@ This recipe configures the llm-d inference gateway to use a **Google Kubernetes 
 
 It integrates with all well-lit path guides (Inference Scheduling, PD Disaggregation, Wide EP LWS) and is installed via Kustomize overlays.
 
+## Architecture
+
+```mermaid
+graph TD
+    A[Client inside VPC] --> B[GKE Internal LB ILB]
+    B --> C[K8s Service: LoadBalancer<br/>with internal LB annotation]
+    C --> D[llm-d Inference Gateway]
+```
+
 ## Folder Structure
 
 - `base/` — Common Gateway + HTTPRoute resources for GKE
