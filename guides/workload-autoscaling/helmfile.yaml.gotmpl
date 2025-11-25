@@ -136,6 +136,8 @@ releases:
               caCertPath: "/etc/ssl/certs/prometheus-ca.crt"
             caCert: |
 {{ readFile "/tmp/prometheus-ca.crt" | indent 14 }}
+    values:
+      - workload-autoscaling/values.yaml
     set:
       - name: va.accelerator
         value: "L40S"
