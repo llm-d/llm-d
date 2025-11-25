@@ -46,21 +46,36 @@ To see what gateway options are supported refer to our [gateway provider prereq 
 
 You can also customize your gateway, for more information on how to do that see our [gateway customization docs](../../docs/customizing-your-gateway.md).
 
-### Install HTTPRoute
+### Install Gateway and HTTPRoute
 
-Follow provider specific instructions for installing HTTPRoute.
+Follow provider specific instructions for installing Gateway and HTTPRoute.
 
 #### Install for "kgateway" or "istio"
+
+The gateway is deployed automatically via helmfile. Install the HTTPRoute:
 
 ```bash
 kubectl apply -f httproute.yaml -n ${NAMESPACE}
 ```
 
-#### Install for "gke"
+#### Install for "gke" (External Load Balancer)
+
+The gateway is deployed automatically via helmfile using the external GKE gateway class. Install the HTTPRoute:
 
 ```bash
 kubectl apply -f httproute.gke.yaml -n ${NAMESPACE}
 ```
+
+#### Install for "gke" (Internal Load Balancer - VPC-only access)
+
+For VPC-only access, deploy the internal load balancer gateway separately:
+
+```bash
+kubectl apply -k ../../recipes/gateway/gke-internal-lb-gateway/internal-lb -n ${NAMESPACE}
+kubectl apply -f httproute.gke.yaml -n ${NAMESPACE}
+```
+
+**_NOTE:_** When using the internal load balancer, the gateway deployed by helmfile (external) will still be created but won't be used. You can disable it by customizing the helmfile values, or simply use the internal LB gateway as shown above.
 
 ## Verify the Installation
 
@@ -129,3 +144,4 @@ helm uninstall ms-sim -n ${NAMESPACE}
 ## Customization
 
 For information on customizing a guide and tips to build your own, see [our docs](../../docs/customizing-a-guide.md)
+

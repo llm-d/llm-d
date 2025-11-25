@@ -84,21 +84,36 @@ You can also customize your gateway, for more information on how to do that see 
 
 This guide uses RDMA via InfiniBand or RoCE for disaggregated serving kv-cache transfer. The resource attributes required to configure accelerator networking are not yet standardized via [Kubernetes Dynamic Resource Allocation](https://kubernetes.io/docs/concepts/scheduling-eviction/dynamic-resource-allocation/) and so are parameterized per infra provider in the Helm charts. If your provider has a custom setting you will need to update the charts before deploying.
 
-### Install HTTPRoute
+### Install Gateway and HTTPRoute
 
-Follow provider specific instructions for installing HTTPRoute.
+Follow provider specific instructions for installing Gateway and HTTPRoute.
 
 #### Install for "kgateway" or "istio"
+
+The gateway is deployed automatically via helmfile. Install the HTTPRoute:
 
 ```bash
 kubectl apply -f httproute.yaml -n ${NAMESPACE}
 ```
 
-#### Install for "gke"
+#### Install for "gke" (External Load Balancer)
+
+The gateway is deployed automatically via helmfile using the external GKE gateway class. Install the HTTPRoute:
 
 ```bash
 kubectl apply -f httproute.gke.yaml -n ${NAMESPACE}
 ```
+
+#### Install for "gke" (Internal Load Balancer - VPC-only access)
+
+For VPC-only access, deploy the internal load balancer gateway separately:
+
+```bash
+kubectl apply -k ../../recipes/gateway/gke-internal-lb-gateway/internal-lb -n ${NAMESPACE}
+kubectl apply -f httproute.gke.yaml -n ${NAMESPACE}
+```
+
+**_NOTE:_** When using the internal load balancer, the gateway deployed by helmfile (external) will still be created but won't be used. You can disable it by customizing the helmfile values, or simply use the internal LB gateway as shown above.
 
 ## Verify the Installation
 
@@ -183,9 +198,9 @@ helm uninstall infra-pd -n ${NAMESPACE}
 
 **_NOTE:_** If you set the `$RELEASE_NAME_POSTFIX` environment variable, your release names will be different from the command above: `infra-$RELEASE_NAME_POSTFIX`, `gaie-$RELEASE_NAME_POSTFIX` and `ms-$RELEASE_NAME_POSTFIX`.
 
-### Cleanup HTTPRoute
+### Cleanup Gateway and HTTPRoute
 
-Follow provider specific instructions for deleting HTTPRoute.
+Follow provider specific instructions for deleting Gateway and HTTPRoute.
 
 #### Cleanup for "kgateway" or "istio"
 
@@ -193,12 +208,20 @@ Follow provider specific instructions for deleting HTTPRoute.
 kubectl delete -f httproute.yaml -n ${NAMESPACE}
 ```
 
-#### Cleanup for "gke"
+#### Cleanup for "gke" (External Load Balancer)
 
 ```bash
 kubectl delete -f httproute.gke.yaml -n ${NAMESPACE}
 ```
 
+#### Cleanup for "gke" (Internal Load Balancer)
+
+```bash
+kubectl delete -f httproute.gke.yaml -n ${NAMESPACE}
+kubectl delete -k ../../recipes/gateway/gke-internal-lb-gateway/internal-lb -n ${NAMESPACE}
+```
+
 ## Customization
 
 For information on customizing a guide and tips to build your own, see [our docs](../../docs/customizing-a-guide.md)
+

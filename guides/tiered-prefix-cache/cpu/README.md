@@ -31,6 +31,12 @@ kubectl create secret generic llm-d-hf-token --from-literal=HF_TOKEN=${HF_TOKEN}
 
 Deploy the Gateway and HTTPRoute using the [gateway recipe](../../recipes/gateway/README.md).
 
+**For GKE deployments, you can choose between:**
+- **External Load Balancer** (default): `kubectl apply -k ../../../../recipes/gateway/gke-l7-regional-external-managed -n ${NAMESPACE}`
+- **Internal Load Balancer** (VPC-only access): `kubectl apply -k ../../../../recipes/gateway/gke-internal-lb-gateway/internal-lb -n ${NAMESPACE}`
+
+See the [GKE Internal Load Balancer Gateway Recipe](../../recipes/gateway/gke-internal-lb-gateway/README.md) for more details.
+
 ### 2. Deploy vLLM Model Server
 
 <!-- TABS:START -->
@@ -174,7 +180,10 @@ To remove the deployment:
 ```bash
 helm uninstall llm-d-infpool -n ${NAMESPACE}
 kubectl delete -k ./manifests/vllm/offloading-connector -n ${NAMESPACE}
+# For external GKE gateway:
 kubectl delete -k ../../../../recipes/gateway/gke-l7-regional-external-managed -n ${NAMESPACE}
+# For internal GKE gateway:
+kubectl delete -k ../../../../recipes/gateway/gke-internal-lb-gateway/internal-lb -n ${NAMESPACE}
 kubectl delete namespace ${NAMESPACE}
 ```
 

@@ -56,13 +56,26 @@ cd guides/pd-disaggregation
 helmfile apply -e gke_tpu -n ${NAMESPACE}
 ```
 
-#### 2.4 Install HTTPRoute
+#### 2.4 Install Gateway and HTTPRoute
 
-Apply the HTTPRoute configuration:
+**For External Load Balancer (default):**
+
+The gateway is deployed automatically via helmfile using the external GKE gateway class. Install the HTTPRoute:
 
 ```bash
 kubectl apply -f httproute.gke.yaml -n ${NAMESPACE}
 ```
+
+**For Internal Load Balancer (VPC-only access):**
+
+For VPC-only access, deploy the internal load balancer gateway separately:
+
+```bash
+kubectl apply -k ../../recipes/gateway/gke-internal-lb-gateway/internal-lb -n ${NAMESPACE}
+kubectl apply -f httproute.gke.yaml -n ${NAMESPACE}
+```
+
+**_NOTE:_** When using the internal load balancer, the gateway deployed by helmfile (external) will still be created but won't be used. You can disable it by customizing the helmfile values, or simply use the internal LB gateway as shown above.
 
 ## Verify the Installation
 
@@ -237,10 +250,19 @@ helm uninstall infra-pd -n ${NAMESPACE}
 
 **_NOTE:_** If you set the `$RELEASE_NAME_POSTFIX` environment variable, your release names will be different from the command above: `infra-$RELEASE_NAME_POSTFIX`, `gaie-$RELEASE_NAME_POSTFIX` and `ms-$RELEASE_NAME_POSTFIX`.
 
-### Cleanup HTTPRoute
+### Cleanup Gateway and HTTPRoute
+
+**For External Load Balancer:**
 
 ```bash
 kubectl delete -f httproute.gke.yaml -n ${NAMESPACE}
+```
+
+**For Internal Load Balancer:**
+
+```bash
+kubectl delete -f httproute.gke.yaml -n ${NAMESPACE}
+kubectl delete -k ../../recipes/gateway/gke-internal-lb-gateway/internal-lb -n ${NAMESPACE}
 ```
 
 ## Customization

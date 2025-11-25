@@ -10,11 +10,21 @@ The following recipes are available for deploying the gateway and httproute.
 
 <!-- TAB:GKE L7 Regional External Managed:default -->
 ### GKE L7 Regional External Managed  
-This deploys a gateway suitable for GKE, using the `gke-l7-regional-external-managed` gateway class.
+This deploys a gateway suitable for GKE, using the `gke-l7-regional-external-managed` gateway class. This creates an **external** load balancer accessible from the internet.
 
 ```bash
 kubectl apply -k ./gke-l7-regional-external-managed -n ${NAMESPACE}
 ```
+
+<!-- TAB:GKE L7 Regional Internal Managed -->
+### GKE L7 Regional Internal Managed  
+This deploys a gateway suitable for GKE, using the `gke-l7-regional-internal-managed` gateway class. This creates an **internal** load balancer accessible only within your VPC. Use this when you need VPC-only access.
+
+```bash
+kubectl apply -k ./gke-internal-lb-gateway/internal-lb -n ${NAMESPACE}
+```
+
+For more details, see the [GKE Internal Load Balancer Gateway Recipe](./gke-internal-lb-gateway/README.md).
 
 <!-- TAB:Istio -->
 ### Istio

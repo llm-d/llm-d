@@ -122,8 +122,18 @@ Choose the gateway manifest that matches your environment.
 
 <!-- TAB:GKE (Regional External):default -->
 #### GKE (Regional External)
+This creates an **external** load balancer accessible from the internet.
+
 ```bash
 kubectl apply -k ./manifests/gateway/gke-l7-regional-external-managed -n ${NAMESPACE}
+```
+
+<!-- TAB:GKE (Regional Internal) -->
+#### GKE (Regional Internal)
+This creates an **internal** load balancer accessible only within your VPC. Use this when you need VPC-only access.
+
+```bash
+kubectl apply -k ../../recipes/gateway/gke-internal-lb-gateway/internal-lb -n ${NAMESPACE}
 ```
 
 <!-- TAB:Istio -->
@@ -219,7 +229,12 @@ To remove the deployment:
 # From examples/wide-ep-lws
 helm uninstall deepseek-r1 -n ${NAMESPACE}
 kubectl delete -k ./manifests/modelserver/<gke|coreweave> -n ${NAMESPACE}
-kubectl delete -k ./manifests/gateway/<gke-l7-regional-external-managed|istio|kgateway|kgateway-openshift> -n ${NAMESPACE}
+# For external GKE gateway:
+kubectl delete -k ./manifests/gateway/gke-l7-regional-external-managed -n ${NAMESPACE}
+# For internal GKE gateway:
+kubectl delete -k ../../recipes/gateway/gke-internal-lb-gateway/internal-lb -n ${NAMESPACE}
+# For other gateways:
+kubectl delete -k ./manifests/gateway/<istio|kgateway|kgateway-openshift> -n ${NAMESPACE}
 ```
 
 ## Customization
