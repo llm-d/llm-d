@@ -31,6 +31,8 @@ decode:
       portName: "metrics"  # decode vLLM service port (from routing.proxy.targetPort)
       path: "/metrics"
       interval: "30s"
+      labels:
+        release: llmd  # Required for Prometheus to discover this PodMonitor
   containers:
   - name: "vllm"
     image: ghcr.io/llm-d/llm-d-cuda:v0.3.1
