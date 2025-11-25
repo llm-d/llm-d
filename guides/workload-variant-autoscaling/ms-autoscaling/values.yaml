@@ -5,6 +5,9 @@ modelArtifacts:
   name: "Qwen/Qwen3-0.6B"
   size: 20Gi
   authSecretName: "llm-d-hf-token"
+  labels:
+    llm-d.ai/inferenceServing: "true"
+    llm-d.ai/model: qwen3-0.6b
 
 routing:
   servicePort: 8000

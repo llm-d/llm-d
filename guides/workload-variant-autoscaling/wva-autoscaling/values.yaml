@@ -1,4 +1,5 @@
 wva:
+  modelName: "ms-autoscaling-llm-d-modelservice"
   enabled: true
   image:
     repository: ghcr.io/llm-d/workload-variant-autoscaler
@@ -15,12 +16,46 @@ wva:
     tls:
       insecureSkipVerify: true
       caCertPath: "/var/run/secrets/kubernetes.io/serviceaccount/ca.crt"
+      caCert: |
+        -----BEGIN CERTIFICATE-----
+        MIIFcDCCA1igAwIBAgIRAMEPJ/V8RYKQMZpM95SF2xYwDQYJKoZIhvcNAQELBQAw
+        QjESMBAGA1UEChMJQ29yZVdlYXZlMRcwFQYDVQQLEw5JbmZyYXN0cnVjdHVyZTET
+        MBEGA1UEAxMKa3ViZXJuZXRlczAeFw0yNTAzMTAxNjI2MzdaFw0zNTAzMTEwNDI2
+        MzdaMEIxEjAQBgNVBAoTCUNvcmVXZWF2ZTEXMBUGA1UECxMOSW5mcmFzdHJ1Y3R1
+        cmUxEzARBgNVBAMTCmt1YmVybmV0ZXMwggIiMA0GCSqGSIb3DQEBAQUAA4ICDwAw
+        ggIKAoICAQDAkcAGVbQkHlVy+Yjpz0FmeNTbhSt9aDkB0khuueAwK6DODByjIjMm
+        cnLvOaqJPaqmwERIHCBEtUgFGn87miyPyqKnie10iT7sGhszwsXHRDOOgJ9ndIOE
+        96Y3BEJSotuF6G75Wz4E0GpvQdkbhA6ypE5LIlX47zzgpt/AuICYr1IiUxRNupWk
+        snlQAWUdIciipAhRB8hMPmFagtVyfjWpSlsohAjnisXEEeHdjQ4xL3D1ThK7s/9r
+        rtG2a2JhAPD/Nvy1Hq1UKHdjdqHsDSUmE8+GuTGOlJ2Guy+GAsM8OB1NNUU/JM6U
+        kEntUhsoYpdxDTATC1+dY2dtdfYrFV9qVxCVf7JbzlMMxg6S+X31AtMFIXJMVgyA
+        skgCrHnT2/ZigwhJIKFcEOQM7Jj1t9zLsoXnaoNk6RywigkKjGo0NCjn18xd1AAf
+        RtltELVA+PFndkpDOJC3p6DQhSb4J+te7iQ7jJPbCBejuXoEBz6bCqgM96rBgoBF
+        Nlt/gOChFybHaHJEihvNWPpMCrnQis2pJefsfeSXq8fhq9hpNK81oj9VEEjGvBBY
+        2D18YFg5w/xF/QiwY/YYcEGJxx4WAIgI3P+zPiZmnomfSrCSJBtlkG9nBK5C27U3
+        icFw5PfzzXy/AjcO15ssObTVgpX6g+nAVb7kQVCoLjlTz9noVdNEFQIDAQABo2Ew
+        XzAOBgNVHQ8BAf8EBAMCAqQwHQYDVR0lBBYwFAYIKwYBBQUHAwEGCCsGAQUFBwMC
+        MA8GA1UdEwEB/wQFMAMBAf8wHQYDVR0OBBYEFM7QAyTVnjFJ82TGzJDgK/lQPWVI
+        MA0GCSqGSIb3DQEBCwUAA4ICAQCcryrtUHdxLcC0Lfy/DrEUbsrSZBsBPpXP6EDM
+        NGTxgpo+5ApXJ5XqOzwnL0JZgOfb85X6QkybaLK91qv+tXqlli3nLNnwQzA2ORBh
+        GVTqpgvibiQ+o/SeT2yarsm34ZaK57Kb9jc8ZZtbczVduuW6hz70k0SVlTX0OtSX
+        TkooI6Q/wzDH2TNdXrpMNxLLucQ7kbwV6NeNInjWEUWTIWK47RsvWoGbRQfCyyGh
+        ubLkfy+pTQEjJTHaZLzWQiiLi6ufT7Tb+ss3RT5idd+OWSr9/x9jmE5851OTDNiG
+        ai9NJA/+8INaAPIKiKUsbofmLbs9XLAi+ImdGAmCiUFm28d9uNDnBrZP56I24TOM
+        NXB25DTdNsn0BTuVBLNWWO+FNtm34EODMrHtM1VVGP+Z2jhvagaJoHIChjbpuhQi
+        1q+XOPnJCZDKeZWdyzo2VGP1+/88JyLHkvCGskbuGfgJRZQOcTAg9Q6f9RUWyu+4
+        IyZNg5GVNJpomGwpivmqs4puGnLAGfYbZ/hMnwAl+8LCE52ExBGOMcXZ4dS3hVIi
+        MICEXIBEOE8diowlSlWp7IzZL/8hJ+SCZs2hnlD8TdxSMDhpxM2Q4HXdDlCJCAw/
+        oUocn9FNCJ2e81PaHoFSRp1WcnKr+uSVFhvqeNSQMuFuolk4R+QN2+1tO/nltQcp
+        FNyZTw==
+        -----END CERTIFICATE-----
+
   experimentalHybridOptimization: false
   scaleToZero: false
 
 llmd:
   namespace: llm-d-autoscaling
-  modelName: ms-autoscaling-llm-d-modelservice
+  modelName: "ms-autoscaling-llm-d-modelservice"
   modelID: "Qwen/Qwen3-0.6B"
 
 va:

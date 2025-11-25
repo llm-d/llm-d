@@ -104,10 +104,11 @@ releases:
   # Note: WVA chart can be installed from a local path or OCI registry
   # Set WVA_CHART_PATH to use a local chart (e.g., after cloning the repo)
   # Otherwise, it will attempt to use the OCI registry path
-  - name: workload-variant-autoscaler
-    namespace: llm-d-autoscaling
-    chart: oci://ghcr.io/llm-d-incubation/workload-variant-autoscaler/workload-variant-autoscaler
-    version: "0.0.5"
+  - name: {{ printf "wva-%s" $rn | quote }}
+    namespace: {{ $ns }}
+    # chart: oci://ghcr.io/llm-d-incubation/workload-variant-autoscaler/workload-variant-autoscaler
+    # version: "0.0.5"
+    chart: ../../../workload-variant-autoscaler/charts/workload-variant-autoscaler
     installed: true
     needs:
       - {{ printf "ms-%s" $rn | quote }}
@@ -115,18 +116,14 @@ releases:
       kind: autoscaling
     values:
       - wva-autoscaling/values.yaml
-    # set:
-    #   - name: va.accelerator
-    #     value: "L40S"
-    #   - name: llmd.modelID
-    #     value: "Qwen/Qwen3-0.6B"
-    #   - name: vllmService.enabled
-    #     value: true
+    set:
+      - name: va.accelerator
+        value: "H200"
     #   - name: vllmService.nodePort
     #     value: 30000
-    #   - name: llmd.namespace
-    #     value: {{ $ns | quote }}
-    #   - name: modelProfile
-    #     value: "default"
-    #   - name: sloClassRef.name
-    #     value: "service-classes-config"
+      - name: llmd.namespace
+        value: {{ $ns | quote }}
+      - name: modelProfile
+        value: "default"
+      - name: sloClassRef.name
+        value: "service-classes-config"
