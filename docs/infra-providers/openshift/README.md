@@ -1,15 +1,68 @@
 # llm-d on OpenShift
 
+This document will guide you through deploying llm-d on an OpenShift cluster.
+
+Note: Comparable Openshift infrastructure and/or older OCP versions may work but have not been tested.
+
 ## Prerequisites
+
+### Infrastructure Setup
+
+- AWS - An [ec2](https://aws.amazon.com/ec2/instance-types/m6a/) instance of m6a.4xlarge was used for the Openshift control plane nodes. Later in the instructions this is scaled up to 3 nodes in total. If your a Red Hat associate, partner, or customer you can provision through the demo redhat system. 
 
 ### Platform Setup
 
-- OpenShift - This guide was tested on OpenShift 4.17. Older versions may work but have not been tested.
-- NVIDIA GPU Operator and NFD Operator - The installation instructions can be found [here](https://docs.nvidia.com/datacenter/cloud-native/openshift/latest/steps-overview.html).
-- NO Service Mesh or Istio installation as Istio CRDs will conflict with the gateway
-- Cluster administrator privileges are required to install the llm-d cluster scoped resources
+At a high level the following conditions are assumed.
 
-## Installation
+- OpenShift - This guide was tested on OpenShift 4.17, 4.19, and 4.20. 
+- Ensure no Service Mesh or Istio installations exist on the cluster as the included CRDs may conflict with the llm-d gateway component.
+- Cluster administrator privileges are required to install the llm-d cluster scoped resources.
+- NVIDIA GPU Operator and NFD Operator - The original installation instructions can be found [here](https://docs.nvidia.com/datacenter/cloud-native/openshift/latest/steps-overview.html). However below are convenient steps for setting up via configuration given by RedHat AI Business Unit.
+
+### GPU, Operator, and Additional Configuration Steps
+
+Make sure you first clone the following repo and work from its directory for the prereq setup.
+```
+git clone https://github.com/rh-aiservices-bu/ocp-gpu-setup.git
+cd ocp-gpu-setup
+```
+
+#### Prepare GPUs
+1. Configure the gpu machinesets by invoking the guided script.
+    ```
+    ./machine-set/gpu-machineset.sh
+    ```
+1. For this setup the following settings were selected when prompted by the script:
+    * Select option `12` for `L40S Single GPU`
+    * Select option `p` for `private`
+    * Enter AWS region (e.g. `us-east-2`)
+    * Enter Availability zone (e.g. `1`)
+    * Answer `n` for spot instances
+1. Check if you have the default machineset available. If not, then run the above command twice. 
+1. Once the first gpu machine set is provisioned, set the MachineSet count to 2.
+1. Configure the default MachineSet count (or extra one provisioned above) to 6.
+1. After the machines have provisioned the configuration should look similiar to the following:
+![machinesets](./images/machinesets.png)
+
+#### Deploy the Supporting Operators
+
+1. Deploy the NFD Operator
+    ```
+    oc apply -f ./nfd
+    ```
+1. Deploy the NVIDIA GPU Operator
+    ```
+    oc apply -f ./gpu-operator
+    ```
+1. Wait for the Node Feature Discovery and NVIDIA GPU Operator to be installed
+![operators](./images/installed_operators.png)
+
+
+#### Deploy the Supporting CRs
+
+1. Deploy the CRs: `oc apply -f ./crs`
+
+## llm-d Installation
 
 ### Clone this repository
 ```sh
