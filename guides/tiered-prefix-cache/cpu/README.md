@@ -65,14 +65,13 @@ To deploy the `InferencePool`, select your provider below.
 This command deploys the `InferencePool` on GKE with GKE-specific monitoring enabled.
 
 ```bash
-helm upgrade -i llm-d-infpool \
+helm install llm-d-infpool \
     -n ${NAMESPACE} \
     -f ./manifests/inferencepool/values.yaml \
     --set "provider.name=gke" \
-    --set "inferencePool.apiVersion=inference.networking.k8s.io/v1" \
     --set "inferenceExtension.monitoring.gke.enable=true" \
     oci://us-central1-docker.pkg.dev/k8s-staging-images/gateway-api-inference-extension/charts/inferencepool \
-    --version v1.0.1
+    --version v1.2.0-rc.1
 ```
 
 <!-- TAB:Istio -->
@@ -81,13 +80,13 @@ helm upgrade -i llm-d-infpool \
 This command deploys the `InferencePool` with Istio, enabling Prometheus monitoring.
 
 ```bash
-helm upgrade -i llm-d-infpool \
+helm install llm-d-infpool \
     -n ${NAMESPACE} \
     -f ./manifests/inferencepool/values.yaml \
     --set "provider.name=istio" \
     --set "inferenceExtension.monitoring.prometheus.enable=true" \
     oci://us-central1-docker.pkg.dev/k8s-staging-images/gateway-api-inference-extension/charts/inferencepool \
-    --version v1.0.1
+    --version v1.2.0-rc.1
 ```
 
 <!-- TAB:Kgateway -->
@@ -96,12 +95,12 @@ helm upgrade -i llm-d-infpool \
 This command deploys the `InferencePool` with Kgateway.
 
 ```bash
-helm upgrade -i llm-d-infpool \
+helm install llm-d-infpool \
     -n ${NAMESPACE} \
     -f ./manifests/inferencepool/values.yaml \
     --set "provider.name=kgateway" \
     oci://us-central1-docker.pkg.dev/k8s-staging-images/gateway-api-inference-extension/charts/inferencepool \
-    --version v1.0.1
+    --version v1.2.0-rc.1
 ```
 
 <!-- TABS:END -->
@@ -192,7 +191,8 @@ The following benchmark results demonstrate the performance improvements of usin
     *   The GPUs were distributed across 4 `a3-highgpu-4g` instances, with 4 GPUs per instance.
 
 *   **vLLM Configuration:**
-    *   `gpu_memory_utilization` was set to `0.65`.
+    *   `gpu_memory_utilization` was set to `0.65` to reduce the pressure on the benchmark tool. In
+    production configuration this is typically set to a higher value such as 0.9.
     *   CPU offloading was enabled with `num_cpu_blocks` set to `41000`, which provides approximately 100GB of CPU cache.
 *   **LMCache Configuration:**
     *   For LMCache setup, `LMCACHE_MAX_LOCAL_CPU_SIZE` is set to 100 GB.

@@ -14,29 +14,25 @@ gateway:
 # MS values
 routing:
   proxy:
-    debugLevel: 1
-  # IF epp is created through ms, set its debugLevel
-  epp:
-    debugLevel: 1
+    zapLogLevel: error
 
 # GAIE values
 inferenceExtension:
   flags:
-    - name: v
-      value: 1
-  # include pool group, whole flags get overwritten
-    - name: "pool-group"
-      value: "inference.networking.x-k8s.io"
-istio:
-  destinationRule:
-    trafficPolicy:
-      connectionPool:
-        http:
-          http1MaxPendingRequests: 256000
-          maxRequestsPerConnection: 256000
-          http2MaxRequests: 256000
-          idleTimeout: "900s"
-        tcp:
-          maxConnections: 256000
-          maxConnectionDuration: "1800s"
-          connectTimeout: "900s"
+    v: 1
+    pool-group: "inference.networking.x-k8s.io"
+
+provider:
+  istio:
+    destinationRule:
+      trafficPolicy:
+        connectionPool:
+          http:
+            http1MaxPendingRequests: 256000
+            maxRequestsPerConnection: 256000
+            http2MaxRequests: 256000
+            idleTimeout: "900s"
+          tcp:
+            maxConnections: 256000
+            maxConnectionDuration: "1800s"
+            connectTimeout: "900s"

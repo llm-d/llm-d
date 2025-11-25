@@ -5,11 +5,11 @@ inferenceExtension:
     ###################
     name: llm-d-inference-scheduler
     hub: ghcr.io/llm-d
-    tag: v0.3.2
+    tag: v0.4.0-rc.1
     ###################
     # name: epp
     # hub: registry.k8s.io/gateway-api-inference-extension
-    # tag: v1.0.1
+    # tag: v1.2.0-rc.1
     ###################
     pullPolicy: Always
   extProcPort: 9002

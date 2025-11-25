@@ -72,8 +72,8 @@ kubectl apply -f httproute.gke.yaml -n ${NAMESPACE}
 helm list -n ${NAMESPACE}
 NAME    	NAMESPACE 	REVISION	UPDATED                                	STATUS  	CHART                     	APP VERSION
 gaie-pd 	llm-d-pd	1       	2025-11-07 00:31:54.106881562 +0000 UTC	deployed	inferencepool-v1.0.1      	v1.0.1
-infra-pd	llm-d-pd	1       	2025-11-07 00:31:50.355629868 +0000 UTC	deployed	llm-d-infra-v1.3.3        	v0.3.0
-ms-pd   	llm-d-pd	7       	2025-11-07 17:45:30.946563039 +0000 UTC	deployed	llm-d-modelservice-v0.2.11	v0.2.0
+infra-pd	llm-d-pd	1       	2025-11-07 00:31:50.355629868 +0000 UTC	deployed	llm-d-infra-v1.3.4        	v0.3.0
+ms-pd   	llm-d-pd	7       	2025-11-07 17:45:30.946563039 +0000 UTC	deployed	llm-d-modelservice-v0.3.8	v0.3.0
 ```
 
 - Out of the box with this example you should have the following resources:

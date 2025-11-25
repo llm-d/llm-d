@@ -37,7 +37,7 @@ releases:
   - name: {{ printf "infra-%s" $rn | quote }}
     namespace: {{ $ns }}
     chart: llm-d-infra/llm-d-infra
-    version: v1.3.3
+    version: v1.3.4
     installed: true
     labels:
       type: infrastructure
@@ -49,7 +49,7 @@ releases:
   - name: {{ printf "gaie-%s" $rn | quote }}
     namespace: {{ $ns }}
     chart: oci://registry.k8s.io/gateway-api-inference-extension/charts/inferencepool
-    version: v1.0.1
+    version: v1.2.0-rc.1
     installed: true
     needs:
       - {{ printf "infra-%s" $rn | quote }}
@@ -72,11 +72,12 @@ releases:
     {{- if or (eq .Environment.Name "istio") (eq .Environment.Name "default") (eq .Environment.Name "istioBench") (eq .Environment.Name "aks") (eq .Environment.Name "xpu") }}
       - provider:
           name: {{ .Environment.Values.provider.name }}
-      - istio:
-        {{ .Environment.Values.istio | toYaml | nindent 10 }}
-      - istio:
-          destinationRule:
-            host: {{ printf "gaie-%s-epp.%s.svc.cluster.local" $rn $ns | quote }}
+          istio:
+            {{ .Environment.Values.provider.istio | toYaml | nindent 12 }}
+      - provider:
+          istio:
+            destinationRule:
+              host: {{ printf "gaie-%s-epp.%s.svc.cluster.local" $rn $ns | quote }}
     {{- end }}
     # Apply log level only in bench setting
     {{- if or (eq .Environment.Name "istioBench") (eq .Environment.Name "default") }}
@@ -90,7 +91,7 @@ releases:
   - name: {{ printf "ms-%s" $rn | quote }}
     namespace: {{ $ns }}
     chart: llm-d-modelservice/llm-d-modelservice
-    version: v0.2.11
+    version: v0.3.8
     installed: true
     needs:
       - {{ printf "infra-%s" $rn | quote }}
@@ -123,11 +124,6 @@ releases:
                 soft: 17179869184
     {{- end }}
     set:
-    # apply release name derived values
-      - name: "routing.inferencePool.name"
-        value: {{ printf "gaie-%s" $rn | quote }}
-      - name: "routing.parentRefs[0].name"
-        value: {{ printf "infra-%s-inference-gateway" $rn | quote }}
     {{- if or (eq .Environment.Name "gke") (eq .Environment.Name "gke_tpu") }}
       - name: 'decode.containers[0].resources.limits.rdma/ib'
         value: "null"

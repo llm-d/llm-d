@@ -3,7 +3,7 @@ inferenceExtension:
   image:
     name: llm-d-inference-scheduler
     hub: ghcr.io/llm-d
-    tag: v0.3.2
+    tag: v0.4.0-rc.1
   extProcPort: 9002
   monitoring:
     interval: "10s"
@@ -44,8 +44,7 @@ inferenceExtension:
         - pluginRef: decode-filter
         - pluginRef: random-picker
   flags:
-    - name: v
-      value: 1
+    v: 1
 
 inferencePool:
   apiVersion: inference.networking.x-k8s.io/v1alpha2
@@ -53,21 +52,21 @@ inferencePool:
     matchLabels:
       llm-d.ai/inferenceServing: "true"
       llm-d.ai/model: DeepSeek-R1-0528
-
-istio:
-  destinationRule:
-    host: deepseek-r1-epp
-    trafficPolicy:
-      tls:
-        mode: SIMPLE
-        insecureSkipVerify: true
-      connectionPool:
-        http:
-          http1MaxPendingRequests: 256000
-          maxRequestsPerConnection: 256000
-          http2MaxRequests: 256000
-          idleTimeout: "900s"
-        tcp:
-          maxConnections: 256000
-          maxConnectionDuration: "1800s"
-          connectTimeout: "900s"
+  provider:
+    istio:
+      destinationRule:
+        host: deepseek-r1-epp
+        trafficPolicy:
+          tls:
+            mode: SIMPLE
+            insecureSkipVerify: true
+          connectionPool:
+            http:
+              http1MaxPendingRequests: 256000
+              maxRequestsPerConnection: 256000
+              http2MaxRequests: 256000
+              idleTimeout: "900s"
+            tcp:
+              maxConnections: 256000
+              maxConnectionDuration: "1800s"
+              connectTimeout: "900s"
