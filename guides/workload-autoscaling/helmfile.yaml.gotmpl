@@ -122,7 +122,7 @@ releases:
   - name: workload-variant-autoscaler
     namespace: llm-d-autoscaler
     chart: oci://ghcr.io/llm-d-incubation/workload-variant-autoscaler/workload-variant-autoscaler
-    version: "0.0.5"
+    version: "0.0.6"
     installed: true
     needs:
       - {{ printf "ms-%s" $rn | quote }}
