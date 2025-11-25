@@ -149,6 +149,8 @@ releases:
         value: 30000
       - name: llmd.namespace
         value: {{ $ns | quote }}
+      - name: llmd.modelName
+        value: {{ printf "ms-%s-llm-d-modelservice" $rn | quote }}
       - name: modelProfile
         value: "default"
       - name: sloClassRef.name
