@@ -13,7 +13,7 @@ environments:
     <<: *I
 
 ---
-
+{{- $certdir := (env "TMPDIR") | default "/tmp" -}}
 {{- $ns := .Namespace | default "llm-d-autoscaler" -}}
 {{- $rn := (env "RELEASE_NAME_POSTFIX") | default "workload-autoscaler" -}}
 
@@ -129,7 +129,7 @@ releases:
               insecureSkipVerify: true
               caCertPath: ""
             caCert: |
-{{ readFile "/tmp/prometheus-ca.crt" | indent 14 }}
+{{ readFile (printf "%s/prometheus-ca.crt" $certdir) | indent 14 }}
     set:
       - name: va.accelerator
         value: "L40S"
