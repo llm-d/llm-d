@@ -348,6 +348,9 @@ grafana:
   service:
     type: ClusterIP
     sessionAffinity: ""
+  sidecar:
+    datasources:
+      defaultDatasourceEnabled: false
   datasources:
     datasources.yaml:
       apiVersion: 1
@@ -387,6 +390,9 @@ grafana:
   service:
     type: ClusterIP
     sessionAffinity: ""
+  sidecar:
+    datasources:
+      defaultDatasourceEnabled: false
   datasources:
     datasources.yaml:
       apiVersion: 1
