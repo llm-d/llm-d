@@ -15,6 +15,7 @@ wva:
     
   prometheus:
     monitoringNamespace: llm-d-monitoring # Namespace for Prometheus monitoring
+    serviceAccountName: "kube-prometheus-stack-prometheus"
     baseURL: "https://llmd-kube-prometheus-stack-prometheus.monitoring.svc.cluster.local:9090"
     # Development security configuration (relaxed for easier development)
     tls:
