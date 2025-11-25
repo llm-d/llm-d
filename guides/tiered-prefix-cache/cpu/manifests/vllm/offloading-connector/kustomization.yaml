@@ -27,4 +27,4 @@ patches:
           nvidia.com/gpu: 2
         requests:
           nvidia.com/gpu: 2
-          memory: 400G  
+          memory: 400G

@@ -1,0 +1,37 @@
+inferencePool:
+  apiVersion: "inference.networking.k8s.io/v1"
+  modelServers:
+    matchLabels:
+      "llm-d.ai/inferenceServing": "true"
+inferenceExtension:
+  monitoring:
+    gke:
+      enable: false
+    prometheus:
+      enable: false
+  pluginsConfigFile: "custom-plugins.yaml"
+  pluginsCustomConfig:
+    custom-plugins.yaml: |
+      apiVersion: inference.networking.x-k8s.io/v1alpha1
+      kind: EndpointPickerConfig
+      plugins:
+      - type: queue-scorer
+      - type: kv-cache-utilization-scorer
+      - type: prefix-cache-scorer
+        name: gpu-prefix-cache-scorer
+      - type: prefix-cache-scorer
+        name: cpu-prefix-cache-scorer
+        parameters:
+          autoTune: false  # vLLM doesn't have the CPU capacity metric to enable autoTune yet
+          lruCapacityPerServer: 41000  # Allocating ~100GB for Qwen-32B: 41,000 blocks * 2.5MB/block (based on 160KB/token * 16 block size).
+      schedulingProfiles:
+      - name: default
+        plugins:
+        - pluginRef: queue-scorer
+          weight: 2
+        - pluginRef: kv-cache-utilization-scorer
+          weight: 2
+        - pluginRef: gpu-prefix-cache-scorer
+          weight: 1
+        - pluginRef: cpu-prefix-cache-scorer
+          weight: 1

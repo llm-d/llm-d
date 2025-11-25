@@ -78,3 +78,4 @@ spec:
         - name: shm
           emptyDir:
             medium: Memory
+

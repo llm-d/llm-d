@@ -20,8 +20,7 @@ environments:
   gaudi: &GAUDI
     <<: *I
   cpu: &CPU
-    values:
-      - ../prereq/gateway-provider/common-configurations/istio.yaml
+    <<: *I
   digitalocean: &DO
     <<: *I
   default: &DEFAULT
@@ -42,7 +41,7 @@ releases:
   - name: {{ printf "infra-%s" $rn | quote }}
     namespace: {{ $ns }}
     chart: llm-d-infra/llm-d-infra
-    version: v1.3.3
+    version: v1.3.4
     installed: true
     labels:
       type: infrastructure
@@ -54,7 +53,7 @@ releases:
   - name: {{ printf "gaie-%s" $rn | quote }}
     namespace: {{ $ns }}
     chart: oci://registry.k8s.io/gateway-api-inference-extension/charts/inferencepool
-    version: v1.0.1
+    version: v1.2.0-rc.1
     installed: true
     needs:
       - {{ printf "infra-%s" $rn | quote }}
@@ -77,11 +76,12 @@ releases:
     {{- if or (eq .Environment.Name "istio") (eq .Environment.Name "default") (eq .Environment.Name "istioBench") (eq .Environment.Name "xpu") (eq .Environment.Name "gaudi") (eq .Environment.Name "cpu") }}
       - provider:
           name: {{ .Environment.Values.provider.name }}
-      - istio:
-        {{ .Environment.Values.istio | toYaml | nindent 10 }}
-      - istio:
-          destinationRule:
-            host: {{ printf "gaie-%s-epp.%s.svc.cluster.local" $rn $ns | quote }}
+          istio:
+            {{ .Environment.Values.provider.istio | toYaml | nindent 12 }}
+      - provider:
+          istio:
+            destinationRule:
+              host: {{ printf "gaie-%s-epp.%s.svc.cluster.local" $rn $ns | quote }}
     {{- end }}
     # Apply log level only in bench setting
     {{- if (eq .Environment.Name "istioBench") }}
@@ -95,7 +95,7 @@ releases:
   - name: {{ printf "ms-%s" $rn | quote }}
     namespace: {{ $ns }}
     chart: llm-d-modelservice/llm-d-modelservice
-    version: v0.3.3
+    version: v0.3.8
     installed: true
     needs:
       - {{ printf "infra-%s" $rn | quote }}

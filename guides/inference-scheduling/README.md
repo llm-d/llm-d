@@ -13,6 +13,8 @@ This example out of the box requires 2 GPUs of any supported kind:
 - **Intel XPU/GPUs**: Intel Data Center GPU Max 1550 or compatible Intel XPU device
 - **TPUs**: Google Cloud TPUs (when using GKE TPU configuration)
 
+**Alternative CPU Deployment**: For CPU-only deployment (no GPUs required), see the [Hardware Backends](#hardware-backends) section for CPU-specific deployment instructions. CPU deployment requires Intel/AMD CPUs with 64 cores and 64GB RAM per replica.
+
 ## Prerequisites
 
 - Have the [proper client tools installed on your local system](../prereq/client-setup/README.md) to use this guide.
@@ -28,10 +30,24 @@ Use the helmfile to compose and install the stack. The Namespace in which the st
 
 **_IMPORTANT:_** When using long namespace names (like `llm-d-inference-scheduler`), the generated pod hostnames may become too long and cause issues due to Linux hostname length limitations (typically 64 characters maximum). It's recommended to use shorter namespace names (like `llm-d`) and set `RELEASE_NAME_POSTFIX` to generate shorter hostnames and avoid potential networking or vLLM startup problems.
 
+**For GPU deployment (default):**
+```bash
+export NAMESPACE=llm-d-inference-scheduler # or any other namespace (shorter names recommended)
+kubectl create namespace ${NAMESPACE}
+
+# Clone the repo and switch to the latest release tag 
+tag=$(curl -s https://api.github.com/repos/llm-d/llm-d/releases/latest | jq -r '.tag_name')
+git clone https://github.com/llm-d/llm-d.git && cd llm-d && git checkout "$tag"
+
+cd guides/inference-scheduling
+helmfile apply -n ${NAMESPACE}
+```
+
+**For CPU-only deployment:**
 ```bash
 export NAMESPACE=llm-d-inference-scheduler # or any other namespace (shorter names recommended)
 cd guides/inference-scheduling
-helmfile apply -n ${NAMESPACE}
+helmfile apply -e cpu -n ${NAMESPACE}
 ```
 
 **_NOTE:_** You can set the `$RELEASE_NAME_POSTFIX` env variable to change the release names. This is how we support concurrent installs. Ex: `RELEASE_NAME_POSTFIX=inference-scheduling-2 helmfile apply -n ${NAMESPACE}`
@@ -63,13 +79,19 @@ You can also customize your gateway, for more information on how to do that see 
 
 #### Hardware Backends
 
-Currently in the `inference-scheduling` example we suppport configurations for `xpu`, `tpu` and `cuda` GPUs. By default we use modelserver values supporting `cuda` GPUs, but to deploy on one of the other speciality hardware backends you may use:
+Currently in the `inference-scheduling` example we suppport configurations for `xpu`, `tpu`, `cpu`, and `cuda` GPUs. By default we use modelserver values supporting `cuda` GPUs, but to deploy on one of the other hardware backends you may use:
 
 ```bash
 helmfile apply -e xpu  -n ${NAMESPACE} # targets istio as gateway provider with XPU hardware
 # or
 helmfile apply -e gke_tpu  -n ${NAMESPACE} # targets GKE externally managed as gateway provider with TPU hardware
+# or
+helmfile apply -e cpu  -n ${NAMESPACE} # targets istio as gateway provider with CPU hardware
 ```
+
+##### CPU Inferencing
+
+This case expects using 4th Gen Intel Xeon processors (Sapphire Rapids) or later. 
 
 ### Install HTTPRoute
 
@@ -99,9 +121,9 @@ kubectl apply -f httproute.yaml -n ${NAMESPACE}
 ```bash
 helm list -n ${NAMESPACE}
 NAME                        NAMESPACE                 REVISION  UPDATED                               STATUS    CHART                     APP VERSION
-gaie-inference-scheduling   llm-d-inference-scheduler 1         2025-08-24 11:24:53.231918 -0700 PDT  deployed  inferencepool-v1.0.1      v1.0.1
-infra-inference-scheduling  llm-d-inference-scheduler 1         2025-08-24 11:24:49.551591 -0700 PDT  deployed  llm-d-infra-v1.3.3        v0.3.0
-ms-inference-scheduling     llm-d-inference-scheduler 1         2025-08-24 11:24:58.360173 -0700 PDT  deployed  llm-d-modelservice-v0.2.9 v0.2.0
+gaie-inference-scheduling   llm-d-inference-scheduler 1         2025-08-24 11:24:53.231918 -0700 PDT  deployed  inferencepool-v1.2.0-rc.1 v1.2.0-rc.1
+infra-inference-scheduling  llm-d-inference-scheduler 1         2025-08-24 11:24:49.551591 -0700 PDT  deployed  llm-d-infra-v1.3.4        v0.3.0
+ms-inference-scheduling     llm-d-inference-scheduler 1         2025-08-24 11:24:58.360173 -0700 PDT  deployed  llm-d-modelservice-v0.3.8 v0.3.0
 ```
 
 - Out of the box with this example you should have the following resources:

@@ -26,7 +26,7 @@ spec:
               - --connector=nixlv2
               - -v=1
               - --secure-proxy=false
-            image: ghcr.io/llm-d/llm-d-routing-sidecar:v0.3.0
+            image: ghcr.io/llm-d/llm-d-routing-sidecar:v0.4.0-rc.1
             imagePullPolicy: Always
             ports:
               - containerPort: 8000
