@@ -132,8 +132,8 @@ releases:
       - wva:
           prometheus:
             tls:
-              insecureSkipVerify: false
-              caCertPath: "/etc/ssl/certs/prometheus-ca.crt"
+              insecureSkipVerify: true
+              caCertPath: ""
             caCert: |
 {{ readFile "/tmp/prometheus-ca.crt" | indent 14 }}
     values:
