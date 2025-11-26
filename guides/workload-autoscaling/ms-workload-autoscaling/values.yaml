@@ -5,6 +5,9 @@ modelArtifacts:
   name: "Qwen/Qwen3-0.6B"
   size: 20Gi
   authSecretName: "llm-d-hf-token"
+  labels:
+    llm-d.ai/inferenceServing: "true"
+    llm-d.ai/model: ms-workload-autoscaler-llm-d-modelservice
 
 routing:
   servicePort: 8000
@@ -24,6 +27,7 @@ decode:
       interval: "30s"
       labels:
         release: llmd  # Required for Prometheus to discover this PodMonitor
+
   containers:
   - name: "vllm"
     image: ghcr.io/llm-d/llm-d-cuda:v0.3.1
