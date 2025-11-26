@@ -91,7 +91,8 @@ spec:
                 --data-parallel-rpc-port 5555 \
                 --data-parallel-start-rank $START_RANK \
                 --kv_transfer_config '{"kv_connector":"NixlConnector",
-                                        "kv_role":"kv_both"}' \
+                                        "kv_role":"kv_both",
+                                        "kv_load_failure_policy":"fail"}' \
                 --async-scheduling \
                 --enable-dbo \
                 --dbo-decode-token-threshold 32 \

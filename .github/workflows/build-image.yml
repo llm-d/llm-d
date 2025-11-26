@@ -21,14 +21,12 @@ on:
         default: 'cuda'
         type: string
       vllm_repo:
-        description: 'vLLM repository URL'
+        description: 'vLLM repository URL to (override Dockerfile)'
         required: false
-        default: 'https://github.com/vllm-project/vllm.git'
         type: string
       vllm_commit_sha:
-        description: 'vLLM commit SHA to checkout for source'
+        description: 'vLLM commit SHA to checkout for source (override Dockerfile)'
         required: false
-        default: 'b8b302cde434df8c9289a2b465406b47ebab1c2d'
         type: string
       vllm_precompiled_wheel_commit:
         description: 'vLLM commit SHA for precompiled wheel lookup (defaults to vllm_commit_sha)'
@@ -190,9 +188,10 @@ jobs:
             TARGETOS=${{ matrix.os }}
             BUILD_BASE_IMAGE_SUFFIX=${{ matrix.os == 'ubuntu' && 'ubuntu20.04' || matrix.base_image_suffix }}
             FINAL_BASE_IMAGE_SUFFIX=${{ matrix.base_image_suffix }}
-            VLLM_REPO=${{ inputs.vllm_repo || 'https://github.com/vllm-project/vllm.git' }}
-            VLLM_COMMIT_SHA=${{ inputs.vllm_commit_sha || 'b8b302cde434df8c9289a2b465406b47ebab1c2d' }}
-            VLLM_PRECOMPILED_WHEEL_COMMIT=${{ inputs.vllm_precompiled_wheel_commit || inputs.vllm_commit_sha || '' }}
+            ${{ inputs.vllm_repo != '' && format('VLLM_REPO={0}', inputs.vllm_repo) || '' }}
+            ${{ inputs.vllm_commit_sha != '' && format('VLLM_COMMIT_SHA={0}', inputs.vllm_commit_sha) || '' }}
+            ${{ inputs.vllm_precompiled_wheel_commit != '' &&
+              format('VLLM_PRECOMPILED_WHEEL_COMMIT={0}', inputs.vllm_precompiled_wheel_commit) || '' }}
           cache-from: >-
             type=gha,scope=cuda-dev-${{ matrix.os }}-${{
             matrix.platform == 'linux/arm64' && 'arm64' || 'amd64' }}

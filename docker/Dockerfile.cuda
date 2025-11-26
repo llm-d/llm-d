@@ -142,7 +142,8 @@ WORKDIR /workspace
 # Define commit SHAs as build args to avoid layer invalidation
 ARG LMCACHE_REPO=https://github.com/LMCache/LMCache.git
 ARG LMCACHE_COMMIT_SHA
-ARG VLLM_COMMIT_SHA="439368496db48d8f992ba8c606a0c0b1eebbfa69"
+ARG VLLM_REPO="https://github.com/neuralmagic/vllm.git"
+ARG VLLM_COMMIT_SHA="llm-d-release-0.4"
 
 # Build LMCache wheel (skip on ARM64 - infinistore dependency has no ARM wheels)
 # hadolint ignore=DL3003,SC1091
@@ -173,7 +174,7 @@ ARG DEEPGEMM_VERSION="v2.1.0"
 ARG PPLX_KERNELS_REPO="https://github.com/perplexityai/pplx-kernels"
 ARG PPLX_KERNELS_SHA="12cecfda252e4e646417ac263d96e994d476ee5d"
 
-ARG FLASHINFER_VERSION="v0.3.1"
+ARG FLASHINFER_VERSION="v0.5.2"
 
 # Build compiled packages as wheels (only ones that need build tools)
 COPY docker/scripts/cuda/builder/build-compiled-wheels.sh /tmp/build-compiled-wheels.sh
@@ -196,6 +197,7 @@ ARG CUDA_MINOR=9
 ARG CUDA_PATCH=1
 ARG PYTHON_VERSION
 ARG NVSHMEM_VERSION=3.3.20
+ARG FLASHINFER_VERSION=v0.5.2
 
 COPY docker/constraints.txt /tmp/constraints.txt
 
@@ -206,7 +208,10 @@ ENV LANG=C.UTF-8 \
     UV_CONSTRAINT=/tmp/constraints.txt \
     VIRTUAL_ENV=/opt/vllm \
     NVSHMEM_DIR="/opt/nvshmem-${NVSHMEM_VERSION}" \
-    TORCH_CUDA_ARCH_LIST="9.0a;10.0+PTX"
+    TORCH_CUDA_ARCH_LIST="9.0a;10.0+PTX" \
+    FLASHINFER_VERSION=${FLASHINFER_VERSION} \
+    CUDA_MAJOR=${CUDA_MAJOR} \
+    CUDA_MINOR=${CUDA_MINOR}
 
 # LD_LIBRARY_PATH needs the torch path to apply proper linkers so as not to produce torch ABI missmatch
 ENV LD_LIBRARY_PATH="/opt/vllm/lib64/python${PYTHON_VERSION}/site-packages/torch/lib:/usr/local/nvidia/lib:/usr/local/nvidia/lib64:/usr/local/cuda/lib64:/usr/local/lib:/usr/local/lib64:${NVSHMEM_DIR}/lib:${LD_LIBRARY_PATH}"
@@ -283,11 +288,12 @@ RUN mkdir -p /opt/vllm-source && \
 
 # Define commit SHAs as build args to avoid layer invalidation
 ARG LMCACHE_COMMIT_SHA
-ARG VLLM_REPO="https://github.com/vllm-project/vllm.git"
-ARG VLLM_COMMIT_SHA="439368496db48d8f992ba8c606a0c0b1eebbfa69"
+ARG VLLM_REPO="https://github.com/neuralmagic/vllm.git"
+ARG VLLM_COMMIT_SHA="llm-d-release-0.4"
+
 # vllm commit to use for precompiled wheel lookup (defaults to VLLM_COMMIT_SHA)
 # useful for testing feature branches with python-only changes against merge-base binaries
-ARG VLLM_PRECOMPILED_WHEEL_COMMIT
+ARG VLLM_PRECOMPILED_WHEEL_COMMIT="75648b16ddce1bff02c39c6f06be62a58385ff52"
 
 # Dictates if we should pull a production wheel for the vllm commit sha
 ARG VLLM_PREBUILT=0
