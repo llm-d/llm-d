@@ -1,6 +1,7 @@
 ARG CUDA_MAJOR=12
 ARG CUDA_MINOR=8
 ARG CUDA_PATCH=1
+ARG LMCACHE_COMMIT_SHA="d5be14f600866a10fe829e09d2acaf5cb823f9a0"
 
 # ============================================================================
 # BUILD STAGE - Install build dependencies and create wheels
@@ -249,7 +250,7 @@ RUN echo "/usr/local/lib" > /etc/ld.so.conf.d/local.conf && \
 WORKDIR /workspace
 
 # Define commit SHAs as build args to avoid layer invalidation
-ARG LMCACHE_COMMIT_SHA="d5be14f600866a10fe829e09d2acaf5cb823f9a0"
+ARG LMCACHE_COMMIT_SHA
 ARG VLLM_COMMIT_SHA="439368496db48d8f992ba8c606a0c0b1eebbfa69"
 
 # Build LMCache wheel (skip on ARM64 - infinistore dependency has no ARM wheels)
@@ -408,7 +409,7 @@ RUN python${PYTHON_VERSION} -m venv /opt/vllm && \
 COPY --from=builder /wheels/*.whl /tmp/wheels/
 
 # Define commit SHAs as build args to avoid layer invalidation
-ARG LMCACHE_COMMIT_SHA="d5be14f600866a10fe829e09d2acaf5cb823f9a0"
+ARG LMCACHE_COMMIT_SHA
 ARG VLLM_COMMIT_SHA="439368496db48d8f992ba8c606a0c0b1eebbfa69"
 
 ARG VLLM_PREBUILT=0
