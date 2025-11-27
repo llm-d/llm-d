@@ -43,7 +43,7 @@ This guide expects 8 Nvidia GPUs of any kind, and RDMA via InfiniBand or RoCE be
 ### Intel HPU Hardware Requirements
 
 For Intel HPU deployments:
-* Intel Gaudi2 machine with at least 2 Gaudi2 cards.
+* Intel Gaudi2/3 machine with at least 2 Gaudi2 cards.
 
 ## Prerequisites
 
@@ -76,7 +76,7 @@ cd guides/pd-disaggregation
 helmfile apply -e hpu -n ${NAMESPACE}
 ```
 **Resource Requirements by GPU Type:**
- * **Intel Gaudi2**: Use `habana.ai/gaudi`
+ * **Intel Gaudi2/3**: Use `habana.ai/gaudi`
  * For HPU prerequisites and setup instructions, see [docs/accelerators/README.md](../../docs/accelerators/README.md).
 
 
