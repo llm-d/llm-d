@@ -272,6 +272,8 @@ Open up the LLM-D Performance Dashboard.
 
 ## Configure AnythingLLM
 
+If you have not yet installed AnythingLLM, follow the steps here: https://anythingllm.com/desktop
+
 In AnythingLLM, configure Settings -> AI Providers -> LLMProvider to `LocalAI`.
 
 Copy the service ingress:
