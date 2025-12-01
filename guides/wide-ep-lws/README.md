@@ -116,7 +116,7 @@ helm install llm-d-infpool \
 
 ### Deploy Gateway and HTTPRoute
 
-Deploy the Gateway and HTTPRoute using the [gateway recipe](../../recipes/gateway/README.md).
+Deploy the Gateway and HTTPRoute using the [gateway recipe](../recipes/gateway/README.md).
 
 ### Gateway options
 
