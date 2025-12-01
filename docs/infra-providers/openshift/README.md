@@ -38,7 +38,7 @@ cd ocp-gpu-setup
     * Enter AWS region (e.g. `us-east-2`)
     * Enter Availability zone (e.g. `1`)
     * Answer `n` for spot instances
-1. Check if you have the default machineset available. If not, then run the above command twice. 
+1. Check if you have the default machineset available (in the web console, see Compute -> MahineSets). If not, then run the above command twice. 
 1. Once the first gpu machine set is provisioned, set the MachineSet count to 2.
 1. Configure the default MachineSet count (or extra one provisioned above) to 6.
 1. After the machines have provisioned the configuration should look similiar to the following:
@@ -60,7 +60,9 @@ cd ocp-gpu-setup
 
 #### Deploy the Supporting CRs
 
-1. Deploy the CRs: `oc apply -f ./crs`
+```sh
+oc apply -f ./crs
+```
 
 ## llm-d Installation
 
