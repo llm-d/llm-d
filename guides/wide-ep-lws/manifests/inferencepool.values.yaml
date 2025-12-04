@@ -50,7 +50,7 @@ inferenceExtension:
         - pluginRef: random-picker
 
 inferencePool:
-  apiVersion: inference.networking.k8s.io/v1
+  apiVersion: inference.networking.x-k8s.io/v1alpha2
   modelServers:
     matchLabels:
       llm-d.ai/inferenceServing: "true"
