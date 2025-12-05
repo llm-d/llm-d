@@ -44,26 +44,24 @@ kubectl create secret generic ${HF_TOKEN_NAME} \
 
 <!-- TABS:START -->
 
-<!-- TAB:Choose the Latest Release  -->
-**Choose the Latest Release**
+<!-- TAB:Choose Main Branch -->
+**Choose Main Branch**
 
-Choose this if you want the latest and greatest of llm-d with a high qualification standard. This is
-the default choice for most users.
+Choose the main branch if you want the latest llm-d.
 
 ```
-branch=$(curl -s https://api.github.com/repos/llm-d/llm-d/releases/latest | jq -r '.tag_name')
+branch="main"
 # Clone the repo and switch to the desired branch 
 git clone https://github.com/llm-d/llm-d.git && cd llm-d && git checkout ${branch}
 ```
 
-<!-- TAB:Choose Main Branch -->
-**Choose Main Branch**
+<!-- TAB:Choose the Latest Release  -->
+**Choose the Latest Release**
 
-Choose the main branch if you want the latest llm-d. Note the main branch is under active
-development and has a higher chance of carrying bugs than a released version.
+Choose this if you want the latest and greatest of llm-d with a high qualification standard.
 
 ```
-branch="main"
+branch=$(curl -s https://api.github.com/repos/llm-d/llm-d/releases/latest | jq -r '.tag_name')
 # Clone the repo and switch to the desired branch 
 git clone https://github.com/llm-d/llm-d.git && cd llm-d && git checkout ${branch}
 ```
