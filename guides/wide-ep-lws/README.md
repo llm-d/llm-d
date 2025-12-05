@@ -27,21 +27,21 @@ This guide requires 32 Nvidia H200 or B200 GPUs and InfiniBand or RoCE RDMA netw
   - The pods leveraging inter-node EP must be deployed within the same networking domain
   - You have deployed the [LeaderWorkerSet optional controller](../prereq/infrastructure/README.md#optional-install-leaderworkerset-for-multi-host-inference)
 - Configure and deploy your [Gateway control plane](../prereq/gateway-provider/README.md).
-- [Create the `llm-d-hf-token` secret in your target namespace with the key `HF_TOKEN` matching a valid HuggingFace token](../prereq/client-setup/README.md#huggingface-token) to pull models.
 - Have the [Monitoring stack](../../docs/monitoring/README.md) installed on your system.
+- Create a namespace for installation.
+  
+  ```
+  export NAMESPACE=llm-d-wide-ep # or any other namespace (shorter names recommended)
+  kubectl create namespace ${NAMESPACE}
+  ```
+
+- [Create the `llm-d-hf-token` secret in your target namespace with the key `HF_TOKEN` matching a valid HuggingFace token](../prereq/client-setup/README.md#huggingface-token) to pull models.
+- [Choose an llm-d version](../prereq/client-setup/README.md#llm-d-version)
 
 ## Installation
 
-Use the helmfile to compose and install the stack. The Namespace in which the stack will be deployed will be derived from the `${NAMESPACE}` environment variable. If you have not set this, it will default to `llm-d-wide-ep` in this example.
-
 ```bash
-# Clone the repo and switch to the latest release tag 
-tag=$(curl -s https://api.github.com/repos/llm-d/llm-d/releases/latest | jq -r '.tag_name')
-git clone https://github.com/llm-d/llm-d.git && cd llm-d && git checkout "$tag"
-
-export NAMESPACE=llm-d-wide-ep # or any other namespace
 cd guides/wide-ep-lws/
-kubectl create namespace ${NAMESPACE}
 ```
 
 ### Deploy Model Servers

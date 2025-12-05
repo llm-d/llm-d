@@ -28,21 +28,14 @@ Before installing WVA, ensure you have:
    - **Kind/Minikube**: Install Prometheus with TLS/HTTPS configuration. See [Kind/Minikube configuration](#other-kubernetes-platforms-kind-minikube-etc) below for installation and TLS setup instructions.
    - **Other Kubernetes**: A Prometheus stack must be installed with HTTPS support (see [monitoring documentation](../../docs/monitoring/README.md))
 
-4. **HuggingFace token secret**: The model service requires a Kubernetes secret named `llm-d-hf-token` in your target namespace with the key `HF_TOKEN` containing a valid HuggingFace token to pull models. Create the namespace and secret before running `helmfile apply` (Step 6):
-   ```bash
-   export HF_TOKEN=<your-huggingface-token>
-   export NAMESPACE=llm-d-autoscaler  # or your target namespace
-   
-   # Create namespace if it doesn't exist
-   kubectl create namespace "${NAMESPACE}" --dry-run=client -o yaml | kubectl apply -f -
-   
-   # Create HuggingFace token secret
-   kubectl create secret generic llm-d-hf-token \
-       --from-literal="HF_TOKEN=${HF_TOKEN}" \
-       --namespace "${NAMESPACE}" \
-       --dry-run=client -o yaml | kubectl apply -f -
-   ```
-   For more details, see the [client setup prerequisites](../prereq/client-setup/README.md#huggingface-token).
+4. **Create Installation Namespace**: 
+  
+  ```
+  export NAMESPACE=llm-d-autoscaler
+  kubectl create namespace ${NAMESPACE}
+  ```
+
+5. **HuggingFace token secret**: [Create the `llm-d-hf-token` secret in your target namespace with the key `HF_TOKEN` matching a valid HuggingFace token](../../prereq/client-setup/README.md#huggingface-token) to pull models.
 
 ## Installation
 

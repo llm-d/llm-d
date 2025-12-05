@@ -40,6 +40,39 @@ kubectl create secret generic ${HF_TOKEN_NAME} \
     --dry-run=client -o yaml | kubectl apply -f -
 ```
 
+## Choose an llm-d Version {#llm-d-version}
+
+<!-- TABS:START -->
+
+<!-- TAB:Choose the Latest Release  -->
+**Choose the Latest Release**
+
+```
+branch=$(curl -s https://api.github.com/repos/llm-d/llm-d/releases/latest | jq -r '.tag_name')
+# Clone the repo and switch to the desired branch 
+git clone https://github.com/llm-d/llm-d.git && cd llm-d && git checkout ${branch}
+```
+
+<!-- TAB:Choose Main Branch -->
+**Choose Main Branch**
+
+```
+branch="main"
+# Clone the repo and switch to the desired branch 
+git clone https://github.com/llm-d/llm-d.git && cd llm-d && git checkout ${branch}
+```
+
+<!-- TAB:Choose a Commit -->
+**Choose a Commit**
+
+```
+branch=<commit_sha>
+# Clone the repo and switch to the desired branch 
+git clone https://github.com/llm-d/llm-d.git && cd llm-d && git checkout ${branch}
+```
+
+<!-- TABS:END -->
+
 ## Pulling llm-d Images from GitHub Container Registry (GHCR)
 
 All of the container images in the `llm-d` organization are public on GitHub and require no authentication to pull.
