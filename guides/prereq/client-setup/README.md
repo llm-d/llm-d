@@ -42,6 +42,8 @@ kubectl create secret generic ${HF_TOKEN_NAME} \
 
 ## Choose an llm-d Version {#llm-d-version}
 
+Check for [known issues](../../README.md#known-issues) first.
+
 <!-- TABS:START -->
 
 <!-- TAB:Choose Main Branch -->
@@ -58,7 +60,7 @@ git clone https://github.com/llm-d/llm-d.git && cd llm-d && git checkout ${branc
 <!-- TAB:Choose the Latest Release  -->
 **Choose the Latest Release**
 
-Choose this if you want the latest and greatest of llm-d with a high qualification standard.
+Choose the latest release of llm-d with a high qualification standard.
 
 ```
 branch=$(curl -s https://api.github.com/repos/llm-d/llm-d/releases/latest | jq -r '.tag_name')
