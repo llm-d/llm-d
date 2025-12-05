@@ -1,0 +1,26 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ../gke
+patches:
+  - path: decode.yaml
+  - path: prefill.yaml
+  # - target:
+  #     kind: LeaderWorkerSet
+  #     name: wide-ep-llm-d-prefill
+  #   patch: |-
+  #     kind: LeaderWorkerSet
+  #     apiVersion: leaderworkerset.x-k8s.io/v1
+  #     metadata:
+  #       name: wide-ep-llm-d-prefill
+  #     spec:
+  #       $patch: merge
+  #       leaderWorkerTemplate:
+  #         size: 4
+  #         workerTemplate:
+  #           spec:
+  #             containers:
+  #             - name: vllm
+  #               env:
+  #               - name: DP_SIZE_LOCAL
+  #                 value: "4"
