@@ -10,7 +10,7 @@ inferenceExtension:
   pluginsCustomConfig: # THIS CONFIG NEEDS TO BE CHECKED FOR INF SCHEDULER NEW IMAGE
     pd-config.yaml: |
       # ALWAYS DO PD IN THIS EXAMPLE (THRESHOLD 0)
-      apiVersion: inference.networking.x-k8s.io/v1alpha1
+      apiVersion: inference.networking.k8s.io/v1
       kind: EndpointPickerConfig
       plugins:
       - type: prefill-header-handler
@@ -51,7 +51,7 @@ inferenceExtension:
       enabled: true
 
 inferencePool:
-  apiVersion: inference.networking.x-k8s.io/v1alpha2 # use old API version for inference
+  apiVersion: inference.networking.k8s.io/v1
   targetPortNumber: 8000
   modelServerType: vllm
   modelServers:

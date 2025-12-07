@@ -9,7 +9,7 @@ spec:
     name: infra-kv-events-inference-gateway
   rules:
     - backendRefs:
-      - group: inference.networking.x-k8s.io
+      - group: inference.networking.k8s.io
         kind: InferencePool
         name: gaie-kv-events
         port: 8000

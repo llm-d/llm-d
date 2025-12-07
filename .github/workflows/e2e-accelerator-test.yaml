@@ -469,7 +469,7 @@ jobs:
             helm list -n "${NAMESPACE}" || true
             echo ""
             echo "=== Inference Pools ==="
-            kubectl get inferencepool.inference.networking.x-k8s.io -n "${NAMESPACE}"
+            kubectl get inferencepool.inference.networking.k8s.io -n "${NAMESPACE}"
             echo ""
             echo "=== HTTPRoutes ==="
             kubectl get httproutes -n "${NAMESPACE}"

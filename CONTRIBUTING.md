@@ -73,7 +73,7 @@ The first key step in testing a feature, or bugfix is to identify what layer of 
 ### Deployment related changes:
 
 - Swapping GIE helm chart version and `inference-scheduler` image upgrades - check `inference-scheduler` container logs
-  - Check that your `InferencePool` exists (`kubectl get InferencePool.inference.networking.x-k8s.io`)
+  - Check that your `InferencePool` exists (`kubectl get InferencePool.inference.networking.k8s.io`)
 - Upgrading Infra helmchart or anything affecting Gateway infrastructure
   - Check the `gateway` object (`kubectl get gateway -o yaml`)
     - Check the `status` seciton, make sure it has an `address` and that there is a message saying `"Resource programmed, assigned to service(s) <gateway_service_address>"`

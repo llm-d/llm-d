@@ -131,8 +131,6 @@ Once the prerequisite steps are complete, you should be able to verify that `Inf
 ```bash
 # Verify the v1 APIs are installed, specifically InferencePool
 kubectl api-resources --api-group=inference.networking.k8s.io
-# Verify other APIs are installed
-kubectl api-resources --api-group=inference.networking.x-k8s.io
 ```
 
 If successful, the first command should return at least the `v1` version of `InferencePool`, and you should also see a `v1alpha2` or newer version of `InferenceObjective`.

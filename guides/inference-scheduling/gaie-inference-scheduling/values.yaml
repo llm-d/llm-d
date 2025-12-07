@@ -23,7 +23,7 @@ inferenceExtension:
     prometheus:
       enabled: true
 inferencePool:
-  apiVersion: inference.networking.x-k8s.io/v1alpha2 # use old API version for inference
+  apiVersion: inference.networking.k8s.io/v1
   targetPortNumber: 8000
   modelServerType: vllm
   modelServers:

@@ -20,7 +20,7 @@ routing:
 inferenceExtension:
   flags:
     v: 1
-    pool-group: "inference.networking.x-k8s.io"
+    pool-group: "inference.networking.k8s.io"
 
 provider:
   istio:
