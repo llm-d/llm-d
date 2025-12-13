@@ -12,15 +12,21 @@ This document provides complete steps for deploying Intel XPU PD (Prefill-Decode
 * Intel GPU Plugin deployed
 * kubectl access with cluster-admin privileges
 
+### Client Setup
+
+- Create a namespace for installation. 
+  
+  ```
+  export NAMESPACE=llm-d-pd # or any other namespace (shorter names recommended)
+  kubectl create namespace ${NAMESPACE}
+  ```
+
+- [Create the `llm-d-hf-token` secret in your target namespace with the key `HF_TOKEN` matching a valid HuggingFace token](../prereq/client-setup/README.md#huggingface-token) to pull models.
+- [Choose an llm-d version](../prereq/client-setup/README.md#llm-d-version)
+
 ## Step 0: Build Intel XPU Docker Image (Optional)
 If you need to customize the vLLM version or build the image from source, you can build the Intel XPU Docker image:
 
-### Clone Repository
-```shell
-# Clone the repo and switch to the latest release tag 
-tag=$(curl -s https://api.github.com/repos/llm-d/llm-d/releases/latest | jq -r '.tag_name')
-git clone https://github.com/llm-d/llm-d.git && cd llm-d && git checkout "$tag"
-```
 
 ### Build Default Image
 #### Intel Data Center GPU Max 1550
@@ -126,24 +132,7 @@ helmfile apply -f istio.helmfile.yaml
 helmfile apply -f istio.helmfile.yaml --selector kind=gateway-control-plane
 ```
 
-
-## Step 5: Create HuggingFace Token Secret
-```shell
-# Set environment variables
-export NAMESPACE=llm-d-pd
-export RELEASE_NAME_POSTFIX=pd
-export HF_TOKEN_NAME=${HF_TOKEN_NAME:-llm-d-hf-token}
-export HF_TOKEN=$your-hf-token
-
-# Create namespace
-kubectl create namespace ${NAMESPACE} --dry-run=client -o yaml | kubectl apply -f -
-
-# Create HuggingFace token secret (empty token for public models)
-kubectl create secret generic $HF_TOKEN_NAME --from-literal="HF_TOKEN=${HF_TOKEN}" --namespace ${NAMESPACE}
-```
-
-
-## Step 6: Deploy Intel XPU PD Disaggregation
+## Step 5: Deploy Intel XPU PD Disaggregation
 ⚠️ **Important - For Intel BMG GPU Users**: Before running `helmfile apply`, you must update the GPU resource type in `ms-pd/values_xpu.yaml`:
 
 ```yaml

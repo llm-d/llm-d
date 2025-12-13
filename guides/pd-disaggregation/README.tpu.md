@@ -11,7 +11,15 @@ This guide uses Cloud TPU v6e (Trillium) accelerators on Google Cloud Platform (
 
 ## Prerequisites
 - Have the [proper client tools installed on your local system](../prereq/client-setup/README.md) to use this guide.
-- Possess a valid Hugging Face token for pulling models.
+- Create a namespace for installation. 
+  
+  ```
+  export NAMESPACE=llm-d-pd # or any other namespace (shorter names recommended)
+  kubectl create namespace ${NAMESPACE}
+  ```
+
+- [Create the `llm-d-hf-token` secret in your target namespace with the key `HF_TOKEN` matching a valid HuggingFace token](../prereq/client-setup/README.md#huggingface-token) to pull models.
+- [Choose an llm-d version](../prereq/client-setup/README.md#llm-d-version)
 
 ## Installation Steps
 The following steps detail a fresh deployment of a PD disaggregation service on GKE using TPU accelerators. If you are using existing infrastructure, skip the relevant steps.
@@ -22,32 +30,7 @@ Please refer to [llm-d on GKE Documentation](../../docs/infra-providers/gke/READ
 
 ### Step 2 Install the Stack
 
-#### 2.1 Create Namespace
-
-Create the namespace for the deployment. You may use a custom namespace if preferred.
-
-```bash
-# Clone the repo and switch to the latest release tag 
-tag=$(curl -s https://api.github.com/repos/llm-d/llm-d/releases/latest | jq -r '.tag_name')
-git clone https://github.com/llm-d/llm-d.git && cd llm-d && git checkout "$tag"
-
-export NAMESPACE=llm-d-pd # Or any namespace your heart desires
-kubectl create namespace ${NAMESPACE}
-```
-
-#### 2.2 Create HF Token Secret
-
-Create a Kubernetes secret to store your Hugging Face token:
-
-```bash
-export HF_TOKEN=<YOUR_HF_TOKEN>
-
-kubectl create secret generic llm-d-hf-token \
-  --namespace "${NAMESPACE}" \
-  --from-literal="HF_TOKEN=${HF_TOKEN}"
-```
-
-#### 2.3 Install the stack via helmfile
+#### 2.1 Install the stack via helmfile
 
 Use the helmfile to compose and install the stack. The Namespace in which the stack will be deployed will be derived from the ${NAMESPACE} environment variable. If you have not set this, it will default to llm-d-pd in this example.
 
@@ -56,7 +39,7 @@ cd guides/pd-disaggregation
 helmfile apply -e gke_tpu -n ${NAMESPACE}
 ```
 
-#### 2.4 Install HTTPRoute
+#### 2.2 Install HTTPRoute
 
 Apply the HTTPRoute configuration:
 

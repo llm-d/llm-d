@@ -9,22 +9,20 @@ This guide provides recipes to offload prefix cache to CPU RAM via the vLLM nati
 * All prerequisites from the [upper level](../README.md).
 * Have the [proper client tools installed on your local system](../../prereq/client-setup/README.md) to use this guide.
 * Ensure your cluster infrastructure is sufficient to [deploy high scale inference](../../prereq/infrastructure/README.md).
+* Create a namespace for installation.
+  
+  ```
+  export NAMESPACE=llm-d-pfc-cpu # or any other namespace (shorter names recommended)
+  kubectl create namespace ${NAMESPACE}
+  ```
+
+* [Create the `llm-d-hf-token` secret in your target namespace with the key `HF_TOKEN` matching a valid HuggingFace token](../../prereq/client-setup/README.md#huggingface-token) to pull models.
+* [Choose an llm-d version](../../prereq/client-setup/README.md#llm-d-version)
 
 ## Installation
 
-First, set up a namespace for the deployment and create the HuggingFace token secret.
-
-```bash
-# Clone the repo and switch to the latest release tag 
-tag=$(curl -s https://api.github.com/repos/llm-d/llm-d/releases/latest | jq -r '.tag_name')
-git clone https://github.com/llm-d/llm-d.git && cd llm-d && git checkout "$tag"
-
-export NAMESPACE=llm-d-pfc-cpu # or any other namespace
-kubectl create namespace ${NAMESPACE}
-
-# NOTE: You must have your HuggingFace token stored in the HF_TOKEN environment variable.
-export HF_TOKEN="<your-hugging-face-token>"
-kubectl create secret generic llm-d-hf-token --from-literal=HF_TOKEN=${HF_TOKEN} -n ${NAMESPACE}
+```
+cd guides/tiered-prefix-cache/cpu
 ```
 
 ### 1. Deploy Gateway and HTTPRoute

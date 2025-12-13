@@ -1,6 +1,6 @@
 # Autoscaling with Workload Variant Autoscaler (WVA)
 
-The [Workload Variant Autoscaler](https://github.com/llm-d-incubation/workload-variant-autoscaler/tree/v0.0.5) (WVA) provides dynamic autoscaling capabilities for llm-d inference deployments, automatically adjusting replica counts based on inference server saturation.
+The [Workload Variant Autoscaler](https://github.com/llm-d-incubation/workload-variant-autoscaler/tree/v0.4.1) (WVA) provides dynamic autoscaling capabilities for llm-d inference deployments, automatically adjusting replica counts based on inference server saturation.
 
 ## Overview
 
@@ -16,7 +16,7 @@ WVA integrates with llm-d to:
 Before installing WVA, ensure you have:
 
 1. **Kubernetes cluster**: A running Kubernetes cluster (v1.31+) with GPU support. WVA uses the [Intelligent Inference Scheduling](../inference-scheduling/README.md) well-lit path, which requires GPUs. See [Hardware Requirements](../inference-scheduling/README.md#hardware-requirements) for supported accelerator types. If you need to set up a local cluster:
-   - **Kind**: For Kind clusters with GPU emulation, use the [WVA Kind setup script](https://github.com/llm-d-incubation/workload-variant-autoscaler/blob/v0.0.5/deploy/kind-emulator/setup.sh) which creates a cluster and patches nodes with GPU capacity (required for pod scheduling if using GPU-requesting pods). **Note**: Saturation-based scaling does not require node patching; it only uses workload metrics. See [Infrastructure Prerequisites](../prereq/infrastructure/README.md) for other cluster setup options.
+   - **Kind**: For Kind clusters with GPU emulation, use the [WVA Kind setup script](https://github.com/llm-d-incubation/workload-variant-autoscaler/blob/v0.4.1/deploy/kind-emulator/setup.sh) which creates a cluster and patches nodes with GPU capacity (required for pod scheduling if using GPU-requesting pods). **Note**: Saturation-based scaling does not require node patching; it only uses workload metrics. See [Infrastructure Prerequisites](../prereq/infrastructure/README.md) for other cluster setup options.
    - **Minikube**: See [Minikube setup documentation](../../docs/infra-providers/minikube/README.md) for single-host development.
    - **Production clusters**: See [Infrastructure Prerequisites](../prereq/infrastructure/README.md) for provider-specific setup (GKE, AKS, OpenShift (4.18+), etc.).
 
@@ -28,21 +28,14 @@ Before installing WVA, ensure you have:
    - **Kind/Minikube**: Install Prometheus with TLS/HTTPS configuration. See [Kind/Minikube configuration](#other-kubernetes-platforms-kind-minikube-etc) below for installation and TLS setup instructions.
    - **Other Kubernetes**: A Prometheus stack must be installed with HTTPS support (see [monitoring documentation](../../docs/monitoring/README.md))
 
-4. **HuggingFace token secret**: The model service requires a Kubernetes secret named `llm-d-hf-token` in your target namespace with the key `HF_TOKEN` containing a valid HuggingFace token to pull models. Create the namespace and secret before running `helmfile apply` (Step 6):
-   ```bash
-   export HF_TOKEN=<your-huggingface-token>
-   export NAMESPACE=llm-d-autoscaler  # or your target namespace
-   
-   # Create namespace if it doesn't exist
-   kubectl create namespace "${NAMESPACE}" --dry-run=client -o yaml | kubectl apply -f -
-   
-   # Create HuggingFace token secret
-   kubectl create secret generic llm-d-hf-token \
-       --from-literal="HF_TOKEN=${HF_TOKEN}" \
-       --namespace "${NAMESPACE}" \
-       --dry-run=client -o yaml | kubectl apply -f -
-   ```
-   For more details, see the [client setup prerequisites](../prereq/client-setup/README.md#huggingface-token).
+4. **Create Installation Namespace**: 
+  
+  ```
+  export NAMESPACE=llm-d-autoscaler
+  kubectl create namespace ${NAMESPACE}
+  ```
+
+5. **HuggingFace token secret**: [Create the `llm-d-hf-token` secret in your target namespace with the key `HF_TOKEN` matching a valid HuggingFace token](../prereq/client-setup/README.md#huggingface-token) to pull models.
 
 ## Installation
 
@@ -154,7 +147,7 @@ kubectl label namespace "${NAMESPACE}" openshift.io/user-monitoring=true --overw
 Install WVA CRDs before deploying:
 
 ```bash
-kubectl apply -f https://raw.githubusercontent.com/llm-d-incubation/workload-variant-autoscaler/v0.0.5/charts/workload-variant-autoscaler/crds/llmd.ai_variantautoscalings.yaml
+kubectl apply -f https://raw.githubusercontent.com/llm-d-incubation/workload-variant-autoscaler/v0.4.1/charts/workload-variant-autoscaler/crds/llmd.ai_variantautoscalings.yaml
 kubectl get crd variantautoscalings.llmd.ai
 ```
 
@@ -192,7 +185,7 @@ export MON_NS=openshift-user-workload-monitoring
 
 # Download OpenShift-specific values
 curl -o ${TMPDIR:-/tmp}/prometheus-adapter-values.yaml \
-  https://raw.githubusercontent.com/llm-d-incubation/workload-variant-autoscaler/v0.0.5/config/samples/prometheus-adapter-values-ocp.yaml
+  https://raw.githubusercontent.com/llm-d-incubation/workload-variant-autoscaler/v0.4.1/config/samples/prometheus-adapter-values-ocp.yaml
 
 # Update Prometheus URL
 sed -i.bak "s|url:.*|url: https://thanos-querier.openshift-monitoring.svc.cluster.local|" ${TMPDIR:-/tmp}/prometheus-adapter-values.yaml || \
@@ -234,7 +227,7 @@ export MON_NS=${MON_NS:-llm-d-monitoring}
 
 # Download values
 curl -o ${TMPDIR:-/tmp}/prometheus-adapter-values.yaml \
-  https://raw.githubusercontent.com/llm-d-incubation/workload-variant-autoscaler/v0.0.5/config/samples/prometheus-adapter-values.yaml
+  https://raw.githubusercontent.com/llm-d-incubation/workload-variant-autoscaler/v0.4.1/config/samples/prometheus-adapter-values.yaml
 
 # Update Prometheus URL
 sed -i.bak "s|url:.*|url: http://llmd-kube-prometheus-stack-prometheus.${MON_NS}.svc.cluster.local:9090|" ${TMPDIR:-/tmp}/prometheus-adapter-values.yaml || \
@@ -257,7 +250,7 @@ export MON_NS=${MON_NS:-llm-d-monitoring}
 
 # Download values
 curl -o ${TMPDIR:-/tmp}/prometheus-adapter-values.yaml \
-  https://raw.githubusercontent.com/llm-d-incubation/workload-variant-autoscaler/v0.0.5/config/samples/prometheus-adapter-values.yaml
+  https://raw.githubusercontent.com/llm-d-incubation/workload-variant-autoscaler/v0.4.1/config/samples/prometheus-adapter-values.yaml
 
 # Configure values with CA cert (ConfigMap created by WVA in Step 5)
 cat >> ${TMPDIR:-/tmp}/prometheus-adapter-values.yaml <<EOF
@@ -328,7 +321,7 @@ wva:
       insecureSkipVerify: true
 ```
 
-See [WVA chart documentation](https://github.com/llm-d-incubation/workload-variant-autoscaler/blob/v0.0.5/charts/workload-variant-autoscaler/README.md) for all options.
+See [WVA chart documentation](https://github.com/llm-d-incubation/workload-variant-autoscaler/blob/v0.4.1/charts/workload-variant-autoscaler/README.md) for all options.
 
 ## Cleanup
 

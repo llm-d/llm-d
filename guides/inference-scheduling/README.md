@@ -17,25 +17,20 @@ This example out of the box requires 2 GPUs of any supported kind:
 
 ## Prerequisites
 
-<!-- TABS:START -->
-
-<!-- TAB:Gateway Option -->
-### Gateway Option
-
 - Have the [proper client tools installed on your local system](../prereq/client-setup/README.md) to use this guide.
 - Ensure your cluster infrastructure is sufficient to [deploy high scale inference](../prereq/infrastructure)
-- [Create the `llm-d-hf-token` secret in your target namespace with the key `HF_TOKEN` matching a valid HuggingFace token](../prereq/client-setup/README.md#huggingface-token) to pull models.
 - Have the [Monitoring stack](../../docs/monitoring/README.md) installed on your system.
-- Configure and deploy your [Gateway control plane](../prereq/gateway-provider/README.md) 
+- Create a namespace for installation.
+  
+  ```
+  export NAMESPACE=llm-d-inference-scheduler # or any other namespace (shorter names recommended)
+  kubectl create namespace ${NAMESPACE}
+  ```
 
-<!-- TAB:Standalone Option -->
-### Standalone Option
-- Have the [proper client tools installed on your local system](../prereq/client-setup/README.md) to use this guide.
-- Ensure your cluster infrastructure is sufficient to [deploy high scale inference](../prereq/infrastructure)
 - [Create the `llm-d-hf-token` secret in your target namespace with the key `HF_TOKEN` matching a valid HuggingFace token](../prereq/client-setup/README.md#huggingface-token) to pull models.
-- Have the [Monitoring stack](../../docs/monitoring/README.md) installed on your system.
+- [Choose an llm-d version](../prereq/client-setup/README.md#llm-d-version)
+- [Skip if using standalone-inference-scheduling] Configure and deploy your [Gateway control plane](../prereq/gateway-provider/README.md)
 
-<!-- TABS:END -->
 
 ## Installation
 
@@ -43,25 +38,27 @@ Use the helmfile to compose and install the stack. The Namespace in which the st
 
 **_IMPORTANT:_** When using long namespace names (like `llm-d-inference-scheduler`), the generated pod hostnames may become too long and cause issues due to Linux hostname length limitations (typically 64 characters maximum). It's recommended to use shorter namespace names (like `llm-d`) and set `RELEASE_NAME_POSTFIX` to generate shorter hostnames and avoid potential networking or vLLM startup problems.
 
-**For GPU deployment (default):**
+### Deploy
+
 ```bash
-export NAMESPACE=llm-d-inference-scheduler # or any other namespace (shorter names recommended)
-kubectl create namespace ${NAMESPACE}
-
-# Clone the repo and switch to the latest release tag 
-tag=$(curl -s https://api.github.com/repos/llm-d/llm-d/releases/latest | jq -r '.tag_name')
-git clone https://github.com/llm-d/llm-d.git && cd llm-d && git checkout "$tag"
-
 cd guides/inference-scheduling
+```
+
+<!-- TABS:START -->
+<!-- TAB:GPU deployment  -->
+
+**GPU deployment**
+```bash
 helmfile apply -n ${NAMESPACE}
 ```
 
-**For CPU-only deployment:**
+<!-- TAB:CPU deployment  -->
+**CPU-only deployment:**
 ```bash
-export NAMESPACE=llm-d-inference-scheduler # or any other namespace (shorter names recommended)
-cd guides/inference-scheduling
 helmfile apply -e cpu -n ${NAMESPACE}
 ```
+
+<!-- TABS:END -->
 
 **_NOTE:_** You can set the `$RELEASE_NAME_POSTFIX` env variable to change the release names. This is how we support concurrent installs. Ex: `RELEASE_NAME_POSTFIX=inference-scheduling-2 helmfile apply -n ${NAMESPACE}`
 

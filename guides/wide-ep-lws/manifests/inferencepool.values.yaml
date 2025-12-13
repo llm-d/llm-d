@@ -1,5 +1,10 @@
 inferenceExtension:
   replicas: 1
+  flags:
+    # in vLLM 10.0+, the metric is renamed while upstream GAIE is still using the old name as default.
+    # See https://github.com/kubernetes-sigs/gateway-api-inference-extension/pull/1905.
+    kv-cache-usage-percentage-metric: "vllm:kv_cache_usage_perc"
+    v: 1
   image:
     name: llm-d-inference-scheduler
     hub: ghcr.io/llm-d
@@ -43,8 +48,6 @@ inferenceExtension:
         plugins:
         - pluginRef: decode-filter
         - pluginRef: random-picker
-  flags:
-    v: 1
 
 inferencePool:
   modelServers:

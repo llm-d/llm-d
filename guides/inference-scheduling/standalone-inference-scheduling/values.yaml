@@ -281,12 +281,12 @@ inferenceExtension:
               path: envoy.yaml
   monitoring:
     interval: "10s"
-    # Service account token secret for authentication
-    secret:
-      name: inference-scheduling-gateway-sa-metrics-reader-secret
     # Prometheus ServiceMonitor will be created when enabled for EPP metrics collection
     prometheus:
       enabled: true
+      auth:
+        # To allow unauthenticated /metrics access (e.g., for debugging with curl), set to false
+        enabled: true
 inferencePool:
   targetPorts:
     - number: 8000

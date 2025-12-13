@@ -14,8 +14,10 @@ For the well lit paths, we specifically recommend the following machine types:
 | Path | GPU | TPU |
 | --- | --- | --- |
 | [Inference Scheduling](../../../guides/inference-scheduling/README.md) | Large models (13B+) with Hopper or newer (A3 or newer)<br>Small or highly quantized models (1-7B) with Ampere, L4, or newer (A2, G2, or newer) | ct5e (v5e) or newer |
-| [Prefill / Decode Disaggregation](../../../guides/pd-disaggregation/README.md) | RDMA-enabled machine types (A3U, A4, or newer) | coming soon |
+| [Prefill / Decode Disaggregation](../../../guides/pd-disaggregation/README.md) | RDMA-enabled machine types (A3U, A4, or newer) | ct6e (v6e) or newer |
 | [Wide Expert Parallelism](../../../guides/wide-ep-lws/README.md) | RDMA-enabled machine types (A3U, A4, or newer) | coming soon |
+| [Tiered Prefix Cache](../../../guides/tiered-prefix-cache/README.md) | Tiered Prefix Cache can be combined with other well-lit paths above.<br>If running Prefill/Decode Disaggregation, or Wide Expert Parallelism, follow their guidance respectively.<br>Otherwise, follow the guidance on Inference Scheduling.  | coming soon |
+
 
 ## Cluster Configuration
 

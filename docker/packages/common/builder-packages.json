@@ -4,16 +4,22 @@
     "python${PYTHON_VERSION}-pip": null,
     "python${PYTHON_VERSION}-wheel": null,
     "python${PYTHON_VERSION}-devel": null,
+    "python3.9": "python3.9",
+    "python3.9-pip": "python3.9-venv",
+    "python3.9-wheel": "python3-wheel",
+    "python3.9-devel": "python3.9-dev",
     "which": null,
     "procps": "procps",
     "findutils": "findutils",
     "tar": "tar",
     "gcc": "gcc",
     "gcc-c++": "g++",
+    "hwloc": "hwloc",
     "make": "make",
     "autoconf": "autoconf",
     "automake": "automake",
     "libtool": "libtool",
+    "hwloc-devel": "libhwloc-dev",
     "git": "git",
     "curl": "curl",
     "wget": "wget",
@@ -32,10 +38,17 @@
     "pciutils-libs": null,
     "ninja-build": "ninja-build",
     "xz": "xz-utils",
-    "rsync": "rsync"
+    "rsync": "rsync",
+    "libaio-devel": "libaio-dev"
   },
   "ubuntu_only": [
     "debhelper",
-    "libnuma-dev"
+    "libnuma-dev",
+    "environment-modules",
+    "tcl",
+    "ethtool",
+    "iproute2",
+    "dmidecode",
+    "udev"
   ]
 }

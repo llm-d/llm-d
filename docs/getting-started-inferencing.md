@@ -196,7 +196,7 @@ For more information options to set for the `/v1/completions` endpoint, see the 
 
 While `/v1/completions` is a legacy API, it is still supported for now. We are in the process of converting over to `/v1/chat/completions`, and this work is being tracked in a few places.
 
-The [initial implementation for the kv-cache-manager package](https://github.com/llm-d/llm-d-kv-cache-manager/issues/10) landed as part of the v0.2 sprint.
+The [initial implementation for the kv-cache-manager package](https://github.com/llm-d/llm-d-kv-cache/issues/10) landed as part of the v0.2 sprint.
 
 [Support within the `llm-d-inference-scheduler` image](https://github.com/llm-d/llm-d-inference-scheduler/issues/83) is in progress and part of the v0.3 roadmap, and further support to the upstream `epp` image is in progress and being [tracked here](https://github.com/kubernetes-sigs/gateway-api-inference-extension/issues/827).
 

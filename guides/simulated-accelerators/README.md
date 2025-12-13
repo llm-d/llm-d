@@ -11,6 +11,14 @@ This guide demonstrates how to deploy the simulator `ghcr.io/llm-d/llm-d-inferen
 - Have the [proper client tools installed on your local system](../prereq/client-setup/README.md) to use this guide.
 - Configure and deploy your [Gateway control plane](../prereq/gateway-provider/README.md).
 - Have the [Monitoring stack](../../docs/monitoring/README.md) installed on your system.
+- Create a namespace for installation.
+  
+  ```
+  export NAMESPACE=llm-d-sim # or any other namespace (shorter names recommended)
+  kubectl create namespace ${NAMESPACE}
+  ```
+
+- [Choose an llm-d version](../prereq/client-setup/README.md#llm-d-version)
 
 **_NOTE:_** Unlike other examples which require models, the simulator stubs the vLLM server and so no HuggingFace token is needed.
 
@@ -18,14 +26,9 @@ This guide demonstrates how to deploy the simulator `ghcr.io/llm-d/llm-d-inferen
 
 Use the helmfile to compose and install the stack. The Namespace in which the stack will be deployed will be derived from the `${NAMESPACE}` environment variable. If you have not set this, it will default to `llm-d-sim` in this example.
 
+### Deploy
+
 ```bash
-export NAMESPACE=llm-d-sim # Or any namespace your heart desires
-kubectl create namespace ${NAMESPACE}
-
-# Clone the repo and switch to the latest release tag 
-tag=$(curl -s https://api.github.com/repos/llm-d/llm-d/releases/latest | jq -r '.tag_name')
-git clone https://github.com/llm-d/llm-d.git && cd llm-d && git checkout "$tag"
-
 cd guides/simulated-accelerators
 helmfile apply -n ${NAMESPACE}
 ```
