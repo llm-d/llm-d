@@ -3,7 +3,7 @@ inferenceExtension:
   image:
     name: llm-d-inference-scheduler
     hub: ghcr.io/llm-d
-    tag: v0.4.0-rc.1
+    tag: v0.4.0
   extProcPort: 9002
   monitoring:
     interval: "10s"
@@ -21,7 +21,7 @@ inferenceExtension:
       # ALWAYS DO PD IN THIS EXAMPLE (THRESHOLD 0)
       # This example uses random routing 
       # since it's not yet possible to route to individual DP ranks
-      apiVersion: inference.networking.k8s.io/v1
+      apiVersion: inference.networking.x-k8s.io/v1alpha1
       kind: EndpointPickerConfig
       plugins:
       - type: prefill-header-handler
@@ -47,7 +47,6 @@ inferenceExtension:
     v: 1
 
 inferencePool:
-  apiVersion: inference.networking.k8s.io/v1
   modelServers:
     matchLabels:
       llm-d.ai/inferenceServing: "true"

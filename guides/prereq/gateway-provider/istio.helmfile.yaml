@@ -5,7 +5,7 @@ repositories:
 releases:
   - name: istio-base
     chart: istio/base
-    version: 1.28.0
+    version: 1.28.1
     namespace: istio-system
     installed: true
     labels:
@@ -14,7 +14,7 @@ releases:
 
   - name: istiod
     chart: istio/istiod
-    version: 1.28.0
+    version: 1.28.1
     namespace: istio-system
     installed: true
     needs:

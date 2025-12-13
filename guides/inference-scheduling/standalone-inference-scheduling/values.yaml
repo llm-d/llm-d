@@ -5,11 +5,11 @@ inferenceExtension:
     ###################
     name: llm-d-inference-scheduler
     hub: ghcr.io/llm-d
-    tag: v0.4.0-rc.1
+    tag: v0.4.0
     ###################
     # name: epp
     # hub: registry.k8s.io/gateway-api-inference-extension
-    # tag: v1.2.0-rc.1
+    # tag: v1.2.0
     ###################
     pullPolicy: Always
   extProcPort: 9002
@@ -288,8 +288,8 @@ inferenceExtension:
     prometheus:
       enabled: true
 inferencePool:
-  apiVersion: inference.networking.k8s.io/v1
-  targetPortNumber: 8000
+  targetPorts:
+    - number: 8000
   modelServerType: vllm
   modelServers:
     matchLabels:
