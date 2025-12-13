@@ -49,7 +49,7 @@ releases:
   - name: {{ printf "infra-%s" $rn | quote }}
     namespace: {{ $ns }}
     chart: llm-d-infra/llm-d-infra
-    version: v1.3.4
+    version: v1.3.5
     installed:  true
     labels:
       type: infrastructure
@@ -57,7 +57,7 @@ releases:
     values:
       - gateway:
           {{ .Environment.Values.gateway | toYaml | nindent 10 }}
-  {{- end }}
+{{- end }}
 
   - name: {{ printf "gaie-%s" $rn | quote }}
     namespace: {{ $ns }}

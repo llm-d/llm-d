@@ -1,2 +1,2 @@
 gateway:
-  gatewayClassName: agentgateway
+  gatewayClassName: agentgateway-v2
