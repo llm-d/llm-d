@@ -14,9 +14,12 @@ routing:
     enabled: false # removes sidecar from deployment - no PD in inference scheduling
     targetPort: 8000 # controlls vLLM port to matchup with sidecar if deployed
 
+accelerator: # controlls specialized hardware Type
+  type: nvidia
+
 # DigitalOcean-specific container configuration
 decode:
-  parallelism: # controlls count of devices allocated
+  parallelism: # controlls count of specialized hardware devices allocated
     tensor: 1
     data: 1
   replicas: 2

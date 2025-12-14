@@ -7,7 +7,7 @@ modelArtifacts:
   size: 10Gi
   authSecretName: "llm-d-hf-token"
 
-accelerator: # controlls type 
+accelerator: # controlls specialized hardware Type
   type: "intel-i915"
 
 routing:
@@ -16,6 +16,8 @@ routing:
     targetPort: 8000 # controlls vLLM port to matchup with sidecar if deployed
 
 decode:
+  parallelism: # controlls count of specialized hardware devices allocated
+    tensor: 1
   create: true
   replicas: 2
   monitoring:

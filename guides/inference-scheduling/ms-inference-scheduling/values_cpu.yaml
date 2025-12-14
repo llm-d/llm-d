@@ -7,7 +7,7 @@ modelArtifacts:
   authSecretName: "llm-d-hf-token"
   name: "meta-llama/Llama-3.2-3B-Instruct"
 
-accelerator:
+accelerator:  # controlls specialized hardware Type (or lack there of in this case)
   type: cpu
 
 # Routing configuration - required for inference-scheduling
@@ -46,7 +46,7 @@ decode:
       - name: VLLM_CPU_KVCACHE_SPACE
         value: "32"
     ports:
-      - containerPort: 8200
+      - containerPort: 8000
         protocol: TCP
     resources:
       limits:
@@ -65,7 +65,7 @@ decode:
     startupProbe:
       httpGet:
         path: /v1/models
-        port: 8200
+        port: 8000
       initialDelaySeconds: 15
       periodSeconds: 30
       timeoutSeconds: 5
@@ -73,14 +73,14 @@ decode:
     livenessProbe:
       httpGet:
         path: /health
-        port: 8200
+        port: 8000
       periodSeconds: 10
       timeoutSeconds: 5
       failureThreshold: 3
     readinessProbe:
       httpGet:
         path: /v1/models
-        port: 8200
+        port: 8000
       periodSeconds: 5
       timeoutSeconds: 2
       failureThreshold: 3

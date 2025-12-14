@@ -35,9 +35,6 @@ inferenceExtension:
         secretKeyRef:
           name: llm-d-hf-token
           key: HF_TOKEN
-  flags:
-    # Log verbosity
-    v: 4
 
   pluginsConfigFile: "precise-prefix-cache-config.yaml"
   pluginsCustomConfig:
@@ -71,6 +68,8 @@ inferenceExtension:
 
   # Monitoring configuration for EPP
   monitoring:
+    secret:
+      name: kv-events-gateway-sa-metrics-reader-secret
     interval: "10s"
     # Prometheus ServiceMonitor will be created when enabled for EPP metrics collection
     prometheus:

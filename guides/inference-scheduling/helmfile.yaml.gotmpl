@@ -2,10 +2,6 @@ environments:
   istio: &I
     values:
       - ../prereq/gateway-provider/common-configurations/istio.yaml
-  istioBench: &IB
-    values:
-      - ../prereq/gateway-provider/common-configurations/istio.yaml
-      - ../prereq/gateway-provider/common-configurations/benchmarking.yaml
   kgateway: &KG
     values:
       - ../prereq/gateway-provider/common-configurations/kgateway.yaml
@@ -15,9 +11,8 @@ environments:
   gke: &GKE
     values:
       - ../prereq/gateway-provider/common-configurations/gke.yaml
-  gke_tpu: &GKE_TPU
-    values:
-      - ../prereq/gateway-provider/common-configurations/gke_tpu.yaml
+  gke_tpu: &GKETPU
+    <<: *GKE
   standalone: &STANDALONE
     values:
       - provider:
@@ -86,7 +81,7 @@ releases:
               enabled: false
     {{- end }}
     # Apply destination rule for anything istio
-    {{- if or (eq .Environment.Name "istio") (eq .Environment.Name "default") (eq .Environment.Name "istioBench") (eq .Environment.Name "xpu") (eq .Environment.Name "gaudi") (eq .Environment.Name "cpu") }}
+    {{- if or (eq .Environment.Name "istio") (eq .Environment.Name "default") (eq .Environment.Name "xpu") (eq .Environment.Name "gaudi") (eq .Environment.Name "cpu") }}
       - provider:
           name: {{ .Environment.Values.provider.name }}
           istio:
@@ -95,12 +90,6 @@ releases:
           istio:
             destinationRule:
               host: {{ printf "gaie-%s-epp.%s.svc.cluster.local" $rn $ns | quote }}
-    {{- end }}
-    # Apply log level only in bench setting
-    {{- if (eq .Environment.Name "istioBench") }}
-      - inferenceExtension:
-          flags: 
-            {{ .Environment.Values.inferenceExtension.flags | toYaml | nindent 12 }}
     {{- end }}
     labels:
       kind: inference-stack
@@ -128,10 +117,6 @@ releases:
       - ms-inference-scheduling/digitalocean-values.yaml
     {{- else }}
       - ms-inference-scheduling/values.yaml
-    {{- end }}
-    {{- if (eq .Environment.Name "istioBench") }}
-      - routing: 
-          {{ .Environment.Values.routing | toYaml | nindent 10 }}
     {{- end }}
     set:
     {{- if or (eq .Environment.Name "gke") (eq .Environment.Name "gke_tpu") }}  

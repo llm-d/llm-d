@@ -1,20 +1,38 @@
 # Infra values
 gateway:
   gatewayClassName: istio
+  gatewayParameters:
+    accessLogging: false
+    logLevel: error
+    resources:
+      limits:
+        cpu: "16"
+        memory: 16Gi
+      requests:
+        cpu: "4"
+        memory: 4Gi
 
 # GAIE values
 inferenceExtension:
-  flags: # empty flag overrides, so key always exists to pull values from, its just empty
+  flags:
+    v: 1
 provider:
   name: istio
   istio:
     destinationRule:
       trafficPolicy:
-        tls:
-          mode: SIMPLE
-          insecureSkipVerify: true
+        connectionPool:
+          http:
+            http1MaxPendingRequests: 256000
+            maxRequestsPerConnection: 256000
+            http2MaxRequests: 256000
+            idleTimeout: "900s"
+          tcp:
+            maxConnections: 256000
+            maxConnectionDuration: "1800s"
+            connectTimeout: "900s"
 
 # MS values
 routing:
   proxy:
-    zapLogLevel: debug
+    zapLogLevel: error

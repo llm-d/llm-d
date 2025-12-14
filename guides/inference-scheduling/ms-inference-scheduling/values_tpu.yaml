@@ -7,7 +7,7 @@ modelArtifacts:
   authSecretName: "llm-d-hf-token"
   name: meta-llama/Llama-3.1-70B
 
-accelerator:
+accelerator:  # controlls specialized hardware Type
   type: google
 
 routing:
@@ -16,7 +16,7 @@ routing:
     targetPort: 8000 # controlls vLLM port to matchup with sidecar if deployed
 
 decode:
-  parallelism:
+  parallelism: # controlls count of specialized hardware devices allocated
     tensor: 8
   create: true
   replicas: 2
@@ -37,7 +37,7 @@ decode:
     args:
       - "--max-model-len=4096"
     ports:
-      - containerPort: 8200
+      - containerPort: 8000
         name: vllm
         protocol: TCP
     mountModelVolume: true
