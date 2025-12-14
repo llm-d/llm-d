@@ -12,11 +12,9 @@ accelerator:
 
 # Routing configuration - required for inference-scheduling
 routing:
-  servicePort: 8000
   proxy:
-    image: ghcr.io/llm-d/llm-d-routing-sidecar:v0.4.0-rc.1
-    connector: nixlv2
-    secure: false
+    enabled: false # removes sidecar from deployment - no PD in inference scheduling
+    targetPort: 8000 # controlls vLLM port to matchup with sidecar if deployed
 
 decode:
   create: true
@@ -29,7 +27,7 @@ decode:
       interval: "30s"
   containers:
   - name: "vllm"
-    image: ghcr.io/llm-d/llm-d-cpu-dev:sha-1b3416d
+    image: ghcr.io/llm-d/llm-d-cpu-dev:v0.4.0
     imagePullPolicy: IfNotPresent
     modelCommand: vllmServe
     securityContext: # NUMA cross-node related

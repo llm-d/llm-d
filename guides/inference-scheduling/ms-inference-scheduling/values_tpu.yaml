@@ -11,11 +11,9 @@ accelerator:
   type: google
 
 routing:
-  servicePort: 8000
   proxy:
-    image: ghcr.io/llm-d/llm-d-routing-sidecar:v0.4.0-rc.1
-    connector: nixlv2
-    secure: false
+    enabled: false # removes sidecar from deployment - no PD in inference scheduling
+    targetPort: 8000 # controlls vLLM port to matchup with sidecar if deployed
 
 decode:
   parallelism:
@@ -29,7 +27,7 @@ decode:
   monitoring:
     podmonitor:
       enabled: true
-      portName: "metrics"  # decode vLLM service port (from routing.proxy.targetPort)
+      portName: "vllm"  # decode vLLM service port (from routing.proxy.targetPort)
       path: "/metrics"
       interval: "30s"
   containers:
@@ -37,13 +35,10 @@ decode:
     image: "vllm/vllm-tpu:e92694b6fe264a85371317295bca6643508034ef"
     modelCommand: vllmServe
     args:
-      - "--tensor-parallel-size=8"
       - "--max-model-len=4096"
     ports:
-      - containerPort: 5557
-        protocol: TCP
       - containerPort: 8200
-        name: metrics
+        name: vllm
         protocol: TCP
     mountModelVolume: true
     volumeMounts:
@@ -54,7 +49,7 @@ decode:
     startupProbe:
       httpGet:
         path: /v1/models
-        port: 8200
+        port: 8000
       initialDelaySeconds: 15
       periodSeconds: 30
       timeoutSeconds: 5
@@ -62,14 +57,14 @@ decode:
     livenessProbe:
       httpGet:
         path: /health
-        port: 8200
+        port: 8000
       periodSeconds: 10
       timeoutSeconds: 5
       failureThreshold: 3
     readinessProbe:
       httpGet:
         path: /v1/models
-        port: 8200
+        port: 8000
       periodSeconds: 5
       timeoutSeconds: 2
       failureThreshold: 3
