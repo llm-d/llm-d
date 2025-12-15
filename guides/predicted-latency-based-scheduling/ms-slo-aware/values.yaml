@@ -22,40 +22,13 @@ decode:
       portName: "vllm"  # decode vLLM service port (from routing.proxy.targetPort)
       path: "/metrics"
       interval: "30s"
-  initContainers:
-    - name: lora-adapter-syncer
-      tty: true
-      stdin: true 
-      image: us-central1-docker.pkg.dev/k8s-staging-images/gateway-api-inference-extension/lora-syncer:main
-      restartPolicy: Always
-      imagePullPolicy: Always
-      env: 
-        - name: DYNAMIC_LORA_ROLLOUT_CONFIG
-          value: "/config/configmap.yaml"
-      volumeMounts: # DO NOT USE subPath, dynamic configmap updates don't work on subPaths
-      - name: config-volume
-        mountPath:  /config
   enableServiceLinks: false
   terminationGracePeriodSeconds: 130
   containers:
   - name: "vllm"
-    image: ghcr.io/llm-d/llm-d-cuda:v0.4.0
-    modelCommand: custom
+    image: ghcr.io/llm-d/llm-d-cuda:v0.3.1
+    modelCommand: vllmServe
     imagePullPolicy: IfNotPresent
-    command:
-      - /bin/sh
-      - '-c'
-    args:
-      - |
-        vllm serve meta-llama/Llama-3.1-8B-Instruct \
-        --max-num-seq 1024 \
-        --enable-lora \
-        --max-loras 2 \
-        --max-lora-rank 8 \
-        --max-cpu-loras 12
-    env:
-      - name: VLLM_ALLOW_RUNTIME_LORA_UPDATING
-        value: "true"
     ports:
       - containerPort: 8200
         name: vllm
@@ -64,32 +37,28 @@ decode:
       preStop:
         sleep:
           seconds: 30
+    startupProbe:
+      httpGet:
+        path: /v1/models
+        port: 8200
+      initialDelaySeconds: 15
+      periodSeconds: 30
+      timeoutSeconds: 5
+      failureThreshold: 60
     livenessProbe:
       httpGet:
         path: /health
-        port: http
-        scheme: HTTP
-      periodSeconds: 1
-      successThreshold: 1
-      failureThreshold: 5
-      timeoutSeconds: 1
+        port: 8200
+      periodSeconds: 10
+      timeoutSeconds: 5
+      failureThreshold: 3
     readinessProbe:
       httpGet:
-        path: /health
-        port: http
-        scheme: HTTP
-      periodSeconds: 1
-      successThreshold: 1
-      failureThreshold: 1
-      timeoutSeconds: 1
-    startupProbe:
-      failureThreshold: 600
-      initialDelaySeconds: 2
-      periodSeconds: 1
-      httpGet:
-        path: /health
-        port: http
-        scheme: HTTP
+        path: /v1/models
+        port: 8200
+      periodSeconds: 5
+      timeoutSeconds: 2
+      failureThreshold: 3
     mountModelVolume: true
     volumeMounts:
     - name: metrics-volume
@@ -100,8 +69,6 @@ decode:
       name: data
     - mountPath: /dev/shm
       name: shm
-    - name: adapters
-      mountPath: "/adapters"
   volumes:
   - name: metrics-volume
     emptyDir: {}
@@ -112,28 +79,6 @@ decode:
   - name: shm
     emptyDir:
       medium: Memory
-  - name: adapters
-    emptyDir: {}
-  - name: config-volume
-    configMap:
-      name: vllm-llama3-8b-instruct-adapters
-
 # PD disabled in this example
 prefill:
   create: false
-
-extraObjects:
-  - apiVersion: v1
-    kind: ConfigMap
-    metadata:
-      name: vllm-llama3-8b-instruct-adapters
-    data:
-      configmap.yaml: |
-          vLLMLoRAConfig:
-            name: vllm-llama3-8b-instruct-adapters
-            port: 8000
-            defaultBaseModel: meta-llama/Llama-3.1-8B-Instruct
-            ensureExist:
-              models:
-              - id: food-review-1
-                source: Kawon/llama3.1-food-finetune_v14_r8
