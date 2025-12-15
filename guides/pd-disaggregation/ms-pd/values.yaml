@@ -12,6 +12,7 @@ routing:
     image: quay.io/rh_ee_rsaini/llm-d-routing-sidecar:dev
     connector: nixlv2
     secure: false
+    zapLogLevel: 4  # Numeric level 4 to see V(4) debug logs
 
 decode:
   parallelism:
