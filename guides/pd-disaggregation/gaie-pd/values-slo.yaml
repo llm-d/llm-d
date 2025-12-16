@@ -41,16 +41,11 @@ inferenceExtension:
           maxPrefixBlocksToMatch: 256
           lruCapacityPerServer: 31250
 
-      # NEW: PD-SLO Pair Optimizer (joint optimization with SLO headers)
-      - type: pd-slo-pair-optimizer
-        name: pd-slo-pair-optimizer
+      # NEW: PD-SLO Optimizer (independent optimization with trained predictors)
+      - type: pd-slo-optimizer
+        name: pd-slo-optimizer
         parameters:
-          ttftWeight: 0.8
-          tpotWeight: 0.2
-          transferOverheadMs: 5.0
           sloBufferFactor: 0.9
-          selectionStrategy: "weighted_random"
-          negativeHeadroomProb: 0.01
 
       # Picker
       - type: max-score-picker
@@ -64,7 +59,6 @@ inferenceExtension:
           prefillProfile: "prefill"
           prefixPluginName: "prefix-cache-scorer"
           hashBlockSize: 5
-          transferOverheadMs: 5.0
           pdThreshold: 5  # Skip prefill for requests with < 5 non-cached tokens (good for testing both paths)
 
       schedulingProfiles:
@@ -73,7 +67,7 @@ inferenceExtension:
         - pluginRef: prefill-filter
         - pluginRef: prefix-cache-scorer
           weight: 2
-        - pluginRef: pd-slo-pair-optimizer  # Joint optimization
+        - pluginRef: pd-slo-optimizer  # Independent prefill optimization
           weight: 3
         - pluginRef: max-score-picker
 
@@ -82,7 +76,7 @@ inferenceExtension:
         - pluginRef: decode-filter
         - pluginRef: prefix-cache-scorer
           weight: 2
-        - pluginRef: pd-slo-pair-optimizer  # Joint optimization
+        - pluginRef: pd-slo-optimizer  # Independent decode optimization
           weight: 3
         - pluginRef: max-score-picker
 
