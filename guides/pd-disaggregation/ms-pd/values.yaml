@@ -1,10 +1,10 @@
 multinode: false
 
 modelArtifacts:
-  uri: "hf://meta-llama/Llama-3.1-8B-Instruct"
+  uri: "hf://RedHatAI/Llama-3.3-70B-Instruct-FP8-dynamic"
   size: 100Gi
   authSecretName: "llm-d-hf-token"
-  name: "meta-llama/Llama-3.1-8B-Instruct"
+  name: "RedHatAI/Llama-3.3-70B-Instruct-FP8-dynamic"
 
 routing:
   servicePort: 8000
@@ -12,22 +12,13 @@ routing:
     image: quay.io/rh_ee_rsaini/llm-d-routing-sidecar:dev
     connector: nixlv2
     secure: false
-    zapLogLevel: 4  # Numeric level 4 to see V(4) debug logs
 
 decode:
   parallelism:
-    tensor: 1
+    tensor: 4
     data: 1
   create: true
   replicas: 1
-  # NOTE: For 1 GPU setup, GPU sharing must be enabled (time-slicing or MIG)
-  affinity:
-    nodeAffinity:
-      requiredDuringSchedulingIgnoredDuringExecution:
-        nodeSelectorTerms:
-        - matchExpressions:
-          - key: nvidia.com/gpu.count
-            operator: Exists
   monitoring:
     podmonitor:
       enabled: true
@@ -41,16 +32,14 @@ decode:
     args:
       # Keep tensor-parallelism as the first set of arguments
       - "--tensor-parallel-size"
-      - "1"
+      - "4"
       - "--block-size"
       - "128"
       - "--kv-transfer-config"
       - '{"kv_connector":"NixlConnector", "kv_role":"kv_both"}'
       - "--disable-uvicorn-access-log"
       - "--max-model-len"
-      - "8192"
-      - "--gpu-memory-utilization"
-      - "0.7"
+      - "32000"
     env:
       - name: VLLM_NIXL_SIDE_CHANNEL_HOST
         valueFrom:
@@ -65,12 +54,14 @@ decode:
     resources:
       limits:
         memory: 64Gi
-        cpu: "8"
-        nvidia.com/gpu: "1"
+        cpu: "16"
+        nvidia.com/gpu: "4"
+        rdma/ib: 1
       requests:
         memory: 64Gi
-        cpu: "8"
-        nvidia.com/gpu: "1"
+        cpu: "16"
+        nvidia.com/gpu: "4"
+        rdma/ib: 1
     mountModelVolume: true
     volumeMounts:
     - name: metrics-volume
@@ -113,15 +104,7 @@ decode:
 
 prefill:
   create: true
-  replicas: 1
-  # Colocate with decode pod on the same node
-  affinity:
-    podAffinity:
-      requiredDuringSchedulingIgnoredDuringExecution:
-      - labelSelector:
-          matchLabels:
-            app.kubernetes.io/component: decode
-        topologyKey: kubernetes.io/hostname
+  replicas: 4
   monitoring:
     podmonitor:
       enabled: true
@@ -139,9 +122,7 @@ prefill:
       - '{"kv_connector":"NixlConnector", "kv_role":"kv_both"}'
       - "--disable-uvicorn-access-log"
       - "--max-model-len"
-      - "8192"
-      - "--gpu-memory-utilization"
-      - "0.7"
+      - "32000"
     env:
       - name: VLLM_NIXL_SIDE_CHANNEL_HOST
         valueFrom:
@@ -158,10 +139,12 @@ prefill:
         memory: 64Gi
         cpu: "8"
         nvidia.com/gpu: "1"
+        rdma/ib: 1
       requests:
         memory: 64Gi
         cpu: "8"
         nvidia.com/gpu: "1"
+        rdma/ib: 1
     mountModelVolume: true
     volumeMounts:
     - name: metrics-volume

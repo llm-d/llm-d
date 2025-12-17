@@ -27,9 +27,6 @@ decode:
     image: ghcr.io/llm-d/llm-d-cuda:v0.3.1
     modelCommand: vllmServe
     args:
-      - "--gpu-memory-utilization"
-      - "0.85" # Use 85% of GPU memory
-      - "--enforce-eager"
       - "--kv-transfer-config"
       - '{"kv_connector":"NixlConnector", "kv_role":"kv_both"}'
       - "--disable-uvicorn-access-log"
