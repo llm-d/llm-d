@@ -411,6 +411,12 @@ grafana:
   service:
     type: ClusterIP
     sessionAffinity: ""
+  sidecar:
+    dashboards:
+      enabled: true
+      searchNamespace: ALL
+      label: grafana_dashboard
+      folderAnnotation: grafana_folder
   datasources:
     datasources.yaml:
       apiVersion: 1
@@ -453,6 +459,12 @@ grafana:
   service:
     type: ClusterIP
     sessionAffinity: ""
+  sidecar:
+    dashboards:
+      enabled: true
+      searchNamespace: ${MONITORING_NAMESPACE}
+      label: grafana_dashboard
+      folderAnnotation: grafana_folder
   datasources:
     datasources.yaml:
       apiVersion: 1
