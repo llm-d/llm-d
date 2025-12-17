@@ -574,6 +574,14 @@ install() {
     log_info "⚠️ ServiceMonitor CRD not found. Installing Prometheus stack with CRDs..."
   fi
   install_prometheus_grafana
+
+  # Load llm-d dashboards
+  SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+  if [ -f "${SCRIPT_DIR}/load-llm-d-dashboards.sh" ]; then
+    log_info "📊 Loading llm-d dashboards..."
+    "${SCRIPT_DIR}/load-llm-d-dashboards.sh" "${MONITORING_NAMESPACE}"
+  fi
+
   log_success "🎉 Prometheus and Grafana installation complete."
 }
 
