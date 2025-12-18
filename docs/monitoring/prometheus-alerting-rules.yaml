@@ -1,0 +1,434 @@
+# llm-d Prometheus Alerting Rules
+# Production-ready alerting rules for SLO enforcement in llm-d deployments
+#
+# Installation:
+#   kubectl apply -f prometheus-alerting-rules.yaml -n llm-d-monitoring
+#
+# Or include in your Prometheus Operator configuration
+#
+# These rules align with the PromQL queries in example-promQL-queries.md
+# and provide production-grade alerting for LLM inference workloads.
+
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: llm-d-alerting-rules
+  namespace: llm-d-monitoring
+  labels:
+    app: llm-d
+    prometheus: llm-d
+    release: llmd
+spec:
+  groups:
+    # =========================================================================
+    # TIER 1: CRITICAL - Immediate Action Required
+    # These alerts indicate service degradation affecting users
+    # =========================================================================
+    - name: llm-d-critical
+      interval: 30s
+      rules:
+        # High Error Rate - Platform Wide
+        - alert: LLMDHighErrorRate
+          expr: |
+            (
+              sum(rate(inference_model_request_error_total[5m]))
+              /
+              sum(rate(inference_model_request_total[5m]))
+            ) > 0.05
+          for: 2m
+          labels:
+            severity: critical
+            team: inference-platform
+          annotations:
+            summary: "High inference error rate detected"
+            description: |
+              Platform-wide error rate is {{ $value | humanizePercentage }}, exceeding 5% threshold.
+              This indicates widespread service degradation affecting user requests.
+            runbook_url: "https://github.com/llm-d/llm-d/blob/main/docs/monitoring/alerting-runbook.md#llmdhigherrorrate"
+
+        # High Error Rate - Per Model
+        - alert: LLMDModelHighErrorRate
+          expr: |
+            (
+              sum by(model_name) (rate(inference_model_request_error_total[5m]))
+              /
+              sum by(model_name) (rate(inference_model_request_total[5m]))
+            ) > 0.10
+          for: 5m
+          labels:
+            severity: critical
+            team: inference-platform
+          annotations:
+            summary: "High error rate for model {{ $labels.model_name }}"
+            description: |
+              Model {{ $labels.model_name }} has error rate of {{ $value | humanizePercentage }}.
+              Investigate model-specific issues or backend pod health.
+            runbook_url: "https://github.com/llm-d/llm-d/blob/main/docs/monitoring/alerting-runbook.md#llmdmodelhigherrorrate"
+
+        # Scheduler Down
+        - alert: LLMDSchedulerDown
+          expr: |
+            avg_over_time(up{job=~".*epp.*"}[5m]) < 0.5
+          for: 2m
+          labels:
+            severity: critical
+            team: inference-platform
+          annotations:
+            summary: "Inference scheduler (EPP) is down"
+            description: |
+              The Endpoint Picker (EPP) scheduler has been unavailable for >2 minutes.
+              All inference requests will fail without a functioning scheduler.
+            runbook_url: "https://github.com/llm-d/llm-d/blob/main/docs/monitoring/alerting-runbook.md#llmdschedulerdown"
+
+        # No Healthy Backends
+        - alert: LLMDNoHealthyBackends
+          expr: |
+            sum(up{job=~".*vllm.*"}) == 0
+          for: 1m
+          labels:
+            severity: critical
+            team: inference-platform
+          annotations:
+            summary: "No healthy vLLM backends available"
+            description: |
+              All vLLM backend pods are down. Inference requests cannot be served.
+              Immediate investigation required.
+            runbook_url: "https://github.com/llm-d/llm-d/blob/main/docs/monitoring/alerting-runbook.md#llmdnohealthybackends"
+
+        # Extreme Latency - P99 TTFT
+        - alert: LLMDExtremeTTFT
+          expr: |
+            histogram_quantile(0.99, sum by(le, model_name) (rate(vllm:time_to_first_token_seconds_bucket[5m]))) > 30
+          for: 5m
+          labels:
+            severity: critical
+            team: inference-platform
+          annotations:
+            summary: "Extreme time-to-first-token latency for {{ $labels.model_name }}"
+            description: |
+              P99 TTFT is {{ $value | humanizeDuration }} for model {{ $labels.model_name }}.
+              Users are experiencing unacceptable wait times before receiving responses.
+            runbook_url: "https://github.com/llm-d/llm-d/blob/main/docs/monitoring/alerting-runbook.md#llmdextremettft"
+
+    # =========================================================================
+    # TIER 2: WARNING - Investigation Required
+    # These alerts indicate potential issues requiring attention
+    # =========================================================================
+    - name: llm-d-warning
+      interval: 60s
+      rules:
+        # Elevated Error Rate
+        - alert: LLMDElevatedErrorRate
+          expr: |
+            (
+              sum(rate(inference_model_request_error_total[5m]))
+              /
+              sum(rate(inference_model_request_total[5m]))
+            ) > 0.01
+          for: 10m
+          labels:
+            severity: warning
+            team: inference-platform
+          annotations:
+            summary: "Elevated inference error rate"
+            description: |
+              Platform error rate is {{ $value | humanizePercentage }}, above 1% threshold.
+              Investigate before this escalates to critical levels.
+            runbook_url: "https://github.com/llm-d/llm-d/blob/main/docs/monitoring/alerting-runbook.md#llmdelevatederrorrate"
+
+        # High Latency - P99
+        - alert: LLMDHighLatencyP99
+          expr: |
+            histogram_quantile(0.99, sum by(le) (rate(inference_model_request_duration_seconds_bucket[5m]))) > 10
+          for: 10m
+          labels:
+            severity: warning
+            team: inference-platform
+          annotations:
+            summary: "High P99 request latency"
+            description: |
+              P99 request latency is {{ $value | humanizeDuration }}, exceeding 10s threshold.
+              This may indicate backend saturation or inefficient routing.
+            runbook_url: "https://github.com/llm-d/llm-d/blob/main/docs/monitoring/alerting-runbook.md#llmdhighlatencyp99"
+
+        # High TTFT
+        - alert: LLMDHighTTFT
+          expr: |
+            histogram_quantile(0.99, sum by(le, model_name) (rate(vllm:time_to_first_token_seconds_bucket[5m]))) > 10
+          for: 10m
+          labels:
+            severity: warning
+            team: inference-platform
+          annotations:
+            summary: "High time-to-first-token for {{ $labels.model_name }}"
+            description: |
+              P99 TTFT is {{ $value | humanizeDuration }} for model {{ $labels.model_name }}.
+              Consider scaling prefill workers or enabling prefix caching.
+            runbook_url: "https://github.com/llm-d/llm-d/blob/main/docs/monitoring/alerting-runbook.md#llmdhighttft"
+
+        # High Request Preemptions
+        - alert: LLMDHighPreemptions
+          expr: |
+            sum by(pod) (rate(vllm:num_preemptions[5m])) > 1
+          for: 5m
+          labels:
+            severity: warning
+            team: inference-platform
+          annotations:
+            summary: "High request preemptions on {{ $labels.pod }}"
+            description: |
+              Pod {{ $labels.pod }} has {{ $value | humanize }} preemptions/sec.
+              This indicates memory pressure and may cause request failures.
+            runbook_url: "https://github.com/llm-d/llm-d/blob/main/docs/monitoring/alerting-runbook.md#llmdhighpreemptions"
+
+        # KV Cache Saturation
+        - alert: LLMDKVCacheSaturation
+          expr: |
+            avg by(pod, model_name) (vllm:kv_cache_usage_perc) > 0.90
+          for: 10m
+          labels:
+            severity: warning
+            team: inference-platform
+          annotations:
+            summary: "KV cache near saturation on {{ $labels.pod }}"
+            description: |
+              KV cache utilization is {{ $value | humanizePercentage }} on pod {{ $labels.pod }}.
+              High utilization leads to preemptions and degraded throughput.
+            runbook_url: "https://github.com/llm-d/llm-d/blob/main/docs/monitoring/alerting-runbook.md#llmdkvcachesaturation"
+
+        # Request Queue Buildup
+        - alert: LLMDRequestQueueBuildup
+          expr: |
+            sum by(pod, model_name) (vllm:num_requests_waiting) > 50
+          for: 5m
+          labels:
+            severity: warning
+            team: inference-platform
+          annotations:
+            summary: "Request queue building up on {{ $labels.pod }}"
+            description: |
+              {{ $value | humanize }} requests waiting in queue on pod {{ $labels.pod }}.
+              Consider scaling decode replicas or optimizing batch size.
+            runbook_url: "https://github.com/llm-d/llm-d/blob/main/docs/monitoring/alerting-runbook.md#llmdrequestqueuebuildup"
+
+        # Low Prefix Cache Hit Rate
+        - alert: LLMDLowPrefixCacheHitRate
+          expr: |
+            (
+              sum(rate(vllm:prefix_cache_hits_total[5m]))
+              /
+              sum(rate(vllm:prefix_cache_queries_total[5m]))
+            ) < 0.30
+          for: 15m
+          labels:
+            severity: warning
+            team: inference-platform
+          annotations:
+            summary: "Low prefix cache hit rate"
+            description: |
+              Prefix cache hit rate is {{ $value | humanizePercentage }}, below 30% threshold.
+              Review cache sizing or consider tiered prefix caching.
+            runbook_url: "https://github.com/llm-d/llm-d/blob/main/docs/monitoring/alerting-runbook.md#llmdlowprefixcachehitrate"
+
+        # GPU Underutilization
+        - alert: LLMDGPUUnderutilization
+          expr: |
+            avg by(node) (DCGM_FI_DEV_GPU_UTIL or nvidia_gpu_duty_cycle) < 30
+          for: 30m
+          labels:
+            severity: warning
+            team: inference-platform
+          annotations:
+            summary: "GPU underutilization on node {{ $labels.node }}"
+            description: |
+              Average GPU utilization is {{ $value | humanize }}% on node {{ $labels.node }}.
+              Consider consolidating workloads or reducing replica count.
+            runbook_url: "https://github.com/llm-d/llm-d/blob/main/docs/monitoring/alerting-runbook.md#llmdgpuunderutilization"
+
+    # =========================================================================
+    # TIER 3: PREFILL/DECODE DISAGGREGATION
+    # Alerts specific to P/D disaggregated deployments
+    # =========================================================================
+    - name: llm-d-pd-disaggregation
+      interval: 60s
+      rules:
+        # Prefill/Decode Imbalance
+        - alert: LLMDPrefillDecodeImbalance
+          expr: |
+            (
+              avg(vllm:num_requests_running{pod=~".*prefill.*"})
+              /
+              avg(vllm:num_requests_running{pod=~".*decode.*"})
+            ) > 3
+          for: 10m
+          labels:
+            severity: warning
+            team: inference-platform
+          annotations:
+            summary: "Prefill/Decode workload imbalance detected"
+            description: |
+              Prefill workers are {{ $value | humanize }}x busier than decode workers.
+              Consider rebalancing replica counts or adjusting autoscaling policies.
+            runbook_url: "https://github.com/llm-d/llm-d/blob/main/docs/monitoring/alerting-runbook.md#llmdprefilldecodeimbalance"
+
+        # Prefill Queue Saturation
+        - alert: LLMDPrefillQueueSaturation
+          expr: |
+            sum by(pod) (vllm:num_requests_waiting{pod=~".*prefill.*"}) > 100
+          for: 5m
+          labels:
+            severity: warning
+            team: inference-platform
+          annotations:
+            summary: "Prefill queue saturated on {{ $labels.pod }}"
+            description: |
+              {{ $value | humanize }} requests waiting in prefill queue on {{ $labels.pod }}.
+              Scale prefill replicas to reduce TTFT.
+            runbook_url: "https://github.com/llm-d/llm-d/blob/main/docs/monitoring/alerting-runbook.md#llmdprefillqueuesaturation"
+
+        # Decode KV Cache Critical
+        - alert: LLMDDecodeKVCacheCritical
+          expr: |
+            avg by(pod) (vllm:kv_cache_usage_perc{pod=~".*decode.*"}) > 0.95
+          for: 5m
+          labels:
+            severity: critical
+            team: inference-platform
+          annotations:
+            summary: "Decode worker KV cache critical on {{ $labels.pod }}"
+            description: |
+              KV cache utilization is {{ $value | humanizePercentage }} on decode pod {{ $labels.pod }}.
+              Imminent OOM or request failures expected.
+            runbook_url: "https://github.com/llm-d/llm-d/blob/main/docs/monitoring/alerting-runbook.md#llmddecodekvCachecritical"
+
+    # =========================================================================
+    # TIER 4: SLO TRACKING
+    # Error budget and SLO compliance alerts
+    # =========================================================================
+    - name: llm-d-slo
+      interval: 60s
+      rules:
+        # Availability SLO Burn Rate (Multi-Window)
+        - alert: LLMDAvailabilitySLOBurn
+          expr: |
+            (
+              # 1h burn rate
+              (1 - (sum(rate(inference_model_request_error_total[1h])) / sum(rate(inference_model_request_total[1h])))) < 0.999
+              and
+              # 5m burn rate (confirms trend)
+              (1 - (sum(rate(inference_model_request_error_total[5m])) / sum(rate(inference_model_request_total[5m])))) < 0.999
+            )
+          for: 5m
+          labels:
+            severity: critical
+            team: inference-platform
+            slo: availability
+          annotations:
+            summary: "Availability SLO burn rate critical"
+            description: |
+              Availability is below 99.9% SLO target over multiple time windows.
+              Error budget is being consumed at an unsustainable rate.
+            runbook_url: "https://github.com/llm-d/llm-d/blob/main/docs/monitoring/alerting-runbook.md#llmdavailabilitysloburn"
+
+        # Latency SLO - P99 Response Time
+        - alert: LLMDLatencySLOViolation
+          expr: |
+            histogram_quantile(0.99, sum by(le) (rate(inference_model_request_duration_seconds_bucket[1h]))) > 5
+          for: 15m
+          labels:
+            severity: warning
+            team: inference-platform
+            slo: latency
+          annotations:
+            summary: "Latency SLO violation detected"
+            description: |
+              P99 latency over 1h is {{ $value | humanizeDuration }}, exceeding 5s SLO target.
+              Review capacity and optimization opportunities.
+            runbook_url: "https://github.com/llm-d/llm-d/blob/main/docs/monitoring/alerting-runbook.md#llmdlatencysloviolation"
+
+        # TTFT SLO - Time to First Token
+        - alert: LLMDTTFTSLO
+          expr: |
+            histogram_quantile(0.95, sum by(le) (rate(vllm:time_to_first_token_seconds_bucket[1h]))) > 3
+          for: 15m
+          labels:
+            severity: warning
+            team: inference-platform
+            slo: ttft
+          annotations:
+            summary: "TTFT SLO violation"
+            description: |
+              P95 TTFT over 1h is {{ $value | humanizeDuration }}, exceeding 3s SLO target.
+              Consider adding prefill capacity or optimizing prefix caching.
+            runbook_url: "https://github.com/llm-d/llm-d/blob/main/docs/monitoring/alerting-runbook.md#llmdttftslo"
+
+    # =========================================================================
+    # TIER 5: INFRASTRUCTURE & CAPACITY
+    # Resource and capacity planning alerts
+    # =========================================================================
+    - name: llm-d-infrastructure
+      interval: 120s
+      rules:
+        # Pod Restart Loop
+        - alert: LLMDPodRestartLoop
+          expr: |
+            increase(kube_pod_container_status_restarts_total{container=~"vllm|epp|routing-proxy"}[1h]) > 5
+          for: 5m
+          labels:
+            severity: warning
+            team: inference-platform
+          annotations:
+            summary: "Pod {{ $labels.pod }} restarting frequently"
+            description: |
+              Container {{ $labels.container }} in pod {{ $labels.pod }} has restarted
+              {{ $value | humanize }} times in the last hour. Investigate crash loops.
+            runbook_url: "https://github.com/llm-d/llm-d/blob/main/docs/monitoring/alerting-runbook.md#llmdpodrestartloop"
+
+        # Approaching Resource Limits
+        - alert: LLMDMemoryPressure
+          expr: |
+            (
+              container_memory_working_set_bytes{container="vllm"}
+              /
+              container_spec_memory_limit_bytes{container="vllm"}
+            ) > 0.85
+          for: 10m
+          labels:
+            severity: warning
+            team: inference-platform
+          annotations:
+            summary: "Memory pressure on {{ $labels.pod }}"
+            description: |
+              Container memory is at {{ $value | humanizePercentage }} of limit on {{ $labels.pod }}.
+              Risk of OOM kill if memory usage continues to grow.
+            runbook_url: "https://github.com/llm-d/llm-d/blob/main/docs/monitoring/alerting-runbook.md#llmdmemorypressure"
+
+        # Low Replica Count
+        - alert: LLMDLowReplicaCount
+          expr: |
+            count(up{job=~".*vllm.*"} == 1) < 2
+          for: 5m
+          labels:
+            severity: warning
+            team: inference-platform
+          annotations:
+            summary: "Low vLLM replica count"
+            description: |
+              Only {{ $value | humanize }} vLLM replicas are healthy.
+              Reduced redundancy increases risk of service disruption.
+            runbook_url: "https://github.com/llm-d/llm-d/blob/main/docs/monitoring/alerting-runbook.md#llmdlowreplicacount"
+
+        # Pending Pods
+        - alert: LLMDPodsPending
+          expr: |
+            sum(kube_pod_status_phase{phase="Pending", namespace=~".*llm.*"}) > 0
+          for: 15m
+          labels:
+            severity: warning
+            team: inference-platform
+          annotations:
+            summary: "Pods pending in llm-d namespace"
+            description: |
+              {{ $value | humanize }} pods have been pending for >15 minutes.
+              Check for resource constraints or scheduling issues.
+            runbook_url: "https://github.com/llm-d/llm-d/blob/main/docs/monitoring/alerting-runbook.md#llmdpodspending"
