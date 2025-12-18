@@ -417,6 +417,8 @@ grafana:
       searchNamespace: ALL
       label: grafana_dashboard
       folderAnnotation: grafana_folder
+    datasources:
+      defaultDatasourceEnabled: false
   datasources:
     datasources.yaml:
       apiVersion: 1
@@ -465,6 +467,8 @@ grafana:
       searchNamespace: ${MONITORING_NAMESPACE}
       label: grafana_dashboard
       folderAnnotation: grafana_folder
+    datasources:
+      defaultDatasourceEnabled: false
   datasources:
     datasources.yaml:
       apiVersion: 1
