@@ -1,7 +1,7 @@
 header:
   schema-version: 1.0.0
-  last-updated: '2025-05-16'
-  last-reviewed: '2025-05-16'
+  last-updated: '2025-12-18'
+  last-reviewed: '2025-12-18'
   expiration-date: '2026-12-01T01:00:00.000Z'
   project-url: https://github.com/llm-d/llm-d
   project-release: '0.0.1'
