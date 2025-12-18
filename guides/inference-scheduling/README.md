@@ -263,3 +263,179 @@ kubectl delete -f httproute.yaml -n ${NAMESPACE}
 ## Customization
 
 For information on customizing a guide and tips to build your own, see [our docs](../../docs/customizing-a-guide.md)
+
+## Benchmarking
+
+This section guides you through benchmarking your llm-d deployment to measure inference performance, identify bottlenecks, and establish baselines for production workloads.
+
+### Prerequisites
+
+- A running llm-d deployment from this guide
+- Python 3.9+ installed on your client machine
+- `${ENDPOINT}` environment variable set (see [Exposing your gateway](../../docs/getting-started-inferencing.md))
+
+### Installing GuideLLM
+
+[GuideLLM](https://github.com/vllm-project/guidellm) is the recommended benchmarking tool for llm-d deployments. It's designed specifically for LLM inference workloads and provides detailed metrics on throughput, latency, and token generation.
+
+```bash
+pip install guidellm
+```
+
+### Running Benchmarks
+
+#### Quick Benchmark
+
+Run a basic benchmark to verify your deployment is functioning correctly:
+
+```bash
+guidellm benchmark \
+  --target "${ENDPOINT}/v1" \
+  --model "Qwen/Qwen3-0.6B" \
+  --request-type completions \
+  --max-requests 100 \
+  --max-seconds 60
+```
+
+#### Load Testing
+
+To understand how your deployment handles production-like traffic, run a sustained load test:
+
+```bash
+guidellm benchmark \
+  --target "${ENDPOINT}/v1" \
+  --model "Qwen/Qwen3-0.6B" \
+  --request-type completions \
+  --rate 10 \
+  --max-seconds 300 \
+  --output-path ./benchmark-results
+```
+
+**Parameters:**
+
+- `--rate`: Requests per second (adjust based on your capacity)
+- `--max-seconds`: Duration of the benchmark
+- `--output-path`: Directory for HTML reports and CSV data
+
+#### Throughput Sweep
+
+To find your deployment's maximum throughput, run a sweep across different request rates:
+
+```bash
+for rate in 1 5 10 20 50; do
+  echo "Testing at ${rate} req/s..."
+  guidellm benchmark \
+    --target "${ENDPOINT}/v1" \
+    --model "Qwen/Qwen3-0.6B" \
+    --request-type completions \
+    --rate ${rate} \
+    --max-seconds 120 \
+    --output-path "./benchmark-rate-${rate}"
+done
+```
+
+### Key Metrics
+
+GuideLLM reports several important metrics for LLM inference:
+
+| Metric | Description | Target |
+|--------|-------------|--------|
+| **TTFT** (Time to First Token) | Latency before first token generation begins | Lower is better; critical for interactive use cases |
+| **ITL** (Inter-Token Latency) | Average time between consecutive tokens | Lower is better; affects perceived responsiveness |
+| **Throughput** | Tokens generated per second | Higher is better; measure of overall capacity |
+| **P50/P95/P99 Latency** | Percentile latencies for end-to-end requests | P99 < 2x P50 indicates stable performance |
+
+### Interpreting Results
+
+After running benchmarks, GuideLLM generates:
+
+1. **HTML Report**: Visual summary with charts for latency distributions and throughput
+2. **CSV Data**: Raw metrics for analysis in spreadsheets or BI tools
+3. **Console Output**: Real-time progress and summary statistics
+
+**Signs of a healthy deployment:**
+
+- Consistent TTFT across request rates (until saturation)
+- Linear throughput scaling with replicas
+- P99 latency within 2-3x of P50 latency
+
+**Warning signs:**
+
+- TTFT spikes at low request rates (possible cold start issues)
+- Non-linear latency increase (saturation or queueing)
+- High variance in ITL (GPU memory pressure)
+
+### Comparing Scheduling Strategies
+
+To evaluate the intelligent scheduling benefits, compare against a baseline without the inference scheduler:
+
+```bash
+# With intelligent scheduling (default)
+guidellm benchmark \
+  --target "${ENDPOINT}/v1" \
+  --model "Qwen/Qwen3-0.6B" \
+  --request-type completions \
+  --rate 20 \
+  --max-seconds 300 \
+  --output-path ./benchmark-with-scheduler
+
+# Directly to a model server (bypass scheduler for comparison)
+# Note: Requires port-forwarding directly to a decode pod
+kubectl port-forward -n ${NAMESPACE} pod/<decode-pod-name> 8200:8200 &
+guidellm benchmark \
+  --target "http://localhost:8200/v1" \
+  --model "Qwen/Qwen3-0.6B" \
+  --request-type completions \
+  --rate 20 \
+  --max-seconds 300 \
+  --output-path ./benchmark-direct
+```
+
+### Advanced Benchmarking
+
+#### Custom Prompts
+
+Use a dataset file for more realistic workloads:
+
+```bash
+guidellm benchmark \
+  --target "${ENDPOINT}/v1" \
+  --model "Qwen/Qwen3-0.6B" \
+  --request-type completions \
+  --data "emulated" \
+  --data-args '{"prompt_tokens": 512, "output_tokens": 128}' \
+  --max-requests 500 \
+  --output-path ./benchmark-custom
+```
+
+#### Monitoring During Benchmarks
+
+While running benchmarks, monitor your deployment:
+
+```bash
+# In a separate terminal - watch pod resource usage
+kubectl top pods -n ${NAMESPACE} --containers
+
+# Watch GPU utilization (if nvidia-smi available in pods)
+kubectl exec -n ${NAMESPACE} <decode-pod-name> -c vllm -- nvidia-smi -l 1
+
+# Monitor inference scheduler metrics
+kubectl port-forward -n ${NAMESPACE} svc/gaie-inference-scheduling-epp 9090:9090 &
+curl -s http://localhost:9090/metrics | grep -E "(request|latency|queue)"
+```
+
+### Troubleshooting Benchmark Issues
+
+| Issue | Possible Cause | Solution |
+|-------|---------------|----------|
+| Connection refused | Gateway not ready | Wait for pods to be Ready, verify `${ENDPOINT}` |
+| 503 errors | No healthy backends | Check decode pod status and logs |
+| Very high TTFT | Model loading | Allow warm-up requests before benchmarking |
+| Inconsistent results | Resource contention | Ensure no other workloads on cluster |
+
+### Next Steps
+
+- For production deployments, establish baseline benchmarks and run regression tests after upgrades
+- Compare results across different [hardware backends](#hardware-backends)
+- Explore [prefix cache aware routing](../precise-prefix-cache-aware) for improved cache hit rates
+- For long-prompt workloads, consider [prefill/decode disaggregation](../pd-disaggregation)

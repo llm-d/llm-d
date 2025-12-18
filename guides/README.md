@@ -33,6 +33,7 @@ We currently offer the following tested and benchmarked paths to help you deploy
 Our supporting guides address common operational challenges with model serving at scale:
 
 - [Simulating model servers](./simulated-accelerators/README.md) can deploy a vLLM model server simulator that allows testing inference scheduling and orchestration at scale as each instance does not need accelerators.
+- [Troubleshooting Guide](../docs/troubleshooting.md) provides solutions for common deployment, networking, and performance issues.
 
 ## Other Guides
 
