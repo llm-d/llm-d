@@ -191,7 +191,7 @@ To remove the deployment:
 # From examples/wide-ep-lws
 helm uninstall llm-d-infpool -n ${NAMESPACE}
 kubectl delete -k ./manifests/modelserver/<gke|coreweave> -n ${NAMESPACE}
-kubectl delete -k ./manifests/gateway/<gke-l7-regional-external-managed|istio|kgateway|kgateway-openshift> -n ${NAMESPACE}
+kubectl delete -k ../recipes/gateway/<gke-l7-regional-external-managed|istio|kgateway|kgateway-openshift> -n ${NAMESPACE}
 ```
 
 ## Customization
