@@ -58,6 +58,7 @@ releases:
       - {{ printf "infra-%s" $rn | quote }}
     values:
       - gaie-pd/values.yaml
+      - gaie-pd/values-slo.yaml
     # Apply provider name if on GKE
     {{- if or (eq .Environment.Name "gke") (eq .Environment.Name "gke_tpu") }}
       - provider:
