@@ -166,7 +166,7 @@ fi
 ########################################
 if ! helm plugin list | grep -q diff; then
   echo "📦 helm-diff plugin not found. Installing ${HELMDIFF_VERSION}..."
-  helm plugin install --version "${HELMDIFF_VERSION}" https://github.com/databus23/helm-diff
+  helm plugin install --version "${HELMDIFF_VERSION}" --verify=false https://github.com/databus23/helm-diff
 fi
 
 ########################################
