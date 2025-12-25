@@ -39,7 +39,7 @@ decode:
       - '{"kv_connector":"NixlConnector", "kv_role":"kv_both"}'
       - "--disable-uvicorn-access-log"
       - "--max-model-len"
-      - "32000"
+      - "4096"
     env:
       - name: VLLM_NIXL_SIDE_CHANNEL_HOST
         valueFrom:
@@ -122,7 +122,7 @@ prefill:
       - '{"kv_connector":"NixlConnector", "kv_role":"kv_both"}'
       - "--disable-uvicorn-access-log"
       - "--max-model-len"
-      - "32000"
+      - "4096"
     env:
       - name: VLLM_NIXL_SIDE_CHANNEL_HOST
         valueFrom:
