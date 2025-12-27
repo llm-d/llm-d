@@ -13,6 +13,7 @@ set -Eeu
 # - UCX_VERSION: git ref to build UCX from
 # - UCX_PREFIX: prefix dir that contains installation path
 # - USE_SCCACHE: whether to use sccache (true/false)
+# - TARGETOS: OS type (ubuntu or rhel)
 
 cd /tmp
 

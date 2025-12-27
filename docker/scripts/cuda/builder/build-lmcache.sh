@@ -1,10 +1,11 @@
 #!/bin/bash
 set -Eeu
 
-# builds and installs gdrcopy from source
+# builds and installs LMCache and Infinistore from source
 #
 # Required environment variables:
 # - USE_SCCACHE: whether to use sccache (true/false)
+# - VIRTUAL_ENV: path to Python virtual environment
 # - INFINISTORE_REPO: git repo to build Infinistore from
 # - INFINISTORE_VERSION: git ref to build Infinistore from
 # - LMCACHE_REPO: git repo to build LMCache from
