@@ -415,8 +415,6 @@ grafana:
     dashboards:
       enabled: true
       searchNamespace: ALL
-      label: grafana_dashboard
-      folderAnnotation: grafana_folder
     datasources:
       defaultDatasourceEnabled: false
   datasources:
