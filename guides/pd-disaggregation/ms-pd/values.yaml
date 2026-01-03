@@ -18,7 +18,7 @@ decode:
     tensor: 4
     data: 1
   create: true
-  replicas: 1
+  replicas: 12
   monitoring:
     podmonitor:
       enabled: true
@@ -104,7 +104,7 @@ decode:
 
 prefill:
   create: true
-  replicas: 4
+  replicas: 16
   monitoring:
     podmonitor:
       enabled: true
