@@ -37,6 +37,8 @@ decode:
       - "128"
       - "--kv-transfer-config"
       - '{"kv_connector":"NixlConnector", "kv_role":"kv_both"}'
+      - "--enable-prefix-caching"
+      - "false"
       - "--disable-uvicorn-access-log"
       - "--max-model-len"
       - "4096"
@@ -119,7 +121,9 @@ prefill:
       - "--block-size"
       - "128"
       - "--kv-transfer-config"
-      - '{"kv_connector":"NixlConnector", "kv_role":"kv_both"}'
+      - '{"kv_connector":"NixlConnector", "kv_role":"kv_producer"}'
+      - "--enable-prefix-caching"
+      - "false"
       - "--disable-uvicorn-access-log"
       - "--max-model-len"
       - "4096"
