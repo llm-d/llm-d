@@ -79,6 +79,9 @@ CMD ["/bin/bash"]
 
 FROM vllm-base AS runtime
 
+ENV HF_HUB_DISABLE_PROGRESS_BARS=0 \
+    PYTHONUNBUFFERED=1
+
 ARG CACHE_BUSTER
 RUN if [ -n "${CACHE_BUSTER}" ]; then \
         echo "$CACHE_BUSTER" > /tmp/builder-buster; \
@@ -87,7 +90,12 @@ RUN if [ -n "${CACHE_BUSTER}" ]; then \
 # install additional dependencies for openai api server
 # hadolint ignore=DL3013
 RUN --mount=type=cache,target=/root/.cache/pip \
-    pip install accelerate hf_transfer pytest pytest_asyncio lm_eval[api] modelscope
+    pip install accelerate pytest pytest_asyncio lm_eval[api] modelscope
+
+# install OTEL packages to enable tracing
+COPY docker/packages/common/runtime-otel-package-requirements.txt /tmp/runtime-otel-package-requirements.txt
+RUN --mount=type=cache,target=/root/.cache/pip \
+    pip install -r /tmp/runtime-otel-package-requirements.txt
 
 # install OTEL packages to enable tracing
 COPY docker/packages/common/runtime-otel-package-requirements.txt /tmp/runtime-otel-package-requirements.txt

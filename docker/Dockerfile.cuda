@@ -476,7 +476,8 @@ RUN umask 002 && \
 
 # default opinionated env var for HF_HOME, over-writeable
 ENV LLM_D_MODELS_DIR=/var/lib/llm-d/models \
-    HF_HOME=/var/lib/llm-d/.hf
+    HF_HOME=/var/lib/llm-d/.hf \
+    HF_HUB_DISABLE_PROGRESS_BARS=0
 
 # creates default models directory and makes path writeable for both root and default user, with symlink for convenience
 # find command keeps group=0 on all new subdirs created later
@@ -488,6 +489,7 @@ RUN mkdir -p "$LLM_D_MODELS_DIR" "$HF_HOME" && \
 
 ENV PATH="${VIRTUAL_ENV}/bin:/usr/local/nvidia/bin:${PATH}" \
     HOME=/home/vllm \
+    PYTHONUNBUFFERED=1 \
     VLLM_USAGE_SOURCE=production-docker-image \
     VLLM_WORKER_MULTIPROC_METHOD=fork \
     OUTLINES_CACHE_DIR=/tmp/outlines \

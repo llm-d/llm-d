@@ -134,4 +134,8 @@ COPY docker/scripts/cpu/install_nixl.py /workspace/install_nixl.py
 RUN python3 /workspace/install_nixl.py
 
 WORKDIR /workspace
+
+ENV HF_HUB_DISABLE_PROGRESS_BARS=0 \
+    PYTHONUNBUFFERED=1
+
 ENTRYPOINT ["python", "-m", "vllm.entrypoints.openai.api_server"]
