@@ -30,9 +30,8 @@ decode:
     image: ghcr.io/llm-d/llm-d-cuda:v0.3.1
     modelCommand: vllmServe
     args:
-      # Keep tensor-parallelism as the first set of arguments
-      - "--tensor-parallel-size"
-      - "4"
+      # Note: --tensor-parallel-size is auto-generated from parallelism.tensor
+      # Do NOT set it here manually to avoid mismatch with GPU resources
       - "--block-size"
       - "128"
       - "--kv-transfer-config"
@@ -52,15 +51,15 @@ decode:
         name: metrics
         protocol: TCP
     resources:
+      # Note: nvidia.com/gpu is auto-generated from parallelism.tensor
+      # Do NOT set it here manually to avoid mismatch
       limits:
         memory: 64Gi
         cpu: "16"
-        nvidia.com/gpu: "4"
         rdma/ib: 1
       requests:
         memory: 64Gi
         cpu: "16"
-        nvidia.com/gpu: "4"
         rdma/ib: 1
     mountModelVolume: true
     volumeMounts:
@@ -103,6 +102,7 @@ decode:
     emptyDir: {}
 
 prefill:
+  # parallelism defaults to tensor: 1, data: 1 (1 GPU per replica)
   create: true
   replicas: 4
   monitoring:
@@ -135,15 +135,14 @@ prefill:
         name: metrics
         protocol: TCP
     resources:
+      # Note: nvidia.com/gpu is auto-generated from parallelism.tensor (default: 1)
       limits:
         memory: 64Gi
         cpu: "8"
-        nvidia.com/gpu: "1"
         rdma/ib: 1
       requests:
         memory: 64Gi
         cpu: "8"
-        nvidia.com/gpu: "1"
         rdma/ib: 1
     mountModelVolume: true
     volumeMounts:
