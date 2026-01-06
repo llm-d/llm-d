@@ -527,7 +527,7 @@ EOF
   rm -f /tmp/prometheus-values.yaml
 
   log_info "⏳ Waiting for Prometheus stack pods to be ready..."
-  
+
   # Wait for pods to be created first (they might not exist immediately after helm install)
   local max_wait=60
   local waited=0
@@ -541,16 +541,30 @@ EOF
     sleep 2
     waited=$((waited + 2))
   done
-  
-  # Wait for Prometheus pods to be ready (using instance label which is more reliable)
-  local prometheus_pods=$($KCMD get pods -n "${MONITORING_NAMESPACE}" -l "app.kubernetes.io/instance=${RELEASE_NAME},app.kubernetes.io/name=prometheus" --no-headers 2>/dev/null | wc -l | tr -d ' ')
+
+  # Wait for Prometheus StatefulSet to be created by the operator
+  # The Prometheus operator creates the StatefulSet asynchronously after the Prometheus CR is created
+  local prometheus_label="operator.prometheus.io/name=${RELEASE_NAME}-kube-prometheus-stack-prometheus"
+  log_info "⏳ Waiting for Prometheus StatefulSet to be created by operator..."
+  local sts_wait=0
+  local sts_max_wait=60
+  while [[ $sts_wait -lt $sts_max_wait ]]; do
+    if $KCMD get statefulset -n "${MONITORING_NAMESPACE}" -l "${prometheus_label}" &>/dev/null; then
+      log_info "✅ Prometheus StatefulSet created"
+      break
+    fi
+    sleep 2
+    sts_wait=$((sts_wait + 2))
+  done
+
+  # Wait for Prometheus pods to be ready
+  local prometheus_pods=$($KCMD get pods -n "${MONITORING_NAMESPACE}" -l "${prometheus_label}" --no-headers 2>/dev/null | wc -l | tr -d ' ')
   if [[ "$prometheus_pods" -gt 0 ]]; then
-    $KCMD wait --for=condition=ready pod -l "app.kubernetes.io/instance=${RELEASE_NAME},app.kubernetes.io/name=prometheus" -n "${MONITORING_NAMESPACE}" --timeout=300s || log_info "⚠️  Prometheus pods did not become ready within timeout"
+    $KCMD wait --for=condition=ready pod -l "${prometheus_label}" -n "${MONITORING_NAMESPACE}" --timeout=300s || log_info "⚠️  Prometheus pods did not become ready within timeout"
   else
-    log_info "⚠️  No Prometheus pods found - checking alternative labels..."
-    # Fallback: try waiting for statefulset instead
-    if $KCMD get statefulset -n "${MONITORING_NAMESPACE}" -l "app.kubernetes.io/instance=${RELEASE_NAME}" &>/dev/null; then
-      $KCMD wait --for=jsonpath='{.status.readyReplicas}'=1 statefulset -l "app.kubernetes.io/instance=${RELEASE_NAME}" -n "${MONITORING_NAMESPACE}" --timeout=300s || log_info "⚠️  Prometheus statefulset did not become ready within timeout"
+    # Fallback: wait for statefulset readiness if pods don't exist yet
+    if $KCMD get statefulset -n "${MONITORING_NAMESPACE}" -l "${prometheus_label}" &>/dev/null; then
+      $KCMD wait --for=jsonpath='{.status.readyReplicas}'=1 statefulset -l "${prometheus_label}" -n "${MONITORING_NAMESPACE}" --timeout=300s || log_info "⚠️  Prometheus statefulset did not become ready within timeout"
     fi
   fi
   
