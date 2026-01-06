@@ -527,8 +527,8 @@ EOF
   rm -f /tmp/prometheus-values.yaml
 
   log_info "⏳ Waiting for Prometheus stack pods to be ready..."
-  $KCMD wait --for=condition=ready pod -l app.kubernetes.io/name=prometheus -n "${MONITORING_NAMESPACE}" --timeout=300s || true
-  $KCMD wait --for=condition=ready pod -l app.kubernetes.io/name=grafana -n "${MONITORING_NAMESPACE}" --timeout=300s || true
+  $KCMD wait --for=condition=ready pod -l app.kubernetes.io/name=prometheus -n "${MONITORING_NAMESPACE}" --timeout=300s
+  $KCMD wait --for=condition=ready pod -l app.kubernetes.io/name=grafana -n "${MONITORING_NAMESPACE}" --timeout=300s
 
   # Use the known service name from the Helm chart
   PROMETHEUS_SVC="${RELEASE_NAME}-kube-prometheus-stack-prometheus"
