@@ -558,13 +558,21 @@ EOF
   done
 
   # Wait for Prometheus pods to be ready
+  log_info "⏳ Waiting for Prometheus pods to be ready..."
   local prometheus_pods=$($KCMD get pods -n "${MONITORING_NAMESPACE}" -l "${prometheus_label}" --no-headers 2>/dev/null | wc -l | tr -d ' ')
+  log_info "📊 Found ${prometheus_pods} Prometheus pod(s) with label ${prometheus_label}"
+
   if [[ "$prometheus_pods" -gt 0 ]]; then
+    log_info "⏳ Calling kubectl wait for Prometheus pods..."
     $KCMD wait --for=condition=ready pod -l "${prometheus_label}" -n "${MONITORING_NAMESPACE}" --timeout=300s || log_info "⚠️  Prometheus pods did not become ready within timeout"
   else
+    log_info "⚠️  No Prometheus pods found yet, will wait for StatefulSet to create them"
     # Fallback: wait for statefulset readiness if pods don't exist yet
     if $KCMD get statefulset -n "${MONITORING_NAMESPACE}" -l "${prometheus_label}" &>/dev/null; then
+      log_info "⏳ Calling kubectl wait for StatefulSet readiness..."
       $KCMD wait --for=jsonpath='{.status.readyReplicas}'=1 statefulset -l "${prometheus_label}" -n "${MONITORING_NAMESPACE}" --timeout=300s || log_info "⚠️  Prometheus statefulset did not become ready within timeout"
+    else
+      log_info "⚠️  No Prometheus StatefulSet found - this should not happen"
     fi
   fi
   
