@@ -18,7 +18,7 @@ decode:
     tensor: 4
     data: 1
   create: true
-  replicas: 1
+  replicas: 6
   monitoring:
     podmonitor:
       enabled: true
@@ -37,7 +37,6 @@ decode:
       - "128"
       - "--kv-transfer-config"
       - '{"kv_connector":"NixlConnector", "kv_role":"kv_both"}'
-      - "--no-enable-prefix-caching"
       - "--disable-uvicorn-access-log"
       - "--max-model-len"
       - "4096"
@@ -105,7 +104,7 @@ decode:
 
 prefill:
   create: true
-  replicas: 4
+  replicas: 8
   monitoring:
     podmonitor:
       enabled: true
@@ -121,7 +120,6 @@ prefill:
       - "128"
       - "--kv-transfer-config"
       - '{"kv_connector":"NixlConnector", "kv_role":"kv_producer"}'
-      - "--no-enable-prefix-caching"
       - "--disable-uvicorn-access-log"
       - "--max-model-len"
       - "4096"
