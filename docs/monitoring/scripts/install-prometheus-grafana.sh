@@ -527,8 +527,44 @@ EOF
   rm -f /tmp/prometheus-values.yaml
 
   log_info "⏳ Waiting for Prometheus stack pods to be ready..."
-  $KCMD wait --for=condition=ready pod -l app.kubernetes.io/name=prometheus -n "${MONITORING_NAMESPACE}" --timeout=300s
-  $KCMD wait --for=condition=ready pod -l app.kubernetes.io/name=grafana -n "${MONITORING_NAMESPACE}" --timeout=300s
+  
+  # Wait for pods to be created first (they might not exist immediately after helm install)
+  local max_wait=60
+  local waited=0
+  log_info "⏳ Waiting for pods to be created..."
+  while [[ $waited -lt $max_wait ]]; do
+    local pod_count=$($KCMD get pods -n "${MONITORING_NAMESPACE}" -l "app.kubernetes.io/instance=${RELEASE_NAME}" --no-headers 2>/dev/null | wc -l | tr -d ' ')
+    if [[ "$pod_count" -gt 0 ]]; then
+      log_info "✅ Found $pod_count pods"
+      break
+    fi
+    sleep 2
+    waited=$((waited + 2))
+  done
+  
+  # Wait for Prometheus pods to be ready (using instance label which is more reliable)
+  local prometheus_pods=$($KCMD get pods -n "${MONITORING_NAMESPACE}" -l "app.kubernetes.io/instance=${RELEASE_NAME},app.kubernetes.io/name=prometheus" --no-headers 2>/dev/null | wc -l | tr -d ' ')
+  if [[ "$prometheus_pods" -gt 0 ]]; then
+    $KCMD wait --for=condition=ready pod -l "app.kubernetes.io/instance=${RELEASE_NAME},app.kubernetes.io/name=prometheus" -n "${MONITORING_NAMESPACE}" --timeout=300s || log_info "⚠️  Prometheus pods did not become ready within timeout"
+  else
+    log_info "⚠️  No Prometheus pods found - checking alternative labels..."
+    # Fallback: try waiting for statefulset instead
+    if $KCMD get statefulset -n "${MONITORING_NAMESPACE}" -l "app.kubernetes.io/instance=${RELEASE_NAME}" &>/dev/null; then
+      $KCMD wait --for=jsonpath='{.status.readyReplicas}'=1 statefulset -l "app.kubernetes.io/instance=${RELEASE_NAME}" -n "${MONITORING_NAMESPACE}" --timeout=300s || log_info "⚠️  Prometheus statefulset did not become ready within timeout"
+    fi
+  fi
+  
+  # Wait for Grafana pods to be ready
+  local grafana_pods=$($KCMD get pods -n "${MONITORING_NAMESPACE}" -l "app.kubernetes.io/instance=${RELEASE_NAME},app.kubernetes.io/name=grafana" --no-headers 2>/dev/null | wc -l | tr -d ' ')
+  if [[ "$grafana_pods" -gt 0 ]]; then
+    $KCMD wait --for=condition=ready pod -l "app.kubernetes.io/instance=${RELEASE_NAME},app.kubernetes.io/name=grafana" -n "${MONITORING_NAMESPACE}" --timeout=300s || log_info "⚠️  Grafana pods did not become ready within timeout"
+  else
+    log_info "⚠️  No Grafana pods found - checking alternative labels..."
+    # Fallback: try waiting for deployment instead
+    if $KCMD get deployment -n "${MONITORING_NAMESPACE}" -l "app.kubernetes.io/instance=${RELEASE_NAME},app.kubernetes.io/name=grafana" &>/dev/null; then
+      $KCMD wait --for=condition=available deployment -l "app.kubernetes.io/instance=${RELEASE_NAME},app.kubernetes.io/name=grafana" -n "${MONITORING_NAMESPACE}" --timeout=300s || log_info "⚠️  Grafana deployment did not become ready within timeout"
+    fi
+  fi
 
   # Use the known service name from the Helm chart
   PROMETHEUS_SVC="${RELEASE_NAME}-kube-prometheus-stack-prometheus"
