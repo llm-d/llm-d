@@ -51,7 +51,7 @@ inferenceExtension:
           prefillProfile: "prefill"
           prefixPluginName: "prefix-cache-scorer"
           hashBlockSize: 5
-          pdThreshold: 30  # Increased from 5 to reduce unnecessary PD overhead for small requests
+          pdThreshold: 0  # Increased from 5 to reduce unnecessary PD overhead for small requests
 
       schedulingProfiles:
       - name: prefill
