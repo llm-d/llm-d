@@ -528,12 +528,10 @@ EOF
 
   log_info "⏳ Waiting for Prometheus and Grafana to be ready..."
 
-  # Wait for Prometheus pod to be ready
-  # Note: The Prometheus operator creates the StatefulSet asynchronously after Helm install completes,
-  # so we wait for the pod directly. kubectl wait will wait for the resource to appear.
-  local prometheus_label="operator.prometheus.io/name=${RELEASE_NAME}-kube-prometheus-stack-prometheus"
-  log_info "⏳ Waiting for Prometheus pod to be ready..."
-  $KCMD wait --for=condition=Ready pod -l "${prometheus_label}" -n "${MONITORING_NAMESPACE}" --timeout=300s || log_info "⚠️  Prometheus pod did not become ready within timeout"
+  # Wait for Prometheus custom resource to be available
+  # The Prometheus CR is created by Helm and managed by the Prometheus operator
+  log_info "⏳ Waiting for Prometheus instance to be available..."
+  $KCMD wait --for=condition=Available prometheus "${RELEASE_NAME}-kube-prometheus-stack-prometheus" -n "${MONITORING_NAMESPACE}" --timeout=300s || log_info "⚠️  Prometheus instance did not become available within timeout"
 
   # Wait for Grafana deployment to be available
   log_info "⏳ Waiting for Grafana deployment to be available..."
