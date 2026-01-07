@@ -16,6 +16,7 @@ set -Eeu
 
 if [ "${BUILD_NIXL_FROM_SOURCE}" = "false" ]; then
     echo "NIXL will be installed be vLLM and not built from source."
+    mkdir -p ${NIXL_PREFIX}
     exit 0
 fi
 
@@ -41,7 +42,7 @@ meson setup build \
     --prefix="${NIXL_PREFIX}" \
     -Dbuildtype=release \
     -Ducx_path="${UCX_PREFIX}" \
-    "${EFA_FLAG}" \
+    ${EFA_FLAG:+${EFA_FLAG}} \
     -Dinstall_headers=true
 
 cd build
@@ -55,5 +56,4 @@ cp build/src/bindings/python/nixl-meta/nixl-*-py3-none-any.whl /wheels/
 
 rm -rf build
 
-cd /tmp && rm -rf /tmp/nixl 
-
+cd /tmp && rm -rf /tmp/nixl

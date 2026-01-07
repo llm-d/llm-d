@@ -55,7 +55,7 @@ ARG DEEPGEMM_VERSION="v2.1.0"
 ARG PPLX_KERNELS_REPO="https://github.com/perplexityai/pplx-kernels"
 ARG PPLX_KERNELS_VERSION="2bd6e30fab358829bd01d1c0907be8088ff9e5e1"
 ARG FLASHINFER_REPO="https://github.com/flashinfer-ai/flashinfer.git"
-ARG FLASHINFER_VERSION="v0.5.2"
+ARG FLASHINFER_VERSION="v0.5.3"
 
 # vLLM build settings
 ARG VLLM_REPO="https://github.com/neuralmagic/vllm.git"
@@ -142,7 +142,7 @@ ENV NVSHMEM_DIR="/opt/nvshmem-${NVSHMEM_VERSION}" \
     EFA_PREFIX="/opt/amazon/efa" \
     UCX_PREFIX="/opt/ucx" \
     NIXL_PREFIX="/opt/nixl"
-    
+
 ENV PATH="${NVSHMEM_DIR}/bin:${VIRTUAL_ENV}/bin:${PATH}" \
     LIBRARY_PATH="${EFA_PREFIX}/lib:${EFA_PREFIX}/lib64:${UCX_PREFIX}/lib:${UCX_PREFIX}/lib64:${NVSHMEM_DIR}/lib:${NVSHMEM_DIR}/lib64:${CUDA_HOME}/lib64:/usr/local/lib:/usr/local/lib64" \
     CPATH="${NVSHMEM_DIR}/include:/usr/include:/usr/local/include:${CUDA_HOME}/include:${CPATH}" \
@@ -200,6 +200,9 @@ RUN --mount=type=cache,target=/root/.cache/uv \
     pyyaml \
     types-PyYAML \
     pytest \
+    setuptools-scm \
+    ninja \
+    cmake \
     "patchelf>=0.11.0"
 
 ### Decide to build NIXL from source.
@@ -283,6 +286,7 @@ ENV LANG="C.UTF-8" \
     NVSHMEM_DIR="/opt/nvshmem-${NVSHMEM_VERSION}" \
     EFA_PREFIX="/opt/amazon/efa" \
     UCX_PREFIX="/opt/ucx" \
+    NIXL_PREFIX="/opt/nixl" \
     CUDA_HOME="/usr/local/cuda"
 
 ENV LD_LIBRARY_PATH="${EFA_PREFIX}/lib:${EFA_PREFIX}/lib64:\
@@ -334,37 +338,38 @@ COPY --from=builder /tmp/gdrcopy_libs /tmp/
 COPY --from=builder /opt/ucx /opt/ucx
 
 RUN if [ -d /tmp/gdrcopy_libs ]; then \
-        if [ "${TARGETOS:-rhel}" = "ubuntu" ]; then \
-            if [ "${TARGETPLATFORM:-linux/amd64}" = "linux/arm64" ]; then \
-                cp -a /tmp/gdrcopy_libs/* /usr/lib/aarch64-linux-gnu/ || true; \
-            else \
-                cp -a /tmp/gdrcopy_libs/* /usr/lib/x86_64-linux-gnu/ || true; \
-            fi; \
-        else \
-            cp -a /tmp/gdrcopy_libs/* /usr/lib64/ || true; \
-        fi; \
-        rm -rf /tmp/gdrcopy_libs; \
+    if [ "${TARGETOS:-rhel}" = "ubuntu" ]; then \
+    if [ "${TARGETPLATFORM:-linux/amd64}" = "linux/arm64" ]; then \
+    cp -a /tmp/gdrcopy_libs/* /usr/lib/aarch64-linux-gnu/ || true; \
+    else \
+    cp -a /tmp/gdrcopy_libs/* /usr/lib/x86_64-linux-gnu/ || true; \
+    fi; \
+    else \
+    cp -a /tmp/gdrcopy_libs/* /usr/lib64/ || true; \
+    fi; \
+    rm -rf /tmp/gdrcopy_libs; \
     fi
 
 # Copy compiled NVSHMEM libraries from builder
 COPY --from=builder /opt/nvshmem-${NVSHMEM_VERSION}/ /opt/nvshmem-${NVSHMEM_VERSION}/
 
-COPY --from=builder /opt/nixl /opt/nixl
-RUN if [ -d /opt/nixl/include ]; then \
-        cp -a /opt/nixl/include/nixl* /usr/local/include/ || true; \
+# Copy NIXL libraries from builder
+COPY --from=builder ${NIXL_PREFIX} ${NIXL_PREFIX}
+RUN if [ -d ${NIXL_PREFIX}/include ]; then \
+    cp -a ${NIXL_PREFIX}/include/nixl* /usr/local/include/ || true; \
     fi; \
     if [ -d /opt/nixl/lib ]; then \
-        if [ "${TARGETOS:-rhel}" = "ubuntu" ]; then \
-            if [ "${TARGETPLATFORM:-linux/amd64}" = "linux/arm64" ]; then \
-                cp -a /opt/nixl/lib/aarch64-linux-gnu /usr/lib/aarch64-linux-gnu/ || true; \
-            else \
-                cp -a /opt/nixl/lib/x86_64-linux-gnu /usr/lib/x86_64-linux-gnu/ || true; \
-            fi; \
-        else \
-            cp -a /opt/nixl/lib64/ /usr/lib64/ || true; \
-        fi; \
+    if [ "${TARGETOS:-rhel}" = "ubuntu" ]; then \
+    if [ "${TARGETPLATFORM:-linux/amd64}" = "linux/arm64" ]; then \
+    cp -a ${NIXL_PREFIX}/lib/aarch64-linux-gnu /usr/lib/aarch64-linux-gnu/ || true; \
+    else \
+    cp -a ${NIXL_PREFIX}/lib/x86_64-linux-gnu /usr/lib/x86_64-linux-gnu/ || true; \
     fi; \
-    rm -rf /opt/nixl
+    else \
+    cp -a ${NIXL_PREFIX}/lib64/ /usr/lib64/ || true; \
+    fi; \
+    fi; \
+    rm -rf ${NIXL_PREFIX}
 
 # Install uv and setup Python virtual environment
 RUN export UV_INSTALL_DIR=/usr/local/bin && \
@@ -412,9 +417,9 @@ COPY scripts/warn-vllm-precompiled.sh /opt/
 # Install cuda-python, nvshmem python bindings, xet
 # Install all compiled wheels (DeepEP, DeepGEMM, pplx-kernels, LMCache, nixl)
 # Installs vllm source. Supports three install modes:
-    # 1) install vllm from source totally editably - dev option, supports fork and commit swapping
-    # 3) install vllm from source with pulling precomiled binaries (shared libraries) from the vllm wheels index - less flexible dev option, may or may not work swapping shas but faster than full editable
-    # 2) install vllm from a wheel on the vllm wheels index - prod option, no flexbility
+# 1) install vllm from source totally editably - dev option, supports fork and commit swapping
+# 3) install vllm from source with pulling precomiled binaries (shared libraries) from the vllm wheels index - less flexible dev option, may or may not work swapping shas but faster than full editable
+# 2) install vllm from a wheel on the vllm wheels index - prod option, no flexbility
 COPY docker/scripts/cuda/runtime/install-vllm.sh /tmp/install-vllm.sh
 RUN --mount=type=cache,target=/var/cache/git \
     chmod +x /tmp/install-vllm.sh && \
