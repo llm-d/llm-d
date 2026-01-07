@@ -41,7 +41,7 @@ releases:
   - name: {{ printf "gaie-%s" $rn | quote }}
     namespace: {{ $ns }}
     chart: oci://registry.k8s.io/gateway-api-inference-extension/charts/inferencepool
-    version: v1.2.0
+    version: v1.2.1
     installed: true
     needs:
       - {{ printf "infra-%s" $rn | quote }}
