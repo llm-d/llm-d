@@ -119,7 +119,7 @@ releases:
       - {{ printf "gaie-%s" $rn | quote }}
     values:
     {{- if eq .Environment.Name "gke_tpu" }}
-      - ms-inference-scheduling/values_gke_tpu.yaml
+      - ms-inference-scheduling/values_tpu.yaml
     {{- else if eq .Environment.Name "xpu" }}
       - ms-inference-scheduling/values_xpu.yaml
     {{- else if eq .Environment.Name "gaudi" }}

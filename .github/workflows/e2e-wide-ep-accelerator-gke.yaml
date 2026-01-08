@@ -42,6 +42,7 @@ jobs:
       GKE_CLUSTER_NAME: llm-d-e2e-us-south1-2
       GKE_CLUSTER_ZONE: us-south1
       NAMESPACE: llm-d-wide-ep
+      INFERENCEPOOLVERSION: v1.2.1
       GATEWAY: gke-l7-regional-external-managed
       GATEWAY_TYPE: gke
       PR_OR_BRANCH: ${{ github.event.inputs.pr_or_branch || github.event.issue.number || github.event.number || 'main' }}
@@ -121,23 +122,24 @@ jobs:
       - name: Deploy InferencePool
         shell: bash
         run: |
-          cd guides/wide-ep-lws
+          cd guides/wide-ep-lws/manifests
           echo "Deploying InferencePool..."
-          helm install deepseek-r1 \
+          helm install llm-d-infpool \
           --namespace ${NAMESPACE} \
           --set "provider.name=gke" \
           --set "inferencePool.apiVersion=inference.networking.k8s.io/v1" \
           --set "inferenceExtension.monitoring.gke.enable=true" \
           -f inferencepool.values.yaml \
           oci://us-central1-docker.pkg.dev/k8s-staging-images/gateway-api-inference-extension/charts/inferencepool \
-          --version v1.0.1
+          --version ${INFERENCEPOOLVERSION}
           echo "---------------------------------------" >> ~/wide-ep-deployment.log
 
       - name: Deploy Gateway and HTTPRoute
         run: |
-          cd guides/wide-ep-lws
+          cd guides/recipes/gateway
           echo "Deploying Gateway and HTTPRoute..."
-          kubectl apply -k ./manifests/gateway/gke-l7-regional-external-managed -n ${NAMESPACE} | tee ~/wide-ep-deployment.log
+          kubectl apply -k ./gke-l7-regional-external-managed -n ${NAMESPACE} | tee ~/wide-ep-deployment.log
+          kubectl get gateway -n ${NAMESPACE}
           echo "---------------------------------------" >> ~/wide-ep-deployment.log
 
       - name: Wait for all pods to be ready
@@ -153,11 +155,12 @@ jobs:
 
       - name: Wait for gateway to be ready
         run: |
-          GATEWAY_NAME=wide-ep-inference-gateway
+          GATEWAY_NAME=llm-d-inference-gateway
+          kubectl get gateway -n ${NAMESPACE}
           kubectl wait gateway/${GATEWAY_NAME} \
             --for=condition=Programmed=True \
-            -n "${NAMESPACE}"
-            # --timeout=300s
+            -n "${NAMESPACE}" \
+            --timeout=300s
           echo "✅ Gateway is ready."
           kubectl get gateway -n "${NAMESPACE}"
 
@@ -245,7 +248,7 @@ jobs:
       - name: Cleanup deployment
         if: always()
         run: |
-          cd guides/wide-ep-lws
-          helm uninstall deepseek-r1 -n ${NAMESPACE}
-          kubectl delete -k ./manifests/modelserver/gke -n ${NAMESPACE}
-          kubectl delete -k ./manifests/gateway/gke-l7-regional-external-managed -n ${NAMESPACE}
+          cd guides
+          helm uninstall llm-d-infpool -n ${NAMESPACE}
+          kubectl delete -k ./wide-ep-lws/manifests/modelserver/gke -n ${NAMESPACE}
+          kubectl delete -k ./recipes/gateway/gke-l7-regional-external-managed -n ${NAMESPACE}
