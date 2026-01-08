@@ -338,16 +338,16 @@ COPY --from=builder /tmp/gdrcopy_libs /tmp/
 COPY --from=builder /opt/ucx /opt/ucx
 
 RUN if [ -d /tmp/gdrcopy_libs ]; then \
-    if [ "${TARGETOS:-rhel}" = "ubuntu" ]; then \
-    if [ "${TARGETPLATFORM:-linux/amd64}" = "linux/arm64" ]; then \
-    cp -a /tmp/gdrcopy_libs/* /usr/lib/aarch64-linux-gnu/ || true; \
-    else \
-    cp -a /tmp/gdrcopy_libs/* /usr/lib/x86_64-linux-gnu/ || true; \
-    fi; \
-    else \
-    cp -a /tmp/gdrcopy_libs/* /usr/lib64/ || true; \
-    fi; \
-    rm -rf /tmp/gdrcopy_libs; \
+        if [ "${TARGETOS:-rhel}" = "ubuntu" ]; then \
+            if [ "${TARGETPLATFORM:-linux/amd64}" = "linux/arm64" ]; then \
+                cp -a /tmp/gdrcopy_libs/* /usr/lib/aarch64-linux-gnu/ || true; \
+            else \
+                cp -a /tmp/gdrcopy_libs/* /usr/lib/x86_64-linux-gnu/ || true; \
+            fi; \
+        else \
+            cp -a /tmp/gdrcopy_libs/* /usr/lib64/ || true; \
+        fi; \
+        rm -rf /tmp/gdrcopy_libs; \
     fi
 
 # Copy compiled NVSHMEM libraries from builder
@@ -355,21 +355,21 @@ COPY --from=builder /opt/nvshmem-${NVSHMEM_VERSION}/ /opt/nvshmem-${NVSHMEM_VERS
 
 # Copy NIXL libraries from builder
 COPY --from=builder ${NIXL_PREFIX} ${NIXL_PREFIX}
-RUN if [ -d ${NIXL_PREFIX}/include ]; then \
-    cp -a ${NIXL_PREFIX}/include/nixl* /usr/local/include/ || true; \
+RUN if [ -d "${NIXL_PREFIX}/include" ]; then \
+        cp -a "${NIXL_PREFIX}/include/nixl"* /usr/local/include/ || true; \
     fi; \
-    if [ -d /opt/nixl/lib ]; then \
-    if [ "${TARGETOS:-rhel}" = "ubuntu" ]; then \
-    if [ "${TARGETPLATFORM:-linux/amd64}" = "linux/arm64" ]; then \
-    cp -a ${NIXL_PREFIX}/lib/aarch64-linux-gnu /usr/lib/aarch64-linux-gnu/ || true; \
-    else \
-    cp -a ${NIXL_PREFIX}/lib/x86_64-linux-gnu /usr/lib/x86_64-linux-gnu/ || true; \
+    if [ -d "${NIXL_PREFIX}/lib" ]; then \
+        if [ "${TARGETOS:-rhel}" = "ubuntu" ]; then \
+            if [ "${TARGETPLATFORM:-linux/amd64}" = "linux/arm64" ]; then \
+                cp -a "${NIXL_PREFIX}/lib/aarch64-linux-gnu" /usr/lib/aarch64-linux-gnu/ || true; \
+            else \
+                cp -a "${NIXL_PREFIX}/lib/x86_64-linux-gnu" /usr/lib/x86_64-linux-gnu/ || true; \
+            fi; \
+        else \
+            cp -a "${NIXL_PREFIX}/lib64/" /usr/lib64/ || true; \
+        fi; \
     fi; \
-    else \
-    cp -a ${NIXL_PREFIX}/lib64/ /usr/lib64/ || true; \
-    fi; \
-    fi; \
-    rm -rf ${NIXL_PREFIX}
+    rm -rf "${NIXL_PREFIX}"
 
 # Install uv and setup Python virtual environment
 RUN export UV_INSTALL_DIR=/usr/local/bin && \
