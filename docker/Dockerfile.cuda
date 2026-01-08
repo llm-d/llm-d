@@ -417,9 +417,9 @@ COPY scripts/warn-vllm-precompiled.sh /opt/
 # Install cuda-python, nvshmem python bindings, xet
 # Install all compiled wheels (DeepEP, DeepGEMM, pplx-kernels, LMCache, nixl)
 # Installs vllm source. Supports three install modes:
-# 1) install vllm from source totally editably - dev option, supports fork and commit swapping
-# 3) install vllm from source with pulling precomiled binaries (shared libraries) from the vllm wheels index - less flexible dev option, may or may not work swapping shas but faster than full editable
-# 2) install vllm from a wheel on the vllm wheels index - prod option, no flexbility
+#   1) install vllm from source totally editably - dev option, supports fork and commit swapping
+#   3) install vllm from source with pulling precomiled binaries (shared libraries) from the vllm wheels index - less flexible dev option, may or may not work swapping shas but faster than full editable
+#   2) install vllm from a wheel on the vllm wheels index - prod option, no flexbility
 COPY docker/scripts/cuda/runtime/install-vllm.sh /tmp/install-vllm.sh
 RUN --mount=type=cache,target=/var/cache/git \
     chmod +x /tmp/install-vllm.sh && \
