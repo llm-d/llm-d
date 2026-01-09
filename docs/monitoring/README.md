@@ -41,7 +41,7 @@ kubectl get configmap prometheus-web-tls-ca -n llm-d-monitoring -o jsonpath='{.d
   - Enable [automatic application monitoring](https://cloud.google.com/kubernetes-engine/docs/how-to/configure-automatic-application-monitoring) which will automatically collect metrics for vLLM.
   - GKE provides an out of box [inference gateway dashboard](https://cloud.google.com/kubernetes-engine/docs/how-to/customize-gke-inference-gateway-configurations#inference-gateway-dashboard).
 - If running on OpenShift, User Workload Monitoring provides an accessible Prometheus Stack for scraping metrics. See the
-  [OpenShift documentation](https://docs.redhat.com/en/documentation/openshift_container_platform/4.18/html/monitoring/configuring-user-workload-monitoring#enabling-monitoring-for-user-defined-projects_preparing-to-configure-the-monitoring-stack-uwm)
+  [OpenShift documentation](https://docs.redhat.com/en/documentation/monitoring_stack_for_red_hat_openshift/4.18/html-single/configuring_user_workload_monitoring/index#enabling-monitoring-for-user-defined-projects_preparing-to-configure-the-monitoring-stack-uwm)
   to enable this feature.
 - In other Kubernetes environments, Prometheus custom resources must be available in the cluster. To install a simple Prometheus and Grafana stack,
   refer to [prometheus-grafana-stack.md](./prometheus-grafana-stack.md).
