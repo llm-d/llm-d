@@ -17,20 +17,10 @@ routing:
       # name: infra-pd-inference-gateway # set in helmfile
 
   proxy:
-    image: ghcr.io/llm-d/llm-d-routing-sidecar:v0.3.0
+    image: ghcr.io/llm-d/llm-d-routing-sidecar:v0.4.0-rc.1
     imagePullPolicy: IfNotPresent
     connector: nixlv2
     secure: false
-
-  inferencePool:
-    create: false
-    # name: gaie-pd # set in helmfile
-
-  httpRoute:
-    create: true
-
-  epp:
-    create: false
 
 decode:
   create: true
@@ -45,18 +35,17 @@ decode:
   - name: vllm
     image: docker.io/library/vllm-cpu-env:latest
     imagePullPolicy: IfNotPresent
-    securityContext:
-      privileged: true
-    command: ["/bin/bash", "-c"]
+    modelCommand: vllmServe
     args:
-      - |
-          VLLM_SKIP_WARMUP=True vllm serve deepseek-ai/DeepSeek-R1-Distill-Qwen-1.5B \
-          --port 8200 \
-          --gpu-memory-utilization 0.9 \
-          --enforce-eager \
-          --disable-hybrid-kv-cache-manager \
-          --tensor-parallel-size 1 --max_model_len 32768 --kv-transfer-config '{"kv_connector":"NixlConnector","kv_role":"kv_both","kv_buffer_device":"cpu"}'
+      - "--gpu-memory-utilization"
+      - "0.9"
+      - "--enforce-eager"
+      - "--disable-hybrid-kv-cache-manager"
+      - "--kv-transfer-config"
+      - '{"kv_connector":"NixlConnector","kv_role":"kv_both","kv_buffer_device":"cpu"}'
     env:
+      - name: VLLM_SKIP_WARMUP
+        value: "True"
       - name: VLLM_LOGGING_LEVEL
         value: "DEBUG"
       - name: NIXL_TELEMETRY_ENABLE
@@ -116,18 +105,17 @@ prefill:
   - name: vllm
     image: docker.io/library/vllm-cpu-env:latest
     imagePullPolicy: IfNotPresent
-    securityContext:
-      privileged: true
-    command: ["/bin/bash", "-c"]
+    modelCommand: vllmServe
     args:
-      - |
-        VLLM_SKIP_WARMUP=True vllm serve deepseek-ai/DeepSeek-R1-Distill-Qwen-1.5B \
-          --port 8000 \
-          --gpu-memory-utilization 0.9 \
-          --enforce-eager \
-          --disable-hybrid-kv-cache-manager \
-          --tensor-parallel-size 1 --max_model_len 32768 --kv-transfer-config '{"kv_connector":"NixlConnector","kv_role":"kv_both","kv_buffer_device":"cpu"}'
+      - "--gpu-memory-utilization"
+      - "0.9"
+      - "--enforce-eager"
+      - "--disable-hybrid-kv-cache-manager"
+      - "--kv-transfer-config"
+      - '{"kv_connector":"NixlConnector","kv_role":"kv_both","kv_buffer_device":"cpu"}'
     env:
+      - name: VLLM_SKIP_WARMUP
+        value: "True"
       - name: VLLM_LOGGING_LEVEL
         value: "DEBUG"
       - name: NIXL_TELEMETRY_ENABLE
