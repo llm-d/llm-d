@@ -1,9 +1,12 @@
 inferencePool:
-  apiVersion: "inference.networking.k8s.io/v1"
   modelServers:
     matchLabels:
       "llm-d.ai/inferenceServing": "true"
 inferenceExtension:
+  flags:
+    # in vLLM 10.0+, the metric is renamed while upstream GAIE is still using the old name as default.
+    # See https://github.com/kubernetes-sigs/gateway-api-inference-extension/pull/1905.
+    kv-cache-usage-percentage-metric: "vllm:kv_cache_usage_perc"
   monitoring:
     gke:
       enable: false

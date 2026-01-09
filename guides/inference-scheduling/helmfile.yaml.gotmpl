@@ -9,6 +9,9 @@ environments:
   kgateway: &KG
     values:
       - ../prereq/gateway-provider/common-configurations/kgateway.yaml
+  agentgateway: &AG
+    values:
+      - ../prereq/gateway-provider/common-configurations/agentgateway.yaml
   gke: &GKE
     values:
       - ../prereq/gateway-provider/common-configurations/gke.yaml
@@ -46,7 +49,7 @@ releases:
   - name: {{ printf "infra-%s" $rn | quote }}
     namespace: {{ $ns }}
     chart: llm-d-infra/llm-d-infra
-    version: v1.3.4
+    version: v1.3.5
     installed:  true
     labels:
       type: infrastructure
@@ -54,12 +57,12 @@ releases:
     values:
       - gateway:
           {{ .Environment.Values.gateway | toYaml | nindent 10 }}
-  {{- end }}
+{{- end }}
 
   - name: {{ printf "gaie-%s" $rn | quote }}
     namespace: {{ $ns }}
     chart: oci://registry.k8s.io/gateway-api-inference-extension/charts/inferencepool
-    version: v1.2.0-rc.1
+    version: v1.2.1
     installed: true
     needs:
       {{- if ne .Environment.Name "standalone" }}

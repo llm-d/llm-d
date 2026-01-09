@@ -5,11 +5,11 @@ inferenceExtension:
     ###################
     name: llm-d-inference-scheduler
     hub: ghcr.io/llm-d
-    tag: v0.4.0-rc.1
+    tag: v0.4.0
     ###################
     # name: epp
     # hub: registry.k8s.io/gateway-api-inference-extension
-    # tag: v1.2.0-rc.1
+    # tag: v1.2.0
     ###################
     pullPolicy: Always
   extProcPort: 9002
@@ -281,15 +281,15 @@ inferenceExtension:
               path: envoy.yaml
   monitoring:
     interval: "10s"
-    # Service account token secret for authentication
-    secret:
-      name: inference-scheduling-gateway-sa-metrics-reader-secret
     # Prometheus ServiceMonitor will be created when enabled for EPP metrics collection
     prometheus:
       enabled: true
+      auth:
+        # To allow unauthenticated /metrics access (e.g., for debugging with curl), set to false
+        enabled: true
 inferencePool:
-  apiVersion: inference.networking.x-k8s.io/v1alpha2 # use old API version for inference
-  targetPortNumber: 8000
+  targetPorts:
+    - number: 8000
   modelServerType: vllm
   modelServers:
     matchLabels:

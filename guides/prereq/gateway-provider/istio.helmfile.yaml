@@ -1,7 +1,11 @@
+repositories:
+- name: istio
+  url: https://istio-release.storage.googleapis.com/charts
+
 releases:
   - name: istio-base
-    chart: oci://gcr.io/istio-testing/charts/base
-    version: 1.28-alpha.89f30b26ba71bf5e538083a4720d0bc2d8c06401
+    chart: istio/base
+    version: 1.28.1
     namespace: istio-system
     installed: true
     labels:
@@ -9,8 +13,8 @@ releases:
       kind: gateway-crds
 
   - name: istiod
-    chart: oci://gcr.io/istio-testing/charts/istiod
-    version: 1.28-alpha.89f30b26ba71bf5e538083a4720d0bc2d8c06401
+    chart: istio/istiod
+    version: 1.28.1
     namespace: istio-system
     installed: true
     needs:
@@ -19,12 +23,12 @@ releases:
       - meshConfig:
           defaultConfig:
             proxyMetadata:
-              SUPPORT_GATEWAY_API_INFERENCE_EXTENSION: "true"
+              ENABLE_GATEWAY_API_INFERENCE_EXTENSION: "true"
         pilot:
           env:
-            SUPPORT_GATEWAY_API_INFERENCE_EXTENSION: "true"
-        tag: 1.28-alpha.89f30b26ba71bf5e538083a4720d0bc2d8c06401
-        hub: "gcr.io/istio-testing"
+            ENABLE_GATEWAY_API_INFERENCE_EXTENSION: "true"
+        tag: 1.28.1
+        hub: "docker.io/istio"
     labels:
       type: gateway-provider
       kind: gateway-control-plane

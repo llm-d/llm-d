@@ -15,6 +15,7 @@ on:
         type: choice
         options:
           - kgateway
+          - agentgateway
           - istio
       wait_for_termination:
         description: 'Wait time (in minutes) before terminating for debugging'

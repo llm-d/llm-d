@@ -13,6 +13,7 @@ if [ "${USE_SCCACHE}" = "true" ]; then
         AWS_SECRET_ACCESS_KEY="$(cat /run/secrets/aws_secret_access_key)"
         export AWS_SECRET_ACCESS_KEY
         export AWS_DEFAULT_REGION="us-west-2"
+        export AWS_EC2_METADATA_DISABLED=true
     fi
 
     export CMAKE_C_COMPILER_LAUNCHER=sccache

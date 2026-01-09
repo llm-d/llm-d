@@ -5,6 +5,3 @@ gateway:
 
 provider:
   name: gke
-
-inferencePool:
-  apiVersion: "inference.networking.k8s.io/v1"

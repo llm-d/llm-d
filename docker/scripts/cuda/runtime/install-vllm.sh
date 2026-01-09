@@ -10,9 +10,9 @@ set -Eeu
 # - VLLM_USE_PRECOMPILED: whether to use precompiled binaries (1/0)
 # - VLLM_PRECOMPILED_WHEEL_COMMIT: commit SHA for precompiled wheel lookup (defaults to VLLM_COMMIT_SHA)
 # - CUDA_MAJOR: The major CUDA version
+# - BUILD_NIXL_FROM_SOURCE: if nixl should be installed by vLLM or has been built from source in the builder stages
 
-# shellcheck source=/dev/null
-source /opt/vllm/bin/activate
+. /opt/vllm/bin/activate
 
 # default VLLM_PRECOMPILED_WHEEL_COMMIT to VLLM_COMMIT_SHA if not set
 VLLM_PRECOMPILED_WHEEL_COMMIT="${VLLM_PRECOMPILED_WHEEL_COMMIT:-${VLLM_COMMIT_SHA}}"
@@ -21,13 +21,15 @@ VLLM_PRECOMPILED_WHEEL_COMMIT="${VLLM_PRECOMPILED_WHEEL_COMMIT:-${VLLM_COMMIT_SH
 # flashinfer-cubin/jit-cache are pre-built wheels (building from source times out)
 FLASHINFER_WHEEL_VERSION="${FLASHINFER_VERSION#v}"
 INSTALL_PACKAGES=(
-  nixl
   cuda-python
   'huggingface_hub[hf_xet]'
   flashinfer-cubin=="${FLASHINFER_WHEEL_VERSION}"
   flashinfer-jit-cache=="${FLASHINFER_WHEEL_VERSION}"
   /tmp/wheels/*.whl
 )
+if [ "${BUILD_NIXL_FROM_SOURCE}" = "false" ]; then
+  INSTALL_PACKAGES+=(nixl)
+fi
 
 # clone vllm repository
 git clone "${VLLM_REPO}" /opt/vllm-source
@@ -43,12 +45,11 @@ echo "DEBUG: Architecture: $(uname -m), Python: $(python3 --version)"
 # determine platform tag from architecture
 MACHINE=$(uname -m)
 case "${MACHINE}" in
-x86_64) PLATFORM_TAG="manylinux1_x86_64" ;;
-aarch64) PLATFORM_TAG="manylinux2014_aarch64" ;;
-*)
-  echo "unsupported architecture: ${MACHINE}"
-  exit 1
-  ;;
+  x86_64) PLATFORM_TAG="manylinux1_x86_64" ;;
+  amd64) PLATFORM_TAG="manylinux1_x86_64" ;;
+  aarch64) PLATFORM_TAG="manylinux2014_aarch64" ;;
+  arm64) PLATFORM_TAG="manylinux2014_aarch64" ;;
+  *) echo "unsupported architecture: ${MACHINE}"; exit 1 ;;
 esac
 
 # scrape wheel filename from HTML index
