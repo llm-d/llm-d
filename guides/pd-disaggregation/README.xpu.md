@@ -8,19 +8,26 @@ This document provides complete steps for deploying Intel XPU PD (Prefill-Decode
 * Sufficient disk space (recommended at least 50GB available)
 
 ### Software Requirements
-* Kubernetes cluster (v1.28.0+)
+* Kubernetes cluster (v1.29.0+)
 * Intel GPU Plugin deployed
 * kubectl access with cluster-admin privileges
+
+### Client Setup
+
+- Create a namespace for installation. 
+  
+  ```
+  export NAMESPACE=llm-d-pd # or any other namespace (shorter names recommended)
+  kubectl create namespace ${NAMESPACE}
+  ```
+
+- [Create the `llm-d-hf-token` secret in your target namespace with the key `HF_TOKEN` matching a valid HuggingFace token](../prereq/client-setup/README.md#huggingface-token) to pull models.
+- [Choose an llm-d version](../prereq/client-setup/README.md#llm-d-version)
 
 ## Step 0: Build Intel XPU Docker Image (Optional)
 If you need to customize the vLLM version or build the image from source, you can build the Intel XPU Docker image:
 
-### Clone Repository
-```shell
-# Clone the llm-d repository
-git clone https://github.com/llm-d/llm-d
-cd llm-d
-```
+
 ### Build Default Image
 #### Intel Data Center GPU Max 1550
 ```shell
@@ -64,7 +71,7 @@ curl -Lo ./kind https://kind.sigs.k8s.io/dl/v0.20.0/kind-linux-amd64 && chmod +x
 
 * helm (v3.12.0+)
 * helmfile (v1.1.0+)
-* kubectl (v1.28.0+)
+* kubectl (v1.29.0+)
 * yq (v4+)
 * git (v2.30.0+)
 
@@ -75,9 +82,8 @@ If you don't have a Kubernetes cluster, you can create one using Kind:
 # Use the same llm-d repository
 cd llm-d
 
-# Create Kind cluster with Intel GPU support configuration
-# Note: Adjust kind configuration for Intel XPU as needed
-kind create cluster --name llm-d-cluster --image kindest/node:v1.28.15
+# Create Kind cluster with Kubernetes v1.34.0 for full sidecar support
+kind create cluster --name llm-d-cluster --image kindest/node:v1.34.0
 
 # Verify cluster is running
 kubectl cluster-info
@@ -98,15 +104,9 @@ kind load docker-image llm-d:custom-xpu --name llm-d-cluster
 docker exec -it llm-d-cluster-control-plane crictl images | grep llm-d
 ```
 
-**For Intel XPU deployments**: You must have the Intel GPU Plugin deployed on your cluster. The plugin provides the `gpu.intel.com/i915` resource that the Intel XPU workloads require.
+**For Intel XPU deployments**: You must have the Intel GPU Plugin deployed on your cluster. See [Intel XPU Hardware-Specific Setup](../../docs/accelerators/README.md#intel-xpu) for installation instructions.
 
-To deploy the Intel GPU Plugin:
-
-```shell
-kubectl apply -k 'https://github.com/intel/intel-device-plugins-for-kubernetes/deployments/gpu_plugin?ref=v0.32.1'
-```
-
-**Note**: If you already have a Kubernetes cluster (v1.28.0+) with Intel GPU Plugin deployed, you can skip this step.
+**Note**: If you already have a Kubernetes cluster (v1.29.0+) with Intel GPU Plugin deployed, you can skip this step.
 
 ## Step 3: Install Gateway API Dependencies
 ```shell
@@ -125,24 +125,7 @@ helmfile apply -f istio.helmfile.yaml
 helmfile apply -f istio.helmfile.yaml --selector kind=gateway-control-plane
 ```
 
-
-## Step 5: Create HuggingFace Token Secret
-```shell
-# Set environment variables
-export NAMESPACE=llm-d-pd
-export RELEASE_NAME_POSTFIX=pd
-export HF_TOKEN_NAME=${HF_TOKEN_NAME:-llm-d-hf-token}
-export HF_TOKEN=$your-hf-token
-
-# Create namespace
-kubectl create namespace ${NAMESPACE} --dry-run=client -o yaml | kubectl apply -f -
-
-# Create HuggingFace token secret (empty token for public models)
-kubectl create secret generic $HF_TOKEN_NAME --from-literal="HF_TOKEN=${HF_TOKEN}" --namespace ${NAMESPACE}
-```
-
-
-## Step 6: Deploy Intel XPU PD Disaggregation
+## Step 5: Deploy Intel XPU PD Disaggregation
 ⚠️ **Important - For Intel BMG GPU Users**: Before running `helmfile apply`, you must update the GPU resource type in `ms-pd/values_xpu.yaml`:
 
 ```yaml

@@ -6,6 +6,7 @@ This guide demonstrates how to deploy DeepSeek-R1-0528 using vLLM's P/D disaggre
 
 * a 32xH200 cluster with InfiniBand networking
 * a 32xH200 cluster on GKE with RoCE networking
+* a 32xB200 cluster on GKE with RoCE networking
 
 > WARNING: We are still investigating and optimizing performance for other hardware and networking configurations
 
@@ -16,7 +17,7 @@ In this example, we will demonstrate a deployment of `DeepSeek-R1-0528` with:
 
 ## Hardware Requirements
 
-This guide requires 32 Nvidia H200 GPUs and InfiniBand or RoCE RDMA networking. Check `modelserver/base/decode.yaml` and `modelserver/base/prefill.yaml` for detailed resource requirements.
+This guide requires 32 Nvidia H200 or B200 GPUs and InfiniBand or RoCE RDMA networking. Check `modelserver/base/decode.yaml` and `modelserver/base/prefill.yaml` for detailed resource requirements.
 
 ## Prerequisites
 
@@ -26,76 +27,96 @@ This guide requires 32 Nvidia H200 GPUs and InfiniBand or RoCE RDMA networking. 
   - The pods leveraging inter-node EP must be deployed within the same networking domain
   - You have deployed the [LeaderWorkerSet optional controller](../prereq/infrastructure/README.md#optional-install-leaderworkerset-for-multi-host-inference)
 - Configure and deploy your [Gateway control plane](../prereq/gateway-provider/README.md).
-- [Create the `llm-d-hf-token` secret in your target namespace with the key `HF_TOKEN` matching a valid HuggingFace token](../prereq/client-setup/README.md#huggingface-token) to pull models.
 - Have the [Monitoring stack](../../docs/monitoring/README.md) installed on your system.
+- Create a namespace for installation.
+  
+  ```
+  export NAMESPACE=llm-d-wide-ep # or any other namespace (shorter names recommended)
+  kubectl create namespace ${NAMESPACE}
+  ```
+
+- [Create the `llm-d-hf-token` secret in your target namespace with the key `HF_TOKEN` matching a valid HuggingFace token](../prereq/client-setup/README.md#huggingface-token) to pull models.
+- [Choose an llm-d version](../prereq/client-setup/README.md#llm-d-version)
 
 ## Installation
 
-Use the helmfile to compose and install the stack. The Namespace in which the stack will be deployed will be derived from the `${NAMESPACE}` environment variable. If you have not set this, it will default to `llm-d-wide-ep` in this example.
-
 ```bash
-export NAMESPACE=llm-d-wide-ep # or any other namespace
 cd guides/wide-ep-lws/
-kubectl create namespace ${NAMESPACE}
 ```
 
 ### Deploy Model Servers
 
 GKE and CoreWeave are tested Kubernetes providers for this well-lit path. You can customize the manifests if you run on other Kubernetes providers.
 
-```bash
-# Deploy on GKE
-kubectl apply -k ./manifests/modelserver/gke -n ${NAMESPACE}
+<!-- TABS:START -->
 
-# OR, deploy on CoreWeave
+<!-- TAB:GKE (H200):default -->
+#### GKE (H200)
+```bash
+kubectl apply -k ./manifests/modelserver/gke -n ${NAMESPACE}
+```
+
+<!-- TAB:GKE (B200) -->
+#### GKE (B200)
+```bash
+# Deploy on GKE for B200 on the a4 instance type to work around a known vLLM memory issue
+kubectl apply -k ./manifests/modelserver/gke-a4 -n ${NAMESPACE}
+```
+
+<!-- TAB:CoreWeave -->
+#### CoreWeave
+```bash
 kubectl apply -k ./manifests/modelserver/coreweave  -n ${NAMESPACE}
 ```
 
+<!-- TABS:END -->
+
 ### Deploy InferencePool
 
+Select the provider-specific Helm command using the tabs below.
+
+<!-- TABS:START -->
+
+<!-- TAB:GKE:default -->
+#### GKE
 ```bash
-# For GKE
-helm install deepseek-r1 \
+helm install llm-d-infpool \
   -n ${NAMESPACE} \
-  -f inferencepool.values.yaml \
+  -f ./manifests/inferencepool.values.yaml \
   --set "provider.name=gke" \
   --set "inferencePool.apiVersion=inference.networking.k8s.io/v1" \
   --set "inferenceExtension.monitoring.gke.enable=true" \
   oci://us-central1-docker.pkg.dev/k8s-staging-images/gateway-api-inference-extension/charts/inferencepool \
-  --version v1.0.1
+  --version v1.2.0-rc.1
+```
 
-# For Istio
-helm install deepseek-r1 \
+<!-- TAB:Istio -->
+#### Istio
+```bash
+helm install llm-d-infpool \
   -n ${NAMESPACE} \
-  -f inferencepool.values.yaml \
+  -f ./manifests/inferencepool.values.yaml \
   --set "provider.name=istio" \
   --set "inferenceExtension.monitoring.prometheus.enable=true" \
   oci://us-central1-docker.pkg.dev/k8s-staging-images/gateway-api-inference-extension/charts/inferencepool \
-  --version v1.0.1
-
-# For Kgateway
-helm install deepseek-r1 \
-  -n ${NAMESPACE} \
-  -f inferencepool.values.yaml \
-  oci://us-central1-docker.pkg.dev/k8s-staging-images/gateway-api-inference-extension/charts/inferencepool \
-  --version v1.0.1
+  --version v1.2.0-rc.1
 ```
+
+<!-- TAB:Kgateway -->
+#### Kgateway
+```bash
+helm install llm-d-infpool \
+  -n ${NAMESPACE} \
+  -f ./manifests/inferencepool.values.yaml \
+  oci://us-central1-docker.pkg.dev/k8s-staging-images/gateway-api-inference-extension/charts/inferencepool \
+  --version v1.2.0-rc.1
+```
+
+<!-- TABS:END -->
 
 ### Deploy Gateway and HTTPRoute
 
-```bash
-# Deploy a gke-l7-regional-external-managed gateway.
-kubectl apply -k ./manifests/gateway/gke-l7-regional-external-managed -n ${NAMESPACE}
-
-# Deploy an Istio gateway.
-kubectl apply -k ./manifests/gateway/istio -n ${NAMESPACE}
-
-# Deploy a kgateway gateway.
-kubectl apply -k ./manifests/gateway/kgateway -n ${NAMESPACE}
-
-# Deploy a kgateway gateway on Openshift Container Platform (OCP).
-kubectl apply -k ./manifests/gateway/kgateway-openshift -n ${NAMESPACE}
-```
+Deploy the Gateway and HTTPRoute using the [gateway recipe](../recipes/gateway/README.md).
 
 ### Gateway options
 
@@ -114,7 +135,7 @@ As with PD, the `wide-ep-lws` guide supports selective PD. For information on th
 ```bash
 helm list -n ${NAMESPACE}
 NAME            NAMESPACE       REVISION    UPDATED                                 STATUS      CHART                       APP VERSION
-deepseek-r1     llm-d-wide-ep   1           2025-08-24 13:14:53.355639 -0700 PDT    deployed    inferencepool-v1.0          v0.3.0
+llm-d-infpool   llm-d-wide-ep   1           2025-08-24 13:14:53.355639 -0700 PDT    deployed    inferencepool-v1.0          v0.3.0
 ```
 
 - Out of the box with this example you should have the following resources (if using Istio):
@@ -125,7 +146,7 @@ NAME                                                         READY   STATUS    R
 pod/infra-wide-ep-inference-gateway-istio-74d5c66c86-h5mfn   1/1     Running   0          2m22s
 pod/wide-ep-llm-d-decode-0                   2/2     Running   0          2m13s
 pod/wide-ep-llm-d-decode-0-1                 2/2     Running   0          2m13s
-pod/deepseek-r1-epp-84dd98f75b-r6lvh         1/1     Running   0          2m14s
+pod/llm-d-infpool-epp-84dd98f75b-r6lvh         1/1     Running   0          2m14s
 pod/wide-ep-llm-d-prefill-0                  1/1     Running   0          2m13s
 pod/wide-ep-llm-d-prefill-0-1                1/1     Running   0          2m13s
 
@@ -134,16 +155,16 @@ NAME                                            TYPE           CLUSTER-IP    EXT
 service/infra-wide-ep-inference-gateway-istio   ClusterIP      10.16.1.34    10.16.4.2     15021:30312/TCP,80:33662/TCP   2m22s
 service/wide-ep-ip-1e480070                     ClusterIP      None          <none>        54321/TCP                      2d4h
 service/wide-ep-llm-d-decode                    ClusterIP      None          <none>        <none>                         2m13s
-service/deepseek-r1-epp                         ClusterIP      10.16.1.137   <none>        9002/TCP                       2d4h
+service/llm-d-infpool-epp                         ClusterIP      10.16.1.137   <none>        9002/TCP                       2d4h
 service/wide-ep-llm-d-prefill                   ClusterIP      None          <none>        <none>                         2m13s
 
 NAME                                                    READY   UP-TO-DATE   AVAILABLE   AGE
 deployment.apps/infra-wide-ep-inference-gateway-istio   1/1     1            1           2m22s
-deployment.apps/deepseek-r1-epp       1/1     1            1           2m14s
+deployment.apps/llm-d-infpool-epp       1/1     1            1           2m14s
 
 NAME                                                               DESIRED   CURRENT   READY   AGE
 replicaset.apps/infra-wide-ep-inference-gateway-istio-74d5c66c86   1         1         1       2m22s
-replicaset.apps/deepseek-r1-epp-55bb9857cf       1         1         1       2m14s
+replicaset.apps/llm-d-infpool-epp-55bb9857cf       1         1         1       2m14s
 
 NAME                                                      READY   AGE
 statefulset.apps/wide-ep-llm-d-decode     1/1     2m13s
@@ -168,7 +189,7 @@ To remove the deployment:
 
 ```bash
 # From examples/wide-ep-lws
-helm uninstall deepseek-r1 -n ${NAMESPACE}
+helm uninstall llm-d-infpool -n ${NAMESPACE}
 kubectl delete -k ./manifests/modelserver/<gke|coreweave> -n ${NAMESPACE}
 kubectl delete -k ./manifests/gateway/<gke-l7-regional-external-managed|istio|kgateway|kgateway-openshift> -n ${NAMESPACE}
 ```

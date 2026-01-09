@@ -1,13 +1,30 @@
 # vLLM Recipe
 
-This directory contains a standard recipe for deploying a vLLM model server.
+This directory contains recipes for deploying a vLLM model server.
 
 ## Installation
 
-This is a base recipe and is meant to be used as a resource in other kustomizations. To deploy a standard vLLM model server, you can use the following command:
+The following recipes are available for deploying the vLLM model server.
+
+### Standard
+
+This deploys a standard vLLM model server with default configuration.
 
 ```bash
 kubectl apply -k ./standard -n ${NAMESPACE}
 ```
 
-Typically, you would overlay this base to provide specific arguments and resource requests for your model.
+This is an overlay of the base recipe. You can create additional overlays to provide specific arguments and resource requests for your model by referencing the base:
+
+```yaml
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ../base
+patches:
+  - target:
+      kind: Deployment
+      name: llm-d-model-server
+    patch: |-
+      # Your customizations here
+```

@@ -1,0 +1,74 @@
+inferenceExtension:
+  replicas: 1
+  flags:
+    # in vLLM 10.0+, the metric is renamed while upstream GAIE is still using the old name as default.
+    # See https://github.com/kubernetes-sigs/gateway-api-inference-extension/pull/1905.
+    kv-cache-usage-percentage-metric: "vllm:kv_cache_usage_perc"
+    v: 1
+  image:
+    name: llm-d-inference-scheduler
+    hub: ghcr.io/llm-d
+    tag: v0.4.0
+  extProcPort: 9002
+  monitoring:
+    interval: "10s"
+    # Service account token secret for authentication
+    secret:
+      name: wide-ep-gateway-sa-metrics-reader-secret
+    # Prometheus ServiceMonitor will be created when enabled for EPP metrics collection
+    prometheus:
+      enabled: false
+    gke:
+      enable: false
+  pluginsConfigFile: "custom-plugins.yaml"
+  pluginsCustomConfig:
+    custom-plugins.yaml: |
+      # ALWAYS DO PD IN THIS EXAMPLE (THRESHOLD 0)
+      # This example uses random routing 
+      # since it's not yet possible to route to individual DP ranks
+      apiVersion: inference.networking.x-k8s.io/v1alpha1
+      kind: EndpointPickerConfig
+      plugins:
+      - type: prefill-header-handler
+      - type: prefill-filter
+      - type: decode-filter
+      - type: random-picker
+        parameters:
+          maxNumOfEndpoints: 1
+      - type: pd-profile-handler
+        parameters:
+          threshold: 0
+          hashBlockSize: 5
+      schedulingProfiles:
+      - name: prefill
+        plugins:
+        - pluginRef: prefill-filter
+        - pluginRef: random-picker
+      - name: decode
+        plugins:
+        - pluginRef: decode-filter
+        - pluginRef: random-picker
+
+inferencePool:
+  modelServers:
+    matchLabels:
+      llm-d.ai/inferenceServing: "true"
+      llm-d.ai/model: DeepSeek-R1-0528
+  provider:
+    istio:
+      destinationRule:
+        host: deepseek-r1-epp
+        trafficPolicy:
+          tls:
+            mode: SIMPLE
+            insecureSkipVerify: true
+          connectionPool:
+            http:
+              http1MaxPendingRequests: 256000
+              maxRequestsPerConnection: 256000
+              http2MaxRequests: 256000
+              idleTimeout: "900s"
+            tcp:
+              maxConnections: 256000
+              maxConnectionDuration: "1800s"
+              connectTimeout: "900s"

@@ -1,0 +1,40 @@
+inferencePool:
+  modelServers:
+    matchLabels:
+      "llm-d.ai/inferenceServing": "true"
+inferenceExtension:
+  flags:
+    # in vLLM 10.0+, the metric is renamed while upstream GAIE is still using the old name as default.
+    # See https://github.com/kubernetes-sigs/gateway-api-inference-extension/pull/1905.
+    kv-cache-usage-percentage-metric: "vllm:kv_cache_usage_perc"
+  monitoring:
+    gke:
+      enable: false
+    prometheus:
+      enable: false
+  pluginsConfigFile: "custom-plugins.yaml"
+  pluginsCustomConfig:
+    custom-plugins.yaml: |
+      apiVersion: inference.networking.x-k8s.io/v1alpha1
+      kind: EndpointPickerConfig
+      plugins:
+      - type: queue-scorer
+      - type: kv-cache-utilization-scorer
+      - type: prefix-cache-scorer
+        name: gpu-prefix-cache-scorer
+      - type: prefix-cache-scorer
+        name: cpu-prefix-cache-scorer
+        parameters:
+          autoTune: false  # vLLM doesn't have the CPU capacity metric to enable autoTune yet
+          lruCapacityPerServer: 41000  # Allocating ~100GB for Qwen-32B: 41,000 blocks * 2.5MB/block (based on 160KB/token * 16 block size).
+      schedulingProfiles:
+      - name: default
+        plugins:
+        - pluginRef: queue-scorer
+          weight: 2
+        - pluginRef: kv-cache-utilization-scorer
+          weight: 2
+        - pluginRef: gpu-prefix-cache-scorer
+          weight: 1
+        - pluginRef: cpu-prefix-cache-scorer
+          weight: 1

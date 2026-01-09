@@ -8,38 +8,20 @@ You are assumed to have deployed the llm-d inference stack from a guide, using t
 
 ## Exposing your gateway
 
-First we need to choose what strategy were going to use to expose / interact with your gateway. It should be noted that this will be affected by the values you used when installing the `llm-d-infra` chart for your given guide. There are three options:
+First we need to choose what strategy we are going to use to expose / interact with your gateway. It should be noted that this will be affected by the values you used when installing the `llm-d-infra` chart for your given guide. Select the tab that matches your environment.
 
-1. Port-forward the gateway service to localhost
-    - Pros: works on any k8s cluster type
-    - Cons: requires k8s user access
-2. Using the gateway's external IP address
-    - Pros: publicly accessible endpoint
-    - Cons: environment dependent - depends on your `Service.type=LoadBalancer` and cloud-provider integration to your k8s cluster
-3. Using an ingress attached to the gateway service
-    - Pros:
-        - Stable hostname
-        - Optional TLS and Traffic policies
-    - Cons:
-        - Depends on an ingress controller
-        - Depends on configuring DNS
+**_NOTE:_** If you're unsure which to use—start with port-forward as it's the most reliable and easiest. For anything shareable, use Ingress/Route. Use LoadBalancer if your provider supports it and you just need raw L4 access.
 
-**_NOTE:_** If you’re unsure which to use—start with port-forward as its the most reliable and easiest. For anything shareable, use Ingress/Route. Use LoadBalancer if your provider supports it and you just need raw L4 access.
+<!-- TABS:START -->
 
-**_NOTE:_** It should also be noted that you can use other platform specific networking options such as Openshift Routes. When benchmarking the `pd-disaggregation` example with OCP routes we noticed that Openshift Networking was enforcing timeouts on gateway requests, which, under heavy load affected our results. If you wish to use a platform dependent option with a benchmarking setup ensure to check your platform docs.
-
-Each of these paths should export the `${ENDPOINT}` environment variable which we can send requests to.
-
-### Port-forward to a gateway on cluster
-
+<!-- TAB:Port-forward (Cluster Internal):default -->
+### Port-forward (Cluster Internal)  
 For gateway providers that install into the cluster you can port forward to the gateway deployment directly.
 
 ```bash
 GATEWAY_SVC=$(kubectl get svc -n "${NAMESPACE}" -o yaml | yq '.items[] | select(.metadata.name | test(".*-inference-gateway(-.*)?$")).metadata.name' | head -n1)
 ```
-
-**_NOTE:_** This command assumes you have one gateway in your given `${NAMESPACE}`, even if you have multiple it will only grab the name of the first gateway service in alphabetical order. If you are running multiple gateway deployments in a single namespace, you will have to explicitly set your `$GATEWAY_SVC` to the appropriate gateway endpoint.
-
+**_NOTE:_** This command assumes you have one gateway in your given `${NAMESPACE}`, even if you have multiple it will only grab the name of the first gateway service in alphabetical order. If you are running multiple gateway deployments in a single namespace, you will have to explicitly set your `$GATEWAY_SVC` to the appropriate gateway endpoint
 ```bash
 k get services
 NAME                                                 TYPE           CLUSTER-IP    EXTERNAL-IP   PORT(S)                        AGE
@@ -47,13 +29,10 @@ gaie-inference-scheduling-epp                        ClusterIP      10.16.3.250 
 gaie-inference-scheduling-ip-18c12339                ClusterIP      None          <none>        54321/TCP                      12s
 gaie-sim-epp                                         ClusterIP      10.16.1.220   <none>        9002/TCP,9090/TCP              80m
 infra-inference-scheduling-inference-gateway-istio   LoadBalancer   10.16.3.226   10.16.4.3     15021:34529/TCP,80:35734/TCP   22s
-infra-sim-inference-gateway                          LoadBalancer   10.16.1.62    10.16.4.2     80:38348/TCP                   81m
-
+infra-sim-inference-gateway                          LoadBalancer   10.16.1.62    10.16.4.2     80:38348/TCP                   81
 export GATEWAY_SVC="infra-inference-scheduling-inference-gateway-istio"
 ```
-
-After we have our gateway service name, we can port forward it:
-
+After we have our gateway service name, we can port forward it
 ```bash
 export ENDPOINT="http://localhost:8000"
 kubectl port-forward -n ${NAMESPACE} service/${GATEWAY_SVC} 8000:80
@@ -61,53 +40,56 @@ kubectl port-forward -n ${NAMESPACE} service/${GATEWAY_SVC} 8000:80
 
 **_NOTE:_** Port 8000 is the default gateway service port in our guides. You can change this by altering the values for the `llm-d-infra` helm chart and updating your port-forward command appropriately.
 
-### Using the Gateway External IP with service type `LoadBalancer`
-
+<!-- TAB:External IP (LoadBalancer) -->
+### External IP (LoadBalancer)
 > [!REQUIREMENTS]
-> This requires that the release of the `llm-d-infra` chart must have `.gateway.serviceType` set to `LoadBalancer`. Currently this is the [default value](https://github.com/llm-d-incubation/llm-d-infra/blob/main/charts/llm-d-infra/values.yaml#L167), however its worth noting.
+> This requires that the release of the `llm-d-infra` chart must have `.gateway.serviceType` set to `LoadBalancer`. Currently this is the [default value](https://github.com/llm-d-incubation/llm-d-infra/blob/main/charts/llm-d-infra/values.yaml#L167), however it's worth noting.
+> 
 > This requires your K8s cluster is deployed on a cloud provider with LB integration (EKS/GKE/AKS/AWS/…).
 
-If you are using the GKE gateway or have are using the default service type of `LoadBalancer` for you gateway and you are on a cloud platform with loadbalancing, you can use the `External IP` of your gateway service (you should see the same thing under your gateway with `kubectl get gateway`.)
-
+If you are using the GKE gateway or are using the default service type of `LoadBalancer` for your gateway and you are on a cloud platform with load balancing, you can use the `External IP` of your gateway service (you should see the same thing under your gateway with `kubectl get gateway`)
 ```bash
 export ENDPOINT=$(kubectl get gateway --no-headers -n ${NAMESPACE} -o jsonpath='{.items[].status.addresses[0].value}')
 ```
 
-**_NOTE:_** This command assumes you have one gateway in your given `${NAMESPACE}`, if you have multiple, it will just grab one. Therefore, in the case you do have multiple gateways, you should find the correct gateway and target that specifically:
+**_NOTE:_** This command assumes you have one gateway in your given `${NAMESPACE}`, if you have multiple, it will just grab one. Therefore, in the case you do have multiple gateways, you should find the correct gateway and target that specifically
 
 ```bash
 kubectl get gateway -n ${NAMESPACE}
 NAME                                           CLASS      ADDRESS                                                                   PROGRAMMED   AGE
 infra-inference-scheduling-inference-gateway   kgateway   af805bef3ec444a558da28061b487dd5-2012676366.us-east-1.elb.amazonaws.com   True         11m
-infra-sim-inference-gateway                    kgateway   a67ad245358e34bba9cb274bc220169e-1351042165.us-east-1.elb.amazonaws.com   True         45s
-
+infra-sim-inference-gateway                    kgateway   a67ad245358e34bba9cb274bc220169e-1351042165.us-east-1.elb.amazonaws.com   True         45
 GATEWAY_NAME=infra-inference-scheduling-inference-gateway
 export ENDPOINT=$(kubectl get gateway ${GATEWAY_NAME} --no-headers -n ${NAMESPACE} -o jsonpath='{.status.addresses[0].value}')
 ```
 
-### Using an ingress
-
+<!-- TAB:Ingress Controller -->
+### Ingress Controller
 > [!REQUIREMENTS]
 > This requires that the release of the `llm-d-infra` chart must have `.ingress.enabled` set to `true`, and the `.gateway.service.type` to `ClusterIP`.
-> This requires some load-balancer configuration for your cluster / ingress-controller. This could be either cloud-provider integration or something like metalLB.
+> This requires some load-balancer configuration for your cluster / ingress-controller. This could be either cloud-provider integration or something like MetalLB
 
-This is the most environment dependent of all the options, and can be tricky to set up. For more information on this see [our gateway customization docs](../docs/customizing-your-gateway.md#using-an-ingress). You should be able to get your endpoint from you ingress with the following:
-
+This is the most environment dependent of all the options, and can be tricky to set up. For more information on this see [our gateway customization docs](../docs/customizing-your-gateway.md#using-an-ingress). You should be able to get your endpoint from your ingress with the following
 ```bash
 export ENDPOINT=$(kubectl get ingress --no-headers -o jsonpath='{.items[].status.loadBalancer.ingress[0].ip}')
 ```
 
-**_NOTE:_** This command assumes you have one ingress in your given `${NAMESPACE}`, if you have multiple, it will just grab one. Therefore, in the case you do have multiple gateways, you should find the correct gateway and target that specifically:
+**_NOTE:_** This command assumes you have one ingress in your given `${NAMESPACE}`, if you have multiple, it will just grab one. Therefore, in the case you do have multiple gateways, you should find the correct gateway and target that specifically
 
 ```bash
 kubectl get ingress -n ${NAMESPACE}
 NAME                                           CLASS     HOSTS   ADDRESS         PORTS   AGE
 infra-inference-scheduling-inference-gateway   traefik   *       166.19.16.120   80      21m
-infra-sim-inference-gateway                    traefik   *       166.19.16.132   80      7m
-
+infra-sim-inference-gateway                    traefik   *       166.19.16.132   80      7
 INGRESS_NAME=infra-inference-scheduling-inference-gateway
 export ENDPOINT=$(kubectl get ingress ${GATEWAY_NAME} --no-headers -n ${NAMESPACE} -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
 ```
+
+<!-- TABS:END -->
+
+**_NOTE:_** You can also use other platform specific networking options such as Openshift Routes. When benchmarking the `pd-disaggregation` example with OCP routes we noticed that Openshift Networking was enforcing timeouts on gateway requests, which, under heavy load affected our results. If you wish to use a platform dependent option with a benchmarking setup ensure to check your platform docs.
+
+Each of these paths should export the `${ENDPOINT}` environment variable which we can send requests to.
 
 ## Sending the Requests
 
@@ -214,7 +196,7 @@ For more information options to set for the `/v1/completions` endpoint, see the 
 
 While `/v1/completions` is a legacy API, it is still supported for now. We are in the process of converting over to `/v1/chat/completions`, and this work is being tracked in a few places.
 
-The [initial implementation for the kv-cache-manager package](https://github.com/llm-d/llm-d-kv-cache-manager/issues/10) landed as part of the v0.2 sprint.
+The [initial implementation for the kv-cache-manager package](https://github.com/llm-d/llm-d-kv-cache/issues/10) landed as part of the v0.2 sprint.
 
 [Support within the `llm-d-inference-scheduler` image](https://github.com/llm-d/llm-d-inference-scheduler/issues/83) is in progress and part of the v0.3 roadmap, and further support to the upstream `epp` image is in progress and being [tracked here](https://github.com/kubernetes-sigs/gateway-api-inference-extension/issues/827).
 

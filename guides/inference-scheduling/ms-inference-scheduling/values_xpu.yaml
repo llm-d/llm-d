@@ -8,30 +8,14 @@ modelArtifacts:
   authSecretName: "llm-d-hf-token"
 
 accelerator:
-  type: "intel"
+  type: "intel-i915"
 
-# Routing configuration - required for inference-scheduling
 routing:
   servicePort: 8000
   proxy:
-    image: ghcr.io/llm-d/llm-d-routing-sidecar:v0.3.0
+    image: ghcr.io/llm-d/llm-d-routing-sidecar:v0.4.0-rc.1
     connector: nixlv2
     secure: false
-
-  parentRefs:
-    - group: gateway.networking.k8s.io
-      kind: Gateway
-      name: infra-r1-inference-gateway
-
-  inferencePool:
-    create: false
-
-  # create httpRoute via MS for using release name r1 override
-  httpRoute:
-    create: true
-
-  epp:
-    create: false
 
 decode:
   create: true

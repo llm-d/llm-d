@@ -104,6 +104,9 @@ CMD ["/bin/bash"]
 # ============================================================
 FROM vllm-build
 
+
+ENV LD_LIBRARY_PATH="/usr/local/lib:/usr/lib:${LD_LIBRARY_PATH}"
+
 RUN --mount=type=bind,from=vllm-build,src=/workspace/vllm/dist,target=dist \
     pip install dist/*.whl
 

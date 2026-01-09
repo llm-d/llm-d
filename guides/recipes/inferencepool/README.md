@@ -6,47 +6,54 @@ This directory contains a standard `values.yaml` for deploying an `InferencePool
 
 To deploy the `InferencePool`, select your provider below.
 
-=== "GKE"
+<!-- TABS:START -->
 
-    This command deploys the `InferencePool` on GKE with GKE-specific monitoring enabled.
+<!-- TAB:GKE:default -->
+### GKE
 
-    ```bash
-    helm install llm-d-infpool \
-      -n ${NAMESPACE} \
-      -f ./values.yaml \
-      --set "provider.name=gke" \
-      --set "inferencePool.apiVersion=inference.networking.k8s.io/v1" \
-      --set "inferenceExtension.monitoring.gke.enable=true" \
-      oci://us-central1-docker.pkg.dev/k8s-staging-images/gateway-api-inference-extension/charts/inferencepool \
-      --version v1.0.1
-    ```
+This command deploys the `InferencePool` on GKE with GKE-specific monitoring enabled.
 
-=== "Istio"
+```bash
+helm install llm-d-infpool \
+  -n ${NAMESPACE} \
+  -f ./values.yaml \
+  --set "provider.name=gke" \
+  --set "inferencePool.apiVersion=inference.networking.k8s.io/v1" \
+  --set "inferenceExtension.monitoring.gke.enable=true" \
+  oci://us-central1-docker.pkg.dev/k8s-staging-images/gateway-api-inference-extension/charts/inferencepool \
+  --version v1.2.0-rc.1
+```
 
-    This command deploys the `InferencePool` with Istio, enabling Prometheus monitoring.
+<!-- TAB:Istio -->
+### Istio
 
-    ```bash
-    helm install llm-d-infpool \
-      -n ${NAMESPACE} \
-      -f ./values.yaml \
-      --set "provider.name=istio" \
-      --set "inferenceExtension.monitoring.prometheus.enable=true" \
-      oci://us-central1-docker.pkg.dev/k8s-staging-images/gateway-api-inference-extension/charts/inferencepool \
-      --version v1.0.1
-    ```
+This command deploys the `InferencePool` with Istio, enabling Prometheus monitoring.
 
-=== "Kgateway"
+```bash
+helm install llm-d-infpool \
+  -n ${NAMESPACE} \
+  -f ./values.yaml \
+  --set "provider.name=istio" \
+  --set "inferenceExtension.monitoring.prometheus.enable=true" \
+  oci://us-central1-docker.pkg.dev/k8s-staging-images/gateway-api-inference-extension/charts/inferencepool \
+  --version v1.2.0-rc.1
+```
 
-    This command deploys the `InferencePool` with Kgateway.
+<!-- TAB:KGateway -->
+### KGateway
 
-    ```bash
-    helm install llm-d-infpool \
-      -n ${NAMESPACE} \
-      -f ./values.yaml \
-      --set "provider.name=kgateway" \
-      oci://us-central1-docker.pkg.dev/k8s-staging-images/gateway-api-inference-extension/charts/inferencepool \
-      --version v1.0.1
-    ```
+This command deploys the `InferencePool` with Kgateway.
+
+```bash
+helm install llm-d-infpool \
+  -n ${NAMESPACE} \
+  -f ./values.yaml \
+  --set "provider.name=kgateway" \
+  oci://us-central1-docker.pkg.dev/k8s-staging-images/gateway-api-inference-extension/charts/inferencepool \
+  --version v1.2.0-rc.1
+```
+
+<!-- TABS:END -->
 
 ## Verification
 
@@ -58,7 +65,7 @@ You can verify the installation by checking the status of the created resources.
 kubectl get inferencepool -n ${NAMESPACE}
 ```
 
-```
+```text
 NAME            AGE
 llm-d-infpool   1m
 ```
@@ -71,7 +78,7 @@ kubectl get pods -l app.kubernetes.io/instance=llm-d-infpool -n ${NAMESPACE}
 
 You should see the InferencePool's endpoint pod in a `Running` state.
 
-```
+```text
 NAME                                  READY   STATUS    RESTARTS   AGE
 llm-d-infpool-epp-xxxxxxxx-xxxxx     1/1     Running   0          1m
 ```

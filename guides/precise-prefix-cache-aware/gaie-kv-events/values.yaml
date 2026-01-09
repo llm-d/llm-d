@@ -1,15 +1,20 @@
 inferenceExtension:
   replicas: 1
+  flags:
+    # in vLLM 10.0+, the metric is renamed while upstream GAIE is still using the old name as default.
+    # See https://github.com/kubernetes-sigs/gateway-api-inference-extension/pull/1905.
+    kv-cache-usage-percentage-metric: "vllm:kv_cache_usage_perc"
+    v: 4 # log verbosity
   image:
     # both downstream infernece-scheduler and upstream epp images can support precise KV Cache awareness based on the configurations here
     ###################
     name: llm-d-inference-scheduler
     hub: ghcr.io/llm-d
-    tag: v0.3.2
+    tag: v0.4.0
     ###################
     # name: epp
     # hub: registry.k8s.io/gateway-api-inference-extension
-    # tag: v1.0.1
+    # tag: v1.2.0
     ###################
     pullPolicy: Always
   extProcPort: 9002
@@ -32,9 +37,8 @@ inferenceExtension:
           key: HF_TOKEN
   flags:
     # Log verbosity
-    - name: v
-      value: 4
-  
+    v: 4
+
   pluginsConfigFile: "precise-prefix-cache-config.yaml"
   pluginsCustomConfig:
     precise-prefix-cache-config.yaml: |
@@ -48,6 +52,9 @@ inferenceExtension:
               tokenProcessorConfig:
                 blockSize: 64   
                 hashSeed: "42"
+              tokenizersPoolConfig:
+                hf:
+                  tokenizersCacheDir: "/tmp/tokenizers"
         - type: kv-cache-utilization-scorer
         - type: queue-scorer
         - type: max-score-picker
@@ -65,16 +72,15 @@ inferenceExtension:
   # Monitoring configuration for EPP
   monitoring:
     interval: "10s"
-    # Service account token secret for authentication
-    secret:
-      name: prefix-routing-gateway-sa-metrics-reader-secret
-
     # Prometheus ServiceMonitor will be created when enabled for EPP metrics collection
     prometheus:
       enabled: true
+      auth:
+        # To allow unauthenticated /metrics access (e.g., for debugging with curl), set to false
+        enabled: true
 inferencePool:
-  apiVersion: inference.networking.x-k8s.io/v1alpha2 # use old API version for inference
-  targetPortNumber: 8000
+  targetPorts:
+    - number: 8000
   modelServerType: vllm
   modelServers:
     matchLabels:

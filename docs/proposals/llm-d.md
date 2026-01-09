@@ -162,7 +162,7 @@ Unlike production-stack, llm-d:
 
 ### Use KServe
 
-KServe offers a comprehensive platform for teams running large numbers of traditional and generative models on Kubernetes. Consider KServe when you have high numbers of model deployments or if you have many teams that need distinct deployments of models. llm-d intends to expose [large model optimizations into KServe](https://docs.google.com/document/d/11ZQJ2VhTc42S9K4yau2dMs3Q3f4jqWJL_7Sq14C3hzY/edit?usp=sharing).
+KServe offers a comprehensive platform for teams running large numbers of traditional and generative models on Kubernetes. Consider KServe when you have high numbers of model deployments or if you have many teams that need distinct deployments of models. llm-d exposes [large model optimizations into KServe's new CRD `LLMInferenceService`](https://kserve.github.io/website/docs/model-serving/generative-inference/llmisvc/llmisvc-overview).
 
 Unlike KServe, llm-d:
 * Is focused on reducing the operational friction for serving single workloads and enabling large-model-as-a-service offerings with core capabilities rather than offering an integrated and broad platform

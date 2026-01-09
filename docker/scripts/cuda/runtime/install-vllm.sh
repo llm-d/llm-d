@@ -10,20 +10,26 @@ set -Eeu
 # - VLLM_USE_PRECOMPILED: whether to use precompiled binaries (1/0)
 # - VLLM_PRECOMPILED_WHEEL_COMMIT: commit SHA for precompiled wheel lookup (defaults to VLLM_COMMIT_SHA)
 # - CUDA_MAJOR: The major CUDA version
+# - BUILD_NIXL_FROM_SOURCE: if nixl should be installed by vLLM or has been built from source in the builder stages
 
-# shellcheck source=/dev/null
-source /opt/vllm/bin/activate
+. /opt/vllm/bin/activate
 
 # default VLLM_PRECOMPILED_WHEEL_COMMIT to VLLM_COMMIT_SHA if not set
 VLLM_PRECOMPILED_WHEEL_COMMIT="${VLLM_PRECOMPILED_WHEEL_COMMIT:-${VLLM_COMMIT_SHA}}"
 
 # build list of packages to install
+# flashinfer-cubin/jit-cache are pre-built wheels (building from source times out)
+FLASHINFER_WHEEL_VERSION="${FLASHINFER_VERSION#v}"
 INSTALL_PACKAGES=(
-  nixl
   cuda-python
   'huggingface_hub[hf_xet]'
+  flashinfer-cubin=="${FLASHINFER_WHEEL_VERSION}"
+  flashinfer-jit-cache=="${FLASHINFER_WHEEL_VERSION}"
   /tmp/wheels/*.whl
 )
+if [ "${BUILD_NIXL_FROM_SOURCE}" = "false" ]; then
+  INSTALL_PACKAGES+=(nixl)
+fi
 
 # clone vllm repository
 git clone "${VLLM_REPO}" /opt/vllm-source
@@ -40,7 +46,9 @@ echo "DEBUG: Architecture: $(uname -m), Python: $(python3 --version)"
 MACHINE=$(uname -m)
 case "${MACHINE}" in
   x86_64) PLATFORM_TAG="manylinux1_x86_64" ;;
+  amd64) PLATFORM_TAG="manylinux1_x86_64" ;;
   aarch64) PLATFORM_TAG="manylinux2014_aarch64" ;;
+  arm64) PLATFORM_TAG="manylinux2014_aarch64" ;;
   *) echo "unsupported architecture: ${MACHINE}"; exit 1 ;;
 esac
 
@@ -55,9 +63,9 @@ fi
 
 if [ -n "${WHEEL_FILENAME}" ]; then
   # construct full URL (wheels are in parent directory)
-  # note: actual files don't have +cuXXX suffix despite HTML index showing it
+  # URL-encode the + sign in the wheel filename
   WHEEL_URL="https://wheels.vllm.ai/${VLLM_PRECOMPILED_WHEEL_COMMIT}/${WHEEL_FILENAME}"
-  WHEEL_URL=$(echo "${WHEEL_URL}" | sed -E 's/%2Bcu[0-9]+//g; s/\+cu[0-9]+//g')
+  WHEEL_URL=$(echo "${WHEEL_URL}" | sed -E 's/\+/%2B/g')
   echo "DEBUG: Found wheel: ${WHEEL_FILENAME}"
   echo "DEBUG: Wheel URL: ${WHEEL_URL}"
 else
@@ -92,7 +100,10 @@ fi
 echo "DEBUG: Installing packages: ${INSTALL_PACKAGES[*]}"
 
 # install all packages in one command with verbose output to prevent GHA timeouts
-uv pip install -v "${INSTALL_PACKAGES[@]}"
+# use flashinfer wheel index for jit-cache pre-built binaries
+CUDA_SHORT_VERSION="cu${CUDA_MAJOR}${CUDA_MINOR}"
+uv pip install -v "${INSTALL_PACKAGES[@]}" \
+  --extra-index-url "https://flashinfer.ai/whl/${CUDA_SHORT_VERSION}"
 
 # uninstall the NVSHMEM dependency brought in by vllm if using a compiled NVSHMEM
 if [[ "${NVSHMEM_DIR-}" != "" ]]; then

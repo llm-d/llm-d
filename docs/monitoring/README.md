@@ -4,6 +4,35 @@ Please join [SIG-Observability](https://github.com/llm-d/llm-d/blob/main/SIGS.md
 
 ## Enable Metrics Collection in llm-d Deployments
 
+### Prometheus HTTPS/TLS Support
+
+By default, Prometheus is installed with HTTP-only access. For production environments or when integrating with autoscalers that require HTTPS, you can enable TLS:
+
+```bash
+# Install Prometheus with HTTPS/TLS enabled
+./scripts/install-prometheus-grafana.sh --enable-tls
+```
+
+This will:
+1. Generate self-signed TLS certificates valid for 10 years
+2. Create Kubernetes secrets with the certificates
+3. Configure Prometheus to serve its API over HTTPS
+4. Update Grafana datasource to use HTTPS
+
+**Accessing Prometheus with TLS:**
+- Internal cluster access: `https://llmd-kube-prometheus-stack-prometheus.llm-d-monitoring.svc.cluster.local:9090`
+- Port-forward access: `kubectl port-forward -n llm-d-monitoring svc/llmd-kube-prometheus-stack-prometheus 9090:9090` then access via `https://localhost:9090`
+
+**For clients that need the CA certificate:**
+```bash
+kubectl get configmap prometheus-web-tls-ca -n llm-d-monitoring -o jsonpath='{.data.ca\.crt}' > prometheus-ca.crt
+```
+
+**Certificate Management:**
+- Certificates are stored in the `prometheus-web-tls` secret
+- CA certificate is also available in the `prometheus-web-tls-ca` ConfigMap for client use
+- To regenerate certificates: delete the secret and run the installation script again with `--enable-tls`
+
 ### Platform-Specific
 
 - If running on Google Kubernetes Engine (GKE), 
@@ -101,4 +130,40 @@ For specific PromQL queries to monitor LLM-D deployments, see:
 To populate metrics (especially error metrics) for testing and monitoring validation:
 
 - [Load Generation Script](./scripts/generate-load-llmd.sh) - Sends both valid and malformed requests to generate metrics
+
+## Troubleshooting
+
+### Autoscaler "http: server gave HTTP response to HTTPS client" Error
+
+If your autoscaler is configured to connect to Prometheus via HTTPS but Prometheus is serving HTTP, you'll see this error:
+
+```
+Post "https://llmd-kube-prometheus-stack-prometheus.llm-d-monitoring.svc.cluster.local:9090/api/v1/query":
+http: server gave HTTP response to HTTPS client
+```
+
+**Solution:** Enable TLS on your Prometheus installation:
+
+```bash
+# Reinstall with TLS enabled
+./scripts/install-prometheus-grafana.sh --uninstall
+./scripts/install-prometheus-grafana.sh --enable-tls
+```
+
+Or manually generate certificates and upgrade:
+
+```bash
+# Generate certificates
+./scripts/generate-prometheus-tls-certs.sh
+
+# Upgrade existing installation
+helm upgrade llmd prometheus-community/kube-prometheus-stack \
+  -n llm-d-monitoring \
+  -f /tmp/prometheus-values-with-tls.yaml
+```
+
+After enabling TLS, ensure your autoscaler:
+1. Uses `https://` instead of `http://` in the Prometheus URL
+2. Has access to the CA certificate (available in the `prometheus-web-tls-ca` ConfigMap)
+3. Is configured to either verify or skip TLS verification appropriately
 

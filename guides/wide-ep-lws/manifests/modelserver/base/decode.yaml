@@ -24,9 +24,10 @@ spec:
               - --port=8000
               - --vllm-port=8200
               - --connector=nixlv2
-              - -v=1
+              - --zap-log-level=1
               - --secure-proxy=false
-            image: ghcr.io/llm-d/llm-d-routing-sidecar:v0.3.0
+              - --enable-prefiller-sampling
+            image: ghcr.io/llm-d/llm-d-routing-sidecar:v0.4.0-rc.1
             imagePullPolicy: Always
             ports:
               - containerPort: 8000
@@ -42,9 +43,13 @@ spec:
             emptyDir:
               medium: Memory
               sizeLimit: 2Gi # roughly 32MB per local DP plus scratch space
+          - name: hf-cache
+            emptyDir: {}
+          - name: jit-cache
+            emptyDir: {}
         containers:
         - name: vllm
-          image: ghcr.io/llm-d/llm-d-cuda:v0.3.1
+          image: ghcr.io/llm-d/llm-d-cuda:v0.4.0
           securityContext:
             capabilities:
               add:
@@ -87,7 +92,8 @@ spec:
                 --data-parallel-rpc-port 5555 \
                 --data-parallel-start-rank $START_RANK \
                 --kv_transfer_config '{"kv_connector":"NixlConnector",
-                                        "kv_role":"kv_both"}' \
+                                        "kv_role":"kv_both",
+                                        "kv_load_failure_policy":"fail"}' \
                 --async-scheduling \
                 --enable-dbo \
                 --dbo-decode-token-threshold 32 \
@@ -142,6 +148,21 @@ spec:
             valueFrom:
               fieldRef:
                 fieldPath: status.podIP
+
+          # Use cache directories from the mounted volume under one easy to mount
+          # root directory.
+          - name: CUDA_CACHE_PATH
+            value: /var/cache/vllm/cuda
+          - name: CCACHE_DIR
+            value: /var/cache/vllm/ccache
+          - name: VLLM_CACHE_ROOT
+            value: /var/cache/vllm/vllm
+          - name: FLASHINFER_WORKSPACE_BASE
+            value: /var/cache/vllm/flashinfer
+          # HuggingFace is likely to be quite a bit larger, give it its own cache
+          - name: HF_HUB_CACHE
+            value: /var/cache/huggingface
+
           ports:
           - containerPort: 8200
             name: metrics
@@ -153,7 +174,7 @@ spec:
             initialDelaySeconds: 0
             periodSeconds: 1
             timeoutSeconds: 5
-            failureThreshold: 1800
+            failureThreshold: 2700
           livenessProbe:
             httpGet:
               path: /health
@@ -181,3 +202,7 @@ spec:
           volumeMounts:
             - name: dshm
               mountPath: /dev/shm
+            - name: hf-cache
+              mountPath: /var/cache/huggingface
+            - name: jit-cache
+              mountPath: /var/cache/vllm

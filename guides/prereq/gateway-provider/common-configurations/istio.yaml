@@ -7,15 +7,14 @@ inferenceExtension:
   flags: # empty flag overrides, so key always exists to pull values from, its just empty
 provider:
   name: istio
-istio:
-  destinationRule:
-    trafficPolicy:
-      tls:
-        mode: SIMPLE
-        insecureSkipVerify: true
+  istio:
+    destinationRule:
+      trafficPolicy:
+        tls:
+          mode: SIMPLE
+          insecureSkipVerify: true
 
-routing:  # empty debugLevel overrides, so keys always exist to pull values from, its just empty
+# MS values
+routing:
   proxy:
-    debugLevel:
-  epp:
-    debugLevel:
+    zapLogLevel: debug

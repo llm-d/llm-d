@@ -1,0 +1,71 @@
+# Intel Gaudi configuration using imageDefault mode.
+# This configuration is for single-node Gaudi setup without prefill.
+# Models are used from prepopulated model-pvc PVC using Hugging Face Hub.
+# Gaudi warmup is skipped for startup speed.
+# Custom vLLM image for Gaudi is used for now.
+# Use DRA instead of device plugins.
+
+modelArtifacts:
+  name: meta-llama/Llama-3.1-8B-Instruct
+  uri: "pvc+hf://model-pvc/meta-llama/Llama-3.1-8B-Instruct"
+  size: 50Gi
+  authSecretName: "llm-d-hf-token"
+
+dra:
+  enabled: true
+  type: "intel-gaudi"
+  claimTemplates:
+  - name: intel-gaudi
+    class: gaudi.intel.com
+    match: "exactly"
+    count: 1
+
+routing:
+  servicePort: 8000
+  proxy:
+    image: ghcr.io/llm-d/llm-d-routing-sidecar:v0.4.0-rc.1
+    connector: nixlv2
+    secure: false
+
+# Decode pod configuration for Intel Gaudi - simplified with imageDefault
+decode:
+  create: true
+  replicas: 1
+  containers:
+  - name: "vllm"
+    # Use custom vLLM image for Gaudi for now
+    image: "opea/vllm-gaudi:1.22.0"
+
+    # Use imageDefault mode - chart will generate basic vLLM command automatically
+    modelCommand: "imageDefault"
+
+    # Only specify Gaudi specific arguments that differ from defaults
+    args:
+    - --block-size=128
+    - --max-num-seqs=256
+    - --max-seq-len-to-capture=2048
+    - --max-model-len=2048
+    - --max-num-batched-token=16000
+    env:
+    - name: OMPI_MCA_btl_vader_single_copy_mechanism
+      value: "none"
+    - name: HABANA_LOGS # For OpenShift compatibility, set log path to writable location
+      value: "/tmp/habana_logs"
+    - name: VLLM_SKIP_WARMUP
+      value: "true"
+    - name: DO_NOT_TRACK
+      value: "1"
+    - name: VLLM_USE_V1
+      value: "1"
+    ports:
+      - containerPort: 8200
+        protocol: TCP
+
+    mountModelVolume: true
+
+# Disable prefill for simple Intel Gaudi example
+prefill:
+  create: false
+
+# When true, use LeaderWorkerSet for multi-node Intel Gaudi setups
+multinode: false

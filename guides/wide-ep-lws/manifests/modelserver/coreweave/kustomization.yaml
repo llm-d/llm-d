@@ -8,25 +8,20 @@ patches:
       kind: LeaderWorkerSet
     patch: |-
       # We add the volume for different providers since the hostPath can be different.
-      - op: add
-        path: /spec/leaderWorkerTemplate/workerTemplate/spec/volumes/-
-        value: 
+      - op: replace
+        path: /spec/leaderWorkerTemplate/workerTemplate/spec/volumes/1
+        value:
           name: hf-cache
           hostPath:
             path: /mnt/local/hf-cache
             type: DirectoryOrCreate
-      # Since we are loading model in from a host storage, lets patch in the volumeMount
-      - op: add
-        path: /spec/leaderWorkerTemplate/workerTemplate/spec/containers/0/volumeMounts/-
+      - op: replace
+        path: /spec/leaderWorkerTemplate/workerTemplate/spec/volumes/2
         value:
-          name: hf-cache
-          mountPath: /huggingface-cache
-      # Since we are loading model in from a host storage, specify HF_HUB_CACHE
-      - op: add
-        path: /spec/leaderWorkerTemplate/workerTemplate/spec/containers/0/env/-
-        value:
-          name: HF_HUB_CACHE
-          value: /huggingface-cache
+          name: jit-cache
+          hostPath:
+            path: /mnt/local/jit-cache
+            type: DirectoryOrCreate
       # Since we are loading model in from a host storage, disable HF_XET
       - op: add
         path: /spec/leaderWorkerTemplate/workerTemplate/spec/containers/0/env/-

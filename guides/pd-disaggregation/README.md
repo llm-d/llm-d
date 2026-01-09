@@ -16,7 +16,9 @@ In this example, we will demonstrate a deployment of `Llama-3.3-70B-Instruct-FP8
 
 ## P/D Best Practices
 
-P/D disaggregation can benefit overall throughput by:
+P/D disaggregation provides more flexibility in navigating the trade-off between throughput and interactivity([ref](https://arxiv.org/html/2506.05508v1)).
+In particular, due to the elimination of prefill interference to the decode phase, P/D disaggregation can achieve lower inter token latency (ITL), thus
+improving interactivity. For a given ITL goal, P/D disaggregation can benefit overall throughput by:
 
 - Specializing P and D workers for compute-bound vs latency-bound workloads
 - Reducing the number of copies of the model (increasing KV cache RAM) with wide parallelism
@@ -43,15 +45,24 @@ This guide expects 8 Nvidia GPUs of any kind, and RDMA via InfiniBand or RoCE be
 - Have the [proper client tools installed on your local system](../prereq/client-setup/README.md) to use this guide.
 - Ensure your cluster infrastructure is sufficient to [deploy high scale inference](../prereq/infrastructure)
 - Configure and deploy your [Gateway control plane](../prereq/gateway-provider/README.md).
-- [Create the `llm-d-hf-token` secret in your target namespace with the key `HF_TOKEN` matching a valid HuggingFace token](../prereq/client-setup/README.md#huggingface-token) to pull models.
 - Have the [Monitoring stack](../../docs/monitoring/README.md) installed on your system.
+- Create a namespace for installation. 
+  
+  ```
+  export NAMESPACE=llm-d-pd # or any other namespace (shorter names recommended)
+  kubectl create namespace ${NAMESPACE}
+  ```
+
+- [Create the `llm-d-hf-token` secret in your target namespace with the key `HF_TOKEN` matching a valid HuggingFace token](../prereq/client-setup/README.md#huggingface-token) to pull models.
+- [Choose an llm-d version](../prereq/client-setup/README.md#llm-d-version)
 
 ## Installation
 
 Use the helmfile to compose and install the stack. The Namespace in which the stack will be deployed will be derived from the `${NAMESPACE}` environment variable. If you have not set this, it will default to `llm-d-pd` in this example.
 
+### Deploy
+
 ```bash
-export NAMESPACE=llm-d-pd # Or any namespace your heart desires
 cd guides/pd-disaggregation
 helmfile apply -n ${NAMESPACE}
 ```
@@ -99,9 +110,9 @@ kubectl apply -f httproute.gke.yaml -n ${NAMESPACE}
 ```bash
 helm list -n ${NAMESPACE}
 NAME        NAMESPACE   REVISION    UPDATED                                 STATUS      CHART                       APP VERSION
-gaie-pd     llm-d-pd    1           2025-08-24 12:54:51.231537 -0700 PDT    deployed    inferencepool-v1.0.1        v1.0.1
-infra-pd    llm-d-pd    1           2025-08-24 12:54:46.983361 -0700 PDT    deployed    llm-d-infra-v1.2.4          v0.2.0
-ms-pd       llm-d-pd    1           2025-08-24 12:54:56.736873 -0700 PDT    deployed    llm-d-modelservice-v0.2.9   v0.2.0
+gaie-pd     llm-d-pd    1           2025-08-24 12:54:51.231537 -0700 PDT    deployed    inferencepool-v1.2.0-rc.1   v1.2.0-rc.1
+infra-pd    llm-d-pd    1           2025-08-24 12:54:46.983361 -0700 PDT    deployed    llm-d-infra-v1.3.4          v0.3.0
+ms-pd       llm-d-pd    1           2025-08-24 12:54:56.736873 -0700 PDT    deployed    llm-d-modelservice-v0.3.8   v0.3.0
 ```
 
 - Out of the box with this example you should have the following resources:

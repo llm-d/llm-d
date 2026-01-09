@@ -1,0 +1,23 @@
+releases:
+  - name: agentgateway-crds
+    chart: oci://ghcr.io/kgateway-dev/charts/agentgateway-crds
+    namespace: agentgateway-system
+    version: v2.2.0-beta.3
+    installed: true
+    labels:
+      type: gateway-provider
+      kind: gateway-crds
+
+  - name: agentgateway
+    chart: oci://ghcr.io/kgateway-dev/charts/agentgateway
+    version: v2.2.0-beta.3
+    namespace: agentgateway-system
+    installed: true
+    values:
+      - inferenceExtension:
+          enabled: true
+    needs:
+      - agentgateway-system/agentgateway-crds
+    labels:
+      type: gateway-provider
+      kind: gateway-control-plane
