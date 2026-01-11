@@ -25,14 +25,6 @@ inferenceExtension:
       - type: decode-filter
         name: decode-filter
 
-      # Scorers
-      - type: prefix-cache-scorer
-        name: prefix-cache-scorer
-        parameters:
-          hashBlockSize: 5
-          maxPrefixBlocksToMatch: 256
-          lruCapacityPerServer: 31250
-
       # NEW: PD-SLO Optimizer
       - type: pd-slo-optimizer
         name: pd-slo-optimizer
@@ -49,7 +41,6 @@ inferenceExtension:
         parameters:
           decodeProfile: "decode"
           prefillProfile: "prefill"
-          prefixPluginName: "prefix-cache-scorer"
           hashBlockSize: 5
           pdThreshold: 0  # Increased from 5 to reduce unnecessary PD overhead for small requests
 
@@ -57,19 +48,15 @@ inferenceExtension:
       - name: prefill
         plugins:
         - pluginRef: prefill-filter
-        - pluginRef: prefix-cache-scorer
-          weight: 3  # Increased from 2 to prioritize prefix cache hits
         - pluginRef: pd-slo-optimizer  # Independent prefill optimization
-          weight: 3
+          weight: 1
         - pluginRef: max-score-picker
 
       - name: decode
         plugins:
         - pluginRef: decode-filter
-        - pluginRef: prefix-cache-scorer
-          weight: 3  # Increased from 2 to prioritize prefix cache hits
         - pluginRef: pd-slo-optimizer  # Independent decode optimization
-          weight: 3
+          weight: 1
         - pluginRef: max-score-picker
 
   # Monitoring configuration for EPP
