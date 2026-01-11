@@ -122,7 +122,7 @@ inferenceExtension:
         LATENCY_MAX_TRAINING_DATA_SIZE_PER_BUCKET: "5000"
         LATENCY_QUANTILE_ALPHA: "0.9"
     predictionServers:
-      count: 5
+      count: 1
       startPort: 8001
       image:
         hub: quay.io/rh_ee_rsaini

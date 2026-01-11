@@ -18,7 +18,7 @@ decode:
     tensor: 4
     data: 1
   create: true
-  replicas: 6
+  replicas: 1
   monitoring:
     podmonitor:
       enabled: true
@@ -36,7 +36,7 @@ decode:
       - "--block-size"
       - "128"
       - "--kv-transfer-config"
-      - '{"kv_connector":"NixlConnector", "kv_role":"kv_both"}'
+      - '{"kv_connector":"NixlConnector", "kv_role":"kv_both", "kv_load_failure_policy":"fail"}'
       - "--disable-uvicorn-access-log"
       - "--max-model-len"
       - "4096"
@@ -46,6 +46,8 @@ decode:
           fieldRef:
             fieldPath: status.podIP
       - name: VLLM_LOGGING_LEVEL
+        value: DEBUG
+      - name: UCX_LOG_LEVEL
         value: DEBUG
     ports:
       - containerPort: 8200
@@ -104,7 +106,7 @@ decode:
 
 prefill:
   create: true
-  replicas: 8
+  replicas: 2
   monitoring:
     podmonitor:
       enabled: true
@@ -119,7 +121,7 @@ prefill:
       - "--block-size"
       - "128"
       - "--kv-transfer-config"
-      - '{"kv_connector":"NixlConnector", "kv_role":"kv_both"}'
+      - '{"kv_connector":"NixlConnector", "kv_role":"kv_both", "kv_load_failure_policy":"fail"}'
       - "--disable-uvicorn-access-log"
       - "--max-model-len"
       - "4096"
@@ -129,6 +131,8 @@ prefill:
           fieldRef:
             fieldPath: status.podIP
       - name: VLLM_LOGGING_LEVEL
+        value: DEBUG
+      - name: UCX_LOG_LEVEL
         value: DEBUG
     ports:
       - containerPort: 8000
