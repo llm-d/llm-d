@@ -33,7 +33,7 @@ decode:
       interval: "30s"
   containers:
   - name: vllm
-    image: docker.io/library/vllm-cpu-env:latest
+    image: ghcr.io/llm-d/llm-d-cpu-dev:pr-434
     imagePullPolicy: IfNotPresent
     modelCommand: vllmServe
     args:
@@ -103,7 +103,7 @@ prefill:
       interval: "30s"
   containers:
   - name: vllm
-    image: docker.io/library/vllm-cpu-env:latest
+    image: ghcr.io/llm-d/llm-d-cpu-dev:pr-434
     imagePullPolicy: IfNotPresent
     modelCommand: vllmServe
     args:
