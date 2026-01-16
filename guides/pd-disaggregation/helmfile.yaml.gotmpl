@@ -20,6 +20,9 @@ environments:
   xpu: &XPU
     values:
       - ../prereq/gateway-provider/common-configurations/istio.yaml
+  xpu_gdr: &XPUGDR
+    values:
+      - ../prereq/gateway-provider/common-configurations/istio.yaml
   aks: &AKS
     <<: *IB
   default:
@@ -102,6 +105,8 @@ releases:
     values:
     {{- if eq .Environment.Name "xpu" }}
       - ms-pd/values_xpu.yaml
+    {{- if eq .Environment.Name "xpu_gdr" }}
+      - ms-pd/values_xpu_gdr.yaml
     {{- else if eq .Environment.Name "gke_tpu" }}
       - ms-pd/values_tpu.yaml
     {{- else }}

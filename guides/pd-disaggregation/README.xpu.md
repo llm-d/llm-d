@@ -180,6 +180,8 @@ cd guides/pd-disaggregation
 
 # Deploy Intel XPU PD disaggregation configuration
 helmfile apply -e xpu -n ${NAMESPACE}
+# Deploy Intel XPU PD disaggregation configuration with GPUDirect
+helmfile apply -e xpu_gdr -n ${NAMESPACE}
 ```
 
 This will deploy three main components in the `llm-d-pd` namespace:
