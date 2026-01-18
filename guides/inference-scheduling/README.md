@@ -154,10 +154,10 @@ kubectl apply -f httproute.yaml -n ${NAMESPACE}
 
 ```bash
 helm list -n ${NAMESPACE}
-NAME                        NAMESPACE                 REVISION  UPDATED                               STATUS    CHART                     APP VERSION
-gaie-inference-scheduling   llm-d-inference-scheduler 1         2025-08-24 11:24:53.231918 -0700 PDT  deployed  inferencepool-v1.2.0-rc.1 v1.2.0-rc.1
-infra-inference-scheduling  llm-d-inference-scheduler 1         2025-08-24 11:24:49.551591 -0700 PDT  deployed  llm-d-infra-v1.3.4        v0.3.0
-ms-inference-scheduling     llm-d-inference-scheduler 1         2025-08-24 11:24:58.360173 -0700 PDT  deployed  llm-d-modelservice-v0.3.8 v0.3.0
+NAME                        NAMESPACE                 REVISION  UPDATED                               STATUS    CHART                       APP VERSION
+gaie-inference-scheduling   llm-d-inference-scheduler 1         2025-08-24 11:24:53.231918 -0700 PDT  deployed  inferencepool-v1.2.0        v1.2.0
+infra-inference-scheduling  llm-d-inference-scheduler 1         2025-08-24 11:24:49.551591 -0700 PDT  deployed  llm-d-infra-v1.3.6          v0.3.0
+ms-inference-scheduling     llm-d-inference-scheduler 1         2025-08-24 11:24:58.360173 -0700 PDT  deployed  llm-d-modelservice-v0.3.17  v0.3.0
 ```
 
 - Out of the box with this example you should have the following resources:
@@ -167,8 +167,8 @@ kubectl get all -n ${NAMESPACE}
 NAME                                                                  READY   STATUS    RESTARTS   AGE
 pod/gaie-inference-scheduling-epp-f8fbd9897-cxfvn                     1/1     Running   0          3m59s
 pod/infra-inference-scheduling-inference-gateway-istio-6787675b9swc   1/1     Running   0          4m3s
-pod/ms-inference-scheduling-llm-d-modelservice-decode-8ff7fd5b58lw9   2/2     Running   0          3m55s
-pod/ms-inference-scheduling-llm-d-modelservice-decode-8ff7fd5bt5f9s   2/2     Running   0          3m55s
+pod/ms-inference-scheduling-llm-d-modelservice-decode-8ff7fd5b58lw9   1/1     Running   0          3m55s
+pod/ms-inference-scheduling-llm-d-modelservice-decode-8ff7fd5bt5f9s   1/1     Running   0          3m55s
 
 NAME                                                         TYPE           CLUSTER-IP    EXTERNAL-IP   PORT(S)                        AGE
 service/gaie-inference-scheduling-epp                        ClusterIP      10.16.3.151   <none>        9002/TCP,9090/TCP              3m59s
@@ -193,9 +193,9 @@ replicaset.apps/ms-inference-scheduling-llm-d-modelservice-decode-8ff7fd5b8    2
 
 ```bash
 helm list -n ${NAMESPACE}
-NAME                        NAMESPACE                 REVISION  UPDATED                               STATUS    CHART                     APP VERSION
-gaie-inference-scheduling   llm-d-inference-scheduler 1         2025-08-24 11:24:53.231918 -0700 PDT  deployed  inferencepool-v1.2.0-rc.1 v1.2.0-rc.1
-ms-inference-scheduling     llm-d-inference-scheduler 1         2025-08-24 11:24:58.360173 -0700 PDT  deployed  llm-d-modelservice-v0.3.8 v0.3.0
+NAME                        NAMESPACE                 REVISION  UPDATED                               STATUS    CHART                       APP VERSION
+gaie-inference-scheduling   llm-d-inference-scheduler 1         2025-08-24 11:24:53.231918 -0700 PDT  deployed  inferencepool-v1.2.0        v1.2.0
+ms-inference-scheduling     llm-d-inference-scheduler 1         2025-08-24 11:24:58.360173 -0700 PDT  deployed  llm-d-modelservice-v0.3.17  v0.3.0
 ```
 
 - Out of the box with this example you should have the following resources:
@@ -204,8 +204,8 @@ ms-inference-scheduling     llm-d-inference-scheduler 1         2025-08-24 11:24
 kubectl get all -n ${NAMESPACE}
 NAME                                                                  READY   STATUS    RESTARTS   AGE
 pod/gaie-inference-scheduling-epp-f8fbd9897-cxfvn                     1/1     Running   0          3m59s
-pod/ms-inference-scheduling-llm-d-modelservice-decode-8ff7fd5b58lw9   2/2     Running   0          3m55s
-pod/ms-inference-scheduling-llm-d-modelservice-decode-8ff7fd5bt5f9s   2/2     Running   0          3m55s
+pod/ms-inference-scheduling-llm-d-modelservice-decode-8ff7fd5b58lw9   1/1     Running   0          3m55s
+pod/ms-inference-scheduling-llm-d-modelservice-decode-8ff7fd5bt5f9s   1/1     Running   0          3m55s
 
 NAME                                                         TYPE           CLUSTER-IP    EXTERNAL-IP   PORT(S)                        AGE
 service/gaie-inference-scheduling-epp                        ClusterIP      10.16.3.151   <none>        9002/TCP,9090/TCP              3m59s

@@ -69,9 +69,9 @@ kubectl apply -f httproute.gke.yaml -n ${NAMESPACE}
 ```bash
 helm list -n ${NAMESPACE}
 NAME            NAMESPACE       REVISION        UPDATED                                 STATUS          CHART                           APP VERSION
-gaie-kv-events  llm-d-precise   1               2025-09-25 21:36:52.452999581 +0000 UTC deployed        inferencepool-v1.2.0-rc.1       v1.2.0-rc.1
-infra-kv-events llm-d-precise   1               2025-09-25 21:36:50.848300265 +0000 UTC deployed        llm-d-infra-v1.3.4              v0.3.0     
-ms-kv-events    llm-d-precise   1               2025-09-25 21:36:55.955958022 +0000 UTC deployed        llm-d-modelservice-v0.3.8       v0.3.0 
+gaie-kv-events  llm-d-precise   1               2025-09-25 21:36:52.452999581 +0000 UTC deployed        inferencepool-v1.2.0            v1.2.0
+infra-kv-events llm-d-precise   1               2025-09-25 21:36:50.848300265 +0000 UTC deployed        llm-d-infra-v1.3.6              v0.3.0     
+ms-kv-events    llm-d-precise   1               2025-09-25 21:36:55.955958022 +0000 UTC deployed        llm-d-modelservice-v0.3.17      v0.3.0 
 ```
 
 - Out of the box with this example you should have the following resources:
@@ -81,8 +81,8 @@ kubectl get all -n ${NAMESPACE}
 NAME                                                          READY   STATUS    RESTARTS   AGE
 pod/gaie-kv-events-epp-687b78968b-wvswh                       1/1     Running   0          80s
 pod/infra-kv-events-inference-gateway-istio-949d87f84-zvsp2   1/1     Running   0          85s
-pod/ms-kv-events-llm-d-modelservice-decode-b874d48d9-bgm5r    2/2     Running   0          75s
-pod/ms-kv-events-llm-d-modelservice-decode-b874d48d9-ph64c    2/2     Running   0          75s
+pod/ms-kv-events-llm-d-modelservice-decode-b874d48d9-bgm5r    1/1     Running   0          75s
+pod/ms-kv-events-llm-d-modelservice-decode-b874d48d9-ph64c    1/1     Running   0          75s
 
 NAME                                              TYPE           CLUSTER-IP   EXTERNAL-IP   PORT(S)                        AGE
 service/gaie-kv-events-epp                        ClusterIP      10.16.2.44   <none>        9002/TCP,9090/TCP,5557/TCP     81s

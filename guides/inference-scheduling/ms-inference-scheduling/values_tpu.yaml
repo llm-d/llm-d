@@ -16,7 +16,7 @@ routing:
     targetPort: 8000 # controlls vLLM port to matchup with sidecar if deployed
 
 decode:
-  parallelism: # controlls count of specialized hardware devices allocated
+  parallelism:
     tensor: 8
   create: true
   replicas: 2
