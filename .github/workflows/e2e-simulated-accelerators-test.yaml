@@ -130,13 +130,30 @@ jobs:
           GATEWAY_TYPE: ${{ env.GATEWAY_TYPE }}
         run: |
           cd guides/simulated-accelerators
-          helmfile apply -e ${GATEWAY_TYPE}
+          helmfile apply -e ${GATEWAY_TYPE} \
+            --set "gateway.gatewayParameters.resources.requests.cpu=100m" \
+            --set "gateway.gatewayParameters.resources.requests.memory=128Mi" \
+            --skip-schema-validation
+          # Unification of benchmarking and non-benchmarking istio setup significantly bumped the gateway resources
+          # By explicitly setting the lower bound (requests), our workflow can still run in our kind cluster
 
       - name: Deploy the httpRoute
         run: |
           cd guides/simulated-accelerators
           echo "Deploying HTTPRoute..."
           kubectl apply -f httproute.yaml -n ${{ env.NAMESPACE }}
+
+      - name: Show deployment status
+        run: |
+          sleep 10
+          echo "=== Pods ==="
+          kubectl get pods -n "${NAMESPACE}"
+          echo ""
+          echo "=== Services ==="
+          kubectl get svc -n "${NAMESPACE}"
+          echo ""
+          echo "=== Helm releases ==="
+          helm list --all-namespaces
 
       - name: Wait for all simulation pods to be ready
         run: |
@@ -149,17 +166,6 @@ jobs:
 
           echo "✅ All pods are ready."
           kubectl get pods -n "${{ env.NAMESPACE }}"
-
-      - name: Show deployment status
-        run: |
-          echo "=== Pods ==="
-          kubectl get pods -n "${NAMESPACE}"
-          echo ""
-          echo "=== Services ==="
-          kubectl get svc -n "${NAMESPACE}"
-          echo ""
-          echo "=== Helm releases ==="
-          helm list --all-namespaces
 
       - name: Locate inference‑gateway Service
         id: gateway
