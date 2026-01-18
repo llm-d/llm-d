@@ -27,7 +27,7 @@ To remove the chance that the envoy pod can be a bottle neck, we thought it migh
 
 ### Increasing Max Connections and Timeout (Istio only)
 
-Currently we only have a workaround for increasing max connections and timeout for Istio, we would like to expand this to other providers in the future. This is provided via the Istio destination rule, you can see a values configuration for this in our [benchmarking values file](../guides/prereq/gateway-provider/common-configurations/benchmarking.yaml).
+Currently we only have a workaround for increasing max connections and timeout for Istio, we would like to expand this to other providers in the future. This is provided via the Istio destination rule, you can see a values configuration for this in our [istio values file](../guides/prereq/gateway-provider/common-configurations/istio.yaml).
 
 This gets exposed by the [`DestinationRule` template](https://github.com/llm-d-incubation/llm-d-infra/blob/main/charts/llm-d-infra/templates/gateway-infrastructure/destinationrule.yaml) in the `llm-d-infra` charts, but we hope this manifest will make its way upstream to the GAIE charts.
 
