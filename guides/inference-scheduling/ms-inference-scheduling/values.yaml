@@ -29,15 +29,15 @@ decode:
     modelCommand: vllmServe
     args:
       - "--disable-uvicorn-access-log"
+    ports:
+      - containerPort: 8000
+        name: vllm
+        protocol: TCP
     resources:
       limits:
         nvidia.com/gpu: "1"
       requests:
         nvidia.com/gpu: "1"
-    ports:
-      - containerPort: 8000
-        name: vllm
-        protocol: TCP
     mountModelVolume: true
     volumeMounts:
     - name: metrics-volume
@@ -47,7 +47,7 @@ decode:
     startupProbe:
       httpGet:
         path: /v1/models
-        port: 8000
+        port: vllm
       initialDelaySeconds: 15
       periodSeconds: 30
       timeoutSeconds: 5
@@ -55,14 +55,14 @@ decode:
     livenessProbe:
       httpGet:
         path: /health
-        port: 8000
+        port: vllm
       periodSeconds: 10
       timeoutSeconds: 5
       failureThreshold: 3
     readinessProbe:
       httpGet:
         path: /v1/models
-        port: 8000
+        port: vllm
       periodSeconds: 5
       timeoutSeconds: 2
       failureThreshold: 3

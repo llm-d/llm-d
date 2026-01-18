@@ -83,7 +83,7 @@ prefill:
     startupProbe:
       httpGet:
         path: /v1/models
-        port: 8000
+        port: vllm
       initialDelaySeconds: 15
       periodSeconds: 30
       timeoutSeconds: 5
@@ -91,14 +91,14 @@ prefill:
     livenessProbe:
       httpGet:
         path: /health
-        port: 8000
+        port: vllm
       periodSeconds: 10
       timeoutSeconds: 5
       failureThreshold: 3
     readinessProbe:
       httpGet:
         path: /v1/models
-        port: 8000
+        port: vllm
       periodSeconds: 5
       timeoutSeconds: 2
   volumes:
