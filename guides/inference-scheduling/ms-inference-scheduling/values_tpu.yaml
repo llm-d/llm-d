@@ -32,7 +32,7 @@ decode:
       interval: "30s"
   containers:
   - name: "vllm"
-    image: "vllm/vllm-tpu:e92694b6fe264a85371317295bca6643508034ef"
+    image: "vllm/vllm-tpu:v0.11.1"
     modelCommand: vllmServe
     args:
       - "--max-model-len=4096"

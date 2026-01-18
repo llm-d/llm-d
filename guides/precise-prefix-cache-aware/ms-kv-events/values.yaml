@@ -9,7 +9,6 @@ modelArtifacts:
 routing:
   proxy:
     enabled: false # removes sidecar from deployment - no PD in inference scheduling
-    # targetPort: 8000 # controlls vLLM port to matchup with sidecar if deployed
 
 accelerator: # controlls specialized hardware Type
   type: nvidia
@@ -56,9 +55,6 @@ decode:
     ports:
       - containerPort: 8000
         name: vllm
-        protocol: TCP
-      - containerPort: 5557
-        name: nixl
         protocol: TCP
     mountModelVolume: true
     volumeMounts:
