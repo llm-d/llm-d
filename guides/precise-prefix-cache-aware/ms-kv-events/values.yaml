@@ -56,6 +56,11 @@ decode:
       - containerPort: 8000
         name: vllm
         protocol: TCP
+    resources:
+      limits:
+        nvidia.com/gpu: "1"
+      requests:
+        nvidia.com/gpu: "1"
     mountModelVolume: true
     volumeMounts:
     - name: metrics-volume

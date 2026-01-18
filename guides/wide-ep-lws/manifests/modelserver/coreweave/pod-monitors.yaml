@@ -14,7 +14,7 @@ spec:
       llm-d.ai/role: decode
   podMetricsEndpoints:
   # For decode service, this is port 8200. Must use port name.
-  - port: "metrics"
+  - port: "vllm"
     path: /metrics
     interval: 5s
 ---
@@ -35,6 +35,6 @@ spec:
       llm-d.ai/role: prefill
   podMetricsEndpoints:
   # For prefill, this is port 8000. Must use port name.
-  - port: "metrics"
+  - port: "vllm"
     path: /metrics
     interval: 5s

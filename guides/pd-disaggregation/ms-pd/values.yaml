@@ -97,7 +97,7 @@ prefill:
   monitoring:
     podmonitor:
       enabled: true
-      portName: "metrics" # prefill vLLM service port (from routing.servicePort)
+      portName: "vllm" # prefill vLLM service port (from routing.servicePort)
       path: "/metrics"
       interval: "30s"
   containers:
@@ -114,17 +114,22 @@ prefill:
       - "32000"
     ports:
       - containerPort: 8000
-        name: metrics
+        name: vllm
+        protocol: TCP
+      - containerPort: 5557
+        name: nixl
         protocol: TCP
     resources:
       limits:
         memory: 64Gi
         cpu: "8"
         rdma/ib: 1
+        # note: GPU resources get controlled by parallelism + accelerators above
       requests:
         memory: 64Gi
         cpu: "8"
         rdma/ib: 1
+        # note: GPU resources get controlled by parallelism + accelerators above
     mountModelVolume: true
     volumeMounts:
     - name: metrics-volume

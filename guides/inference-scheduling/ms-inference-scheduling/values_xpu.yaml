@@ -49,9 +49,11 @@ decode:
     resources:
       limits:
         memory: 24Gi
+        # note: GPU resources get controlled by parallelism + accelerators above
         cpu: "8"
       requests:
         cpu: "4"
+        # note: GPU resources get controlled by parallelism + accelerators above
         memory: 12Gi
 
     mountModelVolume: true

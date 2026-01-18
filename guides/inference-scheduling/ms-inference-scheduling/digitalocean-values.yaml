@@ -19,9 +19,6 @@ accelerator: # controlls specialized hardware Type
 
 # DigitalOcean-specific container configuration
 decode:
-  parallelism: # controlls count of specialized hardware devices allocated
-    tensor: 1
-    data: 1
   replicas: 2
   containers:
   - name: "vllm"
@@ -36,8 +33,6 @@ decode:
       - name: VLLM_LOGGING_LEVEL
         value: DEBUG
     ports:
-      - containerPort: 5557
-        protocol: TCP
       - containerPort: 8000
         name: vllm
         protocol: TCP
@@ -45,9 +40,11 @@ decode:
       limits:
         memory: 16Gi
         cpu: "4"
+        nvidia.com/gpu: "1"
       requests:
         memory: 16Gi
         cpu: "4"
+        nvidia.com/gpu: "1"
     mountModelVolume: true
     volumeMounts:
     - name: shm

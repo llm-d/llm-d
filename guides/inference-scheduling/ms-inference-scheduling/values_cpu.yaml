@@ -7,7 +7,7 @@ modelArtifacts:
   authSecretName: "llm-d-hf-token"
   name: "meta-llama/Llama-3.2-3B-Instruct"
 
-accelerator:  # controlls specialized hardware Type (or lack there of in this case)
+accelerator:
   type: cpu
 
 # Routing configuration - required for inference-scheduling
@@ -22,7 +22,7 @@ decode:
   monitoring:
     podmonitor:
       enabled: true
-      portName: "metrics"
+      portName: "vllm"
       path: "/metrics"
       interval: "30s"
   containers:
@@ -47,6 +47,7 @@ decode:
         value: "32"
     ports:
       - containerPort: 8000
+        name: vllm
         protocol: TCP
     resources:
       limits:

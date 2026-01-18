@@ -80,6 +80,10 @@ decode:
       periodSeconds: 5
       timeoutSeconds: 2
       failureThreshold: 3
+
+# Disable prefill for simple Intel Gaudi example
 prefill:
   create: false
 
+# When true, use LeaderWorkerSet for multi-node Intel Gaudi setups
+multinode: false

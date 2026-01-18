@@ -56,15 +56,18 @@ decode:
       - containerPort: 8200
         name: vllm
         protocol: TCP
+      - containerPort: 5557
+        name: nixl
+        protocol: TCP
     resources:
       limits:
         memory: 64Gi
         cpu: "16"
-        google.com/tpu: 8
+        # note: TPU resources get controlled by parallelism + accelerators above
       requests:
         memory: 64Gi
         cpu: "16"
-        google.com/tpu: 8
+        # note: TPU resources get controlled by parallelism + accelerators above
     mountModelVolume: true
     volumeMounts:
     - name: metrics-volume
@@ -143,15 +146,18 @@ prefill:
       - containerPort: 8000
         name: metrics
         protocol: TCP
+      - containerPort: 5557
+        name: nixl
+        protocol: TCP
     resources:
       limits:
         memory: 64Gi
         cpu: "16"
-        google.com/tpu: 8
+        # note: TPU resources get controlled by parallelism + accelerators above
       requests:
         memory: 64Gi
         cpu: "16"
-        google.com/tpu: 8
+       # note: TPU resources get controlled by parallelism + accelerators above
     mountModelVolume: true
     volumeMounts:
     - name: metrics-volume

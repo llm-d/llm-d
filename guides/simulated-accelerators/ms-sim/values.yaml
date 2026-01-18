@@ -18,7 +18,7 @@ decode:
   monitoring:
     podmonitor:
       enabled: true
-      portName: "metrics"  # decode vLLM service port (from routing.proxy.targetPort)
+      portName: "vllm"  # decode vLLM service port (from routing.proxy.targetPort)
       path: "/metrics"
       interval: "30s"
   containers:
@@ -27,9 +27,7 @@ decode:
     modelCommand: imageDefault
     ports:
       - containerPort: 8200
-        name: metrics
-        protocol: TCP
-      - containerPort: 5557
+        name: vllm
         protocol: TCP
     mountModelVolume: true
     volumeMounts:
@@ -67,7 +65,7 @@ prefill:
   monitoring:
     podmonitor:
       enabled: true
-      portName: "metrics"  # prefill vLLM service port (from routing.servicePort)
+      portName: "vllm"  # prefill vLLM service port (from routing.servicePort)
       path: "/metrics"
       interval: "30s"
   containers:
@@ -76,9 +74,7 @@ prefill:
     modelCommand: imageDefault
     ports:
       - containerPort: 8000
-        name: metrics
-        protocol: TCP
-      - containerPort: 5557
+        name: vllm
         protocol: TCP
     mountModelVolume: true
     volumeMounts:
