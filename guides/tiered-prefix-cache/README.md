@@ -44,18 +44,24 @@ Otherwise we recommend a shared storage because it:
 
 ### Shared Storage
 
-Offloading prefix cache to a shared(remote) storage offers the following benefits:
+Offloading prefix cache to a shared (remote) storage tier provides several important benefits beyond local CPU or disk caching:
 
-* Massive storage capacity independent of the inference engine deployment capacity.
-* Seamlessly share prefix cache across inference engine replicas and restarts.
+* **Extended cache capacity** - Offers massive storage capacity that is independent of the inference engine deployment size.
+* **Shared KV-cache across nodes** - Multiple inference replicas can access and reuse the same prefix cache.
+* **Fast scale-up** - New nodes can immediately reuse existing KV-cache data without warming the cache from scratch.
+* **Persistence across restarts or failures** - KV-cache data survives pod restarts, rescheduling, and node failures.
+* **Enterprise storage integration** - Can leverage mature enterprise storage systems (for example CephFS, Lustre, IBM Storage Scale) with built-in durability, monitoring, and access control.
 
-However, it adds both operational and performance overhead which depends on the characteristics (such as latency and throughput) of the storage system. Thus the decision of offloading to a shared storage system needs careful consideration.
+However, shared storage introduces additional operational and performance considerations. Latency and throughput depend on the characteristics of the underlying storage system, so careful evaluation is required to ensure that cache transfer overhead does not negatively impact inference performance.
 
-Consider a shared storage option when at least one of the following applies:
+Integration between the storage system and llm-d is achieved through vLLM connectors. The specific connector and data path depend on the storage system type and the underlying transport mechanism. 
+For example, different implementations may use CPU staging buffers, GPU Direct Storage (GDS), or NIXL-based data movement.
+Any storage connector that is compatible with vLLM can be used **transparently within the llm-d project**.
 
-* Large cache capacity requirement beyond HBM + CPU RAM.
-* Long input size (>10k) and high cache hits.
-* Frequent cache migration needs (e.g., model or engine rollouts).
+To enable shared storage offloading, refer to one of the following guides:
+
+1. [**llm-d File System (FS) backend**](./storage/llm-d-fs/README.md) - POSIX-based shared storage using a file system (for example CephFS, Lustre, IBM Storage Scale), leveraging the `vLLM native offloading connector`.
+2. **WEKA GDS** - Deploying WEKA storage with GPU Direct Storage (GDS) for high-performance data transfer.
 
 ### P2P Cache Sharing
 
