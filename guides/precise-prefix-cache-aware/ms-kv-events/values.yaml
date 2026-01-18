@@ -9,7 +9,7 @@ modelArtifacts:
 routing:
   proxy:
     enabled: false # removes sidecar from deployment - no PD in inference scheduling
-    targetPort: 8000 # controlls vLLM port to matchup with sidecar if deployed
+    # targetPort: 8000 # controlls vLLM port to matchup with sidecar if deployed
 
 accelerator: # controlls specialized hardware Type
   type: nvidia
@@ -34,7 +34,7 @@ decode:
       - |
         vllm serve Qwen/Qwen3-0.6B \
         --host 0.0.0.0 \
-        --port 8200 \
+        --port 8000 \
         --block-size 64 \
         --prefix-caching-hash-algo sha256_cbor \
         --kv-events-config "{\"enable_kv_cache_events\":true,\"publisher\":\"zmq\",\"endpoint\":\"tcp://gaie-${GAIE_RELEASE_NAME_POSTFIX}-epp.${NAMESPACE}.svc.cluster.local:5557\",\"topic\":\"kv@${POD_IP}@Qwen/Qwen3-0.6B\"}"
@@ -55,7 +55,10 @@ decode:
         value: DEBUG
     ports:
       - containerPort: 8000
-        name: metrics
+        name: vllm
+        protocol: TCP
+      - containerPort: 5557
+        name: nixl
         protocol: TCP
     mountModelVolume: true
     volumeMounts:
