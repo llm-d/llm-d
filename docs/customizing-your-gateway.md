@@ -33,4 +33,4 @@ This gets exposed by the [`DestinationRule` template](https://github.com/llm-d-i
 
 ### Changing log levels
 
-In an effort to reduce the workload of the envoy gateway container, we have dropped the logs to level error, only showing us critical issues. Again this is visible in the [benchmarking values file](../guides/prereq/gateway-provider/common-configurations/benchmarking.yaml).
+In an effort to reduce the workload of the envoy gateway container, we have dropped the logs to level error, only showing us critical issues. You can change these through the `--v` flag on the GAIE (inferencepool) chart. You can see an example of this in the [precise-kv-cache-aware guide](../guides/precise-prefix-cache-aware/gaie-kv-events/values.yaml#L7).
