@@ -105,7 +105,7 @@ releases:
     values:
     {{- if eq .Environment.Name "xpu" }}
       - ms-pd/values_xpu.yaml
-    {{- if eq .Environment.Name "xpu_gdr" }}
+    {{- else if eq .Environment.Name "xpu_gdr" }}
       - ms-pd/values_xpu_gdr.yaml
     {{- else if eq .Environment.Name "gke_tpu" }}
       - ms-pd/values_tpu.yaml
