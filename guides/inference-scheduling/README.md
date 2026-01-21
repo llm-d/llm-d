@@ -8,7 +8,7 @@ This profile defaults to the approximate prefix cache aware scorer, which only o
 
 ## Hardware Requirements
 
-This example out of the box uses 20 GPUs (10 replicas x 2 GPUs each) of any supported kind, though fewer can be used so long as `values.yaml` is also updated accordingly:
+This example out of the box uses 16 GPUs (8 replicas x 2 GPUs each) of any supported kind, though fewer can be used so long as `values.yaml` is also updated accordingly:
 
 - **NVIDIA GPUs**: Any NVIDIA GPU (support determined by the inferencing image used)
 - **Intel XPU/GPUs**: Intel Data Center GPU Max 1550 or compatible Intel XPU device
