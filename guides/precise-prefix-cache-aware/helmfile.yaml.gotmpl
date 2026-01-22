@@ -18,6 +18,7 @@ environments:
 
 {{- $ns := .Namespace | default "llm-d-precise" -}}
 {{- $rn := (env "RELEASE_NAME_POSTFIX") | default "kv-events" -}}
+{{- $dt := (env "DISAGGREGATED_TOKENIZATION") | default "false" -}}
 
 repositories:
   - name: llm-d-modelservice
@@ -41,12 +42,16 @@ releases:
   - name: {{ printf "gaie-%s" $rn | quote }}
     namespace: {{ $ns }}
     chart: oci://registry.k8s.io/gateway-api-inference-extension/charts/inferencepool
-    version: v1.2.0
+    version: v1.3.0
     installed: true
     needs:
       - {{ printf "infra-%s" $rn | quote }}
     values:
+      {{- if eq $dt "true" }}
+      - gaie-kv-events-disaggregated-tokenization/values.yaml
+      {{- else }}
       - gaie-kv-events/values.yaml
+      {{- end }}
     # Apply provider name if on GKE
     {{- if eq .Environment.Name "gke" }}
       - provider:

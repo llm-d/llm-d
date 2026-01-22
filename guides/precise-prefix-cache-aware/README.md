@@ -32,6 +32,10 @@ helmfile apply -n ${NAMESPACE}
 
 **_NOTE:_** You can set the `$RELEASE_NAME_POSTFIX` env variable to change the release names. This is how we support concurrent installs. Ex: `RELEASE_NAME_POSTFIX=kv-events-2 helmfile apply -n ${NAMESPACE}`
 
+**_NOTE:_** As an option, when using Precise Prefix Cache Aware Routing, the inference scheduler can offload the tokenization of prompts to a tokenizer service deployed as a sidecar. You can deploy the tokenizer service using `$DISAGGREGATE_TOKENIZER=true` and configure the inference scheduler to utilize it.
+Ex:
+`DISAGGREGATED_TOKENIZATION=true helmfile apply -n ${NAMESPACE}`
+
 **_NOTE:_** This uses Istio as the default provider, see [Gateway Options](./README.md#gateway-options) for installing with a specific provider.
 
 ### Gateway options
