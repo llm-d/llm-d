@@ -1,0 +1,124 @@
+ARG CUDA_MAJOR=12
+ARG CUDA_MINOR=9
+ARG CUDA_PATCH=1
+
+# Tool versions (pinned for reproducibility)
+ARG IPERF_VERSION=3.20
+ARG TCPDUMP_VERSION=tcpdump-4.99.6
+ARG PCIUTILS_VERSION=v3.14.0
+ARG PERFTEST_VERSION=25.10.0-0.128
+ARG GDRCOPY_VERSION=v2.5.1
+ARG NCCL_TESTS_VERSION=v2.17.8
+
+# ============================================================================
+# Builder Stage: Build all tools from source
+# ============================================================================
+FROM nvcr.io/nvidia/cuda:${CUDA_MAJOR}.${CUDA_MINOR}.${CUDA_PATCH}-devel-ubi9 AS builder
+
+ARG IPERF_VERSION
+ARG TCPDUMP_VERSION
+ARG PCIUTILS_VERSION
+ARG PERFTEST_VERSION
+ARG GDRCOPY_VERSION
+ARG NCCL_TESTS_VERSION
+
+# Install build dependencies in one layer
+RUN dnf install -y \
+    git gcc gcc-c++ make autoconf automake libtool diffutils \
+    libpcap libpcap-devel \
+    rdma-core-devel libibverbs-devel librdmacm-devel libibumad-devel \
+    && dnf clean all
+
+# Build iperf3
+RUN git clone --branch ${IPERF_VERSION} --depth 1 https://github.com/esnet/iperf.git /tmp/iperf && \
+    cd /tmp/iperf && \
+    ./configure --prefix=/usr --libdir=/usr/lib && \
+    make -j$(nproc) && \
+    make install DESTDIR=/install
+# Build tcpdump
+RUN git clone --branch ${TCPDUMP_VERSION} --depth 1 https://github.com/the-tcpdump-group/tcpdump.git /tmp/tcpdump && \
+    cd /tmp/tcpdump && \
+    ./autogen.sh && \
+    ./configure --prefix=/usr && \
+    make -j$(nproc) && \
+    make install DESTDIR=/install
+
+# Build pciutils (must be before perftest - provides pci/pci.h)
+RUN git clone --branch ${PCIUTILS_VERSION} --depth 1 https://github.com/pciutils/pciutils.git /tmp/pciutils && \
+    cd /tmp/pciutils && \
+    make SHARED=yes && \
+    make install-lib PREFIX=/usr DESTDIR=/install && \
+    # Create symlinks - version number from tag
+    cd /install/usr/lib && \
+    ln -sf libpci.so.*.*.* libpci.so.3 && \
+    ln -sf libpci.so.3 libpci.so && \
+    # Also install to system for perftest build
+    cd /tmp/pciutils && \
+    make install-lib PREFIX=/usr && \
+    ln -sf /usr/lib/libpci.so.*.*.* /usr/lib/libpci.so.3 && \
+    ln -sf /usr/lib/libpci.so.3 /usr/lib/libpci.so && \
+    ldconfig
+
+# Build perftest with CUDA support
+RUN git clone --branch ${PERFTEST_VERSION} --depth 1 https://github.com/linux-rdma/perftest.git /tmp/perftest && \
+    cd /tmp/perftest && \
+    ./autogen.sh && \
+    CUDA_H_PATH=/usr/local/cuda/include ./configure --prefix=/usr --enable-cudart && \
+    make -j$(nproc) && \
+    make install DESTDIR=/install
+
+# Build GDRCopy
+RUN git clone --branch ${GDRCOPY_VERSION} --depth 1 https://github.com/NVIDIA/gdrcopy.git /tmp/gdrcopy && \
+    cd /tmp/gdrcopy && \
+    make lib exes && \
+    make DESTDIR=/install PREFIX=/usr/local install
+
+# Build NCCL tests
+RUN git clone --branch ${NCCL_TESTS_VERSION} --depth 1 https://github.com/NVIDIA/nccl-tests.git /tmp/nccl-tests && \
+    cd /tmp/nccl-tests && \
+    make MPI=0 CUDA_HOME=/usr/local/cuda NCCL_HOME=/usr/local/cuda \
+         NVCC_GENCODE="\
+         -gencode=arch=compute_70,code=sm_70 \
+         -gencode=arch=compute_75,code=sm_75 \
+         -gencode=arch=compute_80,code=sm_80 \
+         -gencode=arch=compute_86,code=sm_86 \
+         -gencode=arch=compute_89,code=sm_89 \
+         -gencode=arch=compute_90,code=sm_90" && \
+    chmod +x build/*_perf
+
+# Consolidate libraries into /install/usr/local/lib for easy copying
+RUN mkdir -p /install/usr/local/lib && \
+    cp -a /install/usr/lib/libpci* /install/usr/local/lib/ && \
+    cp -a /install/usr/lib/libiperf* /install/usr/local/lib/
+
+
+# ============================================================================
+# Final Stage: Compact runtime image
+# ============================================================================
+ARG CUDA_MAJOR CUDA_MINOR CUDA_PATCH
+FROM nvcr.io/nvidia/cuda:${CUDA_MAJOR}.${CUDA_MINOR}.${CUDA_PATCH}-runtime-ubi9
+
+WORKDIR /root
+
+# Install runtime utilities
+RUN dnf install -y \
+    wget procps-ng jq bc iputils ethtool net-tools \
+    numactl kmod systemd-udev libpcap python3 hostname \
+    && dnf clean all
+
+# Install RDMA libraries from UBI (matches what perftest was compiled against)
+RUN dnf install -y libibverbs libibumad librdmacm && dnf clean all
+
+# Copy all built artifacts from builder
+COPY --from=builder /install/usr/bin/* /usr/local/bin/
+COPY --from=builder /install/usr/local/bin/* /usr/local/bin/
+COPY --from=builder /install/usr/local/lib/* /usr/local/lib/
+COPY --from=builder /tmp/nccl-tests /opt/nccl-tests
+
+# Configure library paths
+RUN echo "/usr/local/lib" > /etc/ld.so.conf.d/usrlocal.conf && ldconfig
+
+# Create results directory
+RUN mkdir -p /results
+
+CMD ["/bin/bash"]

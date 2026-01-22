@@ -83,6 +83,7 @@ jobs:
       xpu: ${{ steps.force.outputs.xpu || steps.filter.outputs.xpu || steps.dispatch.outputs.xpu }}
       cpu: ${{ steps.force.outputs.cpu || steps.filter.outputs.cpu || steps.dispatch.outputs.cpu }}
       hpu: ${{ steps.force.outputs.hpu || steps.filter.outputs.hpu || steps.dispatch.outputs.hpu }}
+      rdma-tools: ${{ steps.filter.outputs.rdma-tools }}
     steps:
       - name: Force all platforms
         if: inputs.force_build == true
@@ -133,6 +134,8 @@ jobs:
               - 'docker/scripts/cpu/**'
             hpu:
               - 'docker/Dockerfile.hpu'
+            rdma-tools:
+              - 'docker/Dockerfile.rdma-tools'
       # shim to convert comma-separated platforms input into same boolean outputs as path filter
       - name: Parse dispatch platforms
         if: github.event_name == 'workflow_dispatch'
@@ -961,6 +964,81 @@ jobs:
 
       - name: Display vulnerability summary
         if: ${{ steps.should-run.outputs.rhel_ok == 'true' }}
+        run: |
+          echo "=== Vulnerability Scan Summary ==="
+          if [ -f trivy-results.sarif ]; then
+            echo "Scan completed. Check the Security tab for detailed results."
+          else
+            echo "No vulnerabilities found or scan failed."
+          fi
+
+  rdma-tools-build-llm-d:
+    needs: [detect-changes]
+    if: ${{ needs.detect-changes.outputs.rdma-tools == 'true' }}
+    strategy:
+      fail-fast: false
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+        with:
+          buildkitd-flags: --oci-worker-gc
+
+      - name: Log in to Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ secrets.GHCR_USER }}
+          password: ${{ secrets.GHCR_TOKEN }}
+
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ github.repository }}-rdma-tools-dev
+          tags: |
+            type=ref,event=branch
+            type=ref,event=pr
+            type=sha
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      - name: Build & Push
+        id: build-and-push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./docker/Dockerfile.rdma-tools
+          platforms: linux/amd64
+          push: true
+          provenance: true
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          github-token: ${{ secrets.GHCR_TOKEN }}
+
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: ${{ env.REGISTRY }}/${{ github.repository }}-rdma-tools-dev@${{ steps.build-and-push.outputs.digest }}
+          format: "sarif"
+          output: "trivy-results.sarif"
+          severity: "CRITICAL,HIGH,MEDIUM"
+          scanners: vuln
+          timeout: 30m
+        env:
+          TRIVY_USERNAME: ${{ secrets.GHCR_USER }}
+          TRIVY_PASSWORD: ${{ secrets.GHCR_TOKEN }}
+
+      - name: Upload Trivy scan results to GitHub Security tab
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: "trivy-results.sarif"
+
+      - name: Display vulnerability summary
         run: |
           echo "=== Vulnerability Scan Summary ==="
           if [ -f trivy-results.sarif ]; then
