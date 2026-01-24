@@ -132,6 +132,46 @@ You can also customize your gateway, for more information on how to do that see 
 
 As with PD, the `wide-ep-lws` guide supports selective PD. For information on this refer to [this section of the PD docs](../pd-disaggregation/README.md#tuning-selective-pd).
 
+## Experimental: Data Parallel (DP) Aware Scheduling
+
+This deployment uses **DP-aware scheduling**, where instead of letting vLLM automatically handle data parallelism internally, we explicitly launch separate vLLM server instances for each data parallel rank. This enables the inference scheduler to route requests directly to specific DP ranks, improving KV cache routing efficiency.
+
+### How It Works
+
+**Traditional Data Parallelism:**
+- vLLM launches a single server process that internally manages DP=16 across GPUs
+- External clients see one endpoint per pod
+- vLLM handles internal load balancing across DP ranks
+
+**DP-Aware Scheduling (This Deployment):**
+- Each pod explicitly launches 8 separate vLLM server instances (one per GPU)
+- Each instance runs on a unique port (8000-8007 for prefill, 8200-8207 for decode)
+- Each instance is assigned an explicit DP rank using `--data-parallel-rank`
+- The inference scheduler can route to specific DP ranks based on request characteristics
+
+**Key Configuration Changes:**
+
+1. **InferencePool**: Declares 8 target ports (8000-8007) to expose all local DP ranks
+2. **Routing Proxy**: Configured with `--data-parallel-size=8` to understand the DP topology
+3. **vLLM Containers**: Launch 8 parallel processes per pod with:
+   - `CUDA_VISIBLE_DEVICES` pinning each process to a specific GPU (0-7)
+   - Unique ports per rank
+   - Explicit `--data-parallel-rank` assignment
+   - Global `--data-parallel-size=16` (8 ranks × 2 pods)
+   - Local `--data-parallel-size-local=8`
+
+**Architecture:**
+
+Each LeaderWorkerSet has 2 pods, each running 8 vLLM instances:
+- **Prefill Pod 0**: DP ranks 0-7 on ports 8000-8007
+- **Prefill Pod 1**: DP ranks 8-15 on ports 8000-8007
+- **Decode Pod 0**: DP ranks 0-7 on ports 8200-8207
+- **Decode Pod 1**: DP ranks 8-15 on ports 8200-8207
+
+The scheduler routes to specific ranks using (pod IP, port) tuples, enabling fine-grained request distribution.
+
+For more information on vLLM's data parallelism features, see the [vLLM documentation](https://docs.vllm.ai/en/latest/serving/data_parallel_deployment/#external-load-balancing).
+
 ## Verifying the installation
 
 * Firstly, you should be able to list all helm releases installed into your chosen namespace:
