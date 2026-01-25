@@ -131,7 +131,7 @@ pod/ms-pd-llm-d-modelservice-prefill-86f6fb7cdc-vzcb8   1/1     Running   0     
 NAME                                       TYPE           CLUSTER-IP    EXTERNAL-IP   PORT(S)                        AGE
 service/gaie-pd-epp                        ClusterIP      10.16.0.255   <none>        9002/TCP,9090/TCP              2m35s
 service/gaie-pd-ip-bb618139                ClusterIP      None          <none>        54321/TCP                      2m35s
-service/infra-pd-inference-gateway-istio   LoadBalancer   10.16.3.74    10.16.4.3     15021:31707/TCP,80:34096/TCP   2m41s
+service/infra-pd-inference-gateway-istio   ClusterIP      10.16.3.74    10.16.4.3     15021:31707/TCP,80:34096/TCP   2m41s
 
 NAME                                               READY   UP-TO-DATE   AVAILABLE   AGE
 deployment.apps/gaie-pd-epp                        1/1     1            1           2m36s

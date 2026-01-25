@@ -173,7 +173,7 @@ pod/ms-inference-scheduling-llm-d-modelservice-decode-8ff7fd5bt5f9s   1/1     Ru
 NAME                                                         TYPE           CLUSTER-IP    EXTERNAL-IP   PORT(S)                        AGE
 service/gaie-inference-scheduling-epp                        ClusterIP      10.16.3.151   <none>        9002/TCP,9090/TCP              3m59s
 service/gaie-inference-scheduling-ip-18c12339                ClusterIP      None          <none>        54321/TCP                      3m59s
-service/infra-inference-scheduling-inference-gateway-istio   LoadBalancer   10.16.1.195   10.16.4.2     15021:30274/TCP,80:32814/TCP   4m3s
+service/infra-inference-scheduling-inference-gateway-istio   ClusterIP      10.16.1.195   10.16.4.2     15021:30274/TCP,80:32814/TCP   4m3s
 
 NAME                                                                 READY   UP-TO-DATE   AVAILABLE   AGE
 deployment.apps/gaie-inference-scheduling-epp                        1/1     1            1           4m

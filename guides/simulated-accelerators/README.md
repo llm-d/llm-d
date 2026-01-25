@@ -92,7 +92,7 @@ pod/ms-sim-llm-d-modelservice-prefill-76c86dd9f8-pvbzm   1/1     Running   0    
 NAME                                        TYPE           CLUSTER-IP    EXTERNAL-IP   PORT(S)                        AGE
 service/gaie-sim-epp                        ClusterIP      10.16.0.143   <none>        9002/TCP,9090/TCP              7m14s
 service/gaie-sim-ip-207d1d4c                ClusterIP      None          <none>        54321/TCP                      7m14s
-service/infra-sim-inference-gateway-istio   LoadBalancer   10.16.1.112   10.16.4.2     15021:33302/TCP,80:31413/TCP   7m19s
+service/infra-sim-inference-gateway-istio   ClusterIP      10.16.1.112   10.16.4.2     15021:33302/TCP,80:31413/TCP   7m19s
 
 NAME                                                READY   UP-TO-DATE   AVAILABLE   AGE
 deployment.apps/gaie-sim-epp                        1/1     1            1           7m14s

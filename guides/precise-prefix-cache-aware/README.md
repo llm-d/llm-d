@@ -87,7 +87,7 @@ pod/ms-kv-events-llm-d-modelservice-decode-b874d48d9-ph64c    1/1     Running   
 NAME                                              TYPE           CLUSTER-IP   EXTERNAL-IP   PORT(S)                        AGE
 service/gaie-kv-events-epp                        ClusterIP      10.16.2.44   <none>        9002/TCP,9090/TCP,5557/TCP     81s
 service/gaie-kv-events-ip-805c964d                ClusterIP      None         <none>        54321/TCP                      75s
-service/infra-kv-events-inference-gateway-istio   LoadBalancer   10.16.1.30   10.16.4.2     15021:32033/TCP,80:39332/TCP   86s
+service/infra-kv-events-inference-gateway-istio   ClusterIP      10.16.1.30   10.16.4.2     15021:32033/TCP,80:39332/TCP   86s
 
 NAME                                                      READY   UP-TO-DATE   AVAILABLE   AGE
 deployment.apps/gaie-kv-events-epp                        1/1     1            1           81s

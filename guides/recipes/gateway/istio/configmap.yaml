@@ -32,4 +32,4 @@ data:
                 memory: 4Gi
   service: |
     spec:
-      type: LoadBalancer
+      type: ClusterIP
