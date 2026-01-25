@@ -153,7 +153,7 @@ You have to look at [helmfile.yaml.gotmpl](https://github.com/llm-d/llm-d/blob/2
 ](https://github.com/llm-d/llm-d/blob/main/guides/inference-scheduling/ms-inference-scheduling/values.yaml) before deploying it to align with the latest schema.
 
 
-[Example (Using Qwen/Qwen3-0.6B on 1 NVIDIA GPU in 2 Replica)](./sts-deploy-example/gaie-inference-scheduling.yaml)
+[Example (Using Qwen/Qwen3-0.6B on 1 NVIDIA GPU in 2 Replica)](./sts-deploy-example/ms-inference-scheduling-values.yaml)
 
 Then deploy llm-d-modelservice with helm.
 
