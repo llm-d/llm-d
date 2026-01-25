@@ -1,0 +1,33 @@
+inferenceExtension:
+  extProcPort: 9002
+  flags:
+    kv-cache-usage-percentage-metric: vllm:kv_cache_usage_perc
+  image:
+    hub: ghcr.io/llm-d
+    name: llm-d-inference-scheduler
+    pullPolicy: Always
+    tag: v0.4.0
+  monitoring:
+    interval: 10s
+    prometheus:
+      auth:
+        enabled: true
+      enabled: true
+  pluginsConfigFile: default-plugins.yaml
+  replicas: 1
+inferencePool:
+  modelServerType: vllm
+  modelServers:
+    matchLabels:
+      llm-d.ai/inferenceServing: "true"
+  targetPorts:
+  - number: 8000
+provider:
+  istio:
+    destinationRule:
+      host: llm-d-gaie-epp.llm-d-system.svc.cluster.local
+      trafficPolicy:
+        tls:
+          insecureSkipVerify: true
+          mode: SIMPLE
+  name: istio

@@ -4,6 +4,7 @@ Our guides provide tested and benchmarked recipes and Helm charts to serve large
 
 > [!TIP]
 > If you want to learn by doing, follow a [step-by-step first deployment with QUICKSTART.md](./QUICKSTART.md).
+> If you want to deploy shared components among features on your own namespace, follow a [step-by-step deployment with STS-DEPLOY.md](./STS-DEPLOY.md).
 
 ## Who are these guides (and llm-d) for?
 
@@ -32,7 +33,7 @@ We currently offer the following tested and benchmarked paths to help you deploy
 
 Our supporting guides address common operational challenges with model serving at scale:
 
-* [Simulating model servers](./simulated-accelerators/README.md) can deploy a vLLM model server simulator that allows testing inference scheduling and orchestration at scale as each instance does not need accelerators.
+- [Simulating model servers](./simulated-accelerators/README.md) can deploy a vLLM model server simulator that allows testing inference scheduling and orchestration at scale as each instance does not need accelerators.
 
 ## Other Guides
 
