@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# -*- indent-tabs-mode: nil; tab-width: 4; sh-indentation: 4; -*-
+# -*- indent-tabs-mode: nil; tab-width: 2; sh-indentation: 2; -*-
 
 set -euo pipefail
 
@@ -14,8 +14,6 @@ HELMDIFF_VERSION="v3.13.0"
 HELMFILE_VERSION="1.2.1"
 # chart-testing version
 CT_VERSION="3.14.0"
-# Kubernetes version (latest stable)
-KUBE_VERSION=$(curl -sL https://dl.k8s.io/release/stable.txt)
 
 ########################################
 #  Usage function
@@ -132,17 +130,17 @@ install_binary() {
 # Helper: install binary from a tar.gz URL
 ########################################
 install_from_tarball() {
-    local url="$1"
-    local bin_in_archive="$2"
-    local bin_name="${3:-$bin_in_archive}"
-    local tmp_dir
-    tmp_dir=$(mktemp -d)
-    # Cleanup the temp directory on function return
-    trap 'rm -rf -- "$tmp_dir"' RETURN
+  local url="$1"
+  local bin_in_archive="$2"
+  local bin_name="${3:-$bin_in_archive}"
+  local tmp_dir
+  tmp_dir=$(mktemp -d)
+  # Cleanup the temp directory on function return
+  trap 'rm -rf -- "$tmp_dir"' RETURN
 
-    echo "Installing ${bin_name}..."
-    curl -sSL "${url}" | tar -xz -C "${tmp_dir}"
-    sudo install -m 0755 "${tmp_dir}/${bin_in_archive}" "/usr/local/bin/${bin_name}"
+  echo "Installing ${bin_name}..."
+  curl -sSL "${url}" | tar -xz -C "${tmp_dir}"
+  sudo install -m 0755 "${tmp_dir}/${bin_in_archive}" "/usr/local/bin/${bin_name}"
 }
 
 ########################################
@@ -170,6 +168,8 @@ fi
 #  kubectl
 ########################################
 if ! command -v kubectl &> /dev/null; then
+  # Kubernetes version (latest stable)
+  KUBE_VERSION=$(curl -sL https://dl.k8s.io/release/stable.txt)
   K8S_URL="https://dl.k8s.io/release/${KUBE_VERSION}/bin/${OS}/${ARCH}/kubectl"
   install_binary "${K8S_URL}" "kubectl"
 fi
