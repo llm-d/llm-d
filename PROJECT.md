@@ -4,15 +4,16 @@
 
 ## Principles
 
-1. Keep it simple - Users rapidly achieve running inference along a few well-lit paths  
-2. Composition is preferred to configurability - components connect at API boundaries  
-3. We move fast - experimental code and features are encouraged as long as they are opt-in and isolated when off  
-4. We respect our upstreams - vLLM and inference-gateway are where code changes start, no forks  
-5. We are shipping to production - core code should have a high review, test, and reliability bar  
-6. vLLM-first but not vLLM-only - build the modular architecture for most people and collaborate with other projects  
+1. Keep it simple - Users rapidly achieve running inference along a few well-lit paths
+2. Composition is preferred to configurability - components connect at API boundaries
+3. We move fast - experimental code and features are encouraged as long as they are opt-in and isolated when off
+4. We respect our upstreams - vLLM and inference-gateway are where code changes start, no forks
+5. We are shipping to production - core code should have a high review, test, and reliability bar
+6. vLLM-first but not vLLM-only - build the modular architecture for most people and collaborate with other projects
 7. [Hyrum's Law](https://www.hyrumslaw.com/) is real - we do not regress published APIs or ship breaking changes, only new APIs
 
 ## Code of Conduct
+
 This project adheres to the llm-d [Code of Conduct and Covenant](CODE_OF_CONDUCT.md). By participating, you are expected to uphold this code.
 
 ## Contributing
@@ -33,12 +34,12 @@ The project (including all components owned by the project) direction and scope 
 
 To rapidly align the technical vision across the major stakeholders in the project, a small group of technical leads will devote a majority of their time as **project maintainers** to:
 
-* Act together in the best interests of the project, maintainers, and contributors  
-* Provide consistent architectural direction  
-* Approve and review code changes with project-level context  
-* Enable component maintainers with quick decision loops in the initial few months  
-* Grow strong and stable component maintainers and delegate responsibility  
-* Accelerate consensus and resolve disagreements  
+* Act together in the best interests of the project, maintainers, and contributors
+* Provide consistent architectural direction
+* Approve and review code changes with project-level context
+* Enable component maintainers with quick decision loops in the initial few months
+* Grow strong and stable component maintainers and delegate responsibility
+* Accelerate consensus and resolve disagreements
 * Approve changes to project process
 
 Project maintainers are listed as in the [OWNERS](./OWNERS) file of this repository as approvers (also referred to as "top level approvers").  The initial project maintainers are Carlos Costa, Clayton Coleman, and Robert Shaw, representing inference optimization research, the inference gateway project, and vLLM respectively.
@@ -92,20 +93,20 @@ Red Hat and Google will provide initial hardware for testing.
 Located on GitHub as two top level organizations:
 
 * `llm-d`
-  * Description: Our core organization, all code that is on a well-lit path to production  
-  * Rules:  
-    * Follows the API Changes and Deprecation process  
-    * All major changes require project proposals  
-    * If/when we need midstream repos, we will consider them in this repo  
+  * Description: Our core organization, all code that is on a well-lit path to production
+  * Rules:
+    * Follows the API Changes and Deprecation process
+    * All major changes require project proposals
+    * If/when we need midstream repos, we will consider them in this repo
 * `llm-d-incubation`
-  * Description: All components that are experimental and not yet fully supported  
-  * Purpose:  
-    * Reduce the scope of code in the llm-d org to our minimum viable project  
-    * Provide a clear place to experiment and stage projects with lower overhead for end users  
-  * Rules:  
-    * Bias towards accepting experimentation, with a clear goal for each component  
-    * Each repo must have a README with a short paragraph describing the purpose and goal  
-    * Components that graduate are moved to llm-d org  
+  * Description: All components that are experimental and not yet fully supported
+  * Purpose:
+    * Reduce the scope of code in the llm-d org to our minimum viable project
+    * Provide a clear place to experiment and stage projects with lower overhead for end users
+  * Rules:
+    * Bias towards accepting experimentation, with a clear goal for each component
+    * Each repo must have a README with a short paragraph describing the purpose and goal
+    * Components that graduate are moved to llm-d org
 
 Note: some projects at the current time may be incubating and located in the `llm-d` org, and will be moved in the near future.
 

@@ -54,10 +54,10 @@ prefill:
 ## Step 4: Access Prometheus & Grafana UIs
 
 ```bash
-kubectl port-forward -n <your-monitoring-namespace> svc/prometheus-kube-prometheus-prometheus 9090:9090
+kubectl port-forward -n <your-monitoring-namespace> svc/llmd-kube-prometheus-stack-prometheus 9090:9090
 # Visit http://localhost:9090
 
-kubectl port-forward -n <your-monitoring-namespace> svc/prometheus-grafana 3000:80
+kubectl port-forward -n <your-monitoring-namespace> svc/llmd-grafana 3000:80
 # Visit http://localhost:3000
 
 # Grafana login: admin/admin

@@ -3,8 +3,9 @@
 
 multinode: false
 
-# Configure accelerator type for Intel XPU
-accelerator:
+# Configure accelerator type for Intel XPU via DRA
+dra:
+  enabled: true
   type: intel
 
 modelArtifacts:
@@ -16,22 +17,24 @@ modelArtifacts:
 routing:
   servicePort: 8000
   proxy:
-    image: ghcr.io/llm-d/llm-d-routing-sidecar:v0.4.0-rc.1
+    image: ghcr.io/llm-d/llm-d-routing-sidecar:v0.4.0
     connector: nixlv2
     secure: false
 
 decode:
+  parallelism:  # controlls count of specialized hardware devices allocated
+    tensor: 1
   create: true
   replicas: 1
   monitoring:
     podmonitor:
       enabled: true
-      portName: "metrics" # decode vLLM service port (from routing.proxy.targetPort)
+      portName: "vllm" # decode vLLM service port (from routing.proxy.targetPort)
       path: "/metrics"
       interval: "30s"
   containers:
   - name: "vllm"
-    image: ghcr.io/llm-d/llm-d-xpu:v0.3.1
+    image: ghcr.io/llm-d/llm-d-xpu-dev:pr-592
     modelCommand: vllmServe
     args:
       - "--block-size"
@@ -49,25 +52,22 @@ decode:
     env:
       - name: UCX_TLS
         value: "tcp"
-      - name: VLLM_NIXL_SIDE_CHANNEL_HOST
-        valueFrom:
-          fieldRef:
-            fieldPath: status.podIP
-      - name: VLLM_NIXL_SIDE_CHANNEL_PORT
-        value: "5557"
     ports:
       - containerPort: 8200
-        name: metrics
+        name: vllm
+        protocol: TCP
+      - containerPort: 5557
+        name: nixl
         protocol: TCP
     resources:
       limits:
         memory: 64Gi
         cpu: "16"
-        gpu.intel.com/i915: "1"
+        # note: XPU resources get controlled by parallelism + accelerators above
       requests:
         memory: 64Gi
         cpu: "16"
-        gpu.intel.com/i915: "1"
+        # note: XPU resources get controlled by parallelism + accelerators above
     mountModelVolume: true
     volumeMounts:
       - name: dshm
@@ -79,17 +79,19 @@ decode:
         sizeLimit: 4Gi
 
 prefill:
+  parallelism:
+    tensor: 1
   create: true
   replicas: 3
   monitoring:
     podmonitor:
       enabled: true
-      portName: "metrics" # prefill vLLM service port (from routing.servicePort)
+      portName: "vllm" # prefill vLLM service port (from routing.servicePort)
       path: "/metrics"
       interval: "30s"
   containers:
   - name: "vllm"
-    image: ghcr.io/llm-d/llm-d-xpu:v0.3.1
+    image: ghcr.io/llm-d/llm-d-xpu-dev:pr-592
     modelCommand: vllmServe
     args:
       - "--block-size"
@@ -107,25 +109,22 @@ prefill:
     env:
       - name: UCX_TLS
         value: "tcp"
-      - name: VLLM_NIXL_SIDE_CHANNEL_HOST
-        valueFrom:
-          fieldRef:
-            fieldPath: status.podIP
-      - name: VLLM_NIXL_SIDE_CHANNEL_PORT
-        value: "5557"
     ports:
       - containerPort: 8000
-        name: metrics
+        name: vllm
+        protocol: TCP
+      - containerPort: 5557
+        name: nixl
         protocol: TCP
     resources:
       limits:
         memory: 64Gi
         cpu: "8"
-        gpu.intel.com/i915: "1"
+        # note: XPU resources get controlled by parallelism + dra above
       requests:
         memory: 64Gi
         cpu: "8"
-        gpu.intel.com/i915: "1"
+        # note: XPU resources get controlled by parallelism + dra above
     mountModelVolume: true
     volumeMounts:
       - name: dshm

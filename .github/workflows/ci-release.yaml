@@ -90,7 +90,7 @@ jobs:
             matrix.platform == 'linux/arm64' && 'arm64' || 'amd64' }}
           cache-to: >-
             type=gha,mode=max,scope=cuda-${{ matrix.os }}-${{
-            matrix.platform == 'linux/arm64' && 'arm64' || 'amd64' }}
+            matrix.platform == 'linux/arm64' && 'arm64' || 'amd64' }},oci-mediatypes=true,compression=zstd
           labels: ${{ steps.meta.outputs.labels }}
           outputs: >-
             type=image,name=${{ env.REGISTRY }}/${{ github.repository }}-cuda${{ matrix.image_suffix }},
@@ -223,8 +223,6 @@ jobs:
           fi
 
   release-aws-llm-d:
-    strategy:
-      fail-fast: false
     runs-on: vllm-runner
     steps:
       - name: Checkout code
@@ -264,8 +262,8 @@ jobs:
           platforms: linux/amd64
           push: true
           provenance: true
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          cache-from: type=gha,scope=aws
+          cache-to: type=gha,mode=max,scope=aws,oci-mediatypes=true,compression=zstd
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           github-token: ${{ secrets.GHCR_TOKEN }}
@@ -304,8 +302,6 @@ jobs:
           fi
 
   release-cpu-llm-d:
-    strategy:
-      fail-fast: false
     runs-on: vllm-runner
     steps:
       - name: Checkout code
@@ -328,16 +324,22 @@ jobs:
 
       - name: Build and push the image
         id: build-and-push
-        run: |
-          export DEVICE=cpu
-          export DOCKERFILE=Dockerfile.cpu
-          export BUILD_TYPE=prod
-          export VERSION="${{ env.TAG }}"
-          make image-build
-          make image-push
-          export NEW_TAG="latest"
-          make image-retag
-          VERSION="${NEW_TAG}" make image-push
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./docker/Dockerfile.cpu
+          platforms: linux/amd64
+          push: true
+          provenance: true
+          cache-from: type=gha,scope=cpu
+          cache-to: type=gha,mode=max,scope=cpu,oci-mediatypes=true,compression=zstd
+          tags: |
+            ${{ env.REGISTRY }}/${{ github.repository }}-cpu:${{ env.TAG }}
+            ${{ env.REGISTRY }}/${{ github.repository }}-cpu:latest
+          github-token: ${{ secrets.GHCR_TOKEN }}
+        env:
+          DOCKER_BUILDKIT: "1"
+          BUILDKIT_PROGRESS: "plain"
 
       - name: Run Trivy vulnerability scanner
         uses: aquasecurity/trivy-action@master
@@ -392,16 +394,22 @@ jobs:
 
       - name: Build and push the image
         id: build-and-push
-        run: |
-          export DEVICE=xpu
-          export BUILD_TYPE=prod
-          export DOCKERFILE=Dockerfile.xpu
-          export VERSION="${{ env.TAG }}"
-          make image-build
-          make image-push
-          export NEW_TAG="latest"
-          make image-retag
-          VERSION="${NEW_TAG}" make image-push
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./docker/Dockerfile.xpu
+          platforms: linux/amd64
+          push: true
+          provenance: true
+          cache-from: type=gha,scope=xpu
+          cache-to: type=gha,mode=max,scope=xpu,oci-mediatypes=true,compression=zstd
+          tags: |
+            ${{ env.REGISTRY }}/${{ github.repository }}-xpu:${{ env.TAG }}
+            ${{ env.REGISTRY }}/${{ github.repository }}-xpu:latest
+          github-token: ${{ secrets.GHCR_TOKEN }}
+        env:
+          DOCKER_BUILDKIT: "1"
+          BUILDKIT_PROGRESS: "plain"
 
       - name: Run Trivy vulnerability scanner
         uses: aquasecurity/trivy-action@master

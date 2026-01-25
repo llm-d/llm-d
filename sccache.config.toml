@@ -1,7 +1,0 @@
-[cache.s3]
-bucket = "vllm-nightly-sccache"
-key_prefix = "llm-d-cache/"
-region = "us-west-2"
-endpoint = "s3.us-west-2.amazonaws.com"
-use_ssl = true
-no_credentials = false

@@ -1,6 +1,5 @@
 #!/usr/bin/env bash
-
-set -euo pipefail
+set -Eeuo pipefail
 
 if ! command -v yq >/dev/null 2>&1; then
   echo "ERROR: yq v4 is required on PATH" >&2

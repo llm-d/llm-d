@@ -48,6 +48,8 @@ inferenceExtension:
   monitoring:
     interval: "10s"
     # Prometheus ServiceMonitor will be created when enabled for EPP metrics collection
+    secret:
+      name: pd-gateway-sa-metrics-reader-secret
     prometheus:
       enabled: true
       auth:

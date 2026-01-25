@@ -44,10 +44,11 @@ jobs:
         run: |
           echo "Warning! Some paths are ignored in the markdown link checker config.
           This is because those websites have strong anti-scraping behaviours. For
-          the full list of ignored paths, see the .markdownlinkcheck.json file:"
-          cat .markdownlinkcheck.json
+          the full list of ignored paths, see the lychee.toml file:"
+          cat .github/lychee.toml
 
       - name: Run markdown link checker
-        uses: ./.github/actions/markdown-link-checker
+        uses: lycheeverse/lychee-action@v2.7.0
         with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
+          args: --verbose --no-progress --include-fragments --format markdown --config .github/lychee.toml '**/*.md'
+          fail: true

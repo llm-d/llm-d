@@ -1,5 +1,5 @@
 #!/usr/bin/env sh
-set -eux
+set -Eeuo pipefail
 
 if [ ! $(command -v helm) ]; then
   echo "\`helm\` is required for this script, please install helm"

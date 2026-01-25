@@ -1,8 +1,8 @@
 name: E2E Accelerator EC2 Test
 
 on:
-#  schedule: # TODO: enable once validated functional
-#    - cron: '0 8 * * *'  # 4AM Eastern (08:00 UTC)
+  #  schedule: # TODO: enable once validated functional
+  #    - cron: '0 8 * * *'  # 4AM Eastern (08:00 UTC)
   workflow_dispatch:
     inputs:
       pr_or_branch:
@@ -416,7 +416,7 @@ jobs:
             set -x
             release_names=(${{ join(matrix.deployment.release_names, ' ') }})
             for release_name in ${release_names[@]}; do
-              /bin/sh ./llm-d/.github/scripts/e2e/helm-get-all.sh \
+              bash ./llm-d/.github/scripts/e2e/helm-get-all.sh \
                 ~/${{ matrix.deployment.helm_log_file }} \
                 "$release_name" \
                 "${{ matrix.deployment.namespace}}"
@@ -489,7 +489,7 @@ jobs:
       - name: Collect and upload Kubernetes pod logs
         if: always()
         env:
-            NAMESPACE: ${{ matrix.deployment.namespace}}
+          NAMESPACE: ${{ matrix.deployment.namespace}}
         run: |
           echo "Collecting logs for namespace: ${NAMESPACE}"
           REMOTE_TARBALL="pod-logs-${{ matrix.deployment.name }}.tar.gz"

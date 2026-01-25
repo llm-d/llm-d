@@ -19,9 +19,10 @@ The DigitalOcean deployment follows clean configuration principles:
 * **Conditional Loading**: Using `digitalocean` environment selectively applies DigitalOcean overrides
 
 This approach ensures:
-- Original configurations remain unchanged for other platforms
-- DigitalOcean optimizations are isolated and maintainable
-- Clear separation between base architecture and platform adaptations
+
+* Original configurations remain unchanged for other platforms
+* DigitalOcean optimizations are isolated and maintainable
+* Clear separation between base architecture and platform adaptations
 
 ## Cluster Configuration
 
@@ -40,6 +41,7 @@ DigitalOcean automatically installs and manages GPU drivers on DOKS clusters:
 * **GPU Monitoring**: Built-in metrics collection via DCGM Exporter
 
 Verify automatic GPU setup:
+
 ```bash
 kubectl get pods -n nvidia-device-plugin-system
 kubectl get nodes -o custom-columns="NAME:.metadata.name,GPU:.status.allocatable.nvidia\.com/gpu"
@@ -87,15 +89,16 @@ helmfile apply -e digitalocean -n ${NAMESPACE}
 ```
 
 **Key DigitalOcean Optimizations Applied Automatically:**
-- **Smaller Models**: Uses `Qwen3-0.6B` (inference-scheduling) that doesn't require HuggingFace tokens
-- **Stable Images**: Uses production-ready `ghcr.io/llm-d/llm-d:v0.2.0` instead of development builds
-- **DOKS-Optimized Resources**: Reduced memory/CPU requirements suitable for DOKS GPU nodes
-- **GPU Tolerations**: Automatic scheduling on DigitalOcean GPU nodes with `nvidia.com/gpu` taints
-- **No RDMA**: Removes InfiniBand requirements not available on DOKS
+
+* **Smaller Models**: Uses `Qwen3-0.6B` (inference-scheduling) that doesn't require HuggingFace tokens
+* **Stable Images**: Uses production-ready `ghcr.io/llm-d/llm-d:v0.2.0` instead of development builds
+* **DOKS-Optimized Resources**: Reduced memory/CPU requirements suitable for DOKS GPU nodes
+* **GPU Tolerations**: Automatic scheduling on DigitalOcean GPU nodes with `nvidia.com/gpu` taints
+* **No RDMA**: Removes InfiniBand requirements not available on DOKS
 
 **Architecture Overview:**
 
-- **Inference Scheduling**: 2 decode pods with intelligent routing via InferencePool
+* **Inference Scheduling**: 2 decode pods with intelligent routing via InferencePool
 
 ### Step 4: Testing
 
@@ -115,6 +118,7 @@ curl -X POST http://localhost:8080/v1/chat/completions \
 ```
 
 ## Monitoring (Optional)
+
 Deploy Prometheus and Grafana for observability:
 
 ```bash
@@ -126,10 +130,11 @@ kubectl port-forward -n llm-d-monitoring svc/prometheus-grafana 3000:80
 ```
 
 We recommend enabling the monitoring stack to track:
-- GPU utilization per deployment
-- Inference request latency and throughput
-- Memory usage and KV cache efficiency
-- Network performance between inference pods
+
+* GPU utilization per deployment
+* Inference request latency and throughput
+* Memory usage and KV cache efficiency
+* Network performance between inference pods
 
 ## DigitalOcean-Specific Configuration Details
 
@@ -145,10 +150,10 @@ The DigitalOcean deployment uses smaller, optimized models:
 
 DigitalOcean deployment automatically optimizes resource allocation for DOKS GPU nodes:
 
-- **Reduced Memory**: Uses 16Gi instead of 64Gi for better node utilization
-- **Optimized CPU**: Uses 4 cores instead of 16 cores per pod
-- **Single GPU**: Uses 1 GPU per pod (optimal for DOKS node sizes)
-- **No RDMA**: Removes InfiniBand requirements not available on DOKS
+* **Reduced Memory**: Uses 16Gi instead of 64Gi for better node utilization
+* **Optimized CPU**: Uses 4 cores instead of 16 cores per pod
+* **Single GPU**: Uses 1 GPU per pod (optimal for DOKS node sizes)
+* **No RDMA**: Removes InfiniBand requirements not available on DOKS
 
 ### GPU Node Configuration
 
@@ -165,9 +170,10 @@ tolerations:
 ### Architecture Differences
 
 **Inference Scheduling on DOKS:**
-- 2 decode pods with InferencePool routing
-- Single GPU per pod (optimal for DOKS node sizes)
-- Intelligent request distribution
+
+* 2 decode pods with InferencePool routing
+* Single GPU per pod (optimal for DOKS node sizes)
+* Intelligent request distribution
 
 ## Troubleshooting
 
@@ -180,6 +186,7 @@ tolerations:
 **Cause**: Required CRDs not installed before deployment
 
 **Solution**: Install CRDs before any helmfile deployment:
+
 ```bash
 cd guides/prereq/gateway-provider
 ./install-gateway-provider-dependencies.sh
@@ -193,6 +200,7 @@ helmfile apply -f istio.helmfile.yaml
 **Cause**: DigitalOcean API rate limiting or concurrent LoadBalancer operations
 
 **Solution**:
+
 ```bash
 # Check LoadBalancer status
 kubectl describe svc <service-name> -n <namespace>
@@ -208,6 +216,7 @@ kubectl describe svc <service-name> -n <namespace>
 **Cause**: DigitalOcean GPU nodes have automatic taints to prevent non-GPU workloads
 
 **Solution**: DigitalOcean values automatically include required tolerations. Verify they're applied:
+
 ```bash
 kubectl describe pod <pod-name> -n <namespace> | grep Tolerations
 
@@ -222,11 +231,11 @@ If tolerations are missing, ensure you're using the `digitalocean` environment w
 **Error**: Gateway shows `PROGRAMMED: False`
 
 **Solution**: Verify Istio is running and LoadBalancer IP is assigned:
+
 ```bash
 kubectl get pods -n istio-system
 kubectl get gateway -n <namespace>
 ```
-
 
 ## Cleanup
 
@@ -244,14 +253,17 @@ helmfile destroy -f istio.helmfile.yaml
 ## Configuration Files Reference
 
 ### Base Configurations (Unchanged)
-- `guides/inference-scheduling/ms-inference-scheduling/values.yaml`
+
+* `guides/inference-scheduling/ms-inference-scheduling/values.yaml`
 
 ### DigitalOcean Overrides (Platform-Specific)
-- `guides/inference-scheduling/ms-inference-scheduling/digitalocean-values.yaml`
+
+* `guides/inference-scheduling/ms-inference-scheduling/digitalocean-values.yaml`
 
 ### Helmfile Configuration
-- Uses `digitalocean` environment to conditionally load DigitalOcean overrides
-- Only applies platform-specific configurations when explicitly using `-e digitalocean`
-- Follows clean configuration architecture principles with proper environment separation
+
+* Uses `digitalocean` environment to conditionally load DigitalOcean overrides
+* Only applies platform-specific configurations when explicitly using `-e digitalocean`
+* Follows clean configuration architecture principles with proper environment separation
 
 For detailed configuration options and advanced setups, see the main [llm-d guides](../../../guides/).

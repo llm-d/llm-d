@@ -1,7 +1,7 @@
 repos:
   # general pre-commit hooks
   - repo: https://github.com/pre-commit/pre-commit-hooks
-    rev: v5.0.0
+    rev: v6.0.0
     hooks:
       - id: trailing-whitespace
       - id: end-of-file-fixer
@@ -53,18 +53,18 @@ repos:
 
   # markdown linting
   - repo: https://github.com/igorshubovych/markdownlint-cli
-    rev: v0.42.0
+    rev: v0.47.0
     hooks:
       - id: markdownlint
         args: [--fix]
 
   # yaml linting
   - repo: https://github.com/adrienverge/yamllint
-    rev: v1.35.1
+    rev: v1.37.1
     hooks:
       - id: yamllint
         args:
           - -d
           - >-
-            {extends: default, rules: {line-length: {max: 120},
+            {extends: default, rules: {line-length: {max: 250},
             document-start: disable, truthy: {check-keys: false}}}

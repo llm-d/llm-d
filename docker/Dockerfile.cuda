@@ -28,6 +28,8 @@ ARG USE_SCCACHE=true
 
 # Note: Components are listed in build order.
 
+ARG EFA_INSTALLER_VERSION="1.46.0"
+
 ARG GDRCOPY_REPO="https://github.com/NVIDIA/gdrcopy.git"
 ARG GDRCOPY_VERSION="v2.5.1"
 
@@ -55,12 +57,12 @@ ARG DEEPGEMM_VERSION="v2.1.0"
 ARG PPLX_KERNELS_REPO="https://github.com/perplexityai/pplx-kernels"
 ARG PPLX_KERNELS_VERSION="2bd6e30fab358829bd01d1c0907be8088ff9e5e1"
 ARG FLASHINFER_REPO="https://github.com/flashinfer-ai/flashinfer.git"
-ARG FLASHINFER_VERSION="v0.5.2"
+ARG FLASHINFER_VERSION="v0.5.3"
 
 # vLLM build settings
-ARG VLLM_REPO="https://github.com/neuralmagic/vllm.git"
-ARG VLLM_COMMIT_SHA="llm-d-release-0.4"
-ARG VLLM_PRECOMPILED_WHEEL_COMMIT="75648b16ddce1bff02c39c6f06be62a58385ff52"
+ARG VLLM_REPO="https://github.com/vllm-project/vllm.git"
+ARG VLLM_COMMIT_SHA="72506c98349d6bcd32b4e33eec7b5513453c1502"
+ARG VLLM_PRECOMPILED_WHEEL_COMMIT="72506c98349d6bcd32b4e33eec7b5513453c1502"
 ARG VLLM_PREBUILT=0
 ARG VLLM_USE_PRECOMPILED=1
 
@@ -142,18 +144,21 @@ ENV NVSHMEM_DIR="/opt/nvshmem-${NVSHMEM_VERSION}" \
     EFA_PREFIX="/opt/amazon/efa" \
     UCX_PREFIX="/opt/ucx" \
     NIXL_PREFIX="/opt/nixl"
-    
+
 ENV PATH="${NVSHMEM_DIR}/bin:${VIRTUAL_ENV}/bin:${PATH}" \
     LIBRARY_PATH="${EFA_PREFIX}/lib:${EFA_PREFIX}/lib64:${UCX_PREFIX}/lib:${UCX_PREFIX}/lib64:${NVSHMEM_DIR}/lib:${NVSHMEM_DIR}/lib64:${CUDA_HOME}/lib64:/usr/local/lib:/usr/local/lib64" \
     CPATH="${NVSHMEM_DIR}/include:/usr/include:/usr/local/include:${CUDA_HOME}/include:${CPATH}" \
     PKG_CONFIG_PATH="${UCX_PREFIX}/lib/pkgconfig:${UCX_PREFIX}/lib64/pkgconfig:${EFA_PREFIX}/lib/pkgconfig:${EFA_PREFIX}/lib64/pkgconfig:/usr/local/lib/pkgconfig:/usr/local/lib/x86_64-linux-gnu/pkgconfig:/usr/local/lib/aarch64-linux-gnu/pkgconfig:/usr/lib64/pkgconfig:/usr/lib/pkgconfig:/usr/lib/x86_64-linux-gnu/pkgconfig:/usr/lib/aarch64-linux-gnu/pkgconfig:/usr/share/pkgconfig:${PKG_CONFIG_PATH}"
 
 # Install EFA
+ARG EFA_INSTALLER_VERSION
 COPY docker/scripts/cuda/common/package-utils.sh /tmp/package-utils.sh
 COPY docker/scripts/cuda/builder/install-efa.sh /tmp/install-efa.sh
 RUN --mount=type=secret,id=subman_org \
     --mount=type=secret,id=subman_activation_key \
-    TARGETOS=${TARGETOS} /tmp/install-efa.sh && \
+    TARGETOS=${TARGETOS} \
+    EFA_INSTALLER_VERSION=${EFA_INSTALLER_VERSION} \
+    /tmp/install-efa.sh && \
     rm -f /tmp/install-efa.sh /tmp/package-utils.sh
 
 # Build and install gdrcopy
@@ -313,6 +318,14 @@ RUN TARGETOS=${TARGETOS} /tmp/install-runtime-packages.sh && \
 
 # Copy in efa
 COPY --from=builder /opt/amazon/efa /opt/amazon/efa/
+
+# Copy efa libs from builder (install-efa.sh)
+# Ubuntu does not build EFA
+COPY --from=builder /tmp/efa_libs /tmp/efa_libs
+RUN if [ "${TARGETOS:-rhel}" = "rhel" ] && [ -d /tmp/efa_libs ]; then \
+        cp -a /tmp/efa_libs/* /usr/lib64/ || true; \
+    fi && \
+    rm -rf /tmp/efa_libs
 
 # Copy gdrcopy libraries from builder
 # Install to /usr/local/lib (always present) and multiarch lib dir

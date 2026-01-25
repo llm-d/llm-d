@@ -3,6 +3,7 @@
 Special Interest Groups (SIGs) are the primary organizational units for coordinating work across the llm-d project. Each SIG focuses on a specific area of the project's technology stack and is responsible for driving design, implementation, and maintenance of their respective components.
 
 SIGs provide a mechanism for:
+
 - **Focused expertise**: Bringing together contributors with specialized knowledge in specific areas
 - **Coordinated development**: Ensuring consistent architectural decisions across related components
 - **Community building**: Creating smaller, more manageable groups for collaboration and mentorship
@@ -11,10 +12,13 @@ SIGs provide a mechanism for:
 ## SIG Structure and Governance
 
 ### SIG Leadership
+
 Each SIG has:
+
 - **SIG Leads** (2-3 people): Responsible for overall SIG direction, coordination, and decision-making
 
 ### SIG Responsibilities
+
 - Drive technical design and implementation in their area
 - Maintain documentation and architectural decisions
 - Coordinate with other SIGs on cross-cutting concerns
@@ -22,11 +26,13 @@ Each SIG has:
 - Participate in project-wide planning and releases
 
 ### SIG Meetings
+
 - Regular meetings (typically weekly) for technical discussions
-  
+
 ## Relationship to Project Governance
 
 SIGs operate within the broader llm-d project governance framework defined in [PROJECT.md](PROJECT.md):
+
 - SIGs follow the project's [lazy consensus](https://community.apache.org/committers/decisionMaking.html#lazy-consensus) decision-making process
 - Major cross-SIG decisions require project maintainer approval
 - All SIG work follows the project's [contribution guidelines](CONTRIBUTING.md)
@@ -56,6 +62,7 @@ SIGs operate within the broader llm-d project governance framework defined in [P
 **Charter**: Develop and maintain intelligent request routing and load balancing systems that optimize for latency, throughput, and resource utilization across distributed inference workloads.
 
 **Key Areas**:
+
 - vLLM-optimized inference scheduling algorithms
 - KV-cache aware routing and load balancing
 - Integration with Kubernetes Gateway API and Inference Gateway Extension
@@ -63,6 +70,7 @@ SIGs operate within the broader llm-d project governance framework defined in [P
 - SLA-aware request prioritization
 
 **💬 Communication**:
+
 - **Slack Channel**: [#sig-inference-scheduler](https://llm-d.slack.com/archives/C08SBNRRSBD)
 - **Meeting Recordings and Docs**: [Public Google Drive](https://drive.google.com/drive/folders/1aKTJru43krjHP2ORayEEp4JP-N7dJL8S)
 - **GitHub Issues**: [github.com/llm-d/llm-d-inference-scheduler](https://github.com/llm-d/llm-d-inference-scheduler/issues)
@@ -76,6 +84,7 @@ SIGs operate within the broader llm-d project governance framework defined in [P
 **Charter**: Establish comprehensive performance testing and benchmarking frameworks to ensure llm-d delivers optimal performance across diverse workloads and hardware configurations.
 
 **Key Areas**:
+
 - Benchmarking frameworks and methodologies
 - Performance regression testing
 - Workload simulation and synthetic data generation
@@ -83,10 +92,10 @@ SIGs operate within the broader llm-d project governance framework defined in [P
 - Performance analysis and profiling tools
 
 **💬 Communication**:
+
 - **Slack Channel**: [#sig-benchmarking](https://llm-d.slack.com/archives/C08TSFYMSCQ)
 - **Meeting Recordings and Docs**: [Public Google Drive](https://drive.google.com/drive/folders/1Hd-rCRLDbucl-LD0RlQwOCLqERWF-obT)
 - **GitHub Issues**: [github.com/llm-d/llm-d-benchmark](https://github.com/llm-d/llm-d-benchmark/issues)
-
 
 ### SIG PD-Disaggregation
 
@@ -97,6 +106,7 @@ SIGs operate within the broader llm-d project governance framework defined in [P
 **Charter**: Design and implement prefill/decode disaggregation patterns that enable efficient separation of inference workloads across heterogeneous hardware and scaling requirements.
 
 **Key Areas**:
+
 - Prefill/decode workload separation
 - Disaggregated serving architecture
 - Cross-instance communication protocols
@@ -104,10 +114,10 @@ SIGs operate within the broader llm-d project governance framework defined in [P
 - Dynamic workload balancing between Prefill and Decode instances
 
 **💬 Communication**:
+
 - **Slack Channel**: [#sig-pd-disaggregation](https://llm-d.slack.com/archives/C08T1E128PK)
 - **Meeting Recordings and Docs**: [Public Google Drive](https://drive.google.com/drive/folders/1jk7wtojsWNbYQVf7BY8BEvIg8FMRZV0q)
 - **GitHub Issues**: [github.com/llm-d/llm-d-routing-sidecar](https://github.com/llm-d/llm-d-routing-sidecar/issues)
-
 
 ### SIG KV-Disaggregation
 
@@ -118,6 +128,7 @@ SIGs operate within the broader llm-d project governance framework defined in [P
 **Charter**: Design and implement distributed KV caching solutions that improve inference performance through intelligent cache management, prefix sharing, and disaggregated storage.
 
 **Key Areas**:
+
 - Distributed KV cache architecture
 - Prefix cache hierarchies (local, remote, shared)
 - Cache-aware scheduling and routing
@@ -125,6 +136,7 @@ SIGs operate within the broader llm-d project governance framework defined in [P
 - Integration with vLLM's KVConnector
 
 **💬 Communication**:
+
 - **Slack Channel**: [#sig-kv-disaggregation](https://llm-d.slack.com/archives/C08TB7ZDV7S)
 - **Meeting Recordings and Docs**: [Public Google Drive](https://drive.google.com/drive/folders/1mFbzwEWL2-LvD21owgxlKRcQD0eSmcz6)
 - **GitHub Issues**: [github.com/llm-d/llm-d-kv-cache](https://github.com/llm-d/llm-d-kv-cache/issues)
@@ -138,6 +150,7 @@ SIGs operate within the broader llm-d project governance framework defined in [P
 **Charter**: Ensure llm-d integrates seamlessly with Kubernetes and provides robust deployment, scaling, and operational capabilities for production environments.
 
 **Key Areas**:
+
 - Kubernetes-native deployment patterns
 - Helm charts and operators
 - Installation and configuration management
@@ -145,6 +158,7 @@ SIGs operate within the broader llm-d project governance framework defined in [P
 - Platform integration and operational best practices
 
 **💬 Communication**:
+
 - **Slack Channel**: [#sig-installation](https://llm-d.slack.com/archives/C08SLBGKBEZ)
 - **Meeting Recordings and Docs**: [Public Google Drive](https://drive.google.com/drive/folders/1H-0Y8fXepzrYpcaUOBfuphn1Cl-gU0xr)
 - **GitHub Issues**: [github.com/llm-d-incubation/llm-d-modelservice](https://github.com/llm-d-incubation/llm-d-modelservice/issues) | [github.com/llm-d-incubation/llm-d-infra](https://github.com/llm-d-incubation/llm-d-infra/issues)
@@ -158,6 +172,7 @@ SIGs operate within the broader llm-d project governance framework defined in [P
 **Charter**: Develop intelligent autoscaling solutions that automatically adjust llm-d deployments based on traffic patterns, workload characteristics, and hardware utilization.
 
 **Key Areas**:
+
 - Traffic-aware autoscaling algorithms
 - Hardware-specific scaling policies
 - Workload-based capacity planning
@@ -165,6 +180,7 @@ SIGs operate within the broader llm-d project governance framework defined in [P
 - Cost-optimized scaling strategies
 
 **💬 Communication**:
+
 - **Slack Channel**: [#sig-autoscaling](https://llm-d.slack.com/archives/C08T899332A)
 - **Meeting Recordings and Docs**: [Public Google Drive](https://drive.google.com/drive/folders/1iDlTgpFPOrSQn7dWR3uCQLtqhz86HTAi)
 - **GitHub Issues**: [github.com/llm-d-incubation/workload-variant-autoscaler](https://github.com/llm-d-incubation/workload-variant-autoscaler/issues)
@@ -178,6 +194,7 @@ SIGs operate within the broader llm-d project governance framework defined in [P
 **Charter**: Provide comprehensive monitoring, logging, and observability capabilities that enable operators to understand system behavior, diagnose issues, and optimize performance.
 
 **Key Areas**:
+
 - Metrics collection and visualization
 - Distributed tracing and logging
 - Performance monitoring and alerting
@@ -185,18 +202,21 @@ SIGs operate within the broader llm-d project governance framework defined in [P
 - Integration with monitoring ecosystems (Prometheus, Grafana, etc.)
 
 **💬 Communication**:
+
 - **Slack Channel**: [#sig-observability](https://llm-d.slack.com/archives/C09305NHZ45)
 - **Meeting Recordings and Docs**: [Public Google Drive](https://drive.google.com/drive/folders/1H-TVTCKYVxUn4fER7xuTPmscNttZCutN)
 
 ## Getting Involved
 
 ### Joining a SIG
+
 1. **Attend a meeting**: Check the [project calendar](https://red.ht/llm-d-public-calendar) for SIG meeting times
 2. **Join the conversation**: Participate in SIG-specific channels on [Slack](https://llm-d.ai/slack)
 3. **Review documentation**: Read the SIG's charter and current initiatives
 4. **Start contributing**: Look for "good first issues" labeled with the SIG's area
 
 ### SIG Communication Channels
+
 - **Slack**: Each SIG has dedicated channels in the [llm-d Slack workspace](https://llm-d.slack.com)
 - **Google Groups**: Join [llm-d-contributors](https://groups.google.com/g/llm-d-contributors) for comment access to SIG documents
 - **GitHub**: Issues and discussions are labeled by SIG area
@@ -205,6 +225,7 @@ SIGs operate within the broader llm-d project governance framework defined in [P
 ## SIG Formation and Evolution
 
 ### Creating a New SIG
+
 1. **Identify need**: Demonstrate community interest and technical necessity
 2. **Draft charter**: Define scope, goals, and initial leadership
 3. **Proposal process**: Submit proposal following [project contribution guidelines](CONTRIBUTING.md)
@@ -212,6 +233,7 @@ SIGs operate within the broader llm-d project governance framework defined in [P
 5. **Approval**: Obtain approval from project maintainers
 
 ### SIG Lifecycle Management
+
 - **Active**: Regular meetings, active development, engaged community
 - **Maintenance**: Limited active development, focus on stability and bug fixes
 - **Archived**: No longer active, historical reference only
@@ -229,6 +251,7 @@ SIGs may evolve, merge, or be archived based on project needs and community enga
 ## Maintenance
 
 This document is maintained by the project maintainers and updated as SIGs evolve. For questions or suggestions about SIG structure, please reach out via:
+
 - Weekly project standup (Wednesdays 12:30 PM ET)
 - [llm-d Slack channel](https://llm-d.slack.com/)
 - GitHub issues in the [llm-d/llm-d](https://github.com/llm-d/llm-d) repository

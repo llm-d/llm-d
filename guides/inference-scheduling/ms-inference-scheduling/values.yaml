@@ -7,11 +7,12 @@ modelArtifacts:
   authSecretName: "llm-d-hf-token"
 
 routing:
-  servicePort: 8000
   proxy:
-    image: ghcr.io/llm-d/llm-d-routing-sidecar:v0.4.0-rc.1
-    connector: nixlv2
-    secure: false
+    enabled: false # removes sidecar from deployment - no PD in inference scheduling
+    targetPort: 8000 # controlls vLLM port to matchup with sidecar if deployed
+
+accelerator: # controlls specialized hardware Type
+  type: nvidia 
 
 decode:
   create: true
@@ -19,35 +20,18 @@ decode:
   monitoring:
     podmonitor:
       enabled: true
-      portName: "metrics"  # decode vLLM service port (from routing.proxy.targetPort)
+      portName: "vllm"  # decode vLLM service port (from routing.proxy.targetPort)
       path: "/metrics"
       interval: "30s"
   containers:
   - name: "vllm"
-    image: ghcr.io/llm-d/llm-d-cuda:v0.3.1
+    image: ghcr.io/llm-d/llm-d-cuda:v0.4.0
     modelCommand: vllmServe
     args:
-      - "--kv-transfer-config"
-      - '{"kv_connector":"NixlConnector", "kv_role":"kv_both"}'
       - "--disable-uvicorn-access-log"
-    env:
-      - name: CUDA_VISIBLE_DEVICES
-        value: "0"
-      - name: UCX_TLS
-        value: "cuda_ipc,cuda_copy,tcp"
-      - name: VLLM_NIXL_SIDE_CHANNEL_HOST
-        valueFrom:
-          fieldRef:
-            fieldPath: status.podIP
-      - name: VLLM_NIXL_SIDE_CHANNEL_PORT
-        value: "5557"
-      - name: VLLM_LOGGING_LEVEL
-        value: INFO
     ports:
-      - containerPort: 5557
-        protocol: TCP
-      - containerPort: 8200
-        name: metrics
+      - containerPort: 8000
+        name: vllm
         protocol: TCP
     resources:
       limits:
@@ -63,7 +47,7 @@ decode:
     startupProbe:
       httpGet:
         path: /v1/models
-        port: 8200
+        port: vllm
       initialDelaySeconds: 15
       periodSeconds: 30
       timeoutSeconds: 5
@@ -71,14 +55,14 @@ decode:
     livenessProbe:
       httpGet:
         path: /health
-        port: 8200
+        port: vllm
       periodSeconds: 10
       timeoutSeconds: 5
       failureThreshold: 3
     readinessProbe:
       httpGet:
         path: /v1/models
-        port: 8200
+        port: vllm
       periodSeconds: 5
       timeoutSeconds: 2
       failureThreshold: 3

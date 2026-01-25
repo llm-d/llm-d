@@ -1,49 +1,57 @@
 # Intel XPU PD Disaggregation Deployment Guide
+
 This document provides complete steps for deploying Intel XPU PD (Prefill-Decode) disaggregation service on Kubernetes cluster using DeepSeek-R1-Distill-Qwen-1.5B model. PD disaggregation separates the prefill and decode phases of inference, allowing for more efficient resource utilization and improved throughput.
 
 ## Prerequisites
+
 ### Hardware Requirements
+
 * Intel Data Center GPU Max 1550 or compatible Intel XPU device
 * At least 8GB system memory
 * Sufficient disk space (recommended at least 50GB available)
 
 ### Software Requirements
+
 * Kubernetes cluster (v1.29.0+)
 * Intel GPU Plugin deployed
 * kubectl access with cluster-admin privileges
 
 ### Client Setup
 
-- Create a namespace for installation. 
-  
+* Create a namespace for installation.
+
   ```
   export NAMESPACE=llm-d-pd # or any other namespace (shorter names recommended)
   kubectl create namespace ${NAMESPACE}
   ```
 
-- [Create the `llm-d-hf-token` secret in your target namespace with the key `HF_TOKEN` matching a valid HuggingFace token](../prereq/client-setup/README.md#huggingface-token) to pull models.
-- [Choose an llm-d version](../prereq/client-setup/README.md#llm-d-version)
+* [Create the `llm-d-hf-token` secret in your target namespace with the key `HF_TOKEN` matching a valid HuggingFace token](../prereq/client-setup/README.md#huggingface-token) to pull models.
+* [Choose an llm-d version](../prereq/client-setup/README.md#llm-d-version)
 
 ## Step 0: Build Intel XPU Docker Image (Optional)
+
 If you need to customize the vLLM version or build the image from source, you can build the Intel XPU Docker image:
 
-
 ### Build Default Image
+
 #### Intel Data Center GPU Max 1550
+
 ```shell
 # Build with default vLLM version (v0.11.0)
-make image-build DEVICE=xpu VERSION=v0.3.0
+make image-build DEVICE=xpu VERSION=v0.4.0
 ```
 
 #### Intel Corporation Battlemage G21
+
 ```shell
 # Build with default vLLM version (v0.11.0)
 git clone https://github.com/vllm-project/vllm.git
 git checkout v0.11.0
-docker build -f docker/Dockerfile.xpu -t ghcr.io/llm-d/llm-d-xpu-dev:v0.3.1 --shm-size=4g .
+docker build -f docker/Dockerfile.xpu -t ghcr.io/llm-d/llm-d-xpu-dev:v0.4.0 --shm-size=4g .
 ```
 
 ### Available Build Arguments
+
 * `VLLM_VERSION`: vLLM version to build (default: v0.11.0)
 * `PYTHON_VERSION`: Python version (default: 3.12)
 * `ONEAPI_VERSION`: Intel OneAPI toolkit version (default: 2025.1.3-0)
@@ -55,6 +63,7 @@ docker build -f docker/Dockerfile.xpu -t ghcr.io/llm-d/llm-d-xpu-dev:v0.3.1 --sh
 * **Repository Integration**: The llm-d-infra project has been integrated into the main llm-d repository. All previous references to separate llm-d-infra installations are now unified under the main llm-d project structure.
 
 ## Step 1: Install Tool Dependencies
+
 ```shell
 # Navigate to llm-d repository (use the same repo from Step 0)
 cd llm-d
@@ -76,6 +85,7 @@ curl -Lo ./kind https://kind.sigs.k8s.io/dl/v0.20.0/kind-linux-amd64 && chmod +x
 * git (v2.30.0+)
 
 ## Step 2: Create Kubernetes Cluster
+
 If you don't have a Kubernetes cluster, you can create one using Kind:
 
 ```shell
@@ -91,11 +101,12 @@ kubectl get nodes
 ```
 
 ### Load Built Image into Cluster (If using custom built image)
+
 If you built the Intel XPU image in Step 0, load it into the Kind cluster:
 
 ```shell
 # Load the built image into Kind cluster
-kind load docker-image ghcr.io/llm-d/llm-d-xpu:v0.3.1 --name llm-d-cluster
+kind load docker-image ghcr.io/llm-d/llm-d-xpu:v0.4.0 --name llm-d-cluster
 
 # Or if you built with custom tag
 kind load docker-image llm-d:custom-xpu --name llm-d-cluster
@@ -109,6 +120,7 @@ docker exec -it llm-d-cluster-control-plane crictl images | grep llm-d
 **Note**: If you already have a Kubernetes cluster (v1.29.0+) with Intel GPU Plugin deployed, you can skip this step.
 
 ## Step 3: Install Gateway API Dependencies
+
 ```shell
 # Install Gateway API dependencies
 cd guides/prereq/gateway-provider
@@ -116,6 +128,7 @@ cd guides/prereq/gateway-provider
 ```
 
 ## Step 4: Deploy Gateway Control Plane
+
 ```shell
 # Deploy Istio Gateway control plane
 cd guides/prereq/gateway-provider
@@ -126,6 +139,7 @@ helmfile apply -f istio.helmfile.yaml --selector kind=gateway-control-plane
 ```
 
 ## Step 5: Deploy Intel XPU PD Disaggregation
+
 ⚠️ **Important - For Intel BMG GPU Users**: Before running `helmfile apply`, you must update the GPU resource type in `ms-pd/values_xpu.yaml`:
 
 ```yaml
@@ -155,7 +169,6 @@ prefill:
         gpu.intel.com/xe: 1  # Change from gpu.intel.com/i915 to gpu.intel.com/xe
 ```
 
-  
 **Resource Requirements by GPU Type:**
 
 * **Intel Data Center GPU Max 1550**: Use `gpu.intel.com/i915`
@@ -176,12 +189,15 @@ This will deploy three main components in the `llm-d-pd` namespace:
 3. **ms-pd**: Model service with separate prefill and decode deployments
 
 ### Deployment Architecture
+
 * **Decode Service**: 1 replica with 1 Intel GPUs
 * **Prefill Service**: 3 replicas with 1 Intel GPU each
 * **Total GPU Usage**: 4 Intel GPUs (1 for decode + 3 for prefill)
 
 ## Step 7: Verify Deployment
+
 ### Check Helm Releases
+
 ```shell
 helm list -n llm-d-pd
 ```
@@ -189,18 +205,20 @@ helm list -n llm-d-pd
 Expected output:
 
 ```
-NAME       NAMESPACE   REVISION   STATUS     CHART                     
-gaie-pd    llm-d-pd    1          deployed   inferencepool-v0.5.1      
-infra-pd   llm-d-pd    1          deployed   llm-d-infra-v1.3.0        
-ms-pd      llm-d-pd    1          deployed   llm-d-modelservice-v0.2.11 
+NAME       NAMESPACE   REVISION   STATUS     CHART
+gaie-pd    llm-d-pd    1          deployed   inferencepool-v0.5.1
+infra-pd   llm-d-pd    1          deployed   llm-d-infra-v1.3.0
+ms-pd      llm-d-pd    1          deployed   llm-d-modelservice-v0.2.11
 ```
 
 ### Check All Resources
+
 ```shell
 kubectl get all -n llm-d-pd
 ```
 
 ### Monitor Pod Startup Status
+
 ```shell
 # Check all PD pods status
 kubectl get pods -n llm-d-pd
@@ -213,7 +231,9 @@ kubectl get pods -n llm-d-pd -l llm-d.ai/role=prefill -w
 ```
 
 ### View vLLM Startup Logs
+
 #### Decode Pod Logs
+
 ```shell
 # Get decode pod name
 DECODE_POD=$(kubectl get pods -n llm-d-pd -l llm-d.ai/role=decode -o jsonpath='{.items[0].metadata.name}')
@@ -226,6 +246,7 @@ kubectl logs -n llm-d-pd ${DECODE_POD} -c vllm --tail=50
 ```
 
 #### Prefill Pod Logs
+
 ```shell
 # Get prefill pod names
 PREFILL_PODS=($(kubectl get pods -n llm-d-pd -l llm-d.ai/role=prefill -o jsonpath='{.items[*].metadata.name}'))
@@ -242,7 +263,9 @@ done
 ```
 
 ## Step 8: Create HTTPRoute for Gateway Access
+
 ### Check if HTTPRoute was Auto-Created
+
 First, check if the HTTPRoute was automatically created by the Chart:
 
 ```shell
@@ -255,6 +278,7 @@ Note
 **HTTPRoute Auto-Creation**: When using `llm-d-modelservice` Chart v0.2.9+, the HTTPRoute is typically created automatically during deployment. If you see `ms-pd-llm-d-modelservice` HTTPRoute listed, you can skip the manual creation step below.
 
 ### Manual HTTPRoute Creation (If Not Auto-Created)
+
 If no HTTPRoute was found, create one manually:
 
 ```shell
@@ -263,6 +287,7 @@ kubectl apply -f httproute.yaml
 ```
 
 ### Verify HTTPRoute Configuration
+
 Verify the HTTPRoute is properly configured:
 
 ```shell
@@ -283,13 +308,17 @@ Expected output should show:
 * Status showing `Accepted` and `ResolvedRefs` conditions
 
 ## Step 9: Test PD Disaggregation Inference Service
+
 ### Get Gateway Service Information
+
 ```shell
 kubectl get service -n llm-d-pd infra-pd-inference-gateway-istio
 ```
 
 ### Perform Inference Requests
+
 #### Method 1: Using Port Forwarding (Recommended)
+
 ```shell
 # Port forward to local
 kubectl port-forward -n llm-d-pd service/infra-pd-inference-gateway-istio 8086:80 &
@@ -304,7 +333,7 @@ curl -X POST "http://localhost:8086/v1/chat/completions" \
     "model": "deepseek-ai/DeepSeek-R1-Distill-Qwen-1.5B",
     "messages": [
       {
-        "role": "user", 
+        "role": "user",
         "content": "Explain the benefits of prefill-decode disaggregation in LLM inference"
       }
     ],
@@ -312,4 +341,3 @@ curl -X POST "http://localhost:8086/v1/chat/completions" \
     "temperature": 0.7
   }'
 ```
-

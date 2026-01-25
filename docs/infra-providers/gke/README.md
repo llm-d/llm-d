@@ -6,8 +6,8 @@ This document covers configuring GKE clusters for running high performance LLM i
 
 llm-d on GKE is tested with the following configurations:
 
-  * Machine types: A3, A4, ct5p, ct5lp, ct6e
-  * Versions: GKE 1.33.4+
+* Machine types: A3, A4, ct5p, ct5lp, ct6e
+* Versions: GKE 1.33.4+
 
 For the well lit paths, we specifically recommend the following machine types:
 
@@ -17,7 +17,6 @@ For the well lit paths, we specifically recommend the following machine types:
 | [Prefill / Decode Disaggregation](../../../guides/pd-disaggregation/README.md) | RDMA-enabled machine types (A3U, A4, or newer) | ct6e (v6e) or newer |
 | [Wide Expert Parallelism](../../../guides/wide-ep-lws/README.md) | RDMA-enabled machine types (A3U, A4, or newer) | coming soon |
 | [Tiered Prefix Cache](../../../guides/tiered-prefix-cache/README.md) | Tiered Prefix Cache can be combined with other well-lit paths above.<br>If running Prefill/Decode Disaggregation, or Wide Expert Parallelism, follow their guidance respectively.<br>Otherwise, follow the guidance on Inference Scheduling.  | coming soon |
-
 
 ## Cluster Configuration
 

@@ -12,8 +12,8 @@ This guide demonstrates how to deploy DeepSeek-R1-0528 using vLLM's P/D disaggre
 
 In this example, we will demonstrate a deployment of `DeepSeek-R1-0528` with:
 
-- 1 DP=16 Prefill Worker
-- 1 DP=16 Decode Worker
+* 1 DP=16 Prefill Worker
+* 1 DP=16 Decode Worker
 
 ## Hardware Requirements
 
@@ -21,22 +21,22 @@ This guide requires 32 Nvidia H200 or B200 GPUs and InfiniBand or RoCE RDMA netw
 
 ## Prerequisites
 
-- Have the [proper client tools installed on your local system](../prereq/client-setup/README.md) to use this guide.
-- Ensure your cluster infrastructure is sufficient to [deploy high scale inference](../prereq/infrastructure/README.md)
-  - You must have high speed inter-accelerator networking
-  - The pods leveraging inter-node EP must be deployed within the same networking domain
-  - You have deployed the [LeaderWorkerSet optional controller](../prereq/infrastructure/README.md#optional-install-leaderworkerset-for-multi-host-inference)
-- Configure and deploy your [Gateway control plane](../prereq/gateway-provider/README.md).
-- Have the [Monitoring stack](../../docs/monitoring/README.md) installed on your system.
-- Create a namespace for installation.
-  
+* Have the [proper client tools installed on your local system](../prereq/client-setup/README.md) to use this guide.
+* Ensure your cluster infrastructure is sufficient to [deploy high scale inference](../prereq/infrastructure/README.md)
+  * You must have high speed inter-accelerator networking
+  * The pods leveraging inter-node EP must be deployed within the same networking domain
+  * You have deployed the [LeaderWorkerSet optional controller](../prereq/infrastructure/README.md#optional-install-leaderworkerset-for-multi-host-inference)
+* Configure and deploy your [Gateway control plane](../prereq/gateway-provider/README.md).
+* Have the [Monitoring stack](../../docs/monitoring/README.md) installed on your system.
+* Create a namespace for installation.
+
   ```
   export NAMESPACE=llm-d-wide-ep # or any other namespace (shorter names recommended)
   kubectl create namespace ${NAMESPACE}
   ```
 
-- [Create the `llm-d-hf-token` secret in your target namespace with the key `HF_TOKEN` matching a valid HuggingFace token](../prereq/client-setup/README.md#huggingface-token) to pull models.
-- [Choose an llm-d version](../prereq/client-setup/README.md#llm-d-version)
+* [Create the `llm-d-hf-token` secret in your target namespace with the key `HF_TOKEN` matching a valid HuggingFace token](../prereq/client-setup/README.md#huggingface-token) to pull models.
+* [Choose an llm-d version](../prereq/client-setup/README.md#llm-d-version)
 
 ## Installation
 
@@ -52,12 +52,14 @@ GKE and CoreWeave are tested Kubernetes providers for this well-lit path. You ca
 
 <!-- TAB:GKE (H200):default -->
 #### GKE (H200)
+
 ```bash
 kubectl apply -k ./manifests/modelserver/gke -n ${NAMESPACE}
 ```
 
 <!-- TAB:GKE (B200) -->
 #### GKE (B200)
+
 ```bash
 # Deploy on GKE for B200 on the a4 instance type to work around a known vLLM memory issue
 kubectl apply -k ./manifests/modelserver/gke-a4 -n ${NAMESPACE}
@@ -65,6 +67,7 @@ kubectl apply -k ./manifests/modelserver/gke-a4 -n ${NAMESPACE}
 
 <!-- TAB:CoreWeave -->
 #### CoreWeave
+
 ```bash
 kubectl apply -k ./manifests/modelserver/coreweave  -n ${NAMESPACE}
 ```
@@ -79,19 +82,20 @@ Select the provider-specific Helm command using the tabs below.
 
 <!-- TAB:GKE:default -->
 #### GKE
+
 ```bash
 helm install llm-d-infpool \
   -n ${NAMESPACE} \
   -f ./manifests/inferencepool.values.yaml \
   --set "provider.name=gke" \
-  --set "inferencePool.apiVersion=inference.networking.k8s.io/v1" \
   --set "inferenceExtension.monitoring.gke.enable=true" \
   oci://us-central1-docker.pkg.dev/k8s-staging-images/gateway-api-inference-extension/charts/inferencepool \
-  --version v1.2.0-rc.1
+  --version v1.2.0
 ```
 
 <!-- TAB:Istio -->
 #### Istio
+
 ```bash
 helm install llm-d-infpool \
   -n ${NAMESPACE} \
@@ -99,17 +103,18 @@ helm install llm-d-infpool \
   --set "provider.name=istio" \
   --set "inferenceExtension.monitoring.prometheus.enable=true" \
   oci://us-central1-docker.pkg.dev/k8s-staging-images/gateway-api-inference-extension/charts/inferencepool \
-  --version v1.2.0-rc.1
+  --version v1.2.0
 ```
 
 <!-- TAB:Kgateway -->
 #### Kgateway
+
 ```bash
 helm install llm-d-infpool \
   -n ${NAMESPACE} \
   -f ./manifests/inferencepool.values.yaml \
   oci://us-central1-docker.pkg.dev/k8s-staging-images/gateway-api-inference-extension/charts/inferencepool \
-  --version v1.2.0-rc.1
+  --version v1.2.0
 ```
 
 <!-- TABS:END -->
@@ -130,7 +135,7 @@ As with PD, the `wide-ep-lws` guide supports selective PD. For information on th
 
 ## Verifying the installation
 
-- Firstly, you should be able to list all helm releases installed into your chosen namespace:
+* Firstly, you should be able to list all helm releases installed into your chosen namespace:
 
 ```bash
 helm list -n ${NAMESPACE}
@@ -138,7 +143,7 @@ NAME            NAMESPACE       REVISION    UPDATED                             
 llm-d-infpool   llm-d-wide-ep   1           2025-08-24 13:14:53.355639 -0700 PDT    deployed    inferencepool-v1.0          v0.3.0
 ```
 
-- Out of the box with this example you should have the following resources (if using Istio):
+* Out of the box with this example you should have the following resources (if using Istio):
 
 ```bash
 kubectl get all -n ${NAMESPACE}

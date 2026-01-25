@@ -25,7 +25,7 @@ See the [CPU offloading guide](./cpu/README.md) to learn how to enable CPU RAM o
 
 ### Local Disk
 
-Utilizing local disk storage can significantly increase the cache capacity. However disks are typically significantly slower than CPU RAM. 
+Utilizing local disk storage can significantly increase the cache capacity. However disks are typically significantly slower than CPU RAM.
 
 Consider this when:
 

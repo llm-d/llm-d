@@ -422,7 +422,7 @@ jobs:
           ssh -o StrictHostKeyChecking=no -i key.pem ubuntu@$INSTANCE_IP "NAMESPACE=$NAMESPACE bash -s" << EOF
             set -euo pipefail
             set -x
-            /bin/sh llm-d/.github/scripts/e2e/helm-get-all.sh \
+            bash llm-d/.github/scripts/e2e/helm-get-all.sh \
               ~/wide-ep-deployment.log \
               ms-wide-ep "$NAMESPACE"
           EOF

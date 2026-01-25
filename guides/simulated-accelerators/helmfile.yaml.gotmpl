@@ -29,7 +29,7 @@ releases:
   - name: {{ printf "infra-%s" $rn | quote }}
     namespace: {{ $ns }}
     chart: llm-d-infra/llm-d-infra
-    version: v1.3.4
+    version: v1.3.6
     installed: true
     labels:
       type: infrastructure
@@ -74,7 +74,7 @@ releases:
   - name: {{ printf "ms-%s" $rn | quote }}
     namespace: {{ $ns }}
     chart: llm-d-modelservice/llm-d-modelservice
-    version: v0.3.8
+    version: v0.3.17
     installed: true
     needs:
       - {{ printf "infra-%s" $rn | quote }}

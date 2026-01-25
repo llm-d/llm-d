@@ -5,7 +5,7 @@
 Proper health checking for vLLM inference containers requires understanding three distinct lifecycle stages:
 
 1. **Container Running** - Kubernetes container lifecycle
-2. **API Server Ready** - vLLM OpenAI-compatible API server is accepting connections  
+2. **API Server Ready** - vLLM OpenAI-compatible API server is accepting connections
 3. **Model Loaded** - Model is loaded and ready to serve inference requests
 
 This guide explains how to configure Kubernetes probes to ensure pods are only marked Ready when models are fully loaded and operational.
@@ -16,7 +16,7 @@ When deploying vLLM inference servers, there's a significant time gap between wh
 
 - Premature traffic routing to pods that aren't ready to serve requests
 - Failed requests during model loading phase
-- Need for arbitrary sleep times in deployment pipelines  
+- Need for arbitrary sleep times in deployment pipelines
 - Unreliable E2E testing and CI/CD workflows
 
 The vLLM `/health` endpoint only indicates that the server process is running, **not** that models are loaded and ready to serve.
@@ -33,7 +33,7 @@ containers:
   ports:
   - containerPort: 8000  # or 8200 for decode pods
     protocol: TCP
-  
+
   # Startup Probe: Wait for model to load during initialization
   # Protects liveness/readiness probes from firing too early
   startupProbe:
@@ -44,7 +44,7 @@ containers:
     periodSeconds: 30           # How often to probe during startup
     timeoutSeconds: 5           # HTTP request timeout
     failureThreshold: 60        # Max attempts (30s * 60 = 30min max startup time)
-  
+
   # Liveness Probe: Is the server process alive?
   # Simple health check, restarts container if failing
   livenessProbe:
@@ -54,7 +54,7 @@ containers:
     periodSeconds: 10           # Check every 10s
     timeoutSeconds: 5
     failureThreshold: 3         # Restart after 3 failures
-  
+
   # Readiness Probe: Is the model loaded and ready?
   # Controls traffic routing, removes from service if failing
   readinessProbe:
@@ -90,6 +90,7 @@ $ curl http://localhost:8000/health
 ```
 
 **Behavior:**
+
 - Returns `200 OK` immediately when vLLM server starts
 - Does **not** wait for model loading
 - Use for `livenessProbe` only
@@ -114,6 +115,7 @@ $ curl http://localhost:8000/v1/models
 ```
 
 **Behavior:**
+
 - Returns `503` or connection refused during model loading
 - Returns `200 OK` with model metadata once ready
 - Ideal for `startupProbe` and `readinessProbe`
@@ -136,6 +138,7 @@ Container Start
 ### HTTP Probes vs Exec Probes
 
 **HTTP Probes (Recommended):**
+
 - ✅ Lightweight, no exec overhead
 - ✅ Compatible with cloud load balancers
 - ✅ Native Kubernetes integration
@@ -143,12 +146,14 @@ Container Start
 - ✅ Uses existing vLLM endpoints
 
 **Exec Probes (Legacy):**
+
 - ❌ Higher overhead (fork/exec per probe)
 - ❌ Incompatible with many cloud load balancers
 - ❌ Requires custom scripts in container
 - ⚠️ More complex to debug and maintain
 
 ### For Production Deployments
+
 - ✅ Prevent premature traffic routing
 - ✅ Avoid failed requests during startup
 - ✅ Enable safe rolling updates
@@ -156,9 +161,10 @@ Container Start
 - ✅ Better integration with service meshes
 
 ### For E2E Testing
+
 - ✅ Eliminate arbitrary sleep times
 - ✅ Faster test execution
-- ✅ More reliable test results  
+- ✅ More reliable test results
 - ✅ Better error detection
 
 ## Examples
@@ -175,7 +181,7 @@ decode:
     ports:
     - containerPort: 8200
       protocol: TCP
-    
+
     startupProbe:
       httpGet:
         path: /v1/models
@@ -184,7 +190,7 @@ decode:
       periodSeconds: 30
       timeoutSeconds: 5
       failureThreshold: 60
-    
+
     livenessProbe:
       httpGet:
         path: /health
@@ -192,7 +198,7 @@ decode:
       periodSeconds: 10
       timeoutSeconds: 5
       failureThreshold: 3
-    
+
     readinessProbe:
       httpGet:
         path: /v1/models
@@ -218,7 +224,7 @@ spec:
     ports:
     - containerPort: 8200
       protocol: TCP
-    
+
     startupProbe:
       httpGet:
         path: /v1/models
@@ -227,7 +233,7 @@ spec:
       periodSeconds: 10
       timeoutSeconds: 5
       failureThreshold: 60
-    
+
     livenessProbe:
       httpGet:
         path: /health
@@ -235,7 +241,7 @@ spec:
       periodSeconds: 30
       timeoutSeconds: 5
       failureThreshold: 3
-    
+
     readinessProbe:
       httpGet:
         path: /v1/models
@@ -258,7 +264,7 @@ POD=$(kubectl get pods -n llm-d -l app=vllm -o name | head -1)
 # Test liveness endpoint
 kubectl exec -n llm-d $POD -- curl -sf http://localhost:8000/health
 
-# Test readiness endpoint  
+# Test readiness endpoint
 kubectl exec -n llm-d $POD -- curl -sf http://localhost:8000/v1/models | jq '.'
 ```
 
@@ -278,6 +284,7 @@ kubectl get events -n llm-d --field-selector involvedObject.name=${POD##*/}
 ```
 
 Expected behavior:
+
 1. Pod starts, enters `Running` state
 2. Startup probe checks `/v1/models` repeatedly (30s intervals)
 3. Once model loads, startup probe succeeds
@@ -301,12 +308,14 @@ kubectl exec -n llm-d $POD -- curl -v http://localhost:8000/v1/models
 ```
 
 **Common causes:**
+
 - Model download taking longer than `failureThreshold` allows
 - Insufficient resources (CPU/memory/GPU)
 - Wrong port in probe configuration
 - Network issues preventing model download
 
 **Solutions:**
+
 - Increase `failureThreshold` or `periodSeconds` in `startupProbe`
 - Pre-download models using init containers or persistent volumes
 - Verify pod has sufficient resources allocated
@@ -323,6 +332,7 @@ kubectl logs -n llm-d $POD --tail=100
 ```
 
 **Common causes:**
+
 - vLLM server crashed (liveness probe fails)
 - Model unloaded or corrupted (readiness probe fails)
 - Resource exhaustion (OOM, GPU errors)

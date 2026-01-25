@@ -30,7 +30,6 @@ ModelService addresses these challenges by defining a Helm chart that can be use
 
 **Ease of configuration optimization:** Seamlessly integrate with ecosystem components, such as grid search and Bayesian optimization tools for optimizing the deployment configuration.
 
-
 ## Non-Goals
 
 **Going beyond llm-d (initially):** ModelService is purpose-built for llm-d, with a strict focus on model and LoRA deployment on the llm-d platform.
@@ -48,7 +47,6 @@ The Helm chart supports the declarative deployment of base models and LoRA adapt
 The ModelService Helm chart will only deploy namespace-scoped resources. Helm’s layering model allows platform owners to define reusable `preset-values.yaml` for platform defaults (e.g., accelerator type, sidecars, readiness), while model owners can supply `model-values.yaml` to override only the specifics (e.g., artifact URI, replicas, args). This structure encourages safe customization and sharing. Any last-mile modifications can also be handled using [kustomize's built-in helm chart support](https://github.com/kubernetes-sigs/kustomize/blob/master/examples/chart.md).
 
 Overall, the Helm-based architecture will simplify onboarding, enable reproducibility, and provide a robust foundation for experimentation and configuration search on llm-d—paving the way toward a more production-ready deployment system in the future.
-
 
 ## Implementation status
 
@@ -68,7 +66,7 @@ Manual composition via raw Kubernetes resources:  One possible approach is for p
 
 ## Alternative: Extending KServe
 
-KServe provides a general-purpose model serving abstraction but was originally designed for traditional predictive models; it now provides several LLM specific features as of release 0.15 (see [this blogpost](https://kserve.github.io/website/blog/kserve-0.15-release) for details). As we evolve the ModelService Helm chart, we also plan to collaborate with the KServe community to develop production-grade KServe mechanisms that integrate well with llm-d. This collaboration will support a variety of useful features, including prefill/decode disaggregation, dynamic LoRA loading, and configuration search and tuning.
+KServe provides a general-purpose model serving abstraction but was originally designed for traditional predictive models; it now provides several LLM specific features as of release 0.15 (see [this blogpost](https://kserve.github.io/website/blog/kserve-0.15-release) for details). We also collaborated with the KServe community and added [the integration of llm-d in KServe via a new CRD `LLMInferenceService`](https://kserve.github.io/website/docs/model-serving/generative-inference/llmisvc/llmisvc-overview), which supports a variety of useful features, including prefill/decode disaggregation, dynamic LoRA loading, and configuration search and tuning.
 
 ## Acknowledgements
 

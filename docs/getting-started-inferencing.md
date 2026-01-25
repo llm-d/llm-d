@@ -2,6 +2,9 @@
 
 This document show you how to interact with the model server and inference scheduler.
 
+> [!TIP] 
+> To run a performance test against the llm-d stack checkout our [benchmark doc](../guides/benchmark/README.md).
+
 ## Prerequisites
 
 You are assumed to have deployed the llm-d inference stack from a guide, using the model service Helm charts, or otherwise followed the llm-d conventions for deployment of inference scheduler and model server.
@@ -15,13 +18,16 @@ First we need to choose what strategy we are going to use to expose / interact w
 <!-- TABS:START -->
 
 <!-- TAB:Port-forward (Cluster Internal):default -->
-### Port-forward (Cluster Internal)  
+### Port-forward (Cluster Internal)
+
 For gateway providers that install into the cluster you can port forward to the gateway deployment directly.
 
 ```bash
 GATEWAY_SVC=$(kubectl get svc -n "${NAMESPACE}" -o yaml | yq '.items[] | select(.metadata.name | test(".*-inference-gateway(-.*)?$")).metadata.name' | head -n1)
 ```
+
 **_NOTE:_** This command assumes you have one gateway in your given `${NAMESPACE}`, even if you have multiple it will only grab the name of the first gateway service in alphabetical order. If you are running multiple gateway deployments in a single namespace, you will have to explicitly set your `$GATEWAY_SVC` to the appropriate gateway endpoint
+
 ```bash
 k get services
 NAME                                                 TYPE           CLUSTER-IP    EXTERNAL-IP   PORT(S)                        AGE
@@ -32,7 +38,9 @@ infra-inference-scheduling-inference-gateway-istio   LoadBalancer   10.16.3.226 
 infra-sim-inference-gateway                          LoadBalancer   10.16.1.62    10.16.4.2     80:38348/TCP                   81
 export GATEWAY_SVC="infra-inference-scheduling-inference-gateway-istio"
 ```
+
 After we have our gateway service name, we can port forward it
+
 ```bash
 export ENDPOINT="http://localhost:8000"
 kubectl port-forward -n ${NAMESPACE} service/${GATEWAY_SVC} 8000:80
@@ -42,12 +50,14 @@ kubectl port-forward -n ${NAMESPACE} service/${GATEWAY_SVC} 8000:80
 
 <!-- TAB:External IP (LoadBalancer) -->
 ### External IP (LoadBalancer)
+>
 > [!REQUIREMENTS]
 > This requires that the release of the `llm-d-infra` chart must have `.gateway.serviceType` set to `LoadBalancer`. Currently this is the [default value](https://github.com/llm-d-incubation/llm-d-infra/blob/main/charts/llm-d-infra/values.yaml#L167), however it's worth noting.
-> 
+>
 > This requires your K8s cluster is deployed on a cloud provider with LB integration (EKS/GKE/AKS/AWS/…).
 
 If you are using the GKE gateway or are using the default service type of `LoadBalancer` for your gateway and you are on a cloud platform with load balancing, you can use the `External IP` of your gateway service (you should see the same thing under your gateway with `kubectl get gateway`)
+
 ```bash
 export ENDPOINT=$(kubectl get gateway --no-headers -n ${NAMESPACE} -o jsonpath='{.items[].status.addresses[0].value}')
 ```
@@ -65,11 +75,13 @@ export ENDPOINT=$(kubectl get gateway ${GATEWAY_NAME} --no-headers -n ${NAMESPAC
 
 <!-- TAB:Ingress Controller -->
 ### Ingress Controller
+>
 > [!REQUIREMENTS]
 > This requires that the release of the `llm-d-infra` chart must have `.ingress.enabled` set to `true`, and the `.gateway.service.type` to `ClusterIP`.
 > This requires some load-balancer configuration for your cluster / ingress-controller. This could be either cloud-provider integration or something like MetalLB
 
 This is the most environment dependent of all the options, and can be tricky to set up. For more information on this see [our gateway customization docs](../docs/customizing-your-gateway.md#using-an-ingress). You should be able to get your endpoint from your ingress with the following
+
 ```bash
 export ENDPOINT=$(kubectl get ingress --no-headers -o jsonpath='{.items[].status.loadBalancer.ingress[0].ip}')
 ```
