@@ -156,7 +156,7 @@ Now lets try hitting the `/v1/completions` endpoint (this is model dependent, en
 curl -X POST ${ENDPOINT}/v1/completions \
   -H 'Content-Type: application/json' \
   -d '{
-        "model": "Qwen3/Qwen3-0.6B",
+        "model": "Qwen/Qwen3-32B",
         "prompt": "How are you today?"
       }' | jq
 ```
@@ -177,7 +177,7 @@ Expected output:
   ],
   "created": 1752727735,
   "id": "chatcmpl-af42e9e3-dab0-420f-872b-d23353d982da",
-  "model": "Qwen3/Qwen3-0.6B",
+  "model": "Qwen/Qwen3-32B",
 }
 ```
 
