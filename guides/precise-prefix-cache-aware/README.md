@@ -30,11 +30,19 @@ cd guides/precise-prefix-cache-aware
 helmfile apply -n ${NAMESPACE}
 ```
 
-**_NOTE:_** You can set the `$RELEASE_NAME_POSTFIX` env variable to change the release names. This is how we support concurrent installs. Ex: `RELEASE_NAME_POSTFIX=kv-events-2 helmfile apply -n ${NAMESPACE}`
+**_Experimental_**: Disaggregated Tokenization
+In this path, the precise-prefix-cache-scorer plugin tokenizes and processes the user input in order to eventually compute prefix-cache hits.
+By default, the logic for tokenization and preprocessing is embedded within the inference scheduler.
 
-**_NOTE:_** As an option, when using Precise Prefix Cache Aware Routing, the inference scheduler can offload the tokenization of prompts to a tokenizer service deployed as a sidecar. You can deploy the tokenizer service using `$DISAGGREGATE_TOKENIZER=true` and configure the inference scheduler to utilize it.
-Ex:
-`DISAGGREGATED_TOKENIZATION=true helmfile apply -n ${NAMESPACE}`
+Through this experimental feature, the inference scheduler can delegate the preprocessing and tokenization of inputs to a tokenization-service deployed as a sidecar.
+To use, run this command instead of the above:
+
+```bash
+cd guides/precise-prefix-cache-aware
+DISAGGREGATED_TOKENIZATION=true helmfile apply -n ${NAMESPACE}
+```
+
+**_NOTE:_** You can set the `$RELEASE_NAME_POSTFIX` env variable to change the release names. This is how we support concurrent installs. Ex: `RELEASE_NAME_POSTFIX=kv-events-2 helmfile apply -n ${NAMESPACE}`
 
 **_NOTE:_** This uses Istio as the default provider, see [Gateway Options](./README.md#gateway-options) for installing with a specific provider.
 
