@@ -9,8 +9,7 @@ patches:
   patch: |-
     - op: replace
       path: /spec/template/spec/containers/0/image
-      value: quay.io/kfirt/vllm-offloading:storage-v0.0.12
-#      value: vllm/vllm-openai:v0.13.0
+      value: vllm/vllm-openai:v0.14.1
 
 # Add Offloading Connector with llm-d FS Backend
 - target:
@@ -74,3 +73,14 @@ patches:
       value:
         name: files-storage
         mountPath: /mnt/files-storage
+
+# Add PYTHONHASHSEED env var
+- target:
+    kind: Deployment
+    name: llm-d-model-server
+  patch: |-
+    - op: add
+      path: /spec/template/spec/containers/0/env/-
+      value:
+        name: PYTHONHASHSEED
+        value: "42"

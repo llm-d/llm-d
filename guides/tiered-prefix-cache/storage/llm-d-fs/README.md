@@ -4,7 +4,7 @@
 
 This guide shows how to offload the vLLM prefix cache (KV cache) to shared storage using the llm-d file system (FS) backend.
 The llm-d FS backend integrates with vLLM's native OffloadingConnector and stores KV blocks on shared storage that exposes
-a POSIX-compatible file API (for example IBM Storage Scale, CephFS, GPFS, AWS Lustre).
+a POSIX-compatible file API (for example IBM Storage Scale, CephFS, GCP Lustre, AWS Lustre).
 This enables prefix cache reuse across multiple vLLM instances and across nodes that mount the same shared path.
 Key advantages of the FS backend:
 
@@ -20,8 +20,9 @@ A simple reference implementation of a PVC-based evictor is available in the [kv
 
 ## Prerequisites
 
-* Have the [proper client tools installed on your local system](../../prereq/client-setup/README.md) to use this guide.
-* Ensure your cluster infrastructure is sufficient to [deploy high scale inference](../../prereq/infrastructure/README.md).
+* Have the [proper client tools installed on your local system](../../../prereq/client-setup/README.md) to use this guide.
+* Ensure your cluster infrastructure is sufficient to [deploy high scale inference](../../../prereq/infrastructure/README.md).
+* Ensure that a POSIX-compatible shared storage system is available and configured in the cluster. This guide assumes that the required CSI driver is already installed and that a PVC can be created and mounted into vLLM pods.
 * Create a namespace for installation.
 
 ```bash
@@ -29,8 +30,8 @@ export NAMESPACE=llm-d-storage # or any other namespace (shorter names recommend
 kubectl create namespace ${NAMESPACE}
 ```
 
-* [Create the `llm-d-hf-token` secret in your target namespace with the key `HF_TOKEN` matching a valid HuggingFace token](../../prereq/client-setup/README.md#huggingface-token) to pull models.
-* [Choose an llm-d version](../../prereq/client-setup/README.md#llm-d-version)
+* [Create the `llm-d-hf-token` secret in your target namespace with the key `HF_TOKEN` matching a valid HuggingFace token](../../../prereq/client-setup/README.md#huggingface-token) to pull models.
+* [Choose an llm-d version](../../../prereq/client-setup/README.md#llm-d-version)
 
 ## Installation
 
@@ -40,17 +41,25 @@ cd guides/tiered-prefix-cache/storage/llm-d-fs
 
 ### 1. Deploy Gateway and HTTPRoute
 
-Deploy the Gateway and HTTPRoute using the [gateway recipe](../../recipes/gateway/README.md).
+Deploy the Gateway and HTTPRoute using the [gateway recipe](../../../recipes/gateway/README.md).
 
 ### 2. Deploy PVC (shared storage)
 
 The FS backend requires a shared, POSIX-accessible path to store KV-cache files.
-One common option is a Kubernetes PVC that is mounted into each vLLM pod.
+This requires a volume that supports `ReadWriteMany (RWX)`.
+One common option is a Kubernetes PersistentVolumeClaim (PVC) that is mounted into each vLLM pod.
 
 Apply the PVC manifest:
 
 ```bash
 kubectl apply -n ${NAMESPACE} -f ./manifests/pvc/pvc.yaml
+```
+
+By default, this PVC uses the cluster’s `default` StorageClass (if one is configured).
+If your default StorageClass does not support RWX, update the PVC to reference an RWX-capable StorageClass by setting:
+
+```bash
+storageClassName: <YOUR_RWX_STORAGECLASS>
 ```
 
 ### 3. Deploy vLLM Model Server
@@ -61,11 +70,11 @@ Deploy the vLLM model server with the Offloading Connector enabled and the `llm-
 kubectl apply -k ./manifests/vllm/ -n ${NAMESPACE}
 ```
 
-**Note:** The llm-d FS backend path must point to the PVC created in the previous step. For additional configuration options [llmd-fs backend configuration](https://github.com/llm-d/llm-d-kv-cache/tree/main/kv_connectors/llmd_fs_backend)
+**Note:** The llm-d FS backend path must point to the PVC created in the previous step. For additional configuration options [llmd-fs backend configuration](https://github.com/llm-d/llm-d-kv-cache/blob/main/kv_connectors/llmd_fs_backend/README.md)
 
 ### 4. Deploy InferencePool
 
-Deploy the `InferencePool` using the [InferencePool recipe](../../recipes/inferncepool/README.md).
+Deploy the `InferencePool` using the [InferencePool recipe](../../../recipes/inferencepool/README.md).
 
 ## Verifying the installation
 

@@ -50,7 +50,7 @@ Offloading prefix cache to a shared (remote) storage tier provides several impor
 * **Shared KV-cache across nodes** - Multiple inference replicas can access and reuse the same prefix cache.
 * **Fast scale-up** - New nodes can immediately reuse existing KV-cache data without warming the cache from scratch.
 * **Persistence across restarts or failures** - KV-cache data survives pod restarts, rescheduling, and node failures.
-* **Enterprise storage integration** - Can leverage mature enterprise storage systems (for example CephFS, Lustre, IBM Storage Scale) with built-in durability, monitoring, and access control.
+* **Enterprise storage integration** - Can leverage mature enterprise storage systems (for example CephFS, GCP Lustre, IBM Storage Scale) with built-in durability, monitoring, and access control.
 
 However, shared storage introduces additional operational and performance considerations. Latency and throughput depend on the characteristics of the underlying storage system, so careful evaluation is required to ensure that cache transfer overhead does not negatively impact inference performance.
 
@@ -60,8 +60,8 @@ Any storage connector that is compatible with vLLM can be used **transparently w
 
 To enable shared storage offloading, refer to one of the following guides:
 
-1. [**llm-d File System (FS) backend**](./storage/llm-d-fs/README.md) - POSIX-based shared storage using a file system (for example CephFS, Lustre, IBM Storage Scale), leveraging the `vLLM native offloading connector`.
-2. **WEKA GDS** - Deploying WEKA storage with GPU Direct Storage (GDS) for high-performance data transfer.
+1. [**llm-d File System (FS) backend**](./storage/llm-d-fs/README.md) - POSIX-based shared storage using a file system (for example CephFS, GCP Lustre, IBM Storage Scale), leveraging the `vLLM native offloading connector`.
+**Note:** This backend can also be used with local disk, where each vLLM instance uses a local storage path. Sharing will only be between vLLM instances on the same physical node that can access the same local storage path.
 
 ### P2P Cache Sharing
 
