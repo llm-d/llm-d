@@ -13,7 +13,7 @@ modelArtifacts:
 routing:
   servicePort: 8000
   proxy:
-    image: ghcr.io/llm-d/llm-d-routing-sidecar:v0.4.0-rc.1
+    image: ghcr.io/llm-d/llm-d-routing-sidecar:v0.4.0
     connector: nixlv2
     secure: false
 
@@ -29,7 +29,7 @@ decode:
   monitoring:
     podmonitor:
       enabled: true
-      portName: "metrics" # decode vLLM service port (from routing.proxy.targetPort)
+      portName: "vllm" # decode vLLM service port (from routing.proxy.targetPort)
       path: "/metrics"
       interval: "30s"
   containers:
@@ -54,17 +54,20 @@ decode:
         value: DEBUG
     ports:
       - containerPort: 8200
-        name: metrics
+        name: vllm
+        protocol: TCP
+      - containerPort: 5557
+        name: nixl
         protocol: TCP
     resources:
       limits:
         memory: 64Gi
         cpu: "16"
-        google.com/tpu: 8
+        # note: TPU resources get controlled by parallelism + accelerators above
       requests:
         memory: 64Gi
         cpu: "16"
-        google.com/tpu: 8
+        # note: TPU resources get controlled by parallelism + accelerators above
     mountModelVolume: true
     volumeMounts:
     - name: metrics-volume
@@ -76,7 +79,7 @@ decode:
     startupProbe:
       httpGet:
         path: /health
-        port: 8200
+        port: vllm
       initialDelaySeconds: 15
       periodSeconds: 30
       timeoutSeconds: 5
@@ -84,14 +87,14 @@ decode:
     livenessProbe:
       httpGet:
         path: /health
-        port: 8200
+        port: vllm
       periodSeconds: 10
       timeoutSeconds: 5
       failureThreshold: 3
     readinessProbe:
       httpGet:
         path: /v1/models
-        port: 8200
+        port: vllm
       periodSeconds: 5
       timeoutSeconds: 2
       failureThreshold: 3
@@ -143,15 +146,18 @@ prefill:
       - containerPort: 8000
         name: metrics
         protocol: TCP
+      - containerPort: 5557
+        name: nixl
+        protocol: TCP
     resources:
       limits:
         memory: 64Gi
         cpu: "16"
-        google.com/tpu: 8
+        # note: TPU resources get controlled by parallelism + accelerators above
       requests:
         memory: 64Gi
         cpu: "16"
-        google.com/tpu: 8
+       # note: TPU resources get controlled by parallelism + accelerators above
     mountModelVolume: true
     volumeMounts:
     - name: metrics-volume
@@ -163,7 +169,7 @@ prefill:
     startupProbe:
       httpGet:
         path: /health
-        port: 8000
+        port: vllm
       initialDelaySeconds: 15
       periodSeconds: 30
       timeoutSeconds: 5
@@ -171,14 +177,14 @@ prefill:
     livenessProbe:
       httpGet:
         path: /health
-        port: 8000
+        port: vllm
       periodSeconds: 10
       timeoutSeconds: 5
       failureThreshold: 3
     readinessProbe:
       httpGet:
         path: /v1/models
-        port: 8000
+        port: vllm
       periodSeconds: 5
       timeoutSeconds: 2
       failureThreshold: 3

@@ -411,6 +411,12 @@ grafana:
   service:
     type: ClusterIP
     sessionAffinity: ""
+  sidecar:
+    dashboards:
+      enabled: true
+      searchNamespace: ALL
+    datasources:
+      defaultDatasourceEnabled: false
   datasources:
     datasources.yaml:
       apiVersion: 1
@@ -453,6 +459,14 @@ grafana:
   service:
     type: ClusterIP
     sessionAffinity: ""
+  sidecar:
+    dashboards:
+      enabled: true
+      searchNamespace: ${MONITORING_NAMESPACE}
+      label: grafana_dashboard
+      folderAnnotation: grafana_folder
+    datasources:
+      defaultDatasourceEnabled: false
   datasources:
     datasources.yaml:
       apiVersion: 1
@@ -512,9 +526,16 @@ EOF
 
   rm -f /tmp/prometheus-values.yaml
 
-  log_info "⏳ Waiting for Prometheus stack pods to be ready..."
-  $KCMD wait --for=condition=ready pod -l app.kubernetes.io/name=prometheus -n "${MONITORING_NAMESPACE}" --timeout=300s || true
-  $KCMD wait --for=condition=ready pod -l app.kubernetes.io/name=grafana -n "${MONITORING_NAMESPACE}" --timeout=300s || true
+  log_info "⏳ Waiting for Prometheus and Grafana to be ready..."
+
+  # Wait for Prometheus custom resource to be available
+  # The Prometheus CR is created by Helm and managed by the Prometheus operator
+  log_info "⏳ Waiting for Prometheus instance to be available..."
+  $KCMD wait --for=condition=Available prometheus "${RELEASE_NAME}-kube-prometheus-stack-prometheus" -n "${MONITORING_NAMESPACE}" --timeout=300s || log_info "⚠️  Prometheus instance did not become available within timeout"
+
+  # Wait for Grafana deployment to be available
+  log_info "⏳ Waiting for Grafana deployment to be available..."
+  $KCMD wait --for=condition=Available deployment -l "app.kubernetes.io/instance=${RELEASE_NAME},app.kubernetes.io/name=grafana" -n "${MONITORING_NAMESPACE}" --timeout=300s || log_info "⚠️  Grafana deployment did not become available within timeout"
 
   # Use the known service name from the Helm chart
   PROMETHEUS_SVC="${RELEASE_NAME}-kube-prometheus-stack-prometheus"
@@ -562,6 +583,14 @@ install() {
     log_info "⚠️ ServiceMonitor CRD not found. Installing Prometheus stack with CRDs..."
   fi
   install_prometheus_grafana
+
+  # Load llm-d dashboards
+  SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+  if [ -f "${SCRIPT_DIR}/load-llm-d-dashboards.sh" ]; then
+    log_info "📊 Loading llm-d dashboards..."
+    "${SCRIPT_DIR}/load-llm-d-dashboards.sh" "${MONITORING_NAMESPACE}"
+  fi
+
   log_success "🎉 Prometheus and Grafana installation complete."
 }
 

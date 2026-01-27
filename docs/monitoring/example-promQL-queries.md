@@ -82,18 +82,22 @@ The provided [load generation script](./scripts/generate-load-llmd.sh) will popu
 ## Key Notes
 
 ### Metric Name Updates
+
 - **GAIE Metrics**: Current metric names use `inference_objective_*` prefix (older deployments may still use `inference_model_*`)
 - **vLLM Metrics**: Inter-token latency metrics use `vllm:inter_token_latency_seconds` (previously `vllm:time_per_output_token_seconds`)
 
 ### Histogram Queries
+
 - Always include `by(le)` grouping when using `histogram_quantile()` with bucket metrics
 - Example: `histogram_quantile(0.99, sum by(le) (rate(metric_name_bucket[5m])))`
 
 ### Job Labels
+
 - EPP availability queries use job labels like `job="gaie-inference-scheduling-epp"`
 - Actual job names depend on your deployment configuration
 
 ### Error Metrics
+
 - Error metrics (`*_error_total`) only appear after the first error occurs
 - Use the provided [load generation script](./scripts/generate-load-llmd.sh) to populate error metrics for testing
 
@@ -102,12 +106,15 @@ The provided [load generation script](./scripts/generate-load-llmd.sh) will popu
 The following metrics from community-gathered monitoring requirements are not currently available and would need custom instrumentation:
 
 ### Path C: Prefix Caching
+
 - **Cache Eviction Rate**: No metrics track when cache entries are evicted due to memory pressure
 - **Prefix Cache Memory Usage (Absolute)**: Only percentage utilization is available
 
 ### Path D: P/D Disaggregation
+
 - **KV Cache Transfer Times**: No metrics track the latency of transferring KV cache between prefill and decode workers
 
 ### Workarounds
+
 - **Cache Pressure Detection**: Monitor trends in `vllm:prefix_cache_hits` / `vllm:prefix_cache_queries` - declining hit rates may indicate cache evictions
 - **Transfer Bottlenecks**: Monitor overall latency spikes during P/D operations as an indirect indicator

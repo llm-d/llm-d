@@ -132,27 +132,27 @@ To apply this configuration:
 kubectl debug node/<gpu-node-name> -it --image=ubuntu --profile=sysadmin -- chroot /host
 ```
 
-2. Within the debug pod, edit the containerd configuration file:
+1. Within the debug pod, edit the containerd configuration file:
 
 ```bash
 vim /etc/containerd/config.toml
 ```
 
-3. Add or modify the NRI configuration section as shown above.
+1. Add or modify the NRI configuration section as shown above.
 
-4. Restart the containerd service to apply the changes:
+2. Restart the containerd service to apply the changes:
 
 ```bash
 systemctl restart containerd
 ```
 
-5. Exit the debug pod:
+1. Exit the debug pod:
 
 ```bash
 exit
 ```
 
-6. Repeat these steps for each GPU node in your cluster.
+1. Repeat these steps for each GPU node in your cluster.
 
 #### Deploying the ulimit Adjuster Plugin
 

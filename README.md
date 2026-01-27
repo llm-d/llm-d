@@ -15,6 +15,7 @@ Achieve SOTA Inference Performance On Any Accelerator
  [![Join Slack](https://img.shields.io/badge/Join_Slack-blue?logo=slack)](https://llm-d.ai/slack)
 
 Latest News 🔥
+
 - [2025-12] The [v0.4](https://llm-d.ai/blog/llm-d-v0.4-achieve-sota-inference-across-accelerators) release demonstrates 40% reduction in per output token latency for DeepSeek V3.1 on H200 GPUs, Intel XPU and Google TPU disaggregation support for lower time to first token, a new well-lit path for prefix cache offload to vLLM-native CPU memory tiering, and a preview of the workload variant autoscaler improving model-as-a-service efficiency.
 - [2025-10] Our [v0.3](https://llm-d.ai/blog/llm-d-v0.3-expanded-hardware-faster-perf-and-igw-ga) release delivers Intel XPU and Google TPU support, TCP and RDMA over RoCE tested with disaggregation, new experimental predicted latency balancing for up to 3x better P90 latency on long prefill, DeepSeek Expert Parallel serving reaching 2.2k output tokens/s/gpu on H200 and 2.9k output tokens/s/gpu on B200, and integrates the Inference Gateway v1.0 GA release.
 - [2025-08] Read more about the [intelligent inference scheduler](https://llm-d.ai/blog/intelligent-inference-scheduling-with-llm-d), including a deep dive on how different balancing techniques are composed to improve throughput without overloading replicas.
@@ -41,23 +42,23 @@ See the [accelerator docs](./docs/accelerators/README.md) for points of contact 
 
 `llm-d` currently targets improving the production serving experience around:
 
-* Online serving and online batch of Generative models running in PyTorch or JAX
-  * Large language models (LLMs) with 1 billion or more parameters
-  * Using most or all of the capacity of one or more hardware accelerators
-  * Running in throughput, latency, or multiple-objective configurations
-* On recent generation datacenter-class accelerators
-  * NVIDIA A100 / L4 or newer
-  * AMD MI250 or newer
-  * Google TPU v5e or newer
-  * Intel Data Center GPU Max (XPU/Ponte Vecchio) series or newer
-* With extremely fast accelerator interconnect and datacenter networking
-  * 600-16,000 Gbps per accelerator NVLINK on host or across narrow domains like NVL72
-  * 1,600-5,000 Gbps per chip TPU OCS links within TPU pods
-  * 100-1,600 Gbps per host datacenter networking across broad (>128 host) domains
-* Kubernetes 1.29+ as the hardware orchestrator
-  * in large (100-100k node) reserved cloud capacity or datacenters, often overlapping with AI batch and training
-  * in medium (10-1k node) cloud deployments with a mix of reserved, on-demand, or spot capacity
-  * in small (1-10 node) test and qualification environments with a static footprint, often time shared
+- Online serving and online batch of Generative models running in PyTorch or JAX
+  - Large language models (LLMs) with 1 billion or more parameters
+  - Using most or all of the capacity of one or more hardware accelerators
+  - Running in throughput, latency, or multiple-objective configurations
+- On recent generation datacenter-class accelerators
+  - NVIDIA A100 / L4 or newer
+  - AMD MI250 or newer
+  - Google TPU v5e or newer
+  - Intel Data Center GPU Max (XPU/Ponte Vecchio) series or newer
+- With extremely fast accelerator interconnect and datacenter networking
+  - 600-16,000 Gbps per accelerator NVLINK on host or across narrow domains like NVL72
+  - 1,600-5,000 Gbps per chip TPU OCS links within TPU pods
+  - 100-1,600 Gbps per host datacenter networking across broad (>128 host) domains
+- Kubernetes 1.29+ as the hardware orchestrator
+  - in large (100-100k node) reserved cloud capacity or datacenters, often overlapping with AI batch and training
+  - in medium (10-1k node) cloud deployments with a mix of reserved, on-demand, or spot capacity
+  - in small (1-10 node) test and qualification environments with a static footprint, often time shared
 
 Our upstream projects – particularly vLLM and Kubernetes – support a broader array of models, accelerators, and networks that may also benefit from our work, but we concentrate on optimizing and standardizing the operational and automation challenges of the leading edge inference workloads.
 
@@ -79,8 +80,8 @@ Key features of llm-d include:
 - **Disaggregated Serving with vLLM:** llm-d orchestrates prefill and decode phases onto  independent instances - the scheduler decides which instances should receive a given request, and the transaction is coordinated via a sidecar alongside decode instances. The sidecar instructs vLLM to provide point to point KV cache transfer over fast interconnects (IB/RoCE RDMA, TPU ICI, and DCN) via NIXL. [See our Northstar design](https://docs.google.com/document/d/1FNN5snmipaTxEA1FGEeSH7Z_kEqskouKD1XYhVyTHr8/edit?tab=t.0)
 
 - **Disaggregated Prefix Caching :** llm-d uses vLLM's KVConnector abstraction to configure a pluggable KV cache hierarchy, including offloading KVs to host, remote storage, and systems like LMCache. We plan to support two KV caching schemes. [See our Northstar design](https://docs.google.com/document/d/1d-jKVHpTJ_tkvy6Pfbl3q2FM59NpfnqPAh__Uz_bEZ8/edit?tab=t.0#heading=h.6qazyl873259)
-    - *Independent (N/S)* caching with offloading to local memory and disk, providing a zero operational cost mechanism for offloading.
-    - *Shared (E/W)* caching with KV transfer between instances and shared storage with global indexing, providing potential for higher performance at the cost of a more operationally complex system.
+  - *Independent (N/S)* caching with offloading to local memory and disk, providing a zero operational cost mechanism for offloading.
+  - *Shared (E/W)* caching with KV transfer between instances and shared storage with global indexing, providing potential for higher performance at the cost of a more operationally complex system.
 
 - **Variant Autoscaling over Hardware, Workload, and Traffic**: A traffic- and hardware-aware autoscaler that (a) measures the capacity of each model server instance, (b) derive a load function that takes into account different request shapes and QoS, and (c) assesses recent traffic mix (QPS, QoS, and shapes) to calculate the optimal mix of instances to handle prefill, decode, and latency-tolerant requests, enabling use of HPA for SLO-level efficiency. [See our Northstar design](https://docs.google.com/document/d/1inTneLEZTv3rDEBB9KLOB9K6oMq8c3jkogARJqdt_58/edit?tab=t.0)
 
@@ -98,7 +99,7 @@ See the [prerequisites for our guides](./guides/prereq/) for more details on sup
 
 ### Deploying llm-d
 
-`llm-d` provides Helm charts that deploy the [inference scheduler](https://github.com/llm-d-incubation/llm-d-infra/blob/main/charts/llm-d-infra/README.md#tldr) and a parameterized [deployment of vLLM](https://github.com/llm-d-incubation/llm-d-modelservice/blob/main/README.md#getting-started) that demonstrates [a number of different production configurations](https://github.com/llm-d-incubation/llm-d-modelservice/tree/main/examples).
+`llm-d` provides Helm charts that deploy the [inference scheduler](https://github.com/llm-d-incubation/llm-d-infra/blob/main/charts/llm-d-infra/README.md) and a parameterized [deployment of vLLM](https://github.com/llm-d-incubation/llm-d-modelservice/blob/main/README.md) that demonstrates [a number of different production configurations](https://github.com/llm-d-incubation/llm-d-modelservice/tree/main/examples).
 
 We bundle these with guides to our [well-lit paths](./guides/README.md) with key decisions, tradeoffs, benchmarks, and recommended configuration.
 

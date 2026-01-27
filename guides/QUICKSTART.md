@@ -33,7 +33,7 @@ A HuggingFace token is required to download models from the HuggingFace Hub. You
 
 llm-d can be deployed on a variety of Kubernetes distributions and managed providers. The [infrastructure prerequisite](./prereq/infrastructure/README.md) will help you ensure your cluster is properly configured with the resources necessary to run LLM inference.
 
-Specific requirements, workarounds, and any other documentation relevant to these platforms can be reviewed in the [infra-providers directory](../docs/infra-providers/). 
+Specific requirements, workarounds, and any other documentation relevant to these platforms can be reviewed in the [infra-providers directory](../docs/infra-providers/).
 
 ### Gateway provider
 

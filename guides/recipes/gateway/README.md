@@ -9,7 +9,8 @@ The following recipes are available for deploying the gateway and httproute.
 <!-- TABS:START -->
 
 <!-- TAB:GKE L7 Regional External Managed:default -->
-### GKE L7 Regional External Managed  
+### GKE L7 Regional External Managed
+
 This deploys a gateway suitable for GKE, using the `gke-l7-regional-external-managed` gateway class.
 
 ```bash
@@ -18,6 +19,7 @@ kubectl apply -k ./gke-l7-regional-external-managed -n ${NAMESPACE}
 
 <!-- TAB:Istio -->
 ### Istio
+
 This deploys a gateway suitable for Istio, using the `istio` gateway class.
 
 ```bash
@@ -26,6 +28,7 @@ kubectl apply -k ./istio -n ${NAMESPACE}
 
 <!-- TAB:KGateway -->
 ### KGateway
+
 This deploys a gateway suitable for KGateway, using the `kgateway` gateway class.
 
 ```bash
@@ -34,7 +37,7 @@ kubectl apply -k ./kgateway -n ${NAMESPACE}
 
 <!-- TAB:KGateway (OpenShift) -->
 ### KGateway (OpenShift)
- 
+
 This deploys a gateway suitable for OpenShift, using the `openshift` gateway class.
 
 ```bash

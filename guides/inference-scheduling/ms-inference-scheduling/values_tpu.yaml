@@ -2,20 +2,18 @@
 multinode: false
 
 modelArtifacts:
-  uri: "hf://meta-llama/Llama-3.1-70B-Instruct"
-  size: 160Gi
+  uri: "hf://Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8"
+  size: 700Gi
   authSecretName: "llm-d-hf-token"
-  name: meta-llama/Llama-3.1-70B
-
-accelerator:
-  type: google
+  name: Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8
 
 routing:
-  servicePort: 8000
   proxy:
-    image: ghcr.io/llm-d/llm-d-routing-sidecar:v0.4.0-rc.1
-    connector: nixlv2
-    secure: false
+    enabled: false # removes sidecar from deployment - no PD in inference scheduling
+    targetPort: 8000 # controlls vLLM port to matchup with sidecar if deployed
+
+accelerator:
+  type: "google"
 
 decode:
   parallelism:
@@ -24,27 +22,39 @@ decode:
   replicas: 2
   extraConfig:
     nodeSelector:
-      cloud.google.com/gke-tpu-topology: "2x4"
-      cloud.google.com/gke-tpu-accelerator: "tpu-v6e-slice"
+      cloud.google.com/gke-tpu-topology: "2x2x1"
+      cloud.google.com/gke-tpu-accelerator: "tpu7x"
   monitoring:
     podmonitor:
       enabled: true
-      portName: "metrics"  # decode vLLM service port (from routing.proxy.targetPort)
+      portName: "vllm"  # decode vLLM service port (from routing.proxy.targetPort)
       path: "/metrics"
       interval: "30s"
   containers:
   - name: "vllm"
-    image: "vllm/vllm-tpu:e92694b6fe264a85371317295bca6643508034ef"
+    image: "vllm/vllm-tpu:nightly-ironwood-20260113-8424c78-df7e127"
     modelCommand: vllmServe
     args:
-      - "--tensor-parallel-size=8"
-      - "--max-model-len=4096"
+        - --data-parallel-size=1
+        - --max-model-len=9216
+        - --max-num-batched-tokens=1028
+        - --max-num-seqs=128
+        - --kv-cache-dtype=fp8
+        - --async-scheduling
+        - --gpu-memory-utilization=0.93
     ports:
-      - containerPort: 5557
+      - containerPort: 8000
+        name: vllm
         protocol: TCP
-      - containerPort: 8200
-        name: metrics
-        protocol: TCP
+    resources:
+      limits:
+        memory: 64Gi
+        cpu: "16"
+        google.com/tpu: 4
+      requests:
+        memory: 64Gi
+        cpu: "16"
+        google.com/tpu: 4
     mountModelVolume: true
     volumeMounts:
     - name: metrics-volume
@@ -54,7 +64,7 @@ decode:
     startupProbe:
       httpGet:
         path: /v1/models
-        port: 8200
+        port: vllm
       initialDelaySeconds: 15
       periodSeconds: 30
       timeoutSeconds: 5
@@ -62,14 +72,14 @@ decode:
     livenessProbe:
       httpGet:
         path: /health
-        port: 8200
+        port: vllm
       periodSeconds: 10
       timeoutSeconds: 5
       failureThreshold: 3
     readinessProbe:
       httpGet:
         path: /v1/models
-        port: 8200
+        port: vllm
       periodSeconds: 5
       timeoutSeconds: 2
       failureThreshold: 3

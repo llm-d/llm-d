@@ -72,9 +72,9 @@ kubectl apply -f httproute.gke.yaml -n ${NAMESPACE}
 ```bash
 helm list -n ${NAMESPACE}
 NAME        NAMESPACE   REVISION   UPDATED                               STATUS     CHART                       APP VERSION
-gaie-sim    llm-d-sim   1          2025-08-24 11:44:26.88254 -0700 PDT   deployed   inferencepool-v1.2.0-rc.1   v1.2.0-rc.1
-infra-sim   llm-d-sim   1          2025-08-24 11:44:23.11688 -0700 PDT   deployed   llm-d-infra-v1.3.4          v0.3.0
-ms-sim      llm-d-sim   1          2025-08-24 11:44:32.17112 -0700 PDT   deployed   llm-d-modelservice-v0.3.8   v0.3.0
+gaie-sim    llm-d-sim   1          2025-08-24 11:44:26.88254 -0700 PDT   deployed   inferencepool-v1.2.0        v1.2.0
+infra-sim   llm-d-sim   1          2025-08-24 11:44:23.11688 -0700 PDT   deployed   llm-d-infra-v1.3.6          v0.3.0
+ms-sim      llm-d-sim   1          2025-08-24 11:44:32.17112 -0700 PDT   deployed   llm-d-modelservice-v0.3.17  v0.3.0
 ```
 
 - Out of the box with this example you should have the following resources:
@@ -92,7 +92,7 @@ pod/ms-sim-llm-d-modelservice-prefill-76c86dd9f8-pvbzm   1/1     Running   0    
 NAME                                        TYPE           CLUSTER-IP    EXTERNAL-IP   PORT(S)                        AGE
 service/gaie-sim-epp                        ClusterIP      10.16.0.143   <none>        9002/TCP,9090/TCP              7m14s
 service/gaie-sim-ip-207d1d4c                ClusterIP      None          <none>        54321/TCP                      7m14s
-service/infra-sim-inference-gateway-istio   LoadBalancer   10.16.1.112   10.16.4.2     15021:33302/TCP,80:31413/TCP   7m19s
+service/infra-sim-inference-gateway-istio   ClusterIP      10.16.1.112   10.16.4.2     15021:33302/TCP,80:31413/TCP   7m19s
 
 NAME                                                READY   UP-TO-DATE   AVAILABLE   AGE
 deployment.apps/gaie-sim-epp                        1/1     1            1           7m14s

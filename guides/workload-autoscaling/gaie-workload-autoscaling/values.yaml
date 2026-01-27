@@ -9,7 +9,7 @@ inferenceExtension:
     ###################
     name: llm-d-inference-scheduler
     hub: ghcr.io/llm-d
-    tag: v0.4.0
+    tag: v0.5.0
     pullPolicy: Always
   extProcPort: 9002
   pluginsConfigFile: "default-plugins.yaml"

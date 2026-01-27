@@ -2,10 +2,6 @@ environments:
   istio: &I
     values:
       - ../prereq/gateway-provider/common-configurations/istio.yaml
-  istioBench: &IB
-    values:
-      - ../prereq/gateway-provider/common-configurations/istio.yaml
-      - ../prereq/gateway-provider/common-configurations/benchmarking.yaml
   kgateway: &KG
     values:
       - ../prereq/gateway-provider/common-configurations/kgateway.yaml
@@ -33,7 +29,7 @@ releases:
   - name: {{ printf "infra-%s" $rn | quote }}
     namespace: {{ $ns }}
     chart: llm-d-infra/llm-d-infra
-    version: v1.3.4
+    version: v1.3.6
     installed: true
     labels:
       type: infrastructure
@@ -45,7 +41,7 @@ releases:
   - name: {{ printf "gaie-%s" $rn | quote }}
     namespace: {{ $ns }}
     chart: oci://registry.k8s.io/gateway-api-inference-extension/charts/inferencepool
-    version: v1.2.1
+    version: v1.2.0
     installed: true
     needs:
       - {{ printf "infra-%s" $rn | quote }}
@@ -63,7 +59,7 @@ releases:
               enabled: true
             prometheus:
               enabled: false
-    {{- else if or (eq .Environment.Name "istio") (eq .Environment.Name "default") (eq .Environment.Name "istioBench") }}
+    {{- else if or (eq .Environment.Name "istio") (eq .Environment.Name "default") }}
       - provider:
           name: {{ .Environment.Values.provider.name }}
           istio:
@@ -73,26 +69,20 @@ releases:
             destinationRule:
               host: {{ printf "gaie-%s-epp.%s.svc.cluster.local" $rn $ns | quote }}
     {{- end }}
-    # Apply log level only in bench setting
-    {{- if (eq .Environment.Name "istioBench") }}
-      - inferenceExtension:
-          flags: 
-            {{ .Environment.Values.inferenceExtension.flags | toYaml | nindent 12 }}
-    {{- end }}
     labels:
       kind: inference-stack
 
   - name: {{ printf "ms-%s" $rn | quote }}
     namespace: {{ $ns }}
     chart: llm-d-modelservice/llm-d-modelservice
-    version: v0.3.8
+    version: v0.3.17
     installed: true
     needs:
       - {{ printf "infra-%s" $rn | quote }}
       - {{ printf "gaie-%s" $rn | quote }}
     values:
       - ms-kv-events/values.yaml
-    {{- if (eq .Environment.Name "istioBench") }}
+    {{- if or (eq .Environment.Name "istio") (eq .Environment.Name "default") }}
       - routing: 
           {{ .Environment.Values.routing | toYaml | nindent 10 }}
     {{- end }}

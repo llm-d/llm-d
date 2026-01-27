@@ -2,10 +2,6 @@ environments:
   istio: &I
     values:
       - ../prereq/gateway-provider/common-configurations/istio.yaml
-  istioBench: &IB
-    values:
-      - ../prereq/gateway-provider/common-configurations/istio.yaml
-      - ../prereq/gateway-provider/common-configurations/benchmarking.yaml
   kgateway: &KG
     values:
       - ../prereq/gateway-provider/common-configurations/kgateway.yaml
@@ -24,9 +20,9 @@ environments:
     values:
       - ../prereq/gateway-provider/common-configurations/istio.yaml
   aks: &AKS
-    <<: *IB
+    <<: *I
   default:
-    <<: *IB
+    <<: *I
 
 ---
 
@@ -43,7 +39,7 @@ releases:
   - name: {{ printf "infra-%s" $rn | quote }}
     namespace: {{ $ns }}
     chart: llm-d-infra/llm-d-infra
-    version: v1.3.4
+    version: v1.3.6
     installed: true
     labels:
       type: infrastructure
@@ -55,7 +51,7 @@ releases:
   - name: {{ printf "gaie-%s" $rn | quote }}
     namespace: {{ $ns }}
     chart: oci://registry.k8s.io/gateway-api-inference-extension/charts/inferencepool
-    version: v1.2.1
+    version: v1.2.0
     installed: true
     needs:
       - {{ printf "infra-%s" $rn | quote }}
@@ -65,8 +61,6 @@ releases:
     {{- if or (eq .Environment.Name "gke") (eq .Environment.Name "gke_tpu") }}
       - provider:
           name: {{ .Environment.Values.provider.name }}
-        inferencePool:
-          apiVersion: {{ .Environment.Values.inferencePool.apiVersion }}
         inferenceExtension:
           monitoring:
             gke:
@@ -75,7 +69,7 @@ releases:
               enabled: false
     {{- end }}
     # Apply destination rule for anything istio
-    {{- if or (eq .Environment.Name "istio") (eq .Environment.Name "default") (eq .Environment.Name "istioBench") (eq .Environment.Name "aks") (eq .Environment.Name "xpu") }}
+    {{- if or (eq .Environment.Name "istio") (eq .Environment.Name "default") (eq .Environment.Name "aks") (eq .Environment.Name "xpu") }}
       - provider:
           name: {{ .Environment.Values.provider.name }}
           istio:
@@ -85,8 +79,7 @@ releases:
             destinationRule:
               host: {{ printf "gaie-%s-epp.%s.svc.cluster.local" $rn $ns | quote }}
     {{- end }}
-    # Apply log level only in bench setting
-    {{- if or (eq .Environment.Name "istioBench") (eq .Environment.Name "default") }}
+    {{- if or (eq .Environment.Name "istio") (eq .Environment.Name "default") }}
       - inferenceExtension:
           flags:
             {{ .Environment.Values.inferenceExtension.flags | toYaml | nindent 12 }}
@@ -97,7 +90,7 @@ releases:
   - name: {{ printf "ms-%s" $rn | quote }}
     namespace: {{ $ns }}
     chart: llm-d-modelservice/llm-d-modelservice
-    version: v0.3.8
+    version: v0.3.17
     installed: true
     needs:
       - {{ printf "infra-%s" $rn | quote }}
@@ -112,7 +105,7 @@ releases:
     {{- else }}
       - ms-pd/values.yaml
     {{- end }}
-    {{- if or (eq .Environment.Name "istioBench") (eq .Environment.Name "default") }}
+    {{- if or (eq .Environment.Name "istio") (eq .Environment.Name "default") }}
       - routing:
           {{ .Environment.Values.routing | toYaml | nindent 10 }}
     {{- end }}

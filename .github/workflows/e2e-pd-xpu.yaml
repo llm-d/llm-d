@@ -91,7 +91,7 @@ jobs:
       - name: fetch helm manifests - prepare for upload
         run: |
           for release_name in "${INFRA_RELEASE_NAME}" "${GAIE_RELEASE_NAME}" "${MS_RELEASE_NAME}"; do
-            /bin/sh .github/scripts/e2e/helm-get-all.sh \
+            bash .github/scripts/e2e/helm-get-all.sh \
               ~/pd-xpu-deployment.log \
               "$release_name" \
               "$NAMESPACE"

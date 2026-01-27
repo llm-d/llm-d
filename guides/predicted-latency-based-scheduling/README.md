@@ -4,52 +4,52 @@
 
 This experimental feature introduces **predicted latency based load balancing**, where scheduling decisions are guided by real-time predictions of request latency rather than only utilization metrics like queue depth or KV-cache utilization.
 
-- **Problem:** Utilization-based load balancing misses some distinct characteristics of LLM workloads, leading to requests missing SLO targets or leads to overly conservative routing that wastes capacity. 
-- **Approach:** The Endpoint Picker (EPP) integrates with **in-pod latency predictor sidecars** that continuously learn from live traffic. These sidecars estimate **p90 TTFT** and **p90 TPOT** for each candidate pod given current load, prefix cache state, and request features.  
+- **Problem:** Utilization-based load balancing misses some distinct characteristics of LLM workloads, leading to requests missing SLO targets or leads to overly conservative routing that wastes capacity.
+- **Approach:** The Endpoint Picker (EPP) integrates with **in-pod latency predictor sidecars** that continuously learn from live traffic. These sidecars estimate **p90 TTFT** and **p90 TPOT** for each candidate pod given current load, prefix cache state, and request features.
 - **Outcome:** The **SLO scorer** compares predictions against per-request SLOs and directs traffic to pods with some headroom. If none exist, requests are shed (priority < 0) or sent to a weighted pool favoring lower latency pods.
+
 ### Tradeoffs & Gaps
 
-- **Homogeneous InferencePool**  
-  Current predictors assume that all model server pods are identical (same GPU type, model weights, and serving configuration). Heterogeneous pools are not yet modeled.  
+- **Homogeneous InferencePool**
+  Current predictors assume that all model server pods are identical (same GPU type, model weights, and serving configuration). Heterogeneous pools are not yet modeled.
 
-- **Scaling limits**  
-  Each prediction sidecar can sustain ~300 QPS on a c4-standard-192 Google cloud machine (**≈ 192 vCPUs, 720 GB RAM, Up to 100 Gbps network, Up to 200 Gbps aggregate throughput**). Because the EPP makes one prediction call per candidate pod, total prediction load grows with both **cluster QPS** and **pod count**. If traffic or pod count increases, prediction servers must be scaled horizontally.  
+- **Scaling limits**
+  Each prediction sidecar can sustain ~300 QPS on a c4-standard-192 Google cloud machine (**≈ 192 vCPUs, 720 GB RAM, Up to 100 Gbps network, Up to 200 Gbps aggregate throughput**). Because the EPP makes one prediction call per candidate pod, total prediction load grows with both **cluster QPS** and **pod count**. If traffic or pod count increases, prediction servers must be scaled horizontally.
 
-- **Training mode**  
-  Only streaming workloads (set **"stream": "true"** in the request body as per openAI protocol) are supported.  
+- **Training mode**
+  Only streaming workloads (set **"stream": "true"** in the request body as per openAI protocol) are supported.
 
-- **Percentiles**  
-  The predictor currently estimates only **p90** TTFT and TPOT. Other percentiles (p95, p99) or a mix of percentiles are not yet available.  
+- **Percentiles**
+  The predictor currently estimates only **p90** TTFT and TPOT. Other percentiles (p95, p99) or a mix of percentiles are not yet available.
 
-- **Prefill/Decode disaggregation**  
-  Current routing does **not support prefill/decode disaggregation** (where one pod performs prefill and another performs decode). Prediction and SLO scoring assume a pod executes the entire request lifecycle. Support for disaggregated serving is a **work in progress**.  
+- **Prefill/Decode disaggregation**
+  Current routing does **not support prefill/decode disaggregation** (where one pod performs prefill and another performs decode). Prediction and SLO scoring assume a pod executes the entire request lifecycle. Support for disaggregated serving is a **work in progress**.
 
-- **Unvalidated against advanced inference features**  
+- **Unvalidated against advanced inference features**
   Predictions have not yet been tested with advanced serving strategies such as LoRA adapters, speculative decoding, or beam search. Each of these may shift latency characteristics (e.g., speculative decoding may reduce TTFT but increase TPOT variance), and models may need to be extended to remain accurate in these contexts.
-
 
 ### What is Tested
 
 This feature has been validated against the scenarios described in the [original design doc](https://docs.google.com/document/d/1q56wr3N5XGx0B21MzHu5oBsCiGi9VrbZAvyhP2VFG_c/edit?tab=t.0#heading=h.ob7j9esmcyd3) — including **short-prompt/long-completion**, **long-prompt/short-completion**, and **mixed workloads** — to compare baseline inference gateway routing versus prediction-based SLO routing. The benchmarking results are included in this doc.
 
-This guide explains how to deploy EPP with latency predictor sidecars, configure profiles and scorers, and enable **SLO-aware routing** via headers.  
+This guide explains how to deploy EPP with latency predictor sidecars, configure profiles and scorers, and enable **SLO-aware routing** via headers.
 
 ---
 
 ## Prerequisites
 
-- **Install the Inference Gateway extension**  
-  Follow the official installation steps here:  
-  https://gateway-api-inference-extension.sigs.k8s.io/guides/
+- **Install the Inference Gateway extension**
+  Follow the official installation steps here:
+  <https://gateway-api-inference-extension.sigs.k8s.io/guides/>
 
-- **Build your EPP image** from the experimental branch:  
-
+- **Build your EPP image** from the experimental branch:
 
     ***Prerequisites***
-    - Docker/BuildKit installed
-    - Access to a container registry (e.g., GCP Artifact Registry, Docker Hub, ECR)
+  - Docker/BuildKit installed
+  - Access to a container registry (e.g., GCP Artifact Registry, Docker Hub, ECR)
 
     ***Clone & checkout***
+
     ```bash
     git clone https://github.com/kubernetes-sigs/gateway-api-inference-extension.git
     cd gateway-api-inference-extension
@@ -57,22 +57,25 @@ This guide explains how to deploy EPP with latency predictor sidecars, configure
     ```
 
     ***Set your target registry and tag***
+
     ```
     export IMG="<your-registry>/epp:slo-prediction-$(git rev-parse --short HEAD)"
     ```
 
     ***Build the image***
+
     ```
     docker build -t "$IMG" -f Dockerfile .
     ```
 
     ***Push the image***
+
     ```
     docker push "$IMG"
     ```
 
-- **Build your EPP Sidecars** from the same experimental branch as described here: 
-  https://github.com/kubernetes-sigs/gateway-api-inference-extension/tree/slo-prediction-experimental/latencypredictor-v1
+- **Build your EPP Sidecars** from the same experimental branch as described here:
+  <https://github.com/kubernetes-sigs/gateway-api-inference-extension/tree/slo-prediction-experimental/latencypredictor-v1>
 
 ---
 
@@ -80,24 +83,25 @@ This guide explains how to deploy EPP with latency predictor sidecars, configure
 
 Once prerequisites are met, you can validate predicted latency based scheduling:
 
-1. **Apply your InferencePool/EPP manifest**  
+1. **Apply your InferencePool/EPP manifest**
    - Consult the example manifest shown [here](https://github.com/kubernetes-sigs/gateway-api-inference-extension/blob/slo-prediction-experimental/config/manifests/inferencepool-resources-lp.yaml)
-   - Update the EPP container and sidecar images to the ones you built.  
-   - Confirm that the `Deployment` includes the EPP container, training sidecar, and three prediction sidecars, each with their own volumes.  
-   - Ensure the `plugins-config` ConfigMap defines both `default` and `slo` profiles.  
+   - Update the EPP container and sidecar images to the ones you built.
+   - Confirm that the `Deployment` includes the EPP container, training sidecar, and three prediction sidecars, each with their own volumes.
+   - Ensure the `plugins-config` ConfigMap defines both `default` and `slo` profiles.
 
-2. **Check readiness**  
-   - Verify pod status: `kubectl get pods` → all containers `Running/Ready`.  
-   - Training sidecar health: `curl http://<pod-ip>:8000/readyz`  
-   - Prediction sidecar health: `curl http://<pod-ip>:8001/readyz` (and 8002, 8003).  
-   - EPP gRPC health: port `9003` (liveness/readiness probes).  
+2. **Check readiness**
+   - Verify pod status: `kubectl get pods` → all containers `Running/Ready`.
+   - Training sidecar health: `curl http://<pod-ip>:8000/readyz`
+   - Prediction sidecar health: `curl http://<pod-ip>:8001/readyz` (and 8002, 8003).
+   - EPP gRPC health: port `9003` (liveness/readiness probes).
 
-3. **Send traffic**  
-   - **Baseline:** run requests using the **`default`** profile (no prediction headers).  
-   - **SLO-aware:** run requests with the **`slo`** profile and set  
-     `x-prediction-based-scheduling: true`, optionally adding SLO headers like `x-slo-ttft-ms` and `x-slo-tpot-ms`.  
+3. **Send traffic**
+   - **Baseline:** run requests using the **`default`** profile (no prediction headers).
+   - **SLO-aware:** run requests with the **`slo`** profile and set
+     `x-prediction-based-scheduling: true`, optionally adding SLO headers like `x-slo-ttft-ms` and `x-slo-tpot-ms`.
 
    Example request:
+
    ```bash
    curl -v $GW_IP/v1/completions \
      -H 'Content-Type: application/json' \
@@ -115,6 +119,7 @@ Once prerequisites are met, you can validate predicted latency based scheduling:
    ```
 
    Example response (abridged SSE):
+
    ```
    < HTTP/1.1 200 OK
    < content-type: text/event-stream; charset=utf-8
@@ -139,25 +144,28 @@ Once prerequisites are met, you can validate predicted latency based scheduling:
    data: [DONE]
    ```
 
-   - The final SSE frame includes both **predictions and actuals** so you can validate accuracy (e.g., `predicted_ttft_ms` vs `ttft_ms`).  
-   - TPOTs are sampled every 200th token and surfaced in the arrays like `tpot_observations_ms`.  
+   - The final SSE frame includes both **predictions and actuals** so you can validate accuracy (e.g., `predicted_ttft_ms` vs `ttft_ms`).
+   - TPOTs are sampled every 200th token and surfaced in the arrays like `tpot_observations_ms`.
 
-4. **Validate predictions in logs**  
+4. **Validate predictions in logs**
    Tail EPP logs at verbosity `-v=4`. For each request you should see:
 
-   - **Profile selection**  
+   - **Profile selection**
+
      ```
      msg:"Running profile handler, Pick profiles"
      plugin:"slo-aware-profile-handler/slo-aware-profile-handler"
      ```
 
-   - **Candidate pods**  
+   - **Candidate pods**
+
      ```
      msg:"Before running scorer plugins"
      pods:[{... "pod_name":"...-5k7qr" ...}, {... "pod_name":"...-9lp5g" ...}]
      ```
 
-   - **SLO scorer pod scores**  
+   - **SLO scorer pod scores**
+
      ```
      msg:"Pod score"
      scorer_type:"slo-scorer"
@@ -165,20 +173,21 @@ Once prerequisites are met, you can validate predicted latency based scheduling:
      score:0.82
      ```
 
-   - **Final pick**  
+   - **Final pick**
+
      ```
      msg:"Picked endpoint"
      scorer_type:"slo-scorer"
      selected_pod:"vllm-llama3-8b-instruct-7b584dd595-9b4wt"
      ```
 
-   These logs confirm:  
-   - The request entered the SLO-aware path.  
-   - All candidate pods were evaluated.  
-   - Scores reflect predicted headroom vs SLOs.  
+   These logs confirm:
+   - The request entered the SLO-aware path.
+   - All candidate pods were evaluated.
+   - Scores reflect predicted headroom vs SLOs.
    - The final pod was chosen based on SLO scorer output.
 
-5. **Confirm request shedding (optional)**  
+5. **Confirm request shedding (optional)**
    If you send requests with **priority < 0** and no pod can meet both TTFT & TPOT SLOs, logs should show the request being **shed** instead of placed in the negative bucket.
 
 ---
@@ -190,6 +199,7 @@ This section details the container setup, ConfigMaps, and profile configuration 
 ### Sidecars & EPP containers in the Deployment
 
 **EPP container**
+
 - **Image**: `epp`
 - **Args**
   - `--config-file=/config/default-plugins.yaml`
@@ -204,14 +214,16 @@ This section details the container setup, ConfigMaps, and profile configuration 
   - `SLO_BUFFER_FACTOR`
 
 **Training sidecar (`training-server`)**
-- **Port**: 8000  
-- **EnvFrom**: `latency-predictor-config`  
-- **Volume**: `/models`  
+
+- **Port**: 8000
+- **EnvFrom**: `latency-predictor-config`
+- **Volume**: `/models`
 
 **Prediction sidecars (`prediction-server-1/2/3`)**
-- **Ports**: 8001, 8002, 8003  
-- **EnvFrom**: `prediction-server-config`  
-- **Volumes**: `/server_models`  
+
+- **Ports**: 8001, 8002, 8003
+- **EnvFrom**: `prediction-server-config`
+- **Volumes**: `/server_models`
 
 ---
 
@@ -280,10 +292,11 @@ schedulingProfiles:
 ```
 
 **What they do**
-- `slo-request-tracker` — captures per-request SLOs and tracks them.  
-- `slo-scorer` — uses predicted TTFT/TPOT to compare against SLOs and classify into positive/negative buckets.  
-- `slo-aware-profile-handler` — switches requests into the `slo` profile when SLO headers are present.  
-- `queue-scorer`, `kv-cache-utilization-scorer`, `prefix-cache-scorer` — baseline scoring plugins.  
+
+- `slo-request-tracker` — captures per-request SLOs and tracks them.
+- `slo-scorer` — uses predicted TTFT/TPOT to compare against SLOs and classify into positive/negative buckets.
+- `slo-aware-profile-handler` — switches requests into the `slo` profile when SLO headers are present.
+- `queue-scorer`, `kv-cache-utilization-scorer`, `prefix-cache-scorer` — baseline scoring plugins.
 
 ---
 
@@ -291,10 +304,10 @@ schedulingProfiles:
 
 Tune positive vs negative headroom scoring with env vars:
 
-- `HEADROOM_SELECTION_STRATEGY` — `least` (compact) or `most` (spread)  
-- `HEADROOM_TTFT_WEIGHT` / `HEADROOM_TPOT_WEIGHT` — blend weights for positive headroom  
-- `NEG_HEADROOM_TTFT_WEIGHT` / `NEG_HEADROOM_TPOT_WEIGHT` — blend weights for deficits  
-- `SLO_BUFFER_FACTOR` — safety multiplier on TPOT SLOs  
+- `HEADROOM_SELECTION_STRATEGY` — `least` (compact) or `most` (spread)
+- `HEADROOM_TTFT_WEIGHT` / `HEADROOM_TPOT_WEIGHT` — blend weights for positive headroom
+- `NEG_HEADROOM_TTFT_WEIGHT` / `NEG_HEADROOM_TPOT_WEIGHT` — blend weights for deficits
+- `SLO_BUFFER_FACTOR` — safety multiplier on TPOT SLOs
 
 ---
 
@@ -306,19 +319,20 @@ Turn on SLO-aware routing per request with the header:
 x-prediction-based-scheduling: true
 ```
 
-- If **SLO headers are present**: predictions are compared against thresholds.  
-- If **no SLOs** are provided: treated as SLO=0 → lowest latency pod is chosen.  
-- If **priority < 0** and **no pod can meet SLOs**: request is **shed** instead of placed in the negative bucket.  
+- If **SLO headers are present**: predictions are compared against thresholds.
+- If **no SLOs** are provided: treated as SLO=0 → lowest latency pod is chosen.
+- If **priority < 0** and **no pod can meet SLOs**: request is **shed** instead of placed in the negative bucket.
 
 **Current limitations**
-- Percentile: only **p90** supported.  
-- Training: only **streaming mode** supported.  
-- TPOT sampling: for obsevability, every 200th token is logged and compared with predictions.  
+
+- Percentile: only **p90** supported.
+- Training: only **streaming mode** supported.
+- TPOT sampling: for obsevability, every 200th token is logged and compared with predictions.
 
 ---
 
 ## Cleanup
 
-To remove the resources you created in this walkthrough, follow the same cleanup instructions from the [Inference Gateway Extension guide](https://gateway-api-inference-extension.sigs.k8s.io/guides/#cleanup).  
+To remove the resources you created in this walkthrough, follow the same cleanup instructions from the [Inference Gateway Extension guide](https://gateway-api-inference-extension.sigs.k8s.io/guides/#cleanup).
 
 That section covers how to delete the InferencePool, ConfigMaps, and supporting resources you applied here. The steps are identical — only the EPP image and sidecar configuration differ.

@@ -34,10 +34,13 @@ By integrating with a Gateway -- instead of developing an llm-d specific proxy l
 
 llm-d requires you select a [Gateway implementation that supports the inference-scheduler](https://gateway-api-inference-extension.sigs.k8s.io/implementations/gateways/). Your infrastructure may provide a default compatible implementation, or you may choose to deploy a gateway implementation onto your cluster. Pick the guidance that matches your environment:
 
+## Supported providers
+
 <!-- TABS:START -->
 
 <!-- TAB:Cloud-managed (GKE):default -->
 ### Cloud-managed (GKE)
+
 #### Use an infrastructure provided Gateway implementation
 
 We recommend using the infrastructure provided Gateway with our guides if available.
@@ -61,6 +64,7 @@ The other steps are optional and are not necessary to continue with your guide.
 
 <!-- TAB:Self-installed (Istio/Kgateway) -->
 ### Self-installed (Istio/Kgateway)
+
 #### Self-installed Gateway implementations
 
 llm-d provides a Helm chart that installs and configures the `kgateway` or `istio` Gateway implementations.
@@ -118,7 +122,6 @@ If you wish to bump versions or customize your installs, check out our helmfiles
 
 <!-- TAB:Other providers -->
 ### Other providers
-
 
 For other [compatible Gateway implementations](https://gateway-api-inference-extension.sigs.k8s.io/implementations/gateways/) follow the instructions for your selected Gateway. Ensure the necessary CRDs for Gateway API and the Gateway API Inference Extension are installed.
 

@@ -91,17 +91,21 @@ jobs:
           filters: |
             cuda:
               - 'docker/Dockerfile.cuda'
-              - 'docker/scripts/**'
+              - 'docker/scripts/common/**'
+              - 'docker/scripts/cuda/**'
               - 'docker/packages/common/**'
               - 'docker/packages/cuda/**'
+              - 'docker/packages/rpms/**'
               - 'patches/cks_nvshmem3.3.20.patch'
               - 'patches/cks_nvshmem3.3.9.patch'
+              - 'patches/nvshmem_zero_ibv_ah_attr_3.3.20.patch'
+              - 'patches/nvshmem_zero_ibv_ah_attr_v3.4.5-0.patch'
             xpu:
               - 'docker/Dockerfile.xpu'
-              - 'docker/scripts/**'
+              - 'docker/scripts/xpu/**'
             cpu:
               - 'docker/Dockerfile.cpu'
-              - 'docker/scripts/**'
+              - 'docker/scripts/cpu/**'
             hpu:
               - 'docker/Dockerfile.hpu'
       # shim to convert comma-separated platforms input into same boolean outputs as path filter
@@ -267,9 +271,9 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       any_succeeded: ${{ steps.check.outputs.any_succeeded }}
-      rhel_ok:       ${{ steps.check.outputs.rhel_ok }}
-      ubuntu_ok:     ${{ steps.check.outputs.ubuntu_ok }}
-      shortsha:      ${{ steps.export-sha.outputs.shortsha }}
+      rhel_ok: ${{ steps.check.outputs.rhel_ok }}
+      ubuntu_ok: ${{ steps.check.outputs.ubuntu_ok }}
+      shortsha: ${{ steps.export-sha.outputs.shortsha }}
     steps:
       - name: Download all digests (best-effort)
         uses: actions/download-artifact@v4
@@ -464,7 +468,7 @@ jobs:
     if: ${{ needs.detect-changes.outputs.xpu == 'true' }}
     strategy:
       fail-fast: false
-    runs-on: vllm-runner
+    runs-on: xpu
     steps:
       - name: Checkout push ref
         if: github.event_name == 'push'
@@ -476,6 +480,9 @@ jobs:
         with:
           ref: ${{ github.event.pull_request.head.sha }}
 
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
       - name: Log in to Container Registry
         uses: docker/login-action@v3
         with:
@@ -483,28 +490,39 @@ jobs:
           username: ${{ secrets.GHCR_USER }}
           password: ${{ secrets.GHCR_TOKEN }}
 
-      - name: Build and push the image
-        id: build-and-push
+      - name: Set image tag
+        id: set-tag
         run: |
           TAG="sha-$(git rev-parse --short HEAD)"
-          PR_TAG="${{ github.event.pull_request.number }}"
-          export DEVICE=xpu
-          export DOCKERFILE=Dockerfile.xpu
-          export VERSION="${TAG}"
-          make image-build
-          make image-push
           echo "tag=${TAG}" >> $GITHUB_OUTPUT
-          if [ -n ${PR_TAG} ]; then
-            export NEW_TAG="pr-${PR_TAG}"
-            make image-retag
-            VERSION="${NEW_TAG}" make image-push
-            echo "pr_tag=pr-${PR_TAG}"  >> $GITHUB_OUTPUT
-          fi;
+          PR_TAG="${{ github.event.pull_request.number }}"
+          if [ -n "${PR_TAG}" ]; then
+            echo "pr_tag=pr-${PR_TAG}" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Build and push the image
+        id: build-and-push
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./docker/Dockerfile.xpu
+          platforms: linux/amd64
+          push: true
+          provenance: true
+          cache-from: type=gha,scope=xpu-dev
+          cache-to: type=gha,mode=max,scope=xpu-dev,oci-mediatypes=true,compression=zstd
+          tags: |
+            ${{ env.REGISTRY }}/${{ github.repository }}-xpu-dev:${{ steps.set-tag.outputs.tag }}
+            ${{ steps.set-tag.outputs.pr_tag != '' && format('{0}/{1}-xpu-dev:{2}', env.REGISTRY, github.repository, steps.set-tag.outputs.pr_tag) || '' }}
+          github-token: ${{ secrets.GHCR_TOKEN }}
+        env:
+          DOCKER_BUILDKIT: "1"
+          BUILDKIT_PROGRESS: "plain"
 
       - name: Run Trivy vulnerability scanner
         uses: aquasecurity/trivy-action@master
         with:
-          image-ref: ${{ env.REGISTRY }}/${{ github.repository }}-xpu-dev:${{ steps.build-and-push.outputs.tag }}
+          image-ref: ${{ env.REGISTRY }}/${{ github.repository }}-xpu-dev:${{ steps.set-tag.outputs.tag }}
           format: 'sarif'
           output: 'trivy-results.sarif'
           severity: 'CRITICAL,HIGH,MEDIUM'
@@ -603,8 +621,6 @@ jobs:
   cpu-build-llm-d:
     needs: [detect-changes]
     if: ${{ needs.detect-changes.outputs.cpu == 'true' }}
-    strategy:
-      fail-fast: false
     runs-on: vllm-runner
     steps:
       - name: Checkout push ref
@@ -617,6 +633,9 @@ jobs:
         with:
           ref: ${{ github.event.pull_request.head.sha }}
 
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
       - name: Log in to Container Registry
         uses: docker/login-action@v3
         with:
@@ -624,28 +643,39 @@ jobs:
           username: ${{ secrets.GHCR_USER }}
           password: ${{ secrets.GHCR_TOKEN }}
 
-      - name: Build and push the image
-        id: build-and-push
+      - name: Set image tag
+        id: set-tag
         run: |
           TAG="sha-$(git rev-parse --short HEAD)"
-          PR_TAG="${{ github.event.pull_request.number }}"
-          export DEVICE=cpu
-          export DOCKERFILE=Dockerfile.cpu
-          export VERSION="${TAG}"
-          make image-build
-          make image-push
           echo "tag=${TAG}" >> $GITHUB_OUTPUT
-          if [ -n ${PR_TAG} ]; then
-            export NEW_TAG="pr-${PR_TAG}"
-            make image-retag
-            VERSION="${NEW_TAG}" make image-push
-            echo "pr_tag=pr-${PR_TAG}"  >> $GITHUB_OUTPUT
-          fi;
+          PR_TAG="${{ github.event.pull_request.number }}"
+          if [ -n "${PR_TAG}" ]; then
+            echo "pr_tag=pr-${PR_TAG}" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Build and push the image
+        id: build-and-push
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./docker/Dockerfile.cpu
+          platforms: linux/amd64
+          push: true
+          provenance: true
+          cache-from: type=gha,scope=cpu-dev
+          cache-to: type=gha,mode=max,scope=cpu-dev,oci-mediatypes=true,compression=zstd
+          tags: |
+            ${{ env.REGISTRY }}/${{ github.repository }}-cpu-dev:${{ steps.set-tag.outputs.tag }}
+            ${{ steps.set-tag.outputs.pr_tag != '' && format('{0}/{1}-cpu-dev:{2}', env.REGISTRY, github.repository, steps.set-tag.outputs.pr_tag) || '' }}
+          github-token: ${{ secrets.GHCR_TOKEN }}
+        env:
+          DOCKER_BUILDKIT: "1"
+          BUILDKIT_PROGRESS: "plain"
 
       - name: Run Trivy vulnerability scanner
         uses: aquasecurity/trivy-action@master
         with:
-          image-ref: ${{ env.REGISTRY }}/${{ github.repository }}-cpu-dev:${{ steps.build-and-push.outputs.tag }}
+          image-ref: ${{ env.REGISTRY }}/${{ github.repository }}-cpu-dev:${{ steps.set-tag.outputs.tag }}
           format: 'sarif'
           output: 'trivy-results.sarif'
           severity: 'CRITICAL,HIGH,MEDIUM'

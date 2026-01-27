@@ -8,7 +8,7 @@ modelArtifacts:
 routing:
   servicePort: 8000
   proxy:
-    image: ghcr.io/llm-d/llm-d-routing-sidecar:v0.4.0-rc.1
+    image: ghcr.io/llm-d/llm-d-routing-sidecar:v0.4.0
     connector: nixlv2
     secure: false
 
@@ -18,7 +18,7 @@ decode:
   monitoring:
     podmonitor:
       enabled: true
-      portName: "metrics"  # decode vLLM service port (from routing.proxy.targetPort)
+      portName: "vllm"  # decode vLLM service port (from routing.proxy.targetPort)
       path: "/metrics"
       interval: "30s"
   containers:
@@ -27,9 +27,7 @@ decode:
     modelCommand: imageDefault
     ports:
       - containerPort: 8200
-        name: metrics
-        protocol: TCP
-      - containerPort: 5557
+        name: vllm
         protocol: TCP
     mountModelVolume: true
     volumeMounts:
@@ -38,7 +36,7 @@ decode:
     startupProbe:
       httpGet:
         path: /v1/models
-        port: 8200
+        port: vllm
       initialDelaySeconds: 15
       periodSeconds: 30
       timeoutSeconds: 5
@@ -46,14 +44,14 @@ decode:
     livenessProbe:
       httpGet:
         path: /health
-        port: 8200
+        port: vllm
       periodSeconds: 10
       timeoutSeconds: 5
       failureThreshold: 3
     readinessProbe:
       httpGet:
         path: /v1/models
-        port: 8200
+        port: vllm
       periodSeconds: 5
       timeoutSeconds: 2
       failureThreshold: 3
@@ -67,7 +65,7 @@ prefill:
   monitoring:
     podmonitor:
       enabled: true
-      portName: "metrics"  # prefill vLLM service port (from routing.servicePort)
+      portName: "vllm"  # prefill vLLM service port (from routing.servicePort)
       path: "/metrics"
       interval: "30s"
   containers:
@@ -76,9 +74,7 @@ prefill:
     modelCommand: imageDefault
     ports:
       - containerPort: 8000
-        name: metrics
-        protocol: TCP
-      - containerPort: 5557
+        name: vllm
         protocol: TCP
     mountModelVolume: true
     volumeMounts:
@@ -87,7 +83,7 @@ prefill:
     startupProbe:
       httpGet:
         path: /v1/models
-        port: 8000
+        port: vllm
       initialDelaySeconds: 15
       periodSeconds: 30
       timeoutSeconds: 5
@@ -95,14 +91,14 @@ prefill:
     livenessProbe:
       httpGet:
         path: /health
-        port: 8000
+        port: vllm
       periodSeconds: 10
       timeoutSeconds: 5
       failureThreshold: 3
     readinessProbe:
       httpGet:
         path: /v1/models
-        port: 8000
+        port: vllm
       periodSeconds: 5
       timeoutSeconds: 2
   volumes:

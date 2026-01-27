@@ -27,7 +27,7 @@ spec:
               - --zap-log-level=1
               - --secure-proxy=false
               - --enable-prefiller-sampling
-            image: ghcr.io/llm-d/llm-d-routing-sidecar:v0.4.0-rc.1
+            image: ghcr.io/llm-d/llm-d-routing-sidecar:v0.4.0
             imagePullPolicy: Always
             ports:
               - containerPort: 8000
@@ -165,12 +165,15 @@ spec:
 
           ports:
           - containerPort: 8200
-            name: metrics
+            name: vllm
+            protocol: TCP
+          - containerPort: 5557
+            name: nixl
             protocol: TCP
           startupProbe:
             httpGet:
               path: /health
-              port: metrics
+              port: vllm
             initialDelaySeconds: 0
             periodSeconds: 1
             timeoutSeconds: 5
@@ -178,14 +181,14 @@ spec:
           livenessProbe:
             httpGet:
               path: /health
-              port: metrics
+              port: vllm
             periodSeconds: 30
             timeoutSeconds: 5
             failureThreshold: 3
           readinessProbe:
             httpGet:
               path: /v1/models
-              port: metrics
+              port: vllm
             periodSeconds: 10
             timeoutSeconds: 5
             failureThreshold: 3

@@ -1,0 +1,33 @@
+# Lychee link checker configuration
+# https://lychee.cli.rs/
+
+# Exclude these URL patterns from link checking
+exclude = [
+  # LinkedIn requires login
+  "linkedin.com",
+  # Reddit often blocks automated requests (matches www.reddit.com, old.reddit.com, etc.)
+  "^(https?://)?(www\\.)?(old\\.)?reddit\\.com/",
+  # OpenAI API docs can have rate limiting
+  "^https://platform\\.openai\\.com/docs/api-reference/",
+  # Google Docs headings/fragments are dynamically generated and not reliably checkable
+  "^https://docs\\.google\\.com/document/.*#",
+  # GitHub blob line anchors (#L123 / #L123-L130) aren't reliably checkable by lychee (HTML-only anchors)
+  "^https://github\\.com/.*/blob/.*#L[0-9]",
+  # Local file references with line numbers cannot be verified by lychee
+  "^file://.*:[0-9]",
+]
+
+# Accept status codes like 200 (OK), 204 (No Content), etc.
+accept = ["200..=299", "429"]
+
+# Maximum number of concurrent link checks
+max_concurrency = 10
+
+# Timeout for each request (in seconds)
+timeout = 30
+
+# Retry failed requests
+max_retries = 3
+
+# User agent string
+user_agent = "Mozilla/5.0 (compatible; lychee/link-checker)"

@@ -16,6 +16,7 @@ set -Eeux
 # - UCX_PREFIX: Path to UCX installation
 # - VIRTUAL_ENV: Path to the virtual environment from which python will be pulled
 # - USE_SCCACHE: whether to use sccache (true/false)
+# - PYTHON_VERSION: Python version (e.g., 3.12)
 
 cd /tmp
 

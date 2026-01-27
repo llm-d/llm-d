@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# -*- indent-tabs-mode: nil; tab-width: 4; sh-indentation: 4; -*-
+# -*- indent-tabs-mode: nil; tab-width: 2; sh-indentation: 2; -*-
 
 set -euo pipefail
 
@@ -7,13 +7,13 @@ set -euo pipefail
 # Component versions
 ########################################
 # Helm version
-HELM_VER="v3.17.3"
+HELM_VER="v3.19.0"
 # Helmdiff version
-HELMDIFF_VERSION="v3.11.0"
+HELMDIFF_VERSION="v3.13.0"
 # Helmfile version
 HELMFILE_VERSION="1.2.1"
 # chart-testing version
-CT_VERSION="3.12.0"
+CT_VERSION="3.14.0"
 
 ########################################
 #  Usage function
@@ -111,6 +111,39 @@ install_pkg() {
 }
 
 ########################################
+# Helper: install binary from a URL
+########################################
+install_binary() {
+  local url="$1"
+  local bin_name="$2"
+  local tmp_dir
+  tmp_dir=$(mktemp -d)
+  # Cleanup the temp directory on function return
+  trap 'rm -rf -- "$tmp_dir"' RETURN
+
+  echo "Installing ${bin_name}..."
+  curl -sSL -o "${tmp_dir}/${bin_name}" "${url}"
+  sudo install -m 0755 "${tmp_dir}/${bin_name}" "/usr/local/bin/${bin_name}"
+}
+
+########################################
+# Helper: install binary from a tar.gz URL
+########################################
+install_from_tarball() {
+  local url="$1"
+  local bin_in_archive="$2"
+  local bin_name="${3:-$bin_in_archive}"
+  local tmp_dir
+  tmp_dir=$(mktemp -d)
+  # Cleanup the temp directory on function return
+  trap 'rm -rf -- "$tmp_dir"' RETURN
+
+  echo "Installing ${bin_name}..."
+  curl -sSL "${url}" | tar -xz -C "${tmp_dir}"
+  sudo install -m 0755 "${tmp_dir}/${bin_in_archive}" "/usr/local/bin/${bin_name}"
+}
+
+########################################
 #  Base utilities
 ########################################
 for pkg in git curl tar; do
@@ -123,11 +156,8 @@ done
 #  yq (v4+)
 ########################################
 if ! command -v yq &> /dev/null; then
-  echo "Installing yq..."
-  curl -sLo yq \
-    "https://github.com/mikefarah/yq/releases/latest/download/yq_${OS}_${ARCH}"
-  chmod +x yq
-  sudo mv yq /usr/local/bin/yq
+  YQ_URL="https://github.com/mikefarah/yq/releases/latest/download/yq_${OS}_${ARCH}"
+  install_binary "${YQ_URL}" "yq"
 fi
 
 if ! yq --version 2>&1 | grep -q 'mikefarah'; then
@@ -138,27 +168,19 @@ fi
 #  kubectl
 ########################################
 if ! command -v kubectl &> /dev/null; then
-  echo "Installing kubectl..."
-  K8S_URL="https://dl.k8s.io/release/$(curl -sL https://dl.k8s.io/release/stable.txt)"
-  curl -sLO "${K8S_URL}/bin/${OS}/${ARCH}/kubectl"
-  if [[ "$OS" == "darwin" ]]; then
-    sudo install -m 0755 kubectl /usr/local/bin/kubectl
-  else
-    sudo install -o root -g root -m 0755 kubectl /usr/local/bin/kubectl
-  fi
-  rm kubectl
+  # Kubernetes version (latest stable)
+  KUBE_VERSION=$(curl -sL https://dl.k8s.io/release/stable.txt)
+  K8S_URL="https://dl.k8s.io/release/${KUBE_VERSION}/bin/${OS}/${ARCH}/kubectl"
+  install_binary "${K8S_URL}" "kubectl"
 fi
 
 ########################################
 #  Helm
 ########################################
 if ! command -v helm &> /dev/null; then
-  echo "Installing Helm..."
   TARBALL="helm-${HELM_VER}-${OS}-${ARCH}.tar.gz"
-  curl -sLO "https://get.helm.sh/${TARBALL}"
-  tar -zxvf "${TARBALL}"
-  sudo mv "${OS}-${ARCH}/helm" /usr/local/bin/helm
-  rm -rf "${OS}-${ARCH}" "${TARBALL}"
+  HELM_URL="https://get.helm.sh/${TARBALL}"
+  install_from_tarball "${HELM_URL}" "${OS}-${ARCH}/helm" "helm"
 fi
 
 ########################################
@@ -173,14 +195,9 @@ fi
 #  helmfile
 ########################################
 if ! command -v helmfile &> /dev/null; then
-  echo "📦 helmfile not found. Installing ${HELMFILE_VERSION}..."
   ARCHIVE="helmfile_${HELMFILE_VERSION}_${OS}_${ARCH}.tar.gz"
-  URL="https://github.com/helmfile/helmfile/releases/download/v${HELMFILE_VERSION}/${ARCHIVE}"
-  curl -sSL -o "/tmp/helmfile.tar.gz" "$URL"
-  tar -xzf /tmp/helmfile.tar.gz -C /tmp
-  sudo mv /tmp/helmfile /usr/local/bin/helmfile
-  sudo chmod +x /usr/local/bin/helmfile
-  rm /tmp/helmfile.tar.gz
+  HELMFILE_URL="https://github.com/helmfile/helmfile/releases/download/v${HELMFILE_VERSION}/${ARCHIVE}"
+  install_from_tarball "${HELMFILE_URL}" "helmfile"
 fi
 
 ########################################
@@ -188,14 +205,9 @@ fi
 ########################################
 if [[ "$DEV_MODE" == true ]]; then
   if ! command -v ct &> /dev/null; then
-    echo "Installing chart-testing (ct)..."
     ARCHIVE="chart-testing_${CT_VERSION}_${OS}_${ARCH}.tar.gz"
-    URL="https://github.com/helm/chart-testing/releases/download/v${CT_VERSION}/${ARCHIVE}"
-    curl -sSL -o "/tmp/ct.tar.gz" "$URL"
-    tar -xzf /tmp/ct.tar.gz -C /tmp
-    sudo mv /tmp/ct /usr/local/bin/ct
-    sudo chmod +x /usr/local/bin/ct
-    rm /tmp/ct.tar.gz
+    CT_URL="https://github.com/helm/chart-testing/releases/download/v${CT_VERSION}/${ARCHIVE}"
+    install_from_tarball "${CT_URL}" "ct"
   fi
 fi
 

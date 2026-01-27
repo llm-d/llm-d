@@ -90,7 +90,7 @@ jobs:
             matrix.platform == 'linux/arm64' && 'arm64' || 'amd64' }}
           cache-to: >-
             type=gha,mode=max,scope=cuda-${{ matrix.os }}-${{
-            matrix.platform == 'linux/arm64' && 'arm64' || 'amd64' }}
+            matrix.platform == 'linux/arm64' && 'arm64' || 'amd64' }},oci-mediatypes=true,compression=zstd
           labels: ${{ steps.meta.outputs.labels }}
           outputs: >-
             type=image,name=${{ env.REGISTRY }}/${{ github.repository }}-cuda${{ matrix.image_suffix }},
@@ -222,90 +222,7 @@ jobs:
             echo "No vulnerabilities found or scan failed."
           fi
 
-  release-aws-llm-d:
-    strategy:
-      fail-fast: false
-    runs-on: vllm-runner
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-        with:
-          ref: ${{ env.TAG }}
-          fetch-depth: 0
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-        with:
-          buildkitd-flags: --oci-worker-gc
-
-      - name: Log in to GHCR
-        uses: docker/login-action@v3
-        with:
-          registry: ${{ env.REGISTRY }}
-          username: ${{ secrets.GHCR_USER }}
-          password: ${{ secrets.GHCR_TOKEN }}
-
-      - name: Extract Docker metadata (tags/labels)
-        id: meta
-        uses: docker/metadata-action@v5
-        with:
-          images: ${{ env.REGISTRY }}/${{ github.repository }}-aws
-          tags: |
-            type=raw,value=${{ github.event.release.tag_name }},enable=${{ github.event_name == 'release' && github.event.action == 'published' }}
-            type=raw,value=${{ github.ref_name }},enable=${{ github.event_name == 'push' && startsWith(github.ref, 'refs/tags/') }}
-            type=raw,value=latest,enable=true
-
-      - name: Build & Push image
-        id: build-and-push
-        uses: docker/build-push-action@v5
-        with:
-          context: .
-          file: ./docker/Dockerfile.aws
-          platforms: linux/amd64
-          push: true
-          provenance: true
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
-          github-token: ${{ secrets.GHCR_TOKEN }}
-          build-args: |
-            CACHE_BUSTER=${{ github.ref_name }}-${{ github.run_id }}
-          secrets: |
-            aws_access_key_id=${{ secrets.AWS_ACCESS_KEY_ID_S3_BUCKET_ONLY }}
-            aws_secret_access_key=${{ secrets.AWS_SECRET_ACCESS_KEY_S3_BUCKET_ONLY }}
-
-      - name: Run Trivy vulnerability scanner
-        uses: aquasecurity/trivy-action@master
-        with:
-          image-ref: ${{ env.REGISTRY }}/${{ github.repository }}-aws@${{ steps.build-and-push.outputs.digest }}
-          format: 'sarif'
-          output: 'trivy-results.sarif'
-          severity: 'CRITICAL,HIGH,MEDIUM'
-          scanners: vuln
-          timeout: 30m
-          skip-dirs: /root/.cache/uv
-        env:
-          TRIVY_USERNAME: ${{ secrets.GHCR_USER }}
-          TRIVY_PASSWORD: ${{ secrets.GHCR_TOKEN }}
-
-      - name: Upload Trivy scan results to GitHub Security tab
-        uses: github/codeql-action/upload-sarif@v3
-        with:
-          sarif_file: 'trivy-results.sarif'
-
-      - name: Display vulnerability summary
-        run: |
-          echo "=== Vulnerability Scan Summary ==="
-          if [ -f trivy-results.sarif ]; then
-            echo "Scan completed. Check the Security tab for detailed results."
-          else
-            echo "No vulnerabilities found or scan failed."
-          fi
-
   release-cpu-llm-d:
-    strategy:
-      fail-fast: false
     runs-on: vllm-runner
     steps:
       - name: Checkout code
@@ -328,16 +245,22 @@ jobs:
 
       - name: Build and push the image
         id: build-and-push
-        run: |
-          export DEVICE=cpu
-          export DOCKERFILE=Dockerfile.cpu
-          export BUILD_TYPE=prod
-          export VERSION="${{ env.TAG }}"
-          make image-build
-          make image-push
-          export NEW_TAG="latest"
-          make image-retag
-          VERSION="${NEW_TAG}" make image-push
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./docker/Dockerfile.cpu
+          platforms: linux/amd64
+          push: true
+          provenance: true
+          cache-from: type=gha,scope=cpu
+          cache-to: type=gha,mode=max,scope=cpu,oci-mediatypes=true,compression=zstd
+          tags: |
+            ${{ env.REGISTRY }}/${{ github.repository }}-cpu:${{ env.TAG }}
+            ${{ env.REGISTRY }}/${{ github.repository }}-cpu:latest
+          github-token: ${{ secrets.GHCR_TOKEN }}
+        env:
+          DOCKER_BUILDKIT: "1"
+          BUILDKIT_PROGRESS: "plain"
 
       - name: Run Trivy vulnerability scanner
         uses: aquasecurity/trivy-action@master
@@ -392,16 +315,22 @@ jobs:
 
       - name: Build and push the image
         id: build-and-push
-        run: |
-          export DEVICE=xpu
-          export BUILD_TYPE=prod
-          export DOCKERFILE=Dockerfile.xpu
-          export VERSION="${{ env.TAG }}"
-          make image-build
-          make image-push
-          export NEW_TAG="latest"
-          make image-retag
-          VERSION="${NEW_TAG}" make image-push
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./docker/Dockerfile.xpu
+          platforms: linux/amd64
+          push: true
+          provenance: true
+          cache-from: type=gha,scope=xpu
+          cache-to: type=gha,mode=max,scope=xpu,oci-mediatypes=true,compression=zstd
+          tags: |
+            ${{ env.REGISTRY }}/${{ github.repository }}-xpu:${{ env.TAG }}
+            ${{ env.REGISTRY }}/${{ github.repository }}-xpu:latest
+          github-token: ${{ secrets.GHCR_TOKEN }}
+        env:
+          DOCKER_BUILDKIT: "1"
+          BUILDKIT_PROGRESS: "plain"
 
       - name: Run Trivy vulnerability scanner
         uses: aquasecurity/trivy-action@master

@@ -134,12 +134,15 @@ spec:
 
           ports:
           - containerPort: 8000
-            name: metrics
+            name: vllm
+            protocol: TCP
+          - containerPort: 5557
+            name: nixl
             protocol: TCP
           startupProbe:
             httpGet:
               path: /health
-              port: metrics
+              port: vllm
             initialDelaySeconds: 0
             periodSeconds: 1
             timeoutSeconds: 5
@@ -147,14 +150,14 @@ spec:
           livenessProbe:
             httpGet:
               path: /health
-              port: metrics
+              port: vllm
             periodSeconds: 30
             timeoutSeconds: 5
             failureThreshold: 3
           readinessProbe:
             httpGet:
               path: /v1/models
-              port: metrics
+              port: vllm
             periodSeconds: 10
             timeoutSeconds: 5
             failureThreshold: 3

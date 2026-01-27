@@ -30,7 +30,6 @@ ModelService addresses these challenges by defining a Helm chart that can be use
 
 **Ease of configuration optimization:** Seamlessly integrate with ecosystem components, such as grid search and Bayesian optimization tools for optimizing the deployment configuration.
 
-
 ## Non-Goals
 
 **Going beyond llm-d (initially):** ModelService is purpose-built for llm-d, with a strict focus on model and LoRA deployment on the llm-d platform.
@@ -48,7 +47,6 @@ The Helm chart supports the declarative deployment of base models and LoRA adapt
 The ModelService Helm chart will only deploy namespace-scoped resources. Helm’s layering model allows platform owners to define reusable `preset-values.yaml` for platform defaults (e.g., accelerator type, sidecars, readiness), while model owners can supply `model-values.yaml` to override only the specifics (e.g., artifact URI, replicas, args). This structure encourages safe customization and sharing. Any last-mile modifications can also be handled using [kustomize's built-in helm chart support](https://github.com/kubernetes-sigs/kustomize/blob/master/examples/chart.md).
 
 Overall, the Helm-based architecture will simplify onboarding, enable reproducibility, and provide a robust foundation for experimentation and configuration search on llm-d—paving the way toward a more production-ready deployment system in the future.
-
 
 ## Implementation status
 

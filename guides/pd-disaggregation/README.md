@@ -11,8 +11,8 @@ This guide demonstrates how to deploy Llama-70B using vLLM's P/D disaggregation 
 
 In this example, we will demonstrate a deployment of `Llama-3.3-70B-Instruct-FP8` with:
 
-- 4 TP=1 Prefill Workers
-- 1 TP=4 Decode Worker
+* 4 TP=1 Prefill Workers
+* 1 TP=4 Decode Worker
 
 ## P/D Best Practices
 
@@ -20,19 +20,19 @@ P/D disaggregation provides more flexibility in navigating the trade-off between
 In particular, due to the elimination of prefill interference to the decode phase, P/D disaggregation can achieve lower inter token latency (ITL), thus
 improving interactivity. For a given ITL goal, P/D disaggregation can benefit overall throughput by:
 
-- Specializing P and D workers for compute-bound vs latency-bound workloads
-- Reducing the number of copies of the model (increasing KV cache RAM) with wide parallelism
+* Specializing P and D workers for compute-bound vs latency-bound workloads
+* Reducing the number of copies of the model (increasing KV cache RAM) with wide parallelism
 
 However, P/D disaggregation is not a target for all workloads. We suggest exploring P/D disaggregation for workloads with:
 
-- Large models (e.g. Llama-70B+, not Llama-8B)
-- Longer input sequence lengths (e.g 10k ISL | 1k OSL, not 200 ISL | 200 OSL)
-- Sparse MoE architectures with opportunities for wide-EP
+* Large models (e.g. Llama-70B+, not Llama-8B)
+* Longer input sequence lengths (e.g 10k ISL | 1k OSL, not 200 ISL | 200 OSL)
+* Sparse MoE architectures with opportunities for wide-EP
 
 As a result, as you tune your P/D deployments, we suggest focusing on the following parameters:
 
-- **Heterogeneous Parallelism**: deploy P workers with less parallelism and more replicas and D workers with more parallelism and fewer replicas
-- **xPyD Ratios**: tuning the ratio of P workers to D workers to ensure balance for your ISL|OSL ratio
+* **Heterogeneous Parallelism**: deploy P workers with less parallelism and more replicas and D workers with more parallelism and fewer replicas
+* **xPyD Ratios**: tuning the ratio of P workers to D workers to ensure balance for your ISL|OSL ratio
 
 For very large models leveraging wide-EP, traffic for KV cache transfer may contend with expert parallelism when the ISL|OSL ratio is also high. We recommend starting with RDMA for KV cache transfer before attempting to leverage TCP, as TCP transfer requires more tuning of UCX under NIXL.
 
@@ -47,19 +47,19 @@ For Intel HPU deployments:
 
 ## Prerequisites
 
-- Have the [proper client tools installed on your local system](../prereq/client-setup/README.md) to use this guide.
-- Ensure your cluster infrastructure is sufficient to [deploy high scale inference](../prereq/infrastructure)
-- Configure and deploy your [Gateway control plane](../prereq/gateway-provider/README.md).
-- Have the [Monitoring stack](../../docs/monitoring/README.md) installed on your system.
-- Create a namespace for installation. 
-  
+* Have the [proper client tools installed on your local system](../prereq/client-setup/README.md) to use this guide.
+* Ensure your cluster infrastructure is sufficient to [deploy high scale inference](../prereq/infrastructure)
+* Configure and deploy your [Gateway control plane](../prereq/gateway-provider/README.md).
+* Have the [Monitoring stack](../../docs/monitoring/README.md) installed on your system.
+* Create a namespace for installation.
+
   ```
   export NAMESPACE=llm-d-pd # or any other namespace (shorter names recommended)
   kubectl create namespace ${NAMESPACE}
   ```
 
-- [Create the `llm-d-hf-token` secret in your target namespace with the key `HF_TOKEN` matching a valid HuggingFace token](../prereq/client-setup/README.md#huggingface-token) to pull models.
-- [Choose an llm-d version](../prereq/client-setup/README.md#llm-d-version)
+* [Create the `llm-d-hf-token` secret in your target namespace with the key `HF_TOKEN` matching a valid HuggingFace token](../prereq/client-setup/README.md#huggingface-token) to pull models.
+* [Choose an llm-d version](../prereq/client-setup/README.md#llm-d-version)
 
 ## Installation
 
@@ -121,17 +121,17 @@ kubectl apply -f httproute.gke.yaml -n ${NAMESPACE}
 
 ## Verify the Installation
 
-- Firstly, you should be able to list all helm releases to view the 3 charts got installed into your chosen namespace:
+* Firstly, you should be able to list all helm releases to view the 3 charts got installed into your chosen namespace:
 
 ```bash
 helm list -n ${NAMESPACE}
 NAME        NAMESPACE   REVISION    UPDATED                                 STATUS      CHART                       APP VERSION
-gaie-pd     llm-d-pd    1           2025-08-24 12:54:51.231537 -0700 PDT    deployed    inferencepool-v1.2.0-rc.1   v1.2.0-rc.1
-infra-pd    llm-d-pd    1           2025-08-24 12:54:46.983361 -0700 PDT    deployed    llm-d-infra-v1.3.4          v0.3.0
-ms-pd       llm-d-pd    1           2025-08-24 12:54:56.736873 -0700 PDT    deployed    llm-d-modelservice-v0.3.8   v0.3.0
+gaie-pd     llm-d-pd    1           2025-08-24 12:54:51.231537 -0700 PDT    deployed    inferencepool-v1.2.0        v1.2.0
+infra-pd    llm-d-pd    1           2025-08-24 12:54:46.983361 -0700 PDT    deployed    llm-d-infra-v1.3.6          v0.3.0
+ms-pd       llm-d-pd    1           2025-08-24 12:54:56.736873 -0700 PDT    deployed    llm-d-modelservice-v0.3.17  v0.3.0
 ```
 
-- Out of the box with this example you should have the following resources:
+* Out of the box with this example you should have the following resources:
 
 ```bash
 kubectl get all -n ${NAMESPACE}
@@ -147,7 +147,7 @@ pod/ms-pd-llm-d-modelservice-prefill-86f6fb7cdc-vzcb8   1/1     Running   0     
 NAME                                       TYPE           CLUSTER-IP    EXTERNAL-IP   PORT(S)                        AGE
 service/gaie-pd-epp                        ClusterIP      10.16.0.255   <none>        9002/TCP,9090/TCP              2m35s
 service/gaie-pd-ip-bb618139                ClusterIP      None          <none>        54321/TCP                      2m35s
-service/infra-pd-inference-gateway-istio   LoadBalancer   10.16.3.74    10.16.4.3     15021:31707/TCP,80:34096/TCP   2m41s
+service/infra-pd-inference-gateway-istio   ClusterIP      10.16.3.74    10.16.4.3     15021:31707/TCP,80:34096/TCP   2m41s
 
 NAME                                               READY   UP-TO-DATE   AVAILABLE   AGE
 deployment.apps/gaie-pd-epp                        1/1     1            1           2m36s
@@ -181,8 +181,9 @@ parameters:
 ```
 
 Some examples in which you might want to do selective PD might include:
-- When the prompt is short enough that the amount of work split inference into prefill and decode phases, and then open a kv transfer between those two GPUs is greater than the amount of work to do both phases on the same decode inference worker.
-- When Prefill units are at full capacity.
+
+* When the prompt is short enough that the amount of work split inference into prefill and decode phases, and then open a kv transfer between those two GPUs is greater than the amount of work to do both phases on the same decode inference worker.
+* When Prefill units are at full capacity.
 
 For information on this plugin, see our [`pd-profile-handler` docs in the inference-scheduler](https://github.com/llm-d/llm-d-inference-scheduler/blob/v0.3.0/docs/architecture.md?plain=1#L205-L210)
 
