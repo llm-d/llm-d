@@ -424,6 +424,9 @@ RUN export UV_INSTALL_DIR=/usr/local/bin && \
 # Copy compiled wheels
 COPY --from=builder /wheels/*.whl /tmp/wheels/
 
+# Copy in storage offloading connector wheel
+COPY docker/packages/wheels/packages/wheels/llmd_fs_connector-0.1.0-cp312-cp312-linux_x86_64.whl /tmp/wheels/llmd_fs_connector-0.1.0-cp312-cp312-linux_x86_64.whl
+
 # Create the vllm user
 RUN useradd --uid 2000 --gid 0 -m vllm && \
     touch /home/vllm/.bashrc

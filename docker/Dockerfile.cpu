@@ -132,6 +132,9 @@ FROM vllm-build
 
 ENV LD_LIBRARY_PATH="/usr/local/lib:/usr/lib:${LD_LIBRARY_PATH:-}"
 
+# Copy in storage offloading connector wheel
+COPY docker/packages/wheels/packages/wheels/llmd_fs_connector-0.1.0-cp312-cp312-linux_x86_64.whl  dist/llmd_fs_connector-0.1.0-cp312-cp312-linux_x86_64.whl
+
 RUN --mount=type=bind,from=vllm-build,src=/workspace/vllm/dist,target=dist \
     --mount=type=cache,target=/root/.cache/uv \
     uv pip install dist/*.whl
