@@ -1,4 +1,4 @@
-#!/usr/bin/env sh
+#!/usr/bin/env bash
 set -Eeuo pipefail
 
 if [ ! $(command -v helm) ]; then
