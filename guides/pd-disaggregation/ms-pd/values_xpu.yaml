@@ -52,6 +52,10 @@ decode:
       env:
         - name: UCX_TLS
           value: "tcp"
+        - name: VLLM_NIXL_SIDE_CHANNEL_HOST
+          valueFrom:
+            fieldRef:
+              fieldPath: status.podIP
       ports:
         - containerPort: 8200
           name: vllm
@@ -109,6 +113,10 @@ prefill:
       env:
         - name: UCX_TLS
           value: "tcp"
+        - name: VLLM_NIXL_SIDE_CHANNEL_HOST
+          valueFrom:
+            fieldRef:
+              fieldPath: status.podIP
       ports:
         - containerPort: 8000
           name: vllm

@@ -34,7 +34,7 @@ decode:
       interval: "30s"
   containers:
     - name: "vllm"
-      image: vllm/vllm-tpu:v0.11.1
+      image: vllm/vllm-tpu:v0.13.2
       modelCommand: vllmServe
       args:
         # Keep tensor-parallelism as the first set of arguments
@@ -50,14 +50,19 @@ decode:
           valueFrom:
             fieldRef:
               fieldPath: status.podIP
-        - name: VLLM_LOGGING_LEVEL
-          value: DEBUG
+        - name: TPU_SIDE_CHANNEL_PORT # data plane port for PD coordination
+          value: "9600" # default for TPU
+        - name: TPU_KV_TRANSFER_PORT # Port where the KV transfer actually happens
+          value: "9100" # default for TPU
       ports:
-        - containerPort: 8200
+        - containerPort: 8000
           name: vllm
           protocol: TCP
-        - containerPort: 5600
-          name: nixl
+        - containerPort: 9100
+          name: tpu-kv-transfer
+          protocol: TCP
+        - containerPort: 9600
+          name: tpu-pd-coordination
           protocol: TCP
       resources:
         limits:
@@ -120,12 +125,12 @@ prefill:
   monitoring:
     podmonitor:
       enabled: true
-      portName: "metrics"  # prefill vLLM service port (from routing.servicePort)
+      portName: "vllm"  # prefill vLLM service port (from routing.servicePort)
       path: "/metrics"
       interval: "30s"
   containers:
     - name: "vllm"
-      image: vllm/vllm-tpu:v0.11.1
+      image: vllm/vllm-tpu:v0.13.2
       modelCommand: vllmServe
       args:
         - "--tensor-parallel-size"
@@ -140,14 +145,19 @@ prefill:
           valueFrom:
             fieldRef:
               fieldPath: status.podIP
-        - name: VLLM_LOGGING_LEVEL
-          value: DEBUG
+        - name: TPU_SIDE_CHANNEL_PORT # data plane port for PD coordination
+          value: "9600" # default for TPU
+        - name: TPU_KV_TRANSFER_PORT # Port where the KV transfer actually happens
+          value: "9100" # default for TPU
       ports:
         - containerPort: 8000
-          name: metrics
+          name: vllm
           protocol: TCP
-        - containerPort: 5600
-          name: nixl
+        - containerPort: 9100
+          name: tpu-kv-transfer
+          protocol: TCP
+        - containerPort: 9600
+          name: tpu-pd-coordination
           protocol: TCP
       resources:
         limits:
