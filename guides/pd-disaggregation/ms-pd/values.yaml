@@ -36,6 +36,11 @@ decode:
         - "--disable-uvicorn-access-log"
         - "--max-model-len"
         - "32000"
+      env:
+        - name: VLLM_NIXL_SIDE_CHANNEL_HOST
+          valueFrom:
+            fieldRef:
+              fieldPath: status.podIP
       ports:
         - containerPort: 8200
           name: vllm
@@ -114,6 +119,11 @@ prefill:
         - "--disable-uvicorn-access-log"
         - "--max-model-len"
         - "32000"
+      env:
+        - name: VLLM_NIXL_SIDE_CHANNEL_HOST
+          valueFrom:
+            fieldRef:
+              fieldPath: status.podIP
       ports:
         - containerPort: 8000
           name: vllm
