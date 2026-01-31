@@ -63,6 +63,8 @@ decode:
           mountPath: /.config
         - name: torch-compile-cache
           mountPath: /.cache
+        - name: dshm
+          mountPath: /dev/shm
       startupProbe:
         httpGet:
           path: /v1/models
@@ -90,6 +92,10 @@ decode:
       emptyDir: {}
     - name: torch-compile-cache
       emptyDir: {}
+    - name: dshm
+      emptyDir:
+        medium: Memory
+        sizeLimit: 4Gi
 
 # Disable prefill for simple CPU example
 prefill:
