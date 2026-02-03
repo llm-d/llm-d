@@ -191,7 +191,6 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-
       - id: check
         shell: bash
         run: |
@@ -209,9 +208,12 @@ jobs:
           echo "ubuntu_ok=${ubuntu_ok}" >> "$GITHUB_OUTPUT"
 
   release-cuda-manifest:
-    needs: release-cuda-llm-d
+    needs: release-cuda-success-check
+    if: ${{ needs.release-cuda-success-check.outputs.any_succeeded == 'true' }}
     runs-on: ubuntu-latest
+    continue-on-error: true
     strategy:
+      fail-fast: false
       matrix:
         os: [rhel, ubuntu]
         include:
