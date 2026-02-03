@@ -158,8 +158,9 @@ ${CUDA_HOME}/include:\
 /usr/local/include:\
 /usr/include:\
 ${CPATH}" \
-    PKG_CONFIG_PATH="${UCX_PREFIX}/lib/pkgconfig:${UCX_PREFIX}/lib64/pkgconfig:\
-# ${EFA_PREFIX}/lib/pkgconfig:${EFA_PREFIX}/lib64/pkgconfig:\
+    # PKG_CONFIG_PATH="${EFA_PREFIX}/lib/pkgconfig:${EFA_PREFIX}/lib64/pkgconfig:\
+    PKG_CONFIG_PATH="\
+${UCX_PREFIX}/lib/pkgconfig:${UCX_PREFIX}/lib64/pkgconfig:\
 /usr/local/lib/pkgconfig:\
 /usr/local/lib/x86_64-linux-gnu/pkgconfig:/usr/local/lib/aarch64-linux-gnu/pkgconfig:\
 /usr/lib64/pkgconfig:/usr/lib/pkgconfig:\

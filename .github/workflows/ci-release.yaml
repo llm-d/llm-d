@@ -82,6 +82,7 @@ jobs:
           push: false
           build-args: |
             TARGETOS=${{ matrix.os }}
+            TARGETPLATFORM=${{ matrix.platform }}
             BUILD_BASE_IMAGE_SUFFIX=${{ matrix.os == 'ubuntu' && 'ubuntu20.04' || matrix.base_image_suffix }}
             FINAL_BASE_IMAGE_SUFFIX=${{ matrix.base_image_suffix }}
             CACHE_BUSTER=${{ github.ref_name }}-${{ github.run_id }}
@@ -113,6 +114,7 @@ jobs:
           push: true
           build-args: |
             TARGETOS=${{ matrix.os }}
+            TARGETPLATFORM=${{ matrix.platform }}
             BUILD_BASE_IMAGE_SUFFIX=${{ matrix.os == 'ubuntu' && 'ubuntu20.04' || matrix.base_image_suffix }}
             FINAL_BASE_IMAGE_SUFFIX=${{ matrix.base_image_suffix }}
             CACHE_BUSTER=${{ github.ref_name }}-${{ github.run_id }}
