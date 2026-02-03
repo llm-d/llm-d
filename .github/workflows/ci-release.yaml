@@ -110,7 +110,7 @@ jobs:
           context: .
           file: ./docker/Dockerfile.cuda
           platforms: ${{ matrix.platform }}
-          target: builder
+          target: runtime
           push: true
           build-args: |
             TARGETOS=${{ matrix.os }}
@@ -145,7 +145,11 @@ jobs:
       - name: Export digest
         run: |
           mkdir -p /tmp/digests
-          digest="${{ steps.build.outputs.digest }}"
+          digest="${{ steps.build-image-final-layer.outputs.digest }}"
+          if [ -z "$digest" ]; then
+            echo "ERROR: missing digest from build-image-final-layer (did the push succeed?)"
+            exit 1
+          fi
           touch "/tmp/digests/${digest#sha256:}"
 
       - name: Upload digest
@@ -301,6 +305,7 @@ jobs:
 
           # create manifest and tag it
           tags="-t ${{ env.REGISTRY }}/${{ github.repository }}-cuda${{ matrix.image_suffix }}:${{ env.TAG }}"
+          tags="${tags} -t ${{ env.REGISTRY }}/${{ github.repository }}-cuda${{ matrix.image_suffix }}:latest"
           docker buildx imagetools create $tags $sources
 
           # extract final manifest digest
