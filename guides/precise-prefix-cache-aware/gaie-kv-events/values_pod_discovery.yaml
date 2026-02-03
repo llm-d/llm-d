@@ -1,0 +1,72 @@
+inferenceExtension:
+  replicas: 1
+  flags:
+    kv-cache-usage-percentage-metric: "vllm:kv_cache_usage_perc"
+    v: 4
+  image:
+    name: llm-d-inference-scheduler
+    hub: ghcr.io/llm-d
+    tag: v0.5.0
+    pullPolicy: Always
+  extProcPort: 9002
+  env:
+    - name: HF_TOKEN
+      valueFrom:
+        secretKeyRef:
+          name: llm-d-hf-token
+          key: HF_TOKEN
+
+  pluginsConfigFile: "precise-prefix-cache-config.yaml"
+  pluginsCustomConfig:
+    precise-prefix-cache-config.yaml: |
+      apiVersion: inference.networking.x-k8s.io/v1alpha1
+      kind: EndpointPickerConfig
+      plugins:
+        - type: single-profile-handler
+        - type: precise-prefix-cache-scorer
+          parameters:
+            tokenProcessorConfig:
+              blockSize: 64
+            indexerConfig:
+              tokenizersPoolConfig:
+                modelName: "Qwen/Qwen3-32B"
+                hf:
+                  tokenizersCacheDir: "/tmp/tokenizers"
+            kvEventsConfig:
+              topicFilter: "kv@"
+              concurrency: 4
+              discoverPods: true
+              podDiscoveryConfig:
+                socketPort: 5557
+        - type: kv-cache-utilization-scorer
+        - type: queue-scorer
+        - type: max-score-picker
+      schedulingProfiles:
+        - name: default
+          plugins:
+            - pluginRef: precise-prefix-cache-scorer
+              weight: 3.0
+            - pluginRef: kv-cache-utilization-scorer
+              weight: 2.0
+            - pluginRef: queue-scorer
+              weight: 2.0
+            - pluginRef: max-score-picker
+
+  monitoring:
+    secret:
+      name: kv-events-gateway-sa-metrics-reader-secret
+    interval: "10s"
+    prometheus:
+      enabled: true
+      auth:
+        enabled: true
+
+inferencePool:
+  targetPorts:
+    - number: 8000
+  modelServerType: vllm
+  modelServers:
+    matchLabels:
+      llm-d.ai/inference-serving: "true"
+      llm-d.ai/guide: "precise-prefix-cache-aware"
+

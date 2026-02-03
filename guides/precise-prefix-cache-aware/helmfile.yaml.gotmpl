@@ -23,6 +23,7 @@ environments:
 {{- $ns := .Namespace | default "llm-d-precise" -}}
 {{- $rn := (env "RELEASE_NAME_POSTFIX") | default "kv-events" -}}
 {{- $dt := (env "DISAGGREGATED_TOKENIZATION") | default "false" -}}
+{{- $pd := (env "POD_DISCOVERY") | default "false" -}}
 
 repositories:
   - name: llm-d-modelservice
@@ -51,7 +52,9 @@ releases:
     needs:
       - {{ printf "infra-%s" $rn | quote }}
     values:
-      {{- if eq $dt "true" }}
+      {{- if eq $pd "true" }}
+      - gaie-kv-events/values_pod_discovery.yaml
+      {{- else if eq $dt "true" }}
       - gaie-kv-events-disaggregated-tokenization/values.yaml
       {{- else }}
       - gaie-kv-events/values.yaml
@@ -90,7 +93,13 @@ releases:
       - {{ printf "infra-%s" $rn | quote }}
       - {{ printf "gaie-%s" $rn | quote }}
     values:
-    {{- if or (eq .Environment.Name "xpu") (eq .Environment.Name "xpu-kgateway") }}
+    {{- if eq $pd "true" }}
+      {{- if or (eq .Environment.Name "xpu") (eq .Environment.Name "xpu-kgateway") }}
+      - ms-kv-events/values_xpu_pod_discovery.yaml
+      {{- else }}
+      - ms-kv-events/values_pod_discovery.yaml
+      {{- end }}
+    {{- else if or (eq .Environment.Name "xpu") (eq .Environment.Name "xpu-kgateway") }}
       - ms-kv-events/values_xpu.yaml
     {{- else }}
       - ms-kv-events/values.yaml

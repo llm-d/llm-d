@@ -52,6 +52,19 @@ cd guides/precise-prefix-cache-aware
 DISAGGREGATED_TOKENIZATION=true helmfile apply -n ${NAMESPACE}
 ```
 
+**_Experimental_**: Pod Discovery Mode
+By default, the KV events are published to a centralized ZMQ endpoint on the inference scheduler. With pod discovery mode, each vLLM pod publishes KV events on its own endpoint (`tcp://*:5557`), and the inference scheduler discovers and connects to these endpoints automatically.
+This is useful for active-active multi-scheduler deployments - to maintain a global view in each replica.
+
+To enable pod discovery mode:
+
+```bash
+cd guides/precise-prefix-cache-aware
+POD_DISCOVERY=true helmfile apply -n ${NAMESPACE}
+```
+
+**_NOTE:_** Pod discovery mode and disaggregated tokenization are mutually exclusive options.
+
 **_NOTE:_** You can set the `$RELEASE_NAME_POSTFIX` env variable to change the release names. This is how we support concurrent installs. Ex: `RELEASE_NAME_POSTFIX=kv-events-2 helmfile apply -n ${NAMESPACE}`
 
 **_NOTE:_** This uses Istio as the default provider, see [Gateway Options](./README.md#gateway-options) for installing with a specific provider.
@@ -78,6 +91,12 @@ You can also combine Intel XPU hardware with different gateway providers:
 
 ```bash
 helmfile apply -e xpu-kgateway -n ${NAMESPACE} # targets kgateway as gateway provider with Intel XPU hardware
+```
+
+With pod discovery mode:
+
+```bash
+POD_DISCOVERY=true helmfile apply -e xpu -n ${NAMESPACE}
 ```
 
 ### Install HTTPRoute
