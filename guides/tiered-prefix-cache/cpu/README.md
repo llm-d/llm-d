@@ -176,8 +176,11 @@ To remove the deployment:
 
 ```bash
 helm uninstall llm-d-infpool -n ${NAMESPACE}
+
+kubectl delete -f ./manifests/pvc.yaml -n ${NAMESPACE}
 kubectl delete -k ./manifests/vllm/offloading-connector -n ${NAMESPACE}
-kubectl delete -k ../../../../recipes/gateway/gke-l7-regional-external-managed -n ${NAMESPACE}
+kubectl delete -k ./manifests/vllm/<offloading-connector|lmcache-connector> -n ${NAMESPACE}
+kubectl delete -k ../recipes/gateway/<gke-l7-regional-external-managed|istio|kgateway|kgateway-openshift> -n ${NAMESPACE}
 kubectl delete namespace ${NAMESPACE}
 ```
 

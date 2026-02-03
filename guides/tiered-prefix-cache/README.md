@@ -58,10 +58,7 @@ Integration between the storage system and llm-d is achieved through vLLM connec
 For example, different implementations may use CPU staging buffers, GPU Direct Storage (GDS), or NIXL-based data movement.
 Any storage connector that is compatible with vLLM can be used **transparently within the llm-d project**.
 
-To enable shared storage offloading, refer to one of the following guides:
-
-1. [**llm-d File System (FS) backend**](./storage/llm-d-fs/README.md) - POSIX-based shared storage using a file system (for example CephFS, GCP Lustre, IBM Storage Scale), leveraging the `vLLM native offloading connector`.
-**Note:** This backend can also be used with local disk, where each vLLM instance uses a local storage path. Sharing will only be between vLLM instances on the same physical node that can access the same local storage path.
+To enable shared storage offloading, refer to the [**Storage Offloading Guide**](./storage/README.md).
 
 ### P2P Cache Sharing
 
