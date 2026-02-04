@@ -42,6 +42,8 @@ Otherwise we recommend a shared storage because it:
 * has more options to choose from to get a good tradeoff between cost and performance,
 * offers significantly larger capacity.
 
+To enable local disk offloading, refer to the [**Storage Offloading Guide**](./storage/README.md). The guide uses a generic storage connector that can connect to both local and remote/shared storage backends.
+
 ### Shared Storage
 
 Offloading prefix cache to a shared (remote) storage tier provides several important benefits beyond local CPU or disk caching:

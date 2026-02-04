@@ -75,6 +75,18 @@ The following provides instructions to configure different storage backends, and
 
 <!-- TABS:START -->
 
+<!-- TAB:Default Storage Class -->
+
+#### Default Storage Class
+
+If your cluster admin has already set up a `default` storage class:
+
+```
+export STORAGE_CLASS=default
+```
+
+No additional provision steps are required.
+
 <!-- TAB:GCP Lustre -->
 
 #### GCP Lustre
