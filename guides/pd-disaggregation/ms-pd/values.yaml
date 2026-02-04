@@ -7,6 +7,7 @@ modelArtifacts:
   name: "openai/gpt-oss-120b"
   labels:
     llm-d.ai/inference-serving: "true"
+    llm-d.ai/inferenceServing: "true"  # CamelCase version for InferencePool selector
     llm-d.ai/guide: "pd-disaggregation"
     llm-d.ai/hardware-variant: "gpu"
     llm-d.ai/accelerator-vendor: "nvidia"
@@ -24,6 +25,8 @@ decode:
     tensor: 4
   create: true
   replicas: 1
+  nodeSelector:
+    gpu.nvidia.com/model: "H200"
   monitoring:
     podmonitor:
       enabled: true
@@ -48,7 +51,7 @@ decode:
             fieldRef:
               fieldPath: status.podIP
         - name: VLLM_LOGGING_LEVEL
-          value: DEBUG
+          value: DEBUG  # Most verbose level for vLLM
         - name: UCX_LOG_LEVEL
           value: DEBUG
       ports:
@@ -114,6 +117,8 @@ prefill:
     tensor: 1
   create: true
   replicas: 2
+  nodeSelector:
+    gpu.nvidia.com/model: "H200"
   monitoring:
     podmonitor:
       enabled: true
@@ -140,7 +145,7 @@ prefill:
             fieldRef:
               fieldPath: status.podIP
         - name: VLLM_LOGGING_LEVEL
-          value: DEBUG
+          value: DEBUG  # Most verbose level for vLLM
         - name: UCX_LOG_LEVEL
           value: DEBUG
       ports:

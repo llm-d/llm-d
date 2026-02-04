@@ -1,9 +1,5 @@
 inferenceExtension:
   replicas: 1
-  flags:
-    # in vLLM 10.0+, the metric is renamed while upstream GAIE is still using the old name as default.
-    # See https://github.com/kubernetes-sigs/gateway-api-inference-extension/pull/1905.
-    kv-cache-usage-percentage-metric: "vllm:kv_cache_usage_perc"
   image:
     name: llm-d-inference-scheduler
     hub: ghcr.io/llm-d
@@ -11,12 +7,24 @@ inferenceExtension:
     pullPolicy: Always
   extProcPort: 9002
   pluginsConfigFile: "pd-config.yaml"
+  flags:
+    v: 5  # Increase log verbosity to trace level
   pluginsCustomConfig:  # THIS CONFIG NEEDS TO BE CHECKED FOR INF SCHEDULER NEW IMAGE
     pd-config.yaml: |
       # ALWAYS DO PD IN THIS EXAMPLE (THRESHOLD 0)
       apiVersion: inference.networking.x-k8s.io/v1alpha1
       kind: EndpointPickerConfig
       plugins:
+      - type: model-server-protocol-metrics
+        parameters:
+          defaultEngine: "vllm"
+          engineConfigs:
+          - name: vllm
+            queuedRequestsSpec: "vllm:num_requests_waiting"
+            runningRequestsSpec: "vllm:num_requests_running"
+            kvUsageSpec: "vllm:kv_cache_usage_perc"
+            loraSpec: "vllm:lora_requests_info"
+            cacheInfoSpec: "vllm:cache_config_info"
       - type: prefill-header-handler
       - type: prefill-filter
       - type: decode-filter

@@ -12,13 +12,24 @@ inferenceExtension:
 
   flags:
     secure-serving: false
-    v: 4
+    v: 5  # Trace level for detailed request processing logs
 
   pluginsCustomConfig:
     pd-slo-config.yaml: |
       apiVersion: inference.networking.x-k8s.io/v1alpha1
       kind: EndpointPickerConfig
       plugins:
+      # Metrics extractor
+      - type: model-server-protocol-metrics
+        parameters:
+          defaultEngine: "vllm"
+          engineConfigs:
+          - name: vllm
+            queuedRequestsSpec: "vllm:num_requests_waiting"
+            runningRequestsSpec: "vllm:num_requests_running"
+            kvUsageSpec: "vllm:kv_cache_usage_perc"
+            loraSpec: "vllm:lora_requests_info"
+            cacheInfoSpec: "vllm:cache_config_info"
       # Filters
       - type: prefill-filter
         name: prefill-filter

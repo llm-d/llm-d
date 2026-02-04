@@ -2,8 +2,8 @@
 gateway:
   gatewayClassName: istio
   gatewayParameters:
-    accessLogging: false
-    logLevel: error
+    accessLogging: true  # Enable access logging to see requests
+    logLevel: debug  # Most verbose: error < warn < info < debug
     resources:
       limits:
         cpu: "16"
@@ -15,7 +15,7 @@ gateway:
 # GAIE values
 inferenceExtension:
   flags:
-    v: 1
+    v: 5  # Changed to DEBUG level for prediction logging
 provider:
   name: istio
   istio:
@@ -35,4 +35,4 @@ provider:
 # MS values
 routing:
   proxy:
-    zapLogLevel: error
+    zapLogLevel: "5"  # Zap level: most verbose (below error=0, debug=-1)
