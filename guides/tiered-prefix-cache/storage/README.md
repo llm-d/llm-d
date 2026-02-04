@@ -4,7 +4,6 @@
 
 This guide explains how to offload the vLLM prefix cache (KV cache) to shared storage.
 
-
 ## Prerequisites
 
 * Have the [proper client tools installed on your local system](../../prereq/client-setup/README.md) to use this guide.

@@ -30,18 +30,6 @@ patches:
           name: LMCACHE_MAX_LOCAL_DISK_SIZE
           value: "18000.0"
 
-  # TODO: Remove the below patch once lmcache-connector image is switched to use official llm-d image
-  # llm-d image issue is tracked in https://github.com/llm-d/llm-d/issues/663
-  - target:
-      kind: Deployment
-      name: llm-d-model-server
-    patch: |-
-      - op: add
-        path: /spec/template/spec/containers/0/env/-
-        value:
-          name: LD_LIBRARY_PATH
-          value: "/usr/local/nvidia/lib64"
-
   # Add PVC volume
   - target:
       kind: Deployment

@@ -10,7 +10,7 @@ patches:
     patch: |-
       - op: replace
         path: /spec/template/spec/containers/0/image
-        value: quay.io/oroz/llm-d:cpu-offloading-12 # TODO:Update this to use the official llm-d image once https://github.com/llm-d/llm-d/issues/663 is resolved
+        value: ghcr.io/llm-d/llm-d-cuda-dev:sha-a49e6cd # TODO:Update this to use the official llm-d image once https://github.com/llm-d/llm-d/issues/663 is resolved
       - op: replace
         path: /spec/template/spec/containers/0/command
         value:
@@ -55,7 +55,7 @@ patches:
             nvidia.com/gpu: 2
             memory: 400G
 
-# Mount an emptyDir to collect prometheus metrics
+  # Mount an emptyDir to collect prometheus metrics
   - target:
       kind: Deployment
       name: llm-d-model-server
