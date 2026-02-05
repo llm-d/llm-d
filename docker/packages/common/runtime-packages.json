@@ -10,7 +10,9 @@
     "git": "git",
     "curl": "curl",
     "libatomic": "libatomic1",
-    "libaio": null
+    "libaio": null,
+    "libxcb":"libxcb1",
+    "libxcb-devel":"libxcb1-dev"
   },
   "ubuntu_only": [
     "gcc",
