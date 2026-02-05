@@ -16,8 +16,9 @@ At a high level the following conditions are assumed.
 
 - OpenShift - This guide was tested on OpenShift 4.17, 4.19, and 4.20. 
 - Ensure no Service Mesh or Istio installations exist on the cluster as the included CRDs may conflict with the llm-d gateway component.
-- Cluster administrator privileges are required to install the llm-d cluster scoped resources.
+- If installing everything from scratch, Cluster administrator privileges are required to install the llm-d cluster scoped resources. Otherwise you only need namespace scoped permissions.
 - NVIDIA GPU Operator and NFD Operator - The original installation instructions can be found [here](https://docs.nvidia.com/datacenter/cloud-native/openshift/latest/steps-overview.html). However below are convenient steps for setting up via configuration given by RedHat AI Business Unit.
+
 
 ### GPU, Operator, and Additional Configuration Steps
 
