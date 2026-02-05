@@ -1,35 +1,38 @@
 multinode: false
 
-# Configure accelerator type for Intel HPU
-#accelerator:
-#  type: intel-gaudi
-
-# Use DRA instead of device plugins
-dra:
-  enabled: true
-  type: "intel-gaudi"
+# Configure accelerator type for Intel Gaudi (HPU) via DRA
+accelerator:
+  type: intel-gaudi
+  dra: true
   
 modelArtifacts:
   uri: "hf://meta-llama/Llama-3.2-3B-Instruct"
   size: 100Gi
   authSecretName: "llm-d-hf-token"
   name: "meta-llama/Llama-3.2-3B-Instruct"
+  labels:
+    llm-d.ai/inference-serving: "true"
+    llm-d.ai/guide: "pd-disaggregation"
+    llm-d.ai/hardware-variant: "hpu"
+    llm-d.ai/hardware-vendor: "intel"
+    llm-d.ai/model: "Llama-3.2-3B-Instruct"
 
 routing:
   servicePort: 8000
-
   proxy:
-    image: ghcr.io/llm-d/llm-d-routing-sidecar:v0.4.0
+    image: ghcr.io/llm-d/llm-d-routing-sidecar:v0.5.0
     connector: nixlv2
     secure: false
 
 decode:
+  parallelism:
+    tensor: 4
   create: true
   replicas: 1
   monitoring:
     podmonitor:
-      enabled: false
-      portName: "vllm" # decode vLLM service port (from routing.proxy.targetPort)
+      enabled: true
+      portName: "vllm"
       path: "/metrics"
       interval: "30s"
   containers:
@@ -52,10 +55,14 @@ decode:
         value: "none"
       - name: HABANA_LOGS
         value: "/tmp/habana_logs"
-      - name: UCX_TLS 
+      - name: UCX_TLS
         value: "tcp"
-      - name: RANK
-        value: "6"
+      - name: VLLM_NIXL_SIDE_CHANNEL_HOST
+        valueFrom:
+          fieldRef:
+            fieldPath: status.podIP
+      - name: VLLM_NIXL_SIDE_CHANNEL_PORT
+        value: "5600"
       - name: VLLM_LOGGING_LEVEL
         value: "DEBUG"
       - name: VLLM_SKIP_WARMUP
@@ -66,10 +73,6 @@ decode:
         value: "true"
       - name: LD_LIBRARY_PATH
         value: "/usr/lib/nixl_ofi:/usr/local/lib:/usr/lib:/opt/amazon/openmpi/lib:/usr/lib/habanalabs"
-      - name: VLLM_NIXL_SIDE_CHANNEL_HOST
-        valueFrom:
-          fieldRef:
-            fieldPath: status.podIP
       - name: DO_NOT_TRACK
         value: "1"
       - name: VLLM_USE_V1
@@ -78,7 +81,7 @@ decode:
     - containerPort: 8200
       name: vllm
       protocol: TCP
-    - containerPort: 5557
+    - containerPort: 5600
       name: nixl
       protocol: TCP
     mountModelVolume: true
@@ -122,12 +125,14 @@ decode:
     emptyDir: {}
 
 prefill:
+  parallelism:
+    tensor: 1
   create: true
-  replicas: 1
+  replicas: 4
   monitoring:
     podmonitor:
-      enabled: false
-      portName: "metrics" # decode vLLM service port (from routing.proxy.targetPort)
+      enabled: true
+      portName: "vllm"
       path: "/metrics"
       interval: "30s"
   containers:
@@ -144,16 +149,18 @@ prefill:
       - "--kv-transfer-config"
       - '{"kv_connector":"NixlConnector","kv_role":"kv_both","kv_buffer_device":"cpu"}'
     env:
-      - name: HABANA_VISIBLE_DEVICES
-        value: "0,1,2,3,4,5,6,7"
       - name: OMPI_MCA_btl_vader_single_copy_mechanism
         value: "none"
       - name: HABANA_LOGS
         value: "/tmp/habana_logs"
-      - name: UCX_TLS 
+      - name: UCX_TLS
         value: "tcp"
-      - name: RANK
-        value: "7"
+      - name: VLLM_NIXL_SIDE_CHANNEL_HOST
+        valueFrom:
+          fieldRef:
+            fieldPath: status.podIP
+      - name: VLLM_NIXL_SIDE_CHANNEL_PORT
+        value: "5600"
       - name: VLLM_LOGGING_LEVEL
         value: "DEBUG"
       - name: VLLM_SKIP_WARMUP
@@ -164,10 +171,6 @@ prefill:
         value: "true"
       - name: LD_LIBRARY_PATH
         value: "/usr/lib/nixl_ofi:/usr/local/lib:/usr/lib:/opt/amazon/openmpi/lib:/usr/lib/habanalabs"
-      - name: VLLM_NIXL_SIDE_CHANNEL_HOST
-        valueFrom:
-          fieldRef:
-            fieldPath: status.podIP
       - name: DO_NOT_TRACK
         value: "1"
       - name: VLLM_USE_V1
@@ -176,7 +179,7 @@ prefill:
     - containerPort: 8000
       name: vllm
       protocol: TCP
-    - containerPort: 5557
+    - containerPort: 5600
       name: nixl
       protocol: TCP
     mountModelVolume: true
