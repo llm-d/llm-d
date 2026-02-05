@@ -49,8 +49,6 @@ decode:
       - "--kv-transfer-config"
       - '{"kv_connector":"NixlConnector","kv_role":"kv_both","kv_buffer_device":"cpu"}'
     env:
-      - name: HABANA_VISIBLE_DEVICES
-        value: "0,1,2,3,4,5,6,7"
       - name: OMPI_MCA_btl_vader_single_copy_mechanism
         value: "none"
       - name: HABANA_LOGS
