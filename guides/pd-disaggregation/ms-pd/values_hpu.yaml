@@ -6,16 +6,16 @@ accelerator:
   dra: true
   
 modelArtifacts:
-  uri: "hf://meta-llama/Llama-3.2-3B-Instruct"
+  uri: "hf://Qwen/Qwen3-8B"
   size: 100Gi
   authSecretName: "llm-d-hf-token"
-  name: "meta-llama/Llama-3.2-3B-Instruct"
+  name: "Qwen/Qwen3-8B"
   labels:
     llm-d.ai/inference-serving: "true"
     llm-d.ai/guide: "pd-disaggregation"
     llm-d.ai/hardware-variant: "hpu"
     llm-d.ai/hardware-vendor: "intel"
-    llm-d.ai/model: "Llama-3.2-3B-Instruct"
+    llm-d.ai/model: "Qwen3-8B"
 
 routing:
   servicePort: 8000
