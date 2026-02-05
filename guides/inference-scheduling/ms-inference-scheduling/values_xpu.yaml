@@ -6,14 +6,22 @@ modelArtifacts:
   uri: "hf://Qwen/Qwen3-0.6B"
   size: 10Gi
   authSecretName: "llm-d-hf-token"
+  labels:
+    llm-d.ai/inference-serving: "true"
+    llm-d.ai/guide: "inference-scheduling"
+    llm-d.ai/hardware-variant: "xpu"
+    llm-d.ai/accelerator-vendor: "intel"
+    llm-d.ai/model: "Qwen3-0.6B"
 
-accelerator: # controlls specialized hardware Type
-  type: "intel-i915"
+# Configure accelerator type for Intel XPU via DRA
+accelerator:
+  type: intel-i915
+  dra: true
 
 routing:
   proxy:
-    enabled: false # removes sidecar from deployment - no PD in inference scheduling
-    targetPort: 8000 # controlls vLLM port to matchup with sidecar if deployed
+    enabled: false  # removes sidecar from deployment - no PD in inference scheduling
+    targetPort: 8000  # controlls vLLM port to matchup with sidecar if deployed
 
 decode:
   create: true
@@ -25,67 +33,65 @@ decode:
       path: "/metrics"
       interval: "30s"
   containers:
-  - name: "vllm"
-    # Use Intel latest published xpu image
-    image: ghcr.io/llm-d/llm-d-xpu:v0.4.0
-    modelCommand: "vllmServe"
-    args:
-      - "--dtype"
-      - "float16"
-      - "--disable-sliding-window"
-    securityContext:
-      fsGroup: 107
-      supplementalGroups:
-        - 107
-    env:
-      - name: VLLM_LOGGING_LEVEL
-        value: DEBUG
-    ports:
-      - containerPort: 8000
-        name: vllm
-        protocol: TCP
-    resources:
-      limits:
-        cpu: "8"
-        memory: 24Gi
-        gpu.intel.com/i915: "1"
-      requests:
-        cpu: "4"
-        memory: 12Gi
-        gpu.intel.com/i915: "1"
-    mountModelVolume: true
-    volumeMounts:
-    - name: metrics-volume
-      mountPath: /.config
-    - name: torch-compile-cache
-      mountPath: /.cache
-    startupProbe:
-      httpGet:
-        path: /v1/models
-        port: vllm
-      initialDelaySeconds: 15
-      periodSeconds: 30
-      timeoutSeconds: 5
-      failureThreshold: 60
-    livenessProbe:
-      httpGet:
-        path: /health
-        port: vllm
-      periodSeconds: 10
-      timeoutSeconds: 5
-      failureThreshold: 3
-    readinessProbe:
-      httpGet:
-        path: /v1/models
-        port: vllm
-      periodSeconds: 5
-      timeoutSeconds: 2
-      failureThreshold: 3
+    - name: "vllm"
+      # Use Intel latest published xpu image
+      image: ghcr.io/llm-d/llm-d-xpu:v0.5.0
+      modelCommand: "vllmServe"
+      args:
+        - "--dtype"
+        - "float16"
+        - "--disable-sliding-window"
+      securityContext:
+        fsGroup: 107
+        supplementalGroups:
+          - 107
+      env:
+        - name: VLLM_LOGGING_LEVEL
+          value: DEBUG
+      ports:
+        - containerPort: 8000
+          name: vllm
+          protocol: TCP
+      resources:
+        limits:
+          cpu: "8"
+          memory: 24Gi
+        requests:
+          cpu: "4"
+          memory: 12Gi
+      mountModelVolume: true
+      volumeMounts:
+        - name: metrics-volume
+          mountPath: /.config
+        - name: torch-compile-cache
+          mountPath: /.cache
+      startupProbe:
+        httpGet:
+          path: /v1/models
+          port: vllm
+        initialDelaySeconds: 15
+        periodSeconds: 30
+        timeoutSeconds: 5
+        failureThreshold: 60
+      livenessProbe:
+        httpGet:
+          path: /health
+          port: vllm
+        periodSeconds: 10
+        timeoutSeconds: 5
+        failureThreshold: 3
+      readinessProbe:
+        httpGet:
+          path: /v1/models
+          port: vllm
+        periodSeconds: 5
+        timeoutSeconds: 2
+        failureThreshold: 3
   volumes:
-  - name: metrics-volume
-    emptyDir: {}
-  - name: torch-compile-cache
-    emptyDir: {}
+    - name: metrics-volume
+      emptyDir: {}
+    - name: torch-compile-cache
+      emptyDir: {}
 
 # Disable prefill for simple XPU example
 prefill:

@@ -4,7 +4,7 @@
 name: "Prow merge on lgtm label"
 on:
   schedule:
-  - cron: "*/5 * * * *" # every 5 minutes
+    - cron: "*/5 * * * *"  # every 5 minutes
 
 jobs:
   auto-merge:

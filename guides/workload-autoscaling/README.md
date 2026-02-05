@@ -44,7 +44,12 @@ Before installing WVA, ensure you have:
 
 ## Installation
 
-The workload-autoscaling helmfile installs the complete llm-d [Intelligent Inference Scheduling](../inference-scheduling/README.md) stack (infra, gaie, modelservice) plus WVA in a single `helmfile apply` command. **Install Prometheus Adapter separately in [Step 6](#step-6-install-prometheus-adapter-required-dependency) after WVA installation.**
+The workload-autoscaling helmfile supports two installation modes (see [Step 5](#step-5-install-wva-with-llm-d-stack---if-not-deployed-already)):
+
+1. **Full Installation**: Installs the complete llm-d [Intelligent Inference Scheduling](../inference-scheduling/README.md) stack (infra, gaie, modelservice) plus WVA in a single `helmfile apply` command.
+2. **WVA-Only Installation**: Installs only WVA, connecting to an existing [Intelligent Inference Scheduling](../inference-scheduling/README.md) deployment.
+
+**Install Prometheus Adapter separately in [Step 6](#step-6-install-prometheus-adapter-required-dependency) after WVA installation.**
 
 ### Step 1: Configure WVA Values
 
@@ -155,7 +160,11 @@ kubectl apply -f https://raw.githubusercontent.com/llm-d-incubation/workload-var
 kubectl get crd variantautoscalings.llmd.ai
 ```
 
-### Step 5: Install llm-d Stack with WVA
+### Step 5: Install WVA (with llm-d Stack - if not deployed already)
+
+Choose your installation mode:
+
+#### Option A: Full Installation (Default)
 
 Install the complete llm-d inference-scheduling stack (infra, gaie, modelservice) plus WVA:
 
@@ -173,6 +182,58 @@ This installs the complete [Intelligent Inference Scheduling](../inference-sched
 - **WVA** (workload-variant-autoscaler) in `llm-d-autoscaler` namespace
 
 WVA automatically discovers its namespace via `POD_NAMESPACE`.
+
+#### Option B: WVA-Only Installation (If utilizing existing stack)
+
+If you already have the [Intelligent Inference Scheduling](../inference-scheduling/README.md) stack installed, you can install only WVA and connect it to your existing deployment.
+
+**Prerequisites:**
+
+- An existing inference-scheduling deployment in your cluster
+- The namespace where inference-scheduling is deployed (default: `llm-d-inference-scheduler`)
+- The release name postfix used for inference-scheduling (default: `inference-scheduling`)
+
+**Configuration:**
+
+WVA will auto-detect the model service name based on common patterns, but you can override via environment variables or values file:
+
+```bash
+# Set the namespace where your inference-scheduling is deployed (default: llm-d-inference-scheduling)
+export LLMD_NAMESPACE=llm-d-inference-scheduler
+
+# Set the release name postfix used for inference-scheduling (default: inference-scheduling)
+# This is used to auto-detect the model service name: ms-{RELEASE_NAME_POSTFIX}-llm-d-modelservice
+export LLMD_RELEASE_NAME_POSTFIX=inference-scheduling
+
+# Set the namespace for WVA installation (default: llm-d-autoscaler)
+export WVA_NAMESPACE=llm-d-autoscaler
+```
+
+#### Optional: Explicit Configuration in values.yaml
+
+For explicit control, you can override the auto-detected values in `workload-autoscaling/values.yaml`:
+
+```yaml
+llmd:
+  namespace: llm-d-inference-scheduling  # Namespace of existing inference-scheduling deployment
+  modelName: ms-inference-scheduling-llm-d-modelservice  # Explicit model service name (optional)
+  modelID: "Qwen/Qwen3-0.6B"  # Must match the model in your inference-scheduling deployment
+```
+
+**Install WVA only:**
+
+```bash
+cd guides/workload-autoscaling
+helmfile apply -e wva-only -n ${WVA_NAMESPACE}
+```
+
+> **Note**: Use `WVA_NAMESPACE` (not `LLMD_NAMESPACE`) for the `-n` flag. This is the namespace where WVA will be installed. WVA will connect to your existing inference-scheduling deployment in the `LLMD_NAMESPACE`.
+
+This installs only:
+
+- **WVA** (workload-variant-autoscaler) in the namespace specified by `WVA_NAMESPACE` (default: `llm-d-autoscaler`)
+
+WVA will connect to your existing inference-scheduling deployment using the configured namespace and model service name. The model service name is auto-detected as `ms-{LLMD_RELEASE_NAME_POSTFIX}-llm-d-modelservice` unless explicitly set in values.yaml.
 
 ### Step 6: Install Prometheus Adapter (Required Dependency)
 
@@ -304,7 +365,16 @@ kubectl get variantautoscalings -n ${NAMESPACE}
 
 Edit `workload-autoscaling/values.yaml` for WVA settings. Key configurations:
 
-**Model ID** (must match model configured in modelservice):
+**For WVA-Only Mode**: If using wva-only installation, configure connection to existing inference-scheduling deployment:
+
+```yaml
+llmd:
+  namespace: llm-d-inference-scheduler  # Namespace of existing inference-scheduling deployment
+  modelName: ms-inference-scheduling-llm-d-modelservice  # Optional: explicit model service name (auto-detected if not set)
+  modelID: "Qwen/Qwen3-0.6B"  # Must match model ID in your inference-scheduling deployment
+```
+
+**For Full Installation**: Model ID must match model configured in modelservice:
 
 ```yaml
 llmd:
@@ -355,7 +425,7 @@ See [WVA chart documentation](https://github.com/llm-d-incubation/workload-varia
    ```bash
    # List all VariantAutoscalings
    kubectl get variantautoscalings -A
-   
+
    # For each VariantAutoscaling, add scaleTargetRef
    kubectl edit variantautoscaling <name> -n <namespace>
    ```
@@ -391,12 +461,25 @@ For more details, see the [WVA breaking changes documentation](https://github.co
 
 Remove WVA and Prometheus Adapter:
 
+**For Full Installation:**
+
 ```bash
 # Remove WVA stack
 cd guides/workload-autoscaling
 helmfile destroy -n ${NAMESPACE:-llm-d-autoscaler}
+```
 
-# Remove Prometheus Adapter (if not needed by other components)
+**For WVA-Only Installation:**
+
+```bash
+# Remove only WVA (existing inference-scheduling stack remains)
+cd guides/workload-autoscaling
+helmfile destroy -e wva-only -n ${NAMESPACE:-llm-d-autoscaler}
+```
+
+**Remove Prometheus Adapter** (if not needed by other components):
+
+```bash
 helm uninstall prometheus-adapter -n ${MON_NS:-llm-d-monitoring}
 ```
 

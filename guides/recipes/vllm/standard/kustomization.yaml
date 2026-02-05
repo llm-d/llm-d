@@ -2,3 +2,21 @@ apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 resources:
   - ../base
+
+images:
+  - name: INFERENCE_SERVER_IMAGE
+    newName: ghcr.io/llm-d/llm-d-cuda-dev
+    newTag: sha-5a98b4f
+
+patches:
+  - patch: |-
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: llm-d-model-server
+      spec:
+        template:
+          metadata:
+            labels:
+              llm-d.ai/hardware-variant: "gpu"
+              llm-d.ai/accelerator-vendor: "nvidia"

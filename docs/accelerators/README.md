@@ -24,7 +24,7 @@ For integration into the well-lit paths our standard for contribution is higher,
 
 > [!NOTE]
 > We aim to increase our requirements to have active CI coverage for all hardware guide variants in a future release.
-
+>
 > [!NOTE]
 > The community can assist but is not responsible for keeping hardware guide variants updated. We reserve the right to remove stale examples and documentation with regard to hardware support.
 

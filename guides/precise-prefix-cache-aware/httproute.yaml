@@ -4,20 +4,20 @@ metadata:
   name: llm-d-kv-events
 spec:
   parentRefs:
-  - group: gateway.networking.k8s.io
-    kind: Gateway
-    name: infra-kv-events-inference-gateway
+    - group: gateway.networking.k8s.io
+      kind: Gateway
+      name: infra-kv-events-inference-gateway
   rules:
     - backendRefs:
-      - group: inference.networking.k8s.io
-        kind: InferencePool
-        name: gaie-kv-events
-        port: 8000
-        weight: 1
+        - group: inference.networking.k8s.io
+          kind: InferencePool
+          name: gaie-kv-events
+          port: 8000
+          weight: 1
       timeouts:
         backendRequest: 0s
         request: 0s
       matches:
-      - path:
-          type: PathPrefix
-          value: /
+        - path:
+            type: PathPrefix
+            value: /

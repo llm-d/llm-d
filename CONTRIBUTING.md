@@ -104,7 +104,8 @@ The first key step in testing a feature, or bugfix is to identify what layer of 
   * This can be tested in any example
 * `EFA`
   * To test the libfabric plugin itself over NIXL you can do the following inside a container image built with EFA support (does not require GPUs or EFA):
-```
+
+```bash
 export NIXL_LOG_LEVEL=debug
 python3 - <<'EOF'
 from nixl._api import nixl_agent, nixl_agent_config
@@ -112,7 +113,8 @@ agent_config = nixl_agent_config(backends=["LIBFABRIC"])
 nixl_agent1 = nixl_agent("target", agent_config)
 EOF
 ```
-  * To test actual inference over EFA in AWS with P5+ instances ensure that `UCX_TLS` includes an option with high priority for accelerating over EFA via an ENV var:
+
+* To test actual inference over EFA in AWS with P5+ instances ensure that `UCX_TLS` includes an option with high priority for accelerating over EFA via an ENV var:
 
 ```yaml
   - name: UCX_TLS

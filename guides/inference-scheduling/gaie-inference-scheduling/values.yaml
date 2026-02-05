@@ -9,11 +9,11 @@ inferenceExtension:
     ###################
     name: llm-d-inference-scheduler
     hub: ghcr.io/llm-d
-    tag: v0.4.0
+    tag: v0.5.0
     ###################
     # name: epp
     # hub: registry.k8s.io/gateway-api-inference-extension
-    # tag: v1.2.0
+    # tag: v1.3.0
     ###################
     pullPolicy: Always
   extProcPort: 9002
@@ -34,4 +34,5 @@ inferencePool:
   modelServerType: vllm
   modelServers:
     matchLabels:
-      llm-d.ai/inferenceServing: "true"
+      llm-d.ai/inference-serving: "true"
+      llm-d.ai/guide: "inference-scheduling"

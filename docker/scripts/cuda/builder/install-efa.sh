@@ -1,5 +1,6 @@
 #!/bin/bash
 set -Eeu
+# special logging exception - do not use high level logging with EFA installer + entitlement
 
 # purpose: Install EFA
 # -------------------------------
@@ -7,12 +8,16 @@ set -Eeu
 # - /run/secrets/subman_org: Subscription Manager Organization - used if on a ubi based image for entitlement
 # - /run/secrets/subman_activation_key: Subscription Manager Activation key - used if on a ubi based image for entitlement
 # -------------------------------
+# Optional environment variables:
+# - EFA_PREFIX: Path to include ld linkers to ensure that UCX and NVSHMEM can build against EFA and Libfacbric successfully. When empty will not run script.
+# - EFA_INSTALLER_VERSION: Version of AWS EFA installer to download (default: 1.46.0 is the current latest release). When empty will not run script.
+: "${EFA_PREFIX:=}"
+: "${EFA_INSTALLER_VERSION:=}"
 # Required environment variables:
 # - TARGETOS: Target OS - either 'ubuntu' or 'rhel' (default: rhel)
-# - EFA_PREFIX: Path to include ld linkers to ensure that UCX and NVSHMEM can build against EFA and Libfacbric successfully
-# - EFA_INSTALLER_VERSION: Version of AWS EFA installer to download (default: 1.46.0 is the current latest release)
 
-if [ "$TARGETOS" = "ubuntu" ]; then
+
+if [ "$TARGETOS" = "ubuntu" ] || [ -z "${EFA_PREFIX}" ]  || [ -z "${EFA_INSTALLER_VERSION}" ] ; then
     echo "Ubuntu image needs to be built against Ubuntu 20.04 and EFA only supports 22.04 and 24.04."
     # Create empty folder so Dockerfile COPY don't fail on Ubuntu
     mkdir -p "${EFA_PREFIX}" /tmp/efa_libs

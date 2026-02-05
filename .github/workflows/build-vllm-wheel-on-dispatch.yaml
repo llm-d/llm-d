@@ -17,7 +17,7 @@ on:
         required: false
         default: "12.8"
         type: choice
-        options: ["11.8", "12.6", "12.8"] #  TODO: do we still support old cuda version, do we support 13.x
+        options: ["11.8", "12.6", "12.8"]  # TODO: do we still support old cuda version, do we support 13.x
 
 concurrency:
   group: ${{ github.workflow }}

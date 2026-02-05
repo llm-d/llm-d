@@ -1,6 +1,6 @@
 ARG ONEAPI_VERSION=2025.2.2-0
 ARG VLLM_REPO="https://github.com/vllm-project/vllm.git"
-ARG VLLM_COMMIT_SHA="72506c98349d6bcd32b4e33eec7b5513453c1502"
+ARG VLLM_COMMIT_SHA="d7de043d55d1dd629554467e23874097e1c48993"
 
 FROM intel/deep-learning-essentials:${ONEAPI_VERSION}-devel-ubuntu24.04 AS vllm-base
 
@@ -35,7 +35,7 @@ RUN apt-get clean && apt-get update -y && \
 RUN update-alternatives --install /usr/bin/python3 python3 /usr/bin/python3.12 1
 RUN update-alternatives --install /usr/bin/python python /usr/bin/python3.12 1
 
-RUN apt install -y libze1 libze-dev libze-intel-gpu1 intel-opencl-icd libze-intel-gpu-raytracing intel-ocloc
+RUN apt-get install -y libze1 libze-dev libze-intel-gpu1 intel-opencl-icd libze-intel-gpu-raytracing intel-ocloc
 
 # This oneccl contains the BMG support which is not the case for default version of oneapi 2025.2.
 RUN wget https://github.com/uxlfoundation/oneCCL/releases/download/2021.15.6/intel-oneccl-2021.15.6.9_offline.sh
@@ -43,8 +43,8 @@ RUN bash intel-oneccl-2021.15.6.9_offline.sh -a --silent --eula accept && \
     echo "source /opt/intel/oneapi/setvars.sh --force" >> /root/.bashrc && \
     echo "source /opt/intel/oneapi/ccl/2021.15/env/vars.sh --force" >> /root/.bashrc
 
-SHELL ["bash", "-c"]
-CMD ["bash", "-c", "source /root/.bashrc && exec bash"]
+SHELL ["/bin/bash", "-c"]
+CMD ["/bin/bash", "-c", "source /root/.bashrc && exec /bin/bash"]
 
 # Clone vLLM and build for XPU
 WORKDIR /workspace
@@ -74,9 +74,15 @@ ENV VLLM_WORKER_MULTIPROC_METHOD=spawn
 RUN --mount=type=cache,target=/root/.cache/pip \
     pip install --no-build-isolation .
 
+# hadolint ignore=DL4003
 CMD ["/bin/bash"]
 
 FROM vllm-base AS runtime
+
+ARG CACHE_BUSTER
+RUN if [ -n "${CACHE_BUSTER}" ]; then \
+        echo "$CACHE_BUSTER" > /tmp/builder-buster; \
+    fi;
 
 # install additional dependencies for openai api server
 # hadolint ignore=DL3013

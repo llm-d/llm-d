@@ -24,13 +24,14 @@ This guide requires 32 Nvidia H200 or B200 GPUs and InfiniBand or RoCE RDMA netw
 * Have the [proper client tools installed on your local system](../prereq/client-setup/README.md) to use this guide.
 * Ensure your cluster infrastructure is sufficient to [deploy high scale inference](../prereq/infrastructure/README.md)
   * You must have high speed inter-accelerator networking
-  * The pods leveraging inter-node EP must be deployed within the same networking domain
+  * The pods leveraging inter-node EP must be deployed in a cluster environment with full mesh network connectivity.
+    * **_NOTE:_** The DeepEP backend used in WideEP requires All-to-All RDMA connectivity. Every NIC on a host must be able to communicate with every NIC on all other hosts. Networks restricted to communicating only between matching NIC IDs (rail-only connectivity) will fail.
   * You have deployed the [LeaderWorkerSet optional controller](../prereq/infrastructure/README.md#optional-install-leaderworkerset-for-multi-host-inference)
 * Configure and deploy your [Gateway control plane](../prereq/gateway-provider/README.md).
 * Have the [Monitoring stack](../../docs/monitoring/README.md) installed on your system.
 * Create a namespace for installation.
 
-  ```
+  ```bash
   export NAMESPACE=llm-d-wide-ep # or any other namespace (shorter names recommended)
   kubectl create namespace ${NAMESPACE}
   ```
@@ -88,9 +89,9 @@ helm install llm-d-infpool \
   -n ${NAMESPACE} \
   -f ./manifests/inferencepool.values.yaml \
   --set "provider.name=gke" \
-  --set "inferenceExtension.monitoring.gke.enabled=true" \
+  --set "inferenceExtension.monitoring.prometheus.enabled=true" \
   oci://registry.k8s.io/gateway-api-inference-extension/charts/inferencepool \
-  --version v1.2.0
+  --version v1.3.0
 ```
 
 <!-- TAB:Istio -->
@@ -103,7 +104,7 @@ helm install llm-d-infpool \
   --set "provider.name=istio" \
   --set "inferenceExtension.monitoring.prometheus.enabled=true" \
   oci://registry.k8s.io/gateway-api-inference-extension/charts/inferencepool \
-  --version v1.2.0
+  --version v1.3.0
 ```
 
 <!-- TAB:Kgateway -->
@@ -114,7 +115,7 @@ helm install llm-d-infpool \
   -n ${NAMESPACE} \
   -f ./manifests/inferencepool.values.yaml \
   oci://registry.k8s.io/gateway-api-inference-extension/charts/inferencepool \
-  --version v1.2.0
+  --version v1.3.0
 ```
 
 <!-- TABS:END -->
@@ -140,7 +141,7 @@ As with PD, the `wide-ep-lws` guide supports selective PD. For information on th
 ```bash
 helm list -n ${NAMESPACE}
 NAME            NAMESPACE       REVISION    UPDATED                                 STATUS      CHART                       APP VERSION
-llm-d-infpool   llm-d-wide-ep   1           2025-08-24 13:14:53.355639 -0700 PDT    deployed    inferencepool-v1.0          v0.3.0
+llm-d-infpool   llm-d-wide-ep   1           2025-08-24 13:14:53.355639 -0700 PDT    deployed    inferencepool-v1.3.0        v0.3.0
 ```
 
 * Out of the box with this example you should have the following resources (if using Istio):
@@ -149,27 +150,27 @@ llm-d-infpool   llm-d-wide-ep   1           2025-08-24 13:14:53.355639 -0700 PDT
 kubectl get all -n ${NAMESPACE}
 NAME                                                         READY   STATUS    RESTARTS   AGE
 pod/infra-wide-ep-inference-gateway-istio-74d5c66c86-h5mfn   1/1     Running   0          2m22s
-pod/wide-ep-llm-d-decode-0                   2/2     Running   0          2m13s
-pod/wide-ep-llm-d-decode-0-1                 2/2     Running   0          2m13s
-pod/llm-d-infpool-epp-84dd98f75b-r6lvh         1/1     Running   0          2m14s
-pod/wide-ep-llm-d-prefill-0                  1/1     Running   0          2m13s
-pod/wide-ep-llm-d-prefill-0-1                1/1     Running   0          2m13s
+pod/wide-ep-llm-d-decode-0                                   2/2     Running   0          2m13s
+pod/wide-ep-llm-d-decode-0-1                                 2/2     Running   0          2m13s
+pod/llm-d-infpool-epp-84dd98f75b-r6lvh                       1/1     Running   0          2m14s
+pod/wide-ep-llm-d-prefill-0                                  1/1     Running   0          2m13s
+pod/wide-ep-llm-d-prefill-0-1                                1/1     Running   0          2m13s
 
 
 NAME                                            TYPE           CLUSTER-IP    EXTERNAL-IP   PORT(S)                        AGE
 service/infra-wide-ep-inference-gateway-istio   ClusterIP      10.16.1.34    10.16.4.2     15021:30312/TCP,80:33662/TCP   2m22s
 service/wide-ep-ip-1e480070                     ClusterIP      None          <none>        54321/TCP                      2d4h
 service/wide-ep-llm-d-decode                    ClusterIP      None          <none>        <none>                         2m13s
-service/llm-d-infpool-epp                         ClusterIP      10.16.1.137   <none>        9002/TCP                       2d4h
+service/llm-d-infpool-epp                       ClusterIP      10.16.1.137   <none>        9002/TCP                       2d4h
 service/wide-ep-llm-d-prefill                   ClusterIP      None          <none>        <none>                         2m13s
 
 NAME                                                    READY   UP-TO-DATE   AVAILABLE   AGE
 deployment.apps/infra-wide-ep-inference-gateway-istio   1/1     1            1           2m22s
-deployment.apps/llm-d-infpool-epp       1/1     1            1           2m14s
+deployment.apps/llm-d-infpool-epp                       1/1     1            1           2m14s
 
 NAME                                                               DESIRED   CURRENT   READY   AGE
 replicaset.apps/infra-wide-ep-inference-gateway-istio-74d5c66c86   1         1         1       2m22s
-replicaset.apps/llm-d-infpool-epp-55bb9857cf       1         1         1       2m14s
+replicaset.apps/llm-d-infpool-epp-55bb9857cf                       1         1         1       2m14s
 
 NAME                                                      READY   AGE
 statefulset.apps/wide-ep-llm-d-decode     1/1     2m13s
@@ -187,6 +188,50 @@ For instructions on getting started making inference requests see [our docs](../
 **_NOTE:_** This example particularly benefits from utilizing stern as described in the [getting-started-inferencing docs](../../docs/getting-started-inferencing.md#following-logs-for-requests), because while we only have 3 inferencing pods, it has 16 vllm servers or ranks.
 
 **_NOTE:_** Compared to the other examples, this one takes anywhere between 7-10 minutes for the vllm API servers to startup so this might take longer before you can interact with this example.
+
+## Benchmarking
+
+### Overview
+We deployed the default wide-ep-lws user guide on GKE (`./manifests/modelserver/gke-a4`).
+
+* Provider: GKE
+* Prefill: 1 instance with EP=16
+* Decode: 1 instance with EP=16
+* 4 `a4-highgpu-8g` VMs, 32 GPUs
+
+We use the [inference-perf](https://github.com/kubernetes-sigs/inference-perf/tree/main) benchmark tool to generate random datasets with 1K input length and 1K output length. This benchmark targets batch use case and we aim to find the maximum throughput by sweeping from lower to higher request rates up to 250 QPS.
+
+### Run Benchmark
+
+1. Deploy the wide-ep-lws stack following the Installation steps above. Once the stack is ready, obtain the gateway IP: 
+
+```bash
+export GATEWAY_IP=$(kubectl get gateway/llm-d-inference-gateway -n ${NAMESPACE} -o jsonpath='{.status.addresses[0].value}')
+```
+
+2. Follow the [benchmark guide](../../guides/benchmark/README.md) to deploy the benchmark tool and analyze the benchmark results. Notably, select the corresponding benchmark template:
+
+```
+export BENCHMARK_TEMPLATE="${BENCH_TEMPLATE_DIR}"/wide_ep_template.yaml
+```
+
+### Results
+
+<img src="throughput_vs_qps.png" width="900" alt="Throughput vs QPS">
+<img src="throughput_vs_latency.png" width="300" alt="Throughput vs Latency">
+
+At request rate 250, we achieved the max throughput:
+
+```
+"throughput": {
+    "input_tokens_per_sec": 51218.79261732335,
+    "output_tokens_per_sec": 49783.58426326592,
+    "total_tokens_per_sec": 101002.37688058926,
+    "requests_per_sec": 50.02468992880545
+}
+```
+
+This equals to 3200 input tokens/s/GPU and 3100 output tokens/s/GPU.
 
 ## Cleanup
 

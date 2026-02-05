@@ -47,35 +47,38 @@ Check for [known issues](../../README.md#known-issues) first.
 <!-- TABS:START -->
 
 <!-- TAB:Choose Main Branch -->
-**Choose Main Branch**
+
+### Choose Main Branch
 
 Choose the main branch if you want the latest llm-d.
 
-```
+```bash
 branch="main"
-# Clone the repo and switch to the desired branch 
+# Clone the repo and switch to the desired branch
 git clone https://github.com/llm-d/llm-d.git && cd llm-d && git checkout ${branch}
 ```
 
 <!-- TAB:Choose the Latest Release  -->
-**Choose the Latest Release**
+
+### Choose the Latest Release
 
 Choose the latest release of llm-d with a high qualification standard.
 
-```
+```bash
 branch=$(curl -s https://api.github.com/repos/llm-d/llm-d/releases/latest | jq -r '.tag_name')
-# Clone the repo and switch to the desired branch 
+# Clone the repo and switch to the desired branch
 git clone https://github.com/llm-d/llm-d.git && cd llm-d && git checkout ${branch}
 ```
 
 <!-- TAB:Choose a Commit -->
-**Choose a Commit**
+
+### Choose a Commit
 
 Choose this when you need a specific feature/bug fix, and lock your environment to a specific commit.
 
-```
+```bash
 branch=<commit_sha>
-# Clone the repo and switch to the desired branch 
+# Clone the repo and switch to the desired branch
 git clone https://github.com/llm-d/llm-d.git && cd llm-d && git checkout ${branch}
 ```
 

@@ -71,7 +71,7 @@ containers:
 Different pod roles use different ports:
 
 | Pod Role | Port | Description |
-|----------|------|-------------|
+| ---------- | ------ | ------------- |
 | Prefill | 8000 | Direct vLLM API access |
 | Decode | 8200 | Proxied through sidecar (8200 → 8000) |
 | Standalone | 8000 | Single-node deployments |
@@ -122,7 +122,7 @@ $ curl http://localhost:8000/v1/models
 
 ### Probe Lifecycle
 
-```
+```text
 Container Start
       ↓
 [startupProbe on /v1/models]

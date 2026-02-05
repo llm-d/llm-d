@@ -4,20 +4,20 @@ metadata:
   name: llm-d-workload-autoscaler
 spec:
   parentRefs:
-  - group: gateway.networking.k8s.io
-    kind: Gateway
-    name: infra-workload-autoscaler-inference-gateway
+    - group: gateway.networking.k8s.io
+      kind: Gateway
+      name: infra-workload-autoscaler-inference-gateway
   rules:
     - backendRefs:
-      - group: inference.networking.k8s.io
-        kind: InferencePool
-        name: gaie-workload-autoscaler
-        port: 8000
-        weight: 1
+        - group: inference.networking.k8s.io
+          kind: InferencePool
+          name: gaie-workload-autoscaler
+          port: 8000
+          weight: 1
       timeouts:
         backendRequest: 0s
         request: 0s
       matches:
-      - path:
-          type: PathPrefix
-          value: /
+        - path:
+            type: PathPrefix
+            value: /

@@ -11,7 +11,7 @@ This guide provides recipes to offload prefix cache to CPU RAM via the vLLM nati
 * Ensure your cluster infrastructure is sufficient to [deploy high scale inference](../../prereq/infrastructure/README.md).
 * Create a namespace for installation.
 
-  ```
+  ```bash
   export NAMESPACE=llm-d-pfc-cpu # or any other namespace (shorter names recommended)
   kubectl create namespace ${NAMESPACE}
   ```
@@ -21,15 +21,15 @@ This guide provides recipes to offload prefix cache to CPU RAM via the vLLM nati
 
 ## Installation
 
-```
+```bash
 cd guides/tiered-prefix-cache/cpu
 ```
 
-### 1. Deploy Gateway and HTTPRoute
+### Deploy Gateway and HTTPRoute
 
 Deploy the Gateway and HTTPRoute using the [gateway recipe](../../recipes/gateway/README.md).
 
-### 2. Deploy vLLM Model Server
+### Deploy vLLM Model Server
 
 <!-- TABS:START -->
 
@@ -53,7 +53,7 @@ kubectl apply -k ./manifests/vllm/lmcache-connector -n ${NAMESPACE}
 
 <!-- TABS:END -->
 
-### 3. Deploy InferencePool
+### Deploy InferencePool
 
 To deploy the `InferencePool`, select your provider below.
 
@@ -70,9 +70,9 @@ helm install llm-d-infpool \
     -n ${NAMESPACE} \
     -f ./manifests/inferencepool/values.yaml \
     --set "provider.name=gke" \
-    --set "inferenceExtension.monitoring.gke.enabled=true" \
+    --set "inferenceExtension.monitoring.prometheus.enabled=true" \
     oci://registry.k8s.io/gateway-api-inference-extension/charts/inferencepool \
-    --version v1.2.0
+    --version v1.3.0
 ```
 
 <!-- TAB:Istio -->
@@ -88,7 +88,7 @@ helm install llm-d-infpool \
     --set "provider.name=istio" \
     --set "inferenceExtension.monitoring.prometheus.enabled=true" \
     oci://registry.k8s.io/gateway-api-inference-extension/charts/inferencepool \
-    --version v1.2.0
+    --version v1.3.0
 ```
 
 <!-- TAB:Kgateway -->
@@ -103,7 +103,7 @@ helm install llm-d-infpool \
     -f ./manifests/inferencepool/values.yaml \
     --set "provider.name=kgateway" \
     oci://registry.k8s.io/gateway-api-inference-extension/charts/inferencepool \
-    --version v1.2.0
+    --version v1.3.0
 ```
 
 <!-- TABS:END -->
@@ -128,7 +128,7 @@ kubectl get gateway -n ${NAMESPACE}
 
 You should see output similar to the following, with the `PROGRAMMED` status as `True`.
 
-```
+```text
 NAME                      CLASS                              ADDRESS     PROGRAMMED   AGE
 llm-d-inference-gateway   gke-l7-regional-external-managed   <redacted>  True         16m
 ```
@@ -139,7 +139,7 @@ llm-d-inference-gateway   gke-l7-regional-external-managed   <redacted>  True   
 kubectl get httproute -n ${NAMESPACE}
 ```
 
-```
+```text
 NAME          HOSTNAMES   AGE
 llm-d-route               17m
 ```
@@ -150,7 +150,7 @@ llm-d-route               17m
 kubectl get inferencepool -n ${NAMESPACE}
 ```
 
-```
+```text
 NAME            AGE
 llm-d-infpool   16m
 ```
@@ -163,7 +163,7 @@ kubectl get pods -n ${NAMESPACE}
 
 You should see the InferencePool's endpoint pod and the model server pods in a `Running` state.
 
-```
+```text
 NAME                                  READY   STATUS    RESTARTS   AGE
 llm-d-infpool-epp-xxxxxxxx-xxxxx     1/1     Running   0          16m
 llm-d-model-server-xxxxxxxx-xxxxx   1/1     Running   0          11m
@@ -246,4 +246,4 @@ The following table shows that when the KVCache fits within the HBM, the perform
 | :--- | :--- | :--- | :--- | :--- | :--- |
 | **Baseline vLLM** | 0.12 | 0.09 | 18.4 | 19.6 | 23389.6 |
 | **vLLM + CPU offloading 100GB** | 0.13 | 0.11 | 18.6 | 20.6 | 23032.6 |
-| **vLLM + LMCache CPU offloading 100GB** | 0.15 | 0.10 |18.9 | 19.6 | 22772.5 |
+| **vLLM + LMCache CPU offloading 100GB** | 0.15 | 0.10 | 18.9 | 19.6 | 22772.5 |

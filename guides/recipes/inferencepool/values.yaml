@@ -1,7 +1,8 @@
 inferencePool:
   modelServers:
     matchLabels:
-      "llm-d.ai/inferenceServing": "true"
+      llm-d.ai/inference-serving: "true"
+      # optional additional label for specific guide, ex: `llm-d.ai/guide: "inference-scheduling"
 inferenceExtension:
   flags:
     # in vLLM 10.0+, the metric is renamed while upstream GAIE is still using the old name as default.

@@ -1,14 +1,16 @@
 #!/bin/bash
-set -Eeu
+set -Eeux
 
 # purpose: builds NIXL from source, gated by `BUILD_NIXL_FROM_SOURCE`
 #
+# Optional environment variables:
+# - EFA_PREFIX: Path to Libfabric installation
+: "${EFA_PREFIX:=}"
 # Required environment variables:
 # - BUILD_NIXL_FROM_SOURCE: if nixl should be installed by vLLM or has been built from source in the builder stages
 # - NIXL_REPO: Git repo to use for NIXL
 # - NIXL_VERSION: Git ref to use for NIXL
 # - NIXL_PREFIX: Path to install NIXL to
-# - EFA_PREFIX: Path to Libfabric installation
 # - UCX_PREFIX: Path to UCX installation
 # - VIRTUAL_ENV: Path to the virtual environment
 # - USE_SCCACHE: whether to use sccache (true/false)
@@ -33,7 +35,7 @@ fi
 
 # Ubuntu image needs to be built against Ubuntu 20.04 and EFA only supports 22.04 and 24.04.
 EFA_FLAG=""
-if [ "$TARGETOS" = "rhel" ]; then
+if [ "$TARGETOS" = "rhel" ] && [ -n "${EFA_PREFIX}" ]; then
     EFA_FLAG="-Dlibfabric_path=${EFA_PREFIX}"
 fi
 
@@ -55,5 +57,4 @@ cp build/src/bindings/python/nixl-meta/nixl-*-py3-none-any.whl /wheels/
 
 rm -rf build
 
-cd /tmp && rm -rf /tmp/nixl 
-
+cd /tmp && rm -rf /tmp/nixl

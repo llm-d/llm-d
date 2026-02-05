@@ -2,8 +2,8 @@
 
 ## Overview
 
-This document describes how to run benchmarks against a deployed llm-d stack.  
-For full, customizable benchmarking, please refer to [llm-d-benchmark](https://github.com/llm-d/llm-d-benchmark). `llm-d-benchmark` includes advanced features, such as automatic stack creation, sweeping of configuration parameters, recommendations, etc.   
+This document describes how to run benchmarks against a deployed llm-d stack.
+For full, customizable benchmarking, please refer to [llm-d-benchmark](https://github.com/llm-d/llm-d-benchmark). `llm-d-benchmark` includes advanced features, such as automatic stack creation, sweeping of configuration parameters, recommendations, etc.
 
 ## Requirements
 
@@ -11,11 +11,13 @@ For full, customizable benchmarking, please refer to [llm-d-benchmark](https://g
 - Install `yq` (YAML processor) - version>=4 (see [Client Setup](../prereq/client-setup/README.md))
 - For MacOS users: if `timeout` utility is not present, install it with `brew install coreutils` command.
 - Download the benchmark script [run_only.sh](https://github.com/llm-d/llm-d-benchmark/blob/main/existing_stack/run_only.sh) and make it executable.
+
     ```bash
     curl -L -O https://raw.githubusercontent.com/llm-d/llm-d-benchmark/main/existing_stack/run_only.sh
     chmod u+x run_only.sh
     ```
-- Prepare a Persistent Volume Claim (PVC) to store the benchmark results. The PVC must have `RWX` write permissions and be large enough (`200Gi` recommended).  
+
+- Prepare a Persistent Volume Claim (PVC) to store the benchmark results. The PVC must have `RWX` write permissions and be large enough (`200Gi` recommended).
 
   <details>
   <summary><b><i>Click</i></b> here if you need to create a new PVC</summary>
@@ -36,7 +38,7 @@ For full, customizable benchmarking, please refer to [llm-d-benchmark](https://g
       # storageClassName: <change the default storage class if needed>
     YAML
     ```
-    
+
     Alternatively, a PVC can be created via the UI of the cluster dashboard.
 
   </details>
@@ -50,9 +52,9 @@ For full, customizable benchmarking, please refer to [llm-d-benchmark](https://g
   export BENCH_TEMPLATE_DIR="${LLMD_ROOT_DIR}"/guides/benchmark
   ```
 
-## Set your stack type and gateway name 
+## Set your stack type and gateway name
 
-`GATEWAY_SVC` is your gateway service name.  
+`GATEWAY_SVC` is your gateway service name.
 `BENCHMARK_TEMPLATE` is a corresponding benchmark template file (available in [guides/benchmark](./)).
 
 > [!IMPORTANT]
@@ -62,62 +64,62 @@ For full, customizable benchmarking, please refer to [llm-d-benchmark](https://g
 > <td>
 > <details>
 > <summary><b>Intelligent Inference Scheduling</b></summary>
-> 
->   ```bash
->   export GATEWAY_SVC=$(kubectl get svc -n "${NAMESPACE}" \
->     -l gateway.networking.k8s.io/gateway-name=infra-inference-scheduling-inference-gateway \
->     --no-headers  -o=custom-columns=:metadata.name \
->     | head -1
->   )
->   export BENCHMARK_TEMPLATE="${BENCH_TEMPLATE_DIR}"/inference_scheduling_template.yaml
->   # export BENCHMARK_TEMPLATE="${BENCH_TEMPLATE_DIR}"/inference_scheduling_guidellm_template.yaml
->   # export BENCHMARK_TEMPLATE="${BENCH_TEMPLATE_DIR}"/inference_scheduling_shared_prefix_template.yaml
+>
+> ```bash
+> export GATEWAY_SVC=$(kubectl get svc -n "${NAMESPACE}" \
+>   -l gateway.networking.k8s.io/gateway-name=infra-inference-scheduling-inference-gateway \
+>   --no-headers  -o=custom-columns=:metadata.name \
+>   | head -1
+> )
+> export BENCHMARK_TEMPLATE="${BENCH_TEMPLATE_DIR}"/inference_scheduling_template.yaml
+> # export BENCHMARK_TEMPLATE="${BENCH_TEMPLATE_DIR}"/inference_scheduling_guidellm_template.yaml
+> # export BENCHMARK_TEMPLATE="${BENCH_TEMPLATE_DIR}"/inference_scheduling_shared_prefix_template.yaml
 >   ```
-> 
+>
 > </details>
 > </td>
-> 
+>
 > <td>
 > <details>
 > <summary><b>Prefill/Decode Disaggregation</b></summary>
-> 
->   ```bash
->   export GATEWAY_SVC=$(kubectl get svc -n "${NAMESPACE}" \
->     -l gateway.networking.k8s.io/gateway-name=infra-pd-inference-gateway \
->     --no-headers  -o=custom-columns=:metadata.name \
->     | head -1
->   )
->   export BENCHMARK_TEMPLATE="${BENCH_TEMPLATE_DIR}"/pd_template.yaml
->   #export BENCHMARK_TEMPLATE="${BENCH_TEMPLATE_DIR}"/pd_vllm_bench_random_concurrent_template.yaml
->   #export BENCHMARK_TEMPLATE="${BENCH_TEMPLATE_DIR}"/pd_shared_prefix_template.yaml
+>
+> ```bash
+> export GATEWAY_SVC=$(kubectl get svc -n "${NAMESPACE}" \
+>   -l gateway.networking.k8s.io/gateway-name=infra-pd-inference-gateway \
+>   --no-headers  -o=custom-columns=:metadata.name \
+>   | head -1
+> )
+> export BENCHMARK_TEMPLATE="${BENCH_TEMPLATE_DIR}"/pd_template.yaml
+> #export BENCHMARK_TEMPLATE="${BENCH_TEMPLATE_DIR}"/pd_vllm_bench_random_concurrent_template.yaml
+> #export BENCHMARK_TEMPLATE="${BENCH_TEMPLATE_DIR}"/pd_shared_prefix_template.yaml
 >   ```
-> 
+>
 > </details>
 > </td>
 > </tr>
-> 
+>
 > <tr>
 > <td>
 > <details>
 > <summary><b>Wide Expert-Parallelism</b></summary>
-> 
->   ```bash
->   export GATEWAY_SVC=$(kubectl get svc -n "${NAMESPACE}" \
->     -l gateway.networking.k8s.io/infra-wide-wp-inference-gateway \
->     --no-headers  -o=custom-columns=:metadata.name \
->     | head -1
->   )
->   export BENCHMARK_TEMPLATE="${BENCH_TEMPLATE_DIR}"/wide_ep_template.yaml
+>
+> ```bash
+> export GATEWAY_SVC=$(kubectl get svc -n "${NAMESPACE}" \
+>   -l gateway.networking.k8s.io/infra-wide-wp-inference-gateway \
+>   --no-headers  -o=custom-columns=:metadata.name \
+>   | head -1
+> )
+> export BENCHMARK_TEMPLATE="${BENCH_TEMPLATE_DIR}"/wide_ep_template.yaml
 >   ```
-> 
+>
 > </details>
 > </td>
 > <td>
 > <details>
 > <summary><b>Tiered Prefix Cache</b></summary>
-> 
+>
 > TBD
-> 
+>
 > </details>
 > </tr>
 > <tr>
@@ -125,15 +127,15 @@ For full, customizable benchmarking, please refer to [llm-d-benchmark](https://g
 > <details>
 > <summary><b>Precise Prefix Caching</b></summary>
 >
->   ```bash
->   export GATEWAY_SVC=$(kubectl get svc -n "${NAMESPACE}" \
->     -l gateway.networking.k8s.io/gateway-name=infra-kv-events-inference-gateway \
->     --no-headers  -o=custom-columns=:metadata.name \
->     | head -1
->   )
->   export BENCHMARK_TEMPLATE="${BENCH_TEMPLATE_DIR}"/precise_template.yaml
->   # export BENCHMARK_TEMPLATE="${BENCH_TEMPLATE_DIR}"/precise_guidellm_template.yaml
->   # export BENCHMARK_TEMPLATE="${BENCH_TEMPLATE_DIR}"/precise_shared_prefix_template.yaml
+> ```bash
+> export GATEWAY_SVC=$(kubectl get svc -n "${NAMESPACE}" \
+>   -l gateway.networking.k8s.io/gateway-name=infra-kv-events-inference-gateway \
+>   --no-headers  -o=custom-columns=:metadata.name \
+>   | head -1
+> )
+> export BENCHMARK_TEMPLATE="${BENCH_TEMPLATE_DIR}"/precise_template.yaml
+> # export BENCHMARK_TEMPLATE="${BENCH_TEMPLATE_DIR}"/precise_guidellm_template.yaml
+> # export BENCHMARK_TEMPLATE="${BENCH_TEMPLATE_DIR}"/precise_shared_prefix_template.yaml
 >   ```
 >
 > </details>
@@ -142,6 +144,7 @@ For full, customizable benchmarking, please refer to [llm-d-benchmark](https://g
 > </table>
 
 Check your env:
+
   ```bash
   echo "Using NAMESPACE=${NAMESPACE:?Missing}, GATEWAY_SVC=${GATEWAY_SVC:?Missing}, BENCHMARK_PVC=${BENCHMARK_PVC:?Missing}, BENCHMARK_TEMPLATE=${BENCHMARK_TEMPLATE:?Missing}"
   ```
@@ -149,40 +152,46 @@ Check your env:
 ## Run
 
 Create a yaml configuration file for the benchmark and run.
+
   ```bash
   envsubst < ${BENCHMARK_TEMPLATE} > config.yaml
   ./run_only.sh -c config.yaml
   ```
 
-The benchmarks will create a launcher pod to run and the resulted would be stored on the PVC.  
+The benchmarks will create a launcher pod to run and the resulted would be stored on the PVC.
 You can try running with different workload configuration. Just edit the `workload` section in `config.yaml` and rerun (for details, see [Advanced.workload](README.md#workload) below).
 
 ## Analyze Results
 
 You can access the results PVC through the benchmark launcher pod.
+
   ```bash
   export HARNESS_POD=$(kubectl get pods -n ${NAMESPACE} -l app --show-labels | awk -v p='lmdbench-.*-launcher' '$0~p {print $1; exit}')
   kubectl exec $HARNESS_POD -n $NAMESPACE -- ls /requests
   ```
 
 To copy a results directory to your local machine use:
+
   ```bash
   kubectl cp ${NAMESPACE}/${HARNESS_POD}:/requests/<results-folder> <destination-path>
   ```
 
-# Results Examples
+## Results Examples
 
 ### Terminal output
+
 `run_only.sh` prints progress messages to the terminal. The stdout and stderr of the harness itself is printed to the terminal as well as captured in the results.
 
 This example uses `guidellm` with a [`rate_comparison`](./inference_scheduling_guidellm_template.yaml) workload:
+
   ```bash
   export BENCHMARK_TEMPLATE="${BENCH_TEMPLATE_DIR}"/inference_scheduling_guidellm_template.yaml
   ```
+
 <details>
 
 <summary><b><i>Click</i></b> to view the terminal output of <code>run_only.sh</code> using <code>guidellm</code></summary>
-  
+
   ```bash
   ✦ ❯  ./run_only.sh -c config.yaml
 
@@ -191,7 +200,7 @@ This example uses `guidellm` with a [`rate_comparison`](./inference_scheduling_g
   ------------------------------------------------------------
 
   ===> Mon Dec 29 18:14:20 IST 2025 - ./run_only.sh:63
-  ℹ️ Using endpoint_stack_name=inference-scheduling-Qwen3-0.6B on endpoint_namespace=dean-ns1 running model=Qwen/Qwen3-0.6B at endpoint_base_url=http://infra-inference-scheduling-inference-gateway-istio.dean-ns1.svc.cluster.local:80
+  ℹ️ Using endpoint_stack_name=inference-scheduling-Qwen3-32B on endpoint_namespace=dean-ns1 running model=Qwen/Qwen3-32B at endpoint_base_url=http://infra-inference-scheduling-inference-gateway-istio.dean-ns1.svc.cluster.local:80
   ------------------------------------------------------------
 
   ===> Mon Dec 29 18:14:20 IST 2025 - ./run_only.sh:63
@@ -211,7 +220,7 @@ This example uses `guidellm` with a [`rate_comparison`](./inference_scheduling_g
   ------------------------------------------------------------
 
   ===> Mon Dec 29 18:14:21 IST 2025 - ./run_only.sh:63
-  🔍 Verifying model Qwen/Qwen3-0.6B on endpoint http://infra-inference-scheduling-inference-gateway-istio.dean-ns1.svc.cluster.local:80/v1/completions using pod verify-model-1767024860
+  🔍 Verifying model Qwen/Qwen3-32B on endpoint http://infra-inference-scheduling-inference-gateway-istio.dean-ns1.svc.cluster.local:80/v1/completions using pod verify-model-1767024860
   ------------------------------------------------------------
   HTTP/1.1 200 OK
   x-envoy-upstream-service-time: 41
@@ -221,7 +230,7 @@ This example uses `guidellm` with a [`rate_comparison`](./inference_scheduling_g
   server: istio-envoy
   transfer-encoding: chunked
 
-  {"choices":[{"finish_reason":"length","index":0,"logprobs":null,"prompt_logprobs":null,"prompt_token_ids":null,"stop_reason":null,"text":"Question::HelloQuestion() {\n    question = \"Hello, World!\";\n    answer","token_ids":null}],"created":1767024864,"id":"cmpl-36726d69-84e3-48c6-98c1-8161ca9dce8a","kv_transfer_params":null,"model":"Qwen/Qwen3-0.6B","object":"text_completion","service_tier":null,"system_fingerprint":null,"usage":{"completion_tokens":16,"prompt_tokens":1,"prompt_tokens_details":null,"total_tokens":17}}
+  {"choices":[{"finish_reason":"length","index":0,"logprobs":null,"prompt_logprobs":null,"prompt_token_ids":null,"stop_reason":null,"text":"Question::HelloQuestion() {\n    question = \"Hello, World!\";\n    answer","token_ids":null}],"created":1767024864,"id":"cmpl-36726d69-84e3-48c6-98c1-8161ca9dce8a","kv_transfer_params":null,"model":"Qwen/Qwen3-32B","object":"text_completion","service_tier":null,"system_fingerprint":null,"usage":{"completion_tokens":16,"prompt_tokens":1,"prompt_tokens_details":null,"total_tokens":17}}
   ===> Mon Dec 29 18:14:26 IST 2025 - ./run_only.sh:63
   🔧 Preparing ConfigMap with workload profiles
   ------------------------------------------------------------
@@ -315,18 +324,18 @@ This example uses `guidellm` with a [`rate_comparison`](./inference_scheduling_g
         LLMDBENCH_HARNESS_NAME:                       guidellm
         LLMDBENCH_RUN_EXPERIMENT_RESULTS_DIR_PREFIX:  /requests
         LLMDBENCH_RUN_DATASET_DIR:                    /workspace
-        LLMDBENCH_HARNESS_STACK_NAME:                 inference-scheduling-Qwen3-0.6B
+        LLMDBENCH_HARNESS_STACK_NAME:                 inference-scheduling-Qwen3-32B
       Mounts:
         /requests from results (rw)
         /var/run/secrets/kubernetes.io/serviceaccount from kube-api-access-4jjd2 (ro)
         /workspace/profiles/guidellm from guidellm-profiles (rw)
   Conditions:
     Type                        Status
-    PodReadyToStartContainers   True 
-    Initialized                 True 
-    Ready                       True 
-    ContainersReady             True 
-    PodScheduled                True 
+    PodReadyToStartContainers   True
+    Initialized                 True
+    Ready                       True
+    ContainersReady             True
+    PodScheduled                True
   Volumes:
     results:
       Type:       PersistentVolumeClaim (a reference to a PersistentVolumeClaim in the same namespace)
@@ -363,11 +372,11 @@ This example uses `guidellm` with a [`rate_comparison`](./inference_scheduling_g
   ===> Mon Dec 29 18:14:36 IST 2025 - ./run_only.sh:63
   ℹ️ Running benchmark with workload rate_comparison
   ------------------------------------------------------------
-  LLMDBENCH_CONTROL_WORK_DIR=/requests/guidellm_1767024860_rate_comparison_inference-scheduling-Qwen3-0.6B
+  LLMDBENCH_CONTROL_WORK_DIR=/requests/guidellm_1767024860_rate_comparison_inference-scheduling-Qwen3-32B
   LLMDBENCH_HARNESS_GIT_BRANCH=adfa108ab1df6f2a1452d1037a71817a493303a8
   LLMDBENCH_HARNESS_GIT_REPO=https://github.com/vllm-project/guidellm.git
   LLMDBENCH_HARNESS_NAME=guidellm
-  LLMDBENCH_HARNESS_STACK_NAME=inference-scheduling-Qwen3-0.6B
+  LLMDBENCH_HARNESS_STACK_NAME=inference-scheduling-Qwen3-32B
   LLMDBENCH_MAGIC_ENVAR=harness_pod
   LLMDBENCH_RUN_DATASET_DIR=/workspace
   LLMDBENCH_RUN_EXPERIMENT_ANALYZER=guidellm-analyze_results.sh
@@ -378,48 +387,48 @@ This example uses `guidellm` with a [`rate_comparison`](./inference_scheduling_g
   LLMDBENCH_RUN_EXPERIMENT_HARNESS_WORKLOAD_AUTO=0
   LLMDBENCH_RUN_EXPERIMENT_HARNESS_WORKLOAD_NAME=rate_comparison.yaml
   LLMDBENCH_RUN_EXPERIMENT_ID=1767024860_rate_comparison
-  LLMDBENCH_RUN_EXPERIMENT_RESULTS_DIR=/requests/guidellm_1767024860_rate_comparison_inference-scheduling-Qwen3-0.6B
+  LLMDBENCH_RUN_EXPERIMENT_RESULTS_DIR=/requests/guidellm_1767024860_rate_comparison_inference-scheduling-Qwen3-32B
   LLMDBENCH_RUN_EXPERIMENT_RESULTS_DIR_PREFIX=/requests
-  LLMDBENCH_RUN_EXPERIMENT_RESULTS_DIR_SUFFIX=guidellm_1767024860_rate_comparison_inference-scheduling-Qwen3-0.6B
+  LLMDBENCH_RUN_EXPERIMENT_RESULTS_DIR_SUFFIX=guidellm_1767024860_rate_comparison_inference-scheduling-Qwen3-32B
   LLMDBENCH_RUN_WORKSPACE_DIR=/workspace
   Running harness: /usr/local/bin/guidellm-llm-d-benchmark.sh
-  Using experiment result dir: /requests/guidellm_1767024860_rate_comparison_inference-scheduling-Qwen3-0.6B
-  ✔ OpenAIHTTPBackend backend validated with model Qwen/Qwen3-0.6B
-    {'target':                                                                    
+  Using experiment result dir: /requests/guidellm_1767024860_rate_comparison_inference-scheduling-Qwen3-32B
+  ✔ OpenAIHTTPBackend backend validated with model Qwen/Qwen3-32B
+    {'target':
     'http://infra-inference-scheduling-inference-gateway-istio.dean-ns1.svc.cluste
-    r.local:80', 'model': 'Qwen/Qwen3-0.6B', 'timeout': 60.0, 'http2': True,      
-    'follow_redirects': True, 'verify': False, 'openai_paths': {'health':         
-    'health', 'models': 'v1/models', 'text_completions': 'v1/completions',        
-    'chat_completions': 'v1/chat/completions', 'audio_transcriptions':            
-    'v1/audio/transcriptions', 'audio_translations': 'v1/audio/translations'},    
-    'validate_backend': {'method': 'GET', 'url':                                  
+    r.local:80', 'model': 'Qwen/Qwen3-32B', 'timeout': 60.0, 'http2': True,
+    'follow_redirects': True, 'verify': False, 'openai_paths': {'health':
+    'health', 'models': 'v1/models', 'text_completions': 'v1/completions',
+    'chat_completions': 'v1/chat/completions', 'audio_transcriptions':
+    'v1/audio/transcriptions', 'audio_translations': 'v1/audio/translations'},
+    'validate_backend': {'method': 'GET', 'url':
     'http://infra-inference-scheduling-inference-gateway-istio.dean-ns1.svc.cluste
-    r.local:80/health'}}                                                          
+    r.local:80/health'}}
   ✔ Processor resolved
-    Using model 'Qwen/Qwen3-0.6B' as processor                                    
+    Using model 'Qwen/Qwen3-32B' as processor
   ✔ Request loader initialized with inf unique requests
-    {'data': "[{'prompt_tokens': 50, 'output_tokens': 50}]", 'data_args': '[]',   
-    'data_samples': -1, 'preprocessors': ['GenerativeColumnMapper',               
-    'GenerativeTextCompletionsRequestFormatter'], 'collator':                     
-    'GenerativeRequestCollator', 'sampler': 'None', 'num_workers': 1,             
-    'random_seed': 42}                                                            
+    {'data': "[{'prompt_tokens': 50, 'output_tokens': 50}]", 'data_args': '[]',
+    'data_samples': -1, 'preprocessors': ['GenerativeColumnMapper',
+    'GenerativeTextCompletionsRequestFormatter'], 'collator':
+    'GenerativeRequestCollator', 'sampler': 'None', 'num_workers': 1,
+    'random_seed': 42}
   ✔ Resolved transient phase configurations
-    Warmup: percent=None value=None mode='prefer_duration'                        
-    Cooldown: percent=None value=None mode='prefer_duration'                      
-    Rampup (Throughput/Concurrent): 0.0                                           
+    Warmup: percent=None value=None mode='prefer_duration'
+    Cooldown: percent=None value=None mode='prefer_duration'
+    Rampup (Throughput/Concurrent): 0.0
   ✔ AsyncProfile profile resolved
-    {'str': "type_='constant' completed_strategies=[] constraints={'max_seconds': 
-    30} rampup_duration=0.0 strategy_type='constant' rate=[1.0, 5.0]              
-    max_concurrency=None random_seed=42 strategy_types=['constant', 'constant']", 
-    'type': 'AsyncProfile', 'class': 'AsyncProfile', 'module':                    
-    'guidellm.benchmark.profiles', 'attributes': {'type_': 'constant',            
-    'completed_strategies': [], 'constraints': {'max_seconds': 30},               
-    'rampup_duration': 0.0, 'strategy_type': 'constant', 'rate': [1.0, 5.0],      
-    'max_concurrency': 'None', 'random_seed': 42}}                                
+    {'str': "type_='constant' completed_strategies=[] constraints={'max_seconds':
+    30} rampup_duration=0.0 strategy_type='constant' rate=[1.0, 5.0]
+    max_concurrency=None random_seed=42 strategy_types=['constant', 'constant']",
+    'type': 'AsyncProfile', 'class': 'AsyncProfile', 'module':
+    'guidellm.benchmark.profiles', 'attributes': {'type_': 'constant',
+    'completed_strategies': [], 'constraints': {'max_seconds': 30},
+    'rampup_duration': 0.0, 'strategy_type': 'constant', 'rate': [1.0, 5.0],
+    'max_concurrency': 'None', 'random_seed': 42}}
   ✔ Output formats resolved
-    {'json':                                                                      
+    {'json':
     "output_path=PosixPath('/requests/guidellm_1767024860_rate_comparison_inferenc
-    e-scheduling-Qwen3-0.6B/results.json')"}                                      
+    e-scheduling-Qwen3-32B/results.json')"}
   ✔ Setup complete, starting benchmarks...
 
 
@@ -490,29 +499,29 @@ This example uses `guidellm` with a [`rate_comparison`](./inference_scheduling_g
 
 
   ✔ Benchmarking complete, generated 2 benchmark(s)
-  …   json    : 
-  /requests/guidellm_1767024860_rate_comparison_inference-scheduling-Qwen3-0.6B/re
+  …   json    :
+  /requests/guidellm_1767024860_rate_comparison_inference-scheduling-Qwen3-32B/re
   sults.json
   Harness completed successfully.
   Converting results.json
   Warning: LLMDBENCH_DEPLOY_METHODS undefined, cannot determine deployment method.Warning: LLMDBENCH_DEPLOY_METHODS undefined, cannot determine deployment method.Results data conversion completed successfully.
   Harness completed: /usr/local/bin/guidellm-llm-d-benchmark.sh
   Running analysis: /usr/local/bin/guidellm-analyze_results.sh
-  Done. Data is available at "/requests/guidellm_1767024860_rate_comparison_inference-scheduling-Qwen3-0.6B"
+  Done. Data is available at "/requests/guidellm_1767024860_rate_comparison_inference-scheduling-Qwen3-32B"
 
   ===> Mon Dec 29 18:15:51 IST 2025 - ./run_only.sh:63
   ℹ️ Benchmark workload rate_comparison complete.
   ------------------------------------------------------------
 
   ===> Mon Dec 29 18:15:51 IST 2025 - ./run_only.sh:63
-  ✅ 
+  ✅
     Experiment ID is 1767024860.
-    All workloads completed. 
+    All workloads completed.
     Results should be available in PVC workload-pvc.
     Please use analyze.sh to fetch and analyze results.
 
   ------------------------------------------------------------
-  ... via 🐍 v3.13.7 (.venv) took 1m30s 
+  ... via 🐍 v3.13.7 (.venv) took 1m30s
   ✦ ❯
   ```
 
@@ -520,21 +529,25 @@ This example uses `guidellm` with a [`rate_comparison`](./inference_scheduling_g
 
 ### Output folder
 
-The output files are saved on the benchmark PVC. They are accessible through the launcher pod in the `/requests` folder. Each experiment is saved under its own sub directory. 
+The output files are saved on the benchmark PVC. They are accessible through the launcher pod in the `/requests` folder. Each experiment is saved under its own sub directory.
 
 This example uses `inference-perf` with a [`shared-prefix`](./inference_scheduling_shared_prefix_template.yaml) workload:
+
   ```bash
   export BENCHMARK_TEMPLATE="${BENCH_TEMPLATE_DIR}"/inference_scheduling_shared_prefix_template.yaml
   ```
 
-After running With this template, the `/requests` folder will include a `<results-folder>` named 
+After running With this template, the `/requests` folder will include a `<results-folder>` named
+
 ```bash
-inference-perf_1765442721_shared_prefix_synthetic_inference-scheduling-Qwen3-0.6B
-``` 
-The name indicates `inference-perf` was used as harness, the workload was `shared_prefix_synthetic` and the user-defined stack name was `inference-scheduling-Qwen3-0.6B`. 
+inference-perf_1765442721_shared_prefix_synthetic_inference-scheduling-Qwen3-32B
+```
+
+The name indicates `inference-perf` was used as harness, the workload was `shared_prefix_synthetic` and the user-defined stack name was `inference-scheduling-Qwen3-32B`.
 
 ### Workload file
-The harness workload configuration file, as was used, is copied into the the experiment results directory; in this case, `shared_prefix_synthetic.yaml`.  
+
+The harness workload configuration file, as was used, is copied into the the experiment results directory; in this case, `shared_prefix_synthetic.yaml`.
 
 <details>
 <summary><b><i>Click</i></b> to view the workload details (<code>shared_prefix_synthetic.yaml</code>)</summary>
@@ -562,11 +575,11 @@ The harness workload configuration file, as was used, is copied into the the exp
     streaming: true
   server:
     type: vllm
-    model_name: Qwen/Qwen3-0.6B
+    model_name: Qwen/Qwen3-32B
     base_url: http://infra-inference-scheduling-inference-gateway.dpikus-ns.svc.cluster.local:80
     ignore_eos: true
   tokenizer:
-    pretrained_model_name_or_path: Qwen/Qwen3-0.6B
+    pretrained_model_name_or_path: Qwen/Qwen3-32B
   data:
     type: shared_prefix
     shared_prefix:
@@ -582,18 +595,16 @@ The harness workload configuration file, as was used, is copied into the the exp
       per_request: true
   storage:
     local_storage:
-      path: /requests/inference-perf_1765442721_shared_prefix_synthetic_inference-scheduling-Qwen3-0.6B
+      path: /requests/inference-perf_1765442721_shared_prefix_synthetic_inference-scheduling-Qwen3-32B
   ```
 
 </details>
 
 ### Text reports
 
-All harnesses capture, more or less, the same metrics (e.g., TTFT, TPOT, ITL). However, differet harnesses produce different result files. In our case, `inference-perf` creates a results file for each stage (6 files), a summary file for all stages, and a (huge) details file with per-request metrics. 
-
+All harnesses capture, more or less, the same metrics (e.g., TTFT, TPOT, ITL). However, differet harnesses produce different result files. In our case, `inference-perf` creates a results file for each stage (6 files), a summary file for all stages, and a (huge) details file with per-request metrics.
 
 In this example there are 6 workload stages. For each of these stages, there is a results `json` file in harness-specific format and a standardized benchmark `yaml` report in a harness-agnostic format. In this case, the `inference-perf` benchmark also creates a summary report and a (huge) detailed per-request report. The `analysis` folder includes plots of the same data.
-
 
 <details>
 <summary><b><i>Click</i></b> to view the contents of the experiment directory (after being copied to <code>destination-path=/tmp/test</code>)</summary>
@@ -786,7 +797,7 @@ In this example there are 6 workload stages. For each of these stages, there is 
       "request_latency": null,
       "prompt_len": null
     }
-  }  
+  }
   ```
 
 </details>
@@ -797,26 +808,27 @@ To allow easier comparisson between results from different harnesses, the benchm
 
 ### Graphical report
 
-Some harnesses also generate plots of the results. In our example, `inference-perf` generates several plots under the `analysis` sub directory. In [llm-d-benchmark](https://github.com/llm-d/llm-d-benchmark) there are examples of more complex plots (see [analysis.ipynb](https://github.com/llm-d/llm-d-benchmark/blob/main/analysis/analysis.ipynb)).  
+Some harnesses also generate plots of the results. In our example, `inference-perf` generates several plots under the `analysis` sub directory. In [llm-d-benchmark](https://github.com/llm-d/llm-d-benchmark) there are examples of more complex plots (see [analysis.ipynb](https://github.com/llm-d/llm-d-benchmark/blob/main/analysis/analysis.ipynb)).
 
 ---
 
-# Advanced
+## Advanced
 
-## Customizing the config file
+### Customizing the config file
 
-This section describes the details of the configuration `config.yaml` file. You may edit it as needed to match your stack (e.g., to change the model name). If you followed the guideline to create your stack then you should be able to run without any modification.   
+This section describes the details of the configuration `config.yaml` file. You may edit it as needed to match your stack (e.g., to change the model name). If you followed the guideline to create your stack then you should be able to run without any modification.
 **Do not edit** unless you know what you are doing.
 
 The configuration is divided into sections, each with a different scope.
 
 ### Endpoint
 
-These are the properties of the stack (`envsubst` would replace `NAMESPACE` and `GATEWAY_SVC` to match your env). Gated models need a Hugging Face token to access. Your stack should already have a token secret under the name `llm-d-hf-token`. `stack_name` is a user-defined arbitrary name that will be attached to the benchmark results. You can use `stack_name` to help you identify the results of different experiments. The `model` must match your stack. Please note the `yaml` tags -- other section of this `yaml` reference them (e.g., the tokenizer reference the model).   
+These are the properties of the stack (`envsubst` would replace `NAMESPACE` and `GATEWAY_SVC` to match your env). Gated models need a Hugging Face token to access. Your stack should already have a token secret under the name `llm-d-hf-token`. `stack_name` is a user-defined arbitrary name that will be attached to the benchmark results. You can use `stack_name` to help you identify the results of different experiments. The `model` must match your stack. Please note the `yaml` tags -- other section of this `yaml` reference them (e.g., the tokenizer reference the model).
+
   ```yaml
   endpoint:
-    stack_name: &stack_name inference-scheduling-Qwen3-0.6B  # user defined name for the stack (results prefix)
-    model: &model Qwen/Qwen3-0.6B                      # Exact HuggingFace model name. Must match stack deployed.
+    stack_name: &stack_name inference-scheduling-Qwen3-32B  # user defined name for the stack (results prefix)
+    model: &model Qwen/Qwen3-32B                      # Exact HuggingFace model name. Must match stack deployed.
     namespace: &namespace $NAMESPACE
     base_url: &url http://${GATEWAY_SVC}.${NAMESPACE}.svc.cluster.local:80  # Base URL of inference endpoint
     hf_token_secret: llm-d-hf-token   # The name of secret that contains the HF token of the stack
@@ -829,22 +841,30 @@ The `kubectl` entry allows you to change the k8s control command (e.g., to `oc`)
 
   ```yaml
   control:
-    work_dir: $HOME/llm-d-bench-work  # working directory to store temporary and autogenerated files. 
+    work_dir: $HOME/llm-d-bench-work  # working directory to store temporary and autogenerated files.
                                       # Do not edit content manually.
                                       # If not set, a temp directory will be created.
-    kubectl: kubectl                  # kubectl command: kubectl or oc                                   
+    kubectl: kubectl                  # kubectl command: kubectl or oc
   ```
 
 ### Harness
 
-Harness refers to the specific benchmarking tool used. Several harnesses are supported, including [inference-perf](https://github.com/kubernetes-sigs/inference-perf), [guidellm](https://github.com/vllm-project/guidellm), [InferenceMAX](https://github.com/InferenceMAX/InferenceMAX) and [vLLM Benchmarks](https://github.com/vllm-project/vllm/tree/main/benchmarks). The `results_pvc` should be set to the PVC you created above. The benchmark is run from one or more pods inside the cluster. The image for this pod is from [llm-d-benchmark](https://github.com/llm-d/llm-d-benchmark). Typically, you do not have to change the `namespace` or the `image` 
+Harness refers to the specific benchmarking tool used. Several harnesses are supported, including
+[inference-perf](https://github.com/kubernetes-sigs/inference-perf),
+[guidellm](https://github.com/vllm-project/guidellm),
+[InferenceMAX](https://github.com/InferenceMAX/InferenceMAX) and
+[vLLM Benchmarks](https://github.com/vllm-project/vllm/tree/main/benchmarks).
+The `results_pvc` should be set to the PVC you created above.
+The benchmark is run from one or more pods inside the cluster.
+The image for this pod is from [llm-d-benchmark](https://github.com/llm-d/llm-d-benchmark).
+Typically, you do not have to change the `namespace` or the `image`
 
   ```yaml
   harness:
     name: &harness_name inference-perf
     results_pvc: ${BENCHMARK_PVC}   # PVC where benchmark results are stored
     namespace: *namespace           # Namespace where harness is deployed. Typically with stack.
-    parallelism: 1                  # Number of parallel workload launcher pods to create.  
+    parallelism: 1                  # Number of parallel workload launcher pods to create.
     wait_timeout: 600               # Time (in seconds) to wait for workload launcher pod to complete before terminating.
                                     # Set to 0 to disable timeout.
     image: ghcr.io/llm-d/llm-d-benchmark:v0.4.0
@@ -861,21 +881,22 @@ This sections allows you to add arbitrary environment variable to the harness po
       value: "4"
   ```
 
-### Workload 
+### Workload
 
 These settings characterize of the workload used to benchmark the stack. Each harness supports different configuration parameters for setting the workload. These are described in detail in their documentations (see, e.g., [inference-perf configuration guide](https://github.com/kubernetes-sigs/inference-perf/blob/main/docs/config.md)).
-While the details are different for each harness, the concepts are similar.  
+While the details are different for each harness, the concepts are similar.
 A workload specification typically includes:
- - **Data specification**: How to generated the contents of the inference queries. For example, the distribution of input and output lengths or a path to a HF trace.   
- - **Load specification**: Timing for sending queries. E.g., rate and duration. Some harnesses support "stages", each with its own load specification.
- - **Control**: Which API to use, target endpoint, tokenizers, etc.
- - **Output**: The types of reports to produce and where to store them. **Do not change** -- the benchmark tools will set these automatically. 
 
-Several workload can be specified, each with a different name. The benchmark would run all the workloads against the stack. 
+- **Data specification**: How to generated the contents of the inference queries. For example, the distribution of input and output lengths or a path to a HF trace.
+- **Load specification**: Timing for sending queries. E.g., rate and duration. Some harnesses support "stages", each with its own load specification.
+- **Control**: Which API to use, target endpoint, tokenizers, etc.
+- **Output**: The types of reports to produce and where to store them. **Do not change** -- the benchmark tools will set these automatically.
+
+Several workload can be specified, each with a different name. The benchmark would run all the workloads against the stack.
 
   ```yaml
   workload:                         # yaml configuration for harness workload(s)
-    
+
     # an example workload using random synthetic data
     sanity_random:
       load:

@@ -3,6 +3,9 @@ set -Eeu
 
 # installs vllm and dependencies in runtime stage
 #
+# Optional environment variabls:
+# - SUPPRESS_PYTHON_OUTPUT: If we should suppres vLLM installation logs
+: "${SUPPRESS_PYTHON_OUTPUT:=}"
 # Required environment variables:
 # - VLLM_REPO: vLLM git repository URL
 # - VLLM_COMMIT_SHA: vLLM commit SHA to checkout
@@ -99,10 +102,14 @@ fi
 # debug: print desired package list
 echo "DEBUG: Installing packages: ${INSTALL_PACKAGES[*]}"
 
-# install all packages in one command with verbose output to prevent GHA timeouts
+# install all packages in one command; enable verbose output by default to help prevent GHA timeouts (can be suppressed via SUPPRESS_PYTHON_OUTPUT)
 # use flashinfer wheel index for jit-cache pre-built binaries
 CUDA_SHORT_VERSION="cu${CUDA_MAJOR}${CUDA_MINOR}"
-uv pip install -v "${INSTALL_PACKAGES[@]}" \
+VERBOSE_FLAG="-v"
+if [ "${SUPPRESS_PYTHON_OUTPUT}" = "true" ] || [ "${SUPPRESS_PYTHON_OUTPUT}" = "1" ]; then
+  VERBOSE_FLAG=""
+fi
+uv pip install ${VERBOSE_FLAG} "${INSTALL_PACKAGES[@]}" \
   --extra-index-url "https://flashinfer.ai/whl/${CUDA_SHORT_VERSION}"
 
 # uninstall the NVSHMEM dependency brought in by vllm if using a compiled NVSHMEM

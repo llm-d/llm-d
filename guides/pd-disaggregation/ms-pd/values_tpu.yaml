@@ -9,11 +9,17 @@ modelArtifacts:
   size: 200Gi
   authSecretName: "llm-d-hf-token"
   name: "meta-llama/Llama-3.3-70B-Instruct"
+  labels:
+    llm-d.ai/inference-serving: "true"
+    llm-d.ai/guide: "pd-disaggregation"
+    llm-d.ai/hardware-vairant: "tpu"
+    llm-d.ai/hardware-vendor: "goolge"
+    llm-d.ai/model: "Llama-3.3-70B-Instruct"
 
 routing:
   servicePort: 8000
   proxy:
-    image: ghcr.io/llm-d/llm-d-routing-sidecar:v0.4.0
+    image: ghcr.io/llm-d/llm-d-routing-sidecar:v0.5.0
     connector: nixlv2
     secure: false
 
@@ -29,84 +35,89 @@ decode:
   monitoring:
     podmonitor:
       enabled: true
-      portName: "vllm" # decode vLLM service port (from routing.proxy.targetPort)
+      portName: "vllm"  # decode vLLM service port (from routing.proxy.targetPort)
       path: "/metrics"
       interval: "30s"
   containers:
-  - name: "vllm"
-    image: vllm/vllm-tpu:v0.11.1
-    modelCommand: vllmServe
-    args:
-      # Keep tensor-parallelism as the first set of arguments
-      - "--tensor-parallel-size"
-      - "8"
-      - "--kv-transfer-config"
-      - '{"kv_connector":"TPUConnector", "kv_connector_module_path" : "tpu_inference.distributed.tpu_connector", "kv_role":"kv_both", "kv_ip" : "$(POD_IP)"}'
-      - "--disable-uvicorn-access-log"
-      - "--max-model-len"
-      - "32000"
-    env:
-      - name: POD_IP
-        valueFrom:
-          fieldRef:
-            fieldPath: status.podIP
-      - name: VLLM_LOGGING_LEVEL
-        value: DEBUG
-    ports:
-      - containerPort: 8200
-        name: vllm
-        protocol: TCP
-      - containerPort: 5557
-        name: nixl
-        protocol: TCP
-    resources:
-      limits:
-        memory: 64Gi
-        cpu: "16"
-        # note: TPU resources get controlled by parallelism + accelerators above
-      requests:
-        memory: 64Gi
-        cpu: "16"
-        # note: TPU resources get controlled by parallelism + accelerators above
-    mountModelVolume: true
-    volumeMounts:
-    - name: metrics-volume
-      mountPath: /.config
-    - name: shm
-      mountPath: /dev/shm
-    - name: torch-compile-cache
-      mountPath: /.cache
-    startupProbe:
-      httpGet:
-        path: /health
-        port: vllm
-      initialDelaySeconds: 15
-      periodSeconds: 30
-      timeoutSeconds: 5
-      failureThreshold: 120
-    livenessProbe:
-      httpGet:
-        path: /health
-        port: vllm
-      periodSeconds: 10
-      timeoutSeconds: 5
-      failureThreshold: 3
-    readinessProbe:
-      httpGet:
-        path: /v1/models
-        port: vllm
-      periodSeconds: 5
-      timeoutSeconds: 2
-      failureThreshold: 3
+    - name: "vllm"
+      image: vllm/vllm-tpu:v0.13.2-ironwood
+      modelCommand: vllmServe
+      args:
+        # Keep tensor-parallelism as the first set of arguments
+        - "--tensor-parallel-size"
+        - "8"
+        - "--kv-transfer-config"
+        - '{"kv_connector":"TPUConnector", "kv_connector_module_path" : "tpu_inference.distributed.tpu_connector", "kv_role":"kv_both", "kv_ip" : "$(POD_IP)"}'
+        - "--disable-uvicorn-access-log"
+        - "--max-model-len"
+        - "32000"
+      env:
+        - name: POD_IP
+          valueFrom:
+            fieldRef:
+              fieldPath: status.podIP
+        - name: TPU_SIDE_CHANNEL_PORT # data plane port for PD coordination
+          value: "9600" # default for TPU
+        - name: TPU_KV_TRANSFER_PORT # Port where the KV transfer actually happens
+          value: "9100" # default for TPU
+      ports:
+        - containerPort: 8000
+          name: vllm
+          protocol: TCP
+        - containerPort: 9100
+          name: tpu-kv-transfer
+          protocol: TCP
+        - containerPort: 9600
+          name: tpu-pd-coordination
+          protocol: TCP
+      resources:
+        limits:
+          memory: 64Gi
+          cpu: "16"
+          # note: TPU resources get controlled by parallelism + accelerators above
+        requests:
+          memory: 64Gi
+          cpu: "16"
+          # note: TPU resources get controlled by parallelism + accelerators above
+      mountModelVolume: true
+      volumeMounts:
+        - name: metrics-volume
+          mountPath: /.config
+        - name: shm
+          mountPath: /dev/shm
+        - name: torch-compile-cache
+          mountPath: /.cache
+      startupProbe:
+        httpGet:
+          path: /health
+          port: vllm
+        initialDelaySeconds: 15
+        periodSeconds: 30
+        timeoutSeconds: 5
+        failureThreshold: 120
+      livenessProbe:
+        httpGet:
+          path: /health
+          port: vllm
+        periodSeconds: 10
+        timeoutSeconds: 5
+        failureThreshold: 3
+      readinessProbe:
+        httpGet:
+          path: /v1/models
+          port: vllm
+        periodSeconds: 5
+        timeoutSeconds: 2
+        failureThreshold: 3
   volumes:
-  - name: metrics-volume
-    emptyDir: {}
-  - name: shm
-    emptyDir:
-      medium: Memory
-      sizeLimit: "16Gi"
-  - name: torch-compile-cache
-    emptyDir: {}
+    - name: metrics-volume
+      emptyDir: {}
+    - name: shm
+      emptyDir:
+        medium: Memory
+        sizeLimit: "16Gi"
+    - name: torch-compile-cache
+      emptyDir: {}
 
 prefill:
   parallelism:
@@ -120,80 +131,85 @@ prefill:
   monitoring:
     podmonitor:
       enabled: true
-      portName: "metrics" # prefill vLLM service port (from routing.servicePort)
+      portName: "vllm"  # prefill vLLM service port (from routing.servicePort)
       path: "/metrics"
       interval: "30s"
   containers:
-  - name: "vllm"
-    image: vllm/vllm-tpu:v0.11.1
-    modelCommand: vllmServe
-    args:
-      - "--tensor-parallel-size"
-      - "8"
-      - "--kv-transfer-config"
-      - '{"kv_connector":"TPUConnector", "kv_connector_module_path" : "tpu_inference.distributed.tpu_connector", "kv_role":"kv_producer", "kv_ip" : "$(POD_IP)"}'
-      - "--disable-uvicorn-access-log"
-      - "--max-model-len"
-      - "32000"
-    env:
-      - name: POD_IP
-        valueFrom:
-          fieldRef:
-            fieldPath: status.podIP
-      - name: VLLM_LOGGING_LEVEL
-        value: DEBUG
-    ports:
-      - containerPort: 8000
-        name: metrics
-        protocol: TCP
-      - containerPort: 5557
-        name: nixl
-        protocol: TCP
-    resources:
-      limits:
-        memory: 64Gi
-        cpu: "16"
-        # note: TPU resources get controlled by parallelism + accelerators above
-      requests:
-        memory: 64Gi
-        cpu: "16"
-       # note: TPU resources get controlled by parallelism + accelerators above
-    mountModelVolume: true
-    volumeMounts:
-    - name: metrics-volume
-      mountPath: /.config
-    - name: shm
-      mountPath: /dev/shm
-    - name: torch-compile-cache
-      mountPath: /.cache
-    startupProbe:
-      httpGet:
-        path: /health
-        port: vllm
-      initialDelaySeconds: 15
-      periodSeconds: 30
-      timeoutSeconds: 5
-      failureThreshold: 120
-    livenessProbe:
-      httpGet:
-        path: /health
-        port: vllm
-      periodSeconds: 10
-      timeoutSeconds: 5
-      failureThreshold: 3
-    readinessProbe:
-      httpGet:
-        path: /v1/models
-        port: vllm
-      periodSeconds: 5
-      timeoutSeconds: 2
-      failureThreshold: 3
+    - name: "vllm"
+      image: vllm/vllm-tpu:v0.13.2
+      modelCommand: vllmServe
+      args:
+        - "--tensor-parallel-size"
+        - "8"
+        - "--kv-transfer-config"
+        - '{"kv_connector":"TPUConnector", "kv_connector_module_path" : "tpu_inference.distributed.tpu_connector", "kv_role":"kv_producer", "kv_ip" : "$(POD_IP)"}'
+        - "--disable-uvicorn-access-log"
+        - "--max-model-len"
+        - "32000"
+      env:
+        - name: POD_IP
+          valueFrom:
+            fieldRef:
+              fieldPath: status.podIP
+        - name: TPU_SIDE_CHANNEL_PORT # data plane port for PD coordination
+          value: "9600" # default for TPU
+        - name: TPU_KV_TRANSFER_PORT # Port where the KV transfer actually happens
+          value: "9100" # default for TPU
+      ports:
+        - containerPort: 8000
+          name: vllm
+          protocol: TCP
+        - containerPort: 9100
+          name: tpu-kv-transfer
+          protocol: TCP
+        - containerPort: 9600
+          name: tpu-pd-coordination
+          protocol: TCP
+      resources:
+        limits:
+          memory: 64Gi
+          cpu: "16"
+          # note: TPU resources get controlled by parallelism + accelerators above
+        requests:
+          memory: 64Gi
+          cpu: "16"
+          # note: TPU resources get controlled by parallelism + accelerators above
+      mountModelVolume: true
+      volumeMounts:
+        - name: metrics-volume
+          mountPath: /.config
+        - name: shm
+          mountPath: /dev/shm
+        - name: torch-compile-cache
+          mountPath: /.cache
+      startupProbe:
+        httpGet:
+          path: /health
+          port: vllm
+        initialDelaySeconds: 15
+        periodSeconds: 30
+        timeoutSeconds: 5
+        failureThreshold: 120
+      livenessProbe:
+        httpGet:
+          path: /health
+          port: vllm
+        periodSeconds: 10
+        timeoutSeconds: 5
+        failureThreshold: 3
+      readinessProbe:
+        httpGet:
+          path: /v1/models
+          port: vllm
+        periodSeconds: 5
+        timeoutSeconds: 2
+        failureThreshold: 3
   volumes:
-  - name: metrics-volume
-    emptyDir: {}
-  - name: shm
-    emptyDir:
-      medium: Memory
-      sizeLimit: "16Gi"
-  - name: torch-compile-cache
-    emptyDir: {}
+    - name: metrics-volume
+      emptyDir: {}
+    - name: shm
+      emptyDir:
+        medium: Memory
+        sizeLimit: "16Gi"
+    - name: torch-compile-cache
+      emptyDir: {}

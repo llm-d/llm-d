@@ -6,86 +6,92 @@
 modelArtifacts:
   uri: "hf://Qwen/Qwen3-0.6B"  # Smaller model that doesn't require HF token
   name: "Qwen/Qwen3-0.6B"
-  size: 8Gi  
+  size: 8Gi
   authSecretName: ""  # No HF token required for this model
+  labels:
+    llm-d.ai/inference-serving: "true"
+    llm-d.ai/guide: "inference-scheduling"
+    llm-d.ai/accelerator-variant: "gpu"
+    llm-d.ai/accelerator-vendor: "nvidia"
+    llm-d.ai/model: "Qwen3-0.6B"
 
 routing:
   proxy:
-    targetPort: 8000 # controlls vLLM port to matchup with sidecar if deployed
-    enabled: false # removes sidecar from deployment - no PD in inference scheduling
+    targetPort: 8000  # controlls vLLM port to matchup with sidecar if deployed
+    enabled: false  # removes sidecar from deployment - no PD in inference scheduling
 
-accelerator: # controlls specialized hardware Type
+accelerator:  # controlls specialized hardware Type
   type: nvidia
 
 # DigitalOcean-specific container configuration
 decode:
   replicas: 2
   containers:
-  - name: "vllm"
-    image: ghcr.io/llm-d/llm-d-cuda:v0.4.0
-    modelCommand: vllmServe  # Required by chart
-    args:
-      - "--gpu-memory-utilization"  # DigitalOcean GPU optimization
-      - "0.85"
-      - "--max-model-len"  # Optimized for smaller model
-      - "4096"
-    ports:
-      - containerPort: 8000
-        name: vllm
-        protocol: TCP
-    resources:  # Required for DOKS GPU nodes
-      limits:
-        memory: 16Gi
-        cpu: "4"
-        nvidia.com/gpu: "1"
-      requests:
-        memory: 16Gi
-        cpu: "4"
-        nvidia.com/gpu: "1"
-    mountModelVolume: true
-    volumeMounts:
-    - name: shm
-      mountPath: /dev/shm
-    - name: metrics-volume
-      mountPath: /.config
-    - name: torch-compile-cache
-      mountPath: /.cache
-    startupProbe:
-      httpGet:
-        path: /v1/models
-        port: vllm
-      initialDelaySeconds: 15
-      periodSeconds: 30
-      timeoutSeconds: 5
-      failureThreshold: 60
-    livenessProbe:
-      httpGet:
-        path: /health
-        port: vllm
-      periodSeconds: 10
-      timeoutSeconds: 5
-      failureThreshold: 3
-    readinessProbe:
-      httpGet:
-        path: /v1/models
-        port: vllm
-      periodSeconds: 5
-      timeoutSeconds: 2
-      failureThreshold: 3
+    - name: "vllm"
+      image: ghcr.io/llm-d/llm-d-cuda:v0.5.0
+      modelCommand: vllmServe  # Required by chart
+      args:
+        - "--gpu-memory-utilization"  # DigitalOcean GPU optimization
+        - "0.85"
+        - "--max-model-len"  # Optimized for smaller model
+        - "4096"
+      ports:
+        - containerPort: 8000
+          name: vllm
+          protocol: TCP
+      resources:  # Required for DOKS GPU nodes
+        limits:
+          memory: 16Gi
+          cpu: "4"
+          nvidia.com/gpu: "1"
+        requests:
+          memory: 16Gi
+          cpu: "4"
+          nvidia.com/gpu: "1"
+      mountModelVolume: true
+      volumeMounts:
+        - name: shm
+          mountPath: /dev/shm
+        - name: metrics-volume
+          mountPath: /.config
+        - name: torch-compile-cache
+          mountPath: /.cache
+      startupProbe:
+        httpGet:
+          path: /v1/models
+          port: vllm
+        initialDelaySeconds: 15
+        periodSeconds: 30
+        timeoutSeconds: 5
+        failureThreshold: 60
+      livenessProbe:
+        httpGet:
+          path: /health
+          port: vllm
+        periodSeconds: 10
+        timeoutSeconds: 5
+        failureThreshold: 3
+      readinessProbe:
+        httpGet:
+          path: /v1/models
+          port: vllm
+        periodSeconds: 5
+        timeoutSeconds: 2
+        failureThreshold: 3
   volumes:
-  - name: shm
-    emptyDir:
-      medium: Memory
-      sizeLimit: "4Gi"  # Optimized for DigitalOcean
-  - name: metrics-volume
-    emptyDir: {}
-  - name: torch-compile-cache
-    emptyDir: {}
+    - name: shm
+      emptyDir:
+        medium: Memory
+        sizeLimit: "4Gi"  # Optimized for DigitalOcean
+    - name: metrics-volume
+      emptyDir: {}
+    - name: torch-compile-cache
+      emptyDir: {}
   # IMPORTANT: DigitalOcean GPU node tolerations
   tolerations:
-  - key: "nvidia.com/gpu"
-    operator: "Exists"
-    effect: "NoSchedule"
+    - key: "nvidia.com/gpu"
+      operator: "Exists"
+      effect: "NoSchedule"
 
 # Prefill disabled in inference-scheduling scenario
 prefill:

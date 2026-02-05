@@ -6,15 +6,15 @@ spec:
   replicas: 2
   selector:
     matchLabels:
-      llm-d.ai/inferenceServing: "true"
+      llm-d.ai/inference-serving: "true"
   template:
     metadata:
       labels:
-        llm-d.ai/inferenceServing: "true"
+        llm-d.ai/inference-serving: "true"
     spec:
       containers:
         - name: vllm
-          image: ghcr.io/llm-d/llm-d-cuda:v0.4.0
+          image: INFERENCE_SERVER_IMAGE
           imagePullPolicy: IfNotPresent
           command:
             - /bin/bash
@@ -78,4 +78,3 @@ spec:
         - name: shm
           emptyDir:
             medium: Memory
-

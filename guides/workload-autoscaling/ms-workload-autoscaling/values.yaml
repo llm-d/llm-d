@@ -6,8 +6,11 @@ modelArtifacts:
   size: 20Gi
   authSecretName: "llm-d-hf-token"
   labels:
-    llm-d.ai/inferenceServing: "true"
-    llm-d.ai/model: ms-workload-autoscaler-llm-d-modelservice
+    llm-d.ai/inference-serving: "true"
+    llm-d.ai/guide: "workload-autoscaling"
+    llm-d.ai/accelerator-variant: "gpu"
+    llm-d.ai/accelerator-vendor: "nvidia"
+    llm-d.ai/model: ms-workload-autoscaler-llm-d-modelservice # exception to new model labeling pattern, used for scaling
 
 routing:
   servicePort: 8000
@@ -16,7 +19,7 @@ routing:
 
 decode:
   parallelism:
-    tensor: 1 # each pod requests 1 gpu
+    tensor: 1  # each pod requests 1 gpu
   create: true
   replicas: 2
   monitoring:
@@ -27,51 +30,49 @@ decode:
       interval: "30s"
       labels:
         release: llmd  # Required for Prometheus to discover this PodMonitor
-
   containers:
-  - name: "vllm"
-    image: ghcr.io/llm-d/llm-d-cuda:v0.5.0
-    modelCommand: vllmServe
-    args:
-      - "--disable-uvicorn-access-log"
-    env:
-    ports:
-      - containerPort: 8000
-        name: vllm
-        protocol: TCP
-    mountModelVolume: true
-    volumeMounts:
-    - name: metrics-volume
-      mountPath: /.config
-    - name: torch-compile-cache
-      mountPath: /.cache
-    startupProbe:
-      httpGet:
-        path: /v1/models
-        port: vllm
-      initialDelaySeconds: 15
-      periodSeconds: 30
-      timeoutSeconds: 5
-      failureThreshold: 60
-    livenessProbe:
-      httpGet:
-        path: /health
-        port: vllm
-      periodSeconds: 10
-      timeoutSeconds: 5
-      failureThreshold: 3
-    readinessProbe:
-      httpGet:
-        path: /v1/models
-        port: vllm
-      periodSeconds: 5
-      timeoutSeconds: 2
-      failureThreshold: 3
+    - name: "vllm"
+      image: ghcr.io/llm-d/llm-d-cuda:v0.5.0
+      modelCommand: vllmServe
+      args:
+        - "--disable-uvicorn-access-log"
+      ports:
+        - containerPort: 8000
+          name: vllm
+          protocol: TCP
+      mountModelVolume: true
+      volumeMounts:
+        - name: metrics-volume
+          mountPath: /.config
+        - name: torch-compile-cache
+          mountPath: /.cache
+      startupProbe:
+        httpGet:
+          path: /v1/models
+          port: vllm
+        initialDelaySeconds: 15
+        periodSeconds: 30
+        timeoutSeconds: 5
+        failureThreshold: 60
+      livenessProbe:
+        httpGet:
+          path: /health
+          port: vllm
+        periodSeconds: 10
+        timeoutSeconds: 5
+        failureThreshold: 3
+      readinessProbe:
+        httpGet:
+          path: /v1/models
+          port: vllm
+        periodSeconds: 5
+        timeoutSeconds: 2
+        failureThreshold: 3
   volumes:
-  - name: metrics-volume
-    emptyDir: {}
-  - name: torch-compile-cache
-    emptyDir: {}
+    - name: metrics-volume
+      emptyDir: {}
+    - name: torch-compile-cache
+      emptyDir: {}
 
 # PD disabled in this example
 prefill:

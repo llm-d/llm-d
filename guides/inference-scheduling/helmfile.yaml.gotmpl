@@ -57,7 +57,7 @@ releases:
   - name: {{ printf "gaie-%s" $rn | quote }}
     namespace: {{ $ns }}
     chart: oci://registry.k8s.io/gateway-api-inference-extension/charts/inferencepool
-    version: v1.2.0
+    version: v1.3.0
     installed: true
     needs:
       {{- if ne .Environment.Name "standalone" }}
@@ -97,7 +97,7 @@ releases:
   - name: {{ printf "ms-%s" $rn | quote }}
     namespace: {{ $ns }}
     chart: llm-d-modelservice/llm-d-modelservice
-    version: v0.3.17
+    version: v0.4.5
     installed: true
     needs:
       {{- if ne .Environment.Name "standalone" }}
@@ -119,7 +119,7 @@ releases:
       - ms-inference-scheduling/values.yaml
     {{- end }}
     set:
-    {{- if or (eq .Environment.Name "gke") (eq .Environment.Name "gke_tpu") }}  
+    {{- if or (eq .Environment.Name "gke") (eq .Environment.Name "gke_tpu") }}
       - name: "decode.monitoring.podmonitor.enabled"
         value: false
     {{- end }}

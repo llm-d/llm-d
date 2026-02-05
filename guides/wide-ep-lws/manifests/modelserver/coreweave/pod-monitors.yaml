@@ -3,20 +3,22 @@ kind: PodMonitor
 metadata:
   name: ms-wide-ep-llm-d-modelservice-decode-podmonitor
   labels:
-    llm-d.ai/inferenceServing: "true"
+    llm-d.ai/inference-serving: "true"
+    llm-d.ai/guide: "wide-ep-lws"
     llm-d.ai/model: DeepSeek-R1-0528
     llm-d.ai/role: decode
 spec:
   selector:
     matchLabels:
-      llm-d.ai/inferenceServing: "true"
+      llm-d.ai/inference-serving: "true"
+      llm-d.ai/guide: "wide-ep-lws"
       llm-d.ai/model: DeepSeek-R1-0528
       llm-d.ai/role: decode
   podMetricsEndpoints:
-  # For decode service, this is port 8200. Must use port name.
-  - port: "vllm"
-    path: /metrics
-    interval: 5s
+    # For decode service, this is port 8200. Must use port name.
+    - port: "vllm"
+      path: /metrics
+      interval: 5s
 ---
 # Source: llm-d-modelservice/templates/prefill-podmonitor.yaml
 apiVersion: monitoring.coreos.com/v1
@@ -24,17 +26,19 @@ kind: PodMonitor
 metadata:
   name: ms-wide-ep-llm-d-modelservice-prefill-podmonitor
   labels:
-    llm-d.ai/inferenceServing: "true"
+    llm-d.ai/inference-serving: "true"
+    llm-d.ai/guide: "wide-ep-lws"
     llm-d.ai/model: DeepSeek-R1-0528
     llm-d.ai/role: prefill
 spec:
   selector:
     matchLabels:
-      llm-d.ai/inferenceServing: "true"
+      llm-d.ai/inference-serving: "true"
+      llm-d.ai/guide: "wide-ep-lws"
       llm-d.ai/model: DeepSeek-R1-0528
       llm-d.ai/role: prefill
   podMetricsEndpoints:
-  # For prefill, this is port 8000. Must use port name.
-  - port: "vllm"
-    path: /metrics
-    interval: 5s
+    # For prefill, this is port 8000. Must use port name.
+    - port: "vllm"
+      path: /metrics
+      interval: 5s

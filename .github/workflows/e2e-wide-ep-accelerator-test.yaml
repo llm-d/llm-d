@@ -11,7 +11,7 @@ on:
       gateway_type:
         description: 'Gateway type to use'
         required: false
-        default: 'istio' # currently only istio supported because thats the default used in infra values
+        default: 'istio'  # currently only istio supported because thats the default used in infra values
         type: choice
         options:
           - istio

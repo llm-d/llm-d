@@ -10,6 +10,12 @@ modelArtifacts:
   uri: "pvc+hf://model-pvc/meta-llama/Llama-3.1-8B-Instruct"
   size: 50Gi
   authSecretName: "llm-d-hf-token"
+  labels:
+    llm-d.ai/inference-serving: "true"
+    llm-d.ai/guide: "inference-scheduling"
+    llm-d.ai/hardware-vairant: "hpu"
+    llm-d.ai/accelerator-vendor: "intel"
+    llm-d.ai/model: "Llama-3.1-8B-Instruct"
 
 dra:
   enabled: true
@@ -17,64 +23,64 @@ dra:
 
 routing:
   proxy:
-    enabled: false # removes sidecar from deployment - no PD in inference scheduling
-    targetPort: 8000 # controlls vLLM port to matchup with sidecar if deployed
+    enabled: false  # removes sidecar from deployment - no PD in inference scheduling
+    targetPort: 8000  # controlls vLLM port to matchup with sidecar if deployed
 
 # Decode pod configuration for Intel Gaudi - simplified with imageDefault
 decode:
   create: true
   replicas: 1
   containers:
-  - name: "vllm"
-    # Use custom vLLM image for Gaudi for now
-    image: "opea/vllm-gaudi:1.22.0"
+    - name: "vllm"
+      # Use custom vLLM image for Gaudi for now
+      image: "opea/vllm-gaudi:1.22.0"
 
-    # Use imageDefault mode - chart will generate basic vLLM command automatically
-    modelCommand: "imageDefault"
+      # Use imageDefault mode - chart will generate basic vLLM command automatically
+      modelCommand: "imageDefault"
 
-    # Only specify Gaudi specific arguments that differ from defaults
-    args:
-    - --block-size=128
-    - --max-num-seqs=256
-    - --max-seq-len-to-capture=2048
-    - --max-model-len=2048
-    - --max-num-batched-token=16000
-    env:
-    - name: OMPI_MCA_btl_vader_single_copy_mechanism
-      value: "none"
-    - name: HABANA_LOGS # For OpenShift compatibility, set log path to writable location
-      value: "/tmp/habana_logs"
-    - name: VLLM_SKIP_WARMUP
-      value: "true"
-    - name: DO_NOT_TRACK
-      value: "1"
-    ports:
-      - containerPort: 8000
-        name: "vllm"
-        protocol: TCP
-    mountModelVolume: true
-    startupProbe:
-      httpGet:
-        path: /v1/models
-        port: vllm
-      initialDelaySeconds: 15
-      periodSeconds: 30
-      timeoutSeconds: 5
-      failureThreshold: 60
-    livenessProbe:
-      httpGet:
-        path: /health
-        port: vllm
-      periodSeconds: 10
-      timeoutSeconds: 5
-      failureThreshold: 3
-    readinessProbe:
-      httpGet:
-        path: /v1/models
-        port: vllm
-      periodSeconds: 5
-      timeoutSeconds: 2
-      failureThreshold: 3
+      # Only specify Gaudi specific arguments that differ from defaults
+      args:
+        - --block-size=128
+        - --max-num-seqs=256
+        - --max-seq-len-to-capture=2048
+        - --max-model-len=2048
+        - --max-num-batched-token=16000
+      env:
+        - name: OMPI_MCA_btl_vader_single_copy_mechanism
+          value: "none"
+        - name: HABANA_LOGS  # For OpenShift compatibility, set log path to writable location
+          value: "/tmp/habana_logs"
+        - name: VLLM_SKIP_WARMUP
+          value: "true"
+        - name: DO_NOT_TRACK
+          value: "1"
+      ports:
+        - containerPort: 8000
+          name: "vllm"
+          protocol: TCP
+      mountModelVolume: true
+      startupProbe:
+        httpGet:
+          path: /v1/models
+          port: vllm
+        initialDelaySeconds: 15
+        periodSeconds: 30
+        timeoutSeconds: 5
+        failureThreshold: 60
+      livenessProbe:
+        httpGet:
+          path: /health
+          port: vllm
+        periodSeconds: 10
+        timeoutSeconds: 5
+        failureThreshold: 3
+      readinessProbe:
+        httpGet:
+          path: /v1/models
+          port: vllm
+        periodSeconds: 5
+        timeoutSeconds: 2
+        failureThreshold: 3
 
 # Disable prefill for simple Intel Gaudi example
 prefill:

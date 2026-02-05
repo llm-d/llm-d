@@ -11,8 +11,9 @@
     "strict": false,
     "stern": false
   },
+  "MD024": false,
   "MD033": {
-    "allowed_elements": ["details", "summary", "img", "br"]
+    "allowed_elements": ["details", "summary", "img", "br", "picture", "source", "p", "table", "tr", "td", "th", "h2", "code", "b", "i"]
   },
   "MD041": false
 }

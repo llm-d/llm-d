@@ -16,7 +16,7 @@ For the well lit paths, we specifically recommend the following machine types:
 | [Inference Scheduling](../../../guides/inference-scheduling/README.md) | Large models (13B+) with Hopper or newer (A3 or newer)<br>Small or highly quantized models (1-7B) with Ampere, L4, or newer (A2, G2, or newer) | ct5e (v5e) or newer |
 | [Prefill / Decode Disaggregation](../../../guides/pd-disaggregation/README.md) | RDMA-enabled machine types (A3U, A4, or newer) | ct6e (v6e) or newer |
 | [Wide Expert Parallelism](../../../guides/wide-ep-lws/README.md) | RDMA-enabled machine types (A3U, A4, or newer) | coming soon |
-| [Tiered Prefix Cache](../../../guides/tiered-prefix-cache/README.md) | Tiered Prefix Cache can be combined with other well-lit paths above.<br>If running Prefill/Decode Disaggregation, or Wide Expert Parallelism, follow their guidance respectively.<br>Otherwise, follow the guidance on Inference Scheduling.  | coming soon |
+| [Tiered Prefix Cache](../../../guides/tiered-prefix-cache/README.md) | Tiered Prefix Cache can be combined with other well-lit paths above.<br>If running Prefill/Decode Disaggregation, or Wide Expert Parallelism, follow their guidance respectively.<br>Otherwise, follow the guidance on Inference Scheduling. | coming soon |
 
 ## Cluster Configuration
 
@@ -56,7 +56,7 @@ GKE recommends using [Topology Aware Scheduling with Kueue and LeaderWorkerSet](
 
 For smaller scale expert parallel deployments (2 or 4 node replicas) we have not observed significant wins in requiring all nodes in the replica to be within the same `cloud.google.com/gce-topology-subblock`. We do recommend setting a pod affinity rule to place all pods within the same `cloud.google.com/gce-topology-block`:
 
-```
+```yaml
   affinity:
     podAffinity:
       # Subblock affinity cannot guarantee all pods in the replica
@@ -88,7 +88,7 @@ The GKE managed GPU driver automatically mounts the configured node CUDA driver 
 
 In vLLM, this causes startup to fail with the following logging:
 
-```
+```text
 INFO 05-28 14:02:21 [__init__.py:247] No platform detected, vLLM is running on UnspecifiedPlatform
 ...
 INFO 05-28 14:02:26 [config.py:1909] Disabled the custom all-reduce kernel because it is not supported on current platform.
@@ -129,7 +129,7 @@ To work around this issue llm-d applies a [patch to NVSHMEM](https://github.com/
 
 When starting wide expert parallel deployments using the DeepEP kernels, container images (especially Ubuntu) that are not compiled against the Mellanox OFED drivers as recommended by NVIDIA may fail to start with the following error:
 
-```
+```text
 /tmp/nvshmem_src/src/modules/transport/ibgda/ibgda.cpp 3888 no active IB device that supports GPU-initiated communication is found, exiting...
 
 /tmp/nvshmem_src/src/host/transport/transport.cpp:nvshmemi_transport_init:282: init failed for transport: IBGDA
@@ -139,7 +139,7 @@ The default llm-d images based on RHEL UBI are not impacted. [Issue 412](https:/
 
 To resolve this issue in custom built images add the Mellanox OFED apt repository
 
-```
+```bash
 wget -qO - https://www.mellanox.com/downloads/ofed/RPM-GPG-KEY-Mellanox | apt-key add -
 cd /etc/apt/sources.list.d/ && wget https://linux.mellanox.com/public/repo/mlnx_ofed/24.10-0.7.0.0/ubuntu22.04/mellanox_mlnx_ofed.list
 ```

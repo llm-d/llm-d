@@ -1,5 +1,5 @@
 #!/bin/bash
-set -Eeu
+set -Eeux
 
 # installs base packages, EPEL/universe repos, and CUDA repository
 #
@@ -43,6 +43,7 @@ elif [ "$TARGETOS" = "rhel" ]; then
     mapfile -t INSTALL_PKGS < <(load_layered_packages rhel "builder-packages.json" "cuda")
     install_packages rhel "${INSTALL_PKGS[@]}"
     cleanup_packages rhel
+    ensure_unregistered
 else
     echo "ERROR: Unsupported TARGETOS='$TARGETOS'. Must be 'ubuntu' or 'rhel'." >&2
     exit 1

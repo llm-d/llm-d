@@ -128,7 +128,7 @@ def build_and_install_prerequisites(args):
 
     run_command(['git', 'fetch', '--all'], cwd=NIXL_DIR)
     run_command(['git', 'checkout', 'tags/0.6.1', '-b', 'release-0.6.1'], cwd=NIXL_DIR)
-    
+
     build_env = os.environ.copy()
     build_env['PKG_CONFIG_PATH'] = os.path.join(ucx_install_path, 'lib', 'pkgconfig')
     ucx_lib_path = os.path.join(ucx_install_path, 'lib')

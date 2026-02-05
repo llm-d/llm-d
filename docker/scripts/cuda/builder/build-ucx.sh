@@ -1,5 +1,5 @@
 #!/bin/bash
-set -Eeu
+set -Eeux
 
 # purpose: builds and installs UCX from source
 # --------------------------------------------
@@ -7,6 +7,9 @@ set -Eeu
 # - /run/secrets/aws_access_key_id: AWS access key ID for role that can only interact with SCCache S3 Bucket
 # - /run/secrets/aws_secret_access_key: AWS secret access key for role that can only interact with SCCache S3 Bucket
 # --------------------------------------------
+# Optional environment variables:
+# - EFA_PREFIX: Path to EFA installation
+: "${EFA_PREFIX:=}"
 # Required environment variables:
 # - CUDA_HOME: Cuda runtime path to install UCX against
 # - UCX_REPO: git remote to build UCX from
@@ -20,19 +23,19 @@ cd /tmp
 . /usr/local/bin/setup-sccache
 
 git clone "${UCX_REPO}" ucx && cd ucx
-git checkout -q "${UCX_VERSION}" 
+git checkout -q "${UCX_VERSION}"
 
 if [ "${USE_SCCACHE}" = "true" ]; then
-    export CC="sccache gcc" CXX="sccache g++" 
+    export CC="sccache gcc" CXX="sccache g++"
 fi
 
 # Ubuntu image needs to be built against Ubuntu 20.04 and EFA only supports 22.04 and 24.04.
 EFA_FLAG=""
-if [ "$TARGETOS" = "rhel" ]; then
+if [ "$TARGETOS" = "rhel" ] && [ -n "${EFA_PREFIX}" ]; then
     EFA_FLAG="--with-efa"
 fi
 
-./autogen.sh 
+./autogen.sh
 ./contrib/configure-release \
     --prefix="${UCX_PREFIX}" \
     --enable-shared \
@@ -47,11 +50,11 @@ fi
     "${EFA_FLAG}" \
     --enable-mt
 
-make -j$(nproc) 
-make install-strip 
-ldconfig 
+make -j$(nproc)
+make install-strip
+ldconfig
 
-cd /tmp && rm -rf /tmp/ucx 
+cd /tmp && rm -rf /tmp/ucx
 
 if [ "${USE_SCCACHE}" = "true" ]; then
     echo "=== UCX build complete - sccache stats ==="

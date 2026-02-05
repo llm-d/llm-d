@@ -4,20 +4,20 @@ metadata:
   name: llm-d-sim
 spec:
   parentRefs:
-  - group: gateway.networking.k8s.io
-    kind: Gateway
-    name: infra-sim-inference-gateway
+    - group: gateway.networking.k8s.io
+      kind: Gateway
+      name: infra-sim-inference-gateway
   rules:
     - backendRefs:
-      - group: inference.networking.k8s.io
-        kind: InferencePool
-        name: gaie-sim
-        port: 8000
-        weight: 1
+        - group: inference.networking.k8s.io
+          kind: InferencePool
+          name: gaie-sim
+          port: 8000
+          weight: 1
       timeouts:
         backendRequest: 0s
         request: 0s
       matches:
-      - path:
-          type: PathPrefix
-          value: /
+        - path:
+            type: PathPrefix
+            value: /

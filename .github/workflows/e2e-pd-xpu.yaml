@@ -3,12 +3,35 @@ name: XPU PD Test
 on:
   schedule:
     - cron: '0 10 * * *'  # 3AM PST (10:00 UTC)
+  pull_request:
+    paths:
+      - 'guides/pd-disaggregation/**/values_xpu.yaml'
+      - 'guides/pd-disaggregation/helmfile.yaml.gotmpl'
+      - 'guides/pd-disaggregation/httproute.yaml'
+      - '.github/workflows/e2e-pd-xpu.yaml'
   workflow_dispatch:
     inputs:
       pr_or_branch:
         description: 'Pull-request number or branch name to test'
         required: true
         default: 'main'
+        type: string
+      custom_image_tag:
+        description: 'Custom XPU image tag to use (optional)'
+        required: false
+        default: ''
+        type: string
+  workflow_call:
+    inputs:
+      pr_or_branch:
+        description: 'Pull-request number or branch name to test'
+        required: true
+        default: 'main'
+        type: string
+      custom_image_tag:
+        description: 'Custom XPU image tag to use (optional)'
+        required: false
+        default: ''
         type: string
 
 jobs:
@@ -80,12 +103,48 @@ jobs:
             --namespace "${NAMESPACE}" \
             --dry-run=client -o yaml | kubectl apply -f -
 
+      - name: Set image tag for deployment
+        id: set_image_tag
+        run: |
+          CUSTOM_TAG="${{ inputs.custom_image_tag }}"
+          if [ -n "${CUSTOM_TAG}" ]; then
+            # Check if it's a full image address (contains '/') or just a tag
+            if [[ "${CUSTOM_TAG}" == *"/"* ]]; then
+              echo "Using custom full image address: ${CUSTOM_TAG}"
+              FULL_IMAGE="${CUSTOM_TAG}"
+            else
+              echo "Using custom image tag: ${CUSTOM_TAG}"
+              FULL_IMAGE="ghcr.io/${{ github.repository }}-xpu-dev:${CUSTOM_TAG}"
+            fi
+            echo "IMAGE_TAG=${CUSTOM_TAG}" >> $GITHUB_ENV
+            echo "HELM_SET_IMAGE=--set decode.containers[0].image=${FULL_IMAGE} --set decode.containers[0].imagePullPolicy=Always --set prefill.containers[0].image=${FULL_IMAGE} --set prefill.containers[0].imagePullPolicy=Always" >> $GITHUB_ENV
+          else
+            echo "Using default image tag from values file"
+            echo "HELM_SET_IMAGE=" >> $GITHUB_ENV
+          fi
+
       - name: Deploy guide
         run: |
           cd guides/pd-disaggregation
           RELEASE_NAME_POSTFIX=${RELEASE_NAME_POSTFIX} \
-          helmfile apply -e xpu -n "${NAMESPACE}" \
+          helmfile apply -e xpu -n "${NAMESPACE}" ${HELM_SET_IMAGE} \
+            --skip-schema-validation \
             | tee ~/pd-xpu-deployment.log
+          echo "---------------------------------------" >> ~/pd-xpu-deployment.log
+
+      - name: Deploy HTTPRoute
+        run: |
+          cd guides/pd-disaggregation
+          echo "Deploying HTTPRoute with RELEASE_NAME_POSTFIX=${RELEASE_NAME_POSTFIX}..."
+          # Create a temporary HTTPRoute file with the correct names
+          sed -e "s/infra-pd-inference-gateway/${INFRA_RELEASE_NAME}-inference-gateway/g" \
+              -e "s/gaie-pd/${GAIE_RELEASE_NAME}/g" \
+              -e "s/name: llm-d-pd-disaggregation/name: llm-d-xpu-pd-${RELEASE_NAME_POSTFIX}/g" \
+              httproute.yaml > httproute-xpu.yaml
+          echo "Generated HTTPRoute configuration:"
+          cat httproute-xpu.yaml
+          kubectl apply -f httproute-xpu.yaml -n "${NAMESPACE}" \
+            | tee -a ~/pd-xpu-deployment.log
           echo "---------------------------------------" >> ~/pd-xpu-deployment.log
 
       - name: fetch helm manifests - prepare for upload
@@ -98,16 +157,27 @@ jobs:
           done
 
       - name: Wait for all pods to be ready
+        id: wait_pods
         run: |
-          kubectl wait pod \
+          echo "Waiting for all pods to be ready..."
+          if kubectl wait pod \
             --for=condition=Ready \
             --all \
             -n "${NAMESPACE}" \
-            --timeout=10m
-          echo "✅ All pods are ready."
-          kubectl get pods -n "${NAMESPACE}"
+            --timeout=10m; then
+            echo "✅ All pods are ready."
+            kubectl get pods -n "${NAMESPACE}"
+          else
+            echo "❌ Pods failed to become ready within timeout"
+            echo "=== Pod Status ==="
+            kubectl get pods -n "${NAMESPACE}"
+            echo "=== Pod Descriptions ==="
+            kubectl describe pods -n "${NAMESPACE}"
+            exit 1
+          fi
 
       - name: Check gateway pod is up
+        if: always()
         run: |
           GATEWAY_POD_READY=$(kubectl get pods -n "${NAMESPACE}" | grep "inference-gateway" | awk '{print $2}')
           if [ "${GATEWAY_POD_READY}" = "1/1" ]; then
@@ -117,6 +187,7 @@ jobs:
           fi
 
       - name: Show deployment status
+        if: always()
         run: |
           echo "=== Deployments ==="
           kubectl get deployments -n "${NAMESPACE}"
@@ -146,10 +217,8 @@ jobs:
           kubectl get destinationrule -n "${NAMESPACE}" || true
           echo ""
 
-      - name: Sleep to wait for vLLM to be ready to respond to requests
-        run: sleep 360
-
       - name: Verify installation and run inference tests
+        if: steps.wait_pods.outcome == 'success'
         run: |
           cd .github/scripts/e2e
           ./e2e-validate.sh -n "${NAMESPACE}" -v
@@ -160,16 +229,26 @@ jobs:
             mkdir -p pod-logs-pd-xpu
             cd pod-logs-pd-xpu
             echo "Fetching ${NAMESPACE} pods log..."
-            kubectl get pods -n "${NAMESPACE}" -l "llm-d.ai/inferenceServing" -o yaml > ./inference-pods.yaml
-            kubectl logs -n "${NAMESPACE}" -l "llm-d.ai/inferenceServing" | grep -v "waiting for vLLM to be ready" > ./inference-pod-logs.log
-            kubectl describe pod -n "${NAMESPACE}" -l "llm-d.ai/inferenceServing" > ./inference-describe-pod-logs.log
+            kubectl get pods -n "${NAMESPACE}" -l "llm-d.ai/inferenceServing" -o yaml > ./inference-pods.yaml || true
+            kubectl logs -n "${NAMESPACE}" -l "llm-d.ai/inferenceServing" 2>&1 | grep -v "waiting for vLLM to be ready" > ./inference-pod-logs.log || true
+            kubectl describe pod -n "${NAMESPACE}" -l "llm-d.ai/inferenceServing" > ./inference-describe-pod-logs.log || true
+
+            echo "Collecting logs from all pods..."
             kubectl get pods -n "${NAMESPACE}" --no-headers -o custom-columns=":metadata.name" \
             | xargs -I{} sh -c 'kubectl logs --all-containers=true -n "${NAMESPACE}" {} > "{}.log" 2>&1' || true
+
             echo "Fetching ${NAMESPACE} pods descriptions..."
             kubectl get pods -n "${NAMESPACE}" --no-headers -o custom-columns=":metadata.name" \
             | xargs -I{} sh -c 'kubectl describe pod -n "${NAMESPACE}" {} > "{}-describe.log" 2>&1' || true
+
+            echo "Collecting events..."
+            kubectl get events -n "${NAMESPACE}" --sort-by='.lastTimestamp' > events.log 2>&1 || true
+
             mv ~/pd-xpu-deployment.log . || true
             mv ~/install-deps.log . || true
+
+            echo "Log collection completed."
+            ls -la
 
       - name: Upload pod logs as artifact
         uses: actions/upload-artifact@v4

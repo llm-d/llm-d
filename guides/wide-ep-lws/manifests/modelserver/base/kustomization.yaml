@@ -4,4 +4,3 @@ resources:
   - decode.yaml
   - prefill.yaml
   - serviceAccount.yaml
-

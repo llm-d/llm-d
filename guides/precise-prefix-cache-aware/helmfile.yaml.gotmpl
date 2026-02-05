@@ -11,6 +11,10 @@ environments:
   gke: &GKE
     values:
       - ../prereq/gateway-provider/common-configurations/gke.yaml
+  xpu: &XPU
+    <<: *I
+  xpu-kgateway: &XPU_KG
+    <<: *KG
   default:
     <<: *I
 
@@ -18,6 +22,8 @@ environments:
 
 {{- $ns := .Namespace | default "llm-d-precise" -}}
 {{- $rn := (env "RELEASE_NAME_POSTFIX") | default "kv-events" -}}
+{{- $dt := (env "DISAGGREGATED_TOKENIZATION") | default "false" -}}
+{{- $pd := (env "POD_DISCOVERY") | default "false" -}}
 
 repositories:
   - name: llm-d-modelservice
@@ -35,18 +41,24 @@ releases:
       type: infrastructure
       kind: inference-stack
     values:
-      - gateway: 
+      - gateway:
           {{ .Environment.Values.gateway | toYaml | nindent 10 }}
 
   - name: {{ printf "gaie-%s" $rn | quote }}
     namespace: {{ $ns }}
     chart: oci://registry.k8s.io/gateway-api-inference-extension/charts/inferencepool
-    version: v1.2.0
+    version: v1.3.0
     installed: true
     needs:
       - {{ printf "infra-%s" $rn | quote }}
     values:
+      {{- if eq $pd "true" }}
+      - gaie-kv-events/values_pod_discovery.yaml
+      {{- else if eq $dt "true" }}
+      - gaie-kv-events-disaggregated-tokenization/values.yaml
+      {{- else }}
       - gaie-kv-events/values.yaml
+      {{- end }}
     # Apply provider name if on GKE
     {{- if eq .Environment.Name "gke" }}
       - provider:
@@ -59,7 +71,7 @@ releases:
               enabled: true
             prometheus:
               enabled: false
-    {{- else if or (eq .Environment.Name "istio") (eq .Environment.Name "default") }}
+    {{- else if or (eq .Environment.Name "istio") (eq .Environment.Name "xpu") (eq .Environment.Name "default") }}
       - provider:
           name: {{ .Environment.Values.provider.name }}
           istio:
@@ -75,21 +87,32 @@ releases:
   - name: {{ printf "ms-%s" $rn | quote }}
     namespace: {{ $ns }}
     chart: llm-d-modelservice/llm-d-modelservice
-    version: v0.3.17
+    version: v0.4.5
     installed: true
     needs:
       - {{ printf "infra-%s" $rn | quote }}
       - {{ printf "gaie-%s" $rn | quote }}
     values:
+    {{- if eq $pd "true" }}
+      {{- if or (eq .Environment.Name "xpu") (eq .Environment.Name "xpu-kgateway") }}
+      - ms-kv-events/values_xpu_pod_discovery.yaml
+      {{- else }}
+      - ms-kv-events/values_pod_discovery.yaml
+      {{- end }}
+    {{- else if or (eq .Environment.Name "xpu") (eq .Environment.Name "xpu-kgateway") }}
+      - ms-kv-events/values_xpu.yaml
+    {{- else }}
       - ms-kv-events/values.yaml
+    {{- end }}
+
     {{- if or (eq .Environment.Name "istio") (eq .Environment.Name "default") }}
-      - routing: 
+      - routing:
           {{ .Environment.Values.routing | toYaml | nindent 10 }}
     {{- end }}
     set:
       - name: "decode.containers[0].env[0].value"
         value: {{ printf "%s" $rn | quote }}
-    {{- if (eq .Environment.Name "gke") }}  
+    {{- if (eq .Environment.Name "gke") }}
       - name: "decode.monitoring.podmonitor.enabled"
         value: false
     {{- end }}

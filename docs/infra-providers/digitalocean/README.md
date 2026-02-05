@@ -91,7 +91,7 @@ helmfile apply -e digitalocean -n ${NAMESPACE}
 **Key DigitalOcean Optimizations Applied Automatically:**
 
 * **Smaller Models**: Uses `Qwen3-0.6B` (inference-scheduling) that doesn't require HuggingFace tokens
-* **Stable Images**: Uses production-ready `ghcr.io/llm-d/llm-d:v0.2.0` instead of development builds
+* **Stable Images**: Uses production-ready `ghcr.io/llm-d/llm-d-cuda:v0.5.0` instead of development builds
 * **DOKS-Optimized Resources**: Reduced memory/CPU requirements suitable for DOKS GPU nodes
 * **GPU Tolerations**: Automatic scheduling on DigitalOcean GPU nodes with `nvidia.com/gpu` taints
 * **No RDMA**: Removes InfiniBand requirements not available on DOKS
@@ -142,8 +142,8 @@ We recommend enabling the monitoring stack to track:
 
 The DigitalOcean deployment uses smaller, optimized models:
 
-| Architecture | Original Model | DigitalOcean Model | Benefits |
-|-------------|----------------|--------------------|---------|
+| Architecture         | Original Model          | DigitalOcean Model      | Benefits                   |
+|----------------------|-------------------------|-------------------------|----------------------------|
 | Inference Scheduling | `Qwen3-0.6B` + HF Token | `Qwen3-0.6B` (no token) | No authentication required |
 
 ### Resource Optimization

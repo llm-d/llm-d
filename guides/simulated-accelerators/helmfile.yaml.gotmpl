@@ -35,13 +35,13 @@ releases:
       type: infrastructure
       kind: inference-stack
     values:
-      - gateway: 
+      - gateway:
           {{ .Environment.Values.gateway | toYaml | nindent 10 }}
 
   - name: {{ printf "gaie-%s" $rn | quote }}
     namespace: {{ $ns }}
     chart: oci://registry.k8s.io/gateway-api-inference-extension/charts/inferencepool
-    version: v1.2.0
+    version: v1.3.0
     installed: true
     needs:
       - {{ printf "infra-%s" $rn | quote }}
@@ -74,7 +74,7 @@ releases:
   - name: {{ printf "ms-%s" $rn | quote }}
     namespace: {{ $ns }}
     chart: llm-d-modelservice/llm-d-modelservice
-    version: v0.3.17
+    version: v0.4.5
     installed: true
     needs:
       - {{ printf "infra-%s" $rn | quote }}
@@ -82,7 +82,7 @@ releases:
     values:
       - ms-sim/values.yaml
     set:
-    {{- if (eq .Environment.Name "gke") }}  
+    {{- if (eq .Environment.Name "gke") }}
       - name: "decode.monitoring.podmonitor.enabled"
         value: false
     {{- end }}

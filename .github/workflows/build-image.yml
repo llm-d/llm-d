@@ -177,6 +177,11 @@ jobs:
             type=sha
             type=raw,value=latest,enable={{is_default_branch}}
 
+      - name: Calculate Cache Bust Timestamp
+        id: cache_buster_timestamp
+        run: |
+          echo "cache_buster_timestamp=$(date)" >> $GITHUB_OUTPUT
+
       - name: Build the builder image layer
         id: build-image-build-layer
         uses: docker/build-push-action@v5
@@ -192,6 +197,7 @@ jobs:
             type=gha,mode=max,scope=cuda-dev-builder-${{ matrix.os }}-${{ matrix.platform == 'linux/arm64' && 'arm64' || 'amd64' }},oci-mediatypes=true,compression=zstd
           labels: ${{ steps.meta.outputs.labels }}
           build-args: |
+            CACHE_BUSTER=${{ steps.cache_buster_timestamp.outputs.cache_buster_timestamp }}
             TARGETOS=${{ matrix.os }}
             TARGETPLATFORM=${{ matrix.platform }}
             BUILD_BASE_IMAGE_SUFFIX=${{ matrix.os == 'ubuntu' && 'ubuntu20.04' || matrix.base_image_suffix }}
@@ -217,6 +223,7 @@ jobs:
           push: true
           provenance: false
           build-args: |
+            CACHE_BUSTER=${{ steps.cache_buster_timestamp.outputs.cache_buster_timestamp }}
             TARGETOS=${{ matrix.os }}
             TARGETPLATFORM=${{ matrix.platform }}
             BUILD_BASE_IMAGE_SUFFIX=${{ matrix.os == 'ubuntu' && 'ubuntu20.04' || matrix.base_image_suffix }}
@@ -500,6 +507,11 @@ jobs:
             echo "pr_tag=pr-${PR_TAG}" >> $GITHUB_OUTPUT
           fi
 
+      - name: Calculate Cache Bust Timestamp
+        id: cache_buster_timestamp
+        run: |
+          echo "cache_buster_timestamp=$(date)" >> $GITHUB_OUTPUT
+
       - name: Build and push the image
         id: build-and-push
         uses: docker/build-push-action@v5
@@ -509,6 +521,8 @@ jobs:
           platforms: linux/amd64
           push: true
           provenance: true
+          build-args: |
+            CACHE_BUSTER=${{ steps.cache_buster_timestamp.outputs.cache_buster_timestamp }}
           cache-from: type=gha,scope=xpu-dev
           cache-to: type=gha,mode=max,scope=xpu-dev,oci-mediatypes=true,compression=zstd
           tags: |
@@ -653,6 +667,11 @@ jobs:
             echo "pr_tag=pr-${PR_TAG}" >> $GITHUB_OUTPUT
           fi
 
+      - name: Calculate Cache Bust Timestamp
+        id: cache_buster_timestamp
+        run: |
+          echo "cache_buster_timestamp=$(date)" >> $GITHUB_OUTPUT
+
       - name: Build and push the image
         id: build-and-push
         uses: docker/build-push-action@v5
@@ -664,6 +683,8 @@ jobs:
           provenance: true
           cache-from: type=gha,scope=cpu-dev
           cache-to: type=gha,mode=max,scope=cpu-dev,oci-mediatypes=true,compression=zstd
+          build-args:
+            CACHE_BUSTER=${{ steps.cache_buster_timestamp.outputs.cache_buster_timestamp }}
           tags: |
             ${{ env.REGISTRY }}/${{ github.repository }}-cpu-dev:${{ steps.set-tag.outputs.tag }}
             ${{ steps.set-tag.outputs.pr_tag != '' && format('{0}/{1}-cpu-dev:{2}', env.REGISTRY, github.repository, steps.set-tag.outputs.pr_tag) || '' }}

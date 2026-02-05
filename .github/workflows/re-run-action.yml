@@ -10,7 +10,7 @@ jobs:
     if: ${{ github.event.issue.pull_request }}
     runs-on: ubuntu-20.04
     steps:
-    - uses: estroz/rerun-actions@main
-      with:
-        repo_token: ${{ secrets.GITHUB_TOKEN }}
-        comment_id: ${{ github.event.comment.id }}
+      - uses: estroz/rerun-actions@main
+        with:
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+          comment_id: ${{ github.event.comment.id }}

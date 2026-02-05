@@ -128,7 +128,7 @@ jobs:
           --namespace ${NAMESPACE} \
           --set "provider.name=gke" \
           --set "inferencePool.apiVersion=inference.networking.k8s.io/v1" \
-          --set "inferenceExtension.monitoring.gke.enable=true" \
+          --set "inferenceExtension.monitoring.prometheus.enabled=true" \
           -f inferencepool.values.yaml \
           oci://registry.k8s.io/gateway-api-inference-extension/charts/inferencepool \
           --version ${INFERENCEPOOLVERSION}

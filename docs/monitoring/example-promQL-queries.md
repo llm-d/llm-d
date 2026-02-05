@@ -6,7 +6,7 @@ The provided [load generation script](./scripts/generate-load-llmd.sh) will popu
 ## Tier 1: Immediate Failure & Saturation Indicators
 
 | Metric Need | PromQL Query |
-|-------------|--------------|
+| ----------- | ------------ |
 | **Overall Error Rate** (Platform-wide) | `sum(rate(inference_objective_request_error_total[5m])) / sum(rate(inference_objective_request_total[5m]))` |
 | **Per-Model Error Rate** | `sum by(model_name) (rate(inference_objective_request_error_total[5m])) / sum by(model_name) (rate(inference_objective_request_total[5m]))` |
 | **Request Preemptions** (per vLLM instance) | `sum by(pod, instance) (rate(vllm:num_preemptions[5m]))` |
@@ -28,7 +28,7 @@ The provided [load generation script](./scripts/generate-load-llmd.sh) will popu
 ### Path A: Basic Model Serving & Scaling
 
 | Metric Need | PromQL Query |
-|-------------|--------------|
+| ----------- | ------------ |
 | **KV Cache Utilization** | `avg by(pod, model_name) (vllm:kv_cache_usage_perc)` |
 | **Request Queue Lengths** | `sum by(pod, model_name) (vllm:num_requests_waiting)` |
 | **Model Throughput** (Tokens/sec) | `sum by(model_name, pod) (rate(vllm:prompt_tokens_total[5m]) + rate(vllm:generation_tokens_total[5m]))` |
@@ -38,7 +38,7 @@ The provided [load generation script](./scripts/generate-load-llmd.sh) will popu
 ### Path B: Intelligent Routing & Load Balancing
 
 | Metric Need | PromQL Query |
-|-------------|--------------|
+| ----------- | ------------ |
 | **Request Distribution** (QPS per instance) | `sum by(pod) (rate(inference_objective_request_total{target_model!=""}[5m]))` |
 | **Token Distribution** | `sum by(pod) (rate(vllm:prompt_tokens_total[5m]) + rate(vllm:generation_tokens_total[5m]))` |
 | **Idle GPU Time** | `1 - avg by(pod) (rate(vllm:iteration_tokens_total_count[5m]) > 0)` |
@@ -47,7 +47,7 @@ The provided [load generation script](./scripts/generate-load-llmd.sh) will popu
 ### Path C: Prefix Caching
 
 | Metric Need | PromQL Query |
-|-------------|--------------|
+| ----------- | ------------ |
 | **Prefix Cache Hit Rate** (vLLM) | `sum(rate(vllm:prefix_cache_hits_total[5m])) / sum(rate(vllm:prefix_cache_queries_total[5m]))` |
 | **Per-Instance Hit Rate** (vLLM) | `sum by(pod) (rate(vllm:prefix_cache_hits_total[5m])) / sum by(pod) (rate(vllm:prefix_cache_queries_total[5m]))` |
 | **Cache Utilization** (% full) | `avg by(pod, model_name) (vllm:kv_cache_usage_perc * 100)` |
@@ -60,7 +60,7 @@ The provided [load generation script](./scripts/generate-load-llmd.sh) will popu
 ### Path D: P/D Disaggregation
 
 | Metric Need | PromQL Query |
-|-------------|--------------|
+| ----------- | ------------ |
 | **Prefill Worker Utilization** | `avg by(pod) (vllm:num_requests_running{pod=~".*prefill.*"})` |
 | **Decode Worker Utilization** | `avg by(pod) (vllm:kv_cache_usage_perc{pod=~".*decode.*"})` |
 | **Prefill Queue Length** | `sum by(pod) (vllm:num_requests_waiting{pod=~".*prefill.*"})` |
@@ -72,7 +72,7 @@ The provided [load generation script](./scripts/generate-load-llmd.sh) will popu
 ### Path E: Flow Control & Request Queuing (requires the flow control FeatureGate enabled with EPP)
 
 | Metric Need | PromQL Query |
-|-------------|--------------|
+| ----------- | ------------ |
 | **Flow Control Queue Size** | `sum(inference_extension_flow_control_queue_size)` |
 | **Flow Control Queue Size by Priority** | `sum by(priority) (inference_extension_flow_control_queue_size)` |
 | **Flow Control Request Queue Duration P99** | `histogram_quantile(0.99, sum by(le) (rate(inference_extension_flow_control_request_queue_duration_seconds_bucket[5m])))` |

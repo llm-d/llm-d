@@ -1,15 +1,21 @@
 multinode: false
 
 modelArtifacts:
-  uri: "hf://RedHatAI/Llama-3.3-70B-Instruct-FP8-dynamic"
-  size: 100Gi
+  uri: "hf://openai/gpt-oss-120b"
+  size: 250Gi
   authSecretName: "llm-d-hf-token"
-  name: "RedHatAI/Llama-3.3-70B-Instruct-FP8-dynamic"
+  name: "openai/gpt-oss-120b"
+  labels:
+    llm-d.ai/inference-serving: "true"
+    llm-d.ai/guide: "pd-disaggregation"
+    llm-d.ai/hardware-vairant: "gpu"
+    llm-d.ai/accelerator-vendor: "nvidia"
+    llm-d.ai/model: "gpt-oss-120b"
 
 routing:
   servicePort: 8000
   proxy:
-    image: ghcr.io/llm-d/llm-d-routing-sidecar:v0.4.0
+    image: ghcr.io/llm-d/llm-d-routing-sidecar:v0.5.0
     connector: nixlv2
     secure: false
 
@@ -21,75 +27,83 @@ decode:
   monitoring:
     podmonitor:
       enabled: true
-      portName: "vllm" # decode vLLM service port (from routing.proxy.targetPort)
+      portName: "vllm"  # decode vLLM service port (from routing.proxy.targetPort)
       path: "/metrics"
       interval: "30s"
   containers:
-  - name: "vllm"
-    image: ghcr.io/llm-d/llm-d-cuda:v0.4.0
-    modelCommand: vllmServe
-    args:
-      - "--block-size"
-      - "128"
-      - "--kv-transfer-config"
-      - '{"kv_connector":"NixlConnector", "kv_role":"kv_both"}'
-      - "--disable-uvicorn-access-log"
-      - "--max-model-len"
-      - "32000"
-    ports:
-      - containerPort: 8200
-        name: vllm
-        protocol: TCP
-    resources:
-      limits:
-        memory: 64Gi
-        cpu: "16"
-        # note: GPU resources get controlled by parallelism + accelerators above
-        rdma/ib: 1
-      requests:
-        memory: 64Gi
-        cpu: "16"
-        # note: GPU resources get controlled by parallelism + accelerators above
-        rdma/ib: 1
-    mountModelVolume: true
-    volumeMounts:
-    - name: metrics-volume
-      mountPath: /.config
-    - name: shm
-      mountPath: /dev/shm
-    - name: torch-compile-cache
-      mountPath: /.cache
-    startupProbe:
-      httpGet:
-        path: /v1/models
-        port: vllm
-      initialDelaySeconds: 15
-      periodSeconds: 30
-      timeoutSeconds: 5
-      failureThreshold: 60
-    livenessProbe:
-      httpGet:
-        path: /health
-        port: vllm
-      periodSeconds: 10
-      timeoutSeconds: 5
-      failureThreshold: 3
-    readinessProbe:
-      httpGet:
-        path: /v1/models
-        port: vllm
-      periodSeconds: 5
-      timeoutSeconds: 2
-      failureThreshold: 3
+    - name: "vllm"
+      image: ghcr.io/llm-d/llm-d-cuda:v0.5.0
+      modelCommand: vllmServe
+      args:
+        - "--block-size"
+        - "128"
+        - "--kv-transfer-config"
+        - '{"kv_connector":"NixlConnector", "kv_role":"kv_both"}'
+        - "--disable-uvicorn-access-log"
+        - "--max-model-len"
+        - "32000"
+      env:
+        - name: VLLM_NIXL_SIDE_CHANNEL_HOST
+          valueFrom:
+            fieldRef:
+              fieldPath: status.podIP
+      ports:
+        - containerPort: 8200
+          name: vllm
+          protocol: TCP
+        - containerPort: 5600
+          name: nixl
+          protocol: TCP
+      resources:
+        limits:
+          memory: 64Gi
+          cpu: "16"
+          # note: GPU resources get controlled by parallelism + accelerators above
+          rdma/ib: 1
+        requests:
+          memory: 64Gi
+          cpu: "16"
+          # note: GPU resources get controlled by parallelism + accelerators above
+          rdma/ib: 1
+      mountModelVolume: true
+      volumeMounts:
+        - name: metrics-volume
+          mountPath: /.config
+        - name: shm
+          mountPath: /dev/shm
+        - name: torch-compile-cache
+          mountPath: /.cache
+      startupProbe:
+        httpGet:
+          path: /v1/models
+          port: vllm
+        initialDelaySeconds: 15
+        periodSeconds: 30
+        timeoutSeconds: 5
+        failureThreshold: 60
+      livenessProbe:
+        httpGet:
+          path: /health
+          port: vllm
+        periodSeconds: 10
+        timeoutSeconds: 5
+        failureThreshold: 3
+      readinessProbe:
+        httpGet:
+          path: /v1/models
+          port: vllm
+        periodSeconds: 5
+        timeoutSeconds: 2
+        failureThreshold: 3
   volumes:
-  - name: metrics-volume
-    emptyDir: {}
-  - name: shm
-    emptyDir:
-      medium: Memory
-      sizeLimit: "16Gi"
-  - name: torch-compile-cache
-    emptyDir: {}
+    - name: metrics-volume
+      emptyDir: {}
+    - name: shm
+      emptyDir:
+        medium: Memory
+        sizeLimit: "16Gi"
+    - name: torch-compile-cache
+      emptyDir: {}
 
 prefill:
   parallelism:
@@ -99,75 +113,80 @@ prefill:
   monitoring:
     podmonitor:
       enabled: true
-      portName: "vllm" # prefill vLLM service port (from routing.servicePort)
+      portName: "vllm"  # prefill vLLM service port (from routing.servicePort)
       path: "/metrics"
       interval: "30s"
   containers:
-  - name: "vllm"
-    image: ghcr.io/llm-d/llm-d-cuda:v0.4.0
-    modelCommand: vllmServe
-    args:
-      - "--block-size"
-      - "128"
-      - "--kv-transfer-config"
-      - '{"kv_connector":"NixlConnector", "kv_role":"kv_both"}'
-      - "--disable-uvicorn-access-log"
-      - "--max-model-len"
-      - "32000"
-    ports:
-      - containerPort: 8000
-        name: vllm
-        protocol: TCP
-      - containerPort: 5557
-        name: nixl
-        protocol: TCP
-    resources:
-      limits:
-        memory: 64Gi
-        cpu: "8"
-        # note: GPU resources get controlled by parallelism + accelerators above
-        rdma/ib: 1
-      requests:
-        memory: 64Gi
-        cpu: "8"
-        # note: GPU resources get controlled by parallelism + accelerators above
-        rdma/ib: 1
-    mountModelVolume: true
-    volumeMounts:
-    - name: metrics-volume
-      mountPath: /.config
-    - name: shm
-      mountPath: /dev/shm
-    - name: torch-compile-cache
-      mountPath: /.cache
-    startupProbe:
-      httpGet:
-        path: /v1/models
-        port: vllm
-      initialDelaySeconds: 15
-      periodSeconds: 30
-      timeoutSeconds: 5
-      failureThreshold: 60
-    livenessProbe:
-      httpGet:
-        path: /health
-        port: vllm
-      periodSeconds: 10
-      timeoutSeconds: 5
-      failureThreshold: 3
-    readinessProbe:
-      httpGet:
-        path: /v1/models
-        port: vllm
-      periodSeconds: 5
-      timeoutSeconds: 2
-      failureThreshold: 3
+    - name: "vllm"
+      image: ghcr.io/llm-d/llm-d-cuda:v0.5.0
+      modelCommand: vllmServe
+      args:
+        - "--block-size"
+        - "128"
+        - "--kv-transfer-config"
+        - '{"kv_connector":"NixlConnector", "kv_role":"kv_both"}'
+        - "--disable-uvicorn-access-log"
+        - "--max-model-len"
+        - "32000"
+      env:
+        - name: VLLM_NIXL_SIDE_CHANNEL_HOST
+          valueFrom:
+            fieldRef:
+              fieldPath: status.podIP
+      ports:
+        - containerPort: 8000
+          name: vllm
+          protocol: TCP
+        - containerPort: 5600
+          name: nixl
+          protocol: TCP
+      resources:
+        limits:
+          memory: 64Gi
+          cpu: "8"
+          # note: GPU resources get controlled by parallelism + accelerators above
+          rdma/ib: 1
+        requests:
+          memory: 64Gi
+          cpu: "8"
+          # note: GPU resources get controlled by parallelism + accelerators above
+          rdma/ib: 1
+      mountModelVolume: true
+      volumeMounts:
+        - name: metrics-volume
+          mountPath: /.config
+        - name: shm
+          mountPath: /dev/shm
+        - name: torch-compile-cache
+          mountPath: /.cache
+      startupProbe:
+        httpGet:
+          path: /v1/models
+          port: vllm
+        initialDelaySeconds: 15
+        periodSeconds: 30
+        timeoutSeconds: 5
+        failureThreshold: 60
+      livenessProbe:
+        httpGet:
+          path: /health
+          port: vllm
+        periodSeconds: 10
+        timeoutSeconds: 5
+        failureThreshold: 3
+      readinessProbe:
+        httpGet:
+          path: /v1/models
+          port: vllm
+        periodSeconds: 5
+        timeoutSeconds: 2
+        failureThreshold: 3
   volumes:
-  - name: metrics-volume
-    emptyDir: {}
-  - name: shm
-    emptyDir:
-      medium: Memory
-      sizeLimit: "16Gi"
-  - name: torch-compile-cache
-    emptyDir: {}
+    - name: metrics-volume
+      emptyDir: {}
+    - name: shm
+      emptyDir:
+        medium: Memory
+        sizeLimit: "16Gi"
+    - name: torch-compile-cache
+      emptyDir: {}

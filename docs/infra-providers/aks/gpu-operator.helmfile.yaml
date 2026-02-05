@@ -14,7 +14,7 @@ releases:
         driver:
           # This needs that the OFED driver is installed on the nodes.
           rdma:
-            enabled: true # Enables RDMA for GPUDirect support
+            enabled: true  # Enables RDMA for GPUDirect support
         migManager:
           enabled: false  # Multi-Instance GPU not required
         vgpuDeviceManager:

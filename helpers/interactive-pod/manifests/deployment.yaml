@@ -8,7 +8,7 @@ spec:
   replicas: 1
   revisionHistoryLimit: 2
   strategy:
-    type: Recreate # don't run two interactive pods at once during updates
+    type: Recreate  # don't run two interactive pods at once during updates
   selector:
     matchLabels:
       app: interactive-pod
@@ -21,7 +21,7 @@ spec:
       containers:
         - name: benchmark-runner
           # image: "ghcr.io/llm-d/interactive-pod:latest"
-          image: "quay.io/grpereir/interactive-pod:v1.0.1"
+          image: "quay.io/grpereir/interactive-pod:v1.0.5"
           imagePullPolicy: Always
           command: ["bash", "-lc", "sleep infinity"]
           tty: true

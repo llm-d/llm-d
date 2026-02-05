@@ -2,7 +2,7 @@
 
 This document show you how to interact with the model server and inference scheduler.
 
-> [!TIP] 
+> [!TIP]
 > To run a performance test against the llm-d stack checkout our [benchmark doc](../guides/benchmark/README.md).
 
 ## Prerequisites

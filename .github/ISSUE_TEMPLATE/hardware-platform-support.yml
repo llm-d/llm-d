@@ -8,11 +8,11 @@ body:
     attributes:
       value: |
         ## Hardware and Platform Support Request/Contribution
-        
+
         Thank you for your interest in expanding llm-d's hardware and platform support!
-        
+
         Please provide detailed information about the hardware accelerator or Kubernetes platform you're interested in supporting.
-  
+
   - type: dropdown
     id: support-type
     attributes:
@@ -23,7 +23,7 @@ body:
         - Contributing support
     validations:
       required: true
-      
+
   - type: dropdown
     id: component-type
     attributes:
@@ -37,7 +37,7 @@ body:
         - Other
     validations:
       required: true
-      
+
   - type: input
     id: component-name
     attributes:
@@ -46,7 +46,7 @@ body:
       placeholder: "e.g., NVIDIA H200, GKE 1.30, Azure AKS 1.29"
     validations:
       required: true
-      
+
   - type: textarea
     id: specifications
     attributes:
@@ -57,7 +57,7 @@ body:
       placeholder: "Please provide detailed specifications..."
     validations:
       required: true
-      
+
   - type: textarea
     id: current-status
     attributes:
@@ -66,7 +66,7 @@ body:
       placeholder: "e.g., Currently unsupported, or partially working with known issues..."
     validations:
       required: true
-      
+
   - type: checkboxes
     id: implementation-plan
     attributes:
@@ -79,7 +79,7 @@ body:
         - label: Testing on the hardware/platform
         - label: CI/CD integration
         - label: Well-lit path guide creation/update
-        
+
   - type: textarea
     id: testing-environment
     attributes:
@@ -88,7 +88,7 @@ body:
       placeholder: "e.g., We have access to 4 nodes with 8 GPUs each in our test environment..."
     validations:
       required: false
-      
+
   - type: textarea
     id: maintainer-info
     attributes:
@@ -99,7 +99,7 @@ body:
       placeholder: "Name, Email, GitHub username, Organization"
     validations:
       required: false
-      
+
   - type: textarea
     id: additional-info
     attributes:
@@ -108,7 +108,7 @@ body:
       placeholder: "Any additional context, links, or information..."
     validations:
       required: false
-      
+
   - type: checkboxes
     id: requirements
     attributes:

@@ -1,0 +1,276 @@
+name: XPU Prefix Cache Test
+
+on:
+  schedule:
+    - cron: '0 10 * * *'  # 3AM PST (10:00 UTC)
+  pull_request:
+    paths:
+      - 'guides/precise-prefix-cache-aware/**/values_xpu.yaml'
+      - 'guides/precise-prefix-cache-aware/helmfile.yaml.gotmpl'
+      - 'guides/precise-prefix-cache-aware/httproute.yaml'
+      - '.github/workflows/e2e-prefix-cache-xpu.yaml'
+  workflow_dispatch:
+    inputs:
+      pr_or_branch:
+        description: 'Pull-request number or branch name to test'
+        required: true
+        default: 'main'
+        type: string
+      custom_image_tag:
+        description: 'Custom XPU image tag to use (optional)'
+        required: false
+        default: ''
+        type: string
+  workflow_call:
+    inputs:
+      pr_or_branch:
+        description: 'Pull-request number or branch name to test'
+        required: true
+        default: 'main'
+        type: string
+      custom_image_tag:
+        description: 'Custom XPU image tag to use (optional)'
+        required: false
+        default: ''
+        type: string
+
+jobs:
+  deploy_and_validate:
+    runs-on: xpu
+    env:
+      NAMESPACE: "llm-d-xpu-pc"
+      GATEWAY_TYPE: "istio"
+      RELEASE_NAME_POSTFIX: "kv-events"
+      INFRA_RELEASE_NAME: "infra-kv-events"
+      GAIE_RELEASE_NAME: "gaie-kv-events"
+      MS_RELEASE_NAME: "ms-kv-events"
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Determine if pr_or_branch is a PR number
+        id: check_pr
+        env:
+          PR_OR_BRANCH: ${{ github.event.inputs.pr_or_branch }}
+        shell: bash
+        run: |
+          echo "PR_OR_BRANCH=${PR_OR_BRANCH:-main}" >> "$GITHUB_ENV"
+          if [[ "$PR_OR_BRANCH" =~ ^[0-9]+$ ]]; then
+            echo "is_pr=true" >> "$GITHUB_OUTPUT"
+          elif [[ "${{ github.event_name }}" = "pull_request" ]]; then
+            echo "PR_OR_BRANCH=${{ github.event.pull_request.number }}" >> $GITHUB_ENV
+            echo "is_pr=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "is_pr=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Fetch and checkout PR
+        if: steps.check_pr.outputs.is_pr == 'true'
+        run: |
+          git fetch origin pull/"$PR_OR_BRANCH"/head:pr-"$PR_OR_BRANCH"
+          git checkout pr-"$PR_OR_BRANCH"
+
+      - name: Checkout branch
+        if: steps.check_pr.outputs.is_pr == 'false'
+        run: git checkout "$PR_OR_BRANCH"
+
+      - name: Install prerequisites idempotently
+        run: |
+          ./guides/prereq/client-setup/install-deps.sh | tee ~/install-deps.log
+
+      - name: Install chart dependencies (CRDs and Istio)
+        run: |
+          cd guides/prereq/gateway-provider
+          ./install-gateway-provider-dependencies.sh
+          helmfile apply -f istio.helmfile.yaml
+
+      - name: Install monitoring stack
+        run: |
+          cd docs/monitoring
+          ./scripts/install-prometheus-grafana.sh || true
+
+      - name: Create namespace
+        run: |
+          kubectl create namespace "${NAMESPACE}" || echo "Namespace already exists"
+
+      - name: Create llm-d-hf-token secret
+        run: |
+          kubectl create secret generic llm-d-hf-token \
+            --from-literal="HF_TOKEN=${{ secrets.HF_TOKEN }}" \
+            --namespace "${NAMESPACE}" \
+            --dry-run=client -o yaml | kubectl apply -f -
+
+      - name: Set image tag for deployment
+        id: set_image_tag
+        run: |
+          CUSTOM_TAG="${{ inputs.custom_image_tag }}"
+          if [ -n "${CUSTOM_TAG}" ]; then
+            # Check if it's a full image address (contains '/') or just a tag
+            if [[ "${CUSTOM_TAG}" == *"/"* ]]; then
+              echo "Using custom full image address: ${CUSTOM_TAG}"
+              FULL_IMAGE="${CUSTOM_TAG}"
+            else
+              echo "Using custom image tag: ${CUSTOM_TAG}"
+              FULL_IMAGE="ghcr.io/${{ github.repository }}-xpu-dev:${CUSTOM_TAG}"
+            fi
+            echo "IMAGE_TAG=${CUSTOM_TAG}" >> $GITHUB_ENV
+            echo "HELM_SET_IMAGE=--set decode.containers[0].image=${FULL_IMAGE} --set decode.containers[0].imagePullPolicy=Always" >> $GITHUB_ENV
+          else
+            echo "Using default image tag from values file"
+            echo "HELM_SET_IMAGE=" >> $GITHUB_ENV
+          fi
+
+      - name: Deploy guide
+        run: |
+          cd guides/precise-prefix-cache-aware
+          RELEASE_NAME_POSTFIX=${RELEASE_NAME_POSTFIX} \
+          helmfile apply -e xpu -n "${NAMESPACE}" ${HELM_SET_IMAGE} \
+            --skip-schema-validation \
+            | tee ~/prefix-cache-xpu-deployment.log
+          echo "---------------------------------------" >> ~/prefix-cache-xpu-deployment.log
+
+      - name: Apply HTTPRoute
+        run: |
+          cd guides/precise-prefix-cache-aware
+          echo "Deploying HTTPRoute with RELEASE_NAME_POSTFIX=${RELEASE_NAME_POSTFIX}..."
+          # Create a temporary HTTPRoute file with the correct names
+          sed -e "s/infra-kv-events-inference-gateway/${INFRA_RELEASE_NAME}-inference-gateway/g" \
+              -e "s/gaie-kv-events/${GAIE_RELEASE_NAME}/g" \
+              -e "s/name: llm-d-prefix-cache/name: llm-d-xpu-pc-${RELEASE_NAME_POSTFIX}/g" \
+              httproute.yaml > httproute-xpu.yaml
+          echo "Generated HTTPRoute configuration:"
+          cat httproute-xpu.yaml
+          kubectl apply -f httproute-xpu.yaml -n "${NAMESPACE}" \
+            | tee -a ~/prefix-cache-xpu-deployment.log
+          echo "---------------------------------------" >> ~/prefix-cache-xpu-deployment.log
+
+      - name: Show initial deployment status
+        run: |
+          echo "=== Deployments ==="
+          kubectl get deployments -n "${NAMESPACE}" || true
+          echo ""
+          echo "=== Pods ==="
+          kubectl get pods -n "${NAMESPACE}" || true
+          echo ""
+          echo "=== Events ==="
+          kubectl get events -n "${NAMESPACE}" --sort-by='.lastTimestamp' || true
+
+      - name: fetch helm manifests - prepare for upload
+        run: |
+          for release_name in "${INFRA_RELEASE_NAME}" "${GAIE_RELEASE_NAME}" "${MS_RELEASE_NAME}"; do
+            .github/scripts/e2e/helm-get-all.sh \
+              ~/prefix-cache-xpu-deployment.log \
+              "$release_name" \
+              "$NAMESPACE"
+          done
+
+      - name: Wait for all pods to be ready
+        id: wait_pods
+        run: |
+          echo "Waiting for all pods to be ready..."
+          if kubectl wait pod \
+            --for=condition=Ready \
+            --all \
+            -n "${NAMESPACE}" \
+            --timeout=10m; then
+            echo "✅ All pods are ready."
+            kubectl get pods -n "${NAMESPACE}"
+          else
+            echo "❌ Pods failed to become ready within timeout"
+            echo "=== Pod Status ==="
+            kubectl get pods -n "${NAMESPACE}"
+            echo "=== Pod Descriptions ==="
+            kubectl describe pods -n "${NAMESPACE}"
+            exit 1
+          fi
+
+      - name: Check gateway pod is up
+        if: always()
+        run: |
+          GATEWAY_POD_READY=$(kubectl get pods -n "${NAMESPACE}" | grep "inference-gateway" | awk '{print $2}')
+          if [ "${GATEWAY_POD_READY}" = "1/1" ]; then
+              echo "✅ Gateway pod ready."
+          else
+              echo "❌ Missing gateway pod"
+          fi
+
+      - name: Show deployment status
+        if: always()
+        run: |
+          echo "=== Deployments ==="
+          kubectl get deployments -n "${NAMESPACE}"
+          echo ""
+          echo "=== Replica Sets ==="
+          kubectl get replicasets -n "${NAMESPACE}"
+          echo ""
+          echo "=== Pods ==="
+          kubectl get pods -n "${NAMESPACE}"
+          echo ""
+          echo "=== Services ==="
+          kubectl get svc -n "${NAMESPACE}"
+          echo ""
+          echo "=== Helm releases ==="
+          helm list -n "${NAMESPACE}" || true
+          echo ""
+          echo "=== Inference Pools ==="
+          kubectl get InferencePool.inference.networking.k8s.io -n "${NAMESPACE}" || true
+          echo ""
+          echo "=== HTTPRoutes ==="
+          kubectl get httproutes -n "${NAMESPACE}" || true
+          echo ""
+          echo "=== Gateway ==="
+          kubectl get Gateway -n "${NAMESPACE}" || true
+          echo ""
+          echo "=== Destination Rule ==="
+          kubectl get destinationrule -n "${NAMESPACE}" || true
+          echo ""
+
+      - name: Verify installation and run inference tests
+        if: steps.wait_pods.outcome == 'success'
+        run: |
+          cd .github/scripts/e2e
+          ./e2e-validate.sh -n "${NAMESPACE}" -v
+
+      - name: Collect and upload Kubernetes pod logs
+        if: always()
+        run: |
+            mkdir -p pod-logs-prefix-cache-xpu
+            cd pod-logs-prefix-cache-xpu
+            echo "Fetching ${NAMESPACE} pods log..."
+            kubectl get pods -n "${NAMESPACE}" -l "llm-d.ai/inferenceServing" -o yaml > ./inference-pods.yaml || true
+            kubectl logs -n "${NAMESPACE}" -l "llm-d.ai/inferenceServing" 2>&1 | grep -v "waiting for vLLM to be ready" > ./inference-pod-logs.log || true
+            kubectl describe pod -n "${NAMESPACE}" -l "llm-d.ai/inferenceServing" > ./inference-describe-pod-logs.log || true
+
+            echo "Collecting logs from all pods..."
+            kubectl get pods -n "${NAMESPACE}" --no-headers -o custom-columns=":metadata.name" \
+            | xargs -I{} sh -c 'kubectl logs --all-containers=true -n "${NAMESPACE}" {} > "{}.log" 2>&1' || true
+
+            echo "Fetching ${NAMESPACE} pods descriptions..."
+            kubectl get pods -n "${NAMESPACE}" --no-headers -o custom-columns=":metadata.name" \
+            | xargs -I{} sh -c 'kubectl describe pod -n "${NAMESPACE}" {} > "{}-describe.log" 2>&1' || true
+
+            echo "Collecting events..."
+            kubectl get events -n "${NAMESPACE}" --sort-by='.lastTimestamp' > events.log 2>&1 || true
+
+            mv ~/prefix-cache-xpu-deployment.log . || true
+            mv ~/install-deps.log . || true
+
+            echo "Log collection completed."
+            ls -la
+
+      - name: Upload pod logs as artifact
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: llmd-pod-logs-prefix-cache-xpu
+          path: pod-logs-prefix-cache-xpu
+
+      - name: Cleanup deployment
+        if: always()
+        run: |
+          cd guides/precise-prefix-cache-aware
+          helmfile destroy -e xpu -n "${NAMESPACE}"
+          kubectl delete ns ${NAMESPACE}

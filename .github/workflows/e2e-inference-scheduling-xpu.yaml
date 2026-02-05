@@ -3,6 +3,12 @@ name: XPU Inference Scheduling Test
 on:
   schedule:
     - cron: '0 10 * * *'  # 3AM PST (10:00 UTC)
+  pull_request:
+    paths:
+      - 'guides/inference-scheduling/**/values_xpu.yaml'
+      - 'guides/inference-scheduling/helmfile.yaml.gotmpl'
+      - 'guides/inference-scheduling/httproute.yaml'
+      - '.github/workflows/e2e-inference-scheduling-xpu.yaml'
   workflow_dispatch:
     inputs:
       pr_or_branch:
@@ -10,18 +16,33 @@ on:
         required: true
         default: 'main'
         type: string
+      custom_image_tag:
+        description: 'Custom XPU image tag to use (optional)'
+        required: false
+        default: ''
+        type: string
+  workflow_call:
+    inputs:
+      pr_or_branch:
+        description: 'Pull-request number or branch name to test'
+        required: true
+        default: 'main'
+        type: string
+      custom_image_tag:
+        description: 'Custom XPU image tag to use (optional)'
+        required: false
+        default: ''
+        type: string
 jobs:
   deploy_and_validate:
-    if: >
-      github.event_name == 'workflow_dispatch'
     runs-on: xpu
     env:
       NAMESPACE: "llm-d-xpu-is"
       GATEWAY_TYPE: "istio"
-      RELEASE_NAME_POSTFIX: "r1"
-      INFRA_RELEASE_NAME: "infra-r1"
-      GAIE_RELEASE_NAME: "gaie-r1"
-      MS_RELEASE_NAME: "ms-r1"
+      RELEASE_NAME_POSTFIX: "xpu"
+      INFRA_RELEASE_NAME: "infra-xpu"
+      GAIE_RELEASE_NAME: "gaie-xpu"
+      MS_RELEASE_NAME: "ms-xpu"
 
     steps:
       - name: Checkout
@@ -81,12 +102,47 @@ jobs:
             --namespace "${NAMESPACE}" \
             --dry-run=client -o yaml | kubectl apply -f -
 
+      - name: Set image tag for deployment
+        id: set_image_tag
+        run: |
+          CUSTOM_TAG="${{ inputs.custom_image_tag }}"
+          if [ -n "${CUSTOM_TAG}" ]; then
+            # Check if it's a full image address (contains '/') or just a tag
+            if [[ "${CUSTOM_TAG}" == *"/"* ]]; then
+              echo "Using custom full image address: ${CUSTOM_TAG}"
+              FULL_IMAGE="${CUSTOM_TAG}"
+            else
+              echo "Using custom image tag: ${CUSTOM_TAG}"
+              FULL_IMAGE="ghcr.io/${{ github.repository }}-xpu-dev:${CUSTOM_TAG}"
+            fi
+            echo "IMAGE_TAG=${CUSTOM_TAG}" >> $GITHUB_ENV
+            echo "HELM_SET_IMAGE=--set decode.containers[0].image=${FULL_IMAGE}" >> $GITHUB_ENV
+          else
+            echo "Using default image tag from values file"
+            echo "HELM_SET_IMAGE=" >> $GITHUB_ENV
+          fi
+
       - name: Deploy guide
         run: |
           cd guides/inference-scheduling
-          RELEASE_NAME_POSTFIX=${RELEASE_NAME_POSTFIX} \
-          helmfile apply -e xpu -n "${NAMESPACE}" \
+          helmfile apply -e xpu -n "${NAMESPACE}" ${HELM_SET_IMAGE} \
+            --skip-schema-validation \
             | tee ~/inference-scheduling-deployment.log
+          echo "---------------------------------------" >> ~/inference-scheduling-xpu-deployment.log
+
+      - name: Deploy HTTPRoute
+        run: |
+          cd guides/inference-scheduling
+          echo "Deploying HTTPRoute with RELEASE_NAME_POSTFIX=${RELEASE_NAME_POSTFIX}..."
+          # Create a temporary HTTPRoute file with the correct names
+          sed -e "s/infra-inference-scheduling-inference-gateway/${INFRA_RELEASE_NAME}-inference-gateway/g" \
+              -e "s/gaie-inference-scheduling/${GAIE_RELEASE_NAME}/g" \
+              -e "s/name: llm-d-inference-scheduling/name: llm-d-xpu-is-${RELEASE_NAME_POSTFIX}/g" \
+              httproute.yaml > httproute-xpu.yaml
+          echo "Generated HTTPRoute configuration:"
+          cat httproute-xpu.yaml
+          kubectl apply -f httproute-xpu.yaml -n "${NAMESPACE}" \
+            | tee -a ~/inference-scheduling-xpu-deployment.log
           echo "---------------------------------------" >> ~/inference-scheduling-xpu-deployment.log
 
       - name: fetch helm manifests - prepare for upload
@@ -99,17 +155,27 @@ jobs:
           done
 
       - name: Wait for all pods to be ready
+        id: wait_pods
         run: |
-          kubectl wait pod \
+          echo "Waiting for all pods to be ready..."
+          if kubectl wait pod \
             --for=condition=Ready \
             --all \
             -n "${NAMESPACE}" \
-            --timeout=10m
-          sleep 180 # TODO: remove this once examples have readiness probes
-          echo "✅ All pods are ready."
-          kubectl get pods -n "${NAMESPACE}"
+            --timeout=10m; then
+            echo "✅ All pods are ready."
+            kubectl get pods -n "${NAMESPACE}"
+          else
+            echo "❌ Pods failed to become ready within timeout"
+            echo "=== Pod Status ==="
+            kubectl get pods -n "${NAMESPACE}"
+            echo "=== Pod Descriptions ==="
+            kubectl describe pods -n "${NAMESPACE}"
+            exit 1
+          fi
 
       - name: Check gateway pod is up
+        if: always()
         run: |
           GATEWAY_POD_READY=$(kubectl get pods -n "${NAMESPACE}" | grep "inference-gateway" | awk '{print $2}')
           if [ "${GATEWAY_POD_READY}" = "1/1" ]; then
@@ -119,6 +185,7 @@ jobs:
           fi
 
       - name: Show deployment status
+        if: always()
         run: |
           echo "=== Deployments ==="
           kubectl get deployments -n "${NAMESPACE}"
@@ -149,6 +216,7 @@ jobs:
           echo ""
 
       - name: Verify installation and run inference tests
+        if: steps.wait_pods.outcome == 'success'
         run: |
           cd .github/scripts/e2e
           ./e2e-validate.sh -n "${NAMESPACE}" -v
@@ -159,17 +227,26 @@ jobs:
             mkdir -p pod-logs-inference-scheduling-xpu
             cd pod-logs-inference-scheduling-xpu
             echo "Fetching ${NAMESPACE} pods log..."
-            kubectl get pods -n "${NAMESPACE}" -l "llm-d.ai/role=decode" -o yaml > ./decode-pods.yaml
-            kubectl logs -n "${NAMESPACE}" -l "llm-d.ai/role=decode" > ./decode-pod-logs.log
-            kubectl describe pod -n "${NAMESPACE}" -l "llm-d.ai/role=decode" > ./decode-describe-pod-logs.log
+            kubectl get pods -n "${NAMESPACE}" -l "llm-d.ai/role=decode" -o yaml > ./decode-pods.yaml || true
+            kubectl logs -n "${NAMESPACE}" -l "llm-d.ai/role=decode" 2>&1 > ./decode-pod-logs.log || true
+            kubectl describe pod -n "${NAMESPACE}" -l "llm-d.ai/role=decode" > ./decode-describe-pod-logs.log || true
 
+            echo "Collecting logs from all pods..."
             kubectl get pods -n "${NAMESPACE}" --no-headers -o custom-columns=":metadata.name" \
-            | xargs -I{} sh -c 'kubectl logs --all-containers=true -n "${NAMESPACE}" {} > "{}.log" 2>&1'
+            | xargs -I{} sh -c 'kubectl logs --all-containers=true -n "${NAMESPACE}" {} > "{}.log" 2>&1' || true
+
             echo "Fetching ${NAMESPACE} pods descriptions..."
             kubectl get pods -n "${NAMESPACE}" --no-headers -o custom-columns=":metadata.name" \
-            | xargs -I{} sh -c 'kubectl describe pod -n "${NAMESPACE}" {} > "{}-describe.log" 2>&1'
+            | xargs -I{} sh -c 'kubectl describe pod -n "${NAMESPACE}" {} > "{}-describe.log" 2>&1' || true
+
+            echo "Collecting events..."
+            kubectl get events -n "${NAMESPACE}" --sort-by='.lastTimestamp' > events.log 2>&1 || true
+
             mv ~/inference-scheduling-xpu-deployment.log . || true
             mv ~/install-deps.log . || true
+
+            echo "Log collection completed."
+            ls -la
 
       - name: Upload pod logs as artifact
         uses: actions/upload-artifact@v4

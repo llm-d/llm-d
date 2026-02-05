@@ -71,17 +71,50 @@ jobs:
             type=raw,value=${{ github.ref_name }},enable=${{ github.event_name == 'push' && startsWith(github.ref, 'refs/tags/') }}
             type=raw,value=latest,enable=true
 
-      - name: Build & Push
+      - name: Build the builder image layer
         id: build
         uses: docker/build-push-action@v5
         with:
           context: .
           file: ./docker/Dockerfile.cuda
           platforms: ${{ matrix.platform }}
-          push: true
-          provenance: false
+          target: builder
+          push: false
           build-args: |
             TARGETOS=${{ matrix.os }}
+            TARGETPLATFORM=${{ matrix.platform }}
+            BUILD_BASE_IMAGE_SUFFIX=${{ matrix.os == 'ubuntu' && 'ubuntu20.04' || matrix.base_image_suffix }}
+            FINAL_BASE_IMAGE_SUFFIX=${{ matrix.base_image_suffix }}
+            CACHE_BUSTER=${{ github.ref_name }}-${{ github.run_id }}
+          cache-from: >-
+            type=gha,scope=cuda-${{ matrix.os }}-builder-${{
+            matrix.platform == 'linux/arm64' && 'arm64' || 'amd64' }}
+          cache-to: >-
+            type=gha,mode=max,scope=cuda-${{ matrix.os }}-builder-${{
+            matrix.platform == 'linux/arm64' && 'arm64' || 'amd64' }},oci-mediatypes=true,compression=zstd
+          labels: ${{ steps.meta.outputs.labels }}
+          github-token: ${{ secrets.GHCR_TOKEN }}
+          secrets: |
+            aws_access_key_id=${{ secrets.AWS_ACCESS_KEY_ID_S3_BUCKET_ONLY }}
+            aws_secret_access_key=${{ secrets.AWS_SECRET_ACCESS_KEY_S3_BUCKET_ONLY }}
+            subman_org=${{ secrets.SUBMAN_ORG }}
+            subman_activation_key=${{ secrets.SUBMAN_ACTIVATION_KEY }}
+        env:
+          DOCKER_BUILDKIT: "1"
+          BUILDKIT_PROGRESS: "plain"
+
+      - name: Build the final image layer
+        id: build-image-final-layer
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./docker/Dockerfile.cuda
+          platforms: ${{ matrix.platform }}
+          target: runtime
+          push: true
+          build-args: |
+            TARGETOS=${{ matrix.os }}
+            TARGETPLATFORM=${{ matrix.platform }}
             BUILD_BASE_IMAGE_SUFFIX=${{ matrix.os == 'ubuntu' && 'ubuntu20.04' || matrix.base_image_suffix }}
             FINAL_BASE_IMAGE_SUFFIX=${{ matrix.base_image_suffix }}
             CACHE_BUSTER=${{ github.ref_name }}-${{ github.run_id }}
@@ -96,17 +129,27 @@ jobs:
             type=image,name=${{ env.REGISTRY }}/${{ github.repository }}-cuda${{ matrix.image_suffix }},
             push-by-digest=true,name-canonical=true,push=true
           github-token: ${{ secrets.GHCR_TOKEN }}
-          secrets: |
-            aws_access_key_id=${{ secrets.AWS_ACCESS_KEY_ID_S3_BUCKET_ONLY }}
-            aws_secret_access_key=${{ secrets.AWS_SECRET_ACCESS_KEY_S3_BUCKET_ONLY }}
         env:
           DOCKER_BUILDKIT: "1"
           BUILDKIT_PROGRESS: "plain"
 
+      - name: Verify remote digest exists
+        if: ${{ steps.build-image-final-layer.outputs.digest != '' }}
+        run: |
+          set -x
+          digest="${{ steps.build-image-final-layer.outputs.digest }}"
+          ref="${{ env.REGISTRY }}/${{ github.repository }}-cuda${{ matrix.image_suffix }}@${digest}"
+          echo "Checking remote ref: $ref"
+          docker buildx imagetools inspect "$ref" >/dev/null
+
       - name: Export digest
         run: |
           mkdir -p /tmp/digests
-          digest="${{ steps.build.outputs.digest }}"
+          digest="${{ steps.build-image-final-layer.outputs.digest }}"
+          if [ -z "$digest" ]; then
+            echo "ERROR: missing digest from build-image-final-layer (did the push succeed?)"
+            exit 1
+          fi
           touch "/tmp/digests/${digest#sha256:}"
 
       - name: Upload digest
@@ -117,41 +160,118 @@ jobs:
           if-no-files-found: error
           retention-days: 1
 
-  release-cuda-manifest:
+  release-cuda-success-check:
     needs: release-cuda-llm-d
+    if: ${{ always() }}
     runs-on: ubuntu-latest
+    outputs:
+      any_succeeded: ${{ steps.check.outputs.any_succeeded }}
+      rhel_ok: ${{ steps.check.outputs.rhel_ok }}
+      ubuntu_ok: ${{ steps.check.outputs.ubuntu_ok }}
+    steps:
+      - name: Download all digests (best-effort)
+        uses: actions/download-artifact@v4
+        with:
+          path: /tmp/digests-raw
+          pattern: digests-cuda-*
+        continue-on-error: true
+
+      - name: Reorganize digests by OS
+        run: |
+          mkdir -p /tmp/digests/rhel /tmp/digests/ubuntu
+          shopt -s nullglob
+          for artifact_dir in /tmp/digests-raw/digests-cuda-*; do
+            if [[ "$artifact_dir" == *-rhel-* ]]; then
+              cp -v "$artifact_dir"/* /tmp/digests/rhel/ 2>/dev/null || true
+            elif [[ "$artifact_dir" == *-ubuntu-* ]]; then
+              cp -v "$artifact_dir"/* /tmp/digests/ubuntu/ 2>/dev/null || true
+            fi
+          done
+          echo "=== RHEL digests ==="
+          ls -la /tmp/digests/rhel/ || echo "No RHEL digests"
+          echo "=== Ubuntu digests ==="
+          ls -la /tmp/digests/ubuntu/ || echo "No Ubuntu digests"
+
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - id: check
+        shell: bash
+        run: |
+          shopt -s nullglob
+          rhel=(/tmp/digests/rhel/*)
+          ubuntu=(/tmp/digests/ubuntu/*)
+
+          any=false; [ ${#rhel[@]} -gt 0 ] || [ ${#ubuntu[@]} -gt 0 ] && any=true
+          rhel_ok=false;   [ ${#rhel[@]} -gt 0 ] && rhel_ok=true
+          ubuntu_ok=false; [ ${#ubuntu[@]} -gt 0 ] && ubuntu_ok=true
+
+          echo "Downloaded ${#rhel[@]} RHEL digest(s), ${#ubuntu[@]} Ubuntu digest(s)"
+          echo "any_succeeded=${any}"   >> "$GITHUB_OUTPUT"
+          echo "rhel_ok=${rhel_ok}"     >> "$GITHUB_OUTPUT"
+          echo "ubuntu_ok=${ubuntu_ok}" >> "$GITHUB_OUTPUT"
+
+  release-cuda-manifest:
+    needs: release-cuda-success-check
+    if: ${{ needs.release-cuda-success-check.outputs.any_succeeded == 'true' }}
+    runs-on: ubuntu-latest
+    continue-on-error: true
     strategy:
+      fail-fast: false
       matrix:
         os: [rhel, ubuntu]
         include:
           # RHEL is the default image (no suffix in image name)
           - os: rhel
             image_suffix: ""
+            os_ok: rhel_ok
           # Ubuntu images are tagged with -ubuntu suffix
           - os: ubuntu
             image_suffix: "-ubuntu"
+            os_ok: ubuntu_ok
     steps:
+      - name: Check if OS build succeeded
+        id: should-run
+        run: |
+          os_succeeded="${{ needs.release-cuda-success-check.outputs[matrix.os_ok] }}"
+          echo "os_succeeded=${os_succeeded}" >> $GITHUB_OUTPUT
+          if [ "${os_succeeded}" != "true" ]; then
+            echo "Skipping manifest creation for ${{ matrix.os }} - no successful builds"
+          fi
+
       - name: Download digests
+        if: ${{ steps.should-run.outputs.os_succeeded == 'true' }}
         uses: actions/download-artifact@v4
         with:
-          path: /tmp/digests
+          path: /tmp/digests-raw
           pattern: digests-cuda-${{ matrix.os }}-*
-          merge-multiple: true
+
+      - name: Reorganize digests for manifest
+        if: ${{ steps.should-run.outputs.os_succeeded == 'true' }}
+        run: |
+          mkdir -p /tmp/digests/${{ matrix.os }}
+          shopt -s nullglob
+          for artifact_dir in /tmp/digests-raw/digests-cuda-${{ matrix.os }}-*; do
+            cp -v "$artifact_dir"/* /tmp/digests/${{ matrix.os }}/ 2>/dev/null || true
+          done
 
       - name: Debug digest files
+        if: ${{ steps.should-run.outputs.os_succeeded == 'true' }}
         run: |
           echo "=== Contents of /tmp/digests ==="
           ls -la /tmp/digests
-          echo "=== Files matched by glob * ==="
-          cd /tmp/digests && printf '%s\n' *
+          echo "=== Files matched by glob in ${{ matrix.os }}/ ==="
+          cd /tmp/digests/${{ matrix.os }} && printf '%s\n' *
           echo "=== Test manifest command construction ==="
-          cd /tmp/digests && \
+          cd /tmp/digests/${{ matrix.os }} && \
             printf '${{ env.REGISTRY }}/${{ github.repository }}-cuda${{ matrix.image_suffix }}@sha256:%s ' *
 
       - name: Set up Docker Buildx
+        if: ${{ steps.should-run.outputs.os_succeeded == 'true' }}
         uses: docker/setup-buildx-action@v3
 
       - name: Log in to Container Registry
+        if: ${{ steps.should-run.outputs.os_succeeded == 'true' }}
         uses: docker/login-action@v3
         with:
           registry: ${{ env.REGISTRY }}
@@ -159,20 +279,23 @@ jobs:
           password: ${{ secrets.GHCR_TOKEN }}
 
       - name: Extract metadata
+        if: ${{ steps.should-run.outputs.os_succeeded == 'true' }}
         id: meta
         uses: docker/metadata-action@v5
         with:
           images: ${{ env.REGISTRY }}/${{ github.repository }}-cuda${{ matrix.image_suffix }}
           tags: |
-            type=raw,value=${{ github.event.release.tag_name }},enable=${{ github.event_name == 'release' && github.event.action == 'published' }}
-            type=raw,value=${{ github.ref_name }},enable=${{ github.event_name == 'push' && startsWith(github.ref, 'refs/tags/') }}
-            type=raw,value=latest,enable=true
+            type=ref,event=branch
+            type=ref,event=pr
+            type=sha
+            type=raw,value=latest,enable={{is_default_branch}}
 
       - name: Create and push manifest
+        if: ${{ steps.should-run.outputs.os_succeeded == 'true' }}
         id: manifest
-        working-directory: /tmp/digests
+        working-directory: /tmp/digests/${{ matrix.os }}
         run: |
-          SHORT_SHA="${{ github.event.pull_request.head.sha || github.sha }}"
+          set -x
           # build the list of source images (by digest)
           sources=""
           for digest in *; do
@@ -181,14 +304,13 @@ jobs:
           done
 
           # create manifest and tag it
-          docker buildx imagetools create \
-            -t ${{ env.REGISTRY }}/${{ github.repository }}-cuda${{ matrix.image_suffix }}:${{ github.event.release.tag_name || github.ref_name }} \
-            -t ${{ env.REGISTRY }}/${{ github.repository }}-cuda${{ matrix.image_suffix }}:sha-${SHORT_SHA} \
-            $sources
+          tags="-t ${{ env.REGISTRY }}/${{ github.repository }}-cuda${{ matrix.image_suffix }}:${{ env.TAG }}"
+          tags="${tags} -t ${{ env.REGISTRY }}/${{ github.repository }}-cuda${{ matrix.image_suffix }}:latest"
+          docker buildx imagetools create $tags $sources
 
           # extract final manifest digest
           MANIFEST_DIGEST=$(docker buildx imagetools inspect \
-            ${{ env.REGISTRY }}/${{ github.repository }}-cuda${{ matrix.image_suffix }}:sha-${SHORT_SHA} \
+            ${{ env.REGISTRY }}/${{ github.repository }}-cuda${{ matrix.image_suffix }}:${{ env.TAG }} \
             | awk '/^Digest:/ {print $2}')
           echo "digest=${MANIFEST_DIGEST}" >> $GITHUB_OUTPUT
 

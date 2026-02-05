@@ -63,7 +63,9 @@ For Windows users, **Git Bash** is also highly recommended.
 ## Setting up the GPG Key
 
 1. Install GnuPG (the GPG command line tool).
-    - Binary releases for your specific OS can be found [here](https://www.gnupg.org/download/) after scrolling down to the Binary Releases section (i.e. Gpg4win on Windows, Mac GPG for MacOS, etc).
+    - Binary releases for your specific OS can be found
+      [on the GnuPG download page](https://www.gnupg.org/download/) after scrolling down to the Binary Releases
+      section (i.e. Gpg4win on Windows, Mac GPG for MacOS, etc).
     - After downloading the installer, follow the prompts to set up GnuPG.
 
 2. Open Git Bash (or your CLI of choice) and use the following command to generate your GPG key pair:
@@ -145,7 +147,9 @@ For Windows users, **Git Bash** is also highly recommended.
     ssh -T git@github.com
     ```
 
-    - If given a warning saying something like `The authenticity of the host '[host IP]' can't be established` along with a key fingerprint and a prompt to continue, verify if the provided key fingerprint matches any of those listed [here](https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/githubs-ssh-key-fingerprints)
+    - If given a warning saying something like `The authenticity of the host '[host IP]' can't be established` along
+      with a key fingerprint and a prompt to continue, verify if the provided key fingerprint matches any of those
+      listed [in GitHub's SSH key fingerprints documentation](https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/githubs-ssh-key-fingerprints)
     - Once you've verified the match, type `yes`
     - If the resulting message says something along the lines of `Hi [User]! You've successfully authenticated, but GitHub does not provide shell access.`, then it means your SSH key is up and ready.
     - If you get an error saying something like `Error: Permission denied (publickey)` repeat the procedure in step 6 _with the same key_ only select **Authentication Key**. Then try the test command again.

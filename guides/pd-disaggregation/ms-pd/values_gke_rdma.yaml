@@ -1,0 +1,168 @@
+decode:
+  replicas: 1
+  podAnnotations:
+    networking.gke.io/default-interface: eth0
+    networking.gke.io/interfaces: |
+      [
+        {"interfaceName":"eth0","network":"default"},
+        {"interfaceName":"eth2","network":"rdma-0"},
+        {"interfaceName":"eth3","network":"rdma-1"},
+        {"interfaceName":"eth4","network":"rdma-2"},
+        {"interfaceName":"eth5","network":"rdma-3"},
+        {"interfaceName":"eth6","network":"rdma-4"},
+        {"interfaceName":"eth7","network":"rdma-5"},
+        {"interfaceName":"eth8","network":"rdma-6"},
+        {"interfaceName":"eth9","network":"rdma-7"}
+      ]
+  parallelism:
+    tensor: 8
+  containers:
+  - name: "vllm"
+    image: ghcr.io/llm-d/llm-d-cuda:v0.5.0
+    modelCommand: custom # Use custom command
+    command:
+      - /bin/bash
+      - -c
+    args:
+      - |
+        source /usr/local/gib/scripts/set_nccl_env.sh
+        vllm serve openai/gpt-oss-120b \
+          --port 8200 \
+          --served-model-name "openai/gpt-oss-120b" \
+          --tensor-parallel-size 8 \
+          --block-size 128 \
+          --kv-transfer-config '{"kv_connector":"NixlConnector", "kv_role":"kv_both"}' \
+          --disable-log-requests \
+          --disable-uvicorn-access-log \
+          --max-model-len 32000
+    env:
+      - name: VLLM_NIXL_SIDE_CHANNEL_HOST
+        valueFrom:
+          fieldRef:
+            fieldPath: status.podIP
+    ports:
+      - containerPort: 8200
+        name: vllm
+        protocol: TCP
+    resources:
+      limits:
+        cpu: "128"
+        memory: 1Ti
+        nvidia.com/gpu: "8"
+      requests:
+        cpu: "128"
+        memory: 1Ti
+        nvidia.com/gpu: "8"
+    mountModelVolume: true
+    volumeMounts:
+      - mountPath: /usr/local/nvidia
+        name: library-dir-host
+      - mountPath: /usr/local/gib
+        name: gib
+      - name: metrics-volume
+        mountPath: /.config
+      - name: shm
+        mountPath: /dev/shm
+      - name: torch-compile-cache
+        mountPath: /.cache
+  volumes:
+    - name: shm
+      emptyDir:
+        medium: Memory
+        sizeLimit: 250Gi
+    - hostPath:
+        path: /home/kubernetes/bin/nvidia
+        type: ""
+      name: library-dir-host
+    - hostPath:
+        path: /home/kubernetes/bin/gib
+        type: ""
+      name: gib
+    - name: metrics-volume
+      emptyDir: {}
+    - name: torch-compile-cache
+      emptyDir: {}
+
+prefill:
+  replicas: 1
+  podAnnotations:
+    networking.gke.io/default-interface: eth0
+    networking.gke.io/interfaces: |
+      [
+        {"interfaceName":"eth0","network":"default"},
+        {"interfaceName":"eth2","network":"rdma-0"},
+        {"interfaceName":"eth3","network":"rdma-1"},
+        {"interfaceName":"eth4","network":"rdma-2"},
+        {"interfaceName":"eth5","network":"rdma-3"},
+        {"interfaceName":"eth6","network":"rdma-4"},
+        {"interfaceName":"eth7","network":"rdma-5"},
+        {"interfaceName":"eth8","network":"rdma-6"},
+        {"interfaceName":"eth9","network":"rdma-7"}
+      ]
+  parallelism:
+    tensor: 8
+  containers:
+  - name: "vllm"
+    image: ghcr.io/llm-d/llm-d-cuda:v0.5.0
+    modelCommand: custom # Use custom command
+    command:
+      - /bin/bash
+      - -c
+    args:
+      - |
+        source /usr/local/gib/scripts/set_nccl_env.sh
+        vllm serve openai/gpt-oss-120b \
+          --port 8000 \
+          --served-model-name "openai/gpt-oss-120b" \
+          --tensor-parallel-size 8 \
+          --block-size 128 \
+          --kv-transfer-config '{"kv_connector":"NixlConnector", "kv_role":"kv_both"}' \
+          --disable-log-requests \
+          --disable-uvicorn-access-log \
+          --max-model-len 32000
+    env:
+      - name: VLLM_NIXL_SIDE_CHANNEL_HOST
+        valueFrom:
+          fieldRef:
+            fieldPath: status.podIP
+    ports:
+      - containerPort: 8000
+        name: metrics
+        protocol: TCP
+    resources:
+      limits:
+        cpu: "128"
+        memory: 1Ti
+        nvidia.com/gpu: "8"
+      requests:
+        cpu: "128"
+        memory: 1Ti
+        nvidia.com/gpu: "8"
+    volumeMounts:
+      - mountPath: /usr/local/nvidia
+        name: library-dir-host
+      - mountPath: /usr/local/gib
+        name: gib
+      - name: metrics-volume
+        mountPath: /.config
+      - name: shm
+        mountPath: /dev/shm
+      - name: torch-compile-cache
+        mountPath: /.cache
+  volumes:
+    - name: shm
+      emptyDir:
+        medium: Memory
+        sizeLimit: 250Gi
+    - hostPath:
+        path: /home/kubernetes/bin/nvidia
+        type: ""
+      name: library-dir-host
+    - hostPath:
+        path: /home/kubernetes/bin/gib
+        type: ""
+      name: gib
+    - name: metrics-volume
+      emptyDir: {}
+    - name: torch-compile-cache
+      emptyDir: {}

@@ -4,17 +4,17 @@ inferenceExtension:
     # in vLLM 10.0+, the metric is renamed while upstream GAIE is still using the old name as default.
     # See https://github.com/kubernetes-sigs/gateway-api-inference-extension/pull/1905.
     kv-cache-usage-percentage-metric: "vllm:kv_cache_usage_perc"
-    v: 4 # log verbosity
+    v: 4  # log verbosity
   image:
     # both downstream infernece-scheduler and upstream epp images can support precise KV Cache awareness based on the configurations here
     ###################
     name: llm-d-inference-scheduler
     hub: ghcr.io/llm-d
-    tag: v0.4.0
+    tag: v0.5.0
     ###################
     # name: epp
     # hub: registry.k8s.io/gateway-api-inference-extension
-    # tag: v1.2.0
+    # tag: v1.3.0
     ###################
     pullPolicy: Always
   extProcPort: 9002
@@ -45,13 +45,18 @@ inferenceExtension:
         - type: single-profile-handler
         - type: precise-prefix-cache-scorer
           parameters:
+            tokenProcessorConfig:
+              blockSize: 64
             indexerConfig:
-              tokenProcessorConfig:
-                blockSize: 64   
-                hashSeed: "42"
               tokenizersPoolConfig:
+                modelName: "Qwen/Qwen3-32B"
                 hf:
                   tokenizersCacheDir: "/tmp/tokenizers"
+            kvEventsConfig:
+              topicFilter: "kv@"
+              concurrency: 4
+              discoverPods: false
+              zmqEndpoint: "tcp://*:5557"
         - type: kv-cache-utilization-scorer
         - type: queue-scorer
         - type: max-score-picker
@@ -83,4 +88,5 @@ inferencePool:
   modelServerType: vllm
   modelServers:
     matchLabels:
-      llm-d.ai/inferenceServing: "true"
+      llm-d.ai/inference-serving: "true"
+      llm-d.ai/guide: "precise-prefix-cache-aware"

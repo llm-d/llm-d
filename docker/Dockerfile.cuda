@@ -28,13 +28,13 @@ ARG USE_SCCACHE=true
 
 # Note: Components are listed in build order.
 
-ARG EFA_INSTALLER_VERSION="1.46.0"
+# ARG EFA_INSTALLER_VERSION="1.46.0" # temporarily remove EFA
 
 ARG GDRCOPY_REPO="https://github.com/NVIDIA/gdrcopy.git"
 ARG GDRCOPY_VERSION="v2.5.1"
 
 ARG UCX_REPO="https://github.com/openucx/ucx.git"
-ARG UCX_VERSION="v1.19.0"
+ARG UCX_VERSION="1.20.0"
 
 ARG NVSHMEM_USE_GIT="true"
 ARG NVSHMEM_REPO="https://github.com/NVIDIA/nvshmem.git"
@@ -42,16 +42,19 @@ ARG NVSHMEM_VERSION="v3.4.5-0"
 
 ARG BUILD_NIXL_FROM_SOURCE="true"
 ARG NIXL_REPO="https://github.com/ai-dynamo/nixl.git"
-ARG NIXL_VERSION="0.8.0"
+ARG NIXL_VERSION="0.9.0"
 
 ARG INFINISTORE_REPO="https://github.com/bytedance/InfiniStore.git"
 ARG INFINISTORE_VERSION="0.2.33"
 ARG LMCACHE_REPO="https://github.com/LMCache/LMCache.git"
-ARG LMCACHE_VERSION="v0.3.8"
+ARG LMCACHE_VERSION="v0.3.13"
 
 # Kernels
 ARG DEEPEP_REPO="https://github.com/smarterclayton/DeepEP"
-ARG DEEPEP_VERSION="nic_pe_alignment"
+# ARG DEEPEP_VERSION="nic_pe_alignment"
+# Use clayton's pre-rebase commit head
+ARG DEEPEP_VERSION="c66b1463601af5d127027fb459517fb97adab30d" 
+
 ARG DEEPGEMM_REPO="https://github.com/deepseek-ai/DeepGEMM"
 ARG DEEPGEMM_VERSION="v2.1.0"
 ARG PPLX_KERNELS_REPO="https://github.com/perplexityai/pplx-kernels"
@@ -61,8 +64,8 @@ ARG FLASHINFER_VERSION="v0.5.3"
 
 # vLLM build settings
 ARG VLLM_REPO="https://github.com/vllm-project/vllm.git"
-ARG VLLM_COMMIT_SHA="72506c98349d6bcd32b4e33eec7b5513453c1502"
-ARG VLLM_PRECOMPILED_WHEEL_COMMIT="72506c98349d6bcd32b4e33eec7b5513453c1502"
+ARG VLLM_COMMIT_SHA="d7de043d55d1dd629554467e23874097e1c48993"
+ARG VLLM_PRECOMPILED_WHEEL_COMMIT="d7de043d55d1dd629554467e23874097e1c48993"
 ARG VLLM_PREBUILT=0
 ARG VLLM_USE_PRECOMPILED=1
 
@@ -138,28 +141,46 @@ RUN --mount=type=secret,id=aws_access_key_id \
 RUN export UV_INSTALL_DIR=/usr/local/bin && \
     curl -LsSf https://astral.sh/uv/install.sh | sh && \
     uv venv /opt/vllm --python ${PYTHON_VERSION} && \
-    uv pip install --no-cache -U wheel meson-python ninja pybind11 build
+    uv pip install --no-cache -U wheel meson-python ninja pybind11 build setuptools setuptools-scm
 
 ENV NVSHMEM_DIR="/opt/nvshmem-${NVSHMEM_VERSION}" \
-    EFA_PREFIX="/opt/amazon/efa" \
+    # EFA_PREFIX="/opt/amazon/efa" \ # temporarily remove EFA
     UCX_PREFIX="/opt/ucx" \
     NIXL_PREFIX="/opt/nixl"
 
 ENV PATH="${NVSHMEM_DIR}/bin:${VIRTUAL_ENV}/bin:${PATH}" \
-    LIBRARY_PATH="${EFA_PREFIX}/lib:${EFA_PREFIX}/lib64:${UCX_PREFIX}/lib:${UCX_PREFIX}/lib64:${NVSHMEM_DIR}/lib:${NVSHMEM_DIR}/lib64:${CUDA_HOME}/lib64:/usr/local/lib:/usr/local/lib64" \
-    CPATH="${NVSHMEM_DIR}/include:/usr/include:/usr/local/include:${CUDA_HOME}/include:${CPATH}" \
-    PKG_CONFIG_PATH="${UCX_PREFIX}/lib/pkgconfig:${UCX_PREFIX}/lib64/pkgconfig:${EFA_PREFIX}/lib/pkgconfig:${EFA_PREFIX}/lib64/pkgconfig:/usr/local/lib/pkgconfig:/usr/local/lib/x86_64-linux-gnu/pkgconfig:/usr/local/lib/aarch64-linux-gnu/pkgconfig:/usr/lib64/pkgconfig:/usr/lib/pkgconfig:/usr/lib/x86_64-linux-gnu/pkgconfig:/usr/lib/aarch64-linux-gnu/pkgconfig:/usr/share/pkgconfig:${PKG_CONFIG_PATH}"
+    # LIBRARY_PATH="${EFA_PREFIX}/lib:${EFA_PREFIX}/lib64:\
+    LIBRARY_PATH="\
+${UCX_PREFIX}/lib:${UCX_PREFIX}/lib64:\
+${NVSHMEM_DIR}/lib:${NVSHMEM_DIR}/lib64:\
+${CUDA_HOME}/lib64/stubs:${CUDA_HOME}/lib64:\
+/usr/local/lib:/usr/local/lib64:\
+${LIBRARY_PATH}" \
+    CPATH="${NVSHMEM_DIR}/include:\
+${CUDA_HOME}/include:\
+/usr/local/include:\
+/usr/include:\
+${CPATH}" \
+    # PKG_CONFIG_PATH="${EFA_PREFIX}/lib/pkgconfig:${EFA_PREFIX}/lib64/pkgconfig:\
+    PKG_CONFIG_PATH="\
+${UCX_PREFIX}/lib/pkgconfig:${UCX_PREFIX}/lib64/pkgconfig:\
+/usr/local/lib/pkgconfig:\
+/usr/local/lib/x86_64-linux-gnu/pkgconfig:/usr/local/lib/aarch64-linux-gnu/pkgconfig:\
+/usr/lib64/pkgconfig:/usr/lib/pkgconfig:\
+/usr/lib/x86_64-linux-gnu/pkgconfig:/usr/lib/aarch64-linux-gnu/pkgconfig:\
+/usr/share/pkgconfig:\
+${PKG_CONFIG_PATH}"
 
-# Install EFA
-ARG EFA_INSTALLER_VERSION
-COPY docker/scripts/cuda/common/package-utils.sh /tmp/package-utils.sh
-COPY docker/scripts/cuda/builder/install-efa.sh /tmp/install-efa.sh
-RUN --mount=type=secret,id=subman_org \
-    --mount=type=secret,id=subman_activation_key \
-    TARGETOS=${TARGETOS} \
-    EFA_INSTALLER_VERSION=${EFA_INSTALLER_VERSION} \
-    /tmp/install-efa.sh && \
-    rm -f /tmp/install-efa.sh /tmp/package-utils.sh
+# Install EFA - temporarily disabled
+# ARG EFA_INSTALLER_VERSION
+# COPY docker/scripts/cuda/common/package-utils.sh /tmp/package-utils.sh
+# COPY docker/scripts/cuda/builder/install-efa.sh /tmp/install-efa.sh
+# RUN --mount=type=secret,id=subman_org \
+#     --mount=type=secret,id=subman_activation_key \
+#     TARGETOS=${TARGETOS} \
+#     EFA_INSTALLER_VERSION=${EFA_INSTALLER_VERSION} \
+#     /tmp/install-efa.sh && \
+#     rm -f /tmp/install-efa.sh /tmp/package-utils.sh
 
 # Build and install gdrcopy
 ARG GDRCOPY_REPO
@@ -265,6 +286,11 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 # ============================================================================
 FROM nvcr.io/nvidia/cuda:${CUDA_MAJOR}.${CUDA_MINOR}.${CUDA_PATCH}-devel-${FINAL_BASE_IMAGE_SUFFIX} AS runtime
 
+ARG CACHE_BUSTER
+RUN if [ -n "${CACHE_BUSTER}" ]; then \
+        echo "$CACHE_BUSTER" > /tmp/builder-buster; \
+    fi;
+
 ARG CUDA_MAJOR
 ARG CUDA_MINOR
 ARG CUDA_PATCH
@@ -286,11 +312,12 @@ ENV LANG="C.UTF-8" \
     UV_CONSTRAINT="/tmp/constraints.txt" \
     VIRTUAL_ENV="/opt/vllm" \
     NVSHMEM_DIR="/opt/nvshmem-${NVSHMEM_VERSION}" \
-    EFA_PREFIX="/opt/amazon/efa" \
+    # EFA_PREFIX="/opt/amazon/efa" \
     UCX_PREFIX="/opt/ucx" \
     CUDA_HOME="/usr/local/cuda"
 
-ENV LD_LIBRARY_PATH="${EFA_PREFIX}/lib:${EFA_PREFIX}/lib64:\
+# ENV LD_LIBRARY_PATH="${EFA_PREFIX}/lib:${EFA_PREFIX}/lib64:\
+ENV LD_LIBRARY_PATH="\
 ${UCX_PREFIX}/lib:${UCX_PREFIX}/lib64:\
 /opt/vllm/lib64/python${PYTHON_VERSION}/site-packages/torch/lib:\
 /usr/local/nvidia/lib:/usr/local/nvidia/lib64:${CUDA_HOME}/lib64:${CUDA_HOME}/compat:\
@@ -316,16 +343,16 @@ RUN TARGETOS=${TARGETOS} /tmp/install-runtime-packages.sh && \
     rm -f /tmp/install-runtime-packages.sh /tmp/package-utils.sh && \
     rm -rf /tmp/packages
 
-# Copy in efa
-COPY --from=builder /opt/amazon/efa /opt/amazon/efa/
+# Copy in efa - temporarily removed
+# COPY --from=builder /opt/amazon/efa /opt/amazon/efa/
 
-# Copy efa libs from builder (install-efa.sh)
+# Copy efa libs from builder (install-efa.sh) - temporarily remove
 # Ubuntu does not build EFA
-COPY --from=builder /tmp/efa_libs /tmp/efa_libs
-RUN if [ "${TARGETOS:-rhel}" = "rhel" ] && [ -d /tmp/efa_libs ]; then \
-        cp -a /tmp/efa_libs/* /usr/lib64/ || true; \
-    fi && \
-    rm -rf /tmp/efa_libs
+# COPY --from=builder /tmp/efa_libs /tmp/efa_libs
+# RUN if [ "${TARGETOS:-rhel}" = "rhel" ] && [ -d /tmp/efa_libs ]; then \
+#         cp -a /tmp/efa_libs/* /usr/lib64/ || true; \
+#     fi && \
+#     rm -rf /tmp/efa_libs
 
 # Copy gdrcopy libraries from builder
 # Install to /usr/local/lib (always present) and multiarch lib dir
@@ -417,6 +444,9 @@ ARG VLLM_PREBUILT
 # Dictates if we should pull precompiled binaries when installing vllm editably. These commits must be on main in vLLM.
 ARG VLLM_USE_PRECOMPILED
 
+# Optional: suppress verbose Python output during pip install
+ARG SUPPRESS_PYTHON_OUTPUT
+
 # A script that starts if users exec into the image with bash. It warns that vLLM is built with precompiled by default,
 # and so if they change the vLLM version or use their fork, it may no longer work due to the precompiled shared libraries
 # pulled from teh vLLM wheel index.
@@ -430,7 +460,6 @@ COPY scripts/warn-vllm-precompiled.sh /opt/
     # 2) install vllm from a wheel on the vllm wheels index - prod option, no flexbility
 COPY docker/scripts/cuda/runtime/install-vllm.sh /tmp/install-vllm.sh
 RUN --mount=type=cache,target=/var/cache/git \
-    chmod +x /tmp/install-vllm.sh && \
     /tmp/install-vllm.sh && \
     rm /tmp/install-vllm.sh
 

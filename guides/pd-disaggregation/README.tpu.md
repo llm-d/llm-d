@@ -15,7 +15,7 @@ This guide uses Cloud TPU v6e (Trillium) accelerators on Google Cloud Platform (
 - Have the [proper client tools installed on your local system](../prereq/client-setup/README.md) to use this guide.
 - Create a namespace for installation.
 
-  ```
+  ```bash
   export NAMESPACE=llm-d-pd # or any other namespace (shorter names recommended)
   kubectl create namespace ${NAMESPACE}
   ```
@@ -56,10 +56,10 @@ kubectl apply -f httproute.gke.yaml -n ${NAMESPACE}
 
 ```bash
 helm list -n ${NAMESPACE}
-NAME    	NAMESPACE 	REVISION	UPDATED                                	STATUS  	CHART                     	APP VERSION
-gaie-pd 	llm-d-pd	1       	2025-11-07 00:31:54.106881562 +0000 UTC	deployed	inferencepool-v1.2.0      	v1.2.0
-infra-pd	llm-d-pd	1       	2025-11-07 00:31:50.355629868 +0000 UTC	deployed	llm-d-infra-v1.3.6        	v0.3.0
-ms-pd   	llm-d-pd	7       	2025-11-07 17:45:30.946563039 +0000 UTC	deployed	llm-d-modelservice-v0.3.17	v0.3.0
+NAME     NAMESPACE  REVISION UPDATED                                 STATUS   CHART                      APP VERSION
+gaie-pd  llm-d-pd   1        2025-11-07 00:31:54.106881562 +0000 UTC deployed inferencepool-v1.3.0       v1.3.0
+infra-pd llm-d-pd   1        2025-11-07 00:31:50.355629868 +0000 UTC deployed llm-d-infra-v1.3.6         v0.3.0
+ms-pd    llm-d-pd   7        2025-11-07 17:45:30.946563039 +0000 UTC deployed llm-d-modelservice-v0.4.5   v0.4.0
 ```
 
 - Out of the box with this example you should have the following resources:
@@ -206,7 +206,7 @@ For more information see [our docs](../../docs/getting-started-inferencing.md)
 
 Selective PD is a feature in the `inference-scheduler` within the context of prefill-decode dissagregation, although it is disabled by default. This features enables routing to just decode even with the P/D deployed.
 
-For information on this plugin, see our [`pd-profile-handler` docs in the inference-scheduler](https://github.com/llm-d/llm-d-inference-scheduler/blob/v0.4.0/docs/architecture.md?plain=1#L205-L210)
+For information on this plugin, see our [`pd-profile-handler` docs in the inference-scheduler](https://github.com/llm-d/llm-d-inference-scheduler/blob/v0.5.0/docs/architecture.md?plain=1#L205-L210)
 
 ## Cleanup
 

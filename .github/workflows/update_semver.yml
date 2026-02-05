@@ -20,4 +20,4 @@ jobs:
       - uses: actions/checkout@v4
       - uses: haya14busa/action-update-semver@v1.3.0
         with:
-          major_version_tag_only: false # (optional, default is "false")
+          major_version_tag_only: false  # (optional, default is "false")

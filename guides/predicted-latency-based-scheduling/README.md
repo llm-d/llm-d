@@ -58,19 +58,19 @@ This guide explains how to deploy EPP with latency predictor sidecars, configure
 
     ***Set your target registry and tag***
 
-    ```
+    ```bash
     export IMG="<your-registry>/epp:slo-prediction-$(git rev-parse --short HEAD)"
     ```
 
     ***Build the image***
 
-    ```
+    ```bash
     docker build -t "$IMG" -f Dockerfile .
     ```
 
     ***Push the image***
 
-    ```
+    ```bash
     docker push "$IMG"
     ```
 
@@ -84,7 +84,7 @@ This guide explains how to deploy EPP with latency predictor sidecars, configure
 Once prerequisites are met, you can validate predicted latency based scheduling:
 
 1. **Apply your InferencePool/EPP manifest**
-   - Consult the example manifest shown [here](https://github.com/kubernetes-sigs/gateway-api-inference-extension/blob/slo-prediction-experimental/config/manifests/inferencepool-resources-lp.yaml)
+   - Consult the [example manifest in the gateway-api-inference-extension repository](https://github.com/kubernetes-sigs/gateway-api-inference-extension/blob/slo-prediction-experimental/config/manifests/inferencepool-resources-lp.yaml)
    - Update the EPP container and sidecar images to the ones you built.
    - Confirm that the `Deployment` includes the EPP container, training sidecar, and three prediction sidecars, each with their own volumes.
    - Ensure the `plugins-config` ConfigMap defines both `default` and `slo` profiles.
@@ -120,7 +120,7 @@ Once prerequisites are met, you can validate predicted latency based scheduling:
 
    Example response (abridged SSE):
 
-   ```
+   ```text
    < HTTP/1.1 200 OK
    < content-type: text/event-stream; charset=utf-8
    ...
@@ -152,21 +152,21 @@ Once prerequisites are met, you can validate predicted latency based scheduling:
 
    - **Profile selection**
 
-     ```
+     ```text
      msg:"Running profile handler, Pick profiles"
      plugin:"slo-aware-profile-handler/slo-aware-profile-handler"
      ```
 
    - **Candidate pods**
 
-     ```
+     ```text
      msg:"Before running scorer plugins"
      pods:[{... "pod_name":"...-5k7qr" ...}, {... "pod_name":"...-9lp5g" ...}]
      ```
 
    - **SLO scorer pod scores**
 
-     ```
+     ```text
      msg:"Pod score"
      scorer_type:"slo-scorer"
      pod_name:"vllm-llama3-8b-instruct-7b584dd595-9b4wt"
@@ -175,7 +175,7 @@ Once prerequisites are met, you can validate predicted latency based scheduling:
 
    - **Final pick**
 
-     ```
+     ```text
      msg:"Picked endpoint"
      scorer_type:"slo-scorer"
      selected_pod:"vllm-llama3-8b-instruct-7b584dd595-9b4wt"
@@ -198,7 +198,7 @@ This section details the container setup, ConfigMaps, and profile configuration 
 
 ### Sidecars & EPP containers in the Deployment
 
-**EPP container**
+#### EPP container
 
 - **Image**: `epp`
 - **Args**
@@ -291,7 +291,7 @@ schedulingProfiles:
       - pluginRef: max-score-picker
 ```
 
-**What they do**
+#### What they do
 
 - `slo-request-tracker` — captures per-request SLOs and tracks them.
 - `slo-scorer` — uses predicted TTFT/TPOT to compare against SLOs and classify into positive/negative buckets.
@@ -315,7 +315,7 @@ Tune positive vs negative headroom scoring with env vars:
 
 Turn on SLO-aware routing per request with the header:
 
-```
+```text
 x-prediction-based-scheduling: true
 ```
 
@@ -323,7 +323,7 @@ x-prediction-based-scheduling: true
 - If **no SLOs** are provided: treated as SLO=0 → lowest latency pod is chosen.
 - If **priority < 0** and **no pod can meet SLOs**: request is **shed** instead of placed in the negative bucket.
 
-**Current limitations**
+#### Current limitations
 
 - Percentile: only **p90** supported.
 - Training: only **streaming mode** supported.

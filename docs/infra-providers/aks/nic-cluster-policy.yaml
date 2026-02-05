@@ -5,8 +5,8 @@ metadata:
 spec:
   ofedDriver:
     env:
-    - name: OFED_BLACKLIST_MODULES_FILE
-      value: /host/etc/modprobe.d/blacklist-ofed-modules.conf
+      - name: OFED_BLACKLIST_MODULES_FILE
+        value: /host/etc/modprobe.d/blacklist-ofed-modules.conf
     forcePrecompiled: false
     image: doca-driver
     livenessProbe:

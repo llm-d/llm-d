@@ -27,4 +27,5 @@ inferencePool:
   modelServerType: vllm
   modelServers:
     matchLabels:
-      llm-d.ai/inferenceServing: "true"
+      llm-d.ai/inference-serving: "true"
+      llm-d.ai/guide: "workload-autoscaling"

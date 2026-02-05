@@ -4,9 +4,9 @@ metadata:
   name: llm-d-inference-gateway-telemetry
 spec:
   targetRefs:
-  - group: gateway.networking.k8s.io
-    kind: Gateway
-    name: llm-d-inference-gateway
+    - group: gateway.networking.k8s.io
+      kind: Gateway
+      name: llm-d-inference-gateway
   accessLogging:
-  - providers:
-    - name: envoy
+    - providers:
+        - name: envoy

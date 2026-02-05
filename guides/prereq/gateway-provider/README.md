@@ -73,50 +73,40 @@ llm-d provides a Helm chart that installs and configures the `kgateway` or `isti
 
 Prior to deploying a Gateway control plane, you must install the custom resource definitions (CRDs) configuration that adds the Kubernetes API objects:
 
-    - [Gateway API v1.3.0 CRDs](https://github.com/kubernetes-sigs/gateway-api/tree/v1.4.0/config/crd)
+    - [Gateway API v1.4.0 CRDs](https://github.com/kubernetes-sigs/gateway-api/tree/v1.4.0/config/crd)
       - for more information see their [docs](https://gateway-api.sigs.k8s.io/guides/)
-    - [Gateway API Inference Extension CRDs v1.2.0](https://github.com/kubernetes-sigs/gateway-api-inference-extension/tree/v1.2.0/config/crd)
+    - [Gateway API Inference Extension CRDs v1.3.0](https://github.com/kubernetes-sigs/gateway-api-inference-extension/tree/v1.3.0/config/crd)
       - for more information see their [docs](https://gateway-api-inference-extension.sigs.k8s.io/)
 
 We have provided the [`install-gateway-provider-dependencies.sh`](./install-gateway-provider-dependencies.sh) script:
 
-```bash
-./install-gateway-provider-dependencies.sh
-```
+    ./install-gateway-provider-dependencies.sh
 
 To remove the created dependencies:
 
-```bash
-./install-gateway-provider-dependencies.sh delete
-```
+    ./install-gateway-provider-dependencies.sh delete
 
 You may specify any valid git source control reference for versions as `GATEWAY_API_CRD_REVISION` and `GATEWAY_API_INFERENCE_EXTENSION_CRD_REVISION`:
 
-```bash
-export GATEWAY_API_CRD_REVISION="v1.4.0"
-export GATEWAY_API_INFERENCE_EXTENSION_CRD_REVISION="v1.2.0"
-./install-gateway-provider-dependencies.sh
-```
+    export GATEWAY_API_CRD_REVISION="v1.4.0"
+    export GATEWAY_API_INFERENCE_EXTENSION_CRD_REVISION="v1.3.0"
+    ./install-gateway-provider-dependencies.sh
 
 ##### Installation
 
 To install the gateway control plane:
 
-```bash
-helmfile apply -f <your_gateway_choice>.helmfile.yaml # options: [`istio`, `kgateway`]
-# ex: helmfile apply -f istio.helmfile.yaml
-```
+    helmfile apply -f <your_gateway_choice>.helmfile.yaml # options: [`istio`, `kgateway`]
+    # ex: helmfile apply -f istio.helmfile.yaml
 
 ##### Targeted install
 
 If the CRDs already exist in your cluster and you do not wish to re-apply them, use the `--selector kind=gateway-control-plane` selector to limit your changes to the infrastructure:
 
-```bash
-# Install
-helmfile apply -f <your_gateway_choice> --selector kind=gateway-control-plane
-# Uninstall
-helmfile destroy -f <your_gateway_choice> --selector kind=gateway-control-plane
-```
+    # Install
+    helmfile apply -f <your_gateway_choice> --selector kind=gateway-control-plane
+    # Uninstall
+    helmfile destroy -f <your_gateway_choice> --selector kind=gateway-control-plane
 
 If you wish to bump versions or customize your installs, check out our helmfiles for [istio](./istio.helmfile.yaml), and [kgateway](./kgateway.helmfile.yaml) respectively.
 
@@ -131,9 +121,7 @@ For other [compatible Gateway implementations](https://gateway-api-inference-ext
 
 Once the prerequisite steps are complete, you should be able to verify that `InferencePool` is installed on your cluster with:
 
-```bash
-# Verify the v1 APIs are installed, specifically InferencePool
-kubectl api-resources --api-group=inference.networking.k8s.io
-```
+    # Verify the v1 APIs are installed, specifically InferencePool
+    kubectl api-resources --api-group=inference.networking.k8s.io
 
 If successful, the first command should return at least the `v1` version of `InferencePool`, and you should also see a `v1alpha2` or newer version of `InferenceObjective`.

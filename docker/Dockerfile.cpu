@@ -1,11 +1,16 @@
 # Using Ubuntu 22.04 to match upstream vLLM compilation environment with glibc 2.35 for now.
 FROM ubuntu:22.04 AS base-common
 
+ARG CACHE_BUSTER
+RUN if [ -n "${CACHE_BUSTER}" ]; then \
+        echo "$CACHE_BUSTER" > /tmp/builder-buster; \
+    fi;
+
 ARG PYTHON_VERSION=3.12
 ARG PIP_EXTRA_INDEX_URL="https://download.pytorch.org/whl/cpu/"
 ARG VLLM_REPO="https://github.com/vllm-project/vllm.git"
 # Pin to a commit SHA1/Tag
-ARG VLLM_COMMIT=v0.14.0
+ARG VLLM_COMMIT_SHA="d7de043d55d1dd629554467e23874097e1c48993"
 ARG TARGETARCH
 # Support for building with non-AVX512 vLLM
 ARG VLLM_CPU_DISABLE_AVX512=0
@@ -13,6 +18,17 @@ ARG VLLM_CPU_DISABLE_AVX512=0
 ARG VLLM_CPU_AVX512BF16=0
 # Support for building with AVX512VNNI ISA
 ARG VLLM_CPU_AVX512VNNI=0
+
+RUN apt clean && apt-get update -y && \
+    apt-get install -y --no-install-recommends --fix-missing \
+    curl \
+    git \
+    wget \
+    vim
+
+RUN apt-get install -y ca-certificates && update-ca-certificates
+
+WORKDIR /workspace/vllm
 
 # Install system dependencies and uv
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
@@ -27,6 +43,7 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     && update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-12 10 --slave /usr/bin/g++ g++ /usr/bin/g++-12 \
     && curl -LsSf https://astral.sh/uv/install.sh | sh
 
+# TODO: hookup CPU image to our SCCACHE instance
 ENV CCACHE_DIR=/root/.cache/ccache
 ENV CMAKE_CXX_COMPILER_LAUNCHER=ccache
 
@@ -37,12 +54,13 @@ RUN uv venv --python ${PYTHON_VERSION} --seed ${VIRTUAL_ENV}
 
 ENV PATH="$VIRTUAL_ENV/bin:$PATH"
 
-# Clone vLLM source code
+# Clone vLLM and build for CPU
 WORKDIR /workspace
 RUN --mount=type=cache,target=/var/cache/git \
-    git clone ${VLLM_REPO} vllm && \
-    cd vllm && \
-    git checkout ${VLLM_COMMIT}
+    git clone "${VLLM_REPO}" /workspace/vllm && \
+    git -C /workspace/vllm config --system --add safe.directory /workspace/vllm && \
+    git -C /workspace/vllm fetch --depth=1 origin "${VLLM_COMMIT_SHA}" || true && \
+    git -C /workspace/vllm checkout -q "${VLLM_COMMIT_SHA}"
 
 # Install Python dependencies
 WORKDIR /workspace/vllm
@@ -79,6 +97,11 @@ ENV LD_PRELOAD="/usr/lib/aarch64-linux-gnu/libtcmalloc_minimal.so.4"
 # Build vLLM wheel from source
 ###############################################################
 FROM base-${TARGETARCH} AS vllm-build
+
+ARG CACHE_BUSTER
+RUN if [ -n "${CACHE_BUSTER}" ]; then \
+        echo "$CACHE_BUSTER" > /tmp/builder-buster; \
+    fi;
 
 # Reduce parallel job from 32(vllm prev-0.13.0 pytorch2.8) to 6 due to vllm v0.14.0(pytorch2.9+)
 # resource requirements

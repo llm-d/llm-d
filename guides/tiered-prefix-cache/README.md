@@ -2,7 +2,11 @@
 
 ## Overview
 
-Efficient caching of prefix computation states to avoid recomputation is crucial for boosting Large Language Model (LLM) inference performance such as Time to First Token (TTFT) and overall throughput, as well as reducing the cost. For the self-attention mechanism, the generation of the next token leverages the prefix Key & Value (KV) tensors. For State Space Model (SSM) models such as mamba models, reusing cache of its SSM states of prefix locations also saves computation for the next token. In this guide we use the term "prefix cache" to refer to the cache of computation states in the prefix tokens of a target token which includes the caching of prefix KV tensors and other forms of caches. The prefix aware request scheduling optimizations in the [inference scheduling](../inference-scheduling/README.md) also applies here.
+Efficient caching of prefix computation states to avoid recomputation is crucial for boosting Large Language Model (LLM) inference performance such as Time to First Token (TTFT) and overall throughput, as well as reducing the cost.
+For the self-attention mechanism, the generation of the next token leverages the prefix Key & Value (KV) tensors.
+For State Space Model (SSM) models such as mamba models, reusing cache of its SSM states of prefix locations also saves computation for the next token.
+In this guide we use the term "prefix cache" to refer to the cache of computation states in the prefix tokens of a target token which includes the caching of prefix KV tensors and other forms of caches.
+The prefix aware request scheduling optimizations in the [inference scheduling](../inference-scheduling/README.md) also applies here.
 
 State of the art inference engines already implement native prefix cache reuse across requests in accelerator High-Bandwidth Memory (HBM), but in most serving environments HBM is already a constrained resource. To increase the amount of available memory beyond HBM requires more cache storage, driving the need for offloading prefix cache from HBM to more cost effective storage options such as CPU RAM.
 
@@ -40,18 +44,24 @@ Otherwise we recommend a shared storage because it:
 
 ### Shared Storage
 
-Offloading prefix cache to a shared(remote) storage offers the following benefits:
+Offloading prefix cache to a shared (remote) storage tier provides several important benefits beyond local CPU or disk caching:
 
-* Massive storage capacity independent of the inference engine deployment capacity.
-* Seamlessly share prefix cache across inference engine replicas and restarts.
+* **Extended cache capacity** - Offers massive storage capacity that is independent of the inference engine deployment size.
+* **Shared KV-cache across nodes** - Multiple inference replicas can access and reuse the same prefix cache.
+* **Fast scale-up** - New nodes can immediately reuse existing KV-cache data without warming the cache from scratch.
+* **Persistence across restarts or failures** - KV-cache data survives pod restarts, rescheduling, and node failures.
+* **Enterprise storage integration** - Can leverage mature enterprise storage systems (for example CephFS, GCP Lustre, IBM Storage Scale) with built-in durability, monitoring, and access control.
 
-However, it adds both operational and performance overhead which depends on the characteristics (such as latency and throughput) of the storage system. Thus the decision of offloading to a shared storage system needs careful consideration.
+However, shared storage introduces additional operational and performance considerations. Latency and throughput depend on the characteristics of the underlying storage system, so careful evaluation is required to ensure that cache transfer overhead does not negatively impact inference performance.
 
-Consider a shared storage option when at least one of the following applies:
+Integration between the storage system and llm-d is achieved through vLLM connectors. The specific connector and data path depend on the storage system type and the underlying transport mechanism. 
+For example, different implementations may use CPU staging buffers, GPU Direct Storage (GDS), or NIXL-based data movement.
+Any storage connector that is compatible with vLLM can be used **transparently within the llm-d project**.
 
-* Large cache capacity requirement beyond HBM + CPU RAM.
-* Long input size (>10k) and high cache hits.
-* Frequent cache migration needs (e.g., model or engine rollouts).
+To enable shared storage offloading, refer to one of the following guides:
+
+1. [**llm-d File System (FS) backend**](./storage/llm-d-fs/README.md) - POSIX-based shared storage using a file system (for example CephFS, GCP Lustre, IBM Storage Scale), leveraging the `vLLM native offloading connector`.
+**Note:** This backend can also be used with local disk, where each vLLM instance uses a local storage path. Sharing will only be between vLLM instances on the same physical node that can access the same local storage path.
 
 ### P2P Cache Sharing
 

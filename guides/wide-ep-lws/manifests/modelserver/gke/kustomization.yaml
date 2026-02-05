@@ -100,7 +100,7 @@ patches:
         value:
           mountPath: /usr/local/gib
           name: gib
-      # Env vars 
+      # Env vars
       - op: add
         path: /spec/leaderWorkerTemplate/workerTemplate/spec/containers/0/env/-
         value:

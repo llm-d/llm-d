@@ -3,7 +3,10 @@ kind: LeaderWorkerSet
 metadata:
   name: wide-ep-llm-d-prefill
   labels:
-    llm-d.ai/inferenceServing: "true"
+    llm-d.ai/inference-serving: "true"
+    llm-d.ai/guide: "wide-ep-lws"
+    llm-d.ai/accelerator-variant: "gpu"
+    llm-d.ai/accelerator-vendor: "nvidia"
     llm-d.ai/model: DeepSeek-R1-0528
     llm-d.ai/role: prefill
 spec:
@@ -13,7 +16,10 @@ spec:
     workerTemplate:
       metadata:
         labels:
-          llm-d.ai/inferenceServing: "true"
+          llm-d.ai/inference-serving: "true"
+          llm-d.ai/guide: "wide-ep-lws"
+          llm-d.ai/accelerator-variant: "gpu"
+          llm-d.ai/accelerator-vendor: "nvidia"
           llm-d.ai/model: DeepSeek-R1-0528
           llm-d.ai/role: prefill
       spec:
@@ -22,159 +28,161 @@ spec:
           - name: dshm
             emptyDir:
               medium: Memory
-              sizeLimit: 2Gi # roughly 32MB per local DP plus scratch space
+              sizeLimit: 2Gi  # roughly 32MB per local DP plus scratch space
           - name: hf-cache
             emptyDir: {}
           - name: jit-cache
             emptyDir: {}
         containers:
-        - name: vllm
-          image: ghcr.io/llm-d/llm-d-cuda:v0.4.0
-          securityContext:
-            capabilities:
-              add:
-              - IPC_LOCK
-              - SYS_RAWIO
-            runAsGroup: 0
-            runAsUser: 0
-          imagePullPolicy: Always
-          command:
-            - /bin/bash
-            - -c
-          args:
-            - |-
-              # Clear /dev/shm on start to prevent running out of space when crashes occur
-              # https://github.com/llm-d/llm-d/issues/352
-              find /dev/shm -type f -delete
+          - name: vllm
+            image: ghcr.io/llm-d/llm-d-cuda:v0.5.0
+            securityContext:
+              capabilities:
+                add:
+                  - IPC_LOCK
+                  - SYS_RAWIO
+              runAsGroup: 0
+              runAsUser: 0
+            imagePullPolicy: Always
+            command:
+              - /bin/bash
+              - -c
+            args:
+              - |-
+                # Clear /dev/shm on start to prevent running out of space when crashes occur
+                # https://github.com/llm-d/llm-d/issues/352
+                find /dev/shm -type f -delete
 
-              #################
-              # RUN vLLM prefill worker
-              #################
-              START_RANK=$(( ${LWS_WORKER_INDEX:-0} * DP_SIZE_LOCAL ))
-            
-              # --data-parallel-hybrid-lb: Use exernal load balancing across nodes, and internal load balancing within a node
-              # --enable-expert-parallel: Use TPxDP in attention, EP in MoE layers
-              # --async-scheduling: Reduce white space between engine steps
-              # --enable-dbo: Dual batch overlap (DBO) overlaps compute with collective communication.
-              # --enable-eplb:  Expert-parallel load balancing reduces EP load imbalance by replicating heavily-used experts Performance-memory tradeoff: on DeepSeekV3 eplb uses an extra 2GB per redundant expert per GPU Divisibility constraint: num_routed_experts (256 for DSv3) + num_redundant_experts must be divisible by the number of GPUs.
+                #################
+                # RUN vLLM prefill worker
+                #################
+                START_RANK=$(( ${LWS_WORKER_INDEX:-0} * DP_SIZE_LOCAL ))
 
-              exec vllm serve \
-                deepseek-ai/DeepSeek-R1-0528 \
-                --port 8000 \
-                --trust-remote-code \
-                --disable-uvicorn-access-log \
-                --data-parallel-hybrid-lb \
-                --enable-expert-parallel \
-                --tensor-parallel-size $TP_SIZE \
-                --data-parallel-size $((LWS_GROUP_SIZE * DP_SIZE_LOCAL)) \
-                --data-parallel-size-local $DP_SIZE_LOCAL \
-                --data-parallel-address ${LWS_LEADER_ADDRESS} \
-                --data-parallel-rpc-port 5555 \
-                --data-parallel-start-rank $START_RANK \
-                --kv_transfer_config '{"kv_connector":"NixlConnector",
-                                        "kv_role":"kv_both",
-                                        "kv_load_failure_policy":"fail"}' \
-                --async-scheduling \
-                --enable-dbo \
-                --dbo-prefill-token-threshold 32 \
-                --enable-eplb \
-                --eplb-config '{"window_size":"1000",
-                                "step_interval":"3000",
-                                "num_redundant_experts":"32",
-                                "log_balancedness":"False"}' \
-                --gpu-memory-utilization 0.75
+                # --data-parallel-hybrid-lb: Use exernal load balancing across nodes, and internal load balancing within a node
+                # --enable-expert-parallel: Use TPxDP in attention, EP in MoE layers
+                # --async-scheduling: Reduce white space between engine steps
+                # --enable-dbo: Dual batch overlap (DBO) overlaps compute with collective communication.
+                # --enable-eplb:  Expert-parallel load balancing reduces EP load imbalance by replicating heavily-used experts
+                #   Performance-memory tradeoff: on DeepSeekV3 eplb uses an extra 2GB per redundant expert per GPU
+                #   Divisibility constraint: num_routed_experts (256 for DSv3) + num_redundant_experts must be divisible by the number of GPUs.
 
-          env:
-          - name: DP_SIZE_LOCAL
-            value: "8"
-          - name: TP_SIZE
-            value: "1"
-          - name: TRITON_LIBCUDA_PATH
-            value: /usr/lib64
-          - name: VLLM_SKIP_P2P_CHECK
-            value: "1"
-          - name: VLLM_RANDOMIZE_DP_DUMMY_INPUTS
-            value: "1"
-          - name: VLLM_USE_DEEP_GEMM
-            value: "1"
-          - name: VLLM_ALL2ALL_BACKEND
-            value: deepep_high_throughput
-          - name: NVIDIA_GDRCOPY
-            value: enabled
-          - name: NVSHMEM_REMOTE_TRANSPORT
-            value: ibgda
-          - name: NVSHMEM_IB_ENABLE_IBGDA
-            value: "true"
-          - name: NVSHMEM_BOOTSTRAP_UID_SOCK_IFNAME
-            value: eth0
-          - name: GLOO_SOCKET_IFNAME
-            value: eth0
-          - name: NCCL_SOCKET_IFNAME
-            value: eth0
-          - name: VLLM_LOGGING_LEVEL
-            value: INFO
-          - name: VLLM_NIXL_SIDE_CHANNEL_HOST
-            valueFrom:
-              fieldRef:
-                fieldPath: status.podIP
+                exec vllm serve \
+                  deepseek-ai/DeepSeek-R1-0528 \
+                  --port 8000 \
+                  --trust-remote-code \
+                  --disable-uvicorn-access-log \
+                  --data-parallel-hybrid-lb \
+                  --enable-expert-parallel \
+                  --tensor-parallel-size $TP_SIZE \
+                  --data-parallel-size $((LWS_GROUP_SIZE * DP_SIZE_LOCAL)) \
+                  --data-parallel-size-local $DP_SIZE_LOCAL \
+                  --data-parallel-address ${LWS_LEADER_ADDRESS} \
+                  --data-parallel-rpc-port 5555 \
+                  --data-parallel-start-rank $START_RANK \
+                  --kv_transfer_config '{"kv_connector":"NixlConnector",
+                                          "kv_role":"kv_both",
+                                          "kv_load_failure_policy":"fail"}' \
+                  --async-scheduling \
+                  --enable-dbo \
+                  --dbo-prefill-token-threshold 32 \
+                  --enable-eplb \
+                  --eplb-config '{"window_size":"1000",
+                                  "step_interval":"3000",
+                                  "num_redundant_experts":"32",
+                                  "log_balancedness":"False"}' \
+                  --gpu-memory-utilization 0.75
 
-          # Use cache directories from the mounted volume under one easy to mount
-          # root directory.
-          - name: CUDA_CACHE_PATH
-            value: /var/cache/vllm/cuda
-          - name: CCACHE_DIR
-            value: /var/cache/vllm/ccache
-          - name: VLLM_CACHE_ROOT
-            value: /var/cache/vllm/vllm
-          - name: FLASHINFER_WORKSPACE_BASE
-            value: /var/cache/vllm/flashinfer
-          # HuggingFace is likely to be quite a bit larger, give it its own cache
-          - name: HF_HUB_CACHE
-            value: /var/cache/huggingface
+            env:
+              - name: DP_SIZE_LOCAL
+                value: "8"
+              - name: TP_SIZE
+                value: "1"
+              - name: TRITON_LIBCUDA_PATH
+                value: /usr/lib64
+              - name: VLLM_SKIP_P2P_CHECK
+                value: "1"
+              - name: VLLM_RANDOMIZE_DP_DUMMY_INPUTS
+                value: "1"
+              - name: VLLM_USE_DEEP_GEMM
+                value: "1"
+              - name: VLLM_ALL2ALL_BACKEND
+                value: deepep_high_throughput
+              - name: NVIDIA_GDRCOPY
+                value: enabled
+              - name: NVSHMEM_REMOTE_TRANSPORT
+                value: ibgda
+              - name: NVSHMEM_IB_ENABLE_IBGDA
+                value: "true"
+              - name: NVSHMEM_BOOTSTRAP_UID_SOCK_IFNAME
+                value: eth0
+              - name: GLOO_SOCKET_IFNAME
+                value: eth0
+              - name: NCCL_SOCKET_IFNAME
+                value: eth0
+              - name: VLLM_LOGGING_LEVEL
+                value: INFO
+              - name: VLLM_NIXL_SIDE_CHANNEL_HOST
+                valueFrom:
+                  fieldRef:
+                    fieldPath: status.podIP
 
-          ports:
-          - containerPort: 8000
-            name: vllm
-            protocol: TCP
-          - containerPort: 5557
-            name: nixl
-            protocol: TCP
-          startupProbe:
-            httpGet:
-              path: /health
-              port: vllm
-            initialDelaySeconds: 0
-            periodSeconds: 1
-            timeoutSeconds: 5
-            failureThreshold: 2700
-          livenessProbe:
-            httpGet:
-              path: /health
-              port: vllm
-            periodSeconds: 30
-            timeoutSeconds: 5
-            failureThreshold: 3
-          readinessProbe:
-            httpGet:
-              path: /v1/models
-              port: vllm
-            periodSeconds: 10
-            timeoutSeconds: 5
-            failureThreshold: 3
-          resources:
-            limits:
-              ephemeral-storage: 1Ti
-              memory: 512Gi
-              nvidia.com/gpu: "8"
-            requests:
-              cpu: 32
-              ephemeral-storage: 1Ti
-              memory: 512Gi
-              nvidia.com/gpu: "8"
-          volumeMounts:
-            - name: dshm
-              mountPath: /dev/shm
-            - name: hf-cache
-              mountPath: /var/cache/huggingface
-            - name: jit-cache
-              mountPath: /var/cache/vllm
+              # Use cache directories from the mounted volume under one easy to mount
+              # root directory.
+              - name: CUDA_CACHE_PATH
+                value: /var/cache/vllm/cuda
+              - name: CCACHE_DIR
+                value: /var/cache/vllm/ccache
+              - name: VLLM_CACHE_ROOT
+                value: /var/cache/vllm/vllm
+              - name: FLASHINFER_WORKSPACE_BASE
+                value: /var/cache/vllm/flashinfer
+              # HuggingFace is likely to be quite a bit larger, give it its own cache
+              - name: HF_HUB_CACHE
+                value: /var/cache/huggingface
+
+            ports:
+              - containerPort: 8000
+                name: vllm
+                protocol: TCP
+              - containerPort: 5600
+                name: nixl
+                protocol: TCP
+            startupProbe:
+              httpGet:
+                path: /health
+                port: vllm
+              initialDelaySeconds: 0
+              periodSeconds: 1
+              timeoutSeconds: 5
+              failureThreshold: 2700
+            livenessProbe:
+              httpGet:
+                path: /health
+                port: vllm
+              periodSeconds: 30
+              timeoutSeconds: 5
+              failureThreshold: 3
+            readinessProbe:
+              httpGet:
+                path: /v1/models
+                port: vllm
+              periodSeconds: 10
+              timeoutSeconds: 5
+              failureThreshold: 3
+            resources:
+              limits:
+                ephemeral-storage: 1Ti
+                memory: 512Gi
+                nvidia.com/gpu: "8"
+              requests:
+                cpu: 32
+                ephemeral-storage: 1Ti
+                memory: 512Gi
+                nvidia.com/gpu: "8"
+            volumeMounts:
+              - name: dshm
+                mountPath: /dev/shm
+              - name: hf-cache
+                mountPath: /var/cache/huggingface
+              - name: jit-cache
+                mountPath: /var/cache/vllm

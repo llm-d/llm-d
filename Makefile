@@ -34,6 +34,9 @@ CONTAINER_TOOL := $(shell (command -v docker >/dev/null 2>&1 && echo docker) || 
 BUILDER := $(shell command -v buildah >/dev/null 2>&1 && echo buildah || echo $(CONTAINER_TOOL))
 PLATFORMS ?= linux/amd64 # linux/arm64 # linux/s390x,linux/ppc64le
 
+# SUPPRESS_PYTHON_OUTPUT: Set to "1" or "true" to suppress verbose pip output during build (default: verbose enabled)
+SUPPRESS_PYTHON_OUTPUT ?=
+
 .PHONY: help
 help: ## Print help
 	@awk 'BEGIN {FS = ":.*##"; printf "\nUsage:\n  make \033[36m<target>\033[0m\n"} /^[a-zA-Z_0-9-]+:.*?##/ { printf "  \033[36m%-15s\033[0m %s\n", $$1, $$2 } /^##@/ { printf "\n\033[1m%s\033[0m\n", substr($$0, 5) } ' $(MAKEFILE_LIST)
@@ -110,7 +113,9 @@ buildah-build: check-builder ## Build and push image (multi-arch if supported)
 .PHONY:	image-build
 image-build: check-container-tool ## Build Docker image using $(CONTAINER_TOOL)
 	@printf "\033[33;1m==== Building Docker image $(IMG) ====\033[0m\n"
-	$(CONTAINER_TOOL) build --progress=plain --platform $(PLATFORMS) -t $(IMG) -f $(DOCKERFILE_DIR)/$(DOCKERFILE) .
+	$(CONTAINER_TOOL) build --progress=plain --platform $(PLATFORMS) \
+		$(if $(SUPPRESS_PYTHON_OUTPUT),--build-arg SUPPRESS_PYTHON_OUTPUT=$(SUPPRESS_PYTHON_OUTPUT)) \
+		-t $(IMG) -f $(DOCKERFILE_DIR)/$(DOCKERFILE) .
 
 .PHONY: image-push
 image-push: check-container-tool ## Push Docker image $(IMG) to registry
