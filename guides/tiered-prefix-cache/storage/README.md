@@ -146,7 +146,7 @@ kubectl apply -k ./manifests/vllm/lmcache-connector -n ${NAMESPACE}
 
 #### llm-d FS Connector
 
-Deploy the `InferencePool` using the [InferencePool recipe](../../../recipes/inferencepool/README.md).
+Deploy the `InferencePool` using the [InferencePool recipe](../../recipes/inferencepool/README.md).
 
 **NOTE:** This guide uses an InferencePool recipe with HBM cache only. Storage offloading is typically used with CPU offloading, which is not covered, see https://github.com/llm-d/llm-d/issues/682 for a follow up.
 
