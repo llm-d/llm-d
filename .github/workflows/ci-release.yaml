@@ -86,12 +86,12 @@ jobs:
             BUILD_BASE_IMAGE_SUFFIX=${{ matrix.os == 'ubuntu' && 'ubuntu20.04' || matrix.base_image_suffix }}
             FINAL_BASE_IMAGE_SUFFIX=${{ matrix.base_image_suffix }}
             CACHE_BUSTER=${{ github.ref_name }}-${{ github.run_id }}
-          cache-from: >-
-            type=gha,scope=cuda-${{ matrix.os }}-builder-${{
-            matrix.platform == 'linux/arm64' && 'arm64' || 'amd64' }}
-          cache-to: >-
-            type=gha,mode=max,scope=cuda-${{ matrix.os }}-builder-${{
-            matrix.platform == 'linux/arm64' && 'arm64' || 'amd64' }},oci-mediatypes=true,compression=zstd
+          # cache-from: >-
+          #   type=gha,scope=cuda-${{ matrix.os }}-builder-${{
+          #   matrix.platform == 'linux/arm64' && 'arm64' || 'amd64' }}
+          # cache-to: >-
+          #   type=gha,mode=max,scope=cuda-${{ matrix.os }}-builder-${{
+          #   matrix.platform == 'linux/arm64' && 'arm64' || 'amd64' }},oci-mediatypes=true,compression=zstd
           labels: ${{ steps.meta.outputs.labels }}
           github-token: ${{ secrets.GHCR_TOKEN }}
           secrets: |
@@ -118,12 +118,12 @@ jobs:
             BUILD_BASE_IMAGE_SUFFIX=${{ matrix.os == 'ubuntu' && 'ubuntu20.04' || matrix.base_image_suffix }}
             FINAL_BASE_IMAGE_SUFFIX=${{ matrix.base_image_suffix }}
             CACHE_BUSTER=${{ github.ref_name }}-${{ github.run_id }}
-          cache-from: >-
-            type=gha,scope=cuda-${{ matrix.os }}-${{
-            matrix.platform == 'linux/arm64' && 'arm64' || 'amd64' }}
-          cache-to: >-
-            type=gha,mode=max,scope=cuda-${{ matrix.os }}-${{
-            matrix.platform == 'linux/arm64' && 'arm64' || 'amd64' }},oci-mediatypes=true,compression=zstd
+          # cache-from: >-
+          #   type=gha,scope=cuda-${{ matrix.os }}-${{
+          #   matrix.platform == 'linux/arm64' && 'arm64' || 'amd64' }}
+          # cache-to: >-
+          #   type=gha,mode=max,scope=cuda-${{ matrix.os }}-${{
+          #   matrix.platform == 'linux/arm64' && 'arm64' || 'amd64' }},oci-mediatypes=true,compression=zstd
           labels: ${{ steps.meta.outputs.labels }}
           outputs: >-
             type=image,name=${{ env.REGISTRY }}/${{ github.repository }}-cuda${{ matrix.image_suffix }},
@@ -374,8 +374,8 @@ jobs:
           platforms: linux/amd64
           push: true
           provenance: true
-          cache-from: type=gha,scope=cpu
-          cache-to: type=gha,mode=max,scope=cpu,oci-mediatypes=true,compression=zstd
+          # cache-from: type=gha,scope=cpu
+          # cache-to: type=gha,mode=max,scope=cpu,oci-mediatypes=true,compression=zstd
           tags: |
             ${{ env.REGISTRY }}/${{ github.repository }}-cpu:${{ env.TAG }}
             ${{ env.REGISTRY }}/${{ github.repository }}-cpu:latest
@@ -444,8 +444,8 @@ jobs:
           platforms: linux/amd64
           push: true
           provenance: true
-          cache-from: type=gha,scope=xpu
-          cache-to: type=gha,mode=max,scope=xpu,oci-mediatypes=true,compression=zstd
+          # cache-from: type=gha,scope=xpu
+          # cache-to: type=gha,mode=max,scope=xpu,oci-mediatypes=true,compression=zstd
           tags: |
             ${{ env.REGISTRY }}/${{ github.repository }}-xpu:${{ env.TAG }}
             ${{ env.REGISTRY }}/${{ github.repository }}-xpu:latest
