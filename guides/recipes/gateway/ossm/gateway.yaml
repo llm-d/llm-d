@@ -4,26 +4,20 @@ metadata:
   labels:
     istio.io/rev: openshift-gateway
     platform.opendatahub.io/part-of: gatewayconfig
+  annotations:
+    security.opendatahub.io/enable-auth: 'false'
   name: llm-d-inference-gateway
-  namespace: openshift-ingress
 spec:
   gatewayClassName: data-science-gateway-class
   infrastructure:
     parametersRef:
       group: ""
       kind: ConfigMap
-      name: data-science-gateway-config
+      name: rhoai-gateway-config
   listeners:
     - allowedRoutes:
         namespaces:
-          from: Selector
-          selector:
-            matchExpressions:
-              - key: kubernetes.io/metadata.name
-                operator: In
-                values:
-                  - openshift-ingress
-                  - redhat-ods-applications
+          from: All
       name: https
       port: 443
       protocol: HTTPS
@@ -32,4 +26,5 @@ spec:
           - group: ""
             kind: Secret
             name: data-science-gateway-service-tls
+            namespace: openshift-ingress
         mode: Terminate

@@ -8,6 +8,10 @@ environments:
   agentgateway: &AG
     values:
       - ../prereq/gateway-provider/common-configurations/agentgateway.yaml
+  rhoai: &RHOAI
+    values:
+      - provider:
+          name: none
   gke: &GKE
     values:
       - ../prereq/gateway-provider/common-configurations/gke.yaml
@@ -40,7 +44,7 @@ repositories:
     url: https://llm-d-incubation.github.io/llm-d-infra/
 
 releases:
-{{- if ne .Environment.Name "standalone" }}
+{{- if and (ne .Environment.Name "standalone") (ne .Environment.Name "rhoai") }}
   - name: {{ printf "infra-%s" $rn | quote }}
     namespace: {{ $ns }}
     chart: llm-d-infra/llm-d-infra
@@ -60,7 +64,7 @@ releases:
     version: v1.3.0
     installed: true
     needs:
-      {{- if ne .Environment.Name "standalone" }}
+      {{- if and (ne .Environment.Name "standalone") (ne .Environment.Name "rhoai") }}
       - {{ printf "infra-%s" $rn | quote }}
       {{- end }}
     values:
@@ -100,7 +104,7 @@ releases:
     version: v0.4.5
     installed: true
     needs:
-      {{- if ne .Environment.Name "standalone" }}
+      {{- if and (ne .Environment.Name "standalone") (ne .Environment.Name "rhoai") }}
       - {{ printf "infra-%s" $rn | quote }}
       {{- end }}
       - {{ printf "gaie-%s" $rn | quote }}

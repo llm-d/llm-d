@@ -1,0 +1,14 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: rhoai-gateway-config
+  labels:
+    app.kubernetes.io/gateway: llm-d-inference-gateway
+    app.kubernetes.io/component: inference-gateway
+data:
+  service: |
+    metadata:
+      annotations:
+        service.beta.openshift.io/serving-cert-secret-name: "data-science-gateway-service-tls"
+    spec:
+      type: ClusterIP
