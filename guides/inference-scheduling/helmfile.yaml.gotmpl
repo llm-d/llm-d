@@ -55,6 +55,11 @@ releases:
     values:
       - gateway:
           {{ .Environment.Values.gateway | toYaml | nindent 10 }}
+    {{- if eq .Environment.Name "rhoai" }}
+      - gateway:
+          destinationRule:
+            host: {{ printf "gaie-%s-epp.%s.svc.cluster.local" $rn $ns | quote }}
+    {{- end}}
 {{- end }}
 
   - name: {{ printf "gaie-%s" $rn | quote }}
