@@ -42,34 +42,36 @@ ARG UCX_VERSION="v1.20.0"
 
 ARG NVSHMEM_USE_GIT="true"
 ARG NVSHMEM_REPO="https://github.com/NVIDIA/nvshmem.git"
-ARG NVSHMEM_VERSION="v3.4.5-0"
+ARG NVSHMEM_VERSION="v3.5.19-1"
 
 ARG BUILD_NIXL_FROM_SOURCE="true"
 ARG NIXL_REPO="https://github.com/ai-dynamo/nixl.git"
-ARG NIXL_VERSION="0.9.0"
+# release branch - tag / official release not out yet
+ARG NIXL_VERSION="release/0.10.0"
 
 ARG INFINISTORE_REPO="https://github.com/bytedance/InfiniStore.git"
 ARG INFINISTORE_VERSION="0.2.33"
+
 ARG LMCACHE_REPO="https://github.com/LMCache/LMCache.git"
 ARG LMCACHE_VERSION="v0.3.13"
 
 # Kernels
-ARG DEEPEP_REPO="https://github.com/smarterclayton/DeepEP"
-# ARG DEEPEP_VERSION="nic_pe_alignment"
-# Use clayton's pre-rebase commit head
-ARG DEEPEP_VERSION="c66b1463601af5d127027fb459517fb97adab30d" 
+ARG DEEPEP_REPO="https://github.com/deepseek-ai/DeepEP"
+ARG DEEPEP_VERSION="92fe2deaec24bc92ebd9de276daa6ca9ed602ed4" 
 
 ARG DEEPGEMM_REPO="https://github.com/deepseek-ai/DeepGEMM"
 ARG DEEPGEMM_VERSION="v2.1.0"
+
 ARG PPLX_KERNELS_REPO="https://github.com/perplexityai/pplx-kernels"
 ARG PPLX_KERNELS_VERSION="2bd6e30fab358829bd01d1c0907be8088ff9e5e1"
+
 ARG FLASHINFER_REPO="https://github.com/flashinfer-ai/flashinfer.git"
-ARG FLASHINFER_VERSION="v0.5.3"
+ARG FLASHINFER_VERSION="v0.6.1"
 
 # vLLM build settings
 ARG VLLM_REPO="https://github.com/vllm-project/vllm.git"
-ARG VLLM_COMMIT_SHA="d7de043d55d1dd629554467e23874097e1c48993"
-ARG VLLM_PRECOMPILED_WHEEL_COMMIT="d7de043d55d1dd629554467e23874097e1c48993"
+ARG VLLM_COMMIT_SHA="1892993bc18e243e2c05841314c5e9c06a80c70d"
+ARG VLLM_PRECOMPILED_WHEEL_COMMIT="1892993bc18e243e2c05841314c5e9c06a80c70d"
 ARG VLLM_PREBUILT=0
 ARG VLLM_USE_PRECOMPILED=1
 

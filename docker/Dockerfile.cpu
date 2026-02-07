@@ -10,7 +10,7 @@ ARG PYTHON_VERSION=3.12
 ARG PIP_EXTRA_INDEX_URL="https://download.pytorch.org/whl/cpu/"
 ARG VLLM_REPO="https://github.com/vllm-project/vllm.git"
 # Pin to a commit SHA1/Tag
-ARG VLLM_COMMIT_SHA="d7de043d55d1dd629554467e23874097e1c48993"
+ARG VLLM_COMMIT_SHA="1892993bc18e243e2c05841314c5e9c06a80c70d"
 ARG TARGETARCH
 # Support for building with non-AVX512 vLLM
 ARG VLLM_CPU_DISABLE_AVX512=0
