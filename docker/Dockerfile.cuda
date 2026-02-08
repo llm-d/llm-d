@@ -425,7 +425,9 @@ RUN export UV_INSTALL_DIR=/usr/local/bin && \
 COPY --from=builder /wheels/*.whl /tmp/wheels/
 
 # Copy in storage offloading connector wheel
-COPY docker/packages/wheels/packages/wheels/llmd_fs_connector-0.1.0-cp312-cp312-linux_x86_64.whl /tmp/wheels/llmd_fs_connector-0.1.0-cp312-cp312-linux_x86_64.whl
+COPY docker/scripts/common/install-offloading-connector.sh /tmp/install-offloading-connector.sh
+RUN TARGETPLATFORM=${TARGETPLATFORM} /tmp/install-runtime-packages.sh && \
+    rm -f /tmp/install-runtime-packages.sh
 
 # Create the vllm user
 RUN useradd --uid 2000 --gid 0 -m vllm && \
