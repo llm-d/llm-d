@@ -134,8 +134,8 @@ ENV LD_LIBRARY_PATH="/usr/local/lib:/usr/lib:${LD_LIBRARY_PATH:-}"
 
 # Copy in storage offloading connector wheel
 COPY docker/scripts/common/install-offloading-connector.sh /tmp/install-offloading-connector.sh
-RUN TARGETPLATFORM=${TARGETPLATFORM} /tmp/install-runtime-packages.sh && \
-    rm -f /tmp/install-runtime-packages.sh
+RUN TARGETPLATFORM=${TARGETPLATFORM} /tmp/install-offloading-connector.sh && \
+    rm -f /tmp/install-offloading-connector.sh
 
 RUN --mount=type=bind,from=vllm-build,src=/workspace/vllm/dist,target=dist \
     --mount=type=cache,target=/root/.cache/uv \

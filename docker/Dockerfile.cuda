@@ -346,6 +346,11 @@ RUN EFA_MODE="runtime" /tmp/install-efa.sh && \
     rm -f /tmp/install-efa.sh /tmp/package-utils.sh && \
     rm -rf /tmp/packages
 
+# Copy in storage offloading connector wheel
+COPY docker/scripts/common/install-offloading-connector.sh /tmp/install-offloading-connector.sh
+RUN TARGETPLATFORM=${TARGETPLATFORM} /tmp/install-offloading-connector.sh && \
+    rm -f /tmp/install-offloading-connector.sh
+
 # Install runtime dependencies
 COPY docker/scripts/cuda/common/package-utils.sh /tmp/package-utils.sh
 COPY docker/packages /tmp/packages
@@ -423,11 +428,6 @@ RUN export UV_INSTALL_DIR=/usr/local/bin && \
 
 # Copy compiled wheels
 COPY --from=builder /wheels/*.whl /tmp/wheels/
-
-# Copy in storage offloading connector wheel
-COPY docker/scripts/common/install-offloading-connector.sh /tmp/install-offloading-connector.sh
-RUN TARGETPLATFORM=${TARGETPLATFORM} /tmp/install-runtime-packages.sh && \
-    rm -f /tmp/install-runtime-packages.sh
 
 # Create the vllm user
 RUN useradd --uid 2000 --gid 0 -m vllm && \
