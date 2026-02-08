@@ -46,8 +46,9 @@ ARG NVSHMEM_VERSION="v3.5.19-1"
 
 ARG BUILD_NIXL_FROM_SOURCE="true"
 ARG NIXL_REPO="https://github.com/ai-dynamo/nixl.git"
-# release branch - tag / official release not out yet
 ARG NIXL_VERSION="release/0.10.0"
+# points to current head of NIXL branch: `release/0.10.0` which is not out yet
+# ARG NIXL_VERSION="42cd82679e42707db344642d2abe85e04592847b". When release ready we will swap to a tag or commit pinning.
 
 ARG INFINISTORE_REPO="https://github.com/bytedance/InfiniStore.git"
 ARG INFINISTORE_VERSION="0.2.33"
@@ -56,8 +57,13 @@ ARG LMCACHE_REPO="https://github.com/LMCache/LMCache.git"
 ARG LMCACHE_VERSION="v0.3.13"
 
 # Kernels
-ARG DEEPEP_REPO="https://github.com/deepseek-ai/DeepEP"
-ARG DEEPEP_VERSION="92fe2deaec24bc92ebd9de276daa6ca9ed602ed4" 
+# ARG DEEPEP_REPO="https://github.com/deepseek-ai/DeepEP"
+# ARG DEEPEP_VERSION="92fe2deaec24bc92ebd9de276daa6ca9ed602ed4" 
+
+# My fork of Deepep for duplicate nvshmem IBGDA definitions, see: https://github.com/deepseek-ai/DeepEP/pull/581. 
+# Ideally we take: https://github.com/deepseek-ai/DeepEP/pull/574.
+ARG DEEPEP_REPO="https://github.com/Gregory-Pereira/DeepEP"
+ARG DEEPEP_VERSION="fix/nvshmem-ibgda-multiple-definition" 
 
 ARG DEEPGEMM_REPO="https://github.com/deepseek-ai/DeepGEMM"
 ARG DEEPGEMM_VERSION="v2.1.0"
