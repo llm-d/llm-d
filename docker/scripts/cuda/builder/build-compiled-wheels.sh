@@ -46,21 +46,19 @@ git clone "${DEEPEP_REPO}" deepep
 cd deepep
 git fetch origin "${DEEPEP_VERSION}" # Workaround for claytons floating commit
 git checkout -q "${DEEPEP_VERSION}"
-
-echo "=== NVSHMEM IBGDA header excerpt (around suspected symbol) ==="
-HDR="${NVSHMEM_DIR}/include/device_host_transport/nvshmem_common_ibgda.h"
-if [ -f "$HDR" ]; then
-  # Print line numbers so we can see exactly what is defined/guarded.
-  nl -ba "$HDR" | sed -n '320,380p'
-else
-  echo "Header not found: $HDR"
-fi
-echo "=============================58==========================="
-nl -ba $NVSHMEM_DIR/include/device_host_transport/nvshmem_common_ibgda.h | sed -n '320,380p' || true
-export CXXFLAGS="${CXXFLAGS:-} -fcommon" # temp workaround
+# Force NVSHMEM IBGDA constant to be extern in host-compiled TUs (prevents duplicate definition)
+BACKUP_CXXFLAGS="${CXXFLAGS-}"
+export CXXFLAGS="${CXXFLAGS:-} -D__NVSHMEM_NUMBA_SUPPORT__"
+grep -R --line-number "nvshmem_common_ibgda.h" csrc || true # debug line
 uv build --wheel --no-build-isolation --out-dir /wheels
 cd ..
 rm -rf deepep
+# restore CXXFLAGS exactly as it was (unset vs set)
+if [ -n "${BACKUP_CXXFLAGS+x}" ]; then
+  export CXXFLAGS="${BACKUP_CXXFLAGS}"
+else
+  unset CXXFLAGS
+fi
 
 # build DeepGEMM wheel
 git clone "${DEEPGEMM_REPO}" deepgemm
