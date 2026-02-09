@@ -48,14 +48,14 @@ spec:
           - name: dshm
             emptyDir:
               medium: Memory
-              sizeLimit: 2Gi  # roughly 32MB per local DP plus scratch space
+              sizeLimit: 2Gi # roughly 32MB per local DP plus scratch space
           - name: hf-cache
             emptyDir: {}
           - name: jit-cache
             emptyDir: {}
         containers:
           - name: vllm
-            image: ghcr.io/llm-d/llm-d-cuda:v0.5.0
+            image: ghcr.io/llm-d/llm-d-cuda:v0.4.0
             securityContext:
               capabilities:
                 add:
@@ -120,7 +120,7 @@ spec:
               # memory NVSHMEM allocates up front.
               # Has no effect when VLLM_ALL2ALL_BACKEND=deepep_high_throughput.
               - name: VLLM_MOE_DP_CHUNK_SIZE
-                value: "384"  # vLLM default is 256
+                value: "384" # vLLM default is 256
               - name: DP_SIZE_LOCAL
                 value: "8"
               - name: TP_SIZE
