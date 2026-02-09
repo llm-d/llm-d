@@ -69,9 +69,7 @@ RUN git clone https://github.com/vllm-project/vllm.git && \
     cd vllm && git checkout ${VLLM_SHA} && \
     git config --system --add safe.directory /app/vllm
 
-COPY install-max-token-guidellm-hack.sh /app/install-max-token-guidellm-hack.sh
-RUN /app/install-max-token-guidellm-hack.sh && \
-    rm /app/install-max-token-guidellm-hack.sh
+RUN pip install 'guidellm[recommended]'
 
 COPY prepare-inference.sh /app/prepare-inference.sh
 
