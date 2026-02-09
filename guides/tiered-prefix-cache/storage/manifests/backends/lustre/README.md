@@ -6,7 +6,7 @@ This guide explains how to provision a managed GCP Lustre instance.
 
 ## Prerequisites
 
-* Ensure your cluster infrastructure is sufficient to [deploy high scale inference](../../../../../../prereq/infrastructure/README.md).
+* Ensure your cluster infrastructure is sufficient to [deploy high scale inference](../../../../../../guides/prereq/infrastructure/README.md).
 * Create a namespace for installation.
 
 ```bash

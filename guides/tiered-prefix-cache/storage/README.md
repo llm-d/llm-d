@@ -60,7 +60,6 @@ cd guides/tiered-prefix-cache/storage
 
 Deploy the Gateway and HTTPRoute using the [gateway recipe](../../recipes/gateway/README.md).
 
-
 ### 2. Prepare a PVC
 
 #### 2.1 Provision the Storage Backend
@@ -101,12 +100,11 @@ To provision a managed GCP Lustre instance on GKE and configure the correspoindi
 
 <!-- TABS:END -->
 
-
 #### 2.2. Create the PVC
 
 This guide requires a shared, POSIX-accessible path to store KV-cache files. This requires a volume that supports ReadWriteMany (RWX). One common option is a Kubernetes PersistentVolumeClaim (PVC) that is mounted into each vLLM pod.
 
-Create a PVC using the `$STORAGE_CLASS` storage class set above. 
+Create a PVC using the `$STORAGE_CLASS` storage class set above.
 
 ```bash
 kubectl apply -f ./manifests/pvc.yaml -n ${NAMESPACE}
@@ -130,11 +128,9 @@ kubectl apply -k ./manifests/vllm/llm-d-fs-connector -n ${NAMESPACE}
 
 #### LMCache Connector
 
-
 ```bash
 kubectl apply -k ./manifests/vllm/lmcache-connector -n ${NAMESPACE}
 ```
-
 
 <!-- TABS:END -->
 
@@ -146,9 +142,9 @@ kubectl apply -k ./manifests/vllm/lmcache-connector -n ${NAMESPACE}
 
 #### llm-d FS Connector
 
-Deploy the `InferencePool` using the [InferencePool recipe](../../../recipes/inferencepool/README.md).
+Deploy the `InferencePool` using the [InferencePool recipe](../../../guides/recipes/inferencepool/README.md).
 
-**NOTE:** This guide uses an InferencePool recipe with HBM cache only. Storage offloading is typically used with CPU offloading, which is not covered, see https://github.com/llm-d/llm-d/issues/682 for a follow up.
+**NOTE:** This guide uses an InferencePool recipe with HBM cache only. Storage offloading is typically used with CPU offloading, which is not covered, see <https://github.com/llm-d/llm-d/issues/682> for a follow up.
 
 <!-- TAB:LMCache Connector -->
 
@@ -157,7 +153,6 @@ Deploy the `InferencePool` using the [InferencePool recipe](../../../recipes/inf
 This guide currently uses the same tired prefix caching scoring configuration, so deploy the inferencepool following [CPU offloading inferencepool guide](../cpu/README.md#deploy-inferencepool). A follow up is to further optimize `inferencepool` configuration considering the storage tier.
 
 <!-- TABS:END -->
-
 
 ## Verifying the installation
 
@@ -241,14 +236,15 @@ export PORT=8000
 export POD_NAME=llm-d-model-server-xxxx-xxxx
 kubectl exec -it $POD_NAME -- curl -i http://${IP}:${PORT}/metrics | grep lmcache:local_storage_usage
 ```
+
 Verify the folder size where the Lustre instance is mounted, it should be in GBs after KV cache offloading completes, the actual size will differ based on the requests served.
+
 ```
 kubectl exec -it $POD_NAME -- du -sh /mnt/files-storage
-65G	/mnt/files-storage
+65G /mnt/files-storage
 ```
 
 <!-- TABS:END -->
-
 
 ## Cleanup
 
@@ -265,5 +261,6 @@ kubectl delete namespace ${NAMESPACE}
 ## Benchmarking
 
 Coming soon, see tracking issues:
-* https://github.com/llm-d/llm-d/issues/680
-* https://github.com/llm-d/llm-d/issues/681
+
+* <https://github.com/llm-d/llm-d/issues/680>
+* <https://github.com/llm-d/llm-d/issues/681>
