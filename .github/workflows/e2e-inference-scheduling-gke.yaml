@@ -4,7 +4,7 @@ on:
   # Runs with a PR comment /run-gke-inference-scheduling
   issue_comment:
     types: [created]
-  schedule: # TODO: enable once validated functional
+  schedule:  # TODO: enable once validated functional
     - cron: '0 10 * * *'  # 3AM PST (10:00 UTC)
   workflow_dispatch:
     inputs:
@@ -142,7 +142,7 @@ jobs:
       - name: Upload helm get all
         run: |
           for release_name in infra-inference-scheduling gaie-inference-scheduling ms-inference-scheduling; do
-            /bin/sh .github/scripts/e2e/helm-get-all.sh \
+            bash .github/scripts/e2e/helm-get-all.sh \
               ~/inference-scheduling-deployment.log \
               "$release_name" \
               "$NAMESPACE"

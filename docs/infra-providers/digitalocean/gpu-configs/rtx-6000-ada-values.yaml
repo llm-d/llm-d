@@ -6,12 +6,12 @@ sampleApplication:
   resources:
     limits:
       nvidia.com/gpu: "1"
-      memory: "48Gi" # Conservative limit for 64Gi host memory
-      cpu: "7" # Conservative limit leaving room for system processes
+      memory: "48Gi"  # Conservative limit for 64Gi host memory
+      cpu: "7"  # Conservative limit leaving room for system processes
     requests:
       nvidia.com/gpu: "1"
-      memory: "24Gi" # Conservative request for stable scheduling
-      cpu: "6" # Conservative request for stable scheduling
+      memory: "24Gi"  # Conservative request for stable scheduling
+      cpu: "6"  # Conservative request for stable scheduling
   tolerations:
     - key: nvidia.com/gpu
       operator: Exists
@@ -19,11 +19,11 @@ sampleApplication:
   decode:
     extraArgs:
       - "--max-model-len"
-      - "16384" # Higher sequence length for 48GB VRAM
+      - "16384"  # Higher sequence length for 48GB VRAM
       - "--gpu-memory-utilization"
-      - "0.85" # Use 85% of GPU memory
+      - "0.85"  # Use 85% of GPU memory
       - "--tensor-parallel-size"
-      - "1" # Single GPU setup
+      - "1"  # Single GPU setup
   prefill:
     extraArgs:
       - "--max-model-len"

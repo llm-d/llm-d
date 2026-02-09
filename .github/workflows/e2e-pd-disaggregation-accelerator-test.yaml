@@ -15,6 +15,7 @@ on:
         type: choice
         options:
           - kgateway
+          - agentgateway
           - istio
       wait_for_termination:
         description: 'Wait time (in minutes) before terminating for debugging'
@@ -453,7 +454,7 @@ jobs:
           ssh -o StrictHostKeyChecking=no -i key.pem ubuntu@$INSTANCE_IP << EOF
             set -euo pipefail
             set -x
-            BACKUP_NAMESPACE="llm-d-pd" /bin/sh llm-d/.github/scripts/e2e/helm-get-all.sh \
+            BACKUP_NAMESPACE="llm-d-pd" llm-d/.github/scripts/e2e/helm-get-all.sh \
               ~/pd-disaggregation-deployment.log \
               llm-d/guides/pd-disaggregation/helmfile.yaml
           EOF

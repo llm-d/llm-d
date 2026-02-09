@@ -58,40 +58,40 @@ usage() {
 # Check prerequisites
 check_prerequisites() {
     print_status "Checking prerequisites..."
-    
+
     if ! command -v kubectl &> /dev/null; then
         print_error "kubectl is not installed or not in PATH"
         exit 1
     fi
-    
+
     if ! command -v helm &> /dev/null; then
         print_error "helm is not installed or not in PATH"
         exit 1
     fi
-    
+
     # Check if kubectl can connect to cluster
     if ! kubectl cluster-info &> /dev/null; then
         print_error "Cannot connect to Kubernetes cluster"
         exit 1
     fi
-    
+
     print_success "Prerequisites check passed"
 }
 
 # Add Helm repositories
 setup_helm_repos() {
     print_status "Setting up Helm repositories..."
-    
+
     helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
     helm repo update
-    
+
     print_success "Helm repositories configured"
 }
 
 # Create namespace
 create_namespace() {
     print_status "Creating namespace: ${NAMESPACE}"
-    
+
     if kubectl get namespace ${NAMESPACE} &> /dev/null; then
         print_warning "Namespace ${NAMESPACE} already exists"
     else
@@ -103,7 +103,7 @@ create_namespace() {
 # Install Prometheus Stack
 install_prometheus_stack() {
     print_status "Installing Prometheus Stack with P/D Disaggregation configuration..."
-    
+
     # Create P/D Disaggregation optimized values
     cat > prometheus-pd-values.yaml << 'EOF'
 # DigitalOcean P/D Disaggregation Monitoring Configuration
@@ -125,7 +125,7 @@ prometheus:
           resources:
             requests:
               storage: 30Gi
-    
+
     # ServiceMonitor selector - allows discovery of P/D ServiceMonitors
     serviceMonitorSelectorNilUsesHelmValues: false
     serviceMonitorSelector:
@@ -150,7 +150,7 @@ grafana:
     enabled: true
     storageClassName: do-block-storage
     size: 10Gi
-  
+
   # Enable sidecar for dashboard discovery
   sidecar:
     dashboards:
@@ -158,7 +158,7 @@ grafana:
       searchNamespace: llm-d-monitoring
       label: grafana_dashboard
       folderAnnotation: grafana_folder
-  
+
   # Default admin password (you should change this)
   adminPassword: admin
 
@@ -177,11 +177,11 @@ EOF
     # Check if release already exists
     if helm list -n ${NAMESPACE} | grep -q ${RELEASE_NAME}; then
         print_warning "Prometheus stack already installed. Upgrading..."
-        
+
         # Clean up any incomplete installations
         kubectl delete job --ignore-not-found=true -n ${NAMESPACE} -l app.kubernetes.io/name=prometheus-admission-delete
         kubectl delete job --ignore-not-found=true -n ${NAMESPACE} -l app.kubernetes.io/name=prometheus-admission-patch
-        
+
         helm upgrade ${RELEASE_NAME} prometheus-community/kube-prometheus-stack \
             -n ${NAMESPACE} \
             -f prometheus-pd-values.yaml \
@@ -192,14 +192,14 @@ EOF
             -f prometheus-pd-values.yaml \
             --wait --timeout=600s
     fi
-    
+
     print_success "Prometheus Stack installed successfully"
 }
 
 # Create P/D ServiceMonitors
 create_pd_servicemonitors() {
     print_status "Creating P/D Disaggregation ServiceMonitors..."
-    
+
     # Create ServiceMonitor for EPP component with authentication
     cat <<EOF | kubectl apply -f -
 apiVersion: monitoring.coreos.com/v1
@@ -263,31 +263,31 @@ spec:
     interval: 30s
     scrapeTimeout: 10s
 EOF
-    
+
     print_success "P/D Disaggregation ServiceMonitors created successfully"
 }
 
 # Import Inference Gateway Dashboard
 import_inference_gateway_dashboard() {
     print_status "Importing Inference Gateway Dashboard..."
-    
+
     # Wait for Grafana to be ready
     kubectl wait --for=condition=ready pod -l app.kubernetes.io/name=grafana -n ${NAMESPACE} --timeout=300s
-    
+
     # Import inference gateway dashboard
     if [[ -f "${SCRIPT_DIR}/inference-gateway-dashboard.json" ]]; then
         # Delete existing ConfigMap if it exists
         kubectl delete configmap inference-gateway-dashboard -n ${NAMESPACE} --ignore-not-found=true
-        
+
         # Create new ConfigMap with proper structure for Grafana Sidecar
         kubectl create configmap inference-gateway-dashboard \
             --from-file="${SCRIPT_DIR}/inference-gateway-dashboard.json" \
             -n ${NAMESPACE}
-        
+
         # Add required labels for Grafana Sidecar discovery
         kubectl label configmap inference-gateway-dashboard grafana_dashboard=1 -n ${NAMESPACE} --overwrite
         kubectl annotate configmap inference-gateway-dashboard grafana_folder="Inference Gateway" -n ${NAMESPACE} --overwrite
-        
+
         print_success "Inference Gateway Dashboard imported successfully"
     else
         print_error "Dashboard file not found: ${SCRIPT_DIR}/inference-gateway-dashboard.json"
@@ -297,14 +297,14 @@ import_inference_gateway_dashboard() {
 # Main installation function
 install_monitoring() {
     print_header
-    
+
     check_prerequisites
     setup_helm_repos
     create_namespace
     install_prometheus_stack
     create_pd_servicemonitors
     import_inference_gateway_dashboard
-    
+
     echo ""
     print_success "✅ P/D Disaggregation Monitoring Setup Complete!"
     echo ""
@@ -327,22 +327,22 @@ install_monitoring() {
 # Uninstall monitoring
 uninstall_monitoring() {
     print_status "Uninstalling P/D Disaggregation Monitoring..."
-    
+
     # Remove Helm release
     if helm list -n ${NAMESPACE} | grep -q ${RELEASE_NAME}; then
         helm uninstall ${RELEASE_NAME} -n ${NAMESPACE}
         print_success "Prometheus stack uninstalled"
     fi
-    
+
     # Remove ServiceMonitors
     kubectl delete servicemonitors -n ${NAMESPACE} --all --ignore-not-found=true
-    
+
     # Remove namespace
     kubectl delete namespace ${NAMESPACE} --ignore-not-found=true
-    
+
     # Clean up local files
     rm -f prometheus-pd-values.yaml
-    
+
     print_success "✅ Monitoring stack completely removed"
 }
 

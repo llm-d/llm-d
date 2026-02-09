@@ -3,6 +3,6 @@ kind: Kustomization
 resources:
   - ../base
 patches:
-- path: gateway.yaml
-  target:
-    kind: Gateway
+  - path: gateway.yaml
+    target:
+      kind: Gateway

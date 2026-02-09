@@ -6,7 +6,7 @@ sampleApplication:
   resources:
     limits:
       nvidia.com/gpu: "1"
-      memory: "96Gi" # Host memory for L40S nodes
+      memory: "96Gi"  # Host memory for L40S nodes
       cpu: "24"
     requests:
       nvidia.com/gpu: "1"
@@ -19,12 +19,12 @@ sampleApplication:
   decode:
     extraArgs:
       - "--max-model-len"
-      - "20480" # Higher sequence length for 48GB VRAM
+      - "20480"  # Higher sequence length for 48GB VRAM
       - "--gpu-memory-utilization"
-      - "0.85" # Use 85% of GPU memory
-      - "--enable-chunked-prefill" # Enable chunked prefill for better memory usage
+      - "0.85"  # Use 85% of GPU memory
+      - "--enable-chunked-prefill"  # Enable chunked prefill for better memory usage
       - "--tensor-parallel-size"
-      - "1" # Single GPU setup
+      - "1"  # Single GPU setup
   prefill:
     extraArgs:
       - "--max-model-len"

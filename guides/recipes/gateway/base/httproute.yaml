@@ -4,20 +4,19 @@ metadata:
   name: llm-d-route
 spec:
   parentRefs:
-  - group: gateway.networking.k8s.io
-    kind: Gateway
-    name: llm-d-inference-gateway
+    - group: gateway.networking.k8s.io
+      kind: Gateway
+      name: llm-d-inference-gateway
   rules:
     - backendRefs:
-      - group: inference.networking.k8s.io
-        kind: InferencePool
-        name: llm-d-infpool
-        port: 8000
+        - group: inference.networking.k8s.io
+          kind: InferencePool
+          name: llm-d-infpool
+          port: 8000
       timeouts:
         backendRequest: 0s
         request: 0s
       matches:
-      - path:
-          type: PathPrefix
-          value: /
-      
+        - path:
+            type: PathPrefix
+            value: /

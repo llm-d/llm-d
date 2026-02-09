@@ -2,19 +2,21 @@ environments:
   istio: &I
     values:
       - ../prereq/gateway-provider/common-configurations/istio.yaml
-  istioBench: &IB
-    values:
-      - ../prereq/gateway-provider/common-configurations/istio.yaml
-      - ../prereq/gateway-provider/common-configurations/benchmarking.yaml
   kgateway: &KG
     values:
       - ../prereq/gateway-provider/common-configurations/kgateway.yaml
+  agentgateway: &AG
+    values:
+      - ../prereq/gateway-provider/common-configurations/agentgateway.yaml
   gke: &GKE
     values:
       - ../prereq/gateway-provider/common-configurations/gke.yaml
-  gke_tpu: &GKE_TPU
+  gke_tpu: &GKETPU
+    <<: *GKE
+  standalone: &STANDALONE
     values:
-      - ../prereq/gateway-provider/common-configurations/gke_tpu.yaml
+      - provider:
+          name: none
   xpu: &XPU
     <<: *I
   gaudi: &GAUDI
@@ -38,33 +40,39 @@ repositories:
     url: https://llm-d-incubation.github.io/llm-d-infra/
 
 releases:
+{{- if ne .Environment.Name "standalone" }}
   - name: {{ printf "infra-%s" $rn | quote }}
     namespace: {{ $ns }}
     chart: llm-d-infra/llm-d-infra
-    version: v1.3.4
-    installed: true
+    version: v1.3.6
+    installed:  true
     labels:
       type: infrastructure
       kind: inference-stack
     values:
-      - gateway: 
+      - gateway:
           {{ .Environment.Values.gateway | toYaml | nindent 10 }}
+{{- end }}
 
   - name: {{ printf "gaie-%s" $rn | quote }}
     namespace: {{ $ns }}
     chart: oci://registry.k8s.io/gateway-api-inference-extension/charts/inferencepool
-    version: v1.2.0-rc.1
+    version: v1.3.0
     installed: true
     needs:
+      {{- if ne .Environment.Name "standalone" }}
       - {{ printf "infra-%s" $rn | quote }}
+      {{- end }}
     values:
+      {{- if ne .Environment.Name "standalone" }}
       - gaie-inference-scheduling/values.yaml
+      {{- else }}
+      - standalone-inference-scheduling/values.yaml
+      {{- end }}
     # Apply provider name if on GKE
     {{- if or (eq .Environment.Name "gke") (eq .Environment.Name "gke_tpu") }}
       - provider:
           name: {{ .Environment.Values.provider.name }}
-        inferencePool:
-          apiVersion: {{ .Environment.Values.inferencePool.apiVersion }}
         inferenceExtension:
           monitoring:
             gke:
@@ -73,7 +81,7 @@ releases:
               enabled: false
     {{- end }}
     # Apply destination rule for anything istio
-    {{- if or (eq .Environment.Name "istio") (eq .Environment.Name "default") (eq .Environment.Name "istioBench") (eq .Environment.Name "xpu") (eq .Environment.Name "gaudi") (eq .Environment.Name "cpu") }}
+    {{- if or (eq .Environment.Name "istio") (eq .Environment.Name "default") (eq .Environment.Name "xpu") (eq .Environment.Name "gaudi") (eq .Environment.Name "cpu") }}
       - provider:
           name: {{ .Environment.Values.provider.name }}
           istio:
@@ -83,22 +91,18 @@ releases:
             destinationRule:
               host: {{ printf "gaie-%s-epp.%s.svc.cluster.local" $rn $ns | quote }}
     {{- end }}
-    # Apply log level only in bench setting
-    {{- if (eq .Environment.Name "istioBench") }}
-      - inferenceExtension:
-          flags: 
-            {{ .Environment.Values.inferenceExtension.flags | toYaml | nindent 12 }}
-    {{- end }}
     labels:
       kind: inference-stack
 
   - name: {{ printf "ms-%s" $rn | quote }}
     namespace: {{ $ns }}
     chart: llm-d-modelservice/llm-d-modelservice
-    version: v0.3.8
+    version: v0.4.5
     installed: true
     needs:
+      {{- if ne .Environment.Name "standalone" }}
       - {{ printf "infra-%s" $rn | quote }}
+      {{- end }}
       - {{ printf "gaie-%s" $rn | quote }}
     values:
     {{- if eq .Environment.Name "gke_tpu" }}
@@ -114,12 +118,8 @@ releases:
     {{- else }}
       - ms-inference-scheduling/values.yaml
     {{- end }}
-    {{- if (eq .Environment.Name "istioBench") }}
-      - routing: 
-          {{ .Environment.Values.routing | toYaml | nindent 10 }}
-    {{- end }}
     set:
-    {{- if or (eq .Environment.Name "gke") (eq .Environment.Name "gke_tpu") }}  
+    {{- if or (eq .Environment.Name "gke") (eq .Environment.Name "gke_tpu") }}
       - name: "decode.monitoring.podmonitor.enabled"
         value: false
     {{- end }}

@@ -4,16 +4,27 @@
 
 This document provides complete steps for deploying a PD (Prefill-Decode) disaggregation service on a Google Kubernetes Engine (GKE) cluster using the Llama-3.3-70B-Instruct model. PD disaggregation separates the prefill and decode phases of inference, enabling more efficient resource utilization and improved throughput.
 
-For broader context or GPU setup, refer to this [p/d guide](./README.md) 
+For broader context or GPU setup, refer to this [p/d guide](./README.md)
 
 ## Hardware Requirements
+
 This guide uses Cloud TPU v6e (Trillium) accelerators on Google Cloud Platform (GCP), specifically the `ct6e-standard-8t` machine type. You may also choose other compatible TPU VM types.
 
 ## Prerequisites
+
 - Have the [proper client tools installed on your local system](../prereq/client-setup/README.md) to use this guide.
-- Possess a valid Hugging Face token for pulling models.
+- Create a namespace for installation.
+
+  ```bash
+  export NAMESPACE=llm-d-pd # or any other namespace (shorter names recommended)
+  kubectl create namespace ${NAMESPACE}
+  ```
+
+- [Create the `llm-d-hf-token` secret in your target namespace with the key `HF_TOKEN` matching a valid HuggingFace token](../prereq/client-setup/README.md#huggingface-token) to pull models.
+- [Choose an llm-d version](../prereq/client-setup/README.md#llm-d-version)
 
 ## Installation Steps
+
 The following steps detail a fresh deployment of a PD disaggregation service on GKE using TPU accelerators. If you are using existing infrastructure, skip the relevant steps.
 
 ### Step 1 Prepare GKE Cluster
@@ -22,32 +33,7 @@ Please refer to [llm-d on GKE Documentation](../../docs/infra-providers/gke/READ
 
 ### Step 2 Install the Stack
 
-#### 2.1 Create Namespace
-
-Create the namespace for the deployment. You may use a custom namespace if preferred.
-
-```bash
-# Clone the repo and switch to the latest release tag 
-tag=$(curl -s https://api.github.com/repos/llm-d/llm-d/releases/latest | jq -r '.tag_name')
-git clone https://github.com/llm-d/llm-d.git && cd llm-d && git checkout "$tag"
-
-export NAMESPACE=llm-d-pd # Or any namespace your heart desires
-kubectl create namespace ${NAMESPACE}
-```
-
-#### 2.2 Create HF Token Secret
-
-Create a Kubernetes secret to store your Hugging Face token:
-
-```bash
-export HF_TOKEN=<YOUR_HF_TOKEN>
-
-kubectl create secret generic llm-d-hf-token \
-  --namespace "${NAMESPACE}" \
-  --from-literal="HF_TOKEN=${HF_TOKEN}"
-```
-
-#### 2.3 Install the stack via helmfile
+#### 2.1 Install the stack via helmfile
 
 Use the helmfile to compose and install the stack. The Namespace in which the stack will be deployed will be derived from the ${NAMESPACE} environment variable. If you have not set this, it will default to llm-d-pd in this example.
 
@@ -56,7 +42,7 @@ cd guides/pd-disaggregation
 helmfile apply -e gke_tpu -n ${NAMESPACE}
 ```
 
-#### 2.4 Install HTTPRoute
+#### 2.2 Install HTTPRoute
 
 Apply the HTTPRoute configuration:
 
@@ -70,10 +56,10 @@ kubectl apply -f httproute.gke.yaml -n ${NAMESPACE}
 
 ```bash
 helm list -n ${NAMESPACE}
-NAME    	NAMESPACE 	REVISION	UPDATED                                	STATUS  	CHART                     	APP VERSION
-gaie-pd 	llm-d-pd	1       	2025-11-07 00:31:54.106881562 +0000 UTC	deployed	inferencepool-v1.0.1      	v1.0.1
-infra-pd	llm-d-pd	1       	2025-11-07 00:31:50.355629868 +0000 UTC	deployed	llm-d-infra-v1.3.4        	v0.3.0
-ms-pd   	llm-d-pd	7       	2025-11-07 17:45:30.946563039 +0000 UTC	deployed	llm-d-modelservice-v0.3.8	v0.3.0
+NAME     NAMESPACE  REVISION UPDATED                                 STATUS   CHART                      APP VERSION
+gaie-pd  llm-d-pd   1        2025-11-07 00:31:54.106881562 +0000 UTC deployed inferencepool-v1.3.0       v1.3.0
+infra-pd llm-d-pd   1        2025-11-07 00:31:50.355629868 +0000 UTC deployed llm-d-infra-v1.3.6         v0.3.0
+ms-pd    llm-d-pd   7        2025-11-07 17:45:30.946563039 +0000 UTC deployed llm-d-modelservice-v0.4.5   v0.4.0
 ```
 
 - Out of the box with this example you should have the following resources:
@@ -115,6 +101,7 @@ infra-pd-inference-gateway   gke-l7-regional-external-managed   123.123.123.123 
 ## Using the stack
 
 1. Get the endpoint of GKE Gateway using below command
+
     ```bash
     export ENDPOINT="http://$(kubectl get gateway -n ${NAMESPACE} -o jsonpath='{.items[0].status.addresses[0].value}')"
     echo "Using endpoint: $ENDPOINT"
@@ -219,7 +206,7 @@ For more information see [our docs](../../docs/getting-started-inferencing.md)
 
 Selective PD is a feature in the `inference-scheduler` within the context of prefill-decode dissagregation, although it is disabled by default. This features enables routing to just decode even with the P/D deployed.
 
-For information on this plugin, see our [`pd-profile-handler` docs in the inference-scheduler](https://github.com/llm-d/llm-d-inference-scheduler/blob/v0.3.0/docs/architecture.md?plain=1#L205-L210)
+For information on this plugin, see our [`pd-profile-handler` docs in the inference-scheduler](https://github.com/llm-d/llm-d-inference-scheduler/blob/v0.5.0/docs/architecture.md?plain=1#L205-L210)
 
 ## Cleanup
 

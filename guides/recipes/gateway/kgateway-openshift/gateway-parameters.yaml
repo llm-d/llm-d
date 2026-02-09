@@ -2,7 +2,7 @@ apiVersion: gateway.kgateway.dev/v1alpha1
 kind: GatewayParameters
 metadata:
   name: kgateway-params
-  labels: 
+  labels:
     app.kubernetes.io/component: inference-gateway
 spec:
   kube:

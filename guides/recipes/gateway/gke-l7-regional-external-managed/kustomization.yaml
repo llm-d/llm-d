@@ -1,19 +1,18 @@
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 resources:
-- ../base
+  - ../base
 patches:
-- target:
-    kind: Gateway
-    name: llm-d-inference-gateway
-  patch: |-
-    - op: add
-      path: /spec/gatewayClassName
-      value: gke-l7-regional-external-managed
-- target:
-    kind: HTTPRoute
-    name: llm-d-route
-  patch: |-
-    - op: remove
-      path: /spec/rules/0/timeouts
-
+  - target:
+      kind: Gateway
+      name: llm-d-inference-gateway
+    patch: |-
+      - op: add
+        path: /spec/gatewayClassName
+        value: gke-l7-regional-external-managed
+  - target:
+      kind: HTTPRoute
+      name: llm-d-route
+    patch: |-
+      - op: remove
+        path: /spec/rules/0/timeouts

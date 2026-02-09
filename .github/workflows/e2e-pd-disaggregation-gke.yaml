@@ -4,7 +4,7 @@ on:
   # Runs with a PR comment /run-gke-pd-disaggregation
   issue_comment:
     types: [created]
-  schedule: # TODO: enable once validated functional
+  schedule:  # TODO: enable once validated functional
     - cron: '0 11 * * *'  # 4AM PST (11:00 UTC)
   workflow_dispatch:
     inputs:
@@ -171,7 +171,7 @@ jobs:
         run: |
           release_names=(infra-pd gaie-pd ms-pd)
           for release_name in ${release_names[@]}; do
-            /bin/sh .github/scripts/e2e/helm-get-all.sh \
+            bash .github/scripts/e2e/helm-get-all.sh \
               ~/pd-disaggregation-deployment.log \
               "${release_name}" \
               "llm-d-pd"

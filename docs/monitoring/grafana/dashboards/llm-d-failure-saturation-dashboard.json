@@ -560,7 +560,7 @@
         "type": "prometheus",
         "uid": "${DS_PROMETHEUS}"
       },
-      "description": "P99 Time per Output Token by model (measures generation speed)",
+      "description": "P99 Inter-Token Latency by model (measures generation speed)",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -643,14 +643,14 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.99, sum by(le, model_name) (rate(vllm:time_per_output_token_seconds_bucket{namespace=~\"$namespace\",model_name=~\"$model_name\"}[5m])))",
+          "expr": "histogram_quantile(0.99, sum by(le, model_name) (rate(vllm:inter_token_latency_seconds_bucket{namespace=~\"$namespace\",model_name=~\"$model_name\"}[5m])))",
           "instant": false,
           "legendFormat": "{{model_name}}",
           "range": true,
           "refId": "A"
         }
       ],
-      "title": "Model-Specific TPT P99",
+      "title": "Model-Specific Inter-Token Latency P99",
       "type": "timeseries"
     },
     {

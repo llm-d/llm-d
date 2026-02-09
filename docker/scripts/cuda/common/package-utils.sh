@@ -5,6 +5,33 @@
 # - CUDA_MAJOR: CUDA major version (e.g., 12)
 # - CUDA_MINOR: CUDA minor version (e.g., 9)
 # - PYTHON_VERSION: Python version (e.g., 3.12)
+# Optional docker secret mounts:
+# - /run/secrets/subman_org: Subscription Manager Organization - used if on a ubi based image for entitlement
+# - /run/secrets/subman_activation_key: Subscription Manager Activation key - used if on a ubi based image for entitlement
+
+# Assumes rhel check in consuming script
+ensure_registered() {
+  install -d -m0755 /etc/pki/consumer /etc/pki/entitlement /etc/rhsm
+  subscription-manager clean || true
+  if [ ! -f /etc/pki/consumer/cert.pem ]; then
+    test -f /run/secrets/subman_org && test -f /run/secrets/subman_activation_key
+    subscription-manager register \
+      --org "$(cat /run/secrets/subman_org)" \
+      --activationkey "$(cat /run/secrets/subman_activation_key)" \
+      --force
+    subscription-manager refresh || true
+  fi
+}
+
+# Assumes rhel check in consuming script
+ensure_unregistered() {
+  echo "beginning un-registration process"
+  if [ -f /etc/pki/consumer/cert.pem ]; then
+    subscription-manager unregister || true
+  fi
+  subscription-manager clean || true
+  rm -rf /etc/pki/entitlement/* /etc/pki/consumer/* /etc/rhsm/* /var/cache/dnf/* || true
+}
 
 # detect architecture for repo URLs
 get_download_arch() {
@@ -52,8 +79,10 @@ setup_ubuntu_repos() {
     export DEBIAN_FRONTEND=noninteractive
     apt-get update -qq
     apt-get install -y software-properties-common
-    add-apt-repository universe
+    add-apt-repository -y universe
     apt-get update -qq
+    # efa uses apt for installing packages rather than apt-get
+    apt update -qq
 }
 
 # setup rhel repos (EPEL and CUDA)
@@ -177,6 +206,7 @@ merge_package_manifests() {
 # package_type: "builder-packages.json" or "runtime-packages.json"
 # accelerator: "cuda", "xpu", "hpu", etc.
 # returns: package names (one per line) for the target os
+# if no accelerator is passed only the common manifests will be used
 load_layered_packages() {
     local os="$1"
     local package_type="$2"

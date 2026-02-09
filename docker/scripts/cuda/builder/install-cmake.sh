@@ -1,5 +1,5 @@
 #!/bin/bash
-set -Eeu
+set -Eeux
 
 # purpose: install cmake 3.22.0 as a workaround for building nvshmem from source
 # CMAKE version is locked here because the url changes when downloading from github based on the version

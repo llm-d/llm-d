@@ -1,0 +1,15 @@
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: lustre-class
+provisioner: lustre.csi.storage.gke.io
+volumeBindingMode: Immediate
+reclaimPolicy: Delete
+parameters:
+  network: $NETWORK_NAME # Add your network name here
+  perUnitStorageThroughput: "1000"
+allowedTopologies:
+  - matchLabelExpressions:
+      - key: topology.gke.io/zone
+        values:
+          - $LOCATION # Add the location where you want to provision lustre instance.

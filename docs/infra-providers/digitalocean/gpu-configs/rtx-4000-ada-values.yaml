@@ -7,7 +7,7 @@ sampleApplication:
   resources:
     limits:
       nvidia.com/gpu: "1"
-      memory: "32Gi" # Host memory for RTX 4000 Ada nodes
+      memory: "32Gi"  # Host memory for RTX 4000 Ada nodes
       cpu: "8"
     requests:
       nvidia.com/gpu: "1"
@@ -22,14 +22,14 @@ sampleApplication:
   decode:
     extraArgs:
       - "--max-model-len"
-      - "8192" # Conservative sequence length for 20GB VRAM
+      - "8192"  # Conservative sequence length for 20GB VRAM
       - "--gpu-memory-utilization"
-      - "0.85" # Use 85% of GPU memory
+      - "0.85"  # Use 85% of GPU memory
       - "--enforce-eager" # Disable CUDA graph to save memory
       - "--tensor-parallel-size"
-      - "1" # Single GPU setup
+      - "1"  # Single GPU setup
       - "--block-size"
-      - "16" # Smaller block size for better memory efficiency
+      - "16"  # Smaller block size for better memory efficiency
 
   # Prefill configuration with memory optimizations
   prefill:

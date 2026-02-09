@@ -91,3 +91,75 @@ To set up pre-commit locally:
 pip install pre-commit
 pre-commit install
 ```
+
+## Required Tools for Pre-commit
+
+The pre-commit hooks require the following tools to be installed on your system:
+
+### Python-based tools (installed automatically by pre-commit)
+
+- **yamllint** - YAML linting
+- **markdownlint-cli** - Markdown linting
+
+### System tools (must be installed manually)
+
+- **shellcheck** - Shell script linting
+
+  ```bash
+  # Fedora/RHEL
+  sudo dnf install shellcheck
+
+  # Ubuntu/Debian
+  sudo apt install shellcheck
+
+  # macOS
+  brew install shellcheck
+  ```
+
+- **hadolint** - Dockerfile linting
+
+  ```bash
+  # Download and install
+  wget -O /usr/local/bin/hadolint https://github.com/hadolint/hadolint/releases/download/v2.14.0/hadolint-Linux-x86_64
+  chmod +x /usr/local/bin/hadolint
+  ```
+
+### Optional but recommended
+
+- **Python 3.12+** - For custom linting scripts
+- **yq v4** - For YAML processing (used in some scripts)
+
+## Pre-commit Tool Configuration Files
+
+The following configuration files control the behavior of pre-commit tools:
+
+### Pre-commit Framework
+
+- **`.pre-commit-config.yaml`** - Main pre-commit framework configuration
+  - Located in repository root
+  - Defines which pre-commit hooks are enabled and their versions
+  - Configures hook execution order and file patterns
+  - Used by: `pre-commit` framework when running `git commit`
+
+### Markdown Linting
+
+- **`.markdownlint.json`** - Configuration for `markdownlint-cli` pre-commit hook
+  - Located in repository root
+  - Controls markdown style and formatting rules
+  - Used by: pre-commit hook `igorshubovych/markdownlint-cli`
+
+### Link Checking
+
+- **`.github/lychee.toml`** - Configuration for `lychee` link checker
+  - Located in `.github/` directory
+  - Controls link validation behavior, exclusions, and retry settings
+  - Used by: `lychee-action` in `.github/workflows/ci-pr-checks.yaml`
+  - Contains exclusions for websites with anti-scraping behaviors
+
+### Dockerfile Linting
+
+- **`.hadolint.yaml`** - Configuration for `hadolint` Dockerfile linter
+  - Located in repository root
+  - Controls which hadolint rules to ignore and failure threshold
+  - Used by: pre-commit hook `hadolint/hadolint`
+  - Contains ignored rules for workflow patterns and package manager preferences

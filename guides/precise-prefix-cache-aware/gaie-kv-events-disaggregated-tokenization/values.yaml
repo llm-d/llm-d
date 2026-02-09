@@ -1,0 +1,103 @@
+inferenceExtension:
+  replicas: 1
+  flags:
+    # in vLLM 10.0+, the metric is renamed while upstream GAIE is still using the old name as default.
+    # See https://github.com/kubernetes-sigs/gateway-api-inference-extension/pull/1905.
+    kv-cache-usage-percentage-metric: "vllm:kv_cache_usage_perc"
+    v: 4 # log verbosity
+  image:
+    # both downstream infernece-scheduler and upstream epp images can support precise KV Cache awareness based on the configurations here
+    ###################
+    name: llm-d-inference-scheduler
+    hub: ghcr.io/llm-d
+    tag: v0.5.0
+    ###################
+    # name: epp
+    # hub: registry.k8s.io/gateway-api-inference-extension
+    # tag: v1.3.0
+    ###################
+    pullPolicy: Always
+  extProcPort: 9002
+  # ZMQ port for `kvevents.Pool` (KVEvents subscriber)
+  extraContainerPorts:
+    - name: zmq
+      containerPort: 5557
+      protocol: TCP
+  extraServicePorts:
+    - name: zmq
+      port: 5557
+      targetPort: 5557
+      protocol: TCP
+  # huggingface token for tokenizer
+  env:
+    - name: HF_TOKEN
+      valueFrom:
+        secretKeyRef:
+          name: llm-d-hf-token
+          key: HF_TOKEN
+  sidecar:
+    enabled: true
+    image: registry-cn-hangzhou.ack.aliyuncs.com/dev/llm-d-uds-tokenizer:v0.5.0.rc1-0-apsara
+    imagePullPolicy: IfNotPresent
+    name: tokenizer-uds
+    volumeMounts:
+      - mountPath: /tmp/tokenizer
+        name: tokenizer-uds
+  volumes:
+    - emptyDir: {}
+      name: tokenizer-uds
+  volumeMounts:
+    - mountPath: /tmp/tokenizer
+      name: tokenizer-uds
+  pluginsConfigFile: "precise-prefix-cache-config.yaml"
+  pluginsCustomConfig:
+    precise-prefix-cache-config.yaml: |
+      apiVersion: inference.networking.x-k8s.io/v1alpha1
+      kind: EndpointPickerConfig
+      plugins:
+        - type: single-profile-handler
+        - type: precise-prefix-cache-scorer
+          parameters:
+            tokenProcessorConfig:
+              blockSize: 64
+              hashSeed: "42"
+            indexerConfig:
+              tokenizersPoolConfig:
+                modelName: Qwen/Qwen3-0.6B
+                local: null
+                hf: null
+                uds:
+                  socketFile: /tmp/tokenizer/tokenizer-uds.socket
+        - type: kv-cache-utilization-scorer
+        - type: queue-scorer
+        - type: max-score-picker
+      schedulingProfiles:
+        - name: default
+          plugins:
+            - pluginRef: precise-prefix-cache-scorer
+              weight: 3.0
+            - pluginRef: kv-cache-utilization-scorer
+              weight: 2.0
+            - pluginRef: queue-scorer
+              weight: 2.0
+            - pluginRef: max-score-picker
+
+  # Monitoring configuration for EPP
+  monitoring:
+    secret:
+      name: kv-events-gateway-sa-metrics-reader-secret
+    interval: "10s"
+    # Prometheus ServiceMonitor will be created when enabled for EPP metrics collection
+    prometheus:
+      enabled: true
+      auth:
+        # To allow unauthenticated /metrics access (e.g., for debugging with curl), set to false
+        enabled: true
+inferencePool:
+  targetPorts:
+    - number: 8000
+  modelServerType: vllm
+  modelServers:
+    matchLabels:
+      llm-d.ai/inference-serving: "true"
+      llm-d.ai/guide: "precise-prefix-cache-aware"

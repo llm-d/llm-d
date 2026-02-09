@@ -71,7 +71,7 @@ rules:
       - servicemonitors
       - podmonitors
     verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
-  
+
   # GAIE stuff
   - apiGroups: ["inference.networking.k8s.io", "inference.networking.x-k8s.io", "serving.kserve.io"]
     resources: ["*"]

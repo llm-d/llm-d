@@ -30,7 +30,6 @@ ModelService addresses these challenges by defining a Helm chart that can be use
 
 **Ease of configuration optimization:** Seamlessly integrate with ecosystem components, such as grid search and Bayesian optimization tools for optimizing the deployment configuration.
 
-
 ## Non-Goals
 
 **Going beyond llm-d (initially):** ModelService is purpose-built for llm-d, with a strict focus on model and LoRA deployment on the llm-d platform.
@@ -43,16 +42,26 @@ ModelService addresses these challenges by defining a Helm chart that can be use
 
 This proposal introduces **ModelService** as a Helm chart for serving base models and LoRA adapters on the llm-d platform. The Helm chart will encapsulate all relevant components (deployments, services, RBAC, EPP, inference model, and pool) into a single coherent package. Users will be able to enable/disable specific components (e.g., prefill, decode) via flags in `values.yaml`.
 
-The Helm chart supports the declarative deployment of base models and LoRA adapters using flexible artifact sources (Hugging Face, PVC, OCI), disaggregated prefill-decode workloads, and multi-node inference with LeaderWorkerSets. HPA integration will be supported via conditional template blocks and `values.yaml`-driven configuration. The Helm chart will also allow test-specific ModelService configurations to be deployed in isolation for benchmarking performance and cost efficiency. In particular, it will play well with llm-d-benchmark processes and tooling. Finally, through its values schema, it will expose clean integration points for external configuration search tools (e.g., grid search, Bayesian optimization), enabling automated exploration of parameters like parallelism levels and KV caching strategies.
+The Helm chart supports the declarative deployment of base models and LoRA adapters using flexible artifact sources
+(Hugging Face, PVC, OCI), disaggregated prefill-decode workloads, and multi-node inference with LeaderWorkerSets.
+HPA integration will be supported via conditional template blocks and `values.yaml`-driven configuration.
+The Helm chart will also allow test-specific ModelService configurations to be deployed in isolation for benchmarking
+performance and cost efficiency. In particular, it will play well with llm-d-benchmark processes and tooling.
+Finally, through its values schema, it will expose clean integration points for external configuration search tools
+(e.g., grid search, Bayesian optimization), enabling automated exploration of parameters like parallelism levels and
+KV caching strategies.
 
 The ModelService Helm chart will only deploy namespace-scoped resources. Helm’s layering model allows platform owners to define reusable `preset-values.yaml` for platform defaults (e.g., accelerator type, sidecars, readiness), while model owners can supply `model-values.yaml` to override only the specifics (e.g., artifact URI, replicas, args). This structure encourages safe customization and sharing. Any last-mile modifications can also be handled using [kustomize's built-in helm chart support](https://github.com/kubernetes-sigs/kustomize/blob/master/examples/chart.md).
 
 Overall, the Helm-based architecture will simplify onboarding, enable reproducibility, and provide a robust foundation for experimentation and configuration search on llm-d—paving the way toward a more production-ready deployment system in the future.
 
-
 ## Implementation status
 
-An initial prototype of ModelService is [here](https://github.com/llm-d/llm-d-model-service/tree/main), and it was featured as part of the llm-d launch demos at Red Hat Summit, 2025. The initial design documented in this repo (as of May 29th, 2025; the time of writing this proposal) is based on a ModelService Kubernetes operator (CRD + controller). Our plan is to migrate from the CRD approach to a Helm chart.
+An initial prototype of ModelService is
+[available in the llm-d-model-service repository](https://github.com/llm-d/llm-d-model-service/tree/main),
+and it was featured as part of the llm-d launch demos at Red Hat Summit, 2025.
+The initial design documented in this repo (as of May 29th, 2025; the time of writing this proposal) is based on a
+ModelService Kubernetes operator (CRD + controller). Our plan is to migrate from the CRD approach to a Helm chart.
 
 ## Success criteria
 
@@ -68,7 +77,13 @@ Manual composition via raw Kubernetes resources:  One possible approach is for p
 
 ## Alternative: Extending KServe
 
-KServe provides a general-purpose model serving abstraction but was originally designed for traditional predictive models; it now provides several LLM specific features as of release 0.15 (see [this blogpost](https://kserve.github.io/website/blog/kserve-0.15-release) for details). As we evolve the ModelService Helm chart, we also plan to collaborate with the KServe community to develop production-grade KServe mechanisms that integrate well with llm-d. This collaboration will support a variety of useful features, including prefill/decode disaggregation, dynamic LoRA loading, and configuration search and tuning.
+KServe provides a general-purpose model serving abstraction but was originally designed for traditional predictive
+models; it now provides several LLM specific features as of release 0.15
+(see [this blogpost](https://kserve.github.io/website/blog/kserve-0.15-release) for details).
+We also collaborated with the KServe community and added
+[the integration of llm-d in KServe via a new CRD `LLMInferenceService`](https://kserve.github.io/website/docs/model-serving/generative-inference/llmisvc/llmisvc-overview),
+which supports a variety of useful features, including prefill/decode disaggregation, dynamic LoRA loading, and
+configuration search and tuning.
 
 ## Acknowledgements
 
