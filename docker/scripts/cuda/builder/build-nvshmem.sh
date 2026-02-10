@@ -63,14 +63,15 @@ DEBUG_FLAGS=("")
 : "${BUILD_DEBUG:=false}"
 if [ "${BUILD_DEBUG}" = "true" ]; then
     echo "=== Building NVSHMEM with debug symbols and logging enabled ==="
+    # Set environment variables to disable treating warnings as errors
+    export CFLAGS="${CFLAGS:-} -Wno-error"
+    export CXXFLAGS="${CXXFLAGS:-} -Wno-error"
     DEBUG_FLAGS=(
         -DCMAKE_BUILD_TYPE=RelWithDebInfo
         -DNVSHMEM_DEBUG=ON
         -DNVSHMEM_VERBOSE=ON
         -DNVSHMEM_TRACE=ON
         -DNVSHMEM_WERROR=OFF
-        -DCMAKE_CXX_FLAGS="-Wno-error"
-        -DCMAKE_C_FLAGS="-Wno-error"
     )
 else
     echo "=== Building NVSHMEM in release mode ==="
