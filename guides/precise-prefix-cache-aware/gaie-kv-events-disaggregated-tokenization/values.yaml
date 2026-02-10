@@ -69,7 +69,7 @@ inferenceExtension:
                 uds:
                   socketFile: /tmp/tokenizer/tokenizer-uds.socket
         - type: kv-cache-utilization-scorer
-        - type: queue-scorer
+        - type: active-request-scorer
         - type: max-score-picker
       schedulingProfiles:
         - name: default
@@ -78,7 +78,7 @@ inferenceExtension:
               weight: 3.0
             - pluginRef: kv-cache-utilization-scorer
               weight: 2.0
-            - pluginRef: queue-scorer
+            - pluginRef: active-request-scorer
               weight: 2.0
             - pluginRef: max-score-picker
 

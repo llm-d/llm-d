@@ -265,7 +265,7 @@ data:
 apiVersion: inference.networking.x-k8s.io/v1alpha1
 kind: EndpointPickerConfig
 plugins:
-  - type: queue-scorer
+  - type: active-request-scorer
   - type: kv-cache-utilization-scorer
   - type: prefix-cache-scorer
   - type: slo-request-tracker
@@ -278,7 +278,7 @@ schedulingProfiles:
     plugins:
       - pluginRef: slo-request-tracker
       - pluginRef: prefix-cache-scorer
-      - pluginRef: queue-scorer
+      - pluginRef: active-request-scorer
       - pluginRef: kv-cache-utilization-scorer
       - pluginRef: max-score-picker
 
@@ -296,7 +296,7 @@ schedulingProfiles:
 - `slo-request-tracker` — captures per-request SLOs and tracks them.
 - `slo-scorer` — uses predicted TTFT/TPOT to compare against SLOs and classify into positive/negative buckets.
 - `slo-aware-profile-handler` — switches requests into the `slo` profile when SLO headers are present.
-- `queue-scorer`, `kv-cache-utilization-scorer`, `prefix-cache-scorer` — baseline scoring plugins.
+- `active-request-scorer`, `kv-cache-utilization-scorer`, `prefix-cache-scorer` — baseline scoring plugins.
 
 ---
 
