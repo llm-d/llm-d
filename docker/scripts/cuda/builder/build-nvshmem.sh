@@ -50,7 +50,7 @@ done
 mkdir -p build && cd build
 
 # Ubuntu image needs to be built against Ubuntu 20.04 and EFA only supports 22.04 and 24.04.
-EFA_FLAGS=("")
+EFA_FLAGS=()
 if [ "$TARGETOS" = "rhel" ] && [ -n "${EFA_PREFIX}" ]; then
     EFA_FLAGS=(
         -DNVSHMEM_LIBFABRIC_SUPPORT=1
@@ -59,7 +59,7 @@ if [ "$TARGETOS" = "rhel" ] && [ -n "${EFA_PREFIX}" ]; then
 fi
 
 # Configure debug build options
-DEBUG_FLAGS=("")
+DEBUG_FLAGS=()
 : "${BUILD_DEBUG:=false}"
 if [ "${BUILD_DEBUG}" = "true" ]; then
     echo "=== Building NVSHMEM with debug symbols and logging enabled ==="
@@ -68,8 +68,8 @@ if [ "${BUILD_DEBUG}" = "true" ]; then
         -DNVSHMEM_DEBUG=ON
         -DNVSHMEM_DEVEL=ON
         -DNVSHMEM_WERROR=OFF
-        "-DCMAKE_CXX_FLAGS=-Wno-maybe-uninitialized"
-        "-DCMAKE_CUDA_FLAGS=-g -G"
+        -DCMAKE_CXX_FLAGS=-Wno-maybe-uninitialized
+        -DCMAKE_CUDA_FLAGS=-g
     )
 else
     echo "=== Building NVSHMEM in release mode ==="
@@ -93,8 +93,8 @@ cmake \
     -DNVSHMEM_USE_NCCL=0 \
     -DNVSHMEM_BUILD_TESTS=0 \
     -DNVSHMEM_BUILD_EXAMPLES=0 \
-    ${DEBUG_FLAGS[@]} \
-    ${EFA_FLAGS[@]} \
+    "${DEBUG_FLAGS[@]}" \
+    "${EFA_FLAGS[@]}" \
     ..
 
 ninja -j"$(nproc)"
