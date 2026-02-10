@@ -69,6 +69,8 @@ if [ "${BUILD_DEBUG}" = "true" ]; then
         -DNVSHMEM_VERBOSE=ON
         -DNVSHMEM_TRACE=ON
         -DNVSHMEM_WERROR=OFF
+        -DCMAKE_CXX_FLAGS="-Wno-error"
+        -DCMAKE_C_FLAGS="-Wno-error"
     )
 else
     echo "=== Building NVSHMEM in release mode ==="
