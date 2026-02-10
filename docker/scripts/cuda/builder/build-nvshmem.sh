@@ -97,7 +97,14 @@ cmake \
     ${EFA_FLAGS[@]} \
     ..
 
-ninja -j"$(nproc)"
+echo "=== Starting ninja build with $(nproc) jobs ==="
+ninja -j"$(nproc)" -v || {
+    echo "=== NINJA BUILD FAILED ==="
+    echo "=== Last 100 lines of build output: ==="
+    ninja -j1 -v 2>&1 | tail -100
+    exit 1
+}
+echo "=== Ninja build completed successfully ==="
 ninja install
 
 # copy python wheel to /wheels
