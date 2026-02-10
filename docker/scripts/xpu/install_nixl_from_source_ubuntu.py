@@ -162,6 +162,7 @@ def build_and_install_prerequisites(args):
         "--enable-cma",
         "--enable-devel-headers",
         "--with-verbs",
+        "--without-valgrind",
         "--enable-mt",
         "--with-ze=no",
     ]

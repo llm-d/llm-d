@@ -60,6 +60,7 @@ ${CONFIGURE_SCRIPT} \
     --with-verbs \
     --with-dm \
     --with-gdrcopy="/usr/local" \
+    --without-valgrind \
     "${EFA_FLAG}" \
     --enable-mt
 
