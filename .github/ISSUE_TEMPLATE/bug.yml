@@ -30,13 +30,14 @@ body:
       label: Version
       description: What version of our software are you running?
       options:
-        - v0.2.0
-        - v0.2.1
-        - v0.2.2
-        - v0.3.0
-        - v0.3.1
+        - v0.5.0
         - v0.4.0
-      default: v0.3.0
+        - v0.3.1
+        - v0.3.0
+        - v0.2.2
+        - v0.2.1
+        - v0.2.0
+      default: 0
     validations:
       required: true
   - type: textarea
@@ -44,3 +45,4 @@ body:
     attributes:
       label: Relevant log output
       description: Please copy and paste any relevant log output. This will be automatically formatted into code, so no need for backticks.
+      render: shell
