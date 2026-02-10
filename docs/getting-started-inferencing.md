@@ -13,7 +13,7 @@ You are assumed to have deployed the llm-d inference stack from a guide, using t
 
 First we need to choose what strategy we are going to use to expose / interact with your gateway. It should be noted that this will be affected by the values you used when installing the `llm-d-infra` chart for your given guide. Select the tab that matches your environment.
 
-**_NOTE:_** If you're unsure which to use—start with a ClusterIP gateway service type and port-forward as it's the most reliable and easiest. Use LoadBalancer if your provider supports it and you just need raw L4 access. Use Nodeport if you want an externally accessible gateway but your k8s provider does not support LoadBalancer integration and you have a functioning load balancer ctronller in your cluster, such as MetalLB.
+**_NOTE:_** If you're unsure which to use—start with a ClusterIP gateway service type and port-forward as it's the most reliable and easiest. Use LoadBalancer if your provider supports it and you just need raw L4 access. Use Nodeport if you want an externally accessible gateway but your k8s provider does not support LoadBalancer integration and you have a functioning load balancer controller in your cluster, such as MetalLB.
 
 <!-- TABS:START -->
 
@@ -144,7 +144,7 @@ Expected output:
 
 ### /v1/completions
 
-Now lets try hitting the `/v1/completions` endpoint (this is model dependent, ensure your model matches what the server returns for the `v1/models` curl).
+Now let's try hitting the `/v1/completions` endpoint (this is model dependent, ensure your model matches what the server returns for the `v1/models` curl).
 
 ```bash
 curl -X POST ${ENDPOINT}/v1/completions \

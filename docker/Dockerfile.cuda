@@ -332,7 +332,7 @@ ${LD_LIBRARY_PATH}" \
     CUDA_MAJOR=${CUDA_MAJOR} \
     CUDA_MINOR=${CUDA_MINOR}
 
-# LD_LIBRARY_PATH needs the torch path to apply proper linkers so as not to produce torch ABI missmatch
+# LD_LIBRARY_PATH needs the torch path to apply proper linkers so as not to produce torch ABI mismatch
 ENV LD_LIBRARY_PATH="/opt/vllm/lib64/python${PYTHON_VERSION}/site-packages/torch/lib:/usr/local/nvidia/lib:/usr/local/nvidia/lib64:/usr/local/cuda/lib64:/usr/local/lib:/usr/local/lib64:${NVSHMEM_DIR}/lib:${LD_LIBRARY_PATH}"
 
 # Install runtime dependencies
@@ -449,7 +449,7 @@ ARG SUPPRESS_PYTHON_OUTPUT
 
 # A script that starts if users exec into the image with bash. It warns that vLLM is built with precompiled by default,
 # and so if they change the vLLM version or use their fork, it may no longer work due to the precompiled shared libraries
-# pulled from teh vLLM wheel index.
+# pulled from the vLLM wheel index.
 COPY scripts/warn-vllm-precompiled.sh /opt/
 
 # Install cuda-python, nvshmem python bindings, xet
@@ -457,7 +457,7 @@ COPY scripts/warn-vllm-precompiled.sh /opt/
 # Installs vllm source. Supports three install modes:
     # 1) install vllm from source totally editably - dev option, supports fork and commit swapping
     # 3) install vllm from source with pulling precomiled binaries (shared libraries) from the vllm wheels index - less flexible dev option, may or may not work swapping shas but faster than full editable
-    # 2) install vllm from a wheel on the vllm wheels index - prod option, no flexbility
+    # 2) install vllm from a wheel on the vllm wheels index - prod option, no flexibility
 COPY docker/scripts/cuda/runtime/install-vllm.sh /tmp/install-vllm.sh
 RUN --mount=type=cache,target=/var/cache/git \
     /tmp/install-vllm.sh && \

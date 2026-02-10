@@ -41,7 +41,7 @@ The following guides have been provided by the community but do not fully integr
 * Coming Soon!
 
 > [!NOTE]
-> New guides added to this list enable at least one of the core well-lit paths but may directly include prerequisite steps specific to new hardware or infrastructure providers without full abstraction. A guide added here is expected to eventually become path of an existing well-lit path.
+> New guides added to this list enable at least one of the core well-lit paths but may directly include prerequisite steps specific to new hardware or infrastructure providers without full abstraction. A guide added here is expected to eventually become part of an existing well-lit path.
 
 ## Known Issues
 

@@ -149,7 +149,7 @@ infra-pd-inference-gateway   gke-l7-regional-external-managed   123.123.123.123 
     }
     ```
 
-1. Now lets try hitting the `/v1/completions` endpoint (this is model dependent, ensure your model matches what the server returns for the `v1/models` curl).
+1. Now let's try hitting the `/v1/completions` endpoint (this is model dependent, ensure your model matches what the server returns for the `v1/models` curl).
 
     ```bash
     curl -X POST ${ENDPOINT}/v1/completions \
@@ -204,7 +204,7 @@ For more information see [our docs](../../docs/getting-started-inferencing.md)
 
 ## Tuning Selective PD
 
-Selective PD is a feature in the `inference-scheduler` within the context of prefill-decode dissagregation, although it is disabled by default. This features enables routing to just decode even with the P/D deployed.
+Selective PD is a feature in the `inference-scheduler` within the context of prefill-decode disaggregation, although it is disabled by default. This feature enables routing to just decode even with the P/D deployed.
 
 For information on this plugin, see our [`pd-profile-handler` docs in the inference-scheduler](https://github.com/llm-d/llm-d-inference-scheduler/blob/v0.5.0/docs/architecture.md?plain=1#L205-L210)
 
