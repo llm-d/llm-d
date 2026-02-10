@@ -68,7 +68,7 @@ if [ "${BUILD_DEBUG}" = "true" ]; then
         -DNVSHMEM_DEBUG=ON
         -DNVSHMEM_DEVEL=ON
         -DNVSHMEM_VERBOSE=ON
-        -DNVSHMEM_WERROR=OFFq
+        -DNVSHMEM_WERROR=OFF
     )
 else
     echo "=== Building NVSHMEM in release mode ==="
