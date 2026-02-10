@@ -1,0 +1,90 @@
+name: Feature Request
+description: Suggest a new feature or improvement for llm-d.
+title: "[Feature]: "
+labels: ["enhancement", "triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ## Feature Request
+
+        Thank you for suggesting an improvement to llm-d! Please fill in the details below to help
+        us understand your feature request and evaluate its fit within the project.
+
+        Before opening a new feature request, please check [existing issues](https://github.com/llm-d/llm-d/issues)
+        to see if a similar request already exists.
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Feature Area
+      description: Which area of llm-d does this feature relate to?
+      options:
+        - Inference Scheduling
+        - Prefill/Decode Disaggregation
+        - KV Cache / Prefix Caching
+        - Wide Expert-Parallelism
+        - Autoscaling
+        - Observability / Monitoring
+        - Container Image / Build
+        - Deployment / Helm Charts
+        - Documentation / Guides
+        - CI/CD
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem Statement
+      description: |
+        What problem does this feature solve? Please describe the use case or pain point.
+        A clear description of the problem helps us understand why this feature is needed.
+      placeholder: "I'm always frustrated when..."
+    validations:
+      required: true
+
+  - type: textarea
+    id: solution
+    attributes:
+      label: Proposed Solution
+      description: |
+        Describe the solution you'd like to see. Be as specific as possible about
+        the expected behavior and user experience.
+      placeholder: "Ideally, llm-d would..."
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives Considered
+      description: Describe any alternative solutions or workarounds you've considered.
+      placeholder: "I've also considered..."
+    validations:
+      required: false
+
+  - type: dropdown
+    id: contribution
+    attributes:
+      label: Willingness to Contribute
+      description: Would you be willing to contribute to the implementation of this feature?
+      options:
+        - "Yes, I can submit a PR"
+        - "Yes, with guidance"
+        - "No, but I can help test"
+        - "No"
+    validations:
+      required: true
+
+  - type: textarea
+    id: additional-context
+    attributes:
+      label: Additional Context
+      description: |
+        Add any other context, screenshots, links, or references about the feature request.
+        If this relates to a specific well-lit path or SIG, please mention it.
+      placeholder: "Related to SIG-..."
+    validations:
+      required: false
