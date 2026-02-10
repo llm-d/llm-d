@@ -1,0 +1,78 @@
+environments:
+  istio: &I
+    values:
+      - ../prereq/gateway-provider/common-configurations/istio.yaml
+  default:
+    <<: *I
+
+---
+
+{{- $ns := .Namespace | default "llm-d-pd-kv" -}}
+{{- $rn := (env "RELEASE_NAME_POSTFIX") | default "pd-kv" -}}
+
+repositories:
+  - name: llm-d-modelservice
+    url: https://llm-d-incubation.github.io/llm-d-modelservice/
+  - name: llm-d-infra
+    url: https://llm-d-incubation.github.io/llm-d-infra/
+
+releases:
+  - name: {{ printf "infra-%s" $rn | quote }}
+    namespace: {{ $ns }}
+    chart: llm-d-infra/llm-d-infra
+    version: v1.3.6
+    installed: true
+    labels:
+      type: infrastructure
+      kind: inference-stack
+    values:
+      - gateway:
+          {{ .Environment.Values.gateway | toYaml | nindent 10 }}
+
+  - name: {{ printf "gaie-%s" $rn | quote }}
+    namespace: {{ $ns }}
+    chart: oci://registry.k8s.io/gateway-api-inference-extension/charts/inferencepool
+    version: v1.3.0
+    installed: true
+    needs:
+      - {{ printf "infra-%s" $rn | quote }}
+    values:
+      - gaie-pd-kv/values.yaml
+    # Apply destination rule for anything istio
+    {{- if or (eq .Environment.Name "istio") (eq .Environment.Name "default") }}
+      - provider:
+          name: {{ .Environment.Values.provider.name }}
+          istio:
+            {{ .Environment.Values.provider.istio | toYaml | nindent 12 }}
+      - provider:
+          istio:
+            destinationRule:
+              host: {{ printf "gaie-%s-epp.%s.svc.cluster.local" $rn $ns | quote }}
+    {{- end }}
+    {{- if or (eq .Environment.Name "istio") (eq .Environment.Name "default") }}
+      - inferenceExtension:
+          flags:
+            {{ .Environment.Values.inferenceExtension.flags | toYaml | nindent 12 }}
+    {{- end }}
+    labels:
+      kind: inference-stack
+
+  - name: {{ printf "ms-%s" $rn | quote }}
+    namespace: {{ $ns }}
+    chart: llm-d-modelservice/llm-d-modelservice
+    version: v0.4.5
+    installed: true
+    needs:
+      - {{ printf "infra-%s" $rn | quote }}
+      - {{ printf "gaie-%s" $rn | quote }}
+    values:
+      - ms-pd-kv/values.yaml
+    {{- if or (eq .Environment.Name "istio") (eq .Environment.Name "default") }}
+      - routing:
+          {{ .Environment.Values.routing | toYaml | nindent 10 }}
+    {{- end }}
+    set:
+      - name: "decode.containers[0].env[0].value"
+        value: {{ printf "%s" $rn | quote }}
+    labels:
+      kind: inference-stack
