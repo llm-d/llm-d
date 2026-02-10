@@ -141,22 +141,36 @@ def build_and_install_prerequisites(args):
 
     run_command(["git", "checkout", "v1.19.x"], cwd=ucx_source_path)
     run_command(["./autogen.sh"], cwd=ucx_source_path)
+
+    # Check for debug build mode
+    build_debug = os.environ.get("BUILD_DEBUG", "false").lower() == "true"
+    if build_debug:
+        print("=== Building UCX with debug symbols enabled ===", flush=True)
+        configure_script = "./contrib/configure-devel"
+        make_install_target = "install"
+    else:
+        print("=== Building UCX in release mode ===", flush=True)
+        configure_script = "./configure"
+        make_install_target = "install-strip"
+
     configure_command = [
-        "./configure",
+        configure_script,
         f"--prefix={ucx_install_path}",
         "--enable-shared",
         "--disable-static",
         "--disable-doxygen-doc",
-        "--enable-optimizations",
         "--enable-cma",
         "--enable-devel-headers",
         "--with-verbs",
         "--enable-mt",
         "--with-ze=no",
     ]
+    if not build_debug:
+        configure_command.append("--enable-optimizations")
+
     run_command(configure_command, cwd=ucx_source_path)
     run_command(["make", "-j", str(os.cpu_count() or 1)], cwd=ucx_source_path)
-    run_command(["make", "install"], cwd=ucx_source_path)
+    run_command(["make", make_install_target], cwd=ucx_source_path)
     print("--- UCX build and install complete ---", flush=True)
 
     # -- Step 2: Build NIXL wheel from source --

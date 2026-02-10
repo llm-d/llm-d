@@ -26,6 +26,12 @@ ifeq ($(BUILD_TYPE), dev)
 	IMAGE_BASE := $(IMAGE_BASE)-dev
 endif
 
+# BUILD_DEBUG, options ['true', 'false']
+BUILD_DEBUG ?= false
+ifeq ($(BUILD_DEBUG), true)
+	IMAGE_BASE := $(IMAGE_BASE)-debug
+endif
+
 IMG := $(IMAGE_BASE):$(VERSION)
 
 CONTAINER_TOOL := $(shell (command -v docker >/dev/null 2>&1 && echo docker) || (command -v podman >/dev/null 2>&1 && echo podman) || echo "")
@@ -38,12 +44,14 @@ SUPPRESS_PYTHON_OUTPUT ?=
 .PHONY: help
 help: ## Print help
 	@awk 'BEGIN {FS = ":.*##"; printf "\nUsage:\n  make \033[36m<target>\033[0m\n"} /^[a-zA-Z_0-9-]+:.*?##/ { printf "  \033[36m%-15s\033[0m %s\n", $$1, $$2 } /^##@/ { printf "\n\033[1m%s\033[0m\n", substr($$0, 5) } ' $(MAKEFILE_LIST)
-	@printf "\n\033[1mXPU Build Examples:\033[0m\n"
-	@printf "  \033[36mmake image-build DEVICE=xpu\033[0m                    # Build Intel XPU Docker image\n"
-	@printf "  \033[36mmake image-build DEVICE=xpu VERSION=v0.2.0\033[0m     # Build with specific version\n"
-	@printf "  \033[36mmake image-push DEVICE=xpu\033[0m                     # Push Intel XPU Docker image\n"
-	@printf "  \033[36mmake image-retag DEVICE=xpu NEW_TAG=test\033[0m                     # Re-Tag Intel XPU Docker image\n"
-	@printf "  \033[36mmake env DEVICE=xpu\033[0m                            # Show XPU environment variables\n"
+	@printf "\n\033[1mBuild Examples:\033[0m\n"
+	@printf "  \033[36mmake image-build DEVICE=cuda\033[0m                            # Build CUDA Docker image (default)\n"
+	@printf "  \033[36mmake image-build DEVICE=cuda BUILD_DEBUG=true\033[0m           # Build CUDA Docker image with debug symbols\n"
+	@printf "  \033[36mmake image-build DEVICE=xpu\033[0m                             # Build Intel XPU Docker image\n"
+	@printf "  \033[36mmake image-build DEVICE=xpu VERSION=v0.2.0\033[0m              # Build with specific version\n"
+	@printf "  \033[36mmake image-push DEVICE=xpu\033[0m                              # Push Intel XPU Docker image\n"
+	@printf "  \033[36mmake image-retag DEVICE=xpu NEW_TAG=test\033[0m                # Re-Tag Intel XPU Docker image\n"
+	@printf "  \033[36mmake env DEVICE=xpu\033[0m                                     # Show XPU environment variables\n"
 
 ##@ Development
 
@@ -113,6 +121,7 @@ image-build: check-container-tool ## Build Docker image using $(CONTAINER_TOOL)
 	@printf "\033[33;1m==== Building Docker image $(IMG) ====\033[0m\n"
 	$(CONTAINER_TOOL) build --progress=plain --platform $(PLATFORMS) \
 		$(if $(SUPPRESS_PYTHON_OUTPUT),--build-arg SUPPRESS_PYTHON_OUTPUT=$(SUPPRESS_PYTHON_OUTPUT)) \
+		--build-arg BUILD_DEBUG=$(BUILD_DEBUG) \
 		-t $(IMG) -f $(DOCKERFILE_DIR)/$(DOCKERFILE) .
 
 .PHONY: image-push

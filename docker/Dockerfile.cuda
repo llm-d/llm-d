@@ -23,6 +23,7 @@ ARG BASE_IMAGE_SUFFIX=ubi9
 ARG PYTHON_VERSION=3.12
 
 ARG USE_SCCACHE=true
+ARG BUILD_DEBUG=false
 
 ######################## COMPONENT VERSIONS ########################
 
@@ -90,6 +91,7 @@ ARG PYTHON_VERSION
 ARG NVSHMEM_VERSION
 
 ARG USE_SCCACHE
+ARG BUILD_DEBUG
 
 WORKDIR /workspace
 
@@ -199,7 +201,7 @@ COPY docker/scripts/cuda/builder/build-ucx.sh /tmp/build-ucx.sh
 RUN --mount=type=cache,target=/var/cache/git \
     --mount=type=secret,id=aws_access_key_id \
     --mount=type=secret,id=aws_secret_access_key \
-    /tmp/build-ucx.sh && \
+    BUILD_DEBUG=${BUILD_DEBUG} /tmp/build-ucx.sh && \
     rm -f /tmp/build-ucx.sh
 
 # Build NVSHMEM
@@ -211,7 +213,7 @@ COPY docker/scripts/cuda/builder/build-nvshmem.sh /tmp/build-nvshmem.sh
 RUN --mount=type=cache,target=/var/cache/git \
     --mount=type=secret,id=aws_access_key_id \
     --mount=type=secret,id=aws_secret_access_key \
-    /tmp/build-nvshmem.sh && \
+    BUILD_DEBUG=${BUILD_DEBUG} /tmp/build-nvshmem.sh && \
     rm -f /tmp/build-nvshmem.sh
 
 

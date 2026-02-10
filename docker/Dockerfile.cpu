@@ -18,6 +18,8 @@ ARG VLLM_CPU_DISABLE_AVX512=0
 ARG VLLM_CPU_AVX512BF16=0
 # Support for building with AVX512VNNI ISA
 ARG VLLM_CPU_AVX512VNNI=0
+# Support for debug builds with debug symbols
+ARG BUILD_DEBUG=false
 
 RUN apt clean && apt-get update -y && \
     apt-get install -y --no-install-recommends --fix-missing \
@@ -124,6 +126,8 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 #################################################################
 FROM vllm-build
 
+ARG BUILD_DEBUG
+
 ENV LD_LIBRARY_PATH="/usr/local/lib:/usr/lib:${LD_LIBRARY_PATH}"
 
 RUN --mount=type=bind,from=vllm-build,src=/workspace/vllm/dist,target=dist \
@@ -143,8 +147,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends pkg-config \
 # Copy install_nixl.py script
 COPY docker/scripts/cpu/install_nixl.py /workspace/install_nixl.py
 
-# Install nixl + UCX
-RUN python3 /workspace/install_nixl.py
+# Install nixl + UCX with debug support if enabled
+RUN BUILD_DEBUG=${BUILD_DEBUG} python3 /workspace/install_nixl.py
 
 WORKDIR /workspace
 ENTRYPOINT ["python", "-m", "vllm.entrypoints.openai.api_server"]

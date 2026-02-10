@@ -1,6 +1,7 @@
 ARG ONEAPI_VERSION=2025.2.2-0
 ARG VLLM_REPO="https://github.com/vllm-project/vllm.git"
 ARG VLLM_COMMIT_SHA="d7de043d55d1dd629554467e23874097e1c48993"
+ARG BUILD_DEBUG=false
 
 FROM intel/deep-learning-essentials:${ONEAPI_VERSION}-devel-ubuntu24.04 AS vllm-base
 
@@ -84,6 +85,8 @@ RUN if [ -n "${CACHE_BUSTER}" ]; then \
         echo "$CACHE_BUSTER" > /tmp/builder-buster; \
     fi;
 
+ARG BUILD_DEBUG
+
 # install additional dependencies for openai api server
 # hadolint ignore=DL3013
 RUN --mount=type=cache,target=/root/.cache/pip \
@@ -103,7 +106,7 @@ COPY docker/scripts/xpu/install_nixl_from_source_ubuntu.py /tmp/install_nixl_fro
 # vLLM XPU runtime; the installer script can fetch the latest version if this is unset,
 # but we intentionally use a fixed, tested version here.
 ENV NIXL_VERSION=0.7.0
-RUN python3 /tmp/install_nixl_from_source_ubuntu.py
+RUN BUILD_DEBUG=${BUILD_DEBUG} python3 /tmp/install_nixl_from_source_ubuntu.py
 
 # PyJWT-2.7.0 will influence some wheel behaviors, remove its dist-info to avoid conflicts
 RUN rm /usr/lib/python3/dist-packages/PyJWT-2.7.0.dist-info/ -rf

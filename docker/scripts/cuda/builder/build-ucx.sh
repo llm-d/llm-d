@@ -17,6 +17,7 @@ set -Eeux
 # - UCX_PREFIX: prefix dir that contains installation path
 # - USE_SCCACHE: whether to use sccache (true/false)
 # - TARGETOS: OS type (ubuntu or rhel)
+# - BUILD_DEBUG: whether to build with debug symbols and logging (true/false) - defaults to false
 
 cd /tmp
 
@@ -35,8 +36,20 @@ if [ "$TARGETOS" = "rhel" ] && [ -n "${EFA_PREFIX}" ]; then
     EFA_FLAG="--with-efa"
 fi
 
+# Choose configure script based on debug mode
+: "${BUILD_DEBUG:=false}"
+if [ "${BUILD_DEBUG}" = "true" ]; then
+    echo "=== Building UCX with debug symbols enabled ==="
+    CONFIGURE_SCRIPT="./contrib/configure-devel"
+    INSTALL_TARGET="install"
+else
+    echo "=== Building UCX in release mode ==="
+    CONFIGURE_SCRIPT="./contrib/configure-release"
+    INSTALL_TARGET="install-strip"
+fi
+
 ./autogen.sh
-./contrib/configure-release \
+${CONFIGURE_SCRIPT} \
     --prefix="${UCX_PREFIX}" \
     --enable-shared \
     --disable-static \
@@ -51,7 +64,7 @@ fi
     --enable-mt
 
 make -j$(nproc)
-make install-strip
+make ${INSTALL_TARGET}
 ldconfig
 
 cd /tmp && rm -rf /tmp/ucx

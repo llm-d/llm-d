@@ -19,6 +19,7 @@ set -Eeux
 # - VIRTUAL_ENV: Path to the virtual environment from which python will be pulled
 # - USE_SCCACHE: whether to use sccache (true/false)
 # - PYTHON_VERSION: Python version (e.g., 3.12)
+# - BUILD_DEBUG: whether to build with debug symbols and logging (true/false) - defaults to false
 
 cd /tmp
 
@@ -57,6 +58,19 @@ if [ "$TARGETOS" = "rhel" ] && [ -n "${EFA_PREFIX}" ]; then
     )
 fi
 
+# Configure debug build options
+DEBUG_FLAGS=("")
+: "${BUILD_DEBUG:=false}"
+if [ "${BUILD_DEBUG}" = "true" ]; then
+    echo "=== Building NVSHMEM with debug symbols and logging enabled ==="
+    DEBUG_FLAGS=(
+        -DCMAKE_BUILD_TYPE=RelWithDebInfo
+        -DNVSHMEM_DEVEL=ON
+    )
+else
+    echo "=== Building NVSHMEM in release mode ==="
+fi
+
 cmake \
     -G Ninja \
     -DNVSHMEM_PREFIX="${NVSHMEM_DIR}" \
@@ -75,6 +89,7 @@ cmake \
     -DNVSHMEM_USE_NCCL=0 \
     -DNVSHMEM_BUILD_TESTS=0 \
     -DNVSHMEM_BUILD_EXAMPLES=0 \
+    ${DEBUG_FLAGS[@]} \
     ${EFA_FLAGS[@]} \
     ..
 
