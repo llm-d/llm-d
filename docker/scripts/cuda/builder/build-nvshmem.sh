@@ -64,11 +64,9 @@ DEBUG_FLAGS=("")
 if [ "${BUILD_DEBUG}" = "true" ]; then
     echo "=== Building NVSHMEM with debug symbols enabled ==="
     DEBUG_FLAGS=(
-        -DCMAKE_BUILD_TYPE=Debug
-        -DNVSHMEM_DEBUG=ON
-        -DNVSHMEM_DEVEL=ON
-        -DNVSHMEM_VERBOSE=ON
-        -DNVSHMEM_WERROR=OFF
+        -DCMAKE_BUILD_TYPE=RelWithDebInfo
+        -DCMAKE_CXX_FLAGS="-g"
+        -DCMAKE_CUDA_FLAGS="-G -g"
     )
 else
     echo "=== Building NVSHMEM in release mode ==="
