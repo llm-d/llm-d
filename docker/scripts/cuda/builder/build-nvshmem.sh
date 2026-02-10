@@ -68,7 +68,7 @@ if [ "${BUILD_DEBUG}" = "true" ]; then
         -DNVSHMEM_DEBUG=ON
         -DNVSHMEM_DEVEL=ON
         -DNVSHMEM_WERROR=OFF
-        -DCMAKE_CXX_FLAGS=-Wno-maybe-uninitialized
+        -DCMAKE_CXX_FLAGS="-Wno-maybe-uninitialized"
     )
 else
     echo "=== Building NVSHMEM in release mode ==="
