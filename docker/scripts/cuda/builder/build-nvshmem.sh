@@ -62,10 +62,13 @@ fi
 DEBUG_FLAGS=("")
 : "${BUILD_DEBUG:=false}"
 if [ "${BUILD_DEBUG}" = "true" ]; then
-    echo "=== Building NVSHMEM with debug symbols and logging enabled ==="
+    echo "=== Building NVSHMEM with debug symbols enabled ==="
     DEBUG_FLAGS=(
-        -DCMAKE_BUILD_TYPE=RelWithDebInfo
+        -DCMAKE_BUILD_TYPE=Debug
+        -DNVSHMEM_DEBUG=ON
         -DNVSHMEM_DEVEL=ON
+        -DNVSHMEM_VERBOSE=ON
+        -DNVSHMEM_WERROR=OFFq
     )
 else
     echo "=== Building NVSHMEM in release mode ==="
