@@ -31,14 +31,26 @@ inferenceExtension:
       apiVersion: inference.networking.x-k8s.io/v1alpha1
       kind: EndpointPickerConfig
       plugins:
-        - type: single-profile-handler
+        - type: prefill-header-handler
+        - type: prefill-filter
+        - type: decode-filter
+        - type: max-score-picker
+        - type: queue-scorer
+          parameters:
+            hashBlockSize: 5
+            maxPrefixBlocksToMatch: 256
+            lruCapacityPerServer: 31250
+        - type: pd-profile-handler
+          parameters:
+            threshold: 0
+            hashBlockSize: 5
         - type: precise-prefix-cache-scorer
           parameters:
             tokenProcessorConfig:
               blockSize: 64
             indexerConfig:
               tokenizersPoolConfig:
-                modelName: "Qwen/Qwen3-32B"
+                modelName: "openai/gpt-oss-120b"
                 hf:
                   tokenizersCacheDir: "/tmp/tokenizers"
             kvEventsConfig:
@@ -47,8 +59,6 @@ inferenceExtension:
               discoverPods: false
               zmqEndpoint: "tcp://*:5557"
         - type: kv-cache-utilization-scorer
-        - type: queue-scorer
-        - type: max-score-picker
       schedulingProfiles:
       - name: prefill
         plugins:
