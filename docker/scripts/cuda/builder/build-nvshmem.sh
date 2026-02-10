@@ -62,18 +62,15 @@ fi
 DEBUG_FLAGS=("")
 : "${BUILD_DEBUG:=false}"
 if [ "${BUILD_DEBUG}" = "true" ]; then
-    echo "=== Building NVSHMEM in release mode with runtime debug logging support ==="
-    # NVSHMEM_DEBUG=ON adds incompatible compiler flags that break the build
-    # Instead, we build in release mode and enable debug logging at runtime via env vars:
-    # NVSHMEM_DEBUG=1, NVSHMEM_VERBOSE=1, NVSHMEM_DEBUG_SUBSYS, NVSHMEM_DEBUG_FILE
-    # These runtime flags provide the same debug output without compilation issues
+    echo "=== Building NVSHMEM with debug symbols and logging enabled ==="
     DEBUG_FLAGS=(
-    -DCMAKE_BUILD_TYPE=Debug \
+    -DCMAKE_BUILD_TYPE=RelWithDebInfo \
     -DNVSHMEM_DEBUG=ON \
     -DNVSHMEM_DEVEL=ON \
+    -DNVSHMEM_WERROR=OFF \
+    -DCMAKE_CXX_FLAGS="-Wno-maybe-uninitialized" \
     -DCMAKE_CUDA_FLAGS="-g -G" \
     )
-    echo "NOTE: Set NVSHMEM_DEBUG=1 and NVSHMEM_VERBOSE=1 at runtime for debug output"
 else
     echo "=== Building NVSHMEM in release mode ==="
 fi
