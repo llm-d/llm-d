@@ -18,7 +18,8 @@ if [ ! -f "$UTILS_SCRIPT" ]; then
     echo "ERROR: package-utils.sh not found" >&2
     exit 1
 fi
-. "$UTILS_SCRIPT"
+# shellcheck source=docker/scripts/common/package-utils.sh
+. "${UTILS_SCRIPT}"
 
 DOWNLOAD_ARCH=$(get_download_arch)
 
