@@ -19,6 +19,10 @@ routing:
     image: quay.io/rh_ee_rsaini/llm-d-routing-sidecar:dev
     connector: nixlv2
     secure: false
+    # NOTE: routing-proxy uses klog (not zap), so we need to pass klog flags
+    # Remove zapLogLevel and use args to pass -v directly
+    args:
+      - "-v=5"  # klog verbosity level (5 = most verbose for debugging)
 
 decode:
   parallelism:

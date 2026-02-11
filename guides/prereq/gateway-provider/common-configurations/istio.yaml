@@ -35,4 +35,6 @@ provider:
 # MS values
 routing:
   proxy:
-    zapLogLevel: "5"  # Zap level: most verbose (below error=0, debug=-1)
+    zapLogLevel: "5"  # Zap level: most verbose (for deployments that use zap)
+    args:
+      - "-v=5"  # klog verbosity for routing-proxy (uses klog, not zap)
