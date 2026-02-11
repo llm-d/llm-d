@@ -49,6 +49,40 @@ done
 
 mkdir -p build && cd build
 
+# Create nvcc wrapper to filter out problematic flags when in debug mode
+if [ "${BUILD_DEBUG}" = "true" ]; then
+    cat > /tmp/nvcc_wrapper.sh << 'WRAPPER_EOF'
+#!/bin/bash
+# Filter out problematic flags that cause build failures
+args=()
+skip_next=false
+for arg in "$@"; do
+    if [ "$skip_next" = true ]; then
+        skip_next=false
+        continue
+    fi
+    case "$arg" in
+        -G|-t4)
+            # Skip device debug and thread flags
+            continue
+            ;;
+        -Werror)
+            # Skip next arg (all-warnings)
+            skip_next=true
+            continue
+            ;;
+        *)
+            args+=("$arg")
+            ;;
+    esac
+done
+exec /usr/local/cuda/bin/nvcc "${args[@]}"
+WRAPPER_EOF
+    chmod +x /tmp/nvcc_wrapper.sh
+    export CUDA_NVCC_EXECUTABLE=/tmp/nvcc_wrapper.sh
+    echo "=== Using nvcc wrapper to filter problematic debug flags ==="
+fi
+
 # Ubuntu image needs to be built against Ubuntu 20.04 and EFA only supports 22.04 and 24.04.
 EFA_FLAGS=()
 if [ "$TARGETOS" = "rhel" ] && [ -n "${EFA_PREFIX}" ]; then
@@ -60,16 +94,17 @@ fi
 
 # Configure debug build options
 DEBUG_FLAGS=()
+NVCC_COMPILER="${CUDA_HOME}/bin/nvcc"
 : "${BUILD_DEBUG:=false}"
 if [ "${BUILD_DEBUG}" = "true" ]; then
     echo "=== Building NVSHMEM with debug symbols and logging enabled ==="
+    # Use the wrapper that filters out problematic flags
+    NVCC_COMPILER="/tmp/nvcc_wrapper.sh"
     DEBUG_FLAGS=(
-    -DCMAKE_BUILD_TYPE=RelWithDebInfo \
-    -DNVSHMEM_DEBUG=ON \
-    -DNVSHMEM_DEVEL=ON \
-    -DNVSHMEM_WERROR=OFF \
-    -DCMAKE_CXX_FLAGS="-Wno-maybe-uninitialized" \
-    -DCMAKE_CUDA_FLAGS="-Xcompiler -Wno-maybe-uninitialized"
+        -DCMAKE_BUILD_TYPE=RelWithDebInfo
+        -DNVSHMEM_DEBUG=ON
+        -DNVSHMEM_DEVEL=ON
+        -DNVSHMEM_WERROR=OFF
     )
 else
     echo "=== Building NVSHMEM in release mode ==="
@@ -79,7 +114,7 @@ cmake \
     -G Ninja \
     -DNVSHMEM_PREFIX="${NVSHMEM_DIR}" \
     -DCMAKE_CUDA_ARCHITECTURES="${NVSHMEM_CUDA_ARCHITECTURES}" \
-    -DCMAKE_CUDA_COMPILER="${CUDA_HOME}/bin/nvcc" \
+    -DCMAKE_CUDA_COMPILER="${NVCC_COMPILER}" \
     -DNVSHMEM_PMIX_SUPPORT=0 \
     -DNVSHMEM_IBRC_SUPPORT=1 \
     -DNVSHMEM_IBGDA_SUPPORT=1 \
