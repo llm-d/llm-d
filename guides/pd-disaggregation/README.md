@@ -234,13 +234,13 @@ Expected Results:
 
 On the prefill node, you should see the following log entry:
 
-```
+```console
 (APIServer pid=1) (EngineCore_DP0 pid=322) DEBUG 01-31 07:12:26 [distributed/.../v1/nixl_connector.py:725] NIXLConnector request_finished(chatcmpl-51b9a341-ca93-43f7-92fc-98b51f41d7e7), request_status=FINISHED_LENGTH_CAPPED, kv_transfer_params={'do_remote_decode': True, 'do_remote_prefill': False, 'remote_block_ids': None, 'remote_engine_id': None, 'remote_host': None, 'remote_port': None}
 ```
 
 On the decode node, you should see the corresponding completion entry:
 
-```
+```console
 (APIServer pid=1) (EngineCore_DP0 pid=322) DEBUG 01-31 07:12:26 [distributed/.../v1/nixl_connector.py:725] NIXLConnector request_finished(chatcmpl-51b9a341-ca93-43f7-92fc-98b51f41d7e7), request_status=FINISHED_STOPPED, kv_transfer_params={'do_remote_decode': False, 'do_remote_prefill': False, 'remote_block_ids': [2, 3], 'remote_engine_id': '7520acd6-838a-4c0b-af97-a06e18a4f1c4', 'remote_host': '10.116.24.5', 'remote
 ```
 
@@ -256,9 +256,9 @@ export GATEWAY_IP=$(kubectl get gateway/llm-d-inference-gateway -n ${NAMESPACE} 
 
 The `GATEWAY_IP` environment variable will be used in the [benchmark template](../benchmark/pd_template.yaml).
 
-2. Follow the [benchmark guide](../../guides/benchmark/README.md) to deploy the benchmark tool and analyze the benchmark results. Notably, select the corresponding benchmark template:
+1. Follow the [benchmark guide](../../guides/benchmark/README.md) to deploy the benchmark tool and analyze the benchmark results. Notably, select the corresponding benchmark template:
 
-```
+```bash
 export BENCHMARK_TEMPLATE="${BENCH_TEMPLATE_DIR}"/pd_template.yaml
 ```
 

@@ -61,7 +61,7 @@ kubectl get pvc -n ${NAMESPACE}
 
 Output should show the PVC as `Bound`:
 
-```
+```console
 NAME         STATUS   VOLUME                                     CAPACITY   ACCESS MODES   STORAGECLASS   VOLUMEATTRIBUTESCLASS   AGE
 lustre-pvc   Bound    pvc-3c793698-XXXXXXX   36000Gi    RWX            lustre-class   <unset>                 6d
 ```

@@ -66,7 +66,7 @@ Deploy the Gateway and HTTPRoute using the [gateway recipe](../../recipes/gatewa
 
 If your cluster admin has already configured a storage class, you can set the `STORAGE_CLASS` variable and skip the following steps.
 
-```
+```bash
 export STORAGE_CLASS=<your pvc storage class>
 ```
 
@@ -80,7 +80,7 @@ The following provides instructions to configure different storage backends, and
 
 If your cluster admin has already set up a `default` storage class:
 
-```
+```bash
 export STORAGE_CLASS=default
 ```
 
@@ -92,7 +92,7 @@ No additional provision steps are required.
 
 Set your storage class which will be used later to provision the PVC.
 
-```
+```bash
 export STORAGE_CLASS=lustre
 ```
 
@@ -166,7 +166,7 @@ kubectl get gateway -n ${NAMESPACE}
 
 You should see output similar to the following, with the `PROGRAMMED` status as `True`.
 
-```bash
+```console
 NAME                      CLASS                              ADDRESS     PROGRAMMED   AGE
 llm-d-inference-gateway   gke-l7-regional-external-managed   <redacted>  True         16m
 ```
@@ -177,7 +177,7 @@ llm-d-inference-gateway   gke-l7-regional-external-managed   <redacted>  True   
 kubectl get httproute -n ${NAMESPACE}
 ```
 
-```bash
+```console
 NAME          HOSTNAMES   AGE
 llm-d-route               17m
 ```
@@ -190,7 +190,7 @@ kubectl get pvc -n ${NAMESPACE}
 
 Output should show the PVC as `Bound`:
 
-```
+```console
 NAME         STATUS   VOLUME                                     CAPACITY   ACCESS MODES   STORAGECLASS   VOLUMEATTRIBUTESCLASS   AGE
 lustre-pvc   Bound    pvc-3c793698-XXXXXXX   36000Gi    RWX            lustre-class   <unset>                 6d
 ```
@@ -201,7 +201,7 @@ lustre-pvc   Bound    pvc-3c793698-XXXXXXX   36000Gi    RWX            lustre-cl
 kubectl get inferencepool -n ${NAMESPACE}
 ```
 
-```bash
+```console
 NAME            AGE
 llm-d-infpool   16m
 ```
@@ -214,7 +214,7 @@ kubectl get pods -n ${NAMESPACE}
 
 You should see the InferencePool's endpoint pod and the model server pods in a `Running` state.
 
-```bash
+```console
 NAME                                  READY   STATUS    RESTARTS   AGE
 llm-d-infpool-epp-xxxxxxxx-xxxxx     1/1     Running   0          16m
 llm-d-model-server-xxxxxxxx-xxxxx   1/1     Running   0          11m
@@ -230,7 +230,7 @@ llm-d-model-server-xxxxxxxx-xxxxx   1/1     Running   0          11m
 
 You can verify if the KV cache is being offloaded to local storage by checking the metric `lmcache:local_storaqe_usage` through following command.
 
-```
+```bash
 export IP=localhost
 export PORT=8000
 export POD_NAME=llm-d-model-server-xxxx-xxxx
@@ -239,7 +239,7 @@ kubectl exec -it $POD_NAME -- curl -i http://${IP}:${PORT}/metrics | grep lmcach
 
 Verify the folder size where the Lustre instance is mounted, it should be in GBs after KV cache offloading completes, the actual size will differ based on the requests served.
 
-```
+```console
 kubectl exec -it $POD_NAME -- du -sh /mnt/files-storage
 65G /mnt/files-storage
 ```

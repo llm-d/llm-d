@@ -17,13 +17,13 @@ At a high level the following conditions are assumed.
 - OpenShift - This guide was tested on OpenShift 4.17, 4.19, and 4.20.
 - Ensure no Service Mesh or Istio installations exist on the cluster as the included CRDs may conflict with the llm-d gateway component.
 - If installing everything from scratch, Cluster administrator privileges are required to install the llm-d cluster scoped resources. Otherwise you only need namespace scoped permissions.
-- NVIDIA GPU Operator and NFD Operator - The original installation instructions can be found [here](https://docs.nvidia.com/datacenter/cloud-native/openshift/latest/steps-overview.html). However below are convenient steps for setting up via configuration given by RedHat AI Business Unit.
+- NVIDIA GPU Operator and NFD Operator - The original installation instructions can be found in the [NVIDIA documentation](https://docs.nvidia.com/datacenter/cloud-native/openshift/latest/steps-overview.html). However below are convenient steps for setting up via configuration given by RedHat AI Business Unit.
 
 ### GPU, Operator, and Additional Configuration Steps
 
 Make sure you first clone the following repo and work from its directory for the prereq setup.
 
-```
+```bash
 git clone https://github.com/rh-aiservices-bu/ocp-gpu-setup.git
 cd ocp-gpu-setup
 ```
@@ -32,7 +32,7 @@ cd ocp-gpu-setup
 
 1. Configure the gpu machinesets by invoking the guided script.
 
-    ```
+    ```bash
     ./machine-set/gpu-machineset.sh
     ```
 
@@ -52,13 +52,13 @@ cd ocp-gpu-setup
 
 1. Deploy the NFD Operator
 
-    ```
+    ```bash
     oc apply -f ./nfd
     ```
 
 2. Deploy the NVIDIA GPU Operator
 
-    ```
+    ```bash
     oc apply -f ./gpu-operator
     ```
 
@@ -142,7 +142,7 @@ helmfile apply -n ${NAMESPACE}
 At this point, the ms-kv-events-llm-d-modelservice-decode pods might be stuck in a Pending state.
 This typically happens when GPU nodes have taints applied; for example, for NVIDIA-L40S-PRIVATE (the GPUs we're using in this example).
 
-```
+```console
 Handle GPU Node taints
 
 0/9 nodes are available: 2 node(s) had untolerated taint {nvidia.com/gpu: NVIDIA-L40S-PRIVATE}, 7 Insufficient nvidia.com/gpu. preemption: 0/9 nodes are available: 2 Preemption is not helpful for scheduling, 7 No preemption victims found for incoming pod.
@@ -150,7 +150,7 @@ Handle GPU Node taints
 
 To allow scheduling, add the proper tolerations:
 
-```sh
+```bash
 oc patch deployment ms-kv-events-llm-d-modelservice-decode \
   -p '{"spec":{"template":{"spec":{"tolerations":[{"key":"nvidia.com/gpu","operator":"Equal","value":"NVIDIA-L40S-PRIVATE","effect":"NoSchedule"}]}}}}'
 ```
@@ -173,7 +173,7 @@ oc get pods -n ${NAMESPACE}
 
 Example output:
 
-```
+```console
 NAME                                                      READY   STATUS    RESTARTS   AGE
 gaie-kv-events-epp-588f77495f-8fn7q                       1/1     Running   0          24m
 infra-kv-events-inference-gateway-istio-799c7b8f-nwvwl    1/1     Running   0          24m
@@ -191,13 +191,13 @@ oc port-forward -n ${NAMESPACE} service/infra-kv-events-inference-gateway-istio 
 
 #### Test KV cache-aware routing
 
-```
+```bash
 curl localhost:8000/v1/models | jq
 ```
 
 Output:
 
-```
+```json
 {
   "data": [
     {
@@ -242,7 +242,7 @@ curl -X POST  localhost:8000/v1/completions     -H "Content-Type: application/js
 
 Output:
 
-```
+```json
 {"choices":[{"finish_reason":"length","index":0,"logprobs":null,"prompt_logprobs":null,"prompt_token_ids":null,"stop_reason":null,"text":" I'm sorry to hear about the incident. I'm sorry to hear about the incident, and I'm sorry to hear about the incident again. I'm sorry to hear about the incident, and I'm sorry to hear about the incident again. I","token_ids":null}],"created":1764013750,"id":"cmpl-29ce2940-8500-4c81-95e7-acc26f81fb2c","kv_transfer_params":null,"model":"Qwen/Qwen3-0.6B","object":"text_completion","service_tier":null,"system_fingerprint":null,"usage":{"completion_tokens":50,"prompt_tokens":6,"prompt_tokens_details":null,"total_tokens":56}}
 ```
 
@@ -250,7 +250,7 @@ Output:
 
 Clone the monitoring repo from:  <https://github.com/deewhyweb/hello-chris-llm-d.git>
 
-```
+```bash
 git clone https://github.com/deewhyweb/hello-chris-llm-d.git
 cd hello-chris-llm-d
 ```
@@ -279,7 +279,7 @@ oc create configmap grafana-dashboard-llm-performance --from-file=monitoring/gra
 
 ### Add Prometheus annotations to model service pods for metrics discovery
 
-```
+```bash
 for pod in $(oc get pods -n llm-d -l llm-d.ai/inferenceServing=true -o name); do
   oc annotate $pod prometheus.io/scrape=true prometheus.io/port=8000 prometheus.io/path=/metrics -n llm-d
 done

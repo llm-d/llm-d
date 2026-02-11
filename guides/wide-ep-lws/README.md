@@ -210,7 +210,7 @@ export GATEWAY_IP=$(kubectl get gateway/llm-d-inference-gateway -n ${NAMESPACE} 
 
 1. Follow the [benchmark guide](../../guides/benchmark/README.md) to deploy the benchmark tool and analyze the benchmark results. Notably, select the corresponding benchmark template:
 
-```
+```bash
 export BENCHMARK_TEMPLATE="${BENCH_TEMPLATE_DIR}"/wide_ep_template.yaml
 ```
 
@@ -221,7 +221,7 @@ export BENCHMARK_TEMPLATE="${BENCH_TEMPLATE_DIR}"/wide_ep_template.yaml
 
 At request rate 250, we achieved the max throughput:
 
-```
+```json
 "throughput": {
     "input_tokens_per_sec": 51218.79261732335,
     "output_tokens_per_sec": 49783.58426326592,
