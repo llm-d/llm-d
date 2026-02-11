@@ -1,0 +1,98 @@
+multinode: false
+
+modelArtifacts:
+  uri: "hf://Qwen/Qwen3-32B"
+  name: "Qwen/Qwen3-32B"
+  size: 80Gi
+  authSecretName: "llm-d-hf-token"
+  labels:
+    llm-d.ai/inference-serving: "true"
+    llm-d.ai/guide: "inference-scheduling"
+    llm-d.ai/accelerator-variant: "gpu"
+    llm-d.ai/accelerator-vendor: "amd"
+    llm-d.ai/model: "Qwen3-32B"
+
+routing:
+  proxy:
+    enabled: false  # removes sidecar from deployment - no PD in inference scheduling
+    targetPort: 8000  # controls vLLM port to matchup with sidecar if deployed
+
+accelerator:
+  type: amd
+
+decode:
+  create: true
+  parallelism:
+    tensor: 2
+    data: 1
+  replicas: 8
+  monitoring:
+    podmonitor:
+      enabled: true
+      portName: "vllm"  # decode vLLM service port (from routing.proxy.targetPort)
+      path: "/metrics"
+      interval: "30s"
+  containers:
+    - name: "vllm"
+      image: ghcr.io/llm-d/llm-d-rocm:v0.5.0
+      modelCommand: vllmServe
+      args:
+        - "--disable-uvicorn-access-log"
+        - "--gpu-memory-utilization=0.95"
+        # - "--tensor-parallel-size=2" # added automatically from 'parallelism'
+      ports:
+        - containerPort: 8000
+          name: vllm
+          protocol: TCP
+      resources:
+        limits:
+          # amd.com/gpu: '2' # added automatically from 'parallelism'
+          cpu: '32'
+          memory: 100Gi
+        requests:
+          # amd.com/gpu: '2' # added automatically from 'parallelism'
+          cpu: '32'
+          memory: 100Gi
+      mountModelVolume: true
+      volumeMounts:
+        - name: metrics-volume
+          mountPath: /.config
+        - name: shm
+          mountPath: /dev/shm
+        - name: torch-compile-cache
+          mountPath: /.cache
+      startupProbe:
+        httpGet:
+          path: /v1/models
+          port: vllm
+        initialDelaySeconds: 15
+        periodSeconds: 30
+        timeoutSeconds: 5
+        failureThreshold: 60
+      livenessProbe:
+        httpGet:
+          path: /health
+          port: vllm
+        periodSeconds: 10
+        timeoutSeconds: 5
+        failureThreshold: 3
+      readinessProbe:
+        httpGet:
+          path: /v1/models
+          port: vllm
+        periodSeconds: 5
+        timeoutSeconds: 2
+        failureThreshold: 3
+  volumes:
+    - name: metrics-volume
+      emptyDir: {}
+    - name: torch-compile-cache
+      emptyDir: {}
+    - name: shm
+      emptyDir:
+        medium: Memory
+        sizeLimit: 20Gi
+
+# PD disabled in this example
+prefill:
+  create: false

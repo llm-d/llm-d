@@ -1,0 +1,11 @@
+apiVersion: monitoring.googleapis.com/v1
+kind: PodMonitoring
+metadata:
+  name: prometheus-metrics-monitor
+spec:
+  selector:
+    matchLabels:
+      llm-d.ai/inference-serving: "true"
+  endpoints:
+  - port: 8000
+    interval: 15s

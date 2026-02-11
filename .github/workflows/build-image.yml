@@ -16,20 +16,20 @@ on:
   workflow_dispatch:
     inputs:
       platforms:
-        description: 'Platforms to build (comma-separated: cuda,xpu,cpu,hpu)'
+        description: "Platforms to build (comma-separated: cuda,xpu,cpu,hpu)"
         required: false
-        default: 'cuda'
+        default: "cuda"
         type: string
       vllm_repo:
-        description: 'vLLM repository URL to (override Dockerfile)'
+        description: "vLLM repository URL to (override Dockerfile)"
         required: false
         type: string
       vllm_commit_sha:
-        description: 'vLLM commit SHA to checkout for source (override Dockerfile)'
+        description: "vLLM commit SHA to checkout for source (override Dockerfile)"
         required: false
         type: string
       vllm_precompiled_wheel_commit:
-        description: 'vLLM commit SHA for precompiled wheel lookup (defaults to vllm_commit_sha)'
+        description: "vLLM commit SHA for precompiled wheel lookup (defaults to vllm_commit_sha)"
         required: false
         type: string
 
@@ -68,17 +68,18 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.x'
+          python-version: "3.x"
 
       - name: Run pre-commit
         uses: j178/prek-action@v1
         with:
-          extra-args: ''
+          extra-args: ""
 
   detect-changes:
     runs-on: ubuntu-latest
     outputs:
       cuda: ${{ steps.filter.outputs.cuda || steps.dispatch.outputs.cuda }}
+      rocm: ${{ steps.filter.outputs.rocm || steps.dispatch.outputs.rocm }}
       xpu: ${{ steps.filter.outputs.xpu || steps.dispatch.outputs.xpu }}
       cpu: ${{ steps.filter.outputs.cpu || steps.dispatch.outputs.cpu }}
       hpu: ${{ steps.filter.outputs.hpu || steps.dispatch.outputs.hpu }}
@@ -100,6 +101,8 @@ jobs:
               - 'patches/cks_nvshmem3.3.9.patch'
               - 'patches/nvshmem_zero_ibv_ah_attr_3.3.20.patch'
               - 'patches/nvshmem_zero_ibv_ah_attr_v3.4.5-0.patch'
+            rocm:
+              - 'docker/Dockerfile.rocm'
             xpu:
               - 'docker/Dockerfile.xpu'
               - 'docker/scripts/xpu/**'
@@ -115,6 +118,7 @@ jobs:
         run: |
           platforms="${{ inputs.platforms }}"
           echo "cuda=$(echo $platforms | grep -q cuda && echo true || echo false)" >> $GITHUB_OUTPUT
+          echo "rocm=$(echo $platforms | grep -q rocm && echo true || echo false)" >> $GITHUB_OUTPUT
           echo "xpu=$(echo $platforms | grep -q xpu && echo true || echo false)" >> $GITHUB_OUTPUT
           echo "cpu=$(echo $platforms | grep -q cpu && echo true || echo false)" >> $GITHUB_OUTPUT
           echo "hpu=$(echo $platforms | grep -q hpu && echo true || echo false)" >> $GITHUB_OUTPUT
@@ -191,10 +195,11 @@ jobs:
           platforms: ${{ matrix.platform }}
           target: builder
           push: false
-          cache-from: |
-            type=gha,mode=max,scope=cuda-dev-builder-${{ matrix.os }}-${{ matrix.platform == 'linux/arm64' && 'arm64' || 'amd64' }}
-          cache-to: |
-            type=gha,mode=max,scope=cuda-dev-builder-${{ matrix.os }}-${{ matrix.platform == 'linux/arm64' && 'arm64' || 'amd64' }},oci-mediatypes=true,compression=zstd
+          # disabling cache from cache to temporarily to prevent building issues
+          # cache-from: |
+          #   type=gha,mode=max,scope=cuda-dev-builder-${{ matrix.os }}-${{ matrix.platform == 'linux/arm64' && 'arm64' || 'amd64' }}
+          # cache-to: |
+          #   type=gha,mode=max,scope=cuda-dev-builder-${{ matrix.os }}-${{ matrix.platform == 'linux/arm64' && 'arm64' || 'amd64' }},oci-mediatypes=true,compression=zstd
           labels: ${{ steps.meta.outputs.labels }}
           build-args: |
             CACHE_BUSTER=${{ steps.cache_buster_timestamp.outputs.cache_buster_timestamp }}
@@ -232,12 +237,13 @@ jobs:
             ${{ inputs.vllm_commit_sha != '' && format('VLLM_COMMIT_SHA={0}', inputs.vllm_commit_sha) || '' }}
             ${{ inputs.vllm_precompiled_wheel_commit != '' &&
               format('VLLM_PRECOMPILED_WHEEL_COMMIT={0}', inputs.vllm_precompiled_wheel_commit) || '' }}
-          cache-from: >-
-            type=gha,scope=cuda-dev-${{ matrix.os }}-${{
-            matrix.platform == 'linux/arm64' && 'arm64' || 'amd64' }}
-          cache-to: >-
-            type=gha,mode=max,scope=cuda-dev-${{ matrix.os }}-${{
-            matrix.platform == 'linux/arm64' && 'arm64' || 'amd64' }}
+          # disabling cache from cache to temporarily to prevent building issues
+          # cache-from: >-
+          #   type=gha,scope=cuda-dev-${{ matrix.os }}-${{
+          #   matrix.platform == 'linux/arm64' && 'arm64' || 'amd64' }}
+          # cache-to: >-
+          #   type=gha,mode=max,scope=cuda-dev-${{ matrix.os }}-${{
+          #   matrix.platform == 'linux/arm64' && 'arm64' || 'amd64' }}
           labels: ${{ steps.meta.outputs.labels }}
           outputs: >-
             type=image,name=${{ env.REGISTRY }}/${{ github.repository }}-cuda-dev${{ matrix.image_suffix }},
@@ -443,9 +449,9 @@ jobs:
           image-ref: >-
             ${{ env.REGISTRY }}/${{ github.repository }}-cuda-dev${{ matrix.image_suffix }}@${{
               steps.manifest.outputs.digest }}
-          format: 'sarif'
-          output: 'trivy-results.sarif'
-          severity: 'CRITICAL,HIGH,MEDIUM'
+          format: "sarif"
+          output: "trivy-results.sarif"
+          severity: "CRITICAL,HIGH,MEDIUM"
           scanners: vuln
           timeout: 30m
           skip-dirs: /root/.cache/uv
@@ -458,7 +464,7 @@ jobs:
         continue-on-error: true
         uses: github/codeql-action/upload-sarif@v3
         with:
-          sarif_file: 'trivy-results.sarif'
+          sarif_file: "trivy-results.sarif"
 
       - name: Display vulnerability summary
         if: ${{ steps.should-run.outputs.os_succeeded == 'true' }}
@@ -523,8 +529,9 @@ jobs:
           provenance: true
           build-args: |
             CACHE_BUSTER=${{ steps.cache_buster_timestamp.outputs.cache_buster_timestamp }}
-          cache-from: type=gha,scope=xpu-dev
-          cache-to: type=gha,mode=max,scope=xpu-dev,oci-mediatypes=true,compression=zstd
+          # disabling cache from cache to temporarily to prevent building issues
+          # cache-from: type=gha,scope=xpu-dev
+          # cache-to: type=gha,mode=max,scope=xpu-dev,oci-mediatypes=true,compression=zstd
           tags: |
             ${{ env.REGISTRY }}/${{ github.repository }}-xpu-dev:${{ steps.set-tag.outputs.tag }}
             ${{ steps.set-tag.outputs.pr_tag != '' && format('{0}/{1}-xpu-dev:{2}', env.REGISTRY, github.repository, steps.set-tag.outputs.pr_tag) || '' }}
@@ -537,6 +544,88 @@ jobs:
         uses: aquasecurity/trivy-action@master
         with:
           image-ref: ${{ env.REGISTRY }}/${{ github.repository }}-xpu-dev:${{ steps.set-tag.outputs.tag }}
+          format: "sarif"
+          output: "trivy-results.sarif"
+          severity: "CRITICAL,HIGH,MEDIUM"
+          scanners: vuln # skip secrets/config/license analyzers
+          timeout: 30m
+          skip-dirs: /root/.cache/uv
+        env:
+          TRIVY_USERNAME: ${{ secrets.GHCR_USER }}
+          TRIVY_PASSWORD: ${{ secrets.GHCR_TOKEN }}
+
+      - name: Upload Trivy scan results to GitHub Security tab
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: "trivy-results.sarif"
+
+      - name: Display vulnerability summary
+        run: |
+          echo "=== Vulnerability Scan Summary ==="
+          if [ -f trivy-results.sarif ]; then
+            echo "Scan completed. Check the Security tab for detailed results."
+          else
+            echo "No vulnerabilities found or scan failed."
+          fi
+
+  rocm-build-llm-d:
+    needs: [detect-changes]
+    if: ${{ needs.detect-changes.outputs.rocm == 'true' }}
+    runs-on: vllm-runner
+    steps:
+      - name: Checkout push ref
+        if: github.event_name == 'push'
+        uses: Actions/checkout@v4
+
+      - name: Checkout PR branch
+        if: github.event_name == 'pull_request'
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ secrets.GHCR_USER }}
+          password: ${{ secrets.GHCR_TOKEN }}
+
+      - name: Set image tag
+        id: set-tag
+        run: |
+          TAG="sha-$(git rev-parse --short HEAD)"
+          echo "tag=${TAG}" >> $GITHUB_OUTPUT
+          PR_TAG="${{ github.event.pull_request.number }}"
+          if [ -n "${PR_TAG}" ]; then
+            echo "pr_tag=pr-${PR_TAG}" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Build and push the image
+        id: build-and-push
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./docker/Dockerfile.rocm
+          platforms: linux/amd64
+          push: true
+          provenance: true
+          cache-from: type=gha,scope=rocm-dev
+          cache-to: type=gha,mode=max,scope=rocm-dev,oci-mediatypes=true,compression=zstd
+          tags: |
+            ${{ env.REGISTRY }}/${{ github.repository }}-rocm-dev:${{ steps.set-tag.outputs.tag }}
+            ${{ steps.set-tag.outputs.pr_tag != '' && format('{0}/{1}-rocm-dev:{2}', env.REGISTRY, github.repository, steps.set-tag.outputs.pr_tag) || '' }}
+          github-token: ${{ secrets.GHCR_TOKEN }}
+        env:
+          DOCKER_BUILDKIT: "1"
+          BUILDKIT_PROGRESS: "plain"
+
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: ${{ env.REGISTRY }}/${{ github.repository }}-rocm-dev:${{ steps.set-tag.outputs.tag }}
           format: 'sarif'
           output: 'trivy-results.sarif'
           severity: 'CRITICAL,HIGH,MEDIUM'
@@ -544,9 +633,8 @@ jobs:
           timeout: 30m
           skip-dirs: /root/.cache/uv
         env:
-          TRIVY_USERNAME: ${{ secrets.GHCR_USER }}
+          TRIVY_USERNAME: ${{ github.actor }}
           TRIVY_PASSWORD: ${{ secrets.GHCR_TOKEN }}
-
 
       - name: Upload Trivy scan results to GitHub Security tab
         uses: github/codeql-action/upload-sarif@v3
@@ -681,10 +769,10 @@ jobs:
           platforms: linux/amd64
           push: true
           provenance: true
-          cache-from: type=gha,scope=cpu-dev
-          cache-to: type=gha,mode=max,scope=cpu-dev,oci-mediatypes=true,compression=zstd
-          build-args:
-            CACHE_BUSTER=${{ steps.cache_buster_timestamp.outputs.cache_buster_timestamp }}
+          # disabling cache from cache to temporarily to prevent building issues
+          # cache-from: type=gha,scope=cpu-dev
+          # cache-to: type=gha,mode=max,scope=cpu-dev,oci-mediatypes=true,compression=zstd
+          build-args: CACHE_BUSTER=${{ steps.cache_buster_timestamp.outputs.cache_buster_timestamp }}
           tags: |
             ${{ env.REGISTRY }}/${{ github.repository }}-cpu-dev:${{ steps.set-tag.outputs.tag }}
             ${{ steps.set-tag.outputs.pr_tag != '' && format('{0}/{1}-cpu-dev:{2}', env.REGISTRY, github.repository, steps.set-tag.outputs.pr_tag) || '' }}
@@ -697,10 +785,10 @@ jobs:
         uses: aquasecurity/trivy-action@master
         with:
           image-ref: ${{ env.REGISTRY }}/${{ github.repository }}-cpu-dev:${{ steps.set-tag.outputs.tag }}
-          format: 'sarif'
-          output: 'trivy-results.sarif'
-          severity: 'CRITICAL,HIGH,MEDIUM'
-          scanners: vuln              # skip secrets/config/license analyzers
+          format: "sarif"
+          output: "trivy-results.sarif"
+          severity: "CRITICAL,HIGH,MEDIUM"
+          scanners: vuln # skip secrets/config/license analyzers
           timeout: 30m
           skip-dirs: /root/.cache/uv
         env:
@@ -710,7 +798,7 @@ jobs:
       - name: Upload Trivy scan results to GitHub Security tab
         uses: github/codeql-action/upload-sarif@v3
         with:
-          sarif_file: 'trivy-results.sarif'
+          sarif_file: "trivy-results.sarif"
 
       - name: Display vulnerability summary
         run: |

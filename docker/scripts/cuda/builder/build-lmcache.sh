@@ -16,6 +16,24 @@ set -Eeux
 
 cd /tmp
 
+# LMCache links against the CUDA *driver* API (libcuda).
+# During container builds there is no real NVIDIA driver present,
+# so libcuda.so is not available from the host.
+#
+# CUDA provides "stub" libraries for this exact case:
+# they allow code to *link* against libcuda at build time,
+# while deferring the real driver resolution to runtime.
+#
+# IMPORTANT:
+# - We add CUDA stubs ONLY to LIBRARY_PATH (link-time).
+# - We intentionally do NOT add them to LD_LIBRARY_PATH,
+#   because that would cause the runtime to load stub/compat
+#   libcuda instead of the host driver, leading to CUDA
+#   initialization failures (e.g. cudaGetDeviceCount error 803).
+#
+# This must remain scoped to the LMCache build step only.
+export LIBRARY_PATH="${CUDA_HOME}/lib64/stubs:${LIBRARY_PATH:-}"
+
 . /usr/local/bin/setup-sccache
 . "${VIRTUAL_ENV}/bin/activate"
 

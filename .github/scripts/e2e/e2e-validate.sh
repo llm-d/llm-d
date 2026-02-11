@@ -59,21 +59,50 @@ elif [[ -n "${MODEL_ID-}" ]]; then
   MODEL_ID="$MODEL_ID"
 else
   echo "Attempting to auto-discover model ID from ${SVC_HOST}/v1/models..."
-  ID=$(gen_id)
-  ret=0
-  MODEL_ID=$(kubectl run --pod-running-timeout 5m --rm -i curl-discover-${ID} \
-                --namespace "$NAMESPACE" \
-                --image=curlimages/curl --restart=Never -- \
-                curl -sS --max-time 15 "http://${SVC_HOST}/v1/models" | \
-                grep -o '"id":"[^"]*"' | \
-                head -n 1 | \
-                cut -d '"' -f 4) || ret=$?
 
-  if [[ $ret -ne 0 || -z "$MODEL_ID" ]]; then
-    echo "Error: Failed to auto-discover model ID from gateway (exit code $ret)." >&2
+  # Retry logic: wait for EPP to discover backends and gateway to be fully ready
+  MAX_RETRIES=10
+  RETRY_DELAY=10
+  MODEL_ID=""
+
+  for attempt in $(seq 1 $MAX_RETRIES); do
+    echo "Attempt $attempt of $MAX_RETRIES to discover model ID..."
+    ID=$(gen_id)
+    ret=0
+    response=$(kubectl run --pod-running-timeout 5m --rm -i curl-discover-${ID} \
+                  --namespace "$NAMESPACE" \
+                  --image=curlimages/curl --restart=Never -- \
+                  curl -sS --max-time 15 "http://${SVC_HOST}/v1/models" 2>&1) || ret=$?
+
+    # Try to extract model ID from response
+    MODEL_ID=$(echo "$response" | grep -o '"id":"[^"]*"' | head -n 1 | cut -d '"' -f 4) || true
+
+    if [[ -n "$MODEL_ID" ]]; then
+      echo "Successfully discovered model ID: $MODEL_ID"
+      break
+    fi
+
+    # Check if we got a specific error
+    if echo "$response" | grep -q "404\|No healthy upstream\|no endpoints"; then
+      echo "Gateway not ready yet (attempt $attempt): endpoints not available"
+    elif [[ $ret -ne 0 ]]; then
+      echo "Request failed (attempt $attempt, exit code $ret)"
+    else
+      echo "Empty or invalid response (attempt $attempt)"
+    fi
+
+    if [[ $attempt -lt $MAX_RETRIES ]]; then
+      echo "Waiting ${RETRY_DELAY}s before retry..."
+      sleep $RETRY_DELAY
+    fi
+  done
+
+  if [[ -z "$MODEL_ID" ]]; then
+    echo "Error: Failed to auto-discover model ID from gateway after $MAX_RETRIES attempts." >&2
+    echo "Last response: $response" >&2
     echo "You can specify one using the -m flag or the MODEL_ID environment variable." >&2
-  exit 1
-fi
+    exit 1
+  fi
 fi
 
 echo "Namespace: $NAMESPACE"

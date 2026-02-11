@@ -2,3 +2,10 @@
 *.history
 .DS_Store
 CLAUDE.md
+
+# editor and IDE paraphernalia
+.idea
+.vscode
+*.swp
+*.swo
+*~

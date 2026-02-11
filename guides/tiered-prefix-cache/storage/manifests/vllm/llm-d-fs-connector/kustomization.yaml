@@ -1,0 +1,86 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ../../../../../recipes/vllm/standard
+patches:
+  - target:
+      kind: Deployment
+      name: llm-d-model-server
+    patch: |-
+      - op: replace
+        path: /spec/template/spec/containers/0/image
+        value: vllm/vllm-openai:v0.14.1
+
+  # Add Offloading Connector with llm-d FS Backend
+  - target:
+      kind: Deployment
+      name: llm-d-model-server
+    patch: |-
+      - op: replace
+        path: /spec/template/spec/containers/0/args/0
+        value: |-
+          pip install https://raw.githubusercontent.com/llm-d/llm-d-kv-cache/main/kv_connectors/llmd_fs_backend/wheels/llmd_fs_connector-0.1.0-cp312-cp312-linux_x86_64.whl
+          exec vllm serve \
+            Qwen/Qwen3-32B \
+            --tensor-parallel-size 2 \
+            --port 8000 \
+            --max-num-seq 1024 \
+            --kv-transfer-config '{
+              "kv_connector": "OffloadingConnector",
+              "kv_role": "kv_both",
+              "kv_connector_extra_config": {
+                "spec_name": "SharedStorageOffloadingSpec",
+                "shared_storage_path": "/mnt/files-storage/kv-cache/",
+                "block_size": 256,
+                "threads_per_gpu": 64,
+                "spec_module_path": "llmd_fs_backend.spec"
+              }
+            }'
+
+  # Add GPU + memory resources
+  - target:
+      kind: Deployment
+      name: llm-d-model-server
+    patch: |-
+      - op: add
+        path: /spec/template/spec/containers/0/resources
+        value:
+          limits:
+            nvidia.com/gpu: 2
+          requests:
+            nvidia.com/gpu: 2
+            memory: 400G
+
+  # Add PVC volume
+  - target:
+      kind: Deployment
+      name: llm-d-model-server
+    patch: |-
+      - op: add
+        path: /spec/template/spec/volumes/-
+        value:
+          name: files-storage
+          persistentVolumeClaim:
+            claimName: pvc-storage-files
+
+  # Mount PVC into container
+  - target:
+      kind: Deployment
+      name: llm-d-model-server
+    patch: |-
+      - op: add
+        path: /spec/template/spec/containers/0/volumeMounts/-
+        value:
+          name: files-storage
+          mountPath: /mnt/files-storage
+
+  # Add PYTHONHASHSEED env var
+  - target:
+      kind: Deployment
+      name: llm-d-model-server
+    patch: |-
+      - op: add
+        path: /spec/template/spec/containers/0/env/-
+        value:
+          name: PYTHONHASHSEED
+          value: "42"

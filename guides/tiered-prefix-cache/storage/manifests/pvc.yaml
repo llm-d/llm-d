@@ -1,0 +1,11 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: llm-d-kv-cache-storage # If you change this, update the ./manifests/vllm patches accordingly.
+spec:
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: 18000Gi
+  storageClassName: $STORAGE_CLASS # Specify the storage class here, or remove this line to use the default storage class.

@@ -32,10 +32,10 @@ inferenceExtension:
       - name: default
         plugins:
         - pluginRef: queue-scorer
-          weight: 2
+          weight: 2.0
         - pluginRef: kv-cache-utilization-scorer
-          weight: 2
+          weight: 2.0
         - pluginRef: gpu-prefix-cache-scorer
-          weight: 1
+          weight: 1.0
         - pluginRef: cpu-prefix-cache-scorer
-          weight: 1
+          weight: 1.0

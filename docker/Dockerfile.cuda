@@ -34,7 +34,7 @@ ARG GDRCOPY_REPO="https://github.com/NVIDIA/gdrcopy.git"
 ARG GDRCOPY_VERSION="v2.5.1"
 
 ARG UCX_REPO="https://github.com/openucx/ucx.git"
-ARG UCX_VERSION="1.20.0"
+ARG UCX_VERSION="v1.20.0"
 
 ARG NVSHMEM_USE_GIT="true"
 ARG NVSHMEM_REPO="https://github.com/NVIDIA/nvshmem.git"
@@ -153,7 +153,7 @@ ENV PATH="${NVSHMEM_DIR}/bin:${VIRTUAL_ENV}/bin:${PATH}" \
     LIBRARY_PATH="\
 ${UCX_PREFIX}/lib:${UCX_PREFIX}/lib64:\
 ${NVSHMEM_DIR}/lib:${NVSHMEM_DIR}/lib64:\
-${CUDA_HOME}/lib64/stubs:${CUDA_HOME}/lib64:\
+:${CUDA_HOME}/lib64:\
 /usr/local/lib:/usr/local/lib64:\
 ${LIBRARY_PATH}" \
     CPATH="${NVSHMEM_DIR}/include:\
@@ -320,7 +320,7 @@ ENV LANG="C.UTF-8" \
 ENV LD_LIBRARY_PATH="\
 ${UCX_PREFIX}/lib:${UCX_PREFIX}/lib64:\
 /opt/vllm/lib64/python${PYTHON_VERSION}/site-packages/torch/lib:\
-/usr/local/nvidia/lib:/usr/local/nvidia/lib64:${CUDA_HOME}/lib64:${CUDA_HOME}/compat:\
+/usr/local/nvidia/lib:/usr/local/nvidia/lib64:${CUDA_HOME}/lib64:\
 /usr/local/lib:/usr/local/lib64:\
 ${NVSHMEM_DIR}/lib:${NVSHMEM_DIR}/lib64:\
 /usr/lib/x86_64-linux-gnu:/usr/lib/aarch64-linux-gnu/:\
@@ -508,8 +508,7 @@ ENV PATH="${VIRTUAL_ENV}/bin:/usr/local/nvidia/bin:${PATH}" \
     TORCH_NCCL_DUMP_ON_TIMEOUT=0 \
     VLLM_SKIP_P2P_CHECK=1 \
     VLLM_CACHE_ROOT=/tmp/vllm \
-    UCX_MEM_MMAP_HOOK_MODE=none \
-    NVSHMEM_DISABLE_CUDA_VMM=1
+    UCX_MEM_MMAP_HOOK_MODE=none
 
 USER 2000
 WORKDIR /home/vllm

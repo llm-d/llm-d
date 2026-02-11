@@ -20,12 +20,7 @@ inferenceExtension:
       - type: prefill-header-handler
       - type: prefill-filter
       - type: decode-filter
-      - type: max-score-picker
       - type: queue-scorer
-        parameters:
-          hashBlockSize: 5
-          maxPrefixBlocksToMatch: 256
-          lruCapacityPerServer: 31250
       - type: pd-profile-handler
         parameters:
           threshold: 0
@@ -36,13 +31,12 @@ inferenceExtension:
         - pluginRef: prefill-filter
         - pluginRef: queue-scorer
           weight: 1.0
-        - pluginRef: max-score-picker
       - name: decode
         plugins:
         - pluginRef: decode-filter
         - pluginRef: queue-scorer
           weight: 1.0
-        - pluginRef: max-score-picker
+      # All profiles using max score picker by default
 
   # Monitoring configuration for EPP
   monitoring:
