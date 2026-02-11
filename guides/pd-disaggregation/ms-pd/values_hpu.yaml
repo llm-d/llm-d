@@ -36,91 +36,91 @@ decode:
       path: "/metrics"
       interval: "30s"
   containers:
-  - name: vllm
-    image: "opea/vllm-gaudi:1.22.0"
-    imagePullPolicy: IfNotPresent
-    securityContext:
-      privileged: true
-    modelCommand: vllmServe
-    args:
-      - "--enforce-eager"
-      - "--gpu-memory-utilization"
-      - "0.9"
-      - "--kv-transfer-config"
-      - '{"kv_connector":"NixlConnector","kv_role":"kv_both","kv_buffer_device":"cpu"}'
-    env:
-      - name: OMPI_MCA_btl_vader_single_copy_mechanism
-        value: "none"
-      - name: HABANA_LOGS
-        value: "/tmp/habana_logs"
-      - name: UCX_TLS
-        value: "tcp"
-      - name: VLLM_NIXL_SIDE_CHANNEL_HOST
-        valueFrom:
-          fieldRef:
-            fieldPath: status.podIP
-      - name: VLLM_NIXL_SIDE_CHANNEL_PORT
-        value: "5600"
-      - name: VLLM_LOGGING_LEVEL
-        value: "DEBUG"
-      - name: VLLM_SKIP_WARMUP
-        value: "true"
-      - name: PT_HPU_LAZY_MODE
-        value: "1"
-      - name: PT_HPU_ENABLE_LAZY_COLLECTIVES
-        value: "true"
-      - name: LD_LIBRARY_PATH
-        value: "/usr/lib/nixl_ofi:/usr/local/lib:/usr/lib:/opt/amazon/openmpi/lib:/usr/lib/habanalabs"
-      - name: DO_NOT_TRACK
-        value: "1"
-      - name: VLLM_USE_V1
-        value: "1"
-    ports:
-    - containerPort: 8200
-      name: vllm
-      protocol: TCP
-    - containerPort: 5600
-      name: nixl
-      protocol: TCP
-    mountModelVolume: true
-    volumeMounts:
-    - name: metrics-volume
-      mountPath: /.config
-    - name: shm
-      mountPath: /dev/shm
-    - name: torch-compile-cache
-      mountPath: /.cache
-    startupProbe:
-      httpGet:
-        path: /v1/models
-        port: vllm
-      initialDelaySeconds: 30
-      periodSeconds: 30
-      timeoutSeconds: 10
-      failureThreshold: 60
-    livenessProbe:
-      httpGet:
-        path: /health
-        port: vllm
-      periodSeconds: 30
-      timeoutSeconds: 10
-      failureThreshold: 20
-    readinessProbe:
-      httpGet:
-        path: /v1/models
-        port: vllm
-      periodSeconds: 10
-      timeoutSeconds: 5
-      failureThreshold: 6
+    - name: vllm
+      image: "opea/vllm-gaudi:1.22.0"
+      imagePullPolicy: IfNotPresent
+      securityContext:
+        privileged: true
+      modelCommand: vllmServe
+      args:
+        - "--enforce-eager"
+        - "--gpu-memory-utilization"
+        - "0.9"
+        - "--kv-transfer-config"
+        - '{"kv_connector":"NixlConnector","kv_role":"kv_both","kv_buffer_device":"cpu"}'
+      env:
+        - name: OMPI_MCA_btl_vader_single_copy_mechanism
+          value: "none"
+        - name: HABANA_LOGS
+          value: "/tmp/habana_logs"
+        - name: UCX_TLS
+          value: "tcp"
+        - name: VLLM_NIXL_SIDE_CHANNEL_HOST
+          valueFrom:
+            fieldRef:
+              fieldPath: status.podIP
+        - name: VLLM_NIXL_SIDE_CHANNEL_PORT
+          value: "5600"
+        - name: VLLM_LOGGING_LEVEL
+          value: "DEBUG"
+        - name: VLLM_SKIP_WARMUP
+          value: "true"
+        - name: PT_HPU_LAZY_MODE
+          value: "1"
+        - name: PT_HPU_ENABLE_LAZY_COLLECTIVES
+          value: "true"
+        - name: LD_LIBRARY_PATH
+          value: "/usr/lib/nixl_ofi:/usr/local/lib:/usr/lib:/opt/amazon/openmpi/lib:/usr/lib/habanalabs"
+        - name: DO_NOT_TRACK
+          value: "1"
+        - name: VLLM_USE_V1
+          value: "1"
+      ports:
+        - containerPort: 8200
+          name: vllm
+          protocol: TCP
+        - containerPort: 5600
+          name: nixl
+          protocol: TCP
+      mountModelVolume: true
+      volumeMounts:
+        - name: metrics-volume
+          mountPath: /.config
+        - name: shm
+          mountPath: /dev/shm
+        - name: torch-compile-cache
+          mountPath: /.cache
+      startupProbe:
+        httpGet:
+          path: /v1/models
+          port: vllm
+        initialDelaySeconds: 30
+        periodSeconds: 30
+        timeoutSeconds: 10
+        failureThreshold: 60
+      livenessProbe:
+        httpGet:
+          path: /health
+          port: vllm
+        periodSeconds: 30
+        timeoutSeconds: 10
+        failureThreshold: 20
+      readinessProbe:
+        httpGet:
+          path: /v1/models
+          port: vllm
+        periodSeconds: 10
+        timeoutSeconds: 5
+        failureThreshold: 6
   volumes:
-  - name: metrics-volume
-    emptyDir: {}
-  - name: shm
-    emptyDir:
-      medium: Memory
-      sizeLimit: "16Gi"
-  - name: torch-compile-cache
-    emptyDir: {}
+    - name: metrics-volume
+      emptyDir: {}
+    - name: shm
+      emptyDir:
+        medium: Memory
+        sizeLimit: "16Gi"
+    - name: torch-compile-cache
+      emptyDir: {}
 
 prefill:
   parallelism:
@@ -134,88 +134,88 @@ prefill:
       path: "/metrics"
       interval: "30s"
   containers:
-  - name: vllm
-    image: opea/vllm-gaudi:1.22.0
-    imagePullPolicy: IfNotPresent
-    securityContext:
-      privileged: true
-    modelCommand: vllmServe
-    args:
-      - "--enforce-eager"
-      - "--gpu-memory-utilization"
-      - "0.9"
-      - "--kv-transfer-config"
-      - '{"kv_connector":"NixlConnector","kv_role":"kv_both","kv_buffer_device":"cpu"}'
-    env:
-      - name: OMPI_MCA_btl_vader_single_copy_mechanism
-        value: "none"
-      - name: HABANA_LOGS
-        value: "/tmp/habana_logs"
-      - name: UCX_TLS
-        value: "tcp"
-      - name: VLLM_NIXL_SIDE_CHANNEL_HOST
-        valueFrom:
-          fieldRef:
-            fieldPath: status.podIP
-      - name: VLLM_NIXL_SIDE_CHANNEL_PORT
-        value: "5600"
-      - name: VLLM_LOGGING_LEVEL
-        value: "DEBUG"
-      - name: VLLM_SKIP_WARMUP
-        value: "true"
-      - name: PT_HPU_LAZY_MODE
-        value: "1"
-      - name: PT_HPU_ENABLE_LAZY_COLLECTIVES
-        value: "true"
-      - name: LD_LIBRARY_PATH
-        value: "/usr/lib/nixl_ofi:/usr/local/lib:/usr/lib:/opt/amazon/openmpi/lib:/usr/lib/habanalabs"
-      - name: DO_NOT_TRACK
-        value: "1"
-      - name: VLLM_USE_V1
-        value: "1"
-    ports:
-    - containerPort: 8000
-      name: vllm
-      protocol: TCP
-    - containerPort: 5600
-      name: nixl
-      protocol: TCP
-    mountModelVolume: true
-    volumeMounts:
-    - name: metrics-volume
-      mountPath: /.config
-    - name: shm
-      mountPath: /dev/shm
-    - name: torch-compile-cache
-      mountPath: /.cache
-    startupProbe:
-      httpGet:
-        path: /v1/models
-        port: vllm
-      initialDelaySeconds: 30
-      periodSeconds: 30
-      timeoutSeconds: 10
-      failureThreshold: 60
-    livenessProbe:
-      httpGet:
-        path: /health
-        port: vllm
-      periodSeconds: 30
-      timeoutSeconds: 10
-      failureThreshold: 20
-    readinessProbe:
-      httpGet:
-        path: /v1/models
-        port: vllm
-      periodSeconds: 10
-      timeoutSeconds: 5
-      failureThreshold: 6
+    - name: vllm
+      image: opea/vllm-gaudi:1.22.0
+      imagePullPolicy: IfNotPresent
+      securityContext:
+        privileged: true
+      modelCommand: vllmServe
+      args:
+        - "--enforce-eager"
+        - "--gpu-memory-utilization"
+        - "0.9"
+        - "--kv-transfer-config"
+        - '{"kv_connector":"NixlConnector","kv_role":"kv_both","kv_buffer_device":"cpu"}'
+      env:
+        - name: OMPI_MCA_btl_vader_single_copy_mechanism
+          value: "none"
+        - name: HABANA_LOGS
+          value: "/tmp/habana_logs"
+        - name: UCX_TLS
+          value: "tcp"
+        - name: VLLM_NIXL_SIDE_CHANNEL_HOST
+          valueFrom:
+            fieldRef:
+              fieldPath: status.podIP
+        - name: VLLM_NIXL_SIDE_CHANNEL_PORT
+          value: "5600"
+        - name: VLLM_LOGGING_LEVEL
+          value: "DEBUG"
+        - name: VLLM_SKIP_WARMUP
+          value: "true"
+        - name: PT_HPU_LAZY_MODE
+          value: "1"
+        - name: PT_HPU_ENABLE_LAZY_COLLECTIVES
+          value: "true"
+        - name: LD_LIBRARY_PATH
+          value: "/usr/lib/nixl_ofi:/usr/local/lib:/usr/lib:/opt/amazon/openmpi/lib:/usr/lib/habanalabs"
+        - name: DO_NOT_TRACK
+          value: "1"
+        - name: VLLM_USE_V1
+          value: "1"
+      ports:
+        - containerPort: 8000
+          name: vllm
+          protocol: TCP
+        - containerPort: 5600
+          name: nixl
+          protocol: TCP
+      mountModelVolume: true
+      volumeMounts:
+        - name: metrics-volume
+          mountPath: /.config
+        - name: shm
+          mountPath: /dev/shm
+        - name: torch-compile-cache
+          mountPath: /.cache
+      startupProbe:
+        httpGet:
+          path: /v1/models
+          port: vllm
+        initialDelaySeconds: 30
+        periodSeconds: 30
+        timeoutSeconds: 10
+        failureThreshold: 60
+      livenessProbe:
+        httpGet:
+          path: /health
+          port: vllm
+        periodSeconds: 30
+        timeoutSeconds: 10
+        failureThreshold: 20
+      readinessProbe:
+        httpGet:
+          path: /v1/models
+          port: vllm
+        periodSeconds: 10
+        timeoutSeconds: 5
+        failureThreshold: 6
   volumes:
-  - name: metrics-volume
-    emptyDir: {}
-  - name: shm
-    emptyDir:
-      medium: Memory
-      sizeLimit: "16Gi"
-  - name: torch-compile-cache
-    emptyDir: {}
+    - name: metrics-volume
+      emptyDir: {}
+    - name: shm
+      emptyDir:
+        medium: Memory
+        sizeLimit: "16Gi"
+    - name: torch-compile-cache
+      emptyDir: {}

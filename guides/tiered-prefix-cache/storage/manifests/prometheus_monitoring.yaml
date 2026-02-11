@@ -7,5 +7,5 @@ spec:
     matchLabels:
       llm-d.ai/inference-serving: "true"
   endpoints:
-  - port: 8000
-    interval: 15s
+    - port: 8000
+      interval: 15s

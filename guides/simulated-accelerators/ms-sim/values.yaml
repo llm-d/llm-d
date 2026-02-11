@@ -36,8 +36,8 @@ decode:
           protocol: TCP
       mountModelVolume: true
       volumeMounts:
-      - name: metrics-volume
-        mountPath: /.config
+        - name: metrics-volume
+          mountPath: /.config
       startupProbe:
         httpGet:
           path: /v1/models
@@ -83,8 +83,8 @@ prefill:
           protocol: TCP
       mountModelVolume: true
       volumeMounts:
-      - name: metrics-volume
-        mountPath: /.config
+        - name: metrics-volume
+          mountPath: /.config
       startupProbe:
         httpGet:
           path: /v1/models
