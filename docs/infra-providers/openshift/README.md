@@ -36,16 +36,16 @@ cd ocp-gpu-setup
     ./machine-set/gpu-machineset.sh
     ```
 
-1. For this setup the following settings were selected when prompted by the script:
+2. For this setup the following settings were selected when prompted by the script:
     - Select option `12` for `L40S Single GPU`
     - Select option `p` for `private`
     - Enter AWS region (e.g. `us-east-2`)
     - Enter Availability zone (e.g. `1`)
     - Answer `n` for spot instances
-1. Check if you have the default machineset available (in the web console, see Compute -> MahineSets). If not, then run the above command twice.
-1. Once the first gpu machine set is provisioned, set the MachineSet count to 2.
-1. Configure the default MachineSet count (or extra one provisioned above) to 6.
-1. After the machines have provisioned the configuration should look similiar to the following:
+3. Check if you have the default machineset available (in the web console, see Compute -> MahineSets). If not, then run the above command twice.
+4. Once the first gpu machine set is provisioned, set the MachineSet count to 2.
+5. Configure the default MachineSet count (or extra one provisioned above) to 6.
+6. After the machines have provisioned the configuration should look similiar to the following:
 ![machinesets](./images/machinesets.png)
 
 #### Deploy the Supporting Operators
@@ -56,13 +56,13 @@ cd ocp-gpu-setup
     oc apply -f ./nfd
     ```
 
-1. Deploy the NVIDIA GPU Operator
+2. Deploy the NVIDIA GPU Operator
 
     ```
     oc apply -f ./gpu-operator
     ```
 
-1. Wait for the Node Feature Discovery and NVIDIA GPU Operator to be installed
+3. Wait for the Node Feature Discovery and NVIDIA GPU Operator to be installed
 ![operators](./images/installed_operators.png)
 
 #### Deploy the Supporting CRs
