@@ -98,7 +98,7 @@ jobs:
           RELEASE_NAME_POSTFIX=${RELEASE_NAME_POSTFIX} \
           helmfile apply -e hpu -n "${NAMESPACE}" 2>&1 \
             | tee ~/pd-hpu-deployment.log
-          
+
           # Check if helmfile command succeeded
           HELMFILE_EXIT_CODE=${PIPESTATUS[0]}
           if [ ${HELMFILE_EXIT_CODE} -ne 0 ]; then
@@ -107,9 +107,9 @@ jobs:
             cat ~/pd-hpu-deployment.log
             exit 1
           fi
-          
+
           echo "---------------------------------------" >> ~/pd-hpu-deployment.log
-          
+
           # Verify releases were created
           echo "✅ Helmfile apply succeeded. Checking deployed releases..."
           helm list -n "${NAMESPACE}"

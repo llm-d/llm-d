@@ -43,6 +43,7 @@ This guide expects 8 Nvidia GPUs of any kind, and RDMA via InfiniBand or RoCE be
 ### Intel HPU Hardware Requirements
 
 For Intel HPU deployments:
+
 * Intel Gaudi2/3 machine with at least 2 Gaudi2 cards.
 
 ## Prerequisites
@@ -71,6 +72,7 @@ Use the helmfile to compose and install the stack. The Namespace in which the st
 cd guides/pd-disaggregation
 helmfile apply -n ${NAMESPACE}
 ```
+
 **For Intel HPU deployments**, use the HPU-specific environment:
 
 ```bash
@@ -186,6 +188,7 @@ For information on this plugin, see our [`pd-profile-handler` docs in the infere
 ## Benchmarking
 
 ### Overview
+
 The primary objective of this benchmark is to validate the correctness of the P/D disaggregation setup.
 
 In this example, we deployed the user guide on GKE using the modified [Gateway options](./README.md#gateway-options) described above:
@@ -193,6 +196,7 @@ In this example, we deployed the user guide on GKE using the modified [Gateway o
 ```bash
 helmfile apply -e gke_pd_rdma -n ${NAMESPACE}
 ```
+
 This setup serves the `openai/gpt-oss-120b` model using the following specifications:
 
 * Provider: GKE
@@ -240,7 +244,6 @@ On the decode node, you should see the corresponding completion entry:
 (APIServer pid=1) (EngineCore_DP0 pid=322) DEBUG 01-31 07:12:26 [distributed/.../v1/nixl_connector.py:725] NIXLConnector request_finished(chatcmpl-51b9a341-ca93-43f7-92fc-98b51f41d7e7), request_status=FINISHED_STOPPED, kv_transfer_params={'do_remote_decode': False, 'do_remote_prefill': False, 'remote_block_ids': [2, 3], 'remote_engine_id': '7520acd6-838a-4c0b-af97-a06e18a4f1c4', 'remote_host': '10.116.24.5', 'remote
 ```
 
-
 ### Run Benchmark
 
 We use the [inference-perf](https://github.com/kubernetes-sigs/inference-perf/tree/main) benchmark tool to verify the setup by generating random datasets with 1K input length and 1K output length across different concurrency levels.
@@ -253,7 +256,7 @@ export GATEWAY_IP=$(kubectl get gateway/llm-d-inference-gateway -n ${NAMESPACE} 
 
 The `GATEWAY_IP` environment variable will be used in the [benchmark template](../benchmark/pd_template.yaml).
 
-2. Follow the [benchmark guide](../../guides/benchmark/README.md) to deploy the benchmark tool and analyze the benchmark results. Notably, select the corresponding benchmark template:
+1. Follow the [benchmark guide](../../guides/benchmark/README.md) to deploy the benchmark tool and analyze the benchmark results. Notably, select the corresponding benchmark template:
 
 ```
 export BENCHMARK_TEMPLATE="${BENCH_TEMPLATE_DIR}"/pd_template.yaml
@@ -421,7 +424,6 @@ export BENCHMARK_TEMPLATE="${BENCH_TEMPLATE_DIR}"/pd_template.yaml
   ```
 
 </details>
-
 
 ## Cleanup
 

@@ -137,6 +137,7 @@ Follow provider specific instructions for installing HTTPRoute.
 **_IMPORTANT:_** If you set the `$RELEASE_NAME_POSTFIX` environment variable, you **must** update the HTTPRoute file to match your custom release names before applying it. The HTTPRoute references the Gateway and InferencePool names which include the release name postfix.
 
 For example, if you set `RELEASE_NAME_POSTFIX=my-custom`, you need to update the HTTPRoute:
+
 ```bash
 # Update the HTTPRoute to match your release names
 sed -e "s/infra-inference-scheduling-inference-gateway/infra-my-custom-inference-gateway/g" \

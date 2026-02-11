@@ -54,7 +54,7 @@ ARG LMCACHE_VERSION="v0.3.13"
 ARG DEEPEP_REPO="https://github.com/smarterclayton/DeepEP"
 # ARG DEEPEP_VERSION="nic_pe_alignment"
 # Use clayton's pre-rebase commit head
-ARG DEEPEP_VERSION="c66b1463601af5d127027fb459517fb97adab30d" 
+ARG DEEPEP_VERSION="c66b1463601af5d127027fb459517fb97adab30d"
 
 ARG DEEPGEMM_REPO="https://github.com/deepseek-ai/DeepGEMM"
 ARG DEEPGEMM_VERSION="v2.1.0"

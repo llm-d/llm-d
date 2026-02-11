@@ -122,4 +122,3 @@ decode:
 # Disable prefill for XPU example
 prefill:
   create: false
-

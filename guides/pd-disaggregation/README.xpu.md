@@ -270,6 +270,7 @@ If no HTTPRoute was found, create one manually:
 **_IMPORTANT:_** If you used a custom `$RELEASE_NAME_POSTFIX` environment variable during deployment, you **must** update the HTTPRoute file to match your custom release names before applying it. The HTTPRoute references the Gateway and InferencePool names which include the release name postfix.
 
 For example, if you set `RELEASE_NAME_POSTFIX=pd-xpu`, you need to update the HTTPRoute:
+
 ```shell
 # Update the HTTPRoute to match your release names
 sed -e "s/infra-pd-inference-gateway/infra-pd-xpu-inference-gateway/g" \
@@ -281,6 +282,7 @@ kubectl apply -f httproute-custom.yaml -n llm-d-pd
 ```
 
 If using default release names (no custom `RELEASE_NAME_POSTFIX`), simply apply:
+
 ```shell
 # Apply the HTTPRoute configuration from the PD disaggregation guide
 kubectl apply -f httproute.yaml

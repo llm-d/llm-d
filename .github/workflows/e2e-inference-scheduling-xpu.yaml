@@ -241,7 +241,7 @@ jobs:
 
             mv ~/inference-scheduling-xpu-deployment.log . || true
             mv ~/install-deps.log . || true
-            
+
             echo "Log collection completed."
             ls -la
 

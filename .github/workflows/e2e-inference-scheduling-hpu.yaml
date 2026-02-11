@@ -95,7 +95,7 @@ jobs:
           echo "Starting helmfile deployment for hpu environment..."
           helmfile apply -e hpu -n "${NAMESPACE}" 2>&1 \
             | tee ~/inference-scheduling-hpu-deployment.log
-          
+
           # Check if helmfile command succeeded
           HELMFILE_EXIT_CODE=${PIPESTATUS[0]}
           if [ ${HELMFILE_EXIT_CODE} -ne 0 ]; then
@@ -104,9 +104,9 @@ jobs:
             cat ~/inference-scheduling-hpu-deployment.log
             exit 1
           fi
-          
+
           echo "---------------------------------------" >> ~/inference-scheduling-hpu-deployment.log
-          
+
           # Verify releases were created
           echo "✅ Helmfile apply succeeded. Checking deployed releases..."
           helm list -n "${NAMESPACE}"

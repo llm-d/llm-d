@@ -69,4 +69,3 @@ inferencePool:
     matchLabels:
       llm-d.ai/inference-serving: "true"
       llm-d.ai/guide: "precise-prefix-cache-aware"
-

@@ -190,6 +190,7 @@ For instructions on getting started making inference requests see [our docs](../
 ## Benchmarking
 
 ### Overview
+
 We deployed the default wide-ep-lws user guide on GKE (`./manifests/modelserver/gke-a4`).
 
 * Provider: GKE
@@ -201,13 +202,13 @@ We use the [inference-perf](https://github.com/kubernetes-sigs/inference-perf/tr
 
 ### Run Benchmark
 
-1. Deploy the wide-ep-lws stack following the Installation steps above. Once the stack is ready, obtain the gateway IP: 
+1. Deploy the wide-ep-lws stack following the Installation steps above. Once the stack is ready, obtain the gateway IP:
 
 ```bash
 export GATEWAY_IP=$(kubectl get gateway/llm-d-inference-gateway -n ${NAMESPACE} -o jsonpath='{.status.addresses[0].value}')
 ```
 
-2. Follow the [benchmark guide](../../guides/benchmark/README.md) to deploy the benchmark tool and analyze the benchmark results. Notably, select the corresponding benchmark template:
+1. Follow the [benchmark guide](../../guides/benchmark/README.md) to deploy the benchmark tool and analyze the benchmark results. Notably, select the corresponding benchmark template:
 
 ```
 export BENCHMARK_TEMPLATE="${BENCH_TEMPLATE_DIR}"/wide_ep_template.yaml
