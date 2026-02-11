@@ -80,7 +80,11 @@ exec /usr/local/cuda/bin/nvcc "${args[@]}"
 WRAPPER_EOF
     chmod +x /tmp/nvcc_wrapper.sh
     export CUDA_NVCC_EXECUTABLE=/tmp/nvcc_wrapper.sh
-    echo "=== Using nvcc wrapper to filter problematic debug flags ==="
+
+    # Also suppress the maybe-uninitialized warning for C++ files
+    export CXXFLAGS="${CXXFLAGS:-} -Wno-maybe-uninitialized"
+
+    echo "=== Using nvcc wrapper and CXXFLAGS to suppress debug build warnings ==="
 fi
 
 # Ubuntu image needs to be built against Ubuntu 20.04 and EFA only supports 22.04 and 24.04.
