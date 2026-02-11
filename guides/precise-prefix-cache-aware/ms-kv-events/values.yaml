@@ -69,11 +69,11 @@ decode:
           protocol: TCP
       resources:
         limits:
-  #        nvidia.com/gpu: '2' # added automatically from 'parallelism'
+          #  nvidia.com/gpu: '2'  # added automatically from 'parallelism'
           cpu: '32'
           memory: 100Gi
         requests:
-  #        nvidia.com/gpu: '2' # added automatically from 'parallelism'
+          #  nvidia.com/gpu: '2'  # added automatically from 'parallelism'
           cpu: '32'
           memory: 100Gi
       mountModelVolume: true

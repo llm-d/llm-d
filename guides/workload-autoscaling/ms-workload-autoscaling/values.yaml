@@ -10,7 +10,7 @@ modelArtifacts:
     llm-d.ai/guide: "workload-autoscaling"
     llm-d.ai/accelerator-variant: "gpu"
     llm-d.ai/accelerator-vendor: "nvidia"
-    llm-d.ai/model: ms-workload-autoscaler-llm-d-modelservice # exception to new model labeling pattern, used for scaling
+    llm-d.ai/model: ms-workload-autoscaler-llm-d-modelservice  # exception to new model labeling pattern, used for scaling
 
 routing:
   servicePort: 8000

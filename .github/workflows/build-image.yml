@@ -658,7 +658,7 @@ jobs:
           format: "sarif"
           output: "trivy-results.sarif"
           severity: "CRITICAL,HIGH,MEDIUM"
-          scanners: vuln # skip secrets/config/license analyzers
+          scanners: vuln  # skip secrets/config/license analyzers
           timeout: 30m
           skip-dirs: /root/.cache/uv
         env:
@@ -899,7 +899,7 @@ jobs:
           format: "sarif"
           output: "trivy-results.sarif"
           severity: "CRITICAL,HIGH,MEDIUM"
-          scanners: vuln # skip secrets/config/license analyzers
+          scanners: vuln  # skip secrets/config/license analyzers
           timeout: 30m
           skip-dirs: /root/.cache/uv
         env:

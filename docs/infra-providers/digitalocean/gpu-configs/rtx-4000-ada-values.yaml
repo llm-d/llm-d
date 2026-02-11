@@ -25,7 +25,7 @@ sampleApplication:
       - "8192"  # Conservative sequence length for 20GB VRAM
       - "--gpu-memory-utilization"
       - "0.85"  # Use 85% of GPU memory
-      - "--enforce-eager" # Disable CUDA graph to save memory
+      - "--enforce-eager"  # Disable CUDA graph to save memory
       - "--tensor-parallel-size"
       - "1"  # Single GPU setup
       - "--block-size"
