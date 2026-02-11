@@ -1,7 +1,0 @@
-diff --git a/src/CMakeLists.txt b/src/CMakeLists.txt
-index 1234567..abcdefg 100644
---- a/src/CMakeLists.txt
-+++ b/src/CMakeLists.txt
-@@ -1,1 +1,1 @@
--# Remove problematic debug flags that break compilation
-+# Patch to fix debug build compilation issues
