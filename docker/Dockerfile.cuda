@@ -74,12 +74,13 @@ ARG PPLX_KERNELS_VERSION="2bd6e30fab358829bd01d1c0907be8088ff9e5e1"
 ARG FLASHINFER_REPO="https://github.com/flashinfer-ai/flashinfer.git"
 ARG FLASHINFER_VERSION="v0.6.1"
 
-# vLLM build settings
-ARG VLLM_REPO="https://github.com/vllm-project/vllm.git"
-ARG VLLM_COMMIT_SHA="1892993bc18e243e2c05841314c5e9c06a80c70d"
-ARG VLLM_PRECOMPILED_WHEEL_COMMIT="1892993bc18e243e2c05841314c5e9c06a80c70d"
-ARG VLLM_PREBUILT=0
-ARG VLLM_USE_PRECOMPILED=1
+# vLLM build settings - provided via build args from docker/vllm-version file
+# Override here for platform-specific testing or via build args
+ARG VLLM_REPO
+ARG VLLM_COMMIT_SHA
+ARG VLLM_PRECOMPILED_WHEEL_COMMIT
+ARG VLLM_PREBUILT
+ARG VLLM_USE_PRECOMPILED
 
 # ============================================================================
 # BUILD STAGE - Install build dependencies and create wheels
