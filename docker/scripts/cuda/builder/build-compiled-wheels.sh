@@ -49,7 +49,6 @@ git checkout -q "${DEEPEP_VERSION}"
 # Force NVSHMEM IBGDA constant to be extern in host-compiled TUs (prevents duplicate definition)
 BACKUP_CXXFLAGS="${CXXFLAGS-}"
 export CXXFLAGS="${CXXFLAGS:-} -D__NVSHMEM_NUMBA_SUPPORT__"
-grep -R --line-number "nvshmem_common_ibgda.h" csrc || true # debug line
 uv build --wheel --no-build-isolation --out-dir /wheels
 cd ..
 rm -rf deepep
