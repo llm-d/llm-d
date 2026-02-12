@@ -592,7 +592,7 @@ install() {
   fi
 
   log_info ""
-  log_info "🔍 For distributed tracing (Jaeger), see: ./install-jaeger.sh"
+  log_info "🔍 For distributed tracing (OTel Collector + Jaeger), see: ./install-otel-collector-jaeger.sh"
   log_success "🎉 Prometheus and Grafana installation complete."
 }
 

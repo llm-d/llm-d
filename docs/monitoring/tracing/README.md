@@ -10,33 +10,45 @@ This guide shows how to enable [OpenTelemetry](https://opentelemetry.io/) distri
 | **Routing proxy** (P/D sidecar) | ModelService `tracing:` | KV transfer coordination |
 | **EPP / Inference Scheduler** | GAIE `inferenceExtension.tracing:` | Request routing, endpoint scoring, KV-cache indexing |
 
-All components export traces via OTLP gRPC to an OpenTelemetry Collector, which forwards them to a backend (Jaeger, Tempo, etc.).
+All components export traces via OTLP gRPC to an **OpenTelemetry Collector**, which filters out noise (e.g., `/metrics` scraping spans), batches traces, and forwards them to a backend (Jaeger, Tempo, etc.).
 
-## Quick Start: Deploy Jaeger
+## Quick Start: Deploy OTel Collector + Jaeger
 
-The simplest way to view traces is to deploy Jaeger all-in-one. This works on both Kubernetes and OpenShift.
-
-You can use the install script or apply the manifest directly:
+The install script deploys both an OTel Collector and Jaeger all-in-one into a namespace of your choice. Deploy them into the **same namespace** as your llm-d workload so components can reach the collector at `http://otel-collector:4317`.
 
 ```bash
-# Option A: Use the install script
-../scripts/install-jaeger.sh
+# Deploy OTel Collector + Jaeger into your llm-d namespace
+../scripts/install-otel-collector-jaeger.sh -n <your-namespace>
 
-# Option B: Apply the manifest directly
-kubectl create namespace observability
-kubectl apply -n observability -f jaeger-all-in-one.yaml
+# Uninstall
+../scripts/install-otel-collector-jaeger.sh -u -n <your-namespace>
 ```
+
+If the [OpenTelemetry Operator](https://opentelemetry.io/docs/kubernetes/operator/) is installed, the script deploys the collector as an `OpenTelemetryCollector` CR ([otel-collector-operator.yaml](./otel-collector-operator.yaml)). Otherwise it uses a standalone Deployment ([otel-collector.yaml](./otel-collector.yaml)).
 
 Access the Jaeger UI:
 
 ```bash
-kubectl port-forward -n observability svc/jaeger-collector 16686:16686
+kubectl port-forward -n <your-namespace> svc/jaeger-collector 16686:16686
 # Open http://localhost:16686
 ```
 
-> **Note:** This is an in-memory deployment for development and testing. For production, use the [Jaeger Operator](https://www.jaegertracing.io/docs/latest/operator/) or a managed backend like Grafana Tempo.
+> **Note:** Jaeger all-in-one is an in-memory deployment for development and testing. For production, use the [Jaeger Operator](https://www.jaegertracing.io/docs/latest/operator/) or a managed backend like Grafana Tempo.
+
+### Manual deployment
+
+If you prefer to apply manifests directly:
+
+```bash
+kubectl apply -n <your-namespace> -f jaeger-all-in-one.yaml
+kubectl apply -n <your-namespace> -f otel-collector.yaml          # standalone
+# or, if the OTel Operator is installed:
+kubectl apply -n <your-namespace> -f otel-collector-operator.yaml  # operator CR
+```
 
 ## Enable Tracing
+
+By default, all chart values point to `http://otel-collector:4317` (same namespace). When tracing is enabled and the OTel Collector is deployed alongside your workload, traces flow automatically.
 
 ### ModelService (vLLM + routing proxy)
 
@@ -45,7 +57,8 @@ Add or uncomment the `tracing:` section in your `ms-*/values.yaml`:
 ```yaml
 tracing:
   enabled: true
-  otlpEndpoint: "http://jaeger-collector.observability.svc.cluster.local:4317"
+  # Default: http://otel-collector:4317 (same namespace as your workload)
+  # otlpEndpoint: "http://otel-collector:4317"
   sampling:
     sampler: "parentbased_traceidratio"
     samplerArg: "1.0"  # 100% for dev; use "0.1" (10%) in production
@@ -63,7 +76,8 @@ Add or uncomment the `tracing:` section under `inferenceExtension:` in your `gai
 inferenceExtension:
   tracing:
     enabled: true
-    otelExporterEndpoint: "http://jaeger-collector.observability.svc.cluster.local:4317"
+    # Default: http://otel-collector:4317 (same namespace as your workload)
+    # otelExporterEndpoint: "http://otel-collector:4317"
     sampling:
       sampler: "parentbased_traceidratio"
       samplerArg: "1.0"
@@ -77,7 +91,7 @@ For guides that use raw manifests (e.g., `wide-ep-lws`, `recipes/vllm`), add the
 # vLLM args
 args:
   - vllm serve my-model
-    --otlp-traces-endpoint http://jaeger-collector.observability.svc.cluster.local:4317
+    --otlp-traces-endpoint http://otel-collector:4317
     --collect-detailed-traces all
 
 # Environment variables
@@ -85,7 +99,7 @@ env:
 - name: OTEL_SERVICE_NAME
   value: "vllm-decode"
 - name: OTEL_EXPORTER_OTLP_ENDPOINT
-  value: "http://jaeger-collector.observability.svc.cluster.local:4317"
+  value: "http://otel-collector:4317"
 - name: OTEL_TRACES_EXPORTER
   value: "otlp"
 - name: OTEL_TRACES_SAMPLER
@@ -94,19 +108,15 @@ env:
   value: "1.0"
 ```
 
-## OpenTelemetry Collector (Optional)
+## OpenTelemetry Collector
 
-If you need trace processing (filtering, batching, multi-backend export), deploy an OTel Collector between your components and Jaeger. Without a collector, components can export directly to Jaeger's OTLP endpoint.
+The OTel Collector sits between llm-d components and Jaeger, providing:
 
-### Filtering Metrics Scraping Noise
+- **Noise filtering**: Drops trace spans generated by Prometheus `/metrics` scraping
+- **Batching**: Groups spans for efficient export
+- **Multi-backend export**: Can forward traces to multiple backends simultaneously
 
-When both Prometheus metrics and tracing are enabled, Prometheus scrapes of `/metrics` generate trace spans. Filter these out by deploying the collector:
-
-```bash
-kubectl apply -n observability -f otel-collector.yaml
-```
-
-When using a collector, point your `otlpEndpoint` / `otelExporterEndpoint` values to the collector service instead of Jaeger directly.
+The collector is deployed by `install-otel-collector-jaeger.sh` and all chart defaults already point to it. See the collector config in [otel-collector.yaml](./otel-collector.yaml) or [otel-collector-operator.yaml](./otel-collector-operator.yaml).
 
 ## Verifying Traces
 

@@ -7,7 +7,7 @@
 # Distributed tracing configuration (OpenTelemetry)
 # tracing:
 #   enabled: true
-#   otlpEndpoint: "http://jaeger-collector.observability.svc.cluster.local:4317"
+#   otlpEndpoint: "http://otel-collector:4317"
 #   sampling:
 #     sampler: "parentbased_traceidratio"
 #     samplerArg: "0.1"

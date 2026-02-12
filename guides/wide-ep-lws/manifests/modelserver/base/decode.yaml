@@ -40,7 +40,7 @@ spec:
             #   - name: OTEL_SERVICE_NAME
             #     value: "routing-proxy"
             #   - name: OTEL_EXPORTER_OTLP_ENDPOINT
-            #     value: "http://jaeger-collector.observability.svc.cluster.local:4317"
+            #     value: "http://otel-collector:4317"
             #   - name: OTEL_TRACES_SAMPLER
             #     value: "parentbased_traceidratio"
             #   - name: OTEL_TRACES_SAMPLER_ARG
@@ -121,14 +121,14 @@ spec:
                   --all2all-backend deepep_low_latency \
                   --kv-cache-memory-bytes=${KV_CACHE_MEMORY_BYTES-}
                   # To enable tracing, add:
-                  # --otlp-traces-endpoint http://jaeger-collector.observability.svc.cluster.local:4317 \
+                  # --otlp-traces-endpoint http://otel-collector:4317 \
                   # --collect-detailed-traces all
             env:
               # To enable tracing, uncomment:
               # - name: OTEL_SERVICE_NAME
               #   value: "vllm-decode"
               # - name: OTEL_EXPORTER_OTLP_ENDPOINT
-              #   value: "http://jaeger-collector.observability.svc.cluster.local:4317"
+              #   value: "http://otel-collector:4317"
               # - name: OTEL_TRACES_SAMPLER
               #   value: "parentbased_traceidratio"
               # - name: OTEL_TRACES_SAMPLER_ARG

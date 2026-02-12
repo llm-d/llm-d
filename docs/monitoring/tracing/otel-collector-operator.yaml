@@ -1,0 +1,38 @@
+apiVersion: opentelemetry.io/v1beta1
+kind: OpenTelemetryCollector
+metadata:
+  # The operator creates a service named "<name>-collector", so "otel" produces "otel-collector"
+  name: otel
+spec:
+  mode: deployment
+  config:
+    receivers:
+      otlp:
+        protocols:
+          grpc:
+            endpoint: "0.0.0.0:4317"
+          http:
+            endpoint: "0.0.0.0:4318"
+    processors:
+      filter/drop-metrics-scraping:
+        error_mode: ignore
+        traces:
+          span:
+            - 'attributes["url.path"] == "/metrics"'
+            - 'attributes["http.route"] == "/metrics"'
+            - name == "GET /metrics"
+            - name == "GET"
+      batch:
+        send_batch_size: 1024
+        timeout: 1s
+    exporters:
+      otlp/jaeger:
+        endpoint: "jaeger-collector:4317"
+        tls:
+          insecure: true
+    service:
+      pipelines:
+        traces:
+          receivers: [otlp]
+          processors: [filter/drop-metrics-scraping, batch]
+          exporters: [otlp/jaeger]

@@ -75,8 +75,8 @@ To remove the Prometheus and Grafana stack:
 
 For OpenTelemetry distributed tracing across vLLM, the routing proxy, and the EPP/inference scheduler, see the [Distributed Tracing guide](./tracing/README.md).
 
-To quickly deploy a Jaeger backend for viewing traces:
+To deploy an OTel Collector and Jaeger backend for viewing traces:
 
 ```bash
-./scripts/install-jaeger.sh
+./scripts/install-otel-collector-jaeger.sh -n <your-namespace>
 ```
