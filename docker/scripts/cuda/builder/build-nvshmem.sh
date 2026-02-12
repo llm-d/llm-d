@@ -80,6 +80,7 @@ if [ "${BUILD_DEBUG}" = "true" ]; then
         -DCMAKE_BUILD_TYPE=RelWithDebInfo
         -DNVSHMEM_DEBUG=ON
         -DNVSHMEM_DEVEL=ON
+        -DNVSHMEM_VERBOSE=ON
     )
 
     # Host compiler: keep warnings, but don't fail the build on maybe-uninitialized

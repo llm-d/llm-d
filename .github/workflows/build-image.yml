@@ -132,21 +132,21 @@ jobs:
             os: rhel
             base_image_suffix: ubi9
             image_suffix: "-debug"
-          - platform: linux/arm64
-            runner: vllm-runner-arm
-            os: rhel
-            base_image_suffix: ubi9
-            image_suffix: "-debug"
-          - platform: linux/amd64
-            runner: vllm-runner
-            os: ubuntu
-            base_image_suffix: ubuntu24.04
-            image_suffix: "-ubuntu-debug"
-          - platform: linux/arm64
-            runner: vllm-runner-arm
-            os: ubuntu
-            base_image_suffix: ubuntu24.04
-            image_suffix: "-ubuntu-debug"
+#          - platform: linux/arm64
+#            runner: vllm-runner-arm
+#            os: rhel
+#            base_image_suffix: ubi9
+#            image_suffix: "-debug"
+#          - platform: linux/amd64
+#            runner: vllm-runner
+#            os: ubuntu
+#            base_image_suffix: ubuntu24.04
+#            image_suffix: "-ubuntu-debug"
+#          - platform: linux/arm64
+#            runner: vllm-runner-arm
+#            os: ubuntu
+#            base_image_suffix: ubuntu24.04
+#            image_suffix: "-ubuntu-debug"
     runs-on: ${{ matrix.runner }}
     steps:
       - name: Checkout code
@@ -166,7 +166,7 @@ jobs:
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ${{ env.REGISTRY }}/${{ github.repository }}-cuda-${{ matrix.image_suffix }}
+          images: ${{ env.REGISTRY }}/${{ github.repository }}-cuda${{ matrix.image_suffix }}
           tags: |
             type=ref,event=branch
             type=ref,event=pr
@@ -200,7 +200,7 @@ jobs:
               format('VLLM_PRECOMPILED_WHEEL_COMMIT={0}', inputs.vllm_precompiled_wheel_commit) || '' }}
           labels: ${{ steps.meta.outputs.labels }}
           outputs: >-
-            type=image,name=${{ env.REGISTRY }}/${{ github.repository }}-cuda-${{ matrix.image_suffix }},
+            type=image,name=${{ env.REGISTRY }}/${{ github.repository }}-cuda${{ matrix.image_suffix }},
             push-by-digest=true,name-canonical=true,push=true
           github-token: ${{ secrets.GHCR_TOKEN }}
           secrets: |
@@ -217,7 +217,7 @@ jobs:
         run: |
           set -x
           digest="${{ steps.build-debug.outputs.digest }}"
-          ref="${{ env.REGISTRY }}/${{ github.repository }}-cuda-${{ matrix.image_suffix }}@${digest}"
+          ref="${{ env.REGISTRY }}/${{ github.repository }}-cuda${{ matrix.image_suffix }}@${digest}"
           echo "Checking remote ref: $ref"
           docker buildx imagetools inspect "$ref" >/dev/null
 
