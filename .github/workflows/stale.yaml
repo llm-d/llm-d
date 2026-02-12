@@ -1,0 +1,11 @@
+name: Mark Stale Issues
+on:
+  schedule:
+    - cron: '0 1 * * *'
+
+jobs:
+  stale:
+    uses: llm-d/llm-d-infra/.github/workflows/reusable-stale.yml@2b273d6
+    permissions:
+      issues: write
+      pull-requests: write

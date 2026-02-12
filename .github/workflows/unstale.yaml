@@ -1,0 +1,12 @@
+name: Unstale Issues
+on:
+  issues:
+    types: [reopened]
+  issue_comment:
+    types: [created]
+
+jobs:
+  unstale:
+    uses: llm-d/llm-d-infra/.github/workflows/reusable-unstale.yml@2b273d6
+    permissions:
+      issues: write

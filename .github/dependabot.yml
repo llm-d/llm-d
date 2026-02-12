@@ -4,6 +4,35 @@
 version: 2
 updates:
 
+  # Go module updates
+  - package-ecosystem: "gomod"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 10
+    commit-message:
+      prefix: "deps(go)"
+    labels:
+      - "dependencies"
+      - "release-note-none"
+    ignore:
+      - dependency-name: "go"
+        update-types: ["version-update:semver-major", "version-update:semver-minor"]
+      - dependency-name: "k8s.io/*"
+        update-types: ["version-update:semver-major", "version-update:semver-minor"]
+      - dependency-name: "sigs.k8s.io/*"
+        update-types: ["version-update:semver-major", "version-update:semver-minor"]
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
+    groups:
+      kubernetes:
+        patterns:
+          - "k8s.io/*"
+          - "sigs.k8s.io/*"
+      go-dependencies:
+        patterns:
+          - "*"
+
   # GitHub Actions dependencies
   - package-ecosystem: "github-actions"
     directory: "/"
