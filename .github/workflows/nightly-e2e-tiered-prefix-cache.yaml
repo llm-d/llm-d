@@ -1,0 +1,94 @@
+name: Nightly - Tiered Prefix Cache E2E (OpenShift)
+
+# Nightly regression test for the tiered-prefix-cache/cpu guide on OpenShift.
+# Uses kustomize for model server + helm for InferencePool + gateway recipe.
+# Slim transform reduces Qwen3-32B to Qwen3-0.6B with 1 GPU.
+
+on:
+  schedule:
+    - cron: '0 2 * * *'  # 02:00 UTC daily (staggered)
+  workflow_dispatch:
+    inputs:
+      gateway_type:
+        description: 'Gateway provider type'
+        required: false
+        default: 'istio'
+        type: choice
+        options:
+          - istio
+          - kgateway
+      skip_cleanup:
+        description: 'Skip cleanup after tests (for debugging)'
+        required: false
+        default: 'false'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: nightly-e2e-tiered-prefix-cache
+  cancel-in-progress: true
+
+jobs:
+  nightly:
+    uses: llm-d/llm-d-infra/.github/workflows/reusable-nightly-e2e-openshift-helmfile.yaml@main
+    with:
+      guide_name: tiered-prefix-cache
+      guide_path: guides/tiered-prefix-cache/cpu
+      namespace: llm-d-nightly-pfc-cpu
+      helmfile_env: ${{ github.event.inputs.gateway_type || 'istio' }}
+      gateway_type: ${{ github.event.inputs.gateway_type || 'istio' }}
+      required_gpus: 1
+      recommended_gpus: 2
+      pod_wait_timeout: '15m'
+      pod_readiness_delay: 180
+      httproute_file: ''
+      # Slim transform: reduce Qwen3-32B to Qwen3-0.6B, 1 GPU, lower memory
+      pre_deploy_script: |
+        echo "Applying tiered-prefix-cache slim transforms..."
+        KUSTOMIZE_DIR="guides/tiered-prefix-cache/cpu/manifests/vllm/offloading-connector"
+        cat > "${KUSTOMIZE_DIR}/nightly-slim-patch.yaml" <<'PATCH'
+        - op: replace
+          path: /spec/template/spec/containers/0/args/0
+          value: |-
+            exec vllm serve \
+              Qwen/Qwen3-0.6B \
+              --kv-transfer-config '{"kv_connector":"OffloadingConnector","kv_role":"kv_both","kv_connector_extra_config":{"num_cpu_blocks":4000}}' \
+              --port 8000 \
+              --max-num-seq 64
+        - op: replace
+          path: /spec/template/spec/containers/0/resources
+          value:
+            limits:
+              nvidia.com/gpu: "1"
+            requests:
+              nvidia.com/gpu: "1"
+        PATCH
+        yq e '.patches += [{"target": {"kind": "Deployment", "name": "llm-d-model-server"}, "path": "nightly-slim-patch.yaml"}]' -i "${KUSTOMIZE_DIR}/kustomization.yaml"
+        echo "Slim transform applied — model: Qwen3-0.6B, 1 GPU, reduced memory"
+      # Custom deploy: kustomize + helm + gateway recipe (not helmfile)
+      custom_deploy_script: |
+        NAMESPACE="llm-d-nightly-pfc-cpu"
+        GATEWAY_TYPE="${GATEWAY_TYPE:-istio}"
+        echo "Deploying tiered-prefix-cache/cpu via kustomize + helm..."
+
+        # 1. Deploy gateway recipe
+        echo "Deploying gateway recipe ($GATEWAY_TYPE)..."
+        kubectl apply -k "guides/recipes/gateway/${GATEWAY_TYPE}" -n "$NAMESPACE"
+
+        # 2. Deploy model server via kustomize
+        echo "Deploying model server (offloading-connector)..."
+        kubectl apply -k guides/tiered-prefix-cache/cpu/manifests/vllm/offloading-connector -n "$NAMESPACE"
+
+        # 3. Deploy InferencePool via helm
+        echo "Deploying InferencePool..."
+        helm install llm-d-infpool \
+          -n "$NAMESPACE" \
+          -f guides/tiered-prefix-cache/cpu/manifests/inferencepool/values.yaml \
+          --set "provider.name=${GATEWAY_TYPE}" \
+          oci://registry.k8s.io/gateway-api-inference-extension/charts/inferencepool \
+          --version v1.3.0
+
+        echo "Deployment complete"
+      skip_cleanup: ${{ github.event.inputs.skip_cleanup == 'true' }}
+    secrets: inherit

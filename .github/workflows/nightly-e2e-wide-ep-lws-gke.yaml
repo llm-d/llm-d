@@ -1,0 +1,87 @@
+name: Nightly - Wide EP LWS E2E (GKE)
+
+# Nightly regression test for the wide-ep-lws guide on GKE.
+# Uses LeaderWorkerSet for P/D disaggregation with kustomize + helm.
+# Uses the existing GKE kustomize overlay (manifests/modelserver/gke).
+# Tests: LWS CRD, P/D routing sidecar, InferencePool PD plugins.
+# Reference: e2e-wide-ep-accelerator-gke.yaml (existing GKE wide-ep CI test)
+
+on:
+  schedule:
+    - cron: '0 11 * * *'  # 11:00 UTC daily (staggered)
+  workflow_dispatch:
+    inputs:
+      skip_cleanup:
+        description: 'Skip cleanup after tests (for debugging)'
+        required: false
+        default: 'false'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: nightly-e2e-wide-ep-lws-gke
+  cancel-in-progress: true
+
+jobs:
+  nightly:
+    uses: llm-d/llm-d-infra/.github/workflows/reusable-nightly-e2e-gke-helmfile.yaml@main
+    with:
+      guide_name: wide-ep-lws
+      guide_path: guides/wide-ep-lws
+      namespace: llm-d-nightly-wide-ep-gke
+      helmfile_env: gke
+      gateway_type: gke
+      gke_cluster_name: llm-d-e2e-us-south1-2
+      gke_cluster_zone: us-south1
+      required_gpus: 2
+      recommended_gpus: 2
+      accelerator_type: L4
+      pod_wait_timeout: '35m'
+      pod_readiness_delay: 480
+      httproute_file: ''
+      # Install LWS CRD before deployment
+      pre_deploy_script: |
+        echo "Installing LeaderWorkerSet for wide-ep-lws..."
+        if ! kubectl get crd leaderworkersets.leaderworkerset.x-k8s.io &>/dev/null; then
+          echo "Installing LeaderWorkerSet via helm..."
+          helm install lws oci://registry.k8s.io/lws/charts/lws \
+            --version=0.7.0 \
+            --namespace lws-system \
+            --create-namespace \
+            --wait --timeout 300s
+          kubectl wait deploy/lws-controller-manager -n lws-system \
+            --for=condition=available --timeout=120s || true
+        else
+          echo "LeaderWorkerSet CRD already installed"
+        fi
+      # Custom deploy: kustomize (GKE overlay) + helm + gateway recipe
+      # Mirrors the existing e2e-wide-ep-accelerator-gke.yaml deploy pattern
+      custom_deploy_script: |
+        NAMESPACE="llm-d-nightly-wide-ep-gke"
+        echo "Deploying wide-ep-lws on GKE via kustomize + helm..."
+
+        # 1. Deploy model server via kustomize (GKE overlay)
+        echo "Deploying model server (LeaderWorkerSets, GKE overlay)..."
+        kubectl apply -k guides/wide-ep-lws/manifests/modelserver/gke -n "$NAMESPACE"
+
+        # 2. Deploy InferencePool via helm
+        echo "Deploying InferencePool..."
+        helm install llm-d-infpool \
+          -n "$NAMESPACE" \
+          --set "provider.name=gke" \
+          --set "inferencePool.apiVersion=inference.networking.k8s.io/v1" \
+          --set "inferenceExtension.monitoring.prometheus.enabled=true" \
+          -f guides/wide-ep-lws/manifests/inferencepool.values.yaml \
+          oci://registry.k8s.io/gateway-api-inference-extension/charts/inferencepool \
+          --version v1.3.0
+
+        # 3. Deploy gateway recipe (GKE L7 regional external managed)
+        echo "Deploying Gateway and HTTPRoute..."
+        kubectl apply -k guides/recipes/gateway/gke-l7-regional-external-managed -n "$NAMESPACE"
+
+        echo "Deployment complete"
+      # Wide-EP-specific validation: check prefill + decode pods
+      e2e_validate_args: '-v'
+      skip_cleanup: ${{ github.event.inputs.skip_cleanup == 'true' }}
+    secrets: inherit

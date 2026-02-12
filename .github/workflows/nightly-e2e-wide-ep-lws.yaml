@@ -1,0 +1,272 @@
+name: Nightly - Wide EP LWS E2E (OpenShift)
+
+# Nightly regression test for the wide-ep-lws guide on OpenShift.
+# Uses LeaderWorkerSet for P/D disaggregation with kustomize + helm.
+# Slim transform reduces DeepSeek-R1-0528 to Qwen3-0.6B with 1 GPU per role.
+# Tests: LWS CRD, P/D routing sidecar, InferencePool PD plugins.
+
+on:
+  schedule:
+    - cron: '30 2 * * *'  # 02:30 UTC daily (staggered)
+  workflow_dispatch:
+    inputs:
+      gateway_type:
+        description: 'Gateway provider type'
+        required: false
+        default: 'istio'
+        type: choice
+        options:
+          - istio
+          - kgateway
+      skip_cleanup:
+        description: 'Skip cleanup after tests (for debugging)'
+        required: false
+        default: 'false'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: nightly-e2e-wide-ep-lws
+  cancel-in-progress: true
+
+jobs:
+  nightly:
+    uses: llm-d/llm-d-infra/.github/workflows/reusable-nightly-e2e-openshift-helmfile.yaml@main
+    with:
+      guide_name: wide-ep-lws
+      guide_path: guides/wide-ep-lws
+      namespace: llm-d-nightly-wide-ep
+      helmfile_env: ${{ github.event.inputs.gateway_type || 'istio' }}
+      gateway_type: ${{ github.event.inputs.gateway_type || 'istio' }}
+      required_gpus: 2
+      recommended_gpus: 2
+      pod_wait_timeout: '20m'
+      pod_readiness_delay: 180
+      httproute_file: ''
+      # Slim transform: replace DeepSeek-R1-0528 with Qwen3-0.6B, 1 GPU per role,
+      # remove expert parallelism / RDMA / multi-node, keep LWS + P/D + routing sidecar.
+      # Based on .github/scripts/e2e/wide-ep-transform.sh and e2e-wide-ep-accelerator-gke.yaml.
+      pre_deploy_script: |
+        echo "Applying wide-ep-lws slim transforms..."
+
+        # Install LeaderWorkerSet via helm (matching existing CI approach)
+        if ! kubectl get crd leaderworkersets.leaderworkerset.x-k8s.io &>/dev/null; then
+          echo "Installing LeaderWorkerSet via helm..."
+          helm install lws oci://registry.k8s.io/lws/charts/lws \
+            --version=0.7.0 \
+            --namespace lws-system \
+            --create-namespace \
+            --wait --timeout 300s
+          kubectl wait deploy/lws-controller-manager -n lws-system \
+            --for=condition=available --timeout=120s || true
+        else
+          echo "LeaderWorkerSet CRD already installed"
+        fi
+
+        NIGHTLY_DIR="guides/wide-ep-lws/manifests/modelserver/nightly"
+        mkdir -p "$NIGHTLY_DIR"
+
+        # --- Slim prefill manifest ---
+        cat > "${NIGHTLY_DIR}/prefill.yaml" <<'PREFILL_EOF'
+        apiVersion: leaderworkerset.x-k8s.io/v1
+        kind: LeaderWorkerSet
+        metadata:
+          name: wide-ep-llm-d-prefill
+          labels:
+            llm-d.ai/inference-serving: "true"
+            llm-d.ai/guide: "wide-ep-lws"
+            llm-d.ai/model: DeepSeek-R1-0528
+            llm-d.ai/role: prefill
+        spec:
+          replicas: 1
+          leaderWorkerTemplate:
+            size: 1
+            workerTemplate:
+              metadata:
+                labels:
+                  llm-d.ai/inference-serving: "true"
+                  llm-d.ai/guide: "wide-ep-lws"
+                  llm-d.ai/model: DeepSeek-R1-0528
+                  llm-d.ai/role: prefill
+              spec:
+                serviceAccountName: deepseek-r1
+                volumes:
+                  - name: dshm
+                    emptyDir:
+                      medium: Memory
+                      sizeLimit: 256Mi
+                containers:
+                  - name: vllm
+                    image: ghcr.io/llm-d/llm-d-cuda:v0.5.0
+                    imagePullPolicy: Always
+                    command: ["/bin/bash", "-c"]
+                    args:
+                      - |
+                        exec vllm serve \
+                          Qwen/Qwen3-0.6B \
+                          --port 8000 \
+                          --max-num-seq 64 \
+                          --max-model-len 4096 \
+                          --enforce-eager
+                    env:
+                      - name: VLLM_LOGGING_LEVEL
+                        value: INFO
+                      - name: HF_HUB_CACHE
+                        value: /var/cache/huggingface
+                    ports:
+                      - containerPort: 8000
+                        name: vllm
+                        protocol: TCP
+                    startupProbe:
+                      httpGet:
+                        path: /health
+                        port: vllm
+                      periodSeconds: 1
+                      failureThreshold: 600
+                    readinessProbe:
+                      httpGet:
+                        path: /v1/models
+                        port: vllm
+                      periodSeconds: 10
+                      failureThreshold: 3
+                    resources:
+                      limits:
+                        nvidia.com/gpu: "1"
+                      requests:
+                        nvidia.com/gpu: "1"
+                    volumeMounts:
+                      - name: dshm
+                        mountPath: /dev/shm
+        PREFILL_EOF
+
+        # --- Slim decode manifest (with routing sidecar) ---
+        cat > "${NIGHTLY_DIR}/decode.yaml" <<'DECODE_EOF'
+        apiVersion: leaderworkerset.x-k8s.io/v1
+        kind: LeaderWorkerSet
+        metadata:
+          name: wide-ep-llm-d-decode
+          labels:
+            llm-d.ai/inference-serving: "true"
+            llm-d.ai/guide: "wide-ep-lws"
+            llm-d.ai/model: DeepSeek-R1-0528
+            llm-d.ai/role: decode
+        spec:
+          replicas: 1
+          leaderWorkerTemplate:
+            size: 1
+            workerTemplate:
+              metadata:
+                labels:
+                  llm-d.ai/inference-serving: "true"
+                  llm-d.ai/guide: "wide-ep-lws"
+                  llm-d.ai/model: DeepSeek-R1-0528
+                  llm-d.ai/role: decode
+              spec:
+                serviceAccountName: deepseek-r1
+                initContainers:
+                  - name: routing-proxy
+                    args:
+                      - --port=8000
+                      - --vllm-port=8200
+                      - --connector=nixlv2
+                      - --zap-log-level=1
+                      - --secure-proxy=false
+                      - --enable-prefiller-sampling
+                    image: ghcr.io/llm-d/llm-d-routing-sidecar:v0.5.0
+                    imagePullPolicy: Always
+                    ports:
+                      - containerPort: 8000
+                        name: sidecar
+                        protocol: TCP
+                    resources: {}
+                    restartPolicy: Always
+                    securityContext:
+                      allowPrivilegeEscalation: false
+                      runAsNonRoot: true
+                volumes:
+                  - name: dshm
+                    emptyDir:
+                      medium: Memory
+                      sizeLimit: 256Mi
+                containers:
+                  - name: vllm
+                    image: ghcr.io/llm-d/llm-d-cuda:v0.5.0
+                    imagePullPolicy: Always
+                    command: ["/bin/bash", "-c"]
+                    args:
+                      - |
+                        exec vllm serve \
+                          Qwen/Qwen3-0.6B \
+                          --port 8200 \
+                          --max-num-seq 64 \
+                          --max-model-len 4096 \
+                          --enforce-eager
+                    env:
+                      - name: VLLM_LOGGING_LEVEL
+                        value: INFO
+                      - name: HF_HUB_CACHE
+                        value: /var/cache/huggingface
+                    ports:
+                      - containerPort: 8200
+                        name: vllm
+                        protocol: TCP
+                    startupProbe:
+                      httpGet:
+                        path: /health
+                        port: vllm
+                      periodSeconds: 1
+                      failureThreshold: 600
+                    readinessProbe:
+                      httpGet:
+                        path: /v1/models
+                        port: vllm
+                      periodSeconds: 10
+                      failureThreshold: 3
+                    resources:
+                      limits:
+                        nvidia.com/gpu: "1"
+                      requests:
+                        nvidia.com/gpu: "1"
+                    volumeMounts:
+                      - name: dshm
+                        mountPath: /dev/shm
+        DECODE_EOF
+
+        # --- Kustomization for nightly overlay ---
+        cat > "${NIGHTLY_DIR}/kustomization.yaml" <<'KUSTOM_EOF'
+        apiVersion: kustomize.config.k8s.io/v1beta1
+        kind: Kustomization
+        resources:
+          - prefill.yaml
+          - decode.yaml
+          - ../base/serviceAccount.yaml
+        KUSTOM_EOF
+
+        echo "Slim transform applied — model: Qwen3-0.6B, 1 GPU per role, LWS size 1"
+      # Custom deploy: kustomize + helm + gateway recipe (not helmfile)
+      custom_deploy_script: |
+        NAMESPACE="llm-d-nightly-wide-ep"
+        GATEWAY_TYPE="${GATEWAY_TYPE:-istio}"
+        echo "Deploying wide-ep-lws via kustomize + helm..."
+
+        # 1. Deploy gateway recipe
+        echo "Deploying gateway recipe ($GATEWAY_TYPE)..."
+        kubectl apply -k "guides/recipes/gateway/${GATEWAY_TYPE}" -n "$NAMESPACE"
+
+        # 2. Deploy model server via kustomize (nightly slim overlay)
+        echo "Deploying model server (LeaderWorkerSets)..."
+        kubectl apply -k guides/wide-ep-lws/manifests/modelserver/nightly -n "$NAMESPACE"
+
+        # 3. Deploy InferencePool via helm
+        echo "Deploying InferencePool..."
+        helm install llm-d-infpool \
+          -n "$NAMESPACE" \
+          -f guides/wide-ep-lws/manifests/inferencepool.values.yaml \
+          --set "provider.name=${GATEWAY_TYPE}" \
+          oci://registry.k8s.io/gateway-api-inference-extension/charts/inferencepool \
+          --version v1.3.0
+
+        echo "Deployment complete"
+      skip_cleanup: ${{ github.event.inputs.skip_cleanup == 'true' }}
+    secrets: inherit

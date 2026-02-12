@@ -1,6 +1,8 @@
 name: HPU Inference Scheduling Test
 
 on:
+  schedule:
+    - cron: '0 4 * * *'  # 4:00 AM UTC daily
   pull_request:
     paths:
       - 'guides/inference-scheduling/ms-inference-scheduling/values-hpu.yaml'
@@ -19,7 +21,8 @@ jobs:
   deploy_and_validate:
     if: >
       github.event_name == 'workflow_dispatch' ||
-      github.event_name == 'pull_request'
+      github.event_name == 'pull_request' ||
+      github.event_name == 'schedule'
     runs-on: hpu
     env:
       NAMESPACE: "llm-d-hpu-is"

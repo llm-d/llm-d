@@ -1,0 +1,44 @@
+name: Nightly - Inference Scheduling E2E (OpenShift)
+
+# Nightly regression test for the inference-scheduling guide on OpenShift.
+# Deploys via helmfile and validates with e2e-validate.sh.
+
+on:
+  schedule:
+    - cron: '0 0 * * *'  # Midnight UTC daily
+  workflow_dispatch:
+    inputs:
+      helmfile_env:
+        description: 'Helmfile environment'
+        required: false
+        default: 'istio'
+        type: choice
+        options:
+          - istio
+          - kgateway
+      skip_cleanup:
+        description: 'Skip cleanup after tests (for debugging)'
+        required: false
+        default: 'false'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: nightly-e2e-inference-scheduling
+  cancel-in-progress: true
+
+jobs:
+  nightly:
+    uses: llm-d/llm-d-infra/.github/workflows/reusable-nightly-e2e-openshift-helmfile.yaml@main
+    with:
+      guide_name: inference-scheduling
+      namespace: llm-d-nightly-inference
+      helmfile_env: ${{ github.event.inputs.helmfile_env || 'istio' }}
+      gateway_type: ${{ github.event.inputs.helmfile_env || 'istio' }}
+      required_gpus: 2
+      recommended_gpus: 4
+      pod_wait_timeout: '15m'
+      pod_readiness_delay: 180
+      skip_cleanup: ${{ github.event.inputs.skip_cleanup == 'true' }}
+    secrets: inherit

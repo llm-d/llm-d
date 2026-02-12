@@ -1,0 +1,40 @@
+name: Nightly - Inference Scheduling E2E (GKE)
+
+# Nightly regression test for the inference-scheduling guide on GKE.
+# Deploys via helmfile (gke env) and validates with e2e-validate.sh.
+
+on:
+  schedule:
+    - cron: '0 10 * * *'  # 10:00 UTC daily (staggered from OCP nightlies)
+  workflow_dispatch:
+    inputs:
+      skip_cleanup:
+        description: 'Skip cleanup after tests (for debugging)'
+        required: false
+        default: 'false'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: nightly-e2e-inference-scheduling-gke
+  cancel-in-progress: true
+
+jobs:
+  nightly:
+    uses: llm-d/llm-d-infra/.github/workflows/reusable-nightly-e2e-gke-helmfile.yaml@main
+    with:
+      guide_name: inference-scheduling
+      namespace: llm-d-nightly-inference-gke
+      helmfile_env: gke
+      gateway_type: gke
+      gke_cluster_name: llm-d-e2e-us-east5
+      gke_cluster_zone: us-east5
+      required_gpus: 2
+      recommended_gpus: 4
+      accelerator_type: L4
+      pod_wait_timeout: '15m'
+      pod_readiness_delay: 180
+      httproute_file: httproute.gke.yaml
+      skip_cleanup: ${{ github.event.inputs.skip_cleanup == 'true' }}
+    secrets: inherit

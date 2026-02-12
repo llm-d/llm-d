@@ -1,8 +1,8 @@
 name: E2E Accelerator EC2 Test
 
 on:
-  #  schedule: # TODO: enable once validated functional
-  #    - cron: '0 8 * * *'  # 4AM Eastern (08:00 UTC)
+  schedule:
+    - cron: '0 6 * * *'  # 6AM UTC daily
   workflow_dispatch:
     inputs:
       pr_or_branch:
@@ -31,7 +31,8 @@ permissions:
 jobs:
   setup:
     if: >
-      github.event_name == 'workflow_dispatch'
+      github.event_name == 'workflow_dispatch' ||
+      github.event_name == 'schedule'
     runs-on: ubuntu-latest
     outputs:
       instance_id: ${{ steps.launch.outputs.instance_id }}

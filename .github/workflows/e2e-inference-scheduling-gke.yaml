@@ -4,7 +4,7 @@ on:
   # Runs with a PR comment /run-gke-inference-scheduling
   issue_comment:
     types: [created]
-  schedule:  # TODO: enable once validated functional
+  schedule:
     - cron: '0 10 * * *'  # 3AM PST (10:00 UTC)
   workflow_dispatch:
     inputs:

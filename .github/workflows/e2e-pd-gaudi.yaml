@@ -1,6 +1,8 @@
 name: Gaudi PD Test
 
 on:
+  schedule:
+    - cron: '30 4 * * *'  # 4:30 AM UTC daily
   pull_request:
     paths:
       - 'guides/pd-disaggregation/ms-pd/values_hpu.yaml'
@@ -20,7 +22,8 @@ jobs:
   deploy_and_validate:
     if: >
       github.event_name == 'workflow_dispatch' ||
-      github.event_name == 'pull_request'
+      github.event_name == 'pull_request' ||
+      github.event_name == 'schedule'
     runs-on: hpu
     env:
       NAMESPACE: "llm-d-hpu-pd"

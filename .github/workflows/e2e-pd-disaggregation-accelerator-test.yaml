@@ -1,6 +1,8 @@
 name: E2E PD-Disaggregation Test
 
 on:
+  schedule:
+    - cron: '30 6 * * *'  # 6:30 AM UTC daily
   workflow_dispatch:
     inputs:
       pr_or_branch:
@@ -29,7 +31,8 @@ permissions:
 jobs:
   setup:
     if: >
-      github.event_name == 'workflow_dispatch'
+      github.event_name == 'workflow_dispatch' ||
+      github.event_name == 'schedule'
     runs-on: ubuntu-latest
     outputs:
       instance_id: ${{ steps.launch.outputs.instance_id }}
