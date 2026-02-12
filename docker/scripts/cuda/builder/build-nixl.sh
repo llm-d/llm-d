@@ -4,8 +4,10 @@ set -Eeux
 # purpose: builds NIXL from source, gated by `BUILD_NIXL_FROM_SOURCE`
 #
 # Optional environment variables:
-# - EFA_PREFIX: Path to Libfabric installation
-: "${EFA_PREFIX:=}"
+# - ENABLE_EFA: Enable EFA support in NIXL (true/false, default: false)
+: "${ENABLE_EFA:=false}"
+# Required environment variables (from Dockerfile ENV):
+# - EFA_PREFIX: Path to EFA installation (used if ENABLE_EFA=true)
 # Required environment variables:
 # - BUILD_NIXL_FROM_SOURCE: if nixl should be installed by vLLM or has been built from source in the builder stages
 # - NIXL_REPO: Git repo to use for NIXL
@@ -35,7 +37,7 @@ fi
 
 # Ubuntu image needs to be built against Ubuntu 20.04 and EFA only supports 22.04 and 24.04.
 EFA_FLAG=""
-if [ "$TARGETOS" = "rhel" ] && [ -n "${EFA_PREFIX}" ]; then
+if [ "${ENABLE_EFA}" = "true" ] && [ "$TARGETOS" = "rhel" ]; then
     EFA_FLAG="-Dlibfabric_path=${EFA_PREFIX}"
 fi
 

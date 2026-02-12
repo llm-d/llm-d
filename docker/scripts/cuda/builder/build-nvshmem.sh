@@ -4,10 +4,12 @@ set -Eeux
 # builds and installs NVSHMEM from source with coreweave patch
 #
 # Optional environment variables:
-# - EFA_PREFIX: Path to EFA installation
-: "${EFA_PREFIX:=}"
+# - ENABLE_EFA: Enable EFA support in NVSHMEM (true/false, default: false)
+: "${ENABLE_EFA:=false}"
 # - BUILD_DEBUG: whether to build with debug symbols and logging (true/false) - defaults to false
 : "${BUILD_DEBUG:=false}"
+# Required environment variables (from Dockerfile ENV):
+# - EFA_PREFIX: Path to EFA installation (used if ENABLE_EFA=true)
 # Required environment variables:
 # - TARGETOS: OS type (ubuntu or rhel)
 # - CUDA_MAJOR: CUDA major version (e.g., 12)
@@ -56,15 +58,14 @@ done
 
 mkdir -p build && cd build
 
+# Ubuntu image needs to be built against Ubuntu 20.04 and EFA only supports 22.04 and 24.04.
 EFA_FLAGS=()
-if [ "$TARGETOS" = "rhel" ] && [ -n "${EFA_PREFIX}" ]; then
+if [ "${ENABLE_EFA}" = "true" ] && [ "$TARGETOS" = "rhel" ]; then
     EFA_FLAGS=(
         -DNVSHMEM_LIBFABRIC_SUPPORT=1
         -DLIBFABRIC_HOME="${EFA_PREFIX}"
     )
 fi
-
-# Ubuntu image needs to be built against Ubuntu 20.04 and EFA only supports 22.04 and 24.04.
 # Configure debug build options
 DEBUG_FLAGS=()
 CMAKE_EXTRA_FLAGS=()

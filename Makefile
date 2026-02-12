@@ -43,17 +43,23 @@ PLATFORMS ?= linux/amd64 # linux/arm64 # linux/s390x,linux/ppc64le
 # SUPPRESS_PYTHON_OUTPUT: Set to "1" or "true" to suppress verbose pip output during build (default: verbose enabled)
 SUPPRESS_PYTHON_OUTPUT ?=
 
+# ENABLE_EFA: Set to "true" to enable AWS Elastic Fabric Adapter support in CUDA builds (default: false)
+# When enabled, EFA installer provides RDMA packages; otherwise use CUDA base image packages
+ENABLE_EFA ?= false
+
 .PHONY: help
 help: ## Print help
 	@awk 'BEGIN {FS = ":.*##"; printf "\nUsage:\n  make \033[36m<target>\033[0m\n"} /^[a-zA-Z_0-9-]+:.*?##/ { printf "  \033[36m%-15s\033[0m %s\n", $$1, $$2 } /^##@/ { printf "\n\033[1m%s\033[0m\n", substr($$0, 5) } ' $(MAKEFILE_LIST)
-	@printf "\n\033[1mBuild Examples:\033[0m\n"
-	@printf "  \033[36mmake image-build DEVICE=cuda\033[0m                            # Build CUDA Docker image (default)\n"
+	@printf "\n\033[1mXPU Build Examples:\033[0m\n"
+	@printf "  \033[36mmake image-build DEVICE=xpu\033[0m                    # Build Intel XPU Docker image\n"
+	@printf "  \033[36mmake image-build DEVICE=xpu VERSION=v0.2.0\033[0m     # Build with specific version\n"
+	@printf "  \033[36mmake image-push DEVICE=xpu\033[0m                     # Push Intel XPU Docker image\n"
+	@printf "  \033[36mmake image-retag DEVICE=xpu NEW_TAG=test\033[0m                     # Re-Tag Intel XPU Docker image\n"
+	@printf "  \033[36mmake env DEVICE=xpu\033[0m                            # Show XPU environment variables\n"
+	@printf "\n\033[1mCUDA Build Examples:\033[0m\n"
+	@printf "  \033[36mmake image-build DEVICE=cuda\033[0m                            # Build CUDA Docker image (default, no EFA)\n"
 	@printf "  \033[36mmake image-build DEVICE=cuda BUILD_DEBUG=true\033[0m           # Build CUDA Docker image with debug symbols\n"
-	@printf "  \033[36mmake image-build DEVICE=xpu\033[0m                             # Build Intel XPU Docker image\n"
-	@printf "  \033[36mmake image-build DEVICE=xpu VERSION=v0.2.0\033[0m              # Build with specific version\n"
-	@printf "  \033[36mmake image-push DEVICE=xpu\033[0m                              # Push Intel XPU Docker image\n"
-	@printf "  \033[36mmake image-retag DEVICE=xpu NEW_TAG=test\033[0m                # Re-Tag Intel XPU Docker image\n"
-	@printf "  \033[36mmake env DEVICE=xpu\033[0m                                     # Show XPU environment variables\n"
+	@printf "  \033[36mmake image-build DEVICE=cuda ENABLE_EFA=true\033[0m   # Build CUDA image with EFA support\n"
 
 ##@ Development
 
@@ -88,7 +94,9 @@ buildah-build: check-builder ## Build and push image (multi-arch if supported)
 	  for arch in amd64; do \
 		ARCH_TAG=$$FINAL_TAG-$$arch; \
 	    echo "📦 Building for architecture: $$arch"; \
-		buildah build --file $(DOCKERFILE_DIR)/$(DOCKERFILE) --arch=$$arch --os=linux --layers -t $(IMG)-$$arch . || exit 1; \
+		buildah build --file $(DOCKERFILE_DIR)/$(DOCKERFILE) --arch=$$arch --os=linux --layers \
+			$(if $(filter cuda,$(DEVICE)),--build-arg ENABLE_EFA=$(ENABLE_EFA)) \
+			-t $(IMG)-$$arch . || exit 1; \
 	    echo "🚀 Pushing image: $(IMG)-$$arch"; \
 	    buildah push $(IMG)-$$arch docker://$(IMG)-$$arch || exit 1; \
 	  done; \
@@ -106,7 +114,9 @@ buildah-build: check-builder ## Build and push image (multi-arch if supported)
 	  sed -e '1 s/\(^FROM\)/FROM --platform=$${BUILDPLATFORM}/' $(DOCKERFILE_DIR)/$(DOCKERFILE) >$(DOCKERFILE_DIR)/Dockerfile.cross; \
 	  - docker buildx create --use --name image-builder || true; \
 	  docker buildx use image-builder; \
-	  docker buildx build --push --platform=$(PLATFORMS) --tag $(IMG) -f $(DOCKERFILE_DIR)/Dockerfile.cross . || exit 1; \
+	  docker buildx build --push --platform=$(PLATFORMS) --tag $(IMG) \
+		$(if $(filter cuda,$(DEVICE)),--build-arg ENABLE_EFA=$(ENABLE_EFA)) \
+		-f $(DOCKERFILE_DIR)/Dockerfile.cross . || exit 1; \
 	  docker buildx rm image-builder || true; \
 	  rm $(DOCKERFILE_DIR)/Dockerfile.cross; \
 	elif [ "$(BUILDER)" = "podman" ]; then \
@@ -124,6 +134,7 @@ image-build: check-container-tool ## Build Docker image using $(CONTAINER_TOOL)
 	$(CONTAINER_TOOL) build --progress=plain --platform $(PLATFORMS) \
 		$(if $(SUPPRESS_PYTHON_OUTPUT),--build-arg SUPPRESS_PYTHON_OUTPUT=$(SUPPRESS_PYTHON_OUTPUT)) \
 		--build-arg BUILD_DEBUG=$(BUILD_DEBUG) \
+		$(if $(filter cuda,$(DEVICE)),--build-arg ENABLE_EFA=$(ENABLE_EFA)) \
 		-t $(IMG) -f $(DOCKERFILE_DIR)/$(DOCKERFILE) .
 
 .PHONY: image-push

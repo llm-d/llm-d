@@ -18,13 +18,9 @@ set -Eeu
 # Skip EFA installation if not enabled, on Ubuntu, or missing installer version
 if [ "${ENABLE_EFA}" != "true" ] || [ "$TARGETOS" = "ubuntu" ] || [ -z "${EFA_INSTALLER_VERSION}" ]; then
     echo "EFA installation skipped (ENABLE_EFA=${ENABLE_EFA}, TARGETOS=${TARGETOS})"
-    # Create empty folder so Dockerfile COPY doesn't fail
-    mkdir -p /tmp/efa_libs
     exit 0
 fi
 
-# Set EFA_PREFIX when EFA is enabled
-EFA_PREFIX="/opt/amazon/efa"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # source shared utilities (check script dir first, fallback to /tmp for docker builds)
@@ -38,37 +34,26 @@ fi
 . "${UTILS_SCRIPT}"
 
 update_system "${TARGETOS}"
-# Only need base rpms to install EFA itself
+
 if [ "${TARGETPLATFORM}" = "linux/amd64" ]; then
-    rpm -ivh --nodeps /tmp/packages/rpms/builder/amd64/base/*.rpm
+    rpm -ivh --nodeps /tmp/packages/runtime/rpms/amd64/base/*.rpm
 elif [ "${TARGETPLATFORM}" = "linux/arm64" ]; then
-    rpm -ivh --nodeps /tmp/packages/rpms/builder/arm64/base/*.rpm
+    rpm -ivh --nodeps /tmp/packages/runtime/rpms/arm64/base/*.rpm
 fi
 
 EFA_INSTALLER_URL="https://efa-installer.amazonaws.com"
 EFA_TARBALL="aws-efa-installer-${EFA_INSTALLER_VERSION}.tar.gz"
 EFA_WORKDIR="/tmp/efa"
 
-echo "Installing AWS EFA (Elastic Fabric Adapter) ${EFA_INSTALLER_VERSION}"
+echo "Installing RDMA core from AWS EFA (Elastic Fabric Adapter) ${EFA_INSTALLER_VERSION}"
 
-mkdir -p "${EFA_WORKDIR}" /etc/ld.so.conf.d/
+mkdir -p "${EFA_WORKDIR}"
+
 curl -fsSL "${EFA_INSTALLER_URL}/${EFA_TARBALL}" -o "${EFA_WORKDIR}/${EFA_TARBALL}"
 tar -xzf "${EFA_WORKDIR}/${EFA_TARBALL}" -C "${EFA_WORKDIR}"
 
-cd "${EFA_WORKDIR}/aws-efa-installer" && ./efa_installer.sh --skip-kmod -y
+cd "${EFA_WORKDIR}/aws-efa-installer" && ./efa_installer.sh --skip-kmod --minimal -y
 
-ldconfig
 rm -rf "${EFA_WORKDIR}"
-
-# Copy all EFA-installed libs to runtime
-# - libefa.so*
-# - libibverbs.so*
-# - librdmacm.so*
-mkdir -p /tmp/efa_libs
-for efalib in libefa libibverbs librdmacm; do
-    if ls /lib64/${efalib}.so* >/dev/null 2>&1; then
-        cp -a /lib64/${efalib}.so* /tmp/efa_libs/ || true
-    fi
-done
 
 cleanup_packages rhel

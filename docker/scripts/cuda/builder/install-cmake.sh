@@ -2,9 +2,10 @@
 set -Eeux
 
 # purpose: install cmake 3.22.0 as a workaround for building nvshmem from source
-# CMAKE version is locked here because the url changes when downloading from github based on the version
+# CMAKE version is defined here and locked as apposed to other components in the
+# Dockerfile because the url changes when downloading from github based on the version
 
-export CMAKE_VERSION="3.22.0"
+export CMAKE_VERSION="4.2.3"
 
 ARCH="$(uname -m)"
 case "$ARCH" in

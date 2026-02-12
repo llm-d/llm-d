@@ -14,12 +14,10 @@
     "tar": "tar",
     "gcc": "gcc",
     "gcc-c++": "g++",
-    "hwloc": "hwloc",
     "make": "make",
     "autoconf": "autoconf",
     "automake": "automake",
     "libtool": "libtool",
-    "hwloc-devel": "libhwloc-dev",
     "git": "git",
     "curl": "curl",
     "wget": "wget",
@@ -38,8 +36,7 @@
     "pciutils-libs": null,
     "ninja-build": "ninja-build",
     "xz": "xz-utils",
-    "rsync": "rsync",
-    "libaio-devel": "libaio-dev"
+    "rsync": "rsync"
   },
   "ubuntu_only": [
     "debhelper",
@@ -49,6 +46,9 @@
     "ethtool",
     "iproute2",
     "dmidecode",
-    "udev"
+    "udev",
+    "hwloc",
+    "libhwloc-dev",
+    "libaio-dev"
   ]
 }

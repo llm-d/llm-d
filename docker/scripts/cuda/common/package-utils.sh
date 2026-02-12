@@ -9,30 +9,6 @@
 # - /run/secrets/subman_org: Subscription Manager Organization - used if on a ubi based image for entitlement
 # - /run/secrets/subman_activation_key: Subscription Manager Activation key - used if on a ubi based image for entitlement
 
-# Assumes rhel check in consuming script
-ensure_registered() {
-  install -d -m0755 /etc/pki/consumer /etc/pki/entitlement /etc/rhsm
-  subscription-manager clean || true
-  if [ ! -f /etc/pki/consumer/cert.pem ]; then
-    test -f /run/secrets/subman_org && test -f /run/secrets/subman_activation_key
-    subscription-manager register \
-      --org "$(cat /run/secrets/subman_org)" \
-      --activationkey "$(cat /run/secrets/subman_activation_key)" \
-      --force
-    subscription-manager refresh || true
-  fi
-}
-
-# Assumes rhel check in consuming script
-ensure_unregistered() {
-  echo "beginning un-registration process"
-  if [ -f /etc/pki/consumer/cert.pem ]; then
-    subscription-manager unregister || true
-  fi
-  subscription-manager clean || true
-  rm -rf /etc/pki/entitlement/* /etc/pki/consumer/* /etc/rhsm/* /var/cache/dnf/* || true
-}
-
 # detect architecture for repo URLs
 get_download_arch() {
     local arch

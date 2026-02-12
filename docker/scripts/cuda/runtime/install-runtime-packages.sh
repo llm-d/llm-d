@@ -48,14 +48,6 @@ elif [ "$TARGETOS" = "rhel" ]; then
     setup_rhel_repos "$DOWNLOAD_ARCH"
     mapfile -t INSTALL_PKGS < <(load_layered_packages rhel "runtime-packages.json" "cuda")
     install_packages rhel "${INSTALL_PKGS[@]}"
-    # Install hwloc-libs from entitlement RPMs using rpm directly with --nodeps
-    # The system glibc already provides all required symbols (verified: GLIBC_2.2.5 through 2.34)
-    # but dnf fails to recognize this when installing from local RPM files
-    if [ "${TARGETPLATFORM}" = "linux/amd64" ]; then
-        rpm -ivh --nodeps /tmp/packages/rpms/amd64/hwloc-libs*.rpm
-    elif [ "${TARGETPLATFORM}" = "linux/arm64" ]; then
-        rpm -ivh --nodeps /tmp/packages/rpms/arm64/hwloc-libs*.rpm
-    fi
     cleanup_packages rhel
 else
     echo "ERROR: Unsupported TARGETOS='$TARGETOS'. Must be 'ubuntu' or 'rhel'." >&2

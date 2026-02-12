@@ -8,8 +8,8 @@ set -Eeux
 # - /run/secrets/aws_secret_access_key: AWS secret access key for role that can only interact with SCCache S3 Bucket
 # --------------------------------------------
 # Optional environment variables:
-# - EFA_PREFIX: Path to EFA installation
-: "${EFA_PREFIX:=}"
+# - ENABLE_EFA: Enable EFA support in UCX (true/false, default: false)
+: "${ENABLE_EFA:=false}"
 # Required environment variables:
 # - CUDA_HOME: Cuda runtime path to install UCX against
 # - UCX_REPO: git remote to build UCX from
@@ -29,9 +29,10 @@ if [ "${USE_SCCACHE}" = "true" ]; then
     export CC="sccache gcc" CXX="sccache g++"
 fi
 
+# Enable EFA support if ENABLE_EFA is true and on RHEL
 # Ubuntu image needs to be built against Ubuntu 20.04 and EFA only supports 22.04 and 24.04.
 EFA_FLAG=""
-if [ "$TARGETOS" = "rhel" ] && [ -n "${EFA_PREFIX}" ]; then
+if [ "${ENABLE_EFA}" = "true" ] && [ "$TARGETOS" = "rhel" ]; then
     EFA_FLAG="--with-efa"
 fi
 

@@ -21,7 +21,7 @@ if [ "${USE_SCCACHE}" = "true" ]; then
         exit 1
     fi
 
-    SCCACHE_VERSION="v0.11.0"
+    SCCACHE_VERSION="v0.14.0"
     mkdir -p /tmp/sccache
     cd /tmp/sccache
     curl -sLO https://github.com/mozilla/sccache/releases/download/${SCCACHE_VERSION}/sccache-${SCCACHE_VERSION}-${SCCACHE_ARCH}-unknown-linux-musl.tar.gz

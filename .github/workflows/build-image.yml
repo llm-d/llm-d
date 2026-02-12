@@ -9,7 +9,7 @@ on:
   workflow_dispatch:
     inputs:
       platforms:
-        description: "Platforms to build (comma-separated: cuda,xpu,cpu,hpu)"
+        description: "Platforms to build (comma-separated: cuda,aws,xpu,cpu,hpu)"
         required: false
         default: "cuda"
         type: string
@@ -72,6 +72,7 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       cuda: ${{ steps.filter.outputs.cuda || steps.dispatch.outputs.cuda }}
+      aws: ${{ steps.filter.outputs.aws || steps.dispatch.outputs.aws }}
       rocm: ${{ steps.filter.outputs.rocm || steps.dispatch.outputs.rocm }}
       xpu: ${{ steps.filter.outputs.xpu || steps.dispatch.outputs.xpu }}
       cpu: ${{ steps.filter.outputs.cpu || steps.dispatch.outputs.cpu }}
@@ -84,6 +85,17 @@ jobs:
         with:
           filters: |
             cuda:
+              - 'docker/Dockerfile.cuda'
+              - 'docker/scripts/common/**'
+              - 'docker/scripts/cuda/**'
+              - 'docker/packages/common/**'
+              - 'docker/packages/cuda/**'
+              - 'docker/packages/rpms/**'
+              - 'patches/cks_nvshmem3.3.20.patch'
+              - 'patches/cks_nvshmem3.3.9.patch'
+              - 'patches/nvshmem_zero_ibv_ah_attr_3.3.20.patch'
+              - 'patches/nvshmem_zero_ibv_ah_attr_v3.4.5-0.patch'
+            aws:
               - 'docker/Dockerfile.cuda'
               - 'docker/scripts/common/**'
               - 'docker/scripts/cuda/**'
@@ -111,6 +123,7 @@ jobs:
         run: |
           platforms="${{ inputs.platforms }}"
           echo "cuda=$(echo $platforms | grep -q cuda && echo true || echo false)" >> $GITHUB_OUTPUT
+          echo "aws=$(echo $platforms | grep -q aws && echo true || echo false)" >> $GITHUB_OUTPUT
           echo "rocm=$(echo $platforms | grep -q rocm && echo true || echo false)" >> $GITHUB_OUTPUT
           echo "xpu=$(echo $platforms | grep -q xpu && echo true || echo false)" >> $GITHUB_OUTPUT
           echo "cpu=$(echo $platforms | grep -q cpu && echo true || echo false)" >> $GITHUB_OUTPUT
@@ -203,8 +216,6 @@ jobs:
           secrets: |
             aws_access_key_id=${{ secrets.AWS_ACCESS_KEY_ID_S3_BUCKET_ONLY }}
             aws_secret_access_key=${{ secrets.AWS_SECRET_ACCESS_KEY_S3_BUCKET_ONLY }}
-            subman_org=${{ secrets.SUBMAN_ORG }}
-            subman_activation_key=${{ secrets.SUBMAN_ACTIVATION_KEY }}
         env:
           DOCKER_BUILDKIT: "1"
           BUILDKIT_PROGRESS: "plain"
@@ -322,8 +333,6 @@ jobs:
           secrets: |
             aws_access_key_id=${{ secrets.AWS_ACCESS_KEY_ID_S3_BUCKET_ONLY }}
             aws_secret_access_key=${{ secrets.AWS_SECRET_ACCESS_KEY_S3_BUCKET_ONLY }}
-            subman_org=${{ secrets.SUBMAN_ORG }}
-            subman_activation_key=${{ secrets.SUBMAN_ACTIVATION_KEY }}
         env:
           DOCKER_BUILDKIT: "1"
           BUILDKIT_PROGRESS: "plain"
@@ -579,6 +588,305 @@ jobs:
 
       - name: Display vulnerability summary
         if: ${{ steps.should-run.outputs.os_succeeded == 'true' }}
+        run: |
+          echo "=== Vulnerability Scan Summary ==="
+          if [ -f trivy-results.sarif ]; then
+            echo "Scan completed. Check the Security tab for detailed results."
+          else
+            echo "No vulnerabilities found or scan failed."
+          fi
+
+  aws-build-llm-d:
+    needs: [detect-changes]
+    if: ${{ needs.detect-changes.outputs.aws == 'true' }}
+    continue-on-error: true
+    strategy:
+      fail-fast: false
+      # AWS/EFA build matrix: RHEL-only, amd64-only (for now)
+      # Ubuntu and ARM64 variants commented out - can be enabled if needed
+      matrix:
+        include:
+          - platform: linux/amd64
+            runner: vllm-runner
+            os: rhel
+            base_image_suffix: ubi9
+            image_suffix: ""
+          # - platform: linux/arm64
+          #   runner: vllm-runner-arm
+          #   os: rhel
+          #   base_image_suffix: ubi9
+          #   image_suffix: ""
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ secrets.GHCR_USER }}
+          password: ${{ secrets.GHCR_TOKEN }}
+
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ github.repository }}-aws-dev${{ matrix.image_suffix }}
+          tags: |
+            type=ref,event=branch
+            type=ref,event=pr
+            type=sha
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      - name: Calculate Cache Bust Timestamp
+        id: cache_buster_timestamp
+        run: |
+          echo "cache_buster_timestamp=$(date)" >> $GITHUB_OUTPUT
+
+      - name: Build the builder image layer
+        id: build-image-build-layer
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./docker/Dockerfile.cuda
+          platforms: ${{ matrix.platform }}
+          target: builder
+          push: false
+          labels: ${{ steps.meta.outputs.labels }}
+          build-args: |
+            CACHE_BUSTER=${{ steps.cache_buster_timestamp.outputs.cache_buster_timestamp }}
+            TARGETOS=${{ matrix.os }}
+            TARGETPLATFORM=${{ matrix.platform }}
+            BUILD_BASE_IMAGE_SUFFIX=${{ matrix.base_image_suffix }}
+            FINAL_BASE_IMAGE_SUFFIX=${{ matrix.base_image_suffix }}
+            ENABLE_EFA=true
+          github-token: ${{ secrets.GHCR_TOKEN }}
+          secrets: |
+            aws_access_key_id=${{ secrets.AWS_ACCESS_KEY_ID_S3_BUCKET_ONLY }}
+            aws_secret_access_key=${{ secrets.AWS_SECRET_ACCESS_KEY_S3_BUCKET_ONLY }}
+            # subman_org=${{ secrets.SUBMAN_ORG }}
+            # subman_activation_key=${{ secrets.SUBMAN_ACTIVATION_KEY }}
+        env:
+          DOCKER_BUILDKIT: "1"
+          BUILDKIT_PROGRESS: "plain"
+
+      - name: Build the final image layer
+        id: build-image-final-layer
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./docker/Dockerfile.cuda
+          target: runtime
+          platforms: ${{ matrix.platform }}
+          push: true
+          provenance: false
+          build-args: |
+            CACHE_BUSTER=${{ steps.cache_buster_timestamp.outputs.cache_buster_timestamp }}
+            TARGETOS=${{ matrix.os }}
+            TARGETPLATFORM=${{ matrix.platform }}
+            BUILD_BASE_IMAGE_SUFFIX=${{ matrix.base_image_suffix }}
+            FINAL_BASE_IMAGE_SUFFIX=${{ matrix.base_image_suffix }}
+            ENABLE_EFA=true
+            ${{ inputs.vllm_repo != '' && format('VLLM_REPO={0}', inputs.vllm_repo) || '' }}
+            ${{ inputs.vllm_commit_sha != '' && format('VLLM_COMMIT_SHA={0}', inputs.vllm_commit_sha) || '' }}
+            ${{ inputs.vllm_precompiled_wheel_commit != '' &&
+              format('VLLM_PRECOMPILED_WHEEL_COMMIT={0}', inputs.vllm_precompiled_wheel_commit) || '' }}
+          labels: ${{ steps.meta.outputs.labels }}
+          outputs: >-
+            type=image,name=${{ env.REGISTRY }}/${{ github.repository }}-aws-dev${{ matrix.image_suffix }},
+            push-by-digest=true,name-canonical=true,push=true
+          github-token: ${{ secrets.GHCR_TOKEN }}
+        env:
+          DOCKER_BUILDKIT: "1"
+          BUILDKIT_PROGRESS: "plain"
+
+      - name: Verify remote digest exists
+        if: ${{ steps.build-image-final-layer.outputs.digest != '' }}
+        run: |
+          set -x
+          digest="${{ steps.build-image-final-layer.outputs.digest }}"
+          ref="${{ env.REGISTRY }}/${{ github.repository }}-aws-dev${{ matrix.image_suffix }}@${digest}"
+          echo "Checking remote ref: $ref"
+          docker buildx imagetools inspect "$ref" >/dev/null
+
+      - name: Export digest
+        if: ${{ steps.build-image-final-layer.outputs.digest != '' }}
+        run: |
+          mkdir -p /tmp/digests/${{ matrix.os }}
+          digest="${{ steps.build-image-final-layer.outputs.digest }}"
+          touch "/tmp/digests/${{ matrix.os }}/${digest#sha256:}"
+
+      - name: Upload digest
+        if: ${{ steps.build-image-final-layer.outputs.digest != '' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: digests-aws-dev-${{ matrix.os }}-${{ matrix.platform == 'linux/arm64' && 'arm64' || 'amd64' }}
+          path: /tmp/digests/${{ matrix.os }}/*
+          if-no-files-found: error
+          retention-days: 1
+
+  aws-success-check:
+    needs: aws-build-llm-d
+    if: ${{ always() }}
+    runs-on: ubuntu-latest
+    outputs:
+      any_succeeded: ${{ steps.check.outputs.any_succeeded }}
+      rhel_ok: ${{ steps.check.outputs.rhel_ok }}
+      shortsha: ${{ steps.export-sha.outputs.shortsha }}
+    steps:
+      - name: Download all digests (best-effort)
+        uses: actions/download-artifact@v4
+        with:
+          path: /tmp/digests-raw
+          pattern: digests-aws-dev-*
+        continue-on-error: true
+
+      - name: Reorganize digests by OS
+        run: |
+          mkdir -p /tmp/digests/rhel
+          shopt -s nullglob
+          for artifact_dir in /tmp/digests-raw/digests-aws-dev-*; do
+            if [[ "$artifact_dir" == *-rhel-* ]]; then
+              cp -v "$artifact_dir"/* /tmp/digests/rhel/ 2>/dev/null || true
+            fi
+          done
+          echo "=== RHEL digests ==="
+          ls -la /tmp/digests/rhel/ || echo "No RHEL digests"
+
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Export Git Sha
+        id: export-sha
+        run: |
+          echo "shortsha=$(git rev-parse --short=7 HEAD)" >> $GITHUB_OUTPUT
+
+      - id: check
+        shell: bash
+        run: |
+          shopt -s nullglob
+          rhel=(/tmp/digests/rhel/*)
+
+          any=false; [ ${#rhel[@]} -gt 0 ] && any=true
+          rhel_ok=false; [ ${#rhel[@]} -gt 0 ] && rhel_ok=true
+
+          echo "Downloaded ${#rhel[@]} RHEL digest(s)"
+          echo "any_succeeded=${any}" >> "$GITHUB_OUTPUT"
+          echo "rhel_ok=${rhel_ok}" >> "$GITHUB_OUTPUT"
+
+  aws-manifest:
+    needs: aws-success-check
+    if: ${{ needs.aws-success-check.outputs.any_succeeded == 'true' }}
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - name: Check if build succeeded
+        id: should-run
+        run: |
+          rhel_ok="${{ needs.aws-success-check.outputs.rhel_ok }}"
+          echo "rhel_ok=${rhel_ok}" >> $GITHUB_OUTPUT
+          if [ "${rhel_ok}" != "true" ]; then
+            echo "Skipping manifest creation - no successful builds"
+          fi
+
+      - name: Download digests
+        if: ${{ steps.should-run.outputs.rhel_ok == 'true' }}
+        uses: actions/download-artifact@v4
+        with:
+          path: /tmp/digests-raw
+          pattern: digests-aws-dev-rhel-*
+
+      - name: Reorganize digests for manifest
+        if: ${{ steps.should-run.outputs.rhel_ok == 'true' }}
+        run: |
+          mkdir -p /tmp/digests/rhel
+          shopt -s nullglob
+          for artifact_dir in /tmp/digests-raw/digests-aws-dev-rhel-*; do
+            cp -v "$artifact_dir"/* /tmp/digests/rhel/ 2>/dev/null || true
+          done
+
+      - name: Set up Docker Buildx
+        if: ${{ steps.should-run.outputs.rhel_ok == 'true' }}
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Container Registry
+        if: ${{ steps.should-run.outputs.rhel_ok == 'true' }}
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ secrets.GHCR_USER }}
+          password: ${{ secrets.GHCR_TOKEN }}
+
+      - name: Extract metadata
+        if: ${{ steps.should-run.outputs.rhel_ok == 'true' }}
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ github.repository }}-aws-dev
+          tags: |
+            type=ref,event=branch
+            type=ref,event=pr
+            type=sha
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      - name: Create and push manifest
+        if: ${{ steps.should-run.outputs.rhel_ok == 'true' }}
+        id: manifest
+        working-directory: /tmp/digests/rhel
+        run: |
+          set -x
+          SHORT_SHA="${{ needs.aws-success-check.outputs.shortsha }}"
+          # build the list of source images (by digest)
+          sources=""
+          for digest in *; do
+            image="${{ env.REGISTRY }}/${{ github.repository }}-aws-dev"
+            sources="$sources ${image}@sha256:$digest"
+          done
+
+          # create manifest and tag it
+          tags="-t ${{ env.REGISTRY }}/${{ github.repository }}-aws-dev:sha-${SHORT_SHA}"
+          if [ -n "${{ github.event.pull_request.number }}" ]; then
+            tags="$tags -t ${{ env.REGISTRY }}/${{ github.repository }}-aws-dev:pr-${{ github.event.pull_request.number }}"
+          fi
+          docker buildx imagetools create $tags $sources
+
+          # extract final manifest digest
+          MANIFEST_DIGEST=$(docker buildx imagetools inspect \
+            ${{ env.REGISTRY }}/${{ github.repository }}-aws-dev:sha-${SHORT_SHA} \
+            | awk '/^Digest:/ {print $2}')
+          echo "digest=${MANIFEST_DIGEST}" >> $GITHUB_OUTPUT
+
+      - name: Run Trivy vulnerability scanner
+        if: ${{ steps.should-run.outputs.rhel_ok == 'true' }}
+        continue-on-error: true
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: >-
+            ${{ env.REGISTRY }}/${{ github.repository }}-aws-dev@${{
+              steps.manifest.outputs.digest }}
+          format: "sarif"
+          output: "trivy-results.sarif"
+          severity: "CRITICAL,HIGH,MEDIUM"
+          scanners: vuln
+          timeout: 30m
+          skip-dirs: /root/.cache/uv
+        env:
+          TRIVY_USERNAME: ${{ secrets.GHCR_USER }}
+          TRIVY_PASSWORD: ${{ secrets.GHCR_TOKEN }}
+
+      - name: Upload Trivy scan results to GitHub Security tab
+        if: ${{ steps.should-run.outputs.rhel_ok == 'true' }}
+        continue-on-error: true
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: "trivy-results.sarif"
+
+      - name: Display vulnerability summary
+        if: ${{ steps.should-run.outputs.rhel_ok == 'true' }}
         run: |
           echo "=== Vulnerability Scan Summary ==="
           if [ -f trivy-results.sarif ]; then
