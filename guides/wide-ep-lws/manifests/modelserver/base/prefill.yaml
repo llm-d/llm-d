@@ -92,8 +92,19 @@ spec:
                                   "log_balancedness":"False"}' \
                   --all2all-backend deepep_high_throughput \
                   --gpu-memory-utilization 0.75
-
+                  # To enable tracing, add:
+                  # --otlp-traces-endpoint http://jaeger-collector.observability.svc.cluster.local:4317 \
+                  # --collect-detailed-traces all
             env:
+              # To enable tracing, uncomment:
+              # - name: OTEL_SERVICE_NAME
+              #   value: "vllm-prefill"
+              # - name: OTEL_EXPORTER_OTLP_ENDPOINT
+              #   value: "http://jaeger-collector.observability.svc.cluster.local:4317"
+              # - name: OTEL_TRACES_SAMPLER
+              #   value: "parentbased_traceidratio"
+              # - name: OTEL_TRACES_SAMPLER_ARG
+              #   value: "0.1"
               - name: DP_SIZE_LOCAL
                 value: "8"
               - name: TP_SIZE

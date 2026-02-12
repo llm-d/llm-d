@@ -1,5 +1,13 @@
 multinode: false
 
+# Distributed tracing configuration (OpenTelemetry)
+# tracing:
+#   enabled: true
+#   otlpEndpoint: "http://jaeger-collector.observability.svc.cluster.local:4317"
+#   sampling:
+#     sampler: "parentbased_traceidratio"
+#     samplerArg: "0.1"
+
 # Configure accelerator type for Google TPU
 accelerator:
   type: google

@@ -1,6 +1,14 @@
 # Simplified Intel CPU configuration using imageDefault mode
 # This configuration lets the chart handle most vLLM parameters automatically
 
+# Distributed tracing configuration (OpenTelemetry)
+# tracing:
+#   enabled: true
+#   otlpEndpoint: "http://jaeger-collector.observability.svc.cluster.local:4317"
+#   sampling:
+#     sampler: "parentbased_traceidratio"
+#     samplerArg: "0.1"
+
 modelArtifacts:
   uri: "hf://meta-llama/Llama-3.2-3B-Instruct"
   size: 100Gi

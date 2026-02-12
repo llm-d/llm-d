@@ -1,5 +1,13 @@
 multinode: false
 
+# Distributed tracing configuration (OpenTelemetry)
+# tracing:
+#   enabled: true
+#   otlpEndpoint: "http://jaeger-collector.observability.svc.cluster.local:4317"
+#   sampling:
+#     sampler: "parentbased_traceidratio"
+#     samplerArg: "0.1"
+
 modelArtifacts:
   uri: "hf://Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8"
   size: 700Gi

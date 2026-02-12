@@ -1,0 +1,36 @@
+apiVersion: opentelemetry.io/v1beta1
+kind: OpenTelemetryCollector
+metadata:
+  name: llm-d-collector
+  namespace: observability
+spec:
+  mode: deployment
+  config:
+    receivers:
+      otlp:
+        protocols:
+          grpc:
+            endpoint: "0.0.0.0:4317"
+    processors:
+      filter/drop-metrics-scraping:
+        error_mode: ignore
+        traces:
+          span:
+            - 'attributes["url.path"] == "/metrics"'
+            - 'attributes["http.route"] == "/metrics"'
+            - name == "GET /metrics"
+            - name == "GET"
+      batch:
+        send_batch_size: 1024
+        timeout: 1s
+    exporters:
+      otlp:
+        endpoint: "jaeger-collector.observability.svc.cluster.local:4317"
+        tls:
+          insecure: true
+    service:
+      pipelines:
+        traces:
+          receivers: [otlp]
+          processors: [filter/drop-metrics-scraping, batch]
+          exporters: [otlp]

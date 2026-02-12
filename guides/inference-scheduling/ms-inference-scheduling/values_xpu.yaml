@@ -1,6 +1,14 @@
 # Simplified Intel XPU configuration using imageDefault mode
 # This configuration lets the chart handle most vLLM parameters automatically
 
+# Distributed tracing configuration (OpenTelemetry)
+# tracing:
+#   enabled: true
+#   otlpEndpoint: "http://jaeger-collector.observability.svc.cluster.local:4317"
+#   sampling:
+#     sampler: "parentbased_traceidratio"
+#     samplerArg: "0.1"
+
 modelArtifacts:
   name: Qwen/Qwen3-0.6B
   uri: "hf://Qwen/Qwen3-0.6B"

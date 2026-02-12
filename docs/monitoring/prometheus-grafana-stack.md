@@ -70,3 +70,13 @@ To remove the Prometheus and Grafana stack:
 ```bash
 ./scripts/install-prometheus-grafana.sh -u -n <your-monitoring-namespace>
 ```
+
+## Distributed Tracing
+
+For OpenTelemetry distributed tracing across vLLM, the routing proxy, and the EPP/inference scheduler, see the [Distributed Tracing guide](./tracing/README.md).
+
+To quickly deploy a Jaeger backend for viewing traces:
+
+```bash
+./scripts/install-jaeger.sh
+```

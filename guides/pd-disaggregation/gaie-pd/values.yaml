@@ -38,6 +38,14 @@ inferenceExtension:
           weight: 1.0
       # All profiles using max score picker by default
 
+  # Distributed tracing configuration (OpenTelemetry)
+  tracing:
+    enabled: false
+    # otelExporterEndpoint: "http://jaeger-collector.observability.svc.cluster.local:4317"
+    # sampling:
+    #   sampler: "parentbased_traceidratio"
+    #   samplerArg: "0.1"
+  # Monitoring configuration for EPP
   monitoring:
     interval: "10s"
     prometheus:

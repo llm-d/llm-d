@@ -1,15 +1,15 @@
 #!/bin/bash
 
-# Load generation script with malformed requests to trigger error metrics
-# Usage: ./generate-load-llmd.sh [duration_minutes]
+# Traffic generation script with malformed requests to trigger error metrics
+# Usage: ./generate-traffic-basic.sh [duration_minutes]
 
 set -e
 
-ENDPOINT="http://localhost:8000/v1"
+ENDPOINT="${ENDPOINT:-http://localhost:8000/v1}"
 DURATION_MINUTES=${1:-5}
-MODEL_NAME="Qwen/Qwen3-0.6B"
+MODEL_NAME="${MODEL_NAME:-meta-llama/Llama-3.1-8B-Instruct}"
 
-echo "Load Generator with Error Generation"
+echo "Traffic Generator with Error Generation"
 echo "==================================="
 echo "Endpoint: $ENDPOINT"
 echo "Model: $MODEL_NAME"
@@ -206,7 +206,7 @@ end_time=$((start_time + DURATION_MINUTES * 60))
 request_count=0
 error_count=0
 
-echo "Starting load generation with error injection..."
+echo "Starting traffic generation with error injection..."
 echo "Start time: $(date)"
 echo ""
 
@@ -243,7 +243,7 @@ while [ $(date +%s) -lt $end_time ]; do
 done
 
 echo ""
-echo "Load generation complete!"
+echo "Traffic generation complete!"
 echo "Total requests sent: $request_count"
 echo "Error requests sent: $error_count"
 echo "End time: $(date)"

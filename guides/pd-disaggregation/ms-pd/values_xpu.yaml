@@ -1,6 +1,14 @@
 # Intel XPU configuration for PD Disaggregation
 # This configuration sets up prefill and decode services with Intel XPU optimization
 
+# Distributed tracing configuration (OpenTelemetry)
+# tracing:
+#   enabled: true
+#   otlpEndpoint: "http://jaeger-collector.observability.svc.cluster.local:4317"
+#   sampling:
+#     sampler: "parentbased_traceidratio"
+#     samplerArg: "0.1"
+
 multinode: false
 
 # Configure accelerator type for Intel XPU via DRA

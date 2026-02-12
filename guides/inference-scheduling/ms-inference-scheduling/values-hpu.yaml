@@ -3,6 +3,14 @@
 # Models are downloaded directly from Hugging Face Hub.
 # Gaudi warmup is skipped for startup speed.
 # Custom vLLM image for Gaudi is used for now.
+
+# Distributed tracing configuration (OpenTelemetry)
+# tracing:
+#   enabled: true
+#   otlpEndpoint: "http://jaeger-collector.observability.svc.cluster.local:4317"
+#   sampling:
+#     sampler: "parentbased_traceidratio"
+#     samplerArg: "0.1"
 # Use DRA instead of device plugins.
 #
 # Prerequisites:

@@ -113,12 +113,25 @@ EPP provides additional metrics for request routing, scheduling latency, and plu
 
 EPP metrics include request rates, error rates, scheduling latency, and plugin processing times, providing insights into the inference routing and scheduling performance.
 
+## Distributed Tracing
+
+llm-d supports OpenTelemetry distributed tracing across vLLM, the routing proxy, and the EPP/inference scheduler. See [Distributed Tracing](./tracing/README.md) for setup instructions including a quick-start Jaeger deployment, or use the [install-jaeger.sh](./scripts/install-jaeger.sh) script for a one-command setup.
+
 ## Dashboards
 
 Grafana dashboard raw JSON files can be imported manually into a Grafana UI. Here is a current list of community dashboards:
 
 - [llm-d vLLM Overview dashboard](./grafana/dashboards/llm-d-vllm-overview.json)
-  - vLLM metrics
+  - General vLLM metrics overview for monitoring llm-d inference servers
+- [llm-d Failure & Saturation Indicators dashboard](./grafana/dashboards/llm-d-failure-saturation-dashboard.json)
+  - Key failure and saturation indicators for identifying system issues and capacity constraints
+- [llm-d Diagnostic Drill-Down dashboard](./grafana/dashboards/llm-d-diagnostic-drilldown-dashboard.json)
+  - Detailed diagnostic metrics for investigating performance issues
+- [llm-d Performance Dashboard](./grafana/dashboards/llm-performance-kv-cache.json)
+  - Performance metrics including KV cache utilization
+- [P/D Coordinator Metrics dashboard](./grafana/dashboards/pd-coordinator-metrics.json)
+  - Prefill/Decode disaggregation performance metrics
+  - Shows vLLM E2E latency, prefill duration, decode duration, and phase breakdown
 - [inference-gateway dashboard v1.0.1](https://github.com/kubernetes-sigs/gateway-api-inference-extension/blob/v1.0.1/tools/dashboards/inference_gateway.json)
   - EPP metrics
 - [GKE managed inference gateway dashboard](https://cloud.google.com/kubernetes-engine/docs/how-to/customize-gke-inference-gateway-configurations#inference-gateway-dashboard)
@@ -133,7 +146,8 @@ For specific PromQL queries to monitor LLM-D deployments, see:
 
 To populate metrics (especially error metrics) for testing and monitoring validation:
 
-- [Load Generation Script](./scripts/generate-load-llmd.sh) - Sends both valid and malformed requests to generate metrics
+- [Traffic Generation Script](./scripts/generate-traffic-basic.sh) - Sends both valid and malformed requests to generate metrics
+- [P/D Traffic Generator](./scripts/generate-traffic-pd.sh) - Concurrent traffic optimized for P/D disaggregation tracing
 
 ## Troubleshooting
 

@@ -21,7 +21,19 @@ spec:
             - -c
           args:
             - exec vllm serve --port 8000
+              # To enable tracing, add:
+              # --otlp-traces-endpoint http://jaeger-collector.observability.svc.cluster.local:4317
+              # --collect-detailed-traces all
           env:
+            # To enable tracing, uncomment:
+            # - name: OTEL_SERVICE_NAME
+            #   value: "vllm"
+            # - name: OTEL_EXPORTER_OTLP_ENDPOINT
+            #   value: "http://jaeger-collector.observability.svc.cluster.local:4317"
+            # - name: OTEL_TRACES_SAMPLER
+            #   value: "parentbased_traceidratio"
+            # - name: OTEL_TRACES_SAMPLER_ARG
+            #   value: "0.1"
             - name: HUGGING_FACE_HUB_TOKEN
               valueFrom:
                 secretKeyRef:
