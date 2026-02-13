@@ -143,8 +143,8 @@ NVIDIA Dynamo offers an excellent integrated stack for low-latency and high-scal
 Unlike Dynamo, llm-d:
 
 * Prefers to make the prefill/decode disaggregation decision within the scheduler to more precisely control placement and latency vs. throughput tradeoffs
-* Uses RPC for disaggregation rather than an [async queue in the Distributed Runtime](https://docs.nvidia.com/dynamo/latest/design_docs/distributed_runtime.html) to provide stronger cancellation semantics
-* Prioritizes a strong operational boundary between in-memory prefix cache tiers and local or remote storage tiers rather than a unified memory API like the [KV Block Manager](https://docs.nvidia.com/dynamo/latest/kvbm/kvbm_intro.html)
+* Uses RPC for disaggregation rather than an [async queue in the Distributed Runtime](https://docs.nvidia.com/dynamo/design-docs/distributed-runtime) to provide stronger cancellation semantics
+* Prioritizes a strong operational boundary between in-memory prefix cache tiers and local or remote storage tiers rather than a unified memory API like the [KV Block Manager](https://docs.nvidia.com/dynamo/components/kvbm)
 
 ### Use AIBrix
 
