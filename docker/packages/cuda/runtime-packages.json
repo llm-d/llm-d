@@ -18,6 +18,7 @@
   "ubuntu_only": [
     "gcc",
     "hwloc",
-    "libhwloc15"
+    "libhwloc15",
+    "curl"
   ]
 }

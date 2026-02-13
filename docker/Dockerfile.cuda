@@ -308,6 +308,7 @@ ARG NVSHMEM_VERSION
 ARG BUILD_NIXL_FROM_SOURCE
 ARG FLASHINFER_VERSION
 ARG ENABLE_EFA
+ARG EFA_INSTALLER_VERSION
 
 COPY docker/constraints.txt /tmp/constraints.txt
 
@@ -340,12 +341,12 @@ ${LD_LIBRARY_PATH}" \
     CUDA_MAJOR=${CUDA_MAJOR} \
     CUDA_MINOR=${CUDA_MINOR}
 
-# Install runtime RDMA core packages through AWS installer if EFA variant
+# Install runtime RDMA core packages through AWS EFA installer if EFA is enabled
 COPY docker/scripts/cuda/common/package-utils.sh /tmp/package-utils.sh
 COPY docker/packages /tmp/packages
-COPY docker/scripts/cuda/runtime/install-rdma-packages.sh /tmp/install-rdma-packages.sh
-RUN /tmp/install-rdma-packages.sh && \
-    rm -rf /tmp/install-rdma-packages.sh /tmp/package-utils.sh /tmp/packages
+COPY docker/scripts/cuda/runtime/install-efa-rdma-packages.sh /tmp/install-efa-rdma-packages.sh
+RUN /tmp/install-efa-rdma-packages.sh && \
+    rm -rf /tmp/install-efa-rdma-packages.sh /tmp/package-utils.sh /tmp/packages
 
 # Install runtime dependencies
 COPY docker/scripts/cuda/common/package-utils.sh /tmp/package-utils.sh
