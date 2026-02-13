@@ -1,6 +1,6 @@
 {
   "rhel_to_ubuntu": {
-    "rdma-core": "rdma",
+    "librdmacm": "librdmacm1t64",
     "libibverbs": "libibverbs1"
   }
 }
