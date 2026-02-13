@@ -107,13 +107,16 @@ if [ "${BUILD_DEBUG}" = "true" ]; then
     # so we prefer removing it at the source (NVSHMEM_WERROR) and/or emptying CUDA flags.
 fi
 
-# disables build of all python bindings. We will explicilty build them after
+# Disables build of all python bindings. We will explicilty for ${PYTHON_VERSION} after.
+# pinning Python avoids surprises if NVSHMEM’s CMake.
 CMAKE_EXTRA_FLAGS+=(
     -DNVSHMEM_BUILD_PYTHON_LIB=OFF
+    -DPython3_EXECUTABLE="${VIRTUAL_ENV}/bin/python" \
+    -DPython_EXECUTABLE="${VIRTUAL_ENV}/bin/python" \
 )
 
-cmake \
-    -G Ninja \
+rm -rf build || true
+cmake -S . -B build -G Ninja \
     -DNVSHMEM_PREFIX="${NVSHMEM_DIR}" \
     -DCMAKE_CUDA_ARCHITECTURES="${NVSHMEM_CUDA_ARCHITECTURES}" \
     -DCMAKE_CUDA_COMPILER="${CUDA_HOME}/bin/nvcc" \
@@ -132,16 +135,29 @@ cmake \
     -DNVSHMEM_BUILD_EXAMPLES=0 \
     "${DEBUG_FLAGS[@]}" \
     "${CMAKE_EXTRA_FLAGS[@]}" \
-    "${EFA_FLAGS[@]}" \
-    ..
+    "${EFA_FLAGS[@]}"
 
-ninja -j"$(nproc)"
-ninja install
+ninja -C build -j"$(nproc)"
+ninja -C build install
 
-ninja build_nvshmem4py_wheel_cu${CUDA_MAJOR}_${PYTHON_VERSION}
+# ----- build ONE nvshmem4py wheel (cu${CUDA_MAJOR}, python ${PYTHON_VERSION}) -----
+ninja -C build "build_nvshmem4py_wheel_cu${CUDA_MAJOR}_${PYTHON_VERSION}"
 
-# copy python wheel to /wheels
-cp "${NVSHMEM_DIR}"/lib/python/dist/nvshmem4py_cu"${CUDA_MAJOR}"-*-cp"${PYTHON_VERSION/./}"-cp"${PYTHON_VERSION/./}"-manylinux*.whl /wheels/
+# Parse our python version to platforming tag, eg: 3.12 --> 312
+PYTAG="cp${PYTHON_VERSION/./}"
+NVSHMEM4PY_WHEEL="$(find build/dist -maxdepth 1 -type f \
+  -name "nvshmem4py_cu${CUDA_MAJOR}-*-${PYTAG}-${PYTAG}-manylinux*.whl" \
+  | head -n 1)"
+
+if [ -z "${NVSHMEM4PY_WHEEL}" ]; then
+  echo "ERROR: nvshmem4py wheel not found in build/dist"
+  echo "  expected pattern: nvshmem4py_cu${CUDA_MAJOR}-*-${PYTAG}-${PYTAG}-manylinux*.whl"
+  echo "  contents of build/dist:"
+  ls -la build/dist || true
+  exit 1
+fi
+
+cp -v "${NVSHMEM4PY_WHEEL}" /wheels/
 
 cd /tmp
 rm -rf nvshmem_src*
