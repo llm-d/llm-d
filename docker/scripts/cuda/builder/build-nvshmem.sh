@@ -107,6 +107,11 @@ if [ "${BUILD_DEBUG}" = "true" ]; then
     # so we prefer removing it at the source (NVSHMEM_WERROR) and/or emptying CUDA flags.
 fi
 
+# disables build of all python bindings. We will explicilty build them after
+CMAKE_EXTRA_FLAGS+=(
+    -DNVSHMEM_BUILD_PYTHON_LIB=OFF
+)
+
 cmake \
     -G Ninja \
     -DNVSHMEM_PREFIX="${NVSHMEM_DIR}" \
@@ -132,6 +137,8 @@ cmake \
 
 ninja -j"$(nproc)"
 ninja install
+
+ninja build_nvshmem4py_wheel_cu${CUDA_MAJOR}_${PYTHON_VERSION}
 
 # copy python wheel to /wheels
 cp "${NVSHMEM_DIR}"/lib/python/dist/nvshmem4py_cu"${CUDA_MAJOR}"-*-cp"${PYTHON_VERSION/./}"-cp"${PYTHON_VERSION/./}"-manylinux*.whl /wheels/
