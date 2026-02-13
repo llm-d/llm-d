@@ -5,6 +5,9 @@ environments:
   kgateway: &KG
     values:
       - ../prereq/gateway-provider/common-configurations/kgateway.yaml
+  kgateway-openshift: &KGOS
+    values:
+      - ../prereq/gateway-provider/common-configurations/kgateway.yaml
   agentgateway: &AG
     values:
       - ../prereq/gateway-provider/common-configurations/agentgateway.yaml
@@ -37,6 +40,10 @@ releases:
     values:
       - gateway:
           {{ .Environment.Values.gateway | toYaml | nindent 10 }}
+    {{- if eq .Environment.Name "kgateway-openshift" }}
+          gatewayParameters:
+            floatingUserId: true
+    {{- end }}
 
   - name: {{ printf "gaie-%s" $rn | quote }}
     namespace: {{ $ns }}

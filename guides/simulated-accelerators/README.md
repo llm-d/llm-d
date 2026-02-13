@@ -45,6 +45,14 @@ To see specify your gateway choice you can use the `-e <gateway option>` flag, e
 helmfile apply -e kgateway -n ${NAMESPACE}
 ```
 
+**_NOTE:_** If deploying on OpenShift with kgateway, use the `kgateway-openshift` environment instead:
+
+```bash
+helmfile apply -e kgateway-openshift -n ${NAMESPACE}
+```
+
+This environment enables `floatingUserId` in the GatewayParameters, which allows OpenShift to automatically assign user IDs from its allowed range, resolving Security Context Constraint (SCC) errors.
+
 To see what gateway options are supported refer to our [gateway provider prereq doc](../prereq/gateway-provider/README.md#supported-providers). Gateway configurations per provider are tracked in the [gateway-configurations directory](../prereq/gateway-provider/common-configurations/).
 
 You can also customize your gateway, for more information on how to do that see our [gateway customization docs](../../docs/customizing-your-gateway.md).
@@ -53,7 +61,7 @@ You can also customize your gateway, for more information on how to do that see 
 
 Follow provider specific instructions for installing HTTPRoute.
 
-#### Install for "kgateway" or "istio"
+#### Install for "kgateway", "kgateway-openshift", or "istio"
 
 ```bash
 kubectl apply -f httproute.yaml -n ${NAMESPACE}
