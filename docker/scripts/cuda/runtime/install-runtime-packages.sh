@@ -1,5 +1,5 @@
 #!/bin/bash
-set -Eeu
+set -Eeux
 
 # installs runtime packages for CUDA image
 #
@@ -53,7 +53,7 @@ elif [ "$TARGETOS" = "rhel" ]; then
     install_packages rhel "${INSTALL_PKGS[@]}"
     if [ "${ENABLE_EFA}" != "true" ]; then
         mapfile -t INSTALL_RDMA_PKGS < <(load_layered_packages rhel "runtime-rdma-packages.json" "cuda")
-        install_packages ubuntu "${INSTALL_RDMA_PKGS[@]}"
+        install_packages rhel "${INSTALL_RDMA_PKGS[@]}"
     fi
     cleanup_packages rhel
 else

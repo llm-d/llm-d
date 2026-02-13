@@ -194,7 +194,7 @@ COPY docker/scripts/cuda/builder/build-gdrcopy.sh /tmp/build-gdrcopy.sh
 RUN --mount=type=cache,target=/var/cache/git \
     --mount=type=secret,id=aws_access_key_id \
     --mount=type=secret,id=aws_secret_access_key \
-    TARGETPLATFORM=${TARGETPLATFORM} TARGETOS=${TARGETOS} /tmp/build-gdrcopy.sh && \
+    /tmp/build-gdrcopy.sh && \
     rm -f /tmp/build-gdrcopy.sh
 
 # Build UCX
