@@ -68,6 +68,7 @@ fi
 DEBUG_FLAGS=()
 CMAKE_EXTRA_FLAGS=()
 
+NVSHMEM_BUILD_PERF_TESTS=0 # Nvshmem perf test binaries, off by default on with debug
 if [ "${BUILD_DEBUG}" = "true" ]; then
     echo "=== Building NVSHMEM with debug symbols and logging enabled ==="
 
@@ -103,17 +104,20 @@ if [ "${BUILD_DEBUG}" = "true" ]; then
     # we can add a *counter-flag* at the end to neutralize it.
     # Unfortunately, NVCC doesn't have a universal "-Wno-error" for that form,
     # so we prefer removing it at the source (NVSHMEM_WERROR) and/or emptying CUDA flags.
+
+    NVSHMEM_BUILD_PERF_TESTS=1
 fi
 
-# Disables build of all python bindings. We will explicilty for ${PYTHON_VERSION} after.
-# pinning Python avoids surprises if NVSHMEM’s CMake.
+# Configure our build directory such that targets for specific nvshmem4py bindings exsit
 CMAKE_EXTRA_FLAGS+=(
-    -DNVSHMEM_BUILD_PYTHON_LIB=OFF
-    -DPython3_EXECUTABLE="${VIRTUAL_ENV}/bin/python" \
-    -DPython_EXECUTABLE="${VIRTUAL_ENV}/bin/python" \
+    -DPython3_EXECUTABLE="${VIRTUAL_ENV}/bin/python"
+    -DPython3_ROOT_DIR="${VIRTUAL_ENV}"
+    -DPython3_FIND_STRATEGY=LOCATION
 )
 
-rm -rf build || true
+# Build the core library / SDK without the NVSHMEM4PY bindings
+BUILD_NVSHMEM4PY_BINDINGS="OFF"
+BUILD_PYTHON_DEVICE_LIB="OFF"
 cmake -S . -B build -G Ninja \
     -DNVSHMEM_PREFIX="${NVSHMEM_DIR}" \
     -DCMAKE_CUDA_ARCHITECTURES="${NVSHMEM_CUDA_ARCHITECTURES}" \
@@ -129,16 +133,46 @@ cmake -S . -B build -G Ninja \
     -DGDRCOPY_HOME="/usr/local" \
     -DNVSHMEM_MPI_SUPPORT=0 \
     -DNVSHMEM_USE_NCCL=0 \
-    -DNVSHMEM_BUILD_TESTS=0 \
+    -DNVSHMEM_BUILD_TESTS="${NVSHMEM_BUILD_PERF_TESTS}" \
     -DNVSHMEM_BUILD_EXAMPLES=0 \
+    -DNVSHMEM_BUILD_PYTHON_LIB="${BUILD_NVSHMEM4PY_BINDINGS}" \
+    -DNVSHMEM_BUILD_PYTHON_DEVICE_LIB="${BUILD_PYTHON_DEVICE_LIB}" \
     "${DEBUG_FLAGS[@]}" \
     "${CMAKE_EXTRA_FLAGS[@]}" \
     "${EFA_FLAGS[@]}"
 
 ninja -C build -j"$(nproc)"
-ninja -C build install
+cmake --install build
+rm -rf build
 
-# ----- build ONE nvshmem4py wheel (cu${CUDA_MAJOR}, python ${PYTHON_VERSION}) -----
+# overwrite build perf tests for the 4py bindings
+NVSHMEM_BUILD_PERF_TESTS=0
+# re-build the build directory with nvshmem4py targets and explicitly call the right one.
+BUILD_NVSHMEM4PY_BINDINGS="ON"
+BUILD_PYTHON_DEVICE_LIB="ON"
+cmake -S . -B build -G Ninja \
+    -DNVSHMEM_PREFIX="${NVSHMEM_DIR}" \
+    -DCMAKE_CUDA_ARCHITECTURES="${NVSHMEM_CUDA_ARCHITECTURES}" \
+    -DCMAKE_CUDA_COMPILER="${CUDA_HOME}/bin/nvcc" \
+    -DNVSHMEM_PMIX_SUPPORT=0 \
+    -DNVSHMEM_IBRC_SUPPORT=1 \
+    -DNVSHMEM_IBGDA_SUPPORT=1 \
+    -DNVSHMEM_IBDEVX_SUPPORT=1 \
+    -DNVSHMEM_UCX_SUPPORT=1 \
+    -DUCX_HOME="${UCX_PREFIX}" \
+    -DNVSHMEM_SHMEM_SUPPORT=0 \
+    -DNVSHMEM_USE_GDRCOPY=1 \
+    -DGDRCOPY_HOME="/usr/local" \
+    -DNVSHMEM_MPI_SUPPORT=0 \
+    -DNVSHMEM_USE_NCCL=0 \
+    -DNVSHMEM_BUILD_TESTS="${NVSHMEM_BUILD_PERF_TESTS}" \
+    -DNVSHMEM_BUILD_EXAMPLES=0 \
+    -DNVSHMEM_BUILD_PYTHON_LIB="${BUILD_NVSHMEM4PY_BINDINGS}" \
+    -DNVSHMEM_BUILD_PYTHON_DEVICE_LIB="${BUILD_PYTHON_DEVICE_LIB}" \
+    "${DEBUG_FLAGS[@]}" \
+    "${CMAKE_EXTRA_FLAGS[@]}" \
+    "${EFA_FLAGS[@]}"
+
 ninja -C build "build_nvshmem4py_wheel_cu${CUDA_MAJOR}_${PYTHON_VERSION}"
 
 # Parse our python version to platforming tag, eg: 3.12 --> 312
