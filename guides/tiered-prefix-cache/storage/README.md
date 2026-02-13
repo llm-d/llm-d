@@ -8,6 +8,8 @@ This guide explains how to offload the vLLM prefix cache (KV cache) to shared st
 
 * Have the [proper client tools installed on your local system](../../prereq/client-setup/README.md) to use this guide.
 * Ensure your cluster infrastructure is sufficient to [deploy high scale inference](../../prereq/infrastructure/README.md).
+* Configure and deploy your [Gateway control plane](../../prereq/gateway-provider/README.md).
+* Have the [Monitoring stack](../../../docs/monitoring/README.md) installed on your system.
 * Create a namespace for installation.
 
 ```bash
@@ -254,7 +256,7 @@ To remove the deployment:
 helm uninstall llm-d-infpool -n ${NAMESPACE}
 kubectl delete -f ./manifests/pvc.yaml -n ${NAMESPACE}
 kubectl delete -k ./manifests/vllm/<llm-d-fs-connector|lmcache-connector> -n ${NAMESPACE}
-kubectl delete -k ../recipes/gateway/<gke-l7-regional-external-managed|istio|kgateway|kgateway-openshift> -n ${NAMESPACE}
+kubectl delete -k ../../recipes/gateway/<gke-l7-regional-external-managed|istio|kgateway|kgateway-openshift> -n ${NAMESPACE}
 kubectl delete namespace ${NAMESPACE}
 ```
 

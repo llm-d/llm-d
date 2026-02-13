@@ -2,6 +2,10 @@
 
 This directory contains recipes for deploying the `llm-d-inference-gateway` and `llm-d-route`.
 
+## Prerequisites
+
+Before using these recipes, you must have a Kubernetes cluster with the corresponding gateway control plane installed. Refer to the [gateway provider doc](../../prereq/gateway-provider/README.md) for more information.
+
 ## Installation
 
 The following recipes are available for deploying the gateway and httproute.

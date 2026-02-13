@@ -9,6 +9,8 @@ This guide provides recipes to offload prefix cache to CPU RAM via the vLLM nati
 * All prerequisites from the [upper level](../README.md).
 * Have the [proper client tools installed on your local system](../../prereq/client-setup/README.md) to use this guide.
 * Ensure your cluster infrastructure is sufficient to [deploy high scale inference](../../prereq/infrastructure/README.md).
+* Configure and deploy your [Gateway control plane](../../prereq/gateway-provider/README.md).
+* Have the [Monitoring stack](../../../docs/monitoring/README.md) installed on your system.
 * Create a namespace for installation.
 
   ```bash
