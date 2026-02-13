@@ -42,12 +42,19 @@ if [ "$TARGETOS" = "ubuntu" ]; then
     setup_ubuntu_repos
     mapfile -t INSTALL_PKGS < <(load_layered_packages ubuntu "runtime-packages.json" "cuda")
     install_packages ubuntu "${INSTALL_PKGS[@]}"
+    if [ "${ENABLE_EFA}" != "true" ]; then
+        mapfile -t INSTALL_RDMA_PKGS < <(load_layered_packages ubuntu "runtime-rdma-packages.json" "cuda")
+        install_packages ubuntu "${INSTALL_RDMA_PKGS[@]}"
+    fi
     cleanup_packages ubuntu
-
 elif [ "$TARGETOS" = "rhel" ]; then
     setup_rhel_repos "$DOWNLOAD_ARCH"
     mapfile -t INSTALL_PKGS < <(load_layered_packages rhel "runtime-packages.json" "cuda")
     install_packages rhel "${INSTALL_PKGS[@]}"
+    if [ "${ENABLE_EFA}" != "true" ]; then
+        mapfile -t INSTALL_RDMA_PKGS < <(load_layered_packages rhel "runtime-rdma-packages.json" "cuda")
+        install_packages ubuntu "${INSTALL_RDMA_PKGS[@]}"
+    fi
     cleanup_packages rhel
 else
     echo "ERROR: Unsupported TARGETOS='$TARGETOS'. Must be 'ubuntu' or 'rhel'." >&2

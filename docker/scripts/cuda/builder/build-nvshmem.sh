@@ -39,8 +39,10 @@ if [ "${NVSHMEM_USE_GIT}" = "true" ]; then
     git clone "${NVSHMEM_REPO}" nvshmem_src && cd nvshmem_src
     git checkout -q "${NVSHMEM_VERSION}"
 else
-    wget "https://developer.download.nvidia.com/compute/redist/nvshmem/${NVSHMEM_VERSION}/source/nvshmem_src_cuda12-all-all-${NVSHMEM_VERSION}.tar.gz" \
-    -O "nvshmem_src_cuda${CUDA_MAJOR}.tar.gz"
+    curl -fsSL \
+    -o "nvshmem_src_cuda${CUDA_MAJOR}.tar.gz" \
+    "https://developer.download.nvidia.com/compute/redist/nvshmem/${NVSHMEM_VERSION}/source/nvshmem_src_cuda12-all-all-${NVSHMEM_VERSION}.tar.gz"
+
     tar -xf "nvshmem_src_cuda${CUDA_MAJOR}.tar.gz"
     cd nvshmem_src
 fi
@@ -173,6 +175,7 @@ cmake -S . -B build -G Ninja \
     "${CMAKE_EXTRA_FLAGS[@]}" \
     "${EFA_FLAGS[@]}"
 
+# explicitly build one target after re-setting up build with all bindings options (default is via discovery)
 ninja -C build "build_nvshmem4py_wheel_cu${CUDA_MAJOR}_${PYTHON_VERSION}"
 
 # Parse our python version to platforming tag, eg: 3.12 --> 312
