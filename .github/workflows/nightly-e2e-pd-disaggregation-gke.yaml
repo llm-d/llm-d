@@ -43,7 +43,6 @@ jobs:
         cd guides/pd-disaggregation
         yq e '.modelArtifacts.uri = "hf://Qwen/Qwen3-0.6B"' -i ms-pd/values.yaml
         yq e '.routing.modelName = "Qwen/Qwen3-0.6B"' -i ms-pd/values.yaml
-        yq e 'del(.decode.containers[0].args[] | select(. == "--tensor-parallel-size" or . == "4"))' -i ms-pd/values.yaml
         yq e 'del(.decode.containers[0].args[] | select(. == "--max-model-len" or . == "32000"))' -i ms-pd/values.yaml
         yq e 'del(.prefill.containers[0].args[] | select(. == "--max-model-len" or . == "32000"))' -i ms-pd/values.yaml
         yq e 'del(.decode.containers[0].resources.limits.memory)' -i ms-pd/values.yaml
@@ -60,6 +59,7 @@ jobs:
         yq e 'del(.prefill.containers[0].resources.requests."rdma/ib")' -i ms-pd/values.yaml
         yq e '.decode.containers[0].resources.limits["nvidia.com/gpu"] = "1"' -i ms-pd/values.yaml
         yq e '.decode.containers[0].resources.requests["nvidia.com/gpu"] = "1"' -i ms-pd/values.yaml
+        yq e '.decode.parallelism.tensor = 1' -i ms-pd/values.yaml
         yq e '.prefill.replicas = 1' -i ms-pd/values.yaml
         yq e '.decode.volumes[1].emptyDir.sizeLimit = "2Gi"' -i ms-pd/values.yaml
         yq e '.prefill.volumes[1].emptyDir.sizeLimit = "2Gi"' -i ms-pd/values.yaml
