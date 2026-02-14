@@ -323,7 +323,6 @@ ENV LANG="C.UTF-8" \
     EFA_PREFIX="/opt/amazon/efa" \
     CUDA_HOME="/usr/local/cuda"
 
-# LD_LIBRARY_PATH: torch path must be first to avoid ABI mismatches
 ENV LD_LIBRARY_PATH="\
 /opt/vllm/lib64/python${PYTHON_VERSION}/site-packages/torch/lib:\
 /usr/local/nvidia/lib:/usr/local/nvidia/lib64:\

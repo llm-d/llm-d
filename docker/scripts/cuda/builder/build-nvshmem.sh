@@ -110,7 +110,7 @@ if [ "${BUILD_DEBUG}" = "true" ]; then
     NVSHMEM_BUILD_PERF_TESTS=1
 fi
 
-# Configure our build directory such that targets for specific nvshmem4py bindings exsit
+# Configure our build directory such that targets for specific nvshmem4py bindings exist
 CMAKE_EXTRA_FLAGS+=(
     -DPython3_EXECUTABLE="${VIRTUAL_ENV}/bin/python"
     -DPython3_ROOT_DIR="${VIRTUAL_ENV}"
