@@ -1,8 +1,0 @@
-name: Check Typos
-on:
-  pull_request:
-  push:
-
-jobs:
-  typos:
-    uses: llm-d/llm-d-infra/.github/workflows/reusable-typos.yml@main
