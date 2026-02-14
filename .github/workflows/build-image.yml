@@ -668,8 +668,6 @@ jobs:
           secrets: |
             aws_access_key_id=${{ secrets.AWS_ACCESS_KEY_ID_S3_BUCKET_ONLY }}
             aws_secret_access_key=${{ secrets.AWS_SECRET_ACCESS_KEY_S3_BUCKET_ONLY }}
-            # subman_org=${{ secrets.SUBMAN_ORG }}
-            # subman_activation_key=${{ secrets.SUBMAN_ACTIVATION_KEY }}
         env:
           DOCKER_BUILDKIT: "1"
           BUILDKIT_PROGRESS: "plain"

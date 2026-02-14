@@ -3,9 +3,6 @@ set -Eeux
 
 # installs runtime packages for CUDA image
 #
-# Required docker secret mounts:
-# - /run/secrets/subman_org: Subscription Manager Organization - used if on a ubi based image for entitlement
-# - /run/secrets/subman_activation_key: Subscription Manager Activation key - used if on a ubi based image for entitlement
 # Required environment variables:
 # - PYTHON_VERSION: Python version to install (e.g., 3.12)
 # - CUDA_MAJOR: CUDA major version (e.g., 12)

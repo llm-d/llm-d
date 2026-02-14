@@ -4,10 +4,6 @@ set -Eeux
 
 # purpose: Install EFA
 # -------------------------------
-# Required docker secret mounts:
-# - /run/secrets/subman_org: Subscription Manager Organization - used if on a ubi based image for entitlement
-# - /run/secrets/subman_activation_key: Subscription Manager Activation key - used if on a ubi based image for entitlement
-# -------------------------------
 # Optional environment variables:
 # - ENABLE_EFA: Enable EFA installation (true/false, default: false)
 # - EFA_INSTALLER_VERSION: Version of AWS EFA installer to download (default: 1.46.0)
