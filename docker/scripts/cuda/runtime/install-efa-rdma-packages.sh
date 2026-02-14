@@ -36,9 +36,9 @@ fi
 update_system "${TARGETOS}"
 
 if [ "${TARGETPLATFORM}" = "linux/amd64" ]; then
-    rpm -ivh --nodeps /tmp/packages/runtime/rpms/amd64/*.rpm
+    rpm -ivh --nodeps /tmp/packages/rpms/runtime/amd64/*.rpm
 elif [ "${TARGETPLATFORM}" = "linux/arm64" ]; then
-    rpm -ivh --nodeps /tmp/packages/runtime/rpms/arm64/*.rpm
+    rpm -ivh --nodeps /tmp/packages/rpms/runtime/arm64/*.rpm
 fi
 
 EFA_INSTALLER_URL="https://efa-installer.amazonaws.com"
