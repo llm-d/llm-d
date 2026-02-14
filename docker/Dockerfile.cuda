@@ -358,13 +358,12 @@ RUN TARGETOS=${TARGETOS} /tmp/install-runtime-packages.sh && \
 
 # Copy EFA installation if enabled
 # EFA libs are copied to /usr/lib64 during install-efa.sh and saved to /tmp/efa_libs
+COPY --from=builder /opt/amazon/efa /opt/amazon/efa/
 COPY --from=builder /tmp/efa_libs /tmp/efa_libs
 RUN if [ "${ENABLE_EFA}" = "true" ] && [ "${TARGETOS:-rhel}" = "rhel" ] && [ -d /tmp/efa_libs ]; then \
-        mkdir -p /opt/amazon/efa && \
         cp -a /tmp/efa_libs/* /usr/lib64/ || true; \
     fi && \
     rm -rf /tmp/efa_libs
-
 
 # Copy gdrcopy libraries from builder
 # Install to /usr/local/lib (always present) and multiarch lib dir

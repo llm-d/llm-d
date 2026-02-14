@@ -15,7 +15,7 @@ set -Eeu
 if [ "${ENABLE_EFA}" != "true" ] || [ "$TARGETOS" = "ubuntu" ] || [ -z "${EFA_INSTALLER_VERSION}" ]; then
     echo "EFA installation skipped (ENABLE_EFA=${ENABLE_EFA}, TARGETOS=${TARGETOS})"
     # Create empty folder so Dockerfile COPY doesn't fail
-    mkdir -p /tmp/efa_libs
+    mkdir -p /tmp/efa_libs /opt/amazon/efa
     exit 0
 fi
 
