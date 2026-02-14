@@ -1,0 +1,3 @@
+.github/workflows/*.lock.yml linguist-generated=true merge=ours
+
+.github/workflows/*.campaign.g.md linguist-generated=true merge=ours
