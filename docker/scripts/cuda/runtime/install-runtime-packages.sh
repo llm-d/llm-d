@@ -20,7 +20,7 @@ if [ ! -f "$UTILS_SCRIPT" ]; then
     echo "ERROR: package-utils.sh not found" >&2
     exit 1
 fi
-# shellcheck source=docker/scripts/cuda/common/package-utils.sh
+# shellcheck source=/dev/null
 . "$UTILS_SCRIPT"
 
 DOWNLOAD_ARCH=$(get_download_arch)
@@ -39,6 +39,8 @@ if [ "$TARGETOS" = "ubuntu" ]; then
     setup_ubuntu_repos
     mapfile -t INSTALL_PKGS < <(load_layered_packages ubuntu "runtime-packages.json" "cuda")
     install_packages ubuntu "${INSTALL_PKGS[@]}"
+    # This if statement is redundent right now (currently no EFA on our ubuntu images),
+    # but its included in case we figure out EFA on Ubuntu images.
     if [ "${ENABLE_EFA}" != "true" ]; then
         mapfile -t INSTALL_RDMA_PKGS < <(load_layered_packages ubuntu "runtime-rdma-packages.json" "cuda")
         install_packages ubuntu "${INSTALL_RDMA_PKGS[@]}"
@@ -48,6 +50,7 @@ elif [ "$TARGETOS" = "rhel" ]; then
     setup_rhel_repos "$DOWNLOAD_ARCH"
     mapfile -t INSTALL_PKGS < <(load_layered_packages rhel "runtime-packages.json" "cuda")
     install_packages rhel "${INSTALL_PKGS[@]}"
+    # # If not using EFA, runtime-rdma-packages file owns rdma installation
     if [ "${ENABLE_EFA}" != "true" ]; then
         mapfile -t INSTALL_RDMA_PKGS < <(load_layered_packages rhel "runtime-rdma-packages.json" "cuda")
         install_packages rhel "${INSTALL_RDMA_PKGS[@]}"

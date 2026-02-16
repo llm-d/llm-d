@@ -37,17 +37,15 @@ if [ "$TARGETOS" = "ubuntu" ]; then
     setup_ubuntu_repos
     mapfile -t INSTALL_PKGS < <(load_layered_packages ubuntu "builder-packages.json" "cuda")
     install_packages ubuntu "${INSTALL_PKGS[@]}"
-
-
     cleanup_packages ubuntu
 elif [ "$TARGETOS" = "rhel" ]; then
     setup_rhel_repos "$DOWNLOAD_ARCH"
     mapfile -t INSTALL_PKGS < <(load_layered_packages rhel "builder-packages.json" "cuda")
     install_packages rhel "${INSTALL_PKGS[@]}"
     
-    # if using efa, we already installed hwloc
+    # if using efa, we already installed hwloc as part of base RPMs
     if [ "${ENABLE_EFA}" != "true" ]; then
-        # Install hwloc-libs from entitlement RPMs using rpm directly with --nodeps
+        # Install entitlement RPMs using rpm directly with --nodeps
         # The system glibc already provides all required symbols (verified: GLIBC_2.2.5 through 2.34)
         # but dnf fails to recognize this when installing from local RPM files
         if [ "${TARGETPLATFORM}" = "linux/amd64" ]; then
