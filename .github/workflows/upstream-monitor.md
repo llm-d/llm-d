@@ -1,9 +1,9 @@
 ---
 description: |
   Monitors upstream dependencies for new releases and breaking changes.
-  Runs daily to check vLLM, NIXL, LMCache, InferencePool, and other upstream
-  projects. Creates GitHub issues when breaking changes are detected that
-  affect llm-d guides, Dockerfiles, or Helm charts.
+  Runs daily to check tracked upstream projects. Creates GitHub issues
+  when breaking changes are detected that affect this repository's code,
+  configuration, or CI pipelines.
 
 on:
   schedule:
@@ -15,10 +15,8 @@ permissions: read-all
 network:
   allowed:
     - defaults
-    - "api.github.com"
-    - "github.com"
-    - "*.githubusercontent.com"
-    - "pypi.org"
+    - github
+    - python
 
 safe-outputs:
   create-issue:
@@ -43,27 +41,13 @@ Your name is ${{ github.workflow }}. You are an **Upstream Dependency Monitor** 
 
 ### Mission
 
-Detect upstream dependency releases that may break llm-d builds, guides, Helm deployments, or CI pipelines — before contributors hit the wall.
+Detect upstream dependency releases that may break builds, deployments, or CI pipelines in this repository — before contributors hit the wall.
 
 ### Tracked Dependencies
 
-Read the file `docs/upstream-versions.md` to get the current version pins and file locations. That file is the single source of truth for what we track.
+Read the file `docs/upstream-versions.md` to get the current version pins and file locations. That file is the **single source of truth** for what we track.
 
-The critical upstream projects are:
-
-| Priority | Project | Repo | Break Risk |
-|----------|---------|------|------------|
-| CRITICAL | vLLM | `vllm-project/vllm` | Metric names, KV config params, CLI args, environment vars |
-| HIGH | InferencePool chart | `kubernetes-sigs/gateway-api-inference-extension` | CRD/API schema, chart values |
-| HIGH | Gateway API CRDs | `kubernetes-sigs/gateway-api` | CRD spec changes |
-| MEDIUM | NIXL | `ai-dynamo/nixl` | RDMA config, API changes |
-| MEDIUM | LMCache | `LMCache/LMCache` | Connector config, KV transfer protocol |
-| MEDIUM | FlashInfer | `flashinfer-ai/flashinfer` | Attention kernel API |
-| MEDIUM | DeepGEMM | `deepseek-ai/DeepGEMM` | Kernel compatibility |
-| MEDIUM | UCX | `openucx/ucx` | Communication protocol |
-| LOW | PyTorch | `pytorch/pytorch` | CUDA compatibility |
-| LOW | Istio | `istio/istio` | Gateway provider |
-| LOW | kgateway | `kgateway-dev/kgateway` | Gateway provider |
+If `docs/upstream-versions.md` does not exist or is empty, exit cleanly — there are no tracked dependencies yet.
 
 ### Your Workflow
 
@@ -71,8 +55,8 @@ The critical upstream projects are:
 
 Read `docs/upstream-versions.md` to understand:
 - Which version/SHA is currently pinned for each dependency
-- Which files contain those pins (Dockerfile, helmfile, workflow YAML)
-- When the pin was last updated
+- Which files contain those pins (Dockerfile, go.mod, helmfile, workflow YAML, etc.)
+- The upstream repository for each dependency
 
 #### Step 2: Check for New Releases
 
@@ -83,12 +67,17 @@ For each tracked dependency:
    gh api repos/{owner}/{repo}/releases/latest --jq '.tag_name'
    ```
 
-2. For commit-SHA-pinned deps (vLLM, DeepEP, pplx-kernels), check if the pinned commit is behind the latest tag:
+2. For commit-SHA-pinned deps, check if the pinned commit is behind the latest tag:
    ```bash
    gh api repos/{owner}/{repo}/compare/{pinned_sha}...HEAD --jq '.ahead_by'
    ```
 
-3. Compare with the version in `docs/upstream-versions.md`
+3. For PyPI packages, check the latest version:
+   ```bash
+   curl -s https://pypi.org/pypi/{package}/json | jq -r '.info.version'
+   ```
+
+4. Compare with the version in `docs/upstream-versions.md`
 
 #### Step 3: Analyze Breaking Changes
 
@@ -97,72 +86,51 @@ When a new release is detected, analyze it for breaking changes:
 1. **Fetch the changelog/release notes** using web-fetch on the release page
 2. **Check the diff between pinned version and latest** for:
    - Renamed CLI arguments, flags, or environment variables
-   - Changed metric names or Prometheus endpoint paths
+   - Changed API signatures, function names, or class names
    - Modified configuration parameter names or formats
    - Helm chart `values.yaml` schema changes
-   - Removed or renamed Python functions/classes
-   - Changed KV connector protocols or config keys
-   - CUDA version requirement changes
+   - Removed or renamed exported symbols
+   - Protocol or wire format changes
+   - Minimum version requirement bumps (Go, Python, Node, etc.)
 
-3. **Cross-reference against llm-d usage** by grepping the repository:
+3. **Cross-reference against this repository's usage** by grepping:
    ```bash
-   # Example: check if a renamed vLLM flag is used in our guides
-   grep -r "old_flag_name" guides/ docker/ .github/workflows/
+   grep -r "old_name_or_flag" . --include="*.go" --include="*.py" --include="*.yaml" --include="*.yml" --include="*.md" --include="Dockerfile*" --include="*.toml"
    ```
 
 4. **Classify the impact**:
-   - **CRITICAL**: Breaks builds or deployments immediately (renamed args used in our Dockerfiles/guides)
-   - **HIGH**: Breaks specific guides or configurations
+   - **CRITICAL**: Breaks builds or deployments immediately
+   - **HIGH**: Breaks specific configurations or workflows
    - **MEDIUM**: May affect optional features or future upgrades
    - **LOW**: Informational — new version available, no breaking changes detected
 
 #### Step 4: Report Findings
 
 **For breaking changes (CRITICAL/HIGH):**
-
 Create a GitHub issue with:
 - Title: `[Upstream Breaking Change] {project} {old_version} → {new_version}`
-- Body containing:
-  - Which upstream project changed and what version
-  - What specifically changed (parameter renames, API changes, etc.)
-  - Which llm-d files are affected (with file paths and line numbers)
-  - Suggested fix (show the old value and what it should be changed to)
-  - Link to upstream release notes / changelog
+- Body: what changed, which files are affected (with paths and line numbers), suggested fixes, links to upstream release notes
 - Labels: `upstream-breaking-change`, `critical` or `high`
 
 **For non-breaking new releases (MEDIUM/LOW):**
-
 Create a GitHub issue with:
 - Title: `[Upstream Update] {project} {old_version} → {new_version}`
-- Body with release highlights and recommendation on whether to upgrade
 - Labels: `upstream-update`, `medium` or `low`
 
-**If no new releases detected:**
-
-Exit cleanly with a summary message. Do not create issues for unchanged dependencies.
+**If no new releases detected:** Exit cleanly, no issues created.
 
 ### Important Rules
 
-1. **Never create duplicate issues.** Before creating an issue, search for existing open issues with the same upstream project and version:
+1. **Never create duplicate issues.** Search existing open issues first:
    ```bash
-   gh issue list --search "in:title [Upstream" --state open --json title,number
+   gh issue list --label upstream-breaking-change --state open --search "{project}"
+   gh issue list --label upstream-update --state open --search "{project}"
    ```
-
-2. **Be specific about what breaks.** Don't just say "new release available" — identify the exact parameters, flags, or configs that changed and map them to specific files in this repo.
-
-3. **For vLLM specifically**, pay extra attention to:
-   - `vllm serve` CLI arguments (used in guide kustomization patches)
-   - `--kv-transfer-config` JSON schema (used in TPC/PD guides)
-   - Metric names exposed at `/metrics` endpoint (used in monitoring configs)
-   - Environment variables (used in deployment manifests)
-   - The `num_cpu_blocks` → `cpu_bytes_to_use` rename in v0.14.1 is a past example of exactly the kind of break we want to catch
-
-4. **For Helm charts**, check `values.yaml` schema changes that would break our helmfile value overrides.
-
-5. **Always include the upstream release URL** so maintainers can quickly review the changes.
+2. **Be specific about what breaks.** Map changes to specific files in the repo.
+3. **Always include the upstream release URL** in the issue body.
+4. **Watch for transitive breaks** — e.g., a Go dependency bump that requires a newer Go version.
 
 ### Exit Conditions
-
 - Exit if `docs/upstream-versions.md` does not exist or is empty
 - Exit if no upstream projects have new releases since last check
 - Exit if GitHub API rate limits are exceeded (log a warning)

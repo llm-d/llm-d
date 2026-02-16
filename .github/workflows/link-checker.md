@@ -14,8 +14,7 @@ permissions: read-all
 network:
   allowed:
     - defaults
-    - "*.github.com"
-    - "*.githubusercontent.com"
+    - github
 
 safe-outputs:
   add-comment:
