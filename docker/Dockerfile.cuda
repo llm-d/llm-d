@@ -132,6 +132,7 @@ RUN EFA_MODE="builder" /tmp/install-efa.sh && \
 # Note: DNF/YUM will automatically recognize RDMA packages already installed by EFA
 # and skip reinstallation, so no explicit filtering needed
 COPY docker/scripts/cuda/common/package-utils.sh /tmp/package-utils.sh
+COPY docker/packages /tmp/packages
 COPY docker/scripts/cuda/builder/install-base-packages.sh /tmp/install-base-packages.sh
 RUN --mount=type=cache,target=/var/cache/dnf \
     /tmp/install-base-packages.sh && \
