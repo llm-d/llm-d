@@ -36,6 +36,7 @@ jobs:
       namespace: llm-d-nightly-inference
       helmfile_env: ${{ github.event.inputs.helmfile_env || 'istio' }}
       gateway_type: ${{ github.event.inputs.helmfile_env || 'istio' }}
+      accelerator_type: H100
       required_gpus: 2
       recommended_gpus: 4
       pod_wait_timeout: '30m'

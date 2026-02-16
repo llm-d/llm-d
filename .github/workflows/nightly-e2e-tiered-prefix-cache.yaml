@@ -38,6 +38,7 @@ jobs:
       namespace: llm-d-nightly-pfc-cpu
       helmfile_env: ${{ github.event.inputs.gateway_type || 'istio' }}
       gateway_type: ${{ github.event.inputs.gateway_type || 'istio' }}
+      accelerator_type: H100
       required_gpus: 1
       recommended_gpus: 2
       pod_wait_timeout: '30m'
