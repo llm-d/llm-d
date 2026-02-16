@@ -123,9 +123,10 @@ ENV LANG="C.UTF-8" \
 
 COPY docker/scripts/cuda/common/package-utils.sh /tmp/package-utils.sh
 COPY docker/packages /tmp/packages
-COPY docker/scripts/cuda/builder/install-efa.sh /tmp/install-efa.sh
-RUN /tmp/install-efa.sh && \
-    rm -f /tmp/install-efa.sh /tmp/package-utils.sh
+COPY docker/scripts/cuda/common/install-efa.sh /tmp/install-efa.sh
+RUN EFA_MODE="builder" /tmp/install-efa.sh && \
+    rm -f /tmp/install-efa.sh /tmp/package-utils.sh && \
+    rm -rf /tmp/packages
 
 # Install base packages and EPEL in single layer
 # Note: DNF/YUM will automatically recognize RDMA packages already installed by EFA
@@ -343,26 +344,23 @@ ${LD_LIBRARY_PATH}" \
 # Install runtime RDMA core packages through AWS EFA installer if EFA is enabled
 COPY docker/scripts/cuda/common/package-utils.sh /tmp/package-utils.sh
 COPY docker/packages /tmp/packages
-COPY docker/scripts/cuda/runtime/install-efa-rdma-packages.sh /tmp/install-efa-rdma-packages.sh
-RUN /tmp/install-efa-rdma-packages.sh && \
-    rm -rf /tmp/install-efa-rdma-packages.sh /tmp/package-utils.sh /tmp/packages
+COPY docker/scripts/cuda/common/install-efa.sh /tmp/install-efa.sh
+RUN EFA_MODE="runtime" /tmp/install-efa.sh && \
+    rm -f /tmp/install-efa.sh /tmp/package-utils.sh && \
+    rm -rf /tmp/packages
 
 # Install runtime dependencies
 COPY docker/scripts/cuda/common/package-utils.sh /tmp/package-utils.sh
 COPY docker/packages /tmp/packages
 COPY docker/scripts/cuda/runtime/install-runtime-packages.sh /tmp/install-runtime-packages.sh
-RUN TARGETOS=${TARGETOS} /tmp/install-runtime-packages.sh && \
+RUN /tmp/install-runtime-packages.sh && \
     rm -f /tmp/install-runtime-packages.sh /tmp/package-utils.sh && \
     rm -rf /tmp/packages
 
 # Copy EFA installation if enabled
 # EFA libs are copied to /usr/lib64 during install-efa.sh and saved to /tmp/efa_libs
 COPY --from=builder /opt/amazon/efa /opt/amazon/efa/
-COPY --from=builder /tmp/efa_libs /tmp/efa_libs
-RUN if [ "${ENABLE_EFA}" = "true" ] && [ "${TARGETOS:-rhel}" = "rhel" ] && [ -d /tmp/efa_libs ]; then \
-        cp -a /tmp/efa_libs/* /usr/lib64/ || true; \
-    fi && \
-    rm -rf /tmp/efa_libs
+COPY --from=builder /tmp/efa_libs/* /usr/lib64/
 
 # Copy gdrcopy libraries from builder
 # Install to /usr/local/lib (always present) and multiarch lib dir
