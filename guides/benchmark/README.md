@@ -602,7 +602,7 @@ The harness workload configuration file, as was used, is copied into the the exp
 
 ### Text reports
 
-All harnesses capture, more or less, the same metrics (e.g., TTFT, TPOT, ITL). However, differet harnesses produce different result files. In our case, `inference-perf` creates a results file for each stage (6 files), a summary file for all stages, and a (huge) details file with per-request metrics.
+All harnesses capture, more or less, the same metrics (e.g., TTFT, TPOT, ITL). However, different harnesses produce different result files. In our case, `inference-perf` creates a results file for each stage (6 files), a summary file for all stages, and a (huge) details file with per-request metrics.
 
 In this example there are 6 workload stages. For each of these stages, there is a results `json` file in harness-specific format and a standardized benchmark `yaml` report in a harness-agnostic format. In this case, the `inference-perf` benchmark also creates a summary report and a (huge) detailed per-request report. The `analysis` folder includes plots of the same data.
 
@@ -804,7 +804,7 @@ In this example there are 6 workload stages. For each of these stages, there is 
 
 ### Standardized benchmark report
 
-To allow easier comparisson between results from different harnesses, the benchmark tools analyze the proprietary formats to produce a standardized report with the common metrics for each experiment stage. For more details, see [Benchmark Report](https://github.com/llm-d/llm-d-benchmark/blob/main/docs/benchmark_report.md).
+To allow easier comparison between results from different harnesses, the benchmark tools analyze the proprietary formats to produce a standardized report with the common metrics for each experiment stage. For more details, see [Benchmark Report](https://github.com/llm-d/llm-d-benchmark/blob/main/docs/benchmark_report.md).
 
 ### Graphical report
 

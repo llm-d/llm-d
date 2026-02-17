@@ -96,7 +96,7 @@ Set your storage class which will be used later to provision the PVC.
 export STORAGE_CLASS=lustre
 ```
 
-To provision a managed GCP Lustre instance on GKE and configure the correspoinding `StorageClass`, follow the [GCP Lustre guide](./manifests/backends/lustre/README.md).
+To provision a managed GCP Lustre instance on GKE and configure the corresponding `StorageClass`, follow the [GCP Lustre guide](./manifests/backends/lustre/README.md).
 
 <!-- TABS:END -->
 

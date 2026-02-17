@@ -8,7 +8,7 @@ modelArtifacts:
   labels:
     llm-d.ai/inference-serving: "true"
     llm-d.ai/guide: "pd-disaggregation"
-    llm-d.ai/hardware-vairant: "gpu"
+    llm-d.ai/hardware-variant: "gpu"
     llm-d.ai/accelerator-vendor: "nvidia"
     llm-d.ai/model: "gpt-oss-120b"
 

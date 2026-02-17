@@ -28,7 +28,7 @@ routing:
     secure: false
 
 decode:
-  parallelism:  # controlls count of specialized hardware devices allocated
+  parallelism:  # controls count of specialized hardware devices allocated
     tensor: 1
   create: true
   replicas: 1

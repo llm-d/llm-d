@@ -9,7 +9,7 @@ modelArtifacts:
   labels:
     llm-d.ai/inference-serving: "true"
     llm-d.ai/guide: "inference-scheduling"
-    llm-d.ai/hardware-vairant: "cpu"
+    llm-d.ai/hardware-variant: "cpu"
     llm-d.ai/model: "Llama-3.2-3B-Instruct"
 
 accelerator:
@@ -19,7 +19,7 @@ accelerator:
 routing:
   proxy:
     enabled: false  # removes sidecar from deployment - no PD in inference scheduling
-    targetPort: 8000  # controlls vLLM port to matchup with sidecar if deployed
+    targetPort: 8000  # controls vLLM port to matchup with sidecar if deployed
 
 decode:
   create: true

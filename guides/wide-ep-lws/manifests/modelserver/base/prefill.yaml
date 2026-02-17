@@ -58,7 +58,7 @@ spec:
                 #################
                 START_RANK=$(( ${LWS_WORKER_INDEX:-0} * DP_SIZE_LOCAL ))
 
-                # --data-parallel-hybrid-lb: Use exernal load balancing across nodes, and internal load balancing within a node
+                # --data-parallel-hybrid-lb: Use external load balancing across nodes, and internal load balancing within a node
                 # --enable-expert-parallel: Use TPxDP in attention, EP in MoE layers
                 # --async-scheduling: Reduce white space between engine steps
                 # --enable-dbo: Dual batch overlap (DBO) overlaps compute with collective communication.

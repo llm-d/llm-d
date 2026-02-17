@@ -111,7 +111,7 @@ helmfile apply -f nvidia-device-plugin.helmfile.yaml
 
 ### Enabling Node Resource Interface (NRI)
 
-AKS worker nodes enforce a default maximum locked memory limit (`ulimit -l`) of 64 KiB per container. This limit is insufficient for vLLM's NIXL connector, which require substantially higher locked memory allocations. To address this limitation, enable the Node Resource Interface (NRI) on all GPU nodes in your cluster. NRI allows the integration of plugins that can adjust maxium locked memory limit for containers.
+AKS worker nodes enforce a default maximum locked memory limit (`ulimit -l`) of 64 KiB per container. This limit is insufficient for vLLM's NIXL connector, which require substantially higher locked memory allocations. To address this limitation, enable the Node Resource Interface (NRI) on all GPU nodes in your cluster. NRI allows the integration of plugins that can adjust maximum locked memory limit for containers.
 
 #### Modifying the containerd Configuration
 

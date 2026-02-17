@@ -42,7 +42,7 @@ cd ocp-gpu-setup
 1. Check if you have the default machineset available (in the web console, see Compute -> MahineSets). If not, then run the above command twice. 
 1. Once the first gpu machine set is provisioned, set the MachineSet count to 2.
 1. Configure the default MachineSet count (or extra one provisioned above) to 6.
-1. After the machines have provisioned the configuration should look similiar to the following:
+1. After the machines have provisioned the configuration should look similar to the following:
 ![machinesets](./images/machinesets.png)
 
 #### Deploy the Supporting Operators

@@ -8,14 +8,14 @@ modelArtifacts:
   labels:
     llm-d.ai/inference-serving: "true"
     llm-d.ai/guide: "inference-scheduling"
-    llm-d.ai/hardware-vairant: "tpu"
-    llm-d.ai/hardware-vendor: "goolge"
+    llm-d.ai/hardware-variant: "tpu"
+    llm-d.ai/hardware-vendor: "google"
     llm-d.ai/model: Qwen3-Coder-480B-A35B-Instruct-FP8
 
 routing:
   proxy:
     enabled: false  # removes sidecar from deployment - no PD in inference scheduling
-    targetPort: 8000  # controlls vLLM port to matchup with sidecar if deployed
+    targetPort: 8000  # controls vLLM port to matchup with sidecar if deployed
 
 accelerator:
   type: "google"

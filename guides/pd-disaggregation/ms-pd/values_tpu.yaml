@@ -12,8 +12,8 @@ modelArtifacts:
   labels:
     llm-d.ai/inference-serving: "true"
     llm-d.ai/guide: "pd-disaggregation"
-    llm-d.ai/hardware-vairant: "tpu"
-    llm-d.ai/hardware-vendor: "goolge"
+    llm-d.ai/hardware-variant: "tpu"
+    llm-d.ai/hardware-vendor: "google"
     llm-d.ai/model: "Llama-3.3-70B-Instruct"
 
 routing:

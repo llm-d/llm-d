@@ -17,10 +17,10 @@ modelArtifacts:
 
 routing:
   proxy:
-    targetPort: 8000  # controlls vLLM port to matchup with sidecar if deployed
+    targetPort: 8000  # controls vLLM port to matchup with sidecar if deployed
     enabled: false  # removes sidecar from deployment - no PD in inference scheduling
 
-accelerator:  # controlls specialized hardware Type
+accelerator:  # controls specialized hardware Type
   type: nvidia
 
 # DigitalOcean-specific container configuration
