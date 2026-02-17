@@ -38,17 +38,18 @@ This guide explains how to deploy EPP with latency predictor sidecars, configure
 
 ## Prerequisites
 
-- **Install the Inference Gateway extension**
-  Follow the official installation steps here:
-  <https://gateway-api-inference-extension.sigs.k8s.io/guides/>
+- **Kubernetes cluster** with Gateway API CRDs installed
+- **Helmfile** installed (<https://helmfile.readthedocs.io/>)
+- **Helm** v3+ installed
+- **kubectl** configured to access your cluster
+- **Docker/BuildKit** (if building custom images)
+- Access to container registry for EPP and latency predictor images
 
-- **Build your EPP image** from the experimental branch:
+### Build EPP and Latency Predictor Images (Optional)
 
-    ***Prerequisites***
-  - Docker/BuildKit installed
-  - Access to a container registry (e.g., GCP Artifact Registry, Docker Hub, ECR)
+If you want to build custom images from the experimental branch:
 
-    ***Clone & checkout***
+1. **Clone & checkout the experimental branch**
 
     ```bash
     git clone https://github.com/kubernetes-sigs/gateway-api-inference-extension.git
@@ -56,46 +57,80 @@ This guide explains how to deploy EPP with latency predictor sidecars, configure
     git checkout slo-prediction-experimental
     ```
 
-    ***Set your target registry and tag***
+2. **Build EPP image**
 
     ```bash
     export IMG="<your-registry>/epp:slo-prediction-$(git rev-parse --short HEAD)"
-    ```
-
-    ***Build the image***
-
-    ```bash
     docker build -t "$IMG" -f Dockerfile .
-    ```
-
-    ***Push the image***
-
-    ```bash
     docker push "$IMG"
     ```
 
-- **Build your EPP Sidecars** from the same experimental branch as described here:
-  <https://github.com/kubernetes-sigs/gateway-api-inference-extension/tree/slo-prediction-experimental/latencypredictor-v1>
+3. **Build latency predictor sidecars**
+   Follow instructions at <https://github.com/kubernetes-sigs/gateway-api-inference-extension/tree/slo-prediction-experimental/latencypredictor-v1>
 
 ---
 
-## Testing Predicted Latency based Scheduling
+## Deployment
 
-Once prerequisites are met, you can validate predicted latency based scheduling:
+This guide uses helmfile to orchestrate deployment of:
+- Infrastructure components (inference gateway)
+- Gateway API Inference Extension (GAIE) with latency predictor sidecars
+- Model servers (vLLM)
+- HTTPRoute configuration
 
-1. **Apply your InferencePool/EPP manifest**
-   - Consult the [example manifest in the gateway-api-inference-extension repository](https://github.com/kubernetes-sigs/gateway-api-inference-extension/blob/slo-prediction-experimental/config/manifests/inferencepool-resources-lp.yaml)
-   - Update the EPP container and sidecar images to the ones you built.
-   - Confirm that the `Deployment` includes the EPP container, training sidecar, and three prediction sidecars, each with their own volumes.
-   - Ensure the `plugins-config` ConfigMap defines both `default` and `slo` profiles.
+### File Structure
 
-2. **Check readiness**
-   - Verify pod status: `kubectl get pods` → all containers `Running/Ready`.
+```
+predicted-latency-based-scheduling/
+├── helmfile.yaml.gotmpl         # Helmfile orchestration
+├── gaie-latency/
+│   └── values.yaml              # InferencePool & EPP configuration
+├── ms-latency/
+│   └── values.yaml              # Model server configuration
+├── httproute.yaml               # HTTPRoute for non-GKE environments
+└── httproute.gke.yaml           # HTTPRoute for GKE environments
+```
+
+### Deploy with Helmfile
+
+1. **Review and customize configuration**
+   - Edit `gaie-latency/values.yaml` to set your EPP and latency predictor images
+   - Edit `ms-latency/values.yaml` to configure model servers
+   - Update helmfile environment if needed (default: `istio`, other options: `kgateway`, `gke`, `agentgateway`)
+
+2. **Deploy all components**
+
+    ```bash
+    helmfile sync
+    ```
+
+    This will deploy:
+    - `infra-latency`: Inference gateway infrastructure
+    - `gaie-latency`: InferencePool with EPP and latency predictor sidecars
+    - `ms-latency`: Model servers (3 decode replicas, 1 prefill replica)
+
+3. **Apply HTTPRoute**
+
+    For non-GKE environments:
+    ```bash
+    kubectl apply -f httproute.yaml
+    ```
+
+    For GKE:
+    ```bash
+    kubectl apply -f httproute.gke.yaml
+    ```
+
+### Verify Deployment
+
+1. **Check readiness**
+   - Verify pod status: `kubectl get pods -n llm-d-latency` → all containers `Running/Ready`
+   - Get gateway IP: `kubectl get gateway infra-latency-inference-gateway -n llm-d-latency`
    - Training sidecar health: `curl http://<pod-ip>:8000/readyz`
-   - Prediction sidecar health: `curl http://<pod-ip>:8001/readyz` (and 8002, 8003).
-   - EPP gRPC health: port `9003` (liveness/readiness probes).
+   - Prediction sidecar health: `curl http://<pod-ip>:8001/readyz`
+   - EPP gRPC health: port `9003` (liveness/readiness probes)
 
-3. **Send traffic**
+2. **Send traffic**
    - **Baseline:** run requests using the **`default`** profile (no prediction headers).
    - **SLO-aware:** run requests with the **`slo`** profile and set
      `x-prediction-based-scheduling: true`, optionally adding SLO headers like `x-slo-ttft-ms` and `x-slo-tpot-ms`.
@@ -147,7 +182,8 @@ Once prerequisites are met, you can validate predicted latency based scheduling:
    - The final SSE frame includes both **predictions and actuals** so you can validate accuracy (e.g., `predicted_ttft_ms` vs `ttft_ms`).
    - TPOTs are sampled every 200th token and surfaced in the arrays like `tpot_observations_ms`.
 
-4. **Validate predictions in logs**
+3. **Validate predictions in logs**
+
    Tail EPP logs at verbosity `-v=4`. For each request you should see:
 
    - **Profile selection**
@@ -187,152 +223,253 @@ Once prerequisites are met, you can validate predicted latency based scheduling:
    - Scores reflect predicted headroom vs SLOs.
    - The final pod was chosen based on SLO scorer output.
 
-5. **Confirm request shedding (optional)**
+4. **Confirm request shedding (optional)**
+
    If you send requests with **priority < 0** and no pod can meet both TTFT & TPOT SLOs, logs should show the request being **shed** instead of placed in the negative bucket.
 
 ---
 
 ## Configuration
 
-This section details the container setup, ConfigMaps, and profile configuration needed to enable prediction-based scheduling.
+Configuration is managed through Helm values files. The main configuration files are:
+- `gaie-latency/values.yaml`: InferencePool, EPP, and latency predictor configuration
+- `ms-latency/values.yaml`: Model server configuration
 
-### Sidecars & EPP containers in the Deployment
+### InferencePool & EPP Configuration (`gaie-latency/values.yaml`)
 
-#### EPP container
+Key configuration sections in `gaie-latency/values.yaml`:
 
-- **Image**: `epp`
-- **Args**
-  - `--config-file=/config/default-plugins.yaml`
-  - `--enable-latency-predictor`
-- **Env**
-  - `PREDICTION_SERVER_URL`: CSV of in-pod predictor endpoints
-  - `TRAINING_SERVER_URL`: `http://localhost:8000`
-  - `LATENCY_MAX_SAMPLE_SIZE`
-  - `NEG_HEADROOM_TTFT_WEIGHT`, `NEG_HEADROOM_TPOT_WEIGHT`
-  - `HEADROOM_TTFT_WEIGHT`, `HEADROOM_TPOT_WEIGHT`
-  - `HEADROOM_SELECTION_STRATEGY`
-  - `SLO_BUFFER_FACTOR`
-
-**Training sidecar (`training-server`)**
-
-- **Port**: 8000
-- **EnvFrom**: `latency-predictor-config`
-- **Volume**: `/models`
-
-**Prediction sidecars (`prediction-server-1/2/3`)**
-
-- **Ports**: 8001, 8002, 8003
-- **EnvFrom**: `prediction-server-config`
-- **Volumes**: `/server_models`
-
----
-
-### ConfigMaps
-
-**1. `latency-predictor-config` (training)**
+#### EPP Image Configuration
 
 ```yaml
-data:
-  LATENCY_RETRAINING_INTERVAL_SEC: "1"
-  LATENCY_MIN_SAMPLES_FOR_RETRAIN: "100"
-  LATENCY_TTFT_MODEL_PATH: "/models/ttft.joblib"
-  LATENCY_TPOT_MODEL_PATH: "/models/tpot.joblib"
-  LATENCY_TTFT_SCALER_PATH: "/models/ttft_scaler.joblib"
-  LATENCY_TPOT_SCALER_PATH: "/models/tpot_scaler.joblib"
-  LATENCY_MODEL_TYPE: "xgboost"
-  LATENCY_MAX_TRAINING_DATA_SIZE_PER_BUCKET: "5000"
+inferenceExtension:
+  image:
+    name: epp
+    hub: quay.io/rh-ee-kapjain
+    tag: slo-prediction-06bb5de8
+    pullPolicy: Always
 ```
 
-**2. `prediction-server-config` (predictors)**
+#### Latency Predictor Configuration
+
+The latency predictor setup includes:
+
+1. **Training Server** (port 8000):
+   - Continuously retrains models from live traffic
+   - Stores models in `/models` volume
+   - Configuration in `gaie-latency/values.yaml:28-48`
+
+2. **Prediction Servers** (starting at port 8001):
+   - Serve predictions to EPP
+   - Load models from `/server_models` volume
+   - Configuration in `gaie-latency/values.yaml:50-65`
+
+3. **EPP Environment Variables** (for headroom tuning):
+   - Configuration in `gaie-latency/values.yaml:67-74`
+
+Example latency predictor configuration:
 
 ```yaml
-data:
-  LATENCY_MODEL_TYPE: "xgboost"
-  PREDICT_HOST: "0.0.0.0"
-  LOCAL_TTFT_MODEL_PATH: "/server_models/ttft.joblib"
-  LOCAL_TPOT_MODEL_PATH: "/server_models/tpot.joblib"
-  LOCAL_TTFT_SCALER_PATH: "/server_models/ttft_scaler.joblib"
-  LOCAL_TPOT_SCALER_PATH: "/server_models/tpot_scaler.joblib"
+latencyPredictor:
+  enabled: true
+  trainingServer:
+    image:
+      hub: quay.io/rh-ee-kapjain
+      name: latency-predictor-training
+      tag: latency-predictor-06bb5de8
+    port: 8000
+    config:
+      LATENCY_RETRAINING_INTERVAL_SEC: "1"
+      LATENCY_MIN_SAMPLES_FOR_RETRAIN: "100"
+      LATENCY_MODEL_TYPE: "xgboost"
+      LATENCY_QUANTILE_ALPHA: "0.9"
+  predictionServers:
+    count: 1
+    startPort: 8001
+    image:
+      hub: quay.io/rh-ee-kapjain
+      name: latency-predictor-prediction
+      tag: latency-predictor-06bb5de8
 ```
 
----
+#### Plugins & Scheduling Profiles
 
-### Profiles & Plugins
-
-`plugins-config` ConfigMap (`default-plugins.yaml`):
+The EPP plugins configuration is defined in `gaie-latency/values.yaml:76-105`:
 
 ```yaml
-apiVersion: inference.networking.x-k8s.io/v1alpha1
-kind: EndpointPickerConfig
-plugins:
-  - type: queue-scorer
-  - type: kv-cache-utilization-scorer
-  - type: prefix-cache-scorer
-  - type: slo-request-tracker
-  - type: slo-scorer
-  - type: slo-aware-profile-handler
-  - type: max-score-picker
-
-schedulingProfiles:
-  - name: default
+pluginsConfigFile: "slo-prediction-plugins.yaml"
+pluginsCustomConfig:
+  slo-prediction-plugins.yaml: |
+    apiVersion: inference.networking.x-k8s.io/v1alpha1
+    kind: EndpointPickerConfig
     plugins:
-      - pluginRef: slo-request-tracker
-      - pluginRef: prefix-cache-scorer
-      - pluginRef: queue-scorer
-      - pluginRef: kv-cache-utilization-scorer
-      - pluginRef: max-score-picker
+      - type: queue-scorer
+      - type: kv-cache-utilization-scorer
+      - type: prefix-cache-scorer
+      - type: slo-request-tracker
+      - type: slo-scorer
+      - type: slo-aware-profile-handler
+      - type: max-score-picker
 
-  - name: slo
-    plugins:
-      - pluginRef: prefix-cache-scorer
-        weight: 0
-      - pluginRef: slo-request-tracker
-      - pluginRef: slo-scorer
-      - pluginRef: max-score-picker
+    schedulingProfiles:
+      - name: default
+        plugins:
+          - pluginRef: slo-request-tracker
+          - pluginRef: prefix-cache-scorer
+          - pluginRef: queue-scorer
+          - pluginRef: kv-cache-utilization-scorer
+          - pluginRef: max-score-picker
+
+      - name: slo
+        plugins:
+          - pluginRef: prefix-cache-scorer
+            weight: 0
+          - pluginRef: slo-request-tracker
+          - pluginRef: slo-scorer
+          - pluginRef: max-score-picker
 ```
 
-#### What they do
+**Plugin Descriptions:**
+- `slo-request-tracker`: Captures per-request SLOs from headers
+- `slo-scorer`: Uses predicted TTFT/TPOT to score pods based on SLO headroom
+- `slo-aware-profile-handler`: Switches to `slo` profile when SLO headers are present
+- `queue-scorer`, `kv-cache-utilization-scorer`, `prefix-cache-scorer`: Baseline scoring plugins
 
-- `slo-request-tracker` — captures per-request SLOs and tracks them.
-- `slo-scorer` — uses predicted TTFT/TPOT to compare against SLOs and classify into positive/negative buckets.
-- `slo-aware-profile-handler` — switches requests into the `slo` profile when SLO headers are present.
-- `queue-scorer`, `kv-cache-utilization-scorer`, `prefix-cache-scorer` — baseline scoring plugins.
+### Model Server Configuration (`ms-latency/values.yaml`)
+
+The model server configuration includes:
+
+- **Model**: Llama-3.1-8B-Instruct
+- **Decode replicas**: 3 (for serving decode requests)
+- **Prefill replicas**: 1 (for handling prefill)
+- **Image**: `ghcr.io/llm-d/llm-d-inference-sim:v0.7.1` (simulation mode for testing)
+
+Key configuration sections in `ms-latency/values.yaml`:
+
+```yaml
+modelArtifacts:
+  uri: "hf://meta-llama/Llama-3.1-8B-Instruct"
+  labels:
+    llm-d.ai/inference-serving: "true"
+    llm-d.ai/guide: "predicted-latency-based-scheduling"
+
+decode:
+  replicas: 3
+  monitoring:
+    podmonitor:
+      enabled: true
+
+prefill:
+  replicas: 1
+```
 
 ---
 
-### Headroom strategies
+### Headroom Strategies
 
-Tune positive vs negative headroom scoring with env vars:
+Headroom scoring parameters are configured in `gaie-latency/values.yaml:67-74`:
 
-- `HEADROOM_SELECTION_STRATEGY` — `least` (compact) or `most` (spread)
-- `HEADROOM_TTFT_WEIGHT` / `HEADROOM_TPOT_WEIGHT` — blend weights for positive headroom
-- `NEG_HEADROOM_TTFT_WEIGHT` / `NEG_HEADROOM_TPOT_WEIGHT` — blend weights for deficits
-- `SLO_BUFFER_FACTOR` — safety multiplier on TPOT SLOs
+```yaml
+latencyPredictor:
+  eppEnv:
+    LATENCY_MAX_SAMPLE_SIZE: "10000"
+    NEG_HEADROOM_TTFT_WEIGHT: "0.5"
+    NEG_HEADROOM_TPOT_WEIGHT: "0.5"
+    HEADROOM_TTFT_WEIGHT: "0.5"
+    HEADROOM_TPOT_WEIGHT: "0.5"
+    HEADROOM_SELECTION_STRATEGY: "least"  # or "most"
+    SLO_BUFFER_FACTOR: "1.1"
+```
+
+**Parameter descriptions:**
+- `HEADROOM_SELECTION_STRATEGY`: `least` (compact, minimize pods used) or `most` (spread, distribute load)
+- `HEADROOM_TTFT_WEIGHT` / `HEADROOM_TPOT_WEIGHT`: Blend weights for positive headroom scoring
+- `NEG_HEADROOM_TTFT_WEIGHT` / `NEG_HEADROOM_TPOT_WEIGHT`: Blend weights for negative headroom (when SLOs cannot be met)
+- `SLO_BUFFER_FACTOR`: Safety multiplier on TPOT SLOs (e.g., 1.1 = 10% buffer)
+- `LATENCY_MAX_SAMPLE_SIZE`: Maximum number of latency samples to retain
 
 ---
 
-### Enable prediction-based scheduling
+### HTTPRoute Configuration
 
-Turn on SLO-aware routing per request with the header:
+The HTTPRoute connects the inference gateway to the InferencePool:
+
+**For non-GKE environments** (`httproute.yaml`):
+```yaml
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: llm-d-latency
+spec:
+  parentRefs:
+    - group: gateway.networking.k8s.io
+      kind: Gateway
+      name: infra-latency-inference-gateway
+  rules:
+    - backendRefs:
+        - group: inference.networking.k8s.io
+          kind: InferencePool
+          name: gaie-latency
+          port: 8000
+```
+
+The HTTPRoute:
+- Routes traffic from the `infra-latency-inference-gateway` Gateway
+- Directs requests to the `gaie-latency` InferencePool
+- Sets infinite timeouts (`0s`) to allow long-running streaming requests
+
+---
+
+## Using Prediction-Based Scheduling
+
+### Enable SLO-Aware Routing
+
+Turn on prediction-based scheduling per request with the header:
 
 ```text
 x-prediction-based-scheduling: true
 ```
 
-- If **SLO headers are present**: predictions are compared against thresholds.
-- If **no SLOs** are provided: treated as SLO=0 → lowest latency pod is chosen.
-- If **priority < 0** and **no pod can meet SLOs**: request is **shed** instead of placed in the negative bucket.
+**Behavior:**
+- If **SLO headers are present** (`x-slo-ttft-ms`, `x-slo-tpot-ms`): Predictions are compared against thresholds, and requests are routed to pods with sufficient headroom
+- If **no SLOs** are provided: Treated as SLO=0, routing to the lowest latency pod
+- If **priority < 0** and **no pod can meet SLOs**: Request is **shed** (rejected) instead of being placed in the negative bucket
 
-#### Current limitations
+### Current Limitations
 
-- Percentile: only **p90** supported.
-- Training: only **streaming mode** supported.
-- TPOT sampling: for obsevability, every 200th token is logged and compared with predictions.
+- **Percentile**: Only **p90** supported
+- **Training mode**: Only **streaming mode** (`"stream": "true"`) supported
+- **TPOT sampling**: For observability, every 200th token is logged and compared with predictions
 
 ---
 
 ## Cleanup
 
-To remove the resources you created in this walkthrough, follow the same cleanup instructions from the [Inference Gateway Extension guide](https://gateway-api-inference-extension.sigs.k8s.io/guides/#cleanup).
+To remove all resources created by this guide:
 
-That section covers how to delete the InferencePool, ConfigMaps, and supporting resources you applied here. The steps are identical — only the EPP image and sidecar configuration differ.
+1. **Delete HTTPRoute**
+
+    ```bash
+    kubectl delete -f httproute.yaml
+    # or for GKE:
+    kubectl delete -f httproute.gke.yaml
+    ```
+
+2. **Delete Helm releases**
+
+    ```bash
+    helmfile destroy
+    ```
+
+    This will remove:
+    - `ms-latency`: Model servers
+    - `gaie-latency`: InferencePool and EPP with latency predictors
+    - `infra-latency`: Inference gateway infrastructure
+
+3. **Verify cleanup**
+
+    ```bash
+    kubectl get pods -n llm-d-latency
+    kubectl get inferencepools -n llm-d-latency
+    kubectl get gateways -n llm-d-latency
+    ```
