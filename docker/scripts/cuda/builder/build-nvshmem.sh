@@ -84,19 +84,17 @@ if [ "${BUILD_DEBUG}" = "true" ]; then
 
     # NVSHMEM_DEBUG=ON enables runtime debug logging capabilities
     # NVSHMEM_VERBOSE=ON enables verbose logging
-    # NVSHMEM_DEVEL=ON enables development compilation settings
+    # NOTE: NVSHMEM_DEVEL is intentionally NOT set because:
+    # - It only adds strict compiler warnings (-Werror -Wall -Wextra)
+    # - It defines a macro that is never used in the code
+    # - It does NOT affect debug symbols (those come from CMAKE_BUILD_TYPE)
+    # - It does NOT affect runtime debug logging (that comes from NVSHMEM_DEBUG)
+    # - It causes build failures on warnings that we cannot override without patching
     DEBUG_FLAGS=(
         -DCMAKE_BUILD_TYPE=RelWithDebInfo
         -DNVSHMEM_DEBUG=ON
         -DNVSHMEM_VERBOSE=ON
-        -DNVSHMEM_DEVEL=ON
     )
-
-    # NVSHMEM_DEVEL adds -Werror which breaks the build on warnings.
-    # Override with -Wno-error appended after their flags.
-    # Use environment variables which CMake appends at the end of compile commands
-    export CFLAGS="${CFLAGS:-} -Wno-error"
-    export CXXFLAGS="${CXXFLAGS:-} -Wno-error"
 
     NVSHMEM_BUILD_PERF_TESTS=1
 fi
