@@ -43,4 +43,9 @@ jobs:
       pod_readiness_delay: 180
       image_override: 'ghcr.io/llm-d/llm-d-cuda-dev:latest'
       skip_cleanup: ${{ github.event.inputs.skip_cleanup == 'true' }}
+      pre_deploy_script: |
+        echo "Adding H100 nodeSelector for OCP deployment..."
+        yq e '.decode.extraConfig.nodeSelector["nvidia.com/gpu.product"] = "NVIDIA-H100-80GB-HBM3"' -i "${GUIDE_PATH}/ms-inference-scheduling/values.yaml"
+        echo "Updated values.yaml with H100 nodeSelector"
+        yq e '.decode.extraConfig.nodeSelector' "${GUIDE_PATH}/ms-inference-scheduling/values.yaml"
     secrets: inherit
