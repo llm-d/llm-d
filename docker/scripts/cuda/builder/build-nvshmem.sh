@@ -82,38 +82,21 @@ if [ "${BUILD_DEBUG}" = "true" ]; then
         -DCMAKE_COMPILE_WARNING_AS_ERROR=OFF
     )
 
+    # NVSHMEM_DEBUG=ON enables runtime debug logging capabilities
+    # NVSHMEM_VERBOSE=ON enables verbose logging
+    # NVSHMEM_DEVEL=ON enables development compilation settings
     DEBUG_FLAGS=(
         -DCMAKE_BUILD_TYPE=RelWithDebInfo
         -DNVSHMEM_DEBUG=ON
-        -DNVSHMEM_DEVEL=ON
         -DNVSHMEM_VERBOSE=ON
+        -DNVSHMEM_DEVEL=ON
     )
 
-    # Host compiler: keep warnings, but don't fail the build on maybe-uninitialized
-    # Use *no-error* rather than *no-warning* so you still see it in logs.
-    # Add -Wno-error to completely disable treating warnings as errors
-    CMAKE_EXTRA_FLAGS+=(
-        -DCMAKE_C_FLAGS="-Wno-error"
-        -DCMAKE_CXX_FLAGS="-Wno-error"
-        -DCMAKE_C_FLAGS_DEBUG="-Wno-error"
-        -DCMAKE_CXX_FLAGS_DEBUG="-Wno-error"
-        -DCMAKE_C_FLAGS_RELWITHDEBINFO="-Wno-error"
-        -DCMAKE_CXX_FLAGS_RELWITHDEBINFO="-Wno-error"
-    )
-
-    # NVCC: ensure we don't get broken "-Werror all-warnings" behavior in debug.
-    # This is the safest knob if NVSHMEM is injecting "-Werror all-warnings".
-    # We can also explicitly clear/override CUDA flags in this config.
-    CMAKE_EXTRA_FLAGS+=(
-        -DCMAKE_CUDA_FLAGS="-Wno-error"
-        -DCMAKE_CUDA_FLAGS_RELWITHDEBINFO=""
-        -DCMAKE_CUDA_FLAGS_DEBUG=""
-    )
-
-    # If NVSHMEM insists on adding "-Werror all-warnings" despite NVSHMEM_WERROR=OFF,
-    # we can add a *counter-flag* at the end to neutralize it.
-    # Unfortunately, NVCC doesn't have a universal "-Wno-error" for that form,
-    # so we prefer removing it at the source (NVSHMEM_WERROR) and/or emptying CUDA flags.
+    # NVSHMEM_DEVEL adds -Werror which breaks the build on warnings.
+    # Override with -Wno-error appended after their flags.
+    # Use environment variables which CMake appends at the end of compile commands
+    export CFLAGS="${CFLAGS:-} -Wno-error"
+    export CXXFLAGS="${CXXFLAGS:-} -Wno-error"
 
     NVSHMEM_BUILD_PERF_TESTS=1
 fi
