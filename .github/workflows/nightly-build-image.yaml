@@ -1,0 +1,25 @@
+name: Nightly - Dev Image Build
+
+# Builds fresh dev images from main daily so nightly E2E workflows
+# always test against the latest code. Runs before E2E nightlies
+# (which start at 06:00 UTC) to ensure images are ready.
+
+on:
+  schedule:
+    - cron: '0 4 * * *'  # 04:00 UTC daily (before nightly E2Es at 06:00+)
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  group: nightly-build-image
+  cancel-in-progress: true
+
+jobs:
+  build:
+    uses: ./.github/workflows/build-image.yml
+    with:
+      force_build: true
+    secrets: inherit

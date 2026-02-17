@@ -61,6 +61,13 @@ jobs:
         NAMESPACE="llm-d-nightly-wide-ep-gke"
         echo "Deploying wide-ep-lws on GKE via kustomize + helm..."
 
+        # Override image if IMAGE_OVERRIDE is set by the reusable workflow
+        if [ -n "${IMAGE_OVERRIDE:-}" ]; then
+          find guides/wide-ep-lws/manifests/modelserver -name "*.yaml" -not -name "kustomization.yaml" \
+            -exec sed -i "s|ghcr.io/llm-d/llm-d-cuda:[^ \"]*|${IMAGE_OVERRIDE}|g" {} \;
+          echo "Image override applied: ${IMAGE_OVERRIDE}"
+        fi
+
         # 1. Deploy model server via kustomize (GKE overlay)
         echo "Deploying model server (LeaderWorkerSets, GKE overlay)..."
         kubectl apply -k guides/wide-ep-lws/manifests/modelserver/gke -n "$NAMESPACE"
@@ -83,5 +90,6 @@ jobs:
         echo "Deployment complete"
       # Wide-EP-specific validation: check prefill + decode pods
       e2e_validate_args: '-v'
+      image_override: 'ghcr.io/llm-d/llm-d-cuda-dev:latest'
       skip_cleanup: ${{ github.event.inputs.skip_cleanup == 'true' }}
     secrets: inherit

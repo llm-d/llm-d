@@ -73,6 +73,13 @@ jobs:
         GATEWAY_TYPE="${GATEWAY_TYPE:-istio}"
         echo "Deploying tiered-prefix-cache/cpu via kustomize + helm..."
 
+        # Override image if IMAGE_OVERRIDE is set by the reusable workflow
+        if [ -n "${IMAGE_OVERRIDE:-}" ]; then
+          find guides/tiered-prefix-cache/cpu/manifests/vllm -name "*.yaml" -not -name "kustomization.yaml" \
+            -exec sed -i "s|ghcr.io/llm-d/llm-d-cuda:[^ \"]*|${IMAGE_OVERRIDE}|g" {} \;
+          echo "Image override applied: ${IMAGE_OVERRIDE}"
+        fi
+
         # 1. Deploy gateway recipe
         echo "Deploying gateway recipe ($GATEWAY_TYPE)..."
         kubectl apply -k "guides/recipes/gateway/${GATEWAY_TYPE}" -n "$NAMESPACE"
@@ -91,5 +98,6 @@ jobs:
           --version v1.3.0
 
         echo "Deployment complete"
+      image_override: 'ghcr.io/llm-d/llm-d-cuda-dev:latest'
       skip_cleanup: ${{ github.event.inputs.skip_cleanup == 'true' }}
     secrets: inherit

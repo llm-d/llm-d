@@ -70,5 +70,6 @@ jobs:
         yq e '.prefill.volumes[1].emptyDir.sizeLimit = "2Gi"' -i ms-pd/values.yaml
         echo "Slim transform applied — model: Qwen3-0.6B, 1 GPU decode, 1 prefill replica"
         cd "$GITHUB_WORKSPACE"
+      image_override: 'ghcr.io/llm-d/llm-d-cuda-dev:latest'
       skip_cleanup: ${{ github.event.inputs.skip_cleanup == 'true' }}
     secrets: inherit

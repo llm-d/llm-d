@@ -41,5 +41,6 @@ jobs:
       recommended_gpus: 4
       pod_wait_timeout: '30m'
       pod_readiness_delay: 180
+      image_override: 'ghcr.io/llm-d/llm-d-cuda-dev:latest'
       skip_cleanup: ${{ github.event.inputs.skip_cleanup == 'true' }}
     secrets: inherit

@@ -244,6 +244,13 @@ jobs:
           - ../base/serviceAccount.yaml
         KUSTOM_EOF
 
+        # Override image if IMAGE_OVERRIDE is set by the reusable workflow
+        if [ -n "${IMAGE_OVERRIDE:-}" ]; then
+          sed -i "s|ghcr.io/llm-d/llm-d-cuda:[^ \"]*|${IMAGE_OVERRIDE}|g" \
+            "${NIGHTLY_DIR}/prefill.yaml" "${NIGHTLY_DIR}/decode.yaml"
+          echo "Image override applied: ${IMAGE_OVERRIDE}"
+        fi
+
         echo "Slim transform applied — model: Qwen3-0.6B, 1 GPU per role, LWS size 1"
       # Custom deploy: kustomize + helm + gateway recipe (not helmfile)
       custom_deploy_script: |
@@ -269,5 +276,6 @@ jobs:
           --version v1.3.0
 
         echo "Deployment complete"
+      image_override: 'ghcr.io/llm-d/llm-d-cuda-dev:latest'
       skip_cleanup: ${{ github.event.inputs.skip_cleanup == 'true' }}
     secrets: inherit
