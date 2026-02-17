@@ -1,0 +1,74 @@
+name: Nightly - PD Disaggregation E2E (CKS)
+
+# Nightly regression test for the pd-disaggregation guide on CoreWeave (CKS).
+# Deploys via helmfile and validates with e2e-validate.sh.
+# Uses a slim model transformation to reduce GPU requirements.
+
+on:
+  schedule:
+    - cron: '30 6 * * *'  # 06:30 UTC daily (staggered from inference-scheduling CKS)
+  workflow_dispatch:
+    inputs:
+      helmfile_env:
+        description: 'Helmfile environment'
+        required: false
+        default: 'istio'
+        type: choice
+        options:
+          - istio
+          - kgateway
+      skip_cleanup:
+        description: 'Skip cleanup after tests (for debugging)'
+        required: false
+        default: 'false'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: nightly-e2e-pd-disaggregation-cks
+  cancel-in-progress: true
+
+jobs:
+  nightly:
+    uses: llm-d/llm-d-infra/.github/workflows/reusable-nightly-e2e-cks-helmfile.yaml@main
+    with:
+      guide_name: pd-disaggregation
+      namespace: llm-d-nightly-pd-cks
+      helmfile_env: ${{ github.event.inputs.helmfile_env || 'istio' }}
+      gateway_type: ${{ github.event.inputs.helmfile_env || 'istio' }}
+      accelerator_type: H100
+      required_gpus: 2
+      recommended_gpus: 4
+      pod_wait_timeout: '30m'
+      pod_readiness_delay: 180
+      # Slim transform: reduce model to Qwen3-0.6B, 1 GPU per pod, reduce memory
+      pre_deploy_script: |
+        echo "Applying pd-disaggregation slim transforms..."
+        cd guides/pd-disaggregation
+        yq e '.modelArtifacts.uri = "hf://Qwen/Qwen3-0.6B"' -i ms-pd/values.yaml
+        yq e '.routing.modelName = "Qwen/Qwen3-0.6B"' -i ms-pd/values.yaml
+        yq e 'del(.decode.containers[0].args[] | select(. == "--max-model-len" or . == "32000"))' -i ms-pd/values.yaml
+        yq e 'del(.prefill.containers[0].args[] | select(. == "--max-model-len" or . == "32000"))' -i ms-pd/values.yaml
+        yq e 'del(.decode.containers[0].resources.limits.memory)' -i ms-pd/values.yaml
+        yq e 'del(.decode.containers[0].resources.requests.memory)' -i ms-pd/values.yaml
+        yq e 'del(.decode.containers[0].resources.limits.cpu)' -i ms-pd/values.yaml
+        yq e 'del(.decode.containers[0].resources.requests.cpu)' -i ms-pd/values.yaml
+        yq e 'del(.decode.containers[0].resources.limits."rdma/ib")' -i ms-pd/values.yaml
+        yq e 'del(.decode.containers[0].resources.requests."rdma/ib")' -i ms-pd/values.yaml
+        yq e 'del(.prefill.containers[0].resources.limits.memory)' -i ms-pd/values.yaml
+        yq e 'del(.prefill.containers[0].resources.requests.memory)' -i ms-pd/values.yaml
+        yq e 'del(.prefill.containers[0].resources.limits.cpu)' -i ms-pd/values.yaml
+        yq e 'del(.prefill.containers[0].resources.requests.cpu)' -i ms-pd/values.yaml
+        yq e 'del(.prefill.containers[0].resources.limits."rdma/ib")' -i ms-pd/values.yaml
+        yq e 'del(.prefill.containers[0].resources.requests."rdma/ib")' -i ms-pd/values.yaml
+        yq e '.decode.containers[0].resources.limits["nvidia.com/gpu"] = "1"' -i ms-pd/values.yaml
+        yq e '.decode.containers[0].resources.requests["nvidia.com/gpu"] = "1"' -i ms-pd/values.yaml
+        yq e '.decode.parallelism.tensor = 1' -i ms-pd/values.yaml
+        yq e '.prefill.replicas = 1' -i ms-pd/values.yaml
+        yq e '.decode.volumes[1].emptyDir.sizeLimit = "2Gi"' -i ms-pd/values.yaml
+        yq e '.prefill.volumes[1].emptyDir.sizeLimit = "2Gi"' -i ms-pd/values.yaml
+        echo "Slim transform applied — model: Qwen3-0.6B, 1 GPU decode, 1 prefill replica"
+        cd "$GITHUB_WORKSPACE"
+      skip_cleanup: ${{ github.event.inputs.skip_cleanup == 'true' }}
+    secrets: inherit

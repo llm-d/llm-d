@@ -1,0 +1,45 @@
+name: Nightly - Inference Scheduling E2E (CKS)
+
+# Nightly regression test for the inference-scheduling guide on CoreWeave (CKS).
+# Deploys via helmfile and validates with e2e-validate.sh.
+
+on:
+  schedule:
+    - cron: '0 6 * * *'  # 06:00 UTC daily (staggered from OCP/GKE nightlies)
+  workflow_dispatch:
+    inputs:
+      helmfile_env:
+        description: 'Helmfile environment'
+        required: false
+        default: 'istio'
+        type: choice
+        options:
+          - istio
+          - kgateway
+      skip_cleanup:
+        description: 'Skip cleanup after tests (for debugging)'
+        required: false
+        default: 'false'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: nightly-e2e-inference-scheduling-cks
+  cancel-in-progress: true
+
+jobs:
+  nightly:
+    uses: llm-d/llm-d-infra/.github/workflows/reusable-nightly-e2e-cks-helmfile.yaml@main
+    with:
+      guide_name: inference-scheduling
+      namespace: llm-d-nightly-inference-cks
+      helmfile_env: ${{ github.event.inputs.helmfile_env || 'istio' }}
+      gateway_type: ${{ github.event.inputs.helmfile_env || 'istio' }}
+      accelerator_type: H100
+      required_gpus: 2
+      recommended_gpus: 4
+      pod_wait_timeout: '30m'
+      pod_readiness_delay: 180
+      skip_cleanup: ${{ github.event.inputs.skip_cleanup == 'true' }}
+    secrets: inherit
