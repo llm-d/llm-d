@@ -46,7 +46,7 @@ jobs:
     runs-on: ${{ matrix.runner }}
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           ref: ${{ env.TAG }}
           fetch-depth: 0
@@ -193,7 +193,7 @@ jobs:
           ls -la /tmp/digests/ubuntu/ || echo "No Ubuntu digests"
 
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - id: check
         shell: bash
@@ -364,7 +364,7 @@ jobs:
     runs-on: ${{ matrix.runner }}
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           ref: ${{ env.TAG }}
           fetch-depth: 0
@@ -494,7 +494,7 @@ jobs:
           ls -la /tmp/digests/rhel/ || echo "No RHEL digests"
 
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - id: check
         shell: bash
@@ -622,7 +622,7 @@ jobs:
     runs-on: vllm-runner
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           # fetch tags for docker/metadata semver handling (if you use git describe etc.)
           fetch-depth: 0
@@ -691,7 +691,7 @@ jobs:
     runs-on: vllm-runner
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           # fetch tags for docker/metadata semver handling (if you use git describe etc.)
           fetch-depth: 0
@@ -761,7 +761,7 @@ jobs:
     runs-on: vllm-runner
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           # fetch tags for docker/metadata semver handling (if you use git describe etc.)
           fetch-depth: 0

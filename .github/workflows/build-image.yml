@@ -50,7 +50,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout source
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Install shellcheck
         run: |
@@ -94,7 +94,7 @@ jobs:
           echo "xpu=true" >> $GITHUB_OUTPUT
           echo "cpu=true" >> $GITHUB_OUTPUT
           echo "hpu=true" >> $GITHUB_OUTPUT
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: dorny/paths-filter@v3
         if: github.event_name != 'workflow_dispatch' && inputs.force_build != true
         id: filter
@@ -174,7 +174,7 @@ jobs:
     runs-on: ${{ matrix.runner }}
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -305,7 +305,7 @@ jobs:
     runs-on: ${{ matrix.runner }}
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -457,7 +457,7 @@ jobs:
           ls -la /tmp/digests/ubuntu/ || echo "No Ubuntu digests"
 
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Export Git Sha
         id: export-sha
@@ -648,7 +648,7 @@ jobs:
     runs-on: ${{ matrix.runner }}
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -785,7 +785,7 @@ jobs:
           ls -la /tmp/digests/rhel/ || echo "No RHEL digests"
 
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Export Git Sha
         id: export-sha
@@ -935,11 +935,11 @@ jobs:
     steps:
       - name: Checkout push ref
         if: github.event_name == 'push'
-        uses: Actions/checkout@v4
+        uses: Actions/checkout@v6
 
       - name: Checkout PR branch
         if: github.event_name == 'pull_request'
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           ref: ${{ github.event.pull_request.head.sha }}
 
@@ -1026,11 +1026,11 @@ jobs:
     steps:
       - name: Checkout push ref
         if: github.event_name == 'push'
-        uses: Actions/checkout@v4
+        uses: Actions/checkout@v6
 
       - name: Checkout PR branch
         if: github.event_name == 'pull_request'
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           ref: ${{ github.event.pull_request.head.sha }}
 
@@ -1110,11 +1110,11 @@ jobs:
     steps:
       - name: Checkout push ref
         if: github.event_name == 'push'
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Checkout PR branch
         if: github.event_name == 'pull_request'
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           ref: ${{ github.event.pull_request.head.sha }}
 
@@ -1178,11 +1178,11 @@ jobs:
     steps:
       - name: Checkout push ref
         if: github.event_name == 'push'
-        uses: Actions/checkout@v4
+        uses: Actions/checkout@v6
 
       - name: Checkout PR branch
         if: github.event_name == 'pull_request'
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           ref: ${{ github.event.pull_request.head.sha }}
 

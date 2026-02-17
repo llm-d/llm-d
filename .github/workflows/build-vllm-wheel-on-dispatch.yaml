@@ -50,13 +50,13 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - name: Checkout
-        uses: actions/checkout@v4.1.7
+        uses: actions/checkout@v6
         with:
           path: main
 
       - name: Checkout terraform module
         id: checkout-module
-        uses: actions/checkout@v4.1.7
+        uses: actions/checkout@v6
         with:
           repository: containers/terraform-test-environment-module
           path: terraform-test-environment-module
