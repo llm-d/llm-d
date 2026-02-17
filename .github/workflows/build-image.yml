@@ -188,7 +188,7 @@ jobs:
 
       - name: Build and push debug image
         id: build-debug
-        uses: docker/build-push-action@v5
+        uses: docker/build-push-action@v6
         with:
           context: .
           file: ./docker/Dockerfile.cuda
@@ -308,7 +308,7 @@ jobs:
 
       - name: Build the builder image layer
         id: build-image-build-layer
-        uses: docker/build-push-action@v5
+        uses: docker/build-push-action@v6
         with:
           context: .
           file: ./docker/Dockerfile.cuda
@@ -337,7 +337,7 @@ jobs:
 
       - name: Build the final image layer
         id: build-image-final-layer
-        uses: docker/build-push-action@v5
+        uses: docker/build-push-action@v6
         with:
           context: .
           file: ./docker/Dockerfile.cuda
@@ -647,7 +647,7 @@ jobs:
 
       - name: Build the builder image layer
         id: build-image-build-layer
-        uses: docker/build-push-action@v5
+        uses: docker/build-push-action@v6
         with:
           context: .
           file: ./docker/Dockerfile.cuda
@@ -672,7 +672,7 @@ jobs:
 
       - name: Build the final image layer
         id: build-image-final-layer
-        uses: docker/build-push-action@v5
+        uses: docker/build-push-action@v6
         with:
           context: .
           file: ./docker/Dockerfile.cuda
@@ -935,7 +935,7 @@ jobs:
 
       - name: Build and push the image
         id: build-and-push
-        uses: docker/build-push-action@v5
+        uses: docker/build-push-action@v6
         with:
           context: .
           file: ./docker/Dockerfile.xpu
@@ -1020,7 +1020,7 @@ jobs:
 
       - name: Build and push the image
         id: build-and-push
-        uses: docker/build-push-action@v5
+        uses: docker/build-push-action@v6
         with:
           context: .
           file: ./docker/Dockerfile.rocm
@@ -1177,7 +1177,7 @@ jobs:
 
       - name: Build and push the image
         id: build-and-push
-        uses: docker/build-push-action@v5
+        uses: docker/build-push-action@v6
         with:
           context: .
           file: ./docker/Dockerfile.cpu
