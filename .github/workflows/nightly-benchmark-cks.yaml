@@ -1,0 +1,51 @@
+name: Nightly - Benchmark (CKS)
+
+# Triggers the CKS benchmark nightly in llm-d/llm-d-benchmark.
+# The actual benchmark workflow (ci-nighly-benchmark-cks.yaml) runs on
+# self-hosted runners with GPU access on the waldorf CKS cluster.
+#
+# This caller exists so all nightly schedules for CKS are visible from
+# the llm-d/llm-d repo alongside the IS, PD, and wide-ep nightlies.
+
+on:
+  schedule:
+    - cron: '0 8 * * *'  # 08:00 UTC daily (staggered from wide-ep CKS at 07:00)
+  workflow_dispatch:
+    inputs:
+      input_dir:
+        description: 'Input directory for benchmark results'
+        required: false
+        default: '/tmp/cicd/analysis'
+      output_dir:
+        description: 'Output directory name (S3 prefix and artifact name)'
+        required: false
+        default: ''
+
+permissions:
+  contents: read
+
+concurrency:
+  group: nightly-benchmark-cks
+  cancel-in-progress: true
+
+jobs:
+  trigger-benchmark:
+    name: Trigger CKS Benchmark
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger benchmark workflow in llm-d-benchmark
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GHCR_TOKEN }}
+          script: |
+            await github.rest.actions.createWorkflowDispatch({
+              owner: 'llm-d',
+              repo: 'llm-d-benchmark',
+              workflow_id: 'ci-nighly-benchmark-cks.yaml',
+              ref: 'main',
+              inputs: {
+                input_dir: '${{ github.event.inputs.input_dir || '/tmp/cicd/analysis' }}',
+                output_dir: '${{ github.event.inputs.output_dir || '' }}'
+              }
+            })
+            console.log('Triggered CKS benchmark workflow in llm-d/llm-d-benchmark')
