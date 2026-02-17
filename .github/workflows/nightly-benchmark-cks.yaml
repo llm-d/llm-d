@@ -1,7 +1,7 @@
 name: Nightly - Benchmark (CKS)
 
 # Triggers the CKS benchmark nightly in llm-d/llm-d-benchmark.
-# The actual benchmark workflow (ci-nighly-benchmark-cks.yaml) runs on
+# The actual benchmark workflow (ci-nightly-benchmark-cks.yaml) runs on
 # self-hosted runners with GPU access on the waldorf CKS cluster.
 #
 # This caller exists so all nightly schedules for CKS are visible from
@@ -41,7 +41,7 @@ jobs:
             await github.rest.actions.createWorkflowDispatch({
               owner: 'llm-d',
               repo: 'llm-d-benchmark',
-              workflow_id: 'ci-nighly-benchmark-cks.yaml',
+              workflow_id: 'ci-nightly-benchmark-cks.yaml',
               ref: 'main',
               inputs: {
                 input_dir: '${{ github.event.inputs.input_dir || '/tmp/cicd/analysis' }}',
