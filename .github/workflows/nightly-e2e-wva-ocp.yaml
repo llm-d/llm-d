@@ -1,8 +1,8 @@
 name: Nightly - WVA E2E (OpenShift)
 
 # Nightly regression test for WVA (Workload Variant Autoscaler) on OpenShift.
-# Calls the WVA reusable workflow which deploys the workload-autoscaling guide
-# stack and runs the WVA e2e test suite from the WVA repo.
+# Deploys the workload-autoscaling guide stack via the consolidated helmfile
+# reusable workflow and runs the WVA e2e test suite from the WVA repo.
 
 on:
   schedule:
@@ -51,13 +51,13 @@ concurrency:
 
 jobs:
   nightly:
-    uses: llm-d/llm-d-infra/.github/workflows/reusable-nightly-e2e-openshift.yaml@main
+    uses: llm-d/llm-d-infra/.github/workflows/reusable-nightly-e2e-openshift-helmfile.yaml@main
     with:
       guide_name: workload-autoscaling
-      namespace_suffix: nightly-wva
+      namespace: llm-d-nightly-wva
+      deploy_wva: true
       caller_repo: llm-d/llm-d-workload-variant-autoscaler
       caller_ref: main
-      deploy_wva: true
       model_id: ${{ github.event.inputs.model_id || 'unsloth/Meta-Llama-3.1-8B' }}
       accelerator_type: ${{ github.event.inputs.accelerator_type || 'A100' }}
       wva_image_tag: ${{ github.event.inputs.image_tag || 'latest' }}
