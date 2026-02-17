@@ -2,6 +2,12 @@ name: Dev LLM-D Image Build
 
 on:
   workflow_call:
+    inputs:
+      force_build:
+        description: 'Force build all platforms (bypass change detection)'
+        required: false
+        type: boolean
+        default: false
     outputs:
       xpu:
         description: 'Whether XPU image was built'
@@ -71,16 +77,26 @@ jobs:
   detect-changes:
     runs-on: ubuntu-latest
     outputs:
-      cuda: ${{ steps.filter.outputs.cuda || steps.dispatch.outputs.cuda }}
-      aws: ${{ steps.filter.outputs.aws || steps.dispatch.outputs.aws }}
-      rocm: ${{ steps.filter.outputs.rocm || steps.dispatch.outputs.rocm }}
-      xpu: ${{ steps.filter.outputs.xpu || steps.dispatch.outputs.xpu }}
-      cpu: ${{ steps.filter.outputs.cpu || steps.dispatch.outputs.cpu }}
-      hpu: ${{ steps.filter.outputs.hpu || steps.dispatch.outputs.hpu }}
+      cuda: ${{ steps.force.outputs.cuda || steps.filter.outputs.cuda || steps.dispatch.outputs.cuda }}
+      aws: ${{ steps.force.outputs.aws || steps.filter.outputs.aws || steps.dispatch.outputs.aws }}
+      rocm: ${{ steps.force.outputs.rocm || steps.filter.outputs.rocm || steps.dispatch.outputs.rocm }}
+      xpu: ${{ steps.force.outputs.xpu || steps.filter.outputs.xpu || steps.dispatch.outputs.xpu }}
+      cpu: ${{ steps.force.outputs.cpu || steps.filter.outputs.cpu || steps.dispatch.outputs.cpu }}
+      hpu: ${{ steps.force.outputs.hpu || steps.filter.outputs.hpu || steps.dispatch.outputs.hpu }}
     steps:
+      - name: Force all platforms
+        if: inputs.force_build == true
+        id: force
+        run: |
+          echo "cuda=true" >> $GITHUB_OUTPUT
+          echo "aws=true" >> $GITHUB_OUTPUT
+          echo "rocm=true" >> $GITHUB_OUTPUT
+          echo "xpu=true" >> $GITHUB_OUTPUT
+          echo "cpu=true" >> $GITHUB_OUTPUT
+          echo "hpu=true" >> $GITHUB_OUTPUT
       - uses: actions/checkout@v4
       - uses: dorny/paths-filter@v3
-        if: github.event_name != 'workflow_dispatch'
+        if: github.event_name != 'workflow_dispatch' && inputs.force_build != true
         id: filter
         with:
           filters: |
@@ -551,6 +567,10 @@ jobs:
           if [ -n "${{ github.event.pull_request.number }}" ]; then
             tags="$tags -t ${{ env.REGISTRY }}/${{ github.repository }}-cuda-dev${{ matrix.image_suffix }}:pr-${{ github.event.pull_request.number }}"
           fi
+          if [ "${{ github.ref }}" = "refs/heads/${{ github.event.repository.default_branch }}" ] && \
+             [ "${{ github.event_name }}" != "pull_request" ]; then
+            tags="$tags -t ${{ env.REGISTRY }}/${{ github.repository }}-cuda-dev${{ matrix.image_suffix }}:latest"
+          fi
           docker buildx imagetools create $tags $sources
 
           # extract final manifest digest
@@ -847,6 +867,10 @@ jobs:
           tags="-t ${{ env.REGISTRY }}/${{ github.repository }}-aws-dev:sha-${SHORT_SHA}"
           if [ -n "${{ github.event.pull_request.number }}" ]; then
             tags="$tags -t ${{ env.REGISTRY }}/${{ github.repository }}-aws-dev:pr-${{ github.event.pull_request.number }}"
+          fi
+          if [ "${{ github.ref }}" = "refs/heads/${{ github.event.repository.default_branch }}" ] && \
+             [ "${{ github.event_name }}" != "pull_request" ]; then
+            tags="$tags -t ${{ env.REGISTRY }}/${{ github.repository }}-aws-dev:latest"
           fi
           docker buildx imagetools create $tags $sources
 
