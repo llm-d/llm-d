@@ -515,7 +515,7 @@ jobs:
           echo "Logs downloaded from the AWS instance."
 
       - name: Upload pod logs as artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         if: always()
         with:
           name: llmd-pod-logs-${{ matrix.deployment.name }}
