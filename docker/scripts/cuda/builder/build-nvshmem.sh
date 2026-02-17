@@ -75,7 +75,8 @@ CMAKE_EXTRA_FLAGS=()
 
 NVSHMEM_BUILD_PERF_TESTS=0 # Nvshmem perf test binaries, off by default on with debug
 if [ "${BUILD_DEBUG}" = "true" ]; then
-    echo "=== Building NVSHMEM with debug symbols and logging enabled ==="
+    echo "=== Building NVSHMEM with debug symbols and runtime logging enabled ==="
+    echo "=== This enables verbose logging that can be activated at runtime with NVSHMEM_DEBUG=TRACE ==="
 
     CMAKE_EXTRA_FLAGS+=(
         -DCMAKE_COMPILE_WARNING_AS_ERROR=OFF
@@ -90,17 +91,21 @@ if [ "${BUILD_DEBUG}" = "true" ]; then
 
     # Host compiler: keep warnings, but don't fail the build on maybe-uninitialized
     # Use *no-error* rather than *no-warning* so you still see it in logs.
+    # Add -Wno-error to completely disable treating warnings as errors
     CMAKE_EXTRA_FLAGS+=(
-        -DCMAKE_C_FLAGS_DEBUG="-Wno-error=maybe-uninitialized"
-        -DCMAKE_CXX_FLAGS_DEBUG="-Wno-error=maybe-uninitialized"
-        -DCMAKE_C_FLAGS_RELWITHDEBINFO="-Wno-error=maybe-uninitialized"
-        -DCMAKE_CXX_FLAGS_RELWITHDEBINFO="-Wno-error=maybe-uninitialized"
+        -DCMAKE_C_FLAGS="-Wno-error"
+        -DCMAKE_CXX_FLAGS="-Wno-error"
+        -DCMAKE_C_FLAGS_DEBUG="-Wno-error"
+        -DCMAKE_CXX_FLAGS_DEBUG="-Wno-error"
+        -DCMAKE_C_FLAGS_RELWITHDEBINFO="-Wno-error"
+        -DCMAKE_CXX_FLAGS_RELWITHDEBINFO="-Wno-error"
     )
 
     # NVCC: ensure we don't get broken "-Werror all-warnings" behavior in debug.
     # This is the safest knob if NVSHMEM is injecting "-Werror all-warnings".
     # We can also explicitly clear/override CUDA flags in this config.
     CMAKE_EXTRA_FLAGS+=(
+        -DCMAKE_CUDA_FLAGS="-Wno-error"
         -DCMAKE_CUDA_FLAGS_RELWITHDEBINFO=""
         -DCMAKE_CUDA_FLAGS_DEBUG=""
     )

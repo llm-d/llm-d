@@ -179,6 +179,17 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v6
 
+      - name: Load vLLM version from file
+        id: vllm-version
+        run: |
+          # Read vLLM version from docker/vllm-version file and set as outputs
+          source docker/vllm-version
+          echo "repo=${VLLM_REPO}" >> $GITHUB_OUTPUT
+          echo "commit_sha=${VLLM_COMMIT_SHA}" >> $GITHUB_OUTPUT
+          echo "precompiled_wheel_commit=${VLLM_PRECOMPILED_WHEEL_COMMIT}" >> $GITHUB_OUTPUT
+          echo "prebuilt=${VLLM_PREBUILT}" >> $GITHUB_OUTPUT
+          echo "use_precompiled=${VLLM_USE_PRECOMPILED}" >> $GITHUB_OUTPUT
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
@@ -225,6 +236,11 @@ jobs:
             ${{ inputs.vllm_commit_sha != '' && format('VLLM_COMMIT_SHA={0}', inputs.vllm_commit_sha) || '' }}
             ${{ inputs.vllm_precompiled_wheel_commit != '' &&
               format('VLLM_PRECOMPILED_WHEEL_COMMIT={0}', inputs.vllm_precompiled_wheel_commit) || '' }}
+            VLLM_REPO=${{ inputs.vllm_repo || steps.vllm-version.outputs.repo }}
+            VLLM_COMMIT_SHA=${{ inputs.vllm_commit_sha || steps.vllm-version.outputs.commit_sha }}
+            VLLM_PRECOMPILED_WHEEL_COMMIT=${{ inputs.vllm_precompiled_wheel_commit || steps.vllm-version.outputs.precompiled_wheel_commit }}
+            VLLM_PREBUILT=${{ steps.vllm-version.outputs.prebuilt }}
+            VLLM_USE_PRECOMPILED=${{ steps.vllm-version.outputs.use_precompiled }}
           labels: ${{ steps.meta.outputs.labels }}
           outputs: >-
             type=image,name=${{ env.REGISTRY }}/${{ github.repository }}-cuda${{ matrix.image_suffix }},
@@ -665,6 +681,17 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v6
 
+      - name: Load vLLM version from file
+        id: vllm-version
+        run: |
+          # Read vLLM version from docker/vllm-version file and set as outputs
+          source docker/vllm-version
+          echo "repo=${VLLM_REPO}" >> $GITHUB_OUTPUT
+          echo "commit_sha=${VLLM_COMMIT_SHA}" >> $GITHUB_OUTPUT
+          echo "precompiled_wheel_commit=${VLLM_PRECOMPILED_WHEEL_COMMIT}" >> $GITHUB_OUTPUT
+          echo "prebuilt=${VLLM_PREBUILT}" >> $GITHUB_OUTPUT
+          echo "use_precompiled=${VLLM_USE_PRECOMPILED}" >> $GITHUB_OUTPUT
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
@@ -733,10 +760,11 @@ jobs:
             BUILD_BASE_IMAGE_SUFFIX=${{ matrix.base_image_suffix }}
             FINAL_BASE_IMAGE_SUFFIX=${{ matrix.base_image_suffix }}
             ENABLE_EFA=true
-            ${{ inputs.vllm_repo != '' && format('VLLM_REPO={0}', inputs.vllm_repo) || '' }}
-            ${{ inputs.vllm_commit_sha != '' && format('VLLM_COMMIT_SHA={0}', inputs.vllm_commit_sha) || '' }}
-            ${{ inputs.vllm_precompiled_wheel_commit != '' &&
-              format('VLLM_PRECOMPILED_WHEEL_COMMIT={0}', inputs.vllm_precompiled_wheel_commit) || '' }}
+            VLLM_REPO=${{ inputs.vllm_repo || steps.vllm-version.outputs.repo }}
+            VLLM_COMMIT_SHA=${{ inputs.vllm_commit_sha || steps.vllm-version.outputs.commit_sha }}
+            VLLM_PRECOMPILED_WHEEL_COMMIT=${{ inputs.vllm_precompiled_wheel_commit || steps.vllm-version.outputs.precompiled_wheel_commit }}
+            VLLM_PREBUILT=${{ steps.vllm-version.outputs.prebuilt }}
+            VLLM_USE_PRECOMPILED=${{ steps.vllm-version.outputs.use_precompiled }}
           labels: ${{ steps.meta.outputs.labels }}
           outputs: >-
             type=image,name=${{ env.REGISTRY }}/${{ github.repository }}-aws-dev${{ matrix.image_suffix }},
