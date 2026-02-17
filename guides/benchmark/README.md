@@ -17,7 +17,8 @@ For full, customizable benchmarking, please refer to [llm-d-benchmark](https://g
     chmod u+x run_only.sh
     ```
 
-- Prepare a Persistent Volume Claim (PVC) to store the benchmark results. The PVC must have `RWX` write permissions and be large enough (`200Gi` recommended).
+- Prepare a Persistent Volume Claim (PVC) to store the benchmark results. The PVC must have `RWX` write permissions and be large enough (`200Gi` recommended).  
+  Alternatively, use the `-o` option of `run_only.sh` to output results to ephemeral storage and then copy them over to a local directory or to a cloud bucket.
 
   <details>
   <summary><b><i>Click</i></b> here if you need to create a new PVC</summary>
@@ -49,13 +50,12 @@ For full, customizable benchmarking, please refer to [llm-d-benchmark](https://g
   export NAMESPACE="<your namespace>"
   export BENCHMARK_PVC="<name of your PVC>"
   export LLMD_ROOT_DIR=../..   # where you cloned llm-d/llm-d
-  export BENCH_TEMPLATE_DIR="${LLMD_ROOT_DIR}"/guides/benchmark
   ```
 
 ## Set your stack type and gateway name
 
 `GATEWAY_SVC` is your gateway service name.
-`BENCHMARK_TEMPLATE` is a corresponding benchmark template file (available in [guides/benchmark](./)).
+`BENCHMARK_TEMPLATE` is a corresponding benchmark template file (available in the `benchmark-templates` folder under each guide).
 
 > [!IMPORTANT]
 > Choose the option that matches your stack type:
@@ -71,9 +71,11 @@ For full, customizable benchmarking, please refer to [llm-d-benchmark](https://g
 >   --no-headers  -o=custom-columns=:metadata.name \
 >   | head -1
 > )
-> export BENCHMARK_TEMPLATE="${BENCH_TEMPLATE_DIR}"/inference_scheduling_template.yaml
-> # export BENCHMARK_TEMPLATE="${BENCH_TEMPLATE_DIR}"/inference_scheduling_guidellm_template.yaml
-> # export BENCHMARK_TEMPLATE="${BENCH_TEMPLATE_DIR}"/inference_scheduling_shared_prefix_template.yaml
+> export BENCH_TEMPLATE_DIR="${LLMD_ROOT_DIR}"/guides/inference-scheduling/benchmark-templates
+> export BENCHMARK_TEMPLATE="${BENCH_TEMPLATE_DIR}"/guide.yaml
+> # export BENCHMARK_TEMPLATE="${BENCH_TEMPLATE_DIR}"/sanity.yaml
+> # export BENCHMARK_TEMPLATE="${BENCH_TEMPLATE_DIR}"/shared_prefix.yaml
+> # export BENCHMARK_TEMPLATE="${BENCH_TEMPLATE_DIR}"/guidellm.yaml
 >   ```
 >
 > </details>
@@ -89,9 +91,9 @@ For full, customizable benchmarking, please refer to [llm-d-benchmark](https://g
 >   --no-headers  -o=custom-columns=:metadata.name \
 >   | head -1
 > )
-> export BENCHMARK_TEMPLATE="${BENCH_TEMPLATE_DIR}"/pd_template.yaml
-> #export BENCHMARK_TEMPLATE="${BENCH_TEMPLATE_DIR}"/pd_vllm_bench_random_concurrent_template.yaml
-> #export BENCHMARK_TEMPLATE="${BENCH_TEMPLATE_DIR}"/pd_shared_prefix_template.yaml
+> export BENCH_TEMPLATE_DIR="${LLMD_ROOT_DIR}"/guides/pd-disaggregation/benchmark-templates
+> export BENCHMARK_TEMPLATE="${BENCH_TEMPLATE_DIR}"/guide.yaml
+> # export BENCHMARK_TEMPLATE="${BENCH_TEMPLATE_DIR}"/sanity.yaml
 >   ```
 >
 > </details>
@@ -109,7 +111,8 @@ For full, customizable benchmarking, please refer to [llm-d-benchmark](https://g
 >   --no-headers  -o=custom-columns=:metadata.name \
 >   | head -1
 > )
-> export BENCHMARK_TEMPLATE="${BENCH_TEMPLATE_DIR}"/wide_ep_template.yaml
+> export BENCH_TEMPLATE_DIR="${LLMD_ROOT_DIR}"/guides/wide-ep-lws/benchmark-templates
+> export BENCHMARK_TEMPLATE="${BENCH_TEMPLATE_DIR}"/guide.yaml
 >   ```
 >
 > </details>
@@ -133,9 +136,11 @@ For full, customizable benchmarking, please refer to [llm-d-benchmark](https://g
 >   --no-headers  -o=custom-columns=:metadata.name \
 >   | head -1
 > )
-> export BENCHMARK_TEMPLATE="${BENCH_TEMPLATE_DIR}"/precise_template.yaml
-> # export BENCHMARK_TEMPLATE="${BENCH_TEMPLATE_DIR}"/precise_guidellm_template.yaml
-> # export BENCHMARK_TEMPLATE="${BENCH_TEMPLATE_DIR}"/precise_shared_prefix_template.yaml
+> export BENCH_TEMPLATE_DIR="${LLMD_ROOT_DIR}"/guides/precise-prefix-cache-aware/benchmark-templates
+> export BENCHMARK_TEMPLATE="${BENCH_TEMPLATE_DIR}"/guide.yaml
+> # export BENCHMARK_TEMPLATE="${BENCH_TEMPLATE_DIR}"/sanity.yaml
+> # export BENCHMARK_TEMPLATE="${BENCH_TEMPLATE_DIR}"/shared_prefix.yaml
+> # export BENCHMARK_TEMPLATE="${BENCH_TEMPLATE_DIR}"/guidellm.yaml
 >   ```
 >
 > </details>
@@ -161,7 +166,8 @@ For full, customizable benchmarking, please refer to [llm-d-benchmark](https://g
 >   | head -1
 > )
 >
-> export BENCHMARK_TEMPLATE="${BENCH_TEMPLATE_DIR}"/wva_inference_scheduling_guidellm_template.yaml
+> export BENCH_TEMPLATE_DIR="${LLMD_ROOT_DIR}"/guides/workload-autoscaling/benchmark-templates
+> export BENCHMARK_TEMPLATE="${BENCH_TEMPLATE_DIR}"/guidellm.yaml
 >   ```
 >
 > </details>
@@ -208,10 +214,11 @@ To copy a results directory to your local machine use:
 
 `run_only.sh` prints progress messages to the terminal. The stdout and stderr of the harness itself is printed to the terminal as well as captured in the results.
 
-This example uses `guidellm` with a [`rate_comparison`](./inference_scheduling_guidellm_template.yaml) workload:
+This example uses `guidellm` with a [`rate_comparison`](../inference-scheduling/benchmark-templates/guidellm.yaml) workload:
 
   ```bash
-  export BENCHMARK_TEMPLATE="${BENCH_TEMPLATE_DIR}"/inference_scheduling_guidellm_template.yaml
+  export BENCH_TEMPLATE_DIR=../inference-scheduling/benchmark-templates/
+  export BENCHMARK_TEMPLATE="${BENCH_TEMPLATE_DIR}"/guidellm.yaml
   ```
 
 <details>
@@ -557,10 +564,10 @@ This example uses `guidellm` with a [`rate_comparison`](./inference_scheduling_g
 
 The output files are saved on the benchmark PVC. They are accessible through the launcher pod in the `/requests` folder. Each experiment is saved under its own sub directory.
 
-This example uses `inference-perf` with a [`shared-prefix`](./inference_scheduling_shared_prefix_template.yaml) workload:
+This example uses `inference-perf` with a [`shared-prefix`](../inference-scheduling/benchmark-templates/shared_prefix.yaml) workload:
 
   ```bash
-  export BENCHMARK_TEMPLATE="${BENCH_TEMPLATE_DIR}"/inference_scheduling_shared_prefix_template.yaml
+  export BENCHMARK_TEMPLATE="../inference-scheduling/benchmark-templates/shared_prefix.yaml"
   ```
 
 After running With this template, the `/requests` folder will include a `<results-folder>` named

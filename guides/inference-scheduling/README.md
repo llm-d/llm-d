@@ -272,13 +272,13 @@ For instructions on getting started making inference requests see [our docs](../
 
 ## Benchmarking
 
-To run benchmarks against the installed llm-d stack, you need [run_only.sh](https://github.com/llm-d/llm-d-benchmark/blob/main/existing_stack/run_only.sh), a template file from [guides/benchmark](../benchmark/), and a Persistent Volume Claim (PVC) to store the results. Follow the instructions in the [benchmark doc](../benchmark/README.md).
+To run benchmarks against the installed llm-d stack, you need [run_only.sh](https://github.com/llm-d/llm-d-benchmark/blob/main/existing_stack/run_only.sh), a template file from [./benchmark-templates](./benchmark-templates/), and a Persistent Volume Claim (PVC) to store the results (optional). Follow the instructions in the [benchmark doc](../benchmark/README.md).
 
 ### Example
 
-This example uses [run_only.sh](https://github.com/llm-d/llm-d-benchmark/blob/main/existing_stack/run_only.sh) with the template [inference_scheduling_guide_template.yaml](../benchmark/inference_scheduling_guide_template.yaml).
+This example uses [run_only.sh](https://github.com/llm-d/llm-d-benchmark/blob/main/existing_stack/run_only.sh) with the template [guide.yaml](./benchmark-templates/guide.yaml).
 
-The benchmark launches a pod (`llmdbench-harness-launcher`) that, in this case, uses `inference-perf` with a shared prefix synthetic workload named `shared_prefix_synthetic`. This workload runs several stages with different rates. The results will be stored on the provided PVC, accessible through the `llmdbench-harness-launcher` pod. Each experiment is saved under the `requests` folder, e.g.,/`requests/inference-perf_<experiment ID>_shared_prefix_synthetic_inference-scheduling_<model name>` folder.
+The benchmark launches a pod (`llmdbench-harness-launcher`) that, in this case, uses `inference-perf` with a shared prefix synthetic workload named `shared_prefix_synthetic`. This workload runs several stages with different rates. The results will be stored on the provided PVC, accessible through the `llmdbench-harness-launcher` pod. Alternatively, results may be saved to a local folder or uploaded to a cloud storage bucket, by using the `-o` flag of `run_only.sh`. Each experiment is saved under the `requests` folder, e.g.,/`requests/inference-perf_<experiment ID>_shared_prefix_synthetic_inference-scheduling_<model name>` folder.
 
 Several results files will be created (see [Benchmark doc](../benchmark/README.md)), including a yaml file in a "standard" benchmark report format (see [Benchmark Report](https://github.com/llm-d/llm-d-benchmark/blob/main/docs/benchmark_report.md)).
 
@@ -286,21 +286,21 @@ Several results files will be created (see [Benchmark doc](../benchmark/README.m
   curl -L -O https://raw.githubusercontent.com/llm-d/llm-d-benchmark/main/existing_stack/run_only.sh
   chmod u+x run_only.sh
   select f in $(
-      curl -s https://api.github.com/repos/llm-d/llm-d/contents/guides/benchmark?ref=main |
-      sed -n '/[[:space:]]*"name":[[:space:]][[:space:]]*"\(inference_scheduling.*\_template\.yaml\)".*/ s//\1/p'
+      curl -s https://api.github.com/repos/llm-d/llm-d/contents/guides/inference-scheduling/benchmark-templates?ref=main |
+      sed -n '/[[:space:]]*"name":[[:space:]][[:space:]]*"\([[:alnum:]].*\.yaml\)".*/ s//\1/p'
     ); do
-    curl -LJO "https://raw.githubusercontent.com/llm-d/llm-d/main/guides/benchmark/$f"
+    curl -LJO "https://raw.githubusercontent.com/llm-d/llm-d/main/guides/inference-scheduling/benchmark-templates/$f"
     break
   done
   ```
 
-Choose the `inference_scheduling_guide_template.yaml` template, then run:
+Choose the `guide.yaml` template, then run:
 
   ```bash
   export NAMESPACE=llm-d-inference-scheduler     # replace with your namespace
   export BENCHMARK_PVC=workload-pvc   # replace with your PVC name
   export GATEWAY_SVC=infra-inference-scheduling-inference-gateway-istio  # replace with your exact service name
-  envsubst < inference_scheduling_guide_template.yaml > config.yaml
+  envsubst < guide.yaml > config.yaml
   ```
 
 Edit `config.yaml` if further customization is needed, and then run the command

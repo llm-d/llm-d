@@ -203,37 +203,37 @@ indicating that it had cached the KV-blocks from the first call.
 
 ## Benchmarking
 
-To run benchmarks against the installed llm-d stack, you need [run_only.sh](https://github.com/llm-d/llm-d-benchmark/blob/main/existing_stack/run_only.sh), a template file from [guides/benchmark](../benchmark/), and a Persistent Volume Claim (PVC) to store the results. Follow the instructions in the [benchmark doc](../benchmark/README.md).
+To run benchmarks against the installed llm-d stack, you need [run_only.sh](https://github.com/llm-d/llm-d-benchmark/blob/main/existing_stack/run_only.sh), a template file from [benchmark-templates](./benchmark-templates/), and a Persistent Volume Claim (PVC) to store the results (optional). Follow the instructions in the [benchmark doc](../benchmark/README.md).
 
 ### Example
 
-This example uses [run_only.sh](https://github.com/llm-d/llm-d-benchmark/blob/main/existing_stack/run_only.sh) with the template [precise_template.yaml](../benchmark/precise_template.yaml).
+This example uses [run_only.sh](https://github.com/llm-d/llm-d-benchmark/blob/main/existing_stack/run_only.sh) with the template [guide.yaml](./benchmark-templates/guide.yaml).
 
 The benchmark launches a pod (`llmdbench-harness-launcher`) that, in this case, uses `inference-perf` with a shared prefix synthetic workload named `shared_prefix_synthetic`. This workload runs several stages with different rates. The results will be stored on the provided PVC, accessible through the `llmdbench-harness-launcher` pod. Each experiment is saved under the `requests` folder, e.g.,/`requests/inference-perf_<experiment ID>_shared_prefix_precise-guide-<model name>` folder.
 
 Several results files will be created (see [Benchmark doc](../benchmark/README.md)), including a yaml file in a "standard" benchmark report format (see [Benchmark Report](https://github.com/llm-d/llm-d-benchmark/blob/main/docs/benchmark_report.md)).
 
-The `bash` commands below downloads the benchmark runner script (`run_only.sh`), then presents an interactive menu of Precise-Prefix benchmark templates from the llm-d repository's [`guides/benchmark/`](../benchmark/) directory. Once the user selects a template, it downloads that specific YAML configuration file for running benchmarks.
+The `bash` commands below downloads the benchmark runner script (`run_only.sh`), then presents an interactive menu of Precise-Prefix benchmark templates from the llm-d repository's [`./benchmark-templates/`](./benchmark-templates/) directory. Once the user selects a template, it downloads that specific YAML configuration file for running benchmarks.
 
   ```bash
   curl -L -O https://raw.githubusercontent.com/llm-d/llm-d-benchmark/main/existing_stack/run_only.sh
   chmod u+x run_only.sh
   select f in $(
-      curl -s https://api.github.com/repos/llm-d/llm-d/contents/guides/benchmark?ref=main |
-      sed -n '/[[:space:]]*"name":[[:space:]][[:space:]]*"\(precise.*\_template\.yaml\)".*/ s//\1/p'
+      curl -s https://api.github.com/repos/llm-d/llm-d/contents/guides/precise-prefix-cache-aware/benchmark-templates?ref=main |
+      sed -n '/[[:space:]]*"name":[[:space:]][[:space:]]*"\([[:alnum:]].*\.yaml\)".*/ s//\1/p'
     ); do
-    curl -LJO "https://raw.githubusercontent.com/llm-d/llm-d/main/guides/benchmark/$f"
+    curl -LJO "https://raw.githubusercontent.com/llm-d/llm-d/main/guides/precise-prefix-cache-aware/benchmark-templates/$f"
     break
   done
   ```
 
-Choose the `precise_template.yaml` template, then run:
+Choose the `guide.yaml` template, then run:
 
   ```bash
   export NAMESPACE=llm-d-precise     # replace with your namespace
   export BENCHMARK_PVC=workload-pvc   # replace with your PVC name
   export GATEWAY_SVC=infra-kv-events-inference-gateway-istio  # replace with your exact service name
-  envsubst < precise_template.yaml > config.yaml
+  envsubst < guide.yaml > config.yaml
   ```
 
 Edit `config.yaml` if further customization is needed, and then run the command
