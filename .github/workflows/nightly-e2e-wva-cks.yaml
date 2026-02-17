@@ -1,0 +1,73 @@
+name: Nightly - WVA E2E (CKS)
+
+# Nightly regression test for WVA (Workload Variant Autoscaler) on CoreWeave
+# Kubernetes (CKS). Deploys the workload-autoscaling guide stack via the
+# consolidated helmfile reusable workflow and runs the WVA e2e test suite.
+
+on:
+  schedule:
+    - cron: '30 7 * * *'  # 07:30 UTC daily (staggered from wide-ep-lws CKS at 07:00)
+  workflow_dispatch:
+    inputs:
+      model_id:
+        description: 'Model ID'
+        required: false
+        default: 'unsloth/Meta-Llama-3.1-8B'
+      accelerator_type:
+        description: 'Accelerator type (H100, H200, A100)'
+        required: false
+        default: 'H100'
+      image_tag:
+        description: 'WVA image tag — "latest" auto-resolves to newest release'
+        required: false
+        default: 'latest'
+      request_rate:
+        description: 'Request rate (req/s)'
+        required: false
+        default: '20'
+      num_prompts:
+        description: 'Number of prompts'
+        required: false
+        default: '3000'
+      max_num_seqs:
+        description: 'vLLM max batch size (lower = easier to saturate)'
+        required: false
+        default: '1'
+      hpa_stabilization_seconds:
+        description: 'HPA stabilization window in seconds'
+        required: false
+        default: '240'
+      skip_cleanup:
+        description: 'Skip cleanup after tests (for debugging)'
+        required: false
+        default: 'false'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: nightly-e2e-wva-cks
+  cancel-in-progress: true
+
+jobs:
+  nightly:
+    uses: llm-d/llm-d-infra/.github/workflows/reusable-nightly-e2e-cks-helmfile.yaml@main
+    with:
+      guide_name: workload-autoscaling
+      namespace: llm-d-nightly-wva
+      deploy_wva: true
+      caller_repo: llm-d/llm-d-workload-variant-autoscaler
+      caller_ref: main
+      model_id: ${{ github.event.inputs.model_id || 'unsloth/Meta-Llama-3.1-8B' }}
+      accelerator_type: ${{ github.event.inputs.accelerator_type || 'H100' }}
+      wva_image_tag: ${{ github.event.inputs.image_tag || 'latest' }}
+      request_rate: ${{ github.event.inputs.request_rate || '20' }}
+      num_prompts: ${{ github.event.inputs.num_prompts || '3000' }}
+      max_num_seqs: ${{ github.event.inputs.max_num_seqs || '1' }}
+      hpa_stabilization_seconds: ${{ github.event.inputs.hpa_stabilization_seconds || '240' }}
+      image_override: 'ghcr.io/llm-d/llm-d-cuda-dev:latest'
+      skip_cleanup: ${{ github.event.inputs.skip_cleanup == 'true' }}
+      required_gpus: 2
+      recommended_gpus: 4
+      test_target: test-e2e
+    secrets: inherit
