@@ -26,11 +26,11 @@ set -Eeux
 
 cd /tmp
 
-if [ "${BUILD_DEBUG}" = "true" ]; then
-    # Disable sccache for nvshmem build in debug mode for nvcc + sccache + cmake weirdness. 
-    # Not an issue for regular builds, only for BUILD_DEBUG=true
-    export USE_SCCACHE="false"
-fi
+# if [ "${BUILD_DEBUG}" = "true" ]; then
+#     # Disable sccache for nvshmem build in debug mode for nvcc + sccache + cmake weirdness. 
+#     # Not an issue for regular builds, only for BUILD_DEBUG=true
+#     export USE_SCCACHE="false"
+# fi
 
 . /usr/local/bin/setup-sccache
 . "${VIRTUAL_ENV}/bin/activate"
