@@ -40,18 +40,6 @@ cd guides/precise-prefix-cache-aware
 helmfile apply -n ${NAMESPACE}
 ```
 
-**_Experimental_**: Disaggregated Tokenization
-In this path, the precise-prefix-cache-scorer plugin tokenizes and processes the user input in order to eventually compute prefix-cache hits.
-By default, the logic for tokenization and preprocessing is embedded within the inference scheduler.
-
-Through this experimental feature, the inference scheduler can delegate the preprocessing and tokenization of inputs to a tokenization-service deployed as a sidecar.
-To use, run this command instead of the above:
-
-```bash
-cd guides/precise-prefix-cache-aware
-DISAGGREGATED_TOKENIZATION=true helmfile apply -n ${NAMESPACE}
-```
-
 **_Experimental_**: Pod Discovery Mode
 By default, the KV events are published to a centralized ZMQ endpoint on the inference scheduler. With pod discovery mode, each vLLM pod publishes KV events on its own endpoint (`tcp://*:5557`), and the inference scheduler discovers and connects to these endpoints automatically.
 This is useful for active-active multi-scheduler deployments - to maintain a global view in each replica.
@@ -62,8 +50,6 @@ To enable pod discovery mode:
 cd guides/precise-prefix-cache-aware
 POD_DISCOVERY=true helmfile apply -n ${NAMESPACE}
 ```
-
-**_NOTE:_** Pod discovery mode and disaggregated tokenization are mutually exclusive options.
 
 **_NOTE:_** You can set the `$RELEASE_NAME_POSTFIX` env variable to change the release names. This is how we support concurrent installs. Ex: `RELEASE_NAME_POSTFIX=kv-events-2 helmfile apply -n ${NAMESPACE}`
 

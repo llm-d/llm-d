@@ -35,6 +35,27 @@ inferenceExtension:
         secretKeyRef:
           name: llm-d-hf-token
           key: HF_TOKEN
+  sidecar:
+    enabled: true
+    image: ghcr.io/llm-d/llm-d-uds-tokenizer:v0.5.0
+    imagePullPolicy: IfNotPresent
+    name: tokenizer-uds
+    env:
+      - name: TOKENIZERS_DIR
+        value: /tokenizers
+    volumeMounts:
+      - mountPath: /tokenizers
+        name: tokenizers
+      - mountPath: /tmp/tokenizer
+        name: tokenizer-uds
+  volumes:
+    - name: tokenizers
+      emptyDir: {}
+    - name: tokenizer-uds
+      emptyDir: {}
+  volumeMounts:
+    - mountPath: /tmp/tokenizer
+      name: tokenizer-uds
 
   pluginsConfigFile: "precise-prefix-cache-config.yaml"
   pluginsCustomConfig:
@@ -49,9 +70,11 @@ inferenceExtension:
               blockSize: 64
             indexerConfig:
               tokenizersPoolConfig:
-                modelName: "Qwen/Qwen3-32B"
-                hf:
-                  tokenizersCacheDir: "/tmp/tokenizers"
+                modelName: Qwen/Qwen3-32B
+                local: null
+                hf: null
+                uds:
+                  socketFile: /tmp/tokenizer/tokenizer-uds.socket
             kvEventsConfig:
               topicFilter: "kv@"
               concurrency: 4
