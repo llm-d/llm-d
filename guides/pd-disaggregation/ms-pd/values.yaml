@@ -39,7 +39,7 @@ decode:
       interval: "30s"
   containers:
     - name: "vllm"
-      image: ghcr.io/llm-d/llm-d-cuda:v0.5.0
+      image: ghcr.io/llm-d/llm-d-cuda-dev:sha-f7546ae
       modelCommand: vllmServe
       args:
         - "--block-size"
@@ -131,7 +131,7 @@ prefill:
       interval: "30s"
   containers:
     - name: "vllm"
-      image: ghcr.io/llm-d/llm-d-cuda:v0.5.0
+      image: ghcr.io/llm-d/llm-d-cuda-dev:sha-f7546ae
       modelCommand: vllmServe
       args:
         - "--block-size"
