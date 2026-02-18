@@ -88,7 +88,18 @@ jobs:
           IMAGE_TAG="nightly-${SHA}"
           FULL_IMAGE="ghcr.io/llm-d/llm-d-workload-variant-autoscaler:${IMAGE_TAG}"
           echo "Building WVA controller from main: $FULL_IMAGE"
-          make docker-build IMG="$FULL_IMAGE"
+          for attempt in 1 2 3; do
+            echo "Build attempt $attempt/3"
+            if make docker-build IMG="$FULL_IMAGE"; then
+              break
+            fi
+            if [ "$attempt" -eq 3 ]; then
+              echo "Build failed after 3 attempts"
+              exit 1
+            fi
+            echo "Build failed (likely transient registry error), retrying in 30s..."
+            sleep 30
+          done
           make docker-push IMG="$FULL_IMAGE"
           echo "image_tag=${IMAGE_TAG}" >> $GITHUB_OUTPUT
 
