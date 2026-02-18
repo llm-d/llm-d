@@ -130,7 +130,7 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 #################################################################
 FROM vllm-build
 
-ENV LD_LIBRARY_PATH="/usr/local/lib:/usr/lib:${LD_LIBRARY_PATH}"
+ENV LD_LIBRARY_PATH="/usr/local/lib:/usr/lib:${LD_LIBRARY_PATH:-}"
 
 RUN --mount=type=bind,from=vllm-build,src=/workspace/vllm/dist,target=dist \
     --mount=type=cache,target=/root/.cache/uv \

@@ -83,7 +83,10 @@ if [ "${BUILD_DEBUG}" = "true" ]; then
     )
 
     # NVSHMEM_DEBUG=ON enables runtime debug logging capabilities
-    # NVSHMEM_VERBOSE=ON enables verbose logging
+    # NOTE: NVSHMEM_VERBOSE is intentionally NOT set because:
+    # - It only controls build-time verbosity (ptxas info messages, etc.)
+    # - It does NOT affect runtime logging (that comes from NVSHMEM_DEBUG)
+    # - Runtime verbose logging is controlled by NVSHMEM_DEBUG=TRACE environment variable
     # NOTE: NVSHMEM_DEVEL is intentionally NOT set because:
     # - It only adds strict compiler warnings (-Werror -Wall -Wextra)
     # - It defines a macro that is never used in the code
@@ -93,7 +96,6 @@ if [ "${BUILD_DEBUG}" = "true" ]; then
     DEBUG_FLAGS=(
         -DCMAKE_BUILD_TYPE=RelWithDebInfo
         -DNVSHMEM_DEBUG=ON
-        -DNVSHMEM_VERBOSE=ON
     )
 
     NVSHMEM_BUILD_PERF_TESTS=1
@@ -132,7 +134,16 @@ cmake -S . -B build -G Ninja \
     "${CMAKE_EXTRA_FLAGS[@]}" \
     "${EFA_FLAGS[@]}"
 
-ninja -C build -j"$(nproc)"
+# Calculate max jobs based on available cores
+MAX_JOBS=$(nproc)
+if [ "${BUILD_DEBUG}" = "true" ]; then
+    # Leave one core free for system tasks to prevent CI runner timeout
+    MAX_JOBS=$((MAX_JOBS - 1))
+    # Ensure at least 1 job
+    [ "${MAX_JOBS}" -lt 1 ] && MAX_JOBS=1
+fi
+
+ninja -C build -j"${MAX_JOBS}"
 cmake --install build
 rm -rf build
 
@@ -165,7 +176,8 @@ cmake -S . -B build -G Ninja \
     "${EFA_FLAGS[@]}"
 
 # explicitly build one target after re-setting up build with all bindings options (default is via discovery)
-ninja -C build "build_nvshmem4py_wheel_cu${CUDA_MAJOR}_${PYTHON_VERSION}"
+# Reuse MAX_JOBS calculation from above
+ninja -C build -j"${MAX_JOBS}" "build_nvshmem4py_wheel_cu${CUDA_MAJOR}_${PYTHON_VERSION}"
 
 # Parse our python version to platforming tag, eg: 3.12 --> 312
 PYTAG="cp${PYTHON_VERSION/./}"
