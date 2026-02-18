@@ -405,8 +405,6 @@ jobs:
             FINAL_BASE_IMAGE_SUFFIX=${{ matrix.base_image_suffix }}
             CACHE_BUSTER=${{ github.ref_name }}-${{ github.run_id }}
             ENABLE_EFA=true
-            PPLX_KERNELS_REPO="https://github.com/perplexityai/pplx-garden.git"
-            PPLX_KERNELS_VERSION="f84bc412ef651e5f1440d521f14577107082b087"
           labels: ${{ steps.meta.outputs.labels }}
           github-token: ${{ secrets.GHCR_TOKEN }}
           secrets: |
@@ -432,8 +430,6 @@ jobs:
             FINAL_BASE_IMAGE_SUFFIX=${{ matrix.base_image_suffix }}
             CACHE_BUSTER=${{ github.ref_name }}-${{ github.run_id }}
             ENABLE_EFA=true
-            PPLX_KERNELS_REPO="https://github.com/perplexityai/pplx-garden.git"
-            PPLX_KERNELS_VERSION="f84bc412ef651e5f1440d521f14577107082b087"
           labels: ${{ steps.meta.outputs.labels }}
           outputs: >-
             type=image,name=${{ env.REGISTRY }}/${{ github.repository }}-aws${{ matrix.image_suffix }},
