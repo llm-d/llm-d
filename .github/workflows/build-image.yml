@@ -735,6 +735,8 @@ jobs:
             BUILD_BASE_IMAGE_SUFFIX=${{ matrix.base_image_suffix }}
             FINAL_BASE_IMAGE_SUFFIX=${{ matrix.base_image_suffix }}
             ENABLE_EFA=true
+            PPLX_KERNELS_REPO="https://github.com/perplexityai/pplx-garden.git"
+            PPLX_KERNELS_VERSION="f84bc412ef651e5f1440d521f14577107082b087"
           github-token: ${{ secrets.GHCR_TOKEN }}
           secrets: |
             aws_access_key_id=${{ secrets.AWS_ACCESS_KEY_ID_S3_BUCKET_ONLY }}
@@ -765,6 +767,8 @@ jobs:
             VLLM_PRECOMPILED_WHEEL_COMMIT=${{ inputs.vllm_precompiled_wheel_commit || steps.vllm-version.outputs.precompiled_wheel_commit }}
             VLLM_PREBUILT=${{ steps.vllm-version.outputs.prebuilt }}
             VLLM_USE_PRECOMPILED=${{ steps.vllm-version.outputs.use_precompiled }}
+            PPLX_KERNELS_REPO="https://github.com/perplexityai/pplx-garden.git"
+            PPLX_KERNELS_VERSION="f84bc412ef651e5f1440d521f14577107082b087"
           labels: ${{ steps.meta.outputs.labels }}
           outputs: >-
             type=image,name=${{ env.REGISTRY }}/${{ github.repository }}-aws-dev${{ matrix.image_suffix }},
