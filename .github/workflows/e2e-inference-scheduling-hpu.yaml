@@ -20,9 +20,10 @@ on:
 jobs:
   deploy_and_validate:
     if: >
-      github.event_name == 'workflow_dispatch' ||
+      github.repository == 'llm-d/llm-d' &&
+      (github.event_name == 'workflow_dispatch' ||
       github.event_name == 'pull_request' ||
-      github.event_name == 'schedule'
+      github.event_name == 'schedule')
     runs-on: hpu
     env:
       NAMESPACE: "llm-d-hpu-is"

@@ -31,8 +31,9 @@ permissions:
 jobs:
   setup:
     if: >
-      github.event_name == 'workflow_dispatch' ||
-      github.event_name == 'schedule'
+      github.repository == 'llm-d/llm-d' &&
+      (github.event_name == 'workflow_dispatch' ||
+      github.event_name == 'schedule')
     runs-on: ubuntu-latest
     outputs:
       instance_id: ${{ steps.launch.outputs.instance_id }}

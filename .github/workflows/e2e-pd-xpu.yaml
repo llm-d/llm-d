@@ -30,6 +30,7 @@ on:
 
 jobs:
   deploy_and_validate:
+    if: github.repository == 'llm-d/llm-d'
     runs-on: xpu
     env:
       NAMESPACE: "llm-d-xpu-pd"

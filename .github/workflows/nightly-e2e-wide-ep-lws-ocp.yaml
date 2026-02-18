@@ -32,6 +32,7 @@ concurrency:
 
 jobs:
   nightly:
+    if: github.repository == 'llm-d/llm-d'
     uses: llm-d/llm-d-infra/.github/workflows/reusable-nightly-e2e-openshift-helmfile.yaml@main
     with:
       guide_name: wide-ep-lws

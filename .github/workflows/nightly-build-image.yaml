@@ -19,6 +19,7 @@ concurrency:
 
 jobs:
   build:
+    if: github.repository == 'llm-d/llm-d'
     uses: ./.github/workflows/build-image.yml
     with:
       force_build: true

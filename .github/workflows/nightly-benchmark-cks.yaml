@@ -30,6 +30,7 @@ concurrency:
 
 jobs:
   trigger-benchmark:
+    if: github.repository == 'llm-d/llm-d'
     name: Trigger CKS Benchmark
     runs-on: ubuntu-latest
     steps:

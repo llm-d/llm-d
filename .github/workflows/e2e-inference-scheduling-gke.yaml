@@ -20,7 +20,8 @@ permissions:
 jobs:
   deploy_and_validate:
     if: >
-      github.event_name == 'schedule' ||
+      github.repository == 'llm-d/llm-d' &&
+      (github.event_name == 'schedule' ||
       github.event_name == 'pull_request' ||
       github.event_name == 'workflow_dispatch' ||
       (
@@ -34,7 +35,7 @@ jobs:
           github.event.comment.author_association == 'MEMBER' ||
           github.event.comment.author_association == 'COLLABORATOR'
         )
-      )
+      ))
     name: Test on ${{ matrix.accelerator.name }}
     runs-on: ubuntu-latest
 
