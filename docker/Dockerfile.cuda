@@ -59,7 +59,7 @@ ARG LMCACHE_VERSION="v0.3.14"
 # ARG DEEPEP_VERSION="92fe2deaec24bc92ebd9de276daa6ca9ed602ed4" 
 
 # My fork of Deepep for duplicate nvshmem IBGDA definitions, see: https://github.com/deepseek-ai/DeepEP/pull/581. 
-# Ideally we take: https://github.com/deepseek-ai/DeepEP/pull/574. Based off pf v1.2.1 stable release. Needed for Compat with Nvshmem 3.5.19-1
+# Ideally we take: https://github.com/deepseek-ai/DeepEP/pull/574. Based off of v1.2.1 stable release. Needed for Compat with Nvshmem 3.5.19-1
 ARG DEEPEP_REPO="https://github.com/Gregory-Pereira/DeepEP"
 ARG DEEPEP_VERSION="fix/nvshmem-ibgda-multiple-definition" 
 

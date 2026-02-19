@@ -42,16 +42,12 @@ RUN apt-get install -y libze1 libze-dev libze-intel-gpu1 intel-opencl-icd libze-
 
 # This oneccl contains the BMG support which is not the case for default version of oneapi 2025.2.
 RUN wget https://github.com/uxlfoundation/oneCCL/releases/download/2021.15.6/intel-oneccl-2021.15.6.9_offline.sh
-RUN bash intel-oneccl-2021.15.6.9_offline.sh -a --silent --eula accept
-
-
-# Explicit runtime environment
-ENV ONEAPI_ROOT=/opt/intel/oneapi
-ENV CCL_ROOT=$ONEAPI_ROOT/ccl/2021.15
-ENV PATH=$CCL_ROOT/bin:$PATH
-ENV LD_LIBRARY_PATH=$CCL_ROOT/lib:$LD_LIBRARY_PATH
+RUN bash intel-oneccl-2021.15.6.9_offline.sh -a --silent --eula accept && \
+    echo "source /opt/intel/oneapi/setvars.sh --force" >> /root/.bashrc && \
+    echo "source /opt/intel/oneapi/ccl/2021.15/env/vars.sh --force" >> /root/.bashrc
 
 SHELL ["/bin/bash", "-c"]
+CMD ["/bin/bash", "-c", "source /root/.bashrc && exec /bin/bash"]
 
 # Clone vLLM and build for XPU
 WORKDIR /workspace
