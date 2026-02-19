@@ -121,6 +121,7 @@ jobs:
       max_num_seqs: ${{ github.event.inputs.max_num_seqs || '1' }}
       hpa_stabilization_seconds: ${{ github.event.inputs.hpa_stabilization_seconds || '240' }}
       image_override: 'ghcr.io/llm-d/llm-d-cuda-dev:latest'
+      allow_gpu_preemption: true
       skip_cleanup: ${{ github.event.inputs.skip_cleanup == 'true' }}
       required_gpus: 2
       recommended_gpus: 4
