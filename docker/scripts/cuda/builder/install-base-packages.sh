@@ -7,7 +7,6 @@ set -Eeux
 # - PYTHON_VERSION: Python version to install (e.g., 3.12)
 # - CUDA_MAJOR: CUDA major version (e.g., 12)
 # - TARGETOS: Target OS - either 'ubuntu' or 'rhel' (default: rhel)
-# - TARGETPLATFORM: platform target (linux/arm64 or linux/amd64)
 
 TARGETOS="${TARGETOS:-rhel}"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -30,6 +29,7 @@ if [ "$TARGETOS" = "ubuntu" ]; then
 elif [ "$TARGETOS" = "rhel" ]; then
     dnf -q update -y
     dnf -q install -y jq
+    ensure_registered
 fi
 
 # main installation logic
@@ -42,29 +42,8 @@ elif [ "$TARGETOS" = "rhel" ]; then
     setup_rhel_repos "$DOWNLOAD_ARCH"
     mapfile -t INSTALL_PKGS < <(load_layered_packages rhel "builder-packages.json" "cuda")
     install_packages rhel "${INSTALL_PKGS[@]}"
-    
-    # if using efa, we already installed hwloc as part of base RPMs
-    if [ "${ENABLE_EFA}" != "true" ]; then
-        # Install entitlement RPMs using rpm directly with --nodeps
-        # The system glibc already provides all required symbols (verified: GLIBC_2.2.5 through 2.34)
-        # but dnf fails to recognize this when installing from local RPM files
-        if [ "${TARGETPLATFORM}" = "linux/amd64" ]; then
-            rpm -ivh --nodeps /tmp/packages/rpms/builder/amd64/base/*.rpm
-            rpm -ivh --nodeps /tmp/packages/rpms/builder/amd64/devel/*.rpm
-        elif [ "${TARGETPLATFORM}" = "linux/arm64" ]; then
-            rpm -ivh --nodeps /tmp/packages/rpms/builder/arm64/base/*.rpm
-            rpm -ivh --nodeps /tmp/packages/rpms/builder/arm64/devel/*.rpm
-        fi
-    else
-        # EFA case, install just devel, base required as EFA dep
-        if [ "${TARGETPLATFORM}" = "linux/amd64" ]; then
-            rpm -ivh --nodeps /tmp/packages/rpms/builder/amd64/devel/*.rpm
-        elif [ "${TARGETPLATFORM}" = "linux/arm64" ]; then
-            rpm -ivh --nodeps /tmp/packages/rpms/builder/arm64/devel/*.rpm
-        fi
-    fi
-
     cleanup_packages rhel
+    ensure_unregistered
 else
     echo "ERROR: Unsupported TARGETOS='$TARGETOS'. Must be 'ubuntu' or 'rhel'." >&2
     exit 1

@@ -1,7 +1,7 @@
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 resources:
-  # Use the CPU offloading base to form a tiered cache structure: HBM - CPU - storage.
+  # Use the CPU offloading base to form a tiered cache strcuture: HBM - CPU - storage.
   - ../../../../cpu/manifests/vllm/lmcache-connector
 patches:
   - target:
@@ -52,19 +52,3 @@ patches:
         value:
           name: files-storage
           mountPath: /mnt/files-storage
-
-# Update the permission for lustre instance to allow VLLM user to write to Lustre
-  - target:
-      kind: Deployment
-      name: llm-d-model-server
-    patch: |-
-      - op: add
-        path: /spec/template/spec/initContainers
-        value:
-          - name: fix-lustre-permissions
-            image: busybox:latest
-            # Add Write permission to the Group
-            command: ["sh", "-c", "chmod -R g+w /mnt/files-storage/"]
-            volumeMounts:
-            - name: files-storage
-              mountPath: /mnt/files-storage

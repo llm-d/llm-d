@@ -19,8 +19,6 @@ environments:
   xpu: &XPU
     values:
       - ../prereq/gateway-provider/common-configurations/istio.yaml
-  hpu: &HPU
-    <<: *I
   aks: &AKS
     <<: *I
   default:
@@ -65,11 +63,13 @@ releases:
           name: {{ .Environment.Values.provider.name }}
         inferenceExtension:
           monitoring:
-            prometheus:
+            gke:
               enabled: true
+            prometheus:
+              enabled: false
     {{- end }}
     # Apply destination rule for anything istio
-    {{- if or (eq .Environment.Name "istio") (eq .Environment.Name "default") (eq .Environment.Name "aks") (eq .Environment.Name "xpu") (eq .Environment.Name "hpu") }}
+    {{- if or (eq .Environment.Name "istio") (eq .Environment.Name "default") (eq .Environment.Name "aks") (eq .Environment.Name "xpu") }}
       - provider:
           name: {{ .Environment.Values.provider.name }}
           istio:
@@ -98,8 +98,6 @@ releases:
     values:
     {{- if eq .Environment.Name "xpu" }}
       - ms-pd/values_xpu.yaml
-    {{- else if eq .Environment.Name "hpu" }}
-      - ms-pd/values_hpu.yaml
     {{- else if eq .Environment.Name "gke_tpu" }}
       - ms-pd/values_tpu.yaml
     {{- else if eq .Environment.Name "gke_pd_rdma" }}

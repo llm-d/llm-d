@@ -5,6 +5,33 @@
 # - CUDA_MAJOR: CUDA major version (e.g., 12)
 # - CUDA_MINOR: CUDA minor version (e.g., 9)
 # - PYTHON_VERSION: Python version (e.g., 3.12)
+# Optional docker secret mounts:
+# - /run/secrets/subman_org: Subscription Manager Organization - used if on a ubi based image for entitlement
+# - /run/secrets/subman_activation_key: Subscription Manager Activation key - used if on a ubi based image for entitlement
+
+# Assumes rhel check in consuming script
+ensure_registered() {
+  install -d -m0755 /etc/pki/consumer /etc/pki/entitlement /etc/rhsm
+  subscription-manager clean || true
+  if [ ! -f /etc/pki/consumer/cert.pem ]; then
+    test -f /run/secrets/subman_org && test -f /run/secrets/subman_activation_key
+    subscription-manager register \
+      --org "$(cat /run/secrets/subman_org)" \
+      --activationkey "$(cat /run/secrets/subman_activation_key)" \
+      --force
+    subscription-manager refresh || true
+  fi
+}
+
+# Assumes rhel check in consuming script
+ensure_unregistered() {
+  echo "beginning un-registration process"
+  if [ -f /etc/pki/consumer/cert.pem ]; then
+    subscription-manager unregister || true
+  fi
+  subscription-manager clean || true
+  rm -rf /etc/pki/entitlement/* /etc/pki/consumer/* /etc/rhsm/* /var/cache/dnf/* || true
+}
 
 # detect architecture for repo URLs
 get_download_arch() {
@@ -180,10 +207,6 @@ merge_package_manifests() {
 # accelerator: "cuda", "xpu", "hpu", etc.
 # returns: package names (one per line) for the target os
 # if no accelerator is passed only the common manifests will be used
-# supports three scenarios:
-#   1. both common and accelerator files exist - merge them (accelerator overrides common)
-#   2. only common file exists - use it
-#   3. only accelerator file exists - use it
 load_layered_packages() {
     local os="$1"
     local package_type="$2"
@@ -192,37 +215,24 @@ load_layered_packages() {
     local common_file="/tmp/packages/common/${package_type}"
     local accelerator_file="/tmp/packages/${accelerator}/${package_type}"
 
-    # check if at least one file exists
-    if [ ! -f "$common_file" ] && [ ! -f "$accelerator_file" ]; then
-        echo "ERROR: No package file found at $common_file or $accelerator_file" >&2
+    # check if files exist
+    if [ ! -f "$common_file" ]; then
+        echo "ERROR: Common package file not found: $common_file" >&2
         exit 1
     fi
 
-    local merged_manifest
+    # load common packages
+    local common_manifest common_expanded
+    common_manifest=$(cat "$common_file")
+    common_expanded=$(expand_vars "$common_manifest")
 
-    # scenario 1: both files exist - merge them
-    if [ -f "$common_file" ] && [ -f "$accelerator_file" ]; then
-        local common_manifest common_expanded
-        common_manifest=$(cat "$common_file")
-        common_expanded=$(expand_vars "$common_manifest")
-
+    # load accelerator packages if they exist
+    local merged_manifest="$common_expanded"
+    if [ -f "$accelerator_file" ]; then
         local accel_manifest accel_expanded
         accel_manifest=$(cat "$accelerator_file")
         accel_expanded=$(expand_vars "$accel_manifest")
-
         merged_manifest=$(merge_package_manifests "$common_expanded" "$accel_expanded")
-
-    # scenario 2: only common file exists
-    elif [ -f "$common_file" ]; then
-        local common_manifest
-        common_manifest=$(cat "$common_file")
-        merged_manifest=$(expand_vars "$common_manifest")
-
-    # scenario 3: only accelerator file exists
-    else
-        local accel_manifest
-        accel_manifest=$(cat "$accelerator_file")
-        merged_manifest=$(expand_vars "$accel_manifest")
     fi
 
     # extract package list for target OS

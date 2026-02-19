@@ -107,7 +107,7 @@ EPP provides additional metrics for request routing, scheduling latency, and plu
   # In your gaie-*/values.yaml files
   inferenceExtension:
     monitoring:
-      prometheus:
+      gke:
         enabled: true
   ```
 

@@ -1,9 +1,6 @@
 ARG ONEAPI_VERSION=2025.2.2-0
-
-# vLLM build settings - defaults should match docker/vllm-version file
-# Override here for platform-specific testing or via build args
-ARG VLLM_REPO
-ARG VLLM_COMMIT_SHA
+ARG VLLM_REPO="https://github.com/vllm-project/vllm.git"
+ARG VLLM_COMMIT_SHA="d7de043d55d1dd629554467e23874097e1c48993"
 
 FROM intel/deep-learning-essentials:${ONEAPI_VERSION}-devel-ubuntu24.04 AS vllm-base
 

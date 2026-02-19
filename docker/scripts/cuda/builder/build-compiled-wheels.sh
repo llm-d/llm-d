@@ -46,18 +46,9 @@ git clone "${DEEPEP_REPO}" deepep
 cd deepep
 git fetch origin "${DEEPEP_VERSION}" # Workaround for claytons floating commit
 git checkout -q "${DEEPEP_VERSION}"
-# Force NVSHMEM IBGDA constant to be extern in host-compiled TUs (prevents duplicate definition)
-BACKUP_CXXFLAGS="${CXXFLAGS-}"
-export CXXFLAGS="${CXXFLAGS:-} -D__NVSHMEM_NUMBA_SUPPORT__"
 uv build --wheel --no-build-isolation --out-dir /wheels
 cd ..
 rm -rf deepep
-# restore CXXFLAGS exactly as it was (unset vs set)
-if [ -n "${BACKUP_CXXFLAGS+x}" ]; then
-  export CXXFLAGS="${BACKUP_CXXFLAGS}"
-else
-  unset CXXFLAGS
-fi
 
 # build DeepGEMM wheel
 git clone "${DEEPGEMM_REPO}" deepgemm

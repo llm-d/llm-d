@@ -1,8 +1,11 @@
 #!/bin/bash
-set -Eeux
+set -Eeu
 
 # installs runtime packages for CUDA image
 #
+# Required docker secret mounts:
+# - /run/secrets/subman_org: Subscription Manager Organization - used if on a ubi based image for entitlement
+# - /run/secrets/subman_activation_key: Subscription Manager Activation key - used if on a ubi based image for entitlement
 # Required environment variables:
 # - PYTHON_VERSION: Python version to install (e.g., 3.12)
 # - CUDA_MAJOR: CUDA major version (e.g., 12)
@@ -20,7 +23,7 @@ if [ ! -f "$UTILS_SCRIPT" ]; then
     echo "ERROR: package-utils.sh not found" >&2
     exit 1
 fi
-# shellcheck source=/dev/null
+# shellcheck source=docker/scripts/cuda/common/package-utils.sh
 . "$UTILS_SCRIPT"
 
 DOWNLOAD_ARCH=$(get_download_arch)
@@ -39,21 +42,19 @@ if [ "$TARGETOS" = "ubuntu" ]; then
     setup_ubuntu_repos
     mapfile -t INSTALL_PKGS < <(load_layered_packages ubuntu "runtime-packages.json" "cuda")
     install_packages ubuntu "${INSTALL_PKGS[@]}"
-    # This if statement is redundent right now (currently no EFA on our ubuntu images),
-    # but its included in case we figure out EFA on Ubuntu images.
-    if [ "${ENABLE_EFA}" != "true" ]; then
-        mapfile -t INSTALL_RDMA_PKGS < <(load_layered_packages ubuntu "runtime-rdma-packages.json" "cuda")
-        install_packages ubuntu "${INSTALL_RDMA_PKGS[@]}"
-    fi
     cleanup_packages ubuntu
+
 elif [ "$TARGETOS" = "rhel" ]; then
     setup_rhel_repos "$DOWNLOAD_ARCH"
     mapfile -t INSTALL_PKGS < <(load_layered_packages rhel "runtime-packages.json" "cuda")
     install_packages rhel "${INSTALL_PKGS[@]}"
-    # # If not using EFA, runtime-rdma-packages file owns rdma installation
-    if [ "${ENABLE_EFA}" != "true" ]; then
-        mapfile -t INSTALL_RDMA_PKGS < <(load_layered_packages rhel "runtime-rdma-packages.json" "cuda")
-        install_packages rhel "${INSTALL_RDMA_PKGS[@]}"
+    # Install hwloc-libs from entitlement RPMs using rpm directly with --nodeps
+    # The system glibc already provides all required symbols (verified: GLIBC_2.2.5 through 2.34)
+    # but dnf fails to recognize this when installing from local RPM files
+    if [ "${TARGETPLATFORM}" = "linux/amd64" ]; then
+        rpm -ivh --nodeps /tmp/packages/rpms/amd64/hwloc-libs*.rpm
+    elif [ "${TARGETPLATFORM}" = "linux/arm64" ]; then
+        rpm -ivh --nodeps /tmp/packages/rpms/arm64/hwloc-libs*.rpm
     fi
     cleanup_packages rhel
 else

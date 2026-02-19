@@ -4,8 +4,8 @@ on:
   # Runs with a PR comment /run-gke-wide-ep
   issue_comment:
     types: [created]
-  schedule:
-    - cron: '0 12 * * *'  # 5AM PST (12:00 UTC)
+  schedule:  # TODO: enable once validated functional
+    - cron: '0 12 * * *'  # 5AM PST (11:00 UTC)
   workflow_dispatch:
     inputs:
       pr_or_branch:
@@ -20,8 +20,7 @@ permissions:
 jobs:
   deploy_and_validate:
     if: >
-      github.repository == 'llm-d/llm-d' &&
-      (github.event_name == 'schedule' ||
+      github.event_name == 'schedule' ||
       github.event_name == 'pull_request' ||
       github.event_name == 'workflow_dispatch' ||
       (
@@ -35,7 +34,7 @@ jobs:
           github.event.comment.author_association == 'MEMBER' ||
           github.event.comment.author_association == 'COLLABORATOR'
         )
-      ))
+      )
     runs-on: ubuntu-latest
 
     env:
@@ -51,7 +50,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v4
         with:
           persist-credentials: false
 
@@ -232,7 +231,7 @@ jobs:
             mv ~/install-deps.log . || true
 
       - name: Upload pod logs as artifact
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v4
         if: always()
         with:
           name: llmd-pod-logs-wide-ep

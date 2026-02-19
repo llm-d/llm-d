@@ -1,39 +1,30 @@
 # Intel Gaudi configuration using imageDefault mode.
 # This configuration is for single-node Gaudi setup without prefill.
-# Models are downloaded directly from Hugging Face Hub.
+# Models are used from prepopulated model-pvc PVC using Hugging Face Hub.
 # Gaudi warmup is skipped for startup speed.
 # Custom vLLM image for Gaudi is used for now.
 # Use DRA instead of device plugins.
-#
-# Prerequisites:
-# - Intel Gaudi hardware (Gaudi 1, Gaudi 2, or Gaudi 3)
-# - Kubernetes 1.34+ with DRA feature gates enabled
-# - Intel Resource Drivers for Kubernetes installed
-#   Repository: https://github.com/intel/intel-resource-drivers-for-kubernetes
-#   This driver is required for Dynamic Resource Allocation (DRA) support.
-# - Habana driver installed on host nodes
 
 modelArtifacts:
   name: meta-llama/Llama-3.1-8B-Instruct
-  uri: "hf://meta-llama/Llama-3.1-8B-Instruct"
+  uri: "pvc+hf://model-pvc/meta-llama/Llama-3.1-8B-Instruct"
   size: 50Gi
   authSecretName: "llm-d-hf-token"
   labels:
     llm-d.ai/inference-serving: "true"
     llm-d.ai/guide: "inference-scheduling"
-    llm-d.ai/hardware-variant: "hpu"
+    llm-d.ai/hardware-vairant: "hpu"
     llm-d.ai/accelerator-vendor: "intel"
     llm-d.ai/model: "Llama-3.1-8B-Instruct"
 
-# Configure accelerator type for Intel Gaudi via DRA
-accelerator:
-  type: intel-gaudi
-  dra: true
+dra:
+  enabled: true
+  type: "intel-gaudi"
 
 routing:
   proxy:
     enabled: false  # removes sidecar from deployment - no PD in inference scheduling
-    targetPort: 8000  # controls vLLM port to matchup with sidecar if deployed
+    targetPort: 8000  # controlls vLLM port to matchup with sidecar if deployed
 
 # Decode pod configuration for Intel Gaudi - simplified with imageDefault
 decode:

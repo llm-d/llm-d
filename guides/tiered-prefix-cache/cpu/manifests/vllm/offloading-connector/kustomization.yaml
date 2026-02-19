@@ -13,7 +13,7 @@ patches:
           exec vllm serve \
             Qwen/Qwen3-32B \
             --tensor-parallel-size 2 \
-            --kv-transfer-config '{"kv_connector":"OffloadingConnector","kv_role":"kv_both","kv_connector_extra_config":{"cpu_bytes_to_use":107374182400}}' \
+            --kv-transfer-config '{"kv_connector":"OffloadingConnector","kv_role":"kv_both","kv_connector_extra_config":{"num_cpu_blocks":41000}}' \
             --port 8000 \
             --max-num-seq 1024
   - target:

@@ -4,7 +4,7 @@ on:
   # Runs with a PR comment /run-gke-inference-scheduling
   issue_comment:
     types: [created]
-  schedule:
+  schedule:  # TODO: enable once validated functional
     - cron: '0 10 * * *'  # 3AM PST (10:00 UTC)
   workflow_dispatch:
     inputs:
@@ -20,8 +20,7 @@ permissions:
 jobs:
   deploy_and_validate:
     if: >
-      github.repository == 'llm-d/llm-d' &&
-      (github.event_name == 'schedule' ||
+      github.event_name == 'schedule' ||
       github.event_name == 'pull_request' ||
       github.event_name == 'workflow_dispatch' ||
       (
@@ -35,7 +34,7 @@ jobs:
           github.event.comment.author_association == 'MEMBER' ||
           github.event.comment.author_association == 'COLLABORATOR'
         )
-      ))
+      )
     name: Test on ${{ matrix.accelerator.name }}
     runs-on: ubuntu-latest
 
@@ -63,7 +62,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v4
         with:
           persist-credentials: false
 
@@ -217,7 +216,7 @@ jobs:
             mv ~/install-deps.log . || true
 
       - name: Upload pod logs as artifact
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v4
         if: always()
         with:
           name: llmd-pod-logs-inference-scheduling-${{ matrix.accelerator.name }}
