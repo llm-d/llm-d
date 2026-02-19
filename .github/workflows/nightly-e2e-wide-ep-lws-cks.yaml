@@ -234,6 +234,10 @@ jobs:
                         mountPath: /dev/shm
         DECODE_EOF
 
+        # --- ServiceAccount (copy from base) ---
+        cp "guides/wide-ep-lws/manifests/modelserver/base/serviceAccount.yaml" \
+          "${NIGHTLY_DIR}/serviceAccount.yaml"
+
         # --- Kustomization for nightly overlay ---
         cat > "${NIGHTLY_DIR}/kustomization.yaml" <<'KUSTOM_EOF'
         apiVersion: kustomize.config.k8s.io/v1beta1
@@ -241,7 +245,7 @@ jobs:
         resources:
           - prefill.yaml
           - decode.yaml
-          - ../base/serviceAccount.yaml
+          - serviceAccount.yaml
         KUSTOM_EOF
 
         # Override image if IMAGE_OVERRIDE is set by the reusable workflow
