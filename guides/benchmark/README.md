@@ -140,6 +140,21 @@ For full, customizable benchmarking, please refer to [llm-d-benchmark](https://g
 >
 > </details>
 > </td>
+> <td>
+> <details>
+> <summary><b>Workload Variant Autoscaling (WVA) + Intelligent Inference Scheduling</b></summary>
+>
+> ```bash
+> export GATEWAY_SVC=$(kubectl get svc -n "${NAMESPACE}" \
+>   -l gateway.networking.k8s.io/gateway-name=infra-inference-scheduling-inference-gateway \
+>   --no-headers  -o=custom-columns=:metadata.name \
+>   | head -1
+> )
+> export BENCHMARK_TEMPLATE="${BENCH_TEMPLATE_DIR}"/wva_inference_scheduling_guidellm_template.yaml
+>   ```
+>
+> </details>
+> </td>
 > </tr>
 > </table>
 
