@@ -17,6 +17,15 @@ This deploys a gateway suitable for GKE, using the `gke-l7-regional-external-man
 kubectl apply -k ./gke-l7-regional-external-managed -n ${NAMESPACE}
 ```
 
+<!-- TAB:GKE L7 Regional Internal Managed -->
+### GKE L7 Regional Internal Managed
+
+This deploys a gateway suitable for GKE, using the `gke-l7-rilb` gateway class.
+
+```bash
+kubectl apply -k ./gke-l7-rilb -n ${NAMESPACE}
+```
+
 <!-- TAB:Istio -->
 ### Istio
 
