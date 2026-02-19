@@ -5,6 +5,19 @@
 # 
 # WVA currently only supports the Inference Scheduling well-lit-path.
 # 
+# To see scale up and scale down occur while this workload is running
+# follow the below steps...
+# 
+# # In one terminal, in the namespace containing the llm-d stack, run:
+# > oc get hpa -w
+# 
+# # In another terminal, in the namespace containing the llm-d stack, run:
+# > oc get po -w
+# 
+# After sufficient work spawned, you will observe HPA replica targets increase
+# as well as decode pods increase. Once workload has decreased sufficiently, 
+# the replicas for decode pods will scale back down.
+# 
 
 
 endpoint:
@@ -39,7 +52,7 @@ workload:                         # yaml configuration for harness workload(s)
     request_type: text_completions
     profile: constant
     rate: [4,8,16,24]
-    max_seconds: 60
+    max_seconds: 300
     data:
       prompt_tokens_min: 10
       prompt_tokens_max: 8192

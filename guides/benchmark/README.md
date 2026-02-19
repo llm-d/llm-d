@@ -145,11 +145,22 @@ For full, customizable benchmarking, please refer to [llm-d-benchmark](https://g
 > <summary><b>Workload Variant Autoscaling (WVA) + Intelligent Inference Scheduling</b></summary>
 >
 > ```bash
+> # To obtain the Gateway SVC, please find your inference gateway pod first, then obtain the name.
+> #
+> # For example:
+> #
+> # > oc describe po <INFERENCE-GATEWAY-POD> | grep gateway.networking.k8s.io/gateway-name
+> # >           gateway.networking.k8s.io/gateway-name=infra-llmdbench-inference-gateway
+> # > export GATEWAY_NAME=infra-llmdbench-inference-gateway
+> #
+> # Now we can use ${GATEWAY_NAME} in the below command to obtain the Gateway SVC.
+>
 > export GATEWAY_SVC=$(kubectl get svc -n "${NAMESPACE}" \
->   -l gateway.networking.k8s.io/gateway-name=infra-inference-scheduling-inference-gateway \
+>   -l gateway.networking.k8s.io/gateway-name=${GATEWAY_NAME} \
 >   --no-headers  -o=custom-columns=:metadata.name \
 >   | head -1
 > )
+>
 > export BENCHMARK_TEMPLATE="${BENCH_TEMPLATE_DIR}"/wva_inference_scheduling_guidellm_template.yaml
 >   ```
 >
