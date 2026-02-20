@@ -51,6 +51,16 @@ jobs:
           ref: ${{ env.TAG }}
           fetch-depth: 0
 
+      - name: Load vLLM version from file
+        id: vllm-version
+        run: |
+          source docker/vllm-version
+          echo "repo=${VLLM_REPO}" >> $GITHUB_OUTPUT
+          echo "commit_sha=${VLLM_COMMIT_SHA}" >> $GITHUB_OUTPUT
+          echo "precompiled_wheel_commit=${VLLM_PRECOMPILED_WHEEL_COMMIT}" >> $GITHUB_OUTPUT
+          echo "prebuilt=${VLLM_PREBUILT}" >> $GITHUB_OUTPUT
+          echo "use_precompiled=${VLLM_USE_PRECOMPILED}" >> $GITHUB_OUTPUT
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
@@ -117,6 +127,11 @@ jobs:
             BUILD_BASE_IMAGE_SUFFIX=${{ matrix.os == 'ubuntu' && 'ubuntu20.04' || matrix.base_image_suffix }}
             FINAL_BASE_IMAGE_SUFFIX=${{ matrix.base_image_suffix }}
             CACHE_BUSTER=${{ github.ref_name }}-${{ github.run_id }}
+            VLLM_REPO=${{ steps.vllm-version.outputs.repo }}
+            VLLM_COMMIT_SHA=${{ steps.vllm-version.outputs.commit_sha }}
+            VLLM_PRECOMPILED_WHEEL_COMMIT=${{ steps.vllm-version.outputs.precompiled_wheel_commit }}
+            VLLM_PREBUILT=${{ steps.vllm-version.outputs.prebuilt }}
+            VLLM_USE_PRECOMPILED=${{ steps.vllm-version.outputs.use_precompiled }}
           # disabling cache from cache to temporarily to prevent building issues
           # cache-from: >-
           #   type=gha,scope=cuda-${{ matrix.os }}-${{
@@ -369,6 +384,16 @@ jobs:
           ref: ${{ env.TAG }}
           fetch-depth: 0
 
+      - name: Load vLLM version from file
+        id: vllm-version
+        run: |
+          source docker/vllm-version
+          echo "repo=${VLLM_REPO}" >> $GITHUB_OUTPUT
+          echo "commit_sha=${VLLM_COMMIT_SHA}" >> $GITHUB_OUTPUT
+          echo "precompiled_wheel_commit=${VLLM_PRECOMPILED_WHEEL_COMMIT}" >> $GITHUB_OUTPUT
+          echo "prebuilt=${VLLM_PREBUILT}" >> $GITHUB_OUTPUT
+          echo "use_precompiled=${VLLM_USE_PRECOMPILED}" >> $GITHUB_OUTPUT
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
@@ -430,6 +455,11 @@ jobs:
             FINAL_BASE_IMAGE_SUFFIX=${{ matrix.base_image_suffix }}
             CACHE_BUSTER=${{ github.ref_name }}-${{ github.run_id }}
             ENABLE_EFA=true
+            VLLM_REPO=${{ steps.vllm-version.outputs.repo }}
+            VLLM_COMMIT_SHA=${{ steps.vllm-version.outputs.commit_sha }}
+            VLLM_PRECOMPILED_WHEEL_COMMIT=${{ steps.vllm-version.outputs.precompiled_wheel_commit }}
+            VLLM_PREBUILT=${{ steps.vllm-version.outputs.prebuilt }}
+            VLLM_USE_PRECOMPILED=${{ steps.vllm-version.outputs.use_precompiled }}
           labels: ${{ steps.meta.outputs.labels }}
           outputs: >-
             type=image,name=${{ env.REGISTRY }}/${{ github.repository }}-aws${{ matrix.image_suffix }},
