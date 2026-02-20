@@ -24,7 +24,7 @@ inferenceExtension:
     secret:
       name: inference-scheduling-gateway-sa-metrics-reader-secret
     prometheus:
-      enabled: true
+      enabled: false  # Set to true if Prometheus Operator (ServiceMonitor CRD) is installed on your cluster
       auth:
         # To allow unauthenticated /metrics access (e.g., for debugging with curl), set to false
         enabled: true

@@ -31,7 +31,7 @@ decode:
       cloud.google.com/gke-tpu-accelerator: "tpu7x"
   monitoring:
     podmonitor:
-      enabled: true
+      enabled: false  # Set to true if Prometheus Operator (PodMonitor CRD) is installed on your cluster
       portName: "vllm"  # decode vLLM service port (from routing.proxy.targetPort)
       path: "/metrics"
       interval: "30s"

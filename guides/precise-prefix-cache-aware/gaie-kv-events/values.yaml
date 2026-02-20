@@ -104,7 +104,7 @@ inferenceExtension:
     interval: "10s"
     # Prometheus ServiceMonitor will be created when enabled for EPP metrics collection
     prometheus:
-      enabled: true
+      enabled: false  # Set to true if Prometheus Operator (ServiceMonitor CRD) is installed on your cluster
       auth:
         # To allow unauthenticated /metrics access (e.g., for debugging with curl), set to false
         enabled: true

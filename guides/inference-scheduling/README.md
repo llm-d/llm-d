@@ -24,7 +24,7 @@ This example out of the box uses 16 GPUs (8 replicas x 2 GPUs each) of any suppo
 
 - Have the [proper client tools installed on your local system](../prereq/client-setup/README.md) to use this guide.
 - Ensure your cluster infrastructure is sufficient to [deploy high scale inference](../prereq/infrastructure)
-- Have the [Monitoring stack](../../docs/monitoring/README.md) installed on your system.
+- (Optional) Have the [Monitoring stack](../../docs/monitoring/README.md) installed on your system for metrics collection. If monitoring is installed, enable it by setting `monitoring.prometheus.enabled: true` in `gaie-inference-scheduling/values.yaml` and `decode.monitoring.podmonitor.enabled: true` in the appropriate modelservice values file for your hardware backend (e.g., `ms-inference-scheduling/values.yaml` for the default GPU deployment, or the corresponding `values_*.yaml` such as `values_amd.yaml`, `values_cpu.yaml`, `values_xpu.yaml`, or `values_tpu.yaml` when deploying with `-e amd`, `-e cpu`, `-e xpu`, or `-e gke_tpu`).
 - Create a namespace for installation.
 
   ```bash

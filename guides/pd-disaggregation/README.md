@@ -50,7 +50,7 @@ For Intel HPU deployments:
 * Have the [proper client tools installed on your local system](../prereq/client-setup/README.md) to use this guide.
 * Ensure your cluster infrastructure is sufficient to [deploy high scale inference](../prereq/infrastructure)
 * Configure and deploy your [Gateway control plane](../prereq/gateway-provider/README.md).
-* Have the [Monitoring stack](../../docs/monitoring/README.md) installed on your system.
+* (Optional) Have the [Monitoring stack](../../docs/monitoring/README.md) installed on your system for metrics collection. If monitoring is installed, enable it by setting `monitoring.prometheus.enabled: true` in the GAIE values file and `decode.monitoring.podmonitor.enabled: true` / `prefill.monitoring.podmonitor.enabled: true` in the model service values file.
 * Create a namespace for installation.
 
   ```bash

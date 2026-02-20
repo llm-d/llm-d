@@ -17,7 +17,7 @@ inferenceExtension:
       name: wide-ep-gateway-sa-metrics-reader-secret
     # Prometheus ServiceMonitor will be created when enabled for EPP metrics collection
     prometheus:
-      enabled: true
+      enabled: false  # Set to true if Prometheus Operator (ServiceMonitor CRD) is installed on your cluster
   pluginsConfigFile: "custom-plugins.yaml"
   pluginsCustomConfig:
     custom-plugins.yaml: |

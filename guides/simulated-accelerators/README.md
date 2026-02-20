@@ -10,7 +10,7 @@ This guide demonstrates how to deploy the simulator `ghcr.io/llm-d/llm-d-inferen
 
 - Have the [proper client tools installed on your local system](../prereq/client-setup/README.md) to use this guide.
 - Configure and deploy your [Gateway control plane](../prereq/gateway-provider/README.md).
-- Have the [Monitoring stack](../../docs/monitoring/README.md) installed on your system.
+- (Optional) Have the [Monitoring stack](../../docs/monitoring/README.md) installed on your system for metrics collection. If monitoring is installed, enable it by setting `monitoring.prometheus.enabled: true` in the GAIE values file and `decode.monitoring.podmonitor.enabled: true` / `prefill.monitoring.podmonitor.enabled: true` in the model service values file.
 - Create a namespace for installation.
 
   ```bash
