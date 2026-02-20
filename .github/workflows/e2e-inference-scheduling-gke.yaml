@@ -46,20 +46,23 @@ jobs:
         accelerator:
           - name: GPU
             helmfile_env: gke
-            pod_readiness_sleep_seconds: 180
+            gke_cluster_name: llm-d-e2e-us-east5
+            gke_cluster_zone: us-east5
+            timeout: 25m
           - name: TPU
-            helmfile_env: gke_tpu
-            pod_readiness_sleep_seconds: 1080
+            helmfile_env: gke_tpu_v6
+            gke_cluster_name: llm-d-e2e-us-east5 # TODO: Update cluster once v7x is supported. v7x is only available in us-central1
+            gke_cluster_zone: us-east5
+            timeout: 35m
 
     env:
       GCP_PROJECT_ID: llm-d-scale
-      GKE_CLUSTER_NAME: llm-d-e2e-us-east5
-      GKE_CLUSTER_ZONE: us-east5
       NAMESPACE: llm-d-inference-scheduling
       GATEWAY: gke-l7-regional-external-managed
       GATEWAY_TYPE: gke
       PR_OR_BRANCH: ${{ github.event.inputs.pr_or_branch || github.event.issue.number || github.event.number || 'main' }}
       HF_TOKEN: ${{ secrets.HF_TOKEN }}
+      TPU_JOB: tpu-job
 
     steps:
       - name: Checkout
@@ -103,11 +106,11 @@ jobs:
         uses: google-github-actions/setup-gcloud@cb1e50a9932213ecece00a606661ae9ca44f3397
         with:
           project_id: ${{ env.GCP_PROJECT_ID }}
-          install_components: 'kubectl,gke-gcloud-auth-plugin'
+          install_components: 'kubectl,gke-gcloud-auth-plugin,alpha'
 
       - name: Get GKE credentials
         run: |
-          gcloud container clusters get-credentials "${{ env.GKE_CLUSTER_NAME }}" --zone "${{ env.GKE_CLUSTER_ZONE }}"
+          gcloud container clusters get-credentials "${{ matrix.accelerator.gke_cluster_name }}" --zone "${{ matrix.accelerator.gke_cluster_zone }}"
 
       - name: Install prerequisites
         run: |
@@ -123,6 +126,44 @@ jobs:
             --from-literal="HF_TOKEN=${{ secrets.HF_TOKEN }}" \
             --namespace "${NAMESPACE}" \
             --dry-run=client -o yaml | kubectl apply -f -
+
+      - name: Request TPU v6E
+        if: matrix.accelerator.name == 'TPU'
+        run: |
+          cat <<EOF | kubectl apply -n "${NAMESPACE}" -f -
+          apiVersion: batch/v1
+          kind: Job
+          metadata:
+            name: ${TPU_JOB}
+          spec:
+            parallelism: 2
+            completions: 2
+            template:
+              spec:
+                nodeSelector:
+                  cloud.google.com/gke-flex-start: "true"
+                  cloud.google.com/gke-tpu-accelerator: tpu-v6e-slice
+                  cloud.google.com/gke-tpu-topology: 2x4
+                containers:
+                - name: tpu-container
+                  image: gcr.io/k8s-staging-perf-tests/sleep:latest
+                  args: ["3600s"]
+                  resources:
+                    requests:
+                      google.com/tpu: "8"
+                    limits:
+                      google.com/tpu: "8"
+                restartPolicy: OnFailure
+          EOF
+
+          kubectl wait pod \
+            --for=condition=Ready \
+            -l job-name=${TPU_JOB} \
+            -n "${NAMESPACE}" \
+            --timeout=45m
+
+          # Release the chips so test can use them
+          kubectl delete job ${TPU_JOB} -n "${NAMESPACE}"
 
       - name: Deploy model service and GIE with Helmfile
         run: |
@@ -155,8 +196,7 @@ jobs:
             --for=condition=Ready \
             --all \
             -n "${NAMESPACE}" \
-            --timeout=15m
-          sleep ${{ matrix.accelerator.pod_readiness_sleep_seconds }} # TODO: remove this once examples have readiness probes
+            --timeout=${{ matrix.accelerator.timeout }}
           echo "✅ All pods are ready."
           kubectl get pods -n "${NAMESPACE}"
 
@@ -205,16 +245,16 @@ jobs:
       - name: Collect and upload Kubernetes pod logs
         if: always()
         run: |
-            mkdir -p pod-logs-inference-scheduling
-            cd pod-logs-inference-scheduling
-            echo "Fetching ${NAMESPACE} pods log..."
-            kubectl get pods -n "${NAMESPACE}" --no-headers -o custom-columns=":metadata.name" \
-            | xargs -I{} sh -c 'kubectl logs --all-containers=true -n "${NAMESPACE}" {} > "{}.log" 2>&1'
-            echo "Fetching ${NAMESPACE} pods descriptions..."
-            kubectl get pods -n "${NAMESPACE}" --no-headers -o custom-columns=":metadata.name" \
-            | xargs -I{} sh -c 'kubectl describe pod -n "${NAMESPACE}" {} > "{}-describe.log" 2>&1'
-            mv ~/inference-scheduling-deployment.log . || true
-            mv ~/install-deps.log . || true
+          mkdir -p pod-logs-inference-scheduling
+          cd pod-logs-inference-scheduling
+          echo "Fetching ${NAMESPACE} pods log..."
+          kubectl get pods -n "${NAMESPACE}" --no-headers -o custom-columns=":metadata.name" \
+          | xargs -I{} sh -c 'kubectl logs --all-containers=true -n "${NAMESPACE}" {} > "{}.log" 2>&1'
+          echo "Fetching ${NAMESPACE} pods descriptions..."
+          kubectl get pods -n "${NAMESPACE}" --no-headers -o custom-columns=":metadata.name" \
+          | xargs -I{} sh -c 'kubectl describe pod -n "${NAMESPACE}" {} > "{}-describe.log" 2>&1'
+          mv ~/inference-scheduling-deployment.log . || true
+          mv ~/install-deps.log . || true
 
       - name: Upload pod logs as artifact
         uses: actions/upload-artifact@v6
@@ -237,3 +277,4 @@ jobs:
           cd guides/inference-scheduling
           helmfile destroy -e ${{ matrix.accelerator.helmfile_env }}
           kubectl delete -f httproute.gke.yaml -n ${NAMESPACE}
+          kubectl delete job ${TPU_JOB} -n "${NAMESPACE}" --ignore-not-found

@@ -1,0 +1,83 @@
+multinode: false
+
+modelArtifacts:
+  uri: "hf://meta-llama/Llama-3.1-70B-Instruct"
+  size: 160Gi
+  authSecretName: "llm-d-hf-token"
+  name: meta-llama/Llama-3.1-70B
+  labels:
+    llm-d.ai/inference-serving: "true"
+    llm-d.ai/guide: "inference-scheduling"
+    llm-d.ai/hardware-vairant: "tpu"
+    llm-d.ai/hardware-vendor: "google"
+    llm-d.ai/model: Llama-3.1-70B-Instruct
+
+accelerator:  # controlls specialized hardware Type
+  type: google
+
+routing:
+  proxy:
+    enabled: false  # removes sidecar from deployment - no PD in inference scheduling
+    targetPort: 8000  # controlls vLLM port to matchup with sidecar if deployed
+
+decode:
+  parallelism:
+    tensor: 8
+  create: true
+  replicas: 2
+  extraConfig:
+    nodeSelector:
+      cloud.google.com/gke-tpu-topology: "2x4"
+      cloud.google.com/gke-tpu-accelerator: "tpu-v6e-slice"
+  monitoring:
+    podmonitor:
+      enabled: true
+      portName: "vllm"  # decode vLLM service port (from routing.proxy.targetPort)
+      path: "/metrics"
+      interval: "30s"
+  containers:
+  - name: "vllm"
+    image: "vllm/vllm-tpu:v0.11.1"
+    modelCommand: vllmServe
+    args:
+      - "--max-model-len=4096"
+    ports:
+      - containerPort: 8000
+        name: vllm
+        protocol: TCP
+    mountModelVolume: true
+    volumeMounts:
+    - name: metrics-volume
+      mountPath: /.config
+    - name: torch-compile-cache
+      mountPath: /.cache
+    startupProbe:
+      httpGet:
+        path: /v1/models
+        port: vllm
+      initialDelaySeconds: 15
+      periodSeconds: 30
+      timeoutSeconds: 5
+      failureThreshold: 60
+    livenessProbe:
+      httpGet:
+        path: /health
+        port: vllm
+      periodSeconds: 10
+      timeoutSeconds: 5
+      failureThreshold: 3
+    readinessProbe:
+      httpGet:
+        path: /v1/models
+        port: vllm
+      periodSeconds: 5
+      timeoutSeconds: 2
+      failureThreshold: 3
+  volumes:
+    - name: metrics-volume
+      emptyDir: {}
+    - name: torch-compile-cache
+      emptyDir: {}
+
+prefill:
+  create: false
