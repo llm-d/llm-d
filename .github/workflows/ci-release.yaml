@@ -627,6 +627,13 @@ jobs:
           # fetch tags for docker/metadata semver handling (if you use git describe etc.)
           fetch-depth: 0
 
+      - name: Load vLLM version from file
+        id: vllm-version
+        run: |
+          source docker/vllm-version
+          echo "repo=${VLLM_REPO}" >> $GITHUB_OUTPUT
+          echo "commit_sha=${VLLM_COMMIT_SHA}" >> $GITHUB_OUTPUT
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
         with:
@@ -651,6 +658,9 @@ jobs:
           # disabling cache from cache to temporarily to prevent building issues
           # cache-from: type=gha,scope=cpu
           # cache-to: type=gha,mode=max,scope=cpu,oci-mediatypes=true,compression=zstd
+          build-args: |
+            VLLM_REPO=${{ steps.vllm-version.outputs.repo }}
+            VLLM_COMMIT_SHA=${{ steps.vllm-version.outputs.commit_sha }}
           tags: |
             ${{ env.REGISTRY }}/${{ github.repository }}-cpu:${{ env.TAG }}
             ${{ env.REGISTRY }}/${{ github.repository }}-cpu:latest
@@ -766,6 +776,13 @@ jobs:
           # fetch tags for docker/metadata semver handling (if you use git describe etc.)
           fetch-depth: 0
 
+      - name: Load vLLM version from file
+        id: vllm-version
+        run: |
+          source docker/vllm-version
+          echo "repo=${VLLM_REPO}" >> $GITHUB_OUTPUT
+          echo "commit_sha=${VLLM_COMMIT_SHA}" >> $GITHUB_OUTPUT
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
         with:
@@ -789,6 +806,9 @@ jobs:
           provenance: true
           # cache-from: type=gha,scope=xpu
           # cache-to: type=gha,mode=max,scope=xpu,oci-mediatypes=true,compression=zstd
+          build-args: |
+            VLLM_REPO=${{ steps.vllm-version.outputs.repo }}
+            VLLM_COMMIT_SHA=${{ steps.vllm-version.outputs.commit_sha }}
           tags: |
             ${{ env.REGISTRY }}/${{ github.repository }}-xpu:${{ env.TAG }}
             ${{ env.REGISTRY }}/${{ github.repository }}-xpu:latest
