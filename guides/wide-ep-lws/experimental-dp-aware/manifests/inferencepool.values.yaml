@@ -30,9 +30,9 @@ inferenceExtension:
       - type: prefill-header-handler
       - type: prefill-filter
       - type: decode-filter
-      - type: random-picker
-        parameters:
-          maxNumOfEndpoints: 1
+      - type: prefix-cache-scorer
+      - type: active-request-scorer
+      - type: queue-scorer
       - type: pd-profile-handler
         parameters:
           threshold: 0
@@ -41,13 +41,30 @@ inferenceExtension:
       - name: prefill
         plugins:
         - pluginRef: prefill-filter
-        - pluginRef: random-picker
+        - pluginRef: prefix-cache-scorer
+          weight: 3
+        - pluginRef: active-request-scorer
+          weight: 2
+        - pluginRef: queue-scorer
+          weight: 2
       - name: decode
         plugins:
         - pluginRef: decode-filter
-        - pluginRef: random-picker
+        - pluginRef: active-request-scorer
+          weight: 1
+        - pluginRef: queue-scorer
+          weight: 1
 
 inferencePool:
+  targetPorts:
+    - number: 8000
+    - number: 8001
+    - number: 8002
+    - number: 8003
+    - number: 8004
+    - number: 8005
+    - number: 8006
+    - number: 8007
   modelServers:
     matchLabels:
       llm-d.ai/inference-serving: "true"

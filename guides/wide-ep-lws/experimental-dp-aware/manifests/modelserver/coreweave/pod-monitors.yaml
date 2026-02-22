@@ -1,0 +1,86 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PodMonitor
+metadata:
+  name: ms-wide-ep-llm-d-modelservice-decode-podmonitor
+  labels:
+    llm-d.ai/inference-serving: "true"
+    llm-d.ai/guide: "wide-ep-lws"
+    llm-d.ai/model: DeepSeek-R1-0528
+    llm-d.ai/role: decode
+spec:
+  selector:
+    matchLabels:
+      llm-d.ai/inference-serving: "true"
+      llm-d.ai/guide: "wide-ep-lws"
+      llm-d.ai/model: DeepSeek-R1-0528
+      llm-d.ai/role: decode
+  podMetricsEndpoints:
+  # For decode service with DP-aware scheduling, scrape metrics from all 8 ranks (ports 8200-8207)
+  - port: "rank0"
+    path: /metrics
+    interval: 5s
+  - port: "rank1"
+    path: /metrics
+    interval: 5s
+  - port: "rank2"
+    path: /metrics
+    interval: 5s
+  - port: "rank3"
+    path: /metrics
+    interval: 5s
+  - port: "rank4"
+    path: /metrics
+    interval: 5s
+  - port: "rank5"
+    path: /metrics
+    interval: 5s
+  - port: "rank6"
+    path: /metrics
+    interval: 5s
+  - port: "rank7"
+    path: /metrics
+    interval: 5s
+---
+# Source: llm-d-modelservice/templates/prefill-podmonitor.yaml
+apiVersion: monitoring.coreos.com/v1
+kind: PodMonitor
+metadata:
+  name: ms-wide-ep-llm-d-modelservice-prefill-podmonitor
+  labels:
+    llm-d.ai/inference-serving: "true"
+    llm-d.ai/guide: "wide-ep-lws"
+    llm-d.ai/model: DeepSeek-R1-0528
+    llm-d.ai/role: prefill
+spec:
+  selector:
+    matchLabels:
+      llm-d.ai/inference-serving: "true"
+      llm-d.ai/guide: "wide-ep-lws"
+      llm-d.ai/model: DeepSeek-R1-0528
+      llm-d.ai/role: prefill
+  podMetricsEndpoints:
+  # For prefill service with DP-aware scheduling, scrape metrics from all 8 ranks (ports 8000-8007)
+  - port: "rank0"
+    path: /metrics
+    interval: 5s
+  - port: "rank1"
+    path: /metrics
+    interval: 5s
+  - port: "rank2"
+    path: /metrics
+    interval: 5s
+  - port: "rank3"
+    path: /metrics
+    interval: 5s
+  - port: "rank4"
+    path: /metrics
+    interval: 5s
+  - port: "rank5"
+    path: /metrics
+    interval: 5s
+  - port: "rank6"
+    path: /metrics
+    interval: 5s
+  - port: "rank7"
+    path: /metrics
+    interval: 5s

@@ -1,0 +1,45 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: inference-perf
+  labels:
+    app: inference-perf
+spec:
+  template:
+    metadata:
+      labels:
+        app: inference-perf
+    spec:
+      containers:
+        - name: inference-perf
+          image: quay.io/inference-perf/inference-perf:latest
+          imagePullPolicy: Always
+          command: ["/bin/sh", "-c"]
+          args:
+            - |
+              inference-perf --config_file /etc/config/config.yml
+              echo "Benchmark finished. Sleeping for 15 sec to allow file copy..."
+              sleep 300
+          env:
+            - name: HF_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: hf-secret
+                  key: hf_api_token
+                  optional: true
+          resources:
+            requests:
+              memory: "16Gi"
+              cpu: "8"
+            limits:
+              memory: "16Gi"
+              cpu: "8"
+          volumeMounts:
+            - name: config-volume
+              mountPath: /etc/config
+              readOnly: true
+      restartPolicy: Never
+      volumes:
+      - name: config-volume
+        configMap:
+          name: inference-perf-config

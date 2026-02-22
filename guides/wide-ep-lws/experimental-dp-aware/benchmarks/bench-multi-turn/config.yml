@@ -1,0 +1,28 @@
+load:
+  type: constant
+  stages:
+  - rate: 10
+    duration: 180
+api: 
+  type: completion
+server:
+  type: vllm
+  model_name: "deepseek-ai/DeepSeek-R1-0528"
+  base_url: http://llm-d-inference-gateway-istio.llm-d-nebius.svc.cluster.local:80
+  ignore_eos: true
+tokenizer:
+  pretrained_model_name_or_path: deepseek-ai/DeepSeek-R1-0528
+data:
+  type: shared_prefix
+  shared_prefix:
+    num_groups: 150                 # Number of distinct prefix, Note: the number of users is num_groups * num_prompts_per_group
+    num_prompts_per_group: 5        # Number of unique questions per group (prefix)
+    system_prompt_len: 6000         # Length of the first prefix (in tokens), simulate initialization of a system prompt
+    question_len: 2000              # Length of the unique question part (in tokens)
+    output_len: 1000                # Target length for the model's generated output (in tokens)
+    enable_multi_turn_chat: false   # If enabled, the chat context will be appended for the each request.
+report:
+  request_lifecycle:
+    summary: true
+    per_stage: true
+    per_request: true
