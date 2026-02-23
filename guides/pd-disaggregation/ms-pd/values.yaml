@@ -39,17 +39,36 @@ decode:
       interval: "30s"
   containers:
     - name: "vllm"
-      image: ghcr.io/llm-d/llm-d-cuda-dev:sha-f7546ae
+      image: ghcr.io/llm-d/llm-d-cuda-dev:latest
       modelCommand: vllmServe
       args:
         - "--block-size"
         - "128"
         - "--kv-transfer-config"
         - '{"kv_connector":"NixlConnector", "kv_role":"kv_both", "kv_load_failure_policy":"fail"}'
+        - "--kv-events-config"
+        - |-
+          {
+            "enable_kv_cache_events": true,
+            "publisher": "zmq",
+            "endpoint": "tcp://gaie-$(GAIE_RELEASE_NAME_POSTFIX)-epp.$(NAMESPACE).svc.cluster.local:5557",
+            "topic": "kv@$(POD_IP)@openai/gpt-oss-120b"
+          }
         - "--disable-uvicorn-access-log"
         - "--max-model-len"
         - "4096"
       env:
+        - name: GAIE_RELEASE_NAME_POSTFIX
+          value: "pd"
+        - name: NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
+        - name: POD_IP
+          valueFrom:
+            fieldRef:
+              apiVersion: v1
+              fieldPath: status.podIP
         - name: VLLM_NIXL_SIDE_CHANNEL_HOST
           valueFrom:
             fieldRef:
@@ -131,19 +150,38 @@ prefill:
       interval: "30s"
   containers:
     - name: "vllm"
-      image: ghcr.io/llm-d/llm-d-cuda-dev:sha-f7546ae
+      image: ghcr.io/llm-d/llm-d-cuda-dev:latest
       modelCommand: vllmServe
       args:
         - "--block-size"
         - "128"
         - "--kv-transfer-config"
         - '{"kv_connector":"NixlConnector", "kv_role":"kv_both", "kv_load_failure_policy":"fail"}'
+        - "--kv-events-config"
+        - |-
+          {
+            "enable_kv_cache_events": true,
+            "publisher": "zmq",
+            "endpoint": "tcp://gaie-$(GAIE_RELEASE_NAME_POSTFIX)-epp.$(NAMESPACE).svc.cluster.local:5557",
+            "topic": "kv@$(POD_IP)@openai/gpt-oss-120b"
+          }
         - "--disable-uvicorn-access-log"
         - "--max-model-len"
         - "4096"
         - "--gpu-memory-utilization"
         - "0.95"
       env:
+        - name: GAIE_RELEASE_NAME_POSTFIX
+          value: "pd"
+        - name: NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
+        - name: POD_IP
+          valueFrom:
+            fieldRef:
+              apiVersion: v1
+              fieldPath: status.podIP
         - name: VLLM_NIXL_SIDE_CHANNEL_HOST
           valueFrom:
             fieldRef:

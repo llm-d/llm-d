@@ -8,6 +8,50 @@ inferenceExtension:
     tag: slo-pd-experimental
     pullPolicy: Always
   extProcPort: 9002
+
+  # ZMQ port for KV events subscriber (service only - container listens via zmqEndpoint config)
+  extraServicePorts:
+    - name: zmq
+      port: 5557
+      targetPort: 5557
+      protocol: TCP
+
+  # huggingface token for tokenizer
+  env:
+    - name: HF_TOKEN
+      valueFrom:
+        secretKeyRef:
+          name: llm-d-hf-token
+          key: HF_TOKEN
+
+  sidecar:
+    enabled: true
+    image: ghcr.io/llm-d/llm-d-uds-tokenizer:v0.5.1-rc1
+    imagePullPolicy: IfNotPresent
+    name: tokenizer-uds
+    configMap:
+      name: gaie-pd-tokenizer-config
+      data: {}  # Reference to the EPP configMap (not used by tokenizer but required by chart)
+    # Both HF_HOME and TOKENIZERS_DIR are required to point to the same mounted directory
+    env:
+      - name: TOKENIZERS_DIR
+        value: /tokenizers
+      - name: HF_HOME
+        value: /tokenizers
+    volumeMounts:
+      - mountPath: /tokenizers
+        name: tokenizers
+      - mountPath: /tmp/tokenizer
+        name: tokenizer-uds
+  volumes:
+    - name: tokenizers
+      emptyDir: {}
+    - name: tokenizer-uds
+      emptyDir: {}
+  volumeMounts:
+    - mountPath: /tmp/tokenizer
+      name: tokenizer-uds
+
   pluginsConfigFile: "pd-slo-config.yaml"
 
   flags:
@@ -39,12 +83,24 @@ inferenceExtension:
       - type: prefill-header-handler
         name: prefill-header-handler
 
-      # Prefix cache scorer
-      - type: prefix-cache-scorer
-        name: prefix-cache-scorer
+      # Precise Prefix cache scorer (KV events based)
+      - type: precise-prefix-cache-scorer
+        name: precise-prefix-cache-scorer
         parameters:
-          blockSizeTokens: 128
-          autoTune: true
+          tokenProcessorConfig:
+            blockSize: 128
+          indexerConfig:
+            tokenizersPoolConfig:
+              modelName: "openai/gpt-oss-120b"
+              local: null
+              hf: null
+              uds:
+                socketFile: /tmp/tokenizer/tokenizer-uds.socket
+          kvEventsConfig:
+            topicFilter: "kv@"
+            concurrency: 4
+            discoverPods: false
+            zmqEndpoint: "tcp://*:5557"
 
       # SLO scorer with endpoint role awareness
       - type: predicted-latency-scorer
@@ -76,7 +132,7 @@ inferenceExtension:
       - name: decode
         plugins:
         - pluginRef: decode-filter
-        - pluginRef: prefix-cache-scorer
+        - pluginRef: precise-prefix-cache-scorer
         - pluginRef: pd-slo-scorer
           weight: 100
         - pluginRef: max-score-picker
@@ -84,7 +140,7 @@ inferenceExtension:
       - name: prefill
         plugins:
         - pluginRef: prefill-filter
-        - pluginRef: prefix-cache-scorer
+        - pluginRef: precise-prefix-cache-scorer
         - pluginRef: pd-slo-scorer
           weight: 100
         - pluginRef: max-score-picker
