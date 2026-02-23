@@ -8,7 +8,7 @@ inferenceExtension:
   extProcPort: 9002
   pluginsConfigFile: "pd-config.yaml"
   flags:
-    v: 5  # Increase log verbosity to trace level
+    v: 4  # Increase log verbosity to trace level
   pluginsCustomConfig:  # THIS CONFIG NEEDS TO BE CHECKED FOR INF SCHEDULER NEW IMAGE
     pd-config.yaml: |
       # ALWAYS DO PD IN THIS EXAMPLE (THRESHOLD 0)

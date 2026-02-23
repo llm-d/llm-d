@@ -12,7 +12,7 @@ inferenceExtension:
 
   flags:
     secure-serving: false
-    v: 5  # Trace level for detailed request processing logs
+    v: 4  # Debug level for request processing logs (excludes metrics refresh spam)
 
   pluginsCustomConfig:
     pd-slo-config.yaml: |
@@ -43,7 +43,8 @@ inferenceExtension:
       - type: prefix-cache-scorer
         name: prefix-cache-scorer
         parameters:
-          blockSizeTokens: 5
+          blockSizeTokens: 128
+          autoTune: true
 
       # SLO scorer with endpoint role awareness
       - type: predicted-latency-scorer
@@ -131,7 +132,7 @@ inferenceExtension:
         periodSeconds: 10
       volumeSize: "20Gi"
       config:
-        LATENCY_RETRAINING_INTERVAL_SEC: "30"  # Increased from 1 to reduce unnecessary retraining overhead
+        LATENCY_RETRAINING_INTERVAL_SEC: "5"  # Increased from 1 to reduce unnecessary retraining overhead
         LATENCY_MIN_SAMPLES_FOR_RETRAIN: "100"
         LATENCY_TTFT_MODEL_PATH: "/models/ttft.joblib"
         LATENCY_TPOT_MODEL_PATH: "/models/tpot.joblib"
