@@ -139,34 +139,37 @@ This deployment uses **DP-aware scheduling**, where instead of letting vLLM auto
 ### How It Works
 
 **Traditional Data Parallelism:**
-- vLLM launches a single server process that internally manages DP=16 across GPUs
-- External clients see one endpoint per pod
-- vLLM handles internal load balancing across DP ranks
+
+* vLLM launches a single server process that internally manages DP=16 across GPUs
+* External clients see one endpoint per pod
+* vLLM handles internal load balancing across DP ranks
 
 **DP-Aware Scheduling (This Deployment):**
-- Each pod explicitly launches 8 separate vLLM server instances (one per GPU)
-- Each instance runs on a unique port (8000-8007 for prefill, 8200-8207 for decode)
-- Each instance is assigned an explicit DP rank using `--data-parallel-rank`
-- The inference scheduler can route to specific DP ranks based on request characteristics
+
+* Each pod explicitly launches 8 separate vLLM server instances (one per GPU)
+* Each instance runs on a unique port (8000-8007 for prefill, 8200-8207 for decode)
+* Each instance is assigned an explicit DP rank using `--data-parallel-rank`
+* The inference scheduler can route to specific DP ranks based on request characteristics
 
 **Key Configuration Changes:**
 
 1. **InferencePool**: Declares 8 target ports (8000-8007) to expose all local DP ranks
 2. **Routing Proxy**: Configured with `--data-parallel-size=8` to understand the DP topology
 3. **vLLM Containers**: Launch 8 parallel processes per pod with:
-   - `CUDA_VISIBLE_DEVICES` pinning each process to a specific GPU (0-7)
-   - Unique ports per rank
-   - Explicit `--data-parallel-rank` assignment
-   - Global `--data-parallel-size=16` (8 ranks × 2 pods)
-   - Local `--data-parallel-size-local=8`
+   * `CUDA_VISIBLE_DEVICES` pinning each process to a specific GPU (0-7)
+   * Unique ports per rank
+   * Explicit `--data-parallel-rank` assignment
+   * Global `--data-parallel-size=16` (8 ranks × 2 pods)
+   * Local `--data-parallel-size-local=8`
 
 **Architecture:**
 
 Each LeaderWorkerSet has 2 pods, each running 8 vLLM instances:
-- **Prefill Pod 0**: DP ranks 0-7 on ports 8000-8007
-- **Prefill Pod 1**: DP ranks 8-15 on ports 8000-8007
-- **Decode Pod 0**: DP ranks 0-7 on ports 8200-8207
-- **Decode Pod 1**: DP ranks 8-15 on ports 8200-8207
+
+* **Prefill Pod 0**: DP ranks 0-7 on ports 8000-8007
+* **Prefill Pod 1**: DP ranks 8-15 on ports 8000-8007
+* **Decode Pod 0**: DP ranks 0-7 on ports 8200-8207
+* **Decode Pod 1**: DP ranks 8-15 on ports 8200-8207
 
 The scheduler routes to specific ranks using (pod IP, port) tuples, enabling fine-grained request distribution.
 
@@ -230,6 +233,7 @@ For instructions on getting started making inference requests see [our docs](../
 ## Benchmarking
 
 ### Overview
+
 We deployed the default wide-ep-lws user guide on GKE (`./manifests/modelserver/gke-a4`).
 
 * Provider: GKE
@@ -241,7 +245,7 @@ We use the [inference-perf](https://github.com/kubernetes-sigs/inference-perf/tr
 
 ### Run Benchmark
 
-1. Deploy the wide-ep-lws stack following the Installation steps above. Once the stack is ready, obtain the gateway IP: 
+1. Deploy the wide-ep-lws stack following the Installation steps above. Once the stack is ready, obtain the gateway IP:
 
 ```bash
 export GATEWAY_IP=$(kubectl get gateway/llm-d-inference-gateway -n ${NAMESPACE} -o jsonpath='{.status.addresses[0].value}')
@@ -249,7 +253,7 @@ export GATEWAY_IP=$(kubectl get gateway/llm-d-inference-gateway -n ${NAMESPACE} 
 
 2. Follow the [benchmark guide](../../benchmark/README.md) to deploy the benchmark tool and analyze the benchmark results. Notably, select the corresponding benchmark template:
 
-```
+```bash
 export BENCHMARK_TEMPLATE="${BENCH_TEMPLATE_DIR}"/wide_ep_template.yaml
 ```
 
@@ -260,7 +264,7 @@ export BENCHMARK_TEMPLATE="${BENCH_TEMPLATE_DIR}"/wide_ep_template.yaml
 
 At request rate 250, we achieved the max throughput:
 
-```
+```json
 "throughput": {
     "input_tokens_per_sec": 51218.79261732335,
     "output_tokens_per_sec": 49783.58426326592,
