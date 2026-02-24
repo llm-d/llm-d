@@ -18,7 +18,7 @@ harness:
   parallelism: 1                  # Number of parallel workload launcher pods to create.
   wait_timeout: 6000              # Time (in seconds) to wait for workload launcher pod to complete before terminating.
                                   # Set to 0 to disable timeout.
-  image: ghcr.io/llm-d/llm-d-benchmark:v0.4.9
+  image: ghcr.io/llm-d/llm-d-benchmark:v0.5.0
   # dataset_url: &dataset_url none
 
 workload:                         # yaml configuration for harness workload(s)
