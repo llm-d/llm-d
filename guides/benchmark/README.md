@@ -299,8 +299,8 @@ This example uses `guidellm` with a [`rate_comparison`](./inference_scheduling_g
   Containers:
     harness:
       Container ID:  cri-o://2d450837cc20f303e9635b70897a40865bf4b44f1024e50c41d3c858b21f1db7
-      Image:         ghcr.io/llm-d/llm-d-benchmark:v0.4.0
-      Image ID:      ghcr.io/llm-d/llm-d-benchmark@sha256:585d61309bcfa02ee4b02bc0bc45b72d410b975be0a72e9c8f597eb0326815be
+      Image:         ghcr.io/llm-d/llm-d-benchmark:v0.4.9
+      Image ID:      ghcr.io/llm-d/llm-d-benchmark@sha256:c23a8d5650f1a3f0d40cb0985679f6cddf8f71f0bdfa3fb302b1911f4d8a7d6c
       Port:          <none>
       Host Port:     <none>
       Command:
@@ -364,8 +364,8 @@ This example uses `guidellm` with a [`rate_comparison`](./inference_scheduling_g
     Normal  Scheduled               3s    default-scheduler        Successfully assigned dean-ns1/llmdbench-harness-launcher to pokprod-b93r43s0
     Normal  SuccessfulAttachVolume  3s    attachdetach-controller  AttachVolume.Attach succeeded for volume "pvc-1c986c2c-5c37-44bb-b43f-9c871904428e"
     Normal  AddedInterface          2s    multus                   Add eth0 [10.130.7.105/23] from ovn-kubernetes
-    Normal  Pulling                 2s    kubelet                  Pulling image "ghcr.io/llm-d/llm-d-benchmark:v0.4.0"
-    Normal  Pulled                  2s    kubelet                  Successfully pulled image "ghcr.io/llm-d/llm-d-benchmark:v0.4.0" in 285ms (285ms including waiting). Image size: 3174696470 bytes.
+    Normal  Pulling                 2s    kubelet                  Pulling image "ghcr.io/llm-d/llm-d-benchmark:v0.4.9"
+    Normal  Pulled                  2s    kubelet                  Successfully pulled image "ghcr.io/llm-d/llm-d-benchmark:v0.4.9" in 285ms (285ms including waiting). Image size: 3174696470 bytes.
     Normal  Created                 2s    kubelet                  Created container: harness
     Normal  Started                 2s    kubelet                  Started container harness
 
@@ -867,7 +867,7 @@ Typically, you do not have to change the `namespace` or the `image`
     parallelism: 1                  # Number of parallel workload launcher pods to create.
     wait_timeout: 600               # Time (in seconds) to wait for workload launcher pod to complete before terminating.
                                     # Set to 0 to disable timeout.
-    image: ghcr.io/llm-d/llm-d-benchmark:v0.4.0
+    image: ghcr.io/llm-d/llm-d-benchmark:v0.4.9
     # dataset_url: https://huggingface.co/datasets/anon8231489123/ShareGPT_Vicuna_unfiltered/resolve/main/ShareGPT_V3_unfiltered_cleaned_split.json
   ```
 
