@@ -62,14 +62,14 @@ jobs:
             xpu-inference-scheduling:
               - .github/workflows/ci-pr-test.yaml
               - .github/workflows/e2e-inference-scheduling-xpu.yaml
-              - docker/vllm-version
+              - docker/common-versions
               - guides/**/values_xpu.yaml
               - guides/inference-scheduling/ms-inference-scheduling/values_xpu.yaml
               - guides/inference-scheduling/helmfile.yaml.gotmpl
             xpu-pd-disaggregation:
               - .github/workflows/ci-pr-test.yaml
               - .github/workflows/e2e-pd-xpu.yaml
-              - docker/vllm-version
+              - docker/common-versions
               - guides/**/values_xpu.yaml
               - guides/pd-disaggregation/ms-pd/values_xpu.yaml
               - guides/pd-disaggregation/README.xpu.md
@@ -77,7 +77,7 @@ jobs:
             xpu-prefix-cache:
               - .github/workflows/ci-pr-test.yaml
               - .github/workflows/e2e-prefix-cache-xpu.yaml
-              - docker/vllm-version
+              - docker/common-versions
               - guides/**/values_xpu.yaml
               - guides/precise-prefix-cache-aware/**/values_xpu.yaml
               - guides/precise-prefix-cache-aware/helmfile.yaml.gotmpl

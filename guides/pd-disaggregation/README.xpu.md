@@ -37,7 +37,7 @@ If you need to customize the vLLM version or build the image from source, you ca
 #### Intel Data Center GPU Max 1550
 
 ```shell
-# Build with the default vLLM version from docker/vllm-version
+# Build with the default vLLM version from docker/common-versions
 make image-build DEVICE=xpu VERSION=v0.5.1
 ```
 
@@ -60,7 +60,7 @@ The upstream vLLM Dockerfile.xpu defines the build arguments. Common ones includ
 * `UCX_VERSION`
 * `NIXL_VERSION`
 
-Refer to https://github.com/vllm-project/vllm/blob/main/docker/Dockerfile.xpu for the full list.
+Refer to <https://github.com/vllm-project/vllm/blob/main/docker/Dockerfile.xpu> for the full list.
 
 **⚠️ Important**:
 

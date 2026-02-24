@@ -9,7 +9,7 @@ RUN if [ -n "${CACHE_BUSTER}" ]; then \
 ARG PYTHON_VERSION=3.12
 ARG PIP_EXTRA_INDEX_URL="https://download.pytorch.org/whl/cpu/"
 
-# vLLM build settings - defaults should match docker/vllm-version file
+# vLLM build settings - defaults should match docker/common-versions file
 # Override here for platform-specific testing or via build args
 ARG VLLM_REPO
 ARG VLLM_COMMIT_SHA

@@ -1,3 +1,4 @@
+# CUDA version - provided via build args from docker/common-versions file via GH workflow
 ARG CUDA_MAJOR=12
 ARG CUDA_MINOR=9
 ARG CUDA_PATCH=1

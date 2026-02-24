@@ -1,6 +1,6 @@
 SHELL := /usr/bin/env bash
 
-include docker/vllm-version
+include docker/common-versions
 
 # Defaults
 PROJECT_NAME ?= llm-d

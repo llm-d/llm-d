@@ -1,9 +1,3 @@
-ARG CUDA_MAJOR=12
-ARG CUDA_MINOR=9
-ARG CUDA_PATCH=1
-ARG TARGETOS=rhel
-ARG BASE_IMAGE_SUFFIX=ubi9
-
 # Important: For Ubuntu builds, we use an older version (20.04) in the build stage
 # to maintain broad glibc compatibility. Binaries built with newer glibc versions
 # are not backwards compatible with OSes using earlier glibc versions.
@@ -14,6 +8,7 @@ ARG FINAL_BASE_IMAGE_SUFFIX=${BASE_IMAGE_SUFFIX}
 
 ######################## SYSTEM CONFIGURATION ########################
 
+# CUDA version - provided via build args from docker/common-versions file via GH workflow
 ARG CUDA_MAJOR=12
 ARG CUDA_MINOR=9
 ARG CUDA_PATCH=1
@@ -68,7 +63,7 @@ ARG DEEPGEMM_VERSION="v2.1.1.post3"
 ARG FLASHINFER_REPO="https://github.com/flashinfer-ai/flashinfer.git"
 ARG FLASHINFER_VERSION="v0.6.1"
 
-# vLLM build settings - provided via build args from docker/vllm-version file
+# vLLM build settings - provided via build args from docker/common-versions file
 # Override here for platform-specific testing or via build args
 ARG VLLM_REPO
 ARG VLLM_COMMIT_SHA
