@@ -50,6 +50,7 @@ SIGs operate within the broader llm-d project governance framework defined in [P
 | **[SIG Installation](#sig-installation)** | Kubernetes integration, deployment tooling, and platform operations | • [Meeting Recordings and Docs](https://drive.google.com/drive/folders/1H-0Y8fXepzrYpcaUOBfuphn1Cl-gU0xr)<br>• [llm-d-modelservice Repository](https://github.com/llm-d-incubation/llm-d-modelservice)<br>• [llm-d-infra Repository](https://github.com/llm-d-incubation/llm-d-infra) |
 | **[SIG Autoscaling](#sig-autoscaling)** | Traffic-aware autoscaling, resource management, and capacity planning | • [Meeting Recordings and Docs](https://drive.google.com/drive/folders/1iDlTgpFPOrSQn7dWR3uCQLtqhz86HTAi)<br>• [workload-variant-autoscaler Repository](https://github.com/llm-d-incubation/workload-variant-autoscaler) |
 | **[SIG Observability](#sig-observability)** | Monitoring, logging, metrics, and operational visibility | • [Meeting Recordings and Docs](https://drive.google.com/drive/folders/1H-TVTCKYVxUn4fER7xuTPmscNttZCutN)<br>• [llm-d Observability Documentation](https://github.com/llm-d/llm-d/tree/main/docs/monitoring) |
+| **[SIG RL](#sig-rl)** | Improve SOTA performance for RL workloads | • Meeting Recordings and Docs - TODO |
 
 ## SIG Detailed Descriptions
 
@@ -205,6 +206,27 @@ SIGs operate within the broader llm-d project governance framework defined in [P
 
 - **Slack Channel**: [#sig-observability](https://llm-d.slack.com/archives/C09305NHZ45)
 - **Meeting Recordings and Docs**: [Public Google Drive](https://drive.google.com/drive/folders/1H-TVTCKYVxUn4fER7xuTPmscNttZCutN)
+
+### SIG RL
+
+> **👥 Leadership:** [Bogdan Berce](https://github.com/bogdanatwork), [Robert Shaw](https://github.com/robertgshaw2-redhat)
+> North Star Design Document TODO
+
+**Charter**: Assist RL teams in achieving SOTA performance for RL workloads
+
+**Key Areas**:
+
+- Metrics collection and visualization
+- Distributed tracing and logging
+- Performance monitoring and alerting
+- Operational dashboards and reporting
+- Integration with monitoring ecosystems (Prometheus, Grafana, etc.)
+
+**💬 Communication**:
+
+- **Slack Channel**: [#sig-rl](https://llm-d.slack.com/archives/C0AGTS0UF5L)
+- **Meeting Recordings and Docs**: Public Google Drive TODO
+
 
 ## Getting Involved
 
