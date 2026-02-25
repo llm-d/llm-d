@@ -18,7 +18,7 @@
 | Launch Partner | Mistral AI | 2025 | [Mistral AI](https://mistral.ai) | Mistral AI is a launch partner supporting the llm-d community for distributed generative AI inference at scale. |
 | University Supporter | University of California, Berkeley (Sky Computing Lab) | 2025 | [Sky Computing Lab](https://sky.cs.berkeley.edu) | The Sky Computing Lab at UC Berkeley, originators of vLLM, are founding academic supporters of llm-d. |
 | University Supporter | University of Chicago (LMCache Lab) | 2025 | [LMCache Lab](https://lmcache.ai) | The LMCache Lab at the University of Chicago, originators of LMCache, are founding academic supporters of llm-d. |
-| User | Tesla | 2025 | [Tesla](https://www.tesla.com/) | The Tesla ML Platform team, are users of llm-d. |
+| User | Tesla | 2025 | [Tesla](https://www.tesla.com/) | The Tesla ML Platform team are users of llm-d. |
 
 ## Adopter Types
 
