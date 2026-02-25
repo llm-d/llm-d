@@ -28,4 +28,4 @@
 
 **University Supporter**: An academic institution supporting the llm-d project, often through originating or contributing to foundational open source technologies used by llm-d.
 
-**Users**: The organization is a user of the llm-d project, contributing feedback and real-world examples to the community.
+**User**: The organization is a user of the llm-d project, contributing feedback and real-world examples to the community.
