@@ -149,7 +149,7 @@ For full, customizable benchmarking, please refer to [llm-d-benchmark](https://g
 > #
 > # For example:
 > #
-> # > oc describe po <INFERENCE-GATEWAY-POD> | grep gateway.networking.k8s.io/gateway-name
+> # > kubectl describe po <INFERENCE-GATEWAY-POD> | grep gateway.networking.k8s.io/gateway-name
 > # >           gateway.networking.k8s.io/gateway-name=infra-llmdbench-inference-gateway
 > # > export GATEWAY_NAME=infra-llmdbench-inference-gateway
 > #
