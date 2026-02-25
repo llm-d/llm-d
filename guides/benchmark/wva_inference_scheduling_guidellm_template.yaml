@@ -12,7 +12,7 @@
 # > kubectl get hpa -w
 # 
 # # In another terminal, in the namespace containing the llm-d stack, run:
-# > oc get po -w
+# > kubectl get po -w
 # 
 # After sufficient work spawned, you will observe HPA replica targets increase
 # as well as decode pods increase. Once workload has decreased sufficiently, 
