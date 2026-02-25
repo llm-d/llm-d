@@ -9,7 +9,7 @@
 # follow the below steps...
 # 
 # # In one terminal, in the namespace containing the llm-d stack, run:
-# > oc get hpa -w
+# > kubectl get hpa -w
 # 
 # # In another terminal, in the namespace containing the llm-d stack, run:
 # > oc get po -w
