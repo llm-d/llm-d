@@ -37,6 +37,16 @@ spec:
               - --zap-log-level=1
               - --secure-proxy=false
               - --enable-prefiller-sampling
+            # env:
+              # To enable tracing on routing proxies, add these env vars to each routing-proxy-rankN container:
+              # - name: OTEL_SERVICE_NAME
+              #   value: "routing-proxy"
+              # - name: OTEL_EXPORTER_OTLP_ENDPOINT
+              #   value: "http://otel-collector:4317"
+              # - name: OTEL_TRACES_SAMPLER
+              #   value: "parentbased_traceidratio"
+              # - name: OTEL_TRACES_SAMPLER_ARG
+              #   value: "0.1"
             image: ghcr.io/llm-d/llm-d-routing-sidecar:v0.5.0
             imagePullPolicy: Always
             ports:
@@ -112,6 +122,9 @@ spec:
                   --all2all-backend deepep_low_latency
                   --max-model-len 65536
                   --kv-cache-memory-bytes=${KV_CACHE_MEMORY_BYTES-}
+                  # To enable tracing, add:
+                  # --otlp-traces-endpoint http://otel-collector:4317
+                  # --collect-detailed-traces all
                 )
 
                 CUDA_VISIBLE_DEVICES="0" vllm serve deepseek-ai/DeepSeek-R1-0528 --host=0.0.0.0 --port=8200 --data-parallel-rank=$((START_RANK + 0)) "${COMMON_VLLM_ARGS[@]}" &
@@ -126,6 +139,15 @@ spec:
               - vllm-parallel-launcher
 
             env:
+              # To enable tracing, uncomment:
+              # - name: OTEL_SERVICE_NAME
+              #   value: "vllm-decode"
+              # - name: OTEL_EXPORTER_OTLP_ENDPOINT
+              #   value: "http://otel-collector:4317"
+              # - name: OTEL_TRACES_SAMPLER
+              #   value: "parentbased_traceidratio"
+              # - name: OTEL_TRACES_SAMPLER_ARG
+              #   value: "0.1"
               - name: VLLM_MOE_DP_CHUNK_SIZE
                 value: "384"  # vLLM default is 256
               - name: DP_SIZE_LOCAL

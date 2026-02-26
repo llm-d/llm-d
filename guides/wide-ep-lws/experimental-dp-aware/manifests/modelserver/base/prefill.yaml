@@ -68,6 +68,9 @@ spec:
                   --kv_transfer_config '{"kv_connector":"NixlConnector","kv_role":"kv_both","kv_load_failure_policy":"fail"}'
                   --all2all-backend deepep_high_throughput
                   --max-model-len 65536
+                  # To enable tracing, add:
+                  # --otlp-traces-endpoint http://otel-collector:4317
+                  # --collect-detailed-traces all
                 )
 
                 CUDA_VISIBLE_DEVICES="0" vllm serve deepseek-ai/DeepSeek-R1-0528 --host=0.0.0.0 --port=8000 --data-parallel-rank=$((START_RANK + 0)) "${COMMON_VLLM_ARGS[@]}" &
@@ -81,6 +84,15 @@ spec:
                 wait
               - vllm-parallel-launcher
             env:
+              # To enable tracing, uncomment:
+              # - name: OTEL_SERVICE_NAME
+              #   value: "vllm-prefill"
+              # - name: OTEL_EXPORTER_OTLP_ENDPOINT
+              #   value: "http://otel-collector:4317"
+              # - name: OTEL_TRACES_SAMPLER
+              #   value: "parentbased_traceidratio"
+              # - name: OTEL_TRACES_SAMPLER_ARG
+              #   value: "0.1"
               - name: DP_SIZE_LOCAL
                 value: "8"
               - name: TP_SIZE

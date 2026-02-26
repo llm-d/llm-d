@@ -87,20 +87,24 @@ install() {
   kubectl apply -n "${NAMESPACE}" -f "${JAEGER_MANIFEST}"
 
   # Deploy OTel Collector (operator CR or standalone)
+  STANDALONE_MANIFEST="${TRACING_DIR}/otel-collector.yaml"
   if otel_operator_available; then
     COLLECTOR_MANIFEST="${TRACING_DIR}/otel-collector-operator.yaml"
-    if [[ ! -f "$COLLECTOR_MANIFEST" ]]; then
-      fail "OTel Collector operator manifest not found at: ${COLLECTOR_MANIFEST}"
+    if [[ -f "$COLLECTOR_MANIFEST" ]]; then
+      log_info "OpenTelemetry Operator detected -- deploying collector as OpenTelemetryCollector CR..."
+      kubectl apply -n "${NAMESPACE}" -f "${COLLECTOR_MANIFEST}"
+    elif [[ -f "$STANDALONE_MANIFEST" ]]; then
+      log_info "OpenTelemetry Operator detected but operator manifest not found -- falling back to standalone collector..."
+      kubectl apply -n "${NAMESPACE}" -f "${STANDALONE_MANIFEST}"
+    else
+      fail "No OTel Collector manifest found in: ${TRACING_DIR}"
     fi
-    log_info "OpenTelemetry Operator detected -- deploying collector as OpenTelemetryCollector CR..."
-    kubectl apply -n "${NAMESPACE}" -f "${COLLECTOR_MANIFEST}"
   else
-    COLLECTOR_MANIFEST="${TRACING_DIR}/otel-collector.yaml"
-    if [[ ! -f "$COLLECTOR_MANIFEST" ]]; then
-      fail "OTel Collector standalone manifest not found at: ${COLLECTOR_MANIFEST}"
+    if [[ ! -f "$STANDALONE_MANIFEST" ]]; then
+      fail "OTel Collector standalone manifest not found at: ${STANDALONE_MANIFEST}"
     fi
     log_info "OpenTelemetry Operator not found -- deploying standalone collector..."
-    kubectl apply -n "${NAMESPACE}" -f "${COLLECTOR_MANIFEST}"
+    kubectl apply -n "${NAMESPACE}" -f "${STANDALONE_MANIFEST}"
   fi
 
   log_success "OTel Collector + Jaeger deployed successfully."

@@ -10,6 +10,13 @@ inferenceExtension:
     hub: ghcr.io/llm-d
     tag: v0.5.0
   extProcPort: 9002
+  # Distributed tracing configuration (OpenTelemetry)
+  tracing:
+    enabled: false
+    # otelExporterEndpoint: "http://otel-collector:4317"
+    # sampling:
+    #   sampler: "parentbased_traceidratio"
+    #   samplerArg: "0.1"
   monitoring:
     interval: "10s"
     prometheus:

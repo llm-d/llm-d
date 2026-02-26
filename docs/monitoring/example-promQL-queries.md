@@ -1,7 +1,7 @@
 # Example PromQL Queries for LLM-D Monitoring
 
 This document provides PromQL queries for monitoring LLM-D deployments using Prometheus metrics.
-The provided [load generation script](./scripts/generate-load-llmd.sh) will populate error metrics for testing.
+The provided [load generation script](./scripts/generate-traffic-basic.sh) will populate error metrics for testing.
 
 ## Tier 1: Immediate Failure & Saturation Indicators
 
@@ -99,7 +99,7 @@ The provided [load generation script](./scripts/generate-load-llmd.sh) will popu
 ### Error Metrics
 
 - Error metrics (`*_error_total`) only appear after the first error occurs
-- Use the provided [load generation script](./scripts/generate-load-llmd.sh) to populate error metrics for testing
+- Use the provided [load generation script](./scripts/generate-traffic-basic.sh) to populate error metrics for testing
 
 ## Missing Metrics (Require Additional Instrumentation)
 

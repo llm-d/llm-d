@@ -33,15 +33,14 @@ kubectl port-forward -n <your-namespace> svc/jaeger-collector 16686:16686
 # Open http://localhost:16686
 ```
 
-> **Note:** Jaeger all-in-one is an in-memory deployment for development and testing. For production, use the [Jaeger Operator](https://www.jaegertracing.io/docs/latest/operator/) or a managed backend like Grafana Tempo.
+> **Note:** Jaeger all-in-one is an in-memory deployment for development and testing.
 
 ### Manual deployment
 
 If you prefer to apply manifests directly:
 
 ```bash
-kubectl apply -n <your-namespace> -f jaeger-all-in-one.yaml
-kubectl apply -n <your-namespace> -f otel-collector.yaml          # standalone
+kubectl apply -n <your-namespace> -f jaeger-all-in-one.yaml -f otel-collector.yaml  # standalone
 # or, if the OTel Operator is installed:
 kubectl apply -n <your-namespace> -f otel-collector-operator.yaml  # operator CR
 ```
@@ -52,21 +51,18 @@ By default, all chart values point to `http://otel-collector:4317` (same namespa
 
 ### ModelService (vLLM + routing proxy)
 
-Add or uncomment the `tracing:` section in your `ms-*/values.yaml`:
+Uncomment the `tracing:` section in your `ms-*/values.yaml`:
 
 ```yaml
 tracing:
   enabled: true
-  # Default: http://otel-collector:4317 (same namespace as your workload)
-  # otlpEndpoint: "http://otel-collector:4317"
+  otlpEndpoint: "http://otel-collector:4317"
   sampling:
     sampler: "parentbased_traceidratio"
     samplerArg: "1.0"  # 100% for dev; use "0.1" (10%) in production
-  vllm:
-    collectDetailedTraces: "all"  # options: "all", "model", "scheduler"
 ```
 
-This automatically injects the required `--otlp-traces-endpoint` and `--collect-detailed-traces` args into vLLM, and `OTEL_*` environment variables into both vLLM and routing-proxy containers.
+This injects `--otlp-traces-endpoint` and `--collect-detailed-traces` args into vLLM, and `OTEL_*` environment variables into both vLLM and routing-proxy containers.
 
 ### GAIE / EPP (Inference Scheduler)
 
@@ -76,8 +72,7 @@ Add or uncomment the `tracing:` section under `inferenceExtension:` in your `gai
 inferenceExtension:
   tracing:
     enabled: true
-    # Default: http://otel-collector:4317 (same namespace as your workload)
-    # otelExporterEndpoint: "http://otel-collector:4317"
+    otelExporterEndpoint: "http://otel-collector:4317"
     sampling:
       sampler: "parentbased_traceidratio"
       samplerArg: "1.0"
@@ -85,23 +80,19 @@ inferenceExtension:
 
 ### Kustomize / Raw Manifests
 
-For guides that use raw manifests (e.g., `wide-ep-lws`, `recipes/vllm`), add the tracing args directly to your vLLM container:
+For guides that use raw manifests (e.g., `wide-ep-lws`, `recipes/vllm`), add tracing flags to your `vllm serve` command and OTEL env vars to the container:
 
 ```yaml
-# vLLM args
-args:
-  - vllm serve my-model
-    --otlp-traces-endpoint http://otel-collector:4317
-    --collect-detailed-traces all
+# Add to your vllm serve command:
+#   --otlp-traces-endpoint http://otel-collector:4317
+#   --collect-detailed-traces all
 
-# Environment variables
+# Add to the container's env:
 env:
 - name: OTEL_SERVICE_NAME
-  value: "vllm-decode"
+  value: "vllm-decode"  # or "vllm-prefill"
 - name: OTEL_EXPORTER_OTLP_ENDPOINT
   value: "http://otel-collector:4317"
-- name: OTEL_TRACES_EXPORTER
-  value: "otlp"
 - name: OTEL_TRACES_SAMPLER
   value: "parentbased_traceidratio"
 - name: OTEL_TRACES_SAMPLER_ARG
@@ -136,14 +127,13 @@ If you only see generic `GET` spans, check that:
 - **Backend**: Use Jaeger with Elasticsearch/Cassandra storage, or Grafana Tempo for long-term retention
 - **Service names**: Customize via `tracing.serviceNames` in ModelService values to distinguish clusters/environments
 
-## Reference: Injected Environment Variables
+## Reference: Environment Variables
 
-When tracing is enabled via the ModelService chart, these are set automatically:
+When tracing is enabled, these environment variables are set on vLLM and routing-proxy containers (automatically by the ModelService chart, or manually for raw manifests):
 
-| Variable | vLLM | Routing Proxy | Description |
-|---|---|---|---|
-| `OTEL_SERVICE_NAME` | yes | yes | Service identifier |
-| `OTEL_EXPORTER_OTLP_ENDPOINT` | yes | yes | Collector endpoint |
-| `OTEL_TRACES_EXPORTER` | yes | yes | Set to `otlp` |
-| `OTEL_TRACES_SAMPLER` | yes | yes | Sampler type |
-| `OTEL_TRACES_SAMPLER_ARG` | yes | yes | Sampling ratio |
+| Variable | Description |
+|---|---|
+| `OTEL_SERVICE_NAME` | Service identifier (e.g., `vllm-decode`, `routing-proxy`) |
+| `OTEL_EXPORTER_OTLP_ENDPOINT` | Collector endpoint (`http://otel-collector:4317`) |
+| `OTEL_TRACES_SAMPLER` | Sampler type (e.g., `parentbased_traceidratio`) |
+| `OTEL_TRACES_SAMPLER_ARG` | Sampling ratio (`1.0` = 100%, `0.1` = 10%) |
