@@ -42,7 +42,17 @@ decode:
     - name: "vllm"
       image: amr-registry.caas.intel.com/aiops/catalog/intel-vllm:wenxin-test-2
       modelCommand: custom
-      command: ["bash","-c","export UCX_NET_DEVICES=$(rdma link | grep netdev | awk '{print $2}' | cut -d'/' -f1):1 && exec vllm serve Qwen/Qwen3-0.6 --block-size 64 --kv-transfer-config '{kv_connector:NixlConnector, kv_role:kv_both, kv_buffer_device:xpu}' --disable-log-requests --disable-uvicorn-access-log --max-model-len 32000"]
+      command:
+        - bash
+        - -c
+        - |
+          export UCX_NET_DEVICES=$(rdma link | grep netdev | awk '{print $2}' | cut -d'/' -f1):1
+          exec vllm serve Qwen/Qwen3-0.6 \
+            --block-size 64 \
+            --kv-transfer-config '{kv_connector:NixlConnector, kv_role:kv_both, kv_buffer_device:xpu}' \
+            --disable-log-requests \
+            --disable-uvicorn-access-log \
+            --max-model-len 32000
       securityContext:
         fsGroup: 107
         supplementalGroups:
@@ -167,7 +177,17 @@ prefill:
     - name: "vllm"
       image: amr-registry.caas.intel.com/aiops/catalog/intel-vllm:wenxin-test-2
       modelCommand: custom
-      command: ["bash","-c","export UCX_NET_DEVICES=$(rdma link | grep netdev | awk '{print $2}' | cut -d'/' -f1):1 && exec vllm serve Qwen/Qwen3-0.6 --block-size 64 --kv-transfer-config '{kv_connector:NixlConnector, kv_role:kv_both, kv_buffer_device:xpu}' --disable-log-requests --disable-uvicorn-access-log --max-model-len 32000"]
+      command:
+        - bash
+        - -c
+        - |
+          export UCX_NET_DEVICES=$(rdma link | grep netdev | awk '{print $2}' | cut -d'/' -f1):1
+          exec vllm serve Qwen/Qwen3-0.6 \
+            --block-size 64 \
+            --kv-transfer-config '{kv_connector:NixlConnector, kv_role:kv_both, kv_buffer_device:xpu}' \
+            --disable-log-requests \
+            --disable-uvicorn-access-log \
+            --max-model-len 32000
       securityContext:
         fsGroup: 107
         supplementalGroups:
