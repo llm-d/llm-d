@@ -40,7 +40,7 @@ decode:
       interval: "30s"
   containers:
     - name: "vllm"
-      image: amr-registry.caas.intel.com/aiops/catalog/intel-vllm:wenxin-test-2
+      image: amr-registry.caas.intel.com/aiops/catalog/intel-vllm:0.14.1
       modelCommand: custom
       command:
         - bash
@@ -83,6 +83,9 @@ decode:
           name: vllm
         - containerPort: 5600
           name: nixl
+      resourceClaims:
+        - name: rdma-net-interface
+          resourceClaimTemplateName: rdma-net-template
       resources:
         limits:
           memory: 64Gi
@@ -103,18 +106,9 @@ decode:
         - name: model-storage
           emptyDir:
             sizeLimit: 10Gi
-        - name: infiniband
-          hostPath:
-            path: /dev/infiniband
         - name: driver
           hostPath:
             path: /dev/dri
-        - name: sys-net
-          hostPath:
-            path: /sys/class/net
-        - name: sys-ib-verbs
-          hostPath:
-            path: /sys/class/infiniband_verbs
       startupProbe:
         httpGet:
           path: /v1/models
@@ -149,19 +143,10 @@ decode:
     - name: model-storage
       emptyDir:
         sizeLimit: 10Gi
-    - name: infiniband
-      hostPath:
-        path: /dev/infiniband
     - name: driver
       hostPath:
         path: /dev/dri
-    - name: sys-net
-      hostPath:
-        path: /sys/class/net
-    - name: sys-ib-verbs
-      hostPath:
-        path: /sys/class/infiniband_verbs
-
+    
 prefill:
   parallelism:
     tensor: 1
@@ -175,7 +160,7 @@ prefill:
       interval: "30s"
   containers:
     - name: "vllm"
-      image: amr-registry.caas.intel.com/aiops/catalog/intel-vllm:wenxin-test-2
+      image: amr-registry.caas.intel.com/aiops/catalog/intel-vllm:0.14.1
       modelCommand: custom
       command:
         - bash
@@ -218,6 +203,9 @@ prefill:
           name: vllm
         - containerPort: 5600
           name: nixl
+      resourceClaims:
+        - name: rdma-net-interface
+          resourceClaimTemplateName: rdma-net-template
       resources:
         limits:
           memory: 64Gi
@@ -238,18 +226,9 @@ prefill:
         - name: model-storage
           emptyDir:
             sizeLimit: 10Gi
-        - name: infiniband
-          hostPath:
-            path: /dev/infiniband
         - name: driver
           hostPath:
             path: /dev/dri
-        - name: sys-net
-          hostPath:
-            path: /sys/class/net
-        - name: sys-ib-verbs
-          hostPath:
-            path: /sys/class/infiniband_verbs
       startupProbe:
         httpGet:
           path: /v1/models
@@ -284,15 +263,6 @@ prefill:
     - name: model-storage
       emptyDir:
         sizeLimit: 10Gi
-    - name: infiniband
-      hostPath:
-        path: /dev/infiniband
     - name: driver
       hostPath:
         path: /dev/dri
-    - name: sys-net
-      hostPath:
-        path: /sys/class/net
-    - name: sys-ib-verbs
-      hostPath:
-        path: /sys/class/infiniband_verbs
