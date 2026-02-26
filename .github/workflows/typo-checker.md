@@ -90,7 +90,6 @@ The following are NOT typos — do not flag them:
 - OCI, GHCR, ghcr
 - Gaudi, HPU, XPU, TPU, ROCm
 - InfiniStore, infinistore
-- pplx, perplexity
 - kubectl, kubeconfig, kubecontext
 - ConfigMap, ServiceAccount, ClusterRole, RoleBinding
 - HTTPRoute, GRPCRoute, Gateway API

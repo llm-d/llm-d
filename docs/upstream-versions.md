@@ -22,7 +22,6 @@ Pinned in `docker/Dockerfile.cuda` (and variants):
 | **LMCache** | `v0.3.13` | tag | `docker/Dockerfile.cuda` line 51 | [LMCache/LMCache](https://github.com/LMCache/LMCache) |
 | **DeepEP** | `c66b1463601af5d127027fb459517fb97adab30d` | commit SHA (fork) | `docker/Dockerfile.cuda` line 57 | [smarterclayton/DeepEP](https://github.com/smarterclayton/DeepEP) (fork of [deepseek-ai/DeepEP](https://github.com/deepseek-ai/DeepEP)) |
 | **DeepGEMM** | `v2.1.0` | tag | `docker/Dockerfile.cuda` line 60 | [deepseek-ai/DeepGEMM](https://github.com/deepseek-ai/DeepGEMM) |
-| **pplx-kernels** | `2bd6e30fab358829bd01d1c0907be8088ff9e5e1` | commit SHA | `docker/Dockerfile.cuda` line 62 | [perplexityai/pplx-kernels](https://github.com/perplexityai/pplx-kernels) |
 | **FlashInfer** | `v0.5.3` | tag | `docker/Dockerfile.cuda` line 64 | [flashinfer-ai/flashinfer](https://github.com/flashinfer-ai/flashinfer) |
 | **PyTorch** | `2.9.1` | version | `docker/constraints.txt` line 1 | [pytorch/pytorch](https://github.com/pytorch/pytorch) |
 

@@ -88,10 +88,9 @@ The first key step in testing a feature, or bugfix is to identify what layer of 
 
 ### Container Image Build Changes and Upgrades
 
-* Kernel upgrades and changes (`pplx`, `deepep`, `deepgemm`) - Ignore `flash-infer`
+* Kernel upgrades and changes (`deepep`, `deepgemm`) - Ignore `flash-infer`
   * To test these ensure you use the proper vLLM backend via the `VLLM_ALL2ALL_BACKEND` environment variable
-    * For `pplx` you can set both `prefill` and `decode` `VLLM_ALL2ALL_BACKEND` to `pplx`
-      * This can be ran in any example
+    * For single-node testing without extra dependencies, use `allgather_reducescatter` (the default)
     * For testing the deepseek kernels, you can set `prefill`s backend to `deepep_high_throughput` and `decode` backend to `deepep_low_latency`
       * This needs to be tested in either `pd-disaggregation` or better yet `wide-ep-lws`
 * `UCX` + `NIXL` version bumps and changes
@@ -135,7 +134,6 @@ EOF
 * [ ] `pd-disaggregation` example (also covers deepseek kernels)
 * [ ] `wide-ep-lws` example (also covers deepseek kernels)
 * [ ] a `guidellm` benchmark to do a load test for performance regressions (any example)
-* [ ] run a guide with the `pplx` backend
 * [ ] run `pd-disaggregation` or `wide-ep-lws` with deepseek kernels (for `prefill`s set `VLLM_ALL2ALL_BACKEND` to `deepep_high_throughput` and set `decode` `VLLM_ALL2ALL_BACKEND` to `deepep_low_latency`)
 
 ### Code Review Requirements
