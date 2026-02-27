@@ -108,6 +108,7 @@ spec:
                                   "num_redundant_experts":"32",
                                   "log_balancedness":"False"}' \
                   --compilation_config '{"cudagraph_mode": "FULL_DECODE_ONLY"}' \
+                  --all2all-backend deepep_low_latency \
                   --kv-cache-memory-bytes=${KV_CACHE_MEMORY_BYTES-}
             env:
               # VLLM_MOE_DP_CHUNK_SIZE is a tunable parameter.
@@ -118,7 +119,7 @@ spec:
               # If you increase the VLLM_MOE_DP_CHUNK_SIZE above 510 you will also need to increase the
               # default NVSHMEM_QP_DEPTH to be at least 2 * (chunk_size + 1), which will increase the
               # memory NVSHMEM allocates up front.
-              # Has no effect when VLLM_ALL2ALL_BACKEND=deepep_high_throughput.
+              # Has no effect when --all2all-backend deepep_high_throughput.
               - name: VLLM_MOE_DP_CHUNK_SIZE
                 value: "384"  # vLLM default is 256
               - name: DP_SIZE_LOCAL
@@ -133,8 +134,6 @@ spec:
                 value: "1"
               - name: VLLM_USE_DEEP_GEMM
                 value: "1"
-              - name: VLLM_ALL2ALL_BACKEND
-                value: deepep_low_latency
               - name: NVIDIA_GDRCOPY
                 value: enabled
               - name: NVSHMEM_REMOTE_TRANSPORT

@@ -90,6 +90,7 @@ spec:
                                   "step_interval":"3000",
                                   "num_redundant_experts":"32",
                                   "log_balancedness":"False"}' \
+                  --all2all-backend deepep_high_throughput \
                   --gpu-memory-utilization 0.75
 
             env:
@@ -105,8 +106,6 @@ spec:
                 value: "1"
               - name: VLLM_USE_DEEP_GEMM
                 value: "1"
-              - name: VLLM_ALL2ALL_BACKEND
-                value: deepep_high_throughput
               - name: NVIDIA_GDRCOPY
                 value: enabled
               - name: NVSHMEM_REMOTE_TRANSPORT
