@@ -60,12 +60,12 @@ workload:                         # yaml configuration for harness workload(s)
         min: 1000
         max: 1000
         mean: 1000
-        std: 0
+        std_dev: 0
       output_distribution:
         min: 1000
         max: 1000
         mean: 1000
-        std: 0
+        std_dev: 0
     report:
       request_lifecycle:
         summary: true
