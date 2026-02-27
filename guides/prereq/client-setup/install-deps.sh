@@ -9,9 +9,9 @@ set -euo pipefail
 # Helm version
 HELM_VER="v3.19.0"
 # Helmdiff version
-HELMDIFF_VERSION="v3.13.0"
+HELMDIFF_VERSION="v3.14.0"
 # Helmfile version
-HELMFILE_VERSION="1.2.1"
+HELMFILE_VERSION="1.3.2"
 # chart-testing version
 CT_VERSION="3.14.0"
 
@@ -188,7 +188,7 @@ fi
 ########################################
 if ! helm plugin list | grep -q diff; then
   echo "📦 helm-diff plugin not found. Installing ${HELMDIFF_VERSION}..."
-  helm plugin install --version "${HELMDIFF_VERSION}" https://github.com/databus23/helm-diff
+  helm plugin install --version "${HELMDIFF_VERSION}" --verify=false https://github.com/databus23/helm-diff
 fi
 
 ########################################
