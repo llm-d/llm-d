@@ -5,7 +5,7 @@ multinode: false
 
 # Configure accelerator type for Intel XPU via DRA
 accelerator:
-  type: intel-i915
+  type: intel
   dra: true
 
 modelArtifacts:
@@ -42,21 +42,20 @@ decode:
     - name: "vllm"
       image: amr-registry.caas.intel.com/aiops/catalog/intel-vllm:0.14.1
       modelCommand: custom
-      command:
-        - bash
-        - -c
+      command: ["/bin/bash", "-c"]
+      args:
         - |
-          export UCX_NET_DEVICES=$(rdma link | grep netdev | awk '{print $2}' | cut -d'/' -f1):1
-          exec vllm serve Qwen/Qwen3-0.6 \
-            --block-size 64 \
-            --kv-transfer-config '{kv_connector:NixlConnector, kv_role:kv_both, kv_buffer_device:xpu}' \
+          export UCX_NET_DEVICES="$(rdma link | grep netdev | awk '{print $2}' | cut -d'/' -f1):1"
+          exec vllm serve Qwen/Qwen3-0.6B \
+            --port 8200 \
+            --served-model-name "Qwen/Qwen3-0.6B" \
+            --block-size 128 \
+            --kv-transfer-config '{"kv_connector":"NixlConnector", "kv_role":"kv_consumer", "kv_buffer_device":"xpu"}' \
             --disable-log-requests \
             --disable-uvicorn-access-log \
-            --max-model-len 32000
+            --max-model-len 32000 \
+            --no-enable-prefix-caching
       securityContext:
-        fsGroup: 107
-        supplementalGroups:
-          - 107
         privileged: true
         runAsUser: 0
         runAsGroup: 0
@@ -103,16 +102,15 @@ decode:
           mountPath: /dev/shm
         - name: torch-compile-cache
           mountPath: /.cache
-        - name: model-storage
-          emptyDir:
-            sizeLimit: 10Gi
         - name: driver
-          hostPath:
-            path: /dev/dri
+          mountPath: /dev/dri
       startupProbe:
         httpGet:
           path: /v1/models
           port: vllm
+          httpHeaders:
+            - name: Content-Type
+              value: application/json
         initialDelaySeconds: 30
         periodSeconds: 30
         timeoutSeconds: 10
@@ -128,6 +126,9 @@ decode:
         httpGet:
           path: /v1/models
           port: vllm
+          httpHeaders:
+            - name: Content-Type
+              value: application/json
         periodSeconds: 10
         timeoutSeconds: 5
         failureThreshold: 6
@@ -140,9 +141,6 @@ decode:
         sizeLimit: "16Gi"
     - name: torch-compile-cache
       emptyDir: {}
-    - name: model-storage
-      emptyDir:
-        sizeLimit: 10Gi
     - name: driver
       hostPath:
         path: /dev/dri
@@ -162,21 +160,20 @@ prefill:
     - name: "vllm"
       image: amr-registry.caas.intel.com/aiops/catalog/intel-vllm:0.14.1
       modelCommand: custom
-      command:
-        - bash
-        - -c
+      command: ["/bin/bash", "-c"]
+      args:
         - |
-          export UCX_NET_DEVICES=$(rdma link | grep netdev | awk '{print $2}' | cut -d'/' -f1):1
-          exec vllm serve Qwen/Qwen3-0.6 \
-            --block-size 64 \
-            --kv-transfer-config '{kv_connector:NixlConnector, kv_role:kv_both, kv_buffer_device:xpu}' \
+          export UCX_NET_DEVICES="$(rdma link | grep netdev | awk '{print $2}' | cut -d'/' -f1):1"
+          exec vllm serve Qwen/Qwen3-0.6B \
+            --port 8200 \
+            --served-model-name "Qwen/Qwen3-0.6B" \
+            --block-size 128 \
+            --kv-transfer-config '{"kv_connector":"NixlConnector", "kv_role":"kv_consumer", "kv_buffer_device":"xpu"}' \
             --disable-log-requests \
             --disable-uvicorn-access-log \
-            --max-model-len 32000
+            --max-model-len 32000 \
+            --no-enable-prefix-caching
       securityContext:
-        fsGroup: 107
-        supplementalGroups:
-          - 107
         privileged: true
         runAsUser: 0
         runAsGroup: 0
@@ -223,16 +220,15 @@ prefill:
           mountPath: /dev/shm
         - name: torch-compile-cache
           mountPath: /.cache
-        - name: model-storage
-          emptyDir:
-            sizeLimit: 10Gi
         - name: driver
-          hostPath:
-            path: /dev/dri
+          mountPath: /dev/dri
       startupProbe:
         httpGet:
           path: /v1/models
           port: vllm
+          httpHeaders:
+            - name: Content-Type
+              value: application/json
         initialDelaySeconds: 30
         periodSeconds: 30
         timeoutSeconds: 10
@@ -248,6 +244,9 @@ prefill:
         httpGet:
           path: /v1/models
           port: vllm
+          httpHeaders:
+            - name: Content-Type
+              value: application/json
         periodSeconds: 10
         timeoutSeconds: 5
         failureThreshold: 6
@@ -260,9 +259,6 @@ prefill:
         sizeLimit: "16Gi"
     - name: torch-compile-cache
       emptyDir: {}
-    - name: model-storage
-      emptyDir:
-        sizeLimit: 10Gi
     - name: driver
       hostPath:
         path: /dev/dri
