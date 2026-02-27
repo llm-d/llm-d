@@ -49,7 +49,7 @@ decode:
           exec vllm serve Qwen/Qwen3-0.6B \
             --port 8200 \
             --served-model-name "Qwen/Qwen3-0.6B" \
-            --block-size 128 \
+            --block-size 64 \
             --kv-transfer-config '{"kv_connector":"NixlConnector", "kv_role":"kv_consumer", "kv_buffer_device":"xpu"}' \
             --disable-log-requests \
             --disable-uvicorn-access-log \
@@ -69,7 +69,7 @@ decode:
             fieldRef:
               fieldPath: status.podIP
         - name: VLLM_NIXL_SIDE_CHANNEL_PORT
-          value: "5600"
+          value: "5500"
         # Intel XPU environment variables (required after switching to DRA)
         - name: VLLM_USE_V1
           value: "1"
@@ -80,7 +80,7 @@ decode:
       ports:
         - containerPort: 8200
           name: vllm
-        - containerPort: 5600
+        - containerPort: 5500
           name: nixl
       resourceClaims:
         - name: rdma-net-interface
@@ -149,7 +149,7 @@ prefill:
   parallelism:
     tensor: 1
   create: true
-  replicas: 3
+  replicas: 1
   monitoring:
     podmonitor:
       enabled: true
@@ -165,7 +165,7 @@ prefill:
         - |
           export UCX_NET_DEVICES="$(rdma link | grep netdev | awk '{print $2}' | cut -d'/' -f1):1"
           exec vllm serve Qwen/Qwen3-0.6B \
-            --port 8200 \
+            --port 8000 \
             --served-model-name "Qwen/Qwen3-0.6B" \
             --block-size 128 \
             --kv-transfer-config '{"kv_connector":"NixlConnector", "kv_role":"kv_consumer", "kv_buffer_device":"xpu"}' \
