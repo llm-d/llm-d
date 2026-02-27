@@ -125,5 +125,5 @@ jobs:
       skip_cleanup: ${{ github.event.inputs.skip_cleanup == 'true' }}
       required_gpus: 2
       recommended_gpus: 4
-      test_target: test-e2e-openshift
+      test_target: test-e2e-full
     secrets: inherit
