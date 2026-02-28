@@ -1,2 +1,12 @@
 gateway:
   gatewayClassName: kgateway
+  gatewayParameters:
+    kube:
+      envoyContainer:
+        extraVolumeMounts:
+          - name: tmp
+            mountPath: /tmp
+      podTemplate:
+        extraVolumes:
+          - name: tmp
+            emptyDir: {}
