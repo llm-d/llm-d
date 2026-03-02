@@ -9,3 +9,6 @@ CLAUDE.md
 *.swp
 *.swo
 *~
+
+# helm chart directories via kustomize
+**/charts/

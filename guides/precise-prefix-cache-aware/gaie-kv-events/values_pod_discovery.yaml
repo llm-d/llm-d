@@ -78,13 +78,11 @@ inferenceExtension:
             - pluginRef: max-score-picker
 
   monitoring:
-    secret:
-      name: kv-events-gateway-sa-metrics-reader-secret
     interval: "10s"
     prometheus:
       enabled: true
       auth:
-        enabled: true
+        secretName: kv-events-gateway-sa-metrics-reader-secret
 
 inferencePool:
   targetPorts:

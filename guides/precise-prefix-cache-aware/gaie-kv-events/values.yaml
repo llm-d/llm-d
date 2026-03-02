@@ -97,17 +97,12 @@ inferenceExtension:
               weight: 2.0
             - pluginRef: max-score-picker
 
-  # Monitoring configuration for EPP
   monitoring:
-    secret:
-      name: kv-events-gateway-sa-metrics-reader-secret
     interval: "10s"
-    # Prometheus ServiceMonitor will be created when enabled for EPP metrics collection
     prometheus:
       enabled: true
       auth:
-        # To allow unauthenticated /metrics access (e.g., for debugging with curl), set to false
-        enabled: true
+        secretName: kv-events-gateway-sa-metrics-reader-secret
 inferencePool:
   targetPorts:
     - number: 8000

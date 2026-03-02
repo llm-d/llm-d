@@ -38,17 +38,12 @@ inferenceExtension:
           weight: 1.0
       # All profiles using max score picker by default
 
-  # Monitoring configuration for EPP
   monitoring:
     interval: "10s"
-    # Prometheus ServiceMonitor will be created when enabled for EPP metrics collection
-    secret:
-      name: pd-gateway-sa-metrics-reader-secret
     prometheus:
       enabled: true
       auth:
-        # To allow unauthenticated /metrics access (e.g., for debugging with curl), set to false
-        enabled: true
+        secretName: pd-gateway-sa-metrics-reader-secret
 
 inferencePool:
   targetPorts:
