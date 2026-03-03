@@ -134,8 +134,6 @@ spec:
                 value: "1"
               - name: VLLM_USE_DEEP_GEMM
                 value: "1"
-              - name: VLLM_ALL2ALL_BACKEND
-                value: deepep_low_latency
               - name: NVIDIA_GDRCOPY
                 value: enabled
               - name: NVSHMEM_REMOTE_TRANSPORT
