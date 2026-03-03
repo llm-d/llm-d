@@ -40,7 +40,7 @@ decode:
       interval: "30s"
   containers:
     - name: "vllm"
-      image: amr-registry.caas.intel.com/aiops/catalog/intel-vllm:0.14.1
+      image: amr-registry.caas.intel.com/aiops/catalog/intel-vllm:wenxin-test-2
       modelCommand: custom
       command: ["/bin/bash", "-c"]
       args:
@@ -50,7 +50,7 @@ decode:
             --port 8200 \
             --served-model-name "Qwen/Qwen3-0.6B" \
             --block-size 64 \
-            --kv-transfer-config '{"kv_connector":"NixlConnector", "kv_role":"kv_consumer", "kv_buffer_device":"xpu"}' \
+            --kv-transfer-config '{"kv_connector":"NixlConnector", "kv_role":"kv_both", "kv_buffer_device":"xpu"}' \
             --disable-log-requests \
             --disable-uvicorn-access-log \
             --max-model-len 32000 \
@@ -60,7 +60,7 @@ decode:
         runAsUser: 0
         runAsGroup: 0
         capabilities:
-          add: ["IPC_LOCK","SYS_PTRACE","SYS_ADMIN","SYS_RAWIO"]
+          add: ["IPC_LOCK","NET_ADMIN","SYS_PTRACE","SYS_ADMIN","SYS_RAWIO"]
       env:
         - name: UCX_TLS
           value: "ib,rc,ze_copy"
@@ -77,11 +77,31 @@ decode:
           value: "1"
         - name: VLLM_WORKER_MULTIPROC_METHOD
           value: "spawn"
+        - name: HTTP_PROXY
+          value: http://proxy.ims.intel.com:911
+        - name: HTTPS_PROXY
+          value: http://proxy.ims.intel.com:911
+        - name: http_proxy
+          value: http://proxy.ims.intel.com:911
+        - name: https_proxy
+          value: http://proxy.ims.intel.com:911
+        - name: NO_PROXY
+          value: localhost,*intel.com,192.168.0.0/16,127.0.0.0/8,::1
+        - name: no_proxy
+          value: localhost,*intel.com,192.168.0.0/16,127.0.0.0/8,::1
+        - name: VLLM_LOGGING_LEVEL
+          value: "DEBUG"
+        - name: UCX_MEMTYPE_CACHE
+          value: "0"
+        - name: NIXL_TELEMETRY_ENABLE
+          value: "1"
       ports:
         - containerPort: 8200
           name: vllm
+          protocol: TCP
         - containerPort: 5500
           name: nixl
+          protocol: TCP
       resourceClaims:
         - name: rdma-net-interface
           resourceClaimTemplateName: rdma-net-template
@@ -158,7 +178,7 @@ prefill:
       interval: "30s"
   containers:
     - name: "vllm"
-      image: amr-registry.caas.intel.com/aiops/catalog/intel-vllm:0.14.1
+      image: amr-registry.caas.intel.com/aiops/catalog/intel-vllm:wenxin-test-2
       modelCommand: custom
       command: ["/bin/bash", "-c"]
       args:
@@ -167,8 +187,8 @@ prefill:
           exec vllm serve Qwen/Qwen3-0.6B \
             --port 8000 \
             --served-model-name "Qwen/Qwen3-0.6B" \
-            --block-size 128 \
-            --kv-transfer-config '{"kv_connector":"NixlConnector", "kv_role":"kv_consumer", "kv_buffer_device":"xpu"}' \
+            --block-size 64 \
+            --kv-transfer-config '{"kv_connector":"NixlConnector", "kv_role":"kv_both", "kv_buffer_device":"xpu"}' \
             --disable-log-requests \
             --disable-uvicorn-access-log \
             --max-model-len 32000 \
@@ -178,7 +198,7 @@ prefill:
         runAsUser: 0
         runAsGroup: 0
         capabilities:
-          add: ["IPC_LOCK","SYS_PTRACE","SYS_ADMIN","SYS_RAWIO"]
+          add: ["IPC_LOCK","NET_ADMIN","SYS_PTRACE","SYS_ADMIN","SYS_RAWIO"]
       env:
         - name: UCX_TLS
           value: "ib,rc,ze_copy"
@@ -195,11 +215,31 @@ prefill:
           value: "1"
         - name: VLLM_WORKER_MULTIPROC_METHOD
           value: "spawn"
+        - name: HTTP_PROXY
+          value: http://proxy.ims.intel.com:911
+        - name: HTTPS_PROXY
+          value: http://proxy.ims.intel.com:911
+        - name: http_proxy
+          value: http://proxy.ims.intel.com:911
+        - name: https_proxy
+          value: http://proxy.ims.intel.com:911
+        - name: NO_PROXY
+          value: localhost,*intel.com,192.168.0.0/16,127.0.0.0/8,::1
+        - name: no_proxy
+          value: localhost,*intel.com,192.168.0.0/16,127.0.0.0/8,::1
+        - name: VLLM_LOGGING_LEVEL
+          value: "DEBUG"
+        - name: UCX_MEMTYPE_CACHE
+          value: "0"
+        - name: NIXL_TELEMETRY_ENABLE
+          value: "1"
       ports:
         - containerPort: 8000
           name: vllm
+          protocol: TCP
         - containerPort: 5600
           name: nixl
+          protocol: TCP
       resourceClaims:
         - name: rdma-net-interface
           resourceClaimTemplateName: rdma-net-template

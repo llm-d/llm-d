@@ -42,7 +42,7 @@ To rapidly align the technical vision across the major stakeholders in the proje
 * Accelerate consensus and resolve disagreements
 * Approve changes to project process
 
-Project maintainers are listed as in the [OWNERS](./OWNERS) file of this repository as approvers (also referred to as "top level approvers").  The initial project maintainers are Carlos Costa, Clayton Coleman, and Robert Shaw, representing inference optimization research, the inference gateway project, and vLLM respectively.
+Project leadership and maintainer roles are listed in the [MAINTAINERS.md](./MAINTAINERS.md) file of this repository. The initial project maintainers are Carlos Costa, Clayton Coleman, and Robert Shaw, representing inference optimization research, the inference gateway project, and vLLM respectively.
 
 As the project matures we expect to separate and devolve these responsibilities and to rely on component maintainers for architectural alignment.
 

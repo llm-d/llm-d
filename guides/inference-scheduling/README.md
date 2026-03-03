@@ -110,19 +110,16 @@ helmfile apply -e cpu  -n ${NAMESPACE} # targets istio as gateway provider with 
 
 ##### Intel XPU Configuration
 
-For Intel XPU deployments, the `values_xpu.yaml` uses Dynamic Resource Allocation (DRA). By default it targets Intel Data Center GPU Max 1550 (i915 driver). For Intel BMG GPUs (Battlemage G21), update the accelerator type in `ms-inference-scheduling/values_xpu.yaml`:
+For Intel XPU deployments, the `values_xpu.yaml` uses Dynamic Resource Allocation (DRA) with a unified Intel accelerator configuration:
 
 ```yaml
-# For Intel Data Center GPU Max 1550 (default):
+# For Intel GPUs (supports both i915 and xe drivers):
 accelerator:
-  type: intel-i915
-  dra: true
-
-# For Intel BMG GPU (Battlemage G21):
-accelerator:
-  type: intel-xe
+  type: intel
   dra: true
 ```
+
+**Note:** The unified `intel` type works with both Intel Data Center GPU Max 1550 (i915 driver) and Intel BMG GPUs (Battlemage G21, xe driver). DRA automatically handles driver selection.
 
 **Note for Intel Gaudi (HPU) deployments:** Intel Gaudi uses Dynamic Resource Allocation (DRA) support. Ensure you have the [Intel Resource Drivers for Kubernetes](https://github.com/intel/intel-resource-drivers-for-kubernetes) installed on your cluster. See [Accelerator documentation](../../docs/accelerators/README.md#dynamic-resource-allocation) for setup details.
 
@@ -137,6 +134,7 @@ Follow provider specific instructions for installing HTTPRoute.
 **_IMPORTANT:_** If you set the `$RELEASE_NAME_POSTFIX` environment variable, you **must** update the HTTPRoute file to match your custom release names before applying it. The HTTPRoute references the Gateway and InferencePool names which include the release name postfix.
 
 For example, if you set `RELEASE_NAME_POSTFIX=my-custom`, you need to update the HTTPRoute:
+
 ```bash
 # Update the HTTPRoute to match your release names
 sed -e "s/infra-inference-scheduling-inference-gateway/infra-my-custom-inference-gateway/g" \

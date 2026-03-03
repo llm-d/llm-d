@@ -1,4 +1,4 @@
-name: Gaudi PD Test
+name: HPU PD Test
 
 on:
   schedule:
@@ -9,7 +9,7 @@ on:
       - 'guides/pd-disaggregation/gaie-pd/**'
       - 'guides/pd-disaggregation/helmfile.yaml.gotmpl'
       - 'docker/Dockerfile.hpu'
-      - '.github/workflows/e2e-pd-gaudi.yaml'
+      - '.github/workflows/e2e-pd-hpu.yaml'
   workflow_dispatch:
     inputs:
       pr_or_branch:

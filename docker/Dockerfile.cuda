@@ -66,9 +66,6 @@ ARG DEEPEP_VERSION="fix/nvshmem-ibgda-multiple-definition"
 ARG DEEPGEMM_REPO="https://github.com/deepseek-ai/DeepGEMM"
 ARG DEEPGEMM_VERSION="v2.1.1.post3"
 
-ARG PPLX_KERNELS_REPO="https://github.com/perplexityai/pplx-kernels"
-ARG PPLX_KERNELS_VERSION="2bd6e30fab358829bd01d1c0907be8088ff9e5e1"
-
 ARG FLASHINFER_REPO="https://github.com/flashinfer-ai/flashinfer.git"
 ARG FLASHINFER_VERSION="v0.6.1"
 
@@ -284,8 +281,6 @@ ARG DEEPEP_REPO
 ARG DEEPEP_VERSION
 ARG DEEPGEMM_REPO
 ARG DEEPGEMM_VERSION
-ARG PPLX_KERNELS_REPO
-ARG PPLX_KERNELS_VERSION
 ARG FLASHINFER_REPO
 ARG FLASHINFER_VERSION
 COPY docker/scripts/cuda/builder/build-compiled-wheels.sh /tmp/build-compiled-wheels.sh
@@ -469,7 +464,7 @@ ARG SUPPRESS_PYTHON_OUTPUT
 COPY scripts/warn-vllm-precompiled.sh /opt/
 
 # Install cuda-python, nvshmem python bindings, xet
-# Install all compiled wheels (DeepEP, DeepGEMM, pplx-kernels, LMCache, nixl)
+# Install all compiled wheels (DeepEP, DeepGEMM, LMCache, nixl)
 # Installs vllm source. Supports three install modes:
     # 1) install vllm from source totally editably - dev option, supports fork and commit swapping
     # 3) install vllm from source with pulling precompiled binaries (shared libraries) from the vllm wheels index - less flexible dev option, may or may not work swapping shas but faster than full editable

@@ -14,16 +14,16 @@
 # - Habana driver installed on host nodes
 
 modelArtifacts:
-  name: meta-llama/Llama-3.1-8B-Instruct
-  uri: "hf://meta-llama/Llama-3.1-8B-Instruct"
-  size: 50Gi
+  name: Qwen/Qwen3-8B
+  uri: "hf://Qwen/Qwen3-8B"
+  size: 100Gi
   authSecretName: "llm-d-hf-token"
   labels:
     llm-d.ai/inference-serving: "true"
     llm-d.ai/guide: "inference-scheduling"
     llm-d.ai/hardware-variant: "hpu"
     llm-d.ai/accelerator-vendor: "intel"
-    llm-d.ai/model: "Llama-3.1-8B-Instruct"
+    llm-d.ai/model: "Qwen3-8B"
 
 # Configure accelerator type for Intel Gaudi via DRA
 accelerator:

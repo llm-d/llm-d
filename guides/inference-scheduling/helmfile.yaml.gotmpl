@@ -97,7 +97,7 @@ releases:
   - name: {{ printf "ms-%s" $rn | quote }}
     namespace: {{ $ns }}
     chart: llm-d-modelservice/llm-d-modelservice
-    version: v0.4.5
+    version: v0.4.6
     installed: true
     needs:
       {{- if ne .Environment.Name "standalone" }}

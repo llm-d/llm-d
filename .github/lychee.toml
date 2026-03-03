@@ -15,6 +15,10 @@ exclude = [
   "^https://github\\.com/.*/blob/.*#L[0-9]",
   # Local file references with line numbers cannot be verified by lychee
   "^file://.*:[0-9]",
+  # UC Berkeley Sky Computing Lab site has SSL verification issues in CI
+  "sky\\.cs\\.berkeley\\.edu",
+  # Intel website blocks automated requests with 403
+  "^https?://(www\\.)?intel\\.com",
 ]
 
 # Accept status codes like 200 (OK), 204 (No Content), etc.

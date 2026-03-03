@@ -68,7 +68,7 @@ decode:
         initialDelaySeconds: 15
         periodSeconds: 30
         timeoutSeconds: 5
-        failureThreshold: 60
+        failureThreshold: 120
       livenessProbe:
         httpGet:
           path: /health

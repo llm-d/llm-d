@@ -43,6 +43,9 @@ patch() {
     decode_args_updated=$(echo "${decode_args_updated}" | sed '/--port/a\  --max-model-len 4096 \\')
     decode_args_updated=$(echo "${decode_args_updated}" | sed '/--port/a\  --enforce-eager \\')
 
+    ### L40s Don't support DeepEP kernels, use allgather_reducescatter
+    decode_args_updated=$(echo "${decode_args_updated}" | sed 's/--all2all-backend deepep_low_latency/--all2all-backend allgather_reducescatter/')
+
     export decode_args_updated
 
     yq e '.decode.containers[0].args[0] = strenv(decode_args_updated)' -i ${FILE}
@@ -54,9 +57,6 @@ patch() {
     ### The example is set to work out of the box on the coreweave cluster loading model from node storage. Were going to use HF download instead
     yq 'del(.decode.containers[0].env[] | select(.name == "HF_HUB_CACHE"))' -i ${FILE}
     yq 'del(.decode.containers[0].env[] | select(.name == "HF_HUB_DISABLE_XET"))' -i ${FILE}
-
-    ### L40s Dont support DeepEP kernles, use naive
-    yq e '(.decode.containers[0].env[] | select(.name == "VLLM_ALL2ALL_BACKEND")).value = "naive"' -i ${FILE}
 
     ### Remove deep gemm
     yq e 'del(.decode.containers[0].env[] | select(.name == "VLLM_USE_DEEP_GEMM"))' -i ${FILE}
@@ -94,6 +94,10 @@ patch() {
     prefill_args_updated=$(echo "${prefill_args}" | sed 's/'${OLD_MODEL_SED_ESCAPED}'/'${NEW_MODEL_SED_ESCAPED}'/g') # THIS NEEDS TO USE ARGS ABOVE
     prefill_args_updated=$(echo "${prefill_args_updated}" | sed '/--port/a\  --max-model-len 4096 \\')
     prefill_args_updated=$(echo "${prefill_args_updated}" | sed '/--port/a\  --enforce-eager \\')
+
+    ### L40s Don't support DeepEP kernels, use allgather_reducescatter
+    prefill_args_updated=$(echo "${prefill_args_updated}" | sed 's/--all2all-backend deepep_high_throughput/--all2all-backend allgather_reducescatter/')
+
     export prefill_args_updated
 
     yq e '.prefill.containers[0].args[0] = strenv(prefill_args_updated)' -i ${FILE}
@@ -105,9 +109,6 @@ patch() {
     ### The example is set to work out of the box on the coreweave cluster loading model from node storage. Were going to use HF download instead
     yq 'del(.prefill.containers[0].env[] | select(.name == "HF_HUB_CACHE"))' -i ${FILE}
     yq 'del(.prefill.containers[0].env[] | select(.name == "HF_HUB_DISABLE_XET"))' -i ${FILE}
-
-    ### L40s Dont support DeepEP kernles, use naive
-    yq e '(.prefill.containers[0].env[] | select(.name == "VLLM_ALL2ALL_BACKEND")).value = "naive"' -i ${FILE}
 
     ### Remove deep gemm
     yq e 'del(.prefill.containers[0].env[] | select(.name == "VLLM_USE_DEEP_GEMM"))' -i ${FILE}

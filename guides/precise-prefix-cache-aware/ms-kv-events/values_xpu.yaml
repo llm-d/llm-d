@@ -5,7 +5,7 @@ multinode: false
 
 # Configure accelerator type for Intel XPU via DRA
 accelerator:
-  type: intel-i915
+  type: intel
   dra: true
 
 modelArtifacts:
