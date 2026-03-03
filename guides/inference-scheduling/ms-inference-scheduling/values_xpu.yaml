@@ -43,7 +43,7 @@ decode:
   containers:
     - name: "vllm"
       # Use Intel latest published xpu image
-      image: ghcr.io/llm-d/llm-d-xpu:v0.5.0
+      image: ghcr.io/llm-d/llm-d-xpu:v0.5.1
       modelCommand: "vllmServe"
       args:
         - "--dtype"

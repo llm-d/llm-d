@@ -9,7 +9,7 @@ patches:
     patch: |-
       - op: replace
         path: /spec/template/spec/containers/0/image
-        value: vllm/vllm-openai:v0.14.1
+        value: vllm/vllm-openai:v0.15.1
 
   # Add Offloading Connector with llm-d FS Backend
   - target:

@@ -18,7 +18,7 @@ accelerator:
 routing:
   servicePort: 8000
   proxy:
-    image: ghcr.io/llm-d/llm-d-routing-sidecar:v0.5.0
+    image: ghcr.io/llm-d/llm-d-routing-sidecar:v0.5.1
     connector: nixlv2
     secure: false
 
@@ -36,7 +36,7 @@ decode:
       interval: "30s"
   containers:
     - name: "vllm"
-      image: ghcr.io/llm-d/llm-d-rocm:v0.5.0
+      image: ghcr.io/llm-d/llm-d-rocm:v0.5.1
       modelCommand: vllmServe
       args:
         - "--block-size"
@@ -128,7 +128,7 @@ prefill:
       interval: "30s"
   containers:
     - name: "vllm"
-      image: ghcr.io/llm-d/llm-d-rocm:v0.5.0
+      image: ghcr.io/llm-d/llm-d-rocm:v0.5.1
       modelCommand: vllmServe
       args:
         - "--block-size"

@@ -122,9 +122,9 @@ kubectl apply -f httproute.gke.yaml -n ${NAMESPACE}
 ```bash
 helm list -n ${NAMESPACE}
 NAME        NAMESPACE   REVISION    UPDATED                                 STATUS      CHART                       APP VERSION
-gaie-pd     llm-d-pd    1           2025-08-24 12:54:51.231537 -0700 PDT    deployed    inferencepool-v1.3.0        v1.3.0
+gaie-pd     llm-d-pd    1           2025-08-24 12:54:51.231537 -0700 PDT    deployed    inferencepool-v1.3.1        v1.3.1
 infra-pd    llm-d-pd    1           2025-08-24 12:54:46.983361 -0700 PDT    deployed    llm-d-infra-v1.3.6          v0.3.0
-ms-pd       llm-d-pd    1           2025-08-24 12:54:56.736873 -0700 PDT    deployed    llm-d-modelservice-v0.4.5   v0.4.0
+ms-pd       llm-d-pd    1           2025-08-24 12:54:56.736873 -0700 PDT    deployed    llm-d-modelservice-v0.4.6   v0.4.0
 ```
 
 * Out of the box with this example you should have the following resources:
@@ -181,7 +181,7 @@ Some examples in which you might want to do selective PD might include:
 * When the prompt is short enough that the amount of work split inference into prefill and decode phases, and then open a kv transfer between those two GPUs is greater than the amount of work to do both phases on the same decode inference worker.
 * When Prefill units are at full capacity.
 
-For information on this plugin, see our [`pd-profile-handler` docs in the inference-scheduler](https://github.com/llm-d/llm-d-inference-scheduler/blob/v0.5.0/docs/architecture.md?plain=1#L205-L210)
+For information on this plugin, see our [`pd-profile-handler` docs in the inference-scheduler](https://github.com/llm-d/llm-d-inference-scheduler/blob/v0.5.1/docs/architecture.md?plain=1#L205-L210)
 
 ## Benchmarking
 

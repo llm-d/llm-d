@@ -43,7 +43,7 @@ decode:
       interval: "30s"
   containers:
     - name: "vllm"
-      image: ghcr.io/llm-d/llm-d-xpu:v0.5.0
+      image: ghcr.io/llm-d/llm-d-xpu:v0.5.1
       modelCommand: custom
       command:
         - /bin/sh

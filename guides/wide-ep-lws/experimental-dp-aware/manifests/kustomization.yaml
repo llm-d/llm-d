@@ -9,6 +9,6 @@ resources:
 helmCharts:
   - name: inferencepool
     repo: oci://registry.k8s.io/gateway-api-inference-extension/charts
-    version: v1.3.0
+    version: v1.3.1
     releaseName: llm-d-infpool
     valuesFile: inferencepool.values.yaml
