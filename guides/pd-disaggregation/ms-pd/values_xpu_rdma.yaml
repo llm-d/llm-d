@@ -1,5 +1,5 @@
-# Intel XPU configuration for PD Disaggregation
-# This configuration sets up prefill and decode services with Intel XPU optimization
+# Intel XPU configuration for PD Disaggregation with RDMA
+# This configuration sets up prefill and decode services with Intel XPU optimization and ZE_AFFINITY_MASK
 
 multinode: false
 
@@ -38,6 +38,9 @@ decode:
       portName: "vllm"  # decode vLLM service port (from routing.proxy.targetPort)
       path: "/metrics"
       interval: "30s"
+  resourceClaims:
+    - name: rdma-net-interface
+      resourceClaimTemplateName: rdma-net-template
   containers:
     - name: "vllm"
       image: amr-registry.caas.intel.com/aiops/catalog/intel-vllm:0.14.1
@@ -53,7 +56,7 @@ decode:
             --kv-transfer-config '{"kv_connector":"NixlConnector", "kv_role":"kv_both", "kv_buffer_device":"xpu"}' \
             --disable-log-requests \
             --disable-uvicorn-access-log \
-            --max-model-len 8192 \
+            --max-model-len 32000 \
             --no-enable-prefix-caching
       securityContext:
         privileged: true
@@ -96,7 +99,7 @@ decode:
         - name: NIXL_TELEMETRY_ENABLE
           value: "1"
         - name: ZE_AFFINITY_MASK
-          value: "2"
+          value: "3"
       ports:
         - containerPort: 8200
           name: vllm
@@ -104,9 +107,6 @@ decode:
         - containerPort: 5500
           name: nixl
           protocol: TCP
-      resourceClaims:
-        - name: rdma-net-interface
-          resourceClaimTemplateName: rdma-net-template
       resources:
         limits:
           memory: 64Gi
@@ -178,6 +178,9 @@ prefill:
       portName: "vllm"  # prefill vLLM service port (from routing.servicePort)
       path: "/metrics"
       interval: "30s"
+  resourceClaims:
+    - name: rdma-net-interface
+      resourceClaimTemplateName: rdma-net-template
   containers:
     - name: "vllm"
       image: amr-registry.caas.intel.com/aiops/catalog/intel-vllm:0.14.1
@@ -193,7 +196,7 @@ prefill:
             --kv-transfer-config '{"kv_connector":"NixlConnector", "kv_role":"kv_both", "kv_buffer_device":"xpu"}' \
             --disable-log-requests \
             --disable-uvicorn-access-log \
-            --max-model-len 8192 \
+            --max-model-len 32000 \
             --no-enable-prefix-caching
       securityContext:
         privileged: true
@@ -233,10 +236,8 @@ prefill:
           value: "DEBUG"
         - name: UCX_MEMTYPE_CACHE
           value: "0"
-        - name: NIXL_TELEMETRY_ENABLE
-          value: "1"
         - name: ZE_AFFINITY_MASK
-          value: "3"
+          value: "2"
       ports:
         - containerPort: 8000
           name: vllm
@@ -244,9 +245,6 @@ prefill:
         - containerPort: 5600
           name: nixl
           protocol: TCP
-      resourceClaims:
-        - name: rdma-net-interface
-          resourceClaimTemplateName: rdma-net-template
       resources:
         limits:
           memory: 64Gi

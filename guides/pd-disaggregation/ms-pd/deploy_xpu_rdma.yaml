@@ -1,0 +1,902 @@
+---
+# Source: llm-d-infra/templates/gateway-infrastructure/configmap.yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: infra-pd-inference-gateway
+  labels: 
+    app.kubernetes.io/name: llm-d-infra
+    helm.sh/chart: llm-d-infra-v1.3.6
+    app.kubernetes.io/instance: infra-pd
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/version: "v0.3.0"
+    app.kubernetes.io/gateway: infra-pd-inference-gateway
+    app.kubernetes.io/component: inference-gateway
+  annotations:
+data:
+  deployment: |
+    spec:
+      template:
+        spec:
+          containers:
+          - name: istio-proxy
+            args:
+              - proxy
+              - router
+              - --domain
+              - $(POD_NAMESPACE).svc.cluster.local
+              - --proxyLogLevel
+              - error
+              - --proxyComponentLogLevel
+              - misc:error
+              - --log_output_level
+              - default:error
+            resources: 
+              limits:
+                cpu: "16"
+                memory: 16Gi
+              requests:
+                cpu: "4"
+                memory: 4Gi
+  service: |
+    spec:
+      type: "ClusterIP"
+---
+# Source: llm-d-infra/templates/gateway-infrastructure/gateway.yaml
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: infra-pd-inference-gateway
+  labels:
+    app.kubernetes.io/name: llm-d-infra
+    helm.sh/chart: llm-d-infra-v1.3.6
+    app.kubernetes.io/instance: infra-pd
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/version: "v0.3.0"
+    app.kubernetes.io/gateway: infra-pd-inference-gateway
+    app.kubernetes.io/component: inference-gateway
+    istio.io/enable-inference-extproc: "true"
+  annotations:
+spec:
+  gatewayClassName: "istio"
+  listeners:
+    - port: 80
+      protocol: HTTP
+      name: default
+      allowedRoutes:
+        namespaces:
+          from: All
+  infrastructure:
+    parametersRef:
+      name: infra-pd-inference-gateway
+      group: ""
+      kind: ConfigMap
+
+---
+# Source: inferencepool/templates/rbac.yaml
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: gaie-pd-epp
+  namespace: llm-d
+  labels:
+    app.kubernetes.io/name: gaie-pd-epp
+    app.kubernetes.io/version: "v1.3.0"
+---
+# Source: inferencepool/templates/epp-sa-token-secret.yaml
+apiVersion: v1
+kind: Secret
+metadata:
+  name: inference-gateway-sa-metrics-reader-secret
+  namespace: llm-d
+  labels:
+    app.kubernetes.io/name: gaie-pd-epp
+    app.kubernetes.io/version: "v1.3.0"
+  annotations:
+    kubernetes.io/service-account.name: gaie-pd-epp
+type: kubernetes.io/service-account-token
+---
+# Source: inferencepool/templates/epp-config.yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: gaie-pd-epp
+  namespace: llm-d
+data:
+  default-plugins.yaml: |
+    apiVersion: inference.networking.x-k8s.io/v1alpha1
+    kind: EndpointPickerConfig
+    plugins:
+    - type: queue-scorer
+    - type: kv-cache-utilization-scorer
+    - type: prefix-cache-scorer
+    schedulingProfiles:
+    - name: default
+      plugins:
+      - pluginRef: queue-scorer
+        weight: 2
+      - pluginRef: kv-cache-utilization-scorer
+        weight: 2
+      - pluginRef: prefix-cache-scorer
+        weight: 3
+  pd-config.yaml: |
+    # ALWAYS DO PD IN THIS EXAMPLE (THRESHOLD 0)
+    apiVersion: inference.networking.x-k8s.io/v1alpha1
+    kind: EndpointPickerConfig
+    plugins:
+    - type: prefill-header-handler
+    - type: prefill-filter
+    - type: decode-filter
+    - type: queue-scorer
+    - type: pd-profile-handler
+      parameters:
+        threshold: 0
+        hashBlockSize: 5
+    schedulingProfiles:
+    - name: prefill
+      plugins:
+      - pluginRef: prefill-filter
+      - pluginRef: queue-scorer
+        weight: 1.0
+    - name: decode
+      plugins:
+      - pluginRef: decode-filter
+      - pluginRef: queue-scorer
+        weight: 1.0
+    # All profiles using max score picker by default
+---
+# Source: inferencepool/templates/rbac.yaml
+kind: ClusterRole
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: "gaie-pd-llm-d-epp"
+  labels:
+    app.kubernetes.io/name: gaie-pd-epp
+    app.kubernetes.io/version: "v1.3.0"
+rules:
+- apiGroups:
+  - authentication.k8s.io
+  resources:
+  - tokenreviews
+  verbs:
+  - create
+- apiGroups:
+  - authorization.k8s.io
+  resources:
+  - subjectaccessreviews
+  verbs:
+  - create
+- nonResourceURLs:
+  - "/metrics"
+  verbs:
+  - get
+---
+# Source: inferencepool/templates/rbac.yaml
+kind: ClusterRoleBinding
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: "gaie-pd-llm-d-epp"
+subjects:
+- kind: ServiceAccount
+  name: gaie-pd-epp
+  namespace: llm-d
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: "gaie-pd-llm-d-epp"
+---
+# Source: inferencepool/templates/rbac.yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: gaie-pd-epp
+  namespace: llm-d
+  labels:
+    app.kubernetes.io/name: gaie-pd-epp
+    app.kubernetes.io/version: "v1.3.0"
+rules:
+- apiGroups: ["inference.networking.x-k8s.io"]
+  resources: ["inferenceobjectives", "inferencemodelrewrites"]
+  verbs: ["get", "watch", "list"]
+- apiGroups: ["inference.networking.k8s.io"]
+  resources: ["inferencepools"]
+  verbs: ["get", "watch", "list"]
+- apiGroups: [""]
+  resources: ["pods"]
+  verbs: ["get", "watch", "list"]
+---
+# Source: inferencepool/templates/rbac.yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: gaie-pd-epp
+  namespace: llm-d
+subjects:
+- kind: ServiceAccount
+  name: gaie-pd-epp
+  namespace: llm-d
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: gaie-pd-epp
+---
+# Source: inferencepool/templates/epp-service.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: gaie-pd-epp
+  namespace: llm-d
+  labels:
+    app.kubernetes.io/name: gaie-pd-epp
+    app.kubernetes.io/version: "v1.3.0"
+spec:
+  selector:
+    inferencepool: gaie-pd-epp
+  ports:
+    - name: grpc-ext-proc
+      protocol: TCP
+      port: 9002
+    - name: http-metrics
+      protocol: TCP
+      port: 9090
+  type: ClusterIP
+---
+# Source: inferencepool/templates/epp-deployment.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: gaie-pd-epp
+  namespace: llm-d
+  labels:
+    app.kubernetes.io/name: gaie-pd-epp
+    app.kubernetes.io/version: "v1.3.0"
+spec:
+  replicas: 1
+  strategy:
+    # The current recommended EPP deployment pattern is to have a single active replica. This ensures 
+    # optimal performance of the stateful operations such prefix cache aware scorer.
+    # The Recreate strategy the old replica is killed immediately, and allow the new replica(s) to 
+    # quickly take over. This is particularly important in the high availability set up with leader
+    # election, as the rolling update strategy would prevent the old leader being killed because 
+    # otherwise the maxUnavailable would be 100%.
+    type: Recreate
+  selector:
+    matchLabels:
+      inferencepool: gaie-pd-epp
+  template:
+    metadata:
+      labels:
+        inferencepool: gaie-pd-epp
+    spec:
+      serviceAccountName: gaie-pd-epp
+      # Conservatively, this timeout should mirror the longest grace period of the pods within the pool
+      terminationGracePeriodSeconds: 130
+      containers:
+      - name: epp
+        image: ghcr.io/llm-d/llm-d-inference-scheduler:v0.5.0
+        imagePullPolicy: Always
+        args:
+        - --pool-name
+        - gaie-pd
+        # The pool namespace is optional because EPP can default to the NAMESPACE env var.
+        # We still keep this here so that the template works with older versions of EPP, or other
+        # distros of EPP which may not have implemented the NAMESPACE env var defaulting behavior.
+        - --pool-namespace
+        - llm-d
+        - --pool-group
+        - "inference.networking.k8s.io"
+        - --zap-encoder
+        - "json"
+        - --config-file
+        - "/config/pd-config.yaml"
+        # Pass additional flags via the inferenceExtension.flags field in values.yaml.
+        - --kv-cache-usage-percentage-metric
+        - "vllm:kv_cache_usage_perc"
+        - --v
+        - "1"
+        - --tracing=false
+        ports:
+        - name: grpc
+          containerPort: 9002
+        - name: grpc-health
+          containerPort: 9003
+        - name: metrics
+          containerPort: 9090
+        livenessProbe:
+          grpc:
+            port: 9003
+            service: inference-extension
+          initialDelaySeconds: 5
+          periodSeconds: 10
+        readinessProbe:
+          grpc:
+            port: 9003
+            service: inference-extension
+          periodSeconds: 2
+        env:
+        - name: NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
+        - name: POD_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        
+        volumeMounts:
+        - name: plugins-config-volume
+          mountPath: "/config"
+      
+      volumes:
+      - name: plugins-config-volume
+        configMap:
+          name: gaie-pd-epp
+---
+# Source: inferencepool/templates/epp-config.yaml
+---
+---
+# Source: inferencepool/templates/istio.yaml
+apiVersion: networking.istio.io/v1beta1
+kind: DestinationRule
+metadata:
+  name: gaie-pd-epp
+spec:
+  host: gaie-pd-epp.llm-d.svc.cluster.local
+  trafficPolicy:
+    tls:
+      mode: SIMPLE
+      insecureSkipVerify: true
+    connectionPool:
+      http:
+        http1MaxPendingRequests: 256000
+        http2MaxRequests: 256000
+        idleTimeout: 900s
+        maxRequestsPerConnection: 256000
+      tcp:
+        connectTimeout: 900s
+        maxConnectionDuration: 1800s
+        maxConnections: 256000
+---
+# Source: inferencepool/templates/inferencepool.yaml
+apiVersion: "inference.networking.k8s.io/v1"
+kind: InferencePool
+metadata:
+  name: gaie-pd
+  namespace: llm-d
+  labels:
+    app.kubernetes.io/name: gaie-pd-epp
+    app.kubernetes.io/version: "v1.3.0"
+spec:
+  targetPorts:
+      - number: 8000
+  selector:
+    matchLabels:
+      llm-d.ai/guide: "pd-disaggregation"
+      llm-d.ai/inference-serving: "true"
+  endpointPickerRef:
+    name: gaie-pd-epp
+    port:
+      number: 9002
+---
+# Source: inferencepool/templates/epp-servicemonitor.yaml
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: gaie-pd-epp-monitor
+  namespace: llm-d
+  labels:
+    app.kubernetes.io/name: gaie-pd-epp
+    app.kubernetes.io/version: "v1.3.0"
+spec:
+  endpoints:
+  - interval: 10s
+    port: "http-metrics"
+    path: "/metrics"
+    authorization:
+      credentials:
+        key: token
+        name: inference-gateway-sa-metrics-reader-secret
+  jobLabel: gaie-pd-epp
+  namespaceSelector:
+    matchNames:
+    - llm-d
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: gaie-pd-epp
+      app.kubernetes.io/version: "v1.3.0"
+
+---
+# Source: llm-d-modelservice/templates/serviceaccount.yaml
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: ms-pd-llm-d-modelservice
+  labels:
+    helm.sh/chart: llm-d-modelservice-v0.4.6
+    app.kubernetes.io/version: "v0.4.0"
+    app.kubernetes.io/managed-by: Helm
+---
+# Source: llm-d-modelservice/templates/decode-deployment.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ms-pd-llm-d-modelservice-decode
+  labels:
+    helm.sh/chart: llm-d-modelservice-v0.4.6
+    app.kubernetes.io/version: "v0.4.0"
+    app.kubernetes.io/managed-by: Helm
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      llm-d.ai/guide: pd-disaggregation
+      llm-d.ai/hardware-variant: xpu
+      llm-d.ai/hardware-vendor: intel
+      llm-d.ai/inference-serving: "true"
+      llm-d.ai/model: Qwen3-0.6B
+      llm-d.ai/role: decode
+  template:
+    metadata:
+      labels:
+        llm-d.ai/guide: pd-disaggregation
+        llm-d.ai/hardware-variant: xpu
+        llm-d.ai/hardware-vendor: intel
+        llm-d.ai/inference-serving: "true"
+        llm-d.ai/model: Qwen3-0.6B
+        llm-d.ai/role: decode
+    spec:
+      initContainers:
+        - name: routing-proxy
+          args:
+            - --port=8000
+            - --vllm-port=8200
+            - --connector=nixlv2
+            - --zap-encoder=json
+            - --zap-log-level=debug
+            - --secure-proxy=false
+          image: ghcr.io/llm-d/llm-d-routing-sidecar:v0.5.0
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 8000
+          resources: {}
+          restartPolicy: Always
+          securityContext:
+            allowPrivilegeEscalation: false
+            runAsNonRoot: true
+    
+      serviceAccountName: ms-pd-llm-d-modelservice
+      
+      volumes:
+        - emptyDir: {}
+          name: metrics-volume
+        - emptyDir:
+            medium: Memory
+            sizeLimit: 16Gi
+          name: shm
+        - emptyDir: {}
+          name: torch-compile-cache
+        - hostPath:
+            path: /dev/dri
+          name: driver
+      
+        - name: model-storage
+          emptyDir:
+            sizeLimit: 10Gi
+        
+      resourceClaims:
+        - name: intel-decode-claim
+          resourceClaimTemplateName: intel-claim-template-decode
+      containers:
+        - name: vllm
+          image: amr-registry.caas.intel.com/aiops/catalog/intel-vllm:0.14.1
+          securityContext:
+            capabilities:
+              add:
+              - IPC_LOCK
+              - NET_ADMIN
+              - SYS_PTRACE
+              - SYS_ADMIN
+              - SYS_RAWIO
+            privileged: true
+            runAsGroup: 0
+            runAsUser: 0
+          
+          command:
+            - /bin/bash
+            - -c
+          args:
+            - |
+              export UCX_NET_DEVICES="$(rdma link | grep netdev | awk '{print $2}' | cut -d'/' -f1):1"
+              exec vllm serve Qwen/Qwen3-0.6B \
+                --port 8200 \
+                --served-model-name "Qwen/Qwen3-0.6B" \
+                --block-size 64 \
+                --kv-transfer-config '{"kv_connector":"NixlConnector", "kv_role":"kv_both", "kv_buffer_device":"xpu"}' \
+                --disable-log-requests \
+                --disable-uvicorn-access-log \
+                --max-model-len 32000 \
+                --no-enable-prefix-caching
+          env:
+          - name: UCX_TLS
+            value: ib,rc,ze_copy
+          - name: VLLM_NIXL_SIDE_CHANNEL_HOST
+            valueFrom:
+              fieldRef:
+                fieldPath: status.podIP
+          - name: VLLM_NIXL_SIDE_CHANNEL_PORT
+            value: "5500"
+          - name: VLLM_USE_V1
+            value: "1"
+          - name: TORCH_LLM_ALLREDUCE
+            value: "1"
+          - name: VLLM_WORKER_MULTIPROC_METHOD
+            value: spawn
+          - name: HTTP_PROXY
+            value: http://proxy.ims.intel.com:911
+          - name: HTTPS_PROXY
+            value: http://proxy.ims.intel.com:911
+          - name: http_proxy
+            value: http://proxy.ims.intel.com:911
+          - name: https_proxy
+            value: http://proxy.ims.intel.com:911
+          - name: NO_PROXY
+            value: localhost,*intel.com,192.168.0.0/16,127.0.0.0/8,::1
+          - name: no_proxy
+            value: localhost,*intel.com,192.168.0.0/16,127.0.0.0/8,::1
+          - name: VLLM_LOGGING_LEVEL
+            value: DEBUG
+          - name: UCX_MEMTYPE_CACHE
+            value: "0"
+          - name: NIXL_TELEMETRY_ENABLE
+            value: "1"
+          - name: ZE_AFFINITY_MASK
+            value: "3"
+          - name: DP_SIZE
+            value: "1"
+          - name: TP_SIZE
+            value: "1"
+          - name: DP_SIZE_LOCAL
+            value: "1"
+          
+          - name: HF_HOME
+            value: /model-cache
+          - name: HF_TOKEN
+            valueFrom:
+              secretKeyRef:
+                name: llm-d-hf-token
+                key: HF_TOKEN
+          
+          ports:
+          - containerPort: 8200
+            name: vllm
+            protocol: TCP
+          - containerPort: 5500
+            name: nixl
+            protocol: TCP
+          livenessProbe:
+            failureThreshold: 20
+            httpGet:
+              path: /health
+              port: vllm
+            periodSeconds: 30
+            timeoutSeconds: 10
+          readinessProbe:
+            failureThreshold: 6
+            httpGet:
+              httpHeaders:
+              - name: Content-Type
+                value: application/json
+              path: /v1/models
+              port: vllm
+            periodSeconds: 10
+            timeoutSeconds: 5
+          startupProbe:
+            failureThreshold: 60
+            httpGet:
+              httpHeaders:
+              - name: Content-Type
+                value: application/json
+              path: /v1/models
+              port: vllm
+            initialDelaySeconds: 30
+            periodSeconds: 30
+            timeoutSeconds: 10
+          resources:
+            limits:
+              cpu: "16"
+              memory: 64Gi
+            requests:
+              cpu: "16"
+              memory: 64Gi
+            claims:
+              - name: intel-decode-claim
+          
+          volumeMounts:
+            - mountPath: /.config
+              name: metrics-volume
+            - mountPath: /dev/shm
+              name: shm
+            - mountPath: /.cache
+              name: torch-compile-cache
+            - mountPath: /dev/dri
+              name: driver
+            - name: model-storage
+              mountPath: /model-cache
+---
+# Source: llm-d-modelservice/templates/prefill-deployment.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ms-pd-llm-d-modelservice-prefill
+  labels:
+    helm.sh/chart: llm-d-modelservice-v0.4.6
+    app.kubernetes.io/version: "v0.4.0"
+    app.kubernetes.io/managed-by: Helm
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      llm-d.ai/guide: pd-disaggregation
+      llm-d.ai/hardware-variant: xpu
+      llm-d.ai/hardware-vendor: intel
+      llm-d.ai/inference-serving: "true"
+      llm-d.ai/model: Qwen3-0.6B
+      llm-d.ai/role: prefill
+  template:
+    metadata:
+      labels:
+        llm-d.ai/guide: pd-disaggregation
+        llm-d.ai/hardware-variant: xpu
+        llm-d.ai/hardware-vendor: intel
+        llm-d.ai/inference-serving: "true"
+        llm-d.ai/model: Qwen3-0.6B
+        llm-d.ai/role: prefill
+    spec:
+    
+      serviceAccountName: ms-pd-llm-d-modelservice
+      
+      volumes:
+        - emptyDir: {}
+          name: metrics-volume
+        - emptyDir:
+            medium: Memory
+            sizeLimit: 16Gi
+          name: shm
+        - emptyDir: {}
+          name: torch-compile-cache
+        - hostPath:
+            path: /dev/dri
+          name: driver
+      
+        - name: model-storage
+          emptyDir:
+            sizeLimit: 10Gi
+        
+      resourceClaims:
+        - name: intel-prefill-claim
+          resourceClaimTemplateName: intel-claim-template-prefill
+      containers:
+        - name: vllm
+          image: amr-registry.caas.intel.com/aiops/catalog/intel-vllm:0.14.1
+          securityContext:
+            capabilities:
+              add:
+              - IPC_LOCK
+              - NET_ADMIN
+              - SYS_PTRACE
+              - SYS_ADMIN
+              - SYS_RAWIO
+            privileged: true
+            runAsGroup: 0
+            runAsUser: 0
+          
+          command:
+            - /bin/bash
+            - -c
+          args:
+            - |
+              export UCX_NET_DEVICES="$(rdma link | grep netdev | awk '{print $2}' | cut -d'/' -f1):1"
+              exec vllm serve Qwen/Qwen3-0.6B \
+                --port 8000 \
+                --served-model-name "Qwen/Qwen3-0.6B" \
+                --block-size 64 \
+                --kv-transfer-config '{"kv_connector":"NixlConnector", "kv_role":"kv_both", "kv_buffer_device":"xpu"}' \
+                --disable-log-requests \
+                --disable-uvicorn-access-log \
+                --max-model-len 32000 \
+                --no-enable-prefix-caching
+          env:
+          - name: UCX_TLS
+            value: ib,rc,ze_copy
+          - name: VLLM_NIXL_SIDE_CHANNEL_HOST
+            valueFrom:
+              fieldRef:
+                fieldPath: status.podIP
+          - name: VLLM_NIXL_SIDE_CHANNEL_PORT
+            value: "5600"
+          - name: VLLM_USE_V1
+            value: "1"
+          - name: TORCH_LLM_ALLREDUCE
+            value: "1"
+          - name: VLLM_WORKER_MULTIPROC_METHOD
+            value: spawn
+          - name: HTTP_PROXY
+            value: http://proxy.ims.intel.com:911
+          - name: HTTPS_PROXY
+            value: http://proxy.ims.intel.com:911
+          - name: http_proxy
+            value: http://proxy.ims.intel.com:911
+          - name: https_proxy
+            value: http://proxy.ims.intel.com:911
+          - name: NO_PROXY
+            value: localhost,*intel.com,192.168.0.0/16,127.0.0.0/8,::1
+          - name: no_proxy
+            value: localhost,*intel.com,192.168.0.0/16,127.0.0.0/8,::1
+          - name: VLLM_LOGGING_LEVEL
+            value: DEBUG
+          - name: UCX_MEMTYPE_CACHE
+            value: "0"
+          - name: ZE_AFFINITY_MASK
+            value: "2"
+          - name: DP_SIZE
+            value: "1"
+          - name: TP_SIZE
+            value: "1"
+          - name: DP_SIZE_LOCAL
+            value: "1"
+          
+          - name: HF_HOME
+            value: /model-cache
+          - name: HF_TOKEN
+            valueFrom:
+              secretKeyRef:
+                name: llm-d-hf-token
+                key: HF_TOKEN
+          
+          ports:
+          - containerPort: 8000
+            name: vllm
+            protocol: TCP
+          - containerPort: 5600
+            name: nixl
+            protocol: TCP
+          livenessProbe:
+            failureThreshold: 20
+            httpGet:
+              path: /health
+              port: vllm
+            periodSeconds: 30
+            timeoutSeconds: 10
+          readinessProbe:
+            failureThreshold: 6
+            httpGet:
+              httpHeaders:
+              - name: Content-Type
+                value: application/json
+              path: /v1/models
+              port: vllm
+            periodSeconds: 10
+            timeoutSeconds: 5
+          startupProbe:
+            failureThreshold: 60
+            httpGet:
+              httpHeaders:
+              - name: Content-Type
+                value: application/json
+              path: /v1/models
+              port: vllm
+            initialDelaySeconds: 30
+            periodSeconds: 30
+            timeoutSeconds: 10
+          resources:
+            limits:
+              cpu: "8"
+              memory: 64Gi
+            requests:
+              cpu: "8"
+              memory: 64Gi
+            claims:
+              - name: intel-prefill-claim
+          
+          volumeMounts:
+            - mountPath: /.config
+              name: metrics-volume
+            - mountPath: /dev/shm
+              name: shm
+            - mountPath: /.cache
+              name: torch-compile-cache
+            - mountPath: /dev/dri
+              name: driver
+            - name: model-storage
+              mountPath: /model-cache
+---
+# Source: llm-d-modelservice/templates/decode-podmonitor.yaml
+apiVersion: monitoring.coreos.com/v1
+kind: PodMonitor
+metadata:
+  name: ms-pd-llm-d-modelservice-decode-podmonitor
+  namespace: llm-d
+  labels:
+    helm.sh/chart: llm-d-modelservice-v0.4.6
+    app.kubernetes.io/version: "v0.4.0"
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/component: decode
+spec:
+  selector:
+    matchLabels:
+      llm-d.ai/guide: pd-disaggregation
+      llm-d.ai/hardware-variant: xpu
+      llm-d.ai/hardware-vendor: intel
+      llm-d.ai/inference-serving: "true"
+      llm-d.ai/model: Qwen3-0.6B
+      llm-d.ai/role: decode
+  podMetricsEndpoints:
+  # For decode service, this is port 8200. Must use port name.
+  - port: "vllm"
+    path: /metrics
+    interval: 30s
+---
+# Source: llm-d-modelservice/templates/prefill-podmonitor.yaml
+apiVersion: monitoring.coreos.com/v1
+kind: PodMonitor
+metadata:
+  name: ms-pd-llm-d-modelservice-prefill-podmonitor
+  namespace: llm-d
+  labels:
+    helm.sh/chart: llm-d-modelservice-v0.4.6
+    app.kubernetes.io/version: "v0.4.0"
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/component: prefill
+spec:
+  selector:
+    matchLabels:
+      llm-d.ai/guide: pd-disaggregation
+      llm-d.ai/hardware-variant: xpu
+      llm-d.ai/hardware-vendor: intel
+      llm-d.ai/inference-serving: "true"
+      llm-d.ai/model: Qwen3-0.6B
+      llm-d.ai/role: prefill
+  podMetricsEndpoints:
+  # For prefill, this is port 8000. Must use port name.
+  - port: "vllm"
+    path: /metrics
+    interval: 30s
+---
+# Source: llm-d-modelservice/templates/resource-claim-template.yaml
+apiVersion: resource.k8s.io/v1
+kind: ResourceClaimTemplate
+metadata:
+  name: intel-claim-template-decode
+  labels:
+    helm.sh/chart: llm-d-modelservice-v0.4.6
+    app.kubernetes.io/version: "v0.4.0"
+    app.kubernetes.io/managed-by: Helm
+    llm-d.ai/role: decode
+spec:
+  spec:
+    devices:
+      requests:
+      - name: intel
+        exactly:
+          deviceClassName: gpu.intel.com
+          count: 1
+---
+# Source: llm-d-modelservice/templates/resource-claim-template.yaml
+apiVersion: resource.k8s.io/v1
+kind: ResourceClaimTemplate
+metadata:
+  name: intel-claim-template-prefill
+  labels:
+    helm.sh/chart: llm-d-modelservice-v0.4.6
+    app.kubernetes.io/version: "v0.4.0"
+    app.kubernetes.io/managed-by: Helm
+    llm-d.ai/role: prefill
+spec:
+  spec:
+    devices:
+      requests:
+      - name: intel
+        exactly:
+          deviceClassName: gpu.intel.com
+          count: 1
+

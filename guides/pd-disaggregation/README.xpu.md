@@ -9,18 +9,12 @@ This document provides complete steps for deploying Intel XPU PD (Prefill-Decode
 * Intel Data Center GPU Max 1550 or compatible Intel XPU device
 * At least 8GB system memory
 * Sufficient disk space (recommended at least 50GB available)
-* **RDMA Support (Optional)**: RDMA-capable network interface (e.g., InfiniBand or Ethernet with RDMA)
-  * For InfiniBand: Mellanox/NVIDIA ConnectX-6+ or compatible
-  * For RoCE: RDMA-capable Ethernet NIC
 
 ### Software Requirements
 
 * Kubernetes cluster (v1.29.0+)
 * Intel GPU Plugin deployed
 * kubectl access with cluster-admin privileges
-* **DRA Support (For RDMA)**: Kubernetes v1.29.0+ with Dynamic Resource Allocation (DRA) enabled
-  * Feature gates: `DynamicResourceAllocation=true` (enabled by default in v1.29.0+)
-  * Intel Resource Drivers for Kubernetes (if using RDMA with DRA)
 
 ### Client Setup
 
@@ -144,106 +138,50 @@ helmfile apply -f istio.helmfile.yaml
 helmfile apply -f istio.helmfile.yaml --selector kind=gateway-control-plane
 ```
 
-## Step 4.5: Deploy RDMA DRA Resources (Optional)
-
-If you plan to use RDMA networking for improved inter-pod communication between prefill and decode services, deploy the RDMA DeviceClass and ResourceClaimTemplate:
-
-```shell
-# Navigate to PD disaggregation directory
-cd guides/pd-disaggregation
-
-# Deploy RDMA DRA resources
-kubectl apply -f ms-pd/rdma-resource-claims.yaml
-
-# Verify DeviceClass and ResourceClaimTemplate were created
-kubectl get deviceclass
-kubectl get resourceclaimtemplate
-```
-
-### RDMA Configuration Details
-
-The `rdma-resource-claims.yaml` file defines:
-
-* **DeviceClass `rdma-dranet`**: Allocates RDMA-capable network interfaces
-  * Selector: `device.driver == "dra.net"` and `device.attributes["dra.net"].rdma == true`
-  * Used for dynamic RDMA resource allocation via Kubernetes DRA
-
-* **ResourceClaimTemplate `rdma-net-template`**: Provides RDMA interface allocation template
-  * Referenced by decode and prefill container specs
-  * Automatically allocates RDMA interfaces when pods are scheduled
-
-### Enabling RDMA in values_xpu.yaml
-
-The RDMA support is already configured in `ms-pd/values_xpu.yaml` with:
-
-```yaml
-resourceClaims:
-  - name: rdma-net-interface
-    resourceClaimTemplateName: rdma-net-template
-```
-
-This is automatically included in both decode and prefill container specifications for seamless RDMA networking.
-
-**Note**: If RDMA resources are not available in your cluster, the deployment will still proceed but without RDMA optimization. RDMA is optional and provides performance benefits for high-throughput scenarios.
-
 ## Step 5: Deploy Intel XPU PD Disaggregation
 
-### Pre-Deployment Configuration
-
-#### Accelerator Type Selection
-
-⚠️ **Important - For Intel BMG GPU Users**: Before running `helmfile apply`, you must update the accelerator type in `ms-pd/values_xpu.yaml`:
+The Intel XPU configuration uses a unified accelerator type that works with all Intel GPU drivers:
 
 ```yaml
-# Edit ms-pd/values_xpu.yaml
-# For Intel Data Center GPU Max 1550 (i915 driver):
 accelerator:
-  type: intel-i915
-  dra: true
-
-# For Intel BMG GPU (Battlemage G21, Xe driver):
-accelerator:
-  type: intel-xe
+  type: intel
   dra: true
 ```
 
-**Accelerator Type by GPU:**
+**Note:** The unified `intel` type works with both Intel Data Center GPU Max 1550 (i915 driver) and Intel BMG GPUs (Battlemage G21, xe driver). Dynamic Resource Allocation (DRA) automatically handles driver selection.
 
-* **Intel Data Center GPU Max 1550**: Use `type: intel-i915` (maps to `gpu.intel.com/i915`)
-* **Intel BMG GPU (Battlemage G21)**: Use `type: intel-xe` (maps to `gpu.intel.com/xe`)
+### Deployment
 
-#### RDMA Configuration Status
-
-The deployment already includes RDMA support through resourceClaims:
-
-```yaml
-# decode and prefill containers include:
-resourceClaims:
-  - name: rdma-net-interface
-    resourceClaimTemplateName: rdma-net-template
-```
-
-✅ **RDMA Support**: If you deployed the RDMA DRA resources in Step 4.5, this configuration will automatically request RDMA interfaces for both decode and prefill services.
-
-✅ **Backward Compatible**: If you skipped Step 4.5 (RDMA resources not available), the deployment will proceed without RDMA (graceful degradation).
-
-### Deployment Command
+Navigate to the deployment directory:
 
 ```shell
-# Navigate to PD disaggregation guide directory
 cd guides/pd-disaggregation
+```
 
-# Deploy Intel XPU PD disaggregation configuration
+Choose one of the following deployment methods:
+
+#### Option 1: Standard Deployment
+
+```shell
 helmfile apply -e xpu -n ${NAMESPACE}
 ```
+
+#### Option 2: RDMA Deployment
+
+Apply RDMA DRA resource claims first, then deploy PD disaggregation.
+
+```shell
+kubectl apply -f ms-pd/rdma-resource-claims.yaml
+helmfile apply -e xpu_rdma -n ${NAMESPACE}
+```
+
+### Deployed Components
 
 This will deploy three main components in the `llm-d-pd` namespace:
 
 1. **infra-pd**: Gateway infrastructure for PD disaggregation
 2. **gaie-pd**: Gateway API inference extension with PD-specific routing
 3. **ms-pd**: Model service with separate prefill and decode deployments
-   * Both decode and prefill services will request RDMA network interfaces if available
-   * Network optimization via high-bandwidth RDMA channels for inter-pod communication
 
 ### Deployment Architecture
 
@@ -341,6 +279,7 @@ If no HTTPRoute was found, create one manually:
 **_IMPORTANT:_** If you used a custom `$RELEASE_NAME_POSTFIX` environment variable during deployment, you **must** update the HTTPRoute file to match your custom release names before applying it. The HTTPRoute references the Gateway and InferencePool names which include the release name postfix.
 
 For example, if you set `RELEASE_NAME_POSTFIX=pd-xpu`, you need to update the HTTPRoute:
+
 ```shell
 # Update the HTTPRoute to match your release names
 sed -e "s/infra-pd-inference-gateway/infra-pd-xpu-inference-gateway/g" \
@@ -352,6 +291,7 @@ kubectl apply -f httproute-custom.yaml -n llm-d-pd
 ```
 
 If using default release names (no custom `RELEASE_NAME_POSTFIX`), simply apply:
+
 ```shell
 # Apply the HTTPRoute configuration from the PD disaggregation guide
 kubectl apply -f httproute.yaml
