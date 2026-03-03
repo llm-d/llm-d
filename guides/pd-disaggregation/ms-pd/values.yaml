@@ -74,7 +74,7 @@ decode:
             fieldRef:
               fieldPath: status.podIP
         - name: VLLM_LOGGING_LEVEL
-          value: DEBUG  # Most verbose level for vLLM
+          value: DEBUG  # Most verbose standard level for vLLM
         - name: UCX_LOG_LEVEL
           value: DEBUG
       ports:
@@ -187,7 +187,7 @@ prefill:
             fieldRef:
               fieldPath: status.podIP
         - name: VLLM_LOGGING_LEVEL
-          value: DEBUG  # Most verbose level for vLLM
+          value: DEBUG  # Most verbose standard level for vLLM
         - name: UCX_LOG_LEVEL
           value: DEBUG
       ports:

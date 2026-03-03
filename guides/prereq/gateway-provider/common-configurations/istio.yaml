@@ -35,6 +35,8 @@ provider:
 # MS values
 routing:
   proxy:
-    zapLogLevel: "5"  # Zap level: most verbose (for deployments that use zap)
+    # Disable zap flags - routing-proxy uses klog, not zap
+    zapEncoder: null  # Removes --zap-encoder flag
+    zapLogLevel: null  # Removes --zap-log-level flag
     args:
-      - "-v=5"  # klog verbosity for routing-proxy (uses klog, not zap)
+      - "-v=5"  # klog verbosity for routing-proxy
