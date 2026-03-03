@@ -8,7 +8,7 @@ inferenceExtension:
   image:
     name: llm-d-inference-scheduler
     hub: ghcr.io/llm-d
-    tag: v0.6.0-rc.1
+    tag: v0.6.0
   extProcPort: 9002
   # Distributed tracing configuration (OpenTelemetry)
   tracing:
