@@ -46,14 +46,14 @@ This guide requires 32 Nvidia H200 or B200 GPUs and InfiniBand or RoCE RDMA netw
 
 ## Prerequisites
 
-* Have the [proper client tools installed on your local system](../prereq/client-setup/README.md) to use this guide.
-* Ensure your cluster infrastructure is sufficient to [deploy high scale inference](../prereq/infrastructure/README.md)
+* Have the [proper client tools installed on your local system](../../prereq/client-setup/README.md) to use this guide.
+* Ensure your cluster infrastructure is sufficient to [deploy high scale inference](../../prereq/infrastructure/README.md)
   * You must have high speed inter-accelerator networking
   * The pods leveraging inter-node EP must be deployed in a cluster environment with full mesh network connectivity.
     * **_NOTE:_** The DeepEP backend used in WideEP requires All-to-All RDMA connectivity. Every NIC on a host must be able to communicate with every NIC on all other hosts. Networks restricted to communicating only between matching NIC IDs (rail-only connectivity) will fail.
-  * You have deployed the [LeaderWorkerSet optional controller](../prereq/infrastructure/README.md#optional-install-leaderworkerset-for-multi-host-inference)
-* Configure and deploy your [Gateway control plane](../prereq/gateway-provider/README.md). Note that the Gateway must support multi-port (e.g. Istio 1.28.1)
-* Have the [Monitoring stack](../../docs/monitoring/README.md) installed on your system.
+  * You have deployed the [LeaderWorkerSet optional controller](../../prereq/infrastructure/README.md#optional-install-leaderworkerset-for-multi-host-inference)
+* Configure and deploy your [Gateway control plane](../../prereq/gateway-provider/README.md). Note that the Gateway must support multi-port (e.g. Istio 1.28.1)
+* Have the [Monitoring stack](../../../docs/monitoring/README.md) installed on your system.
 * Create a namespace for installation.
 
   ```bash
@@ -61,8 +61,8 @@ This guide requires 32 Nvidia H200 or B200 GPUs and InfiniBand or RoCE RDMA netw
   kubectl create namespace ${NAMESPACE}
   ```
 
-* [Create the `llm-d-hf-token` secret in your target namespace with the key `HF_TOKEN` matching a valid HuggingFace token](../prereq/client-setup/README.md#huggingface-token) to pull models.
-* [Choose an llm-d version](../prereq/client-setup/README.md#llm-d-version)
+* [Create the `llm-d-hf-token` secret in your target namespace with the key `HF_TOKEN` matching a valid HuggingFace token](../../prereq/client-setup/README.md#huggingface-token) to pull models.
+* [Choose an llm-d version](../../prereq/client-setup/README.md#llm-d-version)
 
 ## Installation
 
@@ -78,7 +78,7 @@ Deploy the Gateway and HTTPRoute using the [gateway recipe](../../recipes/gatewa
 
 To see what gateway options are supported refer to our [gateway provider prereq doc](../../prereq/gateway-provider/README.md#supported-providers). Gateway configurations per provider are tracked in the [gateway-configurations directory](../../prereq/gateway-provider/common-configurations/).
 
-You can also customize your gateway, for more information on how to do that see our [gateway customization docs](../../docs/customizing-your-gateway.md).
+You can also customize your gateway, for more information on how to do that see our [gateway customization docs](../../../docs/customizing-your-gateway.md).
 
 ### Deploy Model Servers
 
@@ -158,9 +158,9 @@ statefulset.apps/wide-ep-llm-d-prefill-1  1/1     2m13s
 
 ## Using the stack
 
-For instructions on getting started making inference requests see [our docs](../../docs/getting-started-inferencing.md)
+For instructions on getting started making inference requests see [our docs](../../../docs/getting-started-inferencing.md)
 
-**_NOTE:_** This example particularly benefits from utilizing stern as described in the [getting-started-inferencing docs](../../docs/getting-started-inferencing.md#following-logs-for-requests), because while we only have 3 inferencing pods, it has 16 vllm servers or ranks.
+**_NOTE:_** This example particularly benefits from utilizing stern as described in the [getting-started-inferencing docs](../../../docs/getting-started-inferencing.md#following-logs-for-requests), because while we only have 3 inferencing pods, it has 16 vllm servers or ranks.
 
 **_NOTE:_** Compared to the other examples, this one takes anywhere between 7-10 minutes for the vllm API servers to startup so this might take longer before you can interact with this example.
 
