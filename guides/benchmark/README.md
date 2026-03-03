@@ -325,7 +325,7 @@ This example uses `guidellm` with a [`rate_comparison`](./inference_scheduling_g
   Containers:
     harness:
       Container ID:  cri-o://2d450837cc20f303e9635b70897a40865bf4b44f1024e50c41d3c858b21f1db7
-      Image:         ghcr.io/llm-d/llm-d-benchmark:v0.5.1
+      Image:         ghcr.io/llm-d/llm-d-benchmark:v0.5.0
       Image ID:      ghcr.io/llm-d/llm-d-benchmark@sha256:c23a8d5650f1a3f0d40cb0985679f6cddf8f71f0bdfa3fb302b1911f4d8a7d6c
       Port:          <none>
       Host Port:     <none>
