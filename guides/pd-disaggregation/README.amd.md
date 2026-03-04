@@ -146,9 +146,9 @@ kubectl apply -f httproute.yaml -n ${NAMESPACE}
 ```bash
 helm list -n ${NAMESPACE}
 NAME        NAMESPACE   REVISION    UPDATED                                 STATUS      CHART                       APP VERSION
-gaie-pd     llm-d-pd    1           2026-02-04 16:08:57.461356878 +0000 UTC deployed    inferencepool-v1.2.0        v1.2.0     
+gaie-pd     llm-d-pd    1           2026-02-04 16:08:57.461356878 +0000 UTC deployed    inferencepool-v1.3.1        v1.3.0     
 infra-pd    llm-d-pd    1           2026-02-04 16:08:56.394680393 +0000 UTC deployed    llm-d-infra-v1.3.6          v0.3.0     
-ms-pd       llm-d-pd    1           2026-02-04 16:08:59.144726828 +0000 UTC deployed    llm-d-modelservice-v0.3.17  v0.3.0   
+ms-pd       llm-d-pd    1           2026-02-04 16:08:59.144726828 +0000 UTC deployed    llm-d-modelservice-v0.4.7   v0.4.0   
 ```
 
 * Out of the box with the example you should have the following resources:
