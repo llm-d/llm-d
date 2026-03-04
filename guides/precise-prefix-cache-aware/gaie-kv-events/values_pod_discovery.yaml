@@ -17,7 +17,7 @@ inferenceExtension:
           key: HF_TOKEN
   sidecar:
     enabled: true
-    image: ghcr.io/llm-d/llm-d-uds-tokenizer:v0.5.1-rc1
+    image: ghcr.io/llm-d/llm-d-uds-tokenizer:v0.6.0
     imagePullPolicy: IfNotPresent
     name: tokenizer-uds
     # Both HF_HOME and TOKENIZERS_DIR are required to point to the same mounted directory
