@@ -8,7 +8,7 @@ api:
 server:
   type: vllm
   model_name: "deepseek-ai/DeepSeek-R1-0528"
-  base_url: http://llm-d-inference-gateway-istio.llm-d-nebius.svc.cluster.local:80
+  base_url: http://llm-d-inference-gateway-istio.rob-dev.svc.cluster.local:80
   ignore_eos: true
 tokenizer:
   pretrained_model_name_or_path: deepseek-ai/DeepSeek-R1-0528

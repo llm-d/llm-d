@@ -40,6 +40,10 @@ on:
         description: 'HPA stabilization window in seconds'
         required: false
         default: '240'
+      caller_ref:
+        description: 'WVA repo ref to checkout for tests and image build (branch, tag, or SHA)'
+        required: false
+        default: 'main'
       skip_cleanup:
         description: 'Skip cleanup after tests (for debugging)'
         required: false
@@ -67,7 +71,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: llm-d/llm-d-workload-variant-autoscaler
-          ref: main
+          ref: ${{ github.event.inputs.caller_ref || 'main' }}
 
       - name: Set up Go
         uses: actions/setup-go@v5
@@ -112,7 +116,7 @@ jobs:
       namespace: llm-d-nightly-wva
       deploy_wva: true
       caller_repo: llm-d/llm-d-workload-variant-autoscaler
-      caller_ref: main
+      caller_ref: ${{ github.event.inputs.caller_ref || 'main' }}
       model_id: ${{ github.event.inputs.model_id || 'unsloth/Meta-Llama-3.1-8B' }}
       accelerator_type: ${{ github.event.inputs.accelerator_type || 'H100' }}
       wva_image_tag: ${{ needs.build-wva-image.outputs.image_tag || github.event.inputs.image_tag }}

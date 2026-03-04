@@ -38,14 +38,14 @@ patches:
         value:
           name: NVSHMEM_HCA_PREFIX
           value: "ibp"
-      # Add RMDA config.
+      # Add RDMA config.
       - op: add
         path: /spec/leaderWorkerTemplate/workerTemplate/spec/containers/0/resources/limits/rdma~1ib
         value: "1"
       - op: add
         path: /spec/leaderWorkerTemplate/workerTemplate/spec/containers/0/resources/requests/rdma~1ib
         value: "1"
-      # Add GPU affinity.
+      # Add GPU affinity. We do this because the sizing of this deployment won't fit on our H100s in terms of memory.
       - op: add
         path: /spec/leaderWorkerTemplate/workerTemplate/spec/affinity
         value:
@@ -57,6 +57,3 @@ patches:
                     operator: In
                     values:
                       - H200
-      - op: add
-        path: /spec/leaderWorkerTemplate/workerTemplate/spec/schedulerName
-        value: custom-binpack-scheduler

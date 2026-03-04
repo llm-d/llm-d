@@ -1,7 +1,7 @@
 apiVersion: leaderworkerset.x-k8s.io/v1
 kind: LeaderWorkerSet
 metadata:
-  name: prefill
+  name: wide-ep-llm-d-prefill
   labels:
     llm-d.ai/inference-serving: "true"
     llm-d.ai/guide: "wide-ep-lws"
@@ -35,7 +35,7 @@ spec:
             emptyDir: {}
         containers:
           - name: vllm
-            image: ghcr.io/llm-d/llm-d-cuda:v0.5.0
+            image: ghcr.io/llm-d/llm-d-cuda-dev:latest
             securityContext:
               capabilities:
                 add:
@@ -58,24 +58,16 @@ spec:
                 #################
                 START_RANK=$(( ${LWS_WORKER_INDEX:-0} * DP_SIZE_LOCAL ))
 
-                # --enable-expert-parallel: Use TPxDP in attention, EP in MoE layers
-                # --async-scheduling: Reduce white space between engine steps
-                # --enable-dbo: Dual batch overlap (DBO) overlaps compute with collective communication.
-                # --enable-eplb:  Expert-parallel load balancing reduces EP load imbalance by replicating heavily-used experts
-                #   Performance-memory tradeoff: on DeepSeekV3 eplb uses an extra 2GB per redundant expert per GPU
-                #   Divisibility constraint: num_routed_experts (256 for DSv3) + num_redundant_experts must be divisible by the number of GPUs.
-
                 # Common vLLM flag arguments shared across all prefill ranks
                 COMMON_VLLM_ARGS=(
-                  --max-model-len 65536
                   --disable-uvicorn-access-log
-                  --tensor-parallel-size=1
                   --data-parallel-size $((LWS_GROUP_SIZE * DP_SIZE_LOCAL))
                   --data-parallel-address="${LWS_LEADER_ADDRESS}"
                   --data-parallel-rpc-port=5555
                   --enable-expert-parallel
                   --kv_transfer_config '{"kv_connector":"NixlConnector","kv_role":"kv_both","kv_load_failure_policy":"fail"}'
                   --all2all-backend deepep_high_throughput
+                  --max-model-len 65536
                 )
 
                 CUDA_VISIBLE_DEVICES="0" vllm serve deepseek-ai/DeepSeek-R1-0528 --host=0.0.0.0 --port=8000 --data-parallel-rank=$((START_RANK + 0)) "${COMMON_VLLM_ARGS[@]}" &
@@ -113,6 +105,8 @@ spec:
                 value: eth0
               - name: VLLM_LOGGING_LEVEL
                 value: INFO
+              - name: NVSHMEM_DISABLE_CUDA_VMM
+                value: "0"
               - name: VLLM_NIXL_SIDE_CHANNEL_HOST
                 valueFrom:
                   fieldRef:

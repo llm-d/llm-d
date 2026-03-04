@@ -43,7 +43,7 @@ decode:
       resourceClaimTemplateName: rdma-net-template
   containers:
     - name: "vllm"
-      image: amr-registry.caas.intel.com/aiops/catalog/intel-vllm:0.14.1
+      image: ghcr.io/llm-d/llm-d-xpu:v0.5.0
       modelCommand: custom
       command: ["/bin/bash", "-c"]
       args:
@@ -80,24 +80,8 @@ decode:
           value: "1"
         - name: VLLM_WORKER_MULTIPROC_METHOD
           value: "spawn"
-        - name: HTTP_PROXY
-          value: http://proxy.ims.intel.com:911
-        - name: HTTPS_PROXY
-          value: http://proxy.ims.intel.com:911
-        - name: http_proxy
-          value: http://proxy.ims.intel.com:911
-        - name: https_proxy
-          value: http://proxy.ims.intel.com:911
-        - name: NO_PROXY
-          value: localhost,*intel.com,192.168.0.0/16,127.0.0.0/8,::1
-        - name: no_proxy
-          value: localhost,*intel.com,192.168.0.0/16,127.0.0.0/8,::1
-        - name: VLLM_LOGGING_LEVEL
-          value: "DEBUG"
         - name: UCX_MEMTYPE_CACHE
           value: "0"
-        - name: NIXL_TELEMETRY_ENABLE
-          value: "1"
         - name: ZE_AFFINITY_MASK
           value: "3"
       ports:
@@ -183,7 +167,7 @@ prefill:
       resourceClaimTemplateName: rdma-net-template
   containers:
     - name: "vllm"
-      image: amr-registry.caas.intel.com/aiops/catalog/intel-vllm:0.14.1
+      image: ghcr.io/llm-d/llm-d-xpu:v0.5.0
       modelCommand: custom
       command: ["/bin/bash", "-c"]
       args:
@@ -220,20 +204,6 @@ prefill:
           value: "1"
         - name: VLLM_WORKER_MULTIPROC_METHOD
           value: "spawn"
-        - name: HTTP_PROXY
-          value: http://proxy.ims.intel.com:911
-        - name: HTTPS_PROXY
-          value: http://proxy.ims.intel.com:911
-        - name: http_proxy
-          value: http://proxy.ims.intel.com:911
-        - name: https_proxy
-          value: http://proxy.ims.intel.com:911
-        - name: NO_PROXY
-          value: localhost,*intel.com,192.168.0.0/16,127.0.0.0/8,::1
-        - name: no_proxy
-          value: localhost,*intel.com,192.168.0.0/16,127.0.0.0/8,::1
-        - name: VLLM_LOGGING_LEVEL
-          value: "DEBUG"
         - name: UCX_MEMTYPE_CACHE
           value: "0"
         - name: ZE_AFFINITY_MASK

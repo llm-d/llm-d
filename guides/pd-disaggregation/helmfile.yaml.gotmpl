@@ -16,6 +16,8 @@ environments:
       - ../prereq/gateway-provider/common-configurations/gke.yaml
   gke_tpu: &GKETPU
     <<: *GKE
+  amd: &AMD
+    <<: *I
   xpu: &XPU
     values:
       - ../prereq/gateway-provider/common-configurations/istio.yaml
@@ -71,7 +73,7 @@ releases:
               enabled: true
     {{- end }}
     # Apply destination rule for anything istio
-    {{- if or (eq .Environment.Name "istio") (eq .Environment.Name "default") (eq .Environment.Name "aks") (eq .Environment.Name "xpu") (eq .Environment.Name "xpu_rdma") (eq .Environment.Name "hpu") }}
+    {{- if or (eq .Environment.Name "istio") (eq .Environment.Name "default") (eq .Environment.Name "aks") (eq .Environment.Name "amd") (eq .Environment.Name "xpu") (eq .Environment.Name "xpu_rdma") (eq .Environment.Name "hpu") }}
       - provider:
           name: {{ .Environment.Values.provider.name }}
           istio:
@@ -92,13 +94,15 @@ releases:
   - name: {{ printf "ms-%s" $rn | quote }}
     namespace: {{ $ns }}
     chart: llm-d-modelservice/llm-d-modelservice
-    version: v0.4.5
+    version: v0.4.6
     installed: true
     needs:
       - {{ printf "infra-%s" $rn | quote }}
       - {{ printf "gaie-%s" $rn | quote }}
     values:
-    {{- if eq .Environment.Name "xpu" }}
+    {{- if eq .Environment.Name "amd" }}
+      - ms-pd/values_amd.yaml
+    {{- else if eq .Environment.Name "xpu" }}
       - ms-pd/values_xpu.yaml
     {{- else if eq .Environment.Name "xpu_rdma" }}
       - ms-pd/values_xpu_rdma.yaml

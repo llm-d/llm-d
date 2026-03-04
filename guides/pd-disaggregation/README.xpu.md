@@ -171,7 +171,7 @@ helmfile apply -e xpu -n ${NAMESPACE}
 Apply RDMA DRA resource claims first, then deploy PD disaggregation.
 
 ```shell
-kubectl apply -f ms-pd/rdma-resource-claims.yaml
+kubectl apply -f ms-pd/rdma-resource-claims.yaml -n ${NAMESPACE}
 helmfile apply -e xpu_rdma -n ${NAMESPACE}
 ```
 

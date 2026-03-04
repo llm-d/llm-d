@@ -55,13 +55,12 @@ ARG LMCACHE_REPO="https://github.com/LMCache/LMCache.git"
 ARG LMCACHE_VERSION="v0.3.14"
 
 # Kernels
-# ARG DEEPEP_REPO="https://github.com/deepseek-ai/DeepEP"
-# ARG DEEPEP_VERSION="92fe2deaec24bc92ebd9de276daa6ca9ed602ed4" 
-
-# My fork of Deepep for duplicate nvshmem IBGDA definitions, see: https://github.com/deepseek-ai/DeepEP/pull/581. 
-# Ideally we take: https://github.com/deepseek-ai/DeepEP/pull/574. Based off of v1.2.1 stable release. Needed for Compat with Nvshmem 3.5.19-1
-ARG DEEPEP_REPO="https://github.com/Gregory-Pereira/DeepEP"
-ARG DEEPEP_VERSION="fix/nvshmem-ibgda-multiple-definition" 
+# NM fork of Deepep for duplicate nvshmem IBGDA definitions, see: https://github.com/deepseek-ai/DeepEP/pull/581.
+# Also GKE nic-pe mapping, see: https://github.com/deepseek-ai/DeepEP/pull/466 
+# Commits cherry-picked on top of: `https://github.com/deepseek-ai/DeepEP/commit/567632dd59810d77b3cc05553df953cc0f779799`
+ARG DEEPEP_REPO="https://github.com/neuralmagic/DeepEP"
+# branch: https://github.com/neuralmagic/DeepEP/tree/llm-d-release-v0.5.1, but frozen at commit:
+ARG DEEPEP_VERSION="38d21b7f9bb6f3b102b1819d09439686eaa87ce8"
 
 ARG DEEPGEMM_REPO="https://github.com/deepseek-ai/DeepGEMM"
 ARG DEEPGEMM_VERSION="v2.1.1.post3"

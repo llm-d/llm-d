@@ -12,12 +12,10 @@ inferenceExtension:
   extProcPort: 9002
   monitoring:
     interval: "10s"
-    # Service account token secret for authentication
-    secret:
-      name: wide-ep-gateway-sa-metrics-reader-secret
-    # Prometheus ServiceMonitor will be created when enabled for EPP metrics collection
     prometheus:
       enabled: true
+      auth:
+        secretName: "wide-ep-gateway-sa-metrics-reader-secret"
   pluginsConfigFile: "custom-plugins.yaml"
   pluginsCustomConfig:
     custom-plugins.yaml: |
