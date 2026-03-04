@@ -1,12 +1,14 @@
 # Proposal: Prism - Performance analysis for distributed inference systems
 
+## Status: Accepted
+
 ## Motivation
 
 Currently, AI Platform Engineers and ML Engineers face significant challenges assembling the full end-to-end inference serving stack for their applications, leading to lengthy, manual evaluation cycles, suboptimal performance, and unnecessarily high friction & costs. While many benchmarks and tools exist, the data follows different methodologies, formats, and is often scattered across disconnected docs, spreadsheets, or vendor-specific sites.
 
 **Prism** aims to solve this by providing a streamlined, intuitive interface for discovering, comparing, and reproducing benchmarks for state-of-the-art distributed inference systems that scale from single-node to complex multi-node disaggregated environments and agentic & RL systems.
 
-We are proposing to donate the Prism codebase (currently at [https://github.com/seanhorgan/prism](https://github.com/seanhorgan/prism)) to the `llm-d` organization to:
+We are proposing to donate the Prism codebase, previously at https://github.com/seanhorgan/prism, and in the process of [being moved to the `llm-d` organization](https://github.com/llm-d/llm-d-prism) to:
 
 1.  Establish a community-driven reference for visualizing performance of distributed inference systems.
 2.  Allow the community to contribute high-quality benchmarks from various sources, e.g. results that conform to the standard `llm-d` benchmark format.
