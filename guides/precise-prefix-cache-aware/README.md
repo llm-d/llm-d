@@ -168,7 +168,7 @@ curl -s http://localhost:8000/v1/completions \
 1. Check the inference-scheduler's prefix-cache-scorer's scores with the following command:
 
 ```bash
-kubectl logs -l inferencepool=gaie-kv-events-epp -n ${NAMESPACE} --tail 100 | grep "Calculated score" | grep "precise-prefix-cache-scorer/precise-prefix-cache-scorer"
+kubectl logs -l inferencepool=gaie-kv-events-epp --all-containers=true -n ${NAMESPACE} --tail 100 | grep "Calculated score" | grep "precise-prefix-cache-scorer/precise-prefix-cache-scorer"
 ```
 
 You should see output similar to:
