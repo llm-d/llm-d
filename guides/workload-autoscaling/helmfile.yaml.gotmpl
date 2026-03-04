@@ -86,7 +86,7 @@ releases:
   - name: workload-variant-autoscaler
     namespace: {{ if $isWvaOnly }}{{ env "WVA_NAMESPACE" | default "llm-d-autoscaler" }}{{ else }}{{ $ns }}{{ end }}
     chart: oci://ghcr.io/llm-d-incubation/workload-variant-autoscaler/workload-variant-autoscaler
-    version: "~0.5.0"
+    version: "0.5.1"
     installed: true
     {{- if not $isWvaOnly }}
     needs:

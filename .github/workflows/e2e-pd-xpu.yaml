@@ -11,7 +11,7 @@ on:
         default: 'main'
         type: string
       custom_image_tag:
-        description: 'Tag only (e.g. pr-123, auto-expanded to ghcr.io/<org>/<repo>-xpu-dev:pr-123) or full image address (e.g. ghcr.io/llm-d/llm-d-xpu:v0.5.0). Leave empty to use default from values file'
+        description: 'Tag only (e.g. pr-123, auto-expanded to ghcr.io/<org>/<repo>-xpu-dev:pr-123) or full image address (e.g. ghcr.io/llm-d/llm-d-xpu:v0.5.1). Leave empty to use default from values file'
         required: false
         default: ''
         type: string

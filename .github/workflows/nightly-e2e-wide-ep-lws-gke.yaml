@@ -65,7 +65,7 @@ jobs:
         # Override image if IMAGE_OVERRIDE is set by the reusable workflow
         if [ -n "${IMAGE_OVERRIDE:-}" ]; then
           find guides/wide-ep-lws/manifests/modelserver -name "*.yaml" -not -name "kustomization.yaml" \
-            -exec sed -i "s|ghcr.io/llm-d/llm-d-cuda:[^ \"]*|${IMAGE_OVERRIDE}|g" {} \;
+            -exec sed -i "s|ghcr.io/llm-d/llm-d-cuda-dev:[^ \"]*|${IMAGE_OVERRIDE}|g" {} \;
           echo "Image override applied: ${IMAGE_OVERRIDE}"
         fi
 
