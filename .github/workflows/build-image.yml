@@ -1249,6 +1249,10 @@ jobs:
         with:
           ref: ${{ github.event.pull_request.head.sha }}
 
+      - name: Checkout for dispatch
+        if: github.event_name == 'workflow_dispatch' || github.event_name == 'workflow_call'
+        uses: actions/checkout@v6
+
       - name: Log in to Container Registry
         uses: docker/login-action@v3
         with:
