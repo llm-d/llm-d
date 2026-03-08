@@ -69,3 +69,154 @@ A P2P network can be formed between the inference engine instances to share cach
 ## Cache Tiering
 
 Generally multiple cache tiers can be applied ordered by their cache read/write latencies, allowing frequently accessed caches to stay as close as possible to the accelerator, and large or less frequently accessed caches to be offloaded to slower tiers. We recommend always setting up HBM and CPU RAM tiers, and consider a third or fourth tier when your cache needs goes beyond HBM + CPU RAM.
+
+## Cache Architecture
+
+### Overview
+
+When a request arrives, vLLM hashes the prompt prefix and checks each cache tier from fastest to slowest. On a hit, it loads the KV blocks and skips recomputation entirely. On a miss, it falls through to the next tier, and if nothing is found, runs a full prefill. After prefill, the computed KV blocks are written back to all configured tiers asynchronously — the GPU is never blocked waiting on I/O.
+
+All of this is wired through vLLM's `--kv-transfer-config` flag. llm-d provides two connector implementations that plug into this interface: the **vLLM native OffloadingConnector** and the **LMCache connector**. Both are transparent to the inference scheduler and the rest of the llm-d stack.
+
+### Cache Hierarchy
+
+The cache is organized as an ordered set of tiers by latency and capacity. Hot blocks stay close to the GPU; cold or overflow blocks spill down to cheaper, larger storage:
+
+```
+Tier 1 — Accelerator HBM       (fastest, smallest)
+Tier 2 — CPU RAM                (fast, larger)
+Tier 3 — Local Disk / Shared Storage  (slowest, largest)
+```
+
+| Tier | Storage | Typical Capacity | Latency | Cross-node Sharing |
+|------|---------|-----------------|---------|-------------------|
+| HBM | GPU VRAM | 24–80 GB/GPU | ~µs | No |
+| CPU RAM | Host memory | 200–500 GB/node | ~10µs | No |
+| Local Disk | NVMe/SSD | 1–10 TB/node | ~100µs | No |
+| Shared Storage | CephFS / Lustre / IBM Storage Scale | Petabyte-scale | ~1ms+ | Yes |
+
+> **Recommendation**: Start with HBM + CPU RAM — it covers most workloads with minimal operational overhead. Add shared storage when your working set exceeds what fits across all replicas, or when you need cache to survive pod restarts and scale-up events.
+
+### Request Flow
+
+```
+Incoming request
+      │
+      ▼
+Hash prefix tokens
+      │
+      ▼
+┌─────────────┐   HIT ──► load KV blocks from HBM ──► generate
+│  Tier 1     │
+│  HBM Cache  │
+└──────┬──────┘
+       │ MISS
+       ▼
+┌─────────────┐   HIT ──► async DMA: HBM ◄── CPU RAM ──► generate
+│  Tier 2     │
+│  CPU RAM    │
+└──────┬──────┘
+       │ MISS
+       ▼
+┌─────────────┐   HIT ──► async I/O: HBM ◄── storage ──► generate
+│  Tier 3     │
+│  Storage    │
+└──────┬──────┘
+       │ MISS
+       ▼
+  Full prefill
+       │
+       ▼
+Write KV blocks back to all tiers (async, non-blocking)
+```
+
+### How the Connectors Interact
+
+#### vLLM Native OffloadingConnector
+
+The `OffloadingConnector` is built into vLLM upstream and requires no extra dependencies. It handles HBM ↔ CPU RAM transfers using GPU DMA, keeping interference with GPU compute minimal.
+
+For a third storage tier, the **llm-d FS backend** extends it via the `SharedStorageOffloadingSpec` plugin. The plugin is installed as a Python wheel at pod startup and handles all POSIX I/O to the mounted storage path. It parallelizes reads and writes across 64 threads per GPU to maximize bandwidth. Eviction is not managed by the connector — that responsibility falls to the underlying storage system or an external [PVC Evictor](https://github.com/llm-d/llm-d-kv-cache).
+
+```
+vLLM
+ └── OffloadingConnector
+      ├── CPU RAM tier  (built-in, GPU DMA)
+      └── llm-d FS backend (optional, POSIX I/O to PVC)
+```
+
+#### LMCache Connector
+
+The `LMCacheConnectorV1` is a third-party connector from [lmcache.ai](https://lmcache.ai) that manages all three tiers in a single implementation. Tiers are configured via environment variables rather than vLLM args:
+
+| Variable | Purpose |
+|----------|---------|
+| `LMCACHE_MAX_LOCAL_CPU_SIZE` | CPU RAM tier size in GB |
+| `LMCACHE_LOCAL_DISK` | Storage tier mount path (`file:///mnt/...`) |
+| `LMCACHE_MAX_LOCAL_DISK_SIZE` | Storage tier size in GB |
+| `LMCACHE_EXTRA_CONFIG` | Extra options, e.g. `{"use_odirect":"True"}` |
+
+The storage kustomization for LMCache builds directly on top of the CPU kustomization, forming a three-tier stack (HBM → CPU → storage) by composition. LMCache also exposes Prometheus metrics via `PROMETHEUS_MULTIPROC_DIR`.
+
+```
+vLLM
+ └── LMCacheConnectorV1
+      ├── CPU RAM tier  (LMCACHE_MAX_LOCAL_CPU_SIZE)
+      └── Disk/storage tier  (LMCACHE_LOCAL_DISK)
+```
+
+### Data Flow Diagram
+
+```
+                        ┌─────────────────────────────────────────┐
+                        │            Kubernetes Node               │
+                        │                                          │
+  Inference             │  ┌──────────────────────────────────┐   │
+  Gateway  ────request──┼─►│           vLLM Process            │   │
+                        │  │                                  │   │
+                        │  │  ┌──────────────────────────┐   │   │
+                        │  │  │   Tier 1: HBM KV Cache   │   │   │
+                        │  │  │   (GPU VRAM, ~µs)        │   │   │
+                        │  │  └────────────┬─────────────┘   │   │
+                        │  │         miss  │  GPU DMA         │   │
+                        │  │               ▼                  │   │
+                        │  │  ┌──────────────────────────┐   │   │
+                        │  │  │  Tier 2: CPU RAM Cache   │   │   │
+                        │  │  │  OffloadingConnector or  │   │   │
+                        │  │  │  LMCacheConnectorV1      │   │   │
+                        │  │  │  (host memory, ~10µs)    │   │   │
+                        │  │  └────────────┬─────────────┘   │   │
+                        │  │         miss  │  async POSIX I/O │   │
+                        │  │               ▼                  │   │
+                        │  │  ┌──────────────────────────┐   │   │
+                        │  │  │  Tier 3: Storage Cache   │   │   │
+                        │  │  │  llm-d FS backend or     │   │   │
+                        │  │  │  LMCache disk connector  │   │   │
+                        │  │  │  (PVC mount, ~1ms+)      │   │   │
+                        │  │  └────────────┬─────────────┘   │   │
+                        │  └───────────────┼──────────────────┘   │
+                        └─────────────────┼───────────────────────┘
+                                          │ PVC (RWX)
+                              ┌───────────▼───────────┐
+                              │    Shared Storage      │
+                              │  CephFS / Lustre /     │
+                              │  IBM Storage Scale     │
+                              └───────────┬───────────┘
+                                          │
+                              ┌───────────▼───────────┐
+                              │   Other vLLM Replicas  │
+                              │   (same PVC mount)     │
+                              └───────────────────────┘
+```
+
+Cross-node KV cache sharing only happens at Tier 3 via a RWX PVC. CPU RAM and local disk are always node-local. This makes shared storage especially useful when scaling out — new pods can immediately reuse cached prefixes without any warmup.
+
+### Connector Selection Guide
+
+| Scenario | Recommended Connector |
+|----------|----------------------|
+| CPU offload only, minimal dependencies | `OffloadingConnector` (vLLM native) |
+| CPU + shared storage offload | `OffloadingConnector` + llm-d FS backend |
+| CPU + local disk offload | `LMCacheConnectorV1` |
+| CPU + shared storage + Prometheus metrics | `LMCacheConnectorV1` |
+| Cross-node KV cache sharing | Either connector with a RWX PVC |
