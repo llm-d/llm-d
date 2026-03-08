@@ -210,13 +210,3 @@ vLLM
 ```
 
 Cross-node KV cache sharing only happens at Tier 3 via a RWX PVC. CPU RAM and local disk are always node-local. This makes shared storage especially useful when scaling out — new pods can immediately reuse cached prefixes without any warmup.
-
-### Connector Selection Guide
-
-| Scenario | Recommended Connector |
-|----------|----------------------|
-| CPU offload only, minimal dependencies | `OffloadingConnector` (vLLM native) |
-| CPU + shared storage offload | `OffloadingConnector` + llm-d FS backend |
-| CPU + local disk offload | `LMCacheConnectorV1` |
-| CPU + shared storage + Prometheus metrics | `LMCacheConnectorV1` |
-| Cross-node KV cache sharing | Either connector with a RWX PVC |
