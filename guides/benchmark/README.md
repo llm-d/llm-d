@@ -5,6 +5,50 @@
 This document describes how to run benchmarks against a deployed llm-d stack.
 For full, customizable benchmarking, please refer to [llm-d-benchmark](https://github.com/llm-d/llm-d-benchmark). `llm-d-benchmark` includes advanced features, such as automatic stack creation, sweeping of configuration parameters, recommendations, etc.
 
+## Benchmark Template Purpose Matrix
+
+This directory contains multiple benchmark templates optimized for different stack types and workload patterns. Use this matrix to select the appropriate template for your testing needs:
+
+| Template Name | Main Purpose | Workload Pattern | Key Parameters | When to Use It |
+|--------------|--------------|------------------|----------------|----------------|
+| **inference_scheduling_template.yaml** | Basic sanity check for inference scheduling stack | Random synthetic data with constant load | `load.type: constant`<br>`data.type: random`<br>Input: 10-100 tokens (mean 50)<br>Output: 10-100 tokens (mean 50)<br>Rate: 1 req/s for 30s | Quick validation of inference scheduling deployment; baseline performance testing with simple random prompts |
+| **inference_scheduling_guidellm_template.yaml** | Lightweight rate comparison using guidellm harness | Synthetic fixed-size prompts with constant rate sweep | `harness: guidellm`<br>`profile: constant`<br>`rate: [1, 5]`<br>Prompt: 50 tokens<br>Output: 50 tokens<br>Duration: 30s per rate | Fast benchmarking with minimal setup; comparing performance at different request rates; when you need guidellm's simplified output format |
+| **inference_scheduling_shared_prefix_template.yaml** | Test prefix cache effectiveness with shared prefixes | Shared prefix synthetic data with multi-stage constant load | `data.type: shared_prefix`<br>`num_groups: 32`<br>`system_prompt_len: 2048`<br>`question_len: 256`<br>Rate ladder: 2→5→8→10→12→15→20 req/s | Evaluating prefix cache hit rates; testing cache-aware routing; workloads with repeated system prompts (RAG, agents, chatbots) |
+| **inference_scheduling_guide_template.yaml** | Comprehensive stress test with realistic traffic patterns | Shared prefix with Poisson arrival and warmup phase | `load.type: poisson`<br>`num_groups: 150`<br>`system_prompt_len: 6000`<br>`question_len: 1200`<br>Warmup: 15 req/s for 50s<br>Ladder: 3→60 req/s | Production-like benchmarking with realistic arrival patterns; testing scheduler under high prefix cache pressure; capacity planning for high-concurrency scenarios |
+| **pd_template.yaml** | Validate prefill/decode disaggregation with long contexts | Random synthetic data with concurrent load bursts | `load.type: concurrent`<br>`data.type: random`<br>Input: 1000 tokens (fixed)<br>Output: 1000 tokens (fixed)<br>Concurrency: 50→100→200→300→400 | Testing PD disaggregation benefits; measuring TTFT improvements with long prompts; validating KV cache transfer performance |
+| **pd_shared_prefix_template.yaml** | Test PD disaggregation with prefix cache reuse | Shared prefix with very long questions and constant load | `data.type: shared_prefix`<br>`system_prompt_len: 2048`<br>`question_len: 10000` (very long)<br>`output_len: 1000`<br>Rate ladder: 2→20 req/s | Combining PD disaggregation with prefix caching; long-context workloads with shared prefixes; evaluating TTFT with cache-aware routing in PD mode |
+| **precise_template.yaml** | Basic sanity check for precise prefix-cache aware routing | Random synthetic data with constant load | `load.type: constant`<br>`data.type: random`<br>Input: 10-100 tokens (mean 50)<br>Output: 10-100 tokens (mean 50)<br>Rate: 1 req/s for 30s | Quick validation of precise prefix-cache aware stack; baseline testing before enabling advanced features |
+| **precise_guidellm_template.yaml** | Lightweight rate comparison for precise routing stack | Synthetic fixed-size prompts with constant rate sweep | `harness: guidellm`<br>`profile: constant`<br>`rate: [1, 5]`<br>Prompt: 50 tokens<br>Output: 50 tokens | Fast benchmarking of precise routing; comparing cache-aware vs cache-unaware routing at different rates |
+| **precise_shared_prefix_template.yaml** | Test precise cache-aware routing effectiveness | Shared prefix synthetic data with multi-stage constant load | `data.type: shared_prefix`<br>`num_groups: 32`<br>`system_prompt_len: 2048`<br>`question_len: 256`<br>Rate ladder: 2→20 req/s | Measuring precise KV cache event routing benefits; validating cache hit improvements; comparing against basic inference scheduling |
+| **precise_guide_template.yaml** | Comprehensive stress test for precise routing with realistic traffic | Shared prefix with Poisson arrival and extensive warmup | `load.type: poisson`<br>`num_groups: 150`<br>`system_prompt_len: 6000`<br>`question_len: 1200`<br>Warmup: 15 req/s for 50s<br>Ladder: 3→60 req/s | Production-like benchmarking of precise routing; testing cache-aware scheduler under high load; capacity planning with KV cache event awareness |
+
+### Template Naming Convention
+
+Templates follow the pattern: `<stack-type>_[variant]_template.yaml`
+
+- **Stack types**: `inference_scheduling`, `pd` (prefill/decode), `precise` (precise prefix-cache aware)
+- **Variants**:
+  - *(none)* - Basic sanity check with random data
+  - `guidellm` - Uses guidellm harness for simplified benchmarking
+  - `shared_prefix` - Tests prefix cache effectiveness
+  - `guide` - Comprehensive production-like stress test
+
+### Load Pattern Types
+
+- **constant**: Fixed request rate per stage (e.g., 5 req/s for 50 seconds)
+- **poisson**: Poisson arrival process (more realistic, models bursty traffic)
+- **concurrent**: Fixed concurrency levels (e.g., 100 concurrent requests)
+
+### Data Pattern Types
+
+- **random**: Randomly generated prompts with configurable length distributions
+- **shared_prefix**: Prompts with shared system prompts + unique questions (tests prefix caching)
+
+### Harness Types
+
+- **inference-perf**: Full-featured harness with detailed metrics and multi-stage load testing
+- **guidellm**: Lightweight harness optimized for quick rate sweeps and simplified output
+
 ## Requirements
 
 - You are assumed to have deployed the llm-d inference stack from a guide, or otherwise followed the llm-d conventions for deployment.
