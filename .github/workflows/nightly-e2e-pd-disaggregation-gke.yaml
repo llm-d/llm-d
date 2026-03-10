@@ -34,7 +34,7 @@ jobs:
       gke_cluster_zone: us-east5
       required_gpus: 2
       recommended_gpus: 4
-      accelerator_type: L4
+      accelerator_type: H100
       pod_wait_timeout: '30m'
       pod_readiness_delay: 180
       httproute_file: httproute.gke.yaml
