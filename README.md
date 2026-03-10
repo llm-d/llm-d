@@ -68,7 +68,7 @@ For more details of architecture see the [project proposal](./docs/proposals/llm
 
 ### What is in scope for llm-d
 
-`llm-d` currently targets improving the production serving experience around:
+llm-d currently targets improving the production serving experience around:
 
 - Online serving and online batch of Generative models running in PyTorch or JAX
   - Large language models (LLMs) with 1 billion or more parameters
