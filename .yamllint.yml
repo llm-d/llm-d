@@ -1,0 +1,8 @@
+# YAML lint configuration for Kubernetes-heavy repos
+extends: default
+rules:
+  line-length:
+    max: 250
+  document-start: disable
+  truthy:
+    check-keys: false

@@ -6,7 +6,7 @@ Join the [llm-d-security-announce](https://groups.google.com/u/1/g/llm-d-securit
 
 We're extremely grateful for security researchers and users that report vulnerabilities to the llm-d Open Source Community. All reports are thoroughly investigated by a set of community volunteers.
 
-You can email the private [llm-d-security-reporting@googlegroups.com](mailto:llm-d-security-reporting@googlegroups.com) list with the security details and the details expected for [all llm-d bug reports](.github/ISSUE_TEMPLATE/bug.yml).
+You can email the private [llm-d-security-reporting@googlegroups.com](mailto:llm-d-security-reporting@googlegroups.com) list with the security details and the details expected for [all llm-d bug reports](.github/ISSUE_TEMPLATE/bug_report.yml).
 
 ### When Should I Report a Vulnerability?
 
