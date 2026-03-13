@@ -208,9 +208,6 @@ jobs:
           kubectl get destinationrule -n "${NAMESPACE}" || true
           echo ""
 
-      - name: Sleep to wait for vLLM to be ready to respond to requests
-        run: sleep 360
-
       - name: Verify installation and run inference tests
         run: |
           cd .github/scripts/e2e
