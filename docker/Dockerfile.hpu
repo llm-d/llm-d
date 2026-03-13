@@ -11,46 +11,21 @@ ARG REPO_TYPE=habanalabs
 
 FROM ${DOCKER_URL}/${VERSION}/${BASE_NAME}/${REPO_TYPE}/pytorch-installer-${PT_VERSION}:${REVISION}
 
-# Parameterize commit/branch for vllm-project & vllm-gaudi checkout
-ENV OMPI_MCA_btl_vader_single_copy_mechanism=none
+# Clone HabanaAI/vllm-fork (same as opea/vllm-gaudi:1.22.0)
+ARG VLLM_FORK_VER=v0.9.0.1+Gaudi-1.22.0
+RUN git clone --depth 1 -b ${VLLM_FORK_VER} --single-branch \
+    https://github.com/HabanaAI/vllm-fork.git /workspace/vllm
 
-RUN apt update && \
-    apt install -y gettext moreutils jq && \
-    ln -sf /usr/bin/python3 /usr/bin/python
-WORKDIR /root
+WORKDIR /workspace/vllm
 
-ENV VLLM_PATH=/workspace/vllm-project
-ENV VLLM_PATH2=/workspace/vllm-gaudi
+RUN pip install --upgrade pip && \
+    pip install -v -r requirements-hpu.txt
 
-RUN echo "dash dash/sh boolean false" | debconf-set-selections && \
-    DEBIAN_FRONTEND=noninteractive dpkg-reconfigure dash
-ENV ENV=~/.profile
+ENV no_proxy=localhost,127.0.0.1
+ENV PT_HPU_ENABLE_LAZY_COLLECTIVES=true
+ENV HABANA_VISIBLE_DEVICES=all
 
-# --- START: COMBINED RUN COMMAND ---
-RUN \
-    # Clone vllm-gaudi and get the commit hash
-    set -e && \
-    mkdir -p $VLLM_PATH2 && \
-    git clone https://github.com/vllm-project/vllm-gaudi.git $VLLM_PATH2 && \
-    cd $VLLM_PATH2 && \
-    VLLM_COMMIT_HASH=$(git show "origin/vllm/last-good-commit-for-vllm-gaudi:VLLM_STABLE_COMMIT" 2>/dev/null) && \
-    echo "Found vLLM commit hash: ${VLLM_COMMIT_HASH}" && \
-    \
-    # Clone vllm-project, check out the specific commit, and install
-    mkdir -p $VLLM_PATH && \
-    git clone https://github.com/vllm-project/vllm.git $VLLM_PATH && \
-    cd $VLLM_PATH && \
-    git remote add upstream https://github.com/vllm-project/vllm.git && \
-    git fetch upstream --tags || true && \
-    git checkout ${VLLM_COMMIT_HASH} && \
-    pip install -r <(sed '/^[torch]/d' requirements/build.txt) && \
-    VLLM_TARGET_DEVICE=empty pip install . && \
-    \
-    # Install vllm-gaudi
-    cd $VLLM_PATH2 && \
-    VLLM_TARGET_DEVICE=hpu pip install -v . && \
-    python install_nixl.py
-# --- END: COMBINED RUN COMMAND ---
+RUN VLLM_TARGET_DEVICE=hpu python3 setup.py install
 
 # Install additional Python packages
 RUN pip install datasets && \
@@ -63,4 +38,4 @@ RUN ln -s /workspace/vllm/tests /workspace/tests \
     && ln -s /workspace/vllm/examples /workspace/examples \
     && ln -s /workspace/vllm/benchmarks /workspace/benchmarks
 
-ENTRYPOINT ["python", "-m", "vllm.entrypoints.openai.api_server"]
+ENTRYPOINT ["python3", "-m", "vllm.entrypoints.openai.api_server"]
