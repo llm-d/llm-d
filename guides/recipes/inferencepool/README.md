@@ -6,6 +6,9 @@ This directory contains a standard `values.yaml` for deploying an `InferencePool
 
 To deploy the `InferencePool`, select your provider below.
 
+> [!NOTE]
+> Prefer `agentgateway` for new self-installed inference deployments. The current Gateway API Inference Extension chart uses `provider.name=none` for both `agentgateway` and the deprecated `kgateway` migration path. See the upstream [`inferencepool` chart values for v1.3.1](https://github.com/kubernetes-sigs/gateway-api-inference-extension/blob/v1.3.1/config/charts/inferencepool/values.yaml).
+
 <!-- TABS:START -->
 
 <!-- TAB:GKE:default -->
@@ -36,16 +39,16 @@ helm install llm-d-infpool \
   --version v1.3.1
 ```
 
-<!-- TAB:KGateway -->
-### KGateway
+<!-- TAB:Agentgateway -->
+### Agentgateway
 
-This command deploys the `InferencePool` with Kgateway.
+This command deploys the `InferencePool` for `agentgateway`.
 
 ```bash
 helm install llm-d-infpool \
   -n ${NAMESPACE} \
   -f ./values.yaml \
-  --set "provider.name=kgateway" \
+  --set "provider.name=none" \
   oci://registry.k8s.io/gateway-api-inference-extension/charts/inferencepool \
   --version v1.3.1
 ```

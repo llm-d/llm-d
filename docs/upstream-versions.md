@@ -39,13 +39,15 @@ Pinned in guide helmfiles (`guides/*/helmfile.yaml.gotmpl`):
 
 Pinned in `guides/prereq/gateway-provider/`:
 
+> `kgateway` support in llm-d is deprecated and will be removed in the next release. Prefer `agentgateway` for new self-installed inference deployments.
+
 | Dependency | Current Pin | File Location | Upstream Repo |
 |-----------|-------------|---------------|---------------|
 | **Gateway API CRDs** | `v1.4.0` | `install-gateway-provider-dependencies.sh` line 39 | [kubernetes-sigs/gateway-api](https://github.com/kubernetes-sigs/gateway-api) |
 | **Gateway API Inference Extension CRDs** | `v1.3.1` | `install-gateway-provider-dependencies.sh` line 46 | [kubernetes-sigs/gateway-api-inference-extension](https://github.com/kubernetes-sigs/gateway-api-inference-extension) |
 | **Istio** | `1.28.1` | `istio.helmfile.yaml` | [istio/istio](https://github.com/istio/istio) |
-| **kgateway** | `v2.1.1` | `kgateway.helmfile.yaml` | [kgateway-dev/kgateway](https://github.com/kgateway-dev/kgateway) |
-| **agentgateway** | `v2.2.0-beta.3` | `agentgateway.helmfile.yaml` | [kgateway-dev/kgateway](https://github.com/kgateway-dev/kgateway) |
+| **kgateway (deprecated llm-d install path)** | `v2.2.1` | `kgateway.helmfile.yaml` | [kgateway-dev/kgateway](https://github.com/kgateway-dev/kgateway) (`ghcr.io/kgateway-dev/charts/agentgateway*`) |
+| **agentgateway (preferred path)** | `v1.0.0-alpha.4` | `agentgateway.helmfile.yaml` | [agentgateway/agentgateway](https://github.com/agentgateway/agentgateway) |
 
 ## CI Workflow Dependencies
 

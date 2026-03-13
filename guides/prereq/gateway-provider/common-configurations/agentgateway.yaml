@@ -1,2 +1,3 @@
 gateway:
-  gatewayClassName: agentgateway-v2
+  provider: agentgateway
+  gatewayClassName: agentgateway

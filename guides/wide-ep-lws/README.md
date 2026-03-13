@@ -79,6 +79,9 @@ kubectl apply -k ./manifests/modelserver/coreweave  -n ${NAMESPACE}
 
 Select the provider-specific Helm command using the tabs below.
 
+> [!WARNING]
+> `kgateway` is deprecated in llm-d and will be removed in the next release. Prefer `agentgateway` for new self-installed inference deployments. The current Gateway API Inference Extension chart uses `provider.name=none` for the `agentgateway` path; see the upstream [`inferencepool` chart values for v1.3.1](https://github.com/kubernetes-sigs/gateway-api-inference-extension/blob/v1.3.1/config/charts/inferencepool/values.yaml).
+
 <!-- TABS:START -->
 
 <!-- TAB:GKE:default -->
@@ -105,13 +108,14 @@ helm install llm-d-infpool \
   --version v1.3.1
 ```
 
-<!-- TAB:Kgateway -->
-#### Kgateway
+<!-- TAB:Agentgateway -->
+#### Agentgateway
 
 ```bash
 helm install llm-d-infpool \
   -n ${NAMESPACE} \
   -f ./manifests/inferencepool.values.yaml \
+  --set "provider.name=none" \
   oci://registry.k8s.io/gateway-api-inference-extension/charts/inferencepool \
   --version v1.3.1
 ```
@@ -239,7 +243,8 @@ To remove the deployment:
 # From examples/wide-ep-lws
 helm uninstall llm-d-infpool -n ${NAMESPACE}
 kubectl delete -k ./manifests/modelserver/<gke|coreweave> -n ${NAMESPACE}
-kubectl delete -k ../recipes/gateway/<gke-l7-regional-external-managed|istio|kgateway|kgateway-openshift> -n ${NAMESPACE}
+# Supported self-installed inference gateway recipe paths are agentgateway (preferred) and kgateway (deprecated migration path).
+kubectl delete -k ../recipes/gateway/<gke-l7-regional-external-managed|istio|agentgateway|agentgateway-openshift|kgateway|kgateway-openshift> -n ${NAMESPACE}
 ```
 
 ## Customization

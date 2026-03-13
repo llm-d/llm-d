@@ -62,12 +62,22 @@ The following steps from the [GKE Gateways deployment documentation](https://clo
 
 The other steps are optional and are not necessary to continue with your guide.
 
-<!-- TAB:Self-installed (Istio/Kgateway) -->
-### Self-installed (Istio/Kgateway)
+<!-- TAB:Self-installed (Istio/Kgateway/Agentgateway) -->
+### Self-installed (Istio/Kgateway/Agentgateway)
 
 #### Self-installed Gateway implementations
 
-llm-d provides a Helm chart that installs and configures the `kgateway` or `istio` Gateway implementations.
+llm-d provides helmfiles that install and configure `istio`, `kgateway`, and `agentgateway` Gateway implementations.
+
+> [!WARNING]
+> `kgateway` support in llm-d is deprecated and will be removed in the next release. Prefer `agentgateway` for new self-installed inference deployments.
+
+The two self-installed inference modes are:
+
+* `agentgateway`: installs the `agentgateway` v1.0.0-alpha.4 control plane and data plane. This is the preferred self-installed inference path.
+* `kgateway`: installs the deprecated llm-d `kgateway` path using the `ghcr.io/kgateway-dev/charts/agentgateway*` charts at `v2.2.1`, with `inferenceExtension.enabled=true`. This path is retained only to support migrations.
+
+Both self-installed inference modes use the `agentgateway` GatewayClass in llm-d guide manifests.
 
 ##### Before you begin
 
@@ -96,19 +106,24 @@ You may specify any valid git source control reference for versions as `GATEWAY_
 
 To install the gateway control plane:
 
-    helmfile apply -f <your_gateway_choice>.helmfile.yaml # options: [`istio`, `kgateway`]
+    helmfile apply -f <your_gateway_choice>.helmfile.yaml # options: [`istio`, `agentgateway`, `kgateway`]
     # ex: helmfile apply -f istio.helmfile.yaml
+
+For the self-installed inference modes:
+
+    helmfile apply -f agentgateway.helmfile.yaml  # preferred: agentgateway
+    helmfile apply -f kgateway.helmfile.yaml      # deprecated: kgateway path via the kgateway-dev agentgateway v2.2.1 charts
 
 ##### Targeted install
 
 If the CRDs already exist in your cluster and you do not wish to re-apply them, use the `--selector kind=gateway-control-plane` selector to limit your changes to the infrastructure:
 
     # Install
-    helmfile apply -f <your_gateway_choice> --selector kind=gateway-control-plane
+    helmfile apply -f <your_gateway_choice>.helmfile.yaml --selector kind=gateway-control-plane
     # Uninstall
-    helmfile destroy -f <your_gateway_choice> --selector kind=gateway-control-plane
+    helmfile destroy -f <your_gateway_choice>.helmfile.yaml --selector kind=gateway-control-plane
 
-If you wish to bump versions or customize your installs, check out our helmfiles for [istio](./istio.helmfile.yaml), and [kgateway](./kgateway.helmfile.yaml) respectively.
+If you wish to bump versions or customize your installs, check out our helmfiles for [istio](./istio.helmfile.yaml), [kgateway](./kgateway.helmfile.yaml), and [agentgateway](./agentgateway.helmfile.yaml).
 
 <!-- TAB:Other providers -->
 ### Other providers

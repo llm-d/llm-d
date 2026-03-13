@@ -1,10 +1,8 @@
-# Deprecated in llm-d. Retained only to support migration to
-# agentgateway and will be removed in a future release.
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 
 resources:
-  - ../kgateway
+  - ../agentgateway
   - gateway-parameters.yaml
 
 patches:

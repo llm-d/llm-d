@@ -16,6 +16,7 @@ environments:
 
 ---
 
+{{- $llmdInfraChart := env "LLMD_INFRA_CHART" | default "llm-d-infra/llm-d-infra" -}}
 {{- $ns := .Namespace | default "llm-d-sim" -}}
 {{- $rn := (env "RELEASE_NAME_POSTFIX") | default "sim" -}}
 
@@ -28,8 +29,10 @@ repositories:
 releases:
   - name: {{ printf "infra-%s" $rn | quote }}
     namespace: {{ $ns }}
-    chart: llm-d-infra/llm-d-infra
+    chart: {{ $llmdInfraChart | quote }}
+    {{- if not (hasPrefix "/" $llmdInfraChart) }}
     version: v1.3.6
+    {{- end }}
     installed: true
     labels:
       type: infrastructure
@@ -56,6 +59,12 @@ releases:
           monitoring:
             prometheus:
               enabled: true
+    {{- else if or (eq .Environment.Name "agentgateway") (eq .Environment.Name "kgateway") }}
+      # The GAIE InferencePool chart uses provider.name=none for non-GKE/non-Istio
+      # providers; see the upstream v1.3.1 chart values:
+      # https://github.com/kubernetes-sigs/gateway-api-inference-extension/blob/v1.3.1/config/charts/inferencepool/values.yaml
+      - provider:
+          name: none
     {{- else if or (eq .Environment.Name "istio") (eq .Environment.Name "default") }}
       - provider:
           name: {{ .Environment.Values.provider.name }}

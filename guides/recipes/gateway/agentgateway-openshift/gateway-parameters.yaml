@@ -1,8 +1,6 @@
-# Deprecated in llm-d. Retained only to support migration to
-# agentgateway and will be removed in a future release.
-# This compatibility recipe uses AgentgatewayParameters to keep the data-plane
-# Service as ClusterIP and remove the fixed runAsUser so OpenShift can assign
-# a compatible UID at runtime.
+# OpenShift-specific AgentgatewayParameters for the agentgateway
+# recipe. Keep the data-plane Service as ClusterIP and remove the fixed
+# runAsUser so OpenShift can assign a compatible UID at runtime.
 apiVersion: agentgateway.dev/v1alpha1
 kind: AgentgatewayParameters
 metadata:

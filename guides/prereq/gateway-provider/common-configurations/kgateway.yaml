@@ -1,2 +1,5 @@
 gateway:
-  gatewayClassName: kgateway
+  # Deprecated in llm-d and retained only for migration. Prefer agentgateway.
+  # This mode uses the kgateway-dev agentgateway v2.2.1 charts, not the agentgateway charts.
+  provider: kgateway
+  gatewayClassName: agentgateway

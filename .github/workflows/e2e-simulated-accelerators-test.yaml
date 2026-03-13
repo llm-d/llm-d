@@ -113,11 +113,25 @@ jobs:
           helmfile apply -f ${GATEWAY_TYPE}.helmfile.yaml
 
       - name: Wait for gateway control plane to be ready
+        env:
+          GATEWAY_TYPE: ${{ env.GATEWAY_TYPE }}
         run: |
-          echo "Waiting for gateway control plane pods to be ready…"
+          echo "Waiting for gateway control plane pods to be ready..."
+          case "${GATEWAY_TYPE}" in
+            istio)
+              namespace="istio-system"
+              ;;
+            agentgateway|kgateway)
+              namespace="agentgateway-system"
+              ;;
+            *)
+              namespace="${GATEWAY_TYPE}-system"
+              ;;
+          esac
+
           kubectl wait --for=condition=ready pod \
             --selector=app.kubernetes.io/managed-by=Helm \
-            --namespace "${{ env.GATEWAY_TYPE }}-system" \
+            --namespace "${namespace}" \
             --timeout=300s || true
 
       - name: Install monitoring stack

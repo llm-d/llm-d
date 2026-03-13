@@ -13,8 +13,8 @@ environments:
       - ../prereq/gateway-provider/common-configurations/gke.yaml
   xpu: &XPU
     <<: *I
-  xpu-kgateway: &XPU_KG
-    <<: *KG
+  xpu-agentgateway: &XPU_AG
+    <<: *AG
   default:
     <<: *I
 
@@ -87,12 +87,12 @@ releases:
       - {{ printf "gaie-%s" $rn | quote }}
     values:
     {{- if eq $pd "true" }}
-      {{- if or (eq .Environment.Name "xpu") (eq .Environment.Name "xpu-kgateway") }}
+      {{- if or (eq .Environment.Name "xpu") (eq .Environment.Name "xpu-agentgateway") }}
       - ms-kv-events/values_xpu_pod_discovery.yaml
       {{- else }}
       - ms-kv-events/values_pod_discovery.yaml
       {{- end }}
-    {{- else if or (eq .Environment.Name "xpu") (eq .Environment.Name "xpu-kgateway") }}
+    {{- else if or (eq .Environment.Name "xpu") (eq .Environment.Name "xpu-agentgateway") }}
       - ms-kv-events/values_xpu.yaml
     {{- else }}
       - ms-kv-events/values.yaml

@@ -67,8 +67,8 @@ export ENDPOINT=$(kubectl get gateway --no-headers -n ${NAMESPACE} -o jsonpath='
 ```bash
 kubectl get gateway -n ${NAMESPACE}
 NAME                                           CLASS      ADDRESS                                                                   PROGRAMMED   AGE
-infra-inference-scheduling-inference-gateway   kgateway   af805bef3ec444a558da28061b487dd5-2012676366.us-east-1.elb.amazonaws.com   True         11m
-infra-sim-inference-gateway                    kgateway   a67ad245358e34bba9cb274bc220169e-1351042165.us-east-1.elb.amazonaws.com   True         45
+infra-inference-scheduling-inference-gateway   agentgateway   af805bef3ec444a558da28061b487dd5-2012676366.us-east-1.elb.amazonaws.com   True         11m
+infra-sim-inference-gateway                    agentgateway   a67ad245358e34bba9cb274bc220169e-1351042165.us-east-1.elb.amazonaws.com   True         45
 GATEWAY_NAME=infra-inference-scheduling-inference-gateway
 export ENDPOINT=$(kubectl get gateway ${GATEWAY_NAME} --no-headers -n ${NAMESPACE} -o jsonpath='{.status.addresses[0].value}')
 ```

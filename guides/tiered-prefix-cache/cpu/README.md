@@ -59,6 +59,9 @@ kubectl apply -k ./manifests/vllm/lmcache-connector -n ${NAMESPACE}
 
 To deploy the `InferencePool`, select your provider below.
 
+> [!WARNING]
+> `kgateway` is deprecated in llm-d and will be removed in the next release. Prefer `agentgateway` for new self-installed inference deployments. The current Gateway API Inference Extension chart uses `provider.name=none` for the `agentgateway` path; see the upstream [`inferencepool` chart values for v1.3.1](https://github.com/kubernetes-sigs/gateway-api-inference-extension/blob/v1.3.1/config/charts/inferencepool/values.yaml).
+
 <!-- TABS:START -->
 
 <!-- TAB:GKE:default -->
@@ -91,17 +94,17 @@ helm install llm-d-infpool \
     --version v1.3.1
 ```
 
-<!-- TAB:Kgateway -->
+<!-- TAB:Agentgateway -->
 
-#### Kgateway
+#### Agentgateway
 
-This command deploys the `InferencePool` with Kgateway.
+This command deploys the `InferencePool` for `agentgateway`.
 
 ```bash
 helm install llm-d-infpool \
     -n ${NAMESPACE} \
     -f ./manifests/inferencepool/values.yaml \
-    --set "provider.name=kgateway" \
+    --set "provider.name=none" \
     oci://registry.k8s.io/gateway-api-inference-extension/charts/inferencepool \
     --version v1.3.1
 ```
@@ -180,7 +183,10 @@ helm uninstall llm-d-infpool -n ${NAMESPACE}
 kubectl delete -f ./manifests/pvc.yaml -n ${NAMESPACE}
 kubectl delete -k ./manifests/vllm/offloading-connector -n ${NAMESPACE}
 kubectl delete -k ./manifests/vllm/<offloading-connector|lmcache-connector> -n ${NAMESPACE}
-kubectl delete -k ../recipes/gateway/<gke-l7-regional-external-managed|istio|kgateway|kgateway-openshift> -n ${NAMESPACE}
+# Supported self-installed inference gateway recipe paths are agentgateway and
+# agentgateway-openshift (preferred), plus kgateway and kgateway-openshift
+# (deprecated migration paths).
+kubectl delete -k ../recipes/gateway/<gke-l7-regional-external-managed|istio|agentgateway|agentgateway-openshift|kgateway|kgateway-openshift> -n ${NAMESPACE}
 kubectl delete namespace ${NAMESPACE}
 ```
 

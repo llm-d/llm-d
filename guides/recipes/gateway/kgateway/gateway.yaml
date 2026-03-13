@@ -1,6 +1,9 @@
+# Deprecated in llm-d. Retained only to support migration to agentgateway.
+# The legacy recipe path remains named "kgateway", but the rendered Gateway uses
+# the current agentgateway GatewayClass.
 apiVersion: gateway.networking.k8s.io/v1
 kind: Gateway
 metadata:
   name: llm-d-inference-gateway
 spec:
-  gatewayClassName: "kgateway"
+  gatewayClassName: agentgateway

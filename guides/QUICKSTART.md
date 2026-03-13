@@ -42,7 +42,10 @@ llm-d integrates with the [Kubernetes Gateway API](https://gateway-api.sigs.k8s.
 You must select an [appropriate Gateway implementation for your infrastructure and deploy the Gateway control plane and its prerequisite CRDs](./prereq/gateway-provider/README.md).
 
 > [!IMPORTANT]
-> We recommend selecting a Gateway implementation provided by your infrastructure, if available. If not, we test and verify our guides with both [kgateway](https://kgateway.dev/docs/envoy/latest/quickstart) and [istio](https://istio.io/latest/docs/setup/getting-started/).
+> We recommend selecting a Gateway implementation provided by your infrastructure, if available. If not, we recommend [agentgateway](https://agentgateway.dev/docs/kubernetes/latest/quickstart/) or [istio](https://istio.io/latest/docs/setup/getting-started/) for self-installed deployments.
+
+> [!WARNING]
+> `kgateway` support in llm-d is deprecated and will be removed in the next release. Prefer `agentgateway` for new self-installed inference deployments.
 
 ## Deployment
 

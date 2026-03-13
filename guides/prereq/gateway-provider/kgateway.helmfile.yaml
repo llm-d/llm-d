@@ -1,23 +1,25 @@
+# Deprecated in llm-d. This migration path will be removed in the next release.
+# Prefer guides/prereq/gateway-provider/agentgateway.helmfile.yaml for new installs.
 releases:
-  - name: kgateway-crds
-    chart: oci://cr.kgateway.dev/kgateway-dev/charts/kgateway-crds
-    namespace: kgateway-system
-    version: v2.1.1
+  - name: agentgateway-crds
+    chart: oci://ghcr.io/kgateway-dev/charts/agentgateway-crds
+    namespace: agentgateway-system
+    version: v2.2.1
     installed: true
     labels:
       type: gateway-provider
       kind: gateway-crds
 
-  - name: kgateway
-    chart: oci://cr.kgateway.dev/kgateway-dev/charts/kgateway
-    version: v2.1.1
-    namespace: kgateway-system
+  - name: agentgateway
+    chart: oci://ghcr.io/kgateway-dev/charts/agentgateway
+    version: v2.2.1
+    namespace: agentgateway-system
     installed: true
-    needs:
-      - kgateway-system/kgateway-crds
     values:
       - inferenceExtension:
           enabled: true
+    needs:
+      - agentgateway-system/agentgateway-crds
     labels:
       type: gateway-provider
       kind: gateway-control-plane

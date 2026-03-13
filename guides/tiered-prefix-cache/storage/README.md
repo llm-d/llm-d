@@ -58,6 +58,9 @@ For advanced configuration options and implementation details, see the [llm-d FS
 cd guides/tiered-prefix-cache/storage
 ```
 
+> [!WARNING]
+> `kgateway` is deprecated in llm-d and will be removed in the next release. Prefer `agentgateway` for new self-installed inference deployments, using `guides/recipes/gateway/agentgateway` for recipe-based installs. The legacy `guides/recipes/gateway/kgateway` recipe path is retained only for migration.
+
 ### 1. Deploy Gateway and HTTPRoute
 
 Deploy the Gateway and HTTPRoute using the [gateway recipe](../../recipes/gateway/README.md).
@@ -256,7 +259,8 @@ To remove the deployment:
 helm uninstall llm-d-infpool -n ${NAMESPACE}
 kubectl delete -f ./manifests/pvc.yaml -n ${NAMESPACE}
 kubectl delete -k ./manifests/vllm/<llm-d-fs-connector|lmcache-connector> -n ${NAMESPACE}
-kubectl delete -k ../../recipes/gateway/<gke-l7-regional-external-managed|istio|kgateway|kgateway-openshift> -n ${NAMESPACE}
+# Supported self-installed inference gateway recipe paths are agentgateway (preferred) and kgateway (deprecated migration path).
+kubectl delete -k ../../recipes/gateway/<gke-l7-regional-external-managed|istio|agentgateway|agentgateway-openshift|kgateway|kgateway-openshift> -n ${NAMESPACE}
 kubectl delete namespace ${NAMESPACE}
 ```
 

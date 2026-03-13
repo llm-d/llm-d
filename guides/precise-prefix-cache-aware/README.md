@@ -59,8 +59,11 @@ POD_DISCOVERY=true helmfile apply -n ${NAMESPACE}
 To see specify your gateway choice you can use the `-e <gateway option>` flag, ex:
 
 ```bash
-helmfile apply -e kgateway -n ${NAMESPACE}
+helmfile apply -e agentgateway -n ${NAMESPACE} # preferred agentgateway path
+helmfile apply -e kgateway -n ${NAMESPACE}     # deprecated migration path
 ```
+
+**_WARNING:_** `kgateway` is deprecated in llm-d and will be removed in the next release. Prefer `agentgateway` for new self-installed inference deployments.
 
 To see what gateway options are supported refer to our [gateway provider prereq doc](../prereq/gateway-provider/README.md#supported-providers). Gateway configurations per provider are tracked in the [gateway-configurations directory](../prereq/gateway-provider/common-configurations/).
 
@@ -75,7 +78,7 @@ helmfile apply -e xpu -n ${NAMESPACE} # targets istio as gateway provider with I
 You can also combine Intel XPU hardware with different gateway providers:
 
 ```bash
-helmfile apply -e xpu-kgateway -n ${NAMESPACE} # targets kgateway as gateway provider with Intel XPU hardware
+helmfile apply -e xpu-agentgateway -n ${NAMESPACE} # targets agentgateway as gateway provider with Intel XPU hardware
 ```
 
 With pod discovery mode:
@@ -88,7 +91,7 @@ POD_DISCOVERY=true helmfile apply -e xpu -n ${NAMESPACE}
 
 Follow provider specific instructions for installing HTTPRoute.
 
-#### Install for "kgateway" or "istio"
+#### Install for "agentgateway", "kgateway" (deprecated), or "istio"
 
 ```bash
 kubectl apply -f httproute.yaml -n ${NAMESPACE}

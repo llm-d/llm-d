@@ -25,7 +25,7 @@ Before installing WVA, ensure you have:
    - **Minikube**: See [Minikube setup documentation](../../docs/infra-providers/minikube/README.md) for single-host development.
    - **Production clusters**: See [Infrastructure Prerequisites](../prereq/infrastructure/README.md) for provider-specific setup (GKE, AKS, OpenShift (4.18+), etc.).
 
-2. **Gateway control plane**: Configure and deploy your [Gateway control plane](../prereq/gateway-provider/README.md) (Istio) before installation.
+2. **Gateway control plane**: Configure and deploy your [Gateway control plane](../prereq/gateway-provider/README.md) before installation. `istio` remains the default path in llm-d, and `agentgateway` is also supported as a first-class self-installed inference gateway. The legacy `kgateway` path remains available only for migration.
 
 3. **Prometheus monitoring stack**: WVA requires Prometheus to be accessible for metric collection. **WVA requires HTTPS connections to Prometheus**. The monitoring setup depends on your platform:
    - **OpenShift**: User Workload Monitoring should be enabled (see [OpenShift monitoring docs](https://docs.redhat.com/en/documentation/monitoring_stack_for_red_hat_openshift/4.18/html-single/configuring_user_workload_monitoring/index))
@@ -48,6 +48,8 @@ The workload-autoscaling helmfile supports two installation modes (see [Step 5](
 
 1. **Full Installation**: Installs the complete llm-d [Intelligent Inference Scheduling](../inference-scheduling/README.md) stack (infra, gaie, modelservice) plus WVA in a single `helmfile apply` command.
 2. **WVA-Only Installation**: Installs only WVA, connecting to an existing [Intelligent Inference Scheduling](../inference-scheduling/README.md) deployment.
+
+For full installation, `istio` remains the default environment, and `agentgateway` is also supported via `helmfile apply -e agentgateway`. The legacy `kgateway` environment remains available only as a deprecated migration path.
 
 **Install Prometheus Adapter separately in [Step 6](#step-6-install-prometheus-adapter-required-dependency) after WVA installation.**
 
@@ -172,6 +174,22 @@ Install the complete llm-d inference-scheduling stack (infra, gaie, modelservice
 export NAMESPACE=${NAMESPACE:-llm-d-autoscaler}
 cd guides/workload-autoscaling
 helmfile apply -n ${NAMESPACE}
+```
+
+To use `agentgateway` instead of the default `istio` environment:
+
+```bash
+export NAMESPACE=${NAMESPACE:-llm-d-autoscaler}
+cd guides/workload-autoscaling
+helmfile apply -e agentgateway -n ${NAMESPACE}
+```
+
+To use the deprecated `kgateway` migration path:
+
+```bash
+export NAMESPACE=${NAMESPACE:-llm-d-autoscaler}
+cd guides/workload-autoscaling
+helmfile apply -e kgateway -n ${NAMESPACE}
 ```
 
 This installs the complete [Intelligent Inference Scheduling](../inference-scheduling/README.md) stack:
@@ -467,6 +485,14 @@ Remove WVA and Prometheus Adapter:
 # Remove WVA stack
 cd guides/workload-autoscaling
 helmfile destroy -n ${NAMESPACE:-llm-d-autoscaler}
+```
+
+If you installed with `agentgateway` or the deprecated `kgateway` migration path, destroy with the matching environment:
+
+```bash
+cd guides/workload-autoscaling
+helmfile destroy -e agentgateway -n ${NAMESPACE:-llm-d-autoscaler}
+# or: helmfile destroy -e kgateway -n ${NAMESPACE:-llm-d-autoscaler}
 ```
 
 **For WVA-Only Installation:**
