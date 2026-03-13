@@ -13,7 +13,7 @@ FROM ${DOCKER_URL}/${VERSION}/${BASE_NAME}/${REPO_TYPE}/pytorch-installer-${PT_V
 
 # Clone HabanaAI/vllm-fork (same as opea/vllm-gaudi:1.22.0)
 ARG VLLM_FORK_VER=v0.9.0.1+Gaudi-1.22.0
-RUN git clone --depth 1 -b ${VLLM_FORK_VER} --single-branch \
+RUN git clone -b ${VLLM_FORK_VER} --single-branch \
     https://github.com/HabanaAI/vllm-fork.git /workspace/vllm
 
 WORKDIR /workspace/vllm
