@@ -1,0 +1,29 @@
+name: Link Check
+
+on:
+  pull_request:
+    paths:
+      - "**/*.md"
+  schedule:
+    # Run weekly on Mondays at 08:00 UTC to catch external link rot
+    - cron: "0 8 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  link-check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+
+      - name: Check links
+        uses: lycheeverse/lychee-action@v2
+        with:
+          args: >-
+            --config .github/lychee.toml
+            --no-progress
+            './**/*.md'
+          fail: true
