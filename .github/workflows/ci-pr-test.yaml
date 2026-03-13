@@ -51,6 +51,8 @@ jobs:
       xpu-inference-scheduling: ${{ steps.filter.outputs.xpu-inference-scheduling }}
       xpu-pd-disaggregation: ${{ steps.filter.outputs.xpu-pd-disaggregation }}
       xpu-prefix-cache: ${{ steps.filter.outputs.xpu-prefix-cache }}
+      hpu-inference-scheduling: ${{ steps.filter.outputs.hpu-inference-scheduling }}
+      hpu-pd-disaggregation: ${{ steps.filter.outputs.hpu-pd-disaggregation }}
     steps:
       - uses: actions/checkout@v6
       - uses: dorny/paths-filter@v3
@@ -79,6 +81,21 @@ jobs:
               - guides/**/values_xpu.yaml
               - guides/precise-prefix-cache-aware/**/values_xpu.yaml
               - guides/precise-prefix-cache-aware/helmfile.yaml.gotmpl
+            hpu-inference-scheduling:
+              - .github/workflows/ci-pr-test.yaml
+              - .github/workflows/e2e-inference-scheduling-hpu.yaml
+              - docker/Dockerfile.hpu
+              - guides/**/values-hpu.yaml
+              - guides/inference-scheduling/ms-inference-scheduling/values-hpu.yaml
+              - guides/inference-scheduling/helmfile.yaml.gotmpl
+            hpu-pd-disaggregation:
+              - .github/workflows/ci-pr-test.yaml
+              - .github/workflows/e2e-pd-hpu.yaml
+              - docker/Dockerfile.hpu
+              - guides/**/values_hpu.yaml
+              - guides/pd-disaggregation/ms-pd/values_hpu.yaml
+              - guides/pd-disaggregation/README.hpu.md
+              - guides/pd-disaggregation/helmfile.yaml.gotmpl
 
   # Call the build-image workflow to build any changed images
   build-images:
@@ -128,4 +145,34 @@ jobs:
       # Only use custom image tag if user provides it, or if XPU image was actually built in this PR
       # Otherwise, let the test use the default image from values_xpu.yaml
       custom_image_tag: ${{ github.event.inputs.custom_image_tag != '' && github.event.inputs.custom_image_tag || (needs.build-images.outputs.xpu == 'true' && github.event.pull_request.number != '' && format('pr-{0}', github.event.pull_request.number) || '') }}
+    secrets: inherit
+
+  # Call the HPU Inference Scheduling test workflow
+  test-hpu-inference-scheduling:
+    needs: [detect-changes, build-images]
+    # Run tests if:
+    # 1. It's a manual workflow_dispatch, OR
+    # 2. Related files changed AND (build succeeded OR build was skipped)
+    if: ${{ (github.event_name == 'workflow_dispatch' || needs.detect-changes.outputs.hpu-inference-scheduling == 'true') && (needs.build-images.result == 'success' || needs.build-images.result == 'skipped') }}
+    uses: ./.github/workflows/e2e-inference-scheduling-hpu.yaml
+    with:
+      pr_or_branch: ${{ github.event.inputs.pr_or_branch || github.event.pull_request.number }}
+      # Only use custom image tag if user provides it, or if HPU image was actually built in this PR
+      # Otherwise, let the test use the default image from values-hpu.yaml
+      custom_image_tag: ${{ github.event.inputs.custom_image_tag != '' && github.event.inputs.custom_image_tag || (needs.build-images.outputs.hpu == 'true' && github.event.pull_request.number != '' && format('pr-{0}', github.event.pull_request.number) || '') }}
+    secrets: inherit
+
+  # Call the HPU PD test workflow
+  test-hpu-pd:
+    needs: [detect-changes, build-images]
+    # Run tests if:
+    # 1. It's a manual workflow_dispatch, OR
+    # 2. Related files changed AND (build succeeded OR build was skipped)
+    if: ${{ (github.event_name == 'workflow_dispatch' || needs.detect-changes.outputs.hpu-pd-disaggregation == 'true') && (needs.build-images.result == 'success' || needs.build-images.result == 'skipped') }}
+    uses: ./.github/workflows/e2e-pd-hpu.yaml
+    with:
+      pr_or_branch: ${{ github.event.inputs.pr_or_branch || github.event.pull_request.number }}
+      # Only use custom image tag if user provides it, or if HPU image was actually built in this PR
+      # Otherwise, let the test use the default image from values_hpu.yaml
+      custom_image_tag: ${{ github.event.inputs.custom_image_tag != '' && github.event.inputs.custom_image_tag || (needs.build-images.outputs.hpu == 'true' && github.event.pull_request.number != '' && format('pr-{0}', github.event.pull_request.number) || '') }}
     secrets: inherit

@@ -12,6 +12,9 @@ on:
       xpu:
         description: 'Whether XPU image was built'
         value: ${{ jobs.detect-changes.outputs.xpu }}
+      hpu:
+        description: 'Whether HPU image was built'
+        value: ${{ jobs.detect-changes.outputs.hpu }}
   workflow_dispatch:
     inputs:
       platforms:
