@@ -102,7 +102,7 @@ RIXL uses the UCX library as its underlying transport mechanism for KV transfers
 **Network & Transport Tuning**
 Use these variables to specify how and where data travels across your hardware:
 * UCX_TLS: Defines the allowed Transport Layer protocols (e.g., tcp, rc, ud, sm).
-* UCX_IB_GID_INDEX: Specifies the Global IDentifier (GID) index for InfiniBand or RoCE devices.
+* UCX_IB_GID_INDEX: Specifies the Global Identifier (GID) index for InfiniBand or RoCE devices.
 * UCX_IB_TRAFFIC_CLASS: Specifies the KV transfer traffic class to use for InfiniBand or RoCE devices.
 
 **Debugging & Logging**

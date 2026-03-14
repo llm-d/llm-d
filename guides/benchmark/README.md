@@ -421,15 +421,15 @@ This example uses `guidellm` with a [`rate_comparison`](./inference_scheduling_g
   Using experiment result dir: /requests/guidellm_1767024860_rate_comparison_inference-scheduling-Qwen3-32B
   ✔ OpenAIHTTPBackend backend validated with model Qwen/Qwen3-32B
     {'target':
-    'http://infra-inference-scheduling-inference-gateway-istio.dean-ns1.svc.cluste
-    r.local:80', 'model': 'Qwen/Qwen3-32B', 'timeout': 60.0, 'http2': True,
+    'http://infra-inference-scheduling-inference-gateway-istio.dean-ns1.svc.cluster
+    .local:80', 'model': 'Qwen/Qwen3-32B', 'timeout': 60.0, 'http2': True,
     'follow_redirects': True, 'verify': False, 'openai_paths': {'health':
     'health', 'models': 'v1/models', 'text_completions': 'v1/completions',
     'chat_completions': 'v1/chat/completions', 'audio_transcriptions':
     'v1/audio/transcriptions', 'audio_translations': 'v1/audio/translations'},
     'validate_backend': {'method': 'GET', 'url':
-    'http://infra-inference-scheduling-inference-gateway-istio.dean-ns1.svc.cluste
-    r.local:80/health'}}
+    'http://infra-inference-scheduling-inference-gateway-istio.dean-ns1.svc.cluster
+    .local:80/health'}}
   ✔ Processor resolved
     Using model 'Qwen/Qwen3-32B' as processor
   ✔ Request loader initialized with inf unique requests

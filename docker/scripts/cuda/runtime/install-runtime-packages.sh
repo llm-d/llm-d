@@ -39,7 +39,7 @@ if [ "$TARGETOS" = "ubuntu" ]; then
     setup_ubuntu_repos
     mapfile -t INSTALL_PKGS < <(load_layered_packages ubuntu "runtime-packages.json" "cuda")
     install_packages ubuntu "${INSTALL_PKGS[@]}"
-    # This if statement is redundent right now (currently no EFA on our ubuntu images),
+    # This if statement is redundant right now (currently no EFA on our ubuntu images),
     # but its included in case we figure out EFA on Ubuntu images.
     if [ "${ENABLE_EFA}" != "true" ]; then
         mapfile -t INSTALL_RDMA_PKGS < <(load_layered_packages ubuntu "runtime-rdma-packages.json" "cuda")

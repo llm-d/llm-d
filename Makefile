@@ -11,7 +11,7 @@ else ifeq ($(DEVICE), hpu)
 	DOCKERFILE ?= Dockerfile.hpu
 else
 	DOCKERFILE ?= Dockerfile.cuda
-endif # Maybe we break out version per image because they share no common bits --> independent releas cycles
+endif # Maybe we break out version per image because they share no common bits --> independent release cycles
 VERSION ?= v0.2.1
 
 # New tag to use if you would like to use `make image-retag`
