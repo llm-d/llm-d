@@ -16,9 +16,8 @@ ARG TORCH_TYPE_SUFFIX
 FROM ${DOCKER_URL}/${VERSION}/${BASE_NAME}/${REPO_TYPE}/pytorch-${TORCH_TYPE_SUFFIX}installer-${PT_VERSION}:${REVISION}
 
 # Parameterize commit/branch for vllm-project & vllm-gaudi checkout
-# leave empty to use last-good-commit-for-vllm-gaudi
 ARG PT_VERSION
-ARG VLLM_PROJECT_COMMIT=
+ARG VLLM_PROJECT_COMMIT=v0.16.0
 ARG VLLM_GAUDI_COMMIT=v0.16.0
 
 ENV OMPI_MCA_btl_vader_single_copy_mechanism=none
