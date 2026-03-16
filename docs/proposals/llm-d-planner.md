@@ -13,6 +13,15 @@ users from natural-language requirements through SLO target generation,
 model-GPU recommendations based on real benchmarks, Kubernetes manifest
 creation, and one-click deployment.
 
+The following are presentations given during recent llm-d sig-benchmarking calls for additional info:
+
+- [llm-d sig-benchmarking call, 3/10/2026](https://drive.google.com/file/d/1Ywlgjd1lz44OzLSJMH5UN8gxdsMHersv)
+  - _NeuralNav_ demo: 2:39-8:28
+  - Questions/Discussion: 8:28-15:45
+  - Overview of integration w/_Config Explorer_: 15:45-21:38
+- [llm-d sig-benchmarking call, 1/27/2026](https://www.youtube.com/watch?v=Y26i69zI6Ag)
+  - _Config Explorer_ demo
+
 Platform teams deploying LLMs on llm-d today must navigate a multitude of
 interacting configuration knobs across llm-d components, with no single tool
 that reasons across all of them. _Config Explorer_ handles the hardware side well
