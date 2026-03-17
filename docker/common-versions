@@ -2,7 +2,7 @@
 # shared vLLM Version Configuration
 # ============================================================================
 VLLM_REPO=https://github.com/vllm-project/vllm.git
-VLLM_COMMIT_SHA=1892993bc18e243e2c05841314c5e9c06a80c70d # maps to v0.15.1 tag
+VLLM_COMMIT_SHA=95c0f928cdeeaa21c4906e73cee6a156e1b3b995 # maps to v0.17.1 tag
 
 # ============================================================================
 # Cuda specific configs
@@ -20,9 +20,12 @@ CUDA_MAJOR=12
 CUDA_MINOR=9
 CUDA_PATCH=1
 
-### Offloading connector
+# If building vLLM from a precompiled commit in the vLLM wheel index (only commits off main),
+# which commit to use as the base for the copiled bits.
+VLLM_PRECOMPILED_WHEEL_COMMIT=95c0f928cdeeaa21c4906e73cee6a156e1b3b995
 
-LLM_D_OFFLOADING_CONNECTOR_VERSION=0.15.1
+### Offloading connector
+LLM_D_OFFLOADING_CONNECTOR_VERSION=0.17.1
 
 # ============================================================================
 # XPU specific settings

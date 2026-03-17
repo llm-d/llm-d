@@ -30,7 +30,7 @@ ARG ENABLE_EFA=false
 ARG EFA_INSTALLER_VERSION="1.46.0"
 
 ARG GDRCOPY_REPO="https://github.com/NVIDIA/gdrcopy.git"
-ARG GDRCOPY_VERSION="v2.5.1"
+ARG GDRCOPY_VERSION="v2.5.2"
 
 ARG UCX_REPO="https://github.com/openucx/ucx.git"
 ARG UCX_VERSION="v1.20.0"
@@ -41,13 +41,13 @@ ARG NVSHMEM_VERSION="v3.5.19-1"
 
 ARG BUILD_NIXL_FROM_SOURCE="true"
 ARG NIXL_REPO="https://github.com/ai-dynamo/nixl.git"
-ARG NIXL_VERSION="0.10.0"
+ARG NIXL_VERSION="v1.0.0"
 
 ARG INFINISTORE_REPO="https://github.com/bytedance/InfiniStore.git"
 ARG INFINISTORE_VERSION="0.2.33"
 
 ARG LMCACHE_REPO="https://github.com/LMCache/LMCache.git"
-ARG LMCACHE_VERSION="v0.3.14"
+ARG LMCACHE_VERSION="v0.4.1"
 
 # Kernels
 # NM fork of Deepep for duplicate nvshmem IBGDA definitions, see: https://github.com/deepseek-ai/DeepEP/pull/581.
@@ -61,7 +61,7 @@ ARG DEEPGEMM_REPO="https://github.com/deepseek-ai/DeepGEMM"
 ARG DEEPGEMM_VERSION="v2.1.1.post3"
 
 ARG FLASHINFER_REPO="https://github.com/flashinfer-ai/flashinfer.git"
-ARG FLASHINFER_VERSION="v0.6.1"
+ARG FLASHINFER_VERSION="v0.6.4"
 
 # vLLM build settings - provided via build args from docker/common-versions file
 # Override here for platform-specific testing or via build args
