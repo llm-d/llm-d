@@ -347,11 +347,6 @@ RUN EFA_MODE="runtime" /tmp/install-efa.sh && \
     rm -f /tmp/install-efa.sh /tmp/package-utils.sh && \
     rm -rf /tmp/packages
 
-# Copy in storage offloading connector wheel
-COPY docker/scripts/common/install-offloading-connector.sh /tmp/install-offloading-connector.sh
-RUN /tmp/install-offloading-connector.sh && \
-    rm -f /tmp/install-offloading-connector.sh
-
 # Install runtime dependencies
 COPY docker/scripts/cuda/common/package-utils.sh /tmp/package-utils.sh
 COPY docker/packages /tmp/packages
@@ -359,6 +354,11 @@ COPY docker/scripts/cuda/runtime/install-runtime-packages.sh /tmp/install-runtim
 RUN /tmp/install-runtime-packages.sh && \
     rm -f /tmp/install-runtime-packages.sh /tmp/package-utils.sh && \
     rm -rf /tmp/packages
+
+# Copy in storage offloading connector wheel
+COPY docker/scripts/common/install-offloading-connector.sh /tmp/install-offloading-connector.sh
+RUN /tmp/install-offloading-connector.sh && \
+    rm -f /tmp/install-offloading-connector.sh
 
 # Copy EFA installation if enabled
 # EFA libs are copied to /usr/lib64 during install-efa.sh and saved to /tmp/efa_libs
