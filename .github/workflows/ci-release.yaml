@@ -63,6 +63,7 @@ jobs:
           echo "cuda_major=${CUDA_MAJOR}" >> $GITHUB_OUTPUT
           echo "cuda_minor=${CUDA_MINOR}" >> $GITHUB_OUTPUT
           echo "cuda_patch=${CUDA_PATCH}" >> $GITHUB_OUTPUT
+          echo "offloading_connector_version=${LLM_D_OFFLOADING_CONNECTOR_VERSION}" >> $GITHUB_OUTPUT
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -141,6 +142,7 @@ jobs:
             VLLM_PRECOMPILED_WHEEL_COMMIT=${{ steps.common-version.outputs.precompiled_wheel_commit }}
             VLLM_PREBUILT=${{ steps.common-version.outputs.prebuilt }}
             VLLM_USE_PRECOMPILED=${{ steps.common-version.outputs.use_precompiled }}
+            LLM_D_OFFLOADING_CONNECTOR_VERSION=${{ steps.common-version.outputs.offloading_connector_version }}
           # disabling cache from cache to temporarily to prevent building issues
           # cache-from: >-
           #   type=gha,scope=cuda-${{ matrix.os }}-${{
@@ -405,6 +407,7 @@ jobs:
           echo "cuda_major=${CUDA_MAJOR}" >> $GITHUB_OUTPUT
           echo "cuda_minor=${CUDA_MINOR}" >> $GITHUB_OUTPUT
           echo "cuda_patch=${CUDA_PATCH}" >> $GITHUB_OUTPUT
+          echo "offloading_connector_version=${LLM_D_OFFLOADING_CONNECTOR_VERSION}" >> $GITHUB_OUTPUT
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -478,6 +481,7 @@ jobs:
             VLLM_PRECOMPILED_WHEEL_COMMIT=${{ steps.common-version.outputs.precompiled_wheel_commit }}
             VLLM_PREBUILT=${{ steps.common-version.outputs.prebuilt }}
             VLLM_USE_PRECOMPILED=${{ steps.common-version.outputs.use_precompiled }}
+            LLM_D_OFFLOADING_CONNECTOR_VERSION=${{ steps.common-version.outputs.offloading_connector_version }}
           labels: ${{ steps.meta.outputs.labels }}
           outputs: >-
             type=image,name=${{ env.REGISTRY }}/${{ github.repository }}-aws${{ matrix.image_suffix }},

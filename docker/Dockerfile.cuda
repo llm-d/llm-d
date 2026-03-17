@@ -281,7 +281,7 @@ COPY docker/scripts/cuda/builder/build-compiled-wheels.sh /tmp/build-compiled-wh
 RUN --mount=type=cache,target=/root/.cache/uv \
     --mount=type=secret,id=aws_access_key_id \
     --mount=type=secret,id=aws_secret_access_key \
-    TARGETPLATFORM=${TARGETPLATFORM} /tmp/build-compiled-wheels.sh && \
+    /tmp/build-compiled-wheels.sh && \
     rm -f /tmp/build-compiled-wheels.sh
 
 # ============================================================================
@@ -307,6 +307,7 @@ ARG BUILD_NIXL_FROM_SOURCE
 ARG FLASHINFER_VERSION
 ARG ENABLE_EFA
 ARG EFA_INSTALLER_VERSION
+ARG LLM_D_OFFLOADING_CONNECTOR_VERSION
 
 COPY docker/constraints.txt /tmp/constraints.txt
 
@@ -348,7 +349,7 @@ RUN EFA_MODE="runtime" /tmp/install-efa.sh && \
 
 # Copy in storage offloading connector wheel
 COPY docker/scripts/common/install-offloading-connector.sh /tmp/install-offloading-connector.sh
-RUN TARGETPLATFORM=${TARGETPLATFORM} /tmp/install-offloading-connector.sh && \
+RUN /tmp/install-offloading-connector.sh && \
     rm -f /tmp/install-offloading-connector.sh
 
 # Install runtime dependencies
