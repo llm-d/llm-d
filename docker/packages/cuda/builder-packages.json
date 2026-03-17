@@ -26,6 +26,7 @@
     "libibverbs": "libibverbs1",
     "libibverbs-devel": "libibverbs-dev",
     "numactl-libs": "libnuma1",
+    "numactl-devel":"libnuma-dev",
     "subunit": null,
     "pciutils": "pciutils",
     "pciutils-libs": null,
@@ -35,7 +36,6 @@
   },
   "ubuntu_only": [
     "debhelper",
-    "libnuma-dev",
     "environment-modules",
     "tcl",
     "ethtool",
