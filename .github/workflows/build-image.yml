@@ -118,6 +118,7 @@ jobs:
               - 'patches/nvshmem_zero_ibv_ah_attr_v3.4.5-0.patch'
             aws:
               - 'docker/Dockerfile.cuda'
+              - 'docker/common-versions'
               - 'docker/scripts/common/**'
               - 'docker/scripts/cuda/**'
               - 'docker/packages/common/**'
@@ -129,7 +130,6 @@ jobs:
               - 'docker/Dockerfile.rocm'
             xpu:
               - 'docker/common-versions'
-              - 'docker/scripts/xpu/**'
             cpu:
               - 'docker/Dockerfile.cpu'
               - 'docker/common-versions'
