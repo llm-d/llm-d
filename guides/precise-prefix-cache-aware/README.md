@@ -110,9 +110,9 @@ kubectl apply -f httproute.gke.yaml -n ${NAMESPACE}
 ```bash
 helm list -n ${NAMESPACE}
 NAME            NAMESPACE       REVISION        UPDATED                                 STATUS          CHART                           APP VERSION
-gaie-kv-events  llm-d-precise  1               2026-01-28 18:16:14.302723 +0200 IST    deployed        inferencepool-v1.3.1            v1.3.1
-infra-kv-events llm-d-precise  1               2026-01-28 18:16:08.733157 +0200 IST    deployed        llm-d-infra-v1.3.6              v0.3.0
-ms-kv-events    llm-d-precise  1               2026-01-28 18:16:26.907329 +0200 IST    deployed        llm-d-modelservice-v0.4.7       v0.4.0
+gaie-kv-events  llm-d-precise   1               2026-01-28 18:16:14.302723 +0200 IST    deployed        inferencepool-v1.4.0-rc.3       v1.4.0-rc.3
+infra-kv-events llm-d-precise   1               2026-01-28 18:16:08.733157 +0200 IST    deployed        llm-d-infra-v1.3.6              v0.3.0
+ms-kv-events    llm-d-precise   1               2026-01-28 18:16:26.907329 +0200 IST    deployed        llm-d-modelservice-v0.4.7       v0.4.0
 ```
 
 - Out of the box with this example you should have the following resources:

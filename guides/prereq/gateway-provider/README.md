@@ -83,9 +83,9 @@ Both self-installed inference modes use the `agentgateway` GatewayClass in llm-d
 
 Prior to deploying a Gateway control plane, you must install the custom resource definitions (CRDs) configuration that adds the Kubernetes API objects:
 
-    - [Gateway API v1.4.0 CRDs](https://github.com/kubernetes-sigs/gateway-api/tree/v1.4.0/config/crd)
+    - [Gateway API v1.5.0 CRDs](https://github.com/kubernetes-sigs/gateway-api/tree/v1.5.0/config/crd)
       - for more information see their [docs](https://gateway-api.sigs.k8s.io/guides/)
-    - [Gateway API Inference Extension CRDs v1.3.1](https://github.com/kubernetes-sigs/gateway-api-inference-extension/tree/v1.3.1/config/crd)
+    - [Gateway API Inference Extension CRDs v1.4.0-rc.3](https://github.com/kubernetes-sigs/gateway-api-inference-extension/tree/v1.4.0-rc.3/config/crd)
       - for more information see their [docs](https://gateway-api-inference-extension.sigs.k8s.io/)
 
 We have provided the [`install-gateway-provider-dependencies.sh`](./install-gateway-provider-dependencies.sh) script:
@@ -98,8 +98,8 @@ To remove the created dependencies:
 
 You may specify any valid git source control reference for versions as `GATEWAY_API_CRD_REVISION` and `GATEWAY_API_INFERENCE_EXTENSION_CRD_REVISION`:
 
-    export GATEWAY_API_CRD_REVISION="v1.4.0"
-    export GATEWAY_API_INFERENCE_EXTENSION_CRD_REVISION="v1.3.1"
+    export GATEWAY_API_CRD_REVISION="v1.5.0"
+    export GATEWAY_API_INFERENCE_EXTENSION_CRD_REVISION="v1.4.0-rc.3"
     ./install-gateway-provider-dependencies.sh
 
 ##### Installation

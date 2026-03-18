@@ -1,7 +1,6 @@
 inferenceExtension:
   replicas: 1
   flags:
-    kv-cache-usage-percentage-metric: "vllm:kv_cache_usage_perc"
     v: 4
   image:
     name: llm-d-inference-scheduler
