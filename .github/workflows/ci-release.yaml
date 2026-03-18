@@ -829,7 +829,7 @@ jobs:
         run: |
           source docker/common-versions
           echo "repo=${VLLM_REPO}" >> $GITHUB_OUTPUT
-          echo "commit_sha=${VLLM_COMMIT_SHA}" >> $GITHUB_OUTPUT
+          echo "commit_sha=${VLLM_XPU_COMMIT_SHA}" >> $GITHUB_OUTPUT
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
