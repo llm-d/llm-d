@@ -53,6 +53,45 @@ releases:
     values:
       {{- if eq $pd "true" }}
       - gaie-kv-events/values_pod_discovery.yaml
+      - inferenceExtension:
+          pluginsCustomConfig:
+            precise-prefix-cache-config.yaml: |
+              apiVersion: inference.networking.x-k8s.io/v1alpha1
+              kind: EndpointPickerConfig
+              plugins:
+                - type: single-profile-handler
+                - type: precise-prefix-cache-scorer
+                  parameters:
+                    tokenProcessorConfig:
+                      blockSize: 64
+                    indexerConfig:
+                      tokenizersPoolConfig:
+                        modelName: Qwen/Qwen3-32B
+                        local: null
+                        hf: null
+                        uds:
+                          socketFile: /tmp/tokenizer/tokenizer-uds.socket
+                    kvEventsConfig:
+                      topicFilter: "kv@"
+                      concurrency: 4
+                      discoverPods: true
+                      podDiscoveryConfig:
+                        labelSelector: "llm-d.ai/inference-serving=true,llm-d.ai/guide=precise-prefix-cache-aware"
+                        podNamespace: {{ $ns | quote }}
+                      zmqEndpoint: "tcp://*:5557"
+                - type: kv-cache-utilization-scorer
+                - type: queue-scorer
+                - type: max-score-picker
+              schedulingProfiles:
+                - name: default
+                  plugins:
+                    - pluginRef: precise-prefix-cache-scorer
+                      weight: 3.0
+                    - pluginRef: kv-cache-utilization-scorer
+                      weight: 2.0
+                    - pluginRef: queue-scorer
+                      weight: 2.0
+                    - pluginRef: max-score-picker
       {{- else }}
       - gaie-kv-events/values.yaml
       {{- end }}
