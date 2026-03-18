@@ -108,13 +108,21 @@ jobs:
     # Run tests if:
     # 1. It's a manual workflow_dispatch, OR
     # 2. Related files changed AND (build succeeded OR build was skipped)
-    if: ${{ (github.event_name == 'workflow_dispatch' || needs.detect-changes.outputs.xpu-inference-scheduling == 'true') && (needs.build-images.result == 'success' || needs.build-images.result == 'skipped') }}
+    if: >-
+      ${{ (github.event_name == 'workflow_dispatch' ||
+      needs.detect-changes.outputs.xpu-inference-scheduling == 'true') &&
+      (needs.build-images.result == 'success' || needs.build-images.result == 'skipped') }}
     uses: ./.github/workflows/e2e-inference-scheduling-xpu.yaml
     with:
       pr_or_branch: ${{ github.event.inputs.pr_or_branch || github.event.pull_request.number }}
       # Only use custom image tag if user provides it, or if XPU image was actually built in this PR
       # Otherwise, let the test use the default image from values_xpu.yaml
-      custom_image_tag: ${{ github.event.inputs.custom_image_tag != '' && github.event.inputs.custom_image_tag || (needs.build-images.outputs.xpu == 'true' && github.event.pull_request.number != '' && format('pr-{0}', github.event.pull_request.number) || '') }}
+      custom_image_tag: >-
+        ${{ github.event.inputs.custom_image_tag != '' &&
+        github.event.inputs.custom_image_tag ||
+        (needs.build-images.outputs.xpu == 'true' &&
+        github.event.pull_request.number != '' &&
+        format('pr-{0}', github.event.pull_request.number) || '') }}
     secrets: inherit
 
   # Call the XPU PD test workflow
@@ -123,13 +131,21 @@ jobs:
     # Run tests if:
     # 1. It's a manual workflow_dispatch, OR
     # 2. Related files changed AND (build succeeded OR build was skipped)
-    if: ${{ (github.event_name == 'workflow_dispatch' || needs.detect-changes.outputs.xpu-pd-disaggregation == 'true') && (needs.build-images.result == 'success' || needs.build-images.result == 'skipped') }}
+    if: >-
+      ${{ (github.event_name == 'workflow_dispatch' ||
+      needs.detect-changes.outputs.xpu-pd-disaggregation == 'true') &&
+      (needs.build-images.result == 'success' || needs.build-images.result == 'skipped') }}
     uses: ./.github/workflows/e2e-pd-xpu.yaml
     with:
       pr_or_branch: ${{ github.event.inputs.pr_or_branch || github.event.pull_request.number }}
       # Only use custom image tag if user provides it, or if XPU image was actually built in this PR
       # Otherwise, let the test use the default image from values_xpu.yaml
-      custom_image_tag: ${{ github.event.inputs.custom_image_tag != '' && github.event.inputs.custom_image_tag || (needs.build-images.outputs.xpu == 'true' && github.event.pull_request.number != '' && format('pr-{0}', github.event.pull_request.number) || '') }}
+      custom_image_tag: >-
+        ${{ github.event.inputs.custom_image_tag != '' &&
+        github.event.inputs.custom_image_tag ||
+        (needs.build-images.outputs.xpu == 'true' &&
+        github.event.pull_request.number != '' &&
+        format('pr-{0}', github.event.pull_request.number) || '') }}
     secrets: inherit
 
   # Call the XPU Prefix Cache test workflow
@@ -138,13 +154,21 @@ jobs:
     # Run tests if:
     # 1. It's a manual workflow_dispatch, OR
     # 2. Related files changed AND (build succeeded OR build was skipped)
-    if: ${{ (github.event_name == 'workflow_dispatch' || needs.detect-changes.outputs.xpu-prefix-cache == 'true') && (needs.build-images.result == 'success' || needs.build-images.result == 'skipped') }}
+    if: >-
+      ${{ (github.event_name == 'workflow_dispatch' ||
+      needs.detect-changes.outputs.xpu-prefix-cache == 'true') &&
+      (needs.build-images.result == 'success' || needs.build-images.result == 'skipped') }}
     uses: ./.github/workflows/e2e-prefix-cache-xpu.yaml
     with:
       pr_or_branch: ${{ github.event.inputs.pr_or_branch || github.event.pull_request.number }}
       # Only use custom image tag if user provides it, or if XPU image was actually built in this PR
       # Otherwise, let the test use the default image from values_xpu.yaml
-      custom_image_tag: ${{ github.event.inputs.custom_image_tag != '' && github.event.inputs.custom_image_tag || (needs.build-images.outputs.xpu == 'true' && github.event.pull_request.number != '' && format('pr-{0}', github.event.pull_request.number) || '') }}
+      custom_image_tag: >-
+        ${{ github.event.inputs.custom_image_tag != '' &&
+        github.event.inputs.custom_image_tag ||
+        (needs.build-images.outputs.xpu == 'true' &&
+        github.event.pull_request.number != '' &&
+        format('pr-{0}', github.event.pull_request.number) || '') }}
     secrets: inherit
 
   # Call the HPU Inference Scheduling test workflow
@@ -153,13 +177,21 @@ jobs:
     # Run tests if:
     # 1. It's a manual workflow_dispatch, OR
     # 2. Related files changed AND (build succeeded OR build was skipped)
-    if: ${{ (github.event_name == 'workflow_dispatch' || needs.detect-changes.outputs.hpu-inference-scheduling == 'true') && (needs.build-images.result == 'success' || needs.build-images.result == 'skipped') }}
+    if: >-
+      ${{ (github.event_name == 'workflow_dispatch' ||
+      needs.detect-changes.outputs.hpu-inference-scheduling == 'true') &&
+      (needs.build-images.result == 'success' || needs.build-images.result == 'skipped') }}
     uses: ./.github/workflows/e2e-inference-scheduling-hpu.yaml
     with:
       pr_or_branch: ${{ github.event.inputs.pr_or_branch || github.event.pull_request.number }}
       # Only use custom image tag if user provides it, or if HPU image was actually built in this PR
       # Otherwise, let the test use the default image from values-hpu.yaml
-      custom_image_tag: ${{ github.event.inputs.custom_image_tag != '' && github.event.inputs.custom_image_tag || (needs.build-images.outputs.hpu == 'true' && github.event.pull_request.number != '' && format('pr-{0}', github.event.pull_request.number) || '') }}
+      custom_image_tag: >-
+        ${{ github.event.inputs.custom_image_tag != '' &&
+        github.event.inputs.custom_image_tag ||
+        (needs.build-images.outputs.hpu == 'true' &&
+        github.event.pull_request.number != '' &&
+        format('pr-{0}', github.event.pull_request.number) || '') }}
     secrets: inherit
 
   # Call the HPU PD test workflow
@@ -168,11 +200,19 @@ jobs:
     # Run tests if:
     # 1. It's a manual workflow_dispatch, OR
     # 2. Related files changed AND (build succeeded OR build was skipped)
-    if: ${{ (github.event_name == 'workflow_dispatch' || needs.detect-changes.outputs.hpu-pd-disaggregation == 'true') && (needs.build-images.result == 'success' || needs.build-images.result == 'skipped') }}
+    if: >-
+      ${{ (github.event_name == 'workflow_dispatch' ||
+      needs.detect-changes.outputs.hpu-pd-disaggregation == 'true') &&
+      (needs.build-images.result == 'success' || needs.build-images.result == 'skipped') }}
     uses: ./.github/workflows/e2e-pd-hpu.yaml
     with:
       pr_or_branch: ${{ github.event.inputs.pr_or_branch || github.event.pull_request.number }}
       # Only use custom image tag if user provides it, or if HPU image was actually built in this PR
       # Otherwise, let the test use the default image from values_hpu.yaml
-      custom_image_tag: ${{ github.event.inputs.custom_image_tag != '' && github.event.inputs.custom_image_tag || (needs.build-images.outputs.hpu == 'true' && github.event.pull_request.number != '' && format('pr-{0}', github.event.pull_request.number) || '') }}
+      custom_image_tag: >-
+        ${{ github.event.inputs.custom_image_tag != '' &&
+        github.event.inputs.custom_image_tag ||
+        (needs.build-images.outputs.hpu == 'true' &&
+        github.event.pull_request.number != '' &&
+        format('pr-{0}', github.event.pull_request.number) || '') }}
     secrets: inherit

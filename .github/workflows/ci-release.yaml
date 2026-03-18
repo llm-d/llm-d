@@ -380,11 +380,11 @@ jobs:
             os: rhel
             base_image_suffix: ubi9
             image_suffix: ""
-          # - platform: linux/arm64
-          #   runner: vllm-runner-arm
-          #   os: rhel
-          #   base_image_suffix: ubi9
-          #   image_suffix: ""
+            # - platform: linux/arm64
+            #   runner: vllm-runner-arm
+            #   os: rhel
+            #   base_image_suffix: ubi9
+            #   image_suffix: ""
     runs-on: ${{ matrix.runner }}
     steps:
       - name: Checkout code

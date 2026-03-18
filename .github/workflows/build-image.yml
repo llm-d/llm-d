@@ -165,21 +165,21 @@ jobs:
             os: rhel
             base_image_suffix: ubi9
             image_suffix: "-debug"
-#          - platform: linux/arm64
-#            runner: vllm-runner-arm
-#            os: rhel
-#            base_image_suffix: ubi9
-#            image_suffix: "-debug"
-#          - platform: linux/amd64
-#            runner: vllm-runner
-#            os: ubuntu
-#            base_image_suffix: ubuntu24.04
-#            image_suffix: "-ubuntu-debug"
-#          - platform: linux/arm64
-#            runner: vllm-runner-arm
-#            os: ubuntu
-#            base_image_suffix: ubuntu24.04
-#            image_suffix: "-ubuntu-debug"
+          # - platform: linux/arm64
+          #   runner: vllm-runner-arm
+          #   os: rhel
+          #   base_image_suffix: ubi9
+          #   image_suffix: "-debug"
+          # - platform: linux/amd64
+          #   runner: vllm-runner
+          #   os: ubuntu
+          #   base_image_suffix: ubuntu24.04
+          #   image_suffix: "-ubuntu-debug"
+          # - platform: linux/arm64
+          #   runner: vllm-runner-arm
+          #   os: ubuntu
+          #   base_image_suffix: ubuntu24.04
+          #   image_suffix: "-ubuntu-debug"
     runs-on: ${{ matrix.runner }}
     steps:
       - name: Checkout code
