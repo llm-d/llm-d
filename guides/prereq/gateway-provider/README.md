@@ -74,7 +74,7 @@ llm-d provides helmfiles that install and configure `istio`, `kgateway`, and `ag
 
 The two self-installed inference modes are:
 
-* `agentgateway`: installs the `agentgateway` v1.0.0-alpha.4 control plane and data plane. This is the preferred self-installed inference path.
+* `agentgateway`: installs the `agentgateway` v1.0.0 control plane and data plane. This is the preferred self-installed inference path.
 * `kgateway`: installs the deprecated llm-d `kgateway` path using the `ghcr.io/kgateway-dev/charts/agentgateway*` charts at `v2.2.1`, with `inferenceExtension.enabled=true`. This path is retained only to support migrations.
 
 Both self-installed inference modes use the `agentgateway` GatewayClass in llm-d guide manifests.
@@ -83,7 +83,7 @@ Both self-installed inference modes use the `agentgateway` GatewayClass in llm-d
 
 Prior to deploying a Gateway control plane, you must install the custom resource definitions (CRDs) configuration that adds the Kubernetes API objects:
 
-    - [Gateway API v1.5.0 CRDs](https://github.com/kubernetes-sigs/gateway-api/tree/v1.5.0/config/crd)
+    - [Gateway API v1.5.1 CRDs](https://github.com/kubernetes-sigs/gateway-api/tree/v1.5.1/config/crd)
       - for more information see their [docs](https://gateway-api.sigs.k8s.io/guides/)
     - [Gateway API Inference Extension CRDs v1.4.0-rc.3](https://github.com/kubernetes-sigs/gateway-api-inference-extension/tree/v1.4.0-rc.3/config/crd)
       - for more information see their [docs](https://gateway-api-inference-extension.sigs.k8s.io/)
@@ -98,7 +98,7 @@ To remove the created dependencies:
 
 You may specify any valid git source control reference for versions as `GATEWAY_API_CRD_REVISION` and `GATEWAY_API_INFERENCE_EXTENSION_CRD_REVISION`:
 
-    export GATEWAY_API_CRD_REVISION="v1.5.0"
+    export GATEWAY_API_CRD_REVISION="v1.5.1"
     export GATEWAY_API_INFERENCE_EXTENSION_CRD_REVISION="v1.4.0-rc.3"
     ./install-gateway-provider-dependencies.sh
 
