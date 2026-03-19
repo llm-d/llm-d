@@ -12,7 +12,7 @@ project-lifecycle:
 
 - contact: github:chcost
 - contact: github:robertgshaw2-redhat
-- contact: github:smarterclayton
+- contact: github:ahg-g
 - contact: github:clubanderson
 contribution-policy:
   accepts-pull-requests: true
