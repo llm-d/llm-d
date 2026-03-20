@@ -32,6 +32,7 @@ cd /tmp
 #   initialization failures (e.g. cudaGetDeviceCount error 803).
 #
 # This must remain scoped to the LMCache build step only.
+BACKUP_LIBRARY_PATH="${LIBRARY_PATH:-}"
 export LIBRARY_PATH="${CUDA_HOME}/lib64/stubs:${LIBRARY_PATH:-}"
 
 . /usr/local/bin/setup-sccache
@@ -77,3 +78,5 @@ if [ "${USE_SCCACHE}" = "true" ]; then
     echo "=== LMCache and Infinistore build complete - sccache stats ==="
     sccache --show-stats
 fi
+
+export LIBRARY_PATH="${BACKUP_LIBRARY_PATH}"
