@@ -7,7 +7,7 @@ This directory contains a standard `values.yaml` for deploying an `InferencePool
 To deploy the `InferencePool`, select your provider below.
 
 > [!NOTE]
-> Prefer `agentgateway` for new self-installed inference deployments. The current Gateway API Inference Extension chart uses `provider.name=none` for both `agentgateway` and the deprecated `kgateway` migration path. See the upstream [`inferencepool` chart values for v1.4.0-rc.3](https://github.com/kubernetes-sigs/gateway-api-inference-extension/blob/v1.4.0-rc.3/config/charts/inferencepool/values.yaml).
+> Prefer `agentgateway` for new self-installed inference deployments. The current Gateway API Inference Extension chart uses `provider.name=none` for both `agentgateway` and the deprecated `kgateway` migration path. See the upstream [`inferencepool` chart values for v1.4.0](https://github.com/kubernetes-sigs/gateway-api-inference-extension/blob/v1.4.0/config/charts/inferencepool/values.yaml).
 
 <!-- TABS:START -->
 
@@ -22,7 +22,7 @@ helm install llm-d-infpool \
   -f ./values.yaml \
   --set "provider.name=gke" \
   oci://registry.k8s.io/gateway-api-inference-extension/charts/inferencepool \
-  --version v1.4.0-rc.3
+  --version v1.4.0
 ```
 
 <!-- TAB:Istio -->
@@ -36,7 +36,7 @@ helm install llm-d-infpool \
   -f ./values.yaml \
   --set "provider.name=istio" \
   oci://registry.k8s.io/gateway-api-inference-extension/charts/inferencepool \
-  --version v1.4.0-rc.3
+  --version v1.4.0
 ```
 
 <!-- TAB:Agentgateway -->
@@ -50,7 +50,7 @@ helm install llm-d-infpool \
   -f ./values.yaml \
   --set "provider.name=none" \
   oci://registry.k8s.io/gateway-api-inference-extension/charts/inferencepool \
-  --version v1.4.0-rc.3
+  --version v1.4.0
 ```
 
 <!-- TABS:END -->

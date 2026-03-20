@@ -82,7 +82,7 @@ jobs:
           --set "inferenceExtension.monitoring.prometheus.enabled=true" \
           -f guides/wide-ep-lws/manifests/inferencepool.values.yaml \
           oci://registry.k8s.io/gateway-api-inference-extension/charts/inferencepool \
-          --version v1.4.0-rc.3
+          --version v1.4.0
 
         # 3. Deploy gateway recipe (GKE L7 regional external managed)
         echo "Deploying Gateway and HTTPRoute..."
