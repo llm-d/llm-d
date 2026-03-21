@@ -21,10 +21,6 @@ environments:
 {{- $llmdNamespaceEnv := env "LLMD_NAMESPACE" | default "llm-d-inference-scheduler" -}}
 {{- $rn := (env "RELEASE_NAME_POSTFIX") | default "workload-autoscaler" -}}
 {{- $ns := .Namespace | default "llm-d-autoscaler" -}}
-{{- $schedulerImageHub := env "LLMD_INFERENCE_SCHEDULER_IMAGE_HUB" | default "" -}}
-{{- $schedulerImageName := env "LLMD_INFERENCE_SCHEDULER_IMAGE_NAME" | default "" -}}
-{{- $schedulerImageTag := env "LLMD_INFERENCE_SCHEDULER_IMAGE_TAG" | default "" -}}
-{{- $routingSidecarImage := env "LLMD_ROUTING_SIDECAR_IMAGE" | default "" -}}
 
 repositories:
   - name: llm-d-modelservice
@@ -55,13 +51,6 @@ releases:
       - {{ printf "infra-%s" $rn | quote }}
     values:
       - gaie-workload-autoscaling/values.yaml
-    {{- if and $schedulerImageHub $schedulerImageName $schedulerImageTag }}
-      - inferenceExtension:
-          image:
-            hub: {{ $schedulerImageHub | quote }}
-            name: {{ $schedulerImageName | quote }}
-            tag: {{ $schedulerImageTag | quote }}
-    {{- end }}
     # Apply destination rule for anything istio
     {{- if or (eq .Environment.Name "istio") (eq .Environment.Name "default") }}
       - provider:
@@ -89,11 +78,6 @@ releases:
       - {{ printf "gaie-%s" $rn | quote }}
     values:
       - ms-workload-autoscaling/values.yaml
-    {{- if $routingSidecarImage }}
-      - routing:
-          proxy:
-            image: {{ $routingSidecarImage | quote }}
-    {{- end }}
     {{- if or (eq .Environment.Name "istio") (eq .Environment.Name "default") }}
       - routing:
           {{ .Environment.Values.routing | toYaml | nindent 10 }}

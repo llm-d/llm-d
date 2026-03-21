@@ -23,10 +23,6 @@ environments:
 {{- $ns := .Namespace | default "llm-d-precise" -}}
 {{- $rn := (env "RELEASE_NAME_POSTFIX") | default "kv-events" -}}
 {{- $pd := (env "POD_DISCOVERY") | default "false" -}}
-{{- $schedulerImageHub := env "LLMD_INFERENCE_SCHEDULER_IMAGE_HUB" | default "" -}}
-{{- $schedulerImageName := env "LLMD_INFERENCE_SCHEDULER_IMAGE_NAME" | default "" -}}
-{{- $schedulerImageTag := env "LLMD_INFERENCE_SCHEDULER_IMAGE_TAG" | default "" -}}
-{{- $routingSidecarImage := env "LLMD_ROUTING_SIDECAR_IMAGE" | default "" -}}
 
 repositories:
   - name: llm-d-modelservice
@@ -60,13 +56,6 @@ releases:
       {{- else }}
       - gaie-kv-events/values.yaml
       {{- end }}
-    {{- if and $schedulerImageHub $schedulerImageName $schedulerImageTag }}
-      - inferenceExtension:
-          image:
-            hub: {{ $schedulerImageHub | quote }}
-            name: {{ $schedulerImageName | quote }}
-            tag: {{ $schedulerImageTag | quote }}
-    {{- end }}
     # Apply provider name if on GKE
     {{- if eq .Environment.Name "gke" }}
       - provider:
@@ -108,12 +97,6 @@ releases:
     {{- else }}
       - ms-kv-events/values.yaml
     {{- end }}
-    {{- if $routingSidecarImage }}
-      - routing:
-          proxy:
-            image: {{ $routingSidecarImage | quote }}
-    {{- end }}
-
     {{- if or (eq .Environment.Name "istio") (eq .Environment.Name "default") }}
       - routing:
           {{ .Environment.Values.routing | toYaml | nindent 10 }}

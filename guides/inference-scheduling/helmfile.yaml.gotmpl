@@ -34,10 +34,6 @@ environments:
 
 {{- $ns := .Namespace | default "llm-d-inference-scheduling" -}}
 {{- $rn := (env "RELEASE_NAME_POSTFIX") | default "inference-scheduling" -}}
-{{- $schedulerImageHub := env "LLMD_INFERENCE_SCHEDULER_IMAGE_HUB" | default "" -}}
-{{- $schedulerImageName := env "LLMD_INFERENCE_SCHEDULER_IMAGE_NAME" | default "" -}}
-{{- $schedulerImageTag := env "LLMD_INFERENCE_SCHEDULER_IMAGE_TAG" | default "" -}}
-{{- $routingSidecarImage := env "LLMD_ROUTING_SIDECAR_IMAGE" | default "" -}}
 
 repositories:
   - name: llm-d-modelservice
@@ -77,13 +73,6 @@ releases:
       {{- else }}
       - gaie-inference-scheduling/values.yaml
       {{- end }}
-    {{- if and $schedulerImageHub $schedulerImageName $schedulerImageTag }}
-      - inferenceExtension:
-          image:
-            hub: {{ $schedulerImageHub | quote }}
-            name: {{ $schedulerImageName | quote }}
-            tag: {{ $schedulerImageTag | quote }}
-    {{- end }}
     # Apply provider name if on GKE
     {{- if or (eq .Environment.Name "gke") (eq .Environment.Name "gke_tpu") }}
       - provider:
@@ -134,11 +123,6 @@ releases:
       - ms-inference-scheduling/values_sglang.yaml
     {{- else }}
       - ms-inference-scheduling/values.yaml
-    {{- end }}
-    {{- if $routingSidecarImage }}
-      - routing:
-          proxy:
-            image: {{ $routingSidecarImage | quote }}
     {{- end }}
     set:
     {{- if or (eq .Environment.Name "gke") (eq .Environment.Name "gke_tpu") }}

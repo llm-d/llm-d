@@ -35,15 +35,6 @@ helmfile apply -n ${NAMESPACE}
 
 **_NOTE:_** You can set the `$RELEASE_NAME_POSTFIX` env variable to change the release names. This is how we support concurrent installs. ex: `RELEASE_NAME_POSTFIX=sim-2 helmfile apply -n ${NAMESPACE}`
 
-**_NOTE:_** For local validation against a prerelease downstream scheduler build, you can override the guide images at deploy time:
-
-```bash
-export LLMD_INFERENCE_SCHEDULER_IMAGE_HUB="<YOUR_IMAGE_HUB>/<YOUR_IMAGE_REPO>"
-export LLMD_INFERENCE_SCHEDULER_IMAGE_NAME="llm-d-inference-scheduler"
-export LLMD_INFERENCE_SCHEDULER_IMAGE_TAG="v0.7.0"
-export LLMD_ROUTING_SIDECAR_IMAGE="<YOUR_IMAGE_HUB>/<YOUR_IMAGE_REPO>/llm-d-routing-sidecar:v0.7.0"
-```
-
 **_NOTE:_** This uses Istio as the default provider, see [Gateway Options](./README.md#gateway-options) for installing with a specific provider.
 
 ### Gateway options

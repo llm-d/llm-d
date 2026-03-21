@@ -16,13 +16,8 @@ environments:
 
 ---
 
-{{- $llmdInfraChart := env "LLMD_INFRA_CHART" | default "llm-d-infra/llm-d-infra" -}}
 {{- $ns := .Namespace | default "llm-d-sim" -}}
 {{- $rn := (env "RELEASE_NAME_POSTFIX") | default "sim" -}}
-{{- $schedulerImageHub := env "LLMD_INFERENCE_SCHEDULER_IMAGE_HUB" | default "" -}}
-{{- $schedulerImageName := env "LLMD_INFERENCE_SCHEDULER_IMAGE_NAME" | default "" -}}
-{{- $schedulerImageTag := env "LLMD_INFERENCE_SCHEDULER_IMAGE_TAG" | default "" -}}
-{{- $routingSidecarImage := env "LLMD_ROUTING_SIDECAR_IMAGE" | default "" -}}
 
 repositories:
   - name: llm-d-modelservice
@@ -33,10 +28,8 @@ repositories:
 releases:
   - name: {{ printf "infra-%s" $rn | quote }}
     namespace: {{ $ns }}
-    chart: {{ $llmdInfraChart | quote }}
-    {{- if not (hasPrefix "/" $llmdInfraChart) }}
+    chart: llm-d-infra/llm-d-infra
     version: v1.3.6
-    {{- end }}
     installed: true
     labels:
       type: infrastructure
@@ -54,13 +47,6 @@ releases:
       - {{ printf "infra-%s" $rn | quote }}
     values:
       - gaie-sim/values.yaml
-    {{- if and $schedulerImageHub $schedulerImageName $schedulerImageTag }}
-      - inferenceExtension:
-          image:
-            hub: {{ $schedulerImageHub | quote }}
-            name: {{ $schedulerImageName | quote }}
-            tag: {{ $schedulerImageTag | quote }}
-    {{- end }}
     {{- if eq .Environment.Name "gke" }}
       - provider:
           name: {{ .Environment.Values.provider.name }}
@@ -99,11 +85,6 @@ releases:
       - {{ printf "gaie-%s" $rn | quote }}
     values:
       - ms-sim/values.yaml
-    {{- if $routingSidecarImage }}
-      - routing:
-          proxy:
-            image: {{ $routingSidecarImage | quote }}
-    {{- end }}
     set:
     {{- if (eq .Environment.Name "gke") }}
       - name: "decode.monitoring.podmonitor.enabled"

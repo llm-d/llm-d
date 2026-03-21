@@ -5,7 +5,7 @@ repositories:
 releases:
   - name: istio-base
     chart: istio/base
-    version: 1.28.1
+    version: 1.29.1
     namespace: istio-system
     installed: true
     labels:
@@ -14,7 +14,7 @@ releases:
 
   - name: istiod
     chart: istio/istiod
-    version: 1.28.1
+    version: 1.29.1
     namespace: istio-system
     installed: true
     needs:
@@ -27,7 +27,7 @@ releases:
         pilot:
           env:
             ENABLE_GATEWAY_API_INFERENCE_EXTENSION: "true"
-        tag: 1.28.1
+        tag: 1.29.1
         hub: "docker.io/istio"
     labels:
       type: gateway-provider
