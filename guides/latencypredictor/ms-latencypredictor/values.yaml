@@ -30,7 +30,8 @@ tracing:
 routing:
   servicePort: 8000
   proxy:
-    image: ghcr.io/llm-d/llm-d-routing-sidecar:v0.6.0
+    # for compat with IS image, based on: 
+    image: quay.io/grpereir/llm-d-routing-sidecar:gie-v1.4.0
     connector: nixlv2
     secure: false
 

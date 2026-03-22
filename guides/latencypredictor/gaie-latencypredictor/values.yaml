@@ -86,9 +86,9 @@ inferenceExtension:
     enabled: true
   replicas: 1
   image:
-    name: epp
-    hub: registry.k8s.io/gateway-api-inference-extension
-    tag: v1.4.0
+    name: llm-d-inference-scheduler
+    hub: quay.io/grpereir
+    tag: gie-v1.4.0
     pullPolicy: Always
   extProcPort: 9002
   pluginsConfigFile: "slo-prediction-plugins.yaml"
@@ -98,10 +98,16 @@ inferenceExtension:
       kind: EndpointPickerConfig
       plugins:
       - type: prefill-header-handler
+      - name: pdDecider
+        type: prefix-based-pd-decider
+        parameters:
+          nonCachedTokens: 16
+      - name: profileHandler
+        type: pd-profile-handler
+        parameters:
+          deciderPluginName: pdDecider
       - type: prefill-filter
       - type: decode-filter
-      - type: queue-scorer
-      - type: kv-cache-utilization-scorer
       - type: prefix-cache-scorer
         parameters:
           maxPrefixBlocksToMatch: 256
@@ -109,18 +115,20 @@ inferenceExtension:
       - type: predicted-latency-scorer
         parameters:
           endpointRoleLabel: "llm-d.ai/role"
-          sloBufferFactor: "1.0"
+          sloBufferFactor: 1.0
           headroomSelectionStrategy: "least"
       - type: max-score-picker
       schedulingProfiles:
       - name: prefill
         plugins:
         - pluginRef: prefill-filter
+        - pluginRef: prefix-cache-scorer
         - pluginRef: predicted-latency-scorer
         - pluginRef: max-score-picker
       - name: decode
         plugins:
         - pluginRef: decode-filter
+        - pluginRef: prefix-cache-scorer
         - pluginRef: predicted-latency-scorer
         - pluginRef: max-score-picker
       featureGates:
