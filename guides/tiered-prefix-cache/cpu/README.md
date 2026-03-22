@@ -184,7 +184,7 @@ kubectl delete -f ./manifests/pvc.yaml -n ${NAMESPACE}
 kubectl delete -k ./manifests/vllm/offloading-connector -n ${NAMESPACE}
 kubectl delete -k ./manifests/vllm/<offloading-connector|lmcache-connector> -n ${NAMESPACE}
 # Supported self-installed inference gateway recipe paths are agentgateway and
-# agentgateway-openshift (preferred), plus kgateway and kgateway-openshift
+# agentgateway (preferred), agentgateway-openshift, plus kgateway and kgateway-openshift
 # (deprecated migration paths).
 kubectl delete -k ../recipes/gateway/<gke-l7-regional-external-managed|istio|agentgateway|agentgateway-openshift|kgateway|kgateway-openshift> -n ${NAMESPACE}
 kubectl delete namespace ${NAMESPACE}
