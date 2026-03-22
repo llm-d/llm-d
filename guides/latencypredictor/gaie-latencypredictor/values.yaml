@@ -91,7 +91,7 @@ inferenceExtension:
     tag: v1.4.0
     pullPolicy: Always
   extProcPort: 9002
-  pluginsConfigFile: "default-plugins.yaml"
+  pluginsConfigFile: "slo-prediction-plugins.yaml"
   pluginsCustomConfig:
     slo-prediction-plugins.yaml: |
       apiVersion: inference.networking.x-k8s.io/v1alpha1
@@ -100,22 +100,18 @@ inferenceExtension:
       - type: prefill-header-handler
       - type: prefill-filter
       - type: decode-filter
-
       - type: queue-scorer
       - type: kv-cache-utilization-scorer
-
       - type: prefix-cache-scorer
         parameters:
           maxPrefixBlocksToMatch: 256
           lruCapacityPerServer: 31250
       - type: predicted-latency-scorer
-         parameters:
-           endpointRoleLabel: "llm-d.ai/role"
-           sloBufferFactor: 1.0
-           headroomSelectionStrategy: "least"
-
+        parameters:
+          endpointRoleLabel: "llm-d.ai/role"
+          sloBufferFactor: "1.0"
+          headroomSelectionStrategy: "least"
       - type: max-score-picker
-
       schedulingProfiles:
       - name: prefill
         plugins:
