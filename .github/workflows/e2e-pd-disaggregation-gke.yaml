@@ -86,7 +86,7 @@ jobs:
           credentials_json: ${{ secrets.GKE_SA_KEY }}
 
       - name: Set up gcloud CLI and kubectl
-        uses: google-github-actions/setup-gcloud@cb1e50a9932213ecece00a606661ae9ca44f3397
+        uses: google-github-actions/setup-gcloud@aa5489c8933f4cc7a4f7d45035b3b1440c9c10db
         with:
           project_id: ${{ env.GCP_PROJECT_ID }}
           install_components: 'kubectl,gke-gcloud-auth-plugin'
