@@ -113,7 +113,7 @@ jobs:
               kubectl wait --for=condition=ready pod \
                 --selector=app.kubernetes.io/managed-by=Helm \
                 --namespace "$ns" \
-                --timeout=300s || true
+                --timeout=300s 2>/dev/null || true
             fi
           done
 
@@ -194,7 +194,7 @@ jobs:
               kubectl wait --for=condition=ready pod \
                 --selector=app.kubernetes.io/managed-by=Helm \
                 --namespace "$ns" \
-                --timeout=300s || true
+                --timeout=300s 2>/dev/null || true
             fi
           done
 
@@ -275,7 +275,7 @@ jobs:
               kubectl wait --for=condition=ready pod \
                 --selector=app.kubernetes.io/managed-by=Helm \
                 --namespace "$ns" \
-                --timeout=300s || true
+                --timeout=300s 2>/dev/null || true
             fi
           done
 
@@ -356,7 +356,7 @@ jobs:
               kubectl wait --for=condition=ready pod \
                 --selector=app.kubernetes.io/managed-by=Helm \
                 --namespace "$ns" \
-                --timeout=300s || true
+                --timeout=300s 2>/dev/null || true
             fi
           done
 
@@ -437,7 +437,7 @@ jobs:
               kubectl wait --for=condition=ready pod \
                 --selector=app.kubernetes.io/managed-by=Helm \
                 --namespace "$ns" \
-                --timeout=300s || true
+                --timeout=300s 2>/dev/null || true
             fi
           done
 
