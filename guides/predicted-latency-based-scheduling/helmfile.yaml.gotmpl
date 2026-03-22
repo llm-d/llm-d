@@ -16,8 +16,8 @@ environments:
 
 ---
 
-{{- $ns := .Namespace | default "llm-d-latency" -}}
-{{- $rn := (env "RELEASE_NAME_POSTFIX") | default "latency" -}}
+{{- $ns := .Namespace | default "llm-d-latencypredictor" -}}
+{{- $rn := (env "RELEASE_NAME_POSTFIX") | default "latencypredictor" -}}
 
 repositories:
   - name: llm-d-modelservice
@@ -29,7 +29,7 @@ releases:
   - name: {{ printf "infra-%s" $rn | quote }}
     namespace: {{ $ns }}
     chart: llm-d-infra/llm-d-infra
-    version: v1.3.6
+    version: v1.4.0
     installed: true
     labels:
       type: infrastructure
@@ -41,12 +41,12 @@ releases:
   - name: {{ printf "gaie-%s" $rn | quote }}
     namespace: {{ $ns }}
     chart: oci://registry.k8s.io/gateway-api-inference-extension/charts/inferencepool
-    version: v1.3.0
+    version: v1.4.0
     installed: true
     needs:
       - {{ printf "infra-%s" $rn | quote }}
     values:
-      - gaie-latency/values.yaml
+      - gaie-latencypredictor/values.yaml
     {{- if eq .Environment.Name "gke" }}
       - provider:
           name: {{ .Environment.Values.provider.name }}
@@ -74,13 +74,13 @@ releases:
   - name: {{ printf "ms-%s" $rn | quote }}
     namespace: {{ $ns }}
     chart: llm-d-modelservice/llm-d-modelservice
-    version: v0.4.5
+    version: v0.4.7
     installed: true
     needs:
       - {{ printf "infra-%s" $rn | quote }}
       - {{ printf "gaie-%s" $rn | quote }}
     values:
-      - ms-latency/values.yaml
+      - ms-latencypredictor/values.yaml
     set:
     {{- if (eq .Environment.Name "gke") }}
       - name: "decode.monitoring.podmonitor.enabled"

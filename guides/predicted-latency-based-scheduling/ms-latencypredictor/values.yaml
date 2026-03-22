@@ -6,7 +6,7 @@ modelArtifacts:
   size: 5Mi
   labels:
     llm-d.ai/inference-serving: "true"
-    llm-d.ai/guide: "predicted-latency-based-scheduling"
+    llm-d.ai/guide: "latencypredictor-based-scheduling"
     llm-d.ai/accelerator-variant: "cpu"
     llm-d.ai/model: "llama-3-1-8b-instruct"
 

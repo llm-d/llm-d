@@ -1,0 +1,153 @@
+latencyPredictor:
+  enabled: false
+  trainingServer:
+    image:
+      hub: registry.k8s.io/gateway-api-inference-extension
+      name: latency-training-server
+      tag: v1.4.0
+      pullPolicy: Always
+    port: 9000
+    resources:
+      requests:
+        cpu: "2000m"
+        memory: "4Gi"
+      limits:
+        cpu: "4000m"
+        memory: "8Gi"
+    livenessProbe:
+      httpGet:
+        path: /healthz
+        port: 9000
+      initialDelaySeconds: 30
+      periodSeconds: 20
+    readinessProbe:
+      httpGet:
+        path: /readyz
+        port: 9000
+      initialDelaySeconds: 45
+      periodSeconds: 10
+    volumeSize: "20Gi"
+    config:
+      LATENCY_RETRAINING_INTERVAL_SEC: "10"
+      LATENCY_MIN_SAMPLES_FOR_RETRAIN: "100"
+      LATENCY_TTFT_MODEL_PATH: "/models/ttft.joblib"
+      LATENCY_TPOT_MODEL_PATH: "/models/tpot.joblib"
+      LATENCY_TTFT_SCALER_PATH: "/models/ttft_scaler.joblib"
+      LATENCY_TPOT_SCALER_PATH: "/models/tpot_scaler.joblib"
+      LATENCY_MODEL_TYPE: "xgboost"
+      LATENCY_MAX_TRAINING_DATA_SIZE_PER_BUCKET: "500"
+      LATENCY_OBJECTIVE_TYPE: "mean"
+
+  # Prediction Server Configuration
+  predictionServers:
+    count: 1
+    startPort: 9001
+    image:
+      hub: registry.k8s.io/gateway-api-inference-extension
+      name: latency-prediction-server
+      tag: v1.4.0
+      pullPolicy: Always
+    resources:
+      requests:
+        cpu: "8000m"
+        memory: "4Gi"
+      limits:
+        cpu: "28000m"
+        memory: "8Gi"
+    livenessProbe:
+      httpGet:
+        path: /healthz
+      initialDelaySeconds: 15
+      periodSeconds: 15
+      timeoutSeconds: 5
+      failureThreshold: 5
+    readinessProbe:
+      httpGet:
+        path: /readyz
+      initialDelaySeconds: 10
+      periodSeconds: 10
+      timeoutSeconds: 5
+      failureThreshold: 30
+    volumeSize: "10Gi"
+    config:
+      LATENCY_MODEL_TYPE: "xgboost"
+      PREDICT_HOST: "0.0.0.0"
+      LOCAL_TTFT_MODEL_PATH: "/server_models/ttft.joblib"
+      LOCAL_TPOT_MODEL_PATH: "/server_models/tpot.joblib"
+      LOCAL_TTFT_SCALER_PATH: "/server_models/ttft_scaler.joblib"
+      LOCAL_TPOT_SCALER_PATH: "/server_models/tpot_scaler.joblib"
+      UVICORN_WORKERS: "28"
+      OMP_NUM_THREADS: "1"
+      MODEL_SYNC_INTERVAL_SEC: "30"
+      LATENCY_OBJECTIVE_TYPE: "mean"
+
+inferenceExtension:
+  replicas: 1
+  flags:
+    # Disable tracing flag (not supported in experimental build)
+    enable-latency-predictor: true
+  image:
+    # Use the experimental EPP image with SLO prediction support
+    # IMPORTANT: Replace with your custom built image from the experimental branch
+    name: epp
+    hub: registry.k8s.io/gateway-api-inference-extension
+    tag: v1.4.0
+    pullPolicy: Always
+
+  # # Override container args to remove unsupported flags
+  # containerArgs:
+  #   - --enable-latency-predictor
+
+  extProcPort: 9002
+
+  pluginsConfigFile: "slo-prediction-plugins.yaml"
+  pluginsCustomConfig:
+    slo-prediction-plugins.yaml: |
+      apiVersion: inference.networking.x-k8s.io/v1alpha1
+      kind: EndpointPickerConfig
+      plugins:
+        - type: queue-scorer
+        - type: kv-cache-utilization-scorer
+        - type: prefix-cache-scorer
+        - type: slo-request-tracker
+        - type: slo-scorer
+        - type: slo-aware-profile-handler
+        - type: max-score-picker
+
+      schedulingProfiles:
+        - name: default
+          plugins:
+            - pluginRef: slo-request-tracker
+            - pluginRef: prefix-cache-scorer
+            - pluginRef: queue-scorer
+            - pluginRef: kv-cache-utilization-scorer
+            - pluginRef: max-score-picker
+
+        - name: slo
+          plugins:
+            - pluginRef: prefix-cache-scorer
+              weight: 0
+            - pluginRef: slo-request-tracker
+            - pluginRef: slo-scorer
+            - pluginRef: max-score-picker
+
+  # Monitoring configuration for EPP
+  monitoring:
+    secret:
+      name: latency-prediction-gateway-sa-metrics-reader-secret
+    interval: "10s"
+    # Prometheus ServiceMonitor will be created when enabled for EPP metrics collection
+    prometheus:
+      enabled: true
+      auth:
+        # To allow unauthenticated /metrics access (e.g., for debugging with curl), set to false
+        enabled: true
+
+inferencePool:
+  targetPorts:
+    - number: 8000
+  modelServerType: vllm
+  modelServers:
+    matchLabels:
+      llm-d.ai/inference-serving: "true"
+      llm-d.ai/guide: "latencypredictor-based-scheduling"

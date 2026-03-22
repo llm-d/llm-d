@@ -81,7 +81,7 @@ This guide uses helmfile to orchestrate deployment of:
 ### File Structure
 
 ```
-predicted-latency-based-scheduling/
+latencypredictor-based-scheduling/
 ├── helmfile.yaml.gotmpl         # Helmfile orchestration
 ├── gaie-latency/
 │   └── values.yaml              # InferencePool & EPP configuration
@@ -351,7 +351,7 @@ modelArtifacts:
   uri: "hf://meta-llama/Llama-3.1-8B-Instruct"
   labels:
     llm-d.ai/inference-serving: "true"
-    llm-d.ai/guide: "predicted-latency-based-scheduling"
+    llm-d.ai/guide: "latencypredictor-based-scheduling"
 
 decode:
   replicas: 3
