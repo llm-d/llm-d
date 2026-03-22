@@ -50,8 +50,6 @@ releases:
     {{- if eq .Environment.Name "gke" }}
       - provider:
           name: {{ .Environment.Values.provider.name }}
-        inferencePool:
-          apiVersion: {{ .Environment.Values.inferencePool.apiVersion }}
         inferenceExtension:
           monitoring:
             prometheus:

@@ -34,6 +34,10 @@ routing:
 decode:
   create: true
   replicas: 2
+  securityContext:
+    fsGroup: 107
+    supplementalGroups:
+      - 107
   monitoring:
     podmonitor:
       enabled: true
@@ -49,10 +53,6 @@ decode:
         - "--dtype"
         - "float16"
         - "--disable-sliding-window"
-      securityContext:
-        fsGroup: 107
-        supplementalGroups:
-          - 107
       env:
         - name: VLLM_LOGGING_LEVEL
           value: DEBUG

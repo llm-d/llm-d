@@ -76,7 +76,7 @@ decode:
           name: tpu-kv-transfer
           protocol: TCP
         - containerPort: 9600
-          name: tpu-pd-coordination
+          name: tpu-pd-coord
           protocol: TCP
       resources:
         limits:
@@ -171,7 +171,7 @@ prefill:
           name: tpu-kv-transfer
           protocol: TCP
         - containerPort: 9600
-          name: tpu-pd-coordination
+          name: tpu-pd-coord
           protocol: TCP
       resources:
         limits:

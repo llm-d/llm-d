@@ -35,6 +35,10 @@ routing:
 decode:
   create: true
   replicas: 2
+  securityContext:
+    fsGroup: 107
+    supplementalGroups:
+      - 107
   monitoring:
     podmonitor:
       enabled: true
@@ -59,10 +63,6 @@ decode:
             --block-size 64 \
             --prefix-caching-hash-algo sha256_cbor \
             --kv-events-config "{\"enable_kv_cache_events\":true,\"publisher\":\"zmq\",\"endpoint\":\"tcp://*:5557\",\"topic\":\"kv@${POD_IP}@Qwen/Qwen3-0.6B\"}"
-      securityContext:
-        fsGroup: 107
-        supplementalGroups:
-          - 107
       env:
         - name: GAIE_RELEASE_NAME_POSTFIX  # index 0 matters because of set in helmfile
           value: "default"

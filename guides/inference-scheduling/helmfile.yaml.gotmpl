@@ -15,10 +15,6 @@ environments:
     <<: *GKE
   gke_tpu_v7: &GKETPU
     <<: *GKE
-  standalone: &STANDALONE
-    values:
-      - provider:
-          name: none
   amd: &AMD
     <<: *I
   xpu: &XPU
@@ -44,7 +40,6 @@ repositories:
     url: https://llm-d-incubation.github.io/llm-d-infra/
 
 releases:
-{{- if ne .Environment.Name "standalone" }}
   - name: {{ printf "infra-%s" $rn | quote }}
     namespace: {{ $ns }}
     chart: llm-d-infra/llm-d-infra
@@ -56,7 +51,6 @@ releases:
     values:
       - gateway:
           {{ .Environment.Values.gateway | toYaml | nindent 10 }}
-{{- end }}
 
   - name: {{ printf "gaie-%s" $rn | quote }}
     namespace: {{ $ns }}
@@ -64,13 +58,9 @@ releases:
     version: v1.4.0
     installed: true
     needs:
-      {{- if ne .Environment.Name "standalone" }}
       - {{ printf "infra-%s" $rn | quote }}
-      {{- end }}
     values:
-      {{- if eq .Environment.Name "standalone" }}
-      - standalone-inference-scheduling/values.yaml
-      {{- else if eq (env "INFERENCE_SERVER") "sglang" }}
+      {{- if eq (env "INFERENCE_SERVER") "sglang" }}
       - gaie-inference-scheduling/values_sglang.yaml
       {{- else }}
       - gaie-inference-scheduling/values.yaml
@@ -104,9 +94,7 @@ releases:
     version: v0.4.7
     installed: true
     needs:
-      {{- if ne .Environment.Name "standalone" }}
       - {{ printf "infra-%s" $rn | quote }}
-      {{- end }}
       - {{ printf "gaie-%s" $rn | quote }}
     values:
     {{- if eq .Environment.Name "gke_tpu_v6" }}

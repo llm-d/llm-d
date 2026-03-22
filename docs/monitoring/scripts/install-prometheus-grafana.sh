@@ -27,6 +27,7 @@ Options:
   -g, --context               Supply a specific Kubernetes context
   -i, --individual            Enable individual user monitoring mode (requires -n or MONITORING_NAMESPACE)
   -t, --enable-tls            Enable HTTPS/TLS for Prometheus (generates self-signed certificates)
+  -c, --crds-only             Install only the monitoring CRDs (ServiceMonitor, PodMonitor, etc.)
   -h, --help                  Show this help and exit
 
 Environment Variables:
@@ -39,6 +40,7 @@ Examples:
   $(basename "$0") -u                           # Uninstall Prometheus/Grafana stack
   $(basename "$0") -i -n my-monitoring          # Install individual monitoring in specified namespace
   MONITORING_NAMESPACE=my-monitoring $(basename "$0") -i  # Individual mode via env var
+  $(basename "$0") -c                            # Install only the monitoring CRDs (no Prometheus/Grafana)
 EOF
 }
 
@@ -93,6 +95,7 @@ parse_args() {
       -g|--context)                    KUBERNETES_CONTEXT="$2"; shift 2 ;;
       -i|--individual)                 CENTRAL_MODE=false; shift ;;
       -t|--enable-tls)                 ENABLE_TLS=true; shift ;;
+      -c|--crds-only)                  ACTION="crds-only"; shift ;;
       -h|--help)                       print_help; exit 0 ;;
       *)                               fail "Unknown option: $1" ;;
     esac
@@ -567,6 +570,21 @@ EOF
   fi
 }
 
+install_crds_only() {
+  log_info "Installing monitoring CRDs only (ServiceMonitor, PodMonitor, etc.)..."
+
+  if ! $HCMD repo list 2>/dev/null | grep -q "prometheus-community"; then
+    log_info "Adding prometheus-community helm repo..."
+    $HCMD repo add prometheus-community https://prometheus-community.github.io/helm-charts
+    $HCMD repo update
+  fi
+
+  $HCMD show crds prometheus-community/kube-prometheus-stack \
+    | $KCMD apply --server-side --validate=false -f -
+
+  log_success "Monitoring CRDs installed."
+}
+
 install() {
   if is_openshift; then
     log_info "🔍 OpenShift detected - this script does not support OpenShift."
@@ -628,6 +646,8 @@ main() {
 
   if [[ "$ACTION" == "install" ]]; then
     install
+  elif [[ "$ACTION" == "crds-only" ]]; then
+    install_crds_only
   elif [[ "$ACTION" == "uninstall" ]]; then
     uninstall
   else

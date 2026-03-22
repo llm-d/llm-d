@@ -40,6 +40,10 @@ decode:
     tensor: 1
   create: true
   replicas: 1
+  securityContext:
+    fsGroup: 107
+    supplementalGroups:
+      - 107
   monitoring:
     podmonitor:
       enabled: true
@@ -58,10 +62,6 @@ decode:
         - "--disable-uvicorn-access-log"
         - "--max-model-len"
         - "32000"
-      securityContext:
-        fsGroup: 107
-        supplementalGroups:
-          - 107
       env:
         - name: UCX_TLS
           value: "tcp"
@@ -139,6 +139,10 @@ prefill:
     tensor: 1
   create: true
   replicas: 3
+  securityContext:
+    fsGroup: 107
+    supplementalGroups:
+      - 107
   monitoring:
     podmonitor:
       enabled: true
@@ -157,10 +161,6 @@ prefill:
         - "--disable-uvicorn-access-log"
         - "--max-model-len"
         - "32000"
-      securityContext:
-        fsGroup: 107
-        supplementalGroups:
-          - 107
       env:
         - name: UCX_TLS
           value: "tcp"
