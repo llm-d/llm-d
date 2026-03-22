@@ -1250,6 +1250,7 @@ jobs:
           tags: |
             ${{ env.REGISTRY }}/${{ github.repository }}-rocm-dev:${{ steps.set-tag.outputs.tag }}
             ${{ steps.set-tag.outputs.pr_tag != '' && format('{0}/{1}-rocm-dev:{2}', env.REGISTRY, github.repository, steps.set-tag.outputs.pr_tag) || '' }}
+            ${{ github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.event_name != 'pull_request' && format('{0}/{1}-rocm-dev:latest', env.REGISTRY, github.repository) || '' }}
           github-token: ${{ secrets.GHCR_TOKEN }}
         env:
           DOCKER_BUILDKIT: "1"
@@ -1328,6 +1329,18 @@ jobs:
             VERSION="${NEW_TAG}" make image-push
             echo "pr_tag=pr-${PR_TAG}"  >> $GITHUB_OUTPUT
           fi;
+
+      - name: Tag latest on default branch
+        if: |
+          github.ref == format('refs/heads/{0}', github.event.repository.default_branch) &&
+          github.event_name != 'pull_request'
+        run: |
+          export DEVICE=hpu
+          export DOCKERFILE=Dockerfile.hpu
+          export VERSION="sha-$(git rev-parse --short HEAD)"
+          export NEW_TAG="latest"
+          make image-retag
+          VERSION="${NEW_TAG}" make image-push
 
       - name: Run Trivy vulnerability scanner
         uses: aquasecurity/trivy-action@master
