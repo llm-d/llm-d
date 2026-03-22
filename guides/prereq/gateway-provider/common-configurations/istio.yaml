@@ -1,9 +1,7 @@
 # Infra values
 gateway:
-  gatewayClassName: istio
+  provider: istio
   gatewayParameters:
-    accessLogging: false
-    logLevel: error
     resources:
       limits:
         cpu: "16"
@@ -11,6 +9,8 @@ gateway:
       requests:
         cpu: "4"
         memory: 4Gi
+    istio:
+      accessLogging: false # default to false for production deployments in llm-d
 
 # GAIE values
 inferenceExtension:
