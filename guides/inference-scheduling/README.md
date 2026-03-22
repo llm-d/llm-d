@@ -192,7 +192,7 @@ kubectl apply -f httproute.yaml -n ${NAMESPACE}
 helm list -n ${NAMESPACE}
 NAME                        NAMESPACE                   REVISION  UPDATED                                 STATUS      CHART                       APP VERSION
 gaie-inference-scheduling   llm-d-inference-scheduler   1         2026-01-26 15:11:26.506854 +0200 IST    deployed    inferencepool-v1.4.0   v1.4.0
-infra-inference-scheduling  llm-d-inference-scheduler   1         2026-01-26 15:11:21.008163 +0200 IST    deployed    llm-d-infra-v1.3.6          v0.3.0
+infra-inference-scheduling  llm-d-inference-scheduler   1         2026-01-26 15:11:21.008163 +0200 IST    deployed    llm-d-infra-v1.4.0          v0.4.0
 ms-inference-scheduling     llm-d-inference-scheduler   1         2026-01-26 15:11:39.385111 +0200 IST    deployed    llm-d-modelservice-v0.4.7   v0.4.0
 ```
 

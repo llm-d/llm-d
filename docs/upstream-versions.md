@@ -31,7 +31,7 @@ Pinned in guide helmfiles (`guides/*/helmfile.yaml.gotmpl`):
 
 | Dependency | Current Pin | File Location | Upstream Repo / Registry |
 |-----------|-------------|---------------|--------------------------|
-| **llm-d-infra chart** | `v1.3.6` | All `helmfile.yaml.gotmpl` files | [llm-d-incubation/llm-d-infra](https://github.com/llm-d-incubation/llm-d-infra) (`https://llm-d-incubation.github.io/llm-d-infra/`) |
+| **llm-d-infra chart** | `v1.4.0` | All `helmfile.yaml.gotmpl` files | [llm-d-incubation/llm-d-infra](https://github.com/llm-d-incubation/llm-d-infra) (`https://llm-d-incubation.github.io/llm-d-infra/`) |
 | **InferencePool chart** | `v1.4.0` | All `helmfile.yaml.gotmpl` files | [kubernetes-sigs/gateway-api-inference-extension](https://github.com/kubernetes-sigs/gateway-api-inference-extension) (`oci://registry.k8s.io/gateway-api-inference-extension/charts/inferencepool`) |
 | **llm-d-modelservice chart** | `v0.4.7` | All `helmfile.yaml.gotmpl` files | [llm-d-incubation/llm-d-modelservice](https://github.com/llm-d-incubation/llm-d-modelservice) (`https://llm-d-incubation.github.io/llm-d-modelservice/`) |
 
