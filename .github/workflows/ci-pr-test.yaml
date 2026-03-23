@@ -13,18 +13,9 @@ on:
       - guides/**/*.yaml
       - guides/**/*.yml
       - guides/**/*.gotmpl
-  pull_request:
+  pull_request_target:
+    types: [opened, synchronize, reopened, labeled]
     branches: [main]
-    paths:
-      - .github/workflows/ci-pr-test.yaml
-      - .github/workflows/e2e-*.yaml
-      - .github/workflows/build-image.yml
-      - docker/**
-      - patches/**
-      - scripts/**
-      - guides/**/*.yaml
-      - guides/**/*.yml
-      - guides/**/*.gotmpl
   workflow_dispatch:
     inputs:
       pr_or_branch:
@@ -43,9 +34,24 @@ permissions:
   packages: write
   security-events: write
 
+concurrency:
+  group: ci-pr-test-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
+  # Gate: for fork PRs, require the 'ok-to-build' label before running any jobs.
+  # Upstream PRs and pushes to main skip this check.
+  fork-gate:
+    if: github.event_name != 'pull_request_target' ||
+      github.event.pull_request.head.repo.full_name == github.repository ||
+      contains(github.event.pull_request.labels.*.name, 'ok-to-build')
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "Build authorized"
+
   # Detect which files have changed to determine which tests to run
   detect-changes:
+    needs: [fork-gate]
     runs-on: ubuntu-latest
     outputs:
       xpu-inference-scheduling: ${{ steps.filter.outputs.xpu-inference-scheduling }}
@@ -55,6 +61,8 @@ jobs:
       hpu-pd-disaggregation: ${{ steps.filter.outputs.hpu-pd-disaggregation }}
     steps:
       - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.pull_request.head.sha || '' }}
       - uses: dorny/paths-filter@v3
         id: filter
         with:
@@ -99,7 +107,10 @@ jobs:
 
   # Call the build-image workflow to build any changed images
   build-images:
+    needs: [fork-gate]
     uses: ./.github/workflows/build-image.yml
+    with:
+      ref: ${{ github.event.pull_request.head.sha || '' }}
     secrets: inherit
 
   # Call the XPU Inference Scheduling test workflow

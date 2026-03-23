@@ -8,6 +8,11 @@ on:
         required: false
         type: boolean
         default: false
+      ref:
+        description: 'Git ref to checkout (SHA or branch). Defaults to the triggering ref.'
+        required: false
+        type: string
+        default: ''
     outputs:
       xpu:
         description: 'Whether XPU image was built'
@@ -22,6 +27,11 @@ on:
         required: false
         default: "cuda"
         type: string
+      ref:
+        description: 'Git ref to checkout (SHA or branch). Defaults to the triggering ref.'
+        required: false
+        type: string
+        default: ''
       vllm_repo:
         description: "vLLM repository URL to (override Dockerfile)"
         required: false
@@ -54,6 +64,8 @@ jobs:
     steps:
       - name: Checkout source
         uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.ref || '' }}
 
       - name: Install shellcheck
         run: |
@@ -99,6 +111,8 @@ jobs:
           echo "cpu=true" >> $GITHUB_OUTPUT
           echo "hpu=true" >> $GITHUB_OUTPUT
       - uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.ref || '' }}
       - uses: dorny/paths-filter@v3
         if: github.event_name != 'workflow_dispatch' && inputs.force_build != true
         id: filter
@@ -184,6 +198,8 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.ref || '' }}
 
       - name: Load version configuration from file
         id: common-version
@@ -339,6 +355,8 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.ref || '' }}
 
       - name: Load version configuration from file
         id: common-version
@@ -514,6 +532,8 @@ jobs:
 
       - name: Checkout code
         uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.ref || '' }}
 
       - name: Export Git Sha
         id: export-sha
@@ -705,6 +725,8 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.ref || '' }}
 
       - name: Load version configuration from file
         id: common-version
@@ -865,6 +887,8 @@ jobs:
 
       - name: Checkout code
         uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.ref || '' }}
 
       - name: Export Git Sha
         id: export-sha
@@ -1014,6 +1038,8 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.ref || '' }}
 
       - name: Load version configuration from file
         id: cuda-version
@@ -1100,15 +1126,10 @@ jobs:
       fail-fast: false
     runs-on: xpu
     steps:
-      - name: Checkout push ref
-        if: github.event_name == 'push'
-        uses: Actions/checkout@v6
-
-      - name: Checkout PR branch
-        if: github.event_name == 'pull_request'
+      - name: Checkout code
         uses: actions/checkout@v6
         with:
-          ref: ${{ github.event.pull_request.head.sha }}
+          ref: ${{ inputs.ref || '' }}
 
       - name: Load vLLM version from file
         id: common-versions
@@ -1206,15 +1227,10 @@ jobs:
     if: ${{ needs.detect-changes.outputs.rocm == 'true' }}
     runs-on: vllm-runner
     steps:
-      - name: Checkout push ref
-        if: github.event_name == 'push'
-        uses: Actions/checkout@v6
-
-      - name: Checkout PR branch
-        if: github.event_name == 'pull_request'
+      - name: Checkout code
         uses: actions/checkout@v6
         with:
-          ref: ${{ github.event.pull_request.head.sha }}
+          ref: ${{ inputs.ref || '' }}
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -1291,19 +1307,10 @@ jobs:
       fail-fast: false
     runs-on: vllm-runner
     steps:
-      - name: Checkout push ref
-        if: github.event_name == 'push'
-        uses: actions/checkout@v6
-
-      - name: Checkout PR branch
-        if: github.event_name == 'pull_request'
+      - name: Checkout code
         uses: actions/checkout@v6
         with:
-          ref: ${{ github.event.pull_request.head.sha }}
-
-      - name: Checkout for dispatch
-        if: github.event_name == 'workflow_dispatch' || github.event_name == 'workflow_call'
-        uses: actions/checkout@v6
+          ref: ${{ inputs.ref || '' }}
 
       - name: Log in to Container Registry
         uses: docker/login-action@v3
@@ -1375,15 +1382,10 @@ jobs:
     if: ${{ needs.detect-changes.outputs.cpu == 'true' }}
     runs-on: vllm-runner
     steps:
-      - name: Checkout push ref
-        if: github.event_name == 'push'
-        uses: Actions/checkout@v6
-
-      - name: Checkout PR branch
-        if: github.event_name == 'pull_request'
+      - name: Checkout code
         uses: actions/checkout@v6
         with:
-          ref: ${{ github.event.pull_request.head.sha }}
+          ref: ${{ inputs.ref || '' }}
 
       - name: Load vLLM version from file
         id: common-versions
