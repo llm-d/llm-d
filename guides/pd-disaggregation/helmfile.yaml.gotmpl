@@ -23,6 +23,8 @@ environments:
       - ../prereq/gateway-provider/common-configurations/istio.yaml
   hpu: &HPU
     <<: *I
+  hpu_cuda: &HPU_CUDA
+    <<: *I
   aks: &AKS
     <<: *I
   default:
@@ -51,6 +53,8 @@ releases:
     values:
       - gateway:
           {{ .Environment.Values.gateway | toYaml | nindent 10 }}
+          service:
+              type: LoadBalancer
 
   - name: {{ printf "gaie-%s" $rn | quote }}
     namespace: {{ $ns }}
@@ -71,7 +75,7 @@ releases:
               enabled: true
     {{- end }}
     # Apply destination rule for anything istio
-    {{- if or (eq .Environment.Name "istio") (eq .Environment.Name "default") (eq .Environment.Name "aks") (eq .Environment.Name "amd") (eq .Environment.Name "xpu") (eq .Environment.Name "hpu") }}
+    {{- if or (eq .Environment.Name "istio") (eq .Environment.Name "default") (eq .Environment.Name "aks") (eq .Environment.Name "amd") (eq .Environment.Name "xpu") (eq .Environment.Name "hpu") (eq .Environment.Name "hpu_cuda") }}
       - provider:
           name: {{ .Environment.Values.provider.name }}
           istio:
@@ -108,6 +112,8 @@ releases:
       - ms-pd/values_tpu.yaml
     {{- else if eq .Environment.Name "gke_pd_rdma" }}
       - ms-pd/values_gke_rdma.yaml
+    {{- else if eq .Environment.Name "hpu_cuda" }}
+      - ms-pd/values_hpu_cuda.yaml
     {{- else }}
       - ms-pd/values.yaml
     {{- end }}

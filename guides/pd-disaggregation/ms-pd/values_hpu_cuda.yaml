@@ -1,0 +1,224 @@
+multinode: false
+
+modelArtifacts:
+  uri: "hf://Qwen/Qwen3-0.6B"
+  size: 100Gi
+  authSecretName: "llm-d-hf-token"
+  name: "Qwen/Qwen3-0.6B"
+  labels:
+    llm-d.ai/inference-serving: "true"
+    llm-d.ai/guide: "pd-disaggregation"
+    llm-d.ai/model: "Qwen3-0.6B"
+routing:
+  servicePort: 8000
+  proxy:
+    image: ghcr.io/llm-d/llm-d-routing-sidecar:v0.6.0
+    connector: nixlv2
+    secure: false
+
+prefill:
+  # Adding the accelartor type as cpu, created the resourceclaim template with both GPU and RDMA
+  accelerator:
+    type: "cpu"
+  create: true
+  replicas: 1
+  resourceClaims:
+  - name: hpu-rdma-resource
+    resourceClaimTemplateName: intel-1-gaudi-1-rdma-pf
+  imagePullSecrets:
+    - name: amr-idc-registry
+  extraConfig: 
+    hostIPC: true
+  containers:
+  - name: "vllm"
+    image: <image name to be updated>
+    securityContext:
+      capabilities:
+        add: 
+        - "IPC_LOCK"
+        - "SYS_RESOURCE"
+        - "SYS_ADMIN"
+        - "SYS_RAWIO"
+        - "IPC_LOCK"
+        - "NET_RAW"
+        - "NET_ADMIN" 
+        - "ALL" 
+    command: ["/bin/bash", "-c"]
+    args:
+      - |
+        ulimit -l unlimited
+        VLLM_NIXL_DEVICE_TO_DEVICE=1 vllm serve Qwen/Qwen3-0.6B --port 8000 \
+          --tensor-parallel-size 1 --served-model-name Qwen/Qwen3-0.6B \
+          --gpu-memory-utilization 0.9 \
+          --max-num-batched-tokens 81920 --max-model-len 15000 \
+          --max-num-seqs 4 --no-enable-prefix-caching \
+          --kv-transfer-config '{"kv_connector":"NixlConnector", "kv_role":"kv_both", "kv_buffer_device":"hpu", "enable_permute_local_kv":"True", "kv_connector_extra_config":{"agreed_block_size": "16"}}'
+    env:
+      - name: VLLM_NIXL_SIDE_CHANNEL_HOST
+        valueFrom:
+          fieldRef:
+            fieldPath: status.podIP
+      - name: VLLM_NIXL_SIDE_CHANNEL_PORT
+        value: "5574"
+      - name: VLLM_HPU_HETERO_KV_LAYOUT
+        value: "true"
+      - name: VLLM_KV_CACHE_LAYOUT
+        value: "NHD"
+      - name: UCX_TLS
+        value: "gaudi_gdr,rc,ud,ib"
+      - name: UCX_IB_ROCE_REACHABILITY_MODE
+        value: "all"
+      - name: UCX_MEMTYPE_CACHE
+        value: "0"
+      - name: UCX_IB_ADDR_TYPE
+        value: "ib_global"
+      - name: VLLM_SKIP_WARMUP
+        value: "true"
+      - name: FUSER_ENABLE_LOW_UTILIZATION
+        value: "true"
+      - name: VLLM_DELAYED_SAMPLING
+        value: "true"
+      - name: VLLM_ALLOW_LONG_MAX_MODEL_LEN
+        value: "1"
+      - name: PT_HPU_ENABLE_LAZY_COLLECTIVES
+        value: "true"
+      - name: EXPERIMENTAL_WEIGHT_SHARING
+        value: "0"
+      - name: VLLM_EXPONENTIAL_BUCKETING
+        value: "false"
+      - name: ENABLE_FUSION_BEFORE_NORM
+        value: "true"
+      - name: VLLM_USE_V1
+        value: "1"
+      - name: VLLM_LOGGING_LEVEL
+        value: "INFO"
+      - name: NUM_GPUS
+        value: "1"
+      - name: HABANA_LOGS 
+        value: "/tmp/hlog"
+    ports:
+      - containerPort: 8000
+        name: metrics
+        protocol: TCP
+    resources:
+      claims:
+        - name: hpu-rdma-resource   
+    mountModelVolume: true
+    volumeMounts:
+      - name: metrics-volume
+        mountPath: /.config
+      - name: shm
+        mountPath: /dev/shm
+      - name: torch-compile-cache
+        mountPath: /.cache
+      - name: mlx-script
+        mountPath: /scripts
+        readOnly: true
+  volumes:
+    - name: metrics-volume
+      emptyDir: {}
+    - name: shm
+      emptyDir:
+        medium: Memory
+    - name: torch-compile-cache
+      emptyDir: {}
+    - name: mlx-script
+      configMap:
+        name: mlx-detect-script
+        defaultMode: 0755
+
+decode:
+  # Adding the accelartor type as cpu, created the resourceclaim template with both GPU and RDMA
+  accelerator:
+    type: "cpu"
+  create: true
+  replicas: 1
+  imagePullSecrets:
+    - name: amr-idc-registry
+  resourceClaims:
+  - name: gpu-rdma-resource
+    resourceClaimTemplateName: nvidia-1-gpu-1-rdma-pf
+  extraConfig: 
+    hostIPC: true
+  containers:
+  - name: "vllm"
+    image: <image name to be updated>
+    securityContext:
+      runAsUser: 0
+      capabilities:
+        add: 
+          - "IPC_LOCK"
+          - "SYS_RESOURCE"
+          - "SYS_ADMIN"
+          - "SYS_RAWIO"
+          - "IPC_LOCK"
+          - "NET_RAW"
+          - "NET_ADMIN" 
+          - "ALL" 
+    command: ["/bin/bash", "-c"]
+    args:
+      - |
+        source /scripts/detect-mlx.sh
+        echo "Starting application with UCX_NET_DEVICES=$UCX_NET_DEVICES"
+        export FLASHINFER_DISABLE_VERSION_CHECK=1
+        ulimit -l unlimited
+        VLLM_NIXL_DEVICE_TO_DEVICE=1 vllm serve Qwen/Qwen3-0.6B --port 8200  \
+          --tensor-parallel-size 1 --served-model-name Qwen/Qwen3-0.6B \
+          --gpu-memory-utilization 0.95 --long_prefill_token_threshold 8192 \
+          --max-num-batched-tokens 65536  \
+          --max-num-seqs 128 --no-enable-prefix-caching \
+          --kv-transfer-config '{"kv_connector":"NixlConnector", "kv_role":"kv_both", "kv_buffer_device":"cuda", "kv_parallel_size":"1", "kv_connector_extra_config":{"enforce_handshake_compat": false}, "enable_permute_local_kv":"True"}'
+    env:
+      - name: VLLM_NIXL_SIDE_CHANNEL_HOST
+        valueFrom:
+          fieldRef:
+            fieldPath: status.podIP
+      - name: VLLM_NIXL_SIDE_CHANNEL_PORT
+        value: "5558"
+      - name: VLLM_USE_V1
+        value: "1"
+      - name: VLLM_EXPONENTIAL_BUCKETING
+        value: "false"
+      - name: UCX_TLS
+        value: "cuda_copy,rc,ib"
+      - name: UCX_MEMTYPE_CACHE
+        value: "0"
+      - name: VLLM_KV_CACHE_LAYOUT
+        value: "HND"
+      - name: UCX_IB_ROCE_REACHABILITY_MODE
+        value: "all"
+      - name: VLLM_LOGGING_LEVEL
+        value: "INFO"
+      - name: NUM_GPUS
+        value: "1"
+    ports:
+      - containerPort: 8200
+        name: metrics
+        protocol: TCP
+    resources:
+      claims: 
+        - name: gpu-rdma-resource
+    mountModelVolume: false
+    volumeMounts:
+      - name: metrics-volume
+        mountPath: /.config
+      - name: shm
+        mountPath: /dev/shm
+      - name: torch-compile-cache
+        mountPath: /.cache
+      - name: mlx-script
+        mountPath: /scripts
+        readOnly: true
+  volumes:
+    - name: metrics-volume
+      emptyDir: {}
+    - name: shm
+      emptyDir:
+        medium: Memory
+    - name: torch-compile-cache
+      emptyDir: {}
+    - name: mlx-script
+      configMap:
+        name: mlx-detect-script
+        defaultMode: 0755  
+
