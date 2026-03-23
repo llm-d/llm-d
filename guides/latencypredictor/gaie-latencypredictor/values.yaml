@@ -82,6 +82,8 @@ latencyPredictor:
       LATENCY_OBJECTIVE_TYPE: "mean"
 
 inferenceExtension:
+  flags:
+    v: 4
   latencyPredictor:
     enabled: true
   replicas: 1

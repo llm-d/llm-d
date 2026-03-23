@@ -1,0 +1,404 @@
+data: {"id":"cmpl-f057ae2a-caf0-4cfc-973c-5f4e062c5756","object":"text_completion","created":1774223316,"model":"Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8","choices":[{"index":0,"text":" ","logprobs":null,"finish_reason":null,"stop_reason":null,"prompt_token_ids":null,"token_ids":null}],"usage":null}
+
+data: {"id":"cmpl-f057ae2a-caf0-4cfc-973c-5f4e062c5756","object":"text_completion","created":1774223316,"model":"Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8","choices":[{"index":0,"text":"\n","logprobs":null,"finish_reason":null,"stop_reason":null,"prompt_token_ids":null,"token_ids":null}],"usage":null}
+
+data: {"id":"cmpl-f057ae2a-caf0-4cfc-973c-5f4e062c5756","object":"text_completion","created":1774223316,"model":"Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8","choices":[{"index":0,"text":"\n","logprobs":null,"finish_reason":null,"stop_reason":null,"prompt_token_ids":null,"token_ids":null}],"usage":null}
+
+data: {"id":"cmpl-f057ae2a-caf0-4cfc-973c-5f4e062c5756","object":"text_completion","created":1774223316,"model":"Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8","choices":[{"index":0,"text":"\n\n","logprobs":null,"finish_reason":null,"stop_reason":null,"prompt_token_ids":null,"token_ids":null}],"usage":null}
+
+data: {"id":"cmpl-f057ae2a-caf0-4cfc-973c-5f4e062c5756","object":"text_completion","created":1774223316,"model":"Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8","choices":[{"index":0,"text":"###","logprobs":null,"finish_reason":null,"stop_reason":null,"prompt_token_ids":null,"token_ids":null}],"usage":null}
+
+data: {"id":"cmpl-f057ae2a-caf0-4cfc-973c-5f4e062c5756","object":"text_completion","created":1774223316,"model":"Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8","choices":[{"index":0,"text":"\n\n","logprobs":null,"finish_reason":null,"stop_reason":null,"prompt_token_ids":null,"token_ids":null}],"usage":null}
+
+data: {"id":"cmpl-f057ae2a-caf0-4cfc-973c-5f4e062c5756","object":"text_completion","created":1774223316,"model":"Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8","choices":[{"index":0,"text":"###","logprobs":null,"finish_reason":null,"stop_reason":null,"prompt_token_ids":null,"token_ids":null}],"usage":null}
+
+data: {"id":"cmpl-f057ae2a-caf0-4cfc-973c-5f4e062c5756","object":"text_completion","created":1774223316,"model":"Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8","choices":[{"index":0,"text":"\n\n","logprobs":null,"finish_reason":null,"stop_reason":null,"prompt_token_ids":null,"token_ids":null}],"usage":null}
+
+data: {"id":"cmpl-f057ae2a-caf0-4cfc-973c-5f4e062c5756","object":"text_completion","created":1774223316,"model":"Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8","choices":[{"index":0,"text":"###","logprobs":null,"finish_reason":null,"stop_reason":null,"prompt_token_ids":null,"token_ids":null}],"usage":null}
+
+data: {"id":"cmpl-f057ae2a-caf0-4cfc-973c-5f4e062c5756","object":"text_completion","created":1774223316,"model":"Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8","choices":[{"index":0,"text":"\n\n","logprobs":null,"finish_reason":null,"stop_reason":null,"prompt_token_ids":null,"token_ids":null}],"usage":null}
+
+data: {"id":"cmpl-f057ae2a-caf0-4cfc-973c-5f4e062c5756","object":"text_completion","created":1774223316,"model":"Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8","choices":[{"index":0,"text":"###","logprobs":null,"finish_reason":null,"stop_reason":null,"prompt_token_ids":null,"token_ids":null}],"usage":null}
+
+data: {"id":"cmpl-f057ae2a-caf0-4cfc-973c-5f4e062c5756","object":"text_completion","created":1774223316,"model":"Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8","choices":[{"index":0,"text":"\n\n","logprobs":null,"finish_reason":null,"stop_reason":null,"prompt_token_ids":null,"token_ids":null}],"usage":null}
+
+data: {"id":"cmpl-f057ae2a-caf0-4cfc-973c-5f4e062c5756","object":"text_completion","created":1774223316,"model":"Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8","choices":[{"index":0,"text":"###","logprobs":null,"finish_reason":null,"stop_reason":null,"prompt_token_ids":null,"token_ids":null}],"usage":null}
+
+data: {"id":"cmpl-f057ae2a-caf0-4cfc-973c-5f4e062c5756","object":"text_completion","created":1774223316,"model":"Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8","choices":[{"index":0,"text":"\n\n","logprobs":null,"finish_reason":null,"stop_reason":null,"prompt_token_ids":null,"token_ids":null}],"usage":null}
+
+data: {"id":"cmpl-f057ae2a-caf0-4cfc-973c-5f4e062c5756","object":"text_completion","created":1774223316,"model":"Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8","choices":[{"index":0,"text":"###","logprobs":null,"finish_reason":null,"stop_reason":null,"prompt_token_ids":null,"token_ids":null}],"usage":null}
+
+data: {"id":"cmpl-f057ae2a-caf0-4cfc-973c-5f4e062c5756","object":"text_completion","created":1774223316,"model":"Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8","choices":[{"index":0,"text":"\n\n","logprobs":null,"finish_reason":null,"stop_reason":null,"prompt_token_ids":null,"token_ids":null}],"usage":null}
+
+data: {"id":"cmpl-f057ae2a-caf0-4cfc-973c-5f4e062c5756","object":"text_completion","created":1774223316,"model":"Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8","choices":[{"index":0,"text":"###","logprobs":null,"finish_reason":null,"stop_reason":null,"prompt_token_ids":null,"token_ids":null}],"usage":null}
+
+data: {"id":"cmpl-f057ae2a-caf0-4cfc-973c-5f4e062c5756","object":"text_completion","created":1774223316,"model":"Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8","choices":[{"index":0,"text":"\n\n","logprobs":null,"finish_reason":null,"stop_reason":null,"prompt_token_ids":null,"token_ids":null}],"usage":null}
+
+data: {"id":"cmpl-f057ae2a-caf0-4cfc-973c-5f4e062c5756","object":"text_completion","created":1774223316,"model":"Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8","choices":[{"index":0,"text":"###","logprobs":null,"finish_reason":null,"stop_reason":null,"prompt_token_ids":null,"token_ids":null}],"usage":null}
+
+data: {"id":"cmpl-f057ae2a-caf0-4cfc-973c-5f4e062c5756","object":"text_completion","created":1774223316,"model":"Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8","choices":[{"index":0,"text":"\n\n","logprobs":null,"finish_reason":null,"stop_reason":null,"prompt_token_ids":null,"token_ids":null}],"usage":null}
+
+data: {"id":"cmpl-f057ae2a-caf0-4cfc-973c-5f4e062c5756","object":"text_completion","created":1774223316,"model":"Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8","choices":[{"index":0,"text":"###","logprobs":null,"finish_reason":null,"stop_reason":null,"prompt_token_ids":null,"token_ids":null}],"usage":null}
+
+data: {"id":"cmpl-f057ae2a-caf0-4cfc-973c-5f4e062c5756","object":"text_completion","created":1774223316,"model":"Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8","choices":[{"index":0,"text":"\n\n","logprobs":null,"finish_reason":null,"stop_reason":null,"prompt_token_ids":null,"token_ids":null}],"usage":null}
+
+data: {"id":"cmpl-f057ae2a-caf0-4cfc-973c-5f4e062c5756","object":"text_completion","created":1774223316,"model":"Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8","choices":[{"index":0,"text":" ","logprobs":null,"finish_reason":null,"stop_reason":null,"prompt_token_ids":null,"token_ids":null}],"usage":null}
+
+data: {"id":"cmpl-f057ae2a-caf0-4cfc-973c-5f4e062c5756","object":"text_completion","created":1774223316,"model":"Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8","choices":[{"index":0,"text":"0","logprobs":null,"finish_reason":null,"stop_reason":null,"prompt_token_ids":null,"token_ids":null}],"usage":null}
+
+data: {"id":"cmpl-f057ae2a-caf0-4cfc-973c-5f4e062c5756","object":"text_completion","created":1774223316,"model":"Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8","choices":[{"index":0,"text":"\n\n","logprobs":null,"finish_reason":null,"stop_reason":null,"prompt_token_ids":null,"token_ids":null}],"usage":null}
+
+data: {"id":"cmpl-f057ae2a-caf0-4cfc-973c-5f4e062c5756","object":"text_completion","created":1774223316,"model":"Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8","choices":[{"index":0,"text":"0","logprobs":null,"finish_reason":null,"stop_reason":null,"prompt_token_ids":null,"token_ids":null}],"usage":null}
+
+data: {"id":"cmpl-f057ae2a-caf0-4cfc-973c-5f4e062c5756","object":"text_completion","created":1774223316,"model":"Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8","choices":[{"index":0,"text":"\n\n","logprobs":null,"finish_reason":null,"stop_reason":null,"prompt_token_ids":null,"token_ids":null}],"usage":null}
+
+data: {"id":"cmpl-f057ae2a-caf0-4cfc-973c-5f4e062c5756","object":"text_completion","created":1774223316,"model":"Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8","choices":[{"index":0,"text":"0","logprobs":null,"finish_reason":null,"stop_reason":null,"prompt_token_ids":null,"token_ids":null}],"usage":null}
+
+data: {"id":"cmpl-f057ae2a-caf0-4cfc-973c-5f4e062c5756","object":"text_completion","created":1774223316,"model":"Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8","choices":[{"index":0,"text":"\n\n","logprobs":null,"finish_reason":null,"stop_reason":null,"prompt_token_ids":null,"token_ids":null}],"usage":null}
+
+data: {"id":"cmpl-f057ae2a-caf0-4cfc-973c-5f4e062c5756","object":"text_completion","created":1774223316,"model":"Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8","choices":[{"index":0,"text":"0","logprobs":null,"finish_reason":null,"stop_reason":null,"prompt_token_ids":null,"token_ids":null}],"usage":null}
+
+data: {"id":"cmpl-f057ae2a-caf0-4cfc-973c-5f4e062c5756","object":"text_completion","created":1774223316,"model":"Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8","choices":[{"index":0,"text":"\n\n","logprobs":null,"finish_reason":null,"stop_reason":null,"prompt_token_ids":null,"token_ids":null}],"usage":null}
+
+data: {"id":"cmpl-f057ae2a-caf0-4cfc-973c-5f4e062c5756","object":"text_completion","created":1774223316,"model":"Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8","choices":[{"index":0,"text":"0","logprobs":null,"finish_reason":null,"stop_reason":null,"prompt_token_ids":null,"token_ids":null}],"usage":null}
+
+data: {"id":"cmpl-f057ae2a-caf0-4cfc-973c-5f4e062c5756","object":"text_completion","created":1774223316,"model":"Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8","choices":[{"index":0,"text":"\n\n","logprobs":null,"finish_reason":null,"stop_reason":null,"prompt_token_ids":null,"token_ids":null}],"usage":null}
+
+data: {"id":"cmpl-f057ae2a-caf0-4cfc-973c-5f4e062c5756","object":"text_completion","created":1774223316,"model":"Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8","choices":[{"index":0,"text":"0","logprobs":null,"finish_reason":null,"stop_reason":null,"prompt_token_ids":null,"token_ids":null}],"usage":null}
+
+data: {"id":"cmpl-f057ae2a-caf0-4cfc-973c-5f4e062c5756","object":"text_completion","created":1774223316,"model":"Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8","choices":[{"index":0,"text":"\n\n","logprobs":null,"finish_reason":null,"stop_reason":null,"prompt_token_ids":null,"token_ids":null}],"usage":null}
+
+data: {"id":"cmpl-f057ae2a-caf0-4cfc-973c-5f4e062c5756","object":"text_completion","created":1774223316,"model":"Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8","choices":[{"index":0,"text":"0","logprobs":null,"finish_reason":null,"stop_reason":null,"prompt_token_ids":null,"token_ids":null}],"usage":null}
+
+data: {"id":"cmpl-f057ae2a-caf0-4cfc-973c-5f4e062c5756","object":"text_completion","created":1774223316,"model":"Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8","choices":[{"index":0,"text":"\n\n","logprobs":null,"finish_reason":null,"stop_reason":null,"prompt_token_ids":null,"token_ids":null}],"usage":null}
+
+data: {"id":"cmpl-f057ae2a-caf0-4cfc-973c-5f4e062c5756","object":"text_completion","created":1774223316,"model":"Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8","choices":[{"index":0,"text":"0","logprobs":null,"finish_reason":null,"stop_reason":null,"prompt_token_ids":null,"token_ids":null}],"usage":null}
+
+data: {"id":"cmpl-f057ae2a-caf0-4cfc-973c-5f4e062c5756","object":"text_completion","created":1774223316,"model":"Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8","choices":[{"index":0,"text":"\n\n","logprobs":null,"finish_reason":null,"stop_reason":null,"prompt_token_ids":null,"token_ids":null}],"usage":null}
+
+data: {"id":"cmpl-f057ae2a-caf0-4cfc-973c-5f4e062c5756","object":"text_completion","created":1774223316,"model":"Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8","choices":[{"index":0,"text":"0","logprobs":null,"finish_reason":null,"stop_reason":null,"prompt_token_ids":null,"token_ids":null}],"usage":null}
+
+data: {"id":"cmpl-f057ae2a-caf0-4cfc-973c-5f4e062c5756","object":"text_completion","created":1774223316,"model":"Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8","choices":[{"index":0,"text":"\n\n","logprobs":null,"finish_reason":null,"stop_reason":null,"prompt_token_ids":null,"token_ids":null}],"usage":null}
+
+data: {"id":"cmpl-f057ae2a-caf0-4cfc-973c-5f4e062c5756","object":"text_completion","created":1774223316,"model":"Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8","choices":[{"index":0,"text":"0","logprobs":null,"finish_reason":null,"stop_reason":null,"prompt_token_ids":null,"token_ids":null}],"usage":null}
+
+data: {"id":"cmpl-f057ae2a-caf0-4cfc-973c-5f4e062c5756","object":"text_completion","created":1774223316,"model":"Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8","choices":[{"index":0,"text":"\n\n","logprobs":null,"finish_reason":null,"stop_reason":null,"prompt_token_ids":null,"token_ids":null}],"usage":null}
+
+data: {"id":"cmpl-f057ae2a-caf0-4cfc-973c-5f4e062c5756","object":"text_completion","created":1774223316,"model":"Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8","choices":[{"index":0,"text":"0","logprobs":null,"finish_reason":null,"stop_reason":null,"prompt_token_ids":null,"token_ids":null}],"usage":null}
+
+data: {"id":"cmpl-f057ae2a-caf0-4cfc-973c-5f4e062c5756","object":"text_completion","created":1774223316,"model":"Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8","choices":[{"index":0,"text":"\n\n","logprobs":null,"finish_reason":null,"stop_reason":null,"prompt_token_ids":null,"token_ids":null}],"usage":null}
+
+data: {"id":"cmpl-f057ae2a-caf0-4cfc-973c-5f4e062c5756","object":"text_completion","created":1774223316,"model":"Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8","choices":[{"index":0,"text":" ","logprobs":null,"finish_reason":null,"stop_reason":null,"prompt_token_ids":null,"token_ids":null}],"usage":null}
+
+data: {"id":"cmpl-f057ae2a-caf0-4cfc-973c-5f4e062c5756","object":"text_completion","created":1774223316,"model":"Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8","choices":[{"index":0,"text":"0","logprobs":null,"finish_reason":null,"stop_reason":null,"prompt_token_ids":null,"token_ids":null}],"usage":null}
+
+data: {"id":"cmpl-f057ae2a-caf0-4cfc-973c-5f4e062c5756","object":"text_completion","created":1774223316,"model":"Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8","choices":[{"index":0,"text":"\n\n","logprobs":null,"finish_reason":null,"stop_reason":null,"prompt_token_ids":null,"token_ids":null}],"usage":null}
+
+data: {"id":"cmpl-f057ae2a-caf0-4cfc-973c-5f4e062c5756","object":"text_completion","created":1774223316,"model":"Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8","choices":[{"index":0,"text":"0","logprobs":null,"finish_reason":null,"stop_reason":null,"prompt_token_ids":null,"token_ids":null}],"usage":null}
+
+data: {"id":"cmpl-f057ae2a-caf0-4cfc-973c-5f4e062c5756","object":"text_completion","created":1774223316,"model":"Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8","choices":[{"index":0,"text":"\n\n","logprobs":null,"finish_reason":null,"stop_reason":null,"prompt_token_ids":null,"token_ids":null}],"usage":null}
+
+data: {"id":"cmpl-f057ae2a-caf0-4cfc-973c-5f4e062c5756","object":"text_completion","created":1774223316,"model":"Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8","choices":[{"index":0,"text":" ","logprobs":null,"finish_reason":null,"stop_reason":null,"prompt_token_ids":null,"token_ids":null}],"usage":null}
+
+data: {"id":"cmpl-f057ae2a-caf0-4cfc-973c-5f4e062c5756","object":"text_completion","created":1774223316,"model":"Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8","choices":[{"index":0,"text":"0","logprobs":null,"finish_reason":null,"stop_reason":null,"prompt_token_ids":null,"token_ids":null}],"usage":null}
+
+data: {"id":"cmpl-f057ae2a-caf0-4cfc-973c-5f4e062c5756","object":"text_completion","created":1774223316,"model":"Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8","choices":[{"index":0,"text":"\n\n","logprobs":null,"finish_reason":null,"stop_reason":null,"prompt_token_ids":null,"token_ids":null}],"usage":null}
+
+data: {"id":"cmpl-f057ae2a-caf0-4cfc-973c-5f4e062c5756","object":"text_completion","created":1774223316,"model":"Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8","choices":[{"index":0,"text":" ","logprobs":null,"finish_reason":null,"stop_reason":null,"prompt_token_ids":null,"token_ids":null}],"usage":null}
+
+data: {"id":"cmpl-f057ae2a-caf0-4cfc-973c-5f4e062c5756","object":"text_completion","created":1774223316,"model":"Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8","choices":[{"index":0,"text":"0","logprobs":null,"finish_reason":null,"stop_reason":null,"prompt_token_ids":null,"token_ids":null}],"usage":null}
+
+data: {"id":"cmpl-f057ae2a-caf0-4cfc-973c-5f4e062c5756","object":"text_completion","created":1774223316,"model":"Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8","choices":[{"index":0,"text":"\n\n","logprobs":null,"finish_reason":null,"stop_reason":null,"prompt_token_ids":null,"token_ids":null}],"usage":null}
+
+data: {"id":"cmpl-f057ae2a-caf0-4cfc-973c-5f4e062c5756","object":"text_completion","created":1774223316,"model":"Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8","choices":[{"index":0,"text":"0","logprobs":null,"finish_reason":null,"stop_reason":null,"prompt_token_ids":null,"token_ids":null}],"usage":null}
+
+data: {"id":"cmpl-f057ae2a-caf0-4cfc-973c-5f4e062c5756","object":"text_completion","created":1774223316,"model":"Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8","choices":[{"index":0,"text":"\n\n","logprobs":null,"finish_reason":null,"stop_reason":null,"prompt_token_ids":null,"token_ids":null}],"usage":null}
+
+data: {"id":"cmpl-f057ae2a-caf0-4cfc-973c-5f4e062c5756","object":"text_completion","created":1774223316,"model":"Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8","choices":[{"index":0,"text":" ","logprobs":null,"finish_reason":null,"stop_reason":null,"prompt_token_ids":null,"token_ids":null}],"usage":null}
+
+data: {"id":"cmpl-f057ae2a-caf0-4cfc-973c-5f4e062c5756","object":"text_completion","created":1774223316,"model":"Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8","choices":[{"index":0,"text":"0","logprobs":null,"finish_reason":null,"stop_reason":null,"prompt_token_ids":null,"token_ids":null}],"usage":null}
+
+data: {"id":"cmpl-f057ae2a-caf0-4cfc-973c-5f4e062c5756","object":"text_completion","created":1774223316,"model":"Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8","choices":[{"index":0,"text":"\n\n","logprobs":null,"finish_reason":null,"stop_reason":null,"prompt_token_ids":null,"token_ids":null}],"usage":null}
+
+data: {"id":"cmpl-f057ae2a-caf0-4cfc-973c-5f4e062c5756","object":"text_completion","created":1774223316,"model":"Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8","choices":[{"index":0,"text":" ","logprobs":null,"finish_reason":null,"stop_reason":null,"prompt_token_ids":null,"token_ids":null}],"usage":null}
+
+data: {"id":"cmpl-f057ae2a-caf0-4cfc-973c-5f4e062c5756","object":"text_completion","created":1774223316,"model":"Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8","choices":[{"index":0,"text":"0","logprobs":null,"finish_reason":null,"stop_reason":null,"prompt_token_ids":null,"token_ids":null}],"usage":null}
+
+data: {"id":"cmpl-f057ae2a-caf0-4cfc-973c-5f4e062c5756","object":"text_completion","created":1774223316,"model":"Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8","choices":[{"index":0,"text":"\n\n","logprobs":null,"finish_reason":null,"stop_reason":null,"prompt_token_ids":null,"token_ids":null}],"usage":null}
+
+data: {"id":"cmpl-f057ae2a-caf0-4cfc-973c-5f4e062c5756","object":"text_completion","created":1774223316,"model":"Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8","choices":[{"index":0,"text":" ","logprobs":null,"finish_reason":null,"stop_reason":null,"prompt_token_ids":null,"token_ids":null}],"usage":null}
+
+data: {"id":"cmpl-f057ae2a-caf0-4cfc-973c-5f4e062c5756","object":"text_completion","created":1774223316,"model":"Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8","choices":[{"index":0,"text":"0","logprobs":null,"finish_reason":null,"stop_reason":null,"prompt_token_ids":null,"token_ids":null}],"usage":null}
+
+data: {"id":"cmpl-f057ae2a-caf0-4cfc-973c-5f4e062c5756","object":"text_completion","created":1774223316,"model":"Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8","choices":[{"index":0,"text":"\n\n","logprobs":null,"finish_reason":null,"stop_reason":null,"prompt_token_ids":null,"token_ids":null}],"usage":null}
+
+data: {"id":"cmpl-f057ae2a-caf0-4cfc-973c-5f4e062c5756","object":"text_completion","created":1774223316,"model":"Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8","choices":[{"index":0,"text":" ","logprobs":null,"finish_reason":null,"stop_reason":null,"prompt_token_ids":null,"token_ids":null}],"usage":null}
+
+data: {"id":"cmpl-f057ae2a-caf0-4cfc-973c-5f4e062c5756","object":"text_completion","created":1774223316,"model":"Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8","choices":[{"index":0,"text":"0","logprobs":null,"finish_reason":null,"stop_reason":null,"prompt_token_ids":null,"token_ids":null}],"usage":null}
+
+data: {"id":"cmpl-f057ae2a-caf0-4cfc-973c-5f4e062c5756","object":"text_completion","created":1774223316,"model":"Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8","choices":[{"index":0,"text":"\n\n","logprobs":null,"finish_reason":null,"stop_reason":null,"prompt_token_ids":null,"token_ids":null}],"usage":null}
+
+data: {"id":"cmpl-f057ae2a-caf0-4cfc-973c-5f4e062c5756","object":"text_completion","created":1774223316,"model":"Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8","choices":[{"index":0,"text":" ","logprobs":null,"finish_reason":null,"stop_reason":null,"prompt_token_ids":null,"token_ids":null}],"usage":null}
+
+data: {"id":"cmpl-f057ae2a-caf0-4cfc-973c-5f4e062c5756","object":"text_completion","created":1774223316,"model":"Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8","choices":[{"index":0,"text":"0","logprobs":null,"finish_reason":null,"stop_reason":null,"prompt_token_ids":null,"token_ids":null}],"usage":null}
+
+data: {"id":"cmpl-f057ae2a-caf0-4cfc-973c-5f4e062c5756","object":"text_completion","created":1774223316,"model":"Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8","choices":[{"index":0,"text":"\n\n","logprobs":null,"finish_reason":null,"stop_reason":null,"prompt_token_ids":null,"token_ids":null}],"usage":null}
+
+data: {"id":"cmpl-f057ae2a-caf0-4cfc-973c-5f4e062c5756","object":"text_completion","created":1774223316,"model":"Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8","choices":[{"index":0,"text":"0","logprobs":null,"finish_reason":null,"stop_reason":null,"prompt_token_ids":null,"token_ids":null}],"usage":null}
+
+data: {"id":"cmpl-f057ae2a-caf0-4cfc-973c-5f4e062c5756","object":"text_completion","created":1774223316,"model":"Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8","choices":[{"index":0,"text":"\n\n","logprobs":null,"finish_reason":null,"stop_reason":null,"prompt_token_ids":null,"token_ids":null}],"usage":null}
+
+data: {"id":"cmpl-f057ae2a-caf0-4cfc-973c-5f4e062c5756","object":"text_completion","created":1774223316,"model":"Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8","choices":[{"index":0,"text":" ","logprobs":null,"finish_reason":null,"stop_reason":null,"prompt_token_ids":null,"token_ids":null}],"usage":null}
+
+data: {"id":"cmpl-f057ae2a-caf0-4cfc-973c-5f4e062c5756","object":"text_completion","created":1774223316,"model":"Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8","choices":[{"index":0,"text":"0","logprobs":null,"finish_reason":null,"stop_reason":null,"prompt_token_ids":null,"token_ids":null}],"usage":null}
+
+data: {"id":"cmpl-f057ae2a-caf0-4cfc-973c-5f4e062c5756","object":"text_completion","created":1774223316,"model":"Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8","choices":[{"index":0,"text":"\n\n","logprobs":null,"finish_reason":null,"stop_reason":null,"prompt_token_ids":null,"token_ids":null}],"usage":null}
+
+data: {"id":"cmpl-f057ae2a-caf0-4cfc-973c-5f4e062c5756","object":"text_completion","created":1774223316,"model":"Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8","choices":[{"index":0,"text":"0","logprobs":null,"finish_reason":null,"stop_reason":null,"prompt_token_ids":null,"token_ids":null}],"usage":null}
+
+data: {"id":"cmpl-f057ae2a-caf0-4cfc-973c-5f4e062c5756","object":"text_completion","created":1774223316,"model":"Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8","choices":[{"index":0,"text":"\n\n","logprobs":null,"finish_reason":null,"stop_reason":null,"prompt_token_ids":null,"token_ids":null}],"usage":null}
+
+data: {"id":"cmpl-f057ae2a-caf0-4cfc-973c-5f4e062c5756","object":"text_completion","created":1774223316,"model":"Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8","choices":[{"index":0,"text":" ","logprobs":null,"finish_reason":null,"stop_reason":null,"prompt_token_ids":null,"token_ids":null}],"usage":null}
+
+data: {"id":"cmpl-f057ae2a-caf0-4cfc-973c-5f4e062c5756","object":"text_completion","created":1774223316,"model":"Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8","choices":[{"index":0,"text":"0","logprobs":null,"finish_reason":null,"stop_reason":null,"prompt_token_ids":null,"token_ids":null}],"usage":null}
+
+data: {"id":"cmpl-f057ae2a-caf0-4cfc-973c-5f4e062c5756","object":"text_completion","created":1774223316,"model":"Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8","choices":[{"index":0,"text":"\n\n","logprobs":null,"finish_reason":null,"stop_reason":null,"prompt_token_ids":null,"token_ids":null}],"usage":null}
+
+data: {"id":"cmpl-f057ae2a-caf0-4cfc-973c-5f4e062c5756","object":"text_completion","created":1774223316,"model":"Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8","choices":[{"index":0,"text":" ","logprobs":null,"finish_reason":null,"stop_reason":null,"prompt_token_ids":null,"token_ids":null}],"usage":null}
+
+data: {"id":"cmpl-f057ae2a-caf0-4cfc-973c-5f4e062c5756","object":"text_completion","created":1774223316,"model":"Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8","choices":[{"index":0,"text":"0","logprobs":null,"finish_reason":null,"stop_reason":null,"prompt_token_ids":null,"token_ids":null}],"usage":null}
+
+data: {"id":"cmpl-f057ae2a-caf0-4cfc-973c-5f4e062c5756","object":"text_completion","created":1774223316,"model":"Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8","choices":[{"index":0,"text":"\n\n","logprobs":null,"finish_reason":null,"stop_reason":null,"prompt_token_ids":null,"token_ids":null}],"usage":null}
+
+data: {"id":"cmpl-f057ae2a-caf0-4cfc-973c-5f4e062c5756","object":"text_completion","created":1774223316,"model":"Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8","choices":[{"index":0,"text":" ","logprobs":null,"finish_reason":null,"stop_reason":null,"prompt_token_ids":null,"token_ids":null}],"usage":null}
+
+data: {"id":"cmpl-f057ae2a-caf0-4cfc-973c-5f4e062c5756","object":"text_completion","created":1774223316,"model":"Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8","choices":[{"index":0,"text":"0","logprobs":null,"finish_reason":null,"stop_reason":null,"prompt_token_ids":null,"token_ids":null}],"usage":null}
+
+data: {"id":"cmpl-f057ae2a-caf0-4cfc-973c-5f4e062c5756","object":"text_completion","created":1774223316,"model":"Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8","choices":[{"index":0,"text":"\n\n","logprobs":null,"finish_reason":null,"stop_reason":null,"prompt_token_ids":null,"token_ids":null}],"usage":null}
+
+data: {"id":"cmpl-f057ae2a-caf0-4cfc-973c-5f4e062c5756","object":"text_completion","created":1774223316,"model":"Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8","choices":[{"index":0,"text":" ","logprobs":null,"finish_reason":null,"stop_reason":null,"prompt_token_ids":null,"token_ids":null}],"usage":null}
+
+data: {"id":"cmpl-f057ae2a-caf0-4cfc-973c-5f4e062c5756","object":"text_completion","created":1774223316,"model":"Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8","choices":[{"index":0,"text":"0","logprobs":null,"finish_reason":null,"stop_reason":null,"prompt_token_ids":null,"token_ids":null}],"usage":null}
+
+data: {"id":"cmpl-f057ae2a-caf0-4cfc-973c-5f4e062c5756","object":"text_completion","created":1774223316,"model":"Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8","choices":[{"index":0,"text":"\n\n","logprobs":null,"finish_reason":null,"stop_reason":null,"prompt_token_ids":null,"token_ids":null}],"usage":null}
+
+data: {"id":"cmpl-f057ae2a-caf0-4cfc-973c-5f4e062c5756","object":"text_completion","created":1774223316,"model":"Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8","choices":[{"index":0,"text":"0","logprobs":null,"finish_reason":null,"stop_reason":null,"prompt_token_ids":null,"token_ids":null}],"usage":null}
+
+data: {"id":"cmpl-f057ae2a-caf0-4cfc-973c-5f4e062c5756","object":"text_completion","created":1774223316,"model":"Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8","choices":[{"index":0,"text":"\n\n","logprobs":null,"finish_reason":null,"stop_reason":null,"prompt_token_ids":null,"token_ids":null}],"usage":null}
+
+data: {"id":"cmpl-f057ae2a-caf0-4cfc-973c-5f4e062c5756","object":"text_completion","created":1774223316,"model":"Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8","choices":[{"index":0,"text":" ","logprobs":null,"finish_reason":null,"stop_reason":null,"prompt_token_ids":null,"token_ids":null}],"usage":null}
+
+data: {"id":"cmpl-f057ae2a-caf0-4cfc-973c-5f4e062c5756","object":"text_completion","created":1774223316,"model":"Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8","choices":[{"index":0,"text":"0","logprobs":null,"finish_reason":null,"stop_reason":null,"prompt_token_ids":null,"token_ids":null}],"usage":null}
+
+data: {"id":"cmpl-f057ae2a-caf0-4cfc-973c-5f4e062c5756","object":"text_completion","created":1774223316,"model":"Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8","choices":[{"index":0,"text":"\n\n","logprobs":null,"finish_reason":null,"stop_reason":null,"prompt_token_ids":null,"token_ids":null}],"usage":null}
+
+data: {"id":"cmpl-f057ae2a-caf0-4cfc-973c-5f4e062c5756","object":"text_completion","created":1774223316,"model":"Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8","choices":[{"index":0,"text":"0","logprobs":null,"finish_reason":null,"stop_reason":null,"prompt_token_ids":null,"token_ids":null}],"usage":null}
+
+data: {"id":"cmpl-f057ae2a-caf0-4cfc-973c-5f4e062c5756","object":"text_completion","created":1774223316,"model":"Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8","choices":[{"index":0,"text":"\n\n","logprobs":null,"finish_reason":null,"stop_reason":null,"prompt_token_ids":null,"token_ids":null}],"usage":null}
+
+data: {"id":"cmpl-f057ae2a-caf0-4cfc-973c-5f4e062c5756","object":"text_completion","created":1774223316,"model":"Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8","choices":[{"index":0,"text":" ","logprobs":null,"finish_reason":null,"stop_reason":null,"prompt_token_ids":null,"token_ids":null}],"usage":null}
+
+data: {"id":"cmpl-f057ae2a-caf0-4cfc-973c-5f4e062c5756","object":"text_completion","created":1774223316,"model":"Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8","choices":[{"index":0,"text":"0","logprobs":null,"finish_reason":null,"stop_reason":null,"prompt_token_ids":null,"token_ids":null}],"usage":null}
+
+data: {"id":"cmpl-f057ae2a-caf0-4cfc-973c-5f4e062c5756","object":"text_completion","created":1774223316,"model":"Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8","choices":[{"index":0,"text":"\n\n","logprobs":null,"finish_reason":null,"stop_reason":null,"prompt_token_ids":null,"token_ids":null}],"usage":null}
+
+data: {"id":"cmpl-f057ae2a-caf0-4cfc-973c-5f4e062c5756","object":"text_completion","created":1774223316,"model":"Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8","choices":[{"index":0,"text":"0","logprobs":null,"finish_reason":null,"stop_reason":null,"prompt_token_ids":null,"token_ids":null}],"usage":null}
+
+data: {"id":"cmpl-f057ae2a-caf0-4cfc-973c-5f4e062c5756","object":"text_completion","created":1774223316,"model":"Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8","choices":[{"index":0,"text":"\n\n","logprobs":null,"finish_reason":null,"stop_reason":null,"prompt_token_ids":null,"token_ids":null}],"usage":null}
+
+data: {"id":"cmpl-f057ae2a-caf0-4cfc-973c-5f4e062c5756","object":"text_completion","created":1774223316,"model":"Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8","choices":[{"index":0,"text":" ","logprobs":null,"finish_reason":null,"stop_reason":null,"prompt_token_ids":null,"token_ids":null}],"usage":null}
+
+data: {"id":"cmpl-f057ae2a-caf0-4cfc-973c-5f4e062c5756","object":"text_completion","created":1774223316,"model":"Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8","choices":[{"index":0,"text":"0","logprobs":null,"finish_reason":null,"stop_reason":null,"prompt_token_ids":null,"token_ids":null}],"usage":null}
+
+data: {"id":"cmpl-f057ae2a-caf0-4cfc-973c-5f4e062c5756","object":"text_completion","created":1774223316,"model":"Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8","choices":[{"index":0,"text":"\n\n","logprobs":null,"finish_reason":null,"stop_reason":null,"prompt_token_ids":null,"token_ids":null}],"usage":null}
+
+data: {"id":"cmpl-f057ae2a-caf0-4cfc-973c-5f4e062c5756","object":"text_completion","created":1774223316,"model":"Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8","choices":[{"index":0,"text":"0","logprobs":null,"finish_reason":null,"stop_reason":null,"prompt_token_ids":null,"token_ids":null}],"usage":null}
+
+data: {"id":"cmpl-f057ae2a-caf0-4cfc-973c-5f4e062c5756","object":"text_completion","created":1774223316,"model":"Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8","choices":[{"index":0,"text":"\n\n","logprobs":null,"finish_reason":null,"stop_reason":null,"prompt_token_ids":null,"token_ids":null}],"usage":null}
+
+data: {"id":"cmpl-f057ae2a-caf0-4cfc-973c-5f4e062c5756","object":"text_completion","created":1774223316,"model":"Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8","choices":[{"index":0,"text":" ","logprobs":null,"finish_reason":null,"stop_reason":null,"prompt_token_ids":null,"token_ids":null}],"usage":null}
+
+data: {"id":"cmpl-f057ae2a-caf0-4cfc-973c-5f4e062c5756","object":"text_completion","created":1774223316,"model":"Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8","choices":[{"index":0,"text":"0","logprobs":null,"finish_reason":null,"stop_reason":null,"prompt_token_ids":null,"token_ids":null}],"usage":null}
+
+data: {"id":"cmpl-f057ae2a-caf0-4cfc-973c-5f4e062c5756","object":"text_completion","created":1774223316,"model":"Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8","choices":[{"index":0,"text":"\n\n","logprobs":null,"finish_reason":null,"stop_reason":null,"prompt_token_ids":null,"token_ids":null}],"usage":null}
+
+data: {"id":"cmpl-f057ae2a-caf0-4cfc-973c-5f4e062c5756","object":"text_completion","created":1774223316,"model":"Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8","choices":[{"index":0,"text":"0","logprobs":null,"finish_reason":null,"stop_reason":null,"prompt_token_ids":null,"token_ids":null}],"usage":null}
+
+data: {"id":"cmpl-f057ae2a-caf0-4cfc-973c-5f4e062c5756","object":"text_completion","created":1774223316,"model":"Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8","choices":[{"index":0,"text":"\n\n","logprobs":null,"finish_reason":null,"stop_reason":null,"prompt_token_ids":null,"token_ids":null}],"usage":null}
+
+data: {"id":"cmpl-f057ae2a-caf0-4cfc-973c-5f4e062c5756","object":"text_completion","created":1774223316,"model":"Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8","choices":[{"index":0,"text":" ","logprobs":null,"finish_reason":null,"stop_reason":null,"prompt_token_ids":null,"token_ids":null}],"usage":null}
+
+data: {"id":"cmpl-f057ae2a-caf0-4cfc-973c-5f4e062c5756","object":"text_completion","created":1774223316,"model":"Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8","choices":[{"index":0,"text":"0","logprobs":null,"finish_reason":null,"stop_reason":null,"prompt_token_ids":null,"token_ids":null}],"usage":null}
+
+data: {"id":"cmpl-f057ae2a-caf0-4cfc-973c-5f4e062c5756","object":"text_completion","created":1774223316,"model":"Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8","choices":[{"index":0,"text":"\n\n","logprobs":null,"finish_reason":null,"stop_reason":null,"prompt_token_ids":null,"token_ids":null}],"usage":null}
+
+data: {"id":"cmpl-f057ae2a-caf0-4cfc-973c-5f4e062c5756","object":"text_completion","created":1774223316,"model":"Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8","choices":[{"index":0,"text":"0","logprobs":null,"finish_reason":null,"stop_reason":null,"prompt_token_ids":null,"token_ids":null}],"usage":null}
+
+data: {"id":"cmpl-f057ae2a-caf0-4cfc-973c-5f4e062c5756","object":"text_completion","created":1774223316,"model":"Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8","choices":[{"index":0,"text":"\n\n","logprobs":null,"finish_reason":null,"stop_reason":null,"prompt_token_ids":null,"token_ids":null}],"usage":null}
+
+data: {"id":"cmpl-f057ae2a-caf0-4cfc-973c-5f4e062c5756","object":"text_completion","created":1774223316,"model":"Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8","choices":[{"index":0,"text":" ","logprobs":null,"finish_reason":null,"stop_reason":null,"prompt_token_ids":null,"token_ids":null}],"usage":null}
+
+data: {"id":"cmpl-f057ae2a-caf0-4cfc-973c-5f4e062c5756","object":"text_completion","created":1774223316,"model":"Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8","choices":[{"index":0,"text":"0","logprobs":null,"finish_reason":null,"stop_reason":null,"prompt_token_ids":null,"token_ids":null}],"usage":null}
+
+data: {"id":"cmpl-f057ae2a-caf0-4cfc-973c-5f4e062c5756","object":"text_completion","created":1774223316,"model":"Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8","choices":[{"index":0,"text":"\n\n","logprobs":null,"finish_reason":null,"stop_reason":null,"prompt_token_ids":null,"token_ids":null}],"usage":null}
+
+data: {"id":"cmpl-f057ae2a-caf0-4cfc-973c-5f4e062c5756","object":"text_completion","created":1774223316,"model":"Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8","choices":[{"index":0,"text":"0","logprobs":null,"finish_reason":null,"stop_reason":null,"prompt_token_ids":null,"token_ids":null}],"usage":null}
+
+data: {"id":"cmpl-f057ae2a-caf0-4cfc-973c-5f4e062c5756","object":"text_completion","created":1774223316,"model":"Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8","choices":[{"index":0,"text":"\n\n","logprobs":null,"finish_reason":null,"stop_reason":null,"prompt_token_ids":null,"token_ids":null}],"usage":null}
+
+data: {"id":"cmpl-f057ae2a-caf0-4cfc-973c-5f4e062c5756","object":"text_completion","created":1774223316,"model":"Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8","choices":[{"index":0,"text":" ","logprobs":null,"finish_reason":null,"stop_reason":null,"prompt_token_ids":null,"token_ids":null}],"usage":null}
+
+data: {"id":"cmpl-f057ae2a-caf0-4cfc-973c-5f4e062c5756","object":"text_completion","created":1774223316,"model":"Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8","choices":[{"index":0,"text":"0","logprobs":null,"finish_reason":null,"stop_reason":null,"prompt_token_ids":null,"token_ids":null}],"usage":null}
+
+data: {"id":"cmpl-f057ae2a-caf0-4cfc-973c-5f4e062c5756","object":"text_completion","created":1774223316,"model":"Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8","choices":[{"index":0,"text":"\n\n","logprobs":null,"finish_reason":null,"stop_reason":null,"prompt_token_ids":null,"token_ids":null}],"usage":null}
+
+data: {"id":"cmpl-f057ae2a-caf0-4cfc-973c-5f4e062c5756","object":"text_completion","created":1774223316,"model":"Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8","choices":[{"index":0,"text":"0","logprobs":null,"finish_reason":null,"stop_reason":null,"prompt_token_ids":null,"token_ids":null}],"usage":null}
+
+data: {"id":"cmpl-f057ae2a-caf0-4cfc-973c-5f4e062c5756","object":"text_completion","created":1774223316,"model":"Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8","choices":[{"index":0,"text":"\n\n","logprobs":null,"finish_reason":null,"stop_reason":null,"prompt_token_ids":null,"token_ids":null}],"usage":null}
+
+data: {"id":"cmpl-f057ae2a-caf0-4cfc-973c-5f4e062c5756","object":"text_completion","created":1774223316,"model":"Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8","choices":[{"index":0,"text":" ","logprobs":null,"finish_reason":null,"stop_reason":null,"prompt_token_ids":null,"token_ids":null}],"usage":null}
+
+data: {"id":"cmpl-f057ae2a-caf0-4cfc-973c-5f4e062c5756","object":"text_completion","created":1774223316,"model":"Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8","choices":[{"index":0,"text":"0","logprobs":null,"finish_reason":null,"stop_reason":null,"prompt_token_ids":null,"token_ids":null}],"usage":null}
+
+data: {"id":"cmpl-f057ae2a-caf0-4cfc-973c-5f4e062c5756","object":"text_completion","created":1774223316,"model":"Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8","choices":[{"index":0,"text":"\n\n","logprobs":null,"finish_reason":null,"stop_reason":null,"prompt_token_ids":null,"token_ids":null}],"usage":null}
+
+data: {"id":"cmpl-f057ae2a-caf0-4cfc-973c-5f4e062c5756","object":"text_completion","created":1774223316,"model":"Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8","choices":[{"index":0,"text":"0","logprobs":null,"finish_reason":null,"stop_reason":null,"prompt_token_ids":null,"token_ids":null}],"usage":null}
+
+data: {"id":"cmpl-f057ae2a-caf0-4cfc-973c-5f4e062c5756","object":"text_completion","created":1774223316,"model":"Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8","choices":[{"index":0,"text":"\n\n","logprobs":null,"finish_reason":null,"stop_reason":null,"prompt_token_ids":null,"token_ids":null}],"usage":null}
+
+data: {"id":"cmpl-f057ae2a-caf0-4cfc-973c-5f4e062c5756","object":"text_completion","created":1774223316,"model":"Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8","choices":[{"index":0,"text":" ","logprobs":null,"finish_reason":null,"stop_reason":null,"prompt_token_ids":null,"token_ids":null}],"usage":null}
+
+data: {"id":"cmpl-f057ae2a-caf0-4cfc-973c-5f4e062c5756","object":"text_completion","created":1774223316,"model":"Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8","choices":[{"index":0,"text":"0","logprobs":null,"finish_reason":null,"stop_reason":null,"prompt_token_ids":null,"token_ids":null}],"usage":null}
+
+data: {"id":"cmpl-f057ae2a-caf0-4cfc-973c-5f4e062c5756","object":"text_completion","created":1774223316,"model":"Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8","choices":[{"index":0,"text":"\n\n","logprobs":null,"finish_reason":null,"stop_reason":null,"prompt_token_ids":null,"token_ids":null}],"usage":null}
+
+data: {"id":"cmpl-f057ae2a-caf0-4cfc-973c-5f4e062c5756","object":"text_completion","created":1774223316,"model":"Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8","choices":[{"index":0,"text":"0","logprobs":null,"finish_reason":null,"stop_reason":null,"prompt_token_ids":null,"token_ids":null}],"usage":null}
+
+data: {"id":"cmpl-f057ae2a-caf0-4cfc-973c-5f4e062c5756","object":"text_completion","created":1774223316,"model":"Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8","choices":[{"index":0,"text":"\n\n","logprobs":null,"finish_reason":null,"stop_reason":null,"prompt_token_ids":null,"token_ids":null}],"usage":null}
+
+data: {"id":"cmpl-f057ae2a-caf0-4cfc-973c-5f4e062c5756","object":"text_completion","created":1774223316,"model":"Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8","choices":[{"index":0,"text":" ","logprobs":null,"finish_reason":null,"stop_reason":null,"prompt_token_ids":null,"token_ids":null}],"usage":null}
+
+data: {"id":"cmpl-f057ae2a-caf0-4cfc-973c-5f4e062c5756","object":"text_completion","created":1774223316,"model":"Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8","choices":[{"index":0,"text":"0","logprobs":null,"finish_reason":null,"stop_reason":null,"prompt_token_ids":null,"token_ids":null}],"usage":null}
+
+data: {"id":"cmpl-f057ae2a-caf0-4cfc-973c-5f4e062c5756","object":"text_completion","created":1774223316,"model":"Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8","choices":[{"index":0,"text":"\n\n","logprobs":null,"finish_reason":null,"stop_reason":null,"prompt_token_ids":null,"token_ids":null}],"usage":null}
+
+data: {"id":"cmpl-f057ae2a-caf0-4cfc-973c-5f4e062c5756","object":"text_completion","created":1774223316,"model":"Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8","choices":[{"index":0,"text":"0","logprobs":null,"finish_reason":null,"stop_reason":null,"prompt_token_ids":null,"token_ids":null}],"usage":null}
+
+data: {"id":"cmpl-f057ae2a-caf0-4cfc-973c-5f4e062c5756","object":"text_completion","created":1774223316,"model":"Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8","choices":[{"index":0,"text":"\n\n","logprobs":null,"finish_reason":null,"stop_reason":null,"prompt_token_ids":null,"token_ids":null}],"usage":null}
+
+data: {"id":"cmpl-f057ae2a-caf0-4cfc-973c-5f4e062c5756","object":"text_completion","created":1774223316,"model":"Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8","choices":[{"index":0,"text":" ","logprobs":null,"finish_reason":null,"stop_reason":null,"prompt_token_ids":null,"token_ids":null}],"usage":null}
+
+data: {"id":"cmpl-f057ae2a-caf0-4cfc-973c-5f4e062c5756","object":"text_completion","created":1774223316,"model":"Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8","choices":[{"index":0,"text":"0","logprobs":null,"finish_reason":null,"stop_reason":null,"prompt_token_ids":null,"token_ids":null}],"usage":null}
+
+data: {"id":"cmpl-f057ae2a-caf0-4cfc-973c-5f4e062c5756","object":"text_completion","created":1774223316,"model":"Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8","choices":[{"index":0,"text":"\n\n","logprobs":null,"finish_reason":null,"stop_reason":null,"prompt_token_ids":null,"token_ids":null}],"usage":null}
+
+data: {"id":"cmpl-f057ae2a-caf0-4cfc-973c-5f4e062c5756","object":"text_completion","created":1774223316,"model":"Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8","choices":[{"index":0,"text":"0","logprobs":null,"finish_reason":null,"stop_reason":null,"prompt_token_ids":null,"token_ids":null}],"usage":null}
+
+data: {"id":"cmpl-f057ae2a-caf0-4cfc-973c-5f4e062c5756","object":"text_completion","created":1774223316,"model":"Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8","choices":[{"index":0,"text":"\n\n","logprobs":null,"finish_reason":null,"stop_reason":null,"prompt_token_ids":null,"token_ids":null}],"usage":null}
+
+data: {"id":"cmpl-f057ae2a-caf0-4cfc-973c-5f4e062c5756","object":"text_completion","created":1774223316,"model":"Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8","choices":[{"index":0,"text":" ","logprobs":null,"finish_reason":null,"stop_reason":null,"prompt_token_ids":null,"token_ids":null}],"usage":null}
+
+data: {"id":"cmpl-f057ae2a-caf0-4cfc-973c-5f4e062c5756","object":"text_completion","created":1774223316,"model":"Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8","choices":[{"index":0,"text":"0","logprobs":null,"finish_reason":null,"stop_reason":null,"prompt_token_ids":null,"token_ids":null}],"usage":null}
+
+data: {"id":"cmpl-f057ae2a-caf0-4cfc-973c-5f4e062c5756","object":"text_completion","created":1774223316,"model":"Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8","choices":[{"index":0,"text":"\n\n","logprobs":null,"finish_reason":null,"stop_reason":null,"prompt_token_ids":null,"token_ids":null}],"usage":null}
+
+data: {"id":"cmpl-f057ae2a-caf0-4cfc-973c-5f4e062c5756","object":"text_completion","created":1774223316,"model":"Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8","choices":[{"index":0,"text":"0","logprobs":null,"finish_reason":null,"stop_reason":null,"prompt_token_ids":null,"token_ids":null}],"usage":null}
+
+data: {"id":"cmpl-f057ae2a-caf0-4cfc-973c-5f4e062c5756","object":"text_completion","created":1774223316,"model":"Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8","choices":[{"index":0,"text":"\n\n","logprobs":null,"finish_reason":null,"stop_reason":null,"prompt_token_ids":null,"token_ids":null}],"usage":null}
+
+data: {"id":"cmpl-f057ae2a-caf0-4cfc-973c-5f4e062c5756","object":"text_completion","created":1774223316,"model":"Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8","choices":[{"index":0,"text":" ","logprobs":null,"finish_reason":null,"stop_reason":null,"prompt_token_ids":null,"token_ids":null}],"usage":null}
+
+data: {"id":"cmpl-f057ae2a-caf0-4cfc-973c-5f4e062c5756","object":"text_completion","created":1774223316,"model":"Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8","choices":[{"index":0,"text":"0","logprobs":null,"finish_reason":null,"stop_reason":null,"prompt_token_ids":null,"token_ids":null}],"usage":null}
+
+data: {"id":"cmpl-f057ae2a-caf0-4cfc-973c-5f4e062c5756","object":"text_completion","created":1774223316,"model":"Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8","choices":[{"index":0,"text":"\n\n","logprobs":null,"finish_reason":null,"stop_reason":null,"prompt_token_ids":null,"token_ids":null}],"usage":null}
+
+data: {"id":"cmpl-f057ae2a-caf0-4cfc-973c-5f4e062c5756","object":"text_completion","created":1774223316,"model":"Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8","choices":[{"index":0,"text":"0","logprobs":null,"finish_reason":null,"stop_reason":null,"prompt_token_ids":null,"token_ids":null}],"usage":null}
+
+data: {"id":"cmpl-f057ae2a-caf0-4cfc-973c-5f4e062c5756","object":"text_completion","created":1774223316,"model":"Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8","choices":[{"index":0,"text":"\n\n","logprobs":null,"finish_reason":null,"stop_reason":null,"prompt_token_ids":null,"token_ids":null}],"usage":null}
+
+data: {"id":"cmpl-f057ae2a-caf0-4cfc-973c-5f4e062c5756","object":"text_completion","created":1774223316,"model":"Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8","choices":[{"index":0,"text":" ","logprobs":null,"finish_reason":null,"stop_reason":null,"prompt_token_ids":null,"token_ids":null}],"usage":null}
+
+data: {"id":"cmpl-f057ae2a-caf0-4cfc-973c-5f4e062c5756","object":"text_completion","created":1774223316,"model":"Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8","choices":[{"index":0,"text":"0","logprobs":null,"finish_reason":null,"stop_reason":null,"prompt_token_ids":null,"token_ids":null}],"usage":null}
+
+data: {"id":"cmpl-f057ae2a-caf0-4cfc-973c-5f4e062c5756","object":"text_completion","created":1774223316,"model":"Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8","choices":[{"index":0,"text":"\n\n","logprobs":null,"finish_reason":null,"stop_reason":null,"prompt_token_ids":null,"token_ids":null}],"usage":null}
+
+data: {"id":"cmpl-f057ae2a-caf0-4cfc-973c-5f4e062c5756","object":"text_completion","created":1774223316,"model":"Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8","choices":[{"index":0,"text":"0","logprobs":null,"finish_reason":null,"stop_reason":null,"prompt_token_ids":null,"token_ids":null}],"usage":null}
+
+data: {"id":"cmpl-f057ae2a-caf0-4cfc-973c-5f4e062c5756","object":"text_completion","created":1774223316,"model":"Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8","choices":[{"index":0,"text":"\n\n","logprobs":null,"finish_reason":null,"stop_reason":null,"prompt_token_ids":null,"token_ids":null}],"usage":null}
+
+data: {"id":"cmpl-f057ae2a-caf0-4cfc-973c-5f4e062c5756","object":"text_completion","created":1774223316,"model":"Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8","choices":[{"index":0,"text":" ","logprobs":null,"finish_reason":null,"stop_reason":null,"prompt_token_ids":null,"token_ids":null}],"usage":null}
+
+data: {"id":"cmpl-f057ae2a-caf0-4cfc-973c-5f4e062c5756","object":"text_completion","created":1774223316,"model":"Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8","choices":[{"index":0,"text":"0","logprobs":null,"finish_reason":null,"stop_reason":null,"prompt_token_ids":null,"token_ids":null}],"usage":null}
+
+data: {"id":"cmpl-f057ae2a-caf0-4cfc-973c-5f4e062c5756","object":"text_completion","created":1774223316,"model":"Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8","choices":[{"index":0,"text":"\n\n","logprobs":null,"finish_reason":null,"stop_reason":null,"prompt_token_ids":null,"token_ids":null}],"usage":null}
+
+data: {"id":"cmpl-f057ae2a-caf0-4cfc-973c-5f4e062c5756","object":"text_completion","created":1774223316,"model":"Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8","choices":[{"index":0,"text":"0","logprobs":null,"finish_reason":null,"stop_reason":null,"prompt_token_ids":null,"token_ids":null}],"usage":null}
+
+data: {"id":"cmpl-f057ae2a-caf0-4cfc-973c-5f4e062c5756","object":"text_completion","created":1774223316,"model":"Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8","choices":[{"index":0,"text":"\n\n","logprobs":null,"finish_reason":null,"stop_reason":null,"prompt_token_ids":null,"token_ids":null}],"usage":null}
+
+data: {"id":"cmpl-f057ae2a-caf0-4cfc-973c-5f4e062c5756","object":"text_completion","created":1774223316,"model":"Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8","choices":[{"index":0,"text":" ","logprobs":null,"finish_reason":null,"stop_reason":null,"prompt_token_ids":null,"token_ids":null}],"usage":null}
+
+data: {"id":"cmpl-f057ae2a-caf0-4cfc-973c-5f4e062c5756","object":"text_completion","created":1774223316,"model":"Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8","choices":[{"index":0,"text":"0","logprobs":null,"finish_reason":null,"stop_reason":null,"prompt_token_ids":null,"token_ids":null}],"usage":null}
+
+data: {"id":"cmpl-f057ae2a-caf0-4cfc-973c-5f4e062c5756","object":"text_completion","created":1774223316,"model":"Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8","choices":[{"index":0,"text":"\n\n","logprobs":null,"finish_reason":null,"stop_reason":null,"prompt_token_ids":null,"token_ids":null}],"usage":null}
+
+data: {"id":"cmpl-f057ae2a-caf0-4cfc-973c-5f4e062c5756","object":"text_completion","created":1774223316,"model":"Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8","choices":[{"index":0,"text":"0","logprobs":null,"finish_reason":null,"stop_reason":null,"prompt_token_ids":null,"token_ids":null}],"usage":null}
+
+data: {"id":"cmpl-f057ae2a-caf0-4cfc-973c-5f4e062c5756","object":"text_completion","created":1774223316,"model":"Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8","choices":[{"index":0,"text":"\n\n","logprobs":null,"finish_reason":null,"stop_reason":null,"prompt_token_ids":null,"token_ids":null}],"usage":null}
+
+data: {"id":"cmpl-f057ae2a-caf0-4cfc-973c-5f4e062c5756","object":"text_completion","created":1774223316,"model":"Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8","choices":[{"index":0,"text":" ","logprobs":null,"finish_reason":null,"stop_reason":null,"prompt_token_ids":null,"token_ids":null}],"usage":null}
+
+data: {"id":"cmpl-f057ae2a-caf0-4cfc-973c-5f4e062c5756","object":"text_completion","created":1774223316,"model":"Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8","choices":[{"index":0,"text":"0","logprobs":null,"finish_reason":null,"stop_reason":null,"prompt_token_ids":null,"token_ids":null}],"usage":null}
+
+data: {"id":"cmpl-f057ae2a-caf0-4cfc-973c-5f4e062c5756","object":"text_completion","created":1774223316,"model":"Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8","choices":[{"index":0,"text":"\n\n","logprobs":null,"finish_reason":null,"stop_reason":null,"prompt_token_ids":null,"token_ids":null}],"usage":null}
+
+data: {"id":"cmpl-f057ae2a-caf0-4cfc-973c-5f4e062c5756","object":"text_completion","created":1774223316,"model":"Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8","choices":[{"index":0,"text":"0","logprobs":null,"finish_reason":null,"stop_reason":null,"prompt_token_ids":null,"token_ids":null}],"usage":null}
+
+data: {"id":"cmpl-f057ae2a-caf0-4cfc-973c-5f4e062c5756","object":"text_completion","created":1774223316,"model":"Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8","choices":[{"index":0,"text":"\n\n","logprobs":null,"finish_reason":null,"stop_reason":null,"prompt_token_ids":null,"token_ids":null}],"usage":null}
+
+data: {"id":"cmpl-f057ae2a-caf0-4cfc-973c-5f4e062c5756","object":"text_completion","created":1774223316,"model":"Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8","choices":[{"index":0,"text":" ","logprobs":null,"finish_reason":null,"stop_reason":null,"prompt_token_ids":null,"token_ids":null}],"usage":null}
+
+data: {"id":"cmpl-f057ae2a-caf0-4cfc-973c-5f4e062c5756","object":"text_completion","created":1774223316,"model":"Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8","choices":[{"index":0,"text":"0","logprobs":null,"finish_reason":null,"stop_reason":null,"prompt_token_ids":null,"token_ids":null}],"usage":null}
+
+data: {"id":"cmpl-f057ae2a-caf0-4cfc-973c-5f4e062c5756","object":"text_completion","created":1774223316,"model":"Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8","choices":[{"index":0,"text":"\n\n","logprobs":null,"finish_reason":null,"stop_reason":null,"prompt_token_ids":null,"token_ids":null}],"usage":null}
+
+data: {"id":"cmpl-f057ae2a-caf0-4cfc-973c-5f4e062c5756","object":"text_completion","created":1774223316,"model":"Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8","choices":[{"index":0,"text":"0","logprobs":null,"finish_reason":null,"stop_reason":null,"prompt_token_ids":null,"token_ids":null}],"usage":null}
+
+data: {"id":"cmpl-f057ae2a-caf0-4cfc-973c-5f4e062c5756","object":"text_completion","created":1774223316,"model":"Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8","choices":[{"index":0,"text":"\n\n","logprobs":null,"finish_reason":null,"stop_reason":null,"prompt_token_ids":null,"token_ids":null}],"usage":null}
+
+data: {"id":"cmpl-f057ae2a-caf0-4cfc-973c-5f4e062c5756","object":"text_completion","created":1774223316,"model":"Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8","choices":[{"index":0,"text":" ","logprobs":null,"finish_reason":null,"stop_reason":null,"prompt_token_ids":null,"token_ids":null}],"usage":null}
+
+data: {"id":"cmpl-f057ae2a-caf0-4cfc-973c-5f4e062c5756","object":"text_completion","created":1774223316,"model":"Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8","choices":[{"index":0,"text":"0","logprobs":null,"finish_reason":null,"stop_reason":null,"prompt_token_ids":null,"token_ids":null}],"usage":null}
+
+data: {"id":"cmpl-f057ae2a-caf0-4cfc-973c-5f4e062c5756","object":"text_completion","created":1774223316,"model":"Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8","choices":[{"index":0,"text":"\n\n","logprobs":null,"finish_reason":null,"stop_reason":null,"prompt_token_ids":null,"token_ids":null}],"usage":null}
+
+data: {"id":"cmpl-f057ae2a-caf0-4cfc-973c-5f4e062c5756","object":"text_completion","created":1774223316,"model":"Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8","choices":[{"index":0,"text":"0","logprobs":null,"finish_reason":null,"stop_reason":null,"prompt_token_ids":null,"token_ids":null}],"usage":null}
+
+data: {"id":"cmpl-f057ae2a-caf0-4cfc-973c-5f4e062c5756","object":"text_completion","created":1774223316,"model":"Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8","choices":[{"index":0,"text":"\n\n","logprobs":null,"finish_reason":null,"stop_reason":null,"prompt_token_ids":null,"token_ids":null}],"usage":null}
+
+data: {"id":"cmpl-f057ae2a-caf0-4cfc-973c-5f4e062c5756","object":"text_completion","created":1774223316,"model":"Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8","choices":[{"index":0,"text":" ","logprobs":null,"finish_reason":null,"stop_reason":null,"prompt_token_ids":null,"token_ids":null}],"usage":null}
+
+data: {"id":"cmpl-f057ae2a-caf0-4cfc-973c-5f4e062c5756","object":"text_completion","created":1774223316,"model":"Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8","choices":[{"index":0,"text":"0","logprobs":null,"finish_reason":null,"stop_reason":null,"prompt_token_ids":null,"token_ids":null}],"usage":null}
+
+data: {"id":"cmpl-f057ae2a-caf0-4cfc-973c-5f4e062c5756","object":"text_completion","created":1774223316,"model":"Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8","choices":[{"index":0,"text":"\n\n","logprobs":null,"finish_reason":null,"stop_reason":null,"prompt_token_ids":null,"token_ids":null}],"usage":null}
+
+data: {"id":"cmpl-f057ae2a-caf0-4cfc-973c-5f4e062c5756","object":"text_completion","created":1774223316,"model":"Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8","choices":[{"index":0,"text":"0","logprobs":null,"finish_reason":null,"stop_reason":null,"prompt_token_ids":null,"token_ids":null}],"usage":null}
+
+data: {"id":"cmpl-f057ae2a-caf0-4cfc-973c-5f4e062c5756","object":"text_completion","created":1774223316,"model":"Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8","choices":[{"index":0,"text":"\n\n","logprobs":null,"finish_reason":null,"stop_reason":null,"prompt_token_ids":null,"token_ids":null}],"usage":null}
+
+data: {"id":"cmpl-f057ae2a-caf0-4cfc-973c-5f4e062c5756","object":"text_completion","created":1774223316,"model":"Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8","choices":[{"index":0,"text":" ","logprobs":null,"finish_reason":null,"stop_reason":null,"prompt_token_ids":null,"token_ids":null}],"usage":null}
+
+data: {"id":"cmpl-f057ae2a-caf0-4cfc-973c-5f4e062c5756","object":"text_completion","created":1774223316,"model":"Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8","choices":[{"index":0,"text":"0","logprobs":null,"finish_reason":null,"stop_reason":null,"prompt_token_ids":null,"token_ids":null}],"usage":null}
+
+data: {"id":"cmpl-f057ae2a-caf0-4cfc-973c-5f4e062c5756","object":"text_completion","created":1774223316,"model":"Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8","choices":[{"index":0,"text":"\n\n","logprobs":null,"finish_reason":null,"stop_reason":null,"prompt_token_ids":null,"token_ids":null}],"usage":null}
+
+data: {"id":"cmpl-f057ae2a-caf0-4cfc-973c-5f4e062c5756","object":"text_completion","created":1774223316,"model":"Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8","choices":[{"index":0,"text":"0","logprobs":null,"finish_reason":null,"stop_reason":null,"prompt_token_ids":null,"token_ids":null}],"usage":null}
+
+data: {"id":"cmpl-f057ae2a-caf0-4cfc-973c-5f4e062c5756","object":"text_completion","created":1774223316,"model":"Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8","choices":[{"index":0,"text":"\n\n","logprobs":null,"finish_reason":null,"stop_reason":null,"prompt_token_ids":null,"token_ids":null}],"usage":null}
+
+data: {"id":"cmpl-f057ae2a-caf0-4cfc-973c-5f4e062c5756","object":"text_completion","created":1774223316,"model":"Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8","choices":[{"index":0,"text":" ","logprobs":null,"finish_reason":"length","stop_reason":null,"prompt_token_ids":null,"token_ids":null}],"usage":null}
+
+data: {"id":"cmpl-f057ae2a-caf0-4cfc-973c-5f4e062c5756","object":"text_completion","created":1774223316,"model":"Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8","choices":[],"usage":{"prompt_tokens":63,"total_tokens":263,"completion_tokens":200}}
+
+data: [DONE]
+
