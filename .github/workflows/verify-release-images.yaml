@@ -1,0 +1,68 @@
+name: Verify Release Images
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag to verify (e.g. v0.5.1)"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  packages: read
+
+env:
+  REGISTRY: ghcr.io
+
+jobs:
+  verify-release-images:
+    name: Verify all release images exist
+    runs-on: ubuntu-latest
+    steps:
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ secrets.GHCR_USER }}
+          password: ${{ secrets.GHCR_TOKEN }}
+
+      - name: Verify all expected images
+        run: |
+          TAG="${{ inputs.tag }}"
+          IMAGES=(
+            "${{ env.REGISTRY }}/llm-d/llm-d-cuda:${TAG}"
+            "${{ env.REGISTRY }}/llm-d/llm-d-cuda-ubuntu:${TAG}"
+            "${{ env.REGISTRY }}/llm-d/llm-d-aws:${TAG}"
+            "${{ env.REGISTRY }}/llm-d/llm-d-cpu:${TAG}"
+            "${{ env.REGISTRY }}/llm-d/llm-d-rocm:${TAG}"
+            "${{ env.REGISTRY }}/llm-d/llm-d-xpu:${TAG}"
+            "${{ env.REGISTRY }}/llm-d/llm-d-hpu:${TAG}"
+          )
+
+          echo "## Release Image Verification for ${TAG}" >> $GITHUB_STEP_SUMMARY
+          echo "| Image | Status |" >> $GITHUB_STEP_SUMMARY
+          echo "|-------|--------|" >> $GITHUB_STEP_SUMMARY
+
+          MISSING=0
+          for img in "${IMAGES[@]}"; do
+            if docker buildx imagetools inspect "$img" > /dev/null 2>&1; then
+              echo "| \`${img}\` | Found |" >> $GITHUB_STEP_SUMMARY
+              echo "OK: $img"
+            else
+              echo "| \`${img}\` | MISSING |" >> $GITHUB_STEP_SUMMARY
+              echo "MISSING: $img"
+              MISSING=$((MISSING + 1))
+            fi
+          done
+
+          echo "" >> $GITHUB_STEP_SUMMARY
+          if [ $MISSING -gt 0 ]; then
+            echo "**${MISSING} image(s) missing from release ${TAG}**" >> $GITHUB_STEP_SUMMARY
+            echo "::error::${MISSING} image(s) missing from release ${TAG}"
+            exit 1
+          fi
+          echo "**All ${#IMAGES[@]} images verified for release ${TAG}**" >> $GITHUB_STEP_SUMMARY
