@@ -109,6 +109,15 @@ kubectl delete service vllm-baseline -n ${NAMESPACE}
 cd guides/simulated-accelerators
 helmfile apply -e kgateway -n ${NAMESPACE}
 kubectl scale deployment ms-sim-llm-d-modelservice-decode -n ${NAMESPACE} --replicas=8
+
+# Kind-specific fixes (not needed on real clusters)
+kubectl patch deployment infra-sim-inference-gateway -n ${NAMESPACE} --type=json -p='[
+  {"op":"add","path":"/spec/template/spec/volumes/-","value":{"name":"tmp","emptyDir":{}}},
+  {"op":"add","path":"/spec/template/spec/containers/0/volumeMounts/-","value":{"name":"tmp","mountPath":"/tmp"}}
+]'
+kubectl patch deployment gaie-sim-epp -n ${NAMESPACE} --type=json \
+  -p='[{"op":"replace","path":"/spec/template/spec/containers/0/imagePullPolicy","value":"IfNotPresent"}]'
+
 kubectl apply -f httproute.yaml -n ${NAMESPACE}
 cd ../..
 
@@ -146,7 +155,9 @@ Show production numbers, cleanup, next steps. See the tutorial for details.
 | No metrics in Grafana | Namespace not labeled | `kubectl label namespace llm-d-tutorial monitoring-ns=llm-d-monitoring` |
 | Port-forward drops | They're fragile | Just restart it |
 | Wrong kubectl context | Context switched | `kubectl config use-context kind-llm-d-tutorial` |
-| Gateway pod crash: "Failed to create temporary file" | kgateway securityContext issue on kind | Check kgateway docs for kind-specific config |
+| Gateway pod crash: "Failed to create temporary file" | kgateway runs with `readOnlyRootFilesystem` | Patch: `kubectl patch deployment infra-sim-inference-gateway -n $NS --type=json -p='[{"op":"add","path":"/spec/template/spec/volumes/-","value":{"name":"tmp","emptyDir":{}}},{"op":"add","path":"/spec/template/spec/containers/0/volumeMounts/-","value":{"name":"tmp","mountPath":"/tmp"}}]'` |
+| EPP in ImagePullBackOff | `imagePullPolicy: Always` but registry unreachable | Patch: `kubectl patch deployment gaie-sim-epp -n $NS --type=json -p='[{"op":"replace","path":"/spec/template/spec/containers/0/imagePullPolicy","value":"IfNotPresent"}]'` |
+| Helm v4 breaks helmfile | `--client` flag removed in Helm v4 | Use Helm v3.x (v3.12-v3.17). Helm v4 is not yet supported by helmfile/helm-diff |
 
 ## PromQL queries for comparison
 

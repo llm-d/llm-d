@@ -33,7 +33,7 @@ during the presentation (Part 0).
 | `docker` | 20.10+ | [docs.docker.com](https://docs.docker.com/get-docker/) |
 | `kind` | v0.20+ | `brew install kind` / [kind.sigs.k8s.io](https://kind.sigs.k8s.io/docs/user/quick-start/#installation) |
 | `kubectl` | v1.28+ | [kubernetes.io/docs](https://kubernetes.io/docs/tasks/tools/install-kubectl/) |
-| `helm` | v3.12+ | [helm.sh/docs](https://helm.sh/docs/intro/install/) |
+| `helm` | v3.12+ (not v4) | [helm.sh/docs](https://helm.sh/docs/intro/install/) |
 | `helmfile` | v1.1+ | [github.com/helmfile](https://github.com/helmfile/helmfile?tab=readme-ov-file#installation) |
 | `yq` | v4+ | `brew install yq` / [github.com/mikefarah/yq](https://github.com/mikefarah/yq) |
 | `jq` | any | `brew install jq` / [jqlang.github.io](https://jqlang.github.io/jq/) |
@@ -375,10 +375,21 @@ This creates three Helm releases:
 | `gaie-sim` | `inferencepool` | InferencePool + EPP (inference scheduler) |
 | `ms-sim` | `llm-d-modelservice` | Simulator pods (3 decode + 1 prefill by default) |
 
-Scale the decode deployment to **8 replicas** to match the guide's 8-pod setup:
+Scale the decode deployment to **8 replicas** and apply kind-specific fixes:
 
 ```bash
+# Scale decode to 8 replicas
 kubectl scale deployment ms-sim-llm-d-modelservice-decode -n ${NAMESPACE} --replicas=8
+
+# Fix: kgateway's envoy needs a writable /tmp on kind
+kubectl patch deployment infra-sim-inference-gateway -n ${NAMESPACE} --type=json -p='[
+  {"op":"add","path":"/spec/template/spec/volumes/-","value":{"name":"tmp","emptyDir":{}}},
+  {"op":"add","path":"/spec/template/spec/containers/0/volumeMounts/-","value":{"name":"tmp","mountPath":"/tmp"}}
+]'
+
+# Fix: EPP imagePullPolicy must be IfNotPresent for pre-loaded images
+kubectl patch deployment gaie-sim-epp -n ${NAMESPACE} --type=json \
+  -p='[{"op":"replace","path":"/spec/template/spec/containers/0/imagePullPolicy","value":"IfNotPresent"}]'
 ```
 
 Wait for all pods to be ready:
@@ -388,7 +399,7 @@ kubectl get pods -n ${NAMESPACE} -w
 ```
 
 You should see:
-- 1 gateway pod (`infra-sim-inference-gateway-kgateway-*`)
+- 1 gateway pod (`infra-sim-inference-gateway-*`)
 - 1 EPP pod (`gaie-sim-epp-*`)
 - **8 decode simulator pods** (`ms-sim-llm-d-modelservice-decode-*`)
 - 1 prefill simulator pod (`ms-sim-llm-d-modelservice-prefill-*`)
@@ -610,6 +621,39 @@ Port-forwards are fragile. If they stop working, restart them:
 kubectl port-forward -n ${NAMESPACE} svc/${GATEWAY_SVC} 8000:80 &
 kubectl port-forward -n llm-d-monitoring svc/llmd-grafana 3000:80 &
 kubectl port-forward -n llm-d-monitoring svc/llmd-kube-prometheus-stack-prometheus 9090:9090 &
+```
+
+### Gateway crashes with "Failed to create temporary file"
+
+The kgateway envoy proxy runs with `readOnlyRootFilesystem: true`. The kind-specific
+patches in step 2.4 fix this by adding a writable `/tmp` volume. If you missed that
+step:
+
+```bash
+kubectl patch deployment infra-sim-inference-gateway -n ${NAMESPACE} --type=json -p='[
+  {"op":"add","path":"/spec/template/spec/volumes/-","value":{"name":"tmp","emptyDir":{}}},
+  {"op":"add","path":"/spec/template/spec/containers/0/volumeMounts/-","value":{"name":"tmp","mountPath":"/tmp"}}
+]'
+```
+
+### EPP stuck in ImagePullBackOff
+
+The EPP deployment defaults to `imagePullPolicy: Always`. On kind (where images
+are pre-loaded and the registry may be unreachable), patch it:
+
+```bash
+kubectl patch deployment gaie-sim-epp -n ${NAMESPACE} --type=json \
+  -p='[{"op":"replace","path":"/spec/template/spec/containers/0/imagePullPolicy","value":"IfNotPresent"}]'
+```
+
+### Helm v4 breaks helmfile
+
+If you see `unknown flag: --client` errors, you have Helm v4 installed. Helmfile
+and helm-diff do not yet support Helm v4. Install Helm v3 instead:
+
+```bash
+curl -sL https://get.helm.sh/helm-v3.17.3-$(uname -s | tr '[:upper:]' '[:lower:]')-$(uname -m | sed 's/x86_64/amd64/;s/aarch64/arm64/').tar.gz | \
+  tar xz --strip-components=1 -C /usr/local/bin */helm
 ```
 
 ### Simulator returns errors
