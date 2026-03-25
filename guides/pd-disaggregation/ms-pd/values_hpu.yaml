@@ -12,7 +12,7 @@ multinode: false
 accelerator:
   type: intel-gaudi
   dra: true
-  
+
 modelArtifacts:
   uri: "hf://Qwen/Qwen3-8B"
   size: 100Gi

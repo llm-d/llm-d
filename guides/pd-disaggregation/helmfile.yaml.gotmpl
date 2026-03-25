@@ -23,6 +23,8 @@ environments:
       - ../prereq/gateway-provider/common-configurations/istio.yaml
   hpu: &HPU
     <<: *I
+  ocp: &OCP
+    <<: *I
   aks: &AKS
     <<: *I
   default:
@@ -92,7 +94,7 @@ releases:
   - name: {{ printf "ms-%s" $rn | quote }}
     namespace: {{ $ns }}
     chart: llm-d-modelservice/llm-d-modelservice
-    version: v0.4.7
+    version: v0.4.9
     installed: true
     needs:
       - {{ printf "infra-%s" $rn | quote }}
@@ -104,6 +106,8 @@ releases:
       - ms-pd/values_xpu.yaml
     {{- else if eq .Environment.Name "hpu" }}
       - ms-pd/values_hpu.yaml
+    {{- else if eq .Environment.Name "ocp" }}
+      - ms-pd/values_ocp_rdma.yaml
     {{- else if eq .Environment.Name "gke_tpu" }}
       - ms-pd/values_tpu.yaml
     {{- else if eq .Environment.Name "gke_pd_rdma" }}
