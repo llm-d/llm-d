@@ -41,7 +41,7 @@ if [ "${NVSHMEM_USE_GIT}" = "true" ]; then
 else
     curl -fsSL \
     -o "nvshmem_src_cuda${CUDA_MAJOR}.tar.gz" \
-    "https://developer.download.nvidia.com/compute/redist/nvshmem/${NVSHMEM_VERSION}/source/nvshmem_src_cuda12-all-all-${NVSHMEM_VERSION}.tar.gz"
+    "https://developer.download.nvidia.com/compute/redist/nvshmem/${NVSHMEM_VERSION}/source/nvshmem_src_cuda${CUDA_MAJOR}-all-all-${NVSHMEM_VERSION}.tar.gz"
 
     tar -xf "nvshmem_src_cuda${CUDA_MAJOR}.tar.gz"
     cd nvshmem_src
@@ -61,7 +61,7 @@ if [ "${ENABLE_EFA}" != "true" ] || [ "$TARGETOS" = "ubuntu" ]; then
     done
 fi
 
-# Ubuntu image needs to be built against Ubuntu 20.04 and EFA only supports 22.04 and 24.04.
+# Enable EFA only for RHEL builds (Ubuntu EFA packages require 22.04+; gated on TARGETOS=rhel for now)
 EFA_FLAGS=()
 if [ "${ENABLE_EFA}" = "true" ] && [ "$TARGETOS" = "rhel" ]; then
     EFA_FLAGS=(
@@ -116,6 +116,7 @@ cmake -S . -B build -G Ninja \
     -DNVSHMEM_PREFIX="${NVSHMEM_DIR}" \
     -DCMAKE_CUDA_ARCHITECTURES="${NVSHMEM_CUDA_ARCHITECTURES}" \
     -DCMAKE_CUDA_COMPILER="${CUDA_HOME}/bin/nvcc" \
+    -DCMAKE_POSITION_INDEPENDENT_CODE=ON \
     -DNVSHMEM_PMIX_SUPPORT=0 \
     -DNVSHMEM_IBRC_SUPPORT=1 \
     -DNVSHMEM_IBGDA_SUPPORT=1 \
@@ -129,8 +130,7 @@ cmake -S . -B build -G Ninja \
     -DNVSHMEM_USE_NCCL=0 \
     -DNVSHMEM_BUILD_TESTS="${NVSHMEM_BUILD_PERF_TESTS}" \
     -DNVSHMEM_BUILD_EXAMPLES=0 \
-    -DNVSHMEM_BUILD_PYTHON_LIB="${BUILD_NVSHMEM4PY_BINDINGS}" \
-    -DNVSHMEM_BUILD_PYTHON_DEVICE_LIB="${BUILD_PYTHON_DEVICE_LIB}" \
+    -DNVSHMEM_BUILD_PYTHON_LIB=OFF \
     "${DEBUG_FLAGS[@]}" \
     "${CMAKE_EXTRA_FLAGS[@]}" \
     "${EFA_FLAGS[@]}"
@@ -147,54 +147,6 @@ fi
 ninja -C build -j"${MAX_JOBS}"
 cmake --install build
 rm -rf build
-
-# overwrite build perf tests for the 4py bindings
-NVSHMEM_BUILD_PERF_TESTS=0
-# re-build the build directory with nvshmem4py targets and explicitly call the right one.
-BUILD_NVSHMEM4PY_BINDINGS="ON"
-BUILD_PYTHON_DEVICE_LIB="ON"
-cmake -S . -B build -G Ninja \
-    -DNVSHMEM_PREFIX="${NVSHMEM_DIR}" \
-    -DCMAKE_CUDA_ARCHITECTURES="${NVSHMEM_CUDA_ARCHITECTURES}" \
-    -DCMAKE_CUDA_COMPILER="${CUDA_HOME}/bin/nvcc" \
-    -DNVSHMEM_PMIX_SUPPORT=0 \
-    -DNVSHMEM_IBRC_SUPPORT=1 \
-    -DNVSHMEM_IBGDA_SUPPORT=1 \
-    -DNVSHMEM_IBDEVX_SUPPORT=1 \
-    -DNVSHMEM_UCX_SUPPORT=1 \
-    -DUCX_HOME="${UCX_PREFIX}" \
-    -DNVSHMEM_SHMEM_SUPPORT=0 \
-    -DNVSHMEM_USE_GDRCOPY=1 \
-    -DGDRCOPY_HOME="/usr/local" \
-    -DNVSHMEM_MPI_SUPPORT=0 \
-    -DNVSHMEM_USE_NCCL=0 \
-    -DNVSHMEM_BUILD_TESTS="${NVSHMEM_BUILD_PERF_TESTS}" \
-    -DNVSHMEM_BUILD_EXAMPLES=0 \
-    -DNVSHMEM_BUILD_PYTHON_LIB="${BUILD_NVSHMEM4PY_BINDINGS}" \
-    -DNVSHMEM_BUILD_PYTHON_DEVICE_LIB="${BUILD_PYTHON_DEVICE_LIB}" \
-    "${DEBUG_FLAGS[@]}" \
-    "${CMAKE_EXTRA_FLAGS[@]}" \
-    "${EFA_FLAGS[@]}"
-
-# explicitly build one target after re-setting up build with all bindings options (default is via discovery)
-# Reuse MAX_JOBS calculation from above
-ninja -C build -j"${MAX_JOBS}" "build_nvshmem4py_wheel_cu${CUDA_MAJOR}_${PYTHON_VERSION}"
-
-# Parse our python version to platforming tag, eg: 3.12 --> 312
-PYTAG="cp${PYTHON_VERSION/./}"
-NVSHMEM4PY_WHEEL="$(find build/dist -maxdepth 1 -type f \
-  -name "nvshmem4py_cu${CUDA_MAJOR}-*-${PYTAG}-${PYTAG}-manylinux*.whl" \
-  | head -n 1)"
-
-if [ -z "${NVSHMEM4PY_WHEEL}" ]; then
-  echo "ERROR: nvshmem4py wheel not found in build/dist"
-  echo "  expected pattern: nvshmem4py_cu${CUDA_MAJOR}-*-${PYTAG}-${PYTAG}-manylinux*.whl"
-  echo "  contents of build/dist:"
-  ls -la build/dist || true
-  exit 1
-fi
-
-cp -v "${NVSHMEM4PY_WHEEL}" /wheels/
 
 cd /tmp
 rm -rf nvshmem_src*

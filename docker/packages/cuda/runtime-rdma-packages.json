@@ -2,6 +2,7 @@
   "rhel_to_ubuntu": {
     "librdmacm": "librdmacm1t64",
     "libibverbs": "libibverbs1",
-    "libibumad": "libibumad3"
+    "libibumad": "libibumad3",
+    "libmlx5": "libmlx5-1"
   }
 }

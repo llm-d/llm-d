@@ -28,14 +28,14 @@ cd /tmp
 . /usr/local/bin/setup-sccache
 . "${VIRTUAL_ENV}/bin/activate"
 
-git clone "${NIXL_REPO}" nixl && cd nixl
-git checkout -q "${NIXL_VERSION}"
-
 if [ "${USE_SCCACHE}" = "true" ]; then
     export CC="sccache gcc" CXX="sccache g++" NVCC="sccache nvcc"
 fi
 
-# Ubuntu image needs to be built against Ubuntu 20.04 and EFA only supports 22.04 and 24.04.
+git clone "${NIXL_REPO}" nixl && cd nixl
+git checkout -q "${NIXL_VERSION}"
+
+# Enable EFA only for RHEL builds (Ubuntu EFA packages require 22.04+; gated on TARGETOS=rhel for now)
 EFA_FLAG=""
 if [ "${ENABLE_EFA}" = "true" ] && [ "$TARGETOS" = "rhel" ]; then
     EFA_FLAG="-Dlibfabric_path=${EFA_PREFIX}"
@@ -45,7 +45,7 @@ meson setup build \
     --prefix="${NIXL_PREFIX}" \
     -Dbuildtype=release \
     -Ducx_path="${UCX_PREFIX}" \
-    "${EFA_FLAG}" \
+    ${EFA_FLAG:+"$EFA_FLAG"} \
     -Dinstall_headers=true
 
 cd build

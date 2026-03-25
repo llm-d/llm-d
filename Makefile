@@ -27,6 +27,35 @@ NEW_TAG ?= sha256...
 # DEVICE, options: ['cuda', 'xpu', 'cpu', 'hpu']
 DEVICE ?= cuda
 
+# ARCH, options: ['amd64', 'arm64']
+ARCH ?= amd64
+
+# OS, options: ['rhel', 'ubuntu']
+OS ?= rhel
+
+# CUDA version (e.g., 12.8, 13.0)
+CUDA_VERSION ?= 13.0
+CUDA_MAJOR := $(word 1,$(subst ., ,$(CUDA_VERSION)))
+CUDA_MINOR := $(word 2,$(subst ., ,$(CUDA_VERSION)))
+
+# USE_SCCACHE: set to true to enable sccache (requires AWS credentials)
+USE_SCCACHE ?= false
+
+# MAX_JOBS: parallel compilation jobs (reduce to avoid OOM, e.g., MAX_JOBS=2)
+MAX_JOBS ?= 2
+
+# TORCH_CUDA_ARCH_LIST: CUDA architectures to build for
+# TORCH_CUDA_ARCH_LIST ?= 7.0;7.5;8.0;8.6;8.9;9.0;9.0a;10.0;12.0+PTX
+TORCH_CUDA_ARCH_LIST ?= "10.0"
+
+# Map OS to base image suffix
+ifeq ($(OS), ubuntu)
+	BASE_IMAGE_SUFFIX := ubuntu24.04
+else
+	BASE_IMAGE_SUFFIX := ubi9
+endif
+BUILD_BASE_IMAGE_SUFFIX := $(BASE_IMAGE_SUFFIX)
+
 IMAGE_BASE ?= ghcr.io/llm-d/$(PROJECT_NAME)-$(DEVICE)
 
 BUILD_CONTEXT ?= .
@@ -47,11 +76,10 @@ ifeq ($(BUILD_DEBUG), true)
 	IMAGE_BASE := $(IMAGE_BASE)-debug
 endif
 
-IMG := $(IMAGE_BASE):$(VERSION)
+IMG := $(IMAGE_BASE):$(VERSION)-$(ARCH)
 
 CONTAINER_TOOL := $(shell (command -v docker >/dev/null 2>&1 && echo docker) || (command -v podman >/dev/null 2>&1 && echo podman) || echo "")
 BUILDER := $(shell command -v buildah >/dev/null 2>&1 && echo buildah || echo $(CONTAINER_TOOL))
-PLATFORMS ?= linux/amd64 # linux/arm64 # linux/s390x,linux/ppc64le
 
 # SUPPRESS_PYTHON_OUTPUT: Set to "1" or "true" to suppress verbose pip output during build (default: verbose enabled)
 SUPPRESS_PYTHON_OUTPUT ?=
@@ -63,11 +91,16 @@ ENABLE_EFA ?= false
 .PHONY: help
 help: ## Print help
 	@awk 'BEGIN {FS = ":.*##"; printf "\nUsage:\n  make \033[36m<target>\033[0m\n"} /^[a-zA-Z_0-9-]+:.*?##/ { printf "  \033[36m%-15s\033[0m %s\n", $$1, $$2 } /^##@/ { printf "\n\033[1m%s\033[0m\n", substr($$0, 5) } ' $(MAKEFILE_LIST)
+	@printf "\n\033[1mArchitecture Examples:\033[0m\n"
+	@printf "  \033[36mmake image-build ARCH=amd64\033[0m                              # Build for x86_64 (default)\n"
+	@printf "  \033[36mmake image-build ARCH=arm64\033[0m                              # Build for ARM64\n"
+	@printf "  \033[36mmake image-build ARCH=arm64 OS=ubuntu\033[0m                    # ARM64 with Ubuntu base\n"
+	@printf "  \033[36mmake image-build ARCH=arm64 OS=ubuntu CUDA_VERSION=13.0\033[0m  # ARM64, Ubuntu, CUDA 13\n"
 	@printf "\n\033[1mXPU Build Examples:\033[0m\n"
 	@printf "  \033[36mmake image-build DEVICE=xpu\033[0m                    # Build Intel XPU Docker image\n"
 	@printf "  \033[36mmake image-build DEVICE=xpu VERSION=v0.2.0\033[0m     # Build with specific version\n"
 	@printf "  \033[36mmake image-push DEVICE=xpu\033[0m                     # Push Intel XPU Docker image\n"
-	@printf "  \033[36mmake image-retag DEVICE=xpu NEW_TAG=test\033[0m                     # Re-Tag Intel XPU Docker image\n"
+	@printf "  \033[36mmake image-retag DEVICE=xpu NEW_TAG=test\033[0m       # Re-Tag Intel XPU Docker image\n"
 	@printf "  \033[36mmake env DEVICE=xpu\033[0m                            # Show XPU environment variables\n"
 	@printf "\n\033[1mCUDA Build Examples:\033[0m\n"
 	@printf "  \033[36mmake image-build DEVICE=cuda\033[0m                            # Build CUDA Docker image (default, no EFA)\n"
@@ -103,39 +136,25 @@ buildah-build: check-builder ## Build and push image (multi-arch if supported)
 	@echo "✅ Using builder: $(BUILDER)"
 	@if [ "$(DEVICE)" = "xpu" ]; then $(MAKE) xpu-prepare; fi
 	@if [ "$(BUILDER)" = "buildah" ]; then \
-	  echo "🔧 Buildah detected: Performing multi-arch build with $(DOCKERFILE_DIR)/$(DOCKERFILE)…"; \
-	  FINAL_TAG=$(IMG); \
-	  for arch in amd64; do \
-		ARCH_TAG=$$FINAL_TAG-$$arch; \
-	    echo "📦 Building for architecture: $$arch"; \
-		buildah build --file $(DOCKERFILE_PATH) --arch=$$arch --os=linux --layers \
-			$(if $(filter cuda,$(DEVICE)),--build-arg ENABLE_EFA=$(ENABLE_EFA)) \
-			-t $(IMG)-$$arch $(BUILD_CONTEXT) || exit 1; \
-	    echo "🚀 Pushing image: $(IMG)-$$arch"; \
-	    buildah push $(IMG)-$$arch docker://$(IMG)-$$arch || exit 1; \
-	  done; \
-	  echo "🧼 Removing existing manifest (if any)..."; \
-	  buildah manifest rm $$FINAL_TAG || true; \
-	  echo "🧱 Creating and pushing manifest list: $(IMG)"; \
-	  buildah manifest create $(IMG); \
-	  for arch in amd64; do \
-	    ARCH_TAG=$$FINAL_TAG-$$arch; \
-	    buildah manifest add $$FINAL_TAG $$ARCH_TAG; \
-	  done; \
-	  buildah manifest push --all $(IMG) docker://$(IMG); \
+	  echo "🔧 Buildah detected: Building for $(ARCH) with $(DOCKERFILE_PATH)…"; \
+	  buildah build --file $(DOCKERFILE_PATH) --arch=$(ARCH) --os=linux --layers \
+		$(if $(filter cuda,$(DEVICE)),--build-arg ENABLE_EFA=$(ENABLE_EFA)) \
+		-t $(IMG) $(BUILD_CONTEXT) || exit 1; \
+	  echo "🚀 Pushing image: $(IMG)"; \
+	  buildah push $(IMG) docker://$(IMG) || exit 1; \
 	elif [ "$(BUILDER)" = "docker" ]; then \
-	  echo "🐳 Docker detected: Building with buildx..."; \
+	  echo "🐳 Docker detected: Building with buildx for linux/$(ARCH)..."; \
 	  sed -e '1 s/\(^FROM\)/FROM --platform=$${BUILDPLATFORM}/' $(DOCKERFILE_PATH) >$(DOCKERFILE_DIR)/Dockerfile.cross; \
 	  - docker buildx create --use --name image-builder || true; \
 	  docker buildx use image-builder; \
-	  docker buildx build --push --platform=$(PLATFORMS) --tag $(IMG) \
+	  docker buildx build --push --platform=linux/$(ARCH) --tag $(IMG) \
 		$(if $(filter cuda,$(DEVICE)),--build-arg ENABLE_EFA=$(ENABLE_EFA)) \
 		-f $(DOCKERFILE_DIR)/Dockerfile.cross $(BUILD_CONTEXT) || exit 1; \
 	  docker buildx rm image-builder || true; \
 	  rm $(DOCKERFILE_DIR)/Dockerfile.cross; \
 	elif [ "$(BUILDER)" = "podman" ]; then \
-	  echo "⚠️ Podman detected: Building single-arch image..."; \
-	  podman build --format=docker -f $(DOCKERFILE_PATH) -t $(IMG) $(BUILD_CONTEXT) || exit 1; \
+	  echo "⚠️ Podman detected: Building for linux/$(ARCH)..."; \
+	  podman build --platform=linux/$(ARCH) --format=docker -f $(DOCKERFILE_PATH) -t $(IMG) $(BUILD_CONTEXT) || exit 1; \
 	  podman push $(IMG) || exit 1; \
 	else \
 	  echo "❌ No supported container tool available."; \
@@ -144,9 +163,17 @@ buildah-build: check-builder ## Build and push image (multi-arch if supported)
 
 .PHONY:	image-build
 image-build: check-container-tool ## Build Docker image using $(CONTAINER_TOOL)
-	@printf "\033[33;1m==== Building Docker image $(IMG) ====\033[0m\n"
+	@printf "\033[33;1m==== Building Docker image $(IMG) for linux/$(ARCH) ====\033[0m\n"
 	@if [ "$(DEVICE)" = "xpu" ]; then $(MAKE) xpu-prepare; fi
-	$(CONTAINER_TOOL) build --progress=plain --platform $(PLATFORMS) \
+	$(CONTAINER_TOOL) build --progress=plain --platform linux/$(ARCH) \
+		--build-arg CUDA_MAJOR=$(CUDA_MAJOR) \
+		--build-arg CUDA_MINOR=$(CUDA_MINOR) \
+		--build-arg TARGETOS=$(OS) \
+		--build-arg BUILD_BASE_IMAGE_SUFFIX=$(BUILD_BASE_IMAGE_SUFFIX) \
+		--build-arg FINAL_BASE_IMAGE_SUFFIX=$(BASE_IMAGE_SUFFIX) \
+		--build-arg USE_SCCACHE=$(USE_SCCACHE) \
+		--build-arg MAX_JOBS=$(MAX_JOBS) \
+		--build-arg TORCH_CUDA_ARCH_LIST="$(TORCH_CUDA_ARCH_LIST)" \
 		$(if $(SUPPRESS_PYTHON_OUTPUT),--build-arg SUPPRESS_PYTHON_OUTPUT=$(SUPPRESS_PYTHON_OUTPUT)) \
 		--build-arg BUILD_DEBUG=$(BUILD_DEBUG) \
 		$(if $(filter cuda,$(DEVICE)),--build-arg ENABLE_EFA=$(ENABLE_EFA)) \
@@ -270,6 +297,11 @@ uninstall-rbac: check-kubectl check-kustomize check-envsubst ## Uninstall RBAC
 env:
 	@echo "IMAGE_BASE=$(IMAGE_BASE)"
 	@echo "VERSION=$(VERSION)"
+	@echo "ARCH=$(ARCH)"
+	@echo "OS=$(OS)"
+	@echo "CUDA_VERSION=$(CUDA_VERSION) ($(CUDA_MAJOR).$(CUDA_MINOR))"
+	@echo "BASE_IMAGE_SUFFIX=$(BASE_IMAGE_SUFFIX)"
+	@echo "USE_SCCACHE=$(USE_SCCACHE)"
 	@echo "IMG=$(IMG)"
 	@echo "CONTAINER_TOOL=$(CONTAINER_TOOL)"
 

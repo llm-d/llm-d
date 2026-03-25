@@ -1,13 +1,9 @@
 {
   "rhel_to_ubuntu": {
-    "python${PYTHON_VERSION}": null,
-    "python${PYTHON_VERSION}-pip": null,
-    "python${PYTHON_VERSION}-wheel": null,
-    "python${PYTHON_VERSION}-devel": null,
-    "python3.9": "python3.9",
-    "python3.9-pip": "python3.9-venv",
-    "python3.9-wheel": "python3-wheel",
-    "python3.9-devel": "python3.9-dev",
+    "python${PYTHON_VERSION}": "python${PYTHON_VERSION}",
+    "python${PYTHON_VERSION}-pip": "python${PYTHON_VERSION}-venv",
+    "python${PYTHON_VERSION}-wheel": "python3-wheel",
+    "python${PYTHON_VERSION}-devel": "python${PYTHON_VERSION}-dev",
     "procps": "procps",
     "findutils": "findutils",
     "gcc": "gcc",
