@@ -79,8 +79,6 @@ RUN git clone --branch ${NCCL_TESTS_VERSION} --depth 1 https://github.com/NVIDIA
     cd /tmp/nccl-tests && \
     make MPI=0 CUDA_HOME=/usr/local/cuda NCCL_HOME=/usr/local/cuda \
          NVCC_GENCODE="\
-         -gencode=arch=compute_70,code=sm_70 \
-         -gencode=arch=compute_75,code=sm_75 \
          -gencode=arch=compute_80,code=sm_80 \
          -gencode=arch=compute_86,code=sm_86 \
          -gencode=arch=compute_89,code=sm_89 \
