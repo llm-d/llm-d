@@ -88,6 +88,19 @@ SUPPRESS_PYTHON_OUTPUT ?=
 # When enabled, EFA installer provides RDMA packages; otherwise use CUDA base image packages
 ENABLE_EFA ?= false
 
+# ENABLE_GB200: Set to "true" to build with GB200-specific NVSHMEM and DeepEP versions (default: false)
+ENABLE_GB200 ?= false
+
+# Override NVSHMEM version and DeepEP repo/version for GB200 builds
+NVSHMEM_VERSION_OVERRIDE ?=
+DEEPEP_REPO_OVERRIDE ?=
+DEEPEP_VERSION_OVERRIDE ?=
+ifeq ($(ENABLE_GB200), true)
+	NVSHMEM_VERSION_OVERRIDE := $(GB200_NVSHMEM_VERSION)
+	DEEPEP_REPO_OVERRIDE := $(GB200_DEEPEP_REPO)
+	DEEPEP_VERSION_OVERRIDE := $(GB200_DEEPEP_VERSION)
+endif
+
 .PHONY: help
 help: ## Print help
 	@awk 'BEGIN {FS = ":.*##"; printf "\nUsage:\n  make \033[36m<target>\033[0m\n"} /^[a-zA-Z_0-9-]+:.*?##/ { printf "  \033[36m%-15s\033[0m %s\n", $$1, $$2 } /^##@/ { printf "\n\033[1m%s\033[0m\n", substr($$0, 5) } ' $(MAKEFILE_LIST)
@@ -105,7 +118,8 @@ help: ## Print help
 	@printf "\n\033[1mCUDA Build Examples:\033[0m\n"
 	@printf "  \033[36mmake image-build DEVICE=cuda\033[0m                            # Build CUDA Docker image (default, no EFA)\n"
 	@printf "  \033[36mmake image-build DEVICE=cuda BUILD_DEBUG=true\033[0m           # Build CUDA Docker image with debug symbols\n"
-	@printf "  \033[36mmake image-build DEVICE=cuda ENABLE_EFA=true\033[0m   # Build CUDA image with EFA support\n"
+	@printf "  \033[36mmake image-build DEVICE=cuda ENABLE_EFA=true\033[0m            # Build CUDA image with EFA support\n"
+	@printf "  \033[36mmake image-build DEVICE=cuda ENABLE_GB200=true\033[0m          # Build CUDA image for GB200\n"
 
 ##@ Development
 
@@ -139,6 +153,9 @@ buildah-build: check-builder ## Build and push image (multi-arch if supported)
 	  echo "🔧 Buildah detected: Building for $(ARCH) with $(DOCKERFILE_PATH)…"; \
 	  buildah build --file $(DOCKERFILE_PATH) --arch=$(ARCH) --os=linux --layers \
 		$(if $(filter cuda,$(DEVICE)),--build-arg ENABLE_EFA=$(ENABLE_EFA)) \
+		$(if $(NVSHMEM_VERSION_OVERRIDE),--build-arg NVSHMEM_VERSION=$(NVSHMEM_VERSION_OVERRIDE)) \
+		$(if $(DEEPEP_REPO_OVERRIDE),--build-arg DEEPEP_REPO=$(DEEPEP_REPO_OVERRIDE)) \
+		$(if $(DEEPEP_VERSION_OVERRIDE),--build-arg DEEPEP_VERSION=$(DEEPEP_VERSION_OVERRIDE)) \
 		-t $(IMG) $(BUILD_CONTEXT) || exit 1; \
 	  echo "🚀 Pushing image: $(IMG)"; \
 	  buildah push $(IMG) docker://$(IMG) || exit 1; \
@@ -149,6 +166,9 @@ buildah-build: check-builder ## Build and push image (multi-arch if supported)
 	  docker buildx use image-builder; \
 	  docker buildx build --push --platform=linux/$(ARCH) --tag $(IMG) \
 		$(if $(filter cuda,$(DEVICE)),--build-arg ENABLE_EFA=$(ENABLE_EFA)) \
+		$(if $(NVSHMEM_VERSION_OVERRIDE),--build-arg NVSHMEM_VERSION=$(NVSHMEM_VERSION_OVERRIDE)) \
+		$(if $(DEEPEP_REPO_OVERRIDE),--build-arg DEEPEP_REPO=$(DEEPEP_REPO_OVERRIDE)) \
+		$(if $(DEEPEP_VERSION_OVERRIDE),--build-arg DEEPEP_VERSION=$(DEEPEP_VERSION_OVERRIDE)) \
 		-f $(DOCKERFILE_DIR)/Dockerfile.cross $(BUILD_CONTEXT) || exit 1; \
 	  docker buildx rm image-builder || true; \
 	  rm $(DOCKERFILE_DIR)/Dockerfile.cross; \
@@ -177,6 +197,9 @@ image-build: check-container-tool ## Build Docker image using $(CONTAINER_TOOL)
 		$(if $(SUPPRESS_PYTHON_OUTPUT),--build-arg SUPPRESS_PYTHON_OUTPUT=$(SUPPRESS_PYTHON_OUTPUT)) \
 		--build-arg BUILD_DEBUG=$(BUILD_DEBUG) \
 		$(if $(filter cuda,$(DEVICE)),--build-arg ENABLE_EFA=$(ENABLE_EFA)) \
+		$(if $(NVSHMEM_VERSION_OVERRIDE),--build-arg NVSHMEM_VERSION=$(NVSHMEM_VERSION_OVERRIDE)) \
+		$(if $(DEEPEP_REPO_OVERRIDE),--build-arg DEEPEP_REPO=$(DEEPEP_REPO_OVERRIDE)) \
+		$(if $(DEEPEP_VERSION_OVERRIDE),--build-arg DEEPEP_VERSION=$(DEEPEP_VERSION_OVERRIDE)) \
 		-t $(IMG) -f $(DOCKERFILE_PATH) $(BUILD_CONTEXT)
 
 .PHONY: xpu-prepare
