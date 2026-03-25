@@ -17,16 +17,16 @@ routing:
     secure: false
 
 prefill:
-  # Adding the accelartor type as cpu, created the resourceclaim template with both GPU and RDMA
   accelerator:
-    type: "cpu"
+    type: "intel-gaudi"
+    dra: "true"
   create: true
   replicas: 1
   resourceClaims:
-  - name: hpu-rdma-resource
-    resourceClaimTemplateName: intel-1-gaudi-1-rdma-pf
+  - name: rdma-resource
+    resourceClaimTemplateName: rdma-claim-template
   imagePullSecrets:
-    - name: amr-idc-registry
+    - name: <image registry>
   extraConfig: 
     hostIPC: true
   containers:
@@ -102,7 +102,7 @@ prefill:
         protocol: TCP
     resources:
       claims:
-        - name: hpu-rdma-resource   
+        - name: rdma-resource   
     mountModelVolume: true
     volumeMounts:
       - name: metrics-volume
@@ -111,9 +111,6 @@ prefill:
         mountPath: /dev/shm
       - name: torch-compile-cache
         mountPath: /.cache
-      - name: mlx-script
-        mountPath: /scripts
-        readOnly: true
   volumes:
     - name: metrics-volume
       emptyDir: {}
@@ -122,22 +119,18 @@ prefill:
         medium: Memory
     - name: torch-compile-cache
       emptyDir: {}
-    - name: mlx-script
-      configMap:
-        name: mlx-detect-script
-        defaultMode: 0755
 
 decode:
-  # Adding the accelartor type as cpu, created the resourceclaim template with both GPU and RDMA
   accelerator:
-    type: "cpu"
+    type: "nvidia"
+    dra: "true"
   create: true
   replicas: 1
   imagePullSecrets:
-    - name: amr-idc-registry
+    - name: <image registry>
   resourceClaims:
-  - name: gpu-rdma-resource
-    resourceClaimTemplateName: nvidia-1-gpu-1-rdma-pf
+  - name: rdma-resource
+    resourceClaimTemplateName: rdma-claim-template
   extraConfig: 
     hostIPC: true
   containers:
@@ -158,8 +151,6 @@ decode:
     command: ["/bin/bash", "-c"]
     args:
       - |
-        source /scripts/detect-mlx.sh
-        echo "Starting application with UCX_NET_DEVICES=$UCX_NET_DEVICES"
         export FLASHINFER_DISABLE_VERSION_CHECK=1
         ulimit -l unlimited
         VLLM_NIXL_DEVICE_TO_DEVICE=1 vllm serve Qwen/Qwen3-0.6B --port 8200  \
@@ -197,7 +188,7 @@ decode:
         protocol: TCP
     resources:
       claims: 
-        - name: gpu-rdma-resource
+        - name: rdma-resource
     mountModelVolume: false
     volumeMounts:
       - name: metrics-volume
@@ -206,9 +197,6 @@ decode:
         mountPath: /dev/shm
       - name: torch-compile-cache
         mountPath: /.cache
-      - name: mlx-script
-        mountPath: /scripts
-        readOnly: true
   volumes:
     - name: metrics-volume
       emptyDir: {}
@@ -217,8 +205,5 @@ decode:
         medium: Memory
     - name: torch-compile-cache
       emptyDir: {}
-    - name: mlx-script
-      configMap:
-        name: mlx-detect-script
-        defaultMode: 0755  
+
 

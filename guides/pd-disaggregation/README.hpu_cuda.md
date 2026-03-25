@@ -58,48 +58,39 @@ is used to allocate both Intel Gaudi and NVIDIA GPU devices to the respective po
 
 [DRANet](https://github.com/kubernetes-sigs/dranet) is used to expose RDMA Devices to pods, enabling high-bandwidth, low-latency KV cache transfer between the heterogeneous prefill and decode workers.
 
+`RDMA Device class` objects must be applied to your namespace before deploying the stack.
+
 - RDMA device class: `rdma-dranet-pf`
+
+```yaml
+apiVersion: resource.k8s.io/v1
+kind: DeviceClass
+metadata:
+  name: rdma-dranet-pf
+spec:
+  selectors:
+  - cel:
+      expression: device.driver == "dra.net"
+  - cel:
+      expression: device.attributes["dra.net"].rdma == true
+```
 
 ### ResourceClaimTemplates
 
-Two `ResourceClaimTemplate` objects must be applied to your namespace before deploying the stack.
+`ResourceClaimTemplate` objects must be applied to your namespace before deploying the stack.
 
-**Prefill — Intel Gaudi + RDMA VF:**
+** RDMA PF:**
 
-```yaml
-apiVersion: resource.k8s.io/v1
-kind: ResourceClaimTemplate
-metadata:
-  name: intel-1-gaudi-1-rdma
-spec:
-  spec:
-    devices:
-      requests:
-      - name: gaudi
-        exactly:
-          deviceClassName: gaudi.intel.com
-          count: 1
-      - name: rdma-net-interface
-        exactly:
-          deviceClassName: rdma-dranet-pf
-          count: 1
-```
-
-**Decode — NVIDIA GPU + RDMA VF:**
 
 ```yaml
 apiVersion: resource.k8s.io/v1
 kind: ResourceClaimTemplate
 metadata:
-  name: nvidia-1-gpu-1-rdma
+  name: rdma-claim-template
 spec:
   spec:
     devices:
       requests:
-      - name: gpu
-        exactly:
-          deviceClassName: gpu.nvidia.com
-          count: 1
       - name: rdma-net-interface
         exactly:
           deviceClassName: rdma-dranet-pf
@@ -109,8 +100,8 @@ spec:
 Apply both templates to your namespace:
 
 ```bash
-kubectl apply -f dra/resourceclaimtemplate/intel-1-gaudi-1-rdma.yaml -n ${NAMESPACE}
-kubectl apply -f dra/resourceclaimtemplate/nvidia-1-gpu-1-rdma.yaml -n ${NAMESPACE}
+kubectl apply -f rdma-dranet-pf.yaml -n ${NAMESPACE}
+kubectl apply -f rdma-claim-template.yaml -n ${NAMESPACE}
 ```
 
 
@@ -124,72 +115,76 @@ provides convenient build targets.
 
 | Dockerfile | Purpose | Used by |
 |---|---|---|
-| `docker/Dockerfile.hpu` | Intel Gaudi (HPU) vLLM image with NIXL | Prefill worker |
+| `docker/Dockerfile.rhel.hpu` | Intel Gaudi (HPU) vLLM image with NIXL (RHEL) | Prefill worker |
 | `docker/Dockerfile.cuda` | NVIDIA CUDA vLLM image with NIXL, UCX, NVSHMEM | Decode worker |
 
 
 ### Build the HPU (Prefill) Image
 
-The HPU image clones `vllm-gaudi` and `vllm-project`, installs NIXL, and targets Intel Gaudi2/3:
+The HPU image uses `Dockerfile.rhel.hpu` and targets Intel Gaudi2/3 on RHEL-based systems:
 
 ```bash
 # From the llm-d repo root
 cd /path/to/llm-d
 
-# Build with defaults (VERSION=v0.2.1, DEVICE=hpu)
-make image-build DEVICE=hpu
-
-# Build a specific version
-make image-build DEVICE=hpu VERSION=v0.3.0
-
-# Build with a custom registry/base tag
-make image-build DEVICE=hpu IMAGE_BASE=my-registry.example.com/llm-d-hpu-dev VERSION=latest
+sudo docker build \
+  -t llm-d:hpu_0.17.1 \
+  -f docker/Dockerfile.rhel.hpu \
+  . \
+  --build-arg https_proxy=$https_proxy \
+  --build-arg http_proxy=$http_proxy
 ```
 
-The resulting image is tagged as `ghcr.io/llm-d/llm-d-hpu-dev:<VERSION>`.
-
-Key build arguments for `Dockerfile.hpu`:
-
-| ARG | Default | Description |
-|---|---|---|
-| `DOCKER_URL` | `vault.habana.ai/gaudi-docker` | Habana base image registry |
-| `VERSION` | `1.22.0` | Habana software version |
-| `BASE_NAME` | `ubuntu22.04` | OS base |
-| `PT_VERSION` | `2.7.1` | PyTorch version |
+The resulting image is tagged as `llm-d:hpu_0.17.1`.
 
 ### Build the CUDA (Decode) Image
 
-The CUDA image is a multi-stage build that compiles UCX, NVSHMEM, NIXL, FlashInfer, and vLLM:
+The CUDA image is a multi-stage build that compiles UCX, NVSHMEM, NIXL, FlashInfer, and vLLM on RHEL UBI9:
 
 ```bash
-# Build with defaults (VERSION=v0.2.1, DEVICE=cuda)
-make image-build DEVICE=cuda
+# From the llm-d repo root
+cd /path/to/llm-d
 
-# Build with debug symbols
-make image-build DEVICE=cuda BUILD_DEBUG=true
-
-# Build with AWS EFA (Elastic Fabric Adapter) RDMA support
-make image-build DEVICE=cuda ENABLE_EFA=true
-
-# Build a production (non-dev) image
-make image-build DEVICE=cuda BUILD_TYPE=prod VERSION=v0.3.0
+sudo docker build \
+  -t llm-d:cuda_0.17.1 \
+  -f docker/Dockerfile.cuda \
+  . \
+  --build-arg https_proxy=$https_proxy \
+  --build-arg http_proxy=$http_proxy \
+  --build-arg USE_SCCACHE=false \
+  --build-arg CUDA_MAJOR=12 \
+  --build-arg CUDA_MINOR=9 \
+  --build-arg CUDA_PATCH=1 \
+  --build-arg TARGETOS=rhel \
+  --build-arg BASE_IMAGE_SUFFIX=ubi9 \
+  --build-arg PYTHON_VERSION=3.12 \
+  --build-arg VLLM_REPO=https://github.com/vllm-project/vllm.git \
+  --build-arg VLLM_COMMIT_SHA=95c0f928cdeeaa21c4906e73cee6a156e1b3b995 \
+  --build-arg VLLM_PREBUILT=0 \
+  --build-arg VLLM_USE_PRECOMPILED=1 \
+  --build-arg VLLM_PRECOMPILED_WHEEL_COMMIT=95c0f928cdeeaa21c4906e73cee6a156e1b3b995 \
+  --build-arg LLM_D_OFFLOADING_CONNECTOR_VERSION=0.17.1 \
+  --build-arg ENABLE_EFA=false
 ```
 
-The resulting image is tagged as `ghcr.io/llm-d/llm-d-cuda-dev:<VERSION>`.
+The resulting image is tagged as `llm-d:cuda_0.17.1`.
 
 Key build arguments for `Dockerfile.cuda`:
 
-| ARG | Default | Description |
+| ARG | Value | Description |
 |---|---|---|
-| `CUDA_MAJOR` / `CUDA_MINOR` / `CUDA_PATCH` | `12.9.1` | CUDA version |
-| `UCX_VERSION` | `v1.20.0` | UCX transport library version |
-| `NIXL_VERSION` | `0.10.0` | NIXL KV transfer library version |
-| `FLASHINFER_VERSION` | `v0.6.1` | FlashInfer attention kernel version |
+| `CUDA_MAJOR` / `CUDA_MINOR` / `CUDA_PATCH` | `12` / `9` / `1` | CUDA version |
+| `TARGETOS` | `rhel` | Target OS type |
+| `BASE_IMAGE_SUFFIX` | `ubi9` | Base image suffix (RHEL UBI9) |
+| `PYTHON_VERSION` | `3.12` | Python version |
+| `VLLM_REPO` | `https://github.com/vllm-project/vllm.git` | vLLM source repository |
+| `VLLM_COMMIT_SHA` | `95c0f928...` | vLLM commit to build from |
+| `VLLM_PREBUILT` | `0` | Whether to use a prebuilt vLLM binary |
+| `VLLM_USE_PRECOMPILED` | `1` | Use precompiled vLLM wheel |
+| `VLLM_PRECOMPILED_WHEEL_COMMIT` | `95c0f928...` | Commit SHA for precompiled wheel |
+| `LLM_D_OFFLOADING_CONNECTOR_VERSION` | `0.17.1` | llm-d offloading connector version |
 | `ENABLE_EFA` | `false` | Enable AWS EFA RDMA support |
-| `BUILD_NIXL_FROM_SOURCE` | `true` | Build NIXL from source vs. pip install |
-
-> **NOTE:** The vLLM commit is pinned in `docker/vllm-version`. To build against a specific
-> commit, pass `VLLM_COMMIT_SHA=<sha>` as an additional build arg or edit that file.
+| `USE_SCCACHE` | `false` | Enable sccache for build caching |
 
 
 ### Push Images to Your Registry
@@ -197,17 +192,13 @@ Key build arguments for `Dockerfile.cuda`:
 After building, retag and push to your internal registry (required for cluster access):
 
 ```bash
-# Retag the HPU image
-make image-retag DEVICE=hpu NEW_TAG=my-custom-tag
-docker push ghcr.io/llm-d/llm-d-hpu-dev:my-custom-tag
+# Retag and push the HPU image
+docker tag llm-d:hpu_0.17.1 my-registry.example.com/vllm-hpu:0.17.1
+docker push my-registry.example.com/vllm-hpu:0.17.1
 
-# Or build and push directly with a custom IMAGE_BASE
-make image-build DEVICE=hpu IMAGE_BASE=my-registry.example.com/vllm-hpu VERSION=v0.3.0
-make image-push  DEVICE=hpu IMAGE_BASE=my-registry.example.com/vllm-hpu VERSION=v0.3.0
-
-# Same for CUDA decode image
-make image-build DEVICE=cuda IMAGE_BASE=my-registry.example.com/vllm-cuda VERSION=v0.3.0
-make image-push  DEVICE=cuda IMAGE_BASE=my-registry.example.com/vllm-cuda VERSION=v0.3.0
+# Retag and push the CUDA image
+docker tag llm-d:cuda_0.17.1 my-registry.example.com/vllm-cuda:0.17.1
+docker push my-registry.example.com/vllm-cuda:0.17.1
 ```
 
 Then update the image references in `ms-pd/values_hpu_cuda.yaml`:
@@ -265,7 +256,8 @@ prefill:
 
 decode:
   extraConfig:
-    kubernetes.io/hostname: <your-nvidia-node-hostname>
+    nodeSelector:
+      kubernetes.io/hostname: <your-nvidia-node-hostname>
 ```
 
 ### Step 3: Deploy the Stack
