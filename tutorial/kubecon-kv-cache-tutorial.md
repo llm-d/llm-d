@@ -28,20 +28,22 @@
 Install these tools **before** the session if possible. If not, you can install
 during the presentation (Part 0).
 
-| Tool | Version | Install |
-|------|---------|---------|
-| `docker` | 20.10+ | [docs.docker.com](https://docs.docker.com/get-docker/) |
-| `kind` | v0.20+ | `brew install kind` / [kind.sigs.k8s.io](https://kind.sigs.k8s.io/docs/user/quick-start/#installation) |
-| `kubectl` | v1.28+ | [kubernetes.io/docs](https://kubernetes.io/docs/tasks/tools/install-kubectl/) |
-| `helm` | v3.12+ (not v4) | [helm.sh/docs](https://helm.sh/docs/intro/install/) |
-| `helmfile` | v1.1+ | [github.com/helmfile](https://github.com/helmfile/helmfile?tab=readme-ov-file#installation) |
-| `yq` | v4+ | `brew install yq` / [github.com/mikefarah/yq](https://github.com/mikefarah/yq) |
-| `jq` | any | `brew install jq` / [jqlang.github.io](https://jqlang.github.io/jq/) |
+| Tool | Version | macOS | Linux |
+|------|---------|-------|-------|
+| `docker` | 20.10+ | [Docker Desktop](https://docs.docker.com/desktop/install/mac-install/) or [Rancher Desktop](https://rancherdesktop.io/) | [docs.docker.com](https://docs.docker.com/engine/install/) |
+| `kind` | v0.20+ | `brew install kind` | `go install sigs.k8s.io/kind@v0.27.0` or [binary releases](https://kind.sigs.k8s.io/docs/user/quick-start/#installing-from-release-binaries) |
+| `kubectl` | v1.28+ | `brew install kubectl` | [kubernetes.io](https://kubernetes.io/docs/tasks/tools/install-kubectl-linux/) |
+| `helm` | v3.12+ (**not** v4) | `brew install helm@3` | [helm.sh](https://helm.sh/docs/intro/install/) |
+| `helmfile` | v1.1+ | `brew install helmfile` | [binary releases](https://github.com/helmfile/helmfile/releases) |
+| `yq` | v4+ | `brew install yq` | [binary releases](https://github.com/mikefarah/yq/releases) |
+| `jq` | any | `brew install jq` | `apt install jq` / `dnf install jq` |
 
 > **Shortcut**: The llm-d repo has a script that installs kubectl, helm, helmfile, and yq:
 > ```bash
 > ./guides/prereq/client-setup/install-deps.sh
 > ```
+>
+> You still need to install **docker** and **kind** separately — the script doesn't cover those.
 
 ---
 
@@ -197,7 +199,7 @@ spec:
             - "--model"
             - "mistralai/Mistral-7B-v0.1"  # open model for tokenizer (no HF token needed)
             - "--served-model-name"
-            - "random"           # API-visible model name stays "random"
+            - "mistralai/Mistral-7B-v0.1"
             - "--enable-kvcache"
             - "--kv-cache-size"
             - "19688"            # 315k tokens / 16 block-size (matches Qwen3-32B TP=2)
@@ -327,7 +329,7 @@ groups, 6000-token system prompts, 1200-token questions, 1000-token outputs.
 ```bash
 ./tutorial/generate-shared-prefix-traffic.sh \
     -e http://localhost:8000 \
-    -m random \
+    -m mistralai/Mistral-7B-v0.1 \
     -d 120 \
     -r 5 \
     -p 3
@@ -425,7 +427,7 @@ kubectl scale deployment ms-sim-llm-d-modelservice-decode -n ${NAMESPACE} --repl
 # Configure simulator with realistic latencies (matching the baseline config)
 kubectl patch deployment ms-sim-llm-d-modelservice-decode -n ${NAMESPACE} --type=json -p='[
   {"op":"replace","path":"/spec/template/spec/containers/0/args","value":[
-    "--model","mistralai/Mistral-7B-v0.1","--port","8200","--served-model-name","random",
+    "--model","mistralai/Mistral-7B-v0.1","--port","8200","--served-model-name","mistralai/Mistral-7B-v0.1",
     "--enable-kvcache","--kv-cache-size","19688",
     "--time-to-first-token","100ms","--prefill-time-per-token","2ms",
     "--inter-token-latency","25ms","--max-model-len","32768","--max-num-seqs","256",
@@ -506,7 +508,7 @@ kubectl port-forward -n ${NAMESPACE} svc/${GATEWAY_SVC} 8000:80 &
 
 ./tutorial/generate-shared-prefix-traffic.sh \
     -e http://localhost:8000 \
-    -m random \
+    -m mistralai/Mistral-7B-v0.1 \
     -d 120 \
     -r 5 \
     -p 3

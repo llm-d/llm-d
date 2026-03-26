@@ -19,7 +19,7 @@ set -euo pipefail
 
 # Defaults
 ENDPOINT="${ENDPOINT:-http://localhost:8000}"
-MODEL="${MODEL_NAME:-random}"
+MODEL="${MODEL_NAME:-mistralai/Mistral-7B-v0.1}"
 DURATION=120
 RATE=5
 NUM_PREFIXES=3

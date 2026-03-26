@@ -7,13 +7,13 @@
 # Single stage at rate 35 req/s for 120s (~4200 requests).
 # Adjust rate/duration as needed for your hardware.
 #
-# For the simulator: model_name is "random" (what the simulator serves).
-# For real GPUs:     change model_name to your deployed model (e.g., Qwen/Qwen3-32B).
-# Tokenizer always uses Qwen/Qwen3-32B to generate realistic synthetic prompts.
+# Model: mistralai/Mistral-7B-v0.1 (open, no HF token needed for tokenizer).
+# For real GPUs: change to your deployed model (e.g., Qwen/Qwen3-32B).
+# Tokenizer uses Qwen/Qwen3-32B to generate realistic synthetic prompts.
 
 endpoint:
   stack_name: &stack_name tutorial-benchmark
-  model: &model random
+  model: &model mistralai/Mistral-7B-v0.1
   namespace: &namespace ${NAMESPACE}
   base_url: &url http://${GATEWAY_SVC}.${NAMESPACE}.svc.cluster.local:80
   hf_token_secret: llm-d-hf-token

@@ -78,13 +78,13 @@ Verify: `kubectl get nodes` (4 nodes, all Ready), `kubectl get pods -n llm-d-mon
 
 Deploy 8 simulator pods with a plain Service. The simulator needs realistic latency config:
 ```
---model mistralai/Mistral-7B-v0.1 --served-model-name random --enable-kvcache
+--model mistralai/Mistral-7B-v0.1 --served-model-name mistralai/Mistral-7B-v0.1 --enable-kvcache
 --kv-cache-size 19688 --time-to-first-token 100ms --prefill-time-per-token 2ms
 --inter-token-latency 25ms --max-model-len 32768 --max-num-seqs 256
 --tokenizers-cache-dir /cache/tokenizers
 ```
 This gives: 315k tokens KV-cache per pod, realistic prefill latency, ~40 tok/s decode.
-Uses Mistral-7B tokenizer (open, no HF token needed). API model name is "random".
+Uses Mistral-7B tokenizer (open, no HF token needed). Model name is `mistralai/Mistral-7B-v0.1` everywhere (API + tokenizer).
 Pods need: `POD_IP` env (fieldRef), `HF_HOME=/cache` env, writable `/cache` volume (emptyDir).
 Without `--model`, the simulator crashes with "model parameter is empty."
 
@@ -145,7 +145,7 @@ Show production numbers, cleanup, next steps. See the tutorial for details.
 ## Key facts
 
 - **Namespace**: `llm-d-tutorial`
-- **Model name**: `random` (what the simulator serves)
+- **Model name**: `mistralai/Mistral-7B-v0.1` (open model, no HF token needed)
 - **Helmfile environment**: `-e kgateway` (for kind deployments)
 - **Decode deployment name**: `ms-sim-llm-d-modelservice-decode`
 - **Gateway service name**: `infra-sim-inference-gateway`
@@ -158,7 +158,7 @@ Show production numbers, cleanup, next steps. See the tutorial for details.
 
 | Problem | Cause | Fix |
 |---------|-------|-----|
-| Simulator crashes: "model parameter is empty" | Missing `--model` arg | Add `args: ["--model", "random"]` to container spec |
+| Simulator crashes: "model parameter is empty" | Missing `--model` arg | Add `args: ["--model", "mistralai/Mistral-7B-v0.1"]` to container spec |
 | `ImagePullBackOff` | Image not loaded into kind | `kind load docker-image <image> --name llm-d-tutorial` |
 | Gateway not programmed | CRDs missing | `./guides/prereq/gateway-provider/install-gateway-provider-dependencies.sh` |
 | No metrics in Grafana | Namespace not labeled | `kubectl label namespace llm-d-tutorial monitoring-ns=llm-d-monitoring` |
