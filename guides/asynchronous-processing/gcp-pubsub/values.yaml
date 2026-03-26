@@ -1,0 +1,7 @@
+ap:
+  messageQueueImpl: "gcp-pubsub"
+  gcpPubSub:
+    enabled: true
+    requestSubscriberId: "projects/your-project-id/subscriptions/async-proc-requests-sub"
+    resultTopicId: "projects/your-project-id/topics/async-proc-results"
+    requestPathURL: "/v1/completions"

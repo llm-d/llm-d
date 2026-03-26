@@ -1,0 +1,9 @@
+ap:
+  messageQueueImpl: "redis-sortedset"
+  redis:
+    enabled: true
+    host: "redis-master.redis.svc.cluster.local"
+    port: 6379
+    requestPathURL: "/v1/completions"
+    requestQueueName: "request-sortedset"
+    resultQueueName: "result-list"

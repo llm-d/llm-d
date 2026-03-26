@@ -1,0 +1,18 @@
+ap:
+  igwBaseURL: "http://infra-inference-scheduling-inference-gateway-istio.llm-d-inference-scheduler.svc.cluster.local:80"
+  image:
+    repository: ghcr.io/llm-d/async-processor
+    tag: v0.0.1
+  imagePullPolicy: Always
+
+  metrics:
+    enabled: true
+    port: 9090
+    secure: false
+
+  # Default implementations are disabled here; pick one in the subdirectories or environment
+  gcpPubSub:
+    enabled: false
+  
+  redis:
+    enabled: false

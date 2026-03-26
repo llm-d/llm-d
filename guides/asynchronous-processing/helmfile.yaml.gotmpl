@@ -1,0 +1,16 @@
+repositories:
+  - name: async-processor 
+    url: https://llm-d-incubation.github.io/llm-d-async/
+
+releases:
+  - name: async-processor
+    namespace: {{ .Namespace | default "llm-d-async" }}
+    chart: /usr/local/google/home/shimib/gitt/async/llm-d-async/charts/async-processor
+    version: v0.0.1
+    values:
+      - values.yaml
+    {{- if eq .Environment.Name "gcp-pubsub" }}
+      - gcp-pubsub/values.yaml
+    {{- else if eq .Environment.Name "redis" }}
+      - redis/values.yaml
+    {{- end }}
