@@ -28,7 +28,7 @@ decode:
   replicas: 2
   initContainers:
     - name: preprocess
-      image: "icr.io/vopo/llm-d-benchmark:latest"
+      image: ghcr.io/llm-d/llm-d-benchmark:v0.5.1
       imagePullPolicy: Always
       command: ["set_llmdbench_environment.py", "-e", "/shared-config/llmdbench_env.sh", "-i"]
       env:
@@ -131,7 +131,6 @@ decode:
         runAsGroup: 0
         runAsUser: 0
       imagePullPolicy: Always
-    mountModelVolume: true
     volumeMounts:
       - name: metrics-volume
         mountPath: /.config
@@ -157,7 +156,7 @@ prefill:
   replicas: 1
   initContainers:
     - name: preprocess
-      image: "icr.io/vopo/llm-d-benchmark:latest"
+      image: ghcr.io/llm-d/llm-d-benchmark:v0.5.1
       imagePullPolicy: Always
       command: ["set_llmdbench_environment.py", "-e", "/shared-config/llmdbench_env.sh", "-i"]
       env:
