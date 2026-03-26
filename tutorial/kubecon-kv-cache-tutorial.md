@@ -140,6 +140,7 @@ docker images ghcr.io/llm-d/llm-d-benchmark:v0.5.0 -q | grep -q . && \
 ```bash
 export NAMESPACE=llm-d-tutorial
 kubectl create namespace ${NAMESPACE}
+kubectl label namespace ${NAMESPACE} monitoring-ns=llm-d-monitoring
 ```
 
 ### Verify setup
@@ -274,6 +275,21 @@ spec:
       port: 80
       targetPort: 8000
   type: ClusterIP
+---
+apiVersion: monitoring.coreos.com/v1
+kind: PodMonitor
+metadata:
+  name: vllm-baseline
+  labels:
+    app: vllm-baseline
+spec:
+  selector:
+    matchLabels:
+      app: vllm-baseline
+  podMetricsEndpoints:
+    - port: http
+      path: /metrics
+      interval: 15s
 EOF
 ```
 
@@ -421,6 +437,7 @@ Helm charts:
 ```bash
 kubectl delete deployment vllm-baseline -n ${NAMESPACE}
 kubectl delete service vllm-baseline -n ${NAMESPACE}
+kubectl delete podmonitor vllm-baseline -n ${NAMESPACE}
 ```
 
 ### 2.4 Deploy the full llm-d simulator stack

@@ -72,6 +72,7 @@ kind load docker-image cr.kgateway.dev/kgateway-dev/envoy-wrapper:v2.1.1 --name 
 # 5. Create namespace
 export NAMESPACE=llm-d-tutorial
 kubectl create namespace ${NAMESPACE}
+kubectl label namespace ${NAMESPACE} monitoring-ns=llm-d-monitoring
 ```
 
 Verify: `kubectl get nodes` (4 nodes, all Ready), `kubectl get pods -n llm-d-monitoring` (5+ pods).
@@ -118,6 +119,7 @@ cd ../../..
 # Delete baseline
 kubectl delete deployment vllm-baseline -n ${NAMESPACE}
 kubectl delete service vllm-baseline -n ${NAMESPACE}
+kubectl delete podmonitor vllm-baseline -n ${NAMESPACE}
 
 # Deploy llm-d stack
 cd guides/simulated-accelerators
