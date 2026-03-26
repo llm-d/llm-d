@@ -76,8 +76,13 @@ Verify: `kubectl get nodes` (4 nodes, all Ready), `kubectl get pods -n llm-d-mon
 
 ### Part 1: Baseline (20 min) — deploy vLLM behind plain k8s Service
 
-Deploy 8 simulator pods with a plain Service. The simulator needs `args: ["--model", "random"]`
-or it crashes with "model parameter is empty."
+Deploy 8 simulator pods with a plain Service. The simulator needs realistic latency config:
+```
+--model random --enable-kvcache --kv-cache-size 19688 --time-to-first-token 100ms
+--prefill-time-per-token 0.5ms --inter-token-latency 25ms --max-model-len 32768 --max-num-seqs 256
+```
+This gives: 315k tokens KV-cache, 3s TTFT on cache miss (6000 × 0.5ms), 100ms on cache hit, ~40 tok/s decode.
+Without `--model`, the simulator crashes with "model parameter is empty."
 
 After deploying, open Grafana (`kubectl port-forward -n llm-d-monitoring svc/llmd-grafana 3000:80 &`)
 and Prometheus (`kubectl port-forward -n llm-d-monitoring svc/llmd-kube-prometheus-stack-prometheus 9090:9090 &`).
@@ -170,6 +175,9 @@ sum by (pod) (rate(inference_extension_picked_endpoint_total[3m]))
 
 # KV cache utilization per pod
 avg by (pod) (vllm:kv_cache_usage_perc)
+
+# TTFT median (the dramatic before/after signal)
+histogram_quantile(0.5, sum by (le) (rate(vllm:time_to_first_token_seconds_bucket[3m])))
 ```
 
 ## Production benchmark results (for context)
