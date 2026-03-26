@@ -78,10 +78,14 @@ Verify: `kubectl get nodes` (4 nodes, all Ready), `kubectl get pods -n llm-d-mon
 
 Deploy 8 simulator pods with a plain Service. The simulator needs realistic latency config:
 ```
---model random --enable-kvcache --kv-cache-size 19688 --time-to-first-token 100ms
---prefill-time-per-token 0.5ms --inter-token-latency 25ms --max-model-len 32768 --max-num-seqs 256
+--model mistralai/Mistral-7B-v0.1 --served-model-name random --enable-kvcache
+--kv-cache-size 19688 --time-to-first-token 100ms --prefill-time-per-token 2ms
+--inter-token-latency 25ms --max-model-len 32768 --max-num-seqs 256
+--tokenizers-cache-dir /cache/tokenizers
 ```
-This gives: 315k tokens KV-cache, 3s TTFT on cache miss (6000 × 0.5ms), 100ms on cache hit, ~40 tok/s decode.
+This gives: 315k tokens KV-cache per pod, realistic prefill latency, ~40 tok/s decode.
+Uses Mistral-7B tokenizer (open, no HF token needed). API model name is "random".
+Pods need: `POD_IP` env (fieldRef), `HF_HOME=/cache` env, writable `/cache` volume (emptyDir).
 Without `--model`, the simulator crashes with "model parameter is empty."
 
 After deploying, open Grafana (`kubectl port-forward -n llm-d-monitoring svc/llmd-grafana 3000:80 &`)

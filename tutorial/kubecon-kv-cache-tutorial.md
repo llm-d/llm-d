@@ -195,23 +195,37 @@ spec:
           image: ghcr.io/llm-d/llm-d-inference-sim:v0.7.1
           args:
             - "--model"
-            - "random"
+            - "mistralai/Mistral-7B-v0.1"  # open model for tokenizer (no HF token needed)
+            - "--served-model-name"
+            - "random"           # API-visible model name stays "random"
             - "--enable-kvcache"
             - "--kv-cache-size"
-            - "19688"           # 315k tokens / 16 block-size (matches Qwen3-32B TP=2)
+            - "19688"            # 315k tokens / 16 block-size (matches Qwen3-32B TP=2)
             - "--time-to-first-token"
-            - "100ms"           # base TTFT overhead
+            - "100ms"            # base TTFT overhead
             - "--prefill-time-per-token"
-            - "0.5ms"           # cache-miss cost: 6000 tokens × 0.5ms = 3s TTFT
+            - "2ms"              # cache-miss cost per uncached token
             - "--inter-token-latency"
-            - "25ms"            # decode speed (~40 tok/s)
+            - "25ms"             # decode speed (~40 tok/s)
             - "--max-model-len"
             - "32768"
             - "--max-num-seqs"
             - "256"
+            - "--tokenizers-cache-dir"
+            - "/cache/tokenizers"
+          env:
+            - name: POD_IP
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.podIP
+            - name: HF_HOME
+              value: /cache
           ports:
             - containerPort: 8000
               name: http
+          volumeMounts:
+            - name: cache
+              mountPath: /cache
           resources:
             requests:
               cpu: "250m"
@@ -219,6 +233,9 @@ spec:
             limits:
               cpu: "500m"
               memory: "1Gi"
+      volumes:
+        - name: cache
+          emptyDir: {}
 ---
 apiVersion: v1
 kind: Service
@@ -331,10 +348,9 @@ sum by (pod) (increase(vllm:request_success_total[3m]))
 
 **What you should see**:
 - Requests spread roughly evenly across all 8 pods
-- **TTFT is high (~3s)** — each pod independently computes KV-cache for the same
-  6000-token system prompts because round-robin scatters same-prefix requests
-  across different pods. Every pod is doing redundant prefill work.
-- On real GPUs, this means 8x the GPU cycles wasted on identical prefixes.
+- KV-cache utilization (`vllm:kv_cache_usage_perc`) is similar across all pods
+  — every pod independently builds cache for the same shared prefixes
+- On real GPUs, this means 8x the GPU cycles wasted on identical prefixes
 
 ---
 
@@ -409,15 +425,16 @@ kubectl scale deployment ms-sim-llm-d-modelservice-decode -n ${NAMESPACE} --repl
 # Configure simulator with realistic latencies (matching the baseline config)
 kubectl patch deployment ms-sim-llm-d-modelservice-decode -n ${NAMESPACE} --type=json -p='[
   {"op":"replace","path":"/spec/template/spec/containers/0/args","value":[
-    "--model","random","--port","8200","--served-model-name","random",
-    "--enable-kvcache",
-    "--kv-cache-size","19688",
-    "--time-to-first-token","100ms",
-    "--prefill-time-per-token","0.5ms",
-    "--inter-token-latency","25ms",
-    "--max-model-len","32768",
-    "--max-num-seqs","256"
-  ]}
+    "--model","mistralai/Mistral-7B-v0.1","--port","8200","--served-model-name","random",
+    "--enable-kvcache","--kv-cache-size","19688",
+    "--time-to-first-token","100ms","--prefill-time-per-token","2ms",
+    "--inter-token-latency","25ms","--max-model-len","32768","--max-num-seqs","256",
+    "--tokenizers-cache-dir","/cache/tokenizers"
+  ]},
+  {"op":"add","path":"/spec/template/spec/containers/0/env/-","value":{"name":"POD_IP","valueFrom":{"fieldRef":{"fieldPath":"status.podIP"}}}},
+  {"op":"add","path":"/spec/template/spec/containers/0/env/-","value":{"name":"HF_HOME","value":"/cache"}},
+  {"op":"add","path":"/spec/template/spec/containers/0/volumeMounts/-","value":{"name":"cache","mountPath":"/cache"}},
+  {"op":"add","path":"/spec/template/spec/volumes/-","value":{"name":"cache","emptyDir":{}}}
 ]'
 
 # Fix: kgateway's envoy needs a writable /tmp on kind
@@ -511,10 +528,10 @@ done
 **What you should see now**:
 - Requests are no longer evenly distributed — the inference scheduler routes
   requests that share a prefix to the **same instance**
-- **TTFT drops from ~3s to ~100ms** — pods that receive repeated prefixes serve
-  them from KV-cache instead of recomputing prefill
-- Some decode pods handle more traffic while others are relatively idle — this
-  is the scheduler concentrating shared-prefix traffic for cache reuse
+- KV-cache utilization is higher on a few "hot" pods (they hold the cached prefixes)
+  while other pods have lower utilization
+- On real GPUs, this means pods that receive repeated prefixes serve them from
+  KV-cache instead of recomputing prefill — dramatically lower TTFT
 
 **Compare in Grafana:**
 
@@ -549,13 +566,8 @@ KV cache utilization per pod:
 avg by (pod) (vllm:kv_cache_usage_perc)
 ```
 
-Time to first token (the dramatic signal):
-```promql
-histogram_quantile(0.5, sum by (le) (rate(vllm:time_to_first_token_seconds_bucket[3m])))
-```
-
-In the baseline: ~equal request distribution, TTFT ~3s (constant cache misses).
-With llm-d: skewed distribution, TTFT drops to ~100ms on hot pods (cache hits).
+In the baseline: ~equal request distribution, ~equal KV-cache usage across all pods.
+With llm-d: skewed distribution, concentrated KV-cache usage on hot pods.
 
 ---
 
