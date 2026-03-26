@@ -81,7 +81,8 @@ Architecture:
 **Step 1: Clone the repo and create the cluster**
 
 ```bash
-git clone https://github.com/llm-d/llm-d.git && cd llm-d
+git clone https://github.com/vMaroon/llm-d.git && cd llm-d
+git checkout claude/kind-khorana
 
 cat <<'EOF' > kind-config.yaml
 kind: Cluster
