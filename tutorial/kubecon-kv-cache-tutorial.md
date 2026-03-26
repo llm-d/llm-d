@@ -33,17 +33,17 @@ during the presentation (Part 0).
 | `docker` | 20.10+ | [Docker Desktop](https://docs.docker.com/desktop/install/mac-install/) or [Rancher Desktop](https://rancherdesktop.io/) | [docs.docker.com](https://docs.docker.com/engine/install/) |
 | `kind` | v0.20+ | `brew install kind` | `go install sigs.k8s.io/kind@v0.27.0` or [binary releases](https://kind.sigs.k8s.io/docs/user/quick-start/#installing-from-release-binaries) |
 | `kubectl` | v1.28+ | `brew install kubectl` | [kubernetes.io](https://kubernetes.io/docs/tasks/tools/install-kubectl-linux/) |
-| `helm` | v3.12+ (**not** v4) | `brew install helm@3` | [helm.sh](https://helm.sh/docs/intro/install/) |
+| `helm` | v3.12–v3.19 (**not** v4) | `brew install helm@3` | Use `install-deps.sh` (pins v3.19.0) |
 | `helmfile` | v1.1+ | `brew install helmfile` | [binary releases](https://github.com/helmfile/helmfile/releases) |
 | `yq` | v4+ | `brew install yq` | [binary releases](https://github.com/mikefarah/yq/releases) |
 | `jq` | any | `brew install jq` | `apt install jq` / `dnf install jq` |
 
-> **Shortcut**: The llm-d repo has a script that installs kubectl, helm, helmfile, and yq:
+> **Shortcut**: The llm-d repo has a script that installs kubectl, helm (v3.19), helm-diff, helmfile, and yq:
 > ```bash
 > ./guides/prereq/client-setup/install-deps.sh
 > ```
 >
-> You still need to install **docker** and **kind** separately — the script doesn't cover those.
+> You still need to install **docker**, **kind**, and **jq** separately.
 
 ---
 
