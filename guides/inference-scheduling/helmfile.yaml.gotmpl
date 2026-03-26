@@ -99,6 +99,8 @@ releases:
     values:
     {{- if eq .Environment.Name "gke_tpu_v6" }}
       - ms-inference-scheduling/values_tpu_v6.yaml
+    {{- else if eq .Environment.Name "gke" }}
+      - ms-inference-scheduling/values_gke.yaml
     {{- else if eq .Environment.Name "gke_tpu_v7" }}
       - ms-inference-scheduling/values_tpu_v7.yaml
     {{- else if eq .Environment.Name "amd" }}
