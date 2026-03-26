@@ -51,7 +51,8 @@ EOF
 kind create cluster --name llm-d-tutorial --config kind-config.yaml
 
 # 2. Pull images in background
-docker pull ghcr.io/llm-d/llm-d-inference-sim:v0.7.1 &
+docker pull ghcr.io/llm-d/llm-d-inference-sim:v0.8.0 &
+docker pull ghcr.io/llm-d/llm-d-uds-tokenizer:v0.6.0 &
 docker pull ghcr.io/llm-d/llm-d-routing-sidecar:v0.6.0 &
 docker pull ghcr.io/llm-d/llm-d-inference-scheduler:v0.6.0 &
 docker pull cr.kgateway.dev/kgateway-dev/envoy-wrapper:v2.1.1 &
@@ -59,7 +60,8 @@ docker pull cr.kgateway.dev/kgateway-dev/envoy-wrapper:v2.1.1 &
 wait
 
 # 3. Load into kind
-kind load docker-image ghcr.io/llm-d/llm-d-inference-sim:v0.7.1 --name llm-d-tutorial
+kind load docker-image ghcr.io/llm-d/llm-d-inference-sim:v0.8.0 --name llm-d-tutorial
+kind load docker-image ghcr.io/llm-d/llm-d-uds-tokenizer:v0.6.0 --name llm-d-tutorial
 kind load docker-image ghcr.io/llm-d/llm-d-routing-sidecar:v0.6.0 --name llm-d-tutorial
 kind load docker-image ghcr.io/llm-d/llm-d-inference-scheduler:v0.6.0 --name llm-d-tutorial
 kind load docker-image cr.kgateway.dev/kgateway-dev/envoy-wrapper:v2.1.1 --name llm-d-tutorial
@@ -78,15 +80,18 @@ Verify: `kubectl get nodes` (4 nodes, all Ready), `kubectl get pods -n llm-d-mon
 
 Deploy 8 simulator pods with a plain Service. The simulator needs realistic latency config:
 ```
---model mistralai/Mistral-7B-v0.1 --served-model-name mistralai/Mistral-7B-v0.1 --enable-kvcache
---kv-cache-size 19688 --time-to-first-token 100ms --prefill-time-per-token 2ms
+--model mistralai/Mistral-7B-v0.1 --served-model-name mistralai/Mistral-7B-v0.1
+--enable-kvcache --kv-cache-size 19688 --latency-calculator per-token
+--prefill-overhead 100ms --prefill-time-per-token 0.5ms
 --inter-token-latency 25ms --max-model-len 32768 --max-num-seqs 256
---tokenizers-cache-dir /cache/tokenizers
 ```
-This gives: 315k tokens KV-cache per pod, realistic prefill latency, ~40 tok/s decode.
-Uses Mistral-7B tokenizer (open, no HF token needed). Model name is `mistralai/Mistral-7B-v0.1` everywhere (API + tokenizer).
-Pods need: `POD_IP` env (fieldRef), `HF_HOME=/cache` env, writable `/cache` volume (emptyDir).
-Without `--model`, the simulator crashes with "model parameter is empty."
+Key details:
+- Image: `ghcr.io/llm-d/llm-d-inference-sim:v0.8.0` (v0.7.1 has a /go permissions bug with KV-cache)
+- UDS tokenizer sidecar (`ghcr.io/llm-d/llm-d-uds-tokenizer:v0.6.0`) required for tokenization
+- `--latency-calculator per-token` + `--prefill-overhead` + `--prefill-time-per-token` (NOT `--time-to-first-token` which overrides per-token calculation)
+- Cache miss TTFB: ~600ms. Cache hit TTFB: ~115ms. Verified on kind.
+- Pods need: `POD_IP` env (fieldRef), shared `/tmp/tokenizer` emptyDir volume between sidecar and simulator
+- Without `--model`, the simulator crashes with "model parameter is empty."
 
 After deploying, open Grafana (`kubectl port-forward -n llm-d-monitoring svc/llmd-grafana 3000:80 &`)
 and Prometheus (`kubectl port-forward -n llm-d-monitoring svc/llmd-kube-prometheus-stack-prometheus 9090:9090 &`).

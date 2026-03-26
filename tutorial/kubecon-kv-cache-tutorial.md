@@ -101,8 +101,9 @@ This takes 2-5 minutes. While it runs, continue with Step 2.
 **Step 2: Pull container images (run in background)**
 
 ```bash
-# These 4 images are required (~800 MB total)
-docker pull ghcr.io/llm-d/llm-d-inference-sim:v0.7.1 &
+# These 5 images are required (~1 GB total)
+docker pull ghcr.io/llm-d/llm-d-inference-sim:v0.8.0 &
+docker pull ghcr.io/llm-d/llm-d-uds-tokenizer:v0.6.0 &
 docker pull ghcr.io/llm-d/llm-d-routing-sidecar:v0.6.0 &
 docker pull ghcr.io/llm-d/llm-d-inference-scheduler:v0.6.0 &
 docker pull cr.kgateway.dev/kgateway-dev/envoy-wrapper:v2.1.1 &
@@ -119,7 +120,8 @@ Once the cluster is up and images are pulled:
 
 ```bash
 # Load images into kind
-kind load docker-image ghcr.io/llm-d/llm-d-inference-sim:v0.7.1 --name llm-d-tutorial
+kind load docker-image ghcr.io/llm-d/llm-d-inference-sim:v0.8.0 --name llm-d-tutorial
+kind load docker-image ghcr.io/llm-d/llm-d-uds-tokenizer:v0.6.0 --name llm-d-tutorial
 kind load docker-image ghcr.io/llm-d/llm-d-routing-sidecar:v0.6.0 --name llm-d-tutorial
 kind load docker-image ghcr.io/llm-d/llm-d-inference-scheduler:v0.6.0 --name llm-d-tutorial
 kind load docker-image cr.kgateway.dev/kgateway-dev/envoy-wrapper:v2.1.1 --name llm-d-tutorial
@@ -167,12 +169,13 @@ the 8-pod Qwen3-32B TP=2 setup from the inference-scheduling guide.
 
 The simulator is configured with realistic latencies:
 - **315k tokens KV-cache** per pod (matching Qwen3-32B TP=2 on real GPUs)
-- **3s TTFT on cache miss** (6000-token prefix × 0.5ms/token prefill)
-- **100ms TTFT on cache hit** (prefix already in KV-cache)
+- **~600ms TTFT on cache miss** (prefill overhead + per-token cost for uncached prefix)
+- **~115ms TTFT on cache hit** (prefix already in KV-cache — just the overhead)
 - **25ms inter-token latency** (~40 tokens/sec decode speed)
 
 This means the before/after difference is not just about routing distribution
-— you'll see actual TTFT differences in the metrics.
+— you'll see actual TTFT differences. A UDS tokenizer sidecar handles
+tokenization for KV-cache hashing.
 
 ```bash
 cat <<'EOF' | kubectl apply -n ${NAMESPACE} -f -
@@ -192,42 +195,61 @@ spec:
       labels:
         app: vllm-baseline
     spec:
+      initContainers:
+        - name: uds-tokenizer
+          image: ghcr.io/llm-d/llm-d-uds-tokenizer:v0.6.0
+          imagePullPolicy: IfNotPresent
+          restartPolicy: Always
+          env:
+            - name: PROBE_PORT
+              value: "8082"
+          ports:
+            - name: health
+              containerPort: 8082
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8082
+            initialDelaySeconds: 5
+            periodSeconds: 5
+          volumeMounts:
+            - name: uds-socket
+              mountPath: /tmp/tokenizer
       containers:
         - name: vllm-sim
-          image: ghcr.io/llm-d/llm-d-inference-sim:v0.7.1
+          image: ghcr.io/llm-d/llm-d-inference-sim:v0.8.0
+          imagePullPolicy: IfNotPresent
           args:
             - "--model"
-            - "mistralai/Mistral-7B-v0.1"  # open model for tokenizer (no HF token needed)
+            - "mistralai/Mistral-7B-v0.1"
             - "--served-model-name"
             - "mistralai/Mistral-7B-v0.1"
             - "--enable-kvcache"
             - "--kv-cache-size"
-            - "19688"            # 315k tokens / 16 block-size (matches Qwen3-32B TP=2)
-            - "--time-to-first-token"
-            - "100ms"            # base TTFT overhead
+            - "19688"            # 315k tokens / 16 block-size
+            - "--latency-calculator"
+            - "per-token"
+            - "--prefill-overhead"
+            - "100ms"            # base TTFT cost
             - "--prefill-time-per-token"
-            - "2ms"              # cache-miss cost per uncached token
+            - "0.5ms"            # per uncached token
             - "--inter-token-latency"
-            - "25ms"             # decode speed (~40 tok/s)
+            - "25ms"             # ~40 tok/s decode
             - "--max-model-len"
             - "32768"
             - "--max-num-seqs"
             - "256"
-            - "--tokenizers-cache-dir"
-            - "/cache/tokenizers"
           env:
             - name: POD_IP
               valueFrom:
                 fieldRef:
                   fieldPath: status.podIP
-            - name: HF_HOME
-              value: /cache
           ports:
             - containerPort: 8000
               name: http
           volumeMounts:
-            - name: cache
-              mountPath: /cache
+            - name: uds-socket
+              mountPath: /tmp/tokenizer
           resources:
             requests:
               cpu: "250m"
@@ -236,7 +258,7 @@ spec:
               cpu: "500m"
               memory: "1Gi"
       volumes:
-        - name: cache
+        - name: uds-socket
           emptyDir: {}
 ---
 apiVersion: v1
@@ -424,19 +446,27 @@ Scale the decode deployment to **8 replicas**, configure realistic latencies, an
 # Scale decode to 8 replicas
 kubectl scale deployment ms-sim-llm-d-modelservice-decode -n ${NAMESPACE} --replicas=8
 
-# Configure simulator with realistic latencies (matching the baseline config)
+# Configure simulator: v0.8.0 image, KV-cache latency, UDS tokenizer sidecar
 kubectl patch deployment ms-sim-llm-d-modelservice-decode -n ${NAMESPACE} --type=json -p='[
+  {"op":"replace","path":"/spec/template/spec/containers/0/image","value":"ghcr.io/llm-d/llm-d-inference-sim:v0.8.0"},
   {"op":"replace","path":"/spec/template/spec/containers/0/args","value":[
     "--model","mistralai/Mistral-7B-v0.1","--port","8200","--served-model-name","mistralai/Mistral-7B-v0.1",
     "--enable-kvcache","--kv-cache-size","19688",
-    "--time-to-first-token","100ms","--prefill-time-per-token","2ms",
-    "--inter-token-latency","25ms","--max-model-len","32768","--max-num-seqs","256",
-    "--tokenizers-cache-dir","/cache/tokenizers"
+    "--latency-calculator","per-token",
+    "--prefill-overhead","100ms","--prefill-time-per-token","0.5ms",
+    "--inter-token-latency","25ms","--max-model-len","32768","--max-num-seqs","256"
   ]},
   {"op":"add","path":"/spec/template/spec/containers/0/env/-","value":{"name":"POD_IP","valueFrom":{"fieldRef":{"fieldPath":"status.podIP"}}}},
-  {"op":"add","path":"/spec/template/spec/containers/0/env/-","value":{"name":"HF_HOME","value":"/cache"}},
-  {"op":"add","path":"/spec/template/spec/containers/0/volumeMounts/-","value":{"name":"cache","mountPath":"/cache"}},
-  {"op":"add","path":"/spec/template/spec/volumes/-","value":{"name":"cache","emptyDir":{}}}
+  {"op":"add","path":"/spec/template/spec/containers/0/volumeMounts/-","value":{"name":"uds-socket","mountPath":"/tmp/tokenizer"}},
+  {"op":"add","path":"/spec/template/spec/volumes/-","value":{"name":"uds-socket","emptyDir":{}}},
+  {"op":"add","path":"/spec/template/spec/initContainers","value":[{
+    "name":"uds-tokenizer","image":"ghcr.io/llm-d/llm-d-uds-tokenizer:v0.6.0",
+    "imagePullPolicy":"IfNotPresent","restartPolicy":"Always",
+    "env":[{"name":"PROBE_PORT","value":"8082"}],
+    "ports":[{"name":"health","containerPort":8082}],
+    "readinessProbe":{"httpGet":{"path":"/health","port":8082},"initialDelaySeconds":5,"periodSeconds":5},
+    "volumeMounts":[{"name":"uds-socket","mountPath":"/tmp/tokenizer"}]
+  }]}
 ]'
 
 # Fix: kgateway's envoy needs a writable /tmp on kind
