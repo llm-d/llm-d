@@ -1,0 +1,12 @@
+wva:
+  prometheus:
+    monitoringNamespace: llm-d-monitoring
+    baseURL: "http://llmd-kube-prometheus-stack-prometheus.llm-d-monitoring.svc.cluster.local:9090"
+    tls:
+      insecureSkipVerify: true
+va:
+  enabled: false
+hpa:
+  enabled: false
+vllmService:
+  enabled: false

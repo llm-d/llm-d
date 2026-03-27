@@ -1,0 +1,13 @@
+wva:
+  prometheus:
+    monitoringNamespace: openshift-user-workload-monitoring
+    baseURL: "https://thanos-querier.openshift-monitoring.svc.cluster.local:9091"
+    serviceAccountName: "prometheus-k8s"
+    tls:
+      insecureSkipVerify: true
+va:
+  enabled: false
+hpa:
+  enabled: false
+vllmService:
+  enabled: false

@@ -1,0 +1,35 @@
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: ms-inference-scheduling-llm-d-modelservice-decode
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: ms-inference-scheduling-llm-d-modelservice-decode
+  minReplicas: 1
+  maxReplicas: 16
+  metrics:
+    - type: External
+      external:
+        metric:
+          name: wva_desired_replicas
+          selector:
+            matchLabels:
+              variant_name: inference-scheduling-autoscaler
+        target:
+          type: AverageValue
+          averageValue: "1"
+  behavior:
+    scaleUp:
+      stabilizationWindowSeconds: 120
+      policies:
+        - type: Percent
+          value: 100
+          periodSeconds: 15
+    scaleDown:
+      stabilizationWindowSeconds: 120
+      policies:
+        - type: Percent
+          value: 100
+          periodSeconds: 15

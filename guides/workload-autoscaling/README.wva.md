@@ -2,11 +2,7 @@
 
 ## **MATURITY** : Experimental (not regularly tested by maintainers)
 
-> **Version Compatibility**: This guide is tested and validated with **WVA v0.5.1**. Ensure that all version references in installation commands match this version for compatibility.
->
-> **Breaking Changes in v0.5.1**: If upgrading from v0.4.1 or earlier, see the [Upgrading](#upgrading) section below for required migration steps.
-
-The [Workload Variant Autoscaler](https://github.com/llm-d-incubation/workload-variant-autoscaler/tree/v0.5.1) (WVA) provides dynamic autoscaling capabilities for llm-d inference deployments, automatically adjusting replica counts based on inference server saturation.
+The [Workload Variant Autoscaler](https://github.com/llm-d-incubation/workload-variant-autoscaler) (WVA) provides dynamic autoscaling capabilities for llm-d inference deployments, automatically adjusting replica counts based on inference server saturation.
 
 ## Overview
 
@@ -16,75 +12,47 @@ WVA integrates with llm-d to:
 - Optimize resource utilization by adjusting to traffic patterns
 - Reduce tail latency through saturation-based scaling decisions
 
-> **Note**: WVA currently supports only the [Intelligent Inference Scheduling](../inference-scheduling/README.md) well-lit path. Other well-lit paths (such as Prefill/Decode Disaggregation or Wide Expert-Parallelism) are not currently supported.
-
 ## Prerequisites
 
 Before installing WVA, ensure you have:
 
-1. **Kubernetes cluster**: A running Kubernetes cluster (v1.31+) with GPU support. WVA uses the [Intelligent Inference Scheduling](../inference-scheduling/README.md) well-lit path, which requires GPUs. See [Hardware Requirements](../inference-scheduling/README.md#hardware-requirements) for supported accelerator types. If you need to set up a local cluster:
-   - **Kind**: For Kind clusters with GPU emulation, use the [WVA Kind setup script](https://github.com/llm-d-incubation/workload-variant-autoscaler/blob/v0.5.1/deploy/kind-emulator/setup.sh) which creates a cluster and patches nodes with GPU capacity (required for pod scheduling if using GPU-requesting pods). **Note**: Saturation-based scaling does not require node patching; it only uses workload metrics. See [Infrastructure Prerequisites](../prereq/infrastructure/README.md) for other cluster setup options.
-   - **Minikube**: See [Minikube setup documentation](../../docs/infra-providers/minikube/README.md) for single-host development.
-   - **Production clusters**: See [Infrastructure Prerequisites](../prereq/infrastructure/README.md) for provider-specific setup (GKE, AKS, OpenShift (4.18+), etc.).
+1. Installed the llm-d inference stack from one of the well-lit path guides.
 
-2. **Gateway control plane**: Configure and deploy your [Gateway control plane](../prereq/gateway-provider/README.md) before installation. `istio` remains the default path in llm-d, and `agentgateway` is also supported as a first-class self-installed inference gateway. The legacy `kgateway` path remains available only for migration.
+    > **Note**: WVA requires HTTPS connections to Prometheus for metric collection. When installing the [monitoring stack](../../docs/monitoring/README.md), ensure to enable HTTPS/TLS support.
 
-3. **Prometheus monitoring stack**: WVA requires Prometheus to be accessible for metric collection. **WVA requires HTTPS connections to Prometheus**. The monitoring setup depends on your platform:
-   - **OpenShift**: User Workload Monitoring should be enabled (see [OpenShift monitoring docs](https://docs.redhat.com/en/documentation/monitoring_stack_for_red_hat_openshift/4.18/html-single/configuring_user_workload_monitoring/index))
-   - **GKE**: An in-cluster Prometheus instance is required (GMP does not expose HTTP API). See [GKE configuration](#gke) below for setup instructions.
-   - **Kind/Minikube**: Install Prometheus with TLS/HTTPS configuration. See [Kind/Minikube configuration](#other-kubernetes-platforms-kind-minikube-etc) below for installation and TLS setup instructions.
-   - **Other Kubernetes**: A Prometheus stack must be installed with HTTPS support (see [monitoring documentation](../../docs/monitoring/README.md))
+    > **Note**: If selecting namespace-scoped mode below, make sure to install the inference stack in the same namespace as WVA (by default `llm-d-autoscaler`).
 
-4. **Create Installation Namespace**:
+    > **Notes**: currently WVA does not support the Wide Expert Parallelism (EP/DP) with LeaderWorkerSet well-lit path. Support for this will be added in a future release.
+
+1. A Kubernetes metrics server installed and configured in your cluster (e.g., Prometheus with the either Prometheus Adapter or KEDA). WVA relies on external metrics to make scaling decisions. See [Install Prometheus Adapter (Required Dependency)](#install-prometheus-adapter-required-dependency) for installation instructions.
+
+1. Choose an [llm-version](../prereq/client-setup/README.md#llm-d-version).
+
+## Set your Namespace
 
   ```bash
   export NAMESPACE=llm-d-autoscaler
   kubectl create namespace ${NAMESPACE}
   ```
 
-1. **HuggingFace token secret**: [Create the `llm-d-hf-token` secret in your target namespace with the key `HF_TOKEN` matching a valid HuggingFace token](../prereq/client-setup/README.md#huggingface-token) to pull models.
+  **For OpenShift only**, ensure the namespace has the monitoring label:
 
-## Installation
+  ```bash
+  kubectl label namespace "${NAMESPACE}" openshift.io/user-monitoring=true --overwrite
+  ```
 
-The workload-autoscaling helmfile supports two installation modes (see [Step 5](#step-5-install-wva-with-llm-d-stack---if-not-deployed-already)):
+## Platform-Specific Configuration
 
-1. **Full Installation**: Installs the complete llm-d [Intelligent Inference Scheduling](../inference-scheduling/README.md) stack (infra, gaie, modelservice) plus WVA in a single `helmfile apply` command.
-2. **WVA-Only Installation**: Installs only WVA, connecting to an existing [Intelligent Inference Scheduling](../inference-scheduling/README.md) deployment.
+### OpenShift
 
-For full installation, `istio` remains the default environment, and `agentgateway` is also supported via `helmfile apply -e agentgateway`. The legacy `kgateway` environment remains available only as a deprecated migration path.
-
-**Install Prometheus Adapter separately in [Step 6](#step-6-install-prometheus-adapter-required-dependency) after WVA installation.**
-
-### Step 1: Configure WVA Values
-
-Edit `workload-autoscaling/values.yaml` to configure WVA settings (controller, Prometheus, accelerator, SLOs, HPA). Set namespace:
+For OpenShift deployments, use the OpenShift-specific Helm values file which configures WVA to connect to the cluster's Thanos Querier for metrics:
 
 ```bash
-export NAMESPACE=llm-d-autoscaler
+export HELM_VALUES=workload-autoscaling/values-openshift.yaml
+export CA_CERT=$(kubectl get secret thanos-querier-tls -n openshift-monitoring -o jsonpath='{.data.tls\.crt}' | base64 -d)
 ```
 
-### Step 2: Platform-Specific Configuration
-
-Update `workload-autoscaling/values.yaml` with platform-specific settings:
-
-#### OpenShift
-
-For OpenShift deployments, update the values file:
-
-```yaml
-wva:
-  prometheus:
-    monitoringNamespace: openshift-user-workload-monitoring
-    baseURL: "https://thanos-querier.openshift-monitoring.svc.cluster.local:9091"
-    serviceAccountName: "prometheus-k8s"
-    tls:
-      insecureSkipVerify: true # or "false" for production
-      caCertPath: "" # or set ca cert path for production - "/etc/ssl/certs/prometheus-ca.crt"
-```
-
-Extract CA cert (if required): `kubectl get secret thanos-querier-tls -n openshift-monitoring -o jsonpath='{.data.tls\.crt}' | base64 -d > ${TMPDIR:-/tmp}/prometheus-ca.crt`
-
-#### GKE
+### GKE
 
 GMP doesn't expose HTTP API. Deploy in-cluster Prometheus:
 
@@ -93,175 +61,103 @@ helm repo add prometheus-community https://prometheus-community.github.io/helm-c
 helm install kube-prometheus-stack prometheus-community/kube-prometheus-stack -n llm-d-monitoring --create-namespace
 ```
 
-Update `workload-autoscaling/values.yaml`:
-
-```yaml
-wva:
-  prometheus:
-    monitoringNamespace: llm-d-monitoring
-    baseURL: "http://llmd-kube-prometheus-stack-prometheus.llm-d-monitoring.svc.cluster.local:9090"
-    tls:
-      insecureSkipVerify: true
-```
-
-#### Other Kubernetes Platforms (Kind, Minikube, etc.)
-
-> **WVA HTTPS Requirement**: WVA **requires** HTTPS for Prometheus connections. The default Prometheus installation on Kind/Minikube uses HTTP only. You **must** install Prometheus and configure it with TLS.
-
-**Install Prometheus**:
+Then use the GKE-specific Helm values file which configures WVA to connect to the in-cluster Prometheus:
 
 ```bash
-export MON_NS=llm-d-monitoring
-
-# Install Prometheus stack
-helm repo add prometheus-community https://prometheus-community.github.io/helm-charts && helm repo update
-helm install llmd prometheus-community/kube-prometheus-stack -n ${MON_NS} --create-namespace
+export HELM_VALUES=workload-autoscaling/values-gke.yaml
+export CA_CERT=
 ```
 
-**Enable TLS on Prometheus** (Required):
+## Installation
 
-WVA requires HTTPS for Prometheus. Configure Prometheus with TLS:
+Install the WVA controller using helm:
+
+  ```bash
+  export VERSION=0.5.1
+  helm install llm-d-wva oci://ghcr.io/llm-d/workload-variant-autoscaler \
+    --namespace ${NAMESPACE} \
+    --version ${VERSION} \
+    --set wva.prometheus.caCert="$(echo "${CA_CERT}")" \
+    --values ${HELM_VALUES}
+  ```
+
+  > **Note**: By default, WVA is configured to watch all namespaces for VariantAutoscaling resources. You can scope this to the namespace where WVA is installed by setting the `namespaceScoped` flag to `true`: `--set wva.namespaceScoped=true`
+
+## Verify Installation
+
+Check that the WVA controller is running:
 
 ```bash
-export MON_NS=llm-d-monitoring
-
-# Create self-signed TLS certificate
-openssl req -x509 -newkey rsa:2048 -nodes \
-  -keyout ${TMPDIR:-/tmp}/prometheus-tls.key -out ${TMPDIR:-/tmp}/prometheus-tls.crt -days 365 \
-  -subj "/CN=prometheus" \
-  -addext "subjectAltName=DNS:llmd-kube-prometheus-stack-prometheus.${MON_NS}.svc.cluster.local,DNS:llmd-kube-prometheus-stack-prometheus.${MON_NS}.svc,DNS:prometheus,DNS:localhost"
-
-# Create TLS secret and upgrade Prometheus
-kubectl create secret tls prometheus-web-tls --cert=${TMPDIR:-/tmp}/prometheus-tls.crt --key=${TMPDIR:-/tmp}/prometheus-tls.key -n ${MON_NS} --dry-run=client -o yaml | kubectl apply -f -
-
-helm upgrade llmd prometheus-community/kube-prometheus-stack -n ${MON_NS} \
-  --set prometheus.prometheusSpec.web.tlsConfig.cert.secret.name=prometheus-web-tls \
-  --set prometheus.prometheusSpec.web.tlsConfig.cert.secret.key=tls.crt \
-  --set prometheus.prometheusSpec.web.tlsConfig.keySecret.name=prometheus-web-tls \
-  --set prometheus.prometheusSpec.web.tlsConfig.keySecret.key=tls.key \
-  --reuse-values
+kubectl get deployment -n ${NAMESPACE}
+NAME                                                       READY   UP-TO-DATE   AVAILABLE   AGE
+llm-d-wva-workload-variant-autoscaler-controller-manager   2/2     2            2           10m
 ```
 
-> **Note**: For Kind clusters, consider using [simulated-accelerators](../simulated-accelerators/README.md) if vLLM GPU detection fails. **Saturation-based scaling does not require node patching**—it only uses workload metrics (KV cache utilization, queue length). Simulator pods don't request GPUs, so they can schedule without node patching. If using regular vLLM with GPU resource requests on Kind, you must patch nodes for pods to schedule (e.g., `kubectl patch node <node-name> -p '{"status":{"capacity":{"nvidia.com/gpu":"8"}}}'`). WVA automatically discovers its namespace via `POD_NAMESPACE`.
+## Enabling Autoscaling for an Inference Deployment
 
-### Step 3: Create WVA Namespace (if needed)
+This section enables autoscaling for an existing [Intelligent Inference Scheduling](../inference-scheduling/README.md) deployment. It creates a `VariantAutoscaling` CR, and an HPA that reads the `wva_desired_replicas` metric.
 
-The helmfile creates `llm-d-autoscaler` namespace automatically if it doesn't exist. **Note:** If you created the namespace in Prerequisites #4 for the HF token secret, it's already created.
-
-**For OpenShift only**, ensure the namespace has the monitoring label:
+### Apply the Kustomize Overlay
 
 ```bash
-export NAMESPACE=${NAMESPACE:-llm-d-autoscaler}
-kubectl label namespace "${NAMESPACE}" openshift.io/user-monitoring=true --overwrite
+kubectl apply -k inference-scheduling-autoscaling -n ${NAMESPACE}
 ```
 
-### Step 4: Install WVA CRDs (Required)
+> **Note:** `${NAMESPACE}` must match the namespace where the inference-scheduling stack is running (default: `llm-d-inference-scheduler`).
 
-Install WVA CRDs before deploying:
+### Verify
+
+After a few minutes, you should see the new `VariantAutoscaling` resource:
 
 ```bash
-kubectl apply -f https://raw.githubusercontent.com/llm-d-incubation/workload-variant-autoscaler/v0.5.1/charts/workload-variant-autoscaler/crds/llmd.ai_variantautoscalings.yaml
-kubectl get crd variantautoscalings.llmd.ai
+kubectl get variantautoscaling ms-inference-scheduling-llm-d-modelservice-decode -n ${NAMESPACE}
 ```
 
-### Step 5: Install WVA (with llm-d Stack - if not deployed already)
+Expected output:
 
-Choose your installation mode:
+```
+NAME                                                TARGET                                              MODEL            OPTIMIZED   METRICSREADY   AGE
+ms-inference-scheduling-llm-d-modelservice-decode   ms-inference-scheduling-llm-d-modelservice-decode   Qwen/Qwen3-32B   1           True           37m
+```
 
-#### Option A: Full Installation (Default)
-
-Install the complete llm-d inference-scheduling stack (infra, gaie, modelservice) plus WVA:
+You should also see the HPA with the `wva_desired_replicas` metric:
 
 ```bash
-export NAMESPACE=${NAMESPACE:-llm-d-autoscaler}
-cd guides/workload-autoscaling
-helmfile apply -n ${NAMESPACE}
+kubectl get hpa -n ${NAMESPACE}
+NAME                                                REFERENCE                                              TARGETS   MINPODS   MAXPODS   REPLICAS   AGE
+ms-inference-scheduling-llm-d-modelservice-decode   Deployment/ms-inference-scheduling-llm-d-modelservice-decode   0%/1         1         16         1         37m
 ```
 
-To use `agentgateway` instead of the default `istio` environment:
+### Cleanup
+
+To remove the autoscaling configuration, simply delete the kustomize overlay:
 
 ```bash
-export NAMESPACE=${NAMESPACE:-llm-d-autoscaler}
-cd guides/workload-autoscaling
-helmfile apply -e agentgateway -n ${NAMESPACE}
+kubectl delete -k inference-scheduling-autoscaling/ -n ${NAMESPACE}
 ```
 
-To use the deprecated `kgateway` migration path:
+## WVA Controller Cleanup
+
+You can use helm to uninstall WVA:
 
 ```bash
-export NAMESPACE=${NAMESPACE:-llm-d-autoscaler}
-cd guides/workload-autoscaling
-helmfile apply -e kgateway -n ${NAMESPACE}
+helm uninstall llm-d-wva -n ${NAMESPACE}
 ```
 
-This installs the complete [Intelligent Inference Scheduling](../inference-scheduling/README.md) stack:
-
-- **Infra** (gateway infrastructure)
-- **GAIE** (inference pool and endpoint picker)
-- **Model Service** (vLLM inference pods)
-- **WVA** (workload-variant-autoscaler) in `llm-d-autoscaler` namespace
-
-WVA automatically discovers its namespace via `POD_NAMESPACE`.
-
-#### Option B: WVA-Only Installation (If utilizing existing stack)
-
-If you already have the [Intelligent Inference Scheduling](../inference-scheduling/README.md) stack installed, you can install only WVA and connect it to your existing deployment.
-
-**Prerequisites:**
-
-- An existing inference-scheduling deployment in your cluster
-- The namespace where inference-scheduling is deployed (default: `llm-d-inference-scheduler`)
-- The release name postfix used for inference-scheduling (default: `inference-scheduling`)
-
-**Configuration:**
-
-WVA will auto-detect the model service name based on common patterns, but you can override via environment variables or values file:
+If you installed Prometheus Adapter for WVA, you can uninstall it as well:
 
 ```bash
-# Set the namespace where your inference-scheduling is deployed (default: llm-d-inference-scheduling)
-export LLMD_NAMESPACE=llm-d-inference-scheduler
-
-# Set the release name postfix used for inference-scheduling (default: inference-scheduling)
-# This is used to auto-detect the model service name: ms-{RELEASE_NAME_POSTFIX}-llm-d-modelservice
-export LLMD_RELEASE_NAME_POSTFIX=inference-scheduling
-
-# Set the namespace for WVA installation (default: llm-d-autoscaler)
-export WVA_NAMESPACE=llm-d-autoscaler
+helm uninstall prometheus-adapter -n ${MON_NS:-llm-d-monitoring}
 ```
 
-#### Optional: Explicit Configuration in values.yaml
 
-For explicit control, you can override the auto-detected values in `workload-autoscaling/values.yaml`:
-
-```yaml
-llmd:
-  namespace: llm-d-inference-scheduling  # Namespace of existing inference-scheduling deployment
-  modelName: ms-inference-scheduling-llm-d-modelservice  # Explicit model service name (optional)
-  modelID: "Qwen/Qwen3-0.6B"  # Must match the model in your inference-scheduling deployment
-```
-
-**Install WVA only:**
-
-```bash
-cd guides/workload-autoscaling
-helmfile apply -e wva-only -n ${WVA_NAMESPACE}
-```
-
-> **Note**: Use `WVA_NAMESPACE` (not `LLMD_NAMESPACE`) for the `-n` flag. This is the namespace where WVA will be installed. WVA will connect to your existing inference-scheduling deployment in the `LLMD_NAMESPACE`.
-
-This installs only:
-
-- **WVA** (workload-variant-autoscaler) in the namespace specified by `WVA_NAMESPACE` (default: `llm-d-autoscaler`)
-
-WVA will connect to your existing inference-scheduling deployment using the configured namespace and model service name. The model service name is auto-detected as `ms-{LLMD_RELEASE_NAME_POSTFIX}-llm-d-modelservice` unless explicitly set in values.yaml.
-
-### Step 6: Install Prometheus Adapter (Required Dependency)
+## Install Prometheus Adapter (Required Dependency)
 
 Prometheus Adapter exposes WVA's external metric to HPA/KEDA. Install **after** WVA installation (Step 5), which creates the required `prometheus-ca` ConfigMap.
 
 Choose your platform and follow the corresponding section:
 
-#### 6.1: OpenShift
+### On OpenShift
 
 ```bash
 # Setup
@@ -303,7 +199,7 @@ rules:
 YAML
 ```
 
-#### 6.2: GKE/Generic Kubernetes
+### On GKE/Generic Kubernetes
 
 ```bash
 # Setup
@@ -324,7 +220,7 @@ helm upgrade -i prometheus-adapter prometheus-community/prometheus-adapter \
   --version 5.2.0 -n ${MON_NS} --create-namespace -f ${TMPDIR:-/tmp}/prometheus-adapter-values.yaml
 ```
 
-#### 6.3: Kind/HTTPS Prometheus
+### On Kind/HTTPS Prometheus
 
 For Kind clusters with HTTPS Prometheus (configured in Step 2), the `prometheus-ca` ConfigMap is created by WVA (Step 5). Configure Prometheus Adapter to use it:
 
@@ -365,150 +261,13 @@ helm upgrade -i prometheus-adapter prometheus-community/prometheus-adapter \
 
 **Verify installation**: `kubectl get pods -n ${MON_NS} -l app.kubernetes.io/name=prometheus-adapter`
 
-### Step 7: Verify End-to-End Installation
+
+## FAQ
+
+**Q: How to I know which metrics server (Prometheus Adapter vs KEDA) to is used?**
+
+A: run this command and check the output:
 
 ```bash
-export NAMESPACE=${NAMESPACE:-llm-d-autoscaler}
-export MON_NS=${MON_NS:-llm-d-monitoring}
-
-# Check pods
-kubectl get pods -n ${MON_NS} -l app.kubernetes.io/name=prometheus-adapter
-kubectl get pods -n ${NAMESPACE} -l app.kubernetes.io/name=workload-variant-autoscaler
-
-# Verify metrics and HPA
-kubectl get --raw "/apis/external.metrics.k8s.io/v1beta1/namespaces/${NAMESPACE}/inferno_desired_replicas" | jq
-kubectl get hpa -n ${NAMESPACE}
-kubectl get variantautoscalings -n ${NAMESPACE}
+kubectl get apiservice v1beta1.external.metrics.k8s.io -o yaml
 ```
-
-## Configuration Checklist
-
-Edit `workload-autoscaling/values.yaml` for WVA settings. Key configurations:
-
-**For WVA-Only Mode**: If using wva-only installation, configure connection to existing inference-scheduling deployment:
-
-```yaml
-llmd:
-  namespace: llm-d-inference-scheduler  # Namespace of existing inference-scheduling deployment
-  modelName: ms-inference-scheduling-llm-d-modelservice  # Optional: explicit model service name (auto-detected if not set)
-  modelID: "Qwen/Qwen3-0.6B"  # Must match model ID in your inference-scheduling deployment
-```
-
-**For Full Installation**: Model ID must match model configured in modelservice:
-
-```yaml
-llmd:
-  modelID: "Qwen/Qwen3-0.6B"  # Must match model ID in ms-workload-autoscaling/values.yaml
-```
-
-**Accelerator** (L40S, A100, H100, Intel-Max-1550):
-
-```yaml
-va:
-  accelerator: L40S # your accelerator type
-```
-
-**Prometheus** (platform-specific):
-
-```yaml
-wva:
-  prometheus:
-    monitoringNamespace: llm-d-monitoring
-    baseURL: "https://..."  # Platform-specific URL
-    tls:
-      insecureSkipVerify: true
-```
-
-See [WVA chart documentation](https://github.com/llm-d-incubation/workload-variant-autoscaler/blob/v0.5.1/charts/workload-variant-autoscaler/README.md) for all options.
-
-## Upgrading
-
-### Upgrading from v0.4.1 or Earlier
-
-**Important Breaking Change in v0.5.1**: The `scaleTargetRef` field is now **required** in the VariantAutoscaling CRD. Existing VariantAutoscaling resources without `scaleTargetRef` must be updated before upgrading to v0.5.1.
-
-#### Impact
-
-- **Scale-to-Zero**: VariantAutoscalings without `scaleTargetRef` will not scale to zero properly, even with HPAScaleToZero enabled and HPA `minReplicas: 0`, because the HPA cannot reference the target deployment.
-- **Validation**: After the CRD update, VariantAutoscalings without `scaleTargetRef` will fail validation.
-
-#### Migration Steps
-
-1. **Update CRDs first** (Helm does not automatically update CRDs during `helm upgrade`):
-
-   ```bash
-   kubectl apply -f https://raw.githubusercontent.com/llm-d-incubation/workload-variant-autoscaler/v0.5.1/charts/workload-variant-autoscaler/crds/llmd.ai_variantautoscalings.yaml
-   ```
-
-2. **Update existing VariantAutoscaling resources** to include the required `scaleTargetRef` field:
-
-   ```bash
-   # List all VariantAutoscalings
-   kubectl get variantautoscalings -A
-
-   # For each VariantAutoscaling, add scaleTargetRef
-   kubectl edit variantautoscaling <name> -n <namespace>
-   ```
-
-   Add the following to the `spec` section:
-
-   ```yaml
-   spec:
-     scaleTargetRef:
-       kind: Deployment
-       name: <your-deployment-name>  # Replace with your actual deployment name
-     # ... rest of your existing spec
-   ```
-
-3. **Verify the CRD update**:
-
-   ```bash
-   kubectl get crd variantautoscalings.llmd.ai -o jsonpath='{.spec.versions[0].schema.openAPIV3Schema.properties.spec.properties}' | jq 'keys'
-   ```
-
-   You should see `scaleTargetRef` in the list of properties.
-
-4. **Upgrade the Helm release**:
-
-   ```bash
-   cd guides/workload-autoscaling
-   helmfile apply -n ${NAMESPACE:-llm-d-autoscaler}
-   ```
-
-For more details, see the [WVA breaking changes documentation](https://github.com/llm-d-incubation/workload-variant-autoscaler/tree/v0.5.1?tab=readme-ov-file#breaking-changes).
-
-## Cleanup
-
-Remove WVA and Prometheus Adapter:
-
-**For Full Installation:**
-
-```bash
-# Remove WVA stack
-cd guides/workload-autoscaling
-helmfile destroy -n ${NAMESPACE:-llm-d-autoscaler}
-```
-
-If you installed with `agentgateway` or the deprecated `kgateway` migration path, destroy with the matching environment:
-
-```bash
-cd guides/workload-autoscaling
-helmfile destroy -e agentgateway -n ${NAMESPACE:-llm-d-autoscaler}
-# or: helmfile destroy -e kgateway -n ${NAMESPACE:-llm-d-autoscaler}
-```
-
-**For WVA-Only Installation:**
-
-```bash
-# Remove only WVA (existing inference-scheduling stack remains)
-cd guides/workload-autoscaling
-helmfile destroy -e wva-only -n ${NAMESPACE:-llm-d-autoscaler}
-```
-
-**Remove Prometheus Adapter** (if not needed by other components):
-
-```bash
-helm uninstall prometheus-adapter -n ${MON_NS:-llm-d-monitoring}
-```
-
-The llm-d stack (infra, gaie, modelservice) continues operating without autoscaling after WVA removal.

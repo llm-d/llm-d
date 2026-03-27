@@ -1,0 +1,15 @@
+apiVersion: llmd.ai/v1alpha1
+kind: VariantAutoscaling
+metadata:
+  name: ms-inference-scheduling-llm-d-modelservice-decode
+  labels:
+    inference.optimization/acceleratorName: "H100"
+    llm-d.ai/model: "Qwen3-32B"
+    llm-d.ai/inference-serving: "true"
+    llm-d.ai/guide: "inference-scheduling"
+spec:
+  scaleTargetRef:
+    kind: Deployment
+    name: ms-inference-scheduling-llm-d-modelservice-decode
+  modelID: "Qwen/Qwen3-32B"
+  variantCost: "10.0"
