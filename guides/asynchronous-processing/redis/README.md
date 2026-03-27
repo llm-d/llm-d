@@ -8,7 +8,7 @@ This implementation uses Redis Sorted Sets as the backend for the request queue.
    - If you don't have one, you can install it via Helm:
      ```bash
      helm repo add bitnami https://charts.bitnami.com/bitnami
-     helm install redis bitnami/redis -n redis --create-namespace
+     helm install redis bitnami/redis -n redis --create-namespace --set auth.enabled=false
      ```
 
 ## Configuration
