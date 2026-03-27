@@ -16,6 +16,7 @@ env:
   REGISTRY: ghcr.io
   IMAGE_NAME: llm-d
   TAG: ${{ github.event.release.tag_name != '' && github.event.release.tag_name || github.ref_name }}
+  IS_STABLE: ${{ !contains(github.event.release.tag_name != '' && github.event.release.tag_name || github.ref_name, 'rc') }}
 
 jobs:
   release-cuda-llm-d:
@@ -83,7 +84,7 @@ jobs:
           tags: |
             type=raw,value=${{ github.event.release.tag_name }},enable=${{ github.event_name == 'release' && github.event.action == 'published' }}
             type=raw,value=${{ github.ref_name }},enable=${{ github.event_name == 'push' && startsWith(github.ref, 'refs/tags/') }}
-            type=raw,value=latest,enable=true
+            type=raw,value=latest,enable=${{ env.IS_STABLE == 'true' }}
 
       - name: Build the builder image layer
         id: build
@@ -331,7 +332,9 @@ jobs:
 
           # create manifest and tag it
           tags="-t ${{ env.REGISTRY }}/${{ github.repository }}-cuda${{ matrix.image_suffix }}:${{ env.TAG }}"
-          tags="${tags} -t ${{ env.REGISTRY }}/${{ github.repository }}-cuda${{ matrix.image_suffix }}:latest"
+          if [ "${{ env.IS_STABLE }}" = "true" ]; then
+            tags="${tags} -t ${{ env.REGISTRY }}/${{ github.repository }}-cuda${{ matrix.image_suffix }}:latest"
+          fi
           docker buildx imagetools create $tags $sources
 
           # extract final manifest digest
@@ -427,7 +430,7 @@ jobs:
           tags: |
             type=raw,value=${{ github.event.release.tag_name }},enable=${{ github.event_name == 'release' && github.event.action == 'published' }}
             type=raw,value=${{ github.ref_name }},enable=${{ github.event_name == 'push' && startsWith(github.ref, 'refs/tags/') }}
-            type=raw,value=latest,enable=true
+            type=raw,value=latest,enable=${{ env.IS_STABLE == 'true' }}
 
       - name: Build the builder image layer
         id: build
@@ -631,7 +634,9 @@ jobs:
 
           # create manifest and tag it
           tags="-t ${{ env.REGISTRY }}/${{ github.repository }}-aws:${{ env.TAG }}"
-          tags="${tags} -t ${{ env.REGISTRY }}/${{ github.repository }}-aws:latest"
+          if [ "${{ env.IS_STABLE }}" = "true" ]; then
+            tags="${tags} -t ${{ env.REGISTRY }}/${{ github.repository }}-aws:latest"
+          fi
           docker buildx imagetools create $tags $sources
 
           # extract final manifest digest
@@ -715,7 +720,7 @@ jobs:
             VLLM_COMMIT_SHA=${{ steps.common-versions.outputs.commit_sha }}
           tags: |
             ${{ env.REGISTRY }}/${{ github.repository }}-cpu:${{ env.TAG }}
-            ${{ env.REGISTRY }}/${{ github.repository }}-cpu:latest
+            ${{ env.IS_STABLE == 'true' && format('{0}/{1}-cpu:latest', env.REGISTRY, github.repository) || '' }}
           github-token: ${{ secrets.GHCR_TOKEN }}
         env:
           DOCKER_BUILDKIT: "1"
@@ -783,7 +788,7 @@ jobs:
           cache-to: type=gha,mode=max,scope=rocm,oci-mediatypes=true,compression=zstd
           tags: |
             ${{ env.REGISTRY }}/${{ github.repository }}-rocm:${{ env.TAG }}
-            ${{ env.REGISTRY }}/${{ github.repository }}-rocm:latest
+            ${{ env.IS_STABLE == 'true' && format('{0}/{1}-rocm:latest', env.REGISTRY, github.repository) || '' }}
           github-token: ${{ secrets.GHCR_TOKEN }}
         env:
           DOCKER_BUILDKIT: "1"
@@ -867,7 +872,7 @@ jobs:
           # cache-to: type=gha,mode=max,scope=xpu,oci-mediatypes=true,compression=zstd
           tags: |
             ${{ env.REGISTRY }}/${{ github.repository }}-xpu:${{ env.TAG }}
-            ${{ env.REGISTRY }}/${{ github.repository }}-xpu:latest
+            ${{ env.IS_STABLE == 'true' && format('{0}/{1}-xpu:latest', env.REGISTRY, github.repository) || '' }}
           github-token: ${{ secrets.GHCR_TOKEN }}
         env:
           DOCKER_BUILDKIT: "1"
@@ -929,10 +934,12 @@ jobs:
           make image-build
           make image-push
           echo "tag=${{ env.TAG }}" >> $GITHUB_OUTPUT
-          # Also tag as latest
-          export NEW_TAG="latest"
-          make image-retag
-          VERSION="latest" make image-push
+          # Also tag as latest (only for stable releases, not RCs)
+          if [ "${{ env.IS_STABLE }}" = "true" ]; then
+            export NEW_TAG="latest"
+            make image-retag
+            VERSION="latest" make image-push
+          fi
 
       - name: Run Trivy vulnerability scanner
         uses: aquasecurity/trivy-action@v0.35.0
