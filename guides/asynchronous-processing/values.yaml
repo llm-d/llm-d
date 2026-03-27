@@ -1,7 +1,7 @@
 ap:
   igwBaseURL: "http://infra-inference-scheduling-inference-gateway-istio.llm-d-inference-scheduler.svc.cluster.local:80"
   image:
-    repository: ghcr.io/llm-d/async-processor
+    repository: ghcr.io/llm-d-incubation/llm-d-async
     tag: v0.0.1
   imagePullPolicy: Always
 
