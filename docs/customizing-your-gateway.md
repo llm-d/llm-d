@@ -21,9 +21,9 @@ ingress:
 
 In our experience there are a few gotchas we encountered when attempting to benchmark for competitive numbers, this document is meant to capture those gateway related challenges we encountered and workarounds we derived.
 
-### Increasing Envoy Pod Resources
+### Increasing Gateway Proxy Pod Resources
 
-To remove the chance that the envoy pod can be a bottle neck, we thought it might be a good idea to increase its resource. This option gets exposed from the `llm-d-infra` chart by either an [AgentgatewayParameters manifest](https://github.com/llm-d-incubation/llm-d-infra/blob/main/charts/llm-d-infra/templates/gateway-infrastructure/agentgatewayparameters.yaml) if you are using `agentgateway` or the deprecated `kgateway` compatibility mode, or a [configmap](https://github.com/llm-d-incubation/llm-d-infra/blob/main/charts/llm-d-infra/templates/gateway-infrastructure/configmap.yaml) if you are using Istio.
+To remove the chance that the Gateway proxy pod can be a bottleneck, we thought it might be a good idea to increase its resources. This option gets exposed from the `llm-d-infra` chart by either an [AgentgatewayParameters manifest](https://github.com/llm-d-incubation/llm-d-infra/blob/main/charts/llm-d-infra/templates/gateway-infrastructure/agentgatewayparameters.yaml) if you are using `agentgateway` or the deprecated `kgateway` compatibility mode, or a [configmap](https://github.com/llm-d-incubation/llm-d-infra/blob/main/charts/llm-d-infra/templates/gateway-infrastructure/configmap.yaml) if you are using Istio.
 
 ### Increasing Max Connections and Timeout (Istio only)
 
@@ -33,4 +33,4 @@ This gets exposed by the [`DestinationRule` template](https://github.com/llm-d-i
 
 ### Changing log levels
 
-In an effort to reduce the workload of the envoy gateway container, we have dropped the logs to level error, only showing us critical issues. You can change these through the `--v` flag on the GAIE (inferencepool) chart. You can see an example of this in the [precise-kv-cache-aware guide](../guides/precise-prefix-cache-aware/gaie-kv-events/values.yaml#L7).
+In an effort to reduce the workload of the Gateway proxy container, we have dropped the logs to level error, only showing us critical issues. You can change these through the `--v` flag on the GAIE (inferencepool) chart. You can see an example of this in the [precise-kv-cache-aware guide](../guides/precise-prefix-cache-aware/gaie-kv-events/values.yaml#L7).

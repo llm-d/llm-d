@@ -28,7 +28,7 @@ and take advantage of key Gateway features like:
 * Traffic splitting for incremental rollout of new models
 * TLS encryption of queries and responses
 
-By integrating with a Gateway -- instead of developing an llm-d specific proxy layer -- llm-d can leverage the high performance of mature proxies like [Envoy](https://www.envoyproxy.io/) and take advantage of existing operational tools for managing traffic to services.
+By integrating with a Gateway -- instead of developing an llm-d specific proxy layer -- llm-d can leverage the high performance of mature proxies and take advantage of existing operational tools for managing traffic to services. Compatible Gateway implementations may use proxies like [Envoy](https://www.envoyproxy.io/) or other high-performance data planes under the hood.
 
 ## Select and install an `inference-scheduler` compatible Gateway implementation
 
