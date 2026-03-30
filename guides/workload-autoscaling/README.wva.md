@@ -107,6 +107,8 @@ kubectl apply -k inference-scheduling-autoscaling -n ${NAMESPACE}
 
 > **Note:** namespace-scoped mode: `${NAMESPACE}` must match the namespace where the WVA is running (default: `llm-d-autoscaler`).
 
+> **Note:** If you set the `RELEASE_NAME_POSTFIX` environment variable when installing the inference-scheduling stack, you need to set the same postfix in the `kustomization.yaml` of this overlay to ensure the correct resources are targeted. For example, if you set `RELEASE_NAME_POSTFIX=my-custom` during installation, you should uncomment the line `nameSuffix: -my-custom` in the `kustomization.yaml` of this overlay.
+
 ### Verify
 
 After a few minutes, you should see the new `VariantAutoscaling` resource:
@@ -152,6 +154,9 @@ If you installed Prometheus Adapter for WVA, you can uninstall it as well:
 helm uninstall prometheus-adapter -n ${MON_NS:-llm-d-monitoring}
 ```
 
+## Advanced Configuration, Updates, and Troubleshooting
+
+Please refer to the [Workload Variant Autoscaler documentation](https://github.com/llm-d-incubation/workload-variant-autoscaler) for advanced configuration options, updating WVA versions, and troubleshooting tips.
 
 ## Install Prometheus Adapter (Required Dependency)
 
