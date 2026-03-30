@@ -155,8 +155,6 @@ helm uninstall prometheus-adapter -n ${MON_NS:-llm-d-monitoring}
 
 ## Install Prometheus Adapter (Required Dependency)
 
-Prometheus Adapter exposes WVA's external metric to HPA. Install this component before completing the WVA installation described in the **Install WVA** section above, which creates the required `prometheus-ca` ConfigMap.
-
 Choose your platform and follow the corresponding section:
 
 ### On OpenShift
