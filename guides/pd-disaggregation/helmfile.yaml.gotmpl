@@ -73,7 +73,7 @@ releases:
               enabled: true
     {{- end }}
     # Apply destination rule for anything istio
-    {{- if or (eq .Environment.Name "istio") (eq .Environment.Name "default") (eq .Environment.Name "aks") (eq .Environment.Name "amd") (eq .Environment.Name "xpu") (eq .Environment.Name "hpu") }}
+    {{- if or (eq .Environment.Name "istio") (eq .Environment.Name "default") (eq .Environment.Name "aks") (eq .Environment.Name "amd") (eq .Environment.Name "xpu") (eq .Environment.Name "hpu") (eq .Environment.Name "ocp") }}
       - provider:
           name: {{ .Environment.Values.provider.name }}
           istio:

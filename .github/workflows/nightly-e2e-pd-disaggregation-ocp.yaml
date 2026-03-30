@@ -12,9 +12,10 @@ on:
       helmfile_env:
         description: 'Helmfile environment'
         required: false
-        default: 'istio'
+        default: 'ocp'
         type: choice
         options:
+          - ocp
           - istio
           - kgateway
       skip_cleanup:
@@ -36,7 +37,7 @@ jobs:
     with:
       guide_name: pd-disaggregation
       namespace: llm-d-nightly-pd
-      helmfile_env: ${{ github.event.inputs.helmfile_env || 'istio' }}
+      helmfile_env: ${{ github.event.inputs.helmfile_env || 'ocp' }}
       gateway_type: ${{ github.event.inputs.helmfile_env || 'istio' }}
       accelerator_type: H100
       required_gpus: 2
