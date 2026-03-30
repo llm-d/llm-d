@@ -24,7 +24,7 @@ Before installing WVA, ensure you have:
 
     > **Notes**: currently WVA does not support the Wide Expert Parallelism (EP/DP) with LeaderWorkerSet well-lit path. Support for this will be added in a future release.
 
-1. A Kubernetes metrics server installed and configured in your cluster (e.g., Prometheus with the either Prometheus Adapter or KEDA). WVA relies on external metrics to make scaling decisions. See [Install Prometheus Adapter (Required Dependency)](#install-prometheus-adapter-required-dependency) for installation instructions.
+1. An external metrics provider installed and configured in your cluster (e.g., Prometheus together with Prometheus Adapter or KEDA). WVA relies on external metrics to make scaling decisions. See [Install Prometheus Adapter (Required Dependency)](#install-prometheus-adapter-required-dependency) for installation instructions.
 
 1. Choose an [llm-version](../prereq/client-setup/README.md#llm-d-version).
 
@@ -78,7 +78,7 @@ Install the WVA controller using helm:
     --namespace ${NAMESPACE} \
     --version ${VERSION} \
     --set wva.prometheus.caCert="$(echo "${CA_CERT}")" \
-    --values ${HELM_VALUES}
+    --values ${HELM_VALUES:=workload-autoscaling/values.yaml}
   ```
 
   > **Note**: By default, WVA is configured to watch all namespaces for VariantAutoscaling resources. You can scope this to the namespace where WVA is installed by setting the `namespaceScoped` flag to `true`: `--set wva.namespaceScoped=true`
@@ -103,7 +103,9 @@ This section enables autoscaling for an existing [Intelligent Inference Scheduli
 kubectl apply -k inference-scheduling-autoscaling -n ${NAMESPACE}
 ```
 
-> **Note:** `${NAMESPACE}` must match the namespace where the inference-scheduling stack is running (default: `llm-d-inference-scheduler`).
+> **Note:** cluster-scoped mode: `${NAMESPACE}` must match the namespace where the inference-scheduling stack is running (default: `llm-d-inference-scheduler`).
+
+> **Note:** namespace-scoped mode: `${NAMESPACE}` must match the namespace where the WVA is running (default: `llm-d-autoscaler`).
 
 ### Verify
 
@@ -153,7 +155,7 @@ helm uninstall prometheus-adapter -n ${MON_NS:-llm-d-monitoring}
 
 ## Install Prometheus Adapter (Required Dependency)
 
-Prometheus Adapter exposes WVA's external metric to HPA/KEDA. Install **after** WVA installation (Step 5), which creates the required `prometheus-ca` ConfigMap.
+Prometheus Adapter exposes WVA's external metric to HPA. Install this component before completing the WVA installation described in the **Install WVA** section above, which creates the required `prometheus-ca` ConfigMap.
 
 Choose your platform and follow the corresponding section:
 
@@ -264,7 +266,7 @@ helm upgrade -i prometheus-adapter prometheus-community/prometheus-adapter \
 
 ## FAQ
 
-**Q: How to I know which metrics server (Prometheus Adapter vs KEDA) to is used?**
+**Q: How do I know which external metrics provider (Prometheus Adapter vs KEDA) is used?**
 
 A: run this command and check the output:
 
