@@ -101,7 +101,7 @@ WORKDIR /root
 
 # Install runtime utilities
 RUN dnf install -y \
-    wget procps-ng jq bc iputils ethtool net-tools \
+    wget procps-ng jq bc iputils ethtool net-tools infiniband-diags \
     numactl kmod systemd-udev libpcap python3 hostname \
     && dnf clean all
 
