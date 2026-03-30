@@ -101,7 +101,7 @@ decode:
   - name: dshm
     emptyDir:
       medium: Memory
- 
+      sizeLimit: 20Gi
 
 # PD disabled in this example
 prefill:
