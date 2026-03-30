@@ -7,3 +7,8 @@ ap:
     requestPathURL: "/v1/completions"
     requestQueueName: "request-sortedset"
     resultQueueName: "result-list"
+    auth:
+       enabled: false
+       secretName: "redis-creds"
+       usernameKey: "username"
+       passwordKey: "password"
