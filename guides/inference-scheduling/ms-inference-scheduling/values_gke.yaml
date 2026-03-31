@@ -49,7 +49,7 @@ decode:
          - -c
       args: 
         - |
-          export LD_LIBRARY_PATH=${LD_LIBRARY_PATH}:/usr/local/cuda-12.9/compat
+          export LD_LIBRARY_PATH=$(find / -name libcuda.so.1 -printf '%h\n' 2>/dev/null | sed ':a; N; $!ba; s/\n/:/g'):${LD_LIBRARY_PATH}
           echo $LD_LIBRARY_PATH
           vllm serve Qwen/Qwen3-32B \
           --disable-uvicorn-access-log \
