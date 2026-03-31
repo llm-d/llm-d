@@ -6,9 +6,9 @@ The [Async Processor](https://github.com/llm-d-incubation/llm-d-async) provides 
 
 Async Processor integrates with llm-d to:
 
-- **Decouple submission from execution**: Clients submit jobs to a queue and retrieve results later.
+- **Decouple submission from execution**: Clients submit requests to a queue and retrieve results later.
 - **Optimize resource utilization**: Fill idle accelerator time with background tasks.
-- **Provide Resilience**: Automatic retries for failed jobs without impacting real-time traffic.
+- **Provide Resilience**: Automatic retries for failed requests without impacting real-time traffic.
 
 ### Supported Queue Implementations
 
@@ -29,18 +29,30 @@ Before installing Async Processor, ensure you have:
 
 Async Processor can be installed via Helm. We provide a `helmfile` for easy deployment.
 
-### Step 1: Choose your Queue Implementation
+### Step 1: Configure Inference Gateway URL
+
+The Async Processor needs to know where to send the requests it pulls from the queue. This is configured via the `IGW_BASE_URL` environment variable. 
+
+By default, it is set to `http://infra-inference-scheduling-inference-gateway-istio.llm-d-inference-scheduler.svc.cluster.local:80`, which assumes you have deployed the [Intelligent Inference Scheduling](../inference-scheduling/README.md) stack in the `llm-d-inference-scheduler` namespace. 
+
+If your Inference Gateway is deployed elsewhere, or if you are using a different service name (e.g., based on the [Gateway Provider](../prereq/gateway-provider/README.md) guide), export the variable before running helmfile:
+
+```bash
+export IGW_BASE_URL="<your-inference-gateway-service-url>"
+```
+
+### Step 2: Choose your Queue Implementation
 
 Decide whether you want to use GCP Pub/Sub or Redis. Follow the setup instructions in the respective subdirectories:
 
 - [GCP Pub/Sub Setup](./gcp-pubsub/README.md)
 - [Redis Setup](./redis/README.md)
 
-### Step 2: Configure Async Processor Values
+### Step 3: Configure Async Processor Values
 
 Edit the `values.yaml` in the chosen implementation folder to match your environment.
 
-### Step 3: Deploy
+### Step 4: Deploy
 
 ```bash
 export NAMESPACE=llm-d-async

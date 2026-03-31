@@ -55,14 +55,22 @@ gcloud pubsub subscriptions create $SUBSCRIPTION_NAME \
 
 ## Configuration
 
-In your `values.yaml`:
+The deployment uses environment variables to dynamically configure the Pub/Sub resources. Ensure the following variables are set:
+
+- `GOOGLE_CLOUD_PROJECT` (Required): Your GCP Project ID.
+- `REQUEST_SUBSCRIBER_ID` (Optional): The full path to the request subscription. Defaults to `projects/${GOOGLE_CLOUD_PROJECT}/subscriptions/async-proc-requests-sub`.
+- `RESULT_TOPIC_ID` (Optional): The full path to the result topic. Defaults to `projects/${GOOGLE_CLOUD_PROJECT}/topics/async-proc-results`.
+
+Your `values.yaml.gotmpl` is configured as follows:
 
 ```yaml
+{{- $project := requiredEnv "GOOGLE_CLOUD_PROJECT" -}}
 ap:
+  messageQueueImpl: "gcp-pubsub"
   gcpPubSub:
     enabled: true
-    requestSubscriberId: "projects/your-project-id/subscriptions/async-proc-requests-sub"
-    resultTopicId: "projects/your-project-id/topics/async-proc-results"
+    requestSubscriberId: {{ env "REQUEST_SUBSCRIBER_ID" | default (printf "projects/%s/subscriptions/async-proc-requests-sub" $project) | quote }}
+    resultTopicId: {{ env "RESULT_TOPIC_ID" | default (printf "projects/%s/topics/async-proc-results" $project) | quote }}
     requestPathURL: "/v1/completions"
 ```
 

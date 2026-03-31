@@ -8,11 +8,11 @@ releases:
   - name: async-processor
     namespace: {{ .Namespace | default "llm-d-async" }}
     chart: oci://ghcr.io/llm-d-incubation/charts/async-processor
-    version: 0.0.1
+    version: 0.6.0-RC
     values:
-      - values.yaml
+      - values.yaml.gotmpl
     {{- if eq .Environment.Name "gcp-pubsub" }}
-      - gcp-pubsub/values.yaml
+      - gcp-pubsub/values.yaml.gotmpl
     {{- else if eq .Environment.Name "redis" }}
-      - redis/values.yaml
+      - redis/values.yaml.gotmpl
     {{- end }}

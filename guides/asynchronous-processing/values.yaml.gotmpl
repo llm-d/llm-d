@@ -1,8 +1,8 @@
 ap:
-  igwBaseURL: "http://infra-inference-scheduling-inference-gateway-istio.llm-d-inference-scheduler.svc.cluster.local:80"
+  igwBaseURL: {{ env "IGW_BASE_URL" | default "http://infra-inference-scheduling-inference-gateway-istio.llm-d-inference-scheduler.svc.cluster.local:80" | quote }}
   image:
     repository: ghcr.io/llm-d-incubation/llm-d-async
-    tag: v0.0.1
+    tag: v0.6.0-RC
   imagePullPolicy: Always
 
   metrics:

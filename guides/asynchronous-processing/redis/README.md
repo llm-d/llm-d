@@ -23,27 +23,39 @@ This implementation uses Redis Sorted Sets as the backend for the request queue.
 
 ## Configuration
 
-In your `values.yaml`, ensure the following parameters are set. If you are using authentication, set `auth.enabled` to `true` and provide the secret details:
+The deployment uses environment variables to dynamically configure the Redis resources. You can configure it by setting the following environment variables:
+
+- `REDIS_HOST` (Optional): The Redis server host. Defaults to `redis-master.redis.svc.cluster.local`.
+- `REDIS_PORT` (Optional): The Redis server port. Defaults to `6379`.
+- `REDIS_REQUEST_QUEUE_NAME` (Optional): The name of the sorted-set for the requests. Defaults to `request-sortedset`.
+- `REDIS_RESULT_QUEUE_NAME` (Optional): The name of the list for the results. Defaults to `result-list`.
+- `REDIS_AUTH_ENABLED` (Optional): Set to `true` to enable authentication. Defaults to `false`.
+- `REDIS_SECRET_NAME` (Optional): The name of the Kubernetes secret containing Redis credentials. Defaults to `redis-creds`.
+- `REDIS_USERNAME_KEY` (Optional): The key in the secret for the username. No default.
+- `REDIS_PASSWORD_KEY` (Optional): The key in the secret for the password. No default.
+
+Your `values.yaml.gotmpl` is configured as follows:
 
 ```yaml
 ap:
+  messageQueueImpl: "redis-sortedset"
   redis:
     enabled: true
-    host: "redis-master.redis.svc.cluster.local" # Adjust as necessary
-    port: 6379
+    host: {{ env "REDIS_HOST" | default "redis-master.redis.svc.cluster.local" | quote }}
+    port: {{ env "REDIS_PORT" | default "6379" | int }}
     requestPathURL: "/v1/completions"
-    messageQueueImpl: "redis-sortedset"
+    requestQueueName: {{ env "REDIS_REQUEST_QUEUE_NAME" | default "request-sortedset" | quote }}
+    resultQueueName: {{ env "REDIS_RESULT_QUEUE_NAME" | default "result-list" | quote }}
     auth:
-       enabled: true # Set to true to enable authentication
-       secretName: "redis-creds"
-       usernameKey: "username" # Optional, only if using Redis users
-       passwordKey: "password"
+       enabled: {{ env "REDIS_AUTH_ENABLED" | default "false" }}
+       secretName: {{ env "REDIS_SECRET_NAME" | default "redis-creds" | quote }}
+{{- if env "REDIS_USERNAME_KEY" }}
+       usernameKey: {{ env "REDIS_USERNAME_KEY" | quote }}
+{{- end }}
+{{- if env "REDIS_PASSWORD_KEY" }}
+       passwordKey: {{ env "REDIS_PASSWORD_KEY" | quote }}
+{{- end }}
 ```
-
-### Key Parameters:
-- `redis.ss.addr`: Address of the Redis server.
-- `redis.ss.request-queue-name`: The name of the sorted-set for the requests (default: `request-sortedset`).
-- `redis.ss.result-queue-name`: The name of the list for the results (default: `result-list`).
 
 ## Testing
 
