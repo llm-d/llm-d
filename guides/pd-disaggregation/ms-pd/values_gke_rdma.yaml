@@ -46,7 +46,7 @@ decode:
         {"interfaceName":"eth9","network":"rdma-7"}
       ]
   parallelism:
-    tensor: 8
+    tensor: 4
   containers:
   - name: "vllm"
     image: ghcr.io/llm-d/llm-d-cuda:v0.5.1
@@ -64,7 +64,7 @@ decode:
         vllm serve Qwen/Qwen3-32B \
           --port 8200 \
           --served-model-name "Qwen/Qwen3-32B" \
-          --tensor-parallel-size 8 \
+          --tensor-parallel-size $TP_SIZE \
           --block-size 128 \
           --kv-transfer-config '{"kv_connector":"NixlConnector", "kv_role":"kv_both"}' \
           --disable-log-requests \
@@ -137,7 +137,7 @@ prefill:
         {"interfaceName":"eth9","network":"rdma-7"}
       ]
   parallelism:
-    tensor: 8
+    tensor: 4
   containers:
   - name: "vllm"
     image: ghcr.io/llm-d/llm-d-cuda:v0.5.1
@@ -155,7 +155,7 @@ prefill:
         vllm serve Qwen/Qwen3-32B \
           --port 8000 \
           --served-model-name "Qwen/Qwen3-32B" \
-          --tensor-parallel-size 8 \
+          --tensor-parallel-size $TP_SIZE \
           --block-size 128 \
           --kv-transfer-config '{"kv_connector":"NixlConnector", "kv_role":"kv_both"}' \
           --disable-log-requests \
