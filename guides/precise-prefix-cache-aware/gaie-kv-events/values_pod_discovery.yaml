@@ -50,11 +50,19 @@ inferenceExtension:
       kind: EndpointPickerConfig
       plugins:
         - type: single-profile-handler
+        - type: tokenizer
+          parameters:
+            modelName: Qwen/Qwen3-32B
+            udsTokenizerConfig:
+              socketFile: /tmp/tokenizer/tokenizer-uds.socket
         - type: precise-prefix-cache-scorer
           parameters:
             tokenProcessorConfig:
-              blockSize: 64
+              blockSize: 16
             indexerConfig:
+              speculativeIndexing: true
+              tokenProcessorConfig:
+                blockSize: 16
               tokenizersPoolConfig:
                 modelName: Qwen/Qwen3-32B
                 local: null

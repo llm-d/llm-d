@@ -7,7 +7,7 @@ inferenceExtension:
     ###################
     name: llm-d-inference-scheduler
     hub: ghcr.io/llm-d
-    tag: v0.6.0
+    tag: v0.7.0-rc1
     ###################
     # name: epp
     # hub: registry.k8s.io/gateway-api-inference-extension
@@ -34,7 +34,7 @@ inferenceExtension:
           key: HF_TOKEN
   sidecar:
     enabled: true
-    image: ghcr.io/llm-d/llm-d-uds-tokenizer:v0.6.0
+    image: ghcr.io/llm-d/llm-d-uds-tokenizer:v0.7.0
     imagePullPolicy: IfNotPresent
     name: tokenizer-uds
     configMap:
@@ -68,11 +68,19 @@ inferenceExtension:
       kind: EndpointPickerConfig
       plugins:
         - type: single-profile-handler
+        - type: tokenizer
+          parameters:
+            modelName: Qwen/Qwen3-32B
+            udsTokenizerConfig:
+              socketFile: /tmp/tokenizer/tokenizer-uds.socket
         - type: precise-prefix-cache-scorer
           parameters:
             tokenProcessorConfig:
-              blockSize: 64
+              blockSize: 16
             indexerConfig:
+              speculativeIndexing: true
+              tokenProcessorConfig:
+                blockSize: 16
               tokenizersPoolConfig:
                 modelName: Qwen/Qwen3-32B
                 local: null

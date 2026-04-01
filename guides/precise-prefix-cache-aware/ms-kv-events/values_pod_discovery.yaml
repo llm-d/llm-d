@@ -51,7 +51,7 @@ decode:
             "enable_kv_cache_events": true,
             "publisher": "zmq",
             "endpoint": "tcp://*:5557",
-            "topic": "kv@$(POD_IP)@Qwen/Qwen3-32B"
+            "topic": "kv@$(POD_IP):8000@Qwen/Qwen3-32B"
           }
         - "--disable-uvicorn-access-log"
         - "--gpu-memory-utilization=0.95"

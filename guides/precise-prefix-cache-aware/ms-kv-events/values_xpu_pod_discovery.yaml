@@ -17,8 +17,8 @@ accelerator:
   dra: true
 
 modelArtifacts:
-  name: Qwen/Qwen3-0.6B
-  uri: "hf://Qwen/Qwen3-0.6B"
+  name: Qwen/Qwen3-32B
+  uri: "hf://Qwen/Qwen3-32B"
   size: 10Gi
   authSecretName: "llm-d-hf-token"
   labels:
@@ -55,14 +55,14 @@ decode:
       args:
         - |
           set -x
-          exec vllm serve Qwen/Qwen3-0.6B \
+          exec vllm serve Qwen/Qwen3-32B \
             --port 8000 \
-            --served-model-name "Qwen/Qwen3-0.6B" \
+            --served-model-name "Qwen/Qwen3-32B" \
             --dtype float16 \
             --disable-sliding-window \
             --block-size 64 \
             --prefix-caching-hash-algo sha256_cbor \
-            --kv-events-config "{\"enable_kv_cache_events\":true,\"publisher\":\"zmq\",\"endpoint\":\"tcp://*:5557\",\"topic\":\"kv@${POD_IP}@Qwen/Qwen3-0.6B\"}"
+            --kv-events-config "{\"enable_kv_cache_events\":true,\"publisher\":\"zmq\",\"endpoint\":\"tcp://*:5557\",\"topic\":\"kv@${POD_IP}:8000@Qwen/Qwen3-32B\"}"
       env:
         - name: GAIE_RELEASE_NAME_POSTFIX  # index 0 matters because of set in helmfile
           value: "default"
