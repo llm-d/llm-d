@@ -33,7 +33,7 @@ decode:
   replicas: 1
   monitoring:
     podmonitor:
-      enabled: true
+      enabled: false
       portName: "vllm"  # decode vLLM service port (from routing.proxy.targetPort)
       path: "/metrics"
       interval: "30s"
@@ -130,7 +130,7 @@ prefill:
   replicas: 1
   monitoring:
     podmonitor:
-      enabled: true
+      enabled: false
       portName: "vllm"  # prefill vLLM service port (from routing.servicePort)
       path: "/metrics"
       interval: "30s"
