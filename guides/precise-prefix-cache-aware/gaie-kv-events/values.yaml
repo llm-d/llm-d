@@ -3,7 +3,7 @@ inferenceExtension:
   flags:
     v: 4  # log verbosity
   image:
-    # both downstream infernece-scheduler and upstream epp images can support precise KV Cache awareness based on the configurations here
+    # both downstream inference-scheduler and upstream epp images can support precise KV Cache awareness based on the configurations here
     ###################
     name: llm-d-inference-scheduler
     hub: ghcr.io/llm-d
