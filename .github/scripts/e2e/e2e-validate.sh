@@ -41,6 +41,56 @@ fi
 # ── Helper for unique pod suffix ────────────────────────────────────────────
 gen_id() { echo $(( RANDOM % 10000 + 1 )); }
 
+# ── Reliable curl-pod runner ───────────────────────────────────────────────
+# Replaces `kubectl run --rm -i` which has a race condition: the container can
+# finish before kubectl establishes the attach, losing all output.  The pod is
+# also auto-deleted (--rm), so there is no way to recover the response.
+#
+# This helper uses create → wait → logs → delete, which is deterministic.
+#
+# Usage: run_curl_pod <pod-name> <args…>
+# Sets:  CURL_OUTPUT  — captured stdout from the pod
+#        CURL_EXIT    — container exit code (0 = success)
+CURL_POD_TIMEOUT_SECONDS=120  # max time to wait for a curl pod to complete
+
+run_curl_pod() {
+  local pod_name="$1"; shift
+  CURL_OUTPUT=""
+  CURL_EXIT=0
+
+  # Create the pod (returns immediately; pod runs in the background)
+  kubectl run "$pod_name" \
+    --namespace "$NAMESPACE" \
+    --image=curlimages/curl \
+    --restart=Never \
+    -- "$@" >/dev/null 2>&1
+
+  # Poll until the pod reaches a terminal phase (Succeeded / Failed)
+  local deadline=$((SECONDS + CURL_POD_TIMEOUT_SECONDS))
+  local phase=""
+  while [[ $SECONDS -lt $deadline ]]; do
+    phase=$(kubectl get pod -n "$NAMESPACE" "$pod_name" \
+      -o jsonpath='{.status.phase}' 2>/dev/null) || true
+    case "$phase" in
+      Succeeded|Failed) break ;;
+      *) sleep 2 ;;
+    esac
+  done
+
+  # Capture logs — always available from a completed (or timed-out) pod
+  CURL_OUTPUT=$(kubectl logs -n "$NAMESPACE" "$pod_name" 2>/dev/null) || true
+
+  # Retrieve the container exit code
+  CURL_EXIT=$(kubectl get pod -n "$NAMESPACE" "$pod_name" \
+    -o jsonpath='{.status.containerStatuses[0].state.terminated.exitCode}' \
+    2>/dev/null) || true
+  CURL_EXIT="${CURL_EXIT:-1}"
+
+  # Clean up
+  kubectl delete pod -n "$NAMESPACE" "$pod_name" \
+    --ignore-not-found >/dev/null 2>&1 || true
+}
+
 # ── Discover Gateway address ────────────────────────────────────────────────
 HOST="${GATEWAY_HOST:-$(kubectl get gateway -n "$NAMESPACE" \
           -o jsonpath='{.items[0].status.addresses[0].value}' 2>/dev/null || true)}"
@@ -68,11 +118,10 @@ else
   for attempt in $(seq 1 $MAX_RETRIES); do
     echo "Attempt $attempt of $MAX_RETRIES to discover model ID..."
     ID=$(gen_id)
-    ret=0
-    response=$(kubectl run --pod-running-timeout 5m --rm -i curl-discover-${ID} \
-                  --namespace "$NAMESPACE" \
-                  --image=curlimages/curl --restart=Never -- \
-                  curl -sS --max-time 15 "http://${SVC_HOST}/v1/models" 2>&1) || ret=$?
+    run_curl_pod "curl-discover-${ID}" \
+      curl -sS --max-time 15 "http://${SVC_HOST}/v1/models"
+    response="$CURL_OUTPUT"
+    ret="$CURL_EXIT"
 
     # Try to extract model ID from response
     MODEL_ID=$(echo "$response" | grep -o '"id":"[^"]*"' | head -n 1 | cut -d '"' -f 4) || true
@@ -123,24 +172,16 @@ for i in {1..10}; do
   }'
   ID=$(gen_id)
   if $VERBOSE; then cat <<CMD
-  - Running command:
-    kubectl run --rm -i curl-${ID} \\
-      --namespace "${NAMESPACE}" \\
-      --image=curlimages/curl --restart=Never -- \\
-      curl -sS -X POST "http://${SVC_HOST}/v1/chat/completions" \\
-        -H 'accept: application/json' \\
-        -H 'Content-Type: application/json' \\
-        -d '${chat_payload//\'/\'}'
+  - Running: run_curl_pod curl-${ID} (POST /v1/chat/completions)
 CMD
   fi
-  ret=0
-  output=$(kubectl run --rm -i curl-"$ID" \
-            --namespace "$NAMESPACE" \
-            --image=curlimages/curl --restart=Never -- \
-            sh -c "sleep 1; curl -sS -X POST 'http://${SVC_HOST}/v1/chat/completions' \
-                 -H 'accept: application/json' \
-                 -H 'Content-Type: application/json' \
-                 -d '$chat_payload'") || ret=$?
+  run_curl_pod "curl-$ID" \
+    sh -c "curl -sS -X POST 'http://${SVC_HOST}/v1/chat/completions' \
+         -H 'accept: application/json' \
+         -H 'Content-Type: application/json' \
+         -d '$chat_payload'"
+  output="$CURL_OUTPUT"
+  ret="$CURL_EXIT"
   echo "$output"
   [[ $ret -ne 0 || "$output" != *'{'* ]] && {
     echo "Error: POST /v1/chat/completions failed (exit $ret or no JSON)" >&2; failed=true; }
@@ -154,25 +195,16 @@ CMD
   }'
   ID=$(gen_id)
   if $VERBOSE; then cat <<CMD
-  - Running command:
-    kubectl run --rm -i curl-${ID} \\
-      --namespace "${NAMESPACE}" \\
-      --image=curlimages/curl --restart=Never -- \\
-      curl -sS -X POST "http://${SVC_HOST}/v1/completions" \\
-        -H 'accept: application/json' \\
-        -H 'Content-Type: application/json' \\
-        -d '${payload//\'/\'}'
-
+  - Running: run_curl_pod curl-${ID} (POST /v1/completions)
 CMD
   fi
-  ret=0
-  output=$(kubectl run --rm -i curl-"$ID" \
-            --namespace "$NAMESPACE" \
-            --image=curlimages/curl --restart=Never -- \
-            sh -c "sleep 1; curl -sS -X POST 'http://${SVC_HOST}/v1/completions' \
-                 -H 'accept: application/json' \
-                 -H 'Content-Type: application/json' \
-                 -d '$payload'") || ret=$?
+  run_curl_pod "curl-$ID" \
+    sh -c "curl -sS -X POST 'http://${SVC_HOST}/v1/completions' \
+         -H 'accept: application/json' \
+         -H 'Content-Type: application/json' \
+         -d '$payload'"
+  output="$CURL_OUTPUT"
+  ret="$CURL_EXIT"
   echo "$output"
   [[ $ret -ne 0 || "$output" != *'{'* ]] && {
     echo "Error: POST /v1/completions failed (exit $ret or no JSON)" >&2; failed=true; }
