@@ -33,9 +33,11 @@ permissions:
   pull-requests: write
   actions: write
 
+# Include nightly name in concurrency group so different nightlies
+# on the same PR can run in parallel.
 concurrency:
-  group: test-nightly-${{ github.event.issue.number }}
-  cancel-in-progress: true
+  group: test-nightly-${{ github.event.issue.number }}-${{ github.event.comment.id }}
+  cancel-in-progress: false
 
 jobs:
   test-nightly:
@@ -48,6 +50,7 @@ jobs:
         id: parse
         uses: actions/github-script@v7
         with:
+          result-encoding: string
           script: |
             const comment = context.payload.comment.body.trim();
             const match = comment.match(/^\/test-nightly\s+(\S+)/);
@@ -60,22 +63,14 @@ jobs:
                   '❌ **Usage**: `/test-nightly <nightly-name>`',
                   '',
                   'Available nightlies:',
-                  '```',
-                  'benchmark-cks           inference-scheduling-cks',
-                  'build-image             inference-scheduling-gke',
-                  'pd-disaggregation-cks   inference-scheduling-ocp',
-                  'pd-disaggregation-gke   precise-prefix-cache-ocp',
-                  'pd-disaggregation-ocp   simulated-accelerators',
-                  'tiered-prefix-cache-ocp wide-ep-lws-cks',
-                  'wide-ep-lws-gke         wide-ep-lws-ocp',
-                  'wva-cks                 wva-ocp',
-                  '```',
+                  '`benchmark-cks`, `build-image`, `inference-scheduling-cks`, `inference-scheduling-gke`, `inference-scheduling-ocp`, `pd-disaggregation-cks`, `pd-disaggregation-gke`, `pd-disaggregation-ocp`, `precise-prefix-cache-ocp`, `simulated-accelerators`, `tiered-prefix-cache-ocp`, `wide-ep-lws-cks`, `wide-ep-lws-gke`, `wide-ep-lws-ocp`, `wva-cks`, `wva-ocp`',
                   '',
                   'Example: `/test-nightly pd-disaggregation-ocp`',
                 ].join('\n')
               });
-              core.setFailed('Missing nightly name');
-              return;
+              // Use return instead of core.setFailed to avoid triggering
+              // the failure comment step for expected validation errors
+              return 'error';
             }
 
             const name = match[1];
@@ -103,18 +98,21 @@ jobs:
                 owner: context.repo.owner,
                 repo: context.repo.repo,
                 issue_number: context.issue.number,
-                body: `❌ Unknown nightly: \`${name}\`\n\nAvailable: ${all.map(n => `\`${n}\``).join(', ')}`
+                body: `❌ Unknown nightly: \`${name}\`\n\nAvailable: ${all.map(n => '\`' + n + '\`').join(', ')}`
               });
-              core.setFailed(`Unknown nightly: ${name}`);
-              return;
+              return 'error';
             }
 
             core.setOutput('nightly_name', name);
             core.setOutput('workflow_file', workflowFile);
+            return 'ok';
 
       - name: Check commenter permission
+        if: steps.parse.outputs.result == 'ok'
+        id: perm
         uses: actions/github-script@v7
         with:
+          result-encoding: string
           script: |
             const { data: perm } = await github.rest.repos.getCollaboratorPermissionLevel({
               owner: context.repo.owner,
@@ -128,12 +126,18 @@ jobs:
                 comment_id: context.payload.comment.id,
                 content: '-1',
               });
-              core.setFailed(
-                `User ${context.payload.comment.user.login} needs write access to trigger nightlies`
-              );
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body: `❌ @${context.payload.comment.user.login} needs **write** access to trigger nightlies.`,
+              });
+              return 'denied';
             }
+            return 'ok';
 
       - name: React with rocket
+        if: steps.parse.outputs.result == 'ok' && steps.perm.outputs.result == 'ok'
         uses: actions/github-script@v7
         with:
           script: |
@@ -145,6 +149,7 @@ jobs:
             });
 
       - name: Get PR details
+        if: steps.parse.outputs.result == 'ok' && steps.perm.outputs.result == 'ok'
         id: pr
         uses: actions/github-script@v7
         with:
@@ -161,25 +166,34 @@ jobs:
             core.setOutput('is_fork', isFork.toString());
             core.setOutput('pr_number', context.issue.number.toString());
 
+      # Use refs/pull/<N>/head on the base repo instead of checking out the
+      # fork repo directly — GITHUB_TOKEN is scoped to the base repo only.
       - name: Checkout PR head
+        if: steps.parse.outputs.result == 'ok' && steps.perm.outputs.result == 'ok'
         uses: actions/checkout@v4
         with:
-          repository: ${{ steps.pr.outputs.head_repo }}
-          ref: ${{ steps.pr.outputs.head_sha }}
+          ref: refs/pull/${{ steps.pr.outputs.pr_number }}/head
           fetch-depth: 1
 
       - name: Push temp branch (fork PRs only)
+        if: steps.parse.outputs.result == 'ok' && steps.perm.outputs.result == 'ok'
         id: branch
         env:
           PR_NUMBER: ${{ steps.pr.outputs.pr_number }}
           NIGHTLY_NAME: ${{ steps.parse.outputs.nightly_name }}
           HEAD_REF: ${{ steps.pr.outputs.head_ref }}
           IS_FORK: ${{ steps.pr.outputs.is_fork }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           if [ "$IS_FORK" = "true" ]; then
             BRANCH="test-nightly/pr-${PR_NUMBER}-${NIGHTLY_NAME}"
             git remote set-url origin "https://x-access-token:${GITHUB_TOKEN}@github.com/${{ github.repository }}.git"
             git checkout -b "$BRANCH"
+            # Add an empty commit so the branch tip has a fresh timestamp
+            # (used by cleanup to determine branch age)
+            git config user.name "github-actions[bot]"
+            git config user.email "github-actions[bot]@users.noreply.github.com"
+            git commit --allow-empty -m "test-nightly: trigger ${NIGHTLY_NAME} for PR #${PR_NUMBER}"
             git push origin "$BRANCH" --force
             echo "ref=$BRANCH" >> "$GITHUB_OUTPUT"
             echo "is_temp=true" >> "$GITHUB_OUTPUT"
@@ -187,10 +201,9 @@ jobs:
             echo "ref=$HEAD_REF" >> "$GITHUB_OUTPUT"
             echo "is_temp=false" >> "$GITHUB_OUTPUT"
           fi
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Trigger nightly workflow
+        if: steps.parse.outputs.result == 'ok' && steps.perm.outputs.result == 'ok'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
@@ -199,6 +212,7 @@ jobs:
             --ref "${{ steps.branch.outputs.ref }}"
 
       - name: Post success comment
+        if: steps.parse.outputs.result == 'ok' && steps.perm.outputs.result == 'ok'
         uses: actions/github-script@v7
         with:
           script: |
@@ -234,11 +248,11 @@ jobs:
             });
 
       - name: Post failure comment
-        if: failure()
+        if: failure() && steps.parse.outputs.result == 'ok' && steps.perm.outputs.result == 'ok'
         uses: actions/github-script@v7
         with:
           script: |
-            const name = '${{ steps.parse.outputs.nightly_name }}' || '(parse failed)';
+            const name = '${{ steps.parse.outputs.nightly_name }}' || '(unknown)';
             const runUrl = `https://github.com/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
             await github.rest.issues.createComment({
               owner: context.repo.owner,
