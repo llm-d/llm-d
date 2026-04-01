@@ -31,6 +31,12 @@ decode:
   create: true
   priorityClassName: nightly-gpu-critical
   replicas: 1
+  monitoring:
+    podmonitor:
+      enabled: true
+      portName: "vllm"  # decode vLLM service port (from routing.proxy.targetPort)
+      path: "/metrics"
+      interval: "30s"
   podAnnotations:
     networking.gke.io/default-interface: eth0
     networking.gke.io/interfaces: |
@@ -122,6 +128,12 @@ prefill:
   create: true
   priorityClassName: nightly-gpu-critical
   replicas: 1
+  monitoring:
+    podmonitor:
+      enabled: true
+      portName: "vllm"  # prefill vLLM service port (from routing.servicePort)
+      path: "/metrics"
+      interval: "30s"
   podAnnotations:
     networking.gke.io/default-interface: eth0
     networking.gke.io/interfaces: |
