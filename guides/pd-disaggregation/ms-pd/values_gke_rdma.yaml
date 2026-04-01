@@ -1,3 +1,5 @@
+multinode: false
+
 # Distributed tracing configuration (OpenTelemetry)
 # tracing:
 #   enabled: true
@@ -5,6 +7,25 @@
 #   sampling:
 #     sampler: "parentbased_traceidratio"
 #     samplerArg: "0.1"
+
+modelArtifacts:
+  uri: "hf://Qwen/Qwen3-32B"
+  name: "Qwen/Qwen3-32B"
+  size: 80Gi
+  authSecretName: "llm-d-hf-token"
+  labels:
+    llm-d.ai/inference-serving: "true"
+    llm-d.ai/guide: "pd-disaggregation"
+    llm-d.ai/accelerator-variant: "gpu"
+    llm-d.ai/accelerator-vendor: "nvidia"
+    llm-d.ai/model: "Qwen3-32B"
+
+routing:
+  servicePort: 8000
+  proxy:
+    image: ghcr.io/llm-d/llm-d-routing-sidecar:v0.6.0
+    connector: nixlv2
+    secure: false
 
 decode:
   create: true
@@ -40,9 +61,9 @@ decode:
         echo "LD_LIBRARY_PATH=$LD_LIBRARY_PATH"
         export LIBRARY_PATH=$(find / -name libcuda.so.1 -printf '%h\n' 2>/dev/null | head -1):${LIBRARY_PATH}
         echo "LIBRARY_PATH=$LIBRARY_PATH"
-        vllm serve openai/gpt-oss-120b \
+        vllm serve Qwen/Qwen3-32B \
           --port 8200 \
-          --served-model-name "openai/gpt-oss-120b" \
+          --served-model-name "Qwen/Qwen3-32B" \
           --tensor-parallel-size 8 \
           --block-size 128 \
           --kv-transfer-config '{"kv_connector":"NixlConnector", "kv_role":"kv_both"}' \
@@ -131,9 +152,9 @@ prefill:
         echo "LD_LIBRARY_PATH=$LD_LIBRARY_PATH"
         export LIBRARY_PATH=$(find / -name libcuda.so.1 -printf '%h\n' 2>/dev/null | head -1):${LIBRARY_PATH}
         echo "LIBRARY_PATH=$LIBRARY_PATH"
-        vllm serve openai/gpt-oss-120b \
+        vllm serve Qwen/Qwen3-32B \
           --port 8000 \
-          --served-model-name "openai/gpt-oss-120b" \
+          --served-model-name "Qwen/Qwen3-32B" \
           --tensor-parallel-size 8 \
           --block-size 128 \
           --kv-transfer-config '{"kv_connector":"NixlConnector", "kv_role":"kv_both"}' \
