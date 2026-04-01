@@ -21,6 +21,11 @@ on:
         description: 'Skip cleanup after tests (for debugging)'
         required: false
         default: 'false'
+      llm_d_ref:
+        description: 'Git ref for llm-d/llm-d checkout (default: main)'
+        required: false
+        default: 'main'
+        type: string
 
 permissions:
   contents: read
@@ -46,4 +51,5 @@ jobs:
       allow_gpu_preemption: true
       install_gateway_provider: false
       skip_cleanup: ${{ github.event.inputs.skip_cleanup == 'true' }}
+      llm_d_ref: ${{ github.event.inputs.llm_d_ref || 'main' }}
     secrets: inherit
