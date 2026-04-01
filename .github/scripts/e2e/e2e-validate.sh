@@ -51,19 +51,20 @@ gen_id() { echo $(( RANDOM % 10000 + 1 )); }
 # Usage: run_curl_pod <pod-name> <args…>
 # Sets:  CURL_OUTPUT  — captured stdout from the pod
 #        CURL_EXIT    — container exit code (0 = success)
-CURL_POD_TIMEOUT_SECONDS=120  # max time to wait for a curl pod to complete
+CURL_POD_TIMEOUT_SECONDS="${CURL_POD_TIMEOUT_SECONDS:-300}"  # max time to wait for a curl pod to complete (env-configurable)
 
 run_curl_pod() {
   local pod_name="$1"; shift
   CURL_OUTPUT=""
   CURL_EXIT=0
 
-  # Create the pod (returns immediately; pod runs in the background)
+  # Create the pod (returns immediately; pod runs in the background).
+  # Allow stderr through so RBAC / quota / image-pull errors are visible in CI logs.
   kubectl run "$pod_name" \
     --namespace "$NAMESPACE" \
     --image=curlimages/curl \
     --restart=Never \
-    -- "$@" >/dev/null 2>&1
+    -- "$@" >/dev/null
 
   # Poll until the pod reaches a terminal phase (Succeeded / Failed)
   local deadline=$((SECONDS + CURL_POD_TIMEOUT_SECONDS))
@@ -77,8 +78,24 @@ run_curl_pod() {
     esac
   done
 
-  # Capture logs — always available from a completed (or timed-out) pod
+  # Detect timeout: pod never reached a terminal phase
+  if [[ "$phase" != "Succeeded" && "$phase" != "Failed" ]]; then
+    echo "Error: curl pod $pod_name timed out after ${CURL_POD_TIMEOUT_SECONDS}s (last phase: ${phase:-Unknown})" >&2
+    kubectl describe pod -n "$NAMESPACE" "$pod_name" >&2 2>/dev/null || true
+    CURL_OUTPUT=""
+    CURL_EXIT=1
+    kubectl delete pod -n "$NAMESPACE" "$pod_name" \
+      --ignore-not-found >/dev/null 2>&1 || true
+    return
+  fi
+
+  # Capture logs. If none are available (e.g. pod never started), fall back to
+  # pod description so CI logs contain something actionable.
   CURL_OUTPUT=$(kubectl logs -n "$NAMESPACE" "$pod_name" 2>/dev/null) || true
+  if [[ -z "$CURL_OUTPUT" ]]; then
+    echo "Warning: no logs from curl pod $pod_name — dumping pod description:" >&2
+    kubectl describe pod -n "$NAMESPACE" "$pod_name" >&2 2>/dev/null || true
+  fi
 
   # Retrieve the container exit code
   CURL_EXIT=$(kubectl get pod -n "$NAMESPACE" "$pod_name" \
