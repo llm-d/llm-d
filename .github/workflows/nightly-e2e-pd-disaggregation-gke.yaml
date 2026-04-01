@@ -28,7 +28,7 @@ jobs:
     with:
       guide_name: pd-disaggregation
       namespace: llm-d-nightly-pd-gke
-      helmfile_env: gke
+      helmfile_env: gke_pd_rdma
       gateway_type: gke
       gke_cluster_name: llm-d-e2e-us-east5
       gke_cluster_zone: us-east5

@@ -64,7 +64,7 @@ releases:
     values:
       - gaie-pd/values.yaml
     # Apply provider name if on GKE
-    {{- if or (eq .Environment.Name "gke") (eq .Environment.Name "gke_tpu") }}
+    {{- if or (eq .Environment.Name "gke") (eq .Environment.Name "gke_tpu") (eq .Environment.Name "gke_pd_rdma") }}
       - provider:
           name: {{ .Environment.Values.provider.name }}
         inferenceExtension:
