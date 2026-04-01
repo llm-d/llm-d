@@ -30,6 +30,7 @@ accelerator:  # controls specialized hardware Type
 
 decode:
   create: true
+  priorityClassName: nightly-gpu-critical
   parallelism:
     tensor: 2
     data: 1
@@ -47,7 +48,7 @@ decode:
       command:
          - /bin/bash
          - -c
-      args: 
+      args:
         - |
           export LD_LIBRARY_PATH=$(find / -name libcuda.so.1 -printf '%h\n' 2>/dev/null | sed ':a; N; $!ba; s/\n/:/g'):${LD_LIBRARY_PATH}
           echo $LD_LIBRARY_PATH
