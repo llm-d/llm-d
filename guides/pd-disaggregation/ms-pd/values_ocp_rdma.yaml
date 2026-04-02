@@ -17,7 +17,7 @@ modelArtifacts:
 routing:
   servicePort: 8000
   proxy:
-    image: ghcr.io/llm-d/llm-d-routing-sidecar:v0.6.0
+    image: ghcr.io/llm-d/llm-d-routing-sidecar:v0.7.0
     connector: nixlv2
     secure: false
 
@@ -28,7 +28,7 @@ decode:
   replicas: 2
   initContainers:
     - name: preprocess
-      image: ghcr.io/llm-d/llm-d-benchmark:v0.5.1
+      image: ghcr.io/llm-d/llm-d-benchmark:v0.5.2
       imagePullPolicy: Always
       command: ["set_llmdbench_environment.py", "-e", "/shared-config/llmdbench_env.sh", "-i"]
       env:
@@ -156,7 +156,7 @@ prefill:
   replicas: 1
   initContainers:
     - name: preprocess
-      image: ghcr.io/llm-d/llm-d-benchmark:v0.5.1
+      image: ghcr.io/llm-d/llm-d-benchmark:v0.5.2
       imagePullPolicy: Always
       command: ["set_llmdbench_environment.py", "-e", "/shared-config/llmdbench_env.sh", "-i"]
       env:

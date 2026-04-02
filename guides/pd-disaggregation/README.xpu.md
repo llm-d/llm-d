@@ -195,7 +195,7 @@ Expected output:
 NAME       NAMESPACE   REVISION   STATUS     CHART
 gaie-pd    llm-d-pd    1          deployed   inferencepool-v1.4.0
 infra-pd   llm-d-pd    1          deployed   llm-d-infra-v1.4.0
-ms-pd      llm-d-pd    1          deployed   llm-d-modelservice-v0.4.7
+ms-pd      llm-d-pd    1          deployed   llm-d-modelservice-v0.4.9
 ```
 
 ### Check All Resources

@@ -71,7 +71,7 @@ releases:
   - name: {{ printf "ms-%s" $rn | quote }}
     namespace: {{ $ns }}
     chart: llm-d-modelservice/llm-d-modelservice
-    version: v0.4.7
+    version: v0.4.9
     installed: true
     needs:
       - {{ printf "infra-%s" $rn | quote }}
@@ -89,7 +89,7 @@ releases:
   - name: workload-variant-autoscaler
     namespace: {{ if $isWvaOnly }}{{ env "WVA_NAMESPACE" | default "llm-d-autoscaler" }}{{ else }}{{ $ns }}{{ end }}
     chart: oci://ghcr.io/llm-d/workload-variant-autoscaler
-    version: 0.5.1
+    version: 0.6.0
     installed: true
     {{- if not $isWvaOnly }}
     needs:
