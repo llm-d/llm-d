@@ -3,16 +3,18 @@ name: /test-nightly Slash Command
 # Allows running any nightly E2E workflow against a fork PR's code.
 #
 # Usage: Comment on a PR with:
-#   /test-nightly <nightly-name>
+#   /test-nightly <nightly-name>       # exact match
+#   /test-nightly <glob-pattern>       # glob pattern (* and ? supported)
 #
 # Examples:
 #   /test-nightly pd-disaggregation-ocp
-#   /test-nightly inference-scheduling-gke
-#   /test-nightly wva-ocp
+#   /test-nightly *-ocp
+#   /test-nightly inference-scheduling-*
+#   /test-nightly wva-*
 #
 # The command checks out the PR head, pushes a temp branch
-# (test-nightly/pr-<number>-<name>) into the main repo, and
-# triggers the matching nightly workflow on that branch.
+# (test-nightly/pr-<number>) into the main repo, and
+# triggers the matching nightly workflow(s) on that branch.
 # Temp branches are cleaned up by slash-test-nightly-cleanup.yaml.
 #
 # Available nightlies (the part after /test-nightly):
@@ -33,8 +35,8 @@ permissions:
   pull-requests: write
   actions: write
 
-# Include nightly name in concurrency group so different nightlies
-# on the same PR can run in parallel.
+# Use comment ID in concurrency group so different /test-nightly
+# commands on the same PR can run in parallel.
 concurrency:
   group: test-nightly-${{ github.event.issue.number }}-${{ github.event.comment.id }}
   cancel-in-progress: false
@@ -54,26 +56,6 @@ jobs:
           script: |
             const comment = context.payload.comment.body.trim();
             const match = comment.match(/^\/test-nightly\s+(\S+)/);
-            if (!match) {
-              await github.rest.issues.createComment({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                issue_number: context.issue.number,
-                body: [
-                  '❌ **Usage**: `/test-nightly <nightly-name>`',
-                  '',
-                  'Available nightlies:',
-                  '`benchmark-cks`, `build-image`, `inference-scheduling-cks`, `inference-scheduling-gke`, `inference-scheduling-ocp`, `pd-disaggregation-cks`, `pd-disaggregation-gke`, `pd-disaggregation-ocp`, `precise-prefix-cache-ocp`, `simulated-accelerators`, `tiered-prefix-cache-ocp`, `wide-ep-lws-cks`, `wide-ep-lws-gke`, `wide-ep-lws-ocp`, `wva-cks`, `wva-ocp`',
-                  '',
-                  'Example: `/test-nightly pd-disaggregation-ocp`',
-                ].join('\n')
-              });
-              // Use return instead of core.setFailed to avoid triggering
-              // the failure comment step for expected validation errors
-              return 'error';
-            }
-
-            const name = match[1];
 
             // Map name to workflow filename
             const E2E_NIGHTLIES = [
@@ -86,25 +68,75 @@ jobs:
               'wva-cks', 'wva-ocp',
             ];
             const OTHER_NIGHTLIES = ['benchmark-cks', 'build-image'];
+            const ALL_NIGHTLIES = [...E2E_NIGHTLIES, ...OTHER_NIGHTLIES].sort();
 
-            let workflowFile;
-            if (E2E_NIGHTLIES.includes(name)) {
-              workflowFile = `nightly-e2e-${name}.yaml`;
-            } else if (OTHER_NIGHTLIES.includes(name)) {
-              workflowFile = `nightly-${name}.yaml`;
-            } else {
-              const all = [...E2E_NIGHTLIES, ...OTHER_NIGHTLIES].sort();
+            function toWorkflowFile(name) {
+              if (E2E_NIGHTLIES.includes(name)) return `nightly-e2e-${name}.yaml`;
+              if (OTHER_NIGHTLIES.includes(name)) return `nightly-${name}.yaml`;
+              return null;
+            }
+
+            if (!match) {
               await github.rest.issues.createComment({
                 owner: context.repo.owner,
                 repo: context.repo.repo,
                 issue_number: context.issue.number,
-                body: `❌ Unknown nightly: \`${name}\`\n\nAvailable: ${all.map(n => '\`' + n + '\`').join(', ')}`
+                body: [
+                  '❌ **Usage**: `/test-nightly <name-or-pattern>`',
+                  '',
+                  'Supports exact names or glob patterns (`*` and `?`):',
+                  '```',
+                  '/test-nightly pd-disaggregation-ocp',
+                  '/test-nightly *-ocp',
+                  '/test-nightly inference-scheduling-*',
+                  '```',
+                  '',
+                  'Available nightlies:',
+                  ALL_NIGHTLIES.map(n => '`' + n + '`').join(', '),
+                ].join('\n')
               });
               return 'error';
             }
 
-            core.setOutput('nightly_name', name);
-            core.setOutput('workflow_file', workflowFile);
+            const input = match[1];
+            const isGlob = input.includes('*') || input.includes('?');
+
+            let matched;
+            if (isGlob) {
+              // Convert glob pattern to regex: escape regex chars, then * → .* and ? → .
+              const regexStr = '^' + input
+                .replace(/[.+^${}()|[\]\\]/g, '\\$&')
+                .replace(/\*/g, '.*')
+                .replace(/\?/g, '.')
+                + '$';
+              const regex = new RegExp(regexStr);
+              matched = ALL_NIGHTLIES.filter(n => regex.test(n));
+            } else {
+              matched = ALL_NIGHTLIES.includes(input) ? [input] : [];
+            }
+
+            if (matched.length === 0) {
+              const hint = isGlob
+                ? `No nightlies match pattern: \`${input}\``
+                : `Unknown nightly: \`${input}\``;
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body: `❌ ${hint}\n\nAvailable: ${ALL_NIGHTLIES.map(n => '\`' + n + '\`').join(', ')}`
+              });
+              return 'error';
+            }
+
+            // Build array of {name, workflowFile} for each match
+            const matches = matched.map(name => ({
+              name,
+              workflowFile: toWorkflowFile(name),
+            }));
+
+            core.setOutput('matches', JSON.stringify(matches));
+            core.setOutput('match_names', matched.join(', '));
+            core.setOutput('match_count', matched.length.toString());
             return 'ok';
 
       - name: Check commenter permission
@@ -180,20 +212,20 @@ jobs:
         id: branch
         env:
           PR_NUMBER: ${{ steps.pr.outputs.pr_number }}
-          NIGHTLY_NAME: ${{ steps.parse.outputs.nightly_name }}
+          MATCH_NAMES: ${{ steps.parse.outputs.match_names }}
           HEAD_REF: ${{ steps.pr.outputs.head_ref }}
           IS_FORK: ${{ steps.pr.outputs.is_fork }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           if [ "$IS_FORK" = "true" ]; then
-            BRANCH="test-nightly/pr-${PR_NUMBER}-${NIGHTLY_NAME}"
+            BRANCH="test-nightly/pr-${PR_NUMBER}"
             git remote set-url origin "https://x-access-token:${GITHUB_TOKEN}@github.com/${{ github.repository }}.git"
             git checkout -b "$BRANCH"
             # Add an empty commit so the branch tip has a fresh timestamp
             # (used by cleanup to determine branch age)
             git config user.name "github-actions[bot]"
             git config user.email "github-actions[bot]@users.noreply.github.com"
-            git commit --allow-empty -m "test-nightly: trigger ${NIGHTLY_NAME} for PR #${PR_NUMBER}"
+            git commit --allow-empty -m "test-nightly: trigger ${MATCH_NAMES} for PR #${PR_NUMBER}"
             git push origin "$BRANCH" --force
             echo "ref=$BRANCH" >> "$GITHUB_OUTPUT"
             echo "is_temp=true" >> "$GITHUB_OUTPUT"
@@ -202,61 +234,158 @@ jobs:
             echo "is_temp=false" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Trigger nightly workflow
+      - name: Trigger nightlies and collect run URLs
         if: steps.parse.outputs.result == 'ok' && steps.perm.outputs.result == 'ok'
+        id: trigger
+        uses: actions/github-script@v7
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          gh workflow run "${{ steps.parse.outputs.workflow_file }}" \
-            --repo "${{ github.repository }}" \
-            --ref "${{ steps.branch.outputs.ref }}"
+          MATCHES_JSON: ${{ steps.parse.outputs.matches }}
+          BRANCH_REF: ${{ steps.branch.outputs.ref }}
+        with:
+          script: |
+            const matches = JSON.parse(process.env.MATCHES_JSON);
+            const ref = process.env.BRANCH_REF;
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+
+            const POLL_INTERVAL_MS = 5000;   // 5 seconds between polls
+            const MAX_POLL_ATTEMPTS = 12;     // 60 seconds total max wait
+
+            // Record time before dispatching (used to identify new runs)
+            const beforeDispatch = new Date();
+
+            // Dispatch all workflows
+            for (const m of matches) {
+              console.log(`Dispatching ${m.workflowFile} on ref ${ref}`);
+              await github.rest.actions.createWorkflowDispatch({
+                owner, repo,
+                workflow_id: m.workflowFile,
+                ref,
+              });
+              m.runUrl = null;
+            }
+
+            // Poll for run URLs — wait for GitHub to create the runs
+            for (let attempt = 0; attempt < MAX_POLL_ATTEMPTS; attempt++) {
+              await new Promise(r => setTimeout(r, POLL_INTERVAL_MS));
+
+              const pending = matches.filter(m => !m.runUrl);
+              if (pending.length === 0) break;
+
+              for (const m of pending) {
+                try {
+                  const { data: { workflow_runs: runs } } = await github.rest.actions.listWorkflowRuns({
+                    owner, repo,
+                    workflow_id: m.workflowFile,
+                    branch: ref,
+                    per_page: 5,
+                  });
+
+                  const newRun = runs.find(r =>
+                    new Date(r.created_at) >= beforeDispatch
+                  );
+                  if (newRun) {
+                    m.runUrl = newRun.html_url;
+                    console.log(`Found run for ${m.name}: ${m.runUrl}`);
+                  }
+                } catch (e) {
+                  console.log(`Error polling for ${m.name}: ${e.message}`);
+                }
+              }
+            }
+
+            // Log any that were not found
+            for (const m of matches) {
+              if (!m.runUrl) {
+                console.log(`Warning: could not find run URL for ${m.name} after polling`);
+              }
+            }
+
+            core.setOutput('results', JSON.stringify(matches));
 
       - name: Post success comment
         if: steps.parse.outputs.result == 'ok' && steps.perm.outputs.result == 'ok'
         uses: actions/github-script@v7
+        env:
+          TRIGGER_RESULTS: ${{ steps.trigger.outputs.results }}
+          BRANCH_REF: ${{ steps.branch.outputs.ref }}
+          HEAD_SHA: ${{ steps.pr.outputs.head_sha }}
+          IS_TEMP: ${{ steps.branch.outputs.is_temp }}
+          PR_NUMBER: ${{ steps.pr.outputs.pr_number }}
         with:
           script: |
-            const name = '${{ steps.parse.outputs.nightly_name }}';
-            const file = '${{ steps.parse.outputs.workflow_file }}';
-            const ref  = '${{ steps.branch.outputs.ref }}';
-            const sha  = '${{ steps.pr.outputs.head_sha }}'.substring(0, 7);
-            const isTemp = '${{ steps.branch.outputs.is_temp }}' === 'true';
-            const repo = '${{ github.repository }}';
+            const results = JSON.parse(process.env.TRIGGER_RESULTS);
+            const ref = process.env.BRANCH_REF;
+            const sha = process.env.HEAD_SHA.substring(0, 7);
+            const isTemp = process.env.IS_TEMP === 'true';
+            const prNumber = parseInt(process.env.PR_NUMBER);
+            const repo = `${context.repo.owner}/${context.repo.repo}`;
 
-            const lines = [
-              `🚀 **Nightly triggered**: \`${name}\``,
-              '',
-              `| Detail | Value |`,
-              `|--------|-------|`,
-              `| Workflow | [\`${file}\`](https://github.com/${repo}/actions/workflows/${file}) |`,
-              `| Branch | \`${ref}\` |`,
-              `| PR HEAD | \`${sha}\` |`,
-            ];
+            function runLink(r) {
+              return r.runUrl
+                ? `[View run](${r.runUrl})`
+                : `[Workflow page](https://github.com/${repo}/actions/workflows/${r.workflowFile})`;
+            }
+
+            const lines = [];
+
+            if (results.length === 1) {
+              const r = results[0];
+              lines.push(
+                `🚀 **Nightly triggered**: \`${r.name}\``,
+                '',
+                '| Detail | Value |',
+                '|--------|-------|',
+                `| Run | ${runLink(r)} |`,
+                `| Workflow | \`${r.workflowFile}\` |`,
+                `| Branch | \`${ref}\` |`,
+                `| PR HEAD | \`${sha}\` |`,
+              );
+            } else {
+              lines.push(
+                `🚀 **${results.length} nightlies triggered**`,
+                '',
+                '| Nightly | Run |',
+                '|---------|-----|',
+              );
+              for (const r of results) {
+                lines.push(`| \`${r.name}\` | ${runLink(r)} |`);
+              }
+              lines.push(
+                '',
+                '| Detail | Value |',
+                '|--------|-------|',
+                `| Branch | \`${ref}\` |`,
+                `| PR HEAD | \`${sha}\` |`,
+              );
+            }
 
             if (isTemp) {
               lines.push(
                 '',
-                '> Temp branch will be cleaned up automatically within 24 hours.'
+                '> Temp branch will be cleaned up automatically within 24 hours.',
               );
             }
 
             await github.rest.issues.createComment({
               owner: context.repo.owner,
               repo: context.repo.repo,
-              issue_number: ${{ steps.pr.outputs.pr_number }},
+              issue_number: prNumber,
               body: lines.join('\n'),
             });
 
       - name: Post failure comment
         if: failure() && steps.parse.outputs.result == 'ok' && steps.perm.outputs.result == 'ok'
         uses: actions/github-script@v7
+        env:
+          MATCH_NAMES: ${{ steps.parse.outputs.match_names }}
         with:
           script: |
-            const name = '${{ steps.parse.outputs.nightly_name }}' || '(unknown)';
+            const names = process.env.MATCH_NAMES || '(unknown)';
             const runUrl = `https://github.com/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
             await github.rest.issues.createComment({
               owner: context.repo.owner,
               repo: context.repo.repo,
               issue_number: context.issue.number,
-              body: `❌ **Failed to trigger nightly**: \`${name}\`\n\n[View logs](${runUrl})`,
+              body: `❌ **Failed to trigger nightly**: \`${names}\`\n\n[View logs](${runUrl})`,
             });
