@@ -102,7 +102,7 @@ WORKDIR /root
 # Install runtime utilities
 RUN dnf install -y \
     wget procps-ng jq bc iputils ethtool net-tools infiniband-diags \
-    numactl kmod systemd-udev libpcap python3 hostname \
+    libibverbs-utils numactl kmod systemd-udev libpcap python3 hostname \
     && dnf clean all
 
 # Install RDMA libraries from UBI (matches what perftest was compiled against)
