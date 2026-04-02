@@ -34,6 +34,7 @@ routing:
 
 decode:
   create: true
+#  priorityClassName: nightly-gpu-critical
   replicas: 2
   securityContext:
     fsGroup: 107

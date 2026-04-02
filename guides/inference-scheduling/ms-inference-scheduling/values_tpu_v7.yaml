@@ -29,9 +29,10 @@ accelerator:
   type: "google"
 
 decode:
+  create: true
+#  priorityClassName: nightly-gpu-critical
   parallelism:
     tensor: 8
-  create: true
   replicas: 2
   extraConfig:
     nodeSelector:

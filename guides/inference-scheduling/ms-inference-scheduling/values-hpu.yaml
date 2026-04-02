@@ -46,6 +46,7 @@ routing:
 # Decode pod configuration for Intel Gaudi - simplified with imageDefault
 decode:
   create: true
+#  priorityClassName: nightly-gpu-critical
   replicas: 1
   containers:
     - name: "vllm"

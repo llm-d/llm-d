@@ -36,9 +36,10 @@ routing:
     secure: false
 
 decode:
+  create: true
+#  priorityClassName: nightly-gpu-critical
   parallelism:  # controls count of specialized hardware devices allocated
     tensor: 1
-  create: true
   replicas: 1
   securityContext:
     fsGroup: 107
@@ -135,9 +136,10 @@ decode:
       emptyDir: {}
 
 prefill:
+  create: true
+#  priorityClassName: nightly-gpu-critical
   parallelism:
     tensor: 1
-  create: true
   replicas: 3
   securityContext:
     fsGroup: 107

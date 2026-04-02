@@ -22,6 +22,7 @@ accelerator:  # controls specialized hardware Type
 
 decode:
   create: true
+#  priorityClassName: nightly-gpu-critical
   replicas: 2
   monitoring:
     podmonitor:

@@ -27,6 +27,7 @@ routing:
 
 decode:
   create: true
+#  priorityClassName: nightly-gpu-critical
   replicas: 3
   monitoring:
     podmonitor:
@@ -106,6 +107,7 @@ decode:
 
 prefill:
   create: true
+#  priorityClassName: nightly-gpu-critical
   replicas: 1
   monitoring:
     podmonitor:

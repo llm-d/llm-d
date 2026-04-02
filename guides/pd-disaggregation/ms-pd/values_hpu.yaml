@@ -33,9 +33,10 @@ routing:
     secure: false
 
 decode:
+  create: true
+#  priorityClassName: nightly-gpu-critical
   parallelism:
     tensor: 4
-  create: true
   replicas: 1
   monitoring:
     podmonitor:
@@ -131,9 +132,10 @@ decode:
     emptyDir: {}
 
 prefill:
+  create: true
+#  priorityClassName: nightly-gpu-critical
   parallelism:
     tensor: 1
-  create: true
   replicas: 4
   monitoring:
     podmonitor:

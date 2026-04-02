@@ -26,9 +26,10 @@ routing:
     secure: false
 
 decode:
+  create: true
+#  priorityClassName: nightly-gpu-critical
   parallelism:
     tensor: 1  # each pod requests 1 gpu
-  create: true
   replicas: 2
   monitoring:
     podmonitor:
