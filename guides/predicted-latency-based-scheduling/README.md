@@ -1,5 +1,7 @@
 # Experimental Feature: Predicted Latency based Load Balancing
 
+## **MATURITY** : Experimental (not regularly tested by maintainers)
+
 ## Overview
 
 This experimental feature introduces **predicted latency based load balancing**, where scheduling decisions are guided by real-time predictions of request latency rather than only utilization metrics like queue depth or KV-cache utilization.

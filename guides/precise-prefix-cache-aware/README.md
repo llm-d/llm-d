@@ -1,5 +1,7 @@
 # Feature: Precise Prefix Cache Aware Routing
 
+## **MATURITY** : Medium (tested nightly on OpenShift)
+
 ## Overview
 
 This guide demonstrates how to configure the inference scheduler to use the new precise prefix cache aware routing based on [vLLM KV-Events](https://github.com/vllm-project/vllm/issues/16669) data. Precise prefix cache aware routing pulls up-to-date prefix cache status from serving instances, eliminating the need for additional indexing services and increasing cache hit rate at high throughput.

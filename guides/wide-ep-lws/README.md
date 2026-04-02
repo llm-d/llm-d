@@ -1,5 +1,7 @@
 # Well-lit Path: Wide Expert Parallelism (EP/DP) with LeaderWorkerSet
 
+## **MATURITY** : Experimental (not regularly tested by maintainers)
+
 ## Overview
 
 This guide demonstrates how to deploy DeepSeek-R1-0528 using vLLM's P/D disaggregation support with NIXL in a wide expert parallel pattern with LeaderWorkerSets. This guide has been validated on:
@@ -206,7 +208,7 @@ We use the [inference-perf](https://github.com/kubernetes-sigs/inference-perf/tr
 
 ### Run Benchmark
 
-1. Deploy the wide-ep-lws stack following the Installation steps above. Once the stack is ready, obtain the gateway IP: 
+1. Deploy the wide-ep-lws stack following the Installation steps above. Once the stack is ready, obtain the gateway IP:
 
 ```bash
 export GATEWAY_IP=$(kubectl get gateway/llm-d-inference-gateway -n ${NAMESPACE} -o jsonpath='{.status.addresses[0].value}')

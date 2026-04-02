@@ -1,5 +1,7 @@
 # Autoscaling with Workload Variant Autoscaler (WVA)
 
+## **MATURITY** : Experimental (not regularly tested by maintainers)
+
 > **Version Compatibility**: This guide is tested and validated with **WVA v0.5.1**. Ensure that all version references in installation commands match this version for compatibility.
 >
 > **Breaking Changes in v0.5.1**: If upgrading from v0.4.1 or earlier, see the [Upgrading](#upgrading) section below for required migration steps.

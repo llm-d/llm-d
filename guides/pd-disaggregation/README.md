@@ -1,5 +1,7 @@
 # Well-lit Path: P/D Disaggregation
 
+## **MATURITY** : High (tested nightly on OpenShift, Google Kubernetes Engine and CoreWeave Kubernetes Service)
+
 ## Overview
 
 This guide demonstrates how to deploy GPT-OSS-120B using vLLM's P/D disaggregation support with NIXL. This guide has been validated on:

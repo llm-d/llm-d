@@ -1,5 +1,7 @@
 # Feature: llm-d Accelerator Simulation
 
+## **MATURITY** : Medium (tested nightly on OpenShift)
+
 ## Overview
 
 Conducting large scale testing of AI/ML workloads is difficult when capacity is limited or already committed to production workloads. `llm-d` provides a lightweight model server that mimics the behavior of executing inference without requiring an attached accelerator. This simulated server can be run in wide or dense configurations on CPU-only machines to validate the correct behavior of other parts of the system, including Kubernetes autoscaling and the `inference-scheduler`.

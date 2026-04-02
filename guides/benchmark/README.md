@@ -17,7 +17,7 @@ For full, customizable benchmarking, please refer to [llm-d-benchmark](https://g
     chmod u+x run_only.sh
     ```
 
-- Prepare a Persistent Volume Claim (PVC) to store the benchmark results. The PVC must have `RWX` write permissions and be large enough (`200Gi` recommended).  
+- Prepare a Persistent Volume Claim (PVC) to store the benchmark results. The PVC must have `RWX` write permissions and be large enough (`200Gi` recommended).
   Alternatively, use the `-o` option of `run_only.sh` to output results to ephemeral storage and then copy them over to a local directory or to a cloud bucket.
 
   <details>
@@ -841,7 +841,7 @@ To allow easier comparison between results from different harnesses, the benchma
 
 ### Graphical report
 
-Some harnesses also generate plots of the results. In our example, `inference-perf` generates several plots under the `analysis` sub directory. In [llm-d-benchmark](https://github.com/llm-d/llm-d-benchmark) there are examples of more complex plots (see [analysis.ipynb](https://github.com/llm-d/llm-d-benchmark/blob/main/analysis/analysis.ipynb)).
+Some harnesses also generate plots of the results. In our example, `inference-perf` generates several plots under the `analysis` sub directory. In [llm-d-benchmark](https://github.com/llm-d/llm-d-benchmark) there are examples of more complex plots (see [analysis.ipynb](https://github.com/llm-d/llm-d-benchmark/blob/main/docs/analysis/analysis.ipynb)).
 
 ---
 

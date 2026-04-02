@@ -1,5 +1,7 @@
 # Google TPU P/D Disaggregation Deployment Guide
 
+## **MATURITY** : Experimental (not regularly tested by maintainers)
+
 ## Overview
 
 This document provides complete steps for deploying a PD (Prefill-Decode) disaggregation service on a Google Kubernetes Engine (GKE) cluster using the Llama-3.3-70B-Instruct model. PD disaggregation separates the prefill and decode phases of inference, enabling more efficient resource utilization and improved throughput.

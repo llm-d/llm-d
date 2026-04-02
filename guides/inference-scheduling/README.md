@@ -1,5 +1,7 @@
 # Well-lit Path: Intelligent Inference Scheduling
 
+## **MATURITY** : High (tested nightly on OpenShift, Google Kubernetes Engine and CoreWeave Kubernetes Service)
+
 ## Overview
 
 This guide deploys the recommended out of the box [scheduling configuration](https://github.com/llm-d/llm-d-inference-scheduler/blob/main/docs/architecture.md) for most vLLM and SGLang deployments, reducing tail latency and increasing throughput through load-aware and prefix-cache aware balancing. This can be run on two GPUs that can load [Qwen/Qwen3-32B](https://huggingface.co/Qwen/Qwen3-32B).
