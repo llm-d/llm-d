@@ -22,9 +22,9 @@ network:
 
 safe-outputs:
   create-issue:
-    labels: [upstream-breaking-change, automation]
+    labels: [upstream-breaking-change, upstream-update, automation, critical, high, medium, low]
   add-labels:
-    allowed: [upstream-breaking-change, upstream-update, automation, critical, high, medium]
+    allowed: [upstream-breaking-change, upstream-update, automation, critical, high, medium, low]
 
 tools:
   github:
