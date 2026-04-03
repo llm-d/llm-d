@@ -13,7 +13,7 @@ modelArtifacts:
 routing:
   servicePort: 8000
   proxy:
-    image: ghcr.io/llm-d/llm-d-routing-sidecar:v0.5.0
+    image: ghcr.io/llm-d/llm-d-routing-sidecar:v0.6.0
     connector: nixlv2
     secure: false
 
@@ -30,6 +30,9 @@ decode:
     - name: "vllm"
       image: "ghcr.io/llm-d/llm-d-inference-sim:v0.7.1"
       modelCommand: imageDefault
+      env:
+        - name: "RELEASE_NAME"
+          value: ""
       ports:
         - containerPort: 8200
           name: vllm
@@ -64,48 +67,6 @@ decode:
     - name: metrics-volume
       emptyDir: {}
 
+# PD disabled in this example
 prefill:
-  create: true
-  replicas: 1
-  monitoring:
-    podmonitor:
-      enabled: true
-      portName: "vllm"
-      path: "/metrics"
-      interval: "30s"
-  containers:
-    - name: "vllm"
-      image: "ghcr.io/llm-d/llm-d-inference-sim:v0.7.1"
-      modelCommand: imageDefault
-      ports:
-        - containerPort: 8000
-          name: vllm
-          protocol: TCP
-      mountModelVolume: true
-      volumeMounts:
-      - name: metrics-volume
-        mountPath: /.config
-      startupProbe:
-        httpGet:
-          path: /v1/models
-          port: vllm
-        initialDelaySeconds: 15
-        periodSeconds: 30
-        timeoutSeconds: 5
-        failureThreshold: 60
-      livenessProbe:
-        httpGet:
-          path: /health
-          port: vllm
-        periodSeconds: 10
-        timeoutSeconds: 5
-        failureThreshold: 3
-      readinessProbe:
-        httpGet:
-          path: /v1/models
-          port: vllm
-        periodSeconds: 5
-        timeoutSeconds: 2
-  volumes:
-    - name: metrics-volume
-      emptyDir: {}
+  create: false

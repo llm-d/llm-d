@@ -1,124 +1,107 @@
+latencyPredictor:
+  enabled: true
+  trainingServer:
+    image:
+      hub: us-central1-docker.pkg.dev/k8s-staging-images/gateway-api-inference-extension
+      name: latency-training-server
+      tag: main
+      pullPolicy: Always
+    port: 8000
+    volumeSize: "20Gi"
+    config:
+      LATENCY_RETRAINING_INTERVAL_SEC: "10"
+      LATENCY_MIN_SAMPLES_FOR_RETRAIN: "100"
+      LATENCY_TTFT_MODEL_PATH: "/models/ttft.joblib"
+      LATENCY_TPOT_MODEL_PATH: "/models/tpot.joblib"
+      LATENCY_TTFT_SCALER_PATH: "/models/ttft_scaler.joblib"
+      LATENCY_TPOT_SCALER_PATH: "/models/tpot_scaler.joblib"
+      LATENCY_MODEL_TYPE: "xgboost"
+      LATENCY_MAX_TRAINING_DATA_SIZE_PER_BUCKET: "500"
+      LATENCY_OBJECTIVE_TYPE: "mean"
+
+  predictionServers:
+    count: 10
+    startPort: 8001
+    image:
+      hub: us-central1-docker.pkg.dev/k8s-staging-images/gateway-api-inference-extension
+      name: latency-prediction-server
+      tag: main
+      pullPolicy: Always
+    volumeSize: "10Gi"
+    config:
+      LATENCY_MODEL_TYPE: "xgboost"
+      PREDICT_HOST: "0.0.0.0"
+      LOCAL_TTFT_MODEL_PATH: "/server_models/ttft.joblib"
+      LOCAL_TPOT_MODEL_PATH: "/server_models/tpot.joblib"
+      LOCAL_TTFT_SCALER_PATH: "/server_models/ttft_scaler.joblib"
+      LOCAL_TPOT_SCALER_PATH: "/server_models/tpot_scaler.joblib"
+      UVICORN_WORKERS: "28"
+      OMP_NUM_THREADS: "1"
+      MODEL_SYNC_INTERVAL_SEC: "30"
+      LATENCY_OBJECTIVE_TYPE: "mean"
+
+  eppEnv:
+    LATENCY_MAX_SAMPLE_SIZE: "10000"
+    LATENCY_MAX_CONCURRENT_DISPATCHES: "36"
+    LATENCY_COALESCE_WINDOW_MS: "1"
+
 inferenceExtension:
   replicas: 1
-
   flags:
-    # in vLLM 10.0+, the metric is renamed while upstream GAIE is still using the old name as default.
-    # See https://github.com/kubernetes-sigs/gateway-api-inference-extension/pull/1905.
-    kv-cache-usage-percentage-metric: "vllm:kv_cache_usage_perc"
-    # Disable tracing flag (not supported in experimental build)
-    enable-latency-predictor: true
-
-  image:
-    # Use the experimental EPP image with SLO prediction support
-    # IMPORTANT: Replace with your custom built image from the experimental branch
-    name: epp
-    hub: quay.io/rh-ee-kapjain
-    tag: slo-prediction-06bb5de8
-    pullPolicy: Always
-
-  # Override container args to remove unsupported flags
-  containerArgs:
-    - --enable-latency-predictor
-    - --config-file=/config/slo-prediction-plugins.yaml
-    - --kv-cache-usage-percentage-metric=vllm:kv_cache_usage_perc
-
-  extProcPort: 9002
-
-  # Latency Predictor Configuration (using chart's built-in support)
   latencyPredictor:
     enabled: true
-    # Training Server Configuration
-    trainingServer:
-      image:
-        hub: quay.io/rh-ee-kapjain
-        name: latency-predictor-training
-        tag: latency-predictor-06bb5de8
-        pullPolicy: Always
-      port: 8000
-      volumeSize: "20Gi"
-      config:
-        LATENCY_RETRAINING_INTERVAL_SEC: "1"
-        LATENCY_MIN_SAMPLES_FOR_RETRAIN: "100"
-        LATENCY_TTFT_MODEL_PATH: "/models/ttft.joblib"
-        LATENCY_TPOT_MODEL_PATH: "/models/tpot.joblib"
-        LATENCY_TTFT_SCALER_PATH: "/models/ttft_scaler.joblib"
-        LATENCY_TPOT_SCALER_PATH: "/models/tpot_scaler.joblib"
-        LATENCY_MODEL_TYPE: "xgboost"
-        LATENCY_MAX_TRAINING_DATA_SIZE_PER_BUCKET: "5000"
-        LATENCY_QUANTILE_ALPHA: "0.9"
-    # Prediction Server Configuration
-    predictionServers:
-      count: 10
-      startPort: 8001
-      image:
-        hub: quay.io/rh-ee-kapjain
-        name: latency-predictor-prediction
-        tag: latency-predictor-06bb5de8
-        pullPolicy: Always
-      volumeSize: "10Gi"
-      config:
-        LATENCY_MODEL_TYPE: "xgboost"
-        PREDICT_HOST: "0.0.0.0"
-        LOCAL_TTFT_MODEL_PATH: "/server_models/ttft.joblib"
-        LOCAL_TPOT_MODEL_PATH: "/server_models/tpot.joblib"
-        LOCAL_TTFT_SCALER_PATH: "/server_models/ttft_scaler.joblib"
-        LOCAL_TPOT_SCALER_PATH: "/server_models/tpot_scaler.joblib"
-    # EPP Environment Variables for Latency Predictor
-    eppEnv:
-      LATENCY_MAX_SAMPLE_SIZE: "10000"
-      NEG_HEADROOM_TTFT_WEIGHT: "0.5"
-      NEG_HEADROOM_TPOT_WEIGHT: "0.5"
-      HEADROOM_TTFT_WEIGHT: "0.5"
-      HEADROOM_TPOT_WEIGHT: "0.5"
-      HEADROOM_SELECTION_STRATEGY: "least"  # or "most"
-      SLO_BUFFER_FACTOR: "1.1"
-
+  image:
+    name: llm-d-inference-scheduler
+    hub: quay.io/rh_ee_rsaini
+    tag: slo-pd-experimental
+    pullPolicy: Always
+  extProcPort: 9002
   pluginsConfigFile: "slo-prediction-plugins.yaml"
-  pluginsCustomConfig:
+  pluginsCustomConfig:  # THIS CONFIG NEEDS TO BE CHECKED FOR INF SCHEDULER NEW IMAGE
     slo-prediction-plugins.yaml: |
+      # ALWAYS DO PD IN THIS EXAMPLE (THRESHOLD 0)
       apiVersion: inference.networking.x-k8s.io/v1alpha1
       kind: EndpointPickerConfig
+      featureGates:
+      - prepareDataPlugins
       plugins:
-        - type: queue-scorer
-        - type: kv-cache-utilization-scorer
-        - type: prefix-cache-scorer
-        - type: slo-request-tracker
-        - type: slo-scorer
-        - type: slo-aware-profile-handler
-        - type: max-score-picker
-
+      - type: prefix-cache-scorer
+        parameters:
+          maxPrefixBlocksToMatch: 256
+          lruCapacityPerServer: 31250
+      - type: predicted-latency-scorer
+        parameters:
+          sloBufferFactor: 1.0
+          headroomSelectionStrategy: "least"
+          samplingMean: 50
+          maxSampledTokens: 10
+      - type: max-score-picker
       schedulingProfiles:
-        - name: default
-          plugins:
-            - pluginRef: slo-request-tracker
-            - pluginRef: prefix-cache-scorer
-            - pluginRef: queue-scorer
-            - pluginRef: kv-cache-utilization-scorer
-            - pluginRef: max-score-picker
+      - name: default
+        plugins:
+        - pluginRef: prefix-cache-scorer
+        - pluginRef: predicted-latency-scorer
+        - pluginRef: max-score-picker
 
-        - name: slo
-          plugins:
-            - pluginRef: prefix-cache-scorer
-              weight: 0
-            - pluginRef: slo-request-tracker
-            - pluginRef: slo-scorer
-            - pluginRef: max-score-picker
-
+  # Distributed tracing configuration (OpenTelemetry)
+  tracing:
+    enabled: false
+    # otelExporterEndpoint: "http://otel-collector:4317"
+    # sampling:
+    #   sampler: "parentbased_traceidratio"
+    #   samplerArg: "0.1"
   # Monitoring configuration for EPP
   monitoring:
-    secret:
-      name: latency-prediction-gateway-sa-metrics-reader-secret
     interval: "10s"
-    # Prometheus ServiceMonitor will be created when enabled for EPP metrics collection
     prometheus:
       enabled: true
       auth:
-        # To allow unauthenticated /metrics access (e.g., for debugging with curl), set to false
-        enabled: true
+        secretName: pd-gateway-sa-metrics-reader-secret
 
 inferencePool:
   targetPorts:
     - number: 8000
+    - number: 8200
   modelServerType: vllm
   modelServers:
     matchLabels:

@@ -12,11 +12,7 @@ spec:
         - group: inference.networking.k8s.io
           kind: InferencePool
           name: gaie-latency
-          port: 8000
           weight: 1
-      timeouts:
-        backendRequest: 0s
-        request: 0s
       matches:
         - path:
             type: PathPrefix
