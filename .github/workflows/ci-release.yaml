@@ -850,7 +850,7 @@ jobs:
       - name: Checkout vLLM source
         uses: actions/checkout@v6
         with:
-          repository: ${{ steps.common-versions.outputs.repo }}
+          repository: vllm-project/vllm
           ref: ${{ steps.common-versions.outputs.commit_sha }}
           path: .cache/vllm-src
 
@@ -902,7 +902,6 @@ jobs:
           fi
 
   release-hpu-llm-d:
-
     strategy:
       fail-fast: false
     runs-on: vllm-runner
@@ -925,6 +924,7 @@ jobs:
         run: |
           export DEVICE=hpu
           export DOCKERFILE=Dockerfile.hpu
+          export BUILD_TYPE=prod
           export VERSION="${{ env.TAG }}"
           make image-build
           make image-push
