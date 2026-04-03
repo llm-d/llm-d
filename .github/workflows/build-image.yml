@@ -55,7 +55,7 @@ env:
   IMAGE_NAME: llm-d
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}-${{ github.sha }}
 
 jobs:
   pre-commit:
