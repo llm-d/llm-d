@@ -10,7 +10,7 @@ patches:
     patch: |-
       - op: replace
         path: /spec/template/spec/containers/0/image
-        value: ghcr.io/llm-d/llm-d-cuda:v0.5.1
+        value: ghcr.io/llm-d/llm-d-cuda:v0.6.0
       - op: replace
         path: /spec/template/spec/containers/0/command
         value:

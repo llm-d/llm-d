@@ -43,7 +43,7 @@ decode:
     k8s.v1.cni.cncf.io/networks: "multi-nic-compute"
   containers:
   - name: "vllm"
-    image: ghcr.io/llm-d/llm-d-cuda:v0.5.1
+    image: ghcr.io/llm-d/llm-d-cuda:v0.6.0
     modelCommand: custom
     command:
       - /bin/bash
@@ -171,7 +171,7 @@ prefill:
     k8s.v1.cni.cncf.io/networks: "multi-nic-compute"
   containers:
   - name: "vllm"
-    image: ghcr.io/llm-d/llm-d-cuda:v0.5.1
+    image: ghcr.io/llm-d/llm-d-cuda:v0.6.0
     modelCommand: custom
     command:
       - /bin/bash

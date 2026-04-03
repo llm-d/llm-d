@@ -52,7 +52,7 @@ decode:
       interval: "30s"
   containers:
     - name: "vllm"
-      image: ghcr.io/llm-d/llm-d-xpu:v0.5.1
+      image: ghcr.io/llm-d/llm-d-xpu:v0.6.0
       modelCommand: vllmServe
       args:
         - "--block-size"
@@ -151,7 +151,7 @@ prefill:
       interval: "30s"
   containers:
     - name: "vllm"
-      image: ghcr.io/llm-d/llm-d-xpu:v0.5.1
+      image: ghcr.io/llm-d/llm-d-xpu:v0.6.0
       modelCommand: vllmServe
       args:
         - "--block-size"

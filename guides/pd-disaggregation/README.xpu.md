@@ -42,7 +42,7 @@ If you need to customize the vLLM version or build the image from source, you ca
 
 ```shell
 # Build with the default vLLM version from docker/common-versions
-make image-build DEVICE=xpu VERSION=v0.5.1
+make image-build DEVICE=xpu VERSION=v0.6.0
 ```
 
 #### Intel Corporation Battlemage G21
@@ -52,7 +52,7 @@ make image-build DEVICE=xpu VERSION=v0.5.1
 git clone https://github.com/vllm-project/vllm.git
 cd vllm
 git checkout v0.15.1
-docker build -f docker/Dockerfile.xpu -t ghcr.io/llm-d/llm-d-xpu-dev:v0.5.1 --shm-size=4g .
+docker build -f docker/Dockerfile.xpu -t ghcr.io/llm-d/llm-d-xpu-dev:v0.6.0 --shm-size=4g .
 ```
 
 ### Available Build Arguments
@@ -116,7 +116,7 @@ If you built the Intel XPU image in Step 0, load it into the Kind cluster:
 
 ```shell
 # Load the built image into Kind cluster
-kind load docker-image ghcr.io/llm-d/llm-d-xpu:v0.5.1 --name llm-d-cluster
+kind load docker-image ghcr.io/llm-d/llm-d-xpu:v0.6.0 --name llm-d-cluster
 
 # Or if you built with custom tag
 kind load docker-image llm-d:custom-xpu --name llm-d-cluster

@@ -50,7 +50,7 @@ decode:
   containers:
     - name: "vllm"
       # Use custom vLLM image for Gaudi for now
-      image: "ghcr.io/llm-d/llm-d-hpu-dev:pr-965"
+      image: "ghcr.io/llm-d/llm-d-hpu:v0.6.0"
 
       # Use imageDefault mode - chart will generate basic vLLM command automatically
       modelCommand: "imageDefault"

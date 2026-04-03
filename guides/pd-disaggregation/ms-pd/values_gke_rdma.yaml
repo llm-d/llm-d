@@ -55,7 +55,7 @@ decode:
     tensor: 4
   containers:
   - name: "vllm"
-    image: ghcr.io/llm-d/llm-d-cuda:v0.5.1
+    image: ghcr.io/llm-d/llm-d-cuda:v0.6.0
     modelCommand: custom # Use custom command
     command:
       - /bin/bash
@@ -152,7 +152,7 @@ prefill:
     tensor: 4
   containers:
   - name: "vllm"
-    image: ghcr.io/llm-d/llm-d-cuda:v0.5.1
+    image: ghcr.io/llm-d/llm-d-cuda:v0.6.0
     modelCommand: custom # Use custom command
     command:
       - /bin/bash
