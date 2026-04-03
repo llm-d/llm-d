@@ -262,8 +262,7 @@ decode:
 
 ### Step 3: Deploy the Stack
 
-Use helmfile to compose and install the stack. The `values_hpu_cuda.yaml` is applied by
-default when no specific environment override is used:
+Use helmfile to compose and install the stack. The `values_hpu_cuda.yaml` is applied when the `hpu_cuda` environment is chosen.
 
 ```bash
 export NAMESPACE=llm-d-pd
@@ -341,24 +340,28 @@ Expected output shows both HPU+RDMA and GPU+RDMA claims in `Allocated` state.
 
 ## Using the Stack
 
-Get the gateway endpoint:
+### Get Gateway Service Information
 
 ```bash
-export ENDPOINT="http://$(kubectl get service infra-pd-inference-gateway-istio \
-  -n ${NAMESPACE} -o jsonpath='{.status.loadBalancer.ingress[0].ip}')"
-echo "Using endpoint: $ENDPOINT"
+kubectl get service -n ${NAMESPACE} infra-pd-inference-gateway-istio
 ```
 
-List available models:
+### Perform Inference Requests
+
+#### Using Port Forwarding (Recommended)
 
 ```bash
-curl -s ${ENDPOINT}/v1/models -H "Content-Type: application/json" | jq
-```
+# Port forward to local
+kubectl port-forward -n ${NAMESPACE} service/infra-pd-inference-gateway-istio 8086:80 &
 
-Run a completion request:
+# Test health check
+curl -X GET "http://localhost:8086/health" -v
 
-```bash
-curl -X POST ${ENDPOINT}/v1/completions \
+# List available models
+curl -s http://localhost:8086/v1/models -H "Content-Type: application/json" | jq
+
+# Run a completion request
+curl -X POST "http://localhost:8086/v1/completions" \
   -H 'Content-Type: application/json' \
   -d '{
     "model": "Qwen/Qwen3-0.6B",

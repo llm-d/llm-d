@@ -19,7 +19,7 @@ routing:
 prefill:
   accelerator:
     type: "intel-gaudi"
-    dra: "true"
+    dra: true
   create: true
   replicas: 1
   resourceClaims:
@@ -36,13 +36,7 @@ prefill:
       capabilities:
         add: 
         - "IPC_LOCK"
-        - "SYS_RESOURCE"
-        - "SYS_ADMIN"
-        - "SYS_RAWIO"
-        - "IPC_LOCK"
-        - "NET_RAW"
-        - "NET_ADMIN" 
-        - "ALL" 
+        - "SYS_RESOURCE" 
     command: ["/bin/bash", "-c"]
     args:
       - |
@@ -52,7 +46,7 @@ prefill:
           --gpu-memory-utilization 0.9 \
           --max-num-batched-tokens 81920 --max-model-len 15000 \
           --max-num-seqs 4 --no-enable-prefix-caching \
-          --kv-transfer-config '{"kv_connector":"NixlConnector", "kv_role":"kv_both", "kv_buffer_device":"hpu", "enable_permute_local_kv":"True", "kv_connector_extra_config":{"agreed_block_size": "16"}}'
+          --kv-transfer-config '{"kv_connector":"NixlConnector", "kv_role":"kv_both", "kv_buffer_device":"hpu", "enable_permute_local_kv":true, "kv_connector_extra_config":{"agreed_block_size": "16"}}'
     env:
       - name: VLLM_NIXL_SIDE_CHANNEL_HOST
         valueFrom:
@@ -123,7 +117,7 @@ prefill:
 decode:
   accelerator:
     type: "nvidia"
-    dra: "true"
+    dra: true
   create: true
   replicas: 1
   imagePullSecrets:
@@ -142,12 +136,6 @@ decode:
         add: 
           - "IPC_LOCK"
           - "SYS_RESOURCE"
-          - "SYS_ADMIN"
-          - "SYS_RAWIO"
-          - "IPC_LOCK"
-          - "NET_RAW"
-          - "NET_ADMIN" 
-          - "ALL" 
     command: ["/bin/bash", "-c"]
     args:
       - |
@@ -158,7 +146,7 @@ decode:
           --gpu-memory-utilization 0.95 --long_prefill_token_threshold 8192 \
           --max-num-batched-tokens 65536  \
           --max-num-seqs 128 --no-enable-prefix-caching \
-          --kv-transfer-config '{"kv_connector":"NixlConnector", "kv_role":"kv_both", "kv_buffer_device":"cuda", "kv_parallel_size":"1", "kv_connector_extra_config":{"enforce_handshake_compat": false}, "enable_permute_local_kv":"True"}'
+          --kv-transfer-config '{"kv_connector":"NixlConnector", "kv_role":"kv_both", "kv_buffer_device":"cuda", "kv_parallel_size":"1", "kv_connector_extra_config":{"enforce_handshake_compat": false}, "enable_permute_local_kv": true}'
     env:
       - name: VLLM_NIXL_SIDE_CHANNEL_HOST
         valueFrom:
