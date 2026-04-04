@@ -1,8 +1,8 @@
 # ============================================================================
 # shared vLLM Version Configuration
 # ============================================================================
-VLLM_REPO=https://github.com/vllm-project/vllm.git
-VLLM_COMMIT_SHA=156405d243924fbede2d4360494a81dea7203334 # maps to v0.17.1 tag
+VLLM_REPO=https://github.com/Gregory-Pereira/vllm.git
+VLLM_COMMIT_SHA=fe564294723bce211df3b215e3ef5b64dd2dfcef # enforce transformers >= 5.5.0 for gemma4
 
 # ============================================================================
 # Cuda specific configs
@@ -15,7 +15,7 @@ VLLM_PREBUILT=0                # 0=editable install, 1=use full prebuilt wheel
 VLLM_USE_PRECOMPILED=1         # 1=use precompiled binaries either from VLLM_COMMIT_SHA or VLLM_PRECOMPILED_WHEEL_COMMIT, 0=compile from source
 # If building vLLM from a precompiled commit in the vLLM wheel index (only commits off main),
 # which commit to use as the base for the copiled bits.
-VLLM_PRECOMPILED_WHEEL_COMMIT=156405d243924fbede2d4360494a81dea7203334
+VLLM_PRECOMPILED_WHEEL_COMMIT=99e5539a6701e77b0586e7d5a1fdddf19a1d42f2 # reverted rs norm change but latest main
 
 ### Cuda Runtime versions
 CUDA_MAJOR=12

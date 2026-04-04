@@ -40,12 +40,6 @@ git -C /opt/vllm-source config --system --add safe.directory /opt/vllm-source
 git -C /opt/vllm-source fetch --depth=1 origin "${VLLM_COMMIT_SHA}" || true
 git -C /opt/vllm-source checkout -q "${VLLM_COMMIT_SHA}"
 
-# Remove vLLM's transformers version pin to allow transformers>=5.5.0 (needed for Gemma4 support).
-# vLLM pins an earlier version that doesn't include Gemma4 model support.
-echo "Patching vLLM to remove transformers version pin..."
-find /opt/vllm-source -maxdepth 1 \( -name '*.txt' -o -name 'pyproject.toml' -o -name 'setup.py' \) -exec \
-  sed -i -E 's/transformers([[:space:]]*[<>=!]+[[:space:]]*[0-9][0-9.]*[[:space:]]*,?[[:space:]]*)+/transformers/g' {} +
-
 # detect if prebuilt wheel exists (using VLLM_PRECOMPILED_WHEEL_COMMIT for lookup)
 # note: vllm wheel index structure isn't pip-compatible, so we scrape the HTML directly
 echo "DEBUG: Looking for wheel at: https://wheels.vllm.ai/${VLLM_PRECOMPILED_WHEEL_COMMIT}/vllm/"
