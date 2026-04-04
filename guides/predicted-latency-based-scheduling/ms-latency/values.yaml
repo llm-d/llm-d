@@ -8,7 +8,7 @@ modelArtifacts:
     llm-d.ai/inference-serving: "true"
     llm-d.ai/guide: "predicted-latency-based-scheduling"
     llm-d.ai/accelerator-variant: "cpu"
-    llm-d.ai/model: "llama-3-1-8b-instruct"
+    llm-d.ai/model: "meta-llama/Llama-3.1-8B-Instruct"
 
 routing:
   servicePort: 8000
