@@ -43,10 +43,14 @@ fi
 # pod per request. This avoids repeated pod scheduling, image pulls, and DNS
 # resolution — which previously caused intermittent "Could not resolve host"
 # failures (curl exit 6) under load.
-CURL_POD_NAME="curl-e2e-test"
+CURL_POD_NAME="curl-e2e-${RANDOM}-$$"
 CURL_POD_TIMEOUT_SECONDS="${CURL_POD_TIMEOUT_SECONDS:-120}"
 
 setup_curl_pod() {
+  # Delete any leftover pod with the same name (idempotent)
+  kubectl delete pod -n "$NAMESPACE" "$CURL_POD_NAME" \
+    --ignore-not-found >/dev/null 2>&1 || true
+
   echo "Creating persistent curl pod ${CURL_POD_NAME}..."
   kubectl run "$CURL_POD_NAME" \
     --namespace "$NAMESPACE" \
