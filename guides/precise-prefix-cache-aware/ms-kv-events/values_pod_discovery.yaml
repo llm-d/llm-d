@@ -44,7 +44,7 @@ decode:
       image: ghcr.io/llm-d/llm-d-cuda:v0.6.0
       modelCommand: vllmServe
       args:
-        - "--block-size=16"
+        - "--block-size=64"
         - "--kv-events-config"
         - |-
           {
