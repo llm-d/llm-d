@@ -1,6 +1,6 @@
 # Google TPU P/D Disaggregation Deployment Guide
 
-## **MATURITY** : Experimental (not regularly tested by maintainers)
+** Automated test status**: Not currently part of nightly testing by llm-d maintainers.
 
 ## Overview
 
@@ -10,7 +10,7 @@ For broader context or GPU setup, refer to this [p/d guide](./README.md)
 
 ## Hardware Requirements
 
-This guide uses Cloud TPU v6e (Trillium) accelerators on Google Cloud Platform (GCP), specifically the `ct6e-standard-8t` machine type. You may also choose other compatible TPU VM types.
+This guide uses Cloud TPU v6e (Trillium) accelerators on Google Cloud Platform (GCP), specifically the `ct6e-standard-8t` machine type. You may also choose other compatible TPU VM topologies, e.g. ct6e-standard-1t (1x1), ct6e-standard-4t (2x2).
 
 ## Prerequisites
 
