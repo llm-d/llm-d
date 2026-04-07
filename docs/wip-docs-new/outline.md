@@ -62,24 +62,26 @@
 
 ### Architecture
 
-* Layers — describe each part of the architecture and what it does
-   * Introduction (Arch Diagram): Proxy → EPP → InferencePool → Model Server
-   * Proxy (Standalone vs Gateway API)
-   * EPP (Overall design, Concept of a scorer, Concept of flow control, Concept of latency predictor)
-   * InferencePool API (API for sets of model servers (Point back to API docs))
-   * Model Servers (vllm, sgl, deploy however you want)
+#### Modular Layers
+* Introduction (Arch Diagram): Proxy → EPP → InferencePool → Model Server
+* Proxy (Standalone vs Gateway API)
+* EPP (Overall design, Concept of a scorer, Concept of flow control, Concept of latency predictor)
+* InferencePool API (API for sets of model servers (Point back to API docs))
+* Model Servers (vllm, sgl, deploy however you want)
 
-* Component Design
-   * EPP (Inference Scheduling, Flow Control)
-   * Async Processor
-   * Latency Predictor
-   * Disaggregation (EPP, Sidecar, Protocols, DP-Aware)
-   * KV-Indexer
-   * KV Offloading (CPU, N/S Disk, E/W Disk)
-   * Workload Autocaling
+#### Component Design
+* EPP (Inference Scheduling, Flow Control)
+* Async Processor
+* Latency Predictor
+* Disaggregation (EPP, Sidecar, Protocols, DP-Aware)
+* KV-Indexer
+* KV Offloading (CPU, N/S Disk, E/W Disk)
+* Workload Autocaling
 
 ### Well-Lit Paths
-* Do we want to just point back to the github? Each one should have:
+* Do we want to just point back to the github?
+
+Each one should have:
 - Arch diagram
 - Configuration / knobs
 - Workload
