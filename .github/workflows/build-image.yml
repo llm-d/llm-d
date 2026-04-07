@@ -220,7 +220,7 @@ jobs:
         uses: docker/setup-buildx-action@v4
 
       - name: Log in to Container Registry
-        uses: docker/login-action@v3
+        uses: docker/login-action@v4
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ secrets.GHCR_USER }}
@@ -377,7 +377,7 @@ jobs:
         uses: docker/setup-buildx-action@v4
 
       - name: Log in to Container Registry
-        uses: docker/login-action@v3
+        uses: docker/login-action@v4
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ secrets.GHCR_USER }}
@@ -617,7 +617,7 @@ jobs:
 
       - name: Log in to Container Registry
         if: ${{ steps.should-run.outputs.os_succeeded == 'true' }}
-        uses: docker/login-action@v3
+        uses: docker/login-action@v4
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ secrets.GHCR_USER }}
@@ -747,7 +747,7 @@ jobs:
         uses: docker/setup-buildx-action@v4
 
       - name: Log in to Container Registry
-        uses: docker/login-action@v3
+        uses: docker/login-action@v4
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ secrets.GHCR_USER }}
@@ -945,7 +945,7 @@ jobs:
 
       - name: Log in to Container Registry
         if: ${{ steps.should-run.outputs.rhel_ok == 'true' }}
-        uses: docker/login-action@v3
+        uses: docker/login-action@v4
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ secrets.GHCR_USER }}
@@ -1056,7 +1056,7 @@ jobs:
           buildkitd-flags: --oci-worker-gc
 
       - name: Log in to Container Registry
-        uses: docker/login-action@v3
+        uses: docker/login-action@v4
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ secrets.GHCR_USER }}
@@ -1143,7 +1143,7 @@ jobs:
         uses: docker/setup-buildx-action@v4
 
       - name: Log in to Container Registry
-        uses: docker/login-action@v3
+        uses: docker/login-action@v4
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ secrets.GHCR_USER }}
@@ -1236,7 +1236,7 @@ jobs:
         uses: docker/setup-buildx-action@v4
 
       - name: Log in to Container Registry
-        uses: docker/login-action@v3
+        uses: docker/login-action@v4
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ secrets.GHCR_USER }}
@@ -1313,7 +1313,7 @@ jobs:
           ref: ${{ inputs.ref || '' }}
 
       - name: Log in to Container Registry
-        uses: docker/login-action@v3
+        uses: docker/login-action@v4
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ secrets.GHCR_USER }}
@@ -1399,7 +1399,7 @@ jobs:
         uses: docker/setup-buildx-action@v4
 
       - name: Log in to Container Registry
-        uses: docker/login-action@v3
+        uses: docker/login-action@v4
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ secrets.GHCR_USER }}
