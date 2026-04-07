@@ -31,4 +31,4 @@ LLM_D_OFFLOADING_CONNECTOR_VERSION=0.17.1
 # ============================================================================
 
 # XPU vLLM version / commit sha
-VLLM_XPU_COMMIT_SHA=9dd656f0ea06ba452e1f26666c111ea4909cd488 # maps to v0.18.0rc2 tag for XPU RDMA support
+VLLM_XPU_COMMIT_SHA=bcf2be96120005e9aea171927f85055a6a5c0cf6 # maps to v0.18.0 for XPU RDMA support
