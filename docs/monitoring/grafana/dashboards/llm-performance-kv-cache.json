@@ -908,8 +908,8 @@
             "type": "prometheus",
             "uid": "${DS_PROMETHEUS}"
           },
-          "expr": "inference_pool_ready_pods{name=\"gaie-cpu-inference\", namespace=~\"$namespace\"}",
-          "legendFormat": "Ready Pods",
+          "expr": "inference_pool_ready_pods{namespace=~\"$namespace\"}",
+          "legendFormat": "{{name}} Ready Pods",
           "refId": "A"
         },
         {
@@ -917,8 +917,8 @@
             "type": "prometheus",
             "uid": "${DS_PROMETHEUS}"
           },
-          "expr": "inference_pool_average_queue_size{name=\"gaie-cpu-inference\", namespace=~\"$namespace\"}",
-          "legendFormat": "Average Queue Size",
+          "expr": "inference_pool_average_queue_size{namespace=~\"$namespace\"}",
+          "legendFormat": "{{name}} Average Queue Size",
           "refId": "B"
         }
       ],
@@ -987,8 +987,8 @@
             "type": "prometheus",
             "uid": "${DS_PROMETHEUS}"
           },
-          "expr": "inference_pool_average_kv_cache_utilization{name=\"gaie-cpu-inference\", namespace=~\"$namespace\"}",
-          "legendFormat": "Pool KV Cache Utilization",
+          "expr": "inference_pool_average_kv_cache_utilization{namespace=~\"$namespace\"}",
+          "legendFormat": "{{name}} Pool KV Cache Utilization",
           "refId": "A"
         }
       ],
