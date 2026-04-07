@@ -1,3 +1,48 @@
+```
+.
+├── getting-started
+│   ├── introduction.md
+│   ├── quickstart-hello-world.md
+│   ├── feature-matrix.md
+│   └── artifacts.md
+├── architecture
+│   ├── layers
+│   │   ├── introduction-arch-diagram.md
+│   │   ├── proxy.md
+│   │   ├── epp.md
+│   │   ├── inferencepool-api.md
+│   │   └── model-servers.md
+│   └── component-design
+│       ├── epp.md
+│       ├── latency-predictor.md
+│       ├── async-processing.md
+│       ├── disaggregation.md
+│       ├── kv-indexer.md
+│       ├── kv-offloading.md
+│       └── wva.md
+├── well-lit-paths
+│   ├── introduction.md
+│   ├── what-is-a-well-lit-path.md
+│   ├── intelligent-inference-scheduling
+│   │   ├── default.md
+│   │   ├── precise-prefix-cache-aware-routing.md
+│   │   ├── predicted-latency.md
+│   │   └── flow-control.md
+│   ├── prefill-decode-disaggregation.md
+│   ├── wide-expert-parallelism.md
+│   ├── tiered-prefix-cache.md
+│   └── workload-autoscaling.md
+├── user-guides
+│   ├── configuring-user-facing-apis.md
+│   ├── monitoring
+│   │   ├── metrics.md
+│   │   └── tracing.md
+│   ├── deploying-multiple-models.md
+│   └── rdma-configuration.md
+└── api-reference
+    └── tbd.md
+```
+
 ### Getting Started
 
 #### Introduction
