@@ -177,7 +177,7 @@ decode:
     resources:
       claims: 
         - name: rdma-resource
-    mountModelVolume: false
+    mountModelVolume: true
     volumeMounts:
       - name: metrics-volume
         mountPath: /.config
