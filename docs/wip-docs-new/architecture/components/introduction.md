@@ -21,7 +21,7 @@ At it core, llm-d contains the following key layers:
 
 ## Key Decision Points
 
-The Infernece Platform and Inference Workload owners have a few key considerations in their setup:
+The Inference Platform and Inference Workload owners have a few key considerations in their setup:
 
 ### Which Proxy?
 
@@ -48,10 +48,5 @@ See [EPP](epp.md) for more details on configuration of the EPP component.
 
 ### How To Configure The Infernce Pool Model Server?
 
-The model servers 
-
----> Add some basic details about how EPP works, scorers etc
----> Add some basic YAML
-
-See [InferencePool](inferencepool.md) and [Model Servers](model-servers.md) for more details on configuration.
+XXX
 
