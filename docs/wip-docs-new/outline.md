@@ -33,6 +33,9 @@
 │   ├── tiered-prefix-cache.md
 │   └── workload-autoscaling.md
 ├── user-guides
+│   ├── deploying-a-proxy
+│   │   ├── gateway.md
+│   │   ├── standalone.md
 │   ├── configuring-user-facing-apis.md
 │   ├── monitoring
 │   │   ├── metrics.md
