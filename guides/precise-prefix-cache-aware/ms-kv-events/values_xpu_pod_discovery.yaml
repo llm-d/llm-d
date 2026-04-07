@@ -60,7 +60,7 @@ decode:
             --served-model-name "Qwen/Qwen3-32B" \
             --dtype float16 \
             --disable-sliding-window \
-            --block-size 16 \
+            --block-size 64 \
             --prefix-caching-hash-algo sha256_cbor \
             --kv-events-config "{\"enable_kv_cache_events\":true,\"publisher\":\"zmq\",\"endpoint\":\"tcp://*:5557\",\"topic\":\"kv@${POD_IP}:8000@Qwen/Qwen3-32B\"}"
       env:
