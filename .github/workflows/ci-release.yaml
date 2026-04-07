@@ -87,7 +87,7 @@ jobs:
 
       - name: Build the builder image layer
         id: build
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           file: ./docker/Dockerfile.cuda
@@ -121,7 +121,7 @@ jobs:
 
       - name: Build the final image layer
         id: build-image-final-layer
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           file: ./docker/Dockerfile.cuda
@@ -431,7 +431,7 @@ jobs:
 
       - name: Build the builder image layer
         id: build
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           file: ./docker/Dockerfile.cuda
@@ -459,7 +459,7 @@ jobs:
 
       - name: Build the final image layer
         id: build-image-final-layer
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           file: ./docker/Dockerfile.cuda
@@ -700,7 +700,7 @@ jobs:
 
       - name: Build and push the image
         id: build-and-push
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           file: ./docker/Dockerfile.cpu
@@ -772,7 +772,7 @@ jobs:
 
       - name: Build and push the image
         id: build-and-push
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           file: ./docker/Dockerfile.rocm
@@ -856,7 +856,7 @@ jobs:
 
       - name: Build and push the image
         id: build-and-push
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: ./.cache/vllm-src
           file: ./.cache/vllm-src/docker/Dockerfile.xpu
