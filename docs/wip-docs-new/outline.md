@@ -2,7 +2,9 @@
 .
 ├── getting-started
 │   ├── introduction.md
-│   ├── quickstart-hello-world.md
+│   ├── quickstart
+│   │   ├── standalone.md
+│   │   ├── gateway.md
 │   ├── feature-matrix.md
 │   └── artifacts.md
 ├── architecture
