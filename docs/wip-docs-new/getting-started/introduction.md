@@ -25,7 +25,7 @@ llm-d focuses on a modular design, with layered abstractions enabling customizat
 
 At it core, llm-d contains the following key components:
 
-- **Proxy** - Gateway or Standalone Envoy proxy coupled with an EndPointer Picker extension. It provides optimized routing and load balancing for serving Kubernetes self-hosted generative Artificial Intelligence (AI) workloads.
+- **Proxy** - Gateway or Standalone Envoy Proxy coupled with an EndPointer Picker extension. It provides optimized routing and load balancing for serving Kubernetes self-hosted generative Artificial Intelligence (AI) workloads.
 
 - **EndPoint Picker (EPP)** - An extendable component that makes selects which endpoint in the `InferencePool` is optimal for an specific inference request. The EPP is the "brains" of the scheduling decision that 
 
@@ -35,3 +35,15 @@ At it core, llm-d contains the following key components:
 
 ![Basic architecture](images/basic-architecture.svg)
 
+## "Well Lit Paths"
+
+In addition to software artifacts, llm-d also provides "Well-Lit Paths" for various deployment patterns. These "Well-Lit Paths" demonstrate how to compose the various components of llm-d to achieve and benchmark key design parterns in LLM serving. These are intended as starting points to be adapted for production usage.
+
+The "Well-Lit Paths" are standardized to include:
+* Deployable manifests via Kustomize
+* Discussion of key configurations and knobs for performance tuning
+* Sample workloads and benchmarks against "naive" setups
+* Example monitoring configurations
+
+llm-d currently offers the following:
+* [add links to each path as we go]
