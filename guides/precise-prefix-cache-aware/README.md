@@ -1,6 +1,6 @@
 # Feature: Precise Prefix Cache Aware Routing
 
-## **MATURITY** : Medium (tested nightly on OpenShift)
+## **Automated Testing Coverage** : Medium (tested nightly on OpenShift)
 
 ## Overview
 

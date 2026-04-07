@@ -1,6 +1,6 @@
 # Well-lit Path: Prefix Cache Offloading
 
-## **MATURITY** : Medium (tested nightly on OpenShift)
+## **Automated Testing Coverage** : Medium (tested nightly on OpenShift)
 
 ## Overview
 

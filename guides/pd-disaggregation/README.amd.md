@@ -1,6 +1,6 @@
 # AMD GPU well-lit Path for P/D Disaggregation
 
-## **MATURITY** : Experimental (not regularly tested by maintainers)
+## **Automated Testing Coverage** : None (currently, not part of nightly testing by llm-d maintainers)
 
 ## Overview
 

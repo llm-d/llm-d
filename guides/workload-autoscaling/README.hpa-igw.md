@@ -1,6 +1,6 @@
 # Autoscaling Workloads with HPA and IGW Metrics
 
-## **MATURITY** : Experimental (not regularly tested by maintainers)
+## **Automated Testing Coverage** : None (currently, not part of nightly testing by llm-d maintainers)
 
 This guide explains how to configure autoscaling for LLM workloads by integrating the
 Kubernetes Horizontal Pod Autoscaler (HPA) with metrics emitted by the Inference

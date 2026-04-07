@@ -1,6 +1,6 @@
 # Well-lit Path: Intelligent Inference Scheduling
 
-## **MATURITY** : High (tested nightly on OpenShift, Google Kubernetes Engine and CoreWeave Kubernetes Service)
+## **Automated Testing Coverage** : High (tested nightly on OpenShift, Google Kubernetes Engine and CoreWeave Kubernetes Service)
 
 ## Overview
 

@@ -1,6 +1,6 @@
 # Google TPU P/D Disaggregation Deployment Guide
 
-**Automated test status**: Not currently part of nightly testing by llm-d maintainers.
+## **Automated Testing Coverage** : None (currently, not part of nightly testing by llm-d maintainers)
 
 ## Overview
 

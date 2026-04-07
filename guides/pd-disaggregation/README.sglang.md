@@ -1,5 +1,7 @@
 # P/D Disaggregation SGLang
 
+## **Automated Testing Coverage** : None (currently, not part of nightly testing by llm-d maintainers)
+
 ## Overview
 
 This document provides complete steps for deploying PD disaggregation service on Kubernetes cluster using SGLang inference server with NIXL as the data transfer backend. PD disaggregation separates the prefill and decode phases of inference, allowing for more efficient resource utilization and improved throughput.

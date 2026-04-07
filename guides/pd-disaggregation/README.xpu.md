@@ -1,6 +1,6 @@
 # Intel XPU PD Disaggregation Deployment Guide
 
-## **MATURITY** : Experimental (not regularly tested by maintainers)
+## **Automated Testing Coverage** : None (currently, not part of nightly testing by llm-d maintainers)
 
 ## Overview
 

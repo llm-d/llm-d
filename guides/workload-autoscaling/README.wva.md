@@ -1,6 +1,6 @@
 # Autoscaling with Workload Variant Autoscaler (WVA)
 
-## **MATURITY** : Experimental (not regularly tested by maintainers)
+## **Automated Testing Coverage** : Medium (tested nightly on OpenShift)
 
 The [Workload Variant Autoscaler](https://github.com/llm-d-incubation/workload-variant-autoscaler) (WVA) provides dynamic autoscaling capabilities for llm-d inference deployments, automatically adjusting replica counts based on inference server saturation.
 
