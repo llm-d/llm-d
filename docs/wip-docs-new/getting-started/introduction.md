@@ -23,7 +23,7 @@ llm-d is vendor-neural CNCF sandbox project, supporting multiple inference engin
 
 llm-d focuses on a modular design, with layered abstractions enabling customization that build on top. 
 
-At it core, llm-d contains the following key components:
+At it core, llm-d contains the following key layers:
 
 - **Proxy** - Gateway or Standalone Envoy Proxy coupled with an EndPointer Picker extension. It provides optimized routing and load balancing for serving Kubernetes self-hosted generative Artificial Intelligence (AI) workloads.
 
@@ -33,7 +33,7 @@ At it core, llm-d contains the following key components:
 
 - **Model Server** - The Model Server (like vLLM or SGLang) runs a model on a particular node. The Model Servers can be deployed through any deployment process, joining an `InferencePool` via standard Kuberentes Labels and Selections.
 
-![Basic architecture](images/basic-architecture.svg)
+![Basic architecture](../../assets/basic-architecture.svg)
 
 From these simple primitives and deep co-design with the Model Servers, llm-d can exploit the leading performance optimizations for LLM serving.
 
@@ -45,7 +45,7 @@ Each "Well-Lit Paths" includes the following:
 * Deployable manifests via Kustomize
 * Discussion of key configurations and knobs for performance tuning
 * Sample workloads and benchmarks against "naive" setups
-* Example monitoring configurations
+* Example monitoring configurationsa
 
 llm-d currently offers the following:
 * [add links to each path as we go]
