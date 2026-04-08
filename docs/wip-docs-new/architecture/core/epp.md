@@ -4,9 +4,7 @@ The Endpoint Picker (EPP) is the core scheduling component of llm-d that makes L
 
 ## Functionality
 
-The EPP is the "brains" of an llm-d deployment. It is an extensible, plugin-based component that decides which model server pod in an `InferencePool` should handle each incoming inference request.
-
-Unlike traditional load balancers that route based on connection counts or round-robin, the EPP understands the internal state of LLM inference engines -- KV-cache utilization, prefix cache locality, request queue depth, and active request counts -- to make scheduling decisions that dramatically improve latency and throughput.
+The EPP is the "brains" of an llm-d deployment. It is an extensible, plugin-based component that decides which Model Server pod in an InferencePool should handle each incoming inference request. Unlike traditional load balancers that route based on connection counts or round-robin, the EPP understands the internal state of LLM inference engines -- KV-cache utilization, prefix cache locality, request queue depth, and active request counts -- to make scheduling decisions that dramatically improve latency and throughput.
 
 The EPP integrates with the proxy layer via Envoy's [External Processing (ext-proc)](https://www.envoyproxy.io/docs/envoy/latest/configuration/http/http_filters/ext_proc_filter) protocol. When a request arrives at the proxy, the proxy calls the EPP to select a backend endpoint, and the EPP returns the optimal pod address.
 
@@ -200,28 +198,3 @@ featureGates:
 
 See the [flow control configuration guide](https://gateway-api-inference-extension.sigs.k8s.io/guides/flow-control/) for tuning saturation thresholds.
 
-## Example
-
-A standard deployment uses approximate prefix cache scoring balanced against load-signals:
-
-```yaml
-pluginsCustomConfig:
-  custom-plugins.yaml: |
-    apiVersion: inference.networking.x-k8s.io/v1alpha1
-    kind: EndpointPickerConfig
-    plugins:
-      - type: prefix-cache-scorer
-      - type: kv-cache-utilization-scorer
-      - type: queue-scorer
-      - type: max-score-picker
-    schedulingProfiles:
-      - name: default
-        plugins:
-          - pluginRef: prefix-cache-scorer
-            weight: 3.0
-          - pluginRef: kv-cache-utilization-scorer
-            weight: 2.0
-          - pluginRef: queue-scorer
-            weight: 2.0
-          - pluginRef: max-score-picker
-```
