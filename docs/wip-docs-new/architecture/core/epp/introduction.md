@@ -27,7 +27,7 @@ The steps are:
 3. **Request handling** -- Parses the request (from e.g. OpenAI format, vllm gRPC) into the internal request data structure.
 3. **Flow control** -- If (optionally) enabled, queues requests and prioritizes among different tenants and request priorities in saturation regimes.
 4. **Scheduling** -- Selecting the optimal endpoint from the available InferencePool, which involves evaluating each request against a configured set of scheduling plugins, such as filters and scorers.
-7. **Response** -- The EPP returns the selected endpoint address to the proxy, which routes the request to that model server pod.
+7. **Request Proxying** -- The EPP returns the address of the selected endpoint to the proxy, which then forwards the request to the corresponding model server endpoint.
 
 Asynchronously, the **Data layer* sets up watches on the Kubernetes API server for updates to relevant objects like InferencePools and pods for endpoint discovery. It is also responsible for model servers metrics probing, and maintaining an internal state—such as a prefix cache tree—to inform the request processing components, Flow Control and Scheduling.```
 
