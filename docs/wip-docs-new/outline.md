@@ -12,7 +12,11 @@
 │   ├── core
 │   │   ├── proxy.md
 │   │   ├── inferencepool.md
-│   │   ├── epp.md
+│   │   ├── epp
+|   │   │   ├── introduction.md
+|   │   │   ├── scheduling.md
+|   │   │   ├── flow-control.md
+|   │   │   └── request-handling.md
 │   │   └── model-servers.md
 │   └── advanced
 │       ├── disaggregation.md
