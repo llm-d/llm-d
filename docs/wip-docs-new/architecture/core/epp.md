@@ -23,20 +23,20 @@ The following diagram shows the end-to-end lifecycle of a request as it flows th
   │(Gateway)│             │  │(tokenizer,│  (tokenize, set profile, etc) │
   │         │             │  │ profiles) │                               │
   │         │             │  └─────┬─────┘                               │
-  │         │             │        │                                      │
-  │         │             │        ▼                                      │
+  │         │             │        │                                     │
+  │         │             │        ▼                                     │
   │         │             │  ┌───────────┐  Remove ineligible endpoints  │
   │         │             │  │  Filters  │  (e.g. prefill-only,          │
   │         │             │  │           │   decode-only)                │
   │         │             │  └─────┬─────┘                               │
-  │         │             │        │                                      │
-  │         │             │        ▼                                      │
+  │         │             │        │                                     │
+  │         │             │        ▼                                     │
   │         │             │  ┌───────────┐  Score remaining endpoints    │
   │         │             │  │  Scorers  │  (cache locality, queue       │
   │         │             │  │ (weighted)│   depth, utilization, etc)    │
   │         │             │  └─────┬─────┘                               │
-  │         │             │        │                                      │
-  │         │             │        ▼                                      │
+  │         │             │        │                                     │
+  │         │             │        ▼                                     │
   │         │             │  ┌───────────┐  Select highest-scoring       │
   │         │             │  │  Picker   │  endpoint                     │
   │         │◄────────────│  │           │                               │
