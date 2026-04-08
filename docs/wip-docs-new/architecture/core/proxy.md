@@ -27,7 +27,7 @@ This integration makes it easy to expose and control access to your local OpenAI
 
 The architecture:
 
-![Architecture](../../../assets/endpoint-picker.svg)
+--> XXX Insert Architecture Diagram
 
 Gateway API deployments require the Gateway implementation to support Gateway API Inference Extension (GAIE). Compatible implementations include [Istio](https://istio.io/), [kgateway](https://kgateway.io/), and [GKE Gateway](https://cloud.google.com/kubernetes-engine/docs/concepts/gateway-api). A full list can be found [here](https://gateway-api-inference-extension.sigs.k8s.io/implementations/gateways/).
 
@@ -43,6 +43,8 @@ In standalone mode:
 - ext-proc communication happens over localhost
 - No Gateway, HTTPRoute, or gateway controller is needed
 - Traffic is sent directly to the EPP pod's externally exposed port
+
+--> XXX Insert Architecture Diagram
 
 > Standalone deployments are intended for workloads where the machinery of Gateway API creates too much operational overhead -- such as clusters using Ingress, basic testing and evaluations, batch inference, and RL post-training.
 
