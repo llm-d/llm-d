@@ -17,9 +17,7 @@ In the llm-d architecture, the InferencePool sits between the EPP (Endpoint Pick
 ```
 External Traffic
     |
-[ Proxy (Gateway API / Standalone Envoy) ]
-    |
-[ EPP (Endpoint Picker Pod) ]
+[ Proxy (Gateway API / Standalone Envoy) ] <-> [ EPP (Endpoint Picker Pod) ]
     |
 [ InferencePool ]
     |
