@@ -21,6 +21,4 @@ Conceptually, the architecture looks like this:
 ![Architecture](../../../assets/endpoint-picker.svg)
 
 
-
-
 ## Standalone
