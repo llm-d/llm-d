@@ -252,7 +252,7 @@ For more information see the [`pd-profile-handler` docs](https://github.com/llm-
 Remove the model services and infrastructure:
 
 ```bash
-helmfile destroy -n ${NAMESPACE}
+helmfile destroy  -e hpu_cuda -n ${NAMESPACE}
 ```
 
 Or individually:
