@@ -80,18 +80,6 @@ In addition to the software components, llm-d provides **Well-Lit Paths** — te
 - Sample workloads and benchmarks against baseline setups
 - Monitoring and observability configuration
 
-These paths are starting points designed to be adapted for your models, hardware, and traffic patterns. See the [Feature Matrix](feature-matrix.md) for current engine and accelerator coverage.
+These paths are starting points designed to be adapted for your models, hardware, and traffic patterns. See the [Well-Lit Paths](../well-lit-paths/introduction.md) for current engine and accelerator coverage.
 
-## What's Next?
 
-<div class="grid cards" markdown>
-
-- **Quickstart** — Deploy a "Hello, llm-d" example
-    - [Standalone mode](quickstart/standalone.md) — lightweight Envoy proxy, ideal for getting started
-    - [Gateway API mode](quickstart/gateway.md) — full Kubernetes Gateway API integration
-
-- **[Architecture](../architecture/introduction.md)** — Understand the core components and how they fit together
-
-- **[Well-Lit Paths](../well-lit-paths/introduction.md)** — Explore well-lit paths
-
-</div>
