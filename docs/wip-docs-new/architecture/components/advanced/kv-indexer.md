@@ -1,6 +1,8 @@
 # KV-Cache Indexer
 
-The KV-Cache Indexer enables precise prefix cache-aware routing in llm-d by maintaining a near-real-time view of KV-Cache block distribution across a fleet of vLLM pods.
+The KV-Cache Indexer enables precise prefix cache-aware routing in llm-d by maintaining a near-real-time view of KV-Cache block distribution across a fleet of Model Servers.
+
+> In comparison to EPP's `prefix-cache-scorer` which maintains an approximate view of the KV cache, the `precise-kv-cache-scorer` leverages **KV-Events** emitted by the Model Servers to maintain a globally consistent view of the KV cache state, which can be useful in near saturation regmies of for multi-modal inputs.
 
 ## Functionality
 
@@ -14,7 +16,7 @@ The indexer has two primary data flows:
 
 ### Write Path: Ingesting Cache Events
 
-vLLM model servers emit **KV-Events** over ZeroMQ whenever cache blocks are created or evicted. The indexer subscribes to these events and updates an internal block index in near-real-time.
+Model servers like vLLM can be configured to emit **KV-Events** over ZeroMQ whenever cache blocks are created or evicted. The indexer subscribes to these events and updates an internal block index in near-real-time.
 
 1. A vLLM pod creates or evicts KV-Cache blocks and publishes an event to a ZMQ topic (format: `kv@<pod-ip>:<port>@<model-name>`)
 2. The indexer's event pool receives the message and routes it to a worker using consistent hashing on the pod ID (FNV-1a), ensuring events from the same pod are processed in order
@@ -280,4 +282,3 @@ kvEventsConfig:
 
 - [llm-d-kv-cache: Architecture](https://github.com/llm-d/llm-d-kv-cache/blob/main/docs/architecture.md) - Detailed architecture with sequence diagrams
 - [llm-d-kv-cache: Configuration Reference](https://github.com/llm-d/llm-d-kv-cache/blob/main/docs/configuration.md) - Complete configuration field reference
-- [KV Offloading Design](../designs/kv-offloading.md) - CPU and storage tier offloading for KV-Cache

@@ -200,11 +200,9 @@ featureGates:
 
 See the [flow control configuration guide](https://gateway-api-inference-extension.sigs.k8s.io/guides/flow-control/) for tuning saturation thresholds.
 
-## Examples
+## Example
 
-### Standard Deployment
-
-A standard deployment uses approximate prefix cache scoring with queue-based load balancing:
+A standard deployment uses approximate prefix cache scoring balanced against load-signals:
 
 ```yaml
 pluginsCustomConfig:
@@ -220,130 +218,10 @@ pluginsCustomConfig:
       - name: default
         plugins:
           - pluginRef: prefix-cache-scorer
-            weight: 2.0
-          - pluginRef: kv-cache-utilization-scorer
-            weight: 2.0
-          - pluginRef: queue-scorer
-            weight: 1.0
-          - pluginRef: max-score-picker
-```
-
-### Prefill/Decode Disaggregation
-
-Disaggregated serving uses separate scheduling profiles for prefill and decode phases:
-
-```yaml
-pluginsCustomConfig:
-  pd-config.yaml: |
-    apiVersion: inference.networking.x-k8s.io/v1alpha1
-    kind: EndpointPickerConfig
-    featureGates:
-      - prepareDataPlugins
-    plugins:
-      - type: prefill-header-handler
-      - type: prefix-cache-scorer
-        parameters:
-          maxPrefixBlocksToMatch: 256
-          lruCapacityPerServer: 31250
-      - type: queue-scorer
-      - type: prefill-filter
-      - type: decode-filter
-      - type: max-score-picker
-      - type: prefix-based-pd-decider
-        parameters:
-          nonCachedTokens: 16
-      - type: pd-profile-handler
-        parameters:
-          primaryPort: 0
-          deciderPluginName: prefix-based-pd-decider
-    schedulingProfiles:
-      - name: prefill
-        plugins:
-          - pluginRef: prefill-filter
-          - pluginRef: prefix-cache-scorer
-            weight: 2
-          - pluginRef: queue-scorer
-            weight: 1
-          - pluginRef: max-score-picker
-      - name: decode
-        plugins:
-          - pluginRef: decode-filter
-          - pluginRef: prefix-cache-scorer
-            weight: 2
-          - pluginRef: queue-scorer
-            weight: 1
-          - pluginRef: max-score-picker
-```
-
-In this configuration:
-- The `pd-profile-handler` uses a decider plugin (`prefix-based-pd-decider`) to determine whether a request should be routed to a prefill or decode endpoint.
-- Each phase has its own scheduling profile with appropriate filters.
-- Scorers are shared across profiles but can be weighted differently per profile.
-
-### Precise Prefix Cache with KV-Events
-
-For real-time cache awareness, deploy the EPP with a tokenizer sidecar and KV-Events subscriber:
-
-```yaml
-pluginsCustomConfig:
-  precise-prefix-cache-config.yaml: |
-    apiVersion: inference.networking.x-k8s.io/v1alpha1
-    kind: EndpointPickerConfig
-    plugins:
-      - type: single-profile-handler
-      - type: tokenizer
-        parameters:
-          modelName: Qwen/Qwen3-32B
-          udsTokenizerConfig:
-            socketFile: /tmp/tokenizer/tokenizer-uds.socket
-      - type: precise-prefix-cache-scorer
-        parameters:
-          tokenProcessorConfig:
-            blockSize: 64
-          indexerConfig:
-            speculativeIndexing: true
-            tokenizersPoolConfig:
-              modelName: Qwen/Qwen3-32B
-              local: null
-              hf: null
-              uds:
-                socketFile: /tmp/tokenizer/tokenizer-uds.socket
-          kvEventsConfig:
-            topicFilter: "kv@"
-            concurrency: 4
-            discoverPods: false
-            zmqEndpoint: "tcp://*:5557"
-      - type: kv-cache-utilization-scorer
-      - type: queue-scorer
-      - type: max-score-picker
-    schedulingProfiles:
-      - name: default
-        plugins:
-          - pluginRef: precise-prefix-cache-scorer
             weight: 3.0
           - pluginRef: kv-cache-utilization-scorer
             weight: 2.0
           - pluginRef: queue-scorer
             weight: 2.0
           - pluginRef: max-score-picker
-```
-
-This configuration requires additional deployment settings for the tokenizer sidecar and ZMQ ports. See the [precise prefix cache guide](../../../guides/precise-prefix-cache-aware/) for the full deployment setup.
-
-### Tiered Prefix Cache (GPU + CPU)
-
-Use multiple prefix cache scorer instances for tiered memory:
-
-```yaml
-schedulingProfiles:
-  - name: default
-    plugins:
-      - pluginRef: gpu-prefix-cache-scorer
-        weight: 1.0
-      - pluginRef: cpu-prefix-cache-scorer
-        weight: 1.0
-      - pluginRef: kv-cache-utilization-scorer
-        weight: 2.0
-      - pluginRef: queue-scorer
-        weight: 2.0
 ```
