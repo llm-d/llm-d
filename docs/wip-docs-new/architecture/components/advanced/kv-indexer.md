@@ -1,14 +1,14 @@
 # KV-Cache Indexer
 
-This document describes the KV-Cache Indexer, a component that enables prefix cache aware routing in llm-d by maintaining a near-real-time view of KV-Cache block distribution across a fleet of vLLM pods.
+The KV-Cache Indexer enables precise prefix cache-aware routing in llm-d by maintaining a near-real-time view of KV-Cache block distribution across a fleet of vLLM pods.
 
-## Introduction
+## Functionality
 
-Reusing KV-Cache blocks rather than recomputing them significantly improves both Time To First Token (TTFT) and overall throughput. The KV-Cache Indexer is the component that makes this possible at the routing level: it tracks which KV-Cache blocks exist on which model server pods, so the inference scheduler (EPP) can route requests to the pod that already has the most relevant cached blocks.
+Reusing KV-Cache blocks rather than recomputing them significantly improves both Time To First Token (TTFT) and overall throughput. The KV-Cache Indexer tracks which KV-Cache blocks exist on which model server pods, so the inference scheduler (EPP) can route requests to the pod that already has the most relevant cached blocks.
 
 The indexer is implemented in the [llm-d-kv-cache](https://github.com/llm-d/llm-d-kv-cache) repository and runs as a library embedded in the EPP via the `precise-prefix-cache-scorer` plugin.
 
-## How It Works
+## Design
 
 The indexer has two primary data flows:
 
@@ -30,7 +30,7 @@ When a new inference request arrives, the EPP asks the indexer to score each can
 4. Each pod receives a score based on its number of consecutive matching blocks
 5. The EPP uses this score (along with other scorers like queue depth and cache utilization) to pick the optimal pod
 
-## Architecture Modules
+### Architecture Modules
 
 | Module | Purpose | Default Implementation |
 | :--- | :--- | :--- |
@@ -41,7 +41,7 @@ When a new inference request arrives, the EPP asks the indexer to score each can
 | `kvblock.TokenProcessor` | Converts token sequences into KV-block keys | Chunking and hashing compatible with vLLM |
 | `kvblock.Scorer` | Scores pods based on cache hit sequences | Longest consecutive prefix matching |
 
-## Index Backends
+### Index Backends
 
 The block index supports multiple backends:
 
@@ -50,53 +50,55 @@ The block index supports multiple backends:
 - **Redis** - Distributed backend shared by multiple indexer replicas. Provides persistence and scalability.
 - **Valkey** - Redis-compatible, open-source alternative (BSD licensed). Supports RDMA for reduced latency.
 
+### Event Delivery Modes
+
+The indexer supports two modes for receiving KV-Events from vLLM pods:
+
+#### Centralized ZMQ Endpoint (Default)
+
+All vLLM pods publish events to a single ZMQ endpoint hosted on the EPP. This is simpler to configure and works well for single-scheduler deployments.
+
+**EPP side:** `zmqEndpoint: "tcp://*:5557"` with `discoverPods: false`
+
+**vLLM side:**
+```json
+{
+  "enable_kv_cache_events": true,
+  "publisher": "zmq",
+  "endpoint": "tcp://gaie-<release>-epp.<namespace>.svc.cluster.local:5557",
+  "topic": "kv@<pod-ip>:8000@<model-name>"
+}
+```
+
+#### Pod Discovery Mode
+
+Each vLLM pod publishes events on its own ZMQ endpoint, and the EPP discovers pods automatically via Kubernetes label selectors. This mode supports active-active multi-scheduler deployments, where each scheduler replica maintains a global view.
+
+**EPP side:** `zmqEndpoint: "tcp://*:5557"` with `discoverPods: true`
+
+**vLLM side:**
+```json
+{
+  "enable_kv_cache_events": true,
+  "publisher": "zmq",
+  "endpoint": "tcp://*:5557",
+  "topic": "kv@<pod-ip>:8000@<model-name>"
+}
+```
+
+Enable via Helm: `POD_DISCOVERY=true helmfile apply -n ${NAMESPACE}`
+
+### Tokenizer Sidecar
+
+The EPP runs a UDS tokenizer sidecar alongside the inference scheduler to provide fast tokenization without network overhead. The sidecar:
+
+- Downloads and caches tokenizers from HuggingFace
+- Exposes tokenization over a Unix Domain Socket at `/tmp/tokenizer/tokenizer-uds.socket`
+- Is shared by both the `tokenizer` plugin (for request preprocessing) and the `precise-prefix-cache-scorer` plugin (for block key generation)
+
 ## Configuration
 
 The KV-Cache Indexer is configured through the EPP's `EndpointPickerConfig` as parameters to the `precise-prefix-cache-scorer` plugin. The configuration has three top-level sections.
-
-### Full EPP Configuration Example
-
-```yaml
-apiVersion: inference.networking.x-k8s.io/v1alpha1
-kind: EndpointPickerConfig
-plugins:
-  - type: single-profile-handler
-  - type: tokenizer
-    parameters:
-      modelName: Qwen/Qwen3-32B
-      udsTokenizerConfig:
-        socketFile: /tmp/tokenizer/tokenizer-uds.socket
-  - type: precise-prefix-cache-scorer
-    parameters:
-      tokenProcessorConfig:
-        blockSize: 64
-      indexerConfig:
-        speculativeIndexing: true
-        tokenizersPoolConfig:
-          modelName: Qwen/Qwen3-32B
-          local: null
-          hf: null
-          uds:
-            socketFile: /tmp/tokenizer/tokenizer-uds.socket
-      kvEventsConfig:
-        topicFilter: "kv@"
-        concurrency: 4
-        discoverPods: false
-        zmqEndpoint: "tcp://*:5557"
-  - type: kv-cache-utilization-scorer
-  - type: queue-scorer
-  - type: max-score-picker
-schedulingProfiles:
-  - name: default
-    plugins:
-      - pluginRef: precise-prefix-cache-scorer
-        weight: 3.0
-      - pluginRef: kv-cache-utilization-scorer
-        weight: 2.0
-      - pluginRef: queue-scorer
-        weight: 2.0
-      - pluginRef: max-score-picker
-```
 
 ### Token Processor Configuration
 
@@ -168,52 +170,73 @@ When `discoverPods` is `true`, the indexer watches Kubernetes pods and connects 
 | `podDiscoveryConfig.podNamespace` | string | `""` | Namespace to watch. Empty watches all namespaces. |
 | `podDiscoveryConfig.socketPort` | integer | `5557` | ZMQ port on each vLLM pod. |
 
-## Event Delivery Modes
+### vLLM Model Server Requirements
 
-The indexer supports two modes for receiving KV-Events from vLLM pods:
-
-### Centralized ZMQ Endpoint (Default)
-
-All vLLM pods publish events to a single ZMQ endpoint hosted on the EPP. This is simpler to configure and works well for single-scheduler deployments.
-
-**EPP side:** `zmqEndpoint: "tcp://*:5557"` with `discoverPods: false`
-
-**vLLM side:**
-```json
-{
-  "enable_kv_cache_events": true,
-  "publisher": "zmq",
-  "endpoint": "tcp://gaie-<release>-epp.<namespace>.svc.cluster.local:5557",
-  "topic": "kv@<pod-ip>:8000@<model-name>"
-}
-```
-
-### Pod Discovery Mode
-
-Each vLLM pod publishes events on its own ZMQ endpoint, and the EPP discovers pods automatically via Kubernetes label selectors. This mode supports active-active multi-scheduler deployments, where each scheduler replica maintains a global view.
-
-**EPP side:** `zmqEndpoint: "tcp://*:5557"` with `discoverPods: true`
-
-**vLLM side:**
-```json
-{
-  "enable_kv_cache_events": true,
-  "publisher": "zmq",
-  "endpoint": "tcp://*:5557",
-  "topic": "kv@<pod-ip>:8000@<model-name>"
-}
-```
-
-Enable via Helm: `POD_DISCOVERY=true helmfile apply -n ${NAMESPACE}`
-
-## vLLM Model Server Configuration
-
-The vLLM model servers must be configured to publish KV-Events. Key requirements:
+The vLLM model servers must be configured to publish KV-Events:
 
 - **`--block-size`** must match the indexer's `tokenProcessorConfig.blockSize` (e.g., `--block-size=64`)
 - **`--kv-events-config`** must enable event publishing with the correct endpoint and topic format
 
-Example vLLM args:
+### Scheduling Weights
+
+The `precise-prefix-cache-scorer` is one of several scorers used in the scheduling profile. Typical weights:
+
+| Scorer | Weight | Purpose |
+| :--- | :--- | :--- |
+| `precise-prefix-cache-scorer` | 3.0 | Prefer pods with cached prefix blocks |
+| `kv-cache-utilization-scorer` | 2.0 | Balance load based on GPU memory pressure |
+| `queue-scorer` | 2.0 | Prefer pods with shorter request queues |
+
+The higher weight on the prefix cache scorer reflects the significant latency benefit of cache hits -- up to 99.5% reduction in TTFT in benchmarks.
+
+## Examples
+
+### Full EPP Configuration with KV-Cache Indexer
+
+```yaml
+apiVersion: inference.networking.x-k8s.io/v1alpha1
+kind: EndpointPickerConfig
+plugins:
+  - type: single-profile-handler
+  - type: tokenizer
+    parameters:
+      modelName: Qwen/Qwen3-32B
+      udsTokenizerConfig:
+        socketFile: /tmp/tokenizer/tokenizer-uds.socket
+  - type: precise-prefix-cache-scorer
+    parameters:
+      tokenProcessorConfig:
+        blockSize: 64
+      indexerConfig:
+        speculativeIndexing: true
+        tokenizersPoolConfig:
+          modelName: Qwen/Qwen3-32B
+          local: null
+          hf: null
+          uds:
+            socketFile: /tmp/tokenizer/tokenizer-uds.socket
+      kvEventsConfig:
+        topicFilter: "kv@"
+        concurrency: 4
+        discoverPods: false
+        zmqEndpoint: "tcp://*:5557"
+  - type: kv-cache-utilization-scorer
+  - type: queue-scorer
+  - type: max-score-picker
+schedulingProfiles:
+  - name: default
+    plugins:
+      - pluginRef: precise-prefix-cache-scorer
+        weight: 3.0
+      - pluginRef: kv-cache-utilization-scorer
+        weight: 2.0
+      - pluginRef: queue-scorer
+        weight: 2.0
+      - pluginRef: max-score-picker
+```
+
+### vLLM Model Server with KV-Events
+
 ```yaml
 args:
   - "--block-size=64"
@@ -227,29 +250,31 @@ args:
     }
 ```
 
-## Tokenizer Sidecar
+### Pod Discovery Mode
 
-The EPP runs a UDS tokenizer sidecar alongside the inference scheduler to provide fast tokenization without network overhead. The sidecar:
+For multi-scheduler active-active deployments:
 
-- Downloads and caches tokenizers from HuggingFace
-- Exposes tokenization over a Unix Domain Socket at `/tmp/tokenizer/tokenizer-uds.socket`
-- Is shared by both the `tokenizer` plugin (for request preprocessing) and the `precise-prefix-cache-scorer` plugin (for block key generation)
+**EPP configuration:**
+```yaml
+kvEventsConfig:
+  topicFilter: "kv@"
+  concurrency: 4
+  discoverPods: true
+  zmqEndpoint: "tcp://*:5557"
+  podDiscoveryConfig:
+    podLabelSelector: "llm-d.ai/inferenceServing=true"
+    socketPort: 5557
+```
 
-## Scheduling Weights
-
-The `precise-prefix-cache-scorer` is one of several scorers used in the scheduling profile. Typical weights:
-
-| Scorer | Weight | Purpose |
-| :--- | :--- | :--- |
-| `precise-prefix-cache-scorer` | 3.0 | Prefer pods with cached prefix blocks |
-| `kv-cache-utilization-scorer` | 2.0 | Balance load based on GPU memory pressure |
-| `queue-scorer` | 2.0 | Prefer pods with shorter request queues |
-
-The higher weight on the prefix cache scorer reflects the significant latency benefit of cache hits - up to 99.5% reduction in TTFT in benchmarks.
-
-## Well-Lit Path
-
-For a complete deployment guide, see [Precise Prefix Cache Aware Routing](../../../../guides/precise-prefix-cache-aware/README.md).
+**vLLM configuration:**
+```json
+{
+  "enable_kv_cache_events": true,
+  "publisher": "zmq",
+  "endpoint": "tcp://*:5557",
+  "topic": "kv@<pod-ip>:8000@<model-name>"
+}
+```
 
 ## Further Reading
 
