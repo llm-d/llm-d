@@ -22,7 +22,7 @@ The following diagram shows the end-to-end lifecycle of a request as it flows th
 
 The steps are:
 
-1. **Request arrival** -- An inference reques arrives at the proxy (Gateway).
+1. **Request arrival** -- An inference request arrives at the proxy (Gateway).
 2. **ext-proc** -- The proxy invokes the EPP via the ext-proc protocol, passing the request headers and body to the EPP.
 3. **Request handling** -- Processes the request (in e.g. OpenAI format) into the internal data structure.
 3. **Flow control** -- If (optionally) enabled, queues requests and prioritizes among different tenants and request priorities in saturation regimes.
