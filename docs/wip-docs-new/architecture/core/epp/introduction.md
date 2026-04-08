@@ -45,7 +45,7 @@ The **Data Layer** operates asynchronously, consuming and storing data from a va
 - Kube API Server about which pods are active in the InferencePool
 - Model Servers about the current internal state (running requests, kv cache utilization)
 - In-memory data structures, such as prefix cache trees for prefix-aware routing
-- "Consultant" pods like latency predictor or the kv-indexer for advanced schemes
+- "Consultant" sidecars like the latency predictor, the kv-indexer or tokenizer for advanced scheduling
 
 Other modules in the EPP consult the **Data Layer** during request processing.
 
