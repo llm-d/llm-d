@@ -2,8 +2,7 @@
 
 llm-d is a high-performance distributed inference serving stack optimized for production deployments on Kubernetes. We help you achieve the fastest "time to state-of-the-art (SOTA) performance" for key OSS large language models across most hardware accelerators and infrastructure providers with well-tested guides and real-world benchmarks.
 
-
-## Why llm-d
+## Why llm-d?
 
 While inference engines like vLLM and SGLang optimize a single accelerator node, llm-d implements distributed performance optimizations, including:
 
@@ -19,23 +18,7 @@ While inference engines like vLLM and SGLang optimize a single accelerator node,
 
 llm-d is vendor-neural CNCF sandbox project, supporting multiple inference engines (vLLM, SGLang) and multiple hardware backends (NVIDIA, AMD, Google TPU, Intel HPU).
 
-## Modular Components
-
-llm-d focuses on a modular design, with layered abstractions enabling customization that build on top. 
-
-At it core, llm-d contains the following key layers:
-
-- **Proxy** - Gateway or Standalone Envoy Proxy coupled with an EndPointer Picker extension. It provides optimized routing and load balancing for serving Kubernetes self-hosted generative Artificial Intelligence (AI) workloads.
-
-- **EndPoint Picker (EPP)** - An extendable component that makes selects which endpoint in the `InferencePool` is optimal for an specific inference request. The EPP is the "brains" of the scheduling decision that 
-
-- **InferencePool** - The InferencePool API defines a group of Model Server Pods dedicated to serving AI models. Pods within an `InferencePool` share the same compute configuration, accelerator, and model server.
-
-- **Model Server** - The Model Server (like vLLM or SGLang) runs a model on a particular node. The Model Servers can be deployed through any deployment process, joining an `InferencePool` via standard Kuberentes Labels and Selections.
-
-![Basic architecture](../../assets/basic-architecture.svg)
-
-From these simple primitives and deep co-design with the Model Servers, llm-d can exploit the leading performance optimizations for LLM serving.
+--> [?]
 
 ## "Well Lit Paths"
 
