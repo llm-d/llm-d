@@ -1,5 +1,3 @@
->> TODO: add something related to different model server types (https://gateway-api-inference-extension.sigs.k8s.io/implementations/model-servers/)
-
 # Endpoint Picker (EPP)
 
 The Endpoint Picker (EPP) is the core scheduling component of llm-d that makes LLM-aware routing decisions for inference requests.
