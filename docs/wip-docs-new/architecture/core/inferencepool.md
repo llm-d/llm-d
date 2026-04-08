@@ -1,7 +1,5 @@
 # InferencePool
 
-The InferencePool is a Kubernetes custom resource that defines a group of Model Server Pods dedicated to serving AI models.
-
 ## Functionality
 
 An [InferencePool](https://gateway-api-inference-extension.sigs.k8s.io/api-types/inferencepool/) is a Kubernetes custom resource defined by the Gateway API Inference Extension project. In the llm-d architecture, the InferencePool is the set of Model Servers that an EPP (Endpoint Picker Pod) considers in routing a request.
@@ -61,26 +59,33 @@ labels:
   llm-d.ai/model: my-model
 ```
 
-No explicit registration or enrollment is required. Once the labels match, the Model Server Pods automatically appear as endpoints in the InferencePool and the EPP begins routing traffic to them.
+No explicit registration or enrollment is required. Once the labels match, the Model Server Pods automatically appear as endpoints in the InferencePool and the EPP begins routing traffic to them, simplifying operational workflows.
 
 ## Configuration
 
-### Helm Charts
+### Installating the CRDs
 
-The InferencePool (and associated EPP) can be deployed using the Helm chart from the Gateway API Inference Extension project:
+The InferencePool CRDs are be installed from the Gateway Inference Extension API repository:
+
+```bash
+IGW_LATEST_RELEASE=$(curl -s https://api.github.com/repos/kubernetes-sigs/gateway-api-inference-extension/releases \
+  | jq -r '.[] | select(.prerelease == false) | .tag_name' \
+  | sort -V \
+  | tail -n1)
+
+kubectl apply -f https://github.com/kubernetes-sigs/gateway-api-inference-extension/releases/download/${IGW_LATEST_RELEASE}/manifests.yaml
+```
+
+### Deploying an InferencePool
+
+An instance of an InferencePool and associated EPP can be deployed using the Helm charts from the Gateway API Inference Extension project:
 - [Chart For Deployment with Gateway API](https://github.com/kubernetes-sigs/gateway-api-inference-extension/tree/main/config/charts/inferencepool)
 - [Chart For Deployment with Standalone Envoy Proxy](https://github.com/kubernetes-sigs/gateway-api-inference-extension/tree/main/config/charts/standalone)
 
-```
-oci://registry.k8s.io/gateway-api-inference-extension/charts/inferencepool
-oci://registry.k8s.io/gateway-api-inference-extension/charts/standalone
-```
+#### Helm Values
 
-### Helm Values
-
-Configuration is split into two sections in the Helm values file: `inferencePool` (the pool itself) and `inferenceExtension` (the EPP that ships alongside it).
-
-#### `inferencePool` Section
+Configuration is split into two sections in the Helm values file:
+- `inferencePool` which defines the pool itself
 
 | Field | Description | Example |
 |---|---|---|
@@ -88,7 +93,7 @@ Configuration is split into two sections in the Helm values file: `inferencePool
 | `modelServerType` | Type of model server (`vllm` or `sglang`) | `vllm` |
 | `modelServers.matchLabels` | Kubernetes label selector for discovering Model Server Pods | `{llm-d.ai/model: "my-model"}` |
 
-#### `inferenceExtension` Section
+- `inferenceExtension` which defines the EPP deployed alongside the pool:
 
 | Field | Description | Example |
 |---|---|---|
@@ -100,13 +105,13 @@ Configuration is split into two sections in the Helm values file: `inferencePool
 | `tracing.enabled` | Enable OpenTelemetry distributed tracing | `false` |
 | `monitoring.prometheus.enabled` | Enable Prometheus metrics scraping | `true` |
 
-> See [epp.md](EPP) for more details on `inferenceExtension` configuration
+> See [epp/introduction.md](EPP) for more details on `inferenceExtension` design and configuration 
 
-### Deploying With A Proxy
+#### Connecting to a Proxy
 
-#### Gateway API
+##### Gateway API
 
-When using Gateway API, the InferencePool is referenced as a backend in an `HTTPRoute`:
+When using Gateway API, the InferencePool is referenced as a backend in an `HTTPRoute`. This simple example routes all incoming traffic through the Gateway to the InferencePool, where the EPP selects the optimal Model Server within the InferencePool for each request.
 
 ```yaml
 apiVersion: gateway.networking.k8s.io/v1
@@ -130,13 +135,11 @@ spec:
             value: /
 ```
 
-This simple example routes all incoming traffic through the Gateway to the InferencePool, where the EPP selects the optimal Model Server within the InferencePool for each request.
-
 An HTTPRoute can have:
 - multiple backendRefs that reference the same InferencePool and therefore routes to the same EPP
 - multiple backendRefs that reference different InferencePools and therefore routes to different EPP (e.g. for traffic splitting in roll-outs)
 
-The following example creates an InferencePool and an EPP:
+The following example creates an InferencePool and with the default EPP:
 
 ```bash
 helm install my-infpool \
@@ -162,7 +165,3 @@ When using standalone Envoy proxy, the InferencePool and EPP can be configured u
 
 See the [GAIE GitHub](https://github.com/kubernetes-sigs/gateway-api-inference-extension/tree/main/config/charts/standalone) for the full Helm Chart configuration details.
 
-## Further Reading
-
-- [Upstream InferencePool API docs](https://gateway-api-inference-extension.sigs.k8s.io/api-types/inferencepool/)
-- [EPP (Endpoint Picker Pod)](epp.md) -- scheduling plugins and profiles
