@@ -27,7 +27,7 @@ Each SIG has:
 
 ### SIG Meetings
 
-- Regular meetings (typically weekly) for technical discussions
+- Regular meetings (typically weekly/bi-weekly) for technical discussions
 
 ## Relationship to Project Governance
 
@@ -247,7 +247,7 @@ SIGs operate within the broader llm-d project governance framework defined in [P
 1. **Identify need**: Demonstrate community interest and technical necessity
 2. **Draft charter**: Define scope, goals, and initial leadership
 3. **Proposal process**: Submit proposal following [project contribution guidelines](CONTRIBUTING.md)
-4. **Community review**: Present at weekly project standup and gather feedback
+4. **Community review**: Present at bi-weekly project standup and gather feedback
 5. **Approval**: Obtain approval from project maintainers
 
 ### SIG Lifecycle Management

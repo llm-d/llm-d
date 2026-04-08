@@ -15,7 +15,7 @@ This document describes the release process for llm-d. The release dates should 
   **Timeline:**
 
   1. **Sprint start (weeks 1-2):** The release leaders create the milestone for the upcoming release. SIG leads and project maintainers begin nominating issues and features for inclusion.
-  2. **Feature collection (weeks 2-4):** SIG leads propose features from their respective areas during the weekly project standup (Wednesdays 12:30 PM ET) and SIG meetings. Each proposed feature must have a corresponding GitHub issue linked to the milestone.
+  2. **Feature collection (weeks 2-4):** SIG leads propose features from their respective areas during the bi-weekly project standup (Every other Wednesday 12:30 PM ET) and SIG meetings. Each proposed feature must have a corresponding GitHub issue linked to the milestone.
   3. **Feature freeze (end of week 4):** The milestone is frozen. No new features are added after this point unless an exception is approved by the release leaders and project maintainers. Only bug fixes and documentation updates are accepted after the freeze.
 
 #### Roles and responsibilities
@@ -41,7 +41,7 @@ This document describes the release process for llm-d. The release dates should 
   Feature tracking is coordinated through:
 
 - **Weekly project standup:** Overall release progress is reviewed every Wednesday at 12:30 PM ET (see the [public calendar](https://red.ht/llm-d-public-calendar)).
-- **SIG meetings:** Each [SIG](SIGS.md) reviews the status of their features during their regular weekly meetings.
+- **SIG meetings:** Each [SIG](SIGS.md) reviews the status of their features during their regular meetings.
 - **Slack:** Day-to-day coordination happens in the [#llm-d-dev](https://llm-d.slack.com/archives/C08SH9K8JGK) Slack channel and relevant SIG channels.
 
   > [!NOTE]
