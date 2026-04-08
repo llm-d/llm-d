@@ -442,15 +442,15 @@ saturationDetector:
   pluginRef: concurrency-detector
 ```
 
-#### High Availability
+### High Availability
 
-#### Monitoring
+### Monitoring
 
 The EPP exposes a Prometheus-compatible metrics endpoint on **port 9090** at `/metrics`. These metrics provide visibility into request processing, scheduling decisions, flow control behavior, and backend pool health.
 
 > For full upstream documentation, see the [Gateway API Inference Extension Metrics & Observability Guide](https://gateway-api-inference-extension.sigs.k8s.io/guides/metrics-and-observability/).
 
-##### EPP Request Metrics
+#### EPP Request Metrics
 
 The following metrics track request-level behavior. Unless otherwise noted, they carry the labels `model_name` and `target_model_name`.
 
@@ -468,7 +468,7 @@ The following metrics track request-level behavior. Unless otherwise noted, they
 
 > **Note:** Response-level metrics (response sizes, output tokens, NTPOT) require Envoy body mode to be set to `Buffered` or `Streamed`. For vLLM streaming responses with usage data, include `stream_options: {"include_usage": true}` in the request.
 
-##### Pool & Scheduling Metrics
+#### Pool & Scheduling Metrics
 
 These metrics provide visibility into the InferencePool health and scheduling decisions.
 
@@ -481,7 +481,7 @@ These metrics provide visibility into the InferencePool health and scheduling de
 | `inference_extension_info` | Gauge | `commit`, `build_ref` | EPP build information |
 | `inference_extension_scheduler_attempts_total` | Counter | `status`, `target_model_name`, `pod_name`, `namespace`, `port` | Number of scheduling attempts and their outcomes |
 
-##### Flow Control Metrics
+#### Flow Control Metrics
 
 When flow control is enabled, the following metrics are exposed. They carry the labels `fairness_id`, `priority`, `outcome`, `inference_pool`, `model_name`, and `target_model_name`.
 
@@ -494,7 +494,7 @@ When flow control is enabled, the following metrics are exposed. They carry the 
 | `inference_extension_flow_control_request_enqueue_duration_seconds` | Distribution | Time taken to enqueue a request |
 | `inference_extension_flow_control_pool_saturation` | Gauge | Pool saturation level (0.0–1.0+) |
 
-##### Monitoring Stack
+#### Monitoring Stack
 
 The recommended monitoring stack is **Prometheus + Grafana**. A pre-built Grafana dashboard is available at [`tools/dashboards/inference_gateway.json`](https://github.com/kubernetes-sigs/gateway-api-inference-extension/blob/main/tools/dashboards/inference_gateway.json) in the upstream repository.
 
@@ -504,9 +504,3 @@ Pre-configured alert rules are also available upstream, covering:
 - **High error rate** — triggers when the error rate exceeds 5%
 - **High queue size** — triggers when queue depth exceeds 50 requests
 - **High KV cache utilization** — triggers when KV cache utilization exceeds 90%
-
-##### Profiling
-
-The EPP also exposes pprof profiling endpoints at `/debug/pprof/` (heap, goroutine, etc.) on the same port. Access to both `/metrics` and `/debug/pprof/*` requires a ClusterRole with appropriate permissions.
-
-
