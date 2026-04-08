@@ -1,8 +1,8 @@
 # Latency Predictor
 
-This document describes the Latency Predictor, an experimental component that enables predicted-latency-based scheduling in llm-d.
+The Latency Predictor is an experimental component that enables predicted-latency-based scheduling in llm-d.
 
-## Introduction
+## Functionality
 
 The Latency Predictor is an ML-based system that continuously learns from live traffic to predict per-endpoint request latency. It enables the EPP to make SLO-aware routing decisions -- choosing model server pods based on whether they can meet a request's latency targets rather than relying solely on utilization metrics like queue depth or KV-cache utilization.
 
@@ -17,7 +17,9 @@ Utilization-based load balancing has fundamental limitations for LLM workloads:
 
 The Latency Predictor addresses these gaps by predicting **p90 TTFT** (time to first token) and **p90 TPOT** (time per output token) for each candidate pod, given the pod's current state and the request's characteristics. The EPP's `slo-scorer` plugin then compares these predictions against per-request SLO targets to route traffic intelligently.
 
-## Architecture
+## Design
+
+### Architecture
 
 The Latency Predictor runs as a set of sidecar containers alongside the EPP. Three container types work together:
 
@@ -55,7 +57,7 @@ The Latency Predictor runs as a set of sidecar containers alongside the EPP. Thr
                     └──────────────────────────────────────────────────────┘
 ```
 
-### Training Server
+#### Training Server
 
 The training server (single instance, port 8000) continuously learns from completed requests:
 
@@ -64,7 +66,7 @@ The training server (single instance, port 8000) continuously learns from comple
 3. The model is retrained at a configurable interval (default: every 1 second, once at least 100 samples are collected).
 4. Updated model files (`.joblib`) are written to a shared volume.
 
-### Prediction Servers
+#### Prediction Servers
 
 Three prediction server instances (ports 8001, 8002, 8003) serve the trained models:
 
@@ -73,7 +75,7 @@ Three prediction server instances (ports 8001, 8002, 8003) serve the trained mod
 3. Requests are load-balanced across the three prediction server instances, each running 28 uvicorn workers.
 4. Each prediction evaluates all candidate pods and returns predicted p90 TTFT and p90 TPOT per pod.
 
-### ML Model
+#### ML Model
 
 The predictor uses **XGBoost quantile regression** (`reg:quantileerror`), chosen for its speed, accuracy, and online learning capability. Two independent models are trained -- one for TTFT and one for TPOT. Across benchmark runs, the models achieve approximately **5% Mean Absolute Percentage Error (MAPE)**.
 
@@ -100,11 +102,9 @@ The target quantile is configurable via `LATENCY_QUANTILE_ALPHA` (default: 0.9 f
 | Running Requests | Active requests / GPU concurrency |
 | Tokens Generated | Output tokens produced so far |
 
-## How Endpoint Selection Works
+### How Endpoint Selection Works
 
-When the `slo-scorer` plugin is active, the endpoint selection algorithm works as follows:
-
-### With SLO Headers
+#### With SLO Headers
 
 1. The EPP calls the prediction servers to get predicted p90 TTFT and TPOT for each candidate pod.
 2. For each pod, the scorer computes **headroom**: `SLO target - predicted latency`.
@@ -112,21 +112,44 @@ When the `slo-scorer` plugin is active, the endpoint selection algorithm works a
 4. Within the positive bucket, the scorer selects the pod with the **least positive headroom** (best-fit packing), keeping other pods free for future requests.
 5. Headroom is computed as a weighted blend, defaulting to 80% TTFT + 20% TPOT.
 
-### Without SLO Headers
+#### Without SLO Headers
 
 When `x-prediction-based-scheduling: true` is set but no SLO targets are provided (treated as SLO=0), the system routes to the pod with the **lowest predicted latency**.
 
-### Request Shedding
+#### Request Shedding
 
 If a request has priority < 0 and no pod can meet both TTFT and TPOT SLOs, the request is **shed** rather than routed to a pod that will miss the SLO.
 
-### Cache-Aware Affinity
+#### Cache-Aware Affinity
 
 The scorer integrates prefix cache awareness with an epsilon-greedy strategy:
 
 - **Exploit (99%)**: Filter candidates to pods whose prefix cache score exceeds the affinity threshold. Among those, select the pod with the best predicted latency.
 - **Explore (1%)**: Ignore the affinity gate and consider all pods, seeding cache entries on non-sticky pods for diversity.
 - **Load gate**: If the best sticky pod's predicted TTFT exceeds the best overall pod's TTFT by more than a configurable penalty threshold, affinity is broken in favor of latency.
+
+### Current Limitations
+
+| Limitation | Details |
+|------------|---------|
+| Homogeneous pools only | All pods must have the same GPU type, model weights, and serving configuration. |
+| Streaming only | Only streaming workloads (`"stream": "true"`) are supported for training data collection. |
+| p90 only | Only p90 TTFT and TPOT are predicted. Other percentiles (p95, p99) are not yet available. |
+| No prefill/decode disaggregation | Prediction assumes a pod executes the entire request lifecycle. |
+| Unvalidated with advanced features | Not tested with LoRA adapters, speculative decoding, or beam search. |
+
+### Scaling
+
+Each prediction server can sustain approximately **300 QPS** (tested on c4-standard-192 with ~192 vCPUs). Scale horizontally by adding more prediction server sidecars and updating `PREDICTION_SERVER_URL` accordingly.
+
+| QPS | Avg Latency (ms) | p99 Latency (ms) | Prediction Servers |
+|-----|-------------------|-------------------|--------------------|
+| 100 | 3.5 | 46 | 1 |
+| 1,000 | 5.0 | 49 | 2 |
+| 2,500 | ~19 | ~36 | 1 |
+| 5,000 | ~27 | ~74 | 1 |
+| 7,500 | ~35 | ~96 | 3 |
+| 10,000 | ~48 | ~137 | 4 |
 
 ## Configuration
 
@@ -156,8 +179,6 @@ args:
 
 ### Training Server ConfigMap
 
-Create a ConfigMap named `latency-predictor-config`:
-
 ```yaml
 apiVersion: v1
 kind: ConfigMap
@@ -186,8 +207,6 @@ data:
 | `LATENCY_SAMPLE_WEIGHTING_FOR_PREFIX_CACHE` | When `true`, reweights underrepresented prefix cache buckets during training (default: `false`). |
 
 ### Prediction Server ConfigMap
-
-Create a ConfigMap named `prediction-server-config`:
 
 ```yaml
 apiVersion: v1
@@ -252,7 +271,7 @@ The `HEADROOM_SELECTION_STRATEGY` environment variable controls how pods are sel
 - **`least`** (default) -- Best-fit / compact. Routes to the pod with the least headroom above the SLO, packing requests to keep other pods free for burst capacity.
 - **`most`** -- Spread. Routes to the pod with the most headroom, distributing load evenly across the pool.
 
-## Per-Request SLO Headers
+### Per-Request SLO Headers
 
 Clients enable SLO-aware routing by setting HTTP headers on inference requests:
 
@@ -262,7 +281,9 @@ Clients enable SLO-aware routing by setting HTTP headers on inference requests:
 | `x-slo-ttft-ms: <value>` | Target time-to-first-token in milliseconds. |
 | `x-slo-tpot-ms: <value>` | Target time-per-output-token in milliseconds. |
 
-Example:
+## Examples
+
+### Sending a Request with SLO Headers
 
 ```bash
 curl $GATEWAY_IP/v1/completions \
@@ -280,7 +301,7 @@ curl $GATEWAY_IP/v1/completions \
   }'
 ```
 
-## Response Observability
+### Response Observability
 
 When the latency predictor is enabled, the final SSE frame in streaming responses includes both predicted and actual latency metrics:
 
@@ -301,33 +322,42 @@ When the latency predictor is enabled, the final SSE frame in streaming response
 
 This allows users to compare predictions against actuals and validate model accuracy. TPOT is sampled every 200th output token.
 
-## Scaling
+### Full Plugin Configuration
 
-Each prediction server can sustain approximately **300 QPS** (tested on c4-standard-192 with ~192 vCPUs). Because each prediction call evaluates all candidate pods, total prediction load grows with both cluster QPS and pod count.
+A complete `EndpointPickerConfig` with both default and SLO-aware profiles:
 
-| QPS | Avg Latency (ms) | p99 Latency (ms) | Prediction Servers |
-|-----|-------------------|-------------------|--------------------|
-| 100 | 3.5 | 46 | 1 |
-| 1,000 | 5.0 | 49 | 2 |
-| 2,500 | ~19 | ~36 | 1 |
-| 5,000 | ~27 | ~74 | 1 |
-| 7,500 | ~35 | ~96 | 3 |
-| 10,000 | ~48 | ~137 | 4 |
+```yaml
+apiVersion: inference.networking.x-k8s.io/v1alpha1
+kind: EndpointPickerConfig
+plugins:
+  - type: queue-scorer
+  - type: kv-cache-utilization-scorer
+  - type: prefix-cache-scorer
+  - type: slo-request-tracker
+  - type: slo-scorer
+  - type: slo-aware-profile-handler
+  - type: max-score-picker
 
-Scale horizontally by adding more prediction server sidecars and updating `PREDICTION_SERVER_URL` accordingly.
+schedulingProfiles:
+  - name: default
+    plugins:
+      - pluginRef: slo-request-tracker
+      - pluginRef: prefix-cache-scorer
+      - pluginRef: queue-scorer
+      - pluginRef: kv-cache-utilization-scorer
+      - pluginRef: max-score-picker
 
-## Current Limitations
-
-| Limitation | Details |
-|------------|---------|
-| Homogeneous pools only | All pods must have the same GPU type, model weights, and serving configuration. |
-| Streaming only | Only streaming workloads (`"stream": "true"`) are supported for training data collection. |
-| p90 only | Only p90 TTFT and TPOT are predicted. Other percentiles (p95, p99) are not yet available. |
-| No prefill/decode disaggregation | Prediction assumes a pod executes the entire request lifecycle. |
-| Unvalidated with advanced features | Not tested with LoRA adapters, speculative decoding, or beam search. |
+  - name: slo
+    plugins:
+      - pluginRef: prefix-cache-scorer
+        weight: 0
+      - pluginRef: slo-request-tracker
+      - pluginRef: slo-scorer
+      - pluginRef: max-score-picker
+```
 
 ## Further Reading
 
 - [Predicted Latency-Based Scheduling Guide](../../../guides/predicted-latency-based-scheduling/README.md) -- step-by-step deployment and validation walkthrough
 - [Predicted Latency-Based Scheduling for LLMs](https://llm-d.ai/blog/predicted-latency-based-scheduling-for-llms) -- blog post with benchmarks and design rationale
-- [EPP Architecture](./epp.md) -- details on the plugin pipeline and scoring system
+- [EPP Architecture](../core/epp.md) -- details on the plugin pipeline and scoring system
