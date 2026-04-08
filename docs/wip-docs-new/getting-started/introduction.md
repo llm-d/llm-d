@@ -81,5 +81,3 @@ In addition to the software components, llm-d provides **Well-Lit Paths** — te
 - Monitoring and observability configuration
 
 These paths are starting points designed to be adapted for your models, hardware, and traffic patterns. See the [Well-Lit Paths](../well-lit-paths/introduction.md) for current engine and accelerator coverage.
-
-
