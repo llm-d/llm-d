@@ -1,6 +1,6 @@
 # Well-lit Path: Prefix Cache Offloading
 
-## **Automated Testing Coverage** : Medium (tested nightly on OpenShift)
+[![Nightly - Tiered Prefix Cache E2E (OpenShift)](https://github.com/llm-d/llm-d/actions/workflows/nightly-e2e-tiered-prefix-cache-ocp.yaml/badge.svg)](https://github.com/llm-d/llm-d/actions/workflows/nightly-e2e-tiered-prefix-cache-ocp.yaml)
 
 ## Overview
 

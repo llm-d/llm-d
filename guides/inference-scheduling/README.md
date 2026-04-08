@@ -1,6 +1,6 @@
 # Well-lit Path: Intelligent Inference Scheduling
 
-## **Automated Testing Coverage** : High (tested nightly on OpenShift, Google Kubernetes Engine and CoreWeave Kubernetes Service)
+[![Nightly - Inference Scheduling E2E (OpenShift)](https://github.com/llm-d/llm-d/actions/workflows/nightly-e2e-inference-scheduling-ocp.yaml/badge.svg)](https://github.com/llm-d/llm-d/actions/workflows/nightly-e2e-inference-scheduling-ocp.yaml) [![Nightly - Inference Scheduling E2E (CKS)](https://github.com/llm-d/llm-d/actions/workflows/nightly-e2e-inference-scheduling-cks.yaml/badge.svg)](https://github.com/llm-d/llm-d/actions/workflows/nightly-e2e-inference-scheduling-cks.yaml) [![Nightly - Inference Scheduling E2E (GKE)](https://github.com/llm-d/llm-d/actions/workflows/nightly-e2e-inference-scheduling-gke.yaml/badge.svg)](https://github.com/llm-d/llm-d/actions/workflows/nightly-e2e-inference-scheduling-gke.yaml)
 
 ## Overview
 

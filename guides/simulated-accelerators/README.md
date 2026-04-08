@@ -1,6 +1,6 @@
 # Feature: llm-d Accelerator Simulation
 
-## **Automated Testing Coverage** : Medium (tested nightly on OpenShift)
+[![Nightly - Simulated Accelerators E2E (OpenShift)](https://github.com/llm-d/llm-d/actions/workflows/nightly-e2e-simulated-accelerators.yaml/badge.svg)](https://github.com/llm-d/llm-d/actions/workflows/nightly-e2e-simulated-accelerators.yaml)
 
 ## Overview
 

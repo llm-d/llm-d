@@ -1,6 +1,6 @@
 # Feature: Precise Prefix Cache Aware Routing
 
-## **Automated Testing Coverage** : Medium (tested nightly on OpenShift)
+[![Nightly - Precise Prefix Cache E2E (OpenShift)](https://github.com/llm-d/llm-d/actions/workflows/nightly-e2e-precise-prefix-cache-ocp.yaml/badge.svg)](https://github.com/llm-d/llm-d/actions/workflows/nightly-e2e-precise-prefix-cache-ocp.yaml)
 
 ## Overview
 

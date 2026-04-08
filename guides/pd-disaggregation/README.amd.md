@@ -1,7 +1,5 @@
 # AMD GPU well-lit Path for P/D Disaggregation
 
-## **Automated Testing Coverage** : None (currently, not part of nightly testing by llm-d maintainers)
-
 ## Overview
 
 This guide demonstrates how to deploy models using vLLM's P/D disaggregation support with RIXL. This guide has been validated on:

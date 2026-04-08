@@ -1,7 +1,5 @@
 # Experimental Feature: Predicted Latency based Load Balancing
 
-## **Automated Testing Coverage** : None (currently, not part of nightly testing by llm-d maintainers)
-
 ## Overview
 
 This experimental feature introduces **predicted latency based load balancing**, where scheduling decisions are guided by real-time predictions of request latency rather than only utilization metrics like queue depth or KV-cache utilization.

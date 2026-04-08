@@ -1,6 +1,6 @@
 # Autoscaling with Workload Variant Autoscaler (WVA)
 
-## **Automated Testing Coverage** : Medium (tested nightly on OpenShift)
+[![Nightly - WVA E2E (OpenShift)](https://github.com/llm-d/llm-d/actions/workflows/nightly-e2e-wva-ocp.yaml/badge.svg)](https://github.com/llm-d/llm-d/actions/workflows/nightly-e2e-wva-ocp.yaml) [![Nightly - WVA E2E (CKS)](https://github.com/llm-d/llm-d/actions/workflows/nightly-e2e-wva-cks.yaml/badge.svg)](https://github.com/llm-d/llm-d/actions/workflows/nightly-e2e-wva-cks.yaml)
 
 The [Workload Variant Autoscaler](https://github.com/llm-d-incubation/workload-variant-autoscaler) (WVA) provides dynamic autoscaling capabilities for llm-d inference deployments, automatically adjusting replica counts based on inference server saturation.
 

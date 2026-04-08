@@ -1,7 +1,5 @@
 # Intel XPU PD Disaggregation Deployment Guide
 
-## **Automated Testing Coverage** : None (currently, not part of nightly testing by llm-d maintainers)
-
 ## Overview
 
 This document provides complete steps for deploying Intel XPU PD (Prefill-Decode) disaggregation service on Kubernetes cluster using DeepSeek-R1-Distill-Qwen-1.5B model. PD disaggregation separates the prefill and decode phases of inference, allowing for more efficient resource utilization and improved throughput.
