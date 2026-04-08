@@ -446,5 +446,67 @@ saturationDetector:
 
 #### Monitoring
 
+The EPP exposes a Prometheus-compatible metrics endpoint on **port 9090** at `/metrics`. These metrics provide visibility into request processing, scheduling decisions, flow control behavior, and backend pool health.
+
+> For full upstream documentation, see the [Gateway API Inference Extension Metrics & Observability Guide](https://gateway-api-inference-extension.sigs.k8s.io/guides/metrics-and-observability/).
+
+##### EPP Request Metrics
+
+The following metrics track request-level behavior. Unless otherwise noted, they carry the labels `model_name` and `target_model_name`.
+
+| Metric | Type | Description |
+|--------|------|-------------|
+| `inference_objective_request_total` | Counter | Total request count per model |
+| `inference_objective_request_error_total` | Counter | Total error count per model |
+| `inference_objective_request_duration_seconds` | Distribution | End-to-end response latency |
+| `inference_objective_normalized_time_per_output_token_seconds` | Distribution | Normalized Time Per Output Token (NTPOT) |
+| `inference_objective_request_sizes` | Distribution | Request size in bytes |
+| `inference_objective_response_sizes` | Distribution | Response size in bytes |
+| `inference_objective_input_tokens` | Distribution | Input token count per request |
+| `inference_objective_output_tokens` | Distribution | Output token count per request |
+| `inference_objective_running_requests` | Gauge | Currently active requests per model |
+
+> **Note:** Response-level metrics (response sizes, output tokens, NTPOT) require Envoy body mode to be set to `Buffered` or `Streamed`. For vLLM streaming responses with usage data, include `stream_options: {"include_usage": true}` in the request.
+
+##### Pool & Scheduling Metrics
+
+These metrics provide visibility into the InferencePool health and scheduling decisions.
+
+| Metric | Type | Labels | Description |
+|--------|------|--------|-------------|
+| `inference_pool_average_kv_cache_utilization` | Gauge | `name` | Average KV cache utilization across the pool |
+| `inference_pool_average_queue_size` | Gauge | `name` | Average number of pending requests across the pool |
+| `inference_pool_per_pod_queue_size` | Gauge | `model_server_pod`, `name` | Queue size for each individual pod |
+| `inference_pool_ready_pods` | Gauge | `name` | Number of ready pods in the pool |
+| `inference_extension_info` | Gauge | `commit`, `build_ref` | EPP build information |
+| `inference_extension_scheduler_attempts_total` | Counter | `status`, `target_model_name`, `pod_name`, `namespace`, `port` | Number of scheduling attempts and their outcomes |
+
+##### Flow Control Metrics
+
+When flow control is enabled, the following metrics are exposed. They carry the labels `fairness_id`, `priority`, `outcome`, `inference_pool`, `model_name`, and `target_model_name`.
+
+| Metric | Type | Description |
+|--------|------|-------------|
+| `inference_extension_flow_control_request_queue_duration_seconds` | Distribution | Time a request spends in the flow control queue |
+| `inference_extension_flow_control_queue_size` | Gauge | Number of requests currently queued |
+| `inference_extension_flow_control_queue_bytes` | Gauge | Total size of queued requests in bytes |
+| `inference_extension_flow_control_dispatch_cycle_duration_seconds` | Distribution | Duration of each dispatch cycle |
+| `inference_extension_flow_control_request_enqueue_duration_seconds` | Distribution | Time taken to enqueue a request |
+| `inference_extension_flow_control_pool_saturation` | Gauge | Pool saturation level (0.0–1.0+) |
+
+##### Monitoring Stack
+
+The recommended monitoring stack is **Prometheus + Grafana**. A pre-built Grafana dashboard is available at [`tools/dashboards/inference_gateway.json`](https://github.com/kubernetes-sigs/gateway-api-inference-extension/blob/main/tools/dashboards/inference_gateway.json) in the upstream repository.
+
+Pre-configured alert rules are also available upstream, covering:
+
+- **High P99 latency** — triggers when P99 request latency exceeds 10 seconds
+- **High error rate** — triggers when the error rate exceeds 5%
+- **High queue size** — triggers when queue depth exceeds 50 requests
+- **High KV cache utilization** — triggers when KV cache utilization exceeds 90%
+
+##### Profiling
+
+The EPP also exposes pprof profiling endpoints at `/debug/pprof/` (heap, goroutine, etc.) on the same port. Access to both `/metrics` and `/debug/pprof/*` requires a ClusterRole with appropriate permissions.
 
 
