@@ -24,7 +24,7 @@ The steps are:
 
 1. **Request arrival** -- An inference reques arrives at the proxy (Gateway).
 2. **ext-proc** -- The proxy invokes the EPP via the ext-proc protocol, passing the request headers and body to the EPP.
-3. **Request handling** -- Processes the request (in e.g. OpenAI format) into the internal data structure.
+3. **Parser** -- Processes the request (in e.g. OpenAI format) into the internal data structure.
 3. **Flow control** -- If (optionally) enabled, queues requests and prioritizes among different tenants and request priorities in saturation regimes.
 4. **Scheduling** -- Filters, scores, and select optimal pod in the inference pool for a request.
 7. **Response** -- The EPP returns the selected endpoint address to the proxy, which routes the request to that model server pod.
@@ -63,7 +63,7 @@ XXX
 
 See [Flow Control](flow-control.md) for more detailson the design.
 
-#### Schedulger (Extensible)
+#### Scheduler (Extensible)
 
 XXX
 
@@ -107,7 +107,7 @@ featureGates:
 - The [`parser`](#parser) section configures the parser, which is used to understand the payload of requests and responses for features like prefix-cache aware routing and 
 - The [`featureGates`](#featureGates) section allows the enablement of experimental features of the IGW. This section is described in more detail in the section Feature Gates.usage tracking.
 
-## Using the `EndpointPickerConfig`
+### Using the `EndpointPickerConfig`
 
 The `EndpointPickerConfig` command line argument `--config-file` should be used to specify the full path of the file in question. For example:
 
@@ -174,9 +174,9 @@ spec:
               weight: 50
 ```
 
-## Detailed Configuration
+### Configuration Guide
 
-### `plugins`
+#### `plugins`
 
 The section declares the set of plugins to be instantiated along with their parameters.
 
@@ -195,7 +195,7 @@ The fields in a plugin entry are:
 - `type` specifies the type of the plugin to be instantiated.
 - `parameters` which is optional, defines the set of parameters used to configure the plugin in question. The actual set of parameters varies from plugin to plugin.
 
-### `schedulingProfiles`
+#### `schedulingProfiles`
 
 The `schedulingProfile` section defines how the EPP's Scheduling component works. If one is not defined, a default `schedulingProfile` named `default` will be added and will reference all of the instantiated plugins.
 
@@ -288,29 +288,4 @@ See [Scheduling](scheduling.md) for more architectural details on how the EPP's 
 #### Monitoring
 
 
-
-
-
-```yaml
-apiVersion: inference.networking.x-k8s.io/v1alpha1
-kind: EndpointPickerConfig
-plugins:
-- ....
-- ....
-schedulingProfiles:
-- ....
-- ....
-saturationDetector:
-  ...
-data:
-  ...
-flowControl:
-  ...
-parser:
-  ...
-featureGates:
-  ...
-```
-
-NOTE: While the configuration text looks like a Kubernetes CRD, it is NOT a Kubernetes CRD. Specifically, the config is not reconciled upon, and is only read on startup. This behavior is intentional, as augmenting the scheduling config without redeploying the EPP is not supported.
 
