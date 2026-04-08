@@ -23,7 +23,7 @@ The following diagram shows the end-to-end lifecycle of a request as it flows th
 The steps are:
 
 1. **Request arrival** -- An inference request arrives at the proxy (Gateway).
-2. **ext-proc** -- The proxy invokes the EPP via the ext-proc protocol, passing the request headers and body to the EPP.
+2. **External processing** -- The proxy invokes the EPP via the ext-proc protocol, passing the request headers and body to the EPP.
 3. **Request handling** -- Parses the request (from e.g. OpenAI format, vllm gRPC) into the internal request data structure.
 3. **Flow control** -- If (optionally) enabled, queues requests and prioritizes among different tenants and request priorities in saturation regimes.
 4. **Scheduling** -- Selecting the optimal endpoint from the available InferencePool, which involves evaluating each request against a configured set of scheduling plugins, such as filters and scorers.
