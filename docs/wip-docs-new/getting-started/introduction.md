@@ -16,10 +16,6 @@ llm-d is a [CNCF sandbox project](https://www.cncf.io/) that supports multiple i
 
 llm-d integrates with standard Kubernetes primitives — Gateway API, Custom Resources, Labels, and HPA — rather than introducing a new orchestration layers or CRDs. If you already run workloads on Kubernetes, llm-d fits naturally into your infrastructure.
 
-### Modular, Layered Design
-
-You don't need to adopt everything at once. Start with intelligent scheduling for an immediate latency improvement, then layer on disaggregated serving, tiered caching, or autoscaling as your needs grow. Each capability is an independent, composable component.
-
 
 ## Key Capabilities
 
@@ -63,7 +59,7 @@ Two complementary autoscaling patterns:
 llm-d uses a layered, composable architecture:
 
 ```
-Client Request → Proxy → Endpoint Picker (EPP) → InferencePool → Model Servers → Accelerators
+Client Request → Proxy → Endpoint Picker (EPP) → InferencePool → Model Servers
 ```
 
 | Layer | Role |
