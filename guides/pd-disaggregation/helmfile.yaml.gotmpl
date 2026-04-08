@@ -111,6 +111,20 @@ releases:
     {{- else if eq .Environment.Name "gke_pd_rdma" }}
       - ms-pd/values_gke_rdma.yaml
     {{- else if eq .Environment.Name "hpu_cuda" }}
+    hooks:
+      - events: ["presync"]
+        command: "kubectl"
+        args: ["apply", "-f", "ms-pd/extras/rdma-deviceclass.yaml", "-n", "{{ $ns }}"]
+      - events: ["presync"]
+        command: "kubectl"
+        args: ["apply", "-f", "ms-pd/extras/rdma-claim-template.yaml", "-n", "{{ $ns }}"]
+      - events: ["postuninstall"]
+        command: "kubectl"
+        args: ["delete", "-f", "ms-pd/extras/rdma-claim-template.yaml", "-n", "{{ $ns }}", "--ignore-not-found"]
+      - events: ["postuninstall"]
+        command: "kubectl"
+        args: ["delete", "-f", "ms-pd/extras/rdma-deviceclass.yaml", "-n", "{{ $ns }}", "--ignore-not-found"]
+    values:
       - ms-pd/values_hpu_cuda.yaml
     {{- else }}
       - ms-pd/values.yaml

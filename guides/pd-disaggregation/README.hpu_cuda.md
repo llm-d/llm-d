@@ -62,158 +62,19 @@ is used to allocate both Intel Gaudi and NVIDIA GPU devices to the respective po
 
 - RDMA device class: `rdma-dranet-pf`
 
-```yaml
-apiVersion: resource.k8s.io/v1
-kind: DeviceClass
-metadata:
-  name: rdma-dranet-pf
-spec:
-  selectors:
-  - cel:
-      expression: device.driver == "dra.net"
-  - cel:
-      expression: device.attributes["dra.net"].rdma == true
-```
+The DeviceClass definition is provided in [`ms-pd/extras/rdma-deviceclass.yaml`](ms-pd/extras/rdma-deviceclass.yaml).
 
 ### ResourceClaimTemplates
 
 `ResourceClaimTemplate` objects must be applied to your namespace before deploying the stack.
 
-** RDMA PF:**
+The RDMA ResourceClaimTemplate is provided in [`ms-pd/extras/rdma-claim-template.yaml`](ms-pd/extras/rdma-claim-template.yaml).
+
+> **NOTE:** Both the DeviceClass and ResourceClaimTemplate are automatically applied
+> via helmfile `presync` hooks and removed via `postuninstall` hooks when using the
+> `hpu_cuda` environment. No manual `kubectl apply` is needed.
 
 
-```yaml
-apiVersion: resource.k8s.io/v1
-kind: ResourceClaimTemplate
-metadata:
-  name: rdma-claim-template
-spec:
-  spec:
-    devices:
-      requests:
-      - name: rdma-net-interface
-        exactly:
-          deviceClassName: rdma-dranet-pf
-          count: 1
-```
-
-Apply both templates to your namespace:
-
-```bash
-kubectl apply -f rdma-dranet-pf.yaml -n ${NAMESPACE}
-kubectl apply -f rdma-claim-template.yaml -n ${NAMESPACE}
-```
-
-
-## Building Docker Images (Optional)
-
-If you need to build custom vLLM images from source (e.g., to test a specific commit or apply
-patches), the `docker/` directory contains the relevant Dockerfiles and the root `Makefile`
-provides convenient build targets.
-
-### Available Dockerfiles
-
-| Dockerfile | Purpose | Used by |
-|---|---|---|
-| `docker/Dockerfile.rhel.hpu` | Intel Gaudi (HPU) vLLM image with NIXL (RHEL) | Prefill worker |
-| `docker/Dockerfile.cuda` | NVIDIA CUDA vLLM image with NIXL, UCX, NVSHMEM | Decode worker |
-
-
-### Build the HPU (Prefill) Image
-
-The HPU image uses `Dockerfile.rhel.hpu` and targets Intel Gaudi2/3 on RHEL-based systems:
-
-```bash
-# From the llm-d repo root
-cd /path/to/llm-d
-
-sudo docker build \
-  -t llm-d:hpu_0.17.1 \
-  -f docker/Dockerfile.rhel.hpu \
-  . \
-  --build-arg https_proxy=$https_proxy \
-  --build-arg http_proxy=$http_proxy
-```
-
-The resulting image is tagged as `llm-d:hpu_0.17.1`.
-
-### Build the CUDA (Decode) Image
-
-The CUDA image is a multi-stage build that compiles UCX, NVSHMEM, NIXL, FlashInfer, and vLLM on RHEL UBI9:
-
-```bash
-# From the llm-d repo root
-cd /path/to/llm-d
-
-sudo docker build \
-  -t llm-d:cuda_0.17.1 \
-  -f docker/Dockerfile.cuda \
-  . \
-  --build-arg https_proxy=$https_proxy \
-  --build-arg http_proxy=$http_proxy \
-  --build-arg USE_SCCACHE=false \
-  --build-arg CUDA_MAJOR=12 \
-  --build-arg CUDA_MINOR=9 \
-  --build-arg CUDA_PATCH=1 \
-  --build-arg TARGETOS=rhel \
-  --build-arg BASE_IMAGE_SUFFIX=ubi9 \
-  --build-arg PYTHON_VERSION=3.12 \
-  --build-arg VLLM_REPO=https://github.com/vllm-project/vllm.git \
-  --build-arg VLLM_COMMIT_SHA=95c0f928cdeeaa21c4906e73cee6a156e1b3b995 \
-  --build-arg VLLM_PREBUILT=0 \
-  --build-arg VLLM_USE_PRECOMPILED=1 \
-  --build-arg VLLM_PRECOMPILED_WHEEL_COMMIT=95c0f928cdeeaa21c4906e73cee6a156e1b3b995 \
-  --build-arg LLM_D_OFFLOADING_CONNECTOR_VERSION=0.17.1 \
-  --build-arg ENABLE_EFA=false
-```
-
-The resulting image is tagged as `llm-d:cuda_0.17.1`.
-
-Key build arguments for `Dockerfile.cuda`:
-
-| ARG | Value | Description |
-|---|---|---|
-| `CUDA_MAJOR` / `CUDA_MINOR` / `CUDA_PATCH` | `12` / `9` / `1` | CUDA version |
-| `TARGETOS` | `rhel` | Target OS type |
-| `BASE_IMAGE_SUFFIX` | `ubi9` | Base image suffix (RHEL UBI9) |
-| `PYTHON_VERSION` | `3.12` | Python version |
-| `VLLM_REPO` | `https://github.com/vllm-project/vllm.git` | vLLM source repository |
-| `VLLM_COMMIT_SHA` | `95c0f928...` | vLLM commit to build from |
-| `VLLM_PREBUILT` | `0` | Whether to use a prebuilt vLLM binary |
-| `VLLM_USE_PRECOMPILED` | `1` | Use precompiled vLLM wheel |
-| `VLLM_PRECOMPILED_WHEEL_COMMIT` | `95c0f928...` | Commit SHA for precompiled wheel |
-| `LLM_D_OFFLOADING_CONNECTOR_VERSION` | `0.17.1` | llm-d offloading connector version |
-| `ENABLE_EFA` | `false` | Enable AWS EFA RDMA support |
-| `USE_SCCACHE` | `false` | Enable sccache for build caching |
-
-
-### Push Images to Your Registry
-
-After building, retag and push to your internal registry (required for cluster access):
-
-```bash
-# Retag and push the HPU image
-docker tag llm-d:hpu_0.17.1 my-registry.example.com/vllm-hpu:0.17.1
-docker push my-registry.example.com/vllm-hpu:0.17.1
-
-# Retag and push the CUDA image
-docker tag llm-d:cuda_0.17.1 my-registry.example.com/vllm-cuda:0.17.1
-docker push my-registry.example.com/vllm-cuda:0.17.1
-```
-
-Then update the image references in `ms-pd/values_hpu_cuda.yaml`:
-
-```yaml
-prefill:
-  containers:
-  - name: "vllm"
-    image: my-registry.example.com/vllm-hpu:v0.3.0   # custom HPU prefill image
-
-decode:
-  containers:
-  - name: "vllm"
-    image: my-registry.example.com/vllm-cuda:v0.3.0  # custom CUDA decode image
-```
 ## Prerequisites
 
 - Have the [proper client tools installed on your local system](../prereq/client-setup/README.md)
@@ -235,16 +96,10 @@ decode:
   matching a valid HuggingFace token](../prereq/client-setup/README.md#huggingface-token)
   to pull models.
 - [Choose an llm-d version](../prereq/client-setup/README.md#llm-d-version)
-- Ensure registry pull secret `amr-idc-registry` is available in your namespace for
-  pulling the custom vLLM images.
 
 ## Installation
 
-### Step 1: Apply ResourceClaimTemplates
-
-Apply the DRA and DRANet `ResourceClaimTemplate` objects (see [Device Management](#device-management) above).
-
-### Step 2: Update Node Selectors
+### Step 1: Update Node Selectors
 
 Edit `ms-pd/values_hpu_cuda.yaml` to match the actual hostnames of your Gaudi and NVIDIA nodes:
 
@@ -260,7 +115,7 @@ decode:
       kubernetes.io/hostname: <your-nvidia-node-hostname>
 ```
 
-### Step 3: Deploy the Stack
+### Step 2: Deploy the Stack
 
 Use helmfile to compose and install the stack. The `values_hpu_cuda.yaml` is applied when the `hpu_cuda` environment is chosen.
 
@@ -277,7 +132,7 @@ names and support concurrent installs. Example:
 RELEASE_NAME_POSTFIX=hpu-cuda helmfile apply -n ${NAMESPACE}
 ```
 
-### Step 4: Install HTTPRoute
+### Step 3: Install HTTPRoute
 
 ```bash
 kubectl apply -f httproute.yaml -n ${NAMESPACE}
@@ -414,12 +269,8 @@ Remove the HTTPRoute:
 kubectl delete -f httproute.yaml -n ${NAMESPACE}
 ```
 
-Remove the ResourceClaimTemplates:
-
-```bash
-kubectl delete resourceclaimtemplate intel-1-gaudi-1-rdma-vf -n ${NAMESPACE}
-kubectl delete resourceclaimtemplate nvidia-1-gpu-1-rdma-vf  -n ${NAMESPACE}
-```
+> **NOTE:** The RDMA DeviceClass and ResourceClaimTemplate resources are automatically
+> removed by helmfile `postuninstall` hooks during `helmfile destroy`.
 
 **_NOTE:_** If you set the `$RELEASE_NAME_POSTFIX` environment variable, your release names
 will differ: `infra-$RELEASE_NAME_POSTFIX`, `gaie-$RELEASE_NAME_POSTFIX`, `ms-$RELEASE_NAME_POSTFIX`.
