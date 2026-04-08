@@ -8,26 +8,19 @@
 │   ├── feature-matrix.md
 │   └── artifacts.md
 ├── architecture
-│   ├── components
-│   │   ├── introduction.md
-│   │   ├── core
-│   │   │   ├── proxy.md
-│   │   │   ├── epp.md
-│   │   │   ├── inferencepool.md
-│   │   │   └── model-servers.md
-│   │   └── advanced
-│   │       ├── proxy.md
-│   │       ├── epp.md
-│   │       ├── inferencepool.md
-│   │       └── model-servers.md
-│   └──designs
-│       ├── epp.md
-│       ├── latency-predictor.md
-│       ├── async-processing.md
+│   ├── introduction.md
+│   ├── core
+│   │   ├── proxy.md
+│   │   ├── inferencepool.md
+│   │   ├── epp.md
+│   │   └── model-servers.md
+│   └── advanced
 │       ├── disaggregation.md
 │       ├── kv-indexer.md
-│       ├── kv-offloading.md
-│       └── wva.md
+│       ├── latency-predictor.md
+│       └── autoscaling
+│          ├── workload-variant-autoscaling.md
+│          └── igw-hpa.md
 ├── well-lit-paths
 │   ├── introduction.md
 │   ├── what-is-a-well-lit-path.md
