@@ -21,6 +21,8 @@ routing:
     targetPort: 8000  # controls vLLM port to match up with sidecar if deployed
 
 decode:
+  create: true
+#  priorityClassName: nightly-gpu-critical
   parallelism:
     tensor: 8
   create: true

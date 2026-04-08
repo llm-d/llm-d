@@ -25,6 +25,8 @@ accelerator:  # controls specialized hardware Type
 
 # DigitalOcean-specific container configuration
 decode:
+  create: true
+#  priorityClassName: nightly-gpu-critical
   replicas: 2
   containers:
     - name: "vllm"

@@ -19,7 +19,7 @@ accelerator:
 modelArtifacts:
   name: Qwen/Qwen3-32B
   uri: "hf://Qwen/Qwen3-32B"
-  size: 10Gi
+  size: 80Gi
   authSecretName: "llm-d-hf-token"
   labels:
     llm-d.ai/inference-serving: "true"
@@ -34,9 +34,10 @@ routing:
 
 decode:
   create: true
-  parallelism:
-    tensor: 1
+#  priorityClassName: nightly-gpu-critical
   replicas: 2
+  parallelism:
+    tensor: 2
   securityContext:
     fsGroup: 107
     supplementalGroups:
@@ -92,11 +93,11 @@ decode:
           protocol: TCP
       resources:
         limits:
-          memory: 24Gi
-          cpu: "8"
+          memory: 48Gi
+          cpu: "16"
         requests:
-          cpu: "4"
-          memory: 12Gi
+          cpu: "8"
+          memory: 24Gi
       mountModelVolume: true
       volumeMounts:
         - name: metrics-volume

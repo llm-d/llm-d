@@ -29,6 +29,7 @@ accelerator:
 
 decode:
   create: true
+#  priorityClassName: nightly-gpu-critical
   parallelism:
     tensor: 2
     data: 1

@@ -30,7 +30,7 @@ accelerator:  # controls specialized hardware Type
 
 decode:
   create: true
-  priorityClassName: nightly-gpu-critical
+#  priorityClassName: nightly-gpu-critical
   parallelism:
     tensor: 2
     data: 1

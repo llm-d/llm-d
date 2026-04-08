@@ -25,6 +25,8 @@ accelerator:  # controls specialized hardware Type
   type: nvidia
 
 decode:
+  create: true
+#  priorityClassName: nightly-gpu-critical
   replicas: 2
   initContainers:
     - name: preprocess
@@ -153,6 +155,8 @@ decode:
       emptyDir: {}
 
 prefill:
+  create: true
+#  priorityClassName: nightly-gpu-critical
   replicas: 1
   initContainers:
     - name: preprocess

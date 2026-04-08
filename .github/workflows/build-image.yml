@@ -113,7 +113,7 @@ jobs:
       - uses: actions/checkout@v6
         with:
           ref: ${{ inputs.ref || '' }}
-      - uses: dorny/paths-filter@v3
+      - uses: dorny/paths-filter@v4
         if: github.event_name != 'workflow_dispatch' && inputs.force_build != true
         id: filter
         with:
@@ -220,7 +220,7 @@ jobs:
         uses: docker/setup-buildx-action@v4
 
       - name: Log in to Container Registry
-        uses: docker/login-action@v3
+        uses: docker/login-action@v4
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ secrets.GHCR_USER }}
@@ -244,7 +244,7 @@ jobs:
 
       - name: Build and push debug image
         id: build-debug
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           file: ./docker/Dockerfile.cuda
@@ -377,7 +377,7 @@ jobs:
         uses: docker/setup-buildx-action@v4
 
       - name: Log in to Container Registry
-        uses: docker/login-action@v3
+        uses: docker/login-action@v4
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ secrets.GHCR_USER }}
@@ -401,7 +401,7 @@ jobs:
 
       - name: Build the builder image layer
         id: build-image-build-layer
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           file: ./docker/Dockerfile.cuda
@@ -433,7 +433,7 @@ jobs:
 
       - name: Build the final image layer
         id: build-image-final-layer
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           file: ./docker/Dockerfile.cuda
@@ -617,7 +617,7 @@ jobs:
 
       - name: Log in to Container Registry
         if: ${{ steps.should-run.outputs.os_succeeded == 'true' }}
-        uses: docker/login-action@v3
+        uses: docker/login-action@v4
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ secrets.GHCR_USER }}
@@ -747,7 +747,7 @@ jobs:
         uses: docker/setup-buildx-action@v4
 
       - name: Log in to Container Registry
-        uses: docker/login-action@v3
+        uses: docker/login-action@v4
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ secrets.GHCR_USER }}
@@ -771,7 +771,7 @@ jobs:
 
       - name: Build the builder image layer
         id: build-image-build-layer
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           file: ./docker/Dockerfile.cuda
@@ -799,7 +799,7 @@ jobs:
 
       - name: Build the final image layer
         id: build-image-final-layer
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           file: ./docker/Dockerfile.cuda
@@ -945,7 +945,7 @@ jobs:
 
       - name: Log in to Container Registry
         if: ${{ steps.should-run.outputs.rhel_ok == 'true' }}
-        uses: docker/login-action@v3
+        uses: docker/login-action@v4
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ secrets.GHCR_USER }}
@@ -1056,7 +1056,7 @@ jobs:
           buildkitd-flags: --oci-worker-gc
 
       - name: Log in to Container Registry
-        uses: docker/login-action@v3
+        uses: docker/login-action@v4
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ secrets.GHCR_USER }}
@@ -1075,7 +1075,7 @@ jobs:
 
       - name: Build & Push
         id: build-and-push
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           file: ./docker/Dockerfile.rdma-tools
@@ -1143,7 +1143,7 @@ jobs:
         uses: docker/setup-buildx-action@v4
 
       - name: Log in to Container Registry
-        uses: docker/login-action@v3
+        uses: docker/login-action@v4
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ secrets.GHCR_USER }}
@@ -1173,7 +1173,7 @@ jobs:
 
       - name: Build and push the image
         id: build-and-push
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: ./.cache/vllm-src
           file: ./.cache/vllm-src/docker/Dockerfile.xpu
@@ -1236,7 +1236,7 @@ jobs:
         uses: docker/setup-buildx-action@v4
 
       - name: Log in to Container Registry
-        uses: docker/login-action@v3
+        uses: docker/login-action@v4
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ secrets.GHCR_USER }}
@@ -1254,7 +1254,7 @@ jobs:
 
       - name: Build and push the image
         id: build-and-push
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           file: ./docker/Dockerfile.rocm
@@ -1313,7 +1313,7 @@ jobs:
           ref: ${{ inputs.ref || '' }}
 
       - name: Log in to Container Registry
-        uses: docker/login-action@v3
+        uses: docker/login-action@v4
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ secrets.GHCR_USER }}
@@ -1399,7 +1399,7 @@ jobs:
         uses: docker/setup-buildx-action@v4
 
       - name: Log in to Container Registry
-        uses: docker/login-action@v3
+        uses: docker/login-action@v4
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ secrets.GHCR_USER }}
@@ -1422,7 +1422,7 @@ jobs:
 
       - name: Build and push the image
         id: build-and-push
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           file: ./docker/Dockerfile.cpu

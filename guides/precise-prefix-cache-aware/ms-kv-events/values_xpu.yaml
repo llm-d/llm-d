@@ -34,8 +34,7 @@ routing:
 
 decode:
   create: true
-  parallelism:
-    tensor: 1
+#  priorityClassName: nightly-gpu-critical
   replicas: 2
   parallelism:
     tensor: 2
