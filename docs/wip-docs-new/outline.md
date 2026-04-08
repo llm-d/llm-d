@@ -8,13 +8,19 @@
 │   ├── feature-matrix.md
 │   └── artifacts.md
 ├── architecture
-│   ├── layers
-│   │   ├── introduction-arch-diagram.md
-│   │   ├── proxy.md
-│   │   ├── epp.md
-│   │   ├── inferencepool-api.md
-│   │   └── model-servers.md
-│   └── component-design
+│   ├── components
+│   │   ├── introduction.md
+│   │   ├── core
+│   │   │   ├── proxy.md
+│   │   │   ├── epp.md
+│   │   │   ├── inferencepool.md
+│   │   │   └── model-servers.md
+│   │   └── advanced
+│   │       ├── proxy.md
+│   │       ├── epp.md
+│   │       ├── inferencepool.md
+│   │       └── model-servers.md
+│   └──designs
 │       ├── epp.md
 │       ├── latency-predictor.md
 │       ├── async-processing.md
