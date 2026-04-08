@@ -8,37 +8,11 @@ The EPP is the "brains" of an llm-d deployment. It is focused on two key objecti
 
 - **Fairness and priortiziaton** - selecting which **inference requests** should run at any given time, enabling consolidation of multiple workloads onto a single InferencePool
 
-The EPP is a pluggible, extensible component that integrates with the proxy layer via Envoy's [External Processing (ext-proc)](https://www.envoyproxy.io/docs/envoy/latest/configuration/http/http_filters/ext_proc_filter) protocol. When a request arrives at the proxy, the proxy calls the EPP to select a backend endpoint, and the EPP returns the optimal pod address.
+The EPP is an extensible component that integrates with the proxy layer via Envoy's [External Processing (ext-proc)](https://www.envoyproxy.io/docs/envoy/latest/configuration/http/http_filters/ext_proc_filter) protocol.
+
+When a request arrives at the proxy, the proxy calls the EPP to select a backend endpoint, and the EPP returns the optimal pod address.
 
 ## Design
-
-### Layers
-
-The EPP is modular and pluggible, consisting of the following layers:
-
-#### Ext-Proc Server
-
-The Ext-Proc Server protocol is very well defined & specific, deviation could cause the EPP to become unusable or unstable. Extension is ill-advised. The Ext-Proc is simply the standard interface by which the Proxy talks to the EPP.
-
-#### Data Layer (Extensible)
-
-The **Data Layer** operates asynchronously, consumes and storing data from a variety of sources:
-- Kube API Server about which pods are active in the InferencePool
-- Model Servers about the current internal state (running requests, kv cache utilization)
-- In-memory data structures, such as prefix cache trees for prefix-aware routing
-- "Consultant" pods like latency predictor or the kv-indexer for advanced schemes
-
-Other modudules in the EPP consult the **Data Layer** during request processing.
-
-#### Request Handler (pluggable)
-
-The **Request Handler** is the first step of the request flow in the EPP.
-
-The EPP provides some out-of-the-box Request Handlers for common protocols like the OpenAI `/v1/chat/completions`. In additon, users can specify thier own protocols.
-
-The rest of the functionality in EPP is agnostic to the client protocol, enabling easy integration into arbitray request
-
-#### 
 
 ### Request Flow
 
@@ -57,11 +31,43 @@ The steps are:
 
 Asynchronously, the **Data layer** consults the Kube API server for service discover, probes the model servers for their metrics, and maintains internal state (e.g. a prefix cache tree) and is consulted by the Flow Control and Scheduling modules.
 
-Each of these steps is pluggible and configurable, enabling customization. See detailed discussion of each component:
-- [Scheduling](scheduling.md)
-- [Flow Control](flow-control.md)
-- [Request Handling](request-handling.md)
+### Layers
 
+The EPP is modular and pluggible, consisting of the following layers:
+
+#### Ext-Proc Server
+
+The Ext-Proc Server protocol is very well defined & specific, deviation could cause the EPP to become unusable or unstable. Extension is ill-advised. The Ext-Proc is simply the standard interface by which the Proxy talks to the EPP.
+
+#### Data Layer (Extensible)
+
+The **Data Layer** operates asynchronously, consuming and storing data from a variety of sources:
+- Kube API Server about which pods are active in the InferencePool
+- Model Servers about the current internal state (running requests, kv cache utilization)
+- In-memory data structures, such as prefix cache trees for prefix-aware routing
+- "Consultant" pods like latency predictor or the kv-indexer for advanced schemes
+
+Other modules in the EPP consult the **Data Layer** during request processing.
+
+#### Request Handler (Extensible)
+
+The **Request Handler** is the first step of the request flow in the EPP. Its responsibility is to convert the user's request into the internal EPP data structure. The EPP provides some out-of-the-box Request Handlers for common protocols like the OpenAI `/v1/chat/completions`.
+
+In additon, users can write a custom handler for their own protocol. The rest of the functionality in EPP is agnostic to the original request protocol, enabling easy adaptation of the EPP to new APIs.
+
+See [Request Handling](request-handling.md) for more details.
+
+#### Flow Control (Extensible)
+
+XXX
+
+See [Flow Control](flow-control.md) for more details.
+
+#### Schedulger (Extensible)
+
+XXX
+
+See [Scheduling](scheduling.md) for more details.
 
 
 
