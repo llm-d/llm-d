@@ -59,7 +59,15 @@ See [Request Handling](request-handling.md) for more details on the design.
 
 #### Flow Control (Extensible)
 
-XXX
+Flow control's primary purpose is to manage the admission, queuing, and dispatching of requests to prevent overloading backend model servers while ensuring fairness and priority. Specifically:
+
+- Admission Control & Throttling: Rather than allowing the inference pool to be overwhelmed, it intercepts incoming requests and holds them in an in-memory queue if saturation is reached, avoiding to overwhelm the backends. This is configurable via SaturationDetector plugins (such as concurrency, which is based on active in-flight requests accounting per endpoint) 
+
+- Priority-Based Queuing: It categorizes traffic into "Priority Bands." Real-time, latency-sensitive tasks (like chat) are prioritized over batch background tasks (like summarization). 
+
+- Resource Fairness: It prevents "noisy neighbor" scenarios by isolating traffic streams, ensuring a single flow (e.g., a user or application) cannot monopolize all available inference slots. Fairness is configurable via two pluggable policies: FairnessPolicy governs governs the distribution of dispatch opportunities among competing Flows within the same priority band (e.g., Round Robin), and OrderingPolicy plugins customizes ordering of requests within a flow (e.g., FIFO, SLO-based).
+
+- Dynamic Dispatching: It monitors saturation to send requests to model servers only when they are ready to process them.
 
 See [Flow Control](flow-control.md) for more detailson the design.
 
