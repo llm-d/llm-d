@@ -75,9 +75,11 @@ Three prediction server instances (ports 8001, 8002, 8003) serve the trained mod
 
 ### ML Model
 
-The predictor uses **XGBoost regression**, chosen for its speed, accuracy, and online learning capability. Across benchmark runs, the model achieves approximately **5% Mean Absolute Percentage Error (MAPE)**.
+The predictor uses **XGBoost quantile regression** (`reg:quantileerror`), chosen for its speed, accuracy, and online learning capability. Two independent models are trained -- one for TTFT and one for TPOT. Across benchmark runs, the models achieve approximately **5% Mean Absolute Percentage Error (MAPE)**.
 
-**Input features:**
+The target quantile is configurable via `LATENCY_QUANTILE_ALPHA` (default: 0.9 for p90).
+
+**TTFT model features:**
 
 | Feature | What It Captures |
 |---------|-----------------|
@@ -87,6 +89,16 @@ The predictor uses **XGBoost regression**, chosen for its speed, accuracy, and o
 | Running Requests | Active GPU concurrency -- higher concurrency increases both TTFT and TPOT |
 | Prefix Cache Match % | KV reuse potential -- high match rates reduce TTFT |
 | Input Tokens In Flight | Tokens dispatched but not yet prefilled, plus tokens still in KV cache -- captures incoming prefill pressure |
+
+**TPOT model features:**
+
+| Feature | What It Captures |
+|---------|-----------------|
+| KV Cache Usage % | KV-cache utilization |
+| Input Length | Input token count |
+| Queue Depth | Queued requests |
+| Running Requests | Active requests / GPU concurrency |
+| Tokens Generated | Output tokens produced so far |
 
 ## How Endpoint Selection Works
 
@@ -168,6 +180,10 @@ data:
 | `LATENCY_MIN_SAMPLES_FOR_RETRAIN` | Minimum number of completed request samples required before retraining. |
 | `LATENCY_MODEL_TYPE` | ML algorithm used for prediction. Currently only `xgboost` is supported. |
 | `LATENCY_MAX_TRAINING_DATA_SIZE_PER_BUCKET` | Maximum samples retained per stratification bucket in the sliding window. |
+| `LATENCY_QUANTILE_ALPHA` | Target quantile for prediction (default: `0.9` for p90). |
+| `LATENCY_TEST_TRAIN_RATIO` | Fraction of data held out for evaluation (default: `0.1`). |
+| `LATENCY_MAX_TEST_DATA_SIZE` | Maximum number of test samples (default: `1000`). |
+| `LATENCY_SAMPLE_WEIGHTING_FOR_PREFIX_CACHE` | When `true`, reweights underrepresented prefix cache buckets during training (default: `false`). |
 
 ### Prediction Server ConfigMap
 
