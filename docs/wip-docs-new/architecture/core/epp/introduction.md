@@ -29,7 +29,7 @@ The steps are:
 4. **Scheduling** -- Filters, scores, and select optimal pod in the inference pool for a request.
 7. **Response** -- The EPP returns the selected endpoint address to the proxy, which routes the request to that model server pod.
 
-Asynchronously, the **Data layer** consults the Kube API server for service discover, probes the model servers for their metrics, and maintains internal state (e.g. a prefix cache tree) and is consulted by the Flow Control and Scheduling modules.
+Asynchronously, the **Data layer* sets up watches on the Kubernetes API server for updates to relevant objects like InferencePools and pods for endpoint discovery. It is also responsible for model servers metrics probing, and maintaining an internal state—such as a prefix cache tree—to inform the request processing components, Flow Control and Scheduling.```
 
 ### Layers
 
