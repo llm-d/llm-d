@@ -51,7 +51,7 @@ Other modules in the EPP consult the **Data Layer** during request processing.
 
 #### Request Handler (Extensible)
 
-The **Request Handler** is the first step of the request flow in the EPP. Its responsibility is to convert the user's request into the internal EPP data structure. The EPP provides some out-of-the-box Request Handlers for common protocols like the OpenAI `/v1/chat/completions`.
+The **Request Handler** is the first step of the request flow in the EPP. The key responsibility is to convert the user's request into the internal EPP data structure via the Parser plugin. The EPP provides out-of-the-box Parsers for common formats like the [OpenAI HTTP](https://developers.openai.com/api/reference/overview) and [vLLM gRPC](https://docs.vllm.ai/en/latest/api/vllm/entrypoints/grpc_server/).
 
 In addition, users can write a custom Parser for their own protocol. The rest of the functionality in EPP is agnostic to the original request protocol, enabling easy adaptation of the EPP to new request formats.
 
