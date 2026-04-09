@@ -1,30 +1,31 @@
 ```
 .
 ├── getting-started
-│   ├── getting-started.md              - rob
-│   ├── quickstart.md                   - rob
-│   ├── feature-matrix.md
-│   └── artifacts.md
+│   ├── getting-started.md                      - rob
+│   ├── quickstart.md                           - rob
+│   ├── feature-matrix.md                       - [?]
+│   └── artifacts.md                            - [?]
 ├── architecture
-│   ├── architecture.md                 - rob
+│   ├── architecture.md                         - rob
 │   ├── core
-│   │   ├── proxy.md                    - rob
-│   │   ├── inferencepool.md            - rob
+│   │   ├── proxy.md                            - rob
+│   │   ├── inferencepool.md                    - rob
 │   │   ├── epp
-|   │   │   ├── epp.md                  - rob
-|   │   │   ├── scheduling.md           - abdullah
-|   │   │   ├── flow-control.md         - luke
-|   │   │   └── request-handling.md     - abdullah
-│   │   └── model-servers.md
+|   │   │   ├── epp.md                          - rob
+|   │   │   ├── scheduling.md                   - abdullah
+|   │   │   ├── flow-control.md                 - luke
+|   │   │   ├── request-handling.md             - abdullah
+|   │   │   └── configuration.md                - [?]
+│   │   └── model-servers.md                    - rob
 │   └── advanced
-│       ├── disaggregation.md           - rob
-│       ├── kv-indexer.md               - [?]
-│       ├── kv-offloading.md            - [?]
-│       ├── latency-predictor.md        - [?]
+│       ├── disaggregation.md                   - rob
+│       ├── kv-indexer.md                       - [?]
+│       ├── kv-offloading.md                    - [?]
+│       ├── latency-predictor.md                - [?]
 │       └── autoscaling
-│          ├── autoscaling.md
-│          ├── workload-variant-autoscaling.md
-│          └── igw-hpa.md
+│          ├── autoscaling.md                   - [?]
+│          ├── workload-variant-autoscaling.md  - [?]
+│          └── igw-hpa.md                       - [?]        
 ├── well-lit-paths
 │   ├── well-lit-paths.md
 │   ├── intelligent-inference-scheduling
