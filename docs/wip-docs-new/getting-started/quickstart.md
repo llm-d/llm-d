@@ -9,7 +9,7 @@ This is a quickstart for deploying a "hello, world" llm-d deployment with a **st
 
 In the llm-d architecture, requests flow in the following way:
 - Client sends a request (e.g. `/v1/chat/completions`) to the Envoy Proxy
-- The Proxy queries the EndpointPicker which selects the optimal replica to process the request from the InferencePool
+- The Proxy queries the EndpointPicker which selects the optimal replica to process the request from the InferencePool. In the standalone mode, the Envoy proxy and the EPP are running as two containers inside one Kubernetes Pod. In the Gateway mode, the EPP runs independently from the proxy (aka the Gateway).
 - The Proxy sends the request to the vLLM pod in the InferencePool, which processes the query
 
 ```
