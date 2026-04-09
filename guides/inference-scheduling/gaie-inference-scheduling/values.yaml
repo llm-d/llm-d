@@ -1,5 +1,12 @@
 inferenceExtension:
   replicas: 1
+  resources:
+    requests:
+      cpu: "500m"   # Reduced to 0.5 CPU to fit on constrained nodes
+      memory: 8Gi
+    limits:
+      cpu: "1"      # Reduced limit
+      memory: 16Gi
   flags:
   image:
     # both downstream infernece-scheduler and upstream epp image can support inference-scheduling example

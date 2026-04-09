@@ -4,10 +4,10 @@ gateway:
   gatewayParameters:
     resources:
       limits:
-        cpu: "16"
+        cpu: "2"
         memory: 16Gi
       requests:
-        cpu: "4"
+        cpu: "1"
         memory: 4Gi
     istio:
       accessLogging: false # default to false for production deployments in llm-d

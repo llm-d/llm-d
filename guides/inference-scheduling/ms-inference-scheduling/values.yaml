@@ -33,7 +33,20 @@ decode:
   parallelism:
     tensor: 2
     data: 1
-  replicas: 8
+  replicas: 4
+  # OpenShift security context configuration
+  securityContext:
+    runAsNonRoot: true
+    seccompProfile:
+      type: RuntimeDefault
+  containerSecurityContext:
+    allowPrivilegeEscalation: false
+    runAsNonRoot: true
+    seccompProfile:
+      type: RuntimeDefault
+    capabilities:
+      drop:
+        - ALL
   monitoring:
     podmonitor:
       enabled: true
