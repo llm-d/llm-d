@@ -65,7 +65,7 @@ helm install my-inference-pool \
 
 - The InferencePool `my-inference-pool` is deployed and will add all pods with labels `app=my-model`.
 - The EPP is deployed with the default configuration (which uses prefix-cache aware and load-aware balancing).
-- The Proxy is deployed a sidecar in the EPP pod.
+- The Proxy is deployed as a sidecar in the EPP pod.
 
 
 Next, deploy a Model Server (in this case, 2 replicas of vLLM running `openai/gpt-oss-20b`):
