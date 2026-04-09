@@ -39,7 +39,8 @@ A Kubernetes cluster with:
 - [Helm](https://helm.sh/docs/intro/install/)
 - [jq](https://jqlang.org/download/)
 
-> Note: the example below uses a NVIDIA GPU deployment for vLLM, but you can leverage the vLLM Simulator (`ghcr.io/llm-d/llm-d-inference-sim:latest`) for basic CPU based testing.
+> [!NOTE]
+> The example below uses a NVIDIA GPU deployment for vLLM, but you can leverage the vLLM Simulator (`ghcr.io/llm-d/llm-d-inference-sim:latest`) for basic CPU based testing.
 
 ## Install
 
