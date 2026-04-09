@@ -4,13 +4,11 @@ High-level guide to llm-d architecture. Start here, then dive into specific guid
 
 ## Core
 
-llm-d has a layers architecture, providing maximum flexibility for deployment automation and infrastructure selection.
-
 At it core, llm-d contains the following key layers:
 
-- **Proxy** - The Proxy accepts requests from the users. It can be deployed as a Standalone Envoy Proxy or via Kuberentes Gateway API. The Proxy consults an EndPoint Picker (EPP) via the ext-proc protocol to determine which pod
+- **Proxy** - Accepts requests from the users. It can be deployed as a Standalone Envoy Proxy or via Kuberentes Gateway API. The Proxy consults an EndPoint Picker (EPP) via the ext-proc protocol to determine which Model Server is optimal for a request.
 
-- **EndPoint Picker (EPP)** - An extendable component that selects which endpoint in an `InferencePool` is optimal for an specific request. The EPP is the "brains" of the scheduling decision that considers prefix-cache affinity, load signals, and (optionally) disaggregated serving.
+- **EndPoint Picker (EPP)** - Selects which endpoint in an `InferencePool` is optimal for an specific request. The EPP is the "brains" of the scheduling decision that considers prefix-cache affinity, load signals, prioritziation, and (optionally) disaggregated serving.
 
 - **InferencePool** - The InferencePool API defines a group of Model Server Pods dedicated to serving AI models. An InferencePool is conceptually similar to a Kuberentes Service. Each InferencePool has an associated EPP which selects the optimal pod for a request.
 
@@ -47,7 +45,7 @@ In addition, the EPP can also query "consultant" components which can execute ar
 
 ![Consultant](../../assets/consultant-architecture.svg)
 
-Examples of this include:
+For more details on example "Consultants", see:
 - [Latency Predictor](advanced/latency-predictor.md), which trains an XGBoost model online (using measured latency of previous requests) for scheduling decisions
 - [KV-Cache Indexer](advanced/kv-indexer.md), which maintains a globally consistent view of each Model Server's KV cache state (which can outperform the EPP's approximated view for multi-modal and hybrid models) that can be used as a scorer (in place of the approximated one built into the EPP)
 
