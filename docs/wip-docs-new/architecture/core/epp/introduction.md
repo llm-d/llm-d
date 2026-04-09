@@ -65,7 +65,7 @@ Flow control's primary purpose is to manage the admission, queuing, and dispatch
 
 - Priority-Based Queuing: It categorizes traffic into "Priority Bands." Real-time, latency-sensitive tasks (like chat) are prioritized over batch background tasks (like summarization). 
 
-- Resource Fairness: It prevents "noisy neighbor" scenarios by isolating traffic streams, ensuring a single flow (e.g., a user or application) cannot monopolize all available inference slots. Fairness is configurable via two pluggable policies: FairnessPolicy governs governs the distribution of dispatch opportunities among competing Flows within the same priority band (e.g., Round Robin), and OrderingPolicy plugins customizes ordering of requests within a flow (e.g., FIFO, SLO-based).
+- Resource Fairness: It prevents "noisy neighbor" scenarios by isolating traffic streams, ensuring a single flow (e.g., a user or application) cannot monopolize all available inference slots. Fairness is configurable via two pluggable policies: FairnessPolicy governs the distribution of dispatch opportunities among competing Flows within the same priority band (e.g., Round Robin), and OrderingPolicy plugins customizes ordering of requests within a flow (e.g., FIFO, SLO-based).
 
 - Dynamic Dispatching: It monitors saturation to send requests to model servers only when they are ready to process them.
 
