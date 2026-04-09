@@ -73,7 +73,7 @@ See [Flow Control](flow-control.md) for more detailson the design.
 
 #### Scheduler (Extensible)
 
-The scheduler acts as the core decision-making engine for intelligent request scheduling. It operates through a modular Filter → Score → Pick pipeline orchestrated by a ProfileHandler, allowing it to evaluate and select the most suitable model server endpoints for each incoming request. 
+The scheduler acts as the core decision-making engine for intelligent request scheduling. It operates through a modular Filter → Score → Pick plugins pipeline orchestrated by a ProfileHandler plugin, allowing it to evaluate and select the most suitable model server endpoints for each incoming request. 
 
 By leveraging custom plugins at each stage—filtering out unavailable endpoints, scoring them based on metrics like "least-loaded" or "affinity," and picking final candidates—the scheduler ensures high performance and efficient resource distribution across inference pools.
 
