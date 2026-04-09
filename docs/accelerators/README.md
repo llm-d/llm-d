@@ -14,7 +14,7 @@ Maintainers for each accelerator type are listed below. See our well-lit path gu
 | Intel | XPU | Yuan Wu (@yuanwu2017, <yuan.wu@intel.com>) | [Inference Scheduling](../../guides/inference-scheduling/README.md), [Prefill/Decode Disaggregation](../../guides/pd-disaggregation/README.md) |
 | Intel | HPU | Sakari Poussa (@poussa, <sakari.poussa@intel.com>) | [Inference Scheduling](../../guides/inference-scheduling/README.md) |
 | NVIDIA | GPU | Will Eaton (<weaton@redhat.com>), Greg (<grpereir@redhat.com>) | All |
-| Rebellions | ATOM NPU | Jinmoo Seok (@rebel-jinmoo, <jinmoo_seok@rebellions.ai>), Minwook Ahn (@rebel-minwook, <minwook.ahn@rebellions.ai>) | [Inference Scheduling](../../guides/inference-scheduling/README.md) |
+| Rebellions | ATOM | Jinmoo Seok (@rebel-jinmoo, <jinmoo_seok@rebellions.ai>), Minwook Ahn (@rebel-minwook, <minwook.ahn@rebellions.ai>) | [Inference Scheduling](../../guides/inference-scheduling/README.md) |
 
 ## Requirements
 
