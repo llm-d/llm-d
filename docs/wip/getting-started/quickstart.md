@@ -1,0 +1,156 @@
+# Quickstart
+
+This is a quickstart for deploying a "hello, world" llm-d deployment with a **standalone Envoy proxy**.
+
+> Looking for production deployment with a Gateway API instead? See the [Gateway Configuration Guide](XXXX) for more details.
+
+## Request Flow
+
+In the llm-d architecture, requests flow in the following way:
+- Client sends a request (e.g. `/v1/chat/completions`) to the Envoy Proxy
+- The Proxy queries the EndpointPicker which selects the optimal replica to process the request from the InferencePool
+- Sends the request to the vLLM pod in the InferencePool, which processes the query
+
+```
+        ┌─────────┐
+        │ Client  │
+        └────┬────┘
+             │
+             ▼     
+        ┌─────────┐      ┌─────┐
+        │  Proxy  │◄────►│ EPP │
+        └────┬────┘      └─────┘
+             │           
+             ▼
+  ┌────────────────────────────────┐
+  │         InferencePool          │
+  │                                │
+  │  ┌──────┐ ┌──────┐   ┌──────┐  │ 
+  │  │ vLLM │ │ vLLM │...│ vLLM │  │
+  │  └──────┘ └──────┘   └──────┘  │
+  └────────────────────────────────┘
+```
+
+## Prerequisites
+
+A Kubernetes cluster with:
+- Support for one of the three most recent Kubernetes minor [releases](https://kubernetes.io/releases/).
+- [Helm](https://helm.sh/docs/intro/install/)
+- [jq](https://jqlang.org/download/)
+
+> Note: the example below uses a NVIDIA GPU deployment for vLLM, but you can leverage the vLLM Simulator (`ghcr.io/llm-d/llm-d-inference-sim:latest`) for basic CPU based testing.
+
+## Install
+
+llm-d leverages the APIs defined by Gateway API Inference Extension. Install them:
+
+```bash
+kubectl apply -k https://github.com/kubernetes-sigs/gateway-api-inference-extension/config/crd
+```
+
+## Deploy
+
+First, deploy the Proxy, InferencePool and EPP:
+
+```bash
+export STANDALONE_CHART_VERSION=v0
+
+helm install my-inference-pool \
+  --dependency-update \
+  --set inferencePool.modelServers.matchLabels.app=my-model \
+  --version $STANDALONE_CHART_VERSION \
+  oci://us-central1-docker.pkg.dev/k8s-staging-images/gateway-api-inference-extension/charts/standalone
+```
+
+- The InferencePool `my-inference-pool` is deployed and will add all pods with labels `app=my-model`.
+- The EPP is deployed with the default configuration (which uses prefix-cache aware and load-aware balancing).
+- The Proxy is deployed a sidecar in the EPP pod.
+
+
+Next, deploy a Model Server (in this case, 2 replicas of vLLM running `openai/gpt-oss-20b`):
+
+```bash
+kubectl apply -f - <<'EOF'
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: my-model
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      # Used by the InferencePool for service discovery
+      app: my-model
+  template:
+    metadata:
+      labels:
+        app: my-model
+        # Used by the InferencePool for selecting the metrics mapping
+        inference.networking.k8s.io/engine-type: vllm
+    spec:
+      containers:
+        - name: vllm
+          image: "vllm/vllm-openai:latest"
+          imagePullPolicy: Always
+          command: ["vllm serve openai/gpt-oss-20b"]
+          ports:
+            - containerPort: 8000
+              name: http
+              protocol: TCP
+          resources:
+            limits:
+              nvidia.com/gpu: 1
+              ephemeral-storage: "100Gi"
+            requests:
+              nvidia.com/gpu: 1
+              ephemeral-storage: "100Gi"
+EOF
+```
+
+- A deployment with 2 replicas of vLLM is created
+- The Model Servers are automatically added to the `my-inference-pool` InferencePool via the `app:my-model` selector.
+
+
+## Make a Request
+
+Install the curl pod.
+
+```bash
+cat <<EOF | kubectl apply -f -
+apiVersion: v1
+kind: Pod
+metadata:
+  name: curl
+  labels:
+    app: curl
+spec:
+  containers:
+  - name: curl
+    image: curlimages/curl:7.83.1
+    imagePullPolicy: IfNotPresent
+    command:
+      - tail
+      - -f
+      - /dev/null
+  restartPolicy: Never
+EOF
+```
+
+Send an inference request.
+
+```bash
+kubectl exec curl -- curl -i http://xxx:8081/v1/chat/completions \
+  xxx
+  xxx
+```
+
+## Cleanup
+
+Run the following commands to remove all resources created by this guide.
+
+```bash
+helm uninstall my-inference-pool
+kubectl delete deployments my-model
+kubectl delete -k https://github.com/kubernetes-sigs/gateway-api-inference-extension/config/crd --ignore-not-found
+kubectl delete pod curl --ignore-not-found
+```
