@@ -1,4 +1,4 @@
-## Configuration
+## EPP Configuration
 
 The `EndpointPickerConfig` is used to cofigure the EPP deployment.
 
