@@ -78,9 +78,9 @@ kubectl apply -f https://github.com/kubernetes-sigs/gateway-api-inference-extens
 
 ### Deploying an InferencePool
 
-An instance of an InferencePool and associated EPP can be deployed using the Helm charts from the Gateway API Inference Extension project:
-- [Chart For Deployment with Gateway API](https://github.com/kubernetes-sigs/gateway-api-inference-extension/tree/main/config/charts/inferencepool)
+An instance of an InferencePool and associated EPP can be deployed using the Helm charts:
 - [Chart For Deployment with Standalone Envoy Proxy](https://github.com/kubernetes-sigs/gateway-api-inference-extension/tree/main/config/charts/standalone)
+- [Chart For Deployment with Gateway API](https://github.com/kubernetes-sigs/gateway-api-inference-extension/tree/main/config/charts/inferencepool)
 
 #### Helm Values
 
@@ -105,13 +105,13 @@ Configuration is split into two sections in the Helm values file:
 | `tracing.enabled` | Enable OpenTelemetry distributed tracing | `false` |
 | `monitoring.prometheus.enabled` | Enable Prometheus metrics scraping | `true` |
 
-> See [epp/introduction.md](EPP) for more details on `inferenceExtension` design and configuration 
+> See [epp/README.md](EPP) for more details on `inferenceExtension` design and configuration 
 
 #### Connecting to a Proxy
 
 #### Standalone
 
-When using standalone Envoy proxy, the InferencePool and EPP can be configured using the same APIs.
+When using a Standalone Envoy proxy, the InferencePool and EPP can be deployed via Helm.
 
 ```bash
  helm install my-infpool \
@@ -121,7 +121,7 @@ When using standalone Envoy proxy, the InferencePool and EPP can be configured u
 
 > Note that in the in the "Standalone" deployment, the Envoy proxy is deployed as a sidecar to the EPP via the above Chart.
 
-See the [GAIE GitHub](https://github.com/kubernetes-sigs/gateway-api-inference-extension/tree/main/config/charts/standalone) for the full Helm Chart configuration details.
+See the [full Helm Chart](https://github.com/kubernetes-sigs/gateway-api-inference-extension/tree/main/config/charts/standalone) for configuration details.
 
 ##### Gateway API
 
@@ -163,4 +163,5 @@ helm install my-infpool \
 
 > Note that the Gateway providers and Gateway provider specific resources (e.g. the `HTTPRoute`) are deployed independently.
 
-See the [full Helm Chart](https://github.com/kubernetes-sigs/gateway-api-inference-extension/tree/main/config/charts/inferencepool) for configuration details.
+- See the [full Helm Chart](https://github.com/kubernetes-sigs/gateway-api-inference-extension/tree/main/config/charts/inferencepool) for configuration details.
+- See the [Gateway API guides](../../guides/deploying-a-proxy/gateway.md) for more details on Gateway API.
