@@ -4,13 +4,13 @@
 
 An [InferencePool](https://gateway-api-inference-extension.sigs.k8s.io/api-types/inferencepool/) is a Kubernetes custom resource defined by the Gateway API Inference Extension project. In the llm-d architecture, the InferencePool is the set of Model Servers that an EPP (Endpoint Picker Pod) considers in routing a request.
 
-All Pods within an InferencePool share the same:
+All Model Server Pods within an InferencePool share the same:
 - **Compute configuration** (CPU, memory, GPU resources)
 - **Accelerator type** (e.g., NVIDIA H100, AMD MI300X, Google TPUv6e)
 - **Model server** (vLLM or SGLang)
 - **Model** (e.g. `openai/gpt-oss-120`)
 
-The EPP uses the InferencePool to discover available Model Server pods and intelligently route requests to the optimal replica based on metrics like KV-cache utilization, queue depth, and prefix cache hits. Each EPP is associated with a single InferencePool, specified by the `poolName` and `poolNamespace` flags.
+The EPP uses the InferencePool to discover available Model Server pods and intelligently route requests to the optimal replica based on metrics like KV-cache utilization, queue depth, and prefix cache hits. Each EPP is associated with a single InferencePool.
 
 ## Design
 
