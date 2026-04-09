@@ -10,7 +10,7 @@ This is a quickstart for deploying a "hello, world" llm-d deployment with a **st
 In the llm-d architecture, requests flow in the following way:
 - Client sends a request (e.g. `/v1/chat/completions`) to the Envoy Proxy
 - The Proxy queries the EndpointPicker which selects the optimal replica to process the request from the InferencePool
-- Sends the request to the vLLM pod in the InferencePool, which processes the query
+- The Proxy sends the request to the vLLM pod in the InferencePool, which processes the query
 
 ```
         ┌─────────┐
