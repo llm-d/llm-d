@@ -16,13 +16,18 @@ At it core, llm-d contains the following key layers:
 
 - **Model Server** - The Model Server (like vLLM or SGLang) executes the model on hardware accelerators. The Model Servers can be deployed through any deployment process, joining an `InferencePool` via Kuberentes labels and selectors.
 
+
 ![Basic architecture](../../assets/basic-architecture.svg)
 
-Via this simple architecture, llm-d injects LLM-aware load balancing into production-quality request routing.
+For more details on the core components, see:
+- [Proxy](core/proxy.md)
+- [EPP](core/epp/epp.md)
+- [InferencePool](core/epp/inferencepool.md)
+- [Model Server](core/epp/model-servers.md)
 
 ## Advanced Patterns
 
-Beyond the core pattern, llm-d's core design composes with optional advanced deployment patterns, which can be classified in the following types:
+llm-d's core design can be extended with optional advanced patterns, which can be classified in the following types:
 
 ### Disaggregation
 
@@ -34,15 +39,18 @@ See [Disaggregation](advanced/disaggregation.md) for complete details on the dis
 
 ### EPP "Consultants"
 
-In addition to leveraging the Model Server metrics and in-memory prefix-cache trees, the EPP can also call out to sidecar "consultant" pods which can execute more complicated scheduling decisions.
+By default, the llm-d EPP leverages scorers that are used to selecting the optimal pod, leveraging:
+- The Model Server's exported Prometheus metrics
+- In-memory data structures (most notably, a prefix-cache tree that approximates the KV cache state of each pod)
+
+In addition, the EPP can also query "consultant" components which can execute arbitrary scoring logic, enabling more sophisticated patterns. 
 
 ![Consultant](../../assets/consultant-architecture.svg)
 
-
 Examples of this include:
 - [Latency Predictor](advanced/latency-predictor.md), which trains an XGBoost model online (using measured latency of previous requests) for scheduling decisions
-- [KV-Cache Indexer](advanced/kv-indexer.md), which maintains a globally consistent view of each Model Server's KV cache state (which can outperform the EPP's approximated view for multi-modal and hybrid models)
+- [KV-Cache Indexer](advanced/kv-indexer.md), which maintains a globally consistent view of each Model Server's KV cache state (which can outperform the EPP's approximated view for multi-modal and hybrid models) that can be used as a scorer (in place of the approximated one built into the EPP)
 
 ### Autoscaling
 
-- TBU
+- TO BE UPDATED
