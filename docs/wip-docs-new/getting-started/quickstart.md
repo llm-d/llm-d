@@ -50,7 +50,7 @@ kubectl apply -k https://github.com/kubernetes-sigs/gateway-api-inference-extens
 
 ## Deploy
 
-First, deploy the Proxy, InferencePool and EPP:
+First, deploy the llm-d inference scheduler, you need one per InferencePool:
 
 ```bash
 export STANDALONE_CHART_VERSION=v0
@@ -66,6 +66,9 @@ helm install my-inference-pool \
 - The EPP is deployed with the default configuration (which uses prefix-cache aware and load-aware balancing).
 - The Proxy is deployed as a sidecar in the EPP pod.
 
+```
+>> TODO: kubectl view the resources
+```
 
 Next, create the model servers Deployment (in this case, 2 replicas of vLLM running `openai/gpt-oss-20b`):
 
@@ -110,6 +113,10 @@ EOF
 - A deployment with 2 replicas of vLLM is created
 - The model servers pods are automatically discovered by the EPP via the `app:my-model` selector.
 
+```
+>> TODO: kubectl view the resources, and show they were added to the InfPool
+```
+
 
 ## Make a Request
 
@@ -139,9 +146,7 @@ EOF
 Send an inference request.
 
 ```bash
-kubectl exec curl -- curl -i http://xxx:8081/v1/chat/completions \
-  xxx
-  xxx
+>> TODO: write an inference request
 ```
 
 ## Cleanup

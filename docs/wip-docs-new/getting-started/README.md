@@ -59,7 +59,7 @@ llm-d uses a layered, composable architecture:
 
 ![Architecture](../../assets/basic-architecture.svg)
 
-| Layer | Role |
+| Component | Role |
 |---|---|
 | **[Proxy](../architecture/core/proxy.md)** | Deployed via Kubernetes Gateway API or standalone Envoy Proxy. |
 | **[Endpoint Picker (EPP)](../architecture/core/epp/introduction.md)** | The scheduling brain — scores and selects the optimal backend for each request using a plugin pipeline of filters, scorers, and pickers. |
