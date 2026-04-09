@@ -4,9 +4,9 @@ llm-d is a high-performance distributed inference serving stack optimized for pr
 
 ## Why llm-d?
 
-### Systems-Level Optimization
+### Distributed Performance Optimization
 
-Model Servers like [vLLM](https://github.com/vllm-project/vllm) and [SGLang](https://github.com/sgl-project/sglang) optimize individual nodes, llm-d is a distributed inference framework the implements key LLM-aware distribtued optimizations to serve at scale, including LLM-aware load balancing and request prioritization, distributed caching, disaggregated serving, multi-node WideEP, and autoscaling — so you can serve high-scale production traffic efficiently and reliably.
+While model servers like [vLLM](https://github.com/vllm-project/vllm) and [SGLang](https://github.com/sgl-project/sglang) optimize individual nodes, llm-d orchestates multiple model server pods to implement key distribtued optimizations to serve at scale, including LLM-aware load balancing and request prioritization, distributed KV caching, disaggregated serving, multi-node "wide EP", and autoscaling — so you can serve high-scale production traffic efficiently and reliably.
 
 ### Vendor-Neutral and Engine-Agnostic
 
@@ -15,7 +15,6 @@ llm-d is a [CNCF sandbox project](https://www.cncf.io/) that supports multiple i
 ### Kubernetes-Native
 
 llm-d integrates with standard Kubernetes primitives — Gateway API, Custom Resources, Labels, and HPA — rather than introducing a new orchestration layers or CRDs. If you already run workloads on Kubernetes, llm-d fits naturally into your infrastructure.
-
 
 ## Key Capabilities
 
@@ -58,26 +57,25 @@ Two complementary autoscaling patterns:
 
 llm-d uses a layered, composable architecture:
 
-```
-Client Request → Proxy → Endpoint Picker (EPP) → InferencePool → Model Servers
-```
+![Architecture](../../assets/basic-architecture.svg)
 
 | Layer | Role |
 |---|---|
 | **[Proxy](../architecture/core/proxy.md)** | Deployed via Kubernetes Gateway API or standalone Envoy Proxy. |
-| **[Endpoint Picker (EPP)](../architecture/core/epp.md)** | The scheduling brain — scores and selects the optimal backend for each request using a plugin pipeline of filters, scorers, and pickers. |
+| **[Endpoint Picker (EPP)](../architecture/core/epp/introduction.md)** | The scheduling brain — scores and selects the optimal backend for each request using a plugin pipeline of filters, scorers, and pickers. |
 | **[InferencePool](../architecture/core/inferencepool.md)** | A Kubernetes Custom Resource that groups model server pods sharing the same model and compute configuration. |
 | **[Model Servers](../architecture/core/model-servers.md)** | vLLM or SGLang instances running models on accelerators. |
 
-For a deeper dive, see the [Architecture Overview](../architecture/introduction.md).
+See the [Architecture Overview](../architecture/introduction.md) for a deeper dive into the architecture.
 
 ## Well-Lit Paths
 
-In addition to the software components, llm-d provides **Well-Lit Paths** — tested, benchmarked deployment recipes for common production patterns. Each path includes:
+In addition to the software components, llm-d provides **Well-Lit Paths** — tested, benchmarked deployment recipes for common production patterns. These paths are starting points designed to be adapted for your models, hardware, and traffic patterns.
 
+Each path includes:
 - Deployable Helm charts and Kustomize manifests
 - Key configuration knobs for performance tuning
 - Sample workloads and benchmarks against baseline setups
 - Monitoring and observability configuration
 
-These paths are starting points designed to be adapted for your models, hardware, and traffic patterns. See the [Well-Lit Paths](../well-lit-paths/introduction.md) for current engine and accelerator coverage.
+See the [Well-Lit Paths](../well-lit-paths/introduction.md) for current engine and accelerator coverage.
