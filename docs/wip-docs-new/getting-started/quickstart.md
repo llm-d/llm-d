@@ -64,7 +64,7 @@ helm install my-inference-pool \
   oci://us-central1-docker.pkg.dev/k8s-staging-images/gateway-api-inference-extension/charts/standalone
 ```
 
-- The InferencePool `my-inference-pool` is deployed and will add all pods with labels `app=my-model`.
+- The inference scheduler for a pool named `my-inference-pool` is deployed and will add all pods with labels `app=my-model`.
 - The EPP is deployed with the default configuration (which uses prefix-cache aware and load-aware balancing).
 - The Proxy is deployed as a sidecar in the EPP pod.
 
