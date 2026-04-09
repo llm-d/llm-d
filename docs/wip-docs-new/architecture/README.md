@@ -19,7 +19,7 @@ At it core, llm-d contains the following key layers:
 
 For more details on the core components, see:
 - [Proxy](core/proxy.md)
-- [EPP](core/epp/epp.md)
+- [EPP](core/epp/README.md)
 - [InferencePool](core/epp/inferencepool.md)
 - [Model Server](core/epp/model-servers.md)
 

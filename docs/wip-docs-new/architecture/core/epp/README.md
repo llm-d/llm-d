@@ -25,7 +25,7 @@ The steps are:
 1. **Request arrival** -- An inference request arrives at the proxy (Gateway).
 2. **External processing** -- The proxy invokes the EPP via the ext-proc protocol, passing the request headers and body to the EPP.
 3. **Request handling** -- Parses the request (from e.g. OpenAI format, vllm gRPC) into the internal request data structure.
-3. **Flow control** -- If (optionally) enabled, queues requests and prioritizes among different priorities and ensures fairness across different tenants within a priority, and holding requests when the pool is "saturated".
+3. **Flow control** -- If enabled, queues requests and prioritizes and ensures fairness across different tenants within a priority, and holding requests when the pool is "saturated".
 4. **Scheduling** -- Selecting the optimal endpoint from the available InferencePool, which involves evaluating each request against a configured set of scheduling plugins, such as filters and scorers.
 7. **Request Proxying** -- The EPP returns the address of the selected endpoint to the proxy, which then forwards the request to the corresponding model server endpoint.
 
