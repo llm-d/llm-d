@@ -14,7 +14,7 @@ For endpoint discovery, you have two options:
 
 ## Prerequisites
 
-A cluster with:
+A Kubernetes cluster with:
 - Support for one of the three most recent Kubernetes minor [releases](https://kubernetes.io/releases/).
 - Support for services of type `LoadBalancer`. For [kind](https://kind.sigs.k8s.io/) (Kubernetes IN Docker) clusters, follow [this guide](https://kind.sigs.k8s.io/docs/user/loadbalancer) to get services of type LoadBalancer working.
 - Support for [sidecar containers](https://kubernetes.io/docs/concepts/workloads/pods/sidecar-containers/) (enabled by default since Kubernetes v1.29) to run the model server deployment.
@@ -25,13 +25,11 @@ Tools:
 
 ## Deploy Model Server
 
-GPU-Based vLLM Deployment
-
 For this setup, you will need 3 GPUs to run the sample model server (one GPU per replica). Adjust the number of replicas as needed based on your available GPU resources.
 
 Create a Hugging Face secret to download the model [Qwen/Qwen3-32B](https://huggingface.co/Qwen/Qwen3-32B). You'll need a Hugging Face account and access token - see the [Hugging Face security tokens documentation](https://huggingface.co/docs/hub/security-tokens) for setup instructions. Ensure that the token grants access to this model (you may need to request access for gated models).
 
-Deploy a sample vLLM deployment with the proper protocol to work with the LLM Instance Gateway.
+Deploy a sample vLLM deployment:
 
 ```bash
 kubectl create secret generic hf-token --from-literal=token=$HF_TOKEN # Your Hugging Face Token with access to the set of Qwen models
