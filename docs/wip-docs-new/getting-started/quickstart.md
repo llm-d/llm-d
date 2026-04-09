@@ -24,8 +24,6 @@ In the llm-d architecture, requests flow in the following way:
              │           
              ▼
   ┌────────────────────────────────┐
-  │         InferencePool          │
-  │                                │
   │  ┌──────┐ ┌──────┐   ┌──────┐  │ 
   │  │ vLLM │ │ vLLM │...│ vLLM │  │
   │  └──────┘ └──────┘   └──────┘  │
