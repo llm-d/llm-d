@@ -14,6 +14,7 @@ Maintainers for each accelerator type are listed below. See our well-lit path gu
 | Intel | XPU | Yuan Wu (@yuanwu2017, <yuan.wu@intel.com>) | [Inference Scheduling](../../guides/inference-scheduling/README.md), [Prefill/Decode Disaggregation](../../guides/pd-disaggregation/README.md) |
 | Intel | HPU | Sakari Poussa (@poussa, <sakari.poussa@intel.com>) | [Inference Scheduling](../../guides/inference-scheduling/README.md) |
 | NVIDIA | GPU | Will Eaton (<weaton@redhat.com>), Greg (<grpereir@redhat.com>) | All |
+| Rebellions | ATOM NPU | Jinmoo Seok (@rebel-jinmoo, <jinmoo_seok@rebellions.ai>), Minwook Ahn (@rebel-minwook, <minwook.ahn@rebellions.ai>) | [Inference Scheduling](../../guides/inference-scheduling/README.md) |
 
 ## Requirements
 
@@ -52,6 +53,7 @@ Each vendor provides Device Plugins for their accelerators. The following plugin
 - [Intel XPU Device Plugin](https://github.com/intel/intel-device-plugins-for-kubernetes/blob/main/cmd/gpu_plugin/README.md)
 - [Intel Gaudi Device Plugin](https://docs.habana.ai/en/latest/Installation_Guide/Additional_Installation/Kubernetes_Installation/Intel_Gaudi_Kubernetes_Device_Plugin.html)
 - [NVIDIA GPU Device Plugin](https://github.com/NVIDIA/k8s-device-plugin)
+- [Rebellions NPU Operator](https://docs.rbln.ai/latest/software/system_management/kubernetes/about_npu_operator.html)
 
 ### Dynamic Resource Allocation
 
