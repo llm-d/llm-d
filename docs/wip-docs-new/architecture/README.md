@@ -31,8 +31,6 @@ llm-d's core design can be extended with optional advanced patterns, which can b
 
 In disaggregated serving, a single inference request is split into multiple steps (e.g. Prefill phase and Decode phase). llm-d's EPP supports the concept of disaggregation and leverages the protocols of the Model Servers (vLLM and SGLang) to execute the multi-step inference process.
 
-![Basic disagg](../../assets/disagg-architecture.svg)
-
 See [Disaggregation](advanced/disaggregation.md) for complete details on the disaggregated serving design.
 
 ### EPP "Consultants"
@@ -41,11 +39,7 @@ By default, the llm-d EPP leverages scorers that are used to selecting the optim
 - The Model Server's exported Prometheus metrics
 - In-memory data structures (most notably, a prefix-cache tree that approximates the KV cache state of each pod)
 
-In addition, the EPP can also query "consultant" components which can execute arbitrary scoring logic, enabling more sophisticated patterns. 
-
-![Consultant](../../assets/consultant-architecture.svg)
-
-For more details on example "Consultants", see:
+In addition, the EPP can also query "consultant" components which can execute arbitrary scoring logic, enabling more sophisticated patterns. For more details on example "Consultants", see:
 - [Latency Predictor](advanced/latency-predictor.md), which trains an XGBoost model online (using measured latency of previous requests) for scheduling decisions
 - [KV-Cache Indexer](advanced/kv-indexer.md), which maintains a globally consistent view of each Model Server's KV cache state (which can outperform the EPP's approximated view for multi-modal and hybrid models) that can be used as a scorer (in place of the approximated one built into the EPP)
 
