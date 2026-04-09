@@ -61,7 +61,7 @@ See [Request Handling](request-handling.md) for more details on the design.
 
 Flow control's primary purpose is to manage the admission, queuing, and dispatching of requests to prevent overloading backend model servers while ensuring fairness and priority. Specifically:
 
-- Admission Control & Throttling: Rather than allowing the inference pool to be overwhelmed, it intercepts incoming requests and holds them in an in-memory queue if saturation is reached, avoiding to overwhelm the backends. This is configurable via SaturationDetector plugins (such as concurrency, which is based on active in-flight requests accounting per endpoint) 
+- Admission Control & Throttling: Rather than allowing the inference pool to be overwhelmed, it intercepts incoming requests and holds them in an in-memory queue if saturation is reached. This is configurable via `SaturationDetector` plugins (such as the Concurrency plugin, which is based on active in-flight requests accounting per endpoint) 
 
 - Priority-Based Queuing: It categorizes traffic into "Priority Bands." Real-time, latency-sensitive tasks (like chat) are prioritized over batch background tasks (like summarization). 
 
