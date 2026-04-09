@@ -1,19 +1,17 @@
 ```
 .
 ├── getting-started
-│   ├── introduction.md
-│   ├── quickstart
-│   │   ├── standalone.md
-│   │   ├── gateway.md
+│   ├── getting-started.md
+│   ├── quickstart.md
 │   ├── feature-matrix.md
 │   └── artifacts.md
 ├── architecture
-│   ├── introduction.md
+│   ├── architecture.md
 │   ├── core
 │   │   ├── proxy.md
 │   │   ├── inferencepool.md
 │   │   ├── epp
-|   │   │   ├── introduction.md
+|   │   │   ├── epp.md
 |   │   │   ├── scheduling.md
 |   │   │   ├── flow-control.md
 |   │   │   └── request-handling.md
@@ -21,13 +19,13 @@
 │   └── advanced
 │       ├── disaggregation.md
 │       ├── kv-indexer.md
+│       ├── kv-offloading.md
 │       ├── latency-predictor.md
 │       └── autoscaling
 │          ├── workload-variant-autoscaling.md
 │          └── igw-hpa.md
 ├── well-lit-paths
-│   ├── introduction.md
-│   ├── what-is-a-well-lit-path.md
+│   ├── well-lit-paths.md
 │   ├── intelligent-inference-scheduling
 │   │   ├── default.md
 │   │   ├── precise-prefix-cache-aware-routing.md
@@ -38,9 +36,11 @@
 │   ├── tiered-prefix-cache.md
 │   └── workload-autoscaling.md
 ├── user-guides
-│   ├── deploying-a-proxy
+│   ├── gateway
 │   │   ├── gateway.md
-│   │   ├── standalone.md
+│   │   ├── istio.md
+│   │   ├── gke.md
+│   │   ├── agentgateway.md
 │   ├── configuring-user-facing-apis.md
 │   ├── monitoring
 │   │   ├── metrics.md
