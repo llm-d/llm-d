@@ -1,4 +1,6 @@
-# KV-Cache Indexer
+THIS NEEDS TO BE UPDATED, WRITTEN BY CLAUDE
+
+# KV-Cache Indexer - [?]
 
 The KV-Cache Indexer enables precise prefix cache-aware routing in llm-d by maintaining a near-real-time view of KV-Cache block distribution across a fleet of Model Servers.
 

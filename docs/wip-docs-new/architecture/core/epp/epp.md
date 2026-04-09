@@ -69,7 +69,7 @@ Flow control's primary purpose is to manage the admission, queuing, and dispatch
 
 - Dynamic Dispatching: It monitors saturation to send requests to model servers only when they are ready to process them.
 
-See [Flow Control](flow-control.md) for more detailson the design.
+See [Flow Control](flow-control.md) for more details on the design.
 
 #### Scheduler (Extensible)
 
