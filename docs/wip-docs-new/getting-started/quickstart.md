@@ -2,6 +2,7 @@
 
 This is a quickstart for deploying a "hello, world" llm-d deployment with a **standalone Envoy proxy**.
 
+> [!NOTE]
 > Looking for production deployment with a Gateway API instead? See the [Gateway Configuration Guide](XXXX) for more details.
 
 ## Request Flow
