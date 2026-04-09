@@ -69,7 +69,7 @@ helm install my-inference-pool \
 - The Proxy is deployed as a sidecar in the EPP pod.
 
 
-Next, deploy a Model Server (in this case, 2 replicas of vLLM running `openai/gpt-oss-20b`):
+Next, create the model servers Deployment (in this case, 2 replicas of vLLM running `openai/gpt-oss-20b`):
 
 ```bash
 kubectl apply -f - <<'EOF'
