@@ -109,7 +109,7 @@ EOF
 ```
 
 - A deployment with 2 replicas of vLLM is created
-- The Model Servers are automatically added to the `my-inference-pool` InferencePool via the `app:my-model` selector.
+- The model servers pods are automatically discovered by the EPP via the `app:my-model` selector.
 
 
 ## Make a Request
