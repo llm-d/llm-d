@@ -50,8 +50,6 @@ kubectl apply -k https://github.com/kubernetes-sigs/gateway-api-inference-extens
 
 ## Deploy
 
-### 
-
 First, deploy the Proxy, InferencePool and EPP:
 
 ```bash
@@ -68,7 +66,6 @@ helm install my-inference-pool \
 - The EPP is deployed with the default configuration (which uses prefix-cache aware and load-aware balancing).
 - The Proxy is deployed a sidecar in the EPP pod.
 
-### Model Server
 
 Next, deploy a Model Server (in this case, 2 replicas of vLLM running `openai/gpt-oss-20b`):
 
