@@ -66,8 +66,23 @@ helm install my-inference-pool \
 - The EPP is deployed with the default configuration (which uses prefix-cache aware and load-aware balancing).
 - The Proxy is deployed as a sidecar in the EPP pod.
 
+Verify the resources were created:
+
+```bash
+kubectl get pods,svc,inferencepool
 ```
->> TODO: kubectl view the resources
+
+Expected output:
+
+```
+NAME                                        READY   STATUS    RESTARTS   AGE
+pod/my-inference-pool-epp-f7c47758d-tblr4   2/2     Running   0          21s
+
+NAME                            TYPE        CLUSTER-IP   EXTERNAL-IP   PORT(S)                      AGE
+service/my-inference-pool-epp   ClusterIP   10.16.2.57   <none>        9002/TCP,9090/TCP,8081/TCP   21s
+
+NAME                                                          AGE
+inferencepool.inference.networking.k8s.io/my-inference-pool   21s
 ```
 
 Next, create the model servers Deployment (in this case, 2 replicas of vLLM running `openai/gpt-oss-20b`):
@@ -95,7 +110,7 @@ spec:
         - name: vllm
           image: "vllm/vllm-openai:latest"
           imagePullPolicy: Always
-          command: ["vllm serve openai/gpt-oss-20b"]
+          command: ["vllm", "serve", "openai/gpt-oss-20b"]
           ports:
             - containerPort: 8000
               name: http
@@ -113,8 +128,18 @@ EOF
 - A deployment with 2 replicas of vLLM is created
 - The model servers pods are automatically discovered by the EPP via the `app:my-model` selector.
 
+Verify the model server pods are running and discovered by the InferencePool:
+
+```bash
+kubectl get pods -l app=my-model
 ```
->> TODO: kubectl view the resources, and show they were added to the InfPool
+
+Expected output:
+
+```
+NAME                        READY   STATUS    RESTARTS   AGE
+my-model-667dcf89f5-c4swt   1/1     Running   0          20s
+my-model-667dcf89f5-tkzgh   1/1     Running   0          20s
 ```
 
 
@@ -143,10 +168,35 @@ spec:
 EOF
 ```
 
-Send an inference request.
+Send an inference request:
 
 ```bash
->> TODO: write an inference request
+kubectl exec curl -- curl -s http://my-inference-pool-epp:8081/v1/chat/completions \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "model": "openai/gpt-oss-20b",
+    "messages": [{"role": "user", "content": "Hello, who are you?"}],
+    "max_tokens": 50
+  }'
+```
+
+Expected output:
+
+```json
+{
+  "id": "chatcmpl-...",
+  "model": "openai/gpt-oss-20b",
+  "choices": [
+    {
+      "index": 0,
+      "finish_reason": "stop",
+      "message": {
+        "role": "assistant",
+        "content": "..."
+      }
+    }
+  ]
+}
 ```
 
 ## Cleanup
