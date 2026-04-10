@@ -112,7 +112,7 @@ For OCI deployments, use `-e oci_amd` which configures SR-IOV RDMA networking an
 helmfile apply -e oci_amd -n ${NAMESPACE}
 ```
 
-OCI RDMA networking must be configured at the infrastructure level before deploying. Refer to the [OCI RDMA documentation](https://docs.oracle.com/en-us/iaas/Content/Compute/Tasks/managing-rdma-networking.htm).
+An OKE Cluster with RDMA networking must be deployed prior to launching llm-d on OCI. Refer to [the oci-hpc-oke stack](https://github.com/oracle-quickstart/oci-hpc-oke) for deployment.
 
 **_NOTE:_** The `NetworkAttachmentDefinition` name (`sriov-rdma-vf`) and `nvidia.com/sriov-rdma-vf` resource label in `ms-pd/values_oci_amd.yaml` must match your cluster's SR-IOV device plugin configuration.
 
