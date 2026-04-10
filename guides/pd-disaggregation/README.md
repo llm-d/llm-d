@@ -104,6 +104,23 @@ You can also customize your gateway, for more information on how to do that see 
 
 This guide uses RDMA via InfiniBand or RoCE for disaggregated serving kv-cache transfer. The resource attributes required to configure accelerator networking are not yet standardized via [Kubernetes Dynamic Resource Allocation](https://kubernetes.io/docs/concepts/scheduling-eviction/dynamic-resource-allocation/) and so are parameterized per infra provider in the Helm charts. If your provider has a custom setting you will need to update the charts before deploying.
 
+##### OCI (Oracle Cloud Infrastructure)
+
+For OCI deployments, use `-e oci_amd` which configures SR-IOV RDMA networking and OCI-specific UCX transport variables:
+
+```bash
+helmfile apply -e oci_amd -n ${NAMESPACE}
+```
+
+OCI RDMA networking must be configured at the infrastructure level before deploying. Refer to the [OCI RDMA documentation](https://docs.oracle.com/en-us/iaas/Content/Compute/Tasks/managing-rdma-networking.htm).
+
+**_NOTE:_** The `NetworkAttachmentDefinition` name (`sriov-rdma-vf`) and `nvidia.com/sriov-rdma-vf` resource label in `ms-pd/values_oci_amd.yaml` must match your cluster's SR-IOV device plugin configuration.
+
+**Common gotchas:**
+* If you change tensor parallelism, update both `podAnnotations` VF count and `nvidia.com/sriov-rdma-vf` resource requests to match
+* Wrong `UCX_IB_GID_INDEX` causes silent fallback to TCP — set `UCX_PROTO_INFO=y` to verify RDMA is selected
+* `IPC_LOCK` capability is required for RDMA pinned memory; without it NIXL transfers will fail
+
 ### Install HTTPRoute
 
 Follow provider specific instructions for installing HTTPRoute.

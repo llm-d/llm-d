@@ -23,6 +23,8 @@ environments:
       - ../prereq/gateway-provider/common-configurations/istio.yaml
   hpu: &HPU
     <<: *I
+  oci_amd: &OCI_AMD
+    <<: *I
   ocp: &OCP
     <<: *I
   aks: &AKS
@@ -77,7 +79,7 @@ releases:
               enabled: true
     {{- end }}
     # Apply destination rule for anything istio
-    {{- if or (eq .Environment.Name "istio") (eq .Environment.Name "default") (eq .Environment.Name "aks") (eq .Environment.Name "amd") (eq .Environment.Name "xpu") (eq .Environment.Name "hpu") (eq .Environment.Name "ocp") }}
+    {{- if or (eq .Environment.Name "istio") (eq .Environment.Name "default") (eq .Environment.Name "aks") (eq .Environment.Name "amd") (eq .Environment.Name "xpu") (eq .Environment.Name "hpu") (eq .Environment.Name "oci_amd") (eq .Environment.Name "ocp") }}
       - provider:
           name: {{ .Environment.Values.provider.name }}
           istio:
@@ -110,6 +112,8 @@ releases:
       - ms-pd/values_xpu.yaml
     {{- else if eq .Environment.Name "hpu" }}
       - ms-pd/values_hpu.yaml
+    {{- else if eq .Environment.Name "oci_amd" }}
+      - ms-pd/values_oci_amd.yaml
     {{- else if eq .Environment.Name "ocp" }}
       - ms-pd/values_ocp_rdma.yaml
     {{- else if eq .Environment.Name "gke_tpu" }}

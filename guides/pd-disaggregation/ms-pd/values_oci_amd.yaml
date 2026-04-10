@@ -1,0 +1,257 @@
+multinode: false
+
+# OCI OKE deployment of Llama-3.3-70B-Instruct-FP8-KV on BM.GPU.MI300X.8 nodes
+# Network: NVIDIA Network Operator SR-IOV VFs (nvidia.com/sriov-rdma-vf) over RoCE
+# Resource layout per BM.GPU.MI300X.8 node: 8x amd.com/gpu, 8x nvidia.com/sriov-rdma-vf
+# This config fills one node: 1 decode (TP=4, 4 GPU + 4 VF) + 4 prefill (TP=1, 1 GPU + 1 VF each)
+
+modelArtifacts:
+  uri: "hf://amd/Llama-3.3-70B-Instruct-FP8-KV"
+  size: 100Gi
+  authSecretName: "llm-d-hf-token"
+  name: "amd/Llama-3.3-70B-Instruct-FP8-KV"
+  labels:
+    llm-d.ai/inference-serving: "true"
+    llm-d.ai/guide: "pd-disaggregation"
+    llm-d.ai/hardware-variant: "gpu"
+    llm-d.ai/accelerator-vendor: "amd"
+    llm-d.ai/model: "Llama-3.3-70B-Instruct-FP8-KV"
+
+accelerator:
+  type: amd
+
+routing:
+  servicePort: 8000
+  proxy:
+    image: ghcr.io/llm-d/llm-d-routing-sidecar:v0.7.1
+    connector: nixlv2
+    secure: false
+
+decode:
+  create: true
+  parallelism:
+    tensor: 4
+    data: 1
+  replicas: 1
+  monitoring:
+    podmonitor:
+      enabled: true
+      portName: "vllm"
+      path: "/metrics"
+      interval: "30s"
+  podAnnotations:
+    # SR-IOV VFs via Multus CNI — 4 interfaces to match tensor parallelism (TP=4)
+    # The SriovNetwork CR "sriov-rdma-vf" is published to namespace "default"
+    k8s.v1.cni.cncf.io/networks: |
+      [
+        {"name":"sriov-rdma-vf","namespace":"default","interface":"net1"},
+        {"name":"sriov-rdma-vf","namespace":"default","interface":"net2"},
+        {"name":"sriov-rdma-vf","namespace":"default","interface":"net3"},
+        {"name":"sriov-rdma-vf","namespace":"default","interface":"net4"}
+      ]
+  containers:
+    - name: "vllm"
+      image: ghcr.io/llm-d/llm-d-rocm:v0.6.0
+      modelCommand: vllmServe
+      args:
+        - "--block-size"
+        - "128"
+        - "--kv-transfer-config"
+        - '{"kv_connector":"NixlConnector", "kv_role":"kv_both"}'
+        - "--disable-uvicorn-access-log"
+        - "--attention-backend"
+        - "ROCM_ATTN"  # required when prefill TP != decode TP
+        - "--max-model-len"
+        - "32000"
+      env:
+        - name: VLLM_NIXL_SIDE_CHANNEL_PORT
+          value: "5600"
+        - name: VLLM_NIXL_SIDE_CHANNEL_HOST
+          valueFrom:
+            fieldRef:
+              fieldPath: status.podIP
+        # UCX transport for OCI RoCE via SR-IOV VFs
+        # rc/ud = RDMA reliable/unreliable connected over RoCE, sm = shared memory, cuda_copy = fallback
+        - name: UCX_TLS
+          value: "rc,ud,sm,self,cuda_copy"
+        # RoCE v2 GID index — verify with: show_gids on the host; typically 3 on OCI
+        - name: UCX_IB_GID_INDEX
+          value: "3"
+      ports:
+        - containerPort: 8200
+          name: vllm
+          protocol: TCP
+        - containerPort: 5600
+          name: nixl
+          protocol: TCP
+      resources:
+        limits:
+          memory: 256Gi
+          cpu: "16"
+          # OCI SR-IOV RDMA VFs via NVIDIA Network Operator — 1 VF per GPU in TP group
+          nvidia.com/sriov-rdma-vf: "4"
+        requests:
+          memory: 256Gi
+          cpu: "16"
+          nvidia.com/sriov-rdma-vf: "4"
+      mountModelVolume: true
+      volumeMounts:
+        - name: metrics-volume
+          mountPath: /.config
+        - name: shm
+          mountPath: /dev/shm
+        - name: torch-compile-cache
+          mountPath: /.cache
+        - name: dev-infiniband
+          mountPath: /dev/infiniband
+      startupProbe:
+        httpGet:
+          path: /v1/models
+          port: vllm
+        initialDelaySeconds: 15
+        periodSeconds: 30
+        timeoutSeconds: 5
+        failureThreshold: 60
+      livenessProbe:
+        httpGet:
+          path: /health
+          port: vllm
+        periodSeconds: 10
+        timeoutSeconds: 5
+        failureThreshold: 3
+      readinessProbe:
+        httpGet:
+          path: /v1/models
+          port: vllm
+        periodSeconds: 5
+        timeoutSeconds: 2
+        failureThreshold: 3
+      # IPC_LOCK allows UCX/RDMA to lock memory pages (mlock) — required for SR-IOV RDMA on OCI
+      extraConfig:
+        securityContext:
+          capabilities:
+            add:
+            - "IPC_LOCK"
+  volumes:
+  - name: metrics-volume
+    emptyDir: {}
+  - name: shm
+    emptyDir:
+      medium: Memory
+      sizeLimit: "16Gi"
+  - name: torch-compile-cache
+    emptyDir: {}
+  - name: dev-infiniband
+    hostPath:
+      path: /dev/infiniband
+      type: Directory
+
+prefill:
+  create: true
+  parallelism:
+    tensor: 1
+  replicas: 4
+  monitoring:
+    podmonitor:
+      enabled: true
+      portName: "vllm"
+      path: "/metrics"
+      interval: "30s"
+  podAnnotations:
+    # SR-IOV VFs via Multus CNI — 1 interface to match tensor parallelism (TP=1)
+    k8s.v1.cni.cncf.io/networks: |
+      [
+        {"name":"sriov-rdma-vf","namespace":"default","interface":"net1"}
+      ]
+  containers:
+    - name: "vllm"
+      image: ghcr.io/llm-d/llm-d-rocm:v0.6.0
+      modelCommand: vllmServe
+      args:
+        - "--block-size"
+        - "128"
+        - "--kv-transfer-config"
+        - '{"kv_connector":"NixlConnector", "kv_role":"kv_both"}'
+        - "--disable-uvicorn-access-log"
+        - "--attention-backend"
+        - "ROCM_ATTN"  # required when prefill TP != decode TP
+        - "--max-model-len"
+        - "32000"
+      env:
+        - name: VLLM_NIXL_SIDE_CHANNEL_PORT
+          value: "5600"
+        - name: VLLM_NIXL_SIDE_CHANNEL_HOST
+          valueFrom:
+            fieldRef:
+              fieldPath: status.podIP
+        - name: UCX_TLS
+          value: "rc,ud,sm,self,cuda_copy"
+        - name: UCX_IB_GID_INDEX
+          value: "3"
+      ports:
+        - containerPort: 8000
+          name: vllm
+          protocol: TCP
+        - containerPort: 5600
+          name: nixl
+          protocol: TCP
+      resources:
+        limits:
+          memory: 256Gi
+          cpu: "8"
+          # 1 SR-IOV VF per prefill pod (TP=1 → 1 VF)
+          nvidia.com/sriov-rdma-vf: "1"
+        requests:
+          memory: 256Gi
+          cpu: "8"
+          nvidia.com/sriov-rdma-vf: "1"
+      mountModelVolume: true
+      volumeMounts:
+        - name: metrics-volume
+          mountPath: /.config
+        - name: shm
+          mountPath: /dev/shm
+        - name: torch-compile-cache
+          mountPath: /.cache
+        - name: dev-infiniband
+          mountPath: /dev/infiniband
+      startupProbe:
+        httpGet:
+          path: /v1/models
+          port: vllm
+        initialDelaySeconds: 15
+        periodSeconds: 30
+        timeoutSeconds: 5
+        failureThreshold: 60
+      livenessProbe:
+        httpGet:
+          path: /health
+          port: vllm
+        periodSeconds: 10
+        timeoutSeconds: 5
+        failureThreshold: 3
+      readinessProbe:
+        httpGet:
+          path: /v1/models
+          port: vllm
+        periodSeconds: 5
+        timeoutSeconds: 2
+        failureThreshold: 3
+      extraConfig:
+        securityContext:
+          capabilities:
+            add:
+            - "IPC_LOCK"
+  volumes:
+  - name: metrics-volume
+    emptyDir: {}
+  - name: shm
+    emptyDir:
+      medium: Memory
+      sizeLimit: "16Gi"
+  - name: torch-compile-cache
+    emptyDir: {}
+  - name: dev-infiniband
+    hostPath:
+      path: /dev/infiniband
+      type: Directory
