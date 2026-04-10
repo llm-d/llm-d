@@ -4,7 +4,7 @@ The proxy is the entry point for inference requests in llm-d, receiving client t
 
 ## Functionality
 
-llm-d leverages Envoy's [External Processing](https://www.envoyproxy.io/docs/envoy/latest/configuration/http/http_filters/ext_proc_filter) to extend production proxies into "inference-aware" proxies by offloading request scheduling to the llm-d EPP. This enables llm-d to reuse the rich existing ecosystem of high-performance, production-quality proxy technologies in the Kubernetes ecosystem.
+llm-d leverages Envoy's [External Processing](https://www.envoyproxy.io/docs/envoy/latest/configuration/http/http_filters/ext_proc_filter) to extend production-grade proxies with the "LLM inference-aware" request scheduling implemented in the llm-d EPP. In this way, llm-d re-uses the rich existing ecosystem of high-performance, production-quality proxy technologies in the Kubernetes ecosystem.
 
 The proxy's job is to:
 
@@ -21,7 +21,19 @@ llm-d provides two deployment patterns for the proxy:
 
 > Standalone deployments are intended for workloads where the machinery of Gateway API creates too much operational overhead - such as clusters using Ingress, basic testing and evaluations, batch inference, and RL post-training. Gateway API provides a clean intergation with modern, L7 production-grade networking practices.
 
-### Standalone
+### Request Flow (Both Modes)
+
+Regardless of the deployment pattern, the request flow is the same:
+
+1. Client sends an inference request to the proxy
+2. The proxy's ext-proc filter calls the EPP
+3. The EPP evaluates endpoints using its plugin pipeline (handlers, filters, scorers, picker)
+4. The EPP returns the selected endpoint address
+5. The proxy routes the request to that model server pod
+6. The model server streams the response back through the proxy to the client
+
+
+### Standalone Deployment
 
 The standalone mode deploys an Envoy proxy as a sidecar to the EPP, offering a lightweight, flexible deployment pattern without requiring Gateway API infrastructure.
 
@@ -35,7 +47,7 @@ In standalone mode:
 --> XXX Insert Architecture Diagram
 
 
-### Gateway API
+### Gateway API Deployment
 
 > ![NOTE]
 > Gateway API is an advanced Kuberentes Networking API, targeted at production deployments. It is recommended to understand the concept of a Gateway in the [official documentation](https://gateway-api.sigs.k8s.io/) 
@@ -95,7 +107,7 @@ spec:
 
 The Inference Platform owner can deploy an InferencePool, EPP, and Model Servers. When Traffic hits the Gateway, it will first consults the EPP for a scheduling decision and then routes to a Model Server in the InferencePool.
 
-#### Deploying llm-d with a Gateway
+#### Configuration Guides
 
 Gateway API-based deployments require the Gateway implementation to support Gateway API Inference Extension (GAIE). A full list of Gateways supporting GAIE can be found [here](https://gateway-api-inference-extension.sigs.k8s.io/implementations/gateways/).
 
@@ -105,4 +117,3 @@ llm-d provides configuration guides and regularly tests integrations with the fo
 - [agentgateway](../guides/gateways/)
 
 > We welcome contribution of guides for other Gateways!
-
