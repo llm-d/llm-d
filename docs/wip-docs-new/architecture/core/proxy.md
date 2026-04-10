@@ -1,4 +1,4 @@
-# Proxy - rob
+# Proxy
 
 The proxy is the entry point for inference requests in llm-d, receiving client traffic and routing it to the optimal model server via the EPP.
 
@@ -16,22 +16,10 @@ The proxy's job is to:
 ## Design
 
 llm-d provides two deployment patterns for the proxy:
+- Standalone - where the Envoy Proxy pod is deployed directly
+- via Gateway API - where the proxy is managed by the Kuberentes Gateway API machinery
 
-### Gateway API
-
-[Gateway API](https://gateway-api.sigs.k8s.io/) is an official Kubernetes project focused on L4 and L7 routing in Kubernetes, representing the next generation of Kubernetes Ingress, Load Balancing, and Service Mesh APIs.
-
-The [Gateway API Inference Extension](https://gateway-api-inference-extension.sigs.k8s.io/) leverages Envoy's External Processing to extend any gateway that supports both ext-proc and Gateway API into an inference gateway. This extends popular gateways like Envoy Gateway, Istio, kgateway, and GKE Gateway to become Inference Gateways -- supporting inference platform teams self-hosting Generative Models on Kubernetes.
-
-This integration makes it easy to expose and control access to your local OpenAI-compatible chat completion endpoints to other workloads on or off cluster, or to integrate your self-hosted models alongside model-as-a-service providers in a higher level AI Gateways like LiteLLM, Gloo AI Gateway, or Apigee.
-
-The architecture:
-
---> XXX Insert Architecture Diagram
-
-Gateway API deployments require the Gateway implementation to support Gateway API Inference Extension (GAIE). Compatible implementations include [Istio](https://istio.io/), [kgateway](https://kgateway.io/), and [GKE Gateway](https://cloud.google.com/kubernetes-engine/docs/concepts/gateway-api). A full list can be found [here](https://gateway-api-inference-extension.sigs.k8s.io/implementations/gateways/).
-
-> Gateway API based deployments are recommended for online production services.
+> Standalone deployments are intended for workloads where the machinery of Gateway API creates too much operational overhead - such as clusters using Ingress, basic testing and evaluations, batch inference, and RL post-training. Gateway API provides a clean intergation with modern, L7 production-grade networking practices.
 
 ### Standalone
 
@@ -46,65 +34,58 @@ In standalone mode:
 
 --> XXX Insert Architecture Diagram
 
-> Standalone deployments are intended for workloads where the machinery of Gateway API creates too much operational overhead -- such as clusters using Ingress, basic testing and evaluations, batch inference, and RL post-training.
-
-### Request Flow (Both Modes)
-
-Regardless of the deployment pattern, the request flow is the same:
-
-1. Client sends an inference request to the proxy
-2. The proxy's ext-proc filter calls the EPP
-3. The EPP evaluates endpoints using its plugin pipeline (handlers, filters, scorers, picker)
-4. The EPP returns the selected endpoint address
-5. The proxy routes the request to that model server pod
-6. The model server streams the response back through the proxy to the client
-
-## Configuration
 
 ### Gateway API
 
-#### Prerequisites
+> ![NOTE]
+> Gateway API is an advanced Kuberentes Networking API, targeted at production deployments. It is recommended to understand the concept of a Gateway in the [official documentation](https://gateway-api.sigs.k8s.io/) 
 
-- A Gateway API implementation that supports ext-proc (Istio, kgateway, GKE Gateway, etc.)
-- Gateway API CRDs installed on the cluster
-- Gateway API Inference Extension CRDs installed
+Gateway API is an official Kubernetes project focused on L4 and L7 routing in Kubernetes, representing the next generation of Kubernetes Ingress, Load Balancing, and Service Mesh APIs.
 
-#### Gateway Resource
+The [Gateway API Inference Extension (GAIE)](https://gateway-api-inference-extension.sigs.k8s.io/) extends Gateway API by leveraging Envoy's External Processing to inject LLM-aware load balancing into into production grade networking provided by popular Gateways like Istio, kgateway, and GKE Gateway. This integration makes it easy to expose and control access to your endpoints to other workloads on or off cluster, or to integrate your self-hosted models alongside model-as-a-service providers in a higher level AI Gateways like LiteLLM, Gloo AI Gateway, or Apigee.
 
-Deploy a Gateway resource for your chosen implementation:
+The architecture looks like this:
+
+![Gateway Architecture](../../../assets/gateway-design.svg)
+
+#### Integration
+
+An [HTTPRoute](https://gateway-api.sigs.k8s.io/api-types/httproute/) is a Gateway API type for specifying routing behavior of HTTP requests from a Gateway listener to an API object, i.e. `Service`. `HTTPRoutes` are attached to `Gateways` to configure how traffic is routed to various pods in the cluster. 
+
+To leverage the LLM-aware scheduling logic of `llm-d`, we simply configure the `HTTPRoute` to reference an `InferencePool` rather than a `Service`.
+
+For example, the Cluster Operator deploys a Gateway like so:
 
 ```yaml
 apiVersion: gateway.networking.k8s.io/v1
 kind: Gateway
 metadata:
-  name: llm-d-inference-gateway
+  name: my-gateway
 spec:
-  gatewayClassName: <your-gateway-class>  # e.g., istio, kgateway, gke-l7-rilb
+  gatewayClassName: istio # for example, requires istio to be installed
   listeners:
     - name: http
       protocol: HTTP
       port: 80
 ```
 
-#### HTTPRoute
-
-Route traffic to the InferencePool:
+Then, the Application Owner deploys the `HTTPRoute` (with a `backendRef` to an existing or to-be-created `InferencePool`):
 
 ```yaml
 apiVersion: gateway.networking.k8s.io/v1
 kind: HTTPRoute
 metadata:
-  name: llm-d-route
+  name: my-http-route
 spec:
   parentRefs:
     - group: gateway.networking.k8s.io
       kind: Gateway
-      name: llm-d-inference-gateway
+      name: my-gateway
   rules:
     - backendRefs:
         - group: inference.networking.k8s.io
           kind: InferencePool
-          name: llm-d-infpool
+          name: my-infpool
           port: 8000
       matches:
         - path:
@@ -112,104 +93,16 @@ spec:
             value: /
 ```
 
-#### Provider Selection
+The Inference Platform owner can deploy an InferencePool, EPP, and Model Servers. When Traffic hits the Gateway, it will first consults the EPP for a scheduling decision and then routes to a Model Server in the InferencePool.
 
-When deploying the InferencePool Helm chart, set the provider to match your gateway implementation:
+#### Deploying llm-d with a Gateway
 
-| Provider | `provider.name` | Notes |
-|----------|-----------------|-------|
-| GKE Gateway | `gke` | Google Kubernetes Engine managed gateway |
-| Istio | `istio` | Istio service mesh gateway |
-| Agentgateway / kgateway | `none` | Used for both agentgateway and legacy kgateway |
+Gateway API-based deployments require the Gateway implementation to support Gateway API Inference Extension (GAIE). A full list of Gateways supporting GAIE can be found [here](https://gateway-api-inference-extension.sigs.k8s.io/implementations/gateways/).
 
-### Standalone
+llm-d provides configuration guides and regularly tests integrations with the following Gateways:
+- [Istio](../guides/gateways/istio.md)
+- [GKE Gateway](../guides/gateways/gke.md)
+- [agentgateway](../guides/gateways/)
 
-The standalone proxy is deployed automatically when using the standalone deployment path. It does not require Gateway API resources.
+> We welcome contribution of guides for other Gateways!
 
-Key configuration is handled through Helm values:
-
-| Field | Description | Example |
-|-------|-------------|---------|
-| `inferenceExtension.extProcPort` | Port the EPP listens on for ext-proc traffic | `9002` |
-
-## Examples
-
-### Gateway API with Istio
-
-```yaml
-# Gateway
-apiVersion: gateway.networking.k8s.io/v1
-kind: Gateway
-metadata:
-  name: llm-d-inference-gateway
-spec:
-  gatewayClassName: istio
-  listeners:
-    - name: http
-      protocol: HTTP
-      port: 80
----
-# HTTPRoute
-apiVersion: gateway.networking.k8s.io/v1
-kind: HTTPRoute
-metadata:
-  name: llm-d-route
-spec:
-  parentRefs:
-    - group: gateway.networking.k8s.io
-      kind: Gateway
-      name: llm-d-inference-gateway
-  rules:
-    - backendRefs:
-        - group: inference.networking.k8s.io
-          kind: InferencePool
-          name: llm-d-infpool
-          port: 8000
-      matches:
-        - path:
-            type: PathPrefix
-            value: /
-```
-
-Install the InferencePool with Istio provider:
-
-```bash
-helm install llm-d-infpool \
-  -n ${NAMESPACE} \
-  -f ./values.yaml \
-  --set "provider.name=istio" \
-  oci://registry.k8s.io/gateway-api-inference-extension/charts/inferencepool \
-  --version v1.4.0
-```
-
-### Standalone Deployment
-
-Install the InferencePool without a gateway provider:
-
-```bash
-helm install llm-d-infpool \
-  -n ${NAMESPACE} \
-  -f ./values.yaml \
-  --set "provider.name=none" \
-  oci://registry.k8s.io/gateway-api-inference-extension/charts/inferencepool \
-  --version v1.4.0
-```
-
-Send requests directly to the EPP pod:
-
-```bash
-curl http://<epp-service>:8000/v1/chat/completions \
-  -H 'Content-Type: application/json' \
-  -d '{
-    "model": "meta-llama/Llama-3.1-8B-Instruct",
-    "messages": [{"role": "user", "content": "Hello!"}]
-  }'
-```
-
-## Further Reading
-
-- [Gateway API documentation](https://gateway-api.sigs.k8s.io/)
-- [Gateway API Inference Extension](https://gateway-api-inference-extension.sigs.k8s.io/)
-- [Compatible gateway implementations](https://gateway-api-inference-extension.sigs.k8s.io/implementations/gateways/)
-- [EPP](epp.md) -- the scheduling extension that powers inference-aware routing
-- [InferencePool](inferencepool.md) -- the backend resource referenced by HTTPRoute
