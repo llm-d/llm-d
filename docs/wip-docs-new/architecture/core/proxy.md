@@ -106,7 +106,7 @@ spec:
             value: /
 ```
 
-The Inference Platform owner can deploy an InferencePool, EPP, and Model Servers. When Traffic hits the Gateway, it will first consults the EPP for a scheduling decision and then routes to a Model Server in the InferencePool.
+The Inference Platform owner deploys an InferencePool, EPP, and model servers. When traffic hits the Gateway, it first consults the EPP for a scheduling decision, and then routes to a model server in the InferencePool.
 
 #### Configuration Guides
 
