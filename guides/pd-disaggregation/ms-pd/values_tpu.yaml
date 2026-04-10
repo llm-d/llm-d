@@ -1,93 +1,106 @@
 multinode: false
 
-# Distributed tracing configuration (OpenTelemetry)
-# tracing:
-#   enabled: true
-#   otlpEndpoint: "http://otel-collector:4317"
-#   sampling:
-#     sampler: "parentbased_traceidratio"
-#     samplerArg: "0.1"
-
 # Configure accelerator type for Google TPU
 accelerator:
   type: google
 
 modelArtifacts:
-  uri: "hf://meta-llama/Llama-3.3-70B-Instruct"
+  uri: "hf://Qwen/Qwen3-32B"
   size: 200Gi
   authSecretName: "llm-d-hf-token"
-  name: "meta-llama/Llama-3.3-70B-Instruct"
+  name: "Qwen/Qwen3-32B"
   labels:
     llm-d.ai/inference-serving: "true"
     llm-d.ai/guide: "pd-disaggregation"
     llm-d.ai/hardware-variant: "tpu"
     llm-d.ai/hardware-vendor: "google"
-    llm-d.ai/model: "Llama-3.3-70B-Instruct"
+    llm-d.ai/model: "Qwen3-32B"
+
+tracing:
+  enabled: true
+  otlpEndpoint: "localhost:4317"
+  serviceNames:
+    routingProxy: "routing-proxy"
+  sampling:
+    sampler: "always_off"
+    samplerArg: "0"
 
 routing:
   servicePort: 8000
   proxy:
-    image: ghcr.io/llm-d/llm-d-routing-sidecar:v0.7.1
+    image: ghcr.io/llm-d/llm-d-routing-sidecar:v0.5.0
     connector: nixlv2
     secure: false
 
 decode:
-  create: true
-#  priorityClassName: nightly-gpu-critical
+  podAnnotations:
+    gke-gcsfuse/volumes: "true"
+    gke-gcsfuse/cpu-limit: "0"
+    gke-gcsfuse/memory-limit: "0"
+    gke-gcsfuse/ephemeral-storage-limit: "0"
   parallelism:
-    tensor: 8
+    tensor: 4
+  create: true
   replicas: 1
+  modelCommand: custom
   extraConfig:
     nodeSelector:
-      cloud.google.com/gke-tpu-topology: "2x4"
       cloud.google.com/gke-tpu-accelerator: "tpu-v6e-slice"
+      cloud.google.com/gke-tpu-topology: "2x2"
   monitoring:
     podmonitor:
-      enabled: true
-      portName: "vllm"  # decode vLLM service port (from routing.proxy.targetPort)
+      enabled: false
+      portName: "vllm"
       path: "/metrics"
       interval: "30s"
   containers:
     - name: "vllm"
-      image: vllm/vllm-tpu:v0.13.2
-      modelCommand: vllmServe
-      args:
-        # Keep tensor-parallelism as the first set of arguments
-        - "--tensor-parallel-size"
-        - "8"
-        - "--kv-transfer-config"
-        - '{"kv_connector":"TPUConnector", "kv_connector_module_path" : "tpu_inference.distributed.tpu_connector", "kv_role":"kv_both", "kv_ip" : "$(POD_IP)"}'
-        - "--disable-uvicorn-access-log"
-        - "--max-model-len"
-        - "32000"
+      image: "vllm/vllm-tpu:nightly"
+      command:
+        - "/bin/bash"
+        - "-c"
+        - |
+          # ROLE: kv_consumer (Receives KV cache from prefill)
+          KV_CONFIG="{\"kv_connector\":\"TPUConnector\", \"kv_connector_module_path\" : \"tpu_inference.distributed.tpu_connector\", \"kv_role\":\"kv_consumer\", \"kv_ip\" : \"\"}"
+          echo "KV_CONFIG="
+          python3 -m vllm.entrypoints.openai.api_server \
+            --model "/models/hf-models/Qwen3-32B" \
+            --port 8200 \
+            --tensor-parallel-size 4 \
+            --kv-transfer-config "$KV_CONFIG" \
+            --disable-uvicorn-access-log \
+            --max-num-seqs 256 \
+            --block-size 128 \
+            --gpu-memory-utilization 0.90 \
+            --max-model-len 8192
       env:
         - name: POD_IP
           valueFrom:
             fieldRef:
               fieldPath: status.podIP
-        - name: TPU_SIDE_CHANNEL_PORT # data plane port for PD coordination
-          value: "9600" # default for TPU
-        - name: TPU_KV_TRANSFER_PORT # Port where the KV transfer actually happens
-          value: "9100" # default for TPU
+        - name: TPU_SIDE_CHANNEL_PORT
+          value: "9600"
+        - name: TPU_KV_TRANSFER_PORT
+          value: "9100"
       ports:
-        - containerPort: 8000
+        - containerPort: 8200
           name: vllm
           protocol: TCP
         - containerPort: 9100
           name: tpu-kv-transfer
           protocol: TCP
         - containerPort: 9600
-          name: tpu-pd-coord
+          name: tpu-coord
           protocol: TCP
       resources:
         limits:
-          memory: 64Gi
+          memory: 256Gi
           cpu: "16"
-          # note: TPU resources get controlled by parallelism + accelerators above
+          google.com/tpu: 4
         requests:
-          memory: 64Gi
+          memory: 256Gi
           cpu: "16"
-          # note: TPU resources get controlled by parallelism + accelerators above
+          google.com/tpu: 4
       mountModelVolume: true
       volumeMounts:
         - name: metrics-volume
@@ -96,6 +109,8 @@ decode:
           mountPath: /dev/shm
         - name: torch-compile-cache
           mountPath: /.cache
+        - name: model-volume
+          mountPath: /models
       startupProbe:
         httpGet:
           path: /health
@@ -127,63 +142,82 @@ decode:
         sizeLimit: "16Gi"
     - name: torch-compile-cache
       emptyDir: {}
+    - name: model-volume
+      csi:
+        driver: gcsfuse.csi.storage.gke.io
+        volumeAttributes:
+          bucketName: rlalwani-vllm
+          mountOptions: "implicit-dirs,file-cache:enable-parallel-downloads:true,file-cache:parallel-downloads-per-file:100,file-cache:max-parallel-downloads:-1,file-cache:download-chunk-size-mb:10,file-cache:max-size-mb:-1"
 
 prefill:
-  create: true
-#  priorityClassName: nightly-gpu-critical
+  podAnnotations:
+    gke-gcsfuse/volumes: "true"
+    gke-gcsfuse/cpu-limit: "0"
+    gke-gcsfuse/memory-limit: "0"
+    gke-gcsfuse/ephemeral-storage-limit: "0"
   parallelism:
-    tensor: 8
-  replicas: 2
+    tensor: 4
+  create: true
+  replicas: 1
+  modelCommand: custom
   extraConfig:
     nodeSelector:
-      cloud.google.com/gke-tpu-topology: "2x4"
       cloud.google.com/gke-tpu-accelerator: "tpu-v6e-slice"
+      cloud.google.com/gke-tpu-topology: "2x2"
   monitoring:
     podmonitor:
-      enabled: true
-      portName: "vllm"  # prefill vLLM service port (from routing.servicePort)
+      enabled: false
+      portName: "vllm"
       path: "/metrics"
       interval: "30s"
   containers:
     - name: "vllm"
-      image: vllm/vllm-tpu:v0.13.2
-      modelCommand: vllmServe
-      args:
-        - "--tensor-parallel-size"
-        - "8"
-        - "--kv-transfer-config"
-        - '{"kv_connector":"TPUConnector", "kv_connector_module_path" : "tpu_inference.distributed.tpu_connector", "kv_role":"kv_producer", "kv_ip" : "$(POD_IP)"}'
-        - "--disable-uvicorn-access-log"
-        - "--max-model-len"
-        - "32000"
+      image: "vllm/vllm-tpu:nightly"
+      command:
+        - "/bin/bash"
+        - "-c"
+        - |
+          # ROLE: kv_producer (Sends KV cache to decode)
+          KV_CONFIG="{\"kv_connector\":\"TPUConnector\", \"kv_connector_module_path\" : \"tpu_inference.distributed.tpu_connector\", \"kv_role\":\"kv_producer\", \"kv_ip\" : \"\"}"
+          echo "KV_CONFIG="
+          python3 -m vllm.entrypoints.openai.api_server \
+            --model "/models/hf-models/Qwen3-32B" \
+            --port 8200 \
+            --tensor-parallel-size 4 \
+            --kv-transfer-config "$KV_CONFIG" \
+            --disable-uvicorn-access-log \
+            --enable-chunked-prefill \
+            --block-size 128 \
+            --gpu-memory-utilization 0.90 \
+            --max-model-len 8192
       env:
         - name: POD_IP
           valueFrom:
             fieldRef:
               fieldPath: status.podIP
-        - name: TPU_SIDE_CHANNEL_PORT # data plane port for PD coordination
-          value: "9600" # default for TPU
-        - name: TPU_KV_TRANSFER_PORT # Port where the KV transfer actually happens
-          value: "9100" # default for TPU
+        - name: TPU_SIDE_CHANNEL_PORT
+          value: "9600"
+        - name: TPU_KV_TRANSFER_PORT
+          value: "9100"
       ports:
-        - containerPort: 8000
+        - containerPort: 8200
           name: vllm
           protocol: TCP
         - containerPort: 9100
           name: tpu-kv-transfer
           protocol: TCP
         - containerPort: 9600
-          name: tpu-pd-coord
+          name: tpu-coord
           protocol: TCP
       resources:
         limits:
-          memory: 64Gi
+          memory: 256Gi
           cpu: "16"
-          # note: TPU resources get controlled by parallelism + accelerators above
+          google.com/tpu: 4
         requests:
-          memory: 64Gi
+          memory: 256Gi
           cpu: "16"
-          # note: TPU resources get controlled by parallelism + accelerators above
+          google.com/tpu: 4
       mountModelVolume: true
       volumeMounts:
         - name: metrics-volume
@@ -192,6 +226,8 @@ prefill:
           mountPath: /dev/shm
         - name: torch-compile-cache
           mountPath: /.cache
+        - name: model-volume
+          mountPath: /models
       startupProbe:
         httpGet:
           path: /health
@@ -223,3 +259,9 @@ prefill:
         sizeLimit: "16Gi"
     - name: torch-compile-cache
       emptyDir: {}
+    - name: model-volume
+      csi:
+        driver: gcsfuse.csi.storage.gke.io
+        volumeAttributes:
+          bucketName: rlalwani-vllm
+          mountOptions: "implicit-dirs,file-cache:enable-parallel-downloads:true,file-cache:parallel-downloads-per-file:100,file-cache:max-parallel-downloads:-1,file-cache:download-chunk-size-mb:10,file-cache:max-size-mb:-1"
