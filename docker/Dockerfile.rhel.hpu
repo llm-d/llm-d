@@ -1,0 +1,429 @@
+# Copyright (c) 2026 Intel Corporation.
+# SPDX-License-Identifier: Apache-2.0
+
+# Global build arguments - declared before first FROM to be available in all stages
+ARG ARTIFACTORY_URL="vault.habana.ai"
+ARG SYNAPSE_VERSION=1.23.0
+# Use an exact revision (e.g. 695) or "latest" to auto-detect the newest available revision.
+# If you do not want metadata to show "latest", pass an exact SYNAPSE_REVISION.
+ARG SYNAPSE_REVISION=695
+ARG BASE_NAME=rhel9.6
+ARG OS_VERSION=9.6
+ARG OS_STRING=rhel96
+ARG PT_VERSION=2.9.0
+ARG PT_MODULES_REPO_NAME=gaudi-pt-modules
+# for internal use - to support a different package name for RHEL 9.4 with Python 3.12
+ARG PT_PACKAGE_NAME_NON_DEFAULT_PYTHON_SUBSTRING=
+ARG PYPI_INDEX_URL="https://pypi.org/simple/"
+ARG HABANA_RPM_REPO_PATH="rhel/9/${OS_VERSION}"
+# SHA-256 checksum of the GPG public key (verified before rpm --import)
+ARG HABANA_GPG_CHECKSUM
+ARG VLLM_GAUDI_COMMIT="3892d0829ea14897c794bf518527f411c8006952"
+ARG VLLM_PROJECT_COMMIT="v0.17.1"
+
+ARG VLLM_REPO="https://github.com/vllm-project/vllm.git"
+ARG VLLM_GAUDI_REPO="https://github.com/vllm-project/vllm-gaudi.git"
+
+
+# ubi9:9.6
+ARG BASE_IMAGE="registry.access.redhat.com/ubi9/ubi@sha256:dec374e05cc13ebbc0975c9f521f3db6942d27f8ccdf06b180160490eef8bdbc"
+
+# ============================================================================
+# Stage 1: gaudi-base - Base system setup with Habana drivers
+# ============================================================================
+FROM ${BASE_IMAGE} AS gaudi-base
+
+# Re-declare global ARGs to use them in this stage
+ARG ARTIFACTORY_URL
+ARG SYNAPSE_VERSION
+ARG SYNAPSE_REVISION
+ARG OS_VERSION
+ARG OS_STRING
+ARG PT_VERSION
+ARG PYPI_INDEX_URL
+ARG HABANA_RPM_REPO_PATH
+ARG HABANA_GPG_CHECKSUM
+
+# Labels for RHEL certification.
+# Note: when SYNAPSE_REVISION=latest, this metadata intentionally records "latest"
+# (the requested input), not the detected numeric revision.
+LABEL vendor="Habanalabs Ltd." \
+    release="${SYNAPSE_VERSION}-${SYNAPSE_REVISION}"
+
+# Environment variables - Habana-specific paths and configurations
+ENV PT_VERSION=${PT_VERSION} \
+    OS_STRING="${OS_STRING}" \
+    VLLM_TARGET_DEVICE="hpu" \
+    GC_KERNEL_PATH=/usr/lib/habanalabs/libtpc_kernels.so \
+    HABANA_LOGS=/var/log/habana_logs/ \
+    HABANA_SCAL_BIN_PATH=/opt/habanalabs/engines_fw \
+    HABANA_PLUGINS_LIB_PATH=/opt/habanalabs/habana_plugins
+
+# Copy license
+COPY LICENSE /licenses/
+
+# System setup - Remove FIPS provider and add EPEL
+RUN dnf install -y --allowerasing python3-dnf-plugin-versionlock && \
+    dnf versionlock add redhat-release* && \
+    dnf -y update && \
+    # '|| true' is added to support RHEL 9.4 in which openssl-fips-provider-so is not installed
+    rpm -e --nodeps openssl-fips-provider-so || true && \
+    dnf install -y --allowerasing https://dl.fedoraproject.org/pub/epel/epel-release-latest-9.noarch.rpm && \
+    dnf clean all
+
+# Add CentOS repositories for additional packages
+RUN printf "[BaseOS]\\nname=CentOS Linux 9 - BaseOS\\nbaseurl=https://mirror.stream.centos.org/9-stream/BaseOS/x86_64/os\\ngpgkey=https://www.centos.org/keys/RPM-GPG-KEY-CentOS-Official-SHA256\\ngpgcheck=1\\n" > /etc/yum.repos.d/CentOS-Linux-BaseOS.repo && \
+    printf "[centos9]\\nname=CentOS Linux 9 - AppStream\\nbaseurl=https://mirror.stream.centos.org/9-stream/AppStream/x86_64/os\\ngpgkey=https://www.centos.org/keys/RPM-GPG-KEY-CentOS-Official-SHA256\\ngpgcheck=1\\n" > /etc/yum.repos.d/CentOS-Linux-AppStream.repo && \
+    printf "[CRB]\\nname=CentOS Linux 9 - CRB\\nbaseurl=https://mirror.stream.centos.org/9-stream/CRB/x86_64/os\\ngpgkey=https://www.centos.org/keys/RPM-GPG-KEY-CentOS-Official-SHA256\\ngpgcheck=1\\n" > /etc/yum.repos.d/CentOS-Linux-CRB.repo
+
+# Install system dependencies
+RUN dnf install -y --allowerasing \
+    wget git-core jq libomp \
+    # Image processing dependencies (needed for pillow-simd -> habana-media-loader)
+    zlib-devel libjpeg-turbo-devel \
+    # habanalabs-thunk dependency
+    libfdt-devel \
+    # Python development
+    python3-devel python3.12 python3.12-devel python3.12-pip \
+    # NUMA support
+    numactl-libs numactl-devel && \
+    dnf clean all
+
+# Configure Python 3.12 as default
+RUN alternatives --install /usr/bin/python3 python3 /usr/bin/python3.12 2 && \
+    alternatives --install /usr/bin/python3 python3 /usr/bin/python3.9 1 && \
+    alternatives --set python3 /usr/bin/python3.12 && \
+    ln -s /usr/bin/python3 /usr/bin/python
+
+# Install base Python packages
+RUN python3 -m pip install --no-cache-dir "setuptools>=80.0.0" "wheel>=0.46.2" "jaraco.context>=6.1.0" \
+    "xgrammar>=0.1.32" setuptools_scm && \
+    python3 -m pip install --no-cache-dir --upgrade Jinja2 protobuf urllib3 requests
+
+# Setup Habana repository and install Habana packages
+RUN --mount=type=tmpfs,target=/tmp \
+    printf "[habanalabs]\\nname=Habana RH9 Linux repo\\nbaseurl=https://${ARTIFACTORY_URL}/artifactory/${HABANA_RPM_REPO_PATH}\\ngpgkey=https://${ARTIFACTORY_URL}/artifactory/${HABANA_RPM_REPO_PATH}/repodata/repomd.xml.key\\ngpgcheck=1\\n" > /etc/yum.repos.d/habanalabs.repo && \
+    echo "=== Content of habanalabs.repo ===" && \
+    cat /etc/yum.repos.d/habanalabs.repo && \
+    echo "=== End of habanalabs.repo ===" && \
+    _GPG_TEMP=$(mktemp -d) && \
+    wget -q -O "${_GPG_TEMP}/habana_pubkey" "https://${ARTIFACTORY_URL}/artifactory/gaudi-general/keyPairs/primary/public" && \
+    echo "${HABANA_GPG_CHECKSUM}  ${_GPG_TEMP}/habana_pubkey" | sha256sum -c - && \
+    rpm --import "${_GPG_TEMP}/habana_pubkey" && \
+    rm -rf "${_GPG_TEMP}" && \
+    dnf makecache && \
+    if [ "${SYNAPSE_REVISION}" = "latest" ]; then \
+    dnf install -y \
+    habanalabs-rdma-core-"$SYNAPSE_VERSION"* \
+    habanalabs-thunk-"$SYNAPSE_VERSION"* \
+    habanalabs-firmware-tools-"$SYNAPSE_VERSION"* \
+    habanalabs-graph-"$SYNAPSE_VERSION"*; \
+    else \
+    dnf install -y \
+    habanalabs-rdma-core-"$SYNAPSE_VERSION"-"$SYNAPSE_REVISION"* \
+    habanalabs-thunk-"$SYNAPSE_VERSION"-"$SYNAPSE_REVISION"* \
+    habanalabs-firmware-tools-"$SYNAPSE_VERSION"-"$SYNAPSE_REVISION"* \
+    habanalabs-graph-"$SYNAPSE_VERSION"-"$SYNAPSE_REVISION"*; \
+    fi && \
+    DETECTED_SYNAPSE_REVISION=$(rpm -q --qf '%{RELEASE}\n' habanalabs-rdma-core | head -n1 | sed 's/\..*$//') && \
+    mkdir -p /etc/habanalabs && \
+    echo "${DETECTED_SYNAPSE_REVISION}" > /etc/habanalabs/synapse_revision && \
+    echo "Detected Synapse revision: ${DETECTED_SYNAPSE_REVISION}" && \
+    dnf clean all && \
+    chmod +t /var/log/habana_logs && \
+    rm -f /etc/yum.repos.d/habanalabs.repo
+
+# Install Habana media loader and configure Python path
+RUN SYNAPSE_REVISION_RUNTIME=$(cat /etc/habanalabs/synapse_revision) && \
+    pip install --no-cache-dir habana-media-loader=="${SYNAPSE_VERSION}"."${SYNAPSE_REVISION_RUNTIME}" --extra-index-url ${PYPI_INDEX_URL} && \
+    echo "/usr/lib/habanalabs" > $(python3 -c "import sysconfig; print(sysconfig.get_path('platlib'))")/habanalabs-graph.pth
+
+# ============================================================================
+# Stage 2: gaudi-pytorch - Install PyTorch for Habana
+# ============================================================================
+FROM gaudi-base AS gaudi-pytorch
+
+# Re-declare global ARGs needed in this stage
+ARG ARTIFACTORY_URL
+ARG OS_STRING
+ARG PT_VERSION
+ARG PT_MODULES_REPO_NAME
+ARG PT_PACKAGE_NAME_NON_DEFAULT_PYTHON_SUBSTRING
+ARG PYPI_INDEX_URL
+ARG SYNAPSE_VERSION
+ARG SYNAPSE_REVISION
+
+# Environment variables inherited from base, OS_STRING needed for PyTorch install
+ENV OS_STRING="${OS_STRING}"
+
+# Use installer script from Habana to install Pytorch
+RUN --mount=type=tmpfs,target=/tmp \
+    SYNAPSE_REVISION_RUNTIME=$(cat /etc/habanalabs/synapse_revision) && \
+    PT_PACKAGE_NAME="pytorch_modules${PT_PACKAGE_NAME_NON_DEFAULT_PYTHON_SUBSTRING}-v${PT_VERSION}_${SYNAPSE_VERSION}_${SYNAPSE_REVISION_RUNTIME}.tgz" && \
+    PT_ARTIFACT_PATH="https://${ARTIFACTORY_URL}/artifactory/${PT_MODULES_REPO_NAME}/${SYNAPSE_VERSION}/${SYNAPSE_REVISION_RUNTIME}/pytorch/${OS_STRING}" && \
+    TMP_PATH=$(mktemp --directory) && \
+    wget --no-verbose -O "${TMP_PATH}/${PT_PACKAGE_NAME}" "${PT_ARTIFACT_PATH}/${PT_PACKAGE_NAME}" && \
+    tar -zxf "${TMP_PATH}/${PT_PACKAGE_NAME}" -C "${TMP_PATH}" && \
+    cd "${TMP_PATH}" && \
+    export SKIP_INSTALL_DEPENDENCIES=1 && \
+    PYTHON_INDEX_URL="--extra-index-url ${PYPI_INDEX_URL}" ./install.sh $SYNAPSE_VERSION $SYNAPSE_REVISION_RUNTIME upstream && \
+    cd / && \
+    rm -rf "${TMP_PATH}" "${PT_PACKAGE_NAME}" && \
+    dnf clean all
+
+# Install torchaudio (CPU-only, matching PT version)
+ARG EXTRA_INDEX_URL=https://download.pytorch.org/whl/cpu
+RUN pip install --no-cache-dir --no-deps --extra-index-url ${EXTRA_INDEX_URL} \
+    torchaudio==${PT_VERSION}
+
+WORKDIR /workspace
+
+# ============================================================================
+# Stage 3: vllm-final - Install vLLM and configure runtime
+# ============================================================================
+FROM gaudi-pytorch AS vllm-openai
+
+# Re-declare global ARGs needed in this stage
+ARG VLLM_REPO
+ARG VLLM_GAUDI_REPO
+ARG VLLM_GAUDI_COMMIT
+ARG VLLM_PROJECT_COMMIT
+ARG BASE_NAME
+
+# Environment variables for this stage
+ENV BASE_NAME=${BASE_NAME} \
+    OMPI_MCA_btl_vader_single_copy_mechanism=none \
+    VLLM_PATH=/workspace/vllm-project \
+    VLLM_PATH2=/workspace/vllm-gaudi
+
+# Install additional system dependencies
+RUN dnf install -y gettext --allowerasing && \
+    dnf clean all && \
+    ln -sf /usr/bin/python3 /usr/bin/python
+
+WORKDIR /root
+
+# Clone and install vLLM
+RUN --mount=type=tmpfs,target=/tmp \
+    set -e && \
+    mkdir -p $VLLM_PATH2 && \
+    git clone $VLLM_GAUDI_REPO $VLLM_PATH2 && \
+    cd $VLLM_PATH2 && \
+    if [ -z "${VLLM_PROJECT_COMMIT}" ]; then \
+    VLLM_PROJECT_COMMIT=$(git show "origin/vllm/last-good-commit-for-vllm-gaudi:VLLM_STABLE_COMMIT" 2>/dev/null || { echo >&2 "Warning: Could not fetch last-good-commit, using main branch"; echo "main"; }) && \
+    echo "Found vLLM commit hash: ${VLLM_PROJECT_COMMIT}"; \
+    else \
+    echo "Using vLLM commit: ${VLLM_PROJECT_COMMIT}"; \
+    fi && \
+    mkdir -p $VLLM_PATH && \
+    echo "Clone vllm-project/vllm and use configured or last good commit hash" && \
+    git clone $VLLM_REPO $VLLM_PATH && \
+    cd $VLLM_PATH && \
+    git fetch origin --tags && \
+    git checkout ${VLLM_PROJECT_COMMIT} && \
+    TMP_REQ_FILE=$(mktemp) && sed '/^torch/d' requirements/build.txt > "$TMP_REQ_FILE" && \
+    pip install --no-cache-dir -r "$TMP_REQ_FILE" && rm -f "$TMP_REQ_FILE" && \
+    VLLM_TARGET_DEVICE=empty pip install --no-cache-dir --no-build-isolation . && \
+    cd $VLLM_PATH2 && \
+    git checkout ${VLLM_GAUDI_COMMIT} && \
+    VLLM_TARGET_DEVICE=hpu pip install --no-cache-dir -v . --no-build-isolation && \
+    pip install --no-cache-dir "setuptools>=80.0.0" "xgrammar>=0.1.32" "wheel>=0.46.2" "jaraco.context>=6.1.0" && \
+    pip check && \
+    rm -rf $VLLM_PATH $VLLM_PATH2
+
+RUN dnf update -y curl-minimal libcurl-minimal glib2 \
+    python3 python3-libs python3.12 python3.12-libs python3.12-devel \
+    python3-pip python3.12-pip \
+    openssl openssl-libs sqlite-libs zlib \
+    systemd systemd-libs systemd-pam \
+    libxml2 openldap p11-kit p11-kit-trust tar \
+    git git-core git-core-doc \
+    sqlite-libs && \
+    dnf update -y --allowerasing --skip-broken --nobest && \
+    dnf remove -y gdb gdb-gdbserver gdb-headless \
+    wget git git-core git-core-doc gettext jq \
+    zlib-devel libjpeg-turbo-devel libfdt-devel \
+    python3-devel python3.12-devel numactl-devel && \
+    dnf clean all && \
+    rm -rf /var/tmp/*
+
+# Setup non-root user for OpenShift compatibility
+RUN umask 002 && \
+    useradd --uid 2000 --gid 0 vllm && \
+    chmod g+rwx /home/vllm /usr/src /workspace && \
+    chmod -R g+rwx /var/log/habana_logs
+
+# Copy license
+COPY LICENSE /licenses/vllm.md
+
+# Reset ENTRYPOINT so the image can be used flexibly
+ENTRYPOINT []
+
+# ============================================================================
+# Stage 4: gaudi-dynamo
+# ============================================================================
+FROM gaudi-pytorch AS gaudi-dynamo
+
+ARG VLLM_REPO
+ARG VLLM_GAUDI_REPO
+ARG SYNAPSE_VERSION
+
+RUN set -e && \
+    dnf install -y git wget net-tools iputils autoconf libtool libaio-devel gcc gcc-c++ make automake && \
+    dnf install -y librdmacm-devel librdmacm libibverbs-devel libibverbs libibverbs-utils infiniband-diags rdma-core rdma-core-devel && \
+    dnf clean all
+
+# (1) UCX build
+ARG UCX_REPO_URL=https://github.com/openucx/ucx.git
+ARG UCX_BRANCH=master
+ARG UCX_SRC_DIR=/tmp/ucx-gaudi
+ARG UCX_INSTALL_DIR=/usr
+ARG UCX_VERSION=af67042d1234eae8e528f4d3ff83d26eb75a7340
+
+RUN --mount=type=tmpfs,target=/tmp \
+    git clone ${UCX_REPO_URL} -b ${UCX_BRANCH} ${UCX_SRC_DIR} && \
+    cd ${UCX_SRC_DIR} && \
+    if [ -n "${UCX_VERSION}" ]; then \
+        git checkout ${UCX_VERSION} || \
+        ( echo "ERROR: UCX checkout to ${UCX_VERSION} failed." && exit 1 ); \
+    else \
+        echo "ERROR: No UCX_VERSION specified." && exit 1; \
+    fi && \
+    cd ${UCX_SRC_DIR} && \
+    libtoolize --force --copy && \
+    autoheader && \
+    aclocal && \
+    autoconf && \
+    cd ${UCX_SRC_DIR} && \
+    automake --add-missing --copy && \
+    ./autogen.sh && \
+    ./configure --prefix=${UCX_INSTALL_DIR} --with-mlx5=no --with-gaudi=yes --enable-examples --enable-mt && \
+    cd ${UCX_SRC_DIR} && \
+    make CFLAGS="-Wno-error=frame-larger-than=" -j$(nproc) 2>&1 | tee /tmp/ucx_make.log || \
+    ( echo "UCX make failed. See /tmp/ucx_make.log" && exit 1 ) && \
+    make install 2>&1 | tee -a /tmp/ucx_make.log || \
+    ( echo "UCX make install failed. See /tmp/ucx_make.log" && exit 1 ) && \
+    rm -rf ${UCX_SRC_DIR}
+
+RUN rm -f /etc/habanalabs/macAddrInfo.json
+
+# (2) NIXL dir and build
+ARG NIXL_REPO_URL=https://github.com/ai-dynamo/nixl.git
+ARG NIXL_BRANCH=release/0.9.0
+ARG NIXL_SRC_DIR=/tmp/nixl-gaudi
+
+RUN --mount=type=tmpfs,target=/tmp \
+    git clone ${NIXL_REPO_URL} -b ${NIXL_BRANCH} ${NIXL_SRC_DIR} && \
+    cd ${NIXL_SRC_DIR} && \
+    pip install --no-cache-dir meson ninja pybind11 && \
+    echo "option('enable_gaudi', type : 'boolean', value : true, description : 'enable gaudi device')" >> ${NIXL_SRC_DIR}/meson_options.txt && \
+    meson setup install \
+        --prefix=/opt/nvidia/nvda_nixl \
+        -Ducx_path=${UCX_INSTALL_DIR} \
+        -Dinstall_headers=true \
+        -Ddisable_gds_backend=false \
+        -Denable_gaudi=true && \
+    cd ${NIXL_SRC_DIR} && \
+    pip install --no-cache-dir . && \
+    cd ${NIXL_SRC_DIR}/install && \
+    ninja install && \
+    rm -rf ${NIXL_SRC_DIR}
+
+RUN mkdir -p /opt/nvidia/nvda_nixl/lib/python3/dist-packages && \
+    NIXL_PKG=$(find /opt/nvidia/nvda_nixl/lib64/python3.12/site-packages -maxdepth 1 -name 'nixl*' -type d | head -n1) && \
+    if [ -n "${NIXL_PKG}" ]; then \
+        ln -s "${NIXL_PKG}" /opt/nvidia/nvda_nixl/lib/python3/dist-packages/nixl; \
+    else \
+        echo "WARNING: No nixl package found under site-packages" && exit 1; \
+    fi
+
+# Declare LD_LIBRARY_PATH and PYTHONPATH as ARGs with empty
+# defaults before the ENV instructions that reference them.
+ARG LD_LIBRARY_PATH=""
+ARG PYTHONPATH=""
+ENV LD_LIBRARY_PATH="/opt/nvidia/nvda_nixl/lib64:/opt/nvidia/nvda_nixl/lib/x86_64-linux-gnu:${UCX_INSTALL_DIR}/lib64:${UCX_INSTALL_DIR}/lib${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}"
+ENV PYTHONPATH="${PYTHONPATH:+${PYTHONPATH}:}/opt/nvidia/nvda_nixl/lib/python3/dist-packages"
+
+# (3) Build vLLM base
+WORKDIR /llm
+ARG VLLM_BRANCH=main
+ARG VLLM_SRC_DIR=/tmp/vllm-base
+# releases/v0.17.1
+ARG VLLM_PROJECT_COMMIT
+ARG VLLM_VERSION=${VLLM_PROJECT_COMMIT}
+
+RUN --mount=type=tmpfs,target=/tmp \
+    git clone $VLLM_REPO ${VLLM_SRC_DIR} && \
+    cd ${VLLM_SRC_DIR} && \
+    git checkout ${VLLM_BRANCH} && \
+    if [ -n "${VLLM_VERSION}" ]; then \
+        git checkout ${VLLM_VERSION} || \
+        ( echo "ERROR: vLLM checkout to ${VLLM_VERSION} failed." && exit 1 ); \
+    else \
+        echo "ERROR: VLLM_VERSION is empty or not set. Aborting build." && exit 1; \
+    fi && \
+    # Pin torch version to prevent upgrade during vllm installation \
+    if echo "${SYNAPSE_VERSION}" | grep -q "1.24"; then \
+        echo "Detected version 1.24, maintain pre-installed torch as 2.10"; \
+        echo "torch<2.11" > /tmp/torch-constraints.txt; \
+    else \
+        echo "Detected other version, maintain pre-installed torch <= 2.9"; \
+        echo "torch<2.10" > /tmp/torch-constraints.txt; \
+    fi && \
+    cd ${VLLM_SRC_DIR} && \
+    sed 's/^torch/#&/' requirements/build.txt > requirements/build_no_torch.txt && \
+    pip install --no-cache-dir -r requirements/build_no_torch.txt && \
+    PIP_CONSTRAINT=/tmp/torch-constraints.txt VLLM_TARGET_DEVICE=empty pip install --no-cache-dir --no-build-isolation . && \
+    rm -rf ${VLLM_SRC_DIR}
+
+# (4) Build dependencies for vllm-gaudi
+ARG VLLM_GAUDI_BRANCH=main
+ARG VLLM_GAUDI_SRC_DIR=/tmp/vllm-gaudi
+# releases/v0.17.1_rhel9.6
+ARG VLLM_GAUDI_COMMIT
+
+# Use upstream VLLM Gaudi plus patch
+RUN --mount=type=tmpfs,target=/tmp \
+    git clone $VLLM_GAUDI_REPO ${VLLM_GAUDI_SRC_DIR} && \
+    cd ${VLLM_GAUDI_SRC_DIR} && \
+    git checkout ${VLLM_GAUDI_BRANCH} && \
+    if [ -n "${VLLM_GAUDI_COMMIT}" ]; then \
+        git checkout ${VLLM_GAUDI_COMMIT} || \
+        ( echo "ERROR: vLLM-Gaudi checkout to ${VLLM_GAUDI_COMMIT} failed." && exit 1 ); \
+    else \
+        echo "No VLLM_GAUDI_COMMIT specified. Use branch ${VLLM_GAUDI_BRANCH}."; \
+    fi && \
+    cd ${VLLM_GAUDI_SRC_DIR} && \
+    sed -i 's/^nixl/#&/' requirements.txt && \
+    VLLM_TARGET_DEVICE=hpu pip install --no-cache-dir --no-build-isolation . && \
+    # Install other modules for test \
+    pip install --no-cache-dir "lm-eval[api]" pytest && \
+    pip check && \
+    rm -rf ${VLLM_GAUDI_SRC_DIR}
+
+# Clean up
+RUN dnf remove -y \
+    autoconf automake libtool \
+    git wget net-tools iputils && \
+    dnf update -y --allowerasing --skip-broken --nobest --exclude=habanalabs\* && \
+    dnf clean all && rm -rf /var/cache/dnf && \
+    rm -rf /var/tmp/*
+
+# Setup non-root user for OpenShift compatibility.
+# Ensure a non-root user with UID 2000 exists and has a writable home/work directory
+RUN set -eux; \
+    if ! getent group 2000 >/dev/null; then \
+        groupadd -g 2000 vllm; \
+    fi; \
+    if ! id -u 2000 >/dev/null 2>&1; then \
+        useradd -u 2000 -g 2000 -m -d /home/vllm -s /sbin/nologin vllm; \
+    fi; \
+    mkdir -p /home/vllm; \
+    chown -R 2000:2000 /home/vllm; \
+    umask 002 && \
+    chmod g+rwx /home/vllm /usr/src /workspace && \
+    chmod -R g+rwx /var/log/habana_logs
+
+WORKDIR /workspace
+USER 2000
+ENTRYPOINT ["python3", "-m", "vllm.entrypoints.openai.api_server"]
