@@ -44,7 +44,7 @@ In standalone mode:
 - No Gateway, HTTPRoute, or gateway controller is needed
 - Traffic is sent directly to the EPP pod's externally exposed port
 
---> XXX Insert Architecture Diagram
+![Standalone Design](../../../assets/standalone-design.svg)
 
 
 ### Gateway API Deployment
@@ -58,7 +58,7 @@ The [Gateway API Inference Extension (GAIE)](https://gateway-api-inference-exten
 
 The architecture looks like this:
 
-![Gateway Architecture](../../../assets/gateway-design.svg)
+![Gateway Design](../../../assets/gateway-design.svg)
 
 #### Integration
 
