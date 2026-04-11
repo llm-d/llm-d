@@ -63,7 +63,7 @@ The architecture looks like this:
 
 #### Integration
 
-An [HTTPRoute](https://gateway-api.sigs.k8s.io/api-types/httproute/) is a Gateway API type for specifying routing behavior of HTTP requests from a Gateway listener to an API object, i.e. `Service`. `HTTPRoutes` are attached to `Gateways` to configure how traffic is routed to various pods in the cluster. 
+An [HTTPRoute](https://gateway-api.sigs.k8s.io/api-types/httproute/) is a Gateway API type for specifying routing behavior of HTTP requests from a Gateway listener to a backend service (e.g., `Service` or `InferencePool`). `HTTPRoutes` are attached to `Gateways` to configure how traffic is routed to various services in the cluster. 
 
 To leverage the LLM-aware scheduling logic of `llm-d`, we simply configure the `HTTPRoute` to reference an `InferencePool` rather than a `Service`.
 
