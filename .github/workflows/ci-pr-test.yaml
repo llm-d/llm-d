@@ -13,11 +13,8 @@ on:
       - guides/**/*.yaml
       - guides/**/*.yml
       - guides/**/*.gotmpl
-  # Upstream PRs: runs workflow from the PR branch (trusts org members' workflow changes)
-  pull_request:
-    types: [opened, synchronize, reopened]
-    branches: [main]
-  # Fork PRs: runs workflow from main (safe for untrusted code, secrets available via label gate)
+  # All PRs use pull_request_target so workflow code runs from main (safe for untrusted code).
+  # Secrets are gated behind the 'ok-to-build' label check in the fork-gate job.
   pull_request_target:
     types: [opened, synchronize, reopened, labeled]
     branches: [main]
@@ -45,21 +42,14 @@ concurrency:
 
 jobs:
   # Gate: determine whether this workflow run should proceed.
-  # Both pull_request and pull_request_target fire for all PRs, so we must ensure
-  # only one of them proceeds per PR to avoid duplicate runs:
-  # - pull_request: only proceeds for upstream PRs (head repo == base repo).
-  #   Runs the PR branch's workflow code, so org members' workflow changes take effect.
-  # - pull_request_target: only proceeds for fork PRs with 'ok-to-build' label.
-  #   Runs main's workflow code (safe), checks out PR code via ref input.
+  # - pull_request_target: proceeds only when the PR carries the 'ok-to-build' label.
+  #   Runs main's workflow code (safe for untrusted code), checks out PR code via ref input.
   # - push/workflow_dispatch: always proceeds.
   fork-gate:
     if: >-
-      (github.event_name == 'pull_request' &&
-       github.event.pull_request.head.repo.full_name == github.repository) ||
       (github.event_name == 'pull_request_target' &&
-       github.event.pull_request.head.repo.full_name != github.repository &&
        contains(github.event.pull_request.labels.*.name, 'ok-to-build')) ||
-      (github.event_name != 'pull_request' && github.event_name != 'pull_request_target')
+      (github.event_name != 'pull_request_target')
     runs-on: ubuntu-latest
     steps:
       - run: echo "Build authorized"
@@ -126,8 +116,7 @@ jobs:
               - guides/pd-disaggregation/helmfile.yaml.gotmpl
 
   # Call the build-image workflow to build any changed images
-  # For upstream PRs (pull_request), this resolves build-image.yml from the PR branch.
-  # For fork PRs (pull_request_target), this resolves build-image.yml from main.
+  # Resolves build-image.yml from main (pull_request_target), checks out PR code via ref.
   build-images:
     needs: [fork-gate]
     uses: ./.github/workflows/build-image.yml
