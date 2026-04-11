@@ -1,0 +1,74 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: decode
+spec:
+  replicas: 2
+  template:
+    spec:
+      securityContext:
+        fsGroup: 107
+        supplementalGroups:
+          - 107
+      containers:
+        - name: modelserver
+          command: ["vllm", "serve"]
+          args:
+            - "Qwen/Qwen3-0.6B"
+            - "--port=8000"
+            - "--dtype=float16"
+            - "--disable-sliding-window"
+            - "--disable-access-log-for-endpoints=/health,/metrics,/v1/models"
+            # Uncomment for distributed tracing
+            # - "--otlp-traces-endpoint=http://otel-collector:4317"
+            # - "--collect-detailed-traces=all"
+          env:
+            - name: HF_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: llm-d-hf-token
+                  key: HF_TOKEN
+            # - name: VLLM_LOGGING_LEVEL
+            #   value: DEBUG
+            # Uncomment for distributed tracing env vars
+            # - name: OTEL_SERVICE_NAME
+            #   value: "vllm-decode"
+            # - name: OTEL_EXPORTER_OTLP_ENDPOINT
+            #   value: "http://otel-collector:4317"
+            # - name: OTEL_TRACES_EXPORTER
+            #   value: "otlp"
+            # - name: OTEL_TRACES_SAMPLER
+            #   value: "parentbased_traceidratio"
+            # - name: OTEL_TRACES_SAMPLER_ARG
+            #   value: "0.1"
+          resources:
+            limits:
+              cpu: "8"
+              memory: 24Gi
+            requests:
+              cpu: "4"
+              memory: 12Gi
+            claims:
+              - name: intel-decode-claim
+          volumeMounts:
+            - mountPath: /.cache
+              name: torch-compile-cache
+          startupProbe:
+            initialDelaySeconds: 15
+            periodSeconds: 30
+            timeoutSeconds: 5
+            failureThreshold: 120
+          livenessProbe:
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            periodSeconds: 5
+            timeoutSeconds: 2
+            failureThreshold: 3
+      resourceClaims:
+        - name: intel-decode-claim
+          resourceClaimTemplateName: intel-claim-template-decode
+      volumes:
+        - name: torch-compile-cache
+          emptyDir: {}

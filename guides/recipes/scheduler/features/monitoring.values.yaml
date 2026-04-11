@@ -1,0 +1,10 @@
+## Enables Prometheus monitoring for the scheduler.
+## Layer this on top of base.values.yaml to enable metrics collection.
+
+inferenceExtension:
+  monitoring:
+    interval: "10s"
+    prometheus:
+      enabled: true
+      auth:
+        enabled: false

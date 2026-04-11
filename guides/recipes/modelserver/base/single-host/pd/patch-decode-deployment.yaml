@@ -1,0 +1,27 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: decode
+spec:
+  template:
+    spec:
+      initContainers:
+        - name: routing-proxy
+          args:
+            - --port=8000
+            - --vllm-port=8200
+            - --connector=nixlv2
+            - --zap-log-level=1
+            - --secure-proxy=false
+            - --enable-prefiller-sampling
+          image: ghcr.io/llm-d/llm-d-routing-sidecar:v0.7.1
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 8000
+              name: sidecar
+              protocol: TCP
+          resources: {}
+          restartPolicy: Always
+          securityContext:
+            allowPrivilegeEscalation: false
+            runAsNonRoot: true

@@ -1,0 +1,74 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: decode
+spec:
+  replicas: 2
+  template:
+    spec:
+      nodeSelector:
+        cloud.google.com/gke-tpu-topology: "2x2x1"
+        cloud.google.com/gke-tpu-accelerator: "tpu7x"
+      containers:
+        - name: modelserver
+          command: ["vllm", "serve"]
+          args:
+            - "Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8"
+            - "--port=8000"
+            - "--data-parallel-size=1"
+            - "--max-model-len=9216"
+            - "--max-num-batched-tokens=1028"
+            - "--max-num-seqs=128"
+            - "--kv-cache-dtype=fp8"
+            - "--async-scheduling"
+            - "--gpu-memory-utilization=0.93"
+            - "--disable-access-log-for-endpoints=/health,/metrics,/v1/models"
+            - "--tensor-parallel-size=8"
+            # Uncomment for distributed tracing
+            # - "--otlp-traces-endpoint=http://otel-collector:4317"
+            # - "--collect-detailed-traces=all"
+          env:
+            - name: HF_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: llm-d-hf-token
+                  key: HF_TOKEN
+            # Uncomment for distributed tracing env vars
+            # - name: OTEL_SERVICE_NAME
+            #   value: "vllm-decode"
+            # - name: OTEL_EXPORTER_OTLP_ENDPOINT
+            #   value: "http://otel-collector:4317"
+            # - name: OTEL_TRACES_EXPORTER
+            #   value: "otlp"
+            # - name: OTEL_TRACES_SAMPLER
+            #   value: "parentbased_traceidratio"
+            # - name: OTEL_TRACES_SAMPLER_ARG
+            #   value: "0.1"
+          resources:
+            limits:
+              memory: 64Gi
+              cpu: "16"
+              google.com/tpu: 8
+            requests:
+              memory: 64Gi
+              cpu: "16"
+              google.com/tpu: 8
+          volumeMounts:
+            - mountPath: /.cache
+              name: torch-compile-cache
+          startupProbe:
+            initialDelaySeconds: 15
+            periodSeconds: 30
+            timeoutSeconds: 5
+            failureThreshold: 120
+          livenessProbe:
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            periodSeconds: 5
+            timeoutSeconds: 2
+            failureThreshold: 3
+      volumes:
+        - name: torch-compile-cache
+          emptyDir: {}

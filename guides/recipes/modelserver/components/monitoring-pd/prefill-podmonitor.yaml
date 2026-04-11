@@ -1,0 +1,14 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PodMonitor
+metadata:
+  name: prefill
+  labels:
+    llm-d.ai/role: prefill
+spec:
+  selector:
+    matchLabels:
+      llm-d.ai/role: prefill
+  podMetricsEndpoints:
+    - port: "modelserver"
+      path: /metrics
+      interval: 30s

@@ -1,0 +1,11 @@
+## Enables distributed tracing (OpenTelemetry) for the scheduler.
+## Layer this on top of base.values.yaml to enable tracing.
+## Update the endpoint and sampling values for your environment.
+
+inferenceExtension:
+  tracing:
+    enabled: true
+    otelExporterEndpoint: "http://otel-collector:4317"
+    sampling:
+      sampler: "parentbased_traceidratio"
+      samplerArg: "0.05"

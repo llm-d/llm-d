@@ -1,0 +1,38 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: decode
+  labels:
+    llm-d.ai/role: decode
+spec:
+  selector:
+    matchLabels:
+      llm-d.ai/role: decode
+  template:
+    metadata:
+      labels:
+        llm-d.ai/role: decode
+    spec:
+      serviceAccountName: sa
+      containers:
+        - name: modelserver
+          image: REPLACE_MODEL_SERVER_IMAGE
+          command: []
+          args: []
+          env: []
+          ports:
+            - name: modelserver
+              containerPort: 8000
+              protocol: TCP
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: modelserver
+          readinessProbe:
+            httpGet:
+              path: /v1/models
+              port: modelserver
+          startupProbe:
+            httpGet:
+              path: /v1/models
+              port: modelserver

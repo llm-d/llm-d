@@ -1,0 +1,33 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ../default
+  - prefill-leaderworkerset.yaml
+
+configurations:
+  - namereference.yaml
+
+patches:
+  # Add routing sidecar to the decode LWS
+  - path: patch-decode-leaderworkerset.yaml
+    target:
+      kind: LeaderWorkerSet
+      name: decode
+  # Change decode modelserver port to 8200
+  - target:
+      kind: LeaderWorkerSet
+      name: decode
+    patch: |
+      - op: replace
+        path: /spec/leaderWorkerTemplate/workerTemplate/spec/containers/0/ports/0/containerPort
+        value: 8200
+  - target:
+      kind: LeaderWorkerSet
+      name: decode
+    patch: |
+      - op: add
+        path: /spec/leaderWorkerTemplate/workerTemplate/spec/containers/0/ports/-
+        value:
+          name: nixl
+          containerPort: 5600
+          protocol: TCP

@@ -4,344 +4,44 @@
 
 ## Overview
 
-This guide deploys the recommended out of the box [scheduling configuration](https://github.com/llm-d/llm-d-inference-scheduler/blob/main/docs/architecture.md) for most vLLM and SGLang deployments, reducing tail latency and increasing throughput through load-aware and prefix-cache aware balancing. This can be run on two GPUs that can load [Qwen/Qwen3-32B](https://huggingface.co/Qwen/Qwen3-32B).
+This guide deploys the recommended out of the box [scheduling configuration](https://github.com/llm-d/llm-d-inference-scheduler/blob/main/docs/architecture.md) for most vLLM and SGLang deployments, reducing tail latency and increasing throughput through load-aware and prefix-cache aware balancing.
 
 This profile defaults to the approximate prefix cache aware scorer, which only observes request traffic to predict prefix cache locality. The [precise prefix cache aware routing feature](../precise-prefix-cache-aware) improves hit rate by introspecting the vLLM instances for cache entries and will become the default in a future release.
 
-## Hardware Requirements
-
-This example out of the box uses 16 GPUs (8 replicas x 2 GPUs each) of any supported kind:
-
-- **NVIDIA GPUs**: Any NVIDIA GPU (support determined by the inferencing image used)
-- **AMD GPUs**: Any AMD GPU (support determined by the inferencing image used)
-- **Intel XPU/GPUs**: Intel Data Center GPU Max 1550 or compatible Intel XPU device
-- **Intel Gaudi (HPU)**: Gaudi 1, Gaudi 2, or Gaudi 3 with DRA support
-- **TPUs**: Google Cloud TPUs (when using GKE TPU configuration)
-
-**Using fewer accelerators**: Fewer accelerators can be used by modifying the `values.yaml` corresponding to your deployment. For example, to use only 2 GPUs with the default NVIDIA GPU deployment, update `replicas: 2` in [ms-inference-scheduling/values.yaml](./ms-inference-scheduling/values.yaml#L17-L36).
-
-**Alternative CPU Deployment**: For CPU-only deployment (no GPUs required), see the [Hardware Backends](#hardware-backends) section for CPU-specific deployment instructions. CPU deployment requires Intel/AMD CPUs with 64 cores and 64GB RAM per replica.
-
-## Prerequisites
-
-- Have the [proper client tools installed on your local system](../../helpers/client-setup/README.md) to use this guide.
-- Have the [Monitoring stack](../../docs/monitoring/README.md) installed on your system.
-- Create a namespace for installation.
-
-  ```bash
-  export NAMESPACE=llm-d-inference-scheduler # or any other namespace (shorter names recommended)
-  kubectl create namespace ${NAMESPACE}
-  ```
-
-- [Create the `llm-d-hf-token` secret in your target namespace with the key `HF_TOKEN` matching a valid HuggingFace token](../../helpers/hf-token.md) to pull models.
-- Configure and deploy your [Gateway control plane](../prereq/gateway-provider/README.md)
-
-## Installation
-
-Use the helmfile to compose and install the stack. The Namespace in which the stack will be deployed will be derived from the `${NAMESPACE}` environment variable. If you have not set this, it will default to `llm-d-inference-scheduler` in this example.
-
-**_IMPORTANT:_** When using long namespace names (like `llm-d-inference-scheduler`), the generated pod hostnames may become too long and cause issues due to Linux hostname length limitations (typically 64 characters maximum). It's recommended to use shorter namespace names (like `llm-d`) and set `RELEASE_NAME_POSTFIX` to generate shorter hostnames and avoid potential networking or vLLM startup problems.
-
-### Deploy
-
-```bash
-cd guides/inference-scheduling
-```
-
-<!-- TABS:START -->
-
-<!-- TAB:GPU deployment:default -->
-
-#### GPU deployment
-
-```bash
-helmfile apply -n ${NAMESPACE}
-```
-
-<!-- TAB:CPU deployment -->
-
-#### CPU-only deployment
-
-```bash
-helmfile apply -e cpu -n ${NAMESPACE}
-```
-
-<!-- TABS:END -->
-
-**_NOTE:_** By default, this guide creates 8 vLLM pods. For development and testing, the number can be reduced by updating number of `replicas` in [ms-inference-scheduling/values.yaml](./ms-inference-scheduling/values.yaml#L36)
-
-
-**_NOTE:_** You can set the `$RELEASE_NAME_POSTFIX` env variable to change the release names. This is how we support concurrent installs. The value must follow DNS-1035 naming conventions: consist of lowercase alphanumeric characters or '-', start with an alphabetic character, and end with an alphanumeric character. Ex: `RELEASE_NAME_POSTFIX=inference-scheduling-2 helmfile apply -n ${NAMESPACE}`
-
-<details>
-<summary><h3>Advanced Gateway and Hardware Options</h3></summary>
-
-#### Gateway Options
-
-**_NOTE:_** This uses Istio as the default gateway provider, see [Gateway Options](#gateway-options) for installing with a specific provider.
-**_WARNING:_** `kgateway` is deprecated in llm-d and will be removed in the next release. Prefer `agentgateway` for new self-installed inference deployments.
-
-To specify your gateway choice you can use the `-e <gateway option>` flag, ex:
-
-```bash
-helmfile apply -e agentgateway -n ${NAMESPACE} # preferred agentgateway path
-helmfile apply -e kgateway -n ${NAMESPACE}     # deprecated migration path
-```
-
-For DigitalOcean Kubernetes Service (DOKS):
-
-```bash
-helmfile apply -e digitalocean -n ${NAMESPACE}
-```
-
- **_NOTE:_** DigitalOcean deployment uses public Qwen/Qwen3-0.6B model (no HuggingFace token required) and is optimized for DOKS GPU nodes with automatic tolerations and node selectors. Gateway API v1 compatibility fixes are automatically included.
-
-To see what gateway options are supported refer to our [gateway provider prereq doc](../prereq/gateway-provider/README.md#supported-providers). Gateway configurations per provider are tracked in the [gateway-configurations directory](../prereq/gateway-provider/common-configurations/).
-
-You can also customize your gateway, for more information on how to do that see our [gateway customization docs](../../docs/customizing-your-gateway.md).
-
-#### Hardware Backends
-
-Currently in the `inference-scheduling` example we support configurations for `amd`, `xpu`, `tpu`, `cpu`, `hpu` (Intel Gaudi) and `cuda` GPUs. By default we use modelserver values supporting `cuda` GPUs, but to deploy on one of the other hardware backends you may use:
-
-```bash
-helmfile apply -e amd  -n ${NAMESPACE} # targets istio as gateway provider with AMD GPU hardware
-helmfile apply -e xpu  -n ${NAMESPACE} # targets istio as gateway provider with XPU hardware
-# or
-helmfile apply -e hpu  -n ${NAMESPACE} # targets istio as gateway provider with Intel Gaudi (HPU) hardware
-helmfile apply -e gke_tpu_v6  -n ${NAMESPACE} # targets GKE externally managed as gateway provider with TPU v6e hardware
-# or
-helmfile apply -e gke_tpu_v7  -n ${NAMESPACE} # targets GKE externally managed as gateway provider with TPU v7 hardware
-# or
-helmfile apply -e cpu  -n ${NAMESPACE} # targets istio as gateway provider with CPU hardware
-```
-
-##### Intel XPU Configuration
-
-For Intel XPU deployments, the `values_xpu.yaml` uses Dynamic Resource Allocation (DRA) with a unified Intel accelerator configuration:
-
-```yaml
-# For Intel GPUs (supports both i915 and xe drivers):
-accelerator:
-  type: intel
-  dra: true
-```
-
-**Note:** The unified `intel` type works with both Intel Data Center GPU Max 1550 (i915 driver) and Intel BMG GPUs (Battlemage G21, xe driver). DRA automatically handles driver selection.
-
-**Note for Intel Gaudi (HPU) deployments:** Intel Gaudi uses Dynamic Resource Allocation (DRA) support. Ensure you have the [Intel Resource Drivers for Kubernetes](https://github.com/intel/intel-resource-drivers-for-kubernetes) installed on your cluster. See [Accelerator documentation](../../docs/accelerators/README.md#dynamic-resource-allocation) for setup details.
-
-##### CPU Inferencing
-
-This case expects using 4th Gen Intel Xeon processors (Sapphire Rapids) or later.
-
-</details>
-
-### Inference Server Selection
-
-By default, this well-lit path uses vLLM as the inference server for AI model serving.
-In case you want to deploy SGLang as the inference server, use:
-
-```bash
-export INFERENCE_SERVER=sglang
-helmfile apply -n ${NAMESPACE}
-```
-
-**_NOTE:_** Currently you can use this option only with the default hardware (i.e., `GPU` hardware).
-
-### Install HTTPRoute When Using Gateway option
-
-Follow provider specific instructions for installing HTTPRoute.
-
-**_IMPORTANT:_** If you set the `$RELEASE_NAME_POSTFIX` environment variable, you **must** update the HTTPRoute file to match your custom release names before applying it. The HTTPRoute references the Gateway and InferencePool names which include the release name postfix.
-
-For example, if you set `RELEASE_NAME_POSTFIX=my-custom`, you need to update the HTTPRoute:
-
-```bash
-# Update the HTTPRoute to match your release names
-sed -e "s/infra-inference-scheduling-inference-gateway/infra-my-custom-inference-gateway/g" \
-    -e "s/gaie-inference-scheduling/gaie-my-custom/g" \
-    httproute.yaml > httproute-custom.yaml
-
-# Then apply the customized HTTPRoute
-kubectl apply -f httproute-custom.yaml -n ${NAMESPACE}
-```
-
-#### Install for "agentgateway", "kgateway" (deprecated), or "istio"
-
-```bash
-kubectl apply -f httproute.yaml -n ${NAMESPACE}
-```
-
-#### Install for "gke"
-
-```bash
-kubectl apply -f httproute.gke.yaml -n ${NAMESPACE}
-```
-
-#### Install for "digitalocean"
-
-```bash
-kubectl apply -f httproute.yaml -n ${NAMESPACE}
-```
-
-## Verify the Installation
-
-- Firstly, you should be able to list all helm releases to view the 3 charts got installed into your chosen namespace:
-
-```bash
-helm list -n ${NAMESPACE}
-NAME                        NAMESPACE                   REVISION  UPDATED                                 STATUS      CHART                       APP VERSION
-gaie-inference-scheduling   llm-d-inference-scheduler   1         2026-01-26 15:11:26.506854 +0200 IST    deployed    inferencepool-v1.4.0   v1.4.0
-infra-inference-scheduling  llm-d-inference-scheduler   1         2026-01-26 15:11:21.008163 +0200 IST    deployed    llm-d-infra-v1.4.0          v0.4.0
-ms-inference-scheduling     llm-d-inference-scheduler   1         2026-01-26 15:11:39.385111 +0200 IST    deployed    llm-d-modelservice-v0.4.9   v0.4.0
-```
-
-- Out of the box with this example you should have the following resources:
-
-```bash
-kubectl get all -n ${NAMESPACE}
-NAME                                                                  READY   STATUS    RESTARTS   AGE
-pod/gaie-inference-scheduling-epp-59c5f64d7b-b5j2d                    1/1     Running   0          36m
-pod/infra-inference-scheduling-inference-gateway-istio-55fd84cnjzfv   1/1     Running   0          36m
-pod/llmdbench-harness-launcher                                        1/1     Running   0          2m43s
-pod/ms-inference-scheduling-llm-d-modelservice-decode-866b7c8795szd   1/1     Running   0          35m
-pod/ms-inference-scheduling-llm-d-modelservice-decode-866b7c87cdntk   1/1     Running   0          35m
-pod/ms-inference-scheduling-llm-d-modelservice-decode-866b7c87cnxxq   1/1     Running   0          35m
-pod/ms-inference-scheduling-llm-d-modelservice-decode-866b7c87fvtjf   1/1     Running   0          35m
-pod/ms-inference-scheduling-llm-d-modelservice-decode-866b7c87jqt27   1/1     Running   0          35m
-pod/ms-inference-scheduling-llm-d-modelservice-decode-866b7c87kwxc6   1/1     Running   0          35m
-pod/ms-inference-scheduling-llm-d-modelservice-decode-866b7c87rld4t   1/1     Running   0          35m
-pod/ms-inference-scheduling-llm-d-modelservice-decode-866b7c87xvbmp   1/1     Running   0          35m
-
-NAME                                                         TYPE        CLUSTER-IP       EXTERNAL-IP   PORT(S)             AGE
-service/gaie-inference-scheduling-epp                        ClusterIP   172.30.240.45    <none>        9002/TCP,9090/TCP   36m
-service/gaie-inference-scheduling-ip-18c12339                ClusterIP   None             <none>        54321/TCP           36m
-service/infra-inference-scheduling-inference-gateway-istio   ClusterIP   172.30.28.163    <none>        15021/TCP,80/TCP    36m
-
-NAME                                                                 READY   UP-TO-DATE   AVAILABLE   AGE
-deployment.apps/gaie-inference-scheduling-epp                        1/1     1            1           36m
-deployment.apps/infra-inference-scheduling-inference-gateway-istio   1/1     1            1           36m
-deployment.apps/ms-inference-scheduling-llm-d-modelservice-decode    8/8     8            8           35m
-
-NAME                                                                            DESIRED   CURRENT   READY   AGE
-replicaset.apps/gaie-inference-scheduling-epp-59c5f64d7b                        1         1         1       36m
-replicaset.apps/infra-inference-scheduling-inference-gateway-istio-55fd84c7fd   1         1         1       36m
-replicaset.apps/ms-inference-scheduling-llm-d-modelservice-decode-866b7c8768    8         8         8       35m
-```
-
-### Test the Deployment
-
-You can verify the deployment is working by creating a port-forward to the Istio gateway service and sending a curl command:
-
-```bash
-# Create port-forward to the gateway service
-kubectl port-forward -n ${NAMESPACE} svc/infra-inference-scheduling-inference-gateway-istio 8080:80
-```
-
-In another terminal, send a test request:
-
-```bash
-# Test with a simple completion request
-curl -X POST http://localhost:8080/v1/completions \
-  -H "Content-Type: application/json" \
-  -d '{
-    "model": "Qwen/Qwen3-32B",
-    "prompt": "Hello, how are you?",
-    "max_tokens": 50
-  }'
-```
-
-Or test with a chat completion:
-
-```bash
-curl -X POST http://localhost:8080/v1/chat/completions \
-  -H "Content-Type: application/json" \
-  -d '{
-    "model": "Qwen/Qwen3-32B",
-    "messages": [{"role": "user", "content": "Hello, how are you?"}],
-    "max_tokens": 50
-  }'
-```
-
-**_NOTE:_** If you set a custom `RELEASE_NAME_POSTFIX`, replace `infra-inference-scheduling-inference-gateway-istio` with `infra-${RELEASE_NAME_POSTFIX}-inference-gateway-istio` in the port-forward command.
-
-## Using the stack
-
-For instructions on getting started making inference requests see [our docs](../../docs/getting-started-inferencing.md)
+## Default Configuration
+
+| Parameter | Value |
+|-----------|-------|
+| Model | [Qwen/Qwen3-32B](https://huggingface.co/Qwen/Qwen3-32B) |
+| Replicas | 8 |
+| Tensor Parallelism | 2 |
+| GPUs per replica | 2 |
+| Total GPUs | 16 |
+
+### Supported Hardware Backends
+
+This guide includes configurations for the following accelerators:
+
+| Backend | Directory | Notes |
+|---------|-----------|-------|
+| NVIDIA CUDA | `modelserver/cuda/vllm/` | Default configuration |
+| NVIDIA CUDA (SGLang) | `modelserver/cuda/sglang/` | SGLang inference server |
+| AMD ROCm | `modelserver/amd/vllm/` | AMD GPU |
+| Intel XPU | `modelserver/xpu/vllm/` | Intel Data Center GPU Max 1550+ |
+| Intel Gaudi (HPU) | `modelserver/hpu/vllm/` | Gaudi 1/2/3 with DRA support |
+| Google TPU v6e | `modelserver/tpu-v6/vllm/` | GKE TPU |
+| Google TPU v7 | `modelserver/tpu-v7/vllm/` | GKE TPU |
+| CPU | `modelserver/cpu/vllm/` | Intel/AMD, 64 cores + 64GB RAM per replica |
+
+> **Note on hardware variant configurations:** Some hardware variants use reduced configurations (fewer replicas, smaller models) to enable CI testing for compatibility and regression checks. These configurations are maintained by their respective hardware vendors and are not guaranteed as production-ready examples. Users deploying on non-default hardware should review and adjust the configurations for their environment.
+
+## Prerequisites and Installation
+
+For prerequisites, installation, verification, and cleanup instructions, see the [guide installation docs](../01_installing_a_guide.md).
 
 ## Benchmarking
 
-To run benchmarks against the installed llm-d stack, you need [run_only.sh](https://github.com/llm-d/llm-d-benchmark/blob/main/existing_stack/run_only.sh), a template file from [./benchmark-templates](./benchmark-templates/), and a Persistent Volume Claim (PVC) to store the results (optional). Follow the instructions in the [benchmark doc](../../helpers/benchmark.md).
-
-### Example
-
-This example uses [run_only.sh](https://github.com/llm-d/llm-d-benchmark/blob/main/existing_stack/run_only.sh) with the template [guide.yaml](./benchmark-templates/guide.yaml).
-
-The benchmark launches a pod (`llmdbench-harness-launcher`) that, in this case, uses `inference-perf` with a shared prefix synthetic workload named `shared_prefix_synthetic`. This workload runs several stages with different rates. The results will be stored on the provided PVC, accessible through the `llmdbench-harness-launcher` pod. Alternatively, results may be saved to a local folder or uploaded to a cloud storage bucket, by using the `-o` flag of `run_only.sh`. Each experiment is saved under the `requests` folder, e.g.,/`requests/inference-perf_<experiment ID>_shared_prefix_synthetic_inference-scheduling_<model name>` folder.
-
-Several results files will be created (see [Benchmark doc](../../helpers/benchmark.md)), including a yaml file in a "standard" benchmark report format (see [Benchmark Report](https://github.com/llm-d/llm-d-benchmark/blob/main/docs/benchmark_report.md)).
-
-  ```bash
-  curl -L -O https://raw.githubusercontent.com/llm-d/llm-d-benchmark/main/existing_stack/run_only.sh
-  chmod u+x run_only.sh
-  select f in $(
-      curl -s https://api.github.com/repos/llm-d/llm-d/contents/guides/inference-scheduling/benchmark-templates?ref=main |
-      sed -n '/[[:space:]]*"name":[[:space:]][[:space:]]*"\([[:alnum:]].*\.yaml\)".*/ s//\1/p'
-    ); do
-    curl -LJO "https://raw.githubusercontent.com/llm-d/llm-d/main/guides/inference-scheduling/benchmark-templates/$f"
-    break
-  done
-  ```
-
-Choose the `guide.yaml` template, then run:
-
-  ```bash
-  export NAMESPACE=llm-d-inference-scheduler     # replace with your namespace
-  export BENCHMARK_PVC=workload-pvc   # replace with your PVC name
-  export GATEWAY_SVC=infra-inference-scheduling-inference-gateway-istio  # replace with your exact service name
-  envsubst < guide.yaml > config.yaml
-  ```
-
-Edit `config.yaml` if further customization is needed, and then run the command
-
-  ```bash
-  ./run_only.sh -c config.yaml
-  ```
-
-The output will show the progress of the `inference-perf` benchmark as it runs
-<details>
-<summary><b><i>Click</i></b> here to view the expected output</summary>
-
-  ```text
-  ...
-  2026-01-14 12:58:15,472 - inference_perf.client.filestorage.local - INFO - Report files will be stored at: /requests/inference-perf_1768395442_shared_prefix_synthetic_inference-scheduling-Qwen3-0.6B
-  2026-01-14 12:58:18,414 - inference_perf.loadgen.load_generator - INFO - Stage 0 - run started
-  Stage 0 progress: 100%|██████████| 1.0/1.0 [00:52<00:00, 52.06s/it]
-  2026-01-14 12:59:10,503 - inference_perf.loadgen.load_generator - INFO - Stage 0 - run completed
-  2026-01-14 12:59:11,504 - inference_perf.loadgen.load_generator - INFO - Stage 1 - run started
-  Stage 1 progress: 100%|██████████| 1.0/1.0 [00:52<00:00, 52.05s/it]
-  2026-01-14 13:00:03,566 - inference_perf.loadgen.load_generator - INFO - Stage 1 - run completed
-  2026-01-14 13:00:04,569 - inference_perf.loadgen.load_generator - INFO - Stage 2 - run started
-  Stage 2 progress: 100%|██████████| 1.0/1.0 [00:52<00:00, 52.05s/it]
-  2026-01-14 13:00:56,620 - inference_perf.loadgen.load_generator - INFO - Stage 2 - run completed
-  Stage 3 progress:   0%|          | 0/1.0 [00:00<?, ?it/s]2026-01-14 13:00:57,621 - inference_perf.loadgen.load_generator - INFO - Stage 3 - run started
-  Stage 3 progress: 100%|██████████| 1.0/1.0 [00:52<00:00, 52.14s/it]  2026-01-14 13:01:49,675 - inference_perf.loadgen.load_generator - INFO - Stage 3 - run completed
-  Stage 3 progress: 100%|██████████| 1.0/1.0 [00:52<00:00, 52.05s/it]
-  2026-01-14 13:01:50,677 - inference_perf.loadgen.load_generator - INFO - Stage 4 - run started
-  Stage 4 progress:  98%|█████████▊| 0.975/1.0 [00:51<00:01, 53.81s/it]2026-01-14 13:02:42,726 - inference_perf.loadgen.load_generator - INFO - Stage 4 - run completed
-  Stage 4 progress: 100%|██████████| 1.0/1.0 [00:52<00:00, 52.05s/it]
-  2026-01-14 13:02:43,727 - inference_perf.loadgen.load_generator - INFO - Stage 5 - run started
-  Stage 5 progress:  98%|█████████▊| 0.976/1.0 [00:51<00:01, 47.18s/it]             2026-01-14 13:03:35,770 - inference_perf.loadgen.load_generator - INFO - Stage 5 - run completed
-  Stage 5 progress: 100%|██████████| 1.0/1.0 [00:52<00:00, 52.04s/it]
-  2026-01-14 13:03:36,771 - inference_perf.loadgen.load_generator - INFO - Stage 6 - run started
-  Stage 6 progress: 100%|██████████| 1.0/1.0 [00:52<00:00, 52.05s/it]
-  2026-01-14 13:04:28,826 - inference_perf.loadgen.load_generator - INFO - Stage 6 - run completed
-  2026-01-14 13:04:29,932 - inference_perf.reportgen.base - INFO - Generating Reports...
-  ...
-  ```
-
-</details>
+For instructions on how to run benchmarks against an installed guide, see the [benchmarking docs](../03_benchmarking_a_guide.md).
 
 ### Benchmarking Report
 
@@ -632,45 +332,3 @@ The following data captures the performance of the last stage conducted at a fix
 | Request latency (s) | 105.4133 | 67.8649 | -37.5484 | -35.6% |
 | TTFT (s) | 34.9145 | 0.1203 | -34.7942 | -99.66% |
 | Inter-token latency (ms) | 70.42 | 67.66 | -2.76 | -3.9% |
-
-## Cleanup
-
-To remove the deployment:
-
-```bash
-# From examples/inference-scheduling
-helmfile destroy -n ${NAMESPACE}
-
-# Or uninstall manually
-helm uninstall infra-inference-scheduling -n ${NAMESPACE} --ignore-not-found
-helm uninstall gaie-inference-scheduling -n ${NAMESPACE}
-helm uninstall ms-inference-scheduling -n ${NAMESPACE}
-```
-
-**_NOTE:_** If you set the `$RELEASE_NAME_POSTFIX` environment variable, your release names will be different from the command above: `infra-$RELEASE_NAME_POSTFIX`, `gaie-$RELEASE_NAME_POSTFIX` and `ms-$RELEASE_NAME_POSTFIX`.
-
-### Cleanup HTTPRoute when using Gateway option
-
-Follow provider specific instructions for deleting HTTPRoute.
-
-#### Cleanup for "agentgateway", "kgateway" (deprecated), or "istio"
-
-```bash
-kubectl delete -f httproute.yaml -n ${NAMESPACE}
-```
-
-#### Cleanup for "gke"
-
-```bash
-kubectl delete -f httproute.gke.yaml -n ${NAMESPACE}
-```
-
-#### Cleanup for "digitalocean"
-
-```bash
-kubectl delete -f httproute.yaml -n ${NAMESPACE}
-```
-
-## Customization
-
-For information on customizing a guide and tips to build your own, see [our docs](../../docs/customizing-a-guide.md)

@@ -1,0 +1,64 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: decode
+spec:
+  replicas: 8
+  template:
+    spec:
+      containers:
+        - name: modelserver
+          command: ["vllm", "serve"]
+          args:
+            - "Qwen/Qwen3-32B"
+            - "--disable-access-log-for-endpoints=/health,/metrics,/v1/models"
+            - "--tensor-parallel-size=2"
+            # Uncomment for distributed tracing
+            # - "--otlp-traces-endpoint=http://otel-collector:4317"
+            # - "--collect-detailed-traces=all"
+          # env:
+          #   # Uncomment for distributed tracing env vars
+          #   - name: OTEL_SERVICE_NAME
+          #     value: "vllm-decode"
+          #   - name: OTEL_EXPORTER_OTLP_ENDPOINT
+          #     value: "http://otel-collector:4317"
+          #   - name: OTEL_TRACES_EXPORTER
+          #     value: "otlp"
+          #   - name: OTEL_TRACES_SAMPLER
+          #     value: "parentbased_traceidratio"
+          #   - name: OTEL_TRACES_SAMPLER_ARG
+          #     value: "0.1"
+          resources:
+            limits:
+              cpu: "32"
+              memory: 100Gi
+              amd.com/gpu: 2
+            requests:
+              cpu: "32"
+              memory: 100Gi
+              amd.com/gpu: 2
+          volumeMounts:
+            - mountPath: /dev/shm
+              name: shm
+            - mountPath: /.cache
+              name: torch-compile-cache
+          startupProbe:
+            initialDelaySeconds: 15
+            periodSeconds: 30
+            timeoutSeconds: 5
+            failureThreshold: 120
+          livenessProbe:
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            periodSeconds: 5
+            timeoutSeconds: 2
+            failureThreshold: 3
+      volumes:
+        - name: shm
+          emptyDir:
+            medium: Memory
+            sizeLimit: 20Gi
+        - name: torch-compile-cache
+          emptyDir: {}
