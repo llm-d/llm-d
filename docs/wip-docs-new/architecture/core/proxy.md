@@ -115,6 +115,6 @@ Gateway API-based deployments require the Gateway implementation to support Gate
 llm-d provides configuration guides and regularly tests integrations with the following Gateways:
 - [Istio](../guides/gateways/istio.md)
 - [GKE Gateway](../guides/gateways/gke.md)
-- [agentgateway](../guides/gateways/)
+- [agentgateway](../guides/gateways/agentgateway.md)
 
 > We welcome contribution of guides for other Gateways!
