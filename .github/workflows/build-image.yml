@@ -226,6 +226,10 @@ jobs:
           username: ${{ secrets.GHCR_USER }}
           password: ${{ secrets.GHCR_TOKEN }}
 
+      - name: Compute short SHA from checkout
+        id: short-sha
+        run: echo "short_sha=$(git rev-parse --short=7 HEAD)" >> $GITHUB_OUTPUT
+
       - name: Extract metadata
         id: meta
         uses: docker/metadata-action@v6
@@ -234,7 +238,7 @@ jobs:
           tags: |
             type=ref,event=branch
             type=ref,event=pr
-            type=sha
+            type=raw,value=sha-${{ steps.short-sha.outputs.short_sha }}
             type=raw,value=latest,enable={{is_default_branch}}
 
       - name: Calculate Cache Bust Timestamp
@@ -383,6 +387,10 @@ jobs:
           username: ${{ secrets.GHCR_USER }}
           password: ${{ secrets.GHCR_TOKEN }}
 
+      - name: Compute short SHA from checkout
+        id: short-sha
+        run: echo "short_sha=$(git rev-parse --short=7 HEAD)" >> $GITHUB_OUTPUT
+
       - name: Extract metadata
         id: meta
         uses: docker/metadata-action@v6
@@ -391,7 +399,7 @@ jobs:
           tags: |
             type=ref,event=branch
             type=ref,event=pr
-            type=sha
+            type=raw,value=sha-${{ steps.short-sha.outputs.short_sha }}
             type=raw,value=latest,enable={{is_default_branch}}
 
       - name: Calculate Cache Bust Timestamp
@@ -632,7 +640,7 @@ jobs:
           tags: |
             type=ref,event=branch
             type=ref,event=pr
-            type=sha
+            type=raw,value=sha-${{ needs.cuda-success-check.outputs.shortsha }}
             type=raw,value=latest,enable={{is_default_branch}}
 
       - name: Create and push manifest
@@ -753,6 +761,10 @@ jobs:
           username: ${{ secrets.GHCR_USER }}
           password: ${{ secrets.GHCR_TOKEN }}
 
+      - name: Compute short SHA from checkout
+        id: short-sha
+        run: echo "short_sha=$(git rev-parse --short=7 HEAD)" >> $GITHUB_OUTPUT
+
       - name: Extract metadata
         id: meta
         uses: docker/metadata-action@v6
@@ -761,7 +773,7 @@ jobs:
           tags: |
             type=ref,event=branch
             type=ref,event=pr
-            type=sha
+            type=raw,value=sha-${{ steps.short-sha.outputs.short_sha }}
             type=raw,value=latest,enable={{is_default_branch}}
 
       - name: Calculate Cache Bust Timestamp
@@ -960,7 +972,7 @@ jobs:
           tags: |
             type=ref,event=branch
             type=ref,event=pr
-            type=sha
+            type=raw,value=sha-${{ needs.aws-success-check.outputs.shortsha }}
             type=raw,value=latest,enable={{is_default_branch}}
 
       - name: Create and push manifest
@@ -1062,6 +1074,10 @@ jobs:
           username: ${{ secrets.GHCR_USER }}
           password: ${{ secrets.GHCR_TOKEN }}
 
+      - name: Compute short SHA from checkout
+        id: short-sha
+        run: echo "short_sha=$(git rev-parse --short=7 HEAD)" >> $GITHUB_OUTPUT
+
       - name: Extract metadata
         id: meta
         uses: docker/metadata-action@v6
@@ -1070,7 +1086,7 @@ jobs:
           tags: |
             type=ref,event=branch
             type=ref,event=pr
-            type=sha
+            type=raw,value=sha-${{ steps.short-sha.outputs.short_sha }}
             type=raw,value=latest,enable={{is_default_branch}}
 
       - name: Build & Push
