@@ -2,7 +2,7 @@
 # shared vLLM Version Configuration
 # ============================================================================
 VLLM_REPO=https://github.com/vllm-project/vllm.git
-VLLM_COMMIT_SHA=95c0f928cdeeaa21c4906e73cee6a156e1b3b995 # maps to v0.17.1 tag
+VLLM_COMMIT_SHA=780ba37458362bdc0596c6511e17749d44b145fc # Maps to 0.19.1rc1.dev44+g780ba3745 (git sha: 780ba37), see: https://github.com/vllm-project/vllm/issues/39057
 
 # ============================================================================
 # Cuda specific configs
@@ -15,7 +15,7 @@ VLLM_PREBUILT=0                # 0=editable install, 1=use full prebuilt wheel
 VLLM_USE_PRECOMPILED=1         # 1=use precompiled binaries either from VLLM_COMMIT_SHA or VLLM_PRECOMPILED_WHEEL_COMMIT, 0=compile from source
 # If building vLLM from a precompiled commit in the vLLM wheel index (only commits off main),
 # which commit to use as the base for the copiled bits.
-VLLM_PRECOMPILED_WHEEL_COMMIT=95c0f928cdeeaa21c4906e73cee6a156e1b3b995
+VLLM_PRECOMPILED_WHEEL_COMMIT=780ba37458362bdc0596c6511e17749d44b145fc # Maps to 0.19.1rc1.dev44+g780ba3745 (git sha: 780ba37), see: https://github.com/vllm-project/vllm/issues/39057
 
 ### Cuda Runtime versions
 CUDA_MAJOR=12
