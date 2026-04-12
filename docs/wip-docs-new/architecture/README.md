@@ -4,15 +4,15 @@ High-level guide to llm-d architecture. Start here, then dive into specific guid
 
 ## Core
 
-At it core, llm-d contains the following key layers:
+At its core, llm-d contains the following key layers:
 
-- **Proxy** - Accepts requests from the users. It can be deployed as a Standalone Envoy Proxy or via Kuberentes Gateway API. The Proxy consults an EndPoint Picker (EPP) via the ext-proc protocol to determine which Model Server is optimal for a request.
+- **Proxy** - Accepts requests from the users. It can be deployed as a Standalone Envoy Proxy or via Kubernetes Gateway API. The Proxy consults an EndPoint Picker (EPP) via the ext-proc protocol to determine which Model Server is optimal for a request.
 
-- **EndPoint Picker (EPP)** - Selects which endpoint in an `InferencePool` is optimal for an specific request. The EPP is the "brains" of the scheduling decision that considers prefix-cache affinity, load signals, prioritziation, and (optionally) disaggregated serving.
+- **EndPoint Picker (EPP)** - Selects which endpoint in an `InferencePool` is optimal for a specific request. The EPP is the "brains" of the scheduling decision that considers prefix-cache affinity, load signals, prioritization, and (optionally) disaggregated serving.
 
-- **InferencePool** - The InferencePool API defines a group of Model Server Pods dedicated to serving AI models. An InferencePool is conceptually similar to a Kuberentes Service. Each InferencePool has an associated EPP which selects the optimal pod for a request.
+- **InferencePool** - The InferencePool API defines a group of Model Server Pods dedicated to serving AI models. An InferencePool is conceptually similar to a Kubernetes Service. Each InferencePool has an associated EPP which selects the optimal pod for a request.
 
-- **Model Server** - The Model Server (like vLLM or SGLang) executes the model on hardware accelerators. The Model Servers can be deployed through any deployment process, joining an `InferencePool` via Kuberentes labels and selectors.
+- **Model Server** - The Model Server (like vLLM or SGLang) executes the model on hardware accelerators. The Model Servers can be deployed through any deployment process, joining an `InferencePool` via Kubernetes labels and selectors.
 
 
 ![Basic architecture](../../assets/basic-architecture.svg)

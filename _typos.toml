@@ -1,0 +1,3 @@
+[default.extend-words]
+ba = "ba"        # sed label syntax in YAML scripts
+MAPE = "MAPE"   # Mean Absolute Percentage Error (ML metric)

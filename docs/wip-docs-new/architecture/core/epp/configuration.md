@@ -3,7 +3,7 @@ NEEDS TO BE REDONE!
 
 ## EPP Configuration
 
-The `EndpointPickerConfig` is used to cofigure the EPP deployment.
+The `EndpointPickerConfig` is used to configure the EPP deployment.
 
 The configuration text has the following form:
 
@@ -118,8 +118,8 @@ Each plugin can also be given a name, enabling the same plugin type to be instan
 - name: aName
   type: a-type
   parameters:
-    parm1: val1
-    parm2: val2
+    param1: val1
+    param2: val2
 ```
 
 The fields in a plugin entry are:
@@ -179,7 +179,7 @@ There are two types of plugins related to Scheduling: `Scorers` and `Pickers`
 
 #### Scorers
 
-During the scheduling process, each pod recieves a score for each scorer in the `schedulingProfile`:
+During the scheduling process, each pod receives a score for each scorer in the `schedulingProfile`:
 
 - `prefix-cache-scorer`: Scores pods based on the amount of the prompt is believed to be in the pod's KvCache. Parameters:
     - `blockSize`: specified the size of the blocks to break up the input prompt when calculating the block hashes. If not specified defaults to 64 
@@ -202,7 +202,7 @@ During the scheduling process, each pod recieves a score for each scorer in the 
 
 #### Pickers
 
-After each pod recieves a score for each scorer which are combined using the `weights`, the `picker` configures how we select the pod.
+After each pod receives a score for each scorer which are combined using the `weights`, the `picker` configures how we select the pod.
 
 - `max-score-picker`: Picks the pod with the maximum score from the list of candidates. This is the default picker plugin if not specified. Parameters:
     - `maxNumOfEndpoints`: Maximum number of endpoints to pick from the list of candidates, based on the scores of those endpoints. If not specified defaults to 1

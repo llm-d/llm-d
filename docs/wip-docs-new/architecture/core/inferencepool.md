@@ -63,9 +63,9 @@ No explicit registration or enrollment is required. Once the labels match, the M
 
 ## Configuration
 
-### Installating the CRDs
+### Installing the CRDs
 
-The InferencePool CRDs are be installed from the Gateway Inference Extension API repository:
+The InferencePool CRDs can be installed from the Gateway Inference Extension API repository:
 
 ```bash
 IGW_LATEST_RELEASE=$(curl -s https://api.github.com/repos/kubernetes-sigs/gateway-api-inference-extension/releases \
