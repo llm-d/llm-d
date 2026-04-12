@@ -134,9 +134,68 @@ vLLM and SGLang use slightly different protocols for KV Transfer between the P a
 
 ### Efficient KV Transfer
 
+Once the EPP and Routing Sidecar have coordinated request flow, the P worker needs to hand off its computed KV cache to the D worker. Because the KV cache for a long prompt can be many gigabytes, this transfer sits directly on the critical path of TTFT — an inefficient transport will erase (or reverse) the latency benefits of disaggregation. llm-d addresses this by using [NIXL](https://github.com/ai-dynamo/nixl) (the NVIDIA Inference Xfer Library) as the transport abstraction, layered over [UCX](https://openucx.org/) and RDMA-capable hardware.
 
+#### Why not NVLink between pods?
 
+A natural question is: why not just use NVLink/NVSwitch, which already connects GPUs within a node at hundreds of GB/s? NVIDIA's Dynamo documentation covers this in detail — see [Why NVLink cannot be used between pods](https://docs.nvidia.com/dynamo/dev/kubernetes-deployment/deployment-guide/disagg-communication#why-nvlink-cannot-be-used-between-pods). The short version is that NVLink peer access is a *process-local* mechanism:
 
+- **Same-process requirement.** `cudaDeviceEnablePeerAccess()` requires both GPUs to be visible to a single CUDA context. P and D workers in llm-d run in separate pods, and therefore separate Linux PID/IPC namespaces and separate processes — the CUDA runtime cannot establish peer mappings across that boundary.
+- **Device isolation by Kubernetes.** The NVIDIA device plugin hands each pod an isolated view of GPUs via `CUDA_VISIBLE_DEVICES`. The P pod literally cannot name the D pod's GPUs, so there is no way to issue a peer-to-peer copy against them.
+- **No cross-process virtual address mapping.** Even CUDA IPC handles, which allow sharing device pointers across processes, assume the processes live on the same host with cooperating drivers and are not designed to span pod sandboxes.
+
+NVLink still matters *inside* a pod — it is what makes tensor parallelism and expert parallelism fast within a single worker — but for the P→D hand-off we need a transport that operates between independent processes, and typically between nodes.
+
+#### Transport options
+
+That leaves network-based transports. The practical options, in order of preference:
+
+| Transport | Typical BW | GPU-Direct | Recommended for |
+|---|---|---|---|
+| InfiniBand (RDMA) | 20–50 GB/s | Yes | Production |
+| RoCEv2 (RDMA over Ethernet) | 10–25 GB/s | Yes | Production |
+| TCP (UCX fallback) | 1–3 GB/s | No | Dev / CI only |
+
+The gap between RDMA and TCP is not subtle. NVIDIA reports ~200–500× TTFT regressions when NIXL falls back to TCP (e.g., ~98 s vs. ~200–500 ms for the same workload), which is why the note at the top of this page is emphatic: disaggregated serving in production assumes RDMA fabric between P and D nodes. See the [llm-d RDMA guide](../../../guides/rdma/README.md) for cluster setup.
+
+#### The NIXL / UCX / driver stack
+
+llm-d does not talk to the NIC directly. The stack looks like:
+
+```
+┌─────────────────────────────────────┐
+│ vLLM / SGLang KV connector          │  ← model server
+├─────────────────────────────────────┤
+│ NIXL                                │  ← KV-aware transfer API (descriptors, agents)
+├─────────────────────────────────────┤
+│ UCX                                 │  ← transport selection, rendezvous, flow control
+├─────────────────────────────────────┤
+│ rc_x / dc_x / cuda_copy / cuda_ipc  │  ← UCX transport backends
+├─────────────────────────────────────┤
+│ InfiniBand / RoCE NIC + GPUDirect   │  ← hardware
+└─────────────────────────────────────┘
+```
+
+- **NIXL** exposes a high-level API for registering GPU/CPU memory regions and describing KV blocks as transfer descriptors. vLLM's `NixlConnector` and SGLang's equivalent register the paged KV cache up-front so that individual transfers only need to reference offsets, not re-register memory.
+- **UCX** is the underlying communication framework. It picks a transport at connection time (`rc_x` for reliable-connection InfiniBand, `dc_x` for dynamically-connected IB at scale, `cuda_ipc` for same-host GPUs, TCP as a last resort) and handles rendezvous, completion, and fragmentation.
+- **GPUDirect RDMA** lets the NIC DMA directly into/out of GPU memory without staging through host RAM. This requires `nvidia-peermem` (or `nv_peer_mem`) to be loaded and a NIC whose firmware advertises PeerDirect support. Without it, UCX falls back to GPU→host→NIC→host→GPU copies, which doubles the PCIe traffic and burns CPU cycles.
+
+#### Pull vs. push and the rendezvous scheme
+
+Looking back at the sequence diagram, the decoder **pulls** the KV cache from the prefiller (`DWorker --> PWorker: Pull KV Cache`) rather than having the prefiller push it. This corresponds to UCX's `get_zcopy` rendezvous scheme:
+
+- The P worker finishes prefill, registers the KV blocks via NIXL, and returns descriptor metadata (remote addresses + rkeys) to the D worker in `kv_transfer_params`.
+- The D worker issues RDMA READs against those descriptors directly into its own paged KV cache — zero-copy on both ends when GPUDirect is available.
+- The D worker signals completion, at which point the P worker can free / reuse the KV blocks.
+
+Pulling from the receiver has two useful properties in a disaggregated scheduler: (1) the D worker already knows where in its paged allocator the blocks should land, avoiding a second copy, and (2) flow control is natural — the P worker never outruns a slow or overloaded D worker.
+
+> [!NOTE]
+> On some fabrics (notably AWS EFA on kernel ≥6.8), forcing `UCX_RNDV_SCHEME=get_zcopy` is unstable; UCX's `auto` scheme should be used instead, at the cost of roughly 3× the latency of native InfiniBand. This is a fabric-specific caveat, not a NIXL limitation.
+
+#### When disaggregation pays off
+
+Because every request pays a one-time KV transfer cost, there is a break-even point below which aggregated serving wins. The exact crossover depends on model size, KV dtype, prompt length, and fabric bandwidth — as a rough guide, NVIDIA observes that on an 8B model over EFA the break-even is around ~10k output tokens, while on a well-provisioned InfiniBand fabric with a large MoE model it can be a few hundred tokens. The EPP's `decider` (see above) exists precisely to make this call per-request based on how much of the prompt is already cached on the D side.
 
 
 
