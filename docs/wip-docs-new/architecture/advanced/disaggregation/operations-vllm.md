@@ -64,5 +64,43 @@ llm-d accomplishes this functionality by building on top of vLLM's existing requ
 
 ## Fault Tolerance
 
-xxx
+llm-d leverages dynamic xPyD configuration for disaggregated serving, meaning within an `InferencePool`, all D workers are connected to all P workers via RDMA. This creates a critical operational risk - crashes in workers have the potential for cascading failures if the system is not tolerant of failures.
+
+### Prefill Worker Failure
+
+Prefill Worker failures is most critical failure mode to handle in disaggregated deployments, as vLLM's NIXL uses a READ-centric KV Transfer protocol. When a P worker crashes, the D workers will attempt to execute and RDMA read without first checking that the P worker is still running.
+
+To do this, we leverage NIXL's error handling functionality to gracefully prevent cascading failure:
+
+```mermaid
+sequenceDiagram
+    participant R as Routing Proxy
+    participant P as Prefill Worker
+    participant D as Decode Worker
+
+    R->>P: Request (do_remote_decode=True)
+    P->>P: Run prefill
+    P->>R: Reponse
+
+    note over P: P crashes 💥
+
+    R->>D: Request (do_remote_prefill=True)
+    D->>P: NIXL RDMA Read 
+    D->>D: NIXL_ERR
+
+    alt kv_load_failure_policy = fail
+        D->>R: 500 Response
+    else kv_load_failure_policy = recompute
+        D->>D: Run full request locally
+        D->>R: 200 Response
+    end
+```
+
+vLLM's [`kv_load_failure_policy`](https://docs.vllm.ai/en/stable/features/nixl_connector_usage/?h=nixl#kv-load-failure-policy) setting controls how the system handles failures when the decoder instance loads KV cache blocks from the prefiller instance:
+- **fail (default, recommended)**: Immediately fail the request with an error when KV load fails. This prevents performance degradation by avoiding recomputation of prefill work on the decode instance.
+- **recompute**: Recompute failed blocks locally on the decode instance. This may cause performance jitter on decode instances as the scheduled prefill will delay and interfere with other decodes. Furthermore, decode instances are typically configured with low-latency optimizations (such as DeepEP LL for Wide EP deployments).
+
+Additionally, failed Prefill Worker pods are automatically moved to [`status: Terminated`](https://kubernetes.io/docs/concepts/workloads/pods/pod-lifecycle/#container-state-terminated) state as part of the standard Pod lifecycle. Since llm-d leverages the Kubernetes API Server for service discovery and there is no other centralized bootstrapping server for KV transfer, no additional cleanup is required to avoid routing additional traffic. The failed Prefill Workers will simply no longer be considered for additional traffic.
+
+### Decode Worker Failure
 
