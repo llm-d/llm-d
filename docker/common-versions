@@ -2,7 +2,7 @@
 # shared vLLM Version Configuration
 # ============================================================================
 VLLM_REPO=https://github.com/vllm-project/vllm.git
-VLLM_COMMIT_SHA=3244a2ebf25d3896c04828b6ce073ef7848ebdc9 # maps to v0.17.1 tag
+VLLM_COMMIT_SHA=3244a2ebf25d3896c04828b6ce073ef7848ebdc9
 
 # ============================================================================
 # Cuda specific configs
@@ -24,7 +24,7 @@ CUDA_PATCH=1
 
 
 ### Offloading connector
-LLM_D_OFFLOADING_CONNECTOR_VERSION=0.17.1
+### LLM_D_OFFLOADING_CONNECTOR_VERSION=0.17.1
 
 # ============================================================================
 # XPU specific settings
