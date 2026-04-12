@@ -3,7 +3,7 @@
 While Disaggregated serving offers superior performance for high scale inference, it introduces additional operational complexity, including:
 - [Dynamic Connections](#dynamic-connections) - how to add or remove P and D workers on the fly when workers require point-to-point RDMA connections
 - [Request Cancellation](#request-cancellation) - how to free KV caches from the engines when requests stop, in a distributed setting
-- [Fault Tolerance](#fault-tolerance) - how to ensure 
+- [Fault Tolerance](#fault-tolerance) - how to ensure crashes do not create cascading failures and that resources are cleaned up 
 
 llm-d's Kubernetes-native design simplifies these operational practices.
 
