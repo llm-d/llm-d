@@ -104,33 +104,13 @@ Note that both the prefill and decode endpoints are part of 1 `InferencePool`. T
 
 #### Routing Proxy Sidecar
 
-The llm-d Routing Proxy is deployed as a sidecar in each decode pod, with a two-fold role:
+The llm-d Routing Proxy is deployed as a sidecar to each decode pod. The role of the routing proxy is twofold:
 - Facilitate the multi-step inference request
 - Mutate the requests to follow each model server's KV transfer protocol
 
-##### Request Flow
+##### Model Server
 
-When a request arrives, the sidecar inspects a routing header set by the proxy:
-
-| Header | Purpose |
-|---|---|
-| `x-prefiller-host-port` | One or more prefill pod addresses (comma-separated or multi-value) |
-
-Based on which headers are present, the sidecar selects one of two execution paths:
-
-1. **Prefiller → Decoder (P/D)** — The standard disaggregated path. The request is sent to a remote prefiller, KV transfer metadata is collected, and the enriched request is forwarded to the local decoder.
-2. **Decoder-only** — No routing headers present; the request is proxied directly to the local model server instance.
-
-All non-completion routes (`GET /health`, and any other path) pass through to the decoder unchanged.
-
-##### KV Transfer Protocol
-
-vLLM and SGLang use slightly different protocols for KV Transfer between the P and D workers, accepting additional parameters in the body of the requests. The Routing Sidecar supports both of these:
-
-- **vLLM** (`nixlv2`, default) — A two-phase sequential protocol. The sidecar generates a UUID, sends a prefill request with `kv_transfer_params` containing remote-decode metadata, and `max_tokens=1` to suppress output. It captures the KV transfer parameters from the prefiller's response and injects them into the decode request before forwarding it to the local decoder. If the prefiller returns a server error, the sidecar falls back to decoder-only mode (client errors are not retried).
-
-**SGLang** (`sglang`) — Uses a concurrent prefill/decode model. Instead of waiting for prefill to complete, the sidecar injects bootstrap coordination parameters (`bootstrap_host`, `bootstrap_port`, `bootstrap_room`) into both requests, fires the prefill asynchronously in a goroutine (with `context.WithoutCancel` to prevent premature cancellation), and immediately sends the decode request synchronously. The decoder and prefiller coordinate KV transfer out-of-band via the bootstrap room.
-
+Each Model Server 
 
 ### Efficient KV Transfer
 
