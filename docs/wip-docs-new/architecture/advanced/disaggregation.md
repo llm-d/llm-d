@@ -1,53 +1,75 @@
 # Disaggregated Serving
 
-Disaggregated serving separates the **prefill** and **decode** stages of LLM inference onto different workers, allowing each stage to be scaled, scheduled, and tuned independently. llm-d implements prefill/decode (P/D) disaggregation as a first-class routing topology driven by the EPP.
+## Functionality
 
-## Overview
+Disaggregated serving separates the **prefill** and **decode** stages of LLM inference onto different workers, enabling:
+- **Specialization of P and D workers** - For example, using a larger TP for the memory-bound decoding phase while a smaller TP for the computation-bound prefill phase allows both phases to be computed efficiently
 
-A typical LLM inference request has two distinct phases with very different performance characteristics:
+- **Avoidance of Head-of-line-Blocking** - For long context requests, separating their prefill phase into dedicated prefill engines allows the ongoing decoding requests to be efficiently processed without being blocked by these long prefills, improving quality-of-service
 
-- **Prefill** -- compute-bound processing of the input prompt that populates the KV-cache. Latency here determines time-to-first-token (TTFT).
-- **Decode** -- memory-bandwidth-bound, token-by-token generation that reuses the KV-cache from prefill. Latency here determines inter-token latency (ITL).
+- **Compatibility with DP/EP** - For DP/EP deployments of Mixture of Experts models, Disaggregated Serving is critical to avoid pipeline bubbles and leveraging the specialized "MaskedGEMM" format for decode.
 
-Running both phases on the same worker forces a single hardware and scheduling configuration to serve two workloads with opposing resource profiles. Disaggregation instead routes prefill and decode to specialized workers and transfers the KV-cache between them.
+## Design
 
-llm-d supports two topologies out of the box:
+An implementation of disaggregated serving requires two key components:
+- **Request Flow Orchestration** - select and route the requests to the correct prefill and decode pods
 
-- **PD (no disaggregation)** -- a single worker handles both prefill and decode. This is the default when no disaggregation is configured.
-- **P/D (Prefill/Decode)** -- prefill and decode run on different workers, with the KV-cache transferred from prefill to decode over the network.
-
-The topology is driven by the unified `disagg-profile-handler` plugin in the EPP, which selects active stages based on configuration, the request, and the system state (for example, the KV-cache hit ratio on the selected decode pod).
-
-## Goals
-
-- Route prefill and decode to different workers when beneficial.
-- Maintain low TTFT and high decode throughput.
-- Improve resource utilization by specializing pods for each stage.
-- Align with Gateway API Inference Extension (GAIE) compatible request handling.
-
-## Key Components
-
-| Component | Role |
-|-----------|------|
-| **Prefill Worker** | Runs the prefill stage using the vLLM engine. |
-| **Decode Worker** | Runs the decode stage and hosts the sidecar that coordinates disaggregated execution. |
-| **Sidecar (Decode)** | Orchestrates communication with the prefill worker and manages the remote-prefill lifecycle. |
-| **Proxy (Envoy)** | Accepts OpenAI-style requests and forwards them to the EPP via ext-proc. |
-| **EPP** | Endpoint Picker, makes scheduling decisions for each stage. |
+- **Efficient KV Transfer** - transfer the KV cache from the P instance to the D instance. llm-d leverages NIXL integration in vLLM and SGLang for RDMA
 
 > [!NOTE]
-> No sidecar or coordination logic is required on the prefill worker. All orchestration lives on the decode side.
+> Disaggregated Serving requires high performance (RDMA) interconnects between nodes for efficient KV transfer. Without RDMA, NIXL falls back to TCP for transfer which is not efficient and should only be used for testing and development.
 
-## Request Lifecycle
 
-1. **User Request** -- Sent via the OpenAI-compatible API to the proxy.
-2. **EPP Scheduling Decision** -- The `disagg-profile-handler` runs stages in order:
-    1. **Decode**: always runs first and selects a decode pod.
-    2. **Prefill** (optional): the PD decider evaluates prompt length and prefix-cache hit on the selected decode pod; if disaggregation is warranted, a prefill pod is selected and its address is attached to the request via the `x-prefiller-host-port` header.
-3. **Execution** -- The request lands on the decode worker's sidecar:
-    - If `x-prefiller-host-port` is **not** present, the decode worker runs both prefill and decode locally.
-    - If `x-prefiller-host-port` is present, the sidecar sends the prefill to the selected prefill worker, waits for the remote KV parameters, then launches decode locally and pulls the KV-cache from the prefill worker.
-4. **Response Flow** -- Decode sidecar -> Proxy -> Client.
+### Request Flow Orchestration
+
+llm-d's EPP natively supports the concept of P/D disaggregation, enabling the following request flow:
+
+```mermaid
+sequenceDiagram
+    participant Client
+    participant Proxy
+    participant EPP
+    participant DSidecar as Routing Sidecar
+    participant DWorker as Decode Worker
+    Note over DSidecar,DWorker: Same Pod
+    participant PWorker as Prefill Worker
+
+    Client->>Proxy: Request
+    Proxy-->>EPP: Run EPP protocol
+    EPP-->>Proxy: Selects P Worker and D Worker
+    Proxy->>DSidecar: Request
+    DSidecar->>PWorker: Request with max_tokens=1, do_remote_decode=True
+    PWorker-->>PWorker: Run prefill
+    PWorker->>DSidecar: Response with KVTransferParams
+    DSidecar->>DWorker: Request with KVTransferParams and do_remote_prefill=True
+    DWorker-->>PWorker: Pull KV Cache (NIXL RDMA)
+    PWorker-->>PWorker: Release KV Cache
+    DWorker-->>DWorker: Run decodes
+    DWorker->>DSidecar: Response
+    DSidecar->>Proxy: Response
+```
+
+
+
+#### EPP
+
+The llm-d EPP suppors the concept of P/D didagg
+
+#### Routing Sidecar
+
+#### Model Server
+
+### Efficient KV Transfer
+
+### 
+
+
+
+
+
+
+
+
 
 ## Architectural Details
 
