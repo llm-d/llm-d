@@ -1,28 +1,5 @@
 ## Disaggregated Serving: Configuration --- WIP
 
-### P/D Sequence
-
-```mermaid
-sequenceDiagram
-  participant C as Client
-  participant I as Inference Gateway
-  participant DS as Decode Worker Sidecar
-  participant D as Decode Worker (vLLM)
-  participant P as Prefill Worker (vLLM)
-
-  C->>I: Inference Request
-  I->>DS: Request is sent to the Decode Worker Sidecar <br/>with the selected Prefill worker set in a header.
-  DS->>P: Remote Prefill with prompt (max_tokens=1)
-  P-->>P: Run prefill
-  P->>DS: Remote KV parameters
-  DS->>D: Request is sent to the Decode Worker (vLLM) with remote_prefill=true, <br/>prefill ID and memory block IDs
-  D-->>P: Read KV-cache
-  D-->>D: Schedule decode into queue & run decode
-  D->>DS: Inference Response
-  DS->>I: Inference Response
-  I->>C: Inference Response
-```
-
 ### Sidecar Responsibilities (Decode Only)
 
 - Receives EPP metadata (decode pod, optional prefill pod).
