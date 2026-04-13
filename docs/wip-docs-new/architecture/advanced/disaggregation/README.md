@@ -7,20 +7,6 @@ Disaggregated serving separates the **prefill** and **decode** stages of LLM inf
 
 - **Avoidance of Request Interference** - For long context requests, long-context prefills can slow down processing of existing requests in the decode phase. Separating the prefill phase of these long requests into dedicated prefill instances allows the ongoing decoding requests to be efficiently processed without being blocked by these long prefills, improving quality-of-service.
 
-```
-Legend:  [##] = prefill    [--] = decode
-
-          t0   t1   t2   t3   t4   t5   t6   t7
-          |    |    |    |    |    |    |    |
-Request A: [##] [--] [------------] [--] [--] [--]
-                                  ^
-                                  decode delay
-
-Request B:           [############] [--] [--] [--]
-                     ^
-             prefill interruption
-```
-
 - **Compatibility with DP/EP** - For DP/EP deployments of Mixture of Experts models, Disaggregated Serving is critical to avoid pipeline bubbles and leveraging the specialized "MaskedGEMM" format for decode.
 
 ## Design
