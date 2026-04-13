@@ -95,7 +95,7 @@ kubectl get pods -l app=my-model
 
 ## Step 3: Deploy the Gateway
 
-Create a `Gateway` resource. Istio watches this resource and automatically creates the Envoy-based gateway proxy that receives incoming traffic.
+Create a `Gateway` resource. Istio watches this resource and creates an Envoy-based proxy that accepts incoming traffic.
 
 ```bash
 kubectl apply -f - <<'EOF'
