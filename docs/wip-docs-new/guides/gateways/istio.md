@@ -12,9 +12,9 @@ This guide shows how to deploy llm-d with [Istio](https://istio.io/) as your [Ga
 - [jq](https://jqlang.org/download/)
 - Gateway API Inference Extension CRDs installed:
 
-  ```bash
-  kubectl apply -k https://github.com/kubernetes-sigs/gateway-api-inference-extension/config/crd
-  ```
+```bash
+kubectl apply -k https://github.com/kubernetes-sigs/gateway-api-inference-extension/config/crd
+```
 
 ## Step 1: Install Istio
 
