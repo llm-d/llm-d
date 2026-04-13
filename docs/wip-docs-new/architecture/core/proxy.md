@@ -20,7 +20,7 @@ llm-d provides two deployment patterns for the proxy:
 - via Gateway API - where the proxy is managed by the Kuberentes Gateway API machinery
 
 > [!NOTE]
-> Standalone deployments are intended for workloads where the machinery of Gateway API creates too much operational overhead - such as clusters using Ingress, basic testing and evaluations, batch inference, and RL post-training. Gateway API provides a clean intergation with modern, L7 production-grade networking practices.
+> Standalone deployments are intended for workloads where the machinery of Gateway API creates too much operational overhead - such as clusters using Ingress, basic testing and evaluations, batch inference, and RL post-training. Gateway API enables a clean integration with modern, L7 production-grade cloud networking solutions such as Istio, GKE Gateway and Agentgateway.
 
 ### Request Flow (Both Modes)
 
