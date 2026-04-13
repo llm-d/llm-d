@@ -35,7 +35,7 @@ sequenceDiagram
         D-->>P: Request NIXLMetadata (via ZMQ)
         P-->>D: Return NIXLMetadata (via ZMQ)
         D-->>D: Bootstrap RDMA connection
-        deactivate Decoder
+        deactivate D
     end
 
     D-->>P: NIXL READ: pull KV cache blocks via RDMA
