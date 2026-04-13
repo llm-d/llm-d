@@ -2,7 +2,7 @@
 
 KV-Cache offloading extends the effective cache capacity beyond GPU HBM by moving KV blocks to lower-cost storage. llm-d supports two offloading backends: CPU RAM (via vLLM's native OffloadingConnector) and shared filesystem storage (via the llm-d FS backend). These currently operate as independent options—tiered offloading where blocks flow through multiple levels is under active development. [Other connectors](#other-connectors) like LMCache are also supported through vLLM/SGLang integration.
 
-> KV-Cache offloading complements the [KV-Cache Indexer](./kv-indexer.md) which handles cache-aware routing. While the indexer determines *where* cached blocks exist, the offloader manages *how* blocks move between GPU memory and offload targets.
+> KV-Cache offloading complements the [KV-Cache Indexer](./kv-indexer.md) which handles cache-aware routing. While the indexer determines *where* cached blocks exist, the offloader manages *how* blocks move between GPU memory and lower-cost tiers.
 
 ## Functionality
 
@@ -57,7 +57,7 @@ llm-d supports two offloading targets. Each extends cache capacity beyond GPU HB
 vLLM's `OffloadingConnector` manages the GPU-to-CPU tier. It uses a hardware DMA engine for high-throughput transfers with minimal GPU core interference. The connector:
 
 - Allocates pinned CPU memory for staging buffers
-- Transfers KV blocks asynchronously using `cudaMemcpyAsync`
+-Transfers KV blocks asynchronously using GPU DMA, avoiding interference with GPU compute cores.
 - Uses a contiguous memory layout (introduced in vLLM 0.12.0) that groups all layers into single physical blocks, improving transfer throughput by 4-5x
 
 CPU offloading requires no external infrastructure. Enable it with:
@@ -307,7 +307,7 @@ The FS backend populates vLLM's built-in offloading metrics:
 - CephFS: Good balance of performance and sharing
 - IBM Storage Scale, GCP Lustre: High throughput for large deployments
 
-**Block size tuning:** Larger `block_size` values (256-512 tokens) improve I/O efficiency but increase minimum cache granularity. Match to your typical prefix lengths.
+**Block size tuning:** Larger `block_size` values (256-512 tokens) improve I/O efficiency but require longer matching prefixes for a cache hit. Match to your typical prefix lengths.
 
 ## Further Reading
 
