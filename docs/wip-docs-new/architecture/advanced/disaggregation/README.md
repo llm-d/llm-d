@@ -11,7 +11,7 @@ Disaggregated serving separates the **prefill** and **decode** stages of LLM inf
 
 An implementation of disaggregated serving requires two key components:
 - **Request Flow Orchestration** - select and route the requests to the correct prefill and decode pods
-- **Efficient KV Transfer** - transfer the KV cache from the P instance to the D instance. llm-d leverages NIXL integration in vLLM and SGLang for RDMA.
+- **Efficient KV Transfer** - transfer the KV cache from the P instance to the D instance, typically over RDMA
 
 > [!NOTE]
 > Disaggregated Serving requires high performance (RDMA) interconnects between nodes for efficient KV transfer. Without RDMA, NIXL falls back to TCP for transfer which is not efficient and should only be used for testing and development.
