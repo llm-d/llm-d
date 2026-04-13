@@ -43,8 +43,8 @@ sequenceDiagram
     D->>R: Response
 ```
 
-- Prefill worker run a side channel server over ZeroMQ. When the P worker finishes processing, it constructs the `KVTransferParams` with `remote_host=VLLM_SIDE_CHANNEL_HOST` (usually the pod ip) and `remote_port=VLLM_SIDE_CHANEL_PORT` in the response body.
-- Decode worker receives the request with the `KVTransferParams`, if there is not yet a connection to the remote P Worker, it runs a background thread to fetch the `NIXLMetadata` and create the RDMA connection. This action does not block core engine execution, enabling other requests to proceed as usualy.
+- Prefill workers run a side channel server over ZeroMQ. When the P worker finishes processing, it constructs the `KVTransferParams` with `remote_host=VLLM_SIDE_CHANNEL_HOST` (usually the pod IP) and `remote_port=VLLM_SIDE_CHANNEL_PORT` in the response body.
+- Decode worker receives the request with the `KVTransferParams`; if there is not yet a connection to the remote P worker, it runs a background thread to fetch the `NIXLMetadata` and create the RDMA connection. This action does not block core engine execution, enabling other requests to proceed as usually.
 
 #### Discovery
 
