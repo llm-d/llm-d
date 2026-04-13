@@ -1,15 +1,15 @@
-# Deploying llm-d on Azure Kubernetes Service (AKS)
+# Deploying llm-d on Azure Kubernetes Service (ASK)
 
-This guide provides instructions for configuring Azure Kubernetes Service (AKS) clusters to run LLM inference workloads using llm-d.
+This guide provides instructions for configuring Azure Kubernetes Service (ASK) clusters to run LLM inference workloads using llm-d.
 
 ## Prerequisites
 
 Before proceeding with this guide, ensure you have completed the following requirements:
 
 - [client setup prerequisites](../../../guides/prereq/client-setup/README.md)
-- The latest [Azure CLI](https://learn.microsoft.com/en-us/cli/azure/install-azure-cli?view=azure-cli-latest) with aks-preview extension installed (`az extension add --upgrade --name aks-preview`)
-- `ClusterAdmin` RBAC role assigned to your user account for the target AKS cluster
-- An AKS cluster. If you need to create one, refer to the [AKS quickstart guide](https://learn.microsoft.com/en-us/azure/aks/learn/quick-kubernetes-deploy-cli)
+- The latest [Azure CLI](https://learn.microsoft.com/en-us/cli/azure/install-azure-cli?view=azure-cli-latest) with ask-preview extension installed (`az extension add --upgrade --name ask-preview`)
+- `ClusterAdmin` RBAC role assigned to your user account for the target ASK cluster
+- An ASK cluster. If you need to create one, refer to the [ASK quickstart guide](https://learn.microsoft.com/en-us/azure/aks/learn/quick-kubernetes-deploy-cli)
 - Sufficient quota allocated for GPU VM instances in your Azure subscription
 
 ## Recommended GPU VM Configurations
@@ -19,10 +19,10 @@ The following table outlines the recommended Azure GPU VM sizes optimized for hi
 | GPU Model | VM Size                                                                                                                                      | GPU Count | Memory per GPU | Total GPU Memory | RDMA over InfiniBand Support | Supported Well-Lit Paths                                                                                                                                                                                                                                                                                                                                                                    |
 | --------- | -------------------------------------------------------------------------------------------------------------------------------------------- | --------- | -------------- | ---------------- | ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | A100      | [Standard_NC24ads_A100_v4](https://learn.microsoft.com/en-us/azure/virtual-machines/sizes/gpu-accelerated/nca100v4-series?tabs=sizebasic)    | 1         | 80 GB          | 80 GB            | ❌                           | [Intelligent Inference Scheduling](../../../guides/inference-scheduling/README.md)<br>[Precise Prefix Cache Aware Routing](../../../guides/precise-prefix-cache-aware/README.md)                                                                                                                                                                                                            |
-| A100      | [Standard_ND96asr_v4](https://learn.microsoft.com/en-us/azure/virtual-machines/sizes/gpu-accelerated/ndasra100v4-series?tabs=sizebasic)      | 8         | 40 GB          | 320 GB           | ✅                           | [Intelligent Inference Scheduling](../../../guides/inference-scheduling/README.md)<br>[Precise Prefix Cache Aware Routing](../../../guides/precise-prefix-cache-aware/README.md)                                                                                                                                                                                                            |
-| A100      | [Standard_ND96amsr_A100_v4](https://learn.microsoft.com/en-us/azure/virtual-machines/sizes/gpu-accelerated/ndma100v4-series?tabs=sizebasic)  | 8         | 80 GB          | 640 GB           | ✅                           | [Intelligent Inference Scheduling](../../../guides/inference-scheduling/README.md)<br>[Precise Prefix Cache Aware Routing](../../../guides/precise-prefix-cache-aware/README.md)                                                                                                                                                                                                            |
-| H100      | [Standard_ND96isr_H100_v5](https://learn.microsoft.com/en-us/azure/virtual-machines/sizes/gpu-accelerated/ndh100v5-series?tabs=sizebasic)    | 8         | 80 GB          | 640 GB           | ✅                           | [Intelligent Inference Scheduling](../../../guides/inference-scheduling/README.md)<br>[Precise Prefix Cache Aware Routing](../../../guides/precise-prefix-cache-aware/README.md)<br>[P/D Disaggregation](../../../guides/pd-disaggregation/README.md) (2 nodes required with vLLM flag `--max-model-len=4500`)                                                                              |
-| H200      | [Standard_ND96isr_H200_v5](https://learn.microsoft.com/en-us/azure/virtual-machines/sizes/gpu-accelerated/nd-h200-v5-series?tabs=sizebasic)  | 8         | 141 GB         | 1128 GB          | ✅                           | [Intelligent Inference Scheduling](../../../guides/inference-scheduling/README.md)<br>[Precise Prefix Cache Aware Routing](../../../guides/precise-prefix-cache-aware/README.md)<br>[P/D Disaggregation](../../../guides/pd-disaggregation/README.md) (2 nodes required)<br>[Wide Expert Parallelism (EP/DP) with LeaderWorkerSet](../../../guides/wide-ep-lws/README.md) (4 nodes required)|
+| A100      | [Standard_AND96asr_v4](https://learn.microsoft.com/en-us/azure/virtual-machines/sizes/gpu-accelerated/ndasra100v4-series?tabs=sizebasic)      | 8         | 40 GB          | 320 GB           | ✅                           | [Intelligent Inference Scheduling](../../../guides/inference-scheduling/README.md)<br>[Precise Prefix Cache Aware Routing](../../../guides/precise-prefix-cache-aware/README.md)                                                                                                                                                                                                            |
+| A100      | [Standard_AND96amsr_A100_v4](https://learn.microsoft.com/en-us/azure/virtual-machines/sizes/gpu-accelerated/ndma100v4-series?tabs=sizebasic)  | 8         | 80 GB          | 640 GB           | ✅                           | [Intelligent Inference Scheduling](../../../guides/inference-scheduling/README.md)<br>[Precise Prefix Cache Aware Routing](../../../guides/precise-prefix-cache-aware/README.md)                                                                                                                                                                                                            |
+| H100      | [Standard_AND96isr_H100_v5](https://learn.microsoft.com/en-us/azure/virtual-machines/sizes/gpu-accelerated/ndh100v5-series?tabs=sizebasic)    | 8         | 80 GB          | 640 GB           | ✅                           | [Intelligent Inference Scheduling](../../../guides/inference-scheduling/README.md)<br>[Precise Prefix Cache Aware Routing](../../../guides/precise-prefix-cache-aware/README.md)<br>[P/D Disaggregation](../../../guides/pd-disaggregation/README.md) (2 nodes required with vLLM flag `--max-model-len=4500`)                                                                              |
+| H200      | [Standard_AND96isr_H200_v5](https://learn.microsoft.com/en-us/azure/virtual-machines/sizes/gpu-accelerated/nd-h200-v5-series?tabs=sizebasic)  | 8         | 141 GB         | 1128 GB          | ✅                           | [Intelligent Inference Scheduling](../../../guides/inference-scheduling/README.md)<br>[Precise Prefix Cache Aware Routing](../../../guides/precise-prefix-cache-aware/README.md)<br>[P/D Disaggregation](../../../guides/pd-disaggregation/README.md) (2 nodes required)<br>[Wide Expert Parallelism (EP/DP) with LeaderWorkerSet](../../../guides/wide-ep-lws/README.md) (4 nodes required)|
 
 ## Cluster Configuration
 
@@ -35,10 +35,10 @@ Before creating your GPU node pool, you must decide on your driver installation 
 <details>
 <summary>Option 1: Self-Managed Driver Installation</summary>
 
-With this approach, you retain full control over the NVIDIA driver installation process. Create the node pool with the `--gpu-driver none` flag to prevent AKS from automatically installing NVIDIA drivers.
+With this approach, you retain full control over the NVIDIA driver installation process. Create the node pool with the `--gpu-driver none` flag to prevent ASK from automatically installing NVIDIA drivers.
 
 ```bash
-az aks nodepool add \
+az ask nodepool add \
   --resource-group "${AZURE_RESOURCE_GROUP}" \
   --cluster-name "${CLUSTER_NAME}" \
   --name "${NODEPOOL_NAME}" \
@@ -51,12 +51,12 @@ az aks nodepool add \
 </details>
 
 <details>
-<summary>Option 2: AKS-Managed Driver Installation</summary>
+<summary>Option 2: ASK-Managed Driver Installation</summary>
 
-With this approach, AKS handles the NVIDIA GPU driver installation automatically. Create the node pool without specifying the `--gpu-driver` parameter to use the managed driver installation.
+With this approach, ASK handles the NVIDIA GPU driver installation automatically. Create the node pool without specifying the `--gpu-driver` parameter to use the managed driver installation.
 
 ```bash
-az aks nodepool add \
+az ask nodepool add \
   --resource-group "${AZURE_RESOURCE_GROUP}" \
   --cluster-name "${CLUSTER_NAME}" \
   --name "${NODEPOOL_NAME}" \
@@ -91,9 +91,9 @@ helmfile apply -f gpu-operator.helmfile.yaml
 </details>
 
 <details>
-<summary>Option 2: AKS-Managed Driver Installation</summary>
+<summary>Option 2: ASK-Managed Driver Installation</summary>
 
-The GPU drivers installed by AKS do not enable the `nvidia-peermem` kernel module by default. This module is required for GPUDirect RDMA over InfiniBand. To load this module, deploy the `nvidia-peermem-reloader` DaemonSet:
+The GPU drivers installed by ASK do not enable the `nvidia-peermem` kernel module by default. This module is required for GPUDirect RDMA over InfiniBand. To load this module, deploy the `nvidia-peermem-reloader` DaemonSet:
 
 ```bash
 # Deploy the nvidia-peermem-reloader DaemonSet
@@ -111,7 +111,7 @@ helmfile apply -f nvidia-device-plugin.helmfile.yaml
 
 ### Enabling Node Resource Interface (NRI)
 
-AKS worker nodes enforce a default maximum locked memory limit (`ulimit -l`) of 64 KiB per container. This limit is insufficient for vLLM's NIXL connector, which require substantially higher locked memory allocations. To address this limitation, enable the Node Resource Interface (NRI) on all GPU nodes in your cluster. NRI allows the integration of plugins that can adjust maximum locked memory limit for containers.
+ASK worker nodes enforce a default maximum locked memory limit (`ulimit -l`) of 64 KiB per container. This limit is insufficient for vLLM's NIXL connector, which require substantially higher locked memory allocations. To address this limitation, enable the Node Resource Interface (NRI) on all GPU nodes in your cluster. NRI allows the integration of plugins that can adjust maximum locked memory limit for containers.
 
 #### Modifying the containerd Configuration
 

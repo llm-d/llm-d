@@ -78,7 +78,7 @@ Use the [TAS + LWS user guide](https://lws.sigs.k8s.io/docs/examples/tas/) to se
 
 The following documentation describes llm-d tested setup for cluster infrastructure providers as well as specific deployment settings that will impact how model servers is expected to access accelerators.
 
-* [Azure Kubernetes Service (AKS)](../../../docs/infra-providers/aks/README.md)
+* [Azure Kubernetes Service (ASK)](../../../docs/infra-providers/aks/README.md)
 * [DigitalOcean Kubernetes (DOKS)](../../../docs/infra-providers/digitalocean/README.md)
 * [Google Kubernetes Engine (GKE)](../../../docs/infra-providers/gke/README.md)
 * [OpenShift (OCP)](../../../docs/infra-providers/openshift/README.md), [OpenShift on AWS](../../../docs/infra-providers/openshift-aws/README.md)
