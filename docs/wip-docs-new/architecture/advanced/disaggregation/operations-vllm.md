@@ -79,7 +79,7 @@ sequenceDiagram
 ```
 
 > [!NOTE]
-> There is a small window in which request cancellation will not trigger KV freeing on the P instance. If the request is diconnected AFTER the request is completed on the P worker but BEFORE the request reaches the D worker's scheduler (e.g. if it disconnects while the request is inside Routing Proxy), the D worker never knows about the request and therefore is unable to free the remote blocks on the P worker. As a result, the KV blocks are stranded on the P worker until the timeout `VLLM_NIXL_ABORT_REQUEST_TIMEOUT`, which defaults to 480s. We are currently working on a lease-extension strategy which will dramatically shorten the timeout window.
+> There is a small window in which request cancellation will not trigger KV freeing on the P instance. If the request is disconnected after it is completed on the P worker but before it reaches the D worker's scheduler (for example, if it disconnects while the request is inside Routing Proxy), the D worker never knows about the request and therefore is unable to free the remote blocks on the P worker. As a result, the KV blocks are stranded on the P worker until the timeout `VLLM_NIXL_ABORT_REQUEST_TIMEOUT`, which defaults to 480s. We are currently working on a lease-extension strategy that will dramatically shorten the timeout window.
 
 ## Fault Tolerance
 
