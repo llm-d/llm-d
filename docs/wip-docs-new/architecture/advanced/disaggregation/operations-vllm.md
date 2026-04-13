@@ -60,8 +60,9 @@ As a result, new replicas can be added to a running disaggregated deployment wit
 
 Given the compute intensity and duration of inference requests, model servers like vLLM support "Request Cancellation", where currently in-progress requests are freed when the client disconnects.
 
-In a disaggregation setup, this feature is more complicated, because the resources associated with an inference request are spread across multiple servers (as the P instances holds onto the KV caches until they have been retrieved by the D instance). As a result, if the request is canceled while it is still "in-flight" on the D instance but before the KV transfer occurs, we need to ensure that the resources on the P instance are properly cleaned up. llm-d accomplishes this functionality by building on top of vLLM's existing request cancellation infrastructure:
-- When requests are disconnected in vLLM, it triggers the `abort` codepath, which cleans up running resources. When request with `do_remote_prefill=True` are aborted, vLLM sends a NIXL side channel message (`sesnd_notif`), instructing the remote prefill instance to free the KV cache for the cancelled request.
+In a disaggregation setup, this feature is more complicated, because the resources associated with an inference request are spread across multiple servers (as the P instances holds onto the KV caches until they have been retrieved by the D instance). As a result, if the request is canceled while it is still "in-flight" on the D instance but before the KV transfer occurs, we need to ensure that the resources on the P instance are properly cleaned up.
+
+llm-d accomplishes this functionality by building on top of vLLM's existing request cancellation infrastructure. When requests are disconnected in vLLM, it triggers the `abort` codepath, which cleans up running resources. When request with `do_remote_prefill=True` are aborted, vLLM sends a NIXL side channel message (`sesnd_notif`), instructing the remote prefill instance to free the KV cache for the cancelled request.
 
 ```mermaid
 sequenceDiagram
@@ -104,7 +105,7 @@ sequenceDiagram
     P->>P: Run prefill
     P->>R: Reponse
 
-    note over P: P crashes
+    note over P: P crashes 💥
 
     R->>D: Request (do_remote_prefill=True)
     D->>P: NIXL_RDMA_READ
@@ -146,4 +147,18 @@ sequenceDiagram
 ```
 
 
-> [!WARNING] Robustness against Decode instance failure is currently a weakness of the design, since the `VLLM_NIXL_ABORT_REQUEST_TIMEOUT` defaults to a long timeout (`480s` to avoid early-free when D instancess are backed up). We recommend that production users consider reducing this timeout, especially if they can ensure Decode instancess do not result in significant queuing. We are currently worksing on a "lease-extension" system, which will dramatically improve this situation and avoid the tradeoff.
+> [!WARNING]
+> Robustness against Decode instance failure is currently a weakness of the design, since the `VLLM_NIXL_ABORT_REQUEST_TIMEOUT` defaults to a long timeout (`480s` to avoid early-free when D instancess are backed up). We recommend that production users consider reducing this timeout, especially if they can ensure Decode instancess do not result in significant queuing. We are currently worksing on a "lease-extension" system, which will dramatically improve this situation and avoid the tradeoff.
+
+## Rollouts
+
+In disaggregated serving, rolling out a new version of the model server (e.g. a new version of vLLM or a new configuration) requires care, since prefill-decode instance pairs communicate with eachother to execute the KV transfer operation. As a motivating example, vLLM has multiple attention kernel implementations, each of which can have slightly different KV cache layouts - since NIXL pulls the KVs directly from the GPU KV cache memory of the remote instance, we need to ensure these are matching.
+
+By default, vLLM checks for [compatibility between instances](https://github.com/vllm-project/vllm/pull/29503) during the NIXL handshake, failing the request if scheduled to incompatible pods. There is an escape hatch to disable compatibility checking:
+
+```bash
+--kv-transfer-config '{"kv_connector_extra_config": {"enforce_handshake_compat": false}}'
+```
+
+> ![IMPORTANT]
+> The llm-d EPP currently assumes all P and D instances within an `InferencePool` are compatible and will therefore schedule requests to any arbitrary pair of P and D instances. As a result, it is currently recommended to create a new `InferencePool` for upgrading model servers. When deploying with a `Gateway`, traffic can be gradually shifted to the new `InferencePool` by modifying the `HTTPRoute`.
