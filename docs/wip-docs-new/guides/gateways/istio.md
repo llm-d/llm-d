@@ -7,10 +7,10 @@ This guide shows how to deploy llm-d with [Istio](https://istio.io/) as your [Ga
 
 ## Prerequisites
 
-- A Kubernetes cluster running one of the three most recent [Kubernetes releases](https://kubernetes.io/releases/)
-- [Helm](https://helm.sh/docs/intro/install/)
-- [jq](https://jqlang.org/download/)
-- Gateway API Inference Extension CRDs installed:
+* A Kubernetes cluster running one of the three most recent [Kubernetes releases](https://kubernetes.io/releases/)
+* [Helm](https://helm.sh/docs/intro/install/)
+* [jq](https://jqlang.org/download/)
+* Gateway API Inference Extension CRDs installed:
 
 ```bash
 kubectl apply -k https://github.com/kubernetes-sigs/gateway-api-inference-extension/config/crd
