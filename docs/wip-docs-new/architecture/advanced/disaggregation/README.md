@@ -82,7 +82,7 @@ sequenceDiagram
     Decode-Profile-->>Decode-Profile: Filter, Score, Pick
     Decode-Profile-->>PD-Profile-Handler: D Endpoint
     PD-Profile-Handler-->>Decider: Num uncached tokens on D
-    Decider-->>PD-Profile-Handler: [do-dp] BOOL
+    Decider-->>PD-Profile-Handler: [do-pd] BOOL
     opt do-pd=FALSE
         PD-Profile-Handler-->>Proxy: D Endpoint
     end
