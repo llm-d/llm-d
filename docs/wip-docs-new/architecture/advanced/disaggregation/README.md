@@ -2,10 +2,24 @@
 
 ## Functionality
 
-Disaggregated serving separates the **prefill** and **decode** stages of LLM inference onto different workers, enabling:
-- **Specialization of P and D workers** - For example, using a larger TP for the memory-bound decoding phase while a smaller TP for the computation-bound prefill phase allows both phases to be computed efficiently.
+Disaggregated serving separates the **prefill** and **decode** stages of LLM inference onto different model server instances, enabling:
+- **Specialization of P and D** - For example, using a larger TP for the memory-bound decoding phase while a smaller TP for the computation-bound prefill phase allows both phases to be computed efficiently.
 
-- **Avoidance of Request Interference** - For long context requests, long-context prefills can create head-of-line blocking challenges that slow down processing of existing requests in the decode phase. Separating the prefill phase of these long requests into dedicated prefill engines allows the ongoing decoding requests to be efficiently processed without being blocked by these long prefills, improving quality-of-service.
+- **Avoidance of Request Interference** - For long context requests, long-context prefills can slow down processing of existing requests in the decode phase. Separating the prefill phase of these long requests into dedicated prefill instances allows the ongoing decoding requests to be efficiently processed without being blocked by these long prefills, improving quality-of-service.
+
+```
+Legend:  [##] = prefill    [--] = decode
+
+          t0   t1   t2   t3   t4   t5   t6   t7
+          |    |    |    |    |    |    |    |
+Request A: [##] [--] [------------] [--] [--] [--]
+                                  ^
+                                  decode delay
+
+Request B:           [############] [--] [--] [--]
+                     ^
+             prefill interruption
+```
 
 - **Compatibility with DP/EP** - For DP/EP deployments of Mixture of Experts models, Disaggregated Serving is critical to avoid pipeline bubbles and leveraging the specialized "MaskedGEMM" format for decode.
 
@@ -17,11 +31,11 @@ An implementation of disaggregated serving requires two key components:
 - **Efficient KV Transfer** - transfer the KV cache from the P instance to the D instance. llm-d leverages NIXL integration in vLLM and SGLang for RDMA.
 
 > [!NOTE]
-> Disaggregated Serving requires high performance (RDMA) interconnects between nodes for Efficient KV transfer. Without RDMA, NIXL falls back to TCP for transfer which is not efficient and should only be used for testing and development.
+> Disaggregated Serving requires high performance (RDMA) interconnects between nodes for efficient KV transfer. Without RDMA, NIXL falls back to TCP for transfer which is not efficient and should only be used for testing and development.
 
 ### Request Flow Orchestration
 
-llm-d's EPP natively supports the concept of P/D disaggregation, enabling the following request flow:
+llm-d's EPP natively supports the concept of P/D disaggregation by selecting a prefill and decode worker pair, enabling the following request flow:
 
 ```mermaid
 sequenceDiagram
@@ -48,7 +62,7 @@ sequenceDiagram
     DSidecar->>Proxy: Response
 ```
 
-We will discuss the design of the EPP and Routing Sidecar.
+Next we will discuss the design of the EPP and Routing Sidecar for disaggregated serving.
 
 #### EPP
 
@@ -59,10 +73,10 @@ The llm-d EPP supports disaggregation via the `pd-profile-handler`.
 
 When configured with `pd-profile-handler`, the EPP processes requests in the following steps:
 - The proxy forwards request metadata to the EPP.
-- The `pd-profile-handler` first runs the `decode-profile`, which runs the `filter`, `score`, `pick` lifecycle to select the D endpoint.
+- The `pd-profile-handler` first runs the `decode-profile`, which runs the `filter`, `score`, `pick` scheduler profile to select the D endpoint.
 - The `pd-profile-handler` then consults the `decider` — given how much of the prompt is cached on the D instance, should this request run disagg?
 - If `no`: the `pd-profile-handler` returns only the D endpoint to the proxy
-- If `yes` (large uncached suffix), the `pd-profile-handler` also runs the `prefill-profile`, which runs the `filter`, `score`, `pick` lifecycle to select the P endpoint and returns both the P and D endpoints to the proxy.
+- If `yes` (large uncached suffix), the `pd-profile-handler` also runs the `prefill-profile`, which runs the `filter`, `score`, `pick` scheduler profile to select the P endpoint and returns both the P and D endpoints to the proxy.
 
 
 The flow looks like this:
@@ -95,7 +109,7 @@ sequenceDiagram
 
 In this way, llm-d's disaggregated serving functionality composes neatly with the existing set of scheduling functionality, enabling use of the existing set of scorers for prefix and load aware routing in the disaggregated setting.
 
-Note that both the prefill and decode endpoints are part of 1 `InferencePool`. The `decode-profile` and `prefill-profile` are responsible for selecting only D workers or P workers via the `filter` step. By default, llm-d uses the label key `llm-d.ai/role` with the following values:
+Note that both the prefill and decode endpoints are part of one `InferencePool`. The `decode-profile` and `prefill-profile` are responsible for selecting only D workers or P workers via the `filter` step. By default, llm-d uses the label key `llm-d.ai/role` with the following values:
 - `prefill` → prefill-only pods
 - `decode` → decode-capable pods
 - `prefill-decode` → pods capable of both prefill and decode 
@@ -128,9 +142,9 @@ All non-completion routes (`GET /health`, and any other path) pass through to th
 
 vLLM and SGLang use slightly different protocols for KV Transfer between the P and D workers, accepting additional parameters in the body of the requests. The Routing Sidecar supports both of these:
 
-- **vLLM** (`nixlv2`, default) — A two-phase sequential protocol. The sidecar generates a UUID, sends a prefill request with `kv_transfer_params` containing remote-decode metadata, and `max_tokens=1` to suppress output. It captures the KV transfer parameters from the prefiller's response and injects them into the decode request before forwarding it to the local decoder. If the prefiller returns a server error, the sidecar falls back to decoder-only mode (client errors are not retried).
+- **vLLM** (`nixlv2`, default) — A two-phase sequential protocol. The sidecar sends a prefill request with `kv_transfer_params` containing remote-decode metadata, and `max_tokens=1` to suppress output. It captures the KV transfer parameters from the prefiller's response and injects them into the decode request before forwarding it to the local decoder. If the prefiller returns a server error, the sidecar falls back to decoder-only mode (client errors are not retried).
 
-**SGLang** (`sglang`) — Uses a concurrent prefill/decode model. Instead of waiting for prefill to complete, the sidecar injects bootstrap coordination parameters (`bootstrap_host`, `bootstrap_port`, `bootstrap_room`) into both requests, fires the prefill asynchronously in a goroutine (with `context.WithoutCancel` to prevent premature cancellation), and immediately sends the decode request synchronously. The decoder and prefiller coordinate KV transfer out-of-band via the bootstrap room.
+-   **SGLang** (`sglang`) — Uses a concurrent prefill/decode model. Instead of waiting for prefill to complete, the sidecar injects bootstrap coordination parameters (`bootstrap_host`, `bootstrap_port`, `bootstrap_room`) into both requests, fires the prefill asynchronously in a goroutine (with `context.WithoutCancel` to prevent premature cancellation), and immediately sends the decode request synchronously. The decoder and prefiller coordinate KV transfer out-of-band via the bootstrap room.
 
 
 ### Efficient KV Transfer
