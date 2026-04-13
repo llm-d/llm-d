@@ -51,7 +51,7 @@ In standalone mode:
 ### Gateway API Deployment
 
 > [!NOTE]
-> Gateway API is an advanced Kuberentes Networking API, targeted at production deployments. It is recommended to understand the concept of a Gateway in the [official documentation](https://gateway-api.sigs.k8s.io/) 
+> Gateway API is an advanced Kubernetes Networking API, targeted at production deployments. It is recommended to understand the concept of a Gateway in the [official documentation](https://gateway-api.sigs.k8s.io/).
 
 Gateway API is an official Kubernetes project focused on L4 and L7 routing in Kubernetes, representing the next generation of Kubernetes Ingress, Load Balancing, and Service Mesh APIs.
 
