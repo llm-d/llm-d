@@ -7,8 +7,6 @@ Disaggregated serving separates the **prefill** and **decode** stages of LLM inf
 - **Avoidance of Request Interference** - For long context requests, long-context prefills can slow down processing of existing requests in the decode phase. Separating the prefill phase of these long requests into dedicated prefill instances allows the ongoing decoding requests to be efficiently processed without being blocked by these long prefills, improving quality-of-service.
 - **Compatibility with DP/EP** - For DP/EP deployments of Mixture of Experts models, disaggregated serving is essential to avoid pipeline bubbles and leveraging the specialized "MaskedGEMM" format for decode.
 
-## Design
-
 An implementation of disaggregated serving requires two key components:
 - **Request Flow Orchestration** - select and route the requests to the correct prefill and decode pods
 - **Efficient KV Transfer** - transfer the KV cache from the P instance to the D instance, typically over RDMA
@@ -16,7 +14,7 @@ An implementation of disaggregated serving requires two key components:
 > [!NOTE]
 > Disaggregated Serving requires high performance (RDMA) interconnects between nodes for efficient KV transfer. Without RDMA, NIXL falls back to TCP for transfer which is not efficient and should only be used for testing and development.
 
-### Request Flow Orchestration
+## Design - Request Flow Orchestration
 
 llm-d's EPP supports the concept of P/D disaggregation by selecting a prefill and decode worker pair, with the following request flow:
 
@@ -47,7 +45,7 @@ sequenceDiagram
 
 Next we will discuss the design of the EPP and Routing Sidecar for disaggregated serving.
 
-#### EPP
+### EPP
 
 The llm-d EPP supports disaggregation via the `pd-profile-handler`.
 
@@ -100,13 +98,13 @@ Note that both the prefill and decode endpoints are part of one `InferencePool`.
 > [!NOTE]
 > It is possible to override the default labels by configuring the `EndpointPickerConfig` to use the generic by-label filter plugin instead of the `prefill-filter` / `decode-filter`. TODO: provide an example of this.
 
-#### Routing Proxy Sidecar
+### Routing Proxy Sidecar
 
 The Routing Proxy is deployed as a sidecar in each decode pod, with a two-fold role:
 - Facilitate the multi-step inference request
 - Mutate the requests to follow each model server's KV transfer protocol
 
-##### Request Flow
+#### Request Flow
 
 When a request arrives, the sidecar inspects a routing header set by the proxy:
 
@@ -121,14 +119,14 @@ Based on which headers are present, the sidecar selects one of two execution pat
 
 All non-completion routes (`GET /health`, and any other path) pass through to the decoder unchanged.
 
-##### KV Transfer Protocol
+#### KV Transfer Protocol
 
 vLLM and SGLang use slightly different protocols for KV Transfer between the P and D instance, inserting additional parameters in the body of the requests to facilitate the transfer:
 - **vLLM** (`nixlv2`, default) — A two-phase sequential protocol. The sidecar sends a prefill request with `kv_transfer_params` containing remote-decode metadata, and `max_tokens=1` to suppress output. It captures the KV transfer parameters from the prefiller's response and injects them into the decode request before forwarding it to the local decoder. If the prefiller returns a server error, the sidecar falls back to decoder-only mode (client errors are not retried).
 - **SGLang** (`sglang`) — Uses a concurrent prefill/decode model. Instead of waiting for prefill to complete, the sidecar injects bootstrap coordination parameters (`bootstrap_host`, `bootstrap_port`, `bootstrap_room`) into both requests, fires the prefill asynchronously in a goroutine (with `context.WithoutCancel` to prevent premature cancellation), and immediately sends the decode request synchronously. The decoder and prefiller coordinate KV transfer out-of-band via the bootstrap room.
 
 
-### Efficient KV Transfer
+## Design - Efficient KV Transfer
 
 Once the EPP and Routing Sidecar have coordinated request flow, the P worker needs to hand off its computed KV cache to the D worker. Because the KV cache for a long prompt can be many gigabytes, this transfer sits directly on the critical path of TTFT — an inefficient transport will erase (or reverse) the latency benefits of disaggregation. llm-d addresses this by using [NIXL](https://github.com/ai-dynamo/nixl) (the NVIDIA Inference Xfer Library) as the transport abstraction, layered over [UCX](https://openucx.org/) and RDMA-capable hardware.
 
