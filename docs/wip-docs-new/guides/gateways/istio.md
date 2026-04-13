@@ -49,7 +49,7 @@ istiod-xxxxxxxxxx-xxxxx   1/1     Running   0          30s
 Deploy two replicas of vLLM running `openai/gpt-oss-20b`:
 
 > [!NOTE]
-> This example requires NVIDIA GPUs. For CPU-based testing, use the vLLM Simulator (`ghcr.io/llm-d/llm-d-inference-sim:latest`) instead.
+> This example uses NVIDIA GPUs. For CPU testing, use the vLLM Simulator (`ghcr.io/llm-d/llm-d-inference-sim:latest`).
 
 ```bash
 kubectl apply -f - <<'EOF'
