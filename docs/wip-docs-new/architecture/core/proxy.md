@@ -16,7 +16,7 @@ The proxy's job is to:
 ## Design
 
 llm-d provides two deployment patterns for the proxy:
-- Standalone - where the Envoy Proxy pod is deployed directly
+- Standalone - where an Envoy proxy container is deployed alongside the [EPP](epp) container in the same Pod
 - via Gateway API - where the proxy is managed by the Kuberentes Gateway API machinery
 
 > [!NOTE]
