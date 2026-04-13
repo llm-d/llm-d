@@ -47,10 +47,10 @@ In addition, the EPP can also query "consultant" components which can execute ar
 
 With autoscaling, Model Servers are added or removed automatically to keep serving capacity aligned with inference demand. llm-d supports three approaches that differ in how they observe and define supply and demand:
 
-- **Supply-side** - Measures supply as the remaining resource headroom on backends (KV cache capacity, compute throughput) and demand as the current resource consumption (tokens in use, model server queue depth). Scales when resource utilization leaves insufficient headroom. Supports prefill/decode (P/D) disaggregation, heterogeneous hardware, and fair-share allocation in supply-constrained environments.
+- **Supply-side** - Measures supply as the remaining resource headroom on backends (KV cache capacity, compute throughput) and demand as the current resource consumption (tokens in use, model server queue depth). Scales when resource utilization leaves insufficient headroom.
 
-- **Demand-side** - Measures demand using EPP flow-control signals — queue depth and active request counts — and scales when pending requests accumulate. Reacts quickly to traffic bursts but is blind to hardware heterogeneity, serving roles, and supply constraints.
+- **Demand-side** - Measures demand using EPP flow-control signals — queue depth and active request counts — and scales when pending requests accumulate.
 
-- **Service-level objective (SLO)-driven** - Defines supply as the maximum request rate backends can sustain while meeting latency targets, and demand as the observed arrival rate. Learns server behavior online and scales to keep time to first token (TTFT) / inter-token latency (ITL) within SLO. Best when latency SLO guarantees are required, and for variable traffic patterns since it adapts dynamically rather than relying on static thresholds.
+- **Service-level objective (SLO)-driven** - Defines supply as the maximum request rate backends can sustain while meeting latency targets, and demand as the observed arrival rate. Learns server behavior online and scales to keep time to first token (TTFT) / inter-token latency (ITL) within SLO targets. Best when latency SLO guarantees are required.
 
 See [Autoscaling](advanced/autoscaling/autoscaling.md) for complete details on the autoscaling design.
