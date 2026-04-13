@@ -100,7 +100,8 @@ Note that both the prefill and decode endpoints are part of 1 `InferencePool`. T
 - `decode` → decode-capable pods
 - `prefill-decode` → pods capable of both prefill and decode 
 
-> [!NOTE]: It is possible to override the default labels. To accommodate this without code changes, you can configure the `EndpointPickerConfig` to use the generic by-label filter plugin instead of the hardcoded encode-filter / prefill-filter / decode-filter. TODO: provide an example of this.
+> [!NOTE]
+> It is possible to override the default labels. To accommodate this without code changes, you can configure the `EndpointPickerConfig` to use the generic by-label filter plugin instead of the hardcoded `prefill-filter` / `decode-filter`. TODO: provide an example of this.
 
 #### Routing Proxy Sidecar
 
