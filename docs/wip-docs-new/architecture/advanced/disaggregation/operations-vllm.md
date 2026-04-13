@@ -30,12 +30,11 @@ sequenceDiagram
     P-->>P: Run prefill
     P->>R: Response with KVTransferParams including remote_host, remote_port, remote_request_id, and remote_kv_blocks
     R->>D: Request with KVTransferParams
-    cond No connection:
+    alt No connection
         D-->>D: Spawn background thread
         D-->>P: Request NIXLMetadata (via ZMQ)
         P-->>D: Return NIXLMetadata (via ZMQ)
         D-->>D: Bootstrap RDMA connection
-        deactivate D
     end
 
     D-->>P: NIXL READ: pull KV cache blocks via RDMA
@@ -147,4 +146,4 @@ sequenceDiagram
 ```
 
 
-> [!WARNING] Robustness against Decode instance failure is currently a weakness of the design, since the `VLLM_NIXL_ABORT_REQUEST_TIMEOUT` defaults to a long timeout (`480s` to avoid early-free when D engines are backed up). We recommend that production users consider reducing this timeout, especially if they can ensure Decode Workers do not result in significant queuing. We are currently working on a "lease-extension" system, which will dramatically improve this situation and avoid the tradeoff.
+> [!WARNING] Robustness against Decode instance failure is currently a weakness of the design, since the `VLLM_NIXL_ABORT_REQUEST_TIMEOUT` defaults to a long timeout (`480s` to avoid early-free when D instancess are backed up). We recommend that production users consider reducing this timeout, especially if they can ensure Decode instancess do not result in significant queuing. We are currently worksing on a "lease-extension" system, which will dramatically improve this situation and avoid the tradeoff.
