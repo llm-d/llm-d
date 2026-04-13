@@ -52,15 +52,15 @@ We will discuss the design of the EPP and Routing Sidecar.
 
 #### EPP
 
-The llm-d EPP supports disaggregation via the `disagg-profile-handler`.
+The llm-d EPP supports disaggregation via the `pd-profile-handler`.
 
 > [!NOTE]
 > Rather than hardcoding a single scheduling algorithm, the EPP delegates execution to one or more `Profile Handlers`, each of which represents a complete scheduling strategy with its own set of scorers and pickers. They can be thought of as "the dispatcher", which maps each incoming inference request to the right scheduling strategy before the scorers and pickers do their work of selecting the actual endpoint. By default, llm-d uses the `single-profile-handler` for simple aggregated serving.
 
-When configured with `disagg-profile-handler`, the EPP processes requests in the following steps:
+When configured with `pd-profile-handler`, the EPP processes requests in the following steps:
 - The proxy forwards request metadata to the EPP.
 - The `pd-profile-handler` first runs the `decode-profile`, which runs the `filter`, `score`, `pick` lifecycle to select the D endpoint.
-- The `pd-profiler-handler` then consults the `decider` — given how much of the prompt is cached on the D instance, should this request run disagg?
+- The `pd-profile-handler` then consults the `decider` — given how much of the prompt is cached on the D instance, should this request run disagg?
 - If `no`: the `pd-profile-handler` returns only the D endpoint to the proxy
 - If `yes` (large uncached suffix), the `pd-profile-handler` also runs the `prefill-profile`, which runs the `filter`, `score`, `pick` lifecycle to select the P endpoint and returns both the P and D endpoints to the proxy.
 
@@ -82,7 +82,7 @@ sequenceDiagram
     Decode-Profile-->>Decode-Profile: Filter, Score, Pick
     Decode-Profile-->>PD-Profile-Handler: D Endpoint
     PD-Profile-Handler-->>Decider: Num uncached tokens on D
-    Decider-->>PD-Profile-Handler: [do-dp] BOOL
+    Decider-->>PD-Profile-Handler: [do-pd] BOOL
     opt do-pd=FALSE
         PD-Profile-Handler-->>Proxy: D Endpoint
     end
@@ -95,12 +95,13 @@ sequenceDiagram
 
 In this way, llm-d's disaggregated serving functionality composes neatly with the existing set of scheduling functionality, enabling use of the existing set of scorers for prefix and load aware routing in the disaggregated setting.
 
-Note that both the prefill and decode endpoints are part of 1 `InferencePool`. The  `decode-profile` and `prefill-profile` for selecting only D workers or P workers via the `filter` step. By default, llm-d uses the label key `llm-d.ai/role` with the following values:
+Note that both the prefill and decode endpoints are part of 1 `InferencePool`. The `decode-profile` and `prefill-profile` are responsible for selecting only D workers or P workers via the `filter` step. By default, llm-d uses the label key `llm-d.ai/role` with the following values:
 - `prefill` → prefill-only pods
 - `decode` → decode-capable pods
 - `prefill-decode` → pods capable of both prefill and decode 
 
-> [!NOTE]: It is possible to override the default labels. To accommodate this without code changes, you can configure the `EndpointPickerConfig` to use the generic by-label filter plugin instead of the hardcoded encode-filter / prefill-filter / decode-filter. TODO: provide an example of this.
+> [!NOTE]
+> It is possible to override the default labels. To accommodate this without code changes, you can configure the `EndpointPickerConfig` to use the generic by-label filter plugin instead of the hardcoded `prefill-filter` / `decode-filter`. TODO: provide an example of this.
 
 #### Routing Proxy Sidecar
 

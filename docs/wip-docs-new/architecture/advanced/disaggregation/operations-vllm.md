@@ -7,7 +7,7 @@ While Disaggregated serving offers superior performance for high scale inference
 
 llm-d's Kubernetes-native design simplifies these operational practices.
 
-## Dyanmic Connection
+## Dynamic Connections
 
 In production enviornments it is common for pods to be created and destroyed - either recovering from crashes or dynamically adjusting capacity alongside load. In a P/D enviornment, the ability to dynamically add/remove replicas from the deployment is complicated by the need to establish/destroy connections between P and D workers on the fly and the need to fee
 
@@ -15,7 +15,7 @@ vLLM leverages NIXL for KV transfer. A key feature of NIXL is support for dynami
 
 ### Scale-Up - Creating New Connections
 
-To create new P/D connections, vLLM executes a "NIXL Handshake" between the D and P worker to setup the RDMA connection. This is a relatievly expensive operation (O(~5s)) that is done once per engine pair, with all subsequent requests leveraging the existing connection. llm-d uses a "dynamic lazy" roll-out strategy, avoiding the need for a centralized bootstrap server maintaining global state.
+To create new P/D connections, vLLM executes a "NIXL Handshake" between the D and P worker to setup the RDMA connection. This is a relatively expensive operation (~5s) that is done once per engine pair, with all subsequent requests leveraging the existing connection. llm-d uses a "dynamic lazy" roll-out strategy, avoiding the need for a centralized bootstrap server maintaining global state.
 
 
 It works like this:
@@ -29,13 +29,13 @@ sequenceDiagram
     R->>P: Request with do_remote_decode=True
     P-->>P: Run prefill
     P->>R: Response with KVTransferParams including remote_host, remote_port, and remote_kv_blocks
-    R->>D: Request with KVTransferParamss
+    R->>D: Request with KVTransferParams
     cond No connection
         D-->>D: Spawn background thread
         D-->>P: Request NIXLMetadata (via ZMQ)
         P-->>D: Return NIXLMetadata (via ZMQ)
         D-->>D: Bootstrap RDMA connection
-        deactivate Decoder
+        deactivate D
     end
 
     D-->>P: NIXL READ: pull KV cache blocks via RDMA
@@ -43,8 +43,8 @@ sequenceDiagram
     D->>R: Response
 ```
 
-- Prefill worker run a side channel server over ZeroMQ. When the P worker finishes processing, it constructs the `KVTransferParams` with `remote_host=VLLM_SIDE_CHANNEL_HOST` (usually the pod ip) and `remote_port=VLLM_SIDE_CHANEL_PORT` in the response body.
-- Decode worker receives the request with the `KVTransferParams`, if there is not yet a connection to the remote P Worker, it runs a background thread to fetch the `NIXLMetadata` and create the RDMA connection. This action does not block core engine execution, enabling other requests to proceed as usualy.
+- Prefill workers run a side channel server over ZeroMQ. When the P worker finishes processing, it constructs the `KVTransferParams` with `remote_host=VLLM_SIDE_CHANNEL_HOST` (usually the pod IP) and `remote_port=VLLM_SIDE_CHANNEL_PORT` in the response body.
+- Decode worker receives the request with the `KVTransferParams`; if there is not yet a connection to the remote P worker, it runs a background thread to fetch the `NIXLMetadata` and create the RDMA connection. This action does not block core engine execution, enabling other requests to proceed as usually.
 
 #### Discovery
 
@@ -79,7 +79,7 @@ sequenceDiagram
 ```
 
 > [!NOTE]
-> There is a small window in which request cancellation will not trigger KV freeing on the P instance. If the request is diconnected AFTER the request is completed on the P worker but BEFORE the request reaches the D worker's scheduler (e.g. if it disconnects while the request is inside Routing Proxy), the D worker never knows about the request and therefore is unable to free the remote blocks on the P worker. As a result, the KV blocks are stranded on the P worker until the timeout `VLLM_NIXL_ABORT_REQUEST_TIMEOUT`, which defaults to 480s. We are currently working on a lease-extension strategy which will dramatically shorten the timeout window.
+> There is a small window in which request cancellation will not trigger KV freeing on the P instance. If the request is disconnected after it is completed on the P worker but before it reaches the D worker's scheduler (for example, if it disconnects while the request is inside Routing Proxy), the D worker never knows about the request and therefore is unable to free the remote blocks on the P worker. As a result, the KV blocks are stranded on the P worker until the timeout `VLLM_NIXL_ABORT_REQUEST_TIMEOUT`, which defaults to 480s. We are currently working on a lease-extension strategy that will dramatically shorten the timeout window.
 
 ## Fault Tolerance
 
@@ -117,7 +117,7 @@ sequenceDiagram
     end
 ```
 
-Failed Prefill Worker pods are automatically moved to [`status: Terminated`](https://kubernetes.io/docs/concepts/workloads/pods/pod-lifecycle/#container-state-terminated) state as part of the standard Pod lifecycle. Since llm-d leverages the Kubernetes API Server for service discovery, no additional traffic will be routed to the failed worker and until the pod has been restarted and returns to the `status: Running` state.
+Failed Prefill Worker pods are automatically moved to [`status: Terminated`](https://kubernetes.io/docs/concepts/workloads/pods/pod-lifecycle/#container-state-terminated) state as part of the standard Pod lifecycle. Since llm-d leverages the Kubernetes API Server for service discovery, no additional traffic will be routed to the failed worker until the pod has been restarted and returns to the `status: Running` state.
 
 In this way, `llm-d` gracefully isolates Prefill Worker failure.
 
@@ -142,7 +142,6 @@ sequenceDiagram
 
     P->>P: Wait `VLLM_NIXL_ABORT_REQUEST_TIMEOUT`
     P->>P: Free KV Blocks
-    end
 ```
 
 
