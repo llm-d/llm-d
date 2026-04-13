@@ -3,7 +3,7 @@
 ## Functionality
 
 Disaggregated serving separates the **prefill** and **decode** stages of LLM inference onto different model server instances, enabling:
-- **Specialization of P and D** - LLM inference is composed of two distinct phases of inference - prefill (FLOPs-bound) and decode (Memory bandwidth-bound). Disgaggregation enables specialization, e.g. using a larger TP for the memory-bound decoding phase while a smaller TP for the computation-bound prefill phase.
+- **Specialization of P and D** - LLM inference is composed of two distinct phases of inference - prefill (FLOPs-bound) and decode (memory bandwidth-bound). Disgaggregation enables specialization, e.g. using a larger TP for the memory-bound decoding phase while a smaller TP for the computation-bound prefill phase.
 - **Avoidance of Request Interference** - For long context requests, long-context prefills can slow down processing of existing requests in the decode phase. Separating the prefill phase of these long requests into dedicated prefill instances allows the ongoing decoding requests to be efficiently processed without being blocked by these long prefills, improving quality-of-service.
 - **Compatibility with DP/EP** - For DP/EP deployments of Mixture of Experts models, disaggregated serving is essential to avoid pipeline bubbles and leveraging the specialized "MaskedGEMM" format for decode.
 
@@ -18,7 +18,7 @@ An implementation of disaggregated serving requires two key components:
 
 ### Request Flow Orchestration
 
-llm-d's EPP natively supports the concept of P/D disaggregation by selecting a prefill and decode worker pair, enabling the following request flow:
+llm-d's EPP supports the concept of P/D disaggregation by selecting a prefill and decode worker pair, with the following request flow:
 
 ```mermaid
 sequenceDiagram
@@ -52,7 +52,7 @@ Next we will discuss the design of the EPP and Routing Sidecar for disaggregated
 The llm-d EPP supports disaggregation via the `pd-profile-handler`.
 
 > [!NOTE]
-> Rather than hardcoding a single scheduling algorithm, the EPP delegates execution to one or more `Profile Handlers`, each of which represents a complete scheduling strategy with its own set of scorers and pickers. They can be thought of as "the dispatcher", which maps each incoming inference request to the right scheduling strategy before the scorers and pickers do their work of selecting the actual endpoint. By default, llm-d uses the `single-profile-handler` for simple aggregated serving.
+> Rather than hardcoding a single scheduling algorithm, the EPP delegates execution to one or more `Profile Handlers`, each of which represents a complete scheduling strategy. They can be thought of as "the dispatcher", which maps each incoming inference request to the right scheduling strategy before the scorers and pickers do their work of selecting the actual endpoint. By default, llm-d uses the `single-profile-handler` for simple aggregated serving.
 
 When configured with `pd-profile-handler`, the EPP processes requests in the following steps:
 - `proxy` forwards request metadata to the EPP.
@@ -90,9 +90,9 @@ sequenceDiagram
     PD-Profile-Handler-->>Proxy: D, P Endpoint
 ```
 
-In this way, llm-d's disaggregated serving functionality composes neatly with the existing set of scheduling functionality, enabling use of the existing set of scorers for prefix and load aware routing in the disaggregated setting.
+In this way, disaggregated serving functionality composes with the existing set of scheduling functionality, enabling use of the existing set of scorers for prefix and load aware routing in the disaggregated setting.
 
-Note that both the prefill and decode endpoints are part of one `InferencePool`. The `decode-profile` and `prefill-profile` are responsible for selecting only D workers or P workers via the `filter` step. By default, llm-d uses the label key `llm-d.ai/role` with the following values:
+Note that both the prefill and decode endpoints are part of one `InferencePool`. The `decode-profile` and `prefill-profile` are responsible for selecting only D workers or P workers via the `filter` step. By default, llm-d uses the label key `llm-d.ai/role` with the following values to filter:
 - `prefill` → prefill-only pods
 - `decode` → decode-capable pods
 - `prefill-decode` → pods capable of both prefill and decode 
@@ -102,7 +102,7 @@ Note that both the prefill and decode endpoints are part of one `InferencePool`.
 
 #### Routing Proxy Sidecar
 
-The llm-d Routing Proxy is deployed as a sidecar in each decode pod, with a two-fold role:
+The Routing Proxy is deployed as a sidecar in each decode pod, with a two-fold role:
 - Facilitate the multi-step inference request
 - Mutate the requests to follow each model server's KV transfer protocol
 
@@ -123,7 +123,7 @@ All non-completion routes (`GET /health`, and any other path) pass through to th
 
 ##### KV Transfer Protocol
 
-vLLM and SGLang use slightly different protocols for KV Transfer between the P and D workers, accepting additional parameters in the body of the requests. The Routing Sidecar supports both of these:
+vLLM and SGLang use slightly different protocols for KV Transfer between the P and D instance, inserting additional parameters in the body of the requests to facilitate the transfer:
 - **vLLM** (`nixlv2`, default) — A two-phase sequential protocol. The sidecar sends a prefill request with `kv_transfer_params` containing remote-decode metadata, and `max_tokens=1` to suppress output. It captures the KV transfer parameters from the prefiller's response and injects them into the decode request before forwarding it to the local decoder. If the prefiller returns a server error, the sidecar falls back to decoder-only mode (client errors are not retried).
 - **SGLang** (`sglang`) — Uses a concurrent prefill/decode model. Instead of waiting for prefill to complete, the sidecar injects bootstrap coordination parameters (`bootstrap_host`, `bootstrap_port`, `bootstrap_room`) into both requests, fires the prefill asynchronously in a goroutine (with `context.WithoutCancel` to prevent premature cancellation), and immediately sends the decode request synchronously. The decoder and prefiller coordinate KV transfer out-of-band via the bootstrap room.
 
