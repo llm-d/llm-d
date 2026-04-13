@@ -15,7 +15,7 @@ vLLM leverages NIXL for KV transfer. A key feature of NIXL is support for dynami
 
 ### Scale-Up - Creating New Connections
 
-To create new P/D connections, vLLM executes a "NIXL Handshake" between the D and P worker to setup the RDMA connection. This is a relatievly expensive operation (O(~5s)) that is done once per engine pair, with all subsequent requests leveraging the existing connection. llm-d uses a "dynamic lazy" roll-out strategy, avoiding the need for a centralized bootstrap server maintaining global state.
+To create new P/D connections, vLLM executes a "NIXL Handshake" between the D and P worker to setup the RDMA connection. This is a relatively expensive operation (~5s) that is done once per engine pair, with all subsequent requests leveraging the existing connection. llm-d uses a "dynamic lazy" roll-out strategy, avoiding the need for a centralized bootstrap server maintaining global state.
 
 
 It works like this:
