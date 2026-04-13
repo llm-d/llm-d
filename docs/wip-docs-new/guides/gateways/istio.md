@@ -162,7 +162,7 @@ The EPP pod shows `1/1` rather than `2/2` because there is no sidecar proxy in t
 
 ## Step 5: Configure the HTTPRoute
 
-Create an `HTTPRoute` to connect the Gateway to the `InferencePool`. When traffic reaches the Gateway, this route sends the request to the `InferencePool`, where the EPP chooses the best model server.
+Create an `HTTPRoute` to connect the Gateway to the `InferencePool`. When traffic reaches the Gateway with this route, the Proxy will consult the EPP and forward the request to the selected pod.
 
 ```bash
 kubectl apply -f - <<'EOF'
@@ -265,9 +265,8 @@ kubectl logs <epp-pod-name> --tail=20
 ```
 
 Common causes:
-
-- InferencePool not created: check `kubectl get inferencepool`
-- CRDs not installed: check `kubectl get crd | grep inference`
+* InferencePool not created: check `kubectl get inferencepool`
+* CRDs not installed: check `kubectl get crd | grep inference`
 
 ### HTTPRoute not accepted
 
