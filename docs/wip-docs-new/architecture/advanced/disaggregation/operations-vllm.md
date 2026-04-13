@@ -7,7 +7,7 @@ While Disaggregated serving offers superior performance for high scale inference
 
 llm-d's Kubernetes-native design simplifies these operational practices.
 
-## Dyanmic Connection
+## Dynamic Connections
 
 In production enviornments it is common for pods to be created and destroyed - either recovering from crashes or dynamically adjusting capacity alongside load. In a P/D enviornment, the ability to dynamically add/remove replicas from the deployment is complicated by the need to establish/destroy connections between P and D workers on the fly and the need to fee
 
