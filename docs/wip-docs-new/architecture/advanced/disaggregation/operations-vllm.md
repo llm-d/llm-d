@@ -29,7 +29,7 @@ sequenceDiagram
     R->>P: Request with do_remote_decode=True
     P-->>P: Run prefill
     P->>R: Response with KVTransferParams including remote_host, remote_port, and remote_kv_blocks
-    R->>D: Request with KVTransferParamss
+    R->>D: Request with KVTransferParams
     cond No connection
         D-->>D: Spawn background thread
         D-->>P: Request NIXLMetadata (via ZMQ)
