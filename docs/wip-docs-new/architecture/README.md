@@ -45,4 +45,12 @@ In addition, the EPP can also query "consultant" components which can execute ar
 
 ### Autoscaling
 
-- TO BE UPDATED
+With autoscaling, Model Servers are added or removed automatically to keep serving capacity aligned with inference demand. llm-d supports three approaches that differ in how they observe and define supply and demand:
+
+- **Supply-side** - Measures supply as the remaining resource headroom on backends (KV cache capacity, compute throughput) and demand as the current resource consumption (tokens in use, model server queue depth). Scales when resource utilization leaves insufficient headroom. Supports P/D disaggregation, heterogeneous hardware, and fair-share allocation in supply-constrained environments.
+
+- **Demand-side** - Measures demand using EPP flow-control signals — queue depth and active request counts — and scales when pending requests accumulate. Reacts quickly to traffic bursts but is blind to hardware heterogeneity, serving roles, and supply constraints.
+
+- **SLO-driven** - Defines supply as the maximum request rate backends can sustain while meeting latency targets, and demand as the observed arrival rate. Learns server behavior online and scales to keep TTFT/ITL within SLO. Best when latency SLO guarantees are required, and for variable traffic patterns since it adapts dynamically rather than relying on static thresholds.
+
+See [Autoscaling](advanced/autoscaling/autoscaling.md) for complete details on the autoscaling design.
