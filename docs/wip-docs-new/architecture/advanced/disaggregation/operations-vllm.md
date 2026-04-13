@@ -142,7 +142,6 @@ sequenceDiagram
 
     P->>P: Wait `VLLM_NIXL_ABORT_REQUEST_TIMEOUT`
     P->>P: Free KV Blocks
-    end
 ```
 
 
