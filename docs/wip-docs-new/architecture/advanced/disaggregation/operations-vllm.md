@@ -1,11 +1,11 @@
 # Disaggregated Serving: Operations vLLM
 
 While Disaggregated serving offers superior performance for high scale inference, it introduces additional operational complexity, including:
-- [Dynamic Connections](#dynamic-connections) - how to add or remove P and D workers on the fly when workers require point-to-point RDMA connections
-- [Request Cancellation](#request-cancellation) - how to free KV caches from the engines when requests stop, in a distributed setting
+- [Dynamic Connections](#dynamic-connections) - how to add or remove P and D instances on the fly when instances require point-to-point RDMA connections
+- [Request Cancellation](#request-cancellation) - how to free KV caches from the instances when requests stop in a distributed setting
 - [Fault Tolerance](#fault-tolerance) - how to ensure crashes do not create cascading failures and that resources are cleaned up 
 
-llm-d's Kubernetes-native design simplifies these operational practices.
+This page documents achitectural considerations that impact common operations flows.
 
 ## Dynamic Connections
 
@@ -13,10 +13,9 @@ In production enviornments it is common for pods to be created and destroyed - e
 
 vLLM leverages NIXL for KV transfer. A key feature of NIXL is support for dynamically adding and removing connections.
 
-### Scale-Up - Creating New Connections
+### Scale-Up
 
-To create new P/D connections, vLLM executes a "NIXL Handshake" between the D and P worker to setup the RDMA connection. This is a relatively expensive operation (~5s) that is done once per engine pair, with all subsequent requests leveraging the existing connection. llm-d uses a "dynamic lazy" roll-out strategy, avoiding the need for a centralized bootstrap server maintaining global state.
-
+To create new P/D connections, vLLM executes a "NIXL Handshake" between the D and P instances to setup the RDMA connection. This is a relatively expensive operation (~5s) that is done once per pair, with all subsequent requests leveraging the existing connection. llm-d uses a "dynamic lazy" roll-out strategy, avoiding the need for a centralized bootstrap server maintaining global state.
 
 It works like this:
 
@@ -28,9 +27,9 @@ sequenceDiagram
 
     R->>P: Request with do_remote_decode=True
     P-->>P: Run prefill
-    P->>R: Response with KVTransferParams including remote_host, remote_port, and remote_kv_blocks
+    P->>R: Response with KVTransferParams including remote_host, remote_port, remote_request_id, and remote_kv_blocks
     R->>D: Request with KVTransferParams
-    cond No connection
+    cond No connection:
         D-->>D: Spawn background thread
         D-->>P: Request NIXLMetadata (via ZMQ)
         P-->>D: Return NIXLMetadata (via ZMQ)
@@ -43,12 +42,14 @@ sequenceDiagram
     D->>R: Response
 ```
 
-- Prefill workers run a side channel server over ZeroMQ. When the P worker finishes processing, it constructs the `KVTransferParams` with `remote_host=VLLM_SIDE_CHANNEL_HOST` (usually the pod IP) and `remote_port=VLLM_SIDE_CHANNEL_PORT` in the response body.
-- Decode worker receives the request with the `KVTransferParams`; if there is not yet a connection to the remote P worker, it runs a background thread to fetch the `NIXLMetadata` and create the RDMA connection. This action does not block core engine execution, enabling other requests to proceed as usually.
+- Prefill instances run a background server thread to handle requests for `NIXLMetadata`. When the P instances finishes processing, it constructs the `KVTransferParams`, which includes (among other things) `remote_host=VLLM_SIDE_CHANNEL_HOST` (the pod IP) and `remote_port=VLLM_SIDE_CHANNEL_PORT` in the response body.
+- Decode instances receive the request with the `KVTransferParams`; if there is not yet a connection to the remote P worker, it runs a background thread to fetch the `NIXLMetadata` and create the RDMA connection. This action does not block core engine execution, enabling other requests to proceed as usually.
 
 #### Discovery
 
-Since workers are added to an `InferencePool` via standard Kuberentes selectors and labels, new prefill and decode workers are automatically added when the pod lifecycle switches to `status: Running` in Kuberentes - there is no need for a special control plane!
+Since model server instances are added to an `InferencePool` via standard Kuberentes selectors and labels, new prefill and decode instances discovered automatically when their pods status becomes `status: Running`.
+
+As a result, new replicas can be added to a running disaggregated deployment without restarts and without need to coordinate within any specialized service discovery plane.
 
 ### Scale-Down
 
@@ -83,13 +84,13 @@ sequenceDiagram
 
 ## Fault Tolerance
 
-llm-d leverages dynamic xPyD configuration for disaggregated serving, meaning within an `InferencePool`, all D workers are connected to all P workers. This creates a critical operational risk - crashes in workers have the potential for cascading failures if the system is not tolerant of failures.
+In llm-d's disaggregated serving design, all D instances are connected to all P instances. This creates a critical operational risk - crashes in workers have the potential for cascading failures if the system is not tolerant of failures.
 
 ### Prefill Worker Failure
 
-Prefill Worker failures is most critical failure mode in disaggregated deployments, as vLLM's NIXL integration uses a READ-centric KV Transfer protocol. When a P worker crashes, the D workers will attempt to execute an RDMA READ without first checking that the P worker is still running.
+Prefill instance failures are a critical failure mode, since instances execute RDMA READs without first checking that the P instances is still running.
 
-vLLM handles Prefill Worker failure by building on top of NIXL's error handling functionality. When a NIXL_READ is attempted and fails (including to a remote engine that has crashed), NIXL returns an error code such as `NIXL_ERR_BACKEND`. vLLM catches this error and handle it according to the [`kv_load_failure_policy`](https://docs.vllm.ai/en/stable/features/nixl_connector_usage/?h=nixl#kv-load-failure-policy):
+vLLM handles Prefill instance failure by building on top of NIXL's error handling functionality. When a READ is attempted and fails (including to a remote instance that has crashed), NIXL returns an error code such as `NIXL_ERR_BACKEND`. vLLM catches this error and handles it according to the [`kv_load_failure_policy`](https://docs.vllm.ai/en/stable/features/nixl_connector_usage/?h=nixl#kv-load-failure-policy):
 - **fail (default, recommended)**: Immediately fail the request with an error when KV load fails. This prevents performance degradation by avoiding recomputation of prefill work on the decode instance.
 - **recompute**: Recompute failed blocks locally on the decode instance. This may cause performance jitter on decode instances as the scheduled prefill will delay and interfere with other decodes. Furthermore, decode instances are typically configured with low-latency optimizations (such as DeepEP LL for Wide EP deployments).
 
@@ -103,7 +104,7 @@ sequenceDiagram
     P->>P: Run prefill
     P->>R: Reponse
 
-    note over P: P crashes 💥
+    note over P: P crashes
 
     R->>D: Request (do_remote_prefill=True)
     D->>P: NIXL_RDMA_READ
