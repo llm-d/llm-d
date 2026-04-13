@@ -1,6 +1,6 @@
-# Deploying llm-d on Azure Kubernetes Service (ASK)
+# Deploying llm-d on Azure Kubernetes Service (AKS)
 
-This guide provides instructions for configuring Azure Kubernetes Service (ASK) clusters to run LLM inference workloads using llm-d.
+This guide provides instructions for configuring Azure Kubernetes Service (AKS) clusters to run LLM inference workloads using llm-d.
 
 ## Prerequisites
 

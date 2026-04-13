@@ -12,3 +12,4 @@ CLAUDE.md
 
 # helm chart directories via kustomize
 **/charts/
+.github/workflows/AIOPS-Project.code-workspace
