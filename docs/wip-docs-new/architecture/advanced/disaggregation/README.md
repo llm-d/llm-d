@@ -4,16 +4,13 @@
 
 Disaggregated serving separates the **prefill** and **decode** stages of LLM inference onto different model server instances, enabling:
 - **Specialization of P and D** - For example, using a larger TP for the memory-bound decoding phase while a smaller TP for the computation-bound prefill phase allows both phases to be computed efficiently.
-
 - **Avoidance of Request Interference** - For long context requests, long-context prefills can slow down processing of existing requests in the decode phase. Separating the prefill phase of these long requests into dedicated prefill instances allows the ongoing decoding requests to be efficiently processed without being blocked by these long prefills, improving quality-of-service.
-
 - **Compatibility with DP/EP** - For DP/EP deployments of Mixture of Experts models, disaggregated serving is essential to avoid pipeline bubbles and leveraging the specialized "MaskedGEMM" format for decode.
 
 ## Design
 
 An implementation of disaggregated serving requires two key components:
 - **Request Flow Orchestration** - select and route the requests to the correct prefill and decode pods
-
 - **Efficient KV Transfer** - transfer the KV cache from the P instance to the D instance. llm-d leverages NIXL integration in vLLM and SGLang for RDMA.
 
 > [!NOTE]
