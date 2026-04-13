@@ -4,8 +4,9 @@ While Disaggregated serving offers superior performance for high scale inference
 - [Dynamic Connections](#dynamic-connections) - how to add or remove P and D instances on the fly when instances require point-to-point RDMA connections
 - [Request Cancellation](#request-cancellation) - how to free KV caches from the instances when requests stop in a distributed setting
 - [Fault Tolerance](#fault-tolerance) - how to ensure crashes do not create cascading failures and that resources are cleaned up 
+- [Rollouts](#rollouts) - how to roll out changes to the service, such as the version of the vLLM image
 
-This page documents achitectural considerations that impact common operations flows.
+This page documents architectural considerations that impact common operations flows.
 
 ## Dynamic Connections
 
@@ -60,14 +61,14 @@ As a result, new replicas can be added to a running disaggregated deployment wit
 
 Given the compute intensity and duration of inference requests, model servers like vLLM support "Request Cancellation", where currently in-progress requests are freed when the client disconnects.
 
-In a P/D disaggregation setup, this feature is more complicated, because the resources associated with an inference request are spread across multiple servers (as the P worker holds onto the KV caches until they have been retrieved by the D worker). As a result, if the request is canceled while it is still "in-flight" on the D worker but before the KV transfer occurs, we need to ensure that the resources on the P worker are properly cleaned up. llm-d accomplishes this functionality by building on top of vLLM's existing request cancellation infrastructure:
-- When requests are disconnected in vLLM, it triggers the `abort` codepath, which cleans up running resources. When request with `do_remote_prefill=True` are aborted, vLLM sends a NIXL side channel message (`send_notif`), instructing the remote prefill engine to free the KV cache for the cancelled request.
+In a disaggregation setup, this feature is more complicated, because the resources associated with an inference request are spread across multiple servers (as the P instances holds onto the KV caches until they have been retrieved by the D instance). As a result, if the request is canceled while it is still "in-flight" on the D instance but before the KV transfer occurs, we need to ensure that the resources on the P instance are properly cleaned up. llm-d accomplishes this functionality by building on top of vLLM's existing request cancellation infrastructure:
+- When requests are disconnected in vLLM, it triggers the `abort` codepath, which cleans up running resources. When request with `do_remote_prefill=True` are aborted, vLLM sends a NIXL side channel message (`sesnd_notif`), instructing the remote prefill instance to free the KV cache for the cancelled request.
 
 ```mermaid
 sequenceDiagram
     participant R as Router
-    participant P as Prefill Worker
-    participant D as Decode Worker
+    participant P as Prefill Instance
+    participant D as Decode Instance
 
     R->>P: Request (do_remote_decode=True)
     P->>P: Run prefill
@@ -79,14 +80,14 @@ sequenceDiagram
     P->>P: Free KVs
 ```
 
-> [!NOTE]
-> There is a small window in which request cancellation will not trigger KV freeing on the P instance. If the request is disconnected after it is completed on the P worker but before it reaches the D worker's scheduler (for example, if it disconnects while the request is inside Routing Proxy), the D worker never knows about the request and therefore is unable to free the remote blocks on the P worker. As a result, the KV blocks are stranded on the P worker until the timeout `VLLM_NIXL_ABORT_REQUEST_TIMEOUT`, which defaults to 480s. We are currently working on a lease-extension strategy that will dramatically shorten the timeout window.
+> [!WARNING]
+> There is a small window in which request cancellation will not trigger KV freeing on the P instance. If the request is disconnected after it is completed on the P worker but before it reaches the D worker's scheduler (for example, if it disconnects while the request is inside Routing Proxy), the D instance never knows about the request and therefore is unable to free the remote blocks on the P worker. As a result, the KV blocks are stranded on the P instance until the timeout `VLLM_NIXL_ABORT_REQUEST_TIMEOUT`, which defaults to 480s. We are currently working on a lease-extension strategy that will dramatically shorten the timeout window.
 
 ## Fault Tolerance
 
 In llm-d's disaggregated serving design, all D instances are connected to all P instances. This creates a critical operational risk - crashes in workers have the potential for cascading failures if the system is not tolerant of failures.
 
-### Prefill Worker Failure
+### Prefill Instance Failure
 
 Prefill instance failures are a critical failure mode, since instances execute RDMA READs without first checking that the P instances is still running.
 
@@ -122,17 +123,17 @@ Failed Prefill Worker pods are automatically moved to [`status: Terminated`](htt
 
 In this way, `llm-d` gracefully isolates Prefill Worker failure.
 
-### Decode Worker Failure
+### Decode Instance Failure
 
-While D Worker failures are unlikely to result in P worker crashes (since P workers never initiate a READ or WRITE to D workers), there is a challenge around ensuring that KV cache memory on the P instance is not stranded since the P worker holds onto the KV cache until it has been explicitly pulled from the D worker.
+While D instance failures are unlikely to result in P instance crashes (since P instance never initiative RDMA operations), there is a challenge around ensuring that KV cache memory on the P instance is not stranded (since the P instance holds onto the KV cache until it has been explicitly pulled from the D instance).
 
-vLLM avoids permanent KV cache stranding by introducing a timeout on the P worker side `VLLM_NIXL_ABORT_REQUEST_TIMEOUT` (default `480s`). After `VLLM_NIXL_ABORT_REQUEST_TIMEOUT` elapses, the P worker will free the KV caches from any requests that have not been READ yet, eventually cleaning up the resources.
+vLLM avoids permanent KV cache stranding by introducing a timeout on the P instance side `VLLM_NIXL_ABORT_REQUEST_TIMEOUT` (default `480s`). After `VLLM_NIXL_ABORT_REQUEST_TIMEOUT` elapses, the P instance will free the KV caches from any requests that have not been READ yet, eventually cleaning up the resources.
 
 ```mermaid
 sequenceDiagram
     participant R as Routing Proxy
-    participant P as Prefill Worker
-    participant D as Decode Worker
+    participant P as Prefill Instance
+    participant D as Decode Instance
 
     R->>P: Request (do_remote_decode=True)
     P->>P: Run prefill (holds onto KVs)
@@ -146,4 +147,4 @@ sequenceDiagram
 ```
 
 
-> [!WARNING] Robustness against Decode Worker failure is currently a major weakness of the design, since the `VLLM_NIXL_ABORT_REQUEST_TIMEOUT` defaults to a long timeout (`480s` to avoid early-free when D engines are backed up). We recommend that production users consider reducing this timeout, especially if they can ensure Decode Workers do not result in significant queuing. We are currently working on a "lease-extension" system, which will dramatically improve this situation and avoid the tradeoff.
+> [!WARNING] Robustness against Decode instance failure is currently a weakness of the design, since the `VLLM_NIXL_ABORT_REQUEST_TIMEOUT` defaults to a long timeout (`480s` to avoid early-free when D engines are backed up). We recommend that production users consider reducing this timeout, especially if they can ensure Decode Workers do not result in significant queuing. We are currently working on a "lease-extension" system, which will dramatically improve this situation and avoid the tradeoff.
