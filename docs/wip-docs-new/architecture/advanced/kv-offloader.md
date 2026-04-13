@@ -1,6 +1,6 @@
 # KV-Cache Offloading
 
-KV-Cache offloading extends the effective cache capacity beyond GPU HBM by moving KV blocks to lower-cost storage. llm-d supports two offloading backends: CPU RAM (via vLLM's native OffloadingConnector) and shared filesystem storage (via the llm-d FS backend). These currently operate as independent options—tiered offloading where blocks flow through multiple levels is under active development. [Other connectors](#other-connectors) like LMCache are also supported through vLLM/SGLang integration.
+KV-Cache offloading extends the effective cache capacity beyond GPU HBM by moving KV blocks to lower-cost tiers like CPU DRAM and storage. llm-d uses the vLLM Offloading Connector, which supports two offloading backends: CPU RAM (part of vLLM) and shared filesystem storage (via the llm-d FS backend, part of llm-d-kv-cache). These currently operate as independent options—tiered offloading where blocks flow through multiple levels is under active development. [Other connectors](#other-connectors) like LMCache are also supported through vLLM/SGLang integration.
 
 > KV-Cache offloading complements the [KV-Cache Indexer](./kv-indexer.md) which handles cache-aware routing. While the indexer determines *where* cached blocks exist, the offloader manages *how* blocks move between GPU memory and lower-cost tiers.
 
