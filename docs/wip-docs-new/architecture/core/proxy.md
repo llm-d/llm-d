@@ -31,7 +31,7 @@ Regardless of the deployment pattern, the request flow is the same:
 3. The EPP evaluates endpoints using its plugin pipeline (handlers, filters, scorers, picker)
 4. The EPP returns the selected endpoint address
 5. The proxy forwards the request to that model server pod
-6. The model server streams the response back through the proxy to the client
+6. The model server sends the response back to the proxy (which streams the result through the EPP for post-processing)
 
 
 ### Standalone Deployment
