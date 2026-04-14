@@ -53,7 +53,9 @@ As a result, new replicas can be added to a running disaggregated deployment wit
 
 ### Scale-Down
 
-Scaling down is a key challenge in all Kuberentes deployments, as we typically want to ensure no interruption of service to currently running requests.
+Scaling down is a challenge in all deployments, as we typically want to ensure:
+- no new requests are sent to the removed pod
+- no interruption of service to running requests
 
 In Kuberentes, there is a well-defined [pod termination process](https://kubernetes.io/docs/concepts/workloads/pods/pod-lifecycle/#pod-termination):
 * **Termination Triggered**: The pod's state is changed to **Terminating**.
@@ -64,21 +66,21 @@ In Kuberentes, there is a well-defined [pod termination process](https://kuberne
 
 For new requests, since instances are automatically removed from the `InferencePool`, no additional traffic is routed to the terminating pod.
 
-For existing requests, we need to configure how vLLM handles the `SIGTERM`:
-- By default, vLLM immediately `aborts` exising requests, cleaning up the resources. This fails the currently running inference request with an error status code (TODO: confirm which error).
-- Additionally, vLLM can be configured with a `--shutdown-timeout N`. When this occurs, vLLM catches the `SIGTERM` and drains the currently running requests for `N` seconds. After this timeout, it `aborts` the still running requests, returning and error code.
+For running requests, we need to configure how vLLM handles the `SIGTERM`:
+- By default, vLLM immediately `aborts` exising requests, cleaning up the resources. This fails the currently running inference request with an error status code.
+- vLLM can be configured with a `--shutdown-timeout N`. When this is set, vLLM catches the `SIGTERM` and drains the currently running requests for `N` seconds. After this timeout, it `aborts` any running requests still in flight, returning an error code.
 
 #### Scaling Down Decode Replicas
 
-Since prefill instances hold the KVs until the decode instances pull them, it is important to ensure that KVs are released when decode instances are scaled down.
+Since prefill instances hold the KVs until the decode instances pull them, it is important to ensure that KVs are released on the prefill instance when decode instances are scaled down.
 
-In vLLM, regardless of whether `--shutdown-timeout` is set, requests are `aborted` during the shutdown process. As part of the `abort` process, decode instances with not-yet-started KV transfer send a notif via NIXL to the remote prefill instances to free the blocks. Thus, scaling down decode replicas should always free requests on the P instance.
+In vLLM, regardless of whether `--shutdown-timeout` is set, requests are `aborted` during the shutdown process. As part of the `abort` process, decode instances with not-yet-started KV transfers send a NIXL notification to the remote prefill instances to free the blocks. Thus, scaling down decode replicas always free requests on the P instance.
 
 #### Scaling Down Prefill Replicas
 
 When scaling down prefill replicas, decode instances may attempt to pull KV blocks from terminated remote prefill instances.
 
-![WARNING] At current, regardless of `--shutdown-timeout`, there is no way to delay shutdown until after all blocks have been retrieved. This functionality is work in progress in vLLM.
+![WARNING] At current, regardless of `--shutdown-timeout`, there is no way to delay shutdown of a prefill instance until after all blocks have been retrieved. This functionality is work in progress in vLLM.
 
 As a result, prefill scale down will cause KV load failure on the decode instance. To avoid error codes for failed KV transfers, the decode instances can be configured with `kv_load_failure_policy=recompute` to recompute the prefill on the decode instance.
 
