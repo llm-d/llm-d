@@ -126,7 +126,7 @@ vLLM and SGLang use slightly different protocols for KV Transfer between the P a
 - **SGLang** (`sglang`) — Uses a concurrent prefill/decode model. Instead of waiting for prefill to complete, the sidecar injects bootstrap coordination parameters (`bootstrap_host`, `bootstrap_port`, `bootstrap_room`) into both requests, fires the prefill asynchronously in a goroutine (with `context.WithoutCancel` to prevent premature cancellation), and immediately sends the decode request synchronously. The decoder and prefiller coordinate KV transfer out-of-band via the bootstrap room.
 
 
-## Efficient KV Transfer
+## Efficient KV Transfer - WIP
 
 Once the EPP and Routing Sidecar have coordinated request flow, the P worker needs to hand off its computed KV cache to the D worker. Because the KV cache for a long prompt can be many gigabytes, this transfer sits directly on the critical path of TTFT — an inefficient transport will erase (or reverse) the latency benefits of disaggregation. llm-d addresses this by using [NIXL](https://github.com/ai-dynamo/nixl) (the NVIDIA Inference Xfer Library) as the transport abstraction, layered over [UCX](https://openucx.org/) and RDMA-capable hardware.
 
