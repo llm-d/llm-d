@@ -12,11 +12,11 @@ This page documents architectural considerations that impact these common operat
 
 In production enviornments, it is common for model server replicas to be created and destroyed during the running of the service. In a disaggregated configuration, the ability to dynamically add/remove replicas from the deployment is complicated by the need to establish/destroy connections between P and D workers on the fly.
 
-Since vLLM leverages NIXL for KV transfer, A key feature of NIXL is support for dynamically adding and removing connections.
+vLLM supports this functionality via NIXL's APIs, which enable dynamically adding and removing connections.
 
 ### Scale-Up
 
-To create new P/D connections, vLLM executes a "NIXL Handshake" between the D and P instances to setup the RDMA connection. This is a relatively expensive operation (~5s) that is done once per pair, with all subsequent requests leveraging the existing connection. llm-d uses a "dynamic lazy" roll-out strategy, avoiding the need for a centralized bootstrap server maintaining global state.
+To create new connections, vLLM executes a "NIXL Handshake" between the D and P instances to setup the RDMA connection. This is a relatively expensive operation (~5s) that is done once per pair, with all subsequent requests leveraging the existing connection. llm-d uses a "dynamic lazy" roll-out strategy, avoiding the need for a centralized bootstrap server maintaining global state.
 
 It works like this:
 
