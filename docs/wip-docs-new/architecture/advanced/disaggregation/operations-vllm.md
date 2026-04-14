@@ -114,11 +114,11 @@ In llm-d's disaggregated serving design, all D instances are connected to all P 
 
 ### Prefill Instance Failure
 
-Prefill instance failures are a critical failure mode, since instances execute RDMA READs without first checking that the P instances is still running.
+Prefill instance crashes are a critical failure mode, since D instances will attempt to pull KVs from no longer running P instances without performing any liveness checks. Since every D worker is connected to every P worker, it is critical to handle such an error on the D worker.
 
-vLLM handles Prefill instance failure by building on top of NIXL's error handling functionality. When a READ is attempted and fails (including to a remote instance that has crashed), NIXL returns an error code such as `NIXL_ERR_BACKEND`. vLLM catches this error and handles it according to the [`kv_load_failure_policy`](https://docs.vllm.ai/en/stable/features/nixl_connector_usage/?h=nixl#kv-load-failure-policy):
+vLLM handles Prefill instance failure by building on top of NIXL's error handling functionality. When a READ is attempted and fails, NIXL returns an error code such as `NIXL_ERR_BACKEND`. vLLM catches this error and handles it according to the [`kv_load_failure_policy`](https://docs.vllm.ai/en/stable/features/nixl_connector_usage/?h=nixl#kv-load-failure-policy):
 - **fail (default, recommended)**: Immediately fail the request with an error when KV load fails. This prevents performance degradation by avoiding recomputation of prefill work on the decode instance.
-- **recompute**: Recompute failed blocks locally on the decode instance. This may cause performance jitter on decode instances as the scheduled prefill will delay and interfere with other decodes. Furthermore, decode instances are typically configured with low-latency optimizations (such as DeepEP LL for Wide EP deployments).
+- **recompute**: Recompute failed blocks locally on the decode instance. This may cause performance jitter on decode instances as the scheduled prefill will delay and interfere with other decodes. Furthermore, decode instances configured with low-latency optimizations (such as DeepEP LL for Wide EP deployments) may suffer significant slowdowns.
 
 ```mermaid
 sequenceDiagram
@@ -144,13 +144,13 @@ sequenceDiagram
     end
 ```
 
-Failed Prefill Worker pods are automatically moved to [`status: Terminated`](https://kubernetes.io/docs/concepts/workloads/pods/pod-lifecycle/#container-state-terminated) state as part of the standard Pod lifecycle. Since llm-d leverages the Kubernetes API Server for service discovery, no additional traffic will be routed to the failed worker until the pod has been restarted and returns to the `status: Running` state.
+Failed Prefill Worker pods are automatically moved to `status: Terminated` state as part of the standard Pod lifecycle. Since llm-d leverages the Kubernetes API Server for service discovery, no additional traffic will be routed to the failed worker until the pod has been restarted and returns to the `status: Running` state.
 
-In this way, `llm-d` gracefully isolates Prefill Worker failure.
+In this way, `llm-d` isolates Prefill instance failure.
 
 ### Decode Instance Failure
 
-While D instance failures are unlikely to result in P instance crashes (since P instance never initiative RDMA operations), there is a challenge around ensuring that KV cache memory on the P instance is not stranded (since the P instance holds onto the KV cache until it has been explicitly pulled from the D instance).
+While D instance failures are unlikely to result in P instance crashes (since P instance never initiates RDMA operations), there is a challenge around ensuring that KV cache memory on the P instance is not stranded (since the P instance holds onto the KV cache until it has been explicitly pulled from the D instance).
 
 vLLM avoids permanent KV cache stranding by introducing a timeout on the P instance side `VLLM_NIXL_ABORT_REQUEST_TIMEOUT` (default `480s`). After `VLLM_NIXL_ABORT_REQUEST_TIMEOUT` elapses, the P instance will free the KV caches from any requests that have not been READ yet, eventually cleaning up the resources.
 
@@ -173,7 +173,7 @@ sequenceDiagram
 
 
 > [!WARNING]
-> Robustness against Decode instance failure is currently a weakness of the design, since the `VLLM_NIXL_ABORT_REQUEST_TIMEOUT` defaults to a long timeout (`480s` to avoid early-free when D instancess are backed up). We recommend that production users consider reducing this timeout, especially if they can ensure Decode instancess do not result in significant queuing. We are currently worksing on a "lease-extension" system, which will dramatically improve this situation and avoid the tradeoff.
+> Robustness against Decode instance failure is currently a weakness of the design, since the `VLLM_NIXL_ABORT_REQUEST_TIMEOUT` defaults to a long timeout (`480s` to avoid early-free when D instancess are backed up). We recommend that production users consider reducing this timeout, especially if they can ensure Decode instances do not have significant request queuing. We are currently implementing a "lease-extension" system, which will dramatically reduce the timeout with no tradeoff.
 
 ## Rollouts
 
