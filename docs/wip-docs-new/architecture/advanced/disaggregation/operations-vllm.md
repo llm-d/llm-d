@@ -66,7 +66,7 @@ In Kuberentes, there is a well-defined [pod termination process](https://kuberne
 For **new requests**, instances are automatically removed from the `InferencePool` so no additional traffic is routed to terminating pods.
 
 For **running requests**, we can configure how vLLM handles the `SIGTERM`:
-* By default, vLLM immediately `aborts` exising requests, cleaning up the resources. This fails the currently running inference request with an error status code.
+* By default, vLLM immediately `aborts` exising requests and terminates. This fails the running requests with an error status code.
 * vLLM can be configured with a `--shutdown-timeout N`. When this is set, vLLM catches the `SIGTERM` and drains the currently running requests for `N` seconds. After this timeout, it `aborts` any running requests still in flight, returning an error code.
 
 #### Scaling Down Decode Replicas
