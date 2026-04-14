@@ -1,1 +1,1 @@
-## Disaggregated Serving: Configuration --- WIP
+## Disaggregated Serving: Configuration
