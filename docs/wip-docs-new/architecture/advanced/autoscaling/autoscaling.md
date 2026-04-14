@@ -22,7 +22,7 @@ With autoscaling, Model Servers are added or removed automatically to keep servi
 | **Strong Latency SLOs** | Not guaranteed | Supported by learning supply/demand dynamics and scaling proactively to meet targets  (**Experimental**) |
 | **Operational Complexity** | Low - Standard Kubernetes HPA/KEDA only | Medium - Requires WVA controller and `VariantAutoscaling` CRD |
 
-> **Note**: Scale to zero with HPA and WVA is only supported if your cluster supports the required HPAScaleToZero features.
+> **Note**: Native Kubernetes HPA scale-to-zero requires cluster support for the `HPAScaleToZero` feature. KEDA-based scale-to-zero is an alternative when that HPA feature is not enabled. For WVA-specific requirements, see the linked design documentation.
 
 ## Choosing an Approach
 
