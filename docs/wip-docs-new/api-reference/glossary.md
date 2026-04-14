@@ -16,7 +16,7 @@ Quick-reference definitions for terms used throughout the llm-d documentation. F
 
 **Endpoint Picker (EPP)** — The central scheduling component of llm-d. Receives ext-proc callbacks from the Proxy, evaluates candidate Model Servers through a Plugin Pipeline of filters, scorers, and pickers, and returns the address of the optimal backend. See [EPP](../architecture/core/epp/README.md).
 
-**Envoy** — A high-performance L7 GAIE-conformant proxy that llm-d uses as its default data-plane Proxy. It communicates routing decisions with the EPP via ext-proc. See [Proxy](../architecture/core/proxy.md).
+**Envoy** — A high-performance L7 GAIE-conformant proxy that can be used with llm-d as a data-plane Proxy. It communicates routing decisions with the EPP via ext-proc. See [Proxy](../architecture/core/proxy.md).
 
 **Expert Parallelism (EP)** — Distributing the expert layers of MoE models across multiple GPUs, enabling large models like DeepSeek-R1 to be served across nodes. See [Model Servers](../architecture/core/model-servers.md).
 
