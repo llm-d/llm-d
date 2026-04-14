@@ -16,7 +16,7 @@ This path is always active -- the question is which scheduling mode to enable:
 | [**Precise Prefix Cache**](./precise-prefix-cache-aware-routing.md) | Exact block-level cache tracking via KV-Events | High prefix sharing (RAG, multi-tenant, shared system prompts) |
 | [**Predicted Latency**](./predicted-latency.md) | ML-predicted TTFT/TPOT for SLO-aware routing | SLO-critical workloads with heterogeneous request costs |
 
-Modes compose -- you can enable precise prefix cache scoring *and* predicted latency simultaneously.
+Each mode replaces the default prefix cache scorer -- choose the one that matches your workload.
 
 [**Flow control**](./flow-control.md) (priority queuing, fairness, admission control) is a configuration option within the EPP that can be enabled alongside any scheduling mode. It is not a separate mode -- it adds admission control and tenant isolation to whatever scoring profile is active.
 
