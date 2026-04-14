@@ -53,9 +53,8 @@ As a result, new replicas can be added to a running disaggregated deployment wit
 
 ### Scale-Down
 
-Scaling down is a challenge in all deployments, as we typically want to ensure:
-- no new requests are sent to the removed pod
-- no interruption of service to running requests
+Scaling down is a challenge in all deployments, as we typically want to ensure that (a) no new requests are sent to the removed pod
+and (b) No interruption of service to already running requests.
 
 In Kuberentes, there is a well-defined [pod termination process](https://kubernetes.io/docs/concepts/workloads/pods/pod-lifecycle/#pod-termination):
 * **Termination Triggered**: The pod's state is changed to **Terminating**.
