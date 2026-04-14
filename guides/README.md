@@ -1,17 +1,16 @@
 # Well-Lit Path Guides
 
-Our well-lit path guides are documented, tested, and benchmarked recipes to serve large language models (LLMs) at peak performance with best practices common to production deployments.
+Our well-lit path guides are documented, tested, and benchmarked recipes to serve LLMs with best-practices for high performance.
 
-We currently offer the following tested and benchmarked paths:
-1. [Intelligent Inference Scheduling](./inference-scheduling/README.md) - Deploy vLLM with prefix-cache and load-aware routing enabled out of the box by the llm-d EPP. 
-2. [Intelligent Inference Scheduling - Precise Prefix Cache Routing](./precise-prefix-cache-aware/README.md) - Enhance LLM-aware scheduling with precise global indexing of the vLLM KV cache state.
-3. [Prefill/Decode Disaggregation](./pd-disaggregation/README.md) - Improve throughput and quality of service stability by splitting inference into prefill servers and decode servers, primarily for medium and large models like `openai/gpt-oss-120b`.
-3. [Wide Expert-Parallelism](./wide-ep-lws/README.md) - Deploy large Mixture-of-Experts (MoE) models like DeepSeek-R1 over mulple nodes via DP/EP deployments, significantly increasing KV cache size and increase throughput.
-4. [Tiered Prefix Cache](./tiered-prefix-cache/README.md) - Increase prefix cache reuse, reduce time to first token (TTFT) and increase throughput for long context or high concurrency workloads by adding tiered prefix cache (e.g., offloading to CPU memory) beyond accelerator memory. Tiered prefix cache can be combined with any of the three well-lit paths above.
+We currently offer the following tested paths:
+1. [Intelligent Inference Scheduling](./inference-scheduling/README.md) - Deploy vLLM with prefix-cache and load-aware routing enabled by the llm-d EPP. 
+2. [Intelligent Inference Scheduling - Precise Prefix Cache Routing](./precise-prefix-cache-aware/README.md) - Enhance intelligent inference scheduling with precise global indexing of the vLLM KV cache state.
+3. [Prefill/Decode Disaggregation](./pd-disaggregation/README.md) - Improve throughput and quality of service stability by splitting inference into specialized prefill servers and decode servers, primarily for medium and large models like `openai/gpt-oss-120b`.
+3. [Wide Expert-Parallelism](./wide-ep-lws/README.md) - Deploy large Mixture-of-Experts (MoE) models like DeepSeek-R1 over mulple nodes via DP/EP configuration, significantly increasing available KV cache space and increasing throughput.
+4. [Tiered Prefix Cache](./tiered-prefix-cache/README.md) - Increase prefix cache reuse, reduce time to first token (TTFT) and increase throughput for long context or high concurrency workloads by adding tiered prefix cache (e.g., offloading to CPU memory) beyond accelerator memory.
 
 > [!IMPORTANT]
-> These guides are intended to be a starting point for your own configuration and deployment of model servers. Our Helm charts provide basic reusable building blocks for vLLM deployments and inference scheduler configuration within these guides but will not support the full range of all possible configurations. Both guides and charts depend on features provided and supported in the [vLLM](https://github.com/vllm-project/vllm) and [inference gateway](https://github.com/kubernetes-sigs/gateway-api-inference-extension) open source projects.
-
+> These guides are intended to be a starting point for your own configuration and deployment of model servers. Our Helm charts provide basic reusable building blocks for vLLM deployments and inference scheduler configuration within these guides but will not support the full range of all possible configurations.
 
 ## Experimental Guides
 
