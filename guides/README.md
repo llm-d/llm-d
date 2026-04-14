@@ -14,7 +14,7 @@ We currently offer the following:
 
 ## Experimental Guides
 
-* [Predicted Latency](./predicted-latency-based-scheduling/README.md) - enhance LLM-aware scheduling leveraging real-time predictions of request latency (via an live-trained XGBoost model) rather than only utilization metrics like queue depth or KV-cache utilization.
+* [Predicted Latency](./predicted-latency-based-scheduling/README.md) - enhance intelligent inference scheduling with real-time predictions of request latency (via an live-trained XGBoost model) rather than heuristic-based combinations of utilization metrics like queue depth or KV-cache utilization.
 * [Workload Autoscaling](./workload-autoscaling/README.md) - autoscale the LLM service via proactive, SLO-aware signals that reflect the true state of the inference system — queue depth, in-flight request counts, and KV cache pressure — so that capacity can be added before end-user latency is impacted.
 * [Asynchronous Processing](./asychronous-processing/README.md) - process inference requests asynchronously using a queue-based architecture. This is ideal for latency-insensitive batch workloads or for filling "slack" capacity in your inference pool.
 
