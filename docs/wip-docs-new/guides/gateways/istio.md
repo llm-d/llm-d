@@ -10,7 +10,6 @@ This guide shows how to deploy llm-d with [Istio](https://istio.io/) as your inf
 * A Kubernetes cluster running one of the three most recent [Kubernetes releases](https://kubernetes.io/releases/)
 * [Helm](https://helm.sh/docs/intro/install/)
 * [jq](https://jqlang.org/download/)
-* Gateway API Inference Extension CRDs installed:
 
 ## Step 1: Install Gateway API and Gateway API Inference Extension CRDs
 
