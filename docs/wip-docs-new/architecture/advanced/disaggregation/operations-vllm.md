@@ -61,11 +61,11 @@ In Kuberentes, there is a well-defined [pod termination process](https://kuberne
 * **`InferencePool` Update**: The pod is removed from the list of endpoints for associated the `InferencePool`, preventing new traffic from being routed to it. (note: for standard Kuberentes objects, this is equiavlent to removal from a Service)
 * **PreStop Hook**: If defined, the preStop hook executes.
 * **SIGTERM Signal**: Kubernetes sends a SIGTERM signal to the main process in each container.
-- **Termination Grace Period**: The pod is given a set amount of time (default is 30 seconds) to shut down gracefully. If it does not terminate by the end of this period, a SIGKILL is sent to force termination.
+* **Termination Grace Period**: The pod is given a set amount of time (default is 30 seconds) to shut down gracefully. If it does not terminate by the end of this period, a SIGKILL is sent to force termination.
 
-For new requests, since instances are automatically removed from the `InferencePool`, no additional traffic is routed to the terminating pod.
+For **new requests**, instances are automatically removed from the `InferencePool` so no additional traffic is routed.
 
-For running requests, we need to configure how vLLM handles the `SIGTERM`:
+For **running requests**, we can configure how vLLM handles the `SIGTERM`:
 - By default, vLLM immediately `aborts` exising requests, cleaning up the resources. This fails the currently running inference request with an error status code.
 - vLLM can be configured with a `--shutdown-timeout N`. When this is set, vLLM catches the `SIGTERM` and drains the currently running requests for `N` seconds. After this timeout, it `aborts` any running requests still in flight, returning an error code.
 
