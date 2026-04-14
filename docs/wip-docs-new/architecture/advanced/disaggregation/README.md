@@ -143,7 +143,7 @@ NIXL provides a standardized API for transfering memory between remote instances
 | **UCCL**    | ✓  |  ✓   |   ✓   |  ✓  |
 | **libfabric**|   |      |       |  ✓  |
 
-> ![NOTE]
+> [!NOTE]
 > UCX also supports transfer via TCP and NVLINK. TCP is extremely slow and is targeted for local development. NVLINK transfer is used for local development and cannot be used in Kuberentes deployments as it cannot cross pod boundaries.
 
 ### Direct KV Cache Transfer
