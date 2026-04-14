@@ -2,7 +2,7 @@
 
 Our well-lit path guides are documented, tested, and benchmarked recipes to serve LLMs with best-practices for high performance.
 
-We currently offer the following tested paths:
+We currently offer the following:
 1. [Intelligent Inference Scheduling](./inference-scheduling/README.md) - Deploy vLLM with prefix-cache and load-aware routing enabled by the llm-d EPP. 
 2. [Intelligent Inference Scheduling - Precise Prefix Cache Routing](./precise-prefix-cache-aware/README.md) - Enhance intelligent inference scheduling with precise global indexing of the vLLM KV cache state.
 3. [Prefill/Decode Disaggregation](./pd-disaggregation/README.md) - Split inference into specialized prefill and decode instances, improving throughput and quality of service stability for medium and large models like `openai/gpt-oss-120b`.
