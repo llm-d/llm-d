@@ -1,9 +1,30 @@
 # Autoscaling
 
-With autoscaling, Model Servers scale up and down automatically based on demand, ensuring efficient resource utilization while meeting latency SLOs. llm-d supports two complementary autoscaling approaches:
+With autoscaling, Model Servers are added or removed automatically to keep serving capacity aligned with inference demand. llm-d autoscalers consume three categories of scaling signals — supply-side, demand-side, and SLO-driven — surfaced through two complementary systems:
 
-- **HPA/KEDA with EPP Queue Metrics** - A straightforward approach that uses Kubernetes Horizontal Pod Autoscaler (HPA) or KEDA to scale Model Server replicas based on queue-depth metrics exported by the EPP. This is well-suited for homogeneous deployments where a single topology serves a model.
+- **HPA/KEDA** - Uses demand-side signals (EPP queue depth and active request counts) to scale Model Server replicas via Kubernetes HPA or KEDA. Well-suited for homogeneous deployments where each model scales independently.
 
-- **Weighted Variant Autoscaler (WVA)** - A global optimizer that dynamically calculates the optimal mix of accelerator topologies and Model Server configurations to serve the current traffic load at the least cost. The WVA considers heterogeneous hardware, disaggregated serving roles (prefill, decode, or both), and changing traffic patterns to determine the desired deployment state.
+  See [HPA/KEDA](./hpa-keda.md) for complete details on the HPA/KEDA design.
 
-See [Autoscaling](advanced/autoscaling/autoscaling.md) for complete details on the autoscaling design.
+- **Workload Variant Autoscaler (WVA)** - A global optimizer that, given an inventory of available accelerators, determines how to optimally place Model Servers — potentially serving different base models — onto those accelerators. WVA consumes supply-side signals (KV cache utilization, model server queue depth) or SLO-driven signals to proactively meet latency targets specified in its configuration. It accounts for heterogeneous hardware, disaggregated serving roles (prefill, decode, or both), and changing traffic patterns. When the accelerator inventory is insufficient to meet all targets, WVA degrades gracefully by prioritizing placement decisions that maximize overall SLO attainment.
+
+  See [Workload Variant Autoscaler (WVA)](./wva.md) for complete details on the WVA design.
+
+## Features Matrix
+
+| | [HPA/KEDA](./hpa-keda.md) | [WVA](./wva.md) |
+|---|---|---|
+| **Scaling Signals** | IGW queue depth and running request count | KV cache utilization, Model Server queue depth, SLO targets |
+| **Multiple-Variants** | Unsupported | Supported — optimally places across models and topologies to minimize cost |
+| **Limited Accelerators** | First come, first served | Fair share allocation |
+| **Scale to zero** | Supported | Supported |
+| **Prefill/Decode Disaggregation** | Uniform — scales prefill and decode as one unit | Per Role (**Experimental**) |
+| **Strong Latency SLOs** | Not guaranteed | Supported by learning supply/demand dynamics and scaling proactively to meet targets  (**Experimental**) |
+| **Operational Complexity** | Low - Standard Kubernetes HPA/KEDA only | Medium - Requires WVA controller and `VariantAutoscaling` CRD |
+
+> **Note**: Scale to zero with HPA and WVA is only supported if your cluster supports the required HPAScaleToZero features.
+
+## Choosing an Approach
+
+- **HPA/KEDA** - Homogeneous hardware, independent per-model scaling, demand-side signals only.
+- **WVA** - Heterogeneous hardware, multiple serving variants, supply-constrained environments, and/or SLO-driven scaling.
