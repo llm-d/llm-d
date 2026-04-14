@@ -1,4 +1,4 @@
-# Disaggregated Serving: Operations vLLM
+# Disaggregated Serving: Operations (vLLM)
 
 While Disaggregated serving offers superior performance for high scale inference, it introduces additional operational complexity, including:
 - [Dynamic Connections](#dynamic-connections) - how to add or remove P and D instances on the fly when instances require point-to-point RDMA connections
