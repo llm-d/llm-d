@@ -90,10 +90,10 @@ sequenceDiagram
 
 In this way, disaggregated serving functionality composes with the existing set of scheduling functionality, enabling use of the existing set of scorers for prefix and load aware routing in the disaggregated setting.
 
-Note that both the prefill and decode endpoints are part of one `InferencePool`. The `decode-profile` and `prefill-profile` are responsible for selecting only D workers or P workers via the `filter` step. By default, llm-d uses the label key `llm-d.ai/role` with the following values to filter:
-- `prefill` → prefill-only pods
-- `decode` → decode-capable pods
-- `prefill-decode` → pods capable of both prefill and decode 
+Note that both the prefill and decode endpoints are part of one `InferencePool`. The `decode-profile` and `prefill-profile` are responsible for selecting only D workers or P workers in the `filter` step. llm-d uses the label `llm-d.ai/role` with the following values to filter:
+* `prefill` → prefill-only pods
+* `decode` → decode-capable pods
+* `prefill-decode` → pods capable of both prefill and decode 
 
 > [!NOTE]
 > It is possible to override the default labels by configuring the `EndpointPickerConfig` to use the generic by-label filter plugin instead of the `prefill-filter` / `decode-filter`. TODO: provide an example of this.
