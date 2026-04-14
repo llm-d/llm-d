@@ -45,12 +45,12 @@ In addition, the EPP can also query "consultant" components which can execute ar
 
 ### Autoscaling
 
-With autoscaling, Model Servers are added or removed automatically to keep serving capacity aligned with inference demand. Scaling decisions are driven by three categories of signals:
+With autoscaling, Model Servers, potentially with different configurations, are added or removed automatically to keep serving capacity aligned with inference demand. Scaling decisions are driven by three categories of signals:
 
 - **Supply-side** - Measures supply as the remaining resource headroom on backends (KV cache capacity, compute throughput) and demand as the current resource consumption (tokens in use, model server queue depth). Scales when resource utilization leaves insufficient headroom.
 
 - **Demand-side** - Measures demand using EPP flow-control signals — queue depth and active request counts — and scales when pending requests accumulate.
 
-- **Service-level objective (SLO)-driven** - Defines supply as the maximum request rate backends can sustain while meeting latency targets, and demand as the observed arrival rate. Learns server behavior online and scales to keep time to first token (TTFT) / inter-token latency (ITL) within SLO targets.
+- **Service-level objective (SLO)-driven (Experimental)** - Defines supply as the maximum request rate backends can sustain while meeting latency targets, and demand as the observed arrival rate. Learns server behavior online and scales to keep time to first token (TTFT) / inter-token latency (ITL) within SLO targets.
 
 See [Autoscaling](advanced/autoscaling/autoscaling.md) for complete details on the autoscaling design.
