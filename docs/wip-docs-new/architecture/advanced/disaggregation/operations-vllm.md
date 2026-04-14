@@ -53,9 +53,6 @@ As a result, new replicas can be added to a running disaggregated deployment wit
 
 ### Scale-Down
 
-Scaling down is a challenge in all deployments, as we typically want to ensure that (a) no new requests are sent to the removed pod
-and (b) no interruption of service to already running requests.
-
 In Kuberentes, there is a well-defined [pod termination process](https://kubernetes.io/docs/concepts/workloads/pods/pod-lifecycle/#pod-termination):
 * **Termination Triggered**: The pod's state is changed to **Terminating**.
 * **`InferencePool` Update**: The pod is removed from the list of endpoints for associated the `InferencePool`, preventing new traffic from being routed to it. (note: for standard Kuberentes objects, this is equiavlent to removal from a Service)
@@ -63,7 +60,7 @@ In Kuberentes, there is a well-defined [pod termination process](https://kuberne
 * **SIGTERM Signal**: Kubernetes sends a SIGTERM signal to the main process in each container.
 * **Termination Grace Period**: The pod is given a set amount of time (default is 30 seconds) to shut down gracefully. If it does not terminate by the end of this period, a SIGKILL is sent to force termination.
 
-For **new requests**, instances are automatically removed from the `InferencePool` so no additional traffic is routed to terminating pods.
+For **new requests**, instances are automatically removed from the `InferencePool` so no new traffic is routed to terminating pods.
 
 For **running requests**, we can configure how vLLM handles the `SIGTERM`:
 * By default, vLLM immediately `aborts` exising requests and terminates. This fails the running requests with an error status code.
