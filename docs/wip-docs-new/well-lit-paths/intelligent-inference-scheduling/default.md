@@ -1,6 +1,6 @@
-# Default Scheduling
+# Load-Aware and Approximate Prefix Cache Scheduling
 
-The recommended starting point for any llm-d deployment. Reduces tail latency and increases throughput through load-aware and prefix-cache-aware routing -- no additional infrastructure beyond the EPP itself.
+The recommended starting point for any llm-d deployment. Reduces tail latency and increases throughput through load-aware and approximate prefix-cache-aware routing -- no additional infrastructure beyond the EPP itself.
 
 ## What It Does
 

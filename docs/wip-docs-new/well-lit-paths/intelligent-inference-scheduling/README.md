@@ -4,25 +4,21 @@ Standard Kubernetes load balancing treats inference requests as interchangeable.
 
 The **Endpoint Picker (EPP)** replaces naive load balancing with LLM-aware scheduling. It routes each request to the best model server based on real-time signals -- prefix cache locality, KV-cache utilization, queue depth, and optionally predicted latency. This path is always active in llm-d deployments and composes with every other well-lit path.
 
-See [Intelligent Inference Scheduling with llm-d](https://llm-d.ai/blog/intelligent-inference-scheduling-with-llm-d) and [KV Cache Wins You Can See](https://llm-d.ai/blog/kvcache-wins-you-can-see) for benchmarks and real-world results.
-
 ## When To Use
 
 This path is always active -- the question is which scheduling mode to enable:
 
 | Mode | What It Adds | When To Use |
 |---|---|---|
-| [**Default**](./default.md) | Load-aware routing + approximate prefix cache scoring | Any workload, start here |
-| [**Precise Prefix Cache**](./precise-prefix-cache-aware-routing.md) | Exact block-level cache tracking via KV-Events | High prefix sharing (RAG, multi-tenant, shared system prompts) |
+| [**Load-Aware and Approximate Prefix Cache**](./default.md) | Load-aware routing + approximate prefix cache scoring | Any workload, start here |
+| [**Precise Prefix Cache**](./precise-prefix-cache-aware-routing.md) | Exact block-level cache tracking via KV-Events | When approximate routing is not enough (e.g., multi-modal, hybrid-model, near saturation regime) |
 | [**Predicted Latency**](./predicted-latency.md) | ML-predicted TTFT/TPOT for SLO-aware routing | SLO-critical workloads with heterogeneous request costs |
-
-Each mode replaces the default prefix cache scorer -- choose the one that matches your workload.
 
 [**Flow control**](./flow-control.md) (priority queuing, fairness, admission control) is a configuration option within the EPP that can be enabled alongside any scheduling mode. It is not a separate mode -- it adds admission control and tenant isolation to whatever scoring profile is active.
 
 ## Key Decisions
 
-Start with [default scheduling](./default.md) (2:2:1 weights for queue depth, KV-cache utilization, and prefix cache affinity). Upgrade to precise prefix cache or predicted latency based on what you observe -- each sub-page describes when to make that transition.
+Start with [load-aware and approximate prefix cache scheduling](./default.md) (2:2:1 weights for queue depth, KV-cache utilization, and prefix cache affinity). Upgrade to precise prefix cache or predicted latency based on what you observe -- each sub-page describes when to make that transition.
 
 ## Observability
 
