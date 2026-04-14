@@ -219,38 +219,60 @@ See [Scheduling](scheduling.md) for more architectural details on how the EPP's 
 
 #### `flowControl`
 
-The `flowControl` section configures the EPP's Flow Control layer, which acts as a pool defense mechanism by buffering requests before they reach backend model servers. Flow Control implements a 3-tier dispatch hierarchy: **Priority → Fairness → Ordering**.
+See [Flow Control](flow-control.md) for more architectural details on how the EPP's flow control layer works internally.
+
+The `flowControl` section configures the EPP's Flow Control layer, which acts as a pool defense mechanism by buffering requests before they reach backend model servers. Flow Control implements a 3-tier dispatch hierarchy: **Priority → Fairness → Ordering**. For a visual breakdown of how this looks in practice, see the [Queuing Topology diagram in the Flow Control reference](flow-control.md#queuing-topology--the-3-tier-dispatch).
 
 When flow control is enabled (via the `FlowControl` feature gate), incoming requests are queued in memory and dispatched according to configured priority bands, fairness policies, and ordering policies. When the pool is saturated (as determined by the [saturation detector](#saturationdetector)), requests are held in the queue until capacity frees up.
 
-The `flowControl` section has the following form:
+The following example demonstrates a complete `EndpointPickerConfig` with flow control enabled, showing how to configure the `featureGates`, `plugins`, `saturationDetector`, and `flowControl` sections to work together.
 
 ```yaml
+apiVersion: inference.networking.x-k8s.io/v1alpha1
+kind: EndpointPickerConfig
+
+featureGates:
+- flowControl
+
+plugins:
+- type: round-robin-fairness-policy
+- type: fcfs-ordering-policy
+- type: global-strict-fairness-policy
+- type: utilization-detector
+# ... other plugins ...
+
+saturationDetector:
+  pluginRef: utilization-detector # Default
+
 flowControl:
-  maxBytes: 10Gi
-  maxRequests: 5000
-  defaultRequestTTL: 60s
+  maxBytes: "0" # Default: unlimited
+  maxRequests: "0" # Default: unlimited
+  defaultRequestTTL: "0s" # Default: uses client context deadline
+
   defaultPriorityBand:
-    maxBytes: 1Gi
-    maxRequests: 1000
-    orderingPolicyRef: fcfs-ordering-policy
-    fairnessPolicyRef: global-strict-fairness-policy
-  priorityBands:
-    - priority: 100
-      maxBytes: 5Gi
-      maxRequests: 500
-      orderingPolicyRef: fcfs-ordering-policy
-      fairnessPolicyRef: round-robin-fairness-policy
-    - priority: 50
-      maxBytes: 2Gi
-      maxRequests: 200
+    maxBytes: "1Gi" # Default
+    maxRequests: "0" # Default: unlimited
+    orderingPolicyRef: fcfs-ordering-policy # Default
+    fairnessPolicyRef: global-strict-fairness-policy # Default
+
+  priorityBands: # Only showing overrides; fields not specified inherit from defaults
+  - priority: 100
+    maxBytes: "5Gi"
+    maxRequests: "500"
+    fairnessPolicyRef: round-robin-fairness-policy
+
+  - priority: 50
+    maxBytes: "2Gi"
+    maxRequests: "200"
+
+# ... other sections (schedulingProfiles, dataLayer, etc.) ...
 ```
 
 ##### Global Fields
 
-- `maxBytes`: Global capacity limit across all priority levels. Supports Kubernetes resource quantity format (e.g., `10Gi`, `512Mi`) or plain integers (bytes). Default: unlimited.
-- `maxRequests`: Optional global maximum request count limit. Default: unlimited.
-- `defaultRequestTTL`: Fallback timeout for requests that do not carry a deadline. Default: uses the client context deadline (which may wait indefinitely).
+- `maxBytes`: Global capacity limit across all priority levels. Supports Kubernetes resource quantity format (e.g., `10Gi`, `512Mi`) or plain integers (bytes). If `0` or omitted, no global limit is enforced (unlimited).
+- `maxRequests`: Optional global maximum request count limit. If `0` or omitted, no global limit is enforced (unlimited).
+- `defaultRequestTTL`: Fallback timeout for requests that do not carry a deadline. If `0` or omitted, it defaults to the client context deadline (which may wait indefinitely).
 - `defaultPriorityBand`: A template used to dynamically provision priority bands that are not explicitly configured in `priorityBands`.
 - `priorityBands`: A list of explicit configurations for specific priority levels.
 
@@ -264,117 +286,26 @@ These fields apply to both `defaultPriorityBand` and entries in `priorityBands`:
 - `orderingPolicyRef`: References a plugin name for request ordering within the band. Default: `fcfs-ordering-policy`.
 - `fairnessPolicyRef`: References a plugin name for fairness policy within the band. Default: `global-strict-fairness-policy`.
 
-##### Fairness Policies
+For a full list of available Fairness and Ordering policies, see the [Flow Control reference](flow-control.md#concrete-plugins).
 
-Fairness policies control how requests from different flows (e.g., different tenants) are interleaved within a priority band:
 
-- `global-strict-fairness-policy`: Serves all requests in a single global FIFO order, with no per-flow distinction. This is the default.
-- `round-robin-fairness-policy`: Cycles fairly between different flows, ensuring no single flow can starve others.
+##### `saturationDetector`
 
-##### Ordering Policies
-
-Ordering policies control the order in which requests are dispatched from the queue within a given flow:
-
-- `fcfs-ordering-policy`: First-Come, First-Served ordering. This is the default.
-- `edf-ordering-policy`: Earliest Deadline First — prioritizes requests closest to their deadline.
-- `slo-deadline-ordering-policy`: SLO-based deadline ordering — orders requests by their SLO-derived deadlines.
-
-Below is a concrete example that configures flow control with two priority bands, round-robin fairness for the high-priority band, and earliest-deadline-first ordering for the low-priority band:
-
-```yaml
-apiVersion: inference.networking.x-k8s.io/v1alpha1
-kind: EndpointPickerConfig
-plugins:
-- type: round-robin-fairness-policy
-- type: edf-ordering-policy
-flowControl:
-  maxBytes: 10Gi
-  defaultRequestTTL: 30s
-  priorityBands:
-    - priority: 100
-      maxBytes: 5Gi
-      maxRequests: 500
-      fairnessPolicyRef: round-robin-fairness-policy
-    - priority: 50
-      maxBytes: 2Gi
-      maxRequests: 200
-      orderingPolicyRef: edf-ordering-policy
-```
-
-See [Flow Control](flow-control.md) for more architectural details on how the EPP's flow control layer works internally.
-
-#### `saturationDetector`
-
-The `saturationDetector` section configures the saturation detection mechanism, which acts as a safety valve to evaluate whether the backend InferencePool is overloaded and protects endpoints from exceeding optimal capacity.
-
-The behavior of the saturation detector depends on whether flow control is enabled:
-
-- **Flow Control enabled**: When the pool is saturated, request dispatch is paused and incoming requests are buffered in the flow control memory queues (respecting priority and fairness policies) until backend capacity frees up.
-- **Flow Control disabled** (default): When the pool is saturated, "sheddable" requests (those with negative priority) are immediately rejected with HTTP 503. All other requests pass directly to the model servers.
+The `saturationDetector` section configures the mechanism that evaluates whether the backend InferencePool is overloaded.
 
 The `saturationDetector` section has the following form:
 
 ```yaml
 saturationDetector:
-  pluginRef: utilization-detector
+  pluginRef: utilization-detector # Default
 ```
 
-##### Fields
+###### Fields
 
-- `pluginRef`: References a plugin instance defined in the global `plugins` section. Defaults to `utilization-detector` if omitted or empty.
+- `pluginRef`: References a plugin instance defined in the global `plugins` section. Defaults to `utilization-detector` if omitted or empty. *Note: If a `utilization-detector` is not explicitly defined in your `plugins` array, the gateway will automatically instantiate one under the hood using standard default parameters.*
 
-##### Saturation Detector Plugins
+For a full list of available Saturation Detector plugins, see the [Flow Control reference](flow-control.md#concrete-plugins).
 
-There are two available saturation detector plugins:
-
-**`utilization-detector`** (Default)
-
-Detects saturation based on queue depth and KV cache utilization thresholds across the pool. Parameters:
-
-- `queueDepthThreshold` (int, default: `5`): Target queue depth limit per endpoint. When an endpoint's queue depth exceeds this value, it is considered saturated.
-- `kvCacheUtilThreshold` (float64, default: `0.8`): Target KV cache utilization threshold (0.0–1.0). When an endpoint's KV cache utilization exceeds this value, it is considered saturated.
-- `metricsStalenessThreshold` (duration, default: `"200ms"`): Maximum age of metrics before an endpoint is deemed stale and excluded from scheduling decisions.
-- `headroom` (float64, default: `0.0`): Allowed burst capacity above thresholds before the pool is considered saturated.
-
-**`concurrency-detector`**
-
-Detects saturation based on in-flight request or token concurrency. Parameters:
-
-- `concurrencyMode` (string, default: `"requests"`): Either `"requests"` (track in-flight requests) or `"tokens"` (track in-flight tokens).
-- `maxConcurrency` (int64, default: `100`): Maximum in-flight requests per endpoint.
-- `maxTokenConcurrency` (int64, default: `1000000`): Maximum tokens in-flight per endpoint.
-- `headroom` (float64, default: `0.0`): Allowed burst capacity above the concurrency limit.
-
-Below is a concrete example that configures the utilization detector with custom thresholds:
-
-```yaml
-apiVersion: inference.networking.x-k8s.io/v1alpha1
-kind: EndpointPickerConfig
-plugins:
-- type: utilization-detector
-  parameters:
-    queueDepthThreshold: 10
-    kvCacheUtilThreshold: 0.9
-    metricsStalenessThreshold: "500ms"
-    headroom: 0.1
-saturationDetector:
-  pluginRef: utilization-detector
-```
-
-And an example using the concurrency detector:
-
-```yaml
-apiVersion: inference.networking.x-k8s.io/v1alpha1
-kind: EndpointPickerConfig
-plugins:
-- type: concurrency-detector
-  parameters:
-    concurrencyMode: "tokens"
-    maxTokenConcurrency: 500000
-    headroom: 0.05
-saturationDetector:
-  pluginRef: concurrency-detector
-```
 
 ### High Availability
 
@@ -419,18 +350,7 @@ These metrics provide visibility into the InferencePool health and scheduling de
 | `inference_extension_info` | Gauge | `commit`, `build_ref` | EPP build information |
 | `inference_extension_scheduler_attempts_total` | Counter | `status`, `target_model_name`, `pod_name`, `namespace`, `port` | Number of scheduling attempts and their outcomes |
 
-#### Flow Control Metrics
 
-When flow control is enabled, the following metrics are exposed. They carry the labels `fairness_id`, `priority`, `outcome`, `inference_pool`, `model_name`, and `target_model_name`.
-
-| Metric | Type | Description |
-|--------|------|-------------|
-| `inference_extension_flow_control_request_queue_duration_seconds` | Distribution | Time a request spends in the flow control queue |
-| `inference_extension_flow_control_queue_size` | Gauge | Number of requests currently queued |
-| `inference_extension_flow_control_queue_bytes` | Gauge | Total size of queued requests in bytes |
-| `inference_extension_flow_control_dispatch_cycle_duration_seconds` | Distribution | Duration of each dispatch cycle |
-| `inference_extension_flow_control_request_enqueue_duration_seconds` | Distribution | Time taken to enqueue a request |
-| `inference_extension_flow_control_pool_saturation` | Gauge | Pool saturation level (0.0–1.0+) |
 
 #### Monitoring Stack
 
@@ -440,5 +360,5 @@ Pre-configured alert rules are also available upstream, covering:
 
 - **High P99 latency** — triggers when P99 request latency exceeds 10 seconds
 - **High error rate** — triggers when the error rate exceeds 5%
-- **High queue size** — triggers when queue depth exceeds 50 requests
+- **High queue size** — triggers when model server queue depth exceeds 50 requests
 - **High KV cache utilization** — triggers when KV cache utilization exceeds 90%

@@ -4,7 +4,7 @@ High-level guide to llm-d architecture. Start here, then dive into specific guid
 
 ## Core
 
-At it core, llm-d contains the following key layers:
+At its core, llm-d contains the following key layers:
 
 - **Proxy** - Accepts requests from the users. It can be deployed as a Standalone Envoy Proxy or via Kubernetes Gateway API. The Proxy consults an EndPoint Picker (EPP) via the ext-proc protocol to determine which Model Server is optimal for a request.
 
