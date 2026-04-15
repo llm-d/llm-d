@@ -275,7 +275,7 @@ export GATEWAY_IP=$(kubectl get gateway/llm-d-inference-gateway -n ${NAMESPACE} 
 
 The `GATEWAY_IP` environment variable will be used in the [benchmark template](./benchmark-templates/guide.yaml).
 
-2. Follow the [benchmark guide](../../guides/benchmark/README.md) to deploy the benchmark tool and analyze the benchmark results. Notably, select the corresponding benchmark template:
+2. Follow the [benchmark guide](../../helpers/benchmark.md) to deploy the benchmark tool and analyze the benchmark results. Notably, select the corresponding benchmark template:
 
 ```bash
 export BENCH_TEMPLATE_DIR="${LLMD_ROOT_DIR}"/guides/pd-disaggregation/benchmark-templates

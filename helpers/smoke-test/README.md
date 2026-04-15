@@ -1,4 +1,4 @@
-# llm-d Deployment Health Check
+# llm-d Deployment Smoke Test
 
 A lightweight smoke-test script that verifies an llm-d cluster is healthy after deployment.
 

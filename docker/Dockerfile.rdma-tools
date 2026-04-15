@@ -8,7 +8,7 @@ ARG IPERF_VERSION=3.20
 ARG TCPDUMP_VERSION=tcpdump-4.99.6
 ARG PCIUTILS_VERSION=v3.14.0
 ARG PERFTEST_VERSION=25.10.0-0.128
-ARG GDRCOPY_VERSION=v2.5.1
+ARG GDRCOPY_VERSION=v2.5.2
 ARG NCCL_TESTS_VERSION=v2.17.8
 
 # ============================================================================

@@ -214,7 +214,7 @@ We use the [inference-perf](https://github.com/kubernetes-sigs/inference-perf/tr
 export GATEWAY_IP=$(kubectl get gateway/llm-d-inference-gateway -n ${NAMESPACE} -o jsonpath='{.status.addresses[0].value}')
 ```
 
-2. Follow the [benchmark guide](../../guides/benchmark/README.md) to deploy the benchmark tool and analyze the benchmark results. Notably, select the corresponding benchmark template:
+2. Follow the [benchmark guide](../../helpers/benchmark.md) to deploy the benchmark tool and analyze the benchmark results. Notably, select the corresponding benchmark template:
 
 ```
 export BENCHMARK_TEMPLATE="${BENCH_TEMPLATE_DIR}"/wide_ep_template.yaml

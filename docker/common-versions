@@ -8,13 +8,13 @@ VLLM_COMMIT_SHA=95c0f928cdeeaa21c4906e73cee6a156e1b3b995 # maps to v0.17.1 tag
 # Cuda specific configs
 # ============================================================================
 
-### Precomipiled wheel settings
+### Precompiled wheel settings
 
 # CUDA-only configurations for precompiled binaries
 VLLM_PREBUILT=0                # 0=editable install, 1=use full prebuilt wheel
 VLLM_USE_PRECOMPILED=1         # 1=use precompiled binaries either from VLLM_COMMIT_SHA or VLLM_PRECOMPILED_WHEEL_COMMIT, 0=compile from source
 # If building vLLM from a precompiled commit in the vLLM wheel index (only commits off main),
-# which commit to use as the base for the copiled bits.
+# which commit to use as the base for the compiled bits.
 VLLM_PRECOMPILED_WHEEL_COMMIT=95c0f928cdeeaa21c4906e73cee6a156e1b3b995
 
 ### Cuda Runtime versions

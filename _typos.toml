@@ -1,3 +1,7 @@
 [default.extend-words]
 ba = "ba"        # sed label syntax in YAML scripts
 MAPE = "MAPE"   # Mean Absolute Percentage Error (ML metric)
+AKS = "AKS"     # Azure Kubernetes Service
+aks = "aks"      # Azure Kubernetes Service (lowercase)
+IST = "IST"      # Indian Standard Time (used in benchmark timestamps)
+ND = "ND"        # Azure VM SKU prefix (e.g., Standard_ND96asr_v4)

@@ -1,6 +1,5 @@
 NEEDS TO BE REDONE!
 
-
 ## EPP Configuration
 
 The `EndpointPickerConfig` is used to configure the EPP deployment.
@@ -32,9 +31,9 @@ featureGates:
 
 - The first two lines of the configuration are constant and must appear as is.
 - The [`plugins`](#plugins) section defines the set of plugins that will be instantiated and their parameters.
-- The [`schedulingProfiles`](#schedulingProfiles) section defines the set of scheduling profiles that can be used in scheduling requests to pods.
-- The [`saturationDetector`](#saturationDetector) section configures the saturation detector.
-- The [`flowControl`](#flowControl) section configures the Flow Control layer, which manages request concurrency and fairness.
+- The [`schedulingProfiles`](#schedulingprofiles) section defines the set of scheduling profiles that can be used in scheduling requests to pods.
+- The [`saturationDetector`](#saturationdetector) section configures the saturation detector.
+- The [`flowControl`](#flowcontrol) section configures the Flow Control layer, which manages request concurrency and fairness.
 - The [`data`](#data) section configures the data layer, which is used to gather information (such as metrics) used in making scheduling decisions.
 - The [`parser`](#parser) section configures the parser, which is used to understand the payload of requests and responses for features like prefix-cache aware routing and
 - The [`featureGates`](#featureGates) section allows the enablement of experimental features of the IGW. This section is described in more detail in the section Feature Gates.usage tracking.
@@ -123,6 +122,7 @@ Each plugin can also be given a name, enabling the same plugin type to be instan
 ```
 
 The fields in a plugin entry are:
+
 - `name` which is optional, provides a name by which the plugin instance can be referenced. If this field is omitted, the plugin's type will be used as its name.
 - `type` specifies the type of the plugin to be instantiated.
 - `parameters` which is optional, defines the set of parameters used to configure the plugin in question. The actual set of parameters varies from plugin to plugin.
@@ -132,10 +132,12 @@ The fields in a plugin entry are:
 The `schedulingProfile` section defines how the EPP's Scheduling component works. If one is not defined, a default `schedulingProfile` named `default` will be added and will reference all of the instantiated plugins.
 
 The number of scheduling profiles depends on the use case:
+
 - For aggregated serving - one profile is needed
 - For disaggregated servings - two profiles are required (one for prefill and one for decode).
 
 Each `schedulingProfile` can have:
+
 - a set of `filters` (optional -- if unset, uses no filter)
 - a set of `scorers` with `weights`
 - a `picker` (optional -- if unset, uses `max-score-picker`)
@@ -182,21 +184,21 @@ There are two types of plugins related to Scheduling: `Scorers` and `Pickers`
 During the scheduling process, each pod receives a score for each scorer in the `schedulingProfile`:
 
 - `prefix-cache-scorer`: Scores pods based on the amount of the prompt is believed to be in the pod's KvCache. Parameters:
-    - `blockSize`: specified the size of the blocks to break up the input prompt when calculating the block hashes. If not specified defaults to 64
-    - `maxPrefixBlocksToMatch`: specifies the maximum number of prefix blocks to match. If not specified defaults to 256
-    - `lruCapacityPerServer`: specifies the capacity of the LRU indexer in number of entries per server (pod). If not specified defaults to 31250
+  - `blockSize`: specified the size of the blocks to break up the input prompt when calculating the block hashes. If not specified defaults to 64
+  - `maxPrefixBlocksToMatch`: specifies the maximum number of prefix blocks to match. If not specified defaults to 256
+  - `lruCapacityPerServer`: specifies the capacity of the LRU indexer in number of entries per server (pod). If not specified defaults to 31250
 
 - `lora-affinity-scorer`: Scores pods based on whether the requested LoRA adapter is already loaded in the pod's HBM, or if the pod is ready to load the LoRA on demand. Parameters:
-    - none
+  - none
 
 - `kv-cache-utilization-scorer`: Scores the candidate pods based on their KV cache utilization. Parameters:
-    - none
+  - none
 
 - `queue-scorer`: Scores list of candidate pods based on the pod's waiting queue size. The lower the waiting queue size the pod has, the higher the score it will get (since it's more available to serve new request). Parameters:
-    - none
+  - none
 
 - `running-requests-size-scorer`: Scores candidate pods based on the number of requests currently being processed (in-flight) on each pod. Pods with fewer running requests receive a higher score. Scores are normalized across the candidate set — the pod with the fewest running requests scores 1.0, the pod with the most scores 0.0, and all others are linearly interpolated. When all candidates have the same count, every pod receives a neutral score of 1.0.
-    - none
+  - none
 
 ---> XXX ---> What Else Is Missing?
 
@@ -205,13 +207,13 @@ During the scheduling process, each pod receives a score for each scorer in the 
 After each pod receives a score for each scorer which are combined using the `weights`, the `picker` configures how we select the pod.
 
 - `max-score-picker`: Picks the pod with the maximum score from the list of candidates. This is the default picker plugin if not specified. Parameters:
-    - `maxNumOfEndpoints`: Maximum number of endpoints to pick from the list of candidates, based on the scores of those endpoints. If not specified defaults to 1
+  - `maxNumOfEndpoints`: Maximum number of endpoints to pick from the list of candidates, based on the scores of those endpoints. If not specified defaults to 1
 
 - `random-picker`: Picks a random pod from the list of candidates. Parameters:
-    - `maxNumOfEndpoints`: Maximum number of endpoints to pick from the list of candidates. If not specified defaults to 1
+  - `maxNumOfEndpoints`: Maximum number of endpoints to pick from the list of candidates. If not specified defaults to 1
 
 - `weighted-random-picker`: Picks pod(s) from the list of candidates based on weighted random sampling using A-Res algorithm. Parameters:
-    - `maxNumOfEndpoints`: Maximum number of endpoints to pick from the list of candidates. If not specified defaults to 1.
+  - `maxNumOfEndpoints`: Maximum number of endpoints to pick from the list of candidates. If not specified defaults to 1.
 
 See [Scheduling](scheduling.md) for more architectural details on how the EPP's scheduler uses these components internally.
 

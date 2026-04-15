@@ -1,9 +1,9 @@
-# How to run a benchmark workload against your LLM-d stack
+# Benchmarking
 
-## Overview
+This helper describes how to run benchmarks against a deployed llm-d stack.
 
-This document describes how to run benchmarks against a deployed llm-d stack.
-For full, customizable benchmarking, please refer to [llm-d-benchmark](https://github.com/llm-d/llm-d-benchmark). `llm-d-benchmark` includes advanced features, such as automatic stack creation, sweeping of configuration parameters, recommendations, etc.
+> [!NOTE]
+> For full, customizable benchmarking, please refer to [llm-d-benchmark](https://github.com/llm-d/llm-d-benchmark), which includes advanced features, such as automatic stack creation, sweeping of configuration parameters, recommendations, etc.
 
 ## Requirements
 

@@ -11,7 +11,6 @@ multinode: false
 modelArtifacts:
   uri: "hf://Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8"
   size: 700Gi
-  authSecretName: "llm-d-hf-token"
   name: Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8
   labels:
     llm-d.ai/inference-serving: "true"
@@ -22,11 +21,13 @@ modelArtifacts:
 
 routing:
   proxy:
-    enabled: false  # removes sidecar from deployment - no PD in inference scheduling
-    targetPort: 8000  # controls vLLM port to matchup with sidecar if deployed
+    enabled: false # removes sidecar from deployment - no PD in inference scheduling
+    targetPort: 8000 # controls vLLM port to matchup with sidecar if deployed
 
 accelerator:
   type: "google"
+
+serviceAccountOverride: "placeholder-sa"
 
 decode:
   create: true
@@ -41,14 +42,24 @@ decode:
   monitoring:
     podmonitor:
       enabled: true
-      portName: "vllm"  # decode vLLM service port (from routing.proxy.targetPort)
+      portName: "vllm" # decode vLLM service port (from routing.proxy.targetPort)
       path: "/metrics"
       interval: "30s"
   containers:
     - name: "vllm"
-      image: "vllm/vllm-tpu:v0.13.2-ironwood"
-      modelCommand: vllmServe
+      image: "vllm/vllm-tpu:nightly-20260401-a536749-8c0b626"
+      env:
+        - name: VLLM_XLA_CACHE_PATH
+          value: <Insert GCS URI here> # e.g. gs://my-gcs-bucket/xla-cache
+      modelCommand: custom
+      command:
+        - python3
+        - -m
+        - vllm.entrypoints.openai.api_server
       args:
+        - --model=<Insert GCS URI here> # e.g. "gs://my-gcs-bucket/Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8"
+        - --load-format=runai_streamer
+        - --tensor_parallel_size=8
         - --data-parallel-size=1
         - --max-model-len=9216
         - --max-num-batched-tokens=1028
@@ -62,14 +73,10 @@ decode:
           protocol: TCP
       resources:
         limits:
-          memory: 64Gi
-          cpu: "16"
           google.com/tpu: 4
         requests:
-          memory: 64Gi
-          cpu: "16"
           google.com/tpu: 4
-      mountModelVolume: true
+      mountModelVolume: false
       volumeMounts:
         - name: metrics-volume
           mountPath: /.config

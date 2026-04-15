@@ -5,6 +5,7 @@
 An [InferencePool](https://gateway-api-inference-extension.sigs.k8s.io/api-types/inferencepool/) is a Kubernetes custom resource defined by the Gateway API Inference Extension project. It is the set of Model Servers that an EPP (Endpoint Picker Pod) considers in routing a request.
 
 Model Server Pods within an InferencePool share the same:
+
 - **Compute configuration** (CPU, memory, GPU resources)
 - **Accelerator type** (e.g., NVIDIA H100, AMD MI300X, Google TPUv6e)
 - **Model server** (vLLM or SGLang)
@@ -52,7 +53,7 @@ The full spec is defined [in the GAIE documentation](https://gateway-api-inferen
 
 ### Model Server Discovery
 
-Model Servers are discovered dynamically via Kubernetes label selectors. To add a Model Server to an InferencePool, apply the labels specified in the InferncePool's `modelServers.matchLabels` to the Model Server's Pod template. For example, to add to a Model Server to `my-infpool`, you can add the following label to the pod:
+Model Servers are discovered dynamically via Kubernetes label selectors. To add a Model Server to an InferencePool, apply the labels specified in the InferencePool's `modelServers.matchLabels` to the Model Server's Pod template. For example, to add to a Model Server to `my-infpool`, you can add the following label to the pod:
 
 ```yaml
 labels:
@@ -85,6 +86,7 @@ An instance of an InferencePool and associated EPP can be deployed using the Hel
 #### Helm Values
 
 Configuration is split into two sections in the Helm values file:
+
 - `inferencePool` which defines the pool itself
 
 | Field | Description | Example |
@@ -105,7 +107,7 @@ Configuration is split into two sections in the Helm values file:
 | `tracing.enabled` | Enable OpenTelemetry distributed tracing | `false` |
 | `monitoring.prometheus.enabled` | Enable Prometheus metrics scraping | `true` |
 
-> See [epp/README.md](EPP) for more details on `inferenceExtension` design and configuration 
+> See [epp/README.md](EPP) for more details on `inferenceExtension` design and configuration
 
 #### Connecting to a Proxy
 
@@ -150,6 +152,7 @@ spec:
 ```
 
 An HTTPRoute can have:
+
 - multiple backendRefs that reference the same InferencePool and therefore routes to the same EPP
 - multiple backendRefs that reference different InferencePools and therefore routes to different EPP (e.g. for traffic splitting in roll-outs)
 
