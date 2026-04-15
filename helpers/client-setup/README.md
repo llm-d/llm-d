@@ -1,6 +1,6 @@
 # Client Setup Prerequisites
 
-llm-d well-lit path guides use various common client-side tools on Linux and Mac OSX. The provided [install-deps.sh](./install-deps.sh) script will download and install the tools below.
+[install-deps.sh](./install-deps.sh) downloads and installs the following client-side tools listed below for use with the llm-d guides.
 
 ## Required Tools
 
