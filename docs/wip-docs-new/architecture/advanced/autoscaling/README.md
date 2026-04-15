@@ -14,11 +14,11 @@ With autoscaling, model servers are added or removed automatically to keep servi
 
 | | [HPA/KEDA](./hpa-keda.md) | [WVA](./wva.md) |
 |---|---|---|
-| **Scaling Signals** | IGW queue depth and running request count | KV cache utilization, model server queue depth, SLO targets |
+| **Scaling Signals** | IGW queue depth and running request count | KV cache utilization, model server queue depth, SLO targets (**Experimental**), IGW queue size (**Experimental**) |
 | **Multiple-Variants** | Unsupported | Supported — optimally places across models and topologies to minimize cost |
 | **Limited Accelerators** | First come, first served | Fair share allocation |
 | **Scale to zero** | Supported | Supported |
-| **Prefill/Decode Disaggregation** | Uniform — scales prefill and decode as one unit | Per Role (**Roadmap**) |
+| **Prefill/Decode Disaggregation** | Uniform — scales prefill and decode as one unit | Per Role (**In Plan**) |
 | **Strong Latency SLOs** | Not guaranteed | Supported by learning supply/demand dynamics and scaling proactively to meet targets  (**Experimental**) |
 | **Pending Pods Awareness** | Unsupported — external metrics do not account for pending (unscheduled) pods | Supported — incorporates pending pod state into scaling decisions |
 | **Operational Complexity** | Low - Standard Kubernetes HPA/KEDA only | Medium - Requires WVA controller and `VariantAutoscaling` CRD |
