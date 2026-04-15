@@ -1,10 +1,8 @@
 # KV-Cache Indexer
 
-Reusing an already-cached prefix lets a model server skip prefill — the dominant cost of LLM inference. The **KV-Cache Indexer** tells the EPP, with precision, which pods hold which KV-cache blocks, so each request can be routed to the pod that skips the most work.
+The **KV-Cache Indexer** maintains a globally consistent view of the fleet's KV-cache state, enabling accurate cache-aware routing across multi-modal, multi-LoRA, and hybrid-attention deployments.
 
-It drives llm-d's **precise prefix cache-aware routing**: an event-driven, globally consistent view of cache state across the fleet, accurate enough to route correctly through multimodal content, LoRA adapters, and hybrid-attention models — cases where approximating cache state from scheduling history breaks down.
-
-The indexer is a Go library in [llm-d-kv-cache](https://github.com/llm-d/llm-d-kv-cache), embedded in the EPP via the `precise-prefix-cache-scorer` plugin from [llm-d-inference-scheduler](https://github.com/llm-d/llm-d-inference-scheduler).
+It is loaded into the EPP as a library, exposed through the `precise-prefix-cache-scorer` plugin ([llm-d-inference-scheduler](https://github.com/llm-d/llm-d-inference-scheduler), built on [llm-d-kv-cache](https://github.com/llm-d/llm-d-kv-cache)).
 
 ## Functionality
 
@@ -12,22 +10,23 @@ The indexer maintains a near-real-time view of which KV-cache blocks exist on wh
 
 Beyond the baseline approximate view, this event-driven foundation unlocks a family of advanced prefix-cache-aware scheduling capabilities:
 
-- **Hybrid-attention-aware scoring.** Hybrid models (mixing full attention with sliding-window attention, or with linear/state-space attention as in Mamba / Jamba) partition the KV-cache into layer groups that evict independently. vLLM can drop sliding-window blocks that have fallen outside the attention window while keeping the corresponding full-attention blocks for the same token range — so a prefix that is "cached" in one group may be partially gone in another. A cache hit is no longer binary: scoring has to distinguish full hits, partial hits (e.g. full-attention retained but SWA evicted outside the window), and misses, and needs the model's window size to decide whether a partial hit is still usable. Only an event-driven foundation carries the per-group fidelity required to reason about this.
+- **Hybrid-attention-aware scoring.** Hybrid models partition the KV-cache into layer groups (full, sliding-window, linear/state-space) that evict independently, so a prefix may be retained in one group and partially gone in another. The event-driven foundation carries the per-group fidelity needed to distinguish full from partial hits.
 - **Multimodal-aware routing.** Multimodal content hashes (images, audio) are folded into block keys, so two prompts with the same text but different images produce different keys and are routed to the pod that actually has the matching multimodal KV-cache.
 - **LoRA-aware routing.** LoRA adapter identity is folded into block keys, so cache hits are scoped to the adapter that produced them — different adapters over the same prompt do not collide.
 - **Heterogeneous device-tier weighting.** Model servers report the storage tier (GPU, CPU, host offload) of each block, and scoring weights each matching block by tier. A prompt cached on GPU outranks the same prompt cached on CPU.
 - **Speculative indexing.** Drawing from the approximate `prefix-cache-scorer`'s strength — immediate recording of routing decisions, so back-to-back identical prompts stick to the same pod without waiting for any signal — speculative indexing closes the gap between picking a pod and the arrival of its confirming KV-event. The plugin inserts short-lived predicted entries for the chosen pod right after the routing decision; subsequent requests match on those entries until the engine confirms or the TTL expires.
 
-> Note: Hybrid-attention-aware scoring is a work in-progress.
+> [!NOTE]
+> Hybrid-attention-aware scoring is a work in progress.
 
 ## Design
 
-### How the Indexer Integrates with the EPP
+### Integration with EPP
 
-The indexer is not a sidecar — it is a library loaded into the EPP process. Two cooperating plugins expose it to the scheduler:
+The indexer is deployed as a library, loaded into the EPP process. Two cooperating plugins are used by the EPP's scheduler:
 
-- The **`tokenizer` plugin** runs as a `PrepareData` plugin, rendering chat templates and tokenizing the prompt once per request, then writing the token IDs and any multimodal features onto the request object (`LLMRequest.TokenizedPrompt`). Downstream plugins read from the request directly instead of re-tokenizing.
-- The **`precise-prefix-cache-scorer` plugin** implements three EPP extension points: `PrepareRequestData`, `Score`, and `PreRequest`.
+- The **`tokenizer` plugin** — a `PrepareData` plugin that tokenizes the prompt (and any multimodal features) once and writes the result onto `LLMRequest.TokenizedPrompt` for downstream reuse.
+- The **`precise-prefix-cache-scorer` plugin** — implements three EPP extension points: `PrepareRequestData`, `Score`, and `PreRequest`.
 
 ```mermaid
 flowchart TB
