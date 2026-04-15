@@ -1,8 +1,8 @@
 # KV-Cache Indexer
 
-The **KV-Cache Indexer** maintains a globally consistent view of the fleet's KV-cache state, enabling accurate cache-aware routing across multi-modal, multi-LoRA, and hybrid-attention deployments.
+The **KV-Cache Indexer** enables llm-d's precise prefix-cache-aware scheduling guide.
 
-It is loaded into the EPP as a library, exposed through the `precise-prefix-cache-scorer` plugin ([llm-d-inference-scheduler](https://github.com/llm-d/llm-d-inference-scheduler), built on [llm-d-kv-cache](https://github.com/llm-d/llm-d-kv-cache)).
+It is loaded into the EPP as a library via the `precise-prefix-cache-scorer` plugin from [llm-d-inference-scheduler](https://github.com/llm-d/llm-d-inference-scheduler), built on [llm-d-kv-cache](https://github.com/llm-d/llm-d-kv-cache).
 
 ## Functionality
 
