@@ -1,7 +1,15 @@
 # KV-Cache Offloading
 
-KV-Cache offloading extends the effective cache capacity beyond GPU HBM by moving KV blocks to lower-cost tiers like CPU DRAM and storage. llm-d uses the vLLM Offloading Connector, which supports two offloading backends: CPU RAM (part of vLLM) and shared filesystem storage (via the llm-d FS backend, part of llm-d-kv-cache). These currently operate as independent options—tiered offloading where blocks flow through multiple levels is under active development. [Other connectors](#other-connectors) like LMCache are also supported through vLLM/SGLang integration.
+KV-Cache offloading extends the effective cache capacity beyond GPU HBM by moving KV blocks to lower-cost tiers like CPU DRAM and shared storage.
 
+Today, llm-d integrates offloading through vLLM's `OffloadingConnector`, which supports two offloading targets:
+
+- **CPU RAM** — vLLM's built-in CPU tier.
+- **Shared filesystem** — the llm-d FS backend (part of [llm-d-kv-cache](https://github.com/llm-d/llm-d-kv-cache)), plugged into the `OffloadingConnector` as an external storage target.
+
+[Other connectors](#other-connectors) like LMCache provide alternative offloading paths and work with both vLLM and SGLang.
+
+> [!NOTE]
 > KV-Cache offloading complements the [KV-Cache Indexer](./kv-indexer.md) which handles cache-aware routing. While the indexer determines *where* cached blocks exist, the offloader manages *how* blocks move between GPU memory and lower-cost tiers.
 
 ## Functionality
@@ -14,9 +22,9 @@ Transformer inference computes Key and Value tensors during prefill, then reuses
 
 The offloading system operates asynchronously. Writes to lower tiers happen in the background without blocking inference. Reads from storage still require waiting, but loading cached blocks is typically faster than recomputing them—up to 16x faster for long prompts.
 
-## Offloading Architecture
+## vLLM Offloading Architecture
 
-llm-d supports two offloading targets. Each extends cache capacity beyond GPU HBM with different tradeoffs:
+llm-d's offloading integration today lives inside the vLLM stack — the `OffloadingConnector` dispatches blocks to either the CPU tier or the shared-storage tier. The diagram below shows how these tiers plug into vLLM:
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
@@ -52,7 +60,7 @@ llm-d supports two offloading targets. Each extends cache capacity beyond GPU HB
 | CPU RAM | Low | ~250GB/GPU | Per-node | High-frequency reuse, preemption recovery |
 | Shared Storage | Higher | TB+ | Cross-cluster | Cross-node sharing, persistence, massive scale |
 
-> **Future work:** Tiered offloading—where blocks flow GPU → CPU → Storage as a unified hierarchy—is under active development. Today, choose one offloading backend based on your workload requirements.
+Today, the two targets operate as independent options — choose one offloading target based on your workload requirements.
 
 ## Components
 
@@ -64,11 +72,13 @@ vLLM's `OffloadingConnector` manages the GPU-to-CPU tier. It uses a hardware DMA
 - Transfers KV blocks asynchronously using GPU DMA, avoiding interference with GPU compute cores.
 - Uses a contiguous memory layout (introduced in vLLM 0.12.0) that groups all layers into single physical blocks, improving transfer throughput by 4-5x
 
-CPU offloading requires no external infrastructure. Enable it with:
+CPU offloading requires no external infrastructure. The simplest way to enable it is via vLLM's dedicated top-level flags:
 
 ```bash
---kv_offloading_backend native --kv_offloading_size <size_in_GB>
+--kv-offloading-backend native --kv-offloading-size <size_in_GB>
 ```
+
+Equivalent to passing `--kv-transfer-config '{"kv_connector":"OffloadingConnector","kv_role":"kv_both",...}'` directly — the top-level flags are a convenience wrapper around the connector JSON.
 
 ### llm-d Filesystem Connector
 
@@ -83,7 +93,8 @@ Key properties:
 - **High throughput via parallelism** — I/O operations parallelized across worker threads with NUMA-aware scheduling
 - **Minimal GPU interference** — Uses GPU DMA by default, reducing interference with compute kernels
 
-> **Note:** The storage connector does not handle cleanup or eviction. Storage capacity management must be handled by the underlying storage system or an external controller. A reference implementation, the [PVC Evictor](https://github.com/llm-d/llm-d-kv-cache/tree/main/kv_connectors/pvc_evictor), can automatically clean up old KV-cache files when storage thresholds are exceeded.
+> [!NOTE]
+> The storage connector does not handle cleanup or eviction. Storage capacity management must be handled by the underlying storage system or an external controller. A reference implementation, the [PVC Evictor](https://github.com/llm-d/llm-d-kv-cache/tree/main/kv_connectors/pvc_evictor), can automatically clean up old KV-cache files when storage thresholds are exceeded.
 
 For implementation details and advanced configuration, see the [llm-d FS backend documentation](https://github.com/llm-d/llm-d-kv-cache/tree/main/kv_connectors/llmd_fs_backend).
 
@@ -99,22 +110,12 @@ For deployment guides covering LMCache and other connector options, see the [Tie
 
 ### CPU Offloading (vLLM Native)
 
-| Field | Type | Default | Description |
+| Flag | Type | Default | Description |
 | :--- | :--- | :--- | :--- |
-| `kv_offloading_backend` | string | - | Set to `native` to enable CPU offloading |
-| `kv_offloading_size` | integer | - | CPU cache size in GB |
+| `--kv-offloading-backend` | string | - | Set to `native` for vLLM's built-in CPU offloading |
+| `--kv-offloading-size` | integer | - | CPU offloading buffer size in GB (per vLLM instance, across all workers) |
 
-Or via `--kv-transfer-config`:
-
-```json
-{
-  "kv_connector": "OffloadingConnector",
-  "kv_role": "kv_both",
-  "kv_connector_extra_config": {
-    "num_cpu_blocks": 10000
-  }
-}
-```
+For advanced use and older vLLM releases, the equivalent `--kv-transfer-config` JSON form is supported. See the [vLLM offloading connector blog](https://vllm.ai/blog/kv-offloading-connector) for details.
 
 ### Storage Offloading (llm-d FS Backend)
 
@@ -134,9 +135,8 @@ For the full configuration reference including GDS modes and environment variabl
 args:
   - "--model=Qwen/Qwen3-32B"
   - "--tensor-parallel-size=2"
-  - "--block-size=16"
-  - "--kv_offloading_backend=native"
-  - "--kv_offloading_size=100"
+  - "--kv-offloading-backend=native"
+  - "--kv-offloading-size=100"
 ```
 
 ### Storage Offloading with llm-d FS Backend
@@ -146,7 +146,7 @@ args:
   - "--model=Qwen/Qwen3-32B"
   - "--tensor-parallel-size=2"
   - "--block-size=16"
-  - "--distributed_executor_backend=mp"
+  - "--distributed-executor-backend=mp"
   - "--kv-transfer-config"
   - |
     {
@@ -164,10 +164,6 @@ volumeMounts:
   - name: kv-cache
     mountPath: /mnt/kv-cache
 ```
-
-### Tiered Offloading (CPU + Storage)
-
-> **Coming soon:** Combined CPU + Storage tiering is under development. Track progress at [llm-d/llm-d#682](https://github.com/llm-d/llm-d/issues/682).
 
 ## Metrics
 
