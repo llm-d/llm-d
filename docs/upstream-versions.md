@@ -14,7 +14,7 @@ Pinned in `docker/Dockerfile.cuda` (and variants):
 | **vLLM** | `d7de043d55d1dd629554467e23874097e1c48993` | commit SHA | `docker/Dockerfile.cuda` line 68 (`VLLM_COMMIT_SHA`) | [vllm-project/vllm](https://github.com/vllm-project/vllm) |
 | **CUDA** | `12.9.1` | version | `docker/Dockerfile.cuda` lines 17-19 | [NVIDIA CUDA](https://developer.nvidia.com/cuda-toolkit) |
 | **Python** | `3.12` | version | `docker/Dockerfile.cuda` line 23 | [python/cpython](https://github.com/python/cpython) |
-| **GDRCOPY** | `v2.5.1` | tag | `docker/Dockerfile.cuda` line 35 | [NVIDIA/gdrcopy](https://github.com/NVIDIA/gdrcopy) |
+| **GDRCOPY** | `v2.5.2` | tag | `docker/Dockerfile.cuda` line 33 | [NVIDIA/gdrcopy](https://github.com/NVIDIA/gdrcopy) |
 | **UCX** | `v1.20.0` | tag | `docker/Dockerfile.cuda` line 38 | [openucx/ucx](https://github.com/openucx/ucx) |
 | **NVSHMEM** | `v3.5.19-1` | tag | `docker/Dockerfile.cuda` line 42 | [NVIDIA/nvshmem](https://github.com/NVIDIA/nvshmem) |
 | **NIXL** | `0.10.0` | version | `docker/Dockerfile.cuda` line 46 | [ai-dynamo/nixl](https://github.com/ai-dynamo/nixl) |

@@ -1,27 +1,41 @@
 # Istio
 
-This guide shows how to deploy llm-d with [Istio](https://istio.io/) as your [Gateway API](https://gateway-api.sigs.k8s.io/) provider. By the end, inference requests will flow from an Istio-managed Gateway to your model servers via the llm-d EPP.
+This guide shows how to deploy llm-d with [Istio](https://istio.io/) as your inference gateway. By the end, inference requests will flow from an Istio-managed `Gateway` to your model servers via the llm-d EPP.
 
 > [!NOTE]
-> This guide assumes familiarity with Gateway API and llm-d.
+> This guide assumes familiarity with [Gateway API](https://gateway-api.sigs.k8s.io/) and llm-d.
 
 ## Prerequisites
 
 * A Kubernetes cluster running one of the three most recent [Kubernetes releases](https://kubernetes.io/releases/)
 * [Helm](https://helm.sh/docs/intro/install/)
 * [jq](https://jqlang.org/download/)
-* Gateway API Inference Extension CRDs installed:
+
+## Step 1: Install Gateway API and Gateway API Inference Extension CRDs
+
+Install the required Gateway API and Gateway API Inference Extension CRDs:
 
 ```bash
-kubectl apply -k https://github.com/kubernetes-sigs/gateway-api-inference-extension/config/crd
+GATEWAY_API_VERSION=v1.5.1
+GAIE_VERSION=v1.4.0
+
+kubectl apply -k "https://github.com/kubernetes-sigs/gateway-api/config/crd?ref=${GATEWAY_API_VERSION}"
+kubectl apply -k "https://github.com/kubernetes-sigs/gateway-api-inference-extension/config/crd?ref=${GAIE_VERSION}"
 ```
 
-## Step 1: Install Istio
+Verify the APIs are available:
+
+```bash
+kubectl api-resources --api-group=gateway.networking.k8s.io
+kubectl api-resources --api-group=inference.networking.k8s.io
+```
+
+## Step 2: Install Istio
 
 > [!NOTE]
 > Istio v1.28.0 or later is required for full Gateway API Inference Extension support.
 
-Download and install Istio with the Gateway API Inference Extension flag enabled:
+Install Istio with inference extension support enabled:
 
 ```bash
 ISTIO_VERSION=1.28.0
@@ -44,7 +58,7 @@ NAME                      READY   STATUS    RESTARTS   AGE
 istiod-xxxxxxxxxx-xxxxx   1/1     Running   0          30s
 ```
 
-## Step 2: Deploy Model Servers
+## Step 3: Deploy Model Servers
 
 Deploy two replicas of vLLM running `openai/gpt-oss-20b`:
 
@@ -93,7 +107,7 @@ Verify the pods are running:
 kubectl get pods -l app=my-model
 ```
 
-## Step 3: Deploy the Gateway
+## Step 4: Deploy the Gateway
 
 Create a `Gateway` resource. Istio watches this resource and creates an Envoy-based proxy that accepts incoming traffic.
 
@@ -112,7 +126,7 @@ spec:
 EOF
 ```
 
-Verify the Gateway is accepted:
+Verify the Gateway is programmed:
 
 ```bash
 kubectl get gateway llm-d-inference-gateway
@@ -127,7 +141,7 @@ llm-d-inference-gateway   istio   10.xx.xx.xx     True         30s
 
 Wait until `PROGRAMMED` shows `True` before proceeding.
 
-## Step 4: Deploy the InferencePool and EPP
+## Step 5: Deploy the InferencePool and EPP
 
 Deploy the `InferencePool` and EPP with the Helm chart, using `provider.name=istio`:
 
@@ -142,7 +156,7 @@ helm install llm-d-infpool \
   oci://registry.k8s.io/gateway-api-inference-extension/charts/inferencepool
 ```
 
-Verify the EPP is running and the InferencePool is created:
+Verify the EPP is running and the `InferencePool` is created:
 
 ```bash
 kubectl get pods,inferencepool
@@ -160,9 +174,9 @@ inferencepool.inference.networking.k8s.io/llm-d-infpool    30s
 
 The EPP pod shows `1/1` rather than `2/2` because there is no sidecar proxy in this setup. Istio manages the gateway proxy separately.
 
-## Step 5: Configure the HTTPRoute
+## Step 6: Configure the HTTPRoute
 
-Create an `HTTPRoute` to connect the Gateway to the `InferencePool`. When traffic reaches the Gateway with this route, the Proxy will consult the EPP and forward the request to the selected pod.
+Create an `HTTPRoute` to connect the Gateway to the `InferencePool`. When traffic reaches the `Gateway` with this route, the Proxy will consult the EPP and forward the request to the selected pod.
 
 ```bash
 kubectl apply -f - <<'EOF'
@@ -196,7 +210,7 @@ kubectl get httproute llm-d-route -o yaml | grep -A5 "conditions:"
 
 Both `Accepted` and `ResolvedRefs` conditions should show `status: "True"`.
 
-## Step 6: Send a Request
+## Step 7: Send a Request
 
 Get the Gateway's external address:
 
@@ -284,11 +298,3 @@ kubectl get gateway llm-d-inference-gateway -o jsonpath='{.status.addresses[0].v
 
 If the address is empty, your Gateway may still be waiting for a LoadBalancer service. Check that your cluster supports external load balancers.
 
-## Further Reading
-
-- [Istio documentation](https://istio.io/latest/docs/)
-- [Gateway API documentation](https://gateway-api.sigs.k8s.io/)
-- [Gateway API Inference Extension](https://gateway-api-inference-extension.sigs.k8s.io/)
-- [Compatible gateway implementations](https://gateway-api-inference-extension.sigs.k8s.io/implementations/gateways/)
-- [Proxy architecture](../../architecture/core/proxy.md): how standalone and gateway modes compare
-- [InferencePool](../../architecture/core/inferencepool.md): the backend resource referenced by HTTPRoute

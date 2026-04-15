@@ -85,7 +85,7 @@ jobs:
           python-version: "3.x"
 
       - name: Run pre-commit
-        uses: j178/prek-action@v1
+        uses: j178/prek-action@v2
         with:
           extra-args: ""
 
@@ -305,7 +305,7 @@ jobs:
 
       - name: Upload digest
         if: ${{ steps.build-debug.outputs.digest != '' }}
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: digests-cuda-dev-debug-${{ matrix.os }}-${{ matrix.platform == 'linux/arm64' && 'arm64' || 'amd64' }}
           path: /tmp/digests/${{ matrix.os }}/*
@@ -498,7 +498,7 @@ jobs:
 
       - name: Upload digest
         if: ${{ steps.build-image-final-layer.outputs.digest != '' }}
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: digests-cuda-dev-${{ matrix.os }}-${{ matrix.platform == 'linux/arm64' && 'arm64' || 'amd64' }}
           path: /tmp/digests/${{ matrix.os }}/*
@@ -862,7 +862,7 @@ jobs:
 
       - name: Upload digest
         if: ${{ steps.build-image-final-layer.outputs.digest != '' }}
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: digests-aws-dev-${{ matrix.os }}-${{ matrix.platform == 'linux/arm64' && 'arm64' || 'amd64' }}
           path: /tmp/digests/${{ matrix.os }}/*

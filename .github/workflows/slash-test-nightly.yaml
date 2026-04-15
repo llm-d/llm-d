@@ -50,7 +50,7 @@ jobs:
     steps:
       - name: Parse command
         id: parse
-        uses: actions/github-script@v8
+        uses: actions/github-script@v9
         with:
           result-encoding: string
           script: |
@@ -142,7 +142,7 @@ jobs:
       - name: Check commenter permission
         if: steps.parse.outputs.result == 'ok'
         id: perm
-        uses: actions/github-script@v8
+        uses: actions/github-script@v9
         with:
           result-encoding: string
           script: |
@@ -170,7 +170,7 @@ jobs:
 
       - name: React with rocket
         if: steps.parse.outputs.result == 'ok' && steps.perm.outputs.result == 'ok'
-        uses: actions/github-script@v8
+        uses: actions/github-script@v9
         with:
           script: |
             await github.rest.reactions.createForIssueComment({
@@ -183,7 +183,7 @@ jobs:
       - name: Get PR details
         if: steps.parse.outputs.result == 'ok' && steps.perm.outputs.result == 'ok'
         id: pr
-        uses: actions/github-script@v8
+        uses: actions/github-script@v9
         with:
           script: |
             const { data: pr } = await github.rest.pulls.get({
@@ -239,7 +239,7 @@ jobs:
       - name: Trigger nightlies and collect run URLs
         if: steps.parse.outputs.result == 'ok' && steps.perm.outputs.result == 'ok'
         id: trigger
-        uses: actions/github-script@v8
+        uses: actions/github-script@v9
         env:
           MATCHES_JSON: ${{ steps.parse.outputs.matches }}
           BRANCH_REF: ${{ steps.branch.outputs.ref }}
@@ -318,7 +318,7 @@ jobs:
 
       - name: Post success comment
         if: steps.parse.outputs.result == 'ok' && steps.perm.outputs.result == 'ok'
-        uses: actions/github-script@v8
+        uses: actions/github-script@v9
         env:
           TRIGGER_RESULTS: ${{ steps.trigger.outputs.results }}
           BRANCH_REF: ${{ steps.branch.outputs.ref }}
@@ -389,7 +389,7 @@ jobs:
 
       - name: Post failure comment
         if: failure() && steps.parse.outputs.result == 'ok' && steps.perm.outputs.result == 'ok'
-        uses: actions/github-script@v8
+        uses: actions/github-script@v9
         env:
           MATCH_NAMES: ${{ steps.parse.outputs.match_names }}
         with:

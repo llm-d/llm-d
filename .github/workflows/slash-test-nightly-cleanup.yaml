@@ -18,7 +18,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Delete stale test-nightly branches
-        uses: actions/github-script@v8
+        uses: actions/github-script@v9
         with:
           script: |
             const BRANCH_PREFIX = 'test-nightly/';

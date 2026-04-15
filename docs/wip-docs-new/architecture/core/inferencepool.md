@@ -80,8 +80,7 @@ kubectl apply -f https://github.com/kubernetes-sigs/gateway-api-inference-extens
 ### Deploying an InferencePool
 
 An instance of an InferencePool and associated EPP can be deployed using the Helm charts:
-
-- [Chart For Deployment with Standalone Envoy Proxy](https://github.com/kubernetes-sigs/gateway-api-inference-extension/tree/main/config/charts/standalone)
+- [Chart For Deployment with Standalone Proxy](https://github.com/kubernetes-sigs/gateway-api-inference-extension/tree/main/config/charts/standalone)
 - [Chart For Deployment with Gateway API](https://github.com/kubernetes-sigs/gateway-api-inference-extension/tree/main/config/charts/inferencepool)
 
 #### Helm Values
@@ -114,7 +113,7 @@ Configuration is split into two sections in the Helm values file:
 
 #### Standalone
 
-When using a Standalone Envoy proxy, the InferencePool and EPP can be deployed via Helm.
+When using a Standalone Proxy, the InferencePool and EPP can be deployed via Helm.
 
 ```bash
  helm install my-infpool \
@@ -122,7 +121,7 @@ When using a Standalone Envoy proxy, the InferencePool and EPP can be deployed v
   oci://us-central1-docker.pkg.dev/k8s-staging-images/gateway-api-inference-extension/charts/standalone
 ```
 
-> Note that in the in the "Standalone" deployment, the Envoy proxy is deployed as a sidecar to the EPP via the above Chart.
+> Note that in the "Standalone" deployment, the proxy is deployed as a sidecar to the EPP via the above Chart.
 
 See the [full Helm Chart](https://github.com/kubernetes-sigs/gateway-api-inference-extension/tree/main/config/charts/standalone) for configuration details.
 

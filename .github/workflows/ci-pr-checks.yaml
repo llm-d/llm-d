@@ -30,7 +30,7 @@ jobs:
           python-version: '3.x'
 
       - name: Run pre-commit
-        uses: j178/prek-action@v1
+        uses: j178/prek-action@v2
         with:
           extra-args: ''
 

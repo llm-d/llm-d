@@ -16,7 +16,7 @@ Quick-reference definitions for terms used throughout the llm-d documentation. F
 
 **Endpoint Picker (EPP)** — The central scheduling component of llm-d. Receives ext-proc callbacks from the Proxy, evaluates candidate Model Servers through a Plugin Pipeline of filters, scorers, and pickers, and returns the address of the optimal backend. See [EPP](../architecture/core/epp/README.md).
 
-**Envoy** — A high-performance L7 proxy that llm-d uses as its default data-plane Proxy. It communicates routing decisions with the EPP via ext-proc. See [Proxy](../architecture/core/proxy.md).
+**Envoy** — A high-performance L7 GAIE-conformant proxy that can be used with llm-d as a data-plane Proxy. It communicates routing decisions with the EPP via ext-proc. See [Proxy](../architecture/core/proxy.md).
 
 **Expert Parallelism (EP)** — Distributing the expert layers of MoE models across multiple GPUs, enabling large models like DeepSeek-R1 to be served across nodes. See [Model Servers](../architecture/core/model-servers.md).
 
@@ -52,7 +52,7 @@ Quick-reference definitions for terms used throughout the llm-d documentation. F
 
 **Prefill** — The first phase of LLM inference that processes all input tokens in parallel to populate the KV Cache. Prefill latency is the dominant component of TTFT. See [Architecture Overview](../architecture/README.md).
 
-**Proxy** — The L7 data-plane component (default: Envoy) that accepts client requests and delegates routing decisions to the EPP via ext-proc. Can be deployed via Gateway API or in Standalone mode with Envoy running as a sidecar to the EPP. See [Proxy](../architecture/core/proxy.md).
+**Proxy** — The L7 data-plane component that accepts client requests and delegates routing decisions to the EPP via ext-proc. Can be deployed via Gateway API or in Standalone mode with a GAIE-conformant proxy (such as Envoy) running as a sidecar to the EPP. See [Proxy](../architecture/core/proxy.md).
 
 **Saturation Detector** — A safety mechanism in the EPP that evaluates whether the backend InferencePool is overloaded based on queue depth and KV-cache utilization, triggering Flow Control or request shedding.
 
