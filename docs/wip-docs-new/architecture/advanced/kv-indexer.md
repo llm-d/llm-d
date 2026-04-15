@@ -78,7 +78,7 @@ With speculative indexing enabled — the recommended configuration — the thre
 vLLM and SGLang publish three event types over ZMQ whenever their KV-cache state changes:
 
 - **`BlockStored`** — blocks with the given content hashes have been created on a specific device tier. Payload includes the chained parent hash, the token chunk, any LoRA ID/name, and any multimodal extra keys.
-- **`BlockRemoved`** — blocks with the given hashes have been evicted from a specific device tier &/ attention group.
+- **`BlockRemoved`** — blocks with the given hashes have been evicted from a specific device tier and/or attention group.
 - **`AllBlocksCleared`** — the pod dropped its entire cache (a reset). This can occur in RL weights rollouts and other scenarios. The indexer drops all entries associated with the pod via a reverse `pod → request keys` index.
 
 ```mermaid
@@ -90,7 +90,7 @@ sequenceDiagram
     participant Worker as Pool Worker
     participant Index as kvblock.Index
 
-    MS->>Sub: Publish msgpack-encoded event batch<br/>topic: kv@<pod-id>@<model>
+    MS->>Sub: Publish msgpack-encoded event batch<br/>topic: kv@<pod-ip>:<port>@<model>
     Sub->>Pool: AddTask(RawMessage)
     Note over Pool: FNV-1a hash of pod-id<br/>routes task to a worker shard<br/>(in-order per pod)
     Pool->>Worker: Dispatch
@@ -102,7 +102,7 @@ sequenceDiagram
             Worker->>Worker: Compute request keys from tokens<br/>(hashSeed, parent, extra)
             Worker->>Index: Add(engineKeys, requestKeys, podEntry)
         else BlockRemoved
-            Worker->>Index: Evict(engineKey, EngineKey, podEntry)
+            Worker->>Index: Evict(engineKey, podEntry)
         else AllBlocksCleared
             Worker->>Index: Clear(podIdentifier)
         end
@@ -228,6 +228,8 @@ Two shapes are supported for getting events from the model servers to the indexe
 
 **Pod discovery** — each model-server pod binds its own ZMQ socket. The EPP discovers pods via Kubernetes label selectors and creates per-pod subscribers. This is the mode to use for active-active multi-scheduler: every EPP replica independently subscribes to every pod and sees the full event stream.
 
+In the current implementation, the plugin establishes subscribers lazily during `Score()` and maintains a 10-minute TTL cache of known endpoints, tearing down subscribers as endpoints fall out. The IGW data layer already exposes an endpoint source; wiring the plugin's subscriber management onto it — so subscriptions follow endpoint events directly rather than request-driven scoring — is in progress.
+
 ```
   EPP Replica 1 ──ZMQ──┐
                        ├──► Model Server A (binds :5557)
@@ -282,6 +284,18 @@ The indexer is configured as parameters of the `precise-prefix-cache-scorer` plu
     speculativeIndexing: true      
     speculativeTTL: "2s"           
 ```
+
+### Plugin
+
+Top-level parameters of the `precise-prefix-cache-scorer` plugin.
+
+| Field | Type | Default | Description |
+| :--- | :--- | :--- | :--- |
+| `tokenProcessorConfig` | object | — | Token-to-block-key config (see below). |
+| `indexerConfig` | object | — | Indexer config: tokenizer sourcing, index backend, device tiers. |
+| `kvEventsConfig` | object | — | KV-events subscription config. |
+| `speculativeIndexing` | boolean | `false` | If `true`, proactively insert speculative entries after a routing decision to close the window before the confirming KV-event. Enables the `PrepareRequestData` / `PreRequest` flow. |
+| `speculativeTTL` | string (duration) | `"2s"` | TTL for speculative entries. Parsed as a Go duration (e.g. `"2s"`, `"500ms"`). Only applies when `speculativeIndexing: true`. |
 
 ### Token Processor
 
@@ -338,7 +352,7 @@ Configure exactly one of the following. If more than one is set, the first resol
 | `concurrency` | integer | `4` | Parallel event-processing workers. |
 | `engineType` | string | `vllm` | `vllm` or `sglang`. |
 | `discoverPods` | boolean | `true` | Enable Kubernetes pod discovery (per-pod subscriber creation). |
-| `podDiscoveryConfig.podLabelSelector` | string | `llm-d.ai/inferenceServing=true` | Label selector for model-server pods. |
+| `podDiscoveryConfig.podLabelSelector` | string | `llm-d.ai/inference-serving=true` | Label selector for model-server pods. Matches the label set by the llm-d guides. |
 | `podDiscoveryConfig.podNamespace` | string | `""` | Namespace to watch. Empty watches all (requires cluster-wide RBAC). |
 | `podDiscoveryConfig.socketPort` | integer | `5557` | Port exposed by each model-server pod for its ZMQ socket. |
 
