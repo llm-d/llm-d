@@ -22,7 +22,11 @@ In this example, we will demonstrate a deployment of `DeepSeek-R1-0528` with:
 This guide requires 32 Nvidia H200 or B200 GPUs and InfiniBand or RoCE RDMA networking. Check `modelserver/base/decode.yaml` and `modelserver/base/prefill.yaml` for detailed resource requirements.
 
 > [!NOTE]
-> The pods leveraging inter-node EP must be deployed in a cluster environment with full mesh network connectivity. **_NOTE:_** The DeepEP backend used in WideEP requires All-to-All RDMA connectivity. Every NIC on a host must be able to communicate with every NIC on all other hosts. Networks restricted to communicating only between matching NIC IDs (rail-only connectivity) will fail.
+> The pods leveraging inter-node EP must be deployed in a cluster environment with full mesh
+> network connectivity. The DeepEP backend used in WideEP requires All-to-All RDMA
+> connectivity. Every NIC on a host must be able to communicate with every NIC on all other
+> hosts. Networks restricted to communicating only between matching NIC IDs (rail-only
+> connectivity) will fail.
 
 ## Prerequisites
 
