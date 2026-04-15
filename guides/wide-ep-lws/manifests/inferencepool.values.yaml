@@ -28,17 +28,20 @@ inferenceExtension:
       # since it's not yet possible to route to individual DP ranks
       apiVersion: inference.networking.x-k8s.io/v1alpha1
       kind: EndpointPickerConfig
+      featureGates:
+      - prepareDataPlugins
       plugins:
-      - type: prefill-header-handler
+      - type: disagg-headers-handler
       - type: prefill-filter
       - type: decode-filter
       - type: random-picker
         parameters:
           maxNumOfEndpoints: 1
-      - type: pd-profile-handler
+      - type: always-disagg-pd-decider
+      - type: disagg-profile-handler
         parameters:
-          threshold: 0
-          hashBlockSize: 5
+          deciders:
+            prefill: always-disagg-pd-decider
       schedulingProfiles:
       - name: prefill
         plugins:

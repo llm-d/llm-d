@@ -15,7 +15,7 @@ inferenceExtension:
       featureGates:
       - prepareDataPlugins
       plugins:
-      - type: prefill-header-handler
+      - type: disagg-headers-handler
       - type: prefix-cache-scorer
         parameters:
           maxPrefixBlocksToMatch: 256
@@ -25,10 +25,10 @@ inferenceExtension:
       - type: decode-filter
       - type: max-score-picker
       - type: always-disagg-pd-decider
-      - type: pd-profile-handler
+      - type: disagg-profile-handler
         parameters:
-          primaryPort: 0
-          deciderPluginName: always-disagg-pd-decider
+          deciders:
+            prefill: always-disagg-pd-decider
       schedulingProfiles:
       - name: prefill
         plugins:
@@ -51,7 +51,7 @@ inferenceExtension:
     total-queued-requests-metric: "sglang:num_queue_reqs"
     kv-cache-usage-percentage-metric: "sglang:token_usage"
     lora-info-metric: "" # Set an empty metric to disable LoRA metric scraping as they are not supported by SGLang yet.
-    cache-info-metric: "" # Set an empty metric to disable CacheInfoMetrics metrics as not all vLLM used metrics has SGLang equivalents 
+    cache-info-metric: "" # Set an empty metric to disable CacheInfoMetrics metrics as not all vLLM used metrics have SGLang equivalents
 
   # Distributed tracing configuration (OpenTelemetry)
   tracing:

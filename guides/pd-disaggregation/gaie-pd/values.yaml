@@ -16,7 +16,7 @@ inferenceExtension:
       featureGates:
       - prepareDataPlugins
       plugins:
-      - type: prefill-header-handler
+      - type: disagg-headers-handler
       - type: prefix-cache-scorer
         parameters:
           maxPrefixBlocksToMatch: 256
@@ -28,10 +28,10 @@ inferenceExtension:
       - type: prefix-based-pd-decider
         parameters:
           nonCachedTokens: 16
-      - type: pd-profile-handler
+      - type: disagg-profile-handler
         parameters:
-          primaryPort: 0
-          deciderPluginName: prefix-based-pd-decider
+          deciders:
+            prefill: prefix-based-pd-decider
       schedulingProfiles:
       - name: prefill
         plugins:

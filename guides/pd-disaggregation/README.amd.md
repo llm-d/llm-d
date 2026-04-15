@@ -71,14 +71,15 @@ Before proceeding, ensure your Kubernetes cluster is configured with the necessa
 2. Network Support (NIC)
 
 * A network operator is required to expose NIC devices. Choose the operator that matches your hardware:
-    - [AMD Network Operator](https://instinct.docs.amd.com/projects/network-operator/en/main/overview.html): For AMD AINIC hardware.
-    - [NVIDIA Network Operator](https://docs.nvidia.com/networking/display/kubernetes2410/nvidia+network+operator): For NVIDIA NIC hardware.
+  * [AMD Network Operator](https://instinct.docs.amd.com/projects/network-operator/en/main/overview.html): For AMD AINIC hardware.
+  * [NVIDIA Network Operator](https://docs.nvidia.com/networking/display/kubernetes2410/nvidia+network+operator): For NVIDIA NIC hardware.
 
 If you haven't installed these yet, follow the official [AMD GPU Installation Guide](https://instinct.docs.amd.com/projects/gpu-operator/en/latest/installation/kubernetes-helm.html) and the [AMD Network Operator Installation Guide](https://instinct.docs.amd.com/projects/network-operator/en/main/installation/kubernetes-helm.html).
 
 #### Deployment
 
 To enact a P/D disaggregation deployment on AMD hardware, use the `-e amd` argument to helmfile as follow:
+
 ```bash
 cd guides/pd-disaggregation
 helmfile apply -e amd -n ${NAMESPACE}
@@ -95,21 +96,23 @@ This command triggers the deployment of the disaggregated configuration describe
 ### RIXL Configuration
 
 #### UCX Transport & Logging
+
 RIXL uses the UCX library as its underlying transport mechanism for KV transfers. While UCX typically automates its configuration, you may need to manually tune the following environment variables if the default selections are suboptimal.
 
 **Network & Transport Tuning**
 Use these variables to specify how and where data travels across your hardware:
+
 * UCX_TLS: Defines the allowed Transport Layer protocols (e.g., tcp, rc, ud, sm).
 * UCX_IB_GID_INDEX: Specifies the Global Identifier (GID) index for InfiniBand or RoCE devices.
 * UCX_IB_TRAFFIC_CLASS: Specifies the KV transfer traffic class to use for InfiniBand or RoCE devices.
 
 **Debugging & Logging**
 Use these variables to verify your configuration or troubleshoot issues:
+
 * UCX_LOG_LEVEL: Adjusts the verbosity of UCX logs (e.g., info, debug, trace, etc..).
 * UCX_PROTO_INFO: Set to 'y' to display the specific protocols and devices selected for both intra-node (local) and inter-node (remote) communications.
 
 For more UCX customizations, please refer to the [UCX documentation](https://openucx.org/documentation/)
-
 
 ### Gateway options
 
@@ -193,22 +196,24 @@ For instructions on getting started making inference requests see [our docs](../
 
 ## Tuning Selective PD
 
-Selective PD is a feature in the `inference-scheduler` within the context of prefill-decode disaggregation, although it is disabled by default. This feature enables routing to just decode even with the P/D deployed. To enable it, you will need to set `threshold` value for the `pd-profile-handler` plugin, in the [GAIE values file](./gaie-pd/values.yaml). You can see the value of this here:
+Selective PD is a feature in the `inference-scheduler` within the context of prefill-decode disaggregation. The `disagg-profile-handler` plugin delegates the prefill/decode decision to a `decider` plugin. In the [GAIE values file](./gaie-pd/values.yaml), you can see the current configuration:
 
 ```bash
-cat gaie-pd/values.yaml | yq '.inferenceExtension.pluginsCustomConfig."pd-config.yaml"' | yq '.plugins[] | select(.type == "pd-profile-handler")'
-type: pd-profile-handler
+cat gaie-pd/values.yaml | yq '.inferenceExtension.pluginsCustomConfig."pd-config.yaml"' | yq '.plugins[] | select(.type == "disagg-profile-handler")'
+type: disagg-profile-handler
 parameters:
-  threshold: 0 # update this
-  hashBlockSize: 5
+  deciders:
+    prefill: prefix-based-pd-decider
 ```
+
+The `prefix-based-pd-decider` determines whether to disaggregate based on the number of uncached tokens. You can tune its `nonCachedTokens` threshold in the decider plugin configuration.
 
 Some examples in which you might want to do selective PD might include:
 
 * When the prompt is short enough, the overhead of splitting inference into prefill and decode phases and transferring the KV cache between GPUs becomes larger than simply running both phases on a single decode inference worker.
 * When Prefill units are at full capacity.
 
-For information on this plugin, see our [`pd-profile-handler` docs in the inference-scheduler](https://github.com/llm-d/llm-d-inference-scheduler/blob/v0.3.0/docs/architecture.md?plain=1#L205-L210)
+For information on this plugin, see our [`disagg-profile-handler` docs in the inference-scheduler](https://github.com/llm-d/llm-d-inference-scheduler/blob/main/docs/architecture.md#disaggprofilehandler)
 
 ## Cleanup
 

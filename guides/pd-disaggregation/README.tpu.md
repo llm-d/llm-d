@@ -203,9 +203,24 @@ For more information see [our docs](../02_verifying_a_guide.md)
 
 ## Tuning Selective PD
 
-Selective PD is a feature in the `inference-scheduler` within the context of prefill-decode disaggregation, although it is disabled by default. This feature enables routing to just decode even with the P/D deployed.
+Selective PD is a feature in the `inference-scheduler` within the context of prefill-decode disaggregation. The `disagg-profile-handler` plugin delegates the prefill/decode decision to a `decider` plugin. In the [GAIE values file](./gaie-pd/values.yaml), you can see the current configuration:
 
-For information on this plugin, see our [`pd-profile-handler` docs in the inference-scheduler](https://github.com/llm-d/llm-d-inference-scheduler/blob/v0.7.0/docs/architecture.md?plain=1#L205-L210)
+```bash
+cat gaie-pd/values.yaml | yq '.inferenceExtension.pluginsCustomConfig."pd-config.yaml"' | yq '.plugins[] | select(.type == "disagg-profile-handler")'
+type: disagg-profile-handler
+parameters:
+  deciders:
+    prefill: prefix-based-pd-decider
+```
+
+The `prefix-based-pd-decider` determines whether to disaggregate based on the number of uncached tokens. You can tune its `nonCachedTokens` threshold in the decider plugin configuration.
+
+Some examples in which you might want to do selective PD might include:
+
+* When the prompt is short enough, the overhead of splitting inference into prefill and decode phases and transferring the KV cache between GPUs becomes larger than simply running both phases on a single decode inference worker.
+* When Prefill units are at full capacity.
+
+For information on this plugin, see our [`disagg-profile-handler` docs in the inference-scheduler](https://github.com/llm-d/llm-d-inference-scheduler/blob/main/docs/architecture.md#disaggprofilehandler)
 
 ## Cleanup
 
