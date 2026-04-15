@@ -136,7 +136,7 @@ The EPP pod shows `1/1` rather than `2/2` because there is no sidecar proxy in t
 Create an `HTTPRoute` to connect the Gateway to the `InferencePool`. When traffic reaches the `Gateway` with this route, the Proxy will consult the EPP and forward the request to the selected pod.
 
 ```bash
-kubectl apply -k https://raw.githubusercontent.com/llm-d/llm-d/blob/main/helpers/manifests/httproute/httproute.yaml
+kubectl apply -f https://raw.githubusercontent.com/llm-d/llm-d/blob/main/helpers/manifests/httproute/httproute.yaml
 ```
 
 Verify the HTTPRoute is accepted:

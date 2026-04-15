@@ -160,7 +160,7 @@ traffic reaches the `Gateway` with this route, the proxy consults the EPP and
 forwards the request to the selected pod.
 
 ```bash
-kubectl apply -k https://raw.githubusercontent.com/llm-d/llm-d/blob/main/helpers/manifests/httproute/httproute.yaml
+kubectl apply -f https://raw.githubusercontent.com/llm-d/llm-d/blob/main/helpers/manifests/httproute/httproute.yaml
 ```
 
 Verify the `HTTPRoute` is accepted:

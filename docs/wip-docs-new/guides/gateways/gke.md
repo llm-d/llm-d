@@ -119,7 +119,7 @@ traffic reaches the `Gateway` with this route, the proxy consults the EPP and
 forwards the request to the selected pod.
 
 ```bash
-kubectl apply -k https://raw.githubusercontent.com/llm-d/llm-d/blob/main/helpers/manifests/httproute/httproute-gke.yaml
+kubectl apply -f https://raw.githubusercontent.com/llm-d/llm-d/blob/main/helpers/manifests/httproute/httproute-gke.yaml
 ```
 
 Verify the `HTTPRoute` is accepted:
@@ -177,5 +177,3 @@ helm uninstall llm-d-infpool
 kubectl delete gateway llm-d-inference-gateway
 kubectl delete deployment my-model
 ```
-
-
