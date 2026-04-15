@@ -21,7 +21,6 @@ This guide uses Cloud TPU v7x accelerators on Google Cloud Platform (GCP). The d
   export NAMESPACE=llm-d-inference-scheduler # or any other namespace (shorter names recommended)
   kubectl create namespace ${NAMESPACE}
   ```
-- [Choose an llm-d version](../prereq/client-setup/README.md#llm-d-version)
 - Configure and deploy your [Gateway control plane](../prereq/gateway-provider/README.md)
 
 ## Installation
