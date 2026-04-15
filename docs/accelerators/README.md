@@ -17,10 +17,9 @@ Maintainers for each accelerator type are listed below. See our well-lit path gu
 
 ## Requirements
 
-We welcome contributions from accelerator vendors. To be referenced as a supported hardware vendor we require at minimum a publicly available container image that launches vLLM in the [recommended configuration](../../guides/prereq/infrastructure/README.md#optional-vllm-container-image).
+We welcome contributions from accelerator vendors. To be referenced as a supported hardware vendor we require at minimum a publicly available container image that launches vLLM.
 
 For integration into the well-lit paths our standard for contribution is higher, **requiring**:
-
 - A named maintainer responsible for keeping guide contents up to date
 - Manual or automated verification of the guide deployment for each release
 
@@ -32,7 +31,7 @@ For integration into the well-lit paths our standard for contribution is higher,
 
 ## Intel XPU
 
-Intel accelerators are supported via the well-lit paths (see the **Intel** row in the table above). For cluster prerequisites and image expectations, see the [infrastructure prereq](../../guides/prereq/infrastructure/README.md#optional-vllm-container-image).
+Intel accelerators are supported via the well-lit paths (see the **Intel** row in the table above).
 
 ## Accelerator Resource Management
 

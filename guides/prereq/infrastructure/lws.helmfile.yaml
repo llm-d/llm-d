@@ -1,8 +1,0 @@
-releases:
-  - name: lws
-    chart: oci://registry.k8s.io/lws/charts/lws
-    version: 0.7.0
-    namespace: lws-system
-    installed: true
-    labels:
-      type: deployment-infrastructure

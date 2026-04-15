@@ -25,7 +25,6 @@ This example out of the box uses 16 GPUs (8 replicas x 2 GPUs each) of any suppo
 ## Prerequisites
 
 - Have the [proper client tools installed on your local system](../prereq/client-setup/README.md) to use this guide.
-- Ensure your cluster infrastructure is sufficient to [deploy high scale inference](../prereq/infrastructure)
 - Have the [Monitoring stack](../../docs/monitoring/README.md) installed on your system.
 - Create a namespace for installation.
 

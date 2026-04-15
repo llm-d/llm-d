@@ -47,11 +47,7 @@ This guide requires 32 Nvidia H200 or B200 GPUs and InfiniBand or RoCE RDMA netw
 ## Prerequisites
 
 * Have the [proper client tools installed on your local system](../../prereq/client-setup/README.md) to use this guide.
-* Ensure your cluster infrastructure is sufficient to [deploy high scale inference](../../prereq/infrastructure/README.md)
-  * You must have high speed inter-accelerator networking
-  * The pods leveraging inter-node EP must be deployed in a cluster environment with full mesh network connectivity.
-    * **_NOTE:_** The DeepEP backend used in WideEP requires All-to-All RDMA connectivity. Every NIC on a host must be able to communicate with every NIC on all other hosts. Networks restricted to communicating only between matching NIC IDs (rail-only connectivity) will fail.
-  * You have deployed the [LeaderWorkerSet optional controller](../../prereq/infrastructure/README.md#optional-install-leaderworkerset-for-multi-host-inference)
+* You have deployed the [LeaderWorkerSet controller](https://lws.sigs.k8s.io/docs/installation/)
 * Configure and deploy your [Gateway control plane](../../prereq/gateway-provider/README.md). Note that the Gateway must support multi-port (e.g. Istio 1.29.1)
 * Have the [Monitoring stack](../../../docs/monitoring/README.md) installed on your system.
 * Create a namespace for installation.

@@ -95,7 +95,7 @@ body:
       label: Maintainer Information
       description: |
         If you're contributing support, please provide maintainer information.
-        As per our [requirements](https://github.com/llm-d/llm-d/blob/main/guides/prereq/infrastructure/README.md#other-providers), we need at least one documented platform maintainer.
+        As per our [requirements](https://github.com/llm-d/llm-d/blob/main/docs/infra-providers/README.md), we need at least one documented platform maintainer.
       placeholder: "Name, Email, GitHub username, Organization"
     validations:
       required: false
