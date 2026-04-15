@@ -30,7 +30,10 @@ These [guides](./guides/README.md) provide tested and benchmarked recipes and He
 
 ## Get Started Now
 
-We recommend new users start with a deployment of the inference scheduler and vLLM together through our [step-by-step quickstart](./guides/QUICKSTART.md).
+We recommend new users start with a deployment of [intelligent inference scheduling](./guides/inference-scheduling/README.md).
+
+> [!NOTE]
+> We are currently revamping our documentation. You can also preview [our new quickstarts](./docs/wip-docs-new/getting-started/quickstart.md), which will be formally released soon.
 
 ### Latest News 🔥
 
