@@ -20,8 +20,6 @@ This guide demonstrates how to deploy the simulator `ghcr.io/llm-d/llm-d-inferen
   kubectl create namespace ${NAMESPACE}
   ```
 
-- [Choose an llm-d version](../../helpers/client-setup/README.md#llm-d-version)
-
 **_NOTE:_** Unlike other examples which require models, the simulator stubs the vLLM server and so no HuggingFace token is needed.
 
 ## Installation

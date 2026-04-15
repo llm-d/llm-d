@@ -92,11 +92,11 @@ jobs:
           wait: 120s
 
       - name: Install Gateway API and GAIE CRDs
-        run: helpers/gateway-provider/install-gateway-provider-dependencies.sh > /dev/null
+        run: guides/prereq/gateway-provider/install-gateway-provider-dependencies.sh > /dev/null
 
       - name: Install gateway providers
         run: |
-          cd helpers/gateway-provider
+          cd guides/prereq/gateway-provider
           for f in *.helmfile.yaml; do
             # Skip kgateway - it is deprecated and its older CRDs would
             # overwrite the agentgateway installation.
