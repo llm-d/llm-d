@@ -46,7 +46,7 @@ This guide requires 32 Nvidia H200 or B200 GPUs and InfiniBand or RoCE RDMA netw
 
 ## Prerequisites
 
-* Have the [proper client tools installed on your local system](../../prereq/client-setup/README.md) to use this guide.
+* Have the [proper client tools installed on your local system](../../../helpers/client-setup/README.md) to use this guide.
 * Ensure your cluster infrastructure is sufficient to [deploy high scale inference](../../prereq/infrastructure/README.md)
   * You must have high speed inter-accelerator networking
   * The pods leveraging inter-node EP must be deployed in a cluster environment with full mesh network connectivity.
@@ -61,8 +61,8 @@ This guide requires 32 Nvidia H200 or B200 GPUs and InfiniBand or RoCE RDMA netw
   kubectl create namespace ${NAMESPACE}
   ```
 
-* [Create the `llm-d-hf-token` secret in your target namespace with the key `HF_TOKEN` matching a valid HuggingFace token](../../prereq/client-setup/README.md#huggingface-token) to pull models.
-* [Choose an llm-d version](../../prereq/client-setup/README.md#llm-d-version)
+* [Create the `llm-d-hf-token` secret in your target namespace with the key `HF_TOKEN` matching a valid HuggingFace token](../../../helpers/client-setup/README.md#huggingface-token) to pull models.
+* [Choose an llm-d version](../../../helpers/client-setup/README.md#llm-d-version)
 
 ## Installation
 

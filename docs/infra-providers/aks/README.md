@@ -6,7 +6,7 @@ This guide provides instructions for configuring Azure Kubernetes Service (AKS) 
 
 Before proceeding with this guide, ensure you have completed the following requirements:
 
-- [client setup prerequisites](../../../guides/prereq/client-setup/README.md)
+- [client setup prerequisites](../../../helpers/client-setup/README.md)
 - The latest [Azure CLI](https://learn.microsoft.com/en-us/cli/azure/install-azure-cli?view=azure-cli-latest) with aks-preview extension installed (`az extension add --upgrade --name aks-preview`)
 - `ClusterAdmin` RBAC role assigned to your user account for the target AKS cluster
 - An AKS cluster. If you need to create one, refer to the [AKS quickstart guide](https://learn.microsoft.com/en-us/azure/aks/learn/quick-kubernetes-deploy-cli)

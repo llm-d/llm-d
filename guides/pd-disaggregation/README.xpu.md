@@ -27,8 +27,8 @@ This document provides complete steps for deploying Intel XPU PD (Prefill-Decode
   kubectl create namespace ${NAMESPACE}
   ```
 
-* [Create the `llm-d-hf-token` secret in your target namespace with the key `HF_TOKEN` matching a valid HuggingFace token](../prereq/client-setup/README.md#huggingface-token) to pull models.
-* [Choose an llm-d version](../prereq/client-setup/README.md#llm-d-version)
+* [Create the `llm-d-hf-token` secret in your target namespace with the key `HF_TOKEN` matching a valid HuggingFace token](../../helpers/client-setup/README.md#huggingface-token) to pull models.
+* [Choose an llm-d version](../../helpers/client-setup/README.md#llm-d-version)
 
 ## Step 0: Build Intel XPU Docker Image (Optional)
 
@@ -77,11 +77,11 @@ Refer to <https://github.com/vllm-project/vllm/blob/main/docker/Dockerfile.xpu> 
 cd llm-d
 
 # Install necessary tools (helm, helmfile, kubectl, yq, git, kind, etc.)
-./guides/prereq/client-setup/install-deps.sh
+./helpers/client-setup/install-deps.sh
 curl -Lo ./kind https://kind.sigs.k8s.io/dl/v0.20.0/kind-linux-amd64 && chmod +x ./kind && sudo mv ./kind /usr/local/bin/kind
 
 # Optional: Install development tools (including chart-testing)
-./guides/prereq/client-setup/install-deps.sh --dev
+./helpers/client-setup/install-deps.sh --dev
 ```
 
 **Installed tools include:**

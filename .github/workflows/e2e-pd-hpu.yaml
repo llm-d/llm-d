@@ -77,7 +77,7 @@ jobs:
 
       - name: Install prerequisites idempotently
         run: |
-          ./guides/prereq/client-setup/install-deps.sh | tee ~/install-deps.log
+          ./helpers/client-setup/install-deps.sh | tee ~/install-deps.log
 
       - name: Install chart dependencies (CRDs and Istio)
         run: |

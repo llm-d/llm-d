@@ -99,8 +99,8 @@ jobs:
 
       - name: Install dependencies
         run: |
-          cd guides
-          ./prereq/client-setup/install-deps.sh | tee ~/install-deps.log
+          cd helpers
+          ./client-setup/install-deps.sh | tee ~/install-deps.log
 
       - name: Create namespace
         run: |

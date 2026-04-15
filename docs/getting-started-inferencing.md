@@ -214,7 +214,7 @@ The [initial implementation for the kv-cache-manager package](https://github.com
 
 ## Following logs for requests
 
-We recommend the `stern` tool for following requests because it will allow you to follow multiple pod logs at once. This is particularly useful in the context of llm-d because most deployments have multiple `decode` pods. For more information on this see our docs on [optional tools](../guides/prereq/client-setup/README.md#optional-tools).
+We recommend the `stern` tool for following requests because it will allow you to follow multiple pod logs at once. This is particularly useful in the context of llm-d because most deployments have multiple `decode` pods. For more information on this see our docs on [optional tools](../helpers/client-setup/README.md#optional-tools).
 
 To grab all decode pods in a namespace we can do the following:
 

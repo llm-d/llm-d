@@ -8,7 +8,7 @@ For full, customizable benchmarking, please refer to [llm-d-benchmark](https://g
 ## Requirements
 
 - You are assumed to have deployed the llm-d inference stack from a guide, or otherwise followed the llm-d conventions for deployment.
-- Install `yq` (YAML processor) - version>=4 (see [Client Setup](../prereq/client-setup/README.md))
+- Install `yq` (YAML processor) - version>=4 (see [Client Setup](../../helpers/client-setup/README.md))
 - For MacOS users: if `timeout` utility is not present, install it with `brew install coreutils` command.
 - Download the benchmark script [run_only.sh](https://github.com/llm-d/llm-d-benchmark/blob/main/existing_stack/run_only.sh) and make it executable.
 

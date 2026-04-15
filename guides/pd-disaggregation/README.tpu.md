@@ -12,7 +12,7 @@ This guide uses Cloud TPU v6e (Trillium) accelerators on Google Cloud Platform (
 
 ## Prerequisites
 
-- Have the [proper client tools installed on your local system](../prereq/client-setup/README.md) to use this guide.
+- Have the [proper client tools installed on your local system](../../helpers/client-setup/README.md) to use this guide.
 - Create a namespace for installation.
 
   ```bash
@@ -20,8 +20,8 @@ This guide uses Cloud TPU v6e (Trillium) accelerators on Google Cloud Platform (
   kubectl create namespace ${NAMESPACE}
   ```
 
-- [Create the `llm-d-hf-token` secret in your target namespace with the key `HF_TOKEN` matching a valid HuggingFace token](../prereq/client-setup/README.md#huggingface-token) to pull models.
-- [Choose an llm-d version](../prereq/client-setup/README.md#llm-d-version)
+- [Create the `llm-d-hf-token` secret in your target namespace with the key `HF_TOKEN` matching a valid HuggingFace token](../../helpers/client-setup/README.md#huggingface-token) to pull models.
+- [Choose an llm-d version](../../helpers/client-setup/README.md#llm-d-version)
 
 ## Installation Steps
 

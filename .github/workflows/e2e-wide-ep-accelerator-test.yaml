@@ -244,7 +244,7 @@ jobs:
           ssh -o StrictHostKeyChecking=no -i key.pem ubuntu@$INSTANCE_IP <<'EOF'
             set -euo pipefail
             set -x
-            ./llm-d/guides/prereq/client-setup/install-deps.sh | tee ~/install-deps.log
+            ./llm-d/helpers/client-setup/install-deps.sh | tee ~/install-deps.log
           EOF
 
       - name: Setup container runtime

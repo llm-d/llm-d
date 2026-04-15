@@ -114,7 +114,7 @@ jobs:
 
       - name: Install prerequisites
         run: |
-          ./guides/prereq/client-setup/install-deps.sh | tee ~/install-deps.log
+          ./helpers/client-setup/install-deps.sh | tee ~/install-deps.log
 
       - name: Create namespace
         run: |

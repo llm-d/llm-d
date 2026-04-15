@@ -101,8 +101,8 @@ jobs:
 
       - name: Install dependencies
         run: |
-          cd guides
-          ./prereq/client-setup/install-deps.sh
+          cd helpers
+          ./client-setup/install-deps.sh
 
       - name: Install chart dependencies (CRDs and Gateway provider)
         env:
