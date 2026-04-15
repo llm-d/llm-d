@@ -2,15 +2,13 @@
 
 The **KV-Cache Indexer** enables llm-d's precise prefix-cache-aware scheduling guide.
 
-It is loaded into the EPP as a library via the `precise-prefix-cache-scorer` plugin from [llm-d-inference-scheduler](https://github.com/llm-d/llm-d-inference-scheduler), built on [llm-d-kv-cache](https://github.com/llm-d/llm-d-kv-cache).
-
 ## Functionality
 
 The indexer maintains a near-real-time view of which KV-cache blocks exist on which model-server pods by subscribing to **KV-Events** emitted by model servers (vLLM and SGLang today). Unlike the EPP's built-in `prefix-cache-scorer`, which approximates cache state from prior scheduling decisions, the indexer reflects the actual cache state observed across the fleet. Routing is grounded in what each pod really holds, not an estimate.
 
 Beyond the baseline approximate view, this event-driven foundation unlocks a family of advanced prefix-cache-aware scheduling capabilities:
 
-- **Hybrid-attention-aware scoring.** Hybrid models partition the KV-cache into layer groups (full, sliding-window, linear/state-space) that evict independently, so a prefix may be retained in one group and partially gone in another. The event-driven foundation carries the per-group fidelity needed to distinguish full from partial hits.
+- **Hybrid-attention-aware scoring.** In hybrid models, layer groups (full, sliding-window, linear) evict independently, so a prefix hit is no longer binary — the event-driven view distinguishes full from partial hits.
 - **Multimodal-aware routing.** Multimodal content hashes (images, audio) are folded into block keys, so two prompts with the same text but different images produce different keys and are routed to the pod that actually has the matching multimodal KV-cache.
 - **LoRA-aware routing.** LoRA adapter identity is folded into block keys, so cache hits are scoped to the adapter that produced them — different adapters over the same prompt do not collide.
 - **Heterogeneous device-tier weighting.** Model servers report the storage tier (GPU, CPU, host offload) of each block, and scoring weights each matching block by tier. A prompt cached on GPU outranks the same prompt cached on CPU.
