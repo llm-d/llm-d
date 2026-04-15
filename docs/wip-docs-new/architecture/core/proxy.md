@@ -16,7 +16,7 @@ The proxy's job is to:
 ## Design
 
 llm-d provides two deployment patterns for the proxy:
-- Standalone - where an Proxy container is deployed alongside the [EPP](epp) container in the same Pod
+- Standalone - where a proxy container is deployed alongside the [EPP](epp) container in the same Pod
 - via Gateway API - where the proxy is managed by the Kuberentes Gateway API machinery
 
 > [!NOTE]
@@ -36,7 +36,7 @@ Regardless of the deployment pattern, the request flow is the same:
 
 ### Standalone Deployment
 
-The standalone mode deploys an proxy as a sidecar to the EPP, offering a lightweight, flexible deployment pattern without requiring Gateway API infrastructure.
+The standalone mode deploys a proxy as a sidecar to the EPP, offering a lightweight, flexible deployment pattern without requiring Gateway API infrastructure.
 
 In standalone mode:
 

@@ -119,7 +119,7 @@ When using a Standalone Proxy, the InferencePool and EPP can be deployed via Hel
   oci://us-central1-docker.pkg.dev/k8s-staging-images/gateway-api-inference-extension/charts/standalone
 ```
 
-> Note that in the in the "Standalone" deployment, the proxy is deployed as a sidecar to the EPP via the above Chart.
+> Note that in the "Standalone" deployment, the proxy is deployed as a sidecar to the EPP via the above Chart.
 
 See the [full Helm Chart](https://github.com/kubernetes-sigs/gateway-api-inference-extension/tree/main/config/charts/standalone) for configuration details.
 
