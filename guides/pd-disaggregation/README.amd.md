@@ -51,7 +51,7 @@ This guide expects 8 AMD GPUs of any kind, and RDMA via RoCE between all pods in
   kubectl create namespace ${NAMESPACE}
   ```
 
-* [Create the `llm-d-hf-token` secret in your target namespace with the key `HF_TOKEN` matching a valid HuggingFace token](../../helpers/client-setup/README.md#huggingface-token) to pull models.
+* [Create the `llm-d-hf-token` secret in your target namespace with the key `HF_TOKEN` matching a valid HuggingFace token](../../helpers/client-setup/hf-token.md) to pull models.
 
 ## Installation
 

@@ -26,8 +26,6 @@ Before installing WVA, ensure you have:
 
 1. An external metrics provider installed and configured in your cluster (e.g., Prometheus together with Prometheus Adapter or KEDA). WVA relies on external metrics to make scaling decisions. See [Install Prometheus Adapter (Required Dependency)](#install-prometheus-adapter-required-dependency) for installation instructions.
 
-1. Choose an [llm-version](../../helpers/client-setup/README.md#llm-d-version).
-
 ## Set your Namespace
 
   ```bash
