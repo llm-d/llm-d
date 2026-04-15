@@ -7,6 +7,7 @@ on:
       - guides/**/helmfile.yaml.gotmpl
       - guides/**/values*.yaml
       - guides/prereq/**
+      - helpers/**
       - docs/monitoring/scripts/install-prometheus-grafana.sh
       - .github/workflows/ci-helmfile-dry-run.yaml
   workflow_dispatch:
