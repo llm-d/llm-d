@@ -28,7 +28,6 @@ This example out of the box uses 16 GPUs (8 replicas x 2 GPUs each) of any suppo
   ```
 
 - [Create the `llm-d-hf-token` secret in your target namespace with the key `HF_TOKEN` matching a valid HuggingFace token](../../helpers/client-setup/README.md#huggingface-token) to pull models.
-- [Choose an llm-d version](../../helpers/client-setup/README.md#llm-d-version)
 
 ## Installation
 

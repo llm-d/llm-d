@@ -28,7 +28,6 @@ This document provides complete steps for deploying Intel XPU PD (Prefill-Decode
   ```
 
 * [Create the `llm-d-hf-token` secret in your target namespace with the key `HF_TOKEN` matching a valid HuggingFace token](../../helpers/client-setup/README.md#huggingface-token) to pull models.
-* [Choose an llm-d version](../../helpers/client-setup/README.md#llm-d-version)
 
 ## Step 0: Build Intel XPU Docker Image (Optional)
 

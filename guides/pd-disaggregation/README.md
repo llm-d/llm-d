@@ -61,7 +61,6 @@ For Intel HPU deployments:
   ```
 
 * [Create the `llm-d-hf-token` secret in your target namespace with the key `HF_TOKEN` matching a valid HuggingFace token](../../helpers/client-setup/README.md#huggingface-token) to pull models.
-* [Choose an llm-d version](../../helpers/client-setup/README.md#llm-d-version)
 
 ## Installation
 
