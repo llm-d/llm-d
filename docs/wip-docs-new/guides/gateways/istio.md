@@ -66,7 +66,7 @@ Deploy two replicas of vLLM running `openai/gpt-oss-20b`:
 > This example uses NVIDIA GPUs. For CPU testing, use the vLLM Simulator (`ghcr.io/llm-d/llm-d-inference-sim:latest`).
 
 ```bash
-kubectl apply -f https://github.com/llm-d/llm-d/blob/main/helpers/manifests/vllm-deployment.yaml
+kubectl apply -f https://raw.githubusercontent.com/llm-d/llm-d/blob/main/helpers/manifests/vllm-deployment.yaml
 ```
 
 Verify the pods are running:
@@ -80,7 +80,7 @@ kubectl get pods -l app=my-model
 Create a `Gateway` resource. Istio watches this resource and creates an Envoy-based proxy that accepts incoming traffic.
 
 ```bash
-kubectl apply -k https://github.com/llm-d/llm-d/blob/main/helpers/manifests/gateways/istio
+kubectl apply -k https://raw.githubusercontent.com/llm-d/llm-d/blob/main/helpers/manifests/gateways/istio
 ```
 
 Verify the Gateway is programmed:
@@ -136,7 +136,7 @@ The EPP pod shows `1/1` rather than `2/2` because there is no sidecar proxy in t
 Create an `HTTPRoute` to connect the Gateway to the `InferencePool`. When traffic reaches the `Gateway` with this route, the Proxy will consult the EPP and forward the request to the selected pod.
 
 ```bash
-kubectl apply -k https://github.com/llm-d/llm-d/blob/main/helpers/manifests/httproute/httproute.yaml
+kubectl apply -k https://raw.githubusercontent.com/llm-d/llm-d/blob/main/helpers/manifests/httproute/httproute.yaml
 ```
 
 Verify the HTTPRoute is accepted:
