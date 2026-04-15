@@ -279,16 +279,16 @@ The indexer is configured as parameters of the `precise-prefix-cache-scorer` plu
     tokenProcessorConfig: { ... }
     indexerConfig: { ... }
     kvEventsConfig: { ... }
-    speculativeIndexing: true      # optional, default false
-    speculativeTTL: "2s"           # optional, default 2s
+    speculativeIndexing: true      
+    speculativeTTL: "2s"           
 ```
 
 ### Token Processor
 
-| Field | Type | Default | Description |
-| :--- | :--- | :--- | :--- |
-| `blockSize` | integer | `16` | Tokens per KV-block. **Must match vLLM's `--block-size`**. |
-| `hashSeed` | string | `""` | Seed for the initial FNV-64a hash. **Must match vLLM's `PYTHONHASHSEED`**. |
+| Field       | Type    | Default | Description                        |
+|:------------|:--------|:--------|:-----------------------------------|
+| `blockSize` | integer | `16`    | Tokens per KV-block.               |
+| `hashSeed`  | string  | `""`    | Seed for the initial FNV-64a hash. |
 
 ### Indexer
 
@@ -344,7 +344,7 @@ Configure exactly one of the following. If more than one is set, the first resol
 
 ### Model Server Requirements
 
-Model servers must be configured to publish KV-Events over ZMQ with a topic of the form `kv@<pod-ip>:<port>@<model>`. The engine's block size must match `tokenProcessorConfig.blockSize` and the engine's hash seed (where configurable) must match `tokenProcessorConfig.hashSeed`.
+Model servers must be configured to publish KV-Events over ZMQ with a topic of the form `kv@<pod-ip>:<port>@<model>`.
 
 For vLLM concretely:
 
