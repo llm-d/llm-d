@@ -1,8 +1,6 @@
 # Intelligent Inference Scheduling
 
-Standard Kubernetes load balancing treats inference requests as interchangeable. They are not -- a request whose prompt prefix is already cached on a specific server begins generating tokens immediately instead of recomputing from scratch. Routing that same request to a random server wastes the cached work and increases latency by orders of magnitude.
-
-The **Endpoint Picker (EPP)** replaces naive load balancing with LLM-aware scheduling. It routes each request to the best model server based on real-time signals -- prefix cache locality, KV-cache utilization, queue depth, and optionally predicted latency. This path is always active in llm-d deployments and composes with every other well-lit path.
+llm-d's **Endpoint Picker (EPP)** replaces naive load balancing with LLM-aware scheduling, routing each request to the best model server based on real-time signals -- prefix cache locality, KV-cache utilization, queue depth, and optionally predicted latency.
 
 ## When To Use
 
@@ -10,11 +8,13 @@ This path is always active -- the question is which scheduling mode to enable:
 
 | Mode | What It Adds | When To Use |
 |---|---|---|
-| [**Load-Aware and Approximate Prefix Cache**](./default.md) | Load-aware routing + approximate prefix cache scoring | Any workload, start here |
-| [**Precise Prefix Cache**](./precise-prefix-cache-aware-routing.md) | Exact block-level cache tracking via KV-Events | When approximate routing is not enough (e.g., multi-modal, hybrid-model, near saturation regime) |
+| [**Default**](./default.md) | Prefix-cache and load-aware routing | Any workload, start here |
 | [**Predicted Latency**](./predicted-latency.md) | ML-predicted TTFT/TPOT for SLO-aware routing | SLO-critical workloads with heterogeneous request costs |
+| [**Flow control**](./flow-control.md) | (priority queuing, fairness, admission control) is a configuration option within the EPP that can be enabled alongside any scheduling mode. It is not a separate mode -- it adds admission control and tenant isolation to whatever scoring profile is active.
+| [**Precise Prefix Cache**](./precise-prefix-cache-aware-routing.md) | Exact block-level cache tracking via KV-Events | When approximate routing is not enough (e.g., multi-modal, hybrid-model, near saturation regime) |
 
-[**Flow control**](./flow-control.md) (priority queuing, fairness, admission control) is a configuration option within the EPP that can be enabled alongside any scheduling mode. It is not a separate mode -- it adds admission control and tenant isolation to whatever scoring profile is active.
+> [!NOTE]
+> llm-d team recommends starting with the default configuration.
 
 ## Key Decisions
 
