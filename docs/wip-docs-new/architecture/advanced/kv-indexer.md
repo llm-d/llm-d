@@ -362,11 +362,10 @@ SGLang uses equivalent configuration; see its KV-events documentation.
 
 ### Tokenizer Sources
 
-The `tokenizer` plugin — and the indexer's own internal tokenization pool, when the plugin is not present — can source tokenizers three ways:
-
-1. **UDS sidecar (recommended for production).** A tokenizer sidecar container serves tokenization requests over a Unix domain socket (default `/tmp/tokenizer/tokenizer-uds.socket`). The sidecar resolves the model identifier as a local path if the path exists on disk, and otherwise downloads and caches from HuggingFace (or ModelScope) on first use. Shared between the `tokenizer` plugin and the indexer.
-2. **In-process local files.** The indexer's embedded tokenizer scans a directory (default `/mnt/models`) for `tokenizer.json`, supporting both HuggingFace cache layouts (`models--org--model/snapshots/{hash}/tokenizer.json`) and flat layouts.
-3. **In-process HuggingFace Hub.** The indexer's embedded tokenizer downloads on demand. Convenient for development; adds startup latency.
+The `tokenizer` plugin (and the indexer's own internal tokenization pool) can source tokenizers three ways:
+* **UDS sidecar (recommended for production).** A tokenizer sidecar container serves tokenization requests over a Unix domain socket (default `/tmp/tokenizer/tokenizer-uds.socket`). The sidecar resolves the model identifier as a local path if the path exists on disk, and otherwise downloads and caches from HuggingFace (or ModelScope) on first use. Shared between the `tokenizer` plugin and the indexer.
+* **In-process local files.** The indexer's embedded tokenizer scans a directory (default `/mnt/models`) for `tokenizer.json`, supporting both HuggingFace cache layouts (`models--org--model/snapshots/{hash}/tokenizer.json`) and flat layouts.
+* **In-process HuggingFace Hub.** The indexer's embedded tokenizer downloads on demand. Convenient for development; adds startup latency.
 
 The plugin falls back through these in order.
 
@@ -454,5 +453,3 @@ Model-server side — each pod binds its own socket (vLLM example):
   "topic": "kv@<pod-ip>:<pod-port>@<model-name>"
 }
 ```
-
-
