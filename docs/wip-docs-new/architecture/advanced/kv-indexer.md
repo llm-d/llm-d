@@ -219,7 +219,7 @@ The KV-Indexer offer multiple backend, which can be configured depending on your
 
 Two shapes are supported for getting events from the model servers to the indexer:
 
-**Centralized** — every model-server pod connects (`zmq.PUB`) to a single endpoint hosted by the EPP (`zmq.SUB`). Simpler to configure; works naturally with a single EPP replica.
+* **Centralized** — every model-server pod connects (`zmq.PUB`) to a single endpoint hosted by the EPP (`zmq.SUB`). Simpler to configure; works naturally with a single EPP replica.
 
 ```
   Model Server A ──► ZMQ ──┐
@@ -227,7 +227,7 @@ Two shapes are supported for getting events from the model servers to the indexe
   Model Server C ──► ZMQ ──┘
 ```
 
-**Pod discovery** — each model-server pod binds its own ZMQ socket. The EPP discovers pods via Kubernetes label selectors and creates per-pod subscribers. This is the mode to use for active-active multi-scheduler: every EPP replica independently subscribes to every pod and sees the full event stream.
+* **Pod discovery** — each model-server pod binds its own ZMQ socket. The EPP discovers pods via Kubernetes label selectors and creates per-pod subscribers. This is the mode to use for active-active multi-scheduler: every EPP replica independently subscribes to every pod and sees the full event stream.
 
 In the current implementation, the plugin establishes subscribers lazily during `Score()` and maintains a 10-minute TTL cache of known endpoints, tearing down subscribers as endpoints fall out. The IGW data layer already exposes an endpoint source; wiring the plugin's subscriber management onto it — so subscriptions follow endpoint events directly rather than request-driven scoring — is in progress.
 
