@@ -9,8 +9,8 @@ The indexer maintains a near-real-time view of which KV-cache blocks exist on wh
 Beyond the baseline approximate view, this event-driven foundation unlocks a family of advanced prefix-cache-aware scheduling capabilities:
 
 - **Hybrid-attention-aware scoring.** In hybrid models, layer groups (full, sliding-window, linear) evict independently, so a prefix hit is no longer binary — the event-driven view distinguishes full from partial hits.
-- **More Precise Multimodal-aware routing.** Multimodal content hashes (images, audio) are folded into block keys, so two prompts with the same text but different images produce different keys and are routed to the pod that actually has the matching multimodal KV-cache.
-- **LoRA-aware routing.** LoRA adapter identity is folded into block keys, so cache hits are scoped to the adapter that produced them — different adapters over the same prompt do not collide.
+- **More Precise MM scoring.** Multimodal content hashes (images, audio) are folded into block keys, so two prompts with the same text but different images produce different keys and are routed to the pod with matching multimodal KV-cache.
+- **LoRA-aware scoring.** LoRA adapter identity is folded into block keys, so cache hits are scoped to the adapter that produced them — different adapters over the same prompt do not collide.
 - **Heterogeneous device-tier weighting.** Model servers report the storage tier (GPU, CPU, host offload) of each block, and scoring weights each matching block by tier. A prompt cached on GPU outranks the same prompt cached on CPU.
 
 > [!NOTE]
@@ -67,7 +67,12 @@ With speculative indexing enabled — the recommended configuration — the thre
 2. **`Score`** — reads the pre-computed scores from `PluginState` and returns them normalized to `[0.0, 1.0]` for the scheduler.
 3. **`PreRequest`** — fires after the scheduler picks an endpoint. Inserts speculative entries in the index for the selected pod (and, under P/D disaggregation, the selected prefill pod) with a TTL (default `2s`), closing the window before the confirming KV-event arrives.
 
-> With `speculativeIndexing: false`, `PrepareRequestData` and `PreRequest` become no-ops and `Score` performs the full lookup-and-score itself on each request. Scoring is still correct, but the plugin no longer seeds the index between the routing decision and the confirming KV-event, so back-to-back identical prompts can race onto different pods until the engine's events land.
+> [!NOTE]
+> With `speculativeIndexing: false`, `PrepareRequestData` and `PreRequest` 
+> become no-ops and `Score` performs the full lookup-and-score itself on each
+> request. Scoring is still correct, but the plugin no longer seeds the index
+> between the routing decision and the confirming KV-event, so back-to-back 
+> identical prompts can race onto different pods until the engine's events land.
 
 ### Write Path: Ingesting KV-Events
 
