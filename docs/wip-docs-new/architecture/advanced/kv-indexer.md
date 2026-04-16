@@ -112,7 +112,7 @@ sequenceDiagram
 
 ### Read Path: Scoring a Request
 
-When a request reaches the scorer, the goal is to find, for each candidate pod, the length of the longest consecutive prefix of the request's block sequence that the pod has cached.
+The scorer's goal is to find the length of the longest consecutive prefix of the request's block sequence cached in each candidate pod.
 
 ```mermaid
 sequenceDiagram
