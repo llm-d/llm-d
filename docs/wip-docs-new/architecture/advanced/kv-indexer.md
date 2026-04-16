@@ -106,7 +106,37 @@ sequenceDiagram
     end
 ```
 
-**The dual-key design.** Model servers publish events using *engine keys* — hash identifiers derived from each engine's internal content-addressing. The indexer needs to look blocks up by hashes it can compute from the request's own prompt tokens (*request keys*). On each `BlockStored`, the worker computes the request key locally and stores a mapping `engineKey → requestKey` alongside `requestKey → PodEntry`. At read time the scorer looks up by request key only; the engine-key mapping is used during eviction so that a `BlockRemoved` referencing an engine key can find the corresponding request key.
+**The dual-key design.** The indexer needs to answer one question at scoring time: *"given this user input, which pods have its prefix cached?"* To answer that, it must be able to look up blocks by hashes it can compute from the prompt's tokens alone — without asking any model server. These are **request keys**.
+
+Model servers, however, identify blocks using their own internal content-addressing hashes (**engine keys**). These are what appear in KV-Events. The indexer cannot derive an engine key from a prompt, and it cannot derive a request key from an engine key — the two hash spaces are independent.
+
+This creates a problem on eviction: `BlockRemoved` events carry only the engine key. The indexer must figure out which request key to remove from its scoring index. The solution is to build the bridge on ingestion:
+
+- `BlockStored` events carry the token chunk, so the worker can compute the request key from tokens *and* record a `engine_key → request_key` mapping.
+- `BlockRemoved` events use that mapping to find the request key, then evict it.
+- Scoring never touches engine keys — it computes request keys from the prompt and looks them up directly.
+
+```
+  BlockStored (engine_key=E1, tokens=[...])
+  ┌──────────────────────────────────────────────┐
+  │  worker computes request_key R1 from tokens  │
+  │                                              │
+  │  stores:  R1 → PodEntry{pod, tier}           │  ← scoring lookups use this
+  │  stores:  E1 → R1                            │  ← eviction lookups use this
+  └──────────────────────────────────────────────┘
+
+  BlockRemoved (engine_key=E1)
+  ┌──────────────────────────────────────────────┐
+  │  looks up:  E1 → R1                          │
+  │  evicts:    R1 → PodEntry{pod, tier}         │
+  └──────────────────────────────────────────────┘
+
+  Score(prompt tokens)
+  ┌──────────────────────────────────────────────┐
+  │  computes request_keys [R0, R1, R2, ...]     │
+  │  looks up each Rn → []PodEntry               │  ← engine keys not involved
+  └──────────────────────────────────────────────┘
+```
 
 ### Event Delivery Modes
 
