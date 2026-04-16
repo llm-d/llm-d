@@ -16,12 +16,14 @@ Beyond the baseline approximate view, this event-driven foundation unlocks a fam
 > [!NOTE]
 > Hybrid-attention-aware scoring is a work in progress.
 
+> [!NOTE]
+> This page assumes familiarity with the EPP's design. See [EPP architecture](../core/epp) for more details.
+
 ## Design
 
 ### Integration with EPP
 
-The indexer is deployed as a library, loaded into the EPP process. Two cooperating plugins are used by the EPP's scheduler:
-
+The indexer is deployed as a library, loaded into the EPP process. Two cooperating plugins are used by the scheduler:
 * **`tokenizer` plugin** — a `PrepareData` plugin that tokenizes the prompt (and any MM features) once and writes the result onto `LLMRequest.TokenizedPrompt` for downstream reuse.
 * **`precise-prefix-cache-scorer` plugin** — implements three EPP extension points: `PrepareRequestData`, `Score`, and `PreRequest`.
 
@@ -61,8 +63,7 @@ flowchart TB
     style Cycle fill:#fff3e0,stroke:#ff9800,color:#000
 ```
 
-With speculative indexing enabled — the recommended configuration — the three extension points of the `precise-prefix-cache-scorer` carry the following responsibilities:
-
+With speculative indexing enabled (recommended) — the three extension points carry the following responsibilities:
 1. **`PrepareRequestData`** — reads `request.TokenizedPrompt`, computes block keys, looks up the index, and scores all candidate pods. Results are cached on `PluginState` for reuse later in the cycle, and a `PrefixCacheMatchInfo` is attached to each endpoint so downstream filters and scorers can see the match length.
 2. **`Score`** — reads the pre-computed scores from `PluginState` and returns them normalized to `[0.0, 1.0]` for the scheduler.
 3. **`PreRequest`** — fires after the scheduler picks an endpoint. Inserts speculative entries in the index for the selected pod (and, under P/D disaggregation, the selected prefill pod) with a TTL (default `2s`), closing the window before the confirming KV-event arrives.
@@ -77,10 +78,9 @@ With speculative indexing enabled — the recommended configuration — the thre
 ### Write Path: Ingesting KV-Events
 
 vLLM and SGLang publish three event types over ZMQ whenever their KV-cache state changes:
-
-- **`BlockStored`** — blocks with the given content hashes have been created on a specific device tier. Payload includes the chained parent hash, the token chunk, any LoRA ID/name, and any multimodal extra keys.
-- **`BlockRemoved`** — blocks with the given hashes have been evicted from a specific device tier and/or attention group.
-- **`AllBlocksCleared`** — the pod dropped its entire cache (a reset). This can occur in RL weights rollouts and other scenarios. The indexer drops all entries associated with the pod via a reverse `pod → request keys` index.
+* **`BlockStored`** — blocks with the given content hashes have been created on a specific device tier. Payload includes the chained parent hash, the token chunk, any LoRA ID/name, and any multimodal extra keys.
+* **`BlockRemoved`** — blocks with the given hashes have been evicted from a specific device tier and/or attention group.
+* **`AllBlocksCleared`** — the pod dropped its entire cache (a reset). This can occur in RL weights rollouts and other scenarios. The indexer drops all entries associated with the pod via a reverse `pod → request keys` index.
 
 ```mermaid
 sequenceDiagram
