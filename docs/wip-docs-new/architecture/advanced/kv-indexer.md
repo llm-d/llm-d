@@ -2,22 +2,20 @@
 
 The **KV-Cache Indexer** enables llm-d's precise prefix-cache-aware scheduling functionality.
 
+> [!NOTE]
+> This page assumes familiarity with the EPP's design. See [EPP architecture](../core/epp) for more details.
+
 ## Functionality
 
-The indexer maintains a near-real-time view of which KV-cache blocks exist on which model-server pods by subscribing to **KV-Events** emitted by model servers. Unlike the EPP's built-in `prefix-cache-scorer`, which approximates cache state from prior scheduling decisions, the indexer reflects the actual cache state observed across the fleet.
+The kv-cache indexer subscribes to `KVEvents` emitted from model servers to maintain a near realtime view of the KV cache state. The `precise-prefix-cache-scorer` uses this information during the EPP schedulers's filter -> score -> pick flow.
 
-Beyond the baseline approximate view, this event-driven foundation unlocks a family of advanced prefix-cache-aware scheduling capabilities:
-
-- **Hybrid-attention-aware scoring.** In hybrid models, layer groups (full, sliding-window, linear) evict independently, so a prefix hit is no longer binary — the event-driven view distinguishes full from partial hits.
-- **More Precise MM scoring.** Multimodal content hashes (images, audio) are folded into block keys, so two prompts with the same text but different images produce different keys and are routed to the pod with matching multimodal KV-cache.
-- **LoRA-aware scoring.** LoRA adapter identity is folded into block keys, so cache hits are scoped to the adapter that produced them — different adapters over the same prompt do not collide.
-- **Heterogeneous device-tier weighting.** Model servers report the storage tier (GPU, CPU, host offload) of each block, and scoring weights each matching block by tier. A prompt cached on GPU outranks the same prompt cached on CPU.
+In contrast with EPP's `prefix-cache-scorer`, which estimates the KV cache state of the running servers, the precise view offers improved precision for harder-to-approximate scenarios:
+- **Multi-LoRA Deployments** - LoRA adapter identity is folded into block keys, so cache hits are scoped to the adapter that produced them — different adapters over the same prompt do not collide.
+- **Multimodal Models** - Multimodal content hashes (images, audio) are folded into block keys, so two prompts with the same text but different images produce different keys and are routed to the pod with matching multimodal KV-cache.
+- **Hybrid-Attention Models** - In hybrid models, layer groups (full, sliding-window, linear) KV caching scales non-linearly making byte-based trees imprecise.
 
 > [!NOTE]
 > Hybrid-attention-aware scoring is a work in progress.
-
-> [!NOTE]
-> This page assumes familiarity with the EPP's design. See [EPP architecture](../core/epp) for more details.
 
 ## Design
 
