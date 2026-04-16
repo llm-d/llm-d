@@ -17,9 +17,7 @@ The precise view offers improved precision for harder-to-approximate scenarios:
 > [!NOTE]
 > Hybrid-attention-aware scoring is a work in progress.
 
-## Design
-
-### Integration with EPP
+## Design - EPP Integration Overview
 
 The indexer is deployed as a library, loaded into the EPP process. Two cooperating plugins are used by the scheduler:
 * `tokenizer` — a `PrepareData` plugin that tokenizes the prompt (and any MM features) once and writes the result onto `LLMRequest.TokenizedPrompt` for downstream reuse.
@@ -73,7 +71,7 @@ With speculative indexing enabled (recommended) — the three extension points c
 > and the confirming KV-event, so back-to-back dentical prompts can race
 > onto different pods until the engine's events land.
 
-### Write Path: Ingesting KV-Events
+## Design: Write Path: Ingesting KV-Events
 
 vLLM and SGLang publish three event types over ZMQ whenever their KV-cache state changes:
 * **`BlockStored`** — blocks with the given content hashes have been created on a specific device tier. Payload includes the chained parent hash, the token chunk, any LoRA ID/name, and any multimodal extra keys.
@@ -110,7 +108,7 @@ sequenceDiagram
 
 **The dual-key design.** Model servers publish events using *engine keys* — hash identifiers derived from each engine's internal content-addressing. The indexer needs to look blocks up by hashes it can compute from the request's own prompt tokens (*request keys*). On each `BlockStored`, the worker computes the request key locally and stores a mapping `engineKey → requestKey` alongside `requestKey → PodEntry`. At read time the scorer looks up by request key only; the engine-key mapping is used during eviction so that a `BlockRemoved` referencing an engine key can find the corresponding request key.
 
-## Event Delivery Modes
+### Event Delivery Modes
 
 Two shapes are supported for getting events from the model servers to the indexer:
 
@@ -136,7 +134,7 @@ In the current implementation, the plugin establishes subscribers lazily during 
   EPP Replica 2 ──ZMQ──┘
 ```
 
-#### Block Index Backends
+### Block Index Backends
 
 The block index is the hot data structure of the system: every scoring call queries it, every KV-event updates it.
 
@@ -156,7 +154,7 @@ The KV-Indexer offer multiple backends, which can be configured depending on you
 
 **Sizing Notes**: In-memory backends size independently per replica; plan for roughly `keys × pod_entries` with overhead for the two-level LRU. The cost-aware backend is easier to bound because you specify a byte ceiling; it is the safer choice when per-entry size is hard to predict. For Redis / Valkey, the key space is proportional to unique blocks across the fleet, not to request volume.
 
-### Read Path: Scoring a Request
+## Design - Read Path: Scoring a Request
 
 The scorer's goal is to find the length of the **longest consecutive prefix** of the request's block sequence cached in each candidate pod.
 
@@ -208,7 +206,7 @@ When blocks are stored across memory tiers, each matching block's contribution i
 
 Raw scores are then normalized to `[0.0, 1.0]` before being returned to the scheduler, where they are combined with other scorers (queue depth, KV-cache utilization, etc.) through the standard Filter-Score-Pick pipeline.
 
-#### Speculative Indexing
+### Speculative Indexing
 
 Confirmed KV-events arrive after a request has been routed. In high-burst workloads, two requests with the same prefix can be scheduled before either's event has propagated, breaking affinity: both land on different pods, each redoing the other's prefill. Speculative indexing closes that window.
 
@@ -221,14 +219,14 @@ When enabled (`speculativeIndexing: true`):
 
 The default 2-second TTL is tuned to comfortably exceed the typical routing-to-event latency without outliving a genuinely failed speculation.
 
-#### Multimodal, LoRA, and Hybrid Attention
+### Multimodal, LoRA, and Hybrid Attention
 
 Many deployment patterns cache KV blocks based on more than text. The KV-Indexer supports these additional modalities.
 * **Multimodal** - The indexer folds per-block multimodal content hashes into the block-key chain. vLLM emits an `extra_keys` field on `BlockStored` events (bare multimodal hash strings in v0.18+, legacy `[hash, offset]` tuples before), which the adapter parses into `BlockExtraFeatures`. The same feature is computed on the read side by walking the multimodal placeholders in the tokenized prompt. Two prompts identical in text but differing in image content hash differently and route independently.
 * **LoRA** - On `BlockStored`, if a `LoraName` is present, the indexer uses it in place of the base model name when deriving block keys. Different adapters therefore produce different key chains for the same token sequence, and cache hits are correctly scoped to the adapter.
 * **Hybrid attention** - vLLM partitions the KV-cache of a hybrid model into layer groups — full attention, sliding-window attention, linear/state-space — that evict independently. For a single token range, the full-attention blocks can still be resident while the SWA blocks have rolled out of the attention window, and the same "prefix" is cached in one group but not in another. Scoring for hybrid models therefore classifies each prefix match as **full** (all groups present), **partial** (some groups retained, others evicted outside the window in a way the model can tolerate), or **miss**, and the scorer needs the model's window sizes to decide whether a partial hit is still routable. The event-driven foundation provides the per-group block fidelity this reasoning requires; the event format and scorer are being extended to capture eviction type explicitly.
 
-### Internal Modules
+## Internal Modules
 
 ```mermaid
 flowchart LR
