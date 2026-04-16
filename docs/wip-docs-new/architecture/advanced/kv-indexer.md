@@ -23,7 +23,7 @@ In contrast with EPP's `prefix-cache-scorer`, which estimates the KV cache state
 
 The indexer is deployed as a library, loaded into the EPP process. Two cooperating plugins are used by the scheduler:
 * `tokenizer` — a `PrepareData` plugin that tokenizes the prompt (and any MM features) once and writes the result onto `LLMRequest.TokenizedPrompt` for downstream reuse.
-* `precise-prefix-cache-scorer`** — implements three EPP extension points: `PrepareRequestData`, `Score`, and `PreRequest`.
+* `precise-prefix-cache-scorer` — implements three EPP extension points: `PrepareRequestData`, `Score`, and `PreRequest`.
 
 ```mermaid
 flowchart TB
@@ -197,7 +197,9 @@ flowchart LR
 
 ### Block Index Backends
 
-The block index is the hot data structure of the system: every scoring call queries it, every KV-event updates it. Pick a backend based on the deployment's replication model and memory envelope — the right answer depends more on those than on raw speed.
+The block index is the hot data structure of the system: every scoring call queries it, every KV-event updates it.
+
+The KV-Indexer offer multiple backend, which can be configured depending on your desired memory and replication model.
 
 | Backend                 | Storage                                                                                                | When to use                                                                                                                                                                                                    | Tradeoff                                                                                                                                                                                                                                                                   |
 |:------------------------|:-------------------------------------------------------------------------------------------------------|:---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|:---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
