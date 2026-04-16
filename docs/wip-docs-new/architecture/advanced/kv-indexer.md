@@ -162,41 +162,6 @@ When blocks are stored across memory tiers, each matching block's contribution i
 
 Raw scores are then normalized to `[0.0, 1.0]` before being returned to the scheduler, where they are combined with other scorers (queue depth, KV-cache utilization, etc.) through the standard Filter-Score-Pick pipeline.
 
-### Internal Modules
-
-```mermaid
-flowchart LR
-    subgraph Library ["llm-d-kv-cache library"]
-        direction TB
-        Indexer["kvcache.Indexer<br/>(orchestrator)"]
-        TP["kvblock.TokenProcessor<br/>(tokens → block keys)"]
-        Tokzr["tokenization.Pool<br/>(UDS / embedded)"]
-        BScorer["kvblock.Scorer<br/>(longest-prefix match)"]
-        Index["kvblock.Index<br/>(block key → pods)"]
-        Pool["kvevents.Pool<br/>(sharded ZMQ workers)"]
-        Adapter["kvevents.EngineAdapter<br/>(vLLM / SGLang)"]
-    end
-
-    Indexer --> Tokzr
-    Indexer --> TP
-    Indexer --> Index
-    Indexer --> BScorer
-
-    Pool --> Adapter
-    Adapter --> TP
-    Pool --> Index
-```
-
-| Module                   | Role                                                                                                                                                                                          |
-|:-------------------------|:----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| `kvcache.Indexer`        | Entry point for the plugin. Coordinates block-key computation, index lookup, and scoring.                                                                                                     |
-| `kvblock.TokenProcessor` | Converts a token sequence into a deterministic list of block keys. Reproduces the engine's chained FNV-64a over CBOR content-addressing scheme.                                               |
-| `tokenization.Pool`      | Worker pool for rendering and tokenizing prompts. Sources tokenizers from a UDS sidecar, from local files, or from HuggingFace Hub. If tokenization is external, this module is not required. |
-| `kvblock.Scorer`         | Computes per-pod scores from a list of block keys and lookup results. Currently implements longest consecutive prefix match, weighted by device tier.                                         |
-| `kvblock.Index`          | The block index itself. A pluggable interface (see [backends](#block-index-backends)) storing `blockKey → []PodEntry` plus the auxiliary `engineKey → requestKey` map.                        |
-| `kvevents.Pool`          | Sharded worker pool that consumes ZMQ messages, orders them per-pod (FNV-1a on pod ID), and applies them to the index.                                                                        |
-| `kvevents.EngineAdapter` | Parses engine-specific wire formats into domain events. vLLM (msgpack) and SGLang (msgpack) adapters ship today.                                                                              |
-
 ### Event Delivery Modes
 
 Two shapes are supported for getting events from the model servers to the indexer:
@@ -274,6 +239,41 @@ Many deployment patterns cache KV blocks based on more than text. The KV-Indexer
 * **Multimodal** - The indexer folds per-block multimodal content hashes into the block-key chain. vLLM emits an `extra_keys` field on `BlockStored` events (bare multimodal hash strings in v0.18+, legacy `[hash, offset]` tuples before), which the adapter parses into `BlockExtraFeatures`. The same feature is computed on the read side by walking the multimodal placeholders in the tokenized prompt. Two prompts identical in text but differing in image content hash differently and route independently.
 * **LoRA** - On `BlockStored`, if a `LoraName` is present, the indexer uses it in place of the base model name when deriving block keys. Different adapters therefore produce different key chains for the same token sequence, and cache hits are correctly scoped to the adapter.
 * **Hybrid attention** - vLLM partitions the KV-cache of a hybrid model into layer groups — full attention, sliding-window attention, linear/state-space — that evict independently. For a single token range, the full-attention blocks can still be resident while the SWA blocks have rolled out of the attention window, and the same "prefix" is cached in one group but not in another. Scoring for hybrid models therefore classifies each prefix match as **full** (all groups present), **partial** (some groups retained, others evicted outside the window in a way the model can tolerate), or **miss**, and the scorer needs the model's window sizes to decide whether a partial hit is still routable. The event-driven foundation provides the per-group block fidelity this reasoning requires; the event format and scorer are being extended to capture eviction type explicitly.
+
+### Internal Modules
+
+```mermaid
+flowchart LR
+    subgraph Library ["llm-d-kv-cache library"]
+        direction TB
+        Indexer["kvcache.Indexer<br/>(orchestrator)"]
+        TP["kvblock.TokenProcessor<br/>(tokens → block keys)"]
+        Tokzr["tokenization.Pool<br/>(UDS / embedded)"]
+        BScorer["kvblock.Scorer<br/>(longest-prefix match)"]
+        Index["kvblock.Index<br/>(block key → pods)"]
+        Pool["kvevents.Pool<br/>(sharded ZMQ workers)"]
+        Adapter["kvevents.EngineAdapter<br/>(vLLM / SGLang)"]
+    end
+
+    Indexer --> Tokzr
+    Indexer --> TP
+    Indexer --> Index
+    Indexer --> BScorer
+
+    Pool --> Adapter
+    Adapter --> TP
+    Pool --> Index
+```
+
+| Module                   | Role                                                                                                                                                                                          |
+|:-------------------------|:----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `kvcache.Indexer`        | Entry point for the plugin. Coordinates block-key computation, index lookup, and scoring.                                                                                                     |
+| `kvblock.TokenProcessor` | Converts a token sequence into a deterministic list of block keys. Reproduces the engine's chained FNV-64a over CBOR content-addressing scheme.                                               |
+| `tokenization.Pool`      | Worker pool for rendering and tokenizing prompts. Sources tokenizers from a UDS sidecar, from local files, or from HuggingFace Hub. If tokenization is external, this module is not required. |
+| `kvblock.Scorer`         | Computes per-pod scores from a list of block keys and lookup results. Currently implements longest consecutive prefix match, weighted by device tier.                                         |
+| `kvblock.Index`          | The block index itself. A pluggable interface (see [backends](#block-index-backends)) storing `blockKey → []PodEntry` plus the auxiliary `engineKey → requestKey` map.                        |
+| `kvevents.Pool`          | Sharded worker pool that consumes ZMQ messages, orders them per-pod (FNV-1a on pod ID), and applies them to the index.                                                                        |
+| `kvevents.EngineAdapter` | Parses engine-specific wire formats into domain events. vLLM (msgpack) and SGLang (msgpack) adapters ship today.                                                                              |
 
 ## Configuration
 
