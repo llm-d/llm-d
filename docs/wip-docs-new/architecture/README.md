@@ -45,12 +45,12 @@ In addition, the EPP can also query "consultant" components which can execute ar
 
 ### Autoscaling
 
-With autoscaling, Model Servers, potentially with different configurations, are added or removed automatically to keep serving capacity aligned with inference demand. Scaling decisions are driven by three categories of signals:
+With autoscaling, Model Servers are added or removed automatically to keep serving capacity aligned with inference demand. llm-d supports two autoscaling approaches — HPA/KEDA for standard Kubernetes-native scaling and the Workload Variant Autoscaler (WVA) for globally optimized scaling that minimizes cost while working toward SLO targets. Both consume scaling signals drawn from three categories:
 
-- **Supply-side** - Measures supply as the remaining resource headroom on backends (KV cache capacity, compute throughput) and demand as the current resource consumption (tokens in use, model server queue depth). Scales when resource utilization leaves insufficient headroom.
+- **Supply-side** — Remaining resource headroom on backends (KV cache capacity, compute throughput) versus current resource consumption (tokens in use, model server queue depth). Scales when utilization leaves insufficient headroom.
 
-- **Demand-side** - Measures demand using EPP flow-control signals — queue depth and active request counts — and scales when pending requests accumulate.
+- **Demand-side** — EPP flow-control signals (queue depth and active request counts) versus current processing capacity. Scales when pending requests accumulate faster than backends can drain them.
 
-- **Service-level objective (SLO)-driven (Experimental)** - Defines supply as the maximum request rate backends can sustain while meeting latency targets, and demand as the observed arrival rate. Learns server behavior online and scales to keep time to first token (TTFT) / inter-token latency (ITL) within SLO targets.
+- **SLO-driven (Experimental)** — Observed request arrival rate versus the maximum rate backends can sustain while meeting latency targets. Learns server behavior online and scales proactively to keep time to first token (TTFT) and inter-token latency (ITL) within configured targets.
 
 See [Autoscaling](advanced/autoscaling/autoscaling.md) for complete details on the autoscaling design.
