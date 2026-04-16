@@ -110,6 +110,52 @@ sequenceDiagram
 
 **The dual-key design.** Model servers publish events using *engine keys* — hash identifiers derived from each engine's internal content-addressing. The indexer needs to look blocks up by hashes it can compute from the request's own prompt tokens (*request keys*). On each `BlockStored`, the worker computes the request key locally and stores a mapping `engineKey → requestKey` alongside `requestKey → PodEntry`. At read time the scorer looks up by request key only; the engine-key mapping is used during eviction so that a `BlockRemoved` referencing an engine key can find the corresponding request key.
 
+## Event Delivery Modes
+
+Two shapes are supported for getting events from the model servers to the indexer:
+
+* **Centralized** — every model-server pod connects (`zmq.PUB`) to a single endpoint hosted by the EPP (`zmq.SUB`). Simpler to configure; works naturally with a single EPP replica.
+
+```
+  Model Server A ──► ZMQ ──┐
+  Model Server B ──► ZMQ ──┼──► EPP (binds tcp://*:5557)
+  Model Server C ──► ZMQ ──┘
+```
+
+* **Pod discovery** — each model-server pod binds its own ZMQ socket. The EPP discovers pods via Kubernetes label selectors and creates per-pod subscribers. This is the mode to use for active-active multi-scheduler: every EPP replica independently subscribes to every pod and sees the full event stream.
+
+In the current implementation, the plugin establishes subscribers lazily during `Score()` and maintains a 10-minute TTL cache of known endpoints, tearing down subscribers as endpoints fall out. The IGW data layer already exposes an endpoint source; wiring the plugin's subscriber management onto it — so subscriptions follow endpoint events directly rather than request-driven scoring — is in progress.
+
+```
+  EPP Replica 1 ──ZMQ──┐
+                       ├──► Model Server A (binds :5557)
+  EPP Replica 2 ──ZMQ──┤
+                       ├──► Model Server B (binds :5557)
+  EPP Replica 1 ──ZMQ──┤
+                       └──► Model Server C (binds :5557)
+  EPP Replica 2 ──ZMQ──┘
+```
+
+#### Block Index Backends
+
+The block index is the hot data structure of the system: every scoring call queries it, every KV-event updates it.
+
+The KV-Indexer offer multiple backends, which can be configured depending on your desired memory and replication model:
+
+| Backend                 | Storage                                                                         | When to use                                                                                                                                                                | Tradeoff                                                                                                                                                       |
+|:------------------------|:--------------------------------------------------------------------------------|:---------------------------------------------------------------------------------------------------------------------------------------------------------------------------|:---------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| **In-Memory (default)** | Two-level LRU: outer cache keyed by block hash, inner cache of pods per block   | Default choice for most deployments, for both single- or multi-replica — every replica subscribes to the full event stream independently and converges to the same view    | Lowest latency; fixed entry count (default 100M keys × 10 pod entries) makes sizing predictable                                                                |
+| **Cost-Aware Memory**   | Ristretto cache with admission control and cost-based eviction                  | Workloads where per-entry size varies a lot (multimodal, variable-length LoRA metadata)                                                                                    | Budget specified in bytes (e.g. `2GiB`) rather than entry count; probabilistic admission can reject entries under pressure                                     |
+| **Redis / Valkey**      | External server (TCP; Valkey is Redis-wire-compatible, BSD-licensed)            | Need for persistent or very-long lived index (uncommon)                                                                                                                    | Adds a network hop per lookup and ties EPP availability to the external store; shared state gives strong consistency across replicas but is rarely necessary   |
+
+> [!IMPORTANT]
+> In-memory is typically the best option, offering both low-latency, simple operations, 
+> and high availability via multi-replica deployment (as each EPP replica in pod-discovery
+> mode subscribes to every model-server pod's events independently, and converges to the
+> same index).
+
+**Sizing Notes**: In-memory backends size independently per replica; plan for roughly `keys × pod_entries` with overhead for the two-level LRU. The cost-aware backend is easier to bound because you specify a byte ceiling; it is the safer choice when per-entry size is hard to predict. For Redis / Valkey, the key space is proportional to unique blocks across the fleet, not to request volume.
+
 ### Read Path: Scoring a Request
 
 The scorer's goal is to find the length of the **longest consecutive prefix** of the request's block sequence cached in each candidate pod.
@@ -162,65 +208,7 @@ When blocks are stored across memory tiers, each matching block's contribution i
 
 Raw scores are then normalized to `[0.0, 1.0]` before being returned to the scheduler, where they are combined with other scorers (queue depth, KV-cache utilization, etc.) through the standard Filter-Score-Pick pipeline.
 
-### Event Delivery Modes
-
-Two shapes are supported for getting events from the model servers to the indexer:
-
-* **Centralized** — every model-server pod connects (`zmq.PUB`) to a single endpoint hosted by the EPP (`zmq.SUB`). Simpler to configure; works naturally with a single EPP replica.
-
-```
-  Model Server A ──► ZMQ ──┐
-  Model Server B ──► ZMQ ──┼──► EPP (binds tcp://*:5557)
-  Model Server C ──► ZMQ ──┘
-```
-
-* **Pod discovery** — each model-server pod binds its own ZMQ socket. The EPP discovers pods via Kubernetes label selectors and creates per-pod subscribers. This is the mode to use for active-active multi-scheduler: every EPP replica independently subscribes to every pod and sees the full event stream.
-
-In the current implementation, the plugin establishes subscribers lazily during `Score()` and maintains a 10-minute TTL cache of known endpoints, tearing down subscribers as endpoints fall out. The IGW data layer already exposes an endpoint source; wiring the plugin's subscriber management onto it — so subscriptions follow endpoint events directly rather than request-driven scoring — is in progress.
-
-```
-  EPP Replica 1 ──ZMQ──┐
-                       ├──► Model Server A (binds :5557)
-  EPP Replica 2 ──ZMQ──┤
-                       ├──► Model Server B (binds :5557)
-  EPP Replica 1 ──ZMQ──┤
-                       └──► Model Server C (binds :5557)
-  EPP Replica 2 ──ZMQ──┘
-```
-
-### Block Index Backends
-
-The block index is the hot data structure of the system: every scoring call queries it, every KV-event updates it.
-
-The KV-Indexer offer multiple backends, which can be configured depending on your desired memory and replication model:
-
-| Backend                 | Storage                                                                         | When to use                                                                                                                                                                | Tradeoff                                                                                                                                                       |
-|:------------------------|:--------------------------------------------------------------------------------|:---------------------------------------------------------------------------------------------------------------------------------------------------------------------------|:---------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| **In-Memory (default)** | Two-level LRU: outer cache keyed by block hash, inner cache of pods per block   | Default choice for most deployments, for both single- or multi-replica — every replica subscribes to the full event stream independently and converges to the same view    | Lowest latency; fixed entry count (default 100M keys × 10 pod entries) makes sizing predictable                                                                |
-| **Cost-Aware Memory**   | Ristretto cache with admission control and cost-based eviction                  | Workloads where per-entry size varies a lot (multimodal, variable-length LoRA metadata)                                                                                    | Budget specified in bytes (e.g. `2GiB`) rather than entry count; probabilistic admission can reject entries under pressure                                     |
-| **Redis / Valkey**      | External server (TCP; Valkey is Redis-wire-compatible, BSD-licensed)            | Need for persistent or very-long lived index (uncommon)                                                                                                                    | Adds a network hop per lookup and ties EPP availability to the external store; shared state gives strong consistency across replicas but is rarely necessary   |
-
-> [!IMPORTANT]
-> In-memory is typically the best option, offering both low-latency, simple operations, 
-> and high availability via multi-replica deployment (as each EPP replica in pod-discovery
-> mode subscribes to every model-server pod's events independently, and converges to the
-> same index).
-
-#### Sizing Notes
-
-In-memory backends size independently per replica; plan for roughly `keys × pod_entries` with overhead for the two-level LRU. The cost-aware backend is easier to bound because you specify a byte ceiling; it is the safer choice when per-entry size is hard to predict. For Redis / Valkey, the key space is proportional to unique blocks across the fleet, not to request volume.
-
-### Tokenizer Sources
-
-The `tokenizer` plugin — and the indexer's own internal tokenization pool, when the plugin is not present — can source tokenizers three ways:
-
-1. **UDS sidecar (recommended for production).** A tokenizer sidecar container serves tokenization requests over a Unix domain socket (default `/tmp/tokenizer/tokenizer-uds.socket`). The sidecar resolves the model identifier as a local path if the path exists on disk, and otherwise downloads and caches from HuggingFace (or ModelScope) on first use. Shared between the `tokenizer` plugin and the indexer.
-2. **In-process local files.** The indexer's embedded tokenizer scans a directory (default `/mnt/models`) for `tokenizer.json`, supporting both HuggingFace cache layouts (`models--org--model/snapshots/{hash}/tokenizer.json`) and flat layouts.
-3. **In-process HuggingFace Hub.** The indexer's embedded tokenizer downloads on demand. Convenient for development; adds startup latency.
-
-The plugin falls back through these in order.
-
-### Speculative Indexing
+#### Speculative Indexing
 
 Confirmed KV-events arrive after a request has been routed. In high-burst workloads, two requests with the same prefix can be scheduled before either's event has propagated, breaking affinity: both land on different pods, each redoing the other's prefill. Speculative indexing closes that window.
 
@@ -233,7 +221,7 @@ When enabled (`speculativeIndexing: true`):
 
 The default 2-second TTL is tuned to comfortably exceed the typical routing-to-event latency without outliving a genuinely failed speculation.
 
-### Multimodal, LoRA, and Hybrid Attention
+#### Multimodal, LoRA, and Hybrid Attention
 
 Many deployment patterns cache KV blocks based on more than text. The KV-Indexer supports these additional modalities.
 * **Multimodal** - The indexer folds per-block multimodal content hashes into the block-key chain. vLLM emits an `extra_keys` field on `BlockStored` events (bare multimodal hash strings in v0.18+, legacy `[hash, offset]` tuples before), which the adapter parses into `BlockExtraFeatures`. The same feature is computed on the read side by walking the multimodal placeholders in the tokenized prompt. Two prompts identical in text but differing in image content hash differently and route independently.
@@ -360,7 +348,7 @@ Configure exactly one of the following. If more than one is set, the first resol
 | `podDiscoveryConfig.podNamespace` | string | `""` | Namespace to watch. Empty watches all (requires cluster-wide RBAC). |
 | `podDiscoveryConfig.socketPort` | integer | `5557` | Port exposed by each model-server pod for its ZMQ socket. |
 
-### Model Server Requirements
+### Model Servers
 
 Model servers must be configured to publish KV-Events over ZMQ with a topic of the form `kv@<pod-ip>:<port>@<model>`.
 
@@ -369,6 +357,16 @@ For vLLM concretely:
 - `--kv-events-config` must enable ZMQ publishing with topic `kv@<pod-ip>:<port>@<model>`.
 
 SGLang uses equivalent configuration; see its KV-events documentation.
+
+### Tokenizer Sources
+
+The `tokenizer` plugin — and the indexer's own internal tokenization pool, when the plugin is not present — can source tokenizers three ways:
+
+1. **UDS sidecar (recommended for production).** A tokenizer sidecar container serves tokenization requests over a Unix domain socket (default `/tmp/tokenizer/tokenizer-uds.socket`). The sidecar resolves the model identifier as a local path if the path exists on disk, and otherwise downloads and caches from HuggingFace (or ModelScope) on first use. Shared between the `tokenizer` plugin and the indexer.
+2. **In-process local files.** The indexer's embedded tokenizer scans a directory (default `/mnt/models`) for `tokenizer.json`, supporting both HuggingFace cache layouts (`models--org--model/snapshots/{hash}/tokenizer.json`) and flat layouts.
+3. **In-process HuggingFace Hub.** The indexer's embedded tokenizer downloads on demand. Convenient for development; adds startup latency.
+
+The plugin falls back through these in order.
 
 ## Examples
 
@@ -455,8 +453,4 @@ Model-server side — each pod binds its own socket (vLLM example):
 }
 ```
 
-## Further Reading
 
-- [EPP Scheduling](../core/epp/scheduling.md) — how scorers fit into the Filter-Score-Pick pipeline.
-- [llm-d-inference-scheduler](https://github.com/llm-d/llm-d-inference-scheduler) — source for the `precise-prefix-cache-scorer` and `tokenizer` plugins.
-- [llm-d-kv-cache](https://github.com/llm-d/llm-d-kv-cache) — source for the indexer library, event adapters, and block-index backends.
