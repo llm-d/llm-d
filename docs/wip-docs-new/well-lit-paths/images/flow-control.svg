@@ -1,0 +1,78 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 750 440" font-family="Inter, Helvetica, Arial, sans-serif">
+  <defs>
+    <marker id="arrow" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+      <path d="M0,0 L8,3 L0,6" fill="#b57ad4"/>
+    </marker>
+  </defs>
+
+  <!-- Background -->
+  <rect width="750" height="440" rx="8" fill="#0a0510"/>
+
+  <!-- Title -->
+  <text x="375" y="33" font-size="18" font-weight="bold" text-anchor="middle" fill="#ffffff">Flow Control</text>
+
+  <!-- Retry label -->
+  <text x="375" y="56" text-anchor="middle" font-size="10" fill="#888" font-style="italic">Retry requests as needed</text>
+
+  <!-- Realtime Client -->
+  <rect x="75" y="70" width="160" height="44" rx="6" fill="#1a2a1a" stroke="#4caf50" stroke-width="1.5"/>
+  <text x="155" y="98" text-anchor="middle" font-weight="600" font-size="14" fill="#81c784">Realtime Client</text>
+
+  <!-- Queue -->
+  <rect x="290" y="70" width="145" height="44" rx="6" fill="#1e1428" stroke="#7b2d8e" stroke-width="1.5"/>
+  <text x="363" y="98" text-anchor="middle" font-weight="600" font-size="14" fill="#b57ad4">Queue</text>
+
+  <!-- Batch Job -->
+  <rect x="490" y="70" width="145" height="44" rx="6" fill="#1e1428" stroke="#666" stroke-width="1.5"/>
+  <text x="563" y="98" text-anchor="middle" font-weight="500" font-size="14" fill="#ccc">Batch Job</text>
+
+  <!-- Batch Job to Queue arrow -->
+  <line x1="490" y1="92" x2="435" y2="92" stroke="#b57ad4" stroke-width="1.5" marker-end="url(#arrow)"/>
+
+  <!-- Priority labels -->
+  <text x="155" y="138" text-anchor="middle" font-size="12" fill="#81c784" font-weight="600" font-style="italic">CRITICAL</text>
+  <text x="363" y="138" text-anchor="middle" font-size="12" fill="#888" font-weight="600" font-style="italic">SHEDDABLE</text>
+
+  <!-- Arrows from clients to Gateway -->
+  <line x1="155" y1="148" x2="270" y2="200" stroke="#b57ad4" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <line x1="363" y1="148" x2="310" y2="200" stroke="#b57ad4" stroke-width="1.5" marker-end="url(#arrow)"/>
+
+  <!-- Gateway box -->
+  <rect x="220" y="203" width="150" height="44" rx="6" fill="#1e1428" stroke="#7b2d8e" stroke-width="1.5"/>
+  <text x="295" y="231" text-anchor="middle" font-weight="500" font-size="15" fill="#ffffff">Gateway</text>
+
+  <!-- Gateway to EPP -->
+  <line x1="370" y1="218" x2="490" y2="218" stroke="#b57ad4" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <text x="430" y="212" text-anchor="middle" font-size="11" fill="#c294df">Prompt, Priority</text>
+  <line x1="490" y1="233" x2="370" y2="233" stroke="#b57ad4" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <text x="430" y="255" text-anchor="middle" font-size="11" fill="#c294df">Pod A</text>
+
+  <!-- EPP box -->
+  <rect x="490" y="203" width="100" height="44" rx="6" fill="#7b2d8e" stroke="#b57ad4" stroke-width="1.5"/>
+  <text x="540" y="231" text-anchor="middle" font-weight="700" font-size="16" fill="#ffffff">EPP</text>
+
+  <!-- EPP saturation note -->
+  <text x="620" y="210" font-size="11" fill="#c294df" font-style="italic">If detect</text>
+  <text x="620" y="224" font-size="11" fill="#c294df" font-style="italic">saturation, kill</text>
+  <text x="620" y="238" font-size="11" fill="#c294df" font-style="italic">SHEDDABLE</text>
+  <text x="620" y="252" font-size="11" fill="#c294df" font-style="italic">requests</text>
+
+  <!-- Arrow to pods -->
+  <line x1="250" y1="247" x2="140" y2="305" stroke="#b57ad4" stroke-width="1.5" marker-end="url(#arrow)"/>
+
+  <!-- vLLM pods -->
+  <rect x="60" y="308" width="145" height="46" rx="6" fill="#1e1428" stroke="#7b2d8e" stroke-width="1.5"/>
+  <text x="133" y="337" text-anchor="middle" font-weight="600" font-size="15" fill="#b57ad4">vLLM</text>
+  <text x="133" y="373" text-anchor="middle" font-size="12" fill="#c294df">Pod A</text>
+
+  <rect x="228" y="308" width="145" height="46" rx="6" fill="#1e1428" stroke="#7b2d8e" stroke-width="1.5"/>
+  <text x="301" y="337" text-anchor="middle" font-weight="600" font-size="15" fill="#b57ad4">vLLM</text>
+  <text x="301" y="373" text-anchor="middle" font-size="12" fill="#c294df">Pod B</text>
+
+  <rect x="396" y="308" width="145" height="46" rx="6" fill="#1e1428" stroke="#7b2d8e" stroke-width="1.5"/>
+  <text x="469" y="337" text-anchor="middle" font-weight="600" font-size="15" fill="#b57ad4">vLLM</text>
+  <text x="469" y="373" text-anchor="middle" font-size="12" fill="#c294df">Pod C</text>
+
+  <!-- Caption -->
+  <text x="375" y="420" text-anchor="middle" font-size="13" fill="#a77bbf" font-weight="600">Enables prioritizing traffic to most critical workloads</text>
+</svg>

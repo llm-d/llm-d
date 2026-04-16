@@ -1,0 +1,98 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 440" font-family="Inter, Helvetica, Arial, sans-serif">
+  <defs>
+    <marker id="arrow" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+      <path d="M0,0 L8,3 L0,6" fill="#b57ad4"/>
+    </marker>
+    <marker id="arrow-green" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+      <path d="M0,0 L8,3 L0,6" fill="#81c784"/>
+    </marker>
+  </defs>
+
+  <!-- Background -->
+  <rect width="800" height="440" rx="8" fill="#0a0510"/>
+
+  <!-- GET completions -->
+  <text x="290" y="25" text-anchor="middle" font-size="13" fill="#c294df">GET /completions</text>
+  <line x1="290" y1="30" x2="290" y2="52" stroke="#b57ad4" stroke-width="1.5" marker-end="url(#arrow)"/>
+
+  <!-- Gateway box -->
+  <rect x="215" y="55" width="150" height="44" rx="6" fill="#1e1428" stroke="#7b2d8e" stroke-width="1.5"/>
+  <text x="290" y="83" text-anchor="middle" font-weight="500" font-size="15" fill="#ffffff">Gateway</text>
+
+  <!-- Gateway to EPP arrows -->
+  <line x1="365" y1="70" x2="490" y2="70" stroke="#b57ad4" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <text x="428" y="64" text-anchor="middle" font-size="11" fill="#c294df">Prompt</text>
+  <line x1="490" y1="84" x2="365" y2="84" stroke="#b57ad4" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <text x="428" y="108" text-anchor="middle" font-size="11" fill="#c294df">Pod A+B</text>
+
+  <!-- EPP box -->
+  <rect x="490" y="55" width="100" height="44" rx="6" fill="#7b2d8e" stroke="#b57ad4" stroke-width="1.5"/>
+  <text x="540" y="83" text-anchor="middle" font-weight="700" font-size="16" fill="#ffffff">EPP</text>
+
+  <!-- Step 1 -->
+  <circle cx="625" cy="77" r="14" fill="#7b2d8e" stroke="#b57ad4" stroke-width="1"/>
+  <text x="625" y="82" text-anchor="middle" fill="#ffffff" font-weight="bold" font-size="12">1</text>
+  <text x="655" y="66" font-size="11" fill="#dec3ee">Schedule request to</text>
+  <text x="655" y="80" font-size="11" fill="#dec3ee">use P/D disagg,</text>
+  <text x="655" y="94" font-size="11" fill="#dec3ee">select D and P</text>
+
+  <!-- Dynamic decision note -->
+  <text x="540" y="120" text-anchor="middle" font-size="10" fill="#888" font-style="italic">Dynamically decide</text>
+  <text x="540" y="132" text-anchor="middle" font-size="10" fill="#888" font-style="italic">whether to use P/D</text>
+
+  <!-- Gateway to Sidecar arrow -->
+  <line x1="265" y1="99" x2="265" y2="170" stroke="#b57ad4" stroke-width="1.5" marker-end="url(#arrow)"/>
+
+  <!-- Sidecar box -->
+  <rect x="205" y="173" width="120" height="42" rx="6" fill="#2a1a3e" stroke="#8a3baf" stroke-width="1.5"/>
+  <text x="265" y="200" text-anchor="middle" font-weight="500" font-size="15" fill="#ffffff">Sidecar</text>
+
+  <!-- Step 2 -->
+  <circle cx="155" cy="194" r="14" fill="#7b2d8e" stroke="#b57ad4" stroke-width="1"/>
+  <text x="155" y="199" text-anchor="middle" fill="#ffffff" font-weight="bold" font-size="12">2</text>
+  <text x="65" y="183" font-size="11" fill="#dec3ee">Coordinates</text>
+  <text x="65" y="197" font-size="11" fill="#dec3ee">transaction with</text>
+  <text x="65" y="211" font-size="11" fill="#dec3ee">IP of P worker</text>
+
+  <!-- Sidecar to Decode Pod -->
+  <line x1="265" y1="215" x2="265" y2="268" stroke="#b57ad4" stroke-width="1.5" marker-end="url(#arrow)"/>
+
+  <!-- Decode Pod A -->
+  <rect x="185" y="270" width="160" height="48" rx="6" fill="#1e1428" stroke="#7b2d8e" stroke-width="1.5"/>
+  <text x="265" y="300" text-anchor="middle" font-weight="600" font-size="15" fill="#b57ad4">vLLM</text>
+  <text x="265" y="338" text-anchor="middle" font-size="12" fill="#c294df">Decode Pod A</text>
+
+  <!-- Sidecar to Prefill arrow -->
+  <line x1="325" y1="194" x2="510" y2="294" stroke="#b57ad4" stroke-width="1.5" marker-end="url(#arrow)"/>
+
+  <!-- Prefill Pod B -->
+  <rect x="510" y="270" width="160" height="48" rx="6" fill="#1e1428" stroke="#7b2d8e" stroke-width="1.5"/>
+  <text x="590" y="300" text-anchor="middle" font-weight="600" font-size="15" fill="#b57ad4">vLLM</text>
+  <text x="590" y="338" text-anchor="middle" font-size="12" fill="#c294df">Prefill Pod B</text>
+
+  <!-- Step 3 -->
+  <circle cx="705" cy="294" r="14" fill="#7b2d8e" stroke="#b57ad4" stroke-width="1"/>
+  <text x="705" y="299" text-anchor="middle" fill="#ffffff" font-weight="bold" font-size="12">3</text>
+  <text x="738" y="282" font-size="11" fill="#dec3ee">Process prefill,</text>
+  <text x="738" y="296" font-size="11" fill="#dec3ee">return KVXfer</text>
+  <text x="738" y="310" font-size="11" fill="#dec3ee">metadata</text>
+
+  <!-- NIXL bar -->
+  <rect x="370" y="370" width="120" height="28" rx="6" fill="#1a2a1a" stroke="#4caf50" stroke-width="1.5"/>
+  <text x="430" y="389" text-anchor="middle" font-weight="700" fill="#81c784" font-size="13">NIXL</text>
+
+  <!-- NIXL arrows -->
+  <line x1="510" y1="318" x2="460" y2="370" stroke="#81c784" stroke-width="2" marker-end="url(#arrow-green)"/>
+  <line x1="400" y1="370" x2="345" y2="318" stroke="#81c784" stroke-width="2" marker-end="url(#arrow-green)"/>
+
+  <!-- Step 4 -->
+  <circle cx="430" cy="355" r="14" fill="#7b2d8e" stroke="#b57ad4" stroke-width="1"/>
+  <text x="430" y="360" text-anchor="middle" fill="#ffffff" font-weight="bold" font-size="12">4</text>
+  <text x="430" y="418" text-anchor="middle" font-size="11" fill="#dec3ee">Pull KVs using KVXfer metadata</text>
+
+  <!-- Step 5 -->
+  <circle cx="155" cy="294" r="14" fill="#7b2d8e" stroke="#b57ad4" stroke-width="1"/>
+  <text x="155" y="299" text-anchor="middle" fill="#ffffff" font-weight="bold" font-size="12">5</text>
+  <text x="85" y="294" font-size="11" fill="#dec3ee" text-anchor="end">Process</text>
+  <text x="85" y="308" font-size="11" fill="#dec3ee" text-anchor="end">decode</text>
+</svg>

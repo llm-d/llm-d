@@ -1,0 +1,56 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 700 340" font-family="Inter, Helvetica, Arial, sans-serif">
+  <defs>
+    <marker id="arrow" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+      <path d="M0,0 L8,3 L0,6" fill="#b57ad4"/>
+    </marker>
+  </defs>
+
+  <!-- Background -->
+  <rect width="700" height="340" rx="8" fill="#0a0510"/>
+
+  <!-- Title -->
+  <text x="350" y="35" font-size="18" font-weight="bold" text-anchor="middle" fill="#ffffff">CPU KV Cache Offloading</text>
+
+  <!-- GET completions -->
+  <text x="250" y="68" text-anchor="middle" font-size="13" fill="#c294df">GET /completions</text>
+  <line x1="250" y1="73" x2="250" y2="98" stroke="#b57ad4" stroke-width="1.5" marker-end="url(#arrow)"/>
+
+  <!-- Gateway -->
+  <rect x="175" y="100" width="150" height="42" rx="6" fill="#1e1428" stroke="#7b2d8e" stroke-width="1.5"/>
+  <text x="250" y="126" text-anchor="middle" font-weight="500" font-size="15" fill="#ffffff">Gateway</text>
+
+  <!-- Gateway to EPP -->
+  <line x1="325" y1="115" x2="440" y2="115" stroke="#b57ad4" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <line x1="440" y1="129" x2="325" y2="129" stroke="#b57ad4" stroke-width="1.5" marker-end="url(#arrow)"/>
+
+  <!-- EPP -->
+  <rect x="440" y="100" width="100" height="42" rx="6" fill="#7b2d8e" stroke="#b57ad4" stroke-width="1.5"/>
+  <text x="490" y="126" text-anchor="middle" font-weight="700" font-size="16" fill="#ffffff">EPP</text>
+
+  <!-- Arrow to pods -->
+  <line x1="210" y1="142" x2="130" y2="190" stroke="#b57ad4" stroke-width="1.5" marker-end="url(#arrow)"/>
+
+  <!-- Pod A -->
+  <rect x="45" y="193" width="160" height="72" rx="6" fill="#1e1428" stroke="#7b2d8e" stroke-width="1.5"/>
+  <rect x="52" y="198" width="146" height="22" rx="4" fill="#1a2a1a" stroke="#4caf50" stroke-width="1"/>
+  <text x="125" y="214" text-anchor="middle" font-size="11" font-weight="600" fill="#81c784">CPU RAM</text>
+  <text x="125" y="248" text-anchor="middle" font-weight="600" font-size="15" fill="#b57ad4">vLLM</text>
+  <text x="125" y="284" text-anchor="middle" font-size="12" fill="#c294df">Pod A</text>
+
+  <!-- Pod B -->
+  <rect x="225" y="193" width="160" height="72" rx="6" fill="#1e1428" stroke="#7b2d8e" stroke-width="1.5"/>
+  <rect x="232" y="198" width="146" height="22" rx="4" fill="#1a2a1a" stroke="#4caf50" stroke-width="1"/>
+  <text x="305" y="214" text-anchor="middle" font-size="11" font-weight="600" fill="#81c784">CPU RAM</text>
+  <text x="305" y="248" text-anchor="middle" font-weight="600" font-size="15" fill="#b57ad4">vLLM</text>
+  <text x="305" y="284" text-anchor="middle" font-size="12" fill="#c294df">Pod B</text>
+
+  <!-- Pod C -->
+  <rect x="405" y="193" width="160" height="72" rx="6" fill="#1e1428" stroke="#7b2d8e" stroke-width="1.5"/>
+  <rect x="412" y="198" width="146" height="22" rx="4" fill="#1a2a1a" stroke="#4caf50" stroke-width="1"/>
+  <text x="485" y="214" text-anchor="middle" font-size="11" font-weight="600" fill="#81c784">CPU RAM</text>
+  <text x="485" y="248" text-anchor="middle" font-weight="600" font-size="15" fill="#b57ad4">vLLM</text>
+  <text x="485" y="284" text-anchor="middle" font-size="12" fill="#c294df">Pod C</text>
+
+  <!-- Caption -->
+  <text x="350" y="322" text-anchor="middle" font-size="13" fill="#a77bbf">Offload KV caches to local memory with global index</text>
+</svg>
