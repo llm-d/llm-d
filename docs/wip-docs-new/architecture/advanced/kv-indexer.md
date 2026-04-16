@@ -71,7 +71,7 @@ With speculative indexing enabled (recommended) — the three extension points c
 > and the confirming KV-event, so back-to-back dentical prompts can race
 > onto different pods until the engine's events land.
 
-## Design: Write Path: Ingesting KV-Events
+## Design - Write Path: Ingesting KV-Events
 
 vLLM and SGLang publish three event types over ZMQ whenever their KV-cache state changes:
 * **`BlockStored`** — blocks with the given content hashes have been created on a specific device tier. Payload includes the chained parent hash, the token chunk, any LoRA ID/name, and any multimodal extra keys.
