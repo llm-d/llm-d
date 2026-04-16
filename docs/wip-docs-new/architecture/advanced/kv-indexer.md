@@ -69,9 +69,9 @@ With speculative indexing enabled (recommended) — the three extension points c
 > [!NOTE]
 > With `speculativeIndexing: false`, `PrepareRequestData` and `PreRequest` 
 > become no-ops and `Score` performs the full lookup-and-score itself on each
-> request. Scoring is still correct, but the plugin no longer seeds the index
-> between the routing decision and the confirming KV-event, so back-to-back 
-> identical prompts can race onto different pods until the engine's events land.
+> request. The plugin no longer seeds the index between the routing decision
+> and the confirming KV-event, so back-to-back dentical prompts can race
+> onto different pods until the engine's events land.
 
 ### Write Path: Ingesting KV-Events
 
