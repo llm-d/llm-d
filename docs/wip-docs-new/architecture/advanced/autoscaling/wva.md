@@ -2,9 +2,9 @@
 
 ## Functionality
 
-The Workload Variant Autoscaler (WVA) is a Kubernetes controller that automatically scales LLM inference workloads based on real-time resource utilization and performance metrics. It manages the replica count of model-serving deployments (Deployments, StatefulSets, or LeaderWorkerSets) by observing vLLM metrics scraped via Prometheus and making cost-aware scaling decisions.
+The Workload Variant Autoscaler (WVA) is an optimizer and a Kubernetes controller that automatically scales LLM inference workloads based on real-time resource utilization and performance metrics. As an optimizer, it analyzes supply and demand signals across all model variants to produce globally cost-efficient scaling decisions. As a controller, it reconciles those decisions by managing the replica count of model-serving deployments (Deployments, StatefulSets, or LeaderWorkerSets), observing vLLM metrics scraped via Prometheus.
 
-WVA introduces the concept of **variants** -- multiple deployments serving the same model on different hardware configurations (e.g., different GPU types), each with an associated cost. The autoscaler optimizes across variants to minimize total cost while meeting capacity or latency requirements.
+WVA introduces the concept of **variants** -- multiple deployments serving the same model that differ in hardware configuration (e.g., GPU type), model server configuration (e.g., tensor parallelism, max batch size, quantization), or both, each with an associated cost. The autoscaler optimizes across variants to minimize total cost while meeting capacity or latency requirements.
 
 WVA provides two main scaling analyzers:
 
@@ -139,7 +139,10 @@ The scale-from-zero engine processes inactive VAs concurrently with configurable
 
 ## Metric Collection
 
-WVA collects metrics through a source registry that holds named metrics source implementations. Currently, only a Prometheus source is registered. Each source maintains a query list where named PromQL query templates are registered at startup.
+WVA collects metrics through a source registry that holds named metrics source implementations. Two types of sources are used:
+
+- **Prometheus source** -- Registered at startup. Executes PromQL queries for model server metrics (KV cache utilization, queue depth, latency, etc.).
+- **Pod scraping sources** -- Added dynamically as InferencePool resources are discovered. When a new pool is set in the datastore, WVA creates a dedicated pod scraping source configured with the pool's EPP service name, namespace, and metrics port. These sources are used to collect EPP-level metrics (e.g., flow control queue size) directly from pods rather than through Prometheus. Sources are automatically removed when their associated pool is deleted.
 
 Each metrics source provides three main capabilities:
 - Returning the query registry for registering query templates
