@@ -195,26 +195,6 @@ flowchart LR
 | `kvevents.Pool`          | Sharded worker pool that consumes ZMQ messages, orders them per-pod (FNV-1a on pod ID), and applies them to the index.                                                                        |
 | `kvevents.EngineAdapter` | Parses engine-specific wire formats into domain events. vLLM (msgpack) and SGLang (msgpack) adapters ship today.                                                                              |
 
-### Block Index Backends
-
-The block index is the hot data structure of the system: every scoring call queries it, every KV-event updates it.
-
-The KV-Indexer offer multiple backend, which can be configured depending on your desired memory and replication model.
-
-| Backend                 | Storage                                                                                                | When to use                                                                                                                                                                                                    | Tradeoff                                                                                                                                                                                                                                                                   |
-|:------------------------|:-------------------------------------------------------------------------------------------------------|:---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|:---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| **In-Memory (default)** | Two-level LRU (`hashicorp/golang-lru`): outer cache keyed by block hash, inner cache of pods per block | The default choice for most deployments, single- or multi-replica — every replica subscribes to the full event stream independently and converges to the same view                                             | Lowest latency; fixed entry count (default 100M keys × 10 pod entries) makes sizing predictable                                                                                                                                                                            |
-| **Cost-Aware Memory**   | Ristretto cache with admission control and cost-based eviction                                         | Workloads where per-entry size varies a lot (multimodal, variable-length LoRA metadata)                                                                                                                        | Budget specified in bytes (e.g. `2GiB`) rather than entry count; probabilistic admission can reject entries under pressure                                                                                                                                                 |
-| **Redis / Valkey**      | External server (TCP; Valkey is Redis-wire-compatible, BSD-licensed)                                   | Only when the index state is known to be persistent or long-lived across the EPP lifecycle — typically uncommon, since KV-cache state/reuse are ephemeral (pods evict aggressively, low reuse across sessions) | Adds a network hop per lookup and ties EPP availability to the external store; shared state gives strong consistency across replicas but is rarely necessary — each in-memory replica already converges from the event stream. Valkey supports experimental RDMA transport |
-
-**Why in-memory is fine for multi-replica.** The index is a *cache of observed state*, not a source of truth. Each EPP replica in pod-discovery mode subscribes to every model-server pod's events independently, so each replica's in-memory index converges to the same view as events flow. Replicas may diverge transiently, but re-agree within the event-propagation window. A shared external store gives tighter consistency, but only matters when that tighter consistency is itself worth the network hop.
-
-**When external state actually helps.** Use Redis / Valkey when you can genuinely make use of persistence: for example, pod lifetimes and cache lifetimes are long enough that warming a fresh replica from scratch (seconds of event replay) is materially worse than reading a pre-populated index. For most deployments KV-cache state decays faster than that argument holds, and in-memory is the right answer.
-
-**Sizing notes.** In-memory backends size independently per replica; plan for roughly `keys × pod_entries` with overhead for the two-level LRU. The cost-aware backend is easier to bound because you specify a byte ceiling; it is the safer choice when per-entry size is hard to predict. For Redis / Valkey, the key space is proportional to unique blocks across the fleet, not to request volume.
-
-**Resilience.** Losing the index is not catastrophic: on state loss, scheduling may be unoptimal for a short window until a stable state is re-built. On-load KV-cache discovery is one experimentation route llm-d can explore, especially with storage offloading in the picture.
-
 ### Event Delivery Modes
 
 Two shapes are supported for getting events from the model servers to the indexer:
@@ -240,6 +220,28 @@ In the current implementation, the plugin establishes subscribers lazily during 
                        └──► Model Server C (binds :5557)
   EPP Replica 2 ──ZMQ──┘
 ```
+
+### Block Index Backends
+
+The block index is the hot data structure of the system: every scoring call queries it, every KV-event updates it.
+
+The KV-Indexer offer multiple backends, which can be configured depending on your desired memory and replication model:
+
+| Backend                 | Storage                                                                         | When to use                                                                                                                                                                | Tradeoff                                                                                                                                                       |
+|:------------------------|:--------------------------------------------------------------------------------|:---------------------------------------------------------------------------------------------------------------------------------------------------------------------------|:---------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| **In-Memory (default)** | Two-level LRU: outer cache keyed by block hash, inner cache of pods per block   | Default choice for most deployments, for both single- or multi-replica — every replica subscribes to the full event stream independently and converges to the same view    | Lowest latency; fixed entry count (default 100M keys × 10 pod entries) makes sizing predictable                                                                |
+| **Cost-Aware Memory**   | Ristretto cache with admission control and cost-based eviction                  | Workloads where per-entry size varies a lot (multimodal, variable-length LoRA metadata)                                                                                    | Budget specified in bytes (e.g. `2GiB`) rather than entry count; probabilistic admission can reject entries under pressure                                     |
+| **Redis / Valkey**      | External server (TCP; Valkey is Redis-wire-compatible, BSD-licensed)            | Need for persistent or very-long lived index (uncommon)                                                                                                                    | Adds a network hop per lookup and ties EPP availability to the external store; shared state gives strong consistency across replicas but is rarely necessary   |
+
+> ![IMPORTANT]
+> In-memory is typically the best option, offering both low-latency, simple operations, 
+> and high availability via multi-replica deployment (as each EPP replica in pod-discovery
+> mode subscribes to every model-server pod's events independently, and converges to the
+> same index).
+
+#### Sizing Notes
+
+In-memory backends size independently per replica; plan for roughly `keys × pod_entries` with overhead for the two-level LRU. The cost-aware backend is easier to bound because you specify a byte ceiling; it is the safer choice when per-entry size is hard to predict. For Redis / Valkey, the key space is proportional to unique blocks across the fleet, not to request volume.
 
 ### Tokenizer Sources
 
