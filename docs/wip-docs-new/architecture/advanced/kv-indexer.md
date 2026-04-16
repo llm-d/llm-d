@@ -9,7 +9,7 @@ The **KV-Cache Indexer** enables llm-d's precise prefix-cache-aware scheduling f
 
 The kv-cache indexer subscribes to `KVEvents` emitted from model servers to maintain a near realtime view of the KV cache state. The `precise-prefix-cache-scorer` uses this information during the EPP scheduler's filter -> score -> pick flow.
 
-In contrast with EPP's `prefix-cache-scorer`, which estimates the KV cache state, the precise view offers improved precision for harder-to-approximate scenarios:
+The precise view offers improved precision for harder-to-approximate scenarios:
 - **Multi-LoRA Deployments** - LoRA adapter identity is folded into block keys, so cache hits are scoped to the adapter that produced them — different adapters over the same prompt do not collide.
 - **Multimodal Models** - Multimodal content hashes (images, audio) are folded into block keys, so two prompts with the same text but different images produce different keys and are routed to the pod with matching multimodal KV-cache.
 - **Hybrid-Attention Models** - In hybrid models, KV cache usage per layer groups (full, sliding-window, linear) scales non-linearly making byte-based trees imprecise.
