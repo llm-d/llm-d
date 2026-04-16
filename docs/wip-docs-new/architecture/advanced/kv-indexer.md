@@ -173,7 +173,7 @@ Two shapes are supported for getting events from the model servers to the indexe
 
 The block index is the hot data structure of the system: every scoring call queries it, every KV-event updates it.
 
-The KV-Indexer offer multiple backends, which can be configured depending on your desired memory and replication model:
+The KV-Indexer offers multiple backends, which can be configured depending on your desired memory and replication model:
 
 | Backend                 | Storage                                                                         | When to use                                                                                                                                                                | Tradeoff                                                                                                                                                       |
 |:------------------------|:--------------------------------------------------------------------------------|:---------------------------------------------------------------------------------------------------------------------------------------------------------------------------|:---------------------------------------------------------------------------------------------------------------------------------------------------------------|
