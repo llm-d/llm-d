@@ -233,7 +233,7 @@ The KV-Indexer offer multiple backends, which can be configured depending on you
 | **Cost-Aware Memory**   | Ristretto cache with admission control and cost-based eviction                  | Workloads where per-entry size varies a lot (multimodal, variable-length LoRA metadata)                                                                                    | Budget specified in bytes (e.g. `2GiB`) rather than entry count; probabilistic admission can reject entries under pressure                                     |
 | **Redis / Valkey**      | External server (TCP; Valkey is Redis-wire-compatible, BSD-licensed)            | Need for persistent or very-long lived index (uncommon)                                                                                                                    | Adds a network hop per lookup and ties EPP availability to the external store; shared state gives strong consistency across replicas but is rarely necessary   |
 
-> ![IMPORTANT]
+> [!IMPORTANT]
 > In-memory is typically the best option, offering both low-latency, simple operations, 
 > and high availability via multi-replica deployment (as each EPP replica in pod-discovery
 > mode subscribes to every model-server pod's events independently, and converges to the
