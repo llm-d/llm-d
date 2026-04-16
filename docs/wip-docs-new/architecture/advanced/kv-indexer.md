@@ -213,10 +213,9 @@ Raw scores are then normalized to `[0.0, 1.0]` before being returned to the sche
 
 ### Speculative Indexing
 
-Confirmed KV-events arrive after a request has been routed. In high-burst workloads, two requests with the same prefix can be scheduled before either's event has propagated, breaking affinity: both land on different pods, each redoing the other's prefill. Speculative indexing closes that window.
+Confirmed KV-events arrive after a request has been routed. Back-to-back requests with the same prefix can be scheduled before `KVEvents` are propagated, breaking affinity.
 
-When enabled (`speculativeIndexing: true`):
-
+Speculative indexing solves this challenge (`speculativeIndexing: true`):
 1. During `PrepareRequestData`, the block keys for the incoming request are computed and cached on `PluginState`.
 2. During `PreRequest` — *after* the scheduler picks an endpoint — the plugin inserts speculative entries for each block key at the chosen pod (and, under P/D disaggregation, the chosen prefill pod).
 3. Speculative entries carry a `Speculative: true` flag. They participate in scoring exactly like confirmed entries.
