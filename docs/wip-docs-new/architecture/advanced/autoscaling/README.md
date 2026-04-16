@@ -23,7 +23,8 @@ With autoscaling, model servers are added or removed automatically to keep servi
 | **Pending Pods Awareness** | Unsupported — external metrics do not account for pending (unscheduled) pods | Supported — incorporates pending pod state into scaling decisions |
 | **Operational Complexity** | Low - Standard Kubernetes HPA/KEDA only | Medium - Requires WVA controller and `VariantAutoscaling` CRD |
 
-> **Note**: Native Kubernetes HPA scale-to-zero requires cluster support for the `HPAScaleToZero` feature. KEDA-based scale-to-zero is an alternative when that HPA feature is not enabled. For WVA-specific requirements, see the linked design documentation.
+> [!NOTE]
+> Native Kubernetes HPA scale-to-zero requires cluster support for the `HPAScaleToZero` feature. KEDA-based scale-to-zero is an alternative when that HPA feature is not enabled. For WVA-specific requirements, see the linked design documentation.
 
 ## Choosing an Approach
 
