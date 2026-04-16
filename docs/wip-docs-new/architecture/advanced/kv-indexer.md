@@ -152,9 +152,9 @@ The KV-Indexer offer multiple backends, which can be configured depending on you
 | **Redis / Valkey**      | External server (TCP; Valkey is Redis-wire-compatible, BSD-licensed)            | Need for persistent or very-long lived index (uncommon)                                                                                                                    | Adds a network hop per lookup and ties EPP availability to the external store; shared state gives strong consistency across replicas but is rarely necessary   |
 
 > [!IMPORTANT]
-> In-memory is typically the best option, offering both low-latency, simple operations, 
+> In-memory is typically the best option, offering low-latency, simple operations, 
 > and high availability via multi-replica deployment (as each EPP replica in pod-discovery
-> mode subscribes to every model-server pod's events independently, and converges to the
+> mode subscribes to every model server events independently and converges to the
 > same index).
 
 **Sizing Notes**: In-memory backends size independently per replica; plan for roughly `keys × pod_entries` with overhead for the two-level LRU. The cost-aware backend is easier to bound because you specify a byte ceiling; it is the safer choice when per-entry size is hard to predict. For Redis / Valkey, the key space is proportional to unique blocks across the fleet, not to request volume.
