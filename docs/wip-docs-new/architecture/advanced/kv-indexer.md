@@ -22,8 +22,8 @@ In contrast with EPP's `prefix-cache-scorer`, which estimates the KV cache state
 ### Integration with EPP
 
 The indexer is deployed as a library, loaded into the EPP process. Two cooperating plugins are used by the scheduler:
-* **`tokenizer` plugin** — a `PrepareData` plugin that tokenizes the prompt (and any MM features) once and writes the result onto `LLMRequest.TokenizedPrompt` for downstream reuse.
-* **`precise-prefix-cache-scorer` plugin** — implements three EPP extension points: `PrepareRequestData`, `Score`, and `PreRequest`.
+* `tokenizer` — a `PrepareData` plugin that tokenizes the prompt (and any MM features) once and writes the result onto `LLMRequest.TokenizedPrompt` for downstream reuse.
+* `precise-prefix-cache-scorer`** — implements three EPP extension points: `PrepareRequestData`, `Score`, and `PreRequest`.
 
 ```mermaid
 flowchart TB
