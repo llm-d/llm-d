@@ -112,7 +112,7 @@ sequenceDiagram
 
 ### Read Path: Scoring a Request
 
-The scorer's goal is to find the length of the longest consecutive prefix of the request's block sequence cached in each candidate pod.
+The scorer's goal is to find the length of the **longest consecutive prefix** of the request's block sequence cached in each candidate pod.
 
 ```mermaid
 sequenceDiagram
@@ -144,7 +144,9 @@ sequenceDiagram
     Scorer-->>Sched: normalized scores (0.0 – 1.0)
 ```
 
-**Longest consecutive prefix match.** KV-cache blocks form a chain where block `i` depends on all blocks `0..i-1`. A pod can reuse a cached block only if it holds the unbroken prefix leading up to it. For a prompt with block keys `[B0, B1, B2, B3, B4]` and three candidate pods:
+KV-cache blocks form a chain where block `i` depends on all blocks `0..i-1`. Due to the causal nature of attention, a server can reuse a cached block only if it holds the unbroken prefix leading up to it.
+
+For example, consider a prompt with block keys `[B0, B1, B2, B3, B4]` and three candidate pods:
 
 ```
 Block keys:   B0    B1    B2    B3    B4
@@ -154,9 +156,9 @@ Pod B:        yes   yes   no    -     -     → score = 2 blocks (chain breaks a
 Pod C:        no    -     -     -     -     → score = 0 blocks (no prefix)
 ```
 
-Even if Pod C happened to hold `B3` and `B4`, those entries are unusable without the preceding chain, and the score is zero. This matches how engine-side prefix-cache reuse actually works: the engine skips prefill only for a contiguous prefix.
+Even if Pod C happened to hold `B3` and `B4`, those entries are unusable without the preceding chain, and the score is zero.
 
-When blocks are stored across device tiers, each matching block's contribution is weighted by tier. For a block cached on multiple tiers at once, the scorer takes the maximum weight. Defaults are `gpu = 1.0`, `cpu = 0.8`.
+When blocks are stored across memory tiers, each matching block's contribution is weighted by tier. For a block cached on multiple tiers at once, the scorer takes the maximum weight. Defaults are `gpu = 1.0`, `cpu = 0.8`.
 
 Raw scores are then normalized to `[0.0, 1.0]` before being returned to the scheduler, where they are combined with other scorers (queue depth, KV-cache utilization, etc.) through the standard Filter-Score-Pick pipeline.
 
