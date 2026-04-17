@@ -13,7 +13,7 @@ For long context workloads (10:1 ISL:OSL) and medium-to-large models, separating
 > HPC networking (e.g. IB, RoCE, or EFA) is **highly**
 > recommended for production usage.
 
-llm-d's EPP natively supports the concept of prefill/decode disaggregation, enabling composition with other scorers (e.g. prefix-aware routing).
+llm-d's EPP natively supports the concept of disaggregation, enabling composition with other scorers (e.g. prefix-aware routing).
 
 ## Deploy
 
@@ -23,11 +23,9 @@ See the [P/D Disaggregation guide](https://github.com/llm-d/llm-d/tree/main/guid
 
 ![P/D Disaggregation](./images/pd-disaggregation.svg)
 
-The guide creates 2 deployments of vLLM:
-- The **prefill** deployment is 4 replicas of TP=1 vLLM - labeled with `llm-d.ai/role=prefill`
-- The **decode** deployment is 1 replica of TP4 vLLM - labeled with `llm-d.ai/role=decode`. All these pods have a routing proxy sidecar.
-
-All vLLM pods are part of the same `InferencePool`.
+The setup creates 2 `Deployments` of vLLM (all are part of the same `InferencePool`):
+- The **prefill** `Deployment` is 4 replicas of TP=1 vLLM - labeled with `llm-d.ai/role=prefill`
+- The **decode** `Deployment` is 1 replica of TP=5 vLLM - labeled with `llm-d.ai/role=decode`. All these pods have a routing proxy sidecar.
 
 During the standard request flow:
 - Request arrives at the proxy, which forwards the request to the EPP
