@@ -17,12 +17,11 @@ llm-d's EPP natively supports the concept of prefill/decode disaggregation, enab
 
 ## Deploy
 
-See the [P/D Disaggregation guide](https://github.com/llm-d/llm-d/tree/main/guides/pd-disaggregation) for step-by-step deployment.
+See the [P/D Disaggregation guide](https://github.com/llm-d/llm-d/tree/main/guides/pd-disaggregation) for manifests and step-by-step deployment.
 
 ## Architecture
 
 ![P/D Disaggregation](./images/pd-disaggregation.svg)
-
 
 The guide creates 2 deployments of vLLM:
 - The **prefill** deployment is 4 replicas of TP=1 vLLM - labeled with `llm-d.ai/role=prefill`
@@ -38,3 +37,6 @@ During the standard request flow:
 - Decode instance pulls the KVs over RDMA (IB, RoCE, EFA) with NIXL
 - Decode instances processes the decodes
 
+## Futher Reading
+
+See [PD Architecture](../architecture/advanced/disaggregation/README.md) for more details.

@@ -1,6 +1,6 @@
 # Intelligent Inference Scheduling
 
-Traditional HTTP requests are fast, uniform, and cheap. A standard `Service`, which route requests via round-robin strategies, balance this load well.
+Traditional HTTP requests are fast, uniform, and cheap. Standard round-robin routing strategies balance this load well.
 
 LLM requests break all three assumptions. They are:
 * **Multi-turn** - multi-turn conversations and agentic tool loops send the same growing prefix repeatedly
@@ -11,7 +11,7 @@ llm-d's EPP injects awareness of the LLM-workload into the load-balancing layer 
 
 ## Deploy
 
-See the [Intelligent Inference Scheduling guide](https://github.com/llm-d/llm-d/tree/main/guides/inference-scheduling) for step-by-step deployment.
+See the [Intelligent Inference Scheduling guide](https://github.com/llm-d/llm-d/tree/main/guides/inference-scheduling) for manifests and step-by-step deployment.
 
 ## Architecture
 
