@@ -1,17 +1,17 @@
 # P/D Disaggregation
 
 LLM inference has two computationally distinct phases:
-* **Prefill** processes the entire input prompt in a single forward pass -- it is compute-bound, bottlenecked by the GPU flops available.
-* **Decode** generates output tokens one at a time from the KV-cache -- it is memory-bandwidth-bound, bottlenecked by how fast data moves from HBM to on-chip memory.
+* **Prefill** processes the entire input prompt in a single forward pass - it is compute-bound, bottlenecked by the GPU flops available.
+* **Decode** generates output tokens one at a time from the KV-cache - it is memory-bandwidth-bound, bottlenecked by how fast data moves from HBM to on-chip memory.
 
-For long context workloads (10:1 ISL:OSL ratio) and medium-to-large models, separating prefill and decode into separate instances can enable:
+For long context workloads (10:1 ISL:OSL) and medium-to-large models, separating prefill and decode into separate instances enables:
 * Improved throughput via specialization or prefill and decode
 * Improved quality of service, as long context prefills will not block decode work
 
 > [!IMPORTANT]
-> llm-d supports TCP-based transfer for experimentation, but
-> HPC networking (e.g. Infiniband, RoCE, or EFA) is **highly**
-> recommended for production usage
+> NIXL supports TCP transfer for experimentation, but
+> HPC networking (e.g. IB, RoCE, or EFA) is **highly**
+> recommended for production usage.
 
 llm-d's EPP natively supports the concept of prefill/decode disaggregation, enabling composition with other scorers (e.g. prefix-aware routing).
 
