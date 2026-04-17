@@ -3,9 +3,9 @@
 Traditional HTTP requests are fast, uniform, and cheap. Standard round-robin routing strategies balance this load well.
 
 LLM requests break all three assumptions. They are:
-* **Multi-turn** - multi-turn conversations and agentic tool loops send the same growing prefix repeatedly
+* **Multi-turn** - conversations and agentic tool loops send the same growing prefix repeatedly
 * **Slow** - a single request can take over a minute generating tokens
-* **Non-uniform** - a short prompt with a long generation or a RAG prompt with thousands of context tokens and a short answer
+* **Non-uniform** - requests can range from short prompt with a long generation or to a RAG prompt with thousands of context tokens and a short answer
 
 llm-d's EPP injects awareness of the LLM-workload into the load-balancing layer considering **prefix-cache affinity** and **realtime server load metrics**.
 
