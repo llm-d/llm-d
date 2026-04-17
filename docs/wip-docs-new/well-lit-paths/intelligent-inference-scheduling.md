@@ -29,4 +29,4 @@ EPP continuously probes each pod's metrics via a PodMonitor scraping `/metrics` 
 
 ## Futher Reading
 
-See [PD Architecture](../architecture/core/epp/README.md) for more details.
+See [EPP Architecture](../architecture/core/epp/README.md) for more details.
