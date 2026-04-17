@@ -15,18 +15,26 @@ For long context workloads (10:1 ISL:OSL ratio) and medium-to-large models, sepa
 
 llm-d's EPP natively supports the concept of prefill/decode disaggregation, enabling composition with other scorers (e.g. prefix-aware routing).
 
+## Deploy
+
+See the [P/D Disaggregation guide](https://github.com/llm-d/llm-d/tree/main/guides/pd-disaggregation) for step-by-step deployment.
+
 ## Architecture
 
 ![P/D Disaggregation](./images/pd-disaggregation.svg)
 
-The deployment creates two separate model server pools as independent Deployments. The **prefill pool** (default: 4 replicas, TP=1) runs a single vLLM container optimized for compute throughput. The **decode pool** (default: 1 replica, TP=4) runs two containers per pod: the vLLM engine on port 8200 and a **routing sidecar** on port 8000 that coordinates the P/D transaction.
 
-1. **EPP schedules the request** -- dynamically decides whether to use P/D disaggregation based on uncached token count (`prefix-based-pd-decider` plugin), and selects the decode and prefill workers.
-2. **Sidecar coordinates the transaction** -- the decode pod's sidecar receives the request from Gateway and forwards it to the selected prefill worker with the prefill worker's IP.
-3. **Prefill processes the prompt** -- runs the forward pass, produces the KV-cache, and returns KV transfer metadata (block IDs and memory locations).
-4. **NIXL pulls the KV-cache** -- GPU-direct RDMA transfer of KV blocks directly from the prefill pod's GPU memory to the decode pod's GPU memory via NIXL on port 5600 -- zero-copy, without kernel involvement. Both pools request RDMA resources (`rdma/ib: 1`).
-5. **Decode generates tokens** -- with the KV-cache now local, the decode pod generates output tokens autoregressively.
+The guide creates 2 deployments of vLLM:
+- The **prefill** deployment is 4 replicas of TP=1 vLLM - labeled with `llm-d.ai/role=prefill`
+- The **decode** deployment is 1 replica of TP4 vLLM - labeled with `llm-d.ai/role=decode`. All these pods have a routing proxy sidecar.
 
-## Guide
+All vLLM pods are part of the same `InferencePool`.
 
-See the [P/D Disaggregation guide](https://github.com/llm-d/llm-d/tree/main/guides/pd-disaggregation) for step-by-step deployment.
+During the standard request flow:
+- Request arrives at the proxy, which forwards the request to the EPP
+- EPP schedules the request with P/D disaggregation, using the labels to detect the decode and prefill variants
+- Request is routed to the sidecar, which forwards the request to the prefill instance
+- Prefill instance processes the prompt, returning metadata about how to retrieve the KV blocks
+- Decode instance pulls the KVs over RDMA (IB, RoCE, EFA) with NIXL
+- Decode instances processes the decodes
+
