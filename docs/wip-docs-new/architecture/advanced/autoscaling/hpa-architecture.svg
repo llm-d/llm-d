@@ -1,0 +1,70 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 360" font-family="Inter, Helvetica, Arial, sans-serif">
+  <defs>
+    <marker id="arrow" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+      <path d="M0,0 L8,3 L0,6" fill="#b57ad4"/>
+    </marker>
+  </defs>
+
+  <!-- Background -->
+  <rect width="760" height="360" rx="8" fill="#0a0510"/>
+
+  <!-- Title -->
+  <text x="380" y="36" font-size="17" font-weight="bold" text-anchor="middle" fill="#ffffff">IGW HPA Architecture</text>
+
+  <!-- ── Row 1: Inference Path ─────────────────────────────────────────── -->
+
+  <!-- Client -->
+  <rect x="30" y="88" width="112" height="46" rx="6" fill="#1e1428" stroke="#7b2d8e" stroke-width="1.5"/>
+  <text x="86" y="117" text-anchor="middle" font-size="14" font-weight="500" fill="#ffffff">Client</text>
+
+  <!-- Client → EPP -->
+  <line x1="142" y1="111" x2="200" y2="111" stroke="#b57ad4" stroke-width="1.5" marker-end="url(#arrow)"/>
+
+  <!-- EPP (highlighted) -->
+  <rect x="200" y="88" width="155" height="46" rx="6" fill="#7b2d8e" stroke="#b57ad4" stroke-width="1.5"/>
+  <text x="277" y="108" text-anchor="middle" font-size="15" font-weight="700" fill="#ffffff">EPP</text>
+  <text x="277" y="127" text-anchor="middle" font-size="11" fill="#dec3ee">(Flow Control)</text>
+
+  <!-- EPP → Pool -->
+  <line x1="355" y1="111" x2="475" y2="111" stroke="#b57ad4" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <text x="415" y="103" text-anchor="middle" font-size="10" fill="#c294df">inference requests</text>
+
+  <!-- Model Server Pool -->
+  <rect x="475" y="88" width="255" height="46" rx="6" fill="#1e1428" stroke="#7b2d8e" stroke-width="1.5"/>
+  <text x="602" y="108" text-anchor="middle" font-size="13" font-weight="600" fill="#b57ad4">Model Server Pool</text>
+  <text x="602" y="126" text-anchor="middle" font-size="11" fill="#c294df">(vLLM)</text>
+
+  <!-- ── Vertical: EPP → Prometheus ──────────────────────────────────── -->
+  <line x1="277" y1="134" x2="277" y2="249" stroke="#b57ad4" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <text x="294" y="188" font-size="10" fill="#c294df">scrapes</text>
+  <text x="294" y="201" font-size="10" fill="#c294df">metrics</text>
+
+  <!-- ── Row 2: Metrics Pipeline ───────────────────────────────────────── -->
+
+  <!-- Prometheus -->
+  <rect x="200" y="249" width="155" height="46" rx="6" fill="#1e1428" stroke="#7b2d8e" stroke-width="1.5"/>
+  <text x="277" y="278" text-anchor="middle" font-size="13" font-weight="500" fill="#ffffff">Prometheus</text>
+
+  <!-- Prometheus → Adapter -->
+  <line x1="355" y1="272" x2="389" y2="272" stroke="#b57ad4" stroke-width="1.5" marker-end="url(#arrow)"/>
+
+  <!-- Prometheus Adapter -->
+  <rect x="389" y="249" width="186" height="46" rx="6" fill="#1e1428" stroke="#7b2d8e" stroke-width="1.5"/>
+  <text x="482" y="268" text-anchor="middle" font-size="12" font-weight="500" fill="#ffffff">Prometheus Adapter</text>
+  <text x="482" y="284" text-anchor="middle" font-size="10" fill="#c294df">External Metrics API</text>
+
+  <!-- Adapter → HPA -->
+  <line x1="575" y1="272" x2="612" y2="272" stroke="#b57ad4" stroke-width="1.5" marker-end="url(#arrow)"/>
+
+  <!-- HPA -->
+  <rect x="612" y="249" width="110" height="46" rx="6" fill="#1e1428" stroke="#7b2d8e" stroke-width="1.5"/>
+  <text x="667" y="278" text-anchor="middle" font-size="14" font-weight="500" fill="#ffffff">HPA</text>
+
+  <!-- ── Vertical: HPA → Pool (scale) ────────────────────────────────── -->
+  <line x1="667" y1="249" x2="667" y2="134" stroke="#b57ad4" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <text x="684" y="196" font-size="10" fill="#c294df">scale</text>
+  <text x="684" y="209" font-size="10" fill="#c294df">replicas</text>
+
+  <!-- Caption -->
+  <text x="380" y="333" text-anchor="middle" font-size="12" fill="#a77bbf">EPP queue depth and running requests drive demand-side scaling</text>
+</svg>
