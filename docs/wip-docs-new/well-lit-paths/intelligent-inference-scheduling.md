@@ -1,6 +1,6 @@
 # Intelligent Inference Scheduling
 
-Traditional HTTP requests are fast, uniform, and cheap. Kuberentes Services, which route requests with round-robin or random strategies, balance the load well.
+Traditional HTTP requests are fast, uniform, and cheap. A standard `Service`, which route requests via round-robin strategies, balance this load well.
 
 LLM requests break all three assumptions. They are:
 * **Multi-turn** - multi-turn conversations and agentic tool loops send the same growing prefix repeatedly
