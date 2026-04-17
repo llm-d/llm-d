@@ -1,8 +1,19 @@
 # P/D Disaggregation
 
-llm-d composes vLLM and Gateway to enable P/D disaggregation.
+LLM inference has two computationally distinct phases:
+* **Prefill** processes the entire input prompt in a single forward pass -- it is compute-bound, bottlenecked by the GPU flops available.
+* **Decode** generates output tokens one at a time from the KV-cache -- it is memory-bandwidth-bound, bottlenecked by how fast data moves from HBM to on-chip memory.
 
-LLM inference has two computationally distinct phases. **Prefill** processes the entire input prompt in a single forward pass -- it is compute-bound, bottlenecked by the GPU flops available. **Decode** generates output tokens one at a time from the KV-cache -- it is memory-bandwidth-bound, bottlenecked by how fast data moves from HBM to on-chip memory. These are fundamentally different computations. In a standard deployment they compete for the same GPU: a long prefill blocks decode iterations for all concurrent requests, and decode batches delay new prefills. P/D disaggregation runs each phase on dedicated server pools, allowing each to be configured and optimized independently.
+For long context workloads (10:1 ISL:OSL ratio) and medium-to-large models, separating prefill and decode into separate instances can enable:
+* Improved throughput via specialization or prefill and decode
+* Improved quality of service, as long context prefills will not block decode work
+
+> [!IMPORTANT]
+> llm-d supports TCP-based transfer for experimentation, but
+> HPC networking (e.g. Infiniband, RoCE, or EFA) is **highly**
+> recommended for production usage
+
+llm-d's EPP natively supports the concept of prefill/decode disaggregation, enabling composition with other scorers (e.g. prefix-aware routing).
 
 ## Architecture
 
