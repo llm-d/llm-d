@@ -53,4 +53,4 @@ With autoscaling, Model Servers are added or removed automatically to keep servi
 
 - **SLO-driven (Experimental)** — Observed request arrival rate versus the maximum rate backends can sustain while meeting latency targets. Learns server behavior online and scales proactively to keep time to first token (TTFT) and inter-token latency (ITL) within configured targets.
 
-See [Autoscaling](advanced/autoscaling/autoscaling.md) for complete details on the autoscaling design.
+See [Autoscaling](advanced/autoscaling/README.md) for complete details on the autoscaling design.
