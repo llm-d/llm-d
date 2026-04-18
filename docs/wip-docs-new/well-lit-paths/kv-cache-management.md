@@ -1,23 +1,71 @@
 # KV Cache Management
 
-Leverage all system resources to maximize prefix cache hit rate within the cluster.
+Given the multi-turn nature of modern, agentic workloads, prefix-cache re-use is a critical factor for high performance inference.
 
-By default, vLLM keeps KV-caches resident in GPU RAM within a least-recently-used cache. Once space runs out, cached prefixes are evicted and future matching requests must recompute from scratch. GPU nodes have heavily underutilized resources -- an H200 node has far more CPU RAM than GPU HBM, and vLLM barely uses it. Pulling KV-caches from CPU RAM back into GPU memory is much faster than recomputing the entire prompt. CPU offloading should be enabled in nearly every deployment. Storage offloading is more selective -- useful when the working set exceeds GPU + CPU capacity or when newly scaled pods need immediate cache access.
+Model servers hold KV-caches in GPU RAM with an LRU eviction scheme. Once space runs out from other requests consuming the resources, the KV caches are evicted. Follow on requests then must recompute the prefill. However, rather than evicting KV caches from GPU memory, we can instead leverage other system resources such as CPU RAM, local NVMe drives, and network storage systems to hold the evicted KVs - pulling them back into GPU RAM on demand.
+
+This increases the **KV-working set size**, growing the **receptive-field** (the amount of time KV caches are retained in the system).
+
+- Without KV offloading:
+```
+   ┌───────┐           ┌─────────┐            ┌───────────┐
+   │user A │           │ user A  │            │  user A   │
+   │  req  │           │   KV    │            │ follow-on │
+   │       │           │ evicted │            │    req    │
+   └───┬───┘           └────┬────┘            └─────┬─────┘
+       │                    │                       │
+───────●────────────────────●───────────────────────●───────▶ time
+       │                    │                       │
+       t                   t+a                     t+b
+       │                    │                       │
+       │◄───── KV live ────►│ ✗                     │
+                                                    ▼
+                                              ┌────────────┐
+                                              │ RECOMPUTE  │
+                                              │  PREFILL   │
+                                              └────────────┘
+```
+
+- With KV offloading:
+
+```
+   ┌───────┐           ┌─────────┐            ┌───────────┐
+   │user A │           │ user A  │            │  user A   │
+   │  req  │           │   KV    │            │ follow-on │
+   │       │           │ offload │            │    req    │
+   └───┬───┘           └────┬────┘            └─────┬─────┘
+       │                    │                       │
+───────●────────────────────●───────────────────────●───────▶ time
+       │                    │                       │
+       t                   t+a                     t+b
+       │                    │                       │
+       │◄─────────────── KV live ──────────────────►│ ✓
+                                                    ▼
+                                              ┌────────────┐
+                                              │ PULL FROM  │
+                                              │  CPU RAM   │
+                                              └────────────┘
+```
+
+
+> [!IMPORTANT]
+> CPU KV Cache offloading is very low overhead and requires ~no additional complexity. It can be enabled in almost all deployments. Storage offloading requires additional consideration.
+
+
+## Deploy
+
+See the [KV Cache Management guide](https://github.com/llm-d/llm-d/tree/main/guides/tiered-prefix-cache) for manifests and step-by-step deployment.
 
 ## Architecture
 
 ### CPU KV Cache Offloading
 
-![CPU KV Cache Offloading](./images/cpu-kv-cache-offloading.svg)
+![CPU KV Cache Offloading](./images/cpu-offloading.svg)
 
-vLLM pods are configured with `OffloadingConnector` and increased CPU memory requests (e.g., 400 GB). Evicted KV-cache blocks move to host CPU memory instead of being discarded, extending the effective cache size with negligible overhead. The EPP maintains a global index of which blocks exist on which pods and tiers, adding a second `prefix-cache-scorer` plugin for CPU-tier blocks with manually configured LRU capacity (`lruCapacityPerServer`), since vLLM does not emit CPU-tier metrics. The scoring profile weights GPU and CPU cache scorers separately (2:2:1:1 for queue-depth, kv-cache-utilization, GPU-cache, CPU-cache).
+vLLM pods are configured with `OffloadingConnector` and increased CPU memory requests (e.g., 400 GB). Evicted KV-cache blocks move to host CPU memory instead of being discarded, extending the effective cache size with negligible overhead. The EPP maintains a global index of which blocks exist on which pods and tiers, adding a second `prefix-cache-scorer` plugin for CPU-tier blocks.
 
 ### Storage KV Cache Offloading
 
-![Storage KV Cache Offloading](./images/storage-kv-cache-offloading.svg)
+![Storage KV Cache Offloading](./images/fs-offloading.svg)
 
 vLLM pods mount a ReadWriteMany PVC backed by shared storage (Lustre, CephFS, or similar) at `/mnt/files-storage`. The `OffloadingConnector` is configured with a custom backend module (`llmd_fs_backend.spec`) that handles async I/O with GPU DMA transfers. This enables cross-pod cache sharing -- newly scaled pods can read existing cache immediately -- persistence across pod restarts, and capacity limited only by storage system size.
-
-## Guide
-
-See the [KV Cache Management guide](https://github.com/llm-d/llm-d/tree/main/guides/tiered-prefix-cache) for step-by-step deployment.
