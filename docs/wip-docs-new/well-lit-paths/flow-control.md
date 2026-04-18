@@ -1,12 +1,60 @@
 # Flow Control
 
-Flow control multiplexing of different request classes onto the same model deployment.
+Model service operators often consolidate multiple workloads onto the same set of resources leveraging a **multi-tenant** deployment pattern.
 
-LLM inference latency curves are non-linear with intense saturation dynamics -- once a server crosses a utilization threshold, latency spikes sharply and quality of service collapses for all requests. In multi-tenant environments, a single client sending a burst of requests can starve every other tenant. Without admission control, burst traffic causes queue buildup, noisy-neighbor effects, and cascading KV-cache evictions that degrade all subsequent requests.
+Additionally, server latency curves are non-linear with intense **saturation dynamics** - once a server crosses a utilization threshold, latency spikes sharply and quality of service collapses for all requests.
 
-Flow control adds priority-based admission control to the EPP. Requests are classified into priority bands -- **critical** requests (e.g., realtime clients) are always honored first with SLO objectives (TTFT, TPOT, NTPOT) applied even under load. **Sheddable** requests (e.g., batch jobs) are treated with lower priority, may be delayed or shed to preserve SLOs for critical requests, and are optimized only when capacity permits. When the EPP detects saturation, it kills sheddable requests to protect critical traffic.
+**Flow Control** considers these dynamics.
+
+### Multi-Tenant Prioritization
+
+Multi-tenant deployments have additional considerations beyond single workload:
+* Certain tenants are **higher-priority** than others (e.g. paid vs unpaid)
+* Certain tenants have **different-SLOs** than others (e.g. batch vs online)
+* Certain tenants are more active than others - we want **fairness** between them
+
+Flow control enables us to consider these dynamics in scheduling requests. This enables platform teams to consolidate multiple workloads onto the same resources:
+
+```
+SINGLE TENANT                    MULTI-TENANT
+  ─────────────                    ────────────
+
+  [A] ──▶ [ Model ]              [A] ╲
+                                 [B] ──▶ [ Model ]
+  [B] ──▶ [ Model ]              [C] ╱
+
+  [C] ──▶ [ Model ]
+
+  One deployment per customer    One deployment, many customers
+```
+### Single Workload "No-Regret" Scheduling
+
+Flow control enables "no-regret" scheduling, holding back requests in the saturation regime until load has reduces on at least one of the model servers.
+
+By delaying the scheduling decision until the actual load subsides, the EPP can make a better decision about where to land the request.
+
+```
+   ┌───┐  req  ┌──────────────────────────┐         ┌─────────────┐
+   │ A │──────▶│   ┌──────────────────┐   │--------▶│ Server 1    │
+   └───┘       │   │  Request Queue   │   │         │ [█████] FULL│
+               │   │ ░░░░░░░░░░░░░░░  │   │         └─────────────┘
+   ┌───┐       │   │  [R][R][R][R][R] │   │         ┌─────────────┐
+   │ B │──────▶│   └──────────────────┘   │--------▶│ Server 2    │
+   └───┘       │   ─ checks load          │         │ [█████] FULL│
+               │   ─ queues reqs if       │         └─────────────┘
+   ┌───┐       │     detects saturation   │         ┌─────────────┐
+   │ C │──────▶│   ─ releases reqs when   │────────▶│ Server 3    │
+   └───┘       │     capacity opens       │         │ [███░░] 60% │
+               └──────────────────────────┘         └─────────────┘                         
+```               
+
+## Deploy
+
+See the [Flow Control guide](https://github.com/llm-d/llm-d/tree/main/guides/inference-scheduling) for configuration within the Intelligent Inference Scheduling deployment.
 
 ## Architecture
+
+WIP!!
 
 ![Flow Control](./images/flow-control.svg)
 
@@ -14,6 +62,3 @@ Flow control is configured in the EPP's `EndpointPickerConfig` -- no separate de
 
 Sheddable requests flow through a **queue** that retries as capacity becomes available. When saturation clears, queued requests are dispatched in priority order. This also enables **scale-to-zero**: when no pods are running and a request arrives, the queue holds it while the autoscaler provisions new pods (2-7 minutes for model loading) rather than returning a 5xx error.
 
-## Guide
-
-See the [Flow Control guide](https://github.com/llm-d/llm-d/tree/main/guides/inference-scheduling) for configuration within the Intelligent Inference Scheduling deployment.
