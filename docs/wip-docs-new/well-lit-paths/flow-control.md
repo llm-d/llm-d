@@ -1,14 +1,14 @@
 # Flow Control
 
-Model service operators often consolidate multiple workloads onto the same set of resources leveraging a **multi-tenant** deployment pattern.
+Model service operators often consolidate multiple workloads onto the same set of resources, leveraging a **multi-tenant** deployment pattern.
 
 Additionally, server latency curves are non-linear with intense **saturation dynamics** - once a server crosses a utilization threshold, latency spikes sharply and quality of service collapses for all requests.
 
-**Flow Control** considers these dynamics.
+The Flow Control layer in the EPP is a critical mechanism for pool defense and multi-tenancy. It protects model servers from overload by shifting intelligent queuing to the gateway, enforcing strict priority and tenant-aware fairness.
 
 ### Multi-Tenant Prioritization
 
-Multi-tenant deployments have additional considerations beyond single workload:
+Multi-tenant deployments have additional considerations beyond a single workload deployment:
 * Certain tenants are **higher-priority** than others (e.g. paid vs unpaid)
 * Certain tenants have **different-SLOs** than others (e.g. batch vs online)
 * Certain tenants are more active than others - we want **fairness** between them
@@ -27,6 +27,7 @@ SINGLE TENANT                    MULTI-TENANT
 
   One deployment per customer    One deployment, many customers
 ```
+
 ### Single Workload "No-Regret" Scheduling
 
 Flow control enables "no-regret" scheduling, holding back requests in the saturation regime until load has reduces on at least one of the model servers.
@@ -45,7 +46,7 @@ By delaying the scheduling decision until the actual load subsides, the EPP can 
    ┌───┐       │     detects saturation   │         ┌─────────────┐
    │ C │──────▶│   ─ releases reqs when   │────────▶│ Server 3    │
    └───┘       │     capacity opens       │         │ [███░░] 60% │
-               └──────────────────────────┘         └─────────────┘                         
+               └──────────────────────────┘                       └─────────────┘                         
 ```               
 
 ## Deploy
