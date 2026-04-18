@@ -45,16 +45,11 @@ The request flow works as follows:
 - Decode instance pulls the KVs over RDMA (IB, RoCE, EFA) with NIXL
 - Decode instances processes the decodes, executing the forward passes with DP/EP. DeepEP executes the cross-node dispatch/combine collectives.
 
-### DP-load Balancing
-
-vLLM supports multiple 
-
-
 
 ## Futher Reading
 
 See:
-* [PD Architecture](../architecture/advanced/disaggregation/README.md) for more details on disaggregation in vLLM
+* [PD Architecture](../architecture/advanced/disaggregation/README.md) for more details on disaggregation in llm-d
 * [vLLM docs on DP deployment](https://docs.vllm.ai/en/latest/serving/data_parallel_deployment/)
 * [vLLM docs on EP deployment](https://docs.vllm.ai/en/latest/serving/expert_parallel_deployment/)
 * [vLLM docs on DeepEP and DeepGEMM](https://docs.vllm.ai/en/latest/design/fused_moe_modular_kernel/)
