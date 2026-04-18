@@ -1,8 +1,6 @@
 # Flow Control
 
-EPP's Flow Control feature enables intelligent request queuing at the proxy level.
-
-Request queuing is useful for multiple reasons:
+EPP's Flow Control feature enables intelligent request queuing at the proxy level. Request queuing is useful for multiple reasons:
 
 #### Multi-Tenant Deployments
 
