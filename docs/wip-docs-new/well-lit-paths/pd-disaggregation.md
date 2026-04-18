@@ -8,11 +8,11 @@ For long context workloads (10:1 ISL:OSL) and medium-to-large models, separating
 * Improved throughput via specialization or prefill and decode
 * Improved quality of service, as long context prefills will not block decode work
 
+llm-d's EPP natively supports the concept of disaggregation, enabling composition with other scorers (e.g. prefix-aware routing).
+
 > [!IMPORTANT]
 > NIXL supports TCP transfer, but high-bandwidth networking
 > (IB, RoCE, EFA) is **highly recommended** for production usage.
-
-llm-d's EPP natively supports the concept of disaggregation, enabling composition with other scorers (e.g. prefix-aware routing).
 
 ## Deploy
 

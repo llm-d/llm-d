@@ -43,8 +43,7 @@ The request flow works as follows:
 - Request is routed to the sidecar, which forwards the request to the prefill pods
 - Prefill instance processes the prompt, executing the forward pass with DP/EP. DeepEP executes the cross-node dispatch/combine collectives. vLLM returns metadata about how to retrieve the KV blocks
 - Decode instance pulls the KVs over RDMA (IB, RoCE, EFA) with NIXL
-- Decode instances processes the decodes, executing the forward passes with DP/EP. DeepEP executes the cross-node dispatch/combine collectives.
-
+- Decode instances processes the decodes, executing the forward passes with DP/EP. DeepEP executes the cross-node dispatch/combine collectives
 
 ## Futher Reading
 
