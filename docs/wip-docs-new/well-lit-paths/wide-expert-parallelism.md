@@ -1,12 +1,35 @@
 # Multi-Node Wide Expert Parallelism
 
-llm-d's Kubernetes-native design composes the DP/EP implementation with the rest of the llm-d system.
+Very large MoE models like DeepSeek-R1 can consume 500GB+ of RAM just to hold the weights of the model, pressuring KV cache space for long context and high throughput serving. This problem is especially magnified for models with MLA attention, which replicates the KV cache when sharded with tensor parallelism.
 
-A key trend in 2025 has been the shift from dense models like Llama 3 towards sparse Mixture-of-Experts models like DeepSeek-R1, Qwen 3, and Llama 4. In the MLP layer, each token is routed to a subset of N experts rather than passing through a single feed-forward network. Rather than Tensor Parallelism -- which shards every layer and whose communication overhead grows with node count -- MoE models can use **Data Parallel (DP) attention** where each request is processed independently on one rank with its own KV-cache, combined with **Expert Parallelism (EP)** where each expert is placed on a different rank. A sparse dispatch operation sends each token to the rank holding its routed expert; after computation, a combine operation returns it to the original DP rank. These sparse collective operations scale efficiently to multi-node deployments -- DeepSeek deploys R1 over 20 nodes with EP-144 in decode.
+To address these issues, model servers like vLLM and SGLang support DP/EP deployments, which deploys the attention layers with data parallelism and the expert layers with expert parallelism. This deployment pattern enables scaling the KV cache space, as the pattern:
+* Scales to multiple nodes - the key collective operations (dispatch/combine) are **sparse** - tokens are only sent to the expert rank after rtouting. The sparse collectives consume much less bandwidth than the all-reduces used in TP deplooyments, making them suitable to run over slower interconnects (IB, RoCE rather than NVLink)
+* No KV cache replication - since every attention layer is deployed at TP=1, there is only one copy of each tokens's KV
+
+![DP/EP deployment](./images/dp-ep-deployment.svg)
+
+> [!IMPORTANT]
+> Expert communication uses the **DeepEP** backend over NVSHMEM with GPU-initiated RDMA (`ibgda` transport), requiring full-mesh InfiniBand/RoCE connectivity. 
+
+## Deploy
+
+See the [Wide Expert Parallelism guide](https://github.com/llm-d/llm-d/tree/main/guides/wide-ep-lws) for manifests and step-by-step deployment.
 
 ## Architecture
 
-![Multi-Node Wide Expert Parallelism](./images/wide-expert-parallelism.svg)
+Multi-node "WideEP" deployments are typically combined with disaggregated serving because:
+* Disaggregatation avoids "bubbles" where Rank N is computing a prefill and Rank M is computing a decode
+* Specialized kernels for prefill and decode can be used (e.g. DeepEP HT vs DeepEP LL)
+
+As a result, we leverage the following design for the deployment:
+* Disaggregated prefill and decode via llm-d's EPP
+* `LeaderWorkerSet` to manage multi-node pod groups (scheduling a single logical vLLM instance over multiple node)
+* DP/EP deployment configuration in vLLM
+
+![Multi-Node Wide Expert Parallelism](./images/wide-ep.svg)
+
+The request flow works as follows:
+
 
 The deployment uses **LeaderWorkerSet** (LWS) instead of standard Deployments to manage multi-node pod groups. Each LWS creates a pod group with a leader and workers -- the leader coordinates the distributed collective via `LWS_LEADER_ADDRESS`, and workers join using that address. vLLM pods run with `--enable-expert-parallel`, `--data-parallel-size` (total DP ranks across all pods), `--data-parallel-size-local` (ranks per pod, typically matching GPU count), and `--data-parallel-hybrid-lb` for external load balancing across nodes.
 
@@ -14,6 +37,3 @@ Expert communication uses the **DeepEP** backend over NVSHMEM with GPU-initiated
 
 The EPP routes requests to the LeaderWorkerSet and composes with prefix-cache-aware routing, load-aware routing, and other scorers.
 
-## Guide
-
-See the [Wide Expert Parallelism guide](https://github.com/llm-d/llm-d/tree/main/guides/wide-ep-lws) for step-by-step deployment.
