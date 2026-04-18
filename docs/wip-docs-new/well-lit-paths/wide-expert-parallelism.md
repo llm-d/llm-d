@@ -3,13 +3,21 @@
 Very large MoE models like DeepSeek-R1 can consume 500GB+ of RAM just to hold the weights of the model, pressuring KV cache space for long context and high throughput serving. This problem is especially magnified for models with MLA attention, which replicates the KV cache when sharded with tensor parallelism.
 
 To address these issues, model servers like vLLM and SGLang support DP/EP deployments, which deploys the attention layers with data parallelism and the expert layers with expert parallelism. This deployment pattern enables scaling the KV cache space, as the pattern:
-* Scales to multiple nodes - the key collective operations (dispatch/combine) are **sparse** - tokens are only sent to the expert rank after rtouting. The sparse collectives consume much less bandwidth than the all-reduces used in TP deplooyments, making them suitable to run over slower interconnects (IB, RoCE rather than NVLink)
+* Scales to multiple nodes - the key collective operations (dispatch/combine) are **sparse** - tokens are only sent to the expert rank after rtouting. The sparse collectives consume much less bandwidth than the all-reduces used in TP setups, making them suitable to run over slower interconnects (IB, RoCE rather than NVLink)
 * No KV cache replication - since every attention layer is deployed at TP=1, there is only one copy of each tokens's KV
 
+The following visualizes the forward pass in a DP/EP deployment in vLLM:
 ![DP/EP deployment](./images/dp-ep-deployment.svg)
 
+The following steps occurs:
+* Each rank runs attention independently
+* MoE router selects the `topk` experts for each token (this  sparse - in the case of DeepSeek, 8 out of 256 experts are selected)
+* Tokens are "dispatched" (using the `topk_id`) to the proper expert rank. In the example above, the "green" token on rank 1 is routed to expert 1 and expert 3
+* Each expert runs independently
+* Tokens are "combined" backed to the original attention rank
+
 > [!IMPORTANT]
-> Expert communication uses the **DeepEP** backend over NVSHMEM with GPU-initiated RDMA (`ibgda` transport), requiring full-mesh InfiniBand/RoCE connectivity. 
+> Dispatch/combine uses the **DeepEP** backend over NVSHMEM with GPU-initiated RDMA (`ibgda` transport), requiring full-mesh InfiniBand/RoCE connectivity. 
 
 ## Deploy
 
@@ -23,17 +31,29 @@ Multi-node "WideEP" deployments are typically combined with disaggregated servin
 
 As a result, we leverage the following design for the deployment:
 * Disaggregated prefill and decode via llm-d's EPP
-* `LeaderWorkerSet` to manage multi-node pod groups (scheduling a single logical vLLM instance over multiple node)
+* `LeaderWorkerSet` to manage multi-node pod group deployment of vLLM
 * DP/EP deployment configuration in vLLM
 
 ![Multi-Node Wide Expert Parallelism](./images/wide-ep.svg)
 
 The request flow works as follows:
+- Request arrives at the proxy, which forwards the request to the EPP
+- EPP schedules the request with P/D disaggregation, using the labels to detect the decode and prefill variants. The EPP schedules to specific pods within the LWS
+- Request is routed to the sidecar, which forwards the request to the prefill pods
+- Prefill instance processes the prompt, executing the forward pass with DP/EP. DeepEP executes the cross-node dispatch/combine collectives. vLLM returns metadata about how to retrieve the KV blocks
+- Decode instance pulls the KVs over RDMA (IB, RoCE, EFA) with NIXL
+- Decode instances processes the decodes, executing the forward passes with DP/EP. DeepEP executes the cross-node dispatch/combine collectives.
+
+### DP-load Balancing
+
+vLLM supports multiple 
 
 
-The deployment uses **LeaderWorkerSet** (LWS) instead of standard Deployments to manage multi-node pod groups. Each LWS creates a pod group with a leader and workers -- the leader coordinates the distributed collective via `LWS_LEADER_ADDRESS`, and workers join using that address. vLLM pods run with `--enable-expert-parallel`, `--data-parallel-size` (total DP ranks across all pods), `--data-parallel-size-local` (ranks per pod, typically matching GPU count), and `--data-parallel-hybrid-lb` for external load balancing across nodes.
 
-Expert communication uses the **DeepEP** backend over NVSHMEM with GPU-initiated RDMA (`ibgda` transport), requiring full-mesh InfiniBand/RoCE connectivity. Wide EP is commonly deployed with P/D disaggregation as separate LeaderWorkerSets -- prefill uses `deepep_high_throughput` all-to-all backend; decode uses `deepep_low_latency`. Key optimizations include `--enable-dbo` (dual batch overlap) to hide collective latency by overlapping it with computation, and `--enable-eplb` (expert-parallel load balancing) to replicate popular experts across ranks.
+## Futher Reading
 
-The EPP routes requests to the LeaderWorkerSet and composes with prefix-cache-aware routing, load-aware routing, and other scorers.
-
+See:
+* [PD Architecture](../architecture/advanced/disaggregation/README.md) for more details on disaggregation in vLLM
+* [vLLM docs on DP deployment](https://docs.vllm.ai/en/latest/serving/data_parallel_deployment/)
+* [vLLM docs on EP deployment](https://docs.vllm.ai/en/latest/serving/expert_parallel_deployment/)
+* [vLLM docs on DeepEP and DeepGEMM](https://docs.vllm.ai/en/latest/design/fused_moe_modular_kernel/)
