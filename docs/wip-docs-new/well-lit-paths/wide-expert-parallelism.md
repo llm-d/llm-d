@@ -12,8 +12,8 @@ The following visualizes the forward pass in a DP/EP deployment in vLLM:
 
 The following steps occurs:
 * Each rank runs attention independently
-* MoE router selects the `topk` experts for each token (this  sparse - in the case of DeepSeek, 8 out of 256 experts are selected)
-* Tokens are "dispatched" (using the `topk_id`) to the proper expert rank (e.g, the green token on rank 1 is routed to E1 and E3
+* MoE router selects the `topk` experts for each token (this is sparse - in the case of DeepSeek, 8 out of 256 experts are selected)
+* Tokens are "dispatched" (using the `topk_id`) to the proper expert rank (e.g, the green token on rank 1 is routed to E1 and E3)
 * Each expert runs independently
 * Tokens are "combined" backed to the original attention rank
 
