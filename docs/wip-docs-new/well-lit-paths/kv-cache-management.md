@@ -1,6 +1,6 @@
 # KV Cache Management
 
-Given the multi-turn nature of modern, agentic workloads, prefix-cache re-use is a critical factor for high performance inference.
+Given the multi-turn nature of agentic workloads, prefix-cache re-use is a critical factor for high performance inference.
 
 Model servers hold KV-caches in GPU RAM with an LRU eviction scheme. Once space runs out from other requests consuming the resources, the KV caches are evicted. Follow on requests then must recompute the prefill. However, rather than evicting KV caches from GPU memory, we can instead leverage other system resources such as CPU RAM, local NVMe drives, and network storage systems to hold the evicted KVs - pulling them back into GPU RAM on demand.
 
@@ -49,14 +49,15 @@ This increases the **KV-working set size**, growing the **receptive-field** (the
 
 
 > [!IMPORTANT]
-> CPU KV Cache offloading is very low overhead and requires ~no additional complexity. It can be enabled in almost all deployments. Storage offloading requires additional consideration.
-
+> CPU KV Cache offloading iss low overhead and requires ~no additional complexity. It can be enabled in almost all deployments. Storage offloading requires additional consideration.
 
 ## Deploy
 
 See the [KV Cache Management guide](https://github.com/llm-d/llm-d/tree/main/guides/tiered-prefix-cache) for manifests and step-by-step deployment.
 
 ## Architecture
+
+llm-d leverages the following architectures for offloading.
 
 ### CPU KV Cache Offloading
 
