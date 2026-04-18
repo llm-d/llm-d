@@ -1,19 +1,68 @@
 # Flow Control
 
-Flow control multiplexing of different request classes onto the same model deployment.
+Flow Control feature enables intelligent request queuing. Request queuing is useful for multiple reasons:
 
-LLM inference latency curves are non-linear with intense saturation dynamics -- once a server crosses a utilization threshold, latency spikes sharply and quality of service collapses for all requests. In multi-tenant environments, a single client sending a burst of requests can starve every other tenant. Without admission control, burst traffic causes queue buildup, noisy-neighbor effects, and cascading KV-cache evictions that degrade all subsequent requests.
+#### Multi-Tenant Deployments
 
-Flow control adds priority-based admission control to the EPP. Requests are classified into priority bands -- **critical** requests (e.g., realtime clients) are always honored first with SLO objectives (TTFT, TPOT, NTPOT) applied even under load. **Sheddable** requests (e.g., batch jobs) are treated with lower priority, may be delayed or shed to preserve SLOs for critical requests, and are optimized only when capacity permits. When the EPP detects saturation, it kills sheddable requests to protect critical traffic.
+Multi-Tenant deployments have additional considerations beyond a single workload deployment:
+* Certain tenants are **higher-priority** than others (e.g. paid vs unpaid)
+* Certain requests have **different-SLOs** than others (e.g. batch vs online)
+* Certain tenants are more active than others - we want **fairness** between them
+
+Flow control injects queuing logic into the EPP, proving a hook-point to consider these dynamics in scheduling requests. This enables model server operators to mitigate **noisy-neighbor** issues when consolidating high priority and low priority traffic onto the same model server resources.
+
+```
+SINGLE TENANT                    MULTI-TENANT
+  ─────────────                    ────────────
+
+  [A] ──▶ [ GPUs ]               [A] ╲
+                                 [B] ──▶ [ GPUs ]
+  [B] ──▶ [ GPUs ]               [C] ╱
+
+  [C] ──▶ [ GPUs ]
+
+  One deployment per customer    One deployment, many customers
+```
+
+#### Single Workload "No-Regret" Scheduling
+
+In addition to inter-tenant prioritization, flow control also enables "no-regret" scheduling, holding back requests in the saturation regime until load has reduces on at least one of the model servers. By delaying the scheduling decision until the actual load subsides (rather than immediately dispatching to the model server's waiting queues after which the request can no longer be migrated), the EPP can make a better decision about where to land the request.
+
+```
+   ┌───┐  req  ┌──────────────────────────┐         ┌─────────────┐
+   │ A │──────▶│   ┌──────────────────┐   │--------▶│ Server 1    │
+   └───┘       │   │  Request Queue   │   │         │ [█████] FULL│
+               │   │ ░░░░░░░░░░░░░░░  │   │         └─────────────┘
+   ┌───┐       │   │  [R][R][R][R][R] │   │         ┌─────────────┐
+   │ B │──────▶│   └──────────────────┘   │--------▶│ Server 2    │
+   └───┘       │   ─ checks load          │         │ [█████] FULL│
+               │   ─ queues reqs if       │         └─────────────┘
+   ┌───┐       │     detects saturation   │         ┌─────────────┐
+   │ C │──────▶│   ─ releases reqs when   │────────▶│ Server 3    │
+   └───┘       │     capacity opens       │         │ [███░░] 60% │
+               └──────────────────────────┘         └─────────────┘                         
+```               
+
+## Deploy
+
+The well-lit path and manifests will be released shortly.
 
 ## Architecture
 
 ![Flow Control](./images/flow-control.svg)
 
-Flow control is configured in the EPP's `EndpointPickerConfig` -- no separate deployment required. The EPP evaluates each incoming request's priority band and applies admission decisions based on real-time saturation detection. The `saturationDetector` monitors KV-cache utilization or request concurrency against a configurable threshold (default: 0.85). Priority bands are configured with `maxQueueSize` limits, and a `flowIdentifier` header (e.g., `x-client-id`) enables per-tenant fairness enforcement.
+Requests arrive to the proxy with headers expressing their tenant ID and traffic priority. EPP leverages these headers to assign a `FlowKey` (tuple of `FairnessID` and `Priority`) to each request and maintains separate in-memory queues for each `FlowKey`. Each `FlowKey` is assigned to a `PriorityBand` (for cases when multiple tenants have the same priority).
 
-Sheddable requests flow through a **queue** that retries as capacity becomes available. When saturation clears, queued requests are dispatched in priority order. This also enables **scale-to-zero**: when no pods are running and a request arrives, the queue holds it while the autoscaler provisions new pods (2-7 minutes for model loading) rather than returning a 5xx error.
+Then, in each scheduling cycle, the EPP traverses the queues in 3 tiers:
+* Priority - the system always services highest `PriorityBand` first
+* Fairness - within a `PriorityBand`, the **Fairness Policy** determines which flow (i.e. tenant) is dispatched next
+* Ordering - within a flow (i.e. tenant), the **Ordering Policy** determines which request to serve (e.g. FCFC or SLO-aware)
 
-## Guide
+In the background EPP monitors the model servers for saturation. If it detects saturation, requests are queued until saturation subsides.
 
-See the [Flow Control guide](https://github.com/llm-d/llm-d/tree/main/guides/inference-scheduling) for configuration within the Intelligent Inference Scheduling deployment.
+> [!WARNING]
+> **Trust Boundary**: In a production system, allowing end-users to self-assert their tenant ID or traffic priority (`premium-traffic`) is an abuse vector. In production, these headers should be stripped from external requests and injected by an upstream trusted API gateway, identity provider, or Envoy AuthZ filter based on the API key.
+
+## Further Reading
+
+See [Flow Control architecture](../architecture/core/epp/flow-control.md) for full details of the design.
