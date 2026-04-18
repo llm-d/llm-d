@@ -1,19 +1,17 @@
 # Flow Control
 
-Model service operators often consolidate multiple workloads onto the same set of resources, leveraging a **multi-tenant** deployment pattern.
+EPP's Flow Control feature enables intelligent request queuing at the proxy level.
 
-Additionally, server latency curves are non-linear with intense **saturation dynamics** - once a server crosses a utilization threshold, latency spikes sharply and quality of service collapses for all requests.
+Request queuing is useful for multiple reasons:
 
-The Flow Control layer in the EPP is a critical mechanism for pool defense and multi-tenancy. It protects model servers from overload by shifting intelligent queuing to the gateway, enforcing strict priority and tenant-aware fairness.
-
-### Multi-Tenant Prioritization
+#### Multi-Tenant Deployments
 
 Multi-tenant deployments have additional considerations beyond a single workload deployment:
 * Certain tenants are **higher-priority** than others (e.g. paid vs unpaid)
-* Certain tenants have **different-SLOs** than others (e.g. batch vs online)
+* Certain requests have **different-SLOs** than others (e.g. batch vs online)
 * Certain tenants are more active than others - we want **fairness** between them
 
-Flow control enables us to consider these dynamics in scheduling requests. This enables platform teams to consolidate multiple workloads onto the same resources:
+Flow control enables us to consider these dynamics in scheduling requests, enabling consolidation of multiple workloads onto the same resources:
 
 ```
 SINGLE TENANT                    MULTI-TENANT
@@ -28,11 +26,9 @@ SINGLE TENANT                    MULTI-TENANT
   One deployment per customer    One deployment, many customers
 ```
 
-### Single Workload "No-Regret" Scheduling
+#### Single Workload "No-Regret" Scheduling
 
-Flow control enables "no-regret" scheduling, holding back requests in the saturation regime until load has reduces on at least one of the model servers.
-
-By delaying the scheduling decision until the actual load subsides, the EPP can make a better decision about where to land the request.
+In addition to inter-tenant prioritization, flow control also enables "no-regret" scheduling, holding back requests in the saturation regime until load has reduces on at least one of the model servers. By delaying the scheduling decision until the actual load subsides (rather than immediately dispatching to the model server's waiting queues after which the request can no longer be migrated), the EPP can make a better decision about where to land the request.
 
 ```
    ┌───┐  req  ┌──────────────────────────┐         ┌─────────────┐
@@ -46,20 +42,29 @@ By delaying the scheduling decision until the actual load subsides, the EPP can 
    ┌───┐       │     detects saturation   │         ┌─────────────┐
    │ C │──────▶│   ─ releases reqs when   │────────▶│ Server 3    │
    └───┘       │     capacity opens       │         │ [███░░] 60% │
-               └──────────────────────────┘                       └─────────────┘                         
+               └──────────────────────────┘         └─────────────┘                         
 ```               
 
 ## Deploy
 
-See the [Flow Control guide](https://github.com/llm-d/llm-d/tree/main/guides/inference-scheduling) for configuration within the Intelligent Inference Scheduling deployment.
+The well-lit path and manifests will be released shortly.
 
 ## Architecture
 
-WIP!!
-
 ![Flow Control](./images/flow-control.svg)
 
-Flow control is configured in the EPP's `EndpointPickerConfig` -- no separate deployment required. The EPP evaluates each incoming request's priority band and applies admission decisions based on real-time saturation detection. The `saturationDetector` monitors KV-cache utilization or request concurrency against a configurable threshold (default: 0.85). Priority bands are configured with `maxQueueSize` limits, and a `flowIdentifier` header (e.g., `x-client-id`) enables per-tenant fairness enforcement.
+Requests arrive to the proxy with headers expressing their tenant ID and traffic priority. EPP leverages these headers to assign a `FlowKey` (tuple of `FairnessID` and `Priority`) to each request and maintains separate in-memory queues for each `FlowKey`. Each `FlowKey` is assigned to a `PriorityBand` (for cases when multiple tenants have the same priority).
 
-Sheddable requests flow through a **queue** that retries as capacity becomes available. When saturation clears, queued requests are dispatched in priority order. This also enables **scale-to-zero**: when no pods are running and a request arrives, the queue holds it while the autoscaler provisions new pods (2-7 minutes for model loading) rather than returning a 5xx error.
+Then, in each scheduling cycle, the EPP traverses the queues in 3 tiers:
+* Priority - the system always services highest `PriorityBand` first
+* Fairness - within a `PriorityBand`, the **Fairness Policy** determines which flow (i.e. tenant) is dispatched next
+* Ordering - within a flow (i.e. tenant), the **Ordering Policy** determines which request to serve (e.g. FCFC or SLO-aware)
 
+In the background EPP monitors the model servers for saturation. If it detects saturation, requests are queued until saturation subsides.
+
+> [!WARNING]
+> **Trust Boundary**: In a production system, allowing end-users to self-assert their tenant ID or traffic priority (`premium-traffic`) is an abuse vector. In production, these headers should be stripped from external requests and injected by an upstream trusted API gateway, identity provider, or Envoy AuthZ filter based on the API key.
+
+## Further Reading
+
+See [Flow Control architecture](../architecture/core/epp/flow-control.md) for full details of the design.
