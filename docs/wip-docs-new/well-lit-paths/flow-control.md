@@ -1,10 +1,10 @@
 # Flow Control
 
-EPP's Flow Control feature enables intelligent request queuing at the proxy level. Request queuing is useful for multiple reasons:
+Flow Control feature enables intelligent request queuing. Request queuing is useful for multiple reasons:
 
 #### Multi-Tenant Deployments
 
-Multi-tenant deployments have additional considerations beyond a single workload deployment:
+Multi-Tenant deployments have additional considerations beyond a single workload deployment:
 * Certain tenants are **higher-priority** than others (e.g. paid vs unpaid)
 * Certain requests have **different-SLOs** than others (e.g. batch vs online)
 * Certain tenants are more active than others - we want **fairness** between them
