@@ -19,7 +19,7 @@ See the [Intelligent Inference Scheduling guide](https://github.com/llm-d/llm-d/
 
 ![Prefix-Aware Routing](./images/prefix-aware-routing.svg)
 
-EPP maintains a approximated view of each pod's prefix-cache state in memory. When a request arrives, it identifies which pod already holds the matching prefix in KV-cache and routes the request there. For multi-turn workloads, this optimization is critical to avoid excessive recomputation in a scale-out setting.
+EPP maintains a view of each pod's prefix-cache state in memory. When a request arrives, it identifies which pod already holds the matching prefix in KV-cache and routes the request there. For multi-turn workloads, this optimization is critical to avoid excessive recomputation in a scale-out setting.
 
 ### Load-Aware Routing
 
