@@ -7,6 +7,7 @@ To address these issues, model servers like vLLM and SGLang support DP/EP deploy
 * No KV cache replication - since every attention layer is deployed at TP=1, there is only one copy of each tokens's KV
 
 The following visualizes the forward pass in a DP/EP deployment in vLLM:
+
 ![DP/EP deployment](./images/dp-ep-deployment.svg)
 
 The following steps occurs:
