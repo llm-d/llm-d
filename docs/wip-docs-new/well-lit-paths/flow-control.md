@@ -9,7 +9,7 @@ Multi-Tenant deployments have additional considerations beyond a single workload
 * Certain requests have **different-SLOs** than others (e.g. batch vs online)
 * Certain tenants are more active than others - we want **fairness** between them
 
-Flow control injects queuing logic into the EPP, enables us to consider these dynamics in scheduling requests. This enables model server operators to consolidate high priority and low priority traffic onto the same model server resources while mitigating **noisy-neighbor** issues:
+Flow control injects queuing logic into the EPP, proving a hook-point to consider these dynamics in scheduling requests. This enables model server operators to consolidate high priority and low priority traffic onto the same model server resources while mitigating **noisy-neighbor** issues:
 
 ```
 SINGLE TENANT                    MULTI-TENANT
