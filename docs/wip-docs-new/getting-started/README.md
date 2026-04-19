@@ -78,4 +78,4 @@ Each path includes:
 - Sample workloads and benchmarks against baseline setups
 - Monitoring and observability configuration
 
-See the [Well-Lit Paths](../well-lit-paths/introduction.md) for current engine and accelerator coverage.
+See the [Well-Lit Paths](../well-lit-paths/README.md) for more details.
