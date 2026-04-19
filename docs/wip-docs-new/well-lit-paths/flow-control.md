@@ -9,7 +9,7 @@ In comparison to a single workload deployment, operators of multi-tenant workloa
 * Certain requests have **different-SLOs** than others (e.g. batch vs online)
 * Certain tenants are more active than others - we want **fairness** between them
 
-Flow control introduces intelligent queuing to the EPP, allowing operators to factor traffic dynamics into scheduling decisions. This capability addresses noisy-neighbor problems when mixing high- and low-priority traffic; furthermore, it ensures fairness among equal-priority tenants, preventing any single user from starving others of shared pool resources```
+Flow control introduces intelligent queuing to the EPP, allowing operators to factor traffic dynamics into scheduling decisions. This capability addresses noisy-neighbor problems when mixing high- and low-priority traffic; furthermore, it ensures fairness among equal-priority tenants, preventing any single user from starving others of shared pool resources.
 
 ```
 SINGLE TENANT                    MULTI-TENANT
