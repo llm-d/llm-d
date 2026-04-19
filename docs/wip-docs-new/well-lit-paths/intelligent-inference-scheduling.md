@@ -20,15 +20,15 @@ See the [Intelligent Inference Scheduling guide](https://github.com/llm-d/llm-d/
 
 ### Prefix-Aware Scheduling
 
-![Prefix-Aware Routing](./images/prefix-aware-routing.svg)
-
 EPP maintains a view of each endpoints's prefix-cache state in memory. When a request arrives, it identifies which pod already holds the matching prefix in KV-cache and routes the request there. For multi-turn workloads, this optimization is critical to avoid excessive recomputation in a scale-out setting.
+
+![Prefix-Aware Routing](./images/prefix-aware-routing.svg)
 
 ### Load-Aware Scheduling
 
-![Load-Aware Routing](./images/load-aware-routing.svg)
-
 EPP continuously probes each endpoints's metrics by scraping `/metrics` at a regular interval (50ms default). It scores endpoints on queue depth, running requests, and KV-cache utilization to schedule requests to the endpoint with the lowest load, avoiding hotspots caused by heterogeneous request patterns.
+
+![Load-Aware Routing](./images/load-aware-routing.svg)
 
 ## Futher Reading
 
