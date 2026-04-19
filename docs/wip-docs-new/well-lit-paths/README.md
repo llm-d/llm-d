@@ -9,7 +9,7 @@ Each guide is hosted in [llm-d guides](https://github.com/llm-d/llm-d/tree/main/
 ## Paths
 
 * [**Intelligent Inference Scheduling**](./intelligent-inference-scheduling.md) -- vLLM-aware load-balancing enables smarter request routing that improves SLOs.
-* [**P/D Disaggregation**](./pd-disaggregation.md) -- llm-d composes vLLM and Inference Scheduler to enable P/D disaggregation.
+* [**P/D Disaggregation**](./pd-disaggregation.md) -- llm-d composes vLLM and EPP to enable P/D disaggregation.
 * [**KV Cache Management**](./kv-cache-management.md) -- Leverage all system resources to maximize prefix cache hit rate within the cluster.
 * [**Multi-Node Wide Expert Parallelism**](./wide-expert-parallelism.md) -- llm-d's Kubernetes-native design composes the DP/EP implementation with the rest of the llm-d system.
 * [**Flow Control**](./flow-control.md) -- Flow control multiplexing of different request classes onto the same model deployment.
