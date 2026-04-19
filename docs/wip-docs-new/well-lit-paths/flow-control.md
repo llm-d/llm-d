@@ -4,7 +4,7 @@ Flow Control feature enables intelligent request queuing. Request queuing is use
 
 #### Multi-Tenant Deployments
 
-Multi-Tenant deployments have additional considerations beyond a single workload deployment:
+In comparison to a single workload deployment, operators of multi-tenant workloads have additional considerations:
 * Certain tenants are **higher-priority** than others (e.g. paid vs unpaid)
 * Certain requests have **different-SLOs** than others (e.g. batch vs online)
 * Certain tenants are more active than others - we want **fairness** between them
