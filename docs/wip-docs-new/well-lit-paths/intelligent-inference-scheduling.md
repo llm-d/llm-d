@@ -25,7 +25,7 @@ EPP maintains a view of each pod's prefix-cache state in memory. When a request 
 
 ![Load-Aware Routing](./images/load-aware-routing.svg)
 
-EPP continuously probes each pod's metrics via a PodMonitor scraping `/metrics` at 50ms intervals. It scores pods on queue depth, running requests, and KV-cache utilization to route requests to the pod with the lowest load, avoiding hotspots caused by heterogeneous request patterns.
+EPP continuously probes each pod's metrics by scraping `/metrics` at a regular interval (50ms default). It scores pods on queue depth, running requests, and KV-cache utilization to schedule requests to the endpoint with the lowest load, avoiding hotspots caused by heterogeneous request patterns.
 
 ## Futher Reading
 
