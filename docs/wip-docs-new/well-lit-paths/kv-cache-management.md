@@ -49,7 +49,7 @@ This increases the **KV-working set size**, growing the **receptive-field** (the
 
 
 > [!IMPORTANT]
-> CPU KV Cache offloading iss low overhead and requires ~no additional complexity. It can be enabled in almost all deployments. Storage offloading requires additional consideration.
+> CPU KV Cache offloading is low overhead and requires ~no additional complexity. It can be enabled in almost all deployments. Storage offloading requires additional consideration.
 
 ## Deploy
 
@@ -61,12 +61,12 @@ llm-d leverages the following architectures for offloading.
 
 ### CPU KV Cache Offloading
 
-![CPU KV Cache Offloading](./images/cpu-offloading.svg)
-
 vLLM pods are configured with `OffloadingConnector` and increased CPU memory requests (e.g., 400 GB). Evicted KV-cache blocks move to host CPU memory instead of being discarded, extending the effective cache size with negligible overhead. The EPP maintains a global index of which blocks exist on which pods and tiers, adding a second `prefix-cache-scorer` plugin for CPU-tier blocks.
+
+![CPU KV Cache Offloading](./images/cpu-offloading.svg)
 
 ### Storage KV Cache Offloading
 
-![Storage KV Cache Offloading](./images/fs-offloading.svg)
-
 vLLM pods mount a ReadWriteMany PVC backed by shared storage (Lustre, CephFS, or similar) at `/mnt/files-storage`. The `OffloadingConnector` is configured with a custom backend module (`llmd_fs_backend.spec`) that handles async I/O with GPU DMA transfers. This enables cross-pod cache sharing -- newly scaled pods can read existing cache immediately -- persistence across pod restarts, and capacity limited only by storage system size.
+
+![Storage KV Cache Offloading](./images/fs-offloading.svg)

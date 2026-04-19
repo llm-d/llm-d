@@ -9,7 +9,7 @@ Multi-Tenant deployments have additional considerations beyond a single workload
 * Certain requests have **different-SLOs** than others (e.g. batch vs online)
 * Certain tenants are more active than others - we want **fairness** between them
 
-Flow control injects queuing logic into the EPP, proving a hook-point to consider these dynamics in scheduling requests. This enables model server operators to mitigate **noisy-neighbor** issues when consolidating high priority and low priority traffic onto the same model server resources.
+Flow control introduces intelligent queuing to the EPP, allowing operators to factor traffic dynamics into scheduling decisions. This capability addresses noisy-neighbor problems when mixing high- and low-priority traffic; furthermore, it ensures fairness among equal-priority tenants, preventing any single user from starving others of shared pool resources```
 
 ```
 SINGLE TENANT                    MULTI-TENANT
@@ -26,7 +26,7 @@ SINGLE TENANT                    MULTI-TENANT
 
 #### Single Workload "No-Regret" Scheduling
 
-In addition to inter-tenant prioritization, flow control also enables "no-regret" scheduling, holding back requests in the saturation regime until load has reduces on at least one of the model servers. By delaying the scheduling decision until the actual load subsides (rather than immediately dispatching to the model server's waiting queues after which the request can no longer be migrated), the EPP can make a better decision about where to land the request.
+In addition to inter-tenant prioritization and fairness, flow control also enables "no-regret" scheduling by holding requests during peak saturation. By delaying the dispatch until load subsides—rather than committing a request to a specific server's queue where it becomes stuck—the EPP ensures requests land on the best available resource.
 
 ```
    ┌───┐  req  ┌──────────────────────────┐         ┌─────────────┐
