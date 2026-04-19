@@ -1,45 +1,41 @@
 ```
 .
 ├── getting-started
-│   ├── getting-started.md                      - rob
-│   ├── quickstart.md                           - rob
-│   ├── feature-matrix.md                       - [?]
-│   └── artifacts.md                            - [?]
+│   ├── README.md
+│   ├── quickstart.md
+│   ├── feature-matrix.md
+│   └── artifacts.md
 ├── architecture
-│   ├── architecture.md                         - rob
+│   ├── README.md
 │   ├── core
-│   │   ├── proxy.md                            - rob
-│   │   ├── inferencepool.md                    - rob
+│   │   ├── proxy.md
+│   │   ├── inferencepool.md
 │   │   ├── epp
-|   │   │   ├── epp.md                          - rob
-|   │   │   ├── scheduling.md                   - abdullah
-|   │   │   ├── flow-control.md                 - luke
-|   │   │   ├── request-handling.md             - abdullah
-|   │   │   └── configuration.md                - [?]
-│   │   └── model-servers.md                    - rob
+|   │   │   ├── README.md
+|   │   │   ├── scheduling.md
+|   │   │   ├── flow-control.md
+|   │   │   ├── request-handling.md
+|   │   │   └── configuration.md
+│   │   └── model-servers.md
 │   └── advanced
-│       ├── disaggregation.md                   - rob
-│       ├── kv-indexer.md                       - [?]
-│       ├── kv-offloading.md                    - [?]
-│       ├── latency-predictor.md                - [?]
+│       ├── disaggregation.md
+│       ├── kv-indexer.md
+│       ├── kv-offloading.md
+│       ├── latency-predictor.md
 │       └── autoscaling
-│          ├── autoscaling.md                   - [?]
-│          ├── workload-variant-autoscaling.md  - [?]
-│          └── igw-hpa.md                       - [?]        
-├── well-lit-paths
-│   ├── well-lit-paths.md
-│   ├── intelligent-inference-scheduling
-│   │   ├── default.md
-│   │   ├── precise-prefix-cache-aware-routing.md
-│   │   ├── predicted-latency.md
-│   │   └── flow-control.md
+│          ├── README.md
+│          ├── workload-variant-autoscaling.md
+│          └── igw-hpa.md
+├── guides
+│   ├── README.md
+│   ├── intelligent-inference-scheduling.md
+│   ├── flow-control.md
 │   ├── prefill-decode-disaggregation.md
 │   ├── wide-expert-parallelism.md
 │   ├── tiered-prefix-cache.md
 │   └── workload-autoscaling.md
-├── user-guides
-│   ├── gateway
-│   │   ├── gateway.md
+├── resources
+│   ├── gateways
 │   │   ├── istio.md
 │   │   ├── gke.md
 │   │   ├── agentgateway.md
