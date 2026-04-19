@@ -26,7 +26,7 @@ SINGLE TENANT                    MULTI-TENANT
 
 #### Single Workload "No-Regret" Scheduling
 
-In addition to inter-tenant prioritization, flow control also enables "no-regret" scheduling, holding back requests in the saturation regime until load has reduces on at least one of the model servers. By delaying the scheduling decision until the actual load subsides (rather than immediately dispatching to the model server's waiting queues after which the request can no longer be migrated), the EPP can make a better decision about where to land the request.
+In addition to inter-tenant prioritization and fairness, flow control also enables "no-regret" scheduling by holding requests during peak saturation. By delaying the dispatch until load subsides—rather than committing a request to a specific server's queue where it becomes stuck—the EPP ensures requests land on the best available resource.
 
 ```
    ┌───┐  req  ┌──────────────────────────┐         ┌─────────────┐
