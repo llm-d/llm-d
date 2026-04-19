@@ -8,11 +8,11 @@ Each guide is hosted in [llm-d guides](https://github.com/llm-d/llm-d/tree/main/
 
 ## Paths
 
-* [**Intelligent Inference Scheduling**](./intelligent-inference-scheduling.md) -- vLLM-aware load-balancing enables smarter request routing that improves SLOs.
-* [**Flow Control**](./flow-control.md) -- Flow control multiplexing of different request classes onto the same model deployment.
+* [**Intelligent Inference Scheduling**](./intelligent-inference-scheduling.md) -- Prefix-cache and load-aware request scheduling.
+* [**Flow Control**](./flow-control.md) -- Prioritize traffic from multiple tenants on the same server resources.
 * [**P/D Disaggregation**](./pd-disaggregation.md) -- Separate prefill and decode phases of inference into separate instances.
 * [**Multi-Node Wide Expert Parallelism**](./wide-expert-parallelism.md) -- Deploy large MoE models over multiple nodes with DP/EP.
-* [**KV Cache Management**](./kv-cache-management.md) -- Leverage all system resources to maximize prefix cache hit rate within the cluster.
+* [**KV Cache Management**](./kv-cache-management.md) -- Offload KV caches to CPU RAM and storage for increased cache hit rates.
 
 > [!IMPORTANT]
 > The deployment guides are intended to be a starting point for your own configuration and deployment of model servers.
