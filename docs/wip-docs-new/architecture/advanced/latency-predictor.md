@@ -154,6 +154,6 @@ All latency and prediction-duration series are Prometheus **histograms**, so das
 
 ## Further Reading
 
-- [Predicted Latency Well-Lit Path](../../well-lit-paths/intelligent-inference-scheduling/predicted-latency.md) — how to adopt this path: Helm enablement, request headers, verification, troubleshooting.
+- [Predicted Latency Well-Lit Path](../../well-lit-paths/experimental/predicted-latency.md) — how to adopt this path: Helm enablement, request headers, verification, troubleshooting.
 - [Predicted Latency-Based Scheduling for LLMs](https://llm-d.ai/blog/predicted-latency-based-scheduling-for-llms) — design rationale and benchmark results.
 - [EPP Scheduling](../core/epp/scheduling.md) — how the plugins fits into EPP request handling.
