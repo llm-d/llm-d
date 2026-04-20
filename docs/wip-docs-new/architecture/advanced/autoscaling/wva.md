@@ -378,11 +378,3 @@ Key controller flags:
 | `--leader-election-lease-duration` | `60s` | Leader election lease duration |
 | `--leader-election-renew-deadline` | `50s` | Leader election renew deadline |
 | `--rest-client-timeout` | `60s` | Kubernetes API client timeout |
-
-## Examples
-
-See the [config/samples/](../config/samples/) directory for example VA manifests, including:
-- Basic single-variant autoscaling
-- Multi-variant cost-aware scaling
-- HPA integration (`config/samples/hpa/`)
-- KEDA integration (`config/samples/keda/`)
