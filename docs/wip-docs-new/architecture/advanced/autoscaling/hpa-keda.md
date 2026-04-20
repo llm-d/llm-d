@@ -59,7 +59,7 @@ sequenceDiagram
     autonumber
     actor Client
     participant EPP as EPP (Flow Control)
-    participant HPA as HPA / KEDA
+    participant HPA as HPA
     participant Pool as Model Server Pool
 
     Note over Pool: Replicas: 0
