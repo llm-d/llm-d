@@ -59,7 +59,7 @@ EPP Flow Control is the enabling mechanism for seamless scale-from-zero. When al
 
 The steps are:
 
-1. **Buffering during cold start**: When a replica-zero deployment receives traffic, the EPP Flow Control layer accepts and queues requests in memory. Users experience a latency spike equal to the pod startup time but receive no 5xx errors.
+1. **Buffering during cold start**: When a zero-replica deployment receives traffic, the EPP Flow Control layer accepts and queues requests in memory. Users experience a latency spike equal to the pod startup time but receive no 5xx errors (unless the scale up time is too long, causing request times outs).
 2. **Scale-out trigger**: A non-zero `igw_queue_depth` is immediately visible to the HPA or KEDA, which provisions the first replica.
 3. **Late binding dispatch**: The EPP holds queued requests until the model server reports readiness, then dispatches them using its standard scheduling logic.
 
