@@ -23,6 +23,28 @@ inferenceExtension:
     # sampling:
     #   sampler: "parentbased_traceidratio"
     #   samplerArg: "0.1"
+  # GenAI payload capture — prompts and completions as OTel events (opt-in).
+  # See docs/proposals/genai-payload-events.md for security implications.
+  payloadCapture:
+    enabled: false
+    # backend: noop            # noop | inline | gcs | s3 | filesystem
+    # inlineSizeThresholdBytes: 4096
+    # offloadBackend: ""
+    # gcs:
+    #   bucket: ""
+    #   prefix: "llm-d/payloads"
+    # s3:
+    #   bucket: ""
+    #   endpoint: ""
+    #   prefix: "llm-d/payloads"
+    #   region: "us-east-1"
+    # filesystem:
+    #   mountPath: "/var/llm-d/payloads"
+    # redaction:
+    #   enabled: false
+    #   builtinPatterns: true
+    #   patterns: []
+    #   webhookURL: ""
   # Monitoring configuration for EPP
   monitoring:
     interval: "10s"

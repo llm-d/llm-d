@@ -1,0 +1,174 @@
+# OTel Collector configuration with GenAI payload capture support.
+#
+# This variant extends otel-collector.yaml with:
+#   - A tail-sampling processor that keeps traces containing payload events
+#   - An attributes processor that redacts configured PII patterns
+#   - A separate "payloads" pipeline that routes gen_ai.content.* events
+#     to a dedicated exporter (filesystem or OTLP) for downstream storage
+#
+# Set LLMD_PAYLOAD_CAPTURE_ENABLED=true and choose a backend in your Helm
+# values before deploying this config.  See docs/proposals/genai-payload-events.md.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: otel-collector-config
+data:
+  config.yaml: |
+    receivers:
+      otlp:
+        protocols:
+          grpc:
+            keepalive:
+              enforcement_policy:
+                min_time: 10s
+                permit_without_stream: true
+            endpoint: "0.0.0.0:4317"
+          http:
+            endpoint: "0.0.0.0:4318"
+
+    processors:
+      filter/drop-metrics-scraping:
+        error_mode: ignore
+        traces:
+          span:
+            - 'attributes["url.path"] == "/metrics"'
+            - 'attributes["http.route"] == "/metrics"'
+            - name == "GET /metrics"
+            - name == "GET"
+
+      # Redact common PII patterns from all span attributes and event bodies
+      # before any exporter sees the data.  Add regexes matching your data
+      # classification policy under additional_patterns.
+      redaction:
+        allow_all_keys: true
+        blocked_values:
+          # US Social Security Numbers
+          - "\\b\\d{3}-\\d{2}-\\d{4}\\b"
+          # Credit card numbers (Luhn-format, 13–19 digits)
+          - "\\b(?:4[0-9]{12}(?:[0-9]{3})?|5[1-5][0-9]{14}|3[47][0-9]{13}|6(?:011|5[0-9]{2})[0-9]{12})\\b"
+          # Bearer tokens in Authorization header values
+          - "(?i)bearer\\s+[A-Za-z0-9\\-._~+/]+=*"
+        summary: redacted
+
+      # Keep only traces that contain gen_ai payload events; all other traces
+      # continue through the normal pipeline unaffected.
+      filter/payload-events-only:
+        error_mode: ignore
+        traces:
+          span_event:
+            - 'name != "gen_ai.content.prompt" and name != "gen_ai.content.completion"'
+
+      batch:
+        send_batch_size: 1024
+        timeout: 1s
+
+      batch/payload:
+        send_batch_size: 256
+        timeout: 2s
+
+    exporters:
+      otlp/jaeger:
+        endpoint: "jaeger-collector:4317"
+        tls:
+          insecure: true
+
+      # Payload exporter: writes gen_ai.content.* events to a local volume.
+      # Replace with an OTLP exporter pointing to your object-store proxy
+      # (e.g. a GCS OTLP bridge) for production use.
+      file/payloads:
+        path: /var/llm-d/payloads/traces.jsonl
+        rotation:
+          max_megabytes: 100
+          max_days: 7
+          max_backups: 5
+          localtime: false
+
+    extensions:
+      health_check:
+        endpoint: "0.0.0.0:13133"
+
+    service:
+      extensions: [health_check]
+      pipelines:
+        # Main traces pipeline — all spans, PII redacted, sent to Jaeger
+        traces:
+          receivers: [otlp]
+          processors: [filter/drop-metrics-scraping, redaction, batch]
+          exporters: [otlp/jaeger]
+
+        # Payload pipeline — only spans carrying gen_ai content events,
+        # written to the filesystem exporter for offline eval / QA workflows.
+        # Enable by deploying this config and setting payloadCapture.enabled=true.
+        traces/payloads:
+          receivers: [otlp]
+          processors: [filter/drop-metrics-scraping, redaction, filter/payload-events-only, batch/payload]
+          exporters: [file/payloads]
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: otel-collector
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: otel-collector
+  template:
+    metadata:
+      labels:
+        app: otel-collector
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+      - name: otel-collector
+        image: ghcr.io/open-telemetry/opentelemetry-collector-releases/opentelemetry-collector-contrib:0.120.0
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop: [ALL]
+        args:
+        - "--config=/etc/otel/config.yaml"
+        ports:
+        - containerPort: 4317
+          name: otlp-grpc
+        - containerPort: 4318
+          name: otlp-http
+        - containerPort: 13133
+          name: health-check
+        volumeMounts:
+        - name: config
+          mountPath: /etc/otel
+          readOnly: true
+        - name: payload-store
+          mountPath: /var/llm-d/payloads
+        livenessProbe:
+          httpGet:
+            path: /
+            port: 13133
+          initialDelaySeconds: 5
+          periodSeconds: 10
+      volumes:
+      - name: config
+        configMap:
+          name: otel-collector-config
+      - name: payload-store
+        # Replace emptyDir with a PVC or cloud-backed volume for persistence.
+        emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: otel-collector
+spec:
+  selector:
+    app: otel-collector
+  ports:
+  - port: 4317
+    targetPort: 4317
+    name: otlp-grpc
+  - port: 4318
+    targetPort: 4318
+    name: otlp-http
