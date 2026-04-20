@@ -1,14 +1,13 @@
-# IGW HPA
+# EPP HPA/KEDA Integration
 
-The IGW HPA design enables Kubernetes HPA (Horizontal Pod Autoscaler) to scale model server replicas using demand-side signals sourced from the Endpoint Picker (EPP). Rather than relying on coarse resource utilization metrics, it exposes the EPP's internal queuing state as the authoritative signal for LLM inference load. This approach is well-suited for homogeneous deployments where each model scales independently.
+The EPP HPA/KEDA integration enables Kubernetes HPA (Horizontal Pod Autoscaler) to scale model server replicas using demand-side signals sourced from the Endpoint Picker (EPP). Rather than relying on coarse resource utilization metrics, it exposes the EPP's internal queuing state as the authoritative signal for LLM inference load. This approach is well-suited for homogeneous deployments where each model scales independently.
 
 ## Functionality
 
-The IGW HPA integration provides:
+The EPP HPA/KEDA integration provides:
 
 - **Demand-driven scaling**: Model server replicas are added or removed based on EPP queue depth and active request count — metrics that directly reflect inference load rather than resource saturation.
 - **Scale to zero**: When traffic drops to zero, model server replicas are fully removed and GPU resources are reclaimed. Incoming requests during this state are buffered in EPP Flow Control queues until pods are ready.
-- **Queue-aware scale-up**: A non-zero queue depth is a definitive "true demand" signal — it counts requests waiting to be served, allowing the HPA to trigger scale-out before users experience latency degradation.
 
 ## Design
 
@@ -28,7 +27,33 @@ EPP Flow Control addresses this by shifting queuing to the gateway. The EPP's `i
 
 The scaling pipeline connects EPP metrics to the Kubernetes HPA through a standard adapter layer:
 
-![IGW HPA Architecture](hpa-architecture.svg)
+```mermaid
+flowchart LR
+    classDef client fill:#eceff1,stroke:#b0bec5,stroke-width:2px,color:#263238,font-weight:bold
+    classDef epp fill:#e3f2fd,stroke:#1e88e5,stroke-width:2px,color:#0b3c5d
+    classDef prom fill:#fff8e1,stroke:#ffb300,stroke-width:2px,color:#ff6f00
+    classDef adapter fill:#f3e5f5,stroke:#8e24aa,stroke-width:2px,color:#4a148c
+    classDef hpa fill:#e8f5e9,stroke:#43a047,stroke-width:2px,color:#1b5e20
+    classDef pool fill:#fce4ec,stroke:#e91e63,stroke-width:2px,color:#880e4f
+
+    Client(["Incoming Requests"]):::client
+
+    subgraph IGW["Inference Gateway"]
+        EPP["EPP\n(Flow Control)"]:::epp
+    end
+
+    Pool["Model Server Pool\n(vLLM)"]:::pool
+    Prom["Prometheus"]:::prom
+    Adapter["Prometheus Adapter\n(External Metrics API)"]:::adapter
+    HPA["Kubernetes HPA"]:::hpa
+
+    Client --> EPP
+    EPP --> Pool
+    EPP -- "flow_control_queue_size\nrunning_requests" --> Prom
+    Prom --> Adapter
+    Adapter -- "igw_queue_depth\nigw_running_requests\n(External Metrics API)" --> HPA
+    HPA -- "scale replicas" --> Pool
+```
 
 The steps are:
 
@@ -55,7 +80,28 @@ When either metric exceeds its target, the HPA takes the more aggressive of the 
 
 EPP Flow Control is the enabling mechanism for seamless scale-from-zero. When all model server replicas are removed, the EPP buffers incoming requests in its in-memory queues rather than rejecting them. This decouples the user-facing availability guarantee from the provisioning state of the backend.
 
-![IGW HPA Scale to Zero](hpa-scale-to-zero.svg)
+```mermaid
+sequenceDiagram
+    autonumber
+    actor Client
+    participant EPP as EPP (Flow Control)
+    participant HPA as HPA / KEDA
+    participant Pool as Model Server Pool
+
+    Note over Pool: Replicas: 0
+    Client->>EPP: Inference Request
+    EPP->>EPP: Enqueue (Flow Control)
+    Note over EPP: queue_depth = 1
+
+    HPA->>EPP: Poll igw_queue_depth (via Prometheus Adapter)
+    EPP-->>HPA: queue_depth = 1
+    HPA->>Pool: Scale 0 → 1
+
+    Note over Pool: Pod starting...
+    Pool-->>EPP: Pod Ready
+    EPP->>Pool: Dispatch queued requests (late binding)
+    Pool-->>Client: Response
+```
 
 The steps are:
 
