@@ -27,33 +27,7 @@ EPP Flow Control addresses this by shifting queuing to the gateway. The EPP's `i
 
 The scaling pipeline connects EPP metrics to the Kubernetes HPA through a standard adapter layer:
 
-```mermaid
-flowchart LR
-    classDef client fill:#eceff1,stroke:#b0bec5,stroke-width:2px,color:#263238,font-weight:bold
-    classDef epp fill:#e3f2fd,stroke:#1e88e5,stroke-width:2px,color:#0b3c5d
-    classDef prom fill:#fff8e1,stroke:#ffb300,stroke-width:2px,color:#ff6f00
-    classDef adapter fill:#f3e5f5,stroke:#8e24aa,stroke-width:2px,color:#4a148c
-    classDef hpa fill:#e8f5e9,stroke:#43a047,stroke-width:2px,color:#1b5e20
-    classDef pool fill:#fce4ec,stroke:#e91e63,stroke-width:2px,color:#880e4f
-
-    Client(["Incoming Requests"]):::client
-
-    subgraph IGW["Inference Gateway"]
-        EPP["EPP\n(Flow Control)"]:::epp
-    end
-
-    Pool["Model Server Pool\n(vLLM)"]:::pool
-    Prom["Prometheus"]:::prom
-    Adapter["Prometheus Adapter\n(External Metrics API)"]:::adapter
-    HPA["Kubernetes HPA"]:::hpa
-
-    Client --> EPP
-    EPP --> Pool
-    EPP -- "flow_control_queue_size\nrunning_requests" --> Prom
-    Prom --> Adapter
-    Adapter -- "igw_queue_depth\nigw_running_requests\n(External Metrics API)" --> HPA
-    HPA -- "scale replicas" --> Pool
-```
+![HPA / KEDA Architecture](hpa-architecture.svg)
 
 The steps are:
 
