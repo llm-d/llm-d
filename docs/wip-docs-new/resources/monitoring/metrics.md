@@ -61,7 +61,13 @@ OpenShift provides a built-in Prometheus stack via User Workload Monitoring. Ena
 
 #### GKE
 
-Google Managed Prometheus (GMP) does not expose an HTTP API. Deploy an in-cluster Prometheus instead:
+**Option 1 — Google Managed Prometheus (recommended)**
+
+GKE clusters include [Google Managed Prometheus (GMP)](https://cloud.google.com/stackdriver/docs/managed-prometheus) by default. To use GMP as a Grafana data source, follow the [GMP Grafana integration guide](https://docs.cloud.google.com/stackdriver/docs/managed-prometheus/query#ui-grafana).
+
+**Option 2 — In-cluster Prometheus**
+
+If you need direct HTTP API access or prefer a standalone instance:
 
 ```bash
 helm repo add prometheus-community https://prometheus-community.github.io/helm-charts && helm repo update
