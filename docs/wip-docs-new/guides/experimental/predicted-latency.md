@@ -16,7 +16,7 @@ See the [Predicted Latency guide](https://github.com/llm-d/llm-d/tree/main/guide
 
 ## Architecture
 
-![Latency Predictor](../images/latency-predictor.svg)
+![Latency Predictor](../../../assets/latency-predictor.svg)
 
 The setup deploys an EPP with the predicted latency sidecar containers:
 * **Training Server** - trains the XGBoost model to predict TPOT and TTFT based on observed traffic

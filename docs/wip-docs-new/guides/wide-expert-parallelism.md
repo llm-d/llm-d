@@ -8,7 +8,7 @@ To address these issues, model servers support DP/EP deployments, which deploys 
 
 The following visualizes the forward pass in a DP/EP deployment in vLLM:
 
-![DP/EP deployment](./images/dp-ep-deployment.svg)
+![DP/EP deployment](../../assets/dp-ep-deployment.svg)
 
 The following steps occurs:
 * Each rank runs attention independently
@@ -35,7 +35,7 @@ As a result, we leverage the following design for the deployment:
 * `LeaderWorkerSet` to manage multi-node pod group deployment of vLLM
 * DP/EP deployment configuration in vLLM
 
-![Multi-Node Wide Expert Parallelism](./images/wide-ep.svg)
+![Multi-Node Wide Expert Parallelism](../../assets/wide-ep.svg)
 
 The request flow works as follows:
 - Request arrives at the proxy, which forwards the request to the EPP

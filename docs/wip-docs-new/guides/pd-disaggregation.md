@@ -20,7 +20,7 @@ See the [P/D Disaggregation guide](https://github.com/llm-d/llm-d/tree/main/guid
 
 ## Architecture
 
-![P/D Disaggregation](./images/pd-disaggregation.svg)
+![P/D Disaggregation](../../assets/pd-disaggregation.svg)
 
 The setup creates 2 `Deployments` of vLLM (all are part of the same `InferencePool`):
 - The **prefill** `Deployment` is 4 replicas of TP=1 vLLM - labeled with `llm-d.ai/role=prefill`.

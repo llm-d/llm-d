@@ -49,7 +49,7 @@ The well-lit path and manifests will be released shortly.
 
 ## Architecture
 
-![Flow Control](./images/flow-control.svg)
+![Flow Control](../../assets/flow-control.svg)
 
 Requests arrive to the proxy with headers expressing their tenant ID and traffic priority. EPP leverages these headers to assign a `FlowKey` (tuple of `FairnessID` and `Priority`) to each request and maintains separate in-memory queues for each `FlowKey`. Each `FlowKey` is assigned to a `PriorityBand` (for cases when multiple tenants have the same priority).
 
