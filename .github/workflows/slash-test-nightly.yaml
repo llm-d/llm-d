@@ -202,7 +202,7 @@ jobs:
       # fork repo directly — GITHUB_TOKEN is scoped to the base repo only.
       - name: Checkout PR head
         if: steps.parse.outputs.result == 'ok' && steps.perm.outputs.result == 'ok'
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           ref: refs/pull/${{ steps.pr.outputs.pr_number }}/head
           fetch-depth: 1
