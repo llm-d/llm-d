@@ -8,7 +8,7 @@ At its core, llm-d contains the following key layers:
 
 - **Proxy** - Accepts requests from the users. It can be deployed as a Standalone Envoy Proxy or via Kubernetes Gateway API. The Proxy consults an EndPoint Picker (EPP) via the ext-proc protocol to determine which Model Server is optimal for a request.
 
-- **EndPoint Picker (EPP)** - Selects which endpoint in an `InferencePool` is optimal for a specific request. The EPP is the "brains" of the scheduling decision that considers prefix-cache affinity, load signals, prioritization, and (optionally) disaggregated serving.
+- **EndPoint Picker (EPP)** - Selects which endpoint in an `InferencePool` is optimal for a specific request. The EPP is the "brains" of the scheduling and queuing decisions that considers prefix-cache affinity, load and saturation signals, prioritization, and (optionally) disaggregated serving.
 
 - **InferencePool** - The InferencePool API defines a group of Model Server Pods dedicated to serving AI models. An InferencePool is conceptually similar to a Kubernetes Service. Each InferencePool has an associated EPP which selects the optimal pod for a request.
 
@@ -20,8 +20,8 @@ At its core, llm-d contains the following key layers:
 For more details on the core components, see:
 - [Proxy](core/proxy.md)
 - [EPP](core/epp/README.md)
-- [InferencePool](core/epp/inferencepool.md)
-- [Model Server](core/epp/model-servers.md)
+- [InferencePool](core/inferencepool.md)
+- [Model Server](core/model-servers.md)
 
 ## Advanced Patterns
 
