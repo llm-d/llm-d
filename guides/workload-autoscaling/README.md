@@ -6,9 +6,9 @@ Effective LLM autoscaling requires proactive, SLO-aware signals that reflect the
 
 This guide covers the autoscaling strategies available in llm-d. Both use the Kubernetes HPA or KEDA as the scaling primitive but differ in the use cases they target, the metrics that drive them, and the operational complexity they require.
 
-## HPA + IGW Metrics
+## HPA + EPP Metrics
 
-The [HPA + IGW Metrics](./README.hpa-igw.md) path integrates the Kubernetes Horizontal Pod Autoscaler (HPA) with signals emitted directly by the Inference Gateway (IGW). The guide demonstrates autoscaling using queue depth and running request counts from the Endpoint Picker (EPP), but other metrics emitted by the IGW can be used depending on your scaling requirements. These signals reflect the actual state of the inference queue, enabling the HPA to scale out before users experience high latency and scale in when capacity is genuinely idle. This path requires only the standard Kubernetes HPA and the Prometheus Adapter, with no additional controllers. KEDA can be used as an alternative to native HPA for alpha features such as scale-to-zero if your cluster does not support alpha feature gates.
+The [HPA + EPP Metrics](./README.hpa-epp.md) path integrates the Kubernetes Horizontal Pod Autoscaler (HPA) with signals emitted directly by the Endpoint Picker (EPP). The guide demonstrates autoscaling using queue depth and running request counts from the Endpoint Picker (EPP), but other metrics emitted by the EPP can be used depending on your scaling requirements. These signals reflect the actual state of the inference queue, enabling the HPA to scale out before users experience high latency and scale in when capacity is genuinely idle. This path requires only the standard Kubernetes HPA and the Prometheus Adapter, with no additional controllers. KEDA can be used as an alternative to native HPA for alpha features such as scale-to-zero if your cluster does not support alpha feature gates.
 
 ## Workload Variant Autoscaler (WVA)
 
@@ -16,10 +16,10 @@ The [Workload Variant Autoscaler (WVA)](./README.wva.md) is designed for operato
 
 ## Choosing a Path
 
-| | [HPA + IGW Metrics](./README.hpa-igw.md) | [Workload Variant Autoscaler (WVA)](./README.wva.md) |
+| | [HPA + EPP Metrics](./README.hpa-epp.md) | [Workload Variant Autoscaler (WVA)](./README.wva.md) |
 |---|---|---|
 | **Best for** | Deployments on homogeneous hardware where each model scales independently | Multi-variant deployments where cost-aware capacity allocation across heterogeneous shared hardware is required |
-| **Scaling signal** | IGW metrics such as queue depth and running request count | KV cache utilization, queue depth, energy and performance budgets |
+| **Scaling signal** | EPP metrics such as queue depth and running request count | KV cache utilization, queue depth, energy and performance budgets |
 | **Cost optimization** | None — scales based on load signals only | Optimizes across variants by preferring lower-cost hardware |
 | **Additional components** | None — standard Kubernetes HPA only | Requires the WVA controller and `VariantAutoscaling` CRD |
 | **Scale to zero** | Supported | Supported |

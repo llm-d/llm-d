@@ -15,15 +15,9 @@ Utilization-based load balancing has structural gaps for LLM workloads:
 
 The Latency Predictor closes those gaps by learning the mapping from `(pod state, request features) → latency` directly from live traffic, and letting the EPP reason about headroom against SLOs instead of hand-tuned weights.
 
-## The Predictor
+## Architecture
 
-The `predicted-latency-producer` plugin drives interactions with the predictor. For each request, it calls the predictor to obtain TTFT and TPOT predictions for every candidate pod, conditioned on the pod's state (KV cache utilization, queue depth, prefix cache match score). After the request is served, the producer sends the observed TTFT and ITL latencies back to the predictor as training samples, so the model is continuously retrained on live traffic.
-
-If the prediction server is unreachable or fails to return a prediction, the latency scorer falls back to a composite score built from KV cache utilization, queue depth, and prefix cache match — so a predictor outage degrades to baseline heuristic routing rather than dropping traffic.
-
-### Architecture
-
-The predictor ships as a set of sidecars colocated with the EPP in the same pod. A **training server** continuously retrains on completed requests, and multiple **prediction servers** read the latest model from a shared volume and answer predictions from the EPP on the hot path.
+The predictor ships as a set of sidecars colocated with the EPP in the same pod. A **training server** continuously retrains on completed requests, and one or more **prediction servers** that read the latest model from a shared volume and answer predictions from the EPP on the hot path.
 
 ```
                 ┌──────────────────────────────────────────────────────┐
@@ -53,9 +47,13 @@ The predictor ships as a set of sidecars colocated with the EPP in the same pod.
                 └──────────────────────────────────────────────────────┘
 ```
 
+In the EPP, latency-based scheduling is implemented as a series of composable EPP plugins (more on this later). The `predicted-latency-producer` plugin drives interactions with the predictor. For each request, it calls the predictor to obtain TTFT and TPOT predictions for every candidate endpoint, conditioned on the endpoint's state (KV cache utilization, queue depth, prefix cache match score). After the request is served, the producer sends the observed TTFT and ITL latencies back to the predictor as training samples, so the model is continuously retrained on live traffic.
+
+If the prediction server is unreachable or fails to return a prediction, the latency scorer falls back to a composite score built from KV cache utilization, queue depth, and prefix cache match — so a predictor outage degrades to baseline heuristic routing rather than dropping traffic.
+
 ### ML Model
 
-Predictions come from **XGBoost** regression models trained online. Two models are maintained — one for TTFT, one for TPOT — and retrained on a sliding window of completed requests.
+The prediction model is an **XGBoost** regression one trained in realtime. Two models are maintained — one for TTFT, one for TPOT — and retrained on a sliding window of completed requests.
 
 Training uses **stratified bucketing** — samples are partitioned by KV cache utilization (10% steps), prefix cache hit rate (0.25 steps), and similar features. Each bucket has its own sample cap, so traffic regimes that are rare in the current window (for example, a cold prefix cache during low load) are not forgotten by the model. Across benchmark runs the models achieve approximately **5% Mean Absolute Percentage Error** on both targets.
 
@@ -86,7 +84,7 @@ The predictor assumes a **homogeneous inference pool** — every pod in the pool
 
 Each prediction sidecar sustains roughly 300 QPS of prediction work on a `c4-standard-192` node (~192 vCPUs). Because the EPP makes one prediction per candidate pod, total prediction load scales with `cluster QPS × pod count`. Scale horizontally by adding prediction sidecars and updating the predictor URL list.
 
-| Cluster QPS | Avg prediction latency (ms) | p99 prediction latency (ms) | Prediction servers |
+| Cluster QPS | Avg prediction latency (ms)  | p99 prediction latency (ms)  | Prediction servers  |
 |-------------|------------------------------|------------------------------|---------------------|
 | 100         | 3.5                          | 46                           | 1                   |
 | 1,000       | 5.0                          | 49                           | 2                   |
@@ -103,7 +101,7 @@ The `predicted-latency-producer` plugin has two training modes, exposed via a `s
 
 ## Scheduling Strategy
 
-Using the latency predictions obtained by `predicted-latency-producer`, scheduling is done using a sequence of filtering and scoring plugins to determine the optimal placement. When the latency predictor is enabled via the Helm chart, the full sequence is wired up automatically. SLO-specific plugins are no-ops when a request does not include SLO headers, so the same set of plugins handles both SLO and non-SLO annotated traffic.
+As indicated before, latency-based scheduling is implemented in the EPP as a set of composable plugins. Using the latency predictions obtained by `predicted-latency-producer` plugin, scheduling is done using a sequence of filtering and scoring plugins to determine the optimal placement. When the latency predictor is enabled via the Helm chart, the full sequence is wired up automatically. SLO-specific plugins are no-ops when a request does not include SLO headers, so the same set of plugins handles both SLO and non-SLO annotated traffic.
 
 ### Filtering Strategy
 
@@ -154,6 +152,6 @@ All latency and prediction-duration series are Prometheus **histograms**, so das
 
 ## Further Reading
 
-- [Predicted Latency Well-Lit Path](../../guides/intelligent-inference-scheduling/predicted-latency.md) — how to adopt this path: Helm enablement, request headers, verification, troubleshooting.
+- [Predicted Latency Well-Lit Path](../../guides/experimental/predicted-latency.md) — how to adopt this path: Helm enablement, request headers, verification, troubleshooting.
 - [Predicted Latency-Based Scheduling for LLMs](https://llm-d.ai/blog/predicted-latency-based-scheduling-for-llms) — design rationale and benchmark results.
 - [EPP Scheduling](../core/epp/scheduling.md) — how the plugins fits into EPP request handling.

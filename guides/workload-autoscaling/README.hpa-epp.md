@@ -1,8 +1,8 @@
-# Autoscaling Workloads with HPA and IGW Metrics
+# Autoscaling Workloads with HPA and EPP Metrics
 
 This guide explains how to configure autoscaling for LLM workloads by integrating the
-Kubernetes Horizontal Pod Autoscaler (HPA) with metrics emitted by the Inference
-Gateway (IGW). By using gateway-level signals like queue depth and active request counts,
+Kubernetes Horizontal Pod Autoscaler (HPA) with metrics emitted by the Endpoint Picker (EPP). 
+By using gateway-level signals like queue size and active request counts,
 you can achieve more responsive and model-aware scaling than with traditional
 CPU/Memory metrics.
 
@@ -30,7 +30,7 @@ Follow the [Intelligent Inference Scheduling](https://github.com/llm-d/llm-d/blo
 
 ## Configuration Guide
 
-### 1. Enable Flow Control in IGW
+### 1. Enable Flow Control in EPP
 
 Enable the Flow Control layer by adding the `flowControl` FeatureGate to your `EndpointPickerConfig`:
 
@@ -47,7 +47,7 @@ Follow the [flow control configuration guide](https://gateway-api-inference-exte
 ### 2. Install the Prometheus Adapter
 
 The Prometheus Adapter bridges Prometheus metrics to the Kubernetes External Metrics API,
-which the HPA uses to read IGW signals.
+which the HPA uses to read EPP signals.
 
 Add the Helm repository and install the adapter into your `monitoring` namespace:
 ```bash
@@ -71,7 +71,7 @@ helm install prometheus-adapter prometheus-community/prometheus-adapter \
 
 ### 3. Configure Prometheus Adapter Rules
 
-Create a values file `igw-adapter-values.yaml` with the following rules:
+Create a values file `epp-adapter-values.yaml` with the following rules:
 ```yaml
 rules:
   external:
@@ -82,7 +82,7 @@ rules:
             resource: "namespace"
           namespaced: false
       name:
-        as: "igw_queue_depth"
+        as: "epp_queue_size"
       metricsQuery: 'sum(inference_extension_flow_control_queue_size{inference_pool="vllm-llama3-8b-instruct"})'
     - seriesQuery: 'inference_objective_running_requests'
       resources:
@@ -91,7 +91,7 @@ rules:
             resource: "namespace"
           namespaced: false
       name:
-        as: "igw_running_requests"
+        as: "epp_running_requests"
       metricsQuery: 'sum(inference_objective_running_requests{top_level_controller_name="vllm-llama3-8b-instruct-epp"})'
 ```
 
@@ -103,13 +103,13 @@ Apply the rules by upgrading the adapter:
 helm upgrade prometheus-adapter prometheus-community/prometheus-adapter \
   --namespace monitoring \
   --reuse-values \
-  --values igw-adapter-values.yaml
+  --values epp-adapter-values.yaml
 ```
 
 Verify the metrics are visible to the Kubernetes API:
 ```bash
-kubectl get --raw "/apis/external.metrics.k8s.io/v1beta1/namespaces/default/igw_queue_depth"
-kubectl get --raw "/apis/external.metrics.k8s.io/v1beta1/namespaces/default/igw_running_requests"
+kubectl get --raw "/apis/external.metrics.k8s.io/v1beta1/namespaces/default/epp_queue_size"
+kubectl get --raw "/apis/external.metrics.k8s.io/v1beta1/namespaces/default/epp_running_requests"
 ```
 
 A successful response returns a JSON object with the current metric value. A `404` means
@@ -118,7 +118,7 @@ re-check the `metricsQuery` label values against your live Prometheus data.
 
 ### 4. Create the HPA Resource
 
-Below is a sample HPA configuration `hpa.yaml` that uses the dual-metric setup to scale your model server based on both the queue depth and current request load.
+Below is a sample HPA configuration `hpa.yaml` that uses the dual-metric setup to scale your model server based on both the queue size and current request load.
 
 ```yaml
 apiVersion: autoscaling/v2
@@ -137,14 +137,14 @@ spec:
   - type: External
     external:
       metric:
-        name: igw_queue_depth
+        name: epp_queue_size
       target:
         type: Value
         value: "250"
   - type: External
     external:
       metric:
-        name: igw_running_requests
+        name: epp_running_requests
       target:
         type: AverageValue
         averageValue: "250"
@@ -165,7 +165,7 @@ spec:
 
 > **Note 1:** The target values (`250`) used here are examples and must be tuned to your model and hardware. A good starting point is to run your model server at a known concurrency level, observe the actual metric values using `kubectl describe hpa`, and set the target below the concurrency at which your model's latency begins to degrade.
 
-> **Note 2:** Although `igw_queue_depth` and `igw_running_requests` originate from the EPP pod, we use `type: External` rather than `type: Pods`. This is because `type: Pods` requires metrics to come from the pods being scaled — in this case the model server pods. Since the EPP is a separate deployment acting as a gateway and emitting metrics on behalf of the model server pool, we treat its metrics as external signals.
+> **Note 2:** Although `epp_queue_size` and `epp_running_requests` originate from the EPP pod, we use `type: External` rather than `type: Pods`. This is because `type: Pods` requires metrics to come from the pods being scaled — in this case the model server pods. Since the EPP is a separate deployment acting as a gateway and emitting metrics on behalf of the model server pool, we treat its metrics as external signals.
 
 ### 5. Verify the HPA
 
@@ -197,12 +197,12 @@ HPA supports scaling to zero through the `HPAScaleToZero` alpha feature flag. Th
 
 1. **Enable Feature Gate:** Follow the [Kubernetes Alpha Feature Guide](https://kubernetes.io/docs/reference/command-line-tools-reference/feature-gates/) to enable the `HPAScaleToZero` feature gate on your cluster.
 2. **Configure HPA:** Set `minReplicas: 0` in your HPA manifest.
-3. **Outcome:** The HPA will de-provision all pods when metrics hit zero and re-provision them as soon as `igw_queue_depth > 0`.
+3. **Outcome:** The HPA will de-provision all pods when metrics hit zero and re-provision them as soon as `epp_queue_size > 0`.
 
 ### Option 2: KEDA
 
 If your environment does not allow alpha feature gates, KEDA is a stable alternative.
 
 1. **Setup KEDA:** Install KEDA and follow the [KEDA Prometheus Scaler guide](https://keda.sh/docs/scalers/prometheus/). Note that KEDA comes with its own built-in metrics adapter that is enabled by default when you install KEDA. Unlike HPA, it does not require the Prometheus adapter installation.
-2. **Configure Scaler:** Use the same `igw_queue_depth` metric as a trigger.
+2. **Configure Scaler:** Use the same `epp_queue_size` metric as a trigger.
 3. **Outcome:** KEDA scales the deployment from 0 to 1 as soon as a request is queued. Once at 1 pod, the standard HPA (configured with `minReplicas: 1`) takes over to scale up to N.
