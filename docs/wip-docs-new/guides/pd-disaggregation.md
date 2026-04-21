@@ -34,6 +34,6 @@ During the standard request flow:
 - Decode instance pulls the KVs over RDMA (IB, RoCE, EFA) with NIXL
 - Decode instances processes the decodes
 
-## Futher Reading
+## Further Reading
 
 See [PD Architecture](../architecture/advanced/disaggregation/README.md) for more details.

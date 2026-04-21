@@ -2,7 +2,7 @@
 
 llm-d's [Intelligent Inference Scheduling guide](../intelligent-inference-scheduling.md) leverages load signals and prefix-cache affinity to schedule requests, combining the signals together with heuristics.
 
-This path is for operators who want to adopt predicted latency-based scheduling - which uses an XGBoost model trained online - to make scheduling decisions. This strategy is useful whne:
+This path is for operators who want to adopt predicted latency-based scheduling - which uses an XGBoost model trained online - to make scheduling decisions. This strategy is useful when:
 - Your workload has **high variance in prompt and completion length**, and queue depth alone is a poor proxy for true load.
 - Your clients can express **per-request latency SLOs** (interactive vs. batch) and you want the gateway to enforce them.
 - Static weight tuning between cache affinity and load has become **fragile** as traffic shifts.

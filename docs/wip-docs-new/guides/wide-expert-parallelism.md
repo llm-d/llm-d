@@ -45,7 +45,7 @@ The request flow works as follows:
 - Decode instance pulls the KVs over RDMA (IB, RoCE, EFA) with NIXL
 - Decode instances processes the decodes, executing the forward passes with DP/EP. DeepEP executes the cross-node dispatch/combine collectives
 
-## Futher Reading
+## Further Reading
 
 See:
 * [PD Architecture](../architecture/advanced/disaggregation/README.md) for more details on disaggregation in llm-d

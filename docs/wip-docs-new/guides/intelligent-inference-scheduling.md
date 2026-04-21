@@ -30,6 +30,6 @@ EPP continuously probes each endpoints's metrics by scraping `/metrics` at a reg
 
 ![Load-Aware Routing](../../assets/load-aware-routing.svg)
 
-## Futher Reading
+## Further Reading
 
 See [EPP Architecture](../architecture/core/epp/README.md) for more details.
