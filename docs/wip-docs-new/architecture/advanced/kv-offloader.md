@@ -8,7 +8,7 @@ llm-d works with any KV-cache connector compatible with vLLM or SGLang. Two inte
 - **Out-of-tree connectors** — third-party cache engines (e.g., [LMCache](https://lmcache.ai), [Mooncake](https://github.com/kvcache-ai/Mooncake), [NVIDIA KVBM](https://docs.nvidia.com/dynamo/latest/kvbm/)) that plug into the model server through its KV-cache connector API and own their own indexing, memory management, and storage.
 
 > [!NOTE]
-> KV-Cache offloading complements llm-d's **cache-aware routing**: routing decides *where* cached blocks live across the fleet, while offloading manages *how* blocks move between GPU memory and lower-cost tiers. Advanced routing scenarios (precise tracking across offload tiers, hybrid-attention models) additionally consume **KV-Events** emitted by the model server via the [KV-Cache Indexer](./kv-indexer.md).
+> Pairs with llm-d's **cache-aware routing** — routing picks replicas that can reuse cached blocks; offloading grows the cache each replica can hold.
 
 ## Functionality
 
