@@ -5,7 +5,7 @@ KV-Cache offloading extends the effective cache capacity beyond GPU HBM by movin
 llm-d works with any KV-cache connector compatible with vLLM or SGLang. Two integration patterns are supported:
 
 - **Native (vLLM `OffloadingConnector`)** — vLLM's built-in offloading path. Targets CPU RAM directly, and a shared filesystem via the [llm-d FS backend](https://github.com/llm-d/llm-d-kv-cache).
-- **Out-of-tree connectors** — third-party cache engines (e.g., [LMCache](https://lmcache.ai), [Mooncake](https://github.com/kvcache-ai/Mooncake)) that plug into the model server through its KV-cache connector API and own their own indexing, memory management, and storage. The same pattern exists in vLLM, SGLang ([HiCache](https://docs.sglang.io/advanced_features/hicache_design.html)), and TensorRT-LLM ([KV Cache Connector API](https://nvidia.github.io/TensorRT-LLM/features/kvcache.html)).
+- **Out-of-tree connectors** — third-party cache engines (e.g., [LMCache](https://lmcache.ai), [Mooncake](https://github.com/kvcache-ai/Mooncake), [NVIDIA KVBM](https://docs.nvidia.com/dynamo/latest/kvbm/)) that plug into the model server through its KV-cache connector API and own their own indexing, memory management, and storage.
 
 > [!NOTE]
 > KV-Cache offloading complements llm-d's **cache-aware routing**: routing decides *where* cached blocks live across the fleet, while offloading manages *how* blocks move between GPU memory and lower-cost tiers. Advanced routing scenarios (precise tracking across offload tiers, hybrid-attention models) additionally consume **KV-Events** emitted by the model server via the [KV-Cache Indexer](./kv-indexer.md).
@@ -134,11 +134,15 @@ For implementation details and advanced configuration, see the [llm-d FS backend
 
 ### Other Connectors
 
-llm-d works with any KV-cache connector compatible with the serving stacks it targets. Beyond the native and filesystem backends described above, established out-of-tree options include [LMCache](https://lmcache.ai) (vLLM and SGLang) and [Mooncake](https://github.com/kvcache-ai/Mooncake) (vLLM and SGLang via HiCache). TensorRT-LLM exposes its own [KV Cache Connector API](https://nvidia.github.io/TensorRT-LLM/features/kvcache.html) on the same pattern.
+Out-of-tree engines coexist with the native path through a common integration contract on the llm-d side:
 
-All connectors integrate with llm-d's scheduling layer through **KV-Events**—cache mutation notifications that the [KV-Cache Indexer](./kv-indexer.md) consumes to maintain a global view of cache distribution. This enables prefix-aware routing regardless of which offloading backend is in use.
+- **Serving-stack side** — each engine is already connector-compatible with one or more of vLLM, SGLang (via HiCache), and TensorRT-LLM, so the model server drives lookups, stores, and loads through its standard KV-cache connector API.
+- **Scheduling side** — connectors integrate with llm-d through **KV-Events**: cache mutation notifications that the [KV-Cache Indexer](./kv-indexer.md) consumes to maintain a global view of cache distribution, enabling prefix-aware routing regardless of which backend is in use.
 
-For deployment guides covering LMCache and other connector options, see the [Tiered Prefix Cache Guide](https://github.com/llm-d/llm-d/tree/main/guides/tiered-prefix-cache).
+> [!NOTE]
+> llm-d's deployment guides formally cover LMCache today. The integration pattern is the same for Mooncake, KVBM, and other connector-compatible engines — they work out-of-the-box on the serving-stack side — but first-class llm-d recipes for each are not yet in the repo.
+
+For existing deployment recipes, see the [Tiered Prefix Cache Guide](https://github.com/llm-d/llm-d/tree/main/guides/tiered-prefix-cache).
 
 ## Configuration
 
