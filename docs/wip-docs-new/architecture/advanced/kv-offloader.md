@@ -2,15 +2,13 @@
 
 KV-Cache offloading extends the effective cache capacity beyond GPU HBM by moving KV blocks to lower-cost tiers like CPU DRAM and shared storage.
 
-Today, llm-d integrates offloading through vLLM's `OffloadingConnector`, which supports two offloading targets:
+llm-d works with any KV-cache connector compatible with vLLM or SGLang. Two integration patterns are supported:
 
-- **CPU RAM** — vLLM's built-in CPU tier.
-- **Shared filesystem** — the llm-d FS backend (part of [llm-d-kv-cache](https://github.com/llm-d/llm-d-kv-cache)), plugged into the `OffloadingConnector` as an external storage target.
-
-[Other connectors](#other-connectors) like LMCache provide alternative offloading paths and work with both vLLM and SGLang.
+- **Native (vLLM `OffloadingConnector`)** — vLLM's built-in offloading path. Targets CPU RAM directly, and a shared filesystem via the [llm-d FS backend](https://github.com/llm-d/llm-d-kv-cache).
+- **Out-of-tree connectors** — third-party cache engines (e.g., [LMCache](https://lmcache.ai), [Mooncake](https://github.com/kvcache-ai/Mooncake)) that plug into the model server through its KV-cache connector API and own their own indexing, memory management, and storage. The same pattern exists in vLLM, SGLang ([HiCache](https://docs.sglang.io/advanced_features/hicache_design.html)), and TensorRT-LLM ([KV Cache Connector API](https://nvidia.github.io/TensorRT-LLM/features/kvcache.html)).
 
 > [!NOTE]
-> KV-Cache offloading complements the [KV-Cache Indexer](./kv-indexer.md) which handles cache-aware routing. While the indexer determines *where* cached blocks exist, the offloader manages *how* blocks move between GPU memory and lower-cost tiers.
+> KV-Cache offloading complements llm-d's **cache-aware routing**: routing decides *where* cached blocks live across the fleet, while offloading manages *how* blocks move between GPU memory and lower-cost tiers. Advanced routing scenarios (precise tracking across offload tiers, multimodal, LoRA) additionally consume **KV-Events** emitted by the model server via the [KV-Cache Indexer](./kv-indexer.md).
 
 ## Functionality
 
@@ -22,9 +20,13 @@ Transformer inference computes Key and Value tensors during prefill, then reuses
 
 The offloading system operates asynchronously. Writes to lower tiers happen in the background without blocking inference. Reads from storage still require waiting, but loading cached blocks is typically faster than recomputing them—up to 16x faster for long prompts.
 
-## vLLM Offloading Architecture
+## Architecture
 
-llm-d's offloading integration today lives inside the vLLM stack — the `OffloadingConnector` dispatches blocks to either the CPU tier or the shared-storage tier. The diagram below shows how these tiers plug into vLLM:
+llm-d supports two integration patterns for KV-cache offloading: the **native** path, where vLLM's own `OffloadingConnector` drives offloading to CPU RAM or a shared filesystem; and **out-of-tree** connectors, where a third-party cache engine plugs into the model server (vLLM, SGLang, or TensorRT-LLM) through its KV-cache connector API and owns its own indexing, memory management, and storage.
+
+### Native (vLLM OffloadingConnector)
+
+The native path lives entirely inside the vLLM stack. The `OffloadingConnector` dispatches blocks to either the CPU tier or the shared-storage tier:
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
@@ -61,6 +63,38 @@ llm-d's offloading integration today lives inside the vLLM stack — the `Offloa
 | Shared Storage | Higher | TB+ | Cross-cluster | Cross-node sharing, persistence, massive scale |
 
 Today, the two targets operate as independent options — choose one offloading target based on your workload requirements.
+
+### Out-of-tree Connectors
+
+Third-party connectors (see [Other Connectors](#other-connectors)) adapt an external KV-cache engine to the model server through its KV-cache connector API. The same pattern is present across major serving stacks — vLLM's V1 Connector API, SGLang's HiCache, and TensorRT-LLM's KV Cache Connector API. Unlike the native path, the cache logic — indexing, memory management, tiering, eviction, and remote storage — lives in a separate engine, often a distinct process or service:
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│               Model Server (vLLM / SGLang / TRT-LLM)            │
+├─────────────────────────────────────────────────────────────────┤
+│                     KV-Cache Connector API                      │
+├─────────────────────────────────────────────────────────────────┤
+│              Third-Party Connector (adapter)                    │
+│      bridges lookup / store / load calls to the engine          │
+└───────────────────────────────┬─────────────────────────────────┘
+                                │  IPC / shared memory / RPC
+                                ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                   External KV-Cache Engine                      │
+│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐           │
+│  │ Cache Index  │  │ Memory Mgr   │  │ Controller   │           │
+│  │ (token → KV) │  │ (pinned pool)│  │ (mgmt, evict)│           │
+│  └──────────────┘  └──────────────┘  └──────────────┘           │
+│  ┌───────────────────────────────────────────────────┐          │
+│  │         Async Offload & Transfer Workers          │          │
+│  └───────────────────────────────────────────────────┘          │
+├────────────┬──────────────────┬─────────────────────────────────┤
+│    CPU     │   Local Disk     │        Remote Backends          │
+│   DRAM     │  (NVMe, etc.)    │   (object store, KV store, ...) │
+└────────────┴──────────────────┴─────────────────────────────────┘
+```
+
+This pattern trades deployment complexity for flexibility: the external engine is independently versioned, can coordinate across multiple inference replicas, and typically supports a wider range of storage backends.
 
 ## Components
 
@@ -100,7 +134,7 @@ For implementation details and advanced configuration, see the [llm-d FS backend
 
 ### Other Connectors
 
-llm-d works with any KV-cache connector compatible with vLLM or SGLang. Beyond the native and filesystem backends described above, [LMCache](https://lmcache.ai) provides an alternative with support for multiple storage backends and its own caching strategies.
+llm-d works with any KV-cache connector compatible with the serving stacks it targets. Beyond the native and filesystem backends described above, established out-of-tree options include [LMCache](https://lmcache.ai) (vLLM and SGLang) and [Mooncake](https://github.com/kvcache-ai/Mooncake) (vLLM and SGLang via HiCache). TensorRT-LLM exposes its own [KV Cache Connector API](https://nvidia.github.io/TensorRT-LLM/features/kvcache.html) on the same pattern.
 
 All connectors integrate with llm-d's scheduling layer through **KV-Events**—cache mutation notifications that the [KV-Cache Indexer](./kv-indexer.md) consumes to maintain a global view of cache distribution. This enables prefix-aware routing regardless of which offloading backend is in use.
 
