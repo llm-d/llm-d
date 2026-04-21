@@ -209,10 +209,11 @@ The FS backend populates vLLM's built-in offloading metrics (`vllm:kv_offload_*`
 
 **Storage offloading:** Best when cache working set exceeds single-node capacity, when cross-node sharing is valuable (repeated system prompts across replicas, agentic workflows), or when persistence across restarts matters. Storage offloading is most effective when the storage network is fast enough to allow low-latency loads and stores.
 
-**Storage selection:** The FS backend works with any POSIX filesystem. Performance varies by backend:
-- Local NVMe: Lowest latency, no sharing
-- CephFS: Good balance of performance and sharing
-- IBM Storage Scale, GCP Lustre: High throughput for large deployments
+**Storage selection:** The FS backend works with any POSIX-compliant filesystem and is not tied to a specific vendor. Your choice trades off:
+- **Sharing scope** — local media (e.g., NVMe SSDs) are per-node only; networked or distributed filesystems (e.g., NFS, CephFS, Lustre, IBM Storage Scale, Weka, cloud file services) enable cross-node reuse.
+- **Throughput and latency** — depend on the underlying hardware, network, and filesystem configuration rather than the KV-cache layer; parallel and distributed filesystems generally scale best for large deployments.
+
+Any POSIX filesystem is a candidate; the best choice for a given deployment depends on existing storage infrastructure, required scale, and latency targets.
 
 **Block size tuning:** Larger `block_size` values (256-512 tokens) improve I/O efficiency but require longer matching prefixes for a cache hit. Match to your typical prefix lengths.
 
