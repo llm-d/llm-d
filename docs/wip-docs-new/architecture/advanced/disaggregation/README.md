@@ -135,7 +135,7 @@ vLLM and SGLang both support multiple KV transfer engines - in llm-d we currentl
 
 [NVIDIA Inference Transfer Library (NIXL)](https://github.com/ai-dynamo/nixl) accelerates point to point communications in AI inference frameworks.
 
-NIXL provides a standardized API for transfering memory between remote instances offering multiple backends (e.g. UCX, UCCL, libfabric) each of which support multiple underlying transports (NVLink, RoCE, IB, EFA, etc).
+NIXL provides a standardized API for transferring memory between remote instances offering multiple backends (e.g. UCX, UCCL, libfabric) each of which support multiple underlying transports (NVLink, RoCE, IB, EFA, etc).
 
 |             | IB | RoCE | TCP-X | EFA |
 |-------------|:--:|:----:|:-----:|:---:|
@@ -144,7 +144,7 @@ NIXL provides a standardized API for transfering memory between remote instances
 | **libfabric**|   |      |       |  ✓  |
 
 > [!NOTE]
-> UCX also supports transfer via TCP and NVLINK. TCP is extremely slow and is targeted for local development. NVLINK transfer is used for local development and cannot be used in Kuberentes deployments as it cannot cross pod boundaries.
+> UCX also supports transfer via TCP and NVLINK. TCP is extremely slow and is targeted for local development. NVLINK transfer is used for local development and cannot be used in Kubernetes deployments as it cannot cross pod boundaries.
 
 ### Direct KV Cache Transfer
 

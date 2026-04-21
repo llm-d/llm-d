@@ -10,7 +10,7 @@ This page documents architectural considerations that impact these common operat
 
 ## Dynamic Connections
 
-In production enviornments, it is common for model server replicas to be created and destroyed during the running of the service. In a disaggregated configuration, the ability to dynamically add/remove replicas from the deployment is complicated by the need to establish/destroy connections between P and D workers on the fly.
+In production environments, it is common for model server replicas to be created and destroyed during the running of the service. In a disaggregated configuration, the ability to dynamically add/remove replicas from the deployment is complicated by the need to establish/destroy connections between P and D workers on the fly.
 
 vLLM supports this functionality via NIXL's APIs, which enable dynamically adding and removing connections.
 
@@ -47,15 +47,15 @@ sequenceDiagram
 
 #### Discovery
 
-Since model server instances are added to an `InferencePool` via standard Kuberentes selectors and labels, new prefill and decode instances discovered automatically when their pods status becomes `status: Running`.
+Since model server instances are added to an `InferencePool` via standard Kubernetes selectors and labels, new prefill and decode instances discovered automatically when their pods status becomes `status: Running`.
 
 As a result, new replicas can be added to a running disaggregated deployment without restarts and without need to coordinate within any specialized service discovery plane.
 
 ### Scale-Down
 
-In Kuberentes, there is a well-defined [pod termination process](https://kubernetes.io/docs/concepts/workloads/pods/pod-lifecycle/#pod-termination):
+In Kubernetes, there is a well-defined [pod termination process](https://kubernetes.io/docs/concepts/workloads/pods/pod-lifecycle/#pod-termination):
 * **Termination Triggered**: The pod's state is changed to **Terminating**.
-* **`InferencePool` Update**: The pod is removed from the list of endpoints for associated the `InferencePool`, preventing new traffic from being routed to it. (note: for standard Kuberentes objects, this is equiavlent to removal from a Service)
+* **`InferencePool` Update**: The pod is removed from the list of endpoints for associated the `InferencePool`, preventing new traffic from being routed to it. (note: for standard Kubernetes objects, this is equivalent to removal from a Service)
 * **PreStop Hook**: If defined, the preStop hook executes.
 * **SIGTERM Signal**: Kubernetes sends a SIGTERM signal to the main process in each container.
 * **Termination Grace Period**: The pod is given a set amount of time (default is 30 seconds) to shut down gracefully. If it does not terminate by the end of this period, a SIGKILL is sent to force termination.
@@ -63,7 +63,7 @@ In Kuberentes, there is a well-defined [pod termination process](https://kuberne
 For **new requests**, instances are automatically removed from the `InferencePool` so no new traffic is routed to terminating pods.
 
 For **running requests**, we can configure how vLLM handles the `SIGTERM`:
-* By default, vLLM immediately `aborts` exising requests and terminates. This fails the running requests with an error status code.
+* By default, vLLM immediately `aborts` existing requests and terminates. This fails the running requests with an error status code.
 * vLLM can be configured with a `--shutdown-timeout N`. When this is set, vLLM catches the `SIGTERM` and drains the currently running requests for `N` seconds. After this timeout, it `aborts` any running requests still in flight, returning an error code.
 
 #### Scaling Down Decode Replicas
@@ -128,7 +128,7 @@ sequenceDiagram
 
     R->>P: Request (do_remote_decode=True)
     P->>P: Run prefill
-    P->>R: Reponse
+    P->>R: Response
 
     note over P: P crashes 💥
 
@@ -162,7 +162,7 @@ sequenceDiagram
 
     R->>P: Request (do_remote_decode=True)
     P->>P: Run prefill (holds onto KVs)
-    P->>R: Reponse
+    P->>R: Response
 
     R->>D: Request (do_remote_prefill=True)
     note over D: D crashes 💥
