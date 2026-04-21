@@ -66,6 +66,45 @@ For changes that fix broken code or add small changes within a component:
   * A good way to bring attention for moderate size changes is to create an RFC issue in GitHub, then engage in Slack
   * Within components, use project proposals when scope of change is large or impact to users is high
 
+## Before You Write Code
+
+AI tools have lowered the cost of opening a PR without lowering the cost of reviewing or maintaining one. The guidance below keeps contributions proportional to the project's capacity to support them.
+
+### Contributions that Benefit from Discussion First
+
+These are not requirements, but contributions in the following categories tend to land more smoothly when the approach is agreed on first. Opening an issue or proposing in the appropriate SIG channel is usually faster than writing a PR and iterating.
+
+* **New features.** Even features that do not rise to a project proposal (no new public API or component) benefit from a brief issue describing the problem and the proposed approach before implementation.
+* **New testing methodologies.** Fuzzing, property-based testing, chaos testing, load testing, or other testing approaches that introduce a new class of ongoing maintenance (new CI jobs, curated inputs, triage, release-gating policy). See the worked example below.
+* **New external dependencies.** Require maintainer sign-off.
+* **Renames or other API-affecting changes.** See [API Changes and Deprecation](#api-changes-and-deprecation).
+
+Every contribution creates ongoing cost: review time, CI time, flake triage, and future maintenance. A good problem statement captures that cost alongside the benefit, which is what an issue or proposal makes visible before code is written.
+
+#### Worked Example: A New Testing Methodology
+
+Adding a new testing framework (fuzzing, property-based, load, chaos) improves robustness on paper. In practice, the PR itself consumes significant review cycles to align on scope and ownership, and once merged it introduces a new CI job, inputs to curate, a new category of flake to triage, and an implicit policy call about whether findings block releases. An issue first absorbs the alignment work at a fraction of the cost.
+
+Before opening a PR, please raise an issue or proposal covering:
+
+* What robustness gap is this closing? (A reported bug, a history of failures in this area, a security concern.)
+* What components are in scope?
+* Who owns the inputs, CI job, and triage?
+* What is the gating policy for findings from this methodology?
+
+Once those are settled, the implementation PR is usually straightforward.
+
+### Contributions We May Decline
+
+Examples of patterns maintainers may close or redirect:
+
+* **Speculative hardening.** Guards or error handling for conditions that cannot occur given current code invariants. If the condition can actually occur, please open an issue with a reproducer instead.
+* **Defensive abstractions without a caller.** New interfaces, factory indirection, or generic wrappers introduced for anticipated future use. Maintainers may ask you to defer these until there is a concrete caller.
+
+### AI-Assisted Contributions
+
+AI-assisted contributions are welcome under the same standards as any other contribution. The human submitter is the author of record and must be able to defend the change on substance.
+
 ## Feature testing
 
 The first key step in testing a feature, or bugfix is to identify what layer of the stack are you testing. Here are some test cases:
@@ -146,6 +185,9 @@ EOF
 ### Commit and Pull Request Style
 
 * **Pull requests** should describe the problem succinctly
+* **Descriptions** should accurately reflect what the diff does
+* **PR ownership**: the submitting contributor is the author of record and should be able to explain the code, justify design choices, and respond to review on substance
+* **Scope discipline**: keep changes sized to the stated problem; large, wide-ranging diffs may be asked to split or trim
 * **Rebase and squash** before merging
 * **Use minimal commits** and break large changes into distinct commits
 * **Commit messages** should have:
