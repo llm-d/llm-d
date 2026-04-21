@@ -2,7 +2,7 @@
 
 The Latency Predictor is the llm-d component behind predicted latency-based scheduling. Instead of scoring pods by coarse utilization signals alone, the EPP asks an online-trained ML model to predict **Time To First Token (TTFT)** and **Time Per Output Token (TPOT)** for each candidate pod, then routes on those predictions — optionally gated by per-request Service Level Objectives (SLOs).
 
-This page is a reference for the component: its design, EPP plugins, ML model, failure modes, and scaling characteristics. For step-by-step adoption — Helm enablement, SLO header usage, verification, troubleshooting — see the [Predicted Latency well-lit path](../../guides/intelligent-inference-scheduling/predicted-latency.md). Design rationale and benchmarks are in the blog [Predicted Latency-Based Scheduling for LLMs](https://llm-d.ai/blog/predicted-latency-based-scheduling-for-llms).
+This page is a reference for the component: its design, EPP plugins, ML model, failure modes, and scaling characteristics. For step-by-step adoption — Helm enablement, SLO header usage, verification, troubleshooting — see the [Predicted Latency well-lit path](../../guides/experimental/predicted-latency.md). Design rationale and benchmarks are in the blog [Predicted Latency-Based Scheduling for LLMs](https://llm-d.ai/blog/predicted-latency-based-scheduling-for-llms).
 
 ## Why Predicted Latency?
 
