@@ -17,7 +17,7 @@ The proxy's job is to:
 
 llm-d provides two deployment patterns for the proxy:
 - Standalone - where a proxy container is deployed alongside the [EPP](epp) container in the same Pod
-- via Gateway API - where the proxy is managed by the Kuberentes Gateway API machinery
+- via Gateway API - where the proxy is managed by the Kubernetes Gateway API machinery
 
 > [!NOTE]
 > Standalone deployments are intended for workloads where the machinery of Gateway API creates too much operational overhead - such as clusters using Ingress, basic testing and evaluations, batch inference, and RL post-training. Gateway API enables a clean integration with modern, L7 production-grade cloud networking solutions such as Istio, GKE Gateway and Agentgateway.
@@ -113,9 +113,9 @@ The Inference Platform owner deploys an InferencePool, EPP, and model servers. W
 Gateway API-based deployments require the Gateway implementation to support Gateway API Inference Extension (GAIE). A full list of Gateways supporting GAIE can be found [here](https://gateway-api-inference-extension.sigs.k8s.io/implementations/gateways/).
 
 llm-d provides configuration guides and regularly tests integrations with the following Gateways:
-- [Istio](../guides/gateways/istio.md)
-- [GKE Gateway](../guides/gateways/gke.md)
-- [agentgateway](../guides/gateways/agentgateway.md)
+- [Istio](../resources/gateways/istio.md)
+- [GKE Gateway](../resources/gateways/gke.md)
+- [agentgateway](../resources/gateways/agentgateway.md)
 
 > [!NOTE]
 > We welcome contribution of guides for other Gateways!

@@ -516,7 +516,7 @@ jobs:
       shortsha: ${{ steps.export-sha.outputs.shortsha }}
     steps:
       - name: Download all digests (best-effort)
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           path: /tmp/digests-raw
           pattern: digests-cuda-dev-*
@@ -594,7 +594,7 @@ jobs:
 
       - name: Download digests
         if: ${{ steps.should-run.outputs.os_succeeded == 'true' }}
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           path: /tmp/digests-raw
           pattern: digests-cuda-dev-${{ matrix.os }}-*
@@ -879,7 +879,7 @@ jobs:
       shortsha: ${{ steps.export-sha.outputs.shortsha }}
     steps:
       - name: Download all digests (best-effort)
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           path: /tmp/digests-raw
           pattern: digests-aws-dev-*
@@ -937,7 +937,7 @@ jobs:
 
       - name: Download digests
         if: ${{ steps.should-run.outputs.rhel_ok == 'true' }}
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           path: /tmp/digests-raw
           pattern: digests-aws-dev-rhel-*

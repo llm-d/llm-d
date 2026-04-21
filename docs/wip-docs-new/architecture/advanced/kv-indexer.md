@@ -1,286 +1,156 @@
-THIS NEEDS TO BE UPDATED, WRITTEN BY CLAUDE
+# KV-Cache Indexer
 
-# KV-Cache Indexer - [?]
+The **KV-Cache Indexer** enables llm-d's precise prefix-cache-aware scheduling functionality.
 
-The KV-Cache Indexer enables precise prefix cache-aware routing in llm-d by maintaining a near-real-time view of KV-Cache block distribution across a fleet of Model Servers.
-
-> In comparison to EPP's `prefix-cache-scorer` which maintains an approximate view of the KV cache, the `precise-kv-cache-scorer` leverages **KV-Events** emitted by the Model Servers to maintain a globally consistent view of the KV cache state, which can be useful in near saturation regmies of for multi-modal inputs.
+> [!NOTE]
+> This page assumes familiarity with the EPP's design. See [EPP architecture](../core/epp) for more details.
 
 ## Functionality
 
-Reusing KV-Cache blocks rather than recomputing them significantly improves both Time To First Token (TTFT) and overall throughput. The KV-Cache Indexer tracks which KV-Cache blocks exist on which model server pods, so the inference scheduler (EPP) can route requests to the pod that already has the most relevant cached blocks.
+The kv-cache indexer subscribes to `KVEvents` emitted from model servers to maintain a near-realtime view of the KV cache state. The `precise-prefix-cache-scorer` uses this information during the EPP scheduler's filter → score → pick flow.
 
-The indexer is implemented in the [llm-d-kv-cache](https://github.com/llm-d/llm-d-kv-cache) repository and runs as a library embedded in the EPP via the `precise-prefix-cache-scorer` plugin.
+The precise view offers improved precision for harder-to-approximate scenarios:
+- **Multi-Modal Models** — Multi-modal content hashes (images, audio) are folded into block keys, so two prompts with the same text but different images produce different keys and are routed to the pod with matching multimodal KV-cache.
+- **Hybrid-Attention Models** — In hybrid models, KV cache usage per layer groups (full, sliding-window, linear) scales non-linearly making byte-based trees imprecise.
+- **Advanced KV-Cache Orchestration** — As model-server KV-cache management policies grow beyond simple LRU, approximate views become increasingly unreliable and complex to create; the event-driven view tracks the actual state.
 
-## Design
+> [!NOTE]
+> Hybrid-attention-aware scoring is a work in progress.
 
-The indexer has two primary data flows:
+## Architecture
 
-### Write Path: Ingesting Cache Events
+At the top level there are two components: the **Model Servers** and the **EPP**. Model servers publish KV-Events whenever their cache state changes; the EPP watches those events, stores them in an index, and consults the index during scheduling.
 
-Model servers like vLLM can be configured to emit **KV-Events** over ZeroMQ whenever cache blocks are created or evicted. The indexer subscribes to these events and updates an internal block index in near-real-time.
+Zooming into the EPP, three cooperating components do the work:
 
-1. A vLLM pod creates or evicts KV-Cache blocks and publishes an event to a ZMQ topic (format: `kv@<pod-ip>:<port>@<model-name>`)
-2. The indexer's event pool receives the message and routes it to a worker using consistent hashing on the pod ID (FNV-1a), ensuring events from the same pod are processed in order
-3. The worker decodes the event (msgpack-encoded for vLLM) and updates the block index accordingly
+- **Index** — stores the event-driven view of which blocks are resident on which pods.
+- **Data Producer** — tokenizes prompts and extracts multimodal features, so downstream components can derive block keys without re-tokenizing.
+- **Scorer** — consults the Index to score each candidate pod by how much of the request's prefix it already holds.
 
-### Read Path: Scoring Pods
+```mermaid
+flowchart LR
+    Req([Inference Request]) --> DP
 
-When a new inference request arrives, the EPP asks the indexer to score each candidate pod based on how much of the request's prefix is already cached.
+    subgraph EPP["EPP"]
+        direction TB
+        DP["Data Producer<br/>(tokenizer plugin)"]
+        Scorer["Scorer<br/>(precise-prefix-cache-scorer)"]
+        Index[("Index<br/>(block key → pods)")]
+        DP --> Scorer
+        Scorer <-->|consult| Index
+    end
 
-1. The incoming prompt is tokenized (via a UDS tokenizer sidecar or HuggingFace tokenizer)
-2. Tokens are chunked into fixed-size blocks (e.g., 64 tokens) and hashed into deterministic KV-block keys using chained FNV-64a hashes, matching vLLM's content-addressing logic
-3. The indexer looks up which pods have each block key and finds the longest consecutive prefix match from the start
-4. Each pod receives a score based on its number of consecutive matching blocks
-5. The EPP uses this score (along with other scorers like queue depth and cache utilization) to pick the optimal pod
+    subgraph MS["Model Servers"]
+        direction TB
+        vllm["vLLM / SGLang"]
+    end
 
-### Architecture Modules
+    MS -.KV-Events over ZMQ.-> Index
 
-| Module | Purpose | Default Implementation |
-| :--- | :--- | :--- |
-| `kvcache.Indexer` | Main orchestrator for scoring requests | Coordinates all internal modules |
-| `kvevents.Pool` | Ingests and processes KV-Cache events from vLLM | Sharded worker pool using ZMQ subscription |
-| `kvevents.EngineAdapter` | Parses engine-specific raw event messages | vLLM adapter for msgpack-encoded events |
-| `kvblock.Index` | Core data store mapping block hashes to pod locations | In-memory two-level LRU cache |
-| `kvblock.TokenProcessor` | Converts token sequences into KV-block keys | Chunking and hashing compatible with vLLM |
-| `kvblock.Scorer` | Scores pods based on cache hit sequences | Longest consecutive prefix matching |
-
-### Index Backends
-
-The block index supports multiple backends:
-
-- **In-Memory (default)** - Fast, thread-safe, two-level LRU cache using `hashicorp/golang-lru`. Stores up to 100M keys with configurable pod cache size per key. Best for most deployments.
-- **Cost-Aware Memory** - Uses `hypermodeinc/ristretto` for cost-aware eviction based on actual memory usage. Useful when memory usage patterns vary significantly across keys.
-- **Redis** - Distributed backend shared by multiple indexer replicas. Provides persistence and scalability.
-- **Valkey** - Redis-compatible, open-source alternative (BSD licensed). Supports RDMA for reduced latency.
-
-### Event Delivery Modes
-
-The indexer supports two modes for receiving KV-Events from vLLM pods:
-
-#### Centralized ZMQ Endpoint (Default)
-
-All vLLM pods publish events to a single ZMQ endpoint hosted on the EPP. This is simpler to configure and works well for single-scheduler deployments.
-
-**EPP side:** `zmqEndpoint: "tcp://*:5557"` with `discoverPods: false`
-
-**vLLM side:**
-```json
-{
-  "enable_kv_cache_events": true,
-  "publisher": "zmq",
-  "endpoint": "tcp://gaie-<release>-epp.<namespace>.svc.cluster.local:5557",
-  "topic": "kv@<pod-ip>:8000@<model-name>"
-}
+    style EPP fill:#eef,stroke:#447,color:#000
+    style MS fill:#fff3e0,stroke:#ff9800,color:#000
 ```
 
-#### Pod Discovery Mode
+Each component has its own configuration surface; the rest of this page describes them in turn.
 
-Each vLLM pod publishes events on its own ZMQ endpoint, and the EPP discovers pods automatically via Kubernetes label selectors. This mode supports active-active multi-scheduler deployments, where each scheduler replica maintains a global view.
+### Index
 
-**EPP side:** `zmqEndpoint: "tcp://*:5557"` with `discoverPods: true`
+The Index holds a `block key → pods` mapping built up from KV-Events published by the model servers. Model servers (vLLM and SGLang today) publish three event types over ZMQ whenever their KV-cache state changes:
 
-**vLLM side:**
-```json
-{
-  "enable_kv_cache_events": true,
-  "publisher": "zmq",
-  "endpoint": "tcp://*:5557",
-  "topic": "kv@<pod-ip>:8000@<model-name>"
-}
+- **`BlockStored`** — blocks with the given content hashes have been created on a specific device tier. Payload includes the chained parent hash, the token chunk, any LoRA ID/name, and any multimodal extra keys.
+- **`BlockRemoved`** — blocks with the given hashes have been evicted from a specific device tier and/or attention group.
+- **`AllBlocksCleared`** — the pod dropped its entire cache (a reset). This can occur in RL weights rollouts and other scenarios. The indexer drops all entries associated with the pod.
+
+#### Event Delivery Modes
+
+Two shapes are supported for getting events from the model servers to the EPP:
+
+* **Centralized** — every model-server pod connects (`zmq.PUB`) to a single endpoint hosted by the EPP (`zmq.SUB`). Works naturally with a single EPP replica.
+
+```
+  Model Server A ──► ZMQ ──┐
+  Model Server B ──► ZMQ ──┼──► EPP (binds tcp://*:5557)
+  Model Server C ──► ZMQ ──┘
 ```
 
-Enable via Helm: `POD_DISCOVERY=true helmfile apply -n ${NAMESPACE}`
+* **Pod discovery** — each model-server pod binds its own ZMQ socket. The EPP discovers pods via Kubernetes label selectors and creates per-pod subscribers. This is the mode to use for active-active multi-scheduler: every EPP replica independently subscribes to every pod and sees the full event stream.
 
-### Tokenizer Sidecar
-
-The EPP runs a UDS tokenizer sidecar alongside the inference scheduler to provide fast tokenization without network overhead. The sidecar:
-
-- Downloads and caches tokenizers from HuggingFace
-- Exposes tokenization over a Unix Domain Socket at `/tmp/tokenizer/tokenizer-uds.socket`
-- Is shared by both the `tokenizer` plugin (for request preprocessing) and the `precise-prefix-cache-scorer` plugin (for block key generation)
-
-## Configuration
-
-The KV-Cache Indexer is configured through the EPP's `EndpointPickerConfig` as parameters to the `precise-prefix-cache-scorer` plugin. The configuration has three top-level sections.
-
-### Token Processor Configuration
-
-Controls how tokens are chunked into KV-Cache blocks.
-
-| Field | Type | Default | Description |
-| :--- | :--- | :--- | :--- |
-| `blockSize` | integer | `16` | Number of tokens per block. **Must match** vLLM's `--block-size` flag. |
-| `hashSeed` | string | `""` | Seed for FNV-64a hashing. **Must align** with `PYTHONHASHSEED` on vLLM pods. |
-
-### Indexer Configuration
-
-Controls the indexer's behavior and tokenizer access.
-
-| Field | Type | Default | Description |
-| :--- | :--- | :--- | :--- |
-| `speculativeIndexing` | boolean | `false` | Enable speculative indexing to predict prefix cache hits before events arrive. |
-| `tokenizersPoolConfig.modelName` | string | - | The model name used for tokenization (e.g., `Qwen/Qwen3-32B`). |
-| `tokenizersPoolConfig.workersCount` | integer | `5` | Number of tokenization worker goroutines. |
-| `tokenizersPoolConfig.uds.socketFile` | string | - | Path to UDS tokenizer socket. Recommended for production. |
-| `tokenizersPoolConfig.hf.enabled` | boolean | `true` | Enable downloading tokenizers from HuggingFace Hub. |
-| `tokenizersPoolConfig.hf.huggingFaceToken` | string | `""` | HuggingFace API token for private models. |
-| `tokenizersPoolConfig.local.autoDiscoveryDir` | string | `"/mnt/models"` | Directory to scan for local tokenizer files. |
-
-#### Index Backend Configuration
-
-Only one backend should be configured. If multiple are set, see priority in [llm-d-kv-cache docs](https://github.com/llm-d/llm-d-kv-cache/blob/main/docs/configuration.md).
-
-**In-Memory (default):**
-
-| Field | Type | Default | Description |
-| :--- | :--- | :--- | :--- |
-| `kvBlockIndexConfig.inMemoryConfig.size` | integer | `100000000` | Maximum number of stored keys. |
-| `kvBlockIndexConfig.inMemoryConfig.podCacheSize` | integer | `10` | Number of pod entries cached per key. |
-
-**Cost-Aware Memory:**
-
-| Field | Type | Default | Description |
-| :--- | :--- | :--- | :--- |
-| `kvBlockIndexConfig.costAwareMemoryConfig.size` | string | `"2GiB"` | Maximum memory usage (e.g., `500MiB`, `2GiB`). |
-
-**Redis / Valkey:**
-
-| Field | Type | Default | Description |
-| :--- | :--- | :--- | :--- |
-| `kvBlockIndexConfig.redisConfig.address` | string | `"redis://127.0.0.1:6379"` | Connection URL. Supports `redis://` and `valkey://` schemes. |
-| `kvBlockIndexConfig.redisConfig.backendType` | string | `"redis"` | Backend type: `redis` or `valkey`. |
-| `kvBlockIndexConfig.redisConfig.enableRDMA` | boolean | `false` | Enable RDMA transport (Valkey only). |
-
-### KV-Events Configuration
-
-Controls how the indexer receives cache events from vLLM pods.
-
-| Field | Type | Default | Description |
-| :--- | :--- | :--- | :--- |
-| `zmqEndpoint` | string | `""` | ZMQ endpoint to bind/connect. e.g., `tcp://*:5557`. |
-| `topicFilter` | string | `"kv@"` | ZMQ topic prefix filter for KV-Cache events. |
-| `concurrency` | integer | `4` | Number of parallel event processing workers. |
-| `engineType` | string | `"vllm"` | Inference engine type (`vllm` or `sglang`). |
-| `discoverPods` | boolean | `true` | Enable Kubernetes pod auto-discovery mode. |
-
-#### Pod Discovery Configuration
-
-When `discoverPods` is `true`, the indexer watches Kubernetes pods and connects to their individual ZMQ endpoints.
-
-| Field | Type | Default | Description |
-| :--- | :--- | :--- | :--- |
-| `podDiscoveryConfig.podLabelSelector` | string | `"llm-d.ai/inferenceServing=true"` | Label selector for discovering vLLM pods. |
-| `podDiscoveryConfig.podNamespace` | string | `""` | Namespace to watch. Empty watches all namespaces. |
-| `podDiscoveryConfig.socketPort` | integer | `5557` | ZMQ port on each vLLM pod. |
-
-### vLLM Model Server Requirements
-
-The vLLM model servers must be configured to publish KV-Events:
-
-- **`--block-size`** must match the indexer's `tokenProcessorConfig.blockSize` (e.g., `--block-size=64`)
-- **`--kv-events-config`** must enable event publishing with the correct endpoint and topic format
-
-### Scheduling Weights
-
-The `precise-prefix-cache-scorer` is one of several scorers used in the scheduling profile. Typical weights:
-
-| Scorer | Weight | Purpose |
-| :--- | :--- | :--- |
-| `precise-prefix-cache-scorer` | 3.0 | Prefer pods with cached prefix blocks |
-| `kv-cache-utilization-scorer` | 2.0 | Balance load based on GPU memory pressure |
-| `queue-scorer` | 2.0 | Prefer pods with shorter request queues |
-
-The higher weight on the prefix cache scorer reflects the significant latency benefit of cache hits -- up to 99.5% reduction in TTFT in benchmarks.
-
-## Examples
-
-### Full EPP Configuration with KV-Cache Indexer
-
-```yaml
-apiVersion: inference.networking.x-k8s.io/v1alpha1
-kind: EndpointPickerConfig
-plugins:
-  - type: single-profile-handler
-  - type: tokenizer
-    parameters:
-      modelName: Qwen/Qwen3-32B
-      udsTokenizerConfig:
-        socketFile: /tmp/tokenizer/tokenizer-uds.socket
-  - type: precise-prefix-cache-scorer
-    parameters:
-      tokenProcessorConfig:
-        blockSize: 64
-      indexerConfig:
-        speculativeIndexing: true
-        tokenizersPoolConfig:
-          modelName: Qwen/Qwen3-32B
-          local: null
-          hf: null
-          uds:
-            socketFile: /tmp/tokenizer/tokenizer-uds.socket
-      kvEventsConfig:
-        topicFilter: "kv@"
-        concurrency: 4
-        discoverPods: false
-        zmqEndpoint: "tcp://*:5557"
-  - type: kv-cache-utilization-scorer
-  - type: queue-scorer
-  - type: max-score-picker
-schedulingProfiles:
-  - name: default
-    plugins:
-      - pluginRef: precise-prefix-cache-scorer
-        weight: 3.0
-      - pluginRef: kv-cache-utilization-scorer
-        weight: 2.0
-      - pluginRef: queue-scorer
-        weight: 2.0
-      - pluginRef: max-score-picker
+```
+  EPP Replica 1 ──ZMQ──┐
+                       ├──► Model Server A (binds :5557)
+  EPP Replica 2 ──ZMQ──┤
+                       ├──► Model Server B (binds :5557)
+  EPP Replica 1 ──ZMQ──┤
+                       └──► Model Server C (binds :5557)
+  EPP Replica 2 ──ZMQ──┘
 ```
 
-### vLLM Model Server with KV-Events
+#### Backends
 
-```yaml
-args:
-  - "--block-size=64"
-  - "--kv-events-config"
-  - |-
-    {
-      "enable_kv_cache_events": true,
-      "publisher": "zmq",
-      "endpoint": "tcp://gaie-<release>-epp.<namespace>.svc.cluster.local:5557",
-      "topic": "kv@$(POD_IP):8000@Qwen/Qwen3-32B"
-    }
+The Index is the hot data structure of the system: every scoring call queries it, every KV-event updates it. Multiple backends are available depending on desired memory and replication model:
+
+| Backend                 | Storage                                                                         | When to use                                                                                                                                                                | Tradeoff                                                                                                                                                       |
+|:------------------------|:--------------------------------------------------------------------------------|:---------------------------------------------------------------------------------------------------------------------------------------------------------------------------|:---------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| **In-Memory (default)** | Two-level LRU: outer cache keyed by block hash, inner cache of pods per block   | Default choice for most deployments                                                                                                                                        | Lowest latency; fixed entry count (default 100M keys × 10 pod entries) makes sizing predictable                                                                |
+| **Cost-Aware Memory**   | Ristretto cache with admission control and cost-based eviction                  | Workloads where per-entry size varies a lot (multimodal, variable-length LoRA metadata)                                                                                    | Budget specified in bytes (e.g. `2GiB`) rather than entry count; probabilistic admission can reject entries under pressure                                     |
+| **Redis / Valkey**      | External server (TCP; Valkey is Redis-wire-compatible, BSD-licensed)            | Need for persistent or very-long lived index (uncommon)                                                                                                                    | Adds a network hop per lookup and ties EPP availability to the external store; shared state gives strong consistency across replicas but is rarely necessary   |
+
+> [!IMPORTANT]
+> In-memory is typically the best option, offering low-latency, simple operations, and high availability via multi-replica deployment (each EPP replica in pod-discovery mode subscribes to every model-server's events independently and converges to the same index).
+
+**Sizing.** In-memory backends size independently per replica; plan for roughly `keys × pod_entries` with overhead for the two-level LRU. The cost-aware backend is easier to bound because you specify a byte ceiling; it is the safer choice when per-entry size is hard to predict. For Redis / Valkey, the key space is proportional to unique blocks across the fleet, not to request volume.
+
+### Data Producer
+
+The Data Producer runs early in the scheduling cycle: it renders chat templates and tokenizes the prompt once per request (and extracts any multimodal features), writing the result onto the request so downstream components — the Scorer included — read from it rather than re-tokenizing.
+
+Today this role is implemented by the `tokenizer` plugin (being renamed `token-producer` to align with plugin naming conventions).
+
+Tokenizers can be sourced three ways:
+
+1. **UDS sidecar** (recommended for production) — a tokenizer sidecar container serves tokenization requests over a Unix domain socket. The sidecar resolves the model identifier as a local path if the path exists on disk, and otherwise downloads and caches from HuggingFace (or ModelScope) on first use.
+2. **In-process local files** — the indexer's embedded tokenizer scans a directory (default `/mnt/models`) for `tokenizer.json`.
+3. **In-process HuggingFace Hub** — the indexer's embedded tokenizer downloads on demand. Convenient for development; adds startup latency.
+
+### Scorer
+
+The Scorer's goal is to find, for each candidate pod, the length of the **longest consecutive prefix** of the request's block sequence that the pod has cached.
+
+KV-cache blocks form a chain where block `i` depends on all blocks `0..i-1`. Due to the causal nature of attention, a server can reuse a cached block only if it holds the unbroken prefix leading up to it.
+
+For example, consider a prompt with block keys `[B0, B1, B2, B3, B4]` and three candidate pods:
+
+```
+Block keys:   B0    B1    B2    B3    B4
+
+Pod A:        yes   yes   yes   yes   no    → score = 4 blocks
+Pod B:        yes   yes   no    -     -     → score = 2 blocks (chain breaks at B2)
+Pod C:        no    -     -     -     -     → score = 0 blocks (no prefix)
 ```
 
-### Pod Discovery Mode
+Even if Pod C happened to hold `B3` and `B4`, those entries are unusable without the preceding chain, and the score is zero.
 
-For multi-scheduler active-active deployments:
+When blocks are stored across memory tiers, each matching block's contribution is weighted by tier. For a block cached on multiple tiers at once, the scorer takes the maximum weight. Defaults are `gpu = 1.0`, `cpu = 0.8`.
 
-**EPP configuration:**
-```yaml
-kvEventsConfig:
-  topicFilter: "kv@"
-  concurrency: 4
-  discoverPods: true
-  zmqEndpoint: "tcp://*:5557"
-  podDiscoveryConfig:
-    podLabelSelector: "llm-d.ai/inferenceServing=true"
-    socketPort: 5557
-```
+Raw scores are then normalized to `[0.0, 1.0]` before being returned to the scheduler, where they are combined with other scorers (queue depth, KV-cache utilization, etc.) through the standard Filter-Score-Pick pipeline.
 
-**vLLM configuration:**
-```json
-{
-  "enable_kv_cache_events": true,
-  "publisher": "zmq",
-  "endpoint": "tcp://*:5557",
-  "topic": "kv@<pod-ip>:8000@<model-name>"
-}
-```
+#### Speculative Indexing
+
+Confirmed KV-events arrive after a request has been routed. Back-to-back requests with the same prefix can be scheduled before `KVEvents` have propagated, breaking affinity.
+
+With `speculativeIndexing: true` (recommended for production), the Scorer inserts short-lived predicted entries in the Index for the selected pod (and, under P/D disaggregation, the selected prefill pod) right after the routing decision. Subsequent requests match against those entries until a confirming `BlockStored` arrives or a TTL (default `2s`) expires.
+
+The default 2-second TTL is tuned to comfortably exceed the typical routing-to-event latency without outliving a genuinely failed speculation.
+
+#### Multimodal, LoRA, and Hybrid Attention
+
+Many deployment patterns cache KV blocks based on more than text. The indexer supports these by folding additional features into block keys:
+
+* **Multimodal** — Multimodal content hashes (images, audio) are folded into the block-key chain. vLLM emits an `extra_keys` field on `BlockStored` events, which the indexer parses and re-computes on the read side by walking the multimodal placeholders in the tokenized prompt. Two prompts identical in text but differing in image content hash differently and route independently.
+* **LoRA** — On `BlockStored`, if a `LoraName` is present, it is used in place of the base model name when deriving block keys. Different adapters produce different key chains for the same token sequence, and cache hits are correctly scoped to the adapter.
+* **Hybrid attention** (*target design — work in progress*) — Hybrid models partition the KV-cache into layer groups (full, sliding-window, linear/state-space) that evict independently. For a single token range, full-attention blocks can still be resident while sliding-window blocks have rolled out of the attention window — the same "prefix" is cached in one group but not in another. Scoring for hybrid models therefore needs to classify each prefix match as **full**, **partial**, or **miss**, using the model's window sizes to decide whether a partial hit is still routable.
 
 ## Further Reading
 
-- [llm-d-kv-cache: Architecture](https://github.com/llm-d/llm-d-kv-cache/blob/main/docs/architecture.md) - Detailed architecture with sequence diagrams
-- [llm-d-kv-cache: Configuration Reference](https://github.com/llm-d/llm-d-kv-cache/blob/main/docs/configuration.md) - Complete configuration field reference
+- [**llm-d-kv-cache**](https://github.com/llm-d/llm-d-kv-cache) — the indexer library. See [architecture.md](https://github.com/llm-d/llm-d-kv-cache/blob/main/docs/architecture.md) for the in-depth technical architecture (block-key hashing, dual-key design, event adapters, module breakdown) and [configuration.md](https://github.com/llm-d/llm-d-kv-cache/blob/main/docs/configuration.md) for the full configuration reference.
+- [**llm-d-inference-scheduler**](https://github.com/llm-d/llm-d-inference-scheduler) — source for the `precise-prefix-cache-scorer` and `tokenizer` plugins. Plugin lifecycle, EPP extension-point wiring, and scheduling-profile examples.

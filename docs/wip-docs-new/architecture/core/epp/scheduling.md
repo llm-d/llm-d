@@ -46,7 +46,7 @@ flowchart TD
 
 *   **Scheduler**: The main orchestrator that manages the scheduling cycle. It invokes the configured `ProfileHandler` to pick profiles and then runs the selected profiles to obtain target endpoints.
 *   **InferenceRequest**: A structured internal representation of the incoming request produced by the [`Parser`](request-handling.md), including the target model, parsed body (Completions, ChatCompletions, etc.), headers, and objectives.
-*   **Endpoint**: Represents a candidate serving engine, with its metadata (e.g., Pod name, namespace and port) and state (e.g., active models, queue depth and KV-cache). Note that a Pod may run one or more endpoints each on a differen port, this is case in [the data parallel deployment mode](https://docs.vllm.ai/en/latest/serving/data_parallel_deployment/).
+*   **Endpoint**: Represents a candidate serving engine, with its metadata (e.g., Pod name, namespace and port) and state (e.g., active models, queue depth and KV-cache). Note that a Pod may run one or more endpoints each on a different port, this is case in [the data parallel deployment mode](https://docs.vllm.ai/en/latest/serving/data_parallel_deployment/).
 
 ### Extension Points
 

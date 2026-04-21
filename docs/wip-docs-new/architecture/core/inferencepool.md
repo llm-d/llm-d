@@ -167,4 +167,4 @@ helm install my-infpool \
 > Note that the Gateway providers and Gateway provider specific resources (e.g. the `HTTPRoute`) are deployed independently.
 
 - See the [full Helm Chart](https://github.com/kubernetes-sigs/gateway-api-inference-extension/tree/main/config/charts/inferencepool) for configuration details.
-- See the [Gateway API guides](../../guides/deploying-a-proxy/gateway.md) for more details on Gateway API.
+- See the [Gateway API guides](../../resources/gateways/README.md) for more details on Gateway API.

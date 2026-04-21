@@ -62,7 +62,7 @@ llm-d uses a layered, composable architecture:
 | Component | Role |
 |---|---|
 | **[Proxy](../architecture/core/proxy.md)** | Deployed via Kubernetes Gateway API or as a standalone GAIE-conformant proxy. |
-| **[Endpoint Picker (EPP)](../architecture/core/epp/introduction.md)** | The scheduling brain — scores and selects the optimal backend for each request using a plugin pipeline of filters, scorers, and pickers. |
+| **[Endpoint Picker (EPP)](../architecture/core/epp/README.md)** | The scheduling brain — scores and selects the optimal backend for each request using a plugin pipeline of filters, scorers, and pickers. |
 | **[InferencePool](../architecture/core/inferencepool.md)** | A Kubernetes Custom Resource that groups model server pods sharing the same model and compute configuration. |
 | **[Model Servers](../architecture/core/model-servers.md)** | vLLM or SGLang instances running models on accelerators. |
 
@@ -78,4 +78,4 @@ Each path includes:
 - Sample workloads and benchmarks against baseline setups
 - Monitoring and observability configuration
 
-See the [Well-Lit Paths](../well-lit-paths/introduction.md) for current engine and accelerator coverage.
+See the [Well-Lit Paths Guides](../guides/README.md) for more details on how to deploy.
