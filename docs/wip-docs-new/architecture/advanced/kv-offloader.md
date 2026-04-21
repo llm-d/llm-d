@@ -64,6 +64,9 @@ The native path lives entirely inside the vLLM stack. The `OffloadingConnector` 
 
 Today, the two targets operate as independent options — choose one offloading target based on your workload requirements.
 
+> [!NOTE]
+> **Hierarchical KV-cache offloading** — where blocks flow GPU → CPU → Storage as a unified tiered hierarchy — is under active development in the native path.
+
 ### Out-of-tree Connectors
 
 Third-party connectors (see [Other Connectors](#other-connectors)) adapt an external KV-cache engine to the model server through its KV-cache connector API. The same pattern is present across major serving stacks — vLLM's V1 Connector API, SGLang's HiCache, and TensorRT-LLM's KV Cache Connector API. Unlike the native path, the cache logic — indexing, memory management, tiering, eviction, and remote storage — lives in a separate engine, often a distinct process or service:
@@ -223,7 +226,7 @@ Any POSIX filesystem is a candidate; the best choice for a given deployment depe
 
 ## Further Reading
 
-- [llm-d FS Backend](https://github.com/llm-d/llm-d-kv-cache/tree/main/kv_connectors/llmd_fs_backend) — Implementation details, configuration, and metrics
 - [Tiered Prefix Cache Guide](https://github.com/llm-d/llm-d/tree/main/guides/tiered-prefix-cache) — Step-by-step deployment guides
+- [llm-d KV-Disaggregation Roadmaps](https://github.com/llm-d/llm-d-kv-cache/issues?q=is%3Aissue%20state%3Aopen%20label%3Aroadmap) — Planned features and improvements across offloading and KV-cache management
+- [llm-d FS Backend](https://github.com/llm-d/llm-d-kv-cache/tree/main/kv_connectors/llmd_fs_backend) — Implementation details, configuration, and metrics
 - [vLLM KV Offloading Connector](https://vllm.ai/blog/kv-offloading-connector) — Deep dive into vLLM's native offloading
-- [Native KV Cache Offloading Blog](https://llm-d.ai/blog/native-kv-cache-offloading-to-any-file-system-with-llm-d) — Benchmarks and design rationale
