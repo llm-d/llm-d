@@ -4,7 +4,7 @@ The proxy is the entry point for inference requests in llm-d, receiving client t
 
 ## Functionality
 
-llm-d leverages Envoy's [External Processing](https://www.envoyproxy.io/docs/envoy/latest/configuration/http/http_filters/ext_proc_filter) to extend production-grade proxies with the "LLM inference-aware" request scheduling implemented in the llm-d EPP. In this way, llm-d re-uses the rich existing ecosystem of high-performance, production-quality proxy technologies in the Kubernetes ecosystem.
+llm-d leverages [External Processing](https://www.envoyproxy.io/docs/envoy/latest/configuration/http/http_filters/ext_proc_filter) to extend production-grade proxies such as Envoy with the "LLM inference-aware" request scheduling implemented in the llm-d EPP. In this way, llm-d re-uses the rich existing ecosystem of high-performance, production-quality proxy technologies in the Kubernetes ecosystem.
 
 The proxy's job is to:
 
