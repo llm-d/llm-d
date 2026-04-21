@@ -8,7 +8,7 @@ llm-d works with any KV-cache connector compatible with vLLM or SGLang. Two inte
 - **Out-of-tree connectors** — third-party cache engines (e.g., [LMCache](https://lmcache.ai), [Mooncake](https://github.com/kvcache-ai/Mooncake)) that plug into the model server through its KV-cache connector API and own their own indexing, memory management, and storage. The same pattern exists in vLLM, SGLang ([HiCache](https://docs.sglang.io/advanced_features/hicache_design.html)), and TensorRT-LLM ([KV Cache Connector API](https://nvidia.github.io/TensorRT-LLM/features/kvcache.html)).
 
 > [!NOTE]
-> KV-Cache offloading complements llm-d's **cache-aware routing**: routing decides *where* cached blocks live across the fleet, while offloading manages *how* blocks move between GPU memory and lower-cost tiers. Advanced routing scenarios (precise tracking across offload tiers, multimodal, LoRA) additionally consume **KV-Events** emitted by the model server via the [KV-Cache Indexer](./kv-indexer.md).
+> KV-Cache offloading complements llm-d's **cache-aware routing**: routing decides *where* cached blocks live across the fleet, while offloading manages *how* blocks move between GPU memory and lower-cost tiers. Advanced routing scenarios (precise tracking across offload tiers, hybrid-attention models) additionally consume **KV-Events** emitted by the model server via the [KV-Cache Indexer](./kv-indexer.md).
 
 ## Functionality
 
@@ -16,13 +16,13 @@ Transformer inference computes Key and Value tensors during prefill, then reuses
 
 1. **Capacity** — GPU HBM is limited (tens of GB per GPU). CPU RAM adds another order of magnitude, but storage can scale nearly infinitely.
 
-2. **Sharing** — Local caches are isolated per vLLM instance. Shared storage enables cross-node cache reuse, faster scale-up for new replicas, and persistence across pod restarts.
+2. **Sharing** — Local caches are isolated per model-server instance. Shared storage enables cross-node cache reuse, faster scale-up for new replicas, and persistence across pod restarts.
 
-The offloading system operates asynchronously. Writes to lower tiers happen in the background without blocking inference. Reads from storage still require waiting, but loading cached blocks is typically faster than recomputing them—up to 16x faster for long prompts.
+The offloading system generally operates asynchronously. Writes to lower tiers happen in the background without blocking inference. Reads from storage still require waiting, but loading cached blocks is typically faster than recomputing them—up to 16x faster for long prompts.
 
 ## Architecture
 
-llm-d supports two integration patterns for KV-cache offloading: the **native** path, where vLLM's own `OffloadingConnector` drives offloading to CPU RAM or a shared filesystem; and **out-of-tree** connectors, where a third-party cache engine plugs into the model server (vLLM, SGLang, or TensorRT-LLM) through its KV-cache connector API and owns its own indexing, memory management, and storage.
+The two integration patterns map to distinct architectures.
 
 ### Native (vLLM OffloadingConnector)
 
