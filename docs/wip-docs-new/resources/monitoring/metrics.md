@@ -252,46 +252,6 @@ kubectl port-forward -n llm-d-monitoring svc/llmd-kube-prometheus-stack-promethe
 # Open http://localhost:9090 (or https://localhost:9090 if TLS is enabled)
 ```
 
-### Essential PromQL Queries
-
-**Error rate (platform-wide):**
-
-```text
-sum(rate(inference_objective_request_error_total[5m])) / sum(rate(inference_objective_request_total[5m]))
-```
-
-**P99 request latency:**
-
-```text
-histogram_quantile(0.99, sum by(le) (rate(inference_objective_request_duration_seconds_bucket[5m])))
-```
-
-**KV cache utilization per pod:**
-
-```text
-avg by(pod, model_name) (vllm:kv_cache_usage_perc)
-```
-
-**Request queue depth per pod:**
-
-```text
-sum by(pod, model_name) (vllm:num_requests_waiting)
-```
-
-**Prefix cache hit rate:**
-
-```text
-sum(rate(vllm:prefix_cache_hits_total[5m])) / sum(rate(vllm:prefix_cache_queries_total[5m]))
-```
-
-**Request throughput per model:**
-
-```text
-sum by(model_name, target_model_name) (rate(inference_objective_request_total[5m]))
-```
-
-For a complete list of PromQL queries organized by monitoring tier, see [Example PromQL Queries](../../../../docs/monitoring/example-promQL-queries.md).
-
 ## Cleanup
 
 ```bash
