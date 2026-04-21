@@ -256,7 +256,7 @@ oc create configmap grafana-dashboard-llm-performance --from-file=monitoring/gra
 ### Add Prometheus annotations to model service pods for metrics discovery
 
 ```
-for pod in $(oc get pods -n llm-d -l llm-d.ai/inferenceServing=true -o name); do
+for pod in $(oc get pods -n llm-d -l llm-d.ai/inference-serving=true -o name); do
   oc annotate $pod prometheus.io/scrape=true prometheus.io/port=8000 prometheus.io/path=/metrics -n llm-d
 done
 ```

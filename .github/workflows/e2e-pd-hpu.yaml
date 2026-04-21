@@ -219,9 +219,9 @@ jobs:
             mkdir -p pod-logs-pd-hpu
             cd pod-logs-pd-hpu
             echo "Fetching ${NAMESPACE} pods log..."
-            kubectl get pods -n "${NAMESPACE}" -l "llm-d.ai/inferenceServing" -o yaml > ./inference-pods.yaml
-            kubectl logs -n "${NAMESPACE}" -l "llm-d.ai/inferenceServing" | grep -v "waiting for vLLM to be ready" > ./inference-pod-logs.log || true
-            kubectl describe pod -n "${NAMESPACE}" -l "llm-d.ai/inferenceServing" > ./inference-describe-pod-logs.log
+            kubectl get pods -n "${NAMESPACE}" -l "llm-d.ai/inference-serving" -o yaml > ./inference-pods.yaml
+            kubectl logs -n "${NAMESPACE}" -l "llm-d.ai/inference-serving" | grep -v "waiting for vLLM to be ready" > ./inference-pod-logs.log || true
+            kubectl describe pod -n "${NAMESPACE}" -l "llm-d.ai/inference-serving" > ./inference-describe-pod-logs.log
             kubectl get pods -n "${NAMESPACE}" --no-headers -o custom-columns=":metadata.name" \
             | xargs -I{} sh -c 'kubectl logs --all-containers=true -n "${NAMESPACE}" {} > "{}.log" 2>&1' || true
             echo "Fetching ${NAMESPACE} pods descriptions..."
