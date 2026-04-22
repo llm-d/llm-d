@@ -76,8 +76,7 @@ agentgateway   agentgateway.dev/agentgateway   True       30s
 Deploy two replicas of vLLM running `Qwen/Qwen3-0.6B`:
 
 > [!NOTE]
-> This example uses NVIDIA GPUs. For CPU testing, use the vLLM Simulator
-> (`ghcr.io/llm-d/llm-d-inference-sim:latest`).
+> This example uses NVIDIA GPUs. For CPU testing, use the vLLM Simulator (`ghcr.io/llm-d/llm-d-inference-sim:latest`).
 
 ```bash
 kubectl apply -f https://raw.githubusercontent.com/robertgshaw2-redhat/llm-d/clean-up-common-yamls/helpers/manifests/vllm-deployment.yaml
@@ -95,7 +94,7 @@ Create a `Gateway` resource. agentgateway watches this resource and provisions a
 proxy that accepts incoming traffic.
 
 ```bash
-kubectl apply -k https://raw.githubusercontent.com/robertgshaw2-redhat/llm-d/clean-up-common-yamls/helpers/manifests/gateways/agentgateway
+kubectl apply -k "https://github.com/robertgshaw2-redhat/llm-d/helpers/manifests/gateway/agentgateway?ref=clean-up-common-yamls"
 ```
 
 Verify the `Gateway` is programmed:
@@ -113,7 +112,7 @@ llm-d-inference-gateway   agentgateway   10.xx.xx.xx     True         30s
 
 Wait until `PROGRAMMED` shows `True` before proceeding.
 
-## Step 5: Deploy the InferencePool and EPP
+## Step 5: Deploy an InferencePool and EPP
 
 Deploy the `InferencePool` and EPP with the Helm chart. For the current
 self-installed agentgateway path, use `provider.name=none`.
@@ -182,33 +181,15 @@ export GATEWAY_IP=$(kubectl get gateway llm-d-inference-gateway -o jsonpath='{.s
 Send an inference request through the agentgateway-managed `Gateway`:
 
 ```bash
-curl -s "http://${GATEWAY_IP}/v1/chat/completions" \
+curl -s http://${GATEWAY_IP}/v1/chat/completions \
   -H 'Content-Type: application/json' \
   -d '{
-    "model": "openai/gpt-oss-20b",
+    "model": "Qwen/Qwen3-0.6B",
     "messages": [{"role": "user", "content": "Hello, who are you?"}],
     "max_tokens": 50
   }'
 ```
 
-Expected output:
-
-```json
-{
-  "id": "chatcmpl-...",
-  "model": "openai/gpt-oss-20b",
-  "choices": [
-    {
-      "index": 0,
-      "finish_reason": "stop",
-      "message": {
-        "role": "assistant",
-        "content": "..."
-      }
-    }
-  ]
-}
-```
 
 ## Cleanup
 
@@ -220,6 +201,9 @@ kubectl delete deployment my-model
 helm uninstall agentgateway -n agentgateway-system
 helm uninstall agentgateway-crds -n agentgateway-system
 kubectl delete namespace agentgateway-system
+kubectl delete gatewayclass agentgateway
+kubectl delete -k "https://github.com/kubernetes-sigs/gateway-api/config/crd?ref=${GATEWAY_API_VERSION}"
+kubectl delete -k "https://github.com/kubernetes-sigs/gateway-api-inference-extension/config/crd?ref=${GAIE_VERSION}"
 ```
 
 ## Troubleshooting

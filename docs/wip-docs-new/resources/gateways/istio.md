@@ -95,7 +95,7 @@ llm-d-inference-gateway   istio   10.xx.xx.xx     True         30s
 
 Wait until `PROGRAMMED` shows `True` before proceeding.
 
-## Step 5: Deploy the InferencePool and EPP
+## Step 5: Deploy an InferencePool and EPP
 
 Deploy the `InferencePool` and EPP with the Helm chart, using `provider.name=istio`:
 
