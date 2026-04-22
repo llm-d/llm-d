@@ -164,16 +164,6 @@ curl -s http://${GATEWAY_IP}/v1/chat/completions \
   }'
 ```
 
-```
-curl -s http://localhost:8080/v1/chat/completions \
-  -H 'Content-Type: application/json' \
-  -d '{
-    "model": "Qwen/Qwen3-0.6B",
-    "messages": [{"role": "user", "content": "Hello, who are you?"}],
-    "max_tokens": 50
-  }'
-```
-
 ## Cleanup
 
 ```bash
@@ -183,6 +173,8 @@ kubectl delete gateway llm-d-inference-gateway
 kubectl delete deployment my-model
 istioctl uninstall --purge -y
 kubectl delete namespace istio-system
+kubectl delete -k "https://github.com/kubernetes-sigs/gateway-api/config/crd?ref=${GATEWAY_API_VERSION}"
+kubectl delete -k "https://github.com/kubernetes-sigs/gateway-api-inference-extension/config/crd?ref=${GAIE_VERSION}"
 ```
 
 ## Troubleshooting
