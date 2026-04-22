@@ -80,7 +80,7 @@ Deploy two replicas of vLLM running `openai/gpt-oss-20b`:
 > (`ghcr.io/llm-d/llm-d-inference-sim:latest`).
 
 ```bash
-kubectl apply -f https://raw.githubusercontent.com/llm-d/llm-d/blob/main/helpers/manifests/vllm-deployment.yaml
+kubectl apply -f https://raw.githubusercontent.com/robertgshaw2-redhat/llm-d/clean-up-common-yamls/helpers/manifests/vllm-deployment.yaml
 ```
 
 Verify the pods are running:
@@ -95,7 +95,7 @@ Create a `Gateway` resource. agentgateway watches this resource and provisions a
 proxy that accepts incoming traffic.
 
 ```bash
-kubectl apply -k https://raw.githubusercontent.com/llm-d/llm-d/blob/main/helpers/manifests/gateways/agentgateway
+kubectl apply -k https://raw.githubusercontent.com/robertgshaw2-redhat/llm-d/clean-up-common-yamls/helpers/manifests/gateways/agentgateway
 ```
 
 Verify the `Gateway` is programmed:
@@ -160,7 +160,7 @@ traffic reaches the `Gateway` with this route, the proxy consults the EPP and
 forwards the request to the selected pod.
 
 ```bash
-kubectl apply -f https://raw.githubusercontent.com/llm-d/llm-d/blob/main/helpers/manifests/httproute/httproute.yaml
+kubectl apply -f https://raw.githubusercontent.com/robertgshaw2-redhat/llm-d/clean-up-common-yamls/helpers/manifests/httproute/httproute.yaml
 ```
 
 Verify the `HTTPRoute` is accepted:
