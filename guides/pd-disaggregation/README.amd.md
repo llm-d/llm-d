@@ -10,6 +10,8 @@ This guide demonstrates how to deploy models using vLLM's P/D disaggregation sup
 
 **_NOTE:_** The ROCm Attention backend must be used `ROCM_ATTN` when tensor parallelism values for prefill and decode are different. There's a PR in progress to address this issue with other attention backends.
 
+**_MI355X (gfx950)_**: The same image and chart work on MI355X without modification. For long-context workloads on MI355X, see `ms-pd/values_amd_mi355x_longctx.yaml` (sets `--max-model-len 131072`) and the performance reference in [`docs/accelerators/amd-mi355x-perf.md`](../../docs/accelerators/amd-mi355x-perf.md).
+
 In this example, we will demonstrate a deployment of `amd/Llama-3.3-70B-Instruct-FP8-KV`.
 
 ## P/D Best Practices
