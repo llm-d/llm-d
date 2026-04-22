@@ -36,7 +36,7 @@ kubectl api-resources --api-group=inference.networking.k8s.io
 
 ## Step 2: Deploy Model Servers
 
-Deploy two replicas of vLLM running `openai/gpt-oss-20b`:
+Deploy two replicas of vLLM running `Qwen/Qwen3-0.6B`:
 
 > [!NOTE]
 > This example uses NVIDIA GPUs. For CPU testing, use the vLLM Simulator

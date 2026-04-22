@@ -57,7 +57,7 @@ istiod-xxxxxxxxxx-xxxxx   1/1     Running   0          30s
 
 ## Step 3: Deploy Model Servers
 
-Deploy two replicas of vLLM running `openai/gpt-oss-20b`:
+Deploy two replicas of vLLM running `Qwen/Qwen3-0.6B`:
 
 > [!NOTE]
 > This example uses NVIDIA GPUs. For CPU testing, use the vLLM Simulator (`ghcr.io/llm-d/llm-d-inference-sim:latest`).
@@ -77,7 +77,7 @@ kubectl get pods -l app=my-model
 Create a `Gateway` resource. Istio watches this resource and creates an Envoy-based proxy that accepts incoming traffic.
 
 ```bash
-kubectl apply -k https://raw.githubusercontent.com/robertgshaw2-redhat/llm-d/clean-up-common-yamls/helpers/manifests/gateways/istio
+kubectl apply -k "https://github.com/robertgshaw2-redhat/llm-d/helpers/manifests/gateway/istio?ref=clean-up-common-yamls"
 ```
 
 Verify the Gateway is programmed:
@@ -158,29 +158,20 @@ Send an inference request through the Istio Gateway:
 curl -s http://${GATEWAY_IP}/v1/chat/completions \
   -H 'Content-Type: application/json' \
   -d '{
-    "model": "openai/gpt-oss-20b",
+    "model": "Qwen/Qwen3-0.6B",
     "messages": [{"role": "user", "content": "Hello, who are you?"}],
     "max_tokens": 50
   }'
 ```
 
-Expected output:
-
-```json
-{
-  "id": "chatcmpl-...",
-  "model": "openai/gpt-oss-20b",
-  "choices": [
-    {
-      "index": 0,
-      "finish_reason": "stop",
-      "message": {
-        "role": "assistant",
-        "content": "..."
-      }
-    }
-  ]
-}
+```
+curl -s http://localhost:8080/v1/chat/completions \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "model": "Qwen/Qwen3-0.6B",
+    "messages": [{"role": "user", "content": "Hello, who are you?"}],
+    "max_tokens": 50
+  }'
 ```
 
 ## Cleanup
