@@ -1,3 +1,12 @@
+# AMD GPU inference-scheduling values.
+#
+# Validated on:
+#   * MI300X (gfx942) -- original target, see PR #642
+#   * MI355X (gfx950) -- llm-d-rocm:v0.6.0 image works as-is on MI355X.
+#     Smoke + standalone vLLM verified on a single 8xMI355X node.
+#     PYTORCH_ROCM_ARCH in the v0.6.0 image already includes both gfx942
+#     and gfx950, so no image-level changes are required for MI355X.
+
 multinode: false
 
 # Distributed tracing configuration (OpenTelemetry)
