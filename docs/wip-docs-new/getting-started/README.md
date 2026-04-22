@@ -18,7 +18,7 @@ llm-d integrates with standard Kubernetes primitives — Gateway API, Custom Res
 
 ## Key Capabilities
 
-### Intelligent Inference Scheduling
+### optimized baseline
 
 LLM-aware load balancing that goes beyond naive round-robin. The LLM-aware load balancing uses a plugin-based scoring pipeline to route each request to the optimal model server replica based on:
 

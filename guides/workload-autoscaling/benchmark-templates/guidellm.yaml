@@ -3,7 +3,7 @@
 # From running this experiment, it will be observed that decode pod replicas will autoscale as traffic rate increases 
 # and decreases over time.
 # 
-# WVA currently only supports the Inference Scheduling well-lit-path.
+# WVA currently only supports the optimized baseline well-lit-path.
 # 
 # To see scale up and scale down occur while this workload is running
 # follow the below steps...
@@ -21,7 +21,7 @@
 
 
 endpoint:
-  stack_name: &stack_name inference-scheduling-Llama-3.1-8B  # user defined name for the stack (results prefix)
+  stack_name: &stack_name optimized-baseline-Llama-3.1-8B  # user defined name for the stack (results prefix)
   model: &model meta-llama/Llama-3.1-8B       # Exact HuggingFace model name. Must match stack deployed.
   namespace: &namespace ${NAMESPACE}  # Namespace where stack is deployed
   base_url: &url http://${GATEWAY_SVC}.${NAMESPACE}.svc.cluster.local:80  # Base URL of inference endpoint

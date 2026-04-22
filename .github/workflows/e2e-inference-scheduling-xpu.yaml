@@ -1,4 +1,4 @@
-name: XPU Inference Scheduling Test
+name: XPU optimized baseline Test
 
 on:
   schedule:
@@ -122,32 +122,32 @@ jobs:
 
       - name: Deploy guide
         run: |
-          cd guides/inference-scheduling
+          cd guides/optimized-baseline
           helmfile apply -e xpu -n "${NAMESPACE}" ${HELM_SET_IMAGE} \
             --skip-schema-validation \
-            | tee ~/inference-scheduling-deployment.log
-          echo "---------------------------------------" >> ~/inference-scheduling-xpu-deployment.log
+            | tee ~/optimized-baseline-deployment.log
+          echo "---------------------------------------" >> ~/optimized-baseline-xpu-deployment.log
 
       - name: Deploy HTTPRoute
         run: |
-          cd guides/inference-scheduling
+          cd guides/optimized-baseline
           echo "Deploying HTTPRoute with RELEASE_NAME_POSTFIX=${RELEASE_NAME_POSTFIX}..."
           # Create a temporary HTTPRoute file with the correct names
-          sed -e "s/infra-inference-scheduling-inference-gateway/${INFRA_RELEASE_NAME}-inference-gateway/g" \
-              -e "s/gaie-inference-scheduling/${GAIE_RELEASE_NAME}/g" \
-              -e "s/name: llm-d-inference-scheduling/name: llm-d-xpu-is-${RELEASE_NAME_POSTFIX}/g" \
+          sed -e "s/infra-optimized-baseline-inference-gateway/${INFRA_RELEASE_NAME}-inference-gateway/g" \
+              -e "s/gaie-optimized-baseline/${GAIE_RELEASE_NAME}/g" \
+              -e "s/name: llm-d-optimized-baseline/name: llm-d-xpu-is-${RELEASE_NAME_POSTFIX}/g" \
               httproute.yaml > httproute-xpu.yaml
           echo "Generated HTTPRoute configuration:"
           cat httproute-xpu.yaml
           kubectl apply -f httproute-xpu.yaml -n "${NAMESPACE}" \
-            | tee -a ~/inference-scheduling-xpu-deployment.log
-          echo "---------------------------------------" >> ~/inference-scheduling-xpu-deployment.log
+            | tee -a ~/optimized-baseline-xpu-deployment.log
+          echo "---------------------------------------" >> ~/optimized-baseline-xpu-deployment.log
 
       - name: fetch helm manifests - prepare for upload
         run: |
           for release_name in "${INFRA_RELEASE_NAME}" "${GAIE_RELEASE_NAME}" "${MS_RELEASE_NAME}"; do
             bash .github/scripts/e2e/helm-get-all.sh \
-              ~/inference-scheduling-xpu-deployment.log \
+              ~/optimized-baseline-xpu-deployment.log \
               "$release_name" \
               "$NAMESPACE"
           done
@@ -222,8 +222,8 @@ jobs:
       - name: Collect and upload Kubernetes pod logs
         if: always()
         run: |
-            mkdir -p pod-logs-inference-scheduling-xpu
-            cd pod-logs-inference-scheduling-xpu
+            mkdir -p pod-logs-optimized-baseline-xpu
+            cd pod-logs-optimized-baseline-xpu
             echo "Fetching ${NAMESPACE} pods log..."
             kubectl get pods -n "${NAMESPACE}" -l "llm-d.ai/role=decode" -o yaml > ./decode-pods.yaml || true
             kubectl logs -n "${NAMESPACE}" -l "llm-d.ai/role=decode" 2>&1 > ./decode-pod-logs.log || true
@@ -240,7 +240,7 @@ jobs:
             echo "Collecting events..."
             kubectl get events -n "${NAMESPACE}" --sort-by='.lastTimestamp' > events.log 2>&1 || true
 
-            mv ~/inference-scheduling-xpu-deployment.log . || true
+            mv ~/optimized-baseline-xpu-deployment.log . || true
             mv ~/install-deps.log . || true
             
             echo "Log collection completed."
@@ -253,12 +253,12 @@ jobs:
         uses: actions/upload-artifact@v7
         if: always()
         with:
-          name: llmd-pod-logs-inference-scheduling-xpu
-          path: pod-logs-inference-scheduling-xpu
+          name: llmd-pod-logs-optimized-baseline-xpu
+          path: pod-logs-optimized-baseline-xpu
 
       - name: Cleanup deployment
         if: always()
         run: |
-          cd guides/inference-scheduling
+          cd guides/optimized-baseline
           helmfile destroy -e xpu -n "${NAMESPACE}"
           kubectl delete ns ${NAMESPACE}

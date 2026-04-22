@@ -28,7 +28,7 @@
 │          └── igw-hpa.md
 ├── guides
 │   ├── README.md
-│   ├── intelligent-inference-scheduling.md
+│   ├── intelligent-optimized-baseline.md
 │   ├── flow-control.md
 │   ├── prefill-decode-disaggregation.md
 │   ├── wide-expert-parallelism.md

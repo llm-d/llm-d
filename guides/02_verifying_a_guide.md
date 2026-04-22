@@ -31,12 +31,12 @@ GATEWAY_SVC=$(kubectl get svc -n "${NAMESPACE}" -o yaml | yq '.items[] | select(
 ```bash
 k get services
 NAME                                                 TYPE           CLUSTER-IP    EXTERNAL-IP   PORT(S)                        AGE
-gaie-inference-scheduling-epp                        ClusterIP      10.16.3.250   <none>        9002/TCP,9090/TCP              18s
-gaie-inference-scheduling-ip-18c12339                ClusterIP      None          <none>        54321/TCP                      12s
+gaie-optimized-baseline-epp                        ClusterIP      10.16.3.250   <none>        9002/TCP,9090/TCP              18s
+gaie-optimized-baseline-ip-18c12339                ClusterIP      None          <none>        54321/TCP                      12s
 gaie-sim-epp                                         ClusterIP      10.16.1.220   <none>        9002/TCP,9090/TCP              80m
-infra-inference-scheduling-inference-gateway-istio   LoadBalancer   10.16.3.226   10.16.4.3     15021:34529/TCP,80:35734/TCP   22s
+infra-optimized-baseline-inference-gateway-istio   LoadBalancer   10.16.3.226   10.16.4.3     15021:34529/TCP,80:35734/TCP   22s
 infra-sim-inference-gateway                          ClusterIP      None          <none>        80:38348/TCP                   81
-export GATEWAY_SVC="infra-inference-scheduling-inference-gateway-istio"
+export GATEWAY_SVC="infra-optimized-baseline-inference-gateway-istio"
 ```
 
 After we have our gateway service name, we can port forward it
@@ -67,9 +67,9 @@ export ENDPOINT=$(kubectl get gateway --no-headers -n ${NAMESPACE} -o jsonpath='
 ```bash
 kubectl get gateway -n ${NAMESPACE}
 NAME                                           CLASS      ADDRESS                                                                   PROGRAMMED   AGE
-infra-inference-scheduling-inference-gateway   agentgateway   af805bef3ec444a558da28061b487dd5-2012676366.us-east-1.elb.amazonaws.com   True         11m
+infra-optimized-baseline-inference-gateway   agentgateway   af805bef3ec444a558da28061b487dd5-2012676366.us-east-1.elb.amazonaws.com   True         11m
 infra-sim-inference-gateway                    agentgateway   a67ad245358e34bba9cb274bc220169e-1351042165.us-east-1.elb.amazonaws.com   True         45
-GATEWAY_NAME=infra-inference-scheduling-inference-gateway
+GATEWAY_NAME=infra-optimized-baseline-inference-gateway
 export ENDPOINT=$(kubectl get gateway ${GATEWAY_NAME} --no-headers -n ${NAMESPACE} -o jsonpath='{.status.addresses[0].value}')
 ```
 
@@ -91,9 +91,9 @@ export ENDPOINT=$(kubectl get ingress --no-headers -o jsonpath='{.items[].status
 ```bash
 kubectl get ingress -n ${NAMESPACE}
 NAME                                           CLASS     HOSTS   ADDRESS         PORTS   AGE
-infra-inference-scheduling-inference-gateway   traefik   *       166.19.16.120   80      21m
+infra-optimized-baseline-inference-gateway   traefik   *       166.19.16.120   80      21m
 infra-sim-inference-gateway                    traefik   *       166.19.16.132   80      7
-INGRESS_NAME=infra-inference-scheduling-inference-gateway
+INGRESS_NAME=infra-optimized-baseline-inference-gateway
 export ENDPOINT=$(kubectl get ingress ${GATEWAY_NAME} --no-headers -n ${NAMESPACE} -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
 ```
 
@@ -252,7 +252,7 @@ We have some helpful `grep -v` commands that can help you remove noise from your
 The moment the vllm container comes online from a k8s perspective (when its `status` becomes ready), the sidecar will start trying to connect to and communicate with it. However, after the `vllm` pod spins up, the vllm API server still needs to start up to be able to respond to requests. For the duration of this delta you will get some ugly logs in the sidecar that should look like the following:
 
 ```log
-ms-inference-scheduling-llm-d-modelservice-decode-8ff7fd5bjvpbm routing-proxy E0824 16:49:51.115884       1 proxy.go:268] "waiting for vLLM to be ready" err="dial tcp [::1]:8200: connect: connection refused" logger="proxy server"
+ms-optimized-baseline-llm-d-modelservice-decode-8ff7fd5bjvpbm routing-proxy E0824 16:49:51.115884       1 proxy.go:268] "waiting for vLLM to be ready" err="dial tcp [::1]:8200: connect: connection refused" logger="proxy server"
 ...
 ```
 
@@ -273,7 +273,7 @@ stern ... | grep -v "GET /metrics HTTP/1.1"
 In some cases you might also want to ignore vllm's usage information which it will log every so often, so that you can isolate logs on a per-request basis. An example usage log from vllm might look like:
 
 ```log
-ms-inference-scheduling-llm-d-modelservice-decode-8ff7fd5bxf7lt vllm DEBUG 08-24 18:09:51 [loggers.py:122] Engine 000: Avg prompt throughput: 0.0 tokens/s, Avg generation throughput: 0.0 tokens/s, Running: 0 reqs, Waiting: 0 reqs, GPU KV cache usage: 0.0%, Prefix cache hit rate: 0.0%
+ms-optimized-baseline-llm-d-modelservice-decode-8ff7fd5bxf7lt vllm DEBUG 08-24 18:09:51 [loggers.py:122] Engine 000: Avg prompt throughput: 0.0 tokens/s, Avg generation throughput: 0.0 tokens/s, Running: 0 reqs, Waiting: 0 reqs, GPU KV cache usage: 0.0%, Prefix cache hit rate: 0.0%
 ```
 
 To target all of these usage logs you could just grep out their shared prefix:

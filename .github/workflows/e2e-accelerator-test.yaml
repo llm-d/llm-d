@@ -340,15 +340,15 @@ jobs:
               - gaie-kv-events
               - ms-kv-events
 
-          - name: inference-scheduling
-            namespace: llm-d-inference-scheduling
-            guide_dir: inference-scheduling
+          - name: optimized-baseline
+            namespace: llm-d-optimized-baseline
+            guide_dir: optimized-baseline
             log_file: llmd-inference-installer.log
-            helm_log_file: inference-scheduling-deployment.log
+            helm_log_file: optimized-baseline-deployment.log
             release_names:
-              - infra-inference-scheduling
-              - gaie-inference-scheduling
-              - ms-inference-scheduling
+              - infra-optimized-baseline
+              - gaie-optimized-baseline
+              - ms-optimized-baseline
 
     env:
       INSTANCE_IP: ${{ needs.setup.outputs.instance_ip }}

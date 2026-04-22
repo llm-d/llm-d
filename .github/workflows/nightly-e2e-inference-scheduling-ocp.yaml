@@ -1,6 +1,6 @@
-name: Nightly - Inference Scheduling E2E (OpenShift)
+name: Nightly - optimized baseline E2E (OpenShift)
 
-# Nightly regression test for the inference-scheduling guide on OpenShift.
+# Nightly regression test for the optimized-baseline guide on OpenShift.
 # Deploys via helmfile and validates with e2e-validate.sh.
 
 on:
@@ -25,7 +25,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: nightly-e2e-inference-scheduling
+  group: nightly-e2e-optimized-baseline
   cancel-in-progress: true
 
 jobs:
@@ -33,7 +33,7 @@ jobs:
     if: github.repository == 'llm-d/llm-d'
     uses: llm-d/llm-d-infra/.github/workflows/reusable-nightly-e2e-openshift-helmfile.yaml@main
     with:
-      guide_name: inference-scheduling
+      guide_name: optimized-baseline
       namespace: llm-d-nightly-inference
       helmfile_env: ${{ github.event.inputs.helmfile_env || 'istio' }}
       gateway_type: ${{ github.event.inputs.helmfile_env || 'istio' }}
@@ -48,7 +48,7 @@ jobs:
       skip_cleanup: ${{ github.event.inputs.skip_cleanup == 'true' }}
       pre_deploy_script: |
         echo "Adding H100 nodeSelector for OCP deployment..."
-        yq e '.decode.extraConfig.nodeSelector["nvidia.com/gpu.product"] = "NVIDIA-H100-80GB-HBM3"' -i "${GUIDE_PATH}/ms-inference-scheduling/values.yaml"
+        yq e '.decode.extraConfig.nodeSelector["nvidia.com/gpu.product"] = "NVIDIA-H100-80GB-HBM3"' -i "${GUIDE_PATH}/ms-optimized-baseline/values.yaml"
         echo "Updated values.yaml with H100 nodeSelector"
-        yq e '.decode.extraConfig.nodeSelector' "${GUIDE_PATH}/ms-inference-scheduling/values.yaml"
+        yq e '.decode.extraConfig.nodeSelector' "${GUIDE_PATH}/ms-optimized-baseline/values.yaml"
     secrets: inherit

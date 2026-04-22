@@ -7,7 +7,7 @@ on:
       - .github/workflows/ci-helmfile-dry-run.yaml
       - .github/scripts/**
       - guides/recipes/**
-      - guides/inference-scheduling/**
+      - guides/optimized-baseline/**
       - guides/pd-disaggregation/**
       - guides/precise-prefix-cache-aware/**
       - guides/simulated-accelerators/**
@@ -25,7 +25,7 @@ jobs:
   detect-changes:
     runs-on: ubuntu-latest
     outputs:
-      inference-scheduling: ${{ steps.filter.outputs.inference-scheduling }}
+      optimized-baseline: ${{ steps.filter.outputs.optimized-baseline }}
       pd-disaggregation: ${{ steps.filter.outputs.pd-disaggregation }}
       precise-prefix-cache-aware: ${{ steps.filter.outputs.precise-prefix-cache-aware }}
       simulated-accelerators: ${{ steps.filter.outputs.simulated-accelerators }}
@@ -36,14 +36,14 @@ jobs:
         id: filter
         with:
           filters: |
-            inference-scheduling:
+            optimized-baseline:
               - .github/workflows/ci-helmfile-dry-run.yaml
               - .github/scripts/install-gke-crds.sh
               - guides/prereq/gateway-provider/install-gateway-provider-dependencies.sh
               - docs/monitoring/scripts/install-prometheus-grafana.sh
               - guides/recipes/modelserver/**
               - guides/recipes/scheduler/**
-              - guides/inference-scheduling/**
+              - guides/optimized-baseline/**
             pd-disaggregation:
               - .github/workflows/ci-helmfile-dry-run.yaml
               - helpers/client-setup/install-deps.sh
@@ -77,9 +77,9 @@ jobs:
               - docs/monitoring/scripts/install-prometheus-grafana.sh
               - guides/workload-autoscaling/**
 
-  dry-run-inference-scheduling:
+  dry-run-optimized-baseline:
     needs: detect-changes
-    if: needs.detect-changes.outputs.inference-scheduling == 'true'
+    if: needs.detect-changes.outputs.optimized-baseline == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -116,14 +116,14 @@ jobs:
           for chart in standalone inferencepool; do
             echo ""
             echo "========================================"
-            echo "inference-scheduling: scheduler (${chart})"
+            echo "optimized-baseline: scheduler (${chart})"
             echo "========================================"
             echo "--- helm template ---"
-            if ! helm template inference-scheduling-scheduler \
+            if ! helm template optimized-baseline-scheduler \
               "oci://registry.k8s.io/gateway-api-inference-extension/charts/${chart}" \
               -f guides/recipes/scheduler/base.values.yaml \
               -f guides/recipes/scheduler/features/monitoring.values.yaml \
-              -f guides/inference-scheduling/scheduler/inference-scheduling.values.yaml \
+              -f guides/optimized-baseline/scheduler/optimized-baseline.values.yaml \
               --version "${CHART_VERSION}" > /tmp/rendered.yaml; then
               echo "FAIL: helm template failed for ${chart}"
               failed=1
@@ -131,9 +131,9 @@ jobs:
             fi
             echo "--- kubectl apply --dry-run=server ---"
             if kubectl apply --dry-run=server -f /tmp/rendered.yaml; then
-              echo "PASS: inference-scheduling / scheduler (${chart})"
+              echo "PASS: optimized-baseline / scheduler (${chart})"
             else
-              echo "FAIL: inference-scheduling / scheduler (${chart})"
+              echo "FAIL: optimized-baseline / scheduler (${chart})"
               failed=1
             fi
           done
@@ -142,15 +142,15 @@ jobs:
       - name: Kustomize build and dry-run all model server overlays
         run: |
           failed=0
-          for overlay_dir in guides/inference-scheduling/modelserver/*/; do
+          for overlay_dir in guides/optimized-baseline/modelserver/*/; do
             # Each accelerator dir may have one or more server subdirs (vllm, sglang)
             for kust_dir in "${overlay_dir}"*/; do
               [ -f "${kust_dir}kustomization.yaml" ] || continue
-              name="${kust_dir#guides/inference-scheduling/modelserver/}"
+              name="${kust_dir#guides/optimized-baseline/modelserver/}"
               name="${name%/}"
               echo ""
               echo "========================================"
-              echo "inference-scheduling: ${name}"
+              echo "optimized-baseline: ${name}"
               echo "========================================"
               echo "--- kustomize build ---"
               if ! kustomize build "${kust_dir}" > /tmp/rendered.yaml; then
@@ -160,9 +160,9 @@ jobs:
               fi
               echo "--- kubectl apply --dry-run=server ---"
               if kubectl apply --dry-run=server -f /tmp/rendered.yaml; then
-                echo "PASS: inference-scheduling / ${name}"
+                echo "PASS: optimized-baseline / ${name}"
               else
-                echo "FAIL: inference-scheduling / ${name}"
+                echo "FAIL: optimized-baseline / ${name}"
                 failed=1
               fi
             done

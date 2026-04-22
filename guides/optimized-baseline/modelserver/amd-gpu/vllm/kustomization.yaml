@@ -1,0 +1,57 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ../../../../recipes/modelserver/base/single-host/default
+
+# To disable monitoring comment the following component out
+components:
+  - ../../../../recipes/modelserver/components/monitoring
+
+namePrefix: optimized-baseline-rocm-vllm-
+
+images:
+  - name: REPLACE_MODEL_SERVER_IMAGE
+    newName: ghcr.io/llm-d/llm-d-rocm
+    newTag: v0.6.0
+
+labels:
+  - pairs:
+      llm-d.ai/guide: optimized-baseline
+      llm-d.ai/model: Qwen3-32B
+      llm-d.ai/accelerator-variant: gpu
+      llm-d.ai/accelerator-vendor: amd
+    includeSelectors: true
+    includeTemplates: true
+    fields:
+      - version: v1
+        kind: ServiceAccount
+        path: metadata/labels
+        create: true
+      - group: apps
+        version: v1
+        kind: Deployment
+        path: metadata/labels
+        create: true
+      - group: apps
+        version: v1
+        kind: Deployment
+        path: spec/selector/matchLabels
+        create: true
+      - group: apps
+        version: v1
+        kind: Deployment
+        path: spec/template/metadata/labels
+        create: true
+      - group: monitoring.coreos.com
+        version: v1
+        kind: PodMonitor
+        path: metadata/labels
+        create: true
+      - group: monitoring.coreos.com
+        version: v1
+        kind: PodMonitor
+        path: spec/selector/matchLabels
+        create: true
+
+patches:
+  - path: patch-vllm.yaml

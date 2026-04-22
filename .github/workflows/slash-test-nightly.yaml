@@ -9,7 +9,7 @@ name: /test-nightly Slash Command
 # Examples:
 #   /test-nightly pd-disaggregation-ocp
 #   /test-nightly *-ocp
-#   /test-nightly inference-scheduling-*
+#   /test-nightly optimized-baseline-*
 #   /test-nightly wva-*
 #
 # The command checks out the PR head, pushes a temp branch
@@ -18,8 +18,8 @@ name: /test-nightly Slash Command
 # Temp branches are cleaned up by slash-test-nightly-cleanup.yaml.
 #
 # Available nightlies (the part after /test-nightly):
-#   benchmark-cks, build-image, inference-scheduling-cks,
-#   inference-scheduling-gke, inference-scheduling-ocp,
+#   benchmark-cks, build-image, optimized-baseline-cks,
+#   optimized-baseline-gke, optimized-baseline-ocp,
 #   pd-disaggregation-cks, pd-disaggregation-gke,
 #   pd-disaggregation-ocp, precise-prefix-cache-ocp,
 #   simulated-accelerators, tiered-prefix-cache-ocp,
@@ -59,8 +59,8 @@ jobs:
 
             // Map name to workflow filename
             const E2E_NIGHTLIES = [
-              'inference-scheduling-cks', 'inference-scheduling-gke',
-              'inference-scheduling-ocp', 'pd-disaggregation-cks',
+              'optimized-baseline-cks', 'optimized-baseline-gke',
+              'optimized-baseline-ocp', 'pd-disaggregation-cks',
               'pd-disaggregation-gke', 'pd-disaggregation-ocp',
               'precise-prefix-cache-ocp', 'simulated-accelerators',
               'tiered-prefix-cache-ocp', 'wide-ep-lws-cks',
@@ -88,7 +88,7 @@ jobs:
                   '```',
                   '/test-nightly pd-disaggregation-ocp',
                   '/test-nightly *-ocp',
-                  '/test-nightly inference-scheduling-*',
+                  '/test-nightly optimized-baseline-*',
                   '```',
                   '',
                   'Available nightlies:',

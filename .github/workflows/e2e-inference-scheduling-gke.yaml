@@ -1,7 +1,7 @@
-name: GKE Inference Scheduling Test
+name: GKE optimized baseline Test
 
 on:
-  # Runs with a PR comment /run-gke-inference-scheduling
+  # Runs with a PR comment /run-gke-optimized-baseline
   issue_comment:
     types: [created]
   schedule:
@@ -28,7 +28,7 @@ jobs:
         github.event_name == 'issue_comment' &&
         github.event.issue.pull_request &&
         (
-          contains(github.event.comment.body, '/run-gke-inference-scheduling')
+          contains(github.event.comment.body, '/run-gke-optimized-baseline')
         ) &&
         (
           github.event.comment.author_association == 'OWNER' ||
@@ -57,7 +57,7 @@ jobs:
 
     env:
       GCP_PROJECT_ID: llm-d-scale
-      NAMESPACE: llm-d-inference-scheduling
+      NAMESPACE: llm-d-optimized-baseline
       GATEWAY: gke-l7-regional-external-managed
       GATEWAY_TYPE: gke
       PR_OR_BRANCH: ${{ github.event.inputs.pr_or_branch || github.event.issue.number || github.event.number || 'main' }}
@@ -167,25 +167,25 @@ jobs:
 
       - name: Deploy model service and GIE with Helmfile
         run: |
-          cd guides/inference-scheduling
+          cd guides/optimized-baseline
           helmfile apply -e ${{ matrix.accelerator.helmfile_env }} \
             --set "gateway.service.type=LoadBalancer" \
             --skip-schema-validation \
-            | tee ~/inference-scheduling-deployment.log
-          echo "---------------------------------------" >> ~/inference-scheduling-deployment.log
+            | tee ~/optimized-baseline-deployment.log
+          echo "---------------------------------------" >> ~/optimized-baseline-deployment.log
 
       - name: Deploy HTTPRoute
         run: |
-          cd guides/inference-scheduling
+          cd guides/optimized-baseline
           echo "Deploying HTTPRoute..."
-          kubectl apply -f httproute.gke.yaml -n ${NAMESPACE} | tee ~/inference-scheduling-deployment.log
-          echo "---------------------------------------" >> ~/inference-scheduling-deployment.log
+          kubectl apply -f httproute.gke.yaml -n ${NAMESPACE} | tee ~/optimized-baseline-deployment.log
+          echo "---------------------------------------" >> ~/optimized-baseline-deployment.log
 
       - name: Upload helm get all
         run: |
-          for release_name in infra-inference-scheduling gaie-inference-scheduling ms-inference-scheduling; do
+          for release_name in infra-optimized-baseline gaie-optimized-baseline ms-optimized-baseline; do
             bash .github/scripts/e2e/helm-get-all.sh \
-              ~/inference-scheduling-deployment.log \
+              ~/optimized-baseline-deployment.log \
               "$release_name" \
               "$NAMESPACE"
           done
@@ -202,7 +202,7 @@ jobs:
 
       - name: Wait for gateway to be ready
         run: |
-          GATEWAY_NAME=infra-inference-scheduling-inference-gateway
+          GATEWAY_NAME=infra-optimized-baseline-inference-gateway
           kubectl wait gateway/${GATEWAY_NAME} \
             --for=condition=Programmed=True \
             -n "${NAMESPACE}" \
@@ -245,23 +245,23 @@ jobs:
       - name: Collect and upload Kubernetes pod logs
         if: always()
         run: |
-          mkdir -p pod-logs-inference-scheduling
-          cd pod-logs-inference-scheduling
+          mkdir -p pod-logs-optimized-baseline
+          cd pod-logs-optimized-baseline
           echo "Fetching ${NAMESPACE} pods log..."
           kubectl get pods -n "${NAMESPACE}" --no-headers -o custom-columns=":metadata.name" \
           | xargs -I{} sh -c 'kubectl logs --all-containers=true -n "${NAMESPACE}" {} > "{}.log" 2>&1'
           echo "Fetching ${NAMESPACE} pods descriptions..."
           kubectl get pods -n "${NAMESPACE}" --no-headers -o custom-columns=":metadata.name" \
           | xargs -I{} sh -c 'kubectl describe pod -n "${NAMESPACE}" {} > "{}-describe.log" 2>&1'
-          mv ~/inference-scheduling-deployment.log . || true
+          mv ~/optimized-baseline-deployment.log . || true
           mv ~/install-deps.log . || true
 
       - name: Upload pod logs as artifact
         uses: actions/upload-artifact@v7
         if: always()
         with:
-          name: llmd-pod-logs-inference-scheduling-${{ matrix.accelerator.name }}
-          path: pod-logs-inference-scheduling
+          name: llmd-pod-logs-optimized-baseline-${{ matrix.accelerator.name }}
+          path: pod-logs-optimized-baseline
 
       - name: Send Google Chat notification on failure
         if: failure()
@@ -274,7 +274,7 @@ jobs:
       - name: Cleanup deployment
         if: always()
         run: |
-          cd guides/inference-scheduling
+          cd guides/optimized-baseline
           helmfile destroy -e ${{ matrix.accelerator.helmfile_env }}
           kubectl delete -f httproute.gke.yaml -n ${NAMESPACE}
           kubectl delete job ${TPU_JOB} -n "${NAMESPACE}" --ignore-not-found

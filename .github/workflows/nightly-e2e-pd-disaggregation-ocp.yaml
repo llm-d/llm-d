@@ -6,7 +6,7 @@ name: Nightly - PD Disaggregation E2E (OpenShift)
 
 on:
   schedule:
-    - cron: '30 0 * * *'  # 00:30 UTC daily (staggered from inference-scheduling)
+    - cron: '30 0 * * *'  # 00:30 UTC daily (staggered from optimized-baseline)
   workflow_dispatch:
     inputs:
       helmfile_env:

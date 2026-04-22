@@ -63,15 +63,15 @@ This helper describes how to run benchmarks against a deployed llm-d stack.
 > <tr>
 > <td>
 > <details>
-> <summary><b>Intelligent Inference Scheduling</b></summary>
+> <summary><b>optimized baseline</b></summary>
 >
 > ```bash
 > export GATEWAY_SVC=$(kubectl get svc -n "${NAMESPACE}" \
->   -l gateway.networking.k8s.io/gateway-name=infra-inference-scheduling-inference-gateway \
+>   -l gateway.networking.k8s.io/gateway-name=infra-optimized-baseline-inference-gateway \
 >   --no-headers  -o=custom-columns=:metadata.name \
 >   | head -1
 > )
-> export BENCH_TEMPLATE_DIR="${LLMD_ROOT_DIR}"/guides/inference-scheduling/benchmark-templates
+> export BENCH_TEMPLATE_DIR="${LLMD_ROOT_DIR}"/guides/optimized-baseline/benchmark-templates
 > export BENCHMARK_TEMPLATE="${BENCH_TEMPLATE_DIR}"/guide.yaml
 > # export BENCHMARK_TEMPLATE="${BENCH_TEMPLATE_DIR}"/sanity.yaml
 > # export BENCHMARK_TEMPLATE="${BENCH_TEMPLATE_DIR}"/shared_prefix.yaml
@@ -147,7 +147,7 @@ This helper describes how to run benchmarks against a deployed llm-d stack.
 > </td>
 > <td>
 > <details>
-> <summary><b>Workload Variant Autoscaling (WVA) + Intelligent Inference Scheduling</b></summary>
+> <summary><b>Workload Variant Autoscaling (WVA) + optimized baseline</b></summary>
 >
 > ```bash
 > # To obtain the Gateway SVC, please find your inference gateway pod first, then obtain the name.
@@ -214,10 +214,10 @@ To copy a results directory to your local machine use:
 
 `run_only.sh` prints progress messages to the terminal. The stdout and stderr of the harness itself is printed to the terminal as well as captured in the results.
 
-This example uses `guidellm` with a [`rate_comparison`](../inference-scheduling/benchmark-templates/guidellm.yaml) workload:
+This example uses `guidellm` with a [`rate_comparison`](../optimized-baseline/benchmark-templates/guidellm.yaml) workload:
 
   ```bash
-  export BENCH_TEMPLATE_DIR=../inference-scheduling/benchmark-templates/
+  export BENCH_TEMPLATE_DIR=../optimized-baseline/benchmark-templates/
   export BENCHMARK_TEMPLATE="${BENCH_TEMPLATE_DIR}"/guidellm.yaml
   ```
 
@@ -233,7 +233,7 @@ This example uses `guidellm` with a [`rate_comparison`](../inference-scheduling/
   ------------------------------------------------------------
 
   ===> Mon Dec 29 18:14:20 IST 2025 - ./run_only.sh:63
-  ℹ️ Using endpoint_stack_name=inference-scheduling-Qwen3-32B on endpoint_namespace=dean-ns1 running model=Qwen/Qwen3-32B at endpoint_base_url=http://infra-inference-scheduling-inference-gateway-istio.dean-ns1.svc.cluster.local:80
+  ℹ️ Using endpoint_stack_name=optimized-baseline-Qwen3-32B on endpoint_namespace=dean-ns1 running model=Qwen/Qwen3-32B at endpoint_base_url=http://infra-optimized-baseline-inference-gateway-istio.dean-ns1.svc.cluster.local:80
   ------------------------------------------------------------
 
   ===> Mon Dec 29 18:14:20 IST 2025 - ./run_only.sh:63
@@ -253,7 +253,7 @@ This example uses `guidellm` with a [`rate_comparison`](../inference-scheduling/
   ------------------------------------------------------------
 
   ===> Mon Dec 29 18:14:21 IST 2025 - ./run_only.sh:63
-  🔍 Verifying model Qwen/Qwen3-32B on endpoint http://infra-inference-scheduling-inference-gateway-istio.dean-ns1.svc.cluster.local:80/v1/completions using pod verify-model-1767024860
+  🔍 Verifying model Qwen/Qwen3-32B on endpoint http://infra-optimized-baseline-inference-gateway-istio.dean-ns1.svc.cluster.local:80/v1/completions using pod verify-model-1767024860
   ------------------------------------------------------------
   HTTP/1.1 200 OK
   x-envoy-upstream-service-time: 41
@@ -357,7 +357,7 @@ This example uses `guidellm` with a [`rate_comparison`](../inference-scheduling/
         LLMDBENCH_HARNESS_NAME:                       guidellm
         LLMDBENCH_RUN_EXPERIMENT_RESULTS_DIR_PREFIX:  /requests
         LLMDBENCH_RUN_DATASET_DIR:                    /workspace
-        LLMDBENCH_HARNESS_STACK_NAME:                 inference-scheduling-Qwen3-32B
+        LLMDBENCH_HARNESS_STACK_NAME:                 optimized-baseline-Qwen3-32B
       Mounts:
         /requests from results (rw)
         /var/run/secrets/kubernetes.io/serviceaccount from kube-api-access-4jjd2 (ro)
@@ -405,11 +405,11 @@ This example uses `guidellm` with a [`rate_comparison`](../inference-scheduling/
   ===> Mon Dec 29 18:14:36 IST 2025 - ./run_only.sh:63
   ℹ️ Running benchmark with workload rate_comparison
   ------------------------------------------------------------
-  LLMDBENCH_CONTROL_WORK_DIR=/requests/guidellm_1767024860_rate_comparison_inference-scheduling-Qwen3-32B
+  LLMDBENCH_CONTROL_WORK_DIR=/requests/guidellm_1767024860_rate_comparison_optimized-baseline-Qwen3-32B
   LLMDBENCH_HARNESS_GIT_BRANCH=adfa108ab1df6f2a1452d1037a71817a493303a8
   LLMDBENCH_HARNESS_GIT_REPO=https://github.com/vllm-project/guidellm.git
   LLMDBENCH_HARNESS_NAME=guidellm
-  LLMDBENCH_HARNESS_STACK_NAME=inference-scheduling-Qwen3-32B
+  LLMDBENCH_HARNESS_STACK_NAME=optimized-baseline-Qwen3-32B
   LLMDBENCH_MAGIC_ENVAR=harness_pod
   LLMDBENCH_RUN_DATASET_DIR=/workspace
   LLMDBENCH_RUN_EXPERIMENT_ANALYZER=guidellm-analyze_results.sh
@@ -420,22 +420,22 @@ This example uses `guidellm` with a [`rate_comparison`](../inference-scheduling/
   LLMDBENCH_RUN_EXPERIMENT_HARNESS_WORKLOAD_AUTO=0
   LLMDBENCH_RUN_EXPERIMENT_HARNESS_WORKLOAD_NAME=rate_comparison.yaml
   LLMDBENCH_RUN_EXPERIMENT_ID=1767024860_rate_comparison
-  LLMDBENCH_RUN_EXPERIMENT_RESULTS_DIR=/requests/guidellm_1767024860_rate_comparison_inference-scheduling-Qwen3-32B
+  LLMDBENCH_RUN_EXPERIMENT_RESULTS_DIR=/requests/guidellm_1767024860_rate_comparison_optimized-baseline-Qwen3-32B
   LLMDBENCH_RUN_EXPERIMENT_RESULTS_DIR_PREFIX=/requests
-  LLMDBENCH_RUN_EXPERIMENT_RESULTS_DIR_SUFFIX=guidellm_1767024860_rate_comparison_inference-scheduling-Qwen3-32B
+  LLMDBENCH_RUN_EXPERIMENT_RESULTS_DIR_SUFFIX=guidellm_1767024860_rate_comparison_optimized-baseline-Qwen3-32B
   LLMDBENCH_RUN_WORKSPACE_DIR=/workspace
   Running harness: /usr/local/bin/guidellm-llm-d-benchmark.sh
-  Using experiment result dir: /requests/guidellm_1767024860_rate_comparison_inference-scheduling-Qwen3-32B
+  Using experiment result dir: /requests/guidellm_1767024860_rate_comparison_optimized-baseline-Qwen3-32B
   ✔ OpenAIHTTPBackend backend validated with model Qwen/Qwen3-32B
     {'target':
-    'http://infra-inference-scheduling-inference-gateway-istio.dean-ns1.svc.cluster
+    'http://infra-optimized-baseline-inference-gateway-istio.dean-ns1.svc.cluster
     .local:80', 'model': 'Qwen/Qwen3-32B', 'timeout': 60.0, 'http2': True,
     'follow_redirects': True, 'verify': False, 'openai_paths': {'health':
     'health', 'models': 'v1/models', 'text_completions': 'v1/completions',
     'chat_completions': 'v1/chat/completions', 'audio_transcriptions':
     'v1/audio/transcriptions', 'audio_translations': 'v1/audio/translations'},
     'validate_backend': {'method': 'GET', 'url':
-    'http://infra-inference-scheduling-inference-gateway-istio.dean-ns1.svc.cluster
+    'http://infra-optimized-baseline-inference-gateway-istio.dean-ns1.svc.cluster
     .local:80/health'}}
   ✔ Processor resolved
     Using model 'Qwen/Qwen3-32B' as processor
@@ -533,14 +533,14 @@ This example uses `guidellm` with a [`rate_comparison`](../inference-scheduling/
 
   ✔ Benchmarking complete, generated 2 benchmark(s)
   …   json    :
-  /requests/guidellm_1767024860_rate_comparison_inference-scheduling-Qwen3-32B/re
+  /requests/guidellm_1767024860_rate_comparison_optimized-baseline-Qwen3-32B/re
   sults.json
   Harness completed successfully.
   Converting results.json
   Warning: LLMDBENCH_DEPLOY_METHODS undefined, cannot determine deployment method.Warning: LLMDBENCH_DEPLOY_METHODS undefined, cannot determine deployment method.Results data conversion completed successfully.
   Harness completed: /usr/local/bin/guidellm-llm-d-benchmark.sh
   Running analysis: /usr/local/bin/guidellm-analyze_results.sh
-  Done. Data is available at "/requests/guidellm_1767024860_rate_comparison_inference-scheduling-Qwen3-32B"
+  Done. Data is available at "/requests/guidellm_1767024860_rate_comparison_optimized-baseline-Qwen3-32B"
 
   ===> Mon Dec 29 18:15:51 IST 2025 - ./run_only.sh:63
   ℹ️ Benchmark workload rate_comparison complete.
@@ -564,19 +564,19 @@ This example uses `guidellm` with a [`rate_comparison`](../inference-scheduling/
 
 The output files are saved on the benchmark PVC. They are accessible through the launcher pod in the `/requests` folder. Each experiment is saved under its own sub directory.
 
-This example uses `inference-perf` with a [`shared-prefix`](../inference-scheduling/benchmark-templates/shared_prefix.yaml) workload:
+This example uses `inference-perf` with a [`shared-prefix`](../optimized-baseline/benchmark-templates/shared_prefix.yaml) workload:
 
   ```bash
-  export BENCHMARK_TEMPLATE="../inference-scheduling/benchmark-templates/shared_prefix.yaml"
+  export BENCHMARK_TEMPLATE="../optimized-baseline/benchmark-templates/shared_prefix.yaml"
   ```
 
 After running With this template, the `/requests` folder will include a `<results-folder>` named
 
 ```bash
-inference-perf_1765442721_shared_prefix_synthetic_inference-scheduling-Qwen3-32B
+inference-perf_1765442721_shared_prefix_synthetic_optimized-baseline-Qwen3-32B
 ```
 
-The name indicates `inference-perf` was used as harness, the workload was `shared_prefix_synthetic` and the user-defined stack name was `inference-scheduling-Qwen3-32B`.
+The name indicates `inference-perf` was used as harness, the workload was `shared_prefix_synthetic` and the user-defined stack name was `optimized-baseline-Qwen3-32B`.
 
 ### Workload file
 
@@ -609,7 +609,7 @@ The harness workload configuration file, as was used, is copied into the the exp
   server:
     type: vllm
     model_name: Qwen/Qwen3-32B
-    base_url: http://infra-inference-scheduling-inference-gateway.dpikus-ns.svc.cluster.local:80
+    base_url: http://infra-optimized-baseline-inference-gateway.dpikus-ns.svc.cluster.local:80
     ignore_eos: true
   tokenizer:
     pretrained_model_name_or_path: Qwen/Qwen3-32B
@@ -628,7 +628,7 @@ The harness workload configuration file, as was used, is copied into the the exp
       per_request: true
   storage:
     local_storage:
-      path: /requests/inference-perf_1765442721_shared_prefix_synthetic_inference-scheduling-Qwen3-32B
+      path: /requests/inference-perf_1765442721_shared_prefix_synthetic_optimized-baseline-Qwen3-32B
   ```
 
 </details>
@@ -860,7 +860,7 @@ These are the properties of the stack (`envsubst` would replace `NAMESPACE` and 
 
   ```yaml
   endpoint:
-    stack_name: &stack_name inference-scheduling-Qwen3-32B  # user defined name for the stack (results prefix)
+    stack_name: &stack_name optimized-baseline-Qwen3-32B  # user defined name for the stack (results prefix)
     model: &model Qwen/Qwen3-32B                      # Exact HuggingFace model name. Must match stack deployed.
     namespace: &namespace $NAMESPACE
     base_url: &url http://${GATEWAY_SVC}.${NAMESPACE}.svc.cluster.local:80  # Base URL of inference endpoint

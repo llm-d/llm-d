@@ -69,10 +69,10 @@ jobs:
     needs: [fork-gate]
     runs-on: ubuntu-latest
     outputs:
-      xpu-inference-scheduling: ${{ steps.filter.outputs.xpu-inference-scheduling }}
+      xpu-optimized-baseline: ${{ steps.filter.outputs.xpu-optimized-baseline }}
       xpu-pd-disaggregation: ${{ steps.filter.outputs.xpu-pd-disaggregation }}
       xpu-prefix-cache: ${{ steps.filter.outputs.xpu-prefix-cache }}
-      hpu-inference-scheduling: ${{ steps.filter.outputs.hpu-inference-scheduling }}
+      hpu-optimized-baseline: ${{ steps.filter.outputs.hpu-optimized-baseline }}
       hpu-pd-disaggregation: ${{ steps.filter.outputs.hpu-pd-disaggregation }}
     steps:
       - uses: actions/checkout@v6
@@ -82,14 +82,14 @@ jobs:
         id: filter
         with:
           filters: |
-            xpu-inference-scheduling:
+            xpu-optimized-baseline:
               - .github/workflows/ci-pr-test.yaml
-              - .github/workflows/e2e-inference-scheduling-xpu.yaml
+              - .github/workflows/e2e-optimized-baseline-xpu.yaml
               - .github/scripts/e2e/**
               - docker/common-versions
               - guides/**/values_xpu.yaml
-              - guides/inference-scheduling/ms-inference-scheduling/values_xpu.yaml
-              - guides/inference-scheduling/helmfile.yaml.gotmpl
+              - guides/optimized-baseline/ms-optimized-baseline/values_xpu.yaml
+              - guides/optimized-baseline/helmfile.yaml.gotmpl
             xpu-pd-disaggregation:
               - .github/workflows/ci-pr-test.yaml
               - .github/workflows/e2e-pd-xpu.yaml
@@ -107,14 +107,14 @@ jobs:
               - guides/**/values_xpu.yaml
               - guides/precise-prefix-cache-aware/**/values_xpu.yaml
               - guides/precise-prefix-cache-aware/helmfile.yaml.gotmpl
-            hpu-inference-scheduling:
+            hpu-optimized-baseline:
               - .github/workflows/ci-pr-test.yaml
-              - .github/workflows/e2e-inference-scheduling-hpu.yaml
+              - .github/workflows/e2e-optimized-baseline-hpu.yaml
               - .github/scripts/e2e/**
               - docker/Dockerfile.hpu
               - guides/**/values-hpu.yaml
-              - guides/inference-scheduling/ms-inference-scheduling/values-hpu.yaml
-              - guides/inference-scheduling/helmfile.yaml.gotmpl
+              - guides/optimized-baseline/ms-optimized-baseline/values-hpu.yaml
+              - guides/optimized-baseline/helmfile.yaml.gotmpl
             hpu-pd-disaggregation:
               - .github/workflows/ci-pr-test.yaml
               - .github/workflows/e2e-pd-hpu.yaml
@@ -135,17 +135,17 @@ jobs:
       ref: ${{ github.event.pull_request.head.sha || '' }}
     secrets: inherit
 
-  # Call the XPU Inference Scheduling test workflow
-  test-xpu-inference-scheduling:
+  # Call the XPU optimized baseline test workflow
+  test-xpu-optimized-baseline:
     needs: [detect-changes, build-images]
     # Run tests if:
     # 1. It's a manual workflow_dispatch, OR
     # 2. Related files changed AND (build succeeded OR build was skipped)
     if: >-
       ${{ (github.event_name == 'workflow_dispatch' ||
-      needs.detect-changes.outputs.xpu-inference-scheduling == 'true') &&
+      needs.detect-changes.outputs.xpu-optimized-baseline == 'true') &&
       (needs.build-images.result == 'success' || needs.build-images.result == 'skipped') }}
-    uses: ./.github/workflows/e2e-inference-scheduling-xpu.yaml
+    uses: ./.github/workflows/e2e-optimized-baseline-xpu.yaml
     with:
       pr_or_branch: ${{ github.event.inputs.pr_or_branch || github.event.pull_request.number }}
       # Only use custom image tag if user provides it, or if XPU image was actually built in this PR
@@ -204,17 +204,17 @@ jobs:
         format('pr-{0}', github.event.pull_request.number) || '') }}
     secrets: inherit
 
-  # Call the HPU Inference Scheduling test workflow
-  test-hpu-inference-scheduling:
+  # Call the HPU optimized baseline test workflow
+  test-hpu-optimized-baseline:
     needs: [detect-changes, build-images]
     # Run tests if:
     # 1. It's a manual workflow_dispatch, OR
     # 2. Related files changed AND (build succeeded OR build was skipped)
     if: >-
       ${{ (github.event_name == 'workflow_dispatch' ||
-      needs.detect-changes.outputs.hpu-inference-scheduling == 'true') &&
+      needs.detect-changes.outputs.hpu-optimized-baseline == 'true') &&
       (needs.build-images.result == 'success' || needs.build-images.result == 'skipped') }}
-    uses: ./.github/workflows/e2e-inference-scheduling-hpu.yaml
+    uses: ./.github/workflows/e2e-optimized-baseline-hpu.yaml
     with:
       pr_or_branch: ${{ github.event.inputs.pr_or_branch || github.event.pull_request.number }}
       # Only use custom image tag if user provides it, or if HPU image was actually built in this PR

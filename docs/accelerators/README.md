@@ -8,13 +8,13 @@ Maintainers for each accelerator type are listed below. See our well-lit path gu
 
 | Vendor | Models | Maintainers | Supported Well-lit Paths |
 | --- | --- | --- | --- |
-| AMD | ROCm | Kenny Roche (<Kenny.Roche@amd.com>), Vincent Cave (<Vincent.Cave@amd.com>) | [Inference Scheduling](../../guides/inference-scheduling/README.md), [Prefill/Decode Disaggregation](../../guides/pd-disaggregation/README.amd.md) |
-| CPU | x86_64 | Hongming Zheng (@ZhengHongming888, <hongming.zheng@intel.com>) | [Inference Scheduling](../../guides/inference-scheduling/README.md) |
-| Google | [TPU](../infra-providers/gke/README.md#llm-d-on-google-kubernetes-engine-gke) | Edwin Hernandez (@Edwinhr716), Cong Liu (@liu-cong, <congliu.thu@gmail.com>) | [Inference Scheduling](../../guides/inference-scheduling/README.md), [Prefill/Decode Disaggregation](../../guides/pd-disaggregation/README.md) |
-| Intel | XPU | Yuan Wu (@yuanwu2017, <yuan.wu@intel.com>) | [Inference Scheduling](../../guides/inference-scheduling/README.md), [Prefill/Decode Disaggregation](../../guides/pd-disaggregation/README.md) |
-| Intel | HPU | Sakari Poussa (@poussa, <sakari.poussa@intel.com>) | [Inference Scheduling](../../guides/inference-scheduling/README.md) |
+| AMD | ROCm | Kenny Roche (<Kenny.Roche@amd.com>), Vincent Cave (<Vincent.Cave@amd.com>) | [optimized baseline](../../guides/optimized-baseline/README.md), [Prefill/Decode Disaggregation](../../guides/pd-disaggregation/README.amd.md) |
+| CPU | x86_64 | Hongming Zheng (@ZhengHongming888, <hongming.zheng@intel.com>) | [optimized baseline](../../guides/optimized-baseline/README.md) |
+| Google | [TPU](../infra-providers/gke/README.md#llm-d-on-google-kubernetes-engine-gke) | Edwin Hernandez (@Edwinhr716), Cong Liu (@liu-cong, <congliu.thu@gmail.com>) | [optimized baseline](../../guides/optimized-baseline/README.md), [Prefill/Decode Disaggregation](../../guides/pd-disaggregation/README.md) |
+| Intel | XPU | Yuan Wu (@yuanwu2017, <yuan.wu@intel.com>) | [optimized baseline](../../guides/optimized-baseline/README.md), [Prefill/Decode Disaggregation](../../guides/pd-disaggregation/README.md) |
+| Intel | HPU | Sakari Poussa (@poussa, <sakari.poussa@intel.com>) | [optimized baseline](../../guides/optimized-baseline/README.md) |
 | NVIDIA | GPU | Will Eaton (<weaton@redhat.com>), Greg (<grpereir@redhat.com>) | All |
-| Rebellions | NPU | Jinmoo Seok (@rebel-jinmoo, <jinmoo_seok@rebellions.ai>), Minwook Ahn (@rebel-minwook, <minwook.ahn@rebellions.ai>) | [Inference Scheduling](../../guides/inference-scheduling/README.md) |
+| Rebellions | NPU | Jinmoo Seok (@rebel-jinmoo, <jinmoo_seok@rebellions.ai>), Minwook Ahn (@rebel-minwook, <minwook.ahn@rebellions.ai>) | [optimized baseline](../../guides/optimized-baseline/README.md) |
 
 ## Requirements
 

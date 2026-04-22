@@ -82,15 +82,15 @@ kubectl get pods -n istio-system
 Use the `digitalocean` environment to automatically load DigitalOcean-specific value overrides:
 
 ```bash
-# For inference scheduling (2 decode pods)
-cd guides/inference-scheduling
-export NAMESPACE=llm-d-inference-scheduling
+# For optimized baseline (2 decode pods)
+cd guides/optimized-baseline
+export NAMESPACE=llm-d-optimized-baseline
 helmfile apply -e digitalocean -n ${NAMESPACE}
 ```
 
 **Key DigitalOcean Optimizations Applied Automatically:**
 
-* **Smaller Models**: Uses `Qwen3-0.6B` (inference-scheduling) that doesn't require HuggingFace tokens
+* **Smaller Models**: Uses `Qwen3-0.6B` (optimized-baseline) that doesn't require HuggingFace tokens
 * **Stable Images**: Uses production-ready `ghcr.io/llm-d/llm-d-cuda:v0.5.1` instead of development builds
 * **DOKS-Optimized Resources**: Reduced memory/CPU requirements suitable for DOKS GPU nodes
 * **GPU Tolerations**: Automatic scheduling on DigitalOcean GPU nodes with `nvidia.com/gpu` taints
@@ -98,19 +98,19 @@ helmfile apply -e digitalocean -n ${NAMESPACE}
 
 **Architecture Overview:**
 
-* **Inference Scheduling**: 2 decode pods with intelligent routing via InferencePool
+* **optimized baseline**: 2 decode pods with intelligent routing via InferencePool
 
 ### Step 4: Testing
 
 Verify deployment success:
 
 ```bash
-# Check deployment status for inference scheduling
-kubectl get pods -n llm-d-inference-scheduling
-kubectl get gateway -n llm-d-inference-scheduling
+# Check deployment status for optimized baseline
+kubectl get pods -n llm-d-optimized-baseline
+kubectl get gateway -n llm-d-optimized-baseline
 
-# Test inference endpoint (inference scheduling example)
-kubectl port-forward -n llm-d-inference-scheduling svc/infra-inference-scheduling-inference-gateway-istio 8080:80
+# Test inference endpoint (optimized baseline example)
+kubectl port-forward -n llm-d-optimized-baseline svc/infra-optimized-baseline-inference-gateway-istio 8080:80
 
 curl -X POST http://localhost:8080/v1/chat/completions \
   -H "Content-Type: application/json" \
@@ -144,7 +144,7 @@ The DigitalOcean deployment uses smaller, optimized models:
 
 | Architecture         | Original Model          | DigitalOcean Model      | Benefits                   |
 |----------------------|-------------------------|-------------------------|----------------------------|
-| Inference Scheduling | `Qwen3-0.6B` + HF Token | `Qwen3-0.6B` (no token) | No authentication required |
+| optimized baseline | `Qwen3-0.6B` + HF Token | `Qwen3-0.6B` (no token) | No authentication required |
 
 ### Resource Optimization
 
@@ -169,7 +169,7 @@ tolerations:
 
 ### Architecture Differences
 
-**Inference Scheduling on DOKS:**
+**optimized baseline on DOKS:**
 
 * 2 decode pods with InferencePool routing
 * Single GPU per pod (optimal for DOKS node sizes)
@@ -241,7 +241,7 @@ kubectl get gateway -n <namespace>
 
 ```bash
 # Remove specific deployment
-export NAMESPACE=llm-d-inference-scheduling
+export NAMESPACE=llm-d-optimized-baseline
 helmfile destroy -e digitalocean -n ${NAMESPACE}
 
 # Remove prerequisites (affects all deployments)
@@ -254,11 +254,11 @@ helmfile destroy -f istio.helmfile.yaml
 
 ### Base Configurations (Unchanged)
 
-* `guides/inference-scheduling/ms-inference-scheduling/values.yaml`
+* `guides/optimized-baseline/ms-optimized-baseline/values.yaml`
 
 ### DigitalOcean Overrides (Platform-Specific)
 
-* `guides/inference-scheduling/ms-inference-scheduling/digitalocean-values.yaml`
+* `guides/optimized-baseline/ms-optimized-baseline/digitalocean-values.yaml`
 
 ### Helmfile Configuration
 

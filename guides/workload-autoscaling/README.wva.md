@@ -93,33 +93,33 @@ llm-d-wva-workload-variant-autoscaler-controller-manager   2/2     2            
 
 ## Enabling Autoscaling for an Inference Deployment
 
-This section enables autoscaling for an existing [Intelligent Inference Scheduling](../inference-scheduling/README.md) deployment. It creates a `VariantAutoscaling` CR, and an HPA that reads the `wva_desired_replicas` metric.
+This section enables autoscaling for an existing [optimized baseline](../optimized-baseline/README.md) deployment. It creates a `VariantAutoscaling` CR, and an HPA that reads the `wva_desired_replicas` metric.
 
 ### Apply the Kustomize Overlay
 
 ```bash
-kubectl apply -k inference-scheduling-autoscaling -n ${NAMESPACE}
+kubectl apply -k optimized-baseline-autoscaling -n ${NAMESPACE}
 ```
 
-> **Note:** cluster-scoped mode: `${NAMESPACE}` must match the namespace where the inference-scheduling stack is running (default: `llm-d-inference-scheduler`).
+> **Note:** cluster-scoped mode: `${NAMESPACE}` must match the namespace where the optimized-baseline stack is running (default: `llm-d-inference-scheduler`).
 
 > **Note:** namespace-scoped mode: `${NAMESPACE}` must match the namespace where the WVA is running (default: `llm-d-autoscaler`).
 
-> **Note:** If you set the `RELEASE_NAME_POSTFIX` environment variable when installing the inference-scheduling stack, you need to set the same postfix in the `kustomization.yaml` of this overlay to ensure the correct resources are targeted. For example, if you set `RELEASE_NAME_POSTFIX=my-custom` during installation, you should uncomment the line `nameSuffix: -my-custom` in the `kustomization.yaml` of this overlay.
+> **Note:** If you set the `RELEASE_NAME_POSTFIX` environment variable when installing the optimized-baseline stack, you need to set the same postfix in the `kustomization.yaml` of this overlay to ensure the correct resources are targeted. For example, if you set `RELEASE_NAME_POSTFIX=my-custom` during installation, you should uncomment the line `nameSuffix: -my-custom` in the `kustomization.yaml` of this overlay.
 
 ### Verify
 
 After a few minutes, you should see the new `VariantAutoscaling` resource:
 
 ```bash
-kubectl get variantautoscaling ms-inference-scheduling-llm-d-modelservice-decode -n ${NAMESPACE}
+kubectl get variantautoscaling ms-optimized-baseline-llm-d-modelservice-decode -n ${NAMESPACE}
 ```
 
 Expected output:
 
 ```
 NAME                                                TARGET                                              MODEL            OPTIMIZED   METRICSREADY   AGE
-ms-inference-scheduling-llm-d-modelservice-decode   ms-inference-scheduling-llm-d-modelservice-decode   Qwen/Qwen3-32B   1           True           37m
+ms-optimized-baseline-llm-d-modelservice-decode   ms-optimized-baseline-llm-d-modelservice-decode   Qwen/Qwen3-32B   1           True           37m
 ```
 
 You should also see the HPA with the `wva_desired_replicas` metric:
@@ -127,7 +127,7 @@ You should also see the HPA with the `wva_desired_replicas` metric:
 ```bash
 kubectl get hpa -n ${NAMESPACE}
 NAME                                                REFERENCE                                              TARGETS   MINPODS   MAXPODS   REPLICAS   AGE
-ms-inference-scheduling-llm-d-modelservice-decode   Deployment/ms-inference-scheduling-llm-d-modelservice-decode   0%/1         1         16         1         37m
+ms-optimized-baseline-llm-d-modelservice-decode   Deployment/ms-optimized-baseline-llm-d-modelservice-decode   0%/1         1         16         1         37m
 ```
 
 ### Cleanup
@@ -135,7 +135,7 @@ ms-inference-scheduling-llm-d-modelservice-decode   Deployment/ms-inference-sche
 To remove the autoscaling configuration, simply delete the kustomize overlay:
 
 ```bash
-kubectl delete -k inference-scheduling-autoscaling/ -n ${NAMESPACE}
+kubectl delete -k optimized-baseline-autoscaling/ -n ${NAMESPACE}
 ```
 
 ## WVA Controller Cleanup

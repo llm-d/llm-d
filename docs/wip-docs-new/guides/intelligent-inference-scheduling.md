@@ -1,4 +1,4 @@
-# Intelligent Inference Scheduling
+# optimized baseline
 
 Traditional HTTP requests are fast, uniform, and cheap. Standard round-robin request scheduling strategies balance this load well.
 
@@ -14,7 +14,7 @@ EPP injects awareness of the LLM-workload into the load-balancing layer consider
 
 ## Deploy
 
-See the [Intelligent Inference Scheduling guide](https://github.com/llm-d/llm-d/tree/main/guides/inference-scheduling) for manifests and step-by-step deployment.
+See the [optimized baseline guide](https://github.com/llm-d/llm-d/tree/main/guides/optimized-baseline) for manifests and step-by-step deployment.
 
 ## Architecture
 

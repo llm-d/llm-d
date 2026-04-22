@@ -20,7 +20,7 @@ llm-d is a high-performance distributed inference serving stack optimized for pr
 
 Model servers like [vLLM](https://docs.vllm.ai) and [SGLang](https://github.com/sgl-project/sglang) handle efficiently running large language models on accelerators. llm-d provides state of the art orchestration above model servers to serve high-scale real world traffic efficiently and reliably:
 
-1. [Intelligent Inference Scheduling](./guides/inference-scheduling/README.md) - Deploy [vLLM](https://docs.vllm.ai) behind a Gateway API-based load balancer enhanced with an [inference scheduler](https://github.com/llm-d/llm-d-inference-scheduler) to decrease serving latency and increase throughput with [prefix-cache aware routing](./guides/precise-prefix-cache-aware/README.md), utilization-based load balancing, fairness and prioritization for multi-tenant serving, and [predicted latency balancing (experimental)](./guides/predicted-latency-based-scheduling).
+1. [optimized baseline](./guides/optimized-baseline/README.md) - Deploy [vLLM](https://docs.vllm.ai) behind a Gateway API-based load balancer enhanced with an [inference scheduler](https://github.com/llm-d/llm-d-inference-scheduler) to decrease serving latency and increase throughput with [prefix-cache aware routing](./guides/precise-prefix-cache-aware/README.md), utilization-based load balancing, fairness and prioritization for multi-tenant serving, and [predicted latency balancing (experimental)](./guides/predicted-latency-based-scheduling).
 2. [Disaggregated Serving (prefill/decode disaggregation)](./guides/pd-disaggregation/README.md) - Reduce time to first token (TTFT) and get more predictable time per output token (TPOT) by splitting inference into prefill servers handling prompts and decode servers handling responses, primarily on large models such as gpt-oss-120b and when processing very long prompts.
 3. [Wide Expert-Parallelism](./guides/wide-ep-lws/README.md) - Deploy very large Mixture-of-Experts (MoE) models like [DeepSeek-R1](https://github.com/vllm-project/vllm/issues/16037) for much higher throughput for RL and latency-insensitive workloads, using [Data Parallelism and Expert Parallelism](https://docs.vllm.ai/en/latest/serving/data_parallel_deployment.html) over fast accelerator networks.
 4. [Tiered KV Prefix Caching with CPU and Storage Offload](./guides/tiered-prefix-cache/README.md) - Improve prefix cache hit rate by offloading KV-cache entries to CPU memory, local SSD, and remote high-performance filesystem storage.
@@ -30,7 +30,7 @@ These [guides](./guides/README.md) provide tested and benchmarked recipes and He
 
 ## Get Started Now
 
-We recommend new users start with a deployment of [intelligent inference scheduling](./guides/inference-scheduling/README.md).
+We recommend new users start with a deployment of [optimized baseline](./guides/optimized-baseline/README.md).
 
 > [!NOTE]
 > We are currently revamping our documentation. You can also preview [our new quickstarts](./docs/wip-docs-new/getting-started/quickstart.md), which will be formally released soon.
@@ -42,7 +42,7 @@ We recommend new users start with a deployment of [intelligent inference schedul
 
 
 <!-- Previous News  -->
-<!-- - [2025-08] Read more about the [intelligent inference scheduler](https://llm-d.ai/blog/intelligent-inference-scheduling-with-llm-d), including a deep dive on how different balancing techniques are composed to improve throughput without overloading replicas. -->
+<!-- - [2025-08] Read more about the [intelligent inference scheduler](https://llm-d.ai/blog/intelligent-optimized-baseline-with-llm-d), including a deep dive on how different balancing techniques are composed to improve throughput without overloading replicas. -->
 
 ## 🧱 Architecture
 

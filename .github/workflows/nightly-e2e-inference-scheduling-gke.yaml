@@ -1,6 +1,6 @@
-name: Nightly - Inference Scheduling E2E (GKE)
+name: Nightly - optimized baseline E2E (GKE)
 
-# Nightly regression test for the inference-scheduling guide on GKE.
+# Nightly regression test for the optimized-baseline guide on GKE.
 # Deploys via helmfile (gke env) and validates with e2e-validate.sh.
 
 on:
@@ -17,7 +17,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: nightly-e2e-inference-scheduling-gke
+  group: nightly-e2e-optimized-baseline-gke
   cancel-in-progress: true
 
 jobs:
@@ -25,7 +25,7 @@ jobs:
     if: github.repository == 'llm-d/llm-d'
     uses: llm-d/llm-d-infra/.github/workflows/reusable-nightly-e2e-gke-helmfile.yaml@main
     with:
-      guide_name: inference-scheduling
+      guide_name: optimized-baseline
       namespace: llm-d-nightly-inference-gke
       helmfile_env: gke
       gateway_type: gke

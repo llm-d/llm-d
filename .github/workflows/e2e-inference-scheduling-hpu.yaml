@@ -1,4 +1,4 @@
-name: HPU Inference Scheduling Test
+name: HPU optimized baseline Test
 
 on:
   schedule:
@@ -35,9 +35,9 @@ jobs:
     env:
       NAMESPACE: "llm-d-hpu-is"
       GATEWAY_TYPE: "istio"
-      INFRA_RELEASE_NAME: "infra-inference-scheduling"
-      GAIE_RELEASE_NAME: "gaie-inference-scheduling"
-      MS_RELEASE_NAME: "ms-inference-scheduling"
+      INFRA_RELEASE_NAME: "infra-optimized-baseline"
+      GAIE_RELEASE_NAME: "gaie-optimized-baseline"
+      MS_RELEASE_NAME: "ms-optimized-baseline"
 
     steps:
       - name: Checkout
@@ -122,22 +122,22 @@ jobs:
 
       - name: Deploy guide
         run: |
-          cd guides/inference-scheduling
+          cd guides/optimized-baseline
           echo "Starting helmfile deployment for hpu environment..."
           helmfile apply -e hpu -n "${NAMESPACE}" ${HELM_SET_IMAGE} \
             --skip-schema-validation 2>&1 \
-            | tee ~/inference-scheduling-hpu-deployment.log
+            | tee ~/optimized-baseline-hpu-deployment.log
           
           # Check if helmfile command succeeded
           HELMFILE_EXIT_CODE=${PIPESTATUS[0]}
           if [ ${HELMFILE_EXIT_CODE} -ne 0 ]; then
             echo "❌ Helmfile apply failed with exit code: ${HELMFILE_EXIT_CODE}"
             echo "=== Full deployment log ==="
-            cat ~/inference-scheduling-hpu-deployment.log
+            cat ~/optimized-baseline-hpu-deployment.log
             exit 1
           fi
           
-          echo "---------------------------------------" >> ~/inference-scheduling-hpu-deployment.log
+          echo "---------------------------------------" >> ~/optimized-baseline-hpu-deployment.log
           
           # Verify releases were created
           echo "✅ Helmfile apply succeeded. Checking deployed releases..."
@@ -147,14 +147,14 @@ jobs:
         run: |
           for release_name in "${INFRA_RELEASE_NAME}" "${GAIE_RELEASE_NAME}" "${MS_RELEASE_NAME}"; do
             bash .github/scripts/e2e/helm-get-all.sh \
-              ~/inference-scheduling-hpu-deployment.log \
+              ~/optimized-baseline-hpu-deployment.log \
               "$release_name" \
               "$NAMESPACE" || echo "⚠️  Failed to fetch manifests for $release_name"
           done
 
       - name: Deploy HTTPRoute
         run: |
-          cd guides/inference-scheduling
+          cd guides/optimized-baseline
           kubectl apply -f httproute.yaml -n "${NAMESPACE}"
 
       - name: Wait for all pods to be ready
@@ -215,8 +215,8 @@ jobs:
       - name: Collect and upload Kubernetes pod logs
         if: always()
         run: |
-            mkdir -p pod-logs-inference-scheduling-hpu
-            cd pod-logs-inference-scheduling-hpu
+            mkdir -p pod-logs-optimized-baseline-hpu
+            cd pod-logs-optimized-baseline-hpu
             echo "Fetching ${NAMESPACE} pods log..."
             kubectl get pods -n "${NAMESPACE}" -l "llm-d.ai/role=decode" -o yaml > ./decode-pods.yaml
             kubectl logs -n "${NAMESPACE}" -l "llm-d.ai/role=decode" > ./decode-pod-logs.log
@@ -227,19 +227,19 @@ jobs:
             echo "Fetching ${NAMESPACE} pods descriptions..."
             kubectl get pods -n "${NAMESPACE}" --no-headers -o custom-columns=":metadata.name" \
             | xargs -I{} sh -c 'kubectl describe pod -n "${NAMESPACE}" {} > "{}-describe.log" 2>&1'
-            mv ~/inference-scheduling-hpu-deployment.log . || true
+            mv ~/optimized-baseline-hpu-deployment.log . || true
             mv ~/install-deps.log . || true
 
       - name: Upload pod logs as artifact
         uses: actions/upload-artifact@v7
         if: always()
         with:
-          name: llmd-pod-logs-inference-scheduling-hpu
-          path: pod-logs-inference-scheduling-hpu
+          name: llmd-pod-logs-optimized-baseline-hpu
+          path: pod-logs-optimized-baseline-hpu
 
       - name: Cleanup deployment
         if: always()
         run: |
-          cd guides/inference-scheduling
+          cd guides/optimized-baseline
           helmfile destroy -e hpu -n "${NAMESPACE}"
           kubectl delete ns ${NAMESPACE}

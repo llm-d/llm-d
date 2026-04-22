@@ -20,7 +20,7 @@ body:
       label: Feature Area
       description: Which area of llm-d does this feature relate to?
       options:
-        - Inference Scheduling
+        - Optimized baseline
         - Prefill/Decode Disaggregation
         - KV Cache / Prefix Caching
         - Wide Expert-Parallelism

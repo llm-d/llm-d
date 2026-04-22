@@ -8,6 +8,6 @@ This page describes how llm-d release validates each "Well-Lit Path" against a s
 
 | Well-Lit Path                       | vLLM - CUDA | vLLM - AMD | vLLM - TPU | SGL - CUDA | SGL - AMD | SGL - TPU |
 |-------------------------------------|-------------|------------|------------|------------|-----------|-----------|
-| Intelligent Inference Scheduling    | X           | X          | X          | X          | X         | X         |
+| optimized baseline    | X           | X          | X          | X          | X         | X         |
 | P/D Disaggregation                  | X           |            | X          | X          |           |           |
 

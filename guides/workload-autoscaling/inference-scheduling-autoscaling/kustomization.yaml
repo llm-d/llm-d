@@ -4,7 +4,7 @@ resources:
   - va.yaml
   - hpa.yaml
 
-# If you set the $RELEASE_NAME_POSTFIX environment variable when installing the inference-scheduling stack,
+# If you set the $RELEASE_NAME_POSTFIX environment variable when installing the optimized-baseline stack,
 # you need to set the same postfix here to ensure the correct resources are targeted.
 # For example, if you set `RELEASE_NAME_POSTFIX=my-custom` during installation,
 # you should uncomment the line below and set `nameSuffix: -my-custom` to ensure the WVA targets the correct Deployment.

@@ -248,7 +248,7 @@ disaggregation, backed by real vLLM or llm-d benchmark runs.
 
 | Milestone | Description | Deliverable |
 |---|---|---|
-| Inference scheduler and scoring search (estimation engine phase 2) | Extend configuration search to inference scheduler and scoring weights | Present performance data (real or estimated) for inference scheduling-driven configuration comparison |
+| Inference scheduler and scoring search (estimation engine phase 2) | Extend configuration search to inference scheduler and scoring weights | Present performance data (real or estimated) for optimized baseline-driven configuration comparison |
 | Benchmark-backed validation | Run llm-d benchmark sweeps for each recommendation configuration. Stores results (local or publicly managed DB by llm-d) | Closes feedback loop. Estimations are compared to real throughput/latency |
 | Multi-model and agentic workflow support | Support more complex use cases such as multi-model and agentic workflows | Recommendation engine handles multi-model topologies with per-model configuration and cross-model resource optimization |
 | Blog posts | Planning and search across vLLM + inference scheduler knobs with real results. | Continued public validation of approach, community feedback loop, and impact |

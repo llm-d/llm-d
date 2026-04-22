@@ -1,0 +1,65 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: decode
+spec:
+  replicas: 1
+  template:
+    spec:
+      containers:
+        - name: modelserver
+          command: ["vllm", "serve"]
+          args:
+            - "Qwen/Qwen3-8B"
+            - "--block-size=128"
+            - "--max-num-seqs=256"
+            - "--max-model-len=2048"
+            - "--max-num-batched-token=16000"
+            - "--disable-access-log-for-endpoints=/health,/metrics,/v1/models"
+            # Uncomment for distributed tracing
+            # - "--otlp-traces-endpoint=http://otel-collector:4317"
+            # - "--collect-detailed-traces=all"
+          env:
+            - name: HF_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: llm-d-hf-token
+                  key: HF_TOKEN
+            - name: OMPI_MCA_btl_vader_single_copy_mechanism
+              value: "none"
+            - name: HABANA_LOGS
+              value: "/tmp/habana_logs"
+            - name: VLLM_SKIP_WARMUP
+              value: "true"
+            - name: DO_NOT_TRACK
+              value: "1"
+            # Uncomment for distributed tracing env vars
+            # - name: OTEL_SERVICE_NAME
+            #   value: "vllm-decode"
+            # - name: OTEL_EXPORTER_OTLP_ENDPOINT
+            #   value: "http://otel-collector:4317"
+            # - name: OTEL_TRACES_EXPORTER
+            #   value: "otlp"
+            # - name: OTEL_TRACES_SAMPLER
+            #   value: "parentbased_traceidratio"
+            # - name: OTEL_TRACES_SAMPLER_ARG
+            #   value: "0.1"
+          resources:
+            claims:
+              - name: optimized-baseline-gaudi-claim
+          startupProbe:
+            initialDelaySeconds: 15
+            periodSeconds: 30
+            timeoutSeconds: 5
+            failureThreshold: 120
+          livenessProbe:
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            periodSeconds: 5
+            timeoutSeconds: 2
+            failureThreshold: 3
+      resourceClaims:
+        - name: optimized-baseline-gaudi-claim
+          resourceClaimTemplateName: optimized-baseline-gaudi-claim

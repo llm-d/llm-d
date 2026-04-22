@@ -15,7 +15,7 @@ The provided [load generation script](./scripts/generate-traffic-basic.sh) will 
 | **Overall Latency P50** | `histogram_quantile(0.50, sum by(le) (rate(inference_objective_request_duration_seconds_bucket[5m])))` |
 | **Model-Specific TTFT P99** | `histogram_quantile(0.99, sum by(le, model_name) (rate(vllm:time_to_first_token_seconds_bucket[5m])))` |
 | **Model-Specific Inter-Token Latency P99** | `histogram_quantile(0.99, sum by(le, model_name) (rate(vllm:inter_token_latency_seconds_bucket[5m])))` |
-| **Scheduler Health** | `avg_over_time(up{job="gaie-inference-scheduling-epp"}[5m])` |
+| **Scheduler Health** | `avg_over_time(up{job="gaie-optimized-baseline-epp"}[5m])` |
 | **Scheduler Error Rate** | `sum(rate(inference_objective_request_error_total[5m])) / sum(rate(inference_objective_request_total[5m]))` |
 | **Scheduler Error Rate by Type** | `sum by(error_code) (rate(inference_objective_request_error_total[5m]))` |
 | **GPU Utilization** | `avg by(gpu, node) (DCGM_FI_DEV_GPU_UTIL or nvidia_gpu_duty_cycle)` |
@@ -93,7 +93,7 @@ The provided [load generation script](./scripts/generate-traffic-basic.sh) will 
 
 ### Job Labels
 
-- EPP availability queries use job labels like `job="gaie-inference-scheduling-epp"`
+- EPP availability queries use job labels like `job="gaie-optimized-baseline-epp"`
 - Actual job names depend on your deployment configuration
 
 ### Error Metrics

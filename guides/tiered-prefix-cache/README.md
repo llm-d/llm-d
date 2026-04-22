@@ -8,7 +8,7 @@ Efficient caching of prefix computation states to avoid recomputation is crucial
 For the self-attention mechanism, the generation of the next token leverages the prefix Key & Value (KV) tensors.
 For State Space Model (SSM) models such as mamba models, reusing cache of its SSM states of prefix locations also saves computation for the next token.
 In this guide we use the term "prefix cache" to refer to the cache of computation states in the prefix tokens of a target token which includes the caching of prefix KV tensors and other forms of caches.
-The prefix aware request scheduling optimizations in the [inference scheduling](../inference-scheduling/README.md) also applies here.
+The prefix aware request scheduling optimizations in the [optimized baseline](../optimized-baseline/README.md) also applies here.
 
 State of the art inference engines already implement native prefix cache reuse across requests in accelerator High-Bandwidth Memory (HBM), but in most serving environments HBM is already a constrained resource. To increase the amount of available memory beyond HBM requires more cache storage, driving the need for offloading prefix cache from HBM to more cost effective storage options such as CPU RAM.
 
@@ -23,7 +23,7 @@ Enabling prefix cache offloading to CPU is recommended for the following reasons
 * Little operational overhead.
 * There are usually more CPU RAM storage available than accelerator HBM on the host offering much larger cache capacity.
 * CPU - accelerator transfer is faster than recomputation for most cases.
-* (WIP) Prefix cache storage tier aware inference scheduling makes smart decisions based on cache tier (accelerator HBM vs. CPU RAM).
+* (WIP) Prefix cache storage tier aware optimized baseline makes smart decisions based on cache tier (accelerator HBM vs. CPU RAM).
 
 In low cache size scenario where HBM is primarily used, async CPU offloading should incur little overhead. In high cache size scenario loading cache from CPU RAM offers significantly higher cache hit and thus better performance than HBM only.
 

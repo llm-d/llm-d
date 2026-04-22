@@ -1,0 +1,334 @@
+# Well-lit Path: optimized baseline
+
+[![Nightly - optimized baseline E2E (OpenShift)](https://github.com/llm-d/llm-d/actions/workflows/nightly-e2e-optimized-baseline-ocp.yaml/badge.svg)](https://github.com/llm-d/llm-d/actions/workflows/nightly-e2e-optimized-baseline-ocp.yaml) [![Nightly - optimized baseline E2E (CKS)](https://github.com/llm-d/llm-d/actions/workflows/nightly-e2e-optimized-baseline-cks.yaml/badge.svg)](https://github.com/llm-d/llm-d/actions/workflows/nightly-e2e-optimized-baseline-cks.yaml) [![Nightly - optimized baseline E2E (GKE)](https://github.com/llm-d/llm-d/actions/workflows/nightly-e2e-optimized-baseline-gke.yaml/badge.svg)](https://github.com/llm-d/llm-d/actions/workflows/nightly-e2e-optimized-baseline-gke.yaml)
+
+## Overview
+
+This guide deploys the recommended out of the box [scheduling configuration](https://github.com/llm-d/llm-d-inference-scheduler/blob/main/docs/architecture.md) for most vLLM and SGLang deployments, reducing tail latency and increasing throughput through load-aware and prefix-cache aware balancing.
+
+This profile defaults to the approximate prefix cache aware scorer, which only observes request traffic to predict prefix cache locality. The [precise prefix cache aware routing feature](../precise-prefix-cache-aware) improves hit rate by introspecting the vLLM instances for cache entries and will become the default in a future release.
+
+## Default Configuration
+
+| Parameter | Value |
+|-----------|-------|
+| Model | [Qwen/Qwen3-32B](https://huggingface.co/Qwen/Qwen3-32B) |
+| Replicas | 8 |
+| Tensor Parallelism | 2 |
+| GPUs per replica | 2 |
+| Total GPUs | 16 |
+
+### Supported Hardware Backends
+
+This guide includes configurations for the following accelerators:
+
+| Backend | Directory | Notes |
+|---------|-----------|-------|
+| NVIDIA CUDA | `modelserver/cuda/vllm/` | Default configuration |
+| NVIDIA CUDA (SGLang) | `modelserver/cuda/sglang/` | SGLang inference server |
+| AMD ROCm | `modelserver/amd/vllm/` | AMD GPU |
+| Intel XPU | `modelserver/xpu/vllm/` | Intel Data Center GPU Max 1550+ |
+| Intel Gaudi (HPU) | `modelserver/hpu/vllm/` | Gaudi 1/2/3 with DRA support |
+| Google TPU v6e | `modelserver/tpu-v6/vllm/` | GKE TPU |
+| Google TPU v7 | `modelserver/tpu-v7/vllm/` | GKE TPU |
+| CPU | `modelserver/cpu/vllm/` | Intel/AMD, 64 cores + 64GB RAM per replica |
+
+> **Note on hardware variant configurations:** Some hardware variants use reduced configurations (fewer replicas, smaller models) to enable CI testing for compatibility and regression checks. These configurations are maintained by their respective hardware vendors and are not guaranteed as production-ready examples. Users deploying on non-default hardware should review and adjust the configurations for their environment.
+
+## Prerequisites and Installation
+
+For prerequisites, installation, verification, and cleanup instructions, see the [guide installation docs](../01_installing_a_guide.md).
+
+## Benchmarking
+
+For instructions on how to run benchmarks against an installed guide, see the [benchmarking docs](../03_benchmarking_a_guide.md).
+
+### Benchmarking Report
+
+The benchmark is running on 16 H100 GPUs, distributed across 8 model servers (2 H100s per server with TP=2).
+
+There is a report for each stage.
+<details>
+<summary><b><i>Click</i></b> here to view the report for `rate=60` from the above example</summary>
+
+  ```yaml
+  metrics:
+    latency:
+      inter_token_latency:
+        max: 0.3976375609636307
+        mean: 0.06765722222528071
+        min: 1.3881013728678226e-05
+        p0p1: 1.722399512073025e-05
+        p1: 0.00027551683422643626
+        p5: 0.02622559448063839
+        p10: 0.033432915166486055
+        p25: 0.04734217074292246
+        p50: 0.07592084849602543
+        p75: 0.08339276927290484
+        p90: 0.0940622523019556
+        p95: 0.09673563879623544
+        p99: 0.13096482709748672
+        p99p9: 0.18361429275909982
+        units: s/token
+      normalized_time_per_output_token:
+        max: 24.031401686001725
+        mean: 0.15119099450472326
+        min: 0.029169302775326988
+        p0p1: 0.030635711364870543
+        p1: 0.03316916608329783
+        p5: 0.03686109928604165
+        p10: 0.0422473103951594
+        p25: 0.06722495797558614
+        p50: 0.07227312453111687
+        p75: 0.0776502936300094
+        p90: 0.08589849215923934
+        p95: 0.15161141803650466
+        p99: 2.2160512474802
+        p99p9: 3.599132445602329
+        units: s/token
+      request_latency:
+        max: 85.97330250998493
+        mean: 67.864936218041
+        min: 29.08179486700101
+        p0p1: 30.597063626140066
+        p1: 32.82888973700406
+        p5: 36.53580686951754
+        p10: 41.68587793367915
+        p25: 66.56756829548976
+        p50: 71.62742416901165
+        p75: 75.53078864999407
+        p90: 82.8551616292796
+        p95: 85.17766979286971
+        p99: 85.8529812369059
+        p99p9: 85.96677305092867
+        units: s
+      time_per_output_token:
+        max: 0.08567342651402578
+        mean: 0.06765722222528071
+        min: 0.028917132598988246
+        p0p1: 0.030438513501739303
+        p1: 0.03267320581834996
+        p5: 0.03637065519659664
+        p10: 0.04149165656909463
+        p25: 0.06637948430397955
+        p50: 0.07139790143899155
+        p75: 0.07530937768449075
+        p90: 0.08259890788880875
+        p95: 0.08494466238816095
+        p99: 0.0856393391511339
+        p99p9: 0.08567179985522212
+        units: s/token
+      time_to_first_token:
+        max: 0.2749739610007964
+        mean: 0.1203408618576747
+        min: 0.04670933203306049
+        p0p1: 0.05085431289958069
+        p1: 0.0542934795509791
+        p5: 0.06336988278490026
+        p10: 0.07046441090060399
+        p25: 0.08575929325888865
+        p50: 0.1132554289943073
+        p75: 0.1517725815065205
+        p90: 0.18095784459728748
+        p95: 0.19695026772387791
+        p99: 0.22566659807867837
+        p99p9: 0.25035182150500235
+        units: s
+    requests:
+      failures: 0
+      input_length:
+        max: 7668.0
+        mean: 7576.364
+        min: 7487.0
+        p0p1: 7490.992
+        p1: 7512.0
+        p5: 7531.0
+        p10: 7541.9
+        p25: 7556.0
+        p50: 7577.0
+        p75: 7594.0
+        p90: 7611.0
+        p95: 7624.0
+        p99: 7646.0
+        p99p9: 7665.006
+        units: count
+      output_length:
+        max: 1999.0
+        mean: 941.86
+        min: 3.0
+        p0p1: 20.0
+        p1: 32.99
+        p5: 500.2
+        p10: 949.9
+        p25: 992.0
+        p50: 997.0
+        p75: 1000.0
+        p90: 1000.0
+        p95: 1000.0
+        p99: 1000.0
+        p99p9: 1500.495
+        units: count
+      total: 1500
+    throughput:
+      output_tokens_per_sec: 13574.368209884744
+      requests_per_sec: 14.41229929064271
+      total_tokens_per_sec: 122767.19371273571
+    time:
+      duration: 24.984177332022227
+  scenario:
+    load:
+      args:
+        api:
+          headers: null
+          streaming: true
+          type: completion
+        circuit_breakers: null
+        data:
+          input_distribution: null
+          output_distribution: null
+          path: null
+          shared_prefix:
+            enable_multi_turn_chat: false
+            num_groups: 150
+            num_prompts_per_group: 5
+            output_len: 1000
+            question_len: 1200
+            system_prompt_len: 6000
+          trace: null
+          type: shared_prefix
+        load:
+          circuit_breakers: []
+          interval: 1.0
+          num_workers: 224
+          request_timeout: null
+          stages:
+          - concurrency_level: null
+            duration: 50
+            num_requests: null
+            rate: 15.0
+          - concurrency_level: null
+            duration: 20
+            num_requests: null
+            rate: 3.0
+          - concurrency_level: null
+            duration: 20
+            num_requests: null
+            rate: 10.0
+          - concurrency_level: null
+            duration: 20
+            num_requests: null
+            rate: 15.0
+          - concurrency_level: null
+            duration: 38
+            num_requests: null
+            rate: 20.0
+          - concurrency_level: null
+            duration: 34
+            num_requests: null
+            rate: 22.0
+          - concurrency_level: null
+            duration: 30
+            num_requests: null
+            rate: 25.0
+          - concurrency_level: null
+            duration: 25
+            num_requests: null
+            rate: 30.0
+          - concurrency_level: null
+            duration: 21
+            num_requests: null
+            rate: 35.0
+          - concurrency_level: null
+            duration: 38
+            num_requests: null
+            rate: 40.0
+          - concurrency_level: null
+            duration: 36
+            num_requests: null
+            rate: 43.0
+          - concurrency_level: null
+            duration: 33
+            num_requests: null
+            rate: 46.0
+          - concurrency_level: null
+            duration: 30
+            num_requests: null
+            rate: 49.0
+          - concurrency_level: null
+            duration: 29
+            num_requests: null
+            rate: 52.0
+          - concurrency_level: null
+            duration: 27
+            num_requests: null
+            rate: 55.0
+          - concurrency_level: null
+            duration: 26
+            num_requests: null
+            rate: 57.0
+          - concurrency_level: null
+            duration: 25
+            num_requests: null
+            rate: 60.0
+          sweep: null
+          trace: null
+          type: poisson
+          worker_max_concurrency: 100
+          worker_max_tcp_connections: 2500
+        metrics: null
+        report:
+          prometheus:
+            per_stage: false
+            summary: true
+          request_lifecycle:
+            per_request: true
+            per_stage: true
+            summary: true
+        server:
+          api_key: null
+          base_url: http://infra-optimized-baseline-inference-gateway-istio.dpikus-intel-inf.svc.cluster.local:80
+          ignore_eos: true
+          model_name: Qwen/Qwen3-32B
+          type: vllm
+        storage:
+          google_cloud_storage: null
+          local_storage:
+            path: /requests/inference-perf_1769435052_Shared_prefix_inf-scheduling-guide-Qwen3-32B
+            report_file_prefix: null
+          simple_storage_service: null
+        tokenizer:
+          pretrained_model_name_or_path: Qwen/Qwen3-32B
+          token: null
+          trust_remote_code: null
+      metadata:
+        stage: 2
+      name: inference-perf
+    model:
+      name: unknown
+  version: '0.1'
+  ```
+
+</details>
+
+### Comparing LLM-d scheduling to a simple kubernetes service
+
+The following graphs illustrate the relationship between latency, throughput, and QPS, as generated by the `inference-perf --analyze`. For benchmarking, we compared our results against a standard Kubernetes (k8s) service endpoint that routes traffic directly to vLLM pods.
+
+<img src="./benchmark-results/latency_vs_qps.png" width="900" alt="Throughput vs QPS">
+<img src="./benchmark-results/throughput_vs_qps.png" width="450" alt="Throughput vs Latency">
+
+The following data captures the performance of the last stage conducted at a fixed request rate of **60**. We also compare the result with k8s service.
+
+- **Throughput**: Requests/sec **+151.5%**; Total tokens/sec **+151.7%**
+- **Latency**: TTFT (mean) **-99.66%**; E2E request latency (mean) **-35.6%**
+- **Per-token speed**: Inter-token latency (mean) **-3.9%**
+
+| Metric | k8s (Mean) | llm-d (Mean) | Δ (llm-d - k8s) | Δ% vs k8s |
+| :--- | :--- | :--- | :--- | :--- |
+| Requests/sec | 5.7306 | 14.4123 | +8.6817 | +151.5% |
+| Input tokens/sec | 43,417.86 | 109,192.83 | +65,774.97 | +151.5% |
+| Output tokens/sec | 5,362.16 | 13,574.37 | +8,212.21 | +153.2% |
+| Total tokens/sec | 48,780.02 | 122,767.19 | +73,987.17 | +151.7% |
+| Request latency (s) | 105.4133 | 67.8649 | -37.5484 | -35.6% |
+| TTFT (s) | 34.9145 | 0.1203 | -34.7942 | -99.66% |
+| Inter-token latency (ms) | 70.42 | 67.66 | -2.76 | -3.9% |
