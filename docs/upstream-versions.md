@@ -46,7 +46,7 @@ Pinned in `guides/prereq/gateway-provider/`:
 | **Gateway API CRDs** | `v1.5.1` | `install-gateway-provider-dependencies.sh` line 39 | [kubernetes-sigs/gateway-api](https://github.com/kubernetes-sigs/gateway-api) |
 | **Gateway API Inference Extension CRDs** | `v1.4.0` | `install-gateway-provider-dependencies.sh` line 46 | [kubernetes-sigs/gateway-api-inference-extension](https://github.com/kubernetes-sigs/gateway-api-inference-extension) |
 | **Istio** | `1.29.1` | `istio.helmfile.yaml` | [istio/istio](https://github.com/istio/istio) |
-| **kgateway (deprecated llm-d install path)** | `v2.2.1` | `kgateway.helmfile.yaml` | [kgateway-dev/kgateway](https://github.com/kgateway-dev/kgateway) (`ghcr.io/kgateway-dev/charts/agentgateway*`) |
+| **kgateway (deprecated llm-d install path)** | `v2.2.3` | `kgateway.helmfile.yaml` | [kgateway-dev/kgateway](https://github.com/kgateway-dev/kgateway) (`ghcr.io/kgateway-dev/charts/agentgateway*`) |
 | **agentgateway (preferred path)** | `v1.0.0` | `agentgateway.helmfile.yaml` | [agentgateway/agentgateway](https://github.com/agentgateway/agentgateway) |
 
 ## CI Workflow Dependencies

@@ -75,7 +75,7 @@ llm-d provides helmfiles that install and configure `istio`, `kgateway`, and `ag
 The two self-installed inference modes are:
 
 * `agentgateway`: installs the `agentgateway` v1.0.0 control plane and data plane. This is the preferred self-installed inference path.
-* `kgateway`: installs the deprecated llm-d `kgateway` path using the `ghcr.io/kgateway-dev/charts/agentgateway*` charts at `v2.2.1`, with `inferenceExtension.enabled=true`. This path is retained only to support migrations.
+* `kgateway`: installs the deprecated llm-d `kgateway` path using the `ghcr.io/kgateway-dev/charts/agentgateway*` charts at `v2.2.3`, with `inferenceExtension.enabled=true`. This path is retained only to support migrations.
 
 Both self-installed inference modes use the `agentgateway` GatewayClass in llm-d guide manifests.
 
@@ -112,7 +112,7 @@ To install the gateway control plane:
 For the self-installed inference modes:
 
     helmfile apply -f agentgateway.helmfile.yaml  # preferred: agentgateway
-    helmfile apply -f kgateway.helmfile.yaml      # deprecated: kgateway path via the kgateway-dev agentgateway v2.2.1 charts
+    helmfile apply -f kgateway.helmfile.yaml      # deprecated: kgateway path via the kgateway-dev agentgateway v2.2.3 charts
 
 ##### Targeted install
 

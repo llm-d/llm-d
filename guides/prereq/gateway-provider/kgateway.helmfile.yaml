@@ -4,7 +4,7 @@ releases:
   - name: agentgateway-crds
     chart: oci://ghcr.io/kgateway-dev/charts/agentgateway-crds
     namespace: agentgateway-system
-    version: v2.2.1
+    version: v2.2.3
     installed: true
     labels:
       type: gateway-provider
@@ -12,7 +12,7 @@ releases:
 
   - name: agentgateway
     chart: oci://ghcr.io/kgateway-dev/charts/agentgateway
-    version: v2.2.1
+    version: v2.2.3
     namespace: agentgateway-system
     installed: true
     values:
