@@ -39,8 +39,7 @@ kubectl api-resources --api-group=inference.networking.k8s.io
 Deploy two replicas of vLLM running `Qwen/Qwen3-0.6B`:
 
 > [!NOTE]
-> This example uses NVIDIA GPUs. For CPU testing, use the vLLM Simulator
-> (`ghcr.io/llm-d/llm-d-inference-sim:latest`).
+> This example uses NVIDIA GPUs. For CPU testing, use the vLLM Simulator (`ghcr.io/llm-d/llm-d-inference-sim:latest`).
 
 ```bash
 kubectl apply -f https://raw.githubusercontent.com/robertgshaw2-redhat/llm-d/clean-up-common-yamls/helpers/manifests/vllm-deployment.yaml
@@ -58,7 +57,7 @@ The key choice for deployment is whether you want to create a regional internal 
 
 
 ```bash
-kubectl apply -k https://raw.githubusercontent.com/robertgshaw2-redhat/llm-d/clean-up-common-yamls/helpers/manifests/gke-l7-regional-external-managed
+kubectl apply -k "https://github.com/robertgshaw2-redhat/llm-d/helpers/manifests/gateway/gke-l7-regional-external-managed?ref=clean-up-common-yamls"
 ```
 
 Verify the `Gateway` is programmed:
@@ -119,7 +118,7 @@ traffic reaches the `Gateway` with this route, the proxy consults the EPP and
 forwards the request to the selected pod.
 
 ```bash
-kubectl apply -f https://raw.githubusercontent.com/robertgshaw2-redhat/llm-d/clean-up-common-yamls/helpers/manifests/httproute/httproute-gke.yaml
+kubectl apply -f https://raw.githubusercontent.com/robertgshaw2-redhat/llm-d/clean-up-common-yamls/helpers/manifests/httproute/httproute.yaml
 ```
 
 Verify the `HTTPRoute` is accepted:
@@ -141,32 +140,13 @@ export GATEWAY_IP=$(kubectl get gateway llm-d-inference-gateway -o jsonpath='{.s
 Send an inference request through the managed `Gateway`:
 
 ```bash
-curl -s "http://${GATEWAY_IP}/v1/chat/completions" \
+curl -s http://${GATEWAY_IP}/v1/chat/completions \
   -H 'Content-Type: application/json' \
   -d '{
-    "model": "openai/gpt-oss-20b",
+    "model": "Qwen/Qwen3-0.6B",
     "messages": [{"role": "user", "content": "Hello, who are you?"}],
     "max_tokens": 50
   }'
-```
-
-Expected output:
-
-```json
-{
-  "id": "chatcmpl-...",
-  "model": "openai/gpt-oss-20b",
-  "choices": [
-    {
-      "index": 0,
-      "finish_reason": "stop",
-      "message": {
-        "role": "assistant",
-        "content": "..."
-      }
-    }
-  ]
-}
 ```
 
 ## Cleanup
