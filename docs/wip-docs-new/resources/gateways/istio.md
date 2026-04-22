@@ -173,6 +173,7 @@ kubectl delete gateway llm-d-inference-gateway
 kubectl delete deployment my-model
 istioctl uninstall --purge -y
 kubectl delete namespace istio-system
+kubectl delete gatewayclass istio istio-remote
 kubectl delete -k "https://github.com/kubernetes-sigs/gateway-api/config/crd?ref=${GATEWAY_API_VERSION}"
 kubectl delete -k "https://github.com/kubernetes-sigs/gateway-api-inference-extension/config/crd?ref=${GAIE_VERSION}"
 ```
