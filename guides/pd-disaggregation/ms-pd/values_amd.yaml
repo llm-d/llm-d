@@ -1,3 +1,12 @@
+# AMD GPU P/D disaggregation values.
+#
+# Validated on:
+#   * MI300X (gfx942) -- original target, see PR #776 (Mar 2026)
+#   * MI355X (gfx950) -- llm-d-rocm:v0.6.0 standalone container verified to
+#     load amd/Llama-3.3-70B-Instruct-FP8-KV at TP=8 on a single 8xMI355X
+#     node and produce coherent output. Two-node P/D disaggregation across
+#     MI355X nodes still needs RoCE-fabric validation.
+
 multinode: false
 
 modelArtifacts:
