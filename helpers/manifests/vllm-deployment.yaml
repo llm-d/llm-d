@@ -17,19 +17,17 @@ spec:
         - name: vllm
           image: "vllm/vllm-openai:latest"
           imagePullPolicy: Always
-          command: ["vllm", "serve", "openai/gpt-oss-20b"]
+          command: ["vllm", "serve", "Qwen/Qwen3-0.6B"]
           ports:
             - containerPort: 8000
               name: http
               protocol: TCP
           resources:
             limits:
-              nvidia.com/gpu: 1
-              ephemeral-storage: "100Gi"
-              cpu: "9"
+              nvidia.com/gpu: "1"
+              cpu: "8"
               memory: "32Gi"
             requests:
-              nvidia.com/gpu: 1
-              ephemeral-storage: "100Gi"
+              nvidia.com/gpu: "1"
               cpu: "8"
               memory: "32Gi"

@@ -32,13 +32,10 @@ kubectl api-resources --api-group=inference.networking.k8s.io
 
 ## Step 2: Install Istio
 
-> [!NOTE]
-> Istio v1.28.0 or later is required for full Gateway API Inference Extension support.
-
 Install Istio with inference extension support enabled:
 
 ```bash
-ISTIO_VERSION=1.28.0
+ISTIO_VERSION=1.29.0
 curl -L https://istio.io/downloadIstio | ISTIO_VERSION=${ISTIO_VERSION} sh -
 export PATH="$PWD/istio-${ISTIO_VERSION}/bin:$PATH"
 istioctl install -y \
