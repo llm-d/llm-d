@@ -5,6 +5,7 @@
 This guide demonstrates how to deploy models using vLLM's P/D disaggregation support with RIXL. This guide has been validated on:
 
 * a cluster with 2 8xMI300x nodes connected with RoCE networking
+* `ghcr.io/llm-d/llm-d-rocm:v0.6.0` standalone container on a single 8xMI355X (gfx950) node — model load + smoke test only; full P/D disaggregation across MI355X nodes still needs validation
 
 > WARNING: We are still investigating and optimizing performance across hardware and networking configurations
 
