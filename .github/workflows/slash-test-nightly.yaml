@@ -1,16 +1,25 @@
 name: /test-nightly Slash Command
 
-# Allows running any nightly E2E workflow against a fork PR's code.
+# Allows running any nightly E2E workflow against a PR's code.
 #
 # Usage: Comment on a PR with:
 #   /test-nightly <nightly-name>       # exact match
 #   /test-nightly <glob-pattern>       # glob pattern (* and ? supported)
+#   /test-nightly <name> infra:<branch> # use a branch from llm-d-infra
 #
 # Examples:
 #   /test-nightly pd-disaggregation-ocp
 #   /test-nightly *-ocp
 #   /test-nightly optimized-baseline-*
 #   /test-nightly wva-*
+#   /test-nightly pd-disaggregation-ocp infra:my-feature-branch
+#   /test-nightly *-ocp infra:fix-helmfile
+#
+# The optional infra:<branch> parameter overrides the @main ref used when
+# calling reusable workflows from llm-d/llm-d-infra. This enables testing
+# cross-repo changes (llm-d + llm-d-infra) together before merging either.
+# The branch must exist in llm-d/llm-d-infra (forks are not supported).
+# When omitted, @main is used (existing behavior).
 #
 # The command checks out the PR head, pushes a temp branch
 # (test-nightly/pr-<number>) into the main repo, and
@@ -76,20 +85,28 @@ jobs:
               return null;
             }
 
+            // Parse optional infra:<branch> from anywhere in the comment
+            const infraMatch = comment.match(/\binfra:(\S+)/);
+            const infraBranch = infraMatch ? infraMatch[1] : '';
+            core.setOutput('infra_branch', infraBranch);
+
             if (!match) {
               await github.rest.issues.createComment({
                 owner: context.repo.owner,
                 repo: context.repo.repo,
                 issue_number: context.issue.number,
                 body: [
-                  '❌ **Usage**: `/test-nightly <name-or-pattern>`',
+                  '❌ **Usage**: `/test-nightly <name-or-pattern> [infra:<branch>]`',
                   '',
                   'Supports exact names or glob patterns (`*` and `?`):',
                   '```',
                   '/test-nightly pd-disaggregation-ocp',
                   '/test-nightly *-ocp',
                   '/test-nightly optimized-baseline-*',
+                  '/test-nightly pd-disaggregation-ocp infra:my-branch',
                   '```',
+                  '',
+                  'The optional `infra:<branch>` uses a branch from `llm-d-infra` instead of `main`.',
                   '',
                   'Available nightlies:',
                   ALL_NIGHTLIES.map(n => '`' + n + '`').join(', '),
@@ -207,23 +224,67 @@ jobs:
           ref: refs/pull/${{ steps.pr.outputs.pr_number }}/head
           fetch-depth: 1
 
-      - name: Push temp branch (fork PRs only)
-        if: steps.parse.outputs.result == 'ok' && steps.perm.outputs.result == 'ok'
+      - name: Validate infra branch
+        if: steps.parse.outputs.infra_branch != '' && steps.parse.outputs.result == 'ok' && steps.perm.outputs.result == 'ok'
+        id: infra_check
+        uses: actions/github-script@v9
+        env:
+          INFRA_BRANCH: ${{ steps.parse.outputs.infra_branch }}
+        with:
+          result-encoding: string
+          script: |
+            try {
+              await github.rest.git.getRef({
+                owner: 'llm-d',
+                repo: 'llm-d-infra',
+                ref: `heads/${process.env.INFRA_BRANCH}`,
+              });
+              return 'ok';
+            } catch (e) {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body: `❌ Branch \`${process.env.INFRA_BRANCH}\` not found in \`llm-d/llm-d-infra\`.`,
+              });
+              return 'error';
+            }
+
+      - name: Push temp branch
+        if: |
+          steps.parse.outputs.result == 'ok' &&
+          steps.perm.outputs.result == 'ok' &&
+          (steps.infra_check.outputs.result == 'ok' || steps.parse.outputs.infra_branch == '')
         id: branch
         env:
           PR_NUMBER: ${{ steps.pr.outputs.pr_number }}
           MATCH_NAMES: ${{ steps.parse.outputs.match_names }}
           HEAD_REF: ${{ steps.pr.outputs.head_ref }}
           IS_FORK: ${{ steps.pr.outputs.is_fork }}
+          INFRA_BRANCH: ${{ steps.parse.outputs.infra_branch }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          if [ "$IS_FORK" = "true" ]; then
+          NEEDS_TEMP="false"
+          if [ "$IS_FORK" = "true" ] || [ -n "$INFRA_BRANCH" ]; then
+            NEEDS_TEMP="true"
+          fi
+
+          if [ "$NEEDS_TEMP" = "true" ]; then
             # Include comment ID to avoid races when multiple /test-nightly
             # commands on the same PR run concurrently.
             BRANCH="test-nightly/pr-${PR_NUMBER}-${{ github.event.comment.id }}"
             git remote set-url origin "https://x-access-token:${GITHUB_TOKEN}@github.com/${{ github.repository }}.git"
             git checkout -b "$BRANCH"
-            # Add an empty commit so the branch tip has a fresh timestamp
+
+            if [ -n "$INFRA_BRANCH" ]; then
+              # Rewrite @main to @<infra-branch> in nightly workflow files.
+              # This is safe: the temp branch is ephemeral (cleaned up within 24h).
+              sed -i "s|llm-d/llm-d-infra/\(.*\)@main|llm-d/llm-d-infra/\1@${INFRA_BRANCH}|g" \
+                .github/workflows/nightly-e2e-*.yaml
+              git add .github/workflows/
+            fi
+
+            # Add a commit so the branch tip has a fresh timestamp
             # (used by cleanup to determine branch age)
             git config user.name "github-actions[bot]"
             git config user.email "github-actions[bot]@users.noreply.github.com"
@@ -237,7 +298,10 @@ jobs:
           fi
 
       - name: Trigger nightlies and collect run URLs
-        if: steps.parse.outputs.result == 'ok' && steps.perm.outputs.result == 'ok'
+        if: |
+          steps.parse.outputs.result == 'ok' &&
+          steps.perm.outputs.result == 'ok' &&
+          (steps.infra_check.outputs.result == 'ok' || steps.parse.outputs.infra_branch == '')
         id: trigger
         uses: actions/github-script@v9
         env:
@@ -317,7 +381,10 @@ jobs:
             core.setOutput('results', JSON.stringify(matches));
 
       - name: Post success comment
-        if: steps.parse.outputs.result == 'ok' && steps.perm.outputs.result == 'ok'
+        if: |
+          steps.parse.outputs.result == 'ok' &&
+          steps.perm.outputs.result == 'ok' &&
+          (steps.infra_check.outputs.result == 'ok' || steps.parse.outputs.infra_branch == '')
         uses: actions/github-script@v9
         env:
           TRIGGER_RESULTS: ${{ steps.trigger.outputs.results }}
@@ -325,6 +392,7 @@ jobs:
           HEAD_SHA: ${{ steps.pr.outputs.head_sha }}
           IS_TEMP: ${{ steps.branch.outputs.is_temp }}
           PR_NUMBER: ${{ steps.pr.outputs.pr_number }}
+          INFRA_BRANCH: ${{ steps.parse.outputs.infra_branch }}
         with:
           script: |
             const results = JSON.parse(process.env.TRIGGER_RESULTS);
@@ -332,6 +400,7 @@ jobs:
             const sha = process.env.HEAD_SHA.substring(0, 7);
             const isTemp = process.env.IS_TEMP === 'true';
             const prNumber = parseInt(process.env.PR_NUMBER);
+            const infraBranch = process.env.INFRA_BRANCH;
             const repo = `${context.repo.owner}/${context.repo.repo}`;
 
             function runLink(r) {
@@ -354,6 +423,9 @@ jobs:
                 `| Branch | \`${ref}\` |`,
                 `| PR HEAD | \`${sha}\` |`,
               );
+              if (infraBranch) {
+                lines.push(`| Infra branch | \`${infraBranch}\` (llm-d-infra) |`);
+              }
             } else {
               lines.push(
                 `🚀 **${results.length} nightlies triggered**`,
@@ -371,6 +443,9 @@ jobs:
                 `| Branch | \`${ref}\` |`,
                 `| PR HEAD | \`${sha}\` |`,
               );
+              if (infraBranch) {
+                lines.push(`| Infra branch | \`${infraBranch}\` (llm-d-infra) |`);
+              }
             }
 
             if (isTemp) {
