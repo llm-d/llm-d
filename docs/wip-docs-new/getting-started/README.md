@@ -78,4 +78,4 @@ Each path includes:
 - Sample workloads and benchmarks against baseline setups
 - Monitoring and observability configuration
 
-See the [Well-Lit Paths Guides](../guides/README.md) for more details on how to deploy.
+See the [Well-Lit Paths Guides](../well-lit-paths/README.md) for more details on how to deploy.

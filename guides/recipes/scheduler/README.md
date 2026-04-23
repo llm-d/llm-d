@@ -2,19 +2,10 @@
 
 llm-d uses the [Inference Scheduler](https://github.com/llm-d/llm-d-inference-scheduler) to make intelligent request scheduling decisions for inference requests. There are two deployment modes:
 
-## Values Layering
-
-Both modes share a common `base.values.yaml` containing the scheduler image, ports, and common pod selector labels. Feature values (monitoring, tracing) and guide-specific values are layered on top:
-
-```
-base.values.yaml                              # shared defaults (this directory)
-  + features/monitoring.values.yaml           # optional feature toggles
-  + <guide>/scheduler/<guide>.values.yaml     # guide-specific overrides
-```
 
 ## Standalone (Default)
 
-Use this when you **do not** want to deploy a proxy via Kubernetes Gateway APIs. The standalone chart deploys the scheduler EPP with an Envoy sidecar to proxy the traffic directly.
+Use this when you **do not** want to deploy a proxy via Kubernetes Gateway APIs. The standalone chart deploys the scheduler as an Endpoint Picker Pod (EPP) with an Envoy sidecar to proxy the traffic directly.
 
 **Chart:** `oci://registry.k8s.io/gateway-api-inference-extension/charts/standalone`
 
@@ -31,7 +22,7 @@ helm install <release-name> \
 
 ## With Kubernetes Gateway API
 
-Use this when you want to route traffic through a proxy managed by the Kubernetes Gateway API  (e.g., GKE Gateway, Istio, Agentgateway) . This requires:
+Use this when you want to route traffic through a proxy managed by the Kubernetes Gateway API (e.g., GKE Gateway, Istio, Agentgateway). This requires:
 
 1. A Gateway control plane installed (see [prereq/gateway-provider](../../prereq/gateway-provider/README.md))
 2. Creating a Gateway resource (see [recipes/gateway](../gateway/))
@@ -50,4 +41,14 @@ helm install <release-name> \
   --set provider.name=<gke|istio|none> \
   -n ${NAMESPACE} \
   --version v1.4.0
+```
+
+## Values Layering
+
+Both modes share a common `base.values.yaml` containing the scheduler image, ports, and common pod selector labels. Feature values (monitoring, tracing) and guide-specific values are layered on top:
+
+```
+base.values.yaml                              # shared defaults (this directory)
+  + features/monitoring.values.yaml           # optional feature toggles
+  + <guide>/scheduler/<guide>.values.yaml     # guide-specific overrides
 ```

@@ -26,9 +26,9 @@
 │          ├── README.md
 │          ├── workload-variant-autoscaling.md
 │          └── igw-hpa.md
-├── guides
+├── well-lit-paths
 │   ├── README.md
-│   ├── intelligent-optimized-baseline.md
+│   ├── optimized-baseline.md
 │   ├── flow-control.md
 │   ├── prefill-decode-disaggregation.md
 │   ├── wide-expert-parallelism.md

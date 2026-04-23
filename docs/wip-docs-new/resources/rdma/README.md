@@ -249,6 +249,6 @@ In the future, this diagnostic will be automated as runtime scripts.
 
 - [NIXL repository](https://github.com/ai-dynamo/nixl)
 - [UCCL repository](https://github.com/ai-dynamo/uccl)
-- [P/D Disaggregation Well-Lit Path](../../guides/pd-disaggregation.md) — deployment patterns using NIXL
-- [Wide Expert-Parallelism Well-Lit Path](../../guides/wide-expert-parallelism.md) — multi-node deployment with DeepEP networking
+- [P/D Disaggregation Well-Lit Path](../../well-lit-paths/pd-disaggregation.md) — deployment patterns using NIXL
+- [Wide Expert-Parallelism Well-Lit Path](../../well-lit-paths/wide-expert-parallelism.md) — multi-node deployment with DeepEP networking
 - [Model Servers](../../architecture/core/model-servers.md) — vLLM/SGLang configuration including KV transfer flags

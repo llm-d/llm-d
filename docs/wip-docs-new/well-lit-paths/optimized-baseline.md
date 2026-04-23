@@ -1,4 +1,4 @@
-# optimized baseline
+# Optimized Baseline
 
 Traditional HTTP requests are fast, uniform, and cheap. Standard round-robin request scheduling strategies balance this load well.
 

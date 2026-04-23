@@ -1,4 +1,4 @@
-# Well-lit Path: optimized baseline
+# Optimized Baseline
 
 [![Nightly - optimized baseline E2E (OpenShift)](https://github.com/llm-d/llm-d/actions/workflows/nightly-e2e-optimized-baseline-ocp.yaml/badge.svg)](https://github.com/llm-d/llm-d/actions/workflows/nightly-e2e-optimized-baseline-ocp.yaml) [![Nightly - optimized baseline E2E (CKS)](https://github.com/llm-d/llm-d/actions/workflows/nightly-e2e-optimized-baseline-cks.yaml/badge.svg)](https://github.com/llm-d/llm-d/actions/workflows/nightly-e2e-optimized-baseline-cks.yaml) [![Nightly - optimized baseline E2E (GKE)](https://github.com/llm-d/llm-d/actions/workflows/nightly-e2e-optimized-baseline-gke.yaml/badge.svg)](https://github.com/llm-d/llm-d/actions/workflows/nightly-e2e-optimized-baseline-gke.yaml)
 
@@ -35,13 +35,97 @@ This guide includes configurations for the following accelerators:
 
 > **Note on hardware variant configurations:** Some hardware variants use reduced configurations (fewer replicas, smaller models) to enable CI testing for compatibility and regression checks. These configurations are maintained by their respective hardware vendors and are not guaranteed as production-ready examples. Users deploying on non-default hardware should review and adjust the configurations for their environment.
 
-## Prerequisites and Installation
+## Prerequisites
+- Have the [proper client tools installed on your local system](../../helpers/client-setup/README.md) to use this guide.
+- (Optional) Have the [Monitoring stack](../../docs/monitoring/README.md) installed on your system.
 
-For prerequisites, installation, verification, and cleanup instructions, see the [guide installation docs](../01_installing_a_guide.md).
+## Installation Instructions
+
+### 1. Prepare a Target Namespace
+
+- Create a target namespace for the installation.
+
+  ```bash
+  export NAMESPACE=llm-d-optimized-baseline
+  kubectl create namespace ${NAMESPACE}
+  ```
+
+- [Create the `llm-d-hf-token` secret in your target namespace with the key `HF_TOKEN` matching a valid HuggingFace token](../../helpers/hf-token.md) to pull models.
+
+
+### 2. Deploy the Standalone Inference Scheduler
+This deploys the EPP scheduler with an Envoy sidecar. For advanced gateway deployments, see [Gateway recipes](../recipes/gateway).
+
+```bash
+helm install optimized-baseline-scheduler \
+  oci://registry.k8s.io/gateway-api-inference-extension/charts/standalone \
+  -f guides/recipes/scheduler/base.values.yaml \
+  -f guides/recipes/scheduler/features/monitoring.values.yaml \
+  -f guides/optimized-baseline/scheduler/optimized-baseline.values.yaml \
+  -n ${NAMESPACE} --version v1.4.0
+```
+
+### 3. Deploy the Model Server
+Build and apply the Kustomize overlays for your specific backend (defaulting to NVIDIA CUDA / vLLM):
+```bash
+kustomize build guides/optimized-baseline/modelserver/nvidia-gpu/vllm/ | kubectl apply -n ${NAMESPACE} -f -
+```
+
+## Verification
+
+### 1. Port-Forward to the Scheduler Service
+Expose the standalone EPP service to your local environment:
+```bash
+kubectl port-forward -n ${NAMESPACE} svc/optimized-baseline-scheduler 8000:9002
+```
+
+### 2. Send Test Requests
+In a separate terminal, verify model availability and inference:
+
+**List Available Models:**
+```bash
+curl -s http://localhost:8000/v1/models | jq
+```
+
+**Send a Completion Request:**
+```bash
+curl -X POST http://localhost:8000/v1/completions \
+  -H 'Content-Type: application/json' \
+  -d '{
+        "model": "Qwen/Qwen3-32B",
+        "prompt": "How are you today?"
+      }' | jq
+```
 
 ## Benchmarking
 
-For instructions on how to run benchmarks against an installed guide, see the [benchmarking docs](../03_benchmarking_a_guide.md).
+To evaluate the profile performance under load:
+
+### 1. Prepare the Benchmarking Suite
+```bash
+curl -L -O https://raw.githubusercontent.com/llm-d/llm-d-benchmark/main/existing_stack/run_only.sh
+chmod u+x run_only.sh
+```
+
+### 2. Download the Workload Template
+```bash
+curl -LJO "https://raw.githubusercontent.com/llm-d/llm-d/main/guides/optimized-baseline/benchmark-templates/shared_prefix.yaml"
+```
+
+### 3. Execute Benchmark
+```bash
+export GATEWAY_SVC=optimized-baseline-scheduler
+envsubst < shared_prefix.yaml > config.yaml
+./run_only.sh -c config.yaml
+```
+
+## Cleanup
+
+To remove the deployed components:
+```bash
+helm uninstall optimized-baseline-scheduler -n ${NAMESPACE}
+kustomize build guides/optimized-baseline/modelserver/cuda/vllm/ | kubectl delete -n ${NAMESPACE} -f -
+```
 
 ### Benchmarking Report
 
