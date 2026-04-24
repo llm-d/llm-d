@@ -13,14 +13,7 @@ spec:
           args:
             - |
               export LD_LIBRARY_PATH=/usr/local/nvidia/lib64:${LD_LIBRARY_PATH}
-              export LIBRARY_PATH="\
-                /usr/local/nvidia/lib:/usr/local/nvidia/lib64:\
-                ${CUDA_HOME}/lib64:\
-                ${EFA_PREFIX}/lib:${EFA_PREFIX}/lib64:\
-                ${UCX_PREFIX}/lib:${UCX_PREFIX}/lib64:\
-                ${NVSHMEM_DIR}/lib:${NVSHMEM_DIR}/lib64:\
-                /usr/local/lib:/usr/local/lib64:\
-                ${LIBRARY_PATH}"
+              export LIBRARY_PATH="/usr/local/nvidia/lib:/usr/local/nvidia/lib64:${CUDA_HOME}/lib64:${EFA_PREFIX}/lib:${EFA_PREFIX}/lib64:${UCX_PREFIX}/lib:${UCX_PREFIX}/lib64:${NVSHMEM_DIR}/lib:${NVSHMEM_DIR}/lib64:/usr/local/lib:/usr/local/lib64:${LIBRARY_PATH}"
               echo "LD_LIBRARY_PATH=$LD_LIBRARY_PATH"
               echo "LIBRARY_PATH=$LIBRARY_PATH"
               vllm serve "Qwen/Qwen3-32B" \
