@@ -277,16 +277,13 @@ jobs:
       - name: Install GKE CRDs
         run: .github/scripts/install-gke-crds.sh
 
-      - name: Install UDS tokenizer post-renderer plugin
-        # The standalone chart's `sidecar.*` slot holds Envoy; the UDS tokenizer
-        # sidecar is appended via this helm post-renderer plugin at install
-        # time. `helm template` uses the same plugin to produce manifests for
-        # dry-run validation.
-        run: helm plugin install guides/precise-prefix-cache-aware/scheduler/patches/uds-tokenizer
-
       - name: Dry-run scheduler (central + active-active)
+        # ubuntu-latest ships helm v3, which accepts a path for --post-renderer.
+        # (helm v4 users instead run `helm plugin install .../uds-tokenizer`
+        # once and pass `--post-renderer uds-tokenizer`; see README.)
         run: |
           CHART_VERSION=v1.4.0
+          POST_RENDERER=./guides/precise-prefix-cache-aware/scheduler/patches/uds-tokenizer/post-renderer.sh
           failed=0
           for feature in "" "active-active"; do
             label="${feature:-central}"
@@ -304,7 +301,7 @@ jobs:
               -f guides/recipes/scheduler/base.values.yaml \
               -f guides/precise-prefix-cache-aware/scheduler/precise-prefix-cache-aware.values.yaml \
               "${extra_values[@]}" \
-              --post-renderer uds-tokenizer \
+              --post-renderer "${POST_RENDERER}" \
               --version "${CHART_VERSION}" > /tmp/rendered.yaml; then
               echo "FAIL: helm template failed for ${label}"
               failed=1

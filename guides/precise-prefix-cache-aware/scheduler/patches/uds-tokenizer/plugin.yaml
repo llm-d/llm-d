@@ -11,6 +11,7 @@ apiVersion: v1
 name: uds-tokenizer
 version: 0.1.0
 type: postrenderer/v1
+description: Adds the UDS tokenizer sidecar to the standalone chart's scheduler pod.
 runtime: subprocess
 runtimeConfig:
   platformCommand:
