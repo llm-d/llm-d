@@ -65,7 +65,7 @@ This guide includes configurations for the following accelerators:
 
 ### 2. Deploy the Standalone Inference Scheduler
 
-This deploys the iinference scheduler with an Envoy sidecar. For gateway deployments, see [Gateway recipes](../recipes/gateway).
+This deploys the inference scheduler with an Envoy sidecar. For gateway deployments, see the next collapsed section.
 
 ```bash
 helm install optimized-baseline-scheduler \
