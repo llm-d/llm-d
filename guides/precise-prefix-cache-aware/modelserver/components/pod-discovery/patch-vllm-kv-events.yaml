@@ -1,0 +1,19 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: decode
+spec:
+  template:
+    spec:
+      containers:
+        - name: modelserver
+          env:
+            # Override the central-mode endpoint. vLLM PUBs bind here so the
+            # scheduler (dialer) can connect per-pod via the data-layer
+            # endpoint-notification-source.
+            - name: KV_EVENTS_ENDPOINT
+              value: "tcp://*:5557"
+          ports:
+            - containerPort: 5557
+              name: kv-events
+              protocol: TCP

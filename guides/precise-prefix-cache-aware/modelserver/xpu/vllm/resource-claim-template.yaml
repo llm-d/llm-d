@@ -1,0 +1,14 @@
+apiVersion: resource.k8s.io/v1
+kind: ResourceClaimTemplate
+metadata:
+  name: intel-claim-template-decode
+  labels:
+    llm-d.ai/role: decode
+spec:
+  spec:
+    devices:
+      requests:
+      - name: intel
+        exactly:
+          deviceClassName: gpu.intel.com
+          count: 1

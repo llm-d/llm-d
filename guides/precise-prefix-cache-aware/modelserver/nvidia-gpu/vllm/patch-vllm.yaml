@@ -1,0 +1,80 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: decode
+spec:
+  replicas: 8
+  template:
+    spec:
+      containers:
+        - name: modelserver
+          command: ["vllm", "serve"]
+          args:
+            - "Qwen/Qwen3-32B"
+            - "--disable-access-log-for-endpoints=/health,/metrics,/v1/models"
+            - "--tensor-parallel-size=2"
+            - "--block-size=64"
+            - "--kv-events-config"
+            - '{"enable_kv_cache_events":true,"publisher":"zmq","endpoint":"$(KV_EVENTS_ENDPOINT)","topic":"kv@$(POD_IP):$(POD_PORT)@Qwen/Qwen3-32B"}'
+            # Uncomment for distributed tracing
+            # - "--otlp-traces-endpoint=http://otel-collector:4317"
+            # - "--collect-detailed-traces=all"
+          env:
+            - name: NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+            - name: POD_IP
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.podIP
+            # Matches the `modelserver` container port on the base deployment.
+            # Used in the kv-events topic (kv@$(POD_IP):$(POD_PORT)@<model>) so
+            # pods are identified by their inference endpoint.
+            - name: POD_PORT
+              value: "8000"
+            # Central-mode default. Swap to tcp://*:5557 by applying the
+            # modelserver/components/pod-discovery kustomize component.
+            # If your helm release name isn't `precise-prefix-cache-aware-scheduler`
+            # (the `<guide>-scheduler` convention in 01_installing_a_guide.md),
+            # patch this value to `<release-name>-epp`.
+            - name: KV_EVENTS_ENDPOINT
+              value: "tcp://precise-prefix-cache-aware-scheduler-epp.$(NAMESPACE).svc.cluster.local:5557"
+            # Must match precise-prefix-cache-scorer tokenProcessorConfig.hashSeed
+            # so the in-EPP tokenizer produces the same block hashes that vLLM emits.
+            - name: PYTHONHASHSEED
+              value: "42"
+          resources:
+            limits:
+              cpu: '16'
+              memory: 128Gi
+              nvidia.com/gpu: 2
+            requests:
+              cpu: '8'
+              memory: 96Gi
+              nvidia.com/gpu: 2
+          volumeMounts:
+            - mountPath: /dev/shm
+              name: shm
+            - mountPath: /.cache
+              name: torch-compile-cache
+          startupProbe:
+            initialDelaySeconds: 15
+            periodSeconds: 30
+            timeoutSeconds: 5
+            failureThreshold: 120
+          livenessProbe:
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            periodSeconds: 5
+            timeoutSeconds: 2
+            failureThreshold: 3
+      volumes:
+        - name: shm
+          emptyDir:
+            medium: Memory
+            sizeLimit: 20Gi
+        - name: torch-compile-cache
+          emptyDir: {}

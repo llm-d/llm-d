@@ -1,0 +1,83 @@
+## Pod-discovery overlay for the precise-prefix-cache-aware guide.
+## Layer on top of: recipes/scheduler/base.values.yaml
+##                  precise-prefix-cache-aware/scheduler/precise-prefix-cache-aware.values.yaml
+##
+## Flips KV-event ingestion from central (scheduler SUB binds, vLLM PUB connects
+## into the EPP service) to per-pod (vLLM PUB binds tcp://*:5557, scheduler SUB
+## dials each pod). Per-pod subscriber lifecycle is driven by the data-layer
+## endpoint-notification-source via the scorer's EndpointExtractor
+## (llm-d/llm-d-inference-scheduler#862) — no in-Score opportunistic subscribe.
+##
+## Required for active-active multi-replica schedulers. Bump replicas below
+## once you've deployed the matching modelserver overlay with the pod-discovery
+## kustomize component applied.
+
+inferenceExtension:
+  replicas: 2
+
+  pluginsCustomConfig:
+    precise-prefix-cache-aware-plugins.yaml: |
+      # Pod-discovery mode.
+      #
+      # kvEventsConfig.discoverPods=true activates per-pod subscriber mgmt.
+      # endpoint-notification-source feeds endpoint add/delete events into
+      # the scorer via ExtractEndpoint; the first invocation turns off the
+      # legacy in-Score discovery path so the data layer is the sole
+      # authority over per-pod ZMQ subscriber lifecycle.
+      #
+      # zmqEndpoint is intentionally unset — each pod is dialed directly
+      # at tcp://<pod-ip>:<podDiscoveryConfig.socketPort>.
+      apiVersion: inference.networking.x-k8s.io/v1alpha1
+      kind: EndpointPickerConfig
+      plugins:
+        - type: tokenizer
+          parameters:
+            modelName: Qwen/Qwen3-32B
+            udsTokenizerConfig:
+              socketFile: /tmp/tokenizer/tokenizer-uds.socket
+        - type: endpoint-notification-source
+        - type: metrics-data-source
+        - type: core-metrics-extractor
+        - type: single-profile-handler
+        - type: decode-filter
+        - type: precise-prefix-cache-scorer
+          parameters:
+            tokenProcessorConfig:
+              blockSize: 64
+              hashSeed: "42"
+            indexerConfig:
+              tokenizersPoolConfig:
+                modelName: Qwen/Qwen3-32B
+                uds:
+                  socketFile: /tmp/tokenizer/tokenizer-uds.socket
+              kvBlockIndexConfig:
+                enableMetrics: true
+            kvEventsConfig:
+              topicFilter: "kv@"
+              concurrency: 4
+              discoverPods: true
+              podDiscoveryConfig:
+                socketPort: 5557
+        - type: kv-cache-utilization-scorer
+        - type: queue-scorer
+        - type: max-score-picker
+      dataLayer:
+        sources:
+          - pluginRef: metrics-data-source
+            extractors:
+              - pluginRef: core-metrics-extractor
+          - pluginRef: endpoint-notification-source
+            extractors:
+              - pluginRef: precise-prefix-cache-scorer
+      schedulingProfiles:
+        - name: default
+          plugins:
+            - pluginRef: decode-filter
+            - pluginRef: tokenizer
+            - pluginRef: precise-prefix-cache-scorer
+              weight: 2.0
+            - pluginRef: kv-cache-utilization-scorer
+              weight: 1.0
+            - pluginRef: queue-scorer
+              weight: 1.0
+            - pluginRef: max-score-picker

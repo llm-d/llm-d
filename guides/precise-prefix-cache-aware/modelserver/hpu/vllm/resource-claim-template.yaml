@@ -1,0 +1,12 @@
+apiVersion: resource.k8s.io/v1
+kind: ResourceClaimTemplate
+metadata:
+  name: precise-prefix-cache-aware-gaudi-claim
+spec:
+  spec:
+    devices:
+      requests:
+        - name: intel-gaudi-claim-template
+          exactly:
+            deviceClassName: gaudi.intel.com
+            count: 1
