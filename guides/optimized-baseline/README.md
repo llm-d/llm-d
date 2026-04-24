@@ -37,6 +37,13 @@ This guide includes configurations for the following accelerators:
 
 ## Prerequisites
 - Have the [proper client tools installed on your local system](../../helpers/client-setup/README.md) to use this guide.
+- Checkout llm-d repo:
+
+  ```bash
+    export branch="main" # branch, tag, or commit hash
+    git clone https://github.com/llm-d/llm-d.git && cd llm-d && git checkout ${branch}
+  ```
+
 - (Optional) Have the [Monitoring stack](../../docs/monitoring/README.md) installed on your system.
 
 ## Installation Instructions
@@ -50,17 +57,13 @@ This guide includes configurations for the following accelerators:
   kubectl create namespace ${NAMESPACE}
   ```
 
-- [Create the `llm-d-hf-token` secret in your target namespace with the key `HF_TOKEN` matching a valid HuggingFace token](../../helpers/hf-token.md) to pull models.
-
-
 ### 2. Deploy the Standalone Inference Scheduler
-This deploys the EPP scheduler with an Envoy sidecar. For advanced gateway deployments, see [Gateway recipes](../recipes/gateway).
+This deploys the EPP scheduler with an Envoy sidecar. For gateway deployments, see [Gateway recipes](../recipes/gateway).
 
 ```bash
 helm install optimized-baseline-scheduler \
   oci://registry.k8s.io/gateway-api-inference-extension/charts/standalone \
   -f guides/recipes/scheduler/base.values.yaml \
-  -f guides/recipes/scheduler/features/monitoring.values.yaml \
   -f guides/optimized-baseline/scheduler/optimized-baseline.values.yaml \
   -n ${NAMESPACE} --version v1.4.0
 ```
@@ -68,7 +71,7 @@ helm install optimized-baseline-scheduler \
 ### 3. Deploy the Model Server
 Build and apply the Kustomize overlays for your specific backend (defaulting to NVIDIA CUDA / vLLM):
 ```bash
-kustomize build guides/optimized-baseline/modelserver/nvidia-gpu/vllm/ | kubectl apply -n ${NAMESPACE} -f -
+kubectl apply -n ${NAMESPACE} -k guides/optimized-baseline/modelserver/nvidia-gpu/vllm/
 ```
 
 ## Verification
@@ -99,7 +102,9 @@ curl -X POST http://localhost:8000/v1/completions \
 
 ## Benchmarking
 
-To evaluate the profile performance under load:
+The benchmark launches a pod (`llmdbench-harness-launcher`) that, in this case, uses `inference-perf` with a shared prefix synthetic workload named `shared_prefix_synthetic`. This workload runs several stages with different rates. The results will be saved to a local folder by using the `-o` flag of `run_only.sh`. Alternatively, results may be stored on the provided PVC, accessible through the `llmdbench-harness-launcher` pod. Each experiment is saved under the specified output folder, e.g., `./results/<experiment ID>/inference-perf_<experiment ID>_shared_prefix_synthetic_inference-scheduling_<model name>` folder
+
+For more details, refer to the [benchmark instructions doc](../../helpers/benchmark.md).
 
 ### 1. Prepare the Benchmarking Suite
 ```bash
@@ -116,7 +121,7 @@ curl -LJO "https://raw.githubusercontent.com/llm-d/llm-d/main/guides/optimized-b
 ```bash
 export GATEWAY_SVC=optimized-baseline-scheduler
 envsubst < shared_prefix.yaml > config.yaml
-./run_only.sh -c config.yaml
+./run_only.sh -c config.yaml -o ./results
 ```
 
 ## Cleanup
@@ -127,7 +132,7 @@ helm uninstall optimized-baseline-scheduler -n ${NAMESPACE}
 kustomize build guides/optimized-baseline/modelserver/cuda/vllm/ | kubectl delete -n ${NAMESPACE} -f -
 ```
 
-### Benchmarking Report
+## Benchmarking Report
 
 The benchmark is running on 16 H100 GPUs, distributed across 8 model servers (2 H100s per server with TP=2).
 
