@@ -1,6 +1,6 @@
 name: /test-nightly Slash Command
 
-# Allows running any nightly E2E workflow against a PR's code.
+# Allows running any nightly E2E workflow against a fork PR's code.
 #
 # Usage: Comment on a PR with:
 #   /test-nightly <nightly-name>       # exact match
