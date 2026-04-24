@@ -50,8 +50,6 @@ This guide includes configurations for the following accelerators:
     git clone https://github.com/llm-d/llm-d.git && cd llm-d && git checkout ${branch}
   ```
 
-- (Optional) Have the [Monitoring stack](../../docs/monitoring/README.md) installed on your system.
-
 ## Installation Instructions
 
 ### 1. Prepare a Target Namespace
@@ -87,6 +85,18 @@ kubectl apply -n ${NAMESPACE} -k guides/optimized-baseline/modelserver/gpu/vllm/
 
 ```bash
 kubectl apply -n ${NAMESPACE} -k guides/optimized-baseline/modelserver/gpu/vllm-gke/
+```
+
+### 4. Enable monitoring (optional)
+
+> [!NOTE]
+> GKE provides [automatic application monitoring](https://docs.cloud.google.com/kubernetes-engine/docs/how-to/configure-automatic-application-monitoring) out of the box. The llm-d [Monitoring stack](../../docs/monitoring/README.md) is not required for GKE, but it is available if you prefer to use it.
+
+- Install the [Monitoring stack](../../docs/monitoring/README.md).
+- Deploy the monitoring resources for this guide.
+
+```bash
+kubectl apply -n ${NAMESPACE} -k guides/recipes/modelserver/components/monitoring
 ```
 
 ## Verification

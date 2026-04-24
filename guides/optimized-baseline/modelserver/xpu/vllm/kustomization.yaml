@@ -4,10 +4,6 @@ resources:
   - ../../../../recipes/modelserver/base/single-host/default
   - resource-claim-template.yaml
 
-# To disable monitoring comment the following component out
-components:
-  - ../../../../recipes/modelserver/components/monitoring
-
 namePrefix: optimized-baseline-xpu-vllm-
 
 images:
