@@ -1,10 +1,11 @@
 ## precise-prefix-cache-aware guide overrides for the scheduler.
 ## Layer on top of: recipes/scheduler/base.values.yaml
 ##
-## Default mode: central ZMQ — the scheduler SUB binds tcp://*:5557 and vLLM
+## Default mode: central ZMQ — the scheduler SUB binds tcp://*:5556 and vLLM
 ## PUBs connect to the EPP service. Single scheduler replica. See
-## features/pod-discovery.values.yaml to switch to per-pod discovery (required
-## for active-active multi-replica schedulers).
+## features/active-active.values.yaml to switch to active-active HA (two
+## scheduler replicas each with its own Envoy gateway sidecar, behind one
+## Service).
 
 inferenceExtension:
   # First release carrying llm-d/llm-d-inference-scheduler#862 (EndpointExtractor
@@ -19,20 +20,27 @@ inferenceExtension:
 
   # Expose the ZMQ port for KV-events ingress. In central mode the scheduler
   # listens here; vLLM connects via its --kv-events-config endpoint.
+  # NOTE: extraServicePorts replaces the chart default, so http:8081 (the
+  # Envoy sidecar's HTTP listener) must be re-declared alongside zmq.
   extraContainerPorts:
     - name: zmq
-      containerPort: 5557
+      containerPort: 5556
       protocol: TCP
   extraServicePorts:
+    - name: http
+      port: 8081
+      protocol: TCP
+      targetPort: 8081
     - name: zmq
-      port: 5557
-      targetPort: 5557
+      port: 5556
+      targetPort: 5556
       protocol: TCP
 
-  # HF_TOKEN flows through to the UDS tokenizer sidecar via the shared
-  # /tokenizers HF_HOME so gated tokenizers can be downloaded. Public
-  # models (Qwen/Qwen3-32B) don't strictly need it, but keeping the secret
-  # reference means the sidecar Just Works if you swap in a gated model.
+  # HF_TOKEN is used by the EPP container's in-process tokenizer fallback
+  # and is required by the UDS tokenizer sidecar (added via the
+  # patches/uds-tokenizer post-renderer). Public models (Qwen/Qwen3-32B)
+  # don't strictly need it, but keeping the reference means things Just
+  # Work if you swap in a gated model.
   env:
     - name: HF_TOKEN
       valueFrom:
@@ -40,41 +48,16 @@ inferenceExtension:
           name: llm-d-hf-token
           key: HF_TOKEN
 
-  # UDS tokenizer sidecar. The EPP container talks to it over the shared
-  # /tmp/tokenizer Unix socket so tokenization runs out-of-process and the
-  # tokenizer model/cache is a concern of the sidecar alone.
-  sidecar:
-    enabled: true
-    image: ghcr.io/llm-d/llm-d-uds-tokenizer:v0.7.1
-    imagePullPolicy: IfNotPresent
-    name: tokenizer-uds
-    configMap:
-      name: tokenizer-uds-config
-      data:
-        placeholder: ""
-    env:
-      - name: TOKENIZERS_DIR
-        value: /tokenizers
-      - name: HF_HOME
-        value: /tokenizers
-    volumeMounts:
-      - mountPath: /tokenizers
-        name: tokenizers
-      - mountPath: /tmp/tokenizer
-        name: tokenizer-uds
-  volumes:
-    - name: tokenizers
-      emptyDir: {}
-    - name: tokenizer-uds
-      emptyDir: {}
-  volumeMounts:
-    - mountPath: /tmp/tokenizer
-      name: tokenizer-uds
+  # The UDS tokenizer sidecar (container, volumes, and /tmp/tokenizer
+  # mount on the EPP container) is intentionally NOT declared here. The
+  # standalone chart's `sidecar.*` slot is owned by Envoy — overriding
+  # it would lose the proxy. Instead the sidecar is appended via the
+  # `scheduler/patches/uds-tokenizer/post-renderer.sh` helm post-renderer.
 
   pluginsConfigFile: "precise-prefix-cache-aware-plugins.yaml"
   pluginsCustomConfig:
     precise-prefix-cache-aware-plugins.yaml: |
-      # Central ZMQ mode. The scorer's SubscriberManager binds tcp://*:5557
+      # Central ZMQ mode. The scorer's SubscriberManager binds tcp://*:5556
       # via zmqEndpoint and vLLM PUBs connect into the EPP service. With
       # discoverPods: false there is no per-pod subscriber churn; the
       # data-layer endpoint-notification-source is therefore not wired.
@@ -108,7 +91,7 @@ inferenceExtension:
               topicFilter: "kv@"
               concurrency: 4
               discoverPods: false
-              zmqEndpoint: "tcp://*:5557"
+              zmqEndpoint: "tcp://*:5556"
         - type: kv-cache-utilization-scorer
         - type: queue-scorer
         - type: max-score-picker

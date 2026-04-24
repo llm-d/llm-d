@@ -1,0 +1,16 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+# Post-renderer overlay applied on top of the standalone chart's rendered
+# output to add the UDS tokenizer sidecar next to the Envoy sidecar.
+# Invoked by post-renderer.sh from `helm install --post-renderer`.
+
+resources:
+  - rendered.yaml
+
+patches:
+  - path: patch-uds-sidecar.yaml
+    # Match by Kind only — the chart emits a single Deployment per release,
+    # so the patch applies regardless of the user's release name.
+    target:
+      kind: Deployment

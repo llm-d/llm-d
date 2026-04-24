@@ -33,13 +33,13 @@ spec:
             # pods are identified by their inference endpoint.
             - name: POD_PORT
               value: "8000"
-            # Central-mode default. Swap to tcp://*:5557 by applying the
-            # modelserver/components/pod-discovery kustomize component.
+            # Central-mode default. Swap to tcp://*:5556 by applying the
+            # modelserver/components/active-active kustomize component.
             # If your helm release name isn't `precise-prefix-cache-aware-scheduler`
             # (the `<guide>-scheduler` convention in 01_installing_a_guide.md),
             # patch this value to `<release-name>-epp`.
             - name: KV_EVENTS_ENDPOINT
-              value: "tcp://precise-prefix-cache-aware-scheduler-epp.$(NAMESPACE).svc.cluster.local:5557"
+              value: "tcp://precise-prefix-cache-aware-scheduler-epp.$(NAMESPACE).svc.cluster.local:5556"
             # Must match precise-prefix-cache-scorer tokenProcessorConfig.hashSeed
             # so the in-EPP tokenizer produces the same block hashes that vLLM emits.
             - name: PYTHONHASHSEED

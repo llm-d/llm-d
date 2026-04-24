@@ -1,0 +1,42 @@
+# Strategic merge patch: adds the UDS tokenizer sidecar container, its
+# emptyDir volumes, and the shared /tmp/tokenizer mount on the EPP
+# container so the `tokenizer` plugin can reach the UDS socket.
+#
+# The chart's default Envoy sidecar (container name `sidecar`) is left
+# untouched — strategic merge by container name appends this new
+# container rather than replacing Envoy.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: placeholder-overridden-by-target-selector
+spec:
+  template:
+    spec:
+      containers:
+        - name: tokenizer-uds
+          image: ghcr.io/llm-d/llm-d-uds-tokenizer:v0.7.1
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: TOKENIZERS_DIR
+              value: /tokenizers
+            - name: HF_HOME
+              value: /tokenizers
+            - name: HF_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: llm-d-hf-token
+                  key: HF_TOKEN
+          volumeMounts:
+            - mountPath: /tokenizers
+              name: tokenizers
+            - mountPath: /tmp/tokenizer
+              name: tokenizer-uds
+        - name: epp
+          volumeMounts:
+            - mountPath: /tmp/tokenizer
+              name: tokenizer-uds
+      volumes:
+        - name: tokenizers
+          emptyDir: {}
+        - name: tokenizer-uds
+          emptyDir: {}

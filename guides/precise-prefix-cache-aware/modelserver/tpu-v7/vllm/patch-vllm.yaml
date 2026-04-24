@@ -42,7 +42,7 @@ spec:
             - name: POD_PORT
               value: "8000"
             - name: KV_EVENTS_ENDPOINT
-              value: "tcp://precise-prefix-cache-aware-scheduler-epp.$(NAMESPACE).svc.cluster.local:5557"
+              value: "tcp://precise-prefix-cache-aware-scheduler-epp.$(NAMESPACE).svc.cluster.local:5556"
             - name: PYTHONHASHSEED
               value: "42"
             - name: HF_TOKEN

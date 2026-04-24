@@ -12,8 +12,8 @@ spec:
             # scheduler (dialer) can connect per-pod via the data-layer
             # endpoint-notification-source.
             - name: KV_EVENTS_ENDPOINT
-              value: "tcp://*:5557"
+              value: "tcp://*:5556"
           ports:
-            - containerPort: 5557
+            - containerPort: 5556
               name: kv-events
               protocol: TCP

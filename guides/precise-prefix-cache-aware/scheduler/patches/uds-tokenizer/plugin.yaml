@@ -1,0 +1,17 @@
+## Helm v4 post-renderer plugin manifest.
+##
+## Helm v3 can use this directory directly via:
+##   --post-renderer <path>/post-renderer.sh
+## Helm v4 requires `--post-renderer` to name a registered plugin. Install
+## this directory as a plugin once:
+##   helm plugin install guides/precise-prefix-cache-aware/scheduler/patches/uds-tokenizer
+## Then use:
+##   --post-renderer uds-tokenizer
+apiVersion: v1
+name: uds-tokenizer
+version: 0.1.0
+type: postrenderer/v1
+runtime: subprocess
+runtimeConfig:
+  platformCommand:
+    - command: "$HELM_PLUGIN_DIR/post-renderer.sh"
