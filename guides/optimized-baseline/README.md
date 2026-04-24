@@ -72,10 +72,16 @@ helm install optimized-baseline-scheduler \
 
 ### 3. Deploy the Model Server
 
-Build and apply the Kustomize overlays for your specific backend (defaulting to NVIDIA CUDA / vLLM):
+Apply the Kustomize overlays for your specific backend (defaulting to NVIDIA CUDA / vLLM):
 
 ```bash
 kubectl apply -n ${NAMESPACE} -k guides/optimized-baseline/modelserver/nvidia-gpu/vllm/
+```
+
+[TEMPORARY] For GKE, run this instead:
+
+```bash
+kubectl apply -n ${NAMESPACE} -k guides/optimized-baseline/modelserver/nvidia-gpu/vllm-gke/
 ```
 
 ## Verification
@@ -111,16 +117,20 @@ curl -X POST http://localhost:8000/v1/completions \
 
 ## Benchmarking
 
-The benchmark launches a pod (`llmdbench-harness-launcher`) that, in this case, uses `inference-perf` with a shared prefix synthetic workload named `shared_prefix_synthetic`. This workload runs several stages with different rates. The results will be saved to a local folder by using the `-o` flag of `run_only.sh`. Alternatively, results may be stored on the provided PVC, accessible through the `llmdbench-harness-launcher` pod. Each experiment is saved under the specified output folder, e.g., `./results/<experiment ID>/inference-perf_<experiment ID>_shared_prefix_synthetic_inference-scheduling_<model name>` folder
+The benchmark launches a pod (`llmdbench-harness-launcher`) that, in this case, uses `inference-perf` with a shared prefix synthetic workload named `shared_prefix_synthetic`. This workload runs several stages with different rates. The results will be saved to a local folder by using the `-o` flag of `run_only.sh`. Each experiment is saved under the specified output folder, e.g., `./results/<experiment ID>/inference-perf_<experiment ID>_shared_prefix_synthetic_optimized-baseline_<model name>` folder
 
 For more details, refer to the [benchmark instructions doc](../../helpers/benchmark.md).
 
 ### 1. Prepare the Benchmarking Suite
 
-```bash
-curl -L -O https://raw.githubusercontent.com/llm-d/llm-d-benchmark/main/existing_stack/run_only.sh
-chmod u+x run_only.sh
-```
+- Download the benchmark script:
+
+  ```bash
+  curl -L -O https://raw.githubusercontent.com/llm-d/llm-d-benchmark/main/existing_stack/run_only.sh
+  chmod u+x run_only.sh
+  ```
+
+- [Create HuggingFace token](../../helpers/hf-token.md)
 
 ### 2. Download the Workload Template
 
@@ -131,7 +141,8 @@ curl -LJO "https://raw.githubusercontent.com/llm-d/llm-d/main/guides/optimized-b
 ### 3. Execute Benchmark
 
 ```bash
-export GATEWAY_SVC=optimized-baseline-scheduler
+export GATEWAY_SVC=optimized-baseline-scheduler-epp
+export PORT=8081
 envsubst < shared_prefix.yaml > config.yaml
 ./run_only.sh -c config.yaml -o ./results
 ```
