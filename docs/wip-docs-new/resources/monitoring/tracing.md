@@ -13,11 +13,11 @@ export NAMESPACE=<your-llm-d-namespace>
 
 ## What Gets Traced
 
-| Component | Chart Config | Traced Operations |
-|-----------|-------------|-------------------|
-| **vLLM** (prefill + decode) | ModelService `tracing:` | Inference engine spans |
-| **Routing proxy** (P/D sidecar) | ModelService `tracing:` | KV transfer coordination |
-| **EPP** | GAIE `inferenceExtension.tracing:` | Request routing, endpoint scoring, KV-cache indexing |
+| Component | Config Method | Traced Operations |
+|-----------|--------------|-------------------|
+| **vLLM** (prefill + decode) | Helm: ModelService `tracing:` / Kustomize: container args + env vars | Inference engine spans |
+| **Routing proxy** (P/D sidecar) | Helm: ModelService `tracing:` / Kustomize: container env vars | KV transfer coordination |
+| **EPP** | Helm: GAIE `inferenceExtension.tracing:` | Request routing, endpoint scoring, KV-cache indexing |
 
 All components export traces via OTLP gRPC to an OpenTelemetry Collector, which filters noise (e.g., `/metrics` scraping spans), batches traces, and forwards them to a backend like Jaeger.
 
@@ -67,6 +67,10 @@ Verify with the same `kubectl get pods` commands above.
 
 ## Step 2: Enable Tracing on vLLM and Routing Proxy
 
+Configuration varies by deployment method.
+
+### Option A: Helm Values
+
 All chart defaults point to `http://otel-collector:4317` (same namespace). Enable tracing in your model service values:
 
 ```yaml
@@ -81,9 +85,9 @@ tracing:
 
 This injects `--otlp-traces-endpoint` and `--collect-detailed-traces` args into vLLM, and `OTEL_*` environment variables into both vLLM and routing-proxy containers.
 
-### Raw Manifests (Without Helm)
+### Option B: Kustomize / Raw Manifests
 
-For deployments using raw manifests, add tracing flags to your `vllm serve` command and OTEL env vars to the container:
+For kustomize deployments or raw manifests, add tracing flags to your `vllm serve` command and OTEL env vars to the container:
 
 ```yaml
 # Add to vllm serve command:

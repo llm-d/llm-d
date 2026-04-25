@@ -8,7 +8,7 @@ This guide shows how to collect and visualize metrics from an llm-d deployment u
 ## Prerequisites
 
 - A running llm-d deployment (InferencePool + EPP + model servers)
-- [Helm](https://helm.sh/docs/intro/install/)
+- [Helm](https://helm.sh/docs/intro/install/) (for scheduler/EPP charts and optional Prometheus install)
 - A Prometheus instance accessible to the cluster (see [Step 1](#step-1-install-prometheus-and-grafana) if you don't have one)
 
 > [!NOTE]
@@ -93,7 +93,23 @@ prometheus-kube-prometheus-stack-prometheus-0         2/2     Running   0       
 
 ## Step 2: Enable vLLM Metrics
 
-vLLM metrics are enabled by default. To verify or enable manually:
+vLLM metrics are enabled by default. Configuration varies by deployment method.
+
+### Kustomize Deployments
+
+If you deployed your model server using `kustomize build`, add the monitoring component to your `kustomization.yaml`:
+
+```yaml
+components:
+  - ../../../recipes/modelserver/components/monitoring       # decode PodMonitor
+  # - ../../../recipes/modelserver/components/monitoring-pd  # add for prefill/decode disaggregation
+```
+
+The monitoring component creates PodMonitors that scrape vLLM metrics. See [`guides/recipes/modelserver/components/monitoring/`](../../../guides/recipes/modelserver/components/monitoring/) for details.
+
+### Helm Deployments
+
+If you deployed using Helm (`ms-*/values.yaml`), enable PodMonitors in your values:
 
 ```yaml
 # In your ms-*/values.yaml
@@ -107,6 +123,8 @@ prefill:
     podmonitor:
       enabled: true
 ```
+
+### Verify PodMonitors
 
 Verify the PodMonitors exist:
 
