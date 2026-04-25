@@ -111,8 +111,8 @@ The same pattern works for the other accelerators (`amd`, `cpu`, `hpu`, `tpu-v6`
 ```bash
 kubectl get pods -n ${NAMESPACE} -l app=precise-prefix-cache-aware-scheduler-epp
 # NAME                                                    READY   STATUS
-# precise-prefix-cache-aware-scheduler-epp-<hash>-aaaaa   2/2     Running
-# precise-prefix-cache-aware-scheduler-epp-<hash>-bbbbb   2/2     Running
+# precise-prefix-cache-aware-scheduler-epp-<hash>-aaaaa   3/3     Running
+# precise-prefix-cache-aware-scheduler-epp-<hash>-bbbbb   3/3     Running
 ```
 
 **Both pods receive traffic** — the Service endpoints list both:
