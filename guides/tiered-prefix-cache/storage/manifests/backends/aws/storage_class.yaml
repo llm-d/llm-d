@@ -1,0 +1,14 @@
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: efs-sc
+provisioner: efs.csi.aws.com
+parameters:
+  provisioningMode: efs-ap
+  fileSystemId: <your-efs-filesystem-id>  # Replace with your actual EFS filesystem ID
+  directoryPerms: "700"
+  basePath: "/dynamic_provisioning"
+  gidRangeStart: "1000"
+  gidRangeEnd: "2000"
+reclaimPolicy: Delete
+volumeBindingMode: Immediate
