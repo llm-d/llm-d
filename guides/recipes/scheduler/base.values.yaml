@@ -7,3 +7,5 @@ inferenceExtension:
     hub: ghcr.io/llm-d
     name: llm-d-inference-scheduler
     tag: v0.7.0
+  flags:
+    v: 2
