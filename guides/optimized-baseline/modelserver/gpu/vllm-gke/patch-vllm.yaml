@@ -13,16 +13,3 @@ spec:
               value: "none"
             - name: NCCL_NET_PLUGIN
               value: ""
-          command:
-            - /bin/bash
-            - -c
-          args:
-           # TODO(Remove this patch once https://github.com/llm-d/llm-d/pull/1147 is built to the llm-d image).
-            - |
-              export LD_LIBRARY_PATH=/usr/local/nvidia/lib64:${LD_LIBRARY_PATH}
-              export LIBRARY_PATH="/usr/local/nvidia/lib:/usr/local/nvidia/lib64:${CUDA_HOME}/lib64:${EFA_PREFIX}/lib:${EFA_PREFIX}/lib64:${NVSHMEM_DIR}/lib:${NVSHMEM_DIR}/lib64:/usr/local/lib:/usr/local/lib64:${LIBRARY_PATH}"
-              echo "LD_LIBRARY_PATH=$LD_LIBRARY_PATH"
-              echo "LIBRARY_PATH=$LIBRARY_PATH"
-              vllm serve "Qwen/Qwen3-32B" \
-              --disable-access-log-for-endpoints=/health,/metrics,/v1/models \
-              --tensor-parallel-size=2
