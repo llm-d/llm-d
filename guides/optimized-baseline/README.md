@@ -42,6 +42,7 @@ This guide includes configurations for the following accelerators:
 
 ## Prerequisites
 
+- Install the [Gateway API Inference Extension CRDs](https://github.com/kubernetes-sigs/gateway-api-inference-extension/tree/v1.4.0/config/crd)
 - Have the [proper client tools installed on your local system](../../helpers/client-setup/README.md) to use this guide.
 - Checkout llm-d repo:
 
