@@ -66,7 +66,7 @@ llm-d uses a layered, composable architecture:
 | **[InferencePool](../architecture/core/inferencepool.md)** | A Kubernetes Custom Resource that groups model server pods sharing the same model and compute configuration. |
 | **[Model Servers](../architecture/core/model-servers.md)** | vLLM or SGLang instances running models on accelerators. |
 
-See the [Architecture Overview](../architecture/introduction.md) for a deeper dive into the architecture.
+See the [Architecture Overview](../architecture/README.md) for a deeper dive into the architecture.
 
 ## Well-Lit Paths
 

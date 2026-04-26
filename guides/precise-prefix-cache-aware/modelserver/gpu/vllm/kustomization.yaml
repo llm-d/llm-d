@@ -11,8 +11,8 @@ namePrefix: precise-prefix-cache-aware-nvidia-gpu-vllm-
 
 images:
   - name: REPLACE_MODEL_SERVER_IMAGE
-    newName: ghcr.io/llm-d/llm-d-cuda
-    newTag: v0.6.0
+    newName: vllm/vllm-openai
+    newTag: v0.19.1
 
 labels:
   - pairs:

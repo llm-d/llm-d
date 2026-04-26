@@ -50,7 +50,7 @@ helmfile apply -e kgateway -n ${NAMESPACE}     # deprecated migration path
 
 To see what gateway options are supported refer to our [gateway provider prereq doc](../prereq/gateway-provider/README.md#supported-providers). Gateway configurations per provider are tracked in the [gateway-configurations directory](../prereq/gateway-provider/common-configurations/).
 
-You can also customize your gateway, for more information on how to do that see our [gateway customization docs](../../docs/customizing-your-gateway.md).
+You can also customize your gateway, for more information on how to do that see our [gateway customization docs](../04_customizing_a_guide.md).
 
 ### Install HTTPRoute
 
@@ -114,7 +114,7 @@ replicaset.apps/ms-sim-llm-d-modelservice-prefill-76c86dd9f8   1         1      
 
 ## Using the stack
 
-For instructions on getting started making inference requests see [our docs](../../docs/getting-started-inferencing.md)
+For instructions on getting started making inference requests see [our docs](../02_verifying_a_guide.md)
 
 ## Cleanup
 
@@ -134,4 +134,4 @@ helm uninstall ms-sim -n ${NAMESPACE}
 
 ## Customization
 
-For information on customizing a guide and tips to build your own, see [our docs](../../docs/customizing-a-guide.md)
+For information on customizing a guide and tips to build your own, see [our docs](../04_customizing_a_guide.md)

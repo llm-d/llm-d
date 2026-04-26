@@ -113,9 +113,9 @@ The Inference Platform owner deploys an InferencePool, EPP, and model servers. W
 Gateway API-based deployments require the Gateway implementation to support Gateway API Inference Extension (GAIE). A full list of Gateways supporting GAIE can be found [here](https://gateway-api-inference-extension.sigs.k8s.io/implementations/gateways/).
 
 llm-d provides configuration guides and regularly tests integrations with the following Gateways:
-- [Istio](../resources/gateways/istio.md)
-- [GKE Gateway](../resources/gateways/gke.md)
-- [agentgateway](../resources/gateways/agentgateway.md)
+- [Istio](../../resources/gateways/istio.md)
+- [GKE Gateway](../../resources/gateways/gke.md)
+- [agentgateway](../../resources/gateways/agentgateway.md)
 
 > [!NOTE]
 > We welcome contribution of guides for other Gateways!

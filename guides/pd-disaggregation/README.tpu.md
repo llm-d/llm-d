@@ -20,7 +20,7 @@ This guide uses Cloud TPU v6e (Trillium) accelerators on Google Cloud Platform (
   kubectl create namespace ${NAMESPACE}
   ```
 
-- [Create the `llm-d-hf-token` secret in your target namespace with the key `HF_TOKEN` matching a valid HuggingFace token](../../helpers/client-setup/hf-token.md) to pull models.
+- [Create the `llm-d-hf-token` secret in your target namespace with the key `HF_TOKEN` matching a valid HuggingFace token](../../helpers/hf-token.md) to pull models.
 
 ## Installation Steps
 
@@ -199,7 +199,7 @@ infra-pd-inference-gateway   gke-l7-regional-external-managed   123.123.123.123 
     }
     ```
 
-For more information see [our docs](../../docs/getting-started-inferencing.md)
+For more information see [our docs](../02_verifying_a_guide.md)
 
 ## Tuning Selective PD
 
@@ -231,4 +231,4 @@ kubectl delete -f httproute.gke.yaml -n ${NAMESPACE}
 
 ## Customization
 
-For information on customizing a guide and tips to build your own, see [our docs](../../docs/customizing-a-guide.md)
+For information on customizing a guide and tips to build your own, see [our docs](../04_customizing_a_guide.md)

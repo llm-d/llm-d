@@ -59,7 +59,7 @@ For Intel HPU deployments:
   kubectl create namespace ${NAMESPACE}
   ```
 
-* [Create the `llm-d-hf-token` secret in your target namespace with the key `HF_TOKEN` matching a valid HuggingFace token](../../helpers/client-setup/hf-token.md) to pull models.
+* [Create the `llm-d-hf-token` secret in your target namespace with the key `HF_TOKEN` matching a valid HuggingFace token](../../helpers/hf-token.md) to pull models.
 
 ## Installation
 
@@ -96,7 +96,7 @@ helmfile apply -e kgateway -n ${NAMESPACE}     # deprecated migration path
 
 To see what gateway options are supported refer to our [gateway provider prereq doc](../prereq/gateway-provider/README.md#supported-providers). Gateway configurations per provider are tracked in the [gateway-configurations directory](../prereq/gateway-provider/common-configurations/).
 
-You can also customize your gateway, for more information on how to do that see our [gateway customization docs](../../docs/customizing-your-gateway.md).
+You can also customize your gateway, for more information on how to do that see our [gateway customization docs](../04_customizing_a_guide.md).
 
 #### Infrastructure provider specifics
 
@@ -182,7 +182,7 @@ replicaset.apps/ms-pd-llm-d-modelservice-prefill-86f6fb7cdc   4         4       
 
 ## Using the stack
 
-For instructions on getting started making inference requests see [our docs](../../docs/getting-started-inferencing.md)
+For instructions on getting started making inference requests see [our docs](../02_verifying_a_guide.md)
 
 ## Tuning Selective PD
 
@@ -478,4 +478,4 @@ kubectl delete -f httproute.gke.yaml -n ${NAMESPACE}
 
 ## Customization
 
-For information on customizing a guide and tips to build your own, see [our docs](../../docs/customizing-a-guide.md)
+For information on customizing a guide and tips to build your own, see [our docs](../04_customizing_a_guide.md)

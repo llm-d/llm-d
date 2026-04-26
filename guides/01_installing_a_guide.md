@@ -81,10 +81,10 @@ And more.
 
 ## Prerequisites
 
-- Have the [proper client tools installed](prereq/client-setup/README.md)
-- **If** serving a model that requires a hugging face token, [Create the `llm-d-hf-token` secret](prereq/client-setup/README.md#huggingface-token) in your target namespace.
+- Have the [proper client tools installed](../helpers/client-setup/README.md)
+- **If** serving a model that requires a hugging face token, [Create the `llm-d-hf-token` secret](../helpers/client-setup/README.md#huggingface-token) in your target namespace.
   - **NOTE**: MOST examples use `Qwen3-32B` or `Deepseek-r1-0528`. Both of these models do not require a token.
-- [Choose an llm-d version](prereq/client-setup/README.md#llm-d-version)
+- [Choose an llm-d version](../helpers/client-setup/README.md#llm-d-version)
 
 ## Installation
 

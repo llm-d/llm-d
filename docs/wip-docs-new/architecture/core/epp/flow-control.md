@@ -393,7 +393,7 @@ Available plugins:
 ### Advanced Use Cases: Autoscaling
 
 #### True Demand Autoscaling
-Traditional metrics like GPU utilization fail to quantify unfulfilled demand because LLM compute is highly non-linear. Shifting the queue to the EPP provides a definitive "True Demand" metric (Queue Depth). External scalers like KEDA can use this metric to scale out replicas based on the exact volume of traffic waiting to be served. See [Autoscaling](../../advanced/autoscaling/autoscaling.md) for more details.
+Traditional metrics like GPU utilization fail to quantify unfulfilled demand because LLM compute is highly non-linear. Shifting the queue to the EPP provides a definitive "True Demand" metric (Queue Depth). External scalers like KEDA can use this metric to scale out replicas based on the exact volume of traffic waiting to be served. See [Autoscaling](../../advanced/autoscaling/README.md) for more details.
 
 ### Metrics & Observability
 

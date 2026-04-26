@@ -33,6 +33,6 @@ envsubst < <template>.yaml > config.yaml
 ./run_only.sh -c config.yaml
 ```
 
-For detailed benchmark documentation, see the [benchmark README](benchmark/README.md) and the [benchmark report format](https://github.com/llm-d/llm-d-benchmark/blob/main/docs/benchmark_report.md).
+For detailed benchmark documentation, see the [benchmark README](../helpers/benchmark.md) and the [benchmark report format](https://github.com/llm-d/llm-d-benchmark/blob/main/docs/benchmark_report.md).
 
 Individual guide benchmark results are found in each guide's README.

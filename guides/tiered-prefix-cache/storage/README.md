@@ -16,7 +16,7 @@ export NAMESPACE=llm-d-storage # or any other namespace (shorter names recommend
 kubectl create namespace ${NAMESPACE}
 ```
 
-* [Create the `llm-d-hf-token` secret in your target namespace with the key `HF_TOKEN` matching a valid HuggingFace token](../../../helpers/client-setup/hf-token.md) to pull models.
+* [Create the `llm-d-hf-token` secret in your target namespace with the key `HF_TOKEN` matching a valid HuggingFace token](../../../helpers/hf-token.md) to pull models.
 
 ## Storage Connectors
 
@@ -145,7 +145,7 @@ kubectl apply -k ./manifests/vllm/lmcache-connector -n ${NAMESPACE}
 
 #### llm-d FS Connector
 
-Deploy the `InferencePool` using the [InferencePool recipe](../../recipes/inferencepool/README.md).
+Deploy the `InferencePool` using the [InferencePool recipe](../../recipes/scheduler/README.md).
 
 **NOTE:** This guide uses an InferencePool recipe with HBM cache only. Storage offloading is typically used with CPU offloading, which is not covered, see <https://github.com/llm-d/llm-d/issues/682> for a follow up.
 

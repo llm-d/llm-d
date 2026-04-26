@@ -137,7 +137,7 @@ flowchart TD
 
 The `ProfileHandler` uses the `Pick` extension point to determine which profiles need to run for a given request (e.g., if a request needs both prefill and decode, or just decode if the KV cache is already transferred). If both are needed, the prefill and decode endpoints are picked at the same time. The `ProfileHandler` then uses the `ProcessResults` extension point to merge the results from both profiles. This merging ensures that the **decode endpoint** is returned as the primary destination for the proxy to forward the original request. Simultaneously, the **prefill endpoint** is injected into the request as a specialized header. When the request reaches the decode worker, the **sidecar** running alongside the decoder intercepts it, extracts the prefill endpoint from the header, and coordinates a remote prefill from the selected prefill worker before the decoding process begins.
 
-See [Disaggregated Serving](../../advanced/disaggregation.md) for more details on the design and request flow.
+See [Disaggregated Serving](../../advanced/disaggregation/README.md) for more details on the design and request flow.
 
 ---
 

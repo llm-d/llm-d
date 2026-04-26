@@ -80,7 +80,7 @@ export ENDPOINT=$(kubectl get gateway ${GATEWAY_NAME} --no-headers -n ${NAMESPAC
 > This requires that the release of the `llm-d-infra` chart must have `.ingress.enabled` set to `true`, and the `.gateway.service.type` to `ClusterIP`.
 > This requires some load-balancer configuration for your cluster / ingress-controller. This could be either cloud-provider integration or something like MetalLB
 
-This is the most environment dependent of all the options, and can be tricky to set up. For more information on this see [our gateway customization docs](../docs/customizing-your-gateway.md#using-an-ingress). You should be able to get your endpoint from your ingress with the following
+This is the most environment dependent of all the options, and can be tricky to set up. For more information on this, see the gateway customization documentation for your environment. You should be able to get your endpoint from your ingress with the following
 
 ```bash
 export ENDPOINT=$(kubectl get ingress --no-headers -o jsonpath='{.items[].status.loadBalancer.ingress[0].ip}')

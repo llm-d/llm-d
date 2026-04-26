@@ -16,7 +16,7 @@ We currently offer the following:
 
 * [Predicted Latency](./predicted-latency-based-scheduling/README.md) - enhance optimized baseline with real-time predictions of request latency (via an live-trained XGBoost model) rather than heuristic-based combinations of utilization metrics like queue depth or KV-cache utilization.
 * [Workload Autoscaling](./workload-autoscaling/README.md) - autoscale the LLM service via proactive, SLO-aware signals that reflect the true state of the inference system — queue depth, in-flight request counts, and KV cache pressure — so that capacity can be added before end-user latency is impacted.
-* [Asynchronous Processing](./asychronous-processing/README.md) - process inference requests asynchronously using a queue-based architecture. This is ideal for latency-insensitive batch workloads or for filling "slack" capacity in your inference pool.
+* [Asynchronous Processing](./asynchronous-processing/README.md) - process inference requests asynchronously using a queue-based architecture. This is ideal for latency-insensitive batch workloads or for filling "slack" capacity in your inference pool.
 
 > [!NOTE]
 > New guides added to this list enable at least one of the core well-lit paths but may directly include prerequisite steps specific to new hardware or infrastructure providers without full abstraction. A guide added here is expected to eventually become part of an existing well-lit path.
@@ -26,4 +26,4 @@ We currently offer the following:
 Our supporting guides address common operational challenges with model serving at scale:
 
 * [Simulating model servers](./simulated-accelerators/README.md) can deploy a vLLM model server simulator that allows testing optimized baseline and orchestration at scale as each instance does not need accelerators.
-* [Benchmark](./benchmark/README.md) demonstrates how to use automation for running benchmarks against the llm-d stack/
+* [Benchmark](../helpers/benchmark.md) demonstrates how to use automation for running benchmarks against the llm-d stack.

@@ -103,11 +103,11 @@ Configuration is split into two sections in the Helm values file:
 | `image` | Container image for the EPP | `ghcr.io/llm-d/llm-d-inference-scheduler:v0.7.0` |
 | `extProcPort` | Port the EPP listens on for ext-proc traffic from the proxy | `9002` |
 | `pluginsConfigFile` | Filename for the scheduling plugin configuration | `"custom-plugins.yaml"` |
-| `pluginsCustomConfig` | Inline scheduling plugin configuration (see [EPP](epp.md)) | See examples below |
+| `pluginsCustomConfig` | Inline scheduling plugin configuration (see [EPP](epp/README.md)) | See examples below |
 | `tracing.enabled` | Enable OpenTelemetry distributed tracing | `false` |
 | `monitoring.prometheus.enabled` | Enable Prometheus metrics scraping | `true` |
 
-> See [epp/README.md](EPP) for more details on `inferenceExtension` design and configuration
+> See [EPP](epp/README.md) for more details on `inferenceExtension` design and configuration
 
 #### Connecting to a Proxy
 
@@ -167,4 +167,4 @@ helm install my-infpool \
 > Note that the Gateway providers and Gateway provider specific resources (e.g. the `HTTPRoute`) are deployed independently.
 
 - See the [full Helm Chart](https://github.com/kubernetes-sigs/gateway-api-inference-extension/tree/main/config/charts/inferencepool) for configuration details.
-- See the [Gateway API guides](../../resources/gateways/README.md) for more details on Gateway API.
+- See the [Gateway API guides](../../resources/gateways/istio.md) for more details on Gateway API.

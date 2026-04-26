@@ -14,7 +14,7 @@ This guide uses Cloud TPU v7x accelerators on Google Cloud Platform (GCP). The d
 
 ## Prerequisites
 
-- Have the [proper client tools installed on your local system](../prereq/client-setup/README.md) to use this guide.
+- Have the [proper client tools installed on your local system](../../helpers/client-setup/README.md) to use this guide.
 - Create a namespace for installation.
 
   ```bash

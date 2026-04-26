@@ -41,7 +41,7 @@ This guide requires 32 Nvidia H200 or B200 GPUs and InfiniBand or RoCE RDMA netw
   kubectl create namespace ${NAMESPACE}
   ```
 
-* [Create the `llm-d-hf-token` secret in your target namespace with the key `HF_TOKEN` matching a valid HuggingFace token](../../helpers/client-setup/hf-token.md) to pull models.
+* [Create the `llm-d-hf-token` secret in your target namespace with the key `HF_TOKEN` matching a valid HuggingFace token](../../helpers/hf-token.md) to pull models.
 
 ## Installation
 
@@ -134,7 +134,7 @@ Deploy the Gateway and HTTPRoute using the [gateway recipe](../recipes/gateway/R
 
 To see what gateway options are supported refer to our [gateway provider prereq doc](../prereq/gateway-provider/README.md#supported-providers). Gateway configurations per provider are tracked in the [gateway-configurations directory](../prereq/gateway-provider/common-configurations/).
 
-You can also customize your gateway, for more information on how to do that see our [gateway customization docs](../../docs/customizing-your-gateway.md).
+You can also customize your gateway, for more information on how to do that see our [gateway customization docs](../04_customizing_a_guide.md).
 
 ## Tuning Selective PD
 
@@ -189,9 +189,9 @@ statefulset.apps/wide-ep-llm-d-prefill-1  1/1     2m13s
 
 ## Using the stack
 
-For instructions on getting started making inference requests see [our docs](../../docs/getting-started-inferencing.md)
+For instructions on getting started making inference requests see [our docs](../02_verifying_a_guide.md)
 
-**_NOTE:_** This example particularly benefits from utilizing stern as described in the [getting-started-inferencing docs](../../docs/getting-started-inferencing.md#following-logs-for-requests), because while we only have 3 inferencing pods, it has 16 vllm servers or ranks.
+**_NOTE:_** This example particularly benefits from utilizing stern as described in the [getting-started-inferencing docs](../02_verifying_a_guide.md#following-logs-for-requests), because while we only have 3 inferencing pods, it has 16 vllm servers or ranks.
 
 **_NOTE:_** Compared to the other examples, this one takes anywhere between 7-10 minutes for the vllm API servers to startup so this might take longer before you can interact with this example.
 
@@ -253,7 +253,7 @@ kubectl delete -k ../recipes/gateway/<gke-l7-regional-external-managed|istio|age
 
 ## Customization
 
-For information on customizing a guide and tips to build your own, see [our docs](../../docs/customizing-a-guide.md)
+For information on customizing a guide and tips to build your own, see [our docs](../04_customizing_a_guide.md)
 
 ## Topology Aware Scheduling (TAS)
 

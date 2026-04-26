@@ -8,7 +8,7 @@ This helper describes how to run benchmarks against a deployed llm-d stack.
 ## Requirements
 
 - You are assumed to have deployed the llm-d inference stack from a guide, or otherwise followed the llm-d conventions for deployment.
-- Install `yq` (YAML processor) - version>=4 (see [Client Setup](../../helpers/client-setup/README.md))
+- Install `yq` (YAML processor) - version>=4 (see [Client Setup](client-setup/README.md))
 - For MacOS users: if `timeout` utility is not present, install it with `brew install coreutils` command.
 - Download the benchmark script [run_only.sh](https://github.com/llm-d/llm-d-benchmark/blob/main/existing_stack/run_only.sh) and make it executable.
 
@@ -191,7 +191,7 @@ Create a yaml configuration file for the benchmark and run.
   ```
 
 The benchmarks will create a launcher pod to run and the resulted would be stored on the PVC.
-You can try running with different workload configuration. Just edit the `workload` section in `config.yaml` and rerun (for details, see [Advanced.workload](README.md#workload) below).
+You can try running with different workload configuration. Just edit the `workload` section in `config.yaml` and rerun (for details, see [Advanced.workload](#workload) below).
 
 ## Analyze Results
 
@@ -214,7 +214,7 @@ To copy a results directory to your local machine use:
 
 `run_only.sh` prints progress messages to the terminal. The stdout and stderr of the harness itself is printed to the terminal as well as captured in the results.
 
-This example uses `guidellm` with a [`rate_comparison`](../optimized-baseline/benchmark-templates/guidellm.yaml) workload:
+This example uses `guidellm` with a [`rate_comparison`](../guides/optimized-baseline/benchmark-templates/guidellm.yaml) workload:
 
   ```bash
   export BENCH_TEMPLATE_DIR=../optimized-baseline/benchmark-templates/
@@ -564,10 +564,10 @@ This example uses `guidellm` with a [`rate_comparison`](../optimized-baseline/be
 
 The output files are saved on the benchmark PVC. They are accessible through the launcher pod in the `/requests` folder. Each experiment is saved under its own sub directory.
 
-This example uses `inference-perf` with a [`shared-prefix`](../optimized-baseline/benchmark-templates/shared_prefix.yaml) workload:
+This example uses `inference-perf` with a [`shared-prefix`](../guides/optimized-baseline/benchmark-templates/shared_prefix.yaml) workload:
 
   ```bash
-  export BENCHMARK_TEMPLATE="../optimized-baseline/benchmark-templates/shared_prefix.yaml"
+  export BENCHMARK_TEMPLATE="../guides/optimized-baseline/benchmark-templates/shared_prefix.yaml"
   ```
 
 After running With this template, the `/requests` folder will include a `<results-folder>` named

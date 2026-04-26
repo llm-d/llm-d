@@ -12,7 +12,7 @@ Quick-reference definitions for terms used throughout the llm-d documentation. F
 
 **Decode** — The second phase of LLM inference that generates output tokens one at a time, each depending on the previous token's KV Cache state. Decode throughput is measured by TPOT. See [Architecture Overview](../architecture/README.md).
 
-**Disaggregated Serving** — A deployment pattern that separates Prefill and Decode into dedicated, independently scalable pools of Model Servers, connected by NIXL for KV-cache transfer. See [Disaggregation](../architecture/advanced/disaggregation.md).
+**Disaggregated Serving** — A deployment pattern that separates Prefill and Decode into dedicated, independently scalable pools of Model Servers, connected by NIXL for KV-cache transfer. See [Disaggregation](../architecture/advanced/disaggregation/README.md).
 
 **Endpoint Picker (EPP)** — The central scheduling component of llm-d. Receives ext-proc callbacks from the Proxy, evaluates candidate Model Servers through a Plugin Pipeline of filters, scorers, and pickers, and returns the address of the optimal backend. See [EPP](../architecture/core/epp/README.md).
 

@@ -31,7 +31,7 @@ llm-d's core design can be extended with optional advanced patterns, which can b
 
 In disaggregated serving, a single inference request is split into multiple steps (e.g. Prefill phase and Decode phase). llm-d's EPP supports the concept of disaggregation and leverages the protocols of the Model Servers (vLLM and SGLang) to execute the multi-step inference process.
 
-See [Disaggregation](advanced/disaggregation.md) for complete details on the disaggregated serving design.
+See [Disaggregation](advanced/disaggregation/README.md) for complete details on the disaggregated serving design.
 
 ### EPP "Consultants"
 
