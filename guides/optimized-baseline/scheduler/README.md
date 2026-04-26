@@ -6,7 +6,7 @@ Layer this file on top of the shared [scheduler recipes](../../recipes/scheduler
 
 ## EPHEMERAL DOC
 
-We no longer want to have per guide docs explaing anything related to installation and verification. All of that should be abstracted into a few docs at the root of guide repo. This Document is kept around for reviews to understand the scoping and implementation of this refactor, as we will be refactoring guide by guide to cut down review overhead.
+We no longer want to have per guide docs explaining anything related to installation and verification. All of that should be abstracted into a few docs at the root of guide repo. This Document is kept around for reviews to understand the scoping and implementation of this refactor, as we will be refactoring guide by guide to cut down review overhead.
 
 ## Standalone (no gateway)
 

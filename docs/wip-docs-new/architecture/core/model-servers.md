@@ -51,7 +51,7 @@ metric types and semantics MUST follow this doc.
 | [Optional] NumGPUBlocks| Labeled/Gauge     | The total number of blocks in the HBM KV cache, used by the prefix cache scorer. If this metric is not available, the NumGPUBlocks will be derived from the [prefix plugin config](https://gateway-api-inference-extension.sigs.k8s.io/guides/epp-configuration/prefix-aware/#customize-the-prefix-cache-plugin).| name: `vllm:cache_config_info`, label name: `num_gpu_blocks`| `nv_trt_llm_kv_cache_block_metrics{kv_cache_block_type=max}` | `trtllm_kv_cache_max_blocks` | name: `sglang:cache_config_info`, label name: `num_pages`
 
 
-To correctly map metrics names, model server Pods should be labeld with the model server type they are running as demonistrated below. Pods without the engine-type label will default to vLLM metrics names.
+To correctly map metrics names, model server Pods should be labeled with the model server type they are running as demonistrated below. Pods without the engine-type label will default to vLLM metrics names.
 
 
 ```yaml
