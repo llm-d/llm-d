@@ -31,13 +31,13 @@ spec:
           #     value: "0.1"
           resources:
             limits:
-              nvidia.com/gpu: "1"
+              nvidia.com/gpu: "2"
               cpu: "8"
-              memory: 32Gi
+              memory: 64Gi
             requests:
-              nvidia.com/gpu: "1"
+              nvidia.com/gpu: "2"
               cpu: "2"
-              memory: 16Gi
+              memory: 32Gi
           volumeMounts:
             - mountPath: /.config
               name: metrics-volume
