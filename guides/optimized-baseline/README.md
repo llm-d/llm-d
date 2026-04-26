@@ -63,7 +63,7 @@ This guide includes configurations for the following accelerators:
 
 ### 2. Deploy the Standalone Inference Scheduler
 
-This deploys the inference scheduler with an Envoy sidecar. For gateway deployments, see the next collapsed section.
+This deploys the inference scheduler with an Envoy sidecar.
 
 ```bash
 helm install optimized-baseline-scheduler \
@@ -79,12 +79,6 @@ Apply the Kustomize overlays for your specific backend (defaulting to NVIDIA GPU
 
 ```bash
 kubectl apply -n ${NAMESPACE} -k guides/optimized-baseline/modelserver/gpu/vllm/
-```
-
-[TEMPORARY] For GKE, run this instead:
-
-```bash
-kubectl apply -n ${NAMESPACE} -k guides/optimized-baseline/modelserver/gpu/vllm-gke/
 ```
 
 ### 4. Enable monitoring (optional)
