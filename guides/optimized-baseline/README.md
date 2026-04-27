@@ -127,7 +127,7 @@ kubectl apply -n ${NAMESPACE} -k guides/recipes/modelserver/components/monitorin
 
 ## Verification
 
-### 1. Get the IP of the Scheduler
+### 1. Get the IP of the Proxy
 
 **Standalone Mode**
 
