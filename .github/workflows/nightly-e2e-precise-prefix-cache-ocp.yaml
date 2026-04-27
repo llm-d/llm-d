@@ -1,21 +1,18 @@
 name: Nightly - Precise Prefix Cache E2E (OpenShift)
 
 # Nightly regression test for the precise-prefix-cache-aware guide on OpenShift.
-# Deploys via helmfile and validates with e2e-validate.sh.
+# Deploys the guide via custom_deploy_script (kustomize + standalone chart with
+# UDS tokenizer post-renderer) and validates with e2e-validate.sh against the
+# scheduler EPP service. Mirrors the optimized-baseline CKS/GKE migration in
+# llm-d/llm-d#1268; the OCP helmfile reusable workflow doesn't expose a
+# `gateway_host` input yet, so pre_deploy_script seeds GATEWAY_HOST via
+# GITHUB_ENV.
 
 on:
   schedule:
-    - cron: '0 1 * * *'  # 01:00 UTC daily (staggered)
+    - cron: '0 1 * * *'  # 01:00 UTC daily
   workflow_dispatch:
     inputs:
-      helmfile_env:
-        description: 'Helmfile environment'
-        required: false
-        default: 'istio'
-        type: choice
-        options:
-          - istio
-          - kgateway
       skip_cleanup:
         description: 'Skip cleanup after tests (for debugging)'
         required: false
@@ -35,8 +32,6 @@ jobs:
     with:
       guide_name: precise-prefix-cache-aware
       namespace: llm-d-nightly-prefix-cache
-      helmfile_env: ${{ github.event.inputs.helmfile_env || 'istio' }}
-      gateway_type: ${{ github.event.inputs.helmfile_env || 'istio' }}
       accelerator_type: H100
       required_gpus: 2
       recommended_gpus: 4
@@ -47,8 +42,17 @@ jobs:
       install_gateway_provider: false
       skip_cleanup: ${{ github.event.inputs.skip_cleanup == 'true' }}
       pre_deploy_script: |
-        echo "Adding H100 nodeSelector for OCP deployment..."
-        yq e '.decode.extraConfig.nodeSelector["nvidia.com/gpu.product"] = "NVIDIA-H100-80GB-HBM3"' -i "${GUIDE_PATH}/ms-kv-events/values.yaml"
-        echo "Updated values.yaml with H100 nodeSelector"
-        yq e '.decode.extraConfig.nodeSelector' "${GUIDE_PATH}/ms-kv-events/values.yaml"
+        echo "Adding H100 nodeSelector to nvidia-gpu/vllm overlay..."
+        yq e '.spec.template.spec.nodeSelector["nvidia.com/gpu.product"] = "NVIDIA-H100-80GB-HBM3"' \
+          -i "${GUIDE_PATH}/modelserver/nvidia-gpu/vllm/patch-vllm.yaml"
+        yq e '.spec.template.spec.nodeSelector' "${GUIDE_PATH}/modelserver/nvidia-gpu/vllm/patch-vllm.yaml"
+        echo "GATEWAY_HOST=precise-prefix-cache-aware-epp" >> "$GITHUB_ENV"
+      custom_deploy_script: |
+        kubectl apply -k guides/precise-prefix-cache-aware/modelserver/nvidia-gpu/vllm -n ${NAMESPACE}
+        helm install precise-prefix-cache-aware \
+          oci://registry.k8s.io/gateway-api-inference-extension/charts/standalone \
+          -f guides/recipes/scheduler/base.values.yaml \
+          -f guides/precise-prefix-cache-aware/scheduler/precise-prefix-cache-aware.values.yaml \
+          --post-renderer ./guides/precise-prefix-cache-aware/scheduler/patches/uds-tokenizer/post-renderer.sh \
+          -n ${NAMESPACE} --version v1.4.0
     secrets: inherit
