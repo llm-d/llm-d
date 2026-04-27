@@ -8,14 +8,6 @@ on:
     - cron: '0 6 * * *'  # 06:00 UTC daily (staggered from OCP/GKE nightlies)
   workflow_dispatch:
     inputs:
-      helmfile_env:
-        description: 'Helmfile environment'
-        required: false
-        default: 'istio'
-        type: choice
-        options:
-          - istio
-          - kgateway
       skip_cleanup:
         description: 'Skip cleanup after tests (for debugging)'
         required: false
