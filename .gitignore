@@ -12,4 +12,3 @@ CLAUDE.md
 
 # helm chart directories via kustomize
 **/charts/
-*.code-workspace
