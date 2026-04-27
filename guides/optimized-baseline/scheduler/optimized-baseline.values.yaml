@@ -2,6 +2,11 @@
 ## Layer on top of: recipes/scheduler/base.values.yaml
 
 inferenceExtension:
+  extraServicePorts:
+    - name: http
+      port: 80
+      protocol: TCP
+      targetPort: 8081
   pluginsConfigFile: "optimized-baseline-plugins.yaml"
   pluginsCustomConfig:
     optimized-baseline-plugins.yaml: |
