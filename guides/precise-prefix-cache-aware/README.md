@@ -27,8 +27,8 @@ Two scorers make up the routing decision alongside the load-aware stack:
 
 | Backend              | Directory                  | Default model                           | Notes                                      |
 | -------------------- | -------------------------- | --------------------------------------- | ------------------------------------------ |
-| NVIDIA GPU           | `modelserver/nvidia-gpu/vllm/`    | Qwen/Qwen3-32B                          | Default configuration                      |
-| AMD GPU              | `modelserver/amd-gpu/vllm/`    | Qwen/Qwen3-32B                          | AMD GPU                                    |
+| NVIDIA GPU           | `modelserver/gpu/vllm/`    | Qwen/Qwen3-32B                          | Default configuration                      |
+| AMD GPU              | `modelserver/amd/vllm/`    | Qwen/Qwen3-32B                          | AMD GPU                                    |
 | Intel XPU            | `modelserver/xpu/vllm/`    | Qwen/Qwen3-0.6B                         | CI-sized; update scheduler `modelName` for real use |
 | Intel Gaudi (HPU)    | `modelserver/hpu/vllm/`    | Qwen/Qwen3-8B                           | `--block-size=128`; update scorer `blockSize` to match |
 | Google TPU v6e       | `modelserver/tpu-v6/vllm/` | Llama-3.1-70B-Instruct                  | GKE TPU                                    |
@@ -40,13 +40,13 @@ Two scorers make up the routing decision alongside the load-aware stack:
 
 ## Prerequisites
 
-- Install the [Gateway API Inference Extension CRDs](https://github.com/kubernetes-sigs/gateway-api-inference-extension/tree/v1.4.0/config/crd).
+- Install the [Gateway API Inference Extension CRDs](https://github.com/kubernetes-sigs/gateway-api-inference-extension/tree/v1.4.0/config/crd)
 - Have the [proper client tools installed on your local system](../../helpers/client-setup/README.md) to use this guide.
 - Checkout llm-d repo:
 
   ```bash
-  export branch="main" # branch, tag, or commit hash
-  git clone https://github.com/llm-d/llm-d.git && cd llm-d && git checkout ${branch}
+    export branch="main" # branch, tag, or commit hash
+    git clone https://github.com/llm-d/llm-d.git && cd llm-d && git checkout ${branch}
   ```
 
 - Create the `llm-d-hf-token` secret (the UDS tokenizer sidecar reads `HF_TOKEN` to reach gated tokenizers — Qwen/Qwen3-32B is public but the secret makes swapping in a gated model a no-op):
@@ -128,10 +128,10 @@ To use a Kubernetes Gateway managed proxy instead of the standalone Envoy sideca
 Apply the Kustomize overlay for your backend (defaulting to NVIDIA GPU / vLLM):
 
 ```bash
-kubectl apply -n ${NAMESPACE} -k guides/precise-prefix-cache-aware/modelserver/nvidia-gpu/vllm/
+kubectl apply -n ${NAMESPACE} -k guides/precise-prefix-cache-aware/modelserver/gpu/vllm/
 ```
 
-### 4. Enable monitoring (optional)
+### 4. (Optional) Enable Monitoring
 
 > [!NOTE]
 > GKE provides [automatic application monitoring](https://docs.cloud.google.com/kubernetes-engine/docs/how-to/configure-automatic-application-monitoring) out of the box. The llm-d [Monitoring stack](../../docs/monitoring/README.md) is not required for GKE, but it is available if you prefer to use it.
@@ -146,14 +146,14 @@ kubectl apply -n ${NAMESPACE} -k guides/precise-prefix-cache-aware/modelserver/n
 
 ### 5. (Optional) Enable Active-Active High Availability
 
-The default single-replica install uses central ZMQ — vLLM publishers connect into the scheduler service. To run two scheduler replicas simultaneously (each with its own Envoy gateway sidecar) behind a single load-balancing Service, see [active-active.md](active-active.md).
+The default single-replica install uses central ZMQ — vLLM publishers connect into the scheduler service. To run multiple scheduler replicas simultaneously (each with its own Envoy gateway sidecar) behind a single load-balancing Service, see [active-active.md](active-active.md).
 
 ## Verification
 
 ### 1. Port-Forward to the Scheduler Service
 
 ```bash
-kubectl port-forward -n ${NAMESPACE} svc/precise-prefix-cache-aware-epp 8000:80
+kubectl port-forward -n ${NAMESPACE} svc/precise-prefix-cache-aware-epp 8000:8081
 ```
 
 ### 2. Send Test Requests
@@ -193,10 +193,14 @@ The benchmark launches a pod (`llmdbench-harness-launcher`) that uses `inference
 
 ### 1. Prepare the Benchmarking Suite
 
-```bash
-curl -L -O https://raw.githubusercontent.com/llm-d/llm-d-benchmark/main/existing_stack/run_only.sh
-chmod u+x run_only.sh
-```
+- Download the benchmark script:
+
+  ```bash
+  curl -L -O https://raw.githubusercontent.com/llm-d/llm-d-benchmark/main/existing_stack/run_only.sh
+  chmod u+x run_only.sh
+  ```
+
+- [Create HuggingFace token](../../helpers/hf-token.md)
 
 ### 2. Download the Workload Template
 
@@ -208,6 +212,7 @@ curl -LJO "https://raw.githubusercontent.com/llm-d/llm-d/main/guides/precise-pre
 
 ```bash
 export GATEWAY_SVC=precise-prefix-cache-aware-epp
+export PORT=8081
 envsubst < guide.yaml > config.yaml
 ./run_only.sh -c config.yaml -o ./results
 ```
@@ -216,7 +221,7 @@ envsubst < guide.yaml > config.yaml
 
 ```bash
 helm uninstall precise-prefix-cache-aware -n ${NAMESPACE}
-kubectl delete -n ${NAMESPACE} -k guides/precise-prefix-cache-aware/modelserver/nvidia-gpu/vllm/
+kubectl delete -n ${NAMESPACE} -k guides/precise-prefix-cache-aware/modelserver/gpu/vllm/
 ```
 
 ## How It Works

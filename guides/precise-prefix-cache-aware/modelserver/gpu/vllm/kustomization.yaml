@@ -4,19 +4,19 @@ resources:
   - ../../../../recipes/modelserver/base/single-host/default
 
 
-namePrefix: precise-prefix-cache-aware-amd-gpu-vllm-
+namePrefix: precise-prefix-cache-aware-gpu-vllm-
 
 images:
   - name: REPLACE_MODEL_SERVER_IMAGE
-    newName: ghcr.io/llm-d/llm-d-rocm
-    newTag: v0.6.0
+    newName: vllm/vllm-openai
+    newTag: v0.19.1
 
 labels:
   - pairs:
       llm-d.ai/guide: precise-prefix-cache-aware
       llm-d.ai/model: Qwen3-32B
       llm-d.ai/accelerator-variant: gpu
-      llm-d.ai/accelerator-vendor: amd
+      llm-d.ai/accelerator-vendor: nvidia
     includeSelectors: true
     includeTemplates: true
     fields:
@@ -49,6 +49,5 @@ labels:
         kind: PodMonitor
         path: spec/selector/matchLabels
         create: true
-
 patches:
   - path: patch-vllm.yaml
