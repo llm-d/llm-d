@@ -35,7 +35,7 @@ jobs:
     with:
       guide_name: optimized-baseline
       namespace: llm-d-nightly-inference-cks
-      gateway_host: 'optimized-baseline-epp:8081'
+      gateway_host: 'optimized-baseline-epp'
       custom_deploy_script: |
         kubectl apply -k guides/optimized-baseline/modelserver/gpu/vllm -n ${NAMESPACE}
         helm install optimized-baseline \
