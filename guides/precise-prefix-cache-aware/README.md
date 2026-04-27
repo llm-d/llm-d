@@ -27,8 +27,8 @@ Two scorers make up the routing decision alongside the load-aware stack:
 
 | Backend              | Directory                  | Default model                           | Notes                                      |
 | -------------------- | -------------------------- | --------------------------------------- | ------------------------------------------ |
-| NVIDIA GPU           | `modelserver/gpu/vllm/`    | Qwen/Qwen3-32B                          | Default configuration                      |
-| AMD GPU              | `modelserver/amd/vllm/`    | Qwen/Qwen3-32B                          | AMD GPU                                    |
+| NVIDIA GPU           | `modelserver/nvidia-gpu/vllm/`    | Qwen/Qwen3-32B                          | Default configuration                      |
+| AMD GPU              | `modelserver/amd-gpu/vllm/`    | Qwen/Qwen3-32B                          | AMD GPU                                    |
 | Intel XPU            | `modelserver/xpu/vllm/`    | Qwen/Qwen3-0.6B                         | CI-sized; update scheduler `modelName` for real use |
 | Intel Gaudi (HPU)    | `modelserver/hpu/vllm/`    | Qwen/Qwen3-8B                           | `--block-size=128`; update scorer `blockSize` to match |
 | Google TPU v6e       | `modelserver/tpu-v6/vllm/` | Llama-3.1-70B-Instruct                  | GKE TPU                                    |
@@ -100,7 +100,7 @@ The release name `precise-prefix-cache-aware` is load-bearing: the vLLM patches 
 Apply the Kustomize overlay for your backend (defaulting to NVIDIA GPU / vLLM):
 
 ```bash
-kubectl apply -n ${NAMESPACE} -k guides/precise-prefix-cache-aware/modelserver/gpu/vllm/
+kubectl apply -n ${NAMESPACE} -k guides/precise-prefix-cache-aware/modelserver/nvidia-gpu/vllm/
 ```
 
 ### 4. Enable monitoring (optional)
@@ -188,7 +188,7 @@ envsubst < guide.yaml > config.yaml
 
 ```bash
 helm uninstall precise-prefix-cache-aware -n ${NAMESPACE}
-kubectl delete -n ${NAMESPACE} -k guides/precise-prefix-cache-aware/modelserver/gpu/vllm/
+kubectl delete -n ${NAMESPACE} -k guides/precise-prefix-cache-aware/modelserver/nvidia-gpu/vllm/
 ```
 
 ## How It Works

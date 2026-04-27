@@ -4,7 +4,7 @@ resources:
   - ../../../../recipes/modelserver/base/single-host/default
 
 
-namePrefix: precise-prefix-cache-aware-rocm-vllm-
+namePrefix: precise-prefix-cache-aware-amd-gpu-vllm-
 
 images:
   - name: REPLACE_MODEL_SERVER_IMAGE

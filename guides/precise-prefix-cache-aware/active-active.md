@@ -94,7 +94,7 @@ cat > my-overlays/gpu-active-active/kustomization.yaml <<'EOF'
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 resources:
-  - ../../guides/precise-prefix-cache-aware/modelserver/gpu/vllm
+  - ../../guides/precise-prefix-cache-aware/modelserver/nvidia-gpu/vllm
 components:
   - ../../guides/precise-prefix-cache-aware/modelserver/components/active-active
 EOF
@@ -102,7 +102,7 @@ EOF
 kubectl apply -n ${NAMESPACE} -k my-overlays/gpu-active-active
 ```
 
-The same pattern works for the other accelerators (`amd`, `cpu`, `hpu`, `tpu-v6`, `tpu-v7`, `xpu`).
+The same pattern works for the other accelerators (`amd-gpu`, `cpu`, `hpu`, `tpu-v6`, `tpu-v7`, `xpu`).
 
 ## Verifying active-active
 
