@@ -1,7 +1,7 @@
 name: Nightly - optimized baseline E2E (GKE)
 
 # Nightly regression test for the optimized-baseline guide on GKE.
-# Deploys via helmfile (gke env) and validates with e2e-validate.sh.
+# Deploys the guide and validates with e2e-validate.sh.
 
 on:
   schedule:

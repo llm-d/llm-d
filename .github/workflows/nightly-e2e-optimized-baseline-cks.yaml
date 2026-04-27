@@ -1,7 +1,7 @@
 name: Nightly - optimized baseline E2E (CKS)
 
 # Nightly regression test for the optimized-baseline guide on CoreWeave (CKS).
-# Deploys via helmfile and validates with e2e-validate.sh.
+# Deploys the guide and validates with e2e-validate.sh.
 
 on:
   schedule:
