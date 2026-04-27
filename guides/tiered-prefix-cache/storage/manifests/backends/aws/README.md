@@ -64,7 +64,7 @@ spec:
   - ReadWriteMany
   resources:
     requests:
-      storage: 5Gi
+      storage: 1Ti
   storageClassName: efs-sc
 ```
 
@@ -80,6 +80,19 @@ Output should show the PVC as `Bound`:
 NAME                        STATUS   VOLUME   CAPACITY   ACCESS MODES   STORAGECLASS   AGE
 llm-d-kv-cache-storage      Bound    ...      ...        RWX            efs-sc         1m
 ```
+
+## Performance Recommendations
+
+For best performance with AWS EFS:
+
+- Use **Max I/O** performance mode for higher throughput
+- Prefer **Provisioned Throughput** for consistent performance under heavy workloads
+- Mount EFS in the same VPC and availability zone as your EKS nodes
+- Use multiple vLLM replicas to parallelize I/O
+- Monitor throughput and latency using AWS CloudWatch metrics
+
+Note: EFS has higher latency than local SSD or Lustre, and is best suited for shared cache reuse rather than ultra-low latency workloads.
+
 
 ## Cleanup
 

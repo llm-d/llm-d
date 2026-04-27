@@ -10,7 +10,7 @@ This guide explains how to offload the vLLM prefix cache (KV cache) to shared st
 * Ensure your cluster infrastructure is sufficient to [deploy high scale inference](../../prereq/infrastructure/README.md).
 * Configure and deploy your [Gateway control plane](../../prereq/gateway-provider/README.md).
 * Have the [Monitoring stack](../../../docs/monitoring/README.md) installed on your system.
-* Create a namespace for installation.
+* Create a namespace for installation.          
 
 ```bash
 export NAMESPACE=llm-d-storage # or any other namespace (shorter names recommended)
@@ -102,6 +102,27 @@ export STORAGE_CLASS=lustre
 ```
 
 To provision a managed GCP Lustre instance on GKE and configure the corresponding `StorageClass`, follow the [GCP Lustre guide](./manifests/backends/lustre/README.md).
+
+<!-- TAB:AWS EFS -->
+
+#### AWS EFS
+
+Set your storage class which will be used later to provision the PVC.
+
+```bash
+export STORAGE_CLASS=efs-sc
+```
+
+To provision AWS EFS and configure the corresponding `StorageClass`, follow the full guide:
+
+<details>
+<summary>Setup guide</summary>
+
+See: ./manifests/backends/aws/README.md
+
+</details>
+
+EFS provides a POSIX-compatible shared filesystem with ReadWriteMany (RWX) support, allowing multiple vLLM pods across nodes to share KV cache.
 
 <!-- TABS:END -->
 
@@ -233,7 +254,7 @@ llm-d-model-server-xxxxxxxx-xxxxx   1/1     Running   0          11m
 <!-- TAB:LMCache Connector -->
 #### LMCache Connector
 
-You can verify if the KV cache is being offloaded to local storage by checking the metric `lmcache:local_storaqe_usage` through following command.
+You can verify if the KV cache is being offloaded to local storage by checking the metric `lmcache:local_storage_usage` through following command.
 
 ```
 export IP=localhost
@@ -242,7 +263,7 @@ export POD_NAME=llm-d-model-server-xxxx-xxxx
 kubectl exec -it $POD_NAME -- curl -i http://${IP}:${PORT}/metrics | grep lmcache:local_storage_usage
 ```
 
-Verify the folder size where the Lustre instance is mounted, it should be in GBs after KV cache offloading completes, the actual size will differ based on the requests served.
+Verify the folder size where the shared storage  is mounted, it should be in GBs after KV cache offloading completes, the actual size will differ based on the requests served.
 
 ```
 kubectl exec -it $POD_NAME -- du -sh /mnt/files-storage
