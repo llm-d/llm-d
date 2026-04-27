@@ -64,9 +64,11 @@ export NAMESPACE=llm-d-precise
 kubectl create namespace ${NAMESPACE}
 ```
 
-### 2. Deploy the Standalone Inference Scheduler
+### 2. Deploy the Inference Scheduler
 
-This deploys the inference scheduler with an Envoy sidecar. For gateway deployments, see [Gateway recipes](../recipes/gateway).
+#### Standalone Mode
+
+This deploys the inference scheduler with an Envoy sidecar — no Kubernetes Gateway required.
 
 **Helm v4** (current release):
 
@@ -94,6 +96,32 @@ helm install precise-prefix-cache-aware \
 The post-renderer attaches the UDS tokenizer sidecar to the scheduler pod. The standalone chart's `sidecar.*` slot is occupied by its Envoy proxy — overriding it would lose HTTP serving — so the UDS container is appended via helm's post-render hook instead. Under the hood, the post-renderer runs `kustomize build` on the chart's rendered manifests with a small strategic merge patch that adds the `tokenizer-uds` container (image `ghcr.io/llm-d/llm-d-uds-tokenizer:v0.7.1`), two `emptyDir` volumes (`tokenizers`, `tokenizer-uds`), and a `/tmp/tokenizer` volumeMount on the existing `epp` container so the `tokenizer` plugin can reach the UDS socket.
 
 The release name `precise-prefix-cache-aware` is load-bearing: the vLLM patches hardcode `KV_EVENTS_ENDPOINT=tcp://<release>-epp.<ns>.svc.cluster.local:5556`. If you use a different release name, patch the `KV_EVENTS_ENDPOINT` env value in your modelserver overlay to match `<release-name>-epp`.
+
+<details>
+<summary><h4>Gateway Mode</h4></summary>
+
+To use a Kubernetes Gateway managed proxy instead of the standalone Envoy sidecar, do **not** apply the standalone chart above. Instead:
+
+1. **Deploy a Kubernetes Gateway**. See [the gateway guides](../prereq/gateways) for step-by-step deployment of a Gateway named `llm-d-inference-gateway`. One Gateway can front multiple guides (each with its own HTTPRoute).
+
+2. **Deploy the Inference Scheduler and HTTPRoute** via the `inferencepool` chart with `experimentalHttpRoute.enabled=true`. Same UDS post-renderer applies:
+
+   ```bash
+   export PROVIDER_NAME=istio   # options: none, gke, agentgateway, istio
+   helm install precise-prefix-cache-aware \
+     oci://registry.k8s.io/gateway-api-inference-extension/charts/inferencepool \
+     -f guides/recipes/scheduler/base.values.yaml \
+     -f guides/precise-prefix-cache-aware/scheduler/precise-prefix-cache-aware.values.yaml \
+     --set provider.name=${PROVIDER_NAME} \
+     --set experimentalHttpRoute.enabled=true \
+     --set experimentalHttpRoute.inferenceGatewayName=llm-d-inference-gateway \
+     --post-renderer uds-tokenizer \
+     -n ${NAMESPACE} --version v1.4.0
+   ```
+
+   (helm v3 users substitute the path-based `--post-renderer ./guides/precise-prefix-cache-aware/scheduler/patches/uds-tokenizer/post-renderer.sh` form.)
+
+</details>
 
 ### 3. Deploy the Model Server
 
@@ -125,7 +153,7 @@ The default single-replica install uses central ZMQ — vLLM publishers connect 
 ### 1. Port-Forward to the Scheduler Service
 
 ```bash
-kubectl port-forward -n ${NAMESPACE} svc/precise-prefix-cache-aware-epp 8000:8081
+kubectl port-forward -n ${NAMESPACE} svc/precise-prefix-cache-aware-epp 8000:80
 ```
 
 ### 2. Send Test Requests

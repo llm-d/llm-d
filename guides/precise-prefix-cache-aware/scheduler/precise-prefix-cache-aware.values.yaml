@@ -20,15 +20,17 @@ inferenceExtension:
 
   # Expose the ZMQ port for KV-events ingress. In central mode the scheduler
   # listens here; vLLM connects via its --kv-events-config endpoint.
-  # NOTE: extraServicePorts replaces the chart default, so http:8081 (the
-  # Envoy sidecar's HTTP listener) must be re-declared alongside zmq.
+  # NOTE: extraServicePorts replaces the chart default, so the http port
+  # (mapped to the Envoy sidecar's :8081 listener) must be re-declared
+  # alongside zmq. We expose it on Service port 80 so the same port works
+  # in standalone and gateway-mode (matches optimized-baseline #1259).
   extraContainerPorts:
     - name: zmq
       containerPort: 5556
       protocol: TCP
   extraServicePorts:
     - name: http
-      port: 8081
+      port: 80
       protocol: TCP
       targetPort: 8081
     - name: zmq

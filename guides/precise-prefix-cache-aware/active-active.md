@@ -15,24 +15,26 @@ Client ──▶  svc/<release>-epp (ClusterIP)
                      │ load-balances
          ┌───────────┴──────────────┐
          ▼                          ▼
-   pod replica 0             pod replica 1
-   ┌──────────────┐          ┌──────────────┐
-   │ envoy  :8081 │          │ envoy  :8081 │ ← gateway (proxy)
-   │ epp   :9002 │           │ epp   :9002 │  ← scheduler
-   └──────┬───────┘          └──────┬───────┘
-          │ ZMQ SUB                 │ ZMQ SUB
-          └──────────┬──────────────┘
+   pod replica 0              pod replica 1
+   ┌────────────────┐         ┌────────────────┐
+   │ envoy   :8081  │         │ envoy   :8081  │ ← gateway (proxy)
+   │ epp     :9002  │         │ epp     :9002  │ ← scheduler
+   │ tokenizer-uds  │         │ tokenizer-uds  │ ← UDS tokenizer (post-renderer)
+   └──────┬─────────┘         └──────┬─────────┘
+          │ ZMQ SUB                  │ ZMQ SUB
+          └──────────┬───────────────┘
                      │ both replicas dial every vLLM pod
-          ┌──────────┴──────────────┐
+          ┌──────────┴───────────────┐
           ▼                          ▼
-       vllm-0 (tcp://*:5556)   vllm-1 ... vllm-N
+       vllm-0 (tcp://*:5556)    vllm-1 ... vllm-N
 ```
 
-Each replica pod runs:
-- The **scheduler** (EPP) — scoring and routing decisions.
+Each replica pod runs three containers:
+- The **scheduler** (`epp`) — scoring and routing decisions.
 - An **Envoy gateway sidecar** — the public-facing proxy that clients connect to on port 8081.
+- The **UDS tokenizer sidecar** (`tokenizer-uds`) — appended by the helm post-renderer; serves the `tokenizer` plugin over a Unix socket so tokenization runs out-of-process.
 
-So `replicas: 2` means two gateway+scheduler pairs behind one Service. Both are actively serving.
+So `replicas: 2` means two gateway+scheduler+tokenizer triples behind one Service. Both are actively serving.
 
 ## Why this needs per-pod KV events
 
