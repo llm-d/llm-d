@@ -38,10 +38,11 @@ jobs:
       gateway_host: 'optimized-baseline-epp:8081'
       custom_deploy_script: |
         kubectl apply -k guides/optimized-baseline/modelserver/gpu/vllm
-        helm install inference-scheduler oci://ghcr.io/llm-d/charts/inference-scheduler \
-          --version 0.1.0-dev \
+        helm install optimized-baseline \
+          oci://registry.k8s.io/gateway-api-inference-extension/charts/standalone \
+          -f guides/recipes/scheduler/base.values.yaml \
           -f guides/optimized-baseline/scheduler/optimized-baseline.values.yaml \
-          --namespace $NAMESPACE
+          -n ${NAMESPACE} --version v1.4.0
       accelerator_type: H100
       required_gpus: 2
       recommended_gpus: 4
