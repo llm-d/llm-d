@@ -57,6 +57,11 @@ spec:
           resources:
             claims:
               - name: precise-prefix-cache-aware-gaudi-claim
+          volumeMounts:
+            # Triton/Inductor caches at /.triton, not writable under
+            # restricted SecurityContexts (e.g. OpenShift).
+            - mountPath: /.triton
+              name: triton-cache
           startupProbe:
             initialDelaySeconds: 15
             periodSeconds: 30
@@ -73,3 +78,6 @@ spec:
       resourceClaims:
         - name: precise-prefix-cache-aware-gaudi-claim
           resourceClaimTemplateName: precise-prefix-cache-aware-gaudi-claim
+      volumes:
+        - name: triton-cache
+          emptyDir: {}

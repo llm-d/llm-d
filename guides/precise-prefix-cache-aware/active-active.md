@@ -109,7 +109,7 @@ The same pattern works for the other accelerators (`amd-gpu`, `cpu`, `hpu`, `tpu
 **Both replica pods are Ready** (leader-election collapse would show only one):
 
 ```bash
-kubectl get pods -n ${NAMESPACE} -l app=precise-prefix-cache-aware-epp
+kubectl get pods -n ${NAMESPACE} -l inferencepool=precise-prefix-cache-aware-epp
 # NAME                                                    READY   STATUS
 # precise-prefix-cache-aware-epp-<hash>-aaaaa   3/3     Running
 # precise-prefix-cache-aware-epp-<hash>-bbbbb   3/3     Running
@@ -127,7 +127,7 @@ Each endpoint should have `conditions.ready: true`.
 **Each replica subscribes to every vLLM pod** — scheduler logs should show one `Ensured` line per `(replica × pod)`:
 
 ```bash
-kubectl logs -l app=precise-prefix-cache-aware-epp -n ${NAMESPACE} --all-containers \
+kubectl logs -l inferencepool=precise-prefix-cache-aware-epp -n ${NAMESPACE} --all-containers \
   | grep -E "Ensured KV-events subscriber|Removed KV-events subscriber"
 ```
 
@@ -146,7 +146,7 @@ kubectl exec -n ${NAMESPACE} <vllm-pod> -c modelserver -- \
 ```bash
 # In one terminal, send a steady stream of requests.
 # In another:
-kubectl delete pod -n ${NAMESPACE} -l app=precise-prefix-cache-aware-epp \
+kubectl delete pod -n ${NAMESPACE} -l inferencepool=precise-prefix-cache-aware-epp \
   --field-selector=metadata.name=<one-of-the-pods>
 ```
 

@@ -40,6 +40,10 @@ spec:
               value: "tcp://precise-prefix-cache-aware-epp.$(NAMESPACE).svc.cluster.local:5556"
             - name: PYTHONHASHSEED
               value: "42"
+            # Disable vLLM usage telemetry — its writes to /.config fail
+            # under restricted SecurityContexts (e.g. OpenShift).
+            - name: DO_NOT_TRACK
+              value: "1"
             - name: VLLM_CPU_KVCACHE_SPACE
               value: "32"
             - name: VLLM_CPU_NUM_OF_RESERVED_CPU
@@ -62,6 +66,10 @@ spec:
               name: dshm
             - mountPath: /.cache
               name: torch-compile-cache
+            # Triton/Inductor caches at /.triton, not writable under
+            # restricted SecurityContexts (e.g. OpenShift).
+            - mountPath: /.triton
+              name: triton-cache
           startupProbe:
             initialDelaySeconds: 15
             periodSeconds: 30
@@ -81,4 +89,6 @@ spec:
             medium: Memory
             sizeLimit: 4Gi
         - name: torch-compile-cache
+          emptyDir: {}
+        - name: triton-cache
           emptyDir: {}

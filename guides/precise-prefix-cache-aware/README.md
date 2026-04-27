@@ -153,7 +153,7 @@ curl -s http://localhost:8000/v1/completions \
 ### 3. Inspect Precise-Prefix-Cache Scores
 
 ```bash
-kubectl logs -l app=precise-prefix-cache-aware-epp -n ${NAMESPACE} --tail 200 \
+kubectl logs -l inferencepool=precise-prefix-cache-aware-epp -n ${NAMESPACE} --tail 200 \
   | grep "Calculated score" | grep "precise-prefix-cache-scorer"
 ```
 
