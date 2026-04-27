@@ -296,7 +296,7 @@ jobs:
               extra_values=(-f "guides/precise-prefix-cache-aware/scheduler/features/${feature}.values.yaml")
             fi
             echo "--- helm template ---"
-            if ! helm template precise-prefix-cache-aware-scheduler \
+            if ! helm template precise-prefix-cache-aware \
               "oci://registry.k8s.io/gateway-api-inference-extension/charts/standalone" \
               -f guides/recipes/scheduler/base.values.yaml \
               -f guides/precise-prefix-cache-aware/scheduler/precise-prefix-cache-aware.values.yaml \

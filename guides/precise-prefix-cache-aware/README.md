@@ -40,8 +40,9 @@ Two scorers make up the routing decision alongside the load-aware stack:
 
 ## Prerequisites
 
+- Install the [Gateway API Inference Extension CRDs](https://github.com/kubernetes-sigs/gateway-api-inference-extension/tree/v1.4.0/config/crd).
 - Have the [proper client tools installed on your local system](../../helpers/client-setup/README.md) to use this guide.
-- Check out the llm-d repo:
+- Checkout llm-d repo:
 
   ```bash
   export branch="main" # branch, tag, or commit hash
@@ -53,8 +54,6 @@ Two scorers make up the routing decision alongside the load-aware stack:
   ```bash
   kubectl -n ${NAMESPACE} create secret generic llm-d-hf-token --from-literal=HF_TOKEN="${HF_TOKEN}"
   ```
-
-- (Optional) Have the [Monitoring stack](../../docs/monitoring/README.md) installed on your system.
 
 ## Installation Instructions
 
@@ -73,7 +72,7 @@ This deploys the inference scheduler with an Envoy sidecar. For gateway deployme
 
 ```bash
 helm plugin install guides/precise-prefix-cache-aware/scheduler/patches/uds-tokenizer   # once
-helm install precise-prefix-cache-aware-scheduler \
+helm install precise-prefix-cache-aware \
   oci://registry.k8s.io/gateway-api-inference-extension/charts/standalone \
   -f guides/recipes/scheduler/base.values.yaml \
   -f guides/precise-prefix-cache-aware/scheduler/precise-prefix-cache-aware.values.yaml \
@@ -84,7 +83,7 @@ helm install precise-prefix-cache-aware-scheduler \
 **Helm v3** (takes a path directly):
 
 ```bash
-helm install precise-prefix-cache-aware-scheduler \
+helm install precise-prefix-cache-aware \
   oci://registry.k8s.io/gateway-api-inference-extension/charts/standalone \
   -f guides/recipes/scheduler/base.values.yaml \
   -f guides/precise-prefix-cache-aware/scheduler/precise-prefix-cache-aware.values.yaml \
@@ -94,9 +93,7 @@ helm install precise-prefix-cache-aware-scheduler \
 
 The post-renderer attaches the UDS tokenizer sidecar to the scheduler pod. The standalone chart's `sidecar.*` slot is occupied by its Envoy proxy — overriding it would lose HTTP serving — so the UDS container is appended via helm's post-render hook instead. Under the hood, the post-renderer runs `kustomize build` on the chart's rendered manifests with a small strategic merge patch that adds the `tokenizer-uds` container (image `ghcr.io/llm-d/llm-d-uds-tokenizer:v0.7.1`), two `emptyDir` volumes (`tokenizers`, `tokenizer-uds`), and a `/tmp/tokenizer` volumeMount on the existing `epp` container so the `tokenizer` plugin can reach the UDS socket.
 
-The release name `precise-prefix-cache-aware-scheduler` is load-bearing: the vLLM patches hardcode `KV_EVENTS_ENDPOINT=tcp://<release>-epp.<ns>.svc.cluster.local:5556`. If you use a different release name, patch the `KV_EVENTS_ENDPOINT` env value in your modelserver overlay to match `<release-name>-epp`.
-
-To enable Prometheus monitoring, add `-f guides/recipes/scheduler/features/monitoring.values.yaml` to the helm command.
+The release name `precise-prefix-cache-aware` is load-bearing: the vLLM patches hardcode `KV_EVENTS_ENDPOINT=tcp://<release>-epp.<ns>.svc.cluster.local:5556`. If you use a different release name, patch the `KV_EVENTS_ENDPOINT` env value in your modelserver overlay to match `<release-name>-epp`.
 
 ### 3. Deploy the Model Server
 
@@ -106,7 +103,20 @@ Apply the Kustomize overlay for your backend (defaulting to NVIDIA GPU / vLLM):
 kubectl apply -n ${NAMESPACE} -k guides/precise-prefix-cache-aware/modelserver/gpu/vllm/
 ```
 
-### 4. (Optional) Enable Active-Active High Availability
+### 4. Enable monitoring (optional)
+
+> [!NOTE]
+> GKE provides [automatic application monitoring](https://docs.cloud.google.com/kubernetes-engine/docs/how-to/configure-automatic-application-monitoring) out of the box. The llm-d [Monitoring stack](../../docs/monitoring/README.md) is not required for GKE, but it is available if you prefer to use it.
+
+- Install the [Monitoring stack](../../docs/monitoring/README.md).
+- Deploy the monitoring resources for this guide:
+
+  ```bash
+  kubectl apply -n ${NAMESPACE} -k guides/recipes/modelserver/components/monitoring
+  ```
+- Enable Prometheus scrape for the scheduler by layering `-f guides/recipes/scheduler/features/monitoring.values.yaml` onto the helm command in step 2.
+
+### 5. (Optional) Enable Active-Active High Availability
 
 The default single-replica install uses central ZMQ — vLLM publishers connect into the scheduler service. To run two scheduler replicas simultaneously (each with its own Envoy gateway sidecar) behind a single load-balancing Service, see [active-active.md](active-active.md).
 
@@ -115,7 +125,7 @@ The default single-replica install uses central ZMQ — vLLM publishers connect 
 ### 1. Port-Forward to the Scheduler Service
 
 ```bash
-kubectl port-forward -n ${NAMESPACE} svc/precise-prefix-cache-aware-scheduler-epp 8000:8081
+kubectl port-forward -n ${NAMESPACE} svc/precise-prefix-cache-aware-epp 8000:8081
 ```
 
 ### 2. Send Test Requests
@@ -143,7 +153,7 @@ curl -s http://localhost:8000/v1/completions \
 ### 3. Inspect Precise-Prefix-Cache Scores
 
 ```bash
-kubectl logs -l app=precise-prefix-cache-aware-scheduler-epp -n ${NAMESPACE} --tail 200 \
+kubectl logs -l app=precise-prefix-cache-aware-epp -n ${NAMESPACE} --tail 200 \
   | grep "Calculated score" | grep "precise-prefix-cache-scorer"
 ```
 
@@ -169,7 +179,7 @@ curl -LJO "https://raw.githubusercontent.com/llm-d/llm-d/main/guides/precise-pre
 ### 3. Execute Benchmark
 
 ```bash
-export GATEWAY_SVC=precise-prefix-cache-aware-scheduler-epp
+export GATEWAY_SVC=precise-prefix-cache-aware-epp
 envsubst < guide.yaml > config.yaml
 ./run_only.sh -c config.yaml -o ./results
 ```
@@ -177,7 +187,7 @@ envsubst < guide.yaml > config.yaml
 ## Cleanup
 
 ```bash
-helm uninstall precise-prefix-cache-aware-scheduler -n ${NAMESPACE}
+helm uninstall precise-prefix-cache-aware -n ${NAMESPACE}
 kubectl delete -n ${NAMESPACE} -k guides/precise-prefix-cache-aware/modelserver/gpu/vllm/
 ```
 

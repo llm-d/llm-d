@@ -69,7 +69,7 @@ Layer [`scheduler/features/active-active.values.yaml`](scheduler/features/active
 # Helm v4: register the post-renderer plugin once (same plugin as the default install)
 helm plugin install guides/precise-prefix-cache-aware/scheduler/patches/uds-tokenizer 2>/dev/null || true
 
-helm install precise-prefix-cache-aware-scheduler \
+helm install precise-prefix-cache-aware \
   oci://registry.k8s.io/gateway-api-inference-extension/charts/standalone \
   -f guides/recipes/scheduler/base.values.yaml \
   -f guides/precise-prefix-cache-aware/scheduler/precise-prefix-cache-aware.values.yaml \
@@ -109,16 +109,16 @@ The same pattern works for the other accelerators (`amd`, `cpu`, `hpu`, `tpu-v6`
 **Both replica pods are Ready** (leader-election collapse would show only one):
 
 ```bash
-kubectl get pods -n ${NAMESPACE} -l app=precise-prefix-cache-aware-scheduler-epp
+kubectl get pods -n ${NAMESPACE} -l app=precise-prefix-cache-aware-epp
 # NAME                                                    READY   STATUS
-# precise-prefix-cache-aware-scheduler-epp-<hash>-aaaaa   3/3     Running
-# precise-prefix-cache-aware-scheduler-epp-<hash>-bbbbb   3/3     Running
+# precise-prefix-cache-aware-epp-<hash>-aaaaa   3/3     Running
+# precise-prefix-cache-aware-epp-<hash>-bbbbb   3/3     Running
 ```
 
 **Both pods receive traffic** — the Service endpoints list both:
 
 ```bash
-kubectl get endpointslices -n ${NAMESPACE} -l kubernetes.io/service-name=precise-prefix-cache-aware-scheduler-epp -o yaml \
+kubectl get endpointslices -n ${NAMESPACE} -l kubernetes.io/service-name=precise-prefix-cache-aware-epp -o yaml \
   | grep -E "^\s*- addresses:|ready: "
 ```
 
@@ -127,7 +127,7 @@ Each endpoint should have `conditions.ready: true`.
 **Each replica subscribes to every vLLM pod** — scheduler logs should show one `Ensured` line per `(replica × pod)`:
 
 ```bash
-kubectl logs -l app=precise-prefix-cache-aware-scheduler-epp -n ${NAMESPACE} --all-containers \
+kubectl logs -l app=precise-prefix-cache-aware-epp -n ${NAMESPACE} --all-containers \
   | grep -E "Ensured KV-events subscriber|Removed KV-events subscriber"
 ```
 
@@ -146,7 +146,7 @@ kubectl exec -n ${NAMESPACE} <vllm-pod> -c modelserver -- \
 ```bash
 # In one terminal, send a steady stream of requests.
 # In another:
-kubectl delete pod -n ${NAMESPACE} -l app=precise-prefix-cache-aware-scheduler-epp \
+kubectl delete pod -n ${NAMESPACE} -l app=precise-prefix-cache-aware-epp \
   --field-selector=metadata.name=<one-of-the-pods>
 ```
 
