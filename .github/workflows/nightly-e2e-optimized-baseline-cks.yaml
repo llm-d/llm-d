@@ -31,12 +31,17 @@ concurrency:
 jobs:
   nightly:
     if: github.repository == 'llm-d/llm-d'
-    uses: llm-d/llm-d-infra/.github/workflows/reusable-nightly-e2e-cks-helmfile.yaml@main
+    uses: llm-d/llm-d-infra/.github/workflows/reusable-nightly-e2e-cks.yaml@main
     with:
       guide_name: optimized-baseline
       namespace: llm-d-nightly-inference-cks
-      helmfile_env: ${{ github.event.inputs.helmfile_env || 'istio' }}
-      gateway_type: ${{ github.event.inputs.helmfile_env || 'istio' }}
+      gateway_host: 'optimized-baseline-epp:8081'
+      custom_deploy_script: |
+        kubectl apply -k guides/optimized-baseline/modelserver/gpu/vllm
+        helm install inference-scheduler oci://ghcr.io/llm-d/charts/inference-scheduler \
+          --version 0.1.0-dev \
+          -f guides/optimized-baseline/scheduler/optimized-baseline.values.yaml \
+          --namespace $NAMESPACE
       accelerator_type: H100
       required_gpus: 2
       recommended_gpus: 4

@@ -110,7 +110,7 @@ jobs:
   nightly:
     needs: build-wva-image
     if: github.repository == 'llm-d/llm-d' && always() && (needs.build-wva-image.result == 'success' || needs.build-wva-image.result == 'skipped')
-    uses: llm-d/llm-d-infra/.github/workflows/reusable-nightly-e2e-cks-helmfile.yaml@main
+    uses: llm-d/llm-d-infra/.github/workflows/reusable-nightly-e2e-cks.yaml@main
     with:
       guide_name: workload-autoscaling
       namespace: llm-d-nightly-wva
