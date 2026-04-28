@@ -677,7 +677,7 @@ jobs:
       - name: Run Trivy vulnerability scanner
         if: ${{ steps.should-run.outputs.os_succeeded == 'true' }}
         continue-on-error: true
-        uses: aquasecurity/trivy-action@v0.35.0
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           image-ref: >-
             ${{ env.REGISTRY }}/${{ github.repository }}-cuda-dev${{ matrix.image_suffix }}@${{
@@ -1009,7 +1009,7 @@ jobs:
       - name: Run Trivy vulnerability scanner
         if: ${{ steps.should-run.outputs.rhel_ok == 'true' }}
         continue-on-error: true
-        uses: aquasecurity/trivy-action@v0.35.0
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           image-ref: >-
             ${{ env.REGISTRY }}/${{ github.repository }}-aws-dev@${{
@@ -1109,7 +1109,7 @@ jobs:
           github-token: ${{ secrets.GHCR_TOKEN }}
 
       - name: Run Trivy vulnerability scanner
-        uses: aquasecurity/trivy-action@v0.35.0
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           image-ref: ${{ env.REGISTRY }}/${{ github.repository }}-rdma-tools-dev@${{ steps.build-and-push.outputs.digest }}
           format: "sarif"
@@ -1211,7 +1211,7 @@ jobs:
           BUILDKIT_PROGRESS: "plain"
 
       - name: Run Trivy vulnerability scanner
-        uses: aquasecurity/trivy-action@v0.35.0
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           image-ref: ${{ env.REGISTRY }}/${{ github.repository }}-xpu-dev:${{ steps.set-tag.outputs.tag }}
           format: "sarif"
@@ -1289,7 +1289,7 @@ jobs:
           BUILDKIT_PROGRESS: "plain"
 
       - name: Run Trivy vulnerability scanner
-        uses: aquasecurity/trivy-action@v0.35.0
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           image-ref: ${{ env.REGISTRY }}/${{ github.repository }}-rocm-dev:${{ steps.set-tag.outputs.tag }}
           format: 'sarif'
@@ -1366,7 +1366,7 @@ jobs:
           VERSION="${NEW_TAG}" make image-push
 
       - name: Run Trivy vulnerability scanner
-        uses: aquasecurity/trivy-action@v0.35.0
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           image-ref: ${{ env.REGISTRY }}/${{ github.repository }}-hpu-dev:${{ steps.build-and-push.outputs.tag }}
           format: 'sarif'
@@ -1462,7 +1462,7 @@ jobs:
           BUILDKIT_PROGRESS: "plain"
 
       - name: Run Trivy vulnerability scanner
-        uses: aquasecurity/trivy-action@v0.35.0
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           image-ref: ${{ env.REGISTRY }}/${{ github.repository }}-cpu-dev:${{ steps.set-tag.outputs.tag }}
           format: "sarif"
