@@ -34,19 +34,21 @@ jobs:
     uses: llm-d/llm-d-infra/.github/workflows/reusable-nightly-e2e-openshift.yaml@main
     with:
       guide_name: optimized-baseline
-      namespace: llm-d-nightly-inference
-      helmfile_env: ${{ github.event.inputs.helmfile_env || 'istio' }}
-      gateway_type: ${{ github.event.inputs.helmfile_env || 'istio' }}
+      namespace: llm-d-nightly-inference-ocp
+      gateway_host: 'optimized-baseline-epp'
+      custom_deploy_script: |
+        kubectl apply -k guides/optimized-baseline/modelserver/gpu/vllm -n ${NAMESPACE}
+        helm install optimized-baseline \
+          oci://registry.k8s.io/gateway-api-inference-extension/charts/standalone \
+          -f guides/recipes/scheduler/base.values.yaml \
+          -f guides/optimized-baseline/scheduler/optimized-baseline.values.yaml \
+          -n ${NAMESPACE} --version v1.4.0
       accelerator_type: H100
-      required_gpus: 16
-      recommended_gpus: 16
-      pod_wait_timeout: '60m'
+      required_gpus: 2 
+      recommended_gpus: 4
+      pod_wait_timeout: '30m'
       pod_readiness_delay: 180
       image_override: 'ghcr.io/llm-d/llm-d-cuda-dev:latest'
       allow_gpu_preemption: true
-      install_gateway_provider: false
       skip_cleanup: ${{ github.event.inputs.skip_cleanup == 'true' }}
-      pre_deploy_script: |
-        echo "Running pre_deploy_script..."
-        echo "Completed run of pre_deploy_script"
     secrets: inherit
