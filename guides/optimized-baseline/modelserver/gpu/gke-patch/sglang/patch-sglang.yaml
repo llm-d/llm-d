@@ -1,7 +1,7 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: decode
+  name: optimized-baseline-nvidia-gpu-sglang-decode
 spec:
   replicas: 8
   template:
