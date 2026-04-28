@@ -47,7 +47,7 @@ Two scorers make up the routing decision alongside the load-aware stack:
 ## Prerequisites
 
 - Install the [Gateway API Inference Extension CRDs](https://github.com/kubernetes-sigs/gateway-api-inference-extension/tree/v1.4.0/config/crd).
-- Have the [proper client tools installed on your local system](../../helpers/client-setup/README.md). The post-renderer plugin invokes `kustomize` directly, so a standalone `kustomize` binary (v5+) must be on `$PATH` in addition to `helm` and `kubectl`.
+- Have the [proper client tools installed on your local system](../../helpers/client-setup/README.md). This guide requires **Helm v4** (the post-renderer plugin uses the v4 plugin manifest format) and a standalone `kustomize` binary (v5+) on `$PATH`, in addition to `kubectl`.
 - Check out the llm-d repo:
 
   ```bash
@@ -76,8 +76,6 @@ kubectl -n ${NAMESPACE} create secret generic llm-d-hf-token --from-literal=HF_T
 
 This deploys the inference scheduler with an Envoy sidecar — no Kubernetes Gateway required.
 
-**Helm v4** (current release):
-
 ```bash
 helm plugin install guides/precise-prefix-cache-aware/scheduler/patches/uds-tokenizer   # once
 helm install precise-prefix-cache-aware \
@@ -88,20 +86,14 @@ helm install precise-prefix-cache-aware \
   -n ${NAMESPACE} --version v1.4.0
 ```
 
-**Helm v3** (takes a path directly):
+The release name `precise-prefix-cache-aware` is mandatory for standard deployments. The vLLM patches hardcode the endpoint as `KV_EVENTS_ENDPOINT=tcp://<release>-epp.<ns>.svc.cluster.local:5556`. If you choose a custom release name, you must manually update the `KV_EVENTS_ENDPOINT` environment variable in your modelserver overlay to match `<your-release-name>-epp`.
 
-```bash
-helm install precise-prefix-cache-aware \
-  oci://registry.k8s.io/gateway-api-inference-extension/charts/standalone \
-  -f guides/recipes/scheduler/base.values.yaml \
-  -f guides/precise-prefix-cache-aware/scheduler/precise-prefix-cache-aware.values.yaml \
-  --post-renderer ./guides/precise-prefix-cache-aware/scheduler/patches/uds-tokenizer/post-renderer.sh \
-  -n ${NAMESPACE} --version v1.4.0
-```
+<details>
+<summary><b>Why a helm post-renderer is required (chart limitation)</b></summary>
 
-The post-renderer attaches the UDS tokenizer sidecar to the scheduler pod. The standalone chart's `sidecar.*` slot is occupied by its Envoy proxy — overriding it would lose HTTP serving — so the UDS container is appended via helm's post-render hook instead. Under the hood, the post-renderer runs `kustomize build` on the chart's rendered manifests with a small strategic merge patch that adds the `tokenizer-uds` container (image `ghcr.io/llm-d/llm-d-uds-tokenizer:v0.7.1`), two `emptyDir` volumes (`tokenizers`, `tokenizer-uds`), and a `/tmp/tokenizer` volumeMount on the existing `epp` container so the `tokenizer` plugin can reach the UDS socket.
+The standalone chart's `sidecar.*` slot is occupied by its Envoy proxy — overriding it would lose HTTP serving — so the UDS tokenizer container is appended via a helm post-render hook instead. The post-renderer runs `kustomize build` on the chart's rendered manifests with a strategic merge patch that adds the `tokenizer-uds` container (image `ghcr.io/llm-d/llm-d-uds-tokenizer:v0.7.1`), two `emptyDir` volumes (`tokenizers`, `tokenizer-uds`), and a `/tmp/tokenizer` volumeMount on the existing `epp` container so the `tokenizer` plugin can reach the UDS socket. Tracking removal of this workaround upstream — once the chart supports multiple sidecars natively, the post-renderer goes away.
 
-The release name `precise-prefix-cache-aware` is mandatory for standard deployments. The vLLM patches hardcode the endpoint as `KV_EVENTS_ENDPOINT=tcp://<release>-epp.<ns>.svc.cluster.local:5556`. If you choose a custom release name, you must manually update the `KV_EVENTS_ENDPOINT` environment variable in your modelserver overlay to match `<your-release-name>-epp`
+</details>
 
 <details>
 <summary><h4>Gateway Mode</h4></summary>
@@ -124,8 +116,6 @@ To use a Kubernetes Gateway managed proxy instead of the standalone Envoy sideca
      --post-renderer uds-tokenizer \
      -n ${NAMESPACE} --version v1.4.0
    ```
-
-   (helm v3 users substitute the path-based `--post-renderer ./guides/precise-prefix-cache-aware/scheduler/patches/uds-tokenizer/post-renderer.sh` form.)
 
 </details>
 
@@ -156,42 +146,45 @@ The default single-replica install uses central ZMQ — vLLM publishers connect 
 
 ## Verification
 
-### 1. Port-Forward to the Scheduler Service
+### 1. Get the IP of the Proxy
+
+**Standalone Mode**
 
 ```bash
-kubectl port-forward -n ${NAMESPACE} svc/precise-prefix-cache-aware-epp 8000:8081
+export IP=$(kubectl get service precise-prefix-cache-aware-epp -n ${NAMESPACE} -o jsonpath='{.spec.clusterIP}')
 ```
+
+<details>
+<summary><b>Gateway Mode</b></summary>
+
+```bash
+export IP=$(kubectl get gateway llm-d-inference-gateway -n ${NAMESPACE} -o jsonpath='{.status.addresses[0].value}')
+```
+
+</details>
 
 ### 2. Send Test Requests
 
-In a separate terminal:
-
-**List available models:**
-```bash
-curl -s http://localhost:8000/v1/models | jq
-```
-
-**Send a completion request** (long prompt so the prefix cache has something to grip on):
-```bash
-export LONG_TEXT_200_WORDS="Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum. Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum."
-
-curl -s http://localhost:8000/v1/completions \
-  -H "Content-Type: application/json" \
-  -d '{
-    "model": "Qwen/Qwen3-32B",
-    "prompt": "'"$LONG_TEXT_200_WORDS"'",
-    "max_tokens": 50
-  }' | jq
-```
-
-### 3. Inspect Precise-Prefix-Cache Scores
+**Open a temporary interactive shell inside the cluster:**
 
 ```bash
-kubectl logs -l inferencepool=precise-prefix-cache-aware-epp -n ${NAMESPACE} --tail 200 \
-  | grep "Calculated score" | grep "precise-prefix-cache-scorer"
+kubectl run curl-debug --rm -it \
+    --image=cfmanteiga/alpine-bash-curl-jq \
+    --env="IP=$IP" \
+    --env="NAMESPACE=$NAMESPACE" \
+    -- /bin/bash
 ```
 
-On the first request through a fresh deployment all pods return `score: 0`. Re-send the **same** prompt — the pod that served it first should now return `score: 1`, confirming the KV blocks it allocated were indexed via the event stream.
+**Send a completion request:**
+
+```bash
+curl -X POST http://${IP}/v1/completions \
+    -H 'Content-Type: application/json' \
+    -d '{
+        "model": "Qwen/Qwen3-32B",
+        "prompt": "How are you today?"
+    }' | jq
+```
 
 ## Benchmarking
 
@@ -217,8 +210,7 @@ curl -LJO "https://raw.githubusercontent.com/llm-d/llm-d/main/guides/precise-pre
 ### 3. Execute Benchmark
 
 ```bash
-export GATEWAY_SVC=precise-prefix-cache-aware-epp
-export PORT=8081
+export IP=$(kubectl get service precise-prefix-cache-aware-epp -n ${NAMESPACE} -o jsonpath='{.spec.clusterIP}')
 envsubst < guide.yaml > config.yaml
 ./run_only.sh -c config.yaml -o ./results
 ```

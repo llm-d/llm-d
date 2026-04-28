@@ -70,7 +70,7 @@ The chart auto-adds `--ha-enable-leader-election` whenever `replicas > 1`. With 
 Layer [`scheduler/features/active-active.values.yaml`](scheduler/features/active-active.values.yaml) on top of the base values file. It replaces `pluginsCustomConfig` wholesale (helm doesn't merge YAML strings), bumps `inferenceExtension.replicas` to 2, and disables leader election.
 
 ```bash
-# Helm v4: register the post-renderer plugin once (same plugin as the default install)
+# Register the post-renderer plugin once (same plugin as the default install)
 helm plugin install guides/precise-prefix-cache-aware/scheduler/patches/uds-tokenizer 2>/dev/null || true
 
 helm install precise-prefix-cache-aware \
@@ -81,8 +81,6 @@ helm install precise-prefix-cache-aware \
   --post-renderer uds-tokenizer \
   -n ${NAMESPACE} --version v1.4.0
 ```
-
-On helm v3, replace `--post-renderer uds-tokenizer` with `--post-renderer ./guides/precise-prefix-cache-aware/scheduler/patches/uds-tokenizer/post-renderer.sh` — see [README.md](README.md#2-deploy-the-standalone-inference-scheduler) for the details.
 
 Bump `inferenceExtension.replicas` higher if you want more than two active replicas.
 
@@ -109,14 +107,9 @@ kubectl get pods -n ${NAMESPACE} -l inferencepool=precise-prefix-cache-aware-epp
 
 `READY 3/3` means each pod has all three containers up (envoy + epp + tokenizer-uds). If only one pod ever reaches Ready while the other stays at `2/3`, the leader-election workaround failed — check that `--ha-enable-leader-election=false` made it onto the EPP container's args.
 
-Send a test request to the Service ClusterIP:
+Send a test request to the Service ClusterIP — the same `${IP}` env var pattern from the [main verification section](README.md#verification) works here, since active-active uses the same `precise-prefix-cache-aware-epp` Service. Both replicas will appear as endpoints; the Service load-balances across them.
 
-```bash
-SVC_IP=$(kubectl get svc -n ${NAMESPACE} precise-prefix-cache-aware-epp -o jsonpath='{.spec.clusterIP}')
-curl -s "http://${SVC_IP}:8081/v1/models" | jq
-```
-
-A second identical completion request through the same Service should produce a non-zero `precise-prefix-cache-scorer` score on the cache-warm pod (see the [main verification section](README.md#verification)).
+A second identical completion request through the same Service should bump `kvcache_index_lookup_hits_total` on the replica that handles it, confirming both replicas have built their index from the per-pod KV events.
 
 ## Tradeoffs vs. the default
 

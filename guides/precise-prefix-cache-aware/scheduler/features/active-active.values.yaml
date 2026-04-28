@@ -39,7 +39,6 @@ inferenceExtension:
   replicas: 2
 
   flags:
-    v: 4
     # Override the chart's auto-added `--ha-enable-leader-election` (added
     # whenever replicas > 1). Without this override only the elected leader's
     # readiness probe passes, collapsing the deployment to active-passive.

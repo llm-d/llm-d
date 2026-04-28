@@ -15,8 +15,6 @@ inferenceExtension:
     hub: ghcr.io/llm-d
     tag: v0.8.0-rc.1
     pullPolicy: IfNotPresent
-  flags:
-    v: 4
 
   # Expose the ZMQ port for KV-events ingress. In central mode the scheduler
   # listens here; vLLM connects via its --kv-events-config endpoint.
