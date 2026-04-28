@@ -1,0 +1,7 @@
+# TODO(Remove this patch once https://github.com/llm-d/llm-d/pull/1147 is built to the llm-d image).
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ../../vllm
+patches:
+  - path: patch-vllm.yaml

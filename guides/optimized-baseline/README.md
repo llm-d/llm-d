@@ -49,6 +49,7 @@ This guide includes configurations for the following accelerators:
     export branch="main" # branch, tag, or commit hash
     git clone https://github.com/llm-d/llm-d.git && cd llm-d && git checkout ${branch}
   ```
+
 - Set the following environment variables:
   ```bash
     export GAIE_VERSION=v1.4.0
@@ -61,6 +62,7 @@ This guide includes configurations for the following accelerators:
   ```bash
     kubectl apply -k "https://github.com/kubernetes-sigs/gateway-api-inference-extension/config/crd?ref=${GAIE_VERSION}"
   ```
+
 - Create a target namespace for the installation
   ```bash
       kubectl create namespace ${NAMESPACE}
@@ -87,8 +89,8 @@ helm install ${GUIDE_NAME} \
 
 To use a Kubernetes Gateway managed proxy rather than the standalone version, follow these steps instead of applying the previous Helm chart:
 
-1. *Deploy a Kubernetes Gateway* named by following one of [the gateway guides](../prereq/gateways).
-2. *Deploy the inference scheduler and an HTTPRoute* that connects it to the Gateway as follows:
+1. _Deploy a Kubernetes Gateway_ named by following one of [the gateway guides](../prereq/gateways).
+2. _Deploy the inference scheduler and an HTTPRoute_ that connects it to the Gateway as follows:
 
 ```bash
 export PROVIDER_NAME=gke # options: none, gke, agentgateway, istio
@@ -104,7 +106,6 @@ helm install ${GUIDE_NAME} \
 
 </details>
 
-
 ### 2. Deploy the Model Server
 
 Apply the Kustomize overlays for your specific backend (defaulting to NVIDIA GPU / vLLM):
@@ -112,6 +113,19 @@ Apply the Kustomize overlays for your specific backend (defaulting to NVIDIA GPU
 ```bash
 kubectl apply -n ${NAMESPACE} -k guides/${GUIDE_NAME}/modelserver/gpu/vllm/
 ```
+
+<details>
+<summary><h4>If you run into NCCL errors on GKE</h4></summary>
+
+Try applying the patch:
+
+```bash
+kubectl apply -n ${NAMESPACE} -k guides/${GUIDE_NAME}/modelserver/gpu/gke-patch/vllm/
+```
+
+See [gke-patch/README.md](./modelserver/gpu/gke-patch/README.md) for more details.
+
+</details>
 
 ### 3. Enable monitoring (optional)
 
@@ -141,6 +155,7 @@ export IP=$(kubectl get service ${GUIDE_NAME}-epp -n ${NAMESPACE} -o jsonpath='{
 ```bash
 export IP=$(kubectl get gateway llm-d-inference-gateway -n ${NAMESPACE} -o jsonpath='{.status.addresses[0].value}')
 ```
+
 </details>
 
 ### 2. Send Test Requests
@@ -201,6 +216,7 @@ export IP=$(kubectl get service ${GUIDE_NAME}-epp  -n ${NAMESPACE} -o jsonpath='
 ```bash
 export IP=$(kubectl get gateway llm-d-inference-gateway  -n ${NAMESPACE} -o jsonpath='{.status.addresses[0].value}')
 ```
+
 </details>
 
 ```bash
