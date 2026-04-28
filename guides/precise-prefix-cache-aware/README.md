@@ -8,7 +8,7 @@ This guide routes requests on precise per-pod KV-cache state rather than request
 
 Two scorers make up the routing decision alongside the load-aware stack:
 
-- **Precise prefix-cache aware** — the [precise-prefix-cache-scorer](https://github.com/llm-d/llm-d-inference-scheduler/tree/main/pkg/epp/framework/plugins/scheduling/scorer/preciseprefixcache) indexes real KV-block events from vLLM and returns the exact resident-block fraction.
+- **Precise prefix-cache aware** — the [precise-prefix-cache-scorer](https://github.com/llm-d/llm-d-inference-scheduler/tree/main/pkg/epp/framework/plugins/scheduling/scorer/preciseprefixcache) indexes real KV-block events from vLLM and returns the exact resident-block fraction. Indexer internals (event ingestion, block hashing, dual-key design) are documented in [llm-d-kv-cache architecture](https://github.com/llm-d/llm-d-kv-cache/blob/main/docs/architecture.md).
 - **Load-aware** — the [kv-cache utilization](https://github.com/llm-d/llm-d-inference-scheduler/tree/main/pkg/epp/framework/plugins/scheduling/scorer/kvcacheutilization) and [queue size](https://github.com/llm-d/llm-d-inference-scheduler/tree/main/pkg/epp/framework/plugins/scheduling/scorer/queuedepth) scorers balance against pod pressure.
 
 ## Default Configuration
@@ -16,7 +16,7 @@ Two scorers make up the routing decision alongside the load-aware stack:
 | Parameter           | Value                                                   |
 |---------------------|---------------------------------------------------------|
 | Model               | [Qwen/Qwen3-32B](https://huggingface.co/Qwen/Qwen3-32B) |
-| Replicas            | 8                                                       |
+| Replicas            | 8 (reduce for smaller fleets — see notes below)         |
 | Tensor Parallelism  | 2                                                       |
 | GPUs per replica    | 2                                                       |
 | Total GPUs          | 16                                                      |
@@ -38,21 +38,18 @@ Two scorers make up the routing decision alongside the load-aware stack:
 > [!NOTE]
 > Some hardware variants use reduced configurations (fewer replicas, smaller models) to enable CI testing for compatibility and regression checks. For precise prefix cache scoring to match reality, the `tokenizer` `modelName` and the scorer's `indexerConfig.tokenizersPoolConfig.modelName` in [`scheduler/precise-prefix-cache-aware.values.yaml`](scheduler/precise-prefix-cache-aware.values.yaml) must match the model the overlay deploys. HPU and anything that tunes `--block-size` also requires updating `tokenProcessorConfig.blockSize` on the scheduler side.
 
+> [!NOTE]
+> The `gpu/vllm/` overlay defaults to 8 replicas to match the canonical 16×H100 benchmark. For smaller fleets (or quick smoke tests), reduce `replicas` in the deployment patch (`modelserver/gpu/vllm/patch-vllm.yaml`) before applying.
+
 ## Prerequisites
 
-- Install the [Gateway API Inference Extension CRDs](https://github.com/kubernetes-sigs/gateway-api-inference-extension/tree/v1.4.0/config/crd)
-- Have the [proper client tools installed on your local system](../../helpers/client-setup/README.md) to use this guide.
-- Checkout llm-d repo:
+- Install the [Gateway API Inference Extension CRDs](https://github.com/kubernetes-sigs/gateway-api-inference-extension/tree/v1.4.0/config/crd).
+- Have the [proper client tools installed on your local system](../../helpers/client-setup/README.md). The post-renderer plugin invokes `kustomize` directly, so a standalone `kustomize` binary (v5+) must be on `$PATH` in addition to `helm` and `kubectl`.
+- Check out the llm-d repo:
 
   ```bash
-    export branch="main" # branch, tag, or commit hash
-    git clone https://github.com/llm-d/llm-d.git && cd llm-d && git checkout ${branch}
-  ```
-
-- Create the `llm-d-hf-token` secret (the UDS tokenizer sidecar reads `HF_TOKEN` to reach gated tokenizers — Qwen/Qwen3-32B is public but the secret makes swapping in a gated model a no-op):
-
-  ```bash
-  kubectl -n ${NAMESPACE} create secret generic llm-d-hf-token --from-literal=HF_TOKEN="${HF_TOKEN}"
+  export branch="main" # branch, tag, or commit hash
+  git clone https://github.com/llm-d/llm-d.git && cd llm-d && git checkout ${branch}
   ```
 
 ## Installation Instructions
@@ -62,6 +59,12 @@ Two scorers make up the routing decision alongside the load-aware stack:
 ```bash
 export NAMESPACE=llm-d-precise
 kubectl create namespace ${NAMESPACE}
+```
+
+Create the `llm-d-hf-token` secret in the namespace. The UDS tokenizer sidecar reads `HF_TOKEN` to reach gated tokenizers — Qwen/Qwen3-32B is public but the secret makes swapping in a gated model a no-op. See [helpers/hf-token.md](../../helpers/hf-token.md) for the full helper.
+
+```bash
+kubectl -n ${NAMESPACE} create secret generic llm-d-hf-token --from-literal=HF_TOKEN="${HF_TOKEN}"
 ```
 
 ### 2. Deploy the Inference Scheduler

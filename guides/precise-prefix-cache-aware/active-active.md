@@ -38,7 +38,7 @@ So `replicas: 2` means two gateway+scheduler+tokenizer triples behind one Servic
 
 ## Why this needs per-pod KV events
 
-Each scheduler replica has its own in-memory prefix-cache index. To populate every replica's index identically, every vLLM pod must publish its KV events on its own socket (`tcp://*:5556`), and every scheduler replica must independently subscribe to every pod. The central ZMQ mode can't do this — each vLLM ZMQ PUB socket connects to exactly one SUB endpoint.
+Each scheduler replica has its own in-memory prefix-cache index. To populate every replica's index identically, every vLLM pod must publish its KV events on its own socket (`tcp://*:5556`), and every scheduler replica must independently subscribe to every pod. The central ZMQ mode can't do this — each vLLM ZMQ PUB socket connects to exactly one SUB endpoint. Indexer write-path internals (event ingestion, sharded workers, dual-key design) are documented in [llm-d-kv-cache architecture](https://github.com/llm-d/llm-d-kv-cache/blob/main/docs/architecture.md).
 
 [llm-d-inference-scheduler#862](https://github.com/llm-d/llm-d-inference-scheduler/pull/862)'s data-layer `EndpointExtractor` handles the per-pod subscriber lifecycle: endpoint add/delete events from the `endpoint-notification-source` are fed into the scorer's `ExtractEndpoint`, which installs or removes a ZMQ subscriber per pod. No opportunistic subscribe-on-score, no TTL-cache hack.
 
@@ -56,6 +56,8 @@ Each scheduler replica has its own in-memory prefix-cache index. To populate eve
 | vLLM pod port `5556`                   | (not exposed)                                            | exposed as `kv-events`                              |
 
 Flipping the scheduler side alone won't help — without the modelserver change, vLLM is still pushing to the central service and per-pod scorers see nothing. Both sides must move together.
+
+The longer-term plan is to make pod-discovery the only mode and collapse this distinction. We're keeping central as the default while the per-pod path matures.
 
 ### Leader election
 
@@ -86,79 +88,41 @@ Bump `inferenceExtension.replicas` higher if you want more than two active repli
 
 ### Model server
 
-Apply the [`modelserver/components/active-active/`](modelserver/components/active-active) kustomize Component on top of your chosen accelerator overlay. It overrides `KV_EVENTS_ENDPOINT` to `tcp://*:5556` and exposes container port 5556 so the schedulers can dial each pod.
-
-Make a small sibling overlay and apply it:
+Apply the bundled active-active overlay at [`modelserver/active-active/`](modelserver/active-active). It pulls in the NVIDIA GPU + vLLM base and layers the `active-active` kustomize component, which overrides `KV_EVENTS_ENDPOINT` to `tcp://*:5556` and exposes container port 5556 so the schedulers can dial each pod.
 
 ```bash
-mkdir -p my-overlays/gpu-active-active
-cat > my-overlays/gpu-active-active/kustomization.yaml <<'EOF'
-apiVersion: kustomize.config.k8s.io/v1beta1
-kind: Kustomization
-resources:
-  - ../../guides/precise-prefix-cache-aware/modelserver/gpu/vllm
-components:
-  - ../../guides/precise-prefix-cache-aware/modelserver/components/active-active
-EOF
-
-kubectl apply -n ${NAMESPACE} -k my-overlays/gpu-active-active
+kubectl apply -n ${NAMESPACE} -k guides/precise-prefix-cache-aware/modelserver/active-active/
 ```
 
-The same pattern works for the other accelerators (`amd`, `cpu`, `hpu`, `tpu-v6`, `tpu-v7`, `xpu`).
+For other accelerators (`amd`, `cpu`, `hpu`, `tpu-v6`, `tpu-v7`, `xpu`), copy [`modelserver/active-active/kustomization.yaml`](modelserver/active-active/kustomization.yaml) and change the `resources` path to point at the chosen base overlay.
 
 ## Verifying active-active
 
-**Both replica pods are Ready** (leader-election collapse would show only one):
+Confirm both replica pods are Ready and the Service load-balances across them:
 
 ```bash
 kubectl get pods -n ${NAMESPACE} -l inferencepool=precise-prefix-cache-aware-epp
-# NAME                                                    READY   STATUS
+# NAME                                          READY   STATUS
 # precise-prefix-cache-aware-epp-<hash>-aaaaa   3/3     Running
 # precise-prefix-cache-aware-epp-<hash>-bbbbb   3/3     Running
 ```
 
-**Both pods receive traffic** — the Service endpoints list both:
+`READY 3/3` means each pod has all three containers up (envoy + epp + tokenizer-uds). If only one pod ever reaches Ready while the other stays at `2/3`, the leader-election workaround failed — check that `--ha-enable-leader-election=false` made it onto the EPP container's args.
+
+Send a test request to the Service ClusterIP:
 
 ```bash
-kubectl get endpointslices -n ${NAMESPACE} -l kubernetes.io/service-name=precise-prefix-cache-aware-epp -o yaml \
-  | grep -E "^\s*- addresses:|ready: "
+SVC_IP=$(kubectl get svc -n ${NAMESPACE} precise-prefix-cache-aware-epp -o jsonpath='{.spec.clusterIP}')
+curl -s "http://${SVC_IP}:8081/v1/models" | jq
 ```
 
-Each endpoint should have `conditions.ready: true`.
-
-**Each replica subscribes to every vLLM pod** — scheduler logs should show one `Ensured` line per `(replica × pod)`:
-
-```bash
-kubectl logs -l inferencepool=precise-prefix-cache-aware-epp -n ${NAMESPACE} --all-containers \
-  | grep -E "Ensured KV-events subscriber|Removed KV-events subscriber"
-```
-
-Delete a vLLM pod and watch for a matching `Removed` line before the replacement comes up — that confirms `ExtractEndpoint` is wired to endpoint lifecycle events.
-
-**Each vLLM pod's ZMQ socket is listening**:
-
-```bash
-kubectl exec -n ${NAMESPACE} <vllm-pod> -c modelserver -- \
-  netstat -tln | grep 5556
-# tcp6  0  0  :::5556  :::*  LISTEN
-```
-
-**Failover test** — delete one scheduler replica and observe that requests still succeed:
-
-```bash
-# In one terminal, send a steady stream of requests.
-# In another:
-kubectl delete pod -n ${NAMESPACE} -l inferencepool=precise-prefix-cache-aware-epp \
-  --field-selector=metadata.name=<one-of-the-pods>
-```
-
-The Service removes the deleted pod from its endpoints within a few seconds; the surviving replica keeps serving. When the replacement pod comes up, its scorer re-subscribes to every vLLM pod and its index warms up from live KV events.
+A second identical completion request through the same Service should produce a non-zero `precise-prefix-cache-scorer` score on the cache-warm pod (see the [main verification section](README.md#verification)).
 
 ## Tradeoffs vs. the default
 
 Active-active costs you:
 - **1 ZMQ socket per (replica × vLLM pod)** — with N replicas × M pods, that's N×M sockets across the cluster. Negligible at normal scales.
 - **Duplicate index memory** — each replica maintains its own KV-block index. Real-world index size is small relative to pod memory.
-- **A deploy-time constraint**: the standalone chart hardcodes `strategy: Recreate`, so rolling updates take both replicas down briefly. For rolling-friendly HA, deploy two separate releases and front them with a custom Service.
+- **A deploy-time constraint** — the standalone chart hardcodes `strategy: Recreate`, so rolling updates take both replicas down briefly. For rolling-friendly HA, deploy two separate releases and front them with a custom Service.
 
-Stick with the single-replica default unless you actually need HA — it's strictly simpler.
+Stick with the single-replica default unless you actually need HA.
