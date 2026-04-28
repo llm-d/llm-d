@@ -31,7 +31,7 @@ concurrency:
 jobs:
   nightly:
     if: github.repository == 'llm-d/llm-d'
-    uses: llm-d/llm-d-infra/.github/workflows/reusable-nightly-e2e-openshift-helmfile.yaml@main
+    uses: llm-d/llm-d-infra/.github/workflows/reusable-nightly-e2e-openshift.yaml@main
     with:
       guide_name: optimized-baseline
       namespace: llm-d-nightly-inference
@@ -47,8 +47,6 @@ jobs:
       install_gateway_provider: false
       skip_cleanup: ${{ github.event.inputs.skip_cleanup == 'true' }}
       pre_deploy_script: |
-        echo "Adding H100 nodeSelector for OCP deployment..."
-        yq e '.decode.extraConfig.nodeSelector["nvidia.com/gpu.product"] = "NVIDIA-H100-80GB-HBM3"' -i "${GUIDE_PATH}/ms-optimized-baseline/values.yaml"
-        echo "Updated values.yaml with H100 nodeSelector"
-        yq e '.decode.extraConfig.nodeSelector' "${GUIDE_PATH}/ms-optimized-baseline/values.yaml"
+        echo "Running pre_deploy_script..."
+        echo "Completed run of pre_deploy_script"
     secrets: inherit
