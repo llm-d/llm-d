@@ -9,9 +9,9 @@ You need this patch when running tensor parallelism on a GKE cluster that has th
 If gIB is installed, vLLM will try to load the gIB NCCL tuner plugin, which will fail. To see the error log, add the following environment variable to your model server deployment:
 
 ```
-env
+env:
     - name: NCCL_DEBUG
-    value: "INFO"
+      value: "INFO"
 ```
 
 You will see NCCL tuner error message like:
