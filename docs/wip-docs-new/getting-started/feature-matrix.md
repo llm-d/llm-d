@@ -98,7 +98,7 @@ This page describes the current coverage as validated in the v0.7.0 release and 
 
 ## Infrastructure Providers
 
-| Provider | Inference Scheduling | P/D Disaggregation | Wide EP | Tiered Prefix Cache | Precise Prefix Cache | WVA |
+| Provider | Optimized Baseline | P/D Disaggregation | Wide EP | Tiered Prefix Cache | Precise Prefix Cache | WVA |
 |----------|---------------------|--------------------|---------|--------------------|-----------------------|-----|
 | **OpenShift** | Nightly | Nightly | Nightly | Nightly | Nightly | Nightly |
 | **GKE** | Nightly | Nightly | Nightly | — | Nightly | — |
@@ -125,10 +125,10 @@ For accelerator maintainer contacts and contribution requirements, see [Accelera
 | Accelerator | Supported Devices | Notes |
 |-------------|-------------------|-------|
 | NVIDIA CUDA | A100, H100, H200, B200 | Primary platform. All well-lit paths validated. |
-| AMD ROCm | MI250, MI300X | Inference scheduling and P/D disaggregation. |
-| Google TPU | v5e, v6e, v7 | GKE only. P/D and inference scheduling. |
-| Intel XPU | Data Center GPU Max 1550, BMG (Battlemage) | Uses DRA. Inference scheduling, P/D, precise prefix cache. |
-| Intel Gaudi (HPU) | Gaudi 2, Gaudi 3 | Uses DRA. Inference scheduling. |
+| AMD ROCm | MI250, MI300X | Optimized baseline and P/D disaggregation. |
+| Google TPU | v5e, v6e, v7 | GKE only. P/D and optimized baseline. |
+| Intel XPU | Data Center GPU Max 1550, BMG (Battlemage) | Uses DRA. Opitmized baseline, P/D, precise prefix cache. |
+| Intel Gaudi (HPU) | Gaudi 2, Gaudi 3 | Uses DRA. Optimized baseline. |
 | CPU | Intel Xeon (Sapphire Rapids+), AMD EPYC | 64 cores, 64 GB RAM per replica. |
 
 ### Software Requirements
@@ -147,12 +147,12 @@ For accelerator maintainer contacts and contribution requirements, see [Accelera
 
 llm-d guides use two deployment methods. Both produce the same Kubernetes resources.
 
-| Method | Used By | Notes |
-|--------|---------|-------|
-| **Helmfile** | Inference scheduling, P/D disaggregation, precise prefix cache, workload autoscaling, simulated accelerators | Composes three Helm charts (infra, InferencePool, modelservice). |
-| **Kustomize** | Tiered prefix cache, wide expert-parallelism | Declarative overlays. Reusable base layers in `guides/recipes/`. |
+| Method | Notes |
+|--------|-------|
+| **Helm** | Used to deploy llm-d router in standalone and gateway modes, async processor, etc. |
+| **Kustomize** | Used to deploy declarative overlays for model servers, gateways, etc. Reusable base layers in `guides/recipes/`. |
 
-> The project is migrating from helmfile to kustomize-first installation ([tracking issue](https://github.com/llm-d/llm-d/issues/850)). New guides should prefer kustomize. Existing helmfile-based guides will be migrated in phases.
+> The project is migrating from helmfile to kustomize-first installation ([tracking issue](https://github.com/llm-d/llm-d/issues/850)). New guides should prefer kustomize.
 
 ## Guide Maturity
 
