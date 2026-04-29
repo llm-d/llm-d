@@ -51,15 +51,15 @@ llm-d uses two deployment methods depending on the guide. Both produce the same 
 
 ### Helm Charts
 
-Used by the helmfile-based guides (inference scheduling, P/D disaggregation, precise prefix cache, workload autoscaling, simulated accelerators).
-
 | Chart | Version | Registry | Repository | Notes |
 |-------|---------|----------|------------|-------|
-| **llm-d-infra** | v1.4.0 | `https://llm-d-incubation.github.io/llm-d-infra/` | [llm-d-incubation/llm-d-infra](https://github.com/llm-d-incubation/llm-d-infra) | Core infrastructure (gateway, CRDs) |
-| **llm-d-modelservice** | v0.4.9 | `https://llm-d-incubation.github.io/llm-d-modelservice/` | [llm-d-incubation/llm-d-modelservice](https://github.com/llm-d-incubation/llm-d-modelservice) | Model server deployment |
+| **Standalone Router** | v1.4.0 | `oci://registry.k8s.io/gateway-api-inference-extension/charts/standalone` | [kubernetes-sigs/gateway-api-inference-extension](https://github.com/kubernetes-sigs/gateway-api-inference-extension) | Standalone Router (EPP+Envoy sidecar) |
 | **InferencePool** | v1.4.0 | `oci://registry.k8s.io/gateway-api-inference-extension/charts/inferencepool` | [kubernetes-sigs/gateway-api-inference-extension](https://github.com/kubernetes-sigs/gateway-api-inference-extension) | InferencePool + EPP |
 | **workload-variant-autoscaler** | v0.7.0 | `https://llm-d.github.io/llm-d-workload-variant-autoscaler/` | [llm-d/llm-d-workload-variant-autoscaler](https://github.com/llm-d/llm-d-workload-variant-autoscaler) | Optional: SLO-aware autoscaling |
 | **async-processor** | v0.6.1 | TBD | TBD | Optional: Queue-based async inference |
+| **llm-d-infra** | v1.4.0 | `https://llm-d-incubation.github.io/llm-d-infra/` | [llm-d-incubation/llm-d-infra](https://github.com/llm-d-incubation/llm-d-infra) | (Deprecated) Core infrastructure (gateway, CRDs). Used in legacy helmfile based guides prior to llm-d v0.7. |
+| **llm-d-modelservice** | v0.4.9 | `https://llm-d-incubation.github.io/llm-d-modelservice/` | [llm-d-incubation/llm-d-modelservice](https://github.com/llm-d-incubation/llm-d-modelservice) | (Deprecated) Model server deployment. Used in legacy helmfile based guides prior to llm-d v0.7. |
+
 
 ### Kustomize Overlays
 
@@ -68,14 +68,15 @@ Used by the kustomize-based guides (tiered prefix cache, wide expert-parallelism
 | Recipe | Path | Description |
 |--------|------|-------------|
 | **Gateway** | `guides/recipes/gateway/` | Base gateway manifest with provider overlays (Istio, AgentGateway, GKE, kgateway) |
-| **InferencePool** | `guides/recipes/inferencepool/` | InferencePool + EPP deployment |
-| **vLLM** | `guides/recipes/vllm/` | Model server base with standard overlay |
+| **InferencePool** | `guides/recipes/scheduler/` | InferencePool + EPP deployment |
+| **vLLM** | `guides/recipes/modelserver/` | Model server base with standard overlay |
 
 Each kustomize-based guide composes these recipes with guide-specific overlays for the target accelerator and infrastructure provider.
 
 ## Gateway Provider Dependencies
 
-Tested and supported versions for the v0.7.0 release.
+By default, llm-d guides runs a standalone router without a gateway. For gateway mode, the following gateway dependencies
+are tested and supported versions for the v0.7.0 release.
 
 | Dependency | Supported Versions | Notes |
 |------------|-------------------|-------|
