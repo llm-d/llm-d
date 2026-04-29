@@ -6,7 +6,7 @@ This page describes the current coverage as validated in the v0.7.0 release and 
 
 ## Well-Lit Paths × Model Server × Accelerator
 
-### Intelligent Inference Scheduling
+### Optimized Baseline
 
 | Accelerator | vLLM | SGLang |
 |-------------|------|--------|
@@ -166,9 +166,9 @@ Each well-lit path guide is assigned a maturity level reflecting its testing and
 
 | Guide | Maturity | Nightly Providers |
 |-------|----------|-------------------|
-| Intelligent Inference Scheduling (vLLM, CUDA) | High | OpenShift, GKE, CoreWeave |
-| Intelligent Inference Scheduling (SGLang, CUDA) | Medium | — |
-| Intelligent Inference Scheduling (AMD, XPU, HPU, TPU, CPU) | Experimental | XPU, HPU (PR-triggered) |
+| Optimized Baseline (vLLM, CUDA) | High | OpenShift, GKE, CoreWeave |
+| Optimized Baseline (SGLang, CUDA) | Medium | — |
+| Optimized Baseline (AMD, XPU, HPU, TPU, CPU) | Experimental | XPU, HPU (PR-triggered) |
 | Precise Prefix-Cache-Aware Routing | Medium | OpenShift |
 | Prefill/Decode Disaggregation (vLLM, CUDA) | High | OpenShift, GKE, CoreWeave |
 | Prefill/Decode Disaggregation (SGLang, CUDA) | Experimental | — |
