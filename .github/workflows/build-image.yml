@@ -59,7 +59,7 @@ concurrency:
 
 jobs:
   pre-commit:
-    if: github.event_name == 'pull_request' || github.event_name == 'pull_request_target'
+    if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout source
@@ -316,8 +316,7 @@ jobs:
         if: |
           steps.build-debug.outputs.digest != '' &&
           github.ref == format('refs/heads/{0}', github.event.repository.default_branch) &&
-          github.event_name != 'pull_request' &&
-          github.event_name != 'pull_request_target'
+          github.event_name != 'pull_request'
         run: |
           IMAGE="${{ env.REGISTRY }}/${{ github.repository }}-cuda${{ matrix.image_suffix }}"
           docker buildx imagetools create \
@@ -664,8 +663,7 @@ jobs:
             tags="$tags -t ${{ env.REGISTRY }}/${{ github.repository }}-cuda-dev${{ matrix.image_suffix }}:pr-${{ github.event.pull_request.number }}"
           fi
           if [ "${{ github.ref }}" = "refs/heads/${{ github.event.repository.default_branch }}" ] && \
-             [ "${{ github.event_name }}" != "pull_request" ] && \
-             [ "${{ github.event_name }}" != "pull_request_target" ]; then
+             [ "${{ github.event_name }}" != "pull_request" ]; then
             tags="$tags -t ${{ env.REGISTRY }}/${{ github.repository }}-cuda-dev${{ matrix.image_suffix }}:latest"
           fi
           docker buildx imagetools create $tags $sources
@@ -997,8 +995,7 @@ jobs:
             tags="$tags -t ${{ env.REGISTRY }}/${{ github.repository }}-aws-dev:pr-${{ github.event.pull_request.number }}"
           fi
           if [ "${{ github.ref }}" = "refs/heads/${{ github.event.repository.default_branch }}" ] && \
-             [ "${{ github.event_name }}" != "pull_request" ] && \
-             [ "${{ github.event_name }}" != "pull_request_target" ]; then
+             [ "${{ github.event_name }}" != "pull_request" ]; then
             tags="$tags -t ${{ env.REGISTRY }}/${{ github.repository }}-aws-dev:latest"
           fi
           docker buildx imagetools create $tags $sources
@@ -1207,7 +1204,7 @@ jobs:
           tags: |
             ${{ env.REGISTRY }}/${{ github.repository }}-xpu-dev:${{ steps.set-tag.outputs.tag }}
             ${{ steps.set-tag.outputs.pr_tag != '' && format('{0}/{1}-xpu-dev:{2}', env.REGISTRY, github.repository, steps.set-tag.outputs.pr_tag) || '' }}
-            ${{ github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.event_name != 'pull_request' && github.event_name != 'pull_request_target' && format('{0}/{1}-xpu-dev:latest', env.REGISTRY, github.repository) || '' }}
+            ${{ github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.event_name != 'pull_request' && format('{0}/{1}-xpu-dev:latest', env.REGISTRY, github.repository) || '' }}
           github-token: ${{ secrets.GHCR_TOKEN }}
         env:
           DOCKER_BUILDKIT: "1"
@@ -1285,7 +1282,7 @@ jobs:
           tags: |
             ${{ env.REGISTRY }}/${{ github.repository }}-rocm-dev:${{ steps.set-tag.outputs.tag }}
             ${{ steps.set-tag.outputs.pr_tag != '' && format('{0}/{1}-rocm-dev:{2}', env.REGISTRY, github.repository, steps.set-tag.outputs.pr_tag) || '' }}
-            ${{ github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.event_name != 'pull_request' && github.event_name != 'pull_request_target' && format('{0}/{1}-rocm-dev:latest', env.REGISTRY, github.repository) || '' }}
+            ${{ github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.event_name != 'pull_request' && format('{0}/{1}-rocm-dev:latest', env.REGISTRY, github.repository) || '' }}
           github-token: ${{ secrets.GHCR_TOKEN }}
         env:
           DOCKER_BUILDKIT: "1"
@@ -1359,8 +1356,7 @@ jobs:
       - name: Tag latest on default branch
         if: |
           github.ref == format('refs/heads/{0}', github.event.repository.default_branch) &&
-          github.event_name != 'pull_request' &&
-          github.event_name != 'pull_request_target'
+          github.event_name != 'pull_request'
         run: |
           export DEVICE=hpu
           export DOCKERFILE=Dockerfile.hpu
@@ -1459,7 +1455,7 @@ jobs:
           tags: |
             ${{ env.REGISTRY }}/${{ github.repository }}-cpu-dev:${{ steps.set-tag.outputs.tag }}
             ${{ steps.set-tag.outputs.pr_tag != '' && format('{0}/{1}-cpu-dev:{2}', env.REGISTRY, github.repository, steps.set-tag.outputs.pr_tag) || '' }}
-            ${{ github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.event_name != 'pull_request' && github.event_name != 'pull_request_target' && format('{0}/{1}-cpu-dev:latest', env.REGISTRY, github.repository) || '' }}
+            ${{ github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.event_name != 'pull_request' && format('{0}/{1}-cpu-dev:latest', env.REGISTRY, github.repository) || '' }}
           github-token: ${{ secrets.GHCR_TOKEN }}
         env:
           DOCKER_BUILDKIT: "1"

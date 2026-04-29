@@ -13,10 +13,10 @@ on:
       - guides/**/*.yaml
       - guides/**/*.yml
       - guides/**/*.gotmpl
-  # All PRs use pull_request_target so workflow code runs from main (safe for untrusted code).
-  # Secrets are gated behind the 'ok-to-build' label check in the fork-gate job.
-  pull_request_target:
-    types: [opened, synchronize, reopened, labeled]
+  # PRs run the fork's workflow code so CI changes can be tested alongside code changes.
+  # Secrets are gated behind a GitHub Environment with required reviewers.
+  pull_request:
+    types: [opened, synchronize, reopened]
     branches: [main]
   workflow_dispatch:
     inputs:
@@ -42,21 +42,26 @@ concurrency:
 
 jobs:
   # Gate: determine whether this workflow run should proceed.
-  # - pull_request_target: proceeds only when the PR carries the 'ok-to-build' label.
-  #   Runs main's workflow code (safe for untrusted code), checks out PR code via ref input.
-  # - push/workflow_dispatch: always proceeds.
-  fork-gate:
-    if: >-
-      (github.event_name == 'pull_request_target' &&
-       contains(github.event.pull_request.labels.*.name, 'ok-to-build')) ||
-      (github.event_name != 'pull_request_target')
+  # For pull_request: requires approval from a maintainer via
+  # the "build-approval" GitHub Environment with required reviewers.
+  # For push/workflow_dispatch: proceeds automatically.
+  pr-gate:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    environment: build-approval
+    steps:
+      - run: echo "Build authorized by maintainer"
+
+  auto-gate:
+    if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     steps:
-      - run: echo "Build authorized"
+      - run: echo "Auto-authorized (push or dispatch)"
 
   # Detect which files have changed to determine which tests to run
   detect-changes:
-    needs: [fork-gate]
+    needs: [pr-gate, auto-gate]
+    if: ${{ !cancelled() && !failure() }}
     runs-on: ubuntu-latest
     outputs:
       xpu-optimized-baseline: ${{ steps.filter.outputs.xpu-optimized-baseline }}
@@ -116,9 +121,10 @@ jobs:
               - guides/pd-disaggregation/helmfile.yaml.gotmpl
 
   # Call the build-image workflow to build any changed images
-  # Resolves build-image.yml from main (pull_request_target), checks out PR code via ref.
+  # Resolves build-image.yml from the PR branch, checks out PR code via ref.
   build-images:
-    needs: [fork-gate]
+    needs: [pr-gate, auto-gate]
+    if: ${{ !cancelled() && !failure() }}
     uses: ./.github/workflows/build-image.yml
     with:
       ref: ${{ github.event.pull_request.head.sha || '' }}
