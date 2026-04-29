@@ -75,21 +75,21 @@ Each kustomize-based guide composes these recipes with guide-specific overlays f
 
 ## Gateway Provider Dependencies
 
-Tested and supported versions for the v0.7.0 release. Newer versions may work but are not validated.
+Tested and supported versions for the v0.7.0 release.
 
-| Dependency | Tested Version | Notes |
-|------------|----------------|-------|
-| Gateway API CRDs | v1.5.1 | Kubernetes SIG |
-| Gateway API Inference Extension CRDs | v1.4.0 | Kubernetes SIG |
-| Istio | 1.29.1 | Default gateway provider |
-| AgentGateway | v1.0.0 | Preferred for new deployments |
-| kgateway | v2.2.3 | **Deprecated** — will be removed in next release |
+| Dependency | Supported Versions | Notes |
+|------------|-------------------|-------|
+| Gateway API CRDs | v1.5.x | Kubernetes SIG |
+| Gateway API Inference Extension CRDs | v1.4.x | Kubernetes SIG |
+| Istio | 1.29.x | Default gateway provider |
+| AgentGateway | v1.0.x | Preferred for new deployments |
+| kgateway | v2.2.x | **Deprecated** — will be removed in next release |
 
 ## Key Upstream Dependencies
 
-Pinned in the container image build. See [upstream-versions.md](https://github.com/llm-d/llm-d/blob/main/docs/upstream-versions.md) for the authoritative source.
+Exact versions pinned in the v0.7.0 container images. See [upstream-versions.md](https://github.com/llm-d/llm-d/blob/main/docs/upstream-versions.md) for the authoritative source.
 
-| Dependency | Version | Purpose |
+| Dependency | Pinned Version (v0.7.0) | Purpose |
 |------------|---------|---------|
 | **vLLM** | v0.17.1 | Primary inference engine |
 | **CUDA** | 12.9.1 | GPU compute runtime |
