@@ -2,8 +2,9 @@
 # vLLM Version Configuration
 # ============================================================================
 # Used by CUDA and CPU platforms
-VLLM_REPO=https://github.com/vllm-project/vllm.git
-VLLM_COMMIT_SHA=1892993bc18e243e2c05841314c5e9c06a80c70d # maps to v0.17.1 tag
+VLLM_REPO=https://github.com/elvircrn/vllm.git
+VLLM_COMMIT_SHA=7de0c69eaf62cff588324db2b16d6e9c20f3ce95 # maps to elvir's cherrypicks on top of v0.19.1,
+# see: https://github.com/elvircrn/vllm/commits/llmd-0.19.1-nan-fixes/
 
 # ============================================================================
 # Cuda specific configs
@@ -14,9 +15,12 @@ VLLM_COMMIT_SHA=1892993bc18e243e2c05841314c5e9c06a80c70d # maps to v0.17.1 tag
 # CUDA-only configurations for precompiled binaries
 VLLM_PREBUILT=0                # 0=editable install, 1=use full prebuilt wheel
 VLLM_USE_PRECOMPILED=1         # 1=use precompiled binaries either from VLLM_COMMIT_SHA or VLLM_PRECOMPILED_WHEEL_COMMIT, 0=compile from source
+# If building vLLM from a precompiled commit in the vLLM wheel index (only commits off main),
+# which commit to use as the base for the compiled bits.
+VLLM_PRECOMPILED_WHEEL_COMMIT=b1388b1fbf5aaef47937fabe98931211684666a6 # maps to vLLM official 0.19.1 release
 
 # Uncomment VLLM_PRECOMPILED_WHEEL_COMMIT to use precompiled wheels from a different SHA1 than VLLM_COMMIT_SHA
-VLLM_PRECOMPILED_WHEEL_COMMIT=b1388b1fbf5aaef47937fabe98931211684666a6
+# VLLM_PRECOMPILED_WHEEL_COMMIT=1892993bc18e243e2c05841314c5e9c06a80c70d
 
 
 # Used by XPU, commit from vllm, point to v0.17.0
@@ -36,4 +40,4 @@ GB200_DEEPEP_REPO=https://github.com/fzyzcjy/DeepEP
 GB200_DEEPEP_VERSION=gb200_blog_part_2
 
 ### Offloading connector
-LLM_D_OFFLOADING_CONNECTOR_VERSION=0.17.1
+# LLM_D_OFFLOADING_CONNECTOR_VERSION=0.17.1
