@@ -80,7 +80,7 @@ inferenceExtension:
 
 ### Kustomize / Raw Manifests
 
-For guides that use raw manifests (e.g., `wide-ep-lws`, `recipes/vllm`), add tracing flags to your `vllm serve` command and OTEL env vars to the container:
+For guides that use raw manifests (e.g., `wide-ep-lws`, `recipes/modelserver`), add tracing flags to your `vllm serve` command and OTEL env vars to the container:
 
 ```yaml
 # Add to your vllm serve command:
