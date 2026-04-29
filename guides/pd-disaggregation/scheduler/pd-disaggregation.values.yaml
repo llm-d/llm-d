@@ -5,14 +5,6 @@ inferenceExtension:
       port: 80
       protocol: TCP
       targetPort: 8081
-  replicas: 1
-  flags:
-  image:
-    name: llm-d-inference-scheduler
-    hub: ghcr.io/llm-d
-    tag: v0.7.0
-    pullPolicy: Always
-  extProcPort: 9002
   pluginsConfigFile: "pd-config.yaml"
   pluginsCustomConfig:
     pd-config.yaml: |
@@ -53,24 +45,7 @@ inferenceExtension:
           weight: 2
         - pluginRef: max-score-picker
 
-  # Distributed tracing configuration (OpenTelemetry)
-  tracing:
-    enabled: false
-    # otelExporterEndpoint: "http://otel-collector:4317"
-    # sampling:
-    #   sampler: "parentbased_traceidratio"
-    #   samplerArg: "0.1"
-  # Monitoring configuration for EPP
-  monitoring:
-    interval: "5s"
-    prometheus:
-      enabled: true
-      auth:
-        secretName: pd-gateway-sa-metrics-reader-secret
-
 inferencePool:
-  targetPorts:
-    - number: 8000
   modelServers:
     matchLabels:
       llm-d.ai/guide: "pd-disaggregation"
