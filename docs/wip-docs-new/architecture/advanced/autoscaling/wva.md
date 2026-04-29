@@ -46,8 +46,6 @@ The engine follows a three-stage pipeline pattern:
 
 3. **Enforcer** -- Applies post-optimization policies: scale-to-zero when an InferencePool is idle (no requests in the retention period), or minimum replica enforcement (at least 1 replica on the cheapest variant) when scale-to-zero is disabled.
 
-> [!NOTE]
-
 ### Saturation Analyzer
 
 The saturation analyzer determines scaling needs based on how saturated the InferencePools are.
