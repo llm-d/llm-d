@@ -2,19 +2,28 @@
 
 ## Functionality
 
-The Workload Variant Autoscaler (WVA) is an optimizer and a Kubernetes controller that automatically scales LLM inference workloads based on real-time resource utilization and performance metrics. As an optimizer, it analyzes supply and demand signals across all model variants to produce globally cost-efficient scaling decisions. As a controller, it reconciles those decisions by managing the replica count of model-serving deployments (Deployments, StatefulSets, or LeaderWorkerSets), observing vLLM metrics scraped via Prometheus.
+The Workload Variant Autoscaler (WVA) is an optimizer and a Kubernetes controller that automatically scales LLM inference workloads based on real-time resource utilization and performance metrics. As an optimizer, it analyzes supply and demand signals across all InferencePool variants to produce globally cost-efficient scaling decisions. As a controller, it reconciles those decisions by managing the replica count of model-serving deployments (Deployments, StatefulSets, or LeaderWorkerSets), observing vLLM metrics scraped via Prometheus.
 
-WVA introduces the concept of **variants** -- multiple deployments serving the same model that differ in hardware configuration (e.g., GPU type), model server configuration (e.g., tensor parallelism, max batch size, quantization), or both, each with an associated cost. The autoscaler optimizes across variants to minimize total cost while meeting capacity or latency requirements.
+WVA introduces the concept of **variants** -- multiple model servers in an InferencePool that all serve the same base model but differ in hardware configuration (e.g., GPU type), serving configuration (e.g., tensor parallelism, max batch size, quantization), or both, each with an associated cost. The autoscaler optimizes across variants to minimize total cost while meeting capacity or latency requirements.
+
+> [!NOTE]
+> WVA assumes a 1:1:1 relationship between InferencePool, Endpoint Picker (EPP), and base model. All variants within an InferencePool share the same EPP and therefore the same EPP metrics (e.g., request queue size).
 
 WVA provides two main scaling analyzers:
 
-- **Saturation Analyzer** -- Scales based on resource saturation signals (KV cache utilization, request queue depth, and token-level capacity). When the system detects that replicas are saturated (running out of KV cache space or building up queues), it triggers scale-up on the cheapest available variant. When spare capacity is detected, it scales down the most expensive variant. This is the default analyzer. It has two sub-variants: `saturation-percentage-based` (default) and `saturation-token-based` (experimental).
+- **Saturation Analyzer** -- Scales based on resource saturation signals (KV cache utilization, request queue depth, and token-level capacity). When the system detects that model servers are saturated (running out of KV cache space or building up queues), it triggers scale-up on the cheapest available variant. When spare capacity is detected, it scales down the most expensive variant. This is the default analyzer. It has two sub-variants: `saturation-percentage-based` (default) and `saturation-token-based` (experimental).
 
 - **SLO Analyzer (Queueing Model)** *(Experimental)* -- Scales based on latency SLO targets using queueing theory. It uses a Kalman filter to learn hardware-specific performance parameters online, then applies a state-dependent Markovian queueing model to determine the maximum sustainable request rate per replica that meets target TTFT (Time To First Token) and ITL (Inter-Token Latency). The desired replica count is computed as the ratio of observed arrival rate to this capacity.
 
 Both analyzers integrate with a pipeline that includes cost-aware optimization, scale-to-zero enforcement, and optional GPU resource limiting.
 
 ## Design
+
+### Relation to llm-d Components
+
+The following diagram shows how WVA fits into the overall llm-d architecture:
+
+![WVA High-Level Architecture](wva-architecture.svg)
 
 ### Scaling Engine Architecture
 
@@ -29,17 +38,19 @@ The engine follows a three-stage pipeline pattern:
 
 **Pipeline stages:**
 
-1. **Analyzer** -- Each analyzer produces capacity signals (required capacity, spare capacity) and a priority score per model. The analyzer does not make scaling decisions directly; it quantifies how much capacity is needed or can be freed.
+1. **Analyzer** -- Each analyzer produces capacity signals (required capacity, spare capacity) and a priority score per InferencePool. The analyzer does not make scaling decisions directly; it quantifies how much capacity is needed or can be freed.
 
-2. **Optimizer** -- The optimizer receives scaling requests (one per model) and produces variant decisions specifying the target replica count per variant. Two modes exist:
-   - **Cost-aware** (default, unlimited mode): Processes each model independently. Scales up the most cost-efficient variant; scales down the most expensive variant.
-   - **Greedy-by-score** (limited mode, `enableLimiter: true`): Fair-shares available GPU resources across all models based on priority scores.
+2. **Optimizer** -- The optimizer receives scaling requests (one per InferencePool) and produces variant decisions specifying the target replica count per variant. Two modes exist:
+   - **Cost-aware** (default, unlimited mode): Processes each InferencePool independently. Scales up the most cost-efficient variant; scales down the most expensive variant.
+   - **Greedy-by-score** (limited mode, `enableLimiter: true`): Fair-shares available GPU resources across all InferencePools based on priority scores.
 
-3. **Enforcer** -- Applies post-optimization policies: scale-to-zero when a model is idle (no requests in the retention period), or minimum replica enforcement (at least 1 replica on the cheapest variant) when scale-to-zero is disabled.
+3. **Enforcer** -- Applies post-optimization policies: scale-to-zero when an InferencePool is idle (no requests in the retention period), or minimum replica enforcement (at least 1 replica on the cheapest variant) when scale-to-zero is disabled.
+
+> [!NOTE]
 
 ### Saturation Analyzer
 
-The saturation analyzer determines scaling needs based on how saturated the model-serving replicas are.
+The saturation analyzer determines scaling needs based on how saturated the InferencePools are.
 
 #### `saturation-percentage-based` -- Default
 
@@ -69,7 +80,7 @@ Each replica's capacity is modeled with two bounds:
 
 The **effective capacity** per replica is the minimum of k1 and k2. Per-variant capacity is aggregated using the median across ready replicas.
 
-**Demand** per replica is the sum of tokens currently in use and the queued requests multiplied by the average input token length. The scheduler queue demand (from `inference_extension_flow_control_queue_size/bytes` metrics) is added to the model-level totals.
+**Demand** per replica is the sum of tokens currently in use and the queued requests multiplied by the average input token length. The scheduler queue demand (from `inference_extension_flow_control_queue_size/bytes` metrics) is added to the InferencePool-level totals.
 
 Scaling signals:
 - **Required capacity**: total demand divided by the scale-up threshold, minus anticipated supply. A positive value means scale-up is needed.
@@ -78,7 +89,7 @@ Scaling signals:
 Default thresholds: scale-up threshold 0.85, scale-down boundary 0.70.
 
 Key improvements over `saturation-percentage-based`:
-- Token-level granularity enables cross-variant and cross-model capacity comparison
+- Token-level granularity enables cross-variant and cross-InferencePool capacity comparison
 - Dual-bound capacity model (memory + compute) captures both resource bottlenecks
 - Capacity knowledge is cached for zero-replica variants, enabling accurate cost estimation before scaling
 - Supports P/D (Prefill/Decode) disaggregation with per-role capacity attribution
@@ -118,9 +129,9 @@ Metrics used by the SLO analyzer:
 
 Scale-to-zero is handled by the **Enforcer** pipeline stage, which runs after the optimizer produces scaling decisions.
 
-For each model:
-1. Check if scale-to-zero is enabled (per-model config > global ConfigMap default > `WVA_SCALE_TO_ZERO` env var > false).
-2. If enabled, query `sum(increase(vllm:request_success_total{...}[retentionPeriod]))` for the model.
+For each InferencePool:
+1. Check if scale-to-zero is enabled (per-inferencepool config > global ConfigMap default > `WVA_SCALE_TO_ZERO` env var > false).
+2. If enabled, query `sum(increase(vllm:request_success_total{...}[retentionPeriod]))` for the InferencePool.
 3. If the request count is 0 over the retention period (default 10 minutes), set all variant target replicas to 0.
 4. If scale-to-zero is disabled, ensure at least 1 replica on the cheapest variant.
 
@@ -128,7 +139,7 @@ Scale-to-zero is skipped entirely when any variant has `MinReplicas > 0` in the 
 
 #### Scale-from-Zero
 
-Scale-from-zero runs as a separate engine with a fast 100ms polling interval, independent of the main 30-second saturation engine loop. This ensures rapid response to incoming requests for idle models.
+Scale-from-zero runs as a separate engine with a fast 100ms polling interval, independent of the main 30-second saturation engine loop. This ensures rapid response to incoming requests for idle InferencePools.
 
 For each VA with 0 replicas:
 1. Find the matching InferencePool from the datastore.
@@ -185,14 +196,14 @@ The replica metrics collector orchestrates query execution and populates per-pod
 
 ## The VariantAutoscaling (VA) Object
 
-The VariantAutoscaling (short name: `va`) is the core CRD that represents an autoscaling configuration for a single model variant. API group: `llmd.ai/v1alpha1`.
+The VariantAutoscaling (short name: `va`) is the core CRD that represents an autoscaling configuration for a single InferencePool variant. API group: `llmd.ai/v1alpha1`.
 
 ### Spec
 
 | Field | Type | Default | Description |
 |---|---|---|---|
 | `scaleTargetRef` | object reference | (required) | Reference to the scalable resource (Deployment, StatefulSet, or LeaderWorkerSet) |
-| `modelID` | string | (required) | Unique identifier of the model being served |
+| `modelID` | string | (required) | Unique identifier linking this VA to an InferencePool; all VAs with the same value form a variant group |
 | `minReplicas` | integer | `1` | Lower bound on replica count. Set to `0` to enable scale-to-zero |
 | `maxReplicas` | integer | `2` | Upper bound on replica count |
 | `variantCost` | string | `"10.0"` | Cost per replica for this variant (used in cost-aware optimization) |
@@ -217,9 +228,9 @@ Validation: `minReplicas <= maxReplicas`.
 | `MetricsAvailable` | Whether vLLM metrics are available from Prometheus |
 | `OptimizationReady` | Whether the optimization engine ran successfully |
 
-### Multi-Variant Model Example
+### Multi-Variant InferencePool Example
 
-Multiple VA objects with the same `modelID` represent the same model served on different hardware. The optimizer considers all variants together:
+Multiple VA objects with the same `modelID` represent variants of the same InferencePool, each served on different hardware. The optimizer considers all variants together:
 
 ```yaml
 # Variant 1: Cost-effective GPU
@@ -267,7 +278,7 @@ The engine is configured through the `wva-saturation-scaling-config` ConfigMap. 
 
 #### Saturation Analyzer Configuration
 
-The `wva-saturation-scaling-config` ConfigMap controls saturation analyzer behavior. Per-model overrides are supported using `model_id` and `namespace` fields.
+The `wva-saturation-scaling-config` ConfigMap controls saturation analyzer behavior. Per-InferencePool overrides are supported using `model_id` and `namespace` fields.
 
 ```yaml
 apiVersion: v1
@@ -363,7 +374,7 @@ The VA object itself is the primary user-facing configuration surface. See the [
 Key configuration decisions per VA:
 - **`minReplicas: 0`** enables scale-to-zero for this variant.
 - **`variantCost`** determines scaling preference order: cheaper variants scale up first, expensive variants scale down first.
-- Multiple VAs with the same **`modelID`** form a variant group optimized together.
+- Multiple VAs with the same **`modelID`** form a variant group for an InferencePool, optimized together.
 
 ### CLI Flags
 
