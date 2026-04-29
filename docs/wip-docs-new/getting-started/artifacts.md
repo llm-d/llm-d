@@ -8,12 +8,12 @@ llm-d publishes container images to the GitHub Container Registry (`ghcr.io/llm-
 
 ### Model Server Images
 
-These images bundle vLLM (or SGLang) with the libraries required for llm-d's well-lit paths (NIXL, DeepEP, etc.).
+These images bundle vLLM and SGLang (CUDA only) with the libraries required for llm-d's well-lit paths (NIXL, DeepEP, etc.).
 
 | Image | Accelerator | Base OS | Architectures | Status |
 |-------|-------------|---------|---------------|--------|
-| `ghcr.io/llm-d/llm-d-cuda` | NVIDIA CUDA | RHEL UBI9 | amd64, arm64 | Available |
-| `ghcr.io/llm-d/llm-d-cuda` (debug) | NVIDIA CUDA | RHEL UBI9 | amd64 | Available |
+| `ghcr.io/llm-d/llm-d-cuda:v0.7.0` | NVIDIA CUDA | RHEL UBI9 | amd64, arm64 | Available |
+| `ghcr.io/llm-d/llm-d-cuda:v0.7.0-debug` | NVIDIA CUDA | RHEL UBI9 | amd64 | Available |
 | `ghcr.io/llm-d/llm-d-aws` | NVIDIA CUDA + EFA | RHEL UBI9 | amd64, arm64 | Available |
 | `ghcr.io/llm-d/llm-d-rocm` | AMD ROCm | RHEL UBI9 | amd64 | Available |
 | `ghcr.io/llm-d/llm-d-xpu` | Intel XPU | Ubuntu 24.04 | amd64 | Available |
@@ -53,18 +53,13 @@ llm-d uses two deployment methods depending on the guide. Both produce the same 
 
 Used by the helmfile-based guides (inference scheduling, P/D disaggregation, precise prefix cache, workload autoscaling, simulated accelerators).
 
-| Chart | Version | Registry | Repository |
-|-------|---------|----------|------------|
-| **llm-d-infra** | v1.4.0 | `https://llm-d-incubation.github.io/llm-d-infra/` | [llm-d-incubation/llm-d-infra](https://github.com/llm-d-incubation/llm-d-infra) |
-| **llm-d-modelservice** | v0.4.9 | `https://llm-d-incubation.github.io/llm-d-modelservice/` | [llm-d-incubation/llm-d-modelservice](https://github.com/llm-d-incubation/llm-d-modelservice) |
-| **InferencePool** | v1.4.0 | `oci://registry.k8s.io/gateway-api-inference-extension/charts/inferencepool` | [kubernetes-sigs/gateway-api-inference-extension](https://github.com/kubernetes-sigs/gateway-api-inference-extension) |
-
-#### Optional Charts
-
-| Chart | Version | Purpose |
-|-------|---------|---------|
-| **workload-variant-autoscaler** | v0.7.0 | SLO-aware autoscaling |
-| **async-processor** | v0.6.1 | Queue-based async inference |
+| Chart | Version | Registry | Repository | Notes |
+|-------|---------|----------|------------|-------|
+| **llm-d-infra** | v1.4.0 | `https://llm-d-incubation.github.io/llm-d-infra/` | [llm-d-incubation/llm-d-infra](https://github.com/llm-d-incubation/llm-d-infra) | Core infrastructure (gateway, CRDs) |
+| **llm-d-modelservice** | v0.4.9 | `https://llm-d-incubation.github.io/llm-d-modelservice/` | [llm-d-incubation/llm-d-modelservice](https://github.com/llm-d-incubation/llm-d-modelservice) | Model server deployment |
+| **InferencePool** | v1.4.0 | `oci://registry.k8s.io/gateway-api-inference-extension/charts/inferencepool` | [kubernetes-sigs/gateway-api-inference-extension](https://github.com/kubernetes-sigs/gateway-api-inference-extension) | InferencePool + EPP |
+| **workload-variant-autoscaler** | v0.7.0 | `https://llm-d.github.io/llm-d-workload-variant-autoscaler/` | [llm-d/llm-d-workload-variant-autoscaler](https://github.com/llm-d/llm-d-workload-variant-autoscaler) | Optional: SLO-aware autoscaling |
+| **async-processor** | v0.6.1 | TBD | TBD | Optional: Queue-based async inference |
 
 ### Kustomize Overlays
 
@@ -80,8 +75,10 @@ Each kustomize-based guide composes these recipes with guide-specific overlays f
 
 ## Gateway Provider Dependencies
 
-| Dependency | Version | Notes |
-|------------|---------|-------|
+Tested and supported versions for the v0.7.0 release. Newer versions may work but are not validated.
+
+| Dependency | Tested Version | Notes |
+|------------|----------------|-------|
 | Gateway API CRDs | v1.5.1 | Kubernetes SIG |
 | Gateway API Inference Extension CRDs | v1.4.0 | Kubernetes SIG |
 | Istio | 1.29.1 | Default gateway provider |

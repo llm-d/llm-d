@@ -23,12 +23,10 @@ This page describes the current coverage as validated in the v0.7.0 release and 
 
 | Accelerator | vLLM | SGLang |
 |-------------|------|--------|
-| NVIDIA CUDA | ✅ | — |
+| NVIDIA CUDA | ✅ | ✅ |
 | Intel XPU | ✅ | — |
 
 **Nightly CI**: OpenShift (CUDA), CoreWeave (CUDA), GKE (CUDA)
-
-> SGLang uses a radix-tree cache architecture. Support requires the [KVEvents abstraction](https://github.com/llm-d/llm-d-kv-cache/issues/240) which is in design.
 
 ### Prefill/Decode Disaggregation
 
@@ -53,10 +51,11 @@ This page describes the current coverage as validated in the v0.7.0 release and 
 
 ### Tiered Prefix Cache
 
-| Variant | vLLM | SGLang |
-|---------|------|--------|
-| CPU offload | ✅ | — |
-| Storage offload | ✅ | — |
+| Accelerator | CPU Offload (vLLM) | Storage Offload (vLLM) | SGLang |
+|-------------|--------------------|-----------------------|--------|
+| NVIDIA CUDA | ✅ | ✅ | — |
+| Intel XPU | — | — | — |
+| Google TPU | Coming soon | — | — |
 
 **Nightly CI**: OpenShift (CUDA)
 
@@ -120,6 +119,8 @@ This page describes the current coverage as validated in the v0.7.0 release and 
 ## Support Matrix
 
 ### Supported Hardware
+
+For accelerator maintainer contacts and contribution requirements, see [Accelerator Support](../../accelerators/README.md).
 
 | Accelerator | Supported Devices | Notes |
 |-------------|-------------------|-------|
