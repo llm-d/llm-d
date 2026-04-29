@@ -2,7 +2,7 @@
 
 llm-d supports multiple model servers, accelerator backends, and infrastructure providers at various levels of maturity.
 
-This page describes the current coverage as validated in the v0.6.0 release and nightly CI.
+This page describes the current coverage as validated in the v0.7.0 release and nightly CI.
 
 ## Well-Lit Paths × Model Server × Accelerator
 
@@ -26,7 +26,7 @@ This page describes the current coverage as validated in the v0.6.0 release and 
 | NVIDIA CUDA | ✅ | — |
 | Intel XPU | ✅ | — |
 
-**Nightly CI**: OpenShift (CUDA)
+**Nightly CI**: OpenShift (CUDA), CoreWeave (CUDA), GKE (CUDA)
 
 > SGLang uses a radix-tree cache architecture. Support requires the [KVEvents abstraction](https://github.com/llm-d/llm-d-kv-cache/issues/240) which is in design.
 
@@ -86,13 +86,24 @@ This page describes the current coverage as validated in the v0.6.0 release and 
 
 **Nightly CI**: None
 
+### Batch Gateway
+
+| Backend | vLLM | SGLang |
+|---------|------|--------|
+| PostgreSQL + Redis | ✅ | — |
+| S3 + Redis | ✅ | — |
+
+**Nightly CI**: None
+
+> Provides OpenAI-compatible Batch API (`/v1/batches`, `/v1/files`) for offline inference workloads.
+
 ## Infrastructure Providers
 
 | Provider | Inference Scheduling | P/D Disaggregation | Wide EP | Tiered Prefix Cache | Precise Prefix Cache | WVA |
 |----------|---------------------|--------------------|---------|--------------------|-----------------------|-----|
 | **OpenShift** | Nightly | Nightly | Nightly | Nightly | Nightly | Nightly |
-| **GKE** | Nightly | Nightly | Nightly | — | — | — |
-| **CoreWeave (CKS)** | Nightly | Nightly | Nightly | — | — | Nightly |
+| **GKE** | Nightly | Nightly | Nightly | — | Nightly | — |
+| **CoreWeave (CKS)** | Nightly | Nightly | Nightly | — | Nightly | Nightly |
 | **Minikube** | Manual | — | — | — | — | — |
 | **DigitalOcean** | Manual | — | — | — | — | — |
 | **AKS** | Manual | — | — | — | — | — |

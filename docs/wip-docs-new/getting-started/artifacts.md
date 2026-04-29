@@ -1,6 +1,6 @@
 # Artifacts
 
-This page provides an inventory of all llm-d release artifacts including container images, Helm charts, Kustomize overlays, and key upstream dependencies. All versions listed correspond to the **v0.6.0** release.
+This page provides an inventory of all llm-d release artifacts including container images, Helm charts, Kustomize overlays, and key upstream dependencies. All versions listed correspond to the **v0.7.0** release.
 
 ## Container Images
 
@@ -16,8 +16,8 @@ These images bundle vLLM (or SGLang) with the libraries required for llm-d's wel
 | `ghcr.io/llm-d/llm-d-cuda` (debug) | NVIDIA CUDA | RHEL UBI9 | amd64 | Available |
 | `ghcr.io/llm-d/llm-d-aws` | NVIDIA CUDA + EFA | RHEL UBI9 | amd64, arm64 | Available |
 | `ghcr.io/llm-d/llm-d-rocm` | AMD ROCm | RHEL UBI9 | amd64 | Available |
-| `ghcr.io/llm-d/llm-d-xpu` | Intel XPU | Ubuntu 24.04 | amd64 | Temporarily Unavailable |
-| `ghcr.io/llm-d/llm-d-hpu` | Intel Gaudi HPU | Ubuntu 22.04 | amd64 | Temporarily Unavailable |
+| `ghcr.io/llm-d/llm-d-xpu` | Intel XPU | Ubuntu 24.04 | amd64 | Available |
+| `ghcr.io/llm-d/llm-d-hpu` | Intel Gaudi HPU | Ubuntu 22.04 | amd64 | Available |
 | `ghcr.io/llm-d/llm-d-cpu` | CPU | RHEL UBI9 | amd64 | Available |
 
 > The project is implementing a move to consuming upstream vLLM images directly, which would reduce the number of maintained images to a thin addon layer for llm-d-specific components. See [#1112](https://github.com/llm-d/llm-d/issues/1112).
@@ -26,19 +26,19 @@ These images bundle vLLM (or SGLang) with the libraries required for llm-d's wel
 
 | Image | Description | Version |
 |-------|-------------|---------|
-| `ghcr.io/llm-d/llm-d-inference-scheduler` | EPP — the inference-aware request router | v0.7.1 |
-| `ghcr.io/llm-d/llm-d-routing-sidecar` | P/D disaggregation sidecar for KV transfer coordination | v0.7.1 |
-| `ghcr.io/llm-d/llm-d-uds-tokenizer` | Unix domain socket tokenizer sidecar | v0.7.1 |
+| `ghcr.io/llm-d/llm-d-inference-scheduler` | EPP — the inference-aware request router | v0.8.0 |
+| `ghcr.io/llm-d/llm-d-routing-sidecar` | P/D disaggregation sidecar for KV transfer coordination | v0.8.0 |
+| `ghcr.io/llm-d/llm-d-uds-tokenizer` | Unix domain socket tokenizer sidecar | v0.8.0 |
 | `ghcr.io/llm-d/llm-d-kv-cache` | KV-cache block locality indexer library | v0.7.1 |
 | `ghcr.io/llm-d/llm-d-inference-sim` | GPU-free vLLM simulator for testing | v0.8.2 |
-| `ghcr.io/llm-d/llm-d-workload-variant-autoscaler` | SLO-aware workload autoscaler | v0.6.0 |
-| `ghcr.io/llm-d/llm-d-rdma-tools` | RDMA diagnostic and testing utilities | v0.6.0 |
+| `ghcr.io/llm-d/llm-d-workload-variant-autoscaler` | SLO-aware workload autoscaler | v0.7.0 |
+| `ghcr.io/llm-d/llm-d-rdma-tools` | RDMA diagnostic and testing utilities | v0.7.0 |
 
 ### Image Tags
 
 | Tag Pattern | Meaning |
 |-------------|---------|
-| `v0.6.0` | Release tag — pinned, immutable |
+| `v0.7.0` | Release tag — pinned, immutable |
 | `latest` | Latest build from `main` — rolling |
 | `sha-<short>` | Specific commit build |
 | `pr-<number>` | Build from a pull request (dev only) |
@@ -63,7 +63,7 @@ Used by the helmfile-based guides (inference scheduling, P/D disaggregation, pre
 
 | Chart | Version | Purpose |
 |-------|---------|---------|
-| **workload-variant-autoscaler** | v0.6.0 | SLO-aware autoscaling |
+| **workload-variant-autoscaler** | v0.7.0 | SLO-aware autoscaling |
 | **async-processor** | v0.6.1 | Queue-based async inference |
 
 ### Kustomize Overlays
@@ -86,7 +86,7 @@ Each kustomize-based guide composes these recipes with guide-specific overlays f
 | Gateway API Inference Extension CRDs | v1.4.0 | Kubernetes SIG |
 | Istio | 1.29.1 | Default gateway provider |
 | AgentGateway | v1.0.0 | Preferred for new deployments |
-| kgateway | v2.2.1 | **Deprecated** — will be removed in next release |
+| kgateway | v2.2.3 | **Deprecated** — will be removed in next release |
 
 ## Key Upstream Dependencies
 
