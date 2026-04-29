@@ -139,6 +139,7 @@ kubectl apply -n ${NAMESPACE} -k guides/${GUIDE_NAME}/modelserver/cpu/vllm/
 
 </details>
 
+<details>
 <summary><h4>If you run into NCCL errors on GKE</h4></summary>
 
 Try applying the patch:
