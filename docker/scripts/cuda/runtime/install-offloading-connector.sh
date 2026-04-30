@@ -78,9 +78,10 @@ else
 fi
 
 if [ -z "${wheel}" ]; then
-    echo "No matching wheel found for arch=${arch} in ${wheels_src}" >&2
+    echo "WARNING: No matching offloading connector wheel found for arch=${arch}, skipping installation" >&2
     ls -la "${wheels_src}" >&2
-    exit 1
+    rm -rf "${clone_dir}"
+    exit 0
 fi
 
 cp "${wheel}" "${WHEELS_DIR}/"
