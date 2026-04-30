@@ -8,19 +8,9 @@ A model server loads a model onto one or more accelerators (GPUs, TPUs, etc.) an
 
 Model servers are the lowest layer in the llm-d stack:
 
-```
-External Traffic
-    |
-    |
-[ Proxy ] <-> [ EPP ]-- 
-    |                 |  <-- metrics probing
-    |                 |
-    |                 |
-[ Model Server (vLLM / SGLang) ]  <-- runs inference
-    |
-    |    
-[ Accelerator (GPU / TPU) ]
-```
+<p align="center">
+  <img src="../../../assets/basic-architecture.svg" width="600" alt="Architecture">
+</p>
 
 Model servers are deployed independently from the rest of the llm-d stack. They join an `InferencePool` automatically via Kubernetes label selectors, and the EPP begins routing traffic to them once they are healthy.
 
@@ -101,4 +91,4 @@ Model servers are expected to expose health endpoints that Kubernetes uses for l
 - [vLLM Documentation](https://docs.vllm.ai/)
 - [SGLang Documentation](https://github.com/sgl-project/sglang)
 - [InferencePool](inferencepool.md) -- how model servers are discovered and managed
-- [EPP](epp) -- how the scheduler routes requests to model servers informed by model servers metrics
+- [EPP](epp) -- how the router routes requests to model servers informed by model servers metrics

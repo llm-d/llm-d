@@ -6,7 +6,7 @@ llm-d is a high-performance distributed inference serving stack optimized for pr
 
 ### Distributed Performance Optimization
 
-While model servers like [vLLM](https://github.com/vllm-project/vllm) and [SGLang](https://github.com/sgl-project/sglang) optimize individual nodes, llm-d orchestates multiple model server pods to implement key distribtued optimizations to serve at scale, including LLM-aware load balancing and request prioritization, distributed KV caching, disaggregated serving, multi-node "wide EP", and autoscaling — so you can serve high-scale production traffic efficiently and reliably.
+While model servers like [vLLM](https://github.com/vllm-project/vllm) and [SGLang](https://github.com/sgl-project/sglang) optimize individual nodes, llm-d orchestrates multiple model server pods to implement key distributed optimizations to serve at scale, including LLM-aware load balancing and request prioritization, distributed KV caching, disaggregated serving, multi-node "wide EP", and autoscaling — so you can serve high-scale production traffic efficiently and reliably.
 
 ### Vendor-Neutral and Engine-Agnostic
 
@@ -14,13 +14,15 @@ llm-d is a [CNCF sandbox project](https://www.cncf.io/) that supports multiple i
 
 ### Kubernetes-Native
 
-llm-d integrates with standard Kubernetes primitives — Gateway API, Custom Resources, Labels, and HPA — rather than introducing a new orchestration layers or CRDs. If you already run workloads on Kubernetes, llm-d fits naturally into your infrastructure.
+llm-d integrates with standard Kubernetes primitives — Gateway API, Custom Resources, Labels, and HPA — rather than introducing new orchestration layers or CRDs. If you already run workloads on Kubernetes, llm-d fits naturally into your infrastructure.
 
 ## Key Capabilities
 
-### optimized baseline
+### llm-d Router (Intelligent Load Balancing)
 
-LLM-aware load balancing that goes beyond naive round-robin. The LLM-aware load balancing uses a plugin-based scoring pipeline to route each request to the optimal model server replica based on:
+The core of llm-d is the **llm-d Router**, which provides LLM-aware load balancing that goes beyond naive round-robin. The router is split into two functional components: an industry-grade **Proxy** (like Envoy) that handles the data plane, and llm-d's **Endpoint Picker (EPP)** that provides the routing intelligence.
+
+The EPP component uses a pluggable scoring pipeline to route each request to the optimal model server replica based on:
 
 - **Prefix cache locality** — route to replicas that already have relevant KV-cache entries
 - **KV-cache utilization** — prefer replicas with more available memory
@@ -28,9 +30,9 @@ LLM-aware load balancing that goes beyond naive round-robin. The LLM-aware load 
 
 This alone can deliver order-of-magnitude latency reductions vs. round-robin baselines.
 
-### Predicted Latency-Based Scheduling
+### Predicted Latency-Based Routing
 
-Route each request to the replica predicted to serve it fastest, using an XGBoost model trained online on live traffic. Optionally enforce per-request SLOs via `x-slo-ttft-ms` / `x-slo-tpot-ms` headers — requests that no replica can meet within budget are shed at admission rather than routed to a guaranteed miss. Useful when workload variance makes queue-depth a poor proxy for true load, or when clients need to express interactive vs. batch latency budgets.
+An **llm-d Router** capability implemented primarily as an EPP plugin that routes each request to the replica predicted to serve it fastest, using an XGBoost model trained online on live traffic. Optionally enforce per-request SLOs via `x-slo-ttft-ms` / `x-slo-tpot-ms` headers — requests that no replica can meet within budget are shed at admission rather than routed to a guaranteed miss. Useful when workload variance makes queue-depth a poor proxy for true load, or when clients need to express interactive vs. batch latency budgets.
 
 ### Prefill/Decode Disaggregation
 
@@ -53,20 +55,21 @@ Extend prefix cache capacity beyond accelerator HBM by offloading KV-cache entri
 
 Two complementary autoscaling patterns:
 
-- **HPA with Inference Gateway metrics** — Kubernetes-native scaling based on queue depth and request counts from the EPP
-- **Workload Variant Autoscaler** — multi-model, SLO-aware scaling on heterogeneous hardware that optimizes cost by routing across model variants
+- **HPA with llm-d Router metrics** — Kubernetes-native scaling based on queue depth and request counts from the Router's internal metrics.
+- **Workload Variant Autoscaler** — multi-model, SLO-aware scaling on heterogeneous hardware that optimizes cost by routing across model variants.
 
 ## Architecture at a Glance
 
-llm-d uses a layered, composable architecture:
+llm-d uses a layered, composable architecture centered around the **llm-d Router**.
 
-![Architecture](../../assets/basic-architecture.svg)
+<p align="center">
+  <img src="../../assets/basic-architecture.svg" width="600" alt="Architecture">
+</p>
 
 | Component | Role |
 |---|---|
-| **[Proxy](../architecture/core/proxy.md)** | Deployed via Kubernetes Gateway API or as a standalone GAIE-conformant proxy. |
-| **[Endpoint Picker (EPP)](../architecture/core/epp/README.md)** | The scheduling brain — scores and selects the optimal backend for each request using a plugin pipeline of filters, scorers, and pickers. |
-| **[InferencePool](../architecture/core/inferencepool.md)** | A Kubernetes Custom Resource that groups model server pods sharing the same model and compute configuration. |
+| **[llm-d Router](../architecture/core/router/README.md)** | The intelligent request gateway. It is composed of a **Proxy** (Envoy) and the **Endpoint Picker (EPP)**. The Router makes model-aware routing decisions, manages flow control, and enforces request-level policies. |
+| **[InferencePool](../architecture/core/inferencepool.md)** | A Kubernetes Custom Resource that groups model server pods and defines how the Router discovers and interacts with them. |
 | **[Model Servers](../architecture/core/model-servers.md)** | vLLM or SGLang instances running models on accelerators. |
 
 See the [Architecture Overview](../architecture/README.md) for a deeper dive into the architecture.

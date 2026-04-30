@@ -29,16 +29,16 @@ Before installing Async Processor, ensure you have:
 
 Async Processor can be installed via Helm. We provide a `helmfile` for easy deployment.
 
-### Step 1: Configure Inference Gateway URL
+### Step 1: Configure llm-d Router URL
 
 The Async Processor needs to know where to send the requests it pulls from the queue. This is configured via the `IGW_BASE_URL` environment variable. 
 
 By default, it is set to `http://infra-optimized-baseline-inference-gateway-istio.llm-d-inference-scheduler.svc.cluster.local:80`, which assumes you have deployed the [optimized baseline](../optimized-baseline/README.md) stack in the `llm-d-inference-scheduler` namespace. 
 
-If your Inference Gateway is deployed elsewhere, or if you are using a different service name (e.g., based on the [Gateway Provider](../prereq/gateway-provider/README.md) guide), export the variable before running helmfile:
+If your llm-d router is deployed elsewhere, or if you are using a different service name (e.g., based on the [Gateway Provider](../prereq/gateway-provider/README.md) guide), export the variable before running helmfile:
 
 ```bash
-export IGW_BASE_URL="<your-inference-gateway-service-url>"
+export IGW_BASE_URL="<your-llm-d-router-service-url>"
 ```
 
 ### Step 2: Choose your Queue Implementation

@@ -1,4 +1,4 @@
-## Base values shared by both standalone and inferencepool (gateway) charts.
+## Base values shared by both standalone and llm-d Router charts.
 ## Layer chart-specific or guide-specific overrides on top with additional -f flags.
 
 inferenceExtension:

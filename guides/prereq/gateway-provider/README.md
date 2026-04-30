@@ -4,12 +4,12 @@
 > OBSOLETE, WILL BE REMOVED ONCE ALL GUIDES MIGRATE TO KUSTOMIZE 
 
 
-This document will guide you through configuring a [Kubernetes Gateway](https://gateway-api.sigs.k8s.io/) provider that can support the llm-d [`inference-scheduler`](https://github.com/llm-d/llm-d-inference-scheduler) component.
+This document will guide you through configuring a [Kubernetes Gateway](https://gateway-api.sigs.k8s.io/) provider that can support the **llm-d Router** component.
 
 The key elements are:
 
-* The `inference-scheduler` is an **endpoint picker (EPP)** that decides which model server a given request should go to
-* The **Inference Gateway `InferencePool` Custom Resource** that provisions and configures an `inference-scheduler` on a Kubernetes cluster
+* The **llm-d Router** is an **endpoint picker (EPP)** that decides which model server a given request should go to
+* The **llm-d Router `InferencePool` Custom Resource** that provisions and configures an **llm-d router** on a Kubernetes cluster
 * The **Gateway Custom Resources** that define the Kubernetes-native Gateway API and how traffic reaches an `InferencePool`
 * A **compatible Gateway implementation (control plane)** that provisions and configures load balancers and endpoint pickers in response to the Gateway API and InferencePool API
 
@@ -19,7 +19,7 @@ This prerequisite generally requires cluster administration rights.
 
 ## Why do you need a Gateway?
 
-The inference scheduler provides an extension to [compatible Gateway providers](https://gateway-api-inference-extension.sigs.k8s.io/implementations/gateways/) that optimizes load balancing of LLM traffic across model server replicas.
+The **llm-d router** provides an extension to [compatible Gateway providers](https://gateway-api-inference-extension.sigs.k8s.io/implementations/gateways/) that optimizes load balancing of LLM traffic across model server replicas.
 
 The integration with a Gateway allows self-hosted models to be exposed in a [wide variety of network topologies including](https://gateway-api.sigs.k8s.io/concepts/use-cases/):
 

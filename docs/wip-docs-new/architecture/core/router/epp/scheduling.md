@@ -1,6 +1,6 @@
-# EPP Scheduler
+# EPP Request Scheduler
 
-The EPP Scheduler is a highly modular and extensible component within the Endpoint Picker (EPP) designed to select the optimal model server (endpoint) for an inference request. It leverages a plugin-based architecture, allowing for sophisticated scheduling strategies based on real-time metrics, prefix cache tracking, and model-specific requirements like LoRA adapters.
+The EPP Request Scheduler is a highly modular and extensible component within the Endpoint Picker (EPP) designed to select the optimal model server (endpoint) for an inference request. It leverages a plugin-based architecture, allowing for sophisticated endpoint picking strategies based on real-time metrics, prefix cache tracking, and model-specific requirements like LoRA adapters.
 
 ## Architecture Overview
 
@@ -9,12 +9,12 @@ At its core, the scheduler follows a **Filter -> Score -> Pick** lifecycle for e
 ```mermaid
 flowchart TD
     Req[Inference Request] --> S[Scheduler.Schedule]
-    
+
     subgraph Cycle [Scheduling Cycle]
         direction TD
         S --> Pick[ProfileHandler.Pick]
         Pick -->|Profiles| Loop{For each Profile}
-        
+
         subgraph Exec [Profile Execution]
             direction TD
             Loop --> Filters[Filters]
@@ -22,11 +22,10 @@ flowchart TD
             Scorers --> Picker[Picker]
             Picker --> Result[ProfileResult]
         end
-        
         Result -->|Collect| Pick
         Pick -->|Done| PRs[ProfileHandler.ProcessResults]
     end
-    
+
     PRs --> Target["Selected Endpoint(s)"]
 
     %% Styling
@@ -58,9 +57,9 @@ The scheduler's logic is distributed across several extension points, implemente
 4.  **Picker**: Selects the final endpoint(s) from the scored list (e.g., highest score, weighted random).
 5.  **ProcessResults**: (Implemented by `ProfileHandler`) Aggregates the results from all executed profiles to produce the final `SchedulingResult`.
 
-### Scheduler Profile
+### Scheduling Profile
 
-A `SchedulerProfile` is a configured pipeline consisting of:
+A `SchedulingProfile` is a configured pipeline consisting of:
 *   **Filters**: A list of `Filter` plugins run sequentially.
 *   **Scorers**: A list of `WeightedScorer` objects, where each contains a `Scorer` plugin and its relative weight.
 *   **Picker**: A single `Picker` plugin that makes the final selection.
@@ -112,7 +111,7 @@ When a profile runs, it first filters the candidate endpoints. If any remain, it
 
 ## Advanced Use Cases: Prefill/Decode Disaggregation
 
-The scheduler natively supports advanced routing paradigms, such as **Prefill/Decode Disaggregation (P/D Disagg)**. This is a serving technique where the initial prompt processing (prefill) and the subsequent token generation (decode) are handled by separate, specialized model servers.
+The scheduler natively supports advanced scheduling paradigms, such as **Prefill/Decode Disaggregation (P/D Disagg)**. This is a serving technique where the initial prompt processing (prefill) and the subsequent token generation (decode) are handled by separate, specialized model servers.
 
 In a P/D Disagg setup, the `ProfileHandler` orchestrates two separate `SchedulerProfiles`:
 1.  **Prefill Profile**: Evaluates and scores endpoints specialized for compute-heavy prompt processing. It may use filters and scorers focused on prefix cache affinity, queue depth, or token load.

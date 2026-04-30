@@ -111,7 +111,7 @@ The first key step in testing a feature, or bugfix is to identify what layer of 
 
 ### Deployment related changes
 
-* Swapping GIE helm chart version and `inference-scheduler` image upgrades - check `inference-scheduler` container logs
+* Swapping GIE helm chart version and `llm-d-inference-scheduler` image upgrades - check `llm-d EPP` container logs
   * Check that your `InferencePool` exists (`kubectl get InferencePool.inference.networking.k8s.io`)
 * Upgrading Infra helmchart or anything affecting Gateway infrastructure
   * Check the `gateway` object (`kubectl get gateway -o yaml`)
@@ -168,7 +168,7 @@ EOF
 
 ### Container Image Checklist
 
-* [ ] `inference-scheduler` guide
+* [ ] `llm-d Router` guide
 * [ ] `precise-kv-cache-aware` example
 * [ ] `pd-disaggregation` example (also covers deepseek kernels)
 * [ ] `wide-ep-lws` example (also covers deepseek kernels)

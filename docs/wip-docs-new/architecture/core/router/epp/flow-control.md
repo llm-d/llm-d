@@ -256,7 +256,7 @@ To prevent the EPP itself from resource exhaustion when queues grow, Flow Contro
 
 ### The Dispatch Lifecycle
 
-While the Scheduler operates on a per-request synchronous lifecycle, the Flow Control layer maintains an asynchronous, continuous **Ingress & Buffer → Policy Evaluation → Gated Dispatch** loop:
+While the Request Scheduler operates on a per-request synchronous lifecycle, the Flow Control layer maintains an asynchronous, continuous **Ingress & Buffer → Policy Evaluation → Gated Dispatch** loop:
 
 ```mermaid
 sequenceDiagram
@@ -266,7 +266,7 @@ sequenceDiagram
     participant EPP_Adm as EPP (Admission)
     participant EPP_Q as EPP (Flow Control Queue)
     participant EPP_BW as EPP (Flow Control Worker)
-    participant EPP_Sched as EPP (Scheduler)
+    participant EPP_Scheduler as EPP (Scheduler)
     participant Endpoint as Model Server
 
     Client->>Proxy: HTTP Request
@@ -293,7 +293,8 @@ sequenceDiagram
 
 1. **Ingress & Buffer**: Incoming requests are classified by `FlowKey` (Priority + Fairness ID) and placed into the appropriate queue. Requests are subject to a configurable TTL (Time-To-Live); if a request remains in the queue past its TTL, it is expired and rejected, preventing the system from processing stale work.
 2. **Policy Evaluation**: Flow Control workers continuously evaluate the queues. They select the highest-priority band with work, apply the **Fairness Policy** to pick a flow, and use the **Ordering Policy** to select the candidate request.
-3. **Gated Dispatch**: Before releasing the request, the **Saturation Detector** is queried. If the pool has capacity, the request is dispatched to the Scheduler. If saturated, the dispatch cycle halts (Head-of-Line blocking), holding the request safely until capacity frees up.
+3. **Gated Dispatch**: Before releasing the request, the **Saturation Detector** is queried. If the pool has capacity, the request is dispatched to the Router. If saturated, the dispatch cycle halts (Head-of-Line blocking), holding the request safely until capacity frees up.
+
 
 ### System Capabilities & Limits
 

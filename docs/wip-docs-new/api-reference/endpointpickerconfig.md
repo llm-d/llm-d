@@ -12,7 +12,7 @@
 | --- | --- |
 | `featureGates` | `[]string` <br> A set of flags to enable experimental features (e.g., `flowControl`). |
 | `plugins` | [][PluginSpec](#pluginspec) <br> **Required** <br> List of plugins to be instantiated (e.g., scorers, adapters, reporters). |
-| `schedulingProfiles` | [][SchedulingProfile](#schedulingprofile) <br> **Required** <br> Named profiles that group plugins into scheduling slots. |
+| `schedulingProfiles` | [][SchedulingProfile](#schedulingprofile) <br> **Required** <br> Named profiles that group plugins into routing slots. |
 | `saturationDetector` | [SaturationDetectorConfig](#saturationdetectorconfig) <br> Configuration for the saturation detector plugin. Defaults to `utilization-detector`. |
 | `dataLayer` | [DataLayerConfig](#datalayerconfig) <br> Configures the DataLayer for metadata extraction and processing. |
 | `flowControl` | [FlowControlConfig](#flowcontrolconfig) <br> Configures global and per-priority admission control. Only respected if the `flowControl` feature gate is enabled. |
@@ -30,7 +30,7 @@ Defines a plugin instance and its parameters.
 
 ## SchedulingProfile
 
-Groups plugins to define specific scheduling behavior.
+Groups plugins to define specific routing behavior.
 
 | Field | Description |
 | --- | --- |

@@ -54,10 +54,10 @@ The llm-d EPP supports disaggregation via the `pd-profile-handler`.
 
 When configured with `pd-profile-handler`, the EPP processes requests in the following steps:
 - `proxy` forwards request metadata to the EPP.
-- `pd-profile-handler` runs the `decode-profile`, which executes the `filter`, `score`, `pick` scheduler profile to select D endpoint.
+- `pd-profile-handler` runs the `decode-profile`, which executes the `filter`, `score`, `pick` request scheduling profile to select D endpoint.
 - `pd-profile-handler` consults the `decider` — given how much of the prompt is cached on D, should this request run disagg?
 - If `no`: `pd-profile-handler` returns only the D endpoint to the `proxy`
-- If `yes` (large uncached suffix), `pd-profile-handler` also runs the `prefill-profile`, which executes the `filter`, `score`, `pick` scheduler profile to select the P endpoint and returns both the P and D endpoints to the proxy.
+- If `yes` (large uncached suffix), `pd-profile-handler` also runs the `prefill-profile`, which executes the `filter`, `score`, `pick` request scheduling profile to select the P endpoint and returns both the P and D endpoints to the proxy.
 
 
 The flow looks like this:

@@ -1,4 +1,4 @@
-## optimized-baseline guide overrides for the scheduler.
+## optimized-baseline guide overrides for the llm-d router.
 ## Layer on top of: recipes/scheduler/base.values.yaml
 
 inferenceExtension:

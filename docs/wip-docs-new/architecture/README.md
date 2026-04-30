@@ -2,46 +2,44 @@
 
 High-level guide to llm-d architecture. Start here, then dive into specific guides.
 
-## Core
+## Core Components
 
-At its core, llm-d contains the following key layers:
+The llm-d architecture is built around three primary concepts: the Router, the InferencePool, and the Model Server.
 
-- **Proxy** - Accepts requests from the users. It can be deployed as a Standalone Envoy Proxy or via Kubernetes Gateway API. The Proxy consults an EndPoint Picker (EPP) via the ext-proc protocol to determine which Model Server is optimal for a request.
+- **llm-d Router** - The intelligent entry point for inference requests. It provides LLM-aware load balancing, request queuing, and policy enforcement. It is composed of two functional parts:
+    - **Proxy**: A high-performance L7 proxy (typically Envoy) that accepts user requests and consults the EPP via the `ext-proc` protocol to determine the optimal destination.
+    - **Endpoint Picker (EPP)**: The routing engine that scores and selects model server pods based on real-time metrics, KV-cache affinity, and configured policies.
 
-- **EndPoint Picker (EPP)** - Selects which endpoint in an `InferencePool` is optimal for a specific request. The EPP is the "brains" of the scheduling and queuing decisions that consider prefix-cache affinity, load and saturation signals, prioritization, and (optionally) disaggregated serving.
+- **InferencePool** - The API that defines a group of Model Server Pods sharing the same model and compute configuration. Conceptualized as an "LLM-optimized Service", it serves as the discovery target for the Router.
 
-- **InferencePool** - The InferencePool API defines a group of Model Server Pods dedicated to serving AI models. An InferencePool is conceptually similar to a Kubernetes Service. Each InferencePool has an associated EPP which selects the optimal pod for a request.
+- **Model Server** - The inference engine (such as vLLM or SGLang) that executes the model on hardware accelerators (GPUs, TPUs, HPUs).
 
-- **Model Server** - The Model Server (like vLLM or SGLang) executes the model on hardware accelerators. The Model Servers can be deployed through any deployment process, joining an `InferencePool` via Kubernetes labels and selectors.
-
-
-![Basic architecture](../../assets/basic-architecture.svg)
+<p align="center">
+  <img src="../../assets/basic-architecture.svg" width="600" alt="Architecture">
+</p>
 
 For more details on the core components, see:
-- [Proxy](core/proxy.md)
-- [EPP](core/epp/README.md)
+- [llm-d Router](core/router/README.md)
+    - [Proxy](core/router/proxy.md)
+    - [EPP](core/router/epp/README.md)
 - [InferencePool](core/inferencepool.md)
 - [Model Server](core/model-servers.md)
 
 ## Advanced Patterns
 
-llm-d's core design can be extended with optional advanced patterns, which can be classified in the following types:
+llm-d's core design can be extended with optional advanced patterns:
 
-### Disaggregation
+### Disaggregated Serving
 
-In disaggregated serving, a single inference request is split into multiple steps (e.g. Prefill phase and Decode phase). llm-d's EPP supports the concept of disaggregation and leverages the protocols of the Model Servers (vLLM and SGLang) to execute the multi-step inference process.
+In disaggregated serving, a single inference request is split into multiple phases (e.g., Prefill and Decode) handled by specialized workers. The llm-d Router orchestrates this flow by selecting both a prefill and a decode endpoint and coordinating the KV-cache transfer between them.
 
-See [Disaggregation](advanced/disaggregation/README.md) for complete details on the disaggregated serving design.
+See [Disaggregation](advanced/disaggregation/README.md) for complete details.
 
-### EPP "Consultants"
+### Router "Consultants"
 
-By default, the llm-d EPP leverages scorers that are used to selecting the optimal pod, leveraging:
-- The Model Server's exported Prometheus metrics
-- In-memory data structures (most notably, a prefix-cache tree that approximates the KV cache state of each pod)
-
-Should your use case require it, the EPP can optionally query 'consultant' components to execute arbitrary scoring logic and enable advanced patterns. For more details on example "Consultants", see:
-- [Latency Predictor](advanced/latency-predictor.md), which trains an XGBoost model online (using measured latency of previous requests) for scheduling decisions
-- [KV-Cache Indexer](advanced/kv-indexer.md), which maintains a globally consistent, event-driven view of each Model Server's KV cache state and serves as the foundation for advanced prefix-cache-aware scheduling (multimodal, HMA-aware routing, and more)
+The EPP can be extended with 'consultant' sidecars that provide additional signals for routing decisions:
+- [Latency Predictor](advanced/latency-predictor.md): Trains an XGBoost model online to predict request latency for better endpoint scoring.
+- [KV-Cache Indexer](advanced/kv-indexer.md): Maintains a precise, event-driven view of KV cache state across all model servers for high-affinity routing.
 
 ### Batch Inference
 
@@ -51,12 +49,8 @@ See [Batch Inference](advanced/batch/README.md) for details on the batch inferen
 
 ### Autoscaling
 
-With autoscaling, Model Servers are added or removed automatically to keep serving capacity aligned with inference demand. llm-d supports two autoscaling approaches — HPA/KEDA for standard Kubernetes-native scaling and the Workload Variant Autoscaler (WVA) for globally optimized scaling that minimizes cost while working toward SLO targets. Both consume scaling signals drawn from three categories:
+llm-d supports proactive, SLO-aware autoscaling through two complementary approaches:
+- **HPA/KEDA**: Standard Kubernetes-native scaling using metrics exported by the EPP (like queue depth).
+- **Workload Variant Autoscaler (WVA)**: Globally optimized scaling that minimizes cost by routing traffic across different model variants (e.g., different hardware or quantization) while meeting latency targets.
 
-- **Supply-side** — Remaining resource headroom on backends (KV cache capacity, compute throughput) versus current resource consumption (tokens in use, model server queue depth). Scales when utilization leaves insufficient headroom.
-
-- **Demand-side** — EPP flow-control signals (queue depth and active request counts) versus current processing capacity. Scales when pending requests accumulate faster than backends can drain them.
-
-- **SLO-driven (Experimental)** — Observed request arrival rate versus the maximum rate backends can sustain while meeting latency targets. Learns server behavior online and scales proactively to keep time to first token (TTFT) and inter-token latency (ITL) within configured targets.
-
-See [Autoscaling](advanced/autoscaling/README.md) for complete details on the autoscaling design.
+See [Autoscaling](advanced/autoscaling/README.md) for complete details.

@@ -16,13 +16,13 @@ See the [precise prefix cache-aware guide](https://github.com/llm-d/llm-d/tree/m
 
 ## Architecture
 
-The split is straightforward: **model servers** produce KV-events on every cache change; the **inference scheduler** consumes them to score pods for better routing decisions. The two sides are decoupled — model server and inference scheduler replicas scale independently.
+The split is straightforward: **model servers** produce KV-events on every cache change; the **llm-d Router** consumes them to score pods for better routing decisions. The two sides are decoupled — model server and llm-d Router replicas scale independently.
 
-Inside the inference scheduler:
+Inside the llm-d Router:
 - An **indexer** consumes the event stream and maintains a `block key → pods` mapping for every block resident across the fleet.
 - A **scorer** derives block keys deterministically from the input and queries the index. It returns the longest consecutive prefix each candidate pod has cached, weighted by tier.
 
-Events flow from model-server pods to the inference scheduler over ZMQ. The default mode is **centralized** — every pod publishes to a single inference scheduler endpoint, fitting a single replica. For multi-replica deployments, **pod discovery** has each inference scheduler replica subscribe to every model server pod independently; all replicas converge to the same index, enabling active-active HA across schedulers.
+Events flow from model-server pods to the llm-d Router over ZMQ. The default mode is **centralized** — every pod publishes to a single llm-d Router endpoint, fitting a single replica. For multi-replica deployments, **pod discovery** has each llm-d Router replica subscribe to every model server pod independently; all replicas converge to the same index, enabling active-active HA across routers.
 
 ## Further Reading
 

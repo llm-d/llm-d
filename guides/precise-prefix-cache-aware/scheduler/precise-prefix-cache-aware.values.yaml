@@ -1,10 +1,10 @@
-## precise-prefix-cache-aware guide overrides for the scheduler.
+## precise-prefix-cache-aware guide overrides for the router.
 ## Layer on top of: recipes/scheduler/base.values.yaml
 ##
-## Default mode: central ZMQ — the scheduler SUB binds tcp://*:5556 and vLLM
-## PUBs connect to the EPP service. Single scheduler replica. See
+## Default mode: central ZMQ — the EPP SUB binds tcp://*:5556 and vLLM
+## PUBs connect to the EPP service. Single EPP replica. See
 ## features/active-active.values.yaml to switch to active-active HA (two
-## scheduler replicas each with its own Envoy gateway sidecar, behind one
+## EPP replicas each with its own Envoy gateway sidecar, behind one
 ## Service).
 
 inferenceExtension:
@@ -16,7 +16,7 @@ inferenceExtension:
     tag: v0.8.0-rc.1
     pullPolicy: IfNotPresent
 
-  # Expose the ZMQ port for KV-events ingress. In central mode the scheduler
+  # Expose the ZMQ port for KV-events ingress. In central mode the EPP
   # listens here; vLLM connects via its --kv-events-config endpoint.
   # NOTE: extraServicePorts replaces the chart default, so the http port
   # (mapped to the Envoy sidecar's :8081 listener) must be re-declared

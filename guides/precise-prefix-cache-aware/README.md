@@ -70,11 +70,11 @@ Create the `llm-d-hf-token` secret in the namespace. The UDS tokenizer sidecar r
 kubectl -n ${NAMESPACE} create secret generic llm-d-hf-token --from-literal=HF_TOKEN="${HF_TOKEN}"
 ```
 
-### 2. Deploy the Inference Scheduler
+### 2. Deploy the llm-d Router
 
 #### Standalone Mode
 
-This deploys the inference scheduler with an Envoy sidecar — no Kubernetes Gateway required.
+This deploys the llm-d Router in the simple [Standalone Mode](placeholder-link):
 
 ```bash
 helm plugin install guides/precise-prefix-cache-aware/scheduler/patches/uds-tokenizer   # once
@@ -102,7 +102,7 @@ To use a Kubernetes Gateway managed proxy instead of the standalone Envoy sideca
 
 1. **Deploy a Kubernetes Gateway**. See [the gateway guides](../prereq/gateways) for step-by-step deployment of a Gateway named `llm-d-inference-gateway`.
 
-2. **Deploy the Inference Scheduler and HTTPRoute** via the `inferencepool` chart with `experimentalHttpRoute.enabled=true`. Same UDS post-renderer applies:
+2. **Deploy the llm-d Router and HTTPRoute** via the `inferencepool` chart with `experimentalHttpRoute.enabled=true`. Same UDS post-renderer applies:
 
    ```bash
    export PROVIDER_NAME=istio   # options: none, gke, agentgateway, istio

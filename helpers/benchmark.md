@@ -150,7 +150,7 @@ This helper describes how to run benchmarks against a deployed llm-d stack.
 > <summary><b>Workload Variant Autoscaling (WVA) + optimized baseline</b></summary>
 >
 > ```bash
-> # To obtain the Gateway SVC, please find your inference gateway pod first, then obtain the name.
+> # To obtain the Gateway SVC, please find your llm-d router pod first, then obtain the name.
 > #
 > # For example:
 > #

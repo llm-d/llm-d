@@ -460,7 +460,7 @@ Metrics are organized by the subsystem that owns the logic. For detailed tables 
 
 *   **[Request Handling Metrics](request-handling.md#metrics--observability)**: Request volume, latency, token usage, and success rates.
 *   **[Flow Control Metrics](flow-control.md#metrics--observability)**: Queue sizes, dispatch cycles, and pool saturation.
-*   **[Scheduling Metrics](scheduling.md#metrics--observability)**: Scheduler performance and pool health state.
+*   **[Routing Metrics](scheduling.md#metrics--observability)**: Router performance and pool health state.
 
 
 

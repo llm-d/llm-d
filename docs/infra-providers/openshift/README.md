@@ -208,7 +208,7 @@ Output:
 }
 ```
 
-#### Send prompts through inference gateway
+#### Send prompts through llm-d router
 ```sh
 curl -X POST  localhost:8000/v1/completions     -H "Content-Type: application/json"     -d '{
       "model": "Qwen/Qwen3-0.6B",

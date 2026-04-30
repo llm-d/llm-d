@@ -14,13 +14,13 @@ Quick-reference definitions for terms used throughout the llm-d documentation. F
 
 **Disaggregated Serving** — A deployment pattern that separates Prefill and Decode into dedicated, independently scalable pools of Model Servers, connected by NIXL for KV-cache transfer. See [Disaggregation](../architecture/advanced/disaggregation/README.md).
 
-**Endpoint Picker (EPP)** — The central scheduling component of llm-d. Receives ext-proc callbacks from the Proxy, evaluates candidate Model Servers through a Plugin Pipeline of filters, scorers, and pickers, and returns the address of the optimal backend. See [EPP](../architecture/core/epp/README.md).
+**Endpoint Picker (EPP)** — The central routing component of llm-d. Receives ext-proc callbacks from the Proxy, evaluates candidate Model Servers through a Plugin Pipeline of filters, scorers, and pickers, and returns the address of the optimal backend. See [EPP](../architecture/core/epp/README.md).
 
 **Envoy** — A high-performance L7 GAIE-conformant proxy that can be used with llm-d as a data-plane Proxy. It communicates routing decisions with the EPP via ext-proc. See [Proxy](../architecture/core/proxy.md).
 
 **Expert Parallelism (EP)** — Distributing the expert layers of MoE models across multiple GPUs, enabling large models like DeepSeek-R1 to be served across nodes. See [Model Servers](../architecture/core/model-servers.md).
 
-**ext-proc (External Processing)** — An Envoy filter protocol that offloads per-request routing decisions to an external gRPC service — in llm-d, the EPP. This is the communication channel between the Proxy and the scheduling logic. See [EPP](../architecture/core/epp/README.md).
+**ext-proc (External Processing)** — An Envoy filter protocol that offloads per-request routing decisions to an external gRPC service — in llm-d, the EPP. This is the communication channel between the Proxy and the routing logic. See [EPP](../architecture/core/epp/README.md).
 
 **Flow Control** — The EPP subsystem that manages admission, queuing, and dispatch of requests using a Priority, Fairness, and Ordering hierarchy to prevent backend overload. See [EPP](../architecture/core/epp/README.md).
 
@@ -38,7 +38,7 @@ Quick-reference definitions for terms used throughout the llm-d documentation. F
 
 **Latency Predictor** — A Consultant that uses XGBoost quantile regression models trained on live traffic to predict per-endpoint TTFT and TPOT, enabling SLO-aware routing. See [Latency Predictor](../architecture/advanced/latency-predictor.md).
 
-**llm-d** — A Kubernetes-native distributed inference serving stack that adds intelligent routing, KV Cache-aware scheduling, Disaggregated Serving, and autoscaling on top of existing Model Servers. See [Introduction](../getting-started/README.md).
+**llm-d** — A Kubernetes-native distributed inference serving stack that adds intelligent routing, KV Cache-aware routing, Disaggregated Serving, and autoscaling on top of existing Model Servers. See [Introduction](../getting-started/README.md).
 
 **MoE (Mixture of Experts)** — A model architecture where only a subset of "expert" sub-networks activate per token, enabling very large models (e.g., DeepSeek-R1) to run efficiently. llm-d supports MoE serving via Wide Expert Parallelism.
 

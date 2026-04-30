@@ -7,10 +7,10 @@ LLM requests break all three assumptions. They are:
 * **Slow** - a single request can take over a minute generating tokens
 * **Non-uniform** - range from 1000s of reasoning tokens to a 100k+ context tokens
 
-The llm-d inference scheduler injects awareness of the LLM-workload into the load-balancing layer considering **prefix-cache affinity** and **server load metrics**.
+The llm-d Router injects awareness of the LLM-workload into the load-balancing layer considering **prefix-cache affinity** and **server load metrics**.
 
 > [!NOTE]
-> This guide demonstrates one approach to prefix- and load-aware scheduling. Inference scheduler supports other options as well, including session affinity and active request based scheduling, which make no assumptions about the scheduler's ability to parse the request or probe the servers. See [configuration](../architecture/core/epp/configuration.md) for more details on the available scorers, or [precise prefix-cache-aware routing](precise-prefix-cache-aware.md) for KV-event-driven scoring.
+> This guide demonstrates one approach to prefix- and load-aware routing. The llm-d Router supports other options as well, including session affinity and active request based routing, which make no assumptions about the router's ability to parse the request or probe the servers. See [configuration](../architecture/core/epp/configuration.md) for more details on the available scorers, or [precise prefix-cache-aware routing](precise-prefix-cache-aware.md) for KV-event-driven scoring.
 
 ## Deploy
 

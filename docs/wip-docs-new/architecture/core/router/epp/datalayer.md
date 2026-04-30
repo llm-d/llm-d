@@ -1,6 +1,6 @@
 # EPP Data Layer
 
-The EPP Data Layer is a pluggable and extensible component responsible for gathering, processing, and storing real-time state for model server endpoints. It provides the foundational data—such as queue depths, KV cache utilization, and LoRA adapter states—that [scheduling](scheduling.md) and [flow control](flow-control.md) plugins use to make informed decisions.
+The EPP Data Layer is a pluggable and extensible component responsible for gathering, processing, and storing real-time state for model server endpoints. It provides the foundational data—such as queue depths, KV cache utilization, and LoRA adapter states—that [request scheduling](scheduling.md) and [flow control](flow-control.md) plugins use to make informed decisions.
 
 ## Architecture Overview
 

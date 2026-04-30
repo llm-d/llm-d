@@ -147,7 +147,7 @@ All latency and prediction-duration series are Prometheus **histograms**, so das
 
 ## Source
 
-- **EPP plugins** (`predicted-latency-producer`, `prefix-cache-affinity-filter`, `latency-scorer`, `weighted-random-picker`, `slo-headroom-tier-filter`, `latency-slo-admitter`) live in [llm-d/llm-d-inference-scheduler](https://github.com/llm-d/llm-d-inference-scheduler). Per-plugin configuration references live alongside each plugin in that repo.
+- **EPP plugins** (`predicted-latency-producer`, `prefix-cache-affinity-filter`, `latency-scorer`, `weighted-random-picker`, `slo-headroom-tier-filter`, `latency-slo-admitter`) live in [llm-d Router](https://github.com/llm-d/llm-d-inference-scheduler). Per-plugin configuration references live alongside each plugin in that repo.
 - **Training and prediction server code** (the Python ML sidecars, XGBoost models, stratified sampler) lives in [llm-d/llm-d-latency-predictor](https://github.com/llm-d/llm-d-latency-predictor).
 
 ## Further Reading

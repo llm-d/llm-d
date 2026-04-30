@@ -7,7 +7,7 @@
 1. Keep it simple - Users rapidly achieve running inference along a few well-lit paths
 2. Composition is preferred to configurability - components connect at API boundaries
 3. We move fast - experimental code and features are encouraged as long as they are opt-in and isolated when off
-4. We respect our upstreams - vLLM and inference-gateway are where code changes start, no forks
+4. We respect our upstreams - vLLM and the Kubernetes Inference Gateway are where code changes start, no forks
 5. We are shipping to production - core code should have a high review, test, and reliability bar
 6. vLLM-first but not vLLM-only - build the modular architecture for most people and collaborate with other projects
 7. [Hyrum's Law](https://www.hyrumslaw.com/) is real - we do not regress published APIs or ship breaking changes, only new APIs
@@ -42,7 +42,7 @@ To rapidly align the technical vision across the major stakeholders in the proje
 * Accelerate consensus and resolve disagreements
 * Approve changes to project process
 
-Project leadership and maintainer roles are listed in the [MAINTAINERS.md](./MAINTAINERS.md) file of this repository. The initial project maintainers are Carlos Costa, Clayton Coleman, and Robert Shaw, representing inference optimization research, the inference gateway project, and vLLM respectively.
+Project leadership and maintainer roles are listed in the [MAINTAINERS.md](./MAINTAINERS.md) file of this repository. The initial project maintainers are Carlos Costa, Clayton Coleman, and Robert Shaw, representing inference optimization research, the llm-d Router project, and vLLM respectively.
 
 As the project matures we expect to separate and devolve these responsibilities and to rely on component maintainers for architectural alignment.
 

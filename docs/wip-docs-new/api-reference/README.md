@@ -16,7 +16,7 @@ These schemas define the internal configuration for project components and are t
 
 | Schema | Version | Description |
 | --- | --- | --- |
-| [EndpointPickerConfig](endpointpickerconfig.md) | `v1alpha1` | Defines the internal configuration for the **Endpoint Picker (EPP)**, including plugins and scheduling profiles. |
+| [EndpointPickerConfig](endpointpickerconfig.md) | `v1alpha1` | Defines the internal configuration for the **Endpoint Picker (EPP)**, including plugins and request scheduling profiles. |
 
 ## Recognized HTTP Headers
 

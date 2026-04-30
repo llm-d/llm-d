@@ -7,7 +7,7 @@ The **KV-Cache Indexer** enables llm-d's precise prefix-cache-aware scheduling f
 
 ## Functionality
 
-The kv-cache indexer subscribes to `KVEvents` emitted from model servers to maintain a near-realtime view of the KV cache state. The `precise-prefix-cache-scorer` uses this information during the EPP scheduler's filter → score → pick flow.
+The kv-cache indexer subscribes to `KVEvents` emitted from model servers to maintain a near-realtime view of the KV cache state. The `precise-prefix-cache-scorer` uses this information during the EPP filter → score → pick flow.
 
 The precise view offers improved precision for harder-to-approximate scenarios:
 - **Multi-Modal Models** — Multi-modal content hashes (images, audio) are folded into block keys, so two prompts with the same text but different images produce different keys and are routed to the pod with matching multimodal KV-cache.
@@ -73,7 +73,7 @@ Two shapes are supported for getting events from the model servers to the EPP:
   Model Server C ──► ZMQ ──┘
 ```
 
-* **Pod discovery** — each model-server pod binds its own ZMQ socket. The EPP discovers pods via Kubernetes label selectors and creates per-pod subscribers. This is the mode to use for active-active multi-scheduler: every EPP replica independently subscribes to every pod and sees the full event stream.
+* **Pod discovery** — each model-server pod binds its own ZMQ socket. The EPP discovers pods via Kubernetes label selectors and creates per-pod subscribers. This is the mode to use for active-active multi-EPP: every EPP replica independently subscribes to every pod and sees the full event stream.
 
 ```
   EPP Replica 1 ──ZMQ──┐
@@ -132,7 +132,7 @@ Even if Pod C happened to hold `B3` and `B4`, those entries are unusable without
 
 When blocks are stored across memory tiers, each matching block's contribution is weighted by tier. For a block cached on multiple tiers at once, the scorer takes the maximum weight. Defaults are `gpu = 1.0`, `cpu = 0.8`.
 
-Raw scores are then normalized to `[0.0, 1.0]` before being returned to the scheduler, where they are combined with other scorers (queue depth, KV-cache utilization, etc.) through the standard Filter-Score-Pick pipeline.
+Raw scores are then normalized to `[0.0, 1.0]` before being returned to the EPP, where they are combined with other scorers (queue depth, KV-cache utilization, etc.) through the standard Filter-Score-Pick pipeline.
 
 #### Speculative Indexing
 
@@ -153,4 +153,4 @@ Many deployment patterns cache KV blocks based on more than text. The indexer su
 ## Further Reading
 
 - [**llm-d-kv-cache**](https://github.com/llm-d/llm-d-kv-cache) — the indexer library. See [architecture.md](https://github.com/llm-d/llm-d-kv-cache/blob/main/docs/architecture.md) for the in-depth technical architecture (block-key hashing, dual-key design, event adapters, module breakdown) and [configuration.md](https://github.com/llm-d/llm-d-kv-cache/blob/main/docs/configuration.md) for the full configuration reference.
-- [**llm-d-inference-scheduler**](https://github.com/llm-d/llm-d-inference-scheduler) — source for the `precise-prefix-cache-scorer` and `tokenizer` plugins. Plugin lifecycle, EPP extension-point wiring, and scheduling-profile examples.
+- [**llm-d Router**](https://github.com/llm-d/llm-d-inference-scheduler) — source for the `precise-prefix-cache-scorer` and `tokenizer` plugins. Plugin lifecycle, EPP extension-point wiring, and request scheduling profile examples.

@@ -4,7 +4,7 @@
 
 The EPP is the "brains" of an llm-d deployment. It is focused on two key objectives:
 
-- **Intelligent scheduling** - selecting which **model server pod** within an InferencePool should process each inference request, using the internal state of model server pods (KV-cache utilization, prefix cache locality, request queue depth, and active request counts)
+- **Intelligent routing** - selecting which **model server pod** within an InferencePool should process each inference request, using the internal state of model server pods (KV-cache utilization, prefix cache locality, request queue depth, and active request counts)
 
 - **Fairness and prioritization** - selecting which **inference requests** should run at any given time, enabling consolidation of multiple workloads with varying priorities onto a single set of Model Servers
 
@@ -23,7 +23,9 @@ When a request arrives at the proxy, the proxy calls the EPP to select a backend
 
 The following diagram shows the end-to-end lifecycle of a request as it flows through the EPP plugin pipeline:
 
-![Design](../../../../assets/epp-design.svg)
+<p align="center">
+  <img src="../../../../../assets/epp-design.svg" width="650" alt="EPP Design">
+</p>
 
 The steps are:
 
@@ -31,10 +33,10 @@ The steps are:
 2. **External processing** -- The proxy invokes the EPP via the ext-proc protocol, passing the request headers and body to the EPP.
 3. **Request handling** -- Parses the request (from e.g. OpenAI format, vllm gRPC) into the internal request data structure.
 4. **Flow control** -- If enabled, queues requests and prioritizes and ensures fairness across different tenants within a priority, and holding requests when the pool is "saturated".
-5. **Scheduling** -- Selecting the optimal endpoint from the available InferencePool, which involves evaluating each request against a configured set of scheduling plugins, such as filters and scorers.
+5. **Request Scheduling** -- Selecting the optimal endpoint from the available InferencePool, which involves evaluating each request against a configured set of scheduling plugins, such as filters and scorers.
 6. **Request Proxying** -- The EPP returns the address of the selected endpoint to the proxy, which then forwards the request to the corresponding model server endpoint.
 
-Asynchronously, the **Data layer** watches the Kubernetes API server for updates to relevant objects like InferencePools and Pods for endpoint discovery. It is also responsible for model servers metrics probing, and maintaining an internal state—such as a prefix cache tree—to inform the request processing components, Flow Control and Scheduling.
+Asynchronously, the **Data layer** watches the Kubernetes API server for updates to relevant objects like InferencePools and Pods for endpoint discovery. It is also responsible for model servers metrics probing, and maintaining an internal state—such as a prefix cache tree—to inform the request processing components, flow control and request scheduling.
 
 ### Layers
 
@@ -50,7 +52,7 @@ The **Data Layer** operates asynchronously, consuming and storing data from a va
 - Kube API Server about which pods are active in the InferencePool
 - Model Servers about the current internal state (running requests, kv cache utilization)
 - In-memory data structures, such as prefix cache trees for prefix-aware routing
-- "Consultant" sidecars like the latency predictor, the kv-indexer or tokenizer for advanced scheduling
+- "Consultant" sidecars like the latency predictor, the kv-indexer or tokenizer for advanced routing
 
 Other modules in the EPP consult the **Data Layer** during request processing.
 
@@ -77,10 +79,10 @@ Flow control's primary purpose is to manage the admission, queuing, and dispatch
 
 See [Flow Control](flow-control.md) for more details on the design.
 
-#### Scheduler (Extensible)
+#### Request Scheduler (Extensible)
 
-The scheduler acts as the core decision-making engine for intelligent request scheduling. It operates through a modular Filter → Score → Pick plugins pipeline orchestrated by a ProfileHandler plugin, allowing it to evaluate and select the most suitable model server endpoints for each incoming request. 
+The scheduler acts as the core decision-making engine for intelligent request routing. It operates through a modular Filter → Score → Pick plugins pipeline orchestrated by a ProfileHandler plugin, allowing it to evaluate and select the most suitable model server endpoints for each incoming request. 
 
-By leveraging custom plugins at each stage—filtering out unavailable endpoints, scoring them based on metrics like "least-loaded" or "affinity," and picking final candidates—the scheduler ensures high performance and efficient resource distribution across inference pools.
+By leveraging custom plugins at each stage—filtering out unavailable endpoints, scoring them based on metrics like "least-loaded" or "affinity," and picking final candidates—the EPP ensures high performance and efficient resource distribution across inference pools.
 
-See [Scheduling](scheduling.md) for more details on the design.
+See [Request Scheduling](scheduling.md) for more details on the design.

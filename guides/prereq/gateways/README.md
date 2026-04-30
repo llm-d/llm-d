@@ -1,6 +1,6 @@
 # Gateway Guides
 
-This directory contains guides for deploying a k8s Gateway managed proxy for the Inference Scheduler.
+This directory contains guides for deploying a k8s Gateway managed proxy for the **llm-d Router**.
 
 > [!NOTE]
 > To have an end-to-end working Gateway configuration, the guides require deploying one of the [well-lit paths](../../guides/README.md).
