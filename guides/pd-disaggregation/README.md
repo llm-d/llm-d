@@ -4,7 +4,7 @@
 
 ## Overview
 
-This guide deploys `openai/gpt-oss-120b` with prefill-decode disaggregation, improving throughput per GPU and quality of service. Since disaggregation is natively built into EPP, we can compose features like prefix- and load-aware routing with disaggregated serving. In this example, we will demonstrate a deployment with:
+This guide deploys `openai/gpt-oss-120b` with prefill-decode disaggregation, improving throughput per GPU and quality of service. Since disaggregation is natively built into llm-d Router, we can compose features like prefix- and load-aware routing with disaggregated serving. In this example, we will demonstrate a deployment with:
 
 * 8 TP=1 Prefill Instances
 * 2 TP=4 Decode Instances

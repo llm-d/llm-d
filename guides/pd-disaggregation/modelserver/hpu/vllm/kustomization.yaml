@@ -4,7 +4,7 @@ resources:
   - ../../../../recipes/modelserver/base/single-host/pd/vllm
   - resource-claim-templates.yaml
 
-namePrefix: pd-vllm-
+namePrefix: pd-disaggregation-hpu-vllm-
 
 configurations:
   - namereference.yaml
