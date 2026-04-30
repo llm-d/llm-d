@@ -312,6 +312,7 @@ ARG MAX_JOBS=4
 ARG ENABLE_EFA
 ARG EFA_INSTALLER_VERSION
 ARG LLM_D_OFFLOADING_CONNECTOR_VERSION
+ARG INSTALL_OFFLOADING_CONNECTOR=true
 
 COPY docker/constraints.txt /tmp/constraints.txt
 
@@ -369,8 +370,13 @@ RUN /tmp/install-runtime-packages.sh && \
     rm -rf /tmp/packages
 
 # Copy in storage offloading connector wheel (CUDA-aware: selects +cu130 variant when CUDA >= 13)
+# Disabled for GB200 builds until aarch64 wheels are available upstream
 COPY docker/scripts/cuda/runtime/install-offloading-connector.sh /tmp/install-offloading-connector.sh
-RUN /tmp/install-offloading-connector.sh && \
+RUN if [ "${INSTALL_OFFLOADING_CONNECTOR}" = "true" ]; then \
+        /tmp/install-offloading-connector.sh; \
+    else \
+        echo "Skipping offloading connector installation (INSTALL_OFFLOADING_CONNECTOR=${INSTALL_OFFLOADING_CONNECTOR})"; \
+    fi && \
     rm -f /tmp/install-offloading-connector.sh
 
 # Copy EFA installation if enabled
