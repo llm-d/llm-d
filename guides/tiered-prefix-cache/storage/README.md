@@ -113,14 +113,7 @@ Set your storage class which will be used later to provision the PVC.
 export STORAGE_CLASS=efs-sc
 ```
 
-To provision AWS EFS and configure the corresponding `StorageClass`, follow the full guide:
-
-<details>
-<summary>Setup guide</summary>
-
-See: ./manifests/backends/aws/README.md
-
-</details>
+To provision AWS EFS and configure the corresponding `StorageClass`, follow the [full guide](./manifests/backends/aws/README.md).
 
 EFS provides a POSIX-compatible shared filesystem with ReadWriteMany (RWX) support, allowing multiple vLLM pods across nodes to share KV cache.
 
