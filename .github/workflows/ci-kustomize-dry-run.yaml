@@ -221,34 +221,66 @@ jobs:
 
       - name: Install GKE CRDs
         run: .github/scripts/install-gke-crds.sh
-
-      - name: Dry-run all environments
+      
+      - name: Dry-run scheduler charts
         run: |
-          cd guides/pd-disaggregation
-          # Extract only the YAML before the --- separator; the rest contains
-          # Go template syntax that yq cannot parse.
-          envs=$(awk '/^---/{exit} {print}' helmfile.yaml.gotmpl | yq -r '.environments | keys | .[]')
-          for env_name in $envs; do
+          CHART_VERSION=v1.4.0
+          failed=0
+          for chart in standalone inferencepool; do
             echo ""
             echo "========================================"
-            echo "pd-disaggregation: environment=$env_name"
+            echo "pd-disaggregation: scheduler (${chart})"
             echo "========================================"
-            echo "--- helmfile template ---"
-            helmfile template -e "$env_name" > /tmp/rendered.yaml
-            echo "--- creating namespaces ---"
-            # Collect namespaces from helmfile release definitions and from the
-            # rendered manifests (some resources reference namespaces outside the
-            # release namespace, e.g. monitoring).
-            {
-              helmfile list -e "$env_name" 2>/dev/null | awk 'NR>1 {print $2}'
-              grep -E '^\s+namespace:\s' /tmp/rendered.yaml | awk '{print $2}' | tr -d '"'"'"
-            } | sort -u | while read -r ns; do
-                kubectl create namespace "$ns" --dry-run=client -o yaml | kubectl apply -f - 2>/dev/null || true
-              done
+            echo "--- helm template ---"
+            if ! helm template pd-disaggregation-scheduler \
+              "oci://registry.k8s.io/gateway-api-inference-extension/charts/${chart}" \
+              -f guides/recipes/scheduler/base.values.yaml \
+              -f guides/recipes/scheduler/features/monitoring.values.yaml \
+              -f guides/pd-disaggregation/scheduler/pd-disaggregation.values.yaml \
+              --version "${CHART_VERSION}" > /tmp/rendered.yaml; then
+              echo "FAIL: helm template failed for ${chart}"
+              failed=1
+              continue
+            fi
             echo "--- kubectl apply --dry-run=server ---"
-            kubectl apply --dry-run=server -f /tmp/rendered.yaml
-            echo "PASS: pd-disaggregation / $env_name"
+            if kubectl apply --dry-run=server -f /tmp/rendered.yaml; then
+              echo "PASS: pd-disaggregation / scheduler (${chart})"
+            else
+              echo "FAIL: pd-disaggregation / scheduler (${chart})"
+              failed=1
+            fi
           done
+          exit $failed
+
+      - name: Kustomize build and dry-run all model server overlays
+        run: |
+          failed=0
+          for overlay_dir in guides/pd-disaggregation/modelserver/*/; do
+            # Each accelerator dir may have one or more server subdirs (vllm, sglang)
+            for kust_dir in "${overlay_dir}"*/; do
+              [ -f "${kust_dir}kustomization.yaml" ] || continue
+              name="${kust_dir#guides/pd-disaggregation/modelserver/}"
+              name="${name%/}"
+              echo ""
+              echo "========================================"
+              echo "pd-disaggregation: ${name}"
+              echo "========================================"
+              echo "--- kustomize build ---"
+              if ! kustomize build "${kust_dir}" > /tmp/rendered.yaml; then
+                echo "FAIL: kustomize build failed for ${name}"
+                failed=1
+                continue
+              fi
+              echo "--- kubectl apply --dry-run=server ---"
+              if kubectl apply --dry-run=server -f /tmp/rendered.yaml; then
+                echo "PASS: pd-disaggregation / ${name}"
+              else
+                echo "FAIL: pd-disaggregation / ${name}"
+                failed=1
+              fi
+            done
+          done
+          exit $failed
 
   dry-run-precise-prefix-cache-aware:
     needs: detect-changes
