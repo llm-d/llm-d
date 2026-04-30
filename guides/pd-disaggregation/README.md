@@ -52,27 +52,25 @@ This guide includes configuration for the following accelerators:
 
 - Have the [proper client tools installed on your local system](../../helpers/client-setup/README.md) to use this guide.
 - Checkout llm-d repo:
-
-  ```bash
-    export branch="main" # branch, tag, or commit hash
-    git clone https://github.com/llm-d/llm-d.git && cd llm-d && git checkout ${branch}
-  ```
+```bash
+export branch="main" # branch, tag, or commit hash
+git clone https://github.com/llm-d/llm-d.git && cd llm-d && git checkout ${branch}
+```
 - Set the following environment variables:
-  ```bash
-    export GAIE_VERSION=v1.4.0
-    export GUIDE_NAME="pd-disaggregation"
-    export NAMESPACE="llm-d-pd-disaggregation"
-    export MODEL_NAME="openai/gpt-oss-120b"
-  ```
+```bash
+export GAIE_VERSION=v1.4.0
+export GUIDE_NAME="pd-disaggregation"
+export NAMESPACE="llm-d-pd-disaggregation"
+export MODEL_NAME="openai/gpt-oss-120b"
+```
 - Install the Gateway API Inference Extension CRDs:
-
-  ```bash
-    kubectl apply -k "https://github.com/kubernetes-sigs/gateway-api-inference-extension/config/crd?ref=${GAIE_VERSION}"
-  ```
+```bash
+kubectl apply -k "https://github.com/kubernetes-sigs/gateway-api-inference-extension/config/crd?ref=${GAIE_VERSION}"
+```
 - Create a target namespace for the installation
-  ```bash
-      kubectl create namespace ${NAMESPACE}
-  ```
+```bash
+kubectl create namespace ${NAMESPACE}
+```
 
 ## Installation Instructions
 
@@ -192,10 +190,10 @@ For more details, refer to the [benchmark instructions doc](../../helpers/benchm
 
 - Download the benchmark script:
 
-  ```bash
-  curl -L -O https://raw.githubusercontent.com/llm-d/llm-d-benchmark/main/existing_stack/run_only.sh
-  chmod u+x run_only.sh
-  ```
+```bash
+curl -L -O https://raw.githubusercontent.com/llm-d/llm-d-benchmark/main/existing_stack/run_only.sh
+chmod u+x run_only.sh
+```
 
 - [Create HuggingFace token](../../helpers/hf-token.md)
 
@@ -211,7 +209,6 @@ curl -LJO "https://raw.githubusercontent.com/llm-d/llm-d/main/guides/pd-disaggre
 envsubst < 20_1_isl_osl.yaml > config.yaml
 ./run_only.sh -c config.yaml -o ./results
 ```
-
 
 ## Cleanup
 
@@ -459,7 +456,7 @@ The following scripts run the same benchmark against a standard deployment and s
 kubectl apply -n ${NAMESPACE} -f guides/pd-disaggregation/baseline/manifest.yaml
 ```
 
-- Benchmark (using the same as above)
+- Benchmark (using the same configuration as above):
 
 ```bash
 export IP=$(kubectl get service baseline -n ${NAMESPACE} -o jsonpath='{.spec.clusterIP}')
@@ -467,7 +464,7 @@ envsubst < 20_1_isl_osl.yaml > config-baseline.yaml
 ./run_only.sh -c config-baseline.yaml -o ./results-baseline
 ```
 
-For this workload (20:1 ISL:OSL, 45 QPS), llm-d improved mean and P90 request latency by ~50%!
+For this workload (20:1 ISL:OSL, 45 QPS), llm-d disaggregation improved mean and P90 request latency by ~50%!
 
 
 | Metric                   | aggregated | llm-d        | Δ% |
