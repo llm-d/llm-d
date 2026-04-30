@@ -13,9 +13,9 @@ on:
       - guides/**/*.yaml
       - guides/**/*.yml
       - guides/**/*.gotmpl
-  # PRs run the fork's workflow code so CI changes can be tested alongside code changes.
+  # All PRs use pull_request_target so workflow code runs from main (secrets available for forks).
   # Secrets are gated behind a GitHub Environment with required reviewers.
-  pull_request:
+  pull_request_target:
     types: [opened, synchronize, reopened]
     branches: [main]
   workflow_dispatch:
@@ -42,18 +42,18 @@ concurrency:
 
 jobs:
   # Gate: determine whether this workflow run should proceed.
-  # For pull_request: requires approval from a maintainer via
+  # For pull_request_target (fork PRs): requires approval from a maintainer via
   # the "build-approval" GitHub Environment with required reviewers.
   # For push/workflow_dispatch: proceeds automatically.
   pr-gate:
-    if: github.event_name == 'pull_request'
+    if: github.event_name == 'pull_request_target'
     runs-on: ubuntu-latest
     environment: build-approval
     steps:
       - run: echo "Build authorized by maintainer"
 
   auto-gate:
-    if: github.event_name != 'pull_request'
+    if: github.event_name != 'pull_request_target'
     runs-on: ubuntu-latest
     steps:
       - run: echo "Auto-authorized (push or dispatch)"
@@ -121,7 +121,7 @@ jobs:
               - guides/pd-disaggregation/helmfile.yaml.gotmpl
 
   # Call the build-image workflow to build any changed images
-  # Resolves build-image.yml from the PR branch, checks out PR code via ref.
+  # Resolves build-image.yml from main (pull_request_target), checks out PR code via ref.
   build-images:
     needs: [pr-gate, auto-gate]
     if: ${{ !cancelled() && !failure() }}

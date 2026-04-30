@@ -139,6 +139,7 @@ jobs:
     needs: [detect-changes]
     if: ${{ needs.detect-changes.outputs.cuda == 'true' }}
     continue-on-error: true
+    environment: build-approval
     strategy:
       fail-fast: false
       matrix:
@@ -285,7 +286,7 @@ jobs:
         if: |
           steps.build-debug.outputs.digest != '' &&
           github.ref == format('refs/heads/{0}', github.event.repository.default_branch) &&
-          github.event_name != 'pull_request'
+          github.event_name != 'pull_request_target'
         run: |
           IMAGE="${{ env.REGISTRY }}/${{ github.repository }}-cuda${{ matrix.image_suffix }}"
           docker buildx imagetools create \
@@ -296,6 +297,7 @@ jobs:
     needs: [detect-changes]
     if: ${{ needs.detect-changes.outputs.cuda == 'true' }}
     continue-on-error: true
+    environment: build-approval
     strategy:
       fail-fast: false
       # multi-OS build matrix: creates 4 images (2 platforms × 2 OS variants)
@@ -538,6 +540,7 @@ jobs:
     if: ${{ needs.cuda-success-check.outputs.any_succeeded == 'true' }}
     runs-on: ubuntu-latest
     continue-on-error: true
+    environment: build-approval
     strategy:
       fail-fast: false
       matrix:
@@ -632,7 +635,7 @@ jobs:
             tags="$tags -t ${{ env.REGISTRY }}/${{ github.repository }}-cuda-dev${{ matrix.image_suffix }}:pr-${{ github.event.pull_request.number }}"
           fi
           if [ "${{ github.ref }}" = "refs/heads/${{ github.event.repository.default_branch }}" ] && \
-             [ "${{ github.event_name }}" != "pull_request" ]; then
+             [ "${{ github.event_name }}" != "pull_request_target" ]; then
             tags="$tags -t ${{ env.REGISTRY }}/${{ github.repository }}-cuda-dev${{ matrix.image_suffix }}:latest"
           fi
           docker buildx imagetools create $tags $sources
@@ -682,6 +685,7 @@ jobs:
     needs: [detect-changes]
     if: ${{ needs.detect-changes.outputs.aws == 'true' }}
     continue-on-error: true
+    environment: build-approval
     strategy:
       fail-fast: false
       # AWS/EFA build matrix: RHEL-only, amd64-only (for now)
@@ -894,6 +898,7 @@ jobs:
     if: ${{ needs.aws-success-check.outputs.any_succeeded == 'true' }}
     runs-on: ubuntu-latest
     continue-on-error: true
+    environment: build-approval
     steps:
       - name: Check if build succeeded
         id: should-run
@@ -964,7 +969,7 @@ jobs:
             tags="$tags -t ${{ env.REGISTRY }}/${{ github.repository }}-aws-dev:pr-${{ github.event.pull_request.number }}"
           fi
           if [ "${{ github.ref }}" = "refs/heads/${{ github.event.repository.default_branch }}" ] && \
-             [ "${{ github.event_name }}" != "pull_request" ]; then
+             [ "${{ github.event_name }}" != "pull_request_target" ]; then
             tags="$tags -t ${{ env.REGISTRY }}/${{ github.repository }}-aws-dev:latest"
           fi
           docker buildx imagetools create $tags $sources
@@ -1013,6 +1018,7 @@ jobs:
   rdma-tools-build-llm-d:
     needs: [detect-changes]
     if: ${{ needs.detect-changes.outputs.rdma-tools == 'true' }}
+    environment: build-approval
     strategy:
       fail-fast: false
     runs-on: ubuntu-latest
@@ -1107,6 +1113,7 @@ jobs:
   xpu-build-llm-d:
     needs: [detect-changes]
     if: ${{ needs.detect-changes.outputs.xpu == 'true' }}
+    environment: build-approval
     strategy:
       fail-fast: false
     runs-on: xpu
@@ -1173,7 +1180,7 @@ jobs:
           tags: |
             ${{ env.REGISTRY }}/${{ github.repository }}-xpu-dev:${{ steps.set-tag.outputs.tag }}
             ${{ steps.set-tag.outputs.pr_tag != '' && format('{0}/{1}-xpu-dev:{2}', env.REGISTRY, github.repository, steps.set-tag.outputs.pr_tag) || '' }}
-            ${{ github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.event_name != 'pull_request' && format('{0}/{1}-xpu-dev:latest', env.REGISTRY, github.repository) || '' }}
+            ${{ github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.event_name != 'pull_request_target' && format('{0}/{1}-xpu-dev:latest', env.REGISTRY, github.repository) || '' }}
           github-token: ${{ secrets.GHCR_TOKEN }}
         env:
           DOCKER_BUILDKIT: "1"
@@ -1210,6 +1217,7 @@ jobs:
   rocm-build-llm-d:
     needs: [detect-changes]
     if: ${{ needs.detect-changes.outputs.rocm == 'true' }}
+    environment: build-approval
     runs-on: vllm-runner
     steps:
       - name: Checkout code
@@ -1251,7 +1259,7 @@ jobs:
           tags: |
             ${{ env.REGISTRY }}/${{ github.repository }}-rocm-dev:${{ steps.set-tag.outputs.tag }}
             ${{ steps.set-tag.outputs.pr_tag != '' && format('{0}/{1}-rocm-dev:{2}', env.REGISTRY, github.repository, steps.set-tag.outputs.pr_tag) || '' }}
-            ${{ github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.event_name != 'pull_request' && format('{0}/{1}-rocm-dev:latest', env.REGISTRY, github.repository) || '' }}
+            ${{ github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.event_name != 'pull_request_target' && format('{0}/{1}-rocm-dev:latest', env.REGISTRY, github.repository) || '' }}
           github-token: ${{ secrets.GHCR_TOKEN }}
         env:
           DOCKER_BUILDKIT: "1"
@@ -1288,6 +1296,7 @@ jobs:
   hpu-build-llm-d:
     needs: [detect-changes]
     if: ${{ needs.detect-changes.outputs.hpu == 'true' }}
+    environment: build-approval
     strategy:
       fail-fast: false
     runs-on: vllm-runner
@@ -1325,7 +1334,7 @@ jobs:
       - name: Tag latest on default branch
         if: |
           github.ref == format('refs/heads/{0}', github.event.repository.default_branch) &&
-          github.event_name != 'pull_request'
+          github.event_name != 'pull_request_target'
         run: |
           export DEVICE=hpu
           export DOCKERFILE=Dockerfile.hpu
@@ -1365,6 +1374,7 @@ jobs:
   cpu-build-llm-d:
     needs: [detect-changes]
     if: ${{ needs.detect-changes.outputs.cpu == 'true' }}
+    environment: build-approval
     runs-on: vllm-runner
     steps:
       - name: Checkout code
@@ -1424,7 +1434,7 @@ jobs:
           tags: |
             ${{ env.REGISTRY }}/${{ github.repository }}-cpu-dev:${{ steps.set-tag.outputs.tag }}
             ${{ steps.set-tag.outputs.pr_tag != '' && format('{0}/{1}-cpu-dev:{2}', env.REGISTRY, github.repository, steps.set-tag.outputs.pr_tag) || '' }}
-            ${{ github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.event_name != 'pull_request' && format('{0}/{1}-cpu-dev:latest', env.REGISTRY, github.repository) || '' }}
+            ${{ github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.event_name != 'pull_request_target' && format('{0}/{1}-cpu-dev:latest', env.REGISTRY, github.repository) || '' }}
           github-token: ${{ secrets.GHCR_TOKEN }}
         env:
           DOCKER_BUILDKIT: "1"
