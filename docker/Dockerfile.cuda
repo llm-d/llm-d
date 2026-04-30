@@ -368,8 +368,8 @@ RUN /tmp/install-runtime-packages.sh && \
     rm -f /tmp/install-runtime-packages.sh /tmp/package-utils.sh && \
     rm -rf /tmp/packages
 
-# Copy in storage offloading connector wheel
-COPY docker/scripts/common/install-offloading-connector.sh /tmp/install-offloading-connector.sh
+# Copy in storage offloading connector wheel (CUDA-aware: selects +cu130 variant when CUDA >= 13)
+COPY docker/scripts/cuda/runtime/install-offloading-connector.sh /tmp/install-offloading-connector.sh
 RUN /tmp/install-offloading-connector.sh && \
     rm -f /tmp/install-offloading-connector.sh
 
