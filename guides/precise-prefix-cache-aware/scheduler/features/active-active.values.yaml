@@ -67,11 +67,6 @@ inferenceExtension:
       apiVersion: inference.networking.x-k8s.io/v1alpha1
       kind: EndpointPickerConfig
       plugins:
-        - type: tokenizer
-          parameters:
-            modelName: Qwen/Qwen3-32B
-            udsTokenizerConfig:
-              socketFile: /tmp/tokenizer/tokenizer-uds.socket
         - type: endpoint-notification-source
         - type: metrics-data-source
         - type: core-metrics-extractor
@@ -110,7 +105,6 @@ inferenceExtension:
         - name: default
           plugins:
             - pluginRef: decode-filter
-            - pluginRef: tokenizer
             - pluginRef: precise-prefix-cache-scorer
               weight: 2.0
             - pluginRef: kv-cache-utilization-scorer
