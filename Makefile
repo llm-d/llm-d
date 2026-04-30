@@ -157,7 +157,7 @@ xpu-prepare: ## Prepare vLLM XPU build context and upstream Dockerfile
 	@rm -rf $(XPU_BUILD_DIR)
 	@mkdir -p $(dir $(XPU_BUILD_DIR))
 	@git clone $(VLLM_REPO) $(XPU_BUILD_DIR)
-	@git -C $(XPU_BUILD_DIR) checkout $(VLLM_COMMIT_SHA)
+	@git -C $(XPU_BUILD_DIR) checkout $(VLLM_XPU_COMMIT_SHA)
 	@curl -fsSL $(XPU_DOCKERFILE_URL) -o $(XPU_BUILD_DIR)/docker/Dockerfile.xpu
 
 .PHONY: image-push
