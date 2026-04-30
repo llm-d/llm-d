@@ -222,7 +222,176 @@ kubectl delete -n ${NAMESPACE} -k guides/optimized-baseline/modelserver/gpu/vllm
 
 The benchmark is running on 16 H200 GPUs (with Infinband on CKS).
 
-### TODO: re-run
+There is a report for each stage.
+
+<details>
+<summary><b><i>Click</i></b> here to view the report for `rate=45` from the above example</summary>
+
+```yaml
+results:
+  request_performance:
+    aggregate:
+      latency:
+        inter_token_latency:
+          max: 0.4451564671471715
+          mean: 0.012416639243213254
+          min: 3.7653371691703796e-06
+          p0p1: 3.986060619354248e-06
+          p1: 4.145316779613495e-06
+          p10: 4.607252776622772e-06
+          p25: 5.087815225124359e-06
+          p5: 4.407018423080444e-06
+          p50: 6.339512765407562e-06
+          p75: 1.2618489563465118e-05
+          p90: 0.05138330096378929
+          p95: 0.09810644732788208
+          p99: 0.18161227625794713
+          p99p9: 0.27771183433011765
+          units: s/token
+        normalized_time_per_output_token:
+          max: 0.03838522714795545
+          mean: 0.020235644857381253
+          min: 0.0005658950262332029
+          p0p1: 0.0007098747353253647
+          p1: 0.012089349899865027
+          p10: 0.01583037307424489
+          p25: 0.017349339720976215
+          p5: 0.01502842840457876
+          p50: 0.019552195101299324
+          p75: 0.022555936899546252
+          p90: 0.026128762050623703
+          p95: 0.028386090987422907
+          p99: 0.03241212966789392
+          p99p9: 0.037228032483879306
+          units: s/token
+        request_latency:
+          max: 9.41744049731642
+          mean: 4.984505030536093
+          min: 2.383338357321918
+          p0p1: 2.710443040263839
+          p1: 3.341698997169733
+          p10: 3.893676984217018
+          p25: 4.25998754077591
+          p5: 3.7291941775474697
+          p50: 4.78889629477635
+          p75: 5.524961187737063
+          p90: 6.3686291925609115
+          p95: 6.938895106548443
+          p99: 7.916496822880583
+          p99p9: 9.114266873544222
+          units: s
+        time_per_output_token:
+          max: 0.015028722692281008
+          mean: 0.012416639243213252
+          min: 0.007651337441056966
+          p0p1: 0.008365667614415288
+          p1: 0.009969908600263297
+          p10: 0.011210729649662972
+          p25: 0.011854297185316682
+          p5: 0.010919190391525625
+          p50: 0.012558143949136139
+          p75: 0.013048471543006599
+          p90: 0.013401017013192178
+          p95: 0.013635492861457169
+          p99: 0.014096900728456678
+          p99p9: 0.014626184518687435
+          units: s/token
+        time_to_first_token:
+          max: 6.2327788500115275
+          mean: 1.8665386269100148
+          min: 0.2328754412010312
+          p0p1: 0.31802471200656146
+          p1: 0.43291855927556755
+          p10: 0.7812989133410155
+          p25: 1.1359100888948888
+          p5: 0.6199993264395743
+          p50: 1.673543413169682
+          p75: 2.400195718742907
+          p90: 3.2472441403195265
+          p95: 3.767739224107936
+          p99: 4.7533523408230405
+          p99p9: 6.065774005791176
+          units: s
+      requests:
+        failures: 0
+        input_length:
+          max: 5234.0
+          mean: 5151.556481481482
+          min: 5106.0
+          p0p1: 5108.0
+          p1: 5116.0
+          p10: 5132.0
+          p25: 5141.0
+          p5: 5127.0
+          p50: 5151.0
+          p75: 5162.0
+          p90: 5171.0
+          p95: 5177.0
+          p99: 5188.01
+          p99p9: 5199.0
+          units: count
+        output_length:
+          max: 5440.0
+          mean: 282.91425925925927
+          min: 145.0
+          p0p1: 201.0
+          p1: 226.0
+          p10: 240.0
+          p25: 243.0
+          p5: 237.0
+          p50: 246.0
+          p75: 248.0
+          p90: 249.0
+          p95: 250.0
+          p99: 253.0
+          p99p9: 5405.803000000002
+          units: count
+        total: 5400
+      throughput:
+        output_token_rate:
+          mean: 12140.475129786893
+          units: tokens/s
+        request_rate:
+          mean: 42.912206551814364
+          units: queries/s
+        total_token_rate:
+          mean: 233205.13092645828
+          units: tokens/s
+run:
+  cid: 84d64299-c166-584e-b27f-d7951cca928b
+  eid: 1b4db7eb-4057-5ddf-91e0-36dec72071f5
+  time: {}
+  uid: 5342f28e-b732-450b-81fb-fa7e2be55c89
+  user: namespace=rob-dev
+scenario:
+  load:
+    metadata:
+      cfg_id: 74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b
+      schema_version: 0.0.1
+    native:
+      args: {}
+    standardized:
+      input_seq_len:
+        distribution: gaussian
+        max: 5234
+        min: 5106
+        value: 5151.556481481482
+      output_seq_len:
+        distribution: gaussian
+        max: 5440
+        min: 145
+        value: 282.91425925925927
+      parallelism: 1
+      rate_qps: 45.0
+      source: unknown
+      stage: 2
+      tool: inference-perf
+      tool_version: ''
+version: '0.2'
+```
+
+</details>
+
 
 ## Comparing llm-d P/D disaggregation to a k8s service
 
@@ -239,7 +408,6 @@ kubectl apply -n ${NAMESPACE} -f guides/pd-disaggregation/baseline/manifest.yaml
 - Benchmark (using the same as above)
 
 ```bash
-export STACK_NAME=baseline
 export IP=$(kubectl get service baseline -n ${NAMESPACE} -o jsonpath='{.spec.clusterIP}')
 envsubst < 20_1_isl_osl.yaml > config-baseline.yaml
 ./run_only.sh -c config-baseline.yaml -o ./results-baseline
