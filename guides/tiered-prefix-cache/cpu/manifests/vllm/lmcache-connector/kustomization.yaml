@@ -9,9 +9,6 @@ patches:
       name: llm-d-model-server
     patch: |-
       - op: replace
-        path: /spec/template/spec/containers/0/image
-        value: ghcr.io/llm-d/llm-d-cuda:v0.6.0
-      - op: replace
         path: /spec/template/spec/containers/0/command
         value:
           - "vllm"
@@ -46,14 +43,6 @@ patches:
         value:
           name: PROMETHEUS_MULTIPROC_DIR
           value: "/tmp/lmcache_prometheus"
-      - op: add
-        path: /spec/template/spec/containers/0/resources
-        value:
-          limits:
-            nvidia.com/gpu: 2
-          requests:
-            nvidia.com/gpu: 2
-            memory: 400G
 
   # Mount an emptyDir to collect prometheus metrics
   - target:

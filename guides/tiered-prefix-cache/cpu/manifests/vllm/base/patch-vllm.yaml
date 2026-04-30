@@ -1,0 +1,59 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: decode
+spec:
+  replicas: 4
+  template:
+    spec:
+      containers:
+        - name: modelserver
+          image: ghcr.io/llm-d/llm-d-cuda:v0.5.1
+          command: ["vllm", "serve"]
+          args:
+            - "Qwen/Qwen3-32B"
+            - "--tensor-parallel-size=2"
+          env:
+            - name: HUGGING_FACE_HUB_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: llm-d-hf-token
+                  key: HF_TOKEN
+          resources:
+            limits:
+              cpu: '16'
+              memory: 400Gi
+              nvidia.com/gpu: 2
+            requests:
+              cpu: '8'
+              memory: 200Gi
+              nvidia.com/gpu: 2
+          volumeMounts:
+            - mountPath: /dev/shm
+              name: shm
+            - mountPath: /.cache
+              name: torch-compile-cache
+          startupProbe:
+            initialDelaySeconds: 15
+            periodSeconds: 30
+            timeoutSeconds: 5
+            failureThreshold: 120
+          livenessProbe:
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            periodSeconds: 5
+            timeoutSeconds: 2
+            failureThreshold: 3
+      restartPolicy: Always
+      enableServiceLinks: false
+      terminationGracePeriodSeconds: 130
+      volumes:
+        - name: data
+          emptyDir: {}
+        - name: shm
+          emptyDir:
+            medium: Memory
+        - name: torch-compile-cache
+          emptyDir: {}  

@@ -6,30 +6,75 @@ This guide provides recipes to offload prefix cache to CPU RAM via the vLLM nati
 
 ## Prerequisites
 
-* All prerequisites from the [upper level](../README.md).
-* Have the [proper client tools installed on your local system](../../../helpers/client-setup/README.md) to use this guide.
-* Configure and deploy your [Gateway control plane](../../prereq/gateway-provider/README.md).
-* Have the [Monitoring stack](../../../docs/monitoring/README.md) installed on your system.
-* Create a namespace for installation.
+- Have the [proper client tools installed on your local system](../../helpers/client-setup/README.md) to use this guide.
+- Checkout llm-d repo:
 
   ```bash
-  export NAMESPACE=llm-d-pfc-cpu # or any other namespace (shorter names recommended)
-  kubectl create namespace ${NAMESPACE}
+    export branch="main" # branch, tag, or commit hash
+    git clone https://github.com/llm-d/llm-d.git && cd llm-d && git checkout ${branch}
+  ```
+- Set the following environment variables:
+  ```bash
+    export GAIE_VERSION=v1.4.0
+    export GUIDE_NAME="tiered-prefix-cache"
+    export NAMESPACE=llm-d-storage
+    export MODEL_NAME="Qwen/Qwen3-32B"
+  ```
+- Install the Gateway API Inference Extension CRDs:
+
+  ```bash
+    kubectl apply -k "https://github.com/kubernetes-sigs/gateway-api-inference-extension/config/crd?ref=${GAIE_VERSION}"
+  ```
+- Create a target namespace for the installation
+  ```bash
+      kubectl create namespace ${NAMESPACE}
   ```
 
-* [Create the `llm-d-hf-token` secret in your target namespace with the key `HF_TOKEN` matching a valid HuggingFace token](../../../helpers/hf-token.md) to pull models.
+- [Create the `llm-d-hf-token` secret in your target namespace with the key `HF_TOKEN` matching a valid HuggingFace token](../../../helpers/hf-token.md) to pull models.
 
-## Installation
+## Installation Instructions
 
 ```bash
-cd guides/tiered-prefix-cache/cpu
+cd guides/
 ```
 
-### Deploy Gateway and HTTPRoute
+### 1. Deploy the Inference Scheduler
 
-Deploy the Gateway and HTTPRoute using the [gateway recipe](../../recipes/gateway/README.md).
+#### Standalone Mode
 
-### Deploy vLLM Model Server
+This deploys the inference scheduler with an Envoy sidecar, it doesn't set up a Kubernetes Gateway.
+
+```bash
+helm install ${GUIDE_NAME} \
+    oci://registry.k8s.io/gateway-api-inference-extension/charts/standalone \
+    -f recipes/scheduler/base.values.yaml \
+    -f ${GUIDE_NAME}/cpu/manifests/scheduler/${GUIDE_NAME}.values.yaml \
+    -n ${NAMESPACE} --version v1.4.0
+```
+
+<details>
+<summary><h4>Gateway Mode</h4></summary>
+
+To use a Kubernetes Gateway managed proxy rather than the standalone version, follow these steps instead of applying the previous Helm chart:
+
+1. *Deploy a Kubernetes Gateway* named by following one of [the gateway guides](../prereq/gateways).
+2. *Deploy the inference scheduler and an HTTPRoute* that connects it to the Gateway as follows:
+
+```bash
+export PROVIDER_NAME=gke # options: none, gke, agentgateway, istio
+helm install ${GUIDE_NAME} \
+    oci://registry.k8s.io/gateway-api-inference-extension/charts/inferencepool  \
+    -f recipes/scheduler/base.values.yaml \
+    -f ${GUIDE_NAME}/cpu/manifests/scheduler/${GUIDE_NAME}.values.yaml \
+    --set provider.name=${PROVIDER_NAME} \
+    --set experimentalHttpRoute.enabled=true \
+    --set experimentalHttpRoute.inferenceGatewayName=llm-d-inference-gateway \
+    -n ${NAMESPACE} --version v1.4.0
+```
+
+</details>
+
+### 2. Deploy the Model Server
 
 <!-- TABS:START -->
 
@@ -39,7 +84,7 @@ Deploy the Gateway and HTTPRoute using the [gateway recipe](../../recipes/gatewa
 Deploy the vLLM model server with the `OffloadingConnector` enabled.
 
 ```bash
-kubectl apply -k ./manifests/vllm/offloading-connector -n ${NAMESPACE}
+kubectl apply -k ./tiered-prefix-cache/cpu/manifests/vllm/offloading-connector -n ${NAMESPACE}
 ```
 
 <!-- TAB:LMCache Connector -->
@@ -48,68 +93,12 @@ kubectl apply -k ./manifests/vllm/offloading-connector -n ${NAMESPACE}
 Deploy the vLLM model server with the `LMCache` connector enabled.
 
 ```bash
-kubectl apply -k ./manifests/vllm/lmcache-connector -n ${NAMESPACE}
+kubectl apply -k ./tiered-prefix-cache/cpu/manifests/vllm/lmcache-connector -n ${NAMESPACE}
 ```
 
 <!-- TABS:END -->
 
-### Deploy InferencePool
-
-To deploy the `InferencePool`, select your provider below.
-
-> [!WARNING]
-> `kgateway` is deprecated in llm-d and will be removed in the next release. Prefer `agentgateway` for new self-installed inference deployments. The current Gateway API Inference Extension chart uses `provider.name=none` for the `agentgateway` path; see the upstream [`inferencepool` chart values for v1.4.0](https://github.com/kubernetes-sigs/gateway-api-inference-extension/blob/v1.4.0/config/charts/inferencepool/values.yaml).
-
-<!-- TABS:START -->
-
-<!-- TAB:GKE:default -->
-
-#### GKE
-
-This command deploys the `InferencePool` on GKE with GKE-specific monitoring enabled.
-
-```bash
-helm install llm-d-infpool \
-    -n ${NAMESPACE} \
-    -f ./manifests/inferencepool/values.yaml \
-    --set "provider.name=gke" \
-    oci://registry.k8s.io/gateway-api-inference-extension/charts/inferencepool \
-    --version v1.4.0
-```
-
-<!-- TAB:Istio -->
-
-#### Istio
-
-This command deploys the `InferencePool` with Istio, enabling Prometheus monitoring.
-
-```bash
-helm install llm-d-infpool \
-    -n ${NAMESPACE} \
-    -f ./manifests/inferencepool/values.yaml \
-    --set "provider.name=istio" \
-    oci://registry.k8s.io/gateway-api-inference-extension/charts/inferencepool \
-    --version v1.4.0
-```
-
-<!-- TAB:Agentgateway -->
-
-#### Agentgateway
-
-This command deploys the `InferencePool` for `agentgateway`.
-
-```bash
-helm install llm-d-infpool \
-    -n ${NAMESPACE} \
-    -f ./manifests/inferencepool/values.yaml \
-    --set "provider.name=none" \
-    oci://registry.k8s.io/gateway-api-inference-extension/charts/inferencepool \
-    --version v1.4.0
-```
-
-<!-- TABS:END -->
-
-To enable tiered prefix caching, we customize the `InferencePool` configuration (see [`manifests/inferencepool/values.yaml`](./manifests/inferencepool/values.yaml)). We configure two prefix cache scorers: one for the GPU cache and another for the CPU cache.
+To enable tiered prefix caching, we customize the `InferencePool` configuration (see [`manifests/scheduler/tiered-prefix-cache.values.yaml`](./manifests/scheduler/tiered-prefix-cache.values.yaml)). We configure two prefix cache scorers: one for the GPU cache and another for the CPU cache.
 
 For the CPU cache, we must manually configure the `lruCapacityPerServer` because vLLM currently does not emit CPU block metrics.
 
@@ -119,22 +108,40 @@ You can tune these values, particularly the ratio between the GPU and CPU scorer
 
 ## Verifying the installation
 
-You can verify the installation by checking the status of the created resources.
+You can verify the installation by checking the status of the created resources depending on your deployment mode.
 
-### Check the Gateway
+#### Standalone Mode
 
+
+If you deployed the standalone inference scheduler, verify the InferencePool and the standalone EPP pods.
+
+You should see output the inferencepool
+
+```bash
+kubectl get inferencepool -n ${NAMESPACE}
+```
+
+```text
+NAME                   AGE
+tiered-prefix-cache    16m
+```
+
+<details>
+<summary><h4>Gateway Mode</h4></summary>
+
+If you are using a Kubernetes Gateway managed proxy rather than the standalone version, you can verify the status with below commands
+
+#### Check the Gateway
 ```bash
 kubectl get gateway -n ${NAMESPACE}
 ```
-
-You should see output similar to the following, with the `PROGRAMMED` status as `True`.
 
 ```text
 NAME                      CLASS                              ADDRESS     PROGRAMMED   AGE
 llm-d-inference-gateway   gke-l7-regional-external-managed   <redacted>  True         16m
 ```
 
-### Check the HTTPRoute
+#### Check the HTTPRoute
 
 ```bash
 kubectl get httproute -n ${NAMESPACE}
@@ -145,7 +152,7 @@ NAME          HOSTNAMES   AGE
 llm-d-route               17m
 ```
 
-### Check the InferencePool
+#### Check the InferencePool
 
 ```bash
 kubectl get inferencepool -n ${NAMESPACE}
@@ -155,8 +162,9 @@ kubectl get inferencepool -n ${NAMESPACE}
 NAME            AGE
 llm-d-infpool   16m
 ```
+</details>
 
-### Check the Pods
+#### Check the Pods
 
 ```bash
 kubectl get pods -n ${NAMESPACE}
@@ -165,10 +173,10 @@ kubectl get pods -n ${NAMESPACE}
 You should see the InferencePool's endpoint pod and the model server pods in a `Running` state.
 
 ```text
-NAME                                  READY   STATUS    RESTARTS   AGE
-llm-d-infpool-epp-xxxxxxxx-xxxxx     1/1     Running   0          16m
-llm-d-model-server-xxxxxxxx-xxxxx   1/1     Running   0          11m
-llm-d-model-server-xxxxxxxx-xxxxx   1/1     Running   0          11m
+NAME                                            READY   STATUS    RESTARTS   AGE
+tiered-prefix-cache-epp-xxxxxxxx-xxxxx           1/1     Running   0          16m
+tiered-prefix-cache-single-host-xxxxxxxx-xxxxx   1/1     Running   0          11m
+tiered-prefix-cache-single-host-xxxxxxxx-xxxxx   1/1     Running   0          11m
 ```
 
 ## Cleanup
@@ -178,9 +186,8 @@ To remove the deployment:
 ```bash
 helm uninstall llm-d-infpool -n ${NAMESPACE}
 
-kubectl delete -f ./manifests/pvc.yaml -n ${NAMESPACE}
-kubectl delete -k ./manifests/vllm/offloading-connector -n ${NAMESPACE}
-kubectl delete -k ./manifests/vllm/<offloading-connector|lmcache-connector> -n ${NAMESPACE}
+kubectl delete pvc llm-d-kv-cache-storage -n ${NAMESPACE}
+kubectl delete -k ./tiered-prefix-cache/storage/manifests/vllm/<offloading-connector|lmcache-connector> -n ${NAMESPACE}
 # Supported self-installed inference gateway recipe paths are agentgateway and
 # agentgateway (preferred), agentgateway-openshift, plus kgateway and kgateway-openshift
 # (deprecated migration paths).
