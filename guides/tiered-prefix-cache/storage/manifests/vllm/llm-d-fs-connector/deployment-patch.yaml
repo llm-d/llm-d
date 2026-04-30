@@ -10,6 +10,8 @@ spec:
         - name: modelserver
           command: ["/bin/sh", "-c"]
           args:
+            # llmd-fs-connector pin must match the vLLM line set in kustomization.yaml's image tag.
+            # For vLLM 0.X.x use llmd-fs-connector==0.X.
             - |
               pip install 'llmd-fs-connector==0.19' --extra-index-url https://llm-d.github.io/llm-d-kv-cache/simple/
               exec vllm serve \
