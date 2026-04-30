@@ -173,7 +173,7 @@ kubectl run curl-debug --rm -it \
 curl -X POST http://${IP}/v1/completions \
     -H 'Content-Type: application/json' \
     -d '{
-        "model": "Qwen/Qwen3-32B",
+        "model": "openai/gpt-oss-120b",
         "prompt": "How are you today?"
     }' | jq
 ```
@@ -204,20 +204,6 @@ curl -LJO "https://raw.githubusercontent.com/llm-d/llm-d/main/guides/pd-disaggre
 ### 3. Execute Benchmark
 
 ```bash
-export IP=$(kubectl get service ${GUIDE_NAME}-epp  -n ${NAMESPACE} -o jsonpath='{.spec.clusterIP}')
-```
-
-<details>
-<summary> <b>Click here for Gateway Mode</b> </summary>
-
-```bash
-export IP=$(kubectl get gateway llm-d-inference-gateway  -n ${NAMESPACE} -o jsonpath='{.status.addresses[0].value}')
-```
-</details>
-
-
-```bash
-export NAMESPACE=default
 envsubst < 20_1_isl_osl.yaml > config.yaml
 ./run_only.sh -c config.yaml -o ./results
 ```
