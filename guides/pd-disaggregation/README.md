@@ -104,7 +104,6 @@ helm install ${GUIDE_NAME} \
     --set provider.name=${PROVIDER_NAME} \
     --set experimentalHttpRoute.enabled=true \
     --set experimentalHttpRoute.inferenceGatewayName=llm-d-inference-gateway \
-    --set experimentalHttpRoute.baseModel=${GUIDE_NAME} \
     -n ${NAMESPACE} --version ${GAIE_VERSION}
 ```
 
