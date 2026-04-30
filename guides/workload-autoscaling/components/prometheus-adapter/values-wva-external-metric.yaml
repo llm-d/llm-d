@@ -1,0 +1,11 @@
+rules:
+  external:
+    - seriesQuery: wva_desired_replicas{variant_name!="",exported_namespace!=""}
+      resources:
+        overrides:
+          exported_namespace:
+            resource: namespace
+      name:
+        matches: ^wva_desired_replicas
+        as: wva_desired_replicas
+      metricsQuery: wva_desired_replicas{<<.LabelMatchers>>}

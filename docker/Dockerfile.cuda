@@ -9,16 +9,20 @@ ARG FINAL_BASE_IMAGE_SUFFIX=${BASE_IMAGE_SUFFIX}
 ######################## SYSTEM CONFIGURATION ########################
 
 # CUDA version - provided via build args from docker/common-versions file via GH workflow
-ARG CUDA_MAJOR=12
-ARG CUDA_MINOR=9
-ARG CUDA_PATCH=1
+ARG CUDA_MAJOR=13
+ARG CUDA_MINOR=0
+ARG CUDA_PATCH=2
 ARG TARGETOS=rhel
-ARG TARGETPLATFORM=linux/amd64
+ARG TARGETPLATFORM
 ARG BASE_IMAGE_SUFFIX=ubi9
 ARG PYTHON_VERSION=3.12
 
 ARG USE_SCCACHE=true
 ARG BUILD_DEBUG=false
+
+# CUDA architectures to build for (reduce for faster builds and less memory usage)
+# For GB200/Blackwell: "10.0"
+ARG TORCH_CUDA_ARCH_LIST="8.0;8.6;8.9;9.0;9.0a;10.0;12.0+PTX"
 
 ######################## COMPONENT VERSIONS ########################
 
@@ -50,21 +54,21 @@ ARG LMCACHE_REPO="https://github.com/LMCache/LMCache.git"
 ARG LMCACHE_VERSION="v0.4.1"
 
 # Kernels
-# NM fork of Deepep for duplicate nvshmem IBGDA definitions, see: https://github.com/deepseek-ai/DeepEP/pull/581.
-# Also GKE nic-pe mapping, see: https://github.com/deepseek-ai/DeepEP/pull/466 
-# Commits cherry-picked on top of: `https://github.com/deepseek-ai/DeepEP/commit/567632dd59810d77b3cc05553df953cc0f779799`
 ARG DEEPEP_REPO="https://github.com/neuralmagic/DeepEP"
-# branch: https://github.com/neuralmagic/DeepEP/tree/llm-d-release-v0.5.1, but frozen at commit:
 ARG DEEPEP_VERSION="38d21b7f9bb6f3b102b1819d09439686eaa87ce8"
 
+# GB200-specific DeepEP variant (built alongside standard, selected via --target runtime-gb200)
+ARG DEEPEP_GB200_REPO="https://github.com/tlrmchlsmth/DeepEP"
+ARG DEEPEP_GB200_VERSION="sgl-gb200-blog-pt2"
 ARG DEEPGEMM_REPO="https://github.com/deepseek-ai/DeepGEMM"
 ARG DEEPGEMM_VERSION="v2.1.1.post3"
-
 ARG FLASHINFER_REPO="https://github.com/flashinfer-ai/flashinfer.git"
-ARG FLASHINFER_VERSION="v0.6.4"
+# May need to be dropped to v0.6.4
+ARG FLASHINFER_VERSION="v0.6.6"
 
 # vLLM build settings - provided via build args from docker/common-versions file
 # Override here for platform-specific testing or via build args
+# For CUDA 13.0: build from source (precompiled wheels only exist for CUDA 12.x)
 ARG VLLM_REPO
 ARG VLLM_COMMIT_SHA
 ARG VLLM_PRECOMPILED_WHEEL_COMMIT
@@ -92,6 +96,7 @@ ARG PYTHON_VERSION
 ARG NVSHMEM_VERSION
 
 ARG USE_SCCACHE
+ARG TORCH_CUDA_ARCH_LIST
 ARG BUILD_DEBUG
 
 ARG ENABLE_EFA
@@ -111,7 +116,7 @@ ENV LANG="C.UTF-8" \
     UV_HTTP_TIMEOUT="500" \
     UV_INDEX_STRATEGY="unsafe-best-match" \
     UV_LINK_MODE="copy" \
-    TORCH_CUDA_ARCH_LIST="7.0;7.5;8.0;8.6;8.9;9.0;9.0a;10.0;12.0+PTX" \
+    TORCH_CUDA_ARCH_LIST="${TORCH_CUDA_ARCH_LIST}" \
     PYTHON_VERSION="${PYTHON_VERSION}" \
     UV_TORCH_BACKEND="${UV_TORCH_BACKEND:-cu${CUDA_MAJOR}${CUDA_MINOR}}" \
     UV_BUILD_CONSTRAINT="/tmp/build-constraints.txt" \
@@ -137,7 +142,7 @@ RUN --mount=type=cache,target=/var/cache/dnf \
     rm -f /tmp/install-base-packages.sh /tmp/package-utils.sh && \
     rm -rf /tmp/packages
 
-# Install cmake from script for consistency between ubuntu22.04 and rhel9
+# Install cmake from script for consistency between ubuntu24.04 and rhel9
 COPY docker/scripts/cuda/builder/install-cmake.sh /tmp/install-cmake.sh
 RUN --mount=type=cache,target=/var/cache/git \
     /tmp/install-cmake.sh && \
@@ -163,6 +168,7 @@ ENV NVSHMEM_DIR="/opt/nvshmem-${NVSHMEM_VERSION}" \
     NIXL_PREFIX="/opt/nixl" \
     EFA_PREFIX="/opt/amazon/efa"
 
+# CUDA 13.0 moved CCCL (libcudacxx) headers to include/cccl/ subdirectory
 ENV PATH="${NVSHMEM_DIR}/bin:${VIRTUAL_ENV}/bin:${PATH}" \
     LIBRARY_PATH="\
 ${EFA_PREFIX}/lib:${EFA_PREFIX}/lib64:\
@@ -172,7 +178,7 @@ ${CUDA_HOME}/lib64:\
 /usr/local/lib:/usr/local/lib64:\
 ${LIBRARY_PATH}" \
     CPATH="${NVSHMEM_DIR}/include:\
-${CUDA_HOME}/include:\
+${CUDA_HOME}/include:${CUDA_HOME}/include/cccl:\
 /usr/local/include:\
 /usr/include:\
 ${CPATH}" \
@@ -207,17 +213,8 @@ RUN --mount=type=cache,target=/var/cache/git \
     /tmp/build-ucx.sh && \
     rm -f /tmp/build-ucx.sh
 
-# Build NVSHMEM
-ARG NVSHMEM_USE_GIT
-ARG NVSHMEM_REPO
-ARG NVSHMEM_VERSION
-ENV NVSHMEM_CUDA_ARCHITECTURES="90a;100"
-COPY docker/scripts/cuda/builder/build-nvshmem.sh /tmp/build-nvshmem.sh
-RUN --mount=type=cache,target=/var/cache/git \
-    --mount=type=secret,id=aws_access_key_id \
-    --mount=type=secret,id=aws_secret_access_key \
-    /tmp/build-nvshmem.sh && \
-    rm -f /tmp/build-nvshmem.sh
+# NVSHMEM is installed via pip (nvidia-nvshmem-cu${CUDA_MAJOR}) in the runtime stage
+# No longer building from source
 
 
 # Pin torch, so all deps are built against the same version
@@ -273,6 +270,8 @@ WORKDIR /workspace/vllm
 # Build compiled packages as wheels (only ones that need build tools)
 ARG DEEPEP_REPO
 ARG DEEPEP_VERSION
+ARG DEEPEP_GB200_REPO
+ARG DEEPEP_GB200_VERSION
 ARG DEEPGEMM_REPO
 ARG DEEPGEMM_VERSION
 ARG FLASHINFER_REPO
@@ -305,6 +304,11 @@ ARG PYTHON_VERSION
 ARG NVSHMEM_VERSION
 ARG BUILD_NIXL_FROM_SOURCE
 ARG FLASHINFER_VERSION
+ARG TORCH_CUDA_ARCH_LIST
+ARG USE_SCCACHE
+
+# Build parallelism - reduce to avoid OOM on memory-constrained systems
+ARG MAX_JOBS=4
 ARG ENABLE_EFA
 ARG EFA_INSTALLER_VERSION
 ARG LLM_D_OFFLOADING_CONNECTOR_VERSION
@@ -312,29 +316,30 @@ ARG LLM_D_OFFLOADING_CONNECTOR_VERSION
 COPY docker/constraints.txt /tmp/constraints.txt
 
 ENV LANG="C.UTF-8" \
+    MAX_JOBS="${MAX_JOBS}" \
     LC_ALL="C.UTF-8" \
     PYTHON_VERSION="${PYTHON_VERSION}" \
     UV_TORCH_BACKEND="${UV_TORCH_BACKEND:-cu${CUDA_MAJOR}${CUDA_MINOR}}" \
     UV_CONSTRAINT="/tmp/constraints.txt" \
     VIRTUAL_ENV="/opt/vllm" \
-    NVSHMEM_DIR="/opt/nvshmem-${NVSHMEM_VERSION}" \
     UCX_PREFIX="/opt/ucx" \
     EFA_PREFIX="/opt/amazon/efa" \
     CUDA_HOME="/usr/local/cuda"
 
+# NVSHMEM is installed via pip (nvidia-nvshmem-cu${CUDA_MAJOR}) - library path set below
 ENV LD_LIBRARY_PATH="\
+/opt/vllm/lib/python${PYTHON_VERSION}/site-packages/nvidia/nvshmem/lib:\
 /opt/vllm/lib64/python${PYTHON_VERSION}/site-packages/torch/lib:\
 /usr/local/nvidia/lib:/usr/local/nvidia/lib64:\
-${CUDA_HOME}/lib64:\
+${CUDA_HOME}/lib64:${CUDA_HOME}/compat:\
 ${EFA_PREFIX}/lib:${EFA_PREFIX}/lib64:\
 ${UCX_PREFIX}/lib:${UCX_PREFIX}/lib64:\
-${NVSHMEM_DIR}/lib:${NVSHMEM_DIR}/lib64:\
 /usr/local/lib:/usr/local/lib64:\
 /usr/lib/x86_64-linux-gnu:/usr/lib/aarch64-linux-gnu:\
 ${LD_LIBRARY_PATH}" \
-    PATH="${NVSHMEM_DIR}/bin:${UCX_PREFIX}/bin:${PATH}" \
-    CPATH="${NVSHMEM_DIR}/include:${CPATH}" \
-    TORCH_CUDA_ARCH_LIST="7.0;7.5;8.0;8.6;8.9;9.0;9.0a;10.0;12.0+PTX" \
+    PATH="${UCX_PREFIX}/bin:${PATH}" \
+    CPATH="${CUDA_HOME}/include:${CUDA_HOME}/include/cccl:${CPATH}" \
+    TORCH_CUDA_ARCH_LIST="${TORCH_CUDA_ARCH_LIST}" \
     FLASHINFER_VERSION=${FLASHINFER_VERSION} \
     CUDA_MAJOR=${CUDA_MAJOR} \
     CUDA_MINOR=${CUDA_MINOR} \
@@ -371,7 +376,7 @@ RUN /tmp/install-offloading-connector.sh && \
 # Copy EFA installation if enabled
 # EFA libs are copied to /usr/lib64 during install-efa.sh and saved to /tmp/efa_libs
 COPY --from=builder /opt/amazon /opt/amazon/
-COPY --from=builder /tmp/efa_libs/* /usr/lib64/
+COPY --from=builder /tmp/efa_libs/ /usr/lib64/
 
 # Copy gdrcopy libraries from builder
 # Install to /usr/local/lib (always present) and multiarch lib dir
@@ -405,8 +410,7 @@ RUN if [ -d /tmp/gdrcopy_libs ]; then \
         rm -rf /tmp/gdrcopy_libs; \
     fi
 
-# Copy compiled NVSHMEM libraries from builder
-COPY --from=builder /opt/nvshmem-${NVSHMEM_VERSION}/ /opt/nvshmem-${NVSHMEM_VERSION}/
+# NVSHMEM is installed via pip (nvidia-nvshmem-cu${CUDA_MAJOR}) - no need to copy from builder
 
 COPY --from=builder /opt/nixl /opt/nixl
 RUN if [ -d /opt/nixl/include ]; then \
@@ -440,6 +444,11 @@ RUN export UV_INSTALL_DIR=/usr/local/bin && \
     ln -s /opt/vllm/bin/pip /usr/bin/pip && \
     uv pip install --no-cache -U wheel
 
+# Copy sccache from builder for vLLM source builds
+# sccache binary is always installed in builder; only configured/started when USE_SCCACHE=true
+COPY --from=builder /usr/local/bin/sccache /usr/local/bin/sccache
+COPY --from=builder /usr/local/bin/setup-sccache /usr/local/bin/setup-sccache
+
 # Copy compiled wheels
 COPY --from=builder /wheels/*.whl /tmp/wheels/
 
@@ -458,6 +467,7 @@ RUN mkdir -p /opt/vllm-source && \
 # Define commit SHAs as build args to avoid layer invalidation
 ARG VLLM_REPO
 ARG VLLM_COMMIT_SHA
+
 
 # vllm commit to use for precompiled wheel lookup (defaults to VLLM_COMMIT_SHA)
 # useful for testing feature branches with python-only changes against merge-base binaries
@@ -483,9 +493,24 @@ COPY scripts/warn-vllm-precompiled.sh /opt/
     # 3) install vllm from source with pulling precompiled binaries (shared libraries) from the vllm wheels index - less flexible dev option, may or may not work swapping shas but faster than full editable
     # 2) install vllm from a wheel on the vllm wheels index - prod option, no flexibility
 COPY docker/scripts/cuda/runtime/install-vllm.sh /tmp/install-vllm.sh
-RUN --mount=type=cache,target=/var/cache/git \
+RUN --mount=type=cache,target=/root/.cache/uv \
+    --mount=type=cache,target=/var/cache/git \
+    --mount=type=secret,id=aws_access_key_id \
+    --mount=type=secret,id=aws_secret_access_key \
+    bash -c "chmod +x /tmp/install-vllm.sh && \
+    export PATH=/usr/local/bin:\${PATH} && \
+    USE_SCCACHE=${USE_SCCACHE} TARGETPLATFORM=${TARGETPLATFORM} source /usr/local/bin/setup-sccache && \
     /tmp/install-vllm.sh && \
-    rm /tmp/install-vllm.sh
+    rm /tmp/install-vllm.sh && \
+    if [ \"\${USE_SCCACHE}\" = \"true\" ]; then sccache --show-stats || true; fi"
+
+# Register pip-installed nvidia library paths with ldconfig so they are found
+# even when LD_LIBRARY_PATH is overridden by the NVIDIA container runtime in k8s
+RUN echo "/opt/vllm/lib/python${PYTHON_VERSION}/site-packages/nvidia/nvshmem/lib" \
+        > /etc/ld.so.conf.d/nvidia-nvshmem.conf && \
+    echo "/opt/vllm/lib/python${PYTHON_VERSION}/site-packages/nvidia/nccl/lib" \
+        >> /etc/ld.so.conf.d/nvidia-nvshmem.conf && \
+    ldconfig
 
 # install OTEL packages to enable tracing
 COPY docker/packages/common/runtime-otel-package-requirements.txt /workspace/runtime-otel-package-requirements.txt
@@ -518,7 +543,7 @@ RUN mkdir -p "$LLM_D_MODELS_DIR" "$HF_HOME" && \
     find /var/lib/llm-d -type d -exec chmod g+s {} \; && \
     ln -snf /var/lib/llm-d/models /models
 
-ENV PATH="${VIRTUAL_ENV}/bin:/usr/local/nvidia/bin:${PATH}" \
+ENV PATH="${VIRTUAL_ENV}/bin:${CUDA_HOME}/bin:/usr/local/nvidia/bin:${PATH}" \
     HOME=/home/vllm \
     VLLM_USAGE_SOURCE=production-docker-image \
     VLLM_WORKER_MULTIPROC_METHOD=fork \
@@ -537,4 +562,23 @@ ENV PATH="${VIRTUAL_ENV}/bin:/usr/local/nvidia/bin:${PATH}" \
 USER 2000
 WORKDIR /home/vllm
 
+# ============================================================================
+# GB200 RUNTIME STAGE - Swap in GB200-specific DeepEP wheel
+# Usage: docker build --target runtime-gb200 ...
+# ============================================================================
+FROM runtime AS runtime-gb200
+
+USER 0
+COPY --from=builder /wheels-gb200/*.whl /tmp/wheels-gb200/
+RUN . /opt/vllm/bin/activate && \
+    uv pip uninstall deep-ep && \
+    uv pip install /tmp/wheels-gb200/*.whl && \
+    rm -rf /tmp/wheels-gb200
+USER 2000
+
 ENTRYPOINT ["python", "-m", "vllm.entrypoints.openai.api_server"]
+
+# ============================================================================
+# DEFAULT - runtime is the default target when no --target is specified
+# ============================================================================
+FROM runtime

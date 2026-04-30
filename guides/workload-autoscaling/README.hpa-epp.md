@@ -16,7 +16,7 @@ The llm-d architecture solves this by using the Endpoint Picker (EPP) [flow cont
 
 ## Metric Definitions and Collection
 
-Follow the [optimized baseline](https://github.com/llm-d/llm-d/blob/main/guides/optimized-baseline/README.md) well-lit path to set up an LLM deployment. By default, llm-d deployments include the necessary ServiceMonitors to scrape EPP metrics.
+Follow the [optimized-baseline](https://github.com/llm-d/llm-d/blob/main/guides/optimized-baseline/README.md) well-lit path to set up an LLM deployment. By default, llm-d deployments include the necessary ServiceMonitors to scrape EPP metrics.
 
 - **Metric Collection:** For details on how to ensure scraping is active, see the [llm-d Monitoring Guide](https://github.com/llm-d/llm-d/blob/main/docs/monitoring/README.md#epp-endpoint-picker-metrics).
 - **Metric Definitions:** For a list of metrics emitted by EPP refer [here](https://gateway-api-inference-extension.sigs.k8s.io/guides/metrics-and-observability/#exposed-metrics).

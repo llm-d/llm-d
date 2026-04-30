@@ -1,0 +1,119 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 48 880 502" font-family="Arial, Helvetica, sans-serif" font-size="13">
+  <defs>
+    <marker id="arr" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+      <polygon points="0 0, 8 3, 0 6" fill="#000000"/>
+    </marker>
+    <marker id="arr-rev" markerWidth="8" markerHeight="6" refX="0" refY="3" orient="auto-start-reverse">
+      <polygon points="0 0, 8 3, 0 6" fill="#000000"/>
+    </marker>
+  </defs>
+
+  <!-- Background -->
+  <rect width="880" height="650" fill="#ffffff"/>
+
+  <!-- ── Client ───────────────────────────────────────────────────────── -->
+  <text x="310" y="62" text-anchor="middle" font-weight="600" fill="#000000">Client</text>
+  <line x1="310" y1="68" x2="310" y2="80" stroke="#000000" stroke-width="1.5" marker-end="url(#arr)"/>
+
+  <!-- ── Proxy (x=200–420, y=80–124) ──────────────────────────────────── -->
+  <rect x="200" y="80" width="220" height="44" rx="3" fill="#f3f3f3" stroke="#d9d2e9" stroke-width="1"/>
+  <rect x="200" y="80" width="6" height="44" rx="3" fill="#0ea5e9"/>
+  <text x="310" y="98" text-anchor="middle" font-weight="600" fill="#000000">Proxy</text>
+  <text x="310" y="114" text-anchor="middle" font-size="11" fill="#666666">external traffic routing</text>
+
+  <!-- ── EPP (x=500–720, y=80–124) ────────────────────────────────────── -->
+  <rect x="500" y="80" width="220" height="44" rx="3" fill="#f3f3f3" stroke="#d9d2e9" stroke-width="1"/>
+  <rect x="500" y="80" width="6" height="44" rx="3" fill="#6366f1"/>
+  <text x="610" y="98" text-anchor="middle" font-weight="600" fill="#000000">Endpoint Picker (EPP)</text>
+  <text x="610" y="114" text-anchor="middle" font-size="11" fill="#666666">routing decisions</text>
+
+  <!-- ── Proxy ↔ EPP: ext-proc ─────────────────────────────────────────── -->
+  <line x1="420" y1="102" x2="500" y2="102" stroke="#000000" stroke-width="1.5" marker-start="url(#arr-rev)" marker-end="url(#arr)"/>
+  <text x="460" y="96" text-anchor="middle" font-size="10" fill="#444444" font-style="italic">ext-proc</text>
+
+  <!-- ── InferencePool (x=80–800, y=196–346) ─────────────────────────── -->
+  <rect x="80" y="196" width="720" height="150" rx="6" fill="#f8f8f8" stroke="#d9d2e9" stroke-width="1.5"/>
+  <rect x="80" y="196" width="720" height="34" rx="6" fill="#eeeeee"/>
+  <rect x="80" y="216" width="720" height="14" fill="#eeeeee"/>
+  <line x1="80" y1="230" x2="800" y2="230" stroke="#d9d2e9" stroke-width="1"/>
+  <text x="100" y="218" font-weight="700" font-size="13" fill="#000000">InferencePool</text>
+  <text x="790" y="212" text-anchor="end" font-size="11" fill="#888888" font-style="italic">1 InferencePool : 1 EPP : 1 base model</text>
+
+  <!-- ── Variant A (x=96–384, y=240–336) ──────────────────────────────── -->
+  <rect x="96" y="240" width="288" height="96" rx="3" fill="#f3f3f3" stroke="#d9d2e9" stroke-width="1"/>
+  <rect x="96" y="240" width="6" height="96" rx="3" fill="#e5a000"/>
+  <text x="242" y="258" text-anchor="middle" font-weight="600" fill="#000000">Variant A</text>
+  <text x="242" y="272" text-anchor="middle" font-size="10" fill="#888888" font-style="italic">VariantAutoscaling CRD</text>
+  <text x="242" y="287" text-anchor="middle" font-size="11" fill="#666666">GPU: A100 · max_batch_size=256</text>
+  <text x="242" y="302" text-anchor="middle" font-size="11" fill="#666666">variantCost: 5.0 · min=1 max=10</text>
+  <rect x="114" y="314" width="28" height="14" rx="7" fill="#ffffff" stroke="#d9d2e9" stroke-width="1"/>
+  <text x="128" y="325" text-anchor="middle" font-size="9" fill="#444444">pod</text>
+  <rect x="148" y="314" width="28" height="14" rx="7" fill="#ffffff" stroke="#d9d2e9" stroke-width="1"/>
+  <text x="162" y="325" text-anchor="middle" font-size="9" fill="#444444">pod</text>
+  <rect x="182" y="314" width="28" height="14" rx="7" fill="#ffffff" stroke="#d9d2e9" stroke-width="1"/>
+  <text x="196" y="325" text-anchor="middle" font-size="9" fill="#444444">pod</text>
+  <text x="222" y="325" font-size="9" fill="#888888">×N</text>
+
+  <!-- ── Variant B (x=496–784, y=240–336) ─────────────────────────────── -->
+  <rect x="496" y="240" width="288" height="96" rx="3" fill="#f3f3f3" stroke="#d9d2e9" stroke-width="1"/>
+  <rect x="496" y="240" width="6" height="96" rx="3" fill="#e5a000"/>
+  <text x="642" y="258" text-anchor="middle" font-weight="600" fill="#000000">Variant B</text>
+  <text x="642" y="272" text-anchor="middle" font-size="10" fill="#888888" font-style="italic">VariantAutoscaling CRD</text>
+  <text x="642" y="287" text-anchor="middle" font-size="11" fill="#666666">GPU: H100 · max_batch_size=512</text>
+  <text x="642" y="302" text-anchor="middle" font-size="11" fill="#666666">variantCost: 15.0 · min=0 max=5</text>
+  <rect x="514" y="314" width="28" height="14" rx="7" fill="#ffffff" stroke="#d9d2e9" stroke-width="1"/>
+  <text x="528" y="325" text-anchor="middle" font-size="9" fill="#444444">pod</text>
+  <rect x="548" y="314" width="28" height="14" rx="7" fill="#ffffff" stroke="#d9d2e9" stroke-width="1"/>
+  <text x="562" y="325" text-anchor="middle" font-size="9" fill="#444444">pod</text>
+  <text x="588" y="325" font-size="9" fill="#888888">×N</text>
+
+  <!-- ── Proxy → Variants (painted after InferencePool) ───────────────── -->
+  <line x1="270" y1="124" x2="242" y2="240" stroke="#000000" stroke-width="1.5" marker-end="url(#arr)"/>
+  <line x1="390" y1="124" x2="640" y2="240" stroke="#000000" stroke-width="1.5" marker-end="url(#arr)"/>
+
+  <!-- ── HPA A (x=56–216, y=368–416) ──────────────────────────────────── -->
+  <rect x="56" y="368" width="160" height="48" rx="3" fill="#f3f3f3" stroke="#d9d2e9" stroke-width="1"/>
+  <text x="136" y="388" text-anchor="middle" font-weight="600" fill="#000000">HPA A</text>
+  <text x="136" y="404" text-anchor="middle" font-size="11" fill="#666666">Variant A</text>
+
+  <!-- ── Prometheus (x=290–590, y=368–416) ────────────────────────────── -->
+  <rect x="290" y="368" width="300" height="48" rx="3" fill="#f3f3f3" stroke="#d9d2e9" stroke-width="1"/>
+  <text x="440" y="388" text-anchor="middle" font-weight="600" fill="#000000">Prometheus</text>
+  <text x="440" y="404" text-anchor="middle" font-size="11" fill="#666666">KV cache · queue depth · latency</text>
+
+  <!-- ── HPA B (x=664–824, y=368–416) ──────────────────────────────────── -->
+  <rect x="664" y="368" width="160" height="48" rx="3" fill="#f3f3f3" stroke="#d9d2e9" stroke-width="1"/>
+  <text x="744" y="388" text-anchor="middle" font-weight="600" fill="#000000">HPA B</text>
+  <text x="744" y="404" text-anchor="middle" font-size="11" fill="#666666">Variant B</text>
+
+  <!-- ── InferencePool → Prometheus: vLLM/EPP metrics ─────────────────── -->
+  <line x1="440" y1="346" x2="440" y2="368" stroke="#000000" stroke-width="1" stroke-dasharray="6 4" marker-end="url(#arr)"/>
+  <text x="452" y="362" font-size="9" fill="#888888" font-style="italic">vLLM/EPP metrics</text>
+
+  <!-- ── Prometheus → HPA A/B: custom metric (horizontal) ─────────────── -->
+  <line x1="290" y1="392" x2="216" y2="392" stroke="#000000" stroke-width="1" stroke-dasharray="6 4" marker-end="url(#arr)"/>
+  <line x1="590" y1="392" x2="664" y2="392" stroke="#000000" stroke-width="1" stroke-dasharray="6 4" marker-end="url(#arr)"/>
+
+  <!-- ── HPA A → Variant A: scale (purely vertical, x=136 ∈ Var A) ────── -->
+  <line x1="136" y1="368" x2="136" y2="336" stroke="#000000" stroke-width="1.5" marker-end="url(#arr)"/>
+  <text x="126" y="353" text-anchor="end" font-size="9" fill="#444444" font-style="italic">scale</text>
+  <!-- ── HPA B → Variant B: scale (purely vertical, x=744 ∈ Var B) ────── -->
+  <line x1="744" y1="368" x2="744" y2="336" stroke="#000000" stroke-width="1.5" marker-end="url(#arr)"/>
+  <text x="754" y="353" font-size="9" fill="#444444" font-style="italic">scale</text>
+
+  <!-- ── Prometheus → WVA: metrics feed (offset right, x=448) ─────────── -->
+  <line x1="448" y1="416" x2="448" y2="450" stroke="#000000" stroke-width="1" stroke-dasharray="6 4" marker-end="url(#arr)"/>
+  <!-- ── WVA → Prometheus: wva_desired_replicas (offset left, x=432) ──── -->
+  <line x1="432" y1="450" x2="432" y2="416" stroke="#000000" stroke-width="1" stroke-dasharray="6 4" marker-end="url(#arr)"/>
+  <text x="456" y="437" font-size="9" fill="#888888" font-style="italic">wva_desired_replicas</text>
+
+  <!-- ── WVA (x=216–664, y=450–514) ───────────────────────────────────── -->
+  <rect x="216" y="450" width="448" height="64" rx="3" fill="#f3f3f3" stroke="#d9d2e9" stroke-width="1.5"/>
+  <rect x="216" y="450" width="6" height="64" rx="3" fill="#22c55e"/>
+  <text x="447" y="472" text-anchor="middle" font-weight="700" font-size="14" fill="#000000">Workload Variant Autoscaler (WVA)</text>
+  <text x="447" y="490" text-anchor="middle" font-size="11" fill="#666666">Analyze → Optimize → Enforce · exposes wva_desired_replicas</text>
+  <text x="447" y="506" text-anchor="middle" font-size="10" fill="#888888">cheapest variant up first · most expensive variant down first</text>
+
+  <!-- Caption -->
+  <text x="440" y="534" text-anchor="middle" font-size="10" fill="#888888" font-style="italic">dashed = metrics (observe) · solid = control (scale)</text>
+</svg>

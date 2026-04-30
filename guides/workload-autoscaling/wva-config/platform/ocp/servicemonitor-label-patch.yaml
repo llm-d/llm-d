@@ -1,0 +1,6 @@
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: workload-variant-autoscaler-controller-manager-metrics-monitor
+  labels:
+    openshift.io/user-monitoring: "true"

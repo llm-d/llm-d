@@ -1,12 +1,12 @@
 apiVersion: autoscaling/v2
 kind: HorizontalPodAutoscaler
 metadata:
-  name: ms-optimized-baseline-llm-d-modelservice-decode
+  name: optimized-baseline-nvidia-gpu-vllm-decode
 spec:
   scaleTargetRef:
     apiVersion: apps/v1
     kind: Deployment
-    name: ms-optimized-baseline-llm-d-modelservice-decode
+    name: optimized-baseline-nvidia-gpu-vllm-decode
   minReplicas: 1
   maxReplicas: 16
   metrics:
@@ -16,7 +16,7 @@ spec:
           name: wva_desired_replicas
           selector:
             matchLabels:
-              variant_name: optimized-baseline-autoscaler
+              variant_name: optimized-baseline-nvidia-gpu-vllm-decode
         target:
           type: AverageValue
           averageValue: "1"

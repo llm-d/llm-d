@@ -1,0 +1,65 @@
+## Predicted Latency-Based Scheduling — SLO-aware setup (streamingMode: true).
+##
+## Overrides the chart's default plugin pipeline so predicted-latency-producer
+## trains on streaming TPOT samples. Required for x-slo-ttft-ms / x-slo-tpot-ms
+## request headers to be honored. Every request must be sent with
+## "stream": true in the body.
+##
+## For routing-only (no SLO headers), use predicted-latency.values.yaml.
+
+inferenceExtension:
+  image:
+    registry: ghcr.io
+    repository: llm-d/llm-d-inference-scheduler
+    tag: v0.8.0
+  latencyPredictor:
+    enabled: true
+  extraServicePorts:
+    - name: http
+      port: 80
+      protocol: TCP
+      targetPort: 8081
+  pluginsConfigFile: "predicted-latency-slo-plugins.yaml"
+  pluginsCustomConfig:
+    predicted-latency-slo-plugins.yaml: |
+      apiVersion: inference.networking.x-k8s.io/v1alpha1
+      kind: EndpointPickerConfig
+      plugins:
+      - type: queue-scorer
+      - type: kv-cache-utilization-scorer
+      - type: prefix-cache-scorer
+      - type: metrics-data-source
+        parameters:
+          insecureSkipVerify: true
+          path: /metrics
+          scheme: http
+      - type: core-metrics-extractor
+      - type: predicted-latency-producer
+        parameters:
+          streamingMode: true
+      - type: prefix-cache-affinity-filter
+        name: strict-affinity-filter
+        parameters:
+          affinityThreshold: 0.99
+      - type: prefix-cache-affinity-filter
+        name: loose-affinity-filter
+        parameters:
+          affinityThreshold: 0.8
+      - type: latency-scorer
+      - type: weighted-random-picker
+      - type: slo-headroom-tier-filter
+      - type: latency-slo-admitter
+      schedulingProfiles:
+      - name: default
+        plugins:
+        - pluginRef: predicted-latency-producer
+        - pluginRef: strict-affinity-filter
+        - pluginRef: slo-headroom-tier-filter
+        - pluginRef: loose-affinity-filter
+        - pluginRef: latency-scorer
+        - pluginRef: weighted-random-picker
+
+inferencePool:
+  modelServers:
+    matchLabels:
+      llm-d.ai/guide: "optimized-baseline"

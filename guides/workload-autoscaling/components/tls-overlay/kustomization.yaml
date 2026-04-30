@@ -1,0 +1,8 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+secretGenerator:
+  - name: prometheus-client-cert
+    files:
+      - ca.crt
+generatorOptions:
+  disableNameSuffixHash: true

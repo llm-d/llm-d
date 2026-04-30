@@ -1,0 +1,18 @@
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: workload-variant-autoscaler-controller-manager-metrics-monitor
+spec:
+  namespaceSelector:
+    matchNames:
+      - llm-d-autoscaler
+  endpoints:
+    - port: https
+      path: /metrics
+      scheme: https
+      interval: 10s
+      tlsConfig:
+        insecureSkipVerify: true
+      bearerTokenSecret:
+        name: workload-variant-autoscaler-controller-manager-token
+        key: token

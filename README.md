@@ -10,7 +10,7 @@ Achieve SOTA Inference Performance On Any Accelerator
 </h2>
 
  [![Documentation](https://img.shields.io/badge/Documentation-8A2BE2?logo=readthedocs&logoColor=white&color=1BC070)](https://www.llm-d.ai)
- [![Release Status](https://img.shields.io/badge/Version-0.5-yellow)](https://github.com/llm-d/llm-d/releases)
+ [![Release Status](https://img.shields.io/badge/Version-0.6-yellow)](https://github.com/llm-d/llm-d/releases)
  [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](./LICENSE)
  [![Join Slack](https://img.shields.io/badge/Join_Slack-blue?logo=slack)](https://llm-d.ai/slack)
 

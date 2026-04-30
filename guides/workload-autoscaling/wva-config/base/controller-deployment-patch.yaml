@@ -1,0 +1,23 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: workload-variant-autoscaler-controller-manager
+spec:
+  replicas: 2
+  template:
+    spec:
+      containers:
+        - name: manager
+          args:
+            - --metrics-bind-address=:8443
+            - --metrics-secure=true
+            - --leader-elect=true
+            - --health-probe-bind-address=:8081
+            - --watch-namespace=llm-d-optimized-baseline
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 1000m
+              memory: 1Gi

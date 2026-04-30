@@ -43,6 +43,12 @@ Should your use case require it, the EPP can optionally query 'consultant' compo
 - [Latency Predictor](advanced/latency-predictor.md), which trains an XGBoost model online (using measured latency of previous requests) for scheduling decisions
 - [KV-Cache Indexer](advanced/kv-indexer.md), which maintains a globally consistent, event-driven view of each Model Server's KV cache state and serves as the foundation for advanced prefix-cache-aware scheduling (multimodal, HMA-aware routing, and more)
 
+### Batch Inference
+
+Batch and offline inference workloads are handled by two modules that can be deployed independently or together. The Batch Gateway provides an OpenAI-compatible Batch API for job management, while the Async Processor dispatches queued requests with flow-control gating. When composed, the Batch Gateway delegates dispatch to the Async Processor.
+
+See [Batch Inference](advanced/batch/README.md) for details on the batch inference design.
+
 ### Autoscaling
 
 With autoscaling, Model Servers are added or removed automatically to keep serving capacity aligned with inference demand. llm-d supports two autoscaling approaches — HPA/KEDA for standard Kubernetes-native scaling and the Workload Variant Autoscaler (WVA) for globally optimized scaling that minimizes cost while working toward SLO targets. Both consume scaling signals drawn from three categories:

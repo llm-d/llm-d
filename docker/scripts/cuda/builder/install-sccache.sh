@@ -9,27 +9,30 @@ set -Eeux
 
 TARGETOS="${TARGETOS:-rhel}"
 
+# Always install sccache binary (small download) so COPY --from=builder works
+# in downstream stages regardless of USE_SCCACHE setting.
+# detect architecture
+ARCH=$(uname -m)
+if [ "$ARCH" = "x86_64" ]; then
+    SCCACHE_ARCH="x86_64"
+elif [ "$ARCH" = "aarch64" ]; then
+    SCCACHE_ARCH="aarch64"
+else
+    echo "Unsupported architecture: $ARCH"
+    exit 1
+fi
+
+SCCACHE_VERSION="v0.11.0"
+mkdir -p /tmp/sccache
+cd /tmp/sccache
+curl -sLO https://github.com/mozilla/sccache/releases/download/${SCCACHE_VERSION}/sccache-${SCCACHE_VERSION}-${SCCACHE_ARCH}-unknown-linux-musl.tar.gz
+tar -xf sccache-${SCCACHE_VERSION}-${SCCACHE_ARCH}-unknown-linux-musl.tar.gz
+mv sccache-${SCCACHE_VERSION}-${SCCACHE_ARCH}-unknown-linux-musl/sccache /usr/local/bin/sccache
+cd /tmp
+rm -rf /tmp/sccache
+
+# Only configure and verify sccache when enabled
 if [ "${USE_SCCACHE}" = "true" ]; then
-    # detect architecture
-    ARCH=$(uname -m)
-    if [ "$ARCH" = "x86_64" ]; then
-        SCCACHE_ARCH="x86_64"
-    elif [ "$ARCH" = "aarch64" ]; then
-        SCCACHE_ARCH="aarch64"
-    else
-        echo "Unsupported architecture: $ARCH"
-        exit 1
-    fi
-
-    SCCACHE_VERSION="v0.11.0"
-    mkdir -p /tmp/sccache
-    cd /tmp/sccache
-    curl -sLO https://github.com/mozilla/sccache/releases/download/${SCCACHE_VERSION}/sccache-${SCCACHE_VERSION}-${SCCACHE_ARCH}-unknown-linux-musl.tar.gz
-    tar -xf sccache-${SCCACHE_VERSION}-${SCCACHE_ARCH}-unknown-linux-musl.tar.gz
-    mv sccache-${SCCACHE_VERSION}-${SCCACHE_ARCH}-unknown-linux-musl/sccache /usr/local/bin/sccache
-    cd /tmp
-    rm -rf /tmp/sccache
-
     # shellcheck source=/dev/null
     source /usr/local/bin/setup-sccache
 

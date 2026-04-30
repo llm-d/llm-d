@@ -1,8 +1,10 @@
 # ============================================================================
-# shared vLLM Version Configuration
+# vLLM Version Configuration
 # ============================================================================
-VLLM_REPO=https://github.com/vllm-project/vllm.git
-VLLM_COMMIT_SHA=95c0f928cdeeaa21c4906e73cee6a156e1b3b995 # maps to v0.17.1 tag
+# Used by CUDA and CPU platforms
+VLLM_REPO=https://github.com/elvircrn/vllm.git
+VLLM_COMMIT_SHA=7de0c69eaf62cff588324db2b16d6e9c20f3ce95 # maps to elvir's cherrypicks on top of v0.19.1,
+# see: https://github.com/elvircrn/vllm/commits/llmd-0.19.1-nan-fixes/
 
 # ============================================================================
 # Cuda specific configs
@@ -15,20 +17,27 @@ VLLM_PREBUILT=0                # 0=editable install, 1=use full prebuilt wheel
 VLLM_USE_PRECOMPILED=1         # 1=use precompiled binaries either from VLLM_COMMIT_SHA or VLLM_PRECOMPILED_WHEEL_COMMIT, 0=compile from source
 # If building vLLM from a precompiled commit in the vLLM wheel index (only commits off main),
 # which commit to use as the base for the compiled bits.
-VLLM_PRECOMPILED_WHEEL_COMMIT=95c0f928cdeeaa21c4906e73cee6a156e1b3b995
+VLLM_PRECOMPILED_WHEEL_COMMIT=b1388b1fbf5aaef47937fabe98931211684666a6 # maps to vLLM official 0.19.1 release
 
-### Cuda Runtime versions
-CUDA_MAJOR=12
-CUDA_MINOR=9
-CUDA_PATCH=1
+# Uncomment VLLM_PRECOMPILED_WHEEL_COMMIT to use precompiled wheels from a different SHA1 than VLLM_COMMIT_SHA
+# VLLM_PRECOMPILED_WHEEL_COMMIT=1892993bc18e243e2c05841314c5e9c06a80c70d
 
+
+# Used by XPU, commit from vllm, point to v0.17.0
+VLLM_XPU_COMMIT_SHA=9dd656f0ea06ba452e1f26666c111ea4909cd488
+
+# ============================================================================
+# CUDA Version Configuration
+# ============================================================================
+# Used by CUDA builds (Dockerfile.cuda, Dockerfile.rdma-tools)
+CUDA_MAJOR=13
+CUDA_MINOR=0
+CUDA_PATCH=2
+
+### GB200-specific overrides
+GB200_NVSHMEM_VERSION=3.4.5-0
+GB200_DEEPEP_REPO=https://github.com/fzyzcjy/DeepEP
+GB200_DEEPEP_VERSION=gb200_blog_part_2
 
 ### Offloading connector
-LLM_D_OFFLOADING_CONNECTOR_VERSION=0.17.1
-
-# ============================================================================
-# XPU specific settings
-# ============================================================================
-
-# XPU vLLM version / commit sha
-VLLM_XPU_COMMIT_SHA=9dd656f0ea06ba452e1f26666c111ea4909cd488 # maps to v0.18.0rc2 tag for XPU RDMA support
+# LLM_D_OFFLOADING_CONNECTOR_VERSION=0.17.1

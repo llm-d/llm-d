@@ -1,0 +1,171 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 880 800" font-family="Arial, Helvetica, sans-serif" font-size="13">
+  <defs>
+    <marker id="arr" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+      <polygon points="0 0, 8 3, 0 6" fill="#000000"/>
+    </marker>
+  </defs>
+
+  <!-- Background -->
+  <rect width="880" height="800" fill="#ffffff"/>
+  <!-- Title bar -->
+  <rect x="0" y="0" width="880" height="48" fill="#f3f3f3"/>
+  <line x1="0" y1="48" x2="880" y2="48" stroke="#d9d2e9" stroke-width="1"/>
+  <!-- Canvas border (drawn last so it sits on top) -->
+  <rect width="880" height="800" rx="4" fill="none" stroke="#d9d2e9" stroke-width="2.5"/>
+
+  <!-- Title -->
+  <text x="440" y="30" text-anchor="middle" font-weight="600" font-size="16" fill="#000000">WVA Scaling Engine Pipeline</text>
+
+  <!-- ── External sources (top row) ─────────────────────────────────── -->
+
+  <!-- Prometheus -->
+  <rect x="80" y="72" width="170" height="52" rx="3" fill="#f3f3f3" stroke="#d9d2e9" stroke-width="1"/>
+  <circle r="12" cx="108" cy="98" fill="#ffffff" stroke="#d9d2e9" stroke-width="1"/>
+  <text x="108" y="98" text-anchor="middle" dominant-baseline="central" font-weight="700" font-size="14" fill="#000000">P</text>
+  <text x="175" y="95" text-anchor="middle" font-weight="600" fill="#000000">Prometheus</text>
+  <text x="175" y="110" text-anchor="middle" font-size="11" fill="#666666">vLLM &amp; EPP metrics</text>
+
+  <!-- VA Watch -->
+  <rect x="355" y="72" width="170" height="52" rx="3" fill="#f3f3f3" stroke="#d9d2e9" stroke-width="1"/>
+  <circle r="12" cx="383" cy="98" fill="#ffffff" stroke="#d9d2e9" stroke-width="1"/>
+  <text x="383" y="98" text-anchor="middle" dominant-baseline="central" font-size="15" fill="#000000">&#9670;</text>
+  <text x="452" y="95" text-anchor="middle" font-weight="600" fill="#000000">VA Watch</text>
+  <text x="452" y="110" text-anchor="middle" font-size="11" fill="#666666">Active VA resources</text>
+
+  <!-- EPP Metrics -->
+  <rect x="630" y="72" width="170" height="52" rx="3" fill="#f3f3f3" stroke="#d9d2e9" stroke-width="1"/>
+  <circle r="12" cx="658" cy="98" fill="#ffffff" stroke="#d9d2e9" stroke-width="1"/>
+  <text x="658" y="98" text-anchor="middle" dominant-baseline="central" font-weight="700" font-size="14" fill="#000000">E</text>
+  <text x="727" y="95" text-anchor="middle" font-weight="600" fill="#000000">EPP Metrics</text>
+  <text x="727" y="110" text-anchor="middle" font-size="11" fill="#666666">flow control queue size</text>
+
+  <!-- Arrows from sources down -->
+  <line x1="165" y1="124" x2="165" y2="162" stroke="#000000" stroke-width="1.5" marker-end="url(#arr)"/>
+  <line x1="440" y1="124" x2="440" y2="162" stroke="#000000" stroke-width="1.5" marker-end="url(#arr)"/>
+  <line x1="715" y1="124" x2="715" y2="656" stroke="#000000" stroke-width="1.5" stroke-dasharray="6 4" marker-end="url(#arr)"/>
+
+  <!-- ── Main Engine Box ─────────────────────────────────────────────── -->
+  <rect x="39.5" y="168" width="560" height="460" rx="6" fill="#f8f8f8" stroke="#d9d2e9" stroke-width="1.5"/>
+  <!-- Header band -->
+  <rect x="40" y="168" width="560" height="36" rx="6" fill="#eeeeee"/>
+  <rect x="40" y="190" width="560" height="14" fill="#eeeeee"/>
+  <line x1="40" y1="204" x2="600" y2="204" stroke="#d9d2e9" stroke-width="1"/>
+  <text x="320" y="191" text-anchor="middle" font-weight="700" font-size="14" fill="#000000">Scaling Engine</text>
+  <text x="586.5" y="185.5" text-anchor="end" font-size="11" fill="#888888" font-style="italic">every 30s</text>
+
+  <!-- Step 1: Collect -->
+  <rect x="68" y="216" width="504" height="40" rx="4" fill="#f3f3f3" stroke="#d9d2e9" stroke-width="1"/>
+  <circle cx="88" cy="236" r="9" fill="#eeeeee" stroke="#d9d2e9" stroke-width="1.2"/>
+  <text x="88" y="236" text-anchor="middle" dominant-baseline="central" font-weight="700" font-size="11" fill="#000000">1</text>
+  <text x="108" y="233" font-size="12" font-weight="600" fill="#000000">Collect</text>
+  <text x="108" y="248" font-size="11" fill="#666666">Group active VAs by modelID, scrape per-replica metrics</text>
+
+  <!-- Arrow 1 → 2 -->
+  <line x1="320" y1="256" x2="320" y2="313" stroke="#000000" stroke-width="1.5" marker-end="url(#arr)"/>
+
+  <!-- Step 2: Analyze -->
+  <rect x="68" y="313" width="504" height="80" rx="4" fill="#f3f3f3" stroke="#d9d2e9" stroke-width="1"/>
+  <circle cx="88" cy="329" r="9" fill="#eeeeee" stroke="#d9d2e9" stroke-width="1.2"/>
+  <text x="88" y="329" text-anchor="middle" dominant-baseline="central" font-weight="700" font-size="11" fill="#000000">2</text>
+  <text x="108" y="334" font-size="12" font-weight="600" fill="#000000">Analyze (per model)</text>
+
+  <!-- Analyzer sub-boxes -->
+  <rect x="88" y="345" width="148" height="36" rx="3" fill="#ffffff" stroke="#d9d2e9" stroke-width="1"/>
+  <text x="162" y="360" text-anchor="middle" font-size="11" font-weight="600" fill="#000000">Saturation V1</text>
+  <text x="162" y="374" text-anchor="middle" font-size="10" fill="#666666">percentage-based (default)</text>
+
+  <rect x="246" y="345" width="148" height="36" rx="3" fill="#ffffff" stroke="#d9d2e9" stroke-width="1"/>
+  <text x="320" y="360" text-anchor="middle" font-size="11" font-weight="600" fill="#000000">Saturation V2</text>
+  <text x="320" y="374" text-anchor="middle" font-size="10" fill="#666666">token-based capacity</text>
+
+  <rect x="404" y="345" width="148" height="36" rx="3" fill="#ffffff" stroke="#d9d2e9" stroke-width="1"/>
+  <text x="478" y="360" text-anchor="middle" font-size="11" font-weight="600" fill="#000000">SLO / Queueing</text>
+  <text x="478" y="374" text-anchor="middle" font-size="10" fill="#666666">latency-driven</text>
+
+  <!-- Experimental badges -->
+  <rect x="240" y="336" width="60" height="14" rx="7" fill="#f59e0b" stroke="#d97706" stroke-width="0.8"/>
+  <text x="270" y="340" text-anchor="middle" dominant-baseline="hanging" font-weight="600" font-size="8" fill="#ffffff">experimental</text>
+
+  <rect x="398.5" y="336" width="60" height="14" rx="7" fill="#f59e0b" stroke="#d97706" stroke-width="0.8"/>
+  <text x="428.5" y="340" text-anchor="middle" dominant-baseline="hanging" font-weight="600" font-size="8" fill="#ffffff">experimental</text>
+
+  <!-- Output labels for analyzer -->
+  <text x="571" y="322" text-anchor="end" font-style="italic" font-size="10" fill="#888888">RequiredCapacity</text>
+  <text x="569" y="333" text-anchor="end" font-style="italic" font-size="10" fill="#888888">SpareCapacity</text>
+
+  <!-- Arrow 2 → 3 -->
+  <line x1="320" y1="393" x2="320" y2="450" stroke="#000000" stroke-width="1.5" marker-end="url(#arr)"/>
+
+  <!-- Step 3: Optimize -->
+  <rect x="68" y="450" width="504" height="60" rx="4" fill="#f3f3f3" stroke="#d9d2e9" stroke-width="1"/>
+  <circle cx="88" cy="466" r="9" fill="#eeeeee" stroke="#d9d2e9" stroke-width="1.2"/>
+  <text x="88" y="466" text-anchor="middle" dominant-baseline="central" font-weight="700" font-size="11" fill="#000000">3</text>
+  <text x="108" y="471" font-size="12" font-weight="600" fill="#000000">Optimize (all models)</text>
+
+  <!-- Optimizer sub-boxes -->
+  <rect x="88" y="482" width="192" height="20" rx="3" fill="#ffffff" stroke="#d9d2e9" stroke-width="1"/>
+  <text x="184" y="496" text-anchor="middle" font-size="11" fill="#000000">CostAwareOptimizer</text>
+
+  <rect x="292" y="482" width="192" height="20" rx="3" fill="#ffffff" stroke="#d9d2e9" stroke-width="1"/>
+  <text x="388" y="496" text-anchor="middle" font-size="11" fill="#000000">GreedyByScoreOptimizer</text>
+
+  <!-- Output label for optimizer -->
+  <text x="567" y="463" text-anchor="end" font-style="italic" font-size="10" fill="#888888">VariantDecisions</text>
+
+  <!-- Arrow 3 → 4 -->
+  <line x1="320" y1="510" x2="320" y2="567" stroke="#000000" stroke-width="1.5" marker-end="url(#arr)"/>
+
+  <!-- Step 4: Enforce -->
+  <rect x="68" y="567" width="504" height="48" rx="4" fill="#f3f3f3" stroke="#d9d2e9" stroke-width="1"/>
+  <circle cx="88" cy="583" r="9" fill="#eeeeee" stroke="#d9d2e9" stroke-width="1.2"/>
+  <text x="88" y="583" text-anchor="middle" dominant-baseline="central" font-weight="700" font-size="11" fill="#000000">4</text>
+  <text x="108" y="588" font-size="12" font-weight="600" fill="#000000">Enforce (per model)</text>
+  <text x="108" y="605" font-size="11" fill="#666666">Scale-to-zero (idle models) &amp; minimum replica guarantee</text>
+
+  <!-- Arrow out of engine box -->
+  <line x1="320" y1="615" x2="320" y2="646" stroke="#000000" stroke-width="1.5" marker-end="url(#arr)"/>
+
+  <!-- ── Bottom row ──────────────────────────────────────────────────── -->
+
+  <!-- Decision Cache -->
+  <rect x="200" y="646" width="240" height="52" rx="4" fill="#f3f3f3" stroke="#d9d2e9" stroke-width="1.5"/>
+  <rect x="200" y="646" width="6" height="52" rx="3" fill="#e5a000"/>
+  <text x="326" y="668" text-anchor="middle" font-weight="600" fill="#000000">DecisionCache</text>
+  <text x="326" y="684" text-anchor="middle" font-size="11" fill="#666666">in-memory decision store</text>
+
+  <!-- Scale-from-Zero Engine -->
+  <rect x="630" y="656" width="220" height="52" rx="4" fill="#f3f3f3" stroke="#d9d2e9" stroke-width="1.5"/>
+  <rect x="630" y="656" width="6" height="52" rx="3" fill="#0ea5e9"/>
+  <text x="746" y="678" text-anchor="middle" font-weight="600" fill="#000000">Scale-from-Zero Engine</text>
+  <text x="746" y="694" text-anchor="middle" font-size="11" fill="#666666">100ms polling, EPP queue check</text>
+
+  <!-- Arrow from Scale-from-Zero to Cache (dashed) -->
+  <line x1="630" y1="676" x2="452" y2="676" stroke="#000000" stroke-width="1.5" stroke-dasharray="6 4" marker-end="url(#arr)"/>
+
+  <!-- T-fork: DecisionCache → VA Reconciler (DecisionTrigger) + Actuator -->
+  <line x1="320" y1="698" x2="320" y2="720" stroke="#000000" stroke-width="1.5"/>
+  <line x1="188" y1="720" x2="465" y2="720" stroke="#000000" stroke-width="1.5"/>
+  <line x1="188" y1="720" x2="188" y2="734" stroke="#000000" stroke-width="1.5" marker-end="url(#arr)"/>
+  <line x1="465" y1="720" x2="465" y2="734" stroke="#000000" stroke-width="1.5" marker-end="url(#arr)"/>
+  <text x="245" y="714" text-anchor="middle" font-style="italic" font-size="10" fill="#888888">DecisionTrigger</text>
+
+  <!-- VA Reconciler -->
+  <rect x="55" y="734" width="265" height="60" rx="4" fill="#f3f3f3" stroke="#d9d2e9" stroke-width="1.5"/>
+  <rect x="55" y="734" width="6" height="60" rx="3" fill="#6366f1"/>
+  <text x="188" y="758" text-anchor="middle" font-weight="600" fill="#000000">VA Reconciler</text>
+  <text x="188" y="774" text-anchor="middle" font-size="11" fill="#666666">Update VA status</text>
+
+  <!-- Actuator -->
+  <rect x="345" y="734" width="240" height="60" rx="4" fill="#f3f3f3" stroke="#d9d2e9" stroke-width="1.5"/>
+  <rect x="345" y="734" width="6" height="60" rx="3" fill="#22c55e"/>
+  <text x="465" y="758" text-anchor="middle" font-weight="600" fill="#000000">Actuator</text>
+  <text x="465" y="772" text-anchor="middle" font-size="10" fill="#666666">emit WVA metrics (wva_desired_replicas, ...)</text>
+
+  <!-- Legend -->
+  <rect x="620" y="744" width="230" height="50" rx="4" fill="#f3f3f3" stroke="#d9d2e9" stroke-width="1"/>
+  <text x="635" y="760" font-weight="600" font-size="10" fill="#000000">LEGEND</text>
+  <line x1="635" y1="774" x2="660" y2="774" stroke="#000000" stroke-width="1.5"/>
+  <text x="668" y="778" font-size="10" fill="#444444">main loop</text>
+  <line x1="730" y1="774" x2="755" y2="774" stroke="#000000" stroke-width="1.5" stroke-dasharray="6 4"/>
+  <text x="763" y="778" font-size="10" fill="#444444">scale-from-zero</text>
+</svg>

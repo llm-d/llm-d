@@ -1,0 +1,23 @@
+## Predicted Latency-Based Scheduling — default (routing-only) setup.
+##
+## The predictor trains on end-to-end latency. Suitable for non-SLO traffic.
+## For SLO header support (x-slo-ttft-ms / x-slo-tpot-ms), use
+## predicted-latency-slo.values.yaml instead.
+
+inferenceExtension:
+  image:
+    registry: ghcr.io
+    repository: llm-d/llm-d-inference-scheduler
+    tag: v0.8.0
+  latencyPredictor:
+    enabled: true
+  extraServicePorts:
+    - name: http
+      port: 80
+      protocol: TCP
+      targetPort: 8081
+
+inferencePool:
+  modelServers:
+    matchLabels:
+      llm-d.ai/guide: "optimized-baseline"

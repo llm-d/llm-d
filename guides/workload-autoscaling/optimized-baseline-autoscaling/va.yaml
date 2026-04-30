@@ -1,7 +1,7 @@
 apiVersion: llmd.ai/v1alpha1
 kind: VariantAutoscaling
 metadata:
-  name: ms-optimized-baseline-llm-d-modelservice-decode
+  name: optimized-baseline-nvidia-gpu-vllm-decode
   labels:
     inference.optimization/acceleratorName: "H100"
     llm-d.ai/model: "Qwen3-32B"
@@ -9,7 +9,8 @@ metadata:
     llm-d.ai/guide: "optimized-baseline"
 spec:
   scaleTargetRef:
+    apiVersion: apps/v1
     kind: Deployment
-    name: ms-optimized-baseline-llm-d-modelservice-decode
+    name: optimized-baseline-nvidia-gpu-vllm-decode
   modelID: "Qwen/Qwen3-32B"
   variantCost: "10.0"

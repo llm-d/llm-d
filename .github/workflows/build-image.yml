@@ -23,7 +23,7 @@ on:
   workflow_dispatch:
     inputs:
       platforms:
-        description: "Platforms to build (comma-separated: cuda,aws,xpu,cpu,hpu)"
+        description: "Platforms to build (comma-separated: cuda,aws,gb200,xpu,cpu,hpu)"
         required: false
         default: "cuda"
         type: string
@@ -58,42 +58,12 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}-${{ github.sha }}
 
 jobs:
-  pre-commit:
-    if: github.event_name == 'pull_request'
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout source
-        uses: actions/checkout@v6
-        with:
-          ref: ${{ inputs.ref || '' }}
-
-      - name: Install shellcheck
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y shellcheck
-
-      - name: Install hadolint
-        run: |
-          wget -O /usr/local/bin/hadolint \
-            https://github.com/hadolint/hadolint/releases/download/v2.12.0/hadolint-Linux-x86_64
-          chmod +x /usr/local/bin/hadolint
-        shell: bash
-
-      - name: Set up Python
-        uses: actions/setup-python@v6
-        with:
-          python-version: "3.x"
-
-      - name: Run pre-commit
-        uses: j178/prek-action@v2
-        with:
-          extra-args: ""
-
   detect-changes:
     runs-on: ubuntu-latest
     outputs:
       cuda: ${{ steps.force.outputs.cuda || steps.filter.outputs.cuda || steps.dispatch.outputs.cuda }}
       aws: ${{ steps.force.outputs.aws || steps.filter.outputs.aws || steps.dispatch.outputs.aws }}
+      gb200: ${{ steps.force.outputs.gb200 || steps.filter.outputs.gb200 || steps.dispatch.outputs.gb200 }}
       rocm: ${{ steps.force.outputs.rocm || steps.filter.outputs.rocm || steps.dispatch.outputs.rocm }}
       xpu: ${{ steps.force.outputs.xpu || steps.filter.outputs.xpu || steps.dispatch.outputs.xpu }}
       cpu: ${{ steps.force.outputs.cpu || steps.filter.outputs.cpu || steps.dispatch.outputs.cpu }}
@@ -106,6 +76,7 @@ jobs:
         run: |
           echo "cuda=true" >> $GITHUB_OUTPUT
           echo "aws=true" >> $GITHUB_OUTPUT
+          echo "gb200=true" >> $GITHUB_OUTPUT
           echo "rocm=true" >> $GITHUB_OUTPUT
           echo "xpu=true" >> $GITHUB_OUTPUT
           echo "cpu=true" >> $GITHUB_OUTPUT
@@ -140,6 +111,16 @@ jobs:
               - 'docker/packages/rpms/**'
               - 'patches/nvshmem_zero_ibv_ah_attr_3.3.20.patch'
               - 'patches/nvshmem_zero_ibv_ah_attr_v3.4.5-0.patch'
+            gb200:
+              - 'docker/Dockerfile.cuda'
+              - 'docker/common-versions'
+              - 'docker/scripts/common/**'
+              - 'docker/scripts/cuda/**'
+              - 'docker/packages/common/**'
+              - 'docker/packages/cuda/**'
+              - 'docker/packages/rpms/**'
+              - 'patches/nvshmem_zero_ibv_ah_attr_3.3.20.patch'
+              - 'patches/nvshmem_zero_ibv_ah_attr_v3.4.5-0.patch'
             rocm:
               - 'docker/Dockerfile.rocm'
             xpu:
@@ -161,6 +142,7 @@ jobs:
           platforms="${{ inputs.platforms }}"
           echo "cuda=$(echo $platforms | grep -q cuda && echo true || echo false)" >> $GITHUB_OUTPUT
           echo "aws=$(echo $platforms | grep -q aws && echo true || echo false)" >> $GITHUB_OUTPUT
+          echo "gb200=$(echo $platforms | grep -q gb200 && echo true || echo false)" >> $GITHUB_OUTPUT
           echo "rocm=$(echo $platforms | grep -q rocm && echo true || echo false)" >> $GITHUB_OUTPUT
           echo "xpu=$(echo $platforms | grep -q xpu && echo true || echo false)" >> $GITHUB_OUTPUT
           echo "cpu=$(echo $platforms | grep -q cpu && echo true || echo false)" >> $GITHUB_OUTPUT
@@ -170,6 +152,7 @@ jobs:
     needs: [detect-changes]
     if: ${{ needs.detect-changes.outputs.cuda == 'true' }}
     continue-on-error: true
+    environment: build-approval
     strategy:
       fail-fast: false
       matrix:
@@ -260,7 +243,7 @@ jobs:
             CACHE_BUSTER=${{ steps.cache_buster_timestamp.outputs.cache_buster_timestamp }}
             TARGETOS=${{ matrix.os }}
             TARGETPLATFORM=${{ matrix.platform }}
-            BUILD_BASE_IMAGE_SUFFIX=${{ matrix.os == 'ubuntu' && 'ubuntu20.04' || matrix.base_image_suffix }}
+            BUILD_BASE_IMAGE_SUFFIX=${{ matrix.os == 'ubuntu' && 'ubuntu24.04' || matrix.base_image_suffix }}
             FINAL_BASE_IMAGE_SUFFIX=${{ matrix.base_image_suffix }}
             CUDA_MAJOR=${{ steps.common-version.outputs.cuda_major }}
             CUDA_MINOR=${{ steps.common-version.outputs.cuda_minor }}
@@ -316,7 +299,7 @@ jobs:
         if: |
           steps.build-debug.outputs.digest != '' &&
           github.ref == format('refs/heads/{0}', github.event.repository.default_branch) &&
-          github.event_name != 'pull_request'
+          github.event_name != 'pull_request_target'
         run: |
           IMAGE="${{ env.REGISTRY }}/${{ github.repository }}-cuda${{ matrix.image_suffix }}"
           docker buildx imagetools create \
@@ -327,6 +310,7 @@ jobs:
     needs: [detect-changes]
     if: ${{ needs.detect-changes.outputs.cuda == 'true' }}
     continue-on-error: true
+    environment: build-approval
     strategy:
       fail-fast: false
       # multi-OS build matrix: creates 4 images (2 platforms × 2 OS variants)
@@ -426,7 +410,7 @@ jobs:
             CACHE_BUSTER=${{ steps.cache_buster_timestamp.outputs.cache_buster_timestamp }}
             TARGETOS=${{ matrix.os }}
             TARGETPLATFORM=${{ matrix.platform }}
-            BUILD_BASE_IMAGE_SUFFIX=${{ matrix.os == 'ubuntu' && 'ubuntu20.04' || matrix.base_image_suffix }}
+            BUILD_BASE_IMAGE_SUFFIX=${{ matrix.os == 'ubuntu' && 'ubuntu24.04' || matrix.base_image_suffix }}
             FINAL_BASE_IMAGE_SUFFIX=${{ matrix.base_image_suffix }}
             CUDA_MAJOR=${{ steps.common-version.outputs.cuda_major }}
             CUDA_MINOR=${{ steps.common-version.outputs.cuda_minor }}
@@ -453,7 +437,7 @@ jobs:
             CACHE_BUSTER=${{ steps.cache_buster_timestamp.outputs.cache_buster_timestamp }}
             TARGETOS=${{ matrix.os }}
             TARGETPLATFORM=${{ matrix.platform }}
-            BUILD_BASE_IMAGE_SUFFIX=${{ matrix.os == 'ubuntu' && 'ubuntu20.04' || matrix.base_image_suffix }}
+            BUILD_BASE_IMAGE_SUFFIX=${{ matrix.os == 'ubuntu' && 'ubuntu24.04' || matrix.base_image_suffix }}
             FINAL_BASE_IMAGE_SUFFIX=${{ matrix.base_image_suffix }}
             CUDA_MAJOR=${{ steps.common-version.outputs.cuda_major }}
             CUDA_MINOR=${{ steps.common-version.outputs.cuda_minor }}
@@ -569,6 +553,7 @@ jobs:
     if: ${{ needs.cuda-success-check.outputs.any_succeeded == 'true' }}
     runs-on: ubuntu-latest
     continue-on-error: true
+    environment: build-approval
     strategy:
       fail-fast: false
       matrix:
@@ -663,7 +648,7 @@ jobs:
             tags="$tags -t ${{ env.REGISTRY }}/${{ github.repository }}-cuda-dev${{ matrix.image_suffix }}:pr-${{ github.event.pull_request.number }}"
           fi
           if [ "${{ github.ref }}" = "refs/heads/${{ github.event.repository.default_branch }}" ] && \
-             [ "${{ github.event_name }}" != "pull_request" ]; then
+             [ "${{ github.event_name }}" != "pull_request_target" ]; then
             tags="$tags -t ${{ env.REGISTRY }}/${{ github.repository }}-cuda-dev${{ matrix.image_suffix }}:latest"
           fi
           docker buildx imagetools create $tags $sources
@@ -713,6 +698,7 @@ jobs:
     needs: [detect-changes]
     if: ${{ needs.detect-changes.outputs.aws == 'true' }}
     continue-on-error: true
+    environment: build-approval
     strategy:
       fail-fast: false
       # AWS/EFA build matrix: RHEL-only, amd64-only (for now)
@@ -925,6 +911,7 @@ jobs:
     if: ${{ needs.aws-success-check.outputs.any_succeeded == 'true' }}
     runs-on: ubuntu-latest
     continue-on-error: true
+    environment: build-approval
     steps:
       - name: Check if build succeeded
         id: should-run
@@ -995,7 +982,7 @@ jobs:
             tags="$tags -t ${{ env.REGISTRY }}/${{ github.repository }}-aws-dev:pr-${{ github.event.pull_request.number }}"
           fi
           if [ "${{ github.ref }}" = "refs/heads/${{ github.event.repository.default_branch }}" ] && \
-             [ "${{ github.event_name }}" != "pull_request" ]; then
+             [ "${{ github.event_name }}" != "pull_request_target" ]; then
             tags="$tags -t ${{ env.REGISTRY }}/${{ github.repository }}-aws-dev:latest"
           fi
           docker buildx imagetools create $tags $sources
@@ -1041,9 +1028,158 @@ jobs:
             echo "No vulnerabilities found or scan failed."
           fi
 
+  gb200-build-llm-d:
+    needs: [detect-changes]
+    if: ${{ needs.detect-changes.outputs.gb200 == 'true' }}
+    runs-on: vllm-runner-arm
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.ref || '' }}
+
+      - name: Load version configuration from file
+        id: common-version
+        run: |
+          source docker/common-versions
+          echo "repo=${VLLM_REPO}" >> $GITHUB_OUTPUT
+          echo "commit_sha=${VLLM_COMMIT_SHA}" >> $GITHUB_OUTPUT
+          echo "precompiled_wheel_commit=${VLLM_PRECOMPILED_WHEEL_COMMIT}" >> $GITHUB_OUTPUT
+          echo "prebuilt=${VLLM_PREBUILT}" >> $GITHUB_OUTPUT
+          echo "use_precompiled=${VLLM_USE_PRECOMPILED}" >> $GITHUB_OUTPUT
+          echo "cuda_major=${CUDA_MAJOR}" >> $GITHUB_OUTPUT
+          echo "cuda_minor=${CUDA_MINOR}" >> $GITHUB_OUTPUT
+          echo "cuda_patch=${CUDA_PATCH}" >> $GITHUB_OUTPUT
+          echo "offloading_connector_version=${LLM_D_OFFLOADING_CONNECTOR_VERSION}" >> $GITHUB_OUTPUT
+          echo "gb200_nvshmem_version=${GB200_NVSHMEM_VERSION}" >> $GITHUB_OUTPUT
+          echo "gb200_deepep_repo=${GB200_DEEPEP_REPO}" >> $GITHUB_OUTPUT
+          echo "gb200_deepep_version=${GB200_DEEPEP_VERSION}" >> $GITHUB_OUTPUT
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ secrets.GHCR_USER }}
+          password: ${{ secrets.GHCR_TOKEN }}
+
+      - name: Set image tag
+        id: set-tag
+        run: |
+          TAG="sha-$(git rev-parse --short HEAD)"
+          echo "tag=${TAG}" >> $GITHUB_OUTPUT
+          PR_TAG="${{ github.event.pull_request.number }}"
+          if [ -n "${PR_TAG}" ]; then
+            echo "pr_tag=pr-${PR_TAG}" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Calculate Cache Bust Timestamp
+        id: cache_buster_timestamp
+        run: |
+          echo "cache_buster_timestamp=$(date)" >> $GITHUB_OUTPUT
+
+      - name: Build the builder image layer
+        id: build-image-build-layer
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./docker/Dockerfile.cuda
+          platforms: linux/arm64
+          target: builder
+          push: false
+          build-args: |
+            CACHE_BUSTER=${{ steps.cache_buster_timestamp.outputs.cache_buster_timestamp }}
+            TARGETOS=rhel
+            TARGETPLATFORM=linux/arm64
+            BUILD_BASE_IMAGE_SUFFIX=ubi9
+            FINAL_BASE_IMAGE_SUFFIX=ubi9
+            CUDA_MAJOR=${{ steps.common-version.outputs.cuda_major }}
+            CUDA_MINOR=${{ steps.common-version.outputs.cuda_minor }}
+            CUDA_PATCH=${{ steps.common-version.outputs.cuda_patch }}
+            NVSHMEM_VERSION=${{ steps.common-version.outputs.gb200_nvshmem_version }}
+            DEEPEP_REPO=${{ steps.common-version.outputs.gb200_deepep_repo }}
+            DEEPEP_VERSION=${{ steps.common-version.outputs.gb200_deepep_version }}
+          github-token: ${{ secrets.GHCR_TOKEN }}
+          secrets: |
+            aws_access_key_id=${{ secrets.AWS_ACCESS_KEY_ID_S3_BUCKET_ONLY }}
+            aws_secret_access_key=${{ secrets.AWS_SECRET_ACCESS_KEY_S3_BUCKET_ONLY }}
+        env:
+          DOCKER_BUILDKIT: "1"
+          BUILDKIT_PROGRESS: "plain"
+
+      - name: Build and push the final image
+        id: build-and-push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./docker/Dockerfile.cuda
+          target: runtime
+          platforms: linux/arm64
+          push: true
+          provenance: true
+          build-args: |
+            CACHE_BUSTER=${{ steps.cache_buster_timestamp.outputs.cache_buster_timestamp }}
+            TARGETOS=rhel
+            TARGETPLATFORM=linux/arm64
+            BUILD_BASE_IMAGE_SUFFIX=ubi9
+            FINAL_BASE_IMAGE_SUFFIX=ubi9
+            CUDA_MAJOR=${{ steps.common-version.outputs.cuda_major }}
+            CUDA_MINOR=${{ steps.common-version.outputs.cuda_minor }}
+            CUDA_PATCH=${{ steps.common-version.outputs.cuda_patch }}
+            NVSHMEM_VERSION=${{ steps.common-version.outputs.gb200_nvshmem_version }}
+            DEEPEP_REPO=${{ steps.common-version.outputs.gb200_deepep_repo }}
+            DEEPEP_VERSION=${{ steps.common-version.outputs.gb200_deepep_version }}
+            VLLM_REPO=${{ inputs.vllm_repo || steps.common-version.outputs.repo }}
+            VLLM_COMMIT_SHA=${{ inputs.vllm_commit_sha || steps.common-version.outputs.commit_sha }}
+            VLLM_PRECOMPILED_WHEEL_COMMIT=${{ inputs.vllm_precompiled_wheel_commit || steps.common-version.outputs.precompiled_wheel_commit }}
+            VLLM_PREBUILT=${{ steps.common-version.outputs.prebuilt }}
+            VLLM_USE_PRECOMPILED=${{ steps.common-version.outputs.use_precompiled }}
+            LLM_D_OFFLOADING_CONNECTOR_VERSION=${{ steps.common-version.outputs.offloading_connector_version }}
+          tags: |
+            ${{ env.REGISTRY }}/${{ github.repository }}-cuda-gb200-dev:${{ steps.set-tag.outputs.tag }}
+            ${{ steps.set-tag.outputs.pr_tag != '' && format('{0}/{1}-cuda-gb200-dev:{2}', env.REGISTRY, github.repository, steps.set-tag.outputs.pr_tag) || '' }}
+            ${{ github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.event_name != 'pull_request' && format('{0}/{1}-cuda-gb200-dev:latest', env.REGISTRY, github.repository) || '' }}
+          github-token: ${{ secrets.GHCR_TOKEN }}
+        env:
+          DOCKER_BUILDKIT: "1"
+          BUILDKIT_PROGRESS: "plain"
+
+      - name: Run Trivy vulnerability scanner
+        continue-on-error: true
+        uses: aquasecurity/trivy-action@v0.35.0
+        with:
+          image-ref: ${{ env.REGISTRY }}/${{ github.repository }}-cuda-gb200-dev:${{ steps.set-tag.outputs.tag }}
+          format: "sarif"
+          output: "trivy-results.sarif"
+          severity: "CRITICAL,HIGH,MEDIUM"
+          scanners: vuln
+          timeout: 30m
+          skip-dirs: /root/.cache/uv
+        env:
+          TRIVY_USERNAME: ${{ secrets.GHCR_USER }}
+          TRIVY_PASSWORD: ${{ secrets.GHCR_TOKEN }}
+
+      - name: Upload Trivy scan results to GitHub Security tab
+        continue-on-error: true
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: "trivy-results.sarif"
+
+      - name: Display vulnerability summary
+        run: |
+          echo "=== Vulnerability Scan Summary ==="
+          if [ -f trivy-results.sarif ]; then
+            echo "Scan completed. Check the Security tab for detailed results."
+          else
+            echo "No vulnerabilities found or scan failed."
+          fi
+
   rdma-tools-build-llm-d:
     needs: [detect-changes]
     if: ${{ needs.detect-changes.outputs.rdma-tools == 'true' }}
+    environment: build-approval
     strategy:
       fail-fast: false
     runs-on: ubuntu-latest
@@ -1138,6 +1274,7 @@ jobs:
   xpu-build-llm-d:
     needs: [detect-changes]
     if: ${{ needs.detect-changes.outputs.xpu == 'true' }}
+    environment: build-approval
     strategy:
       fail-fast: false
     runs-on: xpu
@@ -1204,7 +1341,7 @@ jobs:
           tags: |
             ${{ env.REGISTRY }}/${{ github.repository }}-xpu-dev:${{ steps.set-tag.outputs.tag }}
             ${{ steps.set-tag.outputs.pr_tag != '' && format('{0}/{1}-xpu-dev:{2}', env.REGISTRY, github.repository, steps.set-tag.outputs.pr_tag) || '' }}
-            ${{ github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.event_name != 'pull_request' && format('{0}/{1}-xpu-dev:latest', env.REGISTRY, github.repository) || '' }}
+            ${{ github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.event_name != 'pull_request_target' && format('{0}/{1}-xpu-dev:latest', env.REGISTRY, github.repository) || '' }}
           github-token: ${{ secrets.GHCR_TOKEN }}
         env:
           DOCKER_BUILDKIT: "1"
@@ -1241,6 +1378,7 @@ jobs:
   rocm-build-llm-d:
     needs: [detect-changes]
     if: ${{ needs.detect-changes.outputs.rocm == 'true' }}
+    environment: build-approval
     runs-on: vllm-runner
     steps:
       - name: Checkout code
@@ -1282,7 +1420,7 @@ jobs:
           tags: |
             ${{ env.REGISTRY }}/${{ github.repository }}-rocm-dev:${{ steps.set-tag.outputs.tag }}
             ${{ steps.set-tag.outputs.pr_tag != '' && format('{0}/{1}-rocm-dev:{2}', env.REGISTRY, github.repository, steps.set-tag.outputs.pr_tag) || '' }}
-            ${{ github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.event_name != 'pull_request' && format('{0}/{1}-rocm-dev:latest', env.REGISTRY, github.repository) || '' }}
+            ${{ github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.event_name != 'pull_request_target' && format('{0}/{1}-rocm-dev:latest', env.REGISTRY, github.repository) || '' }}
           github-token: ${{ secrets.GHCR_TOKEN }}
         env:
           DOCKER_BUILDKIT: "1"
@@ -1319,6 +1457,7 @@ jobs:
   hpu-build-llm-d:
     needs: [detect-changes]
     if: ${{ needs.detect-changes.outputs.hpu == 'true' }}
+    environment: build-approval
     strategy:
       fail-fast: false
     runs-on: vllm-runner
@@ -1356,7 +1495,7 @@ jobs:
       - name: Tag latest on default branch
         if: |
           github.ref == format('refs/heads/{0}', github.event.repository.default_branch) &&
-          github.event_name != 'pull_request'
+          github.event_name != 'pull_request_target'
         run: |
           export DEVICE=hpu
           export DOCKERFILE=Dockerfile.hpu
@@ -1396,6 +1535,7 @@ jobs:
   cpu-build-llm-d:
     needs: [detect-changes]
     if: ${{ needs.detect-changes.outputs.cpu == 'true' }}
+    environment: build-approval
     runs-on: vllm-runner
     steps:
       - name: Checkout code
@@ -1455,7 +1595,7 @@ jobs:
           tags: |
             ${{ env.REGISTRY }}/${{ github.repository }}-cpu-dev:${{ steps.set-tag.outputs.tag }}
             ${{ steps.set-tag.outputs.pr_tag != '' && format('{0}/{1}-cpu-dev:{2}', env.REGISTRY, github.repository, steps.set-tag.outputs.pr_tag) || '' }}
-            ${{ github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.event_name != 'pull_request' && format('{0}/{1}-cpu-dev:latest', env.REGISTRY, github.repository) || '' }}
+            ${{ github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.event_name != 'pull_request_target' && format('{0}/{1}-cpu-dev:latest', env.REGISTRY, github.repository) || '' }}
           github-token: ${{ secrets.GHCR_TOKEN }}
         env:
           DOCKER_BUILDKIT: "1"

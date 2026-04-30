@@ -25,9 +25,12 @@ LLM-aware load balancing that goes beyond naive round-robin. The LLM-aware load 
 - **Prefix cache locality** — route to replicas that already have relevant KV-cache entries
 - **KV-cache utilization** — prefer replicas with more available memory
 - **Queue depth** — avoid overloading busy replicas
-- **Predicted latency** — SLO-aware routing based on live traffic patterns (experimental)
 
 This alone can deliver order-of-magnitude latency reductions vs. round-robin baselines.
+
+### Predicted Latency-Based Scheduling
+
+Route each request to the replica predicted to serve it fastest, using an XGBoost model trained online on live traffic. Optionally enforce per-request SLOs via `x-slo-ttft-ms` / `x-slo-tpot-ms` headers — requests that no replica can meet within budget are shed at admission rather than routed to a guaranteed miss. Useful when workload variance makes queue-depth a poor proxy for true load, or when clients need to express interactive vs. batch latency budgets.
 
 ### Prefill/Decode Disaggregation
 

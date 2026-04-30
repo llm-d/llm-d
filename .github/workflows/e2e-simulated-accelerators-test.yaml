@@ -179,7 +179,7 @@ jobs:
             --for=condition=Ready \
             --all \
             -n "${{ env.NAMESPACE }}" \
-            --timeout=5m
+            --timeout=10m
 
           echo "✅ All pods are ready."
           kubectl get pods -n "${{ env.NAMESPACE }}"

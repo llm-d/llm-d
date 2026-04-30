@@ -18,7 +18,7 @@ environments:
 {{- $certdir := (env "TMPDIR") | default "/tmp" -}}
 {{- $isWvaOnly := eq .Environment.Name "wva-only" -}}
 {{- $llmdReleaseName := env "LLMD_RELEASE_NAME_POSTFIX" | default "optimized-baseline" -}}
-{{- $llmdNamespaceEnv := env "LLMD_NAMESPACE" | default "llm-d-inference-scheduler" -}}
+{{- $llmdNamespaceEnv := env "LLMD_NAMESPACE" | default "llm-d-optimized-baseline" -}}
 {{- $rn := (env "RELEASE_NAME_POSTFIX") | default "workload-autoscaler" -}}
 {{- $ns := .Namespace | default "llm-d-autoscaler" -}}
 

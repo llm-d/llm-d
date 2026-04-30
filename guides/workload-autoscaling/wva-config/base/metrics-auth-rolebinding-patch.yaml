@@ -1,0 +1,8 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: workload-variant-autoscaler-prometheus-metrics-auth-rolebinding
+subjects:
+  - kind: ServiceAccount
+    name: workload-variant-autoscaler-controller-manager
+    namespace: llm-d-autoscaler

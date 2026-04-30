@@ -1,6 +1,6 @@
 # Predicted Latency-Based Scheduling
 
-llm-d's [optimized baseline guide](../intelligent-inference-scheduling.md) leverages load signals and prefix-cache affinity to schedule requests, combining the signals together with heuristics.
+llm-d's [optimized baseline guide](./optimized-baseline.md) leverages load signals and prefix-cache affinity to schedule requests, combining the signals together with heuristics.
 
 This path is for operators who want to adopt predicted latency-based scheduling - which uses an XGBoost model trained online - to make scheduling decisions. This strategy is useful when:
 - Your workload has **high variance in prompt and completion length**, and queue depth alone is a poor proxy for true load.
@@ -16,7 +16,7 @@ See the [Predicted Latency guide](https://github.com/llm-d/llm-d/tree/main/guide
 
 ## Architecture
 
-![Latency Predictor](../../../assets/latency-predictor.svg)
+![Latency Predictor](../../assets/latency-predictor.svg)
 
 The setup deploys an EPP with the predicted latency sidecar containers:
 * **Training Server** - trains the XGBoost model to predict TPOT and TTFT based on observed traffic
@@ -32,6 +32,6 @@ During the standard request flow:
 
 ## Further Reading
 
-- [Latency Predictor Architecture](../../architecture/advanced/latency-predictor.md) — plugin pipeline, ML model, scaling characteristics, metric reference.
+- [Latency Predictor Architecture](../architecture/advanced/latency-predictor.md) — plugin pipeline, ML model, scaling characteristics, metric reference.
 - [llm-d/llm-d-latency-predictor](https://github.com/llm-d/llm-d-latency-predictor) — source for the training and prediction server Python code.
 - [Predicted Latency-Based Scheduling for LLMs - Blog](https://llm-d.ai/blog/predicted-latency-based-scheduling-for-llms) — design rationale and benchmark results.
