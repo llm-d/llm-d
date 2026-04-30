@@ -23,11 +23,6 @@ spec:
               valueFrom:
                 fieldRef:
                   fieldPath: status.podIP
-          #   # vLLM has a bug on cu129 in v0.20 where wrong UCX transport
-          #   # (https://github.com/vllm-project/vllm/issues/41048). Uncomment
-          #   # the following env var to fix it if using the cu129 build.
-          #   - name: UCX_MODULE_DIR
-          #    value: /usr/local/lib/python3.12/dist-packages/nixl_cu12.libs/ucx
           resources:
             limits:
               cpu: "8"
