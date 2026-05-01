@@ -127,13 +127,16 @@ PAYLOAD=$(printf '{"model":"%s","prompt":"Tell me a short story.","max_tokens":3
 kubectl exec -n "$NAMESPACE" "$CURL_POD_NAME" -- sh -c "cat > /tmp/payload.json" <<<"$PAYLOAD"
 
 echo "Sending $ITERATIONS requests with concurrency $CONCURRENCY..."
+# Tolerate partial failures: a single curl that fails to connect would otherwise
+# propagate up through xargs/kubectl exec under `set -e` and abort the script
+# before we get to the ok/fail accounting and the metrics check below.
 status_log=$(kubectl exec -n "$NAMESPACE" "$CURL_POD_NAME" -- sh -c "
   seq 1 $ITERATIONS | xargs -I{} -P $CONCURRENCY \
     curl -sS --max-time 60 -o /dev/null -w '%{http_code}\n' \
       -X POST 'http://${SVC_HOST}/v1/completions' \
       -H 'content-type: application/json' \
       --data-binary @/tmp/payload.json
-")
+" || true)
 
 ok=$(echo "$status_log" | grep -c '^200$' || true)
 fail=$(echo "$status_log" | grep -cv '^200$' || true)

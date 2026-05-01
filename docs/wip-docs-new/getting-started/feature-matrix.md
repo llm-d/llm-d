@@ -180,5 +180,5 @@ Each well-lit path guide is assigned a maturity level reflecting its testing and
 | Simulated Accelerators | Medium | OpenShift |
 | Workload Autoscaling (WVA) | Experimental | OpenShift, CoreWeave |
 | Workload Autoscaling (HPA + IGW) | Experimental | — |
-| Predicted Latency-Based Scheduling | Experimental | — |
+| Predicted Latency-Based Scheduling | Medium | OpenShift, GKE, CoreWeave |
 | Asynchronous Processing | Experimental | — |
