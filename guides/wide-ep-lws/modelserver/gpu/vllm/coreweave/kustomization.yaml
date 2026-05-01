@@ -3,6 +3,11 @@ kind: Kustomization
 resources:
   - ../base
 
+images:
+  - name: ghcr.io/llm-d/llm-d-cuda
+    newName: docker.io/vllm/vllm-openai
+    newTag: v0.19.1-x86_64-cu130-ubuntu2404
+
 patches:
   - target:
       kind: LeaderWorkerSet
