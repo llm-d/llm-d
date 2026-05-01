@@ -34,7 +34,6 @@ permissions:
   contents: write
   pull-requests: write
   actions: write
-  workflows: write
 
 # Use comment ID in concurrency group so different /test-nightly
 # commands on the same PR can run in parallel.
@@ -216,17 +215,17 @@ jobs:
           MATCH_NAMES: ${{ steps.parse.outputs.match_names }}
           HEAD_REF: ${{ steps.pr.outputs.head_ref }}
           IS_FORK: ${{ steps.pr.outputs.is_fork }}
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          WORKFLOW_TOKEN: ${{ secrets.WORKFLOW_TOKEN }}
         run: |
           if [ "$IS_FORK" = "true" ]; then
-            if [ -z "$GITHUB_TOKEN" ]; then
-              echo "::error::Fork PR /test-nightly runs require the repository secret WORKFLOW_TOKEN to be configured with contents:write and workflows permissions."
+            if [ -z "$WORKFLOW_TOKEN" ]; then
+              echo "::error::Fork PR /test-nightly runs require the org secret WORKFLOW_TOKEN (a fine-grained PAT with contents:write and workflows permissions)."
               exit 1
             fi
             # Include comment ID to avoid races when multiple /test-nightly
             # commands on the same PR run concurrently.
             BRANCH="test-nightly/pr-${PR_NUMBER}-${{ github.event.comment.id }}"
-            git remote set-url origin "https://x-access-token:${GITHUB_TOKEN}@github.com/${{ github.repository }}.git"
+            git remote set-url origin "https://x-access-token:${WORKFLOW_TOKEN}@github.com/${{ github.repository }}.git"
             git checkout -b "$BRANCH"
             # Add an empty commit so the branch tip has a fresh timestamp
             # (used by cleanup to determine branch age)
