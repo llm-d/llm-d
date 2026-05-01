@@ -8,7 +8,7 @@ This guide shows how to collect and visualize metrics from an llm-d deployment u
 ## Prerequisites
 
 - A running llm-d basic stack (llm-d Router + model servers)
-- [Helm](https://helm.sh/docs/intro/install/) (for scheduler/EPP charts and optional Prometheus install)
+- [Helm](https://helm.sh/docs/intro/install/) (for llm-d Router charts and optional Prometheus install)
 - A Prometheus instance accessible to the cluster (see [Step 1](#step-1-install-prometheus-and-grafana) if you don't have one)
 
 > [!NOTE]
