@@ -47,17 +47,17 @@ Next we will discuss the design of the EPP and Routing Sidecar for disaggregated
 
 ### EPP
 
-The llm-d EPP supports disaggregation via the `pd-profile-handler`.
+The llm-d EPP supports disaggregation via the `disagg-profile-handler`.
 
 > [!NOTE]
 > Rather than hardcoding a single scheduling algorithm, the EPP delegates execution to one or more `Profile Handlers`, each of which represents a complete scheduling strategy. They can be thought of as "the dispatcher", which maps each incoming inference request to the right scheduling strategy before the scorers and pickers do their work of selecting the actual endpoint. By default, llm-d uses the `single-profile-handler` for simple aggregated serving.
 
-When configured with `pd-profile-handler`, the EPP processes requests in the following steps:
-- `proxy` forwards request metadata to the EPP.
-- `pd-profile-handler` runs the `decode-profile`, which executes the `filter`, `score`, `pick` request scheduling profile to select D endpoint.
-- `pd-profile-handler` consults the `decider` — given how much of the prompt is cached on D, should this request run disagg?
-- If `no`: `pd-profile-handler` returns only the D endpoint to the `proxy`
-- If `yes` (large uncached suffix), `pd-profile-handler` also runs the `prefill-profile`, which executes the `filter`, `score`, `pick` request scheduling profile to select the P endpoint and returns both the P and D endpoints to the proxy.
+When configured with `disagg-profile-handler`, the EPP processes requests in the following steps:
+* `proxy` forwards request metadata to the EPP.
+* `disagg-profile-handler` runs the `decode-profile`, which executes the `filter`, `score`, `pick` scheduler profile to select D endpoint.
+* `disagg-profile-handler` consults the `decider` — given how much of the prompt is cached on D, should this request run disagg?
+* If `no`: `disagg-profile-handler` returns only the D endpoint to the `proxy`
+* If `yes` (large uncached suffix), `disagg-profile-handler` also runs the `prefill-profile`, which executes the `filter`, `score`, `pick` scheduler profile to select the P endpoint and returns both the P and D endpoints to the proxy.
 
 
 The flow looks like this:
@@ -66,34 +66,35 @@ The flow looks like this:
 sequenceDiagram
     participant Proxy
     box EPP
-        participant PD-Profile-Handler
+        participant Disagg-Profile-Handler
         participant Decider
         participant Decode-Profile
         participant Prefill-Profile
     end
 
-    Proxy-->>PD-Profile-Handler: Request
-    PD-Profile-Handler-->>Decode-Profile: Request
+    Proxy-->>Disagg-Profile-Handler: Request
+    Disagg-Profile-Handler-->>Decode-Profile: Request
     Decode-Profile-->>Decode-Profile: Filter, Score, Pick
-    Decode-Profile-->>PD-Profile-Handler: D Endpoint
-    PD-Profile-Handler-->>Decider: Num uncached tokens on D
-    Decider-->>PD-Profile-Handler: [do-pd] BOOL
+    Decode-Profile-->>Disagg-Profile-Handler: D Endpoint
+    Disagg-Profile-Handler-->>Decider: Num uncached tokens on D
+    Decider-->>Disagg-Profile-Handler: [do-pd] BOOL
     opt do-pd=FALSE
-        PD-Profile-Handler-->>Proxy: D Endpoint
+        Disagg-Profile-Handler-->>Proxy: D Endpoint
     end
 
-    PD-Profile-Handler-->>Prefill-Profile: Request
+    Disagg-Profile-Handler-->>Prefill-Profile: Request
     Prefill-Profile-->>Prefill-Profile: Filter, Score, Pick
-    Prefill-Profile-->>PD-Profile-Handler: P Endpoint
-    PD-Profile-Handler-->>Proxy: D, P Endpoint
+    Prefill-Profile-->>Disagg-Profile-Handler: P Endpoint
+    Disagg-Profile-Handler-->>Proxy: D, P Endpoint
 ```
 
 In this way, disaggregated serving functionality composes with the existing set of scheduling functionality, enabling use of the existing set of scorers for prefix and load aware routing in the disaggregated setting.
 
 Note that both the prefill and decode endpoints are part of one `InferencePool`. The `decode-profile` and `prefill-profile` are responsible for selecting only D workers or P workers in the `filter` step. llm-d uses the label `llm-d.ai/role` with the following values to filter:
+
 * `prefill` → prefill-only pods
 * `decode` → decode-capable pods
-* `prefill-decode` → pods capable of both prefill and decode 
+* `prefill-decode` → pods capable of both prefill and decode
 
 > [!NOTE]
 > It is possible to override the default labels by configuring the `EndpointPickerConfig` to use the generic by-label filter plugin instead of the `prefill-filter` / `decode-filter`. TODO: provide an example of this.
@@ -101,8 +102,8 @@ Note that both the prefill and decode endpoints are part of one `InferencePool`.
 ### Routing Proxy Sidecar
 
 The Routing Proxy is deployed as a sidecar in each decode pod, with a two-fold role:
-- Facilitate the multi-step inference request
-- Mutate the requests to follow each model server's KV transfer protocol
+* Facilitate the multi-step inference request
+* Mutate the requests to follow each model server's KV transfer protocol
 
 #### Request Flow
 
@@ -122,12 +123,12 @@ All non-completion routes (`GET /health`, and any other path) pass through to th
 #### KV Transfer Protocol
 
 vLLM and SGLang use slightly different protocols for KV Transfer between the P and D instance, inserting additional parameters in the body of the requests to facilitate the transfer:
-- **vLLM** (`nixlv2`, default) — A two-phase sequential protocol. The sidecar sends a prefill request with `kv_transfer_params` containing remote-decode metadata, and `max_tokens=1` to suppress output. It captures the KV transfer parameters from the prefiller's response and injects them into the decode request before forwarding it to the local decoder. If the prefiller returns a server error, the sidecar falls back to decoder-only mode (client errors are not retried).
-- **SGLang** (`sglang`) — Uses a concurrent prefill/decode model. Instead of waiting for prefill to complete, the sidecar injects bootstrap coordination parameters (`bootstrap_host`, `bootstrap_port`, `bootstrap_room`) into both requests, fires the prefill asynchronously in a goroutine (with `context.WithoutCancel` to prevent premature cancellation), and immediately sends the decode request synchronously. The decoder and prefiller coordinate KV transfer out-of-band via the bootstrap room.
+* **vLLM** (`nixlv2`, default) — A two-phase sequential protocol. The sidecar sends a prefill request with `kv_transfer_params` containing remote-decode metadata, and `max_tokens=1` to suppress output. It captures the KV transfer parameters from the prefiller's response and injects them into the decode request before forwarding it to the local decoder. If the prefiller returns a server error, the sidecar falls back to decoder-only mode (client errors are not retried).
+* **SGLang** (`sglang`) — Uses a concurrent prefill/decode model. Instead of waiting for prefill to complete, the sidecar injects bootstrap coordination parameters (`bootstrap_host`, `bootstrap_port`, `bootstrap_room`) into both requests, fires the prefill asynchronously in a goroutine (with `context.WithoutCancel` to prevent premature cancellation), and immediately sends the decode request synchronously. The decoder and prefiller coordinate KV transfer out-of-band via the bootstrap room.
 
 ## Efficient KV Transfer 
 
-In addition to the **Request Flow Orchestation** which coordinates the metadata and RPC calls to each instance, efficient **KV Transfer** (which moves the KVs from the P instance to the D instance) is critical to a high performance disaggregated deployment.
+In addition to the **Request Flow Orchestration** which coordinates the metadata and RPC calls to each instance, efficient **KV Transfer** (which moves the KVs from the P instance to the D instance) is critical to a high performance disaggregated deployment.
 
 vLLM and SGLang both support multiple KV transfer engines - in llm-d we currently focus on NIXL.
 
