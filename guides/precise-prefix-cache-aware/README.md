@@ -46,7 +46,7 @@ Two scorers make up the routing decision alongside the load-aware stack:
 
 ## Prerequisites
 
-- Install the [Gateway API Inference Extension CRDs](https://github.com/kubernetes-sigs/gateway-api-inference-extension/tree/v1.4.0/config/crd).
+- Install the [Gateway API Inference Extension CRDs](https://github.com/kubernetes-sigs/gateway-api-inference-extension/tree/v1.5.0/config/crd).
 - Have the [proper client tools installed on your local system](../../helpers/client-setup/README.md). This guide requires **Helm v4** (the post-renderer plugin uses the v4 plugin manifest format) and a standalone `kustomize` binary (v5+) on `$PATH`, in addition to `kubectl`.
 - Check out the llm-d repo:
 
@@ -83,7 +83,7 @@ helm install precise-prefix-cache-aware \
   -f guides/recipes/scheduler/base.values.yaml \
   -f guides/precise-prefix-cache-aware/scheduler/precise-prefix-cache-aware.values.yaml \
   --post-renderer uds-tokenizer \
-  -n ${NAMESPACE} --version v1.4.0
+  -n ${NAMESPACE} --version v1.5.0
 ```
 
 The release name `precise-prefix-cache-aware` is mandatory for standard deployments. The vLLM patches hardcode the endpoint as `KV_EVENTS_ENDPOINT=tcp://<release>-epp.<ns>.svc.cluster.local:5556`. If you choose a custom release name, you must manually update the `KV_EVENTS_ENDPOINT` environment variable in your modelserver overlay to match `<your-release-name>-epp`.
@@ -114,7 +114,7 @@ To use a Kubernetes Gateway managed proxy instead of the standalone Envoy sideca
      --set experimentalHttpRoute.enabled=true \
      --set experimentalHttpRoute.inferenceGatewayName=llm-d-inference-gateway \
      --post-renderer uds-tokenizer \
-     -n ${NAMESPACE} --version v1.4.0
+     -n ${NAMESPACE} --version v1.5.0
    ```
 
 </details>

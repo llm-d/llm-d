@@ -137,7 +137,7 @@ For accelerator maintainer contacts and contribution requirements, see [Accelera
 |-----------|-----------------|-------|
 | Kubernetes | 1.30+ | Gateway API v1 support required |
 | Gateway API CRDs | v1.5.1 | |
-| Gateway API Inference Extension CRDs | v1.4.0 | |
+| Gateway API Inference Extension CRDs | v1.5.0 | |
 | Helm | 3.x | For helmfile-based guides |
 | Helmfile | 0.x | For helmfile-based guides |
 | kubectl | 1.30+ | |

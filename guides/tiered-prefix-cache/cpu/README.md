@@ -58,7 +58,7 @@ kubectl apply -k ./manifests/vllm/lmcache-connector -n ${NAMESPACE}
 To deploy the `InferencePool`, select your provider below.
 
 > [!WARNING]
-> `kgateway` is deprecated in llm-d and will be removed in the next release. Prefer `agentgateway` for new self-installed inference deployments. The current Gateway API Inference Extension chart uses `provider.name=none` for the `agentgateway` path; see the upstream [`inferencepool` chart values for v1.4.0](https://github.com/kubernetes-sigs/gateway-api-inference-extension/blob/v1.4.0/config/charts/inferencepool/values.yaml).
+> `kgateway` is deprecated in llm-d and will be removed in the next release. Prefer `agentgateway` for new self-installed inference deployments. The current Gateway API Inference Extension chart uses `provider.name=none` for the `agentgateway` path; see the upstream [`inferencepool` chart values for v1.5.0](https://github.com/kubernetes-sigs/gateway-api-inference-extension/blob/v1.5.0/config/charts/inferencepool/values.yaml).
 
 <!-- TABS:START -->
 
@@ -74,7 +74,7 @@ helm install llm-d-infpool \
     -f ./manifests/inferencepool/values.yaml \
     --set "provider.name=gke" \
     oci://registry.k8s.io/gateway-api-inference-extension/charts/inferencepool \
-    --version v1.4.0
+    --version v1.5.0
 ```
 
 <!-- TAB:Istio -->
@@ -89,7 +89,7 @@ helm install llm-d-infpool \
     -f ./manifests/inferencepool/values.yaml \
     --set "provider.name=istio" \
     oci://registry.k8s.io/gateway-api-inference-extension/charts/inferencepool \
-    --version v1.4.0
+    --version v1.5.0
 ```
 
 <!-- TAB:Agentgateway -->
@@ -104,7 +104,7 @@ helm install llm-d-infpool \
     -f ./manifests/inferencepool/values.yaml \
     --set "provider.name=none" \
     oci://registry.k8s.io/gateway-api-inference-extension/charts/inferencepool \
-    --version v1.4.0
+    --version v1.5.0
 ```
 
 <!-- TABS:END -->

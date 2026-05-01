@@ -18,7 +18,7 @@ Install the required Gateway API and Gateway API Inference Extension CRDs:
 
 ```bash
 GATEWAY_API_VERSION=v1.5.1
-GAIE_VERSION=v1.4.0
+GAIE_VERSION=v1.5.0
 
 kubectl apply -k "https://github.com/kubernetes-sigs/gateway-api/config/crd?ref=${GATEWAY_API_VERSION}"
 kubectl apply -k "https://github.com/kubernetes-sigs/gateway-api-inference-extension/config/crd?ref=${GAIE_VERSION}"

@@ -278,7 +278,7 @@ jobs:
           -f guides/wide-ep-lws/manifests/inferencepool.values.yaml \
           --set "provider.name=${GATEWAY_TYPE}" \
           oci://registry.k8s.io/gateway-api-inference-extension/charts/inferencepool \
-          --version v1.4.0
+          --version v1.5.0
 
         echo "Deployment complete"
       image_override: 'ghcr.io/llm-d/llm-d-cuda-dev:latest'

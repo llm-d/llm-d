@@ -111,7 +111,7 @@ jobs:
 
       - name: Dry-run scheduler charts
         run: |
-          CHART_VERSION=v1.4.0
+          CHART_VERSION=v1.5.0
           failed=0
           for chart in standalone inferencepool; do
             echo ""
@@ -224,7 +224,7 @@ jobs:
       
       - name: Dry-run scheduler charts
         run: |
-          CHART_VERSION=v1.4.0
+          CHART_VERSION=v1.5.0
           failed=0
           for chart in standalone inferencepool; do
             echo ""
@@ -314,7 +314,7 @@ jobs:
         # (helm v4 users instead run `helm plugin install .../uds-tokenizer`
         # once and pass `--post-renderer uds-tokenizer`; see README.)
         run: |
-          CHART_VERSION=v1.4.0
+          CHART_VERSION=v1.5.0
           POST_RENDERER=./guides/precise-prefix-cache-aware/scheduler/patches/uds-tokenizer/post-renderer.sh
           failed=0
           for feature in "" "active-active"; do

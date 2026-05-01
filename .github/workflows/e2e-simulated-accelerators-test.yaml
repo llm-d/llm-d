@@ -151,7 +151,7 @@ jobs:
             --set "inferenceExtension.resources.requests.memory=1Gi" \
             --skip-schema-validation
           # Unification of benchmarking and non-benchmarking istio setup significantly bumped the gateway resources
-          # The GAIE v1.4.0 EPP defaults also request far more CPU/memory than this single-node kind cluster can fit.
+          # The GAIE v1.5.0 EPP defaults also request far more CPU/memory than this single-node kind cluster can fit.
           # By explicitly setting lower requests for both gateway and EPP, the workflow remains runnable in CI.
 
       - name: Deploy the httpRoute

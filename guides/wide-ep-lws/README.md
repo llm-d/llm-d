@@ -47,7 +47,7 @@ This guide includes configurations for the following accelerators:
   ```
 - Set the following environment variables:
   ```bash
-  export GAIE_VERSION=v1.4.0
+  export GAIE_VERSION=v1.5.0
   export GUIDE_NAME="wide-ep-lws"
   export NAMESPACE=llm-d-wide-ep
   export MODEL=deepseek-ai/DeepSeek-R1-0528

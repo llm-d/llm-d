@@ -37,7 +37,7 @@ jobs:
           -f guides/recipes/scheduler/base.values.yaml \
           -f guides/precise-prefix-cache-aware/scheduler/precise-prefix-cache-aware.values.yaml \
           --post-renderer ./guides/precise-prefix-cache-aware/scheduler/patches/uds-tokenizer/post-renderer.sh \
-          -n ${NAMESPACE} --version v1.4.0
+          -n ${NAMESPACE} --version v1.5.0
       accelerator_type: H100
       required_gpus: 2
       recommended_gpus: 4

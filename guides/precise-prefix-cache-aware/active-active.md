@@ -79,7 +79,7 @@ helm install precise-prefix-cache-aware \
   -f guides/precise-prefix-cache-aware/scheduler/precise-prefix-cache-aware.values.yaml \
   -f guides/precise-prefix-cache-aware/scheduler/features/active-active.values.yaml \
   --post-renderer uds-tokenizer \
-  -n ${NAMESPACE} --version v1.4.0
+  -n ${NAMESPACE} --version v1.5.0
 ```
 
 Bump `inferenceExtension.replicas` higher if you want more than two active replicas.

@@ -33,7 +33,7 @@ jobs:
     runs-on: xpu
     env:
       NAMESPACE: "llm-d-xpu-is"
-      GAIE_VERSION: "v1.4.0"
+      GAIE_VERSION: "v1.5.0"
       GUIDE_NAME: "optimized-baseline"
       SCHEDULER_RELEASE_NAME: "optimized-baseline"
 

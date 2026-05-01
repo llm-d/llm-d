@@ -43,7 +43,7 @@ jobs:
       GKE_CLUSTER_NAME: llm-d-e2e-us-south1-2
       GKE_CLUSTER_ZONE: us-south1
       NAMESPACE: llm-d-wide-ep
-      INFERENCEPOOLVERSION: v1.4.0
+      INFERENCEPOOLVERSION: v1.5.0
       GATEWAY: gke-l7-regional-external-managed
       GATEWAY_TYPE: gke
       PR_OR_BRANCH: ${{ github.event.inputs.pr_or_branch || github.event.issue.number || github.event.number || 'main' }}
