@@ -206,6 +206,7 @@ jobs:
         with:
           ref: refs/pull/${{ steps.pr.outputs.pr_number }}/head
           fetch-depth: 1
+          persist-credentials: false
 
       - name: Push temp branch (fork PRs only)
         if: steps.parse.outputs.result == 'ok' && steps.perm.outputs.result == 'ok'
