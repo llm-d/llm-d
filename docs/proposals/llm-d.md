@@ -1,5 +1,14 @@
 # llm-d: Kubernetes-native Distributed Inference at Scale
 
+> **Note.** This is the founding proposal for llm-d. For the current
+> architecture, components, and well-lit-path deployment guides, see the
+> [Architecture overview](../architecture/README.md), the
+> [Getting Started introduction](../getting-started/README.md), and the
+> [Well-Lit Paths](../well-lit-paths/README.md). Some terminology has evolved
+> since this proposal — most notably, the "inference scheduler" component is
+> now referred to as the **llm-d Router**, comprising a Proxy and an Endpoint
+> Picker (EPP); see [Router](../architecture/core/router/README.md).
+
 ## Summary
 
 Provide a well-lit path for anyone to serve large language models (LLMs) at scale, with the fastest

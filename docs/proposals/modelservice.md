@@ -1,5 +1,18 @@
 # ModelService: Declarative Inference Serving on llm-d
 
+> **Status: Superseded.** As of llm-d v0.7, ModelService (the
+> `llm-d-incubation/llm-d-modelservice` Helm chart) has been **replaced by
+> Kustomize**. Model server deployment is now handled by reusable Kustomize
+> base layers under `guides/recipes/` (see `guides/recipes/modelserver/`,
+> `guides/recipes/scheduler/`, and `guides/recipes/gateway/`), which each
+> well-lit-path guide composes with guide-specific overlays. The
+> `llm-d-modelservice` Helm chart is deprecated and only retained for legacy
+> helmfile-based guides prior to v0.7. See the
+> [Artifacts page](../getting-started/artifacts.md) and tracking issue
+> [#850](https://github.com/llm-d/llm-d/issues/850) for the kustomize-first
+> migration. The remainder of this proposal is preserved for historical
+> context.
+
 ## Summary
 
 **ModelService** is a Helm chart that simplifies LLM deployment on llm-d by declaratively managing Kubernetes resources for serving base models and LoRA adapters. It enables reproducible, scalable, and tunable model deployments through modular presets, and clean integration with llm-d ecosystem components (including vLLM, Gateway API Inference Extension, LeaderWorkerSet). It provides an opinionated but flexible path for deploying, benchmarking, and tuning LLM inference workloads.
@@ -62,6 +75,15 @@ An initial prototype of ModelService is
 and it was featured as part of the llm-d launch demos at Red Hat Summit, 2025.
 The initial design documented in this repo (as of May 29th, 2025; the time of writing this proposal) is based on a
 ModelService Kubernetes operator (CRD + controller). Our plan is to migrate from the CRD approach to a Helm chart.
+
+**Update (v0.7):** ModelService has been **superseded by Kustomize**. The
+`llm-d-incubation/llm-d-modelservice` Helm chart is deprecated and now only
+exists to support legacy helmfile-based guides. New well-lit-path guides
+deploy model servers, schedulers, and gateways via reusable Kustomize base
+layers under [`guides/recipes/`](https://github.com/llm-d/llm-d/tree/main/guides/recipes),
+composed with guide-specific overlays for the target accelerator and
+infrastructure provider. See tracking issue
+[llm-d/llm-d#850](https://github.com/llm-d/llm-d/issues/850).
 
 ## Success criteria
 

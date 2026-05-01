@@ -6,6 +6,17 @@ enhancement proposal process at https://github.com/kubernetes/enhancements/blob/
 -->
 Variant AutoScaler Proposal
 
+> **Status: Implemented.** The Variant AutoScaler proposed here has shipped as
+> the **Workload Variant Autoscaler (WVA)** in
+> [llm-d/llm-d-workload-variant-autoscaler](https://github.com/llm-d/llm-d-workload-variant-autoscaler).
+> For current architecture, scaling analyzers (saturation and SLO/queueing-model),
+> and operational details, see
+> [Workload Variant Autoscaling](../architecture/advanced/autoscaling/wva.md)
+> and the [Autoscaling overview](../architecture/advanced/autoscaling/README.md).
+> The HPA/KEDA companion path is documented in
+> [HPA + KEDA](../architecture/advanced/autoscaling/hpa-keda.md). The text below
+> is preserved as the original design proposal.
+
 ## Summary
 
 <!--
