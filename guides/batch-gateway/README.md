@@ -1,4 +1,4 @@
-# Experimental Feature: Batch Gateway
+# [Experimental] Batch Gateway
 
 [Batch Gateway](https://github.com/llm-d-incubation/batch-gateway) provides an OpenAI-compatible Batch API for submitting, tracking, and managing large-scale batch inference jobs. It is designed to efficiently process batch workloads alongside interactive workloads on shared infrastructure.
 
