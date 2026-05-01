@@ -72,9 +72,11 @@ This page describes the current coverage as validated in the v0.7.0 release and 
 
 | Accelerator | vLLM | SGLang |
 |-------------|------|--------|
-| NVIDIA CUDA | ✅ | — |
+| NVIDIA CUDA | ✅ | ✅ |
 
-**Nightly CI**: None
+**Nightly CI**: OpenShift (CUDA), GKE (CUDA), CoreWeave (CUDA)
+
+> Accelerator-agnostic: only validated on NVIDIA CUDA, but the scheduler logic does not depend on accelerator type and should work on any backend supported by vLLM or SGLang.
 
 ### Asynchronous Processing
 

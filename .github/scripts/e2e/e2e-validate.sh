@@ -13,6 +13,8 @@ Options:
   -n, --namespace NAMESPACE   Kubernetes namespace (default: llm-d)
   -m, --model MODEL_ID        Model to query. If unset, discovers the first available model.
   -v, --verbose               Echo kubectl/curl commands before running
+  --predicted-latency         After the smoke loop, run e2e-validate-predicted-latency.sh
+                              to assert the predictor returned predictions.
   -h, --help                  Show this help and exit
 EOF
   exit 0
@@ -22,14 +24,16 @@ EOF
 NAMESPACE="llm-d"
 CLI_MODEL_ID=""
 VERBOSE=false
+RUN_PREDICTED_LATENCY_CHECK=false
 
 # ── Flag parsing ────────────────────────────────────────────────────────────
 while [[ $# -gt 0 ]]; do
   case $1 in
-    -n|--namespace) NAMESPACE="$2"; shift 2 ;;
-    -m|--model)     CLI_MODEL_ID="$2"; shift 2 ;;
-    -v|--verbose)   VERBOSE=true; shift ;;
-    -h|--help)      show_help ;;
+    -n|--namespace)      NAMESPACE="$2"; shift 2 ;;
+    -m|--model)          CLI_MODEL_ID="$2"; shift 2 ;;
+    -v|--verbose)        VERBOSE=true; shift ;;
+    --predicted-latency) RUN_PREDICTED_LATENCY_CHECK=true; shift ;;
+    -h|--help)           show_help ;;
     *) echo "Unknown option: $1"; show_help ;;
   esac
 done
@@ -202,3 +206,17 @@ for i in {1..10}; do
 done
 
 echo "✅ All 10 iterations succeeded."
+
+# ── Optional: predicted-latency-specific validation ─────────────────────────
+# When --predicted-latency is set, hand off to the dedicated validator. We
+# release the smoke-test curl pod first (the dispatched script creates its
+# own) and clear the EXIT trap before exec'ing.
+if [[ "$RUN_PREDICTED_LATENCY_CHECK" == "true" ]]; then
+  echo
+  echo "=== Running predicted-latency validation ==="
+  cleanup_curl_pod
+  trap - EXIT
+  SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+  exec "${SCRIPT_DIR}/e2e-validate-predicted-latency.sh" \
+    -n "$NAMESPACE" -m "$MODEL_ID"
+fi
