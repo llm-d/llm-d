@@ -68,10 +68,11 @@ Both target model server pods labeled `llm-d.ai/guide=optimized-baseline` since 
 This deploys the llm-d Router with an Envoy sidecar, it doesn't set up a Kubernetes Gateway.
 
 ```bash
+export REPO_ROOT=$(realpath $(git rev-parse --show-toplevel))
 helm install ${GUIDE_NAME} \
     oci://registry.k8s.io/gateway-api-inference-extension/charts/standalone \
     -f guides/recipes/scheduler/base.values.yaml \
-    -f guides/${GUIDE_NAME}/scheduler/predicted-latency.values.yaml \
+    -f ${REPO_ROOT}/guides/${GUIDE_NAME}/scheduler/predicted-latency.values.yaml \
     -n ${NAMESPACE} --version ${GAIE_VERSION}
 ```
 
@@ -88,14 +89,14 @@ To use a Kubernetes Gateway managed proxy rather than the standalone version, fo
 2. *Deploy the llm-d Router and an HTTPRoute* that connects it to the Gateway as follows:
 
 ```bash
+export REPO_ROOT=$(realpath $(git rev-parse --show-toplevel))
 export PROVIDER_NAME=gke # options: none, gke, agentgateway, istio
 helm install ${GUIDE_NAME} \
     oci://registry.k8s.io/gateway-api-inference-extension/charts/inferencepool \
-    -f guides/recipes/scheduler/base.values.yaml \
-    -f guides/${GUIDE_NAME}/scheduler/predicted-latency.values.yaml \
+    -f ${REPO_ROOT}/guides/recipes/scheduler/base.values.yaml \
+    -f ${REPO_ROOT}/guides/recipes/scheduler/features/httproute-flags.yaml \
+    -f ${REPO_ROOT}/guides/${GUIDE_NAME}/scheduler/predicted-latency.values.yaml \
     --set provider.name=${PROVIDER_NAME} \
-    --set experimentalHttpRoute.enabled=true \
-    --set experimentalHttpRoute.inferenceGatewayName=llm-d-inference-gateway \
     -n ${NAMESPACE} --version ${GAIE_VERSION}
 ```
 

@@ -82,11 +82,11 @@ kubectl create namespace ${NAMESPACE}
 This deploys the llm-d Router with an Envoy sidecar, it doesn't set up a Kubernetes Gateway.
 
 ```bash
+export REPO_ROOT=$(realpath $(git rev-parse --show-toplevel))
 helm install ${GUIDE_NAME} \
     oci://registry.k8s.io/gateway-api-inference-extension/charts/standalone \
-    -f guides/recipes/scheduler/base.values.yaml \
-    -f guides/recipes/scheduler/pd.values.yaml \
-    -f guides/${GUIDE_NAME}/scheduler/${GUIDE_NAME}.values.yaml \
+    -f ${REPO_ROOT}/guides/recipes/scheduler/base.values.yaml \
+    -f ${REPO_ROOT}/guides/${GUIDE_NAME}/scheduler/${GUIDE_NAME}.values.yaml \
     -n ${NAMESPACE} --version ${GAIE_VERSION}
 ```
 
@@ -99,15 +99,14 @@ To employ a Kubernetes Gateway managed proxy instead of the standalone one, then
 2. *Deploy the llm-d Router and an HTTPRoute*. The following deploys the llm-d Router with an HttpRoute that connects it to the Gateway created in the previous step (set `provider.name` to the gateway provider you deployed):
 
 ```bash
+export REPO_ROOT=$(realpath $(git rev-parse --show-toplevel))
 export PROVIDER_NAME=gke # other na, agentgateway or istio
 helm install ${GUIDE_NAME} \
     oci://registry.k8s.io/gateway-api-inference-extension/charts/inferencepool  \
-    -f guides/recipes/scheduler/base.values.yaml \
-    -f guides/recipes/scheduler/pd.values.yaml \
-    -f guides/${GUIDE_NAME}/scheduler/${GUIDE_NAME}.values.yaml \
+    -f ${REPO_ROOT}/guides/recipes/scheduler/base.values.yaml \
+    -f ${REPO_ROOT}/guides/recipes/scheduler/features/httproute-flags.yaml \
+    -f ${REPO_ROOT}/guides/${GUIDE_NAME}/scheduler/${GUIDE_NAME}.values.yaml \
     --set provider.name=${PROVIDER_NAME} \
-    --set experimentalHttpRoute.enabled=true \
-    --set experimentalHttpRoute.inferenceGatewayName=llm-d-inference-gateway \
     -n ${NAMESPACE} --version ${GAIE_VERSION}
 ```
 
@@ -454,7 +453,7 @@ The following scripts run the same benchmark against a standard deployment and s
 
 - Deploy (16 replicas of TP=1, with a standard k8s service)
 ```bash
-kubectl apply -n ${NAMESPACE} -f guides/pd-disaggregation/baseline/manifest.yaml
+kubectl apply -n ${NAMESPACE} -f ${REPO_ROOT}/guides/pd-disaggregation/baseline/manifest.yaml
 ```
 
 - Benchmark (using the same configuration as above):
