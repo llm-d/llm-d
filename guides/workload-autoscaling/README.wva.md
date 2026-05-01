@@ -224,7 +224,7 @@ Choose your platform and follow the corresponding section:
 # Setup
 helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
 helm repo update
-export VERSION=${VERSION:-v0.6.0}
+export VERSION=${VERSION:-v0.7.0}
 export MON_NS=openshift-user-workload-monitoring
 
 # Download OpenShift-specific values
@@ -273,7 +273,7 @@ YAML
 # Setup
 helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
 helm repo update
-export VERSION=${VERSION:-v0.6.0}
+export VERSION=${VERSION:-v0.7.0}
 export MON_NS=${MON_NS:-llm-d-monitoring}
 
 # Download values
@@ -297,7 +297,7 @@ For Kind clusters with HTTPS Prometheus (configured in Platform-Specific Configu
 # Setup
 helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
 helm repo update
-export VERSION=${VERSION:-v0.6.0}
+export VERSION=${VERSION:-v0.7.0}
 export MON_NS=${MON_NS:-llm-d-monitoring}
 
 # Download values

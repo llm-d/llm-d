@@ -9,7 +9,7 @@ namePrefix: optimized-baseline-hpu-vllm-
 images:
   - name: REPLACE_MODEL_SERVER_IMAGE
     newName: ghcr.io/llm-d/llm-d-hpu
-    newTag: v0.6.0
+    newTag: v0.7.0
 
 labels:
   - pairs:

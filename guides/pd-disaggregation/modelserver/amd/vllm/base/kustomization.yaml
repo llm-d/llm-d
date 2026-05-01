@@ -8,7 +8,7 @@ namePrefix: pd-disaggregation-rocm-vllm-
 images:
   - name: REPLACE_MODEL_SERVER_IMAGE
     newName: ghcr.io/llm-d/llm-d-rocm
-    newTag: v0.6.0
+    newTag: v0.7.0
 
 
 labels:

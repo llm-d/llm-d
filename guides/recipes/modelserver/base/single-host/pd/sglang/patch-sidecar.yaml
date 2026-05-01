@@ -13,7 +13,7 @@ spec:
             - --connector=sglang
             - --zap-log-level=1
             - --secure-proxy=false
-          image: ghcr.io/llm-d/llm-d-routing-sidecar:v0.7.1
+          image: ghcr.io/llm-d/llm-d-routing-sidecar:v0.8.0
           imagePullPolicy: Always
           ports:
             - containerPort: 8000

@@ -132,7 +132,7 @@ The release name `${GUIDE_NAME}` is mandatory for standard deployments — the i
 <details>
 <summary><b>Why a helm post-renderer is required (chart limitation)</b></summary>
 
-The standalone chart's `sidecar.*` slot is occupied by its Envoy proxy — overriding it would lose HTTP serving — so the UDS tokenizer container is appended via a helm post-render hook instead. The post-renderer runs `kustomize build` on the chart's rendered manifests with a strategic merge patch that adds the `tokenizer-uds` container (image `ghcr.io/llm-d/llm-d-uds-tokenizer:v0.7.1`), two `emptyDir` volumes (`tokenizers`, `tokenizer-uds`), and a `/tmp/tokenizer` volumeMount on the existing `epp` container so the `tokenizer` plugin can reach the UDS socket. Tracking removal of this workaround upstream — once the chart supports multiple sidecars natively, the post-renderer goes away.
+The standalone chart's `sidecar.*` slot is occupied by its Envoy proxy — overriding it would lose HTTP serving — so the UDS tokenizer container is appended via a helm post-render hook instead. The post-renderer runs `kustomize build` on the chart's rendered manifests with a strategic merge patch that adds the `tokenizer-uds` container (image `ghcr.io/llm-d/llm-d-uds-tokenizer:vllm-v0.19.1`), two `emptyDir` volumes (`tokenizers`, `tokenizer-uds`), and a `/tmp/tokenizer` volumeMount on the existing `epp` container so the `tokenizer` plugin can reach the UDS socket. Tracking removal of this workaround upstream — once the chart supports multiple sidecars natively, the post-renderer goes away.
 
 </details>
 

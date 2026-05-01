@@ -47,7 +47,7 @@ spec:
               #   value: "parentbased_traceidratio"
               # - name: OTEL_TRACES_SAMPLER_ARG
               #   value: "0.1"
-            image: ghcr.io/llm-d/llm-d-routing-sidecar:v0.7.1
+            image: ghcr.io/llm-d/llm-d-routing-sidecar:v0.8.0
             imagePullPolicy: Always
             ports:
               - containerPort: 8000
