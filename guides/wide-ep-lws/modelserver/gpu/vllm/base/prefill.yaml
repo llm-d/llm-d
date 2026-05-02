@@ -31,7 +31,7 @@ spec:
             emptyDir: {}
         containers:
           - name: vllm
-            image: ghcr.io/llm-d/llm-d-cuda:v0.7.0
+            image: ghcr.io/llm-d/llm-d-cuda-gb200:v0.7.0
             securityContext:
               capabilities:
                 add:
@@ -107,8 +107,8 @@ spec:
               # to pick up the wrong UCX library. If you are deploying
               # a cu13 (e.g. vllm/vllm-openai:v0.19.1-x86_64-cu130), 
               # comment out this path.
-              - name: UCX_MODULE_DIR
-                value: /usr/local/lib/python3.12/dist-packages/nixl_cu12.libs/ucx
+              # - name: UCX_MODULE_DIR
+              #   value: /usr/local/lib/python3.12/dist-packages/nixl_cu12.libs/ucx
               - name: VLLM_MEMORY_PROFILER_ESTIMATE_CUDAGRAPHS
                 value: "1"
               - name: VLLM_RANDOMIZE_DP_DUMMY_INPUTS

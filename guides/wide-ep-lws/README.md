@@ -47,7 +47,7 @@ This guide includes configurations for the following accelerators:
   ```
 - Set the following environment variables:
   ```bash
-  export GAIE_VERSION=v1.4.0
+  export GAIE_VERSION=v1..0
   export GUIDE_NAME="wide-ep-lws"
   export NAMESPACE=llm-d-wide-ep
   export MODEL=deepseek-ai/DeepSeek-R1-0528
@@ -108,7 +108,7 @@ helm install ${GUIDE_NAME} \
 Apply the Kustomize overlays for your specific backend:
 
 ```bash
-export INFRA_PROVIDER=gke # options: gke (H200), gke-a4 (B200), coreweave
+export INFRA_PROVIDER=gke # options: gke (H200), gke-a4 (B200), coreweave, dgx-cloud-gb200
 kubectl apply -n ${NAMESPACE} -k guides/${GUIDE_NAME}/modelserver/gpu/vllm/${INFRA_PROVIDER}
 ```
 

@@ -105,6 +105,11 @@ patches:
       - op: add
         path: /spec/leaderWorkerTemplate/workerTemplate/spec/containers/0/env/-
         value:
+          name: LD_LIBRARY_PATH
+          value: "/usr/local/nvidia/lib:/usr/local/nvidia/lib64"
+      - op: add
+        path: /spec/leaderWorkerTemplate/workerTemplate/spec/containers/0/env/-
+        value:
           # GCP pairs GPU NICs to PCIe bridges (https://cloud.google.com/compute/docs/gpus/gpu-network-bandwidth#h200-gpus),
           # which can lead to NVSHMEM's automatic distance assignment algorithm selecting NICs
           # inefficiently. Instead, instruct NVSHMEM to select the NIC that aligns to the
