@@ -41,8 +41,8 @@ jobs:
           oci://registry.k8s.io/gateway-api-inference-extension/charts/standalone \
           -f guides/recipes/scheduler/base.values.yaml \
           -f guides/predicted-latency-based-scheduling/scheduler/predicted-latency.values.yaml \
-          -n ${NAMESPACE} --version v1.4.0
-      e2e_validate_args: '--predicted-latency'
+          -n ${NAMESPACE} --version v1.5.0
+      e2e_validate_args: '--extra-validate predicted-latency'
       accelerator_type: H100
       required_gpus: 2
       recommended_gpus: 4

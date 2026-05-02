@@ -87,11 +87,30 @@ run_curl() {
   CURL_OUTPUT=$(kubectl exec -n "$NAMESPACE" "$CURL_POD_NAME" -- "$@" 2>&1) || CURL_EXIT=$?
 }
 
-# ── Discover gateway address ────────────────────────────────────────────────
-HOST="${GATEWAY_HOST:-$(kubectl get gateway -n "$NAMESPACE" \
-        -o jsonpath='{.items[0].status.addresses[0].value}' 2>/dev/null || true)}"
+# ── Discover EPP service ────────────────────────────────────────────────────
+# The predicted-latency guide deploys the llm-d Router in standalone mode —
+# there is no Gateway resource. Both the request flow (port 80, Envoy sidecar)
+# and the metrics endpoint (port 9090) are served by the EPP service itself,
+# so we resolve directly to the EPP service's ClusterIP.
+#
+# Multi-replica caveat: when more than one EPP pod is running, /metrics is
+# forwarded to one pod at random per scrape, so the histogram counts reflect
+# only that pod's view. base.values.yaml currently sets replicas: 1 so this
+# is fine; future scale-out will need per-pod scraping (port-forward or
+# headless service).
+HOST="${GATEWAY_HOST:-}"
 if [[ -z "$HOST" ]]; then
-  echo "Error: could not discover Gateway address in namespace '$NAMESPACE'." >&2
+  EPP_SVC_NAME=$(kubectl get svc -n "$NAMESPACE" \
+      -o jsonpath='{.items[*].metadata.name}' 2>/dev/null \
+      | tr ' ' '\n' | grep -E -- '-epp$' | head -1 || true)
+  if [[ -n "$EPP_SVC_NAME" ]]; then
+    HOST=$(kubectl get svc "$EPP_SVC_NAME" -n "$NAMESPACE" \
+      -o jsonpath='{.spec.clusterIP}' 2>/dev/null || true)
+  fi
+fi
+if [[ -z "$HOST" ]]; then
+  echo "Error: could not discover EPP service in namespace '$NAMESPACE'." >&2
+  echo "       Set GATEWAY_HOST env var to the EPP service name or ClusterIP." >&2
   exit 1
 fi
 SVC_HOST="${HOST}:80"

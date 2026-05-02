@@ -41,8 +41,8 @@ jobs:
           oci://registry.k8s.io/gateway-api-inference-extension/charts/standalone \
           -f guides/recipes/scheduler/base.values.yaml \
           -f guides/predicted-latency-based-scheduling/scheduler/predicted-latency.values.yaml \
-          -n ${NAMESPACE} --version v1.4.0
-      e2e_validate_args: '--predicted-latency'
+          -n ${NAMESPACE} --version v1.5.0
+      e2e_validate_args: '--extra-validate predicted-latency'
       gke_cluster_name: llm-d-e2e-us-east5
       gke_cluster_zone: us-east5
       required_gpus: 2
