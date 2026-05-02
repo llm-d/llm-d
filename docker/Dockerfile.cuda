@@ -74,6 +74,7 @@ ARG VLLM_COMMIT_SHA
 ARG VLLM_PRECOMPILED_WHEEL_COMMIT
 ARG VLLM_PREBUILT
 ARG VLLM_USE_PRECOMPILED
+ARG VLLM_PRECOMPILED_WHEEL_VARIANT=cu${CUDA_MAJOR}${CUDA_MINOR}
 
 # ============================================================================
 # BUILD STAGE - Install build dependencies and create wheels
