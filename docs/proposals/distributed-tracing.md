@@ -1,5 +1,12 @@
 # Distributed Tracing for llm-d
 
+> **Status: Implemented.** Distributed tracing is now part of llm-d's monitoring
+> stack. For the current operator-facing tracing guide (configuration, OTLP
+> endpoints, sampling, and the spans emitted across components), see
+> [Distributed Tracing](../resources/monitoring/tracing.md). See also
+> [Metrics](../resources/monitoring/metrics.md) for the companion metrics
+> reference. The text below is preserved as the original design proposal.
+
 ## Summary
 
 This proposal introduces distributed tracing for llm-d distributed inference framework using manual OpenTelemetry instrumentation.

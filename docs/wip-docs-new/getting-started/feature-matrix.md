@@ -72,9 +72,11 @@ This page describes the current coverage as validated in the v0.7.0 release and 
 
 | Accelerator | vLLM | SGLang |
 |-------------|------|--------|
-| NVIDIA CUDA | ✅ | — |
+| NVIDIA CUDA | ✅ | ✅ |
 
-**Nightly CI**: None
+**Nightly CI**: OpenShift (CUDA), GKE (CUDA), CoreWeave (CUDA)
+
+> Accelerator-agnostic: only validated on NVIDIA CUDA, but the scheduler logic does not depend on accelerator type and should work on any backend supported by vLLM or SGLang.
 
 ### Asynchronous Processing
 
@@ -137,7 +139,7 @@ For accelerator maintainer contacts and contribution requirements, see [Accelera
 |-----------|-----------------|-------|
 | Kubernetes | 1.30+ | Gateway API v1 support required |
 | Gateway API CRDs | v1.5.1 | |
-| Gateway API Inference Extension CRDs | v1.4.0 | |
+| Gateway API Inference Extension CRDs | v1.5.0 | |
 | Helm | 3.x | For helmfile-based guides |
 | Helmfile | 0.x | For helmfile-based guides |
 | kubectl | 1.30+ | |
@@ -178,5 +180,5 @@ Each well-lit path guide is assigned a maturity level reflecting its testing and
 | Simulated Accelerators | Medium | OpenShift |
 | Workload Autoscaling (WVA) | Experimental | OpenShift, CoreWeave |
 | Workload Autoscaling (HPA + IGW) | Experimental | — |
-| Predicted Latency-Based Scheduling | Experimental | — |
+| Predicted Latency-Based Scheduling | Medium | OpenShift, GKE, CoreWeave |
 | Asynchronous Processing | Experimental | — |

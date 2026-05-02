@@ -58,7 +58,7 @@ git clone https://github.com/llm-d/llm-d.git && cd llm-d && git checkout ${branc
 ```
 - Set the following environment variables:
 ```bash
-export GAIE_VERSION=v1.4.0
+export GAIE_VERSION=v1.5.0
 export GUIDE_NAME="pd-disaggregation"
 export NAMESPACE="llm-d-pd-disaggregation"
 export MODEL_NAME="openai/gpt-oss-120b"

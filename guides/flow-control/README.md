@@ -76,7 +76,7 @@ Flow Control is a software-level scheduling feature at the EPP layer and is enti
 * Set the following environment variables:
 
   ```bash
-  export GAIE_VERSION=v1.4.0
+  export GAIE_VERSION=v1.5.0
   export GUIDE_NAME="flow-control"
   export NAMESPACE="llm-d-flow-control"
   export MODEL_NAME="Qwen/Qwen3-32B"
@@ -107,7 +107,7 @@ helm install ${GUIDE_NAME} \
     oci://registry.k8s.io/gateway-api-inference-extension/charts/standalone \
     -f guides/recipes/scheduler/base.values.yaml \
     -f guides/${GUIDE_NAME}/scheduler/${GUIDE_NAME}.values.yaml \
-    -n ${NAMESPACE} --version v1.4.0
+    -n ${NAMESPACE} --version ${GAIE_VERSION}
 ```
 
 <details>
@@ -127,7 +127,7 @@ helm install ${GUIDE_NAME} \
     --set provider.name=${PROVIDER_NAME} \
     --set experimentalHttpRoute.enabled=true \
     --set experimentalHttpRoute.inferenceGatewayName=llm-d-inference-gateway \
-    -n ${NAMESPACE} --version v1.4.0
+    -n ${NAMESPACE} --version ${GAIE_VERSION}
 ```
 
 </details>

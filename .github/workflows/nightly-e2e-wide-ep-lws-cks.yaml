@@ -58,14 +58,14 @@ jobs:
         echo "Deploying model server..."
         kubectl apply -k guides/wide-ep-lws/modelserver/gpu/vllm/coreweave -n "$NAMESPACE"
 
-        # 2. Deploy Standalone Inference Scheduler via helm
-        echo "Deploying Standalone Inference Scheduler..."
-        helm install wide-ep-lws \
-          oci://registry.k8s.io/gateway-api-inference-extension/charts/standalone \
-          -f guides/recipes/scheduler/base.values.yaml \
-          -f guides/recipes/scheduler/pd.values.yaml \
-          -f guides/wide-ep-lws/scheduler/wide-ep-lws.values.yaml \
-          -n "$NAMESPACE" --version v1.4.0
+        # 3. Deploy InferencePool via helm
+        echo "Deploying InferencePool..."
+        helm install llm-d-infpool \
+          -n "$NAMESPACE" \
+          -f guides/wide-ep-lws/manifests/inferencepool.values.yaml \
+          --set "provider.name=${GATEWAY_TYPE}" \
+          oci://registry.k8s.io/gateway-api-inference-extension/charts/inferencepool \
+          --version v1.5.0
 
         echo "Deployment complete"
       # Wide-EP-specific validation: check prefill + decode pods

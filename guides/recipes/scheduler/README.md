@@ -17,7 +17,7 @@ helm install <release-name> \
   -f guides/<your-guide>/scheduler/<your-guide>.values.yaml \
   --set provider.name=<gke|istio|none> \
   -n ${NAMESPACE} \
-  --version v1.4.0
+  --version v1.5.0
 ```
 
 ## With Kubernetes Gateway API
@@ -38,7 +38,7 @@ helm install <release-name> \
   -f guides/<your-guide>/scheduler/<your-guide>.values.yaml \
   --set provider.name=<gke|istio|none> \
   -n ${NAMESPACE} \
-  --version v1.4.0
+  --version v1.5.0
 ```
 
 ## Values Layering

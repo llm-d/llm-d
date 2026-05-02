@@ -108,7 +108,7 @@ helm install llm-d-infpool \
   -f ./manifests/inferencepool.values.yaml \
   --set "provider.name=istio" \
   oci://registry.k8s.io/gateway-api-inference-extension/charts/inferencepool \
-  --version v1.4.0
+  --version v1.5.0
 ```
 
 ## Verifying the installation
@@ -118,7 +118,7 @@ helm install llm-d-infpool \
 ```bash
 helm list -n ${NAMESPACE}
 NAME            NAMESPACE       REVISION    UPDATED                                 STATUS      CHART                       APP VERSION
-llm-d-infpool   llm-d-wide-ep   1           2025-08-24 13:14:53.355639 -0700 PDT    deployed    inferencepool-v1.4.0   v0.3.0
+llm-d-infpool   llm-d-wide-ep   1           2025-08-24 13:14:53.355639 -0700 PDT    deployed    inferencepool-v1.5.0   v0.3.0
 ```
 
 * Out of the box with this example you should have the following resources (if using Istio):

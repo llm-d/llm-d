@@ -1,0 +1,57 @@
+name: Nightly - Predicted Latency E2E (GKE)
+
+# Nightly regression test for the predicted-latency-based-scheduling guide on
+# GKE. Deploys the optimized-baseline model server (the predicted-latency
+# guide reuses these pods via the `llm-d.ai/guide=optimized-baseline`
+# selector) plus the predicted-latency scheduler chart. Passes
+# --predicted-latency via e2e_validate_args so e2e-validate.sh dispatches to
+# e2e-validate-predicted-latency.sh after the smoke loop, sending 100 requests
+# and asserting the EPP's predicted-TTFT histogram populated — proving the
+# predictor returned predictions instead of silently falling back to the
+# composite KV/queue/prefix heuristic.
+
+on:
+  schedule:
+    - cron: '0 13 * * *'  # 13:00 UTC daily (staggered)
+  workflow_dispatch:
+    inputs:
+      skip_cleanup:
+        description: 'Skip cleanup after tests (for debugging)'
+        required: false
+        default: 'false'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: nightly-e2e-predicted-latency-gke
+  cancel-in-progress: true
+
+jobs:
+  nightly:
+    if: github.repository == 'llm-d/llm-d'
+    uses: llm-d/llm-d-infra/.github/workflows/reusable-nightly-e2e-gke.yaml@main
+    with:
+      guide_name: predicted-latency-based-scheduling
+      namespace: llm-d-nightly-predicted-latency-gke
+      gateway_host: 'predicted-latency-based-scheduling-epp'
+      custom_deploy_script: |
+        kubectl apply -k guides/optimized-baseline/modelserver/gpu/gke-patch/vllm -n ${NAMESPACE}
+        helm install predicted-latency-based-scheduling \
+          oci://registry.k8s.io/gateway-api-inference-extension/charts/standalone \
+          -f guides/recipes/scheduler/base.values.yaml \
+          -f guides/predicted-latency-based-scheduling/scheduler/predicted-latency.values.yaml \
+          -n ${NAMESPACE} --version v1.5.0
+      e2e_validate_args: '--extra-validate predicted-latency'
+      gke_cluster_name: llm-d-e2e-us-east5
+      gke_cluster_zone: us-east5
+      required_gpus: 2
+      recommended_gpus: 4
+      accelerator_type: H100
+      pod_wait_timeout: '30m'
+      pod_readiness_delay: 180
+      image_override: 'ghcr.io/llm-d/llm-d-cuda-dev:latest'
+      allow_gpu_preemption: true
+      llm_d_ref: ${{ github.ref }}
+      skip_cleanup: ${{ github.event.inputs.skip_cleanup == 'true' }}
+    secrets: inherit

@@ -33,7 +33,7 @@ jobs:
     runs-on: xpu
     env:
       NAMESPACE: "llm-d-xpu-pd"
-      GAIE_VERSION: "v1.4.0"
+      GAIE_VERSION: "v1.5.0"
       GUIDE_NAME: "pd-disaggregation"
       SCHEDULER_RELEASE_NAME: "pd-disaggregation"
 

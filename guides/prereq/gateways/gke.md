@@ -22,7 +22,7 @@ This guide shows how to deploy llm-d with
 For GKE versions `1.34.0-gke.1626000` or later, the InferencePool CRD is automatically installed. For GKE versions earlier than `1.34.0-gke.1626000` install it as follows: 
 
 ```bash
-GAIE_VERSION=v1.4.0
+GAIE_VERSION=v1.5.0
 
 kubectl apply -k "https://github.com/kubernetes-sigs/gateway-api-inference-extension/config/crd?ref=${GAIE_VERSION}"
 ```

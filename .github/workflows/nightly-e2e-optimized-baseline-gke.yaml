@@ -34,7 +34,7 @@ jobs:
           oci://registry.k8s.io/gateway-api-inference-extension/charts/standalone \
           -f guides/recipes/scheduler/base.values.yaml \
           -f guides/optimized-baseline/scheduler/optimized-baseline.values.yaml \
-          -n ${NAMESPACE} --version v1.4.0
+          -n ${NAMESPACE} --version v1.5.0
       gke_cluster_name: llm-d-e2e-us-east5
       gke_cluster_zone: us-east5
       required_gpus: 2

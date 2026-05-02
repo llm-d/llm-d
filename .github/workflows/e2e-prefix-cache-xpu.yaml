@@ -48,7 +48,7 @@ jobs:
     runs-on: xpu
     env:
       NAMESPACE: "llm-d-xpu-pc"
-      GAIE_VERSION: "v1.4.0"
+      GAIE_VERSION: "v1.5.0"
       GUIDE_NAME: "precise-prefix-cache-aware"
       SCHEDULER_RELEASE_NAME: "precise-prefix-cache-aware"
       ACCEL: "xpu"

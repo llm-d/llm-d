@@ -374,23 +374,7 @@ jobs:
           fi
 
   release-aws-llm-d:
-    strategy:
-      fail-fast: false
-      # AWS/EFA release matrix: RHEL-only, amd64-only (for now)
-      # Ubuntu and ARM64 variants commented out - can be enabled if needed
-      matrix:
-        include:
-          - platform: linux/amd64
-            runner: vllm-runner
-            os: rhel
-            base_image_suffix: ubi9
-            image_suffix: ""
-            # - platform: linux/arm64
-            #   runner: vllm-runner-arm
-            #   os: rhel
-            #   base_image_suffix: ubi9
-            #   image_suffix: ""
-    runs-on: ${{ matrix.runner }}
+    runs-on: vllm-runner
     steps:
       - name: Checkout code
         uses: actions/checkout@v6
@@ -422,36 +406,25 @@ jobs:
           username: ${{ secrets.GHCR_USER }}
           password: ${{ secrets.GHCR_TOKEN }}
 
-      - name: Extract metadata
-        id: meta
-        uses: docker/metadata-action@v6
-        with:
-          images: ${{ env.REGISTRY }}/${{ github.repository }}-aws${{ matrix.image_suffix }}
-          tags: |
-            type=raw,value=${{ github.event.release.tag_name }},enable=${{ github.event_name == 'release' && github.event.action == 'published' }}
-            type=raw,value=${{ github.ref_name }},enable=${{ github.event_name == 'push' && startsWith(github.ref, 'refs/tags/') }}
-            type=raw,value=latest,enable=${{ env.IS_STABLE == 'true' }}
-
       - name: Build the builder image layer
         id: build
         uses: docker/build-push-action@v7
         with:
           context: .
           file: ./docker/Dockerfile.cuda
-          platforms: ${{ matrix.platform }}
+          platforms: linux/amd64
           target: builder
           push: false
           build-args: |
-            TARGETOS=${{ matrix.os }}
-            TARGETPLATFORM=${{ matrix.platform }}
-            BUILD_BASE_IMAGE_SUFFIX=${{ matrix.base_image_suffix }}
-            FINAL_BASE_IMAGE_SUFFIX=${{ matrix.base_image_suffix }}
+            TARGETOS=rhel
+            TARGETPLATFORM=linux/amd64
+            BUILD_BASE_IMAGE_SUFFIX=ubi9
+            FINAL_BASE_IMAGE_SUFFIX=ubi9
             CUDA_MAJOR=${{ steps.common-version.outputs.cuda_major }}
             CUDA_MINOR=${{ steps.common-version.outputs.cuda_minor }}
             CUDA_PATCH=${{ steps.common-version.outputs.cuda_patch }}
             CACHE_BUSTER=${{ github.ref_name }}-${{ github.run_id }}
             ENABLE_EFA=true
-          labels: ${{ steps.meta.outputs.labels }}
           github-token: ${{ secrets.GHCR_TOKEN }}
           secrets: |
             aws_access_key_id=${{ secrets.AWS_ACCESS_KEY_ID_S3_BUCKET_ONLY }}
@@ -460,20 +433,21 @@ jobs:
           DOCKER_BUILDKIT: "1"
           BUILDKIT_PROGRESS: "plain"
 
-      - name: Build the final image layer
-        id: build-image-final-layer
+      - name: Build and push the final image
+        id: build-and-push
         uses: docker/build-push-action@v7
         with:
           context: .
           file: ./docker/Dockerfile.cuda
-          platforms: ${{ matrix.platform }}
+          platforms: linux/amd64
           target: runtime
           push: true
+          provenance: true
           build-args: |
-            TARGETOS=${{ matrix.os }}
-            TARGETPLATFORM=${{ matrix.platform }}
-            BUILD_BASE_IMAGE_SUFFIX=${{ matrix.base_image_suffix }}
-            FINAL_BASE_IMAGE_SUFFIX=${{ matrix.base_image_suffix }}
+            TARGETOS=rhel
+            TARGETPLATFORM=linux/amd64
+            BUILD_BASE_IMAGE_SUFFIX=ubi9
+            FINAL_BASE_IMAGE_SUFFIX=ubi9
             CUDA_MAJOR=${{ steps.common-version.outputs.cuda_major }}
             CUDA_MINOR=${{ steps.common-version.outputs.cuda_minor }}
             CUDA_PATCH=${{ steps.common-version.outputs.cuda_patch }}
@@ -485,172 +459,18 @@ jobs:
             VLLM_PREBUILT=${{ steps.common-version.outputs.prebuilt }}
             VLLM_USE_PRECOMPILED=${{ steps.common-version.outputs.use_precompiled }}
             LLM_D_OFFLOADING_CONNECTOR_VERSION=${{ steps.common-version.outputs.offloading_connector_version }}
-          labels: ${{ steps.meta.outputs.labels }}
-          outputs: >-
-            type=image,name=${{ env.REGISTRY }}/${{ github.repository }}-aws${{ matrix.image_suffix }},
-            push-by-digest=true,name-canonical=true,push=true
+          tags: |
+            ${{ env.REGISTRY }}/${{ github.repository }}-aws:${{ env.TAG }}
+            ${{ env.IS_STABLE == 'true' && format('{0}/{1}-aws:latest', env.REGISTRY, github.repository) || '' }}
           github-token: ${{ secrets.GHCR_TOKEN }}
         env:
           DOCKER_BUILDKIT: "1"
           BUILDKIT_PROGRESS: "plain"
 
-      - name: Verify remote digest exists
-        if: ${{ steps.build-image-final-layer.outputs.digest != '' }}
-        run: |
-          set -x
-          digest="${{ steps.build-image-final-layer.outputs.digest }}"
-          ref="${{ env.REGISTRY }}/${{ github.repository }}-aws${{ matrix.image_suffix }}@${digest}"
-          echo "Checking remote ref: $ref"
-          docker buildx imagetools inspect "$ref" >/dev/null
-
-      - name: Export digest
-        run: |
-          mkdir -p /tmp/digests
-          digest="${{ steps.build-image-final-layer.outputs.digest }}"
-          if [ -z "$digest" ]; then
-            echo "ERROR: missing digest from build-image-final-layer (did the push succeed?)"
-            exit 1
-          fi
-          touch "/tmp/digests/${digest#sha256:}"
-
-      - name: Upload digest
-        uses: actions/upload-artifact@v7
-        with:
-          name: digests-aws-${{ matrix.os }}-${{ matrix.platform == 'linux/arm64' && 'arm64' || 'amd64' }}
-          path: /tmp/digests/*
-          if-no-files-found: error
-          retention-days: 1
-
-  release-aws-success-check:
-    needs: release-aws-llm-d
-    if: ${{ always() }}
-    runs-on: ubuntu-latest
-    outputs:
-      any_succeeded: ${{ steps.check.outputs.any_succeeded }}
-      rhel_ok: ${{ steps.check.outputs.rhel_ok }}
-    steps:
-      - name: Download all digests (best-effort)
-        uses: actions/download-artifact@v8
-        with:
-          path: /tmp/digests-raw
-          pattern: digests-aws-*
-        continue-on-error: true
-
-      - name: Reorganize digests by OS
-        run: |
-          mkdir -p /tmp/digests/rhel
-          shopt -s nullglob
-          for artifact_dir in /tmp/digests-raw/digests-aws-*; do
-            if [[ "$artifact_dir" == *-rhel-* ]]; then
-              cp -v "$artifact_dir"/* /tmp/digests/rhel/ 2>/dev/null || true
-            fi
-          done
-          echo "=== RHEL digests ==="
-          ls -la /tmp/digests/rhel/ || echo "No RHEL digests"
-
-      - name: Checkout code
-        uses: actions/checkout@v6
-
-      - id: check
-        shell: bash
-        run: |
-          shopt -s nullglob
-          rhel=(/tmp/digests/rhel/*)
-
-          any=false; [ ${#rhel[@]} -gt 0 ] && any=true
-          rhel_ok=false; [ ${#rhel[@]} -gt 0 ] && rhel_ok=true
-
-          echo "Downloaded ${#rhel[@]} RHEL digest(s)"
-          echo "any_succeeded=${any}" >> "$GITHUB_OUTPUT"
-          echo "rhel_ok=${rhel_ok}" >> "$GITHUB_OUTPUT"
-
-  release-aws-manifest:
-    needs: release-aws-success-check
-    if: ${{ needs.release-aws-success-check.outputs.any_succeeded == 'true' }}
-    runs-on: ubuntu-latest
-    continue-on-error: true
-    steps:
-      - name: Check if build succeeded
-        id: should-run
-        run: |
-          rhel_ok="${{ needs.release-aws-success-check.outputs.rhel_ok }}"
-          echo "rhel_ok=${rhel_ok}" >> $GITHUB_OUTPUT
-          if [ "${rhel_ok}" != "true" ]; then
-            echo "Skipping manifest creation - no successful builds"
-          fi
-
-      - name: Download digests
-        if: ${{ steps.should-run.outputs.rhel_ok == 'true' }}
-        uses: actions/download-artifact@v8
-        with:
-          path: /tmp/digests-raw
-          pattern: digests-aws-rhel-*
-
-      - name: Reorganize digests for manifest
-        if: ${{ steps.should-run.outputs.rhel_ok == 'true' }}
-        run: |
-          mkdir -p /tmp/digests/rhel
-          shopt -s nullglob
-          for artifact_dir in /tmp/digests-raw/digests-aws-rhel-*; do
-            cp -v "$artifact_dir"/* /tmp/digests/rhel/ 2>/dev/null || true
-          done
-
-      - name: Set up Docker Buildx
-        if: ${{ steps.should-run.outputs.rhel_ok == 'true' }}
-        uses: docker/setup-buildx-action@v4
-
-      - name: Log in to Container Registry
-        if: ${{ steps.should-run.outputs.rhel_ok == 'true' }}
-        uses: docker/login-action@v4
-        with:
-          registry: ${{ env.REGISTRY }}
-          username: ${{ secrets.GHCR_USER }}
-          password: ${{ secrets.GHCR_TOKEN }}
-
-      - name: Extract metadata
-        if: ${{ steps.should-run.outputs.rhel_ok == 'true' }}
-        id: meta
-        uses: docker/metadata-action@v6
-        with:
-          images: ${{ env.REGISTRY }}/${{ github.repository }}-aws
-          tags: |
-            type=ref,event=branch
-            type=ref,event=pr
-            type=sha
-            type=raw,value=latest,enable={{is_default_branch}}
-
-      - name: Create and push manifest
-        if: ${{ steps.should-run.outputs.rhel_ok == 'true' }}
-        id: manifest
-        working-directory: /tmp/digests/rhel
-        run: |
-          set -x
-          # build the list of source images (by digest)
-          sources=""
-          for digest in *; do
-            image="${{ env.REGISTRY }}/${{ github.repository }}-aws"
-            sources="$sources ${image}@sha256:$digest"
-          done
-
-          # create manifest and tag it
-          tags="-t ${{ env.REGISTRY }}/${{ github.repository }}-aws:${{ env.TAG }}"
-          if [ "${{ env.IS_STABLE }}" = "true" ]; then
-            tags="${tags} -t ${{ env.REGISTRY }}/${{ github.repository }}-aws:latest"
-          fi
-          docker buildx imagetools create $tags $sources
-
-          # extract final manifest digest
-          MANIFEST_DIGEST=$(docker buildx imagetools inspect \
-            ${{ env.REGISTRY }}/${{ github.repository }}-aws:${{ env.TAG }} \
-            | awk '/^Digest:/ {print $2}')
-          echo "digest=${MANIFEST_DIGEST}" >> $GITHUB_OUTPUT
-
       - name: Run Trivy vulnerability scanner
         uses: aquasecurity/trivy-action@v0.36.0
         with:
-          image-ref: >-
-            ${{ env.REGISTRY }}/${{ github.repository }}-aws@${{
-              steps.manifest.outputs.digest }}
+          image-ref: ${{ env.REGISTRY }}/${{ github.repository }}-aws:${{ env.TAG }}
           format: "sarif"
           output: "trivy-results.sarif"
           severity: "CRITICAL,HIGH,MEDIUM"
@@ -1104,7 +924,7 @@ jobs:
     name: Verify all release images exist
     needs:
       - release-cuda-manifest
-      - release-aws-manifest
+      - release-aws-llm-d
       - release-cpu-llm-d
       - release-rocm-llm-d
       - release-xpu-llm-d

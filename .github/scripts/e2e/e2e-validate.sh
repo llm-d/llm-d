@@ -13,6 +13,9 @@ Options:
   -n, --namespace NAMESPACE   Kubernetes namespace (default: llm-d)
   -m, --model MODEL_ID        Model to query. If unset, discovers the first available model.
   -v, --verbose               Echo kubectl/curl commands before running
+  --extra-validate NAME       After the smoke loop, hand off to e2e-validate-NAME.sh
+                              for guide-specific validation (e.g. NAME=predicted-latency
+                              runs e2e-validate-predicted-latency.sh).
   -h, --help                  Show this help and exit
 EOF
   exit 0
@@ -22,14 +25,16 @@ EOF
 NAMESPACE="llm-d"
 CLI_MODEL_ID=""
 VERBOSE=false
+EXTRA_VALIDATE=""
 
 # ── Flag parsing ────────────────────────────────────────────────────────────
 while [[ $# -gt 0 ]]; do
   case $1 in
-    -n|--namespace) NAMESPACE="$2"; shift 2 ;;
-    -m|--model)     CLI_MODEL_ID="$2"; shift 2 ;;
-    -v|--verbose)   VERBOSE=true; shift ;;
-    -h|--help)      show_help ;;
+    -n|--namespace)      NAMESPACE="$2"; shift 2 ;;
+    -m|--model)          CLI_MODEL_ID="$2"; shift 2 ;;
+    -v|--verbose)        VERBOSE=true; shift ;;
+    --extra-validate)    EXTRA_VALIDATE="$2"; shift 2 ;;
+    -h|--help)           show_help ;;
     *) echo "Unknown option: $1"; show_help ;;
   esac
 done
@@ -202,3 +207,22 @@ for i in {1..10}; do
 done
 
 echo "✅ All 10 iterations succeeded."
+
+# ── Optional: hand off to a guide-specific validator ────────────────────────
+# When --extra-validate NAME is set, exec into ${SCRIPT_DIR}/e2e-validate-NAME.sh
+# so guides can layer their own checks on top of the standard smoke loop. We
+# release the smoke-test curl pod first (the dispatched script creates its
+# own) and clear the EXIT trap before exec'ing.
+if [[ -n "$EXTRA_VALIDATE" ]]; then
+  SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+  EXTRA_SCRIPT="${SCRIPT_DIR}/e2e-validate-${EXTRA_VALIDATE}.sh"
+  if [[ ! -x "$EXTRA_SCRIPT" ]]; then
+    echo "Error: --extra-validate '${EXTRA_VALIDATE}' but ${EXTRA_SCRIPT} is not executable" >&2
+    exit 1
+  fi
+  echo
+  echo "=== Running extra validation: ${EXTRA_VALIDATE} ==="
+  cleanup_curl_pod
+  trap - EXIT
+  exec "$EXTRA_SCRIPT" -n "$NAMESPACE" -m "$MODEL_ID"
+fi

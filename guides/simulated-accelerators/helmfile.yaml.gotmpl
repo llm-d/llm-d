@@ -41,7 +41,7 @@ releases:
   - name: {{ printf "gaie-%s" $rn | quote }}
     namespace: {{ $ns }}
     chart: oci://registry.k8s.io/gateway-api-inference-extension/charts/inferencepool
-    version: v1.4.0
+    version: v1.5.0
     installed: true
     needs:
       - {{ printf "infra-%s" $rn | quote }}
@@ -56,8 +56,8 @@ releases:
               enabled: true
     {{- else if or (eq .Environment.Name "agentgateway") (eq .Environment.Name "kgateway") }}
       # The GAIE InferencePool chart uses provider.name=none for non-GKE/non-Istio
-      # providers; see the upstream v1.4.0 chart values:
-      # https://github.com/kubernetes-sigs/gateway-api-inference-extension/blob/v1.4.0/config/charts/inferencepool/values.yaml
+      # providers; see the upstream v1.5.0 chart values:
+      # https://github.com/kubernetes-sigs/gateway-api-inference-extension/blob/v1.5.0/config/charts/inferencepool/values.yaml
       - provider:
           name: none
     {{- else if or (eq .Environment.Name "istio") (eq .Environment.Name "default") }}

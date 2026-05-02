@@ -12,6 +12,10 @@ inferenceExtension:
       port: 80
       protocol: TCP
       targetPort: 8081
+    - name: metrics
+      port: 9090
+      protocol: TCP
+      targetPort: 9090
 
 inferencePool:
   modelServers:

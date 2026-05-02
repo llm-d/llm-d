@@ -53,8 +53,8 @@ llm-d uses two deployment methods depending on the guide. Both produce the same 
 
 | Chart | Version | Registry | Repository | Notes |
 |-------|---------|----------|------------|-------|
-| **Standalone Router** | v1.4.0 | `oci://registry.k8s.io/gateway-api-inference-extension/charts/standalone` | [kubernetes-sigs/gateway-api-inference-extension](https://github.com/kubernetes-sigs/gateway-api-inference-extension) | Standalone Router (EPP+Envoy sidecar) |
-| **InferencePool** | v1.4.0 | `oci://registry.k8s.io/gateway-api-inference-extension/charts/inferencepool` | [kubernetes-sigs/gateway-api-inference-extension](https://github.com/kubernetes-sigs/gateway-api-inference-extension) | InferencePool + EPP |
+| **Standalone Router** | v1.5.0 | `oci://registry.k8s.io/gateway-api-inference-extension/charts/standalone` | [kubernetes-sigs/gateway-api-inference-extension](https://github.com/kubernetes-sigs/gateway-api-inference-extension) | Standalone Router (EPP+Envoy sidecar) |
+| **InferencePool** | v1.5.0 | `oci://registry.k8s.io/gateway-api-inference-extension/charts/inferencepool` | [kubernetes-sigs/gateway-api-inference-extension](https://github.com/kubernetes-sigs/gateway-api-inference-extension) | InferencePool + EPP |
 | **workload-variant-autoscaler** | v0.7.0 | `https://llm-d.github.io/llm-d-workload-variant-autoscaler/` | [llm-d/llm-d-workload-variant-autoscaler](https://github.com/llm-d/llm-d-workload-variant-autoscaler) | Optional: SLO-aware autoscaling |
 | **async-processor** | v0.6.1 | TBD | TBD | Optional: Queue-based async inference |
 | **llm-d-infra** | v1.4.0 | `https://llm-d-incubation.github.io/llm-d-infra/` | [llm-d-incubation/llm-d-infra](https://github.com/llm-d-incubation/llm-d-infra) | (Deprecated) Core infrastructure (gateway, CRDs). Used in legacy helmfile based guides prior to llm-d v0.7. |

@@ -70,7 +70,7 @@ jobs:
           -f guides/recipes/scheduler/base.values.yaml \
           -f guides/recipes/scheduler/pd.values.yaml \
           -f guides/wide-ep-lws/scheduler/wide-ep-lws.values.yaml \
-          -n "$NAMESPACE" --version v1.4.0
+          -n "$NAMESPACE" --version v1.5.0
 
         echo "Deployment complete"
       # Wide-EP-specific validation: check prefill + decode pods
