@@ -103,7 +103,9 @@ fi
 if [ -n "${WHEEL_FILENAME}" ]; then
   # construct full URL (wheels are in parent directory)
   # URL-encode the + sign in the wheel filename
-  WHEEL_URL="https://wheels.vllm.ai/${VLLM_PRECOMPILED_WHEEL_COMMIT}/${VLLM_PRECOMPILED_WHEEL_VARIANT}/${WHEEL_FILENAME}"
+  # The wheel url itself does not use the VLLM_PRECOMPILED_WHEEL_VARIANT
+  # suffix, this is part of the wheel filename url
+  WHEEL_URL="https://wheels.vllm.ai/${VLLM_PRECOMPILED_WHEEL_COMMIT}/${WHEEL_FILENAME}"
   WHEEL_URL=$(echo "${WHEEL_URL}" | sed -E 's/\+/%2B/g')
   echo "DEBUG: Found wheel: ${WHEEL_FILENAME}"
   echo "DEBUG: Wheel URL: ${WHEEL_URL}"
