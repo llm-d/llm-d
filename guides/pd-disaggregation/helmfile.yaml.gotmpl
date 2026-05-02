@@ -27,7 +27,7 @@ environments:
     <<: *I
   ocp: &OCP
     <<: *I
-  ask: &ASK
+  aks: &aks
     <<: *I
   default:
     <<: *I
@@ -79,7 +79,7 @@ releases:
               enabled: true
     {{- end }}
     # Apply destination rule for anything istio
-    {{- if or (eq .Environment.Name "istio") (eq .Environment.Name "default") (eq .Environment.Name "ask") (eq .Environment.Name "amd") (eq .Environment.Name "xpu") (eq .Environment.Name "hpu") (eq .Environment.Name "oci_amd") (eq .Environment.Name "ocp") }}
+    {{- if or (eq .Environment.Name "istio") (eq .Environment.Name "default") (eq .Environment.Name "aks") (eq .Environment.Name "amd") (eq .Environment.Name "xpu") (eq .Environment.Name "hpu") (eq .Environment.Name "oci_amd") (eq .Environment.Name "ocp") }}
       - provider:
           name: {{ .Environment.Values.provider.name }}
           istio:
@@ -129,8 +129,8 @@ releases:
       - routing:
           {{ .Environment.Values.routing | toYaml | nindent 10 }}
     {{- end }}
-    {{- if eq .Environment.Name "ask" }}
-      # Set pod annotations for ulimits on ASK (16GiB memlock)
+    {{- if eq .Environment.Name "aks" }}
+      # Set pod annotations for ulimits on AKS (16GiB memlock)
       - decode:
           podAnnotations:
             ulimits.nri.containerd.io/container.vllm: |
