@@ -102,11 +102,11 @@ patches:
           mountPath: /usr/local/gib
           name: gib
       # Env vars
-      - op: add
-        path: /spec/leaderWorkerTemplate/workerTemplate/spec/containers/0/env/-
-        value:
-          name: LD_LIBRARY_PATH
-          value: "/usr/local/nvidia/lib:/usr/local/nvidia/lib64"
+      # - op: add
+      #   path: /spec/leaderWorkerTemplate/workerTemplate/spec/containers/0/env/-
+      #   value:
+      #     name: LD_LIBRARY_PATH
+      #     value: "/usr/local/nvidia/lib:/usr/local/nvidia/lib64"
       - op: add
         path: /spec/leaderWorkerTemplate/workerTemplate/spec/containers/0/env/-
         value:

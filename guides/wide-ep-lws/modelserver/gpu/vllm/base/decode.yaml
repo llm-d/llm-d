@@ -54,18 +54,28 @@ spec:
           - name: dshm
             emptyDir:
               medium: Memory
-              sizeLimit: 2Gi  # roughly 32MB per local DP plus scratch space
+              sizeLimit: 32Gi  # roughly 32MB per local DP plus scratch space
           - name: hf-cache
             emptyDir: {}
           - name: jit-cache
             emptyDir: {}
+          - name: cache-volume
+            emptyDir:
+              medium: Memory
+              sizeLimit: 32Gi
+          - name: tmp-volume
+            emptyDir:
+              medium: Memory
+              sizeLimit: 32Gi
         containers:
           - name: vllm
-            image: ghcr.io/llm-d/llm-d-cuda:v0.7.0-rc.2
+            image: ghcr.io/llm-d/llm-d-cuda-dev:sha-0cb27a4
             securityContext:
+              privileged: true
               capabilities:
                 add:
                   - IPC_LOCK
+                  - NET_RAW
                   - SYS_RAWIO
               runAsGroup: 0
               runAsUser: 0
@@ -75,9 +85,58 @@ spec:
               - -c
             args:
               - |-
+                # 1. Setup Google's environment variables (NIC selection, etc.)
+                source /usr/local/gib/scripts/set_nccl_env.sh
+
+                # 2. Add the GKE plugin path to LD_LIBRARY_PATH so vLLM can find the 'net' plugin
+                # Note: We put it at the END so it doesn't override PyTorch's NCCL symbols
+                # export LD_LIBRARY_PATH=${LD_LIBRARY_PATH}:/usr/local/gib/lib64:/usr/local/nvidia/lib64
+                export LD_LIBRARY_PATH=/usr/local/gib/lib64:/usr/local/nvidia/lib64
+
+                # 3. Explicitly tell NCCL to use the Google GIB network backend
+                export NCCL_NET_PLUGIN=/usr/local/gib/lib64/libnccl-net.so
+
+                # 4. Blackwell (A4) Workarounds 
+                # These are CRITICAL because vLLM + Blackwell + NCCL 2.20+ often 
+                # conflict on memory management (CDMM) and NVLink SHARP.
+                export NCCL_CUMEM_ENABLE=0
+                export NCCL_NVLS_ENABLE=0
+                export NCCL_IB_HCA=^eth0
+
+                # 5. Let vLLM use its internal (modern) NCCL
+                export VLLM_DISABLE_PYNCCL=0
+                unset LD_PRELOAD
+
                 # Clear /dev/shm on start to prevent running out of space when crashes occur
                 # https://github.com/llm-d/llm-d/issues/352
                 find /dev/shm -type f -delete
+                # export NCCL_DEBUG=INFO
+                # export NCCL_DEBUG_SUBSYS=INIT,ENV,NET,TUNING
+                export PYTHONUNBUFFERED=1
+                export DG_JIT_DEBUG=1
+                export DG_PRINT_CONFIGS=1
+                export DG_JIT_PRINT_COMPILER_COMMAND=1
+                export DG_JIT_PTXAS_VERBOSE=1
+                export DG_JIT_USE_NVRTC=1
+                export DG_JIT_CACHE_DIR=/dg_cache
+                export TMPDIR=/tmp
+
+                # sleep infinity
+                cat /usr/local/gib/VERSION
+                ls /usr/local/gib/      
+
+                export CPATH="/usr/local/cuda-13.0/targets/x86_64-linux/include/cccl:$CPATH"
+                export NVCC_PREPEND_FLAGS="-I/usr/local/cuda-13.0/targets/x86_64-linux/include/cccl"
+                export DG_NVCC_FLAGS="-I/usr/local/cuda-13.0/targets/x86_64-linux/include/cccl"
+                ln -sf /usr/local/cuda-13.0/targets/x86_64-linux/include/cccl/cuda /usr/local/cuda/include/cuda
+                ls -L /usr/local/cuda/include/cuda/std/cstdint
+
+                # export NVCC_PREPEND_FLAGS="-I${CUDA_HOME}/include/cccl/libcudacxx/include"
+                # export DG_NVCC_FLAGS="-I/usr/local/cuda/include/cccl/libcudacxx/include"
+                # dnf config-manager --add-repo https://developer.download.nvidia.com/compute/cuda/repos/rhel9/x86_64/cuda-rhel9.repo
+                # dnf install -y cuda-cccl-devel-13-0
+
+                # sleep infinity          
 
                 #################
                 # RUN vLLM decode worker
@@ -122,7 +181,13 @@ spec:
                   # To enable tracing, add:
                   # --otlp-traces-endpoint http://otel-collector:4317 \
                   # --collect-detailed-traces all
+
+                sleep infinity
             env:
+              - name: VLLM_NCCL_SO_PATH
+                value: /usr/local/gib/lib64/libnccl.so.2.27.5
+              # - name: NCCL_DEBUG
+              #   value: "INFO"
               # To enable tracing, uncomment:
               # - name: OTEL_SERVICE_NAME
               #   value: "vllm-decode"
@@ -182,8 +247,8 @@ spec:
                 value: /var/cache/vllm/cuda
               - name: CCACHE_DIR
                 value: /var/cache/vllm/ccache
-              - name: VLLM_CACHE_ROOT
-                value: /var/cache/vllm/vllm
+              # - name: VLLM_CACHE_ROOT
+              #   value: /var/cache/vllm/vllm
               - name: FLASHINFER_WORKSPACE_BASE
                 value: /var/cache/vllm/flashinfer
               # HuggingFace is likely to be quite a bit larger, give it its own cache
@@ -236,3 +301,8 @@ spec:
                 mountPath: /var/cache/huggingface
               - name: jit-cache
                 mountPath: /var/cache/vllm
+              - name: cache-volume
+                mountPath: /dg_cache
+              - name: tmp-volume
+                mountPath: /tmp
+  

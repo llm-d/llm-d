@@ -31,7 +31,7 @@ spec:
             emptyDir: {}
         containers:
           - name: vllm
-            image: ghcr.io/llm-d/llm-d-cuda-gb200:v0.7.0
+            image: ghcr.io/llm-d/llm-d-cuda-dev:sha-0cb27a4
             securityContext:
               capabilities:
                 add:
@@ -45,9 +45,14 @@ spec:
               - -c
             args:
               - |-
+                source /usr/local/gib/scripts/set_nccl_env.sh
+                export LD_PRELOAD=/usr/local/gib/lib64/libnccl.so.2:${LD_PRELOAD:-}
+
                 # Clear /dev/shm on start to prevent running out of space when crashes occur
                 # https://github.com/llm-d/llm-d/issues/352
                 find /dev/shm -type f -delete
+
+                sleep infinity
 
                 #################
                 # RUN vLLM prefill worker
@@ -93,6 +98,14 @@ spec:
                   # --otlp-traces-endpoint http://otel-collector:4317 \
                   # --collect-detailed-traces all
             env:
+              - name: VLLM_NCCL_SO_PATH
+                value: /usr/local/gib/lib64/libnccl.so.2.27.5
+              - name: NCCL_DEBUG
+                value: "INFO"
+              - name: PYTHONUNBUFFERED
+                value: "1"
+              - name: LD_LIBRARY_PATH
+                value: /usr/local/gib/lib64:/usr/local/nvidia/lib64
               # To enable tracing, uncomment:
               # - name: OTEL_SERVICE_NAME
               #   value: "vllm-prefill"
@@ -146,8 +159,8 @@ spec:
                 value: /var/cache/vllm/cuda
               - name: CCACHE_DIR
                 value: /var/cache/vllm/ccache
-              - name: VLLM_CACHE_ROOT
-                value: /var/cache/vllm/vllm
+              # - name: VLLM_CACHE_ROOT
+              #   value: /var/cache/vllm/vllm
               - name: FLASHINFER_WORKSPACE_BASE
                 value: /var/cache/vllm/flashinfer
               # HuggingFace is likely to be quite a bit larger, give it its own cache

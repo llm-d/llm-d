@@ -108,7 +108,7 @@ helm install ${GUIDE_NAME} \
 Apply the Kustomize overlays for your specific backend:
 
 ```bash
-export INFRA_PROVIDER=gke # options: gke (H200), gke-a4 (B200), coreweave, dgx-cloud-gb200
+export INFRA_PROVIDER=gke # options: gke (H200), gke-a4 (B200), coreweave
 kubectl apply -n ${NAMESPACE} -k guides/${GUIDE_NAME}/modelserver/gpu/vllm/${INFRA_PROVIDER}
 ```
 
@@ -179,29 +179,29 @@ curl -X POST http://${IP}/v1/completions \
 
 ## Benchmarking
 
-The benchmark launches a pod (`llmdbench-harness-launcher`) that, in this case, uses `inference-perf` with a synthetic random batch workload workload named `2048_concurrent_2k_isl_2k_osl`. For more details, refer to the [benchmark instructions doc](../../helpers/benchmark.md).
+The benchmark launches a pod (`llmdbench-harness-launcher`) that uses `inference-perf` with a template workload. The results will be saved to a local folder by using the `-o` flag of `run_only.sh`.
 
 ### 1. Prepare the Benchmarking Suite
 
 - Download the benchmark script:
 
-```bash
-curl -L -O https://raw.githubusercontent.com/llm-d/llm-d-benchmark/main/existing_stack/run_only.sh
-chmod u+x run_only.sh
-```
+  ```bash
+  curl -L -O https://raw.githubusercontent.com/llm-d/llm-d-benchmark/main/existing_stack/run_only.sh
+  chmod u+x run_only.sh
+  ```
 
 ### 2. Download the Workload Template
 
 The template is located at `guides/wide-ep-lws/benchmark-templates/guide.yaml`. You can also download it if needed:
 
 ```bash
-curl -LJO "https://raw.githubusercontent.com/llm-d/llm-d/main/guides/${GUIDE_NAME}/benchmark-templates/2048_concurrent_2k_isl_2k_osl.yaml"
+curl -LJO "https://raw.githubusercontent.com/llm-d/llm-d/main/guides/${GUIDE_NAME}/benchmark-templates/guide.yaml"
 ```
 
 ### 3. Execute Benchmark
 
 ```bash
-envsubst < 2048_concurrent_2k_isl_2k_osl.yaml > config.yaml
+envsubst < guide.yaml > config.yaml
 ./run_only.sh -c config.yaml -o ./results
 ```
 
@@ -216,193 +216,30 @@ kubectl delete -n ${NAMESPACE} -k guides/${GUIDE_NAME}/modelserver/<gke|coreweav
 
 ## Benchmarking Report
 
-The benchmark is running on:
-* Provider: CKS
+We deployed the default wide-ep-lws user guide on GKE (`modelserver/gke-a4`).
+
+* Provider: GKE
 * Prefill: 1 instance with EP=16
 * Decode: 1 instance with EP=16
-* 4 H200 VMs, 32 GPUs, Infiniband
+* 4 `a4-highgpu-8g` VMs, 32 GPUs
 
+We use the [inference-perf](https://github.com/kubernetes-sigs/inference-perf/tree/main) benchmark tool to generate random datasets with 1K input length and 1K output length. This benchmark targets batch use case and we aim to find the maximum throughput by sweeping from lower to higher request rates up to 250 QPS.
 
-<details>
-<summary><b><i>Click</i></b> here to view the report from the above example</summary>
+### Results
 
-```yaml
-results:
-  request_performance:
-    aggregate:
-      latency:
-        inter_token_latency:
-          max: 30.34121842868626
-          mean: 0.07969590251979176
-          min: 3.8053840398788452e-06
-          p0p1: 3.975816071033478e-06
-          p1: 4.106201231479645e-06
-          p10: 4.507601261138916e-06
-          p25: 5.077570676803589e-06
-          p5: 4.325993359088898e-06
-          p50: 6.389804184436798e-06
-          p75: 1.0115094482898712e-05
-          p90: 3.565475344657898e-05
-          p95: 0.8909534962382163
-          p99: 1.2793979200161996
-          p99p9: 1.598953516515907
-          units: s/token
-        normalized_time_per_output_token:
-          max: 22.36453324875661
-          mean: 0.11380224349675808
-          min: 0.03750446231926297
-          p0p1: 0.03859267860123989
-          p1: 0.07242633368539624
-          p10: 0.07806590183948588
-          p25: 0.0794990241915988
-          p5: 0.07746114374645986
-          p50: 0.08341223422272201
-          p75: 0.09037681113958496
-          p90: 0.11040518531155001
-          p95: 0.11893183671153963
-          p99: 0.1280457219757267
-          p99p9: 8.673798847227339
-          units: s/token
-        request_latency:
-          max: 259.90107879415154
-          mean: 175.831311636725
-          min: 137.61615218035877
-          p0p1: 144.07184547862877
-          p1: 152.20689211042597
-          p10: 156.15101961996407
-          p25: 158.87230786448345
-          p5: 155.0747766970657
-          p50: 166.57856354676187
-          p75: 180.30430065304972
-          p90: 218.8493181052618
-          p95: 235.833738672873
-          p99: 248.89307169288398
-          p99p9: 258.52759975225854
-          units: s
-        time_per_output_token:
-          max: 0.09971424710837197
-          mean: 0.07970394011720383
-          min: 0.06714119758317436
-          p0p1: 0.07046533771248802
-          p1: 0.07419887348744633
-          p10: 0.07714715711461388
-          p25: 0.07882438320307489
-          p5: 0.07614581276124897
-          p50: 0.07990098050042406
-          p75: 0.08073974602562461
-          p90: 0.08199862981275519
-          p95: 0.08245319460844246
-          p99: 0.08341267507742763
-          p99p9: 0.0902886399074444
-          units: s/token
-        time_to_first_token:
-          max: 98.8584302579984
-          mean: 21.29069098684954
-          min: 2.6285605849698186
-          p0p1: 2.884328710737638
-          p1: 3.419430093830451
-          p10: 5.03398488946259
-          p25: 6.517769109224901
-          p5: 4.3494329891167585
-          p50: 11.075260647572577
-          p75: 25.52732751844451
-          p90: 58.6893984858878
-          p95: 73.95478512016125
-          p99: 86.97312242283486
-          p99p9: 97.31417823833262
-          units: s
-      requests:
-        failures: 0
-        input_length:
-          max: 2081.0
-          mean: 2046.793701171875
-          min: 2016.0
-          p0p1: 2024.0
-          p1: 2028.0
-          p10: 2036.0
-          p25: 2041.0
-          p5: 2033.0
-          p50: 2046.0
-          p75: 2052.0
-          p90: 2058.0
-          p95: 2061.0
-          p99: 2068.0
-          p99p9: 2075.0
-          units: count
-        output_length:
-          max: 4065.0
-          mean: 2004.9931640625
-          min: 7.0
-          p0p1: 23.573
-          p1: 1914.82
-          p10: 1994.0
-          p25: 1999.0
-          p5: 1987.0
-          p50: 2001.0
-          p75: 2001.0
-          p90: 2001.0
-          p95: 2001.0
-          p99: 2003.0
-          p99p9: 4056.809000000001
-          units: count
-        total: 8192
-      throughput:
-        output_token_rate:
-          mean: 22124.879416240507
-          units: tokens/s
-        request_rate:
-          mean: 11.034890199531286
-          units: queries/s
-        total_token_rate:
-          mean: 44711.0231697644
-          units: tokens/s
-run:
-  cid: 84d64299-c166-584e-b27f-d7951cca928b
-  eid: 1b4db7eb-4057-5ddf-91e0-36dec72071f5
-  time: {}
-  uid: 2c9ada2e-362f-4e90-9eba-453b9e0c200d
-  user: namespace=rob-dev
-scenario:
-  load:
-    metadata:
-      cfg_id: 74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b
-      schema_version: 0.0.1
-    native:
-      args: {}
-    standardized:
-      concurrency: 2048
-      input_seq_len:
-        distribution: gaussian
-        max: 2081
-        min: 2016
-        value: 2046.793701171875
-      output_seq_len:
-        distribution: gaussian
-        max: 4065
-        min: 7
-        value: 2004.9931640625
-      parallelism: 1
-      rate_qps: 8192.0
-      source: unknown
-      stage: 0
-      tool: inference-perf
-      tool_version: ''
-version: '0.2'
-```
+<img src="./benchmark-results/throughput_vs_qps.png" width="900" alt="Throughput vs QPS">
+<img src="./benchmark-results/throughput_vs_latency.png" width="300" alt="Throughput vs Latency">
 
-</details>
-
-At concurrency 2048 (~128 per decode rank), we observe:
+At request rate 250, we achieved the max throughput:
 
 ```json
 "throughput": {
-  "input_tokens_per_sec": 22586.143753523895,
-  "output_tokens_per_sec": 22124.879416240507,
-  "total_tokens_per_sec": 44711.0231697644,
-  "requests_per_sec": 11.034890199531286
+    "input_tokens_per_sec": 51218.79261732335,
+    "output_tokens_per_sec": 49783.58426326592,
+    "total_tokens_per_sec": 101002.37688058926,
+    "requests_per_sec": 50.02468992880545
 }
 ```
 
-This is ~1350 token/second/decode GPU, peaking at 1600 tokens per second per GPU.
+This equals to 3200 input tokens/s/GPU and 3100 output tokens/s/GPU.
 
-At around 200 requests per decode rank, you can achieve ~2000 TPSG.
