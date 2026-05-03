@@ -25,7 +25,7 @@ We can, therefore, compose the WideEP deployment with the existing scorers (for 
 
 ### Why This is Experimental
 
-We are currently working on hardenening the process management, health checking, and probes in vLLM to handle better this style of deployment. Once this is complete, we will upgrade this guide to the default.
+We are currently working on hardening the process management, health checking, and probes in vLLM to handle better this style of deployment. Once this is complete, we will upgrade this guide to the default.
 
 ## Overview
 

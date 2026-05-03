@@ -17,7 +17,7 @@ The following diagram visualizes how the `InferencePool` resource is involved in
 
 ### 1. Endpoint Discovery (EPP Perspective)
 
-The EPP uses the `InferencePool` to disocver which pods it can pick from.
+The EPP uses the `InferencePool` to discover which pods it can pick from.
 
 *   **Selector-based Discovery:** The `InferencePool` defines a `selector` (label matching). The EPP watches for Pods that match these labels within the same namespace.
 *   **Dynamic Membership:** As model server Pods are scaled up or down, or as their readiness state changes, the EPP automatically updates its internal list of healthy candidates.

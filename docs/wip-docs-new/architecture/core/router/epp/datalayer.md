@@ -49,7 +49,7 @@ flowchart LR
 The Data Layer is built around three primary source types, each paired with a corresponding extractor interface:
 
 ### 1. Polling Data Sources
-Used for periodic retrieval of data from model servers, primarly metrics.
+Used for periodic retrieval of data from model servers, primarily metrics.
 *   **Source Interface**: `PollingDataSource` (e.g., `metrics-data-source`)
 *   **Extractor Interface**: `Extractor` (e.g., `core-metrics-extractor`)
 *   **Workflow**: The runtime starts a `Collector` for every new endpoint. The collector polls the source at a configured interval and passes the result to associated extractors. Metrics pulling is the primary motivation for this type of data source.

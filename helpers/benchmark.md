@@ -580,7 +580,7 @@ The name indicates `inference-perf` was used as harness, the workload was `share
 
 ### Workload file
 
-The harness workload configuration file, as was used, is copied into the the experiment results directory; in this case, `shared_prefix_synthetic.yaml`.
+The harness workload configuration file, as was used, is copied into the experiment results directory; in this case, `shared_prefix_synthetic.yaml`.
 
 <details>
 <summary><b><i>Click</i></b> to view the workload details (<code>shared_prefix_synthetic.yaml</code>)</summary>

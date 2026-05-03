@@ -173,11 +173,11 @@ sequenceDiagram
 
 
 > [!WARNING]
-> Robustness against Decode instance failure is currently a weakness of the design, since the `VLLM_NIXL_ABORT_REQUEST_TIMEOUT` defaults to a long timeout (`480s` to avoid early-free when D instancess are backed up). We recommend that production users consider reducing this timeout, especially if they can ensure Decode instances do not have significant request queuing. We are currently implementing a "lease-extension" system, which will dramatically reduce the timeout with no tradeoff.
+> Robustness against Decode instance failure is currently a weakness of the design, since the `VLLM_NIXL_ABORT_REQUEST_TIMEOUT` defaults to a long timeout (`480s` to avoid early-free when D instances are backed up). We recommend that production users consider reducing this timeout, especially if they can ensure Decode instances do not have significant request queuing. We are currently implementing a "lease-extension" system, which will dramatically reduce the timeout with no tradeoff.
 
 ## Rollouts
 
-In disaggregated serving, rolling out a new version of the model server (e.g. a new version of vLLM or a new configuration) requires care, since prefill-decode instance pairs communicate with eachother to execute the KV transfer operation. As a motivating example, vLLM has multiple attention kernel implementations, each of which can have slightly different KV cache layouts - since NIXL pulls the KVs directly from the GPU KV cache memory of the remote instance, we need to ensure these are matching.
+In disaggregated serving, rolling out a new version of the model server (e.g. a new version of vLLM or a new configuration) requires care, since prefill-decode instance pairs communicate with each other to execute the KV transfer operation. As a motivating example, vLLM has multiple attention kernel implementations, each of which can have slightly different KV cache layouts - since NIXL pulls the KVs directly from the GPU KV cache memory of the remote instance, we need to ensure these are matching.
 
 By default, vLLM checks for [compatibility between instances](https://github.com/vllm-project/vllm/pull/29503) during the NIXL handshake, failing the request if scheduled to incompatible pods. There is an escape hatch to disable compatibility checking:
 

@@ -117,9 +117,9 @@ helm install ${GUIDE_NAME} \
 Apply the Kustomize overlays for your specific backend (defaulting to NVIDIA GPU / vLLM):
 
 > [!NOTE]
-> The Kuberentes ecosystem has not yet standardized on how to expose
+> The Kubernetes ecosystem has not yet standardized on how to expose
 > NICs to pods. We provide some pre-configured setups for certain
-> Kuberentes providers. You may need to adapt the guides for the
+> Kubernetes providers. You may need to adapt the guides for the
 > specifics of your infrastructure provider. The provider specific
 > overlays deal with the specifics of each cloud's setup.
 
