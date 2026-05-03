@@ -21,7 +21,9 @@ This implementation uses Redis Sorted Sets as the backend for the request queue.
      kubectl create secret generic redis-creds -n llm-d-async --from-literal=password=$REDIS_PASSWORD
      ```
 
-## Configuration
+## Configuration and Deployment:
+
+### Option 1: Helmfile (using helmfile.yaml.gotmpl)
 
 The deployment uses environment variables to dynamically configure the Redis resources. You can configure it by setting the following environment variables:
 
@@ -55,6 +57,24 @@ ap:
 {{- if env "REDIS_PASSWORD_KEY" }}
        passwordKey: {{ env "REDIS_PASSWORD_KEY" | quote }}
 {{- end }}
+```
+
+### Option 2: Kustomize (using manifests/redis)
+
+Edit the `manifests/redis/values.yaml` file with your specific Redis configuration:
+
+```yaml
+ap:
+  redis:
+    host: "redis-master.redis.svc.cluster.local"
+    port: 6379
+```
+
+Then deploy:
+
+```bash
+cd manifests/redis
+kustomize build . --enable-helm | kubectl apply -f -
 ```
 
 ## Testing

@@ -1,0 +1,26 @@
+ap:
+  # The Async Processor needs to know where to send the requests it pulls from the queue.
+  # Default assumes optimized-baseline stack in llm-d-inference-scheduler namespace.
+  igwBaseURL: "http://infra-optimized-baseline-inference-gateway-istio.llm-d-inference-scheduler.svc.cluster.local:80"
+  
+  image:
+    repository: ghcr.io/llm-d-incubation/llm-d-async
+    tag: v0.6.1
+  imagePullPolicy: Always
+
+  metrics:
+    enabled: true
+    port: 9090
+    secure: false
+
+  messageQueueImpl: "gcp-pubsub"
+  
+  gcpPubSub:
+    enabled: true
+    # Replace with your GCP project and resources
+    requestSubscriberId: "projects/REPLACE_WITH_YOUR_PROJECT/subscriptions/async-proc-requests-sub"
+    resultTopicId: "projects/REPLACE_WITH_YOUR_PROJECT/topics/async-proc-results"
+    requestPathURL: "/v1/completions"
+
+  redis:
+    enabled: false

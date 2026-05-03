@@ -27,37 +27,58 @@ Before installing Async Processor, ensure you have:
 
 ## Installation
 
-Async Processor can be installed via Helm. We provide a `helmfile` for easy deployment.
+Async Processor can be installed via Helm (using Helmfile) or Kustomize.
 
-### Step 1: Configure llm-d Router URL
+### Option 1: Helmfile (Recommended for complex environments)
+
+We provide a `helmfile` for easy deployment.
+
+#### Step 1: Configure llm-d Router URL
 
 The Async Processor needs to know where to send the requests it pulls from the queue. This is configured via the `IGW_BASE_URL` environment variable. 
 
-By default, it is set to `http://infra-optimized-baseline-inference-gateway-istio.llm-d-inference-scheduler.svc.cluster.local:80`, which assumes you have deployed the [optimized baseline](../optimized-baseline/README.md) stack in the `llm-d-inference-scheduler` namespace. 
+By default, it is set to `http://infra-optimized-baseline-inference-gateway-istio.llm-d-inference-scheduler.svc.cluster.local:80`.
 
-If your llm-d router is deployed elsewhere, or if you are using a different service name (e.g., based on the [Gateway Provider](../prereq/gateway-provider/README.md) guide), export the variable before running helmfile:
-
-```bash
-export IGW_BASE_URL="<your-llm-d-router-service-url>"
-```
-
-### Step 2: Choose your Queue Implementation
+#### Step 2: Choose your Queue Implementation
 
 Decide whether you want to use GCP Pub/Sub or Redis. Follow the setup instructions in the respective subdirectories:
 
 - [GCP Pub/Sub Setup](./gcp-pubsub/README.md)
 - [Redis Setup](./redis/README.md)
 
-### Step 3: Configure Async Processor Values
+#### Step 3: Configure Async Processor Values
 
-Edit the `values.yaml` in the chosen implementation folder to match your environment.
+Edit the `values.yaml.gotmpl` (and implementation-specific ones) to match your environment.
 
-### Step 4: Deploy
+#### Step 4: Deploy
 
 ```bash
 export NAMESPACE=llm-d-async
 cd guides/asynchronous-processing
 helmfile apply -n ${NAMESPACE}
+```
+
+### Option 2: Kustomize (Native Kubernetes manifests)
+
+We provide Kustomize manifests for both GCP Pub/Sub and Redis implementations.
+
+#### Step 1: Choose your Implementation
+
+Navigate to the respective manifest directory:
+
+- **GCP Pub/Sub**: `guides/asynchronous-processing/manifests/gcp-pubsub`
+- **Redis**: `guides/asynchronous-processing/manifests/redis`
+
+#### Step 2: Configure Values
+
+Edit the `values.yaml` in the chosen directory to match your environment.
+
+#### Step 3: Deploy
+
+```bash
+export NAMESPACE=llm-d-async
+cd guides/asynchronous-processing/manifests/<implementation>
+kustomize build . --enable-helm | kubectl apply -n ${NAMESPACE} -f -
 ```
 
 ## Testing
@@ -69,14 +90,14 @@ Testing instructions vary depending on the chosen queue implementation. Please r
 
 ## Cleanup
 
+### Helmfile
 ```bash
 cd guides/asynchronous-processing
 helmfile destroy -n ${NAMESPACE}
 ```
 
-
-
-
-
-
-
+### Kustomize
+```bash
+cd guides/asynchronous-processing/manifests/<implementation>
+kustomize build . --enable-helm | kubectl delete -n ${NAMESPACE} -f -
+```

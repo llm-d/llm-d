@@ -53,7 +53,9 @@ gcloud pubsub subscriptions create $SUBSCRIPTION_NAME \
     --enable-exactly-once-delivery
 ```
 
-## Configuration
+## Configuration and Deployment:
+
+### Option 1: Helmfile (using helmfile.yaml.gotmpl)
 
 The deployment uses environment variables to dynamically configure the Pub/Sub resources. Ensure the following variables are set:
 
@@ -72,6 +74,24 @@ ap:
     requestSubscriberId: {{ env "REQUEST_SUBSCRIBER_ID" | default (printf "projects/%s/subscriptions/async-proc-requests-sub" $project) | quote }}
     resultTopicId: {{ env "RESULT_TOPIC_ID" | default (printf "projects/%s/topics/async-proc-results" $project) | quote }}
     requestPathURL: "/v1/completions"
+```
+
+### Option 2: Kustomize (using manifests/gcp-pubsub)
+
+Edit the `manifests/gcp-pubsub/values.yaml` file with your specific GCP project and resources:
+
+```yaml
+ap:
+  gcpPubSub:
+    requestSubscriberId: "projects/<your-project>/subscriptions/async-proc-requests-sub"
+    resultTopicId: "projects/<your-project>/topics/async-proc-results"
+```
+
+Then deploy:
+
+```bash
+cd manifests/gcp-pubsub
+kustomize build . --enable-helm | kubectl apply -f -
 ```
 
 ## Testing
