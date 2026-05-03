@@ -5,8 +5,10 @@ resources:
 
 images:
   - name: ghcr.io/llm-d/llm-d-cuda
-    newName: docker.io/vllm/vllm-openai
-    newTag: v0.19.1-x86_64-cu130-ubuntu2404
+    newName: ghcr.io/llm-d/llm-d-cuda-dev
+    newTag: sha-0cb27a4
+    # newName: docker.io/vllm/vllm-openai
+    # newTag: v0.19.1-x86_64-cu130-ubuntu2404
 
 patches:
   - target:
@@ -20,13 +22,13 @@ patches:
           hostPath:
             path: /mnt/local/hf-cache
             type: DirectoryOrCreate
-      - op: replace
-        path: /spec/leaderWorkerTemplate/workerTemplate/spec/volumes/2
-        value:
-          name: jit-cache
-          hostPath:
-            path: /mnt/local/jit-cache
-            type: DirectoryOrCreate
+      # - op: replace
+      #   path: /spec/leaderWorkerTemplate/workerTemplate/spec/volumes/2
+      #   value:
+      #     name: jit-cache
+      #     hostPath:
+      #       path: /mnt/local/jit-cache
+      #       type: DirectoryOrCreate
       # Since we are loading model in from a host storage, disable HF_XET
       - op: add
         path: /spec/leaderWorkerTemplate/workerTemplate/spec/containers/0/env/-

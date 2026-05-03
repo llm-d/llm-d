@@ -16,7 +16,7 @@ spec:
     spec:
       containers:
         - name: vllm
-          image: docker.io/vllm/vllm-openai:v0.19.1
+          image: ghcr.io/llm-d/llm-d-cuda-dev:sha-0cb27a4
           imagePullPolicy: IfNotPresent
           command: ["vllm", "serve"]
           args:
