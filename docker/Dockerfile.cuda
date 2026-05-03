@@ -51,7 +51,7 @@ ARG INFINISTORE_REPO="https://github.com/bytedance/InfiniStore.git"
 ARG INFINISTORE_VERSION="0.2.33"
 
 ARG LMCACHE_REPO="https://github.com/LMCache/LMCache.git"
-ARG LMCACHE_VERSION="v0.4.1"
+ARG LMCACHE_VERSION="v0.4.4-cu13"
 
 # Kernels
 ARG DEEPEP_REPO="https://github.com/neuralmagic/DeepEP"
