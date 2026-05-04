@@ -48,9 +48,9 @@ def check_file(path: Path) -> list[str]:
     in_code_block = False
     fence_pattern: str | None = None  # full fence string, e.g. "```" or "~~~~"
 
-    # Stack of line numbers for unclosed <details> / <summary> openers.
-    details_stack: list[int] = []
-    summary_stack: list[int] = []
+    # Unified stack to track open tags and enforce proper nesting.
+    # Each entry is a tuple of (tag_type, lineno) where tag_type is 'details' or 'summary'.
+    tag_stack: list[tuple[str, int]] = []
 
     # True after a <details> opener until <summary> or non-blank content is seen.
     # Used to enforce that <summary> is the first element inside <details>.
@@ -93,11 +93,17 @@ def check_file(path: Path) -> list[str]:
                 # Tag segment — classify and update state.
                 tag_lower = segment.lower()
                 if _DETAILS_OPEN.match(tag_lower):
-                    details_stack.append(lineno)
+                    tag_stack.append(('details', lineno))
                     summary_expected = True
                 elif _DETAILS_CLOSE.match(tag_lower):
-                    if details_stack:
-                        details_stack.pop()
+                    if tag_stack and tag_stack[-1][0] == 'details':
+                        tag_stack.pop()
+                    elif tag_stack:
+                        # Wrong tag type on top of stack - crossed nesting
+                        wrong_tag, wrong_lineno = tag_stack[-1]
+                        errors.append(
+                            f"{path}:{lineno}: </details> closes before <{wrong_tag}> from line {wrong_lineno}"
+                        )
                     else:
                         errors.append(
                             f"{path}:{lineno}: dangling </details> with no matching <details>"
@@ -109,19 +115,23 @@ def check_file(path: Path) -> list[str]:
                             f"{path}:{lineno}: <summary> is not immediately inside a <details> block"
                         )
                     summary_expected = False
-                    summary_stack.append(lineno)
+                    tag_stack.append(('summary', lineno))
                 elif _SUMMARY_CLOSE.match(tag_lower):
-                    if summary_stack:
-                        summary_stack.pop()
+                    if tag_stack and tag_stack[-1][0] == 'summary':
+                        tag_stack.pop()
+                    elif tag_stack:
+                        # Wrong tag type on top of stack - crossed nesting
+                        wrong_tag, wrong_lineno = tag_stack[-1]
+                        errors.append(
+                            f"{path}:{lineno}: </summary> closes before <{wrong_tag}> from line {wrong_lineno}"
+                        )
                     else:
                         errors.append(
                             f"{path}:{lineno}: dangling </summary> with no matching <summary>"
                         )
 
-    for lineno in details_stack:
-        errors.append(f"{path}:{lineno}: unclosed <details> with no matching </details>")
-    for lineno in summary_stack:
-        errors.append(f"{path}:{lineno}: unclosed <summary> with no matching </summary>")
+    for tag_type, lineno in tag_stack:
+        errors.append(f"{path}:{lineno}: unclosed <{tag_type}> with no matching </{tag_type}>")
 
     return errors
 
