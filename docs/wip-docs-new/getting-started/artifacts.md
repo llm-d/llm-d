@@ -1,21 +1,21 @@
 # Artifacts
 
-This pages lists llm-d release artifacts:
+This page lists the llm-d release artifacts and dependencies:
 
 1. [**CRDs**](#1-crds) — the Kubernetes Custom Resource Definitions used by llm-d
 2. [**llm-d Router**](#2-llm-d-router) — the Helm chart and container images for the routing layer
-4. [**Model Servers and Extensions**](#4-model-server-images) — the inference engine images
-4. [**Well-Lit Path Guides**](#4-well-lit-path-guides) — tested deployment patterns and benchmark scripts
-5. [**Gateway Recipes**](#5-gateway-recipes) — optional recipes for installings Gateway Providers
+4. [**Model Servers and Extensions**](#4-model-server-images) — the inference engine images and extensions for advanced functionality
+4. [**Well-Lit Path Guides**](#4-well-lit-path-guides) — deployment manifests and benchmark scripts for key user stories
+5. [**Gateway Recipes**](#5-gateway-recipes) — optional recipes for installing Gateways and integrating them with llm-d
 
 > [!IMPORTANT]
 > llm-d follows a modular deployment pattern, enabling gradual feature 
-> adoption. Users needing a CRD-driven deployment pattern should consider
-> KServe's [LLMInferenceService](https://kserve.github.io/website/docs/model-serving/generative-inference/llmisvc/llmisvc-overview).
+> adoption. Users seeking a single CRD-driven deployment pattern should 
+> consider KServe's [LLMInferenceService](https://kserve.github.io/website/docs/model-serving/generative-inference/llmisvc/llmisvc-overview).
 
 ## 1. GAIE CRDs
 
-llm-d uses the APIs defined in the [Gateway API Inference Extension (GAIE)](https://gateway-api-inference-extension.sigs.k8s.io/) project:
+llm-d uses the APIs defined in the Gateway API Inference Extension (GAIE) project:
 
 | CRD |  Purpose |
 |-----|----------|
@@ -37,9 +37,9 @@ llm-d Router is deployed via Helm. We offer a chart both Standalone and Gateway 
 | Chart | Version | OCI Registry | Description |
 |-------|---------|--------------|-------------|
 | **Standalone Mode** | v1.5.0 | `oci://registry.k8s.io/gateway-api-inference-extension/charts/standalone` | Deploys an InferencePool and EPP with a standalone Envoy proxy as sidecar in EPP pod  |
-| **Gateway Mode** | v1.5.0 | `oci://registry.k8s.io/gateway-api-inference-extension/charts/inferencepool` | Deploys an InferencePool and EPP (for use with an existing Kubernetes Gateway - e.g. Istio, AgentGateway, GKE). |
+| **Gateway Mode** | v1.5.0 | `oci://registry.k8s.io/gateway-api-inference-extension/charts/inferencepool` | Deploys an InferencePool and EPP for use with an existing Kubernetes Gateway (e.g. Istio, AgentGateway, GKE) |
 
-The charts are currently published by the [Gateway API Inference Extension](https://github.com/kubernetes-sigs/gateway-api-inference-extension) project (see [standalone source](https://github.com/kubernetes-sigs/gateway-api-inference-extension/tree/main/config/charts/standalone) and [gateway mode source]((https://github.com/kubernetes-sigs/gateway-api-inference-extension/tree/maibn/config/charts/inferencepool))). Each well-lit path guides provides values files on top of the chart defaults.
+The charts are currently published by the Gateway API Inference Extension (GAIE) project (see [standalone mode source](https://github.com/kubernetes-sigs/gateway-api-inference-extension/tree/main/config/charts/standalone) and [gateway mode source]((https://github.com/kubernetes-sigs/gateway-api-inference-extension/tree/maibn/config/charts/inferencepool))). Each well-lit path guides provides values files on top of the chart defaults to enable the functionality implemented in EPP.
 
 > [!NOTE]
 > In a future release, the Helm Charts will be published
@@ -66,6 +66,8 @@ The llm-d stack supports vLLM and SGLang.
 > inference engine metrics, so any recent release should work.
 
 ### Upstream Images
+
+We recommend using the upstream images for most guides:
 
 | Engine        | Image             | Tag       |
 |--------       |----------------   |--------   |
@@ -113,16 +115,14 @@ See the [full list of guides](../well-lit-paths/README.md) for more details.
 
 ## 5. Gateways
 
-llm-d Router (optionally) supports deployment integration with Kuberentes Gateway.
-
-These are the versions we test against for the `v0.7.0` release.
+llm-d Router supports optional integration with Kuberentes Gateways. These are the versions we test against for the `v0.7.0` release:
 
 | Dependency | Tested Versions | Notes |
 |------------|-----------------|-------|
-| Gateway API CRDs | v1.5.x | Kubernetes SIG (required if using a Gateway) |
-| Istio | 1.29.x | Default gateway provider |
-| AgentGateway | v1.0.x | Preferred for new deployments |
-| kgateway | v2.2.x | **Deprecated** — will be removed in the next release |
+| Gateway API CRDs | `v1.5.x` | Kubernetes SIG (required if using a Gateway) |
+| Istio | `1.29.x` | Default gateway provider |
+| AgentGateway | `v1.0.x` | Preferred for new deployments |
+| kgateway | `v2.2.x` | **Deprecated** — will be removed in the next release |
 
 Install instructions live under [`guides/recipes/gateway/`](https://github.com/llm-d/llm-d/tree/main/guides/recipes/gateway).
 
@@ -140,7 +140,7 @@ Install instructions live under [`guides/recipes/gateway/`](https://github.com/l
 | [llm-d-incubation/llm-d-async](https://github.com/llm-d-incubation/llm-d-async) | Go | Asynchronous request processor for latency insensitive traffic |
 | [llm-d-incubation/batch-gateway](https://github.com/llm-d-incubation/batch-gateway) | Go | OpenAI-compatible API for submitting, tracking, and managing batch inference jobs.
 
-### Supporting
+### Supporting Libraries
 
 | Repository | Language | Description |
 |------------|----------|-------------|
