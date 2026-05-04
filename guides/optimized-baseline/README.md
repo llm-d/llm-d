@@ -51,11 +51,13 @@ This guide includes configurations for the following accelerators:
   ```
 
 - Set the following environment variables:
+
   ```bash
     export GAIE_VERSION=v1.5.0
     export GUIDE_NAME="optimized-baseline"
     export NAMESPACE=llm-d-optimized-baseline
   ```
+
 - Install the Gateway API Inference Extension CRDs:
 
   ```bash
@@ -63,6 +65,7 @@ This guide includes configurations for the following accelerators:
   ```
 
 - Create a target namespace for the installation
+
   ```bash
       kubectl create namespace ${NAMESPACE}
   ```
@@ -84,7 +87,7 @@ helm install ${GUIDE_NAME} \
 ```
 
 <details>
-<summary><h4>Gateway Mode</h4></summary>
+<summary><b>Gateway Mode</b></summary>
 
 To use a Kubernetes Gateway managed proxy rather than the standalone version, follow these steps instead of applying the previous Helm chart:
 
@@ -114,7 +117,7 @@ kubectl apply -n ${NAMESPACE} -k guides/${GUIDE_NAME}/modelserver/gpu/vllm/
 ```
 
 <details>
-<summary><h4>If you run into NCCL errors on GKE</h4></summary>
+<summary><b>If you run into NCCL errors on GKE</b></summary>
 
 Try applying the patch:
 
@@ -127,7 +130,7 @@ See [gke-patch/README.md](./modelserver/gpu/gke-patch/README.md) for more detail
 </details>
 
 <details>
-<summary><h4>Other Accelerators</h4></summary>
+<summary><b>Other Accelerators</b></summary>
 
 ```bash
 # AMD GPU
@@ -167,7 +170,7 @@ kubectl apply -n ${NAMESPACE} -k guides/recipes/modelserver/components/monitorin
 
 ### 1. Get the IP of the Proxy
 
-**Standalone Mode**
+#### Standalone Mode
 
 ```bash
 export IP=$(kubectl get service ${GUIDE_NAME}-epp -n ${NAMESPACE} -o jsonpath='{.spec.clusterIP}')
