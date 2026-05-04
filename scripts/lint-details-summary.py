@@ -85,7 +85,9 @@ def check_file(path: Path) -> list[str]:
             if idx % 2 == 0:
                 # Plain text segment — any non-blank content cancels the
                 # expectation that the very next thing is a <summary>.
-                if summary_expected and segment.strip():
+                # Strip blockquote prefixes (e.g., "> ") to get actual content.
+                content = re.sub(r'^(\s*>\s*)+', '', segment).strip()
+                if summary_expected and content:
                     summary_expected = False
             else:
                 # Tag segment — classify and update state.
