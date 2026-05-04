@@ -35,6 +35,9 @@ ARG GDRCOPY_VERSION="v2.5.2"
 ARG UCX_REPO="https://github.com/openucx/ucx.git"
 ARG UCX_VERSION="v1.20.0"
 
+ARG UCCL_REPO="https://github.com/uccl-project/uccl.git"
+ARG UCCL_VERSION="v0.0.1.post6"
+
 ARG NVSHMEM_USE_GIT="true"
 ARG NVSHMEM_REPO="https://github.com/NVIDIA/nvshmem.git"
 ARG NVSHMEM_VERSION="v3.5.19-1"
@@ -160,6 +163,7 @@ RUN export UV_INSTALL_DIR=/usr/local/bin && \
 # Set up build environment paths
 ENV NVSHMEM_DIR="/opt/nvshmem-${NVSHMEM_VERSION}" \
     UCX_PREFIX="/opt/ucx" \
+    UCCL_PREFIX="/opt/uccl" \
     NIXL_PREFIX="/opt/nixl" \
     EFA_PREFIX="/opt/amazon/efa"
 
@@ -167,11 +171,13 @@ ENV PATH="${NVSHMEM_DIR}/bin:${VIRTUAL_ENV}/bin:${PATH}" \
     LIBRARY_PATH="\
 ${EFA_PREFIX}/lib:${EFA_PREFIX}/lib64:\
 ${UCX_PREFIX}/lib:${UCX_PREFIX}/lib64:\
+${UCCL_PREFIX}/lib:\
 ${NVSHMEM_DIR}/lib:${NVSHMEM_DIR}/lib64:\
 ${CUDA_HOME}/lib64:\
 /usr/local/lib:/usr/local/lib64:\
 ${LIBRARY_PATH}" \
     CPATH="${NVSHMEM_DIR}/include:\
+${UCCL_PREFIX}/include:\
 ${CUDA_HOME}/include:\
 /usr/local/include:\
 /usr/include:\
@@ -206,6 +212,14 @@ RUN --mount=type=cache,target=/var/cache/git \
     --mount=type=secret,id=aws_secret_access_key \
     /tmp/build-ucx.sh && \
     rm -f /tmp/build-ucx.sh
+
+# Build UCCL
+ARG UCCL_REPO
+ARG UCCL_VERSION
+COPY docker/scripts/common/build-uccl.sh /tmp/build-uccl.sh
+RUN --mount=type=cache,target=/var/cache/git \
+    /tmp/build-uccl.sh && \
+    rm -f /tmp/build-uccl.sh
 
 # Build NVSHMEM
 ARG NVSHMEM_USE_GIT
@@ -319,6 +333,7 @@ ENV LANG="C.UTF-8" \
     VIRTUAL_ENV="/opt/vllm" \
     NVSHMEM_DIR="/opt/nvshmem-${NVSHMEM_VERSION}" \
     UCX_PREFIX="/opt/ucx" \
+    UCCL_PREFIX="/opt/uccl" \
     EFA_PREFIX="/opt/amazon/efa" \
     CUDA_HOME="/usr/local/cuda"
 
@@ -328,6 +343,7 @@ ENV LD_LIBRARY_PATH="\
 ${CUDA_HOME}/lib64:\
 ${EFA_PREFIX}/lib:${EFA_PREFIX}/lib64:\
 ${UCX_PREFIX}/lib:${UCX_PREFIX}/lib64:\
+${UCCL_PREFIX}/lib:\
 ${NVSHMEM_DIR}/lib:${NVSHMEM_DIR}/lib64:\
 /usr/local/lib:/usr/local/lib64:\
 /usr/lib/x86_64-linux-gnu:/usr/lib/aarch64-linux-gnu:\
@@ -391,6 +407,9 @@ COPY --from=builder /tmp/gdrcopy_libs /tmp/
 
 # Copy UCX libraries from builder
 COPY --from=builder /opt/ucx /opt/ucx
+
+# Copy UCCL libraries from builder
+COPY --from=builder /opt/uccl /opt/uccl
 
 RUN if [ -d /tmp/gdrcopy_libs ]; then \
         if [ "${TARGETOS:-rhel}" = "ubuntu" ]; then \
