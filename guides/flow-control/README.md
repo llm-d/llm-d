@@ -309,7 +309,7 @@ For detailed instructions on how to derive the optimal `maxConcurrency` for your
 
 ## Observability
 
-The Flow Control layer exposes detailed metrics to track queuing dynamics. Please refer to [flow control architecture](https://github.com/llm-d/llm-d/blob/main/docs/wip-docs-new/architecture/core/router/epp/flow-control.md) for more details.
+The Flow Control layer exposes detailed metrics to track queuing dynamics. Please refer to [flow control architecture](https://github.com/llm-d/llm-d/blob/main/docs/architecture/core/router/epp/flow-control.md) for more details.
 
 ## Cleanup
 
@@ -325,4 +325,4 @@ kubectl kustomize guides/optimized-baseline/modelserver/gpu/vllm/ \
 
 ## Further Reading
 
-See [Flow Control architecture](../../docs/wip-docs-new/architecture/core/epp/flow-control.md) for full details of the design.
+See [Flow Control architecture](../../docs/architecture/core/epp/flow-control.md) for full details of the design.

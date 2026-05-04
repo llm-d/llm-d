@@ -2,7 +2,7 @@
 
 Route each inference request to the model server predicted to serve it fastest — and, optionally, only to a server predicted to meet its TTFT/TPOT SLO.
 
-This path is for operators who want to **adopt** predicted latency-based scheduling in an existing llm-d deployment. For what the component is and how it works internally — the plugin pipeline, the ML model, scaling characteristics, the full metric list — see [architecture/advanced/latency-predictor.md](../../docs/wip-docs-new/architecture/advanced/latency-predictor.md).
+This path is for operators who want to **adopt** predicted latency-based scheduling in an existing llm-d deployment. For what the component is and how it works internally — the plugin pipeline, the ML model, scaling characteristics, the full metric list — see [architecture/advanced/latency-predictor.md](../../docs/architecture/advanced/latency-predictor.md).
 
 ## When to Pick This Path
 
@@ -162,7 +162,7 @@ Sheddable requests (priority < 0) are rejected at admission when no endpoint can
 
 ## Verify
 
-Once traffic is flowing, confirm three things in Prometheus (see the [architecture doc](../../docs/wip-docs-new/architecture/advanced/latency-predictor.md#observability) for the metric reference):
+Once traffic is flowing, confirm three things in Prometheus (see the [architecture doc](../../docs/architecture/advanced/latency-predictor.md#observability) for the metric reference):
 
 1. **Predictions are being produced.** `inference_objective_request_ttft_prediction_duration_seconds` has non-zero samples. If it stays empty, the predictor sidecar is not being called — tail the EPP logs for `predicted-latency-producer` errors.
 2. **Predictions track reality.** Compare `inference_objective_request_predicted_ttft_seconds` against `inference_objective_request_ttft_seconds` over a rolling window. A healthy deployment converges to within a few percent after warmup.
@@ -180,7 +180,7 @@ Once traffic is flowing, confirm three things in Prometheus (see the [architectu
 
 ## Related
 
-- [Latency Predictor Architecture](../../docs/wip-docs-new/architecture/advanced/latency-predictor.md) — plugin pipeline, ML model, scaling characteristics, metric reference.
+- [Latency Predictor Architecture](../../docs/architecture/advanced/latency-predictor.md) — plugin pipeline, ML model, scaling characteristics, metric reference.
 - [llm-d/llm-d-inference-scheduler](https://github.com/llm-d/llm-d-inference-scheduler) — source for the EPP plugins and per-plugin configuration references.
 - [llm-d/llm-d-latency-predictor](https://github.com/llm-d/llm-d-latency-predictor) — source for the training and prediction server Python code.
 - [Predicted Latency-Based Scheduling for LLMs](https://llm-d.ai/blog/predicted-latency-based-scheduling-for-llms) — design rationale and benchmark results.

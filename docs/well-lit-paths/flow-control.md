@@ -65,4 +65,4 @@ In the background EPP monitors the model servers for saturation. If it detects s
 
 ## Further Reading
 
-See [Flow Control architecture](https://github.com/llm-d/llm-d/blob/main/docs/wip-docs-new/architecture/core/router/epp/flow-control.md) for full details of the design.
+See [Flow Control architecture](https://github.com/llm-d/llm-d/blob/main/docs/architecture/core/router/epp/flow-control.md) for full details of the design.
