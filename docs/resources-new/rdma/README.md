@@ -1,10 +1,10 @@
-# RDMA and Networking Configuration
+# Remote Direct Memory Access (RDMA) and Networking Configuration
 
 ## Why Networking Matters
 
-In prefill/decode disaggregation, the KV Cache must transfer from prefill to decode workers before the first token can be generated. This transfer time lands directly on TTFT — and the cost grows with context length and model size.
+In prefill/decode disaggregation, the Key-Value (KV) Cache must transfer from prefill to decode workers before the first token can be generated. This transfer time lands directly on Time to First Token (TTFT) — and the cost grows with context length and model size.
 
-For wide expert-parallelism (DeepEP), all-to-all GPU communication across nodes is on the critical path for every token generated.
+For Wide Expert Parallelism, all-to-all GPU communication across nodes is on the critical path for every token generated.
 
 Networking is a first-order concern for distributed inference latency.
 
@@ -18,36 +18,36 @@ llm-d uses a layered networking stack for KV Cache transfers and inter-node comm
 
 [NIXL](https://github.com/ai-dynamo/nixl) (NVIDIA Inference Xfer Library) is the transfer library used by vLLM to move KV Cache between GPUs. It abstracts the underlying transport behind a unified API, so vLLM can initiate transfers without knowledge of the network fabric.
 
-NIXL operates in a **pull-based model**: the decode pod fetches KV Cache blocks directly from the prefill pod's GPU memory using one-sided RDMA reads, without requiring active participation from the prefill pod. This reduces synchronization overhead.
+NIXL operates in a **pull-based model**: the decode pod fetches KV Cache blocks directly from the prefill pod's GPU memory using one-sided RDMA reads (direct memory access without involving the remote CPU), without requiring active participation from the prefill pod. This reduces synchronization overhead.
 
 Key capabilities:
-- Works across InfiniBand, RoCE, EFA, and TCP
-- Supports GPU VRAM, CPU DRAM, and storage backends
+- Works across InfiniBand, RDMA over Converged Ethernet (RoCE), Elastic Fabric Adapter (EFA), and TCP
+- Supports GPU memory (VRAM), CPU Dynamic RAM (DRAM), and storage backends
 - Plugin architecture for adding new transport backends
-- Supports TP heterogeneity (prefill and decode can use different tensor-parallel sizes)
+- Supports Tensor Parallel (TP) heterogeneity (prefill and decode can use different tensor-parallel sizes)
 
 ### UCX
 
-[UCX](https://openucx.org/) (Unified Communication X) is the default transport backend for NIXL. It is a mature, open-source communication framework with broad adoption across HPC clusters. UCX abstracts RDMA transports (InfiniBand, RoCE), shared memory, and TCP behind a single API.
+[UCX](https://openucx.org/) (Unified Communication X) is the default transport backend for NIXL. It is a mature, open-source communication framework with broad adoption across High-Performance Computing (HPC) clusters. UCX abstracts RDMA transports (InfiniBand, RoCE), shared memory, and TCP behind a single API.
 
 UCX is a good default: it is battle-tested, widely supported, and works across most hardware. However, it was designed for HPC workloads and carries complexity that can make it harder to tune for AI inference traffic patterns.
 
 ### UCCL
 
-[UCCL](https://github.com/ai-dynamo/uccl) (Unified Cloud Communication Library) is a newer transport backend integrated into NIXL as of llm-d v0.5. It implements a host-resident software transport stack — managing transport logic on the CPU rather than relying solely on hardware offload. This enables fine-grained flow splitting and adaptive congestion control.
+[UCCL](https://github.com/ai-dynamo/uccl) (Unified Cloud Communication Library) is a newer transport backend integrated into NIXL as of llm-d v0.5. It implements a CPU-managed software transport stack — managing transport logic on the CPU rather than relying solely on network interface card (NIC) hardware offload. This enables fine-grained flow splitting and adaptive congestion control.
 
 UCCL currently supports:
-- Native RDMA (IB/RoCE)
+- Native RDMA (InfiniBand/RoCE)
 - GPUDirect TCP-X (Google Cloud)
 - TCP
 - EFA (AWS)
 
 Currently, UCCL needs to be built for a specific transport option with the `USE_TCPX`/`USE_TCP`/`USE_EFA` flag (refer to [build instructions](https://github.com/uccl-project/uccl/tree/main/p2p)). In the future, this will be enhanced to provide runtime selection.
-UCCL automatically discovers NICs based on PCIe proximity during memory registration, removing the need for manual NIC-to-GPU mapping in most cases.
+UCCL automatically discovers network interface cards (NICs) based on PCIe proximity during memory registration, removing the need for manual NIC-to-GPU mapping in most cases.
 
 ### libfabric
 
-On AWS, NIXL uses [libfabric](https://ofiwg.github.io/libfabric/) as the transport backend. EFA (Elastic Fabric Adapter) requires OpenFabrics Interfaces — UCX does not support EFA natively. The libfabric plugin provides multi-rail RDMA with topology-aware GPU-to-EFA mapping via hwloc.
+On AWS, NIXL uses [libfabric](https://ofiwg.github.io/libfabric/) as the transport backend. EFA (Elastic Fabric Adapter) requires OpenFabrics Interfaces (OFI) — UCX does not support EFA natively. The libfabric plugin provides multi-rail RDMA (using multiple network paths simultaneously for higher bandwidth) with topology-aware GPU-to-EFA mapping via hwloc.
 
 ### Choosing a Transport Backend
 
@@ -61,7 +61,7 @@ On AWS, NIXL uses [libfabric](https://ofiwg.github.io/libfabric/) as the transpo
 
 The core tradeoff:
 
-- **UCX** offloads transport to hardware — works best when the network fabric has dedicated, uncongested paths, typical in on-premise HPC clusters with InfiniBand.
+- **UCX** offloads transport to NIC hardware — works best when the network fabric has dedicated, uncongested paths, typical in on-premise High-Performance Computing (HPC) clusters with InfiniBand.
 - **UCCL** manages transport in software on the CPU — it splits traffic across up to 256 network paths with adaptive congestion control. This matters in cloud environments where network paths are shared and individual paths may be congested.
 - **libfabric** is the default option for AWS EFA. UCCL also supports EFA but requires compilation with the `USE_EFA` flag. UCX does not support EFA.
 
@@ -115,8 +115,8 @@ UCX transport is configured via environment variables:
 
 | Variable | Description | Example |
 |---|---|---|
-| `UCX_TLS` | Transport layers to use | `sm,cuda_ipc,cuda_copy,rc,tcp` |
-| `UCX_SOCKADDR_TLS_PRIORITY` | Priority for socket-based transports | `tcp` |
+| `UCX_TLS` | Transport layers (TLS) to use | `sm,cuda_ipc,cuda_copy,rc,tcp` |
+| `UCX_SOCKADDR_TLS_PRIORITY` | Priority for socket-based transport layers | `tcp` |
 | `UCX_PROTO_INFO` | Check transport selection | `y` |
 | `UCX_NET_DEVICES` | Network devices to use for transport | e.g. `mlx5_0:1, mlx5_1:1` |
 
@@ -146,14 +146,14 @@ securityContext:
 
 ### NIC Selection
 
-Use `NCCL_EXCLUDE_IB_HCA` to exclude specific HCAs from NCCL traffic (e.g., management NICs):
+Use `NCCL_EXCLUDE_IB_HCA` to exclude specific Host Channel Adapters (HCAs) from NVIDIA Collective Communications Library (NCCL) traffic (e.g., management NICs):
 
 ```yaml
 - name: NCCL_EXCLUDE_IB_HCA
   value: "mlx5_0,mlx5_2,mlx5_4,mlx5_8"
 ```
 
-For wide-EP (DeepEP), map GPUs to specific HCAs for optimal topology:
+For Wide Expert Parallelism, map GPUs to specific HCAs for optimal topology:
 
 ```yaml
 - name: DEEP_EP_DEVICE_TO_HCA_MAPPING
@@ -209,7 +209,7 @@ nvidia-smi nvlink --status  # Verify NVLink is active
 rocm-smi --showtopo         # Confirm Infinity Fabric connectivity
 ```
 
-GPUs showing `SYS` or `PHB` topology are communicating over PCIe across NUMA nodes — this adds latency, especially for collective operations.
+GPUs showing `SYS` or `PHB` topology are communicating over PCIe across Non-Uniform Memory Access (NUMA) nodes — this adds latency, especially for collective operations.
 
 ### 2. Inter-Pod Network
 
@@ -240,7 +240,7 @@ nixlbench --etcd_endpoints http://<ETCD_SERVER_IP>:2379 --backend <UCX/UCCL/LIBF
 
 The above test runs nixl benchmarks with the specified backend for message sizes of 1GB - 8GB, and reports the throughput, latency, etc.
 
-If throughput is significantly below the expected line rate for your fabric, check NIC affinity, MTU settings, and whether traffic is falling back to TCP (by setting `UCX_PROTO_INFO=y` for UCX backend).
+If throughput is significantly below the expected line rate for your fabric, check NIC affinity, Maximum Transmission Unit (MTU) settings, and whether traffic is falling back to TCP (by setting `UCX_PROTO_INFO=y` for UCX backend).
 
 If vLLM is already running, GPU memory may be insufficient for in-pod benchmarks. Add a pre-start script that runs tests before vLLM launches and blocks until a condition is met (e.g., removal of a sentinel file).
 In the future, this diagnostic will be automated as runtime scripts.
