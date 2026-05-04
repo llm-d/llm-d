@@ -76,7 +76,7 @@ ifeq ($(BUILD_DEBUG), true)
 	IMAGE_BASE := $(IMAGE_BASE)-debug
 endif
 
-IMG := $(IMAGE_BASE):$(VERSION)-$(ARCH)
+IMG := $(IMAGE_BASE):$(VERSION)
 
 CONTAINER_TOOL := $(shell (command -v docker >/dev/null 2>&1 && echo docker) || (command -v podman >/dev/null 2>&1 && echo podman) || echo "")
 BUILDER := $(shell command -v buildah >/dev/null 2>&1 && echo buildah || echo $(CONTAINER_TOOL))
