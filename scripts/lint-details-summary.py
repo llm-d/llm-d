@@ -30,7 +30,14 @@ _DETAILS_OPEN = re.compile(r"<details(\s[^>]*)?>", re.IGNORECASE)
 _DETAILS_CLOSE = re.compile(r"</details>", re.IGNORECASE)
 _SUMMARY_OPEN = re.compile(r"<summary(\s[^>]*)?>", re.IGNORECASE)
 _SUMMARY_CLOSE = re.compile(r"</summary>", re.IGNORECASE)
-_CODE_FENCE = re.compile(r"^(\s*)(`{3,}|~{3,})")
+# Allow optional blockquote prefix (e.g. "> ```bash") before the fence characters.
+_CODE_FENCE = re.compile(r"^(\s*(?:>\s*)*)(`{3,}|~{3,})")
+# Splitter that tokenises a line into alternating non-tag / tag segments so
+# tags can be processed in document order with correct multiplicity.
+_ANY_TAG = re.compile(
+    r"(<details(?:\s[^>]*)?>|</details>|<summary(?:\s[^>]*)?>|</summary>)",
+    re.IGNORECASE,
+)
 
 
 def check_file(path: Path) -> list[str]:
@@ -58,61 +65,56 @@ def check_file(path: Path) -> list[str]:
                 in_code_block = True
                 fence_pattern = fence_chars  # store full string, e.g. "```"
             elif (
-                # closing fence: same character, at least as many chars, nothing else on line
+                # closing fence: same character, at least as many chars, nothing else on line.
+                # Use fence_match.end() instead of line.strip() so that blockquoted
+                # fences like "> ```" are recognised as closers correctly.
                 fence_chars[0] == fence_pattern[0]
                 and len(fence_chars) >= len(fence_pattern)
-                and line.strip() == fence_chars.strip()
+                and fence_match.end() == len(line.rstrip())
             ):
                 in_code_block = False
                 fence_pattern = None
         if in_code_block:
             continue
 
-        # Determine which tags appear on this line (order matters for same-line pairs).
-        has_details_open = bool(_DETAILS_OPEN.search(line))
-        has_details_close = bool(_DETAILS_CLOSE.search(line))
-        has_summary_open = bool(_SUMMARY_OPEN.search(line))
-        has_summary_close = bool(_SUMMARY_CLOSE.search(line))
-
-        if has_details_open:
-            details_stack.append(lineno)
-            summary_expected = True
-
-        if has_details_close:
-            if details_stack:
-                details_stack.pop()
+        # Split the line into alternating [text, tag, text, tag, …, text] segments
+        # so that tags are processed strictly left-to-right with correct multiplicity.
+        # Odd-indexed segments are matched tags; even-indexed are the text between them.
+        segments = _ANY_TAG.split(line)
+        for idx, segment in enumerate(segments):
+            if idx % 2 == 0:
+                # Plain text segment — any non-blank content cancels the
+                # expectation that the very next thing is a <summary>.
+                if summary_expected and segment.strip():
+                    summary_expected = False
             else:
-                errors.append(
-                    f"{path}:{lineno}: dangling </details> with no matching <details>"
-                )
-            # Fix 1: clear expectation once the block is closed so a <summary>
-            # immediately after </details> is not silently accepted.
-            summary_expected = False
-
-        if has_summary_open:
-            if not summary_expected:
-                errors.append(
-                    f"{path}:{lineno}: <summary> is not immediately inside a <details> block"
-                )
-            summary_expected = False
-            summary_stack.append(lineno)
-
-        # Fix 3: validate </summary> closers.
-        if has_summary_close:
-            if summary_stack:
-                summary_stack.pop()
-            else:
-                errors.append(
-                    f"{path}:{lineno}: dangling </summary> with no matching <summary>"
-                )
-
-        # Fix 2: any non-blank content that is not one of the four tracked tags
-        # cancels the expectation that the next element will be <summary>.
-        if summary_expected and line.strip() and not (
-            has_details_open or has_details_close
-            or has_summary_open or has_summary_close
-        ):
-            summary_expected = False
+                # Tag segment — classify and update state.
+                tag_lower = segment.lower()
+                if _DETAILS_OPEN.match(tag_lower):
+                    details_stack.append(lineno)
+                    summary_expected = True
+                elif _DETAILS_CLOSE.match(tag_lower):
+                    if details_stack:
+                        details_stack.pop()
+                    else:
+                        errors.append(
+                            f"{path}:{lineno}: dangling </details> with no matching <details>"
+                        )
+                    summary_expected = False
+                elif _SUMMARY_OPEN.match(tag_lower):
+                    if not summary_expected:
+                        errors.append(
+                            f"{path}:{lineno}: <summary> is not immediately inside a <details> block"
+                        )
+                    summary_expected = False
+                    summary_stack.append(lineno)
+                elif _SUMMARY_CLOSE.match(tag_lower):
+                    if summary_stack:
+                        summary_stack.pop()
+                    else:
+                        errors.append(
+                            f"{path}:{lineno}: dangling </summary> with no matching <summary>"
+                        )
 
     for lineno in details_stack:
         errors.append(f"{path}:{lineno}: unclosed <details> with no matching </details>")
