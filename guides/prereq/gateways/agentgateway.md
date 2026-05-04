@@ -12,8 +12,8 @@ your model servers via the llm-d EPP.
 
 1. The environment variables `${GUIDE_NAME}`, `${MODEL_NAME}` and `${NAMESPACE}` should be set as part of deploying one of the well-lit path guides.
 2. A Kubernetes cluster running one of the three most recent [Kubernetes releases](https://kubernetes.io/releases/)
-3. [Helm](https://helm.sh/docs/intro/install/)
-4. [jq](https://jqlang.org/download/)
+3. [Helm](https://helm.sh/docs/intro/install/) - Package manager for Kubernetes, used to install Agent Gateway and its CRDs
+4. [jq](https://jqlang.org/download/) - Command-line JSON processor, used to parse and format API responses for verification
 
 ## Step 1: Install Gateway API and Gateway API Inference Extension CRDs
 

@@ -1,8 +1,12 @@
-# Request Handler
+---
+sidebar_label: Request Handling
+---
+
+# Endpoint Picker (EPP): Request Handling
 
 ## Functionality
 
-The Request Handler manages the lifecycle of an inference request before and after the request scheduling phase within the EPP. It handles parsing the request payload, preparing and managing state for the [Request Scheduler](scheduling.md), interacting with [Flow Control](flow-control.md) and processing the response from the model server.
+The Request Handler manages the lifecycle of an inference request before and after the request scheduling phase within the Endpoint Picker (EPP). It handles parsing the request payload, preparing and managing state for the [Request Scheduler](scheduling.md), interacting with [Flow Control](flow-control.md) and processing the response from the model server.
 
 ## Design
 

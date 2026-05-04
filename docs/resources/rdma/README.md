@@ -1,3 +1,7 @@
+---
+sidebar_label: High-Speed Networking
+---
+
 # Remote Direct Memory Access (RDMA) and Networking Configuration
 
 ## Why Networking Matters

@@ -14,7 +14,7 @@ llm-d is a [CNCF sandbox project](https://www.cncf.io/) that supports multiple i
 
 ### Kubernetes-Native
 
-llm-d integrates with standard Kubernetes primitives — Gateway API, Custom Resources, Labels, and HPA. If you already run workloads on Kubernetes, llm-d fits naturally into your infrastructure.
+llm-d integrates with standard Kubernetes primitives — Gateway API, Custom Resources, Labels, and Horizontal Pod Autoscaler (HPA). If you already run workloads on Kubernetes, llm-d fits naturally into your infrastructure.
 
 ### Composable and Incremental Adoption
 
@@ -57,11 +57,11 @@ By composing these layers, llm-d allows an inference pool to scale its effective
 
 ### Prefill/Decode Disaggregation
 
-Split inference into dedicated **prefill workers** (prompt processing) and **decode workers** (token generation) to reduce time-to-first-token (TTFT) and achieve more predictable time-per-output-token (TPOT). KV-cache is transferred between phases via [NIXL](https://github.com/ai-dynamo/nixl) over high-speed interconnects (InfiniBand, RoCE RDMA).
+Split inference into dedicated **prefill workers** (prompt processing) and **decode workers** (token generation) to reduce time-to-first-token (TTFT) and achieve more predictable time-per-output-token (TPOT). KV-cache is transferred between phases via [NIXL](https://github.com/ai-dynamo/nixl) over high-speed interconnects (InfiniBand, RoCE) using Remote Direct Memory Access (RDMA).
 
 ### Predicted Latency-Based Routing
 
-An **llm-d Router** capability implemented primarily as an EPP plugin that routes each request to the replica predicted to serve it fastest, using an XGBoost model trained online on live traffic to predict ITL and TTFT. Optionally enforce per-request SLOs via `x-slo-ttft-ms` / `x-slo-tpot-ms` headers — requests that no replica can meet within budget are shed at admission rather than routed to a guaranteed miss. Useful when workload variance makes queue-depth a poor proxy for true load, or when clients need to express interactive vs. batch latency budgets.
+An **llm-d Router** capability implemented primarily as an EPP plugin that routes each request to the replica predicted to serve it fastest, using an XGBoost model trained online on live traffic to predict Inter-Token Latency (ITL) and Time to First Token (TTFT). Optionally enforce per-request Service Level Objectives (SLOs) via `x-slo-ttft-ms` / `x-slo-tpot-ms` headers — requests that no replica can meet within budget are shed at admission rather than routed to a guaranteed miss. Useful when workload variance makes queue-depth a poor proxy for true load, or when clients need to express interactive vs. batch latency budgets.
 
 ### Batch Inference
 

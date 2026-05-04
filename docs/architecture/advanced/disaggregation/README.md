@@ -3,9 +3,9 @@
 ## Functionality
 
 Disaggregated serving separates the **prefill** and **decode** stages of LLM inference onto different model server instances, enabling:
-* **Specialization of P and D** - LLM inference is composed of two distinct phases of inference - prefill (FLOPs-bound) and decode (memory bandwidth-bound). Disaggregation enables specialization, e.g. using a larger TP for the memory-bound decoding phase while a smaller TP for the computation-bound prefill phase.
+* **Specialization of Prefill and Decode** - LLM inference is composed of two distinct phases of inference - prefill (FLOPs-bound) and decode (memory bandwidth-bound). Disaggregation enables specialization, e.g. using a larger Tensor Parallelism (TP) for the memory-bound decoding phase while a smaller TP for the computation-bound prefill phase.
 * **Avoidance of Request Interference** - For long context requests, prefills can slow down processing of existing requests in the decode phase. Separating the prefill phase of these long requests into dedicated prefill instances allows the ongoing decoding requests to be efficiently processed without being blocked by these long prefills, improving quality-of-service.
-* **Compatibility with DP/EP** - For DP/EP deployments of Mixture of Experts models, disaggregated serving is essential to avoid pipeline bubbles and leveraging the specialized "MaskedGEMM" format for decode.
+* **Compatibility with Data Parallelism/Expert Parallelism (DP/EP)** - For DP/EP deployments of Mixture of Experts models, disaggregated serving is essential to avoid pipeline bubbles and leveraging the specialized "MaskedGEMM" format for decode.
 
 An implementation of disaggregated serving requires two key components:
 * **Request Flow Orchestration** - select and route the requests to the correct prefill and decode pods
@@ -43,11 +43,11 @@ sequenceDiagram
     DSidecar->>Proxy: Response
 ```
 
-Next we will discuss the design of the EPP and Routing Sidecar for disaggregated serving.
+Next we will discuss the design of the Endpoint Picker (EPP) and Routing Sidecar for disaggregated serving.
 
-### EPP
+### Endpoint Picker (EPP)
 
-The llm-d EPP supports disaggregation via the `disagg-profile-handler`.
+The llm-d Endpoint Picker (EPP) supports disaggregation via the `disagg-profile-handler`.
 
 > [!NOTE]
 > Rather than hardcoding a single scheduling algorithm, the EPP delegates execution to one or more `Profile Handlers`, each of which represents a complete scheduling strategy. They can be thought of as "the dispatcher", which maps each incoming inference request to the right scheduling strategy before the scorers and pickers do their work of selecting the actual endpoint. By default, llm-d uses the `single-profile-handler` for simple aggregated serving.

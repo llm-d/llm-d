@@ -1,3 +1,7 @@
+---
+sidebar_label: Serving Operations (vLLM)
+---
+
 # Disaggregated Serving: Operations (vLLM)
 
 While disaggregated serving can offer superior performance, it introduces additional operational complexity, including:
