@@ -1,8 +1,0 @@
-{{- $project := requiredEnv "GOOGLE_CLOUD_PROJECT" -}}
-ap:
-  messageQueueImpl: "gcp-pubsub"
-  gcpPubSub:
-    enabled: true
-    requestSubscriberId: {{ env "REQUEST_SUBSCRIBER_ID" | default (printf "projects/%s/subscriptions/async-proc-requests-sub" $project) | quote }}
-    resultTopicId: {{ env "RESULT_TOPIC_ID" | default (printf "projects/%s/topics/async-proc-results" $project) | quote }}
-    requestPathURL: "/v1/completions"

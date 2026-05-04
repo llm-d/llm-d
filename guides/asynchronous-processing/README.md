@@ -27,58 +27,40 @@ Before installing Async Processor, ensure you have:
 
 ## Installation
 
-Async Processor can be installed via Helm (using Helmfile) or Kustomize.
+Async Processor can be installed via Helm. We recommend following the pattern used in the [optimized baseline](../optimized-baseline/README.md) guide.
 
-### Option 1: Helmfile (Recommended for complex environments)
+#### Step 1: Deploy llm-d Router
 
-We provide a `helmfile` for easy deployment.
-
-#### Step 1: Configure llm-d Router URL
-
-The Async Processor needs to know where to send the requests it pulls from the queue. This is configured via the `IGW_BASE_URL` environment variable. 
-
-By default, it is set to `http://infra-optimized-baseline-inference-gateway-istio.llm-d-inference-scheduler.svc.cluster.local:80`.
-
-#### Step 2: Choose your Queue Implementation
-
-Decide whether you want to use GCP Pub/Sub or Redis. Follow the setup instructions in the respective subdirectories:
-
-- [GCP Pub/Sub Setup](./gcp-pubsub/README.md)
-- [Redis Setup](./redis/README.md)
-
-#### Step 3: Configure Async Processor Values
-
-Edit the `values.yaml.gotmpl` (and implementation-specific ones) to match your environment.
-
-#### Step 4: Deploy
+Apply the [optimized baseline](../optimized-baseline/README.md) guide and get the llm-d Router's IP address:
 
 ```bash
-export NAMESPACE=llm-d-async
-cd guides/asynchronous-processing
-helmfile apply -n ${NAMESPACE}
+# If using Standalone Mode:
+export IP=$(kubectl get service optimized-baseline-epp -n llm-d-optimized-baseline -o jsonpath='{.spec.clusterIP}')
+
+# If using Gateway Mode:
+export IP=$(kubectl get gateway llm-d-inference-gateway -n llm-d-optimized-baseline -o jsonpath='{.status.addresses[0].value}')
 ```
-
-### Option 2: Kustomize (Native Kubernetes manifests)
-
-We provide Kustomize manifests for both GCP Pub/Sub and Redis implementations.
-
-#### Step 1: Choose your Implementation
-
-Navigate to the respective manifest directory:
-
-- **GCP Pub/Sub**: `guides/asynchronous-processing/manifests/gcp-pubsub`
-- **Redis**: `guides/asynchronous-processing/manifests/redis`
 
 #### Step 2: Configure Values
 
-Edit the `values.yaml` in the chosen directory to match your environment.
+Choose your queue implementation (GCP Pub/Sub or Redis) and configure the corresponding `values.yaml` file:
+- `guides/asynchronous-processing/gcp-pubsub/values.yaml`
+- `guides/asynchronous-processing/redis/values.yaml`
 
-#### Step 3: Deploy
+#### Step 3: Deploy Async Processor
+
+Deploy the Async Processor using the selected queue implementation's configuration:
 
 ```bash
 export NAMESPACE=llm-d-async
-cd guides/asynchronous-processing/manifests/<implementation>
-kustomize build . --enable-helm | kubectl apply -n ${NAMESPACE} -f -
+export MQ_PROVIDER=gcp-pubsub # options are gcp-pubsub or redis
+export ASYNC_VERSION=0.6.1
+
+helm install async-processor \
+    oci://ghcr.io/llm-d-incubation/charts/async-processor \
+    -f guides/asynchronous-processing/${MQ_PROVIDER}/values.yaml \
+    --set ap.igwBaseURL=http://${IP}:80 \
+    -n ${NAMESPACE} --create-namespace --version ${ASYNC_VERSION}
 ```
 
 ## Testing
@@ -90,14 +72,6 @@ Testing instructions vary depending on the chosen queue implementation. Please r
 
 ## Cleanup
 
-### Helmfile
 ```bash
-cd guides/asynchronous-processing
-helmfile destroy -n ${NAMESPACE}
-```
-
-### Kustomize
-```bash
-cd guides/asynchronous-processing/manifests/<implementation>
-kustomize build . --enable-helm | kubectl delete -n ${NAMESPACE} -f -
+helm uninstall async-processor -n ${NAMESPACE}
 ```

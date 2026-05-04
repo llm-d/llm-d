@@ -1,0 +1,14 @@
+ap:
+  messageQueueImpl: "redis-sortedset"
+  redis:
+    enabled: true
+    host: "redis-master.redis.svc.cluster.local"
+    port: 6379
+    requestPathURL: "/v1/completions"
+    requestQueueName: "request-sortedset"
+    resultQueueName: "result-list"
+    auth:
+       enabled: false
+       secretName: "redis-creds"
+       # usernameKey: "username" # Optional: key in the secret for the username
+       # passwordKey: "password" # Optional: key in the secret for the password

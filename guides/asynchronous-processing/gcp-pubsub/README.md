@@ -53,32 +53,11 @@ gcloud pubsub subscriptions create $SUBSCRIPTION_NAME \
     --enable-exactly-once-delivery
 ```
 
-## Configuration and Deployment:
+## Configuration and Deployment
 
-### Option 1: Helmfile (using helmfile.yaml.gotmpl)
+We provide a `values.yaml` for this implementation in `guides/asynchronous-processing/gcp-pubsub/values.yaml`.
 
-The deployment uses environment variables to dynamically configure the Pub/Sub resources. Ensure the following variables are set:
-
-- `GOOGLE_CLOUD_PROJECT` (Required): Your GCP Project ID.
-- `REQUEST_SUBSCRIBER_ID` (Optional): The full path to the request subscription. Defaults to `projects/${GOOGLE_CLOUD_PROJECT}/subscriptions/async-proc-requests-sub`.
-- `RESULT_TOPIC_ID` (Optional): The full path to the result topic. Defaults to `projects/${GOOGLE_CLOUD_PROJECT}/topics/async-proc-results`.
-
-Your `values.yaml.gotmpl` is configured as follows:
-
-```yaml
-{{- $project := requiredEnv "GOOGLE_CLOUD_PROJECT" -}}
-ap:
-  messageQueueImpl: "gcp-pubsub"
-  gcpPubSub:
-    enabled: true
-    requestSubscriberId: {{ env "REQUEST_SUBSCRIBER_ID" | default (printf "projects/%s/subscriptions/async-proc-requests-sub" $project) | quote }}
-    resultTopicId: {{ env "RESULT_TOPIC_ID" | default (printf "projects/%s/topics/async-proc-results" $project) | quote }}
-    requestPathURL: "/v1/completions"
-```
-
-### Option 2: Kustomize (using manifests/gcp-pubsub)
-
-Edit the `manifests/gcp-pubsub/values.yaml` file with your specific GCP project and resources:
+Edit the `values.yaml` file with your specific GCP project and resources:
 
 ```yaml
 ap:
@@ -87,12 +66,7 @@ ap:
     resultTopicId: "projects/<your-project>/topics/async-proc-results"
 ```
 
-Then deploy:
-
-```bash
-cd manifests/gcp-pubsub
-kustomize build . --enable-helm | kubectl apply -f -
-```
+For deployment instructions, please refer to the [main README](../README.md#installation).
 
 ## Testing
 
