@@ -24,6 +24,7 @@ ENABLE_EFA="${ENABLE_EFA:-false}"
 TARGETOS="${TARGETOS:-rhel}"
 DOCKER="${DOCKER:-docker}"                 # or podman
 BUILDER="${BUILDER:-}"                     # buildx builder name (e.g. remote-amd64)
+USE_SCCACHE="${USE_SCCACHE:-false}"        # CI uses true; local builds typically lack sccache
 
 # ── parse flags ──────────────────────────────────────────────────────
 usage() {
@@ -42,6 +43,7 @@ Options:
   --debug             Build with debug symbols     (default: false)
   --efa               Enable AWS EFA support       (default: false)
   --os OS             Target OS: rhel or ubuntu    (default: ${TARGETOS})
+  --sccache           Enable sccache               (default: false)
   --docker CMD        Container tool               (default: ${DOCKER})
   --builder NAME      Buildx builder name          (default: default builder)
                       e.g. remote-amd64
@@ -50,7 +52,7 @@ Options:
 
 Environment variables:
   IMAGE_NAME, IMAGE_TAG, TARGET, TARGETPLATFORM, BUILD_DEBUG,
-  ENABLE_EFA, TARGETOS, DOCKER, BUILDER
+  ENABLE_EFA, TARGETOS, DOCKER, BUILDER, USE_SCCACHE
 EOF
     exit 0
 }
@@ -65,6 +67,7 @@ while [[ $# -gt 0 ]]; do
         --debug)      BUILD_DEBUG=true; shift ;;
         --efa)        ENABLE_EFA=true;  shift ;;
         --os)         TARGETOS="$2";   shift 2 ;;
+        --sccache)    USE_SCCACHE=true; shift ;;
         --docker)     DOCKER="$2";     shift 2 ;;
         --builder)    BUILDER="$2";    shift 2 ;;
         --dry-run)    DRY_RUN=true;    shift ;;
@@ -119,6 +122,7 @@ cmd=(
     --build-arg "BUILD_BASE_IMAGE_SUFFIX=${BUILD_BASE_IMAGE_SUFFIX}"
     --build-arg "FINAL_BASE_IMAGE_SUFFIX=${FINAL_BASE_IMAGE_SUFFIX}"
     --build-arg "BUILD_DEBUG=${BUILD_DEBUG}"
+    --build-arg "USE_SCCACHE=${USE_SCCACHE}"
     --build-arg "ENABLE_EFA=${ENABLE_EFA}"
     --build-arg "VLLM_REPO=${VLLM_REPO}"
     --build-arg "VLLM_COMMIT_SHA=${VLLM_COMMIT_SHA}"
