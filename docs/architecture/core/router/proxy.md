@@ -44,7 +44,7 @@ In standalone mode, the conformant proxy (e.g., Envoy) runs alongside the EPP in
 - **Access**: Traffic is sent directly to the EPP pod's externally exposed port.
 
 <p align="center">
-  <img src="../../../assets/standalone-design.svg" width="600" alt="Standalone Design">
+  <img src="../../../assets/standalone-design.svg" width="540" alt="Standalone Design">
 </p>
 
 ---
