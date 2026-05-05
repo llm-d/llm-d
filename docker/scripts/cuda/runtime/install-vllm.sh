@@ -31,6 +31,7 @@ INSTALL_PACKAGES=(
   flashinfer-cubin=="${FLASHINFER_WHEEL_VERSION}"
   flashinfer-jit-cache=="${FLASHINFER_WHEEL_VERSION}"
   /tmp/wheels/*.whl
+  nvidia-nvshmem-cu13==3.5.19
 )
 if [ "${BUILD_NIXL_FROM_SOURCE}" = "false" ]; then
   INSTALL_PACKAGES+=(nixl)

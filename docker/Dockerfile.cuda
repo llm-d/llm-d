@@ -227,7 +227,8 @@ RUN --mount=type=cache,target=/root/.cache/uv \
     pyyaml \
     types-PyYAML \
     pytest \
-    "patchelf>=0.11.0"
+    "patchelf>=0.11.0" \
+    nvidia-nvshmem-cu13==3.5.19
 
 ### Decide to build NIXL from source.
 # If set to false, NIXL will be installed as a dependency of vLLM in the `install-vllm.sh` script,
