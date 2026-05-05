@@ -70,24 +70,28 @@ else
 fi
 
 # build GB200-specific DeepEP wheel (if configured)
-if [ -n "${DEEPEP_GB200_REPO:-}" ] && [ -n "${DEEPEP_GB200_VERSION:-}" ]; then
-  echo "=== Building GB200 DeepEP variant ==="
-  mkdir -p /wheels-gb200
-  git clone "${DEEPEP_GB200_REPO}" deepep-gb200
-  cd deepep-gb200
-  git fetch origin "${DEEPEP_GB200_VERSION}"
-  git checkout -q "${DEEPEP_GB200_VERSION}"
-  BACKUP_CXXFLAGS="${CXXFLAGS-}"
-  export CXXFLAGS="${CXXFLAGS:-} -D__NVSHMEM_NUMBA_SUPPORT__"
-  uv build --wheel --no-build-isolation --out-dir /wheels-gb200
-  cd ..
-  rm -rf deepep-gb200
-  if [ -n "${BACKUP_CXXFLAGS+x}" ]; then
-    export CXXFLAGS="${BACKUP_CXXFLAGS}"
-  else
-    unset CXXFLAGS
-  fi
-fi
+# NOTE: this is failing
+# 2026-05-05T04:41:50.9318833Z #39 266.8 /usr/bin/ld: /opt/vllm/lib64/python3.12/site-packages/nvidia/nvshmem/lib/libnvshmem_device.a(init_device.cu.o):(.bss+0x380): multiple definition of `nvshmemi_ibgda_device_state_d'; /tmp/deepep-gb200/build/temp.linux-x86_64-cpython-312/csrc/deep_ep.o:/opt/vllm/lib64/python3.12/site-packages/nvidia/nvshmem/include/device_host_transport/nvshmem_common_ibgda.h:351: first defined here
+# 2026-05-05T04:41:51.1220379Z #39 266.9 /usr/bin/ld: /opt/vllm/lib64/python3.12/site-packages/nvidia/nvshmem/lib/libnvshmem_device.a(init_device.cu.o): warning: relocation against `nvshmemi_ibgda_device_state_d' in read-only section `.text'
+# 2026-05-05T04:41:51.2291630Z #39 267.0 /usr/bin/ld: /opt/vllm/lib64/python3.12/site-packages/nvidia/nvshmem/lib/libnvshmem_device.a(init_device.cu.o): relocation R_X86_64_PC32 against symbol `nvshmemi_ibgda_device_state_d' can not be used when making a shared object; recompile with -fPIC
+# if [ -n "${DEEPEP_GB200_REPO:-}" ] && [ -n "${DEEPEP_GB200_VERSION:-}" ]; then
+#   echo "=== Building GB200 DeepEP variant ==="
+#   mkdir -p /wheels-gb200
+#   git clone "${DEEPEP_GB200_REPO}" deepep-gb200
+#   cd deepep-gb200
+#   git fetch origin "${DEEPEP_GB200_VERSION}"
+#   git checkout -q "${DEEPEP_GB200_VERSION}"
+#   BACKUP_CXXFLAGS="${CXXFLAGS-}"
+#   export CXXFLAGS="${CXXFLAGS:-} -D__NVSHMEM_NUMBA_SUPPORT__"
+#   uv build --wheel --no-build-isolation --out-dir /wheels-gb200
+#   cd ..
+#   rm -rf deepep-gb200
+#   if [ -n "${BACKUP_CXXFLAGS+x}" ]; then
+#     export CXXFLAGS="${BACKUP_CXXFLAGS}"
+#   else
+#     unset CXXFLAGS
+#   fi
+# fi
 
 # build DeepGEMM wheel
 git clone "${DEEPGEMM_REPO}" deepgemm
