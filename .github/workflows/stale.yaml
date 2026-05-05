@@ -5,7 +5,7 @@ on:
 
 jobs:
   stale:
-    uses: llm-d/llm-d-infra/.github/workflows/reusable-stale.yml@main
+    uses: llm-d/llm-d-infra/.github/workflows/reusable-stale.yaml@main
     permissions:
       issues: write
       pull-requests: write

@@ -69,7 +69,7 @@ The final release work involves creating a tag in the llm-d repo, which triggers
   - `ghcr.io/llm-d/llm-d-cpu:v0.5.0`
   - `ghcr.io/llm-d/llm-d-aws:v0.5.0`
 
-- **Dev** images are created by the dev build workflow (`build-image.yml`), triggered on PRs that modify Dockerfiles/build scripts and by the nightly build schedule. They follow the naming pattern `ghcr.io/llm-d/llm-d-{platform}-dev:{tag}` and are tagged with the git short SHA or PR number. For example:
+- **Dev** images are created by the dev build workflow (`build-image.yaml`), triggered on PRs that modify Dockerfiles/build scripts and by the nightly build schedule. They follow the naming pattern `ghcr.io/llm-d/llm-d-{platform}-dev:{tag}` and are tagged with the git short SHA or PR number. For example:
   - `ghcr.io/llm-d/llm-d-cuda-dev:sha-abc1234`
   - `ghcr.io/llm-d/llm-d-cpu-dev:pr-123`
   - `ghcr.io/llm-d/llm-d-cuda-dev:latest` (from the default branch)

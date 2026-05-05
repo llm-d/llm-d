@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
   push:
     paths:
-      - .github/workflows/copilot-setup-steps.yml
+      - .github/workflows/copilot-setup-steps.yaml
 
 jobs:
   copilot-setup-steps:

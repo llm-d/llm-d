@@ -5,4 +5,4 @@ on:
 
 jobs:
   gatekeeper:
-    uses: llm-d/llm-d-infra/.github/workflows/reusable-non-main-gatekeeper.yml@main
+    uses: llm-d/llm-d-infra/.github/workflows/reusable-non-main-gatekeeper.yaml@main
