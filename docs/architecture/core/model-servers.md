@@ -9,7 +9,7 @@ A model server loads a model onto one or more accelerators (GPUs, TPUs, etc.) an
 Model servers are the lowest layer in the llm-d stack:
 
 <p align="center">
-  <img src="../../assets/basic-architecture.svg" width="600" alt="Architecture">
+  <img src="../../assets/basic-architecture.svg" width="660" alt="Architecture">
 </p>
 
 Model servers are deployed independently from the rest of the llm-d stack. They join an `InferencePool` automatically via Kubernetes label selectors, and the EPP begins routing traffic to them once they are healthy.

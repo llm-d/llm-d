@@ -15,7 +15,7 @@ The llm-d architecture is built around three primary concepts: the [Router](core
 - **[Model Server](core/model-servers.md)** - The inference engine (such as vLLM or SGLang) that executes the model on hardware accelerators (GPUs, TPUs, HPUs).
 
 <p align="center">
-  <img src="../assets/basic-architecture.svg" width="600" alt="Architecture">
+  <img src="../assets/basic-architecture.svg" width="660" alt="Architecture">
 </p>
 
 ## Advanced Patterns
