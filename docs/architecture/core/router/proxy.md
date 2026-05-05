@@ -65,7 +65,7 @@ Gateway Mode is targeted at production environments that require:
 The [Gateway API Inference Extension (GAIE)](https://gateway-api-inference-extension.sigs.k8s.io/) extends Gateway API by leveraging Envoy's External Processing to inject LLM-aware load balancing into the production-grade networking provided by the Gateway provider.
 
 <p align="center">
-  <img src="../../../assets/gateway-design.svg" width="550" alt="Gateway Design">
+  <img src="../../../assets/gateway-design.svg" width="605" alt="Gateway Design">
 </p>
 
 To connect an **InferencePool** (and the EPP it selects) to a **Gateway**, you use an **HTTPRoute** that references the pool as its backend. One of the powerful features of Gateway Mode is the ability to host complex routing topologies: a single `Gateway` can host multiple `HTTPRoute` objects, and each route can be configured with multiple **InferencePool** backends (e.g., for canary rollouts or traffic splitting) or a standard Kubernetes **Service**.
