@@ -490,8 +490,8 @@ ARG VLLM_USE_PRECOMPILED
 ARG SUPPRESS_PYTHON_OUTPUT
 
 # Optional: cherry-pick additional commits onto the vLLM source at build time
-ARG VLLM_CHERRYPICK_1="0fb4b6ab0a1551f6ebeb78ca2d42559831b8e5b9"
-ARG VLLM_CHERRYPICK_1_REMOTE="https://github.com/vllm-project/vllm.git"
+ARG VLLM_CHERRYPICK_1=""
+ARG VLLM_CHERRYPICK_1_REMOTE="origin"
 ARG VLLM_CHERRYPICK_2=""
 ARG VLLM_CHERRYPICK_2_REMOTE="origin"
 
@@ -506,6 +506,7 @@ COPY scripts/warn-vllm-precompiled.sh /opt/
     # 1) install vllm from source totally editably - dev option, supports fork and commit swapping
     # 3) install vllm from source with pulling precompiled binaries (shared libraries) from the vllm wheels index - less flexible dev option, may or may not work swapping shas but faster than full editable
     # 2) install vllm from a wheel on the vllm wheels index - prod option, no flexibility
+COPY patches/vllm_ep_scatter_int64.patch /tmp/vllm-patches/vllm_ep_scatter_int64.patch
 COPY docker/scripts/cuda/runtime/install-vllm.sh /tmp/install-vllm.sh
 RUN --mount=type=cache,target=/root/.cache/uv \
     --mount=type=cache,target=/var/cache/git \

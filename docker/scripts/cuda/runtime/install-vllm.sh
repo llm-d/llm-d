@@ -67,6 +67,14 @@ apply_cherrypick() {
 apply_cherrypick "${VLLM_CHERRYPICK_1:-}" "${VLLM_CHERRYPICK_1_REMOTE:-origin}"
 apply_cherrypick "${VLLM_CHERRYPICK_2:-}" "${VLLM_CHERRYPICK_2_REMOTE:-origin}"
 
+# Apply vLLM patches from /tmp/vllm-patches/ if any exist
+for patch in /tmp/vllm-patches/*.patch; do
+  if [ -f "${patch}" ]; then
+    echo "DEBUG: Applying vLLM patch: ${patch}"
+    git -C /opt/vllm-source apply "${patch}"
+  fi
+done
+
 # resolve VLLM_PRECOMPILED_WHEEL_COMMIT to actual commit SHA (wheel index uses SHAs, not tag names)
 # Only needed when using prebuilt or precompiled modes
 if [ "${VLLM_PREBUILT}" = "1" ] || [ "${VLLM_USE_PRECOMPILED}" = "1" ]; then
