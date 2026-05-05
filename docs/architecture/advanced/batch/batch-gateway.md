@@ -3,7 +3,7 @@
 Batch Gateway adds OpenAI-compatible batch inference processing to the llm-d stack. It sits between batch API clients and the llm-d Router, managing the lifecycle of batch jobs — from job creation through request dispatching to result collection.
 
 <p align="center">
-  <img src="../../../assets/batch-gateway.svg" width="70%" alt="Batch Gateway Architecture">
+  <img src="../../../assets/batch-gateway.svg" width="115%" alt="Batch Gateway Architecture">
 </p>
 
 ## API Server
