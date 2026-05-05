@@ -100,14 +100,10 @@ spec:
                   # --otlp-traces-endpoint http://otel-collector:4317 \
                   # --collect-detailed-traces all
             env:
-              - name: VLLM_NCCL_SO_PATH
-                value: /usr/local/gib/lib64/libnccl.so.2.27.5
               - name: NCCL_DEBUG
                 value: "INFO"
               - name: PYTHONUNBUFFERED
                 value: "1"
-              - name: LD_LIBRARY_PATH
-                value: /usr/local/gib/lib64:/usr/local/nvidia/lib64
               # To enable tracing, uncomment:
               # - name: OTEL_SERVICE_NAME
               #   value: "vllm-prefill"
