@@ -91,7 +91,7 @@ spec:
                 export NVSHMEM_DEBUG=TRACE
                 export NVSHMEM_DEBUG_SUBSYS=ALL
 
-                # sleep infinity
+                sleep infinity
 
                 #################
                 # RUN vLLM decode worker
