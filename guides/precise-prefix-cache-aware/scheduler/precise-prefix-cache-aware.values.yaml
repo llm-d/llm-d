@@ -58,6 +58,7 @@ inferenceExtension:
           parameters:
             tokenProcessorConfig:
               blockSize: 64           # must match vLLM --block-size
+            speculativeIndexing: true
             indexerConfig:
               tokenizersPoolConfig:
                 modelName: Qwen/Qwen3-32B
