@@ -93,7 +93,7 @@ jobs:
         echo "Deploying InferencePool..."
         helm install llm-d-infpool \
           -n "$NAMESPACE" \
-          -f guides/tiered-prefix-cache/cpu/manifests/scheduler/tiered-prefix-cache.values.yaml \
+          -f guides/tiered-prefix-cache/cpu/scheduler/tiered-prefix-cache-cpu.values.yaml \
           --set "provider.name=${GATEWAY_TYPE}" \
           oci://registry.k8s.io/gateway-api-inference-extension/charts/inferencepool \
           --version v1.5.0
