@@ -54,11 +54,11 @@ apply_cherrypick() {
   # Add remote if it's a URL (not "origin")
   if [ "${remote}" != "origin" ] && [ -n "${remote}" ]; then
     git -C /opt/vllm-source remote add cherrypick_remote "${remote}" 2>/dev/null || true
-    git -C /opt/vllm-source fetch --depth=50 cherrypick_remote
+    git -C /opt/vllm-source fetch --depth=1 cherrypick_remote "${commit}"
     git -C /opt/vllm-source cherry-pick --no-commit "${commit}"
     git -C /opt/vllm-source remote remove cherrypick_remote
   else
-    git -C /opt/vllm-source fetch --depth=50 origin
+    git -C /opt/vllm-source fetch --depth=1 origin "${commit}"
     git -C /opt/vllm-source cherry-pick --no-commit "${commit}"
   fi
   echo "DEBUG: Successfully applied ${commit}"

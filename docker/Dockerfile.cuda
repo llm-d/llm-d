@@ -490,8 +490,8 @@ ARG VLLM_USE_PRECOMPILED
 ARG SUPPRESS_PYTHON_OUTPUT
 
 # Optional: cherry-pick additional commits onto the vLLM source at build time
-ARG VLLM_CHERRYPICK_1=""
-ARG VLLM_CHERRYPICK_1_REMOTE="origin"
+ARG VLLM_CHERRYPICK_1="1c72630fb4e37421b9b36c59052e31f9e62ed935"
+ARG VLLM_CHERRYPICK_1_REMOTE="https://github.com/vllm-project/vllm.git"
 ARG VLLM_CHERRYPICK_2=""
 ARG VLLM_CHERRYPICK_2_REMOTE="origin"
 
