@@ -18,7 +18,7 @@ Rules checked:
   4. Every <summary> opener must have a matching </summary> closer.
   5. Every </summary> closer must have a matching <summary> opener.
 
-Tags inside fenced code blocks (``` ... ```) are ignored.
+Tags inside fenced code blocks (``` ... ```) and inline code spans (`...`) are ignored.
 """
 
 import re
@@ -38,6 +38,58 @@ _ANY_TAG = re.compile(
     r"(<details(?:\s[^>]*)?>|</details>|<summary(?:\s[^>]*)?>|</summary>)",
     re.IGNORECASE,
 )
+
+
+def strip_inline_code(line: str) -> str:
+    """
+    Remove inline code spans from a line, replacing them with spaces.
+
+    Handles both single backtick spans (`code`) and multi-backtick spans (``code``).
+    Returns the line with code spans replaced by equivalent-length whitespace
+    to preserve character positions for error reporting.
+    """
+    result = []
+    i = 0
+    while i < len(line):
+        # Check for backtick sequence
+        if line[i] == '`':
+            # Count consecutive backticks
+            backtick_count = 0
+            start = i
+            while i < len(line) and line[i] == '`':
+                backtick_count += 1
+                i += 1
+
+            # Look for closing backtick sequence of same length
+            found_close = False
+            while i < len(line):
+                if line[i] == '`':
+                    # Count closing backticks
+                    close_start = i
+                    close_count = 0
+                    while i < len(line) and line[i] == '`':
+                        close_count += 1
+                        i += 1
+
+                    if close_count == backtick_count:
+                        # Found matching close - replace entire span with spaces
+                        result.append(' ' * (i - start))
+                        found_close = True
+                        break
+                    else:
+                        # Not a match, continue searching
+                        continue
+                else:
+                    i += 1
+
+            if not found_close:
+                # No closing backtick found - treat opening backticks as literal
+                result.append(line[start:i])
+        else:
+            result.append(line[i])
+            i += 1
+
+    return ''.join(result)
 
 
 def check_file(path: Path) -> list[str]:
@@ -77,10 +129,13 @@ def check_file(path: Path) -> list[str]:
         if in_code_block:
             continue
 
+        # Strip inline code spans (backticks) before processing tags
+        line_without_code = strip_inline_code(line)
+
         # Split the line into alternating [text, tag, text, tag, …, text] segments
         # so that tags are processed strictly left-to-right with correct multiplicity.
         # Odd-indexed segments are matched tags; even-indexed are the text between them.
-        segments = _ANY_TAG.split(line)
+        segments = _ANY_TAG.split(line_without_code)
         for idx, segment in enumerate(segments):
             if idx % 2 == 0:
                 # Plain text segment — any non-blank content cancels the

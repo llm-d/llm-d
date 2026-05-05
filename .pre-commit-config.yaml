@@ -65,7 +65,7 @@ repos:
         name: lint HTML details/summary tag balance (MDX compatibility)
         language: script
         entry: scripts/lint-details-summary.py
-        files: \.md$
+        files: \.(md|mdx)$
         types: [file]
 
   # yaml linting
