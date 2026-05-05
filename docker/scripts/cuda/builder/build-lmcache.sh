@@ -73,6 +73,12 @@ git checkout -q "${LMCACHE_VERSION}"
 # (logging-only issue, does not affect the actual build)
 unset NINJA_STATUS
 unset TORCH_LOGS
+
+# Strip any non-PEP-440 suffix from the version tag (e.g. v0.4.4-cu13 → 0.4.4)
+# so that setuptools-scm / vcs_versioning can parse it.
+export SETUPTOOLS_SCM_PRETEND_VERSION="${LMCACHE_VERSION#v}"
+SETUPTOOLS_SCM_PRETEND_VERSION="${SETUPTOOLS_SCM_PRETEND_VERSION%%-*}"
+
 uv build -v --wheel --no-build-isolation --out-dir /wheels
 cd ..
 rm -rf lmcache
