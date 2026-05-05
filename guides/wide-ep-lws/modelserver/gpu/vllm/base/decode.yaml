@@ -81,6 +81,18 @@ spec:
                 # https://github.com/llm-d/llm-d/issues/352
                 find /dev/shm -type f -delete
 
+                export NCCL_NET_PLUGIN=none
+                export NCCL_SHIMNET_SHIM_LAYERS=UNUSED
+                export NCCL_TUNER_PLUGIN=none
+
+                export NVSHMEM_IB_ADDR_FAMILY=AF_INET
+                export NVSHMEM_IB_ADDR_RANGE=0.0.0.0/0
+                export NVSHMEM_IB_GID_INDEX=3
+                export NVSHMEM_DEBUG=TRACE
+                export NVSHMEM_DEBUG_SUBSYS=ALL
+
+                # sleep infinity
+
                 #################
                 # RUN vLLM decode worker
                 #################
@@ -125,8 +137,9 @@ spec:
                   # --otlp-traces-endpoint http://otel-collector:4317 \
                   # --collect-detailed-traces all
             env:
-              - name: NCCL_DEBUG
-                value: "INFO"
+              # - name: NCCL_DEBUG
+              - name: NVSHMEM_DEBUG
+                value: "TRACE"
               - name: PYTHONUNBUFFERED
                 value: "1"
               # To enable tracing, uncomment:
