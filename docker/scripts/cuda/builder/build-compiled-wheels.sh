@@ -48,7 +48,7 @@ rm -rf flashinfer
 # build DeepEP wheel
 # Install NVSHMEM Python package instead of using source-built version
 # This avoids aarch64 static library linking issues
-uv pip install nvidia-nvshmem-cu${CUDA_MAJOR}
+uv pip install nvidia-nvshmem-cu${CUDA_MAJOR}==${NVSHMEM_VERSION}
 # Unset NVSHMEM_DIR so DeepEP discovers NVSHMEM from the Python package
 unset NVSHMEM_DIR
 
