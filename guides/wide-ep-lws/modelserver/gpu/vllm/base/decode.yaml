@@ -54,19 +54,11 @@ spec:
           - name: dshm
             emptyDir:
               medium: Memory
-              sizeLimit: 32Gi  # roughly 32MB per local DP plus scratch space
+              sizeLimit: 2Gi  # roughly 32MB per local DP plus scratch space
           - name: hf-cache
             emptyDir: {}
           - name: jit-cache
             emptyDir: {}
-          - name: cache-volume
-            emptyDir:
-              medium: Memory
-              sizeLimit: 32Gi
-          - name: tmp-volume
-            emptyDir:
-              medium: Memory
-              sizeLimit: 32Gi
         containers:
           - name: vllm
             # image: ghcr.io/llm-d/llm-d-cuda-dev:sha-0cb27a4
@@ -85,28 +77,6 @@ spec:
               - -c
             args:
               - |-
-                # 1. Setup Google's environment variables (NIC selection, etc.)
-                # source /usr/local/gib/scripts/set_nccl_env.sh
-
-                # 2. Add the GKE plugin path to LD_LIBRARY_PATH so vLLM can find the 'net' plugin
-                # Note: We put it at the END so it doesn't override PyTorch's NCCL symbols
-                # export LD_LIBRARY_PATH=${LD_LIBRARY_PATH}:/usr/local/gib/lib64:/usr/local/nvidia/lib64
-                # export LD_LIBRARY_PATH=/usr/local/gib/lib64:/usr/local/nvidia/lib64
-
-                # 3. Explicitly tell NCCL to use the Google GIB network backend
-                # export NCCL_NET_PLUGIN=/usr/local/gib/lib64/libnccl-net.so
-
-                # 4. Blackwell (A4) Workarounds 
-                # These are CRITICAL because vLLM + Blackwell + NCCL 2.20+ often 
-                # conflict on memory management (CDMM) and NVLink SHARP.
-                # export NCCL_CUMEM_ENABLE=0
-                # export NCCL_NVLS_ENABLE=0
-                # export NCCL_IB_HCA=^eth0
-
-                # 5. Let vLLM use its internal (modern) NCCL
-                # export VLLM_DISABLE_PYNCCL=0
-                # unset LD_PRELOAD
-
                 # Clear /dev/shm on start to prevent running out of space when crashes occur
                 # https://github.com/llm-d/llm-d/issues/352
                 find /dev/shm -type f -delete
@@ -154,13 +124,11 @@ spec:
                   # To enable tracing, add:
                   # --otlp-traces-endpoint http://otel-collector:4317 \
                   # --collect-detailed-traces all
-
-                sleep infinity
             env:
-              - name: VLLM_NCCL_SO_PATH
-                value: /usr/local/gib/lib64/libnccl.so.2.27.5
-              # - name: NCCL_DEBUG
-              #   value: "INFO"
+              - name: NCCL_DEBUG
+                value: "INFO"
+              - name: PYTHONUNBUFFERED
+                value: "1"
               # To enable tracing, uncomment:
               # - name: OTEL_SERVICE_NAME
               #   value: "vllm-decode"

@@ -47,9 +47,6 @@ spec:
               - -c
             args:
               - |-
-                # source /usr/local/gib/scripts/set_nccl_env.sh
-                # export LD_PRELOAD=/usr/local/gib/lib64/libnccl.so.2:${LD_PRELOAD:-}
-
                 # Clear /dev/shm on start to prevent running out of space when crashes occur
                 # https://github.com/llm-d/llm-d/issues/352
                 find /dev/shm -type f -delete
@@ -157,8 +154,8 @@ spec:
                 value: /var/cache/vllm/cuda
               - name: CCACHE_DIR
                 value: /var/cache/vllm/ccache
-              # - name: VLLM_CACHE_ROOT
-              #   value: /var/cache/vllm/vllm
+              - name: VLLM_CACHE_ROOT
+                value: /var/cache/vllm/vllm
               - name: FLASHINFER_WORKSPACE_BASE
                 value: /var/cache/vllm/flashinfer
               # HuggingFace is likely to be quite a bit larger, give it its own cache
