@@ -18,7 +18,7 @@ To prevent background tasks from impacting real-time traffic, the Async Processo
 *   **Budget Gating**: Uses a pre-calculated budget to control throughput.
 *   **Priority & Deadlines**: Requests can be prioritized, and the processor enforces deadlines to ensure stale work is abandoned.
 
-![Async Processor Architecture](../../assets/async-processor.svg)
+![Async Processor Architecture](../assets/async-processor.svg)
 
 ### Resilience
 
