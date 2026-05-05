@@ -323,6 +323,7 @@ ENV LANG="C.UTF-8" \
     PYTHON_VERSION="${PYTHON_VERSION}" \
     UV_TORCH_BACKEND="${UV_TORCH_BACKEND:-cu${CUDA_MAJOR}${CUDA_MINOR}}" \
     UV_CONSTRAINT="/tmp/constraints.txt" \
+    UV_OVERRIDE="/tmp/constraints.txt" \
     VIRTUAL_ENV="/opt/vllm" \
     UCX_PREFIX="/opt/ucx" \
     EFA_PREFIX="/opt/amazon/efa" \
