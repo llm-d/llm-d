@@ -22,8 +22,8 @@ name: /test-nightly Slash Command
 #   optimized-baseline-gke, optimized-baseline-ocp,
 #   pd-disaggregation-cks, pd-disaggregation-gke,
 #   pd-disaggregation-ocp, precise-prefix-cache-ocp,
-#   simulated-accelerators, tiered-prefix-cache-ocp,
-#   wide-ep-lws-cks, wide-ep-lws-gke, wide-ep-lws-ocp,
+#   tiered-prefix-cache-ocp, wide-ep-lws-cks, 
+#   wide-ep-lws-gke, wide-ep-lws-ocp,
 #   wva-cks, wva-ocp
 
 on:
@@ -62,7 +62,7 @@ jobs:
               'optimized-baseline-cks', 'optimized-baseline-gke',
               'optimized-baseline-ocp', 'pd-disaggregation-cks',
               'pd-disaggregation-gke', 'pd-disaggregation-ocp',
-              'precise-prefix-cache-ocp', 'simulated-accelerators',
+              'precise-prefix-cache-ocp',
               'tiered-prefix-cache-ocp', 'wide-ep-lws-cks',
               'wide-ep-lws-gke', 'wide-ep-lws-ocp',
               'wva-cks', 'wva-ocp',
