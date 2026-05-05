@@ -69,7 +69,9 @@ spec:
               sizeLimit: 32Gi
         containers:
           - name: vllm
-            image: ghcr.io/llm-d/llm-d-cuda-dev:sha-0cb27a4
+            # image: ghcr.io/llm-d/llm-d-cuda-dev:sha-0cb27a4
+            # image: ghcr.io/llm-d/llm-d-cuda-dev:sha-d7cd9c0
+            image: ghcr.io/llm-d/llm-d-cuda-dev:sha-81afa8e
             securityContext:
               privileged: true
               capabilities:
@@ -110,31 +112,10 @@ spec:
                 # Clear /dev/shm on start to prevent running out of space when crashes occur
                 # https://github.com/llm-d/llm-d/issues/352
                 find /dev/shm -type f -delete
-                # export NCCL_DEBUG=INFO
-                # export NCCL_DEBUG_SUBSYS=INIT,ENV,NET,TUNING
-                export PYTHONUNBUFFERED=1
-                export DG_JIT_DEBUG=1
-                export DG_PRINT_CONFIGS=1
-                export DG_JIT_PRINT_COMPILER_COMMAND=1
-                export DG_JIT_PTXAS_VERBOSE=1
-                export DG_JIT_USE_NVRTC=1
-                export DG_JIT_CACHE_DIR=/dg_cache
-                export TMPDIR=/tmp
 
                 # sleep infinity
                 cat /usr/local/gib/VERSION
                 ls /usr/local/gib/      
-
-                export CPATH="/usr/local/cuda-13.0/targets/x86_64-linux/include/cccl:$CPATH"
-                export NVCC_PREPEND_FLAGS="-I/usr/local/cuda-13.0/targets/x86_64-linux/include/cccl"
-                export DG_NVCC_FLAGS="-I/usr/local/cuda-13.0/targets/x86_64-linux/include/cccl"
-                ln -sf /usr/local/cuda-13.0/targets/x86_64-linux/include/cccl/cuda /usr/local/cuda/include/cuda
-                ls -L /usr/local/cuda/include/cuda/std/cstdint
-
-                # export NVCC_PREPEND_FLAGS="-I${CUDA_HOME}/include/cccl/libcudacxx/include"
-                # export DG_NVCC_FLAGS="-I/usr/local/cuda/include/cccl/libcudacxx/include"
-                # dnf config-manager --add-repo https://developer.download.nvidia.com/compute/cuda/repos/rhel9/x86_64/cuda-rhel9.repo
-                # dnf install -y cuda-cccl-devel-13-0
 
                 # sleep infinity          
 
