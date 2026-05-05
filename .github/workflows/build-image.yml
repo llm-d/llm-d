@@ -152,7 +152,6 @@ jobs:
     needs: [detect-changes]
     if: ${{ needs.detect-changes.outputs.cuda == 'true' }}
     continue-on-error: true
-    environment: build-approval
     strategy:
       fail-fast: false
       matrix:
@@ -312,7 +311,6 @@ jobs:
     needs: [detect-changes]
     if: ${{ needs.detect-changes.outputs.cuda == 'true' }}
     continue-on-error: true
-    environment: build-approval
     strategy:
       fail-fast: false
       # multi-OS build matrix: creates 4 images (2 platforms × 2 OS variants)
@@ -557,7 +555,6 @@ jobs:
     if: ${{ needs.cuda-success-check.outputs.any_succeeded == 'true' }}
     runs-on: ubuntu-latest
     continue-on-error: true
-    environment: build-approval
     strategy:
       fail-fast: false
       matrix:
@@ -702,7 +699,6 @@ jobs:
     needs: [detect-changes]
     if: ${{ needs.detect-changes.outputs.aws == 'true' }}
     continue-on-error: true
-    environment: build-approval
     strategy:
       fail-fast: false
       # AWS/EFA build matrix: RHEL-only, amd64-only (for now)
@@ -917,7 +913,6 @@ jobs:
     if: ${{ needs.aws-success-check.outputs.any_succeeded == 'true' }}
     runs-on: ubuntu-latest
     continue-on-error: true
-    environment: build-approval
     steps:
       - name: Check if build succeeded
         id: should-run
@@ -1187,7 +1182,6 @@ jobs:
   rdma-tools-build-llm-d:
     needs: [detect-changes]
     if: ${{ needs.detect-changes.outputs.rdma-tools == 'true' }}
-    environment: build-approval
     strategy:
       fail-fast: false
     runs-on: ubuntu-latest
@@ -1282,7 +1276,6 @@ jobs:
   xpu-build-llm-d:
     needs: [detect-changes]
     if: ${{ needs.detect-changes.outputs.xpu == 'true' }}
-    environment: build-approval
     strategy:
       fail-fast: false
     runs-on: xpu
@@ -1386,7 +1379,6 @@ jobs:
   rocm-build-llm-d:
     needs: [detect-changes]
     if: ${{ needs.detect-changes.outputs.rocm == 'true' }}
-    environment: build-approval
     runs-on: vllm-runner
     steps:
       - name: Checkout code
@@ -1465,7 +1457,6 @@ jobs:
   hpu-build-llm-d:
     needs: [detect-changes]
     if: ${{ needs.detect-changes.outputs.hpu == 'true' }}
-    environment: build-approval
     strategy:
       fail-fast: false
     runs-on: vllm-runner
@@ -1543,7 +1534,6 @@ jobs:
   cpu-build-llm-d:
     needs: [detect-changes]
     if: ${{ needs.detect-changes.outputs.cpu == 'true' }}
-    environment: build-approval
     runs-on: vllm-runner
     steps:
       - name: Checkout code
