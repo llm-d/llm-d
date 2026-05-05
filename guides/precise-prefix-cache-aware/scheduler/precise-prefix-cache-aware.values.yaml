@@ -6,8 +6,6 @@
 ## Scale to a single replica with --set inferenceExtension.replicas=1.
 
 inferenceExtension:
-  # First release carrying llm-d/llm-d-inference-scheduler#862 (EndpointExtractor
-  # via data-layer endpoint-notification-source). Swap to GA tag once promoted.
   image:
     name: llm-d-inference-scheduler
     hub: ghcr.io/llm-d
@@ -24,22 +22,11 @@ inferenceExtension:
     # last-occurrence wins. No-op when replicas=1.
     ha-enable-leader-election=false: ""
 
-  # extraServicePorts replaces the chart default, so re-declare http
-  # alongside zmq. http on Service port 80 matches standalone + gateway
-  # mode (optimized-baseline #1259).
-  extraContainerPorts:
-    - name: zmq
-      containerPort: 5556
-      protocol: TCP
   extraServicePorts:
     - name: http
       port: 80
       protocol: TCP
       targetPort: 8081
-    - name: zmq
-      port: 5556
-      targetPort: 5556
-      protocol: TCP
 
   env:
     - name: HF_TOKEN
