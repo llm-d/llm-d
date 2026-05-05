@@ -489,12 +489,6 @@ ARG VLLM_USE_PRECOMPILED
 # Optional: suppress verbose Python output during pip install
 ARG SUPPRESS_PYTHON_OUTPUT
 
-# Optional: cherry-pick additional commits onto the vLLM source at build time
-ARG VLLM_CHERRYPICK_1="1c72630fb4e37421b9b36c59052e31f9e62ed935"
-ARG VLLM_CHERRYPICK_1_REMOTE="https://github.com/vllm-project/vllm.git"
-ARG VLLM_CHERRYPICK_2=""
-ARG VLLM_CHERRYPICK_2_REMOTE="origin"
-
 # A script that starts if users exec into the image with bash. It warns that vLLM is built with precompiled by default,
 # and so if they change the vLLM version or use their fork, it may no longer work due to the precompiled shared libraries
 # pulled from the vLLM wheel index.
