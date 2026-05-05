@@ -188,8 +188,8 @@ spec:
                 value: /var/cache/vllm/cuda
               - name: CCACHE_DIR
                 value: /var/cache/vllm/ccache
-              # - name: VLLM_CACHE_ROOT
-              #   value: /var/cache/vllm/vllm
+              - name: VLLM_CACHE_ROOT
+                value: /var/cache/vllm/vllm
               - name: FLASHINFER_WORKSPACE_BASE
                 value: /var/cache/vllm/flashinfer
               # HuggingFace is likely to be quite a bit larger, give it its own cache
