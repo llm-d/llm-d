@@ -91,4 +91,4 @@ Model servers are expected to expose health endpoints that Kubernetes uses for l
 - [vLLM Documentation](https://docs.vllm.ai/)
 - [SGLang Documentation](https://github.com/sgl-project/sglang)
 - [InferencePool](inferencepool.md) -- how model servers are discovered and managed
-- [EPP](epp) -- how the router routes requests to model servers informed by model servers metrics
+- [EPP](router/epp) -- how the router routes requests to model servers informed by model servers metrics

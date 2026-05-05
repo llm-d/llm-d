@@ -14,17 +14,17 @@ Quick-reference definitions for terms used throughout the llm-d documentation. F
 
 **Disaggregated Serving** — A deployment pattern that separates Prefill and Decode into dedicated, independently scalable pools of Model Servers, connected by NIXL for KV-cache transfer. See [Disaggregation](../architecture/advanced/disaggregation/README.md).
 
-**Envoy** — A high-performance L7 GAIE-conformant proxy that can be used with llm-d as a data-plane Proxy. It communicates routing decisions with the EPP via ext-proc. See [Proxy](../architecture/core/proxy.md).
+**Envoy** — A high-performance L7 GAIE-conformant proxy that can be used with llm-d as a data-plane Proxy. It communicates routing decisions with the EPP via ext-proc. See [Proxy](../architecture/core/router/proxy.md).
 
 **Expert Parallelism (EP)** — Distributing the expert layers of MoE models across multiple GPUs, enabling large models like DeepSeek-R1 to be served across nodes. See [Model Servers](../architecture/core/model-servers.md).
 
-**ext-proc (External Processing)** — An Envoy filter protocol that offloads per-request routing decisions to an external gRPC service — in llm-d, the EPP. This is the communication channel between the Proxy and the routing logic. See [EPP](../architecture/core/epp/README.md).
+**ext-proc (External Processing)** — An Envoy filter protocol that offloads per-request routing decisions to an external gRPC service — in llm-d, the EPP. This is the communication channel between the Proxy and the routing logic. See [EPP](../architecture/core/router/epp/README.md).
 
-**Flow Control** — The EPP subsystem that manages admission, queuing, and dispatch of requests using a Priority, Fairness, and Ordering hierarchy to prevent backend overload. See [EPP](../architecture/core/epp/README.md).
+**Flow Control** — The EPP subsystem that manages admission, queuing, and dispatch of requests using a Priority, Fairness, and Ordering hierarchy to prevent backend overload. See [EPP](../architecture/core/router/epp/README.md).
 
-**Gateway API** — The Kubernetes-native API for configuring L7 traffic routing, succeeding Ingress. llm-d uses Gateway API resources (`HTTPRoute`, `Gateway`) to route external traffic to InferencePools. See [Proxy](../architecture/core/proxy.md).
+**Gateway API** — The Kubernetes-native API for configuring L7 traffic routing, succeeding Ingress. llm-d uses Gateway API resources (`HTTPRoute`, `Gateway`) to route external traffic to InferencePools. See [Proxy](../architecture/core/router/proxy.md).
 
-**Gateway API Inference Extension (GAIE)** — An extension to Gateway API that adds inference-aware routing via ext-proc. Defines the InferencePool CRD. See [Proxy](../architecture/core/proxy.md).
+**Gateway API Inference Extension (GAIE)** — An extension to Gateway API that adds inference-aware routing via ext-proc. Defines the InferencePool CRD. See [Proxy](../architecture/core/router/proxy.md).
 
 **InferencePool** — A Kubernetes custom resource, defined by the Gateway API Inference Extension, that represents the set of Model Server pods an EPP considers when routing a request. See [InferencePool](../architecture/core/inferencepool.md).
 
@@ -42,7 +42,7 @@ Quick-reference definitions for terms used throughout the llm-d documentation. F
 
 **llm-d Batch Gateway** — An OpenAI-compatible API server (`/v1/batches`, `/v1/files`) for submitting, tracking, and managing batch inference jobs. It coordinates with the llm-d Async Processor for throttled request dispatch. See [Batch Inference](../architecture/advanced/batch/README.md).
 
-**llm-d Endpoint Picker (EPP)** — The central routing component of llm-d. Receives ext-proc callbacks from the Proxy, evaluates candidate Model Servers through a Plugin Pipeline of filters, scorers, and pickers, and returns the address of the optimal backend. See [EPP](../architecture/core/epp/README.md).
+**llm-d Endpoint Picker (EPP)** — The central routing component of llm-d. Receives ext-proc callbacks from the Proxy, evaluates candidate Model Servers through a Plugin Pipeline of filters, scorers, and pickers, and returns the address of the optimal backend. See [EPP](../architecture/core/router/epp/README.md).
 
 **llm-d Router** — The intelligent entry point for inference requests. It provides LLM-aware load balancing (e.g., prefix-cache and load-aware routing) and request queuing, and manages disaggregated serving. It is composed of two functional parts: a data-plane **Proxy** (e.g., Envoy) and the **Endpoint Picker (EPP)**. See [Architecture Overview](../architecture/README.md).
 
@@ -54,13 +54,13 @@ Quick-reference definitions for terms used throughout the llm-d documentation. F
 
 **NIXL** — NVIDIA Inference Xfer Library for high-speed GPU-to-GPU KV-cache transfer over InfiniBand, RoCE, EFA, and TCP. Used between Prefill and Decode workers in Disaggregated Serving.
 
-**Plugin Pipeline** — The modular Filter, Score, Pick architecture inside the EPP that evaluates and selects Model Server endpoints for each request. Filters narrow candidates, scorers rank them, and pickers make the final selection. See [EPP](../architecture/core/epp/README.md).
+**Plugin Pipeline** — The modular Filter, Score, Pick architecture inside the EPP that evaluates and selects Model Server endpoints for each request. Filters narrow candidates, scorers rank them, and pickers make the final selection. See [EPP](../architecture/core/router/epp/README.md).
 
 **Prefix Caching** — A technique where the EPP routes requests to Model Servers that already hold matching KV Cache entries for the prompt prefix, eliminating redundant Prefill computation and reducing TTFT. See [Architecture Overview](../architecture/README.md).
 
 **Prefill** — The first phase of LLM inference that processes all input tokens in parallel to populate the KV Cache. Prefill latency is the dominant component of TTFT. See [Architecture Overview](../architecture/README.md).
 
-**Proxy** — The L7 data-plane component that accepts client requests and delegates routing decisions to the EPP via ext-proc. Can be deployed via Gateway API or in Standalone mode with a GAIE-conformant proxy (such as Envoy) running as a sidecar to the EPP. See [Proxy](../architecture/core/proxy.md).
+**Proxy** — The L7 data-plane component that accepts client requests and delegates routing decisions to the EPP via ext-proc. Can be deployed via Gateway API or in Standalone mode with a GAIE-conformant proxy (such as Envoy) running as a sidecar to the EPP. See [Proxy](../architecture/core/router/proxy.md).
 
 **Saturation Detector** — A safety mechanism in the EPP that evaluates whether the backend InferencePool is overloaded based on queue depth and KV-cache utilization, triggering Flow Control or request shedding.
 

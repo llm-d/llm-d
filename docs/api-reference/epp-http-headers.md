@@ -1,6 +1,6 @@
 # EPP HTTP Headers Reference
 
-This document describes the HTTP headers that the [Endpoint Picker (EPP)](../architecture/core/epp) inspects to manage and control inference requests, specifically for flow control, performance management, and request classification.
+This document describes the HTTP headers that the [Endpoint Picker (EPP)](../architecture/core/router/epp) inspects to manage and control inference requests, specifically for flow control, performance management, and request classification.
 
 ## Request Classification and Flow Control
 
