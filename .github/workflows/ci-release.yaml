@@ -533,7 +533,7 @@ jobs:
 
       - name: Build the builder image layer
         id: build
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           file: ./docker/Dockerfile.cuda
@@ -562,7 +562,7 @@ jobs:
 
       - name: Build and push the final image
         id: build-and-push
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           file: ./docker/Dockerfile.cuda
