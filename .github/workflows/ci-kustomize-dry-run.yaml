@@ -309,53 +309,39 @@ jobs:
       - name: Install GKE CRDs
         run: .github/scripts/install-gke-crds.sh
 
-      - name: Dry-run scheduler (central + active-active)
+      - name: Dry-run scheduler (active-active default)
         # ubuntu-latest ships helm v3, which accepts a path for --post-renderer.
         # (helm v4 users instead run `helm plugin install .../uds-tokenizer`
         # once and pass `--post-renderer uds-tokenizer`; see README.)
         run: |
           CHART_VERSION=v1.5.0
           POST_RENDERER=./guides/precise-prefix-cache-aware/scheduler/patches/uds-tokenizer/post-renderer.sh
-          failed=0
-          for feature in "" "active-active"; do
-            label="${feature:-central}"
-            echo ""
-            echo "========================================"
-            echo "precise-prefix-cache-aware: scheduler (${label})"
-            echo "========================================"
-            extra_values=()
-            if [ -n "$feature" ]; then
-              extra_values=(-f "guides/precise-prefix-cache-aware/scheduler/features/${feature}.values.yaml")
-            fi
-            echo "--- helm template ---"
-            if ! helm template precise-prefix-cache-aware \
-              "oci://registry.k8s.io/gateway-api-inference-extension/charts/standalone" \
-              -f guides/recipes/scheduler/base.values.yaml \
-              -f guides/precise-prefix-cache-aware/scheduler/precise-prefix-cache-aware.values.yaml \
-              "${extra_values[@]}" \
-              --post-renderer "${POST_RENDERER}" \
-              --version "${CHART_VERSION}" > /tmp/rendered.yaml; then
-              echo "FAIL: helm template failed for ${label}"
-              failed=1
-              continue
-            fi
-            echo "--- kubectl apply --dry-run=server ---"
-            if kubectl apply --dry-run=server -f /tmp/rendered.yaml; then
-              echo "PASS: precise-prefix-cache-aware / scheduler (${label})"
-            else
-              echo "FAIL: precise-prefix-cache-aware / scheduler (${label})"
-              failed=1
-            fi
-          done
-          exit $failed
+          echo ""
+          echo "========================================"
+          echo "precise-prefix-cache-aware: scheduler"
+          echo "========================================"
+          echo "--- helm template ---"
+          if ! helm template precise-prefix-cache-aware \
+            "oci://registry.k8s.io/gateway-api-inference-extension/charts/standalone" \
+            -f guides/recipes/scheduler/base.values.yaml \
+            -f guides/precise-prefix-cache-aware/scheduler/precise-prefix-cache-aware.values.yaml \
+            --post-renderer "${POST_RENDERER}" \
+            --version "${CHART_VERSION}" > /tmp/rendered.yaml; then
+            echo "FAIL: helm template failed"
+            exit 1
+          fi
+          echo "--- kubectl apply --dry-run=server ---"
+          if kubectl apply --dry-run=server -f /tmp/rendered.yaml; then
+            echo "PASS: precise-prefix-cache-aware / scheduler"
+          else
+            echo "FAIL: precise-prefix-cache-aware / scheduler"
+            exit 1
+          fi
 
       - name: Kustomize build and dry-run all model server overlays
         run: |
           failed=0
           for overlay_dir in guides/precise-prefix-cache-aware/modelserver/*/; do
-            # Skip the components/ directory — its children are kustomize
-            # Components (kind: Component), not standalone overlays.
-            [[ "${overlay_dir}" == *"/components/"* ]] && continue
             for kust_dir in "${overlay_dir}"*/; do
               [ -f "${kust_dir}kustomization.yaml" ] || continue
               name="${kust_dir#guides/precise-prefix-cache-aware/modelserver/}"

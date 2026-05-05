@@ -22,7 +22,7 @@ Inside the llm-d Router:
 - An **indexer** consumes the event stream and maintains a `block key → pods` mapping for every block resident across the fleet.
 - A **scorer** derives block keys deterministically from the input and queries the index. It returns the longest consecutive prefix each candidate pod has cached, weighted by tier.
 
-Events flow from model-server pods to the llm-d Router over ZMQ. The default mode is **centralized** — every pod publishes to a single llm-d Router endpoint, fitting a single replica. For multi-replica deployments, **pod discovery** has each llm-d Router replica subscribe to every model server pod independently; all replicas converge to the same index, enabling active-active HA across routers.
+Events flow from model-server pods to the llm-d Router over ZMQ via **pod discovery**: each model-server pod binds its own ZMQ socket and every llm-d Router replica subscribes to every pod independently. All Router replicas converge to the same index, enabling active-active HA out of the box. The reference guide ships with two Router replicas behind one Service by default, scalable down to one for small fleets.
 
 ## Further Reading
 
