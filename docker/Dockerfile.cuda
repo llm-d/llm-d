@@ -216,14 +216,27 @@ RUN --mount=type=cache,target=/var/cache/git \
 # No longer building from source
 
 
+# Override the nvshmem version torch pulls in (the default doesn't work with RoCE)
+RUN cat > /tmp/overrides.txt <<EOF
+nvidia-nvshmem-cu${CUDA_MAJOR}==${NVSHMEM_VERSION}
+EOF
+
 # Pin torch, so all deps are built against the same version
 # as vllm itself
 # hadolint ignore=SC1091
 RUN --mount=type=cache,target=/root/.cache/uv \
   . ${VIRTUAL_ENV}/bin/activate && \
   uv pip install \
+    --override /tmp/overrides.txt \
+    torch==2.10.0+cu${CUDA_MAJOR}${CUDA_MINOR} \
+    --index-url https://download.pytorch.org/whl/cu${CUDA_MAJOR}${CUDA_MINOR}
+
+# hadolint ignore=SC1091
+RUN --mount=type=cache,target=/root/.cache/uv \
+  . ${VIRTUAL_ENV}/bin/activate && \
+  uv pip install \
+    --override /tmp/overrides.txt \
     numpy \
-    torch \
     pyyaml \
     types-PyYAML \
     pytest \
