@@ -37,10 +37,15 @@ jobs:
       gateway_host: 'predicted-latency-based-scheduling-epp'
       custom_deploy_script: |
         kubectl apply -k guides/optimized-baseline/modelserver/gpu/gke-patch/vllm -n ${NAMESPACE}
+        # CI-only: disable EPP /metrics auth so the validate script's curl pod
+        # can scrape predicted/actual TTFT histograms without a bearer token.
+        # This adds --metrics-endpoint-auth=false to the EPP container; the
+        # production guide default (auth on) is unchanged.
         helm install predicted-latency-based-scheduling \
           oci://registry.k8s.io/gateway-api-inference-extension/charts/standalone \
           -f guides/recipes/scheduler/base.values.yaml \
           -f guides/predicted-latency-based-scheduling/scheduler/predicted-latency.values.yaml \
+          --set inferenceExtension.monitoring.prometheus.auth.enabled=false \
           -n ${NAMESPACE} --version v1.5.0
       e2e_validate_args: '--extra-validate predicted-latency'
       gke_cluster_name: llm-d-e2e-us-east5
