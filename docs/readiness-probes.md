@@ -169,45 +169,6 @@ Container Start
 
 ## Examples
 
-### Simulated Accelerator Deployment
-
-Example from `guides/simulated-accelerators/ms-sim/values.yaml`:
-
-```yaml
-decode:
-  replicas: 3
-  containers:
-  - name: vllm
-    ports:
-    - containerPort: 8200
-      protocol: TCP
-
-    startupProbe:
-      httpGet:
-        path: /v1/models
-        port: 8200
-      initialDelaySeconds: 15
-      periodSeconds: 30
-      timeoutSeconds: 5
-      failureThreshold: 60
-
-    livenessProbe:
-      httpGet:
-        path: /health
-        port: 8200
-      periodSeconds: 10
-      timeoutSeconds: 5
-      failureThreshold: 3
-
-    readinessProbe:
-      httpGet:
-        path: /v1/models
-        port: 8200
-      periodSeconds: 5
-      timeoutSeconds: 2
-      failureThreshold: 3
-```
-
 ### Wide Endpoint Deployment
 
 Example from `guides/wide-ep-lws/manifests/modelserver/base/decode.yaml`:

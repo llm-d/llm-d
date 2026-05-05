@@ -36,7 +36,6 @@ We currently offer the following:
 
 Our supporting guides address common operational challenges with model serving at scale:
 
-* [Simulating model servers](./simulated-accelerators/README.md) can deploy a vLLM model server simulator that allows testing optimized baseline and orchestration at scale as each instance does not need accelerators.
 * [Benchmark](../helpers/benchmark.md) demonstrates how to use automation for running benchmarks against the llm-d stack.
 
 ## Nightly Testing

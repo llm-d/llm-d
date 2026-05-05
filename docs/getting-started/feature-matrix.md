@@ -177,7 +177,6 @@ Each well-lit path guide is assigned a maturity level reflecting its testing and
 | Prefill/Decode Disaggregation (AMD, XPU, TPU) | Experimental | — |
 | Wide Expert-Parallelism | Experimental | OpenShift, GKE, CoreWeave |
 | Tiered Prefix Cache | Medium | OpenShift |
-| Simulated Accelerators | Medium | OpenShift |
 | Workload Autoscaling (WVA) | Experimental | OpenShift, CoreWeave |
 | Workload Autoscaling (HPA + IGW) | Experimental | — |
 | Predicted Latency-Based Scheduling | Medium | OpenShift, GKE, CoreWeave |
