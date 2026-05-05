@@ -120,6 +120,7 @@ ENV LANG="C.UTF-8" \
     UV_TORCH_BACKEND="${UV_TORCH_BACKEND:-cu${CUDA_MAJOR}${CUDA_MINOR}}" \
     UV_BUILD_CONSTRAINT="/tmp/build-constraints.txt" \
     UV_CONSTRAINT="/tmp/constraints.txt" \
+    UV_OVERRIDE="/tmp/constraints.txt" \
     VIRTUAL_ENV="/opt/vllm" \
     CUDA_HOME="/usr/local/cuda"
 
