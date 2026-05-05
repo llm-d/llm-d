@@ -59,7 +59,6 @@ spec:
 
                 # --data-parallel-hybrid-lb: Use external load balancing across nodes, and internal load balancing within a node
                 # --enable-expert-parallel: Use TPxDP in attention, EP in MoE layers
-                # --async-scheduling: Reduce white space between engine steps
                 # --enable-dbo: Dual batch overlap (DBO) overlaps compute with collective communication.
                 # --enable-eplb:  Expert-parallel load balancing reduces EP load imbalance by replicating heavily-used experts
                 #   Performance-memory tradeoff: on DeepSeekV3 eplb uses an extra 2GB per redundant expert per GPU
@@ -89,8 +88,8 @@ spec:
                                   "step_interval":"3000",
                                   "num_redundant_experts":"32",
                                   "log_balancedness":"False"}' \
+                  --moe-backend deep_gemm \
                   --all2all-backend deepep_high_throughput
-                  # --moe-backend deep_gemm \
                   # To enable tracing, add:
                   # --otlp-traces-endpoint http://otel-collector:4317 \
                   # --collect-detailed-traces all

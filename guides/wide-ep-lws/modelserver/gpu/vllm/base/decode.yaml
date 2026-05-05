@@ -119,9 +119,8 @@ spec:
                                   "step_interval":"3000",
                                   "num_redundant_experts":"32",
                                   "log_balancedness":"False"}' \
-                  --all2all-backend deepep_low_latency \
-                  --moe-backend deep_gemm \
-                  --kv-cache-memory-bytes=${KV_CACHE_MEMORY_BYTES-}
+                  --moe-backend deep_gemm
+                  --all2all-backend deepep_low_latency
                   # To enable tracing, add:
                   # --otlp-traces-endpoint http://otel-collector:4317 \
                   # --collect-detailed-traces all
