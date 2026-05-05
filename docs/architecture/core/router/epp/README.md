@@ -24,7 +24,7 @@ When a request arrives at the proxy, the proxy calls the EPP to select a backend
 The following diagram shows the end-to-end lifecycle of a request as it flows through the EPP plugin pipeline:
 
 <p align="center">
-  <img src="../../../../../assets/epp-design.svg" width="650" alt="EPP Design">
+  <img src="../../../../assets/epp-design.svg" width="650" alt="EPP Design">
 </p>
 
 The steps are:

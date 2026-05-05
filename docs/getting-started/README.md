@@ -20,6 +20,17 @@ llm-d integrates with standard Kubernetes primitives — Gateway API, Custom Res
 
 While llm-d offers a comprehensive suite of state-of-the-art optimizations, its architecture is fundamentally composable. You do not need to "buy into" the entire stack to benefit from individual features. Whether you only need intelligent, prefix-aware load balancing for an existing pool of model servers, or you want to layer in disaggregated serving and proactive autoscaling, llm-d allows you to incrementally adopt specific capabilities that solve your immediate production bottlenecks.
 
+## Architecture at a Glance
+
+llm-d uses a layered, composable architecture. See the [Architecture Overview](../architecture/README.md) for a deeper dive into the architecture.
+
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)">
+    <img alt="llm-d Arch" src="../assets/images/llm-d-arch.svg" width=95%>
+  </picture>
+</p>
+
 ## Key Capabilities
 
 ### llm-d Router (Intelligent Load Balancing)
@@ -86,19 +97,6 @@ Two complementary autoscaling patterns:
 
 - **HPA with llm-d Router metrics** — Kubernetes-native scaling based on queue depth and request counts from the Router's internal metrics.
 - **Workload Variant Autoscaler** — multi-model, SLO-aware scaling on heterogeneous hardware that optimizes cost by routing across model variants.
-
-## Architecture at a Glance
-
-llm-d uses a layered, composable architecture. See the [Architecture Overview](../architecture/README.md) for a deeper dive into the architecture.
-
-<p align="center">
-  <picture>
-    <source media="(prefers-color-scheme: dark)">
-    <img alt="llm-d Arch" src="../assets/images/llm-d-arch.svg" width=95%>
-  </picture>
-</p>
-
-
 
 ## Well-Lit Paths
 
