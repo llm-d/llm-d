@@ -39,7 +39,7 @@ ARG GDRCOPY_VERSION="v2.5.2"
 ARG UCX_REPO="https://github.com/openucx/ucx.git"
 ARG UCX_VERSION="v1.20.0"
 
-ARG NVSHMEM_VERSION="v3.5.19"
+ARG NVSHMEM_VERSION="3.5.19"
 
 ARG BUILD_NIXL_FROM_SOURCE="true"
 ARG NIXL_REPO="https://github.com/ai-dynamo/nixl.git"
