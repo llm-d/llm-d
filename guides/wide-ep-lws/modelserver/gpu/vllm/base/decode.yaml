@@ -116,7 +116,7 @@ spec:
                                   "step_interval":"3000",
                                   "num_redundant_experts":"32",
                                   "log_balancedness":"False"}' \
-                  --moe-backend deep_gemm
+                  --moe-backend deep_gemm \
                   --all2all-backend deepep_low_latency
                   # To enable tracing, add:
                   # --otlp-traces-endpoint http://otel-collector:4317 \
