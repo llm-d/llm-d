@@ -72,7 +72,7 @@ jobs:
 
             function toWorkflowFile(name) {
               if (E2E_NIGHTLIES.includes(name)) return `nightly-e2e-${name}.yaml`;
-              if (OTHER_NIGHTLIES.includes(name)) return `nightly-${name}.yaml`;
+              if (OTHER_NIGHTLIES.includes(name)) return `${name}.yaml`;
               return null;
             }
 
