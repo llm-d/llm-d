@@ -41,12 +41,40 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  # Gate: determine whether this workflow run should proceed.
+  # Quick check: do any image-related files have changes?
+  # Runs immediately without approval — only reads the GitHub API diff,
+  # does not execute PR code. Used to skip the approval gate when no
+  # images need building.
+  needs-build-check:
+    if: github.event_name == 'pull_request_target'
+    runs-on: ubuntu-latest
+    outputs:
+      any_image_changes: ${{ steps.check.outputs.any_image_changes }}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: dorny/paths-filter@v4
+        id: filter
+        with:
+          filters: |
+            images:
+              - 'docker/**'
+              - 'patches/**'
+              - 'scripts/**'
+      - name: Summarize
+        id: check
+        run: |
+          echo "any_image_changes=${{ steps.filter.outputs.images }}" >> $GITHUB_OUTPUT
+
+  # Gate: require approval only when image-related files changed.
   # For pull_request_target (fork PRs): requires approval from a maintainer via
   # the "build-approval" GitHub Environment with required reviewers.
-  # For push/workflow_dispatch: proceeds automatically.
+  # Skipped entirely when no image files changed — builds will be skipped anyway.
+  # For push/workflow_dispatch: proceeds automatically via auto-gate.
   pr-gate:
-    if: github.event_name == 'pull_request_target'
+    needs: [needs-build-check]
+    if: >-
+      github.event_name == 'pull_request_target' &&
+      needs.needs-build-check.outputs.any_image_changes == 'true'
     runs-on: ubuntu-latest
     environment: build-approval
     steps:
@@ -123,7 +151,7 @@ jobs:
   # Call the build-image workflow to build any changed images
   # Resolves build-image.yml from main (pull_request_target), checks out PR code via ref.
   build-images:
-    needs: [pr-gate, auto-gate]
+    needs: [needs-build-check, pr-gate, auto-gate]
     if: ${{ !cancelled() && !failure() }}
     uses: ./.github/workflows/build-image.yml
     with:
