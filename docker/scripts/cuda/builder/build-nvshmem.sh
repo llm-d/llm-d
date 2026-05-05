@@ -1,7 +1,9 @@
 #!/bin/bash
 set -Eeux
 
-# builds and installs NVSHMEM from source with coreweave patch
+# NOTE: this script is no longer used - we install nvshmem via pypi.
+
+# builds and installs NVSHMEM from source with coreweave/gke patch
 #
 # Optional environment variables:
 # - ENABLE_EFA: Enable EFA support in NVSHMEM (true/false, default: false)
