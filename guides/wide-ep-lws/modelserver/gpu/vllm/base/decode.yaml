@@ -242,8 +242,3 @@ spec:
                 mountPath: /var/cache/huggingface
               - name: jit-cache
                 mountPath: /var/cache/vllm
-              - name: cache-volume
-                mountPath: /dg_cache
-              - name: tmp-volume
-                mountPath: /tmp
-  

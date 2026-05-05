@@ -33,7 +33,8 @@ spec:
           - name: vllm
             # image: ghcr.io/llm-d/llm-d-cuda-dev:sha-0cb27a4
             # image: ghcr.io/llm-d/llm-d-cuda-dev:sha-d7cd9c0
-            image: ghcr.io/llm-d/llm-d-cuda-dev:sha-81afa8e
+            # image: ghcr.io/llm-d/llm-d-cuda-dev:sha-81afa8e
+            image: ghcr.io/llm-d/llm-d-cuda:v0.5.0
             securityContext:
               capabilities:
                 add:
@@ -51,7 +52,7 @@ spec:
                 # https://github.com/llm-d/llm-d/issues/352
                 find /dev/shm -type f -delete
 
-                sleep infinity
+                # sleep infinity
 
                 #################
                 # RUN vLLM prefill worker
