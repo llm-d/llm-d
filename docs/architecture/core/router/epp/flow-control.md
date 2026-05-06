@@ -1,6 +1,6 @@
-# EPP Flow Control
+# Flow Control
 
-The Flow Control layer within the Endpoint Picker (EPP) is a critical mechanism for pool defense and multi-tenancy. It protects the pool of model servers from overload by shifting intelligent queuing to the gateway, enforcing strict priority and tenant-aware fairness.
+The Flow Control layer within the EPP is a critical mechanism for pool defense and multi-tenancy. It protects the pool of model servers from overload by shifting intelligent queuing to the gateway, enforcing strict priority and tenant-aware fairness.
 
 > [!IMPORTANT]
 > EPP Flow Control is currently behind the `flowControl` feature gate. You must explicitly enable it in your [EndpointPickerConfig](configuration.md) to use these capabilities.

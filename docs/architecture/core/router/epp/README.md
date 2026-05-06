@@ -38,31 +38,19 @@ The steps are:
 
 Asynchronously, the **Data layer** watches the Kubernetes API server for updates to relevant objects like InferencePools and Pods for endpoint discovery. It is also responsible for model servers metrics probing, and maintaining an internal state—such as a prefix cache tree—to inform the request processing components, flow control and request scheduling.
 
-### Layers
+### Components
 
-The EPP is modular and pluggable, consisting of the following layers:
+The EPP is modular and pluggable, consisting of the following components:
 
 #### Ext-Proc Server
 
 The Ext-Proc Server protocol is very well defined & specific, deviations could cause the EPP to become unusable or unstable. Extension is ill-advised. The Ext-Proc is simply the standard interface by which the Proxy talks to the EPP.
 
-#### Data Layer (Extensible)
-
-The **Data Layer** operates asynchronously, consuming and storing data from a variety of sources:
-- Kube API Server about which pods are active in the InferencePool
-- Model Servers about the current internal state (running requests, kv cache utilization)
-- In-memory data structures, such as prefix cache trees for prefix-aware routing
-- "Consultant" sidecars like the latency predictor, the kv-indexer or tokenizer for advanced routing
-
-Other modules in the EPP consult the **Data Layer** during request processing.
-
-See [Data Layer](datalayer.md) for more details on the design.
-
 #### Request Handler (Extensible)
 
-The **Request Handler** is the first step of the request flow in the EPP. The key responsibility is to convert the user's request into the internal EPP data structure via the Parser plugin. The EPP provides out-of-the-box Parsers for common formats like the [OpenAI HTTP](https://developers.openai.com/api/reference/overview) and [vLLM gRPC](https://docs.vllm.ai/en/latest/api/vllm/entrypoints/grpc_server/).
+The **Request Handler** is the first step of the request flow in the EPP. The key responsibility is to convert the user's request into the internal EPP data structure via the Parser plugin. The EPP provides out-of-the-box parsers for common formats like the [OpenAI HTTP](https://developers.openai.com/api/reference/overview) and [vLLM gRPC](https://docs.vllm.ai/en/latest/api/vllm/entrypoints/grpc_server/).
 
-In addition, users can write a custom Parser for their own protocol. The rest of the functionality in EPP is agnostic to the original request protocol, enabling easy adaptation of the EPP to new request formats.
+In addition, users can write a custom parser for their own protocol. The rest of the functionality in EPP is agnostic to the original request protocol, enabling easy adaptation of the EPP to new request formats.
 
 See [Request Handling](request-handling.md) for more details on the design.
 
@@ -86,3 +74,16 @@ The scheduler acts as the core decision-making engine for intelligent request ro
 By leveraging custom plugins at each stage—filtering out unavailable endpoints, scoring them based on metrics like "least-loaded" or "affinity," and picking final candidates—the EPP ensures high performance and efficient resource distribution across inference pools.
 
 See [Request Scheduling](scheduling.md) for more details on the design.
+
+#### Data Layer (Extensible)
+
+The **Data Layer** operates asynchronously, consuming and storing data from a variety of sources:
+- Kube API Server about which pods are active in the InferencePool
+- Model Servers about the current internal state (running requests, kv cache utilization)
+- In-memory data structures, such as prefix cache trees for prefix-aware routing
+- "Consultant" sidecars like the latency predictor, the kv-indexer or tokenizer for advanced routing
+
+Other modules in the EPP consult the **Data Layer** during request processing.
+
+See [Data Layer](datalayer.md) for more details on the design.
+

@@ -1,6 +1,6 @@
-# EPP Request Scheduler
+# Request Scheduler
 
-The EPP Request Scheduler is a highly modular and extensible component within the Endpoint Picker (EPP) designed to select the optimal model server (endpoint) for an inference request. It leverages a plugin-based architecture, allowing for sophisticated endpoint picking strategies based on real-time metrics, prefix cache tracking, and model-specific requirements like LoRA adapters.
+The Request Scheduler is a highly modular and extensible component within the EPP designed to select the optimal model server (endpoint) for an inference request. It leverages a plugin-based architecture, allowing for sophisticated endpoint picking strategies based on real-time metrics, prefix cache tracking, and model-specific requirements like LoRA adapters.
 
 ## Architecture Overview
 
