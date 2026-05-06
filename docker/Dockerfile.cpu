@@ -1,5 +1,5 @@
 # Using Ubuntu 22.04 to match upstream vLLM compilation environment with glibc 2.35 for now.
-FROM ubuntu:22.04 AS base-common
+FROM ubuntu:26.04 AS base-common
 
 ARG CACHE_BUSTER
 RUN if [ -n "${CACHE_BUSTER}" ]; then \
