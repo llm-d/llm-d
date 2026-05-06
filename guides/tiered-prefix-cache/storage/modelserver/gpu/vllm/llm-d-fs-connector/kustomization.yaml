@@ -1,0 +1,47 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - ../../../../../../recipes/modelserver/base/single-host/default
+
+namePrefix: gpu-vllm-
+
+
+labels:
+  - pairs:
+      llm-d.ai/guide: tiered-prefix-cache-storage
+    includeSelectors: true
+    includeTemplates: true
+    fields:
+      - version: v1
+        kind: ServiceAccount
+        path: metadata/labels
+        create: true
+      - group: apps
+        version: v1
+        kind: Deployment
+        path: metadata/labels
+        create: true
+      - group: apps
+        version: v1
+        kind: Deployment
+        path: spec/selector/matchLabels
+        create: true
+      - group: apps
+        version: v1
+        kind: Deployment
+        path: spec/template/metadata/labels
+        create: true
+      - group: monitoring.coreos.com
+        version: v1
+        kind: PodMonitor
+        path: metadata/labels
+        create: true
+      - group: monitoring.coreos.com
+        version: v1
+        kind: PodMonitor
+        path: spec/selector/matchLabels
+        create: true
+
+patches:
+  - path: patch-vllm.yaml

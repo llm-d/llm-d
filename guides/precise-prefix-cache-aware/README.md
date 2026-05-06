@@ -9,7 +9,7 @@ This guide routes requests on precise per-pod KV-cache state rather than request
 Two scorers make up the routing decision alongside the load-aware stack:
 
 - **Precise prefix-cache aware** — the [precise-prefix-cache-scorer](https://github.com/llm-d/llm-d-inference-scheduler/tree/main/pkg/epp/framework/plugins/scheduling/scorer/preciseprefixcache) indexes real KV-block events from vLLM and returns the exact resident-block fraction. Indexer internals (event ingestion, block hashing, dual-key design) are documented in [llm-d-kv-cache architecture](https://github.com/llm-d/llm-d-kv-cache/blob/main/docs/architecture.md).
-- **Load-aware** — the [kv-cache utilization](https://github.com/llm-d/llm-d-inference-scheduler/tree/main/pkg/epp/framework/plugins/scheduling/scorer/kvcacheutilization) and [queue size](https://github.com/llm-d/llm-d-inference-scheduler/tree/main/pkg/epp/framework/plugins/scheduling/scorer/queuedepth) scorers balance against pod pressure.
+- **Load-aware** — such as the [kv-cache utilization](https://github.com/llm-d/llm-d-inference-scheduler/tree/main/pkg/epp/framework/plugins/scheduling/scorer/kvcacheutilization) and [queue size](https://github.com/llm-d/llm-d-inference-scheduler/tree/main/pkg/epp/framework/plugins/scheduling/scorer/queuedepth) scorers balance against pod pressure.
 
 ## Default Configuration
 
@@ -21,7 +21,7 @@ Two scorers make up the routing decision alongside the load-aware stack:
 | GPUs per replica    | 2                                                       |
 | Total GPUs          | 16                                                      |
 | vLLM `--block-size` | 64 (must match scorer `tokenProcessorConfig.blockSize`) |
-| Scheduler image     | `ghcr.io/llm-d/llm-d-inference-scheduler:v0.8.0-rc.1`   |
+| Scheduler image     | `ghcr.io/llm-d/llm-d-inference-scheduler:v0.8.0`        |
 
 ### Supported Hardware Backends
 
@@ -36,13 +36,16 @@ Two scorers make up the routing decision alongside the load-aware stack:
 | CPU                  | `modelserver/cpu/vllm/`    | Llama-3.2-3B-Instruct                   | CI-sized                                   |
 
 > [!NOTE]
-> Some hardware variants use reduced configurations (fewer replicas, smaller models) to enable CI testing for compatibility and regression checks. 
+> Some hardware variants use reduced configurations (fewer replicas, smaller models) to enable CI testing for compatibility and regression checks.
 
 > [!NOTE]
 > For precise prefix cache scoring to match reality, the `tokenizer` `modelName` and the scorer's `indexerConfig.tokenizersPoolConfig.modelName` in [`scheduler/precise-prefix-cache-aware.values.yaml`](scheduler/precise-prefix-cache-aware.values.yaml) must match the model the overlay deploys. HPU and anything that tunes `--block-size` also requires updating `tokenProcessorConfig.blockSize` on the scheduler side.
 
 > [!NOTE]
 > The `gpu/vllm/` overlay defaults to 8 replicas to match the canonical 16×H100 benchmark. For smaller fleets (or quick smoke tests), reduce `replicas` in the deployment patch (`modelserver/gpu/vllm/patch-vllm.yaml`) before applying.
+
+> [!NOTE]
+> The scheduler runs in **active-active HA** by default — two replicas behind one Service, each subscribing to every vLLM pod via pod-discovery so both indexes converge. Scale to a single replica with `--set inferenceExtension.replicas=1` if HA isn't needed (small fleets, smoke tests).
 
 ## Prerequisites
 
@@ -86,7 +89,7 @@ helm install precise-prefix-cache-aware \
   -n ${NAMESPACE} --version v1.5.0
 ```
 
-The release name `precise-prefix-cache-aware` is mandatory for standard deployments. The vLLM patches hardcode the endpoint as `KV_EVENTS_ENDPOINT=tcp://<release>-epp.<ns>.svc.cluster.local:5556`. If you choose a custom release name, you must manually update the `KV_EVENTS_ENDPOINT` environment variable in your modelserver overlay to match `<your-release-name>-epp`.
+The release name `precise-prefix-cache-aware` is mandatory for standard deployments — the inference pool selector matches a guide label that pairs with this release.
 
 <details>
 <summary><b>Why a helm post-renderer is required (chart limitation)</b></summary>
@@ -139,10 +142,6 @@ kubectl apply -n ${NAMESPACE} -k guides/precise-prefix-cache-aware/modelserver/g
   kubectl apply -n ${NAMESPACE} -k guides/recipes/modelserver/components/monitoring
   ```
 - Enable Prometheus scrape for the scheduler by layering `-f guides/recipes/scheduler/features/monitoring.values.yaml` onto the helm command in step 2.
-
-### 5. (Optional) Enable Active-Active High Availability
-
-The default single-replica install uses central ZMQ — vLLM publishers connect into the scheduler service. To run multiple scheduler replicas simultaneously (each with its own Envoy gateway sidecar) behind a single load-balancing Service, see [active-active.md](active-active.md).
 
 ## Verification
 
@@ -224,8 +223,8 @@ kubectl delete -n ${NAMESPACE} -k guides/precise-prefix-cache-aware/modelserver/
 
 ## How It Works
 
-1. **vLLM pods publish KV-cache events** — each pod runs `vllm serve ... --kv-events-config '{...,"publisher":"zmq","endpoint":"$(KV_EVENTS_ENDPOINT)","topic":"kv@$(POD_IP):$(POD_PORT)@<model>"}'`. On every KV block allocation/eviction, vLLM emits a ZMQ message.
-2. **Scheduler subscribes** — in central mode the scheduler's scorer binds `tcp://*:5556` and all vLLM publishers connect in. A single `kv@`-prefixed topic filter passes all events through.
+1. **vLLM pods publish KV-cache events** — each pod runs `vllm serve ... --kv-events-config '{...,"publisher":"zmq","endpoint":"$(KV_EVENTS_ENDPOINT)","topic":"kv@$(POD_IP):$(POD_PORT)@<model>"}'` with `KV_EVENTS_ENDPOINT=tcp://*:5556`, binding its own ZMQ socket. On every KV block allocation/eviction, vLLM emits a ZMQ message.
+2. **Scheduler subscribes per pod** — pod-discovery (`kvEventsConfig.discoverPods: true`) wires the data-layer `endpoint-notification-source` into the scorer's `ExtractEndpoint`, so each scheduler replica installs a ZMQ subscriber per vLLM pod independently. All replicas converge to the same index.
 3. **Scoring** — the `precise-prefix-cache-scorer` returns the fraction of the request's prefix blocks that are resident on each candidate pod. The `max-score-picker` routes to the highest-scoring pod.
 
 The `tokenizer` plugin and the scorer's internal `tokenizersPoolConfig` both point at `/tmp/tokenizer/tokenizer-uds.socket` — a UDS tokenizer sidecar (`ghcr.io/llm-d/llm-d-uds-tokenizer`) owns tokenizer model downloads and caching, keeping tokenization out of the EPP main container.

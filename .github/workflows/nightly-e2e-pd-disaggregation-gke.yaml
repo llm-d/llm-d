@@ -28,8 +28,19 @@ jobs:
     with:
       guide_name: pd-disaggregation
       namespace: llm-d-nightly-pd-gke
-      helmfile_env: gke_pd_rdma
       gateway_type: gke
+      custom_deploy_script: |
+        kubectl apply -k guides/pd-disaggregation/modelserver/gpu/vllm/base -n ${NAMESPACE}
+        kubectl apply -k guides/recipes/gateway/gke-l7-regional-external-managed -n ${NAMESPACE}
+        helm install pd-disaggregation \
+          oci://registry.k8s.io/gateway-api-inference-extension/charts/inferencepool \
+          -f guides/recipes/scheduler/base.values.yaml \
+          -f guides/recipes/scheduler/pd.values.yaml \
+          -f guides/pd-disaggregation/scheduler/pd-disaggregation.values.yaml \
+          --set provider.name=gke \
+          --set experimentalHttpRoute.enabled=true \
+          --set experimentalHttpRoute.inferenceGatewayName=llm-d-inference-gateway \
+          -n ${NAMESPACE} --version v1.5.0
       gke_cluster_name: llm-d-e2e-us-east5
       gke_cluster_zone: us-east5
       required_gpus: 2
@@ -37,36 +48,31 @@ jobs:
       accelerator_type: H100
       pod_wait_timeout: '30m'
       pod_readiness_delay: 180
-      httproute_file: httproute.gke.yaml
       # Slim transform: reduce model to Qwen3-0.6B, 1 GPU per pod, reduce memory
       pre_deploy_script: |
         echo "Applying pd-disaggregation slim transforms..."
-        cd guides/pd-disaggregation
-        yq e '.modelArtifacts.uri = "hf://Qwen/Qwen3-0.6B"' -i ms-pd/values.yaml
-        yq e '.routing.modelName = "Qwen/Qwen3-0.6B"' -i ms-pd/values.yaml
-        yq e 'del(.decode.containers[0].args[] | select(. == "--max-model-len" or . == "32000"))' -i ms-pd/values.yaml
-        yq e 'del(.prefill.containers[0].args[] | select(. == "--max-model-len" or . == "32000"))' -i ms-pd/values.yaml
-        yq e 'del(.decode.containers[0].resources.limits.memory)' -i ms-pd/values.yaml
-        yq e 'del(.decode.containers[0].resources.requests.memory)' -i ms-pd/values.yaml
-        yq e 'del(.decode.containers[0].resources.limits.cpu)' -i ms-pd/values.yaml
-        yq e 'del(.decode.containers[0].resources.requests.cpu)' -i ms-pd/values.yaml
-        yq e 'del(.decode.containers[0].resources.limits."rdma/ib")' -i ms-pd/values.yaml
-        yq e 'del(.decode.containers[0].resources.requests."rdma/ib")' -i ms-pd/values.yaml
-        yq e 'del(.prefill.containers[0].resources.limits.memory)' -i ms-pd/values.yaml
-        yq e 'del(.prefill.containers[0].resources.requests.memory)' -i ms-pd/values.yaml
-        yq e 'del(.prefill.containers[0].resources.limits.cpu)' -i ms-pd/values.yaml
-        yq e 'del(.prefill.containers[0].resources.requests.cpu)' -i ms-pd/values.yaml
-        yq e 'del(.prefill.containers[0].resources.limits."rdma/ib")' -i ms-pd/values.yaml
-        yq e 'del(.prefill.containers[0].resources.requests."rdma/ib")' -i ms-pd/values.yaml
-        yq e '.decode.containers[0].resources.limits["nvidia.com/gpu"] = "1"' -i ms-pd/values.yaml
-        yq e '.decode.containers[0].resources.requests["nvidia.com/gpu"] = "1"' -i ms-pd/values.yaml
-        yq e '.decode.parallelism.tensor = 1' -i ms-pd/values.yaml
-        yq e '.prefill.replicas = 1' -i ms-pd/values.yaml
-        yq e '.decode.volumes[1].emptyDir.sizeLimit = "2Gi"' -i ms-pd/values.yaml
-        yq e '.prefill.volumes[1].emptyDir.sizeLimit = "2Gi"' -i ms-pd/values.yaml
+        cd guides/pd-disaggregation/modelserver/gpu/vllm/base
+        yq e '.spec.template.spec.containers[0].args[0] = "Qwen/Qwen3-0.6B"' -i patch-prefill.yaml
+        yq e '.spec.template.spec.containers[0].args[0] = "Qwen/Qwen3-0.6B"' -i patch-decode.yaml
+        yq e 'del(.spec.template.spec.containers[0].resources.limits.memory)' -i patch-prefill.yaml
+        yq e 'del(.spec.template.spec.containers[0].resources.requests.memory)' -i patch-prefill.yaml
+        yq e 'del(.spec.template.spec.containers[0].resources.limits.cpu)' -i patch-prefill.yaml
+        yq e 'del(.spec.template.spec.containers[0].resources.requests.cpu)' -i patch-prefill.yaml
+        yq e 'del(.spec.template.spec.containers[0].resources.limits.memory)' -i patch-decode.yaml
+        yq e 'del(.spec.template.spec.containers[0].resources.requests.memory)' -i patch-decode.yaml
+        yq e 'del(.spec.template.spec.containers[0].resources.limits.cpu)' -i patch-decode.yaml
+        yq e 'del(.spec.template.spec.containers[0].resources.requests.cpu)' -i patch-decode.yaml
+        yq e '.spec.template.spec.containers[0].resources.limits."nvidia.com/gpu" = "1"' -i patch-decode.yaml
+        yq e '.spec.template.spec.containers[0].resources.requests."nvidia.com/gpu" = "1"' -i patch-decode.yaml
+        yq e '.spec.template.spec.containers[0].args[2] = "--tensor-parallel-size=1"' -i patch-decode.yaml
+        yq e '.spec.replicas = 1' -i patch-prefill.yaml
+        yq e '.spec.replicas = 1' -i patch-decode.yaml
+        yq e '.spec.template.spec.volumes[1].emptyDir.sizeLimit = "2Gi"' -i patch-prefill.yaml
+        yq e '.spec.template.spec.volumes[1].emptyDir.sizeLimit = "2Gi"' -i patch-decode.yaml
         echo "Slim transform applied — model: Qwen3-0.6B, 1 GPU decode, 1 prefill replica"
         cd "$GITHUB_WORKSPACE"
       image_override: 'ghcr.io/llm-d/llm-d-cuda-dev:latest'
       allow_gpu_preemption: true
+      llm_d_ref: ${{ github.ref }}
       skip_cleanup: ${{ github.event.inputs.skip_cleanup == 'true' }}
     secrets: inherit

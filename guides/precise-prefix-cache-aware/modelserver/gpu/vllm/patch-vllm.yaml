@@ -19,6 +19,12 @@ spec:
             # Uncomment for distributed tracing
             # - "--otlp-traces-endpoint=http://otel-collector:4317"
             # - "--collect-detailed-traces=all"
+          ports:
+            # Exposed so each scheduler replica can dial the per-pod ZMQ
+            # socket bound by vLLM (KV_EVENTS_ENDPOINT=tcp://*:5556).
+            - containerPort: 5556
+              name: kv-events
+              protocol: TCP
           env:
             - name: NAMESPACE
               valueFrom:
@@ -33,12 +39,11 @@ spec:
             # pods are identified by their inference endpoint.
             - name: POD_PORT
               value: "8000"
-            # Central-mode default. Swap to tcp://*:5556 by applying the
-            # modelserver/components/active-active kustomize component.
-            # If your helm release name isn't `precise-prefix-cache-aware`,
-            # patch this value to `<release-name>-epp`.
+            # Pod-discovery mode: vLLM PUBs bind per-pod so every scheduler
+            # replica can dial each pod's socket independently (required for
+            # active-active HA across schedulers).
             - name: KV_EVENTS_ENDPOINT
-              value: "tcp://precise-prefix-cache-aware-epp.$(NAMESPACE).svc.cluster.local:5556"
+              value: "tcp://*:5556"
             # Disable vLLM usage telemetry — its writes to /.config fail
             # under restricted SecurityContexts (e.g. OpenShift).
             - name: DO_NOT_TRACK

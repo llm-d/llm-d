@@ -2,29 +2,27 @@
 
 ## Overview
 
-This guide explains how to offload the vLLM prefix cache (KV cache) to shared storage.
+This guide explains how to offload the vLLM prefix cache (KV cache) to shared storage using the native llm-d FS connector or the LMCache connector. This allows prefix cache reuse across multiple vLLM instances and across nodes that mount the same shared path.
 
-## Prerequisites
+## Default Configuration
 
-* Have the [proper client tools installed on your local system](../../../helpers/client-setup/README.md) to use this guide.
-* Configure and deploy your [Gateway control plane](../../prereq/gateway-provider/README.md).
-* Have the [Monitoring stack](../../../docs/monitoring/README.md) installed on your system.
-* Create a namespace for installation.          
+| Parameter                 | Value                                                   |
+| ------------------------- | ------------------------------------------------------- |
+| Model                     | [Qwen/Qwen3-32B](https://huggingface.co/Qwen/Qwen3-32B) |
+| GPUs per replica (TP)     | 4                                                       |
+| GPU Accelerator           | NVIDIA H100                                             |
+| CPU Cache Offload Size    | 100 GB                                                  |
 
-```bash
-export NAMESPACE=llm-d-storage # or any other namespace (shorter names recommended)
-kubectl create namespace ${NAMESPACE}
-```
+### Supported Connectors
 
-* [Create the `llm-d-hf-token` secret in your target namespace with the key `HF_TOKEN` matching a valid HuggingFace token](../../../helpers/hf-token.md) to pull models.
+| Connector             | Directory                                                              |
+| --------------------- | ---------------------------------------------------------------------- |
+| llm-d FS Connector    | `modelserver/gpu/vllm/llm-d-fs-connector/`                              |
+| LMCache Connector     | `modelserver/gpu/vllm/lmcache-connector/`                              |
 
-## Storage Connectors
 
-<!-- TABS:START -->
-
-<!-- TAB:llm-d FS Connector -->
-
-### llm-d FS Connector
+<details>
+<summary><h4>Aboutllm-d FS Connector</h4></summary>
 
 The **llm-d FS connector** integrates with vLLM's native OffloadingConnector and stores KV blocks on shared storage that exposes a POSIX-compatible file API (for example IBM Storage Scale, CephFS, GCP Lustre, AWS Lustre).
 
@@ -42,164 +40,135 @@ This enables prefix cache reuse across multiple vLLM instances and across nodes 
 
 For advanced configuration options and implementation details, see the [llm-d FS backend documentation](https://github.com/llm-d/llm-d-kv-cache/tree/main/kv_connectors/llmd_fs_backend).
 
-<!-- TAB:LMCache Connector -->
+</details>
 
-### LMCache Connector
+
+<details>
+<summary><h4>About LMCache Connector</h4></summary>
 
 [LMCache](https://lmcache.ai) is an extension for LLM serving engines that enhances performance by reducing "Time to First Token" (TTFT) and increasing throughput, particularly for long-context scenarios. It provides integration to various storage backends. For more information, visit the [LMCache website](https://lmcache.ai).
 
-<!-- TABS:END -->
+</details>
 
-## Installation
+---
+
+## Prerequisites
+
+- Have the [proper client tools installed on your local system](../../../helpers/client-setup/README.md) to use this guide.
+- Checkout llm-d repo:
+
+  ```bash
+    export branch="main" # branch, tag, or commit hash
+    git clone https://github.com/llm-d/llm-d.git && cd llm-d && git checkout ${branch}
+  ```
+
+- Set the following environment variables:
+  ```bash
+    export GAIE_VERSION=v1.5.0
+    export GUIDE_NAME="tiered-prefix-cache-storage"
+    export NAMESPACE=llm-d-${GUIDE_NAME}
+  ```
+- Install the Gateway API Inference Extension CRDs:
+
+  ```bash
+    kubectl apply -k "https://github.com/kubernetes-sigs/gateway-api-inference-extension/config/crd?ref=${GAIE_VERSION}"
+  ```
+
+- Create a target namespace for the installation:
+  ```bash
+    kubectl create namespace ${NAMESPACE}
+  ```
+
+---
+
+## Installation Instructions
+
+### 1. Prepare a PVC (ReadWriteMany)
+
+Set your storage class depending on your environment:
 
 ```bash
-cd guides/tiered-prefix-cache/storage
-```
-
-> [!WARNING]
-> `kgateway` is deprecated in llm-d and will be removed in the next release. Prefer `agentgateway` for new self-installed inference deployments, using `guides/recipes/gateway/agentgateway` for recipe-based installs. The legacy `guides/recipes/gateway/kgateway` recipe path is retained only for migration.
-
-### 1. Deploy Gateway and HTTPRoute
-
-Deploy the Gateway and HTTPRoute using the [gateway recipe](../../recipes/gateway/README.md).
-
-### 2. Prepare a PVC
-
-#### 2.1 Provision the Storage Backend
-
-If your cluster admin has already configured a storage class, you can set the `STORAGE_CLASS` variable and skip the following steps.
-
-```
-export STORAGE_CLASS=<your pvc storage class>
-```
-
-The following provides instructions to configure different storage backends, and set the `STORAGE_CLASS` variable accordingly.
-
-<!-- TABS:START -->
-
-<!-- TAB:Default Storage Class -->
-
-#### Default Storage Class
-
-If your cluster admin has already set up a `default` storage class:
-
-```
-export STORAGE_CLASS=default
-```
-
-No additional provision steps are required.
-
-<!-- TAB:GCP Lustre -->
-
-#### GCP Lustre
-
-Set your storage class which will be used later to provision the PVC.
-
-```
-export STORAGE_CLASS=lustre
+export STORAGE_CLASS="" # leave empty to use the cluster default StorageClass; or set "lustre" / "efs-sc"
 ```
 
 To provision a managed GCP Lustre instance on GKE and configure the corresponding `StorageClass`, follow the [GCP Lustre guide](./manifests/backends/lustre/README.md).
 
-<!-- TAB:AWS EFS -->
+To provision AWS EFS and configure the corresponding `StorageClass`, follow the [EFS guide](./manifests/backends/aws/README.md).
 
-#### AWS EFS
 
-Set your storage class which will be used later to provision the PVC.
-
-```bash
-export STORAGE_CLASS=efs-sc
-```
-
-To provision AWS EFS and configure the corresponding `StorageClass`, follow the [full guide](./manifests/backends/aws/README.md).
-
-EFS provides a POSIX-compatible shared filesystem with ReadWriteMany (RWX) support, allowing multiple vLLM pods across nodes to share KV cache.
-
-<!-- TABS:END -->
-
-#### 2.2. Create the PVC
-
-This guide requires a shared, POSIX-accessible path to store KV-cache files. This requires a volume that supports ReadWriteMany (RWX). One common option is a Kubernetes PersistentVolumeClaim (PVC) that is mounted into each vLLM pod.
-
-Create a PVC using the `$STORAGE_CLASS` storage class set above.
+Create a PVC using the selected storage class:
 
 ```bash
-kubectl apply -f ./manifests/pvc.yaml -n ${NAMESPACE}
+envsubst < guides/tiered-prefix-cache/storage/manifests/pvc.yaml | kubectl apply -n ${NAMESPACE} -f -
 ```
 
-### 3. Deploy vLLM with Storage Connector
+### 2. Deploy the llm-d Router
 
-Choose a connector to offload prefix cache.
+#### Standalone Mode
 
-<!-- TABS:START -->
-
-<!-- TAB:llm-d FS Connector -->
-
-#### llm-d FS Connector
+This deploys the inference scheduler with an Envoy sidecar side-by-side:
 
 ```bash
-kubectl apply -k ./manifests/vllm/llm-d-fs-connector -n ${NAMESPACE}
+helm install ${GUIDE_NAME} \
+    oci://registry.k8s.io/gateway-api-inference-extension/charts/standalone \
+    -f guides/recipes/scheduler/base.values.yaml \
+    -f guides/tiered-prefix-cache/storage/scheduler/${GUIDE_NAME}.values.yaml \
+    -n ${NAMESPACE} --version ${GAIE_VERSION}
 ```
 
-<!-- TAB:LMCache Connector -->
+<details>
+<summary><h4>Gateway Mode</h4></summary>
 
-#### LMCache Connector
+To use a Kubernetes Gateway managed proxy instead of standalone:
+
+1. _Deploy a Kubernetes Gateway_ by following one of [the gateway guides](../../prereq/gateways).
+2. _Deploy HTTPRoute and the inference scheduler_:
 
 ```bash
-kubectl apply -k ./manifests/vllm/lmcache-connector -n ${NAMESPACE}
+export PROVIDER_NAME=gke # options: none, gke, agentgateway, istio
+helm install llm-d-infpool \
+    oci://registry.k8s.io/gateway-api-inference-extension/charts/inferencepool  \
+    -f guides/recipes/scheduler/base.values.yaml \
+    --set provider.name=${PROVIDER_NAME} \
+    --set experimentalHttpRoute.enabled=true \
+    --set experimentalHttpRoute.inferenceGatewayName=llm-d-inference-gateway \
+    -n ${NAMESPACE} --version ${GAIE_VERSION}
 ```
 
-<!-- TABS:END -->
+</details>
 
-### 4. Deploy InferencePool
+---
 
-<!-- TABS:START -->
+### 3. Deploy the Model Server
 
-<!-- TAB:llm-d FS Connector -->
+Apply the Kustomize overlay corresponding to your desired connector backend. 
 
-#### llm-d FS Connector
-
-Deploy the `InferencePool` using the [InferencePool recipe](../../recipes/scheduler/README.md).
-
-**NOTE:** This guide uses an InferencePool recipe with HBM cache only. Storage offloading is typically used with CPU offloading, which is not covered, see <https://github.com/llm-d/llm-d/issues/682> for a follow up.
-
-<!-- TAB:LMCache Connector -->
-
-#### LMCache Connector
-
-This guide currently uses the same tired prefix caching scoring configuration, so deploy the inferencepool following [CPU offloading inferencepool guide](../cpu/README.md#deploy-inferencepool). A follow up is to further optimize `inferencepool` configuration considering the storage tier.
-
-<!-- TABS:END -->
-
-## Verifying the installation
-
-You can verify the installation by checking the status of the created resources.
-
-### Check the Gateway
+<details>
+<summary><h4>Click here for GCP Lustre</h4></summary>
+For GCP lustre, please apply `llm-d-fs-connector-lustre` or `llm-d-fs-connector-lustre` which contains a patch to allow vLLM to write to Lustre.
+</details>
 
 ```bash
-kubectl get gateway -n ${NAMESPACE}
+export CONNECTOR=llm-d-fs-connector # llm-d-fs-connector | lmcache-connector | llm-d-fs-connector-lustre | lmcache-connector-lustre
+kubectl apply -n ${NAMESPACE} -k guides/tiered-prefix-cache/storage/modelserver/gpu/vllm/${CONNECTOR}
 ```
 
-You should see output similar to the following, with the `PROGRAMMED` status as `True`.
+---
+
+### 4. (Optional) Enable monitoring
+
+- Install the [Monitoring stack](../../../docs/monitoring/README.md).
+- Deploy the monitoring resources for this guide:
 
 ```bash
-NAME                      CLASS                              ADDRESS     PROGRAMMED   AGE
-llm-d-inference-gateway   gke-l7-regional-external-managed   <redacted>  True         16m
+kubectl apply -n ${NAMESPACE} -k guides/recipes/modelserver/components/monitoring
 ```
 
-### Check the HTTPRoute
+---
 
-```bash
-kubectl get httproute -n ${NAMESPACE}
-```
+## Verification
 
-```bash
-NAME            HOSTNAMES   AGE
-llm-d-infpool               17m
-```
-
-### Check the PVC
+### 1. Check the PVC
 
 ```bash
 kubectl get pvc -n ${NAMESPACE}
@@ -212,117 +181,72 @@ NAME         STATUS   VOLUME                  CAPACITY   ACCESS MODES   STORAGEC
 <pvc-name>   Bound    pvc-3c793698-XXXXXXX    18000Gi    RWX            <storage-class>   <unset>              6d
 ```
 
-### Check the InferencePool
+### 2. Get the IP of the Proxy
+
+**Standalone Mode**
 
 ```bash
-kubectl get inferencepool -n ${NAMESPACE}
+export IP=$(kubectl get service ${GUIDE_NAME}-epp -n ${NAMESPACE} -o jsonpath='{.spec.clusterIP}')
 ```
+
+<details>
+<summary> <b>Gateway Mode</b> </summary>
 
 ```bash
-NAME            AGE
-llm-d-infpool   16m
+export IP=$(kubectl get gateway llm-d-inference-gateway -n ${NAMESPACE} -o jsonpath='{.status.addresses[0].value}')
 ```
 
-### Check the Pods
+</details>
+
+### 3. Send Test Requests
+
+**Open a temporary interactive shell inside the cluster:**
 
 ```bash
-kubectl get pods -n ${NAMESPACE}
+kubectl run curl-debug --rm -it \
+    --image=cfmanteiga/alpine-bash-curl-jq \
+    --env="IP=$IP" \
+    --env="NAMESPACE=$NAMESPACE" \
+    -- /bin/bash
 ```
 
-You should see the InferencePool's endpoint pod and the model server pods in a `Running` state.
+**Send a completion request:**
 
 ```bash
-NAME                                READY   STATUS    RESTARTS   AGE
-llm-d-infpool-epp-xxxxxxxx-xxxxx    1/1     Running   0          16m
-llm-d-decode-xxxxxxxx-xxxxx         1/1     Running   0          11m
-llm-d-decode-xxxxxxxx-xxxxx         1/1     Running   0          11m
+curl -X POST http://${IP}/v1/completions \
+    -H 'Content-Type: application/json' \
+    -d '{
+        "model": "Qwen/Qwen3-32B",
+        "prompt": "How are you today?"
+    }' | jq
 ```
+### 4. Verify KV cache is offloaded to storage 
 
-### Test inference through the Gateway
-
-The Gateway is a `ClusterIP` Service, so port-forward to call it from outside the cluster:
+**Send a long prompt (one that crosses several `block_size` boundaries) to trigger offload**
 
 ```bash
-kubectl port-forward -n ${NAMESPACE} svc/llm-d-inference-gateway-istio 8000:80 &
-curl -s http://localhost:8000/v1/models
-curl -s http://localhost:8000/v1/completions \
-  -H 'Content-Type: application/json' \
-  -d '{"model":"Qwen/Qwen3-32B","prompt":"The capital of France is","max_tokens":15,"temperature":0}'
-```
-
-A successful response looks like:
-
-```json
-{"id":"cmpl-...","object":"text_completion","model":"Qwen/Qwen3-32B","choices":[{"index":0,"text":" Paris. ...","finish_reason":"length"}],"usage":{"prompt_tokens":5,"completion_tokens":15,"total_tokens":20}}
-```
-
-### Verify KV cache is offloaded to storage
-
-<!-- TABS:START -->
-
-<!-- TAB:llm-d FS Connector -->
-#### llm-d FS Connector
-
-Send a long prompt (one that crosses several `block_size` boundaries) to trigger offload, then inspect the PVC:
-
-```bash
+# Run this inside the interactive shell created in step 3.
 # Long prompt (~3K tokens)
 PROMPT=$(printf 'Story: '; for i in $(seq 1 800); do printf 'alice met bob and they walked together. '; done)
-curl -s http://localhost:8000/v1/completions \
+jq -n --arg prompt "$PROMPT" '{"model":"Qwen/Qwen3-32B", "prompt":$prompt, "max_tokens":3, "temperature":0}' | \
+curl -s http://${IP}/v1/completions \
   -H 'Content-Type: application/json' \
-  -d "$(printf '{"model":"Qwen/Qwen3-32B","prompt":%s,"max_tokens":3,"temperature":0}' \
-        "$(printf '%s' "$PROMPT" | python3 -c 'import sys,json; print(json.dumps(sys.stdin.read()))')")"
+  -d @- | jq
+```
 
+```bash
 # Check the shared PVC for written blocks
 POD=$(kubectl get pod -n ${NAMESPACE} -l llm-d.ai/role=decode -o jsonpath='{.items[0].metadata.name}')
 kubectl exec -n ${NAMESPACE} ${POD} -- du -sh /mnt/files-storage/kv-cache
-kubectl exec -n ${NAMESPACE} ${POD} -- find /mnt/files-storage/kv-cache -maxdepth 5 -type d
+kubectl exec -n ${NAMESPACE} ${POD} -- find /mnt/files-storage/kv-cache -maxdepth 5
 ```
 
 Expected output: `du -sh` shows hundreds of MB to several GB, and `find` lists a path like
-`/mnt/files-storage/kv-cache/<model>/<block-config>/<tp-config>/...`.
+`/mnt/files-storage/kv-cache/<model>/<block-config>/<tp-config>/...` (fs connector) or `/mnt/files-storage/kv-cache/<model>-xxx.pt` (lmcache connector).
 
-You can also confirm via vLLM's offload metrics (exposed at `/metrics` on each pod):
+If you have monitoring set up, you can also confirm via vLLM's offload metrics in the metrics explorer, `vllm:kv_offload_total_bytes` for fs connector or `lmcache:local_storage_usage` for lmcache connector.
 
-```bash
-kubectl exec -n ${NAMESPACE} ${POD} -- curl -s http://localhost:8000/metrics | grep '^vllm:kv_offload_total_bytes'
-```
-
-A successful offload increments `vllm:kv_offload_total_bytes{transfer_type="GPU_to_SHARED_STORAGE"}`.
-
-<!-- TAB:LMCache Connector -->
-#### LMCache Connector
-
-You can verify if the KV cache is being offloaded to local storage by checking the metric `lmcache:local_storage_usage` through following command.
-
-```
-export IP=localhost
-export PORT=8000
-export POD_NAME=llm-d-decode-xxxx-xxxx
-kubectl exec -it $POD_NAME -- curl -i http://${IP}:${PORT}/metrics | grep lmcache:local_storage_usage
-```
-
-Verify the folder size where the shared storage  is mounted, it should be in GBs after KV cache offloading completes, the actual size will differ based on the requests served.
-
-```
-kubectl exec -it $POD_NAME -- du -sh /mnt/files-storage
-65G /mnt/files-storage
-```
-
-<!-- TABS:END -->
-
-## Cleanup
-
-To remove the deployment:
-
-```bash
-helm uninstall llm-d-infpool -n ${NAMESPACE}
-kubectl delete -f ./manifests/pvc.yaml -n ${NAMESPACE}
-kubectl delete -k ./manifests/vllm/<llm-d-fs-connector|lmcache-connector> -n ${NAMESPACE}
-# Supported self-installed inference gateway recipe paths are agentgateway (preferred) and kgateway (deprecated migration path).
-kubectl delete -k ../../recipes/gateway/<gke-l7-regional-external-managed|istio|agentgateway|agentgateway-openshift|kgateway|kgateway-openshift> -n ${NAMESPACE}
-kubectl delete namespace ${NAMESPACE}
-```
+---
 
 ## Benchmarking
 
@@ -331,6 +255,9 @@ The following benchmark results demonstrate the performance improvements of offl
 ### LMCache connector
 
 #### Benchmark Setup
+
+> [!NOTE]
+> The following benchmark results were from a previous release and does not match the deployment of the current release. A follow up benchmark will be conducted and the results will be updated accordingly. See https://github.com/llm-d/llm-d/issues/680.
 
 * **Hardware:**
   * A total of 16 H100 GPUs, each with 80GB of HBM, were used.
@@ -397,9 +324,15 @@ In both scenarios, the total KV cache size significantly exceeds the combined ca
 | **Baseline vLLM + CPU offloading** | 58.02 | 74.75 | 87.99 | 105.46 | 16598 | 226.65 | 16825 |
 | **vLLM + CPU offloading + Lustre** | 45 (-22%) | 64.79 (-13%) | 68.28 (-22%) | 87.47 (-17%) | 21364 (+28.71%) | 291 (+28.39%) | 21656 (+28.71%) |
 
+---
 
+## Cleanup
 
+To clean and remove applied deployments:
 
-
-LLM-D FS connector benchmarks coming soon, see tracking issues:
-* https://github.com/llm-d/llm-d/issues/680
+```bash
+helm uninstall ${GUIDE_NAME} -n ${NAMESPACE}
+kubectl delete -f guides/tiered-prefix-cache/storage/manifests/pvc.yaml -n ${NAMESPACE}
+kubectl delete -n ${NAMESPACE} -k guides/tiered-prefix-cache/storage/modelserver/gpu/vllm/${CONNECTOR}
+kubectl delete namespace ${NAMESPACE}
+```

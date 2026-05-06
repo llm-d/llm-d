@@ -48,7 +48,7 @@ jobs:
       # Slim transform: reduce Qwen3-32B to Qwen3-0.6B, 1 GPU, lower memory
       pre_deploy_script: |
         echo "Applying tiered-prefix-cache slim transforms..."
-        KUSTOMIZE_DIR="guides/tiered-prefix-cache/cpu/manifests/vllm/offloading-connector"
+        KUSTOMIZE_DIR="guides/tiered-prefix-cache/cpu/modelserver/gpu/vllm/offloading-connector"
         cat > "${KUSTOMIZE_DIR}/nightly-slim-patch.yaml" <<'PATCH'
         - op: replace
           path: /spec/template/spec/containers/0/args/0
@@ -76,7 +76,7 @@ jobs:
 
         # Override image if IMAGE_OVERRIDE is set by the reusable workflow
         if [ -n "${IMAGE_OVERRIDE:-}" ]; then
-          find guides/tiered-prefix-cache/cpu/manifests/vllm -name "*.yaml" -not -name "kustomization.yaml" \
+          find guides/tiered-prefix-cache/cpu/modelserver/gpu/vllm -name "*.yaml" -not -name "kustomization.yaml" \
             -exec sed -i "s|ghcr.io/llm-d/llm-d-cuda:[^ \"]*|${IMAGE_OVERRIDE}|g" {} \;
           echo "Image override applied: ${IMAGE_OVERRIDE}"
         fi
@@ -87,13 +87,13 @@ jobs:
 
         # 2. Deploy model server via kustomize
         echo "Deploying model server (offloading-connector)..."
-        kubectl apply -k guides/tiered-prefix-cache/cpu/manifests/vllm/offloading-connector -n "$NAMESPACE"
+        kubectl apply -k guides/tiered-prefix-cache/cpu/modelserver/gpu/vllm/offloading-connector -n "$NAMESPACE"
 
         # 3. Deploy InferencePool via helm
         echo "Deploying InferencePool..."
         helm install llm-d-infpool \
           -n "$NAMESPACE" \
-          -f guides/tiered-prefix-cache/cpu/manifests/inferencepool/values.yaml \
+          -f guides/tiered-prefix-cache/cpu/scheduler/tiered-prefix-cache-cpu.values.yaml \
           --set "provider.name=${GATEWAY_TYPE}" \
           oci://registry.k8s.io/gateway-api-inference-extension/charts/inferencepool \
           --version v1.5.0

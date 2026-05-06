@@ -8,13 +8,13 @@ Maintainers for each accelerator type are listed below. See our well-lit path gu
 
 | Vendor | Models | Maintainers | Supported Well-lit Paths |
 | --- | --- | --- | --- |
-| AMD | ROCm | Kenny Roche (<Kenny.Roche@amd.com>), Vincent Cave (<Vincent.Cave@amd.com>) | [optimized baseline](../../guides/optimized-baseline/README.md), [Prefill/Decode Disaggregation](../../guides/pd-disaggregation/README.amd.md) |
-| CPU | x86_64 | Hongming Zheng (@ZhengHongming888, <hongming.zheng@intel.com>) | [optimized baseline](../../guides/optimized-baseline/README.md) |
-| Google | [TPU](../infra-providers/gke/README.md#llm-d-on-google-kubernetes-engine-gke) | Edwin Hernandez (@Edwinhr716), Cong Liu (@liu-cong, <congliu.thu@gmail.com>) | [optimized baseline](../../guides/optimized-baseline/README.md), [Prefill/Decode Disaggregation](../../guides/pd-disaggregation/README.md) |
-| Intel | XPU | Yuan Wu (@yuanwu2017, <yuan.wu@intel.com>) | [optimized baseline](../../guides/optimized-baseline/README.md), [Prefill/Decode Disaggregation](../../guides/pd-disaggregation/README.md) |
-| Intel | HPU | Sakari Poussa (@poussa, <sakari.poussa@intel.com>) | [optimized baseline](../../guides/optimized-baseline/README.md) |
+| AMD | ROCm | Kenny Roche (<Kenny.Roche@amd.com>), Vincent Cave (<Vincent.Cave@amd.com>) | [optimized baseline](../well-lit-paths/optimized-baseline.md), [Prefill/Decode Disaggregation](../well-lit-paths/pd-disaggregation.md) |
+| CPU | x86_64 | Hongming Zheng (@ZhengHongming888, <hongming.zheng@intel.com>) | [optimized baseline](../well-lit-paths/optimized-baseline.md) |
+| Google | [TPU](../infra-providers/gke/README.md#llm-d-on-google-kubernetes-engine-gke) | Edwin Hernandez (@Edwinhr716), Cong Liu (@liu-cong, <congliu.thu@gmail.com>) | [optimized baseline](../well-lit-paths/optimized-baseline.md), [Prefill/Decode Disaggregation](../well-lit-paths/pd-disaggregation.md) |
+| Intel | XPU | Yuan Wu (@yuanwu2017, <yuan.wu@intel.com>) | [optimized baseline](../well-lit-paths/optimized-baseline.md), [Prefill/Decode Disaggregation](../well-lit-paths/pd-disaggregation.md) |
+| Intel | HPU | Sakari Poussa (@poussa, <sakari.poussa@intel.com>) | [optimized baseline](../well-lit-paths/optimized-baseline.md) |
 | NVIDIA | GPU | Will Eaton (<weaton@redhat.com>), Greg (<grpereir@redhat.com>) | All |
-| Rebellions | NPU | Jinmoo Seok (@rebel-jinmoo, <jinmoo_seok@rebellions.ai>), Minwook Ahn (@rebel-minwook, <minwook.ahn@rebellions.ai>) | [optimized baseline](../../guides/optimized-baseline/README.md) |
+| Rebellions | NPU | Jinmoo Seok (@rebel-jinmoo, <jinmoo_seok@rebellions.ai>), Minwook Ahn (@rebel-minwook, <minwook.ahn@rebellions.ai>) | [optimized baseline](../well-lit-paths/optimized-baseline.md) |
 
 ## Requirements
 
@@ -88,7 +88,7 @@ Each vendor provides Device Plugins for their accelerators. The following plugin
 
 - [AMD ROCm Device Plugin](https://github.com/ROCm/k8s-device-plugin)
 - Google TPU Device Plugin (automatically enabled for TPU instances)
-- [Intel XPU Device Plugin](https://github.com/intel/intel-device-plugins-for-kubernetes/blob/main/cmd/gpu_plugin/README.md)
+- [Intel XPU Device Plugin](https://github.com/intel/intel-device-plugins-for-kubernetes/blob/main/cmd/gpu_plugin.md)
 - [Intel Gaudi Device Plugin](https://docs.habana.ai/en/latest/Installation_Guide/Additional_Installation/Kubernetes_Installation/Intel_Gaudi_Kubernetes_Device_Plugin.html)
 - [NVIDIA GPU Device Plugin](https://github.com/NVIDIA/k8s-device-plugin)
 - [Rebellions NPU Operator](https://docs.rbln.ai/latest/software/system_management/kubernetes/about_npu_operator.html)

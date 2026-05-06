@@ -12,7 +12,8 @@
     "libatomic": "libatomic1",
     "libaio": null,
     "libxcb":"libxcb1",
-    "libxcb-devel":"libxcb1-dev"
+    "libxcb-devel":"libxcb1-dev",
+    "cuda-cuobjdump-${CUDA_MAJOR}-${CUDA_MINOR}": "cuda-cuobjdump-${CUDA_MAJOR}-${CUDA_MINOR}"
   },
   "ubuntu_only": [
     "hwloc",

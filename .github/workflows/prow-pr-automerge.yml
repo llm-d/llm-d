@@ -1,8 +1,0 @@
-name: Prow Auto-merge
-on:
-  schedule:
-    - cron: "*/5 * * * *"
-
-jobs:
-  auto-merge:
-    uses: llm-d/llm-d-infra/.github/workflows/reusable-prow-automerge.yml@main

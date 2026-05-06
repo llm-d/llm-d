@@ -83,7 +83,7 @@ done
 Both linters are integrated into:
 
 - **Pre-commit hooks**: Run automatically on `git commit`
-- **CI/CD**: Run in the `pre-commit` job in `.github/workflows/build-image.yml`
+- **CI/CD**: Run in the `pre-commit` job in `.github/workflows/build-image.yaml`
 
 To set up pre-commit locally:
 

@@ -12,6 +12,7 @@ on:
 permissions:
   contents: read
   packages: write
+  security-events: write
 
 concurrency:
   group: nightly-build-image
@@ -20,7 +21,7 @@ concurrency:
 jobs:
   build:
     if: github.repository == 'llm-d/llm-d'
-    uses: ./.github/workflows/build-image.yml
+    uses: ./.github/workflows/build-image.yaml
     with:
       force_build: true
     secrets: inherit

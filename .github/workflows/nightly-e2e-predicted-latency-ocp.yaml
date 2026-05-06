@@ -41,10 +41,13 @@ jobs:
         yq '.spec.template.spec.containers[0].volumeMounts += {"mountPath": "/.triton", "name": "triton-cache"}' -i guides/optimized-baseline/modelserver/gpu/vllm/patch-vllm.yaml
         yq '.spec.replicas=2' -i guides/optimized-baseline/modelserver/gpu/vllm/patch-vllm.yaml
         kubectl apply -k guides/optimized-baseline/modelserver/gpu/vllm -n ${NAMESPACE}
+        # CI-only: disable EPP /metrics auth so the validate script's curl pod
+        # can scrape predicted/actual TTFT histograms without a bearer token.
         helm install predicted-latency-based-scheduling \
           oci://registry.k8s.io/gateway-api-inference-extension/charts/standalone \
           -f guides/recipes/scheduler/base.values.yaml \
           -f guides/predicted-latency-based-scheduling/scheduler/predicted-latency.values.yaml \
+          --set inferenceExtension.monitoring.prometheus.auth.enabled=false \
           -n ${NAMESPACE} --version v1.5.0
       e2e_validate_args: '--extra-validate predicted-latency'
       accelerator_type: H100

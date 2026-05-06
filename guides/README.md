@@ -2,6 +2,9 @@
 
 Our well-lit path guides are documented, tested, and benchmarked recipes to serve LLMs with best-practices for high performance.
 
+> [!IMPORTANT]
+> These guides are intended to be a starting point for your own configuration and deployment of model servers. Our manifests provide basic reusable building blocks for vLLM deployments and llm-d router configuration within these guides but will not support the full range of all possible configurations.
+
 We currently offer the following:
 
 ### Intelligent Routing
@@ -24,9 +27,6 @@ We currently offer the following:
 * [Flow Control](./flow-control.md): Intelligent request queuing for multi-tenant deployments and managing traffic spikes.
 * [Workload Autoscaling](./workload-autoscaling/README.md) - autoscale the LLM service via proactive, SLO-aware signals that reflect the true state of the inference system — queue depth, in-flight request counts, and KV cache pressure — so that capacity can be added before end-user latency is impacted.
 
-> [!IMPORTANT]
-> These guides are intended to be a starting point for your own configuration and deployment of model servers. Our manifests provide basic reusable building blocks for vLLM deployments and llm-d router configuration within these guides but will not support the full range of all possible configurations.
-
 ## Experimental Guides
 
 * [Asynchronous Processing](./asynchronous-processing/README.md) - process inference requests asynchronously using a queue-based architecture. This is ideal for latency-insensitive batch workloads or for filling "slack" capacity in your inference pool.
@@ -36,7 +36,6 @@ We currently offer the following:
 
 Our supporting guides address common operational challenges with model serving at scale:
 
-* [Simulating model servers](./simulated-accelerators/README.md) can deploy a vLLM model server simulator that allows testing optimized baseline and orchestration at scale as each instance does not need accelerators.
 * [Benchmark](../helpers/benchmark.md) demonstrates how to use automation for running benchmarks against the llm-d stack.
 
 ## Nightly Testing

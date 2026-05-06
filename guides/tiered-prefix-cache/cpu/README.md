@@ -1,256 +1,230 @@
 # Offloading Prefix Cache to CPU Memory
 
+[![Nightly - tiered cache CPU E2E (OCP)](https://github.com/llm-d/llm-d/actions/workflows/nightly-e2e-tiered-prefix-cache-ocp.yaml/badge.svg)](https://github.com/llm-d/llm-d/actions/workflows/nightly-e2e-tiered-prefix-cache-ocp.yaml)
+
 ## Overview
 
-This guide provides recipes to offload prefix cache to CPU RAM via the vLLM native offloading connector and the LMCache connector.
+This guide provides recipes to offload prefix cache to CPU RAM via the vLLM native offloading connector, LMCache connector and tpu-inference KVCache connector. Offloading prefix cache to CPU helps in increasing overall throughput and mitigating memory starvation on HBM for large context models and frequent multi-turn user sessions.
+
+## Default Configuration
+
+### GPU
+
+| Parameter                 | Value                                                   |
+| ------------------------- | ------------------------------------------------------- |
+| Model                     | [Qwen/Qwen3-32B](https://huggingface.co/Qwen/Qwen3-32B) |
+| GPUs per replica (TP)     | 4                                                       |
+| GPU Accelerator           | NVIDIA H100                                             |
+| CPU Cache Offload Size    | 100 GB                                                  |
+
+### TPU
+
+| Parameter                 | Value                                                   |
+| ------------------------- | ------------------------------------------------------- |
+| Model                     | [Qwen/Qwen3-32B](https://huggingface.co/Qwen/Qwen3-32B) |
+| TPUs per replica (TP)     | 8                                                       |
+| TPU Accelerator           |  TPU7x                                             |
+| HBM Staging Buffer Size   | 1000 Blocks (~34 GB)                                                   |
+| CPU Cache Offload Size    | 25000 Chunks (~780 GB)                                                   |
+
+### Supported Hardware Backends
+This guide supports both GPU and TPU. GPU defaults to NVIDIA H100 and TPU defaults to TPU7x. The Kustomize overlays are available in `modelserver/gpu/vllm/` and `modelserver/tpu-v7/vllm/`.
+
+---
 
 ## Prerequisites
 
-* All prerequisites from the [upper level](../README.md).
-* Have the [proper client tools installed on your local system](../../../helpers/client-setup/README.md) to use this guide.
-* Configure and deploy your [Gateway control plane](../../prereq/gateway-provider/README.md).
-* Have the [Monitoring stack](../../../docs/monitoring/README.md) installed on your system.
-* Create a namespace for installation.
+- Have the [proper client tools installed on your local system](../../../helpers/client-setup/README.md) to use this guide.
+- Checkout llm-d repo:
 
   ```bash
-  export NAMESPACE=llm-d-pfc-cpu # or any other namespace (shorter names recommended)
-  kubectl create namespace ${NAMESPACE}
+    export branch="main" # branch, tag, or commit hash
+    git clone https://github.com/llm-d/llm-d.git && cd llm-d && git checkout ${branch}
   ```
 
-* [Create the `llm-d-hf-token` secret in your target namespace with the key `HF_TOKEN` matching a valid HuggingFace token](../../../helpers/hf-token.md) to pull models.
+- Set the following environment variables:
+  ```bash
+    export GAIE_VERSION=v1.5.0
+    export GUIDE_NAME="tiered-prefix-cache-cpu"
+    export NAMESPACE=llm-d-${GUIDE_NAME}
+  ```
+- Install the Gateway API Inference Extension CRDs:
 
-## Installation
+  ```bash
+    kubectl apply -k "https://github.com/kubernetes-sigs/gateway-api-inference-extension/config/crd?ref=${GAIE_VERSION}"
+  ```
 
-```bash
-cd guides/tiered-prefix-cache/cpu
-```
+- Create a target namespace for the installation
+  ```bash
+    kubectl create namespace ${NAMESPACE}
+  ```
 
-### Deploy Gateway and HTTPRoute
+## Installation Instructions
 
-Deploy the Gateway and HTTPRoute using the [gateway recipe](../../recipes/gateway/README.md).
+### 1. Deploy the llm-d Router
 
-### Deploy vLLM Model Server
+#### Standalone Mode
 
-<!-- TABS:START -->
-
-<!-- TAB:Offloading Connector:default -->
-#### Offloading Connector
-
-Deploy the vLLM model server with the `OffloadingConnector` enabled.
-
-```bash
-kubectl apply -k ./manifests/vllm/offloading-connector -n ${NAMESPACE}
-```
-
-<!-- TAB:LMCache Connector -->
-#### LMCache Connector
-
-Deploy the vLLM model server with the `LMCache` connector enabled.
+This deploys the inference scheduler with an Envoy sidecar side-by-side. Default mode for standalone deployments:
 
 ```bash
-kubectl apply -k ./manifests/vllm/lmcache-connector -n ${NAMESPACE}
+helm install ${GUIDE_NAME} \
+    oci://registry.k8s.io/gateway-api-inference-extension/charts/standalone \
+    -f guides/recipes/scheduler/base.values.yaml \
+    -f guides/tiered-prefix-cache/cpu/scheduler/${GUIDE_NAME}.values.yaml \
+    -n ${NAMESPACE} --version ${GAIE_VERSION}
 ```
 
-<!-- TABS:END -->
+<details>
+<summary><h4>Gateway Mode</h4></summary>
 
-### Deploy InferencePool
+To use a Kubernetes Gateway managed proxy rather than the standalone version, follow these steps instead of applying the previous Helm chart:
 
-To deploy the `InferencePool`, select your provider below.
-
-> [!WARNING]
-> `kgateway` is deprecated in llm-d and will be removed in the next release. Prefer `agentgateway` for new self-installed inference deployments. The current Gateway API Inference Extension chart uses `provider.name=none` for the `agentgateway` path; see the upstream [`inferencepool` chart values for v1.5.0](https://github.com/kubernetes-sigs/gateway-api-inference-extension/blob/v1.5.0/config/charts/inferencepool/values.yaml).
-
-<!-- TABS:START -->
-
-<!-- TAB:GKE:default -->
-
-#### GKE
-
-This command deploys the `InferencePool` on GKE with GKE-specific monitoring enabled.
+1. _Deploy a Kubernetes Gateway_ by following one of [the gateway guides](../../prereq/gateways).
+2. _Deploy the inference scheduler and an HTTPRoute_ connecting to the Gateway:
 
 ```bash
-helm install llm-d-infpool \
-    -n ${NAMESPACE} \
-    -f ./manifests/inferencepool/values.yaml \
-    --set "provider.name=gke" \
-    oci://registry.k8s.io/gateway-api-inference-extension/charts/inferencepool \
-    --version v1.5.0
+export PROVIDER_NAME=gke # options: none, gke, agentgateway, istio
+helm install ${GUIDE_NAME} \
+    oci://registry.k8s.io/gateway-api-inference-extension/charts/inferencepool  \
+    -f guides/recipes/scheduler/base.values.yaml \
+    -f guides/tiered-prefix-cache/cpu/scheduler/${GUIDE_NAME}.values.yaml \
+    --set provider.name=${PROVIDER_NAME} \
+    --set experimentalHttpRoute.enabled=true \
+    --set experimentalHttpRoute.inferenceGatewayName=llm-d-inference-gateway \
+    -n ${NAMESPACE} --version ${GAIE_VERSION}
 ```
 
-<!-- TAB:Istio -->
+</details>
 
-#### Istio
+---
 
-This command deploys the `InferencePool` with Istio, enabling Prometheus monitoring.
+### 2. Deploy the Model Server
+
+Apply the Kustomize overlay setup matching your preferred offloading medium.
 
 ```bash
-helm install llm-d-infpool \
-    -n ${NAMESPACE} \
-    -f ./manifests/inferencepool/values.yaml \
-    --set "provider.name=istio" \
-    oci://registry.k8s.io/gateway-api-inference-extension/charts/inferencepool \
-    --version v1.5.0
+export ACCELERATOR=gpu # gpu|tpu-v7
+export CONNECTOR=offloading-connector # offloading-connector | lmcache-connector | tpu-offloading-connector
+kubectl apply -n ${NAMESPACE} -k guides/tiered-prefix-cache/cpu/modelserver/${ACCELERATOR}/vllm/${CONNECTOR}
 ```
 
-<!-- TAB:Agentgateway -->
+> [!NOTE]
+> To enable tiered prefix caching, we customize the `inferenceExtension` configuration. We configure two prefix cache scorers: one for the GPU/TPU cache and another for the CPU cache.
+> LRU capacity for the CPU cache must be manually configured (`lruCapacityPerServer`) because vLLM currently does not emit CPU block metrics.
 
-#### Agentgateway
+---
 
-This command deploys the `InferencePool` for `agentgateway`.
+### 3. (Optional) Enable monitoring
+
+- Install the [Monitoring stack](../../../docs/monitoring/README.md).
+- Deploy the monitoring resources for this guide:
 
 ```bash
-helm install llm-d-infpool \
-    -n ${NAMESPACE} \
-    -f ./manifests/inferencepool/values.yaml \
-    --set "provider.name=none" \
-    oci://registry.k8s.io/gateway-api-inference-extension/charts/inferencepool \
-    --version v1.5.0
+kubectl apply -n ${NAMESPACE} -k guides/recipes/modelserver/components/monitoring
 ```
 
-<!-- TABS:END -->
+## Verification
 
-To enable tiered prefix caching, we customize the `InferencePool` configuration (see [`manifests/inferencepool/values.yaml`](./manifests/inferencepool/values.yaml)). We configure two prefix cache scorers: one for the GPU cache and another for the CPU cache.
+### 1. Get the IP of the Proxy
 
-For the CPU cache, we must manually configure the `lruCapacityPerServer` because vLLM currently does not emit CPU block metrics.
-
-The current weight configuration is `2:2:1:1` (Queue Scorer : KV Cache Utilization Scorer : GPU Prefix Cache Scorer : CPU Prefix Cache Scorer). The current CPU offloading copies GPU cache entries to CPU, essentially making CPU cache a super set of GPU. This weight configuration ensures that the combined weight of the GPU and CPU prefix cache scorers equals 2.
-
-You can tune these values, particularly the ratio between the GPU and CPU scorers, to suit your specific requirements. The current configuration has demonstrated improved performance in our [Benchmark](#benchmark) tests.
-
-## Verifying the installation
-
-You can verify the installation by checking the status of the created resources.
-
-### Check the Gateway
+**Standalone Mode**
 
 ```bash
-kubectl get gateway -n ${NAMESPACE}
+export IP=$(kubectl get service ${GUIDE_NAME}-epp -n ${NAMESPACE} -o jsonpath='{.spec.clusterIP}')
 ```
 
-You should see output similar to the following, with the `PROGRAMMED` status as `True`.
-
-```text
-NAME                      CLASS                              ADDRESS     PROGRAMMED   AGE
-llm-d-inference-gateway   gke-l7-regional-external-managed   <redacted>  True         16m
-```
-
-### Check the HTTPRoute
+<details>
+<summary> <b>Gateway Mode</b> </summary>
 
 ```bash
-kubectl get httproute -n ${NAMESPACE}
+export IP=$(kubectl get gateway llm-d-inference-gateway -n ${NAMESPACE} -o jsonpath='{.status.addresses[0].value}')
 ```
 
-```text
-NAME          HOSTNAMES   AGE
-llm-d-route               17m
-```
+</details>
 
-### Check the InferencePool
+### 2. Send Test Requests
+
+**Open a temporary interactive shell inside the cluster:**
 
 ```bash
-kubectl get inferencepool -n ${NAMESPACE}
+kubectl run curl-debug --rm -it \
+    --image=cfmanteiga/alpine-bash-curl-jq \
+    --env="IP=$IP" \
+    --env="NAMESPACE=$NAMESPACE" \
+    -- /bin/bash
 ```
 
-```text
-NAME            AGE
-llm-d-infpool   16m
-```
-
-### Check the Pods
+**Send a completion request:**
 
 ```bash
-kubectl get pods -n ${NAMESPACE}
+curl -X POST http://${IP}/v1/completions \
+    -H 'Content-Type: application/json' \
+    -d '{
+        "model": "Qwen/Qwen3-32B",
+        "prompt": "How are you today?"
+    }' | jq
 ```
 
-You should see the InferencePool's endpoint pod and the model server pods in a `Running` state.
-
-```text
-NAME                                  READY   STATUS    RESTARTS   AGE
-llm-d-infpool-epp-xxxxxxxx-xxxxx     1/1     Running   0          16m
-llm-d-model-server-xxxxxxxx-xxxxx   1/1     Running   0          11m
-llm-d-model-server-xxxxxxxx-xxxxx   1/1     Running   0          11m
-```
+---
 
 ## Cleanup
 
-To remove the deployment:
+To clean up the applied deployment components:
 
 ```bash
-helm uninstall llm-d-infpool -n ${NAMESPACE}
-
-kubectl delete -f ./manifests/pvc.yaml -n ${NAMESPACE}
-kubectl delete -k ./manifests/vllm/offloading-connector -n ${NAMESPACE}
-kubectl delete -k ./manifests/vllm/<offloading-connector|lmcache-connector> -n ${NAMESPACE}
-# Supported self-installed inference gateway recipe paths are agentgateway and
-# agentgateway (preferred), agentgateway-openshift, plus kgateway and kgateway-openshift
-# (deprecated migration paths).
-kubectl delete -k ../recipes/gateway/<gke-l7-regional-external-managed|istio|agentgateway|agentgateway-openshift|kgateway|kgateway-openshift> -n ${NAMESPACE}
+helm uninstall ${GUIDE_NAME} -n ${NAMESPACE}
+kubectl delete -n ${NAMESPACE} -k guides/tiered-prefix-cache/cpu/modelserver/${ACCELERATOR}/vllm/${CONNECTOR}
 kubectl delete namespace ${NAMESPACE}
 ```
 
-## Appendix
+---
 
-### Benchmark
+## Benchmarking
 
-The following benchmark results demonstrate the performance improvements of using vLLM's native CPU offloading and LMCache CPU offloading.
+For instructions on setting up standard workloads and running performance analyses against this guide, refer to the [benchmark instructions doc](../../../helpers/benchmark.md).
 
-#### Benchmark Setup
+The current weight configuration defaults to `2:2:1:1` (Queue Scorer : KV Cache Utilization Scorer : GPU/TPU Prefix Cache Scorer : CPU Prefix Cache Scorer). This configuration defaults to a safe performance profile.
 
-* **Hardware:**
-  * A total of 16 H100 GPUs, each with 80GB of HBM, were used.
-  * The GPUs were distributed across 4 `a3-highgpu-4g` instances, with 4 GPUs per instance.
 
-* **vLLM Configuration:**
-  * `gpu_memory_utilization` was set to `0.65` to reduce the pressure on the benchmark tool. In
-    production configuration this is typically set to a higher value such as 0.9.
-  * CPU offloading was enabled with `cpu_bytes_to_use` set to `107374182400` (100GB) of CPU cache.
-* **LMCache Configuration:**
-  * For LMCache setup, `LMCACHE_MAX_LOCAL_CPU_SIZE` is set to 100 GB.
+> [!NOTE]
+> The following benchmark results were from a previous release and does not match the deployment of the current release. A follow up benchmark will be conducted and the results will be updated accordingly. See https://github.com/llm-d/llm-d/issues/680.
 
-The benchmark was conducted using the [inference-perf](https://github.com/kubernetes-sigs/inference-perf) tool with the following hardware, memory, and workload configurations:
+### GPU
 
-* **Workload:**
-  * The two different workloads were tested with a constant concurrency of 45 requests.
-  * **High Cache:**
-    * `num_groups`: 45
-    * `system_prompt_len`: 30,000
-    * `question_len`: 256
-    * `output_len`: 1024
-    * `num_prompts_per_group`: 10
-  * **Low Cache:**
-    * `num_groups`: 45
-    * `system_prompt_len`: 8000
-    * `question_len`: 256
-    * `output_len`: 1024
-    * `num_prompts_per_group`: 10
 
-* **Memory Calculation:**
-  * The KVCache size for the `Qwen/Qwen3-32B` model is approximately 0.0002 GB per token.
-  * With `gpu_memory_utilization` at 0.65, there are 9271 GPU blocks available per engine.
-  * The available HBM for KVCache per engine is approximately 24.3GB (9271 blocks * 2.62 MB/block).
-  * The total available HBM for the KVCache across the entire system was 193.4 GB (8 engines * 24.3 GB/engine).
+#### High Cache Scenario (HBM < KVCache < HBM + CPU RAM)
 
-#### Key Findings
-
-* In **High cache scenarios**, where the KVCache size exceeds the available HBM, both the vLLM native CPU offloading connector and LMCache connector significantly enhance performance.
-* In **Low cache scenarios**, where the KVCache fits entirely within the GPU's HBM, all offloading configurations perform similarly to the baseline. However, consistent slight decreases in performance across metrics indicate a small overhead associated with enabling CPU offloading, even when it is not actively utilized.
-
-#### High Cache Performance
-
-The following table compares the performance of the baseline vLLM with the vLLM using the CPU offloading connector when the KVCache size is larger than the available HBM.
-
-| HBM < KVCache < HBM + CPU RAM | Mean TTFT (second) | P90 TTFT (second) | Mean E2E Latency (second) | P90 E2E Latency (second) | Overall Throughput (token per second) |
+| Medium Configuration | Mean TTFT (second) | P90 TTFT (second) | Mean E2E Latency (second) | P90 E2E Latency (second) | Overall Throughput (token per second) |
 | :--- | :--- | :--- | :--- | :--- | :--- |
-| **Baseline vLLM** | 9.0 | 20.9 | 37.8 | 49.7 | 38534.8 |
-| **vLLM + CPU offloading 100GB** | 6.7 (-25.6%) | 20.2 (-3.3%) | 30.9 (-18.3%) | 44.2 (-11.1%) | 46751.0 (+21.3%) |
-| **vLLM + LMCache CPU offloading 100GB** | 6.5 (-27.8%) | 18.8 (-10.0%) | 30.8 (-18.5%) | 43.0 (-13.5%) | 46910.6 (+21.7%) |
+| **Baseline vLLM** | 9.0 | 20.9 | 37.8 | 49.7 | 38,534.8 |
+| **vLLM + CPU offloading 100GB** | 6.7 (-25.6%) | 20.2 (-3.3%) | 30.9 (-18.3%) | 44.2 (-11.1%) | 46,751.0 (+21.3%) |
+| **vLLM + LMCache CPU offloading 100GB** | 6.5 (-27.8%) | 18.8 (-10.0%) | 30.8 (-18.5%) | 43.0 (-13.5%) | 46,910.6 (+21.7%) |
 
-#### Low Cache Performance
+#### Low Cache Scenario (KVCache < HBM)
 
-The following table shows that when the KVCache fits within the HBM, the performance of all configurations is similar, indicating minimal but measurable overhead from the CPU offloading mechanism.
-
-| KVCache < HBM | Mean TTFT (second) | P90 TTFT (second) | Mean E2E Latency (second) | P90 E2E Latency (second) | Overall Throughput (token per second) |
+| Medium Configuration | Mean TTFT (second) | P90 TTFT (second) | Mean E2E Latency (second) | P90 E2E Latency (second) | Overall Throughput (token per second) |
 | :--- | :--- | :--- | :--- | :--- | :--- |
-| **Baseline vLLM** | 0.12 | 0.09 | 18.4 | 19.6 | 23389.6 |
-| **vLLM + CPU offloading 100GB** | 0.13 | 0.11 | 18.6 | 20.6 | 23032.6 |
-| **vLLM + LMCache CPU offloading 100GB** | 0.15 | 0.10 | 18.9 | 19.6 | 22772.5 |
+| **Baseline vLLM** | 0.12 | 0.09 | 18.4 | 19.6 | 23,389.6 |
+| **vLLM + CPU offloading 100GB** | 0.13 | 0.11 | 18.6 | 20.6 | 23,032.6 |
+| **vLLM + LMCache CPU offloading 100GB** | 0.15 | 0.10 | 18.9 | 19.6 | 22,772.5 |
+
+
+### TPU
+
+
+#### High Cache Scenario (HBM < KVCache < HBM + CPU RAM)
+
+| Medium Configuration | Mean TTFT (second) | P90 TTFT (second) | Mean E2E Latency (second) | P90 E2E Latency (second) | Overall Throughput (token per second) |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| **Baseline vLLM** | 0.98 | 2.1 | 22.1 | 26.2 | 67262.3 |
+| **vLLM + CPU offloading 25000 Chunks** | 0.56 (-49%) | 0.5 (-75.7%) | 20.3 (-8.1%) | 23.6 (-9.9%) | 73178.1 (+8.9%) |
+
+
+#### Low Cache Scenario (KVCache < HBM)
+
+| Medium Configuration | Mean TTFT (second) | P90 TTFT (second) | Mean E2E Latency (second) | P90 E2E Latency (second) | Overall Throughput (token per second) |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| **Baseline vLLM** | 0.24 | 0.23 | 16.9 | 19.9 | 25715.9 |
+| **vLLM + CPU offloading 25000 Chunks** | 0.26 | 0.24 | 17.4 | 20.2 | 23,032.6 |
+

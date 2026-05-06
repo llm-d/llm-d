@@ -113,6 +113,7 @@ Apply the Kustomize overlays for your specific backend (defaulting to NVIDIA GPU
 kubectl apply -n ${NAMESPACE} -k guides/${GUIDE_NAME}/modelserver/gpu/vllm/
 ```
 
+<details>
 <summary><h4>If you run into NCCL errors on GKE</h4></summary>
 
 Try applying the patch:
