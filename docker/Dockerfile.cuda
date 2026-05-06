@@ -9,9 +9,9 @@ ARG FINAL_BASE_IMAGE_SUFFIX=${BASE_IMAGE_SUFFIX}
 ######################## SYSTEM CONFIGURATION ########################
 
 # CUDA version - provided via build args from docker/common-versions file via GH workflow
-ARG CUDA_MAJOR=12
-ARG CUDA_MINOR=9
-ARG CUDA_PATCH=1
+ARG CUDA_MAJOR=13
+ARG CUDA_MINOR=0
+ARG CUDA_PATCH=2
 ARG TARGETOS=rhel
 ARG TARGETPLATFORM=linux/amd64
 ARG BASE_IMAGE_SUFFIX=ubi9
@@ -61,7 +61,7 @@ ARG DEEPGEMM_REPO="https://github.com/deepseek-ai/DeepGEMM"
 ARG DEEPGEMM_VERSION="477618cd51baffca09c4b0b87e97c03fe827ef03"
 
 ARG FLASHINFER_REPO="https://github.com/flashinfer-ai/flashinfer.git"
-ARG FLASHINFER_VERSION="v0.6.4"
+ARG FLASHINFER_VERSION="v0.6.6"
 
 # vLLM build settings - provided via build args from docker/common-versions file
 # Override here for platform-specific testing or via build args
@@ -164,6 +164,7 @@ ENV NVSHMEM_DIR="/opt/nvshmem-${NVSHMEM_VERSION}" \
     NIXL_PREFIX="/opt/nixl" \
     EFA_PREFIX="/opt/amazon/efa"
 
+# CUDA 13.0 moved CCCL (libcudacxx) headers to include/cccl/ subdirectory
 ENV PATH="${NVSHMEM_DIR}/bin:${VIRTUAL_ENV}/bin:${PATH}" \
     LIBRARY_PATH="\
 ${EFA_PREFIX}/lib:${EFA_PREFIX}/lib64:\
@@ -172,8 +173,8 @@ ${NVSHMEM_DIR}/lib:${NVSHMEM_DIR}/lib64:\
 ${CUDA_HOME}/lib64:\
 /usr/local/lib:/usr/local/lib64:\
 ${LIBRARY_PATH}" \
-    CPATH="${NVSHMEM_DIR}/include:\
-${CUDA_HOME}/include:\
+    CPATH="${CUDA_HOME}/include:${CUDA_HOME}/include/cccl:${NVSHMEM_DIR}/include:\
+${CUDA_HOME}/include:${CUDA_HOME}/include/cccl:\
 /usr/local/include:\
 /usr/include:\
 ${CPATH}" \
