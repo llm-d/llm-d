@@ -4,7 +4,7 @@ This page lists the llm-d release artifacts and dependencies:
 
 1. [**CRDs**](#1-crds) — the Kubernetes Custom Resource Definitions used by llm-d
 2. [**llm-d Router**](#2-llm-d-router) — the Helm chart and container images for the routing layer
-4. [**Model Servers and Extensions**](#4-model-server-images) — the inference engine images and extensions for advanced functionality
+3. [**Model Servers and Extensions**](#3-model-servers-and-extensions) — the inference engine images and extensions for advanced functionality
 4. [**Well-Lit Path Guides**](#4-well-lit-path-guides) — deployment manifests and benchmark scripts for key user stories
 5. [**Gateway Recipes**](#5-gateway-recipes) — optional recipes for installing Gateways and integrating them with llm-d
 
@@ -39,7 +39,7 @@ llm-d Router is deployed via Helm. We offer a chart both Standalone and Gateway 
 | **Standalone Mode** | v1.5.0 | `oci://registry.k8s.io/gateway-api-inference-extension/charts/standalone` | Deploys an InferencePool and EPP with a standalone Envoy proxy as sidecar in EPP pod  |
 | **Gateway Mode** | v1.5.0 | `oci://registry.k8s.io/gateway-api-inference-extension/charts/inferencepool` | Deploys an InferencePool and EPP for use with an existing Kubernetes Gateway (e.g. Istio, AgentGateway, GKE) |
 
-The charts are currently published by the Gateway API Inference Extension (GAIE) project (see [standalone mode source](https://github.com/kubernetes-sigs/gateway-api-inference-extension/tree/main/config/charts/standalone) and [gateway mode source]((https://github.com/kubernetes-sigs/gateway-api-inference-extension/tree/maibn/config/charts/inferencepool))). Each well-lit path guides provides values files on top of the chart defaults to enable the functionality implemented in EPP.
+The charts are currently published by the Gateway API Inference Extension (GAIE) project (see [standalone mode source](https://github.com/kubernetes-sigs/gateway-api-inference-extension/tree/main/config/charts/standalone) and [gateway mode source](https://github.com/kubernetes-sigs/gateway-api-inference-extension/tree/main/config/charts/inferencepool)). Each well-lit path guides provides values files on top of the chart defaults to enable the functionality implemented in EPP.
 
 > [!NOTE]
 > In a future release, the Helm Charts will be published
@@ -54,13 +54,19 @@ llm-d releases the core EPP image as well as additional sidecar images for advan
 | `ghcr.io/llm-d/llm-d-inference-scheduler` | Core EPP image | v0.8.0 |
 | `ghcr.io/llm-d/llm-d-uds-tokenizer`       | Optional sidecar for EPP, enabling tokenization for precise cache aware routing | v0.8.0 |
 | `ghcr.io/llm-d/llm-d-routing-sidecar`     | Optional sidecar for model servers, enabling KV cache transfer for P/D | v0.8.0 |
+| `registry.k8s.io/gateway-api-inference-extension/latency-training-server` | Optional sidecar for EPP, for predicted-latency model training | v1.5.0 |
+| `registry.k8s.io/gateway-api-inference-extension/latency-prediction-server` | Optional sidecar for EPP, for predicted-latency scheduling | v1.5.0 |
+
+> [!NOTE]
+> In a future release, the latency server images will be
+> released from the llm-d/llm-d-latency-predictor repo.
 
 ## 3. Model Servers and Extensions
 
 The llm-d stack supports vLLM and SGLang.
 
 > [!IMPORTANT]
-> llm-d validate each released guide against specific versions
+> llm-d validates each released guide against specific versions
 > of each model server, but llm-d Router communicates with model
 > servers over the OpenAI-compatible HTTP API and standard
 > inference engine metrics, so any recent release should work.
@@ -77,21 +83,21 @@ We recommend using the upstream images for most guides:
 
 ### Custom Images
 
-In addition to the upstream images, llm-d also builds and releases vLLM images with features not yet merged into vLLM upstream such:
+In addition to the upstream images, llm-d also builds and releases vLLM images with features not yet merged into vLLM upstream such as:
 * EFA support for AWS HPC networking
 * GKE IB networking patches
 * DeepEP patches for GB200 support
-* RIXL support on AMD RoCM
+* RIXL support on AMD ROCm
 
 | Image | Tag | Accelerator | Base OS | Architectures |
 |-------|-----|-------------|---------|---------------|
-| `ghcr.io/llm-d/llm-d-cuda`     | `v0.7.0` | NVIDIA CUDA | RHEL UBI9 | amd64, arm64 |
-| `ghcr.io/llm-d/llm-d-cud-gb200`| `v0.7.0` | NVIDIA CUDA | RHEL UBI9 | amd64, arm64 |
-| `ghcr.io/llm-d/llm-d-aws`      | `v0.7.0` | NVIDIA CUDA + EFA | RHEL UBI9 | amd64, arm64 |
-| `ghcr.io/llm-d/llm-d-rocm`     | `v0.7.0` | AMD ROCm | RHEL UBI9 | amd64 |
-| `ghcr.io/llm-d/llm-d-xpu`      | `v0.7.0` | Intel XPU | Ubuntu 24.04 | amd64 |
-| `ghcr.io/llm-d/llm-d-hpu`      | `v0.7.0` | Intel Gaudi HPU | Ubuntu 22.04 | amd64 |
-| `ghcr.io/llm-d/llm-d-cpu`      | `v0.7.0` | CPU | RHEL UBI9 | amd64 |
+| `ghcr.io/llm-d/llm-d-cuda`      | `v0.7.0` | NVIDIA CUDA | RHEL UBI9 | amd64, arm64 |
+| `ghcr.io/llm-d/llm-d-cuda-gb200`| `v0.7.0` | NVIDIA CUDA | RHEL UBI9 | amd64, arm64 |
+| `ghcr.io/llm-d/llm-d-aws`       | `v0.7.0` | NVIDIA CUDA + EFA | RHEL UBI9 | amd64, arm64 |
+| `ghcr.io/llm-d/llm-d-rocm`      | `v0.7.0` | AMD ROCm | RHEL UBI9 | amd64 |
+| `ghcr.io/llm-d/llm-d-xpu`       | `v0.7.0` | Intel XPU | Ubuntu 24.04 | amd64 |
+| `ghcr.io/llm-d/llm-d-hpu`       | `v0.7.0` | Intel Gaudi HPU | Ubuntu 22.04 | amd64 |
+| `ghcr.io/llm-d/llm-d-cpu`       | `v0.7.0` | CPU | RHEL UBI9 | amd64 |
 
 ### FS Offloading Extension
 
@@ -115,7 +121,7 @@ See the [full list of guides](../well-lit-paths/README.md) for more details.
 
 ## 5. Gateways
 
-llm-d Router supports optional integration with Kuberentes Gateways. These are the versions we test against for the `v0.7.0` release:
+llm-d Router supports optional integration with Kubernetes Gateways. These are the versions we test against for the `v0.7.0` release:
 
 | Dependency | Tested Versions | Notes |
 |------------|-----------------|-------|
