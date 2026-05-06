@@ -12,3 +12,56 @@ spec:
           volumeMounts:
             - name: files-storage
               mountPath: /mnt/files-storage
+      containers:
+        - name: modelserver
+          image: ghcr.io/llm-d/llm-d-cuda:v0.5.1
+          args:
+            - |-
+              mkdir -p /tmp/custom-package; \
+              uv pip install --target /tmp/custom-package https://raw.githubusercontent.com/llm-d/llm-d-kv-cache/main/kv_connectors/llmd_fs_backend/wheels/llmd_fs_connector-0.15.1-cp312-cp312-linux_x86_64.whl; \
+              export PYTHONPATH="/tmp/custom-package:$PYTHONPATH";
+              exec vllm serve \
+                meta-llama/Llama-3.3-70B-Instruct \
+                --tensor-parallel-size 4 \
+                --port 8000 \
+                --max-num-seq 1024 \
+                --enable_prefix_caching \
+                --gpu-memory-utilization 0.65 \
+                --kv-transfer-config '{
+                  "kv_connector":"MultiConnector",
+                  "kv_role":"kv_both",
+                  "kv_connector_extra_config": {
+                    "connectors": [
+                      {
+                        "kv_connector": "OffloadingConnector",
+                        "kv_role": "kv_both",
+                        "kv_connector_extra_config": {
+                          "cpu_bytes_to_use": 64424509440,
+                          "lazy_offload": true
+                        }
+                      },
+                      {
+                        "kv_connector": "OffloadingConnector",
+                        "kv_role": "kv_both",
+                        "kv_connector_extra_config": 
+                        {
+                          "spec_name": "SharedStorageOffloadingSpec",
+                          "shared_storage_path": "/mnt/files-storage/",
+                          "block_size": 256,
+                          "threads_per_gpu": 64,
+                          "spec_module_path": "llmd_fs_backend.spec"
+                        }
+                      }
+                    ]
+                  }
+                }'
+          env:
+            - name: LIBRARY_PATH
+              value: /usr/local/nvidia/lib64:$LIBRARY_PATH
+            - name: LD_PRELOAD
+              value: /opt/nvidia/nsight-compute/2025.2.1/host/linux-desktop-glibc_2_11_3-x64/libstdc++.so.6
+            - name: HUGGING_FACE_HUB_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: llm-d-hf-token
+                  key: HF_TOKEN

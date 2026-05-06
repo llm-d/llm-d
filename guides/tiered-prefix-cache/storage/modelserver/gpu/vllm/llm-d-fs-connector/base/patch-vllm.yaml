@@ -20,14 +20,31 @@ spec:
                 --tensor-parallel-size 2 \
                 --max-num-seq 1024 \
                 --kv-transfer-config '{
-                  "kv_connector": "OffloadingConnector",
-                  "kv_role": "kv_both",
+                  "kv_connector":"MultiConnector",
+                  "kv_role":"kv_both",
                   "kv_connector_extra_config": {
-                    "spec_name": "SharedStorageOffloadingSpec",
-                    "shared_storage_path": "/mnt/files-storage/kv-cache/",
-                    "block_size": 256,
-                    "threads_per_gpu": 64,
-                    "spec_module_path": "llmd_fs_backend.spec"
+                    "connectors": [
+                      {
+                        "kv_connector": "OffloadingConnector",
+                        "kv_role": "kv_both",
+                        "kv_connector_extra_config": {
+                          "cpu_bytes_to_use": 64424509440,
+                          "lazy_offload": true
+                        }
+                      },
+                      {
+                        "kv_connector": "OffloadingConnector",
+                        "kv_role": "kv_both",
+                        "kv_connector_extra_config": 
+                        {
+                          "spec_name": "SharedStorageOffloadingSpec",
+                          "shared_storage_path": "/mnt/files-storage/",
+                          "block_size": 256,
+                          "threads_per_gpu": 64,
+                          "spec_module_path": "llmd_fs_backend.spec"
+                        }
+                      }
+                    ]
                   }
                 }'
           env:
@@ -37,11 +54,11 @@ spec:
             limits:
               cpu: '16'
               memory: 400Gi
-              nvidia.com/gpu: 2
+              nvidia.com/gpu: 4
             requests:
               cpu: '8'
               memory: 400Gi
-              nvidia.com/gpu: 2
+              nvidia.com/gpu: 4
           volumeMounts:
             - mountPath: /dev/shm
               name: shm
