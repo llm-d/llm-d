@@ -135,15 +135,6 @@ cmake -S . -B build -G Ninja \
     "${CMAKE_EXTRA_FLAGS[@]}" \
     "${EFA_FLAGS[@]}"
 
-# Calculate max jobs based on available cores
-MAX_JOBS=$(nproc)
-if [ "${BUILD_DEBUG}" = "true" ]; then
-    # Leave one core free for system tasks to prevent CI runner timeout
-    MAX_JOBS=$((MAX_JOBS - 1))
-    # Ensure at least 1 job
-    [ "${MAX_JOBS}" -lt 1 ] && MAX_JOBS=1
-fi
-
 ninja -C build -j"${MAX_JOBS}"
 cmake --install build
 rm -rf build

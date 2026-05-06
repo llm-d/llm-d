@@ -41,8 +41,8 @@ CUDA_MINOR := $(word 2,$(subst ., ,$(CUDA_VERSION)))
 # USE_SCCACHE: set to true to enable sccache (requires AWS credentials)
 USE_SCCACHE ?= false
 
-# MAX_JOBS: parallel compilation jobs (reduce to avoid OOM, e.g., MAX_JOBS=2)
-MAX_JOBS ?= 2
+# MAX_JOBS: parallel compilation jobs (reduce to avoid OOM, e.g., MAX_JOBS=1)
+MAX_JOBS ?= 3
 
 # TORCH_CUDA_ARCH_LIST: CUDA architectures to build for
 # TORCH_CUDA_ARCH_LIST ?= 7.0;7.5;8.0;8.6;8.9;9.0;9.0a;10.0;12.0+PTX
