@@ -112,7 +112,7 @@ ENV LANG="C.UTF-8" \
     UV_HTTP_TIMEOUT="500" \
     UV_INDEX_STRATEGY="unsafe-best-match" \
     UV_LINK_MODE="copy" \
-    TORCH_CUDA_ARCH_LIST="7.0;7.5;8.0;8.6;8.9;9.0;9.0a;10.0;12.0+PTX" \
+    TORCH_CUDA_ARCH_LIST="9.0a;10.0" \
     PYTHON_VERSION="${PYTHON_VERSION}" \
     UV_TORCH_BACKEND="${UV_TORCH_BACKEND:-cu${CUDA_MAJOR}${CUDA_MINOR}}" \
     UV_BUILD_CONSTRAINT="/tmp/build-constraints.txt" \
@@ -255,16 +255,16 @@ RUN echo "/usr/local/lib" > /etc/ld.so.conf.d/local.conf && \
 WORKDIR /workspace
 
 # Build LMCache wheel and its infinistore dependency
-ARG INFINISTORE_REPO
-ARG INFINISTORE_VERSION
-ARG LMCACHE_REPO
-ARG LMCACHE_VERSION
-COPY docker/scripts/cuda/builder/build-lmcache.sh /tmp/build-lmcache.sh
-RUN --mount=type=cache,target=/var/cache/git \
-    --mount=type=secret,id=aws_access_key_id \
-    --mount=type=secret,id=aws_secret_access_key \
-    /tmp/build-lmcache.sh && \
-    rm -f /tmp/build-lmcache.sh
+# ARG INFINISTORE_REPO
+# ARG INFINISTORE_VERSION
+# ARG LMCACHE_REPO
+# ARG LMCACHE_VERSION
+# COPY docker/scripts/cuda/builder/build-lmcache.sh /tmp/build-lmcache.sh
+# RUN --mount=type=cache,target=/var/cache/git \
+#     --mount=type=secret,id=aws_access_key_id \
+#     --mount=type=secret,id=aws_secret_access_key \
+#     /tmp/build-lmcache.sh && \
+#     rm -f /tmp/build-lmcache.sh
 
 # Use existing virtual environment at /opt/vllm
 WORKDIR /workspace/vllm
@@ -336,7 +336,7 @@ ${NVSHMEM_DIR}/lib:${NVSHMEM_DIR}/lib64:\
 ${LD_LIBRARY_PATH}" \
     PATH="${NVSHMEM_DIR}/bin:${UCX_PREFIX}/bin:${PATH}" \
     CPATH="${NVSHMEM_DIR}/include:${CPATH}" \
-    TORCH_CUDA_ARCH_LIST="7.0;7.5;8.0;8.6;8.9;9.0;9.0a;10.0;12.0+PTX" \
+    TORCH_CUDA_ARCH_LIST="9.0a;10.0" \
     FLASHINFER_VERSION=${FLASHINFER_VERSION} \
     CUDA_MAJOR=${CUDA_MAJOR} \
     CUDA_MINOR=${CUDA_MINOR} \
