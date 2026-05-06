@@ -1,4 +1,4 @@
-# Important: For Ubuntu builds, we use an older version (20.04) in the build stage
+# Important: For Ubuntu builds, we use an older version (20.24) in the build stage
 # to maintain broad glibc compatibility. Binaries built with newer glibc versions
 # are not backwards compatible with OSes using earlier glibc versions.
 # Runtime stage can use newer Ubuntu (22.04) for updated dependencies.
