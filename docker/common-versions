@@ -18,9 +18,9 @@ VLLM_USE_PRECOMPILED=1         # 1=use precompiled binaries either from VLLM_COM
 VLLM_PRECOMPILED_WHEEL_COMMIT=95c0f928cdeeaa21c4906e73cee6a156e1b3b995
 
 ### Cuda Runtime versions
-CUDA_MAJOR=12
-CUDA_MINOR=9
-CUDA_PATCH=1
+CUDA_MAJOR=13
+CUDA_MINOR=0
+CUDA_PATCH=2
 
 
 ### Offloading connector
