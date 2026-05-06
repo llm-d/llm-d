@@ -35,7 +35,7 @@ if [ "${USE_SCCACHE}" = "true" ]; then
     export CC="sccache gcc" CXX="sccache g++" NVCC="sccache nvcc"
 fi
 
-# Ubuntu image needs to be built against Ubuntu 20.24 and EFA only supports 22.04 and 24.04.
+# Ubuntu image needs to be built against Ubuntu 24.04 and EFA only supports 22.04 and 24.04.
 EFA_FLAG=""
 if [ "${ENABLE_EFA}" = "true" ] && [ "$TARGETOS" = "rhel" ]; then
     EFA_FLAG="-Dlibfabric_path=${EFA_PREFIX}"

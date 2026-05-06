@@ -80,7 +80,7 @@ case "${TARGETOS}" in
         FINAL_BASE_IMAGE_SUFFIX="ubi9"
         ;;
     ubuntu)
-        BUILD_BASE_IMAGE_SUFFIX="ubuntu20.24"
+        BUILD_BASE_IMAGE_SUFFIX="ubuntu24.04"
         FINAL_BASE_IMAGE_SUFFIX="ubuntu24.04"
         ;;
     *)
