@@ -116,8 +116,8 @@ jobs:
       namespace: llm-d-nightly-wva
       gateway_host: 'workload-variant-autoscaler-inferencepool-epp'
       custom_deploy_script: |
-        export WVA_NAMESPACE="${WVA_NAMESPACE:-${NAMESPACE}-system}"
-        kubectl create namespace "${WVA_NAMESPACE}" --dry-run=client -o yaml | kubectl apply -f -
+        # WVA kustomize builds target namespace llm-d-autoscaler (do not pass a conflicting kubectl -n).
+        WVA_DEPLOY_NS=llm-d-autoscaler
         yq '.spec.template.spec.priorityClassName="nightly-gpu-critical"' -i guides/optimized-baseline/modelserver/gpu/vllm/patch-vllm.yaml
         yq '.spec.template.spec.volumes += {"name": "triton-cache", "emptyDir": {}}' -i guides/optimized-baseline/modelserver/gpu/vllm/patch-vllm.yaml
         yq '.spec.template.spec.containers[0].volumeMounts += {"mountPath": "/.triton", "name": "triton-cache"}' -i guides/optimized-baseline/modelserver/gpu/vllm/patch-vllm.yaml
@@ -133,11 +133,11 @@ jobs:
         kubectl kustomize guides/workload-autoscaling/wva-config/platform/cks >/dev/null
 
         # apply WVA assets
-        kubectl apply -k guides/workload-autoscaling/wva-config/platform/cks -n ${WVA_NAMESPACE}
+        kubectl apply -k guides/workload-autoscaling/wva-config/platform/cks
 
         # Validate WVA controller is ready, then apply autoscaling resources
         kubectl wait deployment/workload-variant-autoscaler-controller-manager \
-          -n "${WVA_NAMESPACE}" --for=condition=Available --timeout=300s
+          -n "${WVA_DEPLOY_NS}" --for=condition=Available --timeout=300s
         kubectl apply -k guides/workload-autoscaling/optimized-baseline-autoscaling -n "${NAMESPACE}"
         kubectl get variantautoscaling,hpa -n "${NAMESPACE}"
       e2e_validate_args: '--extra-validate predicted-latency'
