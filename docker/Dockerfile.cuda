@@ -54,9 +54,11 @@ ARG LMCACHE_VERSION="v0.4.1"
 # NM fork of Deepep for duplicate nvshmem IBGDA definitions, see: https://github.com/deepseek-ai/DeepEP/pull/581.
 # Also GKE nic-pe mapping, see: https://github.com/deepseek-ai/DeepEP/pull/466 
 # Commits cherry-picked on top of: `https://github.com/deepseek-ai/DeepEP/commit/567632dd59810d77b3cc05553df953cc0f779799`
-ARG DEEPEP_REPO="https://github.com/neuralmagic/DeepEP"
+# ARG DEEPEP_REPO="https://github.com/neuralmagic/DeepEP"
 # branch: https://github.com/neuralmagic/DeepEP/tree/llm-d-release-v0.5.1, but frozen at commit:
-ARG DEEPEP_VERSION="38d21b7f9bb6f3b102b1819d09439686eaa87ce8"
+# ARG DEEPEP_VERSION="38d21b7f9bb6f3b102b1819d09439686eaa87ce8"
+ARG DEEPEP_REPO="https://github.com/smarterclayton/DeepEP"
+ARG DEEPEP_VERSION="c66b1463601af5d127027fb459517fb97adab30d" 
 
 ARG DEEPGEMM_REPO="https://github.com/deepseek-ai/DeepGEMM"
 ARG DEEPGEMM_VERSION="477618cd51baffca09c4b0b87e97c03fe827ef03"
