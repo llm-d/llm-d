@@ -1,0 +1,75 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: decode
+spec:
+  replicas: 3
+  template:
+    metadata:
+      labels:
+        llm-d.ai/inference-serving: "true"
+    spec:
+      nodeSelector:
+        cloud.google.com/gke-tpu-accelerator: tpu7x
+        cloud.google.com/gke-tpu-topology: 2x2x1 # Specify the physical topology for the TPU slice.
+      initContainers:
+        - name: tpu-node-setup
+          image: busybox
+          command: ["/bin/sh", "-c"]
+          args:
+            - |
+              # WARNING: This changes the HOST memory settings, not just the container.
+              # Required to prevent vLLM crashes due to memory mapping limits.
+              sysctl -w vm.max_map_count=33554432
+
+              # Check if the VFIO IOMMU module parameter exists, and if so, increase the
+              # limit on DMA mappings. This allows the TPU driver to pin and map a
+              # larger number of memory pages for direct hardware access.
+              if [ -f /sys/module/vfio_iommu_type1/parameters/dma_entry_limit ]; then
+                echo 8000000 > /sys/module/vfio_iommu_type1/parameters/dma_entry_limit
+                echo "Successfully increased dma_entry_limit to 8000000"
+              else
+                echo "Warning: vfio_iommu_type1 module parameter not found. Ensure the module is loaded."
+              fi
+
+              echo "Final vm.max_map_count: $(cat /proc/sys/vm.max_map_count)"
+          securityContext:
+            privileged: true
+      containers:
+        - name: modelserver
+          image: vllm/vllm-tpu:nightly-20260504-e2a6582-67058ca
+          command: ["/bin/sh", "-c"]
+          args:
+            - |              
+              vllm serve Qwen/Qwen3-32B \
+                --kv-transfer-config '{"kv_connector":"TPUOffloadConnector","kv_connector_module_path":"tpu_inference.offload.tpu_offload_connector","kv_role":"kv_both"}' \
+                --port 8000 \
+                --tensor-parallel-size 8 \
+                --gpu-memory-utilization 0.9
+          env:
+            - name: PROMETHEUS_MULTIPROC_DIR
+              value: "/tmp/prometheus_multiproc"
+            - name: SKIP_JAX_PRECOMPILE
+              value: "0"
+            - name: TPU_OFFLOAD_NUM_CPU_CHUNKS
+              value: "25000"
+            - name: TPU_OFFLOAD_NUM_STAGING_BLOCKS
+              value: "1000"
+          resources:
+            requests:
+              google.com/tpu: 4
+            limits:
+              google.com/tpu: 4
+          startupProbe:
+            initialDelaySeconds: 15
+            periodSeconds: 30
+            timeoutSeconds: 5
+            failureThreshold: 120
+          livenessProbe:
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            periodSeconds: 5
+            timeoutSeconds: 2
+            failureThreshold: 3

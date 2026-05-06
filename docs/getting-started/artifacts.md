@@ -97,7 +97,7 @@ Exact versions pinned in the v0.7.0 container images. See [upstream-versions.md]
 | **Python** | 3.12 | Runtime |
 | **PyTorch** | 2.9.1 | ML framework |
 | **NIXL** | 0.10.0 | KV-cache transport for P/D disaggregation |
-| **LMCache** | v0.3.14 | Tiered KV-cache offloading |
+| **LMCache** | v0.4.4-cu13 | Tiered KV-cache offloading |
 | **InfiniStore** | 0.2.33 | Distributed cache storage backend |
 | **DeepEP** | llm-d-release-v0.5.1 | Expert-parallelism communication |
 | **DeepGEMM** | v2.1.1.post3 | High-performance inference compute |

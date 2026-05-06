@@ -13,7 +13,7 @@ The `InferencePool` performs two primary roles in the inference infrastructure:
 
 The following diagram visualizes how the `InferencePool` resource is involved in the control path of both the EPP and Gateway Controller:
 
-![InferencePool](../../assets/gateway-design.svg)
+![InferencePool](../../assets/inferencepool.svg)
 
 ### 1. Endpoint Discovery (EPP Perspective)
 

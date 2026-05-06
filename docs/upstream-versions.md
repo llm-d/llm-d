@@ -19,7 +19,7 @@ Pinned in `docker/Dockerfile.cuda` (and variants):
 | **NVSHMEM** | `v3.5.19-1` | tag | `docker/Dockerfile.cuda` line 42 | [NVIDIA/nvshmem](https://github.com/NVIDIA/nvshmem) |
 | **NIXL** | `0.10.0` | version | `docker/Dockerfile.cuda` line 46 | [ai-dynamo/nixl](https://github.com/ai-dynamo/nixl) |
 | **InfiniStore** | `0.2.33` | version | `docker/Dockerfile.cuda` line 49 | [bytedance/InfiniStore](https://github.com/bytedance/InfiniStore) |
-| **LMCache** | `v0.3.14` | tag | `docker/Dockerfile.cuda` line 51 | [LMCache/LMCache](https://github.com/LMCache/LMCache) |
+| **LMCache** | `v0.4.4-cu13` | tag | `docker/Dockerfile.cuda` line 54 | [LMCache/LMCache](https://github.com/LMCache/LMCache) |
 | **DeepEP** | `llm-d-release-v0.5.1` | branch (fork) | `docker/Dockerfile.cuda` line 57 | [neuralmagic/DeepEP](https://github.com/neuralmagic/DeepEP) (fork of [deepseek-ai/DeepEP](https://github.com/deepseek-ai/DeepEP)) |
 | **DeepGEMM** | `v2.1.1.post3` | tag | `docker/Dockerfile.cuda` line 60 | [deepseek-ai/DeepGEMM](https://github.com/deepseek-ai/DeepGEMM) |
 | **FlashInfer** | `v0.6.1` | tag | `docker/Dockerfile.cuda` line 64 | [flashinfer-ai/flashinfer](https://github.com/flashinfer-ai/flashinfer) |

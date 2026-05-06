@@ -4,7 +4,7 @@ on:
   pull_request:
     branches: [main]
     paths:
-      - .github/workflows/ci-helmfile-dry-run.yaml
+      - .github/workflows/ci-kustomize-dry-run.yaml
       - .github/scripts/**
       - guides/recipes/**
       - guides/optimized-baseline/**
@@ -14,7 +14,6 @@ on:
       - guides/prereq/**
       - helpers/client-setup/**
       - docs/monitoring/scripts/install-prometheus-grafana.sh
-      - .github/workflows/ci-kustomize-dry-run.yaml
   workflow_dispatch:
 
 permissions:
@@ -35,7 +34,7 @@ jobs:
         with:
           filters: |
             optimized-baseline:
-              - .github/workflows/ci-helmfile-dry-run.yaml
+              - .github/workflows/ci-kustomize-dry-run.yaml
               - .github/scripts/install-gke-crds.sh
               - guides/prereq/gateway-provider/install-gateway-provider-dependencies.sh
               - docs/monitoring/scripts/install-prometheus-grafana.sh
@@ -43,7 +42,7 @@ jobs:
               - guides/recipes/scheduler/**
               - guides/optimized-baseline/**
             pd-disaggregation:
-              - .github/workflows/ci-helmfile-dry-run.yaml
+              - .github/workflows/ci-kustomize-dry-run.yaml
               - helpers/client-setup/install-deps.sh
               - guides/prereq/gateway-provider/common-configurations/**
               - guides/prereq/gateway-provider/install-gateway-provider-dependencies.sh
@@ -51,19 +50,25 @@ jobs:
               - docs/monitoring/scripts/install-prometheus-grafana.sh
               - guides/pd-disaggregation/**
             precise-prefix-cache-aware:
-              - .github/workflows/ci-helmfile-dry-run.yaml
+              - .github/workflows/ci-kustomize-dry-run.yaml
               - helpers/client-setup/install-deps.sh
               - guides/prereq/gateway-provider/common-configurations/**
               - guides/prereq/gateway-provider/install-gateway-provider-dependencies.sh
               - guides/prereq/gateway-provider/*.helmfile.yaml
               - docs/monitoring/scripts/install-prometheus-grafana.sh
               - guides/precise-prefix-cache-aware/**
-            workload-autoscaling:
-              - .github/workflows/ci-helmfile-dry-run.yaml
+            simulated-accelerators:
+              - .github/workflows/ci-kustomize-dry-run.yaml
               - helpers/client-setup/install-deps.sh
               - guides/prereq/gateway-provider/common-configurations/**
               - guides/prereq/gateway-provider/install-gateway-provider-dependencies.sh
               - guides/prereq/gateway-provider/*.helmfile.yaml
+              - docs/monitoring/scripts/install-prometheus-grafana.sh
+              - guides/simulated-accelerators/**
+            workload-autoscaling:
+              - .github/workflows/ci-kustomize-dry-run.yaml
+              - .github/scripts/install-gke-crds.sh
+              - guides/prereq/gateway-provider/install-gateway-provider-dependencies.sh
               - docs/monitoring/scripts/install-prometheus-grafana.sh
               - guides/workload-autoscaling/**
 
@@ -367,13 +372,10 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Install client dependencies
-        run: helpers/client-setup/install-deps.sh
-
       - name: Create kind cluster
         uses: helm/kind-action@ef37e7f390d99f746eb8b610417061a60e82a6cc  # v1.14.0
         with:
-          cluster_name: helmfile-dry-run
+          cluster_name: kustomize-dry-run
           node_image: kindest/node:v1.35.0  # 1.35+ required for stable DRA (resource.k8s.io/v1)
           version: v0.31.0
           wait: 120s
@@ -381,74 +383,42 @@ jobs:
       - name: Install Gateway API and GAIE CRDs
         run: guides/prereq/gateway-provider/install-gateway-provider-dependencies.sh > /dev/null
 
-      - name: Install gateway providers
-        run: |
-          cd guides/prereq/gateway-provider
-          for f in *.helmfile.yaml; do
-            # Skip kgateway - it is deprecated and its older CRDs would
-            # overwrite the agentgateway installation.
-            [[ "$f" == "kgateway.helmfile.yaml" ]] && continue
-            echo "=== Installing gateway provider: $f ==="
-            helmfile apply -f "$f" > /dev/null
-          done
-
-      - name: Wait for gateway control planes
-        run: |
-          for ns in istio-system agentgateway-system; do
-            if kubectl get namespace "$ns" &>/dev/null; then
-              echo "Waiting for pods in $ns..."
-              kubectl wait --for=condition=ready pod \
-                --selector=app.kubernetes.io/managed-by=Helm \
-                --namespace "$ns" \
-                --timeout=300s 2>/dev/null || true
-            fi
-          done
-
       - name: Install monitoring CRDs
         run: docs/monitoring/scripts/install-prometheus-grafana.sh --crds-only
 
       - name: Install GKE CRDs
         run: .github/scripts/install-gke-crds.sh
 
-      - name: Install WVA CRDs
+      - name: Kustomize build and dry-run all WVA platform overlays
         run: |
-          helm show crds oci://ghcr.io/llm-d/workload-variant-autoscaler --version 0.5.1 \
-            | kubectl apply --server-side --validate=false -f -
-
-      # Create a dummy TLS cert so workload-autoscaling's readFile for
-      # prometheus-ca.crt succeeds during helmfile template.
-      - name: Create dummy prometheus CA cert
-        run: |
-          openssl req -x509 -newkey ec -pkeyopt ec_paramgen_curve:prime256v1 \
-            -keyout /dev/null -out /tmp/prometheus-ca.crt -days 1 -nodes \
-            -subj "/CN=dummy-ca" 2>/dev/null
-
-      - name: Dry-run all environments
-        env:
-          TMPDIR: /tmp
-        run: |
-          cd guides/workload-autoscaling
-          # Extract only the YAML before the --- separator; the rest contains
-          # Go template syntax that yq cannot parse.
-          envs=$(awk '/^---/{exit} {print}' helmfile.yaml.gotmpl | yq -r '.environments | keys | .[]')
-          for env_name in $envs; do
+          failed=0
+          for kust_dir in guides/workload-autoscaling/wva-config/platform/*/; do
+            [ -f "${kust_dir}kustomization.yaml" ] || continue
+            name="${kust_dir#guides/workload-autoscaling/wva-config/platform/}"
+            name="${name%/}"
             echo ""
             echo "========================================"
-            echo "workload-autoscaling: environment=$env_name"
+            echo "workload-autoscaling: ${name}"
             echo "========================================"
-            echo "--- helmfile template ---"
-            helmfile template -e "$env_name" > /tmp/rendered.yaml
+            echo "--- kustomize build ---"
+            if ! kustomize build "${kust_dir}" > /tmp/rendered.yaml; then
+              echo "FAIL: kustomize build failed for ${name}"
+              failed=1
+              continue
+            fi
             echo "--- creating namespaces ---"
-            # Collect namespaces from helmfile release definitions and from the
-            # rendered manifests (some resources reference namespaces outside the
-            # release namespace, e.g. monitoring).
-            {
-              helmfile list -e "$env_name" 2>/dev/null | awk 'NR>1 {print $2}'
-              grep -E '^\s+namespace:\s' /tmp/rendered.yaml | awk '{print $2}' | tr -d '"'"'"
-            } | sort -u | while read -r ns; do
-                kubectl create namespace "$ns" --dry-run=client -o yaml | kubectl apply -f - 2>/dev/null || true
-              done
+            grep -E '^\s+namespace:\s' /tmp/rendered.yaml \
+              | awk '{print $2}' | tr -d '"'"'" | sort -u \
+              | while read -r ns; do
+                  kubectl create namespace "$ns" --dry-run=client -o yaml \
+                    | kubectl apply -f - 2>/dev/null || true
+                done
             echo "--- kubectl apply --dry-run=server ---"
-            kubectl apply --dry-run=server -f /tmp/rendered.yaml
-            echo "PASS: workload-autoscaling / $env_name"
+            if kubectl apply --dry-run=server -f /tmp/rendered.yaml; then
+              echo "PASS: workload-autoscaling / ${name}"
+            else
+              echo "FAIL: workload-autoscaling / ${name}"
+              failed=1
+            fi
           done
+          exit $failed

@@ -87,3 +87,12 @@ Other modules in the EPP consult the **Data Layer** during request processing.
 
 See [Data Layer](datalayer.md) for more details on the design.
 
+## How to Configure
+
+The EPP is configured by passing an `EndpointPickerConfig` YAML to the binary via the `--config-file` or `--config-text` command-line arguments. This configuration defines the plugins, feature gates, and operational parameters that govern request handling, flow control, and scheduling.
+
+> [!IMPORTANT]
+> The configuration is only read on startup. Any updates to the configuration require a restart of the EPP process to take effect.
+
+For a detailed guide on the configuration schema, mental model, and examples, see the [Configuration Guide](configuration.md).
+

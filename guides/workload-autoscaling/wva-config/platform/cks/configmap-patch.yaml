@@ -1,0 +1,8 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: workload-variant-autoscaler-wva-variantautoscaling-config
+data:
+  # CKS currently uses the same defaults as generic Kubernetes.
+  PROMETHEUS_BASE_URL: "https://prometheus-k8s.monitoring.svc.cluster.local:9090"
+  PROMETHEUS_TLS_INSECURE_SKIP_VERIFY: "false"
