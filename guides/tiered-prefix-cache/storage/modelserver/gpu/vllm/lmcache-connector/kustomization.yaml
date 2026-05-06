@@ -7,6 +7,7 @@ resources:
 labels:
   - pairs:
       llm-d.ai/guide: tiered-prefix-cache-storage
+      llm-d.ai/subguide: tiered-prefix-cache-storage
     includeSelectors: true
     includeTemplates: true
     fields:
