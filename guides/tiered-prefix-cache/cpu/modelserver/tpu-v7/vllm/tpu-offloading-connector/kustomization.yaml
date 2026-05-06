@@ -9,7 +9,7 @@ labels:
   - pairs:
       llm-d.ai/model: Qwen3-32B
       llm-d.ai/guide: tiered-prefix-cache
-      llm-d.ai/subguide: tiered-prefix-cache-tpu-native
+      llm-d.ai/subguide: tiered-prefix-cache-tpu
       llm-d.ai/accelerator-variant: tpu
       llm-d.ai/accelerator-vendor: google
     includeSelectors: true
