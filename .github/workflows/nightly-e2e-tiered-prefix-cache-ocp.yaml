@@ -49,6 +49,9 @@ jobs:
       pre_deploy_script: |
         echo "Applying tiered-prefix-cache slim transforms..."
         KUSTOMIZE_DIR="guides/tiered-prefix-cache/cpu/modelserver/gpu/vllm/offloading-connector"
+        yq '.spec.template.spec.priorityClassName="nightly-gpu-critical"' -i ${KUSTOMIZE_DIR}/patch-vllm.yaml
+        yq '.spec.template.spec.volumes += {"name": "triton-cache", "emptyDir": {}}' -i ${KUSTOMIZE_DIR}/patch-vllm.yaml
+        yq '.spec.template.spec.containers[0].volumeMounts += {"mountPath": "/.triton", "name": "triton-cache"}' -i ${KUSTOMIZE_DIR}/patch-vllm.yaml
         cat > "${KUSTOMIZE_DIR}/nightly-slim-patch.yaml" <<'PATCH'
         - op: replace
           path: /spec/template/spec/containers/0/args/0
