@@ -54,24 +54,24 @@ jobs:
         yq '.spec.template.spec.containers[0].volumeMounts += {"mountPath": "/.triton", "name": "triton-cache"}' -i guides/tiered-prefix-cache/cpu/modelserver/gpu/vllm/base/patch-vllm.yaml
         yq '.spec.replicas=2' -i guides/tiered-prefix-cache/cpu/modelserver/gpu/vllm/base/patch-vllm.yaml
         cat > "${KUSTOMIZE_DIR}/nightly-slim-patch.yaml" <<'PATCH'
-        - op: replace
-          path: /spec/template/spec/containers/0/args/0
-          value: |-
-            exec vllm serve \
-              Qwen/Qwen3-0.6B \
-              --kv-transfer-config '{"kv_connector":"OffloadingConnector","kv_role":"kv_both","kv_connector_extra_config":{"cpu_bytes_to_use":10737418240}}' \
-              --port 8000 \
-              --max-num-seq 64
-        - op: replace
-          path: /spec/template/spec/containers/0/resources
-          value:
-            limits:
-              nvidia.com/gpu: "1"
-            requests:
-              nvidia.com/gpu: "1"
+        #- op: replace
+        #  path: /spec/template/spec/containers/0/args/0
+        #  value: |-
+        #    exec vllm serve \
+        #      Qwen/Qwen3-0.6B \
+        #      --kv-transfer-config '{"kv_connector":"OffloadingConnector","kv_role":"kv_both","kv_connector_extra_config":{"cpu_bytes_to_use":10737418240}}' \
+        #      --port 8000 \
+        #      --max-num-seq 64
+        #- op: replace
+        #  path: /spec/template/spec/containers/0/resources
+        #  value:
+        #    limits:
+        #      nvidia.com/gpu: "1"
+        #    requests:
+        #      nvidia.com/gpu: "1"
         PATCH
-        yq e '.patches += [{"target": {"kind": "Deployment", "name": "llm-d-model-server"}, "path": "nightly-slim-patch.yaml"}]' -i "${KUSTOMIZE_DIR}/kustomization.yaml"
-        echo "Slim transform applied — model: Qwen3-0.6B, 1 GPU, reduced memory"
+        #yq e '.patches += [{"target": {"kind": "Deployment", "name": "llm-d-model-server"}, "path": "nightly-slim-patch.yaml"}]' -i "${KUSTOMIZE_DIR}/kustomization.yaml"
+        #echo "Slim transform applied — model: Qwen3-0.6B, 1 GPU, reduced memory"
       # Custom deploy: kustomize + helm + gateway recipe (not helmfile)
       custom_deploy_script: |
         NAMESPACE="llm-d-nightly-pfc-cpu"
