@@ -75,7 +75,6 @@ jobs:
       # Custom deploy: kustomize + helm + gateway recipe (not helmfile)
       custom_deploy_script: |
         NAMESPACE="llm-d-nightly-pfc-cpu"
-        GATEWAY_TYPE="${GATEWAY_TYPE:-istio}"
         echo "Deploying tiered-prefix-cache/cpu via kustomize + helm..."
 
         # Override image if IMAGE_OVERRIDE is set by the reusable workflow
@@ -85,22 +84,14 @@ jobs:
           echo "Image override applied: ${IMAGE_OVERRIDE}"
         fi
 
-        # 1. Deploy gateway recipe
-        echo "Deploying gateway recipe ($GATEWAY_TYPE)..."
-        kubectl apply -k "guides/recipes/gateway/${GATEWAY_TYPE}" -n "$NAMESPACE"
 
-        # 2. Deploy model server via kustomize
-        echo "Deploying model server (offloading-connector)..."
+        helm install tiered-prefix-cache \
+        oci://registry.k8s.io/gateway-api-inference-extension/charts/standalone \
+        -f guides/recipes/scheduler/base.values.yaml \
+        -f guides/tiered-prefix-cache/cpu/scheduler/tiered-prefix-cache-cpu.values.yaml \
+        -n ${NAMESPACE} --version v1.5.0
+
         kubectl apply -k guides/tiered-prefix-cache/cpu/modelserver/gpu/vllm/offloading-connector -n "$NAMESPACE"
-
-        # 3. Deploy InferencePool via helm
-        echo "Deploying InferencePool..."
-        helm install llm-d-infpool \
-          -n "$NAMESPACE" \
-          -f guides/tiered-prefix-cache/cpu/scheduler/tiered-prefix-cache-cpu.values.yaml \
-          --set "provider.name=${GATEWAY_TYPE}" \
-          oci://registry.k8s.io/gateway-api-inference-extension/charts/inferencepool \
-          --version v1.5.0
 
         echo "Deployment complete"
       image_override: 'ghcr.io/llm-d/llm-d-cuda-dev:latest'
