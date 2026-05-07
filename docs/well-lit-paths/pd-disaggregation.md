@@ -16,7 +16,7 @@ llm-d's EPP natively supports the concept of disaggregation, enabling compositio
 
 ## Deploy
 
-See the [P/D Disaggregation guide](../../guides/pd-disaggregation) for manifests and step-by-step deployment.
+See the [P/D Disaggregation guide](https://github.com/llm-d/llm-d/tree/main/guides/pd-disaggregation) for manifests and step-by-step deployment.
 
 ## Architecture
 

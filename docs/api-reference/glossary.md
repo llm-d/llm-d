@@ -18,9 +18,9 @@ Quick-reference definitions for terms used throughout the llm-d documentation. F
 
 **Expert Parallelism (EP)** — Distributing the expert layers of MoE models across multiple GPUs, enabling large models like DeepSeek-R1 to be served across nodes. See [Model Servers](../architecture/core/model-servers.md).
 
-**ext-proc (External Processing)** — An Envoy filter protocol that offloads per-request routing decisions to an external gRPC service — in llm-d, the EPP. This is the communication channel between the Proxy and the routing logic. See [EPP](../architecture/core/router/epp/README.md).
+**ext-proc (External Processing)** — An Envoy filter protocol that offloads per-request routing decisions to an external gRPC service — in llm-d, the EPP. This is the communication channel between the Proxy and the routing logic. See [EPP](../architecture/core/router/epp/).
 
-**Flow Control** — The EPP subsystem that manages admission, queuing, and dispatch of requests using a Priority, Fairness, and Ordering hierarchy to prevent backend overload. See [EPP](../architecture/core/router/epp/README.md).
+**Flow Control** — The EPP subsystem that manages admission, queuing, and dispatch of requests using a Priority, Fairness, and Ordering hierarchy to prevent backend overload. See [EPP](../architecture/core/router/epp/).
 
 **Gateway API** — The Kubernetes-native API for configuring L7 traffic routing, succeeding Ingress. llm-d uses Gateway API resources (`HTTPRoute`, `Gateway`) to route external traffic to InferencePools. See [Proxy](../architecture/core/router/proxy.md).
 
@@ -42,7 +42,7 @@ Quick-reference definitions for terms used throughout the llm-d documentation. F
 
 **llm-d Batch Gateway** — An OpenAI-compatible API server (`/v1/batches`, `/v1/files`) for submitting, tracking, and managing batch inference jobs. It coordinates with the llm-d Async Processor for throttled request dispatch. See [Batch Inference](../architecture/advanced/batch/README.md).
 
-**llm-d Endpoint Picker (EPP)** — The central routing component of llm-d. Receives ext-proc callbacks from the Proxy, evaluates candidate Model Servers through a Plugin Pipeline of filters, scorers, and pickers, and returns the address of the optimal backend. See [EPP](../architecture/core/router/epp/README.md).
+**llm-d Endpoint Picker (EPP)** — The central routing component of llm-d. Receives ext-proc callbacks from the Proxy, evaluates candidate Model Servers through a Plugin Pipeline of filters, scorers, and pickers, and returns the address of the optimal backend. See [EPP](../architecture/core/router/epp/).
 
 **llm-d Router** — The intelligent entry point for inference requests. It provides LLM-aware load balancing (e.g., prefix-cache and load-aware routing) and request queuing, and manages disaggregated serving. It is composed of two functional parts: a data-plane **Proxy** (e.g., Envoy) and the **Endpoint Picker (EPP)**. See [Architecture Overview](../architecture/README.md).
 
@@ -54,7 +54,7 @@ Quick-reference definitions for terms used throughout the llm-d documentation. F
 
 **NIXL** — NVIDIA Inference Xfer Library for high-speed GPU-to-GPU KV-cache transfer over InfiniBand, RoCE, EFA, and TCP. Used between Prefill and Decode workers in Disaggregated Serving.
 
-**Plugin Pipeline** — The modular Filter, Score, Pick architecture inside the EPP that evaluates and selects Model Server endpoints for each request. Filters narrow candidates, scorers rank them, and pickers make the final selection. See [EPP](../architecture/core/router/epp/README.md).
+**Plugin Pipeline** — The modular Filter, Score, Pick architecture inside the EPP that evaluates and selects Model Server endpoints for each request. Filters narrow candidates, scorers rank them, and pickers make the final selection. See [EPP](../architecture/core/router/epp/).
 
 **Prefix Caching** — A technique where the EPP routes requests to Model Servers that already hold matching KV Cache entries for the prompt prefix, eliminating redundant Prefill computation and reducing TTFT. See [Architecture Overview](../architecture/README.md).
 
@@ -68,7 +68,7 @@ Quick-reference definitions for terms used throughout the llm-d documentation. F
 
 **Tensor Parallelism (TP)** — Sharding model layers across multiple GPUs within a node to serve models that exceed single-GPU memory. See [Model Servers](../architecture/core/model-servers.md).
 
-**KV Cache Management** — A comprehensive ecosystem for managing and reusing the KV cache across the inference pool. It includes **Prefix-Cache Aware Routing**, **KV-Cache Indexing**, and **KV Offloading** to scale effective cache capacity beyond hardware limits. See [KV Cache Management](../architecture/advanced/kv-management/README.md).
+**KV Cache Management** — A comprehensive ecosystem for managing and reusing the KV cache across the inference pool. It includes **Prefix-Cache Aware Routing**, **KV-Cache Indexing**, and **KV Offloading** to scale effective cache capacity beyond hardware limits. See [KV Cache Management](../architecture/advanced/kv-management/).
 
 **TPOT (Time Per Output Token)** — The average latency to generate each subsequent token during Decode. A key metric for streaming response quality. See [Architecture Overview](../architecture/README.md).
 

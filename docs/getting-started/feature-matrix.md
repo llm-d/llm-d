@@ -122,7 +122,7 @@ This page describes the current coverage as validated in the v0.7.0 release and 
 
 ### Supported Hardware
 
-For accelerator maintainer contacts and contribution requirements, see [Accelerator Support](../accelerators/README.md). The information below is also maintained in that document and will be consolidated into this feature matrix in a future docs revision.
+For accelerator maintainer contacts and contribution requirements, see [Accelerator Support](../accelerators/). The information below is also maintained in that document and will be consolidated into this feature matrix in a future docs revision.
 
 | Accelerator | Supported Devices | Notes |
 |-------------|-------------------|-------|

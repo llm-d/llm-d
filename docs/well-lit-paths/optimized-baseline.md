@@ -14,7 +14,7 @@ The llm-d Router injects awareness of the LLM-workload into the load-balancing l
 
 ## Deploy
 
-See the [optimized baseline guide](../../guides/optimized-baseline) for manifests and step-by-step deployment.
+See the [optimized baseline guide](https://github.com/llm-d/llm-d/tree/main/guides/optimized-baseline) for manifests and step-by-step deployment.
 
 ## Architecture
 

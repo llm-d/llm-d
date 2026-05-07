@@ -13,9 +13,9 @@ See the [**Proxy deep dive**](proxy.md) to learn about deployment modes (Standal
 
 ### llm-d Endpoint Picker (EPP) 
 
-A specialized service that the proxy consults for every request. The [EPP](epp/README.md) contains the routing "intelligence," using real-time signals from model servers to make optimal placement decisions.
+A specialized service that the proxy consults for every request. The [EPP](./epp) contains the routing "intelligence," using real-time signals from model servers to make optimal placement decisions.
 
-See the [**llm-d EPP deep dive**](epp/README.md) to learn about the the routing engine's architecture, plugin pipeline (Filters, Scorers, Pickers), and flow control mechanisms.
+See the [**llm-d EPP deep dive**](./epp) to learn about the the routing engine's architecture, plugin pipeline (Filters, Scorers, Pickers), and flow control mechanisms.
 
 ## How it Works
 

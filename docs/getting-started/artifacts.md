@@ -19,9 +19,9 @@ llm-d uses the APIs defined in the Gateway API Inference Extension (GAIE) projec
 
 | CRD |  Purpose |
 |-----|----------|
-| [InferencePool](../api-reference/inferencepool.md) | Defines a pool of inference endpoints (model servers) and configures the EPP and proxy for LLM-aware routing. |
-| [InferenceObjective](../api-reference/inferenceobjective.md) | Defines performance goals (priority, latency) for specific model workloads within a pool. |
-| [InferenceModelRewrite](../api-reference/inferencemodelrewrite.md) | Specifies rules for rewriting model names in request bodies, enabling traffic splitting and canary rollouts. |
+| [InferencePool](../api-reference/inferencepool) | Defines a pool of inference endpoints (model servers) and configures the EPP and proxy for LLM-aware routing. |
+| [InferenceObjective](../api-reference/inferenceobjective) | Defines performance goals (priority, latency) for specific model workloads within a pool. |
+| [InferenceModelRewrite](../api-reference/inferencemodelrewrite) | Specifies rules for rewriting model names in request bodies, enabling traffic splitting and canary rollouts. |
 
 Manifests are published at [kubernetes-sigs/gateway-api-inference-extension/config/crd](https://github.com/kubernetes-sigs/gateway-api-inference-extension/tree/main/config/crd) and can be installed like:
 

@@ -4,7 +4,7 @@ The Asynchronous Processing path enables queue-based inference for latency-insen
 
 ## Deploy
 
-See the [asynchronous processing guide](../../guides/asynchronous-processing) for deployment instructions using Helm and supported queue implementations (Redis or GCP Pub/Sub).
+See the [asynchronous processing guide](https://github.com/llm-d/llm-d/tree/main/guides/asynchronous-processing) for deployment instructions using Helm and supported queue implementations (Redis or GCP Pub/Sub).
 
 ## Architecture
 

@@ -12,7 +12,7 @@ As KV-cache orchestration grows more sophisticated and agentic workloads stretch
 
 ## Deploy
 
-See the [precise prefix cache-aware guide](../../guides/precise-prefix-cache-aware) for manifests and step-by-step deployment.
+See the [precise prefix cache-aware guide](https://github.com/llm-d/llm-d/tree/main/guides/precise-prefix-cache-aware) for manifests and step-by-step deployment.
 
 ## Architecture
 

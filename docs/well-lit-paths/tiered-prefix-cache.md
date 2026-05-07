@@ -53,7 +53,7 @@ This increases the **KV-working set size**, growing the **receptive-field** (the
 
 ## Deploy
 
-See the [KV Cache Management guide](../../guides/tiered-prefix-cache) for manifests and step-by-step deployment.
+See the [KV Cache Management guide](https://github.com/llm-d/llm-d/tree/main/guides/tiered-prefix-cache) for manifests and step-by-step deployment.
 
 ## Architecture
 
