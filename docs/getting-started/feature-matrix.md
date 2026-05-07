@@ -128,10 +128,13 @@ For accelerator maintainer contacts and contribution requirements, see [Accelera
 |-------------|-------------------|-------|
 | NVIDIA GPU | A100, H100, H200, B200 | Primary platform. All well-lit paths validated. |
 | AMD ROCm | MI250, MI300X | Optimized baseline and P/D disaggregation. |
-| Google TPU | v5e, v6e, v7 | GKE only. P/D and optimized baseline. |
-| Intel XPU | Data Center GPU Max 1550, BMG (Battlemage) | Uses DRA. Opitmized baseline, P/D, precise prefix cache. |
+| Google TPU | v5e, v6e, v7 | GKE only. Optimized baseline and P/D disaggregation. |
+| Intel XPU | Data Center GPU Max 1550, BMG (Battlemage) | Uses DRA. Optimized baseline, P/D disaggregation, and precise prefix cache. |
 | Intel Gaudi (HPU) | Gaudi 2, Gaudi 3 | Uses DRA. Optimized baseline. |
 | CPU | Intel Xeon (Sapphire Rapids+), AMD EPYC | 64 cores, 64 GB RAM per replica. |
+
+> [!NOTE]
+> All **Operational Excellence** (e.g., observability, flow control) and **Batch** well-lit paths are supported on all accelerator types.
 
 ### Software Requirements
 
