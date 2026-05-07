@@ -10,7 +10,7 @@ This page describes the current coverage as validated in the v0.7.0 release and 
 
 | Accelerator | vLLM | SGLang |
 |-------------|------|--------|
-| NVIDIA CUDA | ✅ | ✅ |
+| NVIDIA GPU | ✅ | ✅ |
 | AMD ROCm | ✅ | — |
 | Intel XPU | ✅ | — |
 | Intel Gaudi (HPU) | ✅ | — |
@@ -23,7 +23,7 @@ This page describes the current coverage as validated in the v0.7.0 release and 
 
 | Accelerator | vLLM | SGLang |
 |-------------|------|--------|
-| NVIDIA CUDA | ✅ | ✅ |
+| NVIDIA GPU | ✅ | ✅ |
 | Intel XPU | ✅ | — |
 
 **Nightly CI**: OpenShift (CUDA), CoreWeave (CUDA), GKE (CUDA)
@@ -32,7 +32,7 @@ This page describes the current coverage as validated in the v0.7.0 release and 
 
 | Accelerator | vLLM | SGLang |
 |-------------|------|--------|
-| NVIDIA CUDA | ✅ | ✅ |
+| NVIDIA GPU | ✅ | ✅ |
 | AMD ROCm | ✅ | — |
 | Intel XPU | ✅ | — |
 | Google TPU | ✅ | — |
@@ -43,7 +43,7 @@ This page describes the current coverage as validated in the v0.7.0 release and 
 
 | Accelerator | vLLM | SGLang |
 |-------------|------|--------|
-| NVIDIA CUDA | ✅ | — |
+| NVIDIA GPU | ✅ | — |
 
 **Nightly CI**: OpenShift (CUDA), GKE (CUDA), CoreWeave (CUDA)
 
@@ -53,7 +53,7 @@ This page describes the current coverage as validated in the v0.7.0 release and 
 
 | Accelerator | CPU Offload (vLLM) | Storage Offload (vLLM) | SGLang |
 |-------------|--------------------|-----------------------|--------|
-| NVIDIA CUDA | ✅ | ✅ | — |
+| NVIDIA GPU | ✅ | ✅ | — |
 | Intel XPU | — | — | — |
 | Google TPU | Coming soon | — | — |
 
@@ -72,11 +72,11 @@ This page describes the current coverage as validated in the v0.7.0 release and 
 
 | Accelerator | vLLM | SGLang |
 |-------------|------|--------|
-| NVIDIA CUDA | ✅ | ✅ |
+| NVIDIA GPU | ✅ | ✅ |
 
 **Nightly CI**: OpenShift (CUDA), GKE (CUDA), CoreWeave (CUDA)
 
-> Accelerator-agnostic: only validated on NVIDIA CUDA, but the scheduler logic does not depend on accelerator type and should work on any backend supported by vLLM or SGLang.
+> Accelerator-agnostic: only validated on NVIDIA GPU, but the scheduler logic does not depend on accelerator type and should work on any backend supported by vLLM or SGLang.
 
 ### Asynchronous Processing
 
@@ -126,7 +126,7 @@ For accelerator maintainer contacts and contribution requirements, see [Accelera
 
 | Accelerator | Supported Devices | Notes |
 |-------------|-------------------|-------|
-| NVIDIA CUDA | A100, H100, H200, B200 | Primary platform. All well-lit paths validated. |
+| NVIDIA GPU | A100, H100, H200, B200 | Primary platform. All well-lit paths validated. |
 | AMD ROCm | MI250, MI300X | Optimized baseline and P/D disaggregation. |
 | Google TPU | v5e, v6e, v7 | GKE only. P/D and optimized baseline. |
 | Intel XPU | Data Center GPU Max 1550, BMG (Battlemage) | Uses DRA. Opitmized baseline, P/D, precise prefix cache. |
