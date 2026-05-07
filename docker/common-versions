@@ -3,7 +3,8 @@
 # ============================================================================
 VLLM_REPO=https://github.com/vllm-project/vllm.git
 VLLM_REPO=https://github.com/elvircrn/vllm.git
-VLLM_COMMIT_SHA=7de0c69eaf62cff588324db2b16d6e9c20f3ce95 # maps to elvir's cherrypicks on top of v0.19.1,
+; VLLM_COMMIT_SHA=7de0c69eaf62cff588324db2b16d6e9c20f3ce95 # maps to elvir's cherrypicks on top of v0.19.1,
+VLLM_COMMIT_SHA=b1388b1fbf5aaef47937fabe98931211684666a6
 # see: https://github.com/elvircrn/vllm/commits/llmd-0.19.1-nan-fixes/
 
 # ============================================================================
