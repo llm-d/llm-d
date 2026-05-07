@@ -1,8 +1,5 @@
 name: Nightly - PD Disaggregation E2E (OpenShift)
 
-# Nightly regression test for the pd-disaggregation guide on OpenShift.
-# Deploys the guide and validates with e2e-validate.sh.
-
 on:
   schedule:
     - cron: '30 0 * * *'
@@ -44,52 +41,7 @@ jobs:
       pod_wait_timeout: '30m'
       pod_readiness_delay: 180
 
-      pre_deploy_script: |
-        echo "Applying pd-disaggregation slim transforms..."
-
-        cd guides/pd-disaggregation/modelserver/gpu/vllm/base
-
-        yq e '.spec.replicas = 1' -i patch-decode.yaml
-        yq e '.spec.replicas = 1' -i patch-prefill.yaml
-
-        yq e '
-          (.spec.template.spec.containers[] | select(.name == "modelserver") | .args[0]) = "Qwen/Qwen3-0.6B"
-        ' -i patch-decode.yaml
-
-        yq e '
-          (.spec.template.spec.containers[] | select(.name == "modelserver") | .args[0]) = "Qwen/Qwen3-0.6B"
-        ' -i patch-prefill.yaml
-
-        yq e '
-          (.spec.template.spec.containers[] | select(.name == "modelserver") | .resources.limits["nvidia.com/gpu"]) = "1"
-        ' -i patch-decode.yaml
-
-        yq e '
-          (.spec.template.spec.containers[] | select(.name == "modelserver") | .resources.requests["nvidia.com/gpu"]) = "1"
-        ' -i patch-decode.yaml
-
-        yq e '
-          del(
-            .spec.template.spec.containers[] |
-            select(.name == "modelserver") |
-            .resources.limits.memory
-          )
-        ' -i patch-decode.yaml
-
-        yq e '
-          del(
-            .spec.template.spec.containers[] |
-            select(.name == "modelserver") |
-            .resources.requests.memory
-          )
-        ' -i patch-decode.yaml
-
-        echo "Slim transform applied"
-
-        cd "$GITHUB_WORKSPACE"
-
       allow_gpu_preemption: true
       skip_cleanup: ${{ github.event.inputs.skip_cleanup == 'true' }}
 
     secrets: inherit
-    
