@@ -25,22 +25,22 @@ jobs:
       matrix:
         include:
           - platform: linux/amd64
-            runner: oracle-16cpu-64gb-x86-64
+            runner: vllm-runner
             os: rhel
             base_image_suffix: ubi9
             image_suffix: ""
           - platform: linux/arm64
-            runner: oracle-16cpu-64gb-arm64
+            runner: vllm-runner-arm
             os: rhel
             base_image_suffix: ubi9
             image_suffix: ""
           - platform: linux/amd64
-            runner: oracle-16cpu-64gb-x86-64
+            runner: vllm-runner
             os: ubuntu
             base_image_suffix: ubuntu24.04
             image_suffix: "-ubuntu"
           - platform: linux/arm64
-            runner: oracle-16cpu-64gb-arm64
+            runner: vllm-runner-arm
             os: ubuntu
             base_image_suffix: ubuntu24.04
             image_suffix: "-ubuntu"
@@ -374,7 +374,7 @@ jobs:
           fi
 
   release-aws-llm-d:
-    runs-on: oracle-16cpu-64gb-x86-64
+    runs-on: vllm-runner
     steps:
       - name: Checkout code
         uses: actions/checkout@v6
@@ -496,7 +496,7 @@ jobs:
           fi
 
   release-gb200-llm-d:
-    runs-on: oracle-16cpu-64gb-arm64
+    runs-on: vllm-runner-arm
     steps:
       - name: Checkout code
         uses: actions/checkout@v6
@@ -627,7 +627,7 @@ jobs:
           fi
 
   release-cpu-llm-d:
-    runs-on: oracle-16cpu-64gb-x86-64
+    runs-on: vllm-runner
     steps:
       - name: Checkout code
         uses: actions/checkout@v6
@@ -706,7 +706,7 @@ jobs:
           fi
 
   release-rocm-llm-d:
-    runs-on: oracle-16cpu-64gb-x86-64
+    runs-on: vllm-runner
     steps:
       - name: Checkout code
         uses: actions/checkout@v6
@@ -776,7 +776,7 @@ jobs:
   release-xpu-llm-d:
     strategy:
       fail-fast: false
-    runs-on: oracle-16cpu-64gb-x86-64
+    runs-on: vllm-runner
     steps:
       - name: Checkout code
         uses: actions/checkout@v6
@@ -860,7 +860,7 @@ jobs:
   release-hpu-llm-d:
     strategy:
       fail-fast: false
-    runs-on: oracle-16cpu-64gb-x86-64
+    runs-on: vllm-runner
     steps:
       - name: Checkout code
         uses: actions/checkout@v6

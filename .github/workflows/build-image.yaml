@@ -157,22 +157,22 @@ jobs:
       matrix:
         include:
           - platform: linux/amd64
-            runner: oracle-16cpu-64gb-x86-64
+            runner: vllm-runner
             os: rhel
             base_image_suffix: ubi9
             image_suffix: "-debug"
           # - platform: linux/arm64
-          #   runner: oracle-16cpu-64gb-arm64
+          #   runner: vllm-runner-arm
           #   os: rhel
           #   base_image_suffix: ubi9
           #   image_suffix: "-debug"
           # - platform: linux/amd64
-          #   runner: oracle-16cpu-64gb-x86-64
+          #   runner: vllm-runner
           #   os: ubuntu
           #   base_image_suffix: ubuntu24.04
           #   image_suffix: "-ubuntu-debug"
           # - platform: linux/arm64
-          #   runner: oracle-16cpu-64gb-arm64
+          #   runner: vllm-runner-arm
           #   os: ubuntu
           #   base_image_suffix: ubuntu24.04
           #   image_suffix: "-ubuntu-debug"
@@ -320,22 +320,22 @@ jobs:
       matrix:
         include:
           - platform: linux/amd64
-            runner: oracle-16cpu-64gb-x86-64
+            runner: vllm-runner
             os: rhel
             base_image_suffix: ubi9
             image_suffix: ""
           - platform: linux/arm64
-            runner: oracle-16cpu-64gb-arm64
+            runner: vllm-runner-arm
             os: rhel
             base_image_suffix: ubi9
             image_suffix: ""
           - platform: linux/amd64
-            runner: oracle-16cpu-64gb-x86-64
+            runner: vllm-runner
             os: ubuntu
             base_image_suffix: ubuntu24.04
             image_suffix: "-ubuntu"
           - platform: linux/arm64
-            runner: oracle-16cpu-64gb-arm64
+            runner: vllm-runner-arm
             os: ubuntu
             base_image_suffix: ubuntu24.04
             image_suffix: "-ubuntu"
@@ -706,12 +706,12 @@ jobs:
       matrix:
         include:
           - platform: linux/amd64
-            runner: oracle-16cpu-64gb-x86-64
+            runner: vllm-runner
             os: rhel
             base_image_suffix: ubi9
             image_suffix: ""
           # - platform: linux/arm64
-          #   runner: oracle-16cpu-64gb-arm64
+          #   runner: vllm-runner-arm
           #   os: rhel
           #   base_image_suffix: ubi9
           #   image_suffix: ""
@@ -1032,7 +1032,7 @@ jobs:
   gb200-build-llm-d:
     needs: [detect-changes]
     if: ${{ needs.detect-changes.outputs.gb200 == 'true' }}
-    runs-on: oracle-16cpu-64gb-arm64
+    runs-on: vllm-runner-arm
     steps:
       - name: Checkout code
         uses: actions/checkout@v6
@@ -1379,7 +1379,7 @@ jobs:
   rocm-build-llm-d:
     needs: [detect-changes]
     if: ${{ needs.detect-changes.outputs.rocm == 'true' }}
-    runs-on: oracle-16cpu-64gb-x86-64
+    runs-on: vllm-runner
     steps:
       - name: Checkout code
         uses: actions/checkout@v6
@@ -1459,7 +1459,7 @@ jobs:
     if: ${{ needs.detect-changes.outputs.hpu == 'true' }}
     strategy:
       fail-fast: false
-    runs-on: oracle-16cpu-64gb-x86-64
+    runs-on: vllm-runner
     steps:
       - name: Checkout code
         uses: actions/checkout@v6
@@ -1534,7 +1534,7 @@ jobs:
   cpu-build-llm-d:
     needs: [detect-changes]
     if: ${{ needs.detect-changes.outputs.cpu == 'true' }}
-    runs-on: oracle-16cpu-64gb-x86-64
+    runs-on: vllm-runner
     steps:
       - name: Checkout code
         uses: actions/checkout@v6
