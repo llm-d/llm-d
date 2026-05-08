@@ -32,75 +32,39 @@ concurrency:
 jobs:
   nightly:
     if: github.repository == 'llm-d/llm-d'
-    uses: llm-d/llm-d-infra/.github/workflows/reusable-nightly-e2e-openshift-helmfile.yaml@main
+    uses: llm-d/llm-d-infra/.github/workflows/reusable-nightly-e2e-openshift.yaml@main  
     with:
       guide_name: tiered-prefix-cache
-      guide_path: guides/tiered-prefix-cache/cpu
       namespace: llm-d-nightly-pfc-cpu
-      helmfile_env: ${{ github.event.inputs.gateway_type || 'istio' }}
-      gateway_type: ${{ github.event.inputs.gateway_type || 'istio' }}
+      gateway_host: 'tiered-prefix-cache-epp'
+      custom_deploy_script: |
+        NAMESPACE="llm-d-nightly-pfc-cpu"
+        echo "Deploying tiered-prefix-cache/cpu via kustomize + helm..."
+
+        yq '.spec.template.spec.priorityClassName="nightly-gpu-critical"' -i guides/tiered-prefix-cache/cpu/modelserver/gpu/vllm/base/patch-vllm.yaml
+        yq '.spec.replicas=2' -i guides/tiered-prefix-cache/cpu/modelserver/gpu/vllm/base/patch-vllm.yaml
+
+        # Override image if IMAGE_OVERRIDE is set by the reusable workflow
+        #if [ -n "${IMAGE_OVERRIDE:-}" ]; then
+        #  find guides/tiered-prefix-cache/cpu/modelserver/gpu/vllm -name "*.yaml" -not -name "kustomization.yaml" \
+        #    -exec sed -i "s|ghcr.io/llm-d/llm-d-cuda:[^ \"]*|${IMAGE_OVERRIDE}|g" {} \;
+        #  echo "Image override applied: ${IMAGE_OVERRIDE}"
+        #fi
+
+        kubectl apply -k guides/tiered-prefix-cache/cpu/modelserver/gpu/vllm/offloading-connector -n "$NAMESPACE"
+
+        helm install tiered-prefix-cache \
+        oci://registry.k8s.io/gateway-api-inference-extension/charts/standalone \
+        -f guides/recipes/scheduler/base.values.yaml \
+        -f guides/tiered-prefix-cache/cpu/scheduler/tiered-prefix-cache-cpu.values.yaml \
+        -n ${NAMESPACE} --version v1.5.0
+
+        echo "Deployment complete"
       accelerator_type: H100
       required_gpus: 1
       recommended_gpus: 2
       pod_wait_timeout: '30m'
       pod_readiness_delay: 180
-      httproute_file: ''
-      # Slim transform: reduce Qwen3-32B to Qwen3-0.6B, 1 GPU, lower memory
-      pre_deploy_script: |
-        echo "Applying tiered-prefix-cache slim transforms..."
-        KUSTOMIZE_DIR="guides/tiered-prefix-cache/cpu/modelserver/gpu/vllm/offloading-connector"
-        yq '.spec.template.spec.priorityClassName="nightly-gpu-critical"' -i guides/tiered-prefix-cache/cpu/modelserver/gpu/vllm/base/patch-vllm.yaml
-        yq '.spec.replicas=2' -i guides/tiered-prefix-cache/cpu/modelserver/gpu/vllm/base/patch-vllm.yaml
-        cat > "${KUSTOMIZE_DIR}/nightly-slim-patch.yaml" <<'PATCH'
-        - op: replace
-          path: /spec/template/spec/containers/0/args/0
-          value: |-
-            exec vllm serve \
-              Qwen/Qwen3-0.6B \
-              --kv-transfer-config '{"kv_connector":"OffloadingConnector","kv_role":"kv_both","kv_connector_extra_config":{"cpu_bytes_to_use":10737418240}}' \
-              --port 8000 \
-              --max-num-seq 64
-        - op: replace
-          path: /spec/template/spec/containers/0/resources
-          value:
-            limits:
-              nvidia.com/gpu: "1"
-            requests:
-              nvidia.com/gpu: "1"
-        PATCH
-        yq e '.patches += [{"target": {"kind": "Deployment", "name": "llm-d-model-server"}, "path": "nightly-slim-patch.yaml"}]' -i "${KUSTOMIZE_DIR}/kustomization.yaml"
-        echo "Slim transform applied — model: Qwen3-0.6B, 1 GPU, reduced memory"
-      # Custom deploy: kustomize + helm + gateway recipe (not helmfile)
-      custom_deploy_script: |
-        NAMESPACE="llm-d-nightly-pfc-cpu"
-        GATEWAY_TYPE="${GATEWAY_TYPE:-istio}"
-        echo "Deploying tiered-prefix-cache/cpu via kustomize + helm..."
-
-        # Override image if IMAGE_OVERRIDE is set by the reusable workflow
-        if [ -n "${IMAGE_OVERRIDE:-}" ]; then
-          find guides/tiered-prefix-cache/cpu/modelserver/gpu/vllm -name "*.yaml" -not -name "kustomization.yaml" \
-            -exec sed -i "s|ghcr.io/llm-d/llm-d-cuda:[^ \"]*|${IMAGE_OVERRIDE}|g" {} \;
-          echo "Image override applied: ${IMAGE_OVERRIDE}"
-        fi
-
-        # 1. Deploy gateway recipe
-        echo "Deploying gateway recipe ($GATEWAY_TYPE)..."
-        kubectl apply -k "guides/recipes/gateway/${GATEWAY_TYPE}" -n "$NAMESPACE"
-
-        # 2. Deploy model server via kustomize
-        echo "Deploying model server (offloading-connector)..."
-        kubectl apply -k guides/tiered-prefix-cache/cpu/modelserver/gpu/vllm/offloading-connector -n "$NAMESPACE"
-
-        # 3. Deploy InferencePool via helm
-        echo "Deploying InferencePool..."
-        helm install llm-d-infpool \
-          -n "$NAMESPACE" \
-          -f guides/tiered-prefix-cache/cpu/scheduler/tiered-prefix-cache-cpu.values.yaml \
-          --set "provider.name=${GATEWAY_TYPE}" \
-          oci://registry.k8s.io/gateway-api-inference-extension/charts/inferencepool \
-          --version v1.5.0
-
-        echo "Deployment complete"
       image_override: 'ghcr.io/llm-d/llm-d-cuda-dev:latest'
       allow_gpu_preemption: true
       install_gateway_provider: false

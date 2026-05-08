@@ -8,7 +8,6 @@ spec:
     spec:
       containers:
         - name: modelserver
-          image: vllm/vllm-openai:v0.19.1
           command: ["vllm", "serve"]
           resources:
             limits:

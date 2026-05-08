@@ -1,0 +1,52 @@
+name: Nightly - Tiered Prefix Cache E2E (GKE)
+
+# Nightly regression test for the tiered-prefix-cache/cpu guide on GKE.
+# Deploys the CPU offloading connector and validates with e2e-validate.sh.
+
+on:
+  schedule:
+    - cron: '0 12 * * *'  # 12:00 UTC daily (staggered between other GKE nightlies)
+  workflow_dispatch:
+    inputs:
+      skip_cleanup:
+        description: 'Skip cleanup after tests (for debugging)'
+        required: false
+        default: 'false'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: nightly-e2e-tiered-prefix-cache-gke
+  cancel-in-progress: true
+
+jobs:
+  nightly:
+    if: github.repository == 'llm-d/llm-d'
+    uses: llm-d/llm-d-infra/.github/workflows/reusable-nightly-e2e-gke.yaml@main
+    with:
+      guide_name: tiered-prefix-cache
+      namespace: llm-d-nightly-pfc-cpu-gke
+      gateway_host: 'tiered-prefix-cache-epp'
+      custom_deploy_script: |
+        export GAIE_VERSION=v1.5.0
+        export GUIDE_NAME="tiered-prefix-cache-cpu"
+        export ACCELERATOR=gpu
+        export CONNECTOR=offloading-connector
+        kubectl apply -n ${NAMESPACE} -k guides/tiered-prefix-cache/cpu/modelserver/${ACCELERATOR}/vllm/${CONNECTOR}
+        helm install ${GUIDE_NAME} \
+          oci://registry.k8s.io/gateway-api-inference-extension/charts/standalone \
+          -f guides/recipes/scheduler/base.values.yaml \
+          -f guides/tiered-prefix-cache/cpu/scheduler/${GUIDE_NAME}.values.yaml \
+          -n ${NAMESPACE} --version ${GAIE_VERSION}
+      gke_cluster_name: llm-d-e2e-us-east5
+      gke_cluster_zone: us-east5
+      required_gpus: 2
+      recommended_gpus: 4
+      accelerator_type: H100
+      pod_wait_timeout: '30m'
+      pod_readiness_delay: 180
+      allow_gpu_preemption: true
+      llm_d_ref: ${{ github.ref }}
+      skip_cleanup: ${{ github.event.inputs.skip_cleanup == 'true' }}
+    secrets: inherit

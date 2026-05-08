@@ -63,7 +63,8 @@ jobs:
               'optimized-baseline-ocp', 'pd-disaggregation-cks',
               'pd-disaggregation-gke', 'pd-disaggregation-ocp',
               'precise-prefix-cache-ocp',
-              'tiered-prefix-cache-ocp', 'wide-ep-lws-cks',
+              'tiered-prefix-cache-gke', 'tiered-prefix-cache-ocp',
+              'wide-ep-lws-cks',
               'wide-ep-lws-gke', 'wide-ep-lws-ocp',
               'wva-cks', 'wva-ocp',
             ];
