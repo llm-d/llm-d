@@ -126,6 +126,7 @@ else
     echo "Using precompiled binaries and shared libraries from commit: ${VLLM_PRECOMPILED_WHEEL_COMMIT} (source: ${VLLM_COMMIT_SHA})."
     export VLLM_USE_PRECOMPILED=1
     export VLLM_PRECOMPILED_WHEEL_LOCATION="${WHEEL_URL}"
+    export SETUPTOOLS_SCM_PRETEND_VERSION="${VLLM_SETUPTOOLS_SCM_PRETEND_VERSION}"
     INSTALL_PACKAGES+=(-e /opt/vllm-source)
     /opt/warn-vllm-precompiled.sh
     rm /opt/warn-vllm-precompiled.sh
