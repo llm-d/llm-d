@@ -22,8 +22,7 @@ ARG BUILD_DEBUG=false
 
 # CUDA architectures to build for (reduce for faster builds and less memory usage)
 # For GB200/Blackwell: "10.0"
-# ARG TORCH_CUDA_ARCH_LIST="8.0;8.6;8.9;9.0;9.0a;10.0;12.0+PTX"
-ARG TORCH_CUDA_ARCH_LIST="10.0"
+ARG TORCH_CUDA_ARCH_LIST="8.0;8.6;8.9;9.0;9.0a;10.0;12.0+PTX"
 
 ######################## COMPONENT VERSIONS ########################
 
