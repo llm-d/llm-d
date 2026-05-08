@@ -36,7 +36,7 @@ jobs:
     with:
       guide_name: tiered-prefix-cache
       namespace: llm-d-nightly-pfc-cpu
-      gateway_host: 'optimized-baseline-epp'
+      gateway_host: 'tiered-prefix-cache-epp'
       custom_deploy_script: |
         NAMESPACE="llm-d-nightly-pfc-cpu"
         echo "Deploying tiered-prefix-cache/cpu via kustomize + helm..."
