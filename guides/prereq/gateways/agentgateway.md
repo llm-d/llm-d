@@ -40,7 +40,7 @@ Install the agentgateway CRDs and control plane with inference extension support
 enabled:
 
 ```bash
-AGENTGATEWAY_VERSION=v1.0.0
+AGENTGATEWAY_VERSION=v1.1.0
 
 helm upgrade --install agentgateway-crds \
   oci://cr.agentgateway.dev/charts/agentgateway-crds \

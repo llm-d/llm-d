@@ -3,7 +3,7 @@ on: pull_request_target
 
 jobs:
   signed-commits:
-    uses: llm-d/llm-d-infra/.github/workflows/reusable-signed-commits.yml@main
+    uses: llm-d/llm-d-infra/.github/workflows/reusable-signed-commits.yaml@main
     permissions:
       contents: read
       pull-requests: write

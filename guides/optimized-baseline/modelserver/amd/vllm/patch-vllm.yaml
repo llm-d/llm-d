@@ -30,11 +30,11 @@ spec:
           #     value: "0.1"
           resources:
             limits:
-              cpu: "32"
+              cpu: "16"
               memory: 100Gi
               amd.com/gpu: 2
             requests:
-              cpu: "32"
+              cpu: "8"
               memory: 100Gi
               amd.com/gpu: 2
           volumeMounts:

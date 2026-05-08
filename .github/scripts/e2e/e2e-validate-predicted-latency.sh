@@ -143,7 +143,11 @@ echo "Namespace=$NAMESPACE Gateway=${SVC_HOST} EPP=${EPP_METRICS_URL} Model=${MO
 
 # ── Warmup loop: feed the predictor's training window ───────────────────────
 PAYLOAD=$(printf '{"model":"%s","prompt":"Tell me a short story.","max_tokens":32}' "$MODEL_ID")
-kubectl exec -n "$NAMESPACE" "$CURL_POD_NAME" -- sh -c "cat > /tmp/payload.json" <<<"$PAYLOAD"
+# Pipe via tee so the payload actually lands in the file. `kubectl exec` +
+# `sh -c "cat > file"` silently produces a 0-byte file (cat's stdin never gets
+# the data through sh -c, even with -i), which would make every warmup curl
+# send an empty body and report ok=0 fail=N.
+printf '%s' "$PAYLOAD" | kubectl exec -i -n "$NAMESPACE" "$CURL_POD_NAME" -- tee /tmp/payload.json >/dev/null
 
 echo "Sending $ITERATIONS requests with concurrency $CONCURRENCY..."
 # Tolerate partial failures: a single curl that fails to connect would otherwise

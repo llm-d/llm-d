@@ -38,8 +38,6 @@ jobs:
       gateway_host: 'optimized-baseline-epp'
       custom_deploy_script: |
         yq '.spec.template.spec.priorityClassName="nightly-gpu-critical"' -i guides/optimized-baseline/modelserver/gpu/vllm/patch-vllm.yaml
-        yq '.spec.template.spec.volumes += {"name": "triton-cache", "emptyDir": {}}' -i guides/optimized-baseline/modelserver/gpu/vllm/patch-vllm.yaml
-        yq '.spec.template.spec.containers[0].volumeMounts += {"mountPath": "/.triton", "name": "triton-cache"}' -i guides/optimized-baseline/modelserver/gpu/vllm/patch-vllm.yaml
         yq '.spec.replicas=2' -i guides/optimized-baseline/modelserver/gpu/vllm/patch-vllm.yaml
         kubectl apply -k guides/optimized-baseline/modelserver/gpu/vllm -n ${NAMESPACE}
         helm install optimized-baseline \

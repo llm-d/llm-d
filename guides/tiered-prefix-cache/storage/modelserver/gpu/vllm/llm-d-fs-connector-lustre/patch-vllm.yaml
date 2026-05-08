@@ -1,0 +1,14 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: decode
+spec:
+  template:
+    spec:
+      initContainers:
+        - name: fix-lustre-permissions
+          image: busybox:latest
+          command: ["sh", "-c", "chmod -R g+w /mnt/files-storage/"]
+          volumeMounts:
+            - name: files-storage
+              mountPath: /mnt/files-storage

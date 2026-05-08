@@ -51,7 +51,7 @@ ARG INFINISTORE_REPO="https://github.com/bytedance/InfiniStore.git"
 ARG INFINISTORE_VERSION="0.2.33"
 
 ARG LMCACHE_REPO="https://github.com/LMCache/LMCache.git"
-ARG LMCACHE_VERSION="v0.4.1"
+ARG LMCACHE_VERSION="v0.4.4-cu13"
 
 # Kernels
 ARG DEEPEP_REPO="https://github.com/neuralmagic/DeepEP"
@@ -61,7 +61,7 @@ ARG DEEPEP_VERSION="38d21b7f9bb6f3b102b1819d09439686eaa87ce8"
 ARG DEEPEP_GB200_REPO="https://github.com/tlrmchlsmth/DeepEP"
 ARG DEEPEP_GB200_VERSION="sgl-gb200-blog-pt2"
 ARG DEEPGEMM_REPO="https://github.com/deepseek-ai/DeepGEMM"
-ARG DEEPGEMM_VERSION="v2.1.1.post3"
+ARG DEEPGEMM_VERSION="477618cd51baffca09c4b0b87e97c03fe827ef03"
 ARG FLASHINFER_REPO="https://github.com/flashinfer-ai/flashinfer.git"
 # May need to be dropped to v0.6.4
 ARG FLASHINFER_VERSION="v0.6.6"
@@ -74,6 +74,7 @@ ARG VLLM_COMMIT_SHA
 ARG VLLM_PRECOMPILED_WHEEL_COMMIT
 ARG VLLM_PREBUILT
 ARG VLLM_USE_PRECOMPILED
+ARG VLLM_PRECOMPILED_WHEEL_VARIANT=cu${CUDA_MAJOR}${CUDA_MINOR}
 
 # ============================================================================
 # BUILD STAGE - Install build dependencies and create wheels
@@ -98,6 +99,7 @@ ARG NVSHMEM_VERSION
 ARG USE_SCCACHE
 ARG TORCH_CUDA_ARCH_LIST
 ARG BUILD_DEBUG
+ARG MAX_JOBS=3
 
 ARG ENABLE_EFA
 ARG EFA_INSTALLER_VERSION
@@ -113,6 +115,7 @@ COPY patches/ /tmp/patches/
 
 ENV LANG="C.UTF-8" \
     LC_ALL="C.UTF-8" \
+    MAX_JOBS="${MAX_JOBS}" \
     UV_HTTP_TIMEOUT="500" \
     UV_INDEX_STRATEGY="unsafe-best-match" \
     UV_LINK_MODE="copy" \
@@ -308,7 +311,7 @@ ARG TORCH_CUDA_ARCH_LIST
 ARG USE_SCCACHE
 
 # Build parallelism - reduce to avoid OOM on memory-constrained systems
-ARG MAX_JOBS=4
+ARG MAX_JOBS=3
 ARG ENABLE_EFA
 ARG EFA_INSTALLER_VERSION
 ARG LLM_D_OFFLOADING_CONNECTOR_VERSION

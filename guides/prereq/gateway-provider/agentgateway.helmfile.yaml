@@ -2,7 +2,7 @@ releases:
   - name: agentgateway-crds
     chart: oci://cr.agentgateway.dev/charts/agentgateway-crds
     namespace: agentgateway-system
-    version: v1.0.0
+    version: v1.1.0
     installed: true
     labels:
       type: gateway-provider
@@ -10,7 +10,7 @@ releases:
 
   - name: agentgateway
     chart: oci://cr.agentgateway.dev/charts/agentgateway
-    version: v1.0.0
+    version: v1.1.0
     namespace: agentgateway-system
     installed: true
     values:

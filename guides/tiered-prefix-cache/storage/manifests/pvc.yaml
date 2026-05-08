@@ -7,5 +7,5 @@ spec:
     - ReadWriteMany
   resources:
     requests:
-      storage: 18000Gi
-  storageClassName: $STORAGE_CLASS # Specify the storage class here, or remove this line to use the default storage class.
+      storage: 9000Gi
+  storageClassName: ${STORAGE_CLASS} # Specify the storage class here, or remove this line to use the default storage class.

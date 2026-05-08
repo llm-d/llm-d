@@ -21,8 +21,8 @@ VLLM_PRECOMPILED_WHEEL_COMMIT=b1388b1fbf5aaef47937fabe98931211684666a6 # maps to
 
 
 
-# Used by XPU, commit from vllm, point to v0.17.0
-VLLM_XPU_COMMIT_SHA=9dd656f0ea06ba452e1f26666c111ea4909cd488
+# Used by XPU, commit from vllm, maps to v0.19.1 tag
+VLLM_XPU_COMMIT_SHA=b1388b1fbf5aaef47937fabe98931211684666a6
 
 # ============================================================================
 # CUDA Version Configuration

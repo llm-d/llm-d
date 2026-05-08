@@ -1,0 +1,35 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: decode
+spec:
+  template:
+    spec:
+      containers:
+        - name: modelserver
+          command: ["vllm"]
+          args:
+            - "serve"
+            - "Qwen/Qwen3-32B"
+            - "--tensor-parallel-size"
+            - "2"
+            - "--max-num-seq"
+            - "1024"
+            - "--kv-transfer-config"
+            - '{"kv_connector":"LMCacheConnectorV1","kv_role":"kv_both"}'
+            - "--gpu-memory-utilization"
+            - "0.8"
+          env:
+            - name: LMCACHE_LOCAL_DISK
+              value: "file:///mnt/files-storage/kv-cache/"
+            - name: LMCACHE_EXTRA_CONFIG
+              value: "{\"use_odirect\":\"True\"}"
+            - name: LMCACHE_MAX_LOCAL_DISK_SIZE
+              value: "1120.0"
+          volumeMounts:
+            - name: files-storage
+              mountPath: /mnt/files-storage
+      volumes:
+        - name: files-storage
+          persistentVolumeClaim:
+            claimName: llm-d-kv-cache-storage

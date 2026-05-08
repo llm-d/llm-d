@@ -3,9 +3,9 @@
 # Build the llm-d CUDA image locally.
 #
 # Usage:
-#   ./docker/scripts/cuda/builder/build-local-llm-d-cuda.sh                # defaults
-#   ./docker/scripts/cuda/builder/build-local-llm-d-cuda.sh --tag my-test   # custom tag
-#   ./docker/scripts/cuda/builder/build-local-llm-d-cuda.sh --help
+#   ./helpers/local-llm-d-cuda-builder/build-local-llm-d-cuda.sh                # defaults
+#   ./helpers/local-llm-d-cuda-builder/build-local-llm-d-cuda.sh --tag my-test   # custom tag
+#   ./helpers/local-llm-d-cuda-builder/build-local-llm-d-cuda.sh --help
 #
 # All options can also be set via environment variables (see below).
 #
@@ -24,6 +24,7 @@ ENABLE_EFA="${ENABLE_EFA:-false}"
 TARGETOS="${TARGETOS:-rhel}"
 DOCKER="${DOCKER:-docker}"                 # or podman
 BUILDER="${BUILDER:-}"                     # buildx builder name (e.g. remote-amd64)
+USE_SCCACHE="${USE_SCCACHE:-false}"        # CI uses true; local builds typically lack sccache
 
 # ── parse flags ──────────────────────────────────────────────────────
 usage() {
@@ -42,6 +43,7 @@ Options:
   --debug             Build with debug symbols     (default: false)
   --efa               Enable AWS EFA support       (default: false)
   --os OS             Target OS: rhel or ubuntu    (default: ${TARGETOS})
+  --sccache           Enable sccache               (default: false)
   --docker CMD        Container tool               (default: ${DOCKER})
   --builder NAME      Buildx builder name          (default: default builder)
                       e.g. remote-amd64
@@ -50,7 +52,7 @@ Options:
 
 Environment variables:
   IMAGE_NAME, IMAGE_TAG, TARGET, TARGETPLATFORM, BUILD_DEBUG,
-  ENABLE_EFA, TARGETOS, DOCKER, BUILDER
+  ENABLE_EFA, TARGETOS, DOCKER, BUILDER, USE_SCCACHE
 EOF
     exit 0
 }
@@ -65,6 +67,7 @@ while [[ $# -gt 0 ]]; do
         --debug)      BUILD_DEBUG=true; shift ;;
         --efa)        ENABLE_EFA=true;  shift ;;
         --os)         TARGETOS="$2";   shift 2 ;;
+        --sccache)    USE_SCCACHE=true; shift ;;
         --docker)     DOCKER="$2";     shift 2 ;;
         --builder)    BUILDER="$2";    shift 2 ;;
         --dry-run)    DRY_RUN=true;    shift ;;
@@ -89,14 +92,14 @@ case "${TARGETOS}" in
         ;;
 esac
 
-# ── load vLLM version pinning ───────────────────────────────────────
-VLLM_VERSION_FILE="${REPO_ROOT}/docker/vllm-version"
-if [[ ! -f "${VLLM_VERSION_FILE}" ]]; then
-    echo "Error: ${VLLM_VERSION_FILE} not found." >&2
+# ── load version pinning from common-versions ───────────────────────
+COMMON_VERSIONS_FILE="${REPO_ROOT}/docker/common-versions"
+if [[ ! -f "${COMMON_VERSIONS_FILE}" ]]; then
+    echo "Error: ${COMMON_VERSIONS_FILE} not found." >&2
     exit 1
 fi
 # shellcheck source=/dev/null
-source "${VLLM_VERSION_FILE}"
+source "${COMMON_VERSIONS_FILE}"
 
 # ── check container tool ────────────────────────────────────────────
 if ! command -v "${DOCKER}" &>/dev/null; then
@@ -119,12 +122,18 @@ cmd=(
     --build-arg "BUILD_BASE_IMAGE_SUFFIX=${BUILD_BASE_IMAGE_SUFFIX}"
     --build-arg "FINAL_BASE_IMAGE_SUFFIX=${FINAL_BASE_IMAGE_SUFFIX}"
     --build-arg "BUILD_DEBUG=${BUILD_DEBUG}"
+    --build-arg "USE_SCCACHE=${USE_SCCACHE}"
     --build-arg "ENABLE_EFA=${ENABLE_EFA}"
     --build-arg "VLLM_REPO=${VLLM_REPO}"
     --build-arg "VLLM_COMMIT_SHA=${VLLM_COMMIT_SHA}"
     --build-arg "VLLM_PRECOMPILED_WHEEL_COMMIT=${VLLM_PRECOMPILED_WHEEL_COMMIT:-${VLLM_COMMIT_SHA}}"
     --build-arg "VLLM_PREBUILT=${VLLM_PREBUILT:-0}"
     --build-arg "VLLM_USE_PRECOMPILED=${VLLM_USE_PRECOMPILED:-1}"
+    --build-arg "CUDA_MAJOR=${CUDA_MAJOR}"
+    --build-arg "CUDA_MINOR=${CUDA_MINOR}"
+    --build-arg "CUDA_PATCH=${CUDA_PATCH}"
+    --build-arg "LLM_D_OFFLOADING_CONNECTOR_VERSION=${LLM_D_OFFLOADING_CONNECTOR_VERSION:-}"
+    --build-arg "INSTALL_OFFLOADING_CONNECTOR=${INSTALL_OFFLOADING_CONNECTOR:-true}"
 )
 
 if [[ -n "${TARGET}" ]]; then
@@ -136,6 +145,7 @@ cmd+=(-t "${FULL_IMAGE}" "${REPO_ROOT}")
 # ── run ──────────────────────────────────────────────────────────────
 echo "==> Building ${FULL_IMAGE}"
 echo "    Platform=${TARGETPLATFORM}  OS=${TARGETOS}  DEBUG=${BUILD_DEBUG}  EFA=${ENABLE_EFA}  Builder=${BUILDER:-default}"
+echo "    CUDA=${CUDA_MAJOR}.${CUDA_MINOR}.${CUDA_PATCH}"
 echo "    vLLM repo=${VLLM_REPO}"
 echo "    vLLM commit=${VLLM_COMMIT_SHA}"
 echo ""

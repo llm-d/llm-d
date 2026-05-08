@@ -1,0 +1,8 @@
+ap:
+  messageQueueImpl: "gcp-pubsub"
+  gcpPubSub:
+    enabled: true
+    # Replace with your GCP project and resources
+    requestSubscriberId: "projects/REPLACE_WITH_YOUR_PROJECT/subscriptions/async-proc-requests-sub"
+    resultTopicId: "projects/REPLACE_WITH_YOUR_PROJECT/topics/async-proc-results"
+    requestPathURL: "/v1/completions"

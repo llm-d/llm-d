@@ -1,0 +1,68 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: decode
+spec:
+  replicas: 8
+  template:
+    spec:
+      containers:
+        - name: modelserver
+          command: ["sglang", "serve"]
+          args:
+            - "--model-path=Qwen/Qwen3-32B"
+            - "--host=0.0.0.0"
+            - "--port=8000"
+            - "--log-level=info"
+            - "--enable-metrics"
+            - "--uvicorn-access-log-exclude-prefixes=/metrics"
+            # Uncomment for distributed tracing
+            # - "--enable-trace"
+            # - "--otlp-traces-endpoint=http://otel-collector:4317"
+          # env:
+          #   # Uncomment for distributed tracing env vars
+          #   - name: OTEL_SERVICE_NAME
+          #     value: "sglang-decode"
+          #   - name: OTEL_EXPORTER_OTLP_ENDPOINT
+          #     value: "http://otel-collector:4317"
+          #   - name: OTEL_TRACES_EXPORTER
+          #     value: "otlp"
+          #   - name: OTEL_TRACES_SAMPLER
+          #     value: "parentbased_traceidratio"
+          #   - name: OTEL_TRACES_SAMPLER_ARG
+          #     value: "0.1"
+          resources:
+            limits:
+              cpu: "32"
+              memory: 64Gi
+              amd.com/gpu: 2
+            requests:
+              cpu: "32"
+              memory: 32Gi
+              amd.com/gpu: 2
+          volumeMounts:
+            - mountPath: /.config
+              name: metrics-volume
+            - mountPath: /dev/shm
+              name: dshm
+          startupProbe:
+            initialDelaySeconds: 15
+            periodSeconds: 30
+            timeoutSeconds: 5
+            failureThreshold: 120
+          livenessProbe:
+            initialDelaySeconds: 30
+            periodSeconds: 30
+            timeoutSeconds: 30
+            failureThreshold: 5
+          readinessProbe:
+            periodSeconds: 5
+            timeoutSeconds: 2
+            failureThreshold: 3
+      volumes:
+        - name: metrics-volume
+          emptyDir: {}
+        - name: dshm
+          emptyDir:
+            medium: Memory
+            sizeLimit: 20Gi

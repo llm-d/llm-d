@@ -25,7 +25,7 @@ We can, therefore, compose the WideEP deployment with the existing scorers (for 
 
 ### Why This is Experimental
 
-We are currently working on hardenening the process management, health checking, and probes in vLLM to handle better this style of deployment. Once this is complete, we will upgrade this guide to the default.
+We are currently working on hardening the process management, health checking, and probes in vLLM to handle better this style of deployment. Once this is complete, we will upgrade this guide to the default.
 
 ## Overview
 
@@ -33,7 +33,7 @@ This guide demonstrates how to deploy DeepSeek-R1-0528 using vLLM's P/D disaggre
 
 * a 32xH200 cluster with InfiniBand networking
 * a 32xB200 cluster with InfiniBand networking
-* Istio 1.29.1 (required for multi-port support)
+* Istio 1.29.2 (required for multi-port support)
 
 In this example, we will demonstrate a deployment of `DeepSeek-R1-0528` with:
 
@@ -55,7 +55,7 @@ This guide requires 32 Nvidia H200 or B200 GPUs and InfiniBand or RoCE RDMA netw
 
 * Have the [proper client tools installed on your local system](../../../helpers/client-setup/README.md) to use this guide.
 * You have deployed the [LeaderWorkerSet controller](https://lws.sigs.k8s.io/docs/installation/)
-* Configure and deploy your [Gateway control plane](../../prereq/gateway-provider/README.md). Note that the Gateway must support multi-port (e.g. Istio 1.29.1)
+* Configure and deploy your [Gateway control plane](../../prereq/gateway-provider/README.md). Note that the Gateway must support multi-port (e.g. Istio 1.29.2)
 * Have the [Monitoring stack](../../../docs/monitoring/README.md) installed on your system.
 * Create a namespace for installation.
 

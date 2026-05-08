@@ -14,7 +14,7 @@ spec:
     spec:
       containers:
         - name: tokenizer-uds
-          image: ghcr.io/llm-d/llm-d-uds-tokenizer:v0.7.1
+          image: ghcr.io/llm-d/llm-d-uds-tokenizer:vllm-v0.19.1
           imagePullPolicy: IfNotPresent
           env:
             - name: TOKENIZERS_DIR

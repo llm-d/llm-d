@@ -1,6 +1,6 @@
-ARG BASE_IMAGE=vllm/vllm-openai-rocm:v0.15.1
+ARG BASE_IMAGE=vllm/vllm-openai-rocm:v0.20.1
 
-ARG RIXL_BRANCH="f33a5599"
+ARG RIXL_BRANCH="39be1de"
 ARG RIXL_REPO="https://github.com/ROCm/RIXL.git"
 ARG UCX_BRANCH="da3fac2a"
 ARG UCX_REPO="https://github.com/ROCm/ucx.git"
@@ -65,7 +65,8 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     protobuf-compiler-grpc \
     libcpprest-dev \
     libaio-dev \
-    libgflags-dev
+    libgflags-dev \
+    libcxxopts-dev
 
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv pip install --system -U packaging 'cmake<4' ninja wheel 'setuptools<80' pybind11 meson auditwheel patchelf tomlkit
@@ -118,7 +119,7 @@ RUN --mount=type=cache,target=/root/.cache/ccache \
 # Generate RIXL wheel
 RUN --mount=type=cache,target=/root/.cache/ccache \
     cd /opt/rixl && mkdir -p /app/install && \
-    ./contrib/build-wheel.sh \
+    LD_LIBRARY_PATH=${RIXL_PATH}/lib/x86_64-linux-gnu:${LD_LIBRARY_PATH} ./contrib/build-wheel.sh \
         --python-version ${PYTHON_VERSION} \
         --output-dir /app/install \
         --rocm-dir ${ROCM_PATH} \

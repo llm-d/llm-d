@@ -18,7 +18,9 @@ set -Eeu
 . /opt/vllm/bin/activate
 
 # default VLLM_PRECOMPILED_WHEEL_COMMIT to VLLM_COMMIT_SHA if not set
+# default VLLM_PRECOMPILED_WHEEL_VARIANT to cu${CUDA_MAJOR}${CUDA_MINOR} if not set
 VLLM_PRECOMPILED_WHEEL_COMMIT="${VLLM_PRECOMPILED_WHEEL_COMMIT:-${VLLM_COMMIT_SHA}}"
+VLLM_PRECOMPILED_WHEEL_VARIANT="${VLLM_PRECOMPILED_WHEEL_VARIANT:-cu${CUDA_MAJOR}${CUDA_MINOR}}"
 
 # build list of packages to install
 # flashinfer-cubin/jit-cache are pre-built wheels (building from source times out)
@@ -76,21 +78,21 @@ fi
 
 # detect if prebuilt wheel exists (using VLLM_PRECOMPILED_WHEEL_COMMIT for lookup)
 # note: vllm wheel index structure isn't pip-compatible, so we scrape the HTML directly
-echo "DEBUG: Looking for wheel at: https://wheels.vllm.ai/${VLLM_PRECOMPILED_WHEEL_COMMIT}/vllm/"
+echo "DEBUG: Looking for wheel at: https://wheels.vllm.ai/${VLLM_PRECOMPILED_WHEEL_COMMIT}/${VLLM_PRECOMPILED_WHEEL_VARIANT}/vllm/"
 echo "DEBUG: Architecture: $(uname -m), Python: $(python3 --version)"
 
 # determine platform tag from architecture
 MACHINE=$(uname -m)
 case "${MACHINE}" in
-  x86_64) PLATFORM_TAG="manylinux_2_31_x86_64" ;;
-  amd64) PLATFORM_TAG="manylinux_2_31_x86_64" ;;
-  aarch64) PLATFORM_TAG="manylinux_2_31_aarch64" ;;
-  arm64) PLATFORM_TAG="manylinux_2_31_aarch64" ;;
+  x86_64) PLATFORM_TAG="manylinux_2_35_x86_64" ;;
+  amd64) PLATFORM_TAG="manylinux_2_35_x86_64" ;;
+  aarch64) PLATFORM_TAG="manylinux_2_35_aarch64" ;;
+  arm64) PLATFORM_TAG="manylinux_2_35_aarch64" ;;
   *) echo "unsupported architecture: ${MACHINE}"; exit 1 ;;
 esac
 
 # scrape wheel filename from HTML index
-WHEEL_INDEX_HTML=$(curl -sf "https://wheels.vllm.ai/${VLLM_PRECOMPILED_WHEEL_COMMIT}/vllm/" || echo "")
+WHEEL_INDEX_HTML=$(curl -sf "https://wheels.vllm.ai/${VLLM_PRECOMPILED_WHEEL_COMMIT}/${VLLM_PRECOMPILED_WHEEL_VARIANT}/vllm/" || echo "")
 if [ -z "${WHEEL_INDEX_HTML}" ]; then
   echo "DEBUG: Failed to fetch wheel index or index does not exist"
   WHEEL_FILENAME=""
@@ -101,6 +103,8 @@ fi
 if [ -n "${WHEEL_FILENAME}" ]; then
   # construct full URL (wheels are in parent directory)
   # URL-encode the + sign in the wheel filename
+  # The wheel url itself does not use the VLLM_PRECOMPILED_WHEEL_VARIANT
+  # suffix, this is part of the wheel filename url
   WHEEL_URL="https://wheels.vllm.ai/${VLLM_PRECOMPILED_WHEEL_COMMIT}/${WHEEL_FILENAME}"
   WHEEL_URL=$(echo "${WHEEL_URL}" | sed -E 's/\+/%2B/g')
   echo "DEBUG: Found wheel: ${WHEEL_FILENAME}"
@@ -112,7 +116,7 @@ fi
 
 if [ "${VLLM_PREBUILT}" = "1" ]; then
   if [ -z "${WHEEL_URL}" ]; then
-    echo "VLLM_PREBUILT set but no platform compatible wheel exists for: https://wheels.vllm.ai/${VLLM_PRECOMPILED_WHEEL_COMMIT}/vllm/"
+    echo "VLLM_PREBUILT set but no platform compatible wheel exists for: https://wheels.vllm.ai/${VLLM_PRECOMPILED_WHEEL_COMMIT}/${VLLM_PRECOMPILED_WHEEL_VARIANT}/vllm/"
     exit 1
   fi
   INSTALL_PACKAGES+=("${WHEEL_URL}")

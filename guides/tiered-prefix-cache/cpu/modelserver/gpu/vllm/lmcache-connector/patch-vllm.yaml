@@ -1,0 +1,38 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: decode
+spec:
+  template:
+    spec:
+      containers:
+        - name: modelserver
+          # TODO: Update to latest image.
+          image: ghcr.io/llm-d/llm-d-cuda:v0.5.1
+          args:
+            - "Qwen/Qwen3-32B"
+            - "--tensor-parallel-size=2"
+            - "--kv-transfer-config"
+            - '{"kv_connector":"LMCacheConnectorV1","kv_role":"kv_both"}'
+            - "--max-num-seq"
+            - "1024"
+            - "--gpu-memory-utilization"
+            - "0.8"
+          resources:
+            limits:
+              memory: 500Gi
+            requests:
+              memory: 500Gi
+          env:
+            - name: LMCACHE_MAX_LOCAL_CPU_SIZE
+              value: "200.0"
+            - name: PYTHONHASHSEED
+              value: "123"
+            - name: PROMETHEUS_MULTIPROC_DIR
+              value: "/tmp/lmcache_prometheus"
+          volumeMounts:
+            - name: lmcache-prometheus-metrics
+              mountPath: /tmp/lmcache_prometheus
+      volumes:
+        - name: lmcache-prometheus-metrics
+          emptyDir: {}

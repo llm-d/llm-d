@@ -1,0 +1,82 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: decode
+spec:
+  replicas: 2
+  template:
+    spec:
+      containers:
+        - name: modelserver
+          image: vllm/vllm-openai:v0.19.1
+          command: ["/bin/sh", "-c"]
+          args:
+            # NOTE: The connector package version must match the vLLM version.
+            # For vLLM 0.X.x use llmd-fs-connector==0.X.
+            - |
+              pip install 'llmd-fs-connector==0.19' --extra-index-url https://llm-d.github.io/llm-d-kv-cache/simple/
+              exec vllm serve \
+                Qwen/Qwen3-32B \
+                --tensor-parallel-size 2 \
+                --max-num-seq 1024 \
+                --kv-transfer-config '{
+                  "kv_connector": "OffloadingConnector",
+                  "kv_role": "kv_both",
+                  "kv_connector_extra_config": {
+                    "spec_name": "SharedStorageOffloadingSpec",
+                    "shared_storage_path": "/mnt/files-storage/kv-cache/",
+                    "block_size": 256,
+                    "threads_per_gpu": 64,
+                    "spec_module_path": "llmd_fs_backend.spec"
+                  }
+                }'
+          env:
+            - name: PYTHONHASHSEED
+              value: "42"
+          resources:
+            limits:
+              cpu: '16'
+              memory: 400Gi
+              nvidia.com/gpu: 2
+            requests:
+              cpu: '8'
+              memory: 400Gi
+              nvidia.com/gpu: 2
+          volumeMounts:
+            - mountPath: /dev/shm
+              name: shm
+            - mountPath: /.cache
+              name: torch-compile-cache
+            - mountPath: /.triton
+              name: triton-cache
+            - mountPath: /.local
+              name: pip-user-site
+            - mountPath: /mnt/files-storage
+              name: files-storage
+          startupProbe:
+            initialDelaySeconds: 15
+            periodSeconds: 30
+            timeoutSeconds: 5
+            failureThreshold: 120
+          livenessProbe:
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            periodSeconds: 5
+            timeoutSeconds: 2
+            failureThreshold: 3
+      volumes:
+        - name: shm
+          emptyDir:
+            medium: Memory
+            sizeLimit: 20Gi
+        - name: torch-compile-cache
+          emptyDir: {}
+        - name: triton-cache
+          emptyDir: {}
+        - name: pip-user-site
+          emptyDir: {}
+        - name: files-storage
+          persistentVolumeClaim:
+            claimName: llm-d-kv-cache-storage

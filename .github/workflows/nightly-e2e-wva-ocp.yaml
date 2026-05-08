@@ -1,7 +1,7 @@
 name: Nightly - WVA E2E (OpenShift)
 
 # Nightly regression test for WVA (Workload Variant Autoscaler) on OpenShift.
-# Deploys the workload-autoscaling guide stack via the consolidated helmfile
+# Deploys the workload-autoscaling guide stack via the consolidated kustomize
 # reusable workflow and runs the WVA e2e test suite from the WVA repo.
 #
 # Builds the WVA controller image from main before testing, since the helm
@@ -110,19 +110,50 @@ jobs:
   nightly:
     needs: build-wva-image
     if: github.repository == 'llm-d/llm-d' && always() && (needs.build-wva-image.result == 'success' || needs.build-wva-image.result == 'skipped')
-    uses: llm-d/llm-d-infra/.github/workflows/reusable-nightly-e2e-openshift-helmfile.yaml@main
+    uses: llm-d/llm-d-infra/.github/workflows/reusable-nightly-e2e-openshift.yaml@main
     with:
       guide_name: workload-autoscaling
       namespace: llm-d-nightly-wva
-      deploy_wva: true
-      caller_repo: llm-d/llm-d-workload-variant-autoscaler
-      caller_ref: ${{ github.event.inputs.caller_ref || 'main' }}
-      wva_image_tag: ${{ needs.build-wva-image.outputs.image_tag || github.event.inputs.image_tag }}
-      image_override: 'ghcr.io/llm-d/llm-d-cuda-dev:latest'
-      allow_gpu_preemption: true
-      install_gateway_provider: false
-      skip_cleanup: ${{ github.event.inputs.skip_cleanup == 'true' }}
+      # Service name is truncated to 63 chars: ...-inferencepoo-epp (not ...-inferencepool-epp)
+      gateway_host: 'workload-variant-autoscaler-inferencepoo-epp'
+      custom_deploy_script: |
+        # WVA kustomize builds target namespace llm-d-autoscaler (do not pass a conflicting kubectl -n).
+        WVA_DEPLOY_NS=llm-d-autoscaler
+        yq '.spec.template.spec.priorityClassName="nightly-gpu-critical"' -i guides/optimized-baseline/modelserver/gpu/vllm/patch-vllm.yaml
+        yq '.spec.template.spec.volumes += {"name": "triton-cache", "emptyDir": {}}' -i guides/optimized-baseline/modelserver/gpu/vllm/patch-vllm.yaml
+        yq '.spec.template.spec.containers[0].volumeMounts += {"mountPath": "/.triton", "name": "triton-cache"}' -i guides/optimized-baseline/modelserver/gpu/vllm/patch-vllm.yaml
+        yq '.spec.replicas=2' -i guides/optimized-baseline/modelserver/gpu/vllm/patch-vllm.yaml
+        kubectl apply -k guides/optimized-baseline/modelserver/gpu/vllm -n ${NAMESPACE}
+        helm install workload-variant-autoscaler-inferencepool-standalone \
+          oci://registry.k8s.io/gateway-api-inference-extension/charts/standalone \
+          -f guides/recipes/scheduler/base.values.yaml \
+          -f guides/optimized-baseline/scheduler/optimized-baseline.values.yaml \
+          -n ${NAMESPACE} --version v1.5.0
+
+        # TLS cert handling
+        export PROMETHEUS_CA_CERT=$(kubectl get secret thanos-querier-tls -n openshift-monitoring -o jsonpath='{.data.tls\.crt}' | base64 -d)
+        WVA_TLS_OVERLAY_DIR=$(mktemp -d)
+        cp -R guides/workload-autoscaling/components/tls-overlay/. "${WVA_TLS_OVERLAY_DIR}"
+        printf "%s" "${PROMETHEUS_CA_CERT}" > "${WVA_TLS_OVERLAY_DIR}/ca.crt"
+        kubectl apply -k "${WVA_TLS_OVERLAY_DIR}" -n "${WVA_DEPLOY_NS}"
+
+        # Kustomization validation dry run
+        kubectl kustomize guides/workload-autoscaling/wva-config/platform/ocp >/dev/null
+
+        # apply WVA assets
+        kubectl apply -k guides/workload-autoscaling/wva-config/platform/ocp
+
+        # Validate WVA controller is ready, then apply autoscaling resources
+        kubectl wait deployment/workload-variant-autoscaler-controller-manager \
+          -n "${WVA_DEPLOY_NS}" --for=condition=Available --timeout=300s
+        kubectl apply -k guides/workload-autoscaling/optimized-baseline-autoscaling -n "${NAMESPACE}"
+        kubectl get variantautoscaling,hpa -n "${NAMESPACE}"
+      accelerator_type: H100
       required_gpus: 2
       recommended_gpus: 4
-      test_target: nightly-test-llm-d
+      pod_wait_timeout: '30m'
+      pod_readiness_delay: 180
+      image_override: 'ghcr.io/llm-d/llm-d-cuda-dev:latest'
+      allow_gpu_preemption: true
+      skip_cleanup: ${{ github.event.inputs.skip_cleanup == 'true' }}
     secrets: inherit

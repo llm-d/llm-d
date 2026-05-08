@@ -1,0 +1,5 @@
+experimentalHttpRoute:
+  enabled: true # a flag to indicate whether to create the httproute as part of the chart or not.
+  inferenceGatewayName: llm-d-inference-gateway
+  # on many providers, setting the requestTimeout to 0s defaults to the maximum that that provider supports
+  requestTimeout: "0s"

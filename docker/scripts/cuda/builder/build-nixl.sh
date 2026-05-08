@@ -49,7 +49,7 @@ meson setup build \
     -Dinstall_headers=true
 
 cd build
-ninja
+ninja -j"${MAX_JOBS}"
 ninja install
 cd ..
 . ${VIRTUAL_ENV}/bin/activate

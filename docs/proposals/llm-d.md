@@ -94,7 +94,12 @@ As an inference platform team, I can autoscale disaggregated serving roles, diff
 
 The [unified architecture diagram](https://docs.google.com/drawings/d/1PNGNsicSFiFJjSBThgg6zhxAQMdJp9LqqExQ-8lmmUY/edit) below shows all of the key components of the system, as well as the basic flow for request flow.
 
-![Architecture diagram](../assets/images/llm-d-arch-initial-large.svg)
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)">
+    <img src="../assets/images/llm-d-arch-initial-large.svg" alt="Architecture diagram">
+  </picture>
+</p>
 
 Our current north star designs lay out the initial scope (join <llm-d-contributors@googlegroups.com> to comment). They will be converted into project proposals:
 

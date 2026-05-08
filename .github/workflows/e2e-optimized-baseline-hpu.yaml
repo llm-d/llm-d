@@ -1,0 +1,236 @@
+name: HPU optimized baseline Test
+
+on:
+  schedule:
+    - cron: '0 4 * * *'  # 4:00 AM UTC daily
+  workflow_dispatch:
+    inputs:
+      pr_or_branch:
+        description: 'PR number (e.g. 123 or pr-123) or branch name (e.g. main, feature/xyz) to test'
+        required: true
+        default: 'main'
+        type: string
+      custom_image_tag:
+        description: 'Tag only (e.g. pr-123, auto-expanded to ghcr.io/<org>/<repo>-hpu-dev:pr-123) or full image address (e.g. ghcr.io/llm-d/llm-d-hpu:v0.5.1). Leave empty to use default from values file'
+        required: false
+        default: ''
+        type: string
+  workflow_call:
+    inputs:
+      pr_or_branch:
+        description: 'Pull-request number or branch name to test'
+        required: true
+        default: 'main'
+        type: string
+      custom_image_tag:
+        description: 'Custom HPU image tag to use (optional)'
+        required: false
+        default: ''
+        type: string
+jobs:
+  deploy_and_validate:
+    if: github.repository == 'llm-d/llm-d'
+    runs-on: hpu-dispatch-runner
+    env:
+      NAMESPACE: "llm-d-hpu-is"
+      GAIE_VERSION: "v1.5.0"
+      GUIDE_NAME: "optimized-baseline"
+      SCHEDULER_RELEASE_NAME: "optimized-baseline"
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: Determine if pr_or_branch is a PR number
+        id: check_pr
+        env:
+          PR_OR_BRANCH: ${{ github.event.inputs.pr_or_branch }}
+        shell: bash
+        run: |
+          echo "PR_OR_BRANCH=${PR_OR_BRANCH:-main}" >> "$GITHUB_ENV"
+          # Strip optional 'pr-' prefix so both '704' and 'pr-704' work
+          CLEAN="${PR_OR_BRANCH#pr-}"
+          if [[ "$CLEAN" =~ ^[0-9]+$ ]]; then
+            echo "PR_OR_BRANCH=$CLEAN" >> "$GITHUB_ENV"
+            echo "is_pr=true" >> "$GITHUB_OUTPUT"
+          elif [[ "${{ github.event_name }}" = "pull_request" ]]; then
+            echo "PR_OR_BRANCH=${{ github.event.pull_request.number }}" >> $GITHUB_ENV
+            echo "is_pr=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "is_pr=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Fetch and checkout PR
+        if: steps.check_pr.outputs.is_pr == 'true'
+        run: |
+          git fetch origin pull/"$PR_OR_BRANCH"/head:pr-"$PR_OR_BRANCH"
+          git checkout pr-"$PR_OR_BRANCH"
+
+      - name: Checkout branch
+        if: steps.check_pr.outputs.is_pr == 'false'
+        run: git checkout "$PR_OR_BRANCH"
+
+      - name: Install prerequisites idempotently
+        run: |
+          ./helpers/client-setup/install-deps.sh | tee ~/install-deps.log
+
+      - name: Install Gateway API Inference Extension CRDs
+        run: |
+          kubectl apply -k "https://github.com/kubernetes-sigs/gateway-api-inference-extension/config/crd?ref=${GAIE_VERSION}"
+
+      - name: Install monitoring stack
+        run: |
+          cd docs/monitoring
+          ./scripts/install-prometheus-grafana.sh || true
+
+      - name: Create namespace
+        run: |
+          kubectl create namespace "${NAMESPACE}" || echo "Namespace already exists"
+
+      - name: Create llm-d-hf-token secret
+        run: |
+          kubectl create secret generic llm-d-hf-token \
+            --from-literal="HF_TOKEN=${{ secrets.HF_TOKEN }}" \
+            --namespace "${NAMESPACE}" \
+            --dry-run=client -o yaml | kubectl apply -f -
+
+      - name: Set image tag for deployment
+        id: set_image_tag
+        run: |
+          CUSTOM_TAG="${{ inputs.custom_image_tag }}"
+          if [ -n "${CUSTOM_TAG}" ]; then
+            # If input contains '/' it is a full image reference; otherwise treat as a tag
+            if [[ "${CUSTOM_TAG}" == *"/"* ]]; then
+              echo "Using custom image reference: ${CUSTOM_TAG}"
+              echo "CUSTOM_IMAGE_REF=${CUSTOM_TAG}" >> $GITHUB_ENV
+            else
+              echo "Using custom image tag: ${CUSTOM_TAG}"
+              echo "CUSTOM_IMAGE_REF=ghcr.io/${{ github.repository }}-hpu-dev:${CUSTOM_TAG}" >> $GITHUB_ENV
+            fi
+            echo "HAS_CUSTOM_IMAGE=true" >> $GITHUB_ENV
+          else
+            echo "Using default image from kustomization.yaml"
+            echo "HAS_CUSTOM_IMAGE=false" >> $GITHUB_ENV
+          fi
+
+      - name: Deploy scheduler via helm (standalone)
+        run: |
+          echo "Installing scheduler (standalone chart) via helm..."
+          helm install "${SCHEDULER_RELEASE_NAME}" \
+            oci://registry.k8s.io/gateway-api-inference-extension/charts/standalone \
+            -f guides/recipes/scheduler/base.values.yaml \
+            -f guides/recipes/scheduler/features/monitoring.values.yaml \
+            -f guides/${GUIDE_NAME}/scheduler/${GUIDE_NAME}.values.yaml \
+            -n "${NAMESPACE}" \
+            --version "${GAIE_VERSION}" \
+            | tee ~/optimized-baseline-hpu-deployment.log
+
+      - name: Deploy model server via kustomize
+        run: |
+          cd guides/${GUIDE_NAME}/modelserver/hpu/vllm
+
+          # Override image if custom reference is provided
+          if [[ "${HAS_CUSTOM_IMAGE}" == "true" ]]; then
+            echo "Overriding image to ${CUSTOM_IMAGE_REF}"
+            kustomize edit set image "REPLACE_MODEL_SERVER_IMAGE=${CUSTOM_IMAGE_REF}"
+          fi
+
+          echo "Building and applying kustomize manifests..."
+          kubectl apply -n "${NAMESPACE}" -k ./ \
+            | tee -a ~/optimized-baseline-hpu-deployment.log
+
+      - name: Wait for all pods to be ready
+        id: wait_pods
+        run: |
+          echo "Waiting for all pods to be ready..."
+          if kubectl wait pod \
+            --for=condition=Ready \
+            --all \
+            -n "${NAMESPACE}" \
+            --timeout=10m; then
+            echo "✅ All pods are ready."
+            kubectl get pods -n "${NAMESPACE}"
+          else
+            echo "❌ Pods failed to become ready within timeout"
+            echo "=== Pod Status ==="
+            kubectl get pods -n "${NAMESPACE}"
+            echo "=== Pod Descriptions ==="
+            kubectl describe pods -n "${NAMESPACE}"
+            exit 1
+          fi
+
+      - name: Show deployment status
+        if: always()
+        run: |
+          echo "=== Deployments ==="
+          kubectl get deployments -n "${NAMESPACE}"
+          echo ""
+          echo "=== Pods ==="
+          kubectl get pods -n "${NAMESPACE}"
+          echo ""
+          echo "=== Services ==="
+          kubectl get svc -n "${NAMESPACE}"
+          echo ""
+          echo "=== Helm releases ==="
+          helm list -n "${NAMESPACE}" || true
+          echo ""
+          echo "=== Inference Pools ==="
+          kubectl get inferencepools -n "${NAMESPACE}" || true
+          echo ""
+
+      - name: Verify installation and run inference tests
+        if: steps.wait_pods.outcome == 'success'
+        env:
+          # Standalone mode: no Gateway resource exists; point e2e-validate.sh
+          # at the EPP service's ClusterIP DNS name directly.
+          GATEWAY_HOST: "${{ env.SCHEDULER_RELEASE_NAME }}-epp.${{ env.NAMESPACE }}.svc.cluster.local"
+        run: |
+          cd .github/scripts/e2e
+          ./e2e-validate.sh -n "${NAMESPACE}" -v
+
+      - name: Collect and upload Kubernetes pod logs
+        if: always()
+        run: |
+            mkdir -p pod-logs-optimized-baseline-hpu
+            cd pod-logs-optimized-baseline-hpu
+            echo "Fetching ${NAMESPACE} pods log..."
+            kubectl get pods -n "${NAMESPACE}" -l "llm-d.ai/role=decode" -o yaml > ./decode-pods.yaml || true
+            kubectl logs -n "${NAMESPACE}" -l "llm-d.ai/role=decode" 2>&1 > ./decode-pod-logs.log || true
+            kubectl describe pod -n "${NAMESPACE}" -l "llm-d.ai/role=decode" > ./decode-describe-pod-logs.log || true
+
+            echo "Collecting logs from all pods..."
+            kubectl get pods -n "${NAMESPACE}" --no-headers -o custom-columns=":metadata.name" \
+            | xargs -I{} sh -c 'kubectl logs --all-containers=true -n "${NAMESPACE}" {} > "{}.log" 2>&1' || true
+
+            echo "Fetching ${NAMESPACE} pods descriptions..."
+            kubectl get pods -n "${NAMESPACE}" --no-headers -o custom-columns=":metadata.name" \
+            | xargs -I{} sh -c 'kubectl describe pod -n "${NAMESPACE}" {} > "{}-describe.log" 2>&1' || true
+
+            echo "Collecting events..."
+            kubectl get events -n "${NAMESPACE}" --sort-by='.lastTimestamp' > events.log 2>&1 || true
+
+            mv ~/optimized-baseline-hpu-deployment.log . || true
+            mv ~/install-deps.log . || true
+
+            echo "Log collection completed."
+            ls -la
+
+      - name: Upload pod logs as artifact
+        uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: llmd-pod-logs-optimized-baseline-hpu
+          path: pod-logs-optimized-baseline-hpu
+
+      - name: Cleanup deployment
+        if: always()
+        run: |
+          echo "Cleaning up helm release..."
+          helm uninstall "${SCHEDULER_RELEASE_NAME}" -n "${NAMESPACE}" || true
+          echo "Cleaning up model server..."
+          kustomize build guides/${GUIDE_NAME}/modelserver/hpu/vllm/ \
+            | kubectl delete -n "${NAMESPACE}" -f - || true
+          echo "Deleting namespace..."
+          kubectl delete ns "${NAMESPACE}" || true

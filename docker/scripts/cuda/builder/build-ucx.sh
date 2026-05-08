@@ -51,7 +51,7 @@ fi
     "${EFA_FLAG}" \
     --enable-mt
 
-make -j$(nproc)
+make -j"${MAX_JOBS}"
 make install-strip
 ldconfig
 

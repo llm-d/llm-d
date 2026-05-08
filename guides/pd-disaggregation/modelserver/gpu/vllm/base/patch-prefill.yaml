@@ -23,6 +23,11 @@ spec:
               valueFrom:
                 fieldRef:
                   fieldPath: status.podIP
+            # NOTE: vLLM 0.19.X and 0.20.X images ship both nixl-cu13 and nixl-cu12;
+            # NIXL can pick the wrong UCX libraries. Uncomment UCX_MODULE_DIR only
+            # if you are running a cu129 version of vLLM.
+            # - name: UCX_MODULE_DIR
+            #   value: /usr/local/lib/python3.12/dist-packages/nixl_cu12.libs/ucx
           resources:
             limits:
               cpu: "8"
