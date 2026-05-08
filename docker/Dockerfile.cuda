@@ -75,7 +75,6 @@ ARG VLLM_COMMIT_SHA
 ARG VLLM_PRECOMPILED_WHEEL_COMMIT
 ARG VLLM_PREBUILT
 ARG VLLM_USE_PRECOMPILED
-ARG VLLM_SETUPTOOLS_SCM_PRETEND_VERSION
 ARG VLLM_PRECOMPILED_WHEEL_VARIANT=cu${CUDA_MAJOR}${CUDA_MINOR}
 
 # ============================================================================
@@ -504,6 +503,7 @@ ARG VLLM_PRECOMPILED_WHEEL_COMMIT
 ARG VLLM_PREBUILT
 # Dictates if we should pull precompiled binaries when installing vllm editably. These commits must be on main in vLLM.
 ARG VLLM_USE_PRECOMPILED
+ARG VLLM_SETUPTOOLS_SCM_PRETEND_VERSION
 
 # Optional: suppress verbose Python output during pip install
 ARG SUPPRESS_PYTHON_OUTPUT
