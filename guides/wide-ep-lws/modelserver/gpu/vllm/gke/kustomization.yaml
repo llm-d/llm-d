@@ -88,25 +88,6 @@ patches:
               {"interfaceName":"eth8","network":"rdma-6"},
               {"interfaceName":"eth9","network":"rdma-7"}
             ]
-      # Add GKE gib per https://cloud.google.com/ai-hypercomputer/docs/create/gke-ai-hypercompute-custom#configure-pod-manifests-rdma
-      - op: add
-        path: /spec/leaderWorkerTemplate/workerTemplate/spec/volumes/-
-        value:
-          name: gib
-          hostPath:
-            path: /home/kubernetes/bin/gib
-            type: ""
-      - op: add
-        path: /spec/leaderWorkerTemplate/workerTemplate/spec/containers/0/volumeMounts/-
-        value:
-          mountPath: /usr/local/gib
-          name: gib
-      # Env vars
-      - op: add
-        path: /spec/leaderWorkerTemplate/workerTemplate/spec/containers/0/env/-
-        value:
-          name: LD_LIBRARY_PATH
-          value: "/usr/local/nvidia/lib:/usr/local/nvidia/lib64"
       - op: add
         path: /spec/leaderWorkerTemplate/workerTemplate/spec/containers/0/env/-
         value:
@@ -116,13 +97,6 @@ patches:
           # index of the GPU on the node. Relies on https://github.com/deepseek-ai/DeepEP/pull/466
           name: DEEP_EP_DEVICE_TO_HCA_MAPPING
           value: "0:mlx5_0:1,1:mlx5_1:1,2:mlx5_2:1,3:mlx5_3:1,4:mlx5_4:1,5:mlx5_5:1,6:mlx5_6:1,7:mlx5_7:1"
-      # Source nccl env at startup.
-      # https://cloud.google.com/ai-hypercomputer/docs/create/gke-ai-hypercompute-custom#configure-pod-manifests-rdma
-      - op: add
-        path: /spec/leaderWorkerTemplate/workerTemplate/spec/containers/0/env/-
-        value:
-          name: BASH_ENV
-          value: "/usr/local/gib/scripts/set_nccl_env.sh"
       # This is recommended on gke.
       # https://github.com/llm-d/llm-d/tree/main/docs/infra-providers/gke#configuring-support-for-rdma-on-gke-workload-pods
       - op: add
@@ -145,5 +119,4 @@ patches:
           hostPath:
             path: /mnt/stateful_partition/kube-ephemeral-ssd/shared_disk/vllm-jit-cache/
             type: DirectoryOrCreate
-
 
