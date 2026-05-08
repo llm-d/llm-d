@@ -150,8 +150,8 @@ fi
 uv pip install ${VERBOSE_FLAG} "${INSTALL_PACKAGES[@]}" \
   --extra-index-url "https://flashinfer.ai/whl/${CUDA_SHORT_VERSION}"
 
-# uninstall the NVSHMEM dependency brought in by vllm if using a compiled NVSHMEM
-if [[ "${NVSHMEM_DIR-}" != "" ]]; then
+# uninstall the pip NVSHMEM package if NVSHMEM was built from source
+if [[ "${NVSHMEM_DIR-}" != "" ]] && [ -d "${NVSHMEM_DIR}/lib" ]; then
   uv pip uninstall nvidia-nvshmem-cu${CUDA_MAJOR}
 fi
 
