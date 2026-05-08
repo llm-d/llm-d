@@ -74,7 +74,7 @@ This page describes the current coverage as validated in the v0.7.0 release and 
 |-------------|------|--------|
 | NVIDIA GPU | ✅ | ✅ |
 
-**Nightly CI**: OpenShift (CUDA), GKE (CUDA), CoreWeave (CUDA)
+**Nightly CI**: GKE (CUDA), CoreWeave (CUDA)
 
 > Accelerator-agnostic: only validated on NVIDIA GPU, but the scheduler logic does not depend on accelerator type and should work on any backend supported by vLLM or SGLang.
 
@@ -182,5 +182,5 @@ Each well-lit path guide is assigned a maturity level reflecting its testing and
 | Tiered Prefix Cache | Medium | OpenShift |
 | Workload Autoscaling (WVA) | Experimental | OpenShift, CoreWeave |
 | Workload Autoscaling (HPA + IGW) | Experimental | — |
-| Predicted Latency-Based Scheduling | Medium | OpenShift, GKE, CoreWeave |
+| Predicted Latency-Based Scheduling | Medium | GKE, CoreWeave |
 | Asynchronous Processing | Experimental | — |
