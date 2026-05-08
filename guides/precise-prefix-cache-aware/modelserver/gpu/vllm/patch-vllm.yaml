@@ -66,6 +66,8 @@ spec:
             # not writable under restricted SecurityContexts (e.g. OpenShift).
             - mountPath: /.triton
               name: triton-cache
+            - mountPath: /.config
+              name: vllm-config
           startupProbe:
             initialDelaySeconds: 15
             periodSeconds: 30
@@ -87,4 +89,6 @@ spec:
         - name: torch-compile-cache
           emptyDir: {}
         - name: triton-cache
+          emptyDir: {}
+        - name: vllm-config
           emptyDir: {}

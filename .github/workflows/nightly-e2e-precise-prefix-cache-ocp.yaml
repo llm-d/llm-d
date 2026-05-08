@@ -35,8 +35,6 @@ jobs:
       gateway_host: 'precise-prefix-cache-aware-epp'
       custom_deploy_script: |
         yq '.spec.template.spec.priorityClassName="nightly-gpu-critical"' -i guides/precise-prefix-cache-aware/modelserver/gpu/vllm/patch-vllm.yaml
-        yq '.spec.template.spec.volumes += {"name": "triton-cache", "emptyDir": {}}' -i guides/precise-prefix-cache-aware/modelserver/gpu/vllm/patch-vllm.yaml
-        yq '.spec.template.spec.containers[0].volumeMounts += {"mountPath": "/.triton", "name": "triton-cache"}' -i guides/precise-prefix-cache-aware/modelserver/gpu/vllm/patch-vllm.yaml
         yq '.spec.replicas=2' -i guides/precise-prefix-cache-aware/modelserver/gpu/vllm/patch-vllm.yaml
         kubectl apply -k guides/precise-prefix-cache-aware/modelserver/gpu/vllm -n ${NAMESPACE}
         helm install precise-prefix-cache-aware \

@@ -15,7 +15,7 @@ Before starting, ensure your cluster and environment are properly configured:
 3. Set your environment variables, overriding the model name for Qwen 3.5:
 
 ```bash
-export GAIE_VERSION=v1.4.0
+export GAIE_VERSION=v1.5.0
 export GUIDE_NAME="pd-disaggregation"
 export NAMESPACE="llm-d-pd-disaggregation"
 export MODEL_NAME="Qwen/Qwen3.5-397B-A17B-FP8"

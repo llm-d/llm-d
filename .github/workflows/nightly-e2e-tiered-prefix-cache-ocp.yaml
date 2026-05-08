@@ -42,8 +42,6 @@ jobs:
         echo "Deploying tiered-prefix-cache/cpu via kustomize + helm..."
 
         yq '.spec.template.spec.priorityClassName="nightly-gpu-critical"' -i guides/tiered-prefix-cache/cpu/modelserver/gpu/vllm/base/patch-vllm.yaml
-        yq '.spec.template.spec.volumes += {"name": "triton-cache", "emptyDir": {}}' -i guides/tiered-prefix-cache/cpu/modelserver/gpu/vllm/base/patch-vllm.yaml
-        yq '.spec.template.spec.containers[0].volumeMounts += {"mountPath": "/.triton", "name": "triton-cache"}' -i guides/tiered-prefix-cache/cpu/modelserver/gpu/vllm/base/patch-vllm.yaml
         yq '.spec.replicas=2' -i guides/tiered-prefix-cache/cpu/modelserver/gpu/vllm/base/patch-vllm.yaml
 
         # Override image if IMAGE_OVERRIDE is set by the reusable workflow
