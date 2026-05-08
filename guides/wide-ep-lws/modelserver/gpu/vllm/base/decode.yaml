@@ -61,7 +61,14 @@ spec:
             emptyDir: {}
         containers:
           - name: vllm
-            image: ghcr.io/llm-d/llm-d-cuda-dev:sha-1baa867
+            image: ghcr.io/llm-d/llm-d-cuda-dev:sha-81f2333
+            # image: ghcr.io/llm-d/llm-d-cuda-dev:sha-4626413 # this worked
+            # image: ghcr.io/llm-d/llm-d-cuda-dev:sha-379a3e1 # this worked
+            # image: ghcr.io/llm-d/llm-d-cuda-dev:sha-4ff0d2d
+            # image: ghcr.io/llm-d/llm-d-cuda-dev:sha-83f4386
+            # image: ghcr.io/llm-d/llm-d-cuda-dev:sha-b10b198
+            # image: ghcr.io/llm-d/llm-d-cuda-dev:sha-a069fef
+            # image: ghcr.io/llm-d/llm-d-cuda:v0.5.1
             securityContext:
               capabilities:
                 add:
@@ -89,13 +96,13 @@ spec:
                 # --async-scheduling: Reduce white space between engine steps
                 # --enable-dbo:  Dual batch overlap (DBO) overlaps compute with collective communication.
 
+                # sleep infinity
                 exec vllm serve \
                   deepseek-ai/DeepSeek-R1-0528 \
                   --port 8200 \
                   --gpu-memory-utilization 0.9 \
                   --trust-remote-code \
                   --api-server-count 1 \
-                  --disable-access-log-for-endpoints=/health,/metrics \
                   --data-parallel-hybrid-lb \
                   --enable-expert-parallel \
                   --tensor-parallel-size $TP_SIZE \
@@ -116,8 +123,9 @@ spec:
                                   "step_interval":"3000",
                                   "num_redundant_experts":"32",
                                   "log_balancedness":"False"}' \
-                  --moe-backend deep_gemm \
-                  --all2all-backend deepep_low_latency
+                  --all2all-backend deepep_low_latency \
+                  # --moe-backend deep_gemm
+                  # --disable-access-log-for-endpoints=/health,/metrics \
                   # To enable tracing, add:
                   # --otlp-traces-endpoint http://otel-collector:4317 \
                   # --collect-detailed-traces all

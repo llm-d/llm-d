@@ -31,7 +31,15 @@ spec:
             emptyDir: {}
         containers:
           - name: vllm
-            image: ghcr.io/llm-d/llm-d-cuda-dev:sha-1baa867
+            image: ghcr.io/llm-d/llm-d-cuda-dev:sha-81f2333
+            # image: ghcr.io/llm-d/llm-d-cuda-dev:sha-cffae7c
+            # image: ghcr.io/llm-d/llm-d-cuda-dev:sha-4626413 $ this worked
+            # image: ghcr.io/llm-d/llm-d-cuda-dev:sha-379a3e1 # this worked
+            # image: ghcr.io/llm-d/llm-d-cuda-dev:sha-4ff0d2d
+            # image: ghcr.io/llm-d/llm-d-cuda-dev:sha-83f4386
+            # image: ghcr.io/llm-d/llm-d-cuda-dev:sha-b10b198
+            # image: ghcr.io/llm-d/llm-d-cuda-dev:sha-a069fef
+            # image: ghcr.io/llm-d/llm-d-cuda:v0.5.1
             securityContext:
               capabilities:
                 add:
@@ -49,6 +57,10 @@ spec:
                 # https://github.com/llm-d/llm-d/issues/352
                 find /dev/shm -type f -delete
 
+                export CUDA_LAUNCH_BLOCKING=1
+                export NVSHMEM_DEBUG=INFO
+                # sleep infinity
+
                 #################
                 # RUN vLLM prefill worker
                 #################
@@ -65,7 +77,7 @@ spec:
                   deepseek-ai/DeepSeek-R1-0528 \
                   --port 8000 \
                   --trust-remote-code \
-                  --gpu-memory-utilization 0.80 \
+                  --gpu-memory-utilization 0.75 \
                   --api-server-count 1 \
                   --data-parallel-hybrid-lb \
                   --enable-expert-parallel \
@@ -83,8 +95,8 @@ spec:
                                   "step_interval":"3000",
                                   "num_redundant_experts":"32",
                                   "log_balancedness":"False"}' \
-                  --moe-backend deep_gemm \
                   --all2all-backend deepep_high_throughput
+                  #                   --moe-backend deep_gemm \
                   # To enable tracing, add:
                   # --otlp-traces-endpoint http://otel-collector:4317 \
                   # --collect-detailed-traces all
