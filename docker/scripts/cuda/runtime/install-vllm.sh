@@ -33,7 +33,8 @@ INSTALL_PACKAGES=(
   /tmp/wheels/*.whl
 )
 if [ "${BUILD_NIXL_FROM_SOURCE}" = "false" ]; then
-  INSTALL_PACKAGES+=(nixl)
+  INSTALL_PACKAGES+=(nixl==0.9.0)
+  INSTALL_PACKAGES+=(nixl-cu"${CUDA_MAJOR}"==0.9.0)
 fi
 
 # clone vllm repository
@@ -137,6 +138,8 @@ else
     rm /opt/warn-vllm-precompiled.sh
   fi
 fi
+
+
 
 # debug: print desired package list
 echo "DEBUG: Installing packages: ${INSTALL_PACKAGES[*]}"
