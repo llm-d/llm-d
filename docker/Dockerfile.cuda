@@ -257,6 +257,7 @@ COPY docker/scripts/cuda/builder/build-nixl.sh /tmp/build-nixl.sh
 RUN --mount=type=cache,target=/var/cache/git \
     --mount=type=secret,id=aws_access_key_id \
     --mount=type=secret,id=aws_secret_access_key \
+    mkdir -p "${NIXL_PREFIX}" && \
     /tmp/build-nixl.sh && \
     rm -f /tmp/build-nixl.sh
 
