@@ -240,57 +240,60 @@ The benchmark runs on 16× H100 GPUs, distributed across 8 model servers (2 H100
 metrics:
   latency:
     request_latency:
-      mean: 63.34
-      p50: 60.84
-      p90: 75.70
-      p99: 77.97
+      mean: 56.51
+      p50:  56.20
+      p90:  64.43
+      p99:  72.82
       units: s
     time_to_first_token:
-      mean: 0.192
-      p50: 0.178
-      p90: 0.260
-      p99: 0.564
+      mean: 0.714
+      p50:  0.532
+      p90:  1.534
+      p99:  2.670
       units: s
     time_per_output_token:
-      mean: 0.063
-      p50: 0.061
-      p90: 0.075
-      p99: 0.078
+      mean: 0.0558
+      p50:  0.0555
+      p90:  0.0632
+      p99:  0.0720
       units: s/token
-  requests:
-    failures: 0
-    input_length: {mean: 7584}
-    output_length: {mean: 937}
-    total: 1500
+    inter_token_latency:
+      mean: 0.0558
+      p50:  0.0351
+      p90:  0.1164
+      p99:  0.2527
+      units: s/token
   throughput:
-    requests_per_sec: 14.87
-    output_tokens_per_sec: 13932.0
-    total_tokens_per_sec: 126727.5
-  time:
-    duration: 24.92
+    requests_per_sec:      15.52
+    output_tokens_per_sec: 15132.8
+    total_tokens_per_sec:  132740.7
 ```
 
 </details>
 
 ### Comparing LLM-d Scheduling to a Simple Kubernetes Service
 
-Graphs below are from `inference-perf --analyze` comparing the precise path to a stock Kubernetes service routing directly to the vLLM pods.
+Graphs below compare the precise path to a stock Kubernetes Service that round-robins requests across the same 8 vLLM pods (no EPP, no scoring).
 
+<img src="./benchmark-results/throughput_vs_qps.png" width="900" alt="Throughput vs QPS">
 <img src="./benchmark-results/latency_vs_qps.png" width="900" alt="Latency vs QPS">
-<img src="./benchmark-results/throughput_vs_qps.png" width="450" alt="Throughput vs QPS">
 
-Stage at `rate=60`:
+Summary across the full ladder (rates 3 → 60):
 
-- **Throughput**: Requests/sec **+159.5%**; Output tokens/sec **+159.8%**
-- **Latency**: TTFT (mean) **-99.5%**; E2E request latency (mean) **-39.9%**
-- **Per-token speed**: Inter-token latency (mean) **-10.4%** (faster)
+| Metric              | k8s service (RR) | LLM-d Precise | Δ% vs k8s |
+| :------------------ | :--------------- | :------------ | :-------- |
+| Output tokens/sec   | 5,722            | 12,223        | +113.6%   |
+| Requests/sec        | 35.87            | 35.89         | ≈ 0%      |
+| TTFT mean (s)       | 58.10            | 0.606         | −98.96%   |
+| TTFT p90 (s)        | 107.43           | 1.076         | −99.00%   |
+| ITL mean (ms)       | 44.0             | 47.0          | +6.8%     |
 
-| Metric                  | k8s (Mean) | llm-d precise (Mean) | Δ (llm-d − k8s) | Δ% vs k8s |
-| :---------------------- | :--------- | :------------------- | :-------------- | :-------- |
-| Requests/sec            | 5.7306     | 14.8719              | +9.1413         | +159.5%   |
-| Input tokens/sec        | 43,417.86  | 112,795.47           | +69,377.61      | +159.8%   |
-| Output tokens/sec       | 5,362.16   | 13,931.99            | +8,569.83       | +159.8%   |
-| Total tokens/sec        | 48,780.02  | 126,727.46           | +77,947.44      | +159.8%   |
-| Request latency (s)     | 105.4133   | 63.3376              | -42.0757        | -39.9%    |
-| TTFT (s)                | 34.9145    | 0.1916               | -34.7229        | -99.5%    |
-| Inter-token latency (ms)| 70.42      | 63.07                | -7.35           | -10.4%    |
+Saturation stage `rate=60`:
+
+| Metric              | k8s service (RR) | LLM-d Precise | Δ% vs k8s |
+| :------------------ | :--------------- | :------------ | :-------- |
+| Output tokens/sec   | 6,551            | 15,133        | +131.0%   |
+| Requests/sec        | 60.41            | 60.90         | +0.8%     |
+| TTFT mean (s)       | 75.59            | 0.714         | −99.06%   |
+| TTFT p90 (s)        | 138.66           | 1.534         | −98.89%   |
+| ITL mean (ms)       | 45.0             | 56.0          | +24.4%    |

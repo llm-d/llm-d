@@ -26,6 +26,10 @@ spec:
                 secretKeyRef:
                   name: llm-d-hf-token
                   key: HF_TOKEN
+          resources:
+            requests:
+              cpu: "8"
+              memory: 8Gi
           volumeMounts:
             - mountPath: /tokenizers
               name: tokenizers
