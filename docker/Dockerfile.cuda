@@ -70,7 +70,6 @@ ARG FLASHINFER_VERSION="v0.6.6"
 
 # vLLM build settings - provided via build args from docker/common-versions file
 # Override here for platform-specific testing or via build args
-# For CUDA 13.0: build from source (precompiled wheels only exist for CUDA 12.x)
 ARG VLLM_REPO
 ARG VLLM_COMMIT_SHA
 ARG VLLM_PRECOMPILED_WHEEL_COMMIT

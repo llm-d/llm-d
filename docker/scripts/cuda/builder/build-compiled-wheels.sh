@@ -15,6 +15,7 @@ set -Eeux
 # - DEEPGEMM_VERSION: DeepGEMM version tag
 # - USE_SCCACHE: whether to use sccache (true/false)
 # - TARGETPLATFORM: Docker buildx platform (e.g., linux/amd64, linux/arm64)
+# - NVSHMEM_BUILD_FROM_SOURCE: if true, use source-built NVSHMEM; if false, install from pip
 # Optional environment variables:
 # - DEEPEP_GB200_REPO: GB200-specific DeepEP repository URL
 # - DEEPEP_GB200_VERSION: GB200-specific DeepEP version tag
@@ -46,11 +47,13 @@ cd ..
 rm -rf flashinfer
 
 # build DeepEP wheel
-# Install NVSHMEM Python package instead of using source-built version
-# This avoids aarch64 static library linking issues
-uv pip install nvidia-nvshmem-cu${CUDA_MAJOR}
-# Unset NVSHMEM_DIR so DeepEP discovers NVSHMEM from the Python package
-unset NVSHMEM_DIR
+if [ "${NVSHMEM_BUILD_FROM_SOURCE:-true}" != "true" ]; then
+  # Install NVSHMEM Python package instead of using source-built version
+  # This avoids aarch64 static library linking issues
+  uv pip install nvidia-nvshmem-cu${CUDA_MAJOR}
+  # Unset NVSHMEM_DIR so DeepEP discovers NVSHMEM from the Python package
+  unset NVSHMEM_DIR
+fi
 
 git clone "${DEEPEP_REPO}" deepep
 cd deepep
