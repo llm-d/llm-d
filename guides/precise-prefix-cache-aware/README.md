@@ -90,12 +90,11 @@ kubectl -n ${NAMESPACE} create secret generic llm-d-hf-token --from-literal=HF_T
 This deploys the llm-d Router in the simple [Standalone Mode](placeholder-link):
 
 ```bash
-helm plugin install guides/${GUIDE_NAME}/scheduler/patches/uds-tokenizer   # once
 helm install ${GUIDE_NAME} \
   oci://registry.k8s.io/gateway-api-inference-extension/charts/standalone \
   -f guides/recipes/scheduler/base.values.yaml \
   -f guides/${GUIDE_NAME}/scheduler/${GUIDE_NAME}.values.yaml \
-  --post-renderer uds-tokenizer \
+  --post-renderer ./guides/${GUIDE_NAME}/scheduler/patches/uds-tokenizer/post-renderer.sh \
   -n ${NAMESPACE} --version ${GAIE_VERSION}
 ```
 
@@ -126,7 +125,7 @@ To use a Kubernetes Gateway managed proxy instead of the standalone Envoy sideca
      --set provider.name=${PROVIDER_NAME} \
      --set experimentalHttpRoute.enabled=true \
      --set experimentalHttpRoute.inferenceGatewayName=llm-d-inference-gateway \
-     --post-renderer uds-tokenizer \
+     --post-renderer ./guides/${GUIDE_NAME}/scheduler/patches/uds-tokenizer/post-renderer.sh \
      -n ${NAMESPACE} --version ${GAIE_VERSION}
    ```
 
