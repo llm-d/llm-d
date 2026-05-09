@@ -63,7 +63,8 @@ spec:
           - name: vllm
             # image: ghcr.io/llm-d/llm-d-cuda-dev:sha-c1ef857
             # image: ghcr.io/llm-d/llm-d-cuda-dev:sha-7e0df41
-            image: ghcr.io/llm-d/llm-d-cuda-dev:sha-d163128
+            # image: ghcr.io/llm-d/llm-d-cuda-dev:sha-d163128
+            image: ghcr.io/llm-d/llm-d-cuda-dev:sha-a63291a # working!
             securityContext:
               capabilities:
                 add:
@@ -80,6 +81,13 @@ spec:
                 # Clear /dev/shm on start to prevent running out of space when crashes occur
                 # https://github.com/llm-d/llm-d/issues/352
                 find /dev/shm -type f -delete
+
+                export UCX_PREFIX=/opt/ucx
+                export LD_LIBRARY_PATH=${UCX_PREFIX}/lib:${UCX_PREFIX}/lib64:${LD_LIBRARY_PATH}
+                export LIBRARY_PATH=${UCX_PREFIX}/lib:${UCX_PREFIX}/lib64:${LD_LIBRARY_PATH}
+                uv pip install nixl==1.0.0
+                uv pip install nixl-cu13==1.0.0
+                uv pip install nixl-cu12==1.0.0
 
                 #################
                 # RUN vLLM decode worker
