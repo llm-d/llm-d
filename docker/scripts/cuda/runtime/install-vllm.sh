@@ -33,8 +33,9 @@ INSTALL_PACKAGES=(
   /tmp/wheels/*.whl
 )
 if [ "${BUILD_NIXL_FROM_SOURCE}" = "false" ]; then
+  INSTALL_PACKAGES+=(nixl-cu12==0.9.0)
+  INSTALL_PACKAGES+=(nixl-cu13==0.9.0)
   INSTALL_PACKAGES+=(nixl==0.9.0)
-  INSTALL_PACKAGES+=(nixl-cu"${CUDA_MAJOR}"==0.9.0)
 fi
 
 # clone vllm repository
