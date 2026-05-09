@@ -529,6 +529,7 @@ RUN --mount=type=cache,target=/root/.cache/uv \
     --mount=type=secret,id=aws_secret_access_key \
     bash -c "chmod +x /tmp/install-vllm.sh && \
     export PATH=/usr/local/bin:\${PATH} && \
+    export NVSHMEM_BUILD_FROM_SOURCE=${NVSHMEM_BUILD_FROM_SOURCE} && \
     USE_SCCACHE=${USE_SCCACHE} TARGETPLATFORM=${TARGETPLATFORM} source /usr/local/bin/setup-sccache && \
     /tmp/install-vllm.sh && \
     rm /tmp/install-vllm.sh && \
