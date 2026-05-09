@@ -97,7 +97,7 @@ inferenceExtension:
             - pluginRef: precise-prefix-cache-scorer
               weight: 3.0
             - pluginRef: no-hit-lru-scorer
-              weight: 1.0
+              weight: 2.0
             - pluginRef: max-score-picker
 
 inferencePool:
