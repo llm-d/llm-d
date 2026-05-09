@@ -288,7 +288,6 @@ Graphs below compare the precise path to a stock Kubernetes Service that round-r
 
 <img src="./benchmark-results/throughput_vs_qps.png" width="900" alt="Throughput vs QPS">
 <img src="./benchmark-results/latency_vs_qps.png" width="900" alt="Latency vs QPS">
-<img src="./benchmark-results/ttft_p90_vs_qps.png" width="900" alt="TTFT p90 vs QPS">
 
 Summary across the full ladder (rates 3 → 60):
 
