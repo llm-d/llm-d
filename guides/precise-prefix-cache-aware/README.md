@@ -251,33 +251,33 @@ The benchmark runs on 16× H100 GPUs, distributed across 8 model servers (2 H100
 metrics:
   latency:
     request_latency:
-      mean: 56.51
-      p50:  56.20
-      p90:  64.43
-      p99:  72.82
+      mean: 56.04
+      p50:  56.43
+      p90:  63.64
+      p99:  66.38
       units: s
     time_to_first_token:
-      mean: 0.714
-      p50:  0.532
-      p90:  1.534
-      p99:  2.670
+      mean: 0.601
+      p50:  0.511
+      p90:  1.174
+      p99:  1.768
       units: s
     time_per_output_token:
-      mean: 0.0558
-      p50:  0.0555
-      p90:  0.0632
-      p99:  0.0720
+      mean: 0.0554
+      p50:  0.0557
+      p90:  0.0627
+      p99:  0.0655
       units: s/token
     inter_token_latency:
-      mean: 0.0558
-      p50:  0.0351
-      p90:  0.1164
-      p99:  0.2527
+      mean: 0.0554
+      p50:  0.0368
+      p90:  0.1150
+      p99:  0.2217
       units: s/token
   throughput:
-    requests_per_sec:      15.52
-    output_tokens_per_sec: 15132.8
-    total_tokens_per_sec:  132740.7
+    requests_per_sec:      16.43
+    output_tokens_per_sec: 16620.3
+    total_tokens_per_sec:  141117.1
 ```
 
 </details>
@@ -288,23 +288,24 @@ Graphs below compare the precise path to a stock Kubernetes Service that round-r
 
 <img src="./benchmark-results/throughput_vs_qps.png" width="900" alt="Throughput vs QPS">
 <img src="./benchmark-results/latency_vs_qps.png" width="900" alt="Latency vs QPS">
+<img src="./benchmark-results/ttft_p90_vs_qps.png" width="900" alt="TTFT p90 vs QPS">
 
 Summary across the full ladder (rates 3 → 60):
 
 | Metric              | k8s service (RR) | llm-d Precise | Δ% vs k8s |
 | :------------------ | :--------------- | :------------ | :-------- |
-| Output tokens/sec   | 5,722            | 12,223        | +113.6%   |
-| Requests/sec        | 35.87            | 35.89         | ≈ 0%      |
-| TTFT mean (s)       | 58.10            | 0.606         | −98.96%   |
-| TTFT p90 (s)        | 107.43           | 1.076         | −99.00%   |
+| Output tokens/sec   | 5,722            | 12,931        | +126.0%   |
+| Requests/sec        | 35.87            | 36.30         | +1.2%     |
+| TTFT mean (s)       | 58.10            | 0.529         | −99.09%   |
+| TTFT p90 (s)        | 107.43           | 1.060         | −99.01%   |
 | ITL mean (ms)       | 44.0             | 47.0          | +6.8%     |
 
 Saturation stage `rate=60`:
 
 | Metric              | k8s service (RR) | llm-d Precise | Δ% vs k8s |
 | :------------------ | :--------------- | :------------ | :-------- |
-| Output tokens/sec   | 6,551            | 15,133        | +131.0%   |
-| Requests/sec        | 60.41            | 60.90         | +0.8%     |
-| TTFT mean (s)       | 75.59            | 0.714         | −99.06%   |
-| TTFT p90 (s)        | 138.66           | 1.534         | −98.89%   |
-| ITL mean (ms)       | 45.0             | 56.0          | +24.4%    |
+| Output tokens/sec   | 6,551            | 16,620        | +153.7%   |
+| Requests/sec        | 60.41            | 58.09         | −3.8%     |
+| TTFT mean (s)       | 75.59            | 0.601         | −99.20%   |
+| TTFT p90 (s)        | 138.66           | 1.174         | −99.15%   |
+| ITL mean (ms)       | 45.0             | 55.4          | +23.1%    |
