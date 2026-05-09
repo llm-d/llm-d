@@ -254,44 +254,6 @@ kubectl delete namespace ${NAMESPACE}
 
 The benchmark runs on 16× H100 GPUs, distributed across 8 model servers (2 H100s per server with TP=2).
 
-<details>
-<summary><b><i>Click</i></b> to view the report for <code>rate=60</code></summary>
-
-```yaml
-metrics:
-  latency:
-    request_latency:
-      mean: 55.36
-      p50:  55.48
-      p90:  62.52
-      p99:  65.46
-      units: s
-    time_to_first_token:
-      mean: 0.154
-      p50:  0.147
-      p90:  0.217
-      p99:  0.297
-      units: s
-    time_per_output_token:
-      mean: 0.0552
-      p50:  0.0553
-      p90:  0.0623
-      p99:  0.0652
-      units: s/token
-    inter_token_latency:
-      mean: 0.0552
-      p50:  0.0489
-      p90:  0.0650
-      p99:  0.1179
-      units: s/token
-  throughput:
-    requests_per_sec:      16.72
-    output_tokens_per_sec: 17063.9
-    total_tokens_per_sec:  143776.5
-```
-
-</details>
-
 ### Comparing llm-d Routing to a Simple Kubernetes Service
 
 Graphs below compare optimized-baseline routing to a stock Kubernetes Service that round-robins requests across the same 8 vLLM pods (no EPP, no scoring).
