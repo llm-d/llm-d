@@ -98,6 +98,19 @@ helm install ${GUIDE_NAME} \
   -n ${NAMESPACE} --version ${GAIE_VERSION}
 ```
 
+<details>
+<summary><b>Helm v4</b></summary>
+
+Helm v4's `--post-renderer` only accepts a registered plugin name, not a path. Install once, then swap the flag value:
+
+```bash
+helm plugin install guides/${GUIDE_NAME}/scheduler/patches/epp-overlay
+# in the helm install above, replace the --post-renderer line with:
+#   --post-renderer epp-overlay
+```
+
+</details>
+
 The release name `${GUIDE_NAME}` is mandatory for standard deployments — the inference pool selector matches a guide label that pairs with this release.
 
 <details>
@@ -117,6 +130,7 @@ To use a Kubernetes Gateway managed proxy instead of the standalone Envoy sideca
 2. **Deploy the llm-d Router and HTTPRoute** via the `inferencepool` chart with `experimentalHttpRoute.enabled=true`. Same UDS post-renderer applies:
 
    ```bash
+   # Assuming base-directory is the root of the llm-d repo
    export PROVIDER_NAME=istio   # options: none, gke, agentgateway, istio
    helm install ${GUIDE_NAME} \
      oci://registry.k8s.io/gateway-api-inference-extension/charts/inferencepool \
