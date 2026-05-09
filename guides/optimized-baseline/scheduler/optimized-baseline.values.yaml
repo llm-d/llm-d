@@ -7,6 +7,34 @@ inferenceExtension:
       port: 80
       protocol: TCP
       targetPort: 8081
+  ## Standalone-mode Envoy sidecar tuning. The standalone chart's defaults
+  ## (100m CPU, --log-level trace, no --concurrency) are dev-grade — Envoy
+  ## otherwise spawns ~hardware_concurrency() worker threads contending on a
+  ## tiny CPU slice and burns cycles on trace logging. These match what the
+  ## istio gateway gives its proxy: 2-CPU floor, 8-CPU ceiling, 8 worker
+  ## threads, warn-level logging. No-op when deploying gateway-mode (the
+  ## inferencepool chart doesn't render a sidecar).
+  sidecar:
+    args:
+      - "--service-node"
+      - "envoy-sidecar"
+      - "--log-level"
+      - "warn"
+      - "--concurrency"
+      - "8"
+      - "--drain-strategy"
+      - "immediate"
+      - "--drain-time-s"
+      - "60"
+      - "-c"
+      - "/etc/envoy/envoy.yaml"
+    resources:
+      requests:
+        cpu: 2
+        memory: 4Gi
+      limits:
+        cpu: 8
+        memory: 16Gi
   pluginsConfigFile: "optimized-baseline-plugins.yaml"
   pluginsCustomConfig:
     optimized-baseline-plugins.yaml: |
