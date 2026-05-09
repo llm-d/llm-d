@@ -14,6 +14,7 @@ spec:
             - "Qwen/Qwen3-32B"
             - "--disable-access-log-for-endpoints=/health,/metrics,/v1/models"
             - "--tensor-parallel-size=2"
+            - "--gpu-memory-utilization=0.95"
             # Uncomment for distributed tracing
             # - "--otlp-traces-endpoint=http://otel-collector:4317"
             # - "--collect-detailed-traces=all"
