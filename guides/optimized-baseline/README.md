@@ -76,23 +76,17 @@ This guide includes configurations for the following accelerators:
 
 This deploys the llm-d Router in [Standalone Mode](placeholder-link):
 
+A post-renderer injects production-grade resources on the EPP container (the v1.5.0 chart does not expose them via values); Envoy sidecar resources and `--concurrency`/log-level tuning come from `optimized-baseline.values.yaml`.
+
 ```bash
+helm plugin install guides/${GUIDE_NAME}/scheduler/patches/epp-resources   # once
 helm install ${GUIDE_NAME} \
     oci://registry.k8s.io/gateway-api-inference-extension/charts/standalone \
     -f guides/recipes/scheduler/base.values.yaml \
     -f guides/${GUIDE_NAME}/scheduler/${GUIDE_NAME}.values.yaml \
+    --post-renderer epp-resources \
     -n ${NAMESPACE} --version ${GAIE_VERSION}
 ```
-
-> [!IMPORTANT]
-> The standalone chart at v1.5.0 does not expose the EPP container's resources via values, leaving it in the BestEffort QoS class — the kube scheduler treats it as the first-evicted pod under node pressure. After installing in standalone mode, set explicit resources on the EPP container so it lands in Burstable QoS:
->
-> ```bash
-> kubectl -n ${NAMESPACE} set resources deploy/${GUIDE_NAME}-epp -c epp \
->   --requests=cpu=4,memory=8Gi --limits=memory=16Gi
-> ```
->
-> The Envoy sidecar already gets production-grade resources and `--concurrency 8` from `optimized-baseline.values.yaml` (the chart's defaults are 100m CPU and `--log-level trace`, which oversubscribe worker threads and burn CPU on tracing under load). Gateway Mode is unaffected — the istio gateway sets these correctly out of the box, and the inferencepool chart sets EPP resources properly.
 
 <details>
 <summary><h4>Gateway Mode</h4></summary>
