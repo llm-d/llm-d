@@ -355,7 +355,6 @@ ${NVSHMEM_DIR}/lib:${NVSHMEM_DIR}/lib64:\
 /usr/local/nvidia/lib:/usr/local/nvidia/lib64:\
 ${CUDA_HOME}/lib64:${CUDA_HOME}/compat:\
 ${EFA_PREFIX}/lib:${EFA_PREFIX}/lib64:\
-${UCX_PREFIX}/lib:${UCX_PREFIX}/lib64:\
 /usr/local/lib:/usr/local/lib64:\
 /usr/lib/x86_64-linux-gnu:/usr/lib/aarch64-linux-gnu:\
 ${LD_LIBRARY_PATH}" \
@@ -369,10 +368,12 @@ ${LD_LIBRARY_PATH}" \
 /usr/local/nvidia/lib:/usr/local/nvidia/lib64:\
 ${CUDA_HOME}/lib64:\
 ${EFA_PREFIX}/lib:${EFA_PREFIX}/lib64:\
-${UCX_PREFIX}/lib:${UCX_PREFIX}/lib64:\
 ${NVSHMEM_DIR}/lib:${NVSHMEM_DIR}/lib64:\
 /usr/local/lib:/usr/local/lib64:\
 ${LIBRARY_PATH}"
+
+# ${UCX_PREFIX}/lib:${UCX_PREFIX}/lib64:\
+# ${UCX_PREFIX}/lib:${UCX_PREFIX}/lib64:\
 
 # Install runtime RDMA core packages through AWS EFA installer if EFA is enabled
 COPY docker/scripts/cuda/common/package-utils.sh /tmp/package-utils.sh
