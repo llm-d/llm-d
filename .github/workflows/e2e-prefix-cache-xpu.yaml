@@ -6,7 +6,7 @@ name: XPU Precise Prefix Cache Test
 # specific additions:
 #
 # 1. The UDS tokenizer sidecar is grafted onto the scheduler pod via a helm
-#    post-renderer (guides/precise-prefix-cache-aware/scheduler/patches/uds-tokenizer/).
+#    post-renderer (guides/precise-prefix-cache-aware/scheduler/patches/epp-overlay/).
 # 2. Before `helm install`, sed-rewrite Qwen/Qwen3-32B -> Qwen/Qwen3-0.6B in the
 #    shared scheduler values file so the tokenizer plugin and the scorer's
 #    tokenizersPoolConfig match what the XPU overlay deploys. The shared file
@@ -154,7 +154,7 @@ jobs:
             oci://registry.k8s.io/gateway-api-inference-extension/charts/standalone \
             -f guides/recipes/scheduler/base.values.yaml \
             -f guides/${GUIDE_NAME}/scheduler/${GUIDE_NAME}.values.yaml \
-            --post-renderer ./guides/${GUIDE_NAME}/scheduler/patches/uds-tokenizer/post-renderer.sh \
+            --post-renderer ./guides/${GUIDE_NAME}/scheduler/patches/epp-overlay/post-renderer.sh \
             -n "${NAMESPACE}" \
             --version "${GAIE_VERSION}" \
             | tee ~/prefix-cache-xpu-deployment.log
