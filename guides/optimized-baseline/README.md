@@ -272,16 +272,6 @@ Summary across the full ladder (rates 3 → 60):
 | TTFT p90 (s)        | 107.43           | 0.206           | −99.81%   |
 | ITL mean (ms)       | 44.0             | 47.0            | +6.8%     |
 
-Saturation stage `rate=60`:
-
-| Metric              | k8s service (RR) | llm-d Optimized | Δ% vs k8s |
-| :------------------ | :--------------- | :-------------- | :-------- |
-| Output tokens/sec   | 6,551            | 17,064          | +160.5%   |
-| Requests/sec        | 60.41            | 60.77           | +0.6%     |
-| TTFT mean (s)       | 75.59            | 0.154           | −99.80%   |
-| TTFT p90 (s)        | 138.66           | 0.217           | −99.84%   |
-| ITL mean (ms)       | 45.0             | 55.2            | +22.7%    |
-
 <details>
 <summary><b><i>Click</i></b> to view the per-rate breakdown across the full ladder</summary>
 

@@ -37,7 +37,7 @@ inferenceExtension:
 
   ## Envoy sidecar tuning — pin worker threads at 8 to match the CPU
   ## limit and drop the chart's default `--log-level trace`. EPP
-  ## container resources are added by the patches/uds-tokenizer
+  ## container resources are added by the patches/epp-overlay
   ## post-renderer (chart doesn't expose them via values).
   sidecar:
     args:
@@ -62,7 +62,7 @@ inferenceExtension:
         memory: 16Gi
 
   # UDS tokenizer sidecar + EPP resources are appended via
-  # patches/uds-tokenizer post-renderer (chart's sidecar.* slot is owned
+  # patches/epp-overlay post-renderer (chart's sidecar.* slot is owned
   # by Envoy; EPP resources aren't exposed via chart values).
 
   pluginsConfigFile: "precise-prefix-cache-aware-plugins.yaml"

@@ -4,11 +4,11 @@
 ##   --post-renderer <path>/post-renderer.sh
 ## Helm v4 requires `--post-renderer` to name a registered plugin. Install
 ## this directory as a plugin once:
-##   helm plugin install guides/precise-prefix-cache-aware/scheduler/patches/uds-tokenizer
+##   helm plugin install guides/precise-prefix-cache-aware/scheduler/patches/epp-overlay
 ## Then use:
-##   --post-renderer uds-tokenizer
+##   --post-renderer epp-overlay
 apiVersion: v1
-name: uds-tokenizer
+name: epp-overlay
 version: 0.1.0
 type: postrenderer/v1
 runtime: subprocess

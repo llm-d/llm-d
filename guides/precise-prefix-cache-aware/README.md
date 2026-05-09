@@ -94,7 +94,7 @@ helm install ${GUIDE_NAME} \
   oci://registry.k8s.io/gateway-api-inference-extension/charts/standalone \
   -f guides/recipes/scheduler/base.values.yaml \
   -f guides/${GUIDE_NAME}/scheduler/${GUIDE_NAME}.values.yaml \
-  --post-renderer ./guides/${GUIDE_NAME}/scheduler/patches/uds-tokenizer/post-renderer.sh \
+  --post-renderer ./guides/${GUIDE_NAME}/scheduler/patches/epp-overlay/post-renderer.sh \
   -n ${NAMESPACE} --version ${GAIE_VERSION}
 ```
 
@@ -125,7 +125,7 @@ To use a Kubernetes Gateway managed proxy instead of the standalone Envoy sideca
      --set provider.name=${PROVIDER_NAME} \
      --set experimentalHttpRoute.enabled=true \
      --set experimentalHttpRoute.inferenceGatewayName=llm-d-inference-gateway \
-     --post-renderer ./guides/${GUIDE_NAME}/scheduler/patches/uds-tokenizer/post-renderer.sh \
+     --post-renderer ./guides/${GUIDE_NAME}/scheduler/patches/epp-overlay/post-renderer.sh \
      -n ${NAMESPACE} --version ${GAIE_VERSION}
    ```
 
@@ -260,16 +260,6 @@ Summary across the full ladder (rates 3 → 60):
 | TTFT mean (s)       | 58.10            | 0.247         | −99.57%   |
 | TTFT p90 (s)        | 107.43           | 0.262         | −99.76%   |
 | ITL mean (ms)       | 44.0             | 47.0          | +6.8%     |
-
-Saturation stage `rate=60`:
-
-| Metric              | k8s service (RR) | llm-d Precise | Δ% vs k8s |
-| :------------------ | :--------------- | :------------ | :-------- |
-| Output tokens/sec   | 6,551            | 15,733        | +140.2%   |
-| Requests/sec        | 60.41            | 58.87         | −2.5%     |
-| TTFT mean (s)       | 75.59            | 0.214         | −99.72%   |
-| TTFT p90 (s)        | 138.66           | 0.300         | −99.78%   |
-| ITL mean (ms)       | 45.0             | 55.7          | +23.8%    |
 
 <details>
 <summary><b><i>Click</i></b> to view the per-rate breakdown across the full ladder</summary>
