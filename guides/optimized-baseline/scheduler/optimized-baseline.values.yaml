@@ -16,6 +16,7 @@ inferenceExtension:
       - type: queue-scorer
       - type: kv-cache-utilization-scorer
       - type: prefix-cache-scorer
+      - type: no-hit-lru-scorer
       schedulingProfiles:
       - name: default
         plugins:
@@ -25,6 +26,8 @@ inferenceExtension:
           weight: 2
         - pluginRef: prefix-cache-scorer
           weight: 3
+        - pluginRef: no-hit-lru-scorer
+          weight: 2
 
 inferencePool:
   modelServers:
