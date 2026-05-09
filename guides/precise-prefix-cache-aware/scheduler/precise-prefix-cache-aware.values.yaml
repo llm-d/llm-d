@@ -35,8 +35,35 @@ inferenceExtension:
           name: llm-d-hf-token
           key: HF_TOKEN
 
-  # UDS tokenizer sidecar is appended via patches/uds-tokenizer
-  # post-renderer (chart's sidecar.* slot is owned by Envoy).
+  ## Envoy sidecar tuning — pin worker threads at 8 to match the CPU
+  ## limit and drop the chart's default `--log-level trace`. EPP
+  ## container resources are added by the patches/uds-tokenizer
+  ## post-renderer (chart doesn't expose them via values).
+  sidecar:
+    args:
+      - "--service-node"
+      - "envoy-sidecar"
+      - "--log-level"
+      - "warn"
+      - "--concurrency"
+      - "8"
+      - "--drain-strategy"
+      - "immediate"
+      - "--drain-time-s"
+      - "60"
+      - "-c"
+      - "/etc/envoy/envoy.yaml"
+    resources:
+      requests:
+        cpu: 2
+        memory: 4Gi
+      limits:
+        cpu: 8
+        memory: 16Gi
+
+  # UDS tokenizer sidecar + EPP resources are appended via
+  # patches/uds-tokenizer post-renderer (chart's sidecar.* slot is owned
+  # by Envoy; EPP resources aren't exposed via chart values).
 
   pluginsConfigFile: "precise-prefix-cache-aware-plugins.yaml"
   pluginsCustomConfig:
