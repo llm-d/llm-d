@@ -22,7 +22,7 @@ This guide explains how to offload the vLLM prefix cache (KV cache) to shared st
 
 
 <details>
-<summary><h4>Aboutllm-d FS Connector</h4></summary>
+<summary><h4>About llm-d FS Connector</h4></summary>
 
 The **llm-d FS connector** integrates with vLLM's native OffloadingConnector and stores KV blocks on shared storage that exposes a POSIX-compatible file API (for example IBM Storage Scale, CephFS, GCP Lustre, AWS Lustre).
 
@@ -106,7 +106,7 @@ envsubst < guides/tiered-prefix-cache/storage/manifests/pvc.yaml | kubectl apply
 
 #### Standalone Mode
 
-This deploys the inference scheduler with an Envoy sidecar side-by-side:
+This deploys the llm-d Router with an Envoy sidecar side-by-side:
 
 ```bash
 helm install ${GUIDE_NAME} \
@@ -122,7 +122,7 @@ helm install ${GUIDE_NAME} \
 To use a Kubernetes Gateway managed proxy instead of standalone:
 
 1. _Deploy a Kubernetes Gateway_ by following one of [the gateway guides](../../prereq/gateways).
-2. _Deploy HTTPRoute and the inference scheduler_:
+2. _Deploy HTTPRoute and the llm-d Router_:
 
 ```bash
 export PROVIDER_NAME=gke # options: none, gke, agentgateway, istio
