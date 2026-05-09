@@ -279,6 +279,10 @@ jobs:
                 owner, repo,
                 workflow_id: m.workflowFile,
                 ref,
+                inputs: {
+                  pr_number: context.issue.number.toString(),
+                  pr_repo: `${context.repo.owner}/${context.repo.repo}`,
+                },
               });
               m.runUrl = null;
             }
