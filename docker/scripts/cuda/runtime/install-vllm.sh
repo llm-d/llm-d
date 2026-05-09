@@ -155,7 +155,7 @@ uv pip install ${VERBOSE_FLAG} "${INSTALL_PACKAGES[@]}" \
   --extra-index-url "https://flashinfer.ai/whl/${CUDA_SHORT_VERSION}"
 
 # uninstall the pip NVSHMEM package if NVSHMEM was built from source
-if [[ "${NVSHMEM_BUILD_FROM_SOURCE-}" != "true" ]] ; then
+if [[ "${NVSHMEM_BUILD_FROM_SOURCE-}" == "true" ]] ; then
   uv pip uninstall nvidia-nvshmem-cu${CUDA_MAJOR}
 fi
 
