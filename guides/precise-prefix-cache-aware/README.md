@@ -282,7 +282,7 @@ metrics:
 
 </details>
 
-### Comparing LLM-d Scheduling to a Simple Kubernetes Service
+### Comparing llm-d Scheduling to a Simple Kubernetes Service
 
 Graphs below compare the precise path to a stock Kubernetes Service that round-robins requests across the same 8 vLLM pods (no EPP, no scoring).
 
@@ -291,7 +291,7 @@ Graphs below compare the precise path to a stock Kubernetes Service that round-r
 
 Summary across the full ladder (rates 3 → 60):
 
-| Metric              | k8s service (RR) | LLM-d Precise | Δ% vs k8s |
+| Metric              | k8s service (RR) | llm-d Precise | Δ% vs k8s |
 | :------------------ | :--------------- | :------------ | :-------- |
 | Output tokens/sec   | 5,722            | 12,223        | +113.6%   |
 | Requests/sec        | 35.87            | 35.89         | ≈ 0%      |
@@ -301,7 +301,7 @@ Summary across the full ladder (rates 3 → 60):
 
 Saturation stage `rate=60`:
 
-| Metric              | k8s service (RR) | LLM-d Precise | Δ% vs k8s |
+| Metric              | k8s service (RR) | llm-d Precise | Δ% vs k8s |
 | :------------------ | :--------------- | :------------ | :-------- |
 | Output tokens/sec   | 6,551            | 15,133        | +131.0%   |
 | Requests/sec        | 60.41            | 60.90         | +0.8%     |

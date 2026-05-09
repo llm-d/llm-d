@@ -298,7 +298,7 @@ Graphs below compare optimized-baseline routing to a stock Kubernetes Service th
 
 Summary across the full ladder (rates 3 → 60):
 
-| Metric              | k8s service (RR) | LLM-d Optimized | Δ% vs k8s |
+| Metric              | k8s service (RR) | llm-d Optimized | Δ% vs k8s |
 | :------------------ | :--------------- | :-------------- | :-------- |
 | Output tokens/sec   | 5,722            | 12,848          | +124.5%   |
 | Requests/sec        | 35.87            | 36.23           | +1.0%     |
@@ -308,7 +308,7 @@ Summary across the full ladder (rates 3 → 60):
 
 Saturation stage `rate=60`:
 
-| Metric              | k8s service (RR) | LLM-d Optimized | Δ% vs k8s |
+| Metric              | k8s service (RR) | llm-d Optimized | Δ% vs k8s |
 | :------------------ | :--------------- | :-------------- | :-------- |
 | Output tokens/sec   | 6,551            | 16,129          | +146.2%   |
 | Requests/sec        | 60.41            | 58.55           | −3.1%     |
