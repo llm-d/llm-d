@@ -268,16 +268,16 @@ RUN echo "/usr/local/lib" > /etc/ld.so.conf.d/local.conf && \
 WORKDIR /workspace
 
 # Build LMCache wheel and its infinistore dependency
-# ARG INFINISTORE_REPO
-# ARG INFINISTORE_VERSION
-# ARG LMCACHE_REPO
-# ARG LMCACHE_VERSION
-# COPY docker/scripts/cuda/builder/build-lmcache.sh /tmp/build-lmcache.sh
-# RUN --mount=type=cache,target=/var/cache/git \
-#     --mount=type=secret,id=aws_access_key_id \
-#     --mount=type=secret,id=aws_secret_access_key \
-#     /tmp/build-lmcache.sh && \
-#     rm -f /tmp/build-lmcache.sh
+ARG INFINISTORE_REPO
+ARG INFINISTORE_VERSION
+ARG LMCACHE_REPO
+ARG LMCACHE_VERSION
+COPY docker/scripts/cuda/builder/build-lmcache.sh /tmp/build-lmcache.sh
+RUN --mount=type=cache,target=/var/cache/git \
+    --mount=type=secret,id=aws_access_key_id \
+    --mount=type=secret,id=aws_secret_access_key \
+    /tmp/build-lmcache.sh && \
+    rm -f /tmp/build-lmcache.sh
 
 # Use existing virtual environment at /opt/vllm
 WORKDIR /workspace/vllm
@@ -355,6 +355,7 @@ ${NVSHMEM_DIR}/lib:${NVSHMEM_DIR}/lib64:\
 /usr/local/nvidia/lib:/usr/local/nvidia/lib64:\
 ${CUDA_HOME}/lib64:${CUDA_HOME}/compat:\
 ${EFA_PREFIX}/lib:${EFA_PREFIX}/lib64:\
+${UCX_PREFIX}/lib:${UCX_PREFIX}/lib64:\
 /usr/local/lib:/usr/local/lib64:\
 /usr/lib/x86_64-linux-gnu:/usr/lib/aarch64-linux-gnu:\
 ${LD_LIBRARY_PATH}" \
@@ -368,12 +369,10 @@ ${LD_LIBRARY_PATH}" \
 /usr/local/nvidia/lib:/usr/local/nvidia/lib64:\
 ${CUDA_HOME}/lib64:\
 ${EFA_PREFIX}/lib:${EFA_PREFIX}/lib64:\
+${UCX_PREFIX}/lib:${UCX_PREFIX}/lib64:\
 ${NVSHMEM_DIR}/lib:${NVSHMEM_DIR}/lib64:\
 /usr/local/lib:/usr/local/lib64:\
 ${LIBRARY_PATH}"
-
-# ${UCX_PREFIX}/lib:${UCX_PREFIX}/lib64:\
-# ${UCX_PREFIX}/lib:${UCX_PREFIX}/lib64:\
 
 # Install runtime RDMA core packages through AWS EFA installer if EFA is enabled
 COPY docker/scripts/cuda/common/package-utils.sh /tmp/package-utils.sh
@@ -506,7 +505,6 @@ ARG VLLM_PRECOMPILED_WHEEL_COMMIT
 ARG VLLM_PREBUILT
 # Dictates if we should pull precompiled binaries when installing vllm editably. These commits must be on main in vLLM.
 ARG VLLM_USE_PRECOMPILED
-ARG VLLM_SETUPTOOLS_SCM_PRETEND_VERSION
 
 # Optional: suppress verbose Python output during pip install
 ARG SUPPRESS_PYTHON_OUTPUT

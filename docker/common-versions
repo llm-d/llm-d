@@ -19,7 +19,6 @@ VLLM_USE_PRECOMPILED=1         # 1=use precompiled binaries either from VLLM_COM
 # If building vLLM from a precompiled commit in the vLLM wheel index (only commits off main),
 # which commit to use as the base for the compiled bits.
 VLLM_PRECOMPILED_WHEEL_COMMIT=b1388b1fbf5aaef47937fabe98931211684666a6 # maps to vLLM official 0.19.1 release
-VLLM_SETUPTOOLS_SCM_PRETEND_VERSION=0.19.1 # used to set vllm version in the wheel
 
 
 # Used by XPU, commit from vllm, maps to v0.19.1 tag
