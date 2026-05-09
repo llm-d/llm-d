@@ -268,16 +268,16 @@ RUN echo "/usr/local/lib" > /etc/ld.so.conf.d/local.conf && \
 WORKDIR /workspace
 
 # Build LMCache wheel and its infinistore dependency
-ARG INFINISTORE_REPO
-ARG INFINISTORE_VERSION
-ARG LMCACHE_REPO
-ARG LMCACHE_VERSION
-COPY docker/scripts/cuda/builder/build-lmcache.sh /tmp/build-lmcache.sh
-RUN --mount=type=cache,target=/var/cache/git \
-    --mount=type=secret,id=aws_access_key_id \
-    --mount=type=secret,id=aws_secret_access_key \
-    /tmp/build-lmcache.sh && \
-    rm -f /tmp/build-lmcache.sh
+# ARG INFINISTORE_REPO
+# ARG INFINISTORE_VERSION
+# ARG LMCACHE_REPO
+# ARG LMCACHE_VERSION
+# COPY docker/scripts/cuda/builder/build-lmcache.sh /tmp/build-lmcache.sh
+# RUN --mount=type=cache,target=/var/cache/git \
+#     --mount=type=secret,id=aws_access_key_id \
+#     --mount=type=secret,id=aws_secret_access_key \
+#     /tmp/build-lmcache.sh && \
+#     rm -f /tmp/build-lmcache.sh
 
 # Use existing virtual environment at /opt/vllm
 WORKDIR /workspace/vllm
