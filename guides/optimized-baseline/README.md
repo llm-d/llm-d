@@ -250,7 +250,7 @@ kubectl delete namespace ${NAMESPACE}
 
 ## Benchmarking Report
 
-The benchmark runs on 16× H100 GPUs, distributed across 8 model servers (2 H100s per server with TP=2).
+The benchmark runs on 16 × H100 GPUs, distributed across 8 model servers (2 H100s per server with TP=2).
 
 ### Comparing llm-d Routing to a Simple Kubernetes Service
 
