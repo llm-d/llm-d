@@ -35,24 +35,6 @@ inferenceExtension:
           name: llm-d-hf-token
           key: HF_TOKEN
 
-  ## Standalone Envoy sidecar args — pin worker threads to match the CPU
-  ## limit (chart default would spawn ~hardware_concurrency() threads) and
-  ## drop the chart's default `--log-level trace`.
-  sidecar:
-    args:
-      - "--service-node"
-      - "envoy-sidecar"
-      - "--log-level"
-      - "warn"
-      - "--concurrency"
-      - "8"
-      - "--drain-strategy"
-      - "immediate"
-      - "--drain-time-s"
-      - "60"
-      - "-c"
-      - "/etc/envoy/envoy.yaml"
-
   # UDS tokenizer sidecar is appended via patches/uds-tokenizer
   # post-renderer (chart's sidecar.* slot is owned by Envoy).
 

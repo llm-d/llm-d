@@ -42,6 +42,25 @@ inferenceExtension:
 
   # Sidecar configuration for EPP
   sidecar:
+    # CLI args for the Envoy sidecar. Override the chart's defaults of
+    # `--log-level trace` (very expensive under load) and no `--concurrency`
+    # (Envoy spawns ~hardware_concurrency() worker threads, oversubscribing
+    # the cgroup's CPU slice). `--concurrency 8` matches the resources.limits
+    # equivalent below; trace-level logging would burn a meaningful share of
+    # the sidecar's CPU at high QPS.
+    args:
+      - "--service-node"
+      - "envoy-sidecar"
+      - "--log-level"
+      - "warn"
+      - "--concurrency"
+      - "8"
+      - "--drain-strategy"
+      - "immediate"
+      - "--drain-time-s"
+      - "60"
+      - "-c"
+      - "/etc/envoy/envoy.yaml"
     # Resource requests and limits for the Envoy sidecar.
     resources:
       requests:
@@ -49,7 +68,7 @@ inferenceExtension:
         memory: 8Gi
       limits:
         memory: 16Gi
-      
+
   tracing:
     otelExporterEndpoint: "http://localhost:4317"
     sampling:
