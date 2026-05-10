@@ -76,30 +76,14 @@ This guide includes configurations for the following accelerators:
 
 This deploys the llm-d Router in [Standalone Mode](placeholder-link):
 
-A post-renderer injects production-grade resources on the EPP container (the v1.5.0 chart does not expose them via values); Envoy sidecar resources and `--concurrency`/log-level tuning come from `optimized-baseline.values.yaml`.
-
 ```bash
 # Assuming base-directory is the root of the llm-d repo
 helm install ${GUIDE_NAME} \
     oci://registry.k8s.io/gateway-api-inference-extension/charts/standalone \
     -f guides/recipes/scheduler/base.values.yaml \
     -f guides/${GUIDE_NAME}/scheduler/${GUIDE_NAME}.values.yaml \
-    --post-renderer ./guides/${GUIDE_NAME}/scheduler/patches/epp-resources/post-renderer.sh \
     -n ${NAMESPACE} --version ${GAIE_VERSION}
 ```
-
-<details>
-<summary><b>Helm v4</b></summary>
-
-Helm v4's `--post-renderer` only accepts a registered plugin name, not a path. Install once, then swap the flag value:
-
-```bash
-helm plugin install guides/${GUIDE_NAME}/scheduler/patches/epp-resources
-# in the helm install above, replace the --post-renderer line with:
-#   --post-renderer epp-resources
-```
-
-</details>
 
 <details>
 <summary><h4>Gateway Mode</h4></summary>

@@ -306,11 +306,11 @@ jobs:
 
       - name: Dry-run scheduler (active-active default)
         # ubuntu-latest ships helm v3, which accepts a path for --post-renderer.
-        # (helm v4 users instead run `helm plugin install .../epp-overlay`
-        # once and pass `--post-renderer epp-overlay`; see README.)
+        # (helm v4 users instead run `helm plugin install .../uds-tokenizer`
+        # once and pass `--post-renderer uds-tokenizer`; see README.)
         run: |
           CHART_VERSION=v1.5.0
-          POST_RENDERER=./guides/precise-prefix-cache-aware/scheduler/patches/epp-overlay/post-renderer.sh
+          POST_RENDERER=./guides/precise-prefix-cache-aware/scheduler/patches/uds-tokenizer/post-renderer.sh
           echo ""
           echo "========================================"
           echo "precise-prefix-cache-aware: scheduler"

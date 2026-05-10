@@ -35,10 +35,17 @@ inferenceExtension:
           name: llm-d-hf-token
           key: HF_TOKEN
 
+  ## Production-grade EPP container resources. Lifts the EPP into Burstable
+  ## QoS — the chart's default leaves resources empty (BestEffort).
+  resources:
+    requests:
+      cpu: 4
+      memory: 8Gi
+    limits:
+      memory: 16Gi
+
   ## Envoy sidecar tuning — pin worker threads at 8 to match the CPU
-  ## limit and drop the chart's default `--log-level trace`. EPP
-  ## container resources are added by the patches/epp-overlay
-  ## post-renderer (chart doesn't expose them via values).
+  ## limit and drop the chart's default `--log-level trace`.
   sidecar:
     args:
       - "--service-node"
@@ -61,9 +68,8 @@ inferenceExtension:
         cpu: 8
         memory: 16Gi
 
-  # UDS tokenizer sidecar + EPP resources are appended via
-  # patches/epp-overlay post-renderer (chart's sidecar.* slot is owned
-  # by Envoy; EPP resources aren't exposed via chart values).
+  # UDS tokenizer sidecar is appended via patches/uds-tokenizer
+  # post-renderer (chart's sidecar.* slot is owned by Envoy).
 
   pluginsConfigFile: "precise-prefix-cache-aware-plugins.yaml"
   pluginsCustomConfig:

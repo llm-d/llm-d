@@ -94,7 +94,7 @@ helm install ${GUIDE_NAME} \
   oci://registry.k8s.io/gateway-api-inference-extension/charts/standalone \
   -f guides/recipes/scheduler/base.values.yaml \
   -f guides/${GUIDE_NAME}/scheduler/${GUIDE_NAME}.values.yaml \
-  --post-renderer ./guides/${GUIDE_NAME}/scheduler/patches/epp-overlay/post-renderer.sh \
+  --post-renderer ./guides/${GUIDE_NAME}/scheduler/patches/uds-tokenizer/post-renderer.sh \
   -n ${NAMESPACE} --version ${GAIE_VERSION}
 ```
 
@@ -104,9 +104,9 @@ helm install ${GUIDE_NAME} \
 Helm v4's `--post-renderer` only accepts a registered plugin name, not a path. Install once, then swap the flag value:
 
 ```bash
-helm plugin install guides/${GUIDE_NAME}/scheduler/patches/epp-overlay
+helm plugin install guides/${GUIDE_NAME}/scheduler/patches/uds-tokenizer
 # in the helm install above, replace the --post-renderer line with:
-#   --post-renderer epp-overlay
+#   --post-renderer uds-tokenizer
 ```
 
 </details>
@@ -139,7 +139,7 @@ To use a Kubernetes Gateway managed proxy instead of the standalone Envoy sideca
      --set provider.name=${PROVIDER_NAME} \
      --set experimentalHttpRoute.enabled=true \
      --set experimentalHttpRoute.inferenceGatewayName=llm-d-inference-gateway \
-     --post-renderer ./guides/${GUIDE_NAME}/scheduler/patches/epp-overlay/post-renderer.sh \
+     --post-renderer ./guides/${GUIDE_NAME}/scheduler/patches/uds-tokenizer/post-renderer.sh \
      -n ${NAMESPACE} --version ${GAIE_VERSION}
    ```
 
