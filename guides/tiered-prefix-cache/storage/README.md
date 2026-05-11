@@ -327,12 +327,18 @@ In both scenarios, the total KV cache size significantly exceeds the combined ca
 The benchmark was conducted using the [inference-perf](https://github.com/kubernetes-sigs/inference-perf) tool with the following hardware, memory, and workload configurations:
 
 * **Workload:**
-  * The two different workloads were tested with a constant concurrency of 20 requests with different system_prompt_lengths of 50K.
+  * The two different workloads were tested with a constant concurrency of 20 requests with different system_prompt_lengths of 30K on Qwen/Qwen3-32B and 50K on a larger model meta-llama/Llama-3.3-70B-Instruct.
   * **Inference Perf configuration**
     * `type`: concurrent
     * `num_requests`: 2700
     * `concurrency_level`: 20
-  * **System prompt length: 50K**
+  * **[Qwen3-32B]System prompt length: 30K**
+    * `num_groups`: 50
+    * `system_prompt_len`: 50000
+    * `question_len`: 256
+    * `output_len`: 1024
+    * `num_prompts_per_group`: 50
+  * **[Llama-3.3-70B-Instruct]System prompt length: 50K**
     * `num_groups`: 50
     * `system_prompt_len`: 50000
     * `question_len`: 256
@@ -340,6 +346,17 @@ The benchmark was conducted using the [inference-perf](https://github.com/kubern
     * `num_prompts_per_group`: 50
 
 * **Memory Calculation:**
+
+* **Model: Qwen3/Qwen3-32B**
+  * The KVCache size for the `Qwen/Qwen3-32B` model is approximately 256KB per token.
+  * With `gpu_memory_utilization` at 0.65, there are 8474 GPU blocks available per engine.
+  * The available HBM for KVCache per engine is approximately 34.7 GB (8474 blocks * 4.096 MB/block).
+  * The total available HBM for the KVCache across the entire system was 277 GB (8 engines * 34 GB/engine).
+  * Total CPU RAM cache available across the system was 64*8 ~= 512GB.
+  * Lustre capacity available for KV cache offloading: 18000GiB for total system.
+
+* **Model: meta-llama/Llama-3.3-70B-Instruct**
+
   * The KVCache size for the `meta-llama/Llama-3.3-70B-Instruct` model is approximately 320KB per token.
   * With `gpu_memory_utilization` at 0.65, there are 10768 GPU blocks available per engine.
   * The available HBM for KVCache per engine is approximately 55 GB (10768 blocks * 5.12 MB/block).
@@ -351,8 +368,18 @@ The benchmark was conducted using the [inference-perf](https://github.com/kubern
 
 In this scenario, the total KV cache size significantly exceeds the combined capacity of local HBM and CPU RAM. The results demonstrate that as context length and memory demands increase, the performance benefits of offloading to Lustre become even more pronounced.
 
-* **50K system prompt length (KVCache size 994 GiB):** While CPU RAM provides 256GB for KV cache offloading, adding Lustre significantly enhances performance compared to relying on CPU offloading alone.
+* **30K system prompt length (KVCache size 653 GiB):** While CPU RAM provides 256GB for KV cache offloading, adding Lustre significantly enhances performance compared to relying on CPU offloading alone.
 
+* **50K system prompt length (KVCache size 994 GiB):** The performance difference with Lustre storage offloading is more prominent for larger models like llama-3.3-70B-Instruct .
+
+
+##### 30K system prompt length (KVCache size 653 GiB) — KV Cache > (HBM + CPU RAM)
+
+| KVCache > HBM + CPU RAM | Mean TTFT (second) | P90 TTFT (second) | Mean E2E Latency (second) | P90 E2E Latency (second) | Input Throughput (token per second) | Output Throughput (token per second) | Overall Throughput (token per second) | ITL (second) |
+| :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
+| **Baseline vLLM + CPU offloading** | 2.24 | 5.14 | 22.21 | 26.6 | 27148 | 836 | 27984 | 0.021 |
+| **vLLM + CPU offloading + Lustre** | 1.38 (-38.4%) | 2.82 (-45.1%) | 20.45 (-7.9%) | 22.77 (-14.4%) | 28832 (+6.2%) | 828 (-1.0%) | 29661 (+6.0%) | 0.02 (-4.8%) |
+---
 
 ##### 50K system prompt length (KVCache size 994 GiB) — KV Cache > (HBM + CPU RAM)
 
