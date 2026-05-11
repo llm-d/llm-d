@@ -36,7 +36,7 @@ jobs:
             optimized-baseline:
               - .github/workflows/ci-kustomize-dry-run.yaml
               - .github/scripts/install-gke-crds.sh
-              - guides/prereq/gateway-provider/install-gateway-provider-dependencies.sh
+              - guides/prereq/gateways/install-gateway-crds.sh
               - docs/monitoring/scripts/install-prometheus-grafana.sh
               - guides/recipes/modelserver/**
               - guides/recipes/scheduler/**
@@ -44,31 +44,25 @@ jobs:
             pd-disaggregation:
               - .github/workflows/ci-kustomize-dry-run.yaml
               - helpers/client-setup/install-deps.sh
-              - guides/prereq/gateway-provider/common-configurations/**
-              - guides/prereq/gateway-provider/install-gateway-provider-dependencies.sh
-              - guides/prereq/gateway-provider/*.helmfile.yaml
+              - guides/prereq/gateways/**
               - docs/monitoring/scripts/install-prometheus-grafana.sh
               - guides/pd-disaggregation/**
             precise-prefix-cache-aware:
               - .github/workflows/ci-kustomize-dry-run.yaml
               - helpers/client-setup/install-deps.sh
-              - guides/prereq/gateway-provider/common-configurations/**
-              - guides/prereq/gateway-provider/install-gateway-provider-dependencies.sh
-              - guides/prereq/gateway-provider/*.helmfile.yaml
+              - guides/prereq/gateways/install-gateway-crds.sh
               - docs/monitoring/scripts/install-prometheus-grafana.sh
               - guides/precise-prefix-cache-aware/**
             simulated-accelerators:
               - .github/workflows/ci-kustomize-dry-run.yaml
               - helpers/client-setup/install-deps.sh
-              - guides/prereq/gateway-provider/common-configurations/**
-              - guides/prereq/gateway-provider/install-gateway-provider-dependencies.sh
-              - guides/prereq/gateway-provider/*.helmfile.yaml
+              - guides/prereq/gateways/**
               - docs/monitoring/scripts/install-prometheus-grafana.sh
               - guides/simulated-accelerators/**
             workload-autoscaling:
               - .github/workflows/ci-kustomize-dry-run.yaml
               - .github/scripts/install-gke-crds.sh
-              - guides/prereq/gateway-provider/install-gateway-provider-dependencies.sh
+              - guides/prereq/gateways/install-gateway-crds.sh
               - docs/monitoring/scripts/install-prometheus-grafana.sh
               - guides/workload-autoscaling/**
 
@@ -91,7 +85,7 @@ jobs:
           wait: 120s
 
       - name: Install Gateway API and GAIE CRDs
-        run: guides/prereq/gateway-provider/install-gateway-provider-dependencies.sh > /dev/null
+        run: guides/prereq/gateways/install-gateway-crds.sh > /dev/null
 
       - name: Install monitoring CRDs
         run: docs/monitoring/scripts/install-prometheus-grafana.sh --crds-only
@@ -186,18 +180,12 @@ jobs:
           wait: 120s
 
       - name: Install Gateway API and GAIE CRDs
-        run: guides/prereq/gateway-provider/install-gateway-provider-dependencies.sh > /dev/null
+        run: guides/prereq/gateways/install-gateway-crds.sh > /dev/null
 
-      - name: Install gateway providers
+      - name: Install gateway control planes
         run: |
-          cd guides/prereq/gateway-provider
-          for f in *.helmfile.yaml; do
-            # Skip kgateway - it is deprecated and its older CRDs would
-            # overwrite the agentgateway installation.
-            [[ "$f" == "kgateway.helmfile.yaml" ]] && continue
-            echo "=== Installing gateway provider: $f ==="
-            helmfile apply -f "$f" > /dev/null
-          done
+          guides/prereq/gateways/install-gateway-control-plane.sh istio > /dev/null
+          guides/prereq/gateways/install-gateway-control-plane.sh agentgateway > /dev/null
 
       - name: Wait for gateway control planes
         run: |
@@ -296,7 +284,7 @@ jobs:
           wait: 120s
 
       - name: Install Gateway API and GAIE CRDs
-        run: guides/prereq/gateway-provider/install-gateway-provider-dependencies.sh > /dev/null
+        run: guides/prereq/gateways/install-gateway-crds.sh > /dev/null
 
       - name: Install monitoring CRDs
         run: docs/monitoring/scripts/install-prometheus-grafana.sh --crds-only
@@ -381,7 +369,7 @@ jobs:
           wait: 120s
 
       - name: Install Gateway API and GAIE CRDs
-        run: guides/prereq/gateway-provider/install-gateway-provider-dependencies.sh > /dev/null
+        run: guides/prereq/gateways/install-gateway-crds.sh > /dev/null
 
       - name: Install monitoring CRDs
         run: docs/monitoring/scripts/install-prometheus-grafana.sh --crds-only

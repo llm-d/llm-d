@@ -81,9 +81,8 @@ jobs:
 
       - name: Install chart dependencies (CRDs and Istio)
         run: |
-          cd guides/prereq/gateway-provider
-          ./install-gateway-provider-dependencies.sh
-          helmfile apply -f istio.helmfile.yaml
+          guides/prereq/gateways/install-gateway-crds.sh
+          guides/prereq/gateways/install-gateway-control-plane.sh istio
 
       - name: Install monitoring stack
         run: |
