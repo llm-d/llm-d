@@ -1,0 +1,65 @@
+name: Nightly - Predicted Latency E2E (OpenShift)
+
+on:
+  schedule:
+    - cron: '0 13 * * *'  # 13:00 UTC daily (staggered)
+  workflow_dispatch:
+    inputs:
+      skip_cleanup:
+        description: 'Skip cleanup after tests (for debugging)'
+        required: false
+        default: 'false'
+      pr_number:
+        description: 'PR number for comment-back (set by /test-nightly)'
+        required: false
+        default: ''
+      pr_repo:
+        description: 'Repo for PR comment-back'
+        required: false
+        default: 'llm-d/llm-d'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: nightly-e2e-predicted-latency-ocp
+  cancel-in-progress: true
+
+jobs:
+  nightly:
+    if: github.repository == 'llm-d/llm-d'
+    uses: llm-d/llm-d-infra/.github/workflows/reusable-nightly-e2e-ocp.yaml@main
+    with:
+      guide_name: predicted-latency-based-scheduling
+      namespace: llm-d-nightly-predicted-latency-ocp
+      gateway_host: 'predicted-latency-based-scheduling-epp'
+      custom_deploy_script: |
+        export GAIE_VERSION=v1.5.0
+        export GUIDE_NAME="predicted-latency-based-scheduling"
+        export INFRA_PROVIDER="base"
+        kubectl apply -n ${NAMESPACE} -k guides/optimized-baseline/modelserver/gpu/vllm/${INFRA_PROVIDER}
+        # CI-only: disable EPP /metrics auth so the validate script's curl pod
+        # can scrape predicted/actual TTFT histograms without a bearer token.
+        # This adds --metrics-endpoint-auth=false to the EPP container; the
+        # production guide default (auth on) is unchanged.
+        helm install ${GUIDE_NAME} \
+          oci://registry.k8s.io/gateway-api-inference-extension/charts/standalone \
+          -f guides/recipes/scheduler/base.values.yaml \
+          -f guides/${GUIDE_NAME}/scheduler/predicted-latency.values.yaml \
+          --set inferenceExtension.monitoring.prometheus.auth.enabled=false \
+          -n ${NAMESPACE} --version ${GAIE_VERSION}
+      e2e_validate_args: '--extra-validate predicted-latency'
+      gke_cluster_name: llm-d-e2e-us-east5
+      gke_cluster_zone: us-east5
+      required_gpus: 2
+      recommended_gpus: 4
+      accelerator_type: H100
+      pod_wait_timeout: '30m'
+      pod_readiness_delay: 0
+      image_override: 'ghcr.io/llm-d/llm-d-cuda-dev:latest'
+      allow_gpu_preemption: true
+      llm_d_ref: ${{ github.ref }}
+      skip_cleanup: ${{ github.event.inputs.skip_cleanup == 'true' }}
+      pr_number: ${{ github.event.inputs.pr_number }}
+      pr_repo: ${{ github.event.inputs.pr_repo }}
+    secrets: inherit

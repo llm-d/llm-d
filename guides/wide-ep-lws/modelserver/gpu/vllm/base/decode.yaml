@@ -61,11 +61,7 @@ spec:
             emptyDir: {}
         containers:
           - name: vllm
-            # image: ghcr.io/llm-d/llm-d-cuda-dev:sha-c1ef857
-            # image: ghcr.io/llm-d/llm-d-cuda-dev:sha-7e0df41
-            # image: ghcr.io/llm-d/llm-d-cuda-dev:sha-d163128
-            # image: ghcr.io/llm-d/llm-d-cuda-dev:sha-a63291a # working!
-            image: ghcr.io/llm-d/llm-d-cuda-dev:sha-ac9a0d7
+            image: ghcr.io/llm-d/llm-d-cuda:v0.7.0-rc.4
             securityContext:
               capabilities:
                 add:
@@ -136,10 +132,10 @@ spec:
               #   value: "parentbased_traceidratio"
               # - name: OTEL_TRACES_SAMPLER_ARG
               #   value: "0.1"
-              # NOTE: vllm/vllm-openai:v0.19.1 is a cu129 image but has 
+              # NOTE: vllm/vllm-openai:v0.19.1 is a cu129 image but has
               # nixl-cu13 and nixl-cu12 installed, which causes NIXL to
               # to pick up the wrong UCX library. If you are deploying
-              # a cu13 (e.g. vllm/vllm-openai:v0.19.1-x86_64-cu130), 
+              # a cu13 (e.g. vllm/vllm-openai:v0.19.1-x86_64-cu130),
               # comment out this path.
               # - name: UCX_MODULE_DIR
               #   value: /usr/local/lib/python3.12/dist-packages/nixl_cu12.libs/ucx

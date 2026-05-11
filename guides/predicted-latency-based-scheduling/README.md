@@ -1,6 +1,6 @@
 # Predicted Latency-Based Routing
 
-[![Nightly - optimized baseline E2E (CKS)](https://github.com/llm-d/llm-d/actions/workflows/nightly-e2e-predicted-latency-cks.yaml/badge.svg)](https://github.com/llm-d/llm-d/actions/workflows/nightly-e2e-predicted-latency-cks.yaml) [![Nightly - optimized baseline E2E (GKE)](https://github.com/llm-d/llm-d/actions/workflows/nightly-e2e-predicted-latency-gke.yaml/badge.svg)](https://github.com/llm-d/llm-d/actions/workflows/nightly-e2e-predicted-latency-gke.yaml) Not tested in CI on ocp
+[![Nightly - optimized baseline E2E (CKS)](https://github.com/llm-d/llm-d/actions/workflows/nightly-e2e-predicted-latency-cks.yaml/badge.svg)](https://github.com/llm-d/llm-d/actions/workflows/nightly-e2e-predicted-latency-cks.yaml) [![Nightly - optimized baseline E2E (GKE)](https://github.com/llm-d/llm-d/actions/workflows/nightly-e2e-predicted-latency-gke.yaml/badge.svg)](https://github.com/llm-d/llm-d/actions/workflows/nightly-e2e-predicted-latency-gke.yaml)
 
 
 ## Overview

@@ -39,6 +39,8 @@ jobs:
       guide_name: wide-ep-lws
       guide_path: guides/wide-ep-lws
       namespace: llm-d-nightly-wide-ep-gke
+#      gke_cluster_name: llm-d-e2e-us-east5
+#      gke_cluster_zone: us-east5
       gke_cluster_name: llm-d-e2e-us-south1-2
       gke_cluster_zone: us-south1
       required_gpus: 32
@@ -67,6 +69,8 @@ jobs:
         export GAIE_VERSION=v1.5.0
         export GUIDE_NAME="wide-ep-lws"
         export INFRA_PROVIDER="gke"
+        yq '.spec.leaderWorkerTemplate.workerTemplate.spec.priorityClassName="nightly-gpu-critical"' -i guides/${GUIDE_NAME}/modelserver/gpu/vllm/base/decode.yaml
+        yq '.spec.leaderWorkerTemplate.workerTemplate.spec.priorityClassName="nightly-gpu-critical"' -i guides/${GUIDE_NAME}/modelserver/gpu/vllm/base/prefill.yaml
         kubectl apply -n ${NAMESPACE} -k guides/${GUIDE_NAME}/modelserver/gpu/vllm/${INFRA_PROVIDER}
         helm install ${GUIDE_NAME} \
           oci://registry.k8s.io/gateway-api-inference-extension/charts/standalone \

@@ -45,16 +45,19 @@ jobs:
       namespace: llm-d-nightly-inference-ocp
       gateway_host: 'optimized-baseline-epp'
       custom_deploy_script: |
-        yq '.spec.template.spec.priorityClassName="nightly-gpu-critical"' -i guides/optimized-baseline/modelserver/gpu/vllm/base/patch-vllm.yaml
-        yq '.spec.replicas=2' -i guides/optimized-baseline/modelserver/gpu/vllm/base/patch-vllm.yaml
-        kubectl apply -k guides/optimized-baseline/modelserver/gpu/vllm/base -n ${NAMESPACE}
-        helm install optimized-baseline \
+        export GAIE_VERSION=v1.5.0
+        export GUIDE_NAME="optimized-baseline"
+        export INFRA_PROVIDER="base"
+        yq '.spec.template.spec.priorityClassName="nightly-gpu-critical"' -i guides/${GUIDE_NAME}/modelserver/gpu/vllm/${INFRA_PROVIDER}/patch-vllm.yaml
+        yq '.spec.replicas=2' -i guides/${GUIDE_NAME}/modelserver/gpu/vllm/${INFRA_PROVIDER}/patch-vllm.yaml
+        kubectl apply -k guides/${GUIDE_NAME}/modelserver/gpu/vllm/${INFRA_PROVIDER} -n ${NAMESPACE}
+        helm install ${GUIDE_NAME} \
           oci://registry.k8s.io/gateway-api-inference-extension/charts/standalone \
           -f guides/recipes/scheduler/base.values.yaml \
-          -f guides/optimized-baseline/scheduler/optimized-baseline.values.yaml \
-          -n ${NAMESPACE} --version v1.5.0
+          -f guides/${GUIDE_NAME}/scheduler/${GUIDE_NAME}.values.yaml \
+          -n ${NAMESPACE} --version ${GAIE_VERSION}
       accelerator_type: H100
-      required_gpus: 2 
+      required_gpus: 2
       recommended_gpus: 4
       pod_wait_timeout: '30m'
       pod_readiness_delay: 180

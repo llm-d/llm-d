@@ -106,17 +106,6 @@ patches:
         value:
           name: NVSHMEM_DISABLED_GDRCOPY
           value: "true"
-      # Disable GKE's NCCL net/tuner plugins so vLLM uses the in-tree NCCL transport.
-      - op: add
-        path: /spec/leaderWorkerTemplate/workerTemplate/spec/containers/0/env/-
-        value:
-          name: NCCL_NET_PLUGIN
-          value: "none"
-      - op: add
-        path: /spec/leaderWorkerTemplate/workerTemplate/spec/containers/0/env/-
-        value:
-          name: NCCL_TUNER_PLUGIN
-          value: "none"
       # We add the volume for different providers since the hostPath can be different.
       - op: replace
         path: /spec/leaderWorkerTemplate/workerTemplate/spec/volumes/1

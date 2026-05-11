@@ -1,8 +1,7 @@
 # P/D Disaggregation
 
-[![Nightly - PD Disaggregation E2E (GKE)](https://github.com/llm-d/llm-d/actions/workflows/nightly-e2e-pd-disaggregation-gke.yaml/badge.svg)](https://github.com/llm-d/llm-d/actions/workflows/nightly-e2e-pd-disaggregation-gke.yaml) [![Nightly - PD Disaggregation E2E (CKS)](https://github.com/llm-d/llm-d/actions/workflows/nightly-e2e-pd-disaggregation-cks.yaml/badge.svg)](https://github.com/llm-d/llm-d/actions/workflows/nightly-e2e-pd-disaggregation-cks.yaml) Not tested in CI on ocp
+[![Nightly - PD Disaggregation E2E (GKE)](https://github.com/llm-d/llm-d/actions/workflows/nightly-e2e-pd-disaggregation-gke.yaml/badge.svg)](https://github.com/llm-d/llm-d/actions/workflows/nightly-e2e-pd-disaggregation-gke.yaml) [![Nightly - PD Disaggregation E2E (CKS)](https://github.com/llm-d/llm-d/actions/workflows/nightly-e2e-pd-disaggregation-cks.yaml/badge.svg)](https://github.com/llm-d/llm-d/actions/workflows/nightly-e2e-pd-disaggregation-cks.yaml)
 <!--
-Not tested on ocp
 [![Nightly - PD Disaggregation E2E (OpenShift)](https://github.com/llm-d/llm-d/actions/workflows/nightly-e2e-pd-disaggregation-ocp.yaml/badge.svg)]
 -->
 
@@ -95,7 +94,7 @@ helm install ${GUIDE_NAME} \
 
 To employ a Kubernetes Gateway managed proxy instead of the standalone one, then instead of applying the standalone helm chart above, do the following:
 
-1. *Deploy a Kubernetes Gateway*. Follow [the gateway guides](../prereq/gateways) for step by step deployment for a Gateway named `llm-d-inference-gateway`. You only need to create one Gateway for your cluster, all guides can share one Gateway each with a separate HTTPRoute. 
+1. *Deploy a Kubernetes Gateway*. Follow [the gateway guides](../prereq/gateways) for step by step deployment for a Gateway named `llm-d-inference-gateway`. You only need to create one Gateway for your cluster, all guides can share one Gateway each with a separate HTTPRoute.
 2. *Deploy the llm-d Router and an HTTPRoute*. The following deploys the llm-d Router with an HttpRoute that connects it to the Gateway created in the previous step (set `provider.name` to the gateway provider you deployed):
 
 ```bash
@@ -479,7 +478,7 @@ For this workload (20:1 ISL:OSL, 45 QPS), llm-d disaggregation improved mean and
 
 
 > ![NOTE]
-> In aggregated setup, vLLM allocates all GPU resources to 
+> In aggregated setup, vLLM allocates all GPU resources to
 > processing prefills as they arrive. TTFT is elevated in the
 > disaggregated setup because less resources are allocated to
 > processing prefills.

@@ -54,6 +54,9 @@ jobs:
       pod_readiness_delay: 180
       # Slim transform: reduce model to Qwen3-0.6B, 1 GPU per pod, reduce memory
       pre_deploy_script: |
+        export GAIE_VERSION=v1.5.0
+        export GUIDE_NAME="pd-disaggregation"
+        export INFRA_PROVIDER="base"
         echo "Applying pd-disaggregation slim transforms..."
         cd guides/pd-disaggregation
         yq e '.modelArtifacts.uri = "hf://Qwen/Qwen3-0.6B"' -i ms-pd/values.yaml
