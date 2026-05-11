@@ -13,7 +13,8 @@ spec:
             # NOTE: The connector package version must match the vLLM version.
             # For vLLM 0.X.x use llmd-fs-connector==0.X.
           args:
-            - |-
+           # We have 2 wheels released for vllm-0.19, install CUDA-13 wheel from https://github.com/llm-d/llm-d-kv-cache/commit/793b51ebcc9ae47d02c8317ff0db8c5f8ef5d81f
+            - |
               mkdir -p /tmp/custom-package; \
               uv pip install --target /tmp/custom-package https://raw.githubusercontent.com/llm-d/llm-d-kv-cache/main/kv_connectors/llmd_fs_backend/wheels/llmd_fs_connector-0.19+cu130-cp312-cp312-linux_x86_64.whl; \
               export PYTHONPATH="/tmp/custom-package:$PYTHONPATH";
@@ -56,11 +57,11 @@ spec:
             limits:
               cpu: '16'
               memory: 400Gi
-              nvidia.com/gpu: 4
+              nvidia.com/gpu: 2
             requests:
               cpu: '8'
               memory: 400Gi
-              nvidia.com/gpu: 4
+              nvidia.com/gpu: 2
           volumeMounts:
             - mountPath: /dev/shm
               name: shm
