@@ -320,7 +320,7 @@ In both scenarios, the total KV cache size significantly exceeds the combined ca
 
 
 #### **LLM-D FS Connector Configuration:**
-  * The LLM-D FS connector does not currently support multi-tiered offloading (e.g., offloading to both CPU and storage backends). To enable a tiered structure, we used a Multi-connector combining a CPU Offloading connector with a storage-backed native offloading connector.
+  * The offloading connector supports multi-tiered offloading (e.g., offloading to both CPU and storage backends) through a Multi-connector setup, which combines an Offloading connector with a CPU backend and an Offloading connector with an LLM-D FS backend.
   * For benchmark we allocated 64.42*4 ~= 356GB GB of CPU RAM for offloading by setting `cpu_bytes_to_use=64424509440`.
   * The offloading connector can utilize the entire capacity of the attached Lustre disk for KV cache offloading, for this case the Lustre PVC = 18000GiB.
 
