@@ -59,6 +59,16 @@ repos:
       - id: markdownlint
         args: [--fix]
 
+  # nightly matrix sync
+  - repo: local
+    hooks:
+      - id: sync-nightly-matrix
+        name: sync nightly testing matrix
+        language: python
+        entry: python scripts/sync-nightly-matrix.py --check
+        files: ^(release/README\.md|\.github/workflows/nightly-e2e-.*)$
+        pass_filenames: false
+
   # yaml linting
   - repo: https://github.com/adrienverge/yamllint
     rev: v1.37.1
