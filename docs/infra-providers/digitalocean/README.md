@@ -241,8 +241,7 @@ export NAMESPACE=llm-d-optimized-baseline
 helmfile destroy -e digitalocean -n ${NAMESPACE}
 
 # Remove prerequisites (affects all deployments)
-istioctl uninstall --purge -y
-kubectl delete namespace istio-system
+guides/prereq/gateways/install-gateway-control-plane.sh delete istio
 guides/prereq/gateways/install-gateway-crds.sh delete
 ```
 

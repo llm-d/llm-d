@@ -17,5 +17,10 @@ fi
 GATEWAY_API_VERSION=${GATEWAY_API_VERSION:-v1.5.1}
 GAIE_VERSION=${GAIE_VERSION:-v1.5.0}
 
-kubectl "${MODE}" -k "https://github.com/kubernetes-sigs/gateway-api/config/crd?ref=${GATEWAY_API_VERSION}"
-kubectl "${MODE}" -k "https://github.com/kubernetes-sigs/gateway-api-inference-extension/config/crd?ref=${GAIE_VERSION}"
+KUBECTL_ARGS=()
+if [[ "${MODE}" == "delete" ]]; then
+  KUBECTL_ARGS+=(--ignore-not-found)
+fi
+
+kubectl "${MODE}" "${KUBECTL_ARGS[@]}" -k "https://github.com/kubernetes-sigs/gateway-api/config/crd?ref=${GATEWAY_API_VERSION}"
+kubectl "${MODE}" "${KUBECTL_ARGS[@]}" -k "https://github.com/kubernetes-sigs/gateway-api-inference-extension/config/crd?ref=${GAIE_VERSION}"

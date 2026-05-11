@@ -17,3 +17,10 @@ guides/prereq/gateways/install-gateway-crds.sh
 guides/prereq/gateways/install-gateway-control-plane.sh istio
 guides/prereq/gateways/install-gateway-control-plane.sh agentgateway
 ```
+
+Use `delete` to remove these prerequisites:
+
+```bash
+guides/prereq/gateways/install-gateway-control-plane.sh delete istio
+guides/prereq/gateways/install-gateway-crds.sh delete
+```
