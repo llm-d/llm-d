@@ -54,14 +54,11 @@ kubectl get nodes -o custom-columns="NAME:.metadata.name,GPU:.status.allocatable
 Before deploying llm-d workloads, install the required components:
 
 ```bash
-# Navigate to gateway provider prerequisites
-cd guides/prereq/gateway-provider
-
 # Install Gateway API and Inference Extension CRDs
-./install-gateway-provider-dependencies.sh
+guides/prereq/gateways/install-gateway-crds.sh
 
 # Install Istio control plane
-helmfile apply -f istio.helmfile.yaml
+guides/prereq/gateways/install-gateway-control-plane.sh istio
 ```
 
 ### Step 2: Cluster Validation
@@ -188,9 +185,8 @@ tolerations:
 **Solution**: Install CRDs before any helmfile deployment:
 
 ```bash
-cd guides/prereq/gateway-provider
-./install-gateway-provider-dependencies.sh
-helmfile apply -f istio.helmfile.yaml
+guides/prereq/gateways/install-gateway-crds.sh
+guides/prereq/gateways/install-gateway-control-plane.sh istio
 ```
 
 #### 2. LoadBalancer Pending or API Errors
@@ -245,9 +241,9 @@ export NAMESPACE=llm-d-optimized-baseline
 helmfile destroy -e digitalocean -n ${NAMESPACE}
 
 # Remove prerequisites (affects all deployments)
-cd guides/prereq/gateway-provider
-helmfile destroy -f istio.helmfile.yaml
-./install-gateway-provider-dependencies.sh delete
+istioctl uninstall --purge -y
+kubectl delete namespace istio-system
+guides/prereq/gateways/install-gateway-crds.sh delete
 ```
 
 ## Configuration Files Reference

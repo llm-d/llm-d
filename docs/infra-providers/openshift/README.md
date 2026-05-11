@@ -74,20 +74,19 @@ cd llm-d
 ```
 
 ### Install Dependencies 
-Go to the `guides/prereq` directory and run `client-setup/install-deps.sh`. 
+Run the client setup helper from the repository root.
 This script detects your OS and uses its package management to install required utilities like `yq`, `helm`, etc.
 
 ```sh
-cd guides/prereq
-./client-setup/install-deps.sh
+./helpers/client-setup/install-deps.sh
 ```
 
 ### Deploy the gateway and infrastructure
-Switch to the `gateway-providers` directory and run the `install-gateway-provider-dependencies.sh` script located in `guides/prereqs/gateway-provider`
+Install the Gateway API and Gateway API Inference Extension CRDs, then install Istio with inference extension support enabled:
+
 ```sh
-cd gateway-provider     
-./install-gateway-provider-dependencies.sh
-helmfile apply -f istio.helmfile.yaml
+guides/prereq/gateways/install-gateway-crds.sh
+guides/prereq/gateways/install-gateway-control-plane.sh istio
 ```
 
 ### Deploy the example `precise prefix cache aware`
