@@ -9,15 +9,6 @@ llm-d on GKE is tested with the following configurations:
 * Machine types: A3, A4, ct5p, ct5lp, ct6e
 * Versions: GKE 1.33.4+
 
-For the well lit paths, we specifically recommend the following machine types:
-
-| Path | GPU | TPU |
-| --- | --- | --- |
-| [optimized baseline](../../../guides/optimized-baseline/README.md) | Large models (13B+) with Hopper or newer (A3 or newer)<br>Small or highly quantized models (1-7B) with Ampere, L4, or newer (A2, G2, or newer) | v5e, v6e, 7x|
-| [Prefill / Decode Disaggregation](../../../guides/pd-disaggregation/README.md) | RDMA-enabled machine types (A3U, A4, or newer) | v6e, 7x |
-| [Wide Expert Parallelism](../../../guides/wide-ep-lws/README.md) | RDMA-enabled machine types (A3U, A4, or newer) | coming soon |
-| [Tiered Prefix Cache](../../../guides/tiered-prefix-cache/README.md) | Tiered Prefix Cache can be combined with other well-lit paths above.<br>If running Prefill/Decode Disaggregation, or Wide Expert Parallelism, follow their guidance respectively.<br>Otherwise, follow the guidance on optimized baseline. | coming soon |
-
 ## Cluster Configuration
 
 The GCP cluster should be configured with the following settings:

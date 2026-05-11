@@ -41,9 +41,11 @@ ARG UCX_VERSION="v1.20.0"
 
 ARG NVSHMEM_USE_GIT="true"
 ARG NVSHMEM_REPO="https://github.com/NVIDIA/nvshmem.git"
-ARG NVSHMEM_VERSION="v3.5.19-1"
+ARG NVSHMEM_VERSION="v3.4.5-0"
+ARG NVSHMEM_BUILD_FROM_SOURCE=true
+ARG NVSHMEM_CUDA_ARCHITECTURES="90a;100"
 
-ARG BUILD_NIXL_FROM_SOURCE="true"
+ARG BUILD_NIXL_FROM_SOURCE="false"
 ARG NIXL_REPO="https://github.com/ai-dynamo/nixl.git"
 ARG NIXL_VERSION="v1.0.0"
 
@@ -68,7 +70,6 @@ ARG FLASHINFER_VERSION="v0.6.6"
 
 # vLLM build settings - provided via build args from docker/common-versions file
 # Override here for platform-specific testing or via build args
-# For CUDA 13.0: build from source (precompiled wheels only exist for CUDA 12.x)
 ARG VLLM_REPO
 ARG VLLM_COMMIT_SHA
 ARG VLLM_PRECOMPILED_WHEEL_COMMIT
@@ -95,6 +96,8 @@ ARG CUDA_PATCH
 ARG PYTHON_VERSION
 
 ARG NVSHMEM_VERSION
+ARG NVSHMEM_BUILD_FROM_SOURCE
+ARG NVSHMEM_CUDA_ARCHITECTURES
 
 ARG USE_SCCACHE
 ARG TORCH_CUDA_ARCH_LIST
@@ -216,8 +219,18 @@ RUN --mount=type=cache,target=/var/cache/git \
     /tmp/build-ucx.sh && \
     rm -f /tmp/build-ucx.sh
 
-# NVSHMEM is installed via pip (nvidia-nvshmem-cu${CUDA_MAJOR}) in the runtime stage
-# No longer building from source
+# Build NVSHMEM from source (skipped for GB200 - uses pip instead)
+ARG NVSHMEM_USE_GIT
+ARG NVSHMEM_REPO
+COPY docker/scripts/cuda/builder/build-nvshmem.sh /tmp/build-nvshmem.sh
+RUN --mount=type=cache,target=/var/cache/git \
+    --mount=type=secret,id=aws_access_key_id \
+    --mount=type=secret,id=aws_secret_access_key \
+    mkdir -p "${NVSHMEM_DIR}" && \
+    if [ "${NVSHMEM_BUILD_FROM_SOURCE}" = "true" ]; then \
+        /tmp/build-nvshmem.sh; \
+    fi && \
+    rm -f /tmp/build-nvshmem.sh
 
 
 # Pin torch, so all deps are built against the same version
@@ -243,6 +256,7 @@ COPY docker/scripts/cuda/builder/build-nixl.sh /tmp/build-nixl.sh
 RUN --mount=type=cache,target=/var/cache/git \
     --mount=type=secret,id=aws_access_key_id \
     --mount=type=secret,id=aws_secret_access_key \
+    mkdir -p "${NIXL_PREFIX}" && \
     /tmp/build-nixl.sh && \
     rm -f /tmp/build-nixl.sh
 
@@ -305,6 +319,7 @@ ARG FINAL_BASE_IMAGE_SUFFIX
 ARG PYTHON_VERSION
 
 ARG NVSHMEM_VERSION
+ARG NVSHMEM_BUILD_FROM_SOURCE
 ARG BUILD_NIXL_FROM_SOURCE
 ARG FLASHINFER_VERSION
 ARG TORCH_CUDA_ARCH_LIST
@@ -326,12 +341,14 @@ ENV LANG="C.UTF-8" \
     UV_TORCH_BACKEND="${UV_TORCH_BACKEND:-cu${CUDA_MAJOR}${CUDA_MINOR}}" \
     UV_CONSTRAINT="/tmp/constraints.txt" \
     VIRTUAL_ENV="/opt/vllm" \
+    NVSHMEM_DIR="/opt/nvshmem-${NVSHMEM_VERSION}" \
     UCX_PREFIX="/opt/ucx" \
     EFA_PREFIX="/opt/amazon/efa" \
     CUDA_HOME="/usr/local/cuda"
 
-# NVSHMEM is installed via pip (nvidia-nvshmem-cu${CUDA_MAJOR}) - library path set below
+# NVSHMEM may be from source (default) or pip (GB200 with NVSHMEM_BUILD_FROM_SOURCE=false)
 ENV LD_LIBRARY_PATH="\
+${NVSHMEM_DIR}/lib:${NVSHMEM_DIR}/lib64:\
 /opt/vllm/lib/python${PYTHON_VERSION}/site-packages/nvidia/nvshmem/lib:\
 /opt/vllm/lib64/python${PYTHON_VERSION}/site-packages/torch/lib:\
 /usr/local/nvidia/lib:/usr/local/nvidia/lib64:\
@@ -419,7 +436,8 @@ RUN if [ -d /tmp/gdrcopy_libs ]; then \
         rm -rf /tmp/gdrcopy_libs; \
     fi
 
-# NVSHMEM is installed via pip (nvidia-nvshmem-cu${CUDA_MAJOR}) - no need to copy from builder
+# Copy NVSHMEM from builder (populated only when NVSHMEM_BUILD_FROM_SOURCE=true; empty dir for GB200)
+COPY --from=builder /opt/nvshmem-${NVSHMEM_VERSION}/ /opt/nvshmem-${NVSHMEM_VERSION}/
 
 COPY --from=builder /opt/nixl /opt/nixl
 RUN if [ -d /opt/nixl/include ]; then \
@@ -508,15 +526,21 @@ RUN --mount=type=cache,target=/root/.cache/uv \
     --mount=type=secret,id=aws_secret_access_key \
     bash -c "chmod +x /tmp/install-vllm.sh && \
     export PATH=/usr/local/bin:\${PATH} && \
+    export NVSHMEM_BUILD_FROM_SOURCE=${NVSHMEM_BUILD_FROM_SOURCE} && \
     USE_SCCACHE=${USE_SCCACHE} TARGETPLATFORM=${TARGETPLATFORM} source /usr/local/bin/setup-sccache && \
     /tmp/install-vllm.sh && \
     rm /tmp/install-vllm.sh && \
     if [ \"\${USE_SCCACHE}\" = \"true\" ]; then sccache --show-stats || true; fi"
 
-# Register pip-installed nvidia library paths with ldconfig so they are found
+# Register NVSHMEM library paths with ldconfig so they are found
 # even when LD_LIBRARY_PATH is overridden by the NVIDIA container runtime in k8s
-RUN echo "/opt/vllm/lib/python${PYTHON_VERSION}/site-packages/nvidia/nvshmem/lib" \
-        > /etc/ld.so.conf.d/nvidia-nvshmem.conf && \
+RUN if [ "${NVSHMEM_BUILD_FROM_SOURCE}" = "true" ]; then \
+        echo "/opt/nvshmem-${NVSHMEM_VERSION}/lib" > /etc/ld.so.conf.d/nvidia-nvshmem.conf && \
+        echo "/opt/nvshmem-${NVSHMEM_VERSION}/lib64" >> /etc/ld.so.conf.d/nvidia-nvshmem.conf; \
+    else \
+        echo "/opt/vllm/lib/python${PYTHON_VERSION}/site-packages/nvidia/nvshmem/lib" \
+            > /etc/ld.so.conf.d/nvidia-nvshmem.conf; \
+    fi && \
     echo "/opt/vllm/lib/python${PYTHON_VERSION}/site-packages/nvidia/nccl/lib" \
         >> /etc/ld.so.conf.d/nvidia-nvshmem.conf && \
     ldconfig

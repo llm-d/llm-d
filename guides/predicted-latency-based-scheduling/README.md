@@ -106,7 +106,8 @@ helm install ${GUIDE_NAME} \
 This guide reuses the model server manifests from the optimized-baseline guide (the values files above already select pods labeled `llm-d.ai/guide=optimized-baseline`). Apply the default NVIDIA GPU / vLLM overlay:
 
 ```bash
-kubectl apply -n ${NAMESPACE} -k guides/optimized-baseline/modelserver/gpu/vllm/
+export INFRA_PROVIDER=base # base | gke
+kubectl apply -n ${NAMESPACE} -k guides/optimized-baseline/modelserver/gpu/vllm/${INFRA_PROVIDER}/
 ```
 
 For other backends (AMD GPU, Intel XPU, Gaudi, TPU, CPU), see [optimized-baseline → Deploy the Model Server](../optimized-baseline/README.md#2-deploy-the-model-server).
@@ -179,6 +180,17 @@ Once traffic is flowing, confirm three things in Prometheus (see the [architectu
 1. **Predictions are being produced.** `inference_objective_request_ttft_prediction_duration_seconds` has non-zero samples. If it stays empty, the predictor sidecar is not being called — tail the EPP logs for `predicted-latency-producer` errors.
 2. **Predictions track reality.** Compare `inference_objective_request_predicted_ttft_seconds` against `inference_objective_request_ttft_seconds` over a rolling window. A healthy deployment converges to within a few percent after warmup.
 3. **SLOs are being honored.** If you're sending SLO-annotated traffic, `inference_objective_request_ttft_slo_violation_total` and `..._tpot_slo_violation_total` should increment only under genuine saturation.
+
+## Cleanup
+
+To remove the deployed components:
+
+```bash
+helm uninstall ${GUIDE_NAME} -n ${NAMESPACE}
+kubectl delete  -n ${NAMESPACE} -k guides/optimized-baseline/modelserver/gpu/vllm/${INFRA_PROVIDER}
+kubectl delete namespace ${NAMESPACE}
+```
+
 
 ## Troubleshooting
 

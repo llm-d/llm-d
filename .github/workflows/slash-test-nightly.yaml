@@ -22,7 +22,8 @@ name: /test-nightly Slash Command
 #   optimized-baseline-gke, optimized-baseline-ocp,
 #   pd-disaggregation-cks, pd-disaggregation-gke,
 #   pd-disaggregation-ocp, precise-prefix-cache-ocp,
-#   tiered-prefix-cache-ocp, wide-ep-lws-cks, 
+#   tiered-prefix-cache-cpu-offloading-gke, tiered-prefix-cache-cpu-offloading-lmcache-gke,
+#   tiered-prefix-cache-cpu-offloading-ocp, wide-ep-lws-cks, 
 #   wide-ep-lws-gke, wide-ep-lws-ocp,
 #   wva-cks, wva-ocp
 
@@ -63,7 +64,8 @@ jobs:
               'optimized-baseline-ocp', 'pd-disaggregation-cks',
               'pd-disaggregation-gke', 'pd-disaggregation-ocp',
               'precise-prefix-cache-ocp',
-              'tiered-prefix-cache-gke', 'tiered-prefix-cache-ocp',
+              'tiered-prefix-cache-cpu-offloading-gke', 'tiered-prefix-cache-cpu-offloading-lmcache-gke',
+              'tiered-prefix-cache-cpu-offloading-ocp',
               'wide-ep-lws-cks',
               'wide-ep-lws-gke', 'wide-ep-lws-ocp',
               'wva-cks', 'wva-ocp',
@@ -277,6 +279,10 @@ jobs:
                 owner, repo,
                 workflow_id: m.workflowFile,
                 ref,
+                inputs: {
+                  pr_number: context.issue.number.toString(),
+                  pr_repo: `${context.repo.owner}/${context.repo.repo}`,
+                },
               });
               m.runUrl = null;
             }

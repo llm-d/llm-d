@@ -33,6 +33,8 @@ INSTALL_PACKAGES=(
   /tmp/wheels/*.whl
 )
 if [ "${BUILD_NIXL_FROM_SOURCE}" = "false" ]; then
+  INSTALL_PACKAGES+=(nixl-cu12)
+  INSTALL_PACKAGES+=(nixl-cu13)
   INSTALL_PACKAGES+=(nixl)
 fi
 
@@ -126,6 +128,7 @@ else
     echo "Using precompiled binaries and shared libraries from commit: ${VLLM_PRECOMPILED_WHEEL_COMMIT} (source: ${VLLM_COMMIT_SHA})."
     export VLLM_USE_PRECOMPILED=1
     export VLLM_PRECOMPILED_WHEEL_LOCATION="${WHEEL_URL}"
+    # export SETUPTOOLS_SCM_PRETEND_VERSION="${VLLM_SETUPTOOLS_SCM_PRETEND_VERSION}"
     INSTALL_PACKAGES+=(-e /opt/vllm-source)
     /opt/warn-vllm-precompiled.sh
     rm /opt/warn-vllm-precompiled.sh
@@ -150,8 +153,8 @@ fi
 uv pip install ${VERBOSE_FLAG} "${INSTALL_PACKAGES[@]}" \
   --extra-index-url "https://flashinfer.ai/whl/${CUDA_SHORT_VERSION}"
 
-# uninstall the NVSHMEM dependency brought in by vllm if using a compiled NVSHMEM
-if [[ "${NVSHMEM_DIR-}" != "" ]]; then
+# uninstall the pip NVSHMEM package if NVSHMEM was built from source
+if [[ "${NVSHMEM_BUILD_FROM_SOURCE-}" == "true" ]] ; then
   uv pip uninstall nvidia-nvshmem-cu${CUDA_MAJOR}
 fi
 

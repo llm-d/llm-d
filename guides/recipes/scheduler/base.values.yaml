@@ -11,5 +11,69 @@ inferenceExtension:
     registry: ghcr.io
     repository: llm-d/llm-d-inference-scheduler
     tag: v0.8.0
+
   flags:
     v: 2
+
+  failureMode: "FailOpen"
+
+  pluginsConfigFile: "default-plugins.yaml"
+
+  # Resource requests and limits for the EPP container.
+  # These defaults are sized for a standard EPP deployment with built-in
+  # scheduling plugins. CPU limits are intentionally unset to allow bursting
+  # to all available node CPUs during scheduling spikes. Memory limit is set
+  # to 16Gi to avoid putting the node under memory pressure in case of a
+  # memory leak.
+  #
+  # These values were validated with scale testing at high QPS, achieving
+  # p90 scheduler latency within 100ms.
+  #
+  # If you add computationally intensive plugins or sidecars (e.g., latency
+  # prediction, custom scorers), you may need to increase these values.
+  # Use pprof (https://pkg.go.dev/net/http/pprof) to profile your deployment
+  # and right-size resources for your workload.
+  resources:
+    requests:
+      cpu: "4"
+      memory: 8Gi
+    limits:
+      memory: 16Gi
+
+  # Sidecar configuration for EPP
+  sidecar:
+    # CLI args for the Envoy sidecar. Override the chart's defaults of
+    # `--log-level trace` (very expensive under load) and no `--concurrency`
+    # (Envoy spawns ~hardware_concurrency() worker threads, oversubscribing
+    # the cgroup's CPU slice). `--concurrency 8` matches the resources.limits
+    # equivalent below; trace-level logging would burn a meaningful share of
+    # the sidecar's CPU at high QPS.
+    args:
+      - "--service-node"
+      - "envoy-sidecar"
+      - "--log-level"
+      - "warn"
+      - "--concurrency"
+      - "8"
+      - "--drain-strategy"
+      - "immediate"
+      - "--drain-time-s"
+      - "60"
+      - "-c"
+      - "/etc/envoy/envoy.yaml"
+    # Resource requests and limits for the Envoy sidecar.
+    resources:
+      requests:
+        cpu: "4"
+        memory: 8Gi
+      limits:
+        memory: 16Gi
+
+  tracing:
+    otelExporterEndpoint: "http://localhost:4317"
+    sampling:
+      sampler: "parentbased_traceidratio"
+      samplerArg: "0.1"
+
+inferencePool:
+  modelServerProtocol: http # http, grpc

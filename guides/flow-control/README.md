@@ -139,7 +139,8 @@ Instead of maintaining duplicate hardware configurations, we dynamically render 
 Deploy the model server (defaulting to NVIDIA GPU / vLLM) by running:
 
 ```bash
-kubectl kustomize guides/optimized-baseline/modelserver/gpu/vllm/ \
+export INFRA_PROVIDER=base # base | gke
+kubectl kustomize guides/optimized-baseline/modelserver/gpu/vllm/${INFRA_PROVIDER}/ \
   | sed "s/optimized-baseline/${GUIDE_NAME}/g" \
   | kubectl apply -n ${NAMESPACE} -f -
 ```

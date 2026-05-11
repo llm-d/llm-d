@@ -2,9 +2,10 @@
 # vLLM Version Configuration
 # ============================================================================
 # Used by CUDA and CPU platforms
-VLLM_REPO=https://github.com/elvircrn/vllm.git
-VLLM_COMMIT_SHA=7de0c69eaf62cff588324db2b16d6e9c20f3ce95 # maps to elvir's cherrypicks on top of v0.19.1,
+VLLM_REPO=https://github.com/neuralmagic/vllm.git
+VLLM_COMMIT_SHA=693c2d11ece54ace6bfaa670998f58707339e82f # maps to elvir + matejs's cherrypicks on top of v0.19.1,
 # see: https://github.com/elvircrn/vllm/commits/llmd-0.19.1-nan-fixes/
+# see: https://github.com/vllm-project/vllm/pull/39213
 
 # ============================================================================
 # Cuda specific configs
@@ -33,7 +34,7 @@ CUDA_MINOR=0
 CUDA_PATCH=2
 
 ### GB200-specific overrides
-GB200_NVSHMEM_VERSION=3.4.5-0
+GB200_NVSHMEM_VERSION=v3.4.5-0
 GB200_DEEPEP_REPO=https://github.com/fzyzcjy/DeepEP
 GB200_DEEPEP_VERSION=gb200_blog_part_2
 GB200_INSTALL_OFFLOADING_CONNECTOR=false

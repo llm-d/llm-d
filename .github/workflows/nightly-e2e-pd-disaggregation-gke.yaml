@@ -13,6 +13,14 @@ on:
         description: 'Skip cleanup after tests (for debugging)'
         required: false
         default: 'false'
+      pr_number:
+        description: 'PR number for comment-back (set by /test-nightly)'
+        required: false
+        default: ''
+      pr_repo:
+        description: 'Repo for PR comment-back'
+        required: false
+        default: 'llm-d/llm-d'
 
 permissions:
   contents: read
@@ -30,7 +38,7 @@ jobs:
       namespace: llm-d-nightly-pd-gke
       gateway_type: gke
       custom_deploy_script: |
-        kubectl apply -k guides/pd-disaggregation/modelserver/gpu/vllm/base -n ${NAMESPACE}
+        kubectl apply -k guides/pd-disaggregation/modelserver/gpu/vllm/gke -n ${NAMESPACE}
         kubectl apply -k guides/recipes/gateway/gke-l7-regional-external-managed -n ${NAMESPACE}
         helm install pd-disaggregation \
           oci://registry.k8s.io/gateway-api-inference-extension/charts/inferencepool \
@@ -75,4 +83,6 @@ jobs:
       allow_gpu_preemption: true
       llm_d_ref: ${{ github.ref }}
       skip_cleanup: ${{ github.event.inputs.skip_cleanup == 'true' }}
+      pr_number: ${{ github.event.inputs.pr_number }}
+      pr_repo: ${{ github.event.inputs.pr_repo }}
     secrets: inherit

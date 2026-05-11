@@ -31,6 +31,7 @@ workload:                         # yaml configuration for harness workload(s)
   shared_prefix: 
     load:
       type: poisson
+      interval: 30.0
       stages:
       # Warmup — seat residents (~1×S)
       - rate: 15
