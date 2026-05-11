@@ -2,6 +2,19 @@
 
 This document describes the release process for llm-d. The release dates should be in the public calendar.
 
+## Nightly Testing
+
+| Guide | OCP | CKS | GKE |
+|-------|-----|-----|-----|
+| [Optimized Baseline](../guides/optimized-baseline/README.md) | [![OCP](https://github.com/llm-d/llm-d/actions/workflows/nightly-e2e-optimized-baseline-ocp.yaml/badge.svg)](https://github.com/llm-d/llm-d/actions/workflows/nightly-e2e-optimized-baseline-ocp.yaml) | [![CKS](https://github.com/llm-d/llm-d/actions/workflows/nightly-e2e-optimized-baseline-cks.yaml/badge.svg)](https://github.com/llm-d/llm-d/actions/workflows/nightly-e2e-optimized-baseline-cks.yaml) | [![GKE](https://github.com/llm-d/llm-d/actions/workflows/nightly-e2e-optimized-baseline-gke.yaml/badge.svg)](https://github.com/llm-d/llm-d/actions/workflows/nightly-e2e-optimized-baseline-gke.yaml) |
+| [Precise Prefix Cache Aware Routing](../guides/precise-prefix-cache-aware/README.md) | [![OCP](https://github.com/llm-d/llm-d/actions/workflows/nightly-e2e-precise-prefix-cache-ocp.yaml/badge.svg)](https://github.com/llm-d/llm-d/actions/workflows/nightly-e2e-precise-prefix-cache-ocp.yaml) | [![CKS](https://github.com/llm-d/llm-d/actions/workflows/nightly-e2e-precise-prefix-cache-cks.yaml/badge.svg)](https://github.com/llm-d/llm-d/actions/workflows/nightly-e2e-precise-prefix-cache-cks.yaml) | [![GKE](https://github.com/llm-d/llm-d/actions/workflows/nightly-e2e-precise-prefix-cache-gke.yaml/badge.svg)](https://github.com/llm-d/llm-d/actions/workflows/nightly-e2e-precise-prefix-cache-gke.yaml) |
+| [P/D Disaggregation](../guides/pd-disaggregation/README.md) | NOT TESTED IN CI | [![CKS](https://github.com/llm-d/llm-d/actions/workflows/nightly-e2e-pd-disaggregation-cks.yaml/badge.svg)](https://github.com/llm-d/llm-d/actions/workflows/nightly-e2e-pd-disaggregation-cks.yaml) | [![GKE](https://github.com/llm-d/llm-d/actions/workflows/nightly-e2e-pd-disaggregation-gke.yaml/badge.svg)](https://github.com/llm-d/llm-d/actions/workflows/nightly-e2e-pd-disaggregation-gke.yaml) |
+| [Wide Expert Parallelism](../guides/wide-ep-lws/README.md) | NOT TESTED IN CI | NOT TESTED IN CI | NOT TESTED IN CI |
+| [Tiered Prefix Cache](./tiered-prefix-cache/README.md) | [![OCP](https://github.com/llm-d/llm-d/actions/workflows/nightly-e2e-tiered-prefix-cache-ocp.yaml/badge.svg)](https://github.com/llm-d/llm-d/actions/workflows/nightly-e2e-tiered-prefix-cache-ocp.yaml) | NOT TESTED IN CI | NOT TESTED IN CI |
+| [Predicted Latency-Based Routing](../guides/predicted-latency-based-scheduling/README.md) | NOT TESTED IN CI | [![CKS](https://github.com/llm-d/llm-d/actions/workflows/nightly-e2e-predicted-latency-cks.yaml/badge.svg)](https://github.com/llm-d/llm-d/actions/workflows/nightly-e2e-predicted-latency-cks.yaml) | [![GKE](https://github.com/llm-d/llm-d/actions/workflows/nightly-e2e-predicted-latency-gke.yaml/badge.svg)](https://github.com/llm-d/llm-d/actions/workflows/nightly-e2e-predicted-latency-gke.yaml)  |
+| [Workload Autoscaling (WVA)](../guides/workload-autoscaling/README.md) | [![OCP](https://github.com/llm-d/llm-d/actions/workflows/nightly-e2e-wva-ocp.yaml/badge.svg)](https://github.com/llm-d/llm-d/actions/workflows/nightly-e2e-wva-ocp.yaml) | [![CKS](https://github.com/llm-d/llm-d/actions/workflows/nightly-e2e-wva-cks.yaml/badge.svg)](https://github.com/llm-d/llm-d/actions/workflows/nightly-e2e-wva-cks.yaml) | NOT TESTED IN CI |
+
+
 ## Phases
 
 ### 1. Feature freeze
