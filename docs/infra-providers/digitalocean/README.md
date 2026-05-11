@@ -53,6 +53,8 @@ kubectl get nodes -o custom-columns="NAME:.metadata.name,GPU:.status.allocatable
 
 Before deploying llm-d workloads, install the required components:
 
+Run these commands from the llm-d repository root.
+
 ```bash
 # Install Gateway API and Inference Extension CRDs
 guides/prereq/gateways/install-gateway-crds.sh

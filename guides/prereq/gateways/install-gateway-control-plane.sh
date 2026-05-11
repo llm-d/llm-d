@@ -36,6 +36,15 @@ run_istioctl() {
   "${TMP_DIR}/istio-${ISTIO_VERSION}/bin/istioctl" "$@"
 }
 
+uninstall_helm_release() {
+  local release_name=$1
+  local namespace=$2
+
+  if helm status "${release_name}" --namespace "${namespace}" >/dev/null 2>&1; then
+    helm uninstall "${release_name}" --namespace "${namespace}"
+  fi
+}
+
 MODE=apply
 GATEWAY=${1:-istio}
 
@@ -49,6 +58,10 @@ case "${1:-}" in
     fi
     ;;
   istio|agentgateway)
+    if [[ $# -gt 2 ]]; then
+      usage >&2
+      exit 1
+    fi
     if [[ $# -gt 1 ]]; then
       MODE=${2}
       if [[ "${MODE}" != "apply" && "${MODE}" != "delete" ]]; then
@@ -97,8 +110,8 @@ case "${GATEWAY}" in
         --version "${AGENTGATEWAY_VERSION}" \
         --set inferenceExtension.enabled=true
     else
-      helm uninstall agentgateway --namespace agentgateway-system --ignore-not-found
-      helm uninstall agentgateway-crds --namespace agentgateway-system --ignore-not-found
+      uninstall_helm_release agentgateway agentgateway-system
+      uninstall_helm_release agentgateway-crds agentgateway-system
       require_command kubectl
       kubectl delete namespace agentgateway-system --ignore-not-found
     fi
