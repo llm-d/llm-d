@@ -8,6 +8,7 @@ usage() {
 Usage:
   install-gateway-control-plane.sh [istio|agentgateway]
   install-gateway-control-plane.sh [apply|delete] [istio|agentgateway]
+  install-gateway-control-plane.sh [istio|agentgateway] [apply|delete]
 
 Environment overrides:
   ISTIO_VERSION          Istio version to install (default: 1.29.2)
@@ -25,17 +26,81 @@ require_command() {
   fi
 }
 
-run_istioctl() {
+detect_istio_os() {
+  case "$(uname -s)" in
+    Linux)
+      echo linux
+      ;;
+    Darwin)
+      echo osx
+      ;;
+    *)
+      echo "Unsupported Istio download OS: $(uname -s)" >&2
+      exit 1
+      ;;
+  esac
+}
+
+detect_istio_arch() {
+  local arch=${TARGET_ARCH:-$(uname -m)}
+
+  case "${arch}" in
+    amd64|x86_64)
+      echo amd64
+      ;;
+    arm64|aarch64)
+      echo arm64
+      ;;
+    armv7|armv7l)
+      echo armv7
+      ;;
+    *)
+      echo "Unsupported Istio download architecture: ${arch}" >&2
+      exit 1
+      ;;
+  esac
+}
+
+verify_sha256() {
+  local checksum_file=$1
+  local checksum_dir
+
+  checksum_dir=$(dirname "${checksum_file}")
+  if command -v sha256sum >/dev/null 2>&1; then
+    (cd "${checksum_dir}" && sha256sum -c "$(basename "${checksum_file}")")
+  elif command -v shasum >/dev/null 2>&1; then
+    (cd "${checksum_dir}" && shasum -a 256 -c "$(basename "${checksum_file}")")
+  else
+    echo "This script depends on sha256sum or shasum. Please install one of them." >&2
+    exit 1
+  fi
+}
+
+run_istioctl() (
   require_command kubectl
   require_command curl
-  require_command sh
+  require_command tar
+
+  local istio_os
+  local istio_arch
+  local artifact
+  local release_url
+  local tmp_dir
 
   ISTIO_VERSION=${ISTIO_VERSION:-1.29.2}
-  TMP_DIR=$(mktemp -d)
-  trap 'rm -rf "${TMP_DIR}"' EXIT
-  curl -fsSL https://istio.io/downloadIstio | ISTIO_VERSION="${ISTIO_VERSION}" TARGET_ARCH="${TARGET_ARCH:-}" sh -s -- -y -d "${TMP_DIR}"
-  "${TMP_DIR}/istio-${ISTIO_VERSION}/bin/istioctl" "$@"
-}
+  istio_os=$(detect_istio_os)
+  istio_arch=$(detect_istio_arch)
+  artifact="istioctl-${ISTIO_VERSION}-${istio_os}-${istio_arch}.tar.gz"
+  release_url="https://github.com/istio/istio/releases/download/${ISTIO_VERSION}"
+  tmp_dir=$(mktemp -d)
+  trap 'rm -rf "${tmp_dir}"' EXIT
+
+  curl -fsSL --retry 3 -o "${tmp_dir}/${artifact}" "${release_url}/${artifact}"
+  curl -fsSL --retry 3 -o "${tmp_dir}/${artifact}.sha256" "${release_url}/${artifact}.sha256"
+  verify_sha256 "${tmp_dir}/${artifact}.sha256"
+  tar -xzf "${tmp_dir}/${artifact}" -C "${tmp_dir}"
+  "${tmp_dir}/istioctl" "$@"
+)
 
 uninstall_helm_release() {
   local release_name=$1

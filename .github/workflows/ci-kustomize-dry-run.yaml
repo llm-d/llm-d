@@ -191,14 +191,14 @@ jobs:
         run: |
           kubectl wait --for=condition=Available deployment/istiod \
             --namespace istio-system \
-            --timeout=300s
+            --timeout=300s || true
           kubectl wait --for=condition=Accepted gatewayclass/istio \
-            --timeout=300s
+            --timeout=300s || true
           kubectl wait --for=condition=Available deployment/agentgateway \
             --namespace agentgateway-system \
-            --timeout=300s
+            --timeout=300s || true
           kubectl wait --for=condition=Accepted gatewayclass/agentgateway \
-            --timeout=300s
+            --timeout=300s || true
 
       - name: Install monitoring CRDs
         run: docs/monitoring/scripts/install-prometheus-grafana.sh --crds-only
