@@ -248,9 +248,7 @@ If you have monitoring set up, you can also confirm via vLLM's offload metrics i
 
 The following benchmark results demonstrate the performance improvements of offloading the KV cache to Lustre using the LMCache connector. Two scenarios with varying context lengths are provided to illustrate how the performance gains from Lustre scale up as the computational load and KV cache size increase, particularly when exceeding the capacity of local HBM and CPU RAM.
 
-### LMCache connector
-
-#### Benchmark Setup
+### Benchmark Setup
 
 > [!NOTE]
 > The following benchmark results were from a previous release and does not match the deployment of the current release. A follow up benchmark will be conducted and the results will be updated accordingly. See https://github.com/llm-d/llm-d/issues/680.
@@ -265,7 +263,7 @@ The following benchmark results demonstrate the performance improvements of offl
   * Baseline has CPU offloading enabled.
   * Lustre offloading was enabled using Lustre PVC as local backend disk.
 
-* **LMCache Configuration:**
+#### **LMCache Connector Configuration:**
   * For LMCache setup, `LMCACHE_MAX_LOCAL_CPU_SIZE` set to `20GB`, which provides approximately 20*16(number of GPUs)=320GB of CPU RAM cache.
   * Lustre storage capacity available for KV cache offloading was set through `LMCACHE_MAX_LOCAL_DISK_SIZE:"1120Gi"`. As we have 16 GPUs sharing the Lustre disk, 1120*16= 17920Gi <= 18000Gi (i.e. available Lustre capacity) This value can be less than or equal to the available disk size.
 
@@ -298,7 +296,7 @@ The benchmark was conducted using the [inference-perf](https://github.com/kubern
   * Total CPU RAM cache available across the system was 320 GB.
   * Lustre capacity available for KV cache offloading: `LMCACHE_MAX_LOCAL_DISK_SIZE="1120Gi"` for each GPU.
 
-#### Key Findings
+##### Key Findings
 
 In both scenarios, the total KV cache size significantly exceeds the combined capacity of local HBM and CPU RAM. The results demonstrate that as context length and memory demands increase, the performance benefits of offloading to Lustre become even more pronounced.
 
@@ -306,20 +304,89 @@ In both scenarios, the total KV cache size significantly exceeds the combined ca
 * **70K system prompt length (KVCache size 1.3 TiB):** As the KV cache footprint grows to 1.3 TiB, the memory pressure intensifies. In this heavier scenario, Lustre delivers even greater performance gains, demonstrating its ability to seamlessly scale with demanding long-context use cases.
 
 
-#### 50K system prompt length (KVCache size 994 GiB) — KV Cache > (HBM + CPU RAM)
+##### 50K system prompt length (KVCache size 994 GiB) — KV Cache > (HBM + CPU RAM)
 
 | KVCache > HBM + CPU RAM | Mean TTFT (second) | P90 TTFT (second) | Mean E2E Latency (second) | P90 E2E Latency (second) | Input Throughput (token per second) | Output Throughput (token per second) | Overall Throughput (token per second) |
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
 | **Baseline vLLM + CPU offloading** | 25.38 | 37.74 | 56.21 | 69.69 | 18607 | 354 | 18962 |
 | **vLLM + CPU offloading + Lustre** | 20.12 (-21%) | 34.02 (-9.9%) | 45.83 (-18%) | 58.73 (-16%) | 22827 (+23%) | 435 (+23%) | 23262 (+23%) |
 
-#### 70K system prompt length (KVCache size 1.3TiB GiB) — KV Cache >> (HBM + CPU RAM)
+##### 70K system prompt length (KVCache size 1.3TiB GiB) — KV Cache >> (HBM + CPU RAM)
 
 | KVCache >> HBM + CPU RAM | Mean TTFT (second) | P90 TTFT (second) | Mean E2E Latency (second) | P90 E2E Latency (second) | Input Throughput (token per second) | Output Throughput (token per second) | Overall Throughput (token per second) |
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
 | **Baseline vLLM + CPU offloading** | 58.02 | 74.75 | 87.99 | 105.46 | 16598 | 226.65 | 16825 |
 | **vLLM + CPU offloading + Lustre** | 45 (-22%) | 64.79 (-13%) | 68.28 (-22%) | 87.47 (-17%) | 21364 (+28.71%) | 291 (+28.39%) | 21656 (+28.71%) |
 
+
+#### **LLM-D FS Connector Configuration:**
+  * The offloading connector supports multi-tiered offloading (e.g., offloading to both CPU and storage backends) through a Multi-connector setup, which combines an Offloading connector with a CPU backend and an Offloading connector with an LLM-D FS backend.
+  * For benchmark we allocated 64.42*4 ~= 356GB GB of CPU RAM for offloading by setting `cpu_bytes_to_use=64424509440`.
+  * The offloading connector can utilize the entire capacity of the attached Lustre disk for KV cache offloading, for this case the Lustre PVC = 18000GiB.
+
+The benchmark was conducted using the [inference-perf](https://github.com/kubernetes-sigs/inference-perf) tool with the following hardware, memory, and workload configurations:
+
+* **Workload:**
+  * The two different workloads were tested with a constant concurrency of 20 requests with different system_prompt_lengths of 30K on Qwen/Qwen3-32B and 50K on a larger model meta-llama/Llama-3.3-70B-Instruct.
+  * **Inference Perf configuration**
+    * `type`: concurrent
+    * `num_requests`: 2700
+    * `concurrency_level`: 20
+  * **[Qwen3-32B]System prompt length: 30K**
+    * `num_groups`: 50
+    * `system_prompt_len`: 50000
+    * `question_len`: 256
+    * `output_len`: 1024
+    * `num_prompts_per_group`: 50
+  * **[Llama-3.3-70B-Instruct]System prompt length: 50K**
+    * `num_groups`: 50
+    * `system_prompt_len`: 50000
+    * `question_len`: 256
+    * `output_len`: 1024
+    * `num_prompts_per_group`: 50
+
+* **Memory Calculation:**
+
+* **Model: Qwen3/Qwen3-32B**
+  * The KVCache size for the `Qwen/Qwen3-32B` model is approximately 256KB per token.
+  * With `gpu_memory_utilization` at 0.65, there are 8474 GPU blocks available per engine.
+  * The available HBM for KVCache per engine is approximately 34.7 GB (8474 blocks * 4.096 MB/block).
+  * The total available HBM for the KVCache across the entire system was 277 GB (8 engines * 34 GB/engine).
+  * Total CPU RAM cache available across the system was 64*8 ~= 512GB.
+  * Lustre capacity available for KV cache offloading: 18000GiB for total system.
+
+* **Model: meta-llama/Llama-3.3-70B-Instruct**
+
+  * The KVCache size for the `meta-llama/Llama-3.3-70B-Instruct` model is approximately 320KB per token.
+  * With `gpu_memory_utilization` at 0.65, there are 10768 GPU blocks available per engine.
+  * The available HBM for KVCache per engine is approximately 55 GB (10768 blocks * 5.12 MB/block).
+  * The total available HBM for the KVCache across the entire system was 220 GB (4 engines * 55 GB/engine).
+  * Total CPU RAM cache available across the system was 64*4 ~= 256GB.
+  * Lustre capacity available for KV cache offloading: 18000GiB for total system.
+
+##### Key Findings
+
+In this scenario, the total KV cache size significantly exceeds the combined capacity of local HBM and CPU RAM. The results demonstrate that as context length and memory demands increase, the performance benefits of offloading to Lustre become even more pronounced.
+
+* **30K system prompt length (KVCache size 653 GiB):** While CPU RAM provides 256GB for KV cache offloading, adding Lustre significantly enhances performance compared to relying on CPU offloading alone.
+
+* **50K system prompt length (KVCache size 994 GiB):** The performance difference with Lustre storage offloading is more prominent for larger models like llama-3.3-70B-Instruct .
+
+
+##### 30K system prompt length (KVCache size 653 GiB) — KV Cache > (HBM + CPU RAM)
+
+| KVCache > HBM + CPU RAM | Mean TTFT (second) | P90 TTFT (second) | Mean E2E Latency (second) | P90 E2E Latency (second) | Input Throughput (token per second) | Output Throughput (token per second) | Overall Throughput (token per second) | ITL (second) |
+| :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
+| **Baseline vLLM + CPU offloading** | 2.24 | 5.14 | 22.21 | 26.6 | 27148 | 836 | 27984 | 0.021 |
+| **vLLM + CPU offloading + Lustre** | 1.38 (-38.4%) | 2.82 (-45.1%) | 20.45 (-7.9%) | 22.77 (-14.4%) | 28832 (+6.2%) | 828 (-1.0%) | 29661 (+6.0%) | 0.02 (-4.8%) |
+---
+
+##### 50K system prompt length (KVCache size 994 GiB) — KV Cache > (HBM + CPU RAM)
+
+| KVCache > HBM + CPU RAM | Mean TTFT (second) | P90 TTFT (second) | Mean E2E Latency (second) | P90 E2E Latency (second) | Input Throughput (token per second) | Output Throughput (token per second) | Overall Throughput (token per second) | ITL (second) |
+| :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
+| **Baseline vLLM + CPU offloading** | 27.11 | 41.71 | 57.06 | 72.28 | 18333 | 350 | 18682 | 0.029 |
+| **vLLM + CPU offloading + Lustre** | 15.25 (-43.7%) | 24.71 (-40.8%) | 38.55 (-32.4%) | 48.01 (-33.6%) | 27091 (+47.8%) | 517 (+47.7%) | 27609 (+47.8%) | 0.022 (-24.1%) |
 ---
 
 ## Cleanup

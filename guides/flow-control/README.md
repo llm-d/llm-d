@@ -103,10 +103,11 @@ Flow Control is a software-level scheduling feature at the EPP layer and is enti
 This deploys the inference scheduler with an Envoy sidecar, it doesn't set up a Kubernetes Gateway.
 
 ```bash
+REPO_ROOT=$(realpath $(git rev-parse --show-toplevel))
 helm install ${GUIDE_NAME} \
     oci://registry.k8s.io/gateway-api-inference-extension/charts/standalone \
-    -f guides/recipes/scheduler/base.values.yaml \
-    -f guides/${GUIDE_NAME}/scheduler/${GUIDE_NAME}.values.yaml \
+    -f ${REPO_ROOT}/guides/recipes/scheduler/base.values.yaml \
+    -f ${REPO_ROOT}/guides/${GUIDE_NAME}/scheduler/${GUIDE_NAME}.values.yaml \
     -n ${NAMESPACE} --version ${GAIE_VERSION}
 ```
 
@@ -120,13 +121,13 @@ To use a Kubernetes Gateway managed proxy rather than the standalone version, fo
 
 ```bash
 export PROVIDER_NAME=gke # options: none, gke, agentgateway, istio
+REPO_ROOT=$(realpath $(git rev-parse --show-toplevel))
 helm install ${GUIDE_NAME} \
     oci://registry.k8s.io/gateway-api-inference-extension/charts/inferencepool  \
-    -f guides/recipes/scheduler/base.values.yaml \
-    -f guides/${GUIDE_NAME}/scheduler/${GUIDE_NAME}.values.yaml \
+    -f ${REPO_ROOT}/guides/recipes/scheduler/base.values.yaml \
+    -f ${REPO_ROOT}/guides/recipes/scheduler/features/httproute-flags.yaml \
+    -f ${REPO_ROOT}/guides/${GUIDE_NAME}/scheduler/${GUIDE_NAME}.values.yaml \
     --set provider.name=${PROVIDER_NAME} \
-    --set experimentalHttpRoute.enabled=true \
-    --set experimentalHttpRoute.inferenceGatewayName=llm-d-inference-gateway \
     -n ${NAMESPACE} --version ${GAIE_VERSION}
 ```
 

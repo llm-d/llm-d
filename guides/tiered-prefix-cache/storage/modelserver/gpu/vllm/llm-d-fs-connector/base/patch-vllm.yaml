@@ -8,26 +8,46 @@ spec:
     spec:
       containers:
         - name: modelserver
-          image: vllm/vllm-openai:v0.19.1
+          image: ghcr.io/llm-d/llm-d-cuda:v0.7.0-rc.3
           command: ["/bin/sh", "-c"]
-          args:
             # NOTE: The connector package version must match the vLLM version.
             # For vLLM 0.X.x use llmd-fs-connector==0.X.
+          args:
+           # We have 2 wheels released for vllm-0.19, install CUDA-13 wheel from https://github.com/llm-d/llm-d-kv-cache/commit/793b51ebcc9ae47d02c8317ff0db8c5f8ef5d81f
             - |
-              pip install 'llmd-fs-connector==0.19' --extra-index-url https://llm-d.github.io/llm-d-kv-cache/simple/
+              mkdir -p /tmp/custom-package; \
+              uv pip install --target /tmp/custom-package https://raw.githubusercontent.com/llm-d/llm-d-kv-cache/main/kv_connectors/llmd_fs_backend/wheels/llmd_fs_connector-0.19+cu130-cp312-cp312-linux_x86_64.whl; \
+              export PYTHONPATH="/tmp/custom-package:$PYTHONPATH";
               exec vllm serve \
                 Qwen/Qwen3-32B \
                 --tensor-parallel-size 2 \
                 --max-num-seq 1024 \
                 --kv-transfer-config '{
-                  "kv_connector": "OffloadingConnector",
-                  "kv_role": "kv_both",
+                  "kv_connector":"MultiConnector",
+                  "kv_role":"kv_both",
                   "kv_connector_extra_config": {
-                    "spec_name": "SharedStorageOffloadingSpec",
-                    "shared_storage_path": "/mnt/files-storage/kv-cache/",
-                    "block_size": 256,
-                    "threads_per_gpu": 64,
-                    "spec_module_path": "llmd_fs_backend.spec"
+                    "connectors": [
+                      {
+                        "kv_connector": "OffloadingConnector",
+                        "kv_role": "kv_both",
+                        "kv_connector_extra_config": {
+                          "cpu_bytes_to_use": 64424509440,
+                          "lazy_offload": true
+                        }
+                      },
+                      {
+                        "kv_connector": "OffloadingConnector",
+                        "kv_role": "kv_both",
+                        "kv_connector_extra_config": 
+                        {
+                          "spec_name": "SharedStorageOffloadingSpec",
+                          "shared_storage_path": "/mnt/files-storage/",
+                          "block_size": 256,
+                          "threads_per_gpu": 64,
+                          "spec_module_path": "llmd_fs_backend.spec"
+                        }
+                      }
+                    ]
                   }
                 }'
           env:

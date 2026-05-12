@@ -49,13 +49,29 @@ Two scorers make up the routing decision alongside the load-aware stack:
 
 ## Prerequisites
 
-- Install the [Gateway API Inference Extension CRDs](https://github.com/kubernetes-sigs/gateway-api-inference-extension/tree/v1.5.0/config/crd).
-- Have the [proper client tools installed on your local system](../../helpers/client-setup/README.md). This guide requires **Helm v4** (the post-renderer plugin uses the v4 plugin manifest format) and a standalone `kustomize` binary (v5+) on `$PATH`, in addition to `kubectl`.
-- Check out the llm-d repo:
+- Have the [proper client tools installed on your local system](../../helpers/client-setup/README.md) to use this guide.
+- Checkout llm-d repo:
 
   ```bash
-  export branch="main" # branch, tag, or commit hash
-  git clone https://github.com/llm-d/llm-d.git && cd llm-d && git checkout ${branch}
+    export branch="main" # branch, tag, or commit hash
+    git clone https://github.com/llm-d/llm-d.git && cd llm-d && git checkout ${branch}
+  ```
+
+- Set the following environment variables:
+  ```bash
+    export GAIE_VERSION=v1.5.0
+    export GUIDE_NAME="precise-prefix-cache-aware"
+    export NAMESPACE=llm-d-precise
+  ```
+- Install the Gateway API Inference Extension CRDs:
+
+  ```bash
+    kubectl apply -k "https://github.com/kubernetes-sigs/gateway-api-inference-extension/config/crd?ref=${GAIE_VERSION}"
+  ```
+
+- Create a target namespace for the installation
+  ```bash
+    kubectl create namespace ${NAMESPACE}
   ```
 
 - Set the following environment variables:
@@ -92,9 +108,9 @@ This deploys the llm-d Router in the simple [Standalone Mode](placeholder-link):
 ```bash
 helm install ${GUIDE_NAME} \
   oci://registry.k8s.io/gateway-api-inference-extension/charts/standalone \
-  -f guides/recipes/scheduler/base.values.yaml \
-  -f guides/${GUIDE_NAME}/scheduler/${GUIDE_NAME}.values.yaml \
-  --post-renderer ./guides/${GUIDE_NAME}/scheduler/patches/uds-tokenizer/post-renderer.sh \
+  -f ${REPO_ROOT}/guides/recipes/scheduler/base.values.yaml \
+  -f ${REPO_ROOT}/guides/${GUIDE_NAME}/scheduler/${GUIDE_NAME}.values.yaml \
+  --post-renderer ${REPO_ROOT}/guides/${GUIDE_NAME}/scheduler/patches/uds-tokenizer/post-renderer.sh \
   -n ${NAMESPACE} --version ${GAIE_VERSION}
 ```
 
@@ -129,19 +145,18 @@ To use a Kubernetes Gateway managed proxy instead of the standalone Envoy sideca
 
 2. **Deploy the llm-d Router and HTTPRoute** via the `inferencepool` chart with `experimentalHttpRoute.enabled=true`. Same UDS post-renderer applies:
 
-   ```bash
-   # Assuming base-directory is the root of the llm-d repo
-   export PROVIDER_NAME=istio   # options: none, gke, agentgateway, istio
-   helm install ${GUIDE_NAME} \
-     oci://registry.k8s.io/gateway-api-inference-extension/charts/inferencepool \
-     -f guides/recipes/scheduler/base.values.yaml \
-     -f guides/${GUIDE_NAME}/scheduler/${GUIDE_NAME}.values.yaml \
-     --set provider.name=${PROVIDER_NAME} \
-     --set experimentalHttpRoute.enabled=true \
-     --set experimentalHttpRoute.inferenceGatewayName=llm-d-inference-gateway \
-     --post-renderer ./guides/${GUIDE_NAME}/scheduler/patches/uds-tokenizer/post-renderer.sh \
-     -n ${NAMESPACE} --version ${GAIE_VERSION}
-   ```
+```bash
+export REPO_ROOT=$(realpath $(git rev-parse --show-toplevel))
+export PROVIDER_NAME=istio   # options: none, gke, agentgateway, istio
+helm install precise-prefix-cache-aware \
+  oci://registry.k8s.io/gateway-api-inference-extension/charts/inferencepool \
+  -f ${REPO_ROOT}/guides/recipes/scheduler/base.values.yaml \
+  -f ${REPO_ROOT}/guides/recipes/scheduler/features/httproute-flags.yaml \
+  -f ${REPO_ROOT}/guides/${GUIDE_NAME}/scheduler/${GUIDE_NAME}.values.yaml \
+  --set provider.name=${PROVIDER_NAME} \
+  --post-renderer ${REPO_ROOT}/guides/${GUIDE_NAME}/scheduler/patches/uds-tokenizer/post-renderer.sh 
+  -n ${NAMESPACE} --version ${GAIE_VERSION}
+```
 
 </details>
 
@@ -151,7 +166,7 @@ Apply the Kustomize overlay for your backend (defaulting to NVIDIA GPU / vLLM):
 
 ```bash
 export INFRA_PROVIDER=base # base | gke
-kubectl apply -n ${NAMESPACE} -k guides/${GUIDE_NAME}/modelserver/gpu/vllm/${INFRA_PROVIDER}/
+kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/gpu/vllm/${INFRA_PROVIDER}/
 ```
 
 ### 4. (Optional) Enable Monitoring
@@ -163,9 +178,9 @@ kubectl apply -n ${NAMESPACE} -k guides/${GUIDE_NAME}/modelserver/gpu/vllm/${INF
 - Deploy the monitoring resources for this guide:
 
   ```bash
-  kubectl apply -n ${NAMESPACE} -k guides/recipes/modelserver/components/monitoring
+  kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/recipes/modelserver/components/monitoring
   ```
-- Enable Prometheus scrape for the scheduler by layering `-f guides/recipes/scheduler/features/monitoring.values.yaml` onto the helm command in step 2.
+- Enable Prometheus scrape for the scheduler by layering `-f ${REPO_ROOT}/guides/recipes/scheduler/features/monitoring.values.yaml` onto the helm command in step 2.
 
 ## Verification
 

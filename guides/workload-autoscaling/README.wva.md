@@ -236,10 +236,11 @@ sed -i.bak "s|url:.*|url: https://thanos-querier.openshift-monitoring.svc.cluste
   echo "Edit ${TMPDIR:-/tmp}/prometheus-adapter-values.yaml to set prometheus.url"
 
 # Install
+export REPO_ROOT=$(realpath $(git rev-parse --show-toplevel))
 helm upgrade -i prometheus-adapter prometheus-community/prometheus-adapter \
   --version 5.2.0 -n ${MON_NS} --create-namespace \
   -f ${TMPDIR:-/tmp}/prometheus-adapter-values.yaml \
-  -f guides/workload-autoscaling/components/prometheus-adapter/values-wva-external-metric.yaml
+  -f ${REPO_ROOT}/guides/workload-autoscaling/components/prometheus-adapter/values-wva-external-metric.yaml
 
 # Verify that WVA metric is discoverable by external metrics API
 kubectl get --raw "/apis/external.metrics.k8s.io/v1beta1" | jq .

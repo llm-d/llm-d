@@ -12,9 +12,9 @@ Use this when you **do not** want to deploy a proxy via Kubernetes Gateway APIs.
 ```bash
 helm install <release-name> \
   oci://registry.k8s.io/gateway-api-inference-extension/charts/standalone \
-  -f guides/recipes/scheduler/base.values.yaml \
-  -f guides/recipes/scheduler/features/monitoring.values.yaml \
-  -f guides/<your-guide>/scheduler/<your-guide>.values.yaml \
+  -f ${REPO_ROOT}/guides/recipes/scheduler/base.values.yaml \
+  -f ${REPO_ROOT}/guides/recipes/scheduler/features/monitoring.values.yaml \
+  -f ${REPO_ROOT}/guides/<your-guide>/scheduler/<your-guide>.values.yaml \
   --set provider.name=<gke|istio|none> \
   -n ${NAMESPACE} \
   --version v1.5.0
@@ -33,9 +33,9 @@ Use this when you want to route traffic through a proxy managed by the Kubernete
 ```bash
 helm install <release-name> \
   oci://registry.k8s.io/gateway-api-inference-extension/charts/inferencepool \
-  -f guides/recipes/scheduler/base.values.yaml \
-  -f guides/recipes/scheduler/features/monitoring.values.yaml \
-  -f guides/<your-guide>/scheduler/<your-guide>.values.yaml \
+  -f ${REPO_ROOT}/guides/recipes/scheduler/base.values.yaml \
+  -f ${REPO_ROOT}/guides/recipes/scheduler/features/monitoring.values.yaml \
+  -f ${REPO_ROOT}/guides/<your-guide>/scheduler/<your-guide>.values.yaml \
   --set provider.name=<gke|istio|none> \
   -n ${NAMESPACE} \
   --version v1.5.0
