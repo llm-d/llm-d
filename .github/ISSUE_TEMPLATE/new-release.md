@@ -64,7 +64,7 @@ This document defines the process for releasing llm-d.
 
 1. Set all `branch` environment variables on all the [guides](../../guides) to the release branch name (i.e.,`release-${MAJOR}.${MINOR}`)
      ```shell
-     git commit -a -s
+     git commit -a -s -S -m "updated branch environment variable on all guides to release-${MAJOR}.${MINOR}"
      ```
 
 1. Push your release branch to the llm-d remote.
