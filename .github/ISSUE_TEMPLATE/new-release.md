@@ -43,7 +43,7 @@ This document defines the process for releasing llm-d.
 
 ## Release Process
 
-### Create or Checkout branch 
+### Create or Checkout branch
 
 1. If you already have the repo cloned, ensure it’s up-to-date and your local branch is clean.
 
@@ -60,6 +60,11 @@ This document defines the process for releasing llm-d.
 
      ```shell
      git checkout -b release-${MAJOR}.${MINOR} ${REMOTE}/release-${MAJOR}.${MINOR}
+     ```
+
+1. Set all `branch` environment variables on all the [guides](../../guides) to the release branch name (i.e.,`release-${MAJOR}.${MINOR}`)
+     ```shell
+     git commit -a -s
      ```
 
 1. Push your release branch to the llm-d remote.
