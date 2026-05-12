@@ -121,6 +121,9 @@ def replace_matrix(content: str, new_table: str) -> str:
 
 
 def main() -> int:
+    if not (REPO_ROOT / ".release-team").exists():
+        return 0
+
     parser = argparse.ArgumentParser(description=__doc__)
     group = parser.add_mutually_exclusive_group()
     group.add_argument("--check", action="store_true", default=True, help="fail if matrix is out of sync (default)")
