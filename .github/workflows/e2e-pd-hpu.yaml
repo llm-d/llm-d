@@ -83,6 +83,11 @@ jobs:
         run: |
           guides/prereq/gateways/install-gateway-crds.sh
           guides/prereq/gateways/install-gateway-control-plane.sh istio
+          kubectl wait --for=condition=Available deployment/istiod \
+            --namespace istio-system \
+            --timeout=300s
+          kubectl wait --for=condition=Accepted gatewayclass/istio \
+            --timeout=300s
 
       - name: Install monitoring stack
         run: |

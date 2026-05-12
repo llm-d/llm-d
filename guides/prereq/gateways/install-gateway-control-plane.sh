@@ -26,6 +26,7 @@ require_command() {
 }
 
 run_istioctl() {
+  require_command kubectl
   require_command curl
   require_command sh
 
@@ -89,7 +90,6 @@ case "${GATEWAY}" in
         --set values.pilot.env.ENABLE_GATEWAY_API_INFERENCE_EXTENSION=true
     else
       run_istioctl uninstall --purge -y
-      require_command kubectl
       kubectl delete namespace istio-system --ignore-not-found
       kubectl delete gatewayclass istio istio-remote --ignore-not-found
     fi

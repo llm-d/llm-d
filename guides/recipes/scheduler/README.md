@@ -24,7 +24,7 @@ helm install <release-name> \
 
 Use this when you want to route traffic through a proxy managed by the Kubernetes Gateway API (e.g., GKE Gateway, Istio, Agentgateway). This requires:
 
-1. A Gateway control plane installed (see [prereq/gateway-provider](../../prereq/gateway-provider/README.md))
+1. A Gateway control plane installed (see [prereq/gateways](../../prereq/gateways/README.md))
 2. Creating a Gateway resource (see [recipes/gateway](../gateway/))
 3. Deploying the inferencepool chart (below)
 

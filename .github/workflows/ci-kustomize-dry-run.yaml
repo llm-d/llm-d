@@ -189,15 +189,16 @@ jobs:
 
       - name: Wait for gateway control planes
         run: |
-          for ns in istio-system agentgateway-system; do
-            if kubectl get namespace "$ns" &>/dev/null; then
-              echo "Waiting for pods in $ns..."
-              kubectl wait --for=condition=ready pod \
-                --selector=app.kubernetes.io/managed-by=Helm \
-                --namespace "$ns" \
-                --timeout=300s 2>/dev/null || true
-            fi
-          done
+          kubectl wait --for=condition=Available deployment/istiod \
+            --namespace istio-system \
+            --timeout=300s
+          kubectl wait --for=condition=Accepted gatewayclass/istio \
+            --timeout=300s
+          kubectl wait --for=condition=Available deployment/agentgateway \
+            --namespace agentgateway-system \
+            --timeout=300s
+          kubectl wait --for=condition=Accepted gatewayclass/agentgateway \
+            --timeout=300s
 
       - name: Install monitoring CRDs
         run: docs/monitoring/scripts/install-prometheus-grafana.sh --crds-only
