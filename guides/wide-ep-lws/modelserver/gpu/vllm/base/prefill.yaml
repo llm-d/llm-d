@@ -31,7 +31,7 @@ spec:
             emptyDir: {}
         containers:
           - name: vllm
-            image: ghcr.io/llm-d/llm-d-cuda:v0.7.0-rc.4
+            image: ghcr.io/llm-d/llm-d-cuda:v0.7.0
             securityContext:
               capabilities:
                 add:
