@@ -37,7 +37,7 @@ jobs:
       guide_name: tiered-prefix-cache
       namespace: llm-d-nightly-pfc-gke-tpu
       gateway_host: 'tiered-prefix-cache-cpu-epp'
-      tpu_type: v7e-8
+      tpu_type: v6e-8
       required_tpu_chips: 8
       recommended_tpu_chips: 8
       custom_deploy_script: |
@@ -50,7 +50,7 @@ jobs:
           -f guides/recipes/scheduler/base.values.yaml \
           -f guides/tiered-prefix-cache/cpu/scheduler/${GUIDE_NAME}.values.yaml \
           -n ${NAMESPACE} --version ${GAIE_VERSION}
-      gke_cluster_name: llm-d-e2e-tpu
+      gke_cluster_name: llm-d-e2e-us-east5
       gke_cluster_zone: us-east5
       pod_wait_timeout: '45m'
       pod_readiness_delay: 300
