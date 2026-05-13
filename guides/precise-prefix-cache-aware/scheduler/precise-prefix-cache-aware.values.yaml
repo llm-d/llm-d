@@ -60,8 +60,8 @@ inferenceExtension:
         - type: precise-prefix-cache-producer
           parameters:
             tokenProcessorConfig:
-              blockSize: 64           # must match vLLM --block-size
-            speculativeIndexing: true
+              blockSize: 64                 # no longer needs to match the model-server's block size
+            speculativeIndexing: false
             indexerConfig:
               kvBlockIndexConfig:
                 enableMetrics: true
@@ -71,7 +71,7 @@ inferenceExtension:
               discoverPods: true
               podDiscoveryConfig:
                 socketPort: 5556
-        - type: precise-prefix-cache-scorer    # parameter-free reader; producer above owns the index
+        - type: precise-prefix-cache-scorer
         - type: kv-cache-utilization-scorer
         - type: queue-scorer
         - type: no-hit-lru-scorer

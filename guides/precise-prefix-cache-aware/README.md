@@ -22,7 +22,7 @@ The precise pipeline is split across three plugins, plus load-aware scorers:
 | Tensor Parallelism  | 2                                                       |
 | GPUs per replica    | 2                                                       |
 | Total GPUs          | 16                                                      |
-| vLLM `--block-size` | 64 (must match scorer `tokenProcessorConfig.blockSize`) |
+| vLLM `--block-size` | 64                                                      |
 | Scheduler image     | `ghcr.io/llm-d/llm-d-inference-scheduler:v0.8.0`        |
 
 ### Supported Hardware Backends
