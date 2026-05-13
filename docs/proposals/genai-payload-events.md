@@ -7,8 +7,11 @@ LLM prompts and completions as OTel span events, following the upstream
 [open-telemetry/semantic-conventions#2010](https://github.com/open-telemetry/semantic-conventions/issues/2010)
 specification. Payloads above a configurable size threshold are offloaded to an object
 storage backend (GCS, S3, or local filesystem) with only a reference URI stored on the
-span. The feature is disabled by default and requires explicit opt-in, preserving the
-existing metadata-only privacy posture for operators who do not need payload visibility.
+span. Non-text content parts (images, audio, and other binary media in multimodal
+requests) are always offloaded — they cannot be carried as OTel attributes — and are
+referenced from the span by URI regardless of the inline threshold. The feature is
+disabled by default and requires explicit opt-in, preserving the existing metadata-only
+privacy posture for operators who do not need payload visibility.
 
 This proposal extends [distributed-tracing.md](distributed-tracing.md).
 
@@ -26,18 +29,29 @@ visibility that cannot be satisfied by token counts and latency metadata alone:
   requires inspecting the assembled prompt.
 - **Cost attribution** — understanding *what* drove high token usage requires the content,
   not just the count.
+- **Multimodal request inspection** — image, audio, and other non-text parts in
+  multimodal requests are increasingly common drivers of latency and quality issues,
+  and cannot be reconstructed from token metadata alone.
 
 The upstream OTel semantic-conventions community chose an **event-based model** (not span
 attributes) specifically to decouple large payload data from the lightweight span record.
-Implementing against that spec makes llm-d payload data consumable by any OTel-native
-tooling without custom parsing.
+Even so, event attributes are typed as strings/numbers/bools/arrays and cannot carry
+opaque bytes; non-text payloads must therefore be offloaded to object storage and
+referenced by URI, never inlined in a span or a log record. Implementing against the
+upstream spec makes llm-d payload data consumable by any OTel-native tooling without
+custom parsing.
 
 ### Goals
 
 - Emit `gen_ai.content.prompt` and `gen_ai.content.completion` OTel events on the
   relevant span following the upstream semantic convention.
-- Inline small payloads (≤ configurable threshold, default 4 KB) directly on the event
-  attribute; offload larger payloads to object storage and record only a reference URI.
+- Inline small text payloads (≤ configurable threshold, default 4 KB) directly on the
+  event attribute; offload larger text payloads to object storage and record only a
+  reference URI.
+- Always offload non-text content parts (image / audio / other binary media in
+  multimodal requests) to object storage regardless of the inline threshold, and expose
+  the resulting URIs via a dedicated event attribute so consumers can locate media
+  without parsing the payload skeleton.
 - Provide a pluggable storage interface with four built-in backends: `noop` (default),
   `inline`, `gcs`, `s3`, and `filesystem`.
 - Expose an opt-in redaction pipeline (configurable regex patterns + optional external
@@ -112,19 +126,71 @@ payload events are emitted on the **same span** that represents the LLM call.
 | Field | Value |
 |---|---|
 | Event name | `gen_ai.content.prompt` |
-| `gen_ai.prompt` | Serialised messages / prompt JSON (omitted when offloaded) |
-| `gen_ai.content.storage_uri` | Object store URI (present only when offloaded) |
+| `gen_ai.prompt` | Serialised messages / prompt JSON, text-only skeleton with non-text parts replaced by `$ref` markers (omitted when the whole payload is offloaded) |
+| `gen_ai.content.storage_uri` | Object store URI for the full text payload (present only when offloaded) |
+| `gen_ai.content.media_uris` | Array of object store URIs for non-text content parts (present when the request contains any non-text media) |
 
 **Completion event**
 
 | Field | Value |
 |---|---|
 | Event name | `gen_ai.content.completion` |
-| `gen_ai.completion` | Serialised choices JSON (omitted when offloaded) |
-| `gen_ai.content.storage_uri` | Object store URI (present only when offloaded) |
+| `gen_ai.completion` | Serialised choices JSON, text-only skeleton with non-text parts replaced by `$ref` markers (omitted when the whole payload is offloaded) |
+| `gen_ai.content.storage_uri` | Object store URI for the full text payload (present only when offloaded) |
+| `gen_ai.content.media_uris` | Array of object store URIs for non-text content parts (present when the completion contains any non-text media) |
 
-When the payload is truncated due to `maxCompletionBufferBytes` being exceeded, the event
-additionally carries `gen_ai.content.truncated: true`.
+When the payload is truncated due to `maxCompletionBufferBytes` being exceeded, or when
+a non-text part is dropped because the configured backend cannot return a resolvable URI
+(e.g. `noop`), the event additionally carries `gen_ai.content.truncated: true`.
+
+### Non-Text and Multimodal Payloads
+
+Modern chat APIs accept multimodal content parts within a single request — OpenAI
+Chat Completions `image_url` and `input_audio` parts, vLLM `multi_modal_data`, and
+similar shapes from other engines. The OTel attribute type system permits strings,
+numbers, bools, and arrays of those — it does **not** permit opaque bytes, and span
+backends do not tolerate multi-megabyte attribute strings. Log records are unsuitable
+for the same reason and lack a standard span-to-payload linking convention. Non-text
+parts must therefore live in object storage and be referenced by URI; this section
+specifies how.
+
+The capture pipeline handles non-text content as follows:
+
+1. The serialiser walks the request / response structure and identifies content parts
+   whose `type` is not `text` (or, in engine-native shapes, parts that carry binary
+   media regardless of declared type).
+2. Each non-text part is **always offloaded** to the configured `PayloadStore`,
+   regardless of `inlineSizeThresholdBytes`. The inline threshold continues to apply
+   only to the text portion.
+3. In the serialised payload that the span event carries, every non-text part is
+   replaced by a `$ref` marker of the form
+   `{"$ref": "<storage_uri>", "media_type": "image/png", "size_bytes": 12345}`.
+   The resulting text-only skeleton is then subject to the normal inline-vs-offload
+   decision against `inlineSizeThresholdBytes`.
+4. The event additionally carries `gen_ai.content.media_uris`: an ordered array of the
+   storage URIs produced for that request or completion. Consumers that only need to
+   locate media can read this attribute without re-parsing the skeleton.
+5. URL-reference parts (e.g. `image_url` pointing to a public CDN) are recorded in
+   `gen_ai.content.media_uris` as-is and are **not** re-fetched by llm-d; the redaction
+   pipeline still runs against the URL string itself.
+6. When the backend is `noop` — or any backend that cannot return a resolvable URI —
+   non-text parts are dropped, `gen_ai.content.truncated: true` is set on the event,
+   and the text skeleton is still emitted so that text-based debugging continues to
+   work.
+
+The object-store path convention is extended to encode part index and media type so
+that text and non-text payloads for the same span do not collide:
+
+```
+{prefix}/{YYYY}/{MM}/{DD}/{traceID}/{spanID}-{kind}.json                 # full text payload
+{prefix}/{YYYY}/{MM}/{DD}/{traceID}/{spanID}-{kind}-{partIndex}.{ext}    # non-text part
+```
+
+`{ext}` is derived from the part's declared media type (`png`, `jpg`, `webp`, `wav`,
+`mp3`, `pcm`, …) with `bin` as the fallback when the type is unknown. The redaction
+pipeline runs against the text skeleton only; binary parts are stored as received,
+and operators relying on redaction for compliance should either disable multimodal
+capture or apply DLP at the object-store layer.
 
 ### Capture Layers
 
@@ -146,7 +212,19 @@ prompt/completion events when `payloadCapture.emitIfUpstreamTraced` is `false` (
 // PayloadStore persists a payload and returns a retrieval URI.
 // Implementations: NoopStore, InlineStore, GCSStore, S3Store, FilesystemStore.
 type PayloadStore interface {
-    Store(ctx context.Context, traceID, spanID string, kind PayloadKind, data []byte) (uri string, err error)
+    Store(ctx context.Context, ref PayloadRef, data []byte) (uri string, err error)
+}
+
+// PayloadRef identifies one payload part. PartIndex is zero for the text payload
+// itself and >= 1 for each non-text content part associated with the same span.
+// MediaType is an IANA media type (e.g. "application/json", "image/png") and
+// drives both the storage-path extension and Content-Type on uploads.
+type PayloadRef struct {
+    TraceID   string
+    SpanID    string
+    Kind      PayloadKind
+    PartIndex int
+    MediaType string
 }
 
 type PayloadKind string
@@ -166,9 +244,12 @@ Backend selection via `payloadCapture.backend`:
 | `s3` | Upload to S3-compatible store, emit `s3://bucket/path` URI |
 | `filesystem` | Write to mounted volume, emit `file:///path` URI |
 
-Object store path convention:
+Object store path convention (text payloads use `.json`; non-text parts append a
+part index and a media-type-derived extension — see
+[Non-Text and Multimodal Payloads](#non-text-and-multimodal-payloads)):
 ```
 {prefix}/{YYYY}/{MM}/{DD}/{traceID}/{spanID}-{kind}.json
+{prefix}/{YYYY}/{MM}/{DD}/{traceID}/{spanID}-{kind}-{partIndex}.{ext}
 ```
 
 ### Redaction Pipeline
@@ -207,6 +288,9 @@ inferenceExtension:
     offloadBackend: ""                  # fallback when inline exceeds threshold
     emitIfUpstreamTraced: false         # skip if vLLM tracing is active
     maxCompletionBufferBytes: 262144
+    captureNonTextParts: true           # set false to drop non-text media instead of
+                                        # storing it (text skeleton + truncated:true)
+    maxNonTextPartBytes: 8388608        # per-part cap for image/audio/binary uploads
     gcs:
       bucket: ""
       prefix: "llm-d/payloads"
@@ -245,6 +329,11 @@ Payload capture significantly raises the sensitivity of trace data. Operators mu
 4. Treat captured payloads with the same classification as the underlying model's
    training data or any user PII present in requests.
 5. Enable `redaction.enabled: true` when serving untrusted user inputs.
+6. Recognise that the redaction pipeline operates only on the text skeleton — non-text
+   parts (images, audio) are written to the configured store as received. For
+   workloads where multimodal content can carry sensitive data, either disable
+   non-text capture (`captureNonTextParts: false`) or apply a DLP pass at the
+   object-store layer (e.g. GCS DLP inspection, S3 Object Lambda).
 
 Credentials for GCS/S3 are never embedded in deployment values — they must come from
 Workload Identity / IRSA bindings or Kubernetes Secrets mounted as environment variables.
