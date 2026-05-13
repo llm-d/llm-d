@@ -1,0 +1,61 @@
+name: Nightly - Tiered Prefix Cache E2E (GKE TPU)
+
+# Nightly regression test for the tiered-prefix-cache guide on GKE with TPU accelerators.
+# Deploys the tpu-v7 CPU offloading connector and validates with e2e-validate.sh.
+# Tracks issue: https://github.com/llm-d/llm-d/issues/1471
+
+on:
+  schedule:
+    - cron: '30 3 * * *'  # 03:30 UTC daily (staggered from PD TPU nightly; avoids wva-ocp at 03:00)
+  workflow_dispatch:
+    inputs:
+      skip_cleanup:
+        description: 'Skip cleanup after tests (for debugging)'
+        required: false
+        default: 'false'
+      pr_number:
+        description: 'PR number for comment-back (set by /test-nightly)'
+        required: false
+        default: ''
+      pr_repo:
+        description: 'Repo for PR comment-back'
+        required: false
+        default: 'llm-d/llm-d'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: nightly-e2e-tiered-prefix-cache-gke-tpu
+  cancel-in-progress: true
+
+jobs:
+  nightly:
+    if: github.repository == 'llm-d/llm-d'
+    uses: llm-d/llm-d-infra/.github/workflows/reusable-nightly-e2e-gke-tpu.yaml@main
+    with:
+      guide_name: tiered-prefix-cache
+      namespace: llm-d-nightly-pfc-gke-tpu
+      gateway_host: 'tiered-prefix-cache-cpu-epp'
+      tpu_type: v7e-8
+      required_tpu_chips: 8
+      recommended_tpu_chips: 8
+      custom_deploy_script: |
+        export GAIE_VERSION=v1.5.0
+        export GUIDE_NAME="tiered-prefix-cache-cpu"
+        export CONNECTOR="tpu-offloading-connector"
+        kubectl apply -n ${NAMESPACE} -k guides/tiered-prefix-cache/cpu/modelserver/tpu-v7/vllm/${CONNECTOR}
+        helm install ${GUIDE_NAME} \
+          oci://registry.k8s.io/gateway-api-inference-extension/charts/standalone \
+          -f guides/recipes/scheduler/base.values.yaml \
+          -f guides/tiered-prefix-cache/cpu/scheduler/${GUIDE_NAME}.values.yaml \
+          -n ${NAMESPACE} --version ${GAIE_VERSION}
+      gke_cluster_name: llm-d-e2e-tpu
+      gke_cluster_zone: us-east5
+      pod_wait_timeout: '45m'
+      pod_readiness_delay: 300
+      llm_d_ref: ${{ github.ref }}
+      skip_cleanup: ${{ github.event.inputs.skip_cleanup == 'true' }}
+      pr_number: ${{ github.event.inputs.pr_number }}
+      pr_repo: ${{ github.event.inputs.pr_repo }}
+    secrets: inherit
