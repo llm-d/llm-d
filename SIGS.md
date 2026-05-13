@@ -51,6 +51,7 @@ SIGs operate within the broader llm-d project governance framework defined in [P
 | **[SIG Autoscaling](#sig-autoscaling)** | Traffic-aware autoscaling, resource management, and capacity planning | • [Meeting Recordings and Docs](https://drive.google.com/drive/folders/1iDlTgpFPOrSQn7dWR3uCQLtqhz86HTAi)<br>• [workload-variant-autoscaler Repository](https://github.com/llm-d-incubation/workload-variant-autoscaler) |
 | **[SIG Observability](#sig-observability)** | Monitoring, logging, metrics, and operational visibility | • [Meeting Recordings and Docs](https://drive.google.com/drive/folders/1H-TVTCKYVxUn4fER7xuTPmscNttZCutN)<br>• [llm-d Observability Documentation](https://github.com/llm-d/llm-d/tree/main/docs/resources/observability) |
 | **[SIG RL](#sig-rl)** | Improve SOTA performance for RL workloads | • [Meeting Recordings and Docs](https://drive.google.com/drive/folders/1k9u56_HO5E1uGGgmp0T0y8VhMfzc1P11) |
+| **[SIG Inference Payload Processor](#sig-inference-payload-processor)** | TBD | • [Meeting Recordings and Docs](https://drive.google.com/drive/folders/1r2yEYMoBxBbs4KNsk5gdZztRO4npAGEH)<br>• [llm-d-inference-payload-processor Repository](https://github.com/llm-d/llm-d-router/) |
 
 ## SIG Detailed Descriptions
 
@@ -222,6 +223,23 @@ SIGs operate within the broader llm-d project governance framework defined in [P
 
 - **Slack Channel**: [#sig-rl](https://llm-d.slack.com/archives/C0AGTS0UF5L)
 - **Meeting Recordings and Docs**: [Public Google Drive](https://drive.google.com/drive/folders/1k9u56_HO5E1uGGgmp0T0y8VhMfzc1P11)
+
+### SIG Inference Payload Processor
+
+> **👥 Leadership:** [Nir Rozenbaum](https://github.com/nirrozenbaum)
+> North Star Design Document TODO
+
+**Charter**: TODO
+
+**Key Areas**:
+
+- TODO
+
+**💬 Communication**:
+
+- **Slack Channel**: [#sig-inference-payload-processor](https://llm-d.slack.com/archives/C0B3H230X9T)
+- **Meeting Recordings and Docs**: [Public Google Drive](https://drive.google.com/drive/folders/1r2yEYMoBxBbs4KNsk5gdZztRO4npAGEH)
+
 
 ## Getting Involved
 
