@@ -1,0 +1,54 @@
+# Strategic merge patch: adds the vLLM render sidecar container and exposes
+# its /v1/{completions,chat/completions}/render endpoints on localhost:8000
+# of the EPP pod, where the token-producer plugin reaches them.
+#
+# The chart's default Envoy sidecar (container name `sidecar`) is left
+# untouched — strategic merge by container name appends this new
+# container rather than replacing Envoy.
+#
+# `vllm launch render` is a GPU-less subcommand (CPU-only) that serves
+# tokenization through vLLM's full prompt-render path, including chat
+# templates and multi-modal placeholder expansion. Keep the image and
+# the positional model arg aligned with the vLLM serve pods so block
+# hashes computed in the scheduler match what vLLM publishes over ZMQ.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: placeholder-overridden-by-target-selector
+spec:
+  template:
+    spec:
+      containers:
+        - name: vllm-renderer
+          image: vllm/vllm-openai:v0.19.1
+          imagePullPolicy: IfNotPresent
+          command: ["vllm", "launch", "render"]
+          args:
+            - Qwen/Qwen3-32B
+            - --port=8000
+          ports:
+            - name: render-http
+              containerPort: 8000
+          env:
+            - name: HF_HOME
+              value: /tokenizers
+            - name: HF_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: llm-d-hf-token
+                  key: HF_TOKEN
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            periodSeconds: 5
+          resources:
+            requests:
+              cpu: "8"
+              memory: 8Gi
+          volumeMounts:
+            - mountPath: /tokenizers
+              name: tokenizers
+      volumes:
+        - name: tokenizers
+          emptyDir: {}

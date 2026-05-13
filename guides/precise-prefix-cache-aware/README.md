@@ -6,9 +6,11 @@
 
 This guide routes requests on precise per-pod KV-cache state rather than request-traffic heuristics. Each vLLM pod publishes [KV-cache events](https://github.com/vllm-project/vllm/issues/16669) over ZMQ; the scheduler subscribes, builds an index keyed by block hash, and scores candidate pods by the fraction of an incoming request's prefix that is already resident.
 
-Two scorers make up the routing decision alongside the load-aware stack:
+The precise pipeline is split across three plugins, plus load-aware scorers:
 
-- **Precise prefix-cache aware** — the [precise-prefix-cache-scorer](https://github.com/llm-d/llm-d-inference-scheduler/tree/main/pkg/epp/framework/plugins/scheduling/scorer/preciseprefixcache) indexes real KV-block events from vLLM and returns the exact resident-block fraction. Indexer internals (event ingestion, block hashing, dual-key design) are documented in [llm-d-kv-cache architecture](https://github.com/llm-d/llm-d-kv-cache/blob/main/docs/architecture.md).
+- **Token producer** — the [`token-producer`](https://github.com/llm-d/llm-d-router/tree/main/pkg/epp/framework/plugins/requestcontrol/dataproducer/tokenizer) renders prompts via vLLM's `/v1/{completions,chat/completions}/render` HTTP endpoint (served by a `vllm launch render` sidecar) and publishes `TokenizedPrompt` for downstream consumers.
+- **Precise prefix-cache producer** — the [`precise-prefix-cache-producer`](https://github.com/llm-d/llm-d-inference-scheduler/tree/refactor-precise-prefix-cache-split/pkg/epp/framework/plugins/requestcontrol/dataproducer/preciseprefixcache) consumes `TokenizedPrompt`, hashes tokens to KV-block keys, ingests KV-events from vLLM over ZMQ, and writes `PrefixCacheMatchInfo` per endpoint. It also owns speculative indexing and the per-pod ZMQ subscriber lifecycle. Indexer internals are documented in [llm-d-kv-cache architecture](https://github.com/llm-d/llm-d-kv-cache/blob/main/docs/architecture.md).
+- **Precise prefix-cache scorer** — the [`precise-prefix-cache-scorer`](https://github.com/llm-d/llm-d-inference-scheduler/tree/refactor-precise-prefix-cache-split/pkg/epp/framework/plugins/scheduling/scorer/preciseprefixcache) is a parameter-free attribute reader that returns `matchBlocks / totalBlocks` per endpoint.
 - **Load-aware** — such as the [kv-cache utilization](https://github.com/llm-d/llm-d-inference-scheduler/tree/main/pkg/epp/framework/plugins/scheduling/scorer/kvcacheutilization) and [queue size](https://github.com/llm-d/llm-d-inference-scheduler/tree/main/pkg/epp/framework/plugins/scheduling/scorer/queuedepth) scorers balance against pod pressure.
 
 ## Default Configuration
@@ -39,7 +41,7 @@ Two scorers make up the routing decision alongside the load-aware stack:
 > Some hardware variants use reduced configurations (fewer replicas, smaller models) to enable CI testing for compatibility and regression checks.
 
 > [!NOTE]
-> For precise prefix cache scoring to match reality, the `tokenizer` `modelName` and the scorer's `indexerConfig.tokenizersPoolConfig.modelName` in [`scheduler/precise-prefix-cache-aware.values.yaml`](scheduler/precise-prefix-cache-aware.values.yaml) must match the model the overlay deploys. HPU and anything that tunes `--block-size` also requires updating `tokenProcessorConfig.blockSize` on the scheduler side.
+> For precise prefix cache scoring to match reality, the `token-producer` `modelName` in [`scheduler/precise-prefix-cache-aware.values.yaml`](scheduler/precise-prefix-cache-aware.values.yaml) and the positional model arg in [`scheduler/patches/vllm-renderer/patch-render-sidecar.yaml`](scheduler/patches/vllm-renderer/patch-render-sidecar.yaml) must both match the model the overlay deploys. HPU and anything that tunes `--block-size` also requires updating `tokenProcessorConfig.blockSize` on the scheduler side.
 
 > [!NOTE]
 > The `gpu/vllm/` overlay defaults to 8 replicas to match the canonical 16×H100 benchmark. For smaller fleets (or quick smoke tests), reduce `replicas` in the deployment patch (`modelserver/gpu/vllm/patch-vllm.yaml`) before applying.
@@ -93,7 +95,7 @@ kubectl create namespace ${NAMESPACE}
 
 ### 1. Prepare HF Token
 
-Create the `llm-d-hf-token` secret in the namespace. The UDS tokenizer sidecar reads `HF_TOKEN` to reach gated tokenizers — Qwen/Qwen3-32B is public but the secret makes swapping in a gated model a no-op. See [helpers/hf-token.md](../../helpers/hf-token.md) for the full helper.
+Create the `llm-d-hf-token` secret in the namespace. The vLLM render sidecar reads `HF_TOKEN` to reach gated tokenizers — Qwen/Qwen3-32B is public but the secret makes swapping in a gated model a no-op. See [helpers/hf-token.md](../../helpers/hf-token.md) for the full helper.
 
 ```bash
 kubectl -n ${NAMESPACE} create secret generic llm-d-hf-token --from-literal=HF_TOKEN="${HF_TOKEN}"
@@ -110,7 +112,7 @@ helm install ${GUIDE_NAME} \
   oci://registry.k8s.io/gateway-api-inference-extension/charts/standalone \
   -f ${REPO_ROOT}/guides/recipes/scheduler/base.values.yaml \
   -f ${REPO_ROOT}/guides/${GUIDE_NAME}/scheduler/${GUIDE_NAME}.values.yaml \
-  --post-renderer ${REPO_ROOT}/guides/${GUIDE_NAME}/scheduler/patches/uds-tokenizer/post-renderer.sh \
+  --post-renderer ${REPO_ROOT}/guides/${GUIDE_NAME}/scheduler/patches/vllm-renderer/post-renderer.sh \
   -n ${NAMESPACE} --version ${GAIE_VERSION}
 ```
 
@@ -120,9 +122,9 @@ helm install ${GUIDE_NAME} \
 Helm v4's `--post-renderer` only accepts a registered plugin name, not a path. Install once, then swap the flag value:
 
 ```bash
-helm plugin install guides/${GUIDE_NAME}/scheduler/patches/uds-tokenizer
+helm plugin install guides/${GUIDE_NAME}/scheduler/patches/vllm-renderer
 # in the helm install above, replace the --post-renderer line with:
-#   --post-renderer uds-tokenizer
+#   --post-renderer vllm-renderer
 ```
 
 </details>
@@ -132,7 +134,7 @@ The release name `${GUIDE_NAME}` is mandatory for standard deployments — the i
 <details>
 <summary><b>Why a helm post-renderer is required (chart limitation)</b></summary>
 
-The standalone chart's `sidecar.*` slot is occupied by its Envoy proxy — overriding it would lose HTTP serving — so the UDS tokenizer container is appended via a helm post-render hook instead. The post-renderer runs `kustomize build` on the chart's rendered manifests with a strategic merge patch that adds the `tokenizer-uds` container (image `ghcr.io/llm-d/llm-d-uds-tokenizer:vllm-v0.19.1`), two `emptyDir` volumes (`tokenizers`, `tokenizer-uds`), and a `/tmp/tokenizer` volumeMount on the existing `epp` container so the `tokenizer` plugin can reach the UDS socket. Tracking removal of this workaround upstream — once the chart supports multiple sidecars natively, the post-renderer goes away.
+The standalone chart's `sidecar.*` slot is occupied by its Envoy proxy — overriding it would lose HTTP serving — so the vLLM render container is appended via a helm post-render hook instead. The post-renderer runs `kustomize build` on the chart's rendered manifests with a strategic merge patch that adds the `vllm-renderer` container (image `vllm/vllm-openai`, `command: ["vllm", "launch", "render"]`) listening on loopback port 8000 and an `emptyDir` `tokenizers` volume for the HF cache. The `token-producer` plugin reaches the renderer via `http://localhost:8000` — no shared volume between the EPP and the sidecar is required. Tracking removal of this workaround upstream — once the chart supports multiple sidecars natively, the post-renderer goes away.
 
 </details>
 
@@ -143,7 +145,7 @@ To use a Kubernetes Gateway managed proxy instead of the standalone Envoy sideca
 
 1. **Deploy a Kubernetes Gateway**. See [the gateway guides](../prereq/gateways) for step-by-step deployment of a Gateway named `llm-d-inference-gateway`.
 
-2. **Deploy the llm-d Router and HTTPRoute** via the `inferencepool` chart with `experimentalHttpRoute.enabled=true`. Same UDS post-renderer applies:
+2. **Deploy the llm-d Router and HTTPRoute** via the `inferencepool` chart with `experimentalHttpRoute.enabled=true`. The same render-sidecar post-renderer applies:
 
 ```bash
 export REPO_ROOT=$(realpath $(git rev-parse --show-toplevel))
@@ -154,7 +156,7 @@ helm install precise-prefix-cache-aware \
   -f ${REPO_ROOT}/guides/recipes/scheduler/features/httproute-flags.yaml \
   -f ${REPO_ROOT}/guides/${GUIDE_NAME}/scheduler/${GUIDE_NAME}.values.yaml \
   --set provider.name=${PROVIDER_NAME} \
-  --post-renderer ${REPO_ROOT}/guides/${GUIDE_NAME}/scheduler/patches/uds-tokenizer/post-renderer.sh 
+  --post-renderer ${REPO_ROOT}/guides/${GUIDE_NAME}/scheduler/patches/vllm-renderer/post-renderer.sh \
   -n ${NAMESPACE} --version ${GAIE_VERSION}
 ```
 
@@ -263,10 +265,11 @@ kubectl delete -n ${NAMESPACE} -k guides/${GUIDE_NAME}/modelserver/gpu/vllm/${IN
 ## How It Works
 
 1. **vLLM pods publish KV-cache events** — each pod runs `vllm serve ... --kv-events-config '{...,"publisher":"zmq","endpoint":"$(KV_EVENTS_ENDPOINT)","topic":"kv@$(POD_IP):$(POD_PORT)@<model>"}'` with `KV_EVENTS_ENDPOINT=tcp://*:5556`, binding its own ZMQ socket. On every KV block allocation/eviction, vLLM emits a ZMQ message.
-2. **Scheduler subscribes per pod** — pod-discovery (`kvEventsConfig.discoverPods: true`) wires the data-layer `endpoint-notification-source` into the scorer's `ExtractEndpoint`, so each scheduler replica installs a ZMQ subscriber per vLLM pod independently. All replicas converge to the same index.
-3. **Scoring** — the `precise-prefix-cache-scorer` returns the fraction of the request's prefix blocks that are resident on each candidate pod. The `max-score-picker` routes to the highest-scoring pod.
+2. **Scheduler subscribes per pod** — pod-discovery (`kvEventsConfig.discoverPods: true`) wires the data-layer `endpoint-notification-source` into the `precise-prefix-cache-producer`'s `ExtractEndpoint`, so each scheduler replica installs a ZMQ subscriber per vLLM pod independently. All replicas converge to the same index.
+3. **Per-request pipeline** — `token-producer` renders the prompt via vLLM HTTP and publishes `TokenizedPrompt`; `precise-prefix-cache-producer` hashes the tokens to KV-block keys, looks them up against its index, and writes `PrefixCacheMatchInfo` per endpoint; the parameter-free `precise-prefix-cache-scorer` then reads those attributes and returns `matchBlocks / totalBlocks`. The data-layer DAG orders the three plugins via Produces/Consumes — no manual scheduling-profile ordering required.
+4. **Scoring** — the `max-score-picker` routes to the highest-scoring pod across the precise + load-aware scorers.
 
-The `tokenizer` plugin and the scorer's internal `tokenizersPoolConfig` both point at `/tmp/tokenizer/tokenizer-uds.socket` — a UDS tokenizer sidecar (`ghcr.io/llm-d/llm-d-uds-tokenizer`) owns tokenizer model downloads and caching, keeping tokenization out of the EPP main container.
+The `token-producer` calls `POST http://localhost:8000/v1/{completions,chat/completions}/render` on a sidecar running `vllm launch render <model>` (GPU-less CPU subcommand of the `vllm/vllm-openai` image). The renderer serves the full vLLM prompt-render path — chat templates and multi-modal placeholder expansion included — so the scheduler's token stream matches what the serve pods see. Internal tokenization in [`llm-d-kv-cache`](https://github.com/llm-d/llm-d-kv-cache) is deprecated and `tokenizersPoolConfig` is no longer needed.
 
 ## Benchmarking Report
 

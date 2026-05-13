@@ -7,9 +7,12 @@
 
 inferenceExtension:
   image:
+    # Local-build of refactor-precise-prefix-cache-split — set hub/tag to
+    # whatever was pushed. Switch back to ghcr.io/llm-d:v0.8.x once the
+    # split scorer ships upstream.
     name: llm-d-inference-scheduler
     hub: ghcr.io/llm-d
-    tag: v0.8.0
+    tag: dev
     pullPolicy: IfNotPresent
 
   replicas: 2
@@ -35,7 +38,7 @@ inferenceExtension:
           name: llm-d-hf-token
           key: HF_TOKEN
 
-  # UDS tokenizer sidecar is appended via patches/uds-tokenizer
+  # vLLM render sidecar is appended via patches/vllm-renderer
   # post-renderer (chart's sidecar.* slot is owned by Envoy).
 
   pluginsConfigFile: "precise-prefix-cache-aware-plugins.yaml"
@@ -44,27 +47,22 @@ inferenceExtension:
       apiVersion: inference.networking.x-k8s.io/v1alpha1
       kind: EndpointPickerConfig
       plugins:
-        - type: tokenizer
+        - type: token-producer
           parameters:
             modelName: Qwen/Qwen3-32B
-            udsTokenizerConfig:
-              socketFile: /tmp/tokenizer/tokenizer-uds.socket
+            vllm:
+              http: http://localhost:8000
         - type: endpoint-notification-source
         - type: metrics-data-source
         - type: core-metrics-extractor
         - type: single-profile-handler
         - type: decode-filter
-        - type: precise-prefix-cache-scorer
+        - type: precise-prefix-cache-producer
           parameters:
             tokenProcessorConfig:
               blockSize: 64           # must match vLLM --block-size
             speculativeIndexing: true
             indexerConfig:
-              tokenizersPoolConfig:
-                modelName: Qwen/Qwen3-32B
-                workersCount: 24      
-                uds:
-                  socketFile: /tmp/tokenizer/tokenizer-uds.socket
               kvBlockIndexConfig:
                 enableMetrics: true
             kvEventsConfig:
@@ -73,6 +71,7 @@ inferenceExtension:
               discoverPods: true
               podDiscoveryConfig:
                 socketPort: 5556
+        - type: precise-prefix-cache-scorer    # parameter-free reader; producer above owns the index
         - type: kv-cache-utilization-scorer
         - type: queue-scorer
         - type: no-hit-lru-scorer
@@ -84,7 +83,7 @@ inferenceExtension:
               - pluginRef: core-metrics-extractor
           - pluginRef: endpoint-notification-source
             extractors:
-              - pluginRef: precise-prefix-cache-scorer
+              - pluginRef: precise-prefix-cache-producer
       schedulingProfiles:
         - name: default
           plugins:
