@@ -208,6 +208,18 @@ pipeline runs against the text skeleton only; binary parts are stored as receive
 and operators relying on redaction for compliance should either disable multimodal
 capture or apply DLP at the object-store layer.
 
+**Per-part size cap (`maxNonTextPartBytes`).** Defaults to 8 MiB (`8388608`). The
+value is chosen to sit comfortably above the per-image caps of common hosted APIs
+that llm-d typically fronts (Anthropic Claude vision: 5 MiB inline; OpenAI and Google
+Gemini: 20 MiB inline) while still bounding worst-case object-store write amplification
+for high-volume inference traffic. The cap is per part, not per request, so a multi-image
+request with several 4 MiB images is fully captured under the default. Operators
+should tune this for their workload: lower it (e.g. 2 MiB) when the dominant media
+type is photos at moderate resolution and storage cost matters, or raise it (up to
+~25 MiB) when serving audio clips or large image inputs through Gemini/OpenAI
+upstreams. Parts exceeding the cap are dropped with `gen_ai.content.truncated: true`
+rather than truncated mid-stream, since binary truncation produces undecodable artifacts.
+
 ### Capture Layers
 
 Payload events are attached to spans at the following layers, with vLLM preferred when
@@ -306,7 +318,9 @@ inferenceExtension:
     maxCompletionBufferBytes: 262144
     captureNonTextParts: true           # set false to drop non-text media instead of
                                         # storing it (text skeleton + truncated:true)
-    maxNonTextPartBytes: 8388608        # per-part cap for image/audio/binary uploads
+    maxNonTextPartBytes: 8388608        # 8 MiB per-part cap; tune per deployment —
+                                        # see "Non-Text and Multimodal Payloads" for
+                                        # the rationale behind the default
     gcs:
       bucket: ""
       prefix: "llm-d/payloads"
