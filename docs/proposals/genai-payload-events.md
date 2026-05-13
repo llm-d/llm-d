@@ -52,7 +52,7 @@ custom parsing.
   multimodal requests) to object storage regardless of the inline threshold, and expose
   the resulting URIs via a dedicated event attribute so consumers can locate media
   without parsing the payload skeleton.
-- Provide a pluggable storage interface with four built-in backends: `noop` (default),
+- Provide a pluggable storage interface with five built-in backends: `noop` (default),
   `inline`, `gcs`, `s3`, and `filesystem`.
 - Expose an opt-in redaction pipeline (configurable regex patterns + optional external
   DLP webhook) that runs before any payload reaches a backend.
@@ -118,8 +118,17 @@ injected) so that I can confirm whether retrieval or generation was the failure 
 
 ### OTel Event Specification
 
-Per [semconv#2010](https://github.com/open-telemetry/semantic-conventions/issues/2010),
-payload events are emitted on the **same span** that represents the LLM call.
+Per [semconv#2010](https://github.com/open-telemetry/semantic-conventions/issues/2010)
+(now closed; GenAI conventions have moved to the dedicated
+[semantic-conventions-genai](https://github.com/open-telemetry/semantic-conventions-genai)
+repository), payload events are emitted on the **same span** that represents the LLM
+call. Attribute names prefixed `gen_ai.content.*` that are **not yet defined** in the
+upstream GenAI semantic conventions are marked below as *(llm-d extension)*; we will
+track upstream as the GenAI conventions stabilise and rename these attributes to match
+once standard names exist. This includes `gen_ai.content.media_uris`,
+`gen_ai.content.storage_uri`, and `gen_ai.content.truncated`. The base event names
+(`gen_ai.content.prompt`, `gen_ai.content.completion`) and the inlined-text payload
+attributes (`gen_ai.prompt`, `gen_ai.completion`) follow the upstream spec.
 
 **Prompt event**
 
@@ -127,8 +136,8 @@ payload events are emitted on the **same span** that represents the LLM call.
 |---|---|
 | Event name | `gen_ai.content.prompt` |
 | `gen_ai.prompt` | Serialised messages / prompt JSON, text-only skeleton with non-text parts replaced by `$ref` markers (omitted when the whole payload is offloaded) |
-| `gen_ai.content.storage_uri` | Object store URI for the full text payload (present only when offloaded) |
-| `gen_ai.content.media_uris` | Array of object store URIs for non-text content parts (present when the request contains any non-text media) |
+| `gen_ai.content.storage_uri` *(llm-d extension)* | Object store URI for the full text payload (present only when offloaded) |
+| `gen_ai.content.media_uris` *(llm-d extension)* | Array of object store URIs for non-text content parts (present when the request contains any non-text media) |
 
 **Completion event**
 
@@ -136,8 +145,8 @@ payload events are emitted on the **same span** that represents the LLM call.
 |---|---|
 | Event name | `gen_ai.content.completion` |
 | `gen_ai.completion` | Serialised choices JSON, text-only skeleton with non-text parts replaced by `$ref` markers (omitted when the whole payload is offloaded) |
-| `gen_ai.content.storage_uri` | Object store URI for the full text payload (present only when offloaded) |
-| `gen_ai.content.media_uris` | Array of object store URIs for non-text content parts (present when the completion contains any non-text media) |
+| `gen_ai.content.storage_uri` *(llm-d extension)* | Object store URI for the full text payload (present only when offloaded) |
+| `gen_ai.content.media_uris` *(llm-d extension)* | Array of object store URIs for non-text content parts (present when the completion contains any non-text media) |
 
 When the payload is truncated due to `maxCompletionBufferBytes` being exceeded, or when
 a non-text part is dropped because the configured backend cannot return a resolvable URI
@@ -177,6 +186,13 @@ The capture pipeline handles non-text content as follows:
    non-text parts are dropped, `gen_ai.content.truncated: true` is set on the event,
    and the text skeleton is still emitted so that text-based debugging continues to
    work.
+7. When the primary `backend` is `inline` (which cannot store binary), the non-text
+   part is routed to the backend named in `offloadBackend`. If `offloadBackend` is
+   empty or unset, the part is dropped with `gen_ai.content.truncated: true` rather
+   than failing the request. Operators selecting `backend: inline` while expecting
+   multimodal capture must therefore configure a non-empty `offloadBackend` (one of
+   `gcs`, `s3`, or `filesystem`); startup configuration validation logs a warning
+   when this combination would silently drop media.
 
 The object-store path convention is extended to encode part index and media type so
 that text and non-text payloads for the same span do not collide:
