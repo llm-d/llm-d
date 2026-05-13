@@ -54,7 +54,7 @@ SIGs operate within the broader llm-d project governance framework defined in [P
 
 ## SIG Detailed Descriptions
 
-### SIG Inference Scheduler
+### SIG Router (Formerly Inference Scheduler)
 
 > **👥 Leadership:** [Nili Guy](https://github.com/nilig), [Abdullah Gharaibeh](https://github.com/ahg-g), [Vita Bortnikov](https://github.com/vitabortnikov)
 >
