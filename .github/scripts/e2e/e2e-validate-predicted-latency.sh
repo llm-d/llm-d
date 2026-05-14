@@ -37,6 +37,7 @@ EOF
   exit 0
 }
 
+# ── Defaults ────────────────────────────────────────────────────────────────
 NAMESPACE="llm-d"
 CLI_MODEL_ID=""
 ITERATIONS=100
@@ -44,6 +45,10 @@ CONCURRENCY=8
 EPP_METRICS_PORT="${EPP_METRICS_PORT:-9090}"
 EPP_HOST_OVERRIDE="${EPP_HOST:-}"
 VERBOSE=false
+
+# Source common utilities
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "${SCRIPT_DIR}/common.sh"
 
 while [[ $# -gt 0 ]]; do
   case $1 in
@@ -64,28 +69,7 @@ done
 CURL_POD_NAME="curl-pl-${RANDOM}-$$"
 CURL_POD_TIMEOUT_SECONDS="${CURL_POD_TIMEOUT_SECONDS:-120}"
 
-setup_curl_pod() {
-  kubectl delete pod -n "$NAMESPACE" "$CURL_POD_NAME" --ignore-not-found >/dev/null 2>&1 || true
-  echo "Creating curl pod ${CURL_POD_NAME}..."
-  kubectl run "$CURL_POD_NAME" --namespace "$NAMESPACE" \
-    --image=curlimages/curl --restart=Never -- sleep 3600 >/dev/null
-  if ! kubectl wait --for=condition=Ready pod/"$CURL_POD_NAME" \
-       -n "$NAMESPACE" --timeout="${CURL_POD_TIMEOUT_SECONDS}s"; then
-    echo "Error: curl pod failed to become ready" >&2
-    kubectl describe pod -n "$NAMESPACE" "$CURL_POD_NAME" >&2 || true
-    exit 1
-  fi
-}
-
-cleanup_curl_pod() {
-  kubectl delete pod -n "$NAMESPACE" "$CURL_POD_NAME" --ignore-not-found >/dev/null 2>&1 || true
-}
 trap cleanup_curl_pod EXIT
-
-run_curl() {
-  CURL_OUTPUT=""; CURL_EXIT=0
-  CURL_OUTPUT=$(kubectl exec -n "$NAMESPACE" "$CURL_POD_NAME" -- "$@" 2>&1) || CURL_EXIT=$?
-}
 
 # ── Discover EPP service ────────────────────────────────────────────────────
 # The predicted-latency guide deploys the llm-d Router in standalone mode —
@@ -125,16 +109,8 @@ if [[ -n "$CLI_MODEL_ID" ]]; then
 elif [[ -n "${MODEL_ID-}" ]]; then
   : # already set in env
 else
-  echo "Auto-discovering model from ${SVC_HOST}/v1/models..."
-  MODEL_ID=""
-  for _ in $(seq 1 10); do
-    run_curl curl -sS --max-time 15 "http://${SVC_HOST}/v1/models" || true
-    MODEL_ID=$(echo "${CURL_OUTPUT}" | grep -o '"id":"[^"]*"' | head -n 1 | cut -d '"' -f 4) || true
-    [[ -n "$MODEL_ID" ]] && break
-    sleep 10
-  done
-  if [[ -z "$MODEL_ID" ]]; then
-    echo "Error: could not auto-discover model after 10 attempts." >&2
+  MODEL_ID=$(discover_model "$SVC_HOST")
+  if [[ $? -ne 0 ]]; then
     exit 1
   fi
 fi
