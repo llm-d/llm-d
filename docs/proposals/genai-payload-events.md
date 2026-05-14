@@ -149,8 +149,11 @@ attributes (`gen_ai.prompt`, `gen_ai.completion`) follow the upstream spec.
 | `gen_ai.content.media_uris` *(llm-d extension)* | Array of object store URIs for non-text content parts (present when the completion contains any non-text media) |
 
 When the payload is truncated due to `maxCompletionBufferBytes` being exceeded, or when
-a non-text part is dropped because the configured backend cannot return a resolvable URI
-(e.g. `noop`), the event additionally carries `gen_ai.content.truncated: true`.
+a non-text part is dropped because the configured offload target cannot return a
+resolvable URI (see [Non-Text and Multimodal Payloads](#non-text-and-multimodal-payloads)
+for the cases that produce this), the event additionally carries
+`gen_ai.content.truncated: true`. `backend: noop` is distinct: it is the
+no-event-at-all kill switch and emits no `gen_ai.content.*` events of any kind.
 
 ### Non-Text and Multimodal Payloads
 
@@ -182,17 +185,20 @@ The capture pipeline handles non-text content as follows:
 5. URL-reference parts (e.g. `image_url` pointing to a public CDN) are recorded in
    `gen_ai.content.media_uris` as-is and are **not** re-fetched by llm-d; the redaction
    pipeline still runs against the URL string itself.
-6. When the backend is `noop` — or any backend that cannot return a resolvable URI —
-   non-text parts are dropped, `gen_ai.content.truncated: true` is set on the event,
-   and the text skeleton is still emitted so that text-based debugging continues to
-   work.
+6. `backend: noop` short-circuits the entire payload pipeline: no
+   `gen_ai.content.*` events are emitted at all, and steps 1–5 above are skipped.
+   Operators who want capture *disabled* should leave `payloadCapture.enabled: false`;
+   `backend: noop` exists as a secondary kill switch for the case where `enabled` must
+   stay `true` for other reasons (e.g. shared overlay) but this particular component
+   should produce nothing.
 7. When the primary `backend` is `inline` (which cannot store binary), the non-text
    part is routed to the backend named in `offloadBackend`. If `offloadBackend` is
-   empty or unset, the part is dropped with `gen_ai.content.truncated: true` rather
-   than failing the request. Operators selecting `backend: inline` while expecting
-   multimodal capture must therefore configure a non-empty `offloadBackend` (one of
-   `gcs`, `s3`, or `filesystem`); startup configuration validation logs a warning
-   when this combination would silently drop media.
+   empty or unset, the part is dropped with `gen_ai.content.truncated: true` on the
+   emitted event, the text skeleton is still emitted so text-based debugging continues
+   to work, and the request itself is not failed. Operators selecting `backend: inline`
+   while expecting multimodal capture must therefore configure a non-empty
+   `offloadBackend` (one of `gcs`, `s3`, or `filesystem`); startup configuration
+   validation logs a warning when this combination would silently drop media.
 
 The object-store path convention is extended to encode part index and media type so
 that text and non-text payloads for the same span do not collide:
