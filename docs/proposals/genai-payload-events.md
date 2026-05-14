@@ -272,7 +272,7 @@ Backend selection via `payloadCapture.backend`:
 
 | Value | Behaviour |
 |---|---|
-| `noop` (default) | Drop silently; no event emitted |
+| `noop` (default) | Drop silently. No `gen_ai.content.*` events of any kind are emitted on the span — neither for text nor for non-text parts, and `gen_ai.content.truncated` is never set. This is the secondary kill switch and short-circuits the entire capture pipeline (see step 6 of [Non-Text and Multimodal Payloads](#non-text-and-multimodal-payloads)) |
 | `inline` | Attach to OTel event attribute; auto-offload if above threshold |
 | `gcs` | Upload to GCS, emit `gs://bucket/path` URI |
 | `s3` | Upload to S3-compatible store, emit `s3://bucket/path` URI |
