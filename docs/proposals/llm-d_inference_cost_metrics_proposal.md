@@ -1,6 +1,6 @@
 # AI Inference Cost Metrics for llm-d
 
-Author: Sima Nadler
+Authors: Sima Nadler (_IBM_), Alex Meijer (_OpenCost_, _IBM_)
 
 ## Summary
 
@@ -34,7 +34,7 @@ Current challenges include:
 
 1. **Not replacing existing metrics**: This proposal does not replace llm-d's existing performance and operational metrics
 2. **Not a billing system**: This is not a billing/invoicing system, but provides cost data for such systems
-3. **Not for training costs**: Focus is exclusively on inference costs, not model training nor fine-tuning
+3. **Not for training costs**: Focus is exclusively on inference costs, not model training nor fine-tuning.  Changes made to OpenCost, however, will be made with an eye towards enabling future work such as training cost support. 
 4. **Not real-time billing**: Cost calculations are based on recent metrics (5-minute windows), not per-request billing
 5. **Not cloud billing integration**: Does not directly integrate with cloud provider billing APIs (uses OpenCost's existing integrations)
 6. **Not pricing**: This proposal provides costs not prices.  If static or dynamic pricing is desired it can be generated using inference costs as a basis.
@@ -66,7 +66,7 @@ As a finance team member, I want to attribute AI inference costs to specific app
 As a platform team managing llm-d deployments, I want to use cost metrics to optimize routing decisions so I can direct requests to the most cost-effective models and model variants and configurations while maintaining SLO compliance.  The models may be self-hosted or externally provided.
 
 **Acceptance Criteria**:
-- Access real-time cost per token metrics for different self-hosted models and model variants
+- Access cost per token metrics for different self-hosted models and model variants
 - Route requests to lower-cost models or model variants when SLOs permit
 - Track cost savings from intelligent routing decisions
 - Balance cost optimization with latency and throughput requirements
@@ -78,7 +78,7 @@ As an executive team, I want to compare self-hosting costs against commercial AP
 
 **Acceptance Criteria**:
 - View total cost per million tokens for self-hosted models
-- Compare against commercial API pricing - collection of commercial API bills out of scope but may be offered by OpenCost
+- Compare against commercial API pricing - collection of commercial API bills out of scope but may be offered by OpenCost via plugins
 - Understand cost breakdown (GPU, memory, network)
 - Project costs at different scale levels
 
@@ -89,7 +89,7 @@ This proposal recommends adding infrastructure cost tracking for AI inference wo
 ### Why OpenCost?
 
 [OpenCost](https://opencost.io/) provides a good foundation for inference cost tracking because it:
-- Already integrates with Kubernetes and Prometheus
+- Already integrates with Kubernetes and monitoring software including Prometheus
 - Has proven cost allocation algorithms for GPU infrastructure
 - Provides unified visibility across infrastructure, cloud, and custom costs
 - Offers REST API and MCP server for programmatic access
@@ -148,17 +148,20 @@ In addition to collecting and calculating general infrastructure costs as is alr
    - Compute cost per token from infrastructure costs divided by token throughput
    - Allocate costs between input and output tokens based on actual processing time
    - Calculate cache saving due to optimizations such as KV cache hits, prefill/decode separation, and smart routing
+   - Identify idle costs - a key metric needed to enable optimization of infrastructure 
 
 3. **Export cost metrics**:
    - Prometheus metrics for monitoring and alerting
    - REST API for programmatic access
    - MCP server integration for AI agent queries
    - Grafana dashboards for visualization
+   - OpenCost UI for model costs
 
 4. **Enable multi-dimensional queries**:
    - Aggregate by model, namespace, team, workload
    - Filter by time windows
    - Compare costs across different configurations - i.e. model variants
+   - Monitor model and model variant idle costs
 
 ## Design Details
 
@@ -183,13 +186,15 @@ The [POC implementation](https://github.com/simanadler/opencost/tree/initial-inf
 **Cost Metrics**:
 
 Proposed inference cost metrics:
-- `opencost_inference_total_cost`: Hourly GPU infrastructure cost per model
-- `opencost_inference_cost_per_million_tokens`: Blended cost per 1M tokens
-- `opencost_inference_input_cost_per_million_tokens`: Cost per 1M input tokens
-- `opencost_inference_output_cost_per_million_tokens`: Cost per 1M output tokens
+- `llm_total_cost`: Hourly GPU infrastructure cost per model
+- `llm_cost_per_million_tokens`: Blended cost per 1M tokens
+- `llm_input_cost_per_million_tokens`: Cost per 1M input tokens
+- `llm_output_cost_per_million_tokens`: Cost per 1M output tokens
 - Additional metrics to be added related to KV cache costs and savings, and others
 
-**Labels**: `model_name`, `model_version`, `namespace`, `model_variant`
+**Labels**: `model_name`, `model_version`, `namespace`, `model_variant`, `workload`
+
+Note: workload label will be 'inference' when used with llm-d
 
 
 ### Architecture Diagram 
@@ -197,7 +202,7 @@ Proposed inference cost metrics:
 The following shows the proposed architecture.  
 Note that the models running in llm-d generate input to OpenCost, while llm-d components such as the smart router (under development) and AutoScaler may be clients of the Inference costs generated by OpenCost.
 
-View with mermaid extension
+View with mermaid extension or [view image](./diagrams/costarchitecture.png)
 
 ```mermaid
 graph TB
