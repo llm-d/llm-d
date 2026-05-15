@@ -208,7 +208,7 @@ curl http://${GUIDE_NAME}-epp:9090/metrics | grep inference_extension_flow_contr
 
 ## Use Cases
 
-### Use Case 1: Multi-Tenancy (MaaS)
+### Use Case 1: Multi-Tenancy (Model-as-a-Service)
 
 In this use case, we configure 3 priority tiers (Premium, Standard, Best-Effort) and guarantee fairness between tenants within the same tier.
 
