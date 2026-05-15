@@ -56,4 +56,4 @@ Start with Guide 1 and follow in order. Each guide assumes the cluster and compo
 
 ## Cleanup
 
-Each guide includes a cleanup section. If you are following the series end-to-end, skip the cleanup steps until you reach the full teardown at the end of [Guide 6](06-observability.md).
+Each guide includes a cleanup section. If you are following the series end-to-end, skip any `helm uninstall` or cluster deletion steps until the full teardown at the end of [Guide 6](06-observability.md). Other cleanup steps — such as scaling replicas back down — are safe to run between guides.
