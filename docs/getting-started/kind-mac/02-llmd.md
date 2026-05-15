@@ -114,15 +114,13 @@ helm install gaie-sim \
   oci://registry.k8s.io/gateway-api-inference-extension/charts/inferencepool \
   --version v1.4.0 \
   -f <(curl -s https://raw.githubusercontent.com/llm-d/llm-d/main/guides/recipes/scheduler/base.values.yaml) \
-  -f <(curl -s https://raw.githubusercontent.com/llm-d/llm-d/main/guides/simulated-accelerators/gaie-sim/values.yaml) \
-  --set inferenceExtension.monitoring.prometheus.enabled=false \
-  --set inferenceExtension.monitoring.prometheus.auth.enabled=false
+  -f <(curl -s https://raw.githubusercontent.com/llm-d/llm-d/main/docs/getting-started/kind-mac/manifests/gaie-sim-values.yaml)
 ```
 
 ## 6. Apply the HTTPRoute
 
 ```bash
-kubectl apply -f https://raw.githubusercontent.com/llm-d/llm-d/main/guides/simulated-accelerators/httproute.yaml
+kubectl apply -f https://raw.githubusercontent.com/llm-d/llm-d/main/docs/getting-started/kind-mac/manifests/httproute.yaml
 ```
 
 ## 7. Verify the Deployment
