@@ -1,6 +1,6 @@
 # Run llm-d on a kind Cluster (Mac)
 
-*Part 2 of 6 — [Series Index](README.md)*
+*Part 2 of 6 — [Overview](README.md) | [Getting Started](../README.md)*
 
 [llm-d](https://llm-d.ai/) adds a scheduling and routing layer on top of vLLM: a **Gateway** that accepts incoming requests and an **EPP** (Endpoint Policy Processor) that performs KV-cache-aware, load-aware routing to vLLM pods.
 

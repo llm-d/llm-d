@@ -1,6 +1,6 @@
 # llm-d Fault Tolerance on a kind Cluster (Mac)
 
-*Part 5 of 6 — [Series Index](README.md)*
+*Part 5 of 6 — [Overview](README.md) | [Getting Started](../README.md)*
 
 This guide kills a vLLM pod mid-traffic and shows that llm-d's EPP automatically routes around it. There is a brief disruption while the EPP detects the failure, then traffic recovers automatically on the remaining pods — no manual intervention required.
 

@@ -1,6 +1,6 @@
 # Model Aliasing with llm-d on a kind Cluster (Mac)
 
-*Part 4 of 6 — [Series Index](README.md)*
+*Part 4 of 6 — [Overview](README.md) | [Getting Started](../README.md)*
 
 This guide demonstrates `InferenceModelRewrite` — a Gateway API Inference Extension resource that decouples the model name clients send from the model vLLM actually serves. This enables model aliasing, versioning, and A/B traffic splitting without changing client code.
 

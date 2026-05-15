@@ -1,6 +1,6 @@
 # llm-d Load Distribution on a kind Cluster (Mac)
 
-*Part 3 of 6 — [Series Index](README.md)*
+*Part 3 of 6 — [Overview](README.md) | [Getting Started](../README.md)*
 
 This guide scales the vLLM deployment to three replicas and shows llm-d's EPP routing requests across all of them in real time.
 

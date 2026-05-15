@@ -1,4 +1,4 @@
-# llm-d on a kind Cluster (Mac): Series Index
+# llm-d on a kind Cluster (Mac)
 
 LLM inferencing at scale is finding a combination of hardware, software, drivers, kernels, and routing.
 

@@ -1,6 +1,6 @@
 # llm-d EPP Observability on a kind Cluster (Mac)
 
-*Part 6 of 6 — [Series Index](README.md)*
+*Part 6 of 6 — [Overview](README.md) | [Getting Started](../README.md)*
 
 This guide explores the metrics exposed by llm-d's EPP (Endpoint Policy Processor) — the data the scheduler uses to make routing decisions. These metrics give visibility into per-pod queue depth, KV cache utilization, and request rates without any additional monitoring infrastructure.
 
