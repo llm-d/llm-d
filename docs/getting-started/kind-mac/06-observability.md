@@ -133,6 +133,18 @@ inference_pool_ready_pods{name="gaie-sim"} 1
 
 `ready_pods` is the signal the EPP uses to decide which backends are eligible for routing — when it drops to 0, the EPP stops routing until pods recover.
 
+## 6. Full Clean Up
+
+To tear down the entire stack built across this series:
+
+```bash
+helm uninstall gaie-sim
+helm uninstall infra-sim
+helm uninstall agentgateway -n agentgateway-system
+helm uninstall agentgateway-crds -n agentgateway-system
+kind delete cluster --name vllm-hello
+```
+
 ---
 
 [← Previous: Fault Tolerance](05-fault-tolerance.md) | [Back to Overview](README.md)

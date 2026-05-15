@@ -196,7 +196,9 @@ Sample response:
 
 ## 9. Clean Up
 
-Remove the llm-d components (leaves vLLM running):
+If you are continuing to the next guide, skip this section — the cluster and all components should remain running.
+
+To remove only the llm-d components (leaves the cluster and vLLM running):
 
 ```bash
 helm uninstall gaie-sim && helm uninstall infra-sim
