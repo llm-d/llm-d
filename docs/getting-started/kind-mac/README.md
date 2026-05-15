@@ -1,13 +1,5 @@
 # llm-d on a kind Cluster (Mac)
 
-LLM inferencing at scale is finding a combination of hardware, software, drivers, kernels, and routing.
-
-[vLLM](https://docs.vllm.ai/) is the inference engine. It takes a model and a GPU and turns them into a high-throughput HTTP API. Its core innovation is PagedAttention, which manages KV cache memory the way an OS manages virtual memory, enabling continuous batching and dramatically higher GPU utilization compared to naive serving. vLLM handles everything from kernel selection to memory management to the OpenAI-compatible endpoint your application talks to.
-
-But vLLM is a single server. When you need multiple replicas (for scale, redundancy, or cost) you need something above it that understands LLM-specific signals like KV cache state and queue depth. A standard load balancer doesn't; it just round-robins blind.
-
-That's where [llm-d](https://llm-d.ai/) comes in. llm-d adds a scheduling layer, the **EPP (Endpoint Policy Processor)**, that sits between your gateway and your vLLM pods. The EPP routes each request to the pod best positioned to handle it, based on live signals: queue depth, KV cache utilization, and prefix cache hits. Sending a request to a pod that already has the prompt prefix cached avoids redundant computation, reduces latency, and makes better use of GPU memory.
-
 This series walks through deploying and exercising the full llm-d stack on a local Kubernetes cluster on macOS, **no GPU required**. Each guide builds on the previous one.
 
 ## Architecture
