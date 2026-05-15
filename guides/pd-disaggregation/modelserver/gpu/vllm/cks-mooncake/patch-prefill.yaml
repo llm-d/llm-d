@@ -1,0 +1,62 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: prefill
+spec:
+  replicas: 8
+  template:
+    spec:
+      nodeSelector:
+        kubernetes.io/hostname: gf4334a
+      containers:
+        - name: modelserver
+          command: ["/bin/bash", "-c"]
+          args:
+            - |
+              pip install mooncake-transfer-engine-cuda13 && \
+              vllm serve openai/gpt-oss-120b \
+                --disable-access-log-for-endpoints=/health,/metrics,/v1/models \
+                --tensor-parallel-size=1 \
+                --block-size=128 \
+                --kv-transfer-config '{"kv_connector":"MooncakeConnector", "kv_role":"kv_producer", "kv_connector_extra_config":{"mooncake_protocol":"rdma"}}' \
+                --gpu-memory-utilization=0.9 \
+                --port 8000
+          env:
+            - name: VLLM_MOONCAKE_BOOTSTRAP_PORT
+              value: "8998"
+          resources:
+            limits:
+              cpu: "16"
+              memory: 64Gi
+              nvidia.com/gpu: "1"
+              rdma/ib: "1"
+            requests:
+              cpu: "12"
+              memory: 48Gi
+              nvidia.com/gpu: "1"
+              rdma/ib: "1"
+          volumeMounts:
+            - mountPath: /dev/shm
+              name: shm
+            - mountPath: /.cache
+              name: torch-compile-cache
+          startupProbe:
+            initialDelaySeconds: 15
+            periodSeconds: 30
+            timeoutSeconds: 5
+            failureThreshold: 120
+          livenessProbe:
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            periodSeconds: 5
+            timeoutSeconds: 2
+            failureThreshold: 3
+      volumes:
+        - name: shm
+          emptyDir:
+            medium: Memory
+            sizeLimit: 20Gi
+        - name: torch-compile-cache
+          emptyDir: {}
