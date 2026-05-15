@@ -98,6 +98,13 @@ Two complementary autoscaling patterns:
 - **HPA with llm-d Router metrics** — Kubernetes-native scaling based on queue depth and request counts from the Router's internal metrics.
 - **Workload Variant Autoscaler** — multi-model, SLO-aware scaling on heterogeneous hardware that optimizes cost by routing across model variants.
 
+## Getting Started
+
+| Guide | Environment | What it covers |
+|---|---|---|
+| [Quickstart](quickstart.md) | Kubernetes cluster with GPU | End-to-end optimized baseline deployment using Helm |
+| [llm-d on a kind Cluster (Mac)](kind-mac/README.md) | macOS, no GPU required | Six-part series: vLLM → llm-d EPP → load distribution → model aliasing → fault tolerance → observability |
+
 ## Well-Lit Paths
 
 In addition to the software components, llm-d provides **Well-Lit Paths** — tested, benchmarked deployment recipes for common production patterns. These paths are starting points designed to be adapted for your models, hardware, and traffic patterns.
