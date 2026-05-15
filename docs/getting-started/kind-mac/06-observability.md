@@ -4,22 +4,7 @@
 
 This guide explores the metrics exposed by llm-d's EPP (Endpoint Policy Processor) — the data the scheduler uses to make routing decisions. These metrics give visibility into per-pod queue depth, KV cache utilization, and request rates without any additional monitoring infrastructure.
 
-**Prerequisite**: Complete the [Run llm-d on a kind Cluster (Mac)](02-llmd.md) guide. The `vllm-hello` cluster must be running with the llm-d stack deployed.
-
-> **If you installed gaie-sim before this guide was updated**, the metrics endpoint may return `Unauthorized`. Upgrade with auth disabled:
->
-> ```bash
-> helm upgrade gaie-sim \
->   oci://registry.k8s.io/gateway-api-inference-extension/charts/inferencepool \
->   --version v1.4.0 \
->   -f <(curl -s https://raw.githubusercontent.com/llm-d/llm-d/main/guides/recipes/scheduler/base.values.yaml) \
->   -f <(curl -s https://raw.githubusercontent.com/llm-d/llm-d/main/guides/simulated-accelerators/gaie-sim/values.yaml) \
->   --set inferenceExtension.monitoring.prometheus.enabled=false \
->   --set inferenceExtension.monitoring.prometheus.auth.enabled=false
-> ```
-> ```bash
-> kubectl rollout status deployment/gaie-sim-epp
-> ```
+**Prerequisite**: Complete the [Run llm-d on a kind Cluster](02-llmd.md) guide. The `vllm-hello` cluster must be running with the llm-d stack deployed.
 
 ## Architecture
 
@@ -135,7 +120,7 @@ inference_pool_ready_pods{name="gaie-sim"} 1
 
 ## 6. Full Clean Up
 
-To tear down the entire stack built across this series:
+Stop all active port-forwards (Ctrl-C in each terminal running `kubectl port-forward`), then tear down the entire stack built across this series:
 
 ```bash
 helm uninstall gaie-sim

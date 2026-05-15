@@ -8,7 +8,7 @@ This guide demonstrates `InferenceModelRewrite` — a Gateway API Inference Exte
 >
 > **Note on KV-cache prefix routing**: Prefix caching requires GPU and does not work with CPU-mode vLLM. Model aliasing and rewriting are the meaningful routing features demonstrable on a local kind cluster.
 
-**Prerequisite**: Complete the [Run llm-d on a kind Cluster (Mac)](02-llmd.md) guide. The `vllm-hello` cluster must be running with the llm-d stack deployed and the gateway port-forwarded on `:8080`.
+**Prerequisite**: Complete the [Run llm-d on a kind Cluster](02-llmd.md) guide. The `vllm-hello` cluster must be running with the llm-d stack deployed and the gateway port-forwarded on `:8080`.
 
 ## Architecture
 
@@ -21,9 +21,8 @@ flowchart LR
 
     Client(Client):::external -->|"model: opt-stable"| GW[(Gateway\ninfra-sim)]:::service
     GW -->|"ext-proc"| EPP[["EPP\ngaie-sim"]]:::container
-    IMR{{InferenceModelRewrite\nopt-stable 90/10 split}}:::policy --> EPP
-    EPP -->|"90% → facebook/opt-125m"| VLLM[["vLLM Container\nfacebook/opt-125m · CPU"]]:::container
-    EPP -->|"10% → facebook/opt-125m-canary"| VLLM
+    IMR{{InferenceModelRewrite\nopt-stable → facebook/opt-125m}}:::policy --> EPP
+    EPP -->|"facebook/opt-125m"| VLLM[["vLLM Container\nfacebook/opt-125m · CPU"]]:::container
     AGW[["agentgateway\ncontroller"]]:::container -.->|"programs"| GW
 
     subgraph agentgateway-system["agentgateway-system"]
@@ -38,7 +37,7 @@ flowchart LR
     end
 ```
 
-Clients always send `model: opt-stable` — they never need to know which model version is actually serving the request. The `InferenceModelRewrite` resource tells the EPP how to rewrite that name before forwarding to vLLM: 90% of requests go to the stable model, 10% to the canary. Changing the split or promoting the canary is a one-line config change with no client or vLLM restart required.
+Clients send `model: opt-stable` — the `InferenceModelRewrite` resource tells the EPP to rewrite that name to `facebook/opt-125m` before forwarding to vLLM. Changing the target model or promoting a canary is a one-line config change with no client or vLLM restart required.
 
 ## 1. Create an InferenceModelRewrite
 
@@ -115,7 +114,35 @@ The EPP rewrites `opt-stable` to `facebook/opt-125m` before the request reaches 
 
 ## 4. A/B Traffic Splitting (Reference)
 
-`InferenceModelRewrite` supports a `targets` list with weights for splitting traffic across model versions. The configuration syntax is:
+`InferenceModelRewrite` supports a `targets` list with weights for splitting traffic across model versions. When implemented, the architecture looks like this:
+
+```mermaid
+flowchart LR
+    classDef external  fill:#e2e8f0,stroke:#94a3b8,color:#1e293b
+    classDef service   fill:#dbeafe,stroke:#3b82f6,color:#1e40af
+    classDef container fill:#dcfce7,stroke:#16a34a,color:#166534
+    classDef policy    fill:#fce7f3,stroke:#db2777,color:#831843
+
+    Client(Client):::external -->|"model: opt-stable"| GW[(Gateway\ninfra-sim)]:::service
+    GW -->|"ext-proc"| EPP[["EPP\ngaie-sim"]]:::container
+    IMR{{InferenceModelRewrite\nopt-stable 90/10 split}}:::policy --> EPP
+    EPP -->|"90% → facebook/opt-125m"| VLLM[["vLLM Container\nfacebook/opt-125m · CPU"]]:::container
+    EPP -->|"10% → facebook/opt-125m-canary"| VLLM
+    AGW[["agentgateway\ncontroller"]]:::container -.->|"programs"| GW
+
+    subgraph agentgateway-system["agentgateway-system"]
+        AGW
+    end
+
+    subgraph kind["kind cluster: vllm-hello"]
+        GW
+        EPP
+        IMR
+        VLLM
+    end
+```
+
+The configuration syntax is:
 
 ```yaml
 rules:

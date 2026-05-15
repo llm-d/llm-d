@@ -4,7 +4,7 @@
 
 This guide scales the vLLM deployment to three replicas and shows llm-d's EPP routing requests across all of them in real time.
 
-**Prerequisite**: Complete the [Run llm-d on a kind Cluster (Mac)](02-llmd.md) guide first. The `vllm-hello` cluster must be running with the llm-d stack deployed and the gateway port-forwarded on `:8080`.
+**Prerequisite**: Complete the [Run llm-d on a kind Cluster](02-llmd.md) guide first. The `vllm-hello` cluster must be running with the llm-d stack deployed and the gateway port-forwarded on `:8080`.
 
 ## Architecture
 
@@ -99,6 +99,8 @@ In the log terminal you will see the three pod names interleaved, confirming tha
 All three pod suffixes (`jhr6m`, `mr2zp`, `6q9f8`) appear — the EPP's load-aware routing spread requests across the pool. Distribution is not strictly round-robin; pods receive varying counts based on observed queue depth.
 
 ## 5. Scale Back Down
+
+Scale back to a single replica before continuing to the next guide:
 
 ```bash
 kubectl scale deployment/vllm --replicas=1

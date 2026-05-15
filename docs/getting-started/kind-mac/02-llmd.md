@@ -30,7 +30,7 @@ flowchart LR
     end
 ```
 
-> **Prerequisite**: Complete the [Run vLLM on a kind Cluster](01-vllm.md) guide first. The `vllm-hello` cluster must be running with `kind`, `kubectl`, and `helm` installed.
+**Prerequisite**: Complete the [Run vLLM on a kind Cluster](01-vllm.md) guide first. The `vllm-hello` cluster must be running with the vLLM deployment still active.
 
 ## 1. Install CRDs
 
@@ -58,7 +58,7 @@ helm upgrade -i agentgateway \
   --wait
 ```
 
-Install the Gateway API Inference Extension CRDs (provides `InferencePool`, `InferenceModel`):
+Install the Gateway API Inference Extension CRDs (provides `InferencePool`, `InferenceModelRewrite`):
 
 ```bash
 kubectl apply -f https://github.com/kubernetes-sigs/gateway-api-inference-extension/releases/download/v1.4.0/manifests.yaml
@@ -68,9 +68,6 @@ kubectl apply -f https://github.com/kubernetes-sigs/gateway-api-inference-extens
 
 ```bash
 helm repo add llm-d-infra https://llm-d-incubation.github.io/llm-d-infra/
-```
-
-```bash
 helm repo update
 ```
 

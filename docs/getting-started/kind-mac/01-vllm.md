@@ -32,7 +32,7 @@ flowchart LR
 ## 1. Install Tools
 
 ```bash
-brew install kind kubectl
+brew install kind kubectl helm
 ```
 
 ## 2. Create a kind Cluster
@@ -170,19 +170,11 @@ Sample response:
 }
 ```
 
-## 6. Next Steps
+## 6. Clean Up
 
-To add the llm-d scheduling and routing layer on top of this cluster, continue to [Run llm-d on a kind Cluster (Mac)](02-llmd.md). Otherwise, clean up in Step 7.
+If you are continuing to the next guide, skip this section — the cluster and vLLM deployment must remain running.
 
-## 7. Clean Up
-
-If you are continuing to the llm-d guide, only remove the vLLM resources (keeps the cluster running):
-
-```bash
-kubectl delete deployment vllm && kubectl delete service vllm
-```
-
-If you are done entirely, delete the cluster (removes everything):
+To delete the cluster entirely:
 
 ```bash
 kind delete cluster --name vllm-hello

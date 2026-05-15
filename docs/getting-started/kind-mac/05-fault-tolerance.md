@@ -4,7 +4,7 @@
 
 This guide kills a vLLM pod mid-traffic and shows that llm-d's EPP automatically routes around it. There is a brief disruption while the EPP detects the failure, then traffic recovers automatically on the remaining pods — no manual intervention required.
 
-**Prerequisite**: Complete the [Run llm-d on a kind Cluster (Mac)](02-llmd.md) guide. The `vllm-hello` cluster must be running with the llm-d stack deployed and the gateway port-forwarded on `:8080`.
+**Prerequisite**: Complete the [Run llm-d on a kind Cluster](02-llmd.md) guide. The `vllm-hello` cluster must be running with the llm-d stack deployed and the gateway port-forwarded on `:8080`.
 
 ## Architecture
 
@@ -43,7 +43,7 @@ When a pod is deleted, the EPP detects it is no longer healthy and stops routing
 kubectl scale deployment/vllm --replicas=3
 ```
 
-Wait for all three pods to be ready:
+Wait for all three pods to be ready (each takes 2–3 minutes to load the model):
 
 ```bash
 kubectl get pods -l app=vllm -w
