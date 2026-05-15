@@ -1,7 +1,7 @@
 name: Nightly - Optimized Baseline E2E (GKE TPU)
 
 # Nightly regression test for the optimized-baseline guide on GKE with TPU accelerators.
-# Deploys the tpu-v7 modelserver kustomization and validates with e2e-validate.sh.
+# Deploys the tpu-v6 modelserver kustomization and validates with e2e-validate.sh.
 # Tracks issue: https://github.com/llm-d/llm-d/issues/1471
 
 on:
@@ -43,7 +43,7 @@ jobs:
       custom_deploy_script: |
         export GAIE_VERSION=v1.5.0
         export GUIDE_NAME="optimized-baseline"
-        kubectl apply -n ${NAMESPACE} -k guides/${GUIDE_NAME}/modelserver/tpu-v7/vllm
+        kubectl apply -n ${NAMESPACE} -k guides/${GUIDE_NAME}/modelserver/tpu-v6/vllm
         helm install ${GUIDE_NAME} \
           oci://registry.k8s.io/gateway-api-inference-extension/charts/standalone \
           -f guides/recipes/scheduler/base.values.yaml \
