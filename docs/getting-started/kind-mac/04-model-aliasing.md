@@ -157,7 +157,7 @@ rules:
     weight: 10
 ```
 
-> **Note**: Weighted routing across multiple targets is not yet implemented in the EPP version used by this guide (`llm-d-inference-scheduler:v0.7.0`). The EPP currently always selects the first target regardless of weights. The configuration is accepted by the API but has no effect. This is expected to be supported in a future release.
+> **Note**: Weighted routing across multiple targets is not yet implemented in the EPP version deployed by this guide. The EPP currently always selects the first target regardless of weights. The configuration is accepted by the API but has no effect. This is expected to be supported in a future release.
 
 When implemented, firing 10 requests with `model: opt-stable` would produce output like:
 
