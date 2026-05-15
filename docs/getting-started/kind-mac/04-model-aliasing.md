@@ -1,4 +1,4 @@
-# Model Aliasing with llm-d on a kind Cluster (Mac)
+# Model Aliasing with llm-d on a kind Cluster
 
 *Part 4 of 6 — [Overview](README.md) | [Getting Started](../README.md)*
 

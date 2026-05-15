@@ -1,4 +1,4 @@
-# Run llm-d on a kind Cluster (Mac)
+# Run llm-d on a kind Cluster
 
 *Part 2 of 6 — [Overview](README.md) | [Getting Started](../README.md)*
 

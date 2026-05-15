@@ -1,4 +1,4 @@
-# llm-d Fault Tolerance on a kind Cluster (Mac)
+# llm-d Fault Tolerance on a kind Cluster
 
 *Part 5 of 6 — [Overview](README.md) | [Getting Started](../README.md)*
 
