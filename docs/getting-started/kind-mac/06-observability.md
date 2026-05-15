@@ -1,4 +1,4 @@
-# llm-d EPP Observability on a kind Cluster
+# Guide 6: llm-d EPP Observability on a kind Cluster
 
 *Part 6 of 6 — [Overview](README.md) | [Getting Started](../README.md)*
 

@@ -1,4 +1,4 @@
-# Run vLLM on a kind Cluster
+# Guide 1: Run vLLM on a kind Cluster
 
 *Part 1 of 6 — [Overview](README.md) | [Getting Started](../README.md)*
 

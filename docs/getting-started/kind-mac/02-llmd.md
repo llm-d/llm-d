@@ -1,4 +1,4 @@
-# Run llm-d on a kind Cluster
+# Guide 2: Run llm-d on a kind Cluster
 
 *Part 2 of 6 — [Overview](README.md) | [Getting Started](../README.md)*
 

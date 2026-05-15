@@ -1,4 +1,4 @@
-# llm-d Load Distribution on a kind Cluster
+# Guide 3: llm-d Load Distribution on a kind Cluster
 
 *Part 3 of 6 — [Overview](README.md) | [Getting Started](../README.md)*
 
