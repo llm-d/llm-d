@@ -154,3 +154,7 @@ facebook/opt-125m
 ```bash
 kubectl delete inferencemodelrewrite opt-stable
 ```
+
+---
+
+[← Previous: Load Distribution](03-load-distribution.md) | [Next: Fault Tolerance →](05-fault-tolerance.md)

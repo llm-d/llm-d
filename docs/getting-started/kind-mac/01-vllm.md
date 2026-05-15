@@ -187,3 +187,7 @@ If you are done entirely, delete the cluster (removes everything):
 ```bash
 kind delete cluster --name vllm-hello
 ```
+
+---
+
+[Next: Run llm-d on a kind Cluster →](02-llmd.md)

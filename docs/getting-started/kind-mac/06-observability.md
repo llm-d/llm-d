@@ -132,3 +132,7 @@ inference_pool_ready_pods{name="gaie-sim"} 1
 ```
 
 `ready_pods` is the signal the EPP uses to decide which backends are eligible for routing — when it drops to 0, the EPP stops routing until pods recover.
+
+---
+
+[← Previous: Fault Tolerance](05-fault-tolerance.md)

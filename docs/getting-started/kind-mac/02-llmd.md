@@ -207,3 +207,7 @@ To delete the cluster entirely:
 ```bash
 kind delete cluster --name vllm-hello
 ```
+
+---
+
+[← Previous: Run vLLM on a kind Cluster](01-vllm.md) | [Next: Load Distribution →](03-load-distribution.md)

@@ -103,3 +103,7 @@ All three pod suffixes (`jhr6m`, `mr2zp`, `6q9f8`) appear — the EPP's load-awa
 ```bash
 kubectl scale deployment/vllm --replicas=1
 ```
+
+---
+
+[← Previous: Run llm-d on a kind Cluster](02-llmd.md) | [Next: Model Aliasing →](04-model-aliasing.md)

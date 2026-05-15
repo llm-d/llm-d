@@ -113,3 +113,7 @@ Kubernetes restarts the deleted pod automatically. Once it is `1/1 Running`, the
 ```bash
 kubectl scale deployment/vllm --replicas=1
 ```
+
+---
+
+[← Previous: Model Aliasing](04-model-aliasing.md) | [Next: EPP Observability →](06-observability.md)
