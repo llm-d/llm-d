@@ -1,4 +1,4 @@
-# llm-d on a kind Cluster (Mac)
+# llm-d on a kind Cluster
 
 This series walks through deploying and exercising the full llm-d stack on a local Kubernetes cluster on macOS, **no GPU required**. Each guide builds on the previous one.
 
