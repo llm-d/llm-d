@@ -53,3 +53,7 @@ flowchart LR
 - [Homebrew](https://brew.sh/) installed
 
 Start with Guide 1 and follow in order. Each guide assumes the cluster and components from the previous one are still running.
+
+## Cleanup
+
+Each guide includes a cleanup section. If you are following the series end-to-end, skip the cleanup steps until you reach the full teardown at the end of [Guide 6](06-observability.md).
