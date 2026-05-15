@@ -32,7 +32,7 @@ flowchart LR
 ## 1. Install Tools
 
 ```bash
-brew install kind kubectl helm
+brew install kind kubectl helm jq
 ```
 
 ## 2. Create a kind Cluster

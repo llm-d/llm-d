@@ -52,6 +52,7 @@ flowchart LR
 - macOS with [Docker Desktop](https://www.docker.com/products/docker-desktop/) running
 - [Homebrew](https://brew.sh/) installed
 - [Helm](https://helm.sh/docs/intro/install/) installed (`brew install helm`)
+- [jq](https://jqlang.org/) installed (`brew install jq`)
 
 Start with Guide 1 and follow in order. Each guide assumes the cluster and components from the previous one are still running.
 
