@@ -6,6 +6,8 @@ spec:
   replicas: 1
   template:
     spec:
+      nodeSelector:
+        kubernetes.io/hostname: kvcache-gpu0
       containers:
         - name: modelserver
           securityContext:
@@ -34,6 +36,11 @@ spec:
                 --tensor-parallel-size 8 \
                 --kv-transfer-config "{\"kv_connector\":\"OffloadingConnector\",\"kv_role\":\"kv_both\",\"kv_connector_extra_config\":{\"spec_name\":\"TieringOffloadingSpec\",\"cpu_bytes_to_use\":30000000000,\"io_threads\":16,\"secondary_tiers\":[{\"type\":\"obj\",\"store_config\":{\"bucket\":\"${OBJECT_STORE_BUCKET}\",\"endpoint_override\":\"${OBJECT_STORE_ENDPOINT}\",\"access_key\":\"${OBJECT_STORE_ACCESS_KEY}\",\"secret_key\":\"${OBJECT_STORE_SECRET_KEY}\",\"scheme\":\"http\"},\"prefix\":\"\",\"io_threads\":16}]}}"
           env:
+            - name: HF_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: llm-d-hf-token
+                  key: HF_TOKEN
             - name: OBJECT_STORE_BUCKET
               valueFrom:
                 secretKeyRef:
@@ -54,6 +61,28 @@ spec:
                 secretKeyRef:
                   name: object-store-credentials
                   key: OBJECT_STORE_SECRET_KEY
+          startupProbe:
+            httpGet:
+              path: /v1/models
+              port: modelserver
+            initialDelaySeconds: 15
+            periodSeconds: 30
+            timeoutSeconds: 5
+            failureThreshold: 120
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: modelserver
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /v1/models
+              port: modelserver
+            periodSeconds: 5
+            timeoutSeconds: 2
+            failureThreshold: 3
           resources:
             limits:
               cpu: "4"

@@ -6,6 +6,8 @@ spec:
   replicas: 1
   template:
     spec:
+      nodeSelector:
+        kubernetes.io/hostname: kvcache-gpu0
       containers:
         - name: modelserver
           securityContext:
@@ -33,6 +35,34 @@ spec:
                 meta-llama/Meta-Llama-3.1-70B \
                 --tensor-parallel-size 8 \
                 --kv-transfer-config '{"kv_connector":"OffloadingConnector","kv_role":"kv_both","kv_connector_extra_config":{"cpu_bytes_to_use":30000000000}}'
+          env:
+            - name: HF_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: llm-d-hf-token
+                  key: HF_TOKEN
+          startupProbe:
+            httpGet:
+              path: /v1/models
+              port: modelserver
+            initialDelaySeconds: 15
+            periodSeconds: 30
+            timeoutSeconds: 5
+            failureThreshold: 120
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: modelserver
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /v1/models
+              port: modelserver
+            periodSeconds: 5
+            timeoutSeconds: 2
+            failureThreshold: 3
           resources:
             limits:
               cpu: "4"
