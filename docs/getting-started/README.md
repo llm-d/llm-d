@@ -103,7 +103,7 @@ Two complementary autoscaling patterns:
 | Guide | Environment | What it covers |
 |---|---|---|
 | [Quickstart](quickstart.md) | Kubernetes cluster with GPU | End-to-end optimized baseline deployment using Helm |
-| [llm-d on a kind Cluster](kind-mac/README.md) | macOS, no GPU required | Six-part series: vLLM → llm-d EPP → load distribution → model aliasing → fault tolerance → observability |
+| [llm-d on a kind Cluster](../infra-providers/kind/README.md) | macOS, no GPU required | Six-part series: vLLM → llm-d EPP → load distribution → model aliasing → fault tolerance → observability |
 
 ## Well-Lit Paths
 

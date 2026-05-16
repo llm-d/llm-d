@@ -2,7 +2,13 @@
 
 This directory contains documentation specific to each Kubernetes provider for deploying llm-d, as well as troubleshooting and known issues.
 
-## Other providers
+## Providers
+
+| Provider | What it covers |
+|---|---|
+| [kind (macOS)](kind/README.md) | Six-part tutorial: run the full llm-d stack locally on macOS with no GPU |
+
+## Adding a new provider
 
 To add a new infrastructure provider to our well-lit paths, we request the following support:
 

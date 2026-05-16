@@ -1,6 +1,6 @@
 # Guide 1: Run vLLM on a kind Cluster
 
-*Part 1 of 6 — [Overview](README.md) | [Getting Started](../README.md)*
+*Part 1 of 6 — [Overview](README.md) | [Infrastructure Providers](../README.md)*
 
 This guide runs a vLLM inference server on a local Kubernetes cluster using [kind](https://kind.sigs.k8s.io/) on macOS. Because kind uses Docker and Mac lacks GPU passthrough to containers, vLLM runs in **CPU mode** with a small model (`facebook/opt-125m`).
 

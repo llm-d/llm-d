@@ -1,8 +1,8 @@
 # Guide 2: Run llm-d on a kind Cluster
 
-*Part 2 of 6 — [Overview](README.md) | [Getting Started](../README.md)*
+*Part 2 of 6 — [Overview](README.md) | [Infrastructure Providers](../README.md)*
 
-[llm-d](https://llm-d.ai/) adds a scheduling and routing layer on top of vLLM: a **Gateway** that accepts incoming requests and an **EPP** (Endpoint Policy Processor) that performs KV-cache-aware, load-aware routing to vLLM pods.
+[llm-d](https://llm-d.ai/) adds a scheduling and routing layer on top of vLLM: a **Gateway** that accepts incoming requests and an **EPP** (Endpoint Picker) that performs KV-cache-aware, load-aware routing to vLLM pods.
 
 This guide deploys the llm-d scheduling layer into the same `vllm-hello` cluster from the [Run vLLM on a kind Cluster](01-vllm.md) guide and routes requests through it to the real vLLM pod.
 

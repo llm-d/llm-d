@@ -1,6 +1,6 @@
 # Guide 3: llm-d Load Distribution on a kind Cluster
 
-*Part 3 of 6 — [Overview](README.md) | [Getting Started](../README.md)*
+*Part 3 of 6 — [Overview](README.md) | [Infrastructure Providers](../README.md)*
 
 This guide scales the vLLM deployment to three replicas and shows llm-d's EPP routing requests across all of them in real time.
 

@@ -4,7 +4,7 @@ This series walks through deploying and exercising the full llm-d stack on a loc
 
 ## Architecture
 
-The full stack runs inside a single kind cluster. A Gateway accepts client requests on port 8080 and forwards them to the EPP (Endpoint Policy Processor) via the ext-proc protocol. The EPP selects the best vLLM pod for each request based on live signals — queue depth, KV cache utilization, and prefix cache hits — then routes it through the InferencePool. An `InferenceModelRewrite` policy optionally rewrites model names before routing. A separate metrics endpoint on port 9090 exposes the EPP's internal scheduling signals for observability.
+The full stack runs inside a single kind cluster. A Gateway accepts client requests on port 8080 and forwards them to the EPP (Endpoint Picker) via the ext-proc protocol. The EPP selects the best vLLM pod for each request based on live signals — queue depth, KV cache utilization, and prefix cache hits — then routes it through the InferencePool. An `InferenceModelRewrite` policy optionally rewrites model names before routing. A separate metrics endpoint on port 9090 exposes the EPP's internal scheduling signals for observability.
 
 ```mermaid
 flowchart LR

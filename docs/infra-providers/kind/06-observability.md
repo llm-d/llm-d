@@ -1,8 +1,8 @@
 # Guide 6: llm-d EPP Observability on a kind Cluster
 
-*Part 6 of 6 — [Overview](README.md) | [Getting Started](../README.md)*
+*Part 6 of 6 — [Overview](README.md) | [Infrastructure Providers](../README.md)*
 
-This guide explores the metrics exposed by llm-d's EPP (Endpoint Policy Processor) — the data the scheduler uses to make routing decisions. These metrics give visibility into per-pod queue depth, KV cache utilization, and request rates without any additional monitoring infrastructure.
+This guide explores the metrics exposed by llm-d's EPP (Endpoint Picker) — the data the scheduler uses to make routing decisions. These metrics give visibility into per-pod queue depth, KV cache utilization, and request rates without any additional monitoring infrastructure.
 
 **Prerequisite**: Complete the [Run llm-d on a kind Cluster](02-llmd.md) guide. The `vllm-hello` cluster must be running with the llm-d stack deployed.
 
