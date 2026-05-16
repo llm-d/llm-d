@@ -7,6 +7,11 @@ resources:
 
 namePrefix: gpu-vllm-
 
+images:
+  - name: REPLACE_MODEL_SERVER_IMAGE
+    newName: vllm/vllm-openai
+    newTag: v0.19.1
+
 labels:
   - pairs:
       llm-d.ai/guide: tiered-prefix-cache-storage
