@@ -1,0 +1,48 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: decode
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  template:
+    spec:
+      containers:
+        - name: modelserver
+          securityContext:
+            runAsUser: 0
+          command: ["/bin/bash", "-c"]
+          args:
+            - |
+              export PATH="/root/.local/bin:$PATH"
+              if ! command -v git > /dev/null 2>&1; then
+                apt-get update -qq && apt-get install -y -qq git
+              fi
+              rm -rf /workspace/vllm
+              cd /workspace
+              git clone --branch objectstore --depth 1 https://github.com/effi-ofer/vllm.git
+              cd vllm
+              uv venv .venv --python 3.12
+              source .venv/bin/activate
+              VLLM_USE_PRECOMPILED=1 \
+              VLLM_PRECOMPILED_WHEEL_COMMIT=bc150f50299199599673614f80d12a196f377655 \
+              uv pip install -e . --torch-backend=auto
+              uv pip install nvidia-cuda-runtime-cu12
+              CUDA12_LIB=$(python -c "import nvidia.cuda_runtime; print(list(nvidia.cuda_runtime.__path__)[0] + '/lib')")
+              export LD_LIBRARY_PATH="${CUDA12_LIB}:${LD_LIBRARY_PATH:-}"
+              exec vllm serve \
+                meta-llama/Meta-Llama-3.1-70B \
+                --tensor-parallel-size 8 \
+                --kv-transfer-config '{"kv_connector":"OffloadingConnector","kv_role":"kv_both","kv_connector_extra_config":{"cpu_bytes_to_use":30000000000}}'
+          resources:
+            limits:
+              memory: 500Gi
+            requests:
+              memory: 500Gi
+          volumeMounts:
+            - name: workspace
+              mountPath: /workspace
+      volumes:
+        - name: workspace
+          emptyDir: {}
