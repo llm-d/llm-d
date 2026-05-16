@@ -4,8 +4,6 @@ metadata:
   name: decode
 spec:
   replicas: 1
-  strategy:
-    type: Recreate
   template:
     spec:
       containers:
@@ -58,9 +56,13 @@ spec:
                   key: OBJECT_STORE_SECRET_KEY
           resources:
             limits:
-              memory: 500Gi
+              cpu: "4"
+              memory: 300Gi
+              nvidia.com/gpu: "8"
             requests:
-              memory: 500Gi
+              cpu: "4"
+              memory: 300Gi
+              nvidia.com/gpu: "8"
           volumeMounts:
             - name: workspace
               mountPath: /workspace

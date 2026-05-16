@@ -4,8 +4,6 @@ metadata:
   name: decode
 spec:
   replicas: 1
-  strategy:
-    type: Recreate
   template:
     spec:
       containers:
@@ -37,9 +35,13 @@ spec:
                 --kv-transfer-config '{"kv_connector":"OffloadingConnector","kv_role":"kv_both","kv_connector_extra_config":{"cpu_bytes_to_use":30000000000}}'
           resources:
             limits:
-              memory: 500Gi
+              cpu: "4"
+              memory: 300Gi
+              nvidia.com/gpu: "8"
             requests:
-              memory: 500Gi
+              cpu: "4"
+              memory: 300Gi
+              nvidia.com/gpu: "8"
           volumeMounts:
             - name: workspace
               mountPath: /workspace
