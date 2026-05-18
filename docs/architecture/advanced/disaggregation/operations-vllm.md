@@ -184,7 +184,11 @@ The `kv_lease_duration` is configurable via `kv_connector_extra_config`:
 ```
 
 > [!NOTE]
-> Lease-based KV block TTL requires **vLLM v0.22.0** or later.
+> Lease-based KV block TTL requires **vLLM v0.22.0** or later. 
+> In earlier versions, vLLM used a fixed-timeout approach via `VLLM_NIXL_ABORT_REQUEST_TIMEOUT` (default `480s`): 
+> the P instance would free stranded KV blocks only after that timeout elapsed, regardless of whether the D
+> instance was still alive. This made the worst-case hold time very long, and reducing the
+> timeout risked premature eviction when D instances were heavily loaded.
 
 ## Rollouts
 
