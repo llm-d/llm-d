@@ -107,7 +107,7 @@ sequenceDiagram
 ```
 
 > [!WARNING]
-> There is a small window in which request cancellation will not trigger KV freeing on the P instance. If the request is disconnected after it is completed on the P worker but before it reaches the D worker's scheduler (for example, if it disconnects while the request is inside Routing Proxy), the D instance never knows about the request and therefore is unable to free the remote blocks on the P worker. As a result, the KV blocks are stranded on the P instance until the timeout `VLLM_NIXL_ABORT_REQUEST_TIMEOUT`, which defaults to 480s. We are currently working on a lease-extension strategy that will dramatically shorten the timeout window.
+> There is a small window in which request cancellation will not trigger KV freeing on the P instance. If the request is disconnected after it is completed on the P worker but before it reaches the D worker's scheduler (for example, if it disconnects while the request is inside Routing Proxy), the D instance never knows about the request and therefore is unable to free the remote blocks on the P worker. In this case, the KV blocks are held on the P instance until the lease expires (`kv_lease_duration`, default 30s), at which point they are freed automatically.
 
 ## Fault Tolerance
 
@@ -154,7 +154,9 @@ In this way, `llm-d` isolates Prefill instance failure.
 
 While D instance failures are unlikely to result in P instance crashes (since P instance never initiates RDMA operations), there is a challenge around ensuring that KV cache memory on the P instance is not stranded (since the P instance holds onto the KV cache until it has been explicitly pulled from the D instance).
 
-vLLM avoids permanent KV cache stranding by introducing a timeout on the P instance side `VLLM_NIXL_ABORT_REQUEST_TIMEOUT` (default `480s`). After `VLLM_NIXL_ABORT_REQUEST_TIMEOUT` elapses, the P instance will free the KV caches from any requests that have not been READ yet, eventually cleaning up the resources.
+vLLM addresses this with a **lease-based KV block management** system. When a prefill completes, P holds the KV blocks with an initial lease of `kv_lease_duration` (default `30s`). While the request is queued or running on the D instance, D's scheduler periodically sends heartbeat notifications to P, each extending the lease by `lease_extentions=kv_lease_duration * 2/3` (default `20s`). If D crashes (or becomes unresponsive), heartbeats stop, and P automatically frees the KV blocks when the last lease extension expires — at most `lease_extension` seconds after the last heartbeat.
+
+This approach keeps the worst-case block hold time short without risking premature block eviction when D instances are heavily loaded — as long as D is alive, the heartbeats keep the lease active indefinitely.
 
 ```mermaid
 sequenceDiagram
@@ -163,18 +165,23 @@ sequenceDiagram
     participant D as Decode Instance
 
     R->>P: Request (do_remote_decode=True)
-    P->>P: Run prefill (holds onto KVs)
+    P->>P: Run prefill (holds onto KVs with lease)
     P->>R: Response
 
     R->>D: Request (do_remote_prefill=True)
+    D->>P: Heartbeat (extend lease)
+    D->>P: Heartbeat (extend lease)
     note over D: D crashes 💥
-
-    P->>P: Wait `VLLM_NIXL_ABORT_REQUEST_TIMEOUT`
+    note over P: No heartbeat received
+    P->>P: Lease expires
     P->>P: Free KV Blocks
 ```
 
-> [!WARNING]
-> Robustness against Decode instance failure is currently a weakness of the design, since the `VLLM_NIXL_ABORT_REQUEST_TIMEOUT` defaults to a long timeout (`480s` to avoid early-free when D instances are backed up). We recommend that production users consider reducing this timeout, especially if they can ensure Decode instances do not have significant request queuing. We are currently implementing a "lease-extension" system, which will dramatically reduce the timeout with no tradeoff.
+The `kv_lease_duration` is configurable via `kv_connector_extra_config`:
+
+```bash
+--kv-transfer-config '{"kv_connector_extra_config": {"kv_lease_duration": 10}}'
+```
 
 ## Rollouts
 
