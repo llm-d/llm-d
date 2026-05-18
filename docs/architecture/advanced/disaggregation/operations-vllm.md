@@ -183,6 +183,9 @@ The `kv_lease_duration` is configurable via `kv_connector_extra_config`:
 --kv-transfer-config '{"kv_connector_extra_config": {"kv_lease_duration": 10}}'
 ```
 
+> [!NOTE]
+> Lease-based KV block TTL requires **vLLM v0.22.0** or later.
+
 ## Rollouts
 
 In disaggregated serving, rolling out a new version of the model server (e.g. a new version of vLLM or a new configuration) requires care, since prefill-decode instance pairs communicate with each other to execute the KV transfer operation. As a motivating example, vLLM has multiple attention kernel implementations, each of which can have slightly different KV cache layouts - since NIXL pulls the KVs directly from the GPU KV cache memory of the remote instance, we need to ensure these are matching.
