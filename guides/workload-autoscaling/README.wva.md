@@ -148,6 +148,71 @@ This section enables autoscaling for an existing [optimized-baseline](../optimiz
 > **Important:** while installing optimized-baseline, make sure monitoring is enabled so vLLM metrics are scraped before applying this autoscaling overlay:
 > `kubectl apply -n ${NAMESPACE} -k guides/recipes/modelserver/components/monitoring`
 
+### Prerequisites: Variant Labeling and Prometheus Relabeling
+
+**Starting with WVA v0.8.0**, two configuration requirements must be met for WVA to associate Prometheus metrics with a `HPA` resource:
+
+#### 1. Add `llm-d.ai/variant` Label to Pod Template
+
+The `llm-d.ai/variant` label must be present on the **pod template** of your Deployment or LeaderWorkerSet. Set the value to the name of the corresponding `VariantAutoscaling` resource.
+
+**For Deployments:**
+```yaml
+spec:
+  template:
+    metadata:
+      labels:
+        llm-d.ai/variant: optimized-baseline-nvidia-gpu-vllm-decode
+```
+
+**For LeaderWorkerSet:**
+```yaml
+spec:
+  leaderWorkerTemplate:
+    leaderTemplate:
+      metadata:
+        labels:
+          llm-d.ai/variant: optimized-baseline-nvidia-gpu-vllm-decode
+    workerTemplate:
+      metadata:
+        labels:
+          llm-d.ai/variant: optimized-baseline-nvidia-gpu-vllm-decode
+```
+
+> **Note**: The optimized-baseline Kustomize overlay automatically adds this label when you apply the autoscaling configuration.
+
+#### 2. Add Relabeling Rule to ServiceMonitor/PodMonitor
+
+The `llm-d.ai/variant` pod label must be propagated into Prometheus metric series as `llm_d_ai_variant`. Add the following target relabeling rule to the `ServiceMonitor` or `PodMonitor` that scrapes your model-server pods:
+
+**For ServiceMonitor:**
+```yaml
+spec:
+  endpoints:
+  - port: vllm
+    path: /metrics
+    interval: 30s
+    # Add this relabeling rule
+    relabelings:
+    - sourceLabels: [__meta_kubernetes_pod_label_llm_d_ai_variant]
+      targetLabel: llm_d_ai_variant
+      action: replace
+```
+
+**For PodMonitor:**
+```yaml
+spec:
+  podMetricsEndpoints:
+  - port: vllm
+    path: /metrics
+    interval: 30s
+    # Add this relabeling rule
+    relabelings:
+    - sourceLabels: [__meta_kubernetes_pod_label_llm_d_ai_variant]
+      targetLabel: llm_d_ai_variant
+      action: replace
+```
+
 ### Apply the Kustomize Overlay
 
 ```bash
