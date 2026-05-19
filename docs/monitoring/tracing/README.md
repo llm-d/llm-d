@@ -118,7 +118,7 @@ The collector is deployed by `install-otel-collector-jaeger.sh` and all chart de
 
 If you only see generic `GET` spans, check that:
 - `collectDetailedTraces` is set to `"all"` for vLLM
-- The EPP/inference-scheduler image includes tracing instrumentation (`llm-d-router`, not upstream `epp`)
+- The llm-d Router EPP image includes tracing instrumentation
 
 ## Production Recommendations
 
