@@ -36,7 +36,7 @@ spec:
               exec vllm serve \
                 meta-llama/Meta-Llama-3.1-70B \
                 --tensor-parallel-size 1 \
-                --kv-transfer-config '{"kv_connector":"OffloadingConnector","kv_role":"kv_both","kv_connector_extra_config":{"cpu_bytes_to_use":100000000000}}'
+                --kv-transfer-config '{"kv_connector":"OffloadingConnector","kv_role":"kv_both","kv_connector_extra_config":{"spec_name":"TieringOffloadingSpec","cpu_bytes_to_use":100000000000,"secondary_tiers":[{"type":"fs_python","root_dir":"/mnt/files-storage","n_read_threads":16,"n_write_threads":16}]}}'
           env:
             - name: HF_TOKEN
               valueFrom:
