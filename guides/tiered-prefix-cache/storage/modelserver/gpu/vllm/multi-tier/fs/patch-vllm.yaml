@@ -21,8 +21,10 @@ spec:
               fi
               rm -rf /workspace/vllm
               cd /workspace
-              git clone --branch objectstore --depth 1 https://github.com/effi-ofer/vllm.git
+              git clone https://github.com/vllm-project/vllm.git
               cd vllm
+              git fetch --depth 1 origin pull/41735/head
+              git checkout FETCH_HEAD
               uv venv .venv --python 3.12
               source .venv/bin/activate
               VLLM_USE_PRECOMPILED=1 \
@@ -33,7 +35,8 @@ spec:
               export LD_LIBRARY_PATH="${CUDA12_LIB}:${LD_LIBRARY_PATH:-}"
               exec vllm serve \
                 meta-llama/Meta-Llama-3.1-70B \
-                --tensor-parallel-size 1
+                --tensor-parallel-size 1 \
+                --kv-transfer-config '{"kv_connector":"OffloadingConnector","kv_role":"kv_both","kv_connector_extra_config":{"cpu_bytes_to_use":100000000000}}'
           env:
             - name: HF_TOKEN
               valueFrom:
@@ -76,6 +79,8 @@ spec:
               mountPath: /workspace
             - name: dshm
               mountPath: /dev/shm
+            - name: files-storage
+              mountPath: /mnt/files-storage
       volumes:
         - name: workspace
           emptyDir: {}
@@ -83,3 +88,6 @@ spec:
           emptyDir:
             medium: Memory
             sizeLimit: 200Gi
+        - name: files-storage
+          persistentVolumeClaim:
+            claimName: llm-d-kv-cache-storage

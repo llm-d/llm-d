@@ -26,15 +26,16 @@ spec:
               uv venv .venv --python 3.12
               source .venv/bin/activate
               VLLM_USE_PRECOMPILED=1 \
-              VLLM_PRECOMPILED_WHEEL_COMMIT=bc150f50299199599673614f80d12a196f377655 \
+              VLLM_PRECOMPILED_WHEEL_COMMIT=599e75f432e5fd7c77e65dc95587f3441201bdbc \
               uv pip install -e . --torch-backend=auto
               uv pip install nvidia-cuda-runtime-cu12
+              uv pip install nixl
               CUDA12_LIB=$(python -c "import nvidia.cuda_runtime; print(list(nvidia.cuda_runtime.__path__)[0] + '/lib')")
               export LD_LIBRARY_PATH="${CUDA12_LIB}:${LD_LIBRARY_PATH:-}"
               exec vllm serve \
                 meta-llama/Meta-Llama-3.1-70B \
-                --tensor-parallel-size 8 \
-                --kv-transfer-config "{\"kv_connector\":\"OffloadingConnector\",\"kv_role\":\"kv_both\",\"kv_connector_extra_config\":{\"spec_name\":\"TieringOffloadingSpec\",\"cpu_bytes_to_use\":30000000000,\"io_threads\":16,\"secondary_tiers\":[{\"type\":\"obj\",\"store_config\":{\"bucket\":\"${OBJECT_STORE_BUCKET}\",\"endpoint_override\":\"${OBJECT_STORE_ENDPOINT}\",\"access_key\":\"${OBJECT_STORE_ACCESS_KEY}\",\"secret_key\":\"${OBJECT_STORE_SECRET_KEY}\",\"scheme\":\"http\"},\"prefix\":\"\",\"io_threads\":16}]}}"
+                --tensor-parallel-size 1 \
+                --kv-transfer-config "{\"kv_connector\":\"OffloadingConnector\",\"kv_role\":\"kv_both\",\"kv_connector_extra_config\":{\"spec_name\":\"TieringOffloadingSpec\",\"cpu_bytes_to_use\":100000000000,\"io_threads\":16,\"secondary_tiers\":[{\"type\":\"obj\",\"store_config\":{\"bucket\":\"${OBJECT_STORE_BUCKET}\",\"endpoint_override\":\"${OBJECT_STORE_ENDPOINT}\",\"access_key\":\"${OBJECT_STORE_ACCESS_KEY}\",\"secret_key\":\"${OBJECT_STORE_SECRET_KEY}\",\"scheme\":\"http\"},\"prefix\":\"\",\"io_threads\":16}]}}"
           env:
             - name: HF_TOKEN
               valueFrom:
@@ -61,6 +62,10 @@ spec:
                 secretKeyRef:
                   name: object-store-credentials
                   key: OBJECT_STORE_SECRET_KEY
+            - name: AWS_REQUEST_CHECKSUM_CALCULATION
+              value: WHEN_REQUIRED
+            - name: AWS_RESPONSE_CHECKSUM_VALIDATION
+              value: WHEN_REQUIRED
           startupProbe:
             httpGet:
               path: /v1/models
@@ -87,14 +92,20 @@ spec:
             limits:
               cpu: "4"
               memory: 300Gi
-              nvidia.com/gpu: "8"
+              nvidia.com/gpu: "1"
             requests:
               cpu: "4"
               memory: 300Gi
-              nvidia.com/gpu: "8"
+              nvidia.com/gpu: "1"
           volumeMounts:
             - name: workspace
               mountPath: /workspace
+            - name: dshm
+              mountPath: /dev/shm
       volumes:
         - name: workspace
           emptyDir: {}
+        - name: dshm
+          emptyDir:
+            medium: Memory
+            sizeLimit: 200Gi
