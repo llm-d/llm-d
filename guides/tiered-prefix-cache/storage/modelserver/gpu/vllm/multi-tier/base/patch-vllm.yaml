@@ -32,7 +32,7 @@ spec:
               CUDA12_LIB=$(python -c "import nvidia.cuda_runtime; print(list(nvidia.cuda_runtime.__path__)[0] + '/lib')")
               export LD_LIBRARY_PATH="${CUDA12_LIB}:${LD_LIBRARY_PATH:-}"
               exec vllm serve \
-                meta-llama/Meta-Llama-3.1-70B \
+                meta-llama/Meta-Llama-3.1-8B \
                 --tensor-parallel-size 1
           env:
             - name: HF_TOKEN

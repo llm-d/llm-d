@@ -33,7 +33,7 @@ spec:
               CUDA12_LIB=$(python -c "import nvidia.cuda_runtime; print(list(nvidia.cuda_runtime.__path__)[0] + '/lib')")
               export LD_LIBRARY_PATH="${CUDA12_LIB}:${LD_LIBRARY_PATH:-}"
               exec vllm serve \
-                meta-llama/Meta-Llama-3.1-70B \
+                meta-llama/Meta-Llama-3.1-8B \
                 --tensor-parallel-size 1 \
                 --kv-transfer-config "{\"kv_connector\":\"OffloadingConnector\",\"kv_role\":\"kv_both\",\"kv_connector_extra_config\":{\"spec_name\":\"TieringOffloadingSpec\",\"cpu_bytes_to_use\":100000000000,\"io_threads\":16,\"secondary_tiers\":[{\"type\":\"obj\",\"store_config\":{\"bucket\":\"${OBJECT_STORE_BUCKET}\",\"endpoint_override\":\"${OBJECT_STORE_ENDPOINT}\",\"access_key\":\"${OBJECT_STORE_ACCESS_KEY}\",\"secret_key\":\"${OBJECT_STORE_SECRET_KEY}\",\"scheme\":\"http\"},\"prefix\":\"\",\"io_threads\":16}]}}"
           env:
