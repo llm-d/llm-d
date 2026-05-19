@@ -356,13 +356,13 @@ The Flow Control layer behavior is customizable via several extension points imp
 ### Concrete Plugins
 
 #### Fairness Policies
-*   **[`global-strict-fairness-policy`](https://github.com/llm-d/llm-d-inference-scheduler/tree/main/pkg/epp/framework/plugins/flowcontrol/fairness/globalstrict/README.md)**: Ignores flow isolation and serves all requests in a single global order based on the Ordering Policy. Ideal when strict global ordering must be enforced across all requests within the band and fairness is not a concern.
-*   **[`round-robin-fairness-policy`](https://github.com/llm-d/llm-d-inference-scheduler/tree/main/pkg/epp/framework/plugins/flowcontrol/fairness/roundrobin/README.md)**: Guarantees fair sharing by cycling through active flows one by one. Prevents a single high-volume flow from starving others (solving the "Noisy Neighbor" problem).
+*   **[`global-strict-fairness-policy`](https://github.com/llm-d/llm-d-router/tree/main/pkg/epp/framework/plugins/flowcontrol/fairness/globalstrict/README.md)**: Ignores flow isolation and serves all requests in a single global order based on the Ordering Policy. Ideal when strict global ordering must be enforced across all requests within the band and fairness is not a concern.
+*   **[`round-robin-fairness-policy`](https://github.com/llm-d/llm-d-router/tree/main/pkg/epp/framework/plugins/flowcontrol/fairness/roundrobin/README.md)**: Guarantees fair sharing by cycling through active flows one by one. Prevents a single high-volume flow from starving others (solving the "Noisy Neighbor" problem).
 
 #### Ordering Policies
-*   **[`fcfs-ordering-policy`](https://github.com/llm-d/llm-d-inference-scheduler/tree/main/pkg/epp/framework/plugins/flowcontrol/ordering/fcfs/README.md)**: First-Come, First-Served based on arrival time. (Default)
-*   **[`edf-ordering-policy`](https://github.com/llm-d/llm-d-inference-scheduler/tree/main/pkg/epp/framework/plugins/flowcontrol/ordering/edf/README.md)**: Earliest Deadline First, prioritizing requests with the closest expiration time.
-*   **[`slo-deadline-ordering-policy`](https://github.com/llm-d/llm-d-inference-scheduler/tree/main/pkg/epp/framework/plugins/flowcontrol/ordering/slodeadline/README.md)**: Orders requests by an SLO-based deadline computed from arrival time. Uses the `x-slo-ttft-ms` header. Requests without this header are placed behind all SLO requests, risking starvation.
+*   **[`fcfs-ordering-policy`](https://github.com/llm-d/llm-d-router/tree/main/pkg/epp/framework/plugins/flowcontrol/ordering/fcfs/README.md)**: First-Come, First-Served based on arrival time. (Default)
+*   **[`edf-ordering-policy`](https://github.com/llm-d/llm-d-router/tree/main/pkg/epp/framework/plugins/flowcontrol/ordering/edf/README.md)**: Earliest Deadline First, prioritizing requests with the closest expiration time.
+*   **[`slo-deadline-ordering-policy`](https://github.com/llm-d/llm-d-router/tree/main/pkg/epp/framework/plugins/flowcontrol/ordering/slodeadline/README.md)**: Orders requests by an SLO-based deadline computed from arrival time. Uses the `x-slo-ttft-ms` header. Requests without this header are placed behind all SLO requests, risking starvation.
 
 #### Saturation Detectors
 
@@ -373,8 +373,8 @@ The behavior of the saturation detector depends on whether flow control is enabl
 
 Available plugins:
 
-*   **[`utilization-detector`](https://github.com/llm-d/llm-d-inference-scheduler/tree/main/pkg/epp/framework/plugins/flowcontrol/saturationdetector/utilization/README.md)**: Closed-loop detector reacting to real-time telemetry (queue depth, KV cache). Highly accurate but subject to telemetry lag ("thundering herd"). In heterogeneous pools, it treats all endpoints equally (unweighted average), meaning a small saturated endpoint can trigger global backpressure. (Default)
-*   **[`concurrency-detector`](https://github.com/llm-d/llm-d-inference-scheduler/tree/main/pkg/epp/framework/plugins/flowcontrol/saturationdetector/concurrency/README.md)**: Open-loop detector based on active in-flight request accounting. Instantaneous reaction but blind to actual hardware memory pressure (KV cache filling). In heterogeneous pools, it biases toward the state of larger endpoints (aggregate capacity model).
+*   **[`utilization-detector`](https://github.com/llm-d/llm-d-router/tree/main/pkg/epp/framework/plugins/flowcontrol/saturationdetector/utilization/README.md)**: Closed-loop detector reacting to real-time telemetry (queue depth, KV cache). Highly accurate but subject to telemetry lag ("thundering herd"). In heterogeneous pools, it treats all endpoints equally (unweighted average), meaning a small saturated endpoint can trigger global backpressure. (Default)
+*   **[`concurrency-detector`](https://github.com/llm-d/llm-d-router/tree/main/pkg/epp/framework/plugins/flowcontrol/saturationdetector/concurrency/README.md)**: Open-loop detector based on active in-flight request accounting. Instantaneous reaction but blind to actual hardware memory pressure (KV cache filling). In heterogeneous pools, it biases toward the state of larger endpoints (aggregate capacity model).
 
 > [!NOTE]
 > #### The "Healthy Buffer" Principle

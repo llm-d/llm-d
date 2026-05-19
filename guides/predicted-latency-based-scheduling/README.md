@@ -206,6 +206,6 @@ kubectl delete namespace ${NAMESPACE}
 ## Related
 
 - [Latency Predictor Architecture](../../docs/architecture/advanced/latency-predictor.md) — plugin pipeline, ML model, scaling characteristics, metric reference.
-- [llm-d/llm-d-inference-scheduler](https://github.com/llm-d/llm-d-inference-scheduler) — source for the EPP plugins and per-plugin configuration references.
+- [llm-d/llm-d-router](https://github.com/llm-d/llm-d-router) — source for the EPP plugins and per-plugin configuration references.
 - [llm-d/llm-d-latency-predictor](https://github.com/llm-d/llm-d-latency-predictor) — source for the training and prediction server Python code.
 - [Predicted Latency-Based Scheduling for LLMs](https://llm-d.ai/blog/predicted-latency-based-scheduling-for-llms) — design rationale and benchmark results.

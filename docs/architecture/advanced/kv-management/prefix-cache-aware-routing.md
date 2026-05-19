@@ -11,8 +11,8 @@ llm-d provides two distinct implementations of this capability, catering to diff
 The approximate implementation is designed to be lightweight and requires no external dependencies beyond the standard EPP deployment.
 
 ### Components
-- [**`approx-prefix-cache-producer`**](https://github.com/llm-d/llm-d-inference-scheduler/tree/main/pkg/epp/framework/plugins/requestcontrol/dataproducer/approximateprefix) (DataProducer plugin)
-- [**`prefix-cache-scorer`**](https://github.com/llm-d/llm-d-inference-scheduler/tree/main/pkg/epp/framework/plugins/scheduling/scorer/prefix) (Scorer plugin)
+- [**`approx-prefix-cache-producer`**](https://github.com/llm-d/llm-d-router/tree/main/pkg/epp/framework/plugins/requestcontrol/dataproducer/approximateprefix) (DataProducer plugin)
+- [**`prefix-cache-scorer`**](https://github.com/llm-d/llm-d-router/tree/main/pkg/epp/framework/plugins/scheduling/scorer/prefix) (Scorer plugin)
 
 ### How it Works
 1.  **Approximation**: Since the EPP does not natively contain a tokenizer, it approximates tokens using character-to-token ratios.
@@ -32,8 +32,8 @@ The approximate implementation is designed to be lightweight and requires no ext
 The precise implementation provides 100% accuracy by leveraging actual token data and real-time state updates from the model servers.
 
 ### Components
-- [**`tokenizer`**](https://github.com/llm-d/llm-d-inference-scheduler/tree/main/pkg/epp/framework/plugins/requestcontrol/dataproducer/tokenizer) (DataProducer plugin)
-- [**`precise-prefix-cache-scorer`**](https://github.com/llm-d/llm-d-inference-scheduler/tree/main/pkg/epp/framework/plugins/scheduling/scorer/preciseprefixcache) (Scorer plugin)
+- [**`tokenizer`**](https://github.com/llm-d/llm-d-router/tree/main/pkg/epp/framework/plugins/requestcontrol/dataproducer/tokenizer) (DataProducer plugin)
+- [**`precise-prefix-cache-scorer`**](https://github.com/llm-d/llm-d-router/tree/main/pkg/epp/framework/plugins/scheduling/scorer/preciseprefixcache) (Scorer plugin)
 - **KV-Cache Indexer** (EPP Data Layer component)
 
 ### How it Works

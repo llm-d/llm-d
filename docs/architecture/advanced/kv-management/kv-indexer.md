@@ -153,4 +153,4 @@ Many deployment patterns cache KV blocks based on more than text. The indexer su
 ## Further Reading
 
 - [**llm-d-kv-cache**](https://github.com/llm-d/llm-d-kv-cache) — the indexer library. See [architecture.md](https://github.com/llm-d/llm-d-kv-cache/blob/main/docs/architecture.md) for the in-depth technical architecture (block-key hashing, dual-key design, event adapters, module breakdown) and [configuration.md](https://github.com/llm-d/llm-d-kv-cache/blob/main/docs/configuration.md) for the full configuration reference.
-- [**llm-d Router**](https://github.com/llm-d/llm-d-inference-scheduler) — source for the `precise-prefix-cache-scorer` and `tokenizer` plugins. Plugin lifecycle, EPP extension-point wiring, and request scheduling profile examples.
+- [**llm-d Router**](https://github.com/llm-d/llm-d-router) — source for the `precise-prefix-cache-scorer` and `tokenizer` plugins. Plugin lifecycle, EPP extension-point wiring, and request scheduling profile examples.

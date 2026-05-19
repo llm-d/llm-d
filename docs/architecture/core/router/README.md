@@ -29,7 +29,7 @@ This decoupled architecture allows llm-d to leverage the performance and reliabi
 
 To ensure clarity across the project, we use the following standard terminology:
 
-- **llm-d Router**: The complete intelligent entry point, comprising both the **Proxy** (e.g., Envoy) and the **Endpoint Picker (EPP)**. This term replaces "Inference Scheduler" in all contexts.
+- **llm-d Router**: The complete intelligent entry point, comprising both the **Proxy** (e.g., Envoy) and the **Endpoint Picker (EPP)**. This term replaces "Router" in all contexts.
 - **llm-d Endpoint Picker (EPP)**: The specific component that implements the routing intelligence and scoring logic. Use this term when referring to capabilities or configurations specific to the EPP itself, rather than the request routing system as a whole.
 - **Inference Gateway**: A synonym for the **llm-d Router** when operating in **Gateway Mode**.
 - **Request Scheduler**: A sub-component within the EPP that acts as the core decision-making engine for intelligent request routing by filtering and scoring candidate model servers (aka endpoints).
