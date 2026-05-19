@@ -88,12 +88,14 @@ For advanced configuration options and implementation details, see the [llm-d FS
 Set your storage class depending on your environment:
 
 ```bash
-export STORAGE_CLASS="" # leave empty to use the cluster default StorageClass; or set "lustre" / "efs-sc"
+export STORAGE_CLASS="" # leave empty to use the cluster default StorageClass; or set "lustre-class" / "efs-sc" / "azurelustre-class"
 ```
 
 To provision a managed GCP Lustre instance on GKE and configure the corresponding `StorageClass`, follow the [GCP Lustre guide](./manifests/backends/lustre/README.md).
 
 To provision AWS EFS and configure the corresponding `StorageClass`, follow the [EFS guide](./manifests/backends/aws/README.md).
+
+To provision an Azure Managed Lustre Filesystem (AMLFS) on AKS and configure the corresponding `StorageClass`, follow the [Azure Managed Lustre guide](./manifests/backends/azure/README.md).
 
 
 Create a PVC using the selected storage class:

@@ -1,0 +1,23 @@
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: azurelustre-class
+provisioner: azurelustre.csi.azure.com
+volumeBindingMode: Immediate
+reclaimPolicy: Delete
+parameters:
+  # SKU determines AMLFS throughput per TiB. One of:
+  # AMLFS-Durable-Premium-40, AMLFS-Durable-Premium-125,
+  # AMLFS-Durable-Premium-250, AMLFS-Durable-Premium-500.
+  sku-name: AMLFS-Durable-Premium-250
+  # Availability zone where the AMLFS cluster will be created.
+  # For best performance, place AMLFS in the same region and zone as your AKS nodes.
+  zone: "1"
+  # Maintenance window for the AMLFS cluster.
+  maintenance-day-of-week: Sunday
+  maintenance-time-of-day-utc: "22:00"
+  # location, resource-group-name, vnet-resource-group, vnet-name and subnet-name
+  # default to the AKS cluster's values and can be set explicitly if AMLFS must
+  # live in a different region/RG/VNet. See driver-parameters.md for details.
+mountOptions:
+  - noatime
