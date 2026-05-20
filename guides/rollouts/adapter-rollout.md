@@ -11,6 +11,9 @@ Use LoRA adapter rollouts to test improvements, bug fixes, or new features in yo
 The [`InferenceModelRewrite`](../../docs/api-reference/inferencemodelrewrite.md) resource allows platform administrators and model owners to control how inference requests are routed to specific models within an InferencePool.
 This capability is essential for managing model/adapter lifecycles without disrupting client applications.
 
+> [!IMPORTANT]
+> This guide applies to both llm-d router standalone and gateway modes.
+
 ## Prerequisites & Setup
 
 Follow the [getting started guide](../../docs/getting-started/README.md) to set up the llm-d stack.
@@ -30,6 +33,13 @@ env:
 - name: VLLM_LORA_RESOLVER_CACHE_DIR
   value: "/adapters"
 ```
+
+**Quick Start:** You can deploy a vLLM instance with these configurations using kustomize:
+```bash
+kubectl apply -k guides/rollouts/adapter-rollout-example/
+```
+
+This will create a deployment with the LoRA adapter environment variables pre-configured. See [`kustomization.yaml`](adapter-rollout-example/kustomization.yaml) and [`patch-lora-config.yaml`](adapter-rollout-example/patch-lora-config.yaml) for the full configuration.
 
 Ensure your adapters are organized in subdirectories under the cache directory:
 - `/adapters/small-segment-lora-v1/`

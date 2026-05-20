@@ -1,11 +1,15 @@
-# InferencePool Rollout
+# Blue-Green Update
+
 The goal of this guide is to show you how to perform incremental roll out operations,
 which gradually deploy new versions of your inference infrastructure.
-You can update Inference Pool with minimal service disruption.
-This page also provides guidance on traffic splitting and rollbacks to help ensure reliable deployments for InferencePool rollout.
+You can update InferencePool with minimal service disruption.
+This page also provides guidance on traffic splitting and rollbacks to help ensure reliable deployments for Blue-Green updates.
 
-InferencePool rollout is a powerful technique for performing various infrastructure and model updates with minimal disruption and built-in rollback capabilities.
+Blue-Green update is a powerful technique for performing various infrastructure and model updates with minimal disruption and built-in rollback capabilities.
 This method allows you to introduce changes incrementally, monitor their impact, and revert to the previous state if necessary.
+
+> [!IMPORTANT]
+> This guide applies to llm-d router gateway mode only. For standalone mode, use rolling updates or adapter rollouts.
 
 ## Use Cases
 Use Cases for InferencePool Rollout:
@@ -39,12 +43,15 @@ teams can ensure stability and performance, quickly identifying and reverting an
 ## Example
 This is an example of InferencePool rollout with node(compute, accelerator) update roll out
 
-###  Prerequisites
-Follow the [getting started guide](../../docs/getting-started/README.md) to set up the llm-d stack.
+### Prerequisites
+
+To deploy llm-d Router in Gateway Mode follow the below instructions:
+1. Deploy a Kubernetes Gateway (see [gateway guides](../prereq/gateways))
+2. Install llm-d router with HTTPRoute enabled (see [optimized-baseline guide](../optimized-baseline/README.md#gateway-mode))
 
 ### Deploy new infrastructure
 You start with an existing InferencePool named vllm-qwen3-32b.
-To replace the original InferencePool, you create a new InferencePool, configured to select the pods with the `nvidia-h100-80gb` accelerator type.
+To replace the original InferencePool, you create a new InferencePool (the green InferencePool) with your desired configuration.
 
 Assuming the new model servers already exist, simply:
 **Create a new helm-managed InferencePool of a different name, with a new selector specified**
