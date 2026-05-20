@@ -8,9 +8,29 @@ These headers allow the EPP to identify the request's goals, group them for fair
 
 | Header | Description |
 | --- | --- |
-| `x-gateway-inference-objective` | Specifies the name of the `InferenceObjective` resource associated with the request. The EPP uses this to look up the corresponding objective resource in the **same namespace as the InferencePool** to apply the defined priority and performance goals. |
-| `x-gateway-inference-fairness-id` | Provides a unique identifier for grouping requests for fairness-based flow control. Requests with the same ID share capacity according to the fairness policy. If omitted, the EPP defaults to `default-flow`. |
-| `x-gateway-model-name-rewrite` | Specifies the target model name to be used for the request. This is an alternative approach to model name rewriting; while the `InferenceModelRewrite` API provides rule-based rewriting on the server side, this header allows for an explicit, per-request override. When present, the EPP uses this value to override the model name in the request body and for recording model-specific metrics. |
+| `x-llm-d-gateway-inference-objective` | Specifies the name of the `InferenceObjective` resource associated with the request. The EPP uses this to look up the corresponding objective resource in the **same namespace as the InferencePool** to apply the defined priority and performance goals. |
+| `x-llm-d-gateway-inference-fairness-id` | Provides a unique identifier for grouping requests for fairness-based flow control. Requests with the same ID share capacity according to the fairness policy. If omitted, the EPP defaults to `default-flow`. |
+| `x-llm-d-gateway-model-name-rewrite` | Specifies the target model name to be used for the request. This is an alternative approach to model name rewriting; while the `InferenceModelRewrite` API provides rule-based rewriting on the server side, this header allows for an explicit, per-request override. When present, the EPP uses this value to override the model name in the request body and for recording model-specific metrics. |
+
+### Example gRPC Request
+
+When using the `vllmgrpc-parser`, send these values as gRPC request headers using the same key names shown above:
+
+
+For example, with `grpcurl`:
+
+```bash
+grpcurl \
+  -H 'x-llm-d-gateway-inference-fairness-id: tenant-a' \
+  -H 'x-llm-d-gateway-inference-objective: premium-traffic' \
+  -d '{
+    "model": "default-model",
+    "prompt": "Say hello"
+  }' \
+  ${HOST}:${PORT} vllm.GRPCInferenceService/Generate
+```
+
+In application code, attach the same keys as outgoing metadata on the gRPC call. These metadata entries are forwarded through the gateway and read by the EPP the same way as HTTP headers.
 
 ## Service Level Objectives (SLOs)
 
@@ -18,8 +38,8 @@ These headers are used by admission control and load balancing plugins to make d
 
 | Header | Description |
 | --- | --- |
-| `x-slo-ttft-ms` | Specifies the target Time To First Token (TTFT) in milliseconds. Used by plugins to determine if a request can be admitted while meeting the latency goal. |
-| `x-slo-tpot-ms` | Specifies the target Time Per Output Token (TPOT) in milliseconds. Used for admission control based on predicted or observed token generation latency. |
+| `x-llm-d-slo-ttft-ms` | Specifies the target Time To First Token (TTFT) in milliseconds. Used by plugins to determine if a request can be admitted while meeting the latency goal. |
+| `x-llm-d-slo-tpot-ms` | Specifies the target Time Per Output Token (TPOT) in milliseconds. Used for admission control based on predicted or observed token generation latency. |
 
 ---
 

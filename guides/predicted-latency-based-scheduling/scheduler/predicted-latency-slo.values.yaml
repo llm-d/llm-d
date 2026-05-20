@@ -1,7 +1,7 @@
 ## Predicted Latency-Based Scheduling — SLO-aware setup (streamingMode: true).
 ##
 ## Overrides the chart's default plugin pipeline so predicted-latency-producer
-## trains on streaming TPOT samples. Required for x-slo-ttft-ms / x-slo-tpot-ms
+## trains on streaming TPOT samples. Required for x-llm-d-slo-ttft-ms / x-llm-d-slo-tpot-ms
 ## request headers to be honored. Every request must be sent with
 ## "stream": true in the body.
 ##

@@ -97,7 +97,7 @@ Each prediction sidecar sustains roughly 300 QPS of prediction work on a `c4-sta
 The `predicted-latency-producer` plugin has two training modes, exposed via a `streamingMode` parameter:
 
 - **`streamingMode: false`** (default) — Trains on end-to-end request latency. TTFT is recorded at response completion (effectively e2e latency); TPOT is not trained. **Use this mode if** your workload mixes streaming and non-streaming responses, or if you only need latency-aware routing without per-request SLO enforcement.
-- **`streamingMode: true`** — Trains separate TTFT and TPOT models. TTFT is recorded on the first streamed chunk; TPOT is sampled across subsequent tokens. **Use this mode if** your workload is fully streaming and you need meaningful `x-slo-ttft-ms` / `x-slo-tpot-ms` enforcement — a mixed workload in this mode will produce incorrect measurements for the non-streamed responses.
+- **`streamingMode: true`** — Trains separate TTFT and TPOT models. TTFT is recorded on the first streamed chunk; TPOT is sampled across subsequent tokens. **Use this mode if** your workload is fully streaming and you need meaningful `x-llm-d-slo-ttft-ms` / `x-llm-d-slo-tpot-ms` enforcement — a mixed workload in this mode will produce incorrect measurements for the non-streamed responses.
 
 ## Scheduling Strategy
 
