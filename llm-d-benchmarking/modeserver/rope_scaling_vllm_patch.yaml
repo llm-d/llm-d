@@ -3,7 +3,7 @@ kind: Deployment
 metadata:
   name: decode
 spec:
-  replicas: 10
+  replicas: 8
   template:
     spec:
       containers:
@@ -12,11 +12,10 @@ spec:
           # Include all args in overlay patch for consistency
           args:
             - "Qwen/Qwen3-32B"
-            - "--disable-access-log-for-endpoints=/health,/metrics,/v1/models"
-            - "--tensor-parallel-size=2"
-            - "--gpu-memory-utilization=0.95"
-            - "--max-model-len=131072"
-            - "--hf-overrides={\"rope_scaling\":{\"rope_type\":\"yarn\",\"factor\":3.2,\"original_max_position_embeddings\":40960}}"
+            - --disable-access-log-for-endpoints=/health,/metrics,/v1/models
+            - --tensor-parallel-size=2
+            - --max-model-len=131072
+            - --hf-overrides={"rope_scaling":{"rope_type":"yarn","factor":3.2,"original_max_position_embeddings":40960}}
             # Uncomment for distributed tracing
             # - "--otlp-traces-endpoint=http://otel-collector:4317"
             # - "--collect-detailed-traces=all"

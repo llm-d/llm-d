@@ -1,0 +1,78 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: predicted-latency-based-scheduling-epp
+  namespace: default
+data:
+  default-plugins.yaml: |
+    apiVersion: inference.networking.x-k8s.io/v1alpha1
+    kind: EndpointPickerConfig
+    featureGates:
+    - dataLayer
+    ${FLOW_CONTROL_GATE}
+    plugins:
+    - type: no-hit-lru-scorer
+    - type: queue-scorer
+    - type: kv-cache-utilization-scorer
+    - type: token-load-scorer
+      parameters:
+        queueThresholdTokens: ${TOKENS_IN_FLIGHT_SCORER_THRESHOLD}
+    - type: prefix-cache-scorer
+      parameters:
+         maxPrefixTokensToMatch: 128000
+    - type: max-score-picker
+    - type: weighted-random-picker
+    - type: active-request-scorer
+      parameters:
+        includeOutputTokens: false
+    - type: prefix-cache-affinity-filter
+      parameters:
+       affinityThreshold: 0.80
+       explorationProbability: 0.000000001
+       maxTTFTPenaltyMs: 0
+       maxTokensInFlightPenalty: ${MAX_TOKENS_IN_FLIGHT_PENALTY}
+
+    - name: metrics-data-source
+      type: metrics-data-source
+      parameters:
+        scheme: "http"
+        path: "/metrics"
+        insecureSkipVerify: true
+    - name: core-metrics-extractor
+      type: core-metrics-extractor
+      parameters:
+        defaultEngine: "vllm"
+        engineConfigs:
+        - name: vllm
+          queuedRequestsSpec: "vllm:num_requests_waiting"
+          runningRequestsSpec: "vllm:num_requests_running"
+          kvUsageSpec: "vllm:kv_cache_usage_perc"
+          loraSpec: "vllm:lora_requests_info"
+          cacheInfoSpec: "vllm:cache_config_info"
+    - name: inflight-load-producer
+      type: inflight-load-producer
+      parameters:
+        includeOutputTokens: false
+    dataLayer:
+      sources:
+      - pluginRef: metrics-data-source
+        extractors:
+        - pluginRef: core-metrics-extractor
+    schedulingProfiles:
+    - name: default
+      plugins:
+      - pluginRef: prefix-cache-affinity-filter
+      - pluginRef: prefix-cache-scorer
+        weight: ${WEIGHT_PREFIX_CACHE}
+      - pluginRef: queue-scorer
+        weight: ${WEIGHT_QUEUE}
+      - pluginRef: kv-cache-utilization-scorer
+        weight: ${WEIGHT_KV_UTIL}
+      - pluginRef: no-hit-lru-scorer
+        weight: ${WEIGHT_NO_HIT_LRU}
+      - pluginRef: token-load-scorer
+        weight: ${WEIGHT_TOKEN_LOAD}
+      - pluginRef: active-request-scorer
+        weight: ${WEIGHT_ACTIVE_REQUESTS}
+      - pluginRef: ${PICKER_PLUGIN}
+

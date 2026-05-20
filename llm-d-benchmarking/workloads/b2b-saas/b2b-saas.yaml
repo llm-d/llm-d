@@ -1,0 +1,88 @@
+load:
+  type: poisson
+  num_workers: 64
+  request_timeout: 600.0
+  interval: 30.0
+  stages:
+    # Warmup — seat residents (~1×S)
+    - rate: 15
+      duration: 50            # 15*50  = 750
+
+    # Main ladder
+    - rate: 3
+      duration: 20
+    - rate: 10
+      duration: 20
+    - rate: 15
+      duration: 20
+    - rate: 20
+      duration: 38
+    - rate: 22
+      duration: 34
+    - rate: 25
+      duration: 30
+    - rate: 30
+      duration: 25
+    - rate: 35
+      duration: 21
+    - rate: 40
+      duration: 38
+    - rate: 43
+      duration: 36
+    - rate: 46
+      duration: 33
+    - rate: 49
+      duration: 30
+    - rate: 52
+      duration: 29
+    - rate: 55
+      duration: 27
+    - rate: 57
+      duration: 26
+    - rate: 60
+      duration: 25
+
+api:
+  type: completion
+  streaming: ${STREAMING_MODE}
+  headers:
+    x-slo-tpot-ms: "${SLO_TPOT_MS}"
+    x-slo-ttft-ms: "${SLO_TTFT_MS}"
+    x-gateway-inference-objective: ${SHEDDABLE}
+  slo_tpot_header: x-slo-tpot-ms
+server:
+  type: vllm
+  model_name: ${MODEL_NAME}
+  base_url: ${BASE_URL} 
+  ignore_eos: true
+tokenizer:
+  pretrained_model_name_or_path: ${MODEL_NAME}
+metrics:
+  type: prometheus
+  prometheus:
+    url: http://prometheus-server.wva-monitoring.svc.cluster.local:80
+    scrape_interval: 15
+    google_managed: false
+report:
+  request_lifecycle:
+    summary: true
+    per_stage: true
+  prometheus:
+    summary: true
+    per_stage: true
+storage:
+  google_cloud_storage:
+    bucket_name: ${GCS_BUCKET}
+    path: ${OUTPUT_DIR}
+    report_file_prefix: ${REPORT_PREFIX}
+data:
+  type: shared_prefix
+  shared_prefix:
+    num_groups: 150                 # Number of distinct prefix, Note: the number of users is num_groups * num_prompts_per_group
+    num_prompts_per_group: 5        # Number of unique questions per group (prefix)
+    system_prompt_len: 6000         # Length of the first prefix (in tokens), simulate initialization of a system prompt
+    question_len: 1200              # Length of the unique question part (in tokens)
+    # question_len_std=9
+    output_len: 1000              # Target length for the model's generated output (in tokens)
+    # output_len_std=300
+    enable_multi_turn_chat: false  # If enabled, the chat context will be appended for the each request.

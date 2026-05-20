@@ -1,0 +1,74 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: predicted-latency-based-scheduling-epp
+  namespace: default
+data:
+  default-plugins.yaml: |
+    apiVersion: inference.networking.x-k8s.io/v1alpha1
+    kind: EndpointPickerConfig
+    featureGates:
+    - dataLayer
+    ${FLOW_CONTROL_GATE}
+    plugins:
+    - type: prefix-cache-scorer
+      parameters:
+        maxPrefixTokensToMatch: 128000
+
+
+    # Latency prediction pipeline (replaces predicted-latency-scorer)
+    - type: predicted-latency-producer
+      parameters:
+        maxDecodeTokenSamplesForPrediction: 0
+    - type: slo-headroom-tier-filter
+    - type: prefix-cache-affinity-filter
+      parameters:
+        explorationProbability: 0.000000001
+        affinityThreshold: ${AFFINITY_GATE_TAU}
+        maxTTFTPenaltyMs: ${MAX_TTFT_PENALTY_MS}
+        maxTokensInFlightPenalty: ${MAX_TOKENS_IN_FLIGHT_PENALTY}
+
+    - type: latency-scorer
+    - type: max-score-picker
+    - type: weighted-random-picker
+    - type: latency-slo-admitter
+    - type: active-request-scorer
+      parameters:
+        includeOutputTokens: false
+    - name: metrics-data-source
+      type: metrics-data-source
+      parameters:
+        scheme: "http"
+        path: "/metrics"
+        insecureSkipVerify: true
+    - name: core-metrics-extractor
+      type: core-metrics-extractor
+      parameters:
+        defaultEngine: "vllm"
+        engineConfigs:
+        - name: vllm
+          queuedRequestsSpec: "vllm:num_requests_waiting"
+          runningRequestsSpec: "vllm:num_requests_running"
+          kvUsageSpec: "vllm:kv_cache_usage_perc"
+          loraSpec: "vllm:lora_requests_info"
+          cacheInfoSpec: "vllm:cache_config_info"
+    - name: inflight-load-producer
+      type: inflight-load-producer
+      parameters:
+        includeOutputTokens: false
+    dataLayer:
+      sources:
+      - pluginRef: metrics-data-source
+        extractors:
+        - pluginRef: core-metrics-extractor
+    schedulingProfiles:
+    - name: default
+      plugins:
+      - pluginRef: predicted-latency-producer
+      - pluginRef: slo-headroom-tier-filter
+      - pluginRef: prefix-cache-affinity-filter
+      - pluginRef: latency-scorer
+        weight: ${WEIGHT_PREDICTED_LATENCY}
+      - pluginRef: active-request-scorer
+        weight: ${WEIGHT_ACTIVE_REQUESTS}
+      - pluginRef: ${PICKER_PLUGIN}
