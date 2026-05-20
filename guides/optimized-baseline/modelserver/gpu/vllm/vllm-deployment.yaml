@@ -1,0 +1,89 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    llm-d.ai/accelerator-variant: gpu
+    llm-d.ai/accelerator-vendor: nvidia
+    llm-d.ai/guide: optimized-baseline
+    llm-d.ai/model: Qwen3-32B
+    llm-d.ai/role: decode
+  name: optimized-baseline-nvidia-gpu-vllm-decode
+  namespace: default
+spec:
+  replicas: 10
+  selector:
+    matchLabels:
+      llm-d.ai/accelerator-variant: gpu
+      llm-d.ai/accelerator-vendor: nvidia
+      llm-d.ai/guide: optimized-baseline
+      llm-d.ai/model: Qwen3-32B
+      llm-d.ai/role: decode
+  template:
+    metadata:
+      labels:
+        llm-d.ai/accelerator-variant: gpu
+        llm-d.ai/accelerator-vendor: nvidia
+        llm-d.ai/guide: optimized-baseline
+        llm-d.ai/model: Qwen3-32B
+        llm-d.ai/role: decode
+    spec:
+      containers:
+      - args:
+        - Qwen/Qwen3-32B
+        - --disable-access-log-for-endpoints=/health,/metrics,/v1/models
+        - --tensor-parallel-size=2
+        - --max-model-len=131072
+        - --hf-overrides={"rope_scaling":{"rope_type":"yarn","factor":3.2,"original_max_position_embeddings":40960}}
+        command:
+        - vllm
+        - serve
+        image: vllm/vllm-openai:v0.19.1
+        livenessProbe:
+          failureThreshold: 3
+          httpGet:
+            path: /health
+            port: modelserver
+          periodSeconds: 10
+          timeoutSeconds: 5
+        name: modelserver
+        ports:
+        - containerPort: 8000
+          name: modelserver
+          protocol: TCP
+        readinessProbe:
+          failureThreshold: 3
+          httpGet:
+            path: /v1/models
+            port: modelserver
+          periodSeconds: 5
+          timeoutSeconds: 2
+        resources:
+          limits:
+            cpu: "16"
+            memory: 128Gi
+            nvidia.com/gpu: 2
+          requests:
+            cpu: "8"
+            memory: 96Gi
+            nvidia.com/gpu: 2
+        startupProbe:
+          failureThreshold: 120
+          httpGet:
+            path: /v1/models
+            port: modelserver
+          initialDelaySeconds: 15
+          periodSeconds: 30
+          timeoutSeconds: 5
+        volumeMounts:
+        - mountPath: /dev/shm
+          name: shm
+        - mountPath: /.cache
+          name: torch-compile-cache
+      serviceAccountName: optimized-baseline-nvidia-gpu-vllm-sa
+      volumes:
+      - emptyDir:
+          medium: Memory
+          sizeLimit: 20Gi
+        name: shm
+      - emptyDir: {}
+        name: torch-compile-cache
