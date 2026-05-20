@@ -1,0 +1,41 @@
+name: Nightly - PD Disaggregation E2E (GKE TPU)
+
+# Placeholder — real test pending v6e manifests for pd-disaggregation.
+# The existing tpu/vllm kustomization hardcodes tpu7x nodeSelectors; v6e
+# overlays need to land before this can run against the v6e cluster.
+# Tracks issue: https://github.com/llm-d/llm-d/issues/1471
+
+on:
+  schedule:
+    - cron: '30 2 * * *'  # 02:30 UTC daily (staggered from optimized-baseline TPU)
+  workflow_dispatch:
+    inputs:
+      skip_cleanup:
+        description: 'Skip cleanup after tests (for debugging)'
+        required: false
+        default: 'false'
+      pr_number:
+        description: 'PR number for comment-back (set by /test-nightly)'
+        required: false
+        default: ''
+      pr_repo:
+        description: 'Repo for PR comment-back'
+        required: false
+        default: 'llm-d/llm-d'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: nightly-e2e-pd-disaggregation-gke-tpu
+  cancel-in-progress: true
+
+jobs:
+  nightly:
+    if: github.repository == 'llm-d/llm-d'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Placeholder
+        run: |
+          echo "Skipping PD Disaggregation TPU nightly — v6e manifests not yet available."
+          echo "Unblock: add guides/pd-disaggregation/modelserver/tpu-v6e/ overlay and replace this job."

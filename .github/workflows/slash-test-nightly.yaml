@@ -19,11 +19,11 @@ name: /test-nightly Slash Command
 #
 # Available nightlies (the part after /test-nightly):
 #   benchmark-cks, build-image, optimized-baseline-cks,
-#   optimized-baseline-gke, optimized-baseline-ocp,
-#   pd-disaggregation-cks, pd-disaggregation-gke,
+#   optimized-baseline-gke, optimized-baseline-gke-tpu, optimized-baseline-ocp,
+#   pd-disaggregation-cks, pd-disaggregation-gke, pd-disaggregation-gke-tpu,
 #   pd-disaggregation-ocp, precise-prefix-cache-ocp,
 #   tiered-prefix-cache-cpu-offloading-gke, tiered-prefix-cache-cpu-offloading-lmcache-gke,
-#   tiered-prefix-cache-cpu-offloading-ocp, wide-ep-lws-cks, 
+#   tiered-prefix-cache-cpu-offloading-ocp, tiered-prefix-cache-gke-tpu, wide-ep-lws-cks,
 #   wide-ep-lws-gke, wide-ep-lws-ocp,
 #   wva-cks, wva-ocp
 
@@ -60,12 +60,12 @@ jobs:
 
             // Map name to workflow filename
             const E2E_NIGHTLIES = [
-              'optimized-baseline-cks', 'optimized-baseline-gke',
+              'optimized-baseline-cks', 'optimized-baseline-gke', 'optimized-baseline-gke-tpu',
               'optimized-baseline-ocp', 'pd-disaggregation-cks',
-              'pd-disaggregation-gke', 'pd-disaggregation-ocp',
+              'pd-disaggregation-gke', 'pd-disaggregation-gke-tpu', 'pd-disaggregation-ocp',
               'precise-prefix-cache-ocp',
               'tiered-prefix-cache-cpu-offloading-gke', 'tiered-prefix-cache-cpu-offloading-lmcache-gke',
-              'tiered-prefix-cache-cpu-offloading-ocp',
+              'tiered-prefix-cache-cpu-offloading-ocp', 'tiered-prefix-cache-gke-tpu',
               'wide-ep-lws-cks',
               'wide-ep-lws-gke', 'wide-ep-lws-ocp',
               'wva-cks', 'wva-ocp',

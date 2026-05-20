@@ -107,26 +107,26 @@ As indicated before, latency-based scheduling is implemented in the EPP as a set
 
 Two filters narrow the candidate set before scoring.
 
-* **[`prefix-cache-affinity-filter`](https://github.com/llm-d/llm-d-inference-scheduler/tree/main/pkg/epp/framework/plugins/scheduling/filter/prefixcacheaffinity/README.md)** narrows the candidate set to cache-warm endpoints when any endpoint's prefix cache match score exceeds the affinity threshold (default `0.80`). If no endpoint clears the threshold, the filter is a no-op. The filter implements an epsilon-greedy exploit/explore over cache locality, with a TTFT-based escape hatch:
+* **[`prefix-cache-affinity-filter`](https://github.com/llm-d/llm-d-router/tree/main/pkg/epp/framework/plugins/scheduling/filter/prefixcacheaffinity/README.md)** narrows the candidate set to cache-warm endpoints when any endpoint's prefix cache match score exceeds the affinity threshold (default `0.80`). If no endpoint clears the threshold, the filter is a no-op. The filter implements an epsilon-greedy exploit/explore over cache locality, with a TTFT-based escape hatch:
 
   * **Exploit** (default path). The filter narrows to cache-warm endpoints so downstream scoring concentrates reuse on them.
   * **Explore** (small probability). On a configurable fraction of requests the filter bypasses itself entirely, letting traffic land on cache-cold pods so they can seed new entries — this prevents a single pod from permanently owning a hot prefix.
   * **TTFT load gate**. Even on the exploit path, if the best cache-warm pod's predicted TTFT is materially worse than the best overall pod's (by more than a configurable penalty), the filter breaks affinity and yields the full candidate set. This stops a hot prefix from piling up behind a saturated pod while cooler pods sit idle.
 
-* **[`slo-headroom-tier-filter`](https://github.com/llm-d/llm-d-inference-scheduler/tree/main/pkg/epp/framework/plugins/scheduling/filter/sloheadroomtier/README.md)** splits endpoints into a **positive** tier (predicted to meet SLO) and a **negative** tier (predicted to violate SLO), with probabilistic exploration of the negative tier so recovering pods still receive traffic. No-op when SLO headers are absent.
+* **[`slo-headroom-tier-filter`](https://github.com/llm-d/llm-d-router/tree/main/pkg/epp/framework/plugins/scheduling/filter/sloheadroomtier/README.md)** splits endpoints into a **positive** tier (predicted to meet SLO) and a **negative** tier (predicted to violate SLO), with probabilistic exploration of the negative tier so recovering pods still receive traffic. No-op when SLO headers are absent.
 
 ### Scoring Strategy
 
 Three plugins handle scoring and final selection.
 
-* **[`latency-scorer`](https://github.com/llm-d/llm-d-inference-scheduler/tree/main/pkg/epp/framework/plugins/scheduling/scorer/latency/README.md)** scores endpoints. Without SLO headers, lowest predicted latency wins. With SLO headers, the score is derived from headroom (`SLO − predicted`) via the `headroomSelectionStrategy` parameter:
+* **[`latency-scorer`](https://github.com/llm-d/llm-d-router/tree/main/pkg/epp/framework/plugins/scheduling/scorer/latency/README.md)** scores endpoints. Without SLO headers, lowest predicted latency wins. With SLO headers, the score is derived from headroom (`SLO − predicted`) via the `headroomSelectionStrategy` parameter:
 
   * **`least`** (default). Bin-pack: prefer the endpoint closest to the SLO boundary — smallest positive headroom if any pod meets the SLO, smallest negative deficit otherwise. Maximizes utilization and keeps less-loaded pods free for bursty arrivals.
   * **`most`**. Spread: prefer the endpoint with the most positive headroom. More conservative, leaves slack for unexpected spikes. For negative headroom, `least` is always used regardless of this setting.
 
-* **[`latency-slo-admitter`](https://github.com/llm-d/llm-d-inference-scheduler/blob/main/pkg/epp/framework/plugins/requestcontrol/admitter/latencyslo/README.md)** rejects *sheddable* requests (priority < 0) when no endpoint can meet the SLO, rather than wasting capacity on a guaranteed miss. No-op when SLO headers are absent.
+* **[`latency-slo-admitter`](https://github.com/llm-d/llm-d-router/blob/main/pkg/epp/framework/plugins/requestcontrol/admitter/latencyslo/README.md)** rejects *sheddable* requests (priority < 0) when no endpoint can meet the SLO, rather than wasting capacity on a guaranteed miss. No-op when SLO headers are absent.
 
-* **[`weighted-random-picker`](https://github.com/llm-d/llm-d-inference-scheduler/tree/main/pkg/epp/framework/plugins/scheduling/picker/weightedrandom/README.md)** selects an endpoint via weighted random selection over the scores. This spreads load while still favoring better-scoring endpoints, and avoids the "everyone piles onto the current best pod" failure mode of pure arg-max selection.
+* **[`weighted-random-picker`](https://github.com/llm-d/llm-d-router/tree/main/pkg/epp/framework/plugins/scheduling/picker/weightedrandom/README.md)** selects an endpoint via weighted random selection over the scores. This spreads load while still favoring better-scoring endpoints, and avoids the "everyone piles onto the current best pod" failure mode of pure arg-max selection.
 
 ## Observability
 
@@ -147,7 +147,7 @@ All latency and prediction-duration series are Prometheus **histograms**, so das
 
 ## Source
 
-- **EPP plugins** (`predicted-latency-producer`, `prefix-cache-affinity-filter`, `latency-scorer`, `weighted-random-picker`, `slo-headroom-tier-filter`, `latency-slo-admitter`) live in [llm-d Router](https://github.com/llm-d/llm-d-inference-scheduler). Per-plugin configuration references live alongside each plugin in that repo.
+- **EPP plugins** (`predicted-latency-producer`, `prefix-cache-affinity-filter`, `latency-scorer`, `weighted-random-picker`, `slo-headroom-tier-filter`, `latency-slo-admitter`) live in [llm-d Router](https://github.com/llm-d/llm-d-router). Per-plugin configuration references live alongside each plugin in that repo.
 - **Training and prediction server code** (the Python ML sidecars, XGBoost models, stratified sampler) lives in [llm-d/llm-d-latency-predictor](https://github.com/llm-d/llm-d-latency-predictor).
 
 ## Further Reading

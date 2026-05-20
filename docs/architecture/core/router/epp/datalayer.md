@@ -72,13 +72,13 @@ Used for reacting to endpoint lifecycle events (Add, Update, Delete) within the 
 
 ### Sources
 
-- **[`metrics-data-source`](https://github.com/llm-d/llm-d-inference-scheduler/tree/main/pkg/epp/framework/plugins/datalayer/source/metrics)** - polls a Prometheus-compatible metrics endpoint of a model server and parses the response into a structured format for extraction.
-- **[`k8s-notification-source`](https://github.com/llm-d/llm-d-inference-scheduler/tree/main/pkg/epp/framework/plugins/datalayer/source/notifications)** — can be configured to watch a single Kubernetes GVK (either a CRD or a k8s core API) and
+- **[`metrics-data-source`](https://github.com/llm-d/llm-d-router/tree/main/pkg/epp/framework/plugins/datalayer/source/metrics)** - polls a Prometheus-compatible metrics endpoint of a model server and parses the response into a structured format for extraction.
+- **[`k8s-notification-source`](https://github.com/llm-d/llm-d-router/tree/main/pkg/epp/framework/plugins/datalayer/source/notifications)** — can be configured to watch a single Kubernetes GVK (either a CRD or a k8s core API) and
   dispatches `NotificationEvent`s to registered `NotificationExtractor`s when objects are created, updated, or deleted. Multiple extractors can
   be notified of GVK changes by a single source. There are currently no upstream extractors that require this source.
-- **[`endpoint-notification-source`](https://github.com/llm-d/llm-d-inference-scheduler/tree/main/pkg/epp/framework/plugins/datalayer/source/notifications)** — delivers endpoint (aka model server engine) lifecycle events (add, update, delete) to registered `EndpointExtractor`s 
+- **[`endpoint-notification-source`](https://github.com/llm-d/llm-d-router/tree/main/pkg/epp/framework/plugins/datalayer/source/notifications)** — delivers endpoint (aka model server engine) lifecycle events (add, update, delete) to registered `EndpointExtractor`s 
   whenever an endpoint is added to or removed from the datastore. 
 
 ### Extractors
 
-- **[`core-metrics-extractor`](https://github.com/llm-d/llm-d-inference-scheduler/tree/main/pkg/epp/framework/plugins/datalayer/extractor/metrics)** - responsible for extracting a set of model server metrics sourced from `metrics-data-source` and storing them as endpoint attributes (such as `KVCacheUsagePercent` and `WaitingQueueSize`), which scorers like `kv-cache-utilization-scorer` consume. It supports multiple inference engines and can be configured to map engine-specific metric names to a standard set of internal keys. 
+- **[`core-metrics-extractor`](https://github.com/llm-d/llm-d-router/tree/main/pkg/epp/framework/plugins/datalayer/extractor/metrics)** - responsible for extracting a set of model server metrics sourced from `metrics-data-source` and storing them as endpoint attributes (such as `KVCacheUsagePercent` and `WaitingQueueSize`), which scorers like `kv-cache-utilization-scorer` consume. It supports multiple inference engines and can be configured to map engine-specific metric names to a standard set of internal keys. 

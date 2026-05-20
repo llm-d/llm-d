@@ -96,11 +96,11 @@ Flow Control is a software-level scheduling feature at the EPP layer and is enti
 
 ## Installation Instructions
 
-### 1. Deploy the Inference Scheduler
+### 1. Deploy the Router
 
 #### Standalone Mode
 
-This deploys the inference scheduler with an Envoy sidecar, it doesn't set up a Kubernetes Gateway.
+This deploys the router with an Envoy sidecar, it doesn't set up a Kubernetes Gateway.
 
 ```bash
 REPO_ROOT=$(realpath $(git rev-parse --show-toplevel))
@@ -117,7 +117,7 @@ helm install ${GUIDE_NAME} \
 To use a Kubernetes Gateway managed proxy rather than the standalone version, follow these steps instead of applying the previous Helm chart:
 
 1. *Deploy a Kubernetes Gateway* named by following one of [the gateway guides](../prereq/gateways).
-2. *Deploy the inference scheduler and an HTTPRoute* that connects it to the Gateway as follows:
+2. *Deploy the router and an HTTPRoute* that connects it to the Gateway as follows:
 
 ```bash
 export PROVIDER_NAME=gke # options: none, gke, agentgateway, istio
@@ -208,7 +208,7 @@ curl http://${GUIDE_NAME}-epp:9090/metrics | grep inference_extension_flow_contr
 
 ## Use Cases
 
-### Use Case 1: Multi-Tenancy (MaaS)
+### Use Case 1: Multi-Tenancy (Model-as-a-Service)
 
 In this use case, we configure 3 priority tiers (Premium, Standard, Best-Effort) and guarantee fairness between tenants within the same tier.
 

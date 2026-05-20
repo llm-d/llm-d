@@ -1,0 +1,40 @@
+name: Nightly - Tiered Prefix Cache E2E (GKE TPU)
+
+# Placeholder — real test pending v6e compatibility confirmation and manifests.
+# Only tpu-v7 manifests exist; @dannawang0221 to confirm TPUOffloadConnector works on v6e.
+# Tracks issue: https://github.com/llm-d/llm-d/issues/1471
+
+on:
+  schedule:
+    - cron: '30 3 * * *'  # 03:30 UTC daily (staggered from PD TPU nightly; avoids wva-ocp at 03:00)
+  workflow_dispatch:
+    inputs:
+      skip_cleanup:
+        description: 'Skip cleanup after tests (for debugging)'
+        required: false
+        default: 'false'
+      pr_number:
+        description: 'PR number for comment-back (set by /test-nightly)'
+        required: false
+        default: ''
+      pr_repo:
+        description: 'Repo for PR comment-back'
+        required: false
+        default: 'llm-d/llm-d'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: nightly-e2e-tiered-prefix-cache-gke-tpu
+  cancel-in-progress: true
+
+jobs:
+  nightly:
+    if: github.repository == 'llm-d/llm-d'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Placeholder
+        run: |
+          echo "Skipping Tiered Prefix Cache TPU nightly — v6e manifests not yet available."
+          echo "Unblock: confirm TPUOffloadConnector v6e support, add tpu-v6e manifests, replace this job."
