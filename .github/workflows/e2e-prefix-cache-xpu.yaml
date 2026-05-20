@@ -6,13 +6,13 @@ name: XPU Precise Prefix Cache Test
 # specific additions:
 #
 # 1. The UDS tokenizer sidecar is grafted onto the scheduler pod via a helm
-#    post-renderer (guides/precise-prefix-cache-aware/scheduler/patches/uds-tokenizer/).
+#    post-renderer (guides/precise-prefix-cache-routing/router/patches/uds-tokenizer/).
 # 2. Before `helm install`, sed-rewrite Qwen/Qwen3-32B -> Qwen/Qwen3-0.6B in the
 #    shared scheduler values file so the tokenizer plugin and the scorer's
 #    tokenizersPoolConfig match what the XPU overlay deploys. The shared file
 #    ships the Qwen/Qwen3-32B nvidia-gpu default; this coupling is load-bearing
 #    — a mismatch silently collapses prefix-cache scores to 0. Matches the
-#    operator-facing NOTE in guides/precise-prefix-cache-aware/README.md.
+#    operator-facing NOTE in guides/precise-prefix-cache-routing/README.md.
 
 on:
   schedule:
@@ -49,8 +49,8 @@ jobs:
     env:
       NAMESPACE: "llm-d-xpu-pc"
       GAIE_VERSION: "v1.5.0"
-      GUIDE_NAME: "precise-prefix-cache-aware"
-      SCHEDULER_RELEASE_NAME: "precise-prefix-cache-aware"
+      GUIDE_NAME: "precise-prefix-cache-routing"
+      SCHEDULER_RELEASE_NAME: "precise-prefix-cache-routing"
       ACCEL: "xpu"
 
     steps:
@@ -140,7 +140,7 @@ jobs:
           # would hash against the 32B vocab and miss every KV lookup, silently
           # dropping precise-prefix-cache scores to 0. The README's NOTE
           # instructs human operators to make the same edit; the CI automates it.
-          VALUES_FILE="guides/${GUIDE_NAME}/scheduler/${GUIDE_NAME}.values.yaml"
+          VALUES_FILE="guides/${GUIDE_NAME}/router/${GUIDE_NAME}.values.yaml"
           echo "Before:"
           grep -nE 'modelName:' "${VALUES_FILE}" || true
           sed -i 's|modelName: Qwen/Qwen3-32B|modelName: Qwen/Qwen3-0.6B|g' "${VALUES_FILE}"
@@ -149,12 +149,12 @@ jobs:
 
       - name: Deploy scheduler via helm (standalone + UDS post-renderer)
         run: |
-          echo "Installing precise-prefix-cache-aware scheduler (standalone chart) via helm..."
+          echo "Installing precise-prefix-cache-routing scheduler (standalone chart) via helm..."
           helm install "${SCHEDULER_RELEASE_NAME}" \
             oci://registry.k8s.io/gateway-api-inference-extension/charts/standalone \
-            -f guides/recipes/scheduler/base.values.yaml \
-            -f guides/${GUIDE_NAME}/scheduler/${GUIDE_NAME}.values.yaml \
-            --post-renderer ./guides/${GUIDE_NAME}/scheduler/patches/uds-tokenizer/post-renderer.sh \
+            -f guides/recipes/router/base.values.yaml \
+            -f guides/${GUIDE_NAME}/router/${GUIDE_NAME}.values.yaml \
+            --post-renderer ./guides/${GUIDE_NAME}/router/patches/uds-tokenizer/post-renderer.sh \
             -n "${NAMESPACE}" \
             --version "${GAIE_VERSION}" \
             | tee ~/prefix-cache-xpu-deployment.log

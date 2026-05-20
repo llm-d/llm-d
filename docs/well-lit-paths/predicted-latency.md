@@ -12,7 +12,7 @@ This path is for operators who want to adopt predicted latency-based scheduling 
 
 ## Deploy
 
-See the [Predicted Latency guide](../../guides/predicted-latency-based-scheduling) for manifests and step-by-step deployment.
+See the [Predicted Latency guide](../../guides/predicted-latency-routing) for manifests and step-by-step deployment.
 
 ## Architecture
 

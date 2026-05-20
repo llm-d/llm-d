@@ -49,11 +49,11 @@ You can use any of the following exact names or glob patterns matching them:
 | `pd-disaggregation-cks` | CKS | [pd-disaggregation](../guides/pd-disaggregation) |
 | `pd-disaggregation-gke` | GKE | [pd-disaggregation](../guides/pd-disaggregation) |
 | `pd-disaggregation-ocp` | OCP | [pd-disaggregation](../guides/pd-disaggregation) |
-| `precise-prefix-cache-cks` | CKS | [precise-prefix-cache-aware](../guides/precise-prefix-cache-aware) |
-| `precise-prefix-cache-gke` | GKE | [precise-prefix-cache-aware](../guides/precise-prefix-cache-aware) |
-| `precise-prefix-cache-ocp` | OCP | [precise-prefix-cache-aware](../guides/precise-prefix-cache-aware) |
-| `predicted-latency-cks` | CKS | [predicted-latency-based-scheduling](../guides/predicted-latency-based-scheduling) |
-| `predicted-latency-gke` | GKE | [predicted-latency-based-scheduling](../guides/predicted-latency-based-scheduling) |
+| `precise-prefix-cache-cks` | CKS | [precise-prefix-cache-routing](../guides/precise-prefix-cache-routing) |
+| `precise-prefix-cache-gke` | GKE | [precise-prefix-cache-routing](../guides/precise-prefix-cache-routing) |
+| `precise-prefix-cache-ocp` | OCP | [precise-prefix-cache-routing](../guides/precise-prefix-cache-routing) |
+| `predicted-latency-cks` | CKS | [predicted-latency-routing](../guides/predicted-latency-routing) |
+| `predicted-latency-gke` | GKE | [predicted-latency-routing](../guides/predicted-latency-routing) |
 | `tiered-prefix-cache-cpu-offloading-gke` | GKE | [tiered-prefix-cache](../guides/tiered-prefix-cache) |
 | `tiered-prefix-cache-cpu-offloading-lmcache-gke` | GKE | [tiered-prefix-cache](../guides/tiered-prefix-cache) |
 | `tiered-prefix-cache-cpu-offloading-ocp` | OCP | [tiered-prefix-cache](../guides/tiered-prefix-cache) |

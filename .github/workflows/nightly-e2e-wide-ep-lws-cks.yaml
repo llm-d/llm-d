@@ -67,8 +67,8 @@ jobs:
         kubectl apply -n ${NAMESPACE} -k guides/${GUIDE_NAME}/modelserver/gpu/vllm/${INFRA_PROVIDER}
         helm install ${GUIDE_NAME} \
           oci://registry.k8s.io/gateway-api-inference-extension/charts/standalone \
-          -f guides/recipes/scheduler/base.values.yaml \
-          -f guides/${GUIDE_NAME}/scheduler/${GUIDE_NAME}.values.yaml \
+          -f guides/recipes/router/base.values.yaml \
+          -f guides/${GUIDE_NAME}/router/${GUIDE_NAME}.values.yaml \
           -n ${NAMESPACE} --version ${GAIE_VERSION}
       # Wide-EP-specific validation: check prefill + decode pods
       e2e_validate_args: '-v'

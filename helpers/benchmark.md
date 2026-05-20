@@ -136,7 +136,7 @@ This helper describes how to run benchmarks against a deployed llm-d stack.
 >   --no-headers  -o=custom-columns=:metadata.name \
 >   | head -1
 > )
-> export BENCH_TEMPLATE_DIR="${LLMD_ROOT_DIR}"/guides/precise-prefix-cache-aware/benchmark-templates
+> export BENCH_TEMPLATE_DIR="${LLMD_ROOT_DIR}"/guides/precise-prefix-cache-routing/benchmark-templates
 > export BENCHMARK_TEMPLATE="${BENCH_TEMPLATE_DIR}"/guide.yaml
 > # export BENCHMARK_TEMPLATE="${BENCH_TEMPLATE_DIR}"/sanity.yaml
 > # export BENCHMARK_TEMPLATE="${BENCH_TEMPLATE_DIR}"/shared_prefix.yaml

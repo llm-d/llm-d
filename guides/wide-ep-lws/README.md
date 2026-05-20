@@ -79,8 +79,8 @@ This deploys the llm-d Router with an Envoy sidecar, it doesn't set up a Kuberne
 export REPO_ROOT=$(realpath $(git rev-parse --show-toplevel))
 helm install ${GUIDE_NAME} \
     oci://registry.k8s.io/gateway-api-inference-extension/charts/standalone \
-    -f ${REPO_ROOT}/guides/recipes/scheduler/base.values.yaml \
-    -f ${REPO_ROOT}/guides/${GUIDE_NAME}/scheduler/${GUIDE_NAME}.values.yaml \
+    -f ${REPO_ROOT}/guides/recipes/router/base.values.yaml \
+    -f ${REPO_ROOT}/guides/${GUIDE_NAME}/router/${GUIDE_NAME}.values.yaml \
     -n ${NAMESPACE} --version ${GAIE_VERSION}
 ```
 
@@ -98,9 +98,9 @@ export REPO_ROOT=$(realpath $(git rev-parse --show-toplevel))
 export PROVIDER_NAME=gke # options: none, gke, agentgateway, istio
 helm install ${GUIDE_NAME} \
     oci://registry.k8s.io/gateway-api-inference-extension/charts/inferencepool  \
-    -f ${REPO_ROOT}/guides/recipes/scheduler/base.values.yaml \
-    -f ${REPO_ROOT}/guides/recipes/scheduler/features/httproute-flags.yaml \
-    -f ${REPO_ROOT}/guides/${GUIDE_NAME}/scheduler/${GUIDE_NAME}.values.yaml \
+    -f ${REPO_ROOT}/guides/recipes/router/base.values.yaml \
+    -f ${REPO_ROOT}/guides/recipes/router/features/httproute-flags.yaml \
+    -f ${REPO_ROOT}/guides/${GUIDE_NAME}/router/${GUIDE_NAME}.values.yaml \
     --set provider.name=${PROVIDER_NAME} \
     -n ${NAMESPACE} --version ${GAIE_VERSION}
 ```

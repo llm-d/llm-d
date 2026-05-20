@@ -4,7 +4,7 @@
 > `llm-d-incubation/llm-d-modelservice` Helm chart) has been **replaced by
 > Kustomize**. Model server deployment is now handled by reusable Kustomize
 > base layers under `guides/recipes/` (see `guides/recipes/modelserver/`,
-> `guides/recipes/scheduler/`, and `guides/recipes/gateway/`), which each
+> `guides/recipes/router/`, and `guides/recipes/gateway/`), which each
 > well-lit-path guide composes with guide-specific overlays. The
 > `llm-d-modelservice` Helm chart is deprecated and only retained for legacy
 > helmfile-based guides prior to v0.7. See the

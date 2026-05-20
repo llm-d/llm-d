@@ -90,11 +90,11 @@ cd gateway-provider
 helmfile apply -f istio.helmfile.yaml
 ```
 
-### Deploy the example `precise prefix cache aware`
+### Deploy the example `precise prefix cache routing`
 
-Go to the `guides/precise-prefix-cache-aware` example directory.
+Go to the `guides/precise-prefix-cache-routing` example directory.
 ```sh
-cd ../../precise-prefix-cache-aware
+cd ../../precise-prefix-cache-routing
 ```
 
 Create a namespace for your deployment.

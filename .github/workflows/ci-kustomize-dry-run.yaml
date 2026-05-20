@@ -9,7 +9,7 @@ on:
       - guides/recipes/**
       - guides/optimized-baseline/**
       - guides/pd-disaggregation/**
-      - guides/precise-prefix-cache-aware/**
+      - guides/precise-prefix-cache-routing/**
       - guides/workload-autoscaling/**
       - guides/prereq/**
       - helpers/client-setup/**
@@ -25,7 +25,7 @@ jobs:
     outputs:
       optimized-baseline: ${{ steps.filter.outputs.optimized-baseline }}
       pd-disaggregation: ${{ steps.filter.outputs.pd-disaggregation }}
-      precise-prefix-cache-aware: ${{ steps.filter.outputs.precise-prefix-cache-aware }}
+      precise-prefix-cache-routing: ${{ steps.filter.outputs.precise-prefix-cache-routing }}
       workload-autoscaling: ${{ steps.filter.outputs.workload-autoscaling }}
     steps:
       - uses: actions/checkout@v6
@@ -39,7 +39,7 @@ jobs:
               - guides/prereq/gateway-provider/install-gateway-provider-dependencies.sh
               - docs/monitoring/scripts/install-prometheus-grafana.sh
               - guides/recipes/modelserver/**
-              - guides/recipes/scheduler/**
+              - guides/recipes/router/**
               - guides/optimized-baseline/**
             pd-disaggregation:
               - .github/workflows/ci-kustomize-dry-run.yaml
@@ -49,14 +49,14 @@ jobs:
               - guides/prereq/gateway-provider/*.helmfile.yaml
               - docs/monitoring/scripts/install-prometheus-grafana.sh
               - guides/pd-disaggregation/**
-            precise-prefix-cache-aware:
+            precise-prefix-cache-routing:
               - .github/workflows/ci-kustomize-dry-run.yaml
               - helpers/client-setup/install-deps.sh
               - guides/prereq/gateway-provider/common-configurations/**
               - guides/prereq/gateway-provider/install-gateway-provider-dependencies.sh
               - guides/prereq/gateway-provider/*.helmfile.yaml
               - docs/monitoring/scripts/install-prometheus-grafana.sh
-              - guides/precise-prefix-cache-aware/**
+              - guides/precise-prefix-cache-routing/**
             simulated-accelerators:
               - .github/workflows/ci-kustomize-dry-run.yaml
               - helpers/client-setup/install-deps.sh
@@ -116,9 +116,9 @@ jobs:
             echo "--- helm template ---"
             if ! helm template optimized-baseline-scheduler \
               "oci://registry.k8s.io/gateway-api-inference-extension/charts/${chart}" \
-              -f guides/recipes/scheduler/base.values.yaml \
-              -f guides/recipes/scheduler/features/monitoring.values.yaml \
-              -f guides/optimized-baseline/scheduler/optimized-baseline.values.yaml \
+              -f guides/recipes/router/base.values.yaml \
+              -f guides/recipes/router/features/monitoring.values.yaml \
+              -f guides/optimized-baseline/router/optimized-baseline.values.yaml \
               --version "${CHART_VERSION}" > /tmp/rendered.yaml; then
               echo "FAIL: helm template failed for ${chart}"
               failed=1
@@ -229,9 +229,9 @@ jobs:
             echo "--- helm template ---"
             if ! helm template pd-disaggregation-scheduler \
               "oci://registry.k8s.io/gateway-api-inference-extension/charts/${chart}" \
-              -f guides/recipes/scheduler/base.values.yaml \
-              -f guides/recipes/scheduler/features/monitoring.values.yaml \
-              -f guides/pd-disaggregation/scheduler/pd-disaggregation.values.yaml \
+              -f guides/recipes/router/base.values.yaml \
+              -f guides/recipes/router/features/monitoring.values.yaml \
+              -f guides/pd-disaggregation/router/pd-disaggregation.values.yaml \
               --version "${CHART_VERSION}" > /tmp/rendered.yaml; then
               echo "FAIL: helm template failed for ${chart}"
               failed=1
@@ -277,9 +277,9 @@ jobs:
           done
           exit $failed
 
-  dry-run-precise-prefix-cache-aware:
+  dry-run-precise-prefix-cache-routing:
     needs: detect-changes
-    if: needs.detect-changes.outputs.precise-prefix-cache-aware == 'true'
+    if: needs.detect-changes.outputs.precise-prefix-cache-routing == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -310,16 +310,16 @@ jobs:
         # once and pass `--post-renderer uds-tokenizer`; see README.)
         run: |
           CHART_VERSION=v1.5.0
-          POST_RENDERER=./guides/precise-prefix-cache-aware/scheduler/patches/uds-tokenizer/post-renderer.sh
+          POST_RENDERER=./guides/precise-prefix-cache-routing/router/patches/uds-tokenizer/post-renderer.sh
           echo ""
           echo "========================================"
-          echo "precise-prefix-cache-aware: scheduler"
+          echo "precise-prefix-cache-routing: scheduler"
           echo "========================================"
           echo "--- helm template ---"
-          if ! helm template precise-prefix-cache-aware \
+          if ! helm template precise-prefix-cache-routing \
             "oci://registry.k8s.io/gateway-api-inference-extension/charts/standalone" \
-            -f guides/recipes/scheduler/base.values.yaml \
-            -f guides/precise-prefix-cache-aware/scheduler/precise-prefix-cache-aware.values.yaml \
+            -f guides/recipes/router/base.values.yaml \
+            -f guides/precise-prefix-cache-routing/router/precise-prefix-cache-routing.values.yaml \
             --post-renderer "${POST_RENDERER}" \
             --version "${CHART_VERSION}" > /tmp/rendered.yaml; then
             echo "FAIL: helm template failed"
@@ -327,23 +327,23 @@ jobs:
           fi
           echo "--- kubectl apply --dry-run=server ---"
           if kubectl apply --dry-run=server -f /tmp/rendered.yaml; then
-            echo "PASS: precise-prefix-cache-aware / scheduler"
+            echo "PASS: precise-prefix-cache-routing / scheduler"
           else
-            echo "FAIL: precise-prefix-cache-aware / scheduler"
+            echo "FAIL: precise-prefix-cache-routing / scheduler"
             exit 1
           fi
 
       - name: Kustomize build and dry-run all model server overlays
         run: |
           failed=0
-          for overlay_dir in guides/precise-prefix-cache-aware/modelserver/*/; do
+          for overlay_dir in guides/precise-prefix-cache-routing/modelserver/*/; do
             for kust_dir in "${overlay_dir}"*/; do
               [ -f "${kust_dir}kustomization.yaml" ] || continue
-              name="${kust_dir#guides/precise-prefix-cache-aware/modelserver/}"
+              name="${kust_dir#guides/precise-prefix-cache-routing/modelserver/}"
               name="${name%/}"
               echo ""
               echo "========================================"
-              echo "precise-prefix-cache-aware: ${name}"
+              echo "precise-prefix-cache-routing: ${name}"
               echo "========================================"
               echo "--- kustomize build ---"
               if ! kustomize build "${kust_dir}" > /tmp/rendered.yaml; then
@@ -353,9 +353,9 @@ jobs:
               fi
               echo "--- kubectl apply --dry-run=server ---"
               if kubectl apply --dry-run=server -f /tmp/rendered.yaml; then
-                echo "PASS: precise-prefix-cache-aware / ${name}"
+                echo "PASS: precise-prefix-cache-routing / ${name}"
               else
-                echo "FAIL: precise-prefix-cache-aware / ${name}"
+                echo "FAIL: precise-prefix-cache-routing / ${name}"
                 failed=1
               fi
             done

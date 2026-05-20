@@ -33,8 +33,8 @@ ROWS = [
         {"ocp": "optimized-baseline", "cks": "optimized-baseline", "gke": "optimized-baseline"},
     ),
     (
-        "Precise Prefix Cache Aware Routing",
-        "../guides/precise-prefix-cache-aware/README.md",
+        "Precise Prefix Cache Routing",
+        "../guides/precise-prefix-cache-routing/README.md",
         {"ocp": "precise-prefix-cache", "cks": "precise-prefix-cache", "gke": "precise-prefix-cache"},
     ),
     (
@@ -59,7 +59,7 @@ ROWS = [
     ),
     (
         "Predicted Latency-Based Routing",
-        "../guides/predicted-latency-based-scheduling/README.md",
+        "../guides/predicted-latency-routing/README.md",
         {"ocp": "predicted-latency", "cks": "predicted-latency", "gke": "predicted-latency"},
     ),
     (

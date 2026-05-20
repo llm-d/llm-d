@@ -30,12 +30,12 @@ jobs:
     if: github.repository == 'llm-d/llm-d'
     uses: llm-d/llm-d-infra/.github/workflows/reusable-nightly-e2e-ocp.yaml@main
     with:
-      guide_name: predicted-latency-based-scheduling
+      guide_name: predicted-latency-routing
       namespace: llm-d-nightly-predicted-latency-ocp
-      gateway_host: 'predicted-latency-based-scheduling-epp'
+      gateway_host: 'predicted-latency-routing-epp'
       custom_deploy_script: |
         export GAIE_VERSION=v1.5.0
-        export GUIDE_NAME="predicted-latency-based-scheduling"
+        export GUIDE_NAME="predicted-latency-routing"
         export INFRA_PROVIDER="base"
         kubectl apply -n ${NAMESPACE} -k guides/optimized-baseline/modelserver/gpu/vllm/${INFRA_PROVIDER}
         # CI-only: disable EPP /metrics auth so the validate script's curl pod
@@ -44,8 +44,8 @@ jobs:
         # production guide default (auth on) is unchanged.
         helm install ${GUIDE_NAME} \
           oci://registry.k8s.io/gateway-api-inference-extension/charts/standalone \
-          -f guides/recipes/scheduler/base.values.yaml \
-          -f guides/${GUIDE_NAME}/scheduler/predicted-latency.values.yaml \
+          -f guides/recipes/router/base.values.yaml \
+          -f guides/${GUIDE_NAME}/router/predicted-latency.values.yaml \
           --set inferenceExtension.monitoring.prometheus.auth.enabled=false \
           -n ${NAMESPACE} --version ${GAIE_VERSION}
       e2e_validate_args: '--extra-validate predicted-latency'

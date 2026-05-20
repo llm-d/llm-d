@@ -40,8 +40,8 @@ The llm-d Router provides the intelligent load balancing. In Standalone Mode, it
 ```bash
 helm install ${GUIDE_NAME} \
     oci://registry.k8s.io/gateway-api-inference-extension/charts/standalone \
-    -f guides/recipes/scheduler/base.values.yaml \
-    -f guides/optimized-baseline/scheduler/optimized-baseline.values.yaml \
+    -f guides/recipes/router/base.values.yaml \
+    -f guides/optimized-baseline/router/optimized-baseline.values.yaml \
     -n ${NAMESPACE} --version ${GAIE_VERSION}
 ```
 
