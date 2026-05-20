@@ -35,6 +35,10 @@ spec:
               value: "5600"
             - name: VLLM_LOGGING_LEVEL
               value: "DEBUG"
+            # Default keep-alive timeout of 5s is shorter than the sidecar's 90s idle conn timeout,
+            # causing TCP RSTs.
+            - name: VLLM_HTTP_TIMEOUT_KEEP_ALIVE
+              value: "120"
             - name: VLLM_SKIP_WARMUP
               value: "true"
             - name: PT_HPU_LAZY_MODE

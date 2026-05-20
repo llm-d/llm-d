@@ -117,6 +117,10 @@ spec:
                 value: eth0
               - name: VLLM_LOGGING_LEVEL
                 value: INFO
+              # Default keep-alive timeout of 5s is shorter than the sidecar's 90s idle conn timeout,
+              # causing TCP RSTs.
+              - name: VLLM_HTTP_TIMEOUT_KEEP_ALIVE
+                value: "120"
               - name: NVSHMEM_DISABLE_CUDA_VMM
                 value: "0"
               - name: VLLM_NIXL_SIDE_CHANNEL_HOST
