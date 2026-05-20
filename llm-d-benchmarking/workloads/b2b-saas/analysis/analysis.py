@@ -7,6 +7,8 @@ import matplotlib.pyplot as plt
 # concurrency level. The script lists GCS for the latest <SUFFIX> per 
 # (base_prefix, c) and loads stage_0 reports.
 RUNS = [
+    ("epp prefix-cache filter + token-load 25k",      "optimised-benchmark-infperf-epp-penalty25k-tokens-scorer-max-picker-no-exp-det-1", "#d62728", "x"),
+
     ("baseline",                        "optimised-benchmark-infperf-baseline-det-1",          "#1f77b4", "o"),
     ("epp prefix-cache filter + token-load",      "optimised-benchmark-infperf-epp-penalty384k-tokens-scorer-max-picker-no-exp-det-1", "#d62728", "x"),
     ("epp default",            "optimised-benchmark-infperf-epp-max-score-det-1", "#2ca02c", "x"),
@@ -65,7 +67,7 @@ def gmp_query(query, eval_time):
             stderr=subprocess.DEVNULL,
         ).decode().strip()
     import urllib.request, urllib.parse
-    params = urllib.parse.urlencode({"query": query, "time": str(eval_time)})
+    params = urllib.parse.urlencode({"query": query, "time": str(int(eval_time))})
     req = urllib.request.Request(
         f"{GMP_URL}?{params}",
         headers={"Authorization": f"Bearer {_gmp_token_cache['token']}"},
@@ -82,19 +84,19 @@ def gmp_query(query, eval_time):
         return 0.0
 
 
-def _get_eval_window(prefix, duration):
+def _get_eval_window(prefix, duration, offset=0):
     # prefix ends in -<SUFFIX>
     run_start = int(prefix.rsplit("-", 1)[-1])
-    stage_start = run_start
+    stage_start = run_start + int(offset)
     stage_end = stage_start + int(duration)
     eval_time = stage_end + SCRAPE_INTERVAL + SCRAPE_BUFFER
     window = eval_time - stage_start
-    return eval_time, window
+    return int(eval_time), int(window)
 
 
-def gmp_prefix_hit_pct(prefix, duration):
+def gmp_prefix_hit_pct(prefix, duration, offset=0):
     """Cluster-wide prefix cache hit % for a specific stage."""
-    eval_time, window = _get_eval_window(prefix, duration)
+    eval_time, window = _get_eval_window(prefix, duration, offset)
     q = (
         f"100 * sum(increase(vllm:prefix_cache_hits_total[{window}s])) "
         f"/ (sum(increase(vllm:prefix_cache_queries_total[{window}s])) > 0)"
@@ -102,24 +104,24 @@ def gmp_prefix_hit_pct(prefix, duration):
     return gmp_query(q, eval_time)
 
 
-def gmp_queue_len(prefix, duration):
+def gmp_queue_len(prefix, duration, offset=0):
     """Cluster-wide peak queue size (sum_max across pods) for a specific stage."""
-    eval_time, window = _get_eval_window(prefix, duration)
+    eval_time, window = _get_eval_window(prefix, duration, offset)
     q = f"sum(max_over_time(vllm:num_requests_waiting[{window}s]))"
     return gmp_query(q, eval_time)
 
 
-def gmp_running_req_total(prefix, duration):
+def gmp_running_req_total(prefix, duration, offset=0):
     """Cluster-wide mean concurrent in-flight requests (summed across pods)."""
-    eval_time, window = _get_eval_window(prefix, duration)
+    eval_time, window = _get_eval_window(prefix, duration, offset)
     # Using 15s resolution for the sub-query to match scrape interval
     q = f"avg_over_time(sum(vllm:num_requests_running)[{window}s:15s])"
     return gmp_query(q, eval_time)
 
 
-def gmp_running_req_max_per_endpoint(prefix, duration):
+def gmp_running_req_max_per_endpoint(prefix, duration, offset=0):
     """Peak concurrent in-flight requests on any single pod."""
-    eval_time, window = _get_eval_window(prefix, duration)
+    eval_time, window = _get_eval_window(prefix, duration, offset)
     q = f"max(max_over_time(vllm:num_requests_running[{window}s]))"
     return gmp_query(q, eval_time)
 
@@ -136,6 +138,7 @@ def gather(label, base_prefix):
         
         # Iterate through stages until we find no more reports
         stage = 0
+        offset = 0
         while True:
             try:
                 life = load(prefix, "lifecycle_metrics", stage)
@@ -162,6 +165,8 @@ def gather(label, base_prefix):
                         f"  drop [{label}] stage={stage}: only {dispatched} dispatched (< MIN_DISPATCHED={MIN_DISPATCHED})",
                         file=sys.stderr,
                     )
+                    duration = life["benchmark_time_seconds"]
+                    offset += duration
                     stage += 1
                     continue
                 
@@ -194,7 +199,7 @@ def gather(label, base_prefix):
                     "e2e_p90": e2e_obj["p90"] if e2e_obj else 0.0,
                     "out_per_sec": life["successes"]["throughput"]["output_tokens_per_sec"],
                     "in_per_sec": life["successes"]["throughput"]["input_tokens_per_sec"],
-                    "prefix_hit_pct": gmp_prefix_hit_pct(prefix, duration) if stage == 0 else 0.0, # GMP queries are currently run-level
+                    "prefix_hit_pct": gmp_prefix_hit_pct(prefix, duration, offset),
                     "prompt_tokens_p50": life["successes"]["prompt_len"]["median"],
                     "prompt_tokens_p90": life["successes"]["prompt_len"]["p90"],
                     "gen_tokens_p50":    life["successes"]["output_len"]["median"],
@@ -205,9 +210,9 @@ def gather(label, base_prefix):
                     row.update({
                         "kv_cache_mean": prom["successes"]["kv_cache_usage_percentage"]["mean"] * 100,
                         "kv_cache_p99":  prom["successes"]["kv_cache_usage_percentage"]["p99"] * 100,
-                        "queue_len_mean": gmp_queue_len(prefix, duration),
-                        "running_req_total": gmp_running_req_total(prefix, duration),
-                        "running_req_max_per_endpoint": gmp_running_req_max_per_endpoint(prefix, duration),
+                        "queue_len_mean": gmp_queue_len(prefix, duration, offset),
+                        "running_req_total": gmp_running_req_total(prefix, duration, offset),
+                        "running_req_max_per_endpoint": gmp_running_req_max_per_endpoint(prefix, duration, offset),
                         "queue_time_mean": prom["successes"]["request_queue_time"]["mean"],
                         "queue_time_p90":  prom["successes"]["request_queue_time"]["p90"],
                         "queue_time_p99":  prom["successes"]["request_queue_time"]["p99"],
@@ -221,10 +226,12 @@ def gather(label, base_prefix):
                     })
 
                 rows.append(row)
+                offset += duration
             except Exception as e:
                 print(f"  [{label}] stage={stage}: {e}", file=sys.stderr)
             
             stage += 1
+
         
         print(f"  [{label}] gathered {len(rows)} stages for prefix '{prefix}'", file=sys.stderr)
     return rows
@@ -268,8 +275,8 @@ def plot_single(idx, key, ylabel, title):
 
 #plot_pair(0, "ttft_mean", "ttft_p90", "TTFT (s)", "Time To First Token")
 #plot_pair(1, "tpot_mean", "tpot_p90", "TPOT (ms)", "Time Per Output Token")
-plot_single(0, "ttft_p90", "TTFT (s)", "Time To First Token")
-plot_single(1,  "tpot_p90", "TPOT (ms)", "Time Per Output Token")
+plot_single(0, "ttft_p90", "TTFT (s)", "Time To First Token p90")
+plot_single(1,  "tpot_p90", "TPOT (ms)", "Time Per Output Token p90")
 plot_single(2, "out_per_sec", "output tokens / sec", "Throughput (mean output tokens/s)")
 plot_pair(3, "kv_cache_mean", "kv_cache_p99", "KV cache usage (%)", "KV Cache Usage")
 plot_single(4, "prefix_hit_pct", "prefix cache hit (%)", "Prefix Cache Hit Rate")
