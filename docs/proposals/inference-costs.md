@@ -39,6 +39,12 @@ Current challenges include:
 5. **Not cloud billing integration**: Does not directly integrate with cloud provider billing APIs (uses OpenCost's existing integrations)
 6. **Not pricing**: This proposal provides costs not prices.  If static or dynamic pricing is desired it can be generated using inference costs as a basis.
 
+## Cost Metrics Primer
+
+For background on infrastructure cost concepts (reservation-based vs usage-only costs, idle, wasted, and shared costs), see the [Cost Metrics Primer](./cost-metrics-primer.md).  
+
+_This is important for understanding the following sections._
+
 ### User Stories
 
 #### Story 1: Platform Team Cost Optimization
@@ -84,7 +90,7 @@ As an executive team, I want to compare self-hosting costs against commercial AP
 
 ## Proposal
 
-This proposal recommends adding infrastructure cost tracking for AI inference workloads on llm-d. After evaluating multiple approaches (detailed in the Alternatives section), we recommend **extending OpenCost** with a new inference cost domain that tracks AI inference costs alongside OpenCost's existing cost domains (Allocation, Asset, CloudCost, CustomCost).
+This proposal recommends adding infrastructure cost tracking for AI inference workloads on llm-d. After evaluating multiple approaches (detailed in the [Alternatives section](#alternatives-to-opencost)), we recommend **extending OpenCost** with a new inference cost domain that tracks AI inference costs alongside OpenCost's existing cost domains (Allocation, Asset, CloudCost, CustomCost).
 
 ### Why OpenCost?
 
@@ -145,10 +151,11 @@ In addition to collecting and calculating general infrastructure costs as is alr
 2. **Calculate infrastructure-based costs**:
    - Determine GPU cost per container based on allocation and node costs
    - Calculate total tokens processed in time window
-   - Compute cost per token from infrastructure costs divided by token throughput
+   - Compute cost per token from infrastructure costs divided by token throughput as well as based on usage
    - Allocate costs between input and output tokens based on actual processing time
    - Calculate cache saving due to optimizations such as KV cache hits, prefill/decode separation, and smart routing
    - Identify idle costs - a key metric needed to enable optimization of infrastructure 
+   - Provide both usage costs and 
 
 3. **Export cost metrics**:
    - Prometheus metrics for monitoring and alerting
@@ -181,20 +188,127 @@ The proposal is based on a **working proof of concept**, which demonstrates:
 
 The [POC implementation](https://github.com/simanadler/opencost/tree/initial-inference) validates the overall approach and feasibility of using OpenCost, and does not aim to provide fully accurate costs.
 
-### High Level Design Proposal
+## High Level Design Proposal
 
-**Cost Metrics**:
+### LLM costs
 
-Proposed inference cost metrics:
+LLM inference introduces all four cost components in a more extreme form than typical CPU workloads, and both cost metrics are useful enough that we propose to expose them directly.
+
+For this initial discussion we focus on GPUs to simplify things.
+
+- **Used** — GPU compute actively processing inference requests (tokens being generated)
+- **Wasted** — GPU memory holding model weights while no requests are arriving (model loaded but idle between requests)
+- **Idle** — GPUs with no model loaded at all
+- **Shared** — Typical kubernetes shared costs **plus kv cache** and other inference specific shared costs described [here](#beyond-just-gpu)
+
+The gap between "used" and "wasted" can be far larger for LLMs than for CPU workloads. A CPU workload can be bin-packed with others to fill spare capacity. An LLM model loaded onto a GPU blocks that GPU entirely — its weights occupy VRAM whether or not a request is in flight, and loading/unloading is slow and expensive. A low-traffic model may spend 95% of its time in the "wasted" state.
+
+The following are the proposed metrics to be added to support AI Inferencing.  
+
+**Cost Metrics Summary**:
+
 - `llm_total_cost`: Hourly GPU infrastructure cost per model
-- `llm_cost_per_million_tokens`: Blended cost per 1M tokens
-- `llm_input_cost_per_million_tokens`: Cost per 1M input tokens
+- `llm_cost_per_million_tokens`: Blended cost per 1M tokens - without kv cache savings
+- `llm_input_cost_per_million_tokens`: Cost per 1M input tokens - without kv cache savings
 - `llm_output_cost_per_million_tokens`: Cost per 1M output tokens
-- Additional metrics to be added related to KV cache costs and savings, and others
+- `llm_total_kv_cache_savings`: Hourly savings due to KV cache hits
+- `llm_kv_cache_savings_per_million_tokens`: KV cache savings per million tokens
 
-**Labels**: `model_name`, `model_version`, `namespace`, `model_variant`, `workload`
+**Labels**: `model_name`, `model_version`, `namespace`, `model_variant`, `workload`, `cost_basis` (usage or reservation), `shared_split`, `shared_idle`
 
 Note: workload label will be 'inference' when used with llm-d
+
+The following section describe in detail the 
+
+### Overall Model Cost Metrics 
+
+**Reservation-based cost per model** counts everything attributed to running that model: the GPU memory reserved for its weights at all times, the compute consumed during active inference, and its share of shared of infrastructure. This is the cost of *having the model available*. It reconciles to your infrastructure bill and answers: *"what is this model costing us?"*
+
+**Usage-based cost per model** counts only the GPU compute consumed during active inference — the tokens actually generated minus costs saved by kv cache hits. This answers: *"what did this model's actual work cost?"* The gap between this and the reservation-based figure is the cost of keeping the model warm and ready, which is a business decision about acceptable latency, not a technical inefficiency.
+
+### Cost Per Million Tokens 
+
+Both cost metrics produce a corresponding cost per million tokens figure, but they answer different questions.
+
+**Usage-based Cost per Million Tokens** measures the intrinsic cost of inference — what each token costs in pure compute terms. This is stable regardless of how busy the model is, making it the right metric for comparing the efficiency of different models or hardware configurations against each other, or against external API pricing for the inference work itself.
+
+**Reservation-based Cost Per Million Tokens** measures the real business cost of each token when you factor in the full price of keeping the model available, including idle time. This varies with utilization — the same model serving fewer requests will show a higher reservation-based cost per token because the fixed hosting cost is spread across fewer tokens.
+
+The relationship between the two directly expresses utilization without needing a separate metric:
+
+```
+utilization = usage-based cost per million tokens / reservation-based cost per million tokens
+
+Example:
+  Usage-based:       $1.00 per million tokens  (intrinsic inference cost)
+  Reservation-based: $4.00 per million tokens  (full hosting cost)
+  Utilization:       25%  (model is busy 1/4 of the time)
+```
+
+These metrics will be broken down further into the cost per million **input** and **output** tokens.  In order to calculate input token cost it is necessary to capture kv cache hit savings, which will also be provided as a metric.
+
+*** Cost Per Million Tokens - with KV Cache Hits
+
+To calculate the actual cost per million tokens its necessary to do the following calculation:
+
+```actual_cost_per_million_tokens = llm_cost_per_million_tokens - llm_kv_cache_savings_per_million_tokens```
+
+or if you want specifically for input tokens only:
+
+```actual_cost_per_million_input_tokens = llm_cost_per_million_input_tokens - llm_kv_cache_savings_per_million_tokens```
+
+The reason for this approach is that SaaS model providers charge in this manner.  I.e. Cost per million tokens without KV cache hits, and a separate summary of KV cache hits.
+
+### Beyond Just GPU 
+
+There are other costs associated with self hosting an AI model via llm-d which must also be captured:
+| Component | Chart | Scope | Notes |
+|---|---|---|---|
+| **Inference Scheduler / EPP** | `inferencepool` (gateway-api-inference-extension) | **1:1 with InferencePool*** | CPU-only; routes all traffic for the pool |
+| **llm-d-infra / Gateway proxy** | `llm-d-infra` | **1:1 with InferencePool** | Sets up gateway; may include a proxy pod |
+| **Async Processor** | `async-processor` | **1:1 with InferencePool** | Present only in async-processing deployments; points to single gateway URL |
+| **Workload Variant Autoscaler (WVA)** | `workload-variant-autoscaler` | **Cluster-wide by default** | Watches all namespaces unless `namespaceScoped: true`; sole cross-pool component |
+| **KV-cache PVC** | manual PVC / `llm-d-kv-cache-storage` | **Per model or shared across model variants** | Can be up to 18TB in tiered-cache deployments |
+
+    Note: An InferencePool is an llm-d resource that groups a set of model server replicas (pods) behind a single logical endpoint. It is the unit of deployment for a model in llm-d: the Inference Scheduler (EPP), gateway proxy, and other per-model infrastructure components are each scoped 1:1 to an InferencePool.  Different models within an InferencePool are referred to as model variants.
+
+
+
+  **Recommendation**: Treat KV cache as a model reservation cost for the purposes of cost attribution. 
+
+    The reason is that KV cache capacity is sized at deployment time based on expected concurrency, not actual requests — the operator makes a deliberate choice to reserve X GB for KV cache when deploying the model. Charging it to usage would obscure that capacity decision and make usage-based costs misleadingly low for
+    memory-intensive models.
+
+    There are situations where portions of the KV cache are offloaded to disk when VRAM is exhausted.  This memory is consumed in proportion to actual request load — more concurrent requests means more KV cache pages in use. This is closer to a usage cost since it scales with actual inference activity - but we will defer addressing this initially.
+
+    In deployments where llm-d's architecture separates prefill and decode with a shared KV cache, the models sharing the KV cache are variants of the same model - i.e. they have different hardware and/or LoRa configurations but use the same model and version.  Thus, from a cost perspective we view them as a single model.
+  
+  
+### The useful combination
+
+The two per-model cost figures and the two per-token figures together give a complete picture:
+
+| Reservation cost | Usage-based cost per million tokens | What it means |
+|------------------|--------------------------------------|---------------|
+| High             | Low                                  | Costly to keep available, but efficient at inference — utilization is the problem, consider shared serving |
+| High             | High                                 | Costly to keep available *and* expensive to run — evaluate whether the model is the right choice |
+| Low              | Low                                  | Cheap to host and efficient — well-sized deployment |
+| Low              | High                                 | Cheap to host but the inference itself is costly — look at model size, quantization, or hardware fit |
+
+### Comparing against external API pricing
+
+When deciding whether to self-host or use an external API, the comparison must be made against **reservation-based cost per million tokens**, not usage-based. Usage-based cost per token reflects only active compute and will almost always make self-hosting look cheaper than it is. The reservation-based figure captures the full cost of availability — which is exactly what an external API provider is also charging you for.
+
+```
+Self-hosted model:
+  Usage-based cost per million tokens:       $1.00  (compute only)
+  Reservation-based cost per million tokens: $4.00  (full hosting cost)
+
+External API price per million tokens:       $2.00
+
+Conclusion: external API is cheaper — self-hosting at 25% utilization costs $4.00/M tokens,
+            not $1.00. Raising utilization above 50% would make self-hosting competitive.
+```
 
 
 ### Architecture Diagram 
@@ -249,12 +363,11 @@ graph TB
 
 
 **Implementation Tasks**:
-- **Task 1**: Add idle, CPU, RAM, Networking and overhead costs to inference costs
+- **Task 1**: Add idle, CPU, RAM, Networking, KV Cache and overhead costs to inference costs
 - **Task 2**: Integration with OpenCost UI and APIs
 - **Task 3**: Workload and team-based attribution 
 - **Task 4**: Optimization cost tracking and savings calculation (KV cache, prefill/decode, smart routing)
-- **Task 5**: Historical cost data storage and trending
-- **Task 6**: Testing and validation framework
+- **Task 5**: Testing and validation framework
 
 ## Alternatives to OpenCost
 
