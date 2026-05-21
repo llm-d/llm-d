@@ -223,7 +223,6 @@ SIGs operate within the broader llm-d project governance framework defined in [P
 - **Slack Channel**: [#sig-rl](https://llm-d.slack.com/archives/C0AGTS0UF5L)
 - **Meeting Recordings and Docs**: [Public Google Drive](https://drive.google.com/drive/folders/1k9u56_HO5E1uGGgmp0T0y8VhMfzc1P11)
 
-
 ## Getting Involved
 
 ### Joining a SIG

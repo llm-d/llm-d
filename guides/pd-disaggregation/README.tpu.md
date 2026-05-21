@@ -1,6 +1,6 @@
 # Prefill/Decode Disaggregation on Google TPU 7x
 
-This guide demonstrates how to deploy `Qwen/Qwen3.5-397B-A17B-FP8` using prefill-decode (P/D) disaggregation on Google TPU 7x clusters. 
+This guide demonstrates how to deploy `Qwen/Qwen3.5-397B-A17B-FP8` using prefill-decode (P/D) disaggregation on Google TPU 7x clusters.
 
 For a comprehensive overview of P/D disaggregation architecture, best practices, and benchmarking, please refer to the **[Unified P/D Disaggregation Guide](./README.md)**.
 
@@ -10,7 +10,7 @@ Before starting, ensure your cluster and environment are properly configured:
 
 1. **TPU Topology:** Your GKE cluster must have TPU 7x nodes provisioned with a `2x2x1` topology (4 chips per node) to accommodate the model requirements.
    > [!NOTE]
-   > **TPU7x Cores and Parallelism:** TPU7x has 2 cores per chip. You need to consider this when setting parallelism. For example, in `guides/pd-disaggregation/modelserver/tpu/vllm/patch-decode.yaml`, with 4 chips per pod, the tensor parallel size (`--tensor-parallel-size`) is set to `8`. 
+   > **TPU7x Cores and Parallelism:** TPU7x has 2 cores per chip. You need to consider this when setting parallelism. For example, in `guides/pd-disaggregation/modelserver/tpu/vllm/patch-decode.yaml`, with 4 chips per pod, the tensor parallel size (`--tensor-parallel-size`) is set to `8`.
 2. Complete the **[Prerequisites](./README.md#prerequisites)** section in the main guide to clone the repository and install the Gateway API Inference Extension CRDs.
 3. Set your environment variables, overriding the model name for Qwen 3.5:
 
@@ -39,7 +39,7 @@ kubectl apply -n ${NAMESPACE} -k guides/${GUIDE_NAME}/modelserver/tpu/vllm/
 
 ## Verification
 
-Follow the **[Verification steps in the main guide](./README.md#verification)** to retrieve the proxy IP address. 
+Follow the **[Verification steps in the main guide](./README.md#verification)** to retrieve the proxy IP address.
 
 When sending your test request, ensure you use the correct TPU model name:
 
@@ -73,6 +73,7 @@ curl -LJO "https://raw.githubusercontent.com/llm-d/llm-d/main/guides/pd-disaggre
 envsubst < tpu_v7_qwen3_5.yaml > config.yaml
 ./run_only.sh -c config.yaml -o ./results
 ```
+
 ## Cleanup
 
 To clean up your cluster, return to the **[Cleanup](./README.md#cleanup)** section of the unified guide.

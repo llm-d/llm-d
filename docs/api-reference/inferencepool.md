@@ -2,7 +2,7 @@
 
 `InferencePool` is the Schema for the `InferencePools` API. It defines a pool of inference endpoints that can be used by a Gateway.
 
-**Group:** `inference.networking.k8s.io`  
+**Group:** `inference.networking.k8s.io`
 **Version:** `v1`
 
 ---
@@ -49,6 +49,7 @@
 `AppProtocol` describes the application protocol for a port.
 
 Supported values:
+
 - `http`: HTTP/1.1. This is the default.
 - `kubernetes.io/h2c`: HTTP/2 over cleartext. Typically used for gRPC workloads where TLS is terminated at the Gateway.
 
@@ -98,6 +99,7 @@ Supported values:
 ## Condition Types and Reasons
 
 ### Accepted
+
 Indicates whether the `InferencePool` has been accepted or rejected by a Parent.
 
 - **True Reasons:**
@@ -109,6 +111,7 @@ Indicates whether the `InferencePool` has been accepted or rejected by a Parent.
   - `Pending`
 
 ### ResolvedRefs
+
 Indicates whether the controller was able to resolve all object references.
 
 - **True Reasons:**
@@ -117,6 +120,7 @@ Indicates whether the controller was able to resolve all object references.
   - `InvalidExtensionRef`: Extension is invalid (unsupported kind/group or not found).
 
 ### Exported
+
 Indicates whether the controller was able to export the InferencePool to specified clusters.
 
 - **True Reasons:**

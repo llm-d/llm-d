@@ -11,6 +11,7 @@ This guide explains how to trigger these tests using **PR Slash Commands** or ma
 If you are working on a Pull Request, you can trigger one or more nightly E2E tests directly by writing a comment on the PR page.
 
 ### Command Format
+
 ```text
 /test-nightly <nightly-name-or-pattern>
 ```
@@ -18,21 +19,25 @@ If you are working on a Pull Request, you can trigger one or more nightly E2E te
 ### Examples
 
 * **Trigger a single test:**
+
   ```text
   /test-nightly optimized-baseline-gke
   ```
 
 * **Trigger all GKE tests:**
+
   ```text
   /test-nightly *-gke
   ```
 
 * **Trigger all OpenShift (OCP) tests:**
+
   ```text
   /test-nightly *-ocp
   ```
 
 * **Trigger all disaggregation tests:**
+
   ```text
   /test-nightly pd-disaggregation-*
   ```
@@ -78,7 +83,7 @@ You can trigger any nightly workflow manually using the **Run workflow** button 
 5. Click the **Run workflow** dropdown on the right side of the workflow runs list.
 6. Select the branch you want to run the workflow on.
 7. Set optional parameters:
-   - **Skip cleanup after tests (for debugging):** Set to `true` if you want the test namespace, cluster resources, and nodes to persist for debugging post-run.
+   * **Skip cleanup after tests (for debugging):** Set to `true` if you want the test namespace, cluster resources, and nodes to persist for debugging post-run.
 8. Click the green **Run workflow** button.
 
 ---

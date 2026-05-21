@@ -26,7 +26,7 @@ Key responsibilities:
 
 ## EPP <-> Model Server Protocol
 
-This is the protocol between the EPP and the model servers. 
+This is the protocol between the EPP and the model servers.
 
 ### Metrics Reporting
 
@@ -43,22 +43,19 @@ metric types and semantics MUST follow this doc.
 | [Optional] BlockSize         | Labeled/Gauge     | The block size in tokens to allocate memory, used by the prefix cache scorer. If this metric is not available, the BlockSize will be derived from the [prefix plugin config](https://gateway-api-inference-extension.sigs.k8s.io/guides/epp-configuration/prefix-aware/#customize-the-prefix-cache-plugin).| name: `vllm:cache_config_info`, label name: `block_size`| `nv_trt_llm_kv_cache_block_metrics{kv_cache_block_type=tokens_per}` | `trtllm_kv_cache_tokens_per_block` | name: `sglang:cache_config_info`, label name: `page_size`
 | [Optional] NumGPUBlocks| Labeled/Gauge     | The total number of blocks in the HBM KV cache, used by the prefix cache scorer. If this metric is not available, the NumGPUBlocks will be derived from the [prefix plugin config](https://gateway-api-inference-extension.sigs.k8s.io/guides/epp-configuration/prefix-aware/#customize-the-prefix-cache-plugin).| name: `vllm:cache_config_info`, label name: `num_gpu_blocks`| `nv_trt_llm_kv_cache_block_metrics{kv_cache_block_type=max}` | `trtllm_kv_cache_max_blocks` | name: `sglang:cache_config_info`, label name: `num_pages`
 
-
 To correctly map metrics names, model server Pods should be labeled with the model server type they are running as demonistrated below. Pods without the engine-type label will default to vLLM metrics names.
-
 
 ```yaml
 metadata:
   labels:
-    inference.networking.k8s.io/engine-type: vllm # other options: sglang, trtllm-serve, triton-tensorrt-llm 
+    inference.networking.k8s.io/engine-type: vllm # other options: sglang, trtllm-serve, triton-tensorrt-llm
 
 ```
-
 
 ### LoRA Adapter Serving
 
 Model servers that support dynamic LoRA serving can benefit from the LoRA affinity algorithm. Note
-the current algorithm in the reference EPP is highly biased towards vLLM's current dynamic LoRA 
+the current algorithm in the reference EPP is highly biased towards vLLM's current dynamic LoRA
 implementation.
 
 The model servers MUST support serving a LoRA adapter specified in the `model` argument of the
@@ -66,21 +63,20 @@ request, provided the requested adapter is valid.
 
 The model server MUST expose the following LoRA adapter metrics via the same Prometheus endpoint:
 
-* Metric name implemented in vLLM: `vllm:lora_requests_info` 
-* Metric type: Gauge
-* Metric value: The last updated timestamp (so the EPP can find the latest).
-* Metric labels: 
-  * `max_lora`: The maximum number of adapters that can be loaded to GPU memory to serve a batch.
+- Metric name implemented in vLLM: `vllm:lora_requests_info`
+- Metric type: Gauge
+- Metric value: The last updated timestamp (so the EPP can find the latest).
+- Metric labels:
+  - `max_lora`: The maximum number of adapters that can be loaded to GPU memory to serve a batch.
   Requests will be queued if the model server has reached MaxActiveAdapter and cannot load the
   requested adapter. Example: `"max_lora": "8"`.
-  * `running_lora_adapters`: A comma separated list of adapters that are currently loaded in GPU
+  - `running_lora_adapters`: A comma separated list of adapters that are currently loaded in GPU
     memory and ready to serve requests. Example: `"running_lora_adapters": "adapter1, adapter2"`
-  * `waiting_lora_adapters`: A comma separated list of adapters that are waiting to be served. Example: `"waiting_lora_adapters": "adapter1, adapter2"`
+  - `waiting_lora_adapters`: A comma separated list of adapters that are waiting to be served. Example: `"waiting_lora_adapters": "adapter1, adapter2"`
 
 ### Prefix Cache Reuse
 
 The EPP supports prefix cache optimized request scheduling. To benefit from the optimal prefix aware request scheduling, model servers SHOULD support prefix cache reuse, such as the [vllm automatic prefix caching](https://docs.vllm.ai/en/latest/features/automatic_prefix_caching.html) feature.
-
 
 ### Health Checks
 

@@ -10,4 +10,3 @@ To add a new infrastructure provider to our well-lit paths, we request the follo
 * The appropriate configuration contributed to the guide to deal with provider-specific variations
 * An automated test environment that validates the supported guides
 * At least one documented platform maintainer who responds to GitHub issues and is available for regular discussion in the llm-d slack channel `#sig-installation`.
-

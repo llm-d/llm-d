@@ -3,6 +3,7 @@
 Traditional HTTP requests are fast, uniform, and cheap. Standard round-robin request scheduling strategies balance this load well.
 
 LLM requests break all three assumptions. They are:
+
 * **Multi-turn** - conversations and agentic tool loops send the same growing prefix repeatedly
 * **Slow** - a single request can take over a minute generating tokens
 * **Non-uniform** - range from 1000s of reasoning tokens to a 100k+ context tokens

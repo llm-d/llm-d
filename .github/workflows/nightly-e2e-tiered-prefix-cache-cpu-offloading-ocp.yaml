@@ -40,7 +40,7 @@ concurrency:
 jobs:
   nightly:
     if: github.repository == 'llm-d/llm-d'
-    uses: llm-d/llm-d-infra/.github/workflows/reusable-nightly-e2e-openshift.yaml@main  
+    uses: llm-d/llm-d-infra/.github/workflows/reusable-nightly-e2e-openshift.yaml@main
     with:
       guide_name: tiered-prefix-cache
       namespace: llm-d-nightly-pfc-cpu

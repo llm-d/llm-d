@@ -2,7 +2,7 @@
 
 `InferenceObjective` represents the desired state of a specific model use case. It allows "Inference Workload Owners" to define performance and latency goals for a model within an `InferencePool`.
 
-**Group:** `inference.networking.x-k8s.io`  
+**Group:** `inference.networking.x-k8s.io`
 **Version:** `v1alpha2`
 
 ---
@@ -49,6 +49,7 @@
 ## Condition Types and Reasons
 
 ### Accepted
+
 Indicates if the objective configuration is accepted.
 
 - **True Reasons:**

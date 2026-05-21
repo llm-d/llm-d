@@ -79,3 +79,9 @@ repos:
           - >-
             {extends: default, rules: {line-length: {max: 250},
             document-start: disable, truthy: {check-keys: false}}}
+
+  # github actions linting
+  - repo: https://github.com/rhysd/actionlint
+    rev: v1.7.12
+    hooks:
+      - id: actionlint

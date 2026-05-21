@@ -1,9 +1,12 @@
 # Offloading Prefix Cache to CPU Memory
+
 ### CPU Offloading (vLLM Native)
+
 [![Nightly - Tiered Prefix Cache E2E (GKE)](https://github.com/llm-d/llm-d/actions/workflows/nightly-e2e-tiered-prefix-cache-cpu-offloading-gke.yaml/badge.svg)](https://github.com/llm-d/llm-d/actions/workflows/nightly-e2e-tiered-prefix-cache-cpu-offloading-gke.yaml)
 [![Nightly - Tiered Prefix Cache E2E (OpenShift)](https://github.com/llm-d/llm-d/actions/workflows/nightly-e2e-tiered-prefix-cache-cpu-offloading-ocp.yaml/badge.svg)](https://github.com/llm-d/llm-d/actions/workflows/nightly-e2e-tiered-prefix-cache-cpu-offloading-ocp.yaml)
 
 ### CPU Offloading (LMCache)
+
 [![Nightly - Tiered Prefix Cache LMCache E2E (GKE)](https://github.com/llm-d/llm-d/actions/workflows/nightly-e2e-tiered-prefix-cache-cpu-offloading-lmcache-gke.yaml/badge.svg)](https://github.com/llm-d/llm-d/actions/workflows/nightly-e2e-tiered-prefix-cache-cpu-offloading-lmcache-gke.yaml)
 
 ## Overview
@@ -32,6 +35,7 @@ This guide provides recipes to offload prefix cache to CPU RAM via the vLLM nati
 | CPU Cache Offload Size    | 25000 Chunks (~780 GB)                                                   |
 
 ### Supported Hardware Backends
+
 This guide supports both GPU and TPU. GPU defaults to NVIDIA H100 and TPU defaults to TPU7x. The Kustomize overlays are available in `modelserver/gpu/vllm/` and `modelserver/tpu-v7/vllm/`.
 
 ---
@@ -47,11 +51,13 @@ This guide supports both GPU and TPU. GPU defaults to NVIDIA H100 and TPU defaul
   ```
 
 - Set the following environment variables:
+
   ```bash
     export GAIE_VERSION=v1.5.0
     export GUIDE_NAME="tiered-prefix-cache-cpu"
     export NAMESPACE=llm-d-${GUIDE_NAME}
   ```
+
 - Install the Gateway API Inference Extension CRDs:
 
   ```bash
@@ -59,6 +65,7 @@ This guide supports both GPU and TPU. GPU defaults to NVIDIA H100 and TPU defaul
   ```
 
 - Create a target namespace for the installation
+
   ```bash
     kubectl create namespace ${NAMESPACE}
   ```
@@ -108,6 +115,7 @@ helm install ${GUIDE_NAME} \
 Apply the Kustomize overlay setup matching your preferred offloading medium:
 
 **For NVIDIA GPU:**
+
 ```bash
 export CONNECTOR=offloading-connector # offloading-connector | lmcache-connector
 export INFRA_PROVIDER=base # base | gke
@@ -115,6 +123,7 @@ kubectl apply -n ${NAMESPACE} -k guides/tiered-prefix-cache/cpu/modelserver/gpu/
 ```
 
 **For Google TPU v7:**
+
 ```bash
 kubectl apply -n ${NAMESPACE} -k guides/tiered-prefix-cache/cpu/modelserver/tpu-v7/vllm/tpu-offloading-connector/
 ```
@@ -196,12 +205,10 @@ For instructions on setting up standard workloads and running performance analys
 
 The current weight configuration defaults to `2:2:1:1` (Queue Scorer : KV Cache Utilization Scorer : GPU/TPU Prefix Cache Scorer : CPU Prefix Cache Scorer). This configuration defaults to a safe performance profile.
 
-
 > [!NOTE]
-> The following benchmark results were from a previous release and does not match the deployment of the current release. A follow up benchmark will be conducted and the results will be updated accordingly. See https://github.com/llm-d/llm-d/issues/680.
+> The following benchmark results were from a previous release and does not match the deployment of the current release. A follow up benchmark will be conducted and the results will be updated accordingly. See <https://github.com/llm-d/llm-d/issues/680>.
 
 ### GPU
-
 
 #### High Cache Scenario (HBM < KVCache < HBM + CPU RAM)
 
@@ -219,9 +226,7 @@ The current weight configuration defaults to `2:2:1:1` (Queue Scorer : KV Cache 
 | **vLLM + CPU offloading 100GB** | 0.13 | 0.11 | 18.6 | 20.6 | 23,032.6 |
 | **vLLM + LMCache CPU offloading 100GB** | 0.15 | 0.10 | 18.9 | 19.6 | 22,772.5 |
 
-
 ### TPU
-
 
 #### High Cache Scenario (HBM < KVCache < HBM + CPU RAM)
 
@@ -230,11 +235,9 @@ The current weight configuration defaults to `2:2:1:1` (Queue Scorer : KV Cache 
 | **Baseline vLLM** | 0.98 | 2.1 | 22.1 | 26.2 | 67262.3 |
 | **vLLM + CPU offloading 25000 Chunks** | 0.56 (-49%) | 0.5 (-75.7%) | 20.3 (-8.1%) | 23.6 (-9.9%) | 73178.1 (+8.9%) |
 
-
 #### Low Cache Scenario (KVCache < HBM)
 
 | Medium Configuration | Mean TTFT (second) | P90 TTFT (second) | Mean E2E Latency (second) | P90 E2E Latency (second) | Overall Throughput (token per second) |
 | :--- | :--- | :--- | :--- | :--- | :--- |
 | **Baseline vLLM** | 0.24 | 0.23 | 16.9 | 19.9 | 25715.9 |
 | **vLLM + CPU offloading 25000 Chunks** | 0.26 | 0.24 | 17.4 | 20.2 | 23,032.6 |
-

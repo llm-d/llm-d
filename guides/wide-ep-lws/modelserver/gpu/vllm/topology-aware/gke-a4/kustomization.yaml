@@ -4,16 +4,15 @@ resources:
   - ../../gke-a4
 
 patches:
-  - target: 
+  - target:
       kind: LeaderWorkerSet
     patch: |-
       - op: add
         path: /metadata/labels/kueue.x-k8s.io~1queue-name
         value: default
-      - op: add 
+      - op: add
         path: /spec/leaderWorkerTemplate/workerTemplate/metadata/annotations/kueue.x-k8s.io~1podset-required-topology
         value: "cloud.google.com/gce-topology-block"
-      - op: add 
+      - op: add
         path: /spec/leaderWorkerTemplate/workerTemplate/metadata/annotations/kueue.x-k8s.io~1podset-group-name
         value: "llm-d-wide-ep"
-

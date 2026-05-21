@@ -121,4 +121,3 @@ patches:
           hostPath:
             path: /mnt/stateful_partition/kube-ephemeral-ssd/shared_disk/vllm-jit-cache/
             type: DirectoryOrCreate
-

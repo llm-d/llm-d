@@ -117,6 +117,7 @@ The collector is deployed by `install-otel-collector-jaeger.sh` and all chart de
 4. You should see spans for inference requests, routing decisions, and KV cache operations
 
 If you only see generic `GET` spans, check that:
+
 - `collectDetailedTraces` is set to `"all"` for vLLM
 - The llm-d Router EPP image includes tracing instrumentation
 

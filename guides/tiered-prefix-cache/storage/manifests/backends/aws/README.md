@@ -23,7 +23,7 @@ kubectl create namespace ${NAMESPACE}
 
 Follow the official AWS guide to install the EFS CSI driver:
 
-https://docs.aws.amazon.com/eks/latest/userguide/efs-csi.html
+<https://docs.aws.amazon.com/eks/latest/userguide/efs-csi.html>
 
 Ensure the driver is running in your cluster:
 
@@ -85,14 +85,13 @@ llm-d-kv-cache-storage      Bound    ...      ...        RWX            efs-sc  
 
 For best performance with AWS EFS:
 
-- Use **Max I/O** performance mode for higher throughput
-- Prefer **Provisioned Throughput** for consistent performance under heavy workloads
-- Mount EFS in the same VPC and availability zone as your EKS nodes
-- Use multiple vLLM replicas to parallelize I/O
-- Monitor throughput and latency using AWS CloudWatch metrics
+* Use **Max I/O** performance mode for higher throughput
+* Prefer **Provisioned Throughput** for consistent performance under heavy workloads
+* Mount EFS in the same VPC and availability zone as your EKS nodes
+* Use multiple vLLM replicas to parallelize I/O
+* Monitor throughput and latency using AWS CloudWatch metrics
 
 Note: EFS has higher latency than local SSD or Lustre, and is best suited for shared cache reuse rather than ultra-low latency workloads.
-
 
 ## Cleanup
 

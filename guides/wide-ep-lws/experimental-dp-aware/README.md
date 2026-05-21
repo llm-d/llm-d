@@ -5,6 +5,7 @@ This deployment uses **DP-aware scheduling**, where instead of letting vLLM auto
 ## Discussion
 
 vLLM supports multiple "modes" for DP load balancing, including:
+
 - **internal**, where vLLM manages DP-balancedness across all ranks. vLLM exposes a single API server endpoint and spreads load between ranks
 
 ![alt text](images/internal-lb.png)
@@ -31,14 +32,14 @@ We are currently working on hardening the process management, health checking, a
 
 This guide demonstrates how to deploy DeepSeek-R1-0528 using vLLM's P/D disaggregation support with NIXL in a wide expert parallel pattern with LeaderWorkerSets with DP-aware scheduling. This guide has been validated on:
 
-* a 32xH200 cluster with InfiniBand networking
-* a 32xB200 cluster with InfiniBand networking
-* Istio 1.29.2 (required for multi-port support)
+- a 32xH200 cluster with InfiniBand networking
+- a 32xB200 cluster with InfiniBand networking
+- Istio 1.29.2 (required for multi-port support)
 
 In this example, we will demonstrate a deployment of `DeepSeek-R1-0528` with:
 
-* 2 DP=8 Prefill Worker
-* 1 DP=16 Decode Worker
+- 2 DP=8 Prefill Worker
+- 1 DP=16 Decode Worker
 
 ## Hardware Requirements
 
@@ -53,18 +54,18 @@ This guide requires 32 Nvidia H200 or B200 GPUs and InfiniBand or RoCE RDMA netw
 
 ## Prerequisites
 
-* Have the [proper client tools installed on your local system](../../../helpers/client-setup/README.md) to use this guide.
-* You have deployed the [LeaderWorkerSet controller](https://lws.sigs.k8s.io/docs/installation/)
-* Configure and deploy your [Gateway control plane](../../prereq/gateway-provider/README.md). Note that the Gateway must support multi-port (e.g. Istio 1.29.2)
-* Have the [Monitoring stack](../../../docs/monitoring/README.md) installed on your system.
-* Create a namespace for installation.
+- Have the [proper client tools installed on your local system](../../../helpers/client-setup/README.md) to use this guide.
+- You have deployed the [LeaderWorkerSet controller](https://lws.sigs.k8s.io/docs/installation/)
+- Configure and deploy your [Gateway control plane](../../prereq/gateway-provider/README.md). Note that the Gateway must support multi-port (e.g. Istio 1.29.2)
+- Have the [Monitoring stack](../../../docs/monitoring/README.md) installed on your system.
+- Create a namespace for installation.
 
   ```bash
   export NAMESPACE=llm-d-wide-ep # or any other namespace (shorter names recommended)
   kubectl create namespace ${NAMESPACE}
   ```
 
-* [Create the `llm-d-hf-token` secret in your target namespace with the key `HF_TOKEN` matching a valid HuggingFace token](../../../helpers/hf-token.md) to pull models.
+- [Create the `llm-d-hf-token` secret in your target namespace with the key `HF_TOKEN` matching a valid HuggingFace token](../../../helpers/hf-token.md) to pull models.
 
 ## Installation
 
@@ -87,7 +88,6 @@ You can also customize your gateway, for more information on how to do that see 
 CoreWeave are tested Kubernetes providers for this well-lit path. You can customize the manifests if you run on other Kubernetes providers.
 
 <!-- TABS:START -->
-
 
 <!-- TAB:CoreWeave -->
 #### CoreWeave
@@ -113,7 +113,7 @@ helm install llm-d-infpool \
 
 ## Verifying the installation
 
-* Firstly, you should be able to list all helm releases installed into your chosen namespace:
+- Firstly, you should be able to list all helm releases installed into your chosen namespace:
 
 ```bash
 helm list -n ${NAMESPACE}
@@ -121,7 +121,7 @@ NAME            NAMESPACE       REVISION    UPDATED                             
 llm-d-infpool   llm-d-wide-ep   1           2025-08-24 13:14:53.355639 -0700 PDT    deployed    inferencepool-v1.5.0   v0.3.0
 ```
 
-* Out of the box with this example you should have the following resources (if using Istio):
+- Out of the box with this example you should have the following resources (if using Istio):
 
 ```bash
 kubectl get all -n ${NAMESPACE}

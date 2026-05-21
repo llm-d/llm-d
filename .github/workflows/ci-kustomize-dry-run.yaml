@@ -216,7 +216,7 @@ jobs:
 
       - name: Install GKE CRDs
         run: .github/scripts/install-gke-crds.sh
-      
+
       - name: Dry-run scheduler charts
         run: |
           CHART_VERSION=v1.5.0

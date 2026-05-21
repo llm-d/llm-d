@@ -1,23 +1,23 @@
-# 
+#
 # This an example guide that leverages the guidellm harness to demonstrates Workload Variant Autoscaler (WVA)
-# From running this experiment, it will be observed that decode pod replicas will autoscale as traffic rate increases 
+# From running this experiment, it will be observed that decode pod replicas will autoscale as traffic rate increases
 # and decreases over time.
-# 
+#
 # WVA currently only supports the optimized baseline well-lit-path.
-# 
+#
 # To see scale up and scale down occur while this workload is running
 # follow the below steps...
-# 
+#
 # # In one terminal, in the namespace containing the llm-d stack, run:
 # > kubectl get hpa -w
-# 
+#
 # # In another terminal, in the namespace containing the llm-d stack, run:
 # > kubectl get po -w
-# 
+#
 # After sufficient work spawned, you will observe HPA replica targets increase
-# as well as decode pods increase. Once workload has decreased sufficiently, 
+# as well as decode pods increase. Once workload has decreased sufficiently,
 # the replicas for decode pods will scale back down.
-# 
+#
 
 
 endpoint:

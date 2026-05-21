@@ -7,8 +7,8 @@ High-level guide to llm-d architecture. Start here, then dive into specific guid
 The llm-d architecture is built around three primary concepts: the [Router](core/router/README.md), the [InferencePool](core/inferencepool.md), and the [Model Server](core/model-servers.md).
 
 - **[llm-d Router](core/router/README.md)** - The intelligent entry point for inference requests. It provides LLM-aware load balancing, request queuing, and policy enforcement. It is composed of two functional parts:
-    - **[Proxy](core/router/proxy.md)**: A high-performance L7 proxy (typically Envoy) that accepts user requests and consults the EPP via the `ext-proc` protocol to determine the optimal destination.
-    - **[Endpoint Picker (EPP)](core/router/epp/README.md)**: The routing engine that scores and selects model server pods based on real-time metrics, KV-cache affinity, and configured policies.
+  - **[Proxy](core/router/proxy.md)**: A high-performance L7 proxy (typically Envoy) that accepts user requests and consults the EPP via the `ext-proc` protocol to determine the optimal destination.
+  - **[Endpoint Picker (EPP)](core/router/epp/README.md)**: The routing engine that scores and selects model server pods based on real-time metrics, KV-cache affinity, and configured policies.
 
 - **[InferencePool](core/inferencepool.md)** - The API that defines a group of Model Server Pods sharing the same model and compute configuration. Conceptualized as an "LLM-optimized Service", it serves as the discovery target for the Router.
 
@@ -28,6 +28,7 @@ llm-d's core design can be extended with optional advanced patterns:
 ### KV Cache Management
 
 llm-d provides a comprehensive ecosystem for managing and reusing the KV cache across the inference pool. This includes:
+
 - [Prefix-Cache Aware Routing](advanced/kv-management/prefix-cache-aware-routing.md): Heuristic and precise techniques to maximize cache hits.
 - [KV-Cache Indexing](advanced/kv-management/kv-indexer.md): Event-driven tracking of cache state across all model servers.
 - [KV Offloading](advanced/kv-management/kv-offloader.md): Tiered storage hierarchy (CPU, SSD) for extending cache capacity.
@@ -55,6 +56,7 @@ See [Batch Inference](advanced/batch/README.md) for details on the batch inferen
 ### Autoscaling
 
 llm-d supports proactive, SLO-aware autoscaling through two complementary approaches:
+
 - **HPA/KEDA**: Standard Kubernetes-native scaling using metrics exported by the EPP (like queue depth).
 - **Workload Variant Autoscaler (WVA)**: Globally optimized scaling that minimizes cost by routing traffic across different model variants (e.g., different hardware or quantization) while meeting latency targets.
 

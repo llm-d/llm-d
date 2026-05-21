@@ -153,6 +153,7 @@ Expected output:
 ```
 
 If you only see generic `GET` spans, check that:
+
 - The vLLM container args include `--collect-detailed-traces all`
 - The EPP image includes tracing instrumentation (`llm-d-inference-scheduler`, not upstream `epp`)
 

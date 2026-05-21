@@ -19,7 +19,7 @@ Async Processor integrates with llm-d to:
 
 Before installing Async Processor, ensure you have:
 
-1. **Kubernetes cluster**: A running Kubernetes cluster (v1.31+). 
+1. **Kubernetes cluster**: A running Kubernetes cluster (v1.31+).
    - For local development, you can use **Kind** or **Minikube**.
    - For production, GKE, AKS, or OpenShift are supported.
 2. **Gateway control plane**: Configure and deploy your [Gateway control plane](../prereq/gateway-provider/README.md) (e.g., Istio) before installation.
@@ -44,6 +44,7 @@ export IP=$(kubectl get gateway llm-d-inference-gateway -n llm-d-optimized-basel
 #### Step 2: Configure Values
 
 Choose your queue implementation (GCP Pub/Sub or Redis) and configure the corresponding `values.yaml` file:
+
 - `guides/asynchronous-processing/gcp-pubsub/values.yaml`
 - `guides/asynchronous-processing/redis/values.yaml`
 

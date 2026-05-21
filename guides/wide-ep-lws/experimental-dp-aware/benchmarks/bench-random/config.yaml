@@ -3,7 +3,7 @@ load:
   stages:
   - rate: 10
     duration: 180
-api: 
+api:
   type: completion
 server:
   type: vllm

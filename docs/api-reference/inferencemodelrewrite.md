@@ -2,7 +2,7 @@
 
 `InferenceModelRewrite` defines rules for rewriting inference requests, such as traffic splitting, A/B tests, or canary rollouts across weighted model targets.
 
-**Group:** `inference.networking.x-k8s.io`  
+**Group:** `inference.networking.x-k8s.io`
 **Version:** `v1alpha2`
 
 ---
@@ -86,6 +86,7 @@
 ## Condition Types and Reasons
 
 ### Accepted
+
 Indicates if the rewrite is valid, non-conflicting, and applied to the pool.
 
 - **True Reasons:**

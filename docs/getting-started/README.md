@@ -66,6 +66,7 @@ An **llm-d Router** capability implemented primarily as an EPP plugin that route
 ### Batch Inference
 
 Manage high-volume offline inference workloads through OpenAI-compatible Batch APIs. llm-d provides two primary components for batch processing:
+
 - **llm-d Batch Gateway** — Provides `/v1/batches` and `/v1/files` endpoints for job submission and tracking.
 - **llm-d Async Processor** — A dispatch agent that pulls requests from message queues (such as Redis and Google Pub/Sub) and feeds them to the llm-d Router with system-aware flow control to prevent impacting interactive traffic.
 
@@ -103,6 +104,7 @@ Two complementary autoscaling patterns:
 In addition to the software components, llm-d provides **Well-Lit Paths** — tested, benchmarked deployment recipes for common production patterns. These paths are starting points designed to be adapted for your models, hardware, and traffic patterns.
 
 Each path includes:
+
 - Deployable Helm charts and Kustomize manifests
 - Key configuration knobs for performance tuning
 - Sample workloads and benchmarks against baseline setups

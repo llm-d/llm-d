@@ -20,7 +20,6 @@ This guide explains how to offload the vLLM prefix cache (KV cache) to shared st
 | llm-d FS Connector    | `modelserver/gpu/vllm/llm-d-fs-connector/`                              |
 | LMCache Connector     | `modelserver/gpu/vllm/lmcache-connector/`                              |
 
-
 <details>
 <summary><h4>About llm-d FS Connector</h4></summary>
 
@@ -42,7 +41,6 @@ For advanced configuration options and implementation details, see the [llm-d FS
 
 </details>
 
-
 <details>
 <summary><h4>About LMCache Connector</h4></summary>
 
@@ -54,27 +52,29 @@ For advanced configuration options and implementation details, see the [llm-d FS
 
 ## Prerequisites
 
-- Have the [proper client tools installed on your local system](../../../helpers/client-setup/README.md) to use this guide.
-- Checkout llm-d repo:
+* Have the [proper client tools installed on your local system](../../../helpers/client-setup/README.md) to use this guide.
+* Checkout llm-d repo:
 
   ```bash
     export branch="main" # branch, tag, or commit hash
     git clone https://github.com/llm-d/llm-d.git && cd llm-d && git checkout ${branch}
   ```
 
-- Set the following environment variables:
+* Set the following environment variables:
+
   ```bash
     export GAIE_VERSION=v1.5.0
     export GUIDE_NAME="tiered-prefix-cache-storage"
     export NAMESPACE=llm-d-${GUIDE_NAME}
   ```
-- Install the Gateway API Inference Extension CRDs:
+* Install the Gateway API Inference Extension CRDs:
 
   ```bash
     kubectl apply -k "https://github.com/kubernetes-sigs/gateway-api-inference-extension/config/crd?ref=${GAIE_VERSION}"
   ```
 
-- Create a target namespace for the installation:
+* Create a target namespace for the installation:
+
   ```bash
     kubectl create namespace ${NAMESPACE}
   ```
@@ -94,7 +94,6 @@ export STORAGE_CLASS="" # leave empty to use the cluster default StorageClass; o
 To provision a managed GCP Lustre instance on GKE and configure the corresponding `StorageClass`, follow the [GCP Lustre guide](./manifests/backends/lustre/README.md).
 
 To provision AWS EFS and configure the corresponding `StorageClass`, follow the [EFS guide](./manifests/backends/aws/README.md).
-
 
 Create a PVC using the selected storage class:
 
@@ -153,8 +152,8 @@ kubectl apply -n ${NAMESPACE} -k guides/tiered-prefix-cache/storage/modelserver/
 
 ### 4. (Optional) Enable monitoring
 
-- Install the [Monitoring stack](../../../docs/monitoring/README.md).
-- Deploy the monitoring resources for this guide:
+* Install the [Monitoring stack](../../../docs/monitoring/README.md).
+* Deploy the monitoring resources for this guide:
 
 ```bash
 kubectl apply -n ${NAMESPACE} -k guides/recipes/modelserver/components/monitoring
@@ -216,7 +215,8 @@ curl -X POST http://${IP}/v1/completions \
         "prompt": "How are you today?"
     }' | jq
 ```
-### 4. Verify KV cache is offloaded to storage 
+
+### 4. Verify KV cache is offloaded to storage
 
 **Send a long prompt (one that crosses several `block_size` boundaries) to trigger offload**
 
@@ -251,7 +251,7 @@ The following benchmark results demonstrate the performance improvements of offl
 ### Benchmark Setup
 
 > [!NOTE]
-> The following benchmark results were from a previous release and does not match the deployment of the current release. A follow up benchmark will be conducted and the results will be updated accordingly. See https://github.com/llm-d/llm-d/issues/680.
+> The following benchmark results were from a previous release and does not match the deployment of the current release. A follow up benchmark will be conducted and the results will be updated accordingly. See <https://github.com/llm-d/llm-d/issues/680>.
 
 * **Hardware:**
   * A total of 16 H100 GPUs, each with 80GB of HBM, were used.
@@ -264,8 +264,9 @@ The following benchmark results demonstrate the performance improvements of offl
   * Lustre offloading was enabled using Lustre PVC as local backend disk.
 
 #### **LMCache Connector Configuration:**
-  * For LMCache setup, `LMCACHE_MAX_LOCAL_CPU_SIZE` set to `20GB`, which provides approximately 20*16(number of GPUs)=320GB of CPU RAM cache.
-  * Lustre storage capacity available for KV cache offloading was set through `LMCACHE_MAX_LOCAL_DISK_SIZE:"1120Gi"`. As we have 16 GPUs sharing the Lustre disk, 1120*16= 17920Gi <= 18000Gi (i.e. available Lustre capacity) This value can be less than or equal to the available disk size.
+
+* For LMCache setup, `LMCACHE_MAX_LOCAL_CPU_SIZE` set to `20GB`, which provides approximately 20*16(number of GPUs)=320GB of CPU RAM cache.
+* Lustre storage capacity available for KV cache offloading was set through `LMCACHE_MAX_LOCAL_DISK_SIZE:"1120Gi"`. As we have 16 GPUs sharing the Lustre disk, 1120*16= 17920Gi <= 18000Gi (i.e. available Lustre capacity) This value can be less than or equal to the available disk size.
 
 The benchmark was conducted using the [inference-perf](https://github.com/kubernetes-sigs/inference-perf) tool with the following hardware, memory, and workload configurations:
 
@@ -303,7 +304,6 @@ In both scenarios, the total KV cache size significantly exceeds the combined ca
 * **50K system prompt length (KVCache size 994 GiB):** While CPU RAM provides 320GB for KV cache offloading, adding Lustre significantly enhances performance compared to relying on CPU offloading alone.
 * **70K system prompt length (KVCache size 1.3 TiB):** As the KV cache footprint grows to 1.3 TiB, the memory pressure intensifies. In this heavier scenario, Lustre delivers even greater performance gains, demonstrating its ability to seamlessly scale with demanding long-context use cases.
 
-
 ##### 50K system prompt length (KVCache size 994 GiB) — KV Cache > (HBM + CPU RAM)
 
 | KVCache > HBM + CPU RAM | Mean TTFT (second) | P90 TTFT (second) | Mean E2E Latency (second) | P90 E2E Latency (second) | Input Throughput (token per second) | Output Throughput (token per second) | Overall Throughput (token per second) |
@@ -318,11 +318,11 @@ In both scenarios, the total KV cache size significantly exceeds the combined ca
 | **Baseline vLLM + CPU offloading** | 58.02 | 74.75 | 87.99 | 105.46 | 16598 | 226.65 | 16825 |
 | **vLLM + CPU offloading + Lustre** | 45 (-22%) | 64.79 (-13%) | 68.28 (-22%) | 87.47 (-17%) | 21364 (+28.71%) | 291 (+28.39%) | 21656 (+28.71%) |
 
-
 #### **LLM-D FS Connector Configuration:**
-  * The offloading connector supports multi-tiered offloading (e.g., offloading to both CPU and storage backends) through a Multi-connector setup, which combines an Offloading connector with a CPU backend and an Offloading connector with an LLM-D FS backend.
-  * For benchmark we allocated 64.42*4 ~= 356GB GB of CPU RAM for offloading by setting `cpu_bytes_to_use=64424509440`.
-  * The offloading connector can utilize the entire capacity of the attached Lustre disk for KV cache offloading, for this case the Lustre PVC = 18000GiB.
+
+* The offloading connector supports multi-tiered offloading (e.g., offloading to both CPU and storage backends) through a Multi-connector setup, which combines an Offloading connector with a CPU backend and an Offloading connector with an LLM-D FS backend.
+* For benchmark we allocated 64.42*4 ~= 356GB GB of CPU RAM for offloading by setting `cpu_bytes_to_use=64424509440`.
+* The offloading connector can utilize the entire capacity of the attached Lustre disk for KV cache offloading, for this case the Lustre PVC = 18000GiB.
 
 The benchmark was conducted using the [inference-perf](https://github.com/kubernetes-sigs/inference-perf) tool with the following hardware, memory, and workload configurations:
 
@@ -372,13 +372,13 @@ In this scenario, the total KV cache size significantly exceeds the combined cap
 
 * **50K system prompt length (KVCache size 994 GiB):** The performance difference with Lustre storage offloading is more prominent for larger models like llama-3.3-70B-Instruct .
 
-
 ##### 30K system prompt length (KVCache size 653 GiB) — KV Cache > (HBM + CPU RAM)
 
 | KVCache > HBM + CPU RAM | Mean TTFT (second) | P90 TTFT (second) | Mean E2E Latency (second) | P90 E2E Latency (second) | Input Throughput (token per second) | Output Throughput (token per second) | Overall Throughput (token per second) | ITL (second) |
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
 | **Baseline vLLM + CPU offloading** | 2.24 | 5.14 | 22.21 | 26.6 | 27148 | 836 | 27984 | 0.021 |
 | **vLLM + CPU offloading + Lustre** | 1.38 (-38.4%) | 2.82 (-45.1%) | 20.45 (-7.9%) | 22.77 (-14.4%) | 28832 (+6.2%) | 828 (-1.0%) | 29661 (+6.0%) | 0.02 (-4.8%) |
+
 ---
 
 ##### 50K system prompt length (KVCache size 994 GiB) — KV Cache > (HBM + CPU RAM)
@@ -387,6 +387,7 @@ In this scenario, the total KV cache size significantly exceeds the combined cap
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
 | **Baseline vLLM + CPU offloading** | 27.11 | 41.71 | 57.06 | 72.28 | 18333 | 350 | 18682 | 0.029 |
 | **vLLM + CPU offloading + Lustre** | 15.25 (-43.7%) | 24.71 (-40.8%) | 38.55 (-32.4%) | 48.01 (-33.6%) | 27091 (+47.8%) | 517 (+47.7%) | 27609 (+47.8%) | 0.022 (-24.1%) |
+
 ---
 
 ## Cleanup

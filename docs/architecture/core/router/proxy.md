@@ -31,14 +31,18 @@ Regardless of the deployment mode, the request flow is the same:
 The standalone mode deploys a proxy as a sidecar to the EPP, offering a lightweight, flexible deployment mode without requiring Gateway API infrastructure.
 
 ### When to Use
+
 Standalone deployments are intended for workloads where the machinery of Gateway API creates too much operational overhead. This includes:
+
 - Clusters using legacy Ingress controllers.
 - Basic testing and local evaluations.
 - Batch inference workloads.
 - RL post-training pipelines.
 
 ### Architecture
-In standalone mode, the conformant proxy (e.g., Envoy) runs alongside the EPP in the same pod. 
+
+In standalone mode, the conformant proxy (e.g., Envoy) runs alongside the EPP in the same pod.
+
 - **Communication**: `ext-proc` communication happens over `localhost`.
 - **Simplification**: No `Gateway`, `HTTPRoute`, or gateway controller is needed.
 - **Access**: Traffic is sent directly to the EPP pod's externally exposed port.
@@ -50,7 +54,6 @@ In standalone mode, the conformant proxy (e.g., Envoy) runs alongside the EPP in
   </picture>
 </p>
 
-
 ---
 
 ## Gateway Mode (Inference Gateway)
@@ -58,7 +61,9 @@ In standalone mode, the conformant proxy (e.g., Envoy) runs alongside the EPP in
 Gateway Mode, also known as the **Inference Gateway**, leverages the official Kubernetes Gateway API project focused on L4 and L7 networking, representing the next generation of Kubernetes Load Balancing and Service Mesh APIs.
 
 ### When to Use
+
 Gateway Mode is targeted at production environments that require:
+
 - **Shared Infrastructure**: A single, shared Gateway can host multiple HTTP/gRPC routes for both inference workloads (represented as `InferencePool`) and traditional applications (standard Kubernetes `Service` objects).
 - Integration with cloud-native L7 networking solutions (Istio, GKE Gateway, Agentgateway).
 - Multi-cluster load balancing.
@@ -66,6 +71,7 @@ Gateway Mode is targeted at production environments that require:
 - Exposure of endpoints to external workloads with robust control.
 
 ### Architecture
+
 The [Gateway API Inference Extension (GAIE)](https://gateway-api-inference-extension.sigs.k8s.io/) extends Gateway API by leveraging Envoy's External Processing to inject LLM-aware load balancing into the production-grade networking provided by the Gateway provider.
 
 <p align="center">
@@ -155,7 +161,9 @@ spec:
 </table>
 
 ### Deployment Guides
+
 llm-d provides [Gateway Mode deployment guides](../../../../guides/prereq/gateways/README.md) for the following Gateways:
+
 - [Istio](../../../../guides/prereq/gateways/istio.md)
 - [GKE Gateway](../../../../guides/prereq/gateways/gke.md)
 - [Agentgateway](../../../../guides/prereq/gateways/agentgateway.md)

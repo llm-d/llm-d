@@ -19,7 +19,7 @@ on:
     inputs:
       pr_or_branch:
         description: 'Pull-request number or branch name to test'
-        required: true
+        required: false
         default: 'main'
         type: string
       custom_image_tag:
@@ -213,7 +213,7 @@ jobs:
 
             mv ~/optimized-baseline-xpu-deployment.log . || true
             mv ~/install-deps.log . || true
-            
+
             echo "Log collection completed."
             ls -la
 

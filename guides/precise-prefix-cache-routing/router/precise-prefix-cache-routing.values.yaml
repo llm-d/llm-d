@@ -62,7 +62,7 @@ inferenceExtension:
             indexerConfig:
               tokenizersPoolConfig:
                 modelName: Qwen/Qwen3-32B
-                workersCount: 24      
+                workersCount: 24
                 uds:
                   socketFile: /tmp/tokenizer/tokenizer-uds.socket
               kvBlockIndexConfig:

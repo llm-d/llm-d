@@ -57,11 +57,13 @@ Two scorers make up the routing decision alongside the load-aware stack:
   ```
 
 - Set the following environment variables:
+
   ```bash
     export GAIE_VERSION=v1.5.0
     export GUIDE_NAME="precise-prefix-cache-routing"
     export NAMESPACE=llm-d-precise
   ```
+
 - Install the Gateway API Inference Extension CRDs:
 
   ```bash
@@ -69,21 +71,27 @@ Two scorers make up the routing decision alongside the load-aware stack:
   ```
 
 - Create a target namespace for the installation
+
   ```bash
     kubectl create namespace ${NAMESPACE}
   ```
 
 - Set the following environment variables:
+
 ```bash
 export GAIE_VERSION=v1.5.0
 export GUIDE_NAME="precise-prefix-cache-routing"
 export NAMESPACE="llm-d-${GUIDE_NAME}"
 ```
+
 - Install the Gateway API Inference Extension CRDs:
+
 ```bash
 kubectl apply -k "https://github.com/kubernetes-sigs/gateway-api-inference-extension/config/crd?ref=${GAIE_VERSION}"
 ```
+
 - Create a target namespace for the installation
+
 ```bash
 kubectl create namespace ${NAMESPACE}
 ```
@@ -153,7 +161,7 @@ helm install precise-prefix-cache-routing \
   -f ${REPO_ROOT}/guides/recipes/router/features/httproute-flags.yaml \
   -f ${REPO_ROOT}/guides/${GUIDE_NAME}/router/${GUIDE_NAME}.values.yaml \
   --set provider.name=${PROVIDER_NAME} \
-  --post-renderer ${REPO_ROOT}/guides/${GUIDE_NAME}/router/patches/uds-tokenizer/post-renderer.sh 
+  --post-renderer ${REPO_ROOT}/guides/${GUIDE_NAME}/router/patches/uds-tokenizer/post-renderer.sh
   -n ${NAMESPACE} --version ${GAIE_VERSION}
 ```
 
@@ -179,6 +187,7 @@ kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/g
   ```bash
   kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/recipes/modelserver/components/monitoring
   ```
+
 - Enable Prometheus scrape for the router by layering `-f ${REPO_ROOT}/guides/recipes/router/features/monitoring.values.yaml` onto the helm command in step 2.
 
 ## Verification

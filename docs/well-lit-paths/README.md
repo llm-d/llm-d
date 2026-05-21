@@ -26,4 +26,3 @@ Well-lit paths are curated, end-to-end guides for common LLM inference patterns 
 
 - **[Asynchronous Processing](asynchronous-processing.md)**: Intelligently processing latency-tolerant requests sourced from message queues via a lightweight agent to leverage "slack" capacity without the complexity of a full batch gateway.
 - **[Batch Gateway](experimental/batch-gateway.md)**: Managing large-scale batch inference coexisting with interactive workloads via an OpenAI-compatible Batch API.
-

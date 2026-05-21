@@ -11,10 +11,10 @@ Traditional API gateways rate-limit by Requests Per Second (RPS), assuming every
 
 Without Flow Control, the following issues arise:
 
-*   **The Noisy Neighbor**: A single tenant sending massive prompts can monopolize an endpoint's KV cache and queue, starving others.
-*   **Scheduling Regret**: Once a request is dispatched to a model server's local queue, the EPP cannot move it. Premature routing locks requests into suboptimal candidates, preventing them from utilizing a better endpoint that may free up soon.
-*   **Priority Inversion**: Model servers batch based on arrival or sequence length, not business priority. Critical real-time requests can get stuck behind large offline batches.
-*   **Resource Asymmetry**: A single request with a massive context can consume more resources than hundreds of short requests.
+* **The Noisy Neighbor**: A single tenant sending massive prompts can monopolize an endpoint's KV cache and queue, starving others.
+* **Scheduling Regret**: Once a request is dispatched to a model server's local queue, the EPP cannot move it. Premature routing locks requests into suboptimal candidates, preventing them from utilizing a better endpoint that may free up soon.
+* **Priority Inversion**: Model servers batch based on arrival or sequence length, not business priority. Critical real-time requests can get stuck behind large offline batches.
+* **Resource Asymmetry**: A single request with a massive context can consume more resources than hundreds of short requests.
 
 By shifting queuing to the EPP, we can govern physical capacity (KV cache, queue saturation) rather than just raw request rates or connection counts.
 
@@ -26,18 +26,18 @@ The Flow Control layer intercepts requests at the EPP and holds them in centrali
 
 To understand how policy plugins act, it helps to visualize the queuing topology as a grid defined by two dimensions: **Priority** and **Flow (Fairness ID)**.
 
-1.  **Flow Identification**: Every request is assigned a `FlowKey` — a tuple of `(FairnessID, Priority)`.
-    *   `FairnessID` is extracted from the `x-gateway-inference-fairness-id` header (e.g., tenant ID).
-    *   `Priority` is derived from the `InferenceObjective`.
-2.  **Separate Queues**: Each unique `FlowKey` maps to its own in-memory queue.
+1. **Flow Identification**: Every request is assigned a `FlowKey` — a tuple of `(FairnessID, Priority)`.
+    * `FairnessID` is extracted from the `x-gateway-inference-fairness-id` header (e.g., tenant ID).
+    * `Priority` is derived from the `InferenceObjective`.
+2. **Separate Queues**: Each unique `FlowKey` maps to its own in-memory queue.
 
 A **Priority Band** is a logical grouping of all queues (flows) that share the same external priority value. The system services bands in strict order, but cycles through the queues *within* a band according to the Fairness Policy.
 
 The system selects the next request to dispatch by traversing these queues in three strict tiers:
 
-*   **Tier 1: Priority (Band Selection)**: The system always services the highest-priority band first. This is hardcoded and not pluggable. It yields all queues belonging to that priority level.
-*   **Tier 2: Fairness (Flow Selection)**: Within that priority band, the **Fairness Policy** plugin determines which specific flow (tenant) gets the next turn.
-*   **Tier 3: Ordering (Item Selection)**: Finally, within that selected flow's queue, the **Ordering Policy** plugin determines which individual request to serve.
+* **Tier 1: Priority (Band Selection)**: The system always services the highest-priority band first. This is hardcoded and not pluggable. It yields all queues belonging to that priority level.
+* **Tier 2: Fairness (Flow Selection)**: Within that priority band, the **Fairness Policy** plugin determines which specific flow (tenant) gets the next turn.
+* **Tier 3: Ordering (Item Selection)**: Finally, within that selected flow's queue, the **Ordering Policy** plugin determines which individual request to serve.
 
 #### Client Integration: Tagging Traffic
 
@@ -61,16 +61,16 @@ curl -X POST http://${IP}:${PORT}/v1/completions \
 
 > [!TIP]
 > **Fallbacks**:
+>
 > * If the **Fairness ID** header is missing, the request falls back to a single global bucket for that priority level.
 > * If the **Inference Objective** header is missing, or references an objective without a priority set, the request defaults to **Priority `0`**.
-
 
 #### Two Levels of Priority
 
 The system distinguishes between two levels of priority:
 
-1.  **External Priority (Traffic Classes)**: Coarse-grained prioritization across tenants and workloads (e.g., Premium vs. Best-Effort). This is governed by `InferenceObjective` and acts at **Tier 1**. Negative values are allowed and designate requests as "sheddable". Unlike legacy admission mode (which immediately drops negative priority requests upon saturation), Flow Control admits them into queues but subjects them to operator-configured band capacity limits, enabling controlled load shedding by strictly bounding lower-priority queues.
-2.  **Internal Priority (Request Ordering)**: Fine-grained prioritization of requests *within a single flow* (e.g., Earliest Deadline First). This is governed by the `OrderingPolicy` and acts at **Tier 3**.
+1. **External Priority (Traffic Classes)**: Coarse-grained prioritization across tenants and workloads (e.g., Premium vs. Best-Effort). This is governed by `InferenceObjective` and acts at **Tier 1**. Negative values are allowed and designate requests as "sheddable". Unlike legacy admission mode (which immediately drops negative priority requests upon saturation), Flow Control admits them into queues but subjects them to operator-configured band capacity limits, enabling controlled load shedding by strictly bounding lower-priority queues.
+2. **Internal Priority (Request Ordering)**: Fine-grained prioritization of requests *within a single flow* (e.g., Earliest Deadline First). This is governed by the `OrderingPolicy` and acts at **Tier 3**.
 
 To visualize how these priority tiers and flows interact, the following diagram represents the centralized queuing topology in the EPP:
 
@@ -239,20 +239,19 @@ Understanding the execution of this configuration requires examining the core co
 
 ### Core Components
 
-*   **Flow Controller**: The main orchestrator managing the dispatch loop and queue evaluation.
-*   **Saturation Detector**: Queries the aggregate health of the pool (e.g., KV cache utilization, queue depth) to determine if the gate should be open or closed.
-*   **Queues**: The in-memory storage structures organized by `FlowKey` (implemented as lists or heaps depending on the Ordering Policy).
+* **Flow Controller**: The main orchestrator managing the dispatch loop and queue evaluation.
+* **Saturation Detector**: Queries the aggregate health of the pool (e.g., KV cache utilization, queue depth) to determine if the gate should be open or closed.
+* **Queues**: The in-memory storage structures organized by `FlowKey` (implemented as lists or heaps depending on the Ordering Policy).
 
 ### Resource Guardrails & Memory Isolation
 
 To prevent the EPP itself from resource exhaustion when queues grow, Flow Control enforces configurable capacity limits. See the [Global Fields section in the Configuration Guide](configuration.md#global-fields) for details on setting `maxBytes` and `maxRequests`:
 
-*   **Global Limits**: Configured via `maxBytes` (payload size) and `maxRequests` (count) across all priority bands. These limits support both plain integers and Kubernetes Quantity format (e.g., `10Gi`, `1k`). If a new request would exceed these limits, it is immediately rejected with an HTTP 429 (Too Many Requests).
-*   **Per-Band Limits**: Each priority band can have its own `maxBytes` and `maxRequests` limits. This provides **memory isolation** between bands; heavy traffic in a lower-priority band cannot fill the queue space reserved for higher-priority bands.
+* **Global Limits**: Configured via `maxBytes` (payload size) and `maxRequests` (count) across all priority bands. These limits support both plain integers and Kubernetes Quantity format (e.g., `10Gi`, `1k`). If a new request would exceed these limits, it is immediately rejected with an HTTP 429 (Too Many Requests).
+* **Per-Band Limits**: Each priority band can have its own `maxBytes` and `maxRequests` limits. This provides **memory isolation** between bands; heavy traffic in a lower-priority band cannot fill the queue space reserved for higher-priority bands.
 
 > [!NOTE]
 > **Proxy vs. GPU Protection**: It is important to distinguish between these flow control limits and the Saturation Detector. The `maxBytes` and `maxRequests` limits protect the **Gateway's** memory footprint and prevent proxy-level Resource Exhaustion. The Saturation Detector (described below) protects the **GPU's** physical compute and KV-cache capacity.
-
 
 ### The Dispatch Lifecycle
 
@@ -295,23 +294,22 @@ sequenceDiagram
 2. **Policy Evaluation**: Flow Control workers continuously evaluate the queues. They select the highest-priority band with work, apply the **Fairness Policy** to pick a flow, and use the **Ordering Policy** to select the candidate request.
 3. **Gated Dispatch**: Before releasing the request, the **Saturation Detector** is queried. If the pool has capacity, the request is dispatched to the Router. If saturated, the dispatch cycle halts (Head-of-Line blocking), holding the request safely until capacity frees up.
 
-
 ### System Capabilities & Limits
 
 Understanding the guaranteed capabilities and inherent boundaries of the Flow Control layer is essential for effective capacity planning.
 
 #### What It Solves (Capabilities & Guarantees)
 
-*   **Multi-Tenant Fairness**: Provides a centralized point to enforce business policies (priority, fairness, and starvation prevention).
-*   **Dynamic Late Binding**: Delays routing decisions until the last possible moment to match requests to the most optimal candidate (e.g., one with high prefix cache affinity).
-*   **Work-Conserving Nature**: Acts as a **work-conserving** system (meaning it never artificially throttles traffic if GPUs have spare capacity); if backend capacity exists, it dispatches.
-*   **TPOT Protection**: By preventing context-thrashing on the GPU (managing **arithmetic intensity**), it ensures predictable generation times (**Time-Per-Output-Token**) once dispatched. (Note: While this can also be managed at the model server level via settings like `max_num_seq` in vLLM, doing so lacks global awareness. This protection is primarily beneficial for **chat streaming** use cases where maintaining human reading pace is critical.)
+* **Multi-Tenant Fairness**: Provides a centralized point to enforce business policies (priority, fairness, and starvation prevention).
+* **Dynamic Late Binding**: Delays routing decisions until the last possible moment to match requests to the most optimal candidate (e.g., one with high prefix cache affinity).
+* **Work-Conserving Nature**: Acts as a **work-conserving** system (meaning it never artificially throttles traffic if GPUs have spare capacity); if backend capacity exists, it dispatches.
+* **TPOT Protection**: By preventing context-thrashing on the GPU (managing **arithmetic intensity**), it ensures predictable generation times (**Time-Per-Output-Token**) once dispatched. (Note: While this can also be managed at the model server level via settings like `max_num_seq` in vLLM, doing so lacks global awareness. This protection is primarily beneficial for **chat streaming** use cases where maintaining human reading pace is critical.)
 
 #### What It Does Not Solve (Limits & Trade-offs)
 
-*   **Absolute Capacity Shortages**: Flow Control only handles *when* and *in what order* requests are dispatched. It cannot make the pool faster or create capacity that doesn't exist.
-*   **TTFT Shifts (Not Elimination)**: Flow Control cannot remove wait time when the system is over capacity. By enabling it, you make the **explicit choice to protect TPOT at the expense of queue time**. Its core function is simply controlling **where** and **for whom** TTFT (Time-To-First-Token) is accrued (accruing it safely in the EPP rather than letting it context-thrash the GPU).
-*   **Non-Persistence**: Queues are stored purely in-memory. If the EPP process restarts or fails, queued requests are lost. During a graceful shutdown, the EPP will attempt to evict queued requests with an internal error (HTTP 500), whereas abrupt crashes will result in hard connection drops for the client.
+* **Absolute Capacity Shortages**: Flow Control only handles *when* and *in what order* requests are dispatched. It cannot make the pool faster or create capacity that doesn't exist.
+* **TTFT Shifts (Not Elimination)**: Flow Control cannot remove wait time when the system is over capacity. By enabling it, you make the **explicit choice to protect TPOT at the expense of queue time**. Its core function is simply controlling **where** and **for whom** TTFT (Time-To-First-Token) is accrued (accruing it safely in the EPP rather than letting it context-thrash the GPU).
+* **Non-Persistence**: Queues are stored purely in-memory. If the EPP process restarts or fails, queued requests are lost. During a graceful shutdown, the EPP will attempt to evict queued requests with an internal error (HTTP 500), whereas abrupt crashes will result in hard connection drops for the client.
 
 ### Failure Modes & Error Mapping
 
@@ -349,35 +347,39 @@ stateDiagram-v2
 
 The Flow Control layer behavior is customizable via several extension points implemented as plugins. For details on how to register and reference these plugins in your config, see the [Flow Control section in the Configuration Guide](configuration.md#flowcontrol):
 
-1.  **Fairness Policy**: Determines how to share dispatch opportunities between different flows within the exact same Priority level.
-2.  **Ordering Policy**: Determines the order in which requests are served within a specific flow.
-3.  **Saturation Detector**: Evaluates whether the pool has capacity for more dispatches.
+1. **Fairness Policy**: Determines how to share dispatch opportunities between different flows within the exact same Priority level.
+2. **Ordering Policy**: Determines the order in which requests are served within a specific flow.
+3. **Saturation Detector**: Evaluates whether the pool has capacity for more dispatches.
 
 ### Concrete Plugins
 
 #### Fairness Policies
-*   **[`global-strict-fairness-policy`](https://github.com/llm-d/llm-d-router/tree/main/pkg/epp/framework/plugins/flowcontrol/fairness/globalstrict/README.md)**: Ignores flow isolation and serves all requests in a single global order based on the Ordering Policy. Ideal when strict global ordering must be enforced across all requests within the band and fairness is not a concern.
-*   **[`round-robin-fairness-policy`](https://github.com/llm-d/llm-d-router/tree/main/pkg/epp/framework/plugins/flowcontrol/fairness/roundrobin/README.md)**: Guarantees fair sharing by cycling through active flows one by one. Prevents a single high-volume flow from starving others (solving the "Noisy Neighbor" problem).
+
+* **[`global-strict-fairness-policy`](https://github.com/llm-d/llm-d-router/tree/main/pkg/epp/framework/plugins/flowcontrol/fairness/globalstrict/README.md)**: Ignores flow isolation and serves all requests in a single global order based on the Ordering Policy. Ideal when strict global ordering must be enforced across all requests within the band and fairness is not a concern.
+* **[`round-robin-fairness-policy`](https://github.com/llm-d/llm-d-router/tree/main/pkg/epp/framework/plugins/flowcontrol/fairness/roundrobin/README.md)**: Guarantees fair sharing by cycling through active flows one by one. Prevents a single high-volume flow from starving others (solving the "Noisy Neighbor" problem).
 
 #### Ordering Policies
-*   **[`fcfs-ordering-policy`](https://github.com/llm-d/llm-d-router/tree/main/pkg/epp/framework/plugins/flowcontrol/ordering/fcfs/README.md)**: First-Come, First-Served based on arrival time. (Default)
-*   **[`edf-ordering-policy`](https://github.com/llm-d/llm-d-router/tree/main/pkg/epp/framework/plugins/flowcontrol/ordering/edf/README.md)**: Earliest Deadline First, prioritizing requests with the closest expiration time.
-*   **[`slo-deadline-ordering-policy`](https://github.com/llm-d/llm-d-router/tree/main/pkg/epp/framework/plugins/flowcontrol/ordering/slodeadline/README.md)**: Orders requests by an SLO-based deadline computed from arrival time. Uses the `x-slo-ttft-ms` header. Requests without this header are placed behind all SLO requests, risking starvation.
+
+* **[`fcfs-ordering-policy`](https://github.com/llm-d/llm-d-router/tree/main/pkg/epp/framework/plugins/flowcontrol/ordering/fcfs/README.md)**: First-Come, First-Served based on arrival time. (Default)
+* **[`edf-ordering-policy`](https://github.com/llm-d/llm-d-router/tree/main/pkg/epp/framework/plugins/flowcontrol/ordering/edf/README.md)**: Earliest Deadline First, prioritizing requests with the closest expiration time.
+* **[`slo-deadline-ordering-policy`](https://github.com/llm-d/llm-d-router/tree/main/pkg/epp/framework/plugins/flowcontrol/ordering/slodeadline/README.md)**: Orders requests by an SLO-based deadline computed from arrival time. Uses the `x-slo-ttft-ms` header. Requests without this header are placed behind all SLO requests, risking starvation.
 
 #### Saturation Detectors
 
 The behavior of the saturation detector depends on whether flow control is enabled:
 
-- **Flow Control enabled**: When the pool is saturated, request dispatch is paused and incoming requests are buffered in the flow control memory queues (respecting priority and fairness policies) until backend capacity frees up. The Saturation Detector acts as the gatekeeper for these centralized queues; see the [Dispatch Lifecycle section](#the-dispatch-lifecycle) for details.
-- **Flow Control disabled** (default): When the pool is saturated, "sheddable" requests (those with negative priority) are immediately rejected with HTTP 429 (Too Many Requests). All other requests pass directly to the model servers.
+* **Flow Control enabled**: When the pool is saturated, request dispatch is paused and incoming requests are buffered in the flow control memory queues (respecting priority and fairness policies) until backend capacity frees up. The Saturation Detector acts as the gatekeeper for these centralized queues; see the [Dispatch Lifecycle section](#the-dispatch-lifecycle) for details.
+* **Flow Control disabled** (default): When the pool is saturated, "sheddable" requests (those with negative priority) are immediately rejected with HTTP 429 (Too Many Requests). All other requests pass directly to the model servers.
 
 Available plugins:
 
-*   **[`utilization-detector`](https://github.com/llm-d/llm-d-router/tree/main/pkg/epp/framework/plugins/flowcontrol/saturationdetector/utilization/README.md)**: Closed-loop detector reacting to real-time telemetry (queue depth, KV cache). Highly accurate but subject to telemetry lag ("thundering herd"). In heterogeneous pools, it treats all endpoints equally (unweighted average), meaning a small saturated endpoint can trigger global backpressure. (Default)
-*   **[`concurrency-detector`](https://github.com/llm-d/llm-d-router/tree/main/pkg/epp/framework/plugins/flowcontrol/saturationdetector/concurrency/README.md)**: Open-loop detector based on active in-flight request accounting. Instantaneous reaction but blind to actual hardware memory pressure (KV cache filling). In heterogeneous pools, it biases toward the state of larger endpoints (aggregate capacity model).
+* **[`utilization-detector`](https://github.com/llm-d/llm-d-router/tree/main/pkg/epp/framework/plugins/flowcontrol/saturationdetector/utilization/README.md)**: Closed-loop detector reacting to real-time telemetry (queue depth, KV cache). Highly accurate but subject to telemetry lag ("thundering herd"). In heterogeneous pools, it treats all endpoints equally (unweighted average), meaning a small saturated endpoint can trigger global backpressure. (Default)
+* **[`concurrency-detector`](https://github.com/llm-d/llm-d-router/tree/main/pkg/epp/framework/plugins/flowcontrol/saturationdetector/concurrency/README.md)**: Open-loop detector based on active in-flight request accounting. Instantaneous reaction but blind to actual hardware memory pressure (KV cache filling). In heterogeneous pools, it biases toward the state of larger endpoints (aggregate capacity model).
 
 > [!NOTE]
+>
 > #### The "Healthy Buffer" Principle
+>
 > Regardless of which detector you use, the core goal of tuning saturation detection is to maintain a small, **"healthy buffer"** of requests queued locally on the model servers themselves.
 >
 > This buffer should be just large enough to ensure continuous batching engines never starve for work, but small enough that the vast majority of queuing happens centrally in the EPP where priority and fairness can be enforced.
@@ -386,14 +388,15 @@ Available plugins:
 >
 > Tuning this buffer involves adjusting the specific parameters of the configured Saturation Detector. For instance:
 >
-> *   In the `utilization-detector`, this is typically controlled via the `queueDepthThreshold` parameter.
-> *   In the `concurrency-detector`, it is controlled by setting `maxConcurrency` just above your model server's effective batch size.
+> * In the `utilization-detector`, this is typically controlled via the `queueDepthThreshold` parameter.
+> * In the `concurrency-detector`, it is controlled by setting `maxConcurrency` just above your model server's effective batch size.
 >
 > See the linked READMEs for each detector above for full details on their available knobs.
 
 ### Advanced Use Cases: Autoscaling
 
 #### True Demand Autoscaling
+
 Traditional metrics like GPU utilization fail to quantify unfulfilled demand because LLM compute is highly non-linear. Shifting the queue to the EPP provides a definitive "True Demand" metric (Queue Depth). External scalers like KEDA can use this metric to scale out replicas based on the exact volume of traffic waiting to be served. See [Autoscaling](../../../advanced/autoscaling/README.md) for more details.
 
 ### Metrics & Observability
@@ -410,6 +413,7 @@ The Flow Control layer exposes detailed metrics to track queuing dynamics and sy
 | `inference_extension_flow_control_pool_saturation` | Gauge | Current saturation level of the pool. | `inference_pool` |
 
 #### Grafana Dashboard
+
 A pre-configured Grafana dashboard is available to visualize these metrics, making it easy to monitor queue depths, dispatch latency, and saturation state transitions.
 
 ![Flow Control Dashboard](../../images/flow_control_dashboard.png)

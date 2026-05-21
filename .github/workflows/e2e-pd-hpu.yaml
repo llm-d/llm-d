@@ -19,7 +19,7 @@ on:
     inputs:
       pr_or_branch:
         description: 'Pull-request number or branch name to test'
-        required: true
+        required: false
         default: 'main'
         type: string
       custom_image_tag:
@@ -129,7 +129,7 @@ jobs:
           helmfile apply -e hpu -n "${NAMESPACE}" ${HELM_SET_IMAGE} \
             --skip-schema-validation 2>&1 \
             | tee ~/pd-hpu-deployment.log
-          
+
           # Check if helmfile command succeeded
           HELMFILE_EXIT_CODE=${PIPESTATUS[0]}
           if [ ${HELMFILE_EXIT_CODE} -ne 0 ]; then
@@ -138,9 +138,9 @@ jobs:
             cat ~/pd-hpu-deployment.log
             exit 1
           fi
-          
+
           echo "---------------------------------------" >> ~/pd-hpu-deployment.log
-          
+
           # Verify releases were created
           echo "✅ Helmfile apply succeeded. Checking deployed releases..."
           helm list -n "${NAMESPACE}"

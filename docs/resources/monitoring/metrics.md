@@ -13,6 +13,7 @@ This guide shows how to collect and visualize metrics from an llm-d deployment u
 
 > [!NOTE]
 > Commands in this guide use `${NAMESPACE}` for the namespace where your llm-d workload runs. Set it before following along:
+>
 > ```bash
 > export NAMESPACE=<your-llm-d-namespace>
 > ```

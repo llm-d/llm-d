@@ -52,11 +52,13 @@ This guide includes configurations for the following accelerators:
   ```
 
 - Set the following environment variables:
+
   ```bash
     export GAIE_VERSION=v1.5.0
     export GUIDE_NAME="optimized-baseline"
     export NAMESPACE=llm-d-optimized-baseline
   ```
+
 - Install the Gateway API Inference Extension CRDs:
 
   ```bash
@@ -64,6 +66,7 @@ This guide includes configurations for the following accelerators:
   ```
 
 - Create a target namespace for the installation
+
   ```bash
       kubectl create namespace ${NAMESPACE}
   ```

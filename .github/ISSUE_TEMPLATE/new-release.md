@@ -35,6 +35,7 @@ This document defines the process for releasing llm-d.
    ```shell
    export RC=1
    ```
+
 1. If needed, clone the llm-d [repo].
 
    ```shell
@@ -63,6 +64,7 @@ This document defines the process for releasing llm-d.
      ```
 
 1. Set all `branch` environment variables on all the [guides](../../guides) to the release branch name (i.e.,`release-${MAJOR}.${MINOR}`)
+
      ```shell
      git commit -a -s -S -m "updated branch environment variable on all guides to release-${MAJOR}.${MINOR}"
      ```
@@ -119,7 +121,7 @@ This document defines the process for releasing llm-d.
 1. Pushing the tag triggers CI action to build and publish the container image to the [ghcr registry].
 1. Test the steps in the tagged quickstart guide after the PR merges. TODO add e2e tests! <!-- link to an e2e tests once we have such one -->
 
-### Create the release!
+### Create the release
 
 1. Create a [new release]:
     1. Choose the tag that you created for the release.

@@ -14,9 +14,9 @@ The **Async Processor** is a lightweight dispatch agent that pulls requests from
 
 To prevent background tasks from impacting real-time traffic, the Async Processor uses **Dispatch Gates**. These gates regulate the flow of requests based on system metrics:
 
-*   **Prometheus Gating**: Queries model server saturation (e.g., KV cache pressure, queue depth) and only dispatches when the system has available "slack" capacity.
-*   **Budget Gating**: Uses a pre-calculated budget to control throughput.
-*   **Priority & Deadlines**: Requests can be prioritized, and the processor enforces deadlines to ensure stale work is abandoned.
+* **Prometheus Gating**: Queries model server saturation (e.g., KV cache pressure, queue depth) and only dispatches when the system has available "slack" capacity.
+* **Budget Gating**: Uses a pre-calculated budget to control throughput.
+* **Priority & Deadlines**: Requests can be prioritized, and the processor enforces deadlines to ensure stale work is abandoned.
 
 <p align="center">
   <picture>
@@ -27,14 +27,14 @@ To prevent background tasks from impacting real-time traffic, the Async Processo
 
 ### Resilience
 
-*   **Retries**: Transient failures (like rate limits or network issues) are automatically re-queued with exponential backoff.
-*   **Concurrency Control**: Configurable worker pools allow you to tune the degree of parallelism for background processing.
+* **Retries**: Transient failures (like rate limits or network issues) are automatically re-queued with exponential backoff.
+* **Concurrency Control**: Configurable worker pools allow you to tune the degree of parallelism for background processing.
 
 ## Use Cases
 
-*   **Batch Inference**: Processing large datasets where completion time is measured in minutes or hours rather than milliseconds.
-*   **Slack Capacity Filling**: Using idle GPU cycles between real-time request spikes to perform background tasks like document summarization or embedding generation.
-*   **Offline Evaluation**: Running model evaluation pipelines without competing for production resources.
+* **Batch Inference**: Processing large datasets where completion time is measured in minutes or hours rather than milliseconds.
+* **Slack Capacity Filling**: Using idle GPU cycles between real-time request spikes to perform background tasks like document summarization or embedding generation.
+* **Offline Evaluation**: Running model evaluation pipelines without competing for production resources.
 
 ## Further Reading
 

@@ -81,12 +81,14 @@ The **effective capacity** per replica is the minimum of k1 and k2. Per-variant 
 **Demand** per replica is the sum of tokens currently in use and the queued requests multiplied by the average input token length. The EPP queue demand (from `inference_extension_flow_control_queue_size` and `inference_extension_flow_control_queue_bytes`metrics) is added to the InferencePool-level totals.
 
 Scaling signals:
+
 - **Required capacity**: total demand divided by the scale-up threshold, minus anticipated supply. A positive value means scale-up is needed.
 - **Spare capacity**: total supply minus total demand divided by the scale-down boundary. A positive value means scale-down is possible.
 
 Default thresholds: scale-up threshold 0.85, scale-down boundary 0.70.
 
 Key improvements over `saturation-percentage-based`:
+
 - Token-level granularity enables cross-variant and cross-InferencePool capacity comparison
 - Dual-bound capacity model (memory + compute) captures both resource bottlenecks
 - Capacity knowledge is cached for zero-replica variants, enabling accurate cost estimation before scaling
@@ -115,6 +117,7 @@ The analyzer operates in three phases:
 3. **Capacity Computation** -- Uses an M/M/1/k queueing theory model to compute the maximum request rate per replica that meets the SLO targets. The desired replica count is the total arrival rate divided by this maximum rate, rounded up.
 
 Metrics used by the SLO analyzer:
+
 - `inference_extension_scheduler_attempts_total{status="success"}` -- per-pod arrival rate (requests/sec)
 - `vllm:time_to_first_token_seconds` -- TTFT histogram (sum/count for average)
 - `vllm:time_per_output_token_seconds` -- ITL histogram (sum/count for average)
@@ -128,6 +131,7 @@ Metrics used by the SLO analyzer:
 Scale-to-zero is handled by the **Enforcer** pipeline stage, which runs after the optimizer produces scaling decisions.
 
 For each InferencePool:
+
 1. Check if scale-to-zero is enabled (per-inferencepool config > global ConfigMap default > `WVA_SCALE_TO_ZERO` env var > false).
 2. If enabled, query `sum(increase(vllm:request_success_total{...}[retentionPeriod]))` for the InferencePool.
 3. If the request count is 0 over the retention period (default 10 minutes), set all variant target replicas to 0.
@@ -140,6 +144,7 @@ Scale-to-zero is skipped entirely when any variant has `MinReplicas > 0` in the 
 Scale-from-zero runs as a separate engine with a fast 100ms polling interval, independent of the main 30-second saturation engine loop. This ensures rapid response to incoming requests for idle InferencePools.
 
 For each VA with 0 replicas:
+
 1. Find the matching InferencePool from the datastore.
 2. Query the EPP (Endpoint Picker) metrics source for `inference_extension_flow_control_queue_size{target_model_name=<modelID>}`.
 3. If queue size > 0 (pending requests exist), scale the deployment directly to 1 replica.
@@ -155,6 +160,7 @@ WVA collects metrics through a source registry that holds named metrics source i
 - **Pod scraping sources** -- Added dynamically as InferencePool resources are discovered. When a new pool is set in the datastore, WVA creates a dedicated pod scraping source configured with the pool's EPP service name, namespace, and metrics port. These sources are used to collect EPP-level metrics (e.g., flow control queue size) directly from pods rather than through Prometheus. Sources are automatically removed when their associated pool is deleted.
 
 Each metrics source provides three main capabilities:
+
 - Returning the query registry for registering query templates
 - Executing queries and updating the cache
 - Retrieving a cached value for a query with given parameters
@@ -162,6 +168,7 @@ Each metrics source provides three main capabilities:
 ### Registered Queries
 
 **Saturation queries** (per-pod, 1-minute windows):
+
 | Query Name | PromQL | Purpose |
 |---|---|---|
 | `kv_cache_usage` | `max by (pod) (max_over_time(vllm:kv_cache_usage_perc{...}[1m]))` | KV cache utilization (0-1) |
@@ -174,6 +181,7 @@ Each metrics source provides three main capabilities:
 | `scheduler_queue_bytes` | `sum(inference_extension_flow_control_queue_bytes{...})` | Upstream EPP queue bytes |
 
 **Queueing model queries** (per-pod, 1-minute windows):
+
 | Query Name | PromQL | Purpose |
 |---|---|---|
 | `scheduler_dispatch_rate` | `sum by (pod_name) (rate(inference_extension_scheduler_attempts_total{status="success",...}[1m]))` | Per-pod arrival rate |
@@ -181,11 +189,13 @@ Each metrics source provides three main capabilities:
 | `avg_itl` | `rate(vllm:time_per_output_token_seconds_sum[1m]) / rate(..._count[1m])` | Average inter-token latency |
 
 **Scale-to-zero query**:
+
 | Query Name | PromQL | Purpose |
 |---|---|---|
 | `model_request_count` | `sum(increase(vllm:request_success_total{...}[retentionPeriod]))` | Total requests in retention window |
 
 **Scale-from-zero** uses EPP (Endpoint Picker) metrics directly (not via Prometheus):
+
 | Metric | Purpose |
 |---|---|
 | `inference_extension_flow_control_queue_size` | Pending requests in the EPP flow control queue |
@@ -370,6 +380,7 @@ Prometheus connectivity is configured via the unified config:
 The VA object itself is the primary user-facing configuration surface. See the [VA Object section](#the-variantautoscaling-va-object) for the full spec reference.
 
 Key configuration decisions per VA:
+
 - **`minReplicas: 0`** enables scale-to-zero for this variant.
 - **`variantCost`** determines scaling preference order: cheaper variants scale up first, expensive variants scale down first.
 - Multiple VAs with the same **`modelID`** form a variant group for an InferencePool, optimized together.

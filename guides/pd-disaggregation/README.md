@@ -51,24 +51,28 @@ This guide includes configuration for the following accelerators:
 
 ## Prerequisites
 
-- Have the [proper client tools installed on your local system](../../helpers/client-setup/README.md) to use this guide.
-- Checkout llm-d repo:
+* Have the [proper client tools installed on your local system](../../helpers/client-setup/README.md) to use this guide.
+* Checkout llm-d repo:
+
 ```bash
 export branch="main" # branch, tag, or commit hash
 git clone https://github.com/llm-d/llm-d.git && cd llm-d && git checkout ${branch}
 ```
-- Set the following environment variables:
+* Set the following environment variables:
+
 ```bash
 export GAIE_VERSION=v1.5.0
 export GUIDE_NAME="pd-disaggregation"
 export NAMESPACE="llm-d-pd-disaggregation"
 export MODEL_NAME="openai/gpt-oss-120b"
 ```
-- Install the Gateway API Inference Extension CRDs:
+* Install the Gateway API Inference Extension CRDs:
+
 ```bash
 kubectl apply -k "https://github.com/kubernetes-sigs/gateway-api-inference-extension/config/crd?ref=${GAIE_VERSION}"
 ```
-- Create a target namespace for the installation
+* Create a target namespace for the installation
+
 ```bash
 kubectl create namespace ${NAMESPACE}
 ```
@@ -134,8 +138,8 @@ kubectl apply -n ${NAMESPACE} -k guides/${GUIDE_NAME}/modelserver/gpu/vllm/${INF
 > [!NOTE]
 > GKE provides [automatic application monitoring](https://docs.cloud.google.com/kubernetes-engine/docs/how-to/configure-automatic-application-monitoring) out of the box. The llm-d [Monitoring stack](../../docs/monitoring/README.md) is not required for GKE, but it is available if you prefer to use it.
 
-- Install the [Monitoring stack](../../docs/monitoring/README.md).
-- Deploy the monitoring resources for this guide.
+* Install the [Monitoring stack](../../docs/monitoring/README.md).
+* Deploy the monitoring resources for this guide.
 
 ```bash
 kubectl apply -n ${NAMESPACE} -k guides/recipes/modelserver/components/monitoring-pd
@@ -157,6 +161,7 @@ export IP=$(kubectl get service ${GUIDE_NAME}-epp -n ${NAMESPACE} -o jsonpath='{
 ```bash
 export IP=$(kubectl get gateway llm-d-inference-gateway -n ${NAMESPACE} -o jsonpath='{.status.addresses[0].value}')
 ```
+
 </details>
 
 ### 2. Send Test Requests
@@ -188,14 +193,14 @@ The benchmark launches a pod (`llmdbench-harness-launcher`) that, in this case, 
 
 ### 1. Prepare the Benchmarking Suite
 
-- Download the benchmark script:
+* Download the benchmark script:
 
 ```bash
 curl -L -O https://raw.githubusercontent.com/llm-d/llm-d-benchmark/main/existing_stack/run_only.sh
 chmod u+x run_only.sh
 ```
 
-- [Create HuggingFace token](../../helpers/hf-token.md)
+* [Create HuggingFace token](../../helpers/hf-token.md)
 
 ### 2. Download the Workload Template
 
@@ -444,19 +449,19 @@ version: '0.1'
 
 </details>
 
-
 ## Comparing llm-d P/D disaggregation to a k8s service
 
 The following scripts run the same benchmark against a standard deployment and service running `openai/gpt-oss-120b`.
 
 #### Run Baseline (Aggregated)
 
-- Deploy (16 replicas of TP=1, with a standard k8s service)
+* Deploy (16 replicas of TP=1, with a standard k8s service)
+
 ```bash
 kubectl apply -n ${NAMESPACE} -f ${REPO_ROOT}/guides/pd-disaggregation/baseline/manifest.yaml
 ```
 
-- Benchmark (using the same configuration as above):
+* Benchmark (using the same configuration as above):
 
 ```bash
 export IP=$(kubectl get service baseline -n ${NAMESPACE} -o jsonpath='{.spec.clusterIP}')
@@ -466,7 +471,6 @@ envsubst < 20_1_isl_osl.yaml > config-baseline.yaml
 
 For this workload (20:1 ISL:OSL, 45 QPS), llm-d disaggregation improved mean and P90 request latency by ~50%!
 
-
 | Metric                   | aggregated | llm-d        | Δ% |
 | :----------------------- | :--------- | :----------- | :------- |
 | **E2E Latency (Mean)**   | **6.7s**   | **3.5s**     | **-47%** |
@@ -475,7 +479,6 @@ For this workload (20:1 ISL:OSL, 45 QPS), llm-d disaggregation improved mean and
 | ITL (P95)                | 197ms      | 67ms         | -66%     |
 | TTFT (Mean)              | 532ms      | 1400ms       | +170%    |
 | TTFT (P95)               | 1574ms     | 2471ms       | +57%     |
-
 
 > ![NOTE]
 > In aggregated setup, vLLM allocates all GPU resources to

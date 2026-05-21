@@ -21,6 +21,7 @@ Maintainers for each accelerator type are listed below. See our well-lit path gu
 We welcome contributions from accelerator vendors. To be referenced as a supported hardware vendor we require at minimum a publicly available container image that launches vLLM.
 
 For integration into the well-lit paths our standard for contribution is higher, **requiring**:
+
 - A named maintainer responsible for keeping guide contents up to date
 - Manual or automated verification of the guide deployment for each release
 

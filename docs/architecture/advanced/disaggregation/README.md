@@ -3,11 +3,13 @@
 ## Functionality
 
 Disaggregated serving separates the **prefill** and **decode** stages of LLM inference onto different model server instances, enabling:
+
 * **Specialization of P and D** - LLM inference is composed of two distinct phases of inference - prefill (FLOPs-bound) and decode (memory bandwidth-bound). Disaggregation enables specialization, e.g. using a larger TP for the memory-bound decoding phase while a smaller TP for the computation-bound prefill phase.
 * **Avoidance of Request Interference** - For long context requests, prefills can slow down processing of existing requests in the decode phase. Separating the prefill phase of these long requests into dedicated prefill instances allows the ongoing decoding requests to be efficiently processed without being blocked by these long prefills, improving quality-of-service.
 * **Compatibility with DP/EP** - For DP/EP deployments of Mixture of Experts models, disaggregated serving is essential to avoid pipeline bubbles and leveraging the specialized "MaskedGEMM" format for decode.
 
 An implementation of disaggregated serving requires two key components:
+
 * **Request Flow Orchestration** - select and route the requests to the correct prefill and decode pods
 * **Efficient KV Transfer** - transfer the KV cache from the P instance to the D instance, typically over RDMA
 
@@ -53,12 +55,12 @@ The llm-d EPP supports disaggregation via the `disagg-profile-handler`.
 > Rather than hardcoding a single scheduling algorithm, the EPP delegates execution to one or more `Profile Handlers`, each of which represents a complete scheduling strategy. They can be thought of as "the dispatcher", which maps each incoming inference request to the right scheduling strategy before the scorers and pickers do their work of selecting the actual endpoint. By default, llm-d uses the `single-profile-handler` for simple aggregated serving.
 
 When configured with `disagg-profile-handler`, the EPP processes requests in the following steps:
+
 * `proxy` forwards request metadata to the EPP.
 * `disagg-profile-handler` runs the `decode-profile`, which executes the `filter`, `score`, `pick` scheduler profile to select D endpoint.
 * `disagg-profile-handler` consults the `decider` — given how much of the prompt is cached on D, should this request run disagg?
 * If `no`: `disagg-profile-handler` returns only the D endpoint to the `proxy`
 * If `yes` (large uncached suffix), `disagg-profile-handler` also runs the `prefill-profile`, which executes the `filter`, `score`, `pick` scheduler profile to select the P endpoint and returns both the P and D endpoints to the proxy.
-
 
 The flow looks like this:
 
@@ -102,6 +104,7 @@ Note that both the prefill and decode endpoints are part of one `InferencePool`.
 ### Routing Proxy Sidecar
 
 The Routing Proxy is deployed as a sidecar in each decode pod, with a two-fold role:
+
 * Facilitate the multi-step inference request
 * Mutate the requests to follow each model server's KV transfer protocol
 
@@ -123,10 +126,11 @@ All non-completion routes (`GET /health`, and any other path) pass through to th
 #### KV Transfer Protocol
 
 vLLM and SGLang use slightly different protocols for KV Transfer between the P and D instance, inserting additional parameters in the body of the requests to facilitate the transfer:
+
 * **vLLM** (`nixlv2`, default) — A two-phase sequential protocol. The sidecar sends a prefill request with `kv_transfer_params` containing remote-decode metadata, and `max_tokens=1` to suppress output. It captures the KV transfer parameters from the prefiller's response and injects them into the decode request before forwarding it to the local decoder. If the prefiller returns a server error, the sidecar falls back to decoder-only mode (client errors are not retried).
 * **SGLang** (`sglang`) — Uses a concurrent prefill/decode model. Instead of waiting for prefill to complete, the sidecar injects bootstrap coordination parameters (`bootstrap_host`, `bootstrap_port`, `bootstrap_room`) into both requests, fires the prefill asynchronously in a goroutine (with `context.WithoutCancel` to prevent premature cancellation), and immediately sends the decode request synchronously. The decoder and prefiller coordinate KV transfer out-of-band via the bootstrap room.
 
-## Efficient KV Transfer 
+## Efficient KV Transfer
 
 In addition to the **Request Flow Orchestration** which coordinates the metadata and RPC calls to each instance, efficient **KV Transfer** (which moves the KVs from the P instance to the D instance) is critical to a high performance disaggregated deployment.
 
