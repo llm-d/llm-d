@@ -96,6 +96,8 @@ CoreWeave are tested Kubernetes providers for this well-lit path. You can custom
 kubectl apply -k ./manifests/modelserver/coreweave  -n ${NAMESPACE}
 ```
 
+<!-- TABS:END -->
+
 ### Deploy InferencePool
 
 Select the provider-specific Helm command using the tabs below.
