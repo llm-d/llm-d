@@ -74,7 +74,7 @@ Neither is wrong — they answer different questions. Reservation-based answers 
 
 ### Shared Costs
   
-  OpenCost has three distinct mechanisms for handling shared ccosts, each for a different scenario.
+  OpenCost has three distinct mechanisms for handling shared costs, each for a different scenario.
 
   1. Shared namespaces
 

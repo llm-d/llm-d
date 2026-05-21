@@ -30,6 +30,8 @@ Current challenges include:
 6. **Production-ready**: Provide reliable, scalable cost tracking suitable for production deployments
 7. **Optimization insights**: Enable measurement of cost savings from KV cache, prefix caching, and other optimizations
 
+Note: Although not a direct goal of this project, collection of SaaS Model Provider billing information is being added to OpenCost via its plugin mechanism.  This will make comparing self hosted costs to SaaS model costs much easier.
+
 ### Non-Goals
 
 1. **Not replacing existing metrics**: This proposal does not replace llm-d's existing performance and operational metrics
@@ -66,6 +68,7 @@ As a finance team member, I want to attribute AI inference costs to specific app
 - Generate cost reports for billing periods
 - Export cost data for integration with billing systems
 - Track costs by workload type (interactive vs batch)
+- Track costs for specific workloads - including agents
 
 #### Story 3: Platform Team Cost-Based Routing Optimization
 
@@ -155,17 +158,15 @@ In addition to collecting and calculating general infrastructure costs as is alr
    - Allocate costs between input and output tokens based on actual processing time
    - Calculate cache saving due to optimizations such as KV cache hits, prefill/decode separation, and smart routing
    - Identify idle costs - a key metric needed to enable optimization of infrastructure 
-   - Provide both usage costs and 
+   - Provide both both usage and reservation cost basis metrics
 
 3. **Export cost metrics**:
    - Prometheus metrics for monitoring and alerting
    - REST API for programmatic access
-   - MCP server integration for AI agent queries
-   - Grafana dashboards for visualization
-   - OpenCost UI for model costs
+   - OpenCost UI for AI model costs
 
 4. **Enable multi-dimensional queries**:
-   - Aggregate by model, namespace, team, workload
+   - Aggregate by model, namespace, team/tenant, workload
    - Filter by time windows
    - Compare costs across different configurations - i.e. model variants
    - Monitor model and model variant idle costs
@@ -176,7 +177,7 @@ The proposal is to:
 1. Define and standardize inference cost metrics
 2. Provide a default implementation based on OpenCost that generates and provides access to the metrics
 
-The goal is to provide a fully functional cost solution for llm-d using OpenCost, but allowing for it to be replaced as long as the replacement for OpenCost is able to generate the same metrics.
+The goal is to provide a fully functional cost solution for llm-d using OpenCost, but allowing for it to be replaced as long as the replacement for OpenCost is able to generate the same metrics and provides the same APIs.
 
 
 ### Implementation Status
@@ -192,6 +193,8 @@ The [POC implementation](https://github.com/simanadler/opencost/tree/initial-inf
 
 ### LLM costs
 
+_For background on infrastructure cost concepts (reservation-based vs usage-only costs, idle, wasted, and shared costs), see the [Cost Metrics Primer](cost-metrics-primer.md)._
+
 LLM inference introduces all four cost components in a more extreme form than typical CPU workloads, and both cost metrics are useful enough that we propose to expose them directly.
 
 For this initial discussion we focus on GPUs to simplify things.
@@ -205,20 +208,33 @@ The gap between "used" and "wasted" can be far larger for LLMs than for CPU work
 
 The following are the proposed metrics to be added to support AI Inferencing.  
 
-**Cost Metrics Summary**:
+**Proposed LLM Cost Metrics**:
 
-- `llm_total_cost`: Hourly GPU infrastructure cost per model
+- `llm_total_cost`: Hourly cost per model
 - `llm_cost_per_million_tokens`: Blended cost per 1M tokens - without kv cache savings
-- `llm_input_cost_per_million_tokens`: Cost per 1M input tokens - without kv cache savings
-- `llm_output_cost_per_million_tokens`: Cost per 1M output tokens
+- `llm_input_cost_per_million_tokens`: Cost per 1M **input tokens** - without kv cache savings
+- `llm_output_cost_per_million_tokens`: Cost per 1M **output** tokens
 - `llm_total_kv_cache_savings`: Hourly savings due to KV cache hits
 - `llm_kv_cache_savings_per_million_tokens`: KV cache savings per million tokens
 
-**Labels**: `model_name`, `model_version`, `namespace`, `model_variant`, `workload`, `cost_basis` (usage or reservation), `shared_split`, `shared_idle`
 
-Note: workload label will be 'inference' when used with llm-d
+**Cost Metric Labels**: 
 
-The following section describe in detail the 
+New labels:
+* model_name="meta-llama/Llama-3.1-8B-Instruct" (example)
+* model_version="v1.0" (example)
+* model_variant="prefill" (example)
+* cost_basis="usage" or "reservation"
+* workload="inference" (for llm-d)
+
+Existing OpenCost labels:
+* namespace="customer-support-llm" (example)
+* product="customer-support-agent" (example)
+* allocation="productA-support-team" (example)
+* share_split="weighted", "equal", "none", "proportional" 
+* share_idle="distributed", "separate", "none" 
+
+The following section describe the metrics in more detail.
 
 ### Overall Model Cost Metrics 
 
