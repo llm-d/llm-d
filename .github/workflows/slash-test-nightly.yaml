@@ -69,6 +69,7 @@ jobs:
               'wide-ep-lws-cks', 'wide-ep-lws-gke', 'wide-ep-lws-ocp',
               'wva-cks', 'wva-ocp',
             ];
+            OTHER_NIGHTLIES = [ 'benchmark-cks' ] 
             const ALL_NIGHTLIES = [...E2E_NIGHTLIES, ...OTHER_NIGHTLIES].sort();
 
             function toWorkflowFile(name) {
