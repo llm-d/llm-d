@@ -31,7 +31,6 @@ concurrency:
 jobs:
   trigger-benchmark:
     if: github.repository == 'llm-d/llm-d'
-    timeout-minutes: 90
     name: Trigger CKS Benchmark
     runs-on: ubuntu-latest
     steps:

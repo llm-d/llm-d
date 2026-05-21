@@ -33,7 +33,6 @@ concurrency:
 jobs:
   nightly:
     if: github.repository == 'llm-d/llm-d'
-    timeout-minutes: 90
     runs-on: ubuntu-latest
     steps:
       - name: Placeholder

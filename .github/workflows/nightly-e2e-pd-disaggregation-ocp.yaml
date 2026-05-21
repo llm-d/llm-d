@@ -41,7 +41,6 @@ concurrency:
 jobs:
   nightly:
     if: github.repository == 'llm-d/llm-d'
-    timeout-minutes: 90
     uses: llm-d/llm-d-infra/.github/workflows/reusable-nightly-e2e-openshift-helmfile.yaml@main
     with:
       guide_name: pd-disaggregation
