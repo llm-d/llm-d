@@ -24,7 +24,7 @@ We currently offer the following:
 
 ### Operational Excellence
 
-* [Flow Control](./flow-control.md): Intelligent request queuing for multi-tenant deployments and managing traffic spikes.
+* [Flow Control](./flow-control/README.md): Intelligent request queuing for multi-tenant deployments and managing traffic spikes.
 * [Workload Autoscaling](./workload-autoscaling/README.md) - autoscale the LLM service via proactive, SLO-aware signals that reflect the true state of the inference system — queue depth, in-flight request counts, and KV cache pressure — so that capacity can be added before end-user latency is impacted.
 
 ## Experimental Guides
