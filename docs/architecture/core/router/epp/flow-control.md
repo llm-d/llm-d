@@ -27,7 +27,7 @@ The Flow Control layer intercepts requests at the EPP and holds them in centrali
 To understand how policy plugins act, it helps to visualize the queuing topology as a grid defined by two dimensions: **Priority** and **Flow (Fairness ID)**.
 
 1. **Flow Identification**: Every request is assigned a `FlowKey` — a tuple of `(FairnessID, Priority)`.
-    * `FairnessID` is extracted from the `x-gateway-inference-fairness-id` header (e.g., tenant ID).
+    * `FairnessID` is extracted from the `x-llm-d-inference-fairness-id` header (e.g., tenant ID).
     * `Priority` is derived from the `InferenceObjective`.
 2. **Separate Queues**: Each unique `FlowKey` maps to its own in-memory queue.
 
@@ -48,8 +48,8 @@ Here is an example of how to target a specific `InferenceObjective` and ensure f
 ```bash
 curl -X POST http://${IP}:${PORT}/v1/completions \
   -H 'Content-Type: application/json' \
-  -H 'x-gateway-inference-fairness-id: tenant-a' \
-  -H 'x-gateway-inference-objective: premium-traffic' \
+  -H 'x-llm-d-inference-fairness-id: tenant-a' \
+  -H 'x-llm-d-inference-objective: premium-traffic' \
   -d '{
     "model": "default-model",
     "prompt": "Say hello"
@@ -362,7 +362,7 @@ The Flow Control layer behavior is customizable via several extension points imp
 
 * **[`fcfs-ordering-policy`](https://github.com/llm-d/llm-d-router/tree/main/pkg/epp/framework/plugins/flowcontrol/ordering/fcfs/README.md)**: First-Come, First-Served based on arrival time. (Default)
 * **[`edf-ordering-policy`](https://github.com/llm-d/llm-d-router/tree/main/pkg/epp/framework/plugins/flowcontrol/ordering/edf/README.md)**: Earliest Deadline First, prioritizing requests with the closest expiration time.
-* **[`slo-deadline-ordering-policy`](https://github.com/llm-d/llm-d-router/tree/main/pkg/epp/framework/plugins/flowcontrol/ordering/slodeadline/README.md)**: Orders requests by an SLO-based deadline computed from arrival time. Uses the `x-slo-ttft-ms` header. Requests without this header are placed behind all SLO requests, risking starvation.
+* **[`slo-deadline-ordering-policy`](https://github.com/llm-d/llm-d-router/tree/main/pkg/epp/framework/plugins/flowcontrol/ordering/slodeadline/README.md)**: Orders requests by an SLO-based deadline computed from arrival time. Uses the `x-llm-d-slo-ttft-ms` header. Requests without this header are placed behind all SLO requests, risking starvation.
 
 #### Saturation Detectors
 

@@ -8,9 +8,9 @@ These headers allow the EPP to identify the request's goals, group them for fair
 
 | Header | Description |
 | --- | --- |
-| `x-gateway-inference-objective` | Specifies the name of the `InferenceObjective` resource associated with the request. The EPP uses this to look up the corresponding objective resource in the **same namespace as the InferencePool** to apply the defined priority and performance goals. |
-| `x-gateway-inference-fairness-id` | Provides a unique identifier for grouping requests for fairness-based flow control. Requests with the same ID share capacity according to the fairness policy. If omitted, the EPP defaults to `default-flow`. |
-| `x-gateway-model-name-rewrite` | Specifies the target model name to be used for the request. This is an alternative approach to model name rewriting; while the `InferenceModelRewrite` API provides rule-based rewriting on the server side, this header allows for an explicit, per-request override. When present, the EPP uses this value to override the model name in the request body and for recording model-specific metrics. |
+| `x-llm-d-inference-objective` | Specifies the name of the `InferenceObjective` resource associated with the request. The EPP uses this to look up the corresponding objective resource in the **same namespace as the InferencePool** to apply the defined priority and performance goals. |
+| `x-llm-d-inference-fairness-id` | Provides a unique identifier for grouping requests for fairness-based flow control. Requests with the same ID share capacity according to the fairness policy. If omitted, the EPP defaults to `default-flow`. |
+| `x-llm-d-model-name-rewrite` | Specifies the target model name to be used for the request. This is an alternative approach to model name rewriting; while the `InferenceModelRewrite` API provides rule-based rewriting on the server side, this header allows for an explicit, per-request override. When present, the EPP uses this value to override the model name in the request body and for recording model-specific metrics. |
 
 ## Service Level Objectives (SLOs)
 
@@ -18,8 +18,22 @@ These headers are used by admission control and load balancing plugins to make d
 
 | Header | Description |
 | --- | --- |
-| `x-slo-ttft-ms` | Specifies the target Time To First Token (TTFT) in milliseconds. Used by plugins to determine if a request can be admitted while meeting the latency goal. |
-| `x-slo-tpot-ms` | Specifies the target Time Per Output Token (TPOT) in milliseconds. Used for admission control based on predicted or observed token generation latency. |
+| `x-llm-d-slo-ttft-ms` | Specifies the target Time To First Token (TTFT) in milliseconds. Used by plugins to determine if a request can be admitted while meeting the latency goal. |
+| `x-llm-d-slo-tpot-ms` | Specifies the target Time Per Output Token (TPOT) in milliseconds. Used for admission control based on predicted or observed token generation latency. |
+
+## Deprecated Aliases
+
+llm-d Router accepts the previous EPP-managed header names as deprecated aliases during the compatibility period. New integrations and examples should use the canonical `x-llm-d-*` names.
+
+| Deprecated alias | Canonical header |
+| --- | --- |
+| `x-gateway-inference-fairness-id` | `x-llm-d-inference-fairness-id` |
+| `x-gateway-inference-objective` | `x-llm-d-inference-objective` |
+| `x-gateway-model-name-rewrite` | `x-llm-d-model-name-rewrite` |
+| `x-slo-ttft-ms` | `x-llm-d-slo-ttft-ms` |
+| `x-slo-tpot-ms` | `x-llm-d-slo-tpot-ms` |
+
+This rename applies only to llm-d/EPP-managed user and control headers. GAIE endpoint picker protocol headers, such as `x-gateway-destination-endpoint*`, are unchanged.
 
 ## Response Headers
 

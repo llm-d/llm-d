@@ -238,8 +238,8 @@ Clients must send the appropriate headers to be placed in the correct queues.
 ```bash
 curl -X POST http://${IP}/v1/completions \
   -H 'Content-Type: application/json' \
-  -H 'x-gateway-inference-fairness-id: tenant-a' \
-  -H 'x-gateway-inference-objective: premium-traffic' \
+  -H 'x-llm-d-inference-fairness-id: tenant-a' \
+  -H 'x-llm-d-inference-objective: premium-traffic' \
   -d "{
     \"model\": \"${MODEL_NAME}\",
     \"prompt\": \"Say hello\"
@@ -249,7 +249,7 @@ curl -X POST http://${IP}/v1/completions \
 > [!WARNING]
 > **Trust Boundary**: In a production system, allowing end-users to self-assert their tenant ID or traffic priority (`premium-traffic`) is an abuse vector.
 >
-> **Production Pattern**: Your ingress API Gateway (or an Envoy `ext_authz` filter) should be configured to automatically strip any incoming `x-gateway-*` headers from external traffic. It should then validate the user's API Key or JWT, extract their tier/tenant from the token claims, and securely inject the authoritative `x-gateway-inference-fairness-id` and `x-gateway-inference-objective` headers before passing the request to the EPP.
+> **Production Pattern**: Your ingress API Gateway (or an Envoy `ext_authz` filter) should be configured to automatically strip any incoming llm-d user/control headers from external traffic. It should then validate the user's API Key or JWT, extract their tier/tenant from the token claims, and securely inject the authoritative `x-llm-d-inference-fairness-id` and `x-llm-d-inference-objective` headers before passing the request to the EPP.
 
 ### Use Case 2: Backpressure Management
 
@@ -279,8 +279,8 @@ To verify backpressure management, you must overwhelm the pool's capacity. Becau
 
     ```bash
     hey -c 150 -n 150 -m POST -T "application/json" \
-      -H "x-gateway-inference-fairness-id: tenant-b" \
-      -H "x-gateway-inference-objective: best-effort-traffic" \
+      -H "x-llm-d-inference-fairness-id: tenant-b" \
+      -H "x-llm-d-inference-objective: best-effort-traffic" \
       -D payload.json http://${IP}/v1/completions
     ```
 

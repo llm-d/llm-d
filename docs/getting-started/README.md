@@ -61,7 +61,7 @@ Split inference into dedicated **prefill workers** (prompt processing) and **dec
 
 ### Predicted Latency-Based Routing
 
-An **llm-d Router** capability implemented primarily as an EPP plugin that routes each request to the replica predicted to serve it fastest, using an XGBoost model trained online on live traffic to predict ITL and TTFT. Optionally enforce per-request SLOs via `x-slo-ttft-ms` / `x-slo-tpot-ms` headers — requests that no replica can meet within budget are shed at admission rather than routed to a guaranteed miss. Useful when workload variance makes queue-depth a poor proxy for true load, or when clients need to express interactive vs. batch latency budgets.
+An **llm-d Router** capability implemented primarily as an EPP plugin that routes each request to the replica predicted to serve it fastest, using an XGBoost model trained online on live traffic to predict ITL and TTFT. Optionally enforce per-request SLOs via `x-llm-d-slo-ttft-ms` / `x-llm-d-slo-tpot-ms` headers — requests that no replica can meet within budget are shed at admission rather than routed to a guaranteed miss. Useful when workload variance makes queue-depth a poor proxy for true load, or when clients need to express interactive vs. batch latency budgets.
 
 ### Batch Inference
 

@@ -62,7 +62,7 @@ Two ready-to-use values files ship with this guide:
 | File | When to use |
 |---|---|
 | [`router/predicted-latency.values.yaml`](./router/predicted-latency.values.yaml) | Default — predictor trains on end-to-end latency. Routing-only, no SLO header support. |
-| [`router/predicted-latency-slo.values.yaml`](./router/predicted-latency-slo.values.yaml) | SLO-aware — Assumes `x-slo-ttft-ms` / `x-slo-tpot-ms` are set on requests. Every request must be sent with `"stream": true`. |
+| [`router/predicted-latency-slo.values.yaml`](./router/predicted-latency-slo.values.yaml) | SLO-aware — Assumes `x-llm-d-slo-ttft-ms` / `x-llm-d-slo-tpot-ms` are set on requests. Every request must be sent with `"stream": true`. |
 
 Both target model server pods labeled `llm-d.ai/guide=optimized-baseline` since in the next step we will simply reuse the model server manifests from the [optimized-baseline guide](../optimized-baseline).
 
@@ -126,8 +126,8 @@ Once enabled, latency-based scheduling works on every request — no header chan
 
 To opt an individual request into SLO-aware routing, add one or both headers:
 
-- `x-slo-ttft-ms` — Time-to-first-token SLO in milliseconds.
-- `x-slo-tpot-ms` — Time-per-output-token SLO in milliseconds.
+- `x-llm-d-slo-ttft-ms` — Time-to-first-token SLO in milliseconds.
+- `x-llm-d-slo-tpot-ms` — Time-per-output-token SLO in milliseconds.
 
 ### 1. Get the IP of the Proxy
 
@@ -164,8 +164,8 @@ kubectl run curl-debug --rm -it \
 ```bash
 curl -X POST http://${IP}/v1/completions \
     -H 'Content-Type: application/json' \
-    -H 'x-slo-ttft-ms: 200' \
-    -H 'x-slo-tpot-ms: 50' \
+    -H 'x-llm-d-slo-ttft-ms: 200' \
+    -H 'x-llm-d-slo-tpot-ms: 50' \
     -d '{
         "model": "'${MODEL_NAME}'",
         "prompt": "Explain the difference between prefill and decode.",
