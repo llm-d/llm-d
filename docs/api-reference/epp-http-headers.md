@@ -23,7 +23,9 @@ These headers are used by admission control and load balancing plugins to make d
 
 ## Deprecated Aliases
 
-llm-d Router accepts the previous EPP-managed header names as deprecated aliases during the compatibility period. New integrations and examples should use the canonical `x-llm-d-*` names.
+llm-d Router [v0.9.0](https://github.com/llm-d/llm-d-router/releases/tag/v0.9.0) and later accept the previous EPP-managed header names as deprecated read aliases. New integrations and examples should use the canonical `x-llm-d-*` names. Earlier releases expect the previous names, so mixed-version fleets should coordinate the header migration during rolling upgrades.
+
+If a request sends both a canonical header and its deprecated alias, the canonical `x-llm-d-*` value wins deterministically. No alias removal release or date has been announced; treat aliases as temporary compatibility support and prefer the canonical names for all new clients.
 
 | Deprecated alias | Canonical header |
 | --- | --- |
@@ -33,7 +35,7 @@ llm-d Router accepts the previous EPP-managed header names as deprecated aliases
 | `x-slo-ttft-ms` | `x-llm-d-slo-ttft-ms` |
 | `x-slo-tpot-ms` | `x-llm-d-slo-tpot-ms` |
 
-This rename applies only to llm-d/EPP-managed user and control headers. GAIE endpoint picker protocol headers, such as `x-gateway-destination-endpoint*`, are unchanged.
+This rename applies only to llm-d/EPP-managed user and control headers. [Gateway API Inference Extension (GAIE) Endpoint Picker Protocol](https://github.com/kubernetes-sigs/gateway-api-inference-extension/tree/main/docs/proposals/004-endpoint-picker-protocol) headers, such as `x-gateway-destination-endpoint*`, are unchanged.
 
 ## Response Headers
 
