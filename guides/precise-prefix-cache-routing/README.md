@@ -60,7 +60,7 @@ Two scorers make up the routing decision alongside the load-aware stack:
   ```bash
     export GAIE_VERSION=v1.5.0
     export GUIDE_NAME="precise-prefix-cache-routing"
-    export NAMESPACE=llm-d-precise
+    export NAMESPACE="llm-d-${GUIDE_NAME}"
   ```
 - Install the Gateway API Inference Extension CRDs:
 
