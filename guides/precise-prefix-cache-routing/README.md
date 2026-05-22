@@ -71,11 +71,7 @@ Two scorers make up the routing decision alongside the load-aware stack:
   ```bash
     kubectl create namespace ${NAMESPACE}
   ```
-- Install the Gateway API Inference Extension CRDs:
-```bash
-kubectl apply -k "https://github.com/kubernetes-sigs/gateway-api-inference-extension/config/crd?ref=${GAIE_VERSION}"
-```
-
+  
 ## Installation Instructions
 
 ### 1. Prepare HF Token
