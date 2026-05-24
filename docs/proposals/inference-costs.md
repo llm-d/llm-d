@@ -30,7 +30,7 @@ Current challenges include:
 6. **Production-ready**: Provide reliable, scalable cost tracking suitable for production deployments
 7. **Optimization insights**: Enable measurement of cost savings from KV cache, prefix caching, and other optimizations
 
-Note: Although not a direct goal of this project, collection of SaaS Model Provider billing information is being added to OpenCost via its plugin mechanism.  This will make comparing self hosted costs to SaaS model costs much easier.
+Note: Although not a direct goal of this project, collection of SaaS Model Provider usage and billing can be obtained via OpenCost via its plugin mechanism.  This makes comparing self hosted costs to SaaS model costs much easier.  Currently there is a [plugin for OpenAI](https://github.com/opencost/opencost-plugins/tree/main/pkg/plugins/openai).
 
 ### Non-Goals
 
@@ -59,18 +59,7 @@ As an inference platform team managing multiple AI model and/or llm-d deployment
 - Identify models with highest infrastructure costs
 - Track cost trends over time
 
-#### Story 2: Finance Team Chargeback
-
-As a finance team member, I want to attribute AI inference costs to specific application teams and workloads so that I have the necessary information to perform accurate chargeback and showback for internal billing purposes.  (**Billing is out of scope**) 
-
-**Acceptance Criteria**:
-- Query costs by namespace and team labels
-- Generate cost reports for billing periods
-- Export cost data for integration with billing systems
-- Track costs by workload type (interactive vs batch)
-- Track costs for specific workloads - including agents
-
-#### Story 3: Platform Team Cost-Based Routing Optimization
+#### Story 2: Platform Team Cost-Based Routing Optimization
 
 As a platform team managing llm-d deployments, I want to use cost metrics to optimize routing decisions so I can direct requests to the most cost-effective models and model variants and configurations while maintaining SLO compliance.  The models may be self-hosted or externally provided.
 
@@ -81,9 +70,9 @@ As a platform team managing llm-d deployments, I want to use cost metrics to opt
 - Balance cost optimization with latency and throughput requirements
 - Measure cost reduction from routing optimization over time
 
-#### Story 4: Executive Team Strategic Decisions
+#### Story 3: Executive Team Strategic Decisions
 
-As an executive team, I want to compare self-hosting costs against commercial API alternatives so I can make informed decisions about our AI infrastructure strategy.
+As an executive team, I am interested in using llm-d for self-hosting but also want to compare self-hosting costs against commercial API alternatives so I can make informed decisions about our AI infrastructure strategy.
 
 **Acceptance Criteria**:
 - View total cost per million tokens for self-hosted models
@@ -91,6 +80,16 @@ As an executive team, I want to compare self-hosting costs against commercial AP
 - Understand cost breakdown (GPU, memory, network)
 - Project costs at different scale levels
 
+#### Story 4: Finance Team Chargeback
+
+As a finance team member, I want to attribute AI inference costs to specific application teams and workloads so that I have the necessary information to perform accurate chargeback and showback for internal billing purposes.  (**Billing is out of scope**) 
+
+**Acceptance Criteria**:
+- Query costs by namespace and team labels
+- Generate cost reports for billing periods
+- Export cost data for integration with billing systems
+- Track costs by workload type (interactive vs batch)
+- Track costs for specific workloads - including agents
 ## Proposal
 
 This proposal recommends adding infrastructure cost tracking for AI inference workloads on llm-d. After evaluating multiple approaches (detailed in the [Alternatives section](#alternatives-to-opencost)), we recommend **extending OpenCost** with a new inference cost domain that tracks AI inference costs alongside OpenCost's existing cost domains (Allocation, Asset, CloudCost, CustomCost).
@@ -158,7 +157,7 @@ In addition to collecting and calculating general infrastructure costs as is alr
    - Allocate costs between input and output tokens based on actual processing time
    - Calculate cache saving due to optimizations such as KV cache hits, prefill/decode separation, and smart routing
    - Identify idle costs - a key metric needed to enable optimization of infrastructure 
-   - Provide both both usage and reservation cost basis metrics
+   - Provide both usage and reservation cost basis metrics
 
 3. **Export cost metrics**:
    - Prometheus metrics for monitoring and alerting
@@ -400,6 +399,7 @@ graph TB
 - Requires reimplementing infrastructure cost tracking
 - No unified view with Kubernetes and cloud costs
 - More maintenance burden on llm-d team
+- Obtaining 3rd party LLM usage and billing information would have to be implemented and maintained, rather than having it done via the OpenCost community
 
 **Decision**: Rejected - OpenCost provides better infrastructure for cost tracking.
 
