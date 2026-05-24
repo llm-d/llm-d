@@ -20,8 +20,7 @@ CONCURRENCY_LEVELS="${CONCURRENCY_LEVELS:-10 20 30 40 50 60 70 80 90 100}"
 TURNS_PER_CONV="${TURNS_PER_CONV:-6}"
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-WORKLOAD_DIR="$(dirname "$SCRIPT_DIR")"
-CONFIG_DIR="$(dirname "$SCRIPT_DIR")/../configmaps"
+WORKLOAD_DIR="."
 
 # Available workloads (each is a yaml file under ./workloads/, sized for 10x Qwen3-32B):
 #   interactive-chat   code-generation   deep-research
@@ -56,12 +55,18 @@ CONFIG_DIR="$(dirname "$SCRIPT_DIR")/../configmaps"
 #   output=<gcs-subpath>           — report directory under gs://$GCS_BUCKET
 
 SCENARIOS=(
-  "run=code-generation-infperf-epp-penalty384k-tokens-scorer-max-picker-no-exp-det-1-safe workload=code-generation-safe stream=false flow=false output=workload-catalog-runs url=$EXTERNAL_IP skip_config=false penalty=384000 prefix_weight=0 queue_weight=0 kv_weight=0 token_load_weight=1 token_load_threshold=4194304 picker=max-score-picker"
+  #"run=code-generation-infperf-epp-penalty245k-tokens-scorer-max-picker-no-exp-det-1-final workload=code-generation stream=true flow=false output=workload-catalog-runs url=$EXTERNAL_IP skip_config=false penalty=245760 prefix_weight=0 queue_weight=0 kv_weight=0 token_load_weight=1 token_load_threshold=4194304 picker=max-score-picker"
+  #"run=code-generation-infperf-epp-penalty204k-tokens-scorer-max-picker-no-exp-det-1-final workload=code-generation stream=true flow=false output=workload-catalog-runs url=$EXTERNAL_IP skip_config=false penalty=204800 prefix_weight=0 queue_weight=0 kv_weight=0 token_load_weight=1 token_load_threshold=4194304 picker=max-score-picker"
+  #"run=code-generation-infperf-epp-penalty163k-tokens-scorer-max-picker-no-exp-det-1-final workload=code-generation stream=true flow=false output=workload-catalog-runs url=$EXTERNAL_IP skip_config=false penalty=163840 prefix_weight=0 queue_weight=0 kv_weight=0 token_load_weight=1 token_load_threshold=4194304 picker=max-score-picker"
   
-  "run=code-generation-infperf-epp-max-score-det-1-safe workload=code-generation-safe stream=false flow=false output=workload-catalog-runs url=$EXTERNAL_IP skip_config=false penalty=0 prefix_weight=3 queue_weight=2 kv_weight=2 lru_weight=2 token_load_weight=0 token_load_threshold=96000 picker=max-score-picker"
-  "run=code-generation-infperf-epp-penalty5s-latency-predictor-det-1-safe workload=code-generation-safe stream=false flow=false output=workload-catalog-runs url=$EXTERNAL_IP skip_config=false penalty=0 ttft_penalty=5000 prefix_weight=0 queue_weight=0 kv_weight=0 token_load_weight=0 pred_weight=1 token_load_threshold=96000"
-  "run=code-generation-infperf-epp-penalty5s-latency-predictor-det-2-safe workload=code-generation-safe stream=false flow=false output=workload-catalog-runs url=$EXTERNAL_IP skip_config=true penalty=0 ttft_penalty=5000 prefix_weight=0 queue_weight=0 kv_weight=0 token_load_weight=0 pred_weight=1 token_load_threshold=96000"
-  "run=code-generation-infperf-baseline-det-1-safe stream=false flow=false workload=code-generation-safe output=workload-catalog-runs url=$INTERNAL_IP skip_config=true penalty=0 prefix_weight=1 queue_weight=1 kv_weight=1 token_load_weight=0 token_load_threshold=96000"
+  "run=code-generation-infperf-epp-penalty286k-modified-tokens-scorer-max-picker-no-exp-det-1-final workload=code-generation stream=true flow=false output=workload-catalog-runs url=$EXTERNAL_IP skip_config=false penalty=286720 prefix_weight=0 queue_weight=0 kv_weight=0 token_load_weight=1 token_load_threshold=4194304 picker=max-score-picker"
+
+  "run=code-generation-infperf-epp-max-score-det-1-final workload=code-generation stream=true flow=false output=workload-catalog-runs url=$EXTERNAL_IP skip_config=false penalty=0 prefix_weight=3 queue_weight=2 kv_weight=2 lru_weight=2 token_load_weight=0 token_load_threshold=96000 picker=max-score-picker"
+  "run=code-generation-infperf-epp-penalty5s-latency-predictor-det-1-final workload=code-generation stream=true flow=false output=workload-catalog-runs url=$EXTERNAL_IP skip_config=false penalty=0 ttft_penalty=5000 prefix_weight=0 queue_weight=0 kv_weight=0 token_load_weight=0 pred_weight=1 token_load_threshold=96000"
+  "run=code-generation-infperf-epp-penalty5s-latency-predictor-det-2-final workload=code-generation stream=true flow=false output=workload-catalog-runs url=$EXTERNAL_IP skip_config=true penalty=0 ttft_penalty=5000 prefix_weight=0 queue_weight=0 kv_weight=0 token_load_weight=0 pred_weight=1 token_load_threshold=96000"
+  #"run=code-generation-infperf-epp-penalty10s-latency-predictor-det-1-final workload=code-generation stream=true flow=false output=workload-catalog-runs url=$EXTERNAL_IP skip_config=false penalty=0 ttft_penalty=10000 prefix_weight=0 queue_weight=0 kv_weight=0 token_load_weight=0 pred_weight=1 token_load_threshold=96000"
+  #"run=code-generation-infperf-epp-penalty10s-latency-predictor-det-2-final workload=code-generation stream=true flow=false output=workload-catalog-runs url=$EXTERNAL_IP skip_config=true penalty=0 ttft_penalty=10000 prefix_weight=0 queue_weight=0 kv_weight=0 token_load_weight=0 pred_weight=1 token_load_threshold=96000"
+  "run=code-generation-infperf-baseline-det-1-final stream=true flow=false workload=code-generation output=workload-catalog-runs url=$INTERNAL_IP skip_config=true penalty=0 prefix_weight=1 queue_weight=1 kv_weight=1 token_load_weight=0 token_load_threshold=96000"
 )
 
 apply_epp_config() {
@@ -77,13 +82,13 @@ apply_epp_config() {
 
   if awk -v w="${WEIGHT_PREDICTED_LATENCY:-0}" 'BEGIN { exit (w > 0 ? 0 : 1) }'; then
     echo "[1/4] Applying EndpointPickerConfig (penalty=$MAX_TOKENS_IN_FLIGHT_PENALTY, ttft_penalty=$MAX_TTFT_PENALTY_MS, with predicted latency)..."
-    envsubst < "$CONFIG_DIR/server-config.yaml" | kubectl apply -f -
+    envsubst < "$SCRIPT_DIR/server-config.yaml" | kubectl apply -f -
   else
     echo "[1/4] Applying EndpointPickerConfig (penalty=$MAX_TOKENS_IN_FLIGHT_PENALTY, ttft_penalty=$MAX_TTFT_PENALTY_MS)..."
     if [ "${MAX_TOKENS_IN_FLIGHT_PENALTY:-0}" -eq 0 ]; then
-      envsubst < "$CONFIG_DIR/server-config-no-predicted-latency.yaml" | sed 's/- pluginRef: prefix-cache-affinity-filter/# - pluginRef: prefix-cache-affinity-filter/g' | kubectl apply -f -
+      envsubst < "$SCRIPT_DIR/server-config-no-predicted-latency.yaml" | sed 's/- pluginRef: prefix-cache-affinity-filter/# - pluginRef: prefix-cache-affinity-filter/g' | kubectl apply -f -
     else
-      envsubst < "$CONFIG_DIR/server-config-no-predicted-latency.yaml" | kubectl apply -f -
+      envsubst < "$SCRIPT_DIR/server-config-no-predicted-latency.yaml" | kubectl apply -f -
     fi
   fi
   echo "[2/4] Restarting Deployment $DEPLOYMENT_NAME..."
@@ -93,22 +98,41 @@ apply_epp_config() {
   sleep 30
 }
 
+# Cleanup function for interrupt signals
+job_name=""
+SUFFIX=""
+cleanup() {
+  if [ -n "$job_name" ]; then
+    echo -e "\n[CLEANUP] Caught interrupt, deleting $job_name..."
+    kubectl delete job "$job_name" --wait=false >/dev/null 2>&1 || true
+    kubectl delete configmap "inference-perf-config-${SUFFIX}" --wait=false >/dev/null 2>&1 || true
+  fi
+  exit 1
+}
+trap cleanup SIGINT SIGTERM
+
 cd "$SCRIPT_DIR"
 export PREDICTED_LATENCY_PARAMS=""
 export MODEL_NAME GCS_BUCKET
 
 for scenario in "${SCENARIOS[@]}"; do
-  RUN_NAME="" WORKLOAD="" BASE_URL="" SKIP_CONFIG="false" MAX_TOKENS_IN_FLIGHT_PENALTY="64000" MAX_TTFT_PENALTY_MS="0"
-  WEIGHT_PREFIX_CACHE="${WEIGHT_PREFIX_CACHE:-1}"
-  WEIGHT_QUEUE="${WEIGHT_QUEUE:-0}"
-  WEIGHT_KV_UTIL="${WEIGHT_KV_UTIL:-1}"
-  WEIGHT_TOKEN_LOAD="${WEIGHT_TOKEN_LOAD:-0}"
-  WEIGHT_ACTIVE_REQUESTS="${WEIGHT_ACTIVE_REQUESTS:-0}"
-  WEIGHT_PREDICTED_LATENCY="${WEIGHT_PREDICTED_LATENCY:-0}"
-  WEIGHT_NO_HIT_LRU="${WEIGHT_NO_HIT_LRU:-0}"
-  TOKENS_IN_FLIGHT_SCORER_THRESHOLD="${TOKENS_IN_FLIGHT_SCORER_THRESHOLD:-0}"
+  RUN_NAME="" WORKLOAD="" BASE_URL="" SKIP_CONFIG="false" 
+  MAX_TOKENS_IN_FLIGHT_PENALTY="64000" MAX_TTFT_PENALTY_MS="0"
+  
+  # Explicitly reset weights to canonical defaults to prevent bleeding between scenarios
+  WEIGHT_PREFIX_CACHE="1"
+  WEIGHT_QUEUE="0"
+  WEIGHT_KV_UTIL="1"
+  WEIGHT_TOKEN_LOAD="0"
+  WEIGHT_ACTIVE_REQUESTS="0"
+  WEIGHT_PREDICTED_LATENCY="0"
+  WEIGHT_NO_HIT_LRU="0"
+  TOKENS_IN_FLIGHT_SCORER_THRESHOLD="0"
+  
   PICKER_PLUGIN="weighted-random-picker"
-  AFFINITY_GATE_TAU="" AFFINITY_GATE_TAU_GLOBAL="" OUTPUT_DIR=""
+  AFFINITY_GATE_TAU="0.80"
+  AFFINITY_GATE_TAU_GLOBAL="0.99"
+  OUTPUT_DIR=""
   SLO_TPOT_MS="0" SLO_TTFT_MS="0" STREAMING_MODE="false"
   SHEDDABLE="nonsheddable" FLOW_CONTROL="false"
   MAX_CONCURRENCY="8192" HEADROOM="3"

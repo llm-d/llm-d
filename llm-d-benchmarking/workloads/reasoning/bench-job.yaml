@@ -12,7 +12,7 @@ spec:
       shareProcessNamespace: true
       containers:
         - name: inference-perf
-          image: quay.io/inference-perf/inference-perf:v0.5.0
+          image: quay.io/inference-perf/inference-perf:3c7c4a3
           imagePullPolicy: Always
           securityContext:
             capabilities:

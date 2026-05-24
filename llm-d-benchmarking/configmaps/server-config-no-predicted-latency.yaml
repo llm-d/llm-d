@@ -23,8 +23,10 @@ data:
     - type: max-score-picker
     - type: weighted-random-picker
     - type: active-request-scorer
-      parameters:
-        includeOutputTokens: false
+    #- type: predicted-latency-producer
+    #  parameters:
+    #    maxDecodeTokenSamplesForPrediction: 0
+    #    streamingMode: ${STREAMING_MODE}
     - type: prefix-cache-affinity-filter
       parameters:
        affinityThreshold: 0.80
@@ -53,6 +55,7 @@ data:
       type: inflight-load-producer
       parameters:
         includeOutputTokens: false
+
     dataLayer:
       sources:
       - pluginRef: metrics-data-source

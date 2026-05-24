@@ -23,6 +23,7 @@ TURNS_PER_CONV="${TURNS_PER_CONV:-3}"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 WORKLOAD_DIR="."
 
+
 # Available workloads (each is a yaml file under ./workloads/, sized for 10x Qwen3-32B):
 #   interactive-chat   reasoning   deep-research
 #   reasoning          batch-summarization-rag   batch-synthetic-data-generation
@@ -56,13 +57,14 @@ WORKLOAD_DIR="."
 #   output=<gcs-subpath>           — report directory under gs://$GCS_BUCKET
 
 SCENARIOS=(
-  "run=reasoning-3turn-infperf-epp-penalty6k-req-scorer-max-picker-no-exp-det-2-safe workload=reasoning stream=false flow=false output=workload-catalog-runs url=$EXTERNAL_IP skip_config=false penalty=6000 prefix_weight=0 queue_weight=0 kv_weight=0 active_weight=1 token_load_weight=0 token_load_threshold=4194304 picker=max-score-picker"
-  "run=reasoning-3turn-infperf-epp-penalty6k-kv-scorer-max-picker-no-exp-det-2-safe workload=reasoning stream=false flow=false output=workload-catalog-runs url=$EXTERNAL_IP skip_config=false penalty=6000 prefix_weight=0 queue_weight=0 kv_weight=1 active_weight=0 token_load_weight=0 token_load_threshold=4194304 picker=max-score-picker"
+  "run=reasoning-3turn-infperf-epp-penalty286k-req-scorer-max-picker-no-exp-det-2-final workload=reasoning stream=true flow=false output=workload-catalog-runs url=$EXTERNAL_IP skip_config=false penalty=286720 prefix_weight=0 queue_weight=0 kv_weight=0 active_weight=1 token_load_weight=0 token_load_threshold=4194304 picker=max-score-picker"
+  "run=reasoning-3turn-infperf-epp-penalty286k-kv-scorer-max-picker-no-exp-det-2-final workload=reasoning stream=true flow=false output=workload-catalog-runs url=$EXTERNAL_IP skip_config=false penalty=286720 prefix_weight=0 queue_weight=0 kv_weight=1 active_weight=0 token_load_weight=0 token_load_threshold=4194304 picker=max-score-picker"
+  "run=reasoning-3turn-infperf-epp-penalty286k-modified-token-scorer-max-picker-no-exp-det-2-final workload=reasoning stream=true flow=false output=workload-catalog-runs url=$EXTERNAL_IP skip_config=false penalty=286720 prefix_weight=0 queue_weight=0 kv_weight=0 active_weight=0 token_load_weight=1 token_load_threshold=4194304 picker=max-score-picker"
 
-  "run=reasoning-3turn-infperf-epp-max-score-det-2-safe workload=reasoning stream=false flow=false output=workload-catalog-runs url=$EXTERNAL_IP skip_config=false penalty=0 prefix_weight=3 queue_weight=2 kv_weight=2 lru_weight=2 token_load_weight=0 token_load_threshold=96000 picker=max-score-picker"
-  "run=reasoning-3turn-infperf-epp-penalty5s-latency-predictor-det-3-safe workload=reasoning stream=false flow=false output=workload-catalog-runs url=$EXTERNAL_IP skip_config=false penalty=0 ttft_penalty=5000 prefix_weight=0 queue_weight=0 kv_weight=0 token_load_weight=0 pred_weight=1 token_load_threshold=96000"
-  "run=reasoning-3turn-infperf-epp-penalty5s-latency-predictor-det-4-safe workload=reasoning stream=false flow=false output=workload-catalog-runs url=$EXTERNAL_IP skip_config=true penalty=0 ttft_penalty=5000 prefix_weight=0 queue_weight=0 kv_weight=0 token_load_weight=0 pred_weight=1 token_load_threshold=96000"
-  "run=reasoning-3turn-infperf-baseline-det-2-safe stream=false flow=false workload=reasoning output=workload-catalog-runs url=$INTERNAL_IP skip_config=true penalty=0 prefix_weight=1 queue_weight=1 kv_weight=1 token_load_weight=0 token_load_threshold=96000"
+  "run=reasoning-3turn-infperf-epp-max-score-det-2-final workload=reasoning stream=true flow=false output=workload-catalog-runs url=$EXTERNAL_IP skip_config=false penalty=0 prefix_weight=3 queue_weight=2 kv_weight=2 lru_weight=2 token_load_weight=0 token_load_threshold=96000 picker=max-score-picker"
+  "run=reasoning-3turn-infperf-epp-penalty5s-latency-predictor-det-3-final workload=reasoning stream=true flow=false output=workload-catalog-runs url=$EXTERNAL_IP skip_config=false penalty=0 ttft_penalty=5000 prefix_weight=0 queue_weight=0 kv_weight=0 token_load_weight=0 pred_weight=1 token_load_threshold=96000"
+  "run=reasoning-3turn-infperf-epp-penalty5s-latency-predictor-det-4-final workload=reasoning stream=true flow=false output=workload-catalog-runs url=$EXTERNAL_IP skip_config=true penalty=0 ttft_penalty=5000 prefix_weight=0 queue_weight=0 kv_weight=0 token_load_weight=0 pred_weight=1 token_load_threshold=96000"
+  "run=reasoning-3turn-infperf-baseline-det-2-final stream=true flow=false workload=reasoning output=workload-catalog-runs url=$INTERNAL_IP skip_config=true penalty=0 prefix_weight=1 queue_weight=1 kv_weight=1 token_load_weight=0 token_load_threshold=96000"
 )
 
 
@@ -95,22 +97,41 @@ apply_epp_config() {
   sleep 30
 }
 
+# Cleanup function for interrupt signals
+job_name=""
+SUFFIX=""
+cleanup() {
+  if [ -n "$job_name" ]; then
+    echo -e "\n[CLEANUP] Caught interrupt, deleting $job_name..."
+    kubectl delete job "$job_name" --wait=false >/dev/null 2>&1 || true
+    kubectl delete configmap "inference-perf-config-${SUFFIX}" --wait=false >/dev/null 2>&1 || true
+  fi
+  exit 1
+}
+trap cleanup SIGINT SIGTERM
+
 cd "$SCRIPT_DIR"
 export PREDICTED_LATENCY_PARAMS=""
 export MODEL_NAME GCS_BUCKET
 
 for scenario in "${SCENARIOS[@]}"; do
-  RUN_NAME="" WORKLOAD="" BASE_URL="" SKIP_CONFIG="false" MAX_TOKENS_IN_FLIGHT_PENALTY="64000" MAX_TTFT_PENALTY_MS="0"
-  WEIGHT_PREFIX_CACHE="${WEIGHT_PREFIX_CACHE:-1}"
-  WEIGHT_QUEUE="${WEIGHT_QUEUE:-0}"
-  WEIGHT_KV_UTIL="${WEIGHT_KV_UTIL:-1}"
-  WEIGHT_TOKEN_LOAD="${WEIGHT_TOKEN_LOAD:-0}"
-  WEIGHT_ACTIVE_REQUESTS="${WEIGHT_ACTIVE_REQUESTS:-0}"
-  WEIGHT_PREDICTED_LATENCY="${WEIGHT_PREDICTED_LATENCY:-0}"
-  WEIGHT_NO_HIT_LRU="${WEIGHT_NO_HIT_LRU:-0}"
-  TOKENS_IN_FLIGHT_SCORER_THRESHOLD="${TOKENS_IN_FLIGHT_SCORER_THRESHOLD:-0}"
+  RUN_NAME="" WORKLOAD="" BASE_URL="" SKIP_CONFIG="false" 
+  MAX_TOKENS_IN_FLIGHT_PENALTY="64000" MAX_TTFT_PENALTY_MS="0"
+  
+  # Explicitly reset weights to canonical defaults to prevent bleeding between scenarios
+  WEIGHT_PREFIX_CACHE="1"
+  WEIGHT_QUEUE="0"
+  WEIGHT_KV_UTIL="1"
+  WEIGHT_TOKEN_LOAD="0"
+  WEIGHT_ACTIVE_REQUESTS="0"
+  WEIGHT_PREDICTED_LATENCY="0"
+  WEIGHT_NO_HIT_LRU="0"
+  TOKENS_IN_FLIGHT_SCORER_THRESHOLD="0"
+  
   PICKER_PLUGIN="weighted-random-picker"
-  AFFINITY_GATE_TAU="" AFFINITY_GATE_TAU_GLOBAL="" OUTPUT_DIR=""
+  AFFINITY_GATE_TAU="0.80"
+  AFFINITY_GATE_TAU_GLOBAL="0.99"
+  OUTPUT_DIR=""
   SLO_TPOT_MS="0" SLO_TTFT_MS="0" STREAMING_MODE="false"
   SHEDDABLE="nonsheddable" FLOW_CONTROL="false"
   MAX_CONCURRENCY="8192" HEADROOM="3"

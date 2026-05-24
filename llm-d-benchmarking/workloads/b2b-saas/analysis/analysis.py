@@ -1,4 +1,5 @@
 import json, re, subprocess, sys
+from tqdm import tqdm
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
@@ -7,10 +8,9 @@ import matplotlib.pyplot as plt
 # concurrency level. The script lists GCS for the latest <SUFFIX> per 
 # (base_prefix, c) and loads stage_0 reports.
 RUNS = [
-    ("epp prefix-cache filter + token-load 25k",      "optimised-benchmark-infperf-epp-penalty25k-tokens-scorer-max-picker-no-exp-det-1", "#d62728", "x"),
-
+    ("epp prefix-cache filter + token-load",      "optimised-benchmark-infperf-epp-penalty286k-tokens-scorer-max-picker-no-exp-det-1", "#d62728", "x"),
     ("baseline",                        "optimised-benchmark-infperf-baseline-det-1",          "#1f77b4", "o"),
-    ("epp prefix-cache filter + token-load",      "optimised-benchmark-infperf-epp-penalty384k-tokens-scorer-max-picker-no-exp-det-1", "#d62728", "x"),
+    #("epp prefix-cache filter + token-load",      "optimised-benchmark-infperf-epp-penalty384k-tokens-scorer-max-picker-no-exp-det-1", "#d62728", "x"),
     ("epp default",            "optimised-benchmark-infperf-epp-max-score-det-1", "#2ca02c", "x"),
     ("latency-predictor",  "optimised-benchmark-infperf-epp-penalty5s-latency-predictor-det-4-safe", "#9467bd", "x"),
 ]
@@ -23,7 +23,6 @@ SCRAPE_BUFFER = 2
 FAIL_RATE_THRESHOLD = 0.60
 FAIL_COUNT_FLOOR = 3
 MIN_DISPATCHED = 30
-USE_SERVER_METRICS = False  # Set to True to pull TTFT/TPOT from vLLM prometheus metrics
 
 
 def discover(base_prefix):
@@ -105,17 +104,16 @@ def gmp_prefix_hit_pct(prefix, duration, offset=0):
 
 
 def gmp_queue_len(prefix, duration, offset=0):
-    """Cluster-wide peak queue size (sum_max across pods) for a specific stage."""
+    """Peak cluster-wide pending depth (sum across replicas)."""
     eval_time, window = _get_eval_window(prefix, duration, offset)
     q = f"sum(max_over_time(vllm:num_requests_waiting[{window}s]))"
     return gmp_query(q, eval_time)
 
 
 def gmp_running_req_total(prefix, duration, offset=0):
-    """Cluster-wide mean concurrent in-flight requests (summed across pods)."""
+    """Mean cluster-wide concurrent in-flight count."""
     eval_time, window = _get_eval_window(prefix, duration, offset)
-    # Using 15s resolution for the sub-query to match scrape interval
-    q = f"avg_over_time(sum(vllm:num_requests_running)[{window}s:15s])"
+    q = f"sum(avg_over_time(vllm:num_requests_running[{window}s]))"
     return gmp_query(q, eval_time)
 
 
@@ -123,6 +121,66 @@ def gmp_running_req_max_per_endpoint(prefix, duration, offset=0):
     """Peak concurrent in-flight requests on any single pod."""
     eval_time, window = _get_eval_window(prefix, duration, offset)
     q = f"max(max_over_time(vllm:num_requests_running[{window}s]))"
+    return gmp_query(q, eval_time)
+
+def gmp_ttft_p50(prefix, duration, offset=0):
+    eval_time, window = _get_eval_window(prefix, duration, offset)
+    q = f"histogram_quantile(0.50, sum by (le) (rate(vllm:time_to_first_token_seconds_bucket[{window}s])))"
+    return gmp_query(q, eval_time)
+
+def gmp_ttft_p90(prefix, duration, offset=0):
+    eval_time, window = _get_eval_window(prefix, duration, offset)
+    q = f"histogram_quantile(0.90, sum by (le) (rate(vllm:time_to_first_token_seconds_bucket[{window}s])))"
+    return gmp_query(q, eval_time)
+
+def gmp_ttft_p95(prefix, duration, offset=0):
+    eval_time, window = _get_eval_window(prefix, duration, offset)
+    q = f"histogram_quantile(0.95, sum by (le) (rate(vllm:time_to_first_token_seconds_bucket[{window}s])))"
+    return gmp_query(q, eval_time)
+
+def gmp_ttft_p99(prefix, duration, offset=0):
+    eval_time, window = _get_eval_window(prefix, duration, offset)
+    q = f"histogram_quantile(0.99, sum by (le) (rate(vllm:time_to_first_token_seconds_bucket[{window}s])))"
+    return gmp_query(q, eval_time)
+
+def gmp_tpot_p50(prefix, duration, offset=0):
+    eval_time, window = _get_eval_window(prefix, duration, offset)
+    q = f"histogram_quantile(0.50, sum by (le) (rate(vllm:request_time_per_output_token_seconds_bucket[{window}s])))"
+    return gmp_query(q, eval_time) * 1000.0
+
+def gmp_tpot_p90(prefix, duration, offset=0):
+    eval_time, window = _get_eval_window(prefix, duration, offset)
+    q = f"histogram_quantile(0.90, sum by (le) (rate(vllm:request_time_per_output_token_seconds_bucket[{window}s])))"
+    return gmp_query(q, eval_time) * 1000.0
+
+def gmp_tpot_p95(prefix, duration, offset=0):
+    eval_time, window = _get_eval_window(prefix, duration, offset)
+    q = f"histogram_quantile(0.95, sum by (le) (rate(vllm:request_time_per_output_token_seconds_bucket[{window}s])))"
+    return gmp_query(q, eval_time) * 1000.0
+
+def gmp_tpot_p99(prefix, duration, offset=0):
+    eval_time, window = _get_eval_window(prefix, duration, offset)
+    q = f"histogram_quantile(0.99, sum by (le) (rate(vllm:request_time_per_output_token_seconds_bucket[{window}s])))"
+    return gmp_query(q, eval_time) * 1000.0
+
+def gmp_e2e_p50(prefix, duration, offset=0):
+    eval_time, window = _get_eval_window(prefix, duration, offset)
+    q = f"histogram_quantile(0.50, sum by (le) (rate(vllm:e2e_request_latency_seconds_bucket[{window}s])))"
+    return gmp_query(q, eval_time)
+
+def gmp_e2e_p90(prefix, duration, offset=0):
+    eval_time, window = _get_eval_window(prefix, duration, offset)
+    q = f"histogram_quantile(0.90, sum by (le) (rate(vllm:e2e_request_latency_seconds_bucket[{window}s])))"
+    return gmp_query(q, eval_time)
+
+def gmp_e2e_p95(prefix, duration, offset=0):
+    eval_time, window = _get_eval_window(prefix, duration, offset)
+    q = f"histogram_quantile(0.95, sum by (le) (rate(vllm:e2e_request_latency_seconds_bucket[{window}s])))"
+    return gmp_query(q, eval_time)
+
+def gmp_e2e_p99(prefix, duration, offset=0):
+    eval_time, window = _get_eval_window(prefix, duration, offset)
+    q = f"histogram_quantile(0.99, sum by (le) (rate(vllm:e2e_request_latency_seconds_bucket[{window}s])))"
     return gmp_query(q, eval_time)
 
 
@@ -133,38 +191,27 @@ def gather(label, base_prefix):
         return []
 
     rows = []
-    for c in sorted(discovered):
+    for c in tqdm(sorted(discovered), desc=f"Loading {label}", leave=False):
         prefix = discovered[c]
-        
-        # Iterate through stages until we find no more reports
         stage = 0
         offset = 0
         while True:
             try:
                 life = load(prefix, "lifecycle_metrics", stage)
-                # Prometheus metrics might be missing for some stages, so we use a fallback
                 try:
                     prom = load(prefix, "prometheus_metrics", stage)
                 except subprocess.CalledProcessError:
                     prom = None
             except subprocess.CalledProcessError:
-                # No more stages found
                 break
             
             try:
                 dispatched = life["load_summary"]["count"]
                 failures = life["failures"]["count"]
                 fail_rate = failures / dispatched if dispatched else 0.0
-                
-                # Use achieved_rate as the x-axis value
-                # We store it in 'conc' to reuse the existing plotting functions which expect that field
                 qps = life["load_summary"].get("achieved_rate", 0.0)
-                
+
                 if dispatched < MIN_DISPATCHED:
-                    print(
-                        f"  drop [{label}] stage={stage}: only {dispatched} dispatched (< MIN_DISPATCHED={MIN_DISPATCHED})",
-                        file=sys.stderr,
-                    )
                     duration = life["benchmark_time_seconds"]
                     offset += duration
                     stage += 1
@@ -173,32 +220,41 @@ def gather(label, base_prefix):
                 lat = life["successes"]["latency"]
                 duration = life["benchmark_time_seconds"]
 
-                # Robust metric extraction (handles stream=false where some fields are null)
-                # Use server metrics if enabled and available
-                if USE_SERVER_METRICS and prom:
-                    ttft_obj = prom["successes"].get("time_to_first_token")
-                    tpot_obj = prom["successes"].get("time_per_output_token")
-                    if not ttft_obj or not tpot_obj:
-                         # Fallback if specific keys are missing in prom
-                         ttft_obj = lat.get("time_to_first_token") or lat.get("request_latency")
-                         tpot_obj = lat.get("time_per_output_token") or lat.get("normalized_time_per_output_token")
-                else:
-                    ttft_obj = lat.get("time_to_first_token") or lat.get("request_latency")
-                    tpot_obj = lat.get("time_per_output_token") or lat.get("normalized_time_per_output_token")
-                
+                # Robust metric extraction
+                ttft_obj = lat.get("time_to_first_token") or lat.get("request_latency")
+                tpot_obj = lat.get("time_per_output_token") or lat.get("normalized_time_per_output_token")
                 e2e_obj = lat.get("request_latency")
                 
                 row = {
-                    "conc": qps,  # This is the Achieved QPS
+                    "conc": c,
+                    "achieved_rate": qps,
                     "success_rate": (1.0 - fail_rate) * 100,
-                    "ttft_mean": ttft_obj["mean"] if ttft_obj else 0.0,
+                    "ttft_p50":  ttft_obj["median"] if ttft_obj else 0.0,
                     "ttft_p90":  ttft_obj["p90"] if ttft_obj else 0.0,
-                    "tpot_mean": (tpot_obj["mean"] * 1000) if tpot_obj else 0.0,
+                    "ttft_p95":  ttft_obj.get("p95", 0.0) if ttft_obj else 0.0,
+                    "ttft_p99":  ttft_obj.get("p99", 0.0) if ttft_obj else 0.0,
+                    "tpot_p50":  (tpot_obj["median"] * 1000) if tpot_obj else 0.0,
                     "tpot_p90":  (tpot_obj["p90"] * 1000) if tpot_obj else 0.0,
-                    "e2e_mean": e2e_obj["mean"] if e2e_obj else 0.0,
-                    "e2e_p90": e2e_obj["p90"] if e2e_obj else 0.0,
+                    "tpot_p95":  (tpot_obj.get("p95", 0.0) * 1000) if tpot_obj else 0.0,
+                    "tpot_p99":  (tpot_obj.get("p99", 0.0) * 1000) if tpot_obj else 0.0,
+                    "e2e_p50":  e2e_obj["median"] if e2e_obj else 0.0,
+                    "e2e_p90":  e2e_obj["p90"] if e2e_obj else 0.0,
+                    "e2e_p95":  e2e_obj.get("p95", 0.0) if e2e_obj else 0.0,
+                    "e2e_p99":  e2e_obj.get("p99", 0.0) if e2e_obj else 0.0,
                     "out_per_sec": life["successes"]["throughput"]["output_tokens_per_sec"],
                     "in_per_sec": life["successes"]["throughput"]["input_tokens_per_sec"],
+                    "vllm_ttft_p50": gmp_ttft_p50(prefix, duration, offset),
+                    "vllm_ttft_p90": gmp_ttft_p90(prefix, duration, offset),
+                    "vllm_ttft_p95": gmp_ttft_p95(prefix, duration, offset),
+                    "vllm_ttft_p99": gmp_ttft_p99(prefix, duration, offset),
+                    "vllm_tpot_p50": gmp_tpot_p50(prefix, duration, offset),
+                    "vllm_tpot_p90": gmp_tpot_p90(prefix, duration, offset),
+                    "vllm_tpot_p95": gmp_tpot_p95(prefix, duration, offset),
+                    "vllm_tpot_p99": gmp_tpot_p99(prefix, duration, offset),
+                    "vllm_e2e_p50":  gmp_e2e_p50(prefix, duration, offset),
+                    "vllm_e2e_p90":  gmp_e2e_p90(prefix, duration, offset),
+                    "vllm_e2e_p95":  gmp_e2e_p95(prefix, duration, offset),
+                    "vllm_e2e_p99":  gmp_e2e_p99(prefix, duration, offset),
                     "prefix_hit_pct": gmp_prefix_hit_pct(prefix, duration, offset),
                     "prompt_tokens_p50": life["successes"]["prompt_len"]["median"],
                     "prompt_tokens_p90": life["successes"]["prompt_len"]["p90"],
@@ -209,7 +265,7 @@ def gather(label, base_prefix):
                 if prom:
                     row.update({
                         "kv_cache_mean": prom["successes"]["kv_cache_usage_percentage"]["mean"] * 100,
-                        "kv_cache_p99":  prom["successes"]["kv_cache_usage_percentage"]["p99"] * 100,
+                        "kv_cache_p90":  prom["successes"]["kv_cache_usage_percentage"]["p90"] * 100,
                         "queue_len_mean": gmp_queue_len(prefix, duration, offset),
                         "running_req_total": gmp_running_req_total(prefix, duration, offset),
                         "running_req_max_per_endpoint": gmp_running_req_max_per_endpoint(prefix, duration, offset),
@@ -218,9 +274,8 @@ def gather(label, base_prefix):
                         "queue_time_p99":  prom["successes"]["request_queue_time"]["p99"],
                     })
                 else:
-                    # Fill with zeros if prometheus metrics are missing
                     row.update({
-                        "kv_cache_mean": 0.0, "kv_cache_p99": 0.0, "queue_len_mean": 0.0,
+                        "kv_cache_mean": 0.0, "kv_cache_p90": 0.0, "queue_len_mean": 0.0,
                         "running_req_total": 0.0, "running_req_max_per_endpoint": 0.0,
                         "queue_time_mean": 0.0, "queue_time_p90": 0.0, "queue_time_p99": 0.0,
                     })
@@ -228,32 +283,28 @@ def gather(label, base_prefix):
                 rows.append(row)
                 offset += duration
             except Exception as e:
-                print(f"  [{label}] stage={stage}: {e}", file=sys.stderr)
-            
+                print(f"  [{label}] c={c} stage={stage}: {e}", file=sys.stderr)
             stage += 1
-
-        
-        print(f"  [{label}] gathered {len(rows)} stages for prefix '{prefix}'", file=sys.stderr)
     return rows
 
 
-runs = [(label, gather(label, base), color, marker) for label, base, color, marker in RUNS]
+runs = [(label, gather(label, base), color, marker) for label, base, color, marker in tqdm(RUNS, desc="Processing runs")]
 runs = [r for r in runs if r[1]]
 
 if not runs:
     sys.exit("no runs with data found")
 
-fig, axes = plt.subplots(5, 3, figsize=(22, 25))
+fig, axes = plt.subplots(10, 3, figsize=(22, 50))
 ax = axes.flatten()
 
 
 def plot_pair(idx, key_lo, key_hi, ylabel, title):
-    lo_label = key_lo.rsplit("_", 1)[-1]  # e.g. "mean", "p50"
+    lo_label = key_lo.rsplit("_", 1)[-1]
     hi_label = key_hi.rsplit("_", 1)[-1] if key_hi else None
     for label, rows, color, marker in runs:
-        # Sort by x-axis (achieved QPS)
-        rows_sorted = sorted(rows, key=lambda r: r["conc"])
-        x = [r["conc"] for r in rows_sorted]
+        # Sort by achieved_rate for x-axis in plots if conc is not meaningful or stage-based
+        rows_sorted = sorted(rows, key=lambda r: r["achieved_rate"])
+        x = [r["achieved_rate"] for r in rows_sorted]
         ax[idx].plot(x, [r[key_lo] for r in rows_sorted], f"{marker}-", label=f"{label} {lo_label}", color=color)
         if key_hi:
             ax[idx].plot(x, [r[key_hi] for r in rows_sorted], f"{marker}--", label=f"{label} {hi_label}", color=color, alpha=0.5)
@@ -264,59 +315,118 @@ def plot_pair(idx, key_lo, key_hi, ylabel, title):
 
 def plot_single(idx, key, ylabel, title):
     for label, rows, color, marker in runs:
-        # Sort by x-axis (achieved QPS)
-        rows_sorted = sorted(rows, key=lambda r: r["conc"])
-        x = [r["conc"] for r in rows_sorted]
+        rows_sorted = sorted(rows, key=lambda r: r["achieved_rate"])
+        x = [r["achieved_rate"] for r in rows_sorted]
         ax[idx].plot(x, [r[key] for r in rows_sorted], f"{marker}-", label=label, color=color)
     ax[idx].set_xlabel("Achieved Rate (QPS)")
     ax[idx].set_ylabel(ylabel); ax[idx].set_title(title)
     ax[idx].legend(fontsize=8); ax[idx].grid(alpha=0.3)
 
 
-#plot_pair(0, "ttft_mean", "ttft_p90", "TTFT (s)", "Time To First Token")
-#plot_pair(1, "tpot_mean", "tpot_p90", "TPOT (ms)", "Time Per Output Token")
-plot_single(0, "ttft_p90", "TTFT (s)", "Time To First Token p90")
-plot_single(1,  "tpot_p90", "TPOT (ms)", "Time Per Output Token p90")
-plot_single(2, "out_per_sec", "output tokens / sec", "Throughput (mean output tokens/s)")
-plot_pair(3, "kv_cache_mean", "kv_cache_p99", "KV cache usage (%)", "KV Cache Usage")
-plot_single(4, "prefix_hit_pct", "prefix cache hit (%)", "Prefix Cache Hit Rate")
-plot_single(5, "queue_len_mean", "queue length (cluster, sum_max)",
-            "Queue Size (vllm:num_requests_waiting)")
-plot_pair(6, "prompt_tokens_p50", "prompt_tokens_p90", "input tokens / request",
-          "Prompt Size (loadgen-tokenized)")
-plot_pair(7, "gen_tokens_p50", "gen_tokens_p90", "output tokens / request",
-          "Output Size (loadgen-tokenized)")
-plot_single(8, "queue_time_mean", "queue wait mean (s)",
-            "Request Queue Wait Time")
-plot_single(9, "running_req_total", "total running requests", "Cluster-wide Concurrent In-Flight")
-plot_single(10, "success_rate", "Success Rate (%)", "Request Success Rate")
-plot_single(11, "e2e_p90", "E2E Latency (s)", "End-to-End Latency p90")
-plot_single(12, "in_per_sec", "input tokens / sec", "Throughput (mean input tokens/s)")
-plot_single(13, "running_req_max_per_endpoint", "max running requests / endpoint", "Max Concurrent Requests per Endpoint")
+# vLLM Latency Metrics
+plot_single(0, "vllm_ttft_p50", "vLLM TTFT p50 (s)", "vLLM TTFT p50")
+plot_single(1, "vllm_ttft_p90", "vLLM TTFT p90 (s)", "vLLM TTFT p90")
+plot_single(2, "vllm_ttft_p95", "vLLM TTFT p95 (s)", "vLLM TTFT p95")
 
-plt.suptitle(" vs ".join(label for label, _, _, _ in RUNS if label in [r[0] for r in runs]) + "   (inference-perf individual runs)", fontsize=12)
+plot_single(3, "vllm_tpot_p50", "vLLM TPOT p50 (ms)", "vLLM TPOT p50")
+plot_single(4, "vllm_tpot_p90", "vLLM TPOT p90 (ms)", "vLLM TPOT p90")
+plot_single(5, "vllm_tpot_p95", "vLLM TPOT p95 (ms)", "vLLM TPOT p95")
+
+plot_single(6, "vllm_e2e_p50", "vLLM E2E p50 (s)", "vLLM E2E Latency p50")
+plot_single(7, "vllm_e2e_p90", "vLLM E2E p90 (s)", "vLLM E2E Latency p90")
+plot_single(8, "vllm_e2e_p95", "vLLM E2E p95 (s)", "vLLM E2E Latency p95")
+
+# Client Latency Metrics
+plot_single(9, "ttft_p50", "Client TTFT p50 (s)", "Client TTFT p50")
+plot_single(10, "ttft_p90", "Client TTFT p90 (s)", "Client TTFT p90")
+plot_single(11, "ttft_p95", "Client TTFT p95 (s)", "Client TTFT p95")
+
+plot_single(12, "tpot_p50", "Client TPOT p50 (ms)", "Client TPOT p50")
+plot_single(13, "tpot_p90", "Client TPOT p90 (ms)", "Client TPOT p90")
+plot_single(14, "tpot_p95", "Client TPOT p95 (ms)", "Client TPOT p95")
+
+plot_single(15, "e2e_p50", "Client E2E p50 (s)", "Client E2E Latency p50")
+plot_single(16, "e2e_p90", "Client E2E p90 (s)", "Client E2E Latency p90")
+plot_single(17, "e2e_p95", "Client E2E p95 (s)", "Client E2E Latency p95")
+
+# Throughput and Load
+plot_single(18, "out_per_sec", "output tokens / sec", "Throughput (mean output tokens/s)")
+plot_single(19, "in_per_sec", "input tokens / sec", "Throughput (mean input tokens/s)")
+plot_single(20, "achieved_rate", "Achieved QPS", "Achieved Rate")
+
+# Efficiency and Queue
+plot_pair(21, "kv_cache_mean", "kv_cache_p90", "KV cache usage (%)", "KV Cache Usage (mean/p90)")
+plot_single(22, "prefix_hit_pct", "prefix cache hit (%)", "Prefix Cache Hit Rate")
+plot_single(23, "queue_len_mean", "queue length (cluster, sum_max)", "Queue Size (vllm:num_requests_waiting)")
+
+# Workload Characteristics
+plot_pair(24, "prompt_tokens_p50", "prompt_tokens_p90", "input tokens / request", "Prompt Size (p50/p90)")
+plot_pair(25, "gen_tokens_p50", "gen_tokens_p90", "output tokens / request", "Output Size (p50/p90)")
+plot_single(26, "queue_time_mean", "queue wait mean (s)", "Request Queue Wait Time")
+
+# System State
+plot_single(27, "running_req_total", "total running requests", "Cluster-wide Concurrent In-Flight")
+plot_single(28, "running_req_max_per_endpoint", "max running requests / endpoint", "Max Concurrent Requests per Endpoint")
+plot_single(29, "success_rate", "Success Rate (%)", "Request Success Rate")
+
+plt.suptitle(" vs ".join(label for label, _, _, _ in RUNS if label in [r[0] for r in runs]) + "   (inference-perf b2b-saas runs)", fontsize=12)
 plt.tight_layout()
 import os
-out = os.path.join(os.path.dirname(os.path.abspath(__file__)), "baseline_vs_epp_prefix_runs.png")
+out = os.path.join(os.path.dirname(os.path.abspath(__file__)), "baseline_vs_epp_b2b_saas_runs.png")
 plt.savefig(out, dpi=120, bbox_inches="tight")
 print(f"saved: {out}")
 
 print()
-print(f"{'conc':>5} | {'Success%':>8} | {'TTFT mean':>9} {'TTFT p90':>9} | {'TPOT mean':>9} | {'E2E mean':>9} {'E2E p90':>9} | {'out_t/s':>8} | {'in_t/s':>8} | {'kv_mean':>8} | {'prefix%':>8} | {'qsize':>6} | {'prompt_p50':>10} | {'gen_p50':>8}")
+header = (
+    f"{'conc':>5} | {'Success%':>8} | "
+    f"{'vTTFT p50':>10} | {'vTTFT p90':>10} | {'vTTFT p95':>10} | {'vTTFT p99':>10} | "
+    f"{'TTFT p50':>10} | {'TTFT p90':>10} | {'TTFT p95':>10} | {'TTFT p99':>10} | "
+    f"{'vTPOT p50':>10} | {'vTPOT p90':>10} | {'vTPOT p95':>10} | {'vTPOT p99':>10} | "
+    f"{'TPOT p50':>10} | {'TPOT p90':>10} | {'TPOT p95':>10} | {'TPOT p99':>10} | "
+    f"{'vE2E p50':>10} | {'vE2E p90':>10} | {'vE2E p95':>10} | {'vE2E p99':>10} | "
+    f"{'E2E p50':>10} | {'E2E p90':>10} | {'E2E p95':>10} | {'E2E p99':>10} | "
+    f"{'out_t/s':>8} | {'in_t/s':>8} | {'ach_qps':>8} | "
+    f"{'kv_mean':>8} | {'prefix%':>8} | {'q_size':>8} | {'q_wait':>8} | "
+    f"{'run_tot':>8} | {'run_max':>8}"
+)
+print(header)
 for label, rows, *_ in runs:
     print(f"--- {label} ---")
-    for r in rows:
+    rows_sorted = sorted(rows, key=lambda r: (r["conc"], r["achieved_rate"]))
+    for r in rows_sorted:
         print(
-            f"{r['conc']:5.1f} | "
+            f"{r['conc']:5d} | "
             f"{r['success_rate']:7.1f}% | "
-            f"{r['ttft_mean']:7.1f}s  {r['ttft_p90']:7.1f}s | "
-            f"{r['tpot_mean']:7.1f}ms | "
-            f"{r['e2e_mean']:8.1f}s  {r['e2e_p90']:8.1f}s | "
+            f"{r['vllm_ttft_p50']:9.1f}s | "
+            f"{r['vllm_ttft_p90']:9.1f}s | "
+            f"{r['vllm_ttft_p95']:9.1f}s | "
+            f"{r['vllm_ttft_p99']:9.1f}s | "
+            f"{r['ttft_p50']:9.1f}s | "
+            f"{r['ttft_p90']:9.1f}s | "
+            f"{r['ttft_p95']:9.1f}s | "
+            f"{r['ttft_p99']:9.1f}s | "
+            f"{r['vllm_tpot_p50']:8.1f}ms | "
+            f"{r['vllm_tpot_p90']:8.1f}ms | "
+            f"{r['vllm_tpot_p95']:8.1f}ms | "
+            f"{r['vllm_tpot_p99']:8.1f}ms | "
+            f"{r['tpot_p50']:8.1f}ms | "
+            f"{r['tpot_p90']:8.1f}ms | "
+            f"{r['tpot_p95']:8.1f}ms | "
+            f"{r['tpot_p99']:8.1f}ms | "
+            f"{r['vllm_e2e_p50']:9.1f}s | "
+            f"{r['vllm_e2e_p90']:9.1f}s | "
+            f"{r['vllm_e2e_p95']:9.1f}s | "
+            f"{r['vllm_e2e_p99']:9.1f}s | "
+            f"{r['e2e_p50']:9.1f}s | "
+            f"{r['e2e_p90']:9.1f}s | "
+            f"{r['e2e_p95']:9.1f}s | "
+            f"{r['e2e_p99']:9.1f}s | "
             f"{r['out_per_sec']:8.1f} | "
             f"{r['in_per_sec']:8.1f} | "
+            f"{r['achieved_rate']:8.2f} | "
             f"{r['kv_cache_mean']:7.1f}% | "
-            f"{r['prefix_hit_pct']:7.2f}% | "
-            f"{r['queue_len_mean']:6.1f} | "
-            f"{r['prompt_tokens_p50']:10.0f} | "
-            f"{r['gen_tokens_p50']:8.0f}"
-        )
+            f"{r['prefix_hit_pct']:7.1f}% | "
+            f"{r['queue_len_mean']:8.1f} | "
+            f"{r['queue_time_mean']:8.1f}s | "
+            f"{r['running_req_total']:8.1f} | "
+            f"{r['running_req_max_per_endpoint']:8.1f}")

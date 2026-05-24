@@ -19,8 +19,8 @@ server:
   model_name: ${MODEL_NAME}
   base_url: ${BASE_URL}
   ignore_eos: true
-tokenizer:
-  pretrained_model_name_or_path: ${MODEL_NAME}
+#tokenizer:
+#  pretrained_model_name_or_path: ${MODEL_NAME}
 metrics:
   type: prometheus
   prometheus:
