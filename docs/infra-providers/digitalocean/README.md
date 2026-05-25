@@ -2,6 +2,8 @@
 
 This document covers configuring DOKS clusters for running high performance LLM inference with llm-d.
 
+For deployment instructions, see the [well-lit path guides](../../../guides/).
+
 ## Prerequisites
 
 llm-d on DOKS is tested with the following configurations:
@@ -9,20 +11,6 @@ llm-d on DOKS is tested with the following configurations:
 * GPU types: NVIDIA H100, NVIDIA RTX 6000 Ada, NVIDIA RTX 4000 Ada, NVIDIA L40S
 * Versions: DOKS 1.33.1-do.3
 * Networking: VPC-native clusters (required)
-
-## Configuration Architecture
-
-The DigitalOcean deployment follows clean configuration principles:
-
-* **Base Configuration**: `values.yaml` files maintain original design intent with high-end specs
-* **Platform Overrides**: `digitalocean-values.yaml` files contain ONLY DigitalOcean-specific modifications
-* **Conditional Loading**: Using `digitalocean` environment selectively applies DigitalOcean overrides
-
-This approach ensures:
-
-* Original configurations remain unchanged for other platforms
-* DigitalOcean optimizations are isolated and maintainable
-* Clear separation between base architecture and platform adaptations
 
 ## Cluster Configuration
 
@@ -47,153 +35,24 @@ kubectl get pods -n nvidia-device-plugin-system
 kubectl get nodes -o custom-columns="NAME:.metadata.name,GPU:.status.allocatable.nvidia\.com/gpu"
 ```
 
-## Quick Start
+### GPU Node Taints
 
-### Step 1: Install Prerequisites
-
-Before deploying llm-d workloads, install the required components:
-
-```bash
-# Navigate to gateway provider prerequisites
-cd guides/prereq/gateway-provider
-
-# Install Gateway API and Inference Extension CRDs
-./install-gateway-provider-dependencies.sh
-
-# Install Istio control plane
-helmfile apply -f istio.helmfile.yaml
-```
-
-### Step 2: Cluster Validation
-
-Verify your cluster setup:
-
-```bash
-# Verify cluster access and GPU nodes
-kubectl cluster-info
-kubectl get nodes -l doks.digitalocean.com/gpu-brand=nvidia
-
-# Verify components are ready
-kubectl get pods -n istio-system
-```
-
-### Step 3: Deploy Workloads
-
-Use the `digitalocean` environment to automatically load DigitalOcean-specific value overrides:
-
-```bash
-# For optimized baseline (2 decode pods)
-cd guides/optimized-baseline
-export NAMESPACE=llm-d-optimized-baseline
-helmfile apply -e digitalocean -n ${NAMESPACE}
-```
-
-**Key DigitalOcean Optimizations Applied Automatically:**
-
-* **Smaller Models**: Uses `Qwen3-0.6B` (optimized-baseline) that doesn't require HuggingFace tokens
-* **Stable Images**: Uses production-ready `ghcr.io/llm-d/llm-d-cuda:v0.5.1` instead of development builds
-* **DOKS-Optimized Resources**: Reduced memory/CPU requirements suitable for DOKS GPU nodes
-* **GPU Tolerations**: Automatic scheduling on DigitalOcean GPU nodes with `nvidia.com/gpu` taints
-* **No RDMA**: Removes InfiniBand requirements not available on DOKS
-
-**Architecture Overview:**
-
-* **optimized baseline**: 2 decode pods with intelligent routing via InferencePool
-
-### Step 4: Testing
-
-Verify deployment success:
-
-```bash
-# Check deployment status for optimized baseline
-kubectl get pods -n llm-d-optimized-baseline
-kubectl get gateway -n llm-d-optimized-baseline
-
-# Test inference endpoint (optimized baseline example)
-kubectl port-forward -n llm-d-optimized-baseline svc/infra-optimized-baseline-inference-gateway-istio 8080:80
-
-curl -X POST http://localhost:8080/v1/chat/completions \
-  -H "Content-Type: application/json" \
-  -d '{"model": "Qwen/Qwen3-0.6B", "messages": [{"role": "user", "content": "hello"}], "max_tokens": 20}'
-```
-
-## Monitoring (Optional)
-
-Deploy Prometheus and Grafana for observability:
-
-```bash
-cd monitoring
-./setup-monitoring.sh
-
-# Access Grafana dashboard
-kubectl port-forward -n llm-d-monitoring svc/prometheus-grafana 3000:80
-```
-
-We recommend enabling the monitoring stack to track:
-
-* GPU utilization per deployment
-* Inference request latency and throughput
-* Memory usage and KV cache efficiency
-* Network performance between inference pods
-
-## DigitalOcean-Specific Configuration Details
-
-### Model Selection
-
-The DigitalOcean deployment uses smaller, optimized models:
-
-| Architecture         | Original Model          | DigitalOcean Model      | Benefits                   |
-|----------------------|-------------------------|-------------------------|----------------------------|
-| optimized baseline | `Qwen3-0.6B` + HF Token | `Qwen3-0.6B` (no token) | No authentication required |
-
-### Resource Optimization
-
-DigitalOcean deployment automatically optimizes resource allocation for DOKS GPU nodes:
-
-* **Reduced Memory**: Uses 16Gi instead of 64Gi for better node utilization
-* **Optimized CPU**: Uses 4 cores instead of 16 cores per pod
-* **Single GPU**: Uses 1 GPU per pod (optimal for DOKS node sizes)
-* **No RDMA**: Removes InfiniBand requirements not available on DOKS
-
-### GPU Node Configuration
-
-DigitalOcean DOKS GPU nodes use taints to prevent non-GPU workloads from scheduling:
+DOKS GPU nodes use taints to prevent non-GPU workloads from scheduling. Add the following toleration to model server deployments:
 
 ```yaml
-# Automatically applied tolerations
 tolerations:
 - key: "nvidia.com/gpu"
   operator: "Exists"
   effect: "NoSchedule"
 ```
 
-### Architecture Differences
+## Deploying llm-d
 
-**optimized baseline on DOKS:**
-
-* 2 decode pods with InferencePool routing
-* Single GPU per pod (optimal for DOKS node sizes)
-* Intelligent request distribution
+Follow the [well-lit path guides](../../../guides/) to deploy llm-d workloads. Each guide includes DigitalOcean-specific steps where applicable.
 
 ## Troubleshooting
 
-### Common Issues
-
-#### 1. CRD Not Found Errors During Deployment
-
-**Error**: `resource mapping not found for name: "..." kind: "Gateway"`
-
-**Cause**: Required CRDs not installed before deployment
-
-**Solution**: Install CRDs before any helmfile deployment:
-
-```bash
-cd guides/prereq/gateway-provider
-./install-gateway-provider-dependencies.sh
-helmfile apply -f istio.helmfile.yaml
-```
-
-#### 2. LoadBalancer Pending or API Errors
+### LoadBalancer Pending or API Errors
 
 **Error**: LoadBalancer stuck in `<pending>` state with API errors
 
@@ -209,61 +68,26 @@ kubectl describe svc <service-name> -n <namespace>
 # Sequential deployments avoid conflicts
 ```
 
-#### 3. Pods Fail to Schedule on GPU Nodes
+### Pods Fail to Schedule on GPU Nodes
 
 **Error**: `untolerated taint {nvidia.com/gpu}`
 
-**Cause**: DigitalOcean GPU nodes have automatic taints to prevent non-GPU workloads
+**Cause**: DOKS GPU nodes have automatic taints to prevent non-GPU workloads
 
-**Solution**: DigitalOcean values automatically include required tolerations. Verify they're applied:
+**Solution**: Ensure your deployment includes the `nvidia.com/gpu` toleration. Verify it is applied:
 
 ```bash
 kubectl describe pod <pod-name> -n <namespace> | grep Tolerations
-
-# Should show:
-# Tolerations: nvidia.com/gpu:NoSchedule op=Exists
+# Should show: nvidia.com/gpu:NoSchedule op=Exists
 ```
 
-If tolerations are missing, ensure you're using the `digitalocean` environment which loads DigitalOcean overrides.
-
-#### 4. Gateway Not Programmed
+### Gateway Not Programmed
 
 **Error**: Gateway shows `PROGRAMMED: False`
 
-**Solution**: Verify Istio is running and LoadBalancer IP is assigned:
+**Solution**: Verify Istio is running and the LoadBalancer IP has been assigned:
 
 ```bash
 kubectl get pods -n istio-system
 kubectl get gateway -n <namespace>
 ```
-
-## Cleanup
-
-```bash
-# Remove specific deployment
-export NAMESPACE=llm-d-optimized-baseline
-helmfile destroy -e digitalocean -n ${NAMESPACE}
-
-# Remove prerequisites (affects all deployments)
-cd guides/prereq/gateway-provider
-helmfile destroy -f istio.helmfile.yaml
-./install-gateway-provider-dependencies.sh delete
-```
-
-## Configuration Files Reference
-
-### Base Configurations (Unchanged)
-
-* `guides/optimized-baseline/ms-optimized-baseline/values.yaml`
-
-### DigitalOcean Overrides (Platform-Specific)
-
-* `guides/optimized-baseline/ms-optimized-baseline/digitalocean-values.yaml`
-
-### Helmfile Configuration
-
-* Uses `digitalocean` environment to conditionally load DigitalOcean overrides
-* Only applies platform-specific configurations when explicitly using `-e digitalocean`
-* Follows clean configuration architecture principles with proper environment separation
-
-For detailed configuration options and advanced setups, see the main [llm-d guides](../../../guides/).
