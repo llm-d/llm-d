@@ -3,7 +3,6 @@ kind: Deployment
 metadata:
   name: prefill
 spec:
-  replicas: 4
   template:
     spec:
       affinity:
@@ -21,34 +20,25 @@ spec:
                       - pd-disaggregation
               topologyKey: topology.kubernetes.io/zone
         podAntiAffinity:
-          requiredDuringSchedulingIgnoredDuringExecution:
-            - labelSelector:
-                matchExpressions:
-                  - key: llm-d.ai/role
-                    operator: In
-                    values:
-                      - decode
-              topologyKey: kubernetes.io/hostname
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector:
+                  matchLabels:
+                    llm-d.ai/role: "decode"
+                topologyKey: "kubernetes.io/hostname"
       containers:
         - name: modelserver
           command: ["vllm", "serve"]
           args:
             - "openai/gpt-oss-120b"
             - "--disable-access-log-for-endpoints=/health,/metrics,/v1/models"
-            - "--tensor-parallel-size=2"
+            - "--tensor-parallel-size=1"
             - "--block-size=128"
             - "--kv-transfer-config"
             - '{"kv_connector":"NixlConnector","kv_role":"kv_both","kv_connector_extra_config":{"backends":["LIBFABRIC"]}}'
             - "--no-disable-hybrid-kv-cache-manager"
             - "--gpu-memory-utilization=0.9"
-          resources:
-            requests:
-              cpu: "32"
-              memory: 100Gi
-              nvidia.com/gpu: "2"
-            limits:
-              memory: 100Gi
-              nvidia.com/gpu: "2"
           securityContext:
             capabilities:
               add:
