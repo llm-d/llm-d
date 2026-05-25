@@ -1,0 +1,67 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: decode
+spec:
+  replicas: 1
+  template:
+    spec:
+      containers:
+        - name: modelserver
+          command: ["vllm", "serve"]
+          args:
+            - "zai-org/GLM-5.1-FP8"
+            - "--disable-access-log-for-endpoints=/health,/metrics,/v1/models"
+            - "--tensor-parallel-size=8"
+            - "--block-size=128"
+            - "--kv-transfer-config"
+            - '{"kv_connector":"NixlConnector", "kv_role":"kv_both"}'
+            - "--no-disable-hybrid-kv-cache-manager"
+            - "--chat-template-content-format=string"
+            - "--port=8200"
+          env:
+            - name: HF_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: llm-d-hf-token
+                  key: HF_TOKEN
+            - name: VLLM_NIXL_SIDE_CHANNEL_HOST
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.podIP
+          resources:
+            limits:
+              cpu: "64"
+              memory: 256Gi
+              nvidia.com/gpu: "8"
+              rdma/ib: "1"
+            requests:
+              cpu: "32"
+              memory: 192Gi
+              nvidia.com/gpu: "8"
+              rdma/ib: "1"
+          volumeMounts:
+            - mountPath: /dev/shm
+              name: shm
+            - mountPath: /.cache
+              name: torch-compile-cache
+          startupProbe:
+            initialDelaySeconds: 15
+            periodSeconds: 30
+            timeoutSeconds: 5
+            failureThreshold: 120
+          livenessProbe:
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            periodSeconds: 5
+            timeoutSeconds: 2
+            failureThreshold: 3
+      volumes:
+        - name: shm
+          emptyDir:
+            medium: Memory
+            sizeLimit: 20Gi
+        - name: torch-compile-cache
+          emptyDir: {}

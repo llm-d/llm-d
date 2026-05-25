@@ -1,0 +1,100 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: decode
+spec:
+  replicas: 1
+  template:
+    spec:
+      initContainers:
+        - args:
+          - --port=8000
+          - --vllm-port=8200
+          - --kv-connector=mooncake
+          - --zap-log-level=1
+          - --secure-proxy=false
+          image: quay.io/grpereir/llm-d-router-disagg-sidecar-dev:wen-mooncake-support
+          imagePullPolicy: Always
+          name: routing-proxy
+          ports:
+          - containerPort: 8000
+            name: sidecar
+            protocol: TCP
+          resources: {}
+          restartPolicy: Always
+          securityContext:
+            allowPrivilegeEscalation: false
+            runAsNonRoot: true
+      containers:
+        - name: modelserver
+          command: ["/bin/bash", "-c"]
+          args:
+            - |
+              pip install mooncake-transfer-engine-cuda13 && \
+              vllm serve zai-org/GLM-5.1-FP8 \
+                --trust-remote-code \
+                --disable-access-log-for-endpoints=/health,/metrics,/v1/models \
+                --tensor-parallel-size=8 \
+                --block-size=128 \
+                --kv-transfer-config '{"kv_connector":"MooncakeConnector", "kv_role":"kv_consumer", "kv_connector_extra_config":{"mooncake_protocol":"rdma"}}' \
+                --compilation-config '{"cudagraph_mode":"FULL_DECODE_ONLY"}' \
+                --tool-call-parser glm47 \
+                --reasoning-parser glm45 \
+                --enable-auto-tool-choice \
+                --chat-template-content-format=string \
+                --served-model-name glm-5.1-fp8 \
+                --port=8200
+          env:
+            - name: HF_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: llm-d-hf-token
+                  key: HF_TOKEN
+            - name: VLLM_MOONCAKE_BOOTSTRAP_PORT
+              value: "8998"
+            # - name: VLLM_LOGGING_LEVEL
+            #   value: INFO
+            # - name: MC_TE_METRIC
+            #   value: "1"
+            # - name: MC_TE_METRIC_INTERVAL_SECONDS
+            #   value: "5"
+            # - name: GLOG_v
+            #   value: "3"
+            # - name: GLOG_logtostderr
+            #   value: "1"
+          resources:
+            limits:
+              cpu: "64"
+              memory: 256Gi
+              nvidia.com/gpu: "8"
+              rdma/ib: "1"
+            requests:
+              cpu: "32"
+              memory: 192Gi
+              nvidia.com/gpu: "8"
+              rdma/ib: "1"
+          volumeMounts:
+            - mountPath: /dev/shm
+              name: shm
+            - mountPath: /.cache
+              name: torch-compile-cache
+          startupProbe:
+            initialDelaySeconds: 15
+            periodSeconds: 30
+            timeoutSeconds: 5
+            failureThreshold: 120
+          livenessProbe:
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            periodSeconds: 5
+            timeoutSeconds: 2
+            failureThreshold: 3
+      volumes:
+        - name: shm
+          emptyDir:
+            medium: Memory
+            sizeLimit: 20Gi
+        - name: torch-compile-cache
+          emptyDir: {}
