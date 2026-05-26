@@ -28,8 +28,8 @@ jobs:
       namespace: llm-d-nightly-ob-xpu
       scheduler_release_name: optimized-baseline
       scheduler_values_files: |
-        guides/recipes/scheduler/base.values.yaml
-        guides/optimized-baseline/scheduler/optimized-baseline.values.yaml
+        guides/recipes/router/base.values.yaml
+        guides/optimized-baseline/router/optimized-baseline.values.yaml
       pod_wait_timeout: '10m'
       llm_d_ref: ${{ github.ref }}
       skip_cleanup: ${{ github.event.inputs.skip_cleanup == 'true' }}

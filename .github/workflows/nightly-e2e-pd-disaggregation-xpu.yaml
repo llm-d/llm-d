@@ -28,8 +28,8 @@ jobs:
       namespace: llm-d-nightly-pd-xpu
       scheduler_release_name: pd-disaggregation
       scheduler_values_files: |
-        guides/recipes/scheduler/base.values.yaml
-        guides/pd-disaggregation/scheduler/pd-disaggregation.values.yaml
+        guides/recipes/router/base.values.yaml
+        guides/pd-disaggregation/router/pd-disaggregation.values.yaml
       pod_wait_timeout: '10m'
       llm_d_ref: ${{ github.ref }}
       skip_cleanup: ${{ github.event.inputs.skip_cleanup == 'true' }}

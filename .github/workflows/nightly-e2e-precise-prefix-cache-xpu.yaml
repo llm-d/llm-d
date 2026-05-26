@@ -28,9 +28,9 @@ jobs:
       namespace: llm-d-nightly-pc-xpu
       scheduler_release_name: precise-prefix-cache-aware
       scheduler_values_files: |
-        guides/recipes/scheduler/base.values.yaml
-        guides/precise-prefix-cache-aware/scheduler/precise-prefix-cache-aware.values.yaml
-      helm_post_renderer: guides/precise-prefix-cache-aware/scheduler/patches/uds-tokenizer/post-renderer.sh
+        guides/recipes/router/base.values.yaml
+        guides/precise-prefix-cache-aware/router/precise-prefix-cache-aware.values.yaml
+      helm_post_renderer: guides/precise-prefix-cache-aware/router/patches/uds-tokenizer/post-renderer.sh
       pod_wait_timeout: '10m'
       llm_d_ref: ${{ github.ref }}
       skip_cleanup: ${{ github.event.inputs.skip_cleanup == 'true' }}
