@@ -325,6 +325,13 @@ jobs:
           echo "precise-prefix-cache-routing: router"
           echo "========================================"
           echo "--- helm template ---"
+          helm version | awk -F'[:,"]' '{print $3}' | grep -q "v4\."
+          if [[ $? -eq 0 ]]; then
+            helm plugin install guides/precise-prefix-cache-routing/router/patches/uds-tokenizer
+            POST_RENDERER=uds-tokenizer
+          else
+            POST_RENDERER=./guides/precise-prefix-cache-routing/router/patches/uds-tokenizer/post-renderer.sh
+          fi
           if ! helm template precise-prefix-cache-routing \
             "oci://ghcr.io/llm-d/charts/llm-d-router-standalone-dev" \
             -f guides/recipes/router/base.values.yaml \
