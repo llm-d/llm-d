@@ -319,7 +319,6 @@ jobs:
         # once and pass `--post-renderer uds-tokenizer`; see README.)
         run: |
           CHART_VERSION=v0
-          POST_RENDERER=./guides/precise-prefix-cache-routing/router/patches/uds-tokenizer/post-renderer.sh
           echo ""
           echo "========================================"
           echo "precise-prefix-cache-routing: router"
