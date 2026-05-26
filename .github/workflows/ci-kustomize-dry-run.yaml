@@ -325,8 +325,8 @@ jobs:
           echo "========================================"
           echo "--- helm template ---"
           set -x
-          helm version | awk -F'[:,"]' '{print $3}' | grep -q "v4\."
-          if [[ $? -eq 0 ]]; then
+          IS_HELM_V4=$(helm version | awk -F'[:,"]' '{print $3}' | grep "v4\." || true)
+          if [[ ! -z $IS_HELM_V4 ]]; then
             helm plugin install guides/precise-prefix-cache-routing/router/patches/uds-tokenizer
             POST_RENDERER=uds-tokenizer
           else
