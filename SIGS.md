@@ -43,7 +43,7 @@ SIGs operate within the broader llm-d project governance framework defined in [P
 
 | SIG | Focus Area | Documentation |
 | ----- | ------------ | --------------- |
-| **[SIG Router (Formerly Inference Scheduler)](#sig-router)** | Intelligent request routing, load balancing, and traffic management | • [Meeting Recordings and Docs](https://drive.google.com/drive/folders/1aKTJru43krjHP2ORayEEp4JP-N7dJL8S)<br>• [llm-d-router Repository](https://github.com/llm-d/llm-d-router/) |
+| **[SIG Router (Formerly Inference Scheduler)](#sig-router-formerly-inference-scheduler)** | Intelligent request routing, load balancing, and traffic management | • [Meeting Recordings and Docs](https://drive.google.com/drive/folders/1aKTJru43krjHP2ORayEEp4JP-N7dJL8S)<br>• [llm-d-router Repository](https://github.com/llm-d/llm-d-router/) |
 | **[SIG Benchmarking](#sig-benchmarking)** | Performance testing, benchmarking frameworks, and optimization | • [Meeting Recordings and Docs](https://drive.google.com/drive/folders/1Hd-rCRLDbucl-LD0RlQwOCLqERWF-obT)<br>• [llm-d-benchmark Repository](https://github.com/llm-d/llm-d-benchmark) |
 | **[SIG PD-Disaggregation](#sig-pd-disaggregation)** | Prefill/decode separation, distributed serving, and workload disaggregation | • [Meeting Recordings and Docs](https://drive.google.com/drive/folders/1jk7wtojsWNbYQVf7BY8BEvIg8FMRZV0q)<br>• [llm-d-routing-sidecar Repository](https://github.com/llm-d/llm-d-routing-sidecar) |
 | **[SIG KV-Disaggregation](#sig-kv-disaggregation)** | KV caching, prefix caching, and distributed storage systems | • [Meeting Recordings and Docs](https://drive.google.com/drive/folders/1mFbzwEWL2-LvD21owgxlKRcQD0eSmcz6)<br>• [llm-d-kv-cache Repository](https://github.com/llm-d/llm-d-kv-cache) |
