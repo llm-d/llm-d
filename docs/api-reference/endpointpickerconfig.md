@@ -13,10 +13,9 @@
 | `featureGates` | `[]string` <br/> A set of flags to enable experimental features (e.g., `flowControl`). |
 | `plugins` | [][PluginSpec](#pluginspec) <br/> **Required** <br/> List of plugins to be instantiated (e.g., scorers, adapters, reporters). |
 | `schedulingProfiles` | [][SchedulingProfile](#schedulingprofile) <br/> **Required** <br/> Named profiles that group plugins into routing slots. |
-| `saturationDetector` | [SaturationDetectorConfig](#saturationdetectorconfig) <br/> Configuration for the saturation detector plugin. Defaults to `utilization-detector`. |
 | `dataLayer` | [DataLayerConfig](#datalayerconfig) <br/> Configures the DataLayer for metadata extraction and processing. |
 | `flowControl` | [FlowControlConfig](#flowcontrolconfig) <br/> Configures global and per-priority admission control. Only respected if the `flowControl` feature gate is enabled. |
-| `parser` | [ParserConfig](#parserconfig) <br/> Specifies the parsing logic for protocol messages (e.g., `openai-parser`). |
+| `requestHandler` | [RequestHandlerConfig](#requesthandlerconfig) <br/> Specifies the handling logic used by the EPP to process incoming requests. |
 
 ## PluginSpec
 
@@ -56,6 +55,7 @@ Configures admission control and queuing.
 | `defaultPriorityBand` | [PriorityBandConfig](#prioritybandconfig) <br/> Template for priority levels not explicitly configured. |
 | `priorityBands` | [][PriorityBandConfig](#prioritybandconfig) <br/> Explicit policies for specific priority levels. |
 | `usageLimitPolicyPluginRef` | `string` <br/> Reference to a `UsageLimitPolicy` plugin for adaptive capacity management. |
+| `saturationDetector` | [SaturationDetectorConfig](#saturationdetectorconfig) <br/> Specifies which saturation detector plugin to use. Defaults to `utilization-detector`. |
 
 ## PriorityBandConfig
 
@@ -66,6 +66,14 @@ Configures admission control and queuing.
 | `maxRequests` | `resource.Quantity` <br/> Max concurrent requests allowed for this band. |
 | `fairnessPolicyRef` | `string` <br/> Policy governing flow selection (default: `global-strict-fairness-policy`). |
 | `orderingPolicyRef` | `string` <br/> Policy governing request selection within a flow (default: `fcfs-ordering-policy`). |
+
+## RequestHandlerConfig
+
+Configures request handling behavior.
+
+| Field | Description |
+| --- | --- |
+| `parser` | [ParserConfig](#parserconfig) <br/> Specifies the parsing logic for protocol messages. |
 
 ## DataLayerConfig
 
