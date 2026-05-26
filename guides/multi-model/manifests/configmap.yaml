@@ -1,0 +1,10 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: vllm-qwen3-32b-adapters-allowlist
+  labels:
+    inference.networking.k8s.io/bbr-managed: "true"
+data:
+  baseModel: Qwen/Qwen3-32B
+  adapters: |
+    - food-review-1
