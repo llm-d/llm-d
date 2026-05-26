@@ -13,6 +13,7 @@ This guide shows how to collect and visualize metrics from an llm-d deployment u
 
 > [!NOTE]
 > Commands in this guide use `${NAMESPACE}` for the namespace where your llm-d workload runs. Set it before following along:
+>
 > ```bash
 > export NAMESPACE=<your-llm-d-namespace>
 > ```
@@ -179,32 +180,30 @@ NAME                    AGE
 epp-servicemonitor      5m
 ```
 
-### Key EPP Metrics
+### Key llm-d Router Endpoint Picker (EPP) Metrics
 
 | Metric | What it measures | Why it matters |
 |--------|-----------------|----------------|
-| `inference_objective_request_total` | Total request count per model | Baseline for calculating error rate and throughput per model |
-| `inference_objective_request_error_total` | Total error count per model | Rising errors signal backend failures. Alert when error rate exceeds 5% |
-| `inference_objective_request_duration_seconds` | End-to-end response latency | The SLO metric. Tracks full round-trip time from request to response |
-| `inference_objective_input_tokens` | Input token count per request | Helps identify expensive requests. Long prompts cost more compute |
-| `inference_objective_output_tokens` | Output token count per request | Combined with duration, gives normalized cost per token |
-| `inference_objective_normalized_time_per_output_token_seconds` | Normalized time per output token (NTPOT) | Key efficiency metric (lower is better). Compare across pods to find stragglers |
-| `inference_objective_running_requests` | Currently active requests per model | Shows real-time load distribution. Uneven distribution suggests the EPP may need tuning |
-| `inference_pool_average_kv_cache_utilization` | Average KV cache utilization across the pool | Pool-wide memory pressure indicator. Above 0.8, consider scaling up to avoid preemptions |
-| `inference_pool_average_queue_size` | Average queue depth across the pool | Pool-wide saturation signal. Non-zero means requests are waiting |
-| `inference_pool_ready_pods` | Number of ready pods in the pool | If this drops below expected count, pods are crashing or not scheduling |
-| `inference_extension_scheduler_attempts_total` | Scheduling attempt counts and outcomes | Track failed scheduling attempts. High failure rate indicates filter/scorer misconfiguration |
+| `llm_d_router_epp_request_total` | Total request count per model | Baseline for calculating error rate and throughput per model |
+| `llm_d_router_epp_request_error_total` | Total error count per model | Rising errors signal backend failures. Alert when error rate exceeds 5% |
+| `llm_d_router_epp_request_duration_seconds` | End-to-end response latency | The SLO metric. Tracks full round-trip time from request to response |
+| `llm_d_router_epp_input_tokens` | Input token count per request | Helps identify expensive requests. Long prompts cost more compute |
+| `llm_d_router_epp_output_tokens` | Output token count per request | Combined with duration, gives normalized cost per token |
+| `llm_d_router_epp_normalized_time_per_output_token_seconds` | Normalized time per output token (NTPOT) | Key efficiency metric (lower is better). Compare across pods to find stragglers |
+| `llm_d_router_epp_running_requests` | Currently active requests per model | Shows real-time load distribution. Uneven distribution suggests the EPP may need tuning |
+| `llm_d_router_epp_average_kv_cache_utilization` | Average KV cache utilization across the pool | Pool-wide memory pressure indicator. Above 0.8, consider scaling up to avoid preemptions |
+| `llm_d_router_epp_average_queue_size` | Average queue depth across the pool | Pool-wide saturation signal. Non-zero means requests are waiting |
+| `llm_d_router_epp_ready_endpoints` | Number of ready endpoints in the pool | If this drops below expected count, pods are crashing or not scheduling |
+| `llm_d_router_epp_scheduler_attempts_total` | Scheduling attempt counts and outcomes | Track failed scheduling attempts. High failure rate indicates filter/scorer misconfiguration |
 
-### Flow Control Metrics
-
-When flow control is enabled, these additional metrics are exposed:
+When flow control is enabled, these additional metrics are exposed by the llm-d Router EPP:
 
 | Metric | What it measures | Why it matters |
 |--------|-----------------|----------------|
-| `inference_extension_flow_control_queue_size` | Requests currently queued | Growing queue means the pool cannot keep up. Consider scaling or adjusting priority bands |
-| `inference_extension_flow_control_queue_bytes` | Total size of queued requests in bytes | Large queued payloads can exhaust EPP memory. Monitor alongside `maxBytes` config |
-| `inference_extension_flow_control_request_queue_duration_seconds` | Time a request spends in the queue | Directly impacts user-perceived latency. High values mean flow control is holding requests too long |
-| `inference_extension_flow_control_pool_saturation` | Pool saturation level (0.0 to 1.0+) | Above 1.0 means demand exceeds capacity and flow control is actively throttling. Scale up or shed load |
+| `llm_d_router_epp_flow_control_queue_size` | Requests currently queued | Growing queue means the pool cannot keep up. Consider scaling or adjusting priority bands |
+| `llm_d_router_epp_flow_control_queue_bytes` | Total size of queued requests in bytes | Large queued payloads can exhaust EPP memory. Monitor alongside `maxBytes` config |
+| `llm_d_router_epp_flow_control_request_queue_duration_seconds` | Time a request spends in the queue | Directly impacts user-perceived latency. High values mean flow control is holding requests too long |
+| `llm_d_router_epp_flow_control_pool_saturation` | Pool saturation level (0.0 to 1.0+) | Above 1.0 means demand exceeds capacity and flow control is actively throttling. Scale up or shed load |
 
 ## Step 4: View Dashboards
 
@@ -259,7 +258,7 @@ Or import individual dashboard JSON files manually from `docs/monitoring/grafana
 The upstream [inference-gateway dashboard](https://github.com/kubernetes-sigs/gateway-api-inference-extension/blob/v1.0.1/tools/dashboards/inference_gateway.json) provides EPP-specific metrics visualization.
 
 > [!NOTE]
-> The upstream dashboard may use older `inference_model_*` metric names. Current llm-d deployments use `inference_objective_*`. If panels show "No data", update the metric names in the dashboard JSON.
+> The upstream dashboard may use older `inference_model_*` metric names. Current llm-d deployments use `llm_d_router_epp_*`. If panels show "No data", update the metric names in the dashboard JSON.
 
 ## Step 5: Query Metrics
 

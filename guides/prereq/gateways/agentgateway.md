@@ -128,7 +128,6 @@ curl -X POST http://${IP}/v1/completions \
     }' | jq
 ```
 
-
 ## Cleanup
 
 ```bash

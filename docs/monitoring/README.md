@@ -115,7 +115,7 @@ EPP metrics include request rates, error rates, scheduling latency, and plugin p
 
 ## Distributed Tracing
 
-llm-d supports OpenTelemetry distributed tracing across vLLM, the routing proxy, and the EPP/inference scheduler. See [Distributed Tracing](./tracing/README.md) for setup instructions, or use the [install-otel-collector-jaeger.sh](./scripts/install-otel-collector-jaeger.sh) script to deploy an OTel Collector and Jaeger backend with one command.
+llm-d supports OpenTelemetry distributed tracing across vLLM, the routing proxy, and the EPP/router. See [Distributed Tracing](./tracing/README.md) for setup instructions, or use the [install-otel-collector-jaeger.sh](./scripts/install-otel-collector-jaeger.sh) script to deploy an OTel Collector and Jaeger backend with one command.
 
 ## Dashboards
 

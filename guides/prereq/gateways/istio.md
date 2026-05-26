@@ -139,4 +139,3 @@ kubectl get gateway llm-d-inference-gateway -o jsonpath='{.status.addresses[0].v
 ```
 
 If the address is empty, your Gateway may still be waiting for a LoadBalancer service. Check that your cluster supports external load balancers.
-

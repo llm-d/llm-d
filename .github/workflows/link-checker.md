@@ -111,6 +111,7 @@ If all links are OK, do not post a comment.
 ### Domain-Specific Knowledge
 
 These domains are known to have intermittent availability or require authentication — treat failures as "possibly transient":
+
 - `registry.k8s.io`
 - `quay.io`
 - `ghcr.io`

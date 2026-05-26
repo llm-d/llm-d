@@ -10,11 +10,11 @@ We currently offer the following:
 ### Intelligent Routing
 
 * [Optimized Baseline](./optimized-baseline/README.md) - Deploy vLLM with prefix-cache and load-aware routing enabled by the llm-d EPP.
-* [Predicted Latency-Based Routing](./predicted-latency-based-scheduling/README.md) - Enhance optimized baseline with real-time predictions of request latency (via a live-trained XGBoost model) rather than heuristic-based combinations of utilization metrics like queue depth or KV-cache utilization.
+* [Predicted Latency-Based Routing](./predicted-latency-routing/README.md) - Enhance optimized baseline with real-time predictions of request latency (via a live-trained XGBoost model) rather than heuristic-based combinations of utilization metrics like queue depth or KV-cache utilization.
 
 ### Advanced KV-Cache Management
 
-* [Precise Prefix Cache Routing](./precise-prefix-cache-aware/README.md) - Enhance optimized baseline with precise global indexing of the vLLM KV cache state.
+* [Precise Prefix Cache Routing](./precise-prefix-cache-routing/README.md) - Enhance optimized baseline with precise global indexing of the vLLM KV cache state.
 * [Tiered Prefix Cache](./tiered-prefix-cache/README.md) - Offload KV caches beyond accelerator memory (e.g. to CPU or disk), increasing the "KV-working set size" for multi-turn inference request patterns.
 
 ### Serving Large Models
@@ -26,6 +26,7 @@ We currently offer the following:
 
 * [Flow Control](./flow-control.md): Intelligent request queuing for multi-tenant deployments and managing traffic spikes.
 * [Workload Autoscaling](./workload-autoscaling/README.md) - autoscale the LLM service via proactive, SLO-aware signals that reflect the true state of the inference system — queue depth, in-flight request counts, and KV cache pressure — so that capacity can be added before end-user latency is impacted.
+* [Rollouts](./rollouts/README.md) - perform incremental rollout operations for LoRA adapters, base models, and model server versions with minimal service disruption using traffic splitting and gradual deployment strategies.
 
 ## Experimental Guides
 
@@ -37,4 +38,3 @@ We currently offer the following:
 Our supporting guides address common operational challenges with model serving at scale:
 
 * [Benchmark](../helpers/benchmark.md) demonstrates how to use automation for running benchmarks against the llm-d stack.
-

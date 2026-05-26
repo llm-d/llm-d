@@ -19,7 +19,7 @@ on:
     inputs:
       pr_or_branch:
         description: 'Pull-request number or branch name to test'
-        required: true
+        required: false
         default: 'main'
         type: string
       custom_image_tag:
@@ -120,9 +120,9 @@ jobs:
           echo "Installing scheduler (standalone chart) via helm..."
           helm install "${SCHEDULER_RELEASE_NAME}" \
             oci://registry.k8s.io/gateway-api-inference-extension/charts/standalone \
-            -f guides/recipes/scheduler/base.values.yaml \
-            -f guides/recipes/scheduler/features/monitoring.values.yaml \
-            -f guides/${GUIDE_NAME}/scheduler/${GUIDE_NAME}.values.yaml \
+            -f guides/recipes/router/base.values.yaml \
+            -f guides/recipes/router/features/monitoring.values.yaml \
+            -f guides/${GUIDE_NAME}/router/${GUIDE_NAME}.values.yaml \
             -n "${NAMESPACE}" \
             --version "${GAIE_VERSION}" \
             | tee ~/optimized-baseline-xpu-deployment.log
@@ -213,7 +213,7 @@ jobs:
 
             mv ~/optimized-baseline-xpu-deployment.log . || true
             mv ~/install-deps.log . || true
-            
+
             echo "Log collection completed."
             ls -la
 

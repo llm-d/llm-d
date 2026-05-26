@@ -1,0 +1,90 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: decode
+spec:
+  replicas: 2
+  template:
+    spec:
+      nodeSelector:
+        cloud.google.com/gke-tpu-topology: "2x4"
+        cloud.google.com/gke-tpu-accelerator: "tpu-v6e-slice"
+      containers:
+        - name: modelserver
+          command: ["vllm", "serve"]
+          # Precise prefix cache on TPU: the TPU backend may constrain block
+          # sizes differently from CUDA. Keep scorer.tokenProcessorConfig.blockSize
+          # in sync with --block-size here, and update `modelName` in
+          # router/precise-prefix-cache-routing.values.yaml to Llama-3.1-70B-Instruct.
+          args:
+            - "meta-llama/Llama-3.1-70B-Instruct"
+            - "--port=$(POD_PORT)"
+            - "--max-model-len=4096"
+            - "--disable-access-log-for-endpoints=/health,/metrics,/v1/models"
+            - "--tensor-parallel-size=8"
+            - "--block-size=64"
+            - "--kv-events-config"
+            - '{"enable_kv_cache_events":true,"publisher":"zmq","endpoint":"$(KV_EVENTS_ENDPOINT)","topic":"kv@$(POD_IP):$(POD_PORT)@meta-llama/Llama-3.1-70B-Instruct"}'
+            # Uncomment for distributed tracing
+            # - "--otlp-traces-endpoint=http://otel-collector:4317"
+            # - "--collect-detailed-traces=all"
+          ports:
+            # Exposed so each router replica can dial the per-pod ZMQ
+            # socket bound by vLLM (KV_EVENTS_ENDPOINT=tcp://*:5556).
+            - containerPort: 5556
+              name: kv-events
+              protocol: TCP
+          env:
+            - name: NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+            - name: POD_IP
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.podIP
+            - name: POD_PORT
+              value: "8000"
+            # Pod-discovery mode: vLLM PUBs bind per-pod so every router
+            # replica can dial each pod's socket independently.
+            - name: KV_EVENTS_ENDPOINT
+              value: "tcp://*:5556"
+            # Disable vLLM usage telemetry — its writes to /.config fail
+            # under restricted SecurityContexts (e.g. OpenShift).
+            - name: DO_NOT_TRACK
+              value: "1"
+            - name: HF_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: llm-d-hf-token
+                  key: HF_TOKEN
+          resources:
+            limits:
+              google.com/tpu: "8"
+            requests:
+              google.com/tpu: "8"
+          volumeMounts:
+            - mountPath: /.cache
+              name: torch-compile-cache
+            # Triton/Inductor caches at /.triton, not writable under
+            # restricted SecurityContexts (e.g. OpenShift).
+            - mountPath: /.triton
+              name: triton-cache
+          startupProbe:
+            initialDelaySeconds: 15
+            periodSeconds: 30
+            timeoutSeconds: 5
+            failureThreshold: 120
+          livenessProbe:
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            periodSeconds: 5
+            timeoutSeconds: 2
+            failureThreshold: 3
+      volumes:
+        - name: torch-compile-cache
+          emptyDir: {}
+        - name: triton-cache
+          emptyDir: {}

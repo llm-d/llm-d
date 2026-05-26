@@ -11,6 +11,7 @@ This guide explains how to trigger these tests using **PR Slash Commands** or ma
 If you are working on a Pull Request, you can trigger one or more nightly E2E tests directly by writing a comment on the PR page.
 
 ### Command Format
+
 ```text
 /test-nightly <nightly-name-or-pattern>
 ```
@@ -18,21 +19,25 @@ If you are working on a Pull Request, you can trigger one or more nightly E2E te
 ### Examples
 
 * **Trigger a single test:**
+
   ```text
   /test-nightly optimized-baseline-gke
   ```
 
 * **Trigger all GKE tests:**
+
   ```text
   /test-nightly *-gke
   ```
 
 * **Trigger all OpenShift (OCP) tests:**
+
   ```text
   /test-nightly *-ocp
   ```
 
 * **Trigger all disaggregation tests:**
+
   ```text
   /test-nightly pd-disaggregation-*
   ```
@@ -49,11 +54,11 @@ You can use any of the following exact names or glob patterns matching them:
 | `pd-disaggregation-cks` | CKS | [pd-disaggregation](../guides/pd-disaggregation) |
 | `pd-disaggregation-gke` | GKE | [pd-disaggregation](../guides/pd-disaggregation) |
 | `pd-disaggregation-ocp` | OCP | [pd-disaggregation](../guides/pd-disaggregation) |
-| `precise-prefix-cache-cks` | CKS | [precise-prefix-cache-aware](../guides/precise-prefix-cache-aware) |
-| `precise-prefix-cache-gke` | GKE | [precise-prefix-cache-aware](../guides/precise-prefix-cache-aware) |
-| `precise-prefix-cache-ocp` | OCP | [precise-prefix-cache-aware](../guides/precise-prefix-cache-aware) |
-| `predicted-latency-cks` | CKS | [predicted-latency-based-scheduling](../guides/predicted-latency-based-scheduling) |
-| `predicted-latency-gke` | GKE | [predicted-latency-based-scheduling](../guides/predicted-latency-based-scheduling) |
+| `precise-prefix-cache-cks` | CKS | [precise-prefix-cache-routing](../guides/precise-prefix-cache-routing) |
+| `precise-prefix-cache-gke` | GKE | [precise-prefix-cache-routing](../guides/precise-prefix-cache-routing) |
+| `precise-prefix-cache-ocp` | OCP | [precise-prefix-cache-routing](../guides/precise-prefix-cache-routing) |
+| `predicted-latency-cks` | CKS | [predicted-latency-routing](../guides/predicted-latency-routing) |
+| `predicted-latency-gke` | GKE | [predicted-latency-routing](../guides/predicted-latency-routing) |
 | `tiered-prefix-cache-cpu-offloading-gke` | GKE | [tiered-prefix-cache](../guides/tiered-prefix-cache) |
 | `tiered-prefix-cache-cpu-offloading-lmcache-gke` | GKE | [tiered-prefix-cache](../guides/tiered-prefix-cache) |
 | `tiered-prefix-cache-cpu-offloading-ocp` | OCP | [tiered-prefix-cache](../guides/tiered-prefix-cache) |
@@ -78,7 +83,7 @@ You can trigger any nightly workflow manually using the **Run workflow** button 
 5. Click the **Run workflow** dropdown on the right side of the workflow runs list.
 6. Select the branch you want to run the workflow on.
 7. Set optional parameters:
-   - **Skip cleanup after tests (for debugging):** Set to `true` if you want the test namespace, cluster resources, and nodes to persist for debugging post-run.
+   * **Skip cleanup after tests (for debugging):** Set to `true` if you want the test namespace, cluster resources, and nodes to persist for debugging post-run.
 8. Click the green **Run workflow** button.
 
 ---

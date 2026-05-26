@@ -9,7 +9,7 @@ Well-lit paths are curated, end-to-end guides for common LLM inference patterns 
 
 ### Advanced KV-Cache Management
 
-- **[Precise Prefix Cache Routing](precise-prefix-cache-aware.md)**: Near-real-time routing based on exact cache state published by model servers.
+- **[Precise Prefix Cache Routing](precise-prefix-cache-routing.md)**: Near-real-time routing based on exact cache state published by model servers.
 - **[Tiered Prefix Cache](tiered-prefix-cache.md)**: Efficiently managing KV caches by offloading to CPU RAM, NVMe, or network storage to improve prefix-cache re-use.
 
 ### Serving Large Models
@@ -26,4 +26,3 @@ Well-lit paths are curated, end-to-end guides for common LLM inference patterns 
 
 - **[Asynchronous Processing](asynchronous-processing.md)**: Intelligently processing latency-tolerant requests sourced from message queues via a lightweight agent to leverage "slack" capacity without the complexity of a full batch gateway.
 - **[Batch Gateway](experimental/batch-gateway.md)**: Managing large-scale batch inference coexisting with interactive workloads via an OpenAI-compatible Batch API.
-

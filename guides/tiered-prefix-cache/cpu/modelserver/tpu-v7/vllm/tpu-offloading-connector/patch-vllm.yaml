@@ -40,7 +40,7 @@ spec:
           image: vllm/vllm-tpu:nightly-20260504-e2a6582-67058ca
           command: ["/bin/sh", "-c"]
           args:
-            - |              
+            - |
               vllm serve Qwen/Qwen3-32B \
                 --kv-transfer-config '{"kv_connector":"TPUOffloadConnector","kv_connector_module_path":"tpu_inference.offload.tpu_offload_connector","kv_role":"kv_both"}' \
                 --port 8000 \

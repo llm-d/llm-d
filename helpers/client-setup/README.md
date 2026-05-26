@@ -19,4 +19,3 @@
 | ------------------ | ------------------------ | ------------------------------------------------------------------------------------------------ |
 | `stern`            | 1.30+                    | [stern - installation](https://github.com/stern/stern?tab=readme-ov-file#installation)           |
 | `helm diff` plugin | v3.10.0+                 | [helm diff installation docs](https://github.com/databus23/helm-diff?tab=readme-ov-file#install) |
-

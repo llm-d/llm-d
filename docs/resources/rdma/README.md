@@ -21,6 +21,7 @@ llm-d uses a layered networking stack for KV Cache transfers and inter-node comm
 NIXL operates in a **pull-based model**: the decode pod fetches KV Cache blocks directly from the prefill pod's GPU memory using one-sided RDMA reads (direct memory access without involving the remote CPU), without requiring active participation from the prefill pod. This reduces synchronization overhead.
 
 Key capabilities:
+
 - Works across InfiniBand, RDMA over Converged Ethernet (RoCE), Elastic Fabric Adapter (EFA), and TCP
 - Supports GPU memory (VRAM), CPU Dynamic RAM (DRAM), and storage backends
 - Plugin architecture for adding new transport backends
@@ -37,6 +38,7 @@ UCX is a good default: it is battle-tested, widely supported, and works across m
 [UCCL](https://github.com/ai-dynamo/uccl) (Unified Cloud Communication Library) is a newer transport backend integrated into NIXL as of llm-d v0.5. It implements a CPU-managed software transport stack — managing transport logic on the CPU rather than relying solely on network interface card (NIC) hardware offload. This enables fine-grained flow splitting and adaptive congestion control.
 
 UCCL currently supports:
+
 - Native RDMA (InfiniBand/RoCE)
 - GPUDirect TCP-X (Google Cloud)
 - TCP
@@ -165,11 +167,13 @@ For Wide Expert Parallelism, map GPUs to specific HCAs for optimal topology:
 #### GKE
 
 - Use GKE multi-NIC annotations for RDMA interfaces:
+
   ```yaml
   annotations:
     networking.gke.io/default-interface: eth0
     networking.gke.io/interfaces: '[{"interfaceName":"eth0","network":"default"}, ...]'
   ```
+
 - Source `set_nccl_env.sh` from `/usr/local/gib/scripts/` at container startup
 - Set `NVSHMEM_DISABLED_GDRCOPY=true` (GKE recommendation)
 - Use pod affinity on `cloud.google.com/gce-topology-block` for topology-aware placement
@@ -178,10 +182,12 @@ For Wide Expert Parallelism, map GPUs to specific HCAs for optimal topology:
 #### OpenShift / OCP
 
 - Use Multus CNI for secondary RDMA networks:
+
   ```yaml
   annotations:
     k8s.v1.cni.cncf.io/networks: "multi-nic-compute"
   ```
+
 - Request `rdma/roce_gdr` device resources as shown above
 
 #### AWS (EFA)

@@ -10,6 +10,7 @@ The **KV-Cache Indexer** is a component of the **llm-d Router** (residing within
 The kv-cache indexer subscribes to `KVEvents` emitted from model servers to maintain a near-realtime view of the KV cache state. The `precise-prefix-cache-scorer` uses this information during the EPP filter → score → pick flow.
 
 The precise view offers improved precision for harder-to-approximate scenarios:
+
 - **Multi-Modal Models** — Multi-modal content hashes (images, audio) are folded into block keys, so two prompts with the same text but different images produce different keys and are routed to the pod with matching multimodal KV-cache.
 - **Hybrid-Attention Models** — In hybrid models, KV cache usage per layer groups (full, sliding-window, linear) scales non-linearly making byte-based trees imprecise.
 - **Advanced KV-Cache Orchestration** — As model-server KV-cache management policies grow beyond simple LRU, approximate views become increasingly unreliable and complex to create; the event-driven view tracks the actual state.
@@ -65,7 +66,7 @@ The Index holds a `block key → pods` mapping built up from KV-Events published
 
 Two shapes are supported for getting events from the model servers to the EPP:
 
-* **Centralized** — every model-server pod connects (`zmq.PUB`) to a single endpoint hosted by the EPP (`zmq.SUB`). Works naturally with a single EPP replica.
+- **Centralized** — every model-server pod connects (`zmq.PUB`) to a single endpoint hosted by the EPP (`zmq.SUB`). Works naturally with a single EPP replica.
 
 ```
   Model Server A ──► ZMQ ──┐
@@ -73,7 +74,7 @@ Two shapes are supported for getting events from the model servers to the EPP:
   Model Server C ──► ZMQ ──┘
 ```
 
-* **Pod discovery** — each model-server pod binds its own ZMQ socket. The EPP discovers pods via Kubernetes label selectors and creates per-pod subscribers. This is the mode to use for active-active multi-EPP: every EPP replica independently subscribes to every pod and sees the full event stream.
+- **Pod discovery** — each model-server pod binds its own ZMQ socket. The EPP discovers pods via Kubernetes label selectors and creates per-pod subscribers. This is the mode to use for active-active multi-EPP: every EPP replica independently subscribes to every pod and sees the full event stream.
 
 ```
   EPP Replica 1 ──ZMQ──┐
@@ -146,11 +147,11 @@ The default 2-second TTL is tuned to comfortably exceed the typical routing-to-e
 
 Many deployment patterns cache KV blocks based on more than text. The indexer supports these by folding additional features into block keys:
 
-* **Multimodal** — Multimodal content hashes (images, audio) are folded into the block-key chain. vLLM emits an `extra_keys` field on `BlockStored` events, which the indexer parses and re-computes on the read side by walking the multimodal placeholders in the tokenized prompt. Two prompts identical in text but differing in image content hash differently and route independently.
-* **LoRA** — On `BlockStored`, if a `LoraName` is present, it is used in place of the base model name when deriving block keys. Different adapters produce different key chains for the same token sequence, and cache hits are correctly scoped to the adapter.
-* **Hybrid attention** (*target design — work in progress*) — Hybrid models partition the KV-cache into layer groups (full, sliding-window, linear/state-space) that evict independently. For a single token range, full-attention blocks can still be resident while sliding-window blocks have rolled out of the attention window — the same "prefix" is cached in one group but not in another. Scoring for hybrid models therefore needs to classify each prefix match as **full**, **partial**, or **miss**, using the model's window sizes to decide whether a partial hit is still routable.
+- **Multimodal** — Multimodal content hashes (images, audio) are folded into the block-key chain. vLLM emits an `extra_keys` field on `BlockStored` events, which the indexer parses and re-computes on the read side by walking the multimodal placeholders in the tokenized prompt. Two prompts identical in text but differing in image content hash differently and route independently.
+- **LoRA** — On `BlockStored`, if a `LoraName` is present, it is used in place of the base model name when deriving block keys. Different adapters produce different key chains for the same token sequence, and cache hits are correctly scoped to the adapter.
+- **Hybrid attention** (*target design — work in progress*) — Hybrid models partition the KV-cache into layer groups (full, sliding-window, linear/state-space) that evict independently. For a single token range, full-attention blocks can still be resident while sliding-window blocks have rolled out of the attention window — the same "prefix" is cached in one group but not in another. Scoring for hybrid models therefore needs to classify each prefix match as **full**, **partial**, or **miss**, using the model's window sizes to decide whether a partial hit is still routable.
 
 ## Further Reading
 
 - [**llm-d-kv-cache**](https://github.com/llm-d/llm-d-kv-cache) — the indexer library. See [architecture.md](https://github.com/llm-d/llm-d-kv-cache/blob/main/docs/architecture.md) for the in-depth technical architecture (block-key hashing, dual-key design, event adapters, module breakdown) and [configuration.md](https://github.com/llm-d/llm-d-kv-cache/blob/main/docs/configuration.md) for the full configuration reference.
-- [**llm-d Router**](https://github.com/llm-d/llm-d-inference-scheduler) — source for the `precise-prefix-cache-scorer` and `tokenizer` plugins. Plugin lifecycle, EPP extension-point wiring, and request scheduling profile examples.
+- [**llm-d Router**](https://github.com/llm-d/llm-d-router) — source for the `precise-prefix-cache-scorer` and `tokenizer` plugins. Plugin lifecycle, EPP extension-point wiring, and request scheduling profile examples.

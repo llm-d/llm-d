@@ -2,7 +2,7 @@
 
 `InferenceModelRewrite` defines rules for rewriting inference requests, such as traffic splitting, A/B tests, or canary rollouts across weighted model targets.
 
-**Group:** `inference.networking.x-k8s.io`  
+**Group:** `inference.networking.x-k8s.io`
 **Version:** `v1alpha2`
 
 ---
@@ -14,15 +14,15 @@
 | `apiVersion` | `inference.networking.x-k8s.io/v1alpha2` |
 | `kind` | `InferenceModelRewrite` |
 | `metadata` | [metav1.ObjectMeta](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.28/#objectmeta-v1-meta) |
-| `spec` | [InferenceModelRewriteSpec](#inferencemodelrewritespec) <br> Spec defines the desired state of the rewrite rules. |
-| `status` | [InferenceModelRewriteStatus](#inferencemodelrewritestatus) <br> Status defines the observed state of the resource. |
+| `spec` | [InferenceModelRewriteSpec](#inferencemodelrewritespec) <br/> Spec defines the desired state of the rewrite rules. |
+| `status` | [InferenceModelRewriteStatus](#inferencemodelrewritestatus) <br/> Status defines the observed state of the resource. |
 
 ## InferenceModelRewriteSpec
 
 | Field | Description |
 | --- | --- |
-| `poolRef` | [PoolObjectReference](#poolobjectreference) <br> **Required** <br> Reference to the target `InferencePool`. |
-| `rules` | [][InferenceModelRewriteRule](#inferencemodelrewriterule) <br> **Required** <br> Ordered set of rules. The first rule to match a request is used. |
+| `poolRef` | [PoolObjectReference](#poolobjectreference) <br/> **Required** <br/> Reference to the target `InferencePool`. |
+| `rules` | [][InferenceModelRewriteRule](#inferencemodelrewriterule) <br/> **Required** <br/> Ordered set of rules. The first rule to match a request is used. |
 
 ## InferenceModelRewriteRule
 
@@ -30,8 +30,8 @@
 
 | Field | Description |
 | --- | --- |
-| `matches` | [][Match](#match) <br> **Optional** <br> Criteria for matching a request. Logical OR if multiple criteria are specified. If empty, matches all requests. |
-| `targets` | [][TargetModel](#targetmodel) <br> **Optional** <br> How to distribute traffic across weighted model targets. Min items: 1. |
+| `matches` | [][Match](#match) <br/> **Optional** <br/> Criteria for matching a request. Logical OR if multiple criteria are specified. If empty, matches all requests. |
+| `targets` | [][TargetModel](#targetmodel) <br/> **Optional** <br/> How to distribute traffic across weighted model targets. Min items: 1. |
 
 ## Match
 
@@ -39,14 +39,14 @@
 
 | Field | Description |
 | --- | --- |
-| `model` | [ModelMatch](#modelmatch) <br> **Required** <br> Criteria for matching the `model` field in the JSON request body. |
+| `model` | [ModelMatch](#modelmatch) <br/> **Required** <br/> Criteria for matching the `model` field in the JSON request body. |
 
 ## ModelMatch
 
 | Field | Description |
 | --- | --- |
-| `type` | `string` <br> Kind of string matching to use. Supported value: `Exact`. Defaults to `Exact`. |
-| `value` | `string` <br> **Required** <br> The model name string to match against. |
+| `type` | `string` <br/> Kind of string matching to use. Supported value: `Exact`. Defaults to `Exact`. |
+| `value` | `string` <br/> **Required** <br/> The model name string to match against. |
 
 ## TargetModel
 
@@ -54,14 +54,14 @@
 
 | Field | Description |
 | --- | --- |
-| `weight` | `int32` <br> **Optional** <br> Proportion of requests forwarded to the model. Computed as `weight/(sum of all weights)`. Min: 1, Max: 1000000. If set for one, must be set for all. |
-| `modelRewrite` | `string` <br> **Required** <br> The static model name to rewrite the request to. |
+| `weight` | `int32` <br/> **Optional** <br/> Proportion of requests forwarded to the model. Computed as `weight/(sum of all weights)`. Min: 1, Max: 1000000. If set for one, must be set for all. |
+| `modelRewrite` | `string` <br/> **Required** <br/> The static model name to rewrite the request to. |
 
 ## InferenceModelRewriteStatus
 
 | Field | Description |
 | --- | --- |
-| `conditions` | [][metav1.Condition](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.28/#condition-v1-meta) <br> Conditions track the state. Known type: `Accepted`. |
+| `conditions` | [][metav1.Condition](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.28/#condition-v1-meta) <br/> Conditions track the state. Known type: `Accepted`. |
 
 ## PoolObjectReference
 
@@ -69,9 +69,9 @@
 
 | Field | Description |
 | --- | --- |
-| `group` | `string` <br> Group of the referent. Defaults to `inference.networking.k8s.io`. |
-| `kind` | `string` <br> Kind of the referent. Defaults to `InferencePool`. |
-| `name` | `string` <br> **Required** <br> Name of the referent. |
+| `group` | `string` <br/> Group of the referent. Defaults to `inference.networking.k8s.io`. |
+| `kind` | `string` <br/> Kind of the referent. Defaults to `InferencePool`. |
+| `name` | `string` <br/> **Required** <br/> Name of the referent. |
 
 ---
 
@@ -86,6 +86,7 @@
 ## Condition Types and Reasons
 
 ### Accepted
+
 Indicates if the rewrite is valid, non-conflicting, and applied to the pool.
 
 - **True Reasons:**

@@ -12,34 +12,10 @@ on:
     - cron: '30 7 * * *'  # 07:30 UTC daily (staggered from wide-ep-lws CKS at 07:00)
   workflow_dispatch:
     inputs:
-      model_id:
-        description: 'Model ID'
-        required: false
-        default: 'unsloth/Meta-Llama-3.1-8B'
-      accelerator_type:
-        description: 'Accelerator type (H100, H200, A100)'
-        required: false
-        default: 'H100'
       image_tag:
         description: 'WVA image tag (leave empty to build from main)'
         required: false
         default: ''
-      request_rate:
-        description: 'Request rate (req/s)'
-        required: false
-        default: '20'
-      num_prompts:
-        description: 'Number of prompts'
-        required: false
-        default: '3000'
-      max_num_seqs:
-        description: 'vLLM max batch size (lower = easier to saturate)'
-        required: false
-        default: '1'
-      hpa_stabilization_seconds:
-        description: 'HPA stabilization window in seconds'
-        required: false
-        default: '240'
       caller_ref:
         description: 'WVA repo ref to checkout for tests and image build (branch, tag, or SHA)'
         required: false
@@ -134,9 +110,17 @@ jobs:
         kubectl apply -k guides/optimized-baseline/modelserver/gpu/vllm/base -n ${NAMESPACE}
         helm install workload-variant-autoscaler-inferencepool-standalone \
           oci://registry.k8s.io/gateway-api-inference-extension/charts/standalone \
-          -f guides/recipes/scheduler/base.values.yaml \
-          -f guides/optimized-baseline/scheduler/optimized-baseline.values.yaml \
+          -f guides/recipes/router/base.values.yaml \
+          -f guides/optimized-baseline/router/optimized-baseline.values.yaml \
           -n ${NAMESPACE} --version v1.5.0
+
+        # Override WVA controller image to the nightly build from this run
+        WVA_TAG="${{ needs.build-wva-image.outputs.image_tag || github.event.inputs.image_tag }}"
+        if [ -n "$WVA_TAG" ]; then
+          export WVA_TAG
+          yq -i '.images = [{"name": "controller", "newName": "ghcr.io/llm-d/llm-d-workload-variant-autoscaler", "newTag": strenv(WVA_TAG)}]' \
+            guides/workload-autoscaling/wva-config/base/kustomization.yaml
+        fi
 
         # Kustomization validation dry run
         kubectl kustomize guides/workload-autoscaling/wva-config/platform/cks >/dev/null
@@ -149,7 +133,6 @@ jobs:
           -n "${WVA_DEPLOY_NS}" --for=condition=Available --timeout=300s
         kubectl apply -k guides/workload-autoscaling/optimized-baseline-autoscaling -n "${NAMESPACE}"
         kubectl get variantautoscaling,hpa -n "${NAMESPACE}"
-      accelerator_type: H100
       required_gpus: 2
       recommended_gpus: 4
       pod_wait_timeout: '30m'

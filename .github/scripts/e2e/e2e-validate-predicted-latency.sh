@@ -4,7 +4,7 @@ set -Eeuo pipefail
 # -----------------------------------------------------------------------------
 # e2e-validate-predicted-latency.sh
 # -----------------------------------------------------------------------------
-# Validates the predicted-latency-based-scheduling guide.
+# Validates the predicted-latency-routing guide.
 #
 # The default e2e-validate.sh proves the gateway returns 200s, but cannot tell
 # whether the predicted-latency scheduler actually used predictions or silently

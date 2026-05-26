@@ -50,6 +50,7 @@ This design allows you to define a plugin once and reuse it across multiple prof
 > **Auto-Wiring**: Some subsystems support automatic binding. If a plugin is declared in the top-level `plugins` list and implements a specific Go interface (like `Admitter`, `DataProducer`, or advanced hooks like `PreRequest`, `ResponseHeaderProcessor`, and `ResponseBodyProcessor`), the system will automatically discover and bind it to its role without requiring an explicit edge in the structural configuration.
 
 To ensure the integrity of this graph, the following **validation rules** apply across all layers:
+
 - **Valid References**: Any field that references a plugin (e.g., `pluginRef` in `schedulingProfiles` or `saturationDetector`) must reference a valid name defined in the top-level `plugins` section.
 - **Unique Names**: All instances within lists that require naming (like `schedulingProfiles`) must have unique, non-empty names.
 - **Data Dependencies**: The system validates that metrics extractors form a Directed Acyclic Graph (DAG) without circular dependencies, ensuring correct execution order.
@@ -161,8 +162,8 @@ featureGates:
 
 To ensure backward compatibility, a feature gate should usually be removed over two releases:
 
-1.  **First Release:** Mark the feature as stable and enable it by default, but keep the feature gate in the configuration as a deprecated, still-functional gate so existing configurations remain valid and operators retain a temporary rollback mechanism by disabling the feature if needed. During this phase, inform users (e.g., via release notes) that the feature gate is deprecated and will be removed in the next release.
-2.  **Second Release:** Completely remove the feature gate from the configuration and code.
+1. **First Release:** Mark the feature as stable and enable it by default, but keep the feature gate in the configuration as a deprecated, still-functional gate so existing configurations remain valid and operators retain a temporary rollback mechanism by disabling the feature if needed. During this phase, inform users (e.g., via release notes) that the feature gate is deprecated and will be removed in the next release.
+2. **Second Release:** Completely remove the feature gate from the configuration and code.
 
 ### Request Handling
 
@@ -188,15 +189,15 @@ If unspecified, `openai-parser` is used by default.
 #### Admitters & Data Producers
 
 Admitters and Data Producers are specialized plugins that execute during the initial request processing phase:
-*   **Admitters** perform early checks to accept or reject requests before they enter the queue.
-*   **Data Producers** gather per request contextual information (like predicted latency or prefix cache status) required by downstream components.
+- **Admitters** perform early checks to accept or reject requests before they enter the queue.
+- **Data Producers** gather per request contextual information (like predicted latency or prefix cache status) required by downstream components.
 
 As introduced in the [Mental Model](#configuration-mental-model-plugins-and-wiring), these plugins support automatic interface-based binding. This reduces boilerplate configuration that would otherwise be needed to wire them explicitly.
 
 If an admitter or data producer plugin is declared in the top-level `plugins` list, the system automatically recognizes it by its capabilities at startup and binds it to the appropriate lifecycle hook:
 
-*   **Admitters**: Automatically bound if they implement the Go interface for admitting or rejecting requests early.
-*   **Data Producers**: Automatically bound if they implement the Go interface for gathering per-request data (like latency predictions) needed by other components.
+- **Admitters**: Automatically bound if they implement the Go interface for admitting or rejecting requests early.
+- **Data Producers**: Automatically bound if they implement the Go interface for gathering per-request data (like latency predictions) needed by other components.
 
 To enable these plugins, simply list them in the `plugins` section:
 
@@ -212,8 +213,6 @@ plugins:
 ```
 
 They are automatically active and do not need to be referenced elsewhere in the configuration.
-
-
 
 ---
 
@@ -469,11 +468,9 @@ The EPP exposes a Prometheus-compatible metrics endpoint on **port 9090** at `/m
 
 Metrics are organized by the subsystem that owns the logic. For detailed tables of metrics available in each subsystem, see:
 
-*   **[Request Handling Metrics](request-handling.md#metrics--observability)**: Request volume, latency, token usage, and success rates.
-*   **[Flow Control Metrics](flow-control.md#metrics--observability)**: Queue sizes, dispatch cycles, and pool saturation.
-*   **[Routing Metrics](scheduling.md#metrics--observability)**: Router performance and pool health state.
-
-
+- **[Request Handling Metrics](request-handling.md#metrics--observability)**: Request volume, latency, token usage, and success rates.
+- **[Flow Control Metrics](flow-control.md#metrics--observability)**: Queue sizes, dispatch cycles, and pool saturation.
+- **[Routing Metrics](scheduling.md#metrics--observability)**: Router performance and pool health state.
 
 ### Monitoring Stack
 

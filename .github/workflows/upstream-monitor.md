@@ -56,6 +56,7 @@ If `docs/upstream-versions.md` does not exist or is empty, exit cleanly — ther
 #### Step 1: Load Current Pins
 
 Read `docs/upstream-versions.md` to understand:
+
 - Which version/SHA is currently pinned for each dependency
 - Which files contain those pins (Dockerfile, go.mod, helmfile, workflow YAML, etc.)
 - The upstream repository for each dependency
@@ -65,16 +66,19 @@ Read `docs/upstream-versions.md` to understand:
 For each tracked dependency:
 
 1. Use the GitHub API via bash to check for new releases:
+
    ```bash
    gh api repos/{owner}/{repo}/releases/latest --jq '.tag_name'
    ```
 
 2. For commit-SHA-pinned deps, check if the pinned commit is behind the latest tag:
+
    ```bash
    gh api repos/{owner}/{repo}/compare/{pinned_sha}...HEAD --jq '.ahead_by'
    ```
 
 3. For PyPI packages, check the latest version:
+
    ```bash
    curl -s https://pypi.org/pypi/{package}/json | jq -r '.info.version'
    ```
@@ -96,6 +100,7 @@ When a new release is detected, analyze it for breaking changes:
    - Minimum version requirement bumps (Go, Python, Node, etc.)
 
 3. **Cross-reference against this repository's usage** by grepping:
+
    ```bash
    grep -r "old_name_or_flag" . --include="*.go" --include="*.py" --include="*.yaml" --include="*.yml" --include="*.md" --include="Dockerfile*" --include="*.toml"
    ```
@@ -110,12 +115,14 @@ When a new release is detected, analyze it for breaking changes:
 
 **For breaking changes (CRITICAL/HIGH):**
 Create a GitHub issue with:
+
 - Title: `[Upstream Breaking Change] {project} {old_version} → {new_version}`
 - Body: what changed, which files are affected (with paths and line numbers), suggested fixes, links to upstream release notes
 - Labels: `upstream-breaking-change`, `critical` or `high`
 
 **For non-breaking new releases (MEDIUM/LOW):**
 Create a GitHub issue with:
+
 - Title: `[Upstream Update] {project} {old_version} → {new_version}`
 - Labels: `upstream-update`, `medium` or `low`
 
@@ -124,15 +131,18 @@ Create a GitHub issue with:
 ### Important Rules
 
 1. **Never create duplicate issues.** Search existing open issues first:
+
    ```bash
    gh issue list --label upstream-breaking-change --state open --search "{project}"
    gh issue list --label upstream-update --state open --search "{project}"
    ```
+
 2. **Be specific about what breaks.** Map changes to specific files in the repo.
 3. **Always include the upstream release URL** in the issue body.
 4. **Watch for transitive breaks** — e.g., a Go dependency bump that requires a newer Go version.
 
 ### Exit Conditions
+
 - Exit if `docs/upstream-versions.md` does not exist or is empty
 - Exit if no upstream projects have new releases since last check
 - Exit if GitHub API rate limits are exceeded (log a warning)

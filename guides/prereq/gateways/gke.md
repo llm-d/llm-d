@@ -12,14 +12,15 @@ This guide shows how to deploy llm-d with
 1. The environment variables `${GUIDE_NAME}`, `${MODEL_NAME}` and `${NAMESPACE}` should be set as part of deploying one of the well-lit path guides.
 
 2. The following steps from the [GKE Inference Gateway deployment documentation](https://cloud.google.com/kubernetes-engine/docs/how-to/deploy-gke-inference-gateway) should be run:
-  * [Verify your prerequisites](https://cloud.google.com/kubernetes-engine/docs/how-to/deploy-gke-inference-gateway#before-you-begin)
-  * [Configure a proxy-only subnet](https://cloud.google.com/kubernetes-engine/docs/how-to/deploying-gateways#configure_a_proxy-only_subnet)
-  * [Enable Gateway API in your cluster](https://cloud.google.com/kubernetes-engine/docs/how-to/deploying-gateways#enable-gateway)
-  * [Verify your cluster](https://cloud.google.com/kubernetes-engine/docs/how-to/deploying-gateways#verify-internal)
+
+* [Verify your prerequisites](https://cloud.google.com/kubernetes-engine/docs/how-to/deploy-gke-inference-gateway#before-you-begin)
+* [Configure a proxy-only subnet](https://cloud.google.com/kubernetes-engine/docs/how-to/deploying-gateways#configure_a_proxy-only_subnet)
+* [Enable Gateway API in your cluster](https://cloud.google.com/kubernetes-engine/docs/how-to/deploying-gateways#enable-gateway)
+* [Verify your cluster](https://cloud.google.com/kubernetes-engine/docs/how-to/deploying-gateways#verify-internal)
 
 ## Step 1: Install Gateway Inference CRDs
 
-For GKE versions `1.34.0-gke.1626000` or later, the InferencePool CRD is automatically installed. For GKE versions earlier than `1.34.0-gke.1626000` install it as follows: 
+For GKE versions `1.34.0-gke.1626000` or later, the InferencePool CRD is automatically installed. For GKE versions earlier than `1.34.0-gke.1626000` install it as follows:
 
 ```bash
 GAIE_VERSION=v1.5.0
@@ -70,7 +71,6 @@ llm-d-inference-gateway   gke-l7-regional-external-managed   xx.xx.xx.xx     Tru
 ```
 
 Wait until `PROGRAMMED` shows `True` before proceeding.
-
 
 ## Step 4: Send a Request
 

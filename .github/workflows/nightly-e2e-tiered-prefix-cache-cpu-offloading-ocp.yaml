@@ -40,7 +40,7 @@ concurrency:
 jobs:
   nightly:
     if: github.repository == 'llm-d/llm-d'
-    uses: llm-d/llm-d-infra/.github/workflows/reusable-nightly-e2e-openshift.yaml@main  
+    uses: llm-d/llm-d-infra/.github/workflows/reusable-nightly-e2e-openshift.yaml@main
     with:
       guide_name: tiered-prefix-cache
       namespace: llm-d-nightly-pfc-cpu
@@ -63,8 +63,8 @@ jobs:
 
         helm install tiered-prefix-cache \
         oci://registry.k8s.io/gateway-api-inference-extension/charts/standalone \
-        -f guides/recipes/scheduler/base.values.yaml \
-        -f guides/tiered-prefix-cache/cpu/scheduler/tiered-prefix-cache-cpu.values.yaml \
+        -f guides/recipes/router/base.values.yaml \
+        -f guides/tiered-prefix-cache/cpu/router/tiered-prefix-cache-cpu.values.yaml \
         -n ${NAMESPACE} --version v1.5.0
 
         echo "Deployment complete"

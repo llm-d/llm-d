@@ -1,9 +1,10 @@
 # Disaggregated Serving: Operations (vLLM)
 
 While disaggregated serving can offer superior performance, it introduces additional operational complexity, including:
+
 - [Dynamic Connections](#dynamic-connections) - how to add or remove P and D instances on the fly when instances require point-to-point RDMA connections
 - [Request Cancellation](#request-cancellation) - how to free KV caches from the instances when requests stop in a distributed setting
-- [Fault Tolerance](#fault-tolerance) - how to ensure crashes do not create cascading failures and that resources are cleaned up 
+- [Fault Tolerance](#fault-tolerance) - how to ensure crashes do not create cascading failures and that resources are cleaned up
 - [Rollouts](#rollouts) - how to roll out changes to the service, such as the version of the vLLM image
 
 This page documents architectural considerations that impact these common operations flows.
@@ -54,17 +55,17 @@ As a result, new replicas can be added to a running disaggregated deployment wit
 ### Scale-Down
 
 In Kubernetes, there is a well-defined [pod termination process](https://kubernetes.io/docs/concepts/workloads/pods/pod-lifecycle/#pod-termination):
-* **Termination Triggered**: The pod's state is changed to **Terminating**.
-* **`InferencePool` Update**: The pod is removed from the list of endpoints for associated the `InferencePool`, preventing new traffic from being routed to it. (note: for standard Kubernetes objects, this is equivalent to removal from a Service)
-* **PreStop Hook**: If defined, the preStop hook executes.
-* **SIGTERM Signal**: Kubernetes sends a SIGTERM signal to the main process in each container.
-* **Termination Grace Period**: The pod is given a set amount of time (default is 30 seconds) to shut down gracefully. If it does not terminate by the end of this period, a SIGKILL is sent to force termination.
+- **Termination Triggered**: The pod's state is changed to **Terminating**.
+- **`InferencePool` Update**: The pod is removed from the list of endpoints for associated the `InferencePool`, preventing new traffic from being routed to it. (note: for standard Kubernetes objects, this is equivalent to removal from a Service)
+- **PreStop Hook**: If defined, the preStop hook executes.
+- **SIGTERM Signal**: Kubernetes sends a SIGTERM signal to the main process in each container.
+- **Termination Grace Period**: The pod is given a set amount of time (default is 30 seconds) to shut down gracefully. If it does not terminate by the end of this period, a SIGKILL is sent to force termination.
 
 For **new requests**, instances are automatically removed from the `InferencePool` so no new traffic is routed to terminating pods.
 
 For **running requests**, we can configure how vLLM handles the `SIGTERM`:
-* By default, vLLM immediately `aborts` existing requests and terminates. This fails the running requests with an error status code.
-* vLLM can be configured with a `--shutdown-timeout N`. When this is set, vLLM catches the `SIGTERM` and drains the currently running requests for `N` seconds. After this timeout, it `aborts` any running requests still in flight, returning an error code.
+- By default, vLLM immediately `aborts` existing requests and terminates. This fails the running requests with an error status code.
+- vLLM can be configured with a `--shutdown-timeout N`. When this is set, vLLM catches the `SIGTERM` and drains the currently running requests for `N` seconds. After this timeout, it `aborts` any running requests still in flight, returning an error code.
 
 #### Scaling Down Decode Replicas
 
@@ -117,6 +118,7 @@ In llm-d's disaggregated serving design, all D instances are connected to all P 
 Prefill instance crashes are a critical failure mode, since D instances will attempt to pull KVs from no longer running P instances without performing any liveness checks. Since every D worker is connected to every P worker, it is critical to handle such an error on the D worker.
 
 vLLM handles Prefill instance failure by building on top of NIXL's error handling functionality. When a READ is attempted and fails, NIXL returns an error code such as `NIXL_ERR_BACKEND`. vLLM catches this error and handles it according to the [`kv_load_failure_policy`](https://docs.vllm.ai/en/stable/features/nixl_connector_usage/?h=nixl#kv-load-failure-policy):
+
 - **fail (default, recommended)**: Immediately fail the request with an error when KV load fails. This prevents performance degradation by avoiding recomputation of prefill work on the decode instance.
 - **recompute**: Recompute failed blocks locally on the decode instance. This may cause performance jitter on decode instances as the scheduled prefill will delay and interfere with other decodes. Furthermore, decode instances configured with low-latency optimizations (such as DeepEP LL for Wide EP deployments) may suffer significant slowdowns.
 
@@ -170,7 +172,6 @@ sequenceDiagram
     P->>P: Wait `VLLM_NIXL_ABORT_REQUEST_TIMEOUT`
     P->>P: Free KV Blocks
 ```
-
 
 > [!WARNING]
 > Robustness against Decode instance failure is currently a weakness of the design, since the `VLLM_NIXL_ABORT_REQUEST_TIMEOUT` defaults to a long timeout (`480s` to avoid early-free when D instances are backed up). We recommend that production users consider reducing this timeout, especially if they can ensure Decode instances do not have significant request queuing. We are currently implementing a "lease-extension" system, which will dramatically reduce the timeout with no tradeoff.

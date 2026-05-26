@@ -25,6 +25,7 @@ include request and response guardrails based on Nemo Guardrails, already
 implemented and expected to be contributed upstream.
 
 Hosting this in its own repository:
+
 - Accurately reflects the scope and purpose of the project under a clear,
   descriptive name
 - Allows the component to evolve independently with its own release cycle,

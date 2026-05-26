@@ -33,4 +33,3 @@ jobs:
         uses: j178/prek-action@v2
         with:
           extra-args: ''
-

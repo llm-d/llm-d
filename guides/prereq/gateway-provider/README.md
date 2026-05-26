@@ -1,8 +1,7 @@
 # Gateway Provider Prerequisite
 
 > [!WARNING]
-> OBSOLETE, WILL BE REMOVED ONCE ALL GUIDES MIGRATE TO KUSTOMIZE 
-
+> OBSOLETE, WILL BE REMOVED ONCE ALL GUIDES MIGRATE TO KUSTOMIZE
 
 This document will guide you through configuring a [Kubernetes Gateway](https://gateway-api.sigs.k8s.io/) provider that can support the **llm-d Router** component.
 

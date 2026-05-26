@@ -92,11 +92,11 @@ def calculate_lookahead_buffer(active_batch: int, max_num_batched_tokens: int, i
     """Sizes the engine's local queue to ensure continuous batching doesn't starve,
     capped at 15% of the active batch."""
     max_allowed_buffer = math.ceil(active_batch * 0.15)
-    
+
     if isl_mean is None:
         # If running in Compute-Only mode, fallback to the 15% safety cap
         return max(1, max_allowed_buffer)
-        
+
     effective_isl = max(1.0, isl_mean)
     buffer_size = math.ceil(max_num_batched_tokens / effective_isl)
     return max(1, min(buffer_size, max_allowed_buffer))

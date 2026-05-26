@@ -45,8 +45,8 @@ jobs:
         kubectl apply -n ${NAMESPACE} -k guides/tiered-prefix-cache/cpu/modelserver/${ACCELERATOR}/vllm/${CONNECTOR}/${INFRA_PROVIDER}
         helm install ${GUIDE_NAME} \
           oci://registry.k8s.io/gateway-api-inference-extension/charts/standalone \
-          -f guides/recipes/scheduler/base.values.yaml \
-          -f guides/tiered-prefix-cache/cpu/scheduler/${GUIDE_NAME}.values.yaml \
+          -f guides/recipes/router/base.values.yaml \
+          -f guides/tiered-prefix-cache/cpu/router/${GUIDE_NAME}.values.yaml \
           -n ${NAMESPACE} --version ${GAIE_VERSION}
       gke_cluster_name: llm-d-e2e-us-east5
       gke_cluster_zone: us-east5

@@ -125,8 +125,8 @@ jobs:
               - .github/scripts/e2e/**
               - docker/common-versions
               - guides/**/values_xpu.yaml
-              - guides/precise-prefix-cache-aware/**/values_xpu.yaml
-              - guides/precise-prefix-cache-aware/helmfile.yaml.gotmpl
+              - guides/precise-prefix-cache-routing/**/values_xpu.yaml
+              - guides/precise-prefix-cache-routing/helmfile.yaml.gotmpl
             hpu-optimized-baseline:
               - .github/workflows/ci-pr-test.yaml
               - .github/workflows/e2e-optimized-baseline-hpu.yaml

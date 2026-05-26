@@ -21,6 +21,7 @@ request processing. An incubation repository provides the right space to
 iterate on this architecture without blocking core llm-d development.
 
 Background and design discussion:
+
 - [Evolution of Disaggregated Serving](https://docs.google.com/document/d/1J7i_J1PwgqstIrMudnZMQf10zgP7ql8k9vgpHEJs9is/edit?tab=t.0#heading=h.o1lcfhplntik)
 - [Coordinator Design](https://docs.google.com/document/d/1Bdwdyh5ULnV_0bYMXlW2Em4BJISqqAJ9kjb9F3dv3vQ/edit?tab=t.0#heading=h.tmmlv95uti06)
 

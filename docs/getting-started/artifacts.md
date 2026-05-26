@@ -9,8 +9,8 @@ This page lists the llm-d release artifacts and dependencies:
 5. [**Gateway Recipes**](#5-gateway-recipes) — optional recipes for installing Gateways and integrating them with llm-d
 
 > [!IMPORTANT]
-> llm-d follows a modular deployment pattern, enabling gradual feature 
-> adoption. Users seeking a single CRD-driven deployment pattern should 
+> llm-d follows a modular deployment pattern, enabling gradual feature
+> adoption. Users seeking a single CRD-driven deployment pattern should
 > consider KServe's [LLMInferenceService](https://kserve.github.io/website/docs/model-serving/generative-inference/llmisvc/llmisvc-overview).
 
 ## 1. GAIE CRDs
@@ -84,6 +84,7 @@ We recommend using the upstream images for most guides:
 ### Custom Images
 
 In addition to the upstream images, llm-d also builds and releases vLLM images with features not yet merged into vLLM upstream such as:
+
 * EFA support for AWS HPC networking
 * GKE IB networking patches
 * DeepEP patches for GB200 support
@@ -101,14 +102,14 @@ In addition to the upstream images, llm-d also builds and releases vLLM images w
 
 ### FS Offloading Extension
 
-`llmd-fs-connector` adds filesystem offloading to vLLM's `OffloadingConnector`. It is released from [llm-d-kv-cache](https://github.com/llm-d/llm-d-kv-cache/releases/tag/v0.8.0) as a python wheel and hosted on the following pypi registry https://llm-d.github.io/llm-d-kv-cache/simple/builds.
+`llmd-fs-connector` adds filesystem offloading to vLLM's `OffloadingConnector`. It is released from [llm-d-kv-cache](https://github.com/llm-d/llm-d-kv-cache/releases/tag/v0.8.0) as a python wheel and hosted on the following pypi registry <https://llm-d.github.io/llm-d-kv-cache/simple/builds>.
 
 ## 4. Well-Lit Path Guides
 
 Well-Lit Paths are tested, benchmarked deployment recipes that show off llm-d's key user stories. Each guide lives under `guides/<path>/` and contains:
 
-- **EPP Configurations** - Helm values files with EPP configurations for usage with the charts for llm-d Router.
-- **Model Server Manifests** - Kustomize manifests for model server with labels and flags needed for usage with llm-d Router. 
+* **EPP Configurations** - Helm values files with EPP configurations for usage with the charts for llm-d Router.
+* **Model Server Manifests** - Kustomize manifests for model server with labels and flags needed for usage with llm-d Router.
 
 > [!IMPORTANT]
 > For some guides, we provide cloud provider specific
@@ -117,7 +118,6 @@ Well-Lit Paths are tested, benchmarked deployment recipes that show off llm-d's 
 > Users can adapt the examples to other platforms as needed.
 
 See the [full list of guides](../well-lit-paths/README.md) for more details.
-
 
 ## 5. Gateways
 
@@ -152,4 +152,3 @@ Install instructions live under [`guides/recipes/gateway/`](https://github.com/l
 |------------|----------|-------------|
 | [llm-d/llm-d-benchmark](https://github.com/llm-d/llm-d-benchmark) | Python | Benchmarking framework |
 | [llm-d/llm-d-inference-sim](https://github.com/llm-d/llm-d-inference-sim) | Go | GPU-free vLLM simulator |
-

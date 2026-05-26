@@ -4,13 +4,13 @@
 
 ## Overview
 
-This guide deploys the recommended out of the box [configuration](https://github.com/llm-d/llm-d-inference-scheduler/blob/main/docs/architecture.md) for most vLLM and SGLang deployments, reducing tail latency and increasing throughput through load-aware and prefix-cache aware balancing.
+This guide deploys the recommended out of the box [configuration](https://github.com/llm-d/llm-d-router/blob/main/docs/architecture.md) for most vLLM and SGLang deployments, reducing tail latency and increasing throughput through load-aware and prefix-cache aware balancing.
 
 The optimized-baseline defaults to two main routing criteria:
 
-- **Prefix-cache aware** using the [prefix cache scorer](https://github.com/llm-d/llm-d-inference-scheduler/tree/main/pkg/epp/framework/plugins/scheduling/scorer/prefix), which scores candidate endpoints by estimating prompt prefix cache reuse on each model server.
+- **Prefix-cache aware** using the [prefix cache scorer](https://github.com/llm-d/llm-d-router/tree/main/pkg/epp/framework/plugins/scheduling/scorer/prefix), which scores candidate endpoints by estimating prompt prefix cache reuse on each model server.
 
-- **Load-aware** using both the [kv-cache utilization](https://github.com/llm-d/llm-d-inference-scheduler/tree/main/pkg/epp/framework/plugins/scheduling/scorer/kvcacheutilization) and the [queue size](https://github.com/llm-d/llm-d-inference-scheduler/tree/main/pkg/epp/framework/plugins/scheduling/scorer/queuedepth) scorers.
+- **Load-aware** using both the [kv-cache utilization](https://github.com/llm-d/llm-d-router/tree/main/pkg/epp/framework/plugins/scheduling/scorer/kvcacheutilization) and the [queue size](https://github.com/llm-d/llm-d-router/tree/main/pkg/epp/framework/plugins/scheduling/scorer/queuedepth) scorers.
 
 ## Default Configuration
 
@@ -52,11 +52,13 @@ This guide includes configurations for the following accelerators:
   ```
 
 - Set the following environment variables:
+
   ```bash
     export GAIE_VERSION=v1.5.0
     export GUIDE_NAME="optimized-baseline"
     export NAMESPACE=llm-d-optimized-baseline
   ```
+
 - Install the Gateway API Inference Extension CRDs:
 
   ```bash
@@ -64,6 +66,7 @@ This guide includes configurations for the following accelerators:
   ```
 
 - Create a target namespace for the installation
+
   ```bash
       kubectl create namespace ${NAMESPACE}
   ```
@@ -80,8 +83,8 @@ This deploys the llm-d Router in [Standalone Mode](placeholder-link):
 # Assuming base-directory is the root of the llm-d repo
 helm install ${GUIDE_NAME} \
     oci://registry.k8s.io/gateway-api-inference-extension/charts/standalone \
-    -f guides/recipes/scheduler/base.values.yaml \
-    -f guides/${GUIDE_NAME}/scheduler/${GUIDE_NAME}.values.yaml \
+    -f guides/recipes/router/base.values.yaml \
+    -f guides/${GUIDE_NAME}/router/${GUIDE_NAME}.values.yaml \
     -n ${NAMESPACE} --version ${GAIE_VERSION}
 ```
 
@@ -97,8 +100,8 @@ To use a Kubernetes Gateway managed proxy rather than the standalone version, fo
 export PROVIDER_NAME=gke # options: none, gke, agentgateway, istio
 helm install ${GUIDE_NAME} \
     oci://registry.k8s.io/gateway-api-inference-extension/charts/inferencepool  \
-    -f guides/recipes/scheduler/base.values.yaml \
-    -f guides/${GUIDE_NAME}/scheduler/${GUIDE_NAME}.values.yaml \
+    -f guides/recipes/router/base.values.yaml \
+    -f guides/${GUIDE_NAME}/router/${GUIDE_NAME}.values.yaml \
     --set provider.name=${PROVIDER_NAME} \
     --set experimentalHttpRoute.enabled=true \
     --set experimentalHttpRoute.inferenceGatewayName=llm-d-inference-gateway \

@@ -96,18 +96,18 @@ Flow Control is a software-level scheduling feature at the EPP layer and is enti
 
 ## Installation Instructions
 
-### 1. Deploy the Inference Scheduler
+### 1. Deploy the Router
 
 #### Standalone Mode
 
-This deploys the inference scheduler with an Envoy sidecar, it doesn't set up a Kubernetes Gateway.
+This deploys the router with an Envoy sidecar, it doesn't set up a Kubernetes Gateway.
 
 ```bash
 REPO_ROOT=$(realpath $(git rev-parse --show-toplevel))
 helm install ${GUIDE_NAME} \
     oci://registry.k8s.io/gateway-api-inference-extension/charts/standalone \
-    -f ${REPO_ROOT}/guides/recipes/scheduler/base.values.yaml \
-    -f ${REPO_ROOT}/guides/${GUIDE_NAME}/scheduler/${GUIDE_NAME}.values.yaml \
+    -f ${REPO_ROOT}/guides/recipes/router/base.values.yaml \
+    -f ${REPO_ROOT}/guides/${GUIDE_NAME}/router/${GUIDE_NAME}.values.yaml \
     -n ${NAMESPACE} --version ${GAIE_VERSION}
 ```
 
@@ -117,16 +117,16 @@ helm install ${GUIDE_NAME} \
 To use a Kubernetes Gateway managed proxy rather than the standalone version, follow these steps instead of applying the previous Helm chart:
 
 1. *Deploy a Kubernetes Gateway* named by following one of [the gateway guides](../prereq/gateways).
-2. *Deploy the inference scheduler and an HTTPRoute* that connects it to the Gateway as follows:
+2. *Deploy the router and an HTTPRoute* that connects it to the Gateway as follows:
 
 ```bash
 export PROVIDER_NAME=gke # options: none, gke, agentgateway, istio
 REPO_ROOT=$(realpath $(git rev-parse --show-toplevel))
 helm install ${GUIDE_NAME} \
     oci://registry.k8s.io/gateway-api-inference-extension/charts/inferencepool  \
-    -f ${REPO_ROOT}/guides/recipes/scheduler/base.values.yaml \
-    -f ${REPO_ROOT}/guides/recipes/scheduler/features/httproute-flags.yaml \
-    -f ${REPO_ROOT}/guides/${GUIDE_NAME}/scheduler/${GUIDE_NAME}.values.yaml \
+    -f ${REPO_ROOT}/guides/recipes/router/base.values.yaml \
+    -f ${REPO_ROOT}/guides/recipes/router/features/httproute-flags.yaml \
+    -f ${REPO_ROOT}/guides/${GUIDE_NAME}/router/${GUIDE_NAME}.values.yaml \
     --set provider.name=${PROVIDER_NAME} \
     -n ${NAMESPACE} --version ${GAIE_VERSION}
 ```

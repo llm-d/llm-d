@@ -8,7 +8,7 @@ This guide shows how to enable [OpenTelemetry](https://opentelemetry.io/) distri
 |---|---|---|
 | **vLLM** (prefill + decode) | ModelService `tracing:` | Inference engine spans |
 | **Routing proxy** (P/D sidecar) | ModelService `tracing:` | KV transfer coordination |
-| **EPP / Inference Scheduler** | GAIE `inferenceExtension.tracing:` | Request routing, endpoint scoring, KV-cache indexing |
+| **EPP / Router** | GAIE `inferenceExtension.tracing:` | Request routing, endpoint scoring, KV-cache indexing |
 
 All components export traces via OTLP gRPC to an **OpenTelemetry Collector**, which filters out noise (e.g., `/metrics` scraping spans), batches traces, and forwards them to a backend (Jaeger, Tempo, etc.).
 
@@ -64,7 +64,7 @@ tracing:
 
 This injects `--otlp-traces-endpoint` and `--collect-detailed-traces` args into vLLM, and `OTEL_*` environment variables into both vLLM and routing-proxy containers.
 
-### GAIE / EPP (Inference Scheduler)
+### GAIE / EPP (Router)
 
 Add or uncomment the `tracing:` section under `inferenceExtension:` in your `gaie-*/values.yaml`:
 
@@ -113,12 +113,13 @@ The collector is deployed by `install-otel-collector-jaeger.sh` and all chart de
 
 1. Send an inference request through llm-d
 2. Open the Jaeger UI (`http://localhost:16686`)
-3. Select a service (e.g., `vllm-decode`, `llm-d-inference-scheduler`) and click **Find Traces**
+3. Select a service (e.g., `vllm-decode`, `llm-d-router`) and click **Find Traces**
 4. You should see spans for inference requests, routing decisions, and KV cache operations
 
 If you only see generic `GET` spans, check that:
+
 - `collectDetailedTraces` is set to `"all"` for vLLM
-- The EPP/inference-scheduler image includes tracing instrumentation (`llm-d-inference-scheduler`, not upstream `epp`)
+- The llm-d Router EPP image includes tracing instrumentation
 
 ## Production Recommendations
 

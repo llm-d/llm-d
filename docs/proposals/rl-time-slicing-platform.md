@@ -22,8 +22,8 @@ You instrument the RL flow using simple decorators (e.g., `@slicer.run_on_gpu`) 
 
 Because the system works collaboratively with the application, we use distinct, highly-optimized swapping mechanisms for Trainers and Samplers:
 
-*   **The Sampler Pool:** When a sampler finishes its rollout phase, the orchestrator triggers a native inference API. Rather than moving the state back and forth, the active context is discarded entirely which is safe, since the trainer re-pushes fresh weights at the start of the next step regardless. This allows an idle sampler to yield a massive GPU footprint in under 250 milliseconds.
-*   **The Trainer Pool:** When the job yields, the platform rapidly moves this critical state into host memory. This cooperative approach enables a ~50GB training state to swap out and in reliably in less than a second.
+* **The Sampler Pool:** When a sampler finishes its rollout phase, the orchestrator triggers a native inference API. Rather than moving the state back and forth, the active context is discarded entirely which is safe, since the trainer re-pushes fresh weights at the start of the next step regardless. This allows an idle sampler to yield a massive GPU footprint in under 250 milliseconds.
+* **The Trainer Pool:** When the job yields, the platform rapidly moves this critical state into host memory. This cooperative approach enables a ~50GB training state to swap out and in reliably in less than a second.
 
 ## Structural Efficiency at Scale
 
@@ -39,9 +39,9 @@ In benchmark testing, interleaving two independent sampler workloads on a single
 
 **Value Delivered**
 
-*   **Preserve Developer Velocity:** Researchers retain their predictable, on-policy pipelines, ensuring high experiment success rates and straightforward debugging.
-*   **Reclaim Quota and Capital:** Reclaim the stranded capacity of traditional RL loops. A static cluster footprint can support drastically more concurrent jobs.
-*   **Frictionless Adoption:** By providing simple integration hooks and leveraging standard open-source tools, bespoke framework integration drops from weeks to hours.
+* **Preserve Developer Velocity:** Researchers retain their predictable, on-policy pipelines, ensuring high experiment success rates and straightforward debugging.
+* **Reclaim Quota and Capital:** Reclaim the stranded capacity of traditional RL loops. A static cluster footprint can support drastically more concurrent jobs.
+* **Frictionless Adoption:** By providing simple integration hooks and leveraging standard open-source tools, bespoke framework integration drops from weeks to hours.
 
 ## Proof of Concept
 
@@ -57,9 +57,9 @@ Setup:
 
 Results summary:
 
-*   43% (~49% to ~92%) increase in peak duty cycles
-*   33% decrease in total execution time for 2 independent RL jobs
-*   3-6% increase in phase duration (inline with noise observed in phase duration within the baseline runs)
+* 43% (~49% to ~92%) increase in peak duty cycles
+* 33% decrease in total execution time for 2 independent RL jobs
+* 3-6% increase in phase duration (inline with noise observed in phase duration within the baseline runs)
 
 |     Baseline          |  Timeslice   |
 :-------------------------:|:-------------------------:

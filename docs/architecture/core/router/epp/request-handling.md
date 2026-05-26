@@ -47,21 +47,20 @@ flowchart TD
 
 #### Core Components
 
-*   **Parser**: Responsible for parsing the incoming request to a structured internal representation consumable by the request scheduler, and parsing the response to extract usage data if reported by the model server.
-*   **DataProducer**: A pluggable extension that allows customizing request pre-processing and producing per-request state needed for scheduling, such as tokenization, prefix-cache matches, predicted processing latency etc.
-*   **Admitter**: Decides whether to admit a request based on criteria like latency SLOs. Runs after dataProducer but before request scheduling. Requests failing admission are rejected, while admitted requests proceed to the request scheduling phase.
+* **Parser**: Responsible for parsing the incoming request to a structured internal representation consumable by the request scheduler, and parsing the response to extract usage data if reported by the model server.
+* **DataProducer**: A pluggable extension that allows customizing request pre-processing and producing per-request state needed for scheduling, such as tokenization, prefix-cache matches, predicted processing latency etc.
+* **Admitter**: Decides whether to admit a request based on criteria like latency SLOs. Runs after dataProducer but before request scheduling. Requests failing admission are rejected, while admitted requests proceed to the request scheduling phase.
 
 #### Advanced Hooks
 
 The framework also supports advanced, auto-resolved hooks in the request control layer. If a plugin implements these interfaces, it is automatically wired into the execution flow:
 
-*   **`PreRequest`**: Executes before the request is processed (e.g., for incrementing in-flight counts).
-*   **`ResponseHeaderProcessor`**: Executes when response headers are received from the backend.
-*   **`ResponseBodyProcessor`**: Executes during response streaming (e.g., for usage tracking on completion).
- 
+* **`PreRequest`**: Executes before the request is processed (e.g., for incrementing in-flight counts).
+* **`ResponseHeaderProcessor`**: Executes when response headers are received from the backend.
+* **`ResponseBodyProcessor`**: Executes during response streaming (e.g., for usage tracking on completion).
+
  > [!NOTE]
  > In practice, these interfaces are often implemented by Data Producers to maintain state or track metrics across the request lifecycle. For example, the `predicted-latency-producer` implements these hooks to track request latency.
-
 
 ---
 
@@ -71,17 +70,19 @@ The framework also supports advanced, auto-resolved hooks in the request control
 
 Parser plugins understand the payloads of requests and responses. This is key for features like prefix-cache aware scheduling and response usage tracking.
 
-*   **[`openai-parser`](https://github.com/llm-d/llm-d-inference-scheduler/tree/main/pkg/epp/framework/plugins/requesthandling/parsers/openai)**: The default parser supporting the OpenAI API. Supported endpoints: `/conversations`, `/responses`, `/chat/completions`, `/completions`, `/embeddings`.
-*   **[`vllmgrpc-parser`](https://github.com/llm-d/llm-d-inference-scheduler/tree/main/pkg/epp/framework/plugins/requesthandling/parsers/vllmgrpc)**: Handles requests for the vLLM gRPC API. Supported methods: `Generate`, `Embed`.
-*   **[`passthrough-parser`](https://github.com/llm-d/llm-d-inference-scheduler/tree/main/pkg/epp/framework/plugins/requesthandling/parsers/passthrough)**: Model-agnostic parser that passes content through without interpretation. Note that payload-related scheduling (e.g., `prefix-cache-scorer`) is not supported with this parser.
+* **[`openai-parser`](https://github.com/llm-d/llm-d-router/tree/main/pkg/epp/framework/plugins/requesthandling/parsers/openai)**: The default parser supporting the OpenAI API. Supported endpoints: `/conversations`, `/responses`, `/chat/completions`, `/completions`, `/embeddings`.
+* **[`vllmgrpc-parser`](https://github.com/llm-d/llm-d-router/tree/main/pkg/epp/framework/plugins/requesthandling/parsers/vllmgrpc)**: Handles requests for the vLLM gRPC API. Supported methods: `Generate`, `Embed`.
+* **[`passthrough-parser`](https://github.com/llm-d/llm-d-router/tree/main/pkg/epp/framework/plugins/requesthandling/parsers/passthrough)**: Model-agnostic parser that passes content through without interpretation. Note that payload-related scheduling (e.g., `prefix-cache-scorer`) is not supported with this parser.
 
 #### Admitter Plugins
-*   **[`latency-slo-admitter`](https://github.com/llm-d/llm-d-inference-scheduler/tree/main/pkg/epp/framework/plugins/requestcontrol/admitter/latencyslo/README.md)**: Rejects sheddable requests (priority < 0) when no endpoint can meet latency SLO constraints.
+
+* **[`latency-slo-admitter`](https://github.com/llm-d/llm-d-router/tree/main/pkg/epp/framework/plugins/requestcontrol/admitter/latencyslo/README.md)**: Rejects sheddable requests (priority < 0) when no endpoint can meet latency SLO constraints.
 
 #### Data Producers
-*   **[`predicted-latency-producer`](https://github.com/llm-d/llm-d-inference-scheduler/tree/main/pkg/epp/framework/plugins/requestcontrol/dataproducer/predictedlatency/README.md)**: Trains XGBoost models via a sidecar and generates per-endpoint TTFT/TPOT predictions. It calculates SLO headroom, collects training data, and tracks per-endpoint running request queues.
-*   **[`inflight-load-producer`](https://github.com/llm-d/llm-d-inference-scheduler/tree/main/pkg/epp/framework/plugins/requestcontrol/dataproducer/inflightload)**: Tracks the number of in-flight requests and estimated tokens for each endpoint. It increments counts in `PreRequest` and decrements them in `ResponseBodyProcessor` on end-of-stream.
-*   **[`approx-prefix-cache-producer`](https://github.com/llm-d/llm-d-inference-scheduler/tree/main/pkg/epp/framework/plugins/requestcontrol/dataproducer/approximateprefix)**: Prepares data for approximate prefix cache aware scheduling by hashing prompts in blocks and matching them against an indexer of cached prefixes on servers.
+
+* **[`predicted-latency-producer`](https://github.com/llm-d/llm-d-router/tree/main/pkg/epp/framework/plugins/requestcontrol/dataproducer/predictedlatency/README.md)**: Trains XGBoost models via a sidecar and generates per-endpoint TTFT/TPOT predictions. It calculates SLO headroom, collects training data, and tracks per-endpoint running request queues.
+* **[`inflight-load-producer`](https://github.com/llm-d/llm-d-router/tree/main/pkg/epp/framework/plugins/requestcontrol/dataproducer/inflightload)**: Tracks the number of in-flight requests and estimated tokens for each endpoint. It increments counts in `PreRequest` and decrements them in `ResponseBodyProcessor` on end-of-stream.
+* **[`approx-prefix-cache-producer`](https://github.com/llm-d/llm-d-router/tree/main/pkg/epp/framework/plugins/requestcontrol/dataproducer/approximateprefix)**: Prepares data for approximate prefix cache aware scheduling by hashing prompts in blocks and matching them against an indexer of cached prefixes on servers.
 
 ---
 

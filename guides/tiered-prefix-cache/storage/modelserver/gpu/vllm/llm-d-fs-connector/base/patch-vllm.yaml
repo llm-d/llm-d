@@ -38,7 +38,7 @@ spec:
                       {
                         "kv_connector": "OffloadingConnector",
                         "kv_role": "kv_both",
-                        "kv_connector_extra_config": 
+                        "kv_connector_extra_config":
                         {
                           "spec_name": "SharedStorageOffloadingSpec",
                           "shared_storage_path": "/mnt/files-storage/",

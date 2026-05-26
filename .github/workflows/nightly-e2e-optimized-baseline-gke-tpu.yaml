@@ -46,8 +46,8 @@ jobs:
         kubectl apply -n ${NAMESPACE} -k guides/${GUIDE_NAME}/modelserver/tpu-v6/vllm
         helm install ${GUIDE_NAME} \
           oci://registry.k8s.io/gateway-api-inference-extension/charts/standalone \
-          -f guides/recipes/scheduler/base.values.yaml \
-          -f guides/${GUIDE_NAME}/scheduler/${GUIDE_NAME}.values.yaml \
+          -f guides/recipes/router/base.values.yaml \
+          -f guides/${GUIDE_NAME}/router/${GUIDE_NAME}.values.yaml \
           -n ${NAMESPACE} --version ${GAIE_VERSION}
       gke_cluster_name: llm-d-e2e-us-east5
       gke_cluster_zone: us-east5

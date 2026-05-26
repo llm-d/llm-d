@@ -20,8 +20,8 @@ These schemas define the internal configuration for project components and are t
 
 ## Recognized HTTP Headers
 
-*   [EPP HTTP Headers Reference](epp-http-headers.md): The EPP inspects specific HTTP headers to manage flow control and observability for inference requests.
+* [EPP HTTP Headers Reference](epp-http-headers.md): The EPP inspects specific HTTP headers to manage flow control and observability for inference requests.
 
 ## See Also
 
-*   [Glossary](glossary.md): Definitions of key terms and concepts used across this project.
+* [Glossary](glossary.md): Definitions of key terms and concepts used across this project.
