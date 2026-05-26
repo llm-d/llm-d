@@ -104,18 +104,18 @@ jobs:
       - name: Install GKE CRDs
         run: .github/scripts/install-gke-crds.sh
 
-      - name: Dry-run scheduler charts
+      - name: Dry-run router charts
         run: |
-          CHART_VERSION=v1.5.0
+          CHART_VERSION=v0
           failed=0
-          for chart in standalone inferencepool; do
+          for chart in llm-d-router-standalone-dev llm-d-router-gateway-dev; do
             echo ""
             echo "========================================"
-            echo "optimized-baseline: scheduler (${chart})"
+            echo "optimized-baseline: router (${chart})"
             echo "========================================"
             echo "--- helm template ---"
-            if ! helm template optimized-baseline-scheduler \
-              "oci://registry.k8s.io/gateway-api-inference-extension/charts/${chart}" \
+            if ! helm template optimized-baseline-router \
+              "oci://ghcr.io/llm-d/charts/${chart}" \
               -f guides/recipes/router/base.values.yaml \
               -f guides/recipes/router/features/monitoring.values.yaml \
               -f guides/optimized-baseline/router/optimized-baseline.values.yaml \
@@ -126,9 +126,9 @@ jobs:
             fi
             echo "--- kubectl apply --dry-run=server ---"
             if kubectl apply --dry-run=server -f /tmp/rendered.yaml; then
-              echo "PASS: optimized-baseline / scheduler (${chart})"
+              echo "PASS: optimized-baseline / router (${chart})"
             else
-              echo "FAIL: optimized-baseline / scheduler (${chart})"
+              echo "FAIL: optimized-baseline / router (${chart})"
               failed=1
             fi
           done
@@ -217,18 +217,18 @@ jobs:
       - name: Install GKE CRDs
         run: .github/scripts/install-gke-crds.sh
 
-      - name: Dry-run scheduler charts
+      - name: Dry-run router charts
         run: |
-          CHART_VERSION=v1.5.0
+          CHART_VERSION=v0
           failed=0
-          for chart in standalone inferencepool; do
+          for chart in llm-d-router-standalone-dev llm-d-router-gateway-dev; do
             echo ""
             echo "========================================"
-            echo "pd-disaggregation: scheduler (${chart})"
+            echo "pd-disaggregation: router (${chart})"
             echo "========================================"
             echo "--- helm template ---"
-            if ! helm template pd-disaggregation-scheduler \
-              "oci://registry.k8s.io/gateway-api-inference-extension/charts/${chart}" \
+            if ! helm template pd-disaggregation-router \
+              "oci://ghcr.io/llm-d/charts/${chart}" \
               -f guides/recipes/router/base.values.yaml \
               -f guides/recipes/router/features/monitoring.values.yaml \
               -f guides/pd-disaggregation/router/pd-disaggregation.values.yaml \
@@ -239,9 +239,9 @@ jobs:
             fi
             echo "--- kubectl apply --dry-run=server ---"
             if kubectl apply --dry-run=server -f /tmp/rendered.yaml; then
-              echo "PASS: pd-disaggregation / scheduler (${chart})"
+              echo "PASS: pd-disaggregation / router (${chart})"
             else
-              echo "FAIL: pd-disaggregation / scheduler (${chart})"
+              echo "FAIL: pd-disaggregation / router (${chart})"
               failed=1
             fi
           done
@@ -304,16 +304,16 @@ jobs:
       - name: Install GKE CRDs
         run: .github/scripts/install-gke-crds.sh
 
-      - name: Dry-run scheduler (active-active default)
+      - name: Dry-run router (active-active default)
         # ubuntu-latest ships helm v3, which accepts a path for --post-renderer.
         # (helm v4 users instead run `helm plugin install .../uds-tokenizer`
         # once and pass `--post-renderer uds-tokenizer`; see README.)
         run: |
-          CHART_VERSION=v1.5.0
+          CHART_VERSION=v0
           POST_RENDERER=./guides/precise-prefix-cache-routing/router/patches/uds-tokenizer/post-renderer.sh
           echo ""
           echo "========================================"
-          echo "precise-prefix-cache-routing: scheduler"
+          echo "precise-prefix-cache-routing: router"
           echo "========================================"
           echo "--- helm template ---"
           if ! helm template precise-prefix-cache-routing \
@@ -327,9 +327,9 @@ jobs:
           fi
           echo "--- kubectl apply --dry-run=server ---"
           if kubectl apply --dry-run=server -f /tmp/rendered.yaml; then
-            echo "PASS: precise-prefix-cache-routing / scheduler"
+            echo "PASS: precise-prefix-cache-routing / router"
           else
-            echo "FAIL: precise-prefix-cache-routing / scheduler"
+            echo "FAIL: precise-prefix-cache-routing / router"
             exit 1
           fi
 
