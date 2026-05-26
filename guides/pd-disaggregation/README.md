@@ -139,7 +139,7 @@ Apply the Kustomize overlays for your specific backend (defaulting to NVIDIA GPU
 > overlays deal with the specifics of each cloud's setup.
 
 ```bash
-export INFRA_PROVIDER=base # base | coreweave | gke
+export INFRA_PROVIDER=base # base | coreweave | gke | aws
 
 kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/gpu/vllm/${INFRA_PROVIDER}
 ```
