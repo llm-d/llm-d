@@ -106,7 +106,7 @@ To employ a Kubernetes Gateway managed proxy instead of the standalone one, then
 export REPO_ROOT=$(realpath $(git rev-parse --show-toplevel))
 export PROVIDER_NAME=gke # other na, agentgateway or istio
 helm install ${GUIDE_NAME} \
-    oci://registry.k8s.io/gateway-api-inference-extension/charts/inferencepool  \
+    oci://ghcr.io/llm-d/charts/llm-d-router-gateway-dev  \
     -f ${REPO_ROOT}/guides/recipes/router/base.values.yaml \
     -f ${REPO_ROOT}/guides/recipes/router/features/httproute-flags.yaml \
     -f ${REPO_ROOT}/guides/${GUIDE_NAME}/router/${GUIDE_NAME}.values.yaml \

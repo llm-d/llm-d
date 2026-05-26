@@ -27,11 +27,11 @@ Use this when you want to route traffic through a proxy managed by the Kubernete
 2. Creating a Gateway resource (see [recipes/gateway](../gateway/))
 3. Deploying the inferencepool chart (below)
 
-**Chart:** `oci://registry.k8s.io/gateway-api-inference-extension/charts/inferencepool`
+**Chart:** `oci://ghcr.io/llm-d/charts/llm-d-router-gateway-dev`
 
 ```bash
 helm install <release-name> \
-  oci://registry.k8s.io/gateway-api-inference-extension/charts/inferencepool \
+  oci://ghcr.io/llm-d/charts/llm-d-router-gateway-dev \
   -f ${REPO_ROOT}/guides/recipes/router/base.values.yaml \
   -f ${REPO_ROOT}/guides/recipes/router/features/monitoring.values.yaml \
   -f ${REPO_ROOT}/guides/<your-guide>/router/<your-guide>.values.yaml \

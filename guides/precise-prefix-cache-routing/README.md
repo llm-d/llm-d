@@ -132,13 +132,13 @@ To use a Kubernetes Gateway managed proxy instead of the standalone Envoy sideca
 
 1. **Deploy a Kubernetes Gateway**. See [the gateway guides](../prereq/gateways) for step-by-step deployment of a Gateway named `llm-d-inference-gateway`.
 
-2. **Deploy the llm-d Router and HTTPRoute** via the `inferencepool` chart with `experimentalHttpRoute.enabled=true`. Same UDS post-renderer applies:
+2. **Deploy the llm-d Router and HTTPRoute** via the `llm-d-router-gateway` chart with `httpRoute.create=true`. Same UDS post-renderer applies:
 
 ```bash
 export REPO_ROOT=$(realpath $(git rev-parse --show-toplevel))
 export PROVIDER_NAME=istio   # options: none, gke, agentgateway, istio
 helm install precise-prefix-cache-routing \
-  oci://registry.k8s.io/gateway-api-inference-extension/charts/inferencepool \
+  oci://ghcr.io/llm-d/charts/llm-d-router-gateway-dev \
   -f ${REPO_ROOT}/guides/recipes/router/base.values.yaml \
   -f ${REPO_ROOT}/guides/recipes/router/features/httproute-flags.yaml \
   -f ${REPO_ROOT}/guides/${GUIDE_NAME}/router/${GUIDE_NAME}.values.yaml \

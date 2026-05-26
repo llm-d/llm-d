@@ -97,12 +97,12 @@ To use a Kubernetes Gateway managed proxy rather than the standalone version, fo
 ```bash
 export PROVIDER_NAME=gke # options: none, gke, agentgateway, istio
 helm install ${GUIDE_NAME} \
-    oci://registry.k8s.io/gateway-api-inference-extension/charts/inferencepool  \
+    oci://ghcr.io/llm-d/charts/llm-d-router-gateway-dev  \
     -f guides/recipes/router/base.values.yaml \
     -f guides/tiered-prefix-cache/cpu/router/${GUIDE_NAME}.values.yaml \
     --set provider.name=${PROVIDER_NAME} \
-    --set experimentalHttpRoute.enabled=true \
-    --set experimentalHttpRoute.inferenceGatewayName=llm-d-inference-gateway \
+    --set httpRoute.create=true \
+    --set httpRoute.inferenceGatewayName=llm-d-inference-gateway \
     -n ${NAMESPACE} --version ${GAIE_VERSION}
 ```
 
