@@ -1,0 +1,45 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ../base
+
+images:
+  - name: docker.io/lmsysorg/sglang
+    newName: 763104351884.dkr.ecr.us-east-1.amazonaws.com/sglang
+    newTag: 0.5.12-gpu-py312-cu130-ubuntu24.04-ec2
+
+patches:
+  - path: patch-decode.yaml
+  - path: patch-prefill.yaml
+  - target:
+      kind: Deployment
+      name: decode
+    patch: |-
+      - op: add
+        path: /spec/template/spec/containers/0/resources/limits/vpc.amazonaws.com~1efa
+        value: "8"
+      - op: add
+        path: /spec/template/spec/containers/0/resources/requests/vpc.amazonaws.com~1efa
+        value: "8"
+      - op: remove
+        path: /spec/template/spec/containers/0/resources/limits/cpu
+      - op: add
+        path: /spec/template/spec/nodeSelector
+        value:
+          node.kubernetes.io/instance-type: p5en.48xlarge
+  - target:
+      kind: Deployment
+      name: prefill
+    patch: |-
+      - op: add
+        path: /spec/template/spec/containers/0/resources/limits/vpc.amazonaws.com~1efa
+        value: "8"
+      - op: add
+        path: /spec/template/spec/containers/0/resources/requests/vpc.amazonaws.com~1efa
+        value: "8"
+      - op: remove
+        path: /spec/template/spec/containers/0/resources/limits/cpu
+      - op: add
+        path: /spec/template/spec/nodeSelector
+        value:
+          node.kubernetes.io/instance-type: p5en.48xlarge
