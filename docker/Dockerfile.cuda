@@ -41,7 +41,7 @@ ARG UCX_VERSION="v1.20.0"
 
 ARG NVSHMEM_USE_GIT="true"
 ARG NVSHMEM_REPO="https://github.com/NVIDIA/nvshmem.git"
-ARG NVSHMEM_VERSION="v3.4.5-0"
+ARG NVSHMEM_VERSION="v3.5.21-0"
 ARG NVSHMEM_BUILD_FROM_SOURCE=true
 ARG NVSHMEM_CUDA_ARCHITECTURES="90a;100"
 
@@ -114,7 +114,6 @@ RUN mkdir -p /wheels
 # Create UV constraint files
 COPY docker/build-constraints.txt /tmp/build-constraints.txt
 COPY docker/constraints.txt /tmp/constraints.txt
-COPY patches/ /tmp/patches/
 
 ENV LANG="C.UTF-8" \
     LC_ALL="C.UTF-8" \

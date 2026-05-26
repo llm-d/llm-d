@@ -97,10 +97,6 @@ jobs:
               - 'docker/packages/common/**'
               - 'docker/packages/cuda/**'
               - 'docker/packages/rpms/**'
-              - 'patches/cks_nvshmem3.3.20.patch'
-              - 'patches/cks_nvshmem3.3.9.patch'
-              - 'patches/nvshmem_zero_ibv_ah_attr_3.3.20.patch'
-              - 'patches/nvshmem_zero_ibv_ah_attr_v3.4.5-0.patch'
             aws:
               - 'docker/Dockerfile.cuda'
               - 'docker/common-versions'
@@ -109,8 +105,6 @@ jobs:
               - 'docker/packages/common/**'
               - 'docker/packages/cuda/**'
               - 'docker/packages/rpms/**'
-              - 'patches/nvshmem_zero_ibv_ah_attr_3.3.20.patch'
-              - 'patches/nvshmem_zero_ibv_ah_attr_v3.4.5-0.patch'
             gb200:
               - 'docker/Dockerfile.cuda'
               - 'docker/common-versions'
@@ -119,8 +113,6 @@ jobs:
               - 'docker/packages/common/**'
               - 'docker/packages/cuda/**'
               - 'docker/packages/rpms/**'
-              - 'patches/nvshmem_zero_ibv_ah_attr_3.3.20.patch'
-              - 'patches/nvshmem_zero_ibv_ah_attr_v3.4.5-0.patch'
             rocm:
               - 'docker/Dockerfile.rocm'
             xpu:
