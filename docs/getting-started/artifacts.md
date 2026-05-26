@@ -36,8 +36,8 @@ llm-d Router is deployed via Helm. We offer a chart both Standalone and Gateway 
 
 | Chart | Version | OCI Registry | Description |
 |-------|---------|--------------|-------------|
-| **Standalone Mode** | v1.5.0 | `oci://registry.k8s.io/gateway-api-inference-extension/charts/standalone` | Deploys an InferencePool and EPP with a standalone Envoy proxy as sidecar in EPP pod  |
-| **Gateway Mode** | v1.5.0 | `oci://registry.k8s.io/gateway-api-inference-extension/charts/inferencepool` | Deploys an InferencePool and EPP for use with an existing Kubernetes Gateway (e.g. Istio, AgentGateway, GKE) |
+| **Standalone Mode** | v0 | `oci://ghcr.io/llm-d/charts/llm-d-router-standalone-dev` | Deploys an InferencePool and EPP with a standalone Envoy proxy as sidecar in EPP pod  |
+| **Gateway Mode** | v0 | `oci://ghcr.io/llm-d/charts/llm-d-router-gateway-dev` | Deploys an InferencePool and EPP for use with an existing Kubernetes Gateway (e.g. Istio, AgentGateway, GKE) |
 
 The charts are currently published by the Gateway API Inference Extension (GAIE) project (see [standalone mode source](https://github.com/kubernetes-sigs/gateway-api-inference-extension/tree/main/config/charts/standalone) and [gateway mode source](https://github.com/kubernetes-sigs/gateway-api-inference-extension/tree/main/config/charts/inferencepool)). Each well-lit path guides provides values files on top of the chart defaults to enable the functionality implemented in EPP.
 
@@ -51,7 +51,7 @@ llm-d releases the core EPP image as well as additional sidecar images for advan
 
 | Image | Description | Version |
 |-------|-------------|---------|
-| `ghcr.io/llm-d/llm-d-inference-scheduler` | Core EPP image | v0.8.0 |
+| `ghcr.io/llm-d/llm-d-router-endpoint-picker-dev` | Core EPP image | main |
 | `ghcr.io/llm-d/llm-d-uds-tokenizer`       | Optional sidecar for EPP, enabling tokenization for precise cache aware routing | v0.8.0 |
 | `ghcr.io/llm-d/llm-d-routing-sidecar`     | Optional sidecar for model servers, enabling KV cache transfer for P/D | v0.8.0 |
 | `registry.k8s.io/gateway-api-inference-extension/latency-training-server` | Optional sidecar for EPP, for predicted-latency model training | v1.5.0 |

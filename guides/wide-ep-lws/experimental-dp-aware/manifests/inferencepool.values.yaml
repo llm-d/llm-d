@@ -4,9 +4,9 @@ router:
     flags:
       v: 1
     image:
-      registry: ghcr.io
-      repository: llm-d/llm-d-inference-scheduler
-      tag: v0.7.0
+      registry: ghcr.io/llm-d
+      repository: llm-d-router-endpoint-picker-dev
+      tag: main
     extProcPort: 9002
     pluginsConfigFile: "custom-plugins.yaml"
     pluginsCustomConfig:

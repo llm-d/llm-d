@@ -7,11 +7,6 @@
 
 router:
   epp:
-    image:
-      registry: ghcr.io
-      repository: llm-d/llm-d-inference-scheduler
-      tag: v0.8.0
-      pullPolicy: IfNotPresent
     replicas: 2
     flags:
       # The chart auto-adds `--ha-enable-leader-election` when replicas > 1,

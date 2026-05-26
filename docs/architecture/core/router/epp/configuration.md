@@ -73,7 +73,7 @@ spec:
       ...
       containers:
       - name: epp
-        image: ghcr.io/llm-d/llm-d-inference-scheduler:latest
+        image: ghcr.io/llm-d/llm-d-router-endpoint-picker-dev:main
         imagePullPolicy: IfNotPresent
         args:
         - --pool-name
@@ -99,7 +99,7 @@ spec:
       ...
       containers:
       - name: epp
-        image: ghcr.io/llm-d/llm-d-inference-scheduler:latest
+        image: ghcr.io/llm-d/llm-d-router-endpoint-picker-dev:main
         imagePullPolicy: IfNotPresent
         args:
         - --pool-name

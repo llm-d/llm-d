@@ -134,7 +134,7 @@ Verify traces are flowing:
 
 1. Send an inference request through llm-d
 2. Open the Jaeger UI
-3. Select a service (e.g., `vllm-decode`, `llm-d-inference-scheduler`)
+3. Select a service (e.g., `vllm-decode`, `llm-d-router/epp`)
 4. Click **Find Traces**
 
 You should see traces with multiple spans covering the request lifecycle. You can also verify via the Jaeger API:
@@ -148,14 +148,14 @@ Expected output:
 ```json
 [
   "vllm-decode",
-  "llm-d-inference-scheduler"
+  "llm-d-router/epp"
 ]
 ```
 
 If you only see generic `GET` spans, check that:
 
 - The vLLM container args include `--collect-detailed-traces all`
-- The EPP image includes tracing instrumentation (`llm-d-inference-scheduler`, not upstream `epp`)
+- The EPP image includes tracing instrumentation (`llm-d-router-endpoint-picker-dev`, not upstream `epp`)
 
 ## Production Recommendations
 
