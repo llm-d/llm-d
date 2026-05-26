@@ -43,10 +43,10 @@ jobs:
         # This adds --metrics-endpoint-auth=false to the EPP container; the
         # production guide default (auth on) is unchanged.
         helm install ${GUIDE_NAME} \
-          oci://registry.k8s.io/gateway-api-inference-extension/charts/standalone \
+          oci://ghcr.io/llm-d/charts/llm-d-router-standalone-dev \
           -f guides/recipes/router/base.values.yaml \
           -f guides/${GUIDE_NAME}/router/predicted-latency.values.yaml \
-          --set inferenceExtension.monitoring.prometheus.auth.enabled=false \
+          --set router.monitoring.prometheus.auth.enabled=false \
           -n ${NAMESPACE} --version ${GAIE_VERSION}
       e2e_validate_args: '--extra-validate predicted-latency'
       required_gpus: 2

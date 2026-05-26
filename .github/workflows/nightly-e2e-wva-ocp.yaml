@@ -109,7 +109,7 @@ jobs:
         yq '.spec.replicas=2' -i guides/optimized-baseline/modelserver/gpu/vllm/base/patch-vllm.yaml
         kubectl apply -k guides/optimized-baseline/modelserver/gpu/vllm/base -n ${NAMESPACE}
         helm install workload-variant-autoscaler-inferencepool-standalone \
-          oci://registry.k8s.io/gateway-api-inference-extension/charts/standalone \
+          oci://ghcr.io/llm-d/charts/llm-d-router-standalone-dev \
           -f guides/recipes/router/base.values.yaml \
           -f guides/optimized-baseline/router/optimized-baseline.values.yaml \
           -n ${NAMESPACE} --version v1.5.0

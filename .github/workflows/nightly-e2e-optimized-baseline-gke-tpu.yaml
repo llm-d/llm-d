@@ -45,7 +45,7 @@ jobs:
         export GUIDE_NAME="optimized-baseline"
         kubectl apply -n ${NAMESPACE} -k guides/${GUIDE_NAME}/modelserver/tpu-v6/vllm
         helm install ${GUIDE_NAME} \
-          oci://registry.k8s.io/gateway-api-inference-extension/charts/standalone \
+          oci://ghcr.io/llm-d/charts/llm-d-router-standalone-dev \
           -f guides/recipes/router/base.values.yaml \
           -f guides/${GUIDE_NAME}/router/${GUIDE_NAME}.values.yaml \
           -n ${NAMESPACE} --version ${GAIE_VERSION}

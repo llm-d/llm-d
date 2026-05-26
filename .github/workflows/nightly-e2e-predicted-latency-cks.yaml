@@ -51,10 +51,10 @@ jobs:
         # CI-only: disable EPP /metrics auth so the validate script's curl pod
         # can scrape predicted/actual TTFT histograms without a bearer token.
         helm install ${GUIDE_NAME} \
-          oci://registry.k8s.io/gateway-api-inference-extension/charts/standalone \
+          oci://ghcr.io/llm-d/charts/llm-d-router-standalone-dev \
           -f guides/recipes/router/base.values.yaml \
           -f guides/${GUIDE_NAME}/router/predicted-latency.values.yaml \
-          --set inferenceExtension.monitoring.prometheus.auth.enabled=false \
+          --set router.monitoring.prometheus.auth.enabled=false \
           -n ${NAMESPACE} --version ${GAIE_VERSION}
       e2e_validate_args: '--extra-validate predicted-latency'
       accelerator_type: H100

@@ -151,7 +151,7 @@ jobs:
         run: |
           echo "Installing precise-prefix-cache-routing scheduler (standalone chart) via helm..."
           helm install "${SCHEDULER_RELEASE_NAME}" \
-            oci://registry.k8s.io/gateway-api-inference-extension/charts/standalone \
+            oci://ghcr.io/llm-d/charts/llm-d-router-standalone-dev \
             -f guides/recipes/router/base.values.yaml \
             -f guides/${GUIDE_NAME}/router/${GUIDE_NAME}.values.yaml \
             --post-renderer ./guides/${GUIDE_NAME}/router/patches/uds-tokenizer/post-renderer.sh \
