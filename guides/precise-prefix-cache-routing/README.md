@@ -143,13 +143,8 @@ helm install precise-prefix-cache-routing \
   -f ${REPO_ROOT}/guides/recipes/router/features/httproute-flags.yaml \
   -f ${REPO_ROOT}/guides/${GUIDE_NAME}/router/${GUIDE_NAME}.values.yaml \
   --set provider.name=${PROVIDER_NAME} \
-<<<<<<< HEAD
-  --post-renderer ${REPO_ROOT}/guides/${GUIDE_NAME}/router/patches/uds-tokenizer/post-renderer.sh
-  -n ${NAMESPACE} --version ${GAIE_VERSION}
-=======
   --post-renderer ${REPO_ROOT}/guides/${GUIDE_NAME}/router/patches/uds-tokenizer/post-renderer.sh 
   -n ${NAMESPACE} --version ${ROUTER_CHART_VERSION}
->>>>>>> 458de992 (Update the chart version)
 ```
 
 </details>
