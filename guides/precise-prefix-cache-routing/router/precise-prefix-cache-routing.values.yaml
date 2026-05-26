@@ -17,7 +17,7 @@ router:
       # active-passive. Embedding `=false` into the key forces the single-arg
       # form (pflag won't parse `--key value` as a bool); pflag honors
       # last-occurrence wins. No-op when replicas=1.
-      ha-enable-leader-election=false: ""
+      ha-enable-leader-election: false
     env:
       - name: HF_TOKEN
         valueFrom:
