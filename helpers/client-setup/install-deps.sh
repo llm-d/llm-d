@@ -125,7 +125,7 @@ install_binary() {
   trap 'rm -rf -- "$tmp_dir"' RETURN
 
   echo "Installing ${bin_name}..."
-  curl -sSL -o "${tmp_dir}/${bin_name}" "${url}"
+  curl -fsSL --retry 3 --retry-delay 5 -o "${tmp_dir}/${bin_name}" "${url}"
   sudo install -m 0755 "${tmp_dir}/${bin_name}" "/usr/local/bin/${bin_name}"
 }
 
@@ -142,7 +142,8 @@ install_from_tarball() {
   trap 'rm -rf -- "$tmp_dir"' RETURN
 
   echo "Installing ${bin_name}..."
-  curl -sSL "${url}" | tar -xz -C "${tmp_dir}"
+  curl -fsSL --retry 3 --retry-delay 5 -o "${tmp_dir}/archive.tar.gz" "${url}"
+  tar -xzf "${tmp_dir}/archive.tar.gz" -C "${tmp_dir}"
   sudo install -m 0755 "${tmp_dir}/${bin_in_archive}" "/usr/local/bin/${bin_name}"
 }
 

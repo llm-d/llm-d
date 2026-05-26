@@ -91,28 +91,28 @@ flowchart TD
     Client(["Incoming HTTP Connections"]):::client --> AdmissionController
 
     subgraph EPP["EPP Flow Control Layer"]
-        AdmissionController{"1. Admission Controller<br>Assign FlowKey"}:::logic
+        AdmissionController{"1. Admission Controller<br/>Assign FlowKey"}:::logic
 
         subgraph B100["Band 100: Highest QoS"]
             direction TB
-            Q1[("Premium-A<br>Ordering: FCFS")]:::premium
-            F1(("Fairness:<br>Round-Robin")):::logic
+            Q1[("Premium-A<br/>Ordering: FCFS")]:::premium
+            F1(("Fairness:<br/>Round-Robin")):::logic
             Q1 --> F1
         end
 
         subgraph B0["Band 0: Standard QoS"]
             direction TB
-            Q2[("Standard-A<br>Ordering: FCFS")]:::standard
-            Q3[("Standard-B<br>Ordering: FCFS")]:::standard
-            F0(("Fairness:<br>Round-Robin")):::logic
+            Q2[("Standard-A<br/>Ordering: FCFS")]:::standard
+            Q3[("Standard-B<br/>Ordering: FCFS")]:::standard
+            F0(("Fairness:<br/>Round-Robin")):::logic
             Q2 --> F0
             Q3 --> F0
         end
 
         subgraph BM10["Band -10: Best Effort / BG"]
             direction TB
-            Q4[("Batch-A<br>Ordering: FCFS")]:::batch
-            FM1(("Fairness:<br>Round-Robin")):::logic
+            Q4[("Batch-A<br/>Ordering: FCFS")]:::batch
+            FM1(("Fairness:<br/>Round-Robin")):::logic
             Q4 --> FM1
         end
 
@@ -130,22 +130,22 @@ flowchart TD
         FM1 -. "3. If Band 0 Empty" .-> Disp
 
         %% Gatekeeper
-        Gate{{"3. Saturation Detector<br>(Example: concurrency-detector)<br>Pool Saturation: 44/45 (98%)"}}:::gate
+        Gate{{"3. Saturation Detector<br/>(Example: concurrency-detector)<br/>Pool Saturation: 44/45 (98%)"}}:::gate
 
         Disp -->|"Selects Next Req"| Gate
 
         %% Explicit label syntax forces a clean loopback curve
-        Gate -.->|"Pool Saturated<br>(Head-of-Line Block)"| Disp
+        Gate -.->|"Pool Saturated<br/>(Head-of-Line Block)"| Disp
 
-        Sched["4. Late-Binding Scheduler<br>(High Affinity Routing)"]:::scheduler
-        Gate == "Capacity Available (Saturation < 100%) <br> (Dispatch)" ==> Sched
+        Sched["4. Late-Binding Scheduler<br/>(High Affinity Routing)"]:::scheduler
+        Gate == "Capacity Available (Saturation < 100%) <br/> (Dispatch)" ==> Sched
     end
 
     subgraph Backend ["Backend Pool: Model Servers (vLLM)"]
         direction LR
-        P1["Endpoint 1<br>Active Batch: 10/10<br>Local Queue: 4/5<br>Saturation: 93%"]:::endpoint
-        P2["Endpoint 2<br>Active Batch: 10/10<br>Local Queue: 5/5<br>Saturation: 100%"]:::endpoint
-        P3["Endpoint 3<br>Active Batch: 10/10<br>Local Queue: 5/5<br>Saturation: 100%"]:::endpoint
+        P1["Endpoint 1<br/>Active Batch: 10/10<br/>Local Queue: 4/5<br/>Saturation: 93%"]:::endpoint
+        P2["Endpoint 2<br/>Active Batch: 10/10<br/>Local Queue: 5/5<br/>Saturation: 100%"]:::endpoint
+        P3["Endpoint 3<br/>Active Batch: 10/10<br/>Local Queue: 5/5<br/>Saturation: 100%"]:::endpoint
     end
 
     Sched == "Route to Best Candidate" ==> P1

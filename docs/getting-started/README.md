@@ -57,7 +57,7 @@ By composing these layers, llm-d allows an inference pool to scale its effective
 
 ### Prefill/Decode Disaggregation
 
-Split inference into dedicated **prefill workers** (prompt processing) and **decode workers** (token generation) to reduce time-to-first-token (TTFT) and achieve more predictable time-per-output-token (TPOT). KV-cache is transferred between phases via [NIXL](https://github.com/ai-dynamo/nixl) over high-speed interconnects (InfiniBand, RoCE RDMA).
+Split inference into dedicated **prefill workers** (prompt processing) and **decode workers** (token generation) to reduce time-to-first-token (TTFT) and achieve more predictable time-per-output-token (TPOT). KV-cache is transferred between phases via [NIXL](https://github.com/ai-dynamo/nixl) over high-speed interconnects (InfiniBand, RoCE).
 
 ### Predicted Latency-Based Routing
 

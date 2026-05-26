@@ -12,34 +12,10 @@ on:
     - cron: '30 7 * * *'  # 07:30 UTC daily (staggered from wide-ep-lws CKS at 07:00)
   workflow_dispatch:
     inputs:
-      model_id:
-        description: 'Model ID'
-        required: false
-        default: 'unsloth/Meta-Llama-3.1-8B'
-      accelerator_type:
-        description: 'Accelerator type (H100, H200, A100)'
-        required: false
-        default: 'H100'
       image_tag:
         description: 'WVA image tag (leave empty to build from main)'
         required: false
         default: ''
-      request_rate:
-        description: 'Request rate (req/s)'
-        required: false
-        default: '20'
-      num_prompts:
-        description: 'Number of prompts'
-        required: false
-        default: '3000'
-      max_num_seqs:
-        description: 'vLLM max batch size (lower = easier to saturate)'
-        required: false
-        default: '1'
-      hpa_stabilization_seconds:
-        description: 'HPA stabilization window in seconds'
-        required: false
-        default: '240'
       caller_ref:
         description: 'WVA repo ref to checkout for tests and image build (branch, tag, or SHA)'
         required: false
@@ -157,7 +133,6 @@ jobs:
           -n "${WVA_DEPLOY_NS}" --for=condition=Available --timeout=300s
         kubectl apply -k guides/workload-autoscaling/optimized-baseline-autoscaling -n "${NAMESPACE}"
         kubectl get variantautoscaling,hpa -n "${NAMESPACE}"
-      accelerator_type: H100
       required_gpus: 2
       recommended_gpus: 4
       pod_wait_timeout: '30m'
