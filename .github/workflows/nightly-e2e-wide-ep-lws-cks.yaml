@@ -60,6 +60,7 @@ jobs:
       # Custom deploy: kustomize + helm + gateway recipe (not helmfile)
       custom_deploy_script: |
         export GAIE_VERSION=v1.5.0
+        export ROUTER_CHART_VERSION=v0
         export GUIDE_NAME="wide-ep-lws"
         export INFRA_PROVIDER="coreweave"
         yq '.spec.leaderWorkerTemplate.workerTemplate.spec.priorityClassName="nightly-gpu-critical"' -i guides/${GUIDE_NAME}/modelserver/gpu/vllm/base/decode.yaml
@@ -69,7 +70,7 @@ jobs:
           oci://ghcr.io/llm-d/charts/llm-d-router-standalone-dev \
           -f guides/recipes/router/base.values.yaml \
           -f guides/${GUIDE_NAME}/router/${GUIDE_NAME}.values.yaml \
-          -n ${NAMESPACE} --version ${GAIE_VERSION}
+          -n ${NAMESPACE} --version ${ROUTER_CHART_VERSION}
       # Wide-EP-specific validation: check prefill + decode pods
       e2e_validate_args: '-v'
       allow_gpu_preemption: true

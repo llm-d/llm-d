@@ -110,7 +110,7 @@ helm install llm-d-infpool \
   -f ./manifests/inferencepool.values.yaml \
   --set "provider.name=istio" \
   oci://ghcr.io/llm-d/charts/llm-d-router-gateway-dev \
-  --version v1.5.0
+  --version ${ROUTER_CHART_VERSION}
 ```
 
 ## Verifying the installation

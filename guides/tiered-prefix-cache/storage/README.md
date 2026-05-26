@@ -64,6 +64,7 @@ For advanced configuration options and implementation details, see the [llm-d FS
 
   ```bash
     export GAIE_VERSION=v1.5.0
+    export ROUTER_CHART_VERSION=v0
     export GUIDE_NAME="tiered-prefix-cache-storage"
     export NAMESPACE=llm-d-${GUIDE_NAME}
   ```
@@ -112,7 +113,7 @@ helm install ${GUIDE_NAME} \
     oci://ghcr.io/llm-d/charts/llm-d-router-standalone-dev \
     -f guides/recipes/router/base.values.yaml \
     -f guides/tiered-prefix-cache/storage/router/${GUIDE_NAME}.values.yaml \
-    -n ${NAMESPACE} --version ${GAIE_VERSION}
+    -n ${NAMESPACE} --version ${ROUTER_CHART_VERSION}
 ```
 
 <details>
@@ -131,7 +132,7 @@ helm install llm-d-infpool \
     --set provider.name=${PROVIDER_NAME} \
     --set httpRoute.create=true \
     --set httpRoute.inferenceGatewayName=llm-d-inference-gateway \
-    -n ${NAMESPACE} --version ${GAIE_VERSION}
+    -n ${NAMESPACE} --version ${ROUTER_CHART_VERSION}
 ```
 
 </details>

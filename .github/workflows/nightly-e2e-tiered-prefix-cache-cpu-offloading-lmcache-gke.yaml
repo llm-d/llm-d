@@ -38,6 +38,7 @@ jobs:
       gateway_host: 'tiered-prefix-cache-cpu-epp'
       custom_deploy_script: |
         export GAIE_VERSION=v1.5.0
+        export ROUTER_CHART_VERSION=v0
         export GUIDE_NAME="tiered-prefix-cache-cpu"
         export ACCELERATOR="gpu"
         export CONNECTOR="lmcache-connector"
@@ -47,7 +48,7 @@ jobs:
           oci://ghcr.io/llm-d/charts/llm-d-router-standalone-dev \
           -f guides/recipes/router/base.values.yaml \
           -f guides/tiered-prefix-cache/cpu/router/${GUIDE_NAME}.values.yaml \
-          -n ${NAMESPACE} --version ${GAIE_VERSION}
+          -n ${NAMESPACE} --version ${ROUTER_CHART_VERSION}
       gke_cluster_name: llm-d-e2e-us-east5
       gke_cluster_zone: us-east5
       required_gpus: 8

@@ -112,7 +112,7 @@ jobs:
           oci://ghcr.io/llm-d/charts/llm-d-router-standalone-dev \
           -f guides/recipes/router/base.values.yaml \
           -f guides/optimized-baseline/router/optimized-baseline.values.yaml \
-          -n ${NAMESPACE} --version v1.5.0
+          -n ${NAMESPACE} --version ${ROUTER_CHART_VERSION}
 
         # Override WVA controller image to the nightly build from this run
         WVA_TAG="${{ needs.build-wva-image.outputs.image_tag || github.event.inputs.image_tag }}"

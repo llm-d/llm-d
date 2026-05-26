@@ -35,6 +35,7 @@ Skip it when your pool is **heterogeneous** — mixed GPU types, model variants,
 
   ```bash
     export GAIE_VERSION=v1.5.0
+    export ROUTER_CHART_VERSION=v0
     export GUIDE_NAME="predicted-latency-routing"
     export NAMESPACE=llm-d-predicted-latency
     export MODEL_NAME="Qwen/Qwen3-32B"
@@ -75,7 +76,7 @@ helm install ${GUIDE_NAME} \
     oci://ghcr.io/llm-d/charts/llm-d-router-standalone-dev \
     -f guides/recipes/router/base.values.yaml \
     -f ${REPO_ROOT}/guides/${GUIDE_NAME}/router/predicted-latency.values.yaml \
-    -n ${NAMESPACE} --version ${GAIE_VERSION}
+    -n ${NAMESPACE} --version ${ROUTER_CHART_VERSION}
 ```
 
 Nightly CI also sets `--set router.monitoring.prometheus.auth.enabled=false` so the validation job can scrape EPP metrics without a bearer token. That override is CI-only; leave metrics auth enabled for normal deployments unless you explicitly need unauthenticated scraping.
@@ -99,7 +100,7 @@ helm install ${GUIDE_NAME} \
     -f ${REPO_ROOT}/guides/recipes/router/features/httproute-flags.yaml \
     -f ${REPO_ROOT}/guides/${GUIDE_NAME}/router/predicted-latency.values.yaml \
     --set provider.name=${PROVIDER_NAME} \
-    -n ${NAMESPACE} --version ${GAIE_VERSION}
+    -n ${NAMESPACE} --version ${ROUTER_CHART_VERSION}
 ```
 
 </details>

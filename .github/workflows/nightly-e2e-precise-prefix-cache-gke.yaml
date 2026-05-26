@@ -40,6 +40,7 @@ jobs:
       gateway_host: 'precise-prefix-cache-routing-epp'
       custom_deploy_script: |
         export GAIE_VERSION=v1.5.0
+        export ROUTER_CHART_VERSION=v0
         export GUIDE_NAME="precise-prefix-cache-routing"
         export INFRA_PROVIDER="gke"
         kubectl apply -n ${NAMESPACE} -k guides/${GUIDE_NAME}/modelserver/gpu/vllm/${INFRA_PROVIDER}
@@ -48,7 +49,7 @@ jobs:
           -f guides/recipes/router/base.values.yaml \
           -f guides/${GUIDE_NAME}/router/${GUIDE_NAME}.values.yaml \
           --post-renderer ./guides/${GUIDE_NAME}/router/patches/uds-tokenizer/post-renderer.sh \
-          -n ${NAMESPACE} --version ${GAIE_VERSION}
+          -n ${NAMESPACE} --version ${ROUTER_CHART_VERSION}
       gke_cluster_name: llm-d-e2e-us-east5
       gke_cluster_zone: us-east5
       required_gpus: 2

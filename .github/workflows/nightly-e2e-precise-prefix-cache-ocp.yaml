@@ -43,6 +43,7 @@ jobs:
       gateway_host: 'precise-prefix-cache-routing-epp'
       custom_deploy_script: |
         export GAIE_VERSION=v1.5.0
+        export ROUTER_CHART_VERSION=v0
         export GUIDE_NAME="precise-prefix-cache-routing"
         export INFRA_PROVIDER="base"
         yq '.spec.template.spec.priorityClassName="nightly-gpu-critical"' -i guides/${GUIDE_NAME}/modelserver/gpu/vllm/${INFRA_PROVIDER}/patch-vllm.yaml
@@ -53,7 +54,7 @@ jobs:
           -f guides/recipes/router/base.values.yaml \
           -f guides/${GUIDE_NAME}/router/${GUIDE_NAME}.values.yaml \
           --post-renderer ./guides/${GUIDE_NAME}/router/patches/uds-tokenizer/post-renderer.sh \
-          -n ${NAMESPACE} --version ${GAIE_VERSION}
+          -n ${NAMESPACE} --version ${ROUTER_CHART_VERSION}
       required_gpus: 2
       recommended_gpus: 4
       pod_wait_timeout: '30m'

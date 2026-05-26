@@ -62,6 +62,7 @@ git clone https://github.com/llm-d/llm-d.git && cd llm-d && git checkout ${branc
 
 ```bash
 export GAIE_VERSION=v1.5.0
+export ROUTER_CHART_VERSION=v0
 export GUIDE_NAME="pd-disaggregation"
 export NAMESPACE="llm-d-pd-disaggregation"
 export MODEL_NAME="openai/gpt-oss-120b"
@@ -91,7 +92,7 @@ helm install ${GUIDE_NAME} \
     oci://ghcr.io/llm-d/charts/llm-d-router-standalone-dev \
     -f ${REPO_ROOT}/guides/recipes/router/base.values.yaml \
     -f ${REPO_ROOT}/guides/${GUIDE_NAME}/router/${GUIDE_NAME}.values.yaml \
-    -n ${NAMESPACE} --version ${GAIE_VERSION}
+    -n ${NAMESPACE} --version ${ROUTER_CHART_VERSION}
 ```
 
 <details>
@@ -111,7 +112,7 @@ helm install ${GUIDE_NAME} \
     -f ${REPO_ROOT}/guides/recipes/router/features/httproute-flags.yaml \
     -f ${REPO_ROOT}/guides/${GUIDE_NAME}/router/${GUIDE_NAME}.values.yaml \
     --set provider.name=${PROVIDER_NAME} \
-    -n ${NAMESPACE} --version ${GAIE_VERSION}
+    -n ${NAMESPACE} --version ${ROUTER_CHART_VERSION}
 ```
 
 </details>

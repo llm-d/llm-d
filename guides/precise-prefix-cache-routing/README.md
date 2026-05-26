@@ -60,10 +60,10 @@ Two scorers make up the routing decision alongside the load-aware stack:
 
 ```bash
 export GAIE_VERSION=v1.5.0
+export ROUTER_CHART_VERSION=v0
 export GUIDE_NAME="precise-prefix-cache-routing"
 export NAMESPACE="llm-d-${GUIDE_NAME}"
 ```
-
 - Install the Gateway API Inference Extension CRDs:
 
 ```bash
@@ -100,7 +100,7 @@ helm install ${GUIDE_NAME} \
   -f ${REPO_ROOT}/guides/recipes/router/base.values.yaml \
   -f ${REPO_ROOT}/guides/${GUIDE_NAME}/router/${GUIDE_NAME}.values.yaml \
   --post-renderer ${REPO_ROOT}/guides/${GUIDE_NAME}/router/patches/uds-tokenizer/post-renderer.sh \
-  -n ${NAMESPACE} --version ${GAIE_VERSION}
+  -n ${NAMESPACE} --version ${ROUTER_CHART_VERSION}
 ```
 
 <details>
@@ -143,8 +143,13 @@ helm install precise-prefix-cache-routing \
   -f ${REPO_ROOT}/guides/recipes/router/features/httproute-flags.yaml \
   -f ${REPO_ROOT}/guides/${GUIDE_NAME}/router/${GUIDE_NAME}.values.yaml \
   --set provider.name=${PROVIDER_NAME} \
+<<<<<<< HEAD
   --post-renderer ${REPO_ROOT}/guides/${GUIDE_NAME}/router/patches/uds-tokenizer/post-renderer.sh
   -n ${NAMESPACE} --version ${GAIE_VERSION}
+=======
+  --post-renderer ${REPO_ROOT}/guides/${GUIDE_NAME}/router/patches/uds-tokenizer/post-renderer.sh 
+  -n ${NAMESPACE} --version ${ROUTER_CHART_VERSION}
+>>>>>>> 458de992 (Update the chart version)
 ```
 
 </details>

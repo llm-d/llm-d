@@ -46,6 +46,7 @@ jobs:
       gateway_host: 'optimized-baseline-epp'
       custom_deploy_script: |
         export GAIE_VERSION=v1.5.0
+        export ROUTER_CHART_VERSION=v0
         export GUIDE_NAME="optimized-baseline"
         export INFRA_PROVIDER="base"
         yq '.spec.template.spec.priorityClassName="nightly-gpu-critical"' -i guides/${GUIDE_NAME}/modelserver/gpu/vllm/${INFRA_PROVIDER}/patch-vllm.yaml
@@ -55,7 +56,7 @@ jobs:
           oci://ghcr.io/llm-d/charts/llm-d-router-standalone-dev \
           -f guides/recipes/router/base.values.yaml \
           -f guides/${GUIDE_NAME}/router/${GUIDE_NAME}.values.yaml \
-          -n ${NAMESPACE} --version ${GAIE_VERSION}
+          -n ${NAMESPACE} --version ${ROUTER_CHART_VERSION}
       accelerator_type: H100
       required_gpus: 2
       recommended_gpus: 4

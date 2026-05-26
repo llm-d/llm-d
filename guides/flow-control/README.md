@@ -77,6 +77,7 @@ Flow Control is a software-level scheduling feature at the EPP layer and is enti
 
   ```bash
   export GAIE_VERSION=v1.5.0
+  export ROUTER_CHART_VERSION=v0
   export GUIDE_NAME="flow-control"
   export NAMESPACE="llm-d-flow-control"
   export MODEL_NAME="Qwen/Qwen3-32B"
@@ -108,7 +109,7 @@ helm install ${GUIDE_NAME} \
     oci://ghcr.io/llm-d/charts/llm-d-router-standalone-dev \
     -f ${REPO_ROOT}/guides/recipes/router/base.values.yaml \
     -f ${REPO_ROOT}/guides/${GUIDE_NAME}/router/${GUIDE_NAME}.values.yaml \
-    -n ${NAMESPACE} --version ${GAIE_VERSION}
+    -n ${NAMESPACE} --version ${ROUTER_CHART_VERSION}
 ```
 
 <details>
@@ -128,7 +129,7 @@ helm install ${GUIDE_NAME} \
     -f ${REPO_ROOT}/guides/recipes/router/features/httproute-flags.yaml \
     -f ${REPO_ROOT}/guides/${GUIDE_NAME}/router/${GUIDE_NAME}.values.yaml \
     --set provider.name=${PROVIDER_NAME} \
-    -n ${NAMESPACE} --version ${GAIE_VERSION}
+    -n ${NAMESPACE} --version ${ROUTER_CHART_VERSION}
 ```
 
 </details>

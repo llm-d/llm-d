@@ -16,7 +16,7 @@ helm install <release-name> \
   -f ${REPO_ROOT}/guides/<your-guide>/router/<your-guide>.values.yaml \
   --set provider.name=<gke|istio|none> \
   -n ${NAMESPACE} \
-  --version v1.5.0
+  --version ${ROUTER_CHART_VERSION}
 ```
 
 ## With Kubernetes Gateway API
@@ -37,7 +37,7 @@ helm install <release-name> \
   -f ${REPO_ROOT}/guides/<your-guide>/router/<your-guide>.values.yaml \
   --set provider.name=<gke|istio|none> \
   -n ${NAMESPACE} \
-  --version v1.5.0
+  --version ${ROUTER_CHART_VERSION}
 ```
 
 ## Values Layering

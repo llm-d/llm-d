@@ -45,6 +45,7 @@ jobs:
       gateway_host: 'predicted-latency-routing-epp'
       custom_deploy_script: |
         export GAIE_VERSION=v1.5.0
+        export ROUTER_CHART_VERSION=v0
         export GUIDE_NAME="predicted-latency-routing"
         export INFRA_PROVIDER="base"
         kubectl apply -n ${NAMESPACE} -k guides/optimized-baseline/modelserver/gpu/vllm/${INFRA_PROVIDER}
@@ -55,7 +56,7 @@ jobs:
           -f guides/recipes/router/base.values.yaml \
           -f guides/${GUIDE_NAME}/router/predicted-latency.values.yaml \
           --set router.monitoring.prometheus.auth.enabled=false \
-          -n ${NAMESPACE} --version ${GAIE_VERSION}
+          -n ${NAMESPACE} --version ${ROUTER_CHART_VERSION}
       e2e_validate_args: '--extra-validate predicted-latency'
       accelerator_type: H100
       required_gpus: 2
