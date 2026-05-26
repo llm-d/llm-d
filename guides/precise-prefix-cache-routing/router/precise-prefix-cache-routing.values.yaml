@@ -6,6 +6,9 @@
 ## Scale to a single replica with --set router.epp.replicas=1.
 
 router:
+  tokenizer:
+    enabled: true
+
   epp:
     replicas: 2
     flags:

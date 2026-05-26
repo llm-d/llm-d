@@ -48,7 +48,6 @@ jobs:
           oci://ghcr.io/llm-d/charts/llm-d-router-standalone-dev \
           -f guides/recipes/router/base.values.yaml \
           -f guides/${GUIDE_NAME}/router/${GUIDE_NAME}.values.yaml \
-          --post-renderer ./guides/${GUIDE_NAME}/router/patches/uds-tokenizer/post-renderer.sh \
           -n ${NAMESPACE} --version ${ROUTER_CHART_VERSION}
       accelerator_type: H100
       required_gpus: 2

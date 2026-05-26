@@ -99,31 +99,11 @@ helm install ${GUIDE_NAME} \
   oci://ghcr.io/llm-d/charts/llm-d-router-standalone-dev \
   -f ${REPO_ROOT}/guides/recipes/router/base.values.yaml \
   -f ${REPO_ROOT}/guides/${GUIDE_NAME}/router/${GUIDE_NAME}.values.yaml \
-  --post-renderer ${REPO_ROOT}/guides/${GUIDE_NAME}/router/patches/uds-tokenizer/post-renderer.sh \
   -n ${NAMESPACE} --version ${ROUTER_CHART_VERSION}
 ```
 
-<details>
-<summary><b>Helm v4</b></summary>
-
-Helm v4's `--post-renderer` only accepts a registered plugin name, not a path. Install once, then swap the flag value:
-
-```bash
-helm plugin install guides/${GUIDE_NAME}/router/patches/uds-tokenizer
-# in the helm install above, replace the --post-renderer line with:
-#   --post-renderer uds-tokenizer
-```
-
-</details>
 
 The release name `${GUIDE_NAME}` is mandatory for standard deployments — the inference pool selector matches a guide label that pairs with this release.
-
-<details>
-<summary><b>Why a helm post-renderer is required (chart limitation)</b></summary>
-
-The standalone chart's `sidecar.*` slot is occupied by its Envoy proxy — overriding it would lose HTTP serving — so the UDS tokenizer container is appended via a helm post-render hook instead. The post-renderer runs `kustomize build` on the chart's rendered manifests with a strategic merge patch that adds the `tokenizer-uds` container (image `ghcr.io/llm-d/llm-d-uds-tokenizer:vllm-v0.19.1`), two `emptyDir` volumes (`tokenizers`, `tokenizer-uds`), and a `/tmp/tokenizer` volumeMount on the existing `epp` container so the `tokenizer` plugin can reach the UDS socket. Tracking removal of this workaround upstream — once the chart supports multiple sidecars natively, the post-renderer goes away.
-
-</details>
 
 <details>
 <summary><h4>Gateway Mode</h4></summary>
@@ -143,7 +123,6 @@ helm install precise-prefix-cache-routing \
   -f ${REPO_ROOT}/guides/recipes/router/features/httproute-flags.yaml \
   -f ${REPO_ROOT}/guides/${GUIDE_NAME}/router/${GUIDE_NAME}.values.yaml \
   --set provider.name=${PROVIDER_NAME} \
-  --post-renderer ${REPO_ROOT}/guides/${GUIDE_NAME}/router/patches/uds-tokenizer/post-renderer.sh 
   -n ${NAMESPACE} --version ${ROUTER_CHART_VERSION}
 ```
 
