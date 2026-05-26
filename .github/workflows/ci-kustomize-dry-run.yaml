@@ -91,7 +91,10 @@ jobs:
           wait: 120s
 
       - name: Install Gateway API and GAIE CRDs
-        run: guides/prereq/gateway-provider/install-gateway-provider-dependencies.sh > /dev/null
+        run: |
+          if [[ -f guides/prereq/gateway-provider/install-gateway-provider-dependencies.sh ]]; then
+            guides/prereq/gateway-provider/install-gateway-provider-dependencies.sh > /dev/null
+          fi
 
       - name: Install monitoring CRDs
         run: docs/monitoring/scripts/install-prometheus-grafana.sh --crds-only
@@ -186,7 +189,10 @@ jobs:
           wait: 120s
 
       - name: Install Gateway API and GAIE CRDs
-        run: guides/prereq/gateway-provider/install-gateway-provider-dependencies.sh > /dev/null
+        run: |
+          if [[ -f guides/prereq/gateway-provider/install-gateway-provider-dependencies.sh ]]; then
+            guides/prereq/gateway-provider/install-gateway-provider-dependencies.sh > /dev/null
+          fi
 
       - name: Install gateway providers
         run: |
@@ -296,7 +302,10 @@ jobs:
           wait: 120s
 
       - name: Install Gateway API and GAIE CRDs
-        run: guides/prereq/gateway-provider/install-gateway-provider-dependencies.sh > /dev/null
+        run: |
+          if [[ -f guides/prereq/gateway-provider/install-gateway-provider-dependencies.sh ]]; then
+            guides/prereq/gateway-provider/install-gateway-provider-dependencies.sh > /dev/null
+          fi
 
       - name: Install monitoring CRDs
         run: docs/monitoring/scripts/install-prometheus-grafana.sh --crds-only
@@ -381,7 +390,10 @@ jobs:
           wait: 120s
 
       - name: Install Gateway API and GAIE CRDs
-        run: guides/prereq/gateway-provider/install-gateway-provider-dependencies.sh > /dev/null
+        run: |
+          if [[ -f guides/prereq/gateway-provider/install-gateway-provider-dependencies.sh ]]; then
+            guides/prereq/gateway-provider/install-gateway-provider-dependencies.sh > /dev/null
+          fi
 
       - name: Install monitoring CRDs
         run: docs/monitoring/scripts/install-prometheus-grafana.sh --crds-only
