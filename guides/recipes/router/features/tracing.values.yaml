@@ -2,7 +2,7 @@
 ## Layer this on top of base.values.yaml to enable tracing.
 ## Update the endpoint and sampling values for your environment.
 
-inferenceExtension:
+router:
   tracing:
     enabled: true
     otelExporterEndpoint: "http://otel-collector:4317"

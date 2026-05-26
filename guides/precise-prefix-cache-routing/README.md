@@ -44,7 +44,7 @@ Two scorers make up the routing decision alongside the load-aware stack:
 > The `gpu/vllm/` overlay defaults to 8 replicas to match the canonical 16×H100 benchmark. For smaller fleets (or quick smoke tests), reduce `replicas` in the deployment patch (`modelserver/gpu/vllm/patch-vllm.yaml`) before applying.
 
 > [!NOTE]
-> The router runs in **active-active HA** by default — two replicas behind one Service, each subscribing to every vLLM pod via pod-discovery so both indexes converge. Scale to a single replica with `--set inferenceExtension.replicas=1` if HA isn't needed (small fleets, smoke tests).
+> The router runs in **active-active HA** by default — two replicas behind one Service, each subscribing to every vLLM pod via pod-discovery so both indexes converge. Scale to a single replica with `--set router.epp.replicas=1` if HA isn't needed (small fleets, smoke tests).
 
 ## Prerequisites
 
@@ -96,7 +96,7 @@ This deploys the llm-d Router in the simple [Standalone Mode](placeholder-link):
 ```bash
 export REPO_ROOT=$(realpath $(git rev-parse --show-toplevel))
 helm install ${GUIDE_NAME} \
-  oci://registry.k8s.io/gateway-api-inference-extension/charts/standalone \
+  oci://ghcr.io/llm-d/charts/llm-d-router-standalone-dev \
   -f ${REPO_ROOT}/guides/recipes/router/base.values.yaml \
   -f ${REPO_ROOT}/guides/${GUIDE_NAME}/router/${GUIDE_NAME}.values.yaml \
   --post-renderer ${REPO_ROOT}/guides/${GUIDE_NAME}/router/patches/uds-tokenizer/post-renderer.sh \

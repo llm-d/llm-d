@@ -4,7 +4,7 @@
 ## For SLO header support (x-slo-ttft-ms / x-slo-tpot-ms), use
 ## predicted-latency-slo.values.yaml instead.
 
-inferenceExtension:
+router:
   latencyPredictor:
     enabled: true
   extraServicePorts:
@@ -13,7 +13,6 @@ inferenceExtension:
       protocol: TCP
       targetPort: 8081
 
-inferencePool:
   modelServers:
     matchLabels:
       llm-d.ai/guide: "optimized-baseline"

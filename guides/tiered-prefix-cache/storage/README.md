@@ -109,7 +109,7 @@ This deploys the llm-d Router with an Envoy sidecar side-by-side:
 
 ```bash
 helm install ${GUIDE_NAME} \
-    oci://registry.k8s.io/gateway-api-inference-extension/charts/standalone \
+    oci://ghcr.io/llm-d/charts/llm-d-router-standalone-dev \
     -f guides/recipes/router/base.values.yaml \
     -f guides/tiered-prefix-cache/storage/router/${GUIDE_NAME}.values.yaml \
     -n ${NAMESPACE} --version ${GAIE_VERSION}

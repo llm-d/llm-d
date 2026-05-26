@@ -6,11 +6,11 @@ llm-d uses the **llm-d Router** to make intelligent request routing decisions fo
 
 Use this when you **do not** want to deploy a proxy via Kubernetes Gateway APIs. The standalone chart deploys the **llm-d Router** with an Envoy sidecar to proxy the traffic directly.
 
-**Chart:** `oci://registry.k8s.io/gateway-api-inference-extension/charts/standalone`
+**Chart:** `oci://ghcr.io/llm-d/charts/llm-d-router-standalone-dev`
 
 ```bash
 helm install <release-name> \
-  oci://registry.k8s.io/gateway-api-inference-extension/charts/standalone \
+  oci://ghcr.io/llm-d/charts/llm-d-router-standalone-dev \
   -f ${REPO_ROOT}/guides/recipes/router/base.values.yaml \
   -f ${REPO_ROOT}/guides/recipes/router/features/monitoring.values.yaml \
   -f ${REPO_ROOT}/guides/<your-guide>/router/<your-guide>.values.yaml \
