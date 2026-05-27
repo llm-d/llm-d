@@ -15,21 +15,20 @@ router:
         apiVersion: llm-d.ai/v1alpha1
         kind: EndpointPickerConfig
         plugins:
-        - type: queue-scorer
-        - type: kv-cache-utilization-scorer
-        - type: prefix-cache-scorer
-        - type: no-hit-lru-scorer
+        - type: token-load-scorer
+        - type: approx-prefix-cache-producer
+          parameters:
+              maxPrefixTokensToMatch: 8192
+        - type: prefix-cache-affinity-filter
+          parameters:
+              explorationProbability: 0.0
+              maxTTFTPenaltyMs: 0
+              maxTokensInFlightPenalty: 286720
         schedulingProfiles:
         - name: default
           plugins:
-          - pluginRef: queue-scorer
-            weight: 2
-          - pluginRef: kv-cache-utilization-scorer
-            weight: 2
-          - pluginRef: prefix-cache-scorer
-            weight: 3
-          - pluginRef: no-hit-lru-scorer
-            weight: 2
+          - pluginRef: prefix-cache-affinity-filter
+          - pluginRef: token-load-scorer
 
   modelServers:
     matchLabels:
