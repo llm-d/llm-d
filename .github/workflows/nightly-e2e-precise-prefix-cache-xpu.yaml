@@ -24,13 +24,12 @@ jobs:
     if: github.repository == 'llm-d/llm-d'
     uses: llm-d/llm-d-infra/.github/workflows/reusable-nightly-e2e-xpu.yaml@main
     with:
-      guide_name: precise-prefix-cache-aware
+      guide_name: precise-prefix-cache-routing
       namespace: llm-d-nightly-pc-xpu
-      scheduler_release_name: precise-prefix-cache-aware
+      scheduler_release_name: precise-prefix-cache-routing
       scheduler_values_files: |
         guides/recipes/router/base.values.yaml
-        guides/precise-prefix-cache-aware/router/precise-prefix-cache-aware.values.yaml
-      helm_post_renderer: guides/precise-prefix-cache-aware/router/patches/uds-tokenizer/post-renderer.sh
+        guides/precise-prefix-cache-routing/router/precise-prefix-cache-routing.values.yaml
       pod_wait_timeout: '10m'
       llm_d_ref: ${{ github.ref }}
       skip_cleanup: ${{ github.event.inputs.skip_cleanup == 'true' }}
