@@ -14,6 +14,19 @@ The configs in this directory are plain YAML — there is no Helm chart and
 no Kustomize overlay. Drop them on a host, point your services at them,
 and run.
 
+## When to use this guide
+
+This guide fits when:
+
+- HPC schedulers (Slurm, LSF) launch workers dynamically.
+- Ray-based stacks run workers as actors instead of pods.
+- Bare-metal inference farms operate without a Kubernetes control plane.
+- A single workstation with a couple of GPUs is enough for development.
+
+For parity caveats compared to the Kubernetes-based
+[optimized-baseline guide](../optimized-baseline/README.md), see
+[What's not included](#whats-not-included) at the end.
+
 The EPP plugin set, vLLM arguments, and Envoy listener parameters all match
 the [optimized-baseline guide](../optimized-baseline/README.md). The only
 substantive change is the data layer: instead of watching an
