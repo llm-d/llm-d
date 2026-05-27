@@ -178,8 +178,11 @@ endpoints:
       model: Qwen/Qwen3-32B
 ```
 
-`address` must be a literal IPv4 address — the plugin does not resolve
-hostnames. The full schema is documented in [the file-discovery
+> [!IMPORTANT]
+> `address` must be a literal IPv4 address — the file-discovery plugin
+> does not resolve hostnames.
+
+The full schema is documented in [the file-discovery
 blog post][blog-endpoints-file].
 
 ### 4. Start the EPP
