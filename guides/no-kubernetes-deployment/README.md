@@ -18,7 +18,7 @@ The EPP plugin set, vLLM arguments, and Envoy listener parameters all match
 the [optimized-baseline guide](../optimized-baseline/README.md). The only
 substantive change is the data layer: instead of watching an
 `InferencePool` over the Kubernetes API, the EPP reads
-[`epp/endpoints.yaml`](./epp/endpoints.yaml) from disk and reconciles
+[`router/epp/endpoints.yaml`](./router/epp/endpoints.yaml) from disk and reconciles
 changes via `fsnotify`.
 
 > [!NOTE]
@@ -33,9 +33,9 @@ changes via `fsnotify`.
 
 | Path                                       | Purpose                                                       |
 | ------------------------------------------ | ------------------------------------------------------------- |
-| [`epp/config.yaml`](./epp/config.yaml)     | EPP plugin config (optimized-baseline plugin set + file-discovery) |
-| [`epp/endpoints.yaml`](./epp/endpoints.yaml) | The endpoints file the EPP watches                          |
-| [`envoy/envoy.yaml`](./envoy/envoy.yaml)   | Envoy config: ext_proc to EPP, ORIGINAL_DST to vLLM           |
+| [`router/epp/config.yaml`](./router/epp/config.yaml)     | EPP plugin config (optimized-baseline plugin set + file-discovery) |
+| [`router/epp/endpoints.yaml`](./router/epp/endpoints.yaml) | The endpoints file the EPP watches                          |
+| [`router/envoy/envoy.yaml`](./router/envoy/envoy.yaml)   | Envoy config: ext_proc to EPP, ORIGINAL_DST to vLLM           |
 
 ## How traffic flows
 
@@ -48,7 +48,7 @@ client -> Envoy listener :8081
 ```
 
 The EPP's datastore is populated entirely from
-[`epp/endpoints.yaml`](./epp/endpoints.yaml). With `watchFile: true` the
+[`router/epp/endpoints.yaml`](./router/epp/endpoints.yaml). With `watchFile: true` the
 file is hot-reloaded on every atomic rewrite — adding, removing, or
 relabelling a worker takes effect without restarting the EPP.
 
@@ -62,7 +62,7 @@ Same as the [optimized-baseline guide](../optimized-baseline/README.md):
 | Tensor parallelism | 2                                                       |
 | GPUs per replica   | 2                                                       |
 
-Replica count is whatever you list in `epp/endpoints.yaml`. Resource
+Replica count is whatever you list in `router/epp/endpoints.yaml`. Resource
 shapes (cpu/memory/GPU) come from your launcher; the optimized-baseline
 references are 16 cpu / 128 GiB / 2 GPUs per replica.
 
@@ -100,13 +100,13 @@ defaults baked into the YAML files:
 
 ```bash
 sudo mkdir -p /etc/epp /etc/envoy
-sudo cp epp/config.yaml      /etc/epp/config.yaml
-sudo cp epp/endpoints.yaml   /etc/epp/endpoints.yaml
-sudo cp envoy/envoy.yaml     /etc/envoy/envoy.yaml
+sudo cp router/epp/config.yaml      /etc/epp/config.yaml
+sudo cp router/epp/endpoints.yaml   /etc/epp/endpoints.yaml
+sudo cp router/envoy/envoy.yaml     /etc/envoy/envoy.yaml
 ```
 
 If you stage them elsewhere, update the `path:` field in
-[`epp/config.yaml`](./epp/config.yaml) (and the `--mount` paths in the
+[`router/epp/config.yaml`](./router/epp/config.yaml) (and the `--mount` paths in the
 commands below) to match.
 
 ### 2. Start the vLLM workers
@@ -233,7 +233,7 @@ curl -s http://127.0.0.1:8081/v1/completions \
 
 ## Live reload
 
-`watchFile: true` in [`epp/config.yaml`](./epp/config.yaml) means edits to
+`watchFile: true` in [`router/epp/config.yaml`](./router/epp/config.yaml) means edits to
 the endpoints file take effect without restarting the EPP. The watcher
 reacts cleanly to atomic-rename writes, so update via a temp file:
 
