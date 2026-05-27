@@ -59,13 +59,22 @@ git clone "${DEEPEP_REPO}" deepep
 cd deepep
 git fetch origin "${DEEPEP_VERSION}" # Workaround for claytons floating commit
 git checkout -q "${DEEPEP_VERSION}"
-# Force NVSHMEM IBGDA constant to be extern in host-compiled TUs (prevents duplicate definition)
+# Force NVSHMEM IBGDA constant to be extern in host-compiled TUs (prevents duplicate definition).
+# distutils/setuptools honors CFLAGS (not CXXFLAGS) for C++ extension compile lines, so set both:
+# CFLAGS reaches the host g++ compile of deep_ep.cpp; CXXFLAGS covers any tooling that prefers it.
+BACKUP_CFLAGS="${CFLAGS-}"
 BACKUP_CXXFLAGS="${CXXFLAGS-}"
+export CFLAGS="${CFLAGS:-} -D__NVSHMEM_NUMBA_SUPPORT__"
 export CXXFLAGS="${CXXFLAGS:-} -D__NVSHMEM_NUMBA_SUPPORT__"
 uv build --wheel --no-build-isolation --out-dir /wheels
 cd ..
 rm -rf deepep
-# restore CXXFLAGS exactly as it was (unset vs set)
+# restore CFLAGS/CXXFLAGS exactly as they were (unset vs set)
+if [ -n "${BACKUP_CFLAGS+x}" ]; then
+  export CFLAGS="${BACKUP_CFLAGS}"
+else
+  unset CFLAGS
+fi
 if [ -n "${BACKUP_CXXFLAGS+x}" ]; then
   export CXXFLAGS="${BACKUP_CXXFLAGS}"
 else
@@ -80,11 +89,18 @@ if [ -n "${DEEPEP_GB200_REPO:-}" ] && [ -n "${DEEPEP_GB200_VERSION:-}" ]; then
   cd deepep-gb200
   git fetch origin "${DEEPEP_GB200_VERSION}"
   git checkout -q "${DEEPEP_GB200_VERSION}"
+  BACKUP_CFLAGS="${CFLAGS-}"
   BACKUP_CXXFLAGS="${CXXFLAGS-}"
+  export CFLAGS="${CFLAGS:-} -D__NVSHMEM_NUMBA_SUPPORT__"
   export CXXFLAGS="${CXXFLAGS:-} -D__NVSHMEM_NUMBA_SUPPORT__"
   uv build --wheel --no-build-isolation --out-dir /wheels-gb200
   cd ..
   rm -rf deepep-gb200
+  if [ -n "${BACKUP_CFLAGS+x}" ]; then
+    export CFLAGS="${BACKUP_CFLAGS}"
+  else
+    unset CFLAGS
+  fi
   if [ -n "${BACKUP_CXXFLAGS+x}" ]; then
     export CXXFLAGS="${BACKUP_CXXFLAGS}"
   else
