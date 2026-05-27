@@ -242,6 +242,26 @@ curl -s http://127.0.0.1:8081/v1/completions \
     }'
 ```
 
+## Troubleshooting
+
+### EPP not detecting endpoint changes
+
+- Verify `watchFile: true` in [`router/epp/config.yaml`](./router/epp/config.yaml).
+- Update the file via atomic rename, e.g. `mv endpoints.yaml.tmp endpoints.yaml`.
+- Check EPP logs (`docker logs epp`) for `endpoints file changed, reloading`.
+
+### Envoy returns 503
+
+- Verify EPP is healthy: `curl http://127.0.0.1:9090/metrics`.
+- Confirm `endpoints.yaml` lists literal IPv4 addresses (hostnames are not resolved).
+- Verify the Envoy → EPP cluster: `curl http://127.0.0.1:19000/clusters | grep ext_proc`.
+
+### vLLM worker unreachable
+
+- Confirm the worker is up: `curl http://<worker-ip>:8000/v1/models`.
+- Ensure firewall rules allow Envoy and EPP to reach the worker on its service port.
+- Check that the `address` in `endpoints.yaml` matches the worker's actual IP.
+
 ## Live reload
 
 `watchFile: true` in [`router/epp/config.yaml`](./router/epp/config.yaml) means edits to
