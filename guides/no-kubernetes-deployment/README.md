@@ -299,7 +299,21 @@ on `--metrics-port` all work; FlowControl and model rewriting do not.
 
 For monitoring, point your existing Prometheus at the EPP's
 `--metrics-port` (`9090` in the command above) and at each vLLM worker's
-`/metrics` endpoint.
+`/metrics` endpoint:
+
+```yaml
+scrape_configs:
+  - job_name: 'llm-d-epp'
+    static_configs:
+      - targets: ['localhost:9090']
+
+  - job_name: 'vllm-workers'
+    static_configs:
+      - targets:
+        - '10.0.0.10:8000'  # vllm-0
+        - '10.0.0.11:8000'  # vllm-1
+    metrics_path: '/metrics'
+```
 
 For prefill/decode disaggregation outside Kubernetes, follow the
 [pd-disaggregation guide](../pd-disaggregation/README.md) for the EPP plugin
