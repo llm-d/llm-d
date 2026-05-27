@@ -4,7 +4,7 @@ title: "Extend GPU Memory with CPU KV Cache Offloading in llm-d"
 date: 2026-05-27
 ---
 
-**Author:** Antonio Cardace
+**Author:** Antonio Cardace and Fahim Uddin
 
 Large language model inference is increasingly limited by GPU high-bandwidth memory (HBM), not compute. Every active request stores Key and Value (KV) state attention from the prefill phase; as context lengths grow, batch sizes increase, and multi-turn agentic workloads reuse long prefixes, that cache pressure shows up as evictions, expensive recomputation, and queueing. llm-d's **CPU KV Cache Offloading** well-lit path addresses this by extending the effective KV cache into host CPU memory.
 
@@ -26,7 +26,7 @@ CPU KV cache offloading moves evicted blocks from GPU to pinned host memory inst
 
 ### vLLM native CPU offloading
 
-llm-d builds on vLLM's **`OffloadingConnector`**, which asynchronously transfers KV blocks between GPU HBM and CPU DRAM using hardware DMA. Transfers run in the background so they do not block the decode loop, and a contiguous KV layout (available in recent vLLM releases) improves transfer throughput by grouping all layers into single physical blocks.
+llm-d builds on vLLM's **`OffloadingConnector`**, which asynchronously transfers KV blocks between GPU and CPU using hardware direct. Transfers run in the background so they do not block the decode loop, and a contiguous KV layout (available in recent vLLM releases) improves transfer throughput by grouping all layers into single physical blocks.
 
 The simplest vLLM configuration uses dedicated flags:
 
@@ -80,10 +80,6 @@ Benchmarking in the llm-d CPU guide compares baseline vLLM against CPU offloadin
 When the working set already fits in HBM, results stay near baseline — confirming that CPU offloading is safe to enable proactively rather than only after you observe evictions.
 
 For reproducible benchmark workflows, see the [benchmark helpers](../../helpers/benchmark.md) and the benchmarking section in the [CPU guide](../../guides/tiered-prefix-cache/cpu/README.md).
-
-### What this well-lit path does not cover
-
-CPU offloading extends per-node cache capacity. It does **not** share KV state across nodes or survive pod rescheduling on its own. For those requirements, add a [storage tier](../../guides/tiered-prefix-cache/storage/README.md) on top of CPU offloading. The llm-d project treats CPU and storage as complementary tiers in a prefix-cache hierarchy; CPU is the recommended starting point because of its simplicity.
 
 ## How do I help?
 
