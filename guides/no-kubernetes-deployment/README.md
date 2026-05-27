@@ -80,12 +80,10 @@ and `no-hit-lru-scorer` (each weight 2), composed by `max-score-picker`.
   `Qwen/Qwen3-32B` on first start.
 
 The EPP binary is built from [`cmd/epp` of the llm-d-router repo][router-repo]
-or pulled from `ghcr.io/llm-d/llm-d-router-endpoint-picker` (file-discovery
-support ships in the upcoming llm-d 0.8 release; build from `main` until
-then).
+or pulled from `ghcr.io/llm-d/llm-d-router-endpoint-picker-dev`.
 
 ```bash
-export EPP_IMAGE=ghcr.io/llm-d/llm-d-router-endpoint-picker:main
+export EPP_IMAGE=ghcr.io/llm-d/llm-d-router-endpoint-picker-dev:main
 export ENVOY_IMAGE=docker.io/envoyproxy/envoy:distroless-v1.33.2
 export VLLM_IMAGE=vllm/vllm-openai:v0.19.1
 export MODEL=Qwen/Qwen3-32B
