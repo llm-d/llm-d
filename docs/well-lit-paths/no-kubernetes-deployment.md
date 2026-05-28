@@ -23,7 +23,7 @@ See the [no-Kubernetes deployment guide](../../guides/no-kubernetes-deployment) 
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)">
-    <img src="../assets/no-kubernetes-deployment.svg" alt="No-Kubernetes Deployment">
+    <img src="../assets/no-kubernetes-deployment.svg" alt="No-Kubernetes Deployment" width="676">
   </picture>
 </p>
 
