@@ -9,7 +9,7 @@ plugins:
   - name: file-discovery
     type: file-discovery
     parameters:
-      path: /etc/epp/endpoints.yaml
+      path: /etc/epp/endpoints.yaml  # EPP must have network access to all worker IPs for metrics scraping
       watchFile: true
 
   - type: queue-scorer
