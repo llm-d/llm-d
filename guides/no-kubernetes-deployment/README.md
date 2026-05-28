@@ -1,38 +1,18 @@
 # No-Kubernetes Deployment
 
-## Overview
+Step-by-step deployment of the llm-d routing stack — the EPP (Endpoint
+Picker), Envoy, and one or more vLLM workers — **without a Kubernetes
+cluster**. The EPP gets its endpoint inventory from a YAML file on disk
+via the [file-discovery plugin][filediscovery-plugin] instead of watching
+an `InferencePool`.
 
-This guide runs the llm-d routing stack — the EPP (Endpoint Picker), Envoy,
-and one or more vLLM workers — **without a Kubernetes cluster**. The EPP
-gets its endpoint inventory from a YAML file on disk via the
-[file-discovery plugin][filediscovery-plugin], which makes the deployment
-work on bare metal, Slurm, Ray, or a single workstation.
-
-Background: ["No Kubernetes? No Problem: llm-d Now Runs Anywhere"][blog].
+For motivation, architecture, and parity caveats vs. the Kubernetes-based
+optimized-baseline, see the
+[No-Kubernetes Deployment well-lit path](../../docs/well-lit-paths/no-kubernetes-deployment.md).
 
 The configs in this directory are plain YAML — there is no Helm chart and
 no Kustomize overlay. Drop them on a host, point your services at them,
 and run.
-
-## When to use this guide
-
-This guide fits when:
-
-- HPC schedulers (Slurm, LSF) launch workers dynamically.
-- Ray-based stacks run workers as actors instead of pods.
-- Bare-metal inference farms operate without a Kubernetes control plane.
-- A single workstation with a couple of GPUs is enough for development.
-
-For parity caveats compared to the Kubernetes-based
-[optimized-baseline guide](../optimized-baseline/README.md), see
-[What's not included](#whats-not-included) at the end.
-
-The EPP plugin set, vLLM arguments, and Envoy listener parameters all match
-the [optimized-baseline guide](../optimized-baseline/README.md). The only
-substantive change is the data layer: instead of watching an
-`InferencePool` over the Kubernetes API, the EPP reads
-[`router/epp/endpoints.yaml`](./router/epp/endpoints.yaml) from disk and reconciles
-changes via `fsnotify`.
 
 > [!NOTE]
 > This guide targets **vLLM on NVIDIA GPUs** — the model-server image,
@@ -49,21 +29,6 @@ changes via `fsnotify`.
 | [`router/epp/config.yaml`](./router/epp/config.yaml)     | EPP plugin config (optimized-baseline plugin set + file-discovery) |
 | [`router/epp/endpoints.yaml`](./router/epp/endpoints.yaml) | The endpoints file the EPP watches                          |
 | [`router/envoy/envoy.yaml`](./router/envoy/envoy.yaml)   | Envoy config: ext_proc to EPP, ORIGINAL_DST to vLLM           |
-
-## How traffic flows
-
-```
-client -> Envoy listener :8081
-       -> ext_proc gRPC :9002 (EPP picks endpoint, sets header)
-       -> ORIGINAL_DST cluster
-       -> reads x-gateway-destination-endpoint from EPP response
-       -> <address>:<port> of the vLLM worker chosen by the EPP
-```
-
-The EPP's datastore is populated entirely from
-[`router/epp/endpoints.yaml`](./router/epp/endpoints.yaml). With `watchFile: true` the
-file is hot-reloaded on every atomic rewrite — adding, removing, or
-relabelling a worker takes effect without restarting the EPP.
 
 ## Default configuration
 
@@ -280,24 +245,9 @@ The EPP logs `endpoints file changed, reloading` and reconciles the pool.
 Plain in-place edits also work for most editors but are less robust — see
 the troubleshooting section of the [blog post][blog-troubleshooting].
 
-## Cleanup
+## Monitoring
 
-```bash
-docker rm -f envoy epp vllm-0     # add other vllm-N containers if any
-sudo rm -rf /etc/epp /etc/envoy   # if you no longer need the configs
-```
-
-## What's not included
-
-Everything in the optimized-baseline guide that depends on Kubernetes
-(`InferencePool`, `InferenceObjective`-driven FlowControl, the
-`InferenceModelRewrite` model-name rewriter, `PodMonitor` for Prometheus)
-is intentionally out of scope here. The blog post lists the
-[parity caveats][blog-parity] in detail; in short: scoring,
-prefix-cache affinity, saturation-based admission, and Prometheus metrics
-on `--metrics-port` all work; FlowControl and model rewriting do not.
-
-For monitoring, point your existing Prometheus at the EPP's
+Point your existing Prometheus at the EPP's
 `--metrics-port` (`9090` in the command above) and at each vLLM worker's
 `/metrics` endpoint:
 
@@ -321,9 +271,14 @@ config and vLLM/sidecar setup, and use the file-discovery plugin in place of
 `InferencePool` discovery (set `llm-d.ai/role: prefill` or `decode` on each
 endpoint's `labels`).
 
+## Cleanup
+
+```bash
+docker rm -f envoy epp vllm-0     # add other vllm-N containers if any
+sudo rm -rf /etc/epp /etc/envoy   # if you no longer need the configs
+```
+
 [filediscovery-plugin]: https://github.com/llm-d/llm-d-router/blob/main/pkg/epp/framework/plugins/datalayer/discovery/file/plugin.go
-[blog]: https://llm-d.ai/blog/running-llm-d-without-kubernetes
 [blog-endpoints-file]: https://llm-d.ai/blog/running-llm-d-without-kubernetes#1-the-endpoints-file
-[blog-parity]: https://llm-d.ai/blog/running-llm-d-without-kubernetes#parity-with-the-kubernetes-native-llm-d-deployment
 [blog-troubleshooting]: https://llm-d.ai/blog/running-llm-d-without-kubernetes#troubleshooting
 [router-repo]: https://github.com/llm-d/llm-d-router
