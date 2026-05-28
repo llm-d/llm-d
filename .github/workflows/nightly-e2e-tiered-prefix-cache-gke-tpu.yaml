@@ -32,9 +32,31 @@ concurrency:
 jobs:
   nightly:
     if: github.repository == 'llm-d/llm-d'
-    runs-on: ubuntu-latest
-    steps:
-      - name: Placeholder
-        run: |
-          echo "Skipping Tiered Prefix Cache TPU nightly — v6e manifests not yet available."
-          echo "Unblock: confirm TPUOffloadConnector v6e support, add tpu-v6e manifests, replace this job."
+    uses: llm-d/llm-d-infra/.github/workflows/reusable-nightly-e2e-gke-tpu.yaml@main
+    with:
+      guide_name: tiered-prefix-cache
+      namespace: llm-d-nightly-pfc-cpu-gke-tpu
+      gateway_host: 'tiered-prefix-cache-cpu-epp'
+      tpu_type: v6e-8
+      required_tpu_chips: 8
+      recommended_tpu_chips: 8
+      custom_deploy_script: |
+        export GAIE_VERSION=v1.5.0
+        export ROUTER_CHART_VERSION=v0
+        export GUIDE_NAME="tiered-prefix-cache-cpu"
+        kubectl apply -n ${NAMESPACE} -k guides/tiered-prefix-cache/cpu/modelserver/tpu-v6/vllm/tpu-offloading-connector
+        helm install ${GUIDE_NAME} \
+          oci://ghcr.io/llm-d/charts/llm-d-router-standalone-dev \
+          -f guides/recipes/router/base.values.yaml \
+          -f guides/tiered-prefix-cache/cpu/router/${GUIDE_NAME}.values.yaml \
+          -n ${NAMESPACE} --version ${ROUTER_CHART_VERSION}
+      gke_cluster_name: llm-d-e2e-us-east5
+      gke_cluster_zone: us-east5
+      pod_wait_timeout: '45m'
+      pod_readiness_delay: 300
+      llm_d_ref: ${{ github.ref }}
+      skip_cleanup: ${{ github.event.inputs.skip_cleanup == 'true' }}
+      pr_number: ${{ github.event.inputs.pr_number }}
+      pr_repo: ${{ github.event.inputs.pr_repo }}
+    secrets: inherit
+
