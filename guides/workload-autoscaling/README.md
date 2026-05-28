@@ -23,5 +23,5 @@ The [Workload Variant Autoscaler (WVA)](./README.wva.md) is designed for operato
 | **Best for** | Deployments on homogeneous hardware where each model scales independently | Multi-variant deployments where cost-aware capacity allocation across heterogeneous shared hardware is required |
 | **Scaling signal** | EPP metrics such as queue depth and running request count | KV cache utilization, queue depth, energy and performance budgets |
 | **Cost optimization** | None — scales based on load signals only | Optimizes across variants by preferring lower-cost hardware |
-| **Additional components** | None — standard Kubernetes HPA only | Requires the WVA controller and `VariantAutoscaling` CRD |
+| **Additional components** | None — standard Kubernetes HPA only | Requires the WVA controller |
 | **Scale to zero** | Supported | Supported |

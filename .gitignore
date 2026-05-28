@@ -3,6 +3,7 @@
 .DS_Store
 CLAUDE.md
 .release-team
+.generated-* # generated files, e.g., from codegen tools
 
 # editor and IDE paraphernalia
 .idea
