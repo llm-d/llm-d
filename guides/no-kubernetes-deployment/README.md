@@ -152,6 +152,11 @@ blog post][blog-endpoints-file].
 
 ### 4. Start the EPP
 
+The EPP can run as a container or as a native binary built from source.
+Pick one — the flags are identical.
+
+#### Option A — container
+
 ```bash
 docker run -d --name epp --network host \
     -v /etc/epp:/etc/epp:ro \
@@ -166,13 +171,34 @@ docker run -d --name epp --network host \
     --v=2
 ```
 
+#### Option B — build from source
+
+```bash
+git clone https://github.com/llm-d/llm-d-router.git
+cd llm-d-router
+make build-epp                # produces bin/epp via the project's builder container
+
+./bin/epp \
+    --config-file=/etc/epp/config.yaml \
+    --pool-name=file-discovery \
+    --pool-namespace=default \
+    --grpc-port=9002 \
+    --grpc-health-port=9003 \
+    --metrics-port=9090 \
+    --secure-serving=false \
+    --v=2
+```
+
+Wrap in `systemd-run`, `nohup`, or your runtime's process manager for
+persistence; the command above runs in the foreground.
+
 `--pool-name` and `--pool-namespace` are not Kubernetes references in
 file-discovery mode; they are only used as labels in the EPP's metrics
 and log lines.
 
-`--network host` lets Envoy reach the EPP on `127.0.0.1:9002` and the EPP
-scrape vLLM's `/metrics` on the host loopback. Drop it and use a Docker
-network if the workers and the EPP are on separate hosts.
+`--network host` (Option A) lets Envoy reach the EPP on `127.0.0.1:9002`
+and the EPP scrape vLLM's `/metrics` on the host loopback. Drop it and
+use a Docker network if the workers and the EPP are on separate hosts.
 
 ### 5. Start Envoy
 
