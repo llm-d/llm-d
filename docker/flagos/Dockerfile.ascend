@@ -1,0 +1,186 @@
+######################## SYSTEM CONFIGURATION ########################
+
+ARG CANN_VERSION=8.5.1
+ARG CANN_CHIP=a3
+ARG UBUNTU_VERSION=22.04
+ARG PYTHON_VERSION=3.11
+
+######################## COMPONENT VERSIONS ########################
+
+# vLLM: installed from PyPI (Ascend uses VLLM_TARGET_DEVICE=empty)
+ARG VLLM_VERSION=0.19.0
+
+# Optional components
+ARG INSTALL_MOONCAKE=true
+ARG MOONCAKE_TAG=v0.3.8.post1
+
+# Ascend SoC
+ARG SOC_VERSION=ascend910_9391
+
+# vllm-plugin-FL
+ARG FLAGOS_FL_PLUGIN_REPO=https://github.com/flagos-ai/vllm-plugin-FL.git
+ARG FLAGOS_FL_PLUGIN_VERSION=20abe1fe0ca81f24a7e352074b2ee673eeca96fc
+
+# FlagGems: unified operator library (NPU backend for Ascend)
+ARG FLAGOS_FLAGGEMS_VERSION=v5.0.0
+
+# FlagTree: Ascend-specific acceleration
+ARG FLAGOS_FLAGTREE_VERSION=0.4.0+ascend3.2
+
+# ============================================================================
+# BASE STAGE
+# ============================================================================
+FROM quay.io/ascend/cann:${CANN_VERSION}-${CANN_CHIP}-ubuntu${UBUNTU_VERSION}-py${PYTHON_VERSION} AS base
+
+ARG CACHE_BUSTER
+RUN if [ -n "${CACHE_BUSTER}" ]; then \
+        echo "$CACHE_BUSTER" > /tmp/builder-buster; \
+    fi;
+
+ARG INSTALL_MOONCAKE
+ARG MOONCAKE_TAG
+ARG SOC_VERSION
+
+ENV DEBIAN_FRONTEND=noninteractive
+ENV SOC_VERSION=${SOC_VERSION} \
+    TASK_QUEUE_ENABLE=1 \
+    OMP_NUM_THREADS=1
+
+# Add BiShengIR compiler to PATH
+ENV PATH="${ASCEND_TOOLKIT_HOME}/tools/bishengir/bin:${PATH}"
+
+# ---- uv + pip upgrade ----
+RUN export UV_INSTALL_DIR=/usr/local/bin && \
+    curl -LsSf https://astral.sh/uv/install.sh | sh && \
+    uv pip install --system --upgrade pip setuptools
+
+# ---- System dependencies ----
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,target=/var/lib/apt/lists,sharing=locked \
+    apt-get update -y && \
+    apt-get install -y \
+        git \
+        vim \
+        wget \
+        net-tools \
+        gcc \
+        g++ \
+        cmake \
+        numactl \
+        libnuma-dev \
+        libjemalloc2 \
+        clang-15 \
+    && update-alternatives --install /usr/bin/clang clang /usr/bin/clang-15 20 \
+    && update-alternatives --install /usr/bin/clang++ clang++ /usr/bin/clang++-15 20 \
+    && rm -rf /var/lib/apt/lists/*
+
+# ---- Mooncake (distributed KV cache, optional) ----
+COPY docker/scripts/common/build-mooncake.sh /tmp/build-mooncake.sh
+RUN if [ "${INSTALL_MOONCAKE}" = "true" ]; then \
+        MOONCAKE_VERSION=${MOONCAKE_TAG} \
+        MOONCAKE_TARGET_ACCELERATOR=ascend \
+        bash /tmp/build-mooncake.sh; \
+    fi && rm /tmp/build-mooncake.sh
+
+# ---- triton-ascend + runtime deps ----
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv pip install --system \
+        triton-ascend==3.2.0 \
+        'ray>=2.47.1,<=2.48.0' \
+        'protobuf>3.20.0'
+
+# jemalloc preload + devlib LD_LIBRARY_PATH
+RUN echo "export LD_PRELOAD=/usr/lib/$(uname -m)-linux-gnu/libjemalloc.so.2:\${LD_PRELOAD}" >> ~/.bashrc && \
+    echo "export LD_LIBRARY_PATH=\${LD_LIBRARY_PATH}:/usr/local/lib" >> ~/.bashrc
+
+WORKDIR /workspace
+
+# ============================================================================
+# RUNTIME STAGE
+# ============================================================================
+FROM base
+
+ARG VLLM_VERSION
+ARG FLAGOS_FL_PLUGIN_REPO
+ARG FLAGOS_FL_PLUGIN_VERSION
+ARG FLAGOS_FLAGGEMS_VERSION
+ARG FLAGOS_FLAGTREE_VERSION
+
+# ---- vLLM (Ascend uses VLLM_TARGET_DEVICE=empty, uninstall x86 triton) ----
+RUN --mount=type=cache,target=/root/.cache/uv \
+    VLLM_TARGET_DEVICE="empty" uv pip install --system \
+        "vllm==${VLLM_VERSION}" \
+        --extra-index-url https://download.pytorch.org/whl/cpu/ \
+    && uv pip uninstall --system triton
+
+# ---- vllm-plugin-FL ----
+RUN --mount=type=cache,target=/root/.cache/uv \
+    git clone ${FLAGOS_FL_PLUGIN_REPO} /workspace/vllm-plugin-FL && \
+    cd /workspace/vllm-plugin-FL && \
+    git checkout ${FLAGOS_FL_PLUGIN_VERSION} && \
+    uv pip install --system --no-build-isolation .
+
+# ---- FlagGems (NPU backend) ----
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv pip install --system scikit-build-core==0.11 pybind11 && \
+    git clone --depth 1 --branch ${FLAGOS_FLAGGEMS_VERSION} \
+        https://github.com/flagos-ai/FlagGems /workspace/FlagGems && \
+    uv pip install --system --no-build-isolation \
+        --config-settings=cmake.define.FLAGGEMS_BACKEND=NPU \
+        /workspace/FlagGems
+
+# ---- FlagTree (Ascend-specific) ----
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv pip install --system \
+        "flagtree==${FLAGOS_FLAGTREE_VERSION}" \
+        --index-url=https://resource.flagos.net/repository/flagos-pypi-hosted/simple \
+        --trusted-host=resource.flagos.net
+
+# ============================================================================
+# RUNTIME CONFIGURATION
+# ============================================================================
+
+# OTEL packages for distributed tracing (llm-d convention)
+COPY docker/packages/common/runtime-otel-package-requirements.txt /workspace/runtime-otel-package-requirements.txt
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv pip install --system -r /workspace/runtime-otel-package-requirements.txt
+
+# Cleanup build artifacts
+RUN rm -rf /workspace/vllm-plugin-FL/.git \
+    && rm -rf /workspace/FlagGems/.git
+
+# Non-root user (llm-d convention: uid 2000, gid 0 for OpenShift)
+RUN useradd --uid 2000 --gid 0 -m vllm && \
+    touch /home/vllm/.bashrc
+
+# Model storage directories (llm-d convention)
+ENV LLM_D_MODELS_DIR=/var/lib/llm-d/models \
+    HF_HOME=/var/lib/llm-d/.hf
+
+RUN mkdir -p "$LLM_D_MODELS_DIR" "$HF_HOME" && \
+    chown -R root:0 /var/lib/llm-d && \
+    chmod -R g+rwX /var/lib/llm-d && \
+    find /var/lib/llm-d -type d -exec chmod g+s {} \; && \
+    ln -snf /var/lib/llm-d/models /models
+
+# Workspace permissions for non-root user
+RUN chown -R 2000:0 /workspace && \
+    chmod -R g+rwX /workspace
+
+# FlagOS + Ascend-specific environment
+ENV VLLM_PLUGINS=fl \
+    TRITON_ALL_BLOCKS_PARALLEL=1
+
+# Standard llm-d runtime environment
+ENV HOME=/home/vllm \
+    VLLM_USAGE_SOURCE=production-docker-image \
+    VLLM_WORKER_MULTIPROC_METHOD=fork \
+    OUTLINES_CACHE_DIR=/tmp/outlines \
+    NUMBA_CACHE_DIR=/tmp/numba \
+    TRITON_CACHE_DIR=/tmp/triton \
+    VLLM_CACHE_ROOT=/tmp/vllm
+
+USER 2000
+WORKDIR /home/vllm
+
+ENTRYPOINT ["python", "-m", "vllm.entrypoints.openai.api_server"]

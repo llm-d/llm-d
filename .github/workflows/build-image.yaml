@@ -23,7 +23,7 @@ on:
   workflow_dispatch:
     inputs:
       platforms:
-        description: "Platforms to build (comma-separated: cuda,aws,gb200,xpu,cpu,hpu)"
+        description: "Platforms to build (comma-separated: cuda,aws,gb200,xpu,cpu,hpu,flagos-cuda,flagos-ascend)"
         required: false
         default: "cuda"
         type: string
@@ -69,6 +69,8 @@ jobs:
       cpu: ${{ steps.force.outputs.cpu || steps.filter.outputs.cpu || steps.dispatch.outputs.cpu }}
       hpu: ${{ steps.force.outputs.hpu || steps.filter.outputs.hpu || steps.dispatch.outputs.hpu }}
       rdma-tools: ${{ steps.filter.outputs.rdma-tools }}
+      flagos-cuda: ${{ steps.force.outputs.flagos-cuda || steps.filter.outputs.flagos-cuda || steps.dispatch.outputs.flagos-cuda }}
+      flagos-ascend: ${{ steps.force.outputs.flagos-ascend || steps.filter.outputs.flagos-ascend || steps.dispatch.outputs.flagos-ascend }}
     steps:
       - name: Force all platforms
         if: inputs.force_build == true
@@ -81,6 +83,8 @@ jobs:
           echo "xpu=true" >> $GITHUB_OUTPUT
           echo "cpu=true" >> $GITHUB_OUTPUT
           echo "hpu=true" >> $GITHUB_OUTPUT
+          echo "flagos-cuda=true" >> $GITHUB_OUTPUT
+          echo "flagos-ascend=true" >> $GITHUB_OUTPUT
       - uses: actions/checkout@v6
         with:
           ref: ${{ inputs.ref || '' }}
@@ -134,6 +138,16 @@ jobs:
             rdma-tools:
               - 'docker/Dockerfile.rdma-tools'
               - 'docker/common-versions'
+            flagos-cuda:
+              - 'docker/flagos/Dockerfile.cuda'
+              - 'docker/flagos/**'
+              - 'docker/scripts/common/**'
+              - 'docker/packages/common/**'
+            flagos-ascend:
+              - 'docker/flagos/Dockerfile.ascend'
+              - 'docker/flagos/**'
+              - 'docker/scripts/common/**'
+              - 'docker/packages/common/**'
       # shim to convert comma-separated platforms input into same boolean outputs as path filter
       - name: Parse dispatch platforms
         if: github.event_name == 'workflow_dispatch'
@@ -147,6 +161,8 @@ jobs:
           echo "xpu=$(echo $platforms | grep -q xpu && echo true || echo false)" >> $GITHUB_OUTPUT
           echo "cpu=$(echo $platforms | grep -q cpu && echo true || echo false)" >> $GITHUB_OUTPUT
           echo "hpu=$(echo $platforms | grep -q hpu && echo true || echo false)" >> $GITHUB_OUTPUT
+          echo "flagos-cuda=$(echo $platforms | grep -q flagos-cuda && echo true || echo false)" >> $GITHUB_OUTPUT
+          echo "flagos-ascend=$(echo $platforms | grep -q flagos-ascend && echo true || echo false)" >> $GITHUB_OUTPUT
 
   cuda-build-llm-d-debug:
     needs: [detect-changes]
@@ -1611,6 +1627,183 @@ jobs:
           skip-dirs: /root/.cache/uv
         env:
           TRIVY_USERNAME: ${{ github.actor }}
+          TRIVY_PASSWORD: ${{ secrets.GHCR_TOKEN }}
+
+      - name: Upload Trivy scan results to GitHub Security tab
+        uses: github/codeql-action/upload-sarif@v4
+        with:
+          sarif_file: "trivy-results.sarif"
+
+      - name: Display vulnerability summary
+        run: |
+          echo "=== Vulnerability Scan Summary ==="
+          if [ -f trivy-results.sarif ]; then
+            echo "Scan completed. Check the Security tab for detailed results."
+          else
+            echo "No vulnerabilities found or scan failed."
+          fi
+
+  flagos-cuda-build-llm-d:
+    needs: [detect-changes]
+    if: ${{ needs.detect-changes.outputs.flagos-cuda == 'true' }}
+    strategy:
+      fail-fast: false
+    runs-on: vllm-runner
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.ref || '' }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+        with:
+          buildkitd-flags: --oci-worker-gc
+
+      - name: Log in to Container Registry
+        uses: docker/login-action@v4
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ secrets.GHCR_USER }}
+          password: ${{ secrets.GHCR_TOKEN }}
+
+      - name: Compute short SHA from checkout
+        id: short-sha
+        run: echo "short_sha=$(git rev-parse --short=7 HEAD)" >> $GITHUB_OUTPUT
+
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v6
+        with:
+          images: ${{ env.REGISTRY }}/${{ github.repository }}-flagos-cuda-dev
+          tags: |
+            type=ref,event=branch
+            type=ref,event=pr
+            type=raw,value=sha-${{ steps.short-sha.outputs.short_sha }}
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      - name: Calculate Cache Bust Timestamp
+        id: cache_buster_timestamp
+        run: |
+          echo "cache_buster_timestamp=$(date)" >> $GITHUB_OUTPUT
+
+      - name: Build & Push
+        id: build-and-push
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: ./docker/flagos/Dockerfile.cuda
+          platforms: linux/amd64
+          push: true
+          provenance: true
+          build-args: |
+            CACHE_BUSTER=${{ steps.cache_buster_timestamp.outputs.cache_buster_timestamp }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          github-token: ${{ secrets.GHCR_TOKEN }}
+
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          image-ref: ${{ env.REGISTRY }}/${{ github.repository }}-flagos-cuda-dev@${{ steps.build-and-push.outputs.digest }}
+          format: "sarif"
+          output: "trivy-results.sarif"
+          severity: "CRITICAL,HIGH,MEDIUM"
+          scanners: vuln
+          timeout: 30m
+          skip-dirs: /root/.cache/uv
+        env:
+          TRIVY_USERNAME: ${{ secrets.GHCR_USER }}
+          TRIVY_PASSWORD: ${{ secrets.GHCR_TOKEN }}
+
+      - name: Upload Trivy scan results to GitHub Security tab
+        uses: github/codeql-action/upload-sarif@v4
+        with:
+          sarif_file: "trivy-results.sarif"
+
+      - name: Display vulnerability summary
+        run: |
+          echo "=== Vulnerability Scan Summary ==="
+          if [ -f trivy-results.sarif ]; then
+            echo "Scan completed. Check the Security tab for detailed results."
+          else
+            echo "No vulnerabilities found or scan failed."
+          fi
+
+  flagos-ascend-build-llm-d:
+    needs: [detect-changes]
+    if: ${{ needs.detect-changes.outputs.flagos-ascend == 'true' }}
+    strategy:
+      fail-fast: false
+    runs-on: vllm-runner
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.ref || '' }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+        with:
+          buildkitd-flags: --oci-worker-gc
+
+      - name: Log in to Container Registry
+        uses: docker/login-action@v4
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ secrets.GHCR_USER }}
+          password: ${{ secrets.GHCR_TOKEN }}
+
+      - name: Compute short SHA from checkout
+        id: short-sha
+        run: echo "short_sha=$(git rev-parse --short=7 HEAD)" >> $GITHUB_OUTPUT
+
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v6
+        with:
+          images: ${{ env.REGISTRY }}/${{ github.repository }}-flagos-ascend-dev
+          tags: |
+            type=ref,event=branch
+            type=ref,event=pr
+            type=raw,value=sha-${{ steps.short-sha.outputs.short_sha }}
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      - name: Calculate Cache Bust Timestamp
+        id: cache_buster_timestamp
+        run: |
+          echo "cache_buster_timestamp=$(date)" >> $GITHUB_OUTPUT
+
+      - name: Build & Push
+        id: build-and-push
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: ./docker/flagos/Dockerfile.ascend
+          platforms: linux/amd64
+          push: true
+          provenance: true
+          build-args: |
+            CACHE_BUSTER=${{ steps.cache_buster_timestamp.outputs.cache_buster_timestamp }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          github-token: ${{ secrets.GHCR_TOKEN }}
+
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          image-ref: ${{ env.REGISTRY }}/${{ github.repository }}-flagos-ascend-dev@${{ steps.build-and-push.outputs.digest }}
+          format: "sarif"
+          output: "trivy-results.sarif"
+          severity: "CRITICAL,HIGH,MEDIUM"
+          scanners: vuln
+          timeout: 30m
+        env:
+          TRIVY_USERNAME: ${{ secrets.GHCR_USER }}
           TRIVY_PASSWORD: ${{ secrets.GHCR_TOKEN }}
 
       - name: Upload Trivy scan results to GitHub Security tab

@@ -16,6 +16,12 @@ else ifeq ($(DEVICE), cpu)
 	DOCKERFILE ?= Dockerfile.cpu
 else ifeq ($(DEVICE), hpu)
 	DOCKERFILE ?= Dockerfile.hpu
+else ifeq ($(DEVICE), flagos-cuda)
+	DOCKERFILE_DIR = docker/flagos
+	DOCKERFILE ?= Dockerfile.cuda
+else ifeq ($(DEVICE), flagos-ascend)
+	DOCKERFILE_DIR = docker/flagos
+	DOCKERFILE ?= Dockerfile.ascend
 else
 	DOCKERFILE ?= Dockerfile.cuda
 endif # Maybe we break out version per image because they share no common bits --> independent release cycles
@@ -24,7 +30,7 @@ VERSION ?= v0.2.1
 # New tag to use if you would like to use `make image-retag`
 NEW_TAG ?= sha256...
 
-# DEVICE, options: ['cuda', 'xpu', 'cpu', 'hpu']
+# DEVICE, options: ['cuda', 'xpu', 'cpu', 'hpu', 'flagos-cuda', 'flagos-ascend']
 DEVICE ?= cuda
 
 # ARCH, options: ['amd64', 'arm64']
