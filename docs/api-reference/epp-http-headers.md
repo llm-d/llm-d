@@ -23,7 +23,7 @@ These headers are used by admission control and load balancing plugins to make d
 
 ## Deprecated Aliases
 
-llm-d Router [v0.9.0](https://github.com/llm-d/llm-d-router/releases/tag/v0.9.0) and later accept the previous EPP-managed header names as deprecated read aliases. New integrations and examples should use the canonical `x-llm-d-*` names. Earlier releases expect the previous names, so mixed-version fleets should coordinate the header migration during rolling upgrades.
+llm-d Router v0.9.0 and later accept the previous EPP-managed header names as deprecated read aliases. New integrations and examples should use the canonical `x-llm-d-*` names. Earlier releases expect the previous names, so mixed-version fleets should coordinate the header migration during rolling upgrades. See the [llm-d Router releases](https://github.com/llm-d/llm-d-router/releases) page for available versions.
 
 If a request sends both a canonical header and its deprecated alias, the canonical `x-llm-d-*` value wins deterministically. No alias removal release or date has been announced; treat aliases as temporary compatibility support and prefer the canonical names for all new clients.
 
