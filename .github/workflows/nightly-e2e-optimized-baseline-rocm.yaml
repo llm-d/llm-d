@@ -1,4 +1,4 @@
-name: Nightly - Optimized Baseline E2E (GKE GPU)
+name: Nightly - Optimized Baseline E2E (AMD ROCM)
 
 on:
   workflow_dispatch:
@@ -29,7 +29,7 @@ on:
         description: 'Type of accelerator (gpu, cpu, sim, amd, xpu, hpu, tpu-v6, tpu-v7) (ONLY VALID FOR "kustomize" standyp method)'
         required: false
         type: 'string'
-        default: 'gpu'
+        default: 'amd'
       backend_type:
         description: 'Type of backend (vllm, sglang) (ONLY VALID FOR "kustomize" standyp method)'
         required: false
@@ -39,7 +39,7 @@ on:
         description: 'Target cloud provider (ONLY VALID FOR "kustomize" standyp method)'
         required: false
         type: 'string'
-        default: 'gke'
+        default: ''
       connector:
         description: 'Accelerator offloading connector (ONLY VALID FOR "kustomize" standyp method)'
         required: false
@@ -48,11 +48,11 @@ on:
       cluster_namespace:
         description: 'Cluster namespace'
         required: false
-        default: 'llm-d-nightly-inference-gke-gpu'
+        default: 'llm-d-nightly-inference-rocm-gpu'
       helm_release:
         description: 'Helm release name (for modelservice)'
         required: false
-        default: 'llmdbenchcicdr-gke'
+        default: 'llmdbenchcicdr-rocm'
       workspace_dir:
         description: 'Workspace directory'
         required: false
@@ -109,7 +109,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: nightly-e2e-optimized-baseline-gke
+  group: nightly-e2e-optimized-baseline-rocm
   cancel-in-progress: true
 
 jobs:
@@ -121,13 +121,13 @@ jobs:
       standup_scenario: ${{ inputs.standup_scenario || 'optimized-baseline' }}
       decode_pods: ${{ inputs.decode_pods || 'auto' }}
       prefill_pods: ${{ inputs.prefill_pods || 'auto' }}
-      accelerator_type: ${{ inputs.accelerator_type || 'gpu' }}
+      accelerator_type: ${{ inputs.accelerator_type || 'amd' }}
       backend_type: ${{ inputs.backend_type || 'vllm' }}
-      infra_provider: ${{ inputs.infra_provider || 'gke' }}
+      infra_provider: ${{ inputs.infra_provider || '' }}
       connector: ${{ inputs.connector || '' }}
-      cluster_namespace: ${{ inputs.cluster_namespace || 'llm-d-nightly-inference-gke-gpu' }}
-      helm_release: ${{ inputs.helm_release || 'llmdbenchcicdr-gke' }}
-      workspace_dir: ${{ inputs.workspace_dir || '/tmp/llmdbenchcicds-gke' }}
+      cluster_namespace: ${{ inputs.cluster_namespace || 'llm-d-nightly-inference-rocm-gpu' }}
+      helm_release: ${{ inputs.helm_release || 'llmdbenchcicdr-rocm' }}
+      workspace_dir: ${{ inputs.workspace_dir || '/tmp/llmdbenchcicds-rocm' }}
       bucket_project: ${{ inputs.bucket_project || 'llm-d-scale' }}
       bucket_provider: ${{ inputs.bucket_provider || 'gcs' }}
       bucket_path: ${{ inputs.bucket_path || 'llm-d-benchmarks/regressions/optimized-baseline' }}
