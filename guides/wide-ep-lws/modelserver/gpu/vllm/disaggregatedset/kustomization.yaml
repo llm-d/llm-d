@@ -12,15 +12,8 @@ labels:
       llm-d.ai/guide: wide-ep-lws
       llm-d.ai/accelerator-variant: gpu
       llm-d.ai/accelerator-vendor: nvidia
-    includeSelectors: true
-    includeTemplates: true
     fields:
       - version: v1
         kind: ServiceAccount
-        path: metadata/labels
-        create: true
-      - group: disaggregatedset.x-k8s.io
-        version: v1alpha1
-        kind: DisaggregatedSet
         path: metadata/labels
         create: true

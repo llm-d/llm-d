@@ -14,13 +14,34 @@ except ImportError as exc:  # pragma: no cover
     raise SystemExit("PyYAML is required: pip install pyyaml") from exc
 
 
+STANDARD_LABELS = {
+    "llm-d.ai/model": "DeepSeek-R1-0528",
+    "llm-d.ai/guide": "wide-ep-lws",
+    "llm-d.ai/accelerator-variant": "gpu",
+    "llm-d.ai/accelerator-vendor": "nvidia",
+}
+
+
+class LiteralSafeDumper(yaml.SafeDumper):
+    """Safe YAML dumper that keeps multi-line shell strings readable."""
+
+
+def str_representer(dumper: yaml.Dumper, data: str) -> yaml.ScalarNode:
+    style = "|" if "\n" in data else None
+    return dumper.represent_scalar("tag:yaml.org,2002:str", data, style=style)
+
+
+LiteralSafeDumper.add_representer(str, str_representer)
+
+
 def load_lws(path: Path) -> dict:
     with path.open(encoding="utf-8") as handle:
         return yaml.safe_load(handle)
 
 
-def role_from_lws(lws: dict, role_name: str) -> dict:
-    metadata_labels = copy.deepcopy(lws.get("metadata", {}).get("labels", {}))
+def role_from_lws(lws: dict, role_name: str, common_labels: dict) -> dict:
+    metadata_labels = copy.deepcopy(common_labels)
+    metadata_labels.update(lws.get("metadata", {}).get("labels", {}))
     metadata_labels["llm-d.ai/role"] = role_name
 
     return {
@@ -37,17 +58,12 @@ def build_disaggregatedset(decode_lws: dict, prefill_lws: dict) -> dict:
         "kind": "DisaggregatedSet",
         "metadata": {
             "name": "wide-ep-lws-nvidia-gpu-vllm",
-            "labels": {
-                "llm-d.ai/model": "DeepSeek-R1-0528",
-                "llm-d.ai/guide": "wide-ep-lws",
-                "llm-d.ai/accelerator-variant": "gpu",
-                "llm-d.ai/accelerator-vendor": "nvidia",
-            },
+            "labels": copy.deepcopy(STANDARD_LABELS),
         },
         "spec": {
             "roles": [
-                role_from_lws(prefill_lws, "prefill"),
-                role_from_lws(decode_lws, "decode"),
+                role_from_lws(prefill_lws, "prefill", STANDARD_LABELS),
+                role_from_lws(decode_lws, "decode", STANDARD_LABELS),
             ],
         },
     }
@@ -85,6 +101,7 @@ def main() -> int:
         yaml.dump(
             manifest,
             handle,
+            Dumper=LiteralSafeDumper,
             default_flow_style=False,
             sort_keys=False,
             width=120,

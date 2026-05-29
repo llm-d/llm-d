@@ -15,6 +15,9 @@ spec:
     metadata:
       labels:
         llm-d.ai/model: DeepSeek-R1-0528
+        llm-d.ai/guide: wide-ep-lws
+        llm-d.ai/accelerator-variant: gpu
+        llm-d.ai/accelerator-vendor: nvidia
         llm-d.ai/role: prefill
     replicas: 1
     leaderWorkerTemplate:
@@ -54,26 +57,54 @@ spec:
             - /bin/bash
             - -c
             args:
-            - "# Clear /dev/shm on start to prevent running out of space when crashes occur\n# https://github.com/llm-d/llm-d/issues/352\n\
-              find /dev/shm -type f -delete\n\n#################\n# RUN vLLM prefill worker\n#################\nSTART_RANK=$((\
-              \ ${LWS_WORKER_INDEX:-0} * DP_SIZE_LOCAL ))\n\n# --data-parallel-hybrid-lb: Use external load balancing across\
-              \ nodes, and internal load balancing within a node\n# --enable-expert-parallel: Use TPxDP in attention, EP in\
-              \ MoE layers\n# --async-scheduling: Reduce white space between engine steps\n# --enable-dbo: Dual batch overlap\
-              \ (DBO) overlaps compute with collective communication.\n# --enable-eplb:  Expert-parallel load balancing reduces\
-              \ EP load imbalance by replicating heavily-used experts\n#   Performance-memory tradeoff: on DeepSeekV3 eplb\
-              \ uses an extra 2GB per redundant expert per GPU\n#   Divisibility constraint: num_routed_experts (256 for DSv3)\
-              \ + num_redundant_experts must be divisible by the number of GPUs.\n\nexec vllm serve \\\n  deepseek-ai/DeepSeek-R1-0528\
-              \ \\\n  --port 8000 \\\n  --trust-remote-code \\\n  --gpu-memory-utilization 0.80 \\\n  --api-server-count 1\
-              \ \\\n  --disable-access-log-for-endpoints=/health,/metrics \\\n  --data-parallel-hybrid-lb \\\n  --enable-expert-parallel\
-              \ \\\n  --tensor-parallel-size $TP_SIZE \\\n  --data-parallel-size $((LWS_GROUP_SIZE * DP_SIZE_LOCAL)) \\\n\
-              \  --data-parallel-size-local $DP_SIZE_LOCAL \\\n  --data-parallel-address ${LWS_LEADER_ADDRESS} \\\n  --data-parallel-rpc-port\
-              \ 5555 \\\n  --data-parallel-start-rank $START_RANK \\\n  --kv_transfer_config '{\"kv_connector\":\"NixlConnector\"\
-              ,\n                          \"kv_role\":\"kv_both\",\n                          \"kv_load_failure_policy\"\
-              :\"fail\"}' \\\n  --enable-dbo \\\n  --dbo-prefill-token-threshold 32 \\\n  --enable-eplb \\\n  --eplb-config\
-              \ '{\"window_size\":\"1000\",\n                  \"step_interval\":\"3000\",\n                  \"num_redundant_experts\"\
-              :\"32\",\n                  \"log_balancedness\":\"False\"}' \\\n  --moe-backend deep_gemm \\\n  --all2all-backend\
-              \ deepep_high_throughput \\\n  # To enable tracing, add:\n  # --otlp-traces-endpoint http://otel-collector:4317\
-              \ \\\n  # --collect-detailed-traces all"
+            - |-
+              # Clear /dev/shm on start to prevent running out of space when crashes occur
+              # https://github.com/llm-d/llm-d/issues/352
+              find /dev/shm -type f -delete
+
+              #################
+              # RUN vLLM prefill worker
+              #################
+              START_RANK=$(( ${LWS_WORKER_INDEX:-0} * DP_SIZE_LOCAL ))
+
+              # --data-parallel-hybrid-lb: Use external load balancing across nodes, and internal load balancing within a node
+              # --enable-expert-parallel: Use TPxDP in attention, EP in MoE layers
+              # --async-scheduling: Reduce white space between engine steps
+              # --enable-dbo: Dual batch overlap (DBO) overlaps compute with collective communication.
+              # --enable-eplb:  Expert-parallel load balancing reduces EP load imbalance by replicating heavily-used experts
+              #   Performance-memory tradeoff: on DeepSeekV3 eplb uses an extra 2GB per redundant expert per GPU
+              #   Divisibility constraint: num_routed_experts (256 for DSv3) + num_redundant_experts must be divisible by the number of GPUs.
+
+              exec vllm serve \
+                deepseek-ai/DeepSeek-R1-0528 \
+                --port 8000 \
+                --trust-remote-code \
+                --gpu-memory-utilization 0.80 \
+                --api-server-count 1 \
+                --disable-access-log-for-endpoints=/health,/metrics \
+                --data-parallel-hybrid-lb \
+                --enable-expert-parallel \
+                --tensor-parallel-size $TP_SIZE \
+                --data-parallel-size $((LWS_GROUP_SIZE * DP_SIZE_LOCAL)) \
+                --data-parallel-size-local $DP_SIZE_LOCAL \
+                --data-parallel-address ${LWS_LEADER_ADDRESS} \
+                --data-parallel-rpc-port 5555 \
+                --data-parallel-start-rank $START_RANK \
+                --kv_transfer_config '{"kv_connector":"NixlConnector",
+                                        "kv_role":"kv_both",
+                                        "kv_load_failure_policy":"fail"}' \
+                --enable-dbo \
+                --dbo-prefill-token-threshold 32 \
+                --enable-eplb \
+                --eplb-config '{"window_size":"1000",
+                                "step_interval":"3000",
+                                "num_redundant_experts":"32",
+                                "log_balancedness":"False"}' \
+                --moe-backend deep_gemm \
+                --all2all-backend deepep_high_throughput \
+                # To enable tracing, add:
+                # --otlp-traces-endpoint http://otel-collector:4317 \
+                # --collect-detailed-traces all
             env:
             - name: VLLM_MEMORY_PROFILER_ESTIMATE_CUDAGRAPHS
               value: '1'
@@ -165,6 +196,9 @@ spec:
     metadata:
       labels:
         llm-d.ai/model: DeepSeek-R1-0528
+        llm-d.ai/guide: wide-ep-lws
+        llm-d.ai/accelerator-variant: gpu
+        llm-d.ai/accelerator-vendor: nvidia
         llm-d.ai/role: decode
     replicas: 1
     leaderWorkerTemplate:
@@ -224,24 +258,54 @@ spec:
             - /bin/bash
             - -c
             args:
-            - "# Clear /dev/shm on start to prevent running out of space when crashes occur\n# https://github.com/llm-d/llm-d/issues/352\n\
-              find /dev/shm -type f -delete\n\n#################\n# RUN vLLM decode worker\n#################\nSTART_RANK=$((\
-              \ ${LWS_WORKER_INDEX:-0} * DP_SIZE_LOCAL ))\n\n# --data-parallel-hybrid-lb: Use external load balancing across\
-              \ nodes, and internal load balancing within a node\n# --enable-expert-parallel:  Use TPxDP in attention, EP\
-              \ in MoE layers\n# --async-scheduling: Reduce white space between engine steps\n# --enable-dbo:  Dual batch\
-              \ overlap (DBO) overlaps compute with collective communication.\n\nexec vllm serve \\\n  deepseek-ai/DeepSeek-R1-0528\
-              \ \\\n  --port 8200 \\\n  --gpu-memory-utilization 0.9 \\\n  --trust-remote-code \\\n  --api-server-count 1\
-              \ \\\n  --disable-access-log-for-endpoints=/health,/metrics \\\n  --data-parallel-hybrid-lb \\\n  --enable-expert-parallel\
-              \ \\\n  --tensor-parallel-size $TP_SIZE \\\n  --max-num-batched-tokens ${MAX_TOKENS} \\\n  --max-num-seqs ${MAX_TOKENS}\
-              \ \\\n  --data-parallel-size $((LWS_GROUP_SIZE * DP_SIZE_LOCAL)) \\\n  --data-parallel-size-local $DP_SIZE_LOCAL\
-              \ \\\n  --data-parallel-address ${LWS_LEADER_ADDRESS} \\\n  --data-parallel-rpc-port 5555 \\\n  --data-parallel-start-rank\
-              \ $START_RANK \\\n  --kv_transfer_config '{\"kv_connector\":\"NixlConnector\",\n                          \"\
-              kv_role\":\"kv_both\",\n                          \"kv_load_failure_policy\":\"fail\"}' \\\n  --enable-dbo \\\
-              \n  --dbo-decode-token-threshold 32 \\\n  --enable-eplb \\\n  --eplb-config '{\"window_size\":\"1000\",\n  \
-              \                \"step_interval\":\"3000\",\n                  \"num_redundant_experts\":\"32\",\n        \
-              \          \"log_balancedness\":\"False\"}' \\\n  --all2all-backend deepep_low_latency \\\n  --moe-backend deep_gemm\
-              \ \\\n  --kv-cache-memory-bytes=${KV_CACHE_MEMORY_BYTES-}\n  # To enable tracing, add:\n  # --otlp-traces-endpoint\
-              \ http://otel-collector:4317 \\\n  # --collect-detailed-traces all"
+            - |-
+              # Clear /dev/shm on start to prevent running out of space when crashes occur
+              # https://github.com/llm-d/llm-d/issues/352
+              find /dev/shm -type f -delete
+
+              #################
+              # RUN vLLM decode worker
+              #################
+              START_RANK=$(( ${LWS_WORKER_INDEX:-0} * DP_SIZE_LOCAL ))
+
+              # --data-parallel-hybrid-lb: Use external load balancing across nodes, and internal load balancing within a node
+              # --enable-expert-parallel:  Use TPxDP in attention, EP in MoE layers
+              # --async-scheduling: Reduce white space between engine steps
+              # --enable-dbo:  Dual batch overlap (DBO) overlaps compute with collective communication.
+
+              exec vllm serve \
+                deepseek-ai/DeepSeek-R1-0528 \
+                --port 8200 \
+                --gpu-memory-utilization 0.9 \
+                --trust-remote-code \
+                --api-server-count 1 \
+                --disable-access-log-for-endpoints=/health,/metrics \
+                --data-parallel-hybrid-lb \
+                --enable-expert-parallel \
+                --tensor-parallel-size $TP_SIZE \
+                --max-num-batched-tokens ${MAX_TOKENS} \
+                --max-num-seqs ${MAX_TOKENS} \
+                --data-parallel-size $((LWS_GROUP_SIZE * DP_SIZE_LOCAL)) \
+                --data-parallel-size-local $DP_SIZE_LOCAL \
+                --data-parallel-address ${LWS_LEADER_ADDRESS} \
+                --data-parallel-rpc-port 5555 \
+                --data-parallel-start-rank $START_RANK \
+                --kv_transfer_config '{"kv_connector":"NixlConnector",
+                                        "kv_role":"kv_both",
+                                        "kv_load_failure_policy":"fail"}' \
+                --enable-dbo \
+                --dbo-decode-token-threshold 32 \
+                --enable-eplb \
+                --eplb-config '{"window_size":"1000",
+                                "step_interval":"3000",
+                                "num_redundant_experts":"32",
+                                "log_balancedness":"False"}' \
+                --all2all-backend deepep_low_latency \
+                --moe-backend deep_gemm \
+                --kv-cache-memory-bytes=${KV_CACHE_MEMORY_BYTES-}
+                # To enable tracing, add:
+                # --otlp-traces-endpoint http://otel-collector:4317 \
+                # --collect-detailed-traces all
             env:
             - name: VLLM_MEMORY_PROFILER_ESTIMATE_CUDAGRAPHS
               value: '1'
