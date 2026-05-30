@@ -36,7 +36,7 @@ jobs:
             optimized-baseline:
               - .github/workflows/ci-kustomize-dry-run.yaml
               - .github/scripts/install-gke-crds.sh
-              - guides/prereq/gateway-provider/install-gateway-provider-dependencies.sh
+              - guides/recipes/gateway/install-gateway-crds.sh
               - docs/monitoring/scripts/install-prometheus-grafana.sh
               - guides/recipes/modelserver/**
               - guides/recipes/router/**
@@ -44,31 +44,25 @@ jobs:
             pd-disaggregation:
               - .github/workflows/ci-kustomize-dry-run.yaml
               - helpers/client-setup/install-deps.sh
-              - guides/prereq/gateway-provider/common-configurations/**
-              - guides/prereq/gateway-provider/install-gateway-provider-dependencies.sh
-              - guides/prereq/gateway-provider/*.helmfile.yaml
+              - guides/recipes/gateway/install-gateway-crds.sh
               - docs/monitoring/scripts/install-prometheus-grafana.sh
               - guides/pd-disaggregation/**
             precise-prefix-cache-routing:
               - .github/workflows/ci-kustomize-dry-run.yaml
               - helpers/client-setup/install-deps.sh
-              - guides/prereq/gateway-provider/common-configurations/**
-              - guides/prereq/gateway-provider/install-gateway-provider-dependencies.sh
-              - guides/prereq/gateway-provider/*.helmfile.yaml
+              - guides/recipes/gateway/install-gateway-crds.sh
               - docs/monitoring/scripts/install-prometheus-grafana.sh
               - guides/precise-prefix-cache-routing/**
             simulated-accelerators:
               - .github/workflows/ci-kustomize-dry-run.yaml
               - helpers/client-setup/install-deps.sh
-              - guides/prereq/gateway-provider/common-configurations/**
-              - guides/prereq/gateway-provider/install-gateway-provider-dependencies.sh
-              - guides/prereq/gateway-provider/*.helmfile.yaml
+              - guides/recipes/gateway/install-gateway-crds.sh
               - docs/monitoring/scripts/install-prometheus-grafana.sh
               - guides/simulated-accelerators/**
             workload-autoscaling:
               - .github/workflows/ci-kustomize-dry-run.yaml
               - .github/scripts/install-gke-crds.sh
-              - guides/prereq/gateway-provider/install-gateway-provider-dependencies.sh
+              - guides/recipes/gateway/install-gateway-crds.sh
               - docs/monitoring/scripts/install-prometheus-grafana.sh
               - guides/workload-autoscaling/**
 
@@ -91,10 +85,7 @@ jobs:
           wait: 120s
 
       - name: Install Gateway API and GAIE CRDs
-        run: |
-          if [[ -f guides/prereq/gateway-provider/install-gateway-provider-dependencies.sh ]]; then
-            guides/prereq/gateway-provider/install-gateway-provider-dependencies.sh > /dev/null
-          fi
+        run: guides/recipes/gateway/install-gateway-crds.sh
 
       - name: Install monitoring CRDs
         run: docs/monitoring/scripts/install-prometheus-grafana.sh --crds-only
@@ -189,33 +180,7 @@ jobs:
           wait: 120s
 
       - name: Install Gateway API and GAIE CRDs
-        run: |
-          if [[ -f guides/prereq/gateway-provider/install-gateway-provider-dependencies.sh ]]; then
-            guides/prereq/gateway-provider/install-gateway-provider-dependencies.sh > /dev/null
-          fi
-
-      - name: Install gateway providers
-        run: |
-          cd guides/prereq/gateway-provider
-          for f in *.helmfile.yaml; do
-            # Skip kgateway - it is deprecated and its older CRDs would
-            # overwrite the agentgateway installation.
-            [[ "$f" == "kgateway.helmfile.yaml" ]] && continue
-            echo "=== Installing gateway provider: $f ==="
-            helmfile apply -f "$f" > /dev/null
-          done
-
-      - name: Wait for gateway control planes
-        run: |
-          for ns in istio-system agentgateway-system; do
-            if kubectl get namespace "$ns" &>/dev/null; then
-              echo "Waiting for pods in $ns..."
-              kubectl wait --for=condition=ready pod \
-                --selector=app.kubernetes.io/managed-by=Helm \
-                --namespace "$ns" \
-                --timeout=300s 2>/dev/null || true
-            fi
-          done
+        run: guides/recipes/gateway/install-gateway-crds.sh
 
       - name: Install monitoring CRDs
         run: docs/monitoring/scripts/install-prometheus-grafana.sh --crds-only
@@ -302,10 +267,7 @@ jobs:
           wait: 120s
 
       - name: Install Gateway API and GAIE CRDs
-        run: |
-          if [[ -f guides/prereq/gateway-provider/install-gateway-provider-dependencies.sh ]]; then
-            guides/prereq/gateway-provider/install-gateway-provider-dependencies.sh > /dev/null
-          fi
+        run: guides/recipes/gateway/install-gateway-crds.sh
 
       - name: Install monitoring CRDs
         run: docs/monitoring/scripts/install-prometheus-grafana.sh --crds-only
@@ -319,7 +281,6 @@ jobs:
         # once and pass `--post-renderer uds-tokenizer`; see README.)
         run: |
           CHART_VERSION=v0
-          POST_RENDERER=./guides/precise-prefix-cache-routing/router/patches/uds-tokenizer/post-renderer.sh
           echo ""
           echo "========================================"
           echo "precise-prefix-cache-routing: router"
@@ -389,10 +350,7 @@ jobs:
           wait: 120s
 
       - name: Install Gateway API and GAIE CRDs
-        run: |
-          if [[ -f guides/prereq/gateway-provider/install-gateway-provider-dependencies.sh ]]; then
-            guides/prereq/gateway-provider/install-gateway-provider-dependencies.sh > /dev/null
-          fi
+        run: guides/recipes/gateway/install-gateway-crds.sh
 
       - name: Install monitoring CRDs
         run: docs/monitoring/scripts/install-prometheus-grafana.sh --crds-only
