@@ -83,10 +83,11 @@ Flow Control is a software-level scheduling feature at the EPP layer and is enti
   export MODEL_NAME="Qwen/Qwen3-32B"
   ```
 
-* Install the Gateway API Inference Extension CRDs:
+* Install the required CRDs (GAIE InferencePool + llm-d.ai InferenceObjective):
 
   ```bash
-  kubectl apply -k "https://github.com/kubernetes-sigs/gateway-api-inference-extension/config/crd?ref=${GAIE_VERSION}"
+  kubectl apply -f https://github.com/kubernetes-sigs/gateway-api-inference-extension/releases/download/${GAIE_VERSION}/v1-manifests.yaml
+  kubectl apply -k "https://github.com/llm-d/llm-d-router/config/crd?ref=${ROUTER_CHART_VERSION}"
   ```
 
 * Create a target namespace for the installation:
