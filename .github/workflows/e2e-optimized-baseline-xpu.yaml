@@ -34,6 +34,7 @@ jobs:
     env:
       NAMESPACE: "llm-d-xpu-is"
       GAIE_VERSION: "v1.5.0"
+      ROUTER_CHART_VERSION: "v0"
       GUIDE_NAME: "optimized-baseline"
       SCHEDULER_RELEASE_NAME: "optimized-baseline"
 
@@ -124,7 +125,7 @@ jobs:
             -f guides/recipes/router/features/monitoring.values.yaml \
             -f guides/${GUIDE_NAME}/router/${GUIDE_NAME}.values.yaml \
             -n "${NAMESPACE}" \
-            --version "${GAIE_VERSION}" \
+            --version "${ROUTER_CHART_VERSION}" \
             | tee ~/optimized-baseline-xpu-deployment.log
 
       - name: Deploy model server via kustomize

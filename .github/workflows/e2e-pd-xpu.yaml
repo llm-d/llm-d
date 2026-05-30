@@ -34,6 +34,7 @@ jobs:
     env:
       NAMESPACE: "llm-d-xpu-pd"
       GAIE_VERSION: "v1.5.0"
+      ROUTER_CHART_VERSION: "v0"
       GUIDE_NAME: "pd-disaggregation"
       SCHEDULER_RELEASE_NAME: "pd-disaggregation"
 
@@ -123,7 +124,7 @@ jobs:
             -f guides/recipes/router/base.values.yaml \
             -f guides/${GUIDE_NAME}/router/${GUIDE_NAME}.values.yaml \
             -n "${NAMESPACE}" \
-            --version "${GAIE_VERSION}" \
+            --version "${ROUTER_CHART_VERSION}" \
             | tee ~/pd-xpu-deployment.log
 
       - name: Deploy model server via kustomize

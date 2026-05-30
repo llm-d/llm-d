@@ -49,6 +49,7 @@ jobs:
     env:
       NAMESPACE: "llm-d-xpu-pc"
       GAIE_VERSION: "v1.5.0"
+      ROUTER_CHART_VERSION: "v0"
       GUIDE_NAME: "precise-prefix-cache-routing"
       SCHEDULER_RELEASE_NAME: "precise-prefix-cache-routing"
       ACCEL: "xpu"
@@ -156,7 +157,7 @@ jobs:
             -f guides/${GUIDE_NAME}/router/${GUIDE_NAME}.values.yaml \
             --post-renderer ./guides/${GUIDE_NAME}/router/patches/uds-tokenizer/post-renderer.sh \
             -n "${NAMESPACE}" \
-            --version "${GAIE_VERSION}" \
+            --version "${ROUTER_CHART_VERSION}" \
             | tee ~/prefix-cache-xpu-deployment.log
 
       - name: Deploy model server via kustomize
