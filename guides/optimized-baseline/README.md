@@ -17,7 +17,9 @@ The optimized-baseline defaults to two main routing criteria:
 
 - **Load-aware** using both the [kv-cache utilization](https://github.com/llm-d/llm-d-router/tree/main/pkg/epp/framework/plugins/scheduling/scorer/kvcacheutilization) and the [queue size](https://github.com/llm-d/llm-d-router/tree/main/pkg/epp/framework/plugins/scheduling/scorer/queuedepth) scorers.
 
-## Configuration
+An optional [calibration step](#4-optional-calibrate-prefix-cache-affinity-filter) is also available to add a saturation-aware override gate (the `prefix-cache-affinity-filter`) on top of the default plugins, with a per-deployment τ value measured against the live cluster. This is useful when sticky prefix-affinity routing under heavy load could create hot-pod imbalance.
+
+## Default Configuration
 
 | Parameter          | Default                                                 | Example                                                 |
 | ------------------ | ------------------------------------------------------- | --------------------------------------------------------- |
@@ -163,6 +165,81 @@ kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/g
 kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/recipes/modelserver/components/monitoring
 ```
 
+### 4. (Optional) Calibrate prefix-cache-affinity-filter
+
+This step adds the `prefix-cache-affinity-filter` plugin to the EPP scheduling pipeline, with its saturation-valve parameter `maxTokensInFlightPenalty` (τ) measured against your live deployment. With τ correctly tuned, sticky prefix-affinity routing keeps its TTFT benefits without creating hot-pod imbalance under high load.
+
+> [!NOTE]
+> τ is deployment-specific: it depends on hardware peak FLOPS, tensor-parallel size, model architecture, and your SLO tolerance. It can't be hardcoded across deployments. See the *Bottleneck-Aware Scheduling for LLM Inference* design doc for the derivation and a treatment of why this matters across workloads.
+
+#### Prerequisites
+
+- Steps 1 and 2 above are complete; vLLM and EPP pods are running and ready.
+- `envsubst` is installed locally (part of `gettext-base` on Debian/Ubuntu, `gettext` on macOS via Homebrew).
+
+#### Run calibration
+
+The wrapper script auto-discovers the EPP service's ClusterIP, runs a one-shot calibration Job, reads the measured τ, renders a Helm values overlay, and re-applies the chart with the overlay layered on top:
+
+```bash
+bash guides/${GUIDE_NAME}/calibration/calibrate-and-apply.sh
+```
+
+After it returns (typically 30-60 seconds), the EPP plugin config includes:
+
+```yaml
+- type: prefix-cache-affinity-filter
+  parameters:
+    affinityThreshold: 0.80
+    maxTokensInFlightPenalty: <measured τ>
+```
+
+and the EPP pods have been rolled out to pick up the new config.
+
+#### Optional environment overrides
+
+The wrapper picks sane defaults for Qwen3-32B at chunk_size=8192 with T_max=17s. Override per-deployment as needed:
+
+```bash
+# Override SLO tolerance (default: 17 seconds)
+T_MAX_SECONDS=20 bash guides/${GUIDE_NAME}/calibration/calibrate-and-apply.sh
+
+# Override calibration target (default: auto-discover EPP service)
+VLLM_ENDPOINT=http://vllm-direct:8000 \
+  bash guides/${GUIDE_NAME}/calibration/calibrate-and-apply.sh
+
+# Override model and chunk size (e.g., when calibrating a different deployment)
+MODEL_NAME=meta-llama/Llama-3.1-8B CHUNK_SIZE=4096 \
+  bash guides/${GUIDE_NAME}/calibration/calibrate-and-apply.sh
+```
+
+#### Re-calibration
+
+Same command. The wrapper re-measures and re-applies; the EPP rolls out with the new τ.
+
+#### Inspect the result
+
+```bash
+# View the rendered calibration values overlay
+cat /tmp/${GUIDE_NAME}-calibration.values.yaml
+
+# View the EPP plugin config in the cluster
+kubectl get configmap ${GUIDE_NAME}-epp -n ${NAMESPACE} -o yaml \
+  | grep -A3 prefix-cache-affinity-filter
+```
+
+#### Files
+
+The calibration assets live in `guides/${GUIDE_NAME}/calibration/`:
+
+| File | Purpose |
+|---|---|
+| `calibrate-tau.yaml` | Standalone K8s manifest: ConfigMap with the calibration Python script + Job that runs it |
+| `calibration.values.template.yaml` | Helm values overlay with `${TAU}` placeholder |
+| `calibrate-and-apply.sh` | Wrapper script that orchestrates the full flow |
+
+The chart itself is not modified. The calibration overlay is a third `-f` file layered on top of the upstream `base.values.yaml` and `optimized-baseline.values.yaml`.
+
 ## Verification
 
 ### 1. Get the IP of the Proxy
@@ -304,3 +381,4 @@ Empirical benchmark reports comparing llm-d routing performance against a standa
 - [Qwen/Qwen3-32B on H100 and SGLang](./benchmark-results/sglang-qwen3-32b-h100/README.md)
 - [Qwen/Qwen3-32B on H100 and vLLM](./benchmark-results/vllm-qwen3-32b-h100/README.md)
 - [openai/gpt-oss-120b on H100 and vLLM](./benchmark-results/vllm-gpt-oss-120b-h100/README.md)
+
