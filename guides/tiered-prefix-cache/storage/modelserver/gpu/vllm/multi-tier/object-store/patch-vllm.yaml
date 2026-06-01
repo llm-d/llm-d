@@ -6,8 +6,15 @@ spec:
   replicas: 1
   template:
     spec:
-      nodeSelector:
-        kubernetes.io/hostname: kvcache-gpu0
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+              - matchExpressions:
+                  - key: kubernetes.io/hostname
+                    operator: NotIn
+                    values:
+                      - pokprod-b93r38s3
       containers:
         - name: modelserver
           securityContext:
@@ -21,8 +28,9 @@ spec:
               fi
               rm -rf /workspace/vllm
               cd /workspace
-              git clone --branch objectstore --depth 1 https://github.com/effi-ofer/vllm.git
+              git clone https://github.com/effi-ofer/vllm.git
               cd vllm
+              git checkout origin/objectstore
               uv venv .venv --python 3.12
               source .venv/bin/activate
               VLLM_USE_PRECOMPILED=1 \
@@ -35,7 +43,7 @@ spec:
               exec vllm serve \
                 meta-llama/Meta-Llama-3.1-8B \
                 --tensor-parallel-size 1 \
-                --kv-transfer-config "{\"kv_connector\":\"OffloadingConnector\",\"kv_role\":\"kv_both\",\"kv_connector_extra_config\":{\"spec_name\":\"TieringOffloadingSpec\",\"cpu_bytes_to_use\":100000000000,\"io_threads\":16,\"secondary_tiers\":[{\"type\":\"obj\",\"store_config\":{\"bucket\":\"${OBJECT_STORE_BUCKET}\",\"endpoint_override\":\"${OBJECT_STORE_ENDPOINT}\",\"access_key\":\"${OBJECT_STORE_ACCESS_KEY}\",\"secret_key\":\"${OBJECT_STORE_SECRET_KEY}\",\"scheme\":\"http\"},\"prefix\":\"\",\"io_threads\":16}]}}"
+                --kv-transfer-config "{\"kv_connector\":\"OffloadingConnector\",\"kv_role\":\"kv_both\",\"kv_connector_extra_config\":{\"spec_name\":\"TieringOffloadingSpec\",\"cpu_bytes_to_use\":100000000000,\"block_size\":512,\"io_threads\":16,\"secondary_tiers\":[{\"type\":\"obj\",\"store_config\":{\"bucket\":\"${OBJECT_STORE_BUCKET}\",\"endpoint_override\":\"${OBJECT_STORE_ENDPOINT}\",\"access_key\":\"${OBJECT_STORE_ACCESS_KEY}\",\"secret_key\":\"${OBJECT_STORE_SECRET_KEY}\",\"scheme\":\"http\"},\"prefix\":\"\",\"io_threads\":16}]}}"
           env:
             - name: HF_TOKEN
               valueFrom:

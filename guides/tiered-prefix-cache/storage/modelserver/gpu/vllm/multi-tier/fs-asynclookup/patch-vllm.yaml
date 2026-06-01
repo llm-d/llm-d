@@ -31,6 +31,7 @@ spec:
               #git clone https://github.com/vllm-project/vllm.git
               git clone https://github.com/effi-ofer/vllm.git
               cd vllm
+              git checkout origin/lookup
               uv venv .venv --python 3.12
               source .venv/bin/activate
               VLLM_USE_PRECOMPILED=1 \

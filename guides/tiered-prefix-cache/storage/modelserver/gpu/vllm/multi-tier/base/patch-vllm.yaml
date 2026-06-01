@@ -7,7 +7,16 @@ spec:
   template:
     spec:
       nodeSelector:
-        kubernetes.io/hostname: kvcache-gpu0
+        kubernetes.io/hostname: pokprod-b93r38s0
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+              - matchExpressions:
+                  - key: kubernetes.io/hostname
+                    operator: NotIn
+                    values:
+                      - pokprod-b93r38s0
       containers:
         - name: modelserver
           securityContext:
@@ -21,7 +30,7 @@ spec:
               fi
               rm -rf /workspace/vllm
               cd /workspace
-              git clone --branch objectstore --depth 1 https://github.com/effi-ofer/vllm.git
+              git clone https://github.com/effi-ofer/vllm.git
               cd vllm
               uv venv .venv --python 3.12
               source .venv/bin/activate
