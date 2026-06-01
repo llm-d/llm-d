@@ -1,13 +1,11 @@
 # No-Kubernetes Deployment
 
-llm-d's reference deployment runs on Kubernetes — workers live in `Deployments`, the EPP discovers them through an `InferencePool`, and the platform handles networking and lifecycle. Many environments don't have a Kubernetes control plane, though: HPC schedulers like Slurm or LSF launch workers dynamically, Ray-based stacks run workers as actors, bare-metal inference farms operate without K8s, and a single workstation with a couple of GPUs is often enough for development.
+llm-d's reference deployment runs on Kubernetes — workers are managed by Kubernetes `Deployments`, the EPP discovers them through an `InferencePool`, and the platform handles networking and lifecycle. Many environments don't have a Kubernetes control plane, though: HPC schedulers like Slurm or LSF launch workers dynamically, Ray-based stacks run workers as actors, bare-metal inference farms operate without K8s, and a single workstation with a couple of GPUs is often enough for development.
 
-The No-Kubernetes path runs the same routing stack — the EPP, Envoy, and one or more vLLM workers — directly as host processes or containers. The EPP gets its endpoint inventory from a YAML file on disk via the [file-discovery plugin][filediscovery-plugin] instead of watching an `InferencePool` over the Kubernetes API; everything else (EPP plugin set, scoring, Envoy ext_proc, vLLM arguments) is unchanged.
-
-Background: ["No Kubernetes? No Problem: llm-d Now Runs Anywhere"][blog].
+The No-Kubernetes path runs the same routing stack — the llm-d EPP, Envoy, and one or more model servers — directly as host processes or containers. The EPP gets its endpoint inventory from a YAML file on disk via the [file-discovery plugin][filediscovery-plugin] instead of watching an `InferencePool` over the Kubernetes API; everything else (EPP plugin set, scoring, Envoy ext_proc, vLLM arguments) is unchanged.
 
 > [!IMPORTANT]
-> Without Kubernetes, several pieces of the optimized-baseline stack are
+> Without Kubernetes, some pieces of the llm-d stack are
 > out of scope: `InferenceObjective`-driven FlowControl, the
 > `InferenceModelRewrite` model-name rewriter, and `PodMonitor`-based
 > Prometheus discovery. Scoring, prefix-cache affinity, saturation-based
