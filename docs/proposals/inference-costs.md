@@ -177,7 +177,7 @@ In addition to collecting and calculating general infrastructure costs as is alr
    - Allocate costs between input and output tokens based on actual processing time
    - Calculate cache saving due to optimizations such as KV cache hits, prefill/decode separation, and smart routing
    - Identify idle costs - a key metric needed to enable optimization of infrastructure 
-   - Provide both usage and reservation cost basis metrics
+   - Provide both usage and allocation cost basis metrics
 
 3. **Export cost metrics**:
    - Prometheus metrics for monitoring and alerting
@@ -213,7 +213,7 @@ The [POC implementation](https://github.com/simanadler/opencost/tree/initial-inf
 
 ### LLM costs
 
-_For background on infrastructure cost concepts (reservation-based vs usage-only costs, idle, wasted, and shared costs), see the [Cost Metrics Primer](cost-metrics-primer.md)._
+_For background on infrastructure cost concepts (allocation-based vs usage-only costs, idle, wasted, and shared costs), see the [Cost Metrics Primer](cost-metrics-primer.md)._
 
 LLM inference introduces all four cost components in a more extreme form than typical CPU workloads, and both cost metrics are useful enough that we propose to expose them directly.
 
@@ -244,7 +244,7 @@ New labels:
 * model_name="meta-llama/Llama-3.1-8B-Instruct" (example)
 * model_version="v1.0" (example)
 * model_variant="prefill" (example)
-* cost_basis="usage" or "reservation"
+* cost_basis="usage" or "allocation"
 * workload="inference" (for llm-d)
 
 Existing OpenCost labels:
@@ -260,7 +260,7 @@ The following section describe the metrics in more detail.
 
 **Allocation-based cost per model** counts everything attributed to running that model: the GPU memory reserved for its weights at all times, the compute consumed during active inference, and its share of shared of infrastructure. This is the cost of *having the model available*. It reconciles to your infrastructure bill and answers: *"what is this model costing us?"*
 
-**Usage-based cost per model** counts only the GPU compute consumed during active inference — the tokens actually generated minus costs saved by kv cache hits. This answers: *"what did this model's actual work cost?"* The gap between this and the reservation-based figure is the cost of keeping the model warm and ready, which is a business decision about acceptable latency, not a technical inefficiency.
+**Usage-based cost per model** counts only the GPU compute consumed during active inference — the tokens actually generated minus costs saved by kv cache hits. This answers: *"what did this model's actual work cost?"* The gap between this and the allocation-based figure is the cost of keeping the model warm and ready, which is a business decision about acceptable latency, not a technical inefficiency.
 
 ### Cost Per Million Tokens 
 
@@ -268,16 +268,16 @@ Both cost metrics produce a corresponding cost per million tokens figure, but th
 
 **Usage-based Cost per Million Tokens** measures the intrinsic cost of inference — what each token costs in pure compute terms. This is stable regardless of how busy the model is, making it the right metric for comparing the efficiency of different models or hardware configurations against each other, or against external API pricing for the inference work itself.
 
-**Reservation-based Cost Per Million Tokens** measures the real business cost of each token when you factor in the full price of keeping the model available, including idle time. This varies with utilization — the same model serving fewer requests will show a higher reservation-based cost per token because the fixed hosting cost is spread across fewer tokens.
+**Allocation-based Cost Per Million Tokens** measures the real business cost of each token when you factor in the full price of keeping the model available, including idle time. This varies with utilization — the same model serving fewer requests will show a higher allocation-based cost per token because the fixed hosting cost is spread across fewer tokens.
 
 The relationship between the two directly expresses utilization without needing a separate metric:
 
 ```
-utilization = usage-based cost per million tokens / reservation-based cost per million tokens
+utilization = usage-based cost per million tokens / allocation-based cost per million tokens
 
 Example:
   Usage-based:       $1.00 per million tokens  (intrinsic inference cost)
-  Reservation-based: $4.00 per million tokens  (full hosting cost)
+  Allocation-based:  $4.00 per million tokens  (full hosting cost)
   Utilization:       25%  (model is busy 1/4 of the time)
 ```
 
@@ -310,7 +310,7 @@ There are other costs associated with self hosting an AI model via llm-d which m
 
 
 
-  **Recommendation**: Treat KV cache as a model reservation cost for the purposes of cost attribution. 
+  **Recommendation**: Treat KV cache as a model allocation cost for the purposes of cost attribution. 
 
     The reason is that KV cache capacity is sized at deployment time based on expected concurrency, not actual requests — the operator makes a deliberate choice to reserve X GB for KV cache when deploying the model. Charging it to usage would obscure that capacity decision and make usage-based costs misleadingly low for
     memory-intensive models.
@@ -324,7 +324,7 @@ There are other costs associated with self hosting an AI model via llm-d which m
 
 The two per-model cost figures and the two per-token figures together give a complete picture:
 
-| Reservation cost | Usage-based cost per million tokens | What it means |
+| Allocation  cost | Usage-based cost per million tokens | What it means |
 |------------------|--------------------------------------|---------------|
 | High             | Low                                  | Costly to keep available, but efficient at inference — utilization is the problem, consider shared serving |
 | High             | High                                 | Costly to keep available *and* expensive to run — evaluate whether the model is the right choice |
@@ -333,12 +333,12 @@ The two per-model cost figures and the two per-token figures together give a com
 
 ### Comparing against external API pricing
 
-When deciding whether to self-host or use an external API, the comparison must be made against **reservation-based cost per million tokens**, not usage-based. Usage-based cost per token reflects only active compute and will almost always make self-hosting look cheaper than it is. The reservation-based figure captures the full cost of availability — which is exactly what an external API provider is also charging you for.
+When deciding whether to self-host or use an external API, the comparison must be made against **allocation-based cost per million tokens**, not usage-based. Usage-based cost per token reflects only active compute and will almost always make self-hosting look cheaper than it is. The allocation-based figure captures the full cost of availability — which is exactly what an external API provider is also charging you for.
 
 ```
 Self-hosted model:
   Usage-based cost per million tokens:       $1.00  (compute only)
-  Reservation-based cost per million tokens: $4.00  (full hosting cost)
+  Allocation-based cost per million tokens:  $4.00  (full hosting cost)
 
 External API price per million tokens:       $2.00
 

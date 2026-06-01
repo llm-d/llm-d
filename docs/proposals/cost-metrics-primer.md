@@ -24,17 +24,16 @@ Each workload pays for what it reserved or what it actually uses, whichever is g
 Each workload pays only for what it actually consumed. App-a pays for 1 CPU, same as app-b. The wasted 2 CPUs (app-a's over-provisioning) now join the idle pool as unattributed cost. **The numbers no longer add up to your overall bill.**
 
 
-### The practical difference - usage vs reservation based costs
+### The practical difference - usage vs allocation based costs
 
-|                              | Reservation-based                             | Usage-only                                          |
+|                              | Allocation-based                              | Usage-only                                          |
 |------------------------------|-----------------------------------------------|-----------------------------------------------------|
-| Reconciles to cloud bill     | Yes                                           | No — waste + idle are unattributed                  |
-| Fair for team chargeback     | No — penalizes over-provisioning              | Yes                                                 |
+| Reconciles to cloud bill     | Yes                                           | No — waste + idle are unattributed                  |                                             |
 | Incentivizes right-sizing    | Yes — you pay for what you reserve            | Less so                                             |
 | Identifies over-provisioning | Not directly — baked into workload cost       | Yes — visible as the gap between the two cost figures |
 | Identifies spare capacity    | Yes — explicit idle line item                 | Waste and idle merged into one unattributed pool    |
 
-Neither is wrong — they answer different questions. Reservation-based answers *"who caused this bill?"* Usage-only answers *"who consumed what?"* The over-provisioning gap is the key distinction: reservation-based assigns it to the workload responsible, usage-only leaves it unattributed alongside genuinely idle capacity.
+Neither is wrong — they answer different questions. Allocation-based answers *"who caused this bill?"* Usage-only answers *"who consumed what?"* The over-provisioning gap is the key distinction: allocation-based assigns it to the workload responsible, usage-only leaves it unattributed alongside genuinely idle capacity.
 
 ### Example:
 
@@ -46,16 +45,16 @@ Neither is wrong — they answer different questions. Reservation-based answers 
   - namespace/app-b: requested 1 CPU → pays for 1/8 = 12.5% of CPU
   - 4 CPUs are idle (nobody requested them) → 50% of CPU
 
-  A cluster's CPU Cost represents the cost of usage + waste.
+  A cluster's CPU Cost represents the cost of usage + idle (waste).
 
   CPU Usage Cost is only the usage without taking into account the waste or idle.
 
-  For idle, there are two ways to attribute the cost of the idle CPUs.  Either across workloads or as a separate line item.
+  For idle, there are two ways to attribute the cost of the idle CPUs - either across workloads or as a separate line item.
 
   **Separating out Idle:**
 
   
-  | Workload   | Requested | Used | Billed cores | CPU cost (of $10/hr) | CPU Usage Cost | Wasted |
+  | Workload   | Requested | Used | Billed cores | CPU cost (of $10/hr) | CPU Usage Cost | Idle   |
   |------------|-----------|------|--------------|----------------------|----------------|--------|
   | app-a      | 3         | 1    | 3            | $3.75                | $1.25          | $2.50  |
   | app-b      | 1         | 1    | 1            | $1.25                | $1.25          | —      |
@@ -71,7 +70,7 @@ Neither is wrong — they answer different questions. Reservation-based answers 
   | app-b    | 1         | 1    | 1            | **$2.50**            | $1.25          | —      |
   
     Usage only cost:         app-a=$1.25, app-b=$1.25, unattributed=$7.50  → total $10.00 ✓
-    Reservation based cost:  app-a=$3.75, app-b=$1.25, idle=$5.00  → total $10.00 ✓
+    Allocation based cost:   app-a=$3.75, app-b=$1.25, idle=$5.00  → total $10.00 ✓
 
 ### Shared Costs
   
