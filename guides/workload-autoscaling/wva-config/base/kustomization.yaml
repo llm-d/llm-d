@@ -7,12 +7,12 @@ patches:
   - path: controller-deployment-patch.yaml
     target:
       kind: Deployment
-      name: workload-variant-autoscaler-controller-manager
+      name: wva-controller-manager
   - path: metrics-auth-rolebinding-patch.yaml
     target:
       kind: ClusterRoleBinding
-      name: workload-variant-autoscaler-prometheus-metrics-auth-rolebinding
+      name: wva-metrics-auth-rolebinding
   - path: epp-token-secret-patch.yaml
     target:
       kind: Secret
-      name: workload-variant-autoscaler-epp-metrics-token
+      name: wva-epp-metrics-token

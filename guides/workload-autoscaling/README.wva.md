@@ -29,12 +29,7 @@ Before installing WVA, ensure you have:
     > [!NOTE]
     > This guide relies on prometheus adapter to expose WVA's desired replica count as an external metric for HPA. KEDA is the recommended alternative and this guide will be updated to include KEDA instructions in a future release.
 
-### Platform-Specific
-
-#### OpenShift
-
-> [!NOTE]
-> [OpenShift User Workload Monitoring](https://docs.redhat.com/en/documentation/openshift_container_platform/4.14/html/monitoring/configuring-user-workload-monitoring) must be enabled for the namespaces used by this guide.
+3. [OpenShift User Workload Monitoring](https://docs.redhat.com/en/documentation/openshift_container_platform/4.14/html/monitoring/configuring-user-workload-monitoring) enabled for the namespaces used by this guide.
 
 
 ## Set Namespaces
@@ -52,13 +47,8 @@ export REPO_ROOT=$(realpath $(git rev-parse --show-toplevel))
 
 ## Installation
 
-Install WVA using the appropriate overlay for your platform.
-
 > [!NOTE]
 >  By default, WVA is configured to watch `llm-d-optimized-baseline` (`--watch-namespace=llm-d-optimized-baseline`) only. To enable cluster-wide autoscaling, set `--watch-namespace=""` in the controller deployment and ensure all target HPA/KEDA objects are annotated with `llm-d.ai/managed: "true"`.
-
-
-### Openshift
 
 - Create a secret with the Prometheus CA certificate for secure communication between WVA and Prometheus:
 
@@ -75,28 +65,14 @@ Install WVA using the appropriate overlay for your platform.
   kubectl apply -k guides/workload-autoscaling/wva-config/platform/ocp -n ${WVA_NAMESPACE}
   ```
 
-### GKE
-
-```bash
-# GKE
-kubectl apply -k ${REPO_ROOT}/guides/workload-autoscaling/wva-config/platform/gke -n ${WVA_NAMESPACE}
-```
-
-### Generic Kubernetes
-
-```bash
-# Generic Kubernetes
-kubectl apply -k guides/workload-autoscaling/wva-config/platform/generic -n ${WVA_NAMESPACE}
-```
-
 ## Verify Installation
 
 Check that the WVA controller is running:
 
 ```bash
 kubectl get deployment -n ${WVA_NAMESPACE}
-NAME                                                       READY   UP-TO-DATE   AVAILABLE   AGE
-workload-variant-autoscaler-controller-manager              2/2     2            2           10m
+NAME                     READY   UP-TO-DATE   AVAILABLE   AGE
+wva-controller-manager   2/2     2            2           10m
 ```
 
 This guide configures the controller deployment with `replicas: 2` and leader election enabled for HA (one active leader plus one standby).
@@ -151,14 +127,7 @@ kubectl delete -k optimized-baseline-autoscaling/ -n ${NAMESPACE}
 Remove the WVA controller with Kustomize:
 
 ```bash
-# OpenShift
-kubectl delete -k ${REPO_ROOT}/guides/workload-autoscaling/wva-config/platform/ocp -n ${WVA_NAMESPACE}
-
-# Generic Kubernetes
-kubectl delete -k ${REPO_ROOT}/guides/workload-autoscaling/wva-config/platform/generic -n ${WVA_NAMESPACE}
-
-# GKE
-kubectl delete -k ${REPO_ROOT}/guides/workload-autoscaling/wva-config/platform/gke -n ${WVA_NAMESPACE}
+kubectl delete -k guides/workload-autoscaling/wva-config/platform/ocp -n ${WVA_NAMESPACE}
 ```
 
 If you installed Prometheus Adapter for WVA, you can uninstall it as well:
@@ -172,10 +141,6 @@ helm uninstall prometheus-adapter -n ${MON_NS:-llm-d-monitoring}
 Please refer to the [Workload Variant Autoscaler documentation](https://github.com/llm-d-incubation/workload-variant-autoscaler) for advanced configuration options, updating WVA versions, and troubleshooting tips.
 
 ## Install Prometheus Adapter (Required Dependency)
-
-Choose your platform and follow the corresponding section:
-
-### On OpenShift
 
 ```bash
 # Setup
@@ -222,68 +187,6 @@ rules:
   verbs: [get]
 YAML
 ```
-
-### On GKE/Generic Kubernetes
-
-```bash
-# Setup
-helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
-helm repo update
-export VERSION=${VERSION:-v0.7.0}
-export MON_NS=${MON_NS:-llm-d-monitoring}
-
-# Download values
-curl -o ${TMPDIR:-/tmp}/prometheus-adapter-values.yaml \
-  https://raw.githubusercontent.com/llm-d-incubation/workload-variant-autoscaler/${VERSION}/config/samples/prometheus-adapter-values.yaml
-
-# Update Prometheus URL
-sed -i.bak "s|url:.*|url: https://kube-prometheus-stack-prometheus.${MON_NS}.svc.cluster.local:9090|" ${TMPDIR:-/tmp}/prometheus-adapter-values.yaml || \
-  echo "Edit ${TMPDIR:-/tmp}/prometheus-adapter-values.yaml to set prometheus.url"
-
-# Install
-helm upgrade -i prometheus-adapter prometheus-community/prometheus-adapter \
-  --version 5.2.0 -n ${MON_NS} --create-namespace -f ${TMPDIR:-/tmp}/prometheus-adapter-values.yaml
-```
-
-### On Kind/HTTPS Prometheus
-
-For Kind clusters with HTTPS Prometheus (configured in Platform-Specific Configuration), the `prometheus-ca` ConfigMap is created by WVA during controller installation. Configure Prometheus Adapter to use it:
-
-```bash
-# Setup
-helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
-helm repo update
-export VERSION=${VERSION:-v0.7.0}
-export MON_NS=${MON_NS:-llm-d-monitoring}
-
-# Download values
-curl -o ${TMPDIR:-/tmp}/prometheus-adapter-values.yaml \
-  https://raw.githubusercontent.com/llm-d-incubation/workload-variant-autoscaler/${VERSION}/config/samples/prometheus-adapter-values.yaml
-
-# Configure values with CA cert (ConfigMap created by WVA during controller installation)
-cat >> ${TMPDIR:-/tmp}/prometheus-adapter-values.yaml <<EOF
-prometheus:
-  url: https://kube-prometheus-stack-prometheus.${MON_NS}.svc.cluster.local
-  port: 9090
-extraArguments:
-  - --prometheus-ca-file=/etc/ssl/certs/prometheus-ca.crt
-extraVolumeMounts:
-  - name: prometheus-ca
-    mountPath: /etc/ssl/certs/prometheus-ca.crt
-    subPath: ca.crt
-    readOnly: true
-extraVolumes:
-  - name: prometheus-ca
-    configMap:
-      name: prometheus-ca
-EOF
-
-# Install
-helm upgrade -i prometheus-adapter prometheus-community/prometheus-adapter \
-  --version 5.2.0 -n ${MON_NS} --create-namespace -f ${TMPDIR:-/tmp}/prometheus-adapter-values.yaml
-```
-
-> **Note**: WVA creates the `prometheus-ca` ConfigMap in the monitoring namespace using the configured CA cert settings. This ConfigMap is required for Prometheus Adapter.
 
 **Verify installation**: `kubectl get pods -n ${MON_NS} -l app.kubernetes.io/name=prometheus-adapter`
 

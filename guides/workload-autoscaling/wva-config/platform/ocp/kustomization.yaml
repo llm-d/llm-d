@@ -8,4 +8,4 @@ patches:
   - path: servicemonitor-label-patch.yaml
     target:
       kind: ServiceMonitor
-      name: workload-variant-autoscaler-controller-manager-metrics-monitor
+      name: wva-controller-manager-metrics-monitor

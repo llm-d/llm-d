@@ -14,3 +14,6 @@ CLAUDE.md
 
 # helm chart directories via kustomize
 **/charts/
+
+# AI
+.claude
