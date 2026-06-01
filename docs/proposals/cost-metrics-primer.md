@@ -4,19 +4,20 @@
 
 The core question: what did you actually pay for?
 
-When you run workloads on a Kubernetes cluster, you pay for the **nodes** (servers) whether they are busy or not. The question is how you attribute fixed and common costs across workloads.  And, how you reflect allocated resources that were under-utilized - i.e. wasted.
+When you run workloads on a Kubernetes cluster, you pay for the **nodes** (servers) whether they are busy or not. The question is how you attribute fixed and common costs across workloads.  An important corollary to this question is how to detect and allocate resources that were under-utilized - i.e. wasted.
 
 There are three distinct layers of cost:
 
 1. **Used** — resources a workload reserved *and* actually consumed
-2. **Wasted** — resources a workload reserved but did not use (over-provisioning)
+2. **Wasted** — resources a workload reserved but did not use (over-provisioning) 
 3. **Idle** — resources that no workload reserved at all — spare cluster capacity
 4. **Shared** - resources that are common to all workloads - [discussed here](#shared-costs)
 
-  
-### Reservation-based cost — max(request, usage)
+Note: There are cases of under-provisioning which result in efficiency (wasted) being greater than 100%. 
 
-Each workload pays for what it reserved. If App-a reserved 3 CPUs and used 1 — it pays for 3. The wasted 2 CPUs are baked into app-a's bill. The idle CPUs (unreserved by anyone) appear as a separate `__idle__` line item. The cluster bill always reconciles — every dollar is accounted for across workloads plus idle.
+### Allocation-based cost — max(request, usage)
+
+Each workload pays for what it reserved or what it actually uses, whichever is greater. If App-a reserved 3 CPUs and used 1 — it pays for 3. The wasted 2 CPUs are baked into App-a's bill. The idle CPUs (unreserved by anyone) appear as a separate `__idle__` line item. In another example, App-b requests 2 CPUs, and then bursts above this to use 4 CPUs, 4 CPUs will be attributed to App-b's costs. The cluster bill always reconciles — every dollar is accounted for across workloads plus idle.
 
 ### Usage-only cost
 
@@ -39,13 +40,13 @@ Neither is wrong — they answer different questions. Reservation-based answers 
 
   In this example we focus only on CPU costs to simplify the discussion.
 
-  A cluster has one node provisioned with 8 CPUs at **$10/hr per CPU**. Two workloads are running:
+  A cluster has one node provisioned with 8 CPUs at **$10/hr total**. Two workloads are running:
 
   - namespace/app-a: requested 3 CPUs out of 8 available → pays for 3/8 = 37.5% of CPU
   - namespace/app-b: requested 1 CPU → pays for 1/8 = 12.5% of CPU
-  - 4 CPUs are idle (nobody requested them) → 50% of CPU cost = $5/hr
+  - 4 CPUs are idle (nobody requested them) → 50% of CPU
 
-  CPU Cost represents the cost of usage + waste.
+  A cluster's CPU Cost represents the cost of usage + waste.
 
   CPU Usage Cost is only the usage without taking into account the waste or idle.
 
@@ -80,7 +81,7 @@ Neither is wrong — they answer different questions. Reservation-based answers 
 
   Workloads in designated namespaces (e.g. monitoring, logging, ingress) are treated as infrastructure
   serving everyone. Their entire cost is removed from their namespace and distributed across all other
-  workloads.
+  workloads, cost-weighted.
   
   Example: A Prometheus stack in the monitoring namespace costs $50/day. With
   SharedNamespaces=["monitoring"], that $50 is spread across all other namespaces — no workload "owns"
@@ -114,12 +115,13 @@ Neither is wrong — they answer different questions. Reservation-based answers 
   ---
   Distribution methods
 
-  Once a cost is identified as shared, it's distributed across remaining workloads using ShareSplit:
+  Once a cost is identified as shared, it is distributed across remaining workloads using ShareSplit:
 
-  ShareEven — each workload gets an equal slice regardless of size. 3 workloads → each gets 1/3.
+  ShareWeighted — each workload gets a slice proportional to its own total cost. A workload that already costs $90 out of a $100 total gets 90% of the shared cost. This is the default.
 
-  ShareWeighted — each workload gets a slice proportional to its own total cost. A workload that already costs $90 out of a $100 total gets 90% of
-  the shared cost. This is the default and generally fairer.
+  ShareEven - simple equal distribution
+
+  ShareNone - shared costs are not attributed to any of the workloads
 
   ---
   What it looks like in the API

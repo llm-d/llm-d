@@ -4,31 +4,38 @@ Authors: Sima Nadler (_IBM_), Alex Meijer (_OpenCost_, _IBM_)
 
 ## Summary
 
-This proposal introduces cost tracking for **AI inference deployed on llm-d**. The solution enables tracking of self-hosted AI model costs, enabling cost tracking across teams and workloads, and enabling optimization of inference routing and resource allocation based on actual per-token costs calculated from infrastructure usage.
+This proposal introduces cost tracking for **AI inference deployed on llm-d**. The solution enables:
+* tracking of self-hosted AI model costs
+* enabling cost tracking across teams and workloads
+* optimization of inference routing 
+* resource allocation and waste detection
+based on actual per-token costs calculated from infrastructure usage.
 
-Cost tracking provides unified visibility across Kubernetes infrastructure, cloud resources, and self hosted AI inference workloads, enabling organizations to make data-driven decisions about model deployment configurations, compare self-hosting costs against commercial API alternatives, and measure the return on investment of optimization techniques like KV cache and disaggregated serving.
+Cost tracking provides unified visibility across Kubernetes infrastructure, cloud resources, and self hosted AI inference workloads.  This enables organizations to make data-driven decisions about model deployment configurations, compare self-hosting costs against commercial API alternatives, and measure the return on investment of optimization techniques like KV cache and disaggregated serving.
 
 ## Motivation
 
-As organizations scale their AI inference deployments on llm-d, understanding and optimizing  costs becomes critical. Platform teams need visibility into the actual cost of serving different models, workloads, and teams to make informed decisions about resource allocation, capacity planning, routing and optimization priorities.
+As organizations scale their AI inference deployments on llm-d, understanding and optimizing  costs becomes critical. Platform teams need visibility into the actual cost of serving different models, workloads, and teams to make informed decisions about resource allocation, capacity planning, routing and optimization priorities.  Management teams need insight into costs versus benefits of investing in LLM optimization and infrastructure upgrades and an overall view into the efficiency of their AI footprint.
 
 Current challenges include:
 - **Lack of cost visibility**: Teams don't know the actual inference cost per token for the self host models they use
 - **No chargeback mechanism**: Cannot attribute costs to specific teams or workloads for internal billing
-- **Optimization blindness**: Cannot measure the cost impact of optimizations like KV cache hits, disaggregated serving nor smart routing
+- **Optimization blindness**: Cannot measure the cost impact of optimizations such as KV cache hits, disaggregated serving and smart routing
 - **Self-hosting vs API comparison**: Cannot compare self-hosting costs against commercial API alternatives because the self hosting costs are not known
 - **Resource allocation**: Cannot make data-driven decisions about which models or configurations to prioritize
 - **Multi-tenant cost allocation**: Cannot fairly distribute infrastructure costs across multiple teams and workloads sharing the same model servers
+- **GPU Efficiency Opacity**: Limited ability to right size underlying GPU infrastructure to actual observed workload resource requirements 
 
 ### Goals
 
 1. **Infrastructure-based cost calculation**: Calculate per-token costs from actual infrastructure use (ex: GPU, CPU, memory infrastructure usage) not pre-configured pricing tables
-2. **Multi-dimensional attribution**: Track costs by team, workload, model, model variant, and namespace
+2. **Multi-dimensional attribution**: Track costs by team, workload, model, model variant, label and namespace
 3. **Differentiated token pricing**: Provide separate costs for input (prompt) and output (generation) tokens based on actual compute time
 4. **Seamless integration**: Integrate with existing llm-d metrics ecosystem (DCGM, vLLM, EPP, GPU metrics) without duplication
 5. **Disaggregation support**: Track costs for disaggregated serving (prefill/decode) deployments
 6. **Production-ready**: Provide reliable, scalable cost tracking suitable for production deployments
 7. **Optimization insights**: Enable measurement of cost savings from KV cache, prefix caching, and other optimizations
+8. **LLM/GPU workload idle insights**: Improve on OpenCosts current GPU capabilities to better identify GPU idle
 
 Note: Although not a direct goal of this project, collection of SaaS Model Provider usage and billing can be obtained via OpenCost via its plugin mechanism.  This makes comparing self hosted costs to SaaS model costs much easier.  Currently there is a [plugin for OpenAI](https://github.com/opencost/opencost-plugins/tree/main/pkg/plugins/openai).
 
@@ -38,12 +45,11 @@ Note: Although not a direct goal of this project, collection of SaaS Model Provi
 2. **Not a billing system**: This is not a billing/invoicing system, but provides cost data for such systems
 3. **Not for training costs**: Focus is exclusively on inference costs, not model training nor fine-tuning.  Changes made to OpenCost, however, will be made with an eye towards enabling future work such as training cost support. 
 4. **Not real-time billing**: Cost calculations are based on recent metrics (5-minute windows), not per-request billing
-5. **Not cloud billing integration**: Does not directly integrate with cloud provider billing APIs (uses OpenCost's existing integrations)
-6. **Not pricing**: This proposal provides costs not prices.  If static or dynamic pricing is desired it can be generated using inference costs as a basis.
+5. **Not pricing**: This proposal provides costs not prices.  If static or dynamic pricing is desired it can be generated using inference costs as a basis.
 
 ## Cost Metrics Primer
 
-For background on infrastructure cost concepts (reservation-based vs usage-only costs, idle, wasted, and shared costs), see the [Cost Metrics Primer](./cost-metrics-primer.md).  
+For background on infrastructure cost concepts (alloccation-based vs usage-only costs, idle, wasted, and shared costs), see the [Cost Metrics Primer](./cost-metrics-primer.md).  
 
 _This is important for understanding the following sections._
 
@@ -90,6 +96,17 @@ As a finance team member, I want to attribute AI inference costs to specific app
 - Export cost data for integration with billing systems
 - Track costs by workload type (interactive vs batch)
 - Track costs for specific workloads - including agents
+
+#### Story 5: FinOps Support/Unit Economics
+As a FinOps team member, I want to view underutilized LLM deployments and their underlying hardware. I want to know the amount of savings that would be realized by right-sizing the LLM deployment. I also want to establish the unit economics of LLM scaling to justify CAPEX. 
+
+**Acceptance Criteria**:
+- View idle resources by type, particularly GPUs
+- Determine which teams/deployments are over-provisioned and inefficient
+- Be able to spread out idle GPU costs across all LLM consumers
+- Determine the effect on cost-per-token for each marginal GPU added or removed
+- Make recommendations for optimizations or best practices at large and small scale LLM deployment
+
 ## Proposal
 
 This proposal recommends adding infrastructure cost tracking for AI inference workloads on llm-d. After evaluating multiple approaches (detailed in the [Alternatives section](#alternatives-to-opencost)), we recommend **extending OpenCost** with a new inference cost domain that tracks AI inference costs alongside OpenCost's existing cost domains (Allocation, Asset, CloudCost, CustomCost).
@@ -98,11 +115,12 @@ This proposal recommends adding infrastructure cost tracking for AI inference wo
 
 [OpenCost](https://opencost.io/) provides a good foundation for inference cost tracking because it:
 - Already integrates with Kubernetes and monitoring software including Prometheus
-- Has proven cost allocation algorithms for GPU infrastructure
+- Has proven cost allocation algorithms for GPU infrastructure, which will be enhanced in the course of this project
 - Provides unified visibility across infrastructure, cloud, and custom costs
 - Offers REST API and MCP server for programmatic access
-- Is open source and widely adopted in the Kubernetes ecosystem
+- Is open source and widely adopted in the Kubernetes ecosystem- 7,000 stars on github and in CNCF incubating status
 - Collects general infrastructure costs - CPU, memory, network, overhead, etc.
+- Open plugin architecture allows for extension to arbitrary costs
 
 ### Alternative Approaches Considered
 
@@ -146,12 +164,14 @@ In addition to collecting and calculating general infrastructure costs as is alr
 1. **Collect metrics from existing sources**:
    - Token metrics from vLLM (ex: `vllm:prompt_tokens_total`, `vllm:generation_tokens_total`)
    - GPU costs from OpenCost's existing allocation system
+   - GPU requests from DRA and device plugins
+   - GPU utilization 
    - Processing time metrics from vLLM for differentiated pricing
    - KV cache hits and usage metrics
    - Namespace and model labels for attribution
 
 2. **Calculate infrastructure-based costs**:
-   - Determine GPU cost per container based on allocation and node costs
+   - Determine total cost per container based on allocation and node costs
    - Calculate total tokens processed in time window
    - Compute cost per token from infrastructure costs divided by token throughput as well as based on usage
    - Allocate costs between input and output tokens based on actual processing time
@@ -162,6 +182,7 @@ In addition to collecting and calculating general infrastructure costs as is alr
 3. **Export cost metrics**:
    - Prometheus metrics for monitoring and alerting
    - REST API for programmatic access
+   - MCP server for agentic interactions
    - OpenCost UI for AI model costs
 
 4. **Enable multi-dimensional queries**:
@@ -200,7 +221,7 @@ For this initial discussion we focus on GPUs to simplify things.
 
 - **Used** — GPU compute actively processing inference requests (tokens being generated)
 - **Wasted** — GPU memory holding model weights while no requests are arriving (model loaded but idle between requests)
-- **Idle** — GPUs with no model loaded at all
+- **Idle** — GPUs with no model loaded at all or with a model but requesting more resources than required
 - **Shared** — Typical kubernetes shared costs **plus kv cache** and other inference specific shared costs described [here](#beyond-just-gpu)
 
 The gap between "used" and "wasted" can be far larger for LLMs than for CPU workloads. A CPU workload can be bin-packed with others to fill spare capacity. An LLM model loaded onto a GPU blocks that GPU entirely — its weights occupy VRAM whether or not a request is in flight, and loading/unloading is slow and expensive. A low-traffic model may spend 95% of its time in the "wasted" state.
@@ -237,7 +258,7 @@ The following section describe the metrics in more detail.
 
 ### Overall Model Cost Metrics 
 
-**Reservation-based cost per model** counts everything attributed to running that model: the GPU memory reserved for its weights at all times, the compute consumed during active inference, and its share of shared of infrastructure. This is the cost of *having the model available*. It reconciles to your infrastructure bill and answers: *"what is this model costing us?"*
+**Allocation-based cost per model** counts everything attributed to running that model: the GPU memory reserved for its weights at all times, the compute consumed during active inference, and its share of shared of infrastructure. This is the cost of *having the model available*. It reconciles to your infrastructure bill and answers: *"what is this model costing us?"*
 
 **Usage-based cost per model** counts only the GPU compute consumed during active inference — the tokens actually generated minus costs saved by kv cache hits. This answers: *"what did this model's actual work cost?"* The gap between this and the reservation-based figure is the cost of keeping the model warm and ready, which is a business decision about acceptable latency, not a technical inefficiency.
 
@@ -380,9 +401,10 @@ graph TB
 **Implementation Tasks**:
 - **Task 1**: Add idle, CPU, RAM, Networking, KV Cache and overhead costs to inference costs
 - **Task 2**: Integration with OpenCost UI and APIs
-- **Task 3**: Workload and team-based attribution 
-- **Task 4**: Optimization cost tracking and savings calculation (KV cache, prefill/decode, smart routing)
-- **Task 5**: Testing and validation framework
+- **Task 3**: GPU efficiency
+- **Task 4**: Workload and team-based attribution 
+- **Task 5**: Optimization cost tracking and savings calculation (KV cache, prefill/decode, smart routing)
+- **Task 6**: Testing and validation framework
 
 ## Alternatives to OpenCost
 
