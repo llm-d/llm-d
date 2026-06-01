@@ -1,4 +1,4 @@
-name: Nightly - Tiered Prefix Cache CPU Offloading E2E (GKE)
+name: Nightly - Tiered Prefix Cache CPU Offloading E2E (GKE GPU)
 
 # Nightly regression test for the tiered-prefix-cache/cpu guide on GKE.
 # Deploys the CPU offloading connector and validates with e2e-validate.sh.

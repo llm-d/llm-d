@@ -1,4 +1,4 @@
-name: Nightly - Wide EP LWS E2E (GKE)
+name: Nightly - Wide EP LWS E2E (GKE GPU)
 
 # Nightly regression test for the wide-ep-lws guide on GKE.
 # Uses LeaderWorkerSet for P/D disaggregation with kustomize + helm.
