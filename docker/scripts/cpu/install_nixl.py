@@ -1,5 +1,6 @@
 # install_prerequisites.py
 import os
+import shutil
 import subprocess
 import sys
 import argparse
@@ -138,33 +139,33 @@ def build_and_install_prerequisites(args):
     print(f"--> Using LD_LIBRARY_PATH: {build_env['LD_LIBRARY_PATH']}", flush=True)
 
     temp_wheel_dir = os.path.join(ROOT_DIR, 'temp_wheelhouse')
-    run_command([sys.executable, '-m', 'pip', 'wheel', '.', '--no-deps', f'--wheel-dir={temp_wheel_dir}'],
-                cwd=os.path.abspath(NIXL_DIR),
-                env=build_env)
+    try:
+        run_command([sys.executable, '-m', 'pip', 'wheel', '.', '--no-deps', f'--wheel-dir={temp_wheel_dir}'],
+                    cwd=os.path.abspath(NIXL_DIR),
+                    env=build_env)
 
-    # -- Step 3: Repair the wheel, excluding the already-bundled plugin --
-    print("\n[3/3] Repairing NIXL wheel to include UCX libraries...", flush=True)
-    unrepaired_wheel = find_nixl_wheel_in_cache(temp_wheel_dir)
-    if not unrepaired_wheel:
-        raise RuntimeError("Failed to find the NIXL wheel after building it.")
+        # -- Step 3: Repair the wheel, excluding the already-bundled plugin --
+        print("\n[3/3] Repairing NIXL wheel to include UCX libraries...", flush=True)
+        unrepaired_wheel = find_nixl_wheel_in_cache(temp_wheel_dir)
+        if not unrepaired_wheel:
+            raise RuntimeError("Failed to find the NIXL wheel after building it.")
 
-    # --- 👇 THE CORRECTED COMMAND 👇 ---
-    # We tell auditwheel to ignore the plugin that mesonpy already handled.
-    auditwheel_command = [
-        'auditwheel',
-        'repair',
-        '--exclude',
-        'libplugin_UCX.so',  # <-- Exclude the problematic library
-        unrepaired_wheel,
-        f'--wheel-dir={WHEELS_CACHE_HOME}'
-    ]
-    run_command(auditwheel_command, env=build_env)
-    # --- 👆 END CORRECTION 👆 ---
-
-    # --- CLEANUP ---
-    # No more temporary files to remove, just the temp wheelhouse
-    run_command(['rm', '-rf', temp_wheel_dir])
-    # --- END CLEANUP ---
+        # --- 👇 THE CORRECTED COMMAND 👇 ---
+        # We tell auditwheel to ignore the plugin that mesonpy already handled.
+        auditwheel_command = [
+            'auditwheel',
+            'repair',
+            '--exclude',
+            'libplugin_UCX.so',  # <-- Exclude the problematic library
+            unrepaired_wheel,
+            f'--wheel-dir={WHEELS_CACHE_HOME}'
+        ]
+        run_command(auditwheel_command, env=build_env)
+        # --- 👆 END CORRECTION 👆 ---
+    finally:
+        # --- CLEANUP ---
+        shutil.rmtree(temp_wheel_dir, ignore_errors=True)
+        # --- END CLEANUP ---
 
     newly_built_wheel = find_nixl_wheel_in_cache(WHEELS_CACHE_HOME)
     if not newly_built_wheel:
