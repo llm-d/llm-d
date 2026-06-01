@@ -13,7 +13,7 @@ The system's true concurrency limit is determined by the active bottleneck (the 
 import argparse
 import math
 import sys
-from typing import Tuple, Optional
+from typing import Any, Tuple, Optional
 
 # ==========================================
 # UI Helpers
@@ -278,7 +278,7 @@ flowControl:
         print("To reproduce this exact calculation via CLI in the future:")
         cmd =["python3 scripts/tuning_wizard.py"]
 
-        def add(flag: str, val: any):
+        def add(flag: str, val: Any):
             if val is not None:
                 cmd.append(f"{flag} {val}")
 
