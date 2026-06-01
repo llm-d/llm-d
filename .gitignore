@@ -3,6 +3,7 @@
 .DS_Store
 CLAUDE.md
 .release-team
+__pycache__/
 
 # editor and IDE paraphernalia
 .idea
