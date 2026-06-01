@@ -1,0 +1,7 @@
+{
+  "rhel_to_ubuntu": {
+    "rdma-core-devel": "librdmacm-dev",
+    "libibverbs": "libibverbs1",
+    "libibverbs-devel": "libibverbs-dev"
+  }
+}

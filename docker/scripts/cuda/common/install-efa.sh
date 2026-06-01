@@ -46,6 +46,10 @@ fi
 
 update_system "${TARGETOS}"
 
+# Snapshot installed packages before EFA installs anything,
+# so we can later exclude EFA-provided packages from dnf update
+rpm -qa --qf '%{NAME}\n' | sort > /tmp/pre_efa_packages.txt
+
 # Install RPMs based on mode
 if [ "${EFA_MODE}" = "builder" ]; then
     # Builder mode: only install base rpms
@@ -92,6 +96,10 @@ else
 fi
 
 rm -rf "${EFA_WORKDIR}"
+
+# Record which packages EFA installed so downstream scripts can exclude them from dnf update
+rpm -qa --qf '%{NAME}\n' | sort | comm -13 /tmp/pre_efa_packages.txt - > /tmp/efa_installed_packages.txt
+rm -f /tmp/pre_efa_packages.txt
 
 # Copy EFA libraries to /tmp/efa_libs for later use in runtime (builder mode only)
 if [ "${EFA_MODE}" = "builder" ]; then
