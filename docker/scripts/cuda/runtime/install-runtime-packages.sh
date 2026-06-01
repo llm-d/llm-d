@@ -30,7 +30,13 @@ if [ "$TARGETOS" = "ubuntu" ]; then
     apt-get update -qq
     apt-get install -y jq
 elif [ "$TARGETOS" = "rhel" ]; then
-    dnf -q update -y
+    DNF_EXCLUDE_ARGS=""
+    if [ -f /tmp/efa_installed_packages.txt ]; then
+        while IFS= read -r pkg; do
+            [ -n "$pkg" ] && DNF_EXCLUDE_ARGS="${DNF_EXCLUDE_ARGS} --exclude=${pkg}"
+        done < /tmp/efa_installed_packages.txt
+    fi
+    dnf -q update -y ${DNF_EXCLUDE_ARGS}
     dnf -q install -y jq
 fi
 
