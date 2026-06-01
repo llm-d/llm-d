@@ -433,4 +433,6 @@ The Flow Control layer exposes detailed metrics to track queuing dynamics and sy
 
 A pre-configured Grafana dashboard is available to visualize these metrics, making it easy to monitor queue depths, dispatch latency, and saturation state transitions.
 
+To load this dashboard, follow the [Observability Setup guide](../../../../operations/observability/setup.md), which installs Prometheus and Grafana and loads the llm-d dashboards.
+
 ![Flow Control Dashboard](../../images/flow_control_dashboard.png)
