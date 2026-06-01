@@ -25,7 +25,7 @@ jobs:
       matrix:
         include:
           - platform: linux/amd64
-            cncf-ubuntu-16-64-x86
+            runner: cncf-ubuntu-16-64-x86
             os: rhel
             base_image_suffix: ubi9
             image_suffix: ""
@@ -35,7 +35,7 @@ jobs:
             base_image_suffix: ubi9
             image_suffix: ""
           - platform: linux/amd64
-            cncf-ubuntu-16-64-x86
+            runner: cncf-ubuntu-16-64-x86
             os: ubuntu
             base_image_suffix: ubuntu24.04
             image_suffix: "-ubuntu"
