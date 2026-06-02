@@ -202,9 +202,83 @@ kubectl delete namespace ${NAMESPACE}
 
 ## Benchmarking
 
-For instructions on setting up standard workloads and running performance analyses against this guide, refer to the [benchmark instructions doc](../../../helpers/benchmark.md).
+The benchmark launches a pod (`llmdbench-harness-launcher`) that uses `inference-perf` with a shared prefix workload. This workload runs several stages with different rates. The results are saved locally to `./results/<experiment ID>`.
 
-The current weight configuration defaults to `2:2:1:1` (Queue Scorer : KV Cache Utilization Scorer : GPU/TPU Prefix Cache Scorer : CPU Prefix Cache Scorer). This configuration defaults to a safe performance profile.
+For more details, refer to the [benchmark instructions doc](../../../helpers/benchmark.md).
+
+### 1. Prepare the Benchmarking Suite
+
+Download the benchmark script:
+
+```bash
+curl -L -O https://raw.githubusercontent.com/llm-d/llm-d-benchmark/main/existing_stack/run_only.sh
+chmod u+x run_only.sh
+```
+
+Ensure a HuggingFace token secret `llm-d-hf-token` is created inside the namespace.
+
+### 2. Download the Workload Template
+
+```bash
+curl -LJO "https://raw.githubusercontent.com/llm-d/llm-d/main/guides/tiered-prefix-cache/cpu/benchmark-templates/guide.yaml"
+```
+
+### 3. Execute Benchmark
+
+```bash
+export IP=$(kubectl get service ${GUIDE_NAME}-epp -n ${NAMESPACE} -o jsonpath='{.spec.clusterIP}')
+envsubst < guide.yaml > config.yaml
+./run_only.sh -c config.yaml -o ./results
+```
+
+---
+
+### Benchmarking Results
+
+The current weight configuration defaults to `1:1:1:1:1` (Queue Scorer : KV Cache Utilization Scorer : GPU Prefix Cache Scorer : CPU Prefix Cache Scorer : LRU Scorer). Note that prefixes in GPU is double counted in the CPU scorer because CPU kv cache is a super set of GPU. This configuration defaults to a safe performance profile.
+
+### GPU
+
+#### High Cache Scenario (HBM < KVCache < HBM + CPU RAM)
+
+The benchmark runs on 16 × H100 GPUs, distributed across 8 model servers (2 H100s per server with TP=2) using Qwen3-32B.
+
+* **Workload**: 250 prefix groups, 5 prompts per group, system prompt length of 16,000 tokens, question length of 256 tokens, output length of 256 tokens.
+* **GPU Cache Size (Total)**: 2,384,000 tokens (381 GB / 355 GiB).
+* **CPU Cache Size (Total)**: 10,496,000 tokens (~1,718 GB / 1,600 GiB) at 200 GiB/replica.
+* **Workload Unique Cache (Working Set)**: 4,640,000 tokens (~760 GB / 708 GiB) — comprising 4.0M system prompt tokens (250 groups × 16,000 tokens), 320,000 question tokens (1,250 prompts × 256 tokens), and 320,000 generated output tokens (1,250 prompts × 256 tokens).
+
+**Cache capacity dynamics**:
+`Total GPU HBM Cache (2.38M tokens / 355 GiB) < Workload Unique Cache (4.64M tokens / 708 GiB) < Total CPU Cache Capacity (10.49M tokens / 1,600 GiB)`
+
+Because the total unique tokens in the workload (4.64M) exceed the GPU local cache capacity (2.38M), running on HBM cache alone (**Optimized Baseline**) causes severe cache thrashing. CPU offloading is required to store the full working set in CPU RAM. Note that the entire workload unique cache fits comfortably within the total CPU cache capacity (10.49M tokens).
+
+Under EPP tiered routing (**GPU + CPU tier prefix aware routing**), EPP explicitly scores both GPU and CPU cache hits, ensuring optimal replica affinity routing even when GPU cache is fully thrashing.
+
+<img src="./benchmark-results/external_prefix_cache_hits.png" width="900" alt="vLLM External Prefix Cache Hits">
+
+Below are the benchmark results across the 5.0 to 40.0 QPS request rate stages:
+
+| Target Rate | Configuration | Mean TTFT (s) | P90 TTFT (s) | Mean E2E Latency (s) | P90 E2E Latency (s) | Throughput (tok/s) |
+| :---: | :--- | :---: | :---: | :---: | :---: | :---: |
+| **5.0 QPS** | **Optimized Baseline (HBM-only)** | 1.62 | 2.65 | 11.98 | 21.60 | 74,638.5 |
+| | **GPU + CPU tier prefix aware routing** | 1.17 (-27.8%) | 1.79 (-32.5%) | 11.49 (-4.1%) | 20.25 (-6.3%) | 82,880.0 (+11.0%) |
+| **10.0 QPS** | **Optimized Baseline (HBM-only)** | 8.08 | 16.61 | 26.28 | 32.60 | 122,387.7 |
+| | **GPU + CPU tier prefix aware routing** | 0.41 (-94.9%) | 1.31 (-92.1%) | 6.97 (-73.5%) | 9.23 (-71.7%) | 167,027.5 (+36.5%) |
+| **15.0 QPS** | **Optimized Baseline (HBM-only)** | 23.19 | 43.64 | 41.79 | 60.08 | 121,248.1 |
+| | **GPU + CPU tier prefix aware routing** | 0.38 (-98.4%) | 0.48 (-98.9%) | 7.66 (-81.7%) | 9.16 (-84.8%) | 247,732.6 (+104.3%) |
+| **20.0 QPS** | **Optimized Baseline (HBM-only)** | 43.67 | 78.13 | 62.29 | 92.14 | 114,663.2 |
+| | **GPU + CPU tier prefix aware routing** | 0.89 (-98.0%) | 2.66 (-96.6%) | 9.03 (-85.5%) | 11.22 (-87.8%) | 300,749.2 (+162.3%) |
+| **25.0 QPS** | **Optimized Baseline (HBM-only)** | 61.01 | 110.00 | 79.91 | 128.00 | 113,870.1 |
+| | **GPU + CPU tier prefix aware routing** | 4.80 (-92.1%) | 10.87 (-90.1%) | 13.24 (-83.4%) | 19.42 (-84.8%) | 318,589.9 (+179.8%) |
+| **30.0 QPS** | **Optimized Baseline (HBM-only)** | 78.79 | 143.67 | 97.77 | 160.89 | 118,508.8 |
+| | **GPU + CPU tier prefix aware routing** | 12.06 (-84.7%) | 23.01 (-84.0%) | 20.58 (-78.9%) | 31.07 (-80.7%) | 328,334.0 (+177.1%) |
+| **35.0 QPS** | **Optimized Baseline (HBM-only)** | 97.24 | 174.85 | 116.54 | 193.17 | 116,009.0 |
+| | **GPU + CPU tier prefix aware routing** | 19.28 (-80.2%) | 36.31 (-79.2%) | 27.81 (-76.1%) | 44.59 (-76.9%) | 324,511.5 (+179.7%) |
+| **40.0 QPS** | **Optimized Baseline (HBM-only)** | 115.57 | 206.39 | 134.78 | 223.93 | 115,645.0 |
+| | **GPU + CPU tier prefix aware routing** | 25.38 (-78.0%) | 48.14 (-76.7%) | 33.95 (-74.8%) | 56.29 (-74.9%) | 331,212.6 (+186.4%) |
+
+### Previous Benchmarking Results
 
 > [!NOTE]
 > The following benchmark results were from a previous release and does not match the deployment of the current release. A follow up benchmark will be conducted and the results will be updated accordingly. See <https://github.com/llm-d/llm-d/issues/680>.
