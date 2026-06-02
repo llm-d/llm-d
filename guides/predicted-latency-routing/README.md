@@ -153,6 +153,7 @@ export IP=$(kubectl get gateway llm-d-inference-gateway -n ${NAMESPACE} -o jsonp
 ```bash
 kubectl run curl-debug --rm -it \
     --image=cfmanteiga/alpine-bash-curl-jq \
+    --namespace="$NAMESPACE" \
     --env="IP=$IP" \
     --env="NAMESPACE=$NAMESPACE" \
     --env="MODEL_NAME=$MODEL_NAME" \

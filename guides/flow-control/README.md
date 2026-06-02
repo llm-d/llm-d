@@ -195,6 +195,7 @@ To fully verify that queuing and backpressure are working, you must apply concur
 ```bash
 kubectl run curl-debug --rm -it \
     --image=cfmanteiga/alpine-bash-curl-jq \
+    --namespace="$NAMESPACE" \
     --env="IP=$IP" \
     --env="NAMESPACE=$NAMESPACE" \
     --env="GUIDE_NAME=$GUIDE_NAME" \
