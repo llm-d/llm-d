@@ -243,7 +243,7 @@ The following are the proposed metrics to be added to support AI Inferencing.
 New labels:
 * model_name="meta-llama/Llama-3.1-8B-Instruct" (example)
 * model_version="v1.0" (example)
-* model_variant="prefill" (example)
+* model_variant="LoRa A" (example)
 * cost_basis="usage" or "allocation"
 * workload="inference" (for llm-d)
 
@@ -260,7 +260,7 @@ The following section describe the metrics in more detail.
 
 **Allocation-based cost per model** counts everything attributed to running that model: the GPU memory reserved for its weights at all times, the compute consumed during active inference, and its share of shared of infrastructure. This is the cost of *having the model available*. It reconciles to your infrastructure bill and answers: *"what is this model costing us?"*
 
-**Usage-based cost per model** counts only the GPU compute consumed during active inference — the tokens actually generated minus costs saved by kv cache hits. This answers: *"what did this model's actual work cost?"* The gap between this and the allocation-based figure is the cost of keeping the model warm and ready, which is a business decision about acceptable latency, not a technical inefficiency.
+**Usage-based cost per model** counts only the GPU and other infrastructure consumed during active inference — the tokens actually generated minus costs saved by kv cache hits. This answers: *"what did this model's actual work cost?"* The gap between this and the allocation-based figure is the cost of keeping the model warm and ready, which is a business decision about acceptable latency, not a technical inefficiency.
 
 ### Cost Per Million Tokens 
 
@@ -283,7 +283,7 @@ Example:
 
 These metrics will be broken down further into the cost per million **input** and **output** tokens.  In order to calculate input token cost it is necessary to capture kv cache hit savings, which will also be provided as a metric.
 
-*** Cost Per Million Tokens - with KV Cache Hits
+**Cost Per Million Tokens - with KV Cache Hits**
 
 To calculate the actual cost per million tokens its necessary to do the following calculation:
 
