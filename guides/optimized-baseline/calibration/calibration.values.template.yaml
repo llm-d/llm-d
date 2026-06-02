@@ -22,7 +22,7 @@ router:
         - type: prefix-cache-affinity-filter
           parameters:
             affinityThreshold: 0.80
-            maxTokensInFlightPenalty: 286720
+            maxTokensInFlightPenalty: ${TAU}
             maxTTFTPenaltyMs: 0
         schedulingProfiles:
         - name: default

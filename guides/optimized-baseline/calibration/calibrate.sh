@@ -1,14 +1,19 @@
 #!/bin/bash
-# calibrate-and-apply.sh — runs the calibration Job, reads tau from logs,
-# renders the calibration values file via envsubst, applies via helm upgrade.
+# calibrate.sh — measures tau against the live deployment and produces a
+# Helm values overlay file with the suggested value.
+#
+# This script DOES NOT apply the value. It produces an overlay file and prints
+# the exact `helm upgrade` command the operator can run if they want to apply.
+# The operator inspects the rendered file, decides whether to use the suggested
+# value, and runs the upgrade themselves.
 #
 # Usage:
-#   GUIDE_NAME=optimized-baseline NAMESPACE=mynamespace ./calibrate-and-apply.sh
+#   GUIDE_NAME=optimized-baseline NAMESPACE=mynamespace ./calibrate.sh
 #
 # Required environment:
 #   GUIDE_NAME             — the guide name (default: optimized-baseline)
 #   NAMESPACE              — the K8s namespace (default: default)
-#   ROUTER_CHART_VERSION   — the chart version (default: v0.0.1)
+#   ROUTER_CHART_VERSION   — the chart version (default: v0)
 #
 # Optional environment (auto-discovered or defaulted if not set):
 #   VLLM_ENDPOINT     — http://host:port; defaults to EPP service ClusterIP
@@ -17,24 +22,25 @@
 #   T_MAX_SECONDS     — SLO tolerance (default: 17)
 #   NUM_WARMUP        — warmup requests (default: 5)
 #   NUM_MEASUREMENTS  — measurement requests (default: 10)
+#   OUTPUT_FILE       — where to write the rendered values overlay
+#                       (default: /tmp/<guide>-calibration.values.yaml)
 #
 # Prerequisites:
 #   - vLLM is running and reachable from the calibrate Job's network
-#   - helm install already done with the upstream values files
 #   - kubectl and envsubst available in PATH
 
 set -euo pipefail
 
 GUIDE_NAME="${GUIDE_NAME:-optimized-baseline}"
 NAMESPACE="${NAMESPACE:-default}"
-ROUTER_CHART_VERSION="${ROUTER_CHART_VERSION:-v0.0.1}"
+ROUTER_CHART_VERSION="${ROUTER_CHART_VERSION:-v0}"
 
 GUIDE_DIR="guides/${GUIDE_NAME}"
 CAL_DIR="${GUIDE_DIR}/calibration"
 JOB_TEMPLATE="${CAL_DIR}/calibrate-tau.yaml"
 VALUES_TEMPLATE="${CAL_DIR}/calibration.values.template.yaml"
 RENDERED_JOB="/tmp/${GUIDE_NAME}-calibrate-tau.yaml"
-RENDERED_VALUES="/tmp/${GUIDE_NAME}-calibration.values.yaml"
+OUTPUT_FILE="${OUTPUT_FILE:-${CAL_DIR}/calibration.values.yaml}"
 
 # 1. Pre-flight checks
 command -v envsubst >/dev/null \
@@ -62,6 +68,7 @@ export T_MAX_SECONDS="${T_MAX_SECONDS:-18}"
 export NUM_WARMUP="${NUM_WARMUP:-5}"
 export NUM_MEASUREMENTS="${NUM_MEASUREMENTS:-20}"
 
+echo ""
 echo "Calibration inputs:"
 echo "  VLLM_ENDPOINT    = $VLLM_ENDPOINT"
 echo "  MODEL_NAME       = $MODEL_NAME"
@@ -69,6 +76,7 @@ echo "  CHUNK_SIZE       = $CHUNK_SIZE"
 echo "  T_MAX_SECONDS    = $T_MAX_SECONDS"
 echo "  NUM_WARMUP       = $NUM_WARMUP"
 echo "  NUM_MEASUREMENTS = $NUM_MEASUREMENTS"
+echo ""
 
 # 3. Render the Job manifest with the env vars substituted in
 envsubst < "$JOB_TEMPLATE" > "$RENDERED_JOB"
@@ -77,7 +85,7 @@ envsubst < "$JOB_TEMPLATE" > "$RENDERED_JOB"
 kubectl delete job calibrate-tau -n "$NAMESPACE" --ignore-not-found
 
 # 5. Apply the rendered Job
-echo "Applying calibration Job..."
+echo "Running calibration Job..."
 kubectl apply -f "$RENDERED_JOB" -n "$NAMESPACE"
 
 # 6. Wait for completion
@@ -97,36 +105,29 @@ if [[ -z "$TAU" ]]; then
   kubectl logs -n "$NAMESPACE" job/calibrate-tau
   exit 1
 fi
-echo "Measured tau = $TAU"
 
 # 8. Render the values template with TAU substituted
-TAU="$TAU" envsubst < "$VALUES_TEMPLATE" > "$RENDERED_VALUES"
-echo "Rendered values file:"
-echo "---"
-cat "$RENDERED_VALUES"
-echo "---"
+TAU="$TAU" envsubst < "$VALUES_TEMPLATE" > "$OUTPUT_FILE"
 
-# 9. Apply via helm upgrade — layered on top of the existing upstream -f files
-echo "Running helm upgrade..."
-helm upgrade "$GUIDE_NAME" \
-  oci://ghcr.io/llm-d/charts/llm-d-router-standalone-dev \
-  --version "$ROUTER_CHART_VERSION" \
-  -f "guides/recipes/router/base.values.yaml" \
-  -f "${GUIDE_DIR}/router/${GUIDE_NAME}.values.yaml" \
-  -f "$RENDERED_VALUES" \
-  -n "$NAMESPACE"
-
-# 10. Force EPP rollout to pick up the new ConfigMap
-#     (helm upgrade alone won't restart the EPP because only the ConfigMap data
-#     changes — the Deployment spec is identical between releases, so K8s sees
-#     no need to recreate pods. ConfigMaps mounted as volumes are read at pod
-#     startup, not live, so we must explicitly restart.)
-echo "Restarting EPP to pick up the new ConfigMap..."
-kubectl rollout restart -n "$NAMESPACE" "deployment/${GUIDE_NAME}-epp"
-
-# 11. Wait for EPP rollout to complete
-echo "Waiting for EPP rollout..."
-kubectl rollout status -n "$NAMESPACE" "deployment/${GUIDE_NAME}-epp"
-
+# 9. Report and print suggested next step (no auto-apply)
 echo ""
-echo "Done. EPP is now running with maxTokensInFlightPenalty=$TAU."
+echo "========================================================================"
+echo "  Calibration complete."
+echo ""
+echo "  Suggested maxTokensInFlightPenalty (tau) = $TAU"
+echo ""
+echo "  Rendered values overlay written to:"
+echo "    $OUTPUT_FILE"
+echo ""
+echo "  Review the file. If you want to apply this suggested value, run:"
+echo ""
+echo "    helm upgrade ${GUIDE_NAME} \\"
+echo "      oci://ghcr.io/llm-d/charts/llm-d-router-standalone-dev \\"
+echo "      --version ${ROUTER_CHART_VERSION} \\"
+echo "      -f guides/recipes/router/base.values.yaml \\"
+echo "      -f ${GUIDE_DIR}/router/${GUIDE_NAME}.values.yaml \\"
+echo "      -f $OUTPUT_FILE \\"
+echo "      -n ${NAMESPACE}"
+echo ""
+echo "    kubectl rollout restart -n ${NAMESPACE} deployment/${GUIDE_NAME}-epp"
+echo "========================================================================"

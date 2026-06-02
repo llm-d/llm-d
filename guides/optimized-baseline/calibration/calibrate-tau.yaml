@@ -36,9 +36,9 @@ data:
     # (Qwen3 vocab is ~150k, Llama is ~128k; 100..10000 is safe for all).
     TOKEN_MIN        = int(os.environ.get("TOKEN_MIN", "100"))
     TOKEN_MAX        = int(os.environ.get("TOKEN_MAX", "10000"))
-    SEED             = int(os.environ.get("SEED", "42"))
-
+    SEED = int(os.environ.get("SEED", "0")) or time.time_ns()
     rng = random.Random(SEED)
+    print(f"using seed={SEED}", flush=True)
 
     def fresh_prompt():
         """Generate a CHUNK_SIZE-length array of random token IDs. Each call
