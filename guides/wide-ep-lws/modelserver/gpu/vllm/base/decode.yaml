@@ -50,6 +50,7 @@ spec:
             securityContext:
               allowPrivilegeEscalation: false
               runAsNonRoot: true
+        terminationGracePeriodSeconds: 330
         volumes:
           - name: dshm
             emptyDir:
@@ -118,6 +119,7 @@ spec:
                                   "log_balancedness":"False"}' \
                   --all2all-backend deepep_low_latency \
                   --moe-backend deep_gemm \
+                  --shutdown-timeout 300 \
                   --kv-cache-memory-bytes=${KV_CACHE_MEMORY_BYTES-}
                   # To enable tracing, add:
                   # --otlp-traces-endpoint http://otel-collector:4317 \

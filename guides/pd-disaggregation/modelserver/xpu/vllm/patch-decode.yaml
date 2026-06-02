@@ -22,6 +22,7 @@ spec:
             - '{"kv_connector":"NixlConnector", "kv_role":"kv_both", "kv_buffer_device":"cpu"}'
             - "--max-model-len=32000"
             - "--port=8200"
+            - "--shutdown-timeout=60"
           env:
             - name: UCX_TLS
               value: "tcp"
@@ -64,6 +65,7 @@ spec:
             periodSeconds: 10
             timeoutSeconds: 5
             failureThreshold: 6
+      terminationGracePeriodSeconds: 90
       resourceClaims:
         - name: xpu-decode-claim
           resourceClaimTemplateName: xpu-decode-claim

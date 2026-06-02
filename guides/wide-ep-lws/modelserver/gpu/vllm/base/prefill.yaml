@@ -20,6 +20,7 @@ spec:
           llm-d.ai/role: prefill
       spec:
         serviceAccountName: deepseek-r1
+        terminationGracePeriodSeconds: 330
         volumes:
           - name: dshm
             emptyDir:
@@ -89,6 +90,7 @@ spec:
                                   "log_balancedness":"False"}' \
                   --moe-backend deep_gemm \
                   --all2all-backend deepep_high_throughput \
+                  --shutdown-timeout 300
                   # To enable tracing, add:
                   # --otlp-traces-endpoint http://otel-collector:4317 \
                   # --collect-detailed-traces all

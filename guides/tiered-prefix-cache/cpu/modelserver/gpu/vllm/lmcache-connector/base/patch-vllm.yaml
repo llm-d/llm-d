@@ -18,6 +18,7 @@ spec:
             - "1024"
             - "--gpu-memory-utilization"
             - "0.8"
+            - "--shutdown-timeout=30"
           resources:
             limits:
               memory: 500Gi

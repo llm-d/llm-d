@@ -22,6 +22,7 @@ spec:
                 Qwen/Qwen3-32B \
                 --tensor-parallel-size 2 \
                 --max-num-seq 1024 \
+                --shutdown-timeout 30 \
                 --kv-transfer-config '{
                   "kv_connector":"MultiConnector",
                   "kv_role":"kv_both",
@@ -86,6 +87,7 @@ spec:
             periodSeconds: 5
             timeoutSeconds: 2
             failureThreshold: 3
+      terminationGracePeriodSeconds: 60
       volumes:
         - name: shm
           emptyDir:

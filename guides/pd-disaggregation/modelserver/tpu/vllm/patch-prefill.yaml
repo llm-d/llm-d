@@ -25,6 +25,7 @@ spec:
             - '{"kv_connector":"TPUConnectorHMA","kv_connector_module_path":"tpu_inference.distributed.tpu_connector_hma","kv_role":"kv_producer"}'
             - "--port=8000"
             - "--disable-access-log-for-endpoints=/health,/metrics,/v1/models"
+            - "--shutdown-timeout=60"
           env:
             - name: POD_IP
               valueFrom:
@@ -70,6 +71,7 @@ spec:
             periodSeconds: 5
             timeoutSeconds: 2
             failureThreshold: 3
+      terminationGracePeriodSeconds: 90
       volumes:
         - name: shm
           emptyDir:

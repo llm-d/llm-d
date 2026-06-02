@@ -21,6 +21,7 @@ spec:
             - "--kv-transfer-config"
             - '{"kv_connector":"NixlConnector","kv_role":"kv_both","kv_buffer_device":"cpu"}'
             - "--port=8200"
+            - "--shutdown-timeout=60"
           env:
             - name: OMPI_MCA_btl_vader_single_copy_mechanism
               value: "none"
@@ -69,6 +70,7 @@ spec:
             periodSeconds: 10
             timeoutSeconds: 5
             failureThreshold: 6
+      terminationGracePeriodSeconds: 90
       resourceClaims:
         - name: hpu-decode-claim
           resourceClaimTemplateName: hpu-decode-claim

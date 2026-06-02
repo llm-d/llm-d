@@ -20,6 +20,7 @@ spec:
             - "--attention-backend=ROCM_ATTN"
             - "--max-model-len=32000"
             - "--port=8200"
+            - "--shutdown-timeout=60"
           env:
             - name: VLLM_NIXL_SIDE_CHANNEL_HOST
               valueFrom:
@@ -52,6 +53,7 @@ spec:
             periodSeconds: 5
             timeoutSeconds: 2
             failureThreshold: 3
+      terminationGracePeriodSeconds: 90
       volumes:
         - name: shm
           emptyDir:

@@ -16,6 +16,7 @@ spec:
             - "--max-model-len=2048"
             - "--max-num-batched-token=16000"
             - "--disable-access-log-for-endpoints=/health,/metrics,/v1/models"
+            - "--shutdown-timeout=30"
             # Uncomment for distributed tracing
             # - "--otlp-traces-endpoint=http://otel-collector:4317"
             # - "--collect-detailed-traces=all"
@@ -60,6 +61,7 @@ spec:
             periodSeconds: 5
             timeoutSeconds: 2
             failureThreshold: 3
+      terminationGracePeriodSeconds: 60
       resourceClaims:
         - name: optimized-baseline-gaudi-claim
           resourceClaimTemplateName: optimized-baseline-gaudi-claim

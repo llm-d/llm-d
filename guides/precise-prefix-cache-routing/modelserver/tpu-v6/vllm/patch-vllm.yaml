@@ -25,6 +25,7 @@ spec:
             - "--block-size=64"
             - "--kv-events-config"
             - '{"enable_kv_cache_events":true,"publisher":"zmq","endpoint":"$(KV_EVENTS_ENDPOINT)","topic":"kv@$(POD_IP):$(POD_PORT)@meta-llama/Llama-3.1-70B-Instruct"}'
+            - "--shutdown-timeout=30"
             # Uncomment for distributed tracing
             # - "--otlp-traces-endpoint=http://otel-collector:4317"
             # - "--collect-detailed-traces=all"
@@ -83,6 +84,7 @@ spec:
             periodSeconds: 5
             timeoutSeconds: 2
             failureThreshold: 3
+      terminationGracePeriodSeconds: 60
       volumes:
         - name: torch-compile-cache
           emptyDir: {}

@@ -19,6 +19,7 @@ spec:
             - "--dtype=float16"
             - "--disable-sliding-window"
             - "--disable-access-log-for-endpoints=/health,/metrics,/v1/models"
+            - "--shutdown-timeout=30"
             # Uncomment for distributed tracing
             # - "--otlp-traces-endpoint=http://otel-collector:4317"
             # - "--collect-detailed-traces=all"
@@ -66,6 +67,7 @@ spec:
             periodSeconds: 5
             timeoutSeconds: 2
             failureThreshold: 3
+      terminationGracePeriodSeconds: 60
       resourceClaims:
         - name: intel-decode-claim
           resourceClaimTemplateName: intel-claim-template-decode

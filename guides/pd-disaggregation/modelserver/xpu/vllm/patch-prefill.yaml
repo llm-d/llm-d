@@ -21,6 +21,7 @@ spec:
             - "--kv-transfer-config"
             - '{"kv_connector":"NixlConnector", "kv_role":"kv_both", "kv_buffer_device":"cpu"}'
             - "--max-model-len=32000"
+            - "--shutdown-timeout=60"
           env:
             - name: UCX_TLS
               value: "tcp"
@@ -63,6 +64,7 @@ spec:
             periodSeconds: 10
             timeoutSeconds: 5
             failureThreshold: 6
+      terminationGracePeriodSeconds: 90
       resourceClaims:
         - name: xpu-prefill-claim
           resourceClaimTemplateName: xpu-prefill-claim

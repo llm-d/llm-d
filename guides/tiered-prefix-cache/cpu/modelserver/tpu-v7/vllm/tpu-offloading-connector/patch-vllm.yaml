@@ -45,7 +45,8 @@ spec:
                 --kv-transfer-config '{"kv_connector":"TPUOffloadConnector","kv_connector_module_path":"tpu_inference.offload.tpu_offload_connector","kv_role":"kv_both"}' \
                 --port 8000 \
                 --tensor-parallel-size 8 \
-                --gpu-memory-utilization 0.9
+                --gpu-memory-utilization 0.9 \
+                --shutdown-timeout 30
           env:
             - name: PROMETHEUS_MULTIPROC_DIR
               value: "/tmp/prometheus_multiproc"
@@ -73,3 +74,4 @@ spec:
             periodSeconds: 5
             timeoutSeconds: 2
             failureThreshold: 3
+      terminationGracePeriodSeconds: 60

@@ -19,6 +19,7 @@ spec:
             - '{"kv_connector":"LMCacheConnectorV1","kv_role":"kv_both"}'
             - "--gpu-memory-utilization"
             - "0.8"
+            - "--shutdown-timeout=30"
           env:
             - name: LMCACHE_LOCAL_DISK
               value: "file:///mnt/files-storage/kv-cache/"
@@ -29,6 +30,7 @@ spec:
           volumeMounts:
             - name: files-storage
               mountPath: /mnt/files-storage
+      terminationGracePeriodSeconds: 60
       volumes:
         - name: files-storage
           persistentVolumeClaim:

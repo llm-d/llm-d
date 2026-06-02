@@ -23,6 +23,7 @@ spec:
             - "--disable-access-log-for-endpoints=/health,/metrics,/v1/models"
             - "--kv-events-config"
             - '{"enable_kv_cache_events":true,"publisher":"zmq","endpoint":"$(KV_EVENTS_ENDPOINT)","topic":"kv@$(POD_IP):$(POD_PORT)@Qwen/Qwen3-8B"}'
+            - "--shutdown-timeout=30"
             # Uncomment for distributed tracing
             # - "--otlp-traces-endpoint=http://otel-collector:4317"
             # - "--collect-detailed-traces=all"
@@ -81,6 +82,7 @@ spec:
             periodSeconds: 5
             timeoutSeconds: 2
             failureThreshold: 3
+      terminationGracePeriodSeconds: 60
       resourceClaims:
         - name: precise-prefix-cache-routing-gaudi-claim
           resourceClaimTemplateName: precise-prefix-cache-routing-gaudi-claim
