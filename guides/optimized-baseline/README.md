@@ -174,10 +174,7 @@ The guide ships with a static default for `maxTokensInFlightPenalty` (τ = 28672
 - **Smaller model on the same hardware** (e.g., Llama-3-8B on H100) — the default is too tight; you lose prefix-affinity benefits unnecessarily.
 - **Same model on faster hardware** (e.g., B200) — the default is too tight; prefix caching becomes suboptimal.
 
-The calibration tool below measures τ against your live deployment and produces a Helm values overlay file with the suggested value. **The tool does not apply the value automatically** — it is purely advisory. You inspect the result and decide whether to apply it.
-
-> [!NOTE]
-> τ derivation is treated in detail in the *Bottleneck-Aware Scheduling for LLM Inference* design doc.
+The calibration tool below measures τ against your live deployment and produces a Helm values overlay file with the suggested value. You inspect the result and decide whether to apply it.
 
 #### Prerequisites
 
@@ -198,7 +195,7 @@ When the script finishes (typically 30–60 seconds), it prints:
 - The path to the rendered values overlay file (defaults to `guides/${GUIDE_NAME}/calibration/calibration.values.yaml`)
 - The exact `helm upgrade` command you would run if you decided to apply the suggested value
 
-#### Apply the suggested value (only if you want to)
+#### Apply the suggested value
 
 Inspect the rendered file:
 
