@@ -280,6 +280,91 @@ bash guides/${GUIDE_NAME}/calibration/calibrate.sh
 When the script finishes (typically 30–60 seconds), it prints:
 
 - The suggested τ value
+- The path to the rendered values overlay file (defaults to `guides/${GUIDE_NAME}/calibration/calibration.values.yaml`)
+- The exact `helm upgrade` command you would run if you decided to apply the suggested value
+
+#### Apply the suggested value (only if you want to)
+
+Inspect the rendered file:
+
+```bash
+cat guides/${GUIDE_NAME}/calibration/calibration.values.yaml
+```
+
+If the suggested value looks reasonable, apply it by running the printed `helm upgrade` command — layering the overlay on top of the upstream guide values — then restart the EPP rollout so the new ConfigMap is loaded:
+
+```bash
+helm upgrade ${GUIDE_NAME} \
+  oci://ghcr.io/llm-d/charts/llm-d-router-standalone-dev \
+  --version ${ROUTER_CHART_VERSION} \
+  -f guides/recipes/router/base.values.yaml \
+  -f guides/${GUIDE_NAME}/router/${GUIDE_NAME}.values.yaml \
+  -f guides/${GUIDE_NAME}/calibration/calibration.values.yaml \
+  -n ${NAMESPACE}
+
+kubectl rollout restart -n ${NAMESPACE} deployment/${GUIDE_NAME}-epp
+```
+
+If you decide not to apply, no action is needed — the EPP keeps running with the static default from the guide values.
+
+#### Optional environment overrides
+
+The calibration script picks sensible defaults for the optimized-baseline reference setup. Override per-deployment as needed:
+
+```bash
+# Override SLO tolerance (default: 17 seconds)
+T_MAX_SECONDS=20 bash guides/${GUIDE_NAME}/calibration/calibrate.sh
+
+# Override calibration target (default: auto-discover EPP service)
+VLLM_ENDPOINT=http://vllm-direct:8000 \
+  bash guides/${GUIDE_NAME}/calibration/calibrate.sh
+
+# Override model and chunk size (e.g., when calibrating a different deployment)
+MODEL_NAME=meta-llama/Llama-3.1-8B CHUNK_SIZE=4096 \
+  bash guides/${GUIDE_NAME}/calibration/calibrate.sh
+```
+
+#### Re-calibration
+
+Same command. The script re-measures and writes a fresh overlay file. Inspect, then apply when ready.
+
+#### Files
+
+The calibration assets live in `guides/${GUIDE_NAME}/calibration/`:
+
+| File | Purpose |
+|---|---|
+| `calibrate-tau.yaml` | Standalone K8s manifest: ConfigMap with the calibration Python script + Job that runs it |
+| `calibration.values.template.yaml` | Helm values overlay template with `${TAU}` placeholder |
+| `calibrate.sh` | Wrapper script that runs the Job, measures τ, and writes the rendered overlay file (does not apply) |
+The guide ships with a static default for `maxTokensInFlightPenalty` (τ = 286720), calibrated for Qwen3-32B on H100 TP=2 at T_max=17s. This default works well for that reference setup but is not optimal for other hardware/model combinations:
+
+- **Larger model on the same hardware** (e.g., 128B on H100) — the static default is too loose; hot-spotting can still occur under heavy load.
+- **Same model on lower-end hardware** (e.g., L4 GPUs) — the default is too loose; hot-spotting risk.
+- **Smaller model on the same hardware** (e.g., Llama-3-8B on H100) — the default is too tight; you lose prefix-affinity benefits unnecessarily.
+- **Same model on faster hardware** (e.g., B200) — the default is too tight; prefix caching becomes suboptimal.
+
+The calibration tool below measures τ against your live deployment and produces a Helm values overlay file with the suggested value. **The tool does not apply the value automatically** — it is purely advisory. You inspect the result and decide whether to apply it.
+
+> [!NOTE]
+> τ derivation is treated in detail in the *Bottleneck-Aware Scheduling for LLM Inference* design doc.
+
+#### Prerequisites
+
+- Steps 1 and 2 above are complete; vLLM and EPP pods are running and ready.
+- `envsubst` is installed locally (part of `gettext-base` on Debian/Ubuntu, `gettext` on macOS via Homebrew).
+
+#### Run calibration (suggest a value)
+
+The script auto-discovers the EPP service's ClusterIP, runs a one-shot calibration Job, and writes a rendered values overlay file:
+
+```bash
+bash guides/${GUIDE_NAME}/calibration/calibrate.sh
+```
+
+When the script finishes (typically 30–60 seconds), it prints:
+
+- The suggested τ value
 - The path to the rendered values overlay file (defaults to `/tmp/${GUIDE_NAME}-calibration.values.yaml`)
 - The exact `helm upgrade` command you would run if you decided to apply the suggested value
 
