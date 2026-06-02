@@ -1,100 +1,21 @@
 # Metrics
 
-This guide shows how to collect and visualize metrics from an llm-d deployment using Prometheus and Grafana.
+This page covers how to enable and interpret metrics from an llm-d deployment. For Prometheus and Grafana installation, see [Observability Setup](./setup.md) first.
 
 > [!NOTE]
-> This guide assumes you have a running llm-d deployment with an InferencePool and model servers. See the [quickstart](../../getting-started/quickstart.md) if you need to set one up first.
-
-## Prerequisites
-
-- A running llm-d basic stack (llm-d Router + model servers)
-- [Helm](https://helm.sh/docs/intro/install/) (for llm-d Router charts and optional Prometheus install)
-- A Prometheus instance accessible to the cluster (see [Step 1](#step-1-install-prometheus-and-grafana) if you don't have one)
-
-> [!NOTE]
-> Commands in this guide use `${NAMESPACE}` for the namespace where your llm-d workload runs. Set it before following along:
->
+> Commands in this page use `${NAMESPACE}` for the namespace where your llm-d workload runs. Set it before following along:
 > ```bash
 > export NAMESPACE=<your-llm-d-namespace>
 > ```
 
-## Step 1: Install Prometheus and Grafana
+## Prerequisites
 
-If you already have Prometheus running in your cluster, skip to [Step 2](#step-2-enable-vllm-metrics).
+- A running llm-d deployment with an InferencePool and model servers — see the [quickstart](../../getting-started/quickstart.md) if needed
+- Prometheus and Grafana installed — see [Observability Setup](./setup.md)
 
-> [!NOTE]
-> llm-d provides an install script that deploys Prometheus and Grafana with sensible defaults. For production environments, see the platform-specific notes below.
+## Step 1: Enable Model Server Metrics
 
-```bash
-# Install Prometheus + Grafana into the llm-d-monitoring namespace
-./docs/monitoring/scripts/install-prometheus-grafana.sh
-```
-
-For HTTPS/TLS (required by autoscalers like WVA):
-
-```bash
-./docs/monitoring/scripts/install-prometheus-grafana.sh --enable-tls
-```
-
-Verify the installation:
-
-```bash
-kubectl get pods -n llm-d-monitoring
-```
-
-Expected output:
-
-```text
-NAME                                                     READY   STATUS    RESTARTS   AGE
-alertmanager-llmd-kube-prometheus-stack-alertmanager-0    2/2     Running   0          30s
-llmd-grafana-xxxxxxxxx-xxxxx                             3/3     Running   0          30s
-prometheus-llmd-kube-prometheus-stack-prometheus-0        2/2     Running   0          30s
-```
-
-### Platform-Specific Configuration
-
-#### OpenShift
-
-OpenShift provides a built-in Prometheus stack via User Workload Monitoring. Enable it instead of installing a separate Prometheus:
-
-- See the [OpenShift monitoring documentation](https://docs.redhat.com/en/documentation/monitoring_stack_for_red_hat_openshift/4.18/html-single/configuring_user_workload_monitoring/index) to enable User Workload Monitoring
-- Prometheus endpoint: `https://thanos-querier.openshift-monitoring.svc.cluster.local:9091`
-
-#### GKE
-
-**Option 1 — Google Managed Prometheus (recommended)**
-
-GKE clusters include [Google Managed Prometheus (GMP)](https://cloud.google.com/stackdriver/docs/managed-prometheus) by default. To use GMP as a Grafana data source, follow the [GMP Grafana integration guide](https://docs.cloud.google.com/stackdriver/docs/managed-prometheus/query#ui-grafana).
-
-**Option 2 — In-cluster Prometheus**
-
-If you need direct HTTP API access or prefer a standalone instance:
-
-```bash
-helm repo add prometheus-community https://prometheus-community.github.io/helm-charts && helm repo update
-helm install kube-prometheus-stack prometheus-community/kube-prometheus-stack \
-  -n llm-d-monitoring --create-namespace
-```
-
-Verify the in-cluster Prometheus is running:
-
-```bash
-kubectl get pods -n llm-d-monitoring -l app.kubernetes.io/name=prometheus
-```
-
-Expected output:
-
-```text
-NAME                                                 READY   STATUS    RESTARTS   AGE
-prometheus-kube-prometheus-stack-prometheus-0         2/2     Running   0          60s
-```
-
-- Enable [automatic application monitoring](https://cloud.google.com/kubernetes-engine/docs/how-to/configure-automatic-application-monitoring) for vLLM metric collection
-- GKE also provides a built-in [inference gateway dashboard](https://cloud.google.com/kubernetes-engine/docs/how-to/customize-gke-inference-gateway-configurations#inference-gateway-dashboard)
-
-## Step 2: Enable vLLM Metrics
-
-vLLM metrics are enabled by default. Configuration varies by deployment method.
+Model server metrics are enabled by default. Configuration varies by deployment method.
 
 ### Kustomize Deployments
 
@@ -106,24 +27,7 @@ components:
   # - ../../../recipes/modelserver/components/monitoring-pd  # add for prefill/decode disaggregation
 ```
 
-The monitoring component creates PodMonitors that scrape vLLM metrics. See [`guides/recipes/modelserver/components/monitoring/`](../../../guides/recipes/modelserver/components/monitoring/) for details.
-
-### Helm Deployments
-
-If you deployed using Helm (`ms-*/values.yaml`), enable PodMonitors in your values:
-
-```yaml
-# In your ms-*/values.yaml
-decode:
-  monitoring:
-    podmonitor:
-      enabled: true
-
-prefill:
-  monitoring:
-    podmonitor:
-      enabled: true
-```
+The monitoring component creates PodMonitors that scrape model server metrics. See [`guides/recipes/modelserver/components/monitoring/`](../../../guides/recipes/modelserver/components/monitoring/) for details.
 
 ### Verify PodMonitors
 
@@ -155,17 +59,21 @@ prefill-podmonitor      5m
 | `vllm:prompt_tokens_total` | Total input tokens processed | Use `rate()` to get tokens/sec per pod. Compare across pods to spot uneven load distribution |
 | `vllm:generation_tokens_total` | Total output tokens generated | Use `rate()` alongside prompt tokens to get total throughput. A drop signals degraded model performance |
 
+### Key SGLang Metrics
+
+| Metric | What it measures | Why it matters |
+|--------|-----------------|----------------|
+| `sglang:num_running_reqs` | Active requests being processed | High values indicate GPU saturation; new requests will queue |
+| `sglang:num_waiting_reqs` | Requests queued, waiting to be processed | Non-zero means pods are saturated. Primary signal for autoscaling decisions |
+| `sglang:token_usage` | KV cache token utilization (0.0 to 1.0) | Above 0.9 means GPU memory is nearly full |
+| `sglang:time_to_first_token_seconds` (histogram) | Time from request arrival to first generated token (TTFT) | Directly impacts user experience. Use `histogram_quantile()` to query percentiles |
+| `sglang:inter_token_latency_seconds` (histogram) | Time between consecutive generated tokens (ITL) | Affects streaming response speed. Use `histogram_quantile()` to query percentiles |
+| `sglang:prompt_tokens_total` | Total input tokens processed | Use `rate()` to get tokens/sec per pod |
+| `sglang:generation_tokens_total` | Total output tokens generated | Use `rate()` alongside prompt tokens to get total throughput |
+
 ## Step 3: Enable EPP Metrics
 
-EPP (Endpoint Picker) metrics are enabled by default. To verify or enable manually:
-
-```yaml
-# In your gaie-*/values.yaml
-inferenceExtension:
-  monitoring:
-    prometheus:
-      enabled: true
-```
+EPP (Endpoint Picker) metrics are enabled by default. To verify or enable manually, see the [Monitoring & Tracing Configuration](https://github.com/llm-d/llm-d-router/tree/main/config/charts#4-monitoring--tracing-configuration) section in the llm-d-router Helm chart docs.
 
 Verify the ServiceMonitor exists:
 
@@ -180,7 +88,7 @@ NAME                    AGE
 epp-servicemonitor      5m
 ```
 
-### Key llm-d Router Endpoint Picker (EPP) Metrics
+### Key llm-d Router EPP Metrics
 
 | Metric | What it measures | Why it matters |
 |--------|-----------------|----------------|
@@ -196,7 +104,9 @@ epp-servicemonitor      5m
 | `llm_d_router_epp_ready_endpoints` | Number of ready endpoints in the pool | If this drops below expected count, pods are crashing or not scheduling |
 | `llm_d_router_epp_scheduler_attempts_total` | Scheduling attempt counts and outcomes | Track failed scheduling attempts. High failure rate indicates filter/scorer misconfiguration |
 
-When flow control is enabled, these additional metrics are exposed by the llm-d Router EPP:
+### Flow Control Metrics
+
+When flow control is enabled, these additional metrics are exposed:
 
 | Metric | What it measures | Why it matters |
 |--------|-----------------|----------------|
@@ -225,7 +135,7 @@ kubectl port-forward -n llm-d-monitoring svc/llmd-grafana 3000:80
 Load all llm-d dashboards into Grafana:
 
 ```bash
-./docs/monitoring/scripts/load-llm-d-dashboards.sh
+./guides/recipes/observability/load-llm-d-dashboards.sh
 ```
 
 Verify dashboards were imported:
@@ -238,27 +148,22 @@ Expected output:
 
 ```text
 NAME                                              DATA   AGE
-llmd-llm-d-vllm-overview                          1      30s
-llmd-llm-d-failure-saturation-dashboard           1      30s
-llmd-llm-d-diagnostic-drilldown-dashboard         1      30s
-llmd-llm-performance-kv-cache                     1      30s
-llmd-pd-coordinator-metrics                       1      30s
+llm-d-vllm-overview                               1      30s
+llm-d-failure-saturation-dashboard                1      30s
+llm-d-diagnostic-drilldown-dashboard              1      30s
+llm-d-performance-kv-cache                        1      30s
+llm-d-pd-coordinator-metrics                      1      30s
 ```
 
-Or import individual dashboard JSON files manually from `docs/monitoring/grafana/dashboards/`:
+Or import individual dashboard JSON files manually from `guides/recipes/observability/grafana/dashboards/`:
 
 | Dashboard | What it shows |
 |-----------|--------------|
 | `llm-d-vllm-overview.json` | General vLLM metrics overview |
 | `llm-d-failure-saturation-dashboard.json` | Failure and saturation indicators |
 | `llm-d-diagnostic-drilldown-dashboard.json` | Detailed diagnostic metrics for troubleshooting |
-| `llm-performance-kv-cache.json` | Performance metrics including KV cache utilization |
-| `pd-coordinator-metrics.json` | Prefill/decode disaggregation metrics |
-
-The upstream [inference-gateway dashboard](https://github.com/kubernetes-sigs/gateway-api-inference-extension/blob/v1.0.1/tools/dashboards/inference_gateway.json) provides EPP-specific metrics visualization.
-
-> [!NOTE]
-> The upstream dashboard may use older `inference_model_*` metric names. Current llm-d deployments use `llm_d_router_epp_*`. If panels show "No data", update the metric names in the dashboard JSON.
+| `llm-d-performance-kv-cache.json` | Performance metrics including KV cache utilization |
+| `llm-d-pd-coordinator-metrics.json` | Prefill/decode disaggregation metrics |
 
 ## Step 5: Query Metrics
 
@@ -272,7 +177,7 @@ kubectl port-forward -n llm-d-monitoring svc/llmd-kube-prometheus-stack-promethe
 ## Cleanup
 
 ```bash
-./docs/monitoring/scripts/install-prometheus-grafana.sh -u -n llm-d-monitoring
+./guides/recipes/observability/install-prometheus-grafana.sh -u -n llm-d-monitoring
 ```
 
 ## Troubleshooting
@@ -282,8 +187,8 @@ kubectl port-forward -n llm-d-monitoring svc/llmd-kube-prometheus-stack-promethe
 The autoscaler is configured for HTTPS but Prometheus is serving HTTP. Enable TLS:
 
 ```bash
-./docs/monitoring/scripts/install-prometheus-grafana.sh -u
-./docs/monitoring/scripts/install-prometheus-grafana.sh --enable-tls
+./guides/recipes/observability/install-prometheus-grafana.sh -u
+./guides/recipes/observability/install-prometheus-grafana.sh --enable-tls
 ```
 
 ### Metrics not appearing in Prometheus

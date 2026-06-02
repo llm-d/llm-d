@@ -137,7 +137,7 @@ kubectl apply -n ${NAMESPACE} -k guides/tiered-prefix-cache/cpu/modelserver/tpu-
 
 ### 3. (Optional) Enable monitoring
 
-- Install the [Monitoring stack](../../../docs/monitoring/README.md).
+- Install the [Monitoring stack](../../../docs/resources/observability/setup.md).
 - Deploy the monitoring resources for this guide:
 
 ```bash

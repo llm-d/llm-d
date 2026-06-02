@@ -13,7 +13,7 @@ on:
       - guides/workload-autoscaling/**
       - guides/prereq/**
       - helpers/client-setup/**
-      - docs/monitoring/scripts/install-prometheus-grafana.sh
+      - guides/recipes/observability/install-prometheus-grafana.sh
   workflow_dispatch:
 
 permissions:
@@ -37,7 +37,7 @@ jobs:
               - .github/workflows/ci-kustomize-dry-run.yaml
               - .github/scripts/install-gke-crds.sh
               - guides/recipes/gateway/install-gateway-crds.sh
-              - docs/monitoring/scripts/install-prometheus-grafana.sh
+              - guides/recipes/observability/install-prometheus-grafana.sh
               - guides/recipes/modelserver/**
               - guides/recipes/router/**
               - guides/optimized-baseline/**
@@ -45,25 +45,25 @@ jobs:
               - .github/workflows/ci-kustomize-dry-run.yaml
               - helpers/client-setup/install-deps.sh
               - guides/recipes/gateway/install-gateway-crds.sh
-              - docs/monitoring/scripts/install-prometheus-grafana.sh
+              - guides/recipes/observability/install-prometheus-grafana.sh
               - guides/pd-disaggregation/**
             precise-prefix-cache-routing:
               - .github/workflows/ci-kustomize-dry-run.yaml
               - helpers/client-setup/install-deps.sh
               - guides/recipes/gateway/install-gateway-crds.sh
-              - docs/monitoring/scripts/install-prometheus-grafana.sh
+              - guides/recipes/observability/install-prometheus-grafana.sh
               - guides/precise-prefix-cache-routing/**
             simulated-accelerators:
               - .github/workflows/ci-kustomize-dry-run.yaml
               - helpers/client-setup/install-deps.sh
               - guides/recipes/gateway/install-gateway-crds.sh
-              - docs/monitoring/scripts/install-prometheus-grafana.sh
+              - guides/recipes/observability/install-prometheus-grafana.sh
               - guides/simulated-accelerators/**
             workload-autoscaling:
               - .github/workflows/ci-kustomize-dry-run.yaml
               - .github/scripts/install-gke-crds.sh
               - guides/recipes/gateway/install-gateway-crds.sh
-              - docs/monitoring/scripts/install-prometheus-grafana.sh
+              - guides/recipes/observability/install-prometheus-grafana.sh
               - guides/workload-autoscaling/**
 
   dry-run-optimized-baseline:
@@ -88,7 +88,7 @@ jobs:
         run: guides/recipes/gateway/install-gateway-crds.sh
 
       - name: Install monitoring CRDs
-        run: docs/monitoring/scripts/install-prometheus-grafana.sh --crds-only
+        run: guides/recipes/observability/install-prometheus-grafana.sh --crds-only
 
       - name: Install LWS CRDs
         run: |
@@ -183,7 +183,7 @@ jobs:
         run: guides/recipes/gateway/install-gateway-crds.sh
 
       - name: Install monitoring CRDs
-        run: docs/monitoring/scripts/install-prometheus-grafana.sh --crds-only
+        run: guides/recipes/observability/install-prometheus-grafana.sh --crds-only
 
       - name: Install GKE CRDs
         run: .github/scripts/install-gke-crds.sh
@@ -270,7 +270,7 @@ jobs:
         run: guides/recipes/gateway/install-gateway-crds.sh
 
       - name: Install monitoring CRDs
-        run: docs/monitoring/scripts/install-prometheus-grafana.sh --crds-only
+        run: guides/recipes/observability/install-prometheus-grafana.sh --crds-only
 
       - name: Install GKE CRDs
         run: .github/scripts/install-gke-crds.sh
@@ -353,7 +353,7 @@ jobs:
         run: guides/recipes/gateway/install-gateway-crds.sh
 
       - name: Install monitoring CRDs
-        run: docs/monitoring/scripts/install-prometheus-grafana.sh --crds-only
+        run: guides/recipes/observability/install-prometheus-grafana.sh --crds-only
 
       - name: Install GKE CRDs
         run: .github/scripts/install-gke-crds.sh
