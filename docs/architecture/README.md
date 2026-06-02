@@ -10,7 +10,8 @@ The llm-d architecture is built around three primary concepts: the [Router](core
   - **[Proxy](core/router/proxy.md)**: A high-performance L7 proxy (typically Envoy) that accepts user requests and consults the EPP via the `ext-proc` protocol to determine the optimal destination.
   - **[Endpoint Picker (EPP)](core/router/epp/README.md)**: The routing engine that scores and selects model server pods based on real-time metrics, KV-cache affinity, and configured policies.
 
-- **[InferencePool](core/inferencepool.md)** - The API that defines a group of Model Server Pods sharing the same model and compute configuration. Conceptualized as an "LLM-optimized Service", it serves as the discovery target for the Router.
+- **[InferencePool](core/inferencepool.md)** - The API that defines a group of Model Server Pods sharing the same model. Conceptualized as an "LLM-optimized Service", it serves as the discovery target for the Router. Additionally:
+  - **Variant** - A logical grouping of model server pods within an InferencePool. Variants are used to distinguish model servers based on shared characteristics such as serving role (e.g., prefill or decode), cost profile, performance profile (throughput, latency), or other operational attributes.
 
 - **[Model Server](core/model-servers.md)** - The inference engine (such as vLLM or SGLang) that executes the model on hardware accelerators (GPUs, TPUs, HPUs).
 
