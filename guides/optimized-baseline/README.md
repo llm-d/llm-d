@@ -17,7 +17,7 @@ The optimized-baseline defaults to two main routing criteria:
 
 - **Load-aware** using both the [kv-cache utilization](https://github.com/llm-d/llm-d-router/tree/main/pkg/epp/framework/plugins/scheduling/scorer/kvcacheutilization) and the [queue size](https://github.com/llm-d/llm-d-router/tree/main/pkg/epp/framework/plugins/scheduling/scorer/queuedepth) scorers.
 
-An optional [calibration step](#4-optional-calibrate-prefix-cache-affinity-filter) is also available to add a saturation-aware override gate (the `prefix-cache-affinity-filter`) on top of the default plugins, with a per-deployment τ value measured against the live cluster. This is useful when sticky prefix-affinity routing under heavy load could create hot-pod imbalance.
+An optional [calibration step](#4-optional-calibrate-prefix-cache-affinity-filter) is also available to add a saturation-aware override gate (the `prefix-cache-affinity-filter`) on top of the default plugins, with a per-deployment τ value measured against the live cluster. This is useful when sticky prefix-affinity routing under heavy load could create hot-spotting.
 
 ## Default Configuration
 
@@ -167,7 +167,7 @@ kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/recipes/modelserver/compone
 
 ### 4. (Optional) Calibrate prefix-cache-affinity-filter
 
-This step adds the `prefix-cache-affinity-filter` plugin to the EPP scheduling pipeline, with its saturation-valve parameter `maxTokensInFlightPenalty` (τ) measured against your live deployment. With τ correctly tuned, sticky prefix-affinity routing keeps its TTFT benefits without creating hot-pod imbalance under high load.
+This step adds the `prefix-cache-affinity-filter` plugin to the EPP scheduling pipeline, with its saturation-valve parameter `maxTokensInFlightPenalty` (τ) measured against your live deployment. With τ correctly tuned, sticky prefix-affinity routing keeps its TTFT benefits without creating hot-endpoint imbalance under high load.
 
 > [!NOTE]
 > τ is deployment-specific: it depends on hardware peak FLOPS, tensor-parallel size, model architecture, and your SLO tolerance. It can't be hardcoded across deployments. See the *Bottleneck-Aware Scheduling for LLM Inference* design doc for the derivation and a treatment of why this matters across workloads.
