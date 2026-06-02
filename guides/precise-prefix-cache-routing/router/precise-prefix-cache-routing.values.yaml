@@ -8,6 +8,8 @@
 router:
   tokenizer:
     enabled: true
+    # Required by llm-d-router chart v0 when tokenizer is enabled; must match model server + plugins below.
+    modelName: Qwen/Qwen3-32B
 
   epp:
     replicas: 2
