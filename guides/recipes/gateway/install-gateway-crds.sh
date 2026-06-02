@@ -44,7 +44,6 @@ kubectl $MODE -k https://github.com/kubernetes-sigs/gateway-api/config/crd/${GAT
 
 
 GATEWAY_API_INFERENCE_EXTENSION_CRD_REVISION=${GATEWAY_API_INFERENCE_EXTENSION_CRD_REVISION:-"v1.5.0"}
-GATEWAY_API_INFERENCE_EXTENSION_CRD_REF="?ref=${GATEWAY_API_INFERENCE_EXTENSION_CRD_REVISION}"
 ### GAIE CRDs
 log_success "🚪 GAIE CRDs: ${LOG_ACTION_NAME}..."
-kubectl $MODE -k https://github.com/kubernetes-sigs/gateway-api-inference-extension/config/crd/${GATEWAY_API_INFERENCE_EXTENSION_CRD_REF} || true
+kubectl $MODE -f https://github.com/kubernetes-sigs/gateway-api-inference-extension/releases/download/${GATEWAY_API_INFERENCE_EXTENSION_CRD_REVISION}/v1-manifests.yaml || true

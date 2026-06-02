@@ -24,7 +24,7 @@ GATEWAY_API_VERSION=v1.5.1
 GAIE_VERSION=v1.5.0
 
 kubectl apply -k "https://github.com/kubernetes-sigs/gateway-api/config/crd?ref=${GATEWAY_API_VERSION}"
-kubectl apply -k "https://github.com/kubernetes-sigs/gateway-api-inference-extension/config/crd?ref=${GAIE_VERSION}"
+kubectl apply -f https://github.com/kubernetes-sigs/gateway-api-inference-extension/releases/download/${GAIE_VERSION}/v1-manifests.yaml
 ```
 
 Verify the APIs are available:
@@ -137,7 +137,7 @@ helm uninstall agentgateway-crds -n agentgateway-system
 kubectl delete namespace agentgateway-system
 kubectl delete gatewayclass agentgateway
 kubectl delete -k "https://github.com/kubernetes-sigs/gateway-api/config/crd?ref=${GATEWAY_API_VERSION}"
-kubectl delete -k "https://github.com/kubernetes-sigs/gateway-api-inference-extension/config/crd?ref=${GAIE_VERSION}"
+kubectl delete -f https://github.com/kubernetes-sigs/gateway-api-inference-extension/releases/download/${GAIE_VERSION}/v1-manifests.yaml
 ```
 
 ## Troubleshooting
