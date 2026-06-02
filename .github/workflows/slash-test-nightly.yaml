@@ -17,19 +17,8 @@ name: /test-nightly Slash Command
 # triggers the matching nightly workflow(s) on that branch.
 # Temp branches are cleaned up by slash-test-nightly-cleanup.yaml.
 #
-# Available nightlies (the part after /test-nightly):
-#   benchmark-cks, build-image,
-#   optimized-baseline-cks, optimized-baseline-gke, optimized-baseline-gke-tpu,
-#   optimized-baseline-ocp, optimized-baseline-xpu,
-#   pd-disaggregation-cks, pd-disaggregation-gke, pd-disaggregation-gke-tpu,
-#   pd-disaggregation-ocp, pd-disaggregation-xpu,
-#   precise-prefix-cache-cks, precise-prefix-cache-gke, precise-prefix-cache-ocp,
-#   precise-prefix-cache-xpu,
-#   predicted-latency-cks, predicted-latency-gke, predicted-latency-ocp,
-#   tiered-prefix-cache-cpu-offloading-gke, tiered-prefix-cache-cpu-offloading-lmcache-gke,
-#   tiered-prefix-cache-cpu-offloading-ocp, tiered-prefix-cache-gke-tpu,
-#   wide-ep-lws-cks, wide-ep-lws-gke, wide-ep-lws-ocp,
-#   wva-cks, wva-ocp
+# Available nightlies are detected dynamically from workflow files
+# matching nightly-e2e-<name>.yaml or nightly-<name>.yaml on main.
 
 on:
   issue_comment:
@@ -61,34 +50,53 @@ jobs:
           script: |
             const comment = context.payload.comment.body.trim();
             const match = comment.match(/^\/test-nightly\s+(\S+)/);
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
 
-            // Map name to workflow filename
-            const E2E_NIGHTLIES = [
-              'optimized-baseline-cks', 'optimized-baseline-gke', 'optimized-baseline-gke-tpu',
-              'optimized-baseline-ocp', 'optimized-baseline-xpu',
-              'pd-disaggregation-cks', 'pd-disaggregation-gke', 'pd-disaggregation-gke-tpu',
-              'pd-disaggregation-ocp', 'pd-disaggregation-xpu',
-              'precise-prefix-cache-cks', 'precise-prefix-cache-gke', 'precise-prefix-cache-ocp',
-              'precise-prefix-cache-xpu',
-              'predicted-latency-cks', 'predicted-latency-gke', 'predicted-latency-ocp',
-              'tiered-prefix-cache-cpu-offloading-gke', 'tiered-prefix-cache-cpu-offloading-lmcache-gke',
-              'tiered-prefix-cache-cpu-offloading-ocp', 'tiered-prefix-cache-gke-tpu',
-              'wide-ep-lws-cks', 'wide-ep-lws-gke', 'wide-ep-lws-ocp',
-              'wva-cks', 'wva-ocp',
-            ];
-            const OTHER_NIGHTLIES = ['benchmark-cks'];
-            const ALL_NIGHTLIES = [...E2E_NIGHTLIES, ...OTHER_NIGHTLIES].sort();
+            // Dynamically list all nightly workflows from the repo
+            async function listAllNightlies() {
+              const { data: files } = await github.rest.repos.getContent({
+                owner, repo,
+                path: '.github/workflows',
+                ref: 'main',
+              });
+              const nightlies = [];
+              for (const f of files) {
+                let m;
+                if ((m = f.name.match(/^nightly-e2e-(.+)\.yaml$/))) {
+                  nightlies.push({ name: m[1], workflowFile: f.name });
+                } else if ((m = f.name.match(/^nightly-(.+)\.yaml$/))) {
+                  nightlies.push({ name: m[1], workflowFile: f.name });
+                }
+              }
+              return nightlies.sort((a, b) => a.name.localeCompare(b.name));
+            }
 
-            function toWorkflowFile(name) {
-              if (E2E_NIGHTLIES.includes(name)) return `nightly-e2e-${name}.yaml`;
-              if (OTHER_NIGHTLIES.includes(name)) return `nightly-${name}.yaml`;
+            // Check if a specific nightly exists by probing workflow files
+            async function resolveWorkflowFile(name) {
+              const candidates = [
+                `nightly-e2e-${name}.yaml`,
+                `nightly-${name}.yaml`,
+              ];
+              for (const filename of candidates) {
+                try {
+                  await github.rest.repos.getContent({
+                    owner, repo,
+                    path: `.github/workflows/${filename}`,
+                    ref: 'main',
+                  });
+                  return filename;
+                } catch (e) {
+                  if (e.status !== 404) throw e;
+                }
+              }
               return null;
             }
 
             if (!match) {
+              const all = await listAllNightlies();
               await github.rest.issues.createComment({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
+                owner, repo,
                 issue_number: context.issue.number,
                 body: [
                   '❌ **Usage**: `/test-nightly <name-or-pattern>`',
@@ -101,7 +109,7 @@ jobs:
                   '```',
                   '',
                   'Available nightlies:',
-                  ALL_NIGHTLIES.map(n => '`' + n + '`').join(', '),
+                  all.map(n => '`' + n.name + '`').join(', '),
                 ].join('\n')
               });
               return 'error';
@@ -110,42 +118,37 @@ jobs:
             const input = match[1];
             const isGlob = input.includes('*') || input.includes('?');
 
-            let matched;
+            let matches;
             if (isGlob) {
-              // Convert glob pattern to regex: escape regex chars, then * → .* and ? → .
               const regexStr = '^' + input
                 .replace(/[.+^${}()|[\]\\]/g, '\\$&')
                 .replace(/\*/g, '.*')
                 .replace(/\?/g, '.')
                 + '$';
               const regex = new RegExp(regexStr);
-              matched = ALL_NIGHTLIES.filter(n => regex.test(n));
+              const all = await listAllNightlies();
+              matches = all.filter(n => regex.test(n.name));
             } else {
-              matched = ALL_NIGHTLIES.includes(input) ? [input] : [];
+              const workflowFile = await resolveWorkflowFile(input);
+              matches = workflowFile ? [{ name: input, workflowFile }] : [];
             }
 
-            if (matched.length === 0) {
+            if (matches.length === 0) {
+              const all = await listAllNightlies();
               const hint = isGlob
                 ? `No nightlies match pattern: \`${input}\``
                 : `Unknown nightly: \`${input}\``;
               await github.rest.issues.createComment({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
+                owner, repo,
                 issue_number: context.issue.number,
-                body: `❌ ${hint}\n\nAvailable: ${ALL_NIGHTLIES.map(n => '\`' + n + '\`').join(', ')}`
+                body: `❌ ${hint}\n\nAvailable: ${all.map(n => '\`' + n.name + '\`').join(', ')}`
               });
               return 'error';
             }
 
-            // Build array of {name, workflowFile} for each match
-            const matches = matched.map(name => ({
-              name,
-              workflowFile: toWorkflowFile(name),
-            }));
-
             core.setOutput('matches', JSON.stringify(matches));
-            core.setOutput('match_names', matched.join(', '));
-            core.setOutput('match_count', matched.length.toString());
+            core.setOutput('match_names', matches.map(m => m.name).join(', '));
+            core.setOutput('match_count', matches.length.toString());
             return 'ok';
 
       - name: Check commenter permission
@@ -284,15 +287,28 @@ jobs:
             // Dispatch all workflows
             for (const m of matches) {
               console.log(`Dispatching ${m.workflowFile} on ref ${ref}`);
-              await github.rest.actions.createWorkflowDispatch({
-                owner, repo,
-                workflow_id: m.workflowFile,
-                ref,
-                inputs: {
-                  pr_number: context.issue.number.toString(),
-                  pr_repo: `${context.repo.owner}/${context.repo.repo}`,
-                },
-              });
+              try {
+                await github.rest.actions.createWorkflowDispatch({
+                  owner, repo,
+                  workflow_id: m.workflowFile,
+                  ref,
+                  inputs: {
+                    pr_number: context.issue.number.toString(),
+                    pr_repo: `${context.repo.owner}/${context.repo.repo}`,
+                  },
+                });
+              } catch (e) {
+                if (e.status === 422) {
+                  // Workflow doesn't declare pr_number/pr_repo inputs
+                  await github.rest.actions.createWorkflowDispatch({
+                    owner, repo,
+                    workflow_id: m.workflowFile,
+                    ref,
+                  });
+                } else {
+                  throw e;
+                }
+              }
               m.runUrl = null;
             }
 
