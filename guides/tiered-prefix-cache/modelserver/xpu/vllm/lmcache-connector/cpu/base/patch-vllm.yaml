@@ -1,0 +1,37 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: decode
+spec:
+  template:
+    spec:
+      containers:
+        - name: modelserver
+          args:
+            - "Qwen/Qwen3-8B"
+            - "--dtype=bfloat16"
+            - "--block-size=64"
+            - "--tensor-parallel-size=1"
+            - "--max-num-seq=128"
+            - "--max_model_len=20480"
+            - "--uvicorn-log-level=warning"
+            - "--kv-transfer-config"
+            - '{"kv_connector":"LMCacheConnectorV1","kv_role":"kv_both"}'
+          env:
+            - name: HF_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: llm-d-hf-token
+                  key: HF_TOKEN
+            - name: LMCACHE_MAX_LOCAL_CPU_SIZE
+              value: "20"
+            - name: PYTHONHASHSEED
+              value: "123"
+            - name: PROMETHEUS_MULTIPROC_DIR
+              value: "/tmp/lmcache_prometheus"
+          volumeMounts:
+            - name: lmcache-prometheus-metrics
+              mountPath: /tmp/lmcache_prometheus
+      volumes:
+        - name: lmcache-prometheus-metrics
+          emptyDir: {}
