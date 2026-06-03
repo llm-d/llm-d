@@ -257,6 +257,18 @@ envsubst < guide.yaml > config.yaml
 ./run_only.sh -c config.yaml -o ./results
 ```
 
+## Accuracy Evaluation
+
+Use `lm-evaluation-harness` to run accuracy tasks against the same OpenAI-compatible `/v1/completions` endpoint:
+
+```bash
+pip install lm-eval
+export NAMESPACE=llm-d-optimized-baseline
+./helpers/accuracy/run-lm-eval.sh -g optimized-baseline
+```
+
+The helper port-forwards the `optimized-baseline-epp` service by default, runs the preset tasks for this guide, and writes results under `./results/<guide>-<timestamp>/`. For a short smoke test, set `LIMIT=5`.
+
 ## Cleanup
 
 To remove the deployed components:
