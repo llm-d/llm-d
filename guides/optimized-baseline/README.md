@@ -259,7 +259,7 @@ envsubst < guide.yaml > config.yaml
 
 ## Accuracy Evaluation
 
-Use `lm-evaluation-harness` to run accuracy tasks against the same OpenAI-compatible `/v1/completions` endpoint:
+Use `lm-evaluation-harness` to run accuracy tasks against the same OpenAI-compatible `/v1/completions` endpoint. The tasks for this guide are defined in [`lm-eval-templates/guide.yaml`](lm-eval-templates/guide.yaml):
 
 ```bash
 pip install "lm-eval[api]" transformers
@@ -267,7 +267,21 @@ export NAMESPACE=llm-d-optimized-baseline
 ./helpers/accuracy/run-lm-eval.sh -g optimized-baseline
 ```
 
-The helper port-forwards the `optimized-baseline-epp` service by default, runs the preset tasks for this guide, and writes results under `./results/<guide>-<timestamp>/`. For a short smoke test, set `LIMIT=5`.
+The helper reads `guides/optimized-baseline/lm-eval-templates/guide.yaml`, port-forwards the `optimized-baseline-epp` service by default, runs the configured tasks, and writes results under `./results/<guide>-<timestamp>/`. For a short smoke test, set `LIMIT=5`. See [accuracy.md](../../helpers/accuracy.md) for more details.
+
+### Accuracy Report
+
+Full-run results for the deployed Intel XPU overlay (`Qwen/Qwen3-0.6B`), produced with `lm-evaluation-harness` 0.4.12, `num_fewshot=0`, no per-task sample cap.
+
+| Task | Filter | Metric | Value | Stderr |
+| :--- | :--- | :--- | ---: | ---: |
+| `gsm8k` (1319) | flexible-extract | exact_match ↑ | 0.1008 | ±0.0083 |
+| `gsm8k` (1319) | strict-match | exact_match ↑ | 0.0000 | ±0.0000 |
+| `lambada_openai` (5153) | none | acc ↑ | 0.4046 | ±0.0068 |
+| `lambada_openai` (5153) | none | perplexity ↓ | 24.7196 | ±1.0476 |
+| `mmlu_high_school_mathematics` (270) | none | acc ↑ | 0.2815 | ±0.0274 |
+
+> `gsm8k` `strict-match` is `0.0000` because the zero-shot model does not emit the `#### <answer>` format the strict filter expects; the `flexible-extract` filter recovers the numeric answer. These values reflect the small (0.6B) model at `num_fewshot=0` and are intended to validate the serving path, not to maximize benchmark scores.
 
 ## Cleanup
 

@@ -4,19 +4,22 @@
 # Usage:
 #   NAMESPACE=<ns> ./run-lm-eval.sh -g <guide-name> [-p <local-port>]
 #                                   [-o <output-dir>] [--no-port-forward]
+#                                   [-c <config.yaml>]
 #
-# Guide name must match a preset file in helpers/accuracy/presets/<guide>.env.
+# The guide name resolves to the per-guide config template at
+# guides/<guide-name>/lm-eval-templates/guide.yaml. Use -c to point at a
+# different config file.
 #
-# Environment overrides:
+# Environment overrides (take precedence over the config file):
 #   NAMESPACE        Kubernetes namespace of the deployed guide (required).
-#   MODEL            Override the model name from the preset.
-#   TASKS            Comma-separated lm-eval tasks (override preset).
-#   NUM_FEWSHOT      Number of few-shot examples (override preset).
-#   LIMIT            Per-task sample limit (override preset; empty = full run).
+#   MODEL            Override the model name from the config.
+#   TASKS            Comma-separated lm-eval tasks (override config).
+#   NUM_FEWSHOT      Number of few-shot examples (override config).
+#   LIMIT            Per-task sample limit (override config; empty = full run).
 #   MAX_GEN_TOKS     Maximum generated tokens per request (optional).
-#   NUM_CONCURRENT   lm-eval client concurrency (override preset).
+#   NUM_CONCURRENT   lm-eval client concurrency (override config).
 #   GATEWAY_SVC      Kubernetes service to port-forward (overrides discovery).
-#   GATEWAY_LABEL    Gateway label value for service discovery (override preset).
+#   GATEWAY_LABEL    Gateway label value for service discovery (override config).
 #   SERVICE_PORT     Service port to forward (default: 80).
 #   BASE_URL         If set, skip port-forward and target this URL directly
 #                    (must point at a /v1/completions endpoint).
@@ -24,9 +27,11 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PRESETS_DIR="${SCRIPT_DIR}/presets"
+REPO_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
+GUIDES_DIR="${REPO_ROOT}/guides"
 
 GUIDE=""
+CONFIG=""
 LOCAL_PORT="8000"
 OUTPUT_DIR=""
 DO_PORT_FORWARD=1
@@ -36,7 +41,9 @@ usage() {
 Usage: NAMESPACE=<ns> $0 -g <guide-name> [options]
 
 Options:
-  -g, --guide <name>      Guide name (preset file in presets/<name>.env)
+  -g, --guide <name>      Guide name (config at
+                          guides/<name>/lm-eval-templates/guide.yaml)
+  -c, --config <file>     Explicit config file (overrides -g resolution)
   -p, --port <port>       Local port for kubectl port-forward (default: 8000)
   -o, --output <dir>      Output directory for lm-eval results
                           (default: ./results/<guide>-<timestamp>)
@@ -45,9 +52,9 @@ Options:
 
 Available guides:
 EOF
-  for f in "${PRESETS_DIR}"/*.env; do
+  for f in "${GUIDES_DIR}"/*/lm-eval-templates/guide.yaml; do
     [ -e "$f" ] || continue
-    echo "  - $(basename "$f" .env)"
+    echo "  - $(basename "$(dirname "$(dirname "$f")")")"
   done
 }
 
@@ -62,6 +69,7 @@ require_arg() {
 while [[ $# -gt 0 ]]; do
   case "$1" in
     -g|--guide)     require_arg "$@"; GUIDE="$2"; shift 2 ;;
+    -c|--config)    require_arg "$@"; CONFIG="$2"; shift 2 ;;
     -p|--port)      require_arg "$@"; LOCAL_PORT="$2"; shift 2 ;;
     -o|--output)    require_arg "$@"; OUTPUT_DIR="$2"; shift 2 ;;
     --no-port-forward) DO_PORT_FORWARD=0; shift ;;
@@ -70,44 +78,68 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
+if [[ -z "${GUIDE}" && -z "${CONFIG}" ]]; then
+  echo "ERROR: -g/--guide (or -c/--config) is required" >&2
+  usage
+  exit 1
+fi
+
+if [[ -z "${CONFIG}" ]]; then
+  CONFIG="${GUIDES_DIR}/${GUIDE}/lm-eval-templates/guide.yaml"
+fi
+if [[ ! -f "${CONFIG}" ]]; then
+  echo "ERROR: config not found: ${CONFIG}" >&2
+  usage
+  exit 1
+fi
+
+# Derive a guide label for default output paths / Standalone service fallback.
 if [[ -z "${GUIDE}" ]]; then
-  echo "ERROR: -g/--guide is required" >&2
-  usage
+  GUIDE="$(basename "$(dirname "$(dirname "${CONFIG}")")")"
+fi
+
+if ! command -v yq >/dev/null 2>&1; then
+  echo "ERROR: 'yq' (v4+) not found. See helpers/client-setup/README.md" >&2
   exit 1
 fi
 
-PRESET="${PRESETS_DIR}/${GUIDE}.env"
-if [[ ! -f "${PRESET}" ]]; then
-  echo "ERROR: preset not found: ${PRESET}" >&2
-  usage
-  exit 1
+# Read a scalar from the config, treating yq's "null" (missing key) as empty.
+cfg_get() {
+  local v
+  v="$(yq "$1" "${CONFIG}")"
+  [[ "$v" == "null" ]] && v=""
+  printf '%s' "$v"
+}
+
+# Config provides defaults; non-empty environment values override them.
+# LIMIT is special: an explicitly empty LIMIT means "full run", so distinguish
+# "set" (even if empty) from "unset".
+MODEL="${MODEL:-$(cfg_get '.endpoint.model')}"
+TASKS="${TASKS:-$(yq '.evaluation.tasks | join(",")' "${CONFIG}")}"
+NUM_FEWSHOT="${NUM_FEWSHOT:-$(cfg_get '.evaluation.num_fewshot')}"
+NUM_FEWSHOT="${NUM_FEWSHOT:-0}"
+MAX_GEN_TOKS="${MAX_GEN_TOKS:-$(cfg_get '.evaluation.max_gen_toks')}"
+NUM_CONCURRENT="${NUM_CONCURRENT:-$(cfg_get '.evaluation.num_concurrent')}"
+NUM_CONCURRENT="${NUM_CONCURRENT:-4}"
+GATEWAY_LABEL="${GATEWAY_LABEL:-$(cfg_get '.endpoint.gateway_label')}"
+GATEWAY_SVC="${GATEWAY_SVC:-}"
+SERVICE_PORT="${SERVICE_PORT:-$(cfg_get '.endpoint.service_port')}"
+SERVICE_PORT="${SERVICE_PORT:-80}"
+
+if [[ -n "${LIMIT+x}" ]]; then
+  LIMIT="${LIMIT}"
+else
+  LIMIT="$(cfg_get '.evaluation.limit')"
 fi
 
-# Capture caller-provided overrides BEFORE sourcing the preset so the
-# preset acts as defaults rather than overrides.
-_OVR_MODEL="${MODEL:-}"
-_OVR_TASKS="${TASKS:-}"
-_OVR_NUM_FEWSHOT="${NUM_FEWSHOT:-}"
-_OVR_LIMIT="${LIMIT-}"
-_OVR_MAX_GEN_TOKS="${MAX_GEN_TOKS:-}"
-_OVR_NUM_CONCURRENT="${NUM_CONCURRENT:-}"
-_OVR_GATEWAY_LABEL="${GATEWAY_LABEL:-}"
-_OVR_GATEWAY_SVC="${GATEWAY_SVC:-}"
-_OVR_SERVICE_PORT="${SERVICE_PORT:-}"
-
-# shellcheck disable=SC1090
-source "${PRESET}"
-
-# Re-apply caller overrides on top of preset values.
-MODEL="${_OVR_MODEL:-${MODEL:?MODEL not set in preset or env}}"
-TASKS="${_OVR_TASKS:-${TASKS:?TASKS not set in preset or env}}"
-NUM_FEWSHOT="${_OVR_NUM_FEWSHOT:-${NUM_FEWSHOT:-0}}"
-LIMIT="${_OVR_LIMIT-${LIMIT:-}}"
-MAX_GEN_TOKS="${_OVR_MAX_GEN_TOKS:-${MAX_GEN_TOKS:-}}"
-NUM_CONCURRENT="${_OVR_NUM_CONCURRENT:-${NUM_CONCURRENT:-4}}"
-GATEWAY_LABEL="${_OVR_GATEWAY_LABEL:-${GATEWAY_LABEL:-}}"
-GATEWAY_SVC="${_OVR_GATEWAY_SVC:-${GATEWAY_SVC:-}}"
-SERVICE_PORT="${_OVR_SERVICE_PORT:-${SERVICE_PORT:-80}}"
+if [[ -z "${MODEL}" ]]; then
+  echo "ERROR: model not set in config (.endpoint.model) or MODEL env" >&2
+  exit 1
+fi
+if [[ -z "${TASKS}" ]]; then
+  echo "ERROR: tasks not set in config (.evaluation.tasks) or TASKS env" >&2
+  exit 1
+fi
 
 if ! command -v lm_eval >/dev/null 2>&1; then
   echo "ERROR: 'lm_eval' not found. Install with: pip install 'lm-eval[api]' transformers" >&2

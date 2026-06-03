@@ -1,0 +1,22 @@
+# lm-evaluation-harness accuracy config for the optimized-baseline guide
+# (Intel XPU overlay: Qwen3-0.6B).
+#
+# Consumed by helpers/accuracy/run-lm-eval.sh:
+#   NAMESPACE=<ns> ./helpers/accuracy/run-lm-eval.sh -g optimized-baseline
+#
+# Any field can be overridden from the environment (MODEL, TASKS, NUM_FEWSHOT,
+# LIMIT, NUM_CONCURRENT, GATEWAY_LABEL, SERVICE_PORT). See helpers/accuracy.md.
+
+endpoint:
+  model: Qwen/Qwen3-0.6B                                      # Exact HuggingFace model name; must match the deployed stack.
+  gateway_label: infra-optimized-baseline-inference-gateway  # gateway.networking.k8s.io/gateway-name value for service discovery.
+  service_port: 80                                            # Service port to port-forward.
+
+evaluation:
+  tasks:                                 # lm-eval tasks to run against the /v1/completions endpoint.
+    - gsm8k
+    - lambada_openai
+    - mmlu_high_school_mathematics
+  num_fewshot: 0                         # Few-shot examples per task.
+  limit: null                            # Per-task sample cap; null = full run. Override with LIMIT=<n> for a quick smoke test.
+  num_concurrent: 4                      # lm-eval client concurrency.

@@ -13,3 +13,7 @@ CLAUDE.md
 
 # helm chart directories via kustomize
 **/charts/
+
+# lm-eval / benchmark run artifacts and local virtualenvs
+results/
+.venv-lmeval/
