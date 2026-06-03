@@ -24,16 +24,17 @@ To overcome this challenge, we instead launch 8 vLLM DP instances (each with a s
 
 We can, therefore, compose the WideEP deployment with the existing scorers (for example, `prefix-cache-scorer` and `active-request-scorer`) to balance load across the ranks and handle complex multi-turn request patterns.
 
-### Why This is Experimental
+### Process Management
 
-We are currently working on hardening the process management, health checking, and probes in vLLM to handle better this style of deployment. Once this is complete, we will upgrade this guide to the default.
+This deployment uses vLLM's built-in DP Supervisor (`--data-parallel-multi-port-external-lb`), which manages the lifecycle of all DP rank processes within a pod. The supervisor automatically assigns `CUDA_VISIBLE_DEVICES` and `--data-parallel-rank` to each child process, aggregates health checks across all children via a single supervisor endpoint, and handles graceful shutdown.
 
 ## Overview
 
 This guide demonstrates how to deploy DeepSeek-R1-0528 using vLLM's P/D disaggregation support with NIXL in a wide expert parallel pattern with LeaderWorkerSets with DP-aware scheduling. This guide has been validated on:
 
-- a 32xH200 cluster with InfiniBand networking
-- a 32xB200 cluster with InfiniBand networking
+- a 32xH200 cluster with InfiniBand networking (CoreWeave)
+- a 32xB200 cluster with InfiniBand networking (CoreWeave)
+- a 32xH200 cluster with RoCE networking (GKE)
 - Istio 1.29.2 (required for multi-port support)
 
 In this example, we will demonstrate a deployment of `DeepSeek-R1-0528` with:
@@ -86,7 +87,7 @@ You can also customize your gateway, for more information on how to do that see 
 
 ### Deploy Model Servers
 
-CoreWeave are tested Kubernetes providers for this well-lit path. You can customize the manifests if you run on other Kubernetes providers.
+CoreWeave and GKE are tested Kubernetes providers for this well-lit path. You can customize the manifests if you run on other Kubernetes providers.
 
 <!-- TABS:START -->
 
@@ -95,6 +96,13 @@ CoreWeave are tested Kubernetes providers for this well-lit path. You can custom
 
 ```bash
 kubectl apply -k ./manifests/modelserver/coreweave  -n ${NAMESPACE}
+```
+
+<!-- TAB:GKE -->
+#### GKE
+
+```bash
+kubectl apply -k ./manifests/modelserver/gke  -n ${NAMESPACE}
 ```
 
 <!-- TABS:END -->
