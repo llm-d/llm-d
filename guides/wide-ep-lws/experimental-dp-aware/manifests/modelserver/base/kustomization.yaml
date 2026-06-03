@@ -4,3 +4,4 @@ resources:
   - decode.yaml
   - prefill.yaml
   - serviceAccount.yaml
+  - pod-monitors.yaml
