@@ -237,6 +237,12 @@ For more details, refer to the [benchmark instructions doc](../../helpers/benchm
 curl -LJO "https://raw.githubusercontent.com/llm-d/llm-d/main/guides/${GUIDE_NAME}/benchmark-templates/guide.yaml"
 ```
 
+For Qwen3-0.6B deployments (e.g. the Intel XPU overlay), use the Qwen3-0.6B template instead:
+
+```bash
+curl -LJO "https://raw.githubusercontent.com/llm-d/llm-d/main/guides/${GUIDE_NAME}/benchmark-templates/qwen-0.6b-shared-prefix.yaml"
+```
+
 ### 3. Execute Benchmark
 
 ```bash
@@ -254,6 +260,13 @@ export IP=$(kubectl get gateway llm-d-inference-gateway  -n ${NAMESPACE} -o json
 
 ```bash
 envsubst < guide.yaml > config.yaml
+./run_only.sh -c config.yaml -o ./results
+```
+
+For the Qwen3-0.6B template:
+
+```bash
+envsubst < qwen-0.6b-shared-prefix.yaml > config.yaml
 ./run_only.sh -c config.yaml -o ./results
 ```
 

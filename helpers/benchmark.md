@@ -76,6 +76,7 @@ This helper describes how to run benchmarks against a deployed llm-d stack.
 > # export BENCHMARK_TEMPLATE="${BENCH_TEMPLATE_DIR}"/sanity.yaml
 > # export BENCHMARK_TEMPLATE="${BENCH_TEMPLATE_DIR}"/shared_prefix.yaml
 > # export BENCHMARK_TEMPLATE="${BENCH_TEMPLATE_DIR}"/guidellm.yaml
+> # export BENCHMARK_TEMPLATE="${BENCH_TEMPLATE_DIR}"/qwen-0.6b-shared-prefix.yaml
 >   ```
 >
 > </details>
