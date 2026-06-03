@@ -8,8 +8,11 @@ set -Eeux
 # - CUDA_MAJOR: CUDA major version (e.g., 12)
 # - TARGETOS: Target OS - either 'ubuntu' or 'rhel' (default: rhel)
 # - TARGETPLATFORM: platform target (linux/arm64 or linux/amd64)
+# Optional environment variables:
+# - ENABLE_EFA: Enable EFA support (true/false, default: false)
 
 TARGETOS="${TARGETOS:-rhel}"
+ENABLE_EFA="${ENABLE_EFA:-false}"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # source shared utilities (check script dir first, fallback to /tmp for docker builds)

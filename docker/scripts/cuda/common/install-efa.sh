@@ -12,6 +12,7 @@ set -Eeu
 : "${ENABLE_EFA:=false}"
 : "${EFA_INSTALLER_VERSION:=}"
 : "${EFA_MODE:=builder}"
+: "${TARGETOS:=rhel}"
 
 # Validate mode
 if [ "${EFA_MODE}" != "builder" ] && [ "${EFA_MODE}" != "runtime" ]; then
@@ -20,7 +21,7 @@ if [ "${EFA_MODE}" != "builder" ] && [ "${EFA_MODE}" != "runtime" ]; then
 fi
 
 # Skip EFA installation if not enabled, on Ubuntu, or missing installer version
-if [ "${ENABLE_EFA}" != "true" ] || [ "$TARGETOS" != "rhel" ]; then
+if [ "${ENABLE_EFA}" != "true" ] || [ "${TARGETOS}" != "rhel" ]; then
     echo "EFA installation skipped (ENABLE_EFA=${ENABLE_EFA}, TARGETOS=${TARGETOS})"
     # Create empty folder so Dockerfile COPY doesn't fail (builder mode only)
     if [ "${EFA_MODE}" = "builder" ]; then
