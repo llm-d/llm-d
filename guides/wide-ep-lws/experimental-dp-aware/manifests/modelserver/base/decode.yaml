@@ -219,6 +219,9 @@ spec:
               - containerPort: 8207
                 name: rank7
                 protocol: TCP
+              - containerPort: 8208
+                name: supervisor
+                protocol: TCP
 
             startupProbe:
               httpGet:
