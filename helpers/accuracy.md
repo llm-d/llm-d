@@ -14,10 +14,10 @@ PVC, launcher pod, or framework image is required.
 
 - A guide stack already deployed in your cluster (see each guide's README).
 - `kubectl` configured for that cluster.
-- Python 3.9+ with `lm-eval` installed:
+- Python 3.9+ with `lm-eval` (API extras) installed:
 
     ```bash
-    pip install lm-eval
+    pip install "lm-eval[api]" transformers
     ```
 
 ## Run

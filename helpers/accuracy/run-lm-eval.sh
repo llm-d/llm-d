@@ -110,7 +110,7 @@ GATEWAY_SVC="${_OVR_GATEWAY_SVC:-${GATEWAY_SVC:-}}"
 SERVICE_PORT="${_OVR_SERVICE_PORT:-${SERVICE_PORT:-80}}"
 
 if ! command -v lm_eval >/dev/null 2>&1; then
-  echo "ERROR: 'lm_eval' not found. Install with: pip install lm-eval" >&2
+  echo "ERROR: 'lm_eval' not found. Install with: pip install 'lm-eval[api]' transformers" >&2
   exit 1
 fi
 

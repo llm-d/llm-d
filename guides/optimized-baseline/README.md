@@ -262,7 +262,7 @@ envsubst < guide.yaml > config.yaml
 Use `lm-evaluation-harness` to run accuracy tasks against the same OpenAI-compatible `/v1/completions` endpoint:
 
 ```bash
-pip install lm-eval
+pip install "lm-eval[api]" transformers
 export NAMESPACE=llm-d-optimized-baseline
 ./helpers/accuracy/run-lm-eval.sh -g optimized-baseline
 ```
