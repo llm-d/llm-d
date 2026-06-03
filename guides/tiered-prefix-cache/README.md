@@ -65,7 +65,7 @@ Generally multiple cache tiers can be applied ordered by their cache read/write 
 | Connector | Storage Tier | Directory |
 | --------- | ------------ | --------- |
 | vLLM Native OffloadingConnector | CPU RAM | `modelserver/gpu/vllm/native/cpu/` |
-| vLLM Native OffloadingConnector | Filesystem (shared storage) | `modelserver/gpu/vllm/native/fs/` |
+| vLLM Native OffloadingConnector | Filesystem (shared storage) | `modelserver/gpu/vllm/native/cpu_plus_fs/` |
 | LMCache Connector | CPU RAM | `modelserver/gpu/vllm/lmcache-connector/cpu/` |
 | LMCache Connector | Filesystem (shared storage) | `modelserver/gpu/vllm/lmcache-connector/fs/` |
 | TPU KVCache Connector | CPU RAM | `modelserver/tpu-v7/vllm/tpu-offloading-connector/` |
@@ -159,7 +159,7 @@ This guide supports both GPU and TPU. The Kustomize overlays are available in `m
 
 ### 1. (Optional) Prepare a PVC for filesystem storage tier
 
-If using the `native/fs/` or `lmcache-connector/fs/` variants, create a ReadWriteMany PVC:
+If using the `native/cpu_plus_fs/` or `lmcache-connector/fs/` variants, create a ReadWriteMany PVC:
 
 ```bash
 export STORAGE_CLASS="" # leave empty to use cluster default; or set "lustre" / "efs-sc"
