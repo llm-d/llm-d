@@ -226,7 +226,7 @@ spec:
             startupProbe:
               httpGet:
                 path: /health
-                port: rank0
+                port: supervisor
               initialDelaySeconds: 0
               periodSeconds: 1
               timeoutSeconds: 5
@@ -234,14 +234,14 @@ spec:
             livenessProbe:
               httpGet:
                 path: /health
-                port: rank0
+                port: supervisor
               periodSeconds: 30
               timeoutSeconds: 5
               failureThreshold: 3
             readinessProbe:
               httpGet:
-                path: /v1/models
-                port: rank0
+                path: /readyz
+                port: supervisor
               periodSeconds: 10
               timeoutSeconds: 5
               failureThreshold: 3
