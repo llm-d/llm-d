@@ -18,7 +18,8 @@ name: /test-nightly Slash Command
 # Temp branches are cleaned up by slash-test-nightly-cleanup.yaml.
 #
 # Available nightlies are detected dynamically from workflow files
-# matching nightly-e2e-<name>.yaml or nightly-<name>.yaml on main.
+# matching nightly-e2e-<name>.yaml or nightly-<name>.yaml at the PR head,
+# so new nightlies added in a PR can be tested immediately.
 
 on:
   issue_comment:
@@ -53,12 +54,19 @@ jobs:
             const owner = context.repo.owner;
             const repo = context.repo.repo;
 
-            // Dynamically list all nightly workflows from the repo
+            // Get the PR head SHA so we can detect workflows added in the PR itself
+            const { data: pr } = await github.rest.pulls.get({
+              owner, repo,
+              pull_number: context.issue.number,
+            });
+            const prHeadSha = pr.head.sha;
+
+            // Dynamically list all nightly workflows from the repo at the PR head
             async function listAllNightlies() {
               const { data: files } = await github.rest.repos.getContent({
                 owner, repo,
                 path: '.github/workflows',
-                ref: 'main',
+                ref: prHeadSha,
               });
               const nightlies = [];
               for (const f of files) {
@@ -83,7 +91,7 @@ jobs:
                   await github.rest.repos.getContent({
                     owner, repo,
                     path: `.github/workflows/${filename}`,
-                    ref: 'main',
+                    ref: prHeadSha,
                   });
                   return filename;
                 } catch (e) {
