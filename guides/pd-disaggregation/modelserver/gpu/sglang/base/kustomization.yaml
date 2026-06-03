@@ -17,7 +17,7 @@ labels:
       llm-d.ai/guide: pd-disaggregation
       llm-d.ai/accelerator-variant: gpu
       llm-d.ai/accelerator-vendor: nvidia
-      inference.networking.k8s.io/engine-type: sglang
+      llm-d.ai/engine-type: sglang
     includeSelectors: true
     includeTemplates: true
     fields:

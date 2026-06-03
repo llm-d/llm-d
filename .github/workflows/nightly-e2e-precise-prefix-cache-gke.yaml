@@ -1,4 +1,4 @@
-name: Nightly - Precise Prefix Cache E2E (GKE)
+name: Nightly - Precise Prefix Cache E2E (GKE GPU)
 
 # Nightly regression test for the precise-prefix-cache-routing guide on GKE.
 # Deploys via kustomize + the standalone chart with the UDS tokenizer

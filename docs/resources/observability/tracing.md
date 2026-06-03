@@ -15,8 +15,8 @@ export NAMESPACE=<your-llm-d-namespace>
 
 | Component | Config Method | Traced Operations |
 |-----------|--------------|-------------------|
-| **vLLM** (prefill + decode) | Helm: ModelService `tracing:` / Kustomize: container args + env vars | Inference engine spans |
-| **Routing proxy** (P/D sidecar) | Helm: ModelService `tracing:` / Kustomize: container env vars | KV transfer coordination |
+| **vLLM** (prefill + decode) | Kustomize: container args + env vars | Inference engine spans |
+| **Routing proxy** (P/D sidecar) | Kustomize: container env vars | KV transfer coordination |
 | **EPP** | Helm: GAIE `inferenceExtension.tracing:` | Request routing, endpoint scoring, KV-cache indexing |
 
 All components export traces via OTLP gRPC to an OpenTelemetry Collector, which filters noise (e.g., `/metrics` scraping spans), batches traces, and forwards them to a backend like Jaeger.
@@ -26,7 +26,7 @@ All components export traces via OTLP gRPC to an OpenTelemetry Collector, which 
 Deploy the OTel Collector and Jaeger into the same namespace as your llm-d workload:
 
 ```bash
-./docs/monitoring/scripts/install-otel-collector-jaeger.sh -n ${NAMESPACE}
+./guides/recipes/observability/install-otel-collector-jaeger.sh -n ${NAMESPACE}
 ```
 
 > [!NOTE]
@@ -55,49 +55,29 @@ If you prefer to apply manifests directly:
 
 ```bash
 # Standalone collector (no operator)
-kubectl apply -n ${NAMESPACE} -f docs/monitoring/tracing/jaeger-all-in-one.yaml \
-  -f docs/monitoring/tracing/otel-collector.yaml
+kubectl apply -n ${NAMESPACE} -f guides/recipes/observability/tracing/jaeger-all-in-one.yaml \
+  -f guides/recipes/observability/tracing/otel-collector.yaml
 
 # Or with the OTel Operator installed
-kubectl apply -n ${NAMESPACE} -f docs/monitoring/tracing/jaeger-all-in-one.yaml \
-  -f docs/monitoring/tracing/otel-collector-operator.yaml
+kubectl apply -n ${NAMESPACE} -f guides/recipes/observability/tracing/jaeger-all-in-one.yaml \
+  -f guides/recipes/observability/tracing/otel-collector-operator.yaml
 ```
 
 Verify with the same `kubectl get pods` commands above.
 
-## Step 2: Enable Tracing on vLLM and Routing Proxy
+## Step 2: Enable Tracing on the Model Server and Routing Proxy
 
-Configuration varies by deployment method.
-
-### Option A: Helm Values
-
-All chart defaults point to `http://otel-collector:4317` (same namespace). Enable tracing in your model service values:
+Model servers are deployed with kustomize. The example below uses vLLM; SGLang and other OpenTelemetry-capable model servers use the same `OTEL_*` environment variables — set `OTEL_SERVICE_NAME` to match your engine and role. Add the engine's tracing flags to its serve command and the OTEL env vars to the container:
 
 ```yaml
-# In your ms-*/values.yaml
-tracing:
-  enabled: true
-  otlpEndpoint: "http://otel-collector:4317"
-  sampling:
-    sampler: "parentbased_traceidratio"
-    samplerArg: "1.0"  # 100% for dev; use "0.1" (10%) in production
-```
-
-This injects `--otlp-traces-endpoint` and `--collect-detailed-traces` args into vLLM, and `OTEL_*` environment variables into both vLLM and routing-proxy containers.
-
-### Option B: Kustomize / Raw Manifests
-
-For kustomize deployments or raw manifests, add tracing flags to your `vllm serve` command and OTEL env vars to the container:
-
-```yaml
-# Add to vllm serve command:
+# Add to the model server's serve command (vLLM shown):
 #   --otlp-traces-endpoint http://otel-collector:4317
 #   --collect-detailed-traces all
 
-# Add to the container env:
+# Add to the container env (applies to any OpenTelemetry-capable engine):
 env:
 - name: OTEL_SERVICE_NAME
-  value: "vllm-decode"  # or "vllm-prefill"
+  value: "vllm-decode"  # name per engine/role, e.g. vllm-decode, vllm-prefill, sglang-decode
 - name: OTEL_EXPORTER_OTLP_ENDPOINT
   value: "http://otel-collector:4317"
 - name: OTEL_TRACES_SAMPLER
@@ -178,5 +158,5 @@ When tracing is enabled, these environment variables are set on vLLM and routing
 ## Cleanup
 
 ```bash
-./docs/monitoring/scripts/install-otel-collector-jaeger.sh -u -n ${NAMESPACE}
+./guides/recipes/observability/install-otel-collector-jaeger.sh -u -n ${NAMESPACE}
 ```

@@ -17,7 +17,7 @@ labels:
       llm-d.ai/guide: pd-disaggregation
       llm-d.ai/accelerator-variant: gpu
       llm-d.ai/accelerator-vendor: amd
-      inference.networking.k8s.io/engine-type: vllm
+      llm-d.ai/engine-type: vllm
     includeSelectors: true
     includeTemplates: true
     fields:

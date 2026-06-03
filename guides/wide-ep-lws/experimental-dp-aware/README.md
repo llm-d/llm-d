@@ -57,7 +57,7 @@ This guide requires 32 Nvidia H200 or B200 GPUs and InfiniBand or RoCE RDMA netw
 - Have the [proper client tools installed on your local system](../../../helpers/client-setup/README.md) to use this guide.
 - You have deployed the [LeaderWorkerSet controller](https://lws.sigs.k8s.io/docs/installation/)
 - Configure and deploy your [Gateway control plane](../../prereq/gateway-provider/README.md). Note that the Gateway must support multi-port (e.g. Istio 1.29.2)
-- Have the [Monitoring stack](../../../docs/monitoring/README.md) installed on your system.
+- Have the [Monitoring stack](../../../docs/resources/observability/setup.md) installed on your system.
 - Create a namespace for installation.
 
   ```bash

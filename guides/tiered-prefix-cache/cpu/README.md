@@ -24,27 +24,15 @@ This guide provides recipes to offload prefix cache to CPU RAM via the vLLM nati
 | GPU Accelerator           | NVIDIA H100                                             |
 | CPU Cache Offload Size    | 100 GB                                                  |
 
-### Alternative GPU configuration
-
-| Parameter                 | Value                                                   |
-| ------------------------- | ------------------------------------------------------- |
-| Model                     | [openai/gpt-oss-120b](https://huggingface.co/openai/gpt-oss-120b) |
-| GPUs per replica (TP)     | 1                                                       |
-| GPU Accelerator           | NVIDIA H100                                             |
-| CPU Cache Offload Size    | 100 GB                                                  |
-
-
 ### TPU
 
 | Parameter                 | Value                                                   |
 | ------------------------- | ------------------------------------------------------- |
 | Model                     | [Qwen/Qwen3-32B](https://huggingface.co/Qwen/Qwen3-32B) |
 | TPUs per replica (TP)     | 8                                                       |
-| TPU Accelerator           |  TPU7x                                                  |
-| HBM Staging Buffer Size   | 1000 Blocks (~34 GB)                                    |
-| CPU Cache Offload Size    | 25000 Chunks (~780 GB)                                  |
-
-
+| TPU Accelerator           |  TPU7x                                             |
+| HBM Staging Buffer Size   | 1000 Blocks (~34 GB)                                                   |
+| CPU Cache Offload Size    | 25000 Chunks (~780 GB)                                                   |
 
 ### Supported Hardware Backends
 
@@ -149,7 +137,7 @@ kubectl apply -n ${NAMESPACE} -k guides/tiered-prefix-cache/cpu/modelserver/tpu-
 
 ### 3. (Optional) Enable monitoring
 
-- Install the [Monitoring stack](../../../docs/monitoring/README.md).
+- Install the [Monitoring stack](../../../docs/resources/observability/setup.md).
 - Deploy the monitoring resources for this guide:
 
 ```bash
@@ -214,70 +202,92 @@ kubectl delete namespace ${NAMESPACE}
 
 ## Benchmarking
 
-For instructions on setting up standard workloads and running performance analyses against this guide, refer to the [benchmark instructions doc](../../../helpers/benchmark.md).
+The benchmark launches a pod (`llmdbench-harness-launcher`) that uses `inference-perf` with a shared prefix workload. This workload runs several stages with different rates. The results are saved locally to `./results/<experiment ID>`.
 
-The current weight configuration defaults to `2:2:3:2` (Queue Scorer : KV Cache Utilization Scorer : GPU/TPU Prefix Cache Scorer : CPU Prefix Cache Scorer). This configuration defaults to a safe performance profile.
+For more details, refer to the [benchmark instructions doc](../../../helpers/benchmark.md).
 
-The benchmark compared optimized baseline to optimized baseline+kv cache offload to cpu. It was run on `gpt-oss-120b` (https://huggingface.co/openai/gpt-oss-120b) with 16 replicas x 1 NVIDIA GPU (tensor-parallel-size=1) and the following additional parameters:
+### 1. Prepare the Benchmarking Suite
 
-- '--gpu-memory-utilization=0.95'
-- '--enable-auto-tool-choice'
-- '--tool-call-parser=openai'
-- '--reasoning-parser=openai_gptoss'
-- '--block-size=128'
+Download the benchmark script:
 
-The syntehtic workload used shared prefix data with high load at poisson rate of 500 req/s, for the duration of 25 seconds. The benchmarking was executed using [llm-d skills](https://github.com/llm-d-incubation/llm-d-skills).
+```bash
+curl -L -O https://raw.githubusercontent.com/llm-d/llm-d-benchmark/main/existing_stack/run_only.sh
+chmod u+x run_only.sh
+```
+
+Ensure a HuggingFace token secret `llm-d-hf-token` is created inside the namespace.
+
+### 2. Download the Workload Template
+
+```bash
+curl -LJO "https://raw.githubusercontent.com/llm-d/llm-d/main/guides/tiered-prefix-cache/cpu/benchmark-templates/guide.yaml"
+```
+
+### 3. Execute Benchmark
+
+```bash
+export IP=$(kubectl get service ${GUIDE_NAME}-epp -n ${NAMESPACE} -o jsonpath='{.spec.clusterIP}')
+envsubst < guide.yaml > config.yaml
+./run_only.sh -c config.yaml -o ./results
+```
+
+---
+
+### Benchmarking Results
+
+The current weight configuration defaults to `1:1:1:1:1` (Queue Scorer : KV Cache Utilization Scorer : GPU Prefix Cache Scorer : CPU Prefix Cache Scorer : LRU Scorer). Note that prefixes in GPU is double counted in the CPU scorer because CPU kv cache is a super set of GPU. This configuration defaults to a safe performance profile.
 
 ### GPU
 
 #### High Cache Scenario (HBM < KVCache < HBM + CPU RAM)
 
+The benchmark runs on 16 × H100 GPUs, distributed across 8 model servers (2 H100s per server with TP=2) using Qwen3-32B.
 
-### Request Outcomes
+* **Workload**: 250 prefix groups, 5 prompts per group, system prompt length of 16,000 tokens, question length of 256 tokens, output length of 256 tokens.
+* **GPU Cache Size (Total)**: 2,384,000 tokens (381 GB / 355 GiB).
+* **CPU Cache Size (Total)**: 10,496,000 tokens (~1,718 GB / 1,600 GiB) at 200 GiB/replica.
+* **Workload Unique Cache (Working Set)**: 4,640,000 tokens (~760 GB / 708 GiB) — comprising 4.0M system prompt tokens (250 groups × 16,000 tokens), 320,000 question tokens (1,250 prompts × 256 tokens), and 320,000 generated output tokens (1,250 prompts × 256 tokens).
 
-| Metric | **Baseline llm-d** | Run B |
-| --- | --- | --- |
-| Total requests sent | 12,500 | 12,500 |
-| **Successful** | **6,614 (52.9%)** | **9,311 (74.5%)** |
-| Failed/Timed out | 5,886 (47.1%) | 3,189 (25.5%) |
+**Cache capacity dynamics**:
+`Total GPU HBM Cache (2.38M tokens / 355 GiB) < Workload Unique Cache (4.64M tokens / 708 GiB) < Total CPU Cache Capacity (10.49M tokens / 1,600 GiB)`
 
-### Throughput
+Because the total unique tokens in the workload (4.64M) exceed the GPU local cache capacity (2.38M), running on HBM cache alone (**Optimized Baseline**) causes severe cache thrashing. CPU offloading is required to store the full working set in CPU RAM. Note that the entire workload unique cache fits comfortably within the total CPU cache capacity (10.49M tokens).
 
-| Metric | **Baseline llm-d** | **llm-d + CPU offloading 100GB** | Delta |
-| --- | --- | --- | --- |
-| Requests/sec (successful) | 20.35 | 28.64 | **+8.3 (+40.7%)** |
-| Output tokens/sec | 20,207 | 29,726 | **+9518.8 (+47.1%)** |
-| Total tokens/sec | 171,119 | 242,247 | **+71128.3 (+41.6%)** |
-| Input tokens/sec | 150,911 | 212,521 | **+61609.5 (+40.8%)** |
+Under EPP tiered routing (**GPU + CPU tier prefix aware routing**), EPP explicitly scores both GPU and CPU cache hits, ensuring optimal replica affinity routing even when GPU cache is fully thrashing.
 
-### Latency (successful requests only)
+<img src="./benchmark-results/external_prefix_cache_hits.png" width="900" alt="vLLM External Prefix Cache Hits">
 
-| Metric | Run A | Run B | B vs A |
-| --- | --- | --- | --- |
-| Mean request latency | 144.3s | 146.9s | +2.5 (+1.7%) |
-| Median request latency | 137.2s | 135.5s | -1.7 (-1.2%) |
-| P90 request latency | 268.1s | 264.3s | -3.7 (-1.4%) |
-| Mean TTFT | 93.3s | 87.0s | -6.3 (-6.8%) |
-| Median TTFT | 3.9s | 6.0s | **+2.2 (+56.0%)** |
-| P90 TTFT | 247.5s | 236.6s | -10.9 (-4.4%) |
-| **Mean TPOT** | 51.1ms | 59.9ms | **+8.8 (+17.2%)** |
-| Median TPOT | 29.5ms | 48.3ms | **+18.7 (+63.4%)** |
-| P90 TPOT | 123.5ms | 130.6ms | +7.1 (+5.8%) |
-| ITL mean | 51.1ms | 59.9ms | **+8.8 (+17.2%)** |
+Below are the benchmark results across the 5.0 to 40.0 QPS request rate stages:
 
-### vLLM Server Metrics (fleet aggregate)
+| Target Rate | Configuration | Mean TTFT (s) | P90 TTFT (s) | Mean E2E Latency (s) | P90 E2E Latency (s) | Throughput (tok/s) |
+| :---: | :--- | :---: | :---: | :---: | :---: | :---: |
+| **5.0 QPS** | **Optimized Baseline (HBM-only)** | 1.62 | 2.65 | 11.98 | 21.60 | 74,638.5 |
+| | **GPU + CPU tier prefix aware routing** | 1.17 (-27.8%) | 1.79 (-32.5%) | 11.49 (-4.1%) | 20.25 (-6.3%) | 82,880.0 (+11.0%) |
+| **10.0 QPS** | **Optimized Baseline (HBM-only)** | 8.08 | 16.61 | 26.28 | 32.60 | 122,387.7 |
+| | **GPU + CPU tier prefix aware routing** | 0.41 (-94.9%) | 1.31 (-92.1%) | 6.97 (-73.5%) | 9.23 (-71.7%) | 167,027.5 (+36.5%) |
+| **15.0 QPS** | **Optimized Baseline (HBM-only)** | 23.19 | 43.64 | 41.79 | 60.08 | 121,248.1 |
+| | **GPU + CPU tier prefix aware routing** | 0.38 (-98.4%) | 0.48 (-98.9%) | 7.66 (-81.7%) | 9.16 (-84.8%) | 247,732.6 (+104.3%) |
+| **20.0 QPS** | **Optimized Baseline (HBM-only)** | 43.67 | 78.13 | 62.29 | 92.14 | 114,663.2 |
+| | **GPU + CPU tier prefix aware routing** | 0.89 (-98.0%) | 2.66 (-96.6%) | 9.03 (-85.5%) | 11.22 (-87.8%) | 300,749.2 (+162.3%) |
+| **25.0 QPS** | **Optimized Baseline (HBM-only)** | 61.01 | 110.00 | 79.91 | 128.00 | 113,870.1 |
+| | **GPU + CPU tier prefix aware routing** | 4.80 (-92.1%) | 10.87 (-90.1%) | 13.24 (-83.4%) | 19.42 (-84.8%) | 318,589.9 (+179.8%) |
+| **30.0 QPS** | **Optimized Baseline (HBM-only)** | 78.79 | 143.67 | 97.77 | 160.89 | 118,508.8 |
+| | **GPU + CPU tier prefix aware routing** | 12.06 (-84.7%) | 23.01 (-84.0%) | 20.58 (-78.9%) | 31.07 (-80.7%) | 328,334.0 (+177.1%) |
+| **35.0 QPS** | **Optimized Baseline (HBM-only)** | 97.24 | 174.85 | 116.54 | 193.17 | 116,009.0 |
+| | **GPU + CPU tier prefix aware routing** | 19.28 (-80.2%) | 36.31 (-79.2%) | 27.81 (-76.1%) | 44.59 (-76.9%) | 324,511.5 (+179.7%) |
+| **40.0 QPS** | **Optimized Baseline (HBM-only)** | 115.57 | 206.39 | 134.78 | 223.93 | 115,645.0 |
+| | **GPU + CPU tier prefix aware routing** | 25.38 (-78.0%) | 48.14 (-76.7%) | 33.95 (-74.8%) | 56.29 (-74.9%) | 331,212.6 (+186.4%) |
 
-| Metric | **Baseline llm-d**  | **llm-d + CPU offloading 100GB** |
-| --- | --- | --- |
-| **Internal GPU cache hit rate** | **7.2%** | **4.1%** |
-| Internal cache hits (tokens) | 130.1M | 49.0M |
-| Internal cache queries (tokens) | 1815.0M | 1207.9M |
-| **External (CPU offload) hit rate** | N/A | **93.4%** |
-| External cache hits (tokens) | N/A | 39.8M |
-| External cache queries (tokens) | N/A | 42.6M |
+### Previous Benchmarking Results
 
+> [!NOTE]
+> The following benchmark results were from a previous release and does not match the deployment of the current release. A follow up benchmark will be conducted and the results will be updated accordingly. See <https://github.com/llm-d/llm-d/issues/680>.
 
-<!--| Medium Configuration | Mean TTFT (second) | P90 TTFT (second) | Mean E2E Latency (second) | P90 E2E Latency (second) | Overall Throughput (token per second) |
+### GPU
+
+#### High Cache Scenario (HBM < KVCache < HBM + CPU RAM)
+
+| Medium Configuration | Mean TTFT (second) | P90 TTFT (second) | Mean E2E Latency (second) | P90 E2E Latency (second) | Overall Throughput (token per second) |
 | :--- | :--- | :--- | :--- | :--- | :--- |
 | **Baseline vLLM** | 9.0 | 20.9 | 37.8 | 49.7 | 38,534.8 |
 | **vLLM + CPU offloading 100GB** | 6.7 (-25.6%) | 20.2 (-3.3%) | 30.9 (-18.3%) | 44.2 (-11.1%) | 46,751.0 (+21.3%) |
@@ -306,4 +316,3 @@ The syntehtic workload used shared prefix data with high load at poisson rate of
 | :--- | :--- | :--- | :--- | :--- | :--- |
 | **Baseline vLLM** | 0.24 | 0.23 | 16.9 | 19.9 | 25715.9 |
 | **vLLM + CPU offloading 25000 Chunks** | 0.26 | 0.24 | 17.4 | 20.2 | 23,032.6 |
--->

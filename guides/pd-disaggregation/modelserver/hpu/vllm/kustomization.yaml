@@ -21,7 +21,7 @@ labels:
       llm-d.ai/guide: pd-disaggregation
       llm-d.ai/accelerator-variant: hpu
       llm-d.ai/accelerator-vendor: intel
-      inference.networking.k8s.io/engine-type: vllm
+      llm-d.ai/engine-type: vllm
     includeSelectors: true
     includeTemplates: true
     fields:

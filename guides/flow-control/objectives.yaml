@@ -1,4 +1,4 @@
-apiVersion: inference.networking.x-k8s.io/v1alpha2
+apiVersion: llm-d.ai/v1alpha2
 kind: InferenceObjective
 metadata:
   name: premium-traffic
@@ -11,7 +11,7 @@ spec:
   poolRef:
     name: default-pool
 ---
-apiVersion: inference.networking.x-k8s.io/v1alpha2
+apiVersion: llm-d.ai/v1alpha2
 kind: InferenceObjective
 metadata:
   name: standard-traffic
@@ -24,7 +24,7 @@ spec:
   poolRef:
     name: default-pool
 ---
-apiVersion: inference.networking.x-k8s.io/v1alpha2
+apiVersion: llm-d.ai/v1alpha2
 kind: InferenceObjective
 metadata:
   name: best-effort-traffic

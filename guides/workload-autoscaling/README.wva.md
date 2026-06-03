@@ -18,7 +18,7 @@ Before installing WVA, ensure you have:
 
 1. Installed the llm-d inference stack from one of the well-lit path guides.
 
-    > **Note**: WVA requires HTTPS connections to Prometheus for metric collection. When installing the [monitoring stack](../../docs/monitoring/README.md), ensure to enable HTTPS/TLS support.
+    > **Note**: WVA requires HTTPS connections to Prometheus for metric collection. When installing the [monitoring stack](../../docs/resources/observability/setup.md), ensure to enable HTTPS/TLS support.
 
     > **Note**: If selecting namespace-scoped mode below, make sure to install the optimized-baseline stack in the same namespace as WVA (by default `llm-d-autoscaler`).
 

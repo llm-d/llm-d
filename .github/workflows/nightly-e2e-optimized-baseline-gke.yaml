@@ -1,4 +1,4 @@
-name: Nightly - optimized baseline E2E (GKE)
+name: Nightly - optimized baseline E2E (GKE GPU)
 
 # Nightly regression test for the optimized-baseline guide on GKE.
 # Deploys the guide and validates with e2e-validate.sh.

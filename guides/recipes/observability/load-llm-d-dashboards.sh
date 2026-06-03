@@ -47,7 +47,7 @@ for dashboard_file in "${DASHBOARDS_DIR}"/*.json; do
     fi
 
     dashboard_name=$(basename "$dashboard_file" .json)
-    configmap_name="llmd-${dashboard_name}"
+    configmap_name="${dashboard_name}"
 
     log_info "Loading dashboard: ${dashboard_name}"
 

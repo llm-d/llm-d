@@ -1,0 +1,48 @@
+apiVersion: llm-d.ai/v1alpha1
+kind: EndpointPickerConfig
+
+# Plugin set mirrors the optimized-baseline guide
+# (guides/optimized-baseline/router/optimized-baseline.values.yaml),
+# with the file-discovery plugin added so the EPP gets its endpoint
+# inventory from a YAML file on disk instead of a Kubernetes InferencePool.
+plugins:
+  - name: file-discovery
+    type: file-discovery
+    parameters:
+      path: /etc/epp/endpoints.yaml  # EPP must have network access to all worker IPs for metrics scraping
+      watchFile: true
+
+  - type: queue-scorer
+  - type: kv-cache-utilization-scorer
+  - type: prefix-cache-scorer
+  - type: no-hit-lru-scorer
+
+  - type: max-score-picker
+  - type: single-profile-handler
+
+  - name: metrics-source
+    type: metrics-data-source
+  - name: metrics-extractor
+    type: core-metrics-extractor
+
+schedulingProfiles:
+  - name: default
+    plugins:
+      - pluginRef: queue-scorer
+        weight: 2
+      - pluginRef: kv-cache-utilization-scorer
+        weight: 2
+      - pluginRef: prefix-cache-scorer
+        weight: 3
+      - pluginRef: no-hit-lru-scorer
+        weight: 2
+      - pluginRef: max-score-picker
+
+dataLayer:
+  injectDefaults: false
+  discovery:
+    pluginRef: file-discovery
+  sources:
+    - pluginRef: metrics-source
+      extractors:
+        - pluginRef: metrics-extractor

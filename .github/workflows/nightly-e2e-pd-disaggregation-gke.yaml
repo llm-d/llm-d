@@ -1,4 +1,4 @@
-name: Nightly - PD Disaggregation E2E (GKE)
+name: Nightly - PD Disaggregation E2E (GKE GPU)
 
 # Nightly regression test for the pd-disaggregation guide on GKE.
 # Deploys the guide and validates with e2e-validate.sh.
