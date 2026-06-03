@@ -13,11 +13,11 @@ This guide deploys the recommended out of the box [configuration](https://github
 
 The optimized-baseline defaults to two main routing criteria:
 
-- **Prefix-cache aware** using the [prefix cache scorer](https://github.com/llm-d/llm-d-router/tree/main/pkg/epp/framework/plugins/scheduling/scorer/prefix), which scores candidate endpoints by estimating prompt prefix cache reuse on each model server, complemented by the [`no-hit-lru-scorer`](https://github.com/llm-d/llm-d-router/tree/main/pkg/epp/framework/plugins/scheduling/scorer/nohitlru) that spreads cold requests (zero cache hits) evenly across endpoints to balance the "prefill" workload.
+- **Prefix-cache aware** using the [prefix cache affinity filter](https://github.com/llm-d/llm-d-router/tree/main/pkg/epp/framework/plugins/scheduling/filter/prefixcacheaffinity/README.md), which narrows candidates to "sticky" endpoints with high estimated prompt prefix cache reuse.
 
-- **Load-aware** using both the [kv-cache utilization](https://github.com/llm-d/llm-d-router/tree/main/pkg/epp/framework/plugins/scheduling/scorer/kvcacheutilization) and the [queue size](https://github.com/llm-d/llm-d-router/tree/main/pkg/epp/framework/plugins/scheduling/scorer/queuedepth) scorers.
+- **Load-aware** using the [token load scorer](https://github.com/llm-d/llm-d-router/tree/main/pkg/epp/framework/plugins/scheduling/scorer/tokenload/README.md), which scores endpoints based on the total prefill token load handled by each model server.
 
-An optional [calibration step](#4-optional-calibrate-prefix-cache-affinity-filter) is also available to add a saturation-aware override gate (the `prefix-cache-affinity-filter`) on top of the default plugins, with a per-deployment τ value measured against the live cluster. This is useful when sticky prefix-affinity routing under heavy load could create hot-spotting.
+An optional [calibration step](#4-optional-calibrate-prefix-cache-affinity-filter) is also available to calibrate this saturation-aware override gate with a per-deployment τ value measured against the live cluster. This is useful when sticky prefix-affinity routing under heavy load could create hot-spotting if not properly tuned.
 
 ## Default Configuration
 
