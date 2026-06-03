@@ -86,7 +86,11 @@ kubectl create namespace ${NAMESPACE}
 Create the `llm-d-hf-token` secret in the namespace. The router reads `HF_TOKEN` to reach gated tokenizers — Qwen/Qwen3-32B is public but the secret makes swapping in a gated model a no-op. See [helpers/hf-token.md](../../helpers/hf-token.md) for the full helper.
 
 ```bash
-kubectl -n ${NAMESPACE} create secret generic llm-d-hf-token --from-literal=HF_TOKEN="${HF_TOKEN}"
+export HF_TOKEN=<your HuggingFace token>
+kubectl create secret generic llm-d-hf-token \
+  --from-literal="HF_TOKEN=${HF_TOKEN}" \
+  --namespace "${NAMESPACE}" \
+  --dry-run=client -o yaml | kubectl apply -f -
 ```
 
 ### 2. Deploy the llm-d Router
@@ -203,8 +207,6 @@ The benchmark launches a pod (`llmdbench-harness-launcher`) that uses `inference
   curl -L -O https://raw.githubusercontent.com/llm-d/llm-d-benchmark/main/existing_stack/run_only.sh
   chmod u+x run_only.sh
   ```
-
-- [Create HuggingFace token](../../helpers/hf-token.md)
 
 ### 2. Download the Workload Template
 

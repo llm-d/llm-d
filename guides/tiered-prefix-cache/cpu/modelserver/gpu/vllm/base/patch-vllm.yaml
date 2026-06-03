@@ -9,6 +9,12 @@ spec:
       containers:
         - name: modelserver
           command: ["vllm", "serve"]
+          env:
+            - name: HF_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: llm-d-hf-token
+                  key: HF_TOKEN
           resources:
             limits:
               cpu: '16'

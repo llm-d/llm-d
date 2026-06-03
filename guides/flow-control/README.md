@@ -96,6 +96,16 @@ Flow Control is a software-level scheduling feature at the EPP layer and is enti
   kubectl create namespace ${NAMESPACE}
   ```
 
+* [Create the `llm-d-hf-token` secret in your target namespace with the key `HF_TOKEN` matching a valid HuggingFace token](../../helpers/hf-token.md) to pull models.
+
+  ```bash
+  export HF_TOKEN=<your HuggingFace token>
+  kubectl create secret generic llm-d-hf-token \
+    --from-literal="HF_TOKEN=${HF_TOKEN}" \
+    --namespace "${NAMESPACE}" \
+    --dry-run=client -o yaml | kubectl apply -f -
+  ```
+
 ## Installation Instructions
 
 ### 1. Deploy the Router

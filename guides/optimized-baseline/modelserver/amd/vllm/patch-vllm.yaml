@@ -28,6 +28,12 @@ spec:
           #     value: "parentbased_traceidratio"
           #   - name: OTEL_TRACES_SAMPLER_ARG
           #     value: "0.1"
+          env:
+            - name: HF_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: llm-d-hf-token
+                  key: HF_TOKEN
           resources:
             limits:
               cpu: "16"

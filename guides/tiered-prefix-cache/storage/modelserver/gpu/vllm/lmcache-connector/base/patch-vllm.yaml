@@ -20,6 +20,11 @@ spec:
             - "--gpu-memory-utilization"
             - "0.8"
           env:
+            - name: HF_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: llm-d-hf-token
+                  key: HF_TOKEN
             - name: LMCACHE_LOCAL_DISK
               value: "file:///mnt/files-storage/kv-cache/"
             - name: LMCACHE_EXTRA_CONFIG
