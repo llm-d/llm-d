@@ -50,8 +50,8 @@ jobs:
         NAMESPACE="llm-d-nightly-pfc-cpu"
         echo "Deploying tiered-prefix-cache/cpu via kustomize + helm..."
 
-        yq '.spec.template.spec.priorityClassName="nightly-gpu-critical"' -i guides/tiered-prefix-cache/cpu/modelserver/gpu/vllm/base/patch-vllm.yaml
-        yq '.spec.replicas=2' -i guides/tiered-prefix-cache/cpu/modelserver/gpu/vllm/base/patch-vllm.yaml
+        yq '.spec.template.spec.priorityClassName="nightly-gpu-critical"' -i guides/tiered-prefix-cache/modelserver/gpu/vllm/base/patch-vllm.yaml
+        yq '.spec.replicas=2' -i guides/tiered-prefix-cache/modelserver/gpu/vllm/base/patch-vllm.yaml
 
         # Override image if IMAGE_OVERRIDE is set by the reusable workflow
         #if [ -n "${IMAGE_OVERRIDE:-}" ]; then
@@ -60,13 +60,13 @@ jobs:
         #  echo "Image override applied: ${IMAGE_OVERRIDE}"
         #fi
 
-        kubectl apply -k guides/tiered-prefix-cache/cpu/modelserver/gpu/vllm/offloading-connector/base -n "$NAMESPACE"
+        kubectl apply -k guides/tiered-prefix-cache/modelserver/gpu/vllm/native/cpu/base -n "$NAMESPACE"
 
         export ROUTER_CHART_VERSION=v0
         helm install tiered-prefix-cache \
         oci://ghcr.io/llm-d/charts/llm-d-router-standalone-dev \
         -f guides/recipes/router/base.values.yaml \
-        -f guides/tiered-prefix-cache/cpu/router/tiered-prefix-cache-cpu.values.yaml \
+        -f guides/tiered-prefix-cache/router/tiered-prefix-cache-cpu.values.yaml \
         -n ${NAMESPACE} --version ${ROUTER_CHART_VERSION}
 
         echo "Deployment complete"

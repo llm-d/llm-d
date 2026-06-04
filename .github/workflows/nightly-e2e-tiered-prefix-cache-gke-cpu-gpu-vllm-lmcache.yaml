@@ -42,9 +42,9 @@ jobs:
         export ROUTER_CHART_VERSION=v0
         export GUIDE_NAME="tiered-prefix-cache-cpu"
         export ACCELERATOR="gpu"
-        export CONNECTOR="lmcache-connector"
+        export CONNECTOR="lmcache-connector/cpu"
         export INFRA_PROVIDER="gke"
-        kubectl apply -n ${NAMESPACE} -k guides/tiered-prefix-cache/cpu/modelserver/${ACCELERATOR}/vllm/${CONNECTOR}/${INFRA_PROVIDER}
+        kubectl apply -n ${NAMESPACE} -k guides/tiered-prefix-cache/modelserver/${ACCELERATOR}/vllm/${CONNECTOR}/${INFRA_PROVIDER}
         helm install ${GUIDE_NAME} \
           oci://ghcr.io/llm-d/charts/llm-d-router-standalone-dev \
           -f guides/recipes/router/base.values.yaml \
