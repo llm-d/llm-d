@@ -115,7 +115,7 @@ cfg_get() {
 # LIMIT is special: an explicitly empty LIMIT means "full run", so distinguish
 # "set" (even if empty) from "unset".
 MODEL="${MODEL:-$(cfg_get '.endpoint.model')}"
-TASKS="${TASKS:-$(yq '.evaluation.tasks | join(",")' "${CONFIG}")}"
+TASKS="${TASKS:-$(yq '.evaluation.tasks // [] | join(",")' "${CONFIG}")}"
 NUM_FEWSHOT="${NUM_FEWSHOT:-$(cfg_get '.evaluation.num_fewshot')}"
 NUM_FEWSHOT="${NUM_FEWSHOT:-0}"
 MAX_GEN_TOKS="${MAX_GEN_TOKS:-$(cfg_get '.evaluation.max_gen_toks')}"

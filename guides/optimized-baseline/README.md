@@ -267,7 +267,7 @@ export NAMESPACE=llm-d-optimized-baseline
 ./helpers/accuracy/run-lm-eval.sh -g optimized-baseline
 ```
 
-The helper reads `guides/optimized-baseline/lm-eval-templates/guide.yaml`, port-forwards the `optimized-baseline-epp` service by default, runs the configured tasks, and writes results under `./results/<guide>-<timestamp>/`. For a short smoke test, set `LIMIT=5`. See [accuracy.md](../../helpers/accuracy.md) for more details.
+The helper reads `guides/optimized-baseline/lm-eval-templates/guide.yaml`, resolves the service to port-forward (honors `GATEWAY_SVC`, then the gateway-labeled service `infra-optimized-baseline-inference-gateway`, then falls back to `optimized-baseline-epp`), runs the configured tasks, and writes results under `./results/<guide>-<timestamp>/`. For a short smoke test, set `LIMIT=5`. See [accuracy.md](../../helpers/accuracy.md) for more details.
 
 ### Accuracy Report
 

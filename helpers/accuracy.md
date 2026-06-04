@@ -50,11 +50,12 @@ The script:
 | -------------------- | --------------------------------------------------------- | ----------- | ----------- |
 | `optimized-baseline` | `gsm8k`, `lambada_openai`, `mmlu_high_school_mathematics` | 0           | 4           |
 
-Sample limit defaults to `LIMIT=50` per task to keep runtime bounded. For a
-full quality run override it:
+The sample limit defaults to whatever the per-guide config sets in
+`.evaluation.limit`. The included `optimized-baseline` config uses `limit: null`
+(a full run). To bound runtime, set `LIMIT=<n>` for a quick smoke test:
 
 ```bash
-LIMIT= ./helpers/accuracy/run-lm-eval.sh -g optimized-baseline
+LIMIT=50 ./helpers/accuracy/run-lm-eval.sh -g optimized-baseline
 ```
 
 ## Overriding config values
