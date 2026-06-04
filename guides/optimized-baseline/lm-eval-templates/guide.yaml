@@ -14,9 +14,9 @@ endpoint:
 
 evaluation:
   tasks:                                 # lm-eval tasks to run against the /v1/completions endpoint.
-    - gsm8k
-    - lambada_openai
-    - mmlu_high_school_mathematics
+    - hellaswag
+    - mmlu
+    - piqa
   num_fewshot: 0                         # Few-shot examples per task.
   limit: null                            # Per-task sample cap; null = full run. Override with LIMIT=<n> for a quick smoke test.
-  num_concurrent: 4                      # lm-eval client concurrency.
+  num_concurrent: 1                      # lm-eval client concurrency (XPU overlay OOMs on the full loglikelihood workload at >1).

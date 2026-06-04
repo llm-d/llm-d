@@ -46,9 +46,9 @@ The script:
 
 ## Per-guide defaults
 
-| Guide                | Tasks                                                     | num_fewshot | concurrency |
-| -------------------- | --------------------------------------------------------- | ----------- | ----------- |
-| `optimized-baseline` | `gsm8k`, `lambada_openai`, `mmlu_high_school_mathematics` | 0           | 4           |
+| Guide                | Tasks                          | num_fewshot | concurrency |
+| -------------------- | ------------------------------ | ----------- | ----------- |
+| `optimized-baseline` | `hellaswag`, `mmlu`, `piqa`    | 0           | 1           |
 
 The sample limit defaults to whatever the per-guide config sets in
 `.evaluation.limit`. The included `optimized-baseline` config uses `limit: null`

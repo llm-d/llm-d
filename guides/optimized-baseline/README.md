@@ -273,15 +273,17 @@ The helper reads `guides/optimized-baseline/lm-eval-templates/guide.yaml`, resol
 
 Full-run results for the deployed Intel XPU overlay (`Qwen/Qwen3-0.6B`), produced with `lm-evaluation-harness` 0.4.12, `num_fewshot=0`, no per-task sample cap.
 
-| Task | Filter | Metric | Value | Stderr |
-| :--- | :--- | :--- | ---: | ---: |
-| `gsm8k` (1319) | flexible-extract | exact_match ↑ | 0.1008 | ±0.0083 |
-| `gsm8k` (1319) | strict-match | exact_match ↑ | 0.0000 | ±0.0000 |
-| `lambada_openai` (5153) | none | acc ↑ | 0.4046 | ±0.0068 |
-| `lambada_openai` (5153) | none | perplexity ↓ | 24.7196 | ±1.0476 |
-| `mmlu_high_school_mathematics` (270) | none | acc ↑ | 0.2815 | ±0.0274 |
+| Task | Metric | Value | Stderr |
+| :--- | :--- | ---: | ---: |
+| `hellaswag` (10042) | acc ↑ | 0.3760 | ±0.0048 |
+| `hellaswag` (10042) | acc_norm ↑ | 0.4728 | ±0.0050 |
+| `mmlu` (14042) | acc ↑ | 0.4010 | ±0.0040 |
+| `piqa` (1838) | acc ↑ | 0.6774 | ±0.0109 |
+| `piqa` (1838) | acc_norm ↑ | 0.6763 | ±0.0109 |
 
-> `gsm8k` `strict-match` is `0.0000` because the zero-shot model does not emit the `#### <answer>` format the strict filter expects; the `flexible-extract` filter recovers the numeric answer. These values reflect the small (0.6B) model at `num_fewshot=0` and are intended to validate the serving path, not to maximize benchmark scores.
+MMLU by category: humanities `0.3651`, social sciences `0.4738`, STEM `0.3600`, other `0.4248`.
+
+> These values reflect the small (0.6B) model at `num_fewshot=0` and are intended to validate the serving path, not to maximize benchmark scores. The eval runs at `num_concurrent=1` because the Intel XPU overlay runs out of device memory on the full loglikelihood workload at higher concurrency.
 
 ## Cleanup
 
