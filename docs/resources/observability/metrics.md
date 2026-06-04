@@ -149,6 +149,7 @@ Expected output:
 ```text
 NAME                                              DATA   AGE
 llm-d-vllm-overview                               1      30s
+llm-d-sglang-overview                             1      30s
 llm-d-failure-saturation-dashboard                1      30s
 llm-d-diagnostic-drilldown-dashboard              1      30s
 llm-d-performance-kv-cache                        1      30s
@@ -160,6 +161,7 @@ Or import individual dashboard JSON files manually from `guides/recipes/observab
 | Dashboard | What it shows |
 |-----------|--------------|
 | `llm-d-vllm-overview.json` | General vLLM metrics overview |
+| `llm-d-sglang-overview.json` | General SGLang metrics overview |
 | `llm-d-failure-saturation-dashboard.json` | Failure and saturation indicators |
 | `llm-d-diagnostic-drilldown-dashboard.json` | Detailed diagnostic metrics for troubleshooting |
 | `llm-d-performance-kv-cache.json` | Performance metrics including KV cache utilization |
