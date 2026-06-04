@@ -31,7 +31,7 @@ Ensure [Lustre CSI driver is enabled](https://docs.cloud.google.com/kubernetes-e
 **1. Create a `StorageClass` for Lustre:**
 
 ```bash
-kubectl apply -f ${REPO_ROOT}/guides/tiered-prefix-cache/storage/manifests/backends/lustre/storage_class.yaml  -n ${NAMESPACE}
+kubectl apply -f ${REPO_ROOT}/guides/tiered-prefix-cache/manifests/backends/lustre/storage_class.yaml -n ${NAMESPACE}
 ```
 
 **2. Create a PVC:**

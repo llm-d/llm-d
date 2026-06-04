@@ -65,7 +65,7 @@ Generally multiple cache tiers can be applied ordered by their cache read/write 
 | Connector | Storage Tier | Directory |
 | --------- | ------------ | --------- |
 | vLLM Native OffloadingConnector | CPU RAM | `modelserver/gpu/vllm/native/cpu/` |
-| vLLM Native OffloadingConnector | Filesystem (shared storage) | `modelserver/gpu/vllm/native/cpu_plus_fs/` |
+| vLLM Native OffloadingConnector | Filesystem (shared storage) | `modelserver/gpu/vllm/native/fs/` |
 | LMCache Connector | CPU RAM | `modelserver/gpu/vllm/lmcache-connector/cpu/` |
 | LMCache Connector | Filesystem (shared storage) | `modelserver/gpu/vllm/lmcache-connector/fs/` |
 | TPU KVCache Connector | CPU RAM | `modelserver/tpu-v7/vllm/tpu-offloading-connector/` |
@@ -157,7 +157,7 @@ This guide supports both GPU and TPU. The Kustomize overlays are available in `m
 
 ## Installation Instructions
 
-### 2. Deploy the llm-d Router
+### 1. Deploy the llm-d Router
 
 #### Standalone Mode
 
@@ -191,7 +191,7 @@ helm install tiered-prefix-cache \
 
 ---
 
-### 3. Deploy the Model Server
+### 2. Deploy the Model Server
 
 Select the connector and infrastructure provider matching your environment:
 
@@ -199,14 +199,14 @@ Select the connector and infrastructure provider matching your environment:
 
 ```bash
 export CONNECTOR=native  # native | lmcache-connector
-export VARIANT=cpu       # cpu | fs
+export VARIANT=cpu       # cpu 
 export INFRA_PROVIDER=base  # base | gke
 kubectl apply -n ${NAMESPACE} -k guides/tiered-prefix-cache/modelserver/gpu/vllm/${CONNECTOR}/${VARIANT}/${INFRA_PROVIDER}/
 ```
 
 **For NVIDIA GPU — filesystem (shared storage) tier:**
 
-If using the `native/cpu_plus_fs/` or `lmcache-connector/fs/` variants, create a ReadWriteMany PVC.
+If using the `native/fs/` or `lmcache-connector/fs/` variants, create a ReadWriteMany PVC.
 
 To provision a managed GCP Lustre instance on GKE and configure the corresponding `StorageClass`, follow the [GCP Lustre guide](./manifests/backends/lustre/README.md).
 
@@ -219,6 +219,8 @@ envsubst < guides/tiered-prefix-cache/manifests/pvc.yaml | kubectl apply -n ${NA
 
 ```bash
 export CONNECTOR=native  # native | lmcache-connector
+export VARIANT=fs        # fs 
+export INFRA_PROVIDER=base  # base | gke
 kubectl apply -n ${NAMESPACE} -k guides/tiered-prefix-cache/modelserver/gpu/vllm/${CONNECTOR}/cpu_plus_fs/base/
 ```
 
@@ -234,7 +236,7 @@ kubectl apply -n ${NAMESPACE} -k guides/tiered-prefix-cache/modelserver/tpu-v7/v
 
 ---
 
-### 4. (Optional) Enable monitoring
+### 3. (Optional) Enable monitoring
 
 - Install the [Monitoring stack](../../docs/resources/observability/setup.md).
 - Deploy the monitoring resources for this guide:

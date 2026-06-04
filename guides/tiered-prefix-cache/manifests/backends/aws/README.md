@@ -45,7 +45,7 @@ You will need this ID when configuring the `StorageClass`.
 **1. Create a `StorageClass` for EFS:**
 
 ```bash
-cd ${REPO_ROOT}/guides/tiered-prefix-cache/storage/manifests/backends/aws
+cd ${REPO_ROOT}/guides/tiered-prefix-cache/manifests/backends/aws
 kubectl apply -f ./storage_class.yaml -n ${NAMESPACE}
 ```
 
