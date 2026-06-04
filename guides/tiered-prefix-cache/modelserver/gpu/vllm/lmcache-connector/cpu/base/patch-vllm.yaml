@@ -31,7 +31,7 @@ spec:
               memory: 500Gi
           env:
             - name: LMCACHE_MAX_LOCAL_CPU_SIZE
-              value: "200.0"
+              value: "100.0"
             - name: PYTHONHASHSEED
               value: "123"
             - name: PROMETHEUS_MULTIPROC_DIR

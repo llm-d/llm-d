@@ -65,7 +65,7 @@ Generally multiple cache tiers can be applied ordered by their cache read/write 
 | Connector | Storage Tier | Directory |
 | --------- | ------------ | --------- |
 | vLLM Native OffloadingConnector | CPU RAM | `modelserver/gpu/vllm/native/cpu/` |
-| vLLM Native OffloadingConnector | Filesystem (shared storage) | `modelserver/gpu/vllm/native/fs/` |
+| vLLM Native OffloadingConnector | CPU RAM + Filesystem (shared storage) | `modelserver/gpu/vllm/native/fs/` |
 | LMCache Connector | CPU RAM | `modelserver/gpu/vllm/lmcache-connector/cpu/` |
 | LMCache Connector | Filesystem (shared storage) | `modelserver/gpu/vllm/lmcache-connector/fs/` |
 | TPU KVCache Connector | CPU RAM | `modelserver/tpu-v7/vllm/tpu-offloading-connector/` |
@@ -105,7 +105,7 @@ For advanced configuration options and implementation details, see the [llm-d FS
 | Parameter                 | Value                                                   |
 | ------------------------- | ------------------------------------------------------- |
 | Model                     | [Qwen/Qwen3-32B](https://huggingface.co/Qwen/Qwen3-32B) |
-| GPUs per replica (TP)     | 4                                                       |
+| GPUs per replica (TP)     | 2                                                       |
 | GPU Accelerator           | NVIDIA H100                                             |
 | CPU Cache Offload Size    | 100 GB                                                  |
 
@@ -221,7 +221,7 @@ envsubst < guides/tiered-prefix-cache/manifests/pvc.yaml | kubectl apply -n ${NA
 export CONNECTOR=native  # native | lmcache-connector
 export VARIANT=fs        # fs 
 export INFRA_PROVIDER=base  # base | gke
-kubectl apply -n ${NAMESPACE} -k guides/tiered-prefix-cache/modelserver/gpu/vllm/${CONNECTOR}/cpu_plus_fs/base/
+kubectl apply -n ${NAMESPACE} -k guides/tiered-prefix-cache/modelserver/gpu/vllm/${CONNECTOR}/${VARIANT}/${INFRA_PROVIDER}/
 ```
 
 **For Google TPU v7:**
