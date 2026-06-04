@@ -123,7 +123,7 @@ jobs:
       prefill_pods: ${{ inputs.prefill_pods || 'auto' }}
       accelerator_type: ${{ inputs.accelerator_type || 'tpu-v6' }}
       backend_type: ${{ inputs.backend_type || 'vllm' }}
-      infra_provider: ${{ inputs.infra_provider || 'gke' }}
+      infra_provider: ${{ inputs.infra_provider || '' }}
       connector: ${{ inputs.connector || '' }}
       cluster_namespace: ${{ inputs.cluster_namespace || 'llm-d-nightly-inference-gke-tpu' }}
       helm_release: ${{ inputs.helm_release || 'llmdbenchcicdr-gke' }}
