@@ -157,22 +157,6 @@ This guide supports both GPU and TPU. The Kustomize overlays are available in `m
 
 ## Installation Instructions
 
-### 1. (Optional) Prepare a PVC for filesystem storage tier
-
-If using the `native/cpu_plus_fs/` or `lmcache-connector/fs/` variants, create a ReadWriteMany PVC:
-
-```bash
-export STORAGE_CLASS="" # leave empty to use cluster default; or set "lustre" / "efs-sc"
-```
-
-To provision a managed GCP Lustre instance on GKE and configure the corresponding `StorageClass`, follow the [GCP Lustre guide](./manifests/backends/lustre/README.md).
-
-To provision AWS EFS and configure the corresponding `StorageClass`, follow the [EFS guide](./manifests/backends/aws/README.md).
-
-```bash
-envsubst < guides/tiered-prefix-cache/manifests/pvc.yaml | kubectl apply -n ${NAMESPACE} -f -
-```
-
 ### 2. Deploy the llm-d Router
 
 #### Standalone Mode
@@ -222,11 +206,20 @@ kubectl apply -n ${NAMESPACE} -k guides/tiered-prefix-cache/modelserver/gpu/vllm
 
 **For NVIDIA GPU — filesystem (shared storage) tier:**
 
-Requires a PVC from step 1.
+If using the `native/cpu_plus_fs/` or `lmcache-connector/fs/` variants, create a ReadWriteMany PVC.
+
+To provision a managed GCP Lustre instance on GKE and configure the corresponding `StorageClass`, follow the [GCP Lustre guide](./manifests/backends/lustre/README.md).
+
+To provision AWS EFS and configure the corresponding `StorageClass`, follow the [EFS guide](./manifests/backends/aws/README.md).
+
+```bash
+export STORAGE_CLASS="" # set your prefered storage class or leave empty to use cluster default; or set "lustre" / "efs-sc"
+envsubst < guides/tiered-prefix-cache/manifests/pvc.yaml | kubectl apply -n ${NAMESPACE} -f -
+```
 
 ```bash
 export CONNECTOR=native  # native | lmcache-connector
-kubectl apply -n ${NAMESPACE} -k guides/tiered-prefix-cache/modelserver/gpu/vllm/${CONNECTOR}/fs/base/
+kubectl apply -n ${NAMESPACE} -k guides/tiered-prefix-cache/modelserver/gpu/vllm/${CONNECTOR}/cpu_plus_fs/base/
 ```
 
 **For Google TPU v7:**
