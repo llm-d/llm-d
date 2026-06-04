@@ -27,7 +27,7 @@ export NAMESPACE=llm-d-quickstart
 Install the Gateway API Inference Extension CRDs and create the namespace:
 
 ```bash
-kubectl apply -k "https://github.com/kubernetes-sigs/gateway-api-inference-extension/config/crd?ref=${GAIE_VERSION}"
+kubectl apply -f https://github.com/kubernetes-sigs/gateway-api-inference-extension/releases/download/${GAIE_VERSION}/v1-manifests.yaml
 kubectl create namespace ${NAMESPACE}
 ```
 

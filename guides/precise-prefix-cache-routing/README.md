@@ -70,7 +70,7 @@ export PROVIDER_NAME=istio   # options: none, gke, agentgateway, istio
 - Install the Gateway API Inference Extension CRDs:
 
 ```bash
-kubectl apply -k "https://github.com/kubernetes-sigs/gateway-api-inference-extension/config/crd?ref=${GAIE_VERSION}"
+kubectl apply -f https://github.com/kubernetes-sigs/gateway-api-inference-extension/releases/download/${GAIE_VERSION}/v1-manifests.yaml
 ```
 
 - Create a target namespace for the installation
