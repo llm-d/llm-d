@@ -1,4 +1,4 @@
-name: Nightly - Optimized Baseline E2E (Intel XPU)
+name: Nightly - Optimized Baseline E2E (Intel HPU)
 
 on:
   workflow_dispatch:
@@ -26,10 +26,10 @@ on:
         type: 'string'
         default: 'auto'
       accelerator_type:
-        description: 'Type of accelerator (gpu, cpu, sim, amd, xpu, hpu, tpu-v6, tpu-v7) (ONLY VALID FOR "kustomize" standyp method)'
+        description: 'Type of accelerator (gpu, cpu, sim, amd, hpu, hpu, tpu-v6, tpu-v7) (ONLY VALID FOR "kustomize" standyp method)'
         required: false
         type: 'string'
-        default: 'xpu'
+        default: 'hpu'
       backend_type:
         description: 'Type of backend (vllm, sglang) (ONLY VALID FOR "kustomize" standyp method)'
         required: false
@@ -48,15 +48,15 @@ on:
       cluster_namespace:
         description: 'Cluster namespace'
         required: false
-        default: 'llm-d-nightly-optimized-baseline-intel-xpu'
+        default: 'llm-d-nightly-optimized-baseline-intel-hpu'
       helm_release:
         description: 'Helm release name (for modelservice)'
         required: false
-        default: 'llmdbenchcicdr-xpu'
+        default: 'llmdbenchcicdr-hpu'
       workspace_dir:
         description: 'Workspace directory'
         required: false
-        default: '/tmp/llmdbenchcicdk-xpu'
+        default: '/tmp/llmdbenchcicdk-hpu'
       bucket_project:
         description: 'Project associated to the object storage bucket'
         required: false
@@ -109,7 +109,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: nightly-e2e-optimized-baseline-xpu
+  group: nightly-e2e-optimized-baseline-gke
   cancel-in-progress: true
 
 jobs:
@@ -123,11 +123,11 @@ jobs:
       prefill_pods: ${{ inputs.prefill_pods || 'auto' }}
       accelerator_type: ${{ inputs.accelerator_type || 'gpu' }}
       backend_type: ${{ inputs.backend_type || 'vllm' }}
-      infra_provider: ${{ inputs.infra_provider || '' }}
+      infra_provider: ${{ inputs.infra_provider || 'gke' }}
       connector: ${{ inputs.connector || '' }}
-      cluster_namespace: ${{ inputs.cluster_namespace || 'llm-d-nightly-optimized-baseline-intel-xpu' }}
-      helm_release: ${{ inputs.helm_release || 'llmdbenchcicdr-xpu' }}
-      workspace_dir: ${{ inputs.workspace_dir || '/tmp/llmdbenchcicdk-xpu' }}
+      cluster_namespace: ${{ inputs.cluster_namespace || 'llm-d-nightly-optimized-baseline-intel-hpu' }}
+      helm_release: ${{ inputs.helm_release || 'llmdbenchcicdr-hpu' }}
+      workspace_dir: ${{ inputs.workspace_dir || '/tmp/llmdbenchcicdk-hpu' }}
       bucket_project: ${{ inputs.bucket_project || 'llm-d-scale' }}
       bucket_provider: ${{ inputs.bucket_provider || 'gcs' }}
       bucket_path: ${{ inputs.bucket_path || 'llm-d-benchmarks/regressions/optimized-baseline' }}

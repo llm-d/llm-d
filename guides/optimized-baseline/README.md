@@ -99,7 +99,6 @@ helm install ${GUIDE_NAME} \
     -f guides/${GUIDE_NAME}/router/${GUIDE_NAME}.values.yaml \
     -n ${NAMESPACE} --version ${ROUTER_CHART_VERSION}
 ```
-
 <details>
 <summary><h4>Gateway Mode</h4></summary>
 
