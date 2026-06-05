@@ -57,6 +57,7 @@ This guide supports both GPU and TPU. GPU defaults to NVIDIA H100 and TPU defaul
     export ROUTER_CHART_VERSION=v0
     export GUIDE_NAME="tiered-prefix-cache-cpu"
     export NAMESPACE=llm-d-${GUIDE_NAME}
+    export REPO_ROOT=$(realpath $(git rev-parse --show-toplevel))
   ```
 
 - Install the Gateway API Inference Extension CRDs:
@@ -82,8 +83,8 @@ This deploys the llm-d Router with an Envoy sidecar side-by-side. Default mode f
 ```bash
 helm install ${GUIDE_NAME} \
     oci://ghcr.io/llm-d/charts/llm-d-router-standalone-dev \
-    -f guides/recipes/router/base.values.yaml \
-    -f guides/tiered-prefix-cache/cpu/router/${GUIDE_NAME}.values.yaml \
+    -f ${REPO_ROOT}/guides/recipes/router/base.values.yaml \
+    -f ${REPO_ROOT}/guides/tiered-prefix-cache/cpu/router/${GUIDE_NAME}.values.yaml \
     -n ${NAMESPACE} --version ${ROUTER_CHART_VERSION}
 ```
 
@@ -99,8 +100,8 @@ To use a Kubernetes Gateway managed proxy rather than the standalone version, fo
 export PROVIDER_NAME=gke # options: none, gke, agentgateway, istio
 helm install ${GUIDE_NAME} \
     oci://ghcr.io/llm-d/charts/llm-d-router-gateway-dev  \
-    -f guides/recipes/router/base.values.yaml \
-    -f guides/tiered-prefix-cache/cpu/router/${GUIDE_NAME}.values.yaml \
+    -f ${REPO_ROOT}/guides/recipes/router/base.values.yaml \
+    -f ${REPO_ROOT}/guides/tiered-prefix-cache/cpu/router/${GUIDE_NAME}.values.yaml \
     --set provider.name=${PROVIDER_NAME} \
     --set httpRoute.create=true \
     --set httpRoute.inferenceGatewayName=llm-d-inference-gateway \
@@ -120,13 +121,13 @@ Apply the Kustomize overlay setup matching your preferred offloading medium:
 ```bash
 export CONNECTOR=offloading-connector # offloading-connector | lmcache-connector
 export INFRA_PROVIDER=base # base | gke
-kubectl apply -n ${NAMESPACE} -k guides/tiered-prefix-cache/cpu/modelserver/gpu/vllm/${CONNECTOR}/${INFRA_PROVIDER}/
+kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/tiered-prefix-cache/cpu/modelserver/gpu/vllm/${CONNECTOR}/${INFRA_PROVIDER}/
 ```
 
 **For Google TPU v7:**
 
 ```bash
-kubectl apply -n ${NAMESPACE} -k guides/tiered-prefix-cache/cpu/modelserver/tpu-v7/vllm/tpu-offloading-connector/
+kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/tiered-prefix-cache/cpu/modelserver/tpu-v7/vllm/tpu-offloading-connector/
 ```
 
 > [!NOTE]
@@ -141,7 +142,7 @@ kubectl apply -n ${NAMESPACE} -k guides/tiered-prefix-cache/cpu/modelserver/tpu-
 - Deploy the monitoring resources for this guide:
 
 ```bash
-kubectl apply -n ${NAMESPACE} -k guides/recipes/modelserver/components/monitoring
+kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/recipes/modelserver/components/monitoring
 ```
 
 ## Verification
@@ -194,7 +195,7 @@ To clean up the applied deployment components:
 
 ```bash
 helm uninstall ${GUIDE_NAME} -n ${NAMESPACE}
-kubectl delete -n ${NAMESPACE} -k guides/tiered-prefix-cache/cpu/modelserver/gpu/vllm/${CONNECTOR}/${INFRA_PROVIDER}
+kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/tiered-prefix-cache/cpu/modelserver/gpu/vllm/${CONNECTOR}/${INFRA_PROVIDER}
 kubectl delete namespace ${NAMESPACE}
 ```
 

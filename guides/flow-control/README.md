@@ -81,6 +81,7 @@ Flow Control is a software-level scheduling feature at the EPP layer and is enti
   export GUIDE_NAME="flow-control"
   export NAMESPACE="llm-d-flow-control"
   export MODEL_NAME="Qwen/Qwen3-32B"
+  export REPO_ROOT=$(realpath $(git rev-parse --show-toplevel))
   ```
 
 * Install the required CRDs (GAIE InferencePool + llm-d.ai InferenceObjective):
@@ -116,7 +117,6 @@ Flow Control is a software-level scheduling feature at the EPP layer and is enti
 This deploys the router with an Envoy sidecar, it doesn't set up a Kubernetes Gateway.
 
 ```bash
-REPO_ROOT=$(realpath $(git rev-parse --show-toplevel))
 helm install ${GUIDE_NAME} \
     oci://ghcr.io/llm-d/charts/llm-d-router-standalone-dev \
     -f ${REPO_ROOT}/guides/recipes/router/base.values.yaml \
@@ -134,7 +134,6 @@ To use a Kubernetes Gateway managed proxy rather than the standalone version, fo
 
 ```bash
 export PROVIDER_NAME=gke # options: none, gke, agentgateway, istio
-REPO_ROOT=$(realpath $(git rev-parse --show-toplevel))
 helm install ${GUIDE_NAME} \
     oci://ghcr.io/llm-d/charts/llm-d-router-gateway-dev  \
     -f ${REPO_ROOT}/guides/recipes/router/base.values.yaml \
@@ -154,7 +153,7 @@ Deploy the model server (defaulting to NVIDIA GPU / vLLM) by running:
 
 ```bash
 export INFRA_PROVIDER=base # base | gke
-kubectl kustomize guides/optimized-baseline/modelserver/gpu/vllm/${INFRA_PROVIDER}/ \
+kubectl kustomize ${REPO_ROOT}/guides/optimized-baseline/modelserver/gpu/vllm/${INFRA_PROVIDER}/ \
   | sed "s/optimized-baseline/${GUIDE_NAME}/g" \
   | kubectl apply -n ${NAMESPACE} -f -
 ```
@@ -168,7 +167,7 @@ kubectl kustomize guides/optimized-baseline/modelserver/gpu/vllm/${INFRA_PROVIDE
 * Deploy the monitoring resources for this guide.
 
 ```bash
-kubectl apply -n ${NAMESPACE} -k guides/recipes/modelserver/components/monitoring
+kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/recipes/modelserver/components/monitoring
 ```
 
 ## Verification
@@ -232,7 +231,7 @@ The `helm upgrade --install` command you ran earlier configured the EPP's underl
 Apply the full definitions (Premium, Standard, Best-Effort) provided in [objectives.yaml](./objectives.yaml) by running:
 
 ```bash
-kubectl apply -f guides/${GUIDE_NAME}/objectives.yaml -n ${NAMESPACE}
+kubectl apply -f ${REPO_ROOT}/guides/${GUIDE_NAME}/objectives.yaml -n ${NAMESPACE}
 ```
 
 The file defines three priority tiers:
@@ -332,8 +331,8 @@ To remove the deployed components:
 
 ```bash
 helm uninstall ${GUIDE_NAME} -n ${NAMESPACE}
-kubectl delete -f guides/${GUIDE_NAME}/objectives.yaml -n ${NAMESPACE}
-kubectl kustomize guides/optimized-baseline/modelserver/gpu/vllm/ \
+kubectl delete -f ${REPO_ROOT}/guides/${GUIDE_NAME}/objectives.yaml -n ${NAMESPACE}
+kubectl kustomize ${REPO_ROOT}/guides/optimized-baseline/modelserver/gpu/vllm/ \
   | sed "s/optimized-baseline/${GUIDE_NAME}/g" \
   | kubectl delete -n ${NAMESPACE} -f -
 ```

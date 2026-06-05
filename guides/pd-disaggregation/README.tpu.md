@@ -15,6 +15,7 @@ Before starting, ensure your cluster and environment are properly configured:
 3. Set your environment variables, overriding the model name for Qwen 3.5:
 
 ```bash
+export REPO_ROOT=$(realpath $(git rev-parse --show-toplevel))
 export GAIE_VERSION=v1.5.0
 export GUIDE_NAME="pd-disaggregation"
 export NAMESPACE="llm-d-pd-disaggregation"
@@ -32,7 +33,7 @@ Deploy the router in either Standalone or Gateway mode by following the exact in
 Once the router is deployed, apply the Kustomize overlays specifically configured for TPU 7x and vLLM. This configuration sets up heterogeneous KV caches (HMA) and configures the TPU workers.
 
 ```bash
-kubectl apply -n ${NAMESPACE} -k guides/${GUIDE_NAME}/modelserver/tpu/vllm/
+kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/tpu/vllm/
 ```
 
 *(Note: If you have monitoring enabled, you can optionally apply the monitoring components as described in the [main guide](./README.md#3-enable-monitoring-optional)).*

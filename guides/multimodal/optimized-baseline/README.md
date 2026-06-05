@@ -33,6 +33,7 @@ This guide includes configurations for the following accelerators and inference 
 1. Install the local client tooling using the [client setup guide](../../../helpers/client-setup/README.md).
 2. Clone and check out the llm-d repository:
    ```bash
+export REPO_ROOT=$(realpath $(git rev-parse --show-toplevel))
    export branch="main" # branch, tag, or commit hash
    git clone https://github.com/llm-d/llm-d.git && cd llm-d && git checkout ${branch}
    ```
@@ -64,8 +65,8 @@ Deploy the llm-d Router in **Standalone Mode** overlaying router custom configur
 # Run from the root of the llm-d repo
 helm install ${GUIDE_NAME} \
     oci://ghcr.io/llm-d/charts/llm-d-router-standalone-dev \
-    -f guides/recipes/router/base.values.yaml \
-    -f guides/multimodal/optimized-baseline/${GUIDE_NAME}/router/${GUIDE_NAME}.values.yaml \
+    -f ${REPO_ROOT}/guides/recipes/router/base.values.yaml \
+    -f ${REPO_ROOT}/guides/multimodal/optimized-baseline/${GUIDE_NAME}/router/${GUIDE_NAME}.values.yaml \
     -n ${NAMESPACE} --version ${ROUTER_CHART_VERSION}
 ```
 
@@ -81,8 +82,8 @@ To use a Kubernetes Gateway managed proxy rather than the standalone version, fo
 export PROVIDER_NAME=gke # options: none, gke, agentgateway, istio
 helm install ${GUIDE_NAME} \
     oci://ghcr.io/llm-d/charts/llm-d-router-gateway-dev  \
-    -f guides/recipes/router/base.values.yaml \
-    -f guides/multimodal/optimized-baseline/router/${GUIDE_NAME}.values.yaml \
+    -f ${REPO_ROOT}/guides/recipes/router/base.values.yaml \
+    -f ${REPO_ROOT}/guides/multimodal/optimized-baseline/router/${GUIDE_NAME}.values.yaml \
     --set provider.name=${PROVIDER_NAME} \
     --set httpRoute.create=true \
     --set httpRoute.inferenceGatewayName=llm-d-inference-gateway \
@@ -97,7 +98,7 @@ Apply the Kustomize overlays for your specific backend (defaulting to NVIDIA GPU
 
 ```bash
 export INFRA_PROVIDER=gke # base | gke
-kubectl apply -n ${NAMESPACE} -k guides/multimodal/${GUIDE_NAME}/modelserver/gpu/vllm/${INFRA_PROVIDER}/
+kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/multimodal/${GUIDE_NAME}/modelserver/gpu/vllm/${INFRA_PROVIDER}/
 ```
 
 ### 3. (Optional) Enable monitoring
@@ -109,7 +110,7 @@ kubectl apply -n ${NAMESPACE} -k guides/multimodal/${GUIDE_NAME}/modelserver/gpu
 - Deploy the monitoring resources for this guide.
 
 ```bash
-kubectl apply -n ${NAMESPACE} -k guides/recipes/modelserver/components/monitoring
+kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/recipes/modelserver/components/monitoring
 ```
 
 ---
@@ -176,7 +177,7 @@ curl -X POST http://${IP}/v1/chat/completions \
 To tear down and clean up all deployed resources:
 ```bash
 helm uninstall ${GUIDE_NAME} -n ${NAMESPACE}
-kubectl delete -n ${NAMESPACE} -k guides/multimodal/${GUIDE_NAME}/modelserver/gpu/vllm/${INFRA_PROVIDER}/
+kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/multimodal/${GUIDE_NAME}/modelserver/gpu/vllm/${INFRA_PROVIDER}/
 kubectl delete namespace ${NAMESPACE}
 ```
 

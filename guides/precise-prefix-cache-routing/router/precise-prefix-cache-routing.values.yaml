@@ -64,6 +64,8 @@ router:
           - type: kv-cache-utilization-scorer
           - type: queue-scorer
           - type: no-hit-lru-scorer
+            parameters:
+              prefixMatchInfoProducerName: precise-prefix-cache-producer
         dataLayer: # metrics-data-source + core-metrics-extractor injected by default
           sources:
             - pluginRef: endpoint-notification-source

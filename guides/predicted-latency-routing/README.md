@@ -39,6 +39,7 @@ Skip it when your pool is **heterogeneous** — mixed GPU types, model variants,
     export GUIDE_NAME="predicted-latency-routing"
     export NAMESPACE=llm-d-predicted-latency
     export MODEL_NAME="Qwen/Qwen3-32B"
+    export REPO_ROOT=$(realpath $(git rev-parse --show-toplevel))
   ```
 
 - Install the Gateway API Inference Extension CRDs:
@@ -71,10 +72,9 @@ Both target model server pods labeled `llm-d.ai/guide=optimized-baseline` since 
 This deploys the llm-d Router with an Envoy sidecar, it doesn't set up a Kubernetes Gateway.
 
 ```bash
-export REPO_ROOT=$(realpath $(git rev-parse --show-toplevel))
 helm install ${GUIDE_NAME} \
     oci://ghcr.io/llm-d/charts/llm-d-router-standalone-dev \
-    -f guides/recipes/router/base.values.yaml \
+    -f ${REPO_ROOT}/guides/recipes/router/base.values.yaml \
     -f ${REPO_ROOT}/guides/${GUIDE_NAME}/router/predicted-latency.values.yaml \
     -n ${NAMESPACE} --version ${ROUTER_CHART_VERSION}
 ```
@@ -92,7 +92,6 @@ To use a Kubernetes Gateway managed proxy rather than the standalone version, fo
 2. *Deploy the llm-d Router and an HTTPRoute* that connects it to the Gateway as follows:
 
 ```bash
-export REPO_ROOT=$(realpath $(git rev-parse --show-toplevel))
 export PROVIDER_NAME=gke # options: none, gke, agentgateway, istio
 helm install ${GUIDE_NAME} \
     oci://ghcr.io/llm-d/charts/llm-d-router-gateway-dev \
@@ -111,7 +110,7 @@ This guide reuses the model server manifests from the optimized-baseline guide (
 
 ```bash
 export INFRA_PROVIDER=base # base | gke
-kubectl apply -n ${NAMESPACE} -k guides/optimized-baseline/modelserver/gpu/vllm/${INFRA_PROVIDER}/
+kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/optimized-baseline/modelserver/gpu/vllm/${INFRA_PROVIDER}/
 ```
 
 For other backends (AMD GPU, Intel XPU, Gaudi, TPU, CPU), see [optimized-baseline → Deploy the Model Server](../optimized-baseline/README.md#2-deploy-the-model-server).
@@ -192,7 +191,7 @@ To remove the deployed components:
 
 ```bash
 helm uninstall ${GUIDE_NAME} -n ${NAMESPACE}
-kubectl delete  -n ${NAMESPACE} -k guides/optimized-baseline/modelserver/gpu/vllm/${INFRA_PROVIDER}
+kubectl delete  -n ${NAMESPACE} -k ${REPO_ROOT}/guides/optimized-baseline/modelserver/gpu/vllm/${INFRA_PROVIDER}
 kubectl delete namespace ${NAMESPACE}
 ```
 
