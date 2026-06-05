@@ -84,7 +84,7 @@ kubectl create namespace ${NAMESPACE}
 ### 1. Prepare HF Token
 
 Create the `llm-d-hf-token` secret in the namespace. The router reads `HF_TOKEN` to reach gated tokenizers — Qwen/Qwen3-32B is public but the secret makes swapping in a gated model a no-op. See [helpers/hf-token.md](../../helpers/hf-token.md) for the full helper.
-
+<!-- llm-d-cicd:skip start -->
 ```bash
 export HF_TOKEN=<your HuggingFace token>
 kubectl create secret generic llm-d-hf-token \
@@ -92,6 +92,7 @@ kubectl create secret generic llm-d-hf-token \
   --namespace "${NAMESPACE}" \
   --dry-run=client -o yaml | kubectl apply -f -
 ```
+<!-- llm-d-cicd:skip end -->
 
 ### 2. Deploy the llm-d Router
 
