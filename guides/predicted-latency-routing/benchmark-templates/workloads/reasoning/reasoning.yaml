@@ -1,0 +1,49 @@
+load:
+  type: concurrent
+  num_workers: 6
+  request_timeout: 600.0
+  stages:
+    - num_requests: ${MAX_REQUESTS}
+      concurrency_level: ${CONC}
+
+api:
+  type: completion
+  streaming: true
+server:
+  type: vllm
+  model_name: ${MODEL_NAME}
+  base_url: ${BASE_URL}
+  ignore_eos: true
+tokenizer:
+  pretrained_model_name_or_path: ${MODEL_NAME}
+metrics:
+  type: default
+report:
+  request_lifecycle:
+    summary: true
+    per_stage: true
+storage:
+  local_storage:
+    path: /tmp/reports
+    report_file_prefix: ${REPORT_PREFIX}
+data:
+  type: conversation_replay
+  conversation_replay:
+    seed: ${SEED}
+    num_conversations: ${NUM_CONVERSATIONS}
+    shared_system_prompt_len: 250
+    turns_per_conversation:
+      type: fixed
+      mean: 1
+    input_tokens_per_turn:
+      type: lognormal
+      min: 100
+      max: 5000
+      mean: 1000
+      std_dev: 800
+    output_tokens_per_turn:
+      type: lognormal
+      min: 500
+      max: 32000
+      mean: 8000
+      std_dev: 6500

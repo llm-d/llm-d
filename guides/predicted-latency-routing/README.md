@@ -111,7 +111,7 @@ This guide reuses the model server manifests from the optimized-baseline guide (
 
 ```bash
 export INFRA_PROVIDER=base # base | gke
-kubectl apply -n ${NAMESPACE} -k guides/optimized-baseline/modelserver/gpu/vllm/${INFRA_PROVIDER}/
+kubectl apply -n ${NAMESPACE} -k guides/predicted-latency-routing/modelserver/gpu/vllm/${INFRA_PROVIDER}/
 ```
 
 For other backends (AMD GPU, Intel XPU, Gaudi, TPU, CPU), see [optimized-baseline → Deploy the Model Server](../optimized-baseline/README.md#2-deploy-the-model-server).
@@ -185,6 +185,74 @@ Once traffic is flowing, confirm three things in Prometheus (see the [architectu
 1. **Predictions are being produced.** `inference_objective_request_ttft_prediction_duration_seconds` has non-zero samples. If it stays empty, the predictor sidecar is not being called — tail the EPP logs for `predicted-latency-producer` errors.
 2. **Predictions track reality.** Compare `inference_objective_request_predicted_ttft_seconds` against `inference_objective_request_ttft_seconds` over a rolling window. A healthy deployment converges to within a few percent after warmup.
 3. **SLOs are being honored.** If you're sending SLO-annotated traffic, `inference_objective_request_ttft_slo_violation_total` and `..._tpot_slo_violation_total` should increment only under genuine saturation.
+
+## Benchmarking
+
+The benchmark uses `inference-perf` with a synthetic code-generation workload (conversation replay with long shared system prompts, multi-turn exchanges, and lognormal input/output length distributions). Jobs are submitted one per concurrency level, each writing results to a shared PVC for collection after the run. For each run, `num_conversations = concurrency` and `num_requests = 6 × num_conversations`, so every conversation gets to complete its average number of turns (mean=6, with variance) before the job ends.
+
+### 1. Get the Proxy IP
+
+```bash
+export IP=$(kubectl get service ${GUIDE_NAME}-epp -n ${NAMESPACE} -o jsonpath='{.spec.clusterIP}')
+```
+
+<details>
+<summary><b>Gateway Mode</b></summary>
+
+```bash
+export IP=$(kubectl get gateway llm-d-inference-gateway -n ${NAMESPACE} -o jsonpath='{.status.addresses[0].value}')
+```
+
+</details>
+
+### 2. Run the Benchmark
+
+```bash
+cd guides/predicted-latency-routing/benchmark-templates
+WORKLOAD=code-generation \
+  IP=${IP} \
+  NAMESPACE=${NAMESPACE} \
+  ./run_benchmark.sh
+```
+
+Results are saved to `workloads/code-generation/results/<run-id>/`.
+
+Optional overrides:
+
+| Variable | Default | Description |
+|---|---|---|
+| `WORKLOAD` | `code-generation` | Subdirectory under `workloads/` to use |
+| `CONCURRENCY_LEVELS` | `10 20 30 40 50 60 70 80 90 100` | Space-separated list of concurrency levels |
+| `MODEL_NAME` | `Qwen/Qwen3-32B` | Model name passed to inference-perf |
+| `EPP_DEPLOYMENT` | `predicted-latency-routing-epp` | EPP deployment restarted before the run |
+
+## Benchmarking Report
+
+The benchmark runs on 10 × H100 GPUs across 10 vLLM decode pods, using the `Qwen/Qwen3-32B` model. Results compare predicted-latency routing against a plain Kubernetes Service (round-robin, no EPP).
+
+### Code Generation
+
+The code-generation workload uses conversation replay with:
+- Shared system prompt: 3,000 tokens; dynamic system prompt: 15,000–100,000 tokens (uniform)
+- Turns per conversation: normal(mean=6, min=2, max=20)
+- Input tokens per turn: lognormal(mean=1,500); output tokens per turn: lognormal(mean=800)
+
+<img src="./benchmark-results/code_generation_k8_vs_latency_predictor.png" width="900" alt="Code Generation: k8 vs latency-predictor">
+
+| Concurrency | k8 in tok/s | LP in tok/s | k8 out tok/s | LP out tok/s | k8 TTFT p50 (s) | LP TTFT p50 (s) | k8 TTFT p90 (s) | LP TTFT p90 (s) |
+| :---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| 10  | 15,168 | 23,511 |  118 |  180 |  1.7 |  3.8 |  25.7 |  18.2 |
+| 20  | 29,451 | 29,568 |  300 |  315 |  1.4 |  6.7 |  14.2 |  15.6 |
+| 30  | 16,269 | 32,335 |  353 |  696 |  5.6 |  6.8 |  74.4 |  21.2 |
+| 40  | 26,357 | 41,627 |  293 |  459 | 10.0 | 11.2 |  70.4 |  26.7 |
+| 50  | 34,552 | 42,329 |  395 |  481 | 27.3 | 15.3 |  63.6 |  36.4 |
+| 60  | 22,125 | 46,165 |  402 |  843 | 54.7 | 23.2 | 148.5 |  48.1 |
+| 70  | 32,786 | 43,878 |  716 |  964 | 48.9 | 41.3 | 136.2 |  74.7 |
+| 80  | 40,560 | 46,032 |  862 |  972 | 49.6 | 42.7 | 108.3 |  73.9 |
+| 90  | 34,526 | 47,618 |  615 |  851 | 64.3 | 55.8 | 162.0 |  83.7 |
+| 100 | 37,699 | 47,309 |  548 |  691 | 66.8 | 80.1 | 175.1 | 121.5 |
+| **avg** | **28,949** | **40,037** | **460** | **645** | **33.0** | **28.7** | **97.8** | **52.0** |
+| **Δ% vs k8** | | **+38.3%** | | **+40.2%** | | **−13.0%** | | **−46.8%** |
 
 ## Cleanup
 
