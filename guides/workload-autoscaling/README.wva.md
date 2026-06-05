@@ -37,8 +37,8 @@ kubectl api-resources | rg ServiceMonitor
 ```bash
 export WVA_NAMESPACE=llm-d-autoscaler
 export NAMESPACE=llm-d-optimized-baseline
-kubectl create namespace ${NAMESPACE}
-kubectl create namespace ${WVA_NAMESPACE}
+kubectl create namespace ${NAMESPACE} --dry-run=client -o yaml | kubectl apply -f -
+kubectl create namespace ${WVA_NAMESPACE} --dry-run=client -o yaml | kubectl apply -f -
 ```
 
 > **Default mode**: this guide installs WVA scoped to `llm-d-optimized-baseline` by default.

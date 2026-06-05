@@ -76,7 +76,7 @@ kubectl apply -f https://github.com/kubernetes-sigs/gateway-api-inference-extens
 - Create a target namespace for the installation
 
 ```bash
-kubectl create namespace ${NAMESPACE}
+kubectl create namespace ${NAMESPACE} --dry-run=client -o yaml | kubectl apply -f -
 ```
 
 ## Installation Instructions

@@ -77,7 +77,7 @@ For advanced configuration options and implementation details, see the [llm-d FS
 * Create a target namespace for the installation:
 
   ```bash
-    kubectl create namespace ${NAMESPACE}
+    kubectl create namespace ${NAMESPACE} --dry-run=client -o yaml | kubectl apply -f -
   ```
 
 * [Create the `llm-d-hf-token` secret in your target namespace with the key `HF_TOKEN` matching a valid HuggingFace token](../../../helpers/hf-token.md) to pull models.

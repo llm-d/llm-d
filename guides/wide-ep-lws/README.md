@@ -63,7 +63,7 @@ This guide includes configurations for the following accelerators:
 * Create a target namespace for the installation:
 
   ```bash
-  kubectl create namespace ${NAMESPACE}
+  kubectl create namespace ${NAMESPACE} --dry-run=client -o yaml | kubectl apply -f -
   ```
 * [Create the `llm-d-hf-token` secret in your target namespace with the key `HF_TOKEN` matching a valid HuggingFace token](../../helpers/hf-token.md) to pull models.
 

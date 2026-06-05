@@ -68,7 +68,7 @@ This guide supports both GPU and TPU. GPU defaults to NVIDIA H100 and TPU defaul
 - Create a target namespace for the installation
 
   ```bash
-    kubectl create namespace ${NAMESPACE}
+    kubectl create namespace ${NAMESPACE} --dry-run=client -o yaml | kubectl apply -f -
   ```
 
 ## Installation Instructions
