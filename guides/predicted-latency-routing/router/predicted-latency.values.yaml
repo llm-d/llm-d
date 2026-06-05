@@ -1,7 +1,7 @@
 ## Predicted Latency-Based Scheduling — routing-only setup.
 ##
 ## Overrides the chart's default plugin pipeline only to raise the
-## prefix-cache-scorer maxPrefixTokensToMatch (the chart default leaves it
+## approx-prefix-cache-producer maxPrefixTokensToMatch (the chart default leaves it
 ## unset). The predictor trains on end-to-end latency; no SLO headers are
 ## required. For SLO-aware scheduling (x-llm-d-slo-ttft-ms / x-llm-d-slo-tpot-ms,
 ## streamingMode: true), use predicted-latency-slo.values.yaml.
@@ -21,7 +21,7 @@ router:
         apiVersion: llm-d.ai/v1alpha1
         kind: EndpointPickerConfig
         plugins:
-        - type: prefix-cache-scorer
+        - type: approx-prefix-cache-producer
           parameters:
             maxPrefixTokensToMatch: 131072
         - type: predicted-latency-producer
