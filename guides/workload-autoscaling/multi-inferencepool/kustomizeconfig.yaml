@@ -1,0 +1,9 @@
+# kustomizeconfig.yaml
+nameReference:
+- kind: Deployment
+  group: apps
+  version: v1
+  fieldSpecs:
+  - path: spec/scaleTargetRef/name
+    kind: VariantAutoscaling
+    group: llmd.ai

@@ -1,0 +1,18 @@
+apiVersion: llmd.ai/v1alpha1
+kind: VariantAutoscaling
+metadata:
+  name: llama-8b-model-a
+  labels:
+    inference.optimization/acceleratorName: "H100"
+    llm-d.ai/model: "llama-3.1-8b"
+    llm-d.ai/inference-serving: "true"
+    llm-d.ai/guide: "multi-inferencepool"
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: llama-8b-model-a
+  modelID: "meta/llama-3.1-8b"
+  minReplicas: 1
+  maxReplicas: 8
+  variantCost: "10.0"

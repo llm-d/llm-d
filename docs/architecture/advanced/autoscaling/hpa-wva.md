@@ -275,6 +275,80 @@ spec:
   variantCost: "15.0"
 ```
 
+
+### Autoscaling Across Multiple InferencePools
+
+![WVA Across Multiple InferencePools](wva-multi-pool-architecture.svg)
+
+WVA operates per-cluster or per-namespace, not per InferencePool. A single WVA
+controller monitors all InferencePools in its watch scope and can make
+optimization decisions across them together.
+
+By default, the `CostAwareOptimizer` evaluates each InferencePool independently.
+When `enableLimiter: true` is set, WVA switches to the `GreedyByScoreOptimizer`,
+which considers all eligible InferencePools in its watch scope and fair-shares
+available GPU resources based on priority scores.
+
+This is useful when multiple models share a fixed GPU budget and independent
+per-pool scaling would lead to one pool holding resources another pool needs.
+
+> **Note:** Cross-pool re-scaling — where one pool actively scales down to free
+> capacity for another — is not yet supported.
+
+To enable cross-pool optimization, set `enableLimiter: true` in the
+`wva-saturation-scaling-config` ConfigMap and create a `VariantAutoscaling`
+object for each InferencePool:
+
+```yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: wva-saturation-scaling-config
+  labels:
+    app.kubernetes.io/name: workload-variant-autoscaler
+data:
+  default: |
+    # Enable GreedyByScoreOptimizer to consider all InferencePools in the
+    # watch scope together rather than evaluating each pool independently.
+    enableLimiter: true
+```
+
+Each model gets its own `VariantAutoscaling` object with a distinct `modelID`:
+
+```yaml
+# Pool 1: meta/llama-3.1-8b
+apiVersion: llmd.ai/v1alpha1
+kind: VariantAutoscaling
+metadata:
+  name: llama-8b
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: llama-8b
+  modelID: "meta/llama-3.1-8b"
+  minReplicas: 1
+  maxReplicas: 8
+  variantCost: "10.0"
+---
+# Pool 2: Qwen/Qwen3-32B
+apiVersion: llmd.ai/v1alpha1
+kind: VariantAutoscaling
+metadata:
+  name: qwen-32b
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: qwen-32b
+  modelID: "Qwen/Qwen3-32B"
+  minReplicas: 1
+  maxReplicas: 8
+  variantCost: "10.0"
+```
+
+For a full walkthrough, see the [multi-InferencePool guide](../../../../guides/workload-autoscaling/multi-inferencepool/README.md).
+
 ## Configuration
 
 WVA uses a layered configuration system. Configuration sources are resolved in the following precedence: **CLI flags > environment variables > config file > ConfigMap > defaults**.

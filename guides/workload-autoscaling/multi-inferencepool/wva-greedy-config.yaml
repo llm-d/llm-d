@@ -1,0 +1,11 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: wva-saturation-scaling-config
+  labels:
+    app.kubernetes.io/name: workload-variant-autoscaler
+data:
+  default: |
+    # Enable GreedyByScoreOptimizer to consider all InferencePools in the
+    # watch scope together rather than evaluating each pool independently.
+    enableLimiter: true
