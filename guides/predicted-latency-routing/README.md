@@ -188,7 +188,13 @@ Once traffic is flowing, confirm three things in Prometheus (see the [architectu
 
 ## Benchmarking
 
-The benchmark uses `inference-perf` with a synthetic code-generation workload (conversation replay with long shared system prompts, multi-turn exchanges, and lognormal input/output length distributions). Jobs are submitted one per concurrency level, each writing results to a shared PVC for collection after the run. For each run, `num_conversations = concurrency` and `num_requests = 6 × num_conversations`, so every conversation gets to complete its average number of turns (mean=6, with variance) before the job ends.
+The benchmark uses `inference-perf` with a synthetic code-generation workload (conversation replay). It models long, multi-turn coding sessions with the following distributions:
+
+- Shared system prompt: 3,000 tokens; dynamic system prompt: 15,000–100,000 tokens (uniform)
+- Turns per conversation: normal(mean=6, min=2, max=20)
+- Input tokens per turn: lognormal(mean=1,500); output tokens per turn: lognormal(mean=800)
+
+Jobs are submitted one per concurrency level, each writing results to a shared PVC for collection after the run. For each run, `num_conversations = concurrency` and `num_requests = 6 × num_conversations`, so every conversation gets to complete its average number of turns (mean=6, with variance) before the job ends.
 
 ### 1. Get the Proxy IP
 
@@ -215,7 +221,7 @@ WORKLOAD=code-generation \
   ./run_benchmark.sh
 ```
 
-Results are saved to `workloads/code-generation/results/<run-id>/`.
+Results are saved to `workloads/code-generation/results/<run-id>/`, where `<run-id>` is a Unix timestamp the script generates automatically at the start of each run (e.g. `1780679112`).
 
 Optional overrides:
 
@@ -231,11 +237,6 @@ Optional overrides:
 The benchmark runs on 10 vLLM decode pods, each with tensor parallelism of 2 (20 × H100 GPUs total), using the `Qwen/Qwen3-32B` model. Results compare predicted-latency routing against a plain Kubernetes Service (round-robin, no EPP).
 
 ### Code Generation
-
-The code-generation workload uses conversation replay with:
-- Shared system prompt: 3,000 tokens; dynamic system prompt: 15,000–100,000 tokens (uniform)
-- Turns per conversation: normal(mean=6, min=2, max=20)
-- Input tokens per turn: lognormal(mean=1,500); output tokens per turn: lognormal(mean=800)
 
 <img src="./benchmark-results/code_generation_k8_vs_latency_predictor.png" width="900" alt="Code Generation: k8 vs latency-predictor">
 
