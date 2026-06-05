@@ -228,7 +228,7 @@ Optional overrides:
 
 ## Benchmarking Report
 
-The benchmark runs on 10 × H100 GPUs across 10 vLLM decode pods, using the `Qwen/Qwen3-32B` model. Results compare predicted-latency routing against a plain Kubernetes Service (round-robin, no EPP).
+The benchmark runs on 10 vLLM decode pods, each with tensor parallelism of 2 (20 × H100 GPUs total), using the `Qwen/Qwen3-32B` model. Results compare predicted-latency routing against a plain Kubernetes Service (round-robin, no EPP).
 
 ### Code Generation
 
@@ -260,7 +260,7 @@ To remove the deployed components:
 
 ```bash
 helm uninstall ${GUIDE_NAME} -n ${NAMESPACE}
-kubectl delete  -n ${NAMESPACE} -k guides/optimized-baseline/modelserver/gpu/vllm/${INFRA_PROVIDER}
+kubectl delete  -n ${NAMESPACE} -k guides/predicted-latency-routing/modelserver/gpu/vllm/${INFRA_PROVIDER}
 kubectl delete namespace ${NAMESPACE}
 ```
 
