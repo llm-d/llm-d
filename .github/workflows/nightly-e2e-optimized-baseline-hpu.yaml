@@ -109,7 +109,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: nightly-e2e-optimized-baseline-gke
+  group: nightly-e2e-optimized-baseline-intel-hpu
   cancel-in-progress: true
 
 jobs:
