@@ -24,7 +24,7 @@
 | User | Tesla | 2025 | [Tesla](https://www.tesla.com/) | The Tesla ML Platform team are users of llm-d. |
 | User | Cohere | 2026 | [Cohere](https://cohere.com/) | The Cohere model serving and RL team are users of llm-d. |
 | User | JetBrains | 2026 | [JetBrains](https://www.jetbrains.com/) | The JetBrains model serving team are users of llm-d. |
-| User | Stelia | 2026 | [Stelia.ai](https://stelia.ai/) | The Stelia.ai's managed inference service is powered by llm-d. |
+| User | Stelia | 2026 | [Stelia.ai](https://stelia.ai/) | Stelia.ai's managed inference service is powered by llm-d. |
 
 ## Adopter Types
 
