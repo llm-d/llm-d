@@ -121,9 +121,9 @@ jobs:
       standup_scenario: ${{ inputs.standup_scenario || 'optimized-baseline' }}
       decode_pods: ${{ inputs.decode_pods || 'auto' }}
       prefill_pods: ${{ inputs.prefill_pods || 'auto' }}
-      accelerator_type: ${{ inputs.accelerator_type || 'gpu' }}
+      accelerator_type: ${{ inputs.accelerator_type || 'hpu' }}
       backend_type: ${{ inputs.backend_type || 'vllm' }}
-      infra_provider: ${{ inputs.infra_provider || 'gke' }}
+      infra_provider: ${{ inputs.infra_provider || '' }}
       connector: ${{ inputs.connector || '' }}
       cluster_namespace: ${{ inputs.cluster_namespace || 'llm-d-nightly-optimized-baseline-intel-hpu' }}
       helm_release: ${{ inputs.helm_release || 'llmdbenchcicdr-hpu' }}
