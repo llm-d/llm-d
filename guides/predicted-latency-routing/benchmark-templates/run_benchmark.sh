@@ -26,6 +26,31 @@ if ! command -v envsubst >/dev/null 2>&1; then
   exit 1
 fi
 
+# --- Best-effort cleanup of cluster resources created by this run ---
+PVC_NAME=""
+COPY_POD=""
+CONFIG_FILE=""
+TRACKED_JOBS=()
+TRACKED_CONFIGMAPS=()
+
+cleanup() {
+  local code=$?
+  set +eu
+  trap - EXIT INT TERM
+  echo "Cleaning up benchmark resources..."
+  [ -n "$CONFIG_FILE" ] && rm -f "$CONFIG_FILE" >/dev/null 2>&1
+  for j in "${TRACKED_JOBS[@]}"; do
+    kubectl delete job "$j" -n "${NAMESPACE}" --wait=false >/dev/null 2>&1
+  done
+  for cm in "${TRACKED_CONFIGMAPS[@]}"; do
+    kubectl delete configmap "$cm" -n "${NAMESPACE}" --wait=false >/dev/null 2>&1
+  done
+  [ -n "$COPY_POD" ] && kubectl delete pod "$COPY_POD" -n "${NAMESPACE}" --wait=false >/dev/null 2>&1
+  [ -n "$PVC_NAME" ] && kubectl delete pvc "$PVC_NAME" -n "${NAMESPACE}" --wait=false >/dev/null 2>&1
+  exit $code
+}
+trap cleanup EXIT INT TERM
+
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 cd "$SCRIPT_DIR"
 
@@ -88,14 +113,16 @@ for conc in $CONCURRENCY_LEVELS; do
   job_name="inference-perf-${SUFFIX}"
   echo "    → c=$conc  num_conversations=$conc  max_requests=$MAX_REQUESTS  job=$job_name"
 
-  CONFIG_FILE="$(mktemp -t inference-perf-config-${SUFFIX}.XXXXXX.yml)"
+  CONFIG_FILE="$(mktemp "${TMPDIR:-/tmp}/inference-perf-config-${SUFFIX}.XXXXXX")"
   envsubst < "$WORKLOAD_YAML" > "$CONFIG_FILE"
 
   kubectl create configmap "inference-perf-config-${SUFFIX}" -n "${NAMESPACE}" \
       --from-file=config.yml="$CONFIG_FILE" \
       --dry-run=client -o yaml | kubectl apply -f -
+  TRACKED_CONFIGMAPS+=("inference-perf-config-${SUFFIX}")
 
   envsubst < bench-job.yaml | kubectl apply -f - -n "${NAMESPACE}"
+  TRACKED_JOBS+=("$job_name")
   rm -f "$CONFIG_FILE"
 
   echo "      Waiting for benchmark to complete..."

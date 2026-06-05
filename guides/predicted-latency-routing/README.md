@@ -211,6 +211,9 @@ export IP=$(kubectl get gateway llm-d-inference-gateway -n ${NAMESPACE} -o jsonp
 
 </details>
 
+> [!NOTE]
+> The load generator runs as in-cluster Kubernetes Jobs, so the EPP `ClusterIP` is reachable directly — no `kubectl port-forward` or external address is needed. If you instead drive traffic from outside the cluster, use a Gateway address, a LoadBalancer IP/hostname, or a port-forward.
+
 ### 2. Run the Benchmark
 
 ```bash

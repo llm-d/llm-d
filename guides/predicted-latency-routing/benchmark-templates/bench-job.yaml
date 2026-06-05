@@ -6,16 +6,12 @@ spec:
   backoffLimit: 0
   template:
     spec:
-      shareProcessNamespace: true
       containers:
         - name: inference-perf
           image: quay.io/inference-perf/inference-perf:v0.5.0
           imagePullPolicy: Always
-          securityContext:
-            capabilities:
-              add: ["SYS_PTRACE"]
           command: ["/bin/sh", "-c"]
-          args: ["/workspace/.venv/bin/inference-perf --config_file /etc/config/config.yml && sleep 60"]
+          args: ["/workspace/.venv/bin/inference-perf --config_file /etc/config/config.yml"]
           volumeMounts:
             - name: config-volume
               mountPath: /etc/config
