@@ -97,6 +97,16 @@ on:
         required: false
         default: 'guide_optimized-baseline_1.yaml'
         type: 'string'
+      tpu_chips:
+        description: 'Total TPU chips to request (0 for simulated)'
+        required: false
+        type: 'string'
+        default: '16'
+      tpu_topology:
+        description: 'GKE TPU topology (e.g. 2x4, 2x2x1)'
+        required: false
+        type: 'string'
+        default: '2x4'
 
 #  push:
 #    branches:
@@ -137,4 +147,6 @@ jobs:
       verbose: ${{ inputs.verbose || 'false' }}
       harness: ${{ inputs.harness || 'inference-perf' }}
       workload: ${{ inputs.workload || 'guide_optimized-baseline_1.yaml' }}
+      tpu_chips: ${{ inputs.tpu_chips || '16' }}
+      tpu_topology: ${{ inputs.tpu_topology || '2x4' }}
     secrets: inherit
