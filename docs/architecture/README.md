@@ -59,7 +59,7 @@ See [Batch Inference](advanced/batch/README.md) for details on the batch inferen
 llm-d supports proactive, SLO-aware autoscaling through two complementary approaches:
 
 - **HPA/KEDA**: Standard Kubernetes-native scaling using metrics exported by the EPP (like queue depth).
-- **Workload Variant Autoscaler (WVA)**: Globally optimized scaling that minimizes cost by placing replicas across different variants, across inference pools while meeting latency targets.
+- **Workload Variant Autoscaler (WVA)**: Globally optimized scaling that minimizes cost by placing replicas across different variants or across inference pools while meeting latency targets.
 
 See [Autoscaling](advanced/autoscaling/README.md) for complete details.
 
