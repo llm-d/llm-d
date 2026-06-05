@@ -107,14 +107,14 @@ helm install ${GUIDE_NAME} \
 
 ### 2. Deploy the Model Server
 
-This guide reuses the model server manifests from the optimized-baseline guide (the values files above already select pods labeled `llm-d.ai/guide=optimized-baseline`). Apply the default NVIDIA GPU / vLLM overlay:
+This guide reuses the model server manifests from the optimized-baseline guide (the values files above already select pods labeled `llm-d.ai/guide=optimized-baseline`) and applies RoPE scaling on top to allow longer prompts. Apply the default NVIDIA GPU / vLLM overlay:
 
 ```bash
 export INFRA_PROVIDER=base # base | gke
 kubectl apply -n ${NAMESPACE} -k guides/predicted-latency-routing/modelserver/gpu/vllm/${INFRA_PROVIDER}/
 ```
 
-For other backends (AMD GPU, Intel XPU, Gaudi, TPU, CPU), see [optimized-baseline → Deploy the Model Server](../optimized-baseline/README.md#2-deploy-the-model-server).
+For other backends (AMD GPU, Intel XPU, Gaudi, TPU, CPU) or model servers (e.g. SGLang), see [optimized-baseline → Deploy the Model Server](../optimized-baseline/README.md#2-deploy-the-model-server).
 
 ### 3. Enable monitoring (optional)
 
