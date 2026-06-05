@@ -23,7 +23,7 @@
 | University Supporter | University of Chicago (LMCache Lab) | 2025 | [LMCache Lab](https://lmcache.ai) | The LMCache Lab at the University of Chicago, originators of LMCache, are founding academic supporters of llm-d. |
 | User | Tesla | 2025 | [Tesla](https://www.tesla.com/) | The Tesla ML Platform team are users of llm-d. |
 | User | Cohere | 2026 | [Cohere](https://cohere.com/) | The Cohere model serving and RL team are users of llm-d. |
-| User | Jetbrains | 2026 | [Jetbrains]([https://www.tesla.com/](https://www.jetbrains.com/)) | The Jetbrains model serving team are users of llm-d. |
+| User | JetBrains | 2026 | [JetBrains](https://www.jetbrains.com/) | The JetBrains model serving team are users of llm-d. |
 
 ## Adopter Types
 
