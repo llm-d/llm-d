@@ -166,7 +166,7 @@
           },
           "disableTextWrap": false,
           "editorMode": "code",
-          "expr": "sglang:num_waiting_reqs{model_name=~\"$model_name\",namespace=~\"$namespace\"}",
+          "expr": "sglang:num_queue_reqs{model_name=~\"$model_name\",namespace=~\"$namespace\"}",
           "fullMetaSearch": false,
           "hide": false,
           "includeNullMetadata": true,
