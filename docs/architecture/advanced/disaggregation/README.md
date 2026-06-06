@@ -176,3 +176,10 @@ vLLM and SGLang both reserve RAM ahead of time for KV cache memory. NIXL directl
 │                             │              │                             │
 └─────────────────────────────┘              └─────────────────────────────┘
 ```
+
+## Operations
+
+Disaggregated serving introduces operational considerations that are specific to each model server's KV transfer mechanism: dynamic connections, request cancellation, fault tolerance, and rollouts. See the engine-specific operations guides:
+
+* [Disaggregated Serving: Operations (vLLM)](operations-vllm.md)
+* [Disaggregated Serving: Operations (SGLang)](operations-sglang.md)
