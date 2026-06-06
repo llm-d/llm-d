@@ -169,6 +169,17 @@ For instructions on getting started making inference requests see [our docs](../
 
 **_NOTE:_** Compared to the other examples, this one takes anywhere between 7-10 minutes for the vllm API servers to startup so this might take longer before you can interact with this example.
 
-## Benchmarking
+## Benchmarking Results
 
-This is a simple benchmarking setup to demonstrate the correctness of the implementation.
+### CKS (4x H200, 32 GPUs, InfiniBand)
+
+Benchmark: `2048_concurrent_2k_isl_2k_osl` (2048 concurrent requests, 2K input / 2K output tokens)
+
+| Metric | Hybrid-LB | DP Supervisor | Change |
+|---|---|---|---|
+| Output tokens/s | 22,125 | 27,853 | +26% |
+| Input tokens/s | 22,586 | 29,329 | +30% |
+| Total tokens/s | 44,711 | 57,183 | +28% |
+| Requests/s | 11.03 | 14.33 | +30% |
+
+This is ~1,741 output tokens/s per decode GPU (16 decode GPUs), compared to ~1,383 with hybrid-lb.
