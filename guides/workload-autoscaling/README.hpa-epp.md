@@ -46,6 +46,8 @@ Follow the [flow control configuration guide](https://gateway-api-inference-exte
 
 ### 2. Install the Prometheus Adapter
 
+> **⚠️ Deprecation Notice:** The Prometheus Adapter project is planned for deprecation ([kubernetes-sigs/prometheus-adapter#701](https://github.com/kubernetes-sigs/prometheus-adapter/issues/701)). **KEDA** is the recommended alternative and is actively maintained. See [Option 2: KEDA](#option-2-keda) below for the recommended approach using KEDA's built-in metrics adapter.
+
 The Prometheus Adapter bridges Prometheus metrics to the Kubernetes External Metrics API,
 which the HPA uses to read EPP signals.
 
@@ -208,7 +210,7 @@ HPA supports scaling to zero through the `HPAScaleToZero` alpha feature flag. Th
 
 ### Option 2: KEDA
 
-If your environment does not allow alpha feature gates, KEDA is a stable alternative.
+If your environment does not allow alpha feature gates, KEDA is a stable alternative. **Note:** KEDA is also the recommended path forward as the Prometheus Adapter is planned for deprecation.
 
 1. **Setup KEDA:** Install KEDA and follow the [KEDA Prometheus Scaler guide](https://keda.sh/docs/scalers/prometheus/). Note that KEDA comes with its own built-in metrics adapter that is enabled by default when you install KEDA. Unlike HPA, it does not require the Prometheus adapter installation.
 2. **Configure Scaler:** Use the same `epp_queue_size` metric as a trigger.

@@ -26,6 +26,12 @@ spec:
             - name: http
               containerPort: 8000
               protocol: TCP
+          env:
+            - name: HF_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: llm-d-hf-token
+                  key: HF_TOKEN
           resources:
             limits:
               cpu: "8"

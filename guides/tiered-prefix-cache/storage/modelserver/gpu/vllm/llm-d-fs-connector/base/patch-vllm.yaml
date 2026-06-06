@@ -51,6 +51,11 @@ spec:
                   }
                 }'
           env:
+            - name: HF_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: llm-d-hf-token
+                  key: HF_TOKEN
             - name: PYTHONHASHSEED
               value: "42"
           resources:

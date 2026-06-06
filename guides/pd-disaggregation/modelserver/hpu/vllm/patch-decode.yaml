@@ -22,6 +22,11 @@ spec:
             - '{"kv_connector":"NixlConnector","kv_role":"kv_both","kv_buffer_device":"cpu"}'
             - "--port=8200"
           env:
+            - name: HF_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: llm-d-hf-token
+                  key: HF_TOKEN
             - name: OMPI_MCA_btl_vader_single_copy_mechanism
               value: "none"
             - name: HABANA_LOGS

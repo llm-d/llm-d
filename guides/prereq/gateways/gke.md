@@ -25,7 +25,7 @@ For GKE versions `1.34.0-gke.1626000` or later, the InferencePool CRD is automat
 ```bash
 GAIE_VERSION=v1.5.0
 
-kubectl apply -k "https://github.com/kubernetes-sigs/gateway-api-inference-extension/config/crd?ref=${GAIE_VERSION}"
+kubectl apply -f https://github.com/kubernetes-sigs/gateway-api-inference-extension/releases/download/${GAIE_VERSION}/v1-manifests.yaml
 ```
 
 Verify the APIs are available:

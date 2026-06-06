@@ -41,9 +41,7 @@ router:
           plugins:
           - pluginRef: decode-filter
           - pluginRef: active-request-scorer
-            weight: 1
           - pluginRef: queue-scorer
-            weight: 1
 
   monitoring:
     interval: "10s"

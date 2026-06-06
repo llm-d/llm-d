@@ -12,7 +12,7 @@
 router:
   tokenizer:
     enabled: true
-    # Required by llm-d-router chart v0 when tokenizer is enabled; 
+    # Required by llm-d-router chart v0 when tokenizer is enabled;
     # must match the deployed model server and the token-producer modelName below
     modelName: Qwen/Qwen3-32B
 
@@ -44,7 +44,7 @@ router:
               vllm:
                 url: "http://localhost:8000"
           - type: endpoint-notification-source
-          - type: precise-prefix-cache-scorer
+          - type: precise-prefix-cache-producer # `precise-prefix-cache-scorer` is deprecated
             parameters:
               tokenProcessorConfig:
                 blockSize: 64
@@ -58,15 +58,17 @@ router:
                 discoverPods: true
                 podDiscoveryConfig:
                   socketPort: 5556
+          - type: prefix-cache-scorer
+            parameters:
+              prefixMatchInfoProducerName: precise-prefix-cache-producer
           - type: kv-cache-utilization-scorer
           - type: queue-scorer
           - type: no-hit-lru-scorer
-          - type: max-score-picker
         dataLayer: # metrics-data-source + core-metrics-extractor injected by default
           sources:
             - pluginRef: endpoint-notification-source
               extractors:
-                - pluginRef: precise-prefix-cache-scorer
+                - pluginRef: precise-prefix-cache-producer
         schedulingProfiles:
           - name: default
             plugins:
@@ -74,11 +76,10 @@ router:
                 weight: 2.0
               - pluginRef: queue-scorer
                 weight: 2.0
-              - pluginRef: precise-prefix-cache-scorer
+              - pluginRef: prefix-cache-scorer
                 weight: 3.0
               - pluginRef: no-hit-lru-scorer
                 weight: 2.0
-              - pluginRef: max-score-picker
 
   extraServicePorts:
     - name: http

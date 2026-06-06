@@ -18,6 +18,12 @@ spec:
             - "1024"
             - "--gpu-memory-utilization"
             - "0.8"
+          env:
+            - name: HF_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: llm-d-hf-token
+                  key: HF_TOKEN
           resources:
             limits:
               memory: 500Gi

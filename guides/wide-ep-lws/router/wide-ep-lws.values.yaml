@@ -23,7 +23,6 @@ router:
         - type: queue-scorer
         - type: kv-cache-utilization-scorer
         - type: active-request-scorer
-        - type: max-score-picker
         schedulingProfiles:
         - name: prefill
           plugins:
@@ -34,7 +33,6 @@ router:
             weight: 2
           - pluginRef: kv-cache-utilization-scorer
             weight: 2
-          - pluginRef: max-score-picker
         - name: decode
           plugins:
           - pluginRef: decode-filter
@@ -42,7 +40,6 @@ router:
             weight: 2
           - pluginRef: prefix-cache-scorer
             weight: 3
-          - pluginRef: max-score-picker
 
   modelServers:
     matchLabels:
