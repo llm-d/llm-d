@@ -64,7 +64,7 @@ spec:
                   deepseek-ai/DeepSeek-R1-0528 \
                   --host=0.0.0.0 \
                   --port=8000 \
-                  --disable-uvicorn-access-log \
+                  --disable-access-log-for-endpoints=/health,/metrics,/v1/models,/readyz \
                   --data-parallel-multi-port-external-lb \
                   --data-parallel-supervisor-port=8008 \
                   --data-parallel-size $((LWS_GROUP_SIZE * DP_SIZE_LOCAL)) \
