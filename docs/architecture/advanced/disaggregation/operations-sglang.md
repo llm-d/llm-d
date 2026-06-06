@@ -7,15 +7,19 @@ While disaggregated serving can offer superior performance, it introduces additi
 - [Fault Tolerance](#fault-tolerance) - how to ensure crashes do not create cascading failures and that resources are cleaned up
 - [Rollouts](#rollouts) - how to roll out changes to the service, such as the version of the SGLang image
 
-This page documents architectural considerations that impact these common operations flows for SGLang model servers. For the vLLM counterpart see [operations-vllm.md](operations-vllm.md), and for an overview of how the EPP and Routing Proxy Sidecar coordinate P/D requests see the [Disaggregated Serving](README.md) page. Unlike vLLM, which negotiates a point-to-point NIXL handshake per request, SGLang coordinates P/D pairing through a bootstrap server that runs alongside each prefill instance; the KV transfer itself runs over NIXL (RDMA) for both.
+This page documents architectural considerations that impact these common operations flows for SGLang model servers. For the vLLM counterpart see [operations-vllm.md](operations-vllm.md), and for an overview of how the EPP and Routing Proxy Sidecar coordinate P/D requests see the [Disaggregated Serving](README.md) page.
+
+Both engines establish a NIXL (RDMA) connection for each P/D pair and differ mainly in how a pair finds each other and which side moves the data: vLLM negotiates the connection peer-to-peer per request and has the decode pull the KVs, while SGLang routes peer discovery through a bootstrap server that runs alongside each prefill instance and has the prefill push the KVs to the decode.
 
 ## Dynamic Connections
 
 In production environments, it is common for model server replicas to be created and destroyed during the running of the service. In a disaggregated configuration, the ability to dynamically add/remove replicas from the deployment is complicated by the need to establish/destroy connections between P and D workers on the fly.
 
-SGLang coordinates this through a bootstrap server that is started on each prefill instance (default port `8998`, configurable via the `SGLANG_BOOTSTRAP_PORT` environment variable read by the routing sidecar). Rather than a sequential prefill-then-decode handshake, the Routing Proxy Sidecar pairs P and D for each request and lets them coordinate the KV transfer out-of-band through the bootstrap server.
+SGLang coordinates this through a bootstrap server that is started on each prefill instance (default port `8998`, configurable via the `SGLANG_BOOTSTRAP_PORT` environment variable read by the routing sidecar). For each request the Routing Proxy Sidecar pairs a P and a D and gives both the same rendezvous tokens; the two then discover each other through that bootstrap server and set up the NIXL connection and KV transfer directly between the pods, off the sidecar's request path.
 
 ### Scale-Up
+
+New P and D replicas connect lazily, with no pre-warming step: the first request routed across a given P/D pair triggers a one-time connection setup, and subsequent requests reuse it, so a newly added replica starts serving without restarts.
 
 For each request, the Routing Proxy Sidecar (configured with `--connector=sglang`) generates a unique `bootstrap_room` ID, injects `bootstrap_host`, `bootstrap_port`, and `bootstrap_room` into both the prefill and decode request bodies, and fires the prefill request asynchronously (in a background goroutine) while sending the decode request synchronously. As a result, the decode worker does not wait for prefill to complete before beginning coordination.
 
@@ -35,14 +39,15 @@ sequenceDiagram
     R->>R: Generate bootstrap_room
     R->>P: Prefill request (async) with bootstrap_host/port/room
     R->>D: Decode request (sync) with bootstrap_host/port/room
-    alt No cached connection to this prefill
-        D->>P: GET /route (fetch parallel info via bootstrap server)
+    alt First contact with this prefill
+        D->>P: GET /route (discover layout via bootstrap server)
         P-->>D: page_size, kv_cache_dtype, TP/CP/PP layout
         D-->>D: Cache connection info
     end
-    P-->>P: Run prefill
-    D-->>P: Pull KV cache blocks via NIXL (RDMA)
-    D-->>D: Run decodes
+    D->>P: Send KV slot indices + NIXL agent
+    P->>P: Run prefill
+    P-->>D: Write KV cache blocks via NIXL (RDMA)
+    D->>D: Run decodes
     D->>R: Response
 ```
 
@@ -73,10 +78,10 @@ Given the compute intensity and duration of inference requests, model servers su
 In a disaggregation setup this is more complicated, because the resources associated with a request are spread across the prefill and decode instances. With SGLang, the Routing Proxy Sidecar holds the decode request open for the client while the prefill request runs asynchronously in the background. When the client disconnects:
 
 - The decode instance aborts the in-flight request and releases its tree cache.
-- The prefill instance frees the room's tree cache once its KV transfer reaches a terminal state. On the NIXL transfer backend used by this guide, a prefill whose decode disconnected *before* initiating the KV pull has no timeout that reclaims it (see the note below). The periodic `SGLANG_DISAGGREGATION_BOOTSTRAP_ENTRY_CLEANUP_INTERVAL` (default `120s`) only evicts stale bookkeeping entries from the bootstrap server, not GPU KV cache.
+- The prefill instance frees the room's tree cache once its KV transfer reaches a terminal state. On the NIXL transfer backend used by this guide, a prefill whose decode disconnected *before* initiating the transfer has no timeout that reclaims it (see the note below). The periodic `SGLANG_DISAGGREGATION_BOOTSTRAP_ENTRY_CLEANUP_INTERVAL` (default `120s`) only evicts stale bookkeeping entries from the bootstrap server, not GPU KV cache.
 
 > [!NOTE]
-> This differs from vLLM, which sends an explicit `NIXL.send_notif` to free the prefill-side KV cache on abort. With the NIXL transfer backend, SGLang has no equivalent prefill-side abort signal: if a request is cancelled after the decode has been paired but before it initiates the KV pull, the prefill can hold that room's KV cache until the prefill pod is restarted.
+> This differs from vLLM, which sends an explicit `NIXL.send_notif` to free the prefill-side KV cache on abort. With the NIXL transfer backend, SGLang has no equivalent prefill-side abort signal: if a request is cancelled after the decode has been paired but before it initiates the transfer, the prefill can hold that room's KV cache until the prefill pod is restarted.
 > This is analogous to vLLM's `VLLM_NIXL_ABORT_REQUEST_TIMEOUT` stranding window, except that vLLM bounds it with a timeout (default `480s`) whereas NIXL-backed SGLang does not. The `SGLANG_DISAGGREGATION_BOOTSTRAP_TIMEOUT` that bounds prefill-side reclaim is implemented for the Mooncake and Mori transfer backends, not NIXL.
 
 ## Fault Tolerance
@@ -113,7 +118,7 @@ sequenceDiagram
 
 ### Decode Instance Failure
 
-While D instance failures are unlikely to crash P instances (the P instance never initiates RDMA reads), there is a risk of KV cache memory being stranded on the prefill instance, since the prefill holds the tree cache for a room until the decode initiates and completes the KV transfer.
+While a decode failure is unlikely to crash a prefill instance, there is a risk of KV cache memory being stranded on the prefill, since the prefill holds the tree cache for a room until it has written the KVs to the decode and the transfer completes.
 
 A decode that is still alive but waiting on a failed or slow transfer protects itself with `SGLANG_DISAGGREGATION_WAITING_TIMEOUT` (default `300s`): if it never receives the KV-transfer-done signal after bootstrapping, it aborts the request and releases its own tree cache. The prefill side frees a room once its transfer reaches a terminal state - a failed NIXL transfer marks the room `KVPoll.Failed`, and the prefill aborts and releases the tree cache. If the decode dies *before* it initiates the transfer, however, the prefill room never reaches a terminal state on the NIXL backend.
 
@@ -126,17 +131,17 @@ sequenceDiagram
     R->>P: Prefill request (async)
     R->>D: Decode request (sync)
     P-->>P: Run prefill (holds tree cache for room)
-    note over D: D crashes before initiating KV pull
+    note over D: D crashes before sending KV indices
     note over P: NIXL backend has no reclaim timeout
     P-->>P: Tree cache held until pod restart
 ```
 
 > [!WARNING]
-> On the NIXL transfer backend used by this guide, a prefill room whose decode died before initiating the KV pull is not reclaimed automatically; it holds its tree cache until the prefill pod is restarted. The `SGLANG_DISAGGREGATION_BOOTSTRAP_TIMEOUT` (default `300s`) that bounds this stranding is implemented for the Mooncake and Mori transfer backends, not NIXL. This is comparable to the decode-failure stranding documented for vLLM, which bounds it with `VLLM_NIXL_ABORT_REQUEST_TIMEOUT` (default `480s`).
+> On the NIXL transfer backend used by this guide, a prefill room whose decode died before initiating the transfer is not reclaimed automatically; it holds its tree cache until the prefill pod is restarted. The `SGLANG_DISAGGREGATION_BOOTSTRAP_TIMEOUT` (default `300s`) that bounds this stranding is implemented for the Mooncake and Mori transfer backends, not NIXL. This is comparable to the decode-failure stranding documented for vLLM, which bounds it with `VLLM_NIXL_ABORT_REQUEST_TIMEOUT` (default `480s`).
 
 ## Rollouts
 
-In disaggregated serving, rolling out a new version of the model server (e.g. a new SGLang image or a new configuration) requires care, because prefill and decode instances pull KV cache directly from each other's GPU memory over NIXL. The KV cache layout must therefore match between any P and D pair that gets scheduled together.
+In disaggregated serving, rolling out a new version of the model server (e.g. a new SGLang image or a new configuration) requires care, because NIXL moves KV cache directly between the prefill and decode GPU memory. The KV cache layout must therefore match between any P and D pair that gets scheduled together.
 
 SGLang validates layout compatibility at connection time. When a decode instance fetches a prefill's info from the bootstrap `/route` endpoint, it checks:
 
