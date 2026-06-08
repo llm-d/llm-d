@@ -3,18 +3,6 @@ name: Nightly - Optimized Baseline E2E (CKS GPU)
 on:
   workflow_dispatch:
     inputs:
-      scenario_dir:
-        description: 'Directory housing the scenarios'
-        required: false
-        default: 'guides'
-      standup_method:
-        description: 'Standup method to be used ("standalone","fma","modelservice")'
-        required: false
-        default: 'kustomize'
-      standup_scenario:
-        description: 'Guide name'
-        required: false
-        default: 'optimized-baseline'
       decode_pods:
         description: 'Number of decode (vllm "standalone") pods (default "auto", means what was configured on the scenario)'
         required: false
@@ -25,50 +13,6 @@ on:
         required: false
         type: 'string'
         default: 'auto'
-      accelerator_type:
-        description: 'Type of accelerator (gpu, cpu, sim, amd, xpu, hpu, tpu-v6, tpu-v7) (ONLY VALID FOR "kustomize" standyp method)'
-        required: false
-        type: 'string'
-        default: 'gpu'
-      backend_type:
-        description: 'Type of backend (vllm, sglang) (ONLY VALID FOR "kustomize" standyp method)'
-        required: false
-        type: 'string'
-        default: 'vllm'
-      infra_provider:
-        description: 'Target cloud provider (ONLY VALID FOR "kustomize" standyp method)'
-        required: false
-        type: 'string'
-        default: 'base'
-      connector:
-        description: 'Accelerator offloading connector (ONLY VALID FOR "kustomize" standyp method)'
-        required: false
-        type: 'string'
-        default: ''
-      cluster_namespace:
-        description: 'Cluster namespace'
-        required: false
-        default: 'llm-d-nightly-optimized-baseline-cks-gpu'
-      helm_release:
-        description: 'Helm release name (for modelservice)'
-        required: false
-        default: 'llmdbenchcicdr-cks'
-      workspace_dir:
-        description: 'Workspace directory'
-        required: false
-        default: '/tmp/llmdbenchcicdk-cks'
-      bucket_project:
-        description: 'Project associated to the object storage bucket'
-        required: false
-        default: 'llm-d-scale'
-      bucket_provider:
-        description: 'Type (provider of) the bucket'
-        required: false
-        default: 'gcs'
-      bucket_path:
-        description: 'Path to object storage bucket'
-        required: false
-        default: 'llm-d-benchmarks/regressions/optimized-baseline'
       gateway_class:
         description: 'Class of gateway used ("istio", "agentgateway", "epponly" (i.e., "standalone"), "none")'
         required: false
@@ -95,8 +39,14 @@ on:
       workload:
         description: 'Workload profile to be used during "run" operation (check list under "workload/profiles")'
         required: false
-        default: 'guide_optimized-baseline_1.yaml'
+        default: 'sanity_random.yaml'
+#        default: 'guide_optimized-baseline_1.yaml'
         type: 'string'
+      cleanup:
+        description: 'Cleanup the llm-d stack stood up by this workflow'
+        required: false
+        default: 'true'
+        type: string
 
 #  push:
 #    branches:
@@ -136,5 +86,7 @@ jobs:
       dry_run: ${{ inputs.dry_run || 'false' }}
       verbose: ${{ inputs.verbose || 'false' }}
       harness: ${{ inputs.harness || 'inference-perf' }}
-      workload: ${{ inputs.workload || 'guide_optimized-baseline_1.yaml' }}
+      workload: ${{ inputs.workload || 'sanity_random.yaml' }}
+#      workload: ${{ inputs.workload || 'guide_optimized-baseline_1.yaml' }}
+      cleanup: ${{ inputs.cleanup || 'true' }}
     secrets: inherit
