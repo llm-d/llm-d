@@ -37,13 +37,10 @@ direction and further reading.
 
 The layers above compose into deployment options spanning a range of capability and operational
 cost — from a routing-and-offloading baseline up to disaggregated serving — added incrementally
-as a workload's scale and latency targets grow. Concrete, benchmarked options are landing in
-this directory as sub-guides.
+as a workload's scale and latency targets grow. Concrete, workloads with benchmarked options are
+provided as sub-guides below.
 
-## Choosing an Option
-
-> 🚧 Under construction — guidance on selecting and combining layers for a given workload and
-> SLO target lands with the deployment options.
+- [Agentic Code Generation](agentic-code-generation.md)
 
 ## Benchmarking
 
