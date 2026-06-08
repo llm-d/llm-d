@@ -15,7 +15,7 @@ spec:
             - "--tensor-parallel-size=4"
             - "--block-size=128"
             - "--kv-transfer-config"
-            - '{"kv_connector":"NixlConnector", "kv_role":"kv_both"}'
+            - '{"kv_connector":"NixlConnector", "kv_role":"kv_consumer"}'
             # ROCM_ATTN required when prefill TP != decode TP; upcoming general fix.
             - "--attention-backend=ROCM_ATTN"
             - "--max-model-len=32000"
