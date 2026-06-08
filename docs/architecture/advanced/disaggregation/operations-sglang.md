@@ -9,13 +9,13 @@ While disaggregated serving can offer superior performance, it introduces additi
 
 This page documents architectural considerations that impact these common operations flows for SGLang model servers. For the vLLM counterpart see [operations-vllm.md](operations-vllm.md), and for an overview of how the EPP and Routing Proxy Sidecar coordinate P/D requests see the [Disaggregated Serving](README.md) page.
 
-Both engines establish a NIXL (RDMA) connection for each P/D pair and differ mainly in how a pair finds each other and which side moves the data: vLLM negotiates the connection peer-to-peer per request and has the decode pull the KVs, while SGLang routes peer discovery through a bootstrap server that runs alongside each prefill instance and has the prefill push the KVs to the decode.
+Both engines establish a NIXL (RDMA) connection for each P/D pair and differ mainly in how a pair finds each other and which side moves the data: vLLM negotiates the connection peer-to-peer with no central coordinator and has the decode pull the KVs, while SGLang routes peer discovery through a bootstrap server that runs alongside each prefill instance and has the prefill push the KVs to the decode.
 
 ## Dynamic Connections
 
 In production environments, it is common for model server replicas to be created and destroyed during the running of the service. In a disaggregated configuration, the ability to dynamically add/remove replicas from the deployment is complicated by the need to establish/destroy connections between P and D workers on the fly.
 
-SGLang coordinates this through a bootstrap server that is started on each prefill instance (default port `8998`, configurable via the `SGLANG_BOOTSTRAP_PORT` environment variable read by the routing sidecar). For each request the Routing Proxy Sidecar pairs a P and a D and gives both the same rendezvous tokens; the two then discover each other through that bootstrap server and set up the NIXL connection and KV transfer directly between the pods, off the sidecar's request path.
+SGLang coordinates this through a bootstrap server that is started on each prefill instance (default port `8998`, configurable via the `SGLANG_BOOTSTRAP_PORT` environment variable read by the routing sidecar). For each request the Routing Proxy Sidecar pairs a P and a D and gives both the same rendezvous tokens; the two then use that bootstrap server to find each other and run the KV transfer directly between the pods, off the sidecar's request path.
 
 ### Scale-Up
 
