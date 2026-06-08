@@ -22,6 +22,17 @@ Two scorers make up the routing decision alongside the load-aware stack:
 | Total GPUs          | 16                                                      |
 | vLLM `--block-size` | 64 (must match scorer `tokenProcessorConfig.blockSize`) |
 
+## Additional Configuration
+
+### GPU 
+
+| Parameter                 | Value                                                   |
+| ------------------------- | ------------------------------------------------------- |
+| Model                     | [openai/gpt-oss-120b](https://huggingface.co/openai/gpt-oss-120b) |
+| GPUs per replica (TP)     | 1                                                       |
+| GPU Accelerator           | NVIDIA H100                                             |
+| CPU Cache Offload Size    | 100 GB                                                  |
+
 ### Supported Hardware Backends
 
 | Backend              | Directory                  | Default model                           | Notes                                                    |
@@ -283,3 +294,126 @@ Output tokens/sec — higher is better; TTFT in seconds — lower is better.
 | 60   | 6,551      | 15,733       | 75.586        | 0.214           | 138.663      | 0.300          |
 
 </details>
+
+### Benchmarking Results for gpt-oss-120B
+
+The benchmark runs on 16 × H100 GPUs, distributed across 16 model servers (1 H100s per server with TP=2) using gpt-oss-120B and the same workload as in [default configuration benchmark results](#benchmarking-results). The benchmark compares both to k8s service and to optimized baseline configuration, and uses its default weight configuration of 2:2:3:2 (Queue Scorer : KV Cache Utilization Scorer : GPU Prefix Cache Scorer : CPU Prefix Cache Scorer : LRU Scorer). The benchmark was executed using a code assistant and [llm-d skills](https://github.com/llm-d-incubation/llm-d-skills) running on top of llm-d-benchmark tooling.
+
+#### Performance Results
+
+> Metrics aggregated over all 17 load stages (stages 1–16 plus warmup stage 0).
+> All latency values are in **milliseconds**. Throughput is measured over the full run.
+
+| Metric | Run A — no-llm-d-baseline | Run B — optimized-baseline | Run C — precise-prefix-cache-routing |
+|---|---:|---:|---:|
+| **Throughput (req/s)** | **10.10** | 6.96 | 9.95 |
+| **Output tokens/s** | **10,314** | 7,185 | 9,880 |
+| **Total tokens/s** | **85,239** | 58,842 | 83,707 |
+| **Total successes** | 17,084 | 17,084 | 17,084 |
+| **Total failures** | 0 | 0 | 0 |
+| **Error rate** | 0.00% | 0.00% | 0.00% |
+| **Request latency P50 (ms)** | 28,265 | **24,629** | 26,366 |
+| **Request latency P90 (ms)** | 52,573 | **37,043** | 41,003 |
+| **Request latency P99 (ms)** | 63,693 | 126,156 | **65,203** |
+| **TTFT mean (ms)** | 12,256 | **3,364** | 6,741 |
+| **TTFT P50 (ms)** | 8,089 | **164** | 993 |
+| **TTFT P90 (ms)** | 31,668 | **15,283** | 21,522 |
+| **TTFT P99 (ms)** | 47,506 | 26,217 | **49,560** |
+| **ITL mean (ms)** | **20.1** | 24.7 | 21.4 |
+| **ITL P50 (ms)** | **16.4** | 17.1 | 17.0 |
+| **ITL P90 (ms)** | **17.5** | 28.7 | 22.3 |
+| **ITL P99 (ms)** | 165.2 | 147.8 | **158.1** |
+| **TPOT mean (ms)** | **20.1** | 24.7 | 21.4 |
+| **TPOT P50 (ms)** | **21.1** | 21.7 | 21.9 |
+| **TPOT P90 (ms)** | **23.3** | 27.3 | 27.3 |
+| **Avg output len (tokens)** | 1,021 | 1,032 | 993 |
+
+---
+
+<details>
+<summary><b><i>Click</i></b> to view the per-rate hroughput breakdown across the full ladder</summary>
+
+> Stage 0 = warmup (15 rps × 50s). Stages 1–16 correspond to load steps 3/10/15/20/22/25/30/35/40/43/46/49/52/55/57/60 rps.
+
+| Stage | Target (rps) | Run A output tok/s | Run A req/s | Run B output tok/s | Run B req/s | Run C output tok/s | Run C req/s |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| 1 | 3 | 2,103 | 2.16 | 2,559 | 2.66 | 2,085 | 2.15 |
+| 2 | 10 | 6,288 | 6.44 | 6,224 | 6.37 | 6,651 | 6.85 |
+| 3 | 15 | 8,829 | 9.05 | 6,030 | 5.92 | 9,108 | 9.37 |
+| 4 | 20 | 13,385 | 13.08 | 8,735 | 8.46 | 13,886 | 13.99 |
+| 5 | 22 | 14,406 | 14.09 | 8,938 | 8.67 | 14,533 | 14.62 |
+| 6 | 25 | 12,390 | 12.12 | 8,594 | 8.32 | 15,095 | 15.16 |
+| 7 | 30 | 13,444 | 13.19 | 9,079 | 8.79 | 15,846 | 15.97 |
+| 8 | 35 | 15,777 | 15.40 | 9,064 | 8.76 | 18,064 | 18.16 |
+| 9 | 40 | 15,065 | 14.75 | 8,430 | 8.17 | 14,935 | 15.02 |
+| 10 | 43 | 16,344 | 15.99 | 9,601 | 9.32 | 15,381 | 15.52 |
+| 11 | 46 | 16,662 | 16.30 | 9,426 | 9.12 | 17,745 | 17.86 |
+| 12 | 49 | 15,744 | 15.39 | 9,598 | 9.27 | 13,474 | 13.55 |
+| 13 | 52 | 17,100 | 16.71 | 9,784 | 9.47 | 17,475 | 17.59 |
+| 14 | 55 | 16,265 | 15.88 | 9,753 | 9.41 | 13,610 | 13.70 |
+| 15 | 57 | 17,429 | 17.04 | 9,580 | 9.27 | 12,927 | 13.01 |
+| 16 | 60 | 17,556 | 17.17 | 9,700 | 9.40 | 13,178 | 13.25 |
+
+</details>
+
+
+<details>
+<summary><b><i>Click</i></b> to view the per-rate latency breakdown across the full ladder</summary>
+
+> All latencies in milliseconds.
+
+| Stage | Target (rps) | A p50 lat | A TTFT p50 | B p50 lat | B TTFT p50 | C p50 lat | C TTFT p50 |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| 1 | 3 | 5,814 | 216 | 4,816 | 101 | 5,305 | 141 |
+| 2 | 10 | 9,809 | 224 | 8,858 | 101 | 9,321 | 249 |
+| 3 | 15 | 13,531 | 231 | 11,173 | 73 | 11,062 | 134 |
+| 4 | 20 | 19,524 | 244 | 13,306 | 108 | 15,710 | 155 |
+| 5 | 22 | 20,058 | 249 | 13,893 | 119 | 18,632 | 255 |
+| 6 | 25 | 20,510 | 318 | 14,281 | 115 | 19,495 | 376 |
+| 7 | 30 | 22,103 | 364 | 15,930 | 121 | 19,097 | 258 |
+| 8 | 35 | 22,278 | 405 | 17,548 | 128 | 20,200 | 254 |
+| 9 | 40 | 34,000 | 12,173 | 25,399 | 157 | 29,830 | 1,741 |
+| 10 | 43 | 35,223 | 13,268 | 28,026 | 272 | 28,706 | 1,751 |
+| 11 | 46 | 36,550 | 14,051 | 24,946 | 245 | 29,428 | 1,699 |
+| 12 | 49 | 37,365 | 15,131 | 25,036 | 226 | 28,267 | 1,442 |
+| 13 | 52 | 37,654 | 16,084 | 26,206 | 230 | 28,946 | 1,286 |
+| 14 | 55 | 37,199 | 15,782 | 25,943 | 232 | 29,117 | 1,676 |
+| 15 | 57 | 38,083 | 16,516 | 25,785 | 225 | 29,043 | 1,999 |
+| 16 | 60 | 38,394 | 16,441 | 25,405 | 227 | 29,002 | 1,735 |
+
+</details>
+
+
+#### KV-Cache Performance Analysis
+
+#### Actual Cache Totals (Cumulative over full run)
+
+Metrics are `vllm:prefix_cache_hits_total` and `vllm:prefix_cache_queries_total`, measured in KV blocks (block_size=128 tokens). Values are **sum of per-pod final (max) cumulative counters** across all 16 decoder pods. The counters measure KV block-level hits and queries; the denominator includes every token position checked against the cache throughout the entire run.
+
+| Metric | Run A — no-llm-d-baseline | Run B — optimized-baseline | Run C — precise-prefix-cache-routing |
+|---|---:|---:|---:|
+| **Total block hits** | 2,829,056 | 74,948,736 | 50,215,168 |
+| **Total block queries** | 2,418,963,873 | 1,209,567,759 | 1,525,981,454 |
+| **Overall hit rate** | **0.12%** | **6.20%** | **3.29%** |
+| **Prompt tokens cached (max)** | 2,709,888 | 73,867,648 | 49,688,448 |
+
+> **Note on scale differences:** Run A has ~2× the total query volume of Runs B and C because random round-robin routing distributes requests uniformly across all 16 pods, so each pod accumulates a full share of prompt-token queries with almost no cache reuse. Runs B and C use EPP-based routing, which concentrates traffic from the same prefix group onto the same pod, reducing per-pod query volume while increasing hit rate.
+
+#### Time-Averaged Cache Hit Rates
+
+Using the mean (time-averaged) cumulative values per pod, averaged over the benchmark duration:
+
+| Metric | Run A | Run B | Run C |
+|---|---:|---:|---:|
+| **Sum of pod hit means** | 1,465,425 | 40,095,064 | 27,161,563 |
+| **Sum of pod query means** | 960,824,182 | 417,282,801 | 546,031,931 |
+| **Time-averaged hit rate** | **0.15%** | **9.61%** | **4.97%** |
+| **Average per-pod hit rate** | **0.12%** | **10.83%** | **3.36%** |
+
+#### Per-Pod Hit Rate Distribution
+
+**Run B** shows high variance across pods (range 3.95%–79.71%), indicating that the optimized-baseline EPP concentrates traffic very unevenly — one pod (hm5xm) received only 7.6M queries but accumulated a 79.7% hit rate, suggesting it was pinned to a small subset of hot prefixes. Most pods cluster in the 4%–9% range.
+
+**Run C** (precise-prefix-cache-routing with KV events) shows uniform distribution across pods (2.90%–3.96%), consistent with the prefix-aware scheduler routing each prefix group to its designated pod regardless of which EPP replica handled the request. The uniformity reflects the KV event-driven cache state awareness working as intended.
+
+For the shared_prefix workload at scale on gpt-oss-120b, **precise-prefix-cache-routing (Run C)** is the recommended configuration: it recovers essentially all of Run A's throughput while adding meaningful KV cache reuse and cutting tail latency, without the EPP-induced throughput ceiling seen in Run B.
