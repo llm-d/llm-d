@@ -1,0 +1,102 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: decode
+spec:
+  replicas: 16
+  template:
+    spec:
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+              - matchExpressions:
+                  - key: kubernetes.io/hostname
+                    operator: NotIn
+                    values:
+                      - pokprod-b93r43s0
+                      - pokprod-b93r44s3
+      containers:
+        - name: modelserver
+          command: ["vllm", "serve"]
+          args:
+            - "/model-cache/models/openai/gpt-oss-120b"
+            - "--disable-access-log-for-endpoints=/health,/metrics,/v1/models"
+            - "--tensor-parallel-size=1"
+            - "--gpu-memory-utilization=0.95"
+            - "--served-model-name=openai/gpt-oss-120b"
+            - "--enable-auto-tool-choice"
+            - "--tool-call-parser=openai"
+            - "--reasoning-parser=openai_gptoss"
+            - "--block-size=128"
+            - "--max-num-seqs=512"
+            - "--kv-events-config"
+            - '{"enable_kv_cache_events":true,"publisher":"zmq","endpoint":"$(KV_EVENTS_ENDPOINT)","topic":"kv@$(POD_IP):$(POD_PORT)@openai/gpt-oss-120b"}'
+          ports:
+            - containerPort: 5556
+              name: kv-events
+              protocol: TCP
+          env:
+            - name: NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+            - name: POD_IP
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.podIP
+            - name: POD_PORT
+              value: "8000"
+            - name: KV_EVENTS_ENDPOINT
+              value: "tcp://*:5556"
+            - name: LOGNAME
+              value: "vllm"
+            - name: DO_NOT_TRACK
+              value: "1"
+          resources:
+            limits:
+              cpu: '16'
+              memory: 128Gi
+              nvidia.com/gpu: 1
+            requests:
+              cpu: '8'
+              memory: 64Gi
+              nvidia.com/gpu: 1
+          volumeMounts:
+            - mountPath: /dev/shm
+              name: shm
+            - mountPath: /.cache
+              name: torch-compile-cache
+            - mountPath: /.triton
+              name: triton-cache
+            - mountPath: /.config
+              name: vllm-config
+            - mountPath: /model-cache
+              name: model-cache
+          startupProbe:
+            initialDelaySeconds: 15
+            periodSeconds: 30
+            timeoutSeconds: 5
+            failureThreshold: 120
+          livenessProbe:
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            periodSeconds: 5
+            timeoutSeconds: 2
+            failureThreshold: 3
+      volumes:
+        - name: shm
+          emptyDir:
+            medium: Memory
+            sizeLimit: 20Gi
+        - name: torch-compile-cache
+          emptyDir: {}
+        - name: triton-cache
+          emptyDir: {}
+        - name: vllm-config
+          emptyDir: {}
+        - name: model-cache
+          persistentVolumeClaim:
+            claimName: model-cache-pvc
