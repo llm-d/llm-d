@@ -73,7 +73,7 @@ spec:
                   --data-parallel-address="${LWS_LEADER_ADDRESS}" \
                   --data-parallel-rpc-port=5555 \
                   --enable-expert-parallel \
-                  --kv_transfer_config '{"kv_connector":"NixlConnector","kv_role":"kv_both","kv_load_failure_policy":"fail"}' \
+                  --kv_transfer_config '{"kv_connector":"NixlConnector","kv_role":"kv_producer","kv_load_failure_policy":"fail"}' \
                   --all2all-backend deepep_high_throughput \
                   --max-model-len 65536
                   # To enable tracing, add:

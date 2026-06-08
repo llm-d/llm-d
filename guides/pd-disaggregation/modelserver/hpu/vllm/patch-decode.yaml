@@ -19,7 +19,7 @@ spec:
             - "--enforce-eager"
             - "--gpu-memory-utilization=0.9"
             - "--kv-transfer-config"
-            - '{"kv_connector":"NixlConnector","kv_role":"kv_both","kv_buffer_device":"cpu"}'
+            - '{"kv_connector":"NixlConnector","kv_role":"kv_consumer","kv_buffer_device":"cpu"}'
             - "--port=8200"
           env:
             - name: HF_TOKEN
