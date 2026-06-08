@@ -4,9 +4,11 @@ llm-d uses the **llm-d Router** to make intelligent request routing decisions fo
 
 ## Standalone (Default)
 
-Use this when you **do not** want to deploy a proxy via Kubernetes Gateway APIs. The standalone chart deploys the **llm-d Router** with an Envoy sidecar to proxy the traffic directly.
+Use this when you **do not** want to deploy a proxy via Kubernetes Gateway APIs. The standalone chart deploys the **llm-d Router** with a sidecar proxy — either **Envoy** (default) or **agentgateway** — to proxy the traffic directly.
 
 **Chart:** `${ROUTER_STANDALONE_CHART}` (set by [`guides/env.sh`](../../env.sh))
+
+### Standalone with Envoy (default)
 
 ```bash
 helm install <release-name> \
@@ -14,7 +16,30 @@ helm install <release-name> \
   -f ${REPO_ROOT}/guides/recipes/router/base.values.yaml \
   -f ${REPO_ROOT}/guides/recipes/router/features/monitoring.values.yaml \
   -f ${REPO_ROOT}/guides/<your-guide>/router/<your-guide>.values.yaml \
-  --set provider.name=<gke|istio|none> \
+  -n ${NAMESPACE} \
+  --version ${ROUTER_CHART_VERSION}
+```
+
+### Standalone with agentgateway
+
+agentgateway can be used as the sidecar proxy in place of Envoy. In this mode agentgateway runs alongside the EPP in the same pod and communicates with it over localhost via ext-proc — no Kubernetes Gateway API infrastructure required.
+
+> [!NOTE]
+> When using `proxyType=agentgateway`, set `router.inferencePool.create=false`.
+> agentgateway automatically creates a pseudo service for model workloads — no
+> explicit service name is required. TLS is disabled between EPP and agentgateway
+> automatically by the chart, but can be set explicitly via
+> `router.epp.flags.secure-serving=false`.
+
+```bash
+helm install <release-name> \
+  oci://ghcr.io/llm-d/charts/llm-d-router-standalone-dev \
+  -f ${REPO_ROOT}/guides/recipes/router/base.values.yaml \
+  -f ${REPO_ROOT}/guides/recipes/router/features/monitoring.values.yaml \
+  -f ${REPO_ROOT}/guides/<your-guide>/router/<your-guide>.values.yaml \
+  --set router.proxy.proxyType=agentgateway \
+  --set router.inferencePool.create=false \
+  --set router.epp.flags.secure-serving=false \
   -n ${NAMESPACE} \
   --version ${ROUTER_CHART_VERSION}
 ```
