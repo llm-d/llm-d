@@ -39,6 +39,7 @@ export WVA_NAMESPACE=llm-d-autoscaler
 export NAMESPACE=llm-d-optimized-baseline
 kubectl create namespace ${NAMESPACE} --dry-run=client -o yaml | kubectl apply -f -
 kubectl create namespace ${WVA_NAMESPACE} --dry-run=client -o yaml | kubectl apply -f -
+export REPO_ROOT=$(realpath $(git rev-parse --show-toplevel))
 ```
 
 > **Default mode**: this guide installs WVA scoped to `llm-d-optimized-baseline` by default.
@@ -60,7 +61,7 @@ kubectl label namespace "${WVA_NAMESPACE}" openshift.io/user-monitoring=true --o
 Configure WVA to query the cluster Thanos Querier:
 
 ```bash
-cat guides/workload-autoscaling/wva-config/platform/ocp/configmap-patch.yaml
+cat ${REPO_ROOT}/guides/workload-autoscaling/wva-config/platform/ocp/configmap-patch.yaml
 ```
 
 OpenShift defaults are already set in the overlay:
@@ -73,7 +74,7 @@ Optional (strict TLS): manage the `prometheus-client-cert` secret with Kustomize
 ```bash
 export PROMETHEUS_CA_CERT=$(kubectl get secret thanos-querier-tls -n openshift-monitoring -o jsonpath='{.data.tls\.crt}' | base64 -d)
 WVA_TLS_OVERLAY_DIR=$(mktemp -d)
-cp -R guides/workload-autoscaling/components/tls-overlay/. "${WVA_TLS_OVERLAY_DIR}"
+cp -R ${REPO_ROOT}/guides/workload-autoscaling/components/tls-overlay/. "${WVA_TLS_OVERLAY_DIR}"
 printf "%s" "${PROMETHEUS_CA_CERT}" > "${WVA_TLS_OVERLAY_DIR}/ca.crt"
 kubectl apply -k "${WVA_TLS_OVERLAY_DIR}" -n ${WVA_NAMESPACE}
 ```
@@ -107,25 +108,25 @@ export PROMETHEUS_TLS_INSECURE_SKIP_VERIFY=false
 Optional preflight: validate platform overlays render before applying:
 
 ```bash
-kubectl kustomize guides/workload-autoscaling/wva-config/platform/ocp >/dev/null
-kubectl kustomize guides/workload-autoscaling/wva-config/platform/generic >/dev/null
-kubectl kustomize guides/workload-autoscaling/wva-config/platform/gke >/dev/null
+kubectl kustomize ${REPO_ROOT}/guides/workload-autoscaling/wva-config/platform/ocp >/dev/null
+kubectl kustomize ${REPO_ROOT}/guides/workload-autoscaling/wva-config/platform/generic >/dev/null
+kubectl kustomize ${REPO_ROOT}/guides/workload-autoscaling/wva-config/platform/gke >/dev/null
 ```
 
 Install WVA using the OpenShift overlay in `wva-config/platform/ocp`:
 
 ```bash
-kubectl apply -k guides/workload-autoscaling/wva-config/platform/ocp -n ${WVA_NAMESPACE}
+kubectl apply -k ${REPO_ROOT}/guides/workload-autoscaling/wva-config/platform/ocp -n ${WVA_NAMESPACE}
 ```
 
 If you are not on OpenShift, use:
 
 ```bash
 # Generic Kubernetes
-kubectl apply -k guides/workload-autoscaling/wva-config/platform/generic -n ${WVA_NAMESPACE}
+kubectl apply -k ${REPO_ROOT}/guides/workload-autoscaling/wva-config/platform/generic -n ${WVA_NAMESPACE}
 
 # GKE
-kubectl apply -k guides/workload-autoscaling/wva-config/platform/gke -n ${WVA_NAMESPACE}
+kubectl apply -k ${REPO_ROOT}/guides/workload-autoscaling/wva-config/platform/gke -n ${WVA_NAMESPACE}
 ```
 
 > **Note**: By default, this install watches `llm-d-optimized-baseline` (`--watch-namespace=llm-d-optimized-baseline`).
@@ -196,13 +197,13 @@ Remove the WVA controller with Kustomize:
 
 ```bash
 # OpenShift
-kubectl delete -k guides/workload-autoscaling/wva-config/platform/ocp -n ${WVA_NAMESPACE}
+kubectl delete -k ${REPO_ROOT}/guides/workload-autoscaling/wva-config/platform/ocp -n ${WVA_NAMESPACE}
 
 # Generic Kubernetes
-kubectl delete -k guides/workload-autoscaling/wva-config/platform/generic -n ${WVA_NAMESPACE}
+kubectl delete -k ${REPO_ROOT}/guides/workload-autoscaling/wva-config/platform/generic -n ${WVA_NAMESPACE}
 
 # GKE
-kubectl delete -k guides/workload-autoscaling/wva-config/platform/gke -n ${WVA_NAMESPACE}
+kubectl delete -k ${REPO_ROOT}/guides/workload-autoscaling/wva-config/platform/gke -n ${WVA_NAMESPACE}
 ```
 
 If you installed Prometheus Adapter for WVA, you can uninstall it as well:
@@ -237,7 +238,6 @@ sed -i.bak "s|url:.*|url: https://thanos-querier.openshift-monitoring.svc.cluste
   echo "Edit ${TMPDIR:-/tmp}/prometheus-adapter-values.yaml to set prometheus.url"
 
 # Install
-export REPO_ROOT=$(realpath $(git rev-parse --show-toplevel))
 helm upgrade -i prometheus-adapter prometheus-community/prometheus-adapter \
   --version 5.2.0 -n ${MON_NS} --create-namespace \
   -f ${TMPDIR:-/tmp}/prometheus-adapter-values.yaml \

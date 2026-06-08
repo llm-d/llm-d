@@ -64,7 +64,6 @@ export ROUTER_CHART_VERSION=v0
 export GUIDE_NAME="precise-prefix-cache-routing"
 export NAMESPACE="llm-d-${GUIDE_NAME}"
 export REPO_ROOT=$(realpath $(git rev-parse --show-toplevel))
-export PROVIDER_NAME=istio   # options: none, gke, agentgateway, istio
 ```
 
 - Install the Gateway API Inference Extension CRDs:
@@ -120,6 +119,8 @@ To use a Kubernetes Gateway managed proxy instead of the standalone Envoy sideca
 2. **Deploy the llm-d Router and HTTPRoute** via the `llm-d-router-gateway` chart with `httpRoute.create=true`:
 
 ```bash
+export PROVIDER_NAME=istio   # options: none, gke, agentgateway, istio
+
 helm install ${GUIDE_NAME} \
   oci://ghcr.io/llm-d/charts/llm-d-router-gateway-dev \
   -f ${REPO_ROOT}/guides/recipes/router/base.values.yaml \
@@ -227,7 +228,7 @@ envsubst < guide.yaml > config.yaml
 
 ```bash
 helm uninstall ${GUIDE_NAME} -n ${NAMESPACE}
-kubectl delete -n ${NAMESPACE} -k guides/${GUIDE_NAME}/modelserver/gpu/vllm/${INFRA_PROVIDER}/
+kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/gpu/vllm/${INFRA_PROVIDER}/
 ```
 
 ## How It Works

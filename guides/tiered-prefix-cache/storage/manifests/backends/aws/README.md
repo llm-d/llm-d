@@ -13,6 +13,7 @@ This guide explains how to provision an AWS EFS-backed shared storage for llm-d 
 * Create a namespace for installation.
 
 ```bash
+export REPO_ROOT=$(realpath $(git rev-parse --show-toplevel))
 export NAMESPACE=llm-d-storage # or any other namespace (shorter names recommended)
 kubectl create namespace ${NAMESPACE}
 ```
@@ -44,7 +45,7 @@ You will need this ID when configuring the `StorageClass`.
 **1. Create a `StorageClass` for EFS:**
 
 ```bash
-cd guides/tiered-prefix-cache/storage/manifests/backends/aws
+cd ${REPO_ROOT}/guides/tiered-prefix-cache/storage/manifests/backends/aws
 kubectl apply -f ./storage_class.yaml -n ${NAMESPACE}
 ```
 

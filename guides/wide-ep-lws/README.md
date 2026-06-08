@@ -53,6 +53,7 @@ This guide includes configurations for the following accelerators:
   export GUIDE_NAME="wide-ep-lws"
   export NAMESPACE=llm-d-wide-ep
   export MODEL=deepseek-ai/DeepSeek-R1-0528
+  export REPO_ROOT=$(realpath $(git rev-parse --show-toplevel))
   ```
 * Install the Gateway API Inference Extension CRDs:
 
@@ -76,7 +77,6 @@ This guide includes configurations for the following accelerators:
 This deploys the llm-d Router with an Envoy sidecar, it doesn't set up a Kubernetes Gateway.
 
 ```bash
-export REPO_ROOT=$(realpath $(git rev-parse --show-toplevel))
 helm install ${GUIDE_NAME} \
     oci://ghcr.io/llm-d/charts/llm-d-router-standalone-dev \
     -f ${REPO_ROOT}/guides/recipes/router/base.values.yaml \
@@ -93,8 +93,6 @@ To use a Kubernetes Gateway managed proxy rather than the standalone version, fo
 2. *Deploy the llm-d Router and an HTTPRoute* that connects it to the Gateway as follows:
 
 ```bash
-export REPO_ROOT=$(realpath $(git rev-parse --show-toplevel))
-
 export PROVIDER_NAME=gke # options: none, gke, agentgateway, istio
 helm install ${GUIDE_NAME} \
     oci://ghcr.io/llm-d/charts/llm-d-router-gateway-dev  \
@@ -113,7 +111,7 @@ Apply the Kustomize overlays for your specific backend:
 
 ```bash
 export INFRA_PROVIDER=gke # options: gke, coreweave, dgx-cloud-gb200
-kubectl apply -n ${NAMESPACE} -k guides/${GUIDE_NAME}/modelserver/gpu/vllm/${INFRA_PROVIDER}
+kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/gpu/vllm/${INFRA_PROVIDER}
 ```
 
 ### 3. (Optional) Enable monitoring
@@ -125,7 +123,7 @@ kubectl apply -n ${NAMESPACE} -k guides/${GUIDE_NAME}/modelserver/gpu/vllm/${INF
 * Deploy the monitoring resources for this guide.
 
 ```bash
-kubectl apply -n ${NAMESPACE} -k guides/recipes/modelserver/components/monitoring-pd
+kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/recipes/modelserver/components/monitoring-pd
 ```
 
 ### 4. (Optional) Topology Aware Scheduling (TAS)
@@ -134,9 +132,9 @@ For information on how to use topology aware scheduling using Kueue, see [LWS + 
 
 ```bash
 # H200 on GKE
-kubectl apply -n ${NAMESPACE} -k guides/${GUIDE_NAME}/modelserver/gpu/vllm/topology-aware/gke
+kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/gpu/vllm/topology-aware/gke
 # B200 on GKE
-kubectl apply -n ${NAMESPACE} -k guides/${GUIDE_NAME}/modelserver/gpu/vllm/topology-aware/gke-a4
+kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/gpu/vllm/topology-aware/gke-a4
 ```
 
 ## Verification
@@ -215,7 +213,7 @@ To remove the deployed components:
 
 ```bash
 helm uninstall ${GUIDE_NAME} -n ${NAMESPACE}
-kubectl delete -n ${NAMESPACE} -k guides/${GUIDE_NAME}/modelserver/<gke|coreweave>
+kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/<gke|coreweave>
 ```
 
 ## Benchmarking Report
