@@ -1,0 +1,28 @@
+inferenceExtension:
+  replicas: 1
+  image:
+    name: llm-d-inference-scheduler
+    hub: ghcr.io/llm-d
+    tag: v0.8.0
+    pullPolicy: Always
+  extProcPort: 9002
+  pluginsConfigFile: "default-plugins.yaml"
+  tracing:
+    enabled: false
+  monitoring:
+    interval: "10s"
+    prometheus:
+      enabled: false
+      auth:
+        enabled: false
+
+inferencePool:
+  targetPorts:
+    - number: 8000
+  modelServerType: vllm
+  modelServers:
+    matchLabels:
+      llm-d.ai/inference-serving: "true"
+      llm-d.ai/guide: "simulated-accelerators"
+      llm-d.ai/accelerator-variant: "cpu"
+      llm-d.ai/model: "random"
