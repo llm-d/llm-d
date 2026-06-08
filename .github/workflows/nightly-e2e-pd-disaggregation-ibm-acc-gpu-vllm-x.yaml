@@ -23,7 +23,7 @@ on:
         default: 'llm-d/llm-d'
 
 permissions:
-  contents: read
+  contents: write
 
 concurrency:
   group: nightly-e2e-pd-disaggregation
@@ -76,3 +76,12 @@ jobs:
           -f guides/${GUIDE_NAME}/router/${GUIDE_NAME}.values.yaml \
           -n ${NAMESPACE} --version ${ROUTER_CHART_VERSION}
     secrets: inherit
+
+  update-badge:
+    needs: [nightly]
+    if: always()
+    uses: ./.github/workflows/reusable-update-badge.yaml
+    with:
+      badge_name: pd-disaggregation-ocp
+      badge_label: "OCP"
+      result: ${{ needs.nightly.result }}

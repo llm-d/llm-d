@@ -56,7 +56,7 @@ on:
     - cron: '0 10 * * *'  # 10:00 UTC daily
 
 permissions:
-  contents: read
+  contents: write
 
 concurrency:
   group: nightly-e2e-optimized-baseline-intel-hpu
@@ -90,3 +90,12 @@ jobs:
 #      workload: ${{ inputs.workload || 'guide_optimized-baseline_1.yaml' }}
       cleanup: ${{ inputs.cleanup || 'true' }}
     secrets: inherit
+
+  update-badge:
+    needs: [nightly]
+    if: always()
+    uses: ./.github/workflows/reusable-update-badge.yaml
+    with:
+      badge_name: optimized-baseline-hpu
+      badge_label: "HPU"
+      result: ${{ needs.nightly.result }}

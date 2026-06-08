@@ -24,7 +24,7 @@ on:
         default: 'llm-d/llm-d'
 
 permissions:
-  contents: read
+  contents: write
 
 concurrency:
   group: nightly-e2e-pd-disaggregation-gke-tpu
@@ -39,3 +39,12 @@ jobs:
         run: |
           echo "Skipping PD Disaggregation TPU nightly — v6e manifests not yet available."
           echo "Unblock: add guides/pd-disaggregation/modelserver/tpu-v6e/ overlay and replace this job."
+
+  update-badge:
+    needs: [nightly]
+    if: always()
+    uses: ./.github/workflows/reusable-update-badge.yaml
+    with:
+      badge_name: pd-disaggregation-gke-tpu
+      badge_label: "GKE TPU"
+      result: ${{ needs.nightly.result }}

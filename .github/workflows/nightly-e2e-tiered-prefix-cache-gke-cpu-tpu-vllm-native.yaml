@@ -23,7 +23,7 @@ on:
         default: 'llm-d/llm-d'
 
 permissions:
-  contents: read
+  contents: write
 
 concurrency:
   group: nightly-e2e-tiered-prefix-cache-gke-tpu
@@ -38,3 +38,12 @@ jobs:
         run: |
           echo "Skipping Tiered Prefix Cache TPU nightly — v6e manifests not yet available."
           echo "Unblock: confirm TPUOffloadConnector v6e support, add tpu-v6e manifests, replace this job."
+
+  update-badge:
+    needs: [nightly]
+    if: always()
+    uses: ./.github/workflows/reusable-update-badge.yaml
+    with:
+      badge_name: tiered-prefix-cache-gke-tpu
+      badge_label: "GKE TPU"
+      result: ${{ needs.nightly.result }}

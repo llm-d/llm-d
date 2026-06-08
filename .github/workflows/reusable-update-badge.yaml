@@ -1,0 +1,70 @@
+name: Update Badge Status
+
+on:
+  workflow_call:
+    inputs:
+      badge_name:
+        description: 'Badge filename (without .json extension)'
+        required: true
+        type: string
+      badge_label:
+        description: 'Short label shown on the badge (e.g., OCP, CKS, GKE GPU)'
+        required: true
+        type: string
+      result:
+        description: 'Result of the upstream job (success, failure, cancelled, skipped)'
+        required: true
+        type: string
+
+jobs:
+  update-badge:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Determine badge status
+        id: badge
+        run: |
+          case "${{ inputs.result }}" in
+            success)
+              echo "color=brightgreen" >> $GITHUB_OUTPUT
+              echo "message=passing" >> $GITHUB_OUTPUT
+              ;;
+            cancelled)
+              echo "color=lightgrey" >> $GITHUB_OUTPUT
+              echo "message=cancelled" >> $GITHUB_OUTPUT
+              ;;
+            skipped)
+              echo "color=lightgrey" >> $GITHUB_OUTPUT
+              echo "message=skipped" >> $GITHUB_OUTPUT
+              ;;
+            *)
+              echo "color=red" >> $GITHUB_OUTPUT
+              echo "message=failing" >> $GITHUB_OUTPUT
+              ;;
+          esac
+
+      - name: Checkout gh-pages
+        uses: actions/checkout@v4
+        with:
+          ref: gh-pages
+
+      - name: Write badge file
+        run: |
+          mkdir -p badges
+          cat > "badges/${{ inputs.badge_name }}.json" <<EOF
+          {
+            "schemaVersion": 1,
+            "label": "${{ inputs.badge_label }}",
+            "message": "${{ steps.badge.outputs.message }}",
+            "color": "${{ steps.badge.outputs.color }}"
+          }
+          EOF
+
+      - name: Push badge update
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add badges/
+          git diff --staged --quiet || git commit -m "badge: update ${{ inputs.badge_name }} (${{ steps.badge.outputs.message }})"
+          git push

@@ -27,7 +27,7 @@ on:
         default: 'llm-d/llm-d'
 
 permissions:
-  contents: read
+  contents: write
 
 concurrency:
   group: nightly-e2e-precise-prefix-cache
@@ -64,3 +64,12 @@ jobs:
       pr_number: ${{ github.event.inputs.pr_number }}
       pr_repo: ${{ github.event.inputs.pr_repo }}
     secrets: inherit
+
+  update-badge:
+    needs: [nightly]
+    if: always()
+    uses: ./.github/workflows/reusable-update-badge.yaml
+    with:
+      badge_name: precise-prefix-cache-ocp
+      badge_label: "OCP"
+      result: ${{ needs.nightly.result }}

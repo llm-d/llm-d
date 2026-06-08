@@ -13,7 +13,7 @@ on:
         default: 'false'
 
 permissions:
-  contents: read
+  contents: write
 
 concurrency:
   group: nightly-e2e-pd-disaggregation-xpu
@@ -34,3 +34,12 @@ jobs:
       llm_d_ref: ${{ github.ref }}
       skip_cleanup: ${{ github.event.inputs.skip_cleanup == 'true' }}
     secrets: inherit
+
+  update-badge:
+    needs: [nightly]
+    if: always()
+    uses: ./.github/workflows/reusable-update-badge.yaml
+    with:
+      badge_name: pd-disaggregation-xpu
+      badge_label: "XPU"
+      result: ${{ needs.nightly.result }}

@@ -65,7 +65,7 @@ on:
   schedule:
     - cron: '0 10 * * *'  # 10:00 UTC daily
 permissions:
-  contents: read
+  contents: write
 
 concurrency:
   group: nightly-e2e-optimized-baseline-gke-tpu
@@ -101,3 +101,12 @@ jobs:
       tpu_chips: ${{ inputs.tpu_chips || '16' }}
       tpu_topology: ${{ inputs.tpu_topology || '2x4' }}
     secrets: inherit
+
+  update-badge:
+    needs: [nightly]
+    if: always()
+    uses: ./.github/workflows/reusable-update-badge.yaml
+    with:
+      badge_name: optimized-baseline-gke-tpu
+      badge_label: "GKE TPU"
+      result: ${{ needs.nightly.result }}

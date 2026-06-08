@@ -34,7 +34,7 @@ on:
         default: 'llm-d/llm-d'
 
 permissions:
-  contents: read
+  contents: write
   packages: write
 
 concurrency:
@@ -113,3 +113,12 @@ jobs:
       pr_number: ${{ github.event.inputs.pr_number }}
       pr_repo: ${{ github.event.inputs.pr_repo }}
     secrets: inherit
+
+  update-badge:
+    needs: [nightly]
+    if: always()
+    uses: ./.github/workflows/reusable-update-badge.yaml
+    with:
+      badge_name: wva-cks
+      badge_label: "CKS"
+      result: ${{ needs.nightly.result }}
