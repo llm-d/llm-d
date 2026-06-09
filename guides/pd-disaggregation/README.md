@@ -155,7 +155,7 @@ kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/g
 SGLang-specific notes:
 
 * **Engine flags**: prefill and decode pods launch with `--disaggregation-mode={prefill,decode}` and `--disaggregation-transfer-backend=nixl`. The decode pod's routing-proxy sidecar is configured with `--connector=sglang`.
-* **Bootstrap server**: each prefill instance runs a bootstrap server (default port `8998`) that the sidecar references via the `SGLANG_BOOTSTRAP_PORT` environment variable. P/D peers discover each other through this server rather than vLLM's peer-to-peer negotiation; the KV transfer itself still runs directly over NIXL/RDMA.
+* **Bootstrap server**: each prefill instance runs a bootstrap server on port `8998` (the default). To use a different port, set `SGLANG_BOOTSTRAP_PORT` on the sidecar and `--disaggregation-bootstrap-port` on the SGLang engine so the two match. P/D peers discover each other through this server rather than vLLM's peer-to-peer negotiation; the KV transfer itself still runs directly over NIXL/RDMA.
 * **Operations**: scale up/down, request cancellation, fault tolerance, and rollout behavior differ from vLLM. See [Disaggregated Serving: Operations (SGLang)](../../docs/architecture/advanced/disaggregation/operations-sglang.md).
 
 </details>
@@ -254,9 +254,19 @@ To remove the deployed components:
 
 ```bash
 helm uninstall ${GUIDE_NAME} -n ${NAMESPACE}
-# Use the same modelserver path you deployed (e.g. .../gpu/sglang/${INFRA_PROVIDER} for SGLang)
 kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/gpu/vllm/${INFRA_PROVIDER}
 ```
+
+<details>
+<summary><h4>Cleanup for SGLang</h4></summary>
+
+If you deployed the SGLang overlay, delete that path instead of the vLLM one:
+
+```bash
+kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/gpu/sglang/${INFRA_PROVIDER}
+```
+
+</details>
 
 ## Benchmarking Report
 

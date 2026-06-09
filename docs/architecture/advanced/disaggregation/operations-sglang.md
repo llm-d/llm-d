@@ -15,7 +15,7 @@ Both engines establish a NIXL (RDMA) connection for each P/D pair and differ mai
 
 In production environments, it is common for model server replicas to be created and destroyed during the running of the service. In a disaggregated configuration, the ability to dynamically add/remove replicas from the deployment is complicated by the need to establish/destroy connections between P and D workers on the fly.
 
-SGLang coordinates this through a bootstrap server that is started on each prefill instance (default port `8998`, configurable via the `SGLANG_BOOTSTRAP_PORT` environment variable read by the routing sidecar). For each request the Routing Proxy Sidecar pairs a P and a D and gives both the same rendezvous tokens; the two then use that bootstrap server to find each other and run the KV transfer directly between the pods, off the sidecar's request path.
+SGLang coordinates this through a bootstrap server that is started on each prefill instance (default port `8998`). For each request the Routing Proxy Sidecar pairs a P and a D and gives both the same rendezvous tokens; the two then use that bootstrap server to find each other and run the KV transfer directly between the pods, off the sidecar's request path.
 
 ### Scale-Up
 
