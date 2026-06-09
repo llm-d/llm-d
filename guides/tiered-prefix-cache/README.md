@@ -1,14 +1,5 @@
 # KV Cache Offloading
 
-### CPU Offloading (vLLM Native)
-
-[![Nightly - Tiered Prefix Cache E2E (GKE GPU)](https://github.com/llm-d/llm-d/actions/workflows/nightly-e2e-tiered-prefix-cache-cpu-offloading-gke.yaml/badge.svg)](https://github.com/llm-d/llm-d/actions/workflows/nightly-e2e-tiered-prefix-cache-cpu-offloading-gke.yaml)
-[![Nightly - Tiered Prefix Cache E2E (OpenShift)](https://github.com/llm-d/llm-d/actions/workflows/nightly-e2e-tiered-prefix-cache-cpu-offloading-ocp.yaml/badge.svg)](https://github.com/llm-d/llm-d/actions/workflows/nightly-e2e-tiered-prefix-cache-cpu-offloading-ocp.yaml)
-
-### CPU Offloading (LMCache)
-
-[![Nightly - Tiered Prefix Cache LMCache E2E (GKE GPU)](https://github.com/llm-d/llm-d/actions/workflows/nightly-e2e-tiered-prefix-cache-cpu-offloading-lmcache-gke.yaml/badge.svg)](https://github.com/llm-d/llm-d/actions/workflows/nightly-e2e-tiered-prefix-cache-cpu-offloading-lmcache-gke.yaml)
-
 ## Overview
 
 Efficient caching of prefix computation states to avoid recomputation is crucial for boosting Large Language Model (LLM) inference performance such as Time to First Token (TTFT) and overall throughput, as well as reducing the cost.

@@ -1,7 +1,5 @@
 # Predicted Latency-Based Routing
 
-[![Nightly - Predicted Latency E2E (OpenShift)](https://github.com/llm-d/llm-d/actions/workflows/nightly-e2e-predicted-latency-ocp.yaml/badge.svg)](https://github.com/llm-d/llm-d/actions/workflows/nightly-e2e-predicted-latency-ocp.yaml) [![Nightly - Predicted Latency E2E (CKS)](https://github.com/llm-d/llm-d/actions/workflows/nightly-e2e-predicted-latency-cks.yaml/badge.svg)](https://github.com/llm-d/llm-d/actions/workflows/nightly-e2e-predicted-latency-cks.yaml) [![Nightly - Predicted Latency E2E (GKE GPU)](https://github.com/llm-d/llm-d/actions/workflows/nightly-e2e-predicted-latency-gke.yaml/badge.svg)](https://github.com/llm-d/llm-d/actions/workflows/nightly-e2e-predicted-latency-gke.yaml)
-
 ## Overview
 
 Route each inference request to the model server predicted to serve it fastest — and, optionally, only to a server predicted to meet its TTFT/TPOT SLO.
