@@ -15,6 +15,9 @@ router:
     # Required by llm-d-router chart v0 when tokenizer is enabled;
     # must match the deployed model server and the token-producer modelName below
     modelName: Qwen/Qwen3-32B
+    env:
+      - name: HF_HOME
+        value: /tmp/hf/hub
 
   epp:
     replicas: 2
