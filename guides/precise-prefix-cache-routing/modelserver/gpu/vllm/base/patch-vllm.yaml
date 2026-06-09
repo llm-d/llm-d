@@ -3,7 +3,7 @@ kind: Deployment
 metadata:
   name: decode
 spec:
-  replicas: 1
+  replicas: 8
   template:
     spec:
       containers:
