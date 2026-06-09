@@ -51,9 +51,8 @@ stack differently:
 The [agentic-inference guide](../../guides/agentic-inference) is the operational counterpart. It
 composes llm-d's existing well-lit paths into a deployment stack — the
 [optimized baseline](optimized-baseline.md) for prefix- and load-aware routing,
-[tiered KV-cache offloading](tiered-prefix-cache.md) (CPU and storage) to keep idle sessions
-resident, [precise prefix-cache routing](precise-prefix-cache-routing.md) for exact KV-state
-visibility, and [P/D disaggregation](pd-disaggregation.md) for interactivity under load — and
+[tiered KV-cache offloading](tiered-prefix-cache.md) to keep idle sessions resident,
+[precise prefix-cache routing](precise-prefix-cache-routing.md) for exact KV-state visibility, and [P/D disaggregation](pd-disaggregation.md) for interactivity under load — and
 exposes them as deployment options on a complexity ladder, benchmarked against a shared, realistic
 agentic workload so options are directly comparable. See the guide for how each layer maps to the
 workload and how the options compose.
@@ -72,19 +71,12 @@ treating the **session as a graph of typed state blocks** the control plane plan
   stalls the whole loop, not per-request fairness. Extends the Inference Scheduler.
 - **State reuse and lifecycle ("zero-recompute")** — if a reusable context exists anywhere (HBM,
   host memory, storage), no node burns compute to regenerate it; durable context is pinned and
-  dead branches dropped via typed retention. Builds on KV-disaggregation, storage offloading, and
+  dead branches dropped via typed retention. Builds on KV-disaggregation, tiered offloading, and
   KV-centric stores such as Mooncake.
 - **Proactive state** — when an agent fans out, context is pre-positioned where the new compute
   will land, rather than pulled on demand.
 
 The guiding boundary: **the engine is the mechanism, llm-d is the meaning** — the semantic layer
 lives one level above the engine, so the work spans vLLM, SGLang, and beyond.
-
-### Further Reading
-
-- [llm-d Agentic Inference SIG Northstar][northstar] — the vision, canonical workloads, and focus areas.
-- [KV-Cache Orchestration for Agentic Inference](https://docs.google.com/document/d/1IHMoVuvfroK6-jZbj3uI5dpr1zyAqUh1HcpkAY_CdFY) — reuse, placement, and lifecycle of cache state.
-- [Session-Graph Orchestration for Agentic Inference](https://docs.google.com/document/d/1oet1juFV8oaJC7fswUSMH4L45gFi3Hbux5doEbBzQZo) — the session-graph planning layer in detail.
-- [OTel Trace Replay — Agentic Workload Simulation](https://docs.google.com/document/d/1qI3DXj9wYy6WY6-lk7viuzHVvftosCiRSP6DONT-dPI) — program-level, trace-driven benchmarking.
 
 [northstar]: https://docs.google.com/document/d/1DCUVHp9Z8CZUnKiP04nnD_31M3gRishW-cWZ657Cn5U
