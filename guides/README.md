@@ -28,9 +28,12 @@ We currently offer the following:
 * [Workload Autoscaling](./workload-autoscaling/README.md) - autoscale the LLM service via proactive, SLO-aware signals that reflect the true state of the inference system — queue depth, in-flight request counts, and KV cache pressure — so that capacity can be added before end-user latency is impacted.
 * [Rollouts](./rollouts/README.md) - perform incremental rollout operations for LoRA adapters, base models, and model server versions with minimal service disruption using traffic splitting and gradual deployment strategies.
 
-### Multimodal Serving
+### Workloads
 
-* [Optimized Baseline](./multimodal-serving/optimized-baseline/README.md) - Deploy vLLM with multimodal prefix-cache and load-aware routing enabled by the llm-d EPP.
+Horizontal, workload-centric paths that compose the capability guides above into a stack tuned for a specific traffic pattern.
+
+* [Agentic Inference](./agentic-inference/README.md) - serve long, multi-turn, tool-using agentic workloads (e.g. coding agents) via a ladder of deployment options that combine prefix-aware routing, KV-cache offloading, and P/D disaggregation.
+* [Multimodal Serving](./multimodal-serving/optimized-baseline/README.md) - Deploy vLLM with multimodal prefix-cache and load-aware routing enabled by the llm-d EPP.
 
 ## Experimental Guides
 
