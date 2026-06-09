@@ -193,16 +193,33 @@ The benchmark uses `inference-perf` with a synthetic code-generation workload (c
 - Turns per conversation: normal(mean=6, min=2, max=20)
 - Input tokens per turn: lognormal(mean=1,500); output tokens per turn: lognormal(mean=800)
 
-Jobs are submitted one per concurrency level, each writing results to a shared PVC for collection after the run. For each run, `num_conversations = concurrency` and `num_requests = 6 × num_conversations`, so every conversation gets to complete its average number of turns (mean=6, with variance) before the job ends.
+You run one benchmark per concurrency level: set `concurrency_level` in [`guide.yaml`](benchmark-templates/guide.yaml) (keeping `num_conversations = concurrency_level` and `num_requests = 6 × num_conversations`, so every conversation completes its average number of turns) and re-run for each point you want on the curve.
 
-### 1. Get the Proxy IP
+### 1. Prepare the Benchmarking Suite
+
+- Download the benchmark script:
+
+  ```bash
+  curl -L -O https://raw.githubusercontent.com/llm-d/llm-d-benchmark/main/existing_stack/run_only.sh
+  chmod u+x run_only.sh
+  ```
+
+- Prepare the HuggingFace token secret `llm-d-hf-token` in the namespace.
+
+### 2. Download the Workload Template
+
+```bash
+curl -LJO "https://raw.githubusercontent.com/llm-d/llm-d/main/guides/${GUIDE_NAME}/benchmark-templates/guide.yaml"
+```
+
+### 3. Execute Benchmark
 
 ```bash
 export IP=$(kubectl get service ${GUIDE_NAME}-epp -n ${NAMESPACE} -o jsonpath='{.spec.clusterIP}')
 ```
 
 <details>
-<summary><b>Gateway Mode</b></summary>
+<summary><b>Click here for Gateway Mode</b></summary>
 
 ```bash
 export IP=$(kubectl get gateway llm-d-inference-gateway -n ${NAMESPACE} -o jsonpath='{.status.addresses[0].value}')
@@ -210,29 +227,17 @@ export IP=$(kubectl get gateway llm-d-inference-gateway -n ${NAMESPACE} -o jsonp
 
 </details>
 
-> [!NOTE]
-> The load generator runs as in-cluster Kubernetes Jobs, so the EPP `ClusterIP` is reachable directly — no `kubectl port-forward` or external address is needed. If you instead drive traffic from outside the cluster, use a Gateway address, a LoadBalancer IP/hostname, or a port-forward.
-
-### 2. Run the Benchmark
+Set the concurrency level for this run (`NUM_REQUESTS = 6 × CONCURRENCY`), then render and launch:
 
 ```bash
-cd guides/predicted-latency-routing/benchmark-templates
-WORKLOAD=code-generation \
-  IP=${IP} \
-  NAMESPACE=${NAMESPACE} \
-  ./run_benchmark.sh
+export CONCURRENCY=40
+export NUM_REQUESTS=$(( CONCURRENCY * 6 ))   # 6 turns per conversation
+
+envsubst < guide.yaml > config.yaml
+./run_only.sh -c config.yaml -o ./results
 ```
 
-Results are saved to `workloads/code-generation/results/<run-id>/`, where `<run-id>` is a Unix timestamp the script generates automatically at the start of each run (e.g. `1780679112`).
-
-Optional overrides:
-
-| Variable | Default | Description |
-|---|---|---|
-| `WORKLOAD` | `code-generation` | Subdirectory under `workloads/` to use |
-| `CONCURRENCY_LEVELS` | `10 20 30 40 50 60 70 80 90 100` | Space-separated list of concurrency levels |
-| `MODEL_NAME` | `Qwen/Qwen3-32B` | Model name passed to inference-perf |
-| `EPP_DEPLOYMENT` | `predicted-latency-routing-epp` | EPP deployment restarted before the run |
+To sweep concurrency, set a new `CONCURRENCY` (and `NUM_REQUESTS`) and re-run the block above for each level. Each run is saved under `./results/`.
 
 ## Benchmarking Report
 
