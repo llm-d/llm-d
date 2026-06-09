@@ -1,0 +1,47 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ../base
+
+images:
+  - name: ghcr.io/llm-d/llm-d-cuda
+    newName: vllm/vllm-openai
+    digest: sha256:4e5d0d839a292df9ce438d73bea96b8ec61a4fcd96f31005f3aa9ddf85f63f3f
+
+patches:
+  - target:
+      kind: LeaderWorkerSet
+    patch: |-
+      # 1. Model cache on the shared Lustre PVC instead of emptyDir, so the ~850 GiB
+      #    download lives on persistent shared storage (downloaded once, RWX) and does
+      #    NOT consume node ephemeral storage. base volumes order: [dshm, hf-cache, jit-cache].
+      - op: replace
+        path: /spec/leaderWorkerTemplate/workerTemplate/spec/volumes/1
+        value:
+          name: hf-cache
+          persistentVolumeClaim:
+            claimName: lustre-pvc-vllm
+      # Scope the HF cache to a subdir on the shared volume (avoid collisions with other
+      #  workloads using the same PVC). volumeMounts order: [dshm, hf-cache, jit-cache].
+      - op: add
+        path: /spec/leaderWorkerTemplate/workerTemplate/spec/containers/0/volumeMounts/1/subPath
+        value: deepseek-v4-pro/hf-cache
+      # 2. Model no longer in emptyDir -> drop ephemeral request to fit GB200 nodes
+      #    (~891 GiB allocatable; the base's 1Ti request is unschedulable here).
+      - op: replace
+        path: /spec/leaderWorkerTemplate/workerTemplate/spec/containers/0/resources/limits/ephemeral-storage
+        value: 128Gi
+      - op: replace
+        path: /spec/leaderWorkerTemplate/workerTemplate/spec/containers/0/resources/requests/ephemeral-storage
+        value: 128Gi
+      # 3. MNNVL cross-node NVLink: attach the cluster's compute-domain ResourceClaimTemplate
+      #    (admin-provisioned in this namespace as llm-d-dev-claim).
+      - op: add
+        path: /spec/leaderWorkerTemplate/workerTemplate/spec/resourceClaims
+        value:
+          - name: compute-domain-channel
+            resourceClaimTemplateName: llm-d-dev-claim
+      - op: add
+        path: /spec/leaderWorkerTemplate/workerTemplate/spec/containers/0/resources/claims
+        value:
+          - name: compute-domain-channel
