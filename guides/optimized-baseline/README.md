@@ -17,7 +17,7 @@ The optimized-baseline defaults to two main routing criteria:
 
 - **Load-aware** using both the [kv-cache utilization](https://github.com/llm-d/llm-d-router/tree/main/pkg/epp/framework/plugins/scheduling/scorer/kvcacheutilization) and the [queue size](https://github.com/llm-d/llm-d-router/tree/main/pkg/epp/framework/plugins/scheduling/scorer/queuedepth) scorers.
 
-The benchmark was done using [compare-llm-d-configurations skill](https://github.com/llm-d-incubation/llm-d-skills/tree/main/skills/compare-llm-d-configurations) on llm-d tagged version v0.7.0 
+The benchmark was done using [compare-llm-d-configurations skill](https://github.com/llm-d-incubation/llm-d-skills/tree/main/skills/compare-llm-d-configurations) 
 
 ## Default Configuration
 
@@ -29,7 +29,7 @@ The benchmark was done using [compare-llm-d-configurations skill](https://github
 | GPUs per replica   | 2                                                       |
 | Total GPUs         | 16                                                      |
 
-## Optional Configuration
+## Additional Configuration
 Deployment label llm-d.ai/model: gpt-oss-120b
 
 | Parameter          | Value                                                             |
@@ -194,7 +194,7 @@ kubectl run curl-debug --rm -it \
     -- /bin/bash
 ```
 
-**Send a completion request (model aware):**
+**Send a completion request (model aware, for Additional Configuration use openai/gpt-oss-120b):**
 
 ```bash
 curl -X POST http://${IP}/v1/completions \
@@ -385,19 +385,22 @@ Output tokens/sec — higher is better; TTFT in seconds — lower is better.
 
 ### Comparing llm-d Routing to a Simple Kubernetes Service (Optional Configuration: gpt-oss-120b)
  
+The benchmark runs on 16 × H100 GPUs, distributed across 16 H100 model servers with TP=1.
+
 <img src="./benchmark-results-gpt120b/throughput_vs_qps.png" width="900" alt="Throughput vs QPS">
 <img src="./benchmark-results-gpt120b/latency_vs_qps.png" width="900" alt="Latency vs QPS">
 <img src="./benchmark-results-gpt120b/ttft_p90_vs_qps.png" width="900" alt="TTFT p90 vs QPS">
 
 Summary across the full ladder (rates 3 → 60):
 
-| Metric              | k8s service (RR) | llm-d Optimized | Δ% vs k8s |
-| :------------------ | :--------------- | :-------------- | :-------- |
-| Output tokens/sec   | 9,768.7          | 11,836.9        | +21.2%    |
-| Requests/sec        | 9.53             | 10.94           | +14.8%    |
-| TTFT mean (s)       | 14.736           | 7.853           | −46.7%    |
-| TTFT p90 (s)        | 39.350           | 26.621          | −32.3%    |
-| ITL mean (ms)       | 18.04            | 17.81           | −1.2%     |
+| Metric              | k8s service (R) | llm-d Optimized | Δ% vs k8s |
+| :------------------ | :-------------- | :-------------- | :-------- |
+| Output tokens/sec   | 9,513           | 11,639.         | +22.3%    |
+| Requests/sec        | 9.49            | 11.45           | +20.6%    |
+| TTFT mean (s)       | 14.473          | 6.188           | −57.2%    |
+| TTFT p90 (s)        | 38.431          | 22.852          | −40.5%    |
+| ITL mean (ms)       | 18.90           | 19.36           | +2.4%     |
+| Cache miss (tokens) | 179,617         | 107,851         | -40.0%    |
 
 <details>
 <summary><b><i>Click</i></b> to view the per-rate breakdown across the full ladder</summary>
@@ -406,22 +409,22 @@ Output tokens/sec — higher is better; TTFT in seconds — lower is better.
 
 | Rate | k8s Output | llm-d Output | k8s TTFT mean | llm-d TTFT mean | k8s TTFT p90 | llm-d TTFT p90 |
 | ---: | ---------: | -----------: | ------------: | --------------: | -----------: | -------------: |
-| 3    | 2,452.4    | 2,458.6      | 0.231         | 0.368           | 0.224        | 1.018          |
-| 10   | 7,103.3    | 7,394.8      | 0.271         | 0.137           | 0.313        | 0.234          |
-| 15   | 9,349.9    | 9,691.9      | 0.258         | 0.097           | 0.349        | 0.223          |
-| 20   | 12,182.0   | 15,905.9     | 1.784         | 0.205           | 5.802        | 0.261          |
-| 22   | 12,466.5   | 17,505.9     | 2.299         | 0.213           | 7.841        | 0.256          |
-| 25   | 13,962.4   | 17,756.8     | 3.049         | 0.191           | 9.479        | 0.253          |
-| 30   | 12,799.3   | 18,350.4     | 3.645         | 0.426           | 10.323       | 0.971          |
-| 35   | 13,702.1   | 19,616.2     | 5.125         | 0.600           | 12.232       | 1.615          |
-| 40   | 15,099.5   | 19,621.8     | 16.321        | 9.625           | 33.499       | 24.192         |
-| 43   | 14,774.6   | 19,319.7     | 18.934        | 11.127          | 37.850       | 26.498         |
-| 46   | 15,005.2   | 18,830.3     | 19.629        | 10.841          | 40.594       | 26.553         |
-| 49   | 14,615.1   | 19,760.6     | 19.269        | 10.672          | 40.348       | 27.650         |
-| 52   | 15,037.4   | 19,643.7     | 20.214        | 10.906          | 40.333       | 28.785         |
-| 55   | 14,387.1   | 19,915.0     | 20.721        | 11.508          | 42.502       | 29.267         |
-| 57   | 15,514.8   | 18,958.0     | 20.790        | 11.090          | 42.134       | 30.160         |
-| 60   | 15,131.8   | 19,167.4     | 22.236        | 12.134          | 43.896       | 31.201         |
+| 3    | 2,434	    | 2,625	       | 0.381	       | 0.338	         | 1.052	      | 1.144          |
+| 10   | 6,435	    | 6,747	       | 0.453	       | 0.252.        	 | 1.347	      | 0.493          |
+| 15   | 8,906	    | 10,415	     | 0.416	       | 0.141	         | 1.057	      | 0.233          |
+| 20   | 11,821	    | 14,848	     | 2.226	       | 0.199	         | 7.186 	      | 0.257          |
+| 22   | 12,284	    | 15,498	     | 2.238	       | 0.291	         | 6.576	      | 0.443          |
+| 25   | 12,110	    | 16,031	     | 2.763	       | 0.210	         | 9.510	      | 0.245          |
+| 30   | 13,126	    | 18,618	     | 3.932	       | 0.372	         | 10.974	      | 0.442          |
+| 35   | 13,542	    | 18,431	     | 5.280	       | 0.280	         | 13.641	      | 0.287          |
+| 40   | 14,626	    | 19,108	     | 17.031	       | 7.953	         | 36.758	      | 23.147         |
+| 43   | 15,221	    | 19,968	     | 18.659	       | 8.219	         | 38.457	      | 23.117         |
+| 46   | 13,560	    | 18,845	     | 18.858	       | 8.758	         | 39.729	      | 25.415         |
+| 49   | 14,399	    | 19,860	     | 17.844	       | 8.244	         | 39.562	      | 24.601         |
+| 52   | 15,642	    | 20,765	     | 19.983	       | 8.658	         | 41.979	      | 25.896         |
+| 55   | 14,832	    | 21,034	     | 20.428	       | 8.902	         | 42.708	      | 27.101         |
+| 57   | 14,241	    | 21,276	     | 20.755	       | 8.325	         | 45.460	      | 25.783         |
+| 60   | 14,537	    | 20,599	     | 21.137	       | 9.766	         | 45.719	      | 29.295         |
 
 
 </details>

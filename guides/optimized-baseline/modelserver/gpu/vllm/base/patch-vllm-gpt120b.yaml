@@ -43,6 +43,8 @@ spec:
           env:
             - name: PYTORCH_ALLOC_CONF
               value: "expandable_segments:True"
+            - name: LOGNAME
+              value: "vllm"
           volumeMounts:
             - mountPath: /dev/shm
               name: shm
