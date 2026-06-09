@@ -32,6 +32,7 @@ on:
 
 permissions:
   contents: write
+  actions: read
 
 concurrency:
   group: nightly-e2e-tiered-prefix-cache

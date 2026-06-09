@@ -23,6 +23,7 @@ on:
 
 permissions:
   contents: write
+  actions: read
 
 concurrency:
   group: nightly-e2e-pd-disaggregation-cks

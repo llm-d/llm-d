@@ -26,6 +26,7 @@ on:
 
 permissions:
   contents: write
+  actions: read
 
 concurrency:
   group: nightly-e2e-wide-ep-lws-gke

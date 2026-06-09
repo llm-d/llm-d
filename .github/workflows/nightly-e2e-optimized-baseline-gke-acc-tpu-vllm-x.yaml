@@ -66,6 +66,7 @@ on:
     - cron: '0 10 * * *'  # 10:00 UTC daily
 permissions:
   contents: write
+  actions: read
 
 concurrency:
   group: nightly-e2e-optimized-baseline-gke-tpu

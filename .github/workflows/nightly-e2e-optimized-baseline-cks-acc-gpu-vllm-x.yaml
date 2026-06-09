@@ -57,6 +57,7 @@ on:
 
 permissions:
   contents: write
+  actions: read
 
 concurrency:
   group: nightly-e2e-optimized-baseline-cks
