@@ -139,6 +139,7 @@ This guide supports both GPU and TPU. The Kustomize overlays are available in `m
   export GAIE_VERSION=v1.5.0
   export ROUTER_CHART_VERSION=v0
   export NAMESPACE=llm-d-tiered-prefix-cache
+  export REPO_ROOT=$(realpath $(git rev-parse --show-toplevel))
   ```
 
 - Install the Gateway API Inference Extension CRDs:
@@ -164,8 +165,8 @@ This guide supports both GPU and TPU. The Kustomize overlays are available in `m
 ```bash
 helm install tiered-prefix-cache \
     oci://ghcr.io/llm-d/charts/llm-d-router-standalone-dev \
-    -f guides/recipes/router/base.values.yaml \
-    -f guides/tiered-prefix-cache/router/tiered-prefix-cache-cpu.values.yaml \
+    -f ${REPO_ROOT}/guides/recipes/router/base.values.yaml \
+    -f ${REPO_ROOT}/guides/tiered-prefix-cache/router/tiered-prefix-cache-cpu.values.yaml \
     -n ${NAMESPACE} --version ${ROUTER_CHART_VERSION}
 ```
 
@@ -179,8 +180,8 @@ helm install tiered-prefix-cache \
 export PROVIDER_NAME=gke # options: none, gke, agentgateway, istio
 helm install tiered-prefix-cache \
     oci://ghcr.io/llm-d/charts/llm-d-router-gateway-dev \
-    -f guides/recipes/router/base.values.yaml \
-    -f guides/tiered-prefix-cache/router/tiered-prefix-cache-cpu.values.yaml \
+    -f ${REPO_ROOT}/guides/recipes/router/base.values.yaml \
+    -f ${REPO_ROOT}/guides/tiered-prefix-cache/router/tiered-prefix-cache-cpu.values.yaml \
     --set provider.name=${PROVIDER_NAME} \
     --set httpRoute.create=true \
     --set httpRoute.inferenceGatewayName=llm-d-inference-gateway \
@@ -201,7 +202,7 @@ Select the connector and infrastructure provider matching your environment:
 export CONNECTOR=native  # native | lmcache-connector
 export VARIANT=cpu       # cpu 
 export INFRA_PROVIDER=base  # base | gke
-kubectl apply -n ${NAMESPACE} -k guides/tiered-prefix-cache/modelserver/gpu/vllm/${CONNECTOR}/${VARIANT}/${INFRA_PROVIDER}/
+kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/tiered-prefix-cache/modelserver/gpu/vllm/${CONNECTOR}/${VARIANT}/${INFRA_PROVIDER}/
 ```
 
 **For NVIDIA GPU — filesystem (shared storage) tier:**
@@ -214,20 +215,20 @@ To provision AWS EFS and configure the corresponding `StorageClass`, follow the 
 
 ```bash
 export STORAGE_CLASS="" # set your prefered storage class or leave empty to use cluster default; or set "lustre" / "efs-sc"
-envsubst < guides/tiered-prefix-cache/manifests/pvc.yaml | kubectl apply -n ${NAMESPACE} -f -
+envsubst < ${REPO_ROOT}/guides/tiered-prefix-cache/manifests/pvc.yaml | kubectl apply -n ${NAMESPACE} -f -
 ```
 
 ```bash
 export CONNECTOR=native  # native | lmcache-connector
 export VARIANT=fs        # fs 
 export INFRA_PROVIDER=base  # base | gke
-kubectl apply -n ${NAMESPACE} -k guides/tiered-prefix-cache/modelserver/gpu/vllm/${CONNECTOR}/${VARIANT}/${INFRA_PROVIDER}/
+kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/tiered-prefix-cache/modelserver/gpu/vllm/${CONNECTOR}/${VARIANT}/${INFRA_PROVIDER}/
 ```
 
 **For Google TPU v7:**
 
 ```bash
-kubectl apply -n ${NAMESPACE} -k guides/tiered-prefix-cache/modelserver/tpu-v7/vllm/tpu-offloading-connector/
+kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/tiered-prefix-cache/modelserver/tpu-v7/vllm/tpu-offloading-connector/
 ```
 
 > [!NOTE]
@@ -242,7 +243,7 @@ kubectl apply -n ${NAMESPACE} -k guides/tiered-prefix-cache/modelserver/tpu-v7/v
 - Deploy the monitoring resources for this guide:
 
 ```bash
-kubectl apply -n ${NAMESPACE} -k guides/recipes/modelserver/components/monitoring
+kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/recipes/modelserver/components/monitoring
 ```
 
 ---
@@ -326,8 +327,8 @@ If you have monitoring set up, confirm via `vllm:kv_offload_total_bytes` (native
 
 ```bash
 helm uninstall tiered-prefix-cache -n ${NAMESPACE}
-kubectl delete -n ${NAMESPACE} -k guides/tiered-prefix-cache/modelserver/gpu/vllm/${CONNECTOR}/${VARIANT}/${INFRA_PROVIDER}
-kubectl delete -f guides/tiered-prefix-cache/manifests/pvc.yaml -n ${NAMESPACE}  # if PVC was created
+kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/tiered-prefix-cache/modelserver/gpu/vllm/${CONNECTOR}/${VARIANT}/${INFRA_PROVIDER}
+kubectl delete -f ${REPO_ROOT}/guides/tiered-prefix-cache/manifests/pvc.yaml -n ${NAMESPACE}  # if PVC was created
 kubectl delete namespace ${NAMESPACE}
 ```
 
