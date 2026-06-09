@@ -18,7 +18,7 @@ Three properties of agentic workloads break those request-centric assumptions:
 
 The next large efficiency gain for these workloads does not come from micro-optimizing isolated
 requests — it comes from making the stack understand the structure of the agentic program, with
-the **KV-cache as the medium that coordinates it.**
+**model state — today primarily the KV-cache — as the medium that coordinates it.**
 
 ```text
 Request-centric (today's default)        Program-aware (the direction)
@@ -28,6 +28,11 @@ Request-centric (today's default)        Program-aware (the direction)
  turn 3 ─▶ RE-prefill    ─▶ decode         turn 3 ─▶ reuse cache  ─▶ decode
    (KV evicted between turns)                (KV retained / offloaded, restored on resume)
 ```
+
+A single engine already reuses cache across turns when a session happens to land on the same
+replica with free memory; the failure is fleet-level — no cross-replica coordination, eviction
+blind to which blocks a live session still needs, and no notion of the program behind the
+requests.
 
 ## Canonical Workloads
 
@@ -70,11 +75,18 @@ treating the **session as a graph of typed state blocks** the control plane plan
 - **Program-aware scheduling** — schedule on program-level metrics and the critical path that
   stalls the whole loop, not per-request fairness. Extends the Inference Scheduler.
 - **State reuse and lifecycle ("zero-recompute")** — if a reusable context exists anywhere (HBM,
-  host memory, storage), no node burns compute to regenerate it; durable context is pinned and
-  dead branches dropped via typed retention. Builds on KV-disaggregation, tiered offloading, and
-  KV-centric stores such as Mooncake.
+  host memory, storage), no node recomputes it whenever reuse is cheaper than regeneration;
+  durable context is pinned and dead branches dropped via typed retention. Builds on
+  KV-disaggregation, tiered offloading, and KV-centric stores such as Mooncake.
 - **Proactive state** — when an agent fans out, context is pre-positioned where the new compute
-  will land, rather than pulled on demand.
+  will land rather than pulled on demand, with placement co-planned with scheduling from the
+  session graph and declared fan-out.
+
+The contract is two-layer: applications express intent through the caching and metadata APIs
+they already use, and llm-d does the cross-session, cluster-wide work underneath — better hints
+sharpen the orchestration, but the stack functions on inferred structure without them. Agent
+control flow and cognitive decisions stay in the logic layer (agent frameworks, MCP and Skills
+servers); llm-d provides the hooks to serve them efficiently.
 
 The guiding boundary: **the engine is the mechanism, llm-d is the meaning** — the semantic layer
 lives one level above the engine, so the work spans vLLM, SGLang, and beyond.

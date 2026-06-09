@@ -24,6 +24,7 @@ the agentic workload; the deployment options below compose them.
 | **[Tiered KV offloading](../tiered-prefix-cache/README.md)** | Offload KV cache beyond accelerator memory across tiers, so idle sessions restore on resume instead of recomputing prefill. |
 | **[Precise prefix-cache routing](../precise-prefix-cache-routing/README.md)** — advanced | An exact, global view of cache state, enabling session-centric orchestration and non-naive (beyond-LRU) KV-cache offloading & retention. |
 | **[P/D disaggregation](../pd-disaggregation/README.md)** — large models / interactivity | Separate prefill and decode pools so heavy prefill never stalls token generation, stabilizing ITL. |
+
 These layers are the available subset of a larger direction. The
 [Agentic Inference SIG northstar](https://docs.google.com/document/d/1DCUVHp9Z8CZUnKiP04nnD_31M3gRishW-cWZ657Cn5U)
 drives toward *program-aware* serving — **session-graph orchestration**, **program-aware
@@ -36,8 +37,8 @@ direction and further reading.
 
 The layers above compose into deployment options spanning a range of capability and operational
 cost — from a routing-and-offloading baseline up to disaggregated serving — added incrementally
-as a workload's scale and latency targets grow. Concrete, benchmarked options are present in this
-directory.
+as a workload's scale and latency targets grow. Concrete, benchmarked options are landing in
+this directory as sub-guides.
 
 ## Choosing an Option
 
@@ -48,8 +49,11 @@ directory.
 
 Deployment options are compared against the same realistic agentic workload — large reused
 contexts, deep multi-turn sessions, and tool-call stalls — replayed with
-[`inference-perf`](https://github.com/llm-d/llm-d-benchmark) rather than a single-turn
+[`inference-perf`](https://github.com/kubernetes-sigs/inference-perf) via the
+[`llm-d-benchmark`](https://github.com/llm-d/llm-d-benchmark) harness rather than a single-turn
 shared-prefix stream, so cross-turn reuse, session persistence, and bursty resumption are
-actually exercised. Replaying real agentic traces (program structure and tool-call timing from
-OpenTelemetry) is the direction for program-level evaluation.
+actually exercised. Options are compared on program-level metrics — whole-session completion
+time and task throughput alongside TTFT and ITL. Replaying real agentic traces (program
+structure and tool-call timing from OpenTelemetry) is the direction for program-level
+evaluation.
 
