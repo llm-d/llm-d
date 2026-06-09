@@ -47,6 +47,11 @@ spec:
                 --tensor-parallel-size 8 \
                 --gpu-memory-utilization 0.9
           env:
+            - name: HF_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: llm-d-hf-token
+                  key: HF_TOKEN
             - name: PROMETHEUS_MULTIPROC_DIR
               value: "/tmp/prometheus_multiproc"
             - name: SKIP_JAX_PRECOMPILE

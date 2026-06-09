@@ -10,7 +10,8 @@ The llm-d architecture is built around three primary concepts: the [Router](core
   - **[Proxy](core/router/proxy.md)**: A high-performance L7 proxy (typically Envoy) that accepts user requests and consults the EPP via the `ext-proc` protocol to determine the optimal destination.
   - **[Endpoint Picker (EPP)](core/router/epp/README.md)**: The routing engine that scores and selects model server pods based on real-time metrics, KV-cache affinity, and configured policies.
 
-- **[InferencePool](core/inferencepool.md)** - The API that defines a group of Model Server Pods sharing the same model and compute configuration. Conceptualized as an "LLM-optimized Service", it serves as the discovery target for the Router.
+- **[InferencePool](core/inferencepool.md)** - The API that groups Model Server pods serving the same base model via a label selector. Conceptualized as an "LLM-optimized Service", it serves as the discovery target for the Router. Additionally:
+  - **Variant** - A logical sub-grouping of Model Server pods within an InferencePool, expressed through pod labels rather than a dedicated resource. Variants distinguish model servers based on shared characteristics such as serving role (e.g., prefill or decode), cost profile, performance profile (throughput, latency), or other operational attributes.
 
 - **[Model Server](core/model-servers.md)** - The inference engine (such as vLLM or SGLang) that executes the model on hardware accelerators (GPUs, TPUs, HPUs).
 
@@ -58,7 +59,7 @@ See [Batch Inference](advanced/batch/README.md) for details on the batch inferen
 llm-d supports proactive, SLO-aware autoscaling through two complementary approaches:
 
 - **HPA/KEDA**: Standard Kubernetes-native scaling using metrics exported by the EPP (like queue depth).
-- **Workload Variant Autoscaler (WVA)**: Globally optimized scaling that minimizes cost by routing traffic across different model variants (e.g., different hardware or quantization) while meeting latency targets.
+- **Workload Variant Autoscaler (WVA)**: Globally optimized scaling that minimizes cost by placing replicas across different variants or across inference pools while meeting latency targets.
 
 See [Autoscaling](advanced/autoscaling/README.md) for complete details.
 

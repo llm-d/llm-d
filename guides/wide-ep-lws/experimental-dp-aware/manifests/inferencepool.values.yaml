@@ -11,39 +11,37 @@ router:
     pluginsConfigFile: "custom-plugins.yaml"
     pluginsCustomConfig:
       custom-plugins.yaml: |
-        # ALWAYS DO PD IN THIS EXAMPLE (THRESHOLD 0)
-        # This example uses random routing
-        # since it's not yet possible to route to individual DP ranks
         apiVersion: llm-d.ai/v1alpha1
         kind: EndpointPickerConfig
         plugins:
-        - type: prefill-header-handler
+        - type: disagg-headers-handler
+        - type: always-disagg-pd-decider
+        - type: disagg-profile-handler
+          parameters:
+            deciderPluginName: always-disagg-pd-decider
         - type: prefill-filter
         - type: decode-filter
         - type: prefix-cache-scorer
-        - type: active-request-scorer
         - type: queue-scorer
-        - type: pd-profile-handler
-          parameters:
-            threshold: 0
-            hashBlockSize: 5
+        - type: kv-cache-utilization-scorer
+        - type: active-request-scorer
         schedulingProfiles:
         - name: prefill
           plugins:
           - pluginRef: prefill-filter
           - pluginRef: prefix-cache-scorer
             weight: 3
-          - pluginRef: active-request-scorer
-            weight: 2
           - pluginRef: queue-scorer
+            weight: 2
+          - pluginRef: kv-cache-utilization-scorer
             weight: 2
         - name: decode
           plugins:
           - pluginRef: decode-filter
           - pluginRef: active-request-scorer
-            weight: 1
-          - pluginRef: queue-scorer
-            weight: 1
+            weight: 2
+          - pluginRef: prefix-cache-scorer
+            weight: 3
 
   monitoring:
     interval: "10s"

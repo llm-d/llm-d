@@ -9,6 +9,7 @@ This guide explains how to provision a managed GCP Lustre instance.
 * Create a namespace for installation.
 
 ```bash
+export REPO_ROOT=$(realpath $(git rev-parse --show-toplevel))
 export NAMESPACE=llm-d-storage # or any other namespace (shorter names recommended)
 kubectl create namespace ${NAMESPACE}
 ```
@@ -30,7 +31,7 @@ Ensure [Lustre CSI driver is enabled](https://docs.cloud.google.com/kubernetes-e
 **1. Create a `StorageClass` for Lustre:**
 
 ```bash
-kubectl apply -f guides/tiered-prefix-cache/storage/manifests/backends/lustre/storage_class.yaml  -n ${NAMESPACE}
+kubectl apply -f ${REPO_ROOT}/guides/tiered-prefix-cache/storage/manifests/backends/lustre/storage_class.yaml  -n ${NAMESPACE}
 ```
 
 **2. Create a PVC:**

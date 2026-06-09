@@ -63,17 +63,29 @@ export ROUTER_CHART_VERSION=v0
 export GUIDE_NAME="pd-disaggregation"
 export NAMESPACE="llm-d-pd-disaggregation"
 export MODEL_NAME="openai/gpt-oss-120b"
+export REPO_ROOT=$(realpath $(git rev-parse --show-toplevel))
 ```
 * Install the Gateway API Inference Extension CRDs:
 
 ```bash
-kubectl apply -k "https://github.com/kubernetes-sigs/gateway-api-inference-extension/config/crd?ref=${GAIE_VERSION}"
+kubectl apply -f https://github.com/kubernetes-sigs/gateway-api-inference-extension/releases/download/${GAIE_VERSION}/v1-manifests.yaml
 ```
 * Create a target namespace for the installation
 
 ```bash
-kubectl create namespace ${NAMESPACE}
+kubectl create namespace ${NAMESPACE} --dry-run=client -o yaml | kubectl apply -f -
 ```
+
+* [Create the `llm-d-hf-token` secret in your target namespace with the key `HF_TOKEN` matching a valid HuggingFace token](../../helpers/hf-token.md) to pull models.
+<!-- llm-d-cicd:skip start -->
+  ```bash
+  export HF_TOKEN=<your HuggingFace token>
+  kubectl create secret generic llm-d-hf-token \
+    --from-literal="HF_TOKEN=${HF_TOKEN}" \
+    --namespace "${NAMESPACE}" \
+    --dry-run=client -o yaml | kubectl apply -f -
+  ```
+<!-- llm-d-cicd:skip end -->
 
 ## Installation Instructions
 
@@ -84,7 +96,6 @@ kubectl create namespace ${NAMESPACE}
 This deploys the llm-d Router with an Envoy sidecar, it doesn't set up a Kubernetes Gateway.
 
 ```bash
-export REPO_ROOT=$(realpath $(git rev-parse --show-toplevel))
 helm install ${GUIDE_NAME} \
     oci://ghcr.io/llm-d/charts/llm-d-router-standalone-dev \
     -f ${REPO_ROOT}/guides/recipes/router/base.values.yaml \
@@ -101,7 +112,6 @@ To employ a Kubernetes Gateway managed proxy instead of the standalone one, then
 2. *Deploy the llm-d Router and an HTTPRoute*. The following deploys the llm-d Router with an HttpRoute that connects it to the Gateway created in the previous step (set `provider.name` to the gateway provider you deployed):
 
 ```bash
-export REPO_ROOT=$(realpath $(git rev-parse --show-toplevel))
 export PROVIDER_NAME=gke # other na, agentgateway or istio
 helm install ${GUIDE_NAME} \
     oci://ghcr.io/llm-d/charts/llm-d-router-gateway-dev  \
@@ -128,7 +138,7 @@ Apply the Kustomize overlays for your specific backend (defaulting to NVIDIA GPU
 ```bash
 export INFRA_PROVIDER=base # base | coreweave | gke
 
-kubectl apply -n ${NAMESPACE} -k guides/${GUIDE_NAME}/modelserver/gpu/vllm/${INFRA_PROVIDER}
+kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/gpu/vllm/${INFRA_PROVIDER}
 ```
 
 <details>
@@ -139,7 +149,7 @@ To run the disaggregated deployment with SGLang instead of vLLM, apply the SGLan
 ```bash
 export INFRA_PROVIDER=base # base | coreweave | gke
 
-kubectl apply -n ${NAMESPACE} -k guides/${GUIDE_NAME}/modelserver/gpu/sglang/${INFRA_PROVIDER}
+kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/gpu/sglang/${INFRA_PROVIDER}
 ```
 
 SGLang-specific notes:
@@ -167,7 +177,7 @@ SGLang-specific notes:
 * Deploy the monitoring resources for this guide.
 
 ```bash
-kubectl apply -n ${NAMESPACE} -k guides/recipes/modelserver/components/monitoring-pd
+kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/recipes/modelserver/components/monitoring-pd
 ```
 
 ## Verification
@@ -225,8 +235,6 @@ curl -L -O https://raw.githubusercontent.com/llm-d/llm-d-benchmark/main/existing
 chmod u+x run_only.sh
 ```
 
-* [Create HuggingFace token](../../helpers/hf-token.md)
-
 ### 2. Download the Workload Template
 
 ```bash
@@ -247,7 +255,7 @@ To remove the deployed components:
 ```bash
 helm uninstall ${GUIDE_NAME} -n ${NAMESPACE}
 # Use the same modelserver path you deployed (e.g. .../gpu/sglang/${INFRA_PROVIDER} for SGLang)
-kubectl delete -n ${NAMESPACE} -k guides/${GUIDE_NAME}/modelserver/gpu/vllm/${INFRA_PROVIDER}
+kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/gpu/vllm/${INFRA_PROVIDER}
 ```
 
 ## Benchmarking Report

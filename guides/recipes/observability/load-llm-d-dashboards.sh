@@ -24,7 +24,7 @@ log_error() {
 # Configuration
 NAMESPACE="${1:-llm-d-monitoring}"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-DASHBOARDS_DIR="${SCRIPT_DIR}/../grafana/dashboards"
+DASHBOARDS_DIR="${SCRIPT_DIR}/grafana/dashboards"
 
 log_info "Loading llm-d dashboards into namespace: ${NAMESPACE}"
 

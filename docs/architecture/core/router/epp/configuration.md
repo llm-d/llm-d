@@ -323,7 +323,7 @@ schedulingProfiles:
 - name: default
   plugins:
   - pluginRef: label-selector-filter # Optional: not in default profile
-  - pluginRef: precise-prefix-cache-scorer # Recommended: not in default profile
+  - pluginRef: prefix-cache-scorer # Recommended: not in default profile
     weight: 3.0
   - pluginRef: kv-cache-utilization-scorer # Recommended: not in default profile
     weight: 2.0
@@ -331,6 +331,9 @@ schedulingProfiles:
     weight: 2.0
   - pluginRef: max-score-picker # Default picker (auto-injected if omitted)
 ```
+
+> [!NOTE]
+> To use **precise** prefix-cache routing (exact, KV-event-driven) instead of the approximate default, declare a `precise-prefix-cache-producer` in the top-level `plugins` section and set `prefixMatchInfoProducerName: precise-prefix-cache-producer` on the `prefix-cache-scorer`; otherwise the scorer falls back to the approximate producer. See the [Precise Prefix Cache Routing guide](../../../../../guides/precise-prefix-cache-routing/README.md).
 
 #### Scheduling Profile Fields
 
@@ -352,7 +355,7 @@ The system applies a multi-tiered defaulting logic for scheduling profiles:
 
 - **Tier 1: Omitted `schedulingProfiles`**: If the `schedulingProfiles` section is entirely omitted, a profile named `default` is automatically created. This profile will reference **all Filter, Scorer, and Picker plugins** defined in the top-level `plugins` section.
 - **Tier 2: Empty `plugins` in a profile**: If you define a profile but leave the `plugins` list empty, it is valid but only gets the auto-injected picker (see Tier 3).
-- **Tier 3: Missing Picker in a profile**: If a profile does not reference a picker plugin, the system automatically injects `max-score-picker`.
+- **Tier 3: Missing Picker in a profile**: If a profile does not reference a picker plugin, the system automatically injects `max-score-picker` with its default `maxNumOfEndpoints: 1`. To use a different value or picker, declare it explicitly and reference it in the profile.
 
 </details>
 
@@ -379,7 +382,7 @@ plugins:
 # Also add the approx-prefix-cache-producer (data producer) when passing parameters to the prefix cache scorer.
 - type: approx-prefix-cache-producer
   parameters:
-    blockSizeTokens: 64 # Default
+    blockSizeTokens: 64
     maxPrefixBlocksToMatch: 256 # Default
     lruCapacityPerServer: 31250 # Default
 
@@ -389,7 +392,7 @@ schedulingProfiles:
 - name: default
   plugins:
   - pluginRef: prefix-cache-scorer
-    weight: 3.0 # Default
+    weight: 3.0
 ```
 
 <details>
@@ -409,20 +412,16 @@ plugins:
   type: another-filter
 - name: scorer-1
   type: some-scorer
-- name: max-score-picker
-  type: max-score-picker
 
 schedulingProfiles:
 - name: profile-a
   plugins:
   - pluginRef: filter-a
   - pluginRef: scorer-1
-  - pluginRef: max-score-picker
 - name: profile-b
   plugins:
   - pluginRef: filter-b
   - pluginRef: scorer-1
-  - pluginRef: max-score-picker
 ```
 
 **Important:** Only one profile handler plugin is allowed in the configuration. If multiple profiles are defined, you must provide a handler that supports them (the default `single-profile-handler` does not support multiple profiles).

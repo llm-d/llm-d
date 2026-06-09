@@ -37,6 +37,11 @@ spec:
               value: "1"
             - name: VLLM_WORKER_MULTIPROC_METHOD
               value: "spawn"
+            - name: HF_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: llm-d-hf-token
+                  key: HF_TOKEN
           resources:
             limits:
               cpu: "16"

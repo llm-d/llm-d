@@ -25,12 +25,8 @@ router:
         - type: queue-scorer
         - type: kv-cache-utilization-scorer
         - type: prefix-cache-scorer
-        - type: metrics-data-source
-          parameters:
-            insecureSkipVerify: true
-            path: /metrics
-            scheme: http
-        - type: core-metrics-extractor
+        # metrics-data-source + core-metrics-extractor are auto-injected with these
+        # exact defaults (scheme: http, path: /metrics, insecureSkipVerify: true).
         - type: predicted-latency-producer
           parameters:
             streamingMode: true

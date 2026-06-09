@@ -34,6 +34,7 @@ Async Processor can be installed via Helm. We recommend following the pattern us
 Apply the [optimized baseline](../optimized-baseline/README.md) guide and get the llm-d Router's IP address:
 
 ```bash
+export REPO_ROOT=$(realpath $(git rev-parse --show-toplevel))
 # If using Standalone Mode:
 export IP=$(kubectl get service optimized-baseline-epp -n llm-d-optimized-baseline -o jsonpath='{.spec.clusterIP}')
 
@@ -59,7 +60,7 @@ export ASYNC_VERSION=0.6.1
 
 helm install async-processor \
     oci://ghcr.io/llm-d-incubation/charts/async-processor \
-    -f guides/asynchronous-processing/${MQ_PROVIDER}/values.yaml \
+    -f ${REPO_ROOT}/guides/asynchronous-processing/${MQ_PROVIDER}/values.yaml \
     --set ap.igwBaseURL=http://${IP}:80 \
     -n ${NAMESPACE} --create-namespace --version ${ASYNC_VERSION}
 ```

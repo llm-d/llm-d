@@ -61,6 +61,7 @@ This guide requires 32 Nvidia H200 or B200 GPUs and InfiniBand or RoCE RDMA netw
 - Create a namespace for installation.
 
   ```bash
+  export REPO_ROOT=$(realpath $(git rev-parse --show-toplevel))
   export NAMESPACE=llm-d-wide-ep # or any other namespace (shorter names recommended)
   kubectl create namespace ${NAMESPACE}
   ```
@@ -70,7 +71,7 @@ This guide requires 32 Nvidia H200 or B200 GPUs and InfiniBand or RoCE RDMA netw
 ## Installation
 
 ```bash
-cd guides/wide-ep-lws/experimental-dp-aware
+cd ${REPO_ROOT}/guides/wide-ep-lws/experimental-dp-aware
 ```
 
 ### Deploy Gateway and HTTPRoute

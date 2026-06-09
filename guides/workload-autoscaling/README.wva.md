@@ -37,8 +37,9 @@ kubectl api-resources | rg ServiceMonitor
 ```bash
 export WVA_NAMESPACE=llm-d-autoscaler
 export NAMESPACE=llm-d-optimized-baseline
-kubectl create namespace ${NAMESPACE}
-kubectl create namespace ${WVA_NAMESPACE}
+kubectl create namespace ${NAMESPACE} --dry-run=client -o yaml | kubectl apply -f -
+kubectl create namespace ${WVA_NAMESPACE} --dry-run=client -o yaml | kubectl apply -f -
+export REPO_ROOT=$(realpath $(git rev-parse --show-toplevel))
 ```
 
 > **Default mode**: this guide installs WVA scoped to `llm-d-optimized-baseline` by default.
@@ -60,7 +61,7 @@ kubectl label namespace "${WVA_NAMESPACE}" openshift.io/user-monitoring=true --o
 Configure WVA to query the cluster Thanos Querier:
 
 ```bash
-cat guides/workload-autoscaling/wva-config/platform/ocp/configmap-patch.yaml
+cat ${REPO_ROOT}/guides/workload-autoscaling/wva-config/platform/ocp/configmap-patch.yaml
 ```
 
 OpenShift defaults are already set in the overlay:
@@ -73,7 +74,7 @@ Optional (strict TLS): manage the `prometheus-client-cert` secret with Kustomize
 ```bash
 export PROMETHEUS_CA_CERT=$(kubectl get secret thanos-querier-tls -n openshift-monitoring -o jsonpath='{.data.tls\.crt}' | base64 -d)
 WVA_TLS_OVERLAY_DIR=$(mktemp -d)
-cp -R guides/workload-autoscaling/components/tls-overlay/. "${WVA_TLS_OVERLAY_DIR}"
+cp -R ${REPO_ROOT}/guides/workload-autoscaling/components/tls-overlay/. "${WVA_TLS_OVERLAY_DIR}"
 printf "%s" "${PROMETHEUS_CA_CERT}" > "${WVA_TLS_OVERLAY_DIR}/ca.crt"
 kubectl apply -k "${WVA_TLS_OVERLAY_DIR}" -n ${WVA_NAMESPACE}
 ```
@@ -107,25 +108,25 @@ export PROMETHEUS_TLS_INSECURE_SKIP_VERIFY=false
 Optional preflight: validate platform overlays render before applying:
 
 ```bash
-kubectl kustomize guides/workload-autoscaling/wva-config/platform/ocp >/dev/null
-kubectl kustomize guides/workload-autoscaling/wva-config/platform/generic >/dev/null
-kubectl kustomize guides/workload-autoscaling/wva-config/platform/gke >/dev/null
+kubectl kustomize ${REPO_ROOT}/guides/workload-autoscaling/wva-config/platform/ocp >/dev/null
+kubectl kustomize ${REPO_ROOT}/guides/workload-autoscaling/wva-config/platform/generic >/dev/null
+kubectl kustomize ${REPO_ROOT}/guides/workload-autoscaling/wva-config/platform/gke >/dev/null
 ```
 
 Install WVA using the OpenShift overlay in `wva-config/platform/ocp`:
 
 ```bash
-kubectl apply -k guides/workload-autoscaling/wva-config/platform/ocp -n ${WVA_NAMESPACE}
+kubectl apply -k ${REPO_ROOT}/guides/workload-autoscaling/wva-config/platform/ocp -n ${WVA_NAMESPACE}
 ```
 
 If you are not on OpenShift, use:
 
 ```bash
 # Generic Kubernetes
-kubectl apply -k guides/workload-autoscaling/wva-config/platform/generic -n ${WVA_NAMESPACE}
+kubectl apply -k ${REPO_ROOT}/guides/workload-autoscaling/wva-config/platform/generic -n ${WVA_NAMESPACE}
 
 # GKE
-kubectl apply -k guides/workload-autoscaling/wva-config/platform/gke -n ${WVA_NAMESPACE}
+kubectl apply -k ${REPO_ROOT}/guides/workload-autoscaling/wva-config/platform/gke -n ${WVA_NAMESPACE}
 ```
 
 > **Note**: By default, this install watches `llm-d-optimized-baseline` (`--watch-namespace=llm-d-optimized-baseline`).
@@ -196,13 +197,13 @@ Remove the WVA controller with Kustomize:
 
 ```bash
 # OpenShift
-kubectl delete -k guides/workload-autoscaling/wva-config/platform/ocp -n ${WVA_NAMESPACE}
+kubectl delete -k ${REPO_ROOT}/guides/workload-autoscaling/wva-config/platform/ocp -n ${WVA_NAMESPACE}
 
 # Generic Kubernetes
-kubectl delete -k guides/workload-autoscaling/wva-config/platform/generic -n ${WVA_NAMESPACE}
+kubectl delete -k ${REPO_ROOT}/guides/workload-autoscaling/wva-config/platform/generic -n ${WVA_NAMESPACE}
 
 # GKE
-kubectl delete -k guides/workload-autoscaling/wva-config/platform/gke -n ${WVA_NAMESPACE}
+kubectl delete -k ${REPO_ROOT}/guides/workload-autoscaling/wva-config/platform/gke -n ${WVA_NAMESPACE}
 ```
 
 If you installed Prometheus Adapter for WVA, you can uninstall it as well:
@@ -237,7 +238,6 @@ sed -i.bak "s|url:.*|url: https://thanos-querier.openshift-monitoring.svc.cluste
   echo "Edit ${TMPDIR:-/tmp}/prometheus-adapter-values.yaml to set prometheus.url"
 
 # Install
-export REPO_ROOT=$(realpath $(git rev-parse --show-toplevel))
 helm upgrade -i prometheus-adapter prometheus-community/prometheus-adapter \
   --version 5.2.0 -n ${MON_NS} --create-namespace \
   -f ${TMPDIR:-/tmp}/prometheus-adapter-values.yaml \
@@ -331,6 +331,80 @@ helm upgrade -i prometheus-adapter prometheus-community/prometheus-adapter \
 > **Note**: WVA creates the `prometheus-ca` ConfigMap in the monitoring namespace using the configured CA cert settings. This ConfigMap is required for Prometheus Adapter.
 
 **Verify installation**: `kubectl get pods -n ${MON_NS} -l app.kubernetes.io/name=prometheus-adapter`
+
+
+## Benchmark Results
+
+These benchmarks measure **single-variant autoscaling** — one model variant scaled dynamically by WVA based on saturation. Benchmarks were run on an NVIDIA H100 cluster (OpenShift) with a Poisson arrival profile. All values are **3-run averages**.
+
+### Configuration
+
+WVA v1 Saturation (Default) drives scaling decisions; HPA acts on the `wva_desired_replicas` metric WVA produces.
+
+| Component | Parameter | Value |
+|---|---|---|
+| WVA | KV cache threshold | 0.80 |
+| WVA | Queue length threshold | 5 |
+| WVA | KV spare trigger | 0.10 |
+| WVA | Queue spare trigger | 3 |
+| WVA | Enable limiter | false |
+| HPA | Min / Max replicas | 1 / 10 |
+| HPA | Scale-up stabilization | 0 s |
+| HPA | Scale-up policy | 10 Pods / 150 s |
+| HPA | Scale-down stabilization | 240 s |
+| HPA | Scale-down policy | 10 Pods / 150 s |
+| HPA | Metric source | External (`wva_desired_replicas`) |
+
+### Results
+
+#### Prefill Heavy
+> 4,000 input tokens · 1,000 output tokens · 20 RPS
+
+| Model | Duration | Load Gen | P99 TTFT (ms) | P99 ITL (ms/tok) | Avg Replicas | Max Replicas | Avg KV Cache | Avg Queue Depth | Errors | Pod Startup (s) |
+|---|---|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| Qwen3-32B | 600 s | GuideLLM | 98,420 | 54.8 | 1.73 | 3 | 66.3% | 236.5 | 4,184 | 110 |
+| Qwen3-0.6B | 600 s | GuideLLM | 81,391 | 51.9 | 1.93 | 3 | 65.1% | 76.5 | 401 | 65 |
+| Qwen3-0.6B | 1800 s | GuideLLM | 66,177 | 47.3 | 3.17 | 5 | 55.7% | 41.2 | 860 | 66 |
+
+#### Decode Heavy
+> 1,000 input tokens · 4,000 output tokens · 20 RPS
+
+| Model | Duration | Load Gen | P99 TTFT (ms) | P99 ITL (ms/tok) | Avg Replicas | Max Replicas | Avg KV Cache | Avg Queue Depth | Errors | Pod Startup (s) |
+|---|---|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| Qwen3-32B | 600 s | GuideLLM | 78,051 | 47.1 | 1.84 | 3 | 79.2% | 108.8 | 3,563 | 109 |
+| Qwen3-0.6B | 600 s | GuideLLM | 62,296 | 41.1 | 1.89 | 3 | 61.7% | 51.1 | 1,408 | 65 |
+| Qwen3-0.6B | 1800 s | GuideLLM | 58,934 | 44.8 | 2.59 | 4 | 57.2% | 30.8 | 2,520 | 66 |
+
+#### Bursty
+> ~1,000 input tokens · ~1,000 output tokens · Multi-stage RPS (15 → 2 → 10 → 15 → 5 → 2)
+
+| Model | Duration | Load Gen | P99 TTFT (ms) | P99 ITL (ms/tok) | Avg Replicas | Max Replicas | Avg KV Cache | Avg Queue Depth | Errors | Pod Startup (s) |
+|---|---|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| Qwen3-32B | 900 s | GuideLLM | 262,441 | 196.3 | 2.43 | 4 | 45.1% | 53.5 | 6,110 | 103 |
+| Qwen3-0.6B | 900 s | inference-perf | 13,376 | 48.0 | 1.99 | 3 | 35.2% | 16.0 | 51 | 66 |
+| Qwen3-0.6B | 1800 s | inference-perf | 23,278 | 50.1 | 1.63 | 3 | 29.5% | 1.1 | 71 | 64 |
+
+#### Symmetrical
+> 1,000 input tokens · 1,000 output tokens · 20 RPS
+
+| Model | Duration | Load Gen | P99 TTFT (ms) | P99 ITL (ms/tok) | Avg Replicas | Max Replicas | Avg KV Cache | Avg Queue Depth | Errors | Pod Startup (s) |
+|---|---|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| Qwen3-32B | 600 s | GuideLLM | 100,187 | 67.3 | 1.70 | 3 | 70.2% | 166.8 | 3,729 | 103 |
+| Qwen3-0.6B | 600 s | GuideLLM | 23,169 | 43.3 | 1.80 | 3 | 52.0% | 13.0 | 17 | 64 |
+| Qwen3-0.6B | 1800 s | GuideLLM | 20,825 | 40.4 | 1.80 | 3 | 46.8% | 10.8 | 342 | 66 |
+
+### Metric Definitions
+
+| Metric | Definition |
+|---|---|
+| P99 TTFT | 99th-percentile time-to-first-token (ms) — lower is better |
+| P99 ITL | 99th-percentile inter-token latency (ms/token) — lower is better |
+| Avg Replicas | Mean pod count during the test window |
+| Avg KV Cache | Mean GPU KV cache utilization |
+| Avg Queue Depth | Mean pending-request queue depth at the endpoint proxy (EPP) |
+| Pod Startup | Average time for a new replica to become ready (s) |
+
+> Full per-run data and additional WVA tuning variants are in the [upstream benchmark doc](https://github.com/llm-d/llm-d-workload-variant-autoscaler/blob/main/docs/benchmark.md).
 
 ## FAQ
 

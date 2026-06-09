@@ -165,6 +165,7 @@ Available dashboards:
 | Dashboard | What it shows |
 |-----------|--------------|
 | `llm-d-vllm-overview` | General vLLM metrics overview |
+| `llm-d-sglang-overview` | General SGLang metrics overview |
 | `llm-d-failure-saturation-dashboard` | Key failure and saturation indicators |
 | `llm-d-diagnostic-drilldown-dashboard` | Detailed diagnostic metrics for troubleshooting |
 | `llm-d-performance-kv-cache` | KV cache utilization and performance |

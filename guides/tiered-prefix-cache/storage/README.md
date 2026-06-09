@@ -67,18 +67,30 @@ For advanced configuration options and implementation details, see the [llm-d FS
     export ROUTER_CHART_VERSION=v0
     export GUIDE_NAME="tiered-prefix-cache-storage"
     export NAMESPACE=llm-d-${GUIDE_NAME}
+    export REPO_ROOT=$(realpath $(git rev-parse --show-toplevel))
   ```
 * Install the Gateway API Inference Extension CRDs:
 
   ```bash
-    kubectl apply -k "https://github.com/kubernetes-sigs/gateway-api-inference-extension/config/crd?ref=${GAIE_VERSION}"
+    kubectl apply -f https://github.com/kubernetes-sigs/gateway-api-inference-extension/releases/download/${GAIE_VERSION}/v1-manifests.yaml
   ```
 
 * Create a target namespace for the installation:
 
   ```bash
-    kubectl create namespace ${NAMESPACE}
+    kubectl create namespace ${NAMESPACE} --dry-run=client -o yaml | kubectl apply -f -
   ```
+
+* [Create the `llm-d-hf-token` secret in your target namespace with the key `HF_TOKEN` matching a valid HuggingFace token](../../../helpers/hf-token.md) to pull models.
+<!-- llm-d-cicd:skip start -->
+  ```bash
+  export HF_TOKEN=<your HuggingFace token>
+  kubectl create secret generic llm-d-hf-token \
+    --from-literal="HF_TOKEN=${HF_TOKEN}" \
+    --namespace "${NAMESPACE}" \
+    --dry-run=client -o yaml | kubectl apply -f -
+  ```
+<!-- llm-d-cicd:skip end -->
 
 ---
 
@@ -99,7 +111,7 @@ To provision AWS EFS and configure the corresponding `StorageClass`, follow the 
 Create a PVC using the selected storage class:
 
 ```bash
-envsubst < guides/tiered-prefix-cache/storage/manifests/pvc.yaml | kubectl apply -n ${NAMESPACE} -f -
+envsubst < ${REPO_ROOT}/guides/tiered-prefix-cache/storage/manifests/pvc.yaml | kubectl apply -n ${NAMESPACE} -f -
 ```
 
 ### 2. Deploy the llm-d Router
@@ -111,8 +123,8 @@ This deploys the llm-d Router with an Envoy sidecar side-by-side:
 ```bash
 helm install ${GUIDE_NAME} \
     oci://ghcr.io/llm-d/charts/llm-d-router-standalone-dev \
-    -f guides/recipes/router/base.values.yaml \
-    -f guides/tiered-prefix-cache/storage/router/${GUIDE_NAME}.values.yaml \
+    -f ${REPO_ROOT}/guides/recipes/router/base.values.yaml \
+    -f ${REPO_ROOT}/guides/tiered-prefix-cache/storage/router/${GUIDE_NAME}.values.yaml \
     -n ${NAMESPACE} --version ${ROUTER_CHART_VERSION}
 ```
 
@@ -128,7 +140,7 @@ To use a Kubernetes Gateway managed proxy instead of standalone:
 export PROVIDER_NAME=gke # options: none, gke, agentgateway, istio
 helm install llm-d-infpool \
     oci://ghcr.io/llm-d/charts/llm-d-router-gateway-dev  \
-    -f guides/recipes/router/base.values.yaml \
+    -f ${REPO_ROOT}/guides/recipes/router/base.values.yaml \
     --set provider.name=${PROVIDER_NAME} \
     --set httpRoute.create=true \
     --set httpRoute.inferenceGatewayName=llm-d-inference-gateway \
@@ -146,7 +158,7 @@ Apply the Kustomize overlay corresponding to your desired connector backend:
 ```bash
 export CONNECTOR=llm-d-fs-connector # llm-d-fs-connector | lmcache-connector
 export INFRA_PROVIDER=base # base | gke
-kubectl apply -n ${NAMESPACE} -k guides/tiered-prefix-cache/storage/modelserver/gpu/vllm/${CONNECTOR}/${INFRA_PROVIDER}/
+kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/tiered-prefix-cache/storage/modelserver/gpu/vllm/${CONNECTOR}/${INFRA_PROVIDER}/
 ```
 
 ---
@@ -157,7 +169,7 @@ kubectl apply -n ${NAMESPACE} -k guides/tiered-prefix-cache/storage/modelserver/
 * Deploy the monitoring resources for this guide:
 
 ```bash
-kubectl apply -n ${NAMESPACE} -k guides/recipes/modelserver/components/monitoring
+kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/recipes/modelserver/components/monitoring
 ```
 
 ---
@@ -397,7 +409,7 @@ To clean and remove applied deployments:
 
 ```bash
 helm uninstall ${GUIDE_NAME} -n ${NAMESPACE}
-kubectl delete -f guides/tiered-prefix-cache/storage/manifests/pvc.yaml -n ${NAMESPACE}
-kubectl delete -n ${NAMESPACE} -k guides/tiered-prefix-cache/storage/modelserver/gpu/vllm/${CONNECTOR}
+kubectl delete -f ${REPO_ROOT}/guides/tiered-prefix-cache/storage/manifests/pvc.yaml -n ${NAMESPACE}
+kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/tiered-prefix-cache/storage/modelserver/gpu/vllm/${CONNECTOR}
 kubectl delete namespace ${NAMESPACE}
 ```
