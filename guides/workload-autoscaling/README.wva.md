@@ -1,4 +1,4 @@
-# Autoscaling with Workload Variant Autoscaler (WVA)
+# Autoscaling Workloads with HPA and WVA Metric
 
 The [Workload Variant Autoscaler](https://github.com/llm-d-incubation/workload-variant-autoscaler) (WVA) provides dynamic autoscaling capabilities for llm-d inference deployments, automatically adjusting replica counts based on inference server saturation.
 
