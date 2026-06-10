@@ -161,6 +161,12 @@ patches:
         value:
           name: NVSHMEM_DISABLED_GDRCOPY
           value: "true"
+      # Since we are loading model in from a host storage, disable HF_XET
+      - op: add
+        path: /spec/leaderWorkerTemplate/workerTemplate/spec/containers/0/env/-
+        value:
+          name: HF_HUB_DISABLE_XET
+          value: "1"
       # We add the volume for different providers since the hostPath can be different.
       - op: replace
         path: /spec/leaderWorkerTemplate/workerTemplate/spec/volumes/1
