@@ -92,8 +92,8 @@ This helper describes how to run benchmarks against a deployed llm-d stack.
 >   | head -1
 > )
 > export BENCH_TEMPLATE_DIR="${LLMD_ROOT_DIR}"/guides/pd-disaggregation/benchmark-templates
-> export BENCHMARK_TEMPLATE="${BENCH_TEMPLATE_DIR}"/guide.yaml
-> # export BENCHMARK_TEMPLATE="${BENCH_TEMPLATE_DIR}"/sanity.yaml
+> export BENCHMARK_TEMPLATE="${BENCH_TEMPLATE_DIR}"/20_1_isl_osl.yaml
+> # export BENCHMARK_TEMPLATE="${BENCH_TEMPLATE_DIR}"/qwen-0.6b-20_1_isl_osl.yaml
 >   ```
 >
 > </details>

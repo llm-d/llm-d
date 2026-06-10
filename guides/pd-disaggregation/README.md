@@ -141,6 +141,13 @@ export INFRA_PROVIDER=base # base | coreweave | gke
 kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/gpu/vllm/${INFRA_PROVIDER}
 ```
 
+For Intel XPU:
+
+```bash
+export MODEL_NAME="Qwen/Qwen3-0.6B"
+kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/xpu/vllm/
+```
+
 ### 3. Enable Monitoring (optional)
 
 > [!NOTE]
@@ -211,13 +218,22 @@ chmod u+x run_only.sh
 ### 2. Download the Workload Template
 
 ```bash
-curl -LJO "https://raw.githubusercontent.com/llm-d/llm-d/main/guides/pd-disaggregation/benchmark-templates/20_1_isl_osl.yaml"
+export BENCHMARK_TEMPLATE=20_1_isl_osl.yaml
+curl -LJO "https://raw.githubusercontent.com/llm-d/llm-d/main/guides/pd-disaggregation/benchmark-templates/${BENCHMARK_TEMPLATE}"
+```
+
+For Qwen3-0.6B deployments (e.g. the Intel XPU overlay), use the Qwen3-0.6B template instead:
+
+```bash
+export BENCHMARK_TEMPLATE=qwen-0.6b-20_1_isl_osl.yaml
+curl -LJO "https://raw.githubusercontent.com/llm-d/llm-d/main/guides/pd-disaggregation/benchmark-templates/${BENCHMARK_TEMPLATE}"
 ```
 
 ### 3. Execute Benchmark
 
 ```bash
-envsubst < 20_1_isl_osl.yaml > config.yaml
+export IP=$(kubectl get service ${GUIDE_NAME}-epp -n ${NAMESPACE} -o jsonpath='{.spec.clusterIP}')
+envsubst < ${BENCHMARK_TEMPLATE} > config.yaml
 ./run_only.sh -c config.yaml -o ./results
 ```
 
