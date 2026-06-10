@@ -103,7 +103,7 @@ ARG max_jobs=6
 WORKDIR /workspace/vllm
 
 RUN --mount=type=cache,target=/root/.cache/uv \
-   uv pip install -r requirements/cpu-build.txt
+   uv pip install -r requirements/build/cpu.txt
 
 RUN --mount=type=cache,target=/root/.cache/uv \
     --mount=type=cache,target=/root/.cache/ccache \
