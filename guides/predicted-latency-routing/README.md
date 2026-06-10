@@ -56,6 +56,17 @@ Skip it when your pool is **heterogeneous** — mixed GPU types, model variants,
     kubectl create namespace ${NAMESPACE}
   ```
 
+- [Create the `llm-d-hf-token` secret in your target namespace with the key `HF_TOKEN` matching a valid HuggingFace token](../../helpers/hf-token.md) to pull models.
+<!-- llm-d-cicd:skip start -->
+  ```bash
+  export HF_TOKEN="your-huggingface-token"  # replace with a valid HuggingFace token
+  kubectl create secret generic llm-d-hf-token \
+    --from-literal="HF_TOKEN=${HF_TOKEN}" \
+    --namespace "${NAMESPACE}" \
+    --dry-run=client -o yaml | kubectl apply -f -
+  ```
+<!-- llm-d-cicd:skip end -->
+
 ## Installation Instructions
 
 ### 1. Deploy the llm-d Router
