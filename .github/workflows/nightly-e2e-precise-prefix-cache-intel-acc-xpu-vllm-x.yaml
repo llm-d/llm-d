@@ -42,5 +42,5 @@ jobs:
     uses: llm-d/llm-d-infra/.github/workflows/reusable-update-badge.yaml@main
     with:
       badge_name: precise-prefix-cache-xpu
-      badge_label: "XPU"
+      badge_label: "VLLM XPU"
       result: ${{ needs.nightly.result }}
