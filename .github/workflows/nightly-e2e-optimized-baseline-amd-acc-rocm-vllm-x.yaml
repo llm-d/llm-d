@@ -98,5 +98,5 @@ jobs:
     uses: llm-d/llm-d-infra/.github/workflows/reusable-update-badge.yaml@main
     with:
       badge_name: optimized-baseline-rocm
-      badge_label: "ROCm"
+      badge_label: "VLLM ROCm"
       result: ${{ needs.nightly.result }}

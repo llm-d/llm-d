@@ -97,5 +97,5 @@ jobs:
     uses: llm-d/llm-d-infra/.github/workflows/reusable-update-badge.yaml@main
     with:
       badge_name: optimized-baseline-ocp
-      badge_label: "OCP"
+      badge_label: "VLLM GPU"
       result: ${{ needs.nightly.result }}

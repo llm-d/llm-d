@@ -1,4 +1,4 @@
-name: Nightly - Optimized Baseline E2E (GKE GPU)
+name: Nightly - Predicted Latency Routing E2E (GKE GPU)
 
 on:
   workflow_dispatch:
@@ -40,7 +40,7 @@ on:
         description: 'Workload profile to be used during "run" operation (check list under "workload/profiles")'
         required: false
         default: 'sanity_random.yaml'
-#        default: 'guide_optimized-baseline_1.yaml'
+#        default: 'guide_predicted-latency-routing_1.yaml'
         type: 'string'
       cleanup:
         description: 'Cleanup the llm-d stack stood up by this workflow'
@@ -53,14 +53,14 @@ on:
 #      - main
 
   schedule:
-    - cron: '0 10 * * *'  # 10:00 UTC daily
+    - cron: '0 7 * * *'  # 07:00 UTC daily
 
 permissions:
   contents: write
   actions: read
 
 concurrency:
-  group: nightly-e2e-optimized-baseline-gke-gpu
+  group: nightly-e2e-predicted-latency-routing-gke-gpu
   cancel-in-progress: true
 
 jobs:
@@ -69,26 +69,26 @@ jobs:
     with:
       scenario_dir: ${{ inputs.scenario_dir || 'guides' }}
       standup_method: ${{ inputs.standup_method || 'kustomize' }}
-      standup_scenario: ${{ inputs.standup_scenario || 'optimized-baseline' }}
+      standup_scenario: ${{ inputs.standup_scenario || 'predicted-latency-routing' }}
       decode_pods: ${{ inputs.decode_pods || 'auto' }}
       prefill_pods: ${{ inputs.prefill_pods || 'auto' }}
       accelerator_type: ${{ inputs.accelerator_type || 'gpu' }}
       backend_type: ${{ inputs.backend_type || 'vllm' }}
       infra_provider: ${{ inputs.infra_provider || 'gke' }}
       connector: ${{ inputs.connector || '' }}
-      cluster_namespace: ${{ inputs.cluster_namespace || 'llm-d-nightly-optimized-baseline-gke-gpu' }}
+      cluster_namespace: ${{ inputs.cluster_namespace || 'llm-d-nightly-predicted-latency-routing-gke-gpu' }}
       helm_release: ${{ inputs.helm_release || 'llmdbenchcicdr-gke' }}
       workspace_dir: ${{ inputs.workspace_dir || '/tmp/llmdbenchcicdk-gke' }}
       bucket_project: ${{ inputs.bucket_project || 'llm-d-scale' }}
       bucket_provider: ${{ inputs.bucket_provider || 'gcs' }}
-      bucket_path: ${{ inputs.bucket_path || 'llm-d-benchmarks/regressions/optimized-baseline' }}
+      bucket_path: ${{ inputs.bucket_path || 'llm-d-benchmarks/regressions/predicted-latency-routing' }}
       gateway_class: ${{ inputs.gateway_class || 'epponly' }}
       monitoring_enabled: ${{ inputs.monitoring_enabled || 'false' }}
       dry_run: ${{ inputs.dry_run || 'false' }}
       verbose: ${{ inputs.verbose || 'false' }}
       harness: ${{ inputs.harness || 'inference-perf' }}
       workload: ${{ inputs.workload || 'sanity_random.yaml' }}
-#      workload: ${{ inputs.workload || 'guide_optimized-baseline_1.yaml' }}
+#      workload: ${{ inputs.workload || 'guide_predicted-latency-routing_1.yaml' }}
       cleanup: ${{ inputs.cleanup || 'true' }}
     secrets: inherit
 
@@ -97,6 +97,6 @@ jobs:
     if: always()
     uses: llm-d/llm-d-infra/.github/workflows/reusable-update-badge.yaml@main
     with:
-      badge_name: optimized-baseline-gke
+      badge_name: predicted-latency-routing-gke
       badge_label: "VLLM GPU"
       result: ${{ needs.nightly.result }}
