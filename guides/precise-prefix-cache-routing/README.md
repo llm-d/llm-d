@@ -139,6 +139,12 @@ export INFRA_PROVIDER=base # base | gke
 kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/gpu/vllm/${INFRA_PROVIDER}/
 ```
 
+For Intel XPU:
+
+```bash
+kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/xpu/vllm/
+```
+
 ### 4. (Optional) Enable Monitoring
 
 > [!NOTE]
@@ -211,14 +217,22 @@ The benchmark launches a pod (`llmdbench-harness-launcher`) that uses `inference
 ### 2. Download the Workload Template
 
 ```bash
-curl -LJO "https://raw.githubusercontent.com/llm-d/llm-d/main/guides/precise-prefix-cache-routing/benchmark-templates/guide.yaml"
+export BENCHMARK_TEMPLATE=guide.yaml
+curl -LJO "https://raw.githubusercontent.com/llm-d/llm-d/main/guides/precise-prefix-cache-routing/benchmark-templates/${BENCHMARK_TEMPLATE}"
+```
+
+For Qwen3-0.6B deployments (e.g. the Intel XPU overlay), use the Qwen3-0.6B template instead:
+
+```bash
+export BENCHMARK_TEMPLATE=qwen-0.6b-shared-prefix.yaml
+curl -LJO "https://raw.githubusercontent.com/llm-d/llm-d/main/guides/precise-prefix-cache-routing/benchmark-templates/${BENCHMARK_TEMPLATE}"
 ```
 
 ### 3. Execute Benchmark
 
 ```bash
 export IP=$(kubectl get service ${GUIDE_NAME}-epp -n ${NAMESPACE} -o jsonpath='{.spec.clusterIP}')
-envsubst < guide.yaml > config.yaml
+envsubst < ${BENCHMARK_TEMPLATE} > config.yaml
 ./run_only.sh -c config.yaml -o ./results
 ```
 
