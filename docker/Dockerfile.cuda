@@ -69,7 +69,7 @@ ARG DEEPGEMM_REPO="https://github.com/deepseek-ai/DeepGEMM"
 ARG DEEPGEMM_VERSION="477618cd51baffca09c4b0b87e97c03fe827ef03"
 ARG FLASHINFER_REPO="https://github.com/flashinfer-ai/flashinfer.git"
 # May need to be dropped to v0.6.4
-ARG FLASHINFER_VERSION="v0.6.6"
+ARG FLASHINFER_VERSION="v0.6.11.post2"
 
 # vLLM build settings - provided via build args from docker/common-versions file
 # Override here for platform-specific testing or via build args
