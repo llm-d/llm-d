@@ -16,16 +16,16 @@ Before installing WVA, ensure you have:
 
 1. Installed the [optimized-baseline well-lit path guide](../optimized-baseline/README.md).
 
-    > [!NOTE]
-    > WVA requires HTTPS connections to Prometheus for metric collection. When installing the [monitoring stack](../../docs/operations/observability/setup.md), ensure to enable HTTPS/TLS support.
+> [!NOTE]
+> WVA requires HTTPS connections to Prometheus for metric collection. When installing the [monitoring stack](../../docs/operations/observability/setup.md), ensure to enable HTTPS/TLS support.
 
-    > [!NOTE]
-    > Make sure to enable monitoring as described in the [optimized-baseline well-lit path guide](../optimized-baseline/README.md#3-optional-enable-monitoring).
+> [!NOTE]
+> Make sure to enable monitoring as described in the [optimized-baseline well-lit path guide](../optimized-baseline/README.md#3-optional-enable-monitoring).
 
 2. An external metrics provider installed and configured in your cluster (e.g., Prometheus together with Prometheus Adapter or KEDA). HPA relies on the external metric exposed by WVA, `wva_desired_replicas`, to make scaling decisions. See [Install Prometheus Adapter (Required Dependency)](#install-prometheus-adapter-required-dependency) for installation instructions.
 
-    > [!NOTE]
-    > This guide relies on prometheus adapter to expose WVA's desired replica count as an external metric for HPA. KEDA is the recommended alternative and this guide will be updated to include KEDA instructions in a future release.
+> [!NOTE]
+> This guide relies on prometheus adapter to expose WVA's desired replica count as an external metric for HPA. KEDA is the recommended alternative and this guide will be updated to include KEDA instructions in a future release.
 
 3. [OpenShift User Workload Monitoring](https://docs.redhat.com/en/documentation/openshift_container_platform/4.14/html/monitoring/configuring-user-workload-monitoring) enabled for the namespaces used by this guide.
 
@@ -138,15 +138,9 @@ helm uninstall prometheus-adapter -n ${MON_NS:-llm-d-monitoring}
 
 Please refer to the [Workload Variant Autoscaler documentation](https://github.com/llm-d-incubation/workload-variant-autoscaler) for advanced configuration options, updating WVA versions, and troubleshooting tips.
 
-## Install Prometheus Adapter (Required Dependency)
+## Update Prometheus Adapter (Required Dependency)
 
 ```bash
-# Setup
-helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
-helm repo update
-export VERSION=${VERSION:-v0.7.0}
-export MON_NS=openshift-user-workload-monitoring
-
 # Download OpenShift-specific values
 curl -o ${TMPDIR:-/tmp}/prometheus-adapter-values.yaml \
   https://raw.githubusercontent.com/llm-d-incubation/workload-variant-autoscaler/${VERSION}/config/samples/prometheus-adapter-values-ocp.yaml
@@ -187,7 +181,6 @@ YAML
 ```
 
 **Verify installation**: `kubectl get pods -n ${MON_NS} -l app.kubernetes.io/name=prometheus-adapter`
-
 
 ## Benchmark Results
 

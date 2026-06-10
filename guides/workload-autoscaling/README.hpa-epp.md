@@ -44,36 +44,7 @@ featureGates:
 
 Follow the [flow control configuration guide](https://gateway-api-inference-extension.sigs.k8s.io/guides/flow-control/#1-enabling-the-layer) to tune the saturation detector in your EPP deployment as needed.
 
-### 2. Install the Prometheus Adapter
-
-> **⚠️ Deprecation Notice:** The Prometheus Adapter project is planned for deprecation ([kubernetes-sigs/prometheus-adapter#701](https://github.com/kubernetes-sigs/prometheus-adapter/issues/701)). **KEDA** is the recommended alternative and is actively maintained. See [Option 2: KEDA](#option-2-keda) below for the recommended approach using KEDA's built-in metrics adapter.
-
-The Prometheus Adapter bridges Prometheus metrics to the Kubernetes External Metrics API,
-which the HPA uses to read EPP signals.
-
-Add the Helm repository and install the adapter into your `monitoring` namespace:
-
-```bash
-helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
-helm repo update
-helm install prometheus-adapter prometheus-community/prometheus-adapter \
-  --namespace monitoring \
-  --create-namespace
-```
-
-> **Note:** You must set `prometheus.url` to point to your Prometheus instance. If you are
-using `kube-prometheus-stack`, the default service is `http://prometheus-operated.monitoring.svc:9090`.
-Pass it at install time or in a values file:
-
-```bash
-helm install prometheus-adapter prometheus-community/prometheus-adapter \
-  --namespace monitoring \
-  --create-namespace \
-  --set prometheus.url=http://prometheus-operated.monitoring.svc \
-  --set prometheus.port=9090
-```
-
-### 3. Configure Prometheus Adapter Rules
+### 2. Configure Prometheus Adapter Rules
 
 Create a values file `epp-adapter-values.yaml` with the following rules:
 
@@ -100,8 +71,8 @@ rules:
       metricsQuery: 'sum(inference_objective_running_requests{top_level_controller_name="vllm-llama3-8b-instruct-epp"})'
 ```
 
-> **Note:** Replace `vllm-llama3-8b-instruct` and `vllm-llama3-8b-instruct-epp` with your
-own deployment names.
+> [!NOTE]
+> Replace `vllm-llama3-8b-instruct` and `vllm-llama3-8b-instruct-epp` with your own deployment names.
 
 Apply the rules by upgrading the adapter:
 
@@ -123,7 +94,7 @@ A successful response returns a JSON object with the current metric value. A `40
 the adapter rules are not applied correctly or the Prometheus series does not exist yet —
 re-check the `metricsQuery` label values against your live Prometheus data.
 
-### 4. Create the HPA Resource
+### 3. Create the HPA Resource
 
 Below is a sample HPA configuration `hpa.yaml` that uses the dual-metric setup to scale your model server based on both the queue size and current request load.
 
@@ -170,11 +141,13 @@ spec:
         periodSeconds: 15
 ```
 
-> **Note 1:** The target values (`250`) used here are examples and must be tuned to your model and hardware. A good starting point is to run your model server at a known concurrency level, observe the actual metric values using `kubectl describe hpa`, and set the target below the concurrency at which your model's latency begins to degrade.
+> [!NOTE]
+> The target values (`250`) used here are examples and must be tuned to your model and hardware. A good starting point is to run your model server at a known concurrency level, observe the actual metric values using `kubectl describe hpa`, and set the target below the concurrency at which your model's latency begins to degrade.
 
-> **Note 2:** Although `epp_queue_size` and `epp_running_requests` originate from the EPP pod, we use `type: External` rather than `type: Pods`. This is because `type: Pods` requires metrics to come from the pods being scaled — in this case the model server pods. Since the EPP is a separate deployment acting as a gateway and emitting metrics on behalf of the model server pool, we treat its metrics as external signals.
+> [!NOTE]
+> Although `epp_queue_size` and `epp_running_requests` originate from the EPP pod, we use `type: External` rather than `type: Pods`. This is because `type: Pods` requires metrics to come from the pods being scaled — in this case the model server pods. Since the EPP is a separate deployment acting as a gateway and emitting metrics on behalf of the model server pool, we treat its metrics as external signals.
 
-### 5. Verify the HPA
+### 4. Verify the HPA
 
 Apply the manifest and confirm the HPA is reading metrics:
 
