@@ -1,8 +1,13 @@
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 resources:
-  - ../base
+  - ../../base
 
+# OCI GB200 (BM.GPU.GB200.4) overlay.
+#
+# Image: official vllm/vllm-openai build validated for DeepSeek-V4 MegaMoE
+# (deep_gemm_mega_moe + MNNVL) instead of llm-d-cuda-gb200, to isolate this test to
+# manifest/overlay correctness. Swap to ghcr.io/llm-d/llm-d-cuda-gb200 to test that image.
 images:
   - name: ghcr.io/llm-d/llm-d-cuda
     newName: vllm/vllm-openai
@@ -12,20 +17,25 @@ patches:
   - target:
       kind: LeaderWorkerSet
     patch: |-
-      # 1. Model cache on the shared Lustre PVC instead of emptyDir, so the ~850 GiB
-      #    download lives on persistent shared storage (downloaded once, RWX) and does
-      #    NOT consume node ephemeral storage. base volumes order: [dshm, hf-cache, jit-cache].
+      # 1. Model + JIT caches on the node's local NVMe (hostPath) instead of emptyDir.
+      #    The ~850 GiB model then persists per-node across pod restarts and is NOT counted
+      #    against the pod's ephemeral-storage budget. Mirrors the coreweave/gke overlays;
+      #    /mnt/numa0 is the local NVMe on OCI BM.GPU.GB200.4 nodes (same path j-llm-d uses).
+      #    base volumes order: [dshm, hf-cache, jit-cache].
       - op: replace
         path: /spec/leaderWorkerTemplate/workerTemplate/spec/volumes/1
         value:
           name: hf-cache
-          persistentVolumeClaim:
-            claimName: lustre-pvc-vllm
-      # Scope the HF cache to a subdir on the shared volume (avoid collisions with other
-      #  workloads using the same PVC). volumeMounts order: [dshm, hf-cache, jit-cache].
-      - op: add
-        path: /spec/leaderWorkerTemplate/workerTemplate/spec/containers/0/volumeMounts/1/subPath
-        value: deepseek-v4-pro/hf-cache
+          hostPath:
+            path: /mnt/numa0/hf-cache
+            type: DirectoryOrCreate
+      - op: replace
+        path: /spec/leaderWorkerTemplate/workerTemplate/spec/volumes/2
+        value:
+          name: jit-cache
+          hostPath:
+            path: /mnt/numa0/jit-cache
+            type: DirectoryOrCreate
       # 2. Model no longer in emptyDir -> drop ephemeral request to fit GB200 nodes
       #    (~891 GiB allocatable; the base's 1Ti request is unschedulable here).
       - op: replace
