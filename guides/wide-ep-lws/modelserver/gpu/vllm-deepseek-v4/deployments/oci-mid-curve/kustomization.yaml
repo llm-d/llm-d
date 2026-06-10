@@ -4,4 +4,4 @@ kind: Kustomization
 resources:
   - ../../providers/oci
 components:
-  - ../../components/ratio-1to1
+  - ../../components/1p1d-dep8
