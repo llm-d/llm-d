@@ -52,7 +52,7 @@ on:
 #      - main
 
   schedule:
-    - cron: '0 10 * * *'  # 10:00 UTC daily
+    - cron: '0 5 * * *'  # 05:00 UTC daily
 
 permissions:
   contents: write
