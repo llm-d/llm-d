@@ -3,11 +3,7 @@ kind: Kustomization
 resources:
   - ../../base
 
-# OCI GB200 (BM.GPU.GB200.4) overlay.
-#
-# Image: official vllm/vllm-openai build validated for DeepSeek-V4 MegaMoE
-# (deep_gemm_mega_moe + MNNVL) instead of llm-d-cuda-gb200, to isolate this test to
-# manifest/overlay correctness. Swap to ghcr.io/llm-d/llm-d-cuda-gb200 to test that image.
+# OCI GB200 (BM.GPU.GB200.4) overlay: image override + OCI-specific storage + MNNVL wiring.
 images:
   - name: ghcr.io/llm-d/llm-d-cuda
     newName: vllm/vllm-openai

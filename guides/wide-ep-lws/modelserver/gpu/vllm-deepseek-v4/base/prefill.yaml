@@ -76,15 +76,10 @@ spec:
                                           "kv_load_failure_policy":"fail"}' \
                   --moe-backend deep_gemm_mega_moe \
                   --enforce-eager \
-                  --max-model-len 9280 \
-                  --max-num-seqs 16 \
-                  --max-num-batched-tokens 32768 \
                   --block-size 256 \
-                  --no-enable-prefix-caching \
-                  --no-enable-flashinfer-autotune \
                   --no-async-scheduling \
                   --no-disable-hybrid-kv-cache-manager \
-                  --enable-sleep-mode \
+                  --enable-cumem-allocator \
                   --numa-bind \
                   --kv-cache-dtype fp8
             env:

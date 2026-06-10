@@ -95,17 +95,13 @@ spec:
                                           "kv_role":"kv_both",
                                           "kv_load_failure_policy":"fail"}' \
                   --moe-backend deep_gemm_mega_moe \
-                  --max-model-len 9280 \
-                  --max-num-batched-tokens 512 \
-                  --max-num-seqs 512 \
-                  --max-cudagraph-capture-size 512 \
+                  --max-num-batched-tokens ${MAX_TOKENS} \
+                  --max-num-seqs ${MAX_TOKENS} \
+                  --max-cudagraph-capture-size ${MAX_TOKENS} \
                   --block-size 256 \
-                  --no-enable-prefix-caching \
-                  --no-enable-flashinfer-autotune \
                   --no-disable-hybrid-kv-cache-manager \
-                  --enable-sleep-mode \
+                  --enable-cumem-allocator \
                   --stream-interval 50 \
-                  --async-scheduling \
                   --kv-cache-dtype fp8 \
                   --compilation-config '{"cudagraph_mode":"FULL_DECODE_ONLY","mode":0}' \
                   --kv-cache-memory-bytes=${KV_CACHE_MEMORY_BYTES-}
@@ -116,7 +112,7 @@ spec:
                     name: llm-d-hf-token
                     key: HF_TOKEN
               - name: MAX_TOKENS
-                value: "256"
+                value: "512"
               - name: DP_SIZE_LOCAL
                 value: "4"
               - name: TP_SIZE
