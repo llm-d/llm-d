@@ -2,7 +2,7 @@
 
 `InferenceModelRewrite` defines rules for rewriting inference requests, such as traffic splitting, A/B tests, or canary rollouts across weighted model targets.
 
-**Group:** `inference.networking.x-k8s.io`
+**Group:** `llm-d.ai`
 **Version:** `v1alpha2`
 
 ---
@@ -11,7 +11,7 @@
 
 | Field | Description |
 | --- | --- |
-| `apiVersion` | `inference.networking.x-k8s.io/v1alpha2` |
+| `apiVersion` | `llm-d.ai/v1alpha2` |
 | `kind` | `InferenceModelRewrite` |
 | `metadata` | [metav1.ObjectMeta](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.28/#objectmeta-v1-meta) |
 | `spec` | [InferenceModelRewriteSpec](#inferencemodelrewritespec) <br/> Spec defines the desired state of the rewrite rules. |

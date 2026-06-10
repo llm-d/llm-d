@@ -2,7 +2,7 @@
 
 `InferenceObjective` represents the desired state of a specific model use case. It allows "Inference Workload Owners" to define performance and latency goals for a model within an `InferencePool`.
 
-**Group:** `inference.networking.x-k8s.io`
+**Group:** `llm-d.ai`
 **Version:** `v1alpha2`
 
 ---
@@ -11,7 +11,7 @@
 
 | Field | Description |
 | --- | --- |
-| `apiVersion` | `inference.networking.x-k8s.io/v1alpha2` |
+| `apiVersion` | `llm-d.ai/v1alpha2` |
 | `kind` | `InferenceObjective` |
 | `metadata` | [metav1.ObjectMeta](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.28/#objectmeta-v1-meta) |
 | `spec` | [InferenceObjectiveSpec](#inferenceobjectivespec) <br/> Spec represents the desired state of the model use case. |

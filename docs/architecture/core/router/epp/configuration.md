@@ -5,7 +5,7 @@ The `EndpointPickerConfig` is the central configuration for the Endpoint Picker 
 The configuration text has the following form:
 
 ```yaml
-apiVersion: inference.networking.x-k8s.io/v1alpha1
+apiVersion: llm-d.ai/v1alpha1
 kind: EndpointPickerConfig
 plugins:
 - ....
@@ -107,7 +107,7 @@ spec:
         ...
         - --config-text
         - |
-          apiVersion: inference.networking.x-k8s.io/v1alpha1
+          apiVersion: llm-d.ai/v1alpha1
           kind: EndpointPickerConfig
           plugins:
           - type: prefix-cache-scorer
@@ -228,7 +228,7 @@ When flow control is enabled (via the `FlowControl` feature gate), incoming requ
 The following example demonstrates a complete `EndpointPickerConfig` with flow control enabled, showing how to configure the `featureGates`, `plugins`, `saturationDetector`, and `flowControl` sections to work together.
 
 ```yaml
-apiVersion: inference.networking.x-k8s.io/v1alpha1
+apiVersion: llm-d.ai/v1alpha1
 kind: EndpointPickerConfig
 
 featureGates:

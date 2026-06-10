@@ -162,7 +162,7 @@ To ground the diagram above, here are the example manifests that would produce t
 These resources define the priority of the traffic. Note the use of a negative priority for best-effort workloads.
 
 ```yaml
-apiVersion: inference.networking.x-k8s.io/v1alpha2
+apiVersion: llm-d.ai/v1alpha2
 kind: InferenceObjective
 metadata:
   name: premium-traffic
@@ -171,7 +171,7 @@ spec:
   poolRef:
     name: default-pool
 ---
-apiVersion: inference.networking.x-k8s.io/v1alpha2
+apiVersion: llm-d.ai/v1alpha2
 kind: InferenceObjective
 metadata:
   name: standard-traffic
@@ -180,7 +180,7 @@ spec:
   poolRef:
     name: default-pool
 ---
-apiVersion: inference.networking.x-k8s.io/v1alpha2
+apiVersion: llm-d.ai/v1alpha2
 kind: InferenceObjective
 metadata:
   name: best-effort-traffic
@@ -195,7 +195,7 @@ spec:
 This snippet from the `EndpointPickerConfig` shows how the Flow Control layer is configured to handle these bands.
 
 ```yaml
-apiVersion: inference.networking.x-k8s.io/v1alpha1
+apiVersion: llm-d.ai/v1alpha1
 kind: EndpointPickerConfig
 metadata:
   name: default-config

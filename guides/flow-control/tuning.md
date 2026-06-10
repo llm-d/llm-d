@@ -115,7 +115,7 @@ vllm serve ... --max-num-seqs <N_active_or_N_peak>
 Configure the `EndpointPickerConfig` with the correct schema. You must enable the `flowControl` feature gate and reference your saturation detector plugin:
 
 ```yaml
-apiVersion: inference.networking.x-k8s.io/v1alpha1
+apiVersion: llm-d.ai/v1alpha1
 kind: EndpointPickerConfig
 
 featureGates:

@@ -66,7 +66,7 @@ A client requests the model `small-segment-lora`. We want to ensure this maps st
 Apply the following `InferenceModelRewrite` CR to map `small-segment-lora` → `small-segment-lora-v1`:
 
 ```yaml
-apiVersion: inference.networking.x-k8s.io/v1alpha2
+apiVersion: llm-d.ai/v1alpha2
 kind: InferenceModelRewrite
 metadata:
   name: small-segment-lora-rewrite
@@ -141,7 +141,7 @@ You want to direct 90% of `small-segment-lora` traffic to the stable `small-segm
 Update the existing `InferenceModelRewrite`:
 
 ```yaml
-apiVersion: inference.networking.x-k8s.io/v1alpha2
+apiVersion: llm-d.ai/v1alpha2
 kind: InferenceModelRewrite
 metadata:
   name: small-segment-lora-rewrite
