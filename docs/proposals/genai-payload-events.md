@@ -3,11 +3,16 @@
 ## Summary
 
 Extend llm-d's existing OpenTelemetry distributed tracing to optionally capture full
-LLM prompts and completions as OTel span events, following the upstream
-[open-telemetry/semantic-conventions#2010](https://github.com/open-telemetry/semantic-conventions/issues/2010)
-specification. Payloads above a configurable size threshold are offloaded to an object
-storage backend (GCS, S3, or local filesystem) with only a reference URI stored on the
-span. Non-text content parts (images, audio, and other binary media in multimodal
+LLM prompts and completions, following the upstream
+[GenAI semantic conventions](https://opentelemetry.io/docs/specs/semconv/gen-ai/) —
+specifically the `gen_ai.input.messages`, `gen_ai.output.messages`, and
+`gen_ai.system_instructions` attributes, recorded in structured form on a span event
+(per the convention, message content is recorded on events/logs and serialised to a JSON
+string when attached to a span). These attributes are `Opt-In` and at `Development`
+stability upstream, and are flagged as likely to contain sensitive data — they are never
+captured by default. Payloads above a configurable size threshold are offloaded to an
+object storage backend (GCS, S3, or local filesystem) with only a reference URI stored on
+the span. Non-text content parts (images, audio, and other binary media in multimodal
 requests) are always offloaded — they cannot be carried as OTel attributes — and are
 referenced from the span by URI regardless of the inline threshold. The feature is
 disabled by default and requires explicit opt-in, preserving the existing metadata-only
@@ -33,18 +38,20 @@ visibility that cannot be satisfied by token counts and latency metadata alone:
   multimodal requests are increasingly common drivers of latency and quality issues,
   and cannot be reconstructed from token metadata alone.
 
-The upstream OTel semantic-conventions community chose an **event-based model** (not span
-attributes) specifically to decouple large payload data from the lightweight span record.
-Even so, event attributes are typed as strings/numbers/bools/arrays and cannot carry
-opaque bytes; non-text payloads must therefore be offloaded to object storage and
-referenced by URI, never inlined in a span or a log record. Implementing against the
-upstream spec makes llm-d payload data consumable by any OTel-native tooling without
-custom parsing.
+The upstream GenAI conventions record message content as **structured attributes on a
+span event or log record** (`gen_ai.input.messages` / `gen_ai.output.messages`), rather
+than as attributes on the span itself, specifically to decouple large payload data from
+the lightweight span record. Even so, these attributes are typed as
+strings/numbers/bools/arrays and cannot carry opaque bytes; non-text payloads (images,
+audio) can be carried **neither on a span nor in a log record** and must therefore be
+offloaded to object storage and referenced by URI. Implementing against the upstream spec
+makes llm-d payload data consumable by any OTel-native tooling without custom parsing.
 
 ### Goals
 
-- Emit `gen_ai.content.prompt` and `gen_ai.content.completion` OTel events on the
-  relevant span following the upstream semantic convention.
+- Record `gen_ai.input.messages`, `gen_ai.output.messages`, and
+  `gen_ai.system_instructions` on a span event for the LLM call, following the upstream
+  GenAI semantic convention.
 - Inline small text payloads (≤ configurable threshold, default 4 KB) directly on the
   event attribute; offload larger text payloads to object storage and record only a
   reference URI.
@@ -81,18 +88,22 @@ see no change in behaviour or performance.
 
 When enabled, the relevant llm-d component:
 
-1. Serialises the request messages / prompt to JSON.
+1. Serialises the request messages into the upstream `gen_ai.input.messages` structure
+   (an array of role/parts messages; system content is split out to
+   `gen_ai.system_instructions`).
 2. Passes the JSON through the configured redaction pipeline.
 3. Compares the byte length against `inlineSizeThresholdBytes` (default 4 096).
-4. If within threshold → attaches the JSON as a `gen_ai.prompt` attribute on a
-   `gen_ai.content.prompt` OTel event on the active span.
+4. If within threshold → attaches the structured messages as the `gen_ai.input.messages`
+   attribute on a span event for the active LLM span (serialised to a JSON string, per the
+   convention's rule for recording messages on spans).
 5. If above threshold → uploads to the configured `PayloadStore` backend and attaches
-   only the returned URI as `gen_ai.content.storage_uri`.
-6. Repeats steps 1–5 for the response completion after the full response is assembled.
+   only the returned URI as `gen_ai.content.storage_uri` (llm-d extension).
+6. Repeats steps 1–5 for the response completion (`gen_ai.output.messages`) after the full
+   response is assembled.
 
-Success is measured by: (a) `gen_ai.content.prompt` / `gen_ai.content.completion` events
-appearing in Jaeger traces when enabled, (b) object-store objects appearing at the
-expected path, (c) no measurable latency increase on sampled requests when disabled.
+Success is measured by: (a) `gen_ai.input.messages` / `gen_ai.output.messages` attributes
+appearing on span events in Jaeger traces when enabled, (b) object-store objects appearing
+at the expected path, (c) no measurable latency increase on sampled requests when disabled.
 
 ### User Stories
 
@@ -116,55 +127,56 @@ injected) so that I can confirm whether retrieval or generation was the failure 
 
 ## Design Details
 
-### OTel Event Specification
+### OTel Attribute Specification
 
-Per [semconv#2010](https://github.com/open-telemetry/semantic-conventions/issues/2010)
-(now closed; GenAI conventions have moved to the dedicated
-[semantic-conventions-genai](https://github.com/open-telemetry/semantic-conventions-genai)
-repository), payload events are emitted on the **same span** that represents the LLM
-call. Attribute names prefixed `gen_ai.content.*` that are **not yet defined** in the
-upstream GenAI semantic conventions are marked below as *(llm-d extension)*; we will
-track upstream as the GenAI conventions stabilise and rename these attributes to match
-once standard names exist. This includes `gen_ai.content.media_uris`,
-`gen_ai.content.storage_uri`, and `gen_ai.content.truncated`. The base event names
-(`gen_ai.content.prompt`, `gen_ai.content.completion`) and the inlined-text payload
-attributes (`gen_ai.prompt`, `gen_ai.completion`) follow the upstream spec.
+Payload content is recorded using the current upstream
+[GenAI semantic conventions](https://opentelemetry.io/docs/specs/semconv/gen-ai/) —
+`gen_ai.input.messages`, `gen_ai.output.messages`, and `gen_ai.system_instructions`
+([attribute registry](https://opentelemetry.io/docs/specs/semconv/registry/attributes/gen-ai/)).
+These attributes are `Opt-In` and at `Development` stability upstream; they may still
+change, so this proposal tracks them rather than pinning a frozen copy. Per the
+convention, message content is recorded **in structured form on a span event or log
+record** attached to the LLM span; when recorded on the span itself it is serialised to a
+JSON string. Each message is `{role, parts: [...]}`, where each part has a `type`
+(`text`, `tool_call`, `tool_call_response`, …); output messages additionally carry a
+`finish_reason`. See [Non-Text and Multimodal Payloads](#non-text-and-multimodal-payloads)
+for how media parts are represented.
 
-**Prompt event**
+The offload and truncation markers below have **no upstream equivalent** and are explicit
+llm-d extensions, prefixed `gen_ai.content.*`. We will adopt standard names if and when
+the GenAI conventions define them.
 
-| Field | Value |
-|---|---|
-| Event name | `gen_ai.content.prompt` |
-| `gen_ai.prompt` | Serialised messages / prompt JSON, text-only skeleton with non-text parts replaced by `$ref` markers (omitted when the whole payload is offloaded) |
-| `gen_ai.content.storage_uri` *(llm-d extension)* | Object store URI for the full text payload (present only when offloaded) |
-| `gen_ai.content.media_uris` *(llm-d extension)* | Array of object store URIs for non-text content parts (present when the request contains any non-text media) |
+| Attribute | Source | Value |
+|---|---|---|
+| `gen_ai.input.messages` | upstream | Structured request messages (role/parts), text-only skeleton with non-text parts replaced by `$ref` markers (omitted when the whole payload is offloaded) |
+| `gen_ai.output.messages` | upstream | Structured response messages (role/parts/finish_reason), same skeleton treatment |
+| `gen_ai.system_instructions` | upstream | System message(s) supplied separately from the chat history |
+| `gen_ai.content.storage_uri` | **llm-d extension** | Object store URI for the full text payload (present only when offloaded) |
+| `gen_ai.content.media_uris` | **llm-d extension** | Array of object store URIs for non-text content parts (present when the payload contains any non-text media) |
+| `gen_ai.content.truncated` | **llm-d extension** | `true` when content was dropped/truncated (see below) |
 
-**Completion event**
-
-| Field | Value |
-|---|---|
-| Event name | `gen_ai.content.completion` |
-| `gen_ai.completion` | Serialised choices JSON, text-only skeleton with non-text parts replaced by `$ref` markers (omitted when the whole payload is offloaded) |
-| `gen_ai.content.storage_uri` *(llm-d extension)* | Object store URI for the full text payload (present only when offloaded) |
-| `gen_ai.content.media_uris` *(llm-d extension)* | Array of object store URIs for non-text content parts (present when the completion contains any non-text media) |
-
-When the payload is truncated due to `maxCompletionBufferBytes` being exceeded, or when
-a non-text part is dropped because the configured offload target cannot return a
-resolvable URI (see [Non-Text and Multimodal Payloads](#non-text-and-multimodal-payloads)
-for the cases that produce this), the event additionally carries
-`gen_ai.content.truncated: true`. `backend: noop` is distinct: it is the
-no-event-at-all kill switch and emits no `gen_ai.content.*` events of any kind.
+`gen_ai.input.messages` (with `gen_ai.system_instructions`) is recorded on the input span
+event; `gen_ai.output.messages` on the output span event. When the payload is truncated
+due to `maxCompletionBufferBytes` being exceeded, or when a non-text part is dropped
+because the configured offload target cannot return a resolvable URI (see
+[Non-Text and Multimodal Payloads](#non-text-and-multimodal-payloads) for the cases that
+produce this), the event additionally carries `gen_ai.content.truncated: true`.
+`backend: noop` is distinct: it is the no-event-at-all kill switch and records none of
+these attributes.
 
 ### Non-Text and Multimodal Payloads
 
 Modern chat APIs accept multimodal content parts within a single request — OpenAI
 Chat Completions `image_url` and `input_audio` parts, vLLM `multi_modal_data`, and
-similar shapes from other engines. The OTel attribute type system permits strings,
-numbers, bools, and arrays of those — it does **not** permit opaque bytes, and span
-backends do not tolerate multi-megabyte attribute strings. Log records are unsuitable
-for the same reason and lack a standard span-to-payload linking convention. Non-text
-parts must therefore live in object storage and be referenced by URI; this section
-specifies how.
+similar shapes from other engines. The upstream GenAI convention models these as typed
+parts inside each message's `parts[]` array (see the
+[input-messages JSON schema](https://opentelemetry.io/docs/specs/semconv/gen-ai/gen-ai-input-messages.json)),
+so llm-d maps engine-native multimodal parts onto that structure. The OTel attribute type
+system permits strings, numbers, bools, and arrays of those — it does **not** permit
+opaque bytes, and span backends do not tolerate multi-megabyte attribute strings. Log
+records are unsuitable for the same reason and lack a standard span-to-payload linking
+convention. Non-text parts must therefore live in object storage and be referenced by
+URI; this section specifies how.
 
 The capture pipeline handles non-text content as follows:
 
@@ -350,10 +362,14 @@ Equivalent environment variables: `LLMD_PAYLOAD_CAPTURE_ENABLED`, `LLMD_PAYLOAD_
 
 ### OTel Collector Pipeline
 
-A new `traces/payloads` pipeline filters for `gen_ai.content.*` events and routes them
-to a dedicated exporter (filesystem or OTLP bridge for GCS/S3). The existing
-`traces` pipeline is unchanged. The redaction processor can additionally be placed in
-the collector as a defence-in-depth layer.
+An optional `traces/payloads` pipeline keeps only the span events that carry
+`gen_ai.input.messages` / `gen_ai.output.messages` (an event-level filter — it drops
+non-payload span events, not whole spans) and routes them to a dedicated exporter
+(filesystem or OTLP bridge for GCS/S3). It is added to the existing collector recipe at
+[`guides/recipes/observability/tracing/otel-collector.yaml`](../../guides/recipes/observability/tracing/otel-collector.yaml)
+as commented, opt-in blocks — the default `traces` pipeline is unchanged, so operators
+who do not enable payload capture see identical behaviour. The `redaction` processor can
+additionally be placed in the collector as a defence-in-depth layer.
 
 ### Security
 
@@ -376,7 +392,21 @@ Workload Identity / IRSA bindings or Kubernetes Secrets mounted as environment v
 
 ### Phased Implementation
 
-**Phase 1 — Interface and noop/inline backends (this proposal)**
+**Ownership.** The Go `PayloadStore` interface and the `noop`/`inline`/`gcs`/`s3`/
+`filesystem` backends are owned by the **gateway / EPP** (`inferenceExtension`), where the
+request body is already parsed and the active span is in scope — this is the component
+that implements the interface for Phases 1–3. The vLLM native integration (Phase 4) is a
+**Python mirror** of the same interface owned by the model-server / vLLM integration, not
+a second Go implementation; it reuses the same attribute spec and object-store path
+convention so consumers see one format regardless of capture layer.
+
+**Concrete next steps** (assuming the design is approved): land Phase 1 as the first
+implementation PR — the `PayloadStore` interface, `NoopStore` + `InlineStore`, the
+`enabled` wiring in the gateway, the Kustomize opt-in surface, and unit tests — then
+proceed through Phases 2–4 in order. Each phase is independently shippable behind the
+default-off `payloadCapture.enabled` flag.
+
+**Phase 1 — Interface and noop/inline backends (first implementation PR)**
 - `PayloadStore` interface in `pkg/telemetry/payload_store.go` (Go)
 - `NoopStore` and `InlineStore` implementations
 - Wire into gateway `server.go` `Process()` method behind the `enabled` flag

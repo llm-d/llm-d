@@ -27,17 +27,55 @@ data:
       batch:
         send_batch_size: 1024
         timeout: 1s
+      # --- Optional: GenAI payload capture processors (opt-in) ----------------
+      # Defence-in-depth PII redaction applied before any payload exporter sees
+      # the data. The redaction processor masks attribute *values* that match any
+      # regex listed in `blocked_values` (it does not validate checksums). Add
+      # patterns for your data-classification policy under `blocked_values`.
+      # See docs/proposals/genai-payload-events.md.
+      # redaction/payloads:
+      #   allow_all_keys: true
+      #   blocked_values:
+      #     - "\\b\\d{3}-\\d{2}-\\d{4}\\b"                # US SSN
+      #     # Credit-card brand prefix + length only (NOT Luhn-validated)
+      #     - "\\b(?:4[0-9]{12}(?:[0-9]{3})?|5[1-5][0-9]{14}|3[47][0-9]{13}|6(?:011|5[0-9]{2})[0-9]{12})\\b"
+      #     - "(?i)bearer\\s+[a-z0-9._\\-]+"             # Bearer tokens
+      #   summary: debug
+      # Keep only span events that carry gen_ai payload attributes. NOTE: this is
+      # an event-level filter — it drops non-payload span *events*, not whole
+      # spans or traces. Parent spans still flow through the `traces` pipeline
+      # above unchanged.
+      # filter/payload-events-only:
+      #   error_mode: ignore
+      #   traces:
+      #     spanevent:
+      #       - 'attributes["gen_ai.input.messages"] == nil and attributes["gen_ai.output.messages"] == nil'
     exporters:
       otlp/jaeger:
         endpoint: "jaeger-collector:4317"
         tls:
           insecure: true
+      # --- Optional: GenAI payload capture exporter (opt-in) ------------------
+      # Dedicated, redacted sink for payload-bearing span events. The `file`
+      # exporter writes to a mounted volume (filesystem backend); for GCS/S3,
+      # bridge via an OTLP exporter to a collector with the object-store
+      # exporter, or offload at the application layer per the proposal.
+      # file/payloads:
+      #   path: /var/llm-d/payloads/payload-spans.json
     service:
       pipelines:
         traces:
           receivers: [otlp]
           processors: [filter/drop-metrics-scraping, batch]
           exporters: [otlp/jaeger]
+        # --- Optional: GenAI payload capture pipeline (opt-in) --------------
+        # Uncomment together with the processors + exporter above to route
+        # payload-bearing span events to a dedicated, redacted sink. The default
+        # `traces` pipeline is unaffected.
+        # traces/payloads:
+        #   receivers: [otlp]
+        #   processors: [filter/payload-events-only, redaction/payloads, batch]
+        #   exporters: [file/payloads]
 ---
 apiVersion: apps/v1
 kind: Deployment
