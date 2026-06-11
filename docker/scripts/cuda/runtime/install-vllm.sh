@@ -86,10 +86,10 @@ echo "DEBUG: Architecture: $(uname -m), Python: $(python3 --version)"
 # determine platform tag from architecture
 MACHINE=$(uname -m)
 case "${MACHINE}" in
-  x86_64) PLATFORM_TAG="manylinux_2_35_x86_64" ;;
-  amd64) PLATFORM_TAG="manylinux_2_35_x86_64" ;;
-  aarch64) PLATFORM_TAG="manylinux_2_35_aarch64" ;;
-  arm64) PLATFORM_TAG="manylinux_2_35_aarch64" ;;
+  x86_64) PLATFORM_TAG="manylinux_2_28_x86_64" ;;
+  amd64) PLATFORM_TAG="manylinux_2_28_x86_64" ;;
+  aarch64) PLATFORM_TAG="manylinux_2_28_aarch64" ;;
+  arm64) PLATFORM_TAG="manylinux_2_28_aarch64" ;;
   *) echo "unsupported architecture: ${MACHINE}"; exit 1 ;;
 esac
 
