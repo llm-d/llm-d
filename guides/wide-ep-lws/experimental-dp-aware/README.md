@@ -182,4 +182,17 @@ Benchmark: `2048_concurrent_2k_isl_2k_osl` (2048 concurrent requests, 2K input /
 | Total tokens/s | 44,711 | 57,183 | +28% |
 | Requests/s | 11.03 | 14.33 | +30% |
 
-This is ~1,741 output tokens/s per decode GPU (16 decode GPUs), compared to ~1,383 with hybrid-lb.
+~1,741 output tokens/s per decode GPU (16 decode GPUs), compared to ~1,383 with hybrid-lb.
+
+### GKE (4x H200, 32 GPUs, RoCE)
+
+Benchmark: `2048_concurrent_2k_isl_2k_osl` (2048 concurrent requests, 2K input / 2K output tokens)
+
+| Metric | DP Supervisor |
+|---|---|
+| Output tokens/s | 23,246 |
+| Input tokens/s | 25,106 |
+| Total tokens/s | 48,352 |
+| Requests/s | 12.27 |
+
+~1,453 output tokens/s per decode GPU (16 decode GPUs). ~17% lower than CKS due to RoCE vs InfiniBand latency.
