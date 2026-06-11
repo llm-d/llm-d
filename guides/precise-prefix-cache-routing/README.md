@@ -218,6 +218,7 @@ curl -LJO "https://raw.githubusercontent.com/llm-d/llm-d/main/guides/precise-pre
 
 ```bash
 export IP=$(kubectl get service ${GUIDE_NAME}-epp -n ${NAMESPACE} -o jsonpath='{.spec.clusterIP}')
+export MODEL=${MODEL:-Qwen/Qwen3-32B}   # defaults to Qwen/Qwen3-32B; override for other stacks (Intel XPU overlay uses Qwen/Qwen3-0.6B)
 envsubst < guide.yaml > config.yaml
 ./run_only.sh -c config.yaml -o ./results
 ```
