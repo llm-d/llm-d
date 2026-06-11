@@ -158,6 +158,12 @@ if [[ "${NVSHMEM_BUILD_FROM_SOURCE-}" == "true" ]] ; then
   uv pip uninstall nvidia-nvshmem-cu${CUDA_MAJOR}
 fi
 
+# Force-reinstall the matching CUDA wheel so the correct nixl_ep_cpp.so is installed.
+# Without this, the wrong CUDA variant's nixl_ep_cpp.so may be active (e.g., cu12 on cu13).
+if [ "${BUILD_NIXL_FROM_SOURCE}" = "false" ]; then
+  uv pip install --force-reinstall --no-deps nixl-cu${CUDA_MAJOR}
+fi
+
 # cleanup
 rm -rf /tmp/wheels
 rm -rf /opt/vllm-source/.deps
