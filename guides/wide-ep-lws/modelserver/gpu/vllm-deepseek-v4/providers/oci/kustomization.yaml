@@ -3,12 +3,8 @@ kind: Kustomization
 resources:
   - ../../base
 
-# OCI GB200 (BM.GPU.GB200.4) overlay: image override + OCI-specific storage + MNNVL wiring.
-images:
-  - name: ghcr.io/llm-d/llm-d-cuda
-    newName: vllm/vllm-openai
-    digest: sha256:4e5d0d839a292df9ce438d73bea96b8ec61a4fcd96f31005f3aa9ddf85f63f3f
-
+# OCI GB200 (BM.GPU.GB200.4) overlay: OCI-specific storage + MNNVL wiring.
+# (Image is set in base to vllm/vllm-openai:v0.22.1.)
 patches:
   - target:
       kind: LeaderWorkerSet

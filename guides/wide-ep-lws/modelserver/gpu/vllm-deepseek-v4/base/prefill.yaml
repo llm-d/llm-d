@@ -31,7 +31,7 @@ spec:
             emptyDir: {}
         containers:
           - name: vllm
-            image: ghcr.io/llm-d/llm-d-cuda:v0.7.0
+            image: vllm/vllm-openai:v0.22.1
             securityContext:
               capabilities:
                 add:
@@ -48,6 +48,8 @@ spec:
                 # Clear /dev/shm on start to prevent running out of space when crashes occur
                 # https://github.com/llm-d/llm-d/issues/352
                 find /dev/shm -type f -delete
+
+                uv pip install --system --force-reinstall --no-deps nvidia-cutlass-dsl-libs-cu13==4.5.2
 
                 #################
                 # RUN vLLM DeepSeek-V4 prefill worker (MegaMoE)
