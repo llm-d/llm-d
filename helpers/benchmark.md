@@ -49,6 +49,7 @@ This helper describes how to run benchmarks against a deployed llm-d stack.
   ```bash
   export NAMESPACE="<your namespace>"
   export BENCHMARK_PVC="<name of your PVC>"
+  export MODEL=${MODEL:-Qwen/Qwen3-32B}   # defaults to Qwen/Qwen3-32B; set to the model your stack serves
   export LLMD_ROOT_DIR=../..   # where you cloned llm-d/llm-d
   ```
 
@@ -178,7 +179,7 @@ This helper describes how to run benchmarks against a deployed llm-d stack.
 Check your env:
 
   ```bash
-  echo "Using NAMESPACE=${NAMESPACE:?Missing}, GATEWAY_SVC=${GATEWAY_SVC:?Missing}, BENCHMARK_PVC=${BENCHMARK_PVC:?Missing}, BENCHMARK_TEMPLATE=${BENCHMARK_TEMPLATE:?Missing}"
+  echo "Using NAMESPACE=${NAMESPACE:?Missing}, MODEL=${MODEL}, GATEWAY_SVC=${GATEWAY_SVC:?Missing}, BENCHMARK_PVC=${BENCHMARK_PVC:?Missing}, BENCHMARK_TEMPLATE=${BENCHMARK_TEMPLATE:?Missing}"
   ```
 
 ## Run
@@ -856,12 +857,12 @@ The configuration is divided into sections, each with a different scope.
 
 ### Endpoint
 
-These are the properties of the stack (`envsubst` would replace `NAMESPACE` and `GATEWAY_SVC` to match your env). Gated models need a Hugging Face token to access. Your stack should already have a token secret under the name `llm-d-hf-token`. `stack_name` is a user-defined arbitrary name that will be attached to the benchmark results. You can use `stack_name` to help you identify the results of different experiments. The `model` must match your stack. Please note the `yaml` tags -- other section of this `yaml` reference them (e.g., the tokenizer reference the model).
+These are the properties of the stack (`envsubst` would replace `NAMESPACE`, `GATEWAY_SVC`, and `MODEL` to match your env). Gated models need a Hugging Face token to access. Your stack should already have a token secret under the name `llm-d-hf-token`. `stack_name` is a user-defined arbitrary name that will be attached to the benchmark results. You can use `stack_name` to help you identify the results of different experiments. The `model` is taken from the `MODEL` environment variable and must match your stack. Please note the `yaml` tags -- other section of this `yaml` reference them (e.g., the tokenizer reference the model).
 
   ```yaml
   endpoint:
     stack_name: &stack_name optimized-baseline-Qwen3-32B  # user defined name for the stack (results prefix)
-    model: &model Qwen/Qwen3-32B                      # Exact HuggingFace model name. Must match stack deployed.
+    model: &model ${MODEL}                            # HuggingFace model name (set via 'export MODEL=...'). Must match stack deployed.
     namespace: &namespace $NAMESPACE
     base_url: &url http://${GATEWAY_SVC}.${NAMESPACE}.svc.cluster.local:80  # Base URL of inference endpoint
     hf_token_secret: llm-d-hf-token   # The name of secret that contains the HF token of the stack
