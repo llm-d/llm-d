@@ -222,9 +222,14 @@ curl -X POST http://${IP}/v1/completions \
 
 This guide uses [`llmdbenchmark`](https://github.com/llm-d/llm-d-benchmark) — the supported standard CLI for llm-d performance benchmarking.
 
-In this example we will demonstrate how to run [`inference-perf`](https://github.com/kubernetes-sigs/inference-perf) with a shared-prefix synthetic workload against the stack you just deployed above (standalone or gateway mode). When orchestrating benchmarks via `llmdbenchmark`, the CLI automatically and transparently deploys a harness pod (`llmdbench-harness-launcher`) into your namespace. This pod is central to driving the workload, collecting the results, and tearing itself down when it's finished.
+In this example we will demonstrate how to run [`inference-perf`](https://github.com/kubernetes-sigs/inference-perf) with a shared-prefix synthetic workload against the stack you just deployed exactly as written above (standalone or gateway mode). When orchestrating benchmarks via `llmdbenchmark`, the CLI automatically and transparently deploys a harness pod (`llmdbench-harness-launcher`) into your namespace. This pod is central to driving the workload, collecting the results, and tearing itself down when it's finished.
 
-For more details about `llmdbenchmark` please visit the documentation found [`here`](https://github.com/llm-d/llm-d-benchmark).
+> [!IMPORTANT]
+> **For more indepth explanation and features for benchmarking llm-d guides directly can be found at [`helpers/benchmark.md`](../../helpers/benchmark.md).**
+>
+> The Benchmarking section below contains only the **optimized-baseline-specific commands** needed to drive the stack you just deployed — for everything else (and especially when something goes wrong), start at [`helpers/benchmark.md`](../../helpers/benchmark.md).
+>
+> For even more details about benchmarking, see the actual repository: [`llm-d-benchmark` on GitHub](https://github.com/llm-d/llm-d-benchmark).
 
 ### 1. Install the `llmdbenchmark` CLI
 
@@ -270,7 +275,7 @@ export GATEWAY_CLASS=istio
 
 ### 3. Run the benchmark
 
-Benchmark results are copied to the workspace directory on the machine running the CLI. The workspace location is optional — by default the CLI auto-generates a timestamped workspace and prints its full path in the logs during the run. If you'd rather choose where results land, pass --workspace <YOUR_DIR_HERE> as a top-level argument of `llmdbenchmark` (before the `run` subcommand):
+Benchmark results are copied to the `workspace` directory that is specified by _you_ (or that is automatically generated when omitted from the cli) on the machine running the CLI. The workspace location is optional — by default the CLI auto-generates a timestamped workspace and prints its full path in the logs during the run. If you'd rather choose where results land, pass --workspace <YOUR_DIR_HERE> as a top-level argument of `llmdbenchmark` (before the `run` subcommand):
 
 ```bash
 llmdbenchmark \
@@ -287,24 +292,6 @@ llmdbenchmark \
 
 > [!NOTE]
 > Depending on your `cluster` you may need to extend the default `timeout` values to longer duration, as creation of `pvc` and `pods` can be arbitrarily slower on other systems, please utilize `llmdbenchmark run --help` to view the knobs needed to increase those values.
-
-What each flag does:
-
-| Flag | Purpose |
-|---|---|
-| `--workspace YOUR_DIR_HERE` | Top-level argument (before the `run` subcommand) — tells the CLI where to store the results of benchmark.|
-| `--spec guides/optimized-baseline` | Top-level argument (before the `run` subcommand) — tells the CLI which scenario this stack matches. Resolves to `config/specification/guides/optimized-baseline.yaml.j2`. |
-| `--endpoint-url` | Skips auto-detection and points the harness at the EPP / Gateway endpoint you just resolved. |
-| `--gateway-class` | Overrides the scenario's default topology so the CLI's re-rendered plan matches the topology you actually deployed. Use `epponly` for Standalone Mode and the corresponding class name (`istio`, `agentgateway`, `gke`, …) for Gateway Mode. |
-| `--model` | The served model name — must match what `${GUIDE_NAME}-epp /v1/models` returns. |
-| `--namespace` | Where the harness launcher pod is deployed (same namespace as the stack). |
-| `--harness inference-perf` | Use the [inference-perf](https://github.com/kubernetes-sigs/inference-perf) driver. Other options: `guidellm`, `vllm-benchmark`. |
-| `--workload shared_prefix_synthetic.yaml` | A workload profile that ships with `llm-d-benchmark`. The catalog of available profiles for each harness lives in the [`llm-d-benchmark` repo under `workload/profiles/`](https://github.com/llm-d/llm-d-benchmark/tree/main/workload/profiles) — see [Available workload profiles](#available-workload-profiles) below. |
-| `--analyze` | Generates graphs of the workload run. |
-
-You should see the harness pod come up, the workload stages execute, and the run finish with a results directory created in the `local workspace` provided (or by default automatically created for you) where `<experiment-id>` is generated per invocation.
-
-Each directory contains the raw `inference-perf` output (per-stage and per-request JSON), the resolved harness configuration, and the harness pod logs.
 
 ### 4. Run Other Workloads
 
@@ -325,20 +312,6 @@ llmdbenchmark \
 
 > [!NOTE]
 > Depending on your `cluster` you may need to extend the default `timeout` values to longer duration, as `bind`, `access` and `wait-timeout` times of `pvcs` and `pods` can be arbitrarily slower on other systems, please utilize `llmdbenchmark run --help` to view the knobs needed to increase those values.
-
-### Available workload profiles
-
-All workload profiles live in the [`llm-d-benchmark` repository](https://github.com/llm-d/llm-d-benchmark) under [`workload/profiles/<harness>/`](https://github.com/llm-d/llm-d-benchmark/tree/main/workload/profiles). Below is an example `subset` of the available harnesses and workloads available:
-
-| Harness | Profile directory | Highlights relevant to this guide |
-|---|---|---|
-| `inference-perf` | [`workload/profiles/inference-perf/`](https://github.com/llm-d/llm-d-benchmark/tree/main/workload/profiles/inference-perf) | `shared_prefix_synthetic.yaml` (short smoke run), `shared_prefix_synthetic_short.yaml`, `shared_prefix_multi_turn_chat.yaml`, `guide_optimized-baseline_1.yaml` (reproduces this guide's report ladder), `chatbot_synthetic.yaml`, `chatbot_sharegpt.yaml`, `code_completion_synthetic.yaml`, `summarization_synthetic.yaml`, `random_concurrent.yaml`, `sanity_random.yaml` |
-| `guidellm` | [`workload/profiles/guidellm/`](https://github.com/llm-d/llm-d-benchmark/tree/main/workload/profiles/guidellm) | `shared_prefix_synthetic.yaml`, `chatbot_synthetic.yaml`, `summarization_synthetic.yaml`, `guide_optimized-baseline_1.yaml`, `sanity_concurrent.yaml`, `sanity_random.yaml` |
-| `vllm-benchmark` | [`workload/profiles/vllm-benchmark/`](https://github.com/llm-d/llm-d-benchmark/tree/main/workload/profiles/vllm-benchmark) | `fixed_dataset.yaml`, `random_concurrent.yaml`, `sharegpt.yaml`, `sonnet_concurrent.yaml`, `sanity_random.yaml` |
-
-Pass the profile filename including `.yaml` (e.g. `shared_prefix_synthetic.yaml`) — the CLI looks it up under `workload/profiles/<harness>/`, tries the name as-is first and then appends `.in` to match the `.yaml.in` template files in the repo. The `--harness` and `--workload` flags travel together.
-
-To author your own profile, copy an existing `.yaml.in` template from the same directory, edit it, and pass the resulting filename (use the `.yaml` form — e.g. `--workload my_profile.yaml`) to `--workload`. The `REPLACE_ENV_*` tokens inside the template (e.g. `REPLACE_ENV_LLMDBENCH_DEPLOY_CURRENT_MODEL`, `REPLACE_ENV_LLMDBENCH_HARNESS_STACK_ENDPOINT_URL`) get substituted at run time from the CLI flags you supplied — no envsubst step required.
 
 ## Cleanup
 
