@@ -217,6 +217,7 @@ curl -LJO "https://raw.githubusercontent.com/llm-d/llm-d/main/guides/pd-disaggre
 ### 3. Execute Benchmark
 
 ```bash
+export MODEL=${MODEL:-openai/gpt-oss-120b}   # defaults to openai/gpt-oss-120b; override for other stacks
 envsubst < 20_1_isl_osl.yaml > config.yaml
 ./run_only.sh -c config.yaml -o ./results
 ```

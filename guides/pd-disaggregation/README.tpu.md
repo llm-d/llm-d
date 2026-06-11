@@ -71,6 +71,7 @@ curl -LJO "https://raw.githubusercontent.com/llm-d/llm-d/main/guides/pd-disaggre
 ### 3. Execute Benchmark
 
 ```bash
+export MODEL=${MODEL:-Qwen/Qwen3.5-397B-A17B-FP8}   # defaults to Qwen/Qwen3.5-397B-A17B-FP8; override for other stacks
 envsubst < tpu_v7_qwen3_5.yaml > config.yaml
 ./run_only.sh -c config.yaml -o ./results
 ```
