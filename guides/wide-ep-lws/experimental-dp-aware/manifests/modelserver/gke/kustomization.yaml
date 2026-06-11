@@ -4,8 +4,8 @@ resources:
   - ../base
 images:
   - name: ghcr.io/llm-d/llm-d-cuda
-    newName: docker.io/vllm/vllm-openai
-    newTag: v0.22.1-x86_64-cu129-ubuntu2404
+    newName: ghcr.io/llm-d/llm-d-cuda-dev
+    newTag: pr-1769
 components:
   - ../../../../../recipes/modelserver/components/disable-gke-nccl-tuner-patch
 
