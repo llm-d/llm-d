@@ -35,7 +35,7 @@ This guide demonstrates how to deploy DeepSeek-R1-0528 using vLLM's P/D disaggre
 - a 32xH200 cluster with InfiniBand networking (CoreWeave)
 - a 32xB200 cluster with InfiniBand networking (CoreWeave)
 - a 32xH200 cluster with RoCE networking (GKE)
-- Istio 1.29.2 (required for multi-port support)
+- Istio 1.29.2 (required for multi-port support in gateway mode) or standalone router mode
 
 In this example, we will demonstrate a deployment of `DeepSeek-R1-0528` with:
 
@@ -107,13 +107,31 @@ kubectl apply -k ./manifests/modelserver/gke  -n ${NAMESPACE}
 
 <!-- TABS:END -->
 
-### Deploy InferencePool
+### Deploy Router
 
-Select the provider-specific Helm command using the tabs below.
+<!-- TABS:START -->
 
-#### Istio
+<!-- TAB:Standalone (recommended) -->
+#### Standalone Mode
+
+Deploys the llm-d Router with an Envoy sidecar. Works on all clusters without requiring a gateway controller.
 
 ```bash
+export ROUTER_CHART_VERSION=v0
+helm install wide-ep-lws \
+  oci://ghcr.io/llm-d/charts/llm-d-router-standalone-dev \
+  -f ${REPO_ROOT}/guides/recipes/router/base.values.yaml \
+  -f ${REPO_ROOT}/guides/wide-ep-lws/router/wide-ep-lws.values.yaml \
+  -n ${NAMESPACE} --version ${ROUTER_CHART_VERSION}
+```
+
+<!-- TAB:Gateway (Istio) -->
+#### Gateway Mode (Istio)
+
+Requires Istio 1.29.2+ for multi-port support.
+
+```bash
+export ROUTER_CHART_VERSION=v0
 helm install llm-d-infpool \
   -n ${NAMESPACE} \
   -f ./manifests/inferencepool.values.yaml \
@@ -121,6 +139,8 @@ helm install llm-d-infpool \
   oci://ghcr.io/llm-d/charts/llm-d-router-gateway-dev \
   --version ${ROUTER_CHART_VERSION}
 ```
+
+<!-- TABS:END -->
 
 ## Verifying the installation
 
