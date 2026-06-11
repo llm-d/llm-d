@@ -25,6 +25,7 @@ This guide includes configurations for the following accelerators and inference 
 | Backend            | Directory                  | Notes                                      |
 | ------------------ | -------------------------- | ------------------------------------------ |
 | NVIDIA GPU         | `modelserver/gpu/vllm/${INFRA_PROVIDER}/`    | Default configuration (`INFRA_PROVIDER` options: `base`, `gke`)                      |
+| Intel XPU          | `modelserver/xpu/vllm/`    | Intel Arc Pro B60            |
 
 ---
 
@@ -110,6 +111,16 @@ export INFRA_PROVIDER=gke # base | gke
 kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/multimodal-serving/${GUIDE_NAME}/modelserver/gpu/vllm/${INFRA_PROVIDER}/
 ```
 
+<details>
+<summary><h4>Other Accelerators</h4></summary>
+
+```bash
+# Intel XPU
+kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/multimodal-serving/${GUIDE_NAME}/modelserver/xpu/vllm/
+```
+
+</details>
+
 ### 3. (Optional) Enable monitoring
 
 > [!NOTE]
@@ -187,6 +198,8 @@ To tear down and clean up all deployed resources:
 ```bash
 helm uninstall ${GUIDE_NAME} -n ${NAMESPACE}
 kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/multimodal-serving/${GUIDE_NAME}/modelserver/gpu/vllm/${INFRA_PROVIDER}/
+# For Intel XPU:
+# kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/multimodal-serving/${GUIDE_NAME}/modelserver/xpu/vllm/
 kubectl delete namespace ${NAMESPACE}
 ```
 
