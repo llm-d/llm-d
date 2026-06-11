@@ -1,6 +1,6 @@
 endpoint:
   stack_name: &stack_name optimized-baseline-Qwen3-32B  # user defined name for the stack (results prefix)
-  model: &model Qwen/Qwen3-32B       # Exact HuggingFace model name. Must match stack deployed.
+  model: &model ${MODEL}             # HuggingFace model name (set via 'export MODEL=...'). Must match stack deployed.
   namespace: &namespace ${NAMESPACE}  # Namespace where stack is deployed
   base_url: &url http://${IP}  # Base URL of inference endpoint
   hf_token_secret: llm-d-hf-token     # The name of secret that contains the HF token of the stack

@@ -253,6 +253,7 @@ export IP=$(kubectl get gateway llm-d-inference-gateway  -n ${NAMESPACE} -o json
 </details>
 
 ```bash
+export MODEL=${MODEL:-Qwen/Qwen3-32B}   # defaults to Qwen/Qwen3-32B; override for other stacks (Intel XPU overlay uses Qwen/Qwen3-0.6B)
 envsubst < guide.yaml > config.yaml
 ./run_only.sh -c config.yaml -o ./results
 ```
