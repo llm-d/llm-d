@@ -1,90 +1,95 @@
 name: Nightly - Wide EP LWS E2E (GKE GPU)
 
-# Nightly regression test for the wide-ep-lws guide on GKE.
-# Uses LeaderWorkerSet for P/D disaggregation with kustomize + helm.
-# Uses the existing GKE kustomize overlay (manifests/modelserver/gke).
-# Tests: LWS CRD, P/D routing sidecar, InferencePool PD plugins.
-# Reference: e2e-wide-ep-accelerator-gke.yaml (existing GKE wide-ep CI test)
-
 on:
-  schedule:
-    - cron: '0 11 * * *'  # 11:00 UTC daily (staggered)
   workflow_dispatch:
     inputs:
-      skip_cleanup:
-        description: 'Skip cleanup after tests (for debugging)'
+      decode_pods:
+        description: 'Number of decode (vllm "standalone") pods (default "auto", means what was configured on the scenario)'
+        required: false
+        type: 'string'
+        default: 'auto'
+      prefill_pods:
+        description: 'Number of prefill pods (default "auto", means what was configured on the scenario)'
+        required: false
+        type: 'string'
+        default: 'auto'
+      gateway_class:
+        description: 'Class of gateway used ("istio", "agentgateway", "epponly" (i.e., "standalone"), "none")'
+        required: false
+        default: 'epponly'
+      monitoring_enabled:
+        description: 'Enabled monitoring ("true", "false")'
+        required: true
+        type: 'string'
+        default: 'false'
+      dry_run:
+        description: 'Execute workflow in "dry-run" mode ("true", "false")'
         required: false
         default: 'false'
-      pr_number:
-        description: 'PR number for comment-back (set by /test-nightly)'
+      verbose:
+        description: 'Execute workflow in "verbose" mode ("true", "false")'
         required: false
-        default: ''
-      pr_repo:
-        description: 'Repo for PR comment-back'
+        default: 'false'
+        type: 'string'
+      harness:
+        description: 'Harness to be used during "run" operation ("inference-perf", "guidellm", "inferencemax", "vllm-benchmark", "nop")'
         required: false
-        default: 'llm-d/llm-d'
+        default: 'inference-perf'
+        type: 'string'
+      workload:
+        description: 'Workload profile to be used during "run" operation (check list under "workload/profiles")'
+        required: false
+        default: 'sanity_random.yaml'
+#        default: 'guide_wide-ep-lws_1.yaml'
+        type: 'string'
+      cleanup:
+        description: 'Cleanup the llm-d stack stood up by this workflow'
+        required: false
+        default: 'true'
+        type: string
+
+#  push:
+#    branches:
+#      - main
+
+  schedule:
+    - cron: '0 1 * * *'
 
 permissions:
   contents: write
   actions: read
 
 concurrency:
-  group: nightly-e2e-wide-ep-lws-gke
+  group: nightly-e2e-wide-ep-lws-gke-gpu
   cancel-in-progress: true
 
 jobs:
   nightly:
-    if: github.repository == 'llm-d/llm-d'
-    uses: llm-d/llm-d-infra/.github/workflows/reusable-nightly-e2e-gke.yaml@main
+    uses: llm-d/llm-d-infra/.github/workflows/reusable-ci-nightly-benchmark.yaml@main
     with:
-      guide_name: wide-ep-lws
-      guide_path: guides/wide-ep-lws
-      namespace: llm-d-nightly-wide-ep-gke
-#      gke_cluster_name: llm-d-e2e-us-east5
-#      gke_cluster_zone: us-east5
-      gke_cluster_name: llm-d-e2e-us-south1-2
-      gke_cluster_zone: us-south1
-      required_gpus: 32
-      recommended_gpus: 32
-      accelerator_type: H200
-      pod_wait_timeout: '35m'
-      pod_readiness_delay: 0
-      gateway_host: 'wide-ep-lws-epp'
-      pre_deploy_script: |
-        echo "Installing LeaderWorkerSet for wide-ep-lws..."
-        if ! kubectl get crd leaderworkersets.leaderworkerset.x-k8s.io &>/dev/null; then
-          echo "Installing LeaderWorkerSet via helm..."
-          helm install lws oci://registry.k8s.io/lws/charts/lws \
-            --version=0.7.0 \
-            --namespace lws-system \
-            --create-namespace \
-            --wait --timeout 300s
-          kubectl wait deploy/lws-controller-manager -n lws-system \
-            --for=condition=available --timeout=120s || true
-        else
-          echo "LeaderWorkerSet CRD already installed"
-        fi
-      # Custom deploy: kustomize (GKE overlay) + helm + gateway recipe
-      # Mirrors the existing e2e-wide-ep-accelerator-gke.yaml deploy pattern
-      custom_deploy_script: |
-        export GAIE_VERSION=v1.5.0
-        export ROUTER_CHART_VERSION=v0
-        export GUIDE_NAME="wide-ep-lws"
-        export INFRA_PROVIDER="gke"
-        yq '.spec.leaderWorkerTemplate.workerTemplate.spec.priorityClassName="nightly-gpu-critical"' -i guides/${GUIDE_NAME}/modelserver/gpu/vllm/base/decode.yaml
-        yq '.spec.leaderWorkerTemplate.workerTemplate.spec.priorityClassName="nightly-gpu-critical"' -i guides/${GUIDE_NAME}/modelserver/gpu/vllm/base/prefill.yaml
-        kubectl apply -n ${NAMESPACE} -k guides/${GUIDE_NAME}/modelserver/gpu/vllm/${INFRA_PROVIDER}
-        helm install ${GUIDE_NAME} \
-          oci://ghcr.io/llm-d/charts/llm-d-router-standalone-dev \
-          -f guides/recipes/router/base.values.yaml \
-          -f guides/${GUIDE_NAME}/router/${GUIDE_NAME}.values.yaml \
-          -n ${NAMESPACE} --version ${ROUTER_CHART_VERSION}
-      # Wide-EP-specific validation: check prefill + decode pods
-      e2e_validate_args: '-v'
-      allow_gpu_preemption: true
-      skip_cleanup: ${{ github.event.inputs.skip_cleanup == 'true' }}
-      pr_number: ${{ github.event.inputs.pr_number }}
-      pr_repo: ${{ github.event.inputs.pr_repo }}
+      scenario_dir: ${{ inputs.scenario_dir || 'guides' }}
+      standup_method: ${{ inputs.standup_method || 'kustomize' }}
+      standup_scenario: ${{ inputs.standup_scenario || 'wide-ep-lws' }}
+      decode_pods: ${{ inputs.decode_pods || 'auto' }}
+      prefill_pods: ${{ inputs.prefill_pods || 'auto' }}
+      accelerator_type: ${{ inputs.accelerator_type || 'gpu' }}
+      backend_type: ${{ inputs.backend_type || 'vllm' }}
+      infra_provider: ${{ inputs.infra_provider || 'gke' }}
+      connector: ${{ inputs.connector || '' }}
+      cluster_namespace: ${{ inputs.cluster_namespace || 'llm-d-nightly-wide-ep-lws-gke-gpu' }}
+      helm_release: ${{ inputs.helm_release || 'llmdbenchcicdr-gke' }}
+      workspace_dir: ${{ inputs.workspace_dir || '/tmp/llmdbenchcicdk-gke' }}
+      bucket_project: ${{ inputs.bucket_project || 'llm-d-scale' }}
+      bucket_provider: ${{ inputs.bucket_provider || 'gcs' }}
+      bucket_path: ${{ inputs.bucket_path || 'llm-d-benchmarks/regressions/wide-ep-lws' }}
+      gateway_class: ${{ inputs.gateway_class || 'epponly' }}
+      monitoring_enabled: ${{ inputs.monitoring_enabled || 'false' }}
+      dry_run: ${{ inputs.dry_run || 'true' }}
+      verbose: ${{ inputs.verbose || 'false' }}
+      harness: ${{ inputs.harness || 'inference-perf' }}
+      workload: ${{ inputs.workload || 'sanity_random.yaml' }}
+#      workload: ${{ inputs.workload || 'guide_wide-ep-lws_1.yaml' }}
+      cleanup: ${{ inputs.cleanup || 'true' }}
     secrets: inherit
 
   update-badge:
@@ -93,5 +98,5 @@ jobs:
     uses: llm-d/llm-d-infra/.github/workflows/reusable-update-badge.yaml@main
     with:
       badge_name: wide-ep-lws-gke
-      badge_label: "GKE GPU"
+      badge_label: "VLLM GPU"
       result: ${{ needs.nightly.result }}

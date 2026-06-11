@@ -1,86 +1,95 @@
 name: Nightly - Tiered Prefix Cache CPU Offloading E2E (OpenShift)
 
-# Nightly regression test for the tiered-prefix-cache/cpu guide on OpenShift.
-# Uses kustomize for model server + helm for InferencePool + gateway recipe.
-# Slim transform reduces Qwen3-32B to Qwen3-0.6B with 1 GPU.
-
 on:
-  schedule:
-    - cron: '0 2 * * *'  # 02:00 UTC daily (staggered)
   workflow_dispatch:
     inputs:
-      gateway_type:
-        description: 'Gateway provider type'
+      decode_pods:
+        description: 'Number of decode (vllm "standalone") pods (default "auto", means what was configured on the scenario)'
         required: false
-        default: 'istio'
-        type: choice
-        options:
-          - istio
-          - kgateway
-      skip_cleanup:
-        description: 'Skip cleanup after tests (for debugging)'
+        type: 'string'
+        default: 'auto'
+      prefill_pods:
+        description: 'Number of prefill pods (default "auto", means what was configured on the scenario)'
+        required: false
+        type: 'string'
+        default: 'auto'
+      gateway_class:
+        description: 'Class of gateway used ("istio", "agentgateway", "epponly" (i.e., "standalone"), "none")'
+        required: false
+        default: 'epponly'
+      monitoring_enabled:
+        description: 'Enabled monitoring ("true", "false")'
+        required: true
+        type: 'string'
+        default: 'false'
+      dry_run:
+        description: 'Execute workflow in "dry-run" mode ("true", "false")'
         required: false
         default: 'false'
-      pr_number:
-        description: 'PR number for comment-back (set by /test-nightly)'
+      verbose:
+        description: 'Execute workflow in "verbose" mode ("true", "false")'
         required: false
-        default: ''
-      pr_repo:
-        description: 'Repo for PR comment-back'
+        default: 'false'
+        type: 'string'
+      harness:
+        description: 'Harness to be used during "run" operation ("inference-perf", "guidellm", "inferencemax", "vllm-benchmark", "nop")'
         required: false
-        default: 'llm-d/llm-d'
+        default: 'inference-perf'
+        type: 'string'
+      workload:
+        description: 'Workload profile to be used during "run" operation (check list under "workload/profiles")'
+        required: false
+        default: 'sanity_random.yaml'
+#        default: 'guide_tiered-prefix-cache_1.yaml'
+        type: 'string'
+      cleanup:
+        description: 'Cleanup the llm-d stack stood up by this workflow'
+        required: false
+        default: 'true'
+        type: string
+#  push:
+#    branches:
+#      - main
+
+  schedule:
+    - cron: '0 12 * * *'  # 10:00 UTC daily
 
 permissions:
   contents: write
   actions: read
 
 concurrency:
-  group: nightly-e2e-tiered-prefix-cache
+  group: nightly-e2e-tiered-prefix-cache-ibm
   cancel-in-progress: true
 
 jobs:
   nightly:
-    if: github.repository == 'llm-d/llm-d'
-    uses: llm-d/llm-d-infra/.github/workflows/reusable-nightly-e2e-openshift.yaml@main
+    uses: llm-d/llm-d-infra/.github/workflows/reusable-ci-nightly-benchmark.yaml@main
     with:
-      guide_name: tiered-prefix-cache
-      namespace: llm-d-nightly-pfc-cpu
-      gateway_host: 'tiered-prefix-cache-epp'
-      custom_deploy_script: |
-        NAMESPACE="llm-d-nightly-pfc-cpu"
-        echo "Deploying tiered-prefix-cache/cpu via kustomize + helm..."
-
-        yq '.spec.template.spec.priorityClassName="nightly-gpu-critical"' -i guides/tiered-prefix-cache/modelserver/gpu/vllm/base/patch-vllm.yaml
-        yq '.spec.replicas=2' -i guides/tiered-prefix-cache/modelserver/gpu/vllm/base/patch-vllm.yaml
-
-        # Override image if IMAGE_OVERRIDE is set by the reusable workflow
-        #if [ -n "${IMAGE_OVERRIDE:-}" ]; then
-        #  find guides/tiered-prefix-cache/cpu/modelserver/gpu/vllm -name "*.yaml" -not -name "kustomization.yaml" \
-        #    -exec sed -i "s|ghcr.io/llm-d/llm-d-cuda:[^ \"]*|${IMAGE_OVERRIDE}|g" {} \;
-        #  echo "Image override applied: ${IMAGE_OVERRIDE}"
-        #fi
-
-        kubectl apply -k guides/tiered-prefix-cache/modelserver/gpu/vllm/native/cpu/base -n "$NAMESPACE"
-
-        export ROUTER_CHART_VERSION=v0
-        helm install tiered-prefix-cache \
-        oci://ghcr.io/llm-d/charts/llm-d-router-standalone-dev \
-        -f guides/recipes/router/base.values.yaml \
-        -f guides/tiered-prefix-cache/router/tiered-prefix-cache-cpu.values.yaml \
-        -n ${NAMESPACE} --version ${ROUTER_CHART_VERSION}
-
-        echo "Deployment complete"
-      accelerator_type: H100
-      required_gpus: 1
-      recommended_gpus: 2
-      pod_wait_timeout: '30m'
-      pod_readiness_delay: 180
-      image_override: 'ghcr.io/llm-d/llm-d-cuda-dev:latest'
-      allow_gpu_preemption: true
-      install_gateway_provider: false
-      skip_cleanup: ${{ github.event.inputs.skip_cleanup == 'true' }}
-      pr_number: ${{ github.event.inputs.pr_number }}
-      pr_repo: ${{ github.event.inputs.pr_repo }}
+      scenario_dir: ${{ inputs.scenario_dir || 'guides' }}
+      standup_method: ${{ inputs.standup_method || 'kustomize' }}
+      standup_scenario: ${{ inputs.standup_scenario || 'tiered-prefix-cache/cpu' }}
+      decode_pods: ${{ inputs.decode_pods || 'auto' }}
+      prefill_pods: ${{ inputs.prefill_pods || 'auto' }}
+      accelerator_type: ${{ inputs.accelerator_type || 'gpu' }}
+      backend_type: ${{ inputs.backend_type || 'vllm' }}
+      infra_provider: ${{ inputs.infra_provider || 'base' }}
+      offloading_target: ${{ inputs.offloading_target || 'cpu' }}
+      connector: ${{ inputs.connector || 'offloading' }}
+      cluster_namespace: ${{ inputs.cluster_namespace || 'llm-d-nightly-tiered-prefix-cache-ibm-gpu' }}
+      helm_release: ${{ inputs.helm_release || 'llmdbenchcicdr-ibm' }}
+      workspace_dir: ${{ inputs.workspace_dir || '/tmp/llmdbenchcicdk-ibm' }}
+      bucket_project: ${{ inputs.bucket_project || 'llm-d-scale' }}
+      bucket_provider: ${{ inputs.bucket_provider || 'gcs' }}
+      bucket_path: ${{ inputs.bucket_path || 'llm-d-benchmarks/regressions/tiered-prefix-cache' }}
+      gateway_class: ${{ inputs.gateway_class || 'epponly' }}
+      monitoring_enabled: ${{ inputs.monitoring_enabled || 'false' }}
+      dry_run: ${{ inputs.dry_run || 'false' }}
+      verbose: ${{ inputs.verbose || 'false' }}
+      harness: ${{ inputs.harness || 'inference-perf' }}
+      workload: ${{ inputs.workload || 'sanity_random.yaml' }}
+#      workload: ${{ inputs.workload || 'guide_tiered-prefix-cache_1.yaml' }}
+      cleanup: ${{ inputs.cleanup || 'true' }}
     secrets: inherit
 
   update-badge:
@@ -89,5 +98,5 @@ jobs:
     uses: llm-d/llm-d-infra/.github/workflows/reusable-update-badge.yaml@main
     with:
       badge_name: tiered-prefix-cache-cpu-offloading-ocp
-      badge_label: "OCP"
+      badge_label: "VLLM GPU"
       result: ${{ needs.nightly.result }}

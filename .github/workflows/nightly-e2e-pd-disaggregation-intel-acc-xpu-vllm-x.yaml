@@ -1,39 +1,95 @@
 name: Nightly - PD Disaggregation E2E (XPU)
 
-# Nightly regression test for the pd-disaggregation guide on XPU.
-
 on:
-  schedule:
-    - cron: '30 10 * * *'  # 10:30 UTC daily (staggered)
   workflow_dispatch:
     inputs:
-      skip_cleanup:
-        description: 'Skip cleanup after tests (for debugging)'
+      decode_pods:
+        description: 'Number of decode (vllm "standalone") pods (default "auto", means what was configured on the scenario)'
+        required: false
+        type: 'string'
+        default: 'auto'
+      prefill_pods:
+        description: 'Number of prefill pods (default "auto", means what was configured on the scenario)'
+        required: false
+        type: 'string'
+        default: 'auto'
+      gateway_class:
+        description: 'Class of gateway used ("istio", "agentgateway", "epponly" (i.e., "standalone"), "none")'
+        required: false
+        default: 'epponly'
+      monitoring_enabled:
+        description: 'Enabled monitoring ("true", "false")'
+        required: true
+        type: 'string'
+        default: 'false'
+      dry_run:
+        description: 'Execute workflow in "dry-run" mode ("true", "false")'
         required: false
         default: 'false'
+      verbose:
+        description: 'Execute workflow in "verbose" mode ("true", "false")'
+        required: false
+        default: 'false'
+        type: 'string'
+      harness:
+        description: 'Harness to be used during "run" operation ("inference-perf", "guidellm", "inferencemax", "vllm-benchmark", "nop")'
+        required: false
+        default: 'inference-perf'
+        type: 'string'
+      workload:
+        description: 'Workload profile to be used during "run" operation (check list under "workload/profiles")'
+        required: false
+        default: 'sanity_random.yaml'
+#        default: 'guide_pd-disaggregation_1.yaml'
+        type: 'string'
+      cleanup:
+        description: 'Cleanup the llm-d stack stood up by this workflow'
+        required: false
+        default: 'true'
+        type: string
+
+#  push:
+#    branches:
+#      - main
+
+  schedule:
+    - cron: '0 3 * * *'
 
 permissions:
   contents: write
   actions: read
 
 concurrency:
-  group: nightly-e2e-pd-disaggregation-xpu
+  group: nightly-e2e-pd-disaggregation-intel-xpu
   cancel-in-progress: true
 
 jobs:
   nightly:
-    if: github.repository == 'llm-d/llm-d'
-    uses: llm-d/llm-d-infra/.github/workflows/reusable-nightly-e2e-xpu.yaml@main
+    uses: llm-d/llm-d-infra/.github/workflows/reusable-ci-nightly-benchmark.yaml@main
     with:
-      guide_name: pd-disaggregation
-      namespace: llm-d-nightly-pd-xpu
-      router_release_name: pd-disaggregation
-      router_values_files: |
-        guides/recipes/router/base.values.yaml
-        guides/pd-disaggregation/router/pd-disaggregation.values.yaml
-      pod_wait_timeout: '10m'
-      llm_d_ref: ${{ github.ref }}
-      skip_cleanup: ${{ github.event.inputs.skip_cleanup == 'true' }}
+      scenario_dir: ${{ inputs.scenario_dir || 'guides' }}
+      standup_method: ${{ inputs.standup_method || 'kustomize' }}
+      standup_scenario: ${{ inputs.standup_scenario || 'pd-disaggregation' }}
+      decode_pods: ${{ inputs.decode_pods || 'auto' }}
+      prefill_pods: ${{ inputs.prefill_pods || 'auto' }}
+      accelerator_type: ${{ inputs.accelerator_type || 'xpu' }}
+      backend_type: ${{ inputs.backend_type || 'vllm' }}
+      infra_provider: ${{ inputs.infra_provider || '' }}
+      connector: ${{ inputs.connector || '' }}
+      cluster_namespace: ${{ inputs.cluster_namespace || 'llm-d-nightly-pd-disaggregation-intel-xpu' }}
+      helm_release: ${{ inputs.helm_release || 'llmdbenchcicdr-xpu' }}
+      workspace_dir: ${{ inputs.workspace_dir || '/tmp/llmdbenchcicdk-xpu' }}
+      bucket_project: ${{ inputs.bucket_project || 'llm-d-scale' }}
+      bucket_provider: ${{ inputs.bucket_provider || 'gcs' }}
+      bucket_path: ${{ inputs.bucket_path || 'llm-d-benchmarks/regressions/pd-disaggregation' }}
+      gateway_class: ${{ inputs.gateway_class || 'epponly' }}
+      monitoring_enabled: ${{ inputs.monitoring_enabled || 'false' }}
+      dry_run: ${{ inputs.dry_run || 'false' }}
+      verbose: ${{ inputs.verbose || 'false' }}
+      harness: ${{ inputs.harness || 'inference-perf' }}
+      workload: ${{ inputs.workload || 'sanity_random.yaml' }}
+#      workload: ${{ inputs.workload || 'guide_pd-disaggregation_1.yaml' }}
+      cleanup: ${{ inputs.cleanup || 'true' }}
     secrets: inherit
 
   update-badge:
@@ -42,5 +98,5 @@ jobs:
     uses: llm-d/llm-d-infra/.github/workflows/reusable-update-badge.yaml@main
     with:
       badge_name: pd-disaggregation-xpu
-      badge_label: "XPU"
+      badge_label: "VLLM XPU"
       result: ${{ needs.nightly.result }}
