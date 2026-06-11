@@ -25,7 +25,7 @@ on:
       dry_run:
         description: 'Execute workflow in "dry-run" mode ("true", "false")'
         required: false
-        default: 'false'
+        default: 'true'
       verbose:
         description: 'Execute workflow in "verbose" mode ("true", "false")'
         required: false
