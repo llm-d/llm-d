@@ -97,7 +97,7 @@ When enabled, the relevant llm-d component:
    attribute on a span event for the active LLM span (serialised to a JSON string, per the
    convention's rule for recording messages on spans).
 5. If above threshold → uploads to the configured `PayloadStore` backend and attaches
-   only the returned URI as `gen_ai.content.storage_uri` (llm-d extension).
+   only the returned URI as `llm_d.payload.storage_uri` (llm-d extension).
 6. Repeats steps 1–5 for the response completion (`gen_ai.output.messages`) after the full
    response is assembled.
 
@@ -142,25 +142,27 @@ JSON string. Each message is `{role, parts: [...]}`, where each part has a `type
 `finish_reason`. See [Non-Text and Multimodal Payloads](#non-text-and-multimodal-payloads)
 for how media parts are represented.
 
-The offload and truncation markers below have **no upstream equivalent** and are explicit
-llm-d extensions, prefixed `gen_ai.content.*`. We will adopt standard names if and when
-the GenAI conventions define them.
+The offload and truncation markers below have **no upstream equivalent** — the GenAI
+registry defines no `gen_ai.content.*` namespace and no storage/offload attribute of any
+kind. To avoid squatting on OTel's reserved `gen_ai.*` namespace, they are namespaced as
+explicit llm-d extensions under `llm_d.payload.*`. We will migrate to standard names if
+and when the GenAI conventions define equivalents.
 
 | Attribute | Source | Value |
 |---|---|---|
-| `gen_ai.input.messages` | upstream | Structured request messages (role/parts), text-only skeleton with non-text parts replaced by `$ref` markers (omitted when the whole payload is offloaded) |
-| `gen_ai.output.messages` | upstream | Structured response messages (role/parts/finish_reason), same skeleton treatment |
+| `gen_ai.input.messages` | upstream | Structured request messages (role/parts); offloaded `blob` parts are rewritten in place as standard `uri` parts (omitted when the whole payload is offloaded) |
+| `gen_ai.output.messages` | upstream | Structured response messages (role/parts/finish_reason), same `blob`→`uri` rewrite |
 | `gen_ai.system_instructions` | upstream | System message(s) supplied separately from the chat history |
-| `gen_ai.content.storage_uri` | **llm-d extension** | Object store URI for the full text payload (present only when offloaded) |
-| `gen_ai.content.media_uris` | **llm-d extension** | Array of object store URIs for non-text content parts (present when the payload contains any non-text media) |
-| `gen_ai.content.truncated` | **llm-d extension** | `true` when content was dropped/truncated (see below) |
+| `llm_d.payload.storage_uri` | **llm-d extension** | Object store URI for the full text payload (present only when offloaded) |
+| `llm_d.payload.media_uris` | **llm-d extension** | Array of object store URIs for non-text content parts (present when the payload contains any non-text media) |
+| `llm_d.payload.truncated` | **llm-d extension** | `true` when content was dropped/truncated (see below) |
 
 `gen_ai.input.messages` (with `gen_ai.system_instructions`) is recorded on the input span
 event; `gen_ai.output.messages` on the output span event. When the payload is truncated
-due to `maxCompletionBufferBytes` being exceeded, or when a non-text part is dropped
+due to `maxCompletionBufferBytes` being exceeded, or when a `blob` part is dropped
 because the configured offload target cannot return a resolvable URI (see
 [Non-Text and Multimodal Payloads](#non-text-and-multimodal-payloads) for the cases that
-produce this), the event additionally carries `gen_ai.content.truncated: true`.
+produce this), the event additionally carries `llm_d.payload.truncated: true`.
 `backend: noop` is distinct: it is the no-event-at-all kill switch and records none of
 these attributes.
 
@@ -170,42 +172,54 @@ Modern chat APIs accept multimodal content parts within a single request — Ope
 Chat Completions `image_url` and `input_audio` parts, vLLM `multi_modal_data`, and
 similar shapes from other engines. The upstream GenAI convention models these as typed
 parts inside each message's `parts[]` array (see the
-[input-messages JSON schema](https://opentelemetry.io/docs/specs/semconv/gen-ai/gen-ai-input-messages.json)),
-so llm-d maps engine-native multimodal parts onto that structure. The OTel attribute type
-system permits strings, numbers, bools, and arrays of those — it does **not** permit
-opaque bytes, and span backends do not tolerate multi-megabyte attribute strings. Log
-records are unsuitable for the same reason and lack a standard span-to-payload linking
-convention. Non-text parts must therefore live in object storage and be referenced by
-URI; this section specifies how.
+[input-messages JSON schema](https://opentelemetry.io/docs/specs/semconv/gen-ai/gen-ai-input-messages.json)).
+The schema defines three media-bearing part types, each carrying a `mime_type` (IANA
+media type) and a `modality` (`image` | `video` | `audio`):
+
+| `type` | Carries | llm-d handling |
+|---|---|---|
+| `blob` | Raw bytes inline (`content`) | **Offloaded** — see below |
+| `file` | A provider pre-upload reference (`file_id`) | Recorded as-is (no bytes to offload) |
+| `uri` | An external reference (`uri`) | Recorded as-is; not re-fetched |
+
+llm-d maps engine-native multimodal parts onto these types (e.g. OpenAI `image_url`
+with a data-URL → `blob`; `image_url` with an `https://` URL → `uri`). The OTel
+attribute type system permits strings, numbers, bools, and arrays of those — it does
+**not** permit the opaque bytes a `blob` part carries, and span backends do not tolerate
+multi-megabyte attribute strings. Log records are unsuitable for the same reason and lack
+a standard span-to-payload linking convention. `blob` parts must therefore live in object
+storage and be referenced by URI; this section specifies how.
 
 The capture pipeline handles non-text content as follows:
 
-1. The serialiser walks the request / response structure and identifies content parts
-   whose `type` is not `text` (or, in engine-native shapes, parts that carry binary
-   media regardless of declared type).
-2. Each non-text part is **always offloaded** to the configured `PayloadStore`,
+1. The serialiser walks the request / response `parts[]` and classifies each part by its
+   `type`. `text` (and `reasoning`) parts stay inline; `blob` parts are offload
+   candidates; `file` and `uri` parts are already references and are kept as-is.
+2. Each `blob` part is **always offloaded** to the configured `PayloadStore`,
    regardless of `inlineSizeThresholdBytes`. The inline threshold continues to apply
    only to the text portion.
-3. In the serialised payload that the span event carries, every non-text part is
-   replaced by a `$ref` marker of the form
-   `{"$ref": "<storage_uri>", "media_type": "image/png", "size_bytes": 12345}`.
-   The resulting text-only skeleton is then subject to the normal inline-vs-offload
-   decision against `inlineSizeThresholdBytes`.
-4. The event additionally carries `gen_ai.content.media_uris`: an ordered array of the
-   storage URIs produced for that request or completion. Consumers that only need to
-   locate media can read this attribute without re-parsing the skeleton.
-5. URL-reference parts (e.g. `image_url` pointing to a public CDN) are recorded in
-   `gen_ai.content.media_uris` as-is and are **not** re-fetched by llm-d; the redaction
-   pipeline still runs against the URL string itself.
+3. In the serialised payload that the span event carries, every offloaded `blob` part is
+   **rewritten in place as a standard `uri` part** — its `content` (raw bytes) is
+   replaced by the object-store `uri`, while the original `mime_type` and `modality` are
+   preserved. The result is therefore still a schema-valid `parts[]` array that any
+   OTel-native consumer can read without understanding an llm-d-specific marker. The
+   resulting text-only skeleton is then subject to the normal inline-vs-offload decision
+   against `inlineSizeThresholdBytes`.
+4. As a convenience, the event additionally carries `llm_d.payload.media_uris`: a flat,
+   ordered array mirroring the object-store URIs of the rewritten parts, so consumers
+   that only need to locate media can read one attribute without walking `parts[]`.
+5. `file` parts (`file_id`) and `uri` parts pointing at an external store (e.g. a public
+   CDN) are recorded as-is and are **not** re-fetched or re-uploaded by llm-d; the
+   redaction pipeline still runs against the `file_id` / `uri` string itself.
 6. `backend: noop` short-circuits the entire payload pipeline: no
-   `gen_ai.content.*` events are emitted at all, and steps 1–5 above are skipped.
+   `llm_d.payload.*` events are emitted at all, and steps 1–5 above are skipped.
    Operators who want capture *disabled* should leave `payloadCapture.enabled: false`;
    `backend: noop` exists as a secondary kill switch for the case where `enabled` must
    stay `true` for other reasons (e.g. shared overlay) but this particular component
    should produce nothing.
-7. When the primary `backend` is `inline` (which cannot store binary), the non-text
+7. When the primary `backend` is `inline` (which cannot store binary), the `blob`
    part is routed to the backend named in `offloadBackend`. If `offloadBackend` is
-   empty or unset, the part is dropped with `gen_ai.content.truncated: true` on the
+   empty or unset, the part is dropped with `llm_d.payload.truncated: true` on the
    emitted event, the text skeleton is still emitted so text-based debugging continues
    to work, and the request itself is not failed. Operators selecting `backend: inline`
    while expecting multimodal capture must therefore configure a non-empty
@@ -213,18 +227,18 @@ The capture pipeline handles non-text content as follows:
    validation logs a warning when this combination would silently drop media.
 
 The object-store path convention is extended to encode part index and media type so
-that text and non-text payloads for the same span do not collide:
+that text and `blob` payloads for the same span do not collide:
 
 ```
 {prefix}/{YYYY}/{MM}/{DD}/{traceID}/{spanID}-{kind}.json                 # full text payload
-{prefix}/{YYYY}/{MM}/{DD}/{traceID}/{spanID}-{kind}-{partIndex}.{ext}    # non-text part
+{prefix}/{YYYY}/{MM}/{DD}/{traceID}/{spanID}-{kind}-{partIndex}.{ext}    # offloaded blob part
 ```
 
-`{ext}` is derived from the part's declared media type (`png`, `jpg`, `webp`, `wav`,
-`mp3`, `pcm`, …) with `bin` as the fallback when the type is unknown. The redaction
-pipeline runs against the text skeleton only; binary parts are stored as received,
-and operators relying on redaction for compliance should either disable multimodal
-capture or apply DLP at the object-store layer.
+`{ext}` is derived from the part's `mime_type` (`image/png`→`png`, `audio/wav`→`wav`,
+…) with `bin` as the fallback when the type is unknown. The redaction pipeline runs
+against the text skeleton only; `blob` bytes are stored as received, and operators
+relying on redaction for compliance should either disable multimodal capture or apply
+DLP at the object-store layer.
 
 **Per-part size cap (`maxNonTextPartBytes`).** Defaults to 8 MiB (`8388608`). The
 value is chosen to sit comfortably above the per-image caps of common hosted APIs
@@ -235,7 +249,7 @@ request with several 4 MiB images is fully captured under the default. Operators
 should tune this for their workload: lower it (e.g. 2 MiB) when the dominant media
 type is photos at moderate resolution and storage cost matters, or raise it (up to
 ~25 MiB) when serving audio clips or large image inputs through Gemini/OpenAI
-upstreams. Parts exceeding the cap are dropped with `gen_ai.content.truncated: true`
+upstreams. Parts exceeding the cap are dropped with `llm_d.payload.truncated: true`
 rather than truncated mid-stream, since binary truncation produces undecodable artifacts.
 
 ### Capture Layers
@@ -284,7 +298,7 @@ Backend selection via `payloadCapture.backend`:
 
 | Value | Behaviour |
 |---|---|
-| `noop` (default) | Drop silently. No `gen_ai.content.*` events of any kind are emitted on the span — neither for text nor for non-text parts, and `gen_ai.content.truncated` is never set. This is the secondary kill switch and short-circuits the entire capture pipeline (see step 6 of [Non-Text and Multimodal Payloads](#non-text-and-multimodal-payloads)) |
+| `noop` (default) | Drop silently. No `llm_d.payload.*` events of any kind are emitted on the span — neither for text nor for non-text parts, and `llm_d.payload.truncated` is never set. This is the secondary kill switch and short-circuits the entire capture pipeline (see step 6 of [Non-Text and Multimodal Payloads](#non-text-and-multimodal-payloads)) |
 | `inline` | Attach to OTel event attribute; auto-offload if above threshold |
 | `gcs` | Upload to GCS, emit `gs://bucket/path` URI |
 | `s3` | Upload to S3-compatible store, emit `s3://bucket/path` URI |
@@ -315,7 +329,7 @@ on error the payload is truncated rather than forwarded unredacted.
 
 SSE responses are buffered in memory up to `maxCompletionBufferBytes` (default 256 KB)
 before the completion event is emitted. If the buffer limit is reached, the event is
-emitted with the buffered content and `gen_ai.content.truncated: true`; the response
+emitted with the buffered content and `llm_d.payload.truncated: true`; the response
 stream continues unaffected.
 
 ### Configuration
