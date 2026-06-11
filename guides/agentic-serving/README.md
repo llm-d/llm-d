@@ -1,4 +1,4 @@
-# Agentic Inference
+# Agentic Serving
 
 The **agentic-inference well-lit path** is a horizontal, workload-centric umbrella that serves
 agentic *programs* on llm-d by composing the capability paths into a stack and exposing a ladder

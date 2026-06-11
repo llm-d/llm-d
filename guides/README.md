@@ -32,7 +32,7 @@ We currently offer the following:
 
 Horizontal, workload-centric paths that compose the capability guides above into a stack tuned for a specific traffic pattern.
 
-* [Agentic Inference](./agentic-inference/README.md) - serve long, multi-turn, tool-using agentic workloads (e.g. coding agents) via a ladder of deployment options that combine prefix-aware routing, KV-cache offloading, and P/D disaggregation.
+* [Agentic Serving](./agentic-serving/README.md) - serve long, multi-turn, tool-using agentic workloads (e.g. coding agents) via a ladder of deployment options that combine prefix-aware routing, KV-cache offloading, and P/D disaggregation.
 * [Multimodal Serving](./multimodal-serving/optimized-baseline/README.md) - Deploy vLLM with multimodal prefix-cache and load-aware routing enabled by the llm-d EPP.
 
 ## Experimental Guides
