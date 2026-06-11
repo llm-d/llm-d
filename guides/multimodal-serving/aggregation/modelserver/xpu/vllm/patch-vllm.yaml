@@ -3,7 +3,7 @@ kind: Deployment
 metadata:
   name: decode
 spec:
-  replicas: 2
+  replicas: 1
   template:
     spec:
       securityContext:
@@ -14,23 +14,17 @@ spec:
         - name: modelserver
           command: ["vllm", "serve"]
           args:
-            - "Qwen/Qwen3-VL-8B-Instruct"
+            - "Qwen/Qwen3-VL-2B-Instruct"
+            - "--disable-access-log-for-endpoints=/health,/metrics,/v1/models"
             - "--port=8000"
-            - "--dtype=bfloat16"
             - "--tensor-parallel-size=2"
             - "--mm-processor-cache-gb"
             - "20"
-            - "--disable-access-log-for-endpoints=/health,/metrics,/v1/models"
+
             # Uncomment for distributed tracing
             # - "--otlp-traces-endpoint=http://otel-collector:4317"
             # - "--collect-detailed-traces=all"
           env:
-            - name: VLLM_USE_V1
-              value: "1"
-            - name: TORCH_LLM_ALLREDUCE
-              value: "1"
-            - name: VLLM_WORKER_MULTIPROC_METHOD
-              value: "spawn"
             - name: HF_TOKEN
               valueFrom:
                 secretKeyRef:
@@ -51,11 +45,11 @@ spec:
             #   value: "0.1"
           resources:
             limits:
-              cpu: "16"
-              memory: 256Gi
-            requests:
               cpu: "8"
-              memory: 128Gi
+              memory: 24Gi
+            requests:
+              cpu: "4"
+              memory: 12Gi
             claims:
               - name: intel-decode-claim
           volumeMounts:
