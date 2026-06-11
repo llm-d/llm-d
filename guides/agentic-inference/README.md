@@ -7,7 +7,7 @@ shapes, and the direction this path is driving toward, see the
 [Agentic Inference well-lit path](../../docs/well-lit-paths/agentic-inference.md); this guide is
 the operational counterpart, and the canonical guide of the llm-d Agentic Inference SIG.
 
-The reference workload here is **long-horizon loops** (agentic code generation): deep multi-turn
+The reference workload this guide optimizes for is **long-horizon loops** (agentic code generation): deep multi-turn
 sessions over large, repository-scale contexts with tool-call pauses between turns. Three
 behaviors drive every choice below — prefill-heavy/decode-light (a 160K-token context dominates
 TTFT), high reusable locality (cache hit rate, not FLOPs, sets throughput), and bursty/stateful
@@ -56,4 +56,3 @@ actually exercised. Options are compared on program-level metrics — whole-sess
 time and task throughput alongside TTFT and ITL. Replaying real agentic traces (program
 structure and tool-call timing from OpenTelemetry) is the direction for program-level
 evaluation.
-

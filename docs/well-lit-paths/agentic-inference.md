@@ -3,7 +3,7 @@
 Agents are becoming the dominant shape of production LLM traffic. A single user goal expands into
 a long *program* of model calls interleaved with tool execution — coding agents, deep-research
 loops, tool-using copilots, multi-agent pipelines. But inference stacks are still tuned for the
-isolated request: each call is served as if standalone, so the stack recomputes context it has
+isolated request: each call is served as if it is standalone, so the stack recomputes context it has
 already seen, evicts long-lived sessions under memory pressure, and hot-spots whichever replica
 holds a popular prefix.
 
@@ -36,7 +36,7 @@ requests.
 
 ## Canonical Workloads
 
-The llm-d Agentic Inference SIG anchors its work to concrete workload shapes, each stressing the
+The llm-d project anchors its work to concrete workload shapes, each stressing the
 stack differently:
 
 - **Long-horizon loops** (coding agents, computer use): one agent iterating reason → act →
@@ -65,15 +65,15 @@ workload and how the options compose.
 ## Direction
 
 These mechanisms are the first concrete steps toward serving that is *program-aware* rather than
-request-aware. The [Agentic Inference SIG northstar][northstar] is driving the stack toward
+request-aware. The [llm-d project agentic northstar][northstar] is driving the stack towards
 treating the **session as a graph of typed state blocks** the control plane plans over:
 
 - **Session-graph orchestration** — model a session as a graph of typed blocks (system prompt,
   tool catalog, conversation turn, reasoning branch), built from external hints (e.g. Anthropic
   `cache_control`, OpenAI `prompt_cache_key`) where available and inferred otherwise. Precise
   KV-state indexing is the substrate this rides on.
-- **Program-aware scheduling** — schedule on program-level metrics and the critical path that
-  stalls the whole loop, not per-request fairness. Extends the Inference Scheduler.
+- **Program-aware scheduling** — schedule based on program-level metrics and the critical path that
+  stalls the whole loop, not per-request fairness. Extends the llm-d Router.
 - **State reuse and lifecycle ("zero-recompute")** — if a reusable context exists anywhere (HBM,
   host memory, storage), no node recomputes it whenever reuse is cheaper than regeneration;
   durable context is pinned and dead branches dropped via typed retention. Builds on
