@@ -11,7 +11,7 @@ configurations:
 
 images:
   - name: REPLACE_MODEL_SERVER_IMAGE
-    newName: ghcr.io/llm-d/llm-d-xpu
+    newName: vllm/vllm-openai
     newTag: v0.7.0
 
 
