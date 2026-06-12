@@ -1,6 +1,6 @@
 ## High Cache Scenario (HBM < KVCache < HBM + CPU RAM)
 
-The benchmark runs on 16 × H100 GPUs, distributed across 16 model servers (1 H100s per server with TP=2) using gpt-oss-120B and the same workload as in [default configuration benchmark results](#README.md/benchmarking-results). The benchmark compares to optimized baseline configuration.
+The benchmark runs on 16 × H100 GPUs, distributed across 16 model servers (1 H100s per server with TP=1) using gpt-oss-120B and the same workload as in [default configuration benchmark results](#README.md/benchmarking-results). The benchmark compares to optimized baseline configuration.
 
 ### Throughput
 
