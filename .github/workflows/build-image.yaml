@@ -69,8 +69,8 @@ jobs:
         run: |
           echo "aws=true" >> $GITHUB_OUTPUT
           echo "gb200=true" >> $GITHUB_OUTPUT
-          echo "cpu=true" >> $GITHUB_OUTPUT
           echo "hpu=true" >> $GITHUB_OUTPUT
+          echo "rdma-tools=true" >> $GITHUB_OUTPUT
       - uses: actions/checkout@v6
         with:
           ref: ${{ inputs.ref || '' }}
@@ -113,6 +113,7 @@ jobs:
           echo "aws=$(echo $platforms | grep -q aws && echo true || echo false)" >> $GITHUB_OUTPUT
           echo "gb200=$(echo $platforms | grep -q gb200 && echo true || echo false)" >> $GITHUB_OUTPUT
           echo "hpu=$(echo $platforms | grep -q hpu && echo true || echo false)" >> $GITHUB_OUTPUT
+          echo "rdma-tools=$(echo $platforms | grep -q rdma-tools && echo true || echo false)" >> $GITHUB_OUTPUT
 
   aws-build-llm-d:
     needs: [detect-changes]
