@@ -76,6 +76,13 @@ spec:
                 #################
                 START_RANK=$(( ${LWS_WORKER_INDEX:-0} * DP_SIZE_LOCAL ))
 
+                # MoE backend (default: MegaMoE) and optional all2all backend are
+                # overridable via env, so alternative-backend components can swap them
+                # without rewriting this launch script. Unset => unchanged MegaMoE path.
+                MOE_BACKEND="${MOE_BACKEND:-deep_gemm_mega_moe}"
+                ALL2ALL_FLAG=""
+                if [ -n "${ALL2ALL_BACKEND:-}" ]; then ALL2ALL_FLAG="--all2all-backend ${ALL2ALL_BACKEND}"; fi
+
                 exec vllm serve \
                   deepseek-ai/DeepSeek-V4-Pro \
                   --port 8200 \
@@ -96,7 +103,8 @@ spec:
                   --kv_transfer_config '{"kv_connector":"NixlConnector",
                                           "kv_role":"kv_both",
                                           "kv_load_failure_policy":"fail"}' \
-                  --moe-backend deep_gemm_mega_moe \
+                  --moe-backend "${MOE_BACKEND}" \
+                  ${ALL2ALL_FLAG} \
                   --max-num-batched-tokens ${MAX_TOKENS} \
                   --max-num-seqs ${MAX_TOKENS} \
                   --max-cudagraph-capture-size ${MAX_TOKENS} \

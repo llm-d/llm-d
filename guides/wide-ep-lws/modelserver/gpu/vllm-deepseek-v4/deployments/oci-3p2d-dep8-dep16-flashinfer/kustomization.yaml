@@ -1,0 +1,7 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ../../providers/oci
+components:
+  - ../../components/3p2d-dep8-dep16
+  - ../../components/decode-flashinfer
