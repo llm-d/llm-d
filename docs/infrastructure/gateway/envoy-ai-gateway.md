@@ -173,6 +173,7 @@ curl -X POST http://${IP}/v1/completions \
 ## Cleanup
 
 ```bash
+kubectl delete clienttrafficpolicy client-buffer-limit -n ${NAMESPACE}
 kubectl delete gateway llm-d-inference-gateway -n ${NAMESPACE}
 helm uninstall envoy-ai-gateway -n envoy-ai-gateway-system
 helm uninstall envoy-ai-gateway-crd -n envoy-ai-gateway-system
