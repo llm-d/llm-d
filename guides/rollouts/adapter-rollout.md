@@ -36,7 +36,8 @@ env:
 
 **Quick Start:** You can deploy a vLLM instance with these configurations using kustomize:
 ```bash
-kubectl apply -k guides/rollouts/adapter-rollout-example/
+export REPO_ROOT=$(realpath $(git rev-parse --show-toplevel))
+kubectl apply -k ${REPO_ROOT}/guides/rollouts/adapter-rollout-example/
 ```
 
 This will create a deployment with the LoRA adapter environment variables pre-configured. See [`kustomization.yaml`](adapter-rollout-example/kustomization.yaml) and [`patch-lora-config.yaml`](adapter-rollout-example/patch-lora-config.yaml) for the full configuration.
@@ -65,7 +66,7 @@ A client requests the model `small-segment-lora`. We want to ensure this maps st
 Apply the following `InferenceModelRewrite` CR to map `small-segment-lora` → `small-segment-lora-v1`:
 
 ```yaml
-apiVersion: inference.networking.x-k8s.io/v1alpha2
+apiVersion: llm-d.ai/v1alpha2
 kind: InferenceModelRewrite
 metadata:
   name: small-segment-lora-rewrite
@@ -140,7 +141,7 @@ You want to direct 90% of `small-segment-lora` traffic to the stable `small-segm
 Update the existing `InferenceModelRewrite`:
 
 ```yaml
-apiVersion: inference.networking.x-k8s.io/v1alpha2
+apiVersion: llm-d.ai/v1alpha2
 kind: InferenceModelRewrite
 metadata:
   name: small-segment-lora-rewrite

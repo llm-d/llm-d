@@ -21,9 +21,14 @@ Well-lit paths are curated, end-to-end guides for common LLM inference patterns 
 
 - **[Flow Control](flow-control.md)**: Intelligent request queuing for multi-tenant deployments and managing traffic spikes.
 - **[Workload Autoscaling](workload-autoscaling.md)**: From simple Kubernetes autoscaling supplemented by EPP load metrics to advanced, SLO-aware capacity optimization for heterogeneous pools via the Workload Variant Autoscaler.
+- **[Batch Gateway](batch-gateway.md)**: Managing large-scale batch inference coexisting with interactive workloads via an OpenAI-compatible Batch API.
+
+### Workloads
+
+- **[Agentic Inference](agentic-inference.md)**: A workload-centric umbrella for serving long, multi-turn, tool-using agentic programs — composing prefix-aware routing, KV-cache offloading, and P/D disaggregation into a ladder of deployment options.
+- **[Multimodal Serving](./multimodal-serving/optimized-baseline/README.md)**: Deploy vLLM with multimodal prefix-cache and load-aware routing enabled by the llm-d EPP.
 
 ### Experimental
 
 - **[Asynchronous Processing](asynchronous-processing.md)**: Intelligently processing latency-tolerant requests sourced from message queues via a lightweight agent to leverage "slack" capacity without the complexity of a full batch gateway.
-- **[Batch Gateway](experimental/batch-gateway.md)**: Managing large-scale batch inference coexisting with interactive workloads via an OpenAI-compatible Batch API.
 - **[No-Kubernetes Deployment](no-kubernetes-deployment.md)**: Running the llm-d routing stack on bare metal, HPC schedulers, or Ray — workers are discovered from a YAML file on disk via the `file-discovery` plugin instead of an `InferencePool`.

@@ -1,8 +1,10 @@
-## Predicted Latency-Based Scheduling — default (routing-only) setup.
+## Predicted Latency-Based Scheduling — routing-only setup.
 ##
-## The predictor trains on end-to-end latency. Suitable for non-SLO traffic.
-## For SLO header support (x-llm-d-slo-ttft-ms / x-llm-d-slo-tpot-ms), use
-## predicted-latency-slo.values.yaml instead.
+## Overrides the chart's default plugin pipeline only to raise the
+## approx-prefix-cache-producer maxPrefixTokensToMatch (the chart default leaves it
+## unset). The predictor trains on end-to-end latency; no SLO headers are
+## required. For SLO-aware scheduling (x-llm-d-slo-ttft-ms / x-llm-d-slo-tpot-ms,
+## streamingMode: true), use predicted-latency-slo.values.yaml.
 
 router:
   latencyPredictor:
@@ -12,6 +14,30 @@ router:
       port: 80
       protocol: TCP
       targetPort: 8081
+  epp:
+    pluginsConfigFile: "predicted-latency-plugins.yaml"
+    pluginsCustomConfig:
+      predicted-latency-plugins.yaml: |
+        apiVersion: llm-d.ai/v1alpha1
+        kind: EndpointPickerConfig
+        plugins:
+        - type: approx-prefix-cache-producer
+          parameters:
+            maxPrefixTokensToMatch: 131072
+        - type: predicted-latency-producer
+        - type: prefix-cache-affinity-filter
+          name: loose-affinity-filter
+          parameters:
+            affinityThreshold: 0.8
+        - type: latency-scorer
+        - type: weighted-random-picker
+        schedulingProfiles:
+        - name: default
+          plugins:
+          - pluginRef: predicted-latency-producer
+          - pluginRef: loose-affinity-filter
+          - pluginRef: latency-scorer
+          - pluginRef: weighted-random-picker
 
   modelServers:
     matchLabels:

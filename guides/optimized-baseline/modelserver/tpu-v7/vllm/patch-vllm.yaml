@@ -21,6 +21,11 @@ spec:
             # - "--otlp-traces-endpoint=http://otel-collector:4317"
             # - "--collect-detailed-traces=all"
           env:
+            - name: HF_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: llm-d-hf-token
+                  key: HF_TOKEN
             # Uncomment for distributed tracing env vars
             # - name: OTEL_SERVICE_NAME
             #   value: "vllm-decode"
@@ -44,6 +49,10 @@ spec:
           volumeMounts:
             - mountPath: /.cache
               name: torch-compile-cache
+            - mountPath: /.triton
+              name: triton-cache
+            - mountPath: /.config
+              name: vllm-config
           startupProbe:
             initialDelaySeconds: 15
             periodSeconds: 30
@@ -59,4 +68,8 @@ spec:
             failureThreshold: 3
       volumes:
         - name: torch-compile-cache
+          emptyDir: {}
+        - name: triton-cache
+          emptyDir: {}
+        - name: vllm-config
           emptyDir: {}

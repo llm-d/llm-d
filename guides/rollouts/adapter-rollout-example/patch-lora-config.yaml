@@ -12,6 +12,11 @@ spec:
             - "Qwen/Qwen3-32B"
             - "--disable-access-log-for-endpoints=/health,/metrics,/v1/models"
           env:
+            - name: HF_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: llm-d-hf-token
+                  key: HF_TOKEN
             - name: VLLM_ALLOW_RUNTIME_LORA_UPDATING
               value: "True"
             - name: VLLM_PLUGINS

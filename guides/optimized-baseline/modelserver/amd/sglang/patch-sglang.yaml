@@ -15,6 +15,7 @@ spec:
             - "--port=8000"
             - "--log-level=info"
             - "--enable-metrics"
+            - "--tensor-parallel-size=2"
             - "--uvicorn-access-log-exclude-prefixes=/metrics"
             # Uncomment for distributed tracing
             # - "--enable-trace"
@@ -31,6 +32,12 @@ spec:
           #     value: "parentbased_traceidratio"
           #   - name: OTEL_TRACES_SAMPLER_ARG
           #     value: "0.1"
+          env:
+            - name: HF_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: llm-d-hf-token
+                  key: HF_TOKEN
           resources:
             limits:
               cpu: "32"

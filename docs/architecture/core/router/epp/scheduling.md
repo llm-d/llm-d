@@ -93,17 +93,17 @@ When a profile runs, it first filters the candidate endpoints. If any remain, it
 * **[`queue-depth-scorer`](https://github.com/llm-d/llm-d-router/tree/main/pkg/epp/framework/plugins/scheduling/scorer/queuedepth)**: Prefers endpoints with shorter request queues.
 * **[`running-requests-size-scorer`](https://github.com/llm-d/llm-d-router/tree/main/pkg/epp/framework/plugins/scheduling/scorer/runningrequests)**: Scores based on the number of currently active requests.
 * **[`token-load-scorer`](https://github.com/llm-d/llm-d-router/tree/main/pkg/epp/framework/plugins/scheduling/scorer/tokenload)**: Scores based on the total token load (input + output) handled by the endpoint.
-* **[`precise-prefix-cache-scorer`](https://github.com/llm-d/llm-d-router/tree/main/pkg/epp/framework/plugins/scheduling/scorer/preciseprefixcache)**: Scores requests based on real-time KV-cache locality. While the `prefix-scorer` relies on historical scheduling estimates, this version tracks actual cache states via model server events to ensure higher precision.
+* **[`precise-prefix-cache-producer`](https://github.com/llm-d/llm-d-router/tree/main/pkg/epp/framework/plugins/requestcontrol/dataproducer/preciseprefixcache)** (DataProducer, paired with `prefix-cache-scorer`): Enables scoring on real-time KV-cache locality. While `prefix-scorer` relies on historical scheduling estimates, this tracks actual cache states via model server events for higher precision. Configure the producer and point the scorer at it with `prefixMatchInfoProducerName: precise-prefix-cache-producer`.
 
   > [!NOTE]
-  > If you configure this plugin but do not explicitly configure its required data producer (`approx-prefix-cache-producer`), the loader will automatically instantiate it with the same parameters. This was done for historical reasons to simplify configuration when data producers were introduced.
+  > Without an explicit `prefixMatchInfoProducerName`, `prefix-cache-scorer` falls back to the auto-instantiated `approx-prefix-cache-producer`. (The older single-plugin `precise-prefix-cache-scorer` is deprecated in favor of this producer + `prefix-cache-scorer` pair.)
 
 * **[`session-affinity-scorer`](https://github.com/llm-d/llm-d-router/tree/main/pkg/epp/framework/plugins/scheduling/scorer/sessionaffinity)**: Assigns a maximum score to the specific endpoint that handled previous requests for the same session, while all other endpoints receive the minimum score.
 * **[`no-hit-lru-scorer`](https://github.com/llm-d/llm-d-router/tree/main/pkg/epp/framework/plugins/scheduling/scorer/nohitlru)**: For cold requests (zero cache hits), the scorer prioritizes endpoints that have never handled one, followed by those used least recently. This ensures an even distribution of the intensive "prefill" workload across the cluster. If a request has existing cache hits, the scorer assigns equal scores to all endpoints (scorer has no impact).
 
 ### Pickers
 
-* **[`max-score-picker`](https://github.com/llm-d/llm-d-router/tree/main/pkg/epp/framework/plugins/scheduling/picker/maxscore)**: Selects the endpoint with the absolute highest score.
+* **[`max-score-picker`](https://github.com/llm-d/llm-d-router/tree/main/pkg/epp/framework/plugins/scheduling/picker/maxscore)**: Selects the endpoint with the absolute highest score. This is the **default picker** — auto-injected into any profile that references no picker with its default `maxNumOfEndpoints: 1` (return the single best endpoint).
 * **[`random-picker`](https://github.com/llm-d/llm-d-router/tree/main/pkg/epp/framework/plugins/scheduling/picker/random)**: Selects an endpoint randomly from the candidates.
 * **[`weighted-random-picker`](https://github.com/llm-d/llm-d-router/tree/main/pkg/epp/framework/plugins/scheduling/picker/weightedrandom)**: Selects an endpoint randomly, using the scores as relative probabilities (lottery scheduling).
 
@@ -111,6 +111,11 @@ When a profile runs, it first filters the candidate endpoints. If any remain, it
 
 * **[`single-profile-handler`](https://github.com/llm-d/llm-d-router/tree/main/pkg/epp/framework/plugins/scheduling/profilehandler/single)**: Runs a single configured primary profile.
 * **[`disagg-profile-handler`](https://github.com/llm-d/llm-d-router/tree/main/pkg/epp/framework/plugins/scheduling/profilehandler/disagg)**: Runs two scheduling profiles, one for prefill and one for decode. The **decode endpoint** is set as the primary destination for the proxy to forward the original request, while the **prefill endpoint** is injected into the request as a specialized header.
+
+> [!NOTE]
+> Two older handlers are **deprecated** and kept only for backward compatibility:
+> - `pd-profile-handler` — use `disagg-profile-handler` instead.
+> - `data-parallel-profile-handler` — use `single-profile-handler` instead.
 
 ---
 

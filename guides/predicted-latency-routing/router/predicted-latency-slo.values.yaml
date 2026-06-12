@@ -22,15 +22,9 @@ router:
         apiVersion: llm-d.ai/v1alpha1
         kind: EndpointPickerConfig
         plugins:
-        - type: queue-scorer
-        - type: kv-cache-utilization-scorer
-        - type: prefix-cache-scorer
-        - type: metrics-data-source
+        - type: approx-prefix-cache-producer
           parameters:
-            insecureSkipVerify: true
-            path: /metrics
-            scheme: http
-        - type: core-metrics-extractor
+            maxPrefixTokensToMatch: 131072
         - type: predicted-latency-producer
           parameters:
             streamingMode: true

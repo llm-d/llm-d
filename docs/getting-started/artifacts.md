@@ -27,7 +27,7 @@ Manifests are published at [kubernetes-sigs/gateway-api-inference-extension/conf
 
 ```bash
 export GAIE_VERSION=v1.5.0
-kubectl apply -k "https://github.com/kubernetes-sigs/gateway-api-inference-extension/config/crd?ref=${GAIE_VERSION}"
+kubectl apply -f https://github.com/kubernetes-sigs/gateway-api-inference-extension/releases/download/${GAIE_VERSION}/v1-manifests.yaml
 ```
 
 ## 2. llm-d Router
@@ -52,7 +52,6 @@ llm-d releases the core EPP image as well as additional sidecar images for advan
 | Image | Description | Version |
 |-------|-------------|---------|
 | `ghcr.io/llm-d/llm-d-router-endpoint-picker-dev` | Core EPP image | main |
-| `ghcr.io/llm-d/llm-d-uds-tokenizer`       | Optional sidecar for EPP, enabling tokenization for precise cache aware routing | v0.8.0 |
 | `ghcr.io/llm-d/llm-d-routing-sidecar`     | Optional sidecar for model servers, enabling KV cache transfer for P/D | v0.8.0 |
 | `registry.k8s.io/gateway-api-inference-extension/latency-training-server` | Optional sidecar for EPP, for predicted-latency model training | v1.5.0 |
 | `registry.k8s.io/gateway-api-inference-extension/latency-prediction-server` | Optional sidecar for EPP, for predicted-latency scheduling | v1.5.0 |
@@ -144,7 +143,7 @@ Install instructions live under [`guides/recipes/gateway/`](https://github.com/l
 | [llm-d/llm-d-kv-cache](https://github.com/llm-d/llm-d-kv-cache) | Go, Python, CPP | KV-cache block locality indexer, FS offloading |
 | [llm-d/llm-d-workload-variant-autoscaler](https://github.com/llm-d/llm-d-workload-variant-autoscaler) | Go | SLO-aware workload autoscaler |
 | [llm-d-incubation/llm-d-async](https://github.com/llm-d-incubation/llm-d-async) | Go | Asynchronous request processor for latency insensitive traffic |
-| [llm-d-incubation/batch-gateway](https://github.com/llm-d-incubation/batch-gateway) | Go | OpenAI-compatible API for submitting, tracking, and managing batch inference jobs.
+| [llm-d/llm-d-batch-gateway](https://github.com/llm-d/llm-d-batch-gateway) | Go | OpenAI-compatible API for submitting, tracking, and managing batch inference jobs.
 
 ### Supporting Libraries
 
