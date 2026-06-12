@@ -163,6 +163,13 @@ The results below are with 8 replicas of TPU v7x (2x2x1) on the benchmark worklo
   <img src="./benchmark-results/ttft_vs_concurrency.png" width="32%" alt="TTFT vs Concurrency" />
 </p>
 
+**Note**: As of June 2026 we are actively working to improve:
+- Long context performance
+- P/D disaggregation
+- KV Cache offloading support
+
+This guide and performance numbers will be updated as further optimizations become available.
+
 ## Cleanup
 
 To clean up resources:
