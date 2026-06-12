@@ -8,8 +8,8 @@ A central-coordinator ModelExpress server (running with the `kubernetes` metadat
 
 Concretely, for an `N`-replica deployment of `meta-llama/Llama-3.3-70B-Instruct` (~140 GB of bf16 weights):
 
-* **Without ModelExpress**: every vLLM pod pulls ~140 GB from HuggingFace at startup. N times the cluster egress, N times the slow path, plus disk-to-GPU load time on every pod.
-* **With this guide**: the first pod to come up does the HuggingFace download, registers its tensors with NIXL, and publishes itself as a P2P source. Every other pod discovers that source via the ModelExpress server and pulls weights straight into GPU HBM over RDMA.
+* Without ModelExpress, every vLLM pod pulls ~140 GB from HuggingFace at startup. N times the cluster egress, N times the slow path, plus disk-to-GPU load time on every pod.
+* With this guide, the first pod to come up does the HuggingFace download, registers its tensors with NIXL, and publishes itself as a P2P source. Every other pod discovers that source via the ModelExpress server and pulls weights straight into GPU HBM over RDMA.
 
 > This guide ships a default of **2 replicas (1 seed + 1 receiver)** to keep the GPU footprint small (4 GPUs at TP2) while still exercising a real HBM-to-HBM transfer. The win scales with `(bytes per replica) x (number of receivers)`, so scale the pool wider for a production fan-out. See [Comparison: weight-loading strategies](#comparison-weight-loading-strategies) for how P2P stacks up against loading the same checkpoint off fast storage.
 
@@ -363,15 +363,15 @@ kubectl logs -n ${NAMESPACE} ${RECEIVER} -c modelserver | grep -i -E "mx|nixl|so
 
 Look for lines like `discovered READY source` followed by NIXL transfer progress. If you see `falling back to disk load`, RDMA isn't reaching the pod - double-check the fabric resource request in your `INFRA_PROVIDER` overlay.
 
-## Running the storage baseline arms
+## Running the storage baseline tests
 
-Run the fastsafetensors arms the same way you ran the P2P arm: prewarm once, then scale 1→N and record `Loading weights took` plus the scale-out wall clock. Keep cudagraph/compile constant across every arm (set `--enforce-eager` on all, or layer `shared-compile-cache` on all) so the only variable is the weight path.
+Run the fastsafetensors tests the same way you ran the P2P test: prewarm once, then scale 1→N and record `Loading weights took` plus the scale-out wall clock. Keep cudagraph/compile constant across every test (set `--enforce-eager` on all, or layer `shared-compile-cache` on all) so the only variable is the weight path.
 
-These arms are benchmark-only and sit outside the router on purpose: the router's `modelServers.matchLabels` selects `llm-d.ai/guide: modelexpress-p2p`, so the fastsafetensors pods never receive routed traffic. Measure them by port-forwarding or hitting the pods directly.
+These tests are benchmark-only and sit outside the router on purpose: the router's `modelServers.matchLabels` selects `llm-d.ai/guide: modelexpress-p2p`, so the fastsafetensors pods never receive routed traffic. Measure them by port-forwarding or hitting the pods directly.
 
 ### 1. Prewarm the checkpoint onto NFS (once)
 
-The prewarm Job + RWX PVC are applied standalone (not through a kustomize overlay) so the PVC keeps the literal name `fst-model-cache` and both fastsafetensors arms share the single download. The PVC requests the `shared-vast` StorageClass (CoreWeave's VAST-backed NFS, the cluster this guide was validated on); edit `prewarm-job.yaml` if your cluster's RWX-capable class is named differently:
+The prewarm Job + RWX PVC are applied standalone (not through a kustomize overlay) so the PVC keeps the literal name `fst-model-cache` and both fastsafetensors tests share the single download. The PVC requests the `shared-vast` StorageClass (CoreWeave's VAST-backed NFS, the cluster this guide was validated on); edit `prewarm-job.yaml` if your cluster's RWX-capable class is named differently:
 
 ```bash
 kubectl apply -n ${NAMESPACE} -f guides/${GUIDE_NAME}/modelserver/gpu/vllm/fastsafetensors-nfs/prewarm-job.yaml
@@ -408,7 +408,7 @@ Check whether GDS engaged. It needs an RDMA-capable mount, so on a TCP NFS mount
 kubectl logs -n ${NAMESPACE} <pod> -c modelserver | grep -iE 'cuFile|GDS is not supported|nogds'
 # If "GDS is not supported in this platform but nogds is False" appears, add
 # --model-loader-extra-config={"nogds": true} to patch-vllm.yaml and re-run
-# (the arm still works on the POSIX-pread path; note it when recording results).
+# (the test still works on the POSIX-pread path; note it when recording results).
 ```
 
 ### 3. fastsafetensors off warm local NVMe (optional)
@@ -416,24 +416,24 @@ kubectl logs -n ${NAMESPACE} <pod> -c modelserver | grep -iE 'cuFile|GDS is not 
 ```bash
 kubectl apply -n ${NAMESPACE} -k guides/${GUIDE_NAME}/modelserver/gpu/vllm/fastsafetensors-localnvme/
 # Same scale-1-then-1->2 timing on deploy fastsafetensors-localnvme-nvidia-gpu-vllm-decode.
-# Confirm P2PDMA engaged vs nogds compat with the same grep as the NFS arm.
+# Confirm P2PDMA engaged vs nogds compat with the same grep as the NFS test.
 ```
 
-This arm pins to NVMe nodes (`nodeSelector: local-persistent-storage=true`) and an init container copies the warm NFS checkpoint to a node-local NVMe `emptyDir` (the untimed prime) before the timed serve.
+This test pins to NVMe nodes (`nodeSelector: local-persistent-storage=true`) and an init container copies the warm NFS checkpoint to a node-local NVMe `emptyDir` (the untimed prime) before the timed serve.
 
-### 4. Per-pod fairness numbers (all arms)
+### 4. Per-pod fairness numbers (all tests)
 
 ```bash
-kubectl get pod -n ${NAMESPACE} -l llm-d.ai/guide=<arm> \
+kubectl get pod -n ${NAMESPACE} -l llm-d.ai/guide=<test> \
     -o jsonpath='{range .items[*]}{.metadata.name}{"\t"}{.metadata.creationTimestamp}{"\t"}{.status.conditions[?(@.type=="Ready")].lastTransitionTime}{"\n"}{end}'
 # Diff creationTimestamp vs Ready lastTransitionTime per pod; report median + max (the tail is the headline).
 ```
 
-Tear each arm down before the next so they don't contend for GPUs (each is 4 GPUs at the default `replicas: 2`):
+Tear each test down before the next so they don't contend for GPUs (each is 4 GPUs at the default `replicas: 2`):
 
 ```bash
-kubectl delete -n ${NAMESPACE} -k guides/${GUIDE_NAME}/modelserver/gpu/vllm/<arm>/
-kubectl wait --for=delete pod -l llm-d.ai/guide=<arm> -n ${NAMESPACE} --timeout=10m
+kubectl delete -n ${NAMESPACE} -k guides/${GUIDE_NAME}/modelserver/gpu/vllm/<test>/
+kubectl wait --for=delete pod -l llm-d.ai/guide=<test> -n ${NAMESPACE} --timeout=10m
 ```
 
 Keep the `fst-model-cache` PVC between runs (the download is the expensive part); delete it only when you're fully done.
@@ -478,7 +478,7 @@ kubectl delete -n ${NAMESPACE} -f guides/${GUIDE_NAME}/modelexpress/modelexpress
 kubectl delete -n ${NAMESPACE} -f guides/${GUIDE_NAME}/security/istio-mtls-authz.yaml --ignore-not-found
 kubectl label namespace ${NAMESPACE} istio-injection- 2>/dev/null || true
 
-# If you ran the storage baseline arms, delete those overlays and the prewarm Job:
+# If you ran the storage baseline tests, delete those overlays and the prewarm Job:
 kubectl delete -n ${NAMESPACE} -k guides/${GUIDE_NAME}/modelserver/gpu/vllm/fastsafetensors-nfs/ --ignore-not-found
 kubectl delete -n ${NAMESPACE} -k guides/${GUIDE_NAME}/modelserver/gpu/vllm/fastsafetensors-localnvme/ --ignore-not-found
 kubectl delete -n ${NAMESPACE} -f guides/${GUIDE_NAME}/modelserver/gpu/vllm/fastsafetensors-nfs/prewarm-job.yaml --ignore-not-found
@@ -504,23 +504,21 @@ kubectl delete -f guides/${GUIDE_NAME}/modelexpress/crds.yaml
 
 The point of this guide is not just "turn on ModelExpress" but to show _why_ HBM-to-HBM P2P beats even a fast storage path on a cold scale-out. We load the **same** `meta-llama/Llama-3.3-70B-Instruct` checkpoint (~140 GB, bf16, TP2) several ways and measure the two numbers that matter: per-pod weight-load time (vLLM's `Loading weights took ...` line) and the 1→N scale-out-to-Ready wall clock.
 
-**Why this model.** A fair comparison needs a checkpoint that loads cleanly _both_ ways. MXFP4 models (e.g. `gpt-oss-120b`) are out: `--load-format=fastsafetensors` hangs at 0% on MXFP4, so the storage baseline could not load the same weights the P2P arm does. Llama-3.3-70B is dense bf16 (the fastsafetensors paper's own reference model) and at TP2 costs only 2 GPUs per replica, so you can run the comparison on a modest GPU budget and scale the fan-out up when you want a bigger demo.
+**Why this model** A fair comparison needs a checkpoint that loads cleanly _both_ ways. MXFP4 models (e.g. `gpt-oss-120b`) are out: `--load-format=fastsafetensors` hangs at 0% on MXFP4, so the storage baseline could not load the same weights the P2P test does. Llama-3.3-70B is dense bf16 (the fastsafetensors paper's own reference model) and at TP2 costs only 2 GPUs per replica, so you can run the comparison on a modest GPU budget and scale the fan-out up when you want a bigger demo.
 
-The arms:
+The tests:
 
-* **Plain HuggingFace cold download (status quo).** Every pod pulls ~140 GB from HuggingFace and runs the default safetensors deserializer. Nx cluster egress, slowest path. The "do nothing" baseline.
-* **fastsafetensors off prewarmed NFS (primary baseline).** A one-shot Job downloads the checkpoint once into an NFS RWX PVC; every pod mounts it read-only and serves `--load-format=fastsafetensors`. One download, N readers. This is the honest apples-to-apples storage counterpart to P2P, the fastest disk-side loader vLLM ships.
+* Plain HuggingFace cold download (the status quo): every pod pulls ~140 GB from HuggingFace and runs the default safetensors deserializer. Nx cluster egress, slowest path. The "do nothing" baseline.
+* fastsafetensors off prewarmed NFS (the primary baseline): a one-shot Job downloads the checkpoint once into an NFS RWX PVC; every pod mounts it read-only and serves `--load-format=fastsafetensors`. One download, N readers. This is the honest apples-to-apples storage counterpart to P2P, the fastest disk-side loader vLLM ships.
   In theory it can use cuFile/GDS to DMA from storage straight into HBM; in practice GDS needs an RDMA-capable mount, and on the test cluster (CoreWeave's VAST-backed NFS) the PVC mounts as TCP NFS, so it ran on the `nogds` POSIX-pread path (still ~2× the default loader). See the GDS note under the results table.
-* **fastsafetensors off warm local NVMe (optional).** Each pod's init copies the warm NFS checkpoint onto node-local NVMe (untimed prime), then loads from there. In theory GDS-via-CUDA-P2PDMA makes the local read fast, but it needs `nvidia-fs` or a P2PDMA-capable node; on the test cluster neither bound, so the timed read was a plain (non-GDS) pread and actually came in _slower_ than the parallel-TCP NFS read. Loses dedup too (every node re-primes). Skip unless your nodes have working local-NVMe GDS.
-* **ModelExpress P2P (the hero).** The seed pod downloads once and publishes its HBM as a NIXL source; every other pod pulls weights HBM→HBM over RDMA, never touching disk. No shared storage, no GDS, no cuFile, just the fabric.
+* fastsafetensors off warm local NVMe (optional): each pod's init copies the warm NFS checkpoint onto node-local NVMe (untimed prime), then loads from there. In theory GDS-via-CUDA-P2PDMA makes the local read fast, but it needs `nvidia-fs` or a P2PDMA-capable node; on the test cluster neither bound, so the timed read was a plain (non-GDS) pread and actually came in _slower_ than the parallel-TCP NFS read. Loses dedup too (every node re-primes). Skip unless your nodes have working local-NVMe GDS.
+* ModelExpress P2P: the seed pod downloads once and publishes its HBM as a NIXL source; every other pod pulls weights HBM→HBM over RDMA, never touching disk. No shared storage, no GDS, no cuFile, just the fabric.
 
-A **LOTA / object-cache arm** (CoreWeave AI Object Storage cached to node NVMe + GDS) is deliberately left out of the runnable set: the LOTA DaemonSet is up on the test cluster, but this arm still needs an object bucket and S3 credentials that aren't provisioned. It's listed as a stretch row; mechanically it matches the local-NVMe arm once LOTA has cached.
+**Fairness rules for the numbers:** (1) every "warm" test does its download/prime in a Job or initContainer that is _not_ part of the timed `vllm serve`, exactly like the P2P test excludes the seed pod's HuggingFace download. (2) Hold cudagraph/compile constant across tests (either layer `shared-compile-cache` on all of them, or set `--enforce-eager` on all) so the only moving variable is the weight path. (3) Report `Loading weights took` median/max plus the 1→N scale-out wall clock, and note whether GDS actually engaged.
 
-**Fairness rules for the numbers:** (1) every "warm" arm does its download/prime in a Job or initContainer that is _not_ part of the timed `vllm serve`, exactly like the P2P arm excludes the seed pod's HuggingFace download. (2) Hold cudagraph/compile constant across arms (either layer `shared-compile-cache` on all of them, or set `--enforce-eager` on all) so the only moving variable is the weight path. (3) Report `Loading weights took` median/max plus the 1→N scale-out wall clock, and note whether GDS actually engaged.
+Measured on CoreWeave (8×H200 + InfiniBand nodes, `meta-llama/Llama-3.3-70B-Instruct`, TP2, ~70.6 GB of weights per TP worker, warm storage; the NFS test ran on CoreWeave's VAST-backed `shared-vast` StorageClass), 2026-05:
 
-Measured on CoreWeave (8×H200 + InfiniBand nodes, `meta-llama/Llama-3.3-70B-Instruct`, TP2, ~70.6 GB of weights per TP worker, warm storage; the NFS arm is CoreWeave's VAST-backed `shared-vast` StorageClass), 2026-05:
-
-| Arm | **Weight-load time** | Effective rate | Total pod-Ready (1→2) | Transport | Egress | Shared storage |
+| Test | **Weight-load time** | Effective rate | Total pod-Ready (1→2) | Transport | Egress | Shared storage |
 | --- | --- | --- | --- | --- | --- | --- |
 | Plain HF cold download | download-bound (~140 GB/pod) | HF bandwidth | — | HF → disk → HBM, default | **Nx** | no |
 | Default loader ← prewarmed NFS | 22.6 s | ~3.1 GB/s | — | NFS → HBM, default | 1x | yes (RWX PVC) |
@@ -528,23 +526,23 @@ Measured on CoreWeave (8×H200 + InfiniBand nodes, `meta-llama/Llama-3.3-70B-Ins
 | fastsafetensors ← warm local NVMe | 30.2 s | ~2.3 GB/s | — | NVMe → HBM, fastsafetensors (no GDS) | 1x | NFS source + per-node copy |
 | **ModelExpress P2P (hero)** | **2.7 s** | **~210 Gbps (~26 GB/s)** | **152 s** | **peer HBM → HBM, RDMA (NIXL)** | **1x** | **no** |
 
-The leading column is the metric this guide moves: per-TP-worker **weight-load time** (vLLM's `Loading weights took` for the storage arms; the NIXL `Transfer complete` for P2P). **Total pod-Ready** is the end-to-end 1→2 scale-out wall clock, which also includes engine init + `torch.compile`/cudagraph capture (identical across arms), so it moves far less than the weight-load column does (see the note below).
+The leading column is the metric this guide moves: per-TP-worker **weight-load time** (vLLM's `Loading weights took` for the storage tests; the NIXL `Transfer complete` for P2P). **Total pod-Ready** is the end-to-end 1→2 scale-out wall clock, which also includes engine init + `torch.compile`/cudagraph capture (identical across tests), so it moves far less than the weight-load column does (see the note below).
 
-> **About GDS on these numbers (important):** none of the storage arms above actually engaged GPUDirect Storage, despite the cluster having an IB fabric. On the CoreWeave test cluster the NFS PVC (VAST-backed) mounts as **NFSv3 over TCP** (`proto=tcp,nconnect=32`), and cuFile/GDS cannot bind a TCP-NFS mount, so fastsafetensors ran on its `nogds` POSIX-pread path.
-> We tried forcing it: a custom StorageClass with `proto=rdma` **provisions and binds, but the mount itself times out** (`MountVolume.SetUp ... DeadlineExceeded`) — NFSoRDMA isn't serviceable on this export without the cloud provider enabling it, so GDS-over-NFS is **not** achievable purely self-serve here. Local NVMe didn't help either: `nvidia-fs` isn't loaded and CUDA P2PDMA didn't bind, so the local-NVMe arm was _slower_ (30.2 s) than NFS — a single-threaded pread off NVMe loses to the NFS mount's `nconnect=32` parallel TCP read.
-> **Takeaway: even with GDS unavailable, the storage baselines are real and fair (they're the best these loaders can do on this cluster), and P2P still beats the fastest of them by ~4×. With GDS enabled the storage arms would close some of that gap, but P2P's HBM→HBM path needs no cuFile, no GDS, and no special mount at all.**
+> **About GDS on these numbers (important):** none of the storage tests above actually engaged GPUDirect Storage, despite the cluster having an IB fabric. On the CoreWeave test cluster the NFS PVC (VAST-backed) mounts as **NFSv3 over TCP** (`proto=tcp,nconnect=32`), and cuFile/GDS cannot bind a TCP-NFS mount, so fastsafetensors ran on its `nogds` POSIX-pread path.
+> We tried forcing it: a custom StorageClass with `proto=rdma` **provisions and binds, but the mount itself times out** (`MountVolume.SetUp ... DeadlineExceeded`) — NFSoRDMA isn't serviceable on this export without the cloud provider enabling it, so GDS-over-NFS is **not** achievable purely self-serve here. Local NVMe didn't help either: `nvidia-fs` isn't loaded and CUDA P2PDMA didn't bind, so the local-NVMe test was _slower_ (30.2 s) than NFS — a single-threaded pread off NVMe loses to the NFS mount's `nconnect=32` parallel TCP read.
+> **Takeaway: even with GDS unavailable, the storage baselines are real and fair (they're the best these loaders can do on this cluster), and P2P still beats the fastest of them by ~4×. With GDS enabled the storage tests would close some of that gap, but P2P's HBM→HBM path needs no cuFile, no GDS, and no special mount at all.**
 
-**Result: on the weight-load step, ModelExpress P2P is ~4× faster than fastsafetensors-from-NFS and ~8× faster than the default loader-from-NFS**, moving 70.6 GB HBM→HBM in 2.7 s at ~210 Gbps. The plain-HuggingFace arm additionally pays Nx egress (every pod re-downloads ~140 GB).
+**Result: on the weight-load step, ModelExpress P2P is ~4× faster than fastsafetensors-from-NFS and ~8× faster than the default loader-from-NFS**, moving 70.6 GB HBM→HBM in 2.7 s at ~210 Gbps. The plain-HuggingFace test additionally pays Nx egress (every pod re-downloads ~140 GB).
 
-> **Why the scale-out wall clock (~150 s) barely moves while weight-load drops 8×:** for a 70B model, end-to-end pod-Ready time is dominated by vLLM engine init + `torch.compile`/cudagraph capture, which is identical across arms. Weight loading is a small slice of total Ready time, but it is the slice this guide eliminates, and it dominates on larger models, wider fan-outs, and `--enforce-eager` workloads (RL rollouts) where there's no cudagraph capture to hide behind. Layer [shared-compile-cache](#optional-share-torchcompile-cache-across-pods) to attack the remaining compile cost.
+> **Why the scale-out wall clock (~150 s) barely moves while weight-load drops 8×:** for a 70B model, end-to-end pod-Ready time is dominated by vLLM engine init + `torch.compile`/cudagraph capture, which is identical across tests. Weight loading is a small slice of total Ready time, but it is the slice this guide eliminates, and it dominates on larger models, wider fan-outs, and `--enforce-eager` workloads (RL rollouts) where there's no cudagraph capture to hide behind. Layer [shared-compile-cache](#optional-share-torchcompile-cache-across-pods) to attack the remaining compile cost.
 >
-> The optional LOTA / object-cache arm was not run (it needs a provisioned object bucket + S3 creds). Its path is documented as a stretch row above.
+> The optional LOTA / object-cache test was not run (it needs a provisioned object bucket + S3 creds). Its path is documented as a stretch row above.
 
 #### It gets _more_ lopsided on MoE
 
 The dense 70B is the conservative case. MoE checkpoints are where P2P really pulls away, because they're the worst case for every storage-deserialize path: hundreds of small per-expert tensors instead of a few fat ones. We re-ran the comparison on `meta-llama/Llama-4-Scout-17B-16E-Instruct` (108.6B total / 17B active, bf16, TP4, ~57 GB of weights per TP worker, `--enforce-eager`) on the same 8×H200 + IB cluster:
 
-| Arm | Weight-load time | Notes |
+| Test | Weight-load time | Notes |
 | --- | --- | --- |
 | Default loader ← prewarmed NFS | **211 s** | 1047 tiny expert tensors murder the deserializer |
 | fastsafetensors + GDS ← prewarmed NFS | **failed to load** | crashes at ~4/13 shards, CUDA OOM from the fastsafetensors TP VRAM spike ([vllm#29403](https://github.com/vllm-project/vllm/issues/29403)), even at `--gpu-memory-utilization=0.80` |
@@ -552,8 +550,8 @@ The dense 70B is the conservative case. MoE checkpoints are where P2P really pul
 
 Two things to take from this:
 
-* **P2P is ~100× faster than the default loader here** (~2 s vs 211 s), versus ~8× on the dense 70B. The transfer time tracks bytes, not tensor count, so the seed's per-tensor deserialize penalty simply doesn't exist on the receivers.
-* **P2P sidesteps loader-specific failure modes entirely.** The fastsafetensors arm couldn't load this MoE at TP4 at all, and `--load-format=fastsafetensors` is also known to hang on MXFP4 (which is why `gpt-oss` is out as a comparison model). Because P2P transfers already-materialized tensors out of a healthy source's HBM, it inherits none of these per-loader, per-quantization quirks: if the seed can load the model, every receiver gets it over RDMA.
+* P2P is ~100× faster than the default loader here (~2 s vs 211 s), versus ~8× on the dense 70B. The transfer time tracks bytes, not tensor count, so the seed's per-tensor deserialize penalty simply doesn't exist on the receivers.
+* P2P sidesteps loader-specific failure modes entirely. The fastsafetensors test couldn't load this MoE at TP4 at all, and `--load-format=fastsafetensors` is also known to hang on MXFP4 (which is why `gpt-oss` is out as a comparison model). Because P2P transfers already-materialized tensors out of a healthy source's HBM, it inherits none of these per-loader, per-quantization quirks: if the seed can load the model, every receiver gets it over RDMA.
 
 ### Security: lock down the ModelExpress metadata broker
 
@@ -625,9 +623,8 @@ If P2P breaks after enabling this, the usual culprit is the NIXL port exclusion 
 
 ## Notes & Trade-offs
 
-* **RDMA resource name**: the `coreweave` overlay (`coreweave/kustomization.yaml`) injects the `rdma/ib: 2` request via a JSON6902 patch — it is _not_ in `base/patch-vllm.yaml`. On clusters with a different device-plugin resource (`rdma/roce`, `vpc.amazonaws.com/efa`, GKE's GPUDirect-TCPXO, etc.) copy that overlay, change the resource name in its patch, and set `MX_NIXL_BACKEND=LIBFABRIC` for EFA.
-* **NIC pinning**: `MX_RDMA_NIC_PIN=auto` runs ModelExpress's topology probe to pin each rank to the IB NIC closest to its GPU. Workaround for [openucx/ucx#11259](https://github.com/openucx/ucx/issues/11259). Override with a comma-separated NIC list if the auto-probe picks wrong, or set `MX_RDMA_NIC_PIN_MIN_RATE_GBPS` to raise the rate threshold the probe uses to discard slow NICs.
-* **Fixed metadata/worker ports**: `MX_METADATA_PORT` (default `5555`) and `MX_WORKER_GRPC_PORT` are _base_ ports; each TP rank uses `base + device_id`. With TP=2 each pod consumes `5555..5556` and `6555..6556`. If you change TP size, make sure the port range stays free and the values match across pods.
-* **Mixed-version fleets**: the kubernetes backend indexes by `mx_source_id`, which is content-addressed via `SourceIdentity.revision`. Multiple revisions of the model can coexist in the same namespace; pods only consume from sources that match their identity.
-* **No shared storage (P2P arm)**: the P2P arm deliberately uses per-pod `emptyDir` model caches. The seed pod fills its local cache, but receivers never touch theirs - weights land straight in HBM via RDMA. (The fastsafetensors baseline arms are the opposite: they _want_ a shared/warm cache, which is the whole point of that comparison.)
-* **`MX_P2P_METADATA=1`**: tells source workers to serve NIXL agent and tensor manifest data directly to targets instead of routing it through the central server.
+* RDMA resource name: the `coreweave` overlay (`coreweave/kustomization.yaml`) injects the `rdma/ib: 2` request via a JSON6902 patch — it is _not_ in `base/patch-vllm.yaml`. On clusters with a different device-plugin resource (`rdma/roce`, `vpc.amazonaws.com/efa`, GKE's GPUDirect-TCPXO, etc.) copy that overlay, change the resource name in its patch, and set `MX_NIXL_BACKEND=LIBFABRIC` for EFA.
+* NIC pinning: `MX_RDMA_NIC_PIN=auto` runs ModelExpress's topology probe to pin each rank to the IB NIC closest to its GPU. Workaround for [openucx/ucx#11259](https://github.com/openucx/ucx/issues/11259). Override with a comma-separated NIC list if the auto-probe picks wrong, or set `MX_RDMA_NIC_PIN_MIN_RATE_GBPS` to raise the rate threshold the probe uses to discard slow NICs.
+* Fixed metadata/worker ports: `MX_METADATA_PORT` (default `5555`) and `MX_WORKER_GRPC_PORT` are _base_ ports; each TP rank uses `base + device_id`. With TP=2 each pod consumes `5555..5556` and `6555..6556`. If you change TP size, make sure the port range stays free and the values match across pods.
+* Mixed-version fleets: the kubernetes backend indexes by `mx_source_id`, which is content-addressed via `SourceIdentity.revision`. Multiple revisions of the model can coexist in the same namespace; pods only consume from sources that match their identity.
+* No shared storage on the P2P test: it deliberately uses per-pod `emptyDir` model caches. The seed pod fills its local cache, but receivers never touch theirs - weights land straight in HBM via RDMA.

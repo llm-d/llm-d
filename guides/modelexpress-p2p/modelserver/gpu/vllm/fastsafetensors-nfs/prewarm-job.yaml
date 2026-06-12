@@ -1,5 +1,5 @@
 # One-time checkpoint download into an NFS RWX PVC shared by both
-# fastsafetensors arms, so the timed `vllm serve` measures storage->HBM and
+# fastsafetensors tests, so the timed `vllm serve` measures storage->HBM and
 # never HuggingFace egress.
 apiVersion: v1
 kind: PersistentVolumeClaim

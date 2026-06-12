@@ -3,7 +3,7 @@ kind: Deployment
 metadata:
   name: decode
 spec:
-  # Mirrors the P2P arm's replica count so the comparison is fair.
+  # Mirrors the P2P test's replica count so the comparison is fair.
   replicas: 2
   template:
     spec:
@@ -73,7 +73,7 @@ spec:
               name: model-cache
               readOnly: true
           # 70B weight load is slow; give startup a wide window or the pod gets
-          # killed mid-load (base probe defaults to ~30s). Mirrors the MX arm.
+          # killed mid-load (base probe defaults to ~30s). Mirrors the MX test.
           startupProbe:
             initialDelaySeconds: 15
             periodSeconds: 30
