@@ -1,15 +1,15 @@
-name: Nightly - WVA E2E (CKS)
+name: Nightly - Workload Autoscaling E2E (OCP GPU)
 
-# Nightly regression test for WVA (Workload Variant Autoscaler) on CoreWeave
-# Kubernetes (CKS). Deploys the workload-autoscaling guide stack via the
-# consolidated kustomize reusable workflow and runs the WVA e2e test suite.
+# Nightly regression test for WVA (Workload Variant Autoscaler) on OpenShift.
+# Deploys the workload-autoscaling guide stack via the consolidated kustomize
+# reusable workflow and runs the WVA e2e test suite from the WVA repo.
 #
 # Builds the WVA controller image from main before testing, since the helm
 # chart on main may require features not yet in a tagged release image.
 
 on:
   schedule:
-    - cron: '30 7 * * *'  # 07:30 UTC daily (staggered from wide-ep-lws CKS at 07:00)
+    - cron: '0 3 * * *'  # 03:00 UTC daily (staggered from tiered-prefix-cache)
   workflow_dispatch:
     inputs:
       image_tag:
@@ -32,6 +32,50 @@ on:
         description: 'Repo for PR comment-back'
         required: false
         default: 'llm-d/llm-d'
+      decode_pods:
+        description: 'Number of decode (vllm "standalone") pods (default "auto", means what was configured on the scenario)'
+        required: false
+        type: 'string'
+        default: 'auto'
+      prefill_pods:
+        description: 'Number of prefill pods (default "auto", means what was configured on the scenario)'
+        required: false
+        type: 'string'
+        default: 'auto'
+      gateway_class:
+        description: 'Class of gateway used ("istio", "agentgateway", "epponly" (i.e., "standalone"), "none")'
+        required: false
+        default: 'epponly'
+      monitoring_enabled:
+        description: 'Enabled monitoring ("true", "false")'
+        required: true
+        type: 'string'
+        default: 'false'
+      dry_run:
+        description: 'Execute workflow in "dry-run" mode ("true", "false")'
+        required: false
+        default: 'true'
+      verbose:
+        description: 'Execute workflow in "verbose" mode ("true", "false")'
+        required: false
+        default: 'false'
+        type: 'string'
+      harness:
+        description: 'Harness to be used during "run" operation ("inference-perf", "guidellm", "inferencemax", "vllm-benchmark", "nop")'
+        required: false
+        default: 'inference-perf'
+        type: 'string'
+      workload:
+        description: 'Workload profile to be used during "run" operation (check list under "workload/profiles")'
+        required: false
+        default: 'sanity_random.yaml'
+#        default: 'guide_wide-ep-lws_1.yaml'
+        type: 'string'
+      cleanup:
+        description: 'Cleanup the llm-d stack stood up by this workflow'
+        required: false
+        default: 'true'
+        type: string
 
 permissions:
   contents: write
@@ -39,7 +83,7 @@ permissions:
   packages: write
 
 concurrency:
-  group: nightly-e2e-wva-cks
+  group: nightly-e2e-wva-ocp
   cancel-in-progress: true
 
 jobs:
@@ -95,7 +139,7 @@ jobs:
   nightly:
     needs: build-wva-image
     if: github.repository == 'llm-d/llm-d' && always() && (needs.build-wva-image.result == 'success' || needs.build-wva-image.result == 'skipped')
-    uses: llm-d/llm-d-infra/.github/workflows/reusable-nightly-e2e-cks.yaml@main
+    uses: llm-d/llm-d-infra/.github/workflows/reusable-nightly-e2e-openshift.yaml@main
     with:
       guide_name: workload-autoscaling
       namespace: llm-d-nightly-wva
@@ -103,7 +147,7 @@ jobs:
       gateway_host: 'workload-variant-autoscaler-inferencepoo-epp'
       custom_deploy_script: |
         export WVA_TAG="${{ needs.build-wva-image.outputs.image_tag || github.event.inputs.image_tag }}"
-        bash guides/workload-autoscaling/scripts/nightly-deploy-cks.sh
+        bash guides/workload-autoscaling/scripts/nightly-deploy-ocp.sh
       required_gpus: 2
       recommended_gpus: 4
       pod_wait_timeout: '30m'
@@ -120,6 +164,6 @@ jobs:
     if: always()
     uses: llm-d/llm-d-infra/.github/workflows/reusable-update-badge.yaml@main
     with:
-      badge_name: wva-cks
-      badge_label: "CKS"
+      badge_name: wva-ocp
+      badge_label: "OCP"
       result: ${{ needs.nightly.result }}

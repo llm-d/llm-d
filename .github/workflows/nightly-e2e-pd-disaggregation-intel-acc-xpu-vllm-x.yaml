@@ -1,4 +1,4 @@
-name: Nightly - PD Disaggregation E2E (XPU)
+name: Nightly - PD Disaggregation E2E (Intel XPU)
 
 on:
   workflow_dispatch:
