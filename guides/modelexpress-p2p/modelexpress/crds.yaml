@@ -1,0 +1,230 @@
+# VENDORED from ai-dynamo/modelexpress @ refs/tags/v0.4.0 (examples/crds.yaml).
+# Pinned to the release tag so the CRD shape stays locked against the
+# modelexpress-server:0.4.0 pin instead of drifting with a moving `main`.
+# Re-vendor when bumping the server image.
+#
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+#
+# ModelExpress Kubernetes Custom Resource Definitions.
+#
+# Apply once per cluster before deploying the server with MX_METADATA_BACKEND=kubernetes:
+#
+#     kubectl apply -f examples/crds.yaml
+#
+# Two CRDs:
+#   * ModelMetadata   — P2P worker coordination (one CR per worker, holds NIXL /
+#                       TransferEngine endpoints + tensor descriptors via ConfigMaps).
+#   * ModelCacheEntry — Model-download lifecycle (one CR per cached model, holds
+#                       phase + created_at / last_used_at timestamps for LRU eviction).
+#
+# Both are scoped to the server's namespace and owned by the server pod's
+# ServiceAccount (see helm/templates/rbac.yaml for the Role).
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: modelmetadatas.modelexpress.nvidia.com
+  labels:
+    app.kubernetes.io/name: modelexpress
+    app.kubernetes.io/component: crd
+spec:
+  group: modelexpress.nvidia.com
+  versions:
+    - name: v1alpha1
+      served: true
+      storage: true
+      subresources:
+        status: {}
+      schema:
+        openAPIV3Schema:
+          type: object
+          properties:
+            spec:
+              type: object
+              required:
+                - modelName
+              properties:
+                modelName:
+                  type: string
+                  description: Full model name (e.g., meta-llama/Llama-3.1-405B-Instruct)
+            status:
+              type: object
+              properties:
+                worker:
+                  type: object
+                  description: Single worker NIXL metadata and readiness state (one CR per worker)
+                  required:
+                    - workerRank
+                  properties:
+                    workerRank:
+                      type: integer
+                      description: Worker rank (0-indexed)
+                    backendType:
+                      type: string
+                      description: Backend type discriminator (nixl, transfer_engine, none)
+                      enum:
+                        - nixl
+                        - transfer_engine
+                        - none
+                    nixlMetadata:
+                      type: string
+                      description: Base64-encoded NIXL agent metadata blob
+                    transferEngineSessionId:
+                      type: string
+                      description: Mooncake TransferEngine session ID (ip:port)
+                    tensorCount:
+                      type: integer
+                      description: Number of tensors registered by this worker
+                    tensorConfigMap:
+                      type: string
+                      description: Name of ConfigMap containing tensor descriptors
+                    metadataEndpoint:
+                      type: string
+                      description: P2P NIXL listen thread endpoint (host:port)
+                    agentName:
+                      type: string
+                      description: P2P NIXL agent name for remote identification
+                    workerGrpcEndpoint:
+                      type: string
+                      description: P2P worker gRPC endpoint for tensor manifest (host:port)
+                    status:
+                      type: string
+                      description: Worker lifecycle status
+                      enum:
+                        - Unknown
+                        - Initializing
+                        - Ready
+                        - Stale
+                      default: Unknown
+                    updatedAt:
+                      type: string
+                      format: date-time
+                      description: Timestamp of last status update (RFC3339)
+                conditions:
+                  type: array
+                  description: Conditions for ModelMetadata lifecycle
+                  items:
+                    type: object
+                    required:
+                      - type
+                      - status
+                    properties:
+                      type:
+                        type: string
+                        description: Condition type
+                        enum:
+                          - Ready
+                      status:
+                        type: string
+                        enum:
+                          - "True"
+                          - "False"
+                          - Unknown
+                      reason:
+                        type: string
+                        description: Machine-readable reason for condition
+                      message:
+                        type: string
+                        description: Human-readable message
+                      lastTransitionTime:
+                        type: string
+                        format: date-time
+                observedGeneration:
+                  type: integer
+                  format: int64
+                  description: Generation observed by the controller
+                publishedAt:
+                  type: string
+                  format: date-time
+                  description: Timestamp when first worker published
+      additionalPrinterColumns:
+        - name: Model
+          type: string
+          description: Model name
+          jsonPath: .spec.modelName
+        - name: Age
+          type: date
+          jsonPath: .metadata.creationTimestamp
+  scope: Namespaced
+  names:
+    plural: modelmetadatas
+    singular: modelmetadata
+    kind: ModelMetadata
+    shortNames:
+      - mxmeta
+      - mm
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: modelcacheentries.modelexpress.nvidia.com
+  labels:
+    app.kubernetes.io/name: modelexpress
+    app.kubernetes.io/component: crd
+spec:
+  group: modelexpress.nvidia.com
+  versions:
+    - name: v1alpha1
+      served: true
+      storage: true
+      subresources:
+        status: {}
+      schema:
+        openAPIV3Schema:
+          type: object
+          properties:
+            spec:
+              type: object
+              required:
+                - modelName
+                - provider
+              properties:
+                modelName:
+                  type: string
+                  description: Full model name (e.g., meta-llama/Llama-3.1-70B)
+                provider:
+                  type: string
+                  description: Model provider identifier
+                  enum:
+                    - HuggingFace
+                    - Ngc
+            status:
+              type: object
+              properties:
+                phase:
+                  type: string
+                  description: Model download lifecycle phase
+                  enum:
+                    - ""
+                    - Downloading
+                    - Downloaded
+                    - Error
+                createdAt:
+                  type: string
+                  description: RFC3339 timestamp of first write
+                lastUsedAt:
+                  type: string
+                  description: RFC3339 timestamp of most recent status write or touch
+                message:
+                  type: string
+                  description: Optional human-readable progress or error message
+      additionalPrinterColumns:
+        - name: Model
+          type: string
+          jsonPath: .spec.modelName
+        - name: Phase
+          type: string
+          jsonPath: .status.phase
+        - name: LastUsed
+          type: date
+          jsonPath: .status.lastUsedAt
+        - name: Age
+          type: date
+          jsonPath: .metadata.creationTimestamp
+  scope: Namespaced
+  names:
+    plural: modelcacheentries
+    singular: modelcacheentry
+    kind: ModelCacheEntry
+    shortNames:
+      - mxcache

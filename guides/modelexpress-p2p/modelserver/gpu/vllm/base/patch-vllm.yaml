@@ -1,0 +1,104 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: decode
+spec:
+  # 1 seed + 1 receiver = 4 GPUs (TP2 x 2), the minimal pool that still shows
+  # an HBM->HBM P2P transfer. Scale wider for a real fan-out; per-pod weight
+  # load time is what the comparison measures.
+  replicas: 2
+  template:
+    spec:
+      # NOTE: this overlay expects the modelserver image to already have the
+      # ModelExpress Python client baked in. `llm-d-cuda:v0.7.0` does NOT ship
+      # it, so build a thin image on top (see "Image: building an llm-d-cuda +
+      # ModelExpress image" in the guide README) and point the `images:` entry
+      # in kustomization.yaml at it.
+      containers:
+        - name: modelserver
+          command: ["vllm", "serve"]
+          args:
+            - "meta-llama/Llama-3.3-70B-Instruct"
+            - "--disable-access-log-for-endpoints=/health,/metrics,/v1/models"
+            - "--tensor-parallel-size=2"
+            - "--gpu-memory-utilization=0.95"
+            # `mx` is registered by the modelexpress client baked into the
+            # image and selected via VLLM_PLUGINS=modelexpress.
+            - "--load-format=mx"
+          securityContext:
+            capabilities:
+              add: [IPC_LOCK]
+          env:
+            - name: VLLM_PLUGINS
+              value: "modelexpress"
+            - name: MX_SERVER_ADDRESS
+              value: "modelexpress-server:8001"
+            # Enable P2P metadata exchange
+            - name: MX_P2P_METADATA
+              value: "1"
+            # Fixed ports so cross-pod NIXL side-channel + worker gRPC
+            # advertisements resolve. With TP=2 each pod uses ports
+            # MX_METADATA_PORT..+1 and MX_WORKER_GRPC_PORT..+1.
+            - name: MX_METADATA_PORT
+              value: "5555"
+            - name: MX_WORKER_GRPC_PORT
+              value: "6555"
+            - name: MX_RDMA_NIC_PIN
+              value: "auto"
+            - name: HF_HUB_CACHE
+              value: "/models"
+            - name: VLLM_RPC_TIMEOUT
+              value: "7200000"
+            - name: HF_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: llm-d-hf-token
+                  key: HF_TOKEN
+                  optional: true
+          resources:
+            limits:
+              cpu: '16'
+              memory: 192Gi
+              nvidia.com/gpu: 2
+            requests:
+              cpu: '8'
+              memory: 128Gi
+              nvidia.com/gpu: 2
+          volumeMounts:
+            - mountPath: /dev/shm
+              name: shm
+            - mountPath: /.cache
+              name: torch-compile-cache
+            - mountPath: /.triton
+              name: triton-cache
+            - mountPath: /.config
+              name: vllm-config
+            - mountPath: /models
+              name: model-cache
+          startupProbe:
+            initialDelaySeconds: 15
+            periodSeconds: 30
+            timeoutSeconds: 5
+            failureThreshold: 120
+          livenessProbe:
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            periodSeconds: 5
+            timeoutSeconds: 2
+            failureThreshold: 3
+      volumes:
+        - name: shm
+          emptyDir:
+            medium: Memory
+            sizeLimit: 20Gi
+        - name: torch-compile-cache
+          emptyDir: {}
+        - name: triton-cache
+          emptyDir: {}
+        - name: vllm-config
+          emptyDir: {}
+        - name: model-cache
+          emptyDir:
+            sizeLimit: 300Gi

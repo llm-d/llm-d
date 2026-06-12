@@ -1,0 +1,106 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: decode
+spec:
+  # 1 seed + 1 receiver keeps the GPU footprint at 4 GPUs (TP2 x 2). Scale
+  # wider for a real fan-out; the per-pod load time is what we compare.
+  replicas: 2
+  template:
+    spec:
+      # fastsafetensors is NOT in llm-d-cuda; install it in an untimed init so
+      # the timed `vllm serve` never does a network install. The image ships
+      # `uv`, not `pip`; --no-deps avoids shadowing the image's torch/vllm.
+      initContainers:
+        - name: install-fastsafetensors
+          # Placeholder name so the overlay's images: transformer retags this
+          # together with the main container (they must stay the same image).
+          image: REPLACE_MODEL_SERVER_IMAGE
+          command: ["/bin/sh", "-c"]
+          args:
+            - "uv pip install --target=/pylibs --no-deps fastsafetensors"
+          volumeMounts:
+            - mountPath: /pylibs
+              name: pylibs
+          resources:
+            requests: {cpu: '1', memory: 2Gi}
+            limits: {cpu: '2', memory: 4Gi}
+      containers:
+        - name: modelserver
+          command: ["vllm", "serve"]
+          args:
+            - "/models/Llama-3.3-70B-Instruct"
+            - "--served-model-name=meta-llama/Llama-3.3-70B-Instruct"
+            - "--disable-access-log-for-endpoints=/health,/metrics,/v1/models"
+            - "--tensor-parallel-size=2"
+            - "--gpu-memory-utilization=0.95"
+            # fastsafetensors loader. GDS needs an RDMA-capable mount; on a
+            # TCP NFS mount (e.g. CoreWeave) it runs the POSIX-pread path,
+            # still ~2x the default loader. If the log shows "GDS is not
+            # supported in this platform but nogds is False", add:
+            #   --model-loader-extra-config={"nogds": true}
+            - "--load-format=fastsafetensors"
+          securityContext:
+            capabilities:
+              add: [IPC_LOCK]
+          env:
+            - name: PYTHONPATH
+              value: "/pylibs"
+            - name: HF_HUB_OFFLINE
+              value: "1"
+            - name: VLLM_RPC_TIMEOUT
+              value: "7200000"
+          resources:
+            limits:
+              cpu: '16'
+              memory: 192Gi
+              nvidia.com/gpu: 2
+            requests:
+              cpu: '8'
+              memory: 128Gi
+              nvidia.com/gpu: 2
+          volumeMounts:
+            - mountPath: /dev/shm
+              name: shm
+            - mountPath: /.cache
+              name: torch-compile-cache
+            - mountPath: /.triton
+              name: triton-cache
+            - mountPath: /.config
+              name: vllm-config
+            - mountPath: /pylibs
+              name: pylibs
+            - mountPath: /models
+              name: model-cache
+              readOnly: true
+          # 70B weight load is slow; give startup a wide window or the pod gets
+          # killed mid-load (base probe defaults to ~30s). Mirrors the MX arm.
+          startupProbe:
+            initialDelaySeconds: 15
+            periodSeconds: 30
+            timeoutSeconds: 5
+            failureThreshold: 120
+          livenessProbe:
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            periodSeconds: 5
+            timeoutSeconds: 2
+            failureThreshold: 3
+      volumes:
+        - name: shm
+          emptyDir:
+            medium: Memory
+            sizeLimit: 20Gi
+        - name: torch-compile-cache
+          emptyDir: {}
+        - name: triton-cache
+          emptyDir: {}
+        - name: vllm-config
+          emptyDir: {}
+        - name: pylibs
+          emptyDir: {}
+        - name: model-cache
+          persistentVolumeClaim:
+            claimName: fst-model-cache

@@ -1,0 +1,77 @@
+# One-time prewarm: download Llama-3.3-70B-Instruct once into an NFS RWX
+# PVC. Every fastsafetensors pod (and the local-NVMe arm) then reads the warm
+# NFS share instead of pulling from HuggingFace, so the timed `vllm serve`
+# measures the storage->HBM path, not network egress. Gate the model-server apply on:
+#   kubectl wait --for=condition=complete job/fst-prewarm-llama33-70b --timeout=60m
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: fst-model-cache
+spec:
+  accessModes: [ReadWriteMany]
+  # CoreWeave's VAST-backed NFS class (where this guide was validated).
+  # Change to your cluster's RWX-capable StorageClass.
+  storageClassName: shared-vast
+  resources:
+    requests:
+      storage: 300Gi
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: fst-prewarm-llama33-70b
+spec:
+  backoffLimit: 2
+  template:
+    metadata:
+      annotations:
+        # A sidecar would keep running after the download exits and block the
+        # Job from ever completing. This Job needs no mesh access.
+        sidecar.istio.io/inject: "false"
+      labels:
+        llm-d.ai/model: Llama-3.3-70B-Instruct
+        llm-d.ai/guide: fastsafetensors-nfs
+        llm-d.ai/role: prewarm
+    spec:
+      restartPolicy: OnFailure
+      containers:
+        - name: hf-download
+          image: ghcr.io/llm-d/llm-d-cuda:v0.7.0
+          command: ["/bin/sh", "-c"]
+          args:
+            - |
+              set -eu
+              DEST=/models/Llama-3.3-70B-Instruct
+              MODEL=meta-llama/Llama-3.3-70B-Instruct
+              if [ -f "$DEST/config.json" ] && ls "$DEST"/*.safetensors >/dev/null 2>&1; then
+                echo "checkpoint already warm on NFS, skipping download"; exit 0
+              fi
+              # `hf` is the current CLI; fall back to huggingface-cli on older images.
+              if command -v hf >/dev/null 2>&1; then
+                hf download "$MODEL" --local-dir "$DEST"
+              else
+                huggingface-cli download "$MODEL" --local-dir "$DEST"
+              fi
+          env:
+            - name: HF_HUB_ENABLE_HF_TRANSFER
+              value: "1"
+            # Llama-3.3-70B is gated: this token is REQUIRED, not optional.
+            - name: HF_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: llm-d-hf-token
+                  key: HF_TOKEN
+          resources:
+            requests:
+              cpu: '4'
+              memory: 16Gi
+            limits:
+              cpu: '8'
+              memory: 32Gi
+          volumeMounts:
+            - mountPath: /models
+              name: model-cache
+      volumes:
+        - name: model-cache
+          persistentVolumeClaim:
+            claimName: fst-model-cache

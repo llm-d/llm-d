@@ -1,0 +1,63 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+# fastsafetensors + GDS off warm LOCAL NVMe (OPTIONAL arm).
+#
+# Each pod's init copies the prewarmed NFS checkpoint onto node-local NVMe
+# (untimed prime), then vLLM serves it with `--load-format fastsafetensors`
+# so cuFile/GDS DMAs from local NVMe to HBM via the CUDA 12.8 PCI P2PDMA path.
+# Beats network storage on the GDS hop but loses dedup (every node re-primes),
+# and the GDS path is fragile (no RHEL 9.5 / KASLR / RAID0). Prefer the NFS
+# arm unless you specifically want a local-NVMe number.
+#
+# Requires the shared `fst-model-cache` PVC from prewarm-job.yaml to exist
+# first (apply it standalone with `kubectl apply -f` as in the NFS arm).
+resources:
+  - ../../../../../recipes/modelserver/base/single-host/default
+
+namePrefix: fastsafetensors-localnvme-nvidia-gpu-vllm-
+
+images:
+  - name: REPLACE_MODEL_SERVER_IMAGE
+    newName: ghcr.io/llm-d/llm-d-cuda
+    newTag: v0.7.0
+
+labels:
+  - pairs:
+      llm-d.ai/model: Llama-3.3-70B-Instruct
+      llm-d.ai/guide: fastsafetensors-localnvme
+      llm-d.ai/accelerator-variant: gpu
+      llm-d.ai/accelerator-vendor: nvidia
+    includeSelectors: true
+    includeTemplates: true
+    fields:
+      - version: v1
+        kind: ServiceAccount
+        path: metadata/labels
+        create: true
+      - group: apps
+        version: v1
+        kind: Deployment
+        path: metadata/labels
+        create: true
+      - group: apps
+        version: v1
+        kind: Deployment
+        path: spec/selector/matchLabels
+        create: true
+      - group: apps
+        version: v1
+        kind: Deployment
+        path: spec/template/metadata/labels
+        create: true
+      - group: monitoring.coreos.com
+        version: v1
+        kind: PodMonitor
+        path: metadata/labels
+        create: true
+      - group: monitoring.coreos.com
+        version: v1
+        kind: PodMonitor
+        path: spec/selector/matchLabels
+        create: true
+patches:
+  - path: patch-vllm.yaml

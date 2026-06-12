@@ -1,0 +1,125 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: decode
+spec:
+  # 1 seed + 1 receiver = 4 GPUs (TP2 x 2). Scale wider for a real fan-out.
+  replicas: 2
+  template:
+    spec:
+      # Pin to local-NVMe nodes so the emptyDir lands on fast NVMe.
+      nodeSelector:
+        local-persistent-storage: "true"
+      initContainers:
+        - name: prime-local-nvme
+          # Placeholder name so the overlay's images: transformer retags the
+          # initContainers together with the main container.
+          image: REPLACE_MODEL_SERVER_IMAGE
+          command: ["/bin/sh", "-c"]
+          args:
+            - |
+              set -eu
+              # Warm source = prewarmed NFS PVC. Copy to node-local NVMe.
+              # This is the UNTIMED prime; only `vllm serve` below is timed.
+              cp -a /models-src/Llama-3.3-70B-Instruct /models-local/Llama-3.3-70B-Instruct
+          volumeMounts:
+            - mountPath: /models-src
+              name: model-src
+              readOnly: true
+            - mountPath: /models-local
+              name: model-local
+          resources:
+            requests: {cpu: '4', memory: 16Gi}
+            limits: {cpu: '8', memory: 32Gi}
+        - name: install-fastsafetensors
+          image: REPLACE_MODEL_SERVER_IMAGE
+          command: ["/bin/sh", "-c"]
+          # uv (not pip) is what the image ships; --no-deps avoids shadowing.
+          args:
+            - "uv pip install --target=/pylibs --no-deps fastsafetensors"
+          volumeMounts:
+            - mountPath: /pylibs
+              name: pylibs
+          resources:
+            requests: {cpu: '1', memory: 2Gi}
+            limits: {cpu: '2', memory: 4Gi}
+      containers:
+        - name: modelserver
+          command: ["vllm", "serve"]
+          args:
+            - "/models-local/Llama-3.3-70B-Instruct"
+            - "--served-model-name=meta-llama/Llama-3.3-70B-Instruct"
+            - "--disable-access-log-for-endpoints=/health,/metrics,/v1/models"
+            - "--tensor-parallel-size=2"
+            - "--gpu-memory-utilization=0.95"
+            # GDS via CUDA 12.8 NVMe P2PDMA (no nvidia-fs.ko needed). If the node
+            # can't bind P2PDMA (RHEL 9.5 / KASLR / RAID0/multipath), add this
+            # flag to fall back to the warm-NVMe POSIX-pread path:
+            #   --model-loader-extra-config={"nogds": true}
+            - "--load-format=fastsafetensors"
+          securityContext:
+            capabilities:
+              add: [IPC_LOCK]
+          env:
+            - name: PYTHONPATH
+              value: "/pylibs"
+            - name: HF_HUB_OFFLINE
+              value: "1"
+            - name: VLLM_RPC_TIMEOUT
+              value: "7200000"
+          resources:
+            limits:
+              cpu: '16'
+              memory: 192Gi
+              nvidia.com/gpu: 2
+            requests:
+              cpu: '8'
+              memory: 128Gi
+              nvidia.com/gpu: 2
+          volumeMounts:
+            - mountPath: /dev/shm
+              name: shm
+            - mountPath: /.cache
+              name: torch-compile-cache
+            - mountPath: /.triton
+              name: triton-cache
+            - mountPath: /.config
+              name: vllm-config
+            - mountPath: /pylibs
+              name: pylibs
+            - mountPath: /models-local
+              name: model-local
+          startupProbe:
+            initialDelaySeconds: 15
+            periodSeconds: 30
+            timeoutSeconds: 5
+            failureThreshold: 120
+          livenessProbe:
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            periodSeconds: 5
+            timeoutSeconds: 2
+            failureThreshold: 3
+      volumes:
+        - name: shm
+          emptyDir:
+            medium: Memory
+            sizeLimit: 20Gi
+        - name: torch-compile-cache
+          emptyDir: {}
+        - name: triton-cache
+          emptyDir: {}
+        - name: vllm-config
+          emptyDir: {}
+        - name: pylibs
+          emptyDir: {}
+        # Warm source: the prewarmed NFS PVC (applied standalone).
+        - name: model-src
+          persistentVolumeClaim:
+            claimName: fst-model-cache
+        # Timed target: node-local NVMe (ephemeral).
+        - name: model-local
+          emptyDir:
+            sizeLimit: 300Gi

@@ -1,0 +1,131 @@
+# ModelExpress server in P2P-coordinator mode.
+#
+# The server itself does not move weight bytes; it's a metadata broker.
+# vLLM workers register their NIXL agent + tensor manifest endpoints with
+# the server, and target workers look the source up here, then pull
+# weights directly from the source GPU's HBM via NIXL/RDMA.
+#
+# Metadata backend is `kubernetes`: download/source lifecycle state lives
+# in the ModelMetadata / ModelCacheEntry CRDs the cluster admin installed
+# once (see Prerequisites in this guide's README). No Redis, no model-cache
+# PVC on the server side, no shared storage of any kind.
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: modelexpress
+  labels:
+    app.kubernetes.io/name: modelexpress
+    llm-d.ai/guide: modelexpress-p2p
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: modelexpress-metadata
+  labels:
+    app.kubernetes.io/name: modelexpress
+    llm-d.ai/guide: modelexpress-p2p
+rules:
+  - apiGroups: [modelexpress.nvidia.com]
+    resources: [modelmetadatas, modelcacheentries]
+    verbs: [get, list, watch, create, update, patch, delete]
+  - apiGroups: [modelexpress.nvidia.com]
+    resources: [modelmetadatas/status, modelcacheentries/status]
+    verbs: [get, update, patch]
+  # ConfigMaps host tensor descriptors in the kubernetes backend.
+  # In shared namespaces, install this guide in a dedicated namespace.
+  - apiGroups: [""]
+    resources: [configmaps]
+    verbs: [get, list, watch, create, update, patch, delete]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: modelexpress-metadata
+  labels:
+    app.kubernetes.io/name: modelexpress
+    llm-d.ai/guide: modelexpress-p2p
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: modelexpress-metadata
+subjects:
+  - kind: ServiceAccount
+    name: modelexpress
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: modelexpress-server
+  labels:
+    app: modelexpress-server
+    llm-d.ai/guide: modelexpress-p2p
+spec:
+  type: ClusterIP
+  ports:
+    - port: 8001
+      targetPort: 8001
+      name: grpc
+  selector:
+    app: modelexpress-server
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: modelexpress-server
+  labels:
+    app: modelexpress-server
+    llm-d.ai/guide: modelexpress-p2p
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: modelexpress-server
+  template:
+    metadata:
+      labels:
+        app: modelexpress-server
+        llm-d.ai/guide: modelexpress-p2p
+    spec:
+      serviceAccountName: modelexpress
+      containers:
+        - name: modelexpress-server
+          image: nvcr.io/nvidia/ai-dynamo/modelexpress-server:0.4.0
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8001
+              name: grpc
+          env:
+            - name: MX_METADATA_BACKEND
+              value: "kubernetes"
+            - name: MX_METADATA_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+            - name: MODEL_EXPRESS_SERVER_PORT
+              value: "8001"
+            - name: MODEL_EXPRESS_LOG_LEVEL
+              value: "info"
+          resources:
+            requests:
+              cpu: "2"
+              memory: 4Gi
+            limits:
+              cpu: "4"
+              memory: 8Gi
+          # grpc (not tcpSocket) probes: the server implements the standard
+          # grpc.health.v1 service, and once the broker is in the Istio mesh a
+          # tcpSocket probe would only test the sidecar (Istio rewrites
+          # httpGet/grpc probes but not tcpSocket ones).
+          livenessProbe:
+            grpc:
+              port: 8001
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          readinessProbe:
+            grpc:
+              port: 8001
+            initialDelaySeconds: 10
+            periodSeconds: 5
+      imagePullSecrets:
+        - name: nvcr-imagepullsecret

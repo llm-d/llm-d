@@ -1,0 +1,24 @@
+apiVersion: kustomize.config.k8s.io/v1alpha1
+kind: Component
+
+# Optional speedup for P2P scale-out. Replaces the per-pod `torch-compile-cache`
+# emptyDir with a ReadWriteMany PVC so the bootstrap pod's torch.compile and
+# inductor AOT artifacts are served to receivers instead of recompiled per pod.
+#
+# Requires an RWX-capable StorageClass. The default request lands on the
+# cluster's default StorageClass; override `storageClassName` in
+# compile-cache-pvc.yaml if you need a specific one (e.g. `shared-vast` on
+# CoreWeave, `efs-sc` on EKS, `azurefile-csi-premium` on AKS).
+#
+# Earlier measured impact (CoreWeave H100 + IB, Qwen3-32B, 1→4 scale-out):
+# Ready time dropped from ~121s to ~93s (~25%) with no change to the ~1s NIXL
+# transfer. The remaining time is per-pod cudagraph capture, which is *not*
+# AOT-cached. Re-measure for your model/pool size.
+resources:
+  - compile-cache-pvc.yaml
+
+patches:
+  - target:
+      kind: Deployment
+      name: decode
+    path: patch-shared-cache.yaml

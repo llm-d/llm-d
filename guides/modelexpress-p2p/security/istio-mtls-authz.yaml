@@ -1,0 +1,56 @@
+# Istio hardening for the ModelExpress metadata broker.
+#
+# The broker's gRPC API (:8001) does not authenticate callers on its own, so
+# this policy pair adds that at the mesh layer: strict mTLS on the broker plus
+# an allow-list that restricts :8001 to the decode pods' ServiceAccount.
+#
+# Scope note: this covers the gRPC control plane. The weight transfers
+# themselves go over RDMA, which bypasses the mesh; restrict that path with
+# NetworkPolicy or at the fabric layer if you need to.
+#
+# Apply with the guide's namespace (envsubst expands ${NAMESPACE} in the
+# AuthorizationPolicy principal, which embeds the namespace in its SPIFFE ID):
+#
+#   envsubst < guides/modelexpress-p2p/security/istio-mtls-authz.yaml \
+#       | kubectl apply -n ${NAMESPACE} -f -
+#
+# Requires: Istio installed, sidecar injection enabled for the namespace, and
+# the modelexpress-server + decode pods running with sidecars (see the guide's
+# Security section).
+---
+apiVersion: security.istio.io/v1
+kind: PeerAuthentication
+metadata:
+  name: modelexpress-server-strict
+  labels:
+    llm-d.ai/guide: modelexpress-p2p
+spec:
+  # Scoped to the broker only, not the whole namespace, so model-serving
+  # traffic (EPP -> decode :8000) and other workloads are unaffected.
+  selector:
+    matchLabels:
+      app: modelexpress-server
+  mtls:
+    mode: STRICT
+---
+apiVersion: security.istio.io/v1
+kind: AuthorizationPolicy
+metadata:
+  name: modelexpress-server-allow-decode
+  labels:
+    llm-d.ai/guide: modelexpress-p2p
+spec:
+  selector:
+    matchLabels:
+      app: modelexpress-server
+  action: ALLOW
+  # An ALLOW policy that selects a workload implicitly DENIES anything that
+  # doesn't match a rule, so this locks :8001 to the decode ServiceAccount.
+  rules:
+    - from:
+        - source:
+            principals:
+              - "cluster.local/ns/${NAMESPACE}/sa/modelexpress-p2p-nvidia-gpu-vllm-sa"
+      to:
+        - operation:
+            ports: ["8001"]
