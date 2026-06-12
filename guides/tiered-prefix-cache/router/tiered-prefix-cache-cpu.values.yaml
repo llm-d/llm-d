@@ -18,13 +18,10 @@ router:
         - type: no-hit-lru-scorer
         - type: approx-prefix-cache-producer
           name: gpu-prefix-cache-producer
-          parameters:
-            maxPrefixTokensToMatch: 40000 # enough to cover the ~20k input length in the benchmark.
         - type: approx-prefix-cache-producer
           name: cpu-prefix-cache-producer
           parameters:
             autoTune: false
-            maxPrefixTokensToMatch: 40000 # enough to cover the ~20k input length in the benchmark.
             lruCapacityPerServer: 82000  # Allocating ~200GB for Qwen-32B: 82,000 blocks * 2.5MB/block (based on 160KB/token * 16 block size).
         - type: queue-scorer
         - type: kv-cache-utilization-scorer
