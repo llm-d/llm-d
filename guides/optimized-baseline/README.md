@@ -231,6 +231,9 @@ In this example we will demonstrate how to run [`inference-perf`](https://github
 >
 > For even more details about benchmarking, see the actual repository: [`llm-d-benchmark` on GitHub](https://github.com/llm-d/llm-d-benchmark).
 
+> [!TIP]
+> The command below runs this guide's **dedicated** benchmark profile, which is intentionally shaped to exercise the optimized-baseline routing under realistic load — and accordingly takes longer to complete. To run a simpler workload with fewer execution cycles first (useful for validating the path, image pulls, PVC binding, etc. before committing to a real run), pick a generic sample profile such as `shared_prefix_synthetic.yaml` from the catalog in [`helpers/benchmark.md` → Available workload profiles](../../helpers/benchmark.md#available-workload-profiles) and substitute it for the `--workload` flag in the command below.
+
 ### 1. Install the `llmdbenchmark` CLI
 
 Automatically clone the benchmark repository into `./llm-d-benchmark/` and create a virtualenv at `./llm-d-benchmark/.venv/` containing dependencies and it's installation:
@@ -273,29 +276,11 @@ export GATEWAY_CLASS=istio
 
 </details>
 
-### 3. Run the benchmark
+### 3. Run the benchmark profile for Optimized Baseline
 
-Benchmark results are copied to the `workspace` directory that is specified by _you_ (or that is automatically generated when omitted from the cli) on the machine running the CLI. The workspace location is optional — by default the CLI auto-generates a timestamped workspace and prints its full path in the logs during the run. If you'd rather choose where results land, pass --workspace <YOUR_DIR_HERE> as a top-level argument of `llmdbenchmark` (before the `run` subcommand):
+`guide_optimized-baseline_1.yaml` is a **dedicated workload profile** shipped with `llm-d-benchmark` specifically for this guide — it reproduces the load ladder used to generate the [graphs at the bottom of this guide](#benchmarking-report) (rates 3 to 60) and is shaped to highlight the strengths of the optimized-baseline routing under realistic saturation.
 
-```bash
-llmdbenchmark \
-    --spec           guides/optimized-baseline \
-    run \
-    --endpoint-url   "${ENDPOINT_URL}" \
-    --gateway-class  "${GATEWAY_CLASS}" \
-    --model          "Qwen/Qwen3-32B" \
-    --namespace      "${NAMESPACE}" \
-    --harness        inference-perf \
-    --workload       shared_prefix_synthetic.yaml \
-    --analyze
-```
-
-> [!NOTE]
-> Depending on your `cluster` you may need to extend the default `timeout` values to longer duration, as creation of `pvc` and `pods` can be arbitrarily slower on other systems, please utilize `llmdbenchmark run --help` to view the knobs needed to increase those values.
-
-### 4. Run Other Workloads
-
-`shared_prefix_synthetic.yaml` is intentionally short and is generally fine for a smoke test, but not really full saturation. To reproduce the load ladder used to generate the [graphs at the bottom of this guide](#benchmarking-report) (rates 3 to 60), use the guide-specific profile that ships with `llm-d-benchmark`:
+Benchmark results are copied to the `workspace` directory that is specified by _you_ (or that is automatically generated when omitted from the cli) on the machine running the CLI. The workspace location is optional — by default the CLI auto-generates a timestamped workspace and prints its full path in the logs during the run. If you'd rather choose where results land, pass `--workspace <YOUR_DIR_HERE>` as a top-level argument of `llmdbenchmark` (before the `run` subcommand):
 
 ```bash
 llmdbenchmark \
