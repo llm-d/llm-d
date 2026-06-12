@@ -251,7 +251,7 @@ To provision a managed GCP Lustre instance on GKE and configure the correspondin
 To provision AWS EFS and configure the corresponding `StorageClass`, follow the [EFS guide](./manifests/backends/aws/README.md).
 
 ```bash
-export STORAGE_CLASS="" # set your prefered storage class or leave empty to use cluster default; or set "lustre" / "efs-sc"
+export STORAGE_CLASS="" # set your preferred storage class or leave empty to use cluster default; or set "lustre" / "efs-sc"
 envsubst < ${REPO_ROOT}/guides/tiered-prefix-cache/manifests/pvc.yaml | kubectl apply -n ${NAMESPACE} -f -
 ```
 
