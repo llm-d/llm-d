@@ -38,41 +38,23 @@ The benchmark runs on 16 × H100 GPUs, distributed across 16 model servers (1 H1
 | External cache queries (tokens) | N/A | 135.3M |
 
 
-### Previous Benchmarking Results
+### Per-Stage Breakdown (5–40 QPS)
 
-> [!NOTE]
-> The following benchmark results were from a previous release and does not match the deployment of the current release. A follow up benchmark will be conducted and the results will be updated accordingly. See <https://github.com/llm-d/llm-d/issues/680>.
-
-### GPU
-
-#### High Cache Scenario (HBM < KVCache < HBM + CPU RAM)
-
-| Medium Configuration | Mean TTFT (second) | P90 TTFT (second) | Mean E2E Latency (second) | P90 E2E Latency (second) | Overall Throughput (token per second) |
-| :--- | :--- | :--- | :--- | :--- | :--- |
-| **Baseline vLLM** | 9.0 | 20.9 | 37.8 | 49.7 | 38,534.8 |
-| **vLLM + CPU offloading 100GB** | 6.7 (-25.6%) | 20.2 (-3.3%) | 30.9 (-18.3%) | 44.2 (-11.1%) | 46,751.0 (+21.3%) |
-| **vLLM + LMCache CPU offloading 100GB** | 6.5 (-27.8%) | 18.8 (-10.0%) | 30.8 (-18.5%) | 43.0 (-13.5%) | 46,910.6 (+21.7%) |
-
-#### Low Cache Scenario (KVCache < HBM)
-
-| Medium Configuration | Mean TTFT (second) | P90 TTFT (second) | Mean E2E Latency (second) | P90 E2E Latency (second) | Overall Throughput (token per second) |
-| :--- | :--- | :--- | :--- | :--- | :--- |
-| **Baseline vLLM** | 0.12 | 0.09 | 18.4 | 19.6 | 23,389.6 |
-| **vLLM + CPU offloading 100GB** | 0.13 | 0.11 | 18.6 | 20.6 | 23,032.6 |
-| **vLLM + LMCache CPU offloading 100GB** | 0.15 | 0.10 | 18.9 | 19.6 | 22,772.5 |
-
-### TPU
-
-#### High Cache Scenario (HBM < KVCache < HBM + CPU RAM)
-
-| Medium Configuration | Mean TTFT (second) | P90 TTFT (second) | Mean E2E Latency (second) | P90 E2E Latency (second) | Overall Throughput (token per second) |
-| :--- | :--- | :--- | :--- | :--- | :--- |
-| **Baseline vLLM** | 0.98 | 2.1 | 22.1 | 26.2 | 67262.3 |
-| **vLLM + CPU offloading 25000 Chunks** | 0.56 (-49%) | 0.5 (-75.7%) | 20.3 (-8.1%) | 23.6 (-9.9%) | 73178.1 (+8.9%) |
-
-#### Low Cache Scenario (KVCache < HBM)
-
-| Medium Configuration | Mean TTFT (second) | P90 TTFT (second) | Mean E2E Latency (second) | P90 E2E Latency (second) | Overall Throughput (token per second) |
-| :--- | :--- | :--- | :--- | :--- | :--- |
-| **Baseline vLLM** | 0.24 | 0.23 | 16.9 | 19.9 | 25715.9 |
-| **vLLM + CPU offloading 25000 Chunks** | 0.26 | 0.24 | 17.4 | 20.2 | 23,032.6 |
+| Target Rate | Configuration | Mean TTFT | P90 TTFT | Mean E2E Latency | P90 E2E Latency | Throughput (tok/s) |
+| :---: | :--- | :---: | :---: | :---: | :---: | :---: |
+| **5 QPS** | optimized-baseline | 0.45s | 0.57s | 1.80s | 2.05s | 1,983 |
+| | cpu-offload | 0.43s (-3.7%) | 0.56s (-2.1%) | 1.80s (-0.1%) | 2.04s (-0.2%) | 1,738 (-12.3%) |
+| **10 QPS** | optimized-baseline | 0.44s | 0.56s | 1.98s | 2.38s | 3,664 |
+| | cpu-offload | 0.37s (-17.9%) | 0.55s (-1.7%) | 1.91s (-3.3%) | 2.28s (-4.3%) | 3,799 (+3.7%) |
+| **15 QPS** | optimized-baseline | 0.45s | 0.57s | 2.73s | 3.45s | 5,653 |
+| | cpu-offload | 0.35s (-22.4%) | 0.55s (-2.4%) | 2.17s (-20.4%) | 2.65s (-23.2%) | 5,171 (-8.5%) |
+| **20 QPS** | optimized-baseline | 0.73s | 1.04s | 5.59s | 9.72s | 6,581 |
+| | cpu-offload | 0.32s (-55.8%) | 0.56s (-46.3%) | 2.60s (-53.5%) | 3.39s (-65.1%) | 6,967 (+5.9%) |
+| **25 QPS** | optimized-baseline | 6.16s | 10.71s | 14.29s | 18.62s | 7,229 |
+| | cpu-offload | 0.34s (-94.5%) | 0.57s (-94.7%) | 3.46s (-75.8%) | 4.61s (-75.3%) | 8,777 (+21.4%) |
+| **30 QPS** | optimized-baseline | 14.07s | 26.17s | 22.51s | 34.04s | 6,822 |
+| | cpu-offload | 0.33s (-97.6%) | 0.58s (-97.8%) | 4.24s (-81.2%) | 5.50s (-83.8%) | 9,767 (+43.2%) |
+| **35 QPS** | optimized-baseline | 18.44s | 35.16s | 26.52s | 41.82s | 7,178 |
+| | cpu-offload | 0.50s (-97.3%) | 0.84s (-97.6%) | 6.16s (-76.8%) | 7.41s (-82.3%) | 11,677 (+62.7%) |
+| **40 QPS** | optimized-baseline | 24.78s | 45.42s | 32.78s | 52.03s | 6,722 |
+| | cpu-offload | 4.24s (-82.9%) | 8.76s (-80.7%) | 10.33s (-68.5%) | 14.63s (-71.9%) | 11,742 (+74.7%) |
