@@ -309,7 +309,7 @@ Understanding the guaranteed capabilities and inherent boundaries of the Flow Co
 
 * **Absolute Capacity Shortages**: Flow Control only handles *when* and *in what order* requests are dispatched. It cannot make the pool faster or create capacity that doesn't exist.
 * **TTFT Shifts (Not Elimination)**: Flow Control cannot remove wait time when the system is over capacity. By enabling it, you make the **explicit choice to protect TPOT at the expense of queue time**. Its core function is simply controlling **where** and **for whom** TTFT (Time-To-First-Token) is accrued (accruing it safely in the EPP rather than letting it context-thrash the GPU).
-* **Non-Persistence**: Queues are stored purely in-memory. If the EPP process restarts or fails, queued requests are lost. During a graceful shutdown, the EPP will attempt to evict queued requests with an internal error (HTTP 500), whereas abrupt crashes will result in hard connection drops for the client.
+* **Non-Persistence**: Queues are stored purely in-memory. If the EPP process restarts or fails, queued requests are lost. During a graceful shutdown, the EPP will attempt to evict queued requests with a service unavailable error (HTTP 503), whereas abrupt crashes will result in hard connection drops for the client.
 
 ### Failure Modes & Error Mapping
 
@@ -328,12 +328,14 @@ stateDiagram-v2
 
     Queued --> Expired: TTL Expired<br/>(HTTP 503)
     Queued --> Cancelled: Client Disconnect<br/>(HTTP 503)
+    Queued --> Shutdown: Controller Shutdown<br/>(HTTP 503)
     Queued --> Dispatched: Saturation < 1.0<br/>(Open Gate)
 
     Dispatched --> [*]: Sent to Scheduler
     Dropped --> [*]
     Expired --> [*]
     Cancelled --> [*]
+    Shutdown --> [*]
 ```
 
 | Queue Outcome | Internal Error Code | HTTP Status | Description |
@@ -341,7 +343,8 @@ stateDiagram-v2
 | `QueueOutcomeRejectedCapacity` | `ResourceExhausted` | 429 (Too Many Requests) | Rejection because queue capacity limits were met (Global or Per-Band). |
 | `QueueOutcomeEvictedTTL` | `ServiceUnavailable` | 503 (Service Unavailable) | Eviction from queue because the request's TTL expired. |
 | `QueueOutcomeEvictedContextCancelled` | `ServiceUnavailable` | 503 (Service Unavailable) | Eviction from queue because the client disconnected. |
-| `QueueOutcomeRejectedOther` / `EvictedOther` | `Internal` | 500 (Internal Server Error) | Internal flow control error or controller shutdown. |
+| `QueueOutcomeRejectedOther` / `EvictedOther` (shutdown) | `ServiceUnavailable` | 503 (Service Unavailable) | Controller is shutting down (e.g., rolling update). Header: `x-llm-d-request-dropped-reason: rejected-shutting-down`. |
+| `QueueOutcomeRejectedOther` / `EvictedOther` (other) | `Internal` | 500 (Internal Server Error) | Internal flow control error (configuration failure, queue error). |
 
 ### Extension Points
 
