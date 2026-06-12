@@ -14,9 +14,11 @@ The router config must include `targetPorts` (8000-8007) so the EPP routes reque
 
 **Fix:** Ensure `targetPorts` is set in the router values file and the Helm chart is deployed with the updated values.
 
-## Router: Standalone Mode Required
+## Router: Standalone Mode
 
-GKE native gateway classes (`gke-l7-rilb`, etc.) do not support ext-proc/InferencePool backends. Use the standalone router mode (`llm-d-router-standalone-dev`) instead of gateway mode. The standalone chart includes an Envoy sidecar that handles the ext-proc integration. This is what the GKE nightly workflow uses.
+During benchmarking, requests timed out when using the `gke-l7-rilb` gateway class with gateway-mode router. The GKE Inference Gateway (which has native InferencePool/ext-proc support) was not tested. Standalone mode (`llm-d-router-standalone-dev`) was used instead, which bundles its own Envoy sidecar and works without an external gateway. This is also what the GKE nightly workflow uses.
+
+If using gateway mode on GKE, use the GKE Inference Gateway class rather than `gke-l7-rilb`.
 
 ```bash
 export REPO_ROOT=$(git rev-parse --show-toplevel)
