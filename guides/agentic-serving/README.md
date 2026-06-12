@@ -40,7 +40,7 @@ cost — from a routing-and-offloading baseline up to disaggregated serving — 
 as a workload's scale and latency targets grow. Concrete, workloads with benchmarked options are
 provided as sub-guides below.
 
-- [Agentic Code Generation](agentic-code-generation.md)
+- [Agentic Code Generation on TPU](agentic-code-generation-tpu.md)
 
 ## Benchmarking
 

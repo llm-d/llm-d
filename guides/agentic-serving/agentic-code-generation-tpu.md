@@ -146,22 +146,22 @@ envsubst < guide.yaml > config.yaml
 
 ## Benchmark Results
 
-### TPU v7x
-
 The results below are with 8 replicas of TPU v7x (2x2x1) on the benchmark workload described above.
 
-#### Summary with 40 concurrent coding sessions:
+### Summary with 40 concurrent coding sessions:
 | Metric | k8s Service | llm-d-optimized | Δ Improvement |
 | :--- | :--- | :--- | :--- |
 | **TTFT P50 (ms)** | 17391 | 1314 | ⬇️ 92.4% |
 | **Input tokens / sec** | 36987 | 78065 | ⬆️ 111.1% |
 | **Output tokens / sec** | 436.8 | 888.5 | ⬆️ 103.4% |
 
-#### Latency Profiles:
+### Latency Profiles:
 
-<img src="./benchmark-results/latency_vs_throughput.png" width="300" alt="Latency vs Throughput">
-<img src="./benchmark-results/throughput_vs_concurrency.png" width="300" alt="Throughput vs Concurrency">
-<img src="./benchmark-results/ttft_vs_concurrency.png" width="300" alt="TTFT vs Concurrency">
+<p float="left">
+  <img src="./benchmark-results/latency_vs_throughput.png" width="32%" alt="Latency vs Throughput" />
+  <img src="./benchmark-results/throughput_vs_concurrency.png" width="32%" alt="Throughput vs Concurrency" />
+  <img src="./benchmark-results/ttft_vs_concurrency.png" width="32%" alt="TTFT vs Concurrency" />
+</p>
 
 ## Cleanup
 
