@@ -7,13 +7,11 @@ This guide deploys the optimal llm-d configuration for agentic workloads using a
 - **KV cache offloading** to CPU DRAM to handle multi-turn conversations with long contexts (via KV offloading connector)
 - **Load balancing** to prevent replica hotspotting from bursty request patterns (via `queue-scorer` and `kv-cache-utilization-scorer`)
 
-## Workload Profile & Key Configurations
+## Workload Profile
 
-To understand why the `llm-d` configuration for agentic workloads is set up this way, it is helpful to examine the typical workload profile of an agentic code generation task. The benchmarking suite uses the following configuration parameters (defined in [guide.yaml](benchmark-templates/guide.yaml)) representing a realistic distribution of agentic interactions:
+The following configuration parameters (defined in [guide.yaml](benchmark-templates/guide.yaml)) represent a realistic distribution of agentic code generation interactions that we validated as a part of this guide:
 
-### Workload Distribution Profile
-
-| Workload Characteristic | Metric / Distribution Type | Min | Max | Mean / Constant | Std Dev | Description & Importance |
+| Workload Characteristic | Metric / Distribution Type | Min | Max | Mean / Constant | Std Dev | Description |
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
 | **Shared System Prompt** | Constant | - | - | 3,000 tokens | - | Common base instructions, libraries, and API schemas shared across all agent instances. Highly cacheable. |
 | **Dynamic System Prompt** | Lognormal | 10,000 | 990,000 | 160,000 tokens | 233,600 | Repository context, file indexes, and user-specific code context. Extremely large and variable context. |
@@ -21,28 +19,6 @@ To understand why the `llm-d` configuration for agentic workloads is set up this
 | **Input Tokens per Turn** | Lognormal | 100 | 10,000 | 1,500 tokens | 1,200 | Ongoing prompt extensions (e.g., test logs, user follow-ups, modified code blocks) during conversation. |
 | **Output Tokens per Turn** | Lognormal | 50 | 10,000 | 425 tokens | 825 | Model generations per turn, which are generally smaller than inputs but can spike when generating large files. |
 | **Tool Call Latency** | Lognormal | 1s | 100s | 15 seconds | 55 | Time spent executing tools (compilation, unit tests, web search). Causes idle/delayed turns on the client side. |
-
----
-
-### Deep Dive: Why the llm-d Routing and KV Cache Configurations are Critical
-
-Given the characteristics of the agentic code generation workload shown above, default serving configurations would suffer from severe performance degradation. Here is why `llm-d`'s specific optimizations are vital:
-
-#### 1. Prefix-Aware Routing (`prefix-cache-scorer`)
-* **The Challenge:** Dynamic system prompts or code context can be extremely large (100K+ tokens). Processing these prompts from scratch on every turn or new conversation is computationally expensive and introduces massive time-to-first-token (TTFT) latency.
-* **The Optimization:** The `prefix-cache-scorer` routes requests to replica pods that have the matching prefix (system prompt and early turns) cached in their KV cache.
-* **The Impact:** Eliminates redundant prefill computation. Consecutive turns of the same agentic conversation or separate conversations sharing the same repository context achieve near-instantaneous TTFT.
-
-#### 2. KV Cache Offloading to CPU DRAM (`KVOffloadConnector`)
-* **The Challenge:** Maintaining active KV caches for dozens of long-running conversations (up to 256,000 tokens per model instance and up to 3,000 turns) exceeds the fast but limited HBM (High Bandwidth Memory) on accelerators.
-* **The Optimization:** The `KVOffloadConnector` offloads inactive KV cache blocks from accelerator HBM to the host CPU DRAM which can be used when needed.
-* **The Impact:** Replicas can handle significantly larger context windows (100K to 1M) and higher concurrency without running out of memory (OOM) or suffering from aggressive context eviction, while restoring cache blocks rapidly on subsequent turns.
-
-#### 3. Concurrency Balancing with Queue-Based Routing (`queue-scorer`)
-* **The Challenge:** The multi-turn interactions and unpredictable tool call delays make the arrival pattern of new requests highly bursty and asynchronous. Because agentic queries require extremely heavy computation (due to very large context sizes), routing requests solely based on prefix matching can lead to severe **hotspotting**, where a single replica's KV cache and request queue builds up dramatically while other replicas remain underutilized.
-* **The Optimization:** The `queue-scorer` and `kv-cache-utilization-scorer` tracks the load and helps load balance among replicas.
-* **The Impact:** Acts as a concurrency balancer and guardrail. If a sticky replica becomes overloaded with pending work, it shifts new incoming requests to less busy replicas. This prevents excessive queuing latency and balances the processing load evenly across the cluster.
-
 
 ## Default Configuration
 
@@ -167,6 +143,25 @@ export IP=$(kubectl get service ${GUIDE_NAME}-epp -n ${NAMESPACE} -o jsonpath='{
 envsubst < guide.yaml > config.yaml
 ./run_only.sh -c config.yaml -o ./results
 ```
+
+## Benchmark Results
+
+### TPU v7x
+
+The results below are with 8 replicas of TPU v7x (2x2x1) on the benchmark workload described above.
+
+#### Summary with 40 concurrent coding sessions:
+| Metric | k8s Service | llm-d-optimized | Δ Improvement |
+| :--- | :--- | :--- | :--- |
+| **TTFT P50 (ms)** | 17391 | 1314 | ⬇️ 92.4% |
+| **Input tokens / sec** | 36987 | 78065 | ⬆️ 111.1% |
+| **Output tokens / sec** | 436.8 | 888.5 | ⬆️ 103.4% |
+
+#### Latency Profiles:
+
+<img src="./benchmark-results/latency_vs_throughput.png" width="300" alt="Latency vs Throughput">
+<img src="./benchmark-results/throughput_vs_concurrency.png" width="300" alt="Throughput vs Concurrency">
+<img src="./benchmark-results/ttft_vs_concurrency.png" width="300" alt="TTFT vs Concurrency">
 
 ## Cleanup
 
