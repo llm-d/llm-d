@@ -127,6 +127,18 @@ For advanced configuration options and implementation details, see the [llm-d FS
 | HBM Staging Buffer Size   | 1000 Blocks (~34 GB)                                    |
 | CPU Cache Offload Size    | 25000 Chunks (~780 GB)                                  |
 
+
+## Additional Configuration
+
+### GPU 
+
+| Parameter                 | Value                                                   |
+| ------------------------- | ------------------------------------------------------- |
+| Model                     | [openai/gpt-oss-120b](https://huggingface.co/openai/gpt-oss-120b) |
+| GPUs per replica (TP)     | 1                                                       |
+| GPU Accelerator           | NVIDIA H100                                             |
+| CPU Cache Offload Size    | 100 GB          
+
 This guide supports both GPU and TPU. The Kustomize overlays are available in `modelserver/gpu/vllm/` and `modelserver/tpu-v7/vllm/`.
 
 ---
@@ -459,3 +471,11 @@ LMCache configuration: `LMCACHE_MAX_LOCAL_CPU_SIZE=20GB`, `LMCACHE_MAX_LOCAL_DIS
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
 | **Baseline vLLM + CPU offloading** | 27.11 | 41.71 | 57.06 | 72.28 | 18333 | 350 | 18682 | 0.029 |
 | **vLLM + CPU offloading + Lustre** | 15.25 (-43.7%) | 24.71 (-40.8%) | 38.55 (-32.4%) | 48.01 (-33.6%) | 27091 (+47.8%) | 517 (+47.7%) | 27609 (+47.8%) | 0.022 (-24.1%) |
+
+
+
+### gpt-oss-120B Benchmarking Results  
+
+The benchmark runs on 16 × H100 GPUs, distributed across 16 model servers (1 H100s per server with TP=1) using gpt-oss-120B and the same workload as in [default configuration benchmark results](#cpu-offloading-benchmarking-results). The benchmark compares to optimized baseline configuration.
+
+For detailed results see [gpt-oss-120B benchmarking results](#benchmark-results-gpt-oss-120b.md).
