@@ -296,8 +296,8 @@ per-pool scaling would lead to one pool holding resources another pool needs.
 > capacity for another — is not yet supported.
 
 To enable cross-pool optimization, set `enableLimiter: true` in the
-`wva-saturation-scaling-config` ConfigMap and create a `VariantAutoscaling`
-object for each InferencePool:
+`wva-saturation-scaling-config` ConfigMap and annotate each HPA with
+`llm-d.ai/managed: "true"` for WVA discovery:
 
 ```yaml
 apiVersion: v1
@@ -313,41 +313,65 @@ data:
     enableLimiter: true
 ```
 
-Each model gets its own `VariantAutoscaling` object with a distinct `modelID`:
+Each model gets its own HPA annotated with `llm-d.ai/managed: "true"`:
 
 ```yaml
 # Pool 1: meta/llama-3.1-8b
-apiVersion: llmd.ai/v1alpha1
-kind: VariantAutoscaling
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
 metadata:
   name: llama-8b
+  annotations:
+    llm-d.ai/managed: "true"
 spec:
   scaleTargetRef:
     apiVersion: apps/v1
     kind: Deployment
     name: llama-8b
-  modelID: "meta/llama-3.1-8b"
   minReplicas: 1
   maxReplicas: 8
-  variantCost: "10.0"
+  metrics:
+    - type: External
+      external:
+        metric:
+          name: wva_desired_replicas
+          selector:
+            matchLabels:
+              variant_name: llama-8b
+              exported_namespace: llm-d-optimized-baseline
+        target:
+          type: AverageValue
+          averageValue: "1"
 ---
 # Pool 2: Qwen/Qwen3-32B
-apiVersion: llmd.ai/v1alpha1
-kind: VariantAutoscaling
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
 metadata:
   name: qwen-32b
+  annotations:
+    llm-d.ai/managed: "true"
 spec:
   scaleTargetRef:
     apiVersion: apps/v1
     kind: Deployment
     name: qwen-32b
-  modelID: "Qwen/Qwen3-32B"
   minReplicas: 1
   maxReplicas: 8
-  variantCost: "10.0"
+  metrics:
+    - type: External
+      external:
+        metric:
+          name: wva_desired_replicas
+          selector:
+            matchLabels:
+              variant_name: qwen-32b
+              exported_namespace: llm-d-optimized-baseline
+        target:
+          type: AverageValue
+          averageValue: "1"
 ```
 
-For a full walkthrough, see the [multi-InferencePool guide](../../../../guides/workload-autoscaling/multi-inferencepool/README.md).
+For a full walkthrough, see the [multi-InferencePool guide](../../../../guides/workload-autoscaling/multi-inferencepool/README.wva-multi-pool.md).
 
 ## Configuration
 
