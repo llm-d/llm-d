@@ -3,17 +3,11 @@ kind: Deployment
 metadata:
   name: decode
 spec:
-  # 1 seed + 1 receiver = 4 GPUs (TP2 x 2), the minimal pool that still shows
-  # an HBM->HBM P2P transfer. Scale wider for a real fan-out; per-pod weight
-  # load time is what the comparison measures.
+  # 1 seed + 1 receiver: the minimal pool that still exercises a real
+  # HBM->HBM transfer. Scale wider for a real fan-out.
   replicas: 2
   template:
     spec:
-      # NOTE: this overlay expects the modelserver image to already have the
-      # ModelExpress Python client baked in. `llm-d-cuda:v0.7.0` does NOT ship
-      # it, so build a thin image on top (see "Image: building an llm-d-cuda +
-      # ModelExpress image" in the guide README) and point the `images:` entry
-      # in kustomization.yaml at it.
       containers:
         - name: modelserver
           command: ["vllm", "serve"]
@@ -22,8 +16,6 @@ spec:
             - "--disable-access-log-for-endpoints=/health,/metrics,/v1/models"
             - "--tensor-parallel-size=2"
             - "--gpu-memory-utilization=0.95"
-            # `mx` is registered by the modelexpress client baked into the
-            # image and selected via VLLM_PLUGINS=modelexpress.
             - "--load-format=mx"
           securityContext:
             capabilities:
@@ -33,12 +25,10 @@ spec:
               value: "modelexpress"
             - name: MX_SERVER_ADDRESS
               value: "modelexpress-server:8001"
-            # Enable P2P metadata exchange
             - name: MX_P2P_METADATA
               value: "1"
-            # Fixed ports so cross-pod NIXL side-channel + worker gRPC
-            # advertisements resolve. With TP=2 each pod uses ports
-            # MX_METADATA_PORT..+1 and MX_WORKER_GRPC_PORT..+1.
+            # Fixed ports so cross-pod advertisements resolve; each pod uses
+            # base..base+TP-1, which the istio-mesh component must exclude.
             - name: MX_METADATA_PORT
               value: "5555"
             - name: MX_WORKER_GRPC_PORT

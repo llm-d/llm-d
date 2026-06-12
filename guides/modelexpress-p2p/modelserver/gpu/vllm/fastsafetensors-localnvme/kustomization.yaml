@@ -1,16 +1,10 @@
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
-# fastsafetensors + GDS off warm LOCAL NVMe (OPTIONAL arm).
-#
-# Each pod's init copies the prewarmed NFS checkpoint onto node-local NVMe
-# (untimed prime), then vLLM serves it with `--load-format fastsafetensors`
-# so cuFile/GDS DMAs from local NVMe to HBM via the CUDA 12.8 PCI P2PDMA path.
-# Beats network storage on the GDS hop but loses dedup (every node re-primes),
-# and the GDS path is fragile (no RHEL 9.5 / KASLR / RAID0). Prefer the NFS
-# arm unless you specifically want a local-NVMe number.
-#
-# Requires the shared `fst-model-cache` PVC from prewarm-job.yaml to exist
-# first (apply it standalone with `kubectl apply -f` as in the NFS arm).
+# fastsafetensors + GDS off warm local NVMe (OPTIONAL arm). Beats network
+# storage on the GDS hop but loses dedup (every node re-primes) and the GDS
+# path is fragile; prefer the NFS arm unless you want a local-NVMe number.
+# Requires the `fst-model-cache` PVC from prewarm-job.yaml (applied
+# standalone, as in the NFS arm).
 resources:
   - ../../../../../recipes/modelserver/base/single-host/default
 

@@ -1,14 +1,5 @@
-# ModelExpress server in P2P-coordinator mode.
-#
-# The server itself does not move weight bytes; it's a metadata broker.
-# vLLM workers register their NIXL agent + tensor manifest endpoints with
-# the server, and target workers look the source up here, then pull
-# weights directly from the source GPU's HBM via NIXL/RDMA.
-#
-# Metadata backend is `kubernetes`: download/source lifecycle state lives
-# in the ModelMetadata / ModelCacheEntry CRDs the cluster admin installed
-# once (see Prerequisites in this guide's README). No Redis, no model-cache
-# PVC on the server side, no shared storage of any kind.
+# ModelExpress metadata broker, kubernetes backend (state lives in the MX
+# CRDs, so no Redis and no server-side storage).
 ---
 apiVersion: v1
 kind: ServiceAccount
@@ -113,10 +104,8 @@ spec:
             limits:
               cpu: "4"
               memory: 8Gi
-          # grpc (not tcpSocket) probes: the server implements the standard
-          # grpc.health.v1 service, and once the broker is in the Istio mesh a
-          # tcpSocket probe would only test the sidecar (Istio rewrites
-          # httpGet/grpc probes but not tcpSocket ones).
+          # grpc, not tcpSocket: with a sidecar injected, tcpSocket only tests
+          # the sidecar (Istio rewrites httpGet/grpc probes, not tcpSocket).
           livenessProbe:
             grpc:
               port: 8001

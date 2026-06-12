@@ -1,16 +1,14 @@
-# One-time prewarm: download Llama-3.3-70B-Instruct once into an NFS RWX
-# PVC. Every fastsafetensors pod (and the local-NVMe arm) then reads the warm
-# NFS share instead of pulling from HuggingFace, so the timed `vllm serve`
-# measures the storage->HBM path, not network egress. Gate the model-server apply on:
-#   kubectl wait --for=condition=complete job/fst-prewarm-llama33-70b --timeout=60m
+# One-time checkpoint download into an NFS RWX PVC shared by both
+# fastsafetensors arms, so the timed `vllm serve` measures storage->HBM and
+# never HuggingFace egress.
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
   name: fst-model-cache
 spec:
   accessModes: [ReadWriteMany]
-  # CoreWeave's VAST-backed NFS class (where this guide was validated).
-  # Change to your cluster's RWX-capable StorageClass.
+  # Change to your cluster's RWX-capable StorageClass; shared-vast is
+  # CoreWeave's NFS class (where this guide was validated).
   storageClassName: shared-vast
   resources:
     requests:

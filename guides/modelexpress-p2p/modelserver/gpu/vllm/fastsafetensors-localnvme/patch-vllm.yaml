@@ -3,7 +3,7 @@ kind: Deployment
 metadata:
   name: decode
 spec:
-  # 1 seed + 1 receiver = 4 GPUs (TP2 x 2). Scale wider for a real fan-out.
+  # Mirrors the P2P arm's replica count so the comparison is fair.
   replicas: 2
   template:
     spec:
@@ -12,15 +12,14 @@ spec:
         local-persistent-storage: "true"
       initContainers:
         - name: prime-local-nvme
-          # Placeholder name so the overlay's images: transformer retags the
-          # initContainers together with the main container.
+          # Placeholder so the images: transformer retags the initContainers
+          # with the main container.
           image: REPLACE_MODEL_SERVER_IMAGE
           command: ["/bin/sh", "-c"]
           args:
             - |
               set -eu
-              # Warm source = prewarmed NFS PVC. Copy to node-local NVMe.
-              # This is the UNTIMED prime; only `vllm serve` below is timed.
+              # Untimed prime: NFS -> node-local NVMe. Only `vllm serve` is timed.
               cp -a /models-src/Llama-3.3-70B-Instruct /models-local/Llama-3.3-70B-Instruct
           volumeMounts:
             - mountPath: /models-src
@@ -34,7 +33,7 @@ spec:
         - name: install-fastsafetensors
           image: REPLACE_MODEL_SERVER_IMAGE
           command: ["/bin/sh", "-c"]
-          # uv (not pip) is what the image ships; --no-deps avoids shadowing.
+          # --no-deps avoids shadowing the image's torch/vllm.
           args:
             - "uv pip install --target=/pylibs --no-deps fastsafetensors"
           volumeMounts:

@@ -5,11 +5,8 @@ resources:
 
 namePrefix: modelexpress-p2p-nvidia-gpu-vllm-
 
-# The decode pods need an llm-d-cuda image with the ModelExpress Python
-# client baked in. `llm-d-cuda:v0.7.0` does NOT ship it, so build a thin
-# image on top (see "Image: building an llm-d-cuda + ModelExpress image" in
-# the guide README), push it somewhere your cluster can pull, and point
-# newName/newTag at that image (e.g. via `kustomize edit set image`).
+# Stock llm-d-cuda does NOT ship the ModelExpress client; build the image
+# from the README's Image section and point newName/newTag at it.
 images:
   - name: REPLACE_MODEL_SERVER_IMAGE
     newName: <your-registry>/llm-d-cuda-modelexpress

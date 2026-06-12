@@ -1,22 +1,13 @@
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
-# fastsafetensors + GPUDirect Storage baseline arm (PRIMARY).
-#
-# This is the apples-to-apples storage counterpart to the ModelExpress P2P
-# arm: a one-shot Job downloads the checkpoint once into an NFS RWX PVC,
-# every pod mounts it read-only, and vLLM serves with
-# `--load-format fastsafetensors`. The difference vs P2P: this pays a
-# storage->HBM hop, P2P pays HBM->HBM. On the CoreWeave cluster this guide
-# was validated on, the NFS mount is TCP-only, so the loader runs its
-# parallel POSIX-pread path (no GDS); see the README's GDS note.
+# fastsafetensors-off-NFS baseline arm (PRIMARY): the storage->HBM
+# counterpart the P2P numbers are compared against.
 resources:
   - ../../../../../recipes/modelserver/base/single-host/default
 
-# NOTE: prewarm-job.yaml (the NFS PVC + download Job) is applied
-# standalone with `kubectl apply -f`, NOT listed here, so its PVC keeps the
-# literal name `fst-model-cache` (un-prefixed) and BOTH fastsafetensors arms
-# can mount the same one-time download. Listing it here would namePrefix the
-# PVC per-overlay and force a separate 140GB download per arm.
+# prewarm-job.yaml is deliberately NOT a resource here: listing it would
+# namePrefix the PVC per-overlay and force a separate 140GB download per
+# arm. Apply it standalone so both arms share the literal `fst-model-cache`.
 namePrefix: fastsafetensors-nfs-nvidia-gpu-vllm-
 
 images:

@@ -3,18 +3,17 @@ kind: Deployment
 metadata:
   name: decode
 spec:
-  # 1 seed + 1 receiver keeps the GPU footprint at 4 GPUs (TP2 x 2). Scale
-  # wider for a real fan-out; the per-pod load time is what we compare.
+  # Mirrors the P2P arm's replica count so the comparison is fair.
   replicas: 2
   template:
     spec:
       # fastsafetensors is NOT in llm-d-cuda; install it in an untimed init so
-      # the timed `vllm serve` never does a network install. The image ships
-      # `uv`, not `pip`; --no-deps avoids shadowing the image's torch/vllm.
+      # the timed `vllm serve` never does a network install. --no-deps avoids
+      # shadowing the image's torch/vllm.
       initContainers:
         - name: install-fastsafetensors
-          # Placeholder name so the overlay's images: transformer retags this
-          # together with the main container (they must stay the same image).
+          # Placeholder so the images: transformer retags this with the main
+          # container.
           image: REPLACE_MODEL_SERVER_IMAGE
           command: ["/bin/sh", "-c"]
           args:

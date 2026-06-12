@@ -1,18 +1,11 @@
 apiVersion: kustomize.config.k8s.io/v1alpha1
 kind: Component
 
-# Puts the decode pods into the Istio mesh so they present an mTLS identity when
-# calling the modelexpress-server gRPC broker (which the security/ manifests
-# lock down to this guide's decode ServiceAccount).
-#
-# Critically, it EXCLUDES the NIXL metadata + worker gRPC ports from sidecar
-# interception. RDMA is outside the mesh: the bulk weight transfer rides IB
-# verbs (never seen by Envoy), and the UCX/NIXL out-of-band wireup on these
-# TCP ports must not be intercepted or it breaks P2P. The default is TP=2, so
-# the ports are base + device_id for device 0 and 1:
-#   MX_METADATA_PORT   5555 -> 5555,5556
-#   MX_WORKER_GRPC_PORT 6555 -> 6555,6556
-# If you change --tensor-parallel-size, widen these ranges to match.
+# Joins the decode pods to the Istio mesh (mTLS identity for broker calls)
+# while EXCLUDING the NIXL metadata + worker gRPC ports from sidecar
+# interception: the UCX/NIXL out-of-band wireup breaks if intercepted, and
+# the bulk transfer rides IB verbs outside the mesh anyway. Ports are
+# base..base+TP-1 (TP=2 here); widen if you change --tensor-parallel-size.
 patches:
   - target:
       kind: Deployment

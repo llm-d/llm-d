@@ -1,10 +1,6 @@
-# Swap the per-pod torch-compile-cache emptyDir for the shared PVC, and point
-# vLLM + TorchInductor caches into the mount so receivers reuse the bootstrap
-# pod's compiled graphs.
-#
-# The `test` op asserts the expected volume is at index 1 in the base — if a
-# future change to patch-vllm.yaml reorders volumes, this patch fails loudly
-# at kustomize build rather than silently swapping the wrong one.
+# The `test` op asserts torch-compile-cache is still volume index 1, so a
+# reorder in patch-vllm.yaml fails the kustomize build instead of silently
+# swapping the wrong volume.
 - op: test
   path: /spec/template/spec/volumes/1/name
   value: torch-compile-cache
