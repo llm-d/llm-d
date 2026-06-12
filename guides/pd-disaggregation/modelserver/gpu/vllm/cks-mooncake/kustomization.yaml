@@ -3,7 +3,7 @@ kind: Kustomization
 resources:
   - ../../../../../recipes/modelserver/base/single-host/pd/vllm
 
-namePrefix: pd-disaggregation-nvidia-gpu-vllm-nixl-
+namePrefix: pd-disaggregation-nvidia-gpu-vllm-mooncake-
 
 images:
   - name: REPLACE_MODEL_SERVER_IMAGE
@@ -13,7 +13,7 @@ images:
 
 labels:
   - pairs:
-      llm-d.ai/model: glm-5-1
+      llm-d.ai/model: gpt-oss-120b
       llm-d.ai/guide: pd-disaggregation
       llm-d.ai/accelerator-variant: gpu
       llm-d.ai/accelerator-vendor: nvidia
@@ -53,3 +53,4 @@ labels:
 patches:
   - path: patch-decode.yaml
   - path: patch-prefill.yaml
+  - path: patch-sidecar.yaml

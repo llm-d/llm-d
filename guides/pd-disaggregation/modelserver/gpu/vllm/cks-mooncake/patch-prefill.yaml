@@ -3,42 +3,35 @@ kind: Deployment
 metadata:
   name: prefill
 spec:
-  replicas: 3
+  replicas: 8
   template:
     spec:
       containers:
         - name: modelserver
-          command: ["vllm", "serve"]
+          command: ["/bin/bash", "-c"]
           args:
-            - "zai-org/GLM-5.1-FP8"
-            - "--disable-access-log-for-endpoints=/health,/metrics,/v1/models"
-            - "--tensor-parallel-size=8"
-            - "--block-size=128"
-            - "--kv-transfer-config"
-            - '{"kv_connector":"NixlConnector", "kv_role":"kv_both"}'
-            - "--no-disable-hybrid-kv-cache-manager"
-            - "--gpu-memory-utilization=0.9"
-            - "--chat-template-content-format=string"
+            - |
+              pip install mooncake-transfer-engine-cuda13 && \
+              vllm serve openai/gpt-oss-120b \
+                --disable-access-log-for-endpoints=/health,/metrics,/v1/models \
+                --tensor-parallel-size=1 \
+                --block-size=128 \
+                --kv-transfer-config '{"kv_connector":"MooncakeConnector", "kv_role":"kv_producer", "kv_connector_extra_config":{"mooncake_protocol":"rdma"}}' \
+                --gpu-memory-utilization=0.9 \
+                --port 8000
           env:
-            - name: HF_TOKEN
-              valueFrom:
-                secretKeyRef:
-                  name: llm-d-hf-token
-                  key: HF_TOKEN
-            - name: VLLM_NIXL_SIDE_CHANNEL_HOST
-              valueFrom:
-                fieldRef:
-                  fieldPath: status.podIP
+            - name: VLLM_MOONCAKE_BOOTSTRAP_PORT
+              value: "8998"
           resources:
             limits:
-              cpu: "64"
-              memory: 256Gi
-              nvidia.com/gpu: "8"
+              cpu: "8"
+              memory: 16Gi
+              nvidia.com/gpu: "1"
               rdma/ib: "1"
             requests:
-              cpu: "32"
-              memory: 192Gi
-              nvidia.com/gpu: "8"
+              cpu: "8"
+              memory: 16Gi
+              nvidia.com/gpu: "1"
               rdma/ib: "1"
           volumeMounts:
             - mountPath: /dev/shm
