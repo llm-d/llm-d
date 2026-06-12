@@ -4,8 +4,8 @@
 
 This guide deploys the optimal llm-d configuration for agentic workloads using agentic code generation as the example workload. The configuration includes multiple llm-d optimizations in terms of routing and KV cache management:
 - **Prefix-aware routing** to optimize prefix cache reuse (via `prefix-cache-scorer`)
-- **KV cache offloading** to CPU DRAM to handle multi-turn conversations with long contexts (via `kv-cache-utilization-scorer` and KV offloading connector)
-- **Concurrency balancing** to prevent replica hotspotting from bursty request patterns (via `queue-scorer`)
+- **KV cache offloading** to CPU DRAM to handle multi-turn conversations with long contexts (via KV offloading connector)
+- **Load balancing** to prevent replica hotspotting from bursty request patterns (via `queue-scorer` and `kv-cache-utilization-scorer`)
 
 ## Workload Profile & Key Configurations
 
@@ -29,19 +29,19 @@ To understand why the `llm-d` configuration for agentic workloads is set up this
 Given the characteristics of the agentic code generation workload shown above, default serving configurations would suffer from severe performance degradation. Here is why `llm-d`'s specific optimizations are vital:
 
 #### 1. Prefix-Aware Routing (`prefix-cache-scorer`)
-* **The Challenge:** Dynamic system prompts or code context can be extremely large (up to 160K tokens). Processing a 160K token prompt (prefill phase) from scratch on every turn or new conversation is computationally expensive and introduces massive time-to-first-token (TTFT) latency.
-* **The Optimization:** The `prefix-cache-scorer` is assigned the highest weight (`weight: 3`). It routes requests to replica pods that already have the matching prefix (system prompt and early turns) cached in their KV cache.
+* **The Challenge:** Dynamic system prompts or code context can be extremely large (100K+ tokens). Processing these prompts from scratch on every turn or new conversation is computationally expensive and introduces massive time-to-first-token (TTFT) latency.
+* **The Optimization:** The `prefix-cache-scorer` routes requests to replica pods that have the matching prefix (system prompt and early turns) cached in their KV cache.
 * **The Impact:** Eliminates redundant prefill computation. Consecutive turns of the same agentic conversation or separate conversations sharing the same repository context achieve near-instantaneous TTFT.
 
 #### 2. KV Cache Offloading to CPU DRAM (`KVOffloadConnector`)
-* **The Challenge:** Maintaining active KV caches for dozens of long-running conversations (up to 256,000 tokens per model instance and up to 3,000 turns) exceeds the fast but limited HBM (High Bandwidth Memory) on TPU/GPU accelerators.
-* **The Optimization:** The `KVOffloadConnector` offloads inactive KV cache blocks from TPU/GPU HBM to the host CPU DRAM, monitored dynamically via the `kv-cache-utilization-scorer` (`weight: 2`).
-* **The Impact:** Replicas can handle significantly larger context windows (160K to 1M) and higher concurrency without running out of memory (OOM) or suffering from aggressive context eviction, while restoring cache blocks rapidly on subsequent turns.
+* **The Challenge:** Maintaining active KV caches for dozens of long-running conversations (up to 256,000 tokens per model instance and up to 3,000 turns) exceeds the fast but limited HBM (High Bandwidth Memory) on accelerators.
+* **The Optimization:** The `KVOffloadConnector` offloads inactive KV cache blocks from accelerator HBM to the host CPU DRAM which can be used when needed.
+* **The Impact:** Replicas can handle significantly larger context windows (100K to 1M) and higher concurrency without running out of memory (OOM) or suffering from aggressive context eviction, while restoring cache blocks rapidly on subsequent turns.
 
 #### 3. Concurrency Balancing with Queue-Based Routing (`queue-scorer`)
-* **The Challenge:** The multi-turn interactions and unpredictable tool call delays make the arrival pattern of new requests highly bursty and asynchronous. Because agentic queries require extremely heavy prefill and decode computation (due to very large context sizes), routing requests solely based on prefix matching can lead to severe **hotspotting**, where a single replica's request queue builds up dramatically while other replicas remain underutilized.
-* **The Optimization:** The `queue-scorer` (`weight: 2`) tracks the number of active and queued requests on each backend replica.
-* **The Impact:** Acts as a concurrency balancer and guardrail. If a sticky replica becomes overloaded with pending work, the `queue-scorer` shifts new incoming requests to less busy replicas. This prevents excessive queuing latency and balances the processing load evenly across the cluster.
+* **The Challenge:** The multi-turn interactions and unpredictable tool call delays make the arrival pattern of new requests highly bursty and asynchronous. Because agentic queries require extremely heavy computation (due to very large context sizes), routing requests solely based on prefix matching can lead to severe **hotspotting**, where a single replica's KV cache and request queue builds up dramatically while other replicas remain underutilized.
+* **The Optimization:** The `queue-scorer` and `kv-cache-utilization-scorer` tracks the load and helps load balance among replicas.
+* **The Impact:** Acts as a concurrency balancer and guardrail. If a sticky replica becomes overloaded with pending work, it shifts new incoming requests to less busy replicas. This prevents excessive queuing latency and balances the processing load evenly across the cluster.
 
 
 ## Default Configuration
@@ -68,11 +68,25 @@ Given the characteristics of the agentic code generation workload shown above, d
   export GAIE_VERSION=v1.5.0
   export GUIDE_NAME="agentic-workloads"
   export NAMESPACE=llm-d-agentic-workloads
+  export REPO_ROOT=$(realpath $(git rev-parse --show-toplevel))
   ```
-- Create the namespace:
+
+- Create a target namespace for the installation:
+
   ```bash
-  kubectl create namespace ${NAMESPACE}
+  kubectl create namespace ${NAMESPACE} --dry-run=client -o yaml | kubectl apply -f -
   ```
+
+- [Create the `llm-d-hf-token` secret in your target namespace with the key `HF_TOKEN` matching a valid HuggingFace token](../../helpers/hf-token.md) to pull models.
+<!-- llm-d-cicd:skip start -->
+  ```bash
+  export HF_TOKEN=<your HuggingFace token>
+  kubectl create secret generic llm-d-hf-token \
+    --from-literal="HF_TOKEN=${HF_TOKEN}" \
+    --namespace "${NAMESPACE}" \
+    --dry-run=client -o yaml | kubectl apply -f -
+  ```
+<!-- llm-d-cicd:skip end -->
 
 ## Installation Instructions
 
@@ -81,8 +95,8 @@ Given the characteristics of the agentic code generation workload shown above, d
 ```bash
 helm install ${GUIDE_NAME} \
     oci://registry.k8s.io/gateway-api-inference-extension/charts/standalone \
-    -f guides/recipes/router/base.values.yaml \
-    -f guides/${GUIDE_NAME}/router/${GUIDE_NAME}.values.yaml \
+    -f ${REPO_ROOT}/guides/recipes/router/base.values.yaml \
+    -f ${REPO_ROOT}/guides/${GUIDE_NAME}/router/${GUIDE_NAME}.values.yaml \
     -n ${NAMESPACE} --version ${GAIE_VERSION}
 ```
 
@@ -91,7 +105,7 @@ helm install ${GUIDE_NAME} \
 Apply the Kustomize overlays for TPU:
 
 ```bash
-kubectl apply -n ${NAMESPACE} -k guides/${GUIDE_NAME}/modelserver/tpu/vllm/
+kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/tpu/vllm/
 ```
 
 ## Verification
@@ -160,6 +174,6 @@ To clean up resources:
 
 ```bash
 helm uninstall ${GUIDE_NAME} -n ${NAMESPACE}
-kubectl delete -n ${NAMESPACE} -k guides/${GUIDE_NAME}/modelserver/tpu/vllm/
+kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/tpu/vllm/
 kubectl delete namespace ${NAMESPACE}
 ```
