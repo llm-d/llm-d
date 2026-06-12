@@ -62,7 +62,9 @@ With 8 DP rank processes per pod sharing the `/dev/shm` volume (default 2Gi), NC
 
 ## Image: llm-d-cuda with vLLM v0.22.1+
 
-The `llm-d-cuda` base image must include vLLM v0.22.1+ for the DP Supervisor feature. The official `llm-d-cuda:v0.7.0` is pinned to vLLM v0.19.1. Use `llm-d-cuda-dev:pr-1769` or a newer build that includes the vLLM version bump.
+The DP Supervisor feature requires vLLM v0.22.0+. The previous `llm-d-cuda:v0.7.0` was pinned to vLLM v0.19.1 and could not be used. Starting with `llm-d-cuda:v0.8.0`, the base image includes the required vLLM version, patched NVSHMEM, and the `nixl_ep_cpp` CUDA 13 fix.
+
+The `v0.8.0` image upgrade ([PR #1769](https://github.com/llm-d/llm-d/pull/1769)) also required updating FlashInfer from v0.6.6 to v0.6.11.post2 (to match vLLM v0.22.1's requirements) and force-reinstalling `nixl-cu13` to ensure the correct `nixl_ep_cpp.so` is linked against `libcudart.so.13` instead of `libcudart.so.12`.
 
 When using the upstream `vllm/vllm-openai` image instead of `llm-d-cuda`, the following additional issues occur (resolved by using `llm-d-cuda`):
 
