@@ -68,6 +68,28 @@ setup_rhel_repos() {
     dnf config-manager --add-repo "https://developer.download.nvidia.com/compute/cuda/repos/rhel9/${download_arch}/cuda-rhel9.repo"
 }
 
+# build dnf --exclude args from EFA installed packages list
+build_efa_exclude_args() {
+    local exclude_args=""
+    if [ -f /tmp/efa_installed_packages.txt ]; then
+        while IFS= read -r pkg; do
+            [ -n "$pkg" ] && exclude_args="${exclude_args} --exclude=${pkg}"
+        done < /tmp/efa_installed_packages.txt
+    fi
+    echo "$exclude_args"
+}
+
+# install RDMA packages if EFA is not enabled
+install_rdma_packages_if_needed() {
+    local os="$1"
+    local rdma_manifest="$2"
+
+    if [ "${ENABLE_EFA}" != "true" ]; then
+        mapfile -t INSTALL_RDMA_PKGS < <(load_layered_packages "$os" "$rdma_manifest" "cuda")
+        install_packages "$os" "${INSTALL_RDMA_PKGS[@]}"
+    fi
+}
+
 # update system packages
 update_system() {
     local os="$1"

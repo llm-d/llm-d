@@ -28,12 +28,7 @@ if [ "$TARGETOS" = "ubuntu" ]; then
     apt-get update -qq
     apt-get install -y jq
 elif [ "$TARGETOS" = "rhel" ]; then
-    DNF_EXCLUDE_ARGS=""
-    if [ -f /tmp/efa_installed_packages.txt ]; then
-        while IFS= read -r pkg; do
-            [ -n "$pkg" ] && DNF_EXCLUDE_ARGS="${DNF_EXCLUDE_ARGS} --exclude=${pkg}"
-        done < /tmp/efa_installed_packages.txt
-    fi
+    DNF_EXCLUDE_ARGS=$(build_efa_exclude_args)
     dnf -q update -y ${DNF_EXCLUDE_ARGS}
     dnf -q install -y jq
 fi
@@ -43,20 +38,13 @@ if [ "$TARGETOS" = "ubuntu" ]; then
     setup_ubuntu_repos
     mapfile -t INSTALL_PKGS < <(load_layered_packages ubuntu "builder-packages.json" "cuda")
     install_packages ubuntu "${INSTALL_PKGS[@]}"
-    if [ "${ENABLE_EFA}" != "true" ]; then
-        mapfile -t INSTALL_RDMA_PKGS < <(load_layered_packages ubuntu "builder-rdma-packages.json" "cuda")
-        install_packages ubuntu "${INSTALL_RDMA_PKGS[@]}"
-    fi
+    install_rdma_packages_if_needed ubuntu "builder-rdma-packages.json"
     cleanup_packages ubuntu
 elif [ "$TARGETOS" = "rhel" ]; then
     setup_rhel_repos "$DOWNLOAD_ARCH"
     mapfile -t INSTALL_PKGS < <(load_layered_packages rhel "builder-packages.json" "cuda")
     install_packages rhel "${INSTALL_PKGS[@]}"
-
-    if [ "${ENABLE_EFA}" != "true" ]; then
-        mapfile -t INSTALL_RDMA_PKGS < <(load_layered_packages rhel "builder-rdma-packages.json" "cuda")
-        install_packages rhel "${INSTALL_RDMA_PKGS[@]}"
-    fi
+    install_rdma_packages_if_needed rhel "builder-rdma-packages.json"
 
     # if using efa, we already installed hwloc as part of base RPMs
     if [ "${ENABLE_EFA}" != "true" ]; then
