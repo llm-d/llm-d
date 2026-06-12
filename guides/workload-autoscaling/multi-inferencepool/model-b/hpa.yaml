@@ -2,6 +2,13 @@ apiVersion: autoscaling/v2
 kind: HorizontalPodAutoscaler
 metadata:
   name: qwen-32b-model-b
+  labels:
+    inference.optimization/acceleratorName: "H100"
+    llm-d.ai/model: "Qwen/Qwen3-32B"
+    llm-d.ai/inference-serving: "true"
+    llm-d.ai/guide: "multi-inferencepool"
+  annotations:
+    llm-d.ai/managed: "true"
 spec:
   scaleTargetRef:
     apiVersion: apps/v1
@@ -9,17 +16,6 @@ spec:
     name: qwen-32b-model-b
   minReplicas: 1
   maxReplicas: 8
-  metrics:
-    - type: External
-      external:
-        metric:
-          name: wva_desired_replicas
-          selector:
-            matchLabels:
-              variant_name: qwen-32b-model-b
-        target:
-          type: AverageValue
-          averageValue: "1"
   behavior:
     scaleUp:
       stabilizationWindowSeconds: 120
@@ -33,3 +29,15 @@ spec:
         - type: Percent
           value: 100
           periodSeconds: 15
+  metrics:
+    - type: External
+      external:
+        metric:
+          name: wva_desired_replicas
+          selector:
+            matchLabels:
+              variant_name: qwen-32b-model-b
+              exported_namespace: llm-d-optimized-baseline
+        target:
+          type: AverageValue
+          averageValue: "1"

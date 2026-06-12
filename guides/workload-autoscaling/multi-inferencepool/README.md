@@ -46,14 +46,14 @@ kubectl apply -f wva-greedy-config.yaml -n ${WVA_NAMESPACE}
 ```
 This enables `enableLimiter: true`, activating the `GreedyByScoreOptimizer` so WVA considers all eligible InferencePools in its watch scope together.
 
-## Step 2: Apply VariantAutoscaling and HPA Resources
+## Step 2: Apply HPA Resources
 
 ```bash
 kubectl apply -k guides/workload-autoscaling/multi-inferencepool -n ${NAMESPACE}
 ```
 
 This creates:
-- A `VariantAutoscaling` CR for each model, linking WVA to each Deployment
+- An HPA for each model, annotated with `llm-d.ai/managed: "true"` for WVA discovery
 - An `HPA` for each model, reading `wva_desired_replicas` from Prometheus
 
 
@@ -61,7 +61,7 @@ This creates:
 > Replace these with the actual names of your existing Deployments and update `modelID` to match.
 ## Step 3: Verify
 
-Check that both `VariantAutoscaling` resources are created and metrics are available:
+Check that both HPAs are created and reading the WVA metric:
 
 ```bash
 kubectl get variantautoscaling -n ${NAMESPACE}
