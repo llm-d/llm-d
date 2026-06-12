@@ -1,6 +1,6 @@
 endpoint:
-  stack_name: &stack_name tpu-v7-qwen3-5-pd   # user defined name for the stack (results prefix)
-  model: &model Qwen/Qwen3.5-397B-A17B-FP8         # Exact HuggingFace model name. Must match stack deployed.
+  stack_name: &stack_name ${STACK_NAME}   # user defined name for the stack (results prefix)
+  model: &model ${MODEL_NAME}         # Exact HuggingFace model name. Must match stack deployed.
   namespace: &namespace ${NAMESPACE}        # Namespace where stack is deployed
   base_url: &url http://${IP}               # Base URL of inference endpoint
   hf_token_secret: llm-d-hf-token           # The name of secret that contains the HF token of the stack
@@ -19,7 +19,6 @@ harness:
   wait_timeout: 6000              # Time (in seconds) to wait for workload launcher pod to complete before terminating.
                                   # Set to 0 to disable timeout.
   image: ghcr.io/llm-d/llm-d-benchmark:v0.5.2
-  # dataset_url: &dataset_url none
 
 env:
   - name: RAYON_NUM_THREADS
@@ -36,6 +35,7 @@ workload:                         # yaml configuration for harness workload(s)
         concurrency_level: null
       num_workers: 100
       worker_max_concurrency: 100
+      request_timeout: 600
     api:
       type: completion
       streaming: true

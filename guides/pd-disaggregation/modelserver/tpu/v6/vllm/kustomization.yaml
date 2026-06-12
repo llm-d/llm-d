@@ -1,23 +1,22 @@
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 resources:
-  - ../../../../recipes/modelserver/base/single-host/pd/vllm
+  - ../../base/vllm
 
 namePrefix: pd-disaggregation-tpu-vllm-
 
 images:
   - name: REPLACE_MODEL_SERVER_IMAGE
     newName: docker.io/vllm/vllm-tpu
-    newTag: nightly-20260430-18ed615-5b39b26
-
+    newTag: v0.18.0
 
 labels:
   - pairs:
-      llm-d.ai/model: Qwen3.5-397B-A17B-FP8
+      llm-d.ai/model: Qwen3-32B
       llm-d.ai/guide: pd-disaggregation
-      llm-d.ai/accelerator-variant: tpu
+      llm-d.ai/accelerator-variant: tpu-v6e
       llm-d.ai/accelerator-vendor: google
-      llm-d.ai/engine-type: vllm
+      inference.networking.k8s.io/engine-type: vllm
     includeSelectors: true
     includeTemplates: true
     fields:
@@ -50,6 +49,7 @@ labels:
         kind: PodMonitor
         path: spec/selector/matchLabels
         create: true
+
 patches:
   - path: patch-decode.yaml
   - path: patch-prefill.yaml
@@ -60,8 +60,8 @@ patches:
       - op: add
         path: /spec/template/spec/nodeSelector
         value:
-          cloud.google.com/gke-tpu-topology: "2x2x1"
-          cloud.google.com/gke-tpu-accelerator: "tpu7x"
+          cloud.google.com/gke-tpu-topology: "2x4"
+          cloud.google.com/gke-tpu-accelerator: "tpu-v6e-slice"
   - target:
       kind: Deployment
       name: prefill
@@ -69,5 +69,5 @@ patches:
       - op: add
         path: /spec/template/spec/nodeSelector
         value:
-          cloud.google.com/gke-tpu-topology: "2x2x1"
-          cloud.google.com/gke-tpu-accelerator: "tpu7x"
+          cloud.google.com/gke-tpu-topology: "2x4"
+          cloud.google.com/gke-tpu-accelerator: "tpu-v6e-slice"

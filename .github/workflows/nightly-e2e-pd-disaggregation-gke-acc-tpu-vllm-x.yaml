@@ -57,13 +57,12 @@ on:
         required: false
         type: 'string'
         default: '2x4'
-
 #  push:
 #    branches:
 #      - main
 
   schedule:
-    - cron: '0 3 * * *'
+    - cron: '30 2 * * *'  # 02:30 UTC daily (staggered from optimized-baseline TPU)
 permissions:
   contents: write
   actions: read
@@ -101,6 +100,10 @@ jobs:
       cleanup: ${{ inputs.cleanup || 'true' }}
       tpu_chips: ${{ inputs.tpu_chips || '16' }}
       tpu_topology: ${{ inputs.tpu_topology || '2x4' }}
+      data_access_timeout: '3600'
+      wait_timeout: '3600'
+      job_timeout: '3600s'
+      kustomize_standup_timeout: '1800'
     secrets: inherit
 
   update-badge:
