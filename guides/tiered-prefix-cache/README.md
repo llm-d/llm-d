@@ -11,7 +11,7 @@ Efficient caching of prefix computation states to avoid recomputation is crucial
 For the self-attention mechanism, the generation of the next token leverages the prefix Key & Value (KV) tensors.
 For State Space Model (SSM) models such as mamba models, reusing cache of its SSM states of prefix locations also saves computation for the next token.
 In this guide we use the term "prefix cache" to refer to the cache of computation states in the prefix tokens of a target token which includes the caching of prefix KV tensors and other forms of caches.
-The prefix aware request scheduling optimizations in the [optimized baseline](../optimized-basline/README.md) also applies here.
+The prefix aware request scheduling optimizations in the [optimized baseline](../optimized-baseline/README.md) also applies here.
 
 State of the art inference engines already implement native prefix cache reuse across requests in accelerator High-Bandwidth Memory (HBM), but in most serving environments HBM is already a constrained resource. To increase the amount of available memory beyond HBM requires more cache storage, driving the need for offloading prefix cache from HBM to more cost effective storage options such as CPU RAM.
 
@@ -138,15 +138,15 @@ This guide supports both GPU and TPU. The Kustomize overlays are available in `m
 
 ## Prerequisites
 
-- Have the [proper client tools installed on your local system](../../helpers/client-setup/README.md) to use this guide.
-- Checkout llm-d repo:
+* Have the [proper client tools installed on your local system](../../helpers/client-setup/README.md) to use this guide.
+* Checkout llm-d repo:
 
   ```bash
   export branch="main" # branch, tag, or commit hash
   git clone https://github.com/llm-d/llm-d.git && cd llm-d && git checkout ${branch}
   ```
 
-- Set the following environment variables:
+* Set the following environment variables:
 
   ```bash
   export GAIE_VERSION=v1.5.0
@@ -155,19 +155,19 @@ This guide supports both GPU and TPU. The Kustomize overlays are available in `m
   export REPO_ROOT=$(realpath $(git rev-parse --show-toplevel))
   ```
 
-- Install the Gateway API Inference Extension CRDs:
+* Install the Gateway API Inference Extension CRDs:
 
   ```bash
   kubectl apply -k "https://github.com/kubernetes-sigs/gateway-api-inference-extension/config/crd?ref=${GAIE_VERSION}"
   ```
 
-- Create a target namespace for the installation:
+* Create a target namespace for the installation:
 
   ```bash
   kubectl create namespace ${NAMESPACE}
   ```
 
-- [Create the `llm-d-hf-token` secret in your target namespace with the key `HF_TOKEN` matching a valid HuggingFace token](../../helpers/hf-token.md) to pull models.
+* [Create the `llm-d-hf-token` secret in your target namespace with the key `HF_TOKEN` matching a valid HuggingFace token](../../helpers/hf-token.md) to pull models.
 <!-- llm-d-cicd:skip start -->
   ```bash
   export HF_TOKEN=<your HuggingFace token>
@@ -230,7 +230,6 @@ export INFRA_PROVIDER=base  # base | gke
 kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/tiered-prefix-cache/modelserver/gpu/${MODEL_SERVER}/${CONNECTOR}/${VARIANT}/${INFRA_PROVIDER}/
 ```
 
-
 **For NVIDIA GPU — filesystem (shared storage) tier:**
 
 If using the `native/fs/` or `lmcache-connector/fs/` variants, create a ReadWriteMany PVC.
@@ -265,8 +264,8 @@ kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/tiered-prefix-cache/modelse
 
 ### 3. (Optional) Enable monitoring
 
-- Install the [Monitoring stack](../../docs/resources/observability/setup.md).
-- Deploy the monitoring resources for this guide:
+* Install the [Monitoring stack](../../docs/resources/observability/setup.md).
+* Deploy the monitoring resources for this guide:
 
 ```bash
 kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/recipes/modelserver/components/monitoring

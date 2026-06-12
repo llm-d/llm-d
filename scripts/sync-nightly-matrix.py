@@ -31,6 +31,7 @@ MATRIX_END = "<!-- NIGHTLY-MATRIX-END -->"
 # ---------------------------------------------------------------------------
 
 BADGE_BASE = "https://github.com/llm-d/llm-d/actions/workflows"
+SHIELDS_ENDPOINT = "https://img.shields.io/endpoint?url=https://llm-d.github.io/llm-d/badges"
 
 PROVIDERS = ["ibm", "cks", "gke", "amd", "intel"]
 PROVIDER_LABELS = {"ibm": "IBM", "cks": "CKS", "gke": "GKE", "amd": "AMD", "intel": "Intel"}
@@ -43,16 +44,17 @@ ACCELERATOR_LABELS = {
     "hpu": "HPU",
 }
 
-# (display_name, guide_path, workflow_slug, connector_filter)
+# (display_name, guide_path, workflow_slugs, connector_filter)
+# workflow_slugs: a string or tuple of strings to match parsed guide slugs.
 # connector_filter: None matches any connector; a string matches only that variant.
 GUIDES = [
     ("Optimized Baseline", "../guides/optimized-baseline/README.md", "optimized-baseline", None),
-    ("Precise Prefix Cache Routing", "../guides/precise-prefix-cache-routing/README.md", "precise-prefix-cache", None),
+    ("Precise Prefix Cache Routing", "../guides/precise-prefix-cache-routing/README.md", ("precise-prefix-cache-routing", "precise-prefix-cache"), None),
     ("P/D Disaggregation", "../guides/pd-disaggregation/README.md", "pd-disaggregation", None),
     ("Wide Expert Parallelism", "../guides/wide-ep-lws/README.md", "wide-ep-lws", None),
     ("Tiered Prefix Cache (CPU Offloading)", "../guides/tiered-prefix-cache/README.md", "tiered-prefix-cache", "native"),
     ("Tiered Prefix Cache (LMCache)", "../guides/tiered-prefix-cache/README.md", "tiered-prefix-cache", "lmcache"),
-    ("Predicted Latency-Based Routing", "../guides/predicted-latency-routing/README.md", "predicted-latency", None),
+    ("Predicted Latency-Based Routing", "../guides/predicted-latency-routing/README.md", "predicted-latency-routing", None),
     ("Workload Autoscaling (WVA)", "../guides/workload-autoscaling/README.md", "wva", None),
 ]
 
@@ -64,14 +66,21 @@ GUIDES = [
 WORKFLOW_PREFIX = "nightly-e2e-"
 
 
+def _extract_badge_name(path: Path) -> str | None:
+    """Extract the badge_name value from a workflow YAML file."""
+    content = path.read_text(encoding="utf-8")
+    m = re.search(r"badge_name:\s*(\S+)", content)
+    return m.group(1) if m else None
+
+
 def discover_workflows() -> dict[tuple[str, str, str], list[str]]:
     """Scan the workflows directory and return a mapping.
 
     Returns:
         dict keyed by (guide_slug, provider, connector) -> sorted list of
-        (accelerator, filename) tuples.
+        (accelerator, filename, badge_name) tuples.
     """
-    result: dict[tuple[str, str, str], list[tuple[str, str]]] = {}
+    result: dict[tuple[str, str, str], list[tuple[str, str, str]]] = {}
 
     for path in sorted(WORKFLOWS_DIR.glob(f"{WORKFLOW_PREFIX}*.yaml")):
         filename = path.name
@@ -81,9 +90,13 @@ def discover_workflows() -> dict[tuple[str, str, str], list[str]]:
         if parsed is None:
             continue
 
+        badge_name = _extract_badge_name(path)
+        if badge_name is None:
+            continue
+
         guide_slug, provider, _offload_dest, accelerator, _engine, connector = parsed
         key = (guide_slug, provider, connector)
-        result.setdefault(key, []).append((accelerator, filename))
+        result.setdefault(key, []).append((accelerator, filename, badge_name))
 
     for entries in result.values():
         entries.sort()
@@ -115,10 +128,11 @@ def _parse_workflow_stem(stem: str) -> tuple[str, str, str, str, str, str] | Non
     return None
 
 
-def badge(accelerator: str, filename: str) -> str:
+def badge(accelerator: str, filename: str, badge_name: str) -> str:
     label = ACCELERATOR_LABELS.get(accelerator, accelerator.upper())
-    url = f"{BADGE_BASE}/{filename}"
-    return f"[![{label}]({url}/badge.svg)]({url})"
+    badge_img = f"{SHIELDS_ENDPOINT}/{badge_name}.json"
+    link = f"{BADGE_BASE}/{filename}"
+    return f"[![{label}]({badge_img})]({link})"
 
 
 def generate_table(workflows: dict) -> str:
@@ -126,18 +140,21 @@ def generate_table(workflows: dict) -> str:
     separator = "|-------|" + "|".join("-----" for _ in PROVIDERS) + "|"
     lines = [header, separator]
 
-    for display_name, guide_path, guide_slug, connector_filter in GUIDES:
+    for display_name, guide_path, guide_slugs, connector_filter in GUIDES:
+        if isinstance(guide_slugs, str):
+            guide_slugs = (guide_slugs,)
         cells = [f"[{display_name}]({guide_path})"]
 
         for provider in PROVIDERS:
             badges = []
             if connector_filter is not None:
-                key = (guide_slug, provider, connector_filter)
-                badges = [badge(acc, fn) for acc, fn in workflows.get(key, [])]
+                for slug in guide_slugs:
+                    key = (slug, provider, connector_filter)
+                    badges.extend(badge(acc, fn, bn) for acc, fn, bn in workflows.get(key, []))
             else:
                 for key, entries in workflows.items():
-                    if key[0] == guide_slug and key[1] == provider:
-                        badges.extend(badge(acc, fn) for acc, fn in entries)
+                    if key[0] in guide_slugs and key[1] == provider:
+                        badges.extend(badge(acc, fn, bn) for acc, fn, bn in entries)
 
             cells.append(" ".join(badges))
 

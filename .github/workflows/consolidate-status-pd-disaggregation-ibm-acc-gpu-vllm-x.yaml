@@ -7,7 +7,7 @@ on:
         description: 'Name of the workflow to be queried'
         required: false
         type: 'string'
-        default: 'nightly-e2e-pd-disaggregation-ibm-acc-gpu-vllm-x.yamll'
+        default: 'nightly-e2e-pd-disaggregation-ibm-acc-gpu-vllm-x.yaml'
       time_window_query:
         description: 'How many days in the past to query'
         required: true

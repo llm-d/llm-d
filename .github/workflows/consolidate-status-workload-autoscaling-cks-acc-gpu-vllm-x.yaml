@@ -1,4 +1,4 @@
-name: Past Status - Workload Autoscaling E2E (GKE GPU)
+name: Past Status - Workload Autoscaling E2E (CKS GPU)
 
 on:
   workflow_dispatch:

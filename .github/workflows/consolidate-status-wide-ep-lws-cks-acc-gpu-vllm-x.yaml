@@ -1,4 +1,4 @@
-name: Past Status - Wide EP LWS E2E (GKE GPU)
+name: Past Status - Wide EP LWS E2E (CKS GPU)
 
 on:
   workflow_dispatch:
