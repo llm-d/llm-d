@@ -20,9 +20,9 @@ on:
   workflow_dispatch:
     inputs:
       platforms:
-        description: "Platforms to build (comma-separated: aws,gb200,cpu,hpu)"
+        description: "Platforms to build (comma-separated: cuda,aws,hpu)"
         required: false
-        default: "aws"
+        default: "cuda"
         type: string
       ref:
         description: 'Git ref to checkout (SHA or branch). Defaults to the triggering ref.'
@@ -58,8 +58,8 @@ jobs:
   detect-changes:
     runs-on: ubuntu-latest
     outputs:
+      cuda: ${{ steps.force.outputs.cuda || steps.filter.outputs.cuda || steps.dispatch.outputs.cuda }}
       aws: ${{ steps.force.outputs.aws || steps.filter.outputs.aws || steps.dispatch.outputs.aws }}
-      gb200: ${{ steps.force.outputs.gb200 || steps.filter.outputs.gb200 || steps.dispatch.outputs.gb200 }}
       hpu: ${{ steps.force.outputs.hpu || steps.filter.outputs.hpu || steps.dispatch.outputs.hpu }}
       rdma-tools: ${{ steps.filter.outputs.rdma-tools }}
     steps:
@@ -67,8 +67,8 @@ jobs:
         if: inputs.force_build == true
         id: force
         run: |
+          echo "cuda=true" >> $GITHUB_OUTPUT
           echo "aws=true" >> $GITHUB_OUTPUT
-          echo "gb200=true" >> $GITHUB_OUTPUT
           echo "hpu=true" >> $GITHUB_OUTPUT
           echo "rdma-tools=true" >> $GITHUB_OUTPUT
       - uses: actions/checkout@v6
@@ -79,7 +79,7 @@ jobs:
         id: filter
         with:
           filters: |
-            aws:
+            cuda:
               - 'docker/Dockerfile.cuda'
               - 'docker/common-versions'
               - 'docker/scripts/common/**'
@@ -87,9 +87,11 @@ jobs:
               - 'docker/packages/common/**'
               - 'docker/packages/cuda/**'
               - 'docker/packages/rpms/**'
+              - 'patches/cks_nvshmem3.3.20.patch'
+              - 'patches/cks_nvshmem3.3.9.patch'
               - 'patches/nvshmem_zero_ibv_ah_attr_3.3.20.patch'
               - 'patches/nvshmem_zero_ibv_ah_attr_v3.4.5-0.patch'
-            gb200:
+            aws:
               - 'docker/Dockerfile.cuda'
               - 'docker/common-versions'
               - 'docker/scripts/common/**'
@@ -110,10 +112,398 @@ jobs:
         id: dispatch
         run: |
           platforms="${{ inputs.platforms }}"
+          echo "cuda=$(echo $platforms | grep -q cuda && echo true || echo false)" >> $GITHUB_OUTPUT
           echo "aws=$(echo $platforms | grep -q aws && echo true || echo false)" >> $GITHUB_OUTPUT
-          echo "gb200=$(echo $platforms | grep -q gb200 && echo true || echo false)" >> $GITHUB_OUTPUT
           echo "hpu=$(echo $platforms | grep -q hpu && echo true || echo false)" >> $GITHUB_OUTPUT
           echo "rdma-tools=$(echo $platforms | grep -q rdma-tools && echo true || echo false)" >> $GITHUB_OUTPUT
+
+  cuda-build-llm-d:
+    needs: [detect-changes]
+    if: ${{ needs.detect-changes.outputs.cuda == 'true' }}
+    continue-on-error: true
+    strategy:
+      fail-fast: false
+      # multi-OS build matrix: creates 4 images (2 platforms × 2 OS variants)
+      # - RHEL (ubi9): default/production image (no suffix in final tags)
+      # - Ubuntu (24.04): alternative base for compatibility testing (-ubuntu suffix)
+      # resulting manifests: cuda-dev (rhel) and cuda-dev-ubuntu
+      matrix:
+        include:
+          - platform: linux/amd64
+            runner: vllm-runner
+            os: rhel
+            base_image_suffix: ubi9
+            image_suffix: ""
+          - platform: linux/arm64
+            runner: vllm-runner-arm
+            os: rhel
+            base_image_suffix: ubi9
+            image_suffix: ""
+          - platform: linux/amd64
+            runner: vllm-runner
+            os: ubuntu
+            base_image_suffix: ubuntu24.04
+            image_suffix: "-ubuntu"
+          - platform: linux/arm64
+            runner: vllm-runner-arm
+            os: ubuntu
+            base_image_suffix: ubuntu24.04
+            image_suffix: "-ubuntu"
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.ref || '' }}
+
+      - name: Load version configuration from file
+        id: common-version
+        run: |
+          # Read vLLM and CUDA versions from docker/common-versions file and set as outputs
+          source docker/common-versions
+          echo "repo=${VLLM_REPO}" >> $GITHUB_OUTPUT
+          echo "commit_sha=${VLLM_COMMIT_SHA}" >> $GITHUB_OUTPUT
+          echo "precompiled_wheel_commit=${VLLM_PRECOMPILED_WHEEL_COMMIT}" >> $GITHUB_OUTPUT
+          echo "prebuilt=${VLLM_PREBUILT}" >> $GITHUB_OUTPUT
+          echo "use_precompiled=${VLLM_USE_PRECOMPILED}" >> $GITHUB_OUTPUT
+          echo "cuda_major=${CUDA_MAJOR}" >> $GITHUB_OUTPUT
+          echo "cuda_minor=${CUDA_MINOR}" >> $GITHUB_OUTPUT
+          echo "cuda_patch=${CUDA_PATCH}" >> $GITHUB_OUTPUT
+          echo "offloading_connector_version=${LLM_D_OFFLOADING_CONNECTOR_VERSION}" >> $GITHUB_OUTPUT
+          echo "install_offloading_connector=${INSTALL_OFFLOADING_CONNECTOR}" >> $GITHUB_OUTPUT
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Log in to Container Registry
+        uses: docker/login-action@v4
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ secrets.GHCR_USER }}
+          password: ${{ secrets.GHCR_TOKEN }}
+
+      - name: Compute short SHA from checkout
+        id: short-sha
+        run: echo "short_sha=$(git rev-parse --short=7 HEAD)" >> $GITHUB_OUTPUT
+
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v6
+        with:
+          images: ${{ env.REGISTRY }}/${{ github.repository }}-cuda-dev${{ matrix.image_suffix }}
+          tags: |
+            type=ref,event=branch
+            type=ref,event=pr
+            type=raw,value=sha-${{ steps.short-sha.outputs.short_sha }}
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      - name: Calculate Cache Bust Timestamp
+        id: cache_buster_timestamp
+        run: |
+          echo "cache_buster_timestamp=$(date)" >> $GITHUB_OUTPUT
+
+      - name: Build the builder image layer
+        id: build-image-build-layer
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: ./docker/Dockerfile.cuda
+          platforms: ${{ matrix.platform }}
+          target: builder
+          push: false
+          # disabling cache from cache to temporarily to prevent building issues
+          # cache-from: |
+          #   type=gha,mode=max,scope=cuda-dev-builder-${{ matrix.os }}-${{ matrix.platform == 'linux/arm64' && 'arm64' || 'amd64' }}
+          # cache-to: |
+          #   type=gha,mode=max,scope=cuda-dev-builder-${{ matrix.os }}-${{ matrix.platform == 'linux/arm64' && 'arm64' || 'amd64' }},oci-mediatypes=true,compression=zstd
+          labels: ${{ steps.meta.outputs.labels }}
+          build-args: |
+            CACHE_BUSTER=${{ steps.cache_buster_timestamp.outputs.cache_buster_timestamp }}
+            TARGETOS=${{ matrix.os }}
+            TARGETPLATFORM=${{ matrix.platform }}
+            BUILD_BASE_IMAGE_SUFFIX=${{ matrix.os == 'ubuntu' && 'ubuntu24.04' || matrix.base_image_suffix }}
+            FINAL_BASE_IMAGE_SUFFIX=${{ matrix.base_image_suffix }}
+            CUDA_MAJOR=${{ steps.common-version.outputs.cuda_major }}
+            CUDA_MINOR=${{ steps.common-version.outputs.cuda_minor }}
+            CUDA_PATCH=${{ steps.common-version.outputs.cuda_patch }}
+          github-token: ${{ secrets.GHCR_TOKEN }}
+          secrets: |
+            aws_access_key_id=${{ secrets.AWS_ACCESS_KEY_ID_S3_BUCKET_ONLY }}
+            aws_secret_access_key=${{ secrets.AWS_SECRET_ACCESS_KEY_S3_BUCKET_ONLY }}
+        env:
+          DOCKER_BUILDKIT: "1"
+          BUILDKIT_PROGRESS: "plain"
+
+      - name: Build the final image layer
+        id: build-image-final-layer
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: ./docker/Dockerfile.cuda
+          target: runtime
+          platforms: ${{ matrix.platform }}
+          push: true
+          provenance: false
+          build-args: |
+            CACHE_BUSTER=${{ steps.cache_buster_timestamp.outputs.cache_buster_timestamp }}
+            TARGETOS=${{ matrix.os }}
+            TARGETPLATFORM=${{ matrix.platform }}
+            BUILD_BASE_IMAGE_SUFFIX=${{ matrix.os == 'ubuntu' && 'ubuntu24.04' || matrix.base_image_suffix }}
+            FINAL_BASE_IMAGE_SUFFIX=${{ matrix.base_image_suffix }}
+            CUDA_MAJOR=${{ steps.common-version.outputs.cuda_major }}
+            CUDA_MINOR=${{ steps.common-version.outputs.cuda_minor }}
+            CUDA_PATCH=${{ steps.common-version.outputs.cuda_patch }}
+            VLLM_REPO=${{ inputs.vllm_repo || steps.common-version.outputs.repo }}
+            VLLM_COMMIT_SHA=${{ inputs.vllm_commit_sha || steps.common-version.outputs.commit_sha }}
+            VLLM_PRECOMPILED_WHEEL_COMMIT=${{ inputs.vllm_precompiled_wheel_commit || steps.common-version.outputs.precompiled_wheel_commit }}
+            VLLM_PREBUILT=${{ steps.common-version.outputs.prebuilt }}
+            VLLM_USE_PRECOMPILED=${{ steps.common-version.outputs.use_precompiled }}
+            LLM_D_OFFLOADING_CONNECTOR_VERSION=${{ steps.common-version.outputs.offloading_connector_version }}
+            INSTALL_OFFLOADING_CONNECTOR=${{ steps.common-version.outputs.install_offloading_connector }}
+          # disabling cache from cache to temporarily to prevent building issues
+          # cache-from: >-
+          #   type=gha,scope=cuda-dev-${{ matrix.os }}-${{
+          #   matrix.platform == 'linux/arm64' && 'arm64' || 'amd64' }}
+          # cache-to: >-
+          #   type=gha,mode=max,scope=cuda-dev-${{ matrix.os }}-${{
+          #   matrix.platform == 'linux/arm64' && 'arm64' || 'amd64' }}
+          labels: ${{ steps.meta.outputs.labels }}
+          outputs: >-
+            type=image,name=${{ env.REGISTRY }}/${{ github.repository }}-cuda-dev${{ matrix.image_suffix }},
+            push-by-digest=true,name-canonical=true,push=true
+          github-token: ${{ secrets.GHCR_TOKEN }}
+        env:
+          DOCKER_BUILDKIT: "1"
+          BUILDKIT_PROGRESS: "plain"
+
+      - name: Verify remote digest exists
+        if: ${{ steps.build-image-final-layer.outputs.digest != '' }}
+        run: |
+          set -x
+          digest="${{ steps.build-image-final-layer.outputs.digest }}"
+          ref="${{ env.REGISTRY }}/${{ github.repository }}-cuda-dev${{ matrix.image_suffix }}@${digest}"
+          echo "Checking remote ref: $ref"
+          docker buildx imagetools inspect "$ref" >/dev/null
+
+      - name: Export digest
+        if: ${{ steps.build-image-final-layer.outputs.digest != '' }}
+        run: |
+          mkdir -p /tmp/digests/${{ matrix.os }}
+          digest="${{ steps.build-image-final-layer.outputs.digest }}"
+          touch "/tmp/digests/${{ matrix.os }}/${digest#sha256:}"
+
+      - name: Upload digest
+        if: ${{ steps.build-image-final-layer.outputs.digest != '' }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: digests-cuda-dev-${{ matrix.os }}-${{ matrix.platform == 'linux/arm64' && 'arm64' || 'amd64' }}
+          path: /tmp/digests/${{ matrix.os }}/*
+          if-no-files-found: error
+          retention-days: 1
+
+  cuda-success-check:
+    needs: cuda-build-llm-d
+    if: ${{ always() }}
+    runs-on: ubuntu-latest
+    outputs:
+      any_succeeded: ${{ steps.check.outputs.any_succeeded }}
+      rhel_ok: ${{ steps.check.outputs.rhel_ok }}
+      ubuntu_ok: ${{ steps.check.outputs.ubuntu_ok }}
+      shortsha: ${{ steps.export-sha.outputs.shortsha }}
+    steps:
+      - name: Download all digests (best-effort)
+        uses: actions/download-artifact@v8
+        with:
+          path: /tmp/digests-raw
+          pattern: digests-cuda-dev-*
+        continue-on-error: true
+
+      - name: Reorganize digests by OS
+        run: |
+          mkdir -p /tmp/digests/rhel /tmp/digests/ubuntu
+          shopt -s nullglob
+          for artifact_dir in /tmp/digests-raw/digests-cuda-dev-*; do
+            if [[ "$artifact_dir" == *-rhel-* ]]; then
+              cp -v "$artifact_dir"/* /tmp/digests/rhel/ 2>/dev/null || true
+            elif [[ "$artifact_dir" == *-ubuntu-* ]]; then
+              cp -v "$artifact_dir"/* /tmp/digests/ubuntu/ 2>/dev/null || true
+            fi
+          done
+          echo "=== RHEL digests ==="
+          ls -la /tmp/digests/rhel/ || echo "No RHEL digests"
+          echo "=== Ubuntu digests ==="
+          ls -la /tmp/digests/ubuntu/ || echo "No Ubuntu digests"
+
+      - name: Checkout code
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.ref || '' }}
+
+      - name: Export Git Sha
+        id: export-sha
+        run: |
+          echo "shortsha=$(git rev-parse --short=7 HEAD)" >> $GITHUB_OUTPUT
+
+      - id: check
+        shell: bash
+        run: |
+          shopt -s nullglob
+          rhel=(/tmp/digests/rhel/*)
+          ubuntu=(/tmp/digests/ubuntu/*)
+
+          any=false; [ ${#rhel[@]} -gt 0 ] || [ ${#ubuntu[@]} -gt 0 ] && any=true
+          rhel_ok=false;   [ ${#rhel[@]} -gt 0 ] && rhel_ok=true
+          ubuntu_ok=false; [ ${#ubuntu[@]} -gt 0 ] && ubuntu_ok=true
+
+          echo "Downloaded ${#rhel[@]} RHEL digest(s), ${#ubuntu[@]} Ubuntu digest(s)"
+          echo "any_succeeded=${any}"   >> "$GITHUB_OUTPUT"
+          echo "rhel_ok=${rhel_ok}"     >> "$GITHUB_OUTPUT"
+          echo "ubuntu_ok=${ubuntu_ok}" >> "$GITHUB_OUTPUT"
+
+  cuda-manifest:
+    needs: cuda-success-check
+    if: ${{ needs.cuda-success-check.outputs.any_succeeded == 'true' }}
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [rhel, ubuntu]
+        include:
+          # RHEL is the default image (no suffix in image name)
+          - os: rhel
+            image_suffix: ""
+            os_ok: rhel_ok
+          # Ubuntu images are tagged with -ubuntu suffix
+          - os: ubuntu
+            image_suffix: "-ubuntu"
+            os_ok: ubuntu_ok
+    steps:
+      - name: Check if OS build succeeded
+        id: should-run
+        run: |
+          os_succeeded="${{ needs.cuda-success-check.outputs[matrix.os_ok] }}"
+          echo "os_succeeded=${os_succeeded}" >> $GITHUB_OUTPUT
+          if [ "${os_succeeded}" != "true" ]; then
+            echo "Skipping manifest creation for ${{ matrix.os }} - no successful builds"
+          fi
+
+      - name: Download digests
+        if: ${{ steps.should-run.outputs.os_succeeded == 'true' }}
+        uses: actions/download-artifact@v8
+        with:
+          path: /tmp/digests-raw
+          pattern: digests-cuda-dev-${{ matrix.os }}-*
+
+      - name: Reorganize digests for manifest
+        if: ${{ steps.should-run.outputs.os_succeeded == 'true' }}
+        run: |
+          mkdir -p /tmp/digests/${{ matrix.os }}
+          shopt -s nullglob
+          for artifact_dir in /tmp/digests-raw/digests-cuda-dev-${{ matrix.os }}-*; do
+            cp -v "$artifact_dir"/* /tmp/digests/${{ matrix.os }}/ 2>/dev/null || true
+          done
+
+      - name: Debug digest files
+        if: ${{ steps.should-run.outputs.os_succeeded == 'true' }}
+        run: |
+          echo "=== Contents of /tmp/digests ==="
+          ls -la /tmp/digests
+          echo "=== Files matched by glob in ${{ matrix.os }}/ ==="
+          cd /tmp/digests/${{ matrix.os }} && printf '%s\n' *
+          echo "=== Test manifest command construction ==="
+          cd /tmp/digests/${{ matrix.os }} && \
+            printf '${{ env.REGISTRY }}/${{ github.repository }}-cuda-dev${{ matrix.image_suffix }}@sha256:%s ' *
+
+      - name: Set up Docker Buildx
+        if: ${{ steps.should-run.outputs.os_succeeded == 'true' }}
+        uses: docker/setup-buildx-action@v4
+
+      - name: Log in to Container Registry
+        if: ${{ steps.should-run.outputs.os_succeeded == 'true' }}
+        uses: docker/login-action@v4
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ secrets.GHCR_USER }}
+          password: ${{ secrets.GHCR_TOKEN }}
+
+      - name: Extract metadata
+        if: ${{ steps.should-run.outputs.os_succeeded == 'true' }}
+        id: meta
+        uses: docker/metadata-action@v6
+        with:
+          images: ${{ env.REGISTRY }}/${{ github.repository }}-cuda-dev${{ matrix.image_suffix }}
+          tags: |
+            type=ref,event=branch
+            type=ref,event=pr
+            type=raw,value=sha-${{ needs.cuda-success-check.outputs.shortsha }}
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      - name: Create and push manifest
+        if: ${{ steps.should-run.outputs.os_succeeded == 'true' }}
+        id: manifest
+        working-directory: /tmp/digests/${{ matrix.os }}
+        run: |
+          set -x
+          SHORT_SHA="${{ needs.cuda-success-check.outputs.shortsha }}"
+          # build the list of source images (by digest)
+          sources=""
+          for digest in *; do
+            image="${{ env.REGISTRY }}/${{ github.repository }}-cuda-dev${{ matrix.image_suffix }}"
+            sources="$sources ${image}@sha256:$digest"
+          done
+
+          # create manifest and tag it
+          tags="-t ${{ env.REGISTRY }}/${{ github.repository }}-cuda-dev${{ matrix.image_suffix }}:sha-${SHORT_SHA}"
+          if [ -n "${{ github.event.pull_request.number }}" ]; then
+            tags="$tags -t ${{ env.REGISTRY }}/${{ github.repository }}-cuda-dev${{ matrix.image_suffix }}:pr-${{ github.event.pull_request.number }}"
+          fi
+          if [ "${{ github.ref }}" = "refs/heads/${{ github.event.repository.default_branch }}" ] && \
+             [ "${{ github.event_name }}" != "pull_request_target" ]; then
+            tags="$tags -t ${{ env.REGISTRY }}/${{ github.repository }}-cuda-dev${{ matrix.image_suffix }}:latest"
+          fi
+          docker buildx imagetools create $tags $sources
+
+          # extract final manifest digest
+          MANIFEST_DIGEST=$(docker buildx imagetools inspect \
+            ${{ env.REGISTRY }}/${{ github.repository }}-cuda-dev${{ matrix.image_suffix }}:sha-${SHORT_SHA} \
+            | awk '/^Digest:/ {print $2}')
+          echo "digest=${MANIFEST_DIGEST}" >> $GITHUB_OUTPUT
+
+      - name: Run Trivy vulnerability scanner
+        if: ${{ steps.should-run.outputs.os_succeeded == 'true' }}
+        continue-on-error: true
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          image-ref: >-
+            ${{ env.REGISTRY }}/${{ github.repository }}-cuda-dev${{ matrix.image_suffix }}@${{
+              steps.manifest.outputs.digest }}
+          format: "sarif"
+          output: "trivy-results.sarif"
+          severity: "CRITICAL,HIGH,MEDIUM"
+          scanners: vuln
+          timeout: 30m
+          skip-dirs: /root/.cache/uv
+        env:
+          TRIVY_USERNAME: ${{ secrets.GHCR_USER }}
+          TRIVY_PASSWORD: ${{ secrets.GHCR_TOKEN }}
+
+      - name: Upload Trivy scan results to GitHub Security tab
+        if: ${{ steps.should-run.outputs.os_succeeded == 'true' }}
+        continue-on-error: true
+        uses: github/codeql-action/upload-sarif@v4
+        with:
+          sarif_file: "trivy-results.sarif"
+
+      - name: Display vulnerability summary
+        if: ${{ steps.should-run.outputs.os_succeeded == 'true' }}
+        run: |
+          echo "=== Vulnerability Scan Summary ==="
+          if [ -f trivy-results.sarif ]; then
+            echo "Scan completed. Check the Security tab for detailed results."
+          else
+            echo "No vulnerabilities found or scan failed."
+          fi
 
   aws-build-llm-d:
     needs: [detect-changes]
@@ -441,156 +831,6 @@ jobs:
 
       - name: Display vulnerability summary
         if: ${{ steps.should-run.outputs.rhel_ok == 'true' }}
-        run: |
-          echo "=== Vulnerability Scan Summary ==="
-          if [ -f trivy-results.sarif ]; then
-            echo "Scan completed. Check the Security tab for detailed results."
-          else
-            echo "No vulnerabilities found or scan failed."
-          fi
-
-  gb200-build-llm-d:
-    needs: [detect-changes]
-    if: ${{ needs.detect-changes.outputs.gb200 == 'true' }}
-    runs-on: vllm-runner-arm
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v6
-        with:
-          ref: ${{ inputs.ref || '' }}
-
-      - name: Load version configuration from file
-        id: common-version
-        run: |
-          source docker/common-versions
-          echo "repo=${VLLM_REPO}" >> $GITHUB_OUTPUT
-          echo "commit_sha=${VLLM_COMMIT_SHA}" >> $GITHUB_OUTPUT
-          echo "precompiled_wheel_commit=${VLLM_PRECOMPILED_WHEEL_COMMIT}" >> $GITHUB_OUTPUT
-          echo "prebuilt=${VLLM_PREBUILT}" >> $GITHUB_OUTPUT
-          echo "use_precompiled=${VLLM_USE_PRECOMPILED}" >> $GITHUB_OUTPUT
-          echo "cuda_major=${CUDA_MAJOR}" >> $GITHUB_OUTPUT
-          echo "cuda_minor=${CUDA_MINOR}" >> $GITHUB_OUTPUT
-          echo "cuda_patch=${CUDA_PATCH}" >> $GITHUB_OUTPUT
-          echo "offloading_connector_version=${LLM_D_OFFLOADING_CONNECTOR_VERSION}" >> $GITHUB_OUTPUT
-          echo "install_offloading_connector=${GB200_INSTALL_OFFLOADING_CONNECTOR}" >> $GITHUB_OUTPUT
-          echo "gb200_nvshmem_version=${GB200_NVSHMEM_VERSION}" >> $GITHUB_OUTPUT
-          echo "gb200_deepep_repo=${GB200_DEEPEP_REPO}" >> $GITHUB_OUTPUT
-          echo "gb200_deepep_version=${GB200_DEEPEP_VERSION}" >> $GITHUB_OUTPUT
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v4
-
-      - name: Log in to Container Registry
-        uses: docker/login-action@v4
-        with:
-          registry: ${{ env.REGISTRY }}
-          username: ${{ secrets.GHCR_USER }}
-          password: ${{ secrets.GHCR_TOKEN }}
-
-      - name: Set image tag
-        id: set-tag
-        run: |
-          TAG="sha-$(git rev-parse --short HEAD)"
-          echo "tag=${TAG}" >> $GITHUB_OUTPUT
-          PR_TAG="${{ github.event.pull_request.number }}"
-          if [ -n "${PR_TAG}" ]; then
-            echo "pr_tag=pr-${PR_TAG}" >> $GITHUB_OUTPUT
-          fi
-
-      - name: Calculate Cache Bust Timestamp
-        id: cache_buster_timestamp
-        run: |
-          echo "cache_buster_timestamp=$(date)" >> $GITHUB_OUTPUT
-
-      - name: Build the builder image layer
-        id: build-image-build-layer
-        uses: docker/build-push-action@v7
-        with:
-          context: .
-          file: ./docker/Dockerfile.cuda
-          platforms: linux/arm64
-          target: builder
-          push: false
-          build-args: |
-            CACHE_BUSTER=${{ steps.cache_buster_timestamp.outputs.cache_buster_timestamp }}
-            TARGETOS=rhel
-            TARGETPLATFORM=linux/arm64
-            BUILD_BASE_IMAGE_SUFFIX=ubi9
-            FINAL_BASE_IMAGE_SUFFIX=ubi9
-            CUDA_MAJOR=${{ steps.common-version.outputs.cuda_major }}
-            CUDA_MINOR=${{ steps.common-version.outputs.cuda_minor }}
-            CUDA_PATCH=${{ steps.common-version.outputs.cuda_patch }}
-            NVSHMEM_VERSION=${{ steps.common-version.outputs.gb200_nvshmem_version }}
-            DEEPEP_REPO=${{ steps.common-version.outputs.gb200_deepep_repo }}
-            DEEPEP_VERSION=${{ steps.common-version.outputs.gb200_deepep_version }}
-          github-token: ${{ secrets.GHCR_TOKEN }}
-          secrets: |
-            aws_access_key_id=${{ secrets.AWS_ACCESS_KEY_ID_S3_BUCKET_ONLY }}
-            aws_secret_access_key=${{ secrets.AWS_SECRET_ACCESS_KEY_S3_BUCKET_ONLY }}
-        env:
-          DOCKER_BUILDKIT: "1"
-          BUILDKIT_PROGRESS: "plain"
-
-      - name: Build and push the final image
-        id: build-and-push
-        uses: docker/build-push-action@v7
-        with:
-          context: .
-          file: ./docker/Dockerfile.cuda
-          target: runtime
-          platforms: linux/arm64
-          push: true
-          provenance: true
-          build-args: |
-            CACHE_BUSTER=${{ steps.cache_buster_timestamp.outputs.cache_buster_timestamp }}
-            TARGETOS=rhel
-            TARGETPLATFORM=linux/arm64
-            BUILD_BASE_IMAGE_SUFFIX=ubi9
-            FINAL_BASE_IMAGE_SUFFIX=ubi9
-            CUDA_MAJOR=${{ steps.common-version.outputs.cuda_major }}
-            CUDA_MINOR=${{ steps.common-version.outputs.cuda_minor }}
-            CUDA_PATCH=${{ steps.common-version.outputs.cuda_patch }}
-            NVSHMEM_VERSION=${{ steps.common-version.outputs.gb200_nvshmem_version }}
-            DEEPEP_REPO=${{ steps.common-version.outputs.gb200_deepep_repo }}
-            DEEPEP_VERSION=${{ steps.common-version.outputs.gb200_deepep_version }}
-            VLLM_REPO=${{ inputs.vllm_repo || steps.common-version.outputs.repo }}
-            VLLM_COMMIT_SHA=${{ inputs.vllm_commit_sha || steps.common-version.outputs.commit_sha }}
-            VLLM_PRECOMPILED_WHEEL_COMMIT=${{ inputs.vllm_precompiled_wheel_commit || steps.common-version.outputs.precompiled_wheel_commit }}
-            VLLM_PREBUILT=${{ steps.common-version.outputs.prebuilt }}
-            VLLM_USE_PRECOMPILED=${{ steps.common-version.outputs.use_precompiled }}
-            LLM_D_OFFLOADING_CONNECTOR_VERSION=${{ steps.common-version.outputs.offloading_connector_version }}
-            INSTALL_OFFLOADING_CONNECTOR=${{ steps.common-version.outputs.install_offloading_connector }}
-          tags: |
-            ${{ env.REGISTRY }}/${{ github.repository }}-cuda-gb200-dev:${{ steps.set-tag.outputs.tag }}
-            ${{ steps.set-tag.outputs.pr_tag != '' && format('{0}/{1}-cuda-gb200-dev:{2}', env.REGISTRY, github.repository, steps.set-tag.outputs.pr_tag) || '' }}
-            ${{ github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.event_name != 'pull_request_target' && format('{0}/{1}-cuda-gb200-dev:latest', env.REGISTRY, github.repository) || '' }}
-          github-token: ${{ secrets.GHCR_TOKEN }}
-        env:
-          DOCKER_BUILDKIT: "1"
-          BUILDKIT_PROGRESS: "plain"
-
-      - name: Run Trivy vulnerability scanner
-        continue-on-error: true
-        uses: aquasecurity/trivy-action@v0.36.0
-        with:
-          image-ref: ${{ env.REGISTRY }}/${{ github.repository }}-cuda-gb200-dev:${{ steps.set-tag.outputs.tag }}
-          format: "sarif"
-          output: "trivy-results.sarif"
-          severity: "CRITICAL,HIGH,MEDIUM"
-          scanners: vuln
-          timeout: 30m
-          skip-dirs: /root/.cache/uv
-        env:
-          TRIVY_USERNAME: ${{ secrets.GHCR_USER }}
-          TRIVY_PASSWORD: ${{ secrets.GHCR_TOKEN }}
-
-      - name: Upload Trivy scan results to GitHub Security tab
-        continue-on-error: true
-        uses: github/codeql-action/upload-sarif@v4
-        with:
-          sarif_file: "trivy-results.sarif"
-
-      - name: Display vulnerability summary
         run: |
           echo "=== Vulnerability Scan Summary ==="
           if [ -f trivy-results.sarif ]; then

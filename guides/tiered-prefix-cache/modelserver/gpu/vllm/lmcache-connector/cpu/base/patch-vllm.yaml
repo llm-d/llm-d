@@ -8,7 +8,7 @@ spec:
       containers:
         - name: modelserver
           # TODO: Update to latest image.
-          image: vllm/vllm-openai:v0.5.1
+          image: vllm/vllm-openai:v0.22.1
           args:
             - "Qwen/Qwen3-32B"
             - "--tensor-parallel-size=2"

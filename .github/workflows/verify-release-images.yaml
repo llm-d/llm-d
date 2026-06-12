@@ -34,8 +34,9 @@ jobs:
         run: |
           TAG="${{ inputs.tag }}"
           IMAGES=(
+            "${{ env.REGISTRY }}/llm-d/llm-d-cuda:${TAG}"
+            "${{ env.REGISTRY }}/llm-d/llm-d-cuda-ubuntu:${TAG}"
             "${{ env.REGISTRY }}/llm-d/llm-d-aws:${TAG}"
-            "${{ env.REGISTRY }}/llm-d/llm-d-cuda-gb200:${TAG}"
             "${{ env.REGISTRY }}/llm-d/llm-d-hpu:${TAG}"
           )
 
