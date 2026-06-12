@@ -31,7 +31,7 @@ spec:
             emptyDir: {}
         containers:
           - name: vllm
-            image: vllm/vllm-openai:v0.22.1
+            image: vllm/vllm-openai:nightly
             securityContext:
               capabilities:
                 add:
@@ -60,7 +60,7 @@ spec:
                   deepseek-ai/DeepSeek-V4-Pro \
                   --port 8000 \
                   --tokenizer-mode deepseek_v4 \
-                  --gpu-memory-utilization 0.95 \
+                  --gpu-memory-utilization 0.9 \
                   --trust-remote-code \
                   --api-server-count 1 \
                   --disable-access-log-for-endpoints=/health,/metrics \
