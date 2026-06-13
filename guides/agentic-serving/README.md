@@ -1,10 +1,10 @@
 # Agentic Serving
 
-The **agentic-inference well-lit path** is a horizontal, workload-centric umbrella that serves
+The **agentic-serving well-lit path** is a horizontal, workload-centric umbrella that serves
 agentic *programs* on llm-d by composing the capability paths into a stack and exposing a ladder
 of deployment options that trade complexity for capability. For the workload model, canonical
 shapes, and the direction this path is driving toward, see the
-[Agentic Inference well-lit path](../../docs/well-lit-paths/agentic-inference.md); this guide is
+[Agentic Serving well-lit path](../../docs/well-lit-paths/agentic-serving.md); this guide is
 the operational counterpart, and the canonical guide of the llm-d Agentic Inference SIG.
 
 The reference workload this guide optimizes for is **long-horizon loops** (agentic code generation): deep multi-turn
@@ -30,7 +30,7 @@ These layers are the available subset of a larger direction. The
 drives toward *program-aware* serving — **session-graph orchestration**, **program-aware
 scheduling**, **zero-recompute state reuse** with typed retention, and **proactive state
 placement** ahead of fan-out; precise routing and tiered offloading are the first steps. See the
-[well-lit path page](../../docs/well-lit-paths/agentic-inference.md#direction) for the full
+[well-lit path page](../../docs/well-lit-paths/agentic-serving.md#direction) for the full
 direction and further reading.
 
 ## Deployment Options

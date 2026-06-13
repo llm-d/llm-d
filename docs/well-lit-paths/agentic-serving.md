@@ -1,4 +1,4 @@
-# Agentic Inference
+# Agentic Serving
 
 Agents are becoming the dominant shape of production LLM traffic. A single user goal expands into
 a long *program* of model calls interleaved with tool execution — coding agents, deep-research
@@ -53,7 +53,7 @@ stack differently:
 
 ## Deploy
 
-The [agentic-inference guide](../../guides/agentic-inference) is the operational counterpart. It
+The [agentic-serving guide](../../guides/agentic-serving) is the operational counterpart. It
 composes llm-d's existing well-lit paths into a deployment stack — the
 [optimized baseline](optimized-baseline.md) for prefix- and load-aware routing,
 [tiered KV-cache offloading](tiered-prefix-cache.md) to keep idle sessions resident,

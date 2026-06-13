@@ -25,7 +25,7 @@ Well-lit paths are curated, end-to-end guides for common LLM inference patterns 
 
 ### Workloads
 
-- **[Agentic Inference](agentic-inference.md)**: A workload-centric umbrella for serving long, multi-turn, tool-using agentic programs — composing prefix-aware routing, KV-cache offloading, and P/D disaggregation into a ladder of deployment options.
+- **[Agentic Serving](agentic-serving.md)**: A workload-centric umbrella for serving long, multi-turn, tool-using agentic programs — composing prefix-aware routing, KV-cache offloading, and P/D disaggregation into a ladder of deployment options.
 - **[Multimodal Serving](./multimodal-serving/optimized-baseline/README.md)**: Deploy vLLM with multimodal prefix-cache and load-aware routing enabled by the llm-d EPP.
 
 ### Experimental
