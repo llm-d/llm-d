@@ -41,32 +41,30 @@ stack differently:
 
 - **Long-horizon loops** (coding agents, computer use): one agent iterating reason → act →
   observe over many turns. Stresses cross-turn KV persistence, typed retention, and context
-  growth. **Covered today.**
+  growth.
 - **Parallel fan-out** (best-of-N, tree search, RL rollouts, subagents): one shared context
   spawns many concurrent children. Stresses prefix reuse, proactive replication, and join
-  (slowest-child) latency. *Roadmap.*
+  (slowest-child) latency.
 - **Multi-agent pipelines** (programs spanning distinct agents across pods, sequential or
   fork/join). Stresses reuse and program identity spanning pools, and program-level accounting.
-  *Roadmap.*
 - **Reasoning-heavy generation** (long internal reasoning before answering): shifts work to
-  decode and grows per-request KV footprint. *Roadmap.*
+  decode and grows per-request KV footprint.
 
 ## Deploy
 
 The [agentic-serving guide](../../guides/agentic-serving) is the operational counterpart. It
 composes llm-d's existing well-lit paths into a deployment stack — the
-[optimized baseline](optimized-baseline.md) for prefix- and load-aware routing,
-[tiered KV-cache offloading](tiered-prefix-cache.md) to keep idle sessions resident,
-[precise prefix-cache routing](precise-prefix-cache-routing.md) for exact KV-state visibility, and [P/D disaggregation](pd-disaggregation.md) for interactivity under load — and
-exposes them as deployment options on a complexity ladder, benchmarked against a shared, realistic
-agentic workload so options are directly comparable. See the guide for how each layer maps to the
-workload and how the options compose.
+[optimized baseline](../well-lit-paths/optimized-baseline.md) for prefix- and load-aware routing,
+[tiered KV-cache offloading](../well-lit-paths/tiered-prefix-cache.md) to keep idle sessions resident,
+[precise prefix-cache routing](../well-lit-paths/precise-prefix-cache-routing.md) for exact KV-state visibility, and [P/D disaggregation](../well-lit-paths/pd-disaggregation.md) for interactivity under load — into
+the recommended deployment, realized per accelerator and benchmarked against a shared, realistic
+agentic workload. See the guide for how each layer maps to the workload.
 
 ## Direction
 
-These mechanisms are the first concrete steps toward serving that is *program-aware* rather than
-request-aware. The [llm-d project agentic northstar][northstar] is driving the stack towards
-treating the **session as a graph of typed state blocks** the control plane plans over:
+The [llm-d project agentic northstar][northstar] sets the direction toward serving that is
+*program-aware* rather than request-aware, treating the **session as a graph of typed state
+blocks** the control plane plans over:
 
 - **Session-graph orchestration** — model a session as a graph of typed blocks (system prompt,
   tool catalog, conversation turn, reasoning branch), built from external hints (e.g. Anthropic
