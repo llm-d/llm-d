@@ -3,7 +3,7 @@
 ## Overview
 
 This guide deploys the optimal llm-d configuration for agentic workloads using agentic code generation as the example workload. The configuration includes multiple llm-d optimizations in terms of routing and KV cache management:
-- **Prefix-aware routing** to optimize prefix cache reuse (via `prefix-cache-scorer`)
+- **Prefix-aware routing** to optimize prefix cache reuse
 - **KV cache offloading** to CPU DRAM to handle multi-turn conversations with long contexts (via KV offloading connector)
 - **Load balancing** to prevent replica hotspotting from bursty request patterns (via `queue-scorer` and `kv-cache-utilization-scorer`)
 
