@@ -43,7 +43,7 @@ The following configuration parameters (defined in [guide.yaml](benchmark-templa
   ```bash
   export GAIE_VERSION=v1.5.0
   export GUIDE_NAME="agentic-workloads"
-  export NAMESPACE=llm-d-agentic-workloads
+  export NAMESPACE=llm-d-agentic-serving
   export REPO_ROOT=$(realpath $(git rev-parse --show-toplevel))
   ```
 
