@@ -1,24 +1,11 @@
-# Agentic Code Generation on TPU
+# Agentic Code Generation Guide
 
 ## Overview
 
-This guide deploys the optimal llm-d configuration for agentic workloads using agentic code generation as the example workload. The configuration includes multiple llm-d optimizations in terms of routing and KV cache management:
+This guide deploys the optimal llm-d configuration for agentic code-generation workload. The configuration includes multiple llm-d optimizations in terms of routing and KV cache management:
 - **Prefix-aware routing** to optimize prefix cache reuse
 - **KV cache offloading** to CPU DRAM to handle multi-turn conversations with long contexts (via KV offloading connector)
 - **Load balancing** to increase cluster-wide accelerator utilization and prevent hot-spotting from bursty request patterns
-
-## Workload Profile
-
-The following configuration parameters (defined in [guide.yaml](benchmark-templates/guide.yaml)) represent a realistic distribution of agentic code generation interactions that we validated as a part of this guide:
-
-| Workload Characteristic | Metric / Distribution Type | Min | Max | Mean / Constant | Std Dev | Description |
-| :--- | :--- | :--- | :--- | :--- | :--- | :--- |
-| **Shared System Prompt** | Constant | - | - | 3,000 tokens | - | Common base instructions, libraries, and API schemas shared across all agent instances. Highly cacheable. |
-| **Dynamic System Prompt** | Lognormal | 10,000 | 990,000 | 160,000 tokens | 233,600 | Repository context, file indexes, and user-specific code context. Extremely large and variable context. |
-| **Turns per Conversation** | Lognormal | 1 | 3,000 | 540 turns | 48,600 | The depth of the agentic reasoning/conversational loop. Multi-turn interactions require sustaining long-lived sessions. |
-| **Input Tokens per Turn** | Lognormal | 100 | 10,000 | 1,500 tokens | 1,200 | Ongoing prompt extensions (e.g., test logs, user follow-ups, modified code blocks) during conversation. |
-| **Output Tokens per Turn** | Lognormal | 50 | 10,000 | 425 tokens | 825 | Model generations per turn, which are generally smaller than inputs but can spike when generating large files. |
-| **Tool Call Latency** | Lognormal | 1s | 100s | 15 seconds | 55 | Time spent executing tools (compilation, unit tests, web search). Causes idle/delayed turns on the client side. |
 
 ## Default Configuration
 
@@ -117,7 +104,16 @@ curl -X POST http://${IP}/v1/completions \
 
 ## Benchmarking
 
-This guide comes with an `inference-perf` benchmark preset designed for conversation replay workloads mimicking agent multi-turn interactions and tool usage.
+This guide comes with an `inference-perf` benchmark preset (defined in [guide.yaml](benchmark-templates/guide.yaml)) designed for agentic code-generation workloads with multi-turn interactions and tool usage. The configuration parameters include:
+
+| Workload Characteristic | Metric / Distribution Type | Min | Max | Mean / Constant | Std Dev | Description |
+| :--- | :--- | :--- | :--- | :--- | :--- | :--- |
+| **Shared System Prompt** | Constant | - | - | 3,000 tokens | - | Common base instructions, libraries, and API schemas shared across all agent instances. Highly cacheable. |
+| **Dynamic System Prompt** | Lognormal | 10,000 | 990,000 | 160,000 tokens | 233,600 | Repository context, file indexes, and user-specific code context. Extremely large and variable context. |
+| **Turns per Conversation** | Lognormal | 1 | 3,000 | 540 turns | 48,600 | The depth of the agentic reasoning/conversational loop. Multi-turn interactions require sustaining long-lived sessions. |
+| **Input Tokens per Turn** | Lognormal | 100 | 10,000 | 1,500 tokens | 1,200 | Ongoing prompt extensions (e.g., test logs, user follow-ups, modified code blocks) during conversation. |
+| **Output Tokens per Turn** | Lognormal | 50 | 10,000 | 425 tokens | 825 | Model generations per turn, which are generally smaller than inputs but can spike when generating large files. |
+| **Tool Call Latency** | Lognormal | 1s | 100s | 15 seconds | 55 | Time spent executing tools (compilation, unit tests, web search). Causes idle/delayed turns on the client side. |
 
 ### 1. Prepare the Benchmarking Suite
 
@@ -163,7 +159,7 @@ The results below are with 8 replicas of TPU v7x (2x2x1) on the benchmark worklo
   <img src="./benchmark-results/ttft_vs_concurrency.png" width="32%" alt="TTFT vs Concurrency" />
 </p>
 
-**Note**: As of June 2026 we are actively working to improve for TPU deployments:
+**Note**: As of June 2026 we are actively working on improving the following for TPU deployments:
 - Long context performance
 - P/D disaggregation
 - KV Cache offloading support
