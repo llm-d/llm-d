@@ -42,7 +42,7 @@ The following configuration parameters (defined in [guide.yaml](benchmark-templa
 - Set the following environment variables:
   ```bash
   export GAIE_VERSION=v1.5.0
-  export GUIDE_NAME="agentic-workloads"
+  export GUIDE_NAME="agentic-serving"
   export NAMESPACE=llm-d-agentic-serving
   export REPO_ROOT=$(realpath $(git rev-parse --show-toplevel))
   ```
