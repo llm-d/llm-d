@@ -33,8 +33,8 @@ direction and further reading.
 
 ## Deployments
 
-Each subdirectory is the deployment for one accelerator, realizing the stack above on that
-hardware. Choose the one matching your accelerator.
+> 🚧 Under construction — guidance on selecting and combining layers for a given workload and
+> SLO target lands with the deployment options.
 
 ## Benchmarking
 
