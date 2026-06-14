@@ -11,7 +11,7 @@ spec:
           command: ["vllm", "serve"]
           # Include all args in overlay patch for consistency
           args:
-            - "/model-cache/models/openai/gpt-oss-120b"
+            - "openai/gpt-oss-120b"
             - "--disable-access-log-for-endpoints=/health,/metrics,/v1/models"
             - "--tensor-parallel-size=1"
             - "--gpu-memory-utilization=0.95"
@@ -81,7 +81,3 @@ spec:
           emptyDir: {}
         - name: vllm-config
           emptyDir: {}
-        - name: model-storage
-          persistentVolumeClaim:
-            claimName: model-pvc
-            readOnly: true
