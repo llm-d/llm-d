@@ -33,8 +33,8 @@ direction and further reading.
 
 ## Deployments
 
-The layers above compose into deployments spanning a range of capability and operational
-cost — from a routing-and-offloading baseline up to disaggregated serving — added incrementally
+The layers above compose into deployments spanning a range of capabilities and operational
+costs - from a routing-and-offloading baseline up to disaggregated serving, added incrementally
 as a workload's scale and latency targets grow. Concrete workloads with benchmarked options are
 provided as sub-guides below.
 
