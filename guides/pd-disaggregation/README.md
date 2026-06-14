@@ -54,9 +54,12 @@ This guide includes configuration for the following accelerators:
 > [!NOTE]
 > Some hardware variants use reduced configurations (fewer replicas, smaller models) to enable CI testing for compatibility and regression checks. These configurations are maintained by their respective hardware vendors and are not guaranteed as production-ready examples. Users deploying on non-default hardware should review and adjust the configurations for their environment.
 
-### KV Transfer Backends
+### Supported KV Transfer Backends
 
 P/D disaggregation requires a KV transfer backend to move KV cache blocks from prefill workers to decode workers. The transfer backend is configured via vLLM's `--kv-transfer-config` flag.
+
+> [!NOTE]
+> The following table represents vLLM's KVTransfer compatability. SGLang also supports these KVTransfer backends but its implementation will look different and is coming soon.
 
 | Connector | Overlay | Transport | Notes |
 | --------- | ------- | --------- | ----- |
