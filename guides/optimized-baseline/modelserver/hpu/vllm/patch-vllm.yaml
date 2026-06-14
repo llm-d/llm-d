@@ -47,6 +47,9 @@ spec:
           resources:
             claims:
               - name: optimized-baseline-gaudi-claim
+          volumeMounts:
+            - mountPath: /.triton
+              name: triton-cache
           startupProbe:
             initialDelaySeconds: 15
             periodSeconds: 30
@@ -63,3 +66,6 @@ spec:
       resourceClaims:
         - name: optimized-baseline-gaudi-claim
           resourceClaimTemplateName: optimized-baseline-gaudi-claim
+      volumes:
+        - name: triton-cache
+          emptyDir: {}

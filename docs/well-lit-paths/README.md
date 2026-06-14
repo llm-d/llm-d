@@ -2,6 +2,8 @@
 
 Well-lit paths are curated, end-to-end guides for common LLM inference patterns and optimizations. These guides are intended to be a starting point for your own configuration and deployment of model servers. Our manifests provide basic reusable building blocks for vLLM deployments and llm-d router configuration within these guides but are not intended to support the full range of all possible configurations.
 
+> **Serving a specific workload?** See **[Workloads](../workloads/README.md)** — guides (e.g. agentic and multimodal serving) that compose these paths into a cohesive deployment for a use case.
+
 ### Intelligent Routing
 
 - **[Optimized Baseline](optimized-baseline.md)**: Strategies for handling the unique challenges of LLM request scheduling, moving beyond traditional round-robin approaches.
@@ -22,11 +24,6 @@ Well-lit paths are curated, end-to-end guides for common LLM inference patterns 
 - **[Flow Control](flow-control.md)**: Intelligent request queuing for multi-tenant deployments and managing traffic spikes.
 - **[Workload Autoscaling](workload-autoscaling.md)**: From simple Kubernetes autoscaling supplemented by EPP load metrics to advanced, SLO-aware capacity optimization for heterogeneous pools via the Workload Variant Autoscaler.
 - **[Batch Gateway](batch-gateway.md)**: Managing large-scale batch inference coexisting with interactive workloads via an OpenAI-compatible Batch API.
-
-### Workloads
-
-- **[Agentic Inference](agentic-inference.md)**: A workload-centric umbrella for serving long, multi-turn, tool-using agentic programs — composing prefix-aware routing, KV-cache offloading, and P/D disaggregation into a ladder of deployment options.
-- **[Multimodal Serving](./multimodal-serving/optimized-baseline/README.md)**: Deploy vLLM with multimodal prefix-cache and load-aware routing enabled by the llm-d EPP.
 
 ### Experimental
 

@@ -1,0 +1,26 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: decode
+spec:
+  template:
+    spec:
+      nodeSelector:
+        cloud.google.com/gke-tpu-topology: "2x4"
+        cloud.google.com/gke-tpu-accelerator: "tpu-v6e-slice"
+      containers:
+        - name: modelserver
+          args:
+            - "Qwen/Qwen3-32B"
+            - "--max-model-len=9216"
+            - "--tensor-parallel-size=8"
+            - "--dtype=bfloat16"
+            - "--kv-transfer-config"
+            - '{"kv_connector":"TPUConnector","kv_connector_module_path":"tpu_inference.distributed.tpu_connector","kv_role":"kv_both","kv_ip":"$(POD_IP)"}'
+            - "--port=8200"
+            - "--disable-access-log-for-endpoints=/health,/metrics,/v1/models"
+          resources:
+            limits:
+              google.com/tpu: 8
+            requests:
+              google.com/tpu: 8

@@ -205,57 +205,84 @@ Once traffic is flowing, confirm three things in Prometheus (see the [architectu
 
 ## Benchmarking
 
-The benchmark uses `inference-perf` with a synthetic code-generation workload (conversation replay). It models long, multi-turn coding sessions with the following distributions:
+This guide uses [`llmdbenchmark`](https://github.com/llm-d/llm-d-benchmark) — the supported standard CLI for llm-d performance benchmarking.
 
-- Shared system prompt: 3,000 tokens; dynamic system prompt: 15,000–100,000 tokens (uniform)
-- Turns per conversation: normal(mean=6, min=2, max=20)
-- Input tokens per turn: lognormal(mean=1,500); output tokens per turn: lognormal(mean=800)
+In this example we will demonstrate how to run [`inference-perf`](https://github.com/kubernetes-sigs/inference-perf) with a shared-prefix synthetic workload against the stack you just deployed above (standalone or gateway mode). When orchestrating benchmarks via `llmdbenchmark`, the CLI automatically and transparently deploys a harness pod (`llmdbench-harness-launcher`) into your namespace. This pod is central to driving the workload, collecting the results, and tearing itself down when it's finished.
 
-You run one benchmark per concurrency level: set `concurrency_level` in [`guide.yaml`](benchmark-templates/guide.yaml) (keeping `num_conversations = concurrency_level` and `num_requests = 6 × num_conversations`, so every conversation completes its average number of turns) and re-run for each point you want on the curve.
+> [!IMPORTANT]
+> **For more in-depth explanation and features for benchmarking llm-d guides, see [`helpers/benchmark.md`](../../helpers/benchmark.md).**
+>
+> The Benchmarking section below contains only the **predicted-latency-routing-specific commands** needed to drive the stack you just deployed — for everything else (and especially when something goes wrong), start at [`helpers/benchmark.md`](../../helpers/benchmark.md).
+>
+> For even more details about benchmarking, see the actual repository: [`llm-d-benchmark` on GitHub](https://github.com/llm-d/llm-d-benchmark).
 
-### 1. Prepare the Benchmarking Suite
+> [!TIP]
+> The command below runs a workload shaped to exercise latency-routing decisions under contention, and accordingly takes longer to complete. To run a simpler workload with fewer execution cycles first (useful for validating the path, image pulls, PVC binding, etc. before committing to a real run), pick a generic sample profile such as `shared_prefix_synthetic.yaml` from the catalog in [`helpers/benchmark.md` → Available workload profiles](../../helpers/benchmark.md#available-workload-profiles) and substitute it for the `--workload` flag in the command below.
 
-- Download the benchmark script:
+### 1. Install the `llmdbenchmark` CLI
 
-  ```bash
-  curl -L -O https://raw.githubusercontent.com/llm-d/llm-d-benchmark/main/existing_stack/run_only.sh
-  chmod u+x run_only.sh
-  ```
-
-- Prepare the HuggingFace token secret `llm-d-hf-token` in the namespace.
-
-### 2. Download the Workload Template
+Automatically clone the benchmark repository into `./llm-d-benchmark/` and create a virtualenv at `./llm-d-benchmark/.venv/` containing dependencies and its installation:
 
 ```bash
-curl -LJO "https://raw.githubusercontent.com/llm-d/llm-d/main/guides/${GUIDE_NAME}/benchmark-templates/guide.yaml"
+curl -sSL https://raw.githubusercontent.com/llm-d/llm-d-benchmark/main/install.sh | bash
 ```
 
-### 3. Execute Benchmark
+Activate the `venv` and enter the repository directory - both are required: the `venv` puts `llmdbenchmark` on your PATH, and the repository directory contains the `workload/profiles/` and `config/specification/` files that orchestrate the benchmark:
 
 ```bash
-export IP=$(kubectl get service ${GUIDE_NAME}-epp -n ${NAMESPACE} -o jsonpath='{.spec.clusterIP}')
+cd llm-d-benchmark
+source .venv/bin/activate
+llmdbenchmark --version
+```
+
+> [!NOTE]
+> Subsequent `llmdbenchmark` commands in this section assume you are inside the `llm-d-benchmark` repo directory with the `venv` activated. If you open a new shell, re-run the two commands above.
+
+### 2. Resolve the endpoint of the stack you just deployed
+
+Set two variables so the rest of the section is topology-agnostic: the endpoint URL and the gateway class. The gateway class tells the CLI which deployment topology the cluster is actually running, without this, the CLI re-renders against the benchmark scenario's default values.
+
+**Standalone Mode** (the default in this guide — no Kubernetes Gateway, EPP pod with an Envoy sidecar):
+
+```bash
+export ENDPOINT_URL="http://$(kubectl get service ${GUIDE_NAME}-epp -n ${NAMESPACE} -o jsonpath='{.spec.clusterIP}')"
+export GATEWAY_CLASS=epponly # standalone mode
 ```
 
 <details>
-<summary><b>Click here for Gateway Mode</b></summary>
+<summary> <b>Gateway Mode</b> </summary>
 
 ```bash
-export IP=$(kubectl get gateway llm-d-inference-gateway -n ${NAMESPACE} -o jsonpath='{.status.addresses[0].value}')
+export ENDPOINT_URL="http://$(kubectl get gateway llm-d-inference-gateway -n ${NAMESPACE} -o jsonpath='{.status.addresses[0].value}')"
+
+# Match whichever provider you used when deploying the gateway (e.g. istio, agentgateway, gke).
+export GATEWAY_CLASS=istio
 ```
 
 </details>
 
-Set the concurrency level for this run (`NUM_REQUESTS = 6 × CONCURRENCY`), then render and launch:
+### 3. Run the benchmark profile for Predicted Latency Routing
+
+> [!NOTE]
+> A **dedicated** `guide_predicted-latency-routing_1.yaml` profile shaped specifically for this guide's strengths is not yet shipped in `llm-d-benchmark`. The command below uses `guide_precise-prefix-cache-routing_1.yaml` as a stand-in because it has the same model (Qwen3-32B) and a representative shared-prefix Poisson load ladder (rates 3 → 60) — useful for comparing latency-routing decisions against prefix-cache-aware routing. Once a tailored profile is upstreamed, substitute it here.
+
+Benchmark results are copied to the `workspace` directory that is specified by _you_ (or that is automatically generated when omitted from the cli) on the machine running the CLI. The workspace location is optional — by default the CLI auto-generates a timestamped workspace and prints its full path in the logs during the run. If you'd rather choose where results land, pass `--workspace <YOUR_DIR_HERE>` as a top-level argument of `llmdbenchmark` (before the `run` subcommand):
 
 ```bash
-export CONCURRENCY=40
-export NUM_REQUESTS=$(( CONCURRENCY * 6 ))   # 6 turns per conversation
-
-envsubst < guide.yaml > config.yaml
-./run_only.sh -c config.yaml -o ./results
+llmdbenchmark \
+    --spec           guides/predicted-latency-routing \
+    run \
+    --endpoint-url   "${ENDPOINT_URL}" \
+    --gateway-class  "${GATEWAY_CLASS}" \
+    --model          "Qwen/Qwen3-32B" \
+    --namespace      "${NAMESPACE}" \
+    --harness        inference-perf \
+    --workload       guide_precise-prefix-cache-routing_1.yaml \
+    --analyze
 ```
 
-To sweep concurrency, set a new `CONCURRENCY` (and `NUM_REQUESTS`) and re-run the block above for each level. Each run is saved under `./results/`.
+> [!NOTE]
+> Depending on your `cluster` you may need to extend the default `timeout` values to longer duration, as `bind`, `access` and `wait-timeout` times of `pvcs` and `pods` can be arbitrarily slower on other systems, please utilize `llmdbenchmark run --help` to view the knobs needed to increase those values.
 
 ## Benchmarking Report
 

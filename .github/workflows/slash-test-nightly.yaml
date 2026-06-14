@@ -3,13 +3,20 @@ name: /test-nightly Slash Command
 # Allows running any nightly E2E workflow against a fork PR's code.
 #
 # Usage: Comment on a PR with:
-#   /test-nightly <nightly-name>       # exact match
-#   /test-nightly <glob-pattern>       # glob pattern (* and ? supported)
+#   /test-nightly <nightly-name> [key=value ...]   # exact match
+#   /test-nightly <glob-pattern> [key=value ...]   # glob pattern (* and ? supported)
+#
+# Optional parameters (passed to E2E benchmark nightlies, ignored for others):
+#   workload=<profile>    Workload profile (default: sanity_random.yaml)
+#   decode_pods=<number>  Number of decode pods (default: 1)
+#   prefill_pods=<number> Number of prefill pods (default: 1)
+#   harness=<name>        Benchmark harness (default: inference-perf)
 #
 # Examples:
 #   /test-nightly pd-disaggregation-ocp
 #   /test-nightly *-ocp
 #   /test-nightly optimized-baseline-*
+#   /test-nightly optimized-baseline-cks workload=sanity_random.yaml decode_pods=1
 #   /test-nightly wva-*
 #
 # The command checks out the PR head, pushes a temp branch
@@ -107,14 +114,21 @@ jobs:
                 owner, repo,
                 issue_number: context.issue.number,
                 body: [
-                  '❌ **Usage**: `/test-nightly <name-or-pattern>`',
+                  '❌ **Usage**: `/test-nightly <name-or-pattern> [key=value ...]`',
                   '',
                   'Supports exact names or glob patterns (`*` and `?`):',
                   '```',
                   '/test-nightly pd-disaggregation-ocp',
                   '/test-nightly *-ocp',
                   '/test-nightly optimized-baseline-*',
+                  '/test-nightly optimized-baseline-cks workload=sanity_random.yaml decode_pods=1',
                   '```',
+                  '',
+                  'Optional parameters (applied to E2E benchmark nightlies only):',
+                  '- `workload=<profile>` — workload profile (default: `sanity_random.yaml`)',
+                  '- `decode_pods=<number>` — number of decode pods (default: `1`)',
+                  '- `prefill_pods=<number>` — number of prefill pods (default: `1`)',
+                  '- `harness=<name>` — benchmark harness (default: `inference-perf`)',
                   '',
                   'Available nightlies:',
                   all.map(n => '`' + n.name + '`').join(', '),
@@ -124,6 +138,25 @@ jobs:
             }
 
             const input = match[1];
+
+            // Parse optional key=value parameters (with defaults for quick PR validation)
+            const SUPPORTED_PARAMS = ['workload', 'decode_pods', 'prefill_pods', 'harness'];
+            const DEFAULT_PARAMS = {
+              workload: 'sanity_random.yaml',
+              decode_pods: '1',
+              prefill_pods: '1',
+              harness: 'inference-perf',
+            };
+            const params = { ...DEFAULT_PARAMS };
+            const tokens = comment.split(/\s+/).slice(2);
+            for (const token of tokens) {
+              const kv = token.match(/^(\w+)=(\S+)$/);
+              if (kv && SUPPORTED_PARAMS.includes(kv[1])) {
+                params[kv[1]] = kv[2];
+              }
+            }
+            core.setOutput('params', JSON.stringify(params));
+
             const isGlob = input.includes('*') || input.includes('?');
 
             let matches;
@@ -271,9 +304,11 @@ jobs:
         env:
           MATCHES_JSON: ${{ steps.parse.outputs.matches }}
           BRANCH_REF: ${{ steps.branch.outputs.ref }}
+          PARAMS_JSON: ${{ steps.parse.outputs.params }}
         with:
           script: |
             const matches = JSON.parse(process.env.MATCHES_JSON);
+            const params = JSON.parse(process.env.PARAMS_JSON || '{}');
             const ref = process.env.BRANCH_REF;
             const owner = context.repo.owner;
             const repo = context.repo.repo;
@@ -294,7 +329,12 @@ jobs:
 
             // Dispatch all workflows
             for (const m of matches) {
-              console.log(`Dispatching ${m.workflowFile} on ref ${ref}`);
+              // Only send benchmark params to E2E benchmark nightlies (not WVA or utility nightlies)
+              const isE2eBenchmark = m.workflowFile.startsWith('nightly-e2e-') && !m.workflowFile.includes('-wva-');
+              const benchmarkParams = isE2eBenchmark ? params : {};
+
+              console.log(`Dispatching ${m.workflowFile} on ref ${ref}` +
+                (isE2eBenchmark ? ` with params: ${JSON.stringify(benchmarkParams)}` : ''));
               try {
                 await github.rest.actions.createWorkflowDispatch({
                   owner, repo,
@@ -303,15 +343,19 @@ jobs:
                   inputs: {
                     pr_number: context.issue.number.toString(),
                     pr_repo: `${context.repo.owner}/${context.repo.repo}`,
+                    ...benchmarkParams,
                   },
                 });
               } catch (e) {
                 if (e.status === 422) {
-                  // Workflow doesn't declare pr_number/pr_repo inputs
+                  // Workflow doesn't declare pr_number/pr_repo inputs — retry without them
                   await github.rest.actions.createWorkflowDispatch({
                     owner, repo,
                     workflow_id: m.workflowFile,
                     ref,
+                    inputs: {
+                      ...benchmarkParams,
+                    },
                   });
                 } else {
                   throw e;
@@ -370,9 +414,11 @@ jobs:
           HEAD_SHA: ${{ steps.pr.outputs.head_sha }}
           IS_TEMP: ${{ steps.branch.outputs.is_temp }}
           PR_NUMBER: ${{ steps.pr.outputs.pr_number }}
+          PARAMS_JSON: ${{ steps.parse.outputs.params }}
         with:
           script: |
             const results = JSON.parse(process.env.TRIGGER_RESULTS);
+            const params = JSON.parse(process.env.PARAMS_JSON || '{}');
             const ref = process.env.BRANCH_REF;
             const sha = process.env.HEAD_SHA.substring(0, 7);
             const isTemp = process.env.IS_TEMP === 'true';
@@ -387,6 +433,14 @@ jobs:
 
             const lines = [];
 
+            // Show overrides only for E2E benchmark nightlies (those that received params)
+            const hasE2eBenchmark = results.some(r =>
+              r.workflowFile.startsWith('nightly-e2e-') && !r.workflowFile.includes('-wva-'));
+            const paramEntries = Object.entries(params);
+            const overridesRow = hasE2eBenchmark && paramEntries.length > 0
+              ? `| Overrides | ${paramEntries.map(([k, v]) => `\`${k}=${v}\``).join(', ')} |`
+              : null;
+
             if (results.length === 1) {
               const r = results[0];
               lines.push(
@@ -399,6 +453,7 @@ jobs:
                 `| Branch | \`${ref}\` |`,
                 `| PR HEAD | \`${sha}\` |`,
               );
+              if (overridesRow) lines.push(overridesRow);
             } else {
               lines.push(
                 `🚀 **${results.length} nightlies triggered**`,
@@ -416,6 +471,7 @@ jobs:
                 `| Branch | \`${ref}\` |`,
                 `| PR HEAD | \`${sha}\` |`,
               );
+              if (overridesRow) lines.push(overridesRow);
             }
 
             if (isTemp) {

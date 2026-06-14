@@ -29,6 +29,11 @@ spec:
               valueFrom:
                 fieldRef:
                   fieldPath: status.podIP
+            # Default vLLM keep-alive (5s) is shorter than llm-d-routing-sidecar's default idle
+            # conn timeout (90s, from Go http.Transport), causing TCP RSTs on reuse.
+            # Server keep-alive must be >= sidecar idle timeout; configured to 120s.
+            - name: VLLM_HTTP_TIMEOUT_KEEP_ALIVE
+              value: "120"
           resources:
             limits:
               cpu: "8"

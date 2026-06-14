@@ -81,7 +81,7 @@ jobs:
       standup_scenario: ${{ inputs.standup_scenario || 'pd-disaggregation' }}
       decode_pods: ${{ inputs.decode_pods || 'auto' }}
       prefill_pods: ${{ inputs.prefill_pods || 'auto' }}
-      accelerator_type: ${{ inputs.accelerator_type || 'tpu-v6' }}
+      accelerator_type: ${{ inputs.accelerator_type || 'tpu/v6' }}
       backend_type: ${{ inputs.backend_type || 'vllm' }}
       infra_provider: ${{ inputs.infra_provider || '' }}
       connector: ${{ inputs.connector || '' }}
@@ -97,10 +97,14 @@ jobs:
       verbose: ${{ inputs.verbose || 'false' }}
       harness: ${{ inputs.harness || 'inference-perf' }}
       workload: ${{ inputs.workload || 'sanity_random.yaml' }}
-#      workload: ${{ inputs.workload || 'guide_pd-disaggregation_1.yaml' }}
+#      workload: ${{ inputs.workload || 'guide_pd_disaggregation_1.yaml' }}
       cleanup: ${{ inputs.cleanup || 'true' }}
       tpu_chips: ${{ inputs.tpu_chips || '16' }}
       tpu_topology: ${{ inputs.tpu_topology || '2x4' }}
+      data_access_timeout: '3600'
+      wait_timeout: '3600'
+      job_timeout: '3600s'
+      kustomize_standup_timeout: '1800'
     secrets: inherit
 
   update-badge:

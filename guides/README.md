@@ -30,10 +30,10 @@ We currently offer the following:
 
 ### Workloads
 
-Horizontal, workload-centric paths that compose the capability guides above into a stack tuned for a specific traffic pattern.
+Workload-centric guides — each provides the recommended, cohesive deployment for serving a workload, composing the capability guides above. See the [workload narratives](../docs/workloads/README.md) for overviews.
 
-* [Agentic Serving](./agentic-serving/README.md) - serve long, multi-turn, tool-using agentic workloads (e.g. coding agents) via a ladder of deployment options that combine prefix-aware routing, KV-cache offloading, and P/D disaggregation.
-* [Multimodal Serving](./multimodal-serving/optimized-baseline/README.md) - Deploy vLLM with multimodal prefix-cache and load-aware routing enabled by the llm-d EPP.
+* [Agentic Serving](./agentic-serving/README.md) - serve long, multi-turn, tool-using agentic workloads (e.g. coding agents) by composing prefix-aware routing, KV-cache offloading, and P/D disaggregation.
+* [Multimodal Serving](./multimodal-serving/optimized-baseline/README.md) - serve image/audio/video workloads with prefix- and load-aware routing that tracks and matches multimodal payloads across the cluster.
 
 ## Experimental Guides
 
