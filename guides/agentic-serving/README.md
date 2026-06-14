@@ -1,9 +1,9 @@
 # Agentic Serving
 
-The **agentic-serving well-lit path** is a horizontal, workload-centric umbrella that serves
+The **agentic-serving** guide is a horizontal, workload-centric umbrella that serves
 agentic *programs* on llm-d. It provides the recommended, cohesive deployment for the workload —
-composing llm-d's horizontal capabilities into one stack rather than enabling a single feature.
-For the workload model, canonical shapes, and the direction this path is driving toward, see the
+composing llm-d's well-lit paths into one stack rather than enabling a single feature.
+For the workload model, canonical shapes, and the direction this guide is driving toward, see the
 [Agentic Serving workload page](../../docs/workloads/agentic-serving.md); this guide is the
 operational counterpart, and the canonical guide of the llm-d Agentic Inference SIG.
 
