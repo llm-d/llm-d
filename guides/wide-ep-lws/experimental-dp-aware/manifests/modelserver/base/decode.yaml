@@ -116,6 +116,7 @@ spec:
 
                 exec vllm serve \
                   deepseek-ai/DeepSeek-R1-0528 \
+                  --served-model-name DeepSeek-R1-0528 \
                   --host=0.0.0.0 \
                   --port=8200 \
                   --disable-access-log-for-endpoints=/health,/metrics,/v1/models,/readyz \

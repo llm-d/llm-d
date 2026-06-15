@@ -64,6 +64,7 @@ spec:
 
                 exec vllm serve \
                   deepseek-ai/DeepSeek-R1-0528 \
+                  --served-model-name DeepSeek-R1-0528 \
                   --port 8000 \
                   --trust-remote-code \
                   --gpu-memory-utilization 0.80 \

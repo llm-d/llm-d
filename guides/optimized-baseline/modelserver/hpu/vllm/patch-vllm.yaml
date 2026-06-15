@@ -3,18 +3,20 @@ kind: Deployment
 metadata:
   name: decode
 spec:
-  replicas: 2
+  replicas: 1
   template:
     spec:
       containers:
         - name: modelserver
           command: ["vllm", "serve"]
           args:
-            - "meta-llama/Llama-3.2-3B-Instruct"
-            - "--served-model-name=Llama-3.2-3B-Instruct"
+            - "Qwen/Qwen3-8B"
+            - "--served-model-name=Qwen3-8B"
+            - "--block-size=128"
+            - "--max-num-seqs=256"
+            - "--max-model-len=2048"
+            - "--max-num-batched-token=16000"
             - "--disable-access-log-for-endpoints=/health,/metrics,/v1/models"
-            - "--disable-hybrid-kv-cache-manager"
-            - "--max_model_len=8192"
             # Uncomment for distributed tracing
             # - "--otlp-traces-endpoint=http://otel-collector:4317"
             # - "--collect-detailed-traces=all"
@@ -24,9 +26,13 @@ spec:
                 secretKeyRef:
                   name: llm-d-hf-token
                   key: HF_TOKEN
-            - name: VLLM_CPU_KVCACHE_SPACE
-              value: "32"
-            - name: VLLM_CPU_NUM_OF_RESERVED_CPU
+            - name: OMPI_MCA_btl_vader_single_copy_mechanism
+              value: "none"
+            - name: HABANA_LOGS
+              value: "/tmp/habana_logs"
+            - name: VLLM_SKIP_WARMUP
+              value: "true"
+            - name: DO_NOT_TRACK
               value: "1"
             # Uncomment for distributed tracing env vars
             # - name: OTEL_SERVICE_NAME
@@ -39,28 +45,12 @@ spec:
             #   value: "parentbased_traceidratio"
             # - name: OTEL_TRACES_SAMPLER_ARG
             #   value: "0.1"
-          securityContext:
-            seccompProfile:
-              type: Unconfined
-            capabilities:
-              add:
-                - SYS_NICE
           resources:
-            limits:
-              memory: 64Gi
-              cpu: "64"
-            requests:
-              cpu: "64"
-              memory: 64Gi
+            claims:
+              - name: optimized-baseline-gaudi-claim
           volumeMounts:
-            - mountPath: /dev/shm
-              name: dshm
-            - mountPath: /.cache
-              name: torch-compile-cache
             - mountPath: /.triton
               name: triton-cache
-            - mountPath: /.config
-              name: vllm-config
           startupProbe:
             initialDelaySeconds: 15
             periodSeconds: 30
@@ -74,14 +64,9 @@ spec:
             periodSeconds: 5
             timeoutSeconds: 2
             failureThreshold: 3
+      resourceClaims:
+        - name: optimized-baseline-gaudi-claim
+          resourceClaimTemplateName: optimized-baseline-gaudi-claim
       volumes:
-        - name: dshm
-          emptyDir:
-            medium: Memory
-            sizeLimit: 4Gi
-        - name: torch-compile-cache
-          emptyDir: {}
         - name: triton-cache
-          emptyDir: {}
-        - name: vllm-config
           emptyDir: {}

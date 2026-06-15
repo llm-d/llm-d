@@ -3,29 +3,27 @@ kind: Deployment
 metadata:
   name: decode
 spec:
-  replicas: 2
+  replicas: 1
   template:
     spec:
-      securityContext:
-        fsGroup: 107
-        supplementalGroups:
-          - 107
       containers:
         - name: modelserver
           command: ["vllm", "serve"]
-          # CI-sized default for Intel XPU (Qwen3-0.6B). Update `modelName` in
-          # router/precise-prefix-cache-routing.values.yaml to match if using
-          # this overlay for scoring.
+          # CI-sized default for Gaudi. HPU typically runs with block-size=128;
+          # precise prefix cache scoring requires scorer.tokenProcessorConfig.blockSize
+          # to match whatever vLLM is configured with. Update both sides together
+          # if you change --block-size here, and update `modelName` in
+          # router/precise-prefix-cache-routing.values.yaml to Qwen/Qwen3-8B.
           args:
-            - "Qwen/Qwen3-0.6B"
-            - "--served-model-name=Qwen3-0.6B"
-            - "--port=$(POD_PORT)"
-            - "--dtype=float16"
-            - "--disable-sliding-window"
+            - "Qwen/Qwen3-8B"
+            - "--served-model-name=Qwen3-8B"
+            - "--block-size=128"
+            - "--max-num-seqs=256"
+            - "--max-model-len=2048"
+            - "--max-num-batched-token=16000"
             - "--disable-access-log-for-endpoints=/health,/metrics,/v1/models"
-            - "--block-size=64"
             - "--kv-events-config"
-            - '{"enable_kv_cache_events":true,"publisher":"zmq","endpoint":"$(KV_EVENTS_ENDPOINT)","topic":"kv@$(POD_IP):$(POD_PORT)@Qwen3-0.6B"}'
+            - '{"enable_kv_cache_events":true,"publisher":"zmq","endpoint":"$(KV_EVENTS_ENDPOINT)","topic":"kv@$(POD_IP):$(POD_PORT)@Qwen3-8B"}'
             # Uncomment for distributed tracing
             # - "--otlp-traces-endpoint=http://otel-collector:4317"
             # - "--collect-detailed-traces=all"
@@ -50,27 +48,23 @@ spec:
             # replica can dial each pod's socket independently.
             - name: KV_EVENTS_ENDPOINT
               value: "tcp://*:5556"
-            # Disable vLLM usage telemetry — its writes to /.config fail
-            # under restricted SecurityContexts (e.g. OpenShift).
-            - name: DO_NOT_TRACK
-              value: "1"
             - name: HF_TOKEN
               valueFrom:
                 secretKeyRef:
                   name: llm-d-hf-token
                   key: HF_TOKEN
+            - name: OMPI_MCA_btl_vader_single_copy_mechanism
+              value: "none"
+            - name: HABANA_LOGS
+              value: "/tmp/habana_logs"
+            - name: VLLM_SKIP_WARMUP
+              value: "true"
+            - name: DO_NOT_TRACK
+              value: "1"
           resources:
-            limits:
-              cpu: "8"
-              memory: 24Gi
-            requests:
-              cpu: "4"
-              memory: 12Gi
             claims:
-              - name: intel-decode-claim
+              - name: precise-prefix-cache-routing-gaudi-claim
           volumeMounts:
-            - mountPath: /.cache
-              name: torch-compile-cache
             # Triton/Inductor caches at /.triton, not writable under
             # restricted SecurityContexts (e.g. OpenShift).
             - mountPath: /.triton
@@ -89,10 +83,8 @@ spec:
             timeoutSeconds: 2
             failureThreshold: 3
       resourceClaims:
-        - name: intel-decode-claim
-          resourceClaimTemplateName: intel-claim-template-decode
+        - name: precise-prefix-cache-routing-gaudi-claim
+          resourceClaimTemplateName: precise-prefix-cache-routing-gaudi-claim
       volumes:
-        - name: torch-compile-cache
-          emptyDir: {}
         - name: triton-cache
           emptyDir: {}

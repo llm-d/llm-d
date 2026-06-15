@@ -12,6 +12,7 @@ spec:
           # Include all args in overlay patch for consistency
           args:
             - "Qwen/Qwen3-VL-32B-Instruct"
+            - "--served-model-name=Qwen3-VL-32B-Instruct"
             - "--disable-access-log-for-endpoints=/health,/metrics,/v1/models"
             - "--tensor-parallel-size=2"
             - "--mm-processor-cache-gb"

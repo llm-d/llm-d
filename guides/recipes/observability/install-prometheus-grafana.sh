@@ -454,6 +454,10 @@ $(if [[ -n "$WEB_TLS_CONFIG" ]]; then echo -e "$WEB_TLS_CONFIG"; fi)
         cpu: 1000m
 $(if [[ -n "$DISABLE_PROMETHEUS_OPERATOR" ]]; then echo -e "$DISABLE_PROMETHEUS_OPERATOR"; fi)
 $(if [[ -n "$DISABLE_NODE_EXPORTER" ]]; then echo -e "$DISABLE_NODE_EXPORTER"; fi)
+kube-state-metrics:
+  metricLabelsAllowlist:
+    - pods=[llm-d.ai/role,llm-d.ai/model,llm-d.ai/accelerator-vendor,llm-d.ai/accelerator-variant,llm-d.ai/engine-type,llm-d.ai/inference-serving,llm-d.ai/managed]
+    - nodes=[llm-d.ai/accelerator-vendor,llm-d.ai/accelerator-variant]
 EOF
   else
     cat <<EOF > /tmp/prometheus-values.yaml
@@ -512,6 +516,10 @@ $(if [[ -n "$WEB_TLS_CONFIG" ]]; then echo -e "$WEB_TLS_CONFIG"; fi)
         cpu: 500m
 $(if [[ -n "$DISABLE_PROMETHEUS_OPERATOR" ]]; then echo -e "$DISABLE_PROMETHEUS_OPERATOR"; fi)
 $(if [[ -n "$DISABLE_NODE_EXPORTER" ]]; then echo -e "$DISABLE_NODE_EXPORTER"; fi)
+kube-state-metrics:
+  metricLabelsAllowlist:
+    - pods=[llm-d.ai/role,llm-d.ai/model,llm-d.ai/accelerator-vendor,llm-d.ai/accelerator-variant,llm-d.ai/engine-type,llm-d.ai/inference-serving,llm-d.ai/managed]
+    - nodes=[llm-d.ai/accelerator-vendor,llm-d.ai/accelerator-variant]
 EOF
   fi
 

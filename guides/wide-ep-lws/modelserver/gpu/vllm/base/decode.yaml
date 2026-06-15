@@ -91,6 +91,7 @@ spec:
 
                 exec vllm serve \
                   deepseek-ai/DeepSeek-R1-0528 \
+                  --served-model-name DeepSeek-R1-0528 \
                   --port 8200 \
                   --trust-remote-code \
                   --api-server-count 1 \

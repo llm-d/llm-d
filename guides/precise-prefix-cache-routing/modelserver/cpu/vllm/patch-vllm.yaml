@@ -15,12 +15,13 @@ spec:
           # to match `meta-llama/Llama-3.2-3B-Instruct`.
           args:
             - "meta-llama/Llama-3.2-3B-Instruct"
+            - "--served-model-name=Llama-3.2-3B-Instruct"
             - "--disable-access-log-for-endpoints=/health,/metrics,/v1/models"
             - "--disable-hybrid-kv-cache-manager"
             - "--max_model_len=8192"
             - "--block-size=64"
             - "--kv-events-config"
-            - '{"enable_kv_cache_events":true,"publisher":"zmq","endpoint":"$(KV_EVENTS_ENDPOINT)","topic":"kv@$(POD_IP):$(POD_PORT)@meta-llama/Llama-3.2-3B-Instruct"}'
+            - '{"enable_kv_cache_events":true,"publisher":"zmq","endpoint":"$(KV_EVENTS_ENDPOINT)","topic":"kv@$(POD_IP):$(POD_PORT)@Llama-3.2-3B-Instruct"}'
             # Uncomment for distributed tracing
             # - "--otlp-traces-endpoint=http://otel-collector:4317"
             # - "--collect-detailed-traces=all"
