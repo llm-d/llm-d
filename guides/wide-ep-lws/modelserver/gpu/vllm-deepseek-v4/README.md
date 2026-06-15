@@ -15,8 +15,9 @@ below cover only what is specific to this deployment.
 In addition to the [wide-ep-lws prerequisites](../../../README.md#prerequisites):
 
 * **NVIDIA DRA driver for GPUs.** Wide-EP spans multiple nodes over GB200's cross-node
-  NVLink (MNNVL) fabric, which is provisioned through a `ComputeDomain` resource. The
-  cluster must have the NVIDIA DRA driver installed and the `ComputeDomain` CRD present:
+  NVLink (MNNVL) fabric, which is provisioned through a [`ComputeDomain`](https://docs.nvidia.com/datacenter/cloud-native/gpu-operator/latest/dra-cds.html#computedomains-multi-node-nvlink-simplified)
+  resource. The cluster must have the NVIDIA DRA driver installed and the `ComputeDomain`
+  CRD present:
 
   ```bash
   kubectl get crd computedomains.resource.nvidia.com
