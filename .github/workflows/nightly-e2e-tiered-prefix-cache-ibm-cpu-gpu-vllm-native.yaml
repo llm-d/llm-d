@@ -1,4 +1,4 @@
-name: Nightly - Tiered Prefix Cache CPU Offloading E2E (OpenShift)
+name: Nightly - Tiered Prefix Cache CPU Offloading E2E (OCP GPU)
 
 on:
   workflow_dispatch:
