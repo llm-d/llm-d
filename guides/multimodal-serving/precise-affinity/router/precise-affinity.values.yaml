@@ -1,18 +1,9 @@
 ## multimodal precise-affinity guide overrides for the llm-d router.
 ## Layer on top of: recipes/router/base.values.yaml
-##
-## A `vllm launch render` sidecar exposes /v1/chat/completions/render on
-## localhost:8000; the EPP `token-producer` plugin calls that endpoint to
-## tokenize prompts and extract multimodal item hashes.
-##
-## Affinity routing is precise (per multimodal item, per pod) rather than
-## approximate; see ../README.md for when this matters vs the optimized-baseline
-## flavor.
 
 router:
   tokenizer:
     enabled: true
-    # Must match the served model and the token-producer modelName below.
     modelName: Qwen/Qwen3-VL-32B-Instruct
     env:
       - name: HF_HOME
@@ -27,15 +18,11 @@ router:
         plugins:
           - type: token-producer
             parameters:
-              # Must match router.tokenizer.modelName above.
               modelName: Qwen/Qwen3-VL-32B-Instruct
               vllm:
                 url: http://localhost:8000
           - type: mm-embeddings-cache-producer
             parameters:
-              # Per-pod LRU memory budget in mebibytes.
-              # Raise for high-cardinality multimodal content; reduce on
-              # memory-constrained EPP nodes.
               cacheSizeInMBPerServer: 2048
           - type: mm-embeddings-cache-scorer
           - type: kv-cache-utilization-scorer
@@ -52,12 +39,8 @@ router:
                 weight: 2.0
               - pluginRef: kv-cache-utilization-scorer
                 weight: 2.0
-              # Affinity weight set high so identical multimodal content
-              # deterministically lands on the cached pod once warm.
               - pluginRef: mm-embeddings-cache-scorer
                 weight: 10.0
-              # Tiebreak for cold cache: spread requests with no affinity
-              # signal across least-recently-picked endpoints.
               - pluginRef: no-hit-lru-scorer
                 weight: 1.0
               - pluginRef: max-score-picker

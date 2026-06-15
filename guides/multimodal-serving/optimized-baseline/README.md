@@ -66,7 +66,7 @@ Deploy the llm-d Router in **Standalone Mode** overlaying router custom configur
 helm install ${GUIDE_NAME} \
     oci://ghcr.io/llm-d/charts/llm-d-router-standalone-dev \
     -f ${REPO_ROOT}/guides/recipes/router/base.values.yaml \
-    -f ${REPO_ROOT}/guides/multimodal/${GUIDE_NAME}/router/${GUIDE_NAME}.values.yaml \
+    -f ${REPO_ROOT}/guides/multimodal-serving/${GUIDE_NAME}/router/${GUIDE_NAME}.values.yaml \
     -n ${NAMESPACE} --version ${ROUTER_CHART_VERSION}
 ```
 
@@ -83,7 +83,7 @@ export PROVIDER_NAME=gke # options: none, gke, agentgateway, istio
 helm install ${GUIDE_NAME} \
     oci://ghcr.io/llm-d/charts/llm-d-router-gateway-dev  \
     -f ${REPO_ROOT}/guides/recipes/router/base.values.yaml \
-    -f ${REPO_ROOT}/guides/multimodal/${GUIDE_NAME}/router/${GUIDE_NAME}.values.yaml \
+    -f ${REPO_ROOT}/guides/multimodal-serving/${GUIDE_NAME}/router/${GUIDE_NAME}.values.yaml \
     --set provider.name=${PROVIDER_NAME} \
     --set httpRoute.create=true \
     --set httpRoute.inferenceGatewayName=llm-d-inference-gateway \
@@ -98,7 +98,7 @@ Apply the Kustomize overlays for your specific backend (defaulting to NVIDIA GPU
 
 ```bash
 export INFRA_PROVIDER=gke # base | gke
-kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/multimodal/${GUIDE_NAME}/modelserver/gpu/vllm/${INFRA_PROVIDER}/
+kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/multimodal-serving/${GUIDE_NAME}/modelserver/gpu/vllm/${INFRA_PROVIDER}/
 ```
 
 ### 3. (Optional) Enable monitoring
@@ -177,7 +177,7 @@ curl -X POST http://${IP}/v1/chat/completions \
 To tear down and clean up all deployed resources:
 ```bash
 helm uninstall ${GUIDE_NAME} -n ${NAMESPACE}
-kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/multimodal/${GUIDE_NAME}/modelserver/gpu/vllm/${INFRA_PROVIDER}/
+kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/multimodal-serving/${GUIDE_NAME}/modelserver/gpu/vllm/${INFRA_PROVIDER}/
 kubectl delete namespace ${NAMESPACE}
 ```
 
