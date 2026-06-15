@@ -18,9 +18,12 @@ This guide shows how to deploy llm-d with
 * [Enable Gateway API in your cluster](https://cloud.google.com/kubernetes-engine/docs/how-to/deploying-gateways#enable-gateway)
 * [Verify your cluster](https://cloud.google.com/kubernetes-engine/docs/how-to/deploying-gateways#verify-internal)
 
-## Step 1: Install Gateway Inference CRDs
+## Step 1: Install Gateway API and Gateway API Inference Extension CRDs
 
-For GKE versions `1.34.0-gke.1626000` or later, the InferencePool CRD is automatically installed. For GKE versions earlier than `1.34.0-gke.1626000` install it as follows:
+> [!NOTE]
+> GKE automatically installs all GA CRDs for Gateway API and Gateway API Inference Extension on GKE versions `1.34.0-gke.1626000` or later. If using this version or newer, skip to Step 2.
+
+For GKE versions earlier than `1.34.0-gke.1626000`, install the CRDs manually:
 
 ```bash
 GAIE_VERSION=v1.5.0
@@ -37,22 +40,26 @@ kubectl api-resources --api-group=inference.networking.k8s.io
 
 ## Step 2: Deploy the Gateway
 
-The key choice for deployment is whether you want an internal or external load balancer:
+GKE supports two types of Application Load Balancers. Choose the one that matches your network requirements:
 
 ### Regional External Application Load Balancer
 
-The class name is `gke-l7-regional-external-managed`. They are accessible to the internet. Here is an example for creating one:
+For internet-facing workloads accessible from outside your VPC:
 
 ```bash
-kubectl apply -n ${NAMESPACE} -k "./guides/recipes/gateway/gke-l7-regional-external-managed"
+LLM_D_VERSION=main  # Use 'main' for latest, or a release tag like 'v0.7.0'
+GATEWAY_CLASS=gke-l7-regional-external-managed
+kubectl apply -n ${NAMESPACE} -k "https://github.com/llm-d/llm-d/guides/recipes/gateway/${GATEWAY_CLASS}?ref=${LLM_D_VERSION}"
 ```
 
 ### Regional Internal Application Load Balancer
 
-The class name is `gke-l7-rilb`. They are accessible only to workloads within your VPC. Here is an example for creating one:
+For private workloads accessible only within your VPC:
 
 ```bash
-kubectl apply -n ${NAMESPACE} -k "./guides/recipes/gateway/gke-l7-rilb"
+LLM_D_VERSION=main  # Use 'main' for latest, or a release tag like 'v0.7.0'
+GATEWAY_CLASS=gke-l7-rilb
+kubectl apply -n ${NAMESPACE} -k "https://github.com/llm-d/llm-d/guides/recipes/gateway/${GATEWAY_CLASS}?ref=${LLM_D_VERSION}"
 ```
 
 ## Step 3: Verify the Gateway

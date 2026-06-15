@@ -162,8 +162,8 @@ spec:
 
 ### Deployment Guides
 
-llm-d provides [Gateway Mode deployment guides](../../../../guides/prereq/gateways/README.md) for the following Gateways:
+llm-d provides [Gateway Mode deployment guides](../../../resources/gateway/README.md) for the following Gateways:
 
-- [Istio](../../../../guides/prereq/gateways/istio.md)
-- [GKE Gateway](../../../../guides/prereq/gateways/gke.md)
-- [agentgateway](../../../../guides/prereq/gateways/agentgateway.md)
+- [Istio](../../../resources/gateway/istio.md)
+- [GKE Gateway](../../../resources/gateway/gke.md)
+- [agentgateway](../../../resources/gateway/agentgateway.md)

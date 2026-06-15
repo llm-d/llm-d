@@ -14,22 +14,7 @@ This guide shows how to deploy llm-d with [Istio](https://istio.io/) as your inf
 
 ## Step 1: Install Gateway API and Gateway API Inference Extension CRDs
 
-Install the required Gateway API and Gateway API Inference Extension CRDs:
-
-```bash
-GATEWAY_API_VERSION=v1.5.1
-GAIE_VERSION=v1.5.0
-
-kubectl apply -k "https://github.com/kubernetes-sigs/gateway-api/config/crd?ref=${GATEWAY_API_VERSION}"
-kubectl apply -f https://github.com/kubernetes-sigs/gateway-api-inference-extension/releases/download/${GAIE_VERSION}/v1-manifests.yaml
-```
-
-Verify the APIs are available:
-
-```bash
-kubectl api-resources --api-group=gateway.networking.k8s.io
-kubectl api-resources --api-group=inference.networking.k8s.io
-```
+Install the required CRDs by following the [CRD installation guide](./install-crds.md).
 
 ## Step 2: Install Istio
 
@@ -58,10 +43,16 @@ istiod-xxxxxxxxxx-xxxxx   1/1     Running   0          30s
 
 ## Step 3: Deploy the Gateway
 
+Set the llm-d version to match your deployment:
+
+```bash
+LLM_D_VERSION=main  # Use 'main' for latest, or a release tag like 'v0.7.0'
+```
+
 Create a `Gateway` resource. Istio watches this resource and creates an Envoy-based proxy that accepts incoming traffic.
 
 ```bash
-kubectl apply -k ./guides/recipes/gateway/istio -n ${NAMESPACE}
+kubectl apply -k "https://github.com/llm-d/llm-d/guides/recipes/gateway/istio?ref=${LLM_D_VERSION}" -n ${NAMESPACE}
 ```
 
 Verify the Gateway is programmed:
@@ -108,9 +99,9 @@ kubectl delete gateway llm-d-inference-gateway -n ${NAMESPACE}
 istioctl uninstall --purge -y
 kubectl delete namespace istio-system
 kubectl delete gatewayclass istio istio-remote
-kubectl delete -k "https://github.com/kubernetes-sigs/gateway-api/config/crd?ref=${GATEWAY_API_VERSION}"
-kubectl delete -k "https://github.com/kubernetes-sigs/gateway-api-inference-extension/config/crd?ref=${GAIE_VERSION}"
 ```
+
+To uninstall the Gateway API and Gateway API Inference Extension CRDs, see the [CRD installation guide](./install-crds.md#uninstalling-gateway-api-crds).
 
 ## Troubleshooting
 

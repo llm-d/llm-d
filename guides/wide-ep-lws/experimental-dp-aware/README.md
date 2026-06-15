@@ -56,7 +56,7 @@ This guide requires 32 Nvidia H200 or B200 GPUs and InfiniBand or RoCE RDMA netw
 
 - Have the [proper client tools installed on your local system](../../../helpers/client-setup/README.md) to use this guide.
 - You have deployed the [LeaderWorkerSet controller](https://lws.sigs.k8s.io/docs/installation/)
-- Configure and deploy your [Gateway control plane](../../prereq/gateway-provider/README.md). Note that the Gateway must support multi-port (e.g. Istio 1.29.2)
+- Configure and deploy your [Gateway control plane](../../../docs/resources/gateway/README.md). Note that the Gateway must support multi-port (e.g. Istio 1.29.2)
 - Have the [Monitoring stack](../../../docs/resources/observability/setup.md) installed on your system.
 - Create a namespace for installation.
 
@@ -80,7 +80,7 @@ Deploy the Gateway and HTTPRoute using the [gateway recipe](../../recipes/gatewa
 
 #### Gateway options
 
-To see what gateway options are supported refer to our [gateway provider prereq doc](../../prereq/gateway-provider/README.md#supported-providers). Gateway configurations per provider are tracked in the [gateway-configurations directory](../../prereq/gateway-provider/common-configurations/).
+To see what gateway options are supported refer to our [gateway provider docs](../../../docs/resources/gateway/README.md). Gateway configurations per provider are tracked in the [gateway recipes directory](../../recipes/gateway/).
 
 You can also customize your gateway, for more information on how to do that see our [gateway customization docs](../../04_customizing_a_guide.md).
 

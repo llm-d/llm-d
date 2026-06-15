@@ -17,22 +17,7 @@ your model servers via the llm-d EPP.
 
 ## Step 1: Install Gateway API and Gateway API Inference Extension CRDs
 
-Install the required Gateway API and Gateway API Inference Extension CRDs:
-
-```bash
-GATEWAY_API_VERSION=v1.5.1
-GAIE_VERSION=v1.5.0
-
-kubectl apply -k "https://github.com/kubernetes-sigs/gateway-api/config/crd?ref=${GATEWAY_API_VERSION}"
-kubectl apply -f https://github.com/kubernetes-sigs/gateway-api-inference-extension/releases/download/${GAIE_VERSION}/v1-manifests.yaml
-```
-
-Verify the APIs are available:
-
-```bash
-kubectl api-resources --api-group=gateway.networking.k8s.io
-kubectl api-resources --api-group=inference.networking.k8s.io
-```
+Install the required CRDs by following the [CRD installation guide](./install-crds.md).
 
 ## Step 2: Install Agentgateway
 
@@ -72,12 +57,18 @@ agentgateway   agentgateway.dev/agentgateway   True       30s
 
 ## Step 3: Deploy the Gateway
 
+Set the llm-d version to match your deployment:
+
+```bash
+LLM_D_VERSION=main  # Use 'main' for latest, or a release tag like 'v0.7.0'
+```
+
 ### Agentgateway
 
 This deploys a gateway suitable for `agentgateway`, using the `agentgateway` gateway class. This is the preferred self-installed inference gateway recipe in llm-d.
 
 ```bash
-kubectl apply -k ./guides/recipes/gateway/agentgateway -n ${NAMESPACE}
+kubectl apply -k "https://github.com/llm-d/llm-d/guides/recipes/gateway/agentgateway?ref=${LLM_D_VERSION}" -n ${NAMESPACE}
 ```
 
 ### Agentgateway (OpenShift)
@@ -87,7 +78,7 @@ recipe. The rendered `Gateway` uses the `agentgateway` GatewayClass and an
 OpenShift-oriented `AgentgatewayParameters` resource.
 
 ```bash
-kubectl apply -k ./guides/recipes/gateway/agentgateway-openshift -n ${NAMESPACE}
+kubectl apply -k "https://github.com/llm-d/llm-d/guides/recipes/gateway/agentgateway-openshift?ref=${LLM_D_VERSION}" -n ${NAMESPACE}
 ```
 
 Verify the `Gateway` is programmed:
@@ -136,9 +127,9 @@ helm uninstall agentgateway -n agentgateway-system
 helm uninstall agentgateway-crds -n agentgateway-system
 kubectl delete namespace agentgateway-system
 kubectl delete gatewayclass agentgateway
-kubectl delete -k "https://github.com/kubernetes-sigs/gateway-api/config/crd?ref=${GATEWAY_API_VERSION}"
-kubectl delete -k "https://github.com/kubernetes-sigs/gateway-api-inference-extension/config/crd?ref=${GAIE_VERSION}"
 ```
+
+To uninstall the Gateway API and Gateway API Inference Extension CRDs, see the [CRD installation guide](./install-crds.md#uninstalling-gateway-api-crds).
 
 ## Troubleshooting
 
