@@ -3,8 +3,6 @@ kind: Kustomization
 resources:
   - ../../../../../recipes/modelserver/base/single-host/default
 
-namePrefix: tpu-v7-vllm-
-
 labels:
   - pairs:
       llm-d.ai/model: Qwen3-32B

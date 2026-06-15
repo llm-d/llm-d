@@ -1,0 +1,17 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: decode
+spec:
+  template:
+    spec:
+      nodeSelector:
+        cloud.google.com/gke-tpu-accelerator: tpu7x
+        cloud.google.com/gke-tpu-topology: 2x2x1
+      containers:
+        - name: modelserver
+          resources:
+            requests:
+              google.com/tpu: 4
+            limits:
+              google.com/tpu: 4

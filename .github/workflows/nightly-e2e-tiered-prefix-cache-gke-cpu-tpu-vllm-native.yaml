@@ -81,7 +81,7 @@ jobs:
       standup_scenario: ${{ inputs.standup_scenario || 'tiered-prefix-cache' }}
       decode_pods: ${{ inputs.decode_pods || 'auto' }}
       prefill_pods: ${{ inputs.prefill_pods || 'auto' }}
-      accelerator_type: ${{ inputs.accelerator_type || 'tpu-v6' }}
+      accelerator_type: ${{ inputs.accelerator_type || 'tpu/v6' }}
       backend_type: ${{ inputs.backend_type || 'vllm' }}
       infra_provider: ${{ inputs.infra_provider || '' }}
       offloading_target: ${{ inputs.offloading_target || 'cpu' }}
@@ -102,6 +102,9 @@ jobs:
       cleanup: ${{ inputs.cleanup || 'true' }}
       tpu_chips: ${{ inputs.tpu_chips || '16' }}
       tpu_topology: ${{ inputs.tpu_topology || '2x4' }}
+      data_access_timeout: '3600'
+      wait_timeout: '3600'
+      job_timeout: '3600s'
     secrets: inherit
 
   update-badge:

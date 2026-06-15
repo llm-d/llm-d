@@ -73,7 +73,7 @@ Generally multiple cache tiers can be applied ordered by their cache read/write 
 | vLLM Native OffloadingConnector | CPU RAM + Filesystem (shared storage) | `modelserver/gpu/vllm/native/fs/` |
 | LMCache Connector | CPU RAM | `modelserver/gpu/vllm/lmcache-connector/cpu/` |
 | LMCache Connector | Filesystem (shared storage) | `modelserver/gpu/vllm/lmcache-connector/fs/` |
-| TPU KVCache Connector | CPU RAM | `modelserver/tpu-v7/vllm/tpu-offloading-connector/` |
+| TPU KVCache Connector | CPU RAM | `modelserver/tpu/v6/vllm/native/tpu-offloading-connector/` and `modelserver/tpu/v7/vllm/native/tpu-offloading-connector/` |
 | SGLang HiCache | CPU RAM | `modelserver/gpu/sglang/native/cpu/` |
 
 <details>
@@ -144,7 +144,7 @@ For advanced configuration options and implementation details, see the [llm-d FS
 | GPU Accelerator           | NVIDIA H100                                             |
 | CPU Cache Offload Size    | 100 GB          
 
-This guide supports both GPU and TPU. The Kustomize overlays are available in `modelserver/gpu/vllm/` and `modelserver/tpu-v7/vllm/`.
+This guide supports both GPU and TPU. The Kustomize overlays are available in `modelserver/gpu/vllm/` and `modelserver/tpu/` (supporting both v6 and v7).
 
 ---
 
@@ -257,15 +257,10 @@ envsubst < ${REPO_ROOT}/guides/tiered-prefix-cache/manifests/pvc.yaml | kubectl 
 
 ```bash
 export CONNECTOR=native  # native | lmcache-connector
-export VARIANT=fs        # fs
+export VARIANT=cpu        # cpu | fs
 export INFRA_PROVIDER=base  # base | gke
-kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/tiered-prefix-cache/modelserver/gpu/vllm/${CONNECTOR}/${VARIANT}/${INFRA_PROVIDER}/
-```
-
-**For Google TPU v7:**
-
-```bash
-kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/tiered-prefix-cache/modelserver/tpu-v7/vllm/tpu-offloading-connector/
+export ACCELERATOR=gpu # gpu | tpu/v6 | tpu/v7
+kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/tiered-prefix-cache/modelserver/${ACCELERATOR}/vllm/${CONNECTOR}/${VARIANT}/${INFRA_PROVIDER}/
 ```
 
 > [!NOTE]

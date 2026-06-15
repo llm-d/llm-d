@@ -9,9 +9,6 @@ spec:
       labels:
         llm-d.ai/inference-serving: "true"
     spec:
-      nodeSelector:
-        cloud.google.com/gke-tpu-accelerator: tpu7x
-        cloud.google.com/gke-tpu-topology: 2x2x1 # Specify the physical topology for the TPU slice.
       initContainers:
         - name: tpu-node-setup
           image: busybox
@@ -41,7 +38,8 @@ spec:
           command: ["/bin/sh", "-c"]
           args:
             - |
-              vllm serve Qwen/Qwen3-32B \
+              exec vllm serve \
+                Qwen/Qwen3-32B \
                 --kv-transfer-config '{"kv_connector":"TPUOffloadConnector","kv_connector_module_path":"tpu_inference.offload.tpu_offload_connector","kv_role":"kv_both"}' \
                 --port 8000 \
                 --tensor-parallel-size 8 \
@@ -60,11 +58,6 @@ spec:
               value: "25000"
             - name: TPU_OFFLOAD_NUM_STAGING_BLOCKS
               value: "1000"
-          resources:
-            requests:
-              google.com/tpu: 4
-            limits:
-              google.com/tpu: 4
           startupProbe:
             initialDelaySeconds: 15
             periodSeconds: 30
