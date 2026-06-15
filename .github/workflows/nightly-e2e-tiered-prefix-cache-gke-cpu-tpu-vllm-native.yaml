@@ -112,3 +112,4 @@ jobs:
       badge_name: tiered-prefix-cache-gke-tpu
       badge_label: "VLLM TPU"
       result: ${{ needs.nightly.result }}
+      dry_run: ${{ inputs.dry_run || 'false' }}

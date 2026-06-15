@@ -115,3 +115,4 @@ jobs:
       badge_name: pd-disaggregation-gke-tpu
       badge_label: "VLLM TPU"
       result: ${{ needs.nightly.result }}
+      dry_run: ${{ inputs.dry_run || 'false' }}

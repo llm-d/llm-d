@@ -111,3 +111,4 @@ jobs:
       badge_name: optimized-baseline-gke-tpu
       badge_label: "VLLM TPU"
       result: ${{ needs.nightly.result }}
+      dry_run: ${{ inputs.dry_run || 'false' }}

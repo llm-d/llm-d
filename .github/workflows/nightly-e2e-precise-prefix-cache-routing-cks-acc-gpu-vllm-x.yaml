@@ -100,3 +100,4 @@ jobs:
       badge_name: precise-prefix-cache-routing-cks
       badge_label: "VLLM GPU"
       result: ${{ needs.nightly.result }}
+      dry_run: ${{ inputs.dry_run || 'false' }}

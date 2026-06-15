@@ -100,3 +100,4 @@ jobs:
       badge_name: precise-prefix-cache-routing-xpu
       badge_label: "VLLM XPU"
       result: ${{ needs.nightly.result }}
+      dry_run: ${{ inputs.dry_run || 'false' }}

@@ -167,3 +167,4 @@ jobs:
       badge_name: wva-ocp
       badge_label: "VLLM GPU"
       result: ${{ needs.nightly.result }}
+      dry_run: ${{ inputs.dry_run || 'false' }}
