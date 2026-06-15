@@ -119,7 +119,7 @@ spec:
                   secretKeyRef:
                     name: llm-d-hf-token
                     key: HF_TOKEN
-              # MAX_TOKENS controls the maxium number sequences, the maximum batch
+              # MAX_TOKENS controls the maximum number sequences, the maximum batch
               # size, and the maximum cuda graph capture size. To run with MTP, the
               # maximum batch size and the maximum cuda graph capture size will need to
               # be multiplied by the number of speculated tokens.
