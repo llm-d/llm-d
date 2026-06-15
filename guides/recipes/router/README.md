@@ -40,6 +40,12 @@ helm install <release-name> \
   --version ${ROUTER_CHART_VERSION}
 ```
 
+## Calibration
+
+[`calibration/`](calibration/) provides a reusable tool to measure
+`peakPrefillThroughput` for the `prefix-cache-affinity-filter` plugin on your own
+hardware/model. See its [README](calibration/README.md).
+
 ## Values Layering
 
 Both modes share a common `base.values.yaml` containing the router image, ports, and common pod selector labels. Feature values (monitoring, tracing) and guide-specific values are layered on top:

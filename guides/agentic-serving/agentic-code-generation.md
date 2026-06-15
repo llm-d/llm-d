@@ -29,9 +29,16 @@ This guide deploys the optimal llm-d configuration for agentic code-generation w
 - Set the following environment variables:
   ```bash
   export GAIE_VERSION=v1.5.0
+  export ROUTER_CHART_VERSION=v0
   export GUIDE_NAME="agentic-serving"
   export NAMESPACE=llm-d-agentic-serving
   export REPO_ROOT=$(realpath $(git rev-parse --show-toplevel))
+  ```
+
+- Install the Gateway API Inference Extension CRDs:
+
+  ```bash
+  kubectl apply -f https://github.com/kubernetes-sigs/gateway-api-inference-extension/releases/download/${GAIE_VERSION}/v1-manifests.yaml
   ```
 
 - Create a target namespace for the installation:
@@ -57,11 +64,17 @@ This guide deploys the optimal llm-d configuration for agentic code-generation w
 
 ```bash
 helm install ${GUIDE_NAME} \
-    oci://registry.k8s.io/gateway-api-inference-extension/charts/standalone \
+    oci://ghcr.io/llm-d/charts/llm-d-router-standalone-dev \
     -f ${REPO_ROOT}/guides/recipes/router/base.values.yaml \
     -f ${REPO_ROOT}/guides/${GUIDE_NAME}/router/${GUIDE_NAME}.values.yaml \
-    -n ${NAMESPACE} --version ${GAIE_VERSION}
+    -n ${NAMESPACE} --version ${ROUTER_CHART_VERSION}
 ```
+
+> **Note — `peakPrefillThroughput` is hardware/model-specific.** The router values set
+> `peakPrefillThroughput: 16444`, calibrated for Qwen3-Coder-480B-FP8 on TPU v7x. If you
+> deploy a different model or hardware, measure your own value and update
+> `router/agentic-serving.values.yaml`. See the shared
+> [router calibration tool](../recipes/router/calibration/README.md).
 
 ### 2. Deploy the Model Server (TPUs)
 
@@ -135,6 +148,13 @@ curl -LJO "https://raw.githubusercontent.com/llm-d/llm-d/main/guides/${GUIDE_NAM
 ### 3. Execute Benchmark
 
 ```bash
+# Benchmark parameters. CONCURRENCY_LEVEL is the number of concurrent coding sessions
+# to drive; NUM_REQUESTS is fixed at 20 per session; SEED is varied per concurrency level
+# so prompts don't overlap across runs (matches the published results below).
+export CONCURRENCY_LEVEL=40
+export NUM_REQUESTS=$((20 * CONCURRENCY_LEVEL))
+export SEED=$((7 + CONCURRENCY_LEVEL))
+
 export IP=$(kubectl get service ${GUIDE_NAME}-epp -n ${NAMESPACE} -o jsonpath='{.spec.clusterIP}')
 envsubst < guide.yaml > config.yaml
 ./run_only.sh -c config.yaml -o ./results
@@ -144,12 +164,15 @@ envsubst < guide.yaml > config.yaml
 
 The results below are with 8 replicas of TPU v7x (2x2x1) on the benchmark workload described above.
 
+Scaling concurrency up to 80 sessions, the optimized configuration sustains a peak total throughput of **~120K tokens/s**, versus **~40K tokens/s** for the k8s Service baseline — roughly **3× higher**.
+
 ### Summary with 40 concurrent coding sessions:
 | Metric | k8s Service | llm-d-optimized | Δ Improvement |
 | :--- | :--- | :--- | :--- |
-| **TTFT P50 (ms)** | 17391 | 1314 | ⬇️ 92.4% |
-| **Input tokens / sec** | 36987 | 78065 | ⬆️ 111.1% |
-| **Output tokens / sec** | 436.8 | 888.5 | ⬆️ 103.4% |
+| **TTFT P50 (ms)** | 17391 | 2474 | ⬇️ 85.8% |
+| **Total tokens / sec** | 37424 | 93353 | ⬆️ 149.5% |
+| **Input tokens / sec** | 36987 | 92705 | ⬆️ 150.6% |
+| **Output tokens / sec** | 436.8 | 647.5 | ⬆️ 48.2% |
 
 ### Latency Profiles:
 

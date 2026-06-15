@@ -1,5 +1,27 @@
+# ---------------------------------------------------------------------------
+# inference-perf workload template for the agentic-serving guide.
+#
+# Render with `envsubst < guide.yaml > config.yaml` AFTER exporting the
+# variables below. Any unset variable renders as an empty string, producing
+# invalid or semantically wrong YAML — so set all of them first.
+#
+# Per-run variables (see the guide's "Execute Benchmark" step):
+#   CONCURRENCY_LEVEL  int  concurrent coding sessions to drive; also sets
+#                           num_conversations. Published sweep: 5..80.
+#   NUM_REQUESTS       int  total requests for the stage.
+#                           Convention: 20 * CONCURRENCY_LEVEL.
+#   SEED               int  RNG seed for prompt generation. Use a DISTINCT seed
+#                           per concurrency (convention: 7 + CONCURRENCY_LEVEL)
+#                           so prompt sets don't overlap across runs and warm
+#                           each other's prefix cache.
+#
+# Environment variables (set by earlier guide steps):
+#   NAMESPACE      namespace where the stack is deployed
+#   IP             EPP service ClusterIP (base_url = http://${IP})
+#   BENCHMARK_PVC  PVC name where benchmark results are stored
+# ---------------------------------------------------------------------------
 endpoint:
-  stack_name: &stack_name agentic-workloads-Qwen3-Coder-480B  # user defined name for the stack (results prefix)
+  stack_name: &stack_name agentic-serving-Qwen3-Coder-480B  # user defined name for the stack (results prefix)
   model: &model Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8        # Exact HuggingFace model name. Must match stack deployed.
   namespace: &namespace ${NAMESPACE}  # Namespace where stack is deployed
   base_url: &url http://${IP}  # Base URL of inference endpoint
@@ -18,7 +40,7 @@ harness:
   parallelism: 1                  # Number of parallel workload launcher pods to create.
   wait_timeout: 6000              # Time (in seconds) to wait for workload launcher pod to complete before terminating.
                                   # Set to 0 to disable timeout.
-  image: ghcr.io/llm-d/llm-d-benchmark:v0.5.2
+  image: ghcr.io/llm-d/llm-d-benchmark:v0.6.8.1
 
 env:
   - name: RAYON_NUM_THREADS
@@ -32,16 +54,8 @@ workload:                         # yaml configuration for harness workload(s)
       worker_max_concurrency: 1000
       request_timeout: 600
       stages:
-      - num_requests: 100
-        concurrency_level: 5
-      - num_requests: 200
-        concurrency_level: 10
-      - num_requests: 400
-        concurrency_level: 20
-      - num_requests: 600
-        concurrency_level: 30
-      - num_requests: 800
-        concurrency_level: 40
+      - num_requests: ${NUM_REQUESTS}
+        concurrency_level: ${CONCURRENCY_LEVEL}
     api:
       type: completion
       streaming: true
@@ -52,9 +66,9 @@ workload:                         # yaml configuration for harness workload(s)
     data:
       type: conversation_replay
       conversation_replay:
-        seed: 42
+        seed: ${SEED}
         max_model_len: 262144
-        num_conversations: 40
+        num_conversations: ${CONCURRENCY_LEVEL}
         shared_system_prompt_len: 3000 
         dynamic_system_prompt_len:
           type: lognormal
