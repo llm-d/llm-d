@@ -535,4 +535,4 @@ LMCache configuration: `LMCACHE_MAX_LOCAL_CPU_SIZE=20GB`, `LMCACHE_MAX_LOCAL_DIS
 
 The benchmark runs on 16 × H100 GPUs, distributed across 16 model servers (1 H100s per server with TP=1) using gpt-oss-120B and the same workload as in [default configuration benchmark results](#cpu-offloading-benchmarking-results). The benchmark compares to optimized baseline configuration.
 
-For detailed results see [gpt-oss-120B benchmarking results](#benchmark-results-gpt-oss-120b.md).
+For detailed results see [gpt-oss-120B benchmarking results](benchmark-results-gpt-oss-120b.md).
