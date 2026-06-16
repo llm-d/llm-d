@@ -4,7 +4,7 @@ The **agentic-serving** guide is a horizontal, workload-centric umbrella that se
 agentic *programs* on llm-d. It provides the recommended, cohesive deployment for the workload —
 composing llm-d's well-lit paths into one stack rather than enabling a single feature.
 For the workload model, canonical shapes, and the direction this guide is driving toward, see the
-[Agentic Serving workload page](../../docs/workloads/agentic-serving.md); this guide is the
+[Agentic Serving workload page](../../docs/well-lit-paths/workloads/agentic-serving.md); this guide is the
 operational counterpart, and the canonical guide of the llm-d Agentic Inference SIG.
 
 The reference workload this guide optimizes for is **long-horizon loops** (agentic code generation): deep multi-turn
@@ -28,7 +28,7 @@ specific pressure of the agentic workload:
 The [Agentic Inference SIG northstar](https://docs.google.com/document/d/1DCUVHp9Z8CZUnKiP04nnD_31M3gRishW-cWZ657Cn5U)
 sets the broader direction: **session-graph orchestration**, **program-aware scheduling**,
 **zero-recompute state reuse** with typed retention, and **proactive state placement** ahead of
-fan-out. See the [workload page](../../docs/workloads/agentic-serving.md#direction) for the full
+fan-out. See the [workload page](../../docs/well-lit-paths/workloads/agentic-serving.md#direction) for the full
 direction and further reading.
 
 ## Deployments

@@ -2,7 +2,14 @@
 
 Well-lit paths are curated, end-to-end guides for common LLM inference patterns and optimizations. These guides are intended to be a starting point for your own configuration and deployment of model servers. Our manifests provide basic reusable building blocks for vLLM deployments and llm-d router configuration within these guides but are not intended to support the full range of all possible configurations.
 
-> **Serving a specific workload?** See **[Workloads](../workloads/README.md)** — guides (e.g. agentic and multimodal serving) that compose these paths into a cohesive deployment for a use case.
+> **Serving a specific workload?** See **[Workloads](#workloads)** — guides (e.g. agentic and multimodal serving) that compose these paths into a cohesive deployment for a use case.
+
+### Workloads
+
+Workload guides provide the recommended, cohesive deployment for serving a production workload on llm-d. Each defines the workload, then composes the relevant well-lit paths into one stack tuned to serve it.
+
+- **[Agentic Serving](workloads/agentic-serving.md)**: Long, multi-turn, tool-using agentic programs (e.g. coding agents) — prefix-aware routing, KV-cache offloading, and P/D disaggregation composed for the agentic workload.
+- **[Multimodal Serving](workloads/multimodal-serving.md)**: Image / audio / video workloads — prefix- and load-aware routing that tracks and matches multimodal payloads across aggregated and disaggregated serving.
 
 ### Intelligent Routing
 

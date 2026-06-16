@@ -30,7 +30,7 @@ We currently offer the following:
 
 ### Workloads
 
-Workload-centric guides — each provides the recommended, cohesive deployment for serving a workload, composing the capability guides above. See the [workload narratives](../docs/workloads/README.md) for overviews.
+Workload-centric guides — each provides the recommended, cohesive deployment for serving a workload, composing the capability guides above. See the [workload narratives](../docs/well-lit-paths/workloads/README.md) for overviews.
 
 * [Agentic Serving](./agentic-serving/README.md) - serve long, multi-turn, tool-using agentic workloads (e.g. coding agents) by composing prefix-aware routing, KV-cache offloading, and P/D disaggregation.
 * [Multimodal Serving](./multimodal-serving/optimized-baseline/README.md) - serve image/audio/video workloads with prefix- and load-aware routing that tracks and matches multimodal payloads across the cluster.
