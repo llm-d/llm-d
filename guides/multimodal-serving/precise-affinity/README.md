@@ -171,11 +171,37 @@ kubectl delete namespace ${NAMESPACE}
 
 ## Benchmarking Report
 
-> [!NOTE]
-> Benchmark results are pending a cluster run; this section will mirror the [optimized-baseline report](../optimized-baseline/README.md#benchmarking-report).
+The benchmark runs on 16 × H200 GPUs, distributed across 8 model servers (2 H200s per server with
+TP=2), serving Qwen3-VL-32B-Instruct on vLLM 0.23. Render is served by a standalone CPU
+`vllm launch render` Service. The workload is a shared-prefix multimodal mix (cached and fresh
+images) swept over an offered-QPS ladder.
 
-Run basis: 8 x H200 GPUs, 4 servers, TP=2, plus the CPU-only `vllm-render` sidecar on the EPP pod. Metrics are swept over a QPS ladder; TTFT is reported as p90 in milliseconds and throughput as output tokens/sec. Planned arms: precise affinity vs a stock Kubernetes Service (round-robin, no EPP), and precise affinity vs optimized-baseline (exact vs approximate scoring).
+### Render-Service Scaling
+
+The render call runs on the routing path for every multimodal request. The saturation knee moves from
+9 to 18 to 70 QPS across 1, 2, and 8 render-Service replicas.
+
+<img src="./benchmark-results/render_scaling.png" width="640" alt="Render-replica scaling">
+
+### Comparing Precise Affinity to a Simple Kubernetes Service
+
+Graphs below compare precise-affinity routing to a stock Kubernetes Service that round-robins requests
+across the same 8 vLLM pods (no EPP, no scoring).
 
 <img src="./benchmark-results/throughput_vs_qps.png" width="900" alt="Throughput vs QPS">
 <img src="./benchmark-results/latency_vs_qps.png" width="900" alt="Latency vs QPS">
 <img src="./benchmark-results/ttft_p90_vs_qps.png" width="900" alt="TTFT p90 vs QPS">
+
+<details>
+<summary><b><i>Click</i></b> to view the per-rate breakdown</summary>
+
+Output tokens/sec, higher is better; TTFT in seconds, lower is better.
+
+| Offered QPS | k8s Output | Precise-affinity Output | k8s TTFT p90 | Precise-affinity TTFT p90 |
+|-----:|-----------:|------------------------:|-------------:|--------------------------:|
+| 40 | 2,560 | 2,560 | 0.7 | 1.3 |
+| 60 | 3,842 | 3,841 | 2.1 | 2.8 |
+| 80 | 5,121 | 4,685 | 2.5 | 14.6 |
+| 120 | 6,390 | 4,479 | 3.1 | 18.8 |
+
+</details>

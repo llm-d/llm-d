@@ -1,0 +1,91 @@
+endpoint:
+  stack_name: &stack_name mm-precise-affinity-Qwen3-VL-32B-Instruct  # results prefix
+  model: &model Qwen/Qwen3-VL-32B-Instruct        # Exact HuggingFace model name. Must match stack deployed.
+  namespace: &namespace ${NAMESPACE}  # Namespace where stack is deployed
+  base_url: &url http://${IP}  # Set per arm: round-robin Service IP (A0) or EPP IP (A1)
+  hf_token_secret: llm-d-hf-token
+
+control:
+  work_dir: $HOME/llm-d-bench-work
+  kubectl: kubectl
+
+harness:
+  name: &harness_name inference-perf
+  results_pvc: ${BENCHMARK_PVC}
+  namespace: *namespace
+  parallelism: 1
+  wait_timeout: 6000
+  # multimodal needs llm-d-benchmark v0.7.0+ (inference-perf multimodal datagen)
+  image: ghcr.io/llm-d/llm-d-benchmark:v0.7.0
+
+env:
+  - name: RAYON_NUM_THREADS
+    value: "4"
+
+# shared-prefix multimodal: cached prefix image (prefix-cache hits) + fresh per-request image
+workload:
+  shared_prefix_mm:
+    load:
+      type: constant
+      num_workers: 16   # enough load-gen concurrency to saturate the render fleet
+      stages:
+        - rate: 20
+          duration: 120   # warmup, seat the cached prefixes
+        - rate: 20
+          duration: 100
+        - rate: 40
+          duration: 100
+        - rate: 60
+          duration: 100
+        - rate: 80
+          duration: 100
+        - rate: 100
+          duration: 100
+        - rate: 120
+          duration: 100
+        - rate: 140
+          duration: 100
+        - rate: 160
+          duration: 100
+    api:
+      type: chat
+      streaming: true
+    server:
+      type: vllm
+      model_name: *model
+      base_url: *url
+      ignore_eos: true
+    tokenizer:
+      pretrained_model_name_or_path: *model
+    data:
+      type: shared_prefix
+      # fresh per-request image (the "new" content each request)
+      multimodal:
+        image:
+          count: { type: fixed, min: 1, max: 1, mean: 1 }
+          insertion_point: 1.0
+          resolutions:
+            - resolution: "720p"
+              weight: 1.0
+      shared_prefix:
+        num_groups: 60
+        num_prompts_per_group: 10
+        system_prompt_len: { type: fixed, min: 200, max: 200, mean: 200 }
+        question_len: { type: fixed, min: 50, max: 50, mean: 50 }
+        output_len: { type: fixed, min: 64, max: 64, mean: 64 }
+        # cached prefix image (same bytes across a group -> prefix-cache hits)
+        multimodal:
+          image:
+            count: { type: fixed, min: 1, max: 1, mean: 1 }
+            insertion_point: 0.0
+            resolutions:
+              - resolution: "1080p"
+                weight: 1.0
+    report:
+      request_lifecycle:
+        summary: true
+        per_stage: true
+        per_request: true
+    storage:
+      local_storage:
+        path: /workspace
