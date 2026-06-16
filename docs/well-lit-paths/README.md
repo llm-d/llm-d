@@ -10,6 +10,7 @@ Workload guides provide the recommended, cohesive deployment for serving a produ
 
 - **[Agentic Serving](workloads/agentic-serving.md)**: Long, multi-turn, tool-using agentic programs (e.g. coding agents) — prefix-aware routing, KV-cache offloading, and P/D disaggregation composed for the agentic workload.
 - **[Multimodal Serving](workloads/multimodal-serving.md)**: Image / audio / video workloads — prefix- and load-aware routing that tracks and matches multimodal payloads across aggregated and disaggregated serving.
+- **[Batch Serving](workloads/batch-serving/README.md)**: Large-scale offline or asynchronous jobs — OpenAI-compatible batch gateway and lightweight async queue processors.
 
 ### Intelligent Routing
 
@@ -30,9 +31,7 @@ Workload guides provide the recommended, cohesive deployment for serving a produ
 
 - **[Flow Control](flow-control.md)**: Intelligent request queuing for multi-tenant deployments and managing traffic spikes.
 - **[Workload Autoscaling](workload-autoscaling.md)**: From simple Kubernetes autoscaling supplemented by EPP load metrics to advanced, SLO-aware capacity optimization for heterogeneous pools via the Workload Variant Autoscaler.
-- **[Batch Gateway](batch-gateway.md)**: Managing large-scale batch inference coexisting with interactive workloads via an OpenAI-compatible Batch API.
 
 ### Experimental
 
-- **[Asynchronous Processing](asynchronous-processing.md)**: Intelligently processing latency-tolerant requests sourced from message queues via a lightweight agent to leverage "slack" capacity without the complexity of a full batch gateway.
 - **[No-Kubernetes Deployment](no-kubernetes-deployment.md)**: Running the llm-d routing stack on bare metal, HPC schedulers, or Ray — workers are discovered from a YAML file on disk via the `file-discovery` plugin instead of an `InferencePool`.
