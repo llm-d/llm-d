@@ -180,7 +180,7 @@ jobs:
       - name: Create kind cluster
         uses: helm/kind-action@ef37e7f390d99f746eb8b610417061a60e82a6cc  # v1.14.0
         with:
-          cluster_name: helmfile-dry-run
+          cluster_name: kustomize-dry-run
           node_image: kindest/node:v1.35.0  # 1.35+ required for stable DRA (resource.k8s.io/v1)
           version: v0.31.0
           wait: 120s
