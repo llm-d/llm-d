@@ -4,4 +4,3 @@ resources:
   - decode.yaml
   - prefill.yaml
   - serviceAccount.yaml
-  - pod-monitors.yaml  # comment out if Prometheus Operator CRDs (PodMonitor) are not installed on the cluster
