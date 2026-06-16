@@ -28,7 +28,6 @@ The optimized-baseline defaults to two main routing criteria:
 | Total GPUs         | 16                                                      |
 
 ## Additional Configuration
-Deployment label llm-d.ai/model: gpt-oss-120b
 
 | Parameter          | Value                                                             |
 | ------------------ | ----------------------------------------------------------------- |
@@ -38,6 +37,7 @@ Deployment label llm-d.ai/model: gpt-oss-120b
 | GPUs per replica   | 1                                                                 |
 | Total GPUs         | 16                                                                |
 | Output_len         | 500                                                               |
+| Question_len       | 500                                                               |
 
 ### Supported Hardware Backends
 
@@ -283,6 +283,7 @@ llmdbenchmark \
 
 > [!NOTE]
 > Depending on your `cluster` you may need to extend the default `timeout` values to longer duration, as `bind`, `access` and `wait-timeout` times of `pvcs` and `pods` can be arbitrarily slower on other systems, please utilize `llmdbenchmark run --help` to view the knobs needed to increase those values.
+> Model-aware; set `model` to the name you want to query, e.g. `Qwen/Qwen3-32B` or `openai/gpt-oss-120b`
 
 ## Cleanup
 
@@ -296,11 +297,9 @@ kubectl delete namespace ${NAMESPACE}
 
 ## Benchmarking Report
 
-### Default Configuration
+### Comparing llm-d Routing to a Simple Kubernetes Service (vLLM)
 
 The benchmark runs on 16 × H100 GPUs, distributed across 8 model servers (2 H100s per server with TP=2).
-
-### Comparing llm-d Routing to a Simple Kubernetes Service (vLLM)
 
 Graphs below compare optimized-baseline routing to a stock Kubernetes Service that round-robins requests across the same 8 vLLM pods (no EPP, no scoring).
 
@@ -385,16 +384,11 @@ Output tokens/sec — higher is better; TTFT in seconds — lower is better.
 </details>
 
 ### Comparing llm-d Routing to a Simple Kubernetes Service (Optional Configuration: gpt-oss-120b)
- 
-The benchmark runs on 16 × H100 GPUs, distributed across 16 H100 model servers with TP=1.
 
-#### Note
-Update [guide_optimized-baseline_1.yaml workload template](#3.-Run-the-benchmark-profile-for-Optimized-Baseline) with workload.shared_prefix.data.shared_prefix.output_len: 500.
+The benchmark runs on 16 × H100 GPUs, distributed across 16 H100 model servers with TP=1 using gpt-oss-120b and a modified workload template:
+Update [guide_optimized-baseline_1.yaml workload template](#3.-Run-the-benchmark-profile-for-Optimized-Baseline) with: `workload.shared_prefix.data.shared_prefix.output_len`: 500 and `workload.shared_prefix.data.shared_prefix.question_len`: 500.
 
 The benchmark run by [compare-llm-d-configurations skill](https://github.com/llm-d-incubation/llm-d-skills/tree/main/skills/compare-llm-d-configurations).
-
-
-#### Comparing llm-d Routing to a Simple Kubernetes Service
 
 Graphs below compare optimized-baseline routing to a stock Kubernetes Service that random (OVN-K) requests across the same 16 vLLM pods (no EPP, no scoring).
 
@@ -406,12 +400,12 @@ Summary across the full ladder (rates 3 → 60):
 
 | Metric                  | k8s service (R) | llm-d Optimized | Δ% vs k8s |
 | :---------------------- | :-------------- | :-------------- | :-------- |
-| Output tokens/sec       | 7,342           | 8,064           | +9.8%     |
-| Requests/sec            | 12.78           | 14.26           | +11.6%    |
-| TTFT mean (s)           | 5.393           | 1.230           | -77.2%    |
-| TTFT p90 (s)            | 14,910          | 4,952           | -66.8%    |
-| ITL mean (ms)           | 21.76           | 19.49           | -10.4%    |
-| Cache miss/req (tokens) | 91,369          | 28,556          | -68.7%    |
+| Output tokens/sec       | 7,189           | 8,605           | +19.7%    |
+| Requests/sec            | 13.44           | 15.59           | +16.0%    |
+| TTFT mean (s)           | 4.106           | 0.142           | -96.5%    |
+| TTFT p90 (s)            | 11.733          | 0.090           | -99.2%    |
+| ITL mean (ms)           | 21.52           | 13.63           | -36.7%    |
+| Cache miss/req (tokens) | 68,467          | 281             | -99.6%    |
 
 <details>
 <summary><b><i>Click</i></b> to view the per-rate breakdown across the full ladder</summary>
@@ -420,22 +414,22 @@ Output tokens/sec — higher is better; TTFT in seconds — lower is better.
 
 | Rate | k8s Output | llm-d Output | k8s TTFT mean | llm-d TTFT mean | k8s TTFT p90 | llm-d TTFT p90 |
 | ---: | ---------: | -----------: | ------------: | --------------: | -----------: | -------------: |
-| 3    | 1,689	    | 1,263	       | 0.298	       | 0.136	         | 0.286	        | 0.113          |
-| 10   | 5,315      | 4,190        | 0.315         | 0.130           | 0.281          | 0.113          |
-| 15   | 7,632      | 5,968        | 0.435         | 0.096           |  1.122          | 0.102          |
-| 20   | 9,498      | 9,931        | 0.354         | 0.131           |  0.440          | 0.140          |
-| 22   | 10,756     | 10,777       | 0.377         | 0.135           |  0.503          | 0.131          |
-| 25   | 10,240     | 12,093       | 0.493         | 0.103           |  0.672          | 0.126          |
-| 30   | 11,667     | 12,683       | 0.778         | 0.242           |  2.206          | 0.156          |
-| 35   | 12,371     | 14,208       | 1.579         | 0.160           |  4.905          | 0.150          |
-| 40   | 13,867     | 18,189       | 4.353         | 0.248           | 10.522          | 0.330          |
-| 43   | 13,913     | 17,998       | 5.893         | 0.614           | 13.158          | 1.945          |
-| 46   | 14,142     | 17,643       | 6.840         | 0.849           | 15.069          | 3.170          |
-| 49   | 13,466     | 18,429       | 6.336         | 1.756           | 14.298          | 6.202          |
-| 52   | 13,150     | 17,931       | 7.504         | 1.505           | 15.703          | 5.310          |
-| 55   | 14,186     | 18,159       | 8.984         | 1.942           | 20.083          | 6.870          |
-| 57   | 11,911     | 17,824       | 9.320         | 3.155           | 20.701          | 9.135          |
-| 60   | 14,660     | 18,899       | 9.630         | 3.064           | 21.164          | 8.876          |
+| 3    | 1,351.4	  | 2,026.2	     | 0.2206	       | 0.0539	         | 0.2089	      | 0.0592         |
+| 10   | 5,003.9    | 5,032.6      | 0.2864        | 0.0533          | 0.3425       | 0.0594         |
+| 15   | 6,495.9    | 7,165.2      | 0.2326        | 0.0594          | 0.2724       | 0.0792         |
+| 20   | 9,306.2    | 9,824.8      | 0.3480        | 0.0811          | 0.5255       | 0.0881         |
+| 22   | 10,007.8   | 10,916.3     | 0.3189        | 0.0602          | 0.3978       | 0.0697         |
+| 25   | 10,801.6   | 11,525.6     | 0.3540        | 0.0634          | 0.5032       | 0.0718         |
+| 30   | 11,762.8   | 13,643.3     | 0.7136        | 0.0637          | 2.1299       | 0.0728         |
+| 35   | 11,493.7   | 14,777.6     | 0.4310        | 0.0641          | 1.0255       | 0.0735         |
+| 40   | 13,894     | 19,309       | 3.4314        | 0.0767          | 8.2725       | 0.0794         |
+| 43   | 15,312.5   | 20,118.8     | 3.7534        | 0.0720          | 9.3615       | 0.0826         |
+| 46   | 14,633.3   | 22,326.1     | 5.0618        | 0.0717          | 12.3945      | 0.0814         |
+| 49   | 14,459.2   | 21,851.7     | 5.9774        | 0.0712          | 13.5660      | 0.0817         |
+| 52   | 14,817.1   | 21,543.7     | 5.6899        | 0.0942          | 12.1829      | 0.0871         |
+| 55   | 14,172.8   | 22,171.2     | 6.5856        | 0.2357          | 14.7343      | 0.1415         |
+| 57   | 13,547.2   | 22,829.8     | 6.8363        | 0.1963          | 15.6380      | 0.1221         |
+| 60   | 14,589.8   | 26,013.2     | 7.6587        | 0.1052          | 15.7172      | 0.0939         |
 
 
 </details>

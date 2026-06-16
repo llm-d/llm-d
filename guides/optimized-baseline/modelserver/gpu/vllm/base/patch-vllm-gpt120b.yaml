@@ -41,6 +41,11 @@ spec:
             requests:
               nvidia.com/gpu: 1
           env:
+            - name: HF_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: llm-d-hf-token
+                  key: HF_TOKEN
             - name: PYTORCH_ALLOC_CONF
               value: "expandable_segments:True"
             - name: LOGNAME
