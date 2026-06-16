@@ -1,0 +1,20 @@
+apiVersion: kustomize.config.k8s.io/v1alpha1
+kind: Component
+# Decode-only backend swap: default ("auto") MoE backend + flashinfer_nvlink_one_sided
+# all2all, instead of MegaMoE. Does NOT change parallelism — TP/DP/EP are set by the
+# topology component this is composed with (e.g. decode DEP16 in 3p2d-dep8-dep16).
+patches:
+  - target:
+      kind: LeaderWorkerSet
+      name: ".*-decode"
+    patch: |-
+      - op: add
+        path: /spec/leaderWorkerTemplate/workerTemplate/spec/containers/0/env/-
+        value:
+          name: MOE_BACKEND
+          value: auto
+      - op: add
+        path: /spec/leaderWorkerTemplate/workerTemplate/spec/containers/0/env/-
+        value:
+          name: ALL2ALL_BACKEND
+          value: flashinfer_nvlink_one_sided

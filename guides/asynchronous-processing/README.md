@@ -22,7 +22,7 @@ Before installing Async Processor, ensure you have:
 1. **Kubernetes cluster**: A running Kubernetes cluster (v1.31+).
    - For local development, you can use **Kind** or **Minikube**.
    - For production, GKE, AKS, or OpenShift are supported.
-2. **Gateway control plane**: Configure and deploy your [Gateway control plane](../prereq/gateway-provider/README.md) (e.g., Istio) before installation.
+2. **Gateway control plane**: Configure and deploy your [Gateway control plane](../../docs/resources/gateway/README.md) (e.g., Istio) before installation.
 3. **llm-d Inference Stack**: Async Processor requires an existing [optimized baseline](../optimized-baseline/README.md) stack to dispatch requests to.
 
 ## Installation

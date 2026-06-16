@@ -52,6 +52,16 @@ This guide includes configurations for the following accelerators and inference 
    ```bash
    kubectl create namespace ${NAMESPACE}
    ```
+6. [Create the `llm-d-hf-token` secret in your target namespace with the key `HF_TOKEN` matching a valid HuggingFace token](../../../helpers/hf-token.md) to pull models.
+<!-- llm-d-cicd:skip start -->
+   ```bash
+   export HF_TOKEN=<your HuggingFace token>
+   kubectl create secret generic llm-d-hf-token \
+     --from-literal="HF_TOKEN=${HF_TOKEN}" \
+     --namespace "${NAMESPACE}" \
+     --dry-run=client -o yaml | kubectl apply -f -
+   ```
+<!-- llm-d-cicd:skip end -->
 
 ---
 

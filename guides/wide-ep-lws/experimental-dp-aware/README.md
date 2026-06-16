@@ -56,7 +56,7 @@ This guide requires 32 Nvidia H200 or B200 GPUs and InfiniBand or RoCE RDMA netw
 
 - Have the [proper client tools installed on your local system](../../../helpers/client-setup/README.md) to use this guide.
 - You have deployed the [LeaderWorkerSet controller](https://lws.sigs.k8s.io/docs/installation/)
-- Configure and deploy your [Gateway control plane](../../prereq/gateway-provider/README.md). Note that the Gateway must support multi-port (e.g. Istio 1.29.2)
+- Configure and deploy your [Gateway control plane](../../../docs/resources/gateway/README.md). Note that the Gateway must support multi-port (e.g. Istio 1.29.2)
 - Have the [Monitoring stack](../../../docs/resources/observability/setup.md) installed on your system.
 - Create a namespace for installation.
 
@@ -80,7 +80,7 @@ Deploy the Gateway and HTTPRoute using the [gateway recipe](../../recipes/gatewa
 
 #### Gateway options
 
-To see what gateway options are supported refer to our [gateway provider prereq doc](../../prereq/gateway-provider/README.md#supported-providers). Gateway configurations per provider are tracked in the [gateway-configurations directory](../../prereq/gateway-provider/common-configurations/).
+To see what gateway options are supported refer to our [gateway provider docs](../../../docs/resources/gateway/README.md). Gateway configurations per provider are tracked in the [gateway recipes directory](../../recipes/gateway/).
 
 You can also customize your gateway, for more information on how to do that see our [gateway customization docs](../../04_customizing_a_guide.md).
 
@@ -169,6 +169,30 @@ For instructions on getting started making inference requests see [our docs](../
 
 **_NOTE:_** Compared to the other examples, this one takes anywhere between 7-10 minutes for the vllm API servers to startup so this might take longer before you can interact with this example.
 
-## Benchmarking
+## Benchmarking Results
 
-This is a simple benchmarking setup to demonstrate the correctness of the implementation.
+### CKS (4x H200, 32 GPUs, InfiniBand)
+
+Benchmark: `2048_concurrent_2k_isl_2k_osl` (2048 concurrent requests, 2K input / 2K output tokens)
+
+| Metric | Hybrid-LB | DP Supervisor | Change |
+|---|---|---|---|
+| Output tokens/s | 22,125 | 27,853 | +26% |
+| Input tokens/s | 22,586 | 29,329 | +30% |
+| Total tokens/s | 44,711 | 57,183 | +28% |
+| Requests/s | 11.03 | 14.33 | +30% |
+
+~1,741 output tokens/s per decode GPU (16 decode GPUs), compared to ~1,383 with hybrid-lb.
+
+### GKE (4x H200, 32 GPUs, RoCE)
+
+Benchmark: `2048_concurrent_2k_isl_2k_osl` (2048 concurrent requests, 2K input / 2K output tokens)
+
+| Metric | DP Supervisor |
+|---|---|
+| Output tokens/s | 23,246 |
+| Input tokens/s | 25,106 |
+| Total tokens/s | 48,352 |
+| Requests/s | 12.27 |
+
+~1,453 output tokens/s per decode GPU (16 decode GPUs). ~17% lower than CKS due to RoCE vs InfiniBand latency.

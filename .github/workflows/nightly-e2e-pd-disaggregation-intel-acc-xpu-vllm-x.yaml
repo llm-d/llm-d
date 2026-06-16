@@ -1,4 +1,4 @@
-name: Nightly - PD Disaggregation E2E (XPU)
+name: Nightly - PD Disaggregation E2E (Intel XPU)
 
 on:
   workflow_dispatch:
@@ -100,3 +100,4 @@ jobs:
       badge_name: pd-disaggregation-xpu
       badge_label: "VLLM XPU"
       result: ${{ needs.nightly.result }}
+      dry_run: ${{ inputs.dry_run || 'false' }}

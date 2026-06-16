@@ -1,0 +1,158 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: calibrate-script
+data:
+  calibrate.py: |
+    #!/usr/bin/env python3
+    """Measure peak prefill throughput against a live vLLM endpoint.
+
+    Sends warmup + measurement requests of exactly CHUNK_SIZE tokens (as token
+    IDs, bypassing tokenizer noise) and measures TTFT. The primary output is
+
+        PEAK_PREFILL_THROUGHPUT = R_peak = CHUNK_SIZE / median(TTFT)   # tokens/sec
+
+    which is the value calibrate.sh extracts and prints. It also prints
+    TAU = R_peak * T_MAX_SECONDS as a convenience for SLO sizing, but nothing
+    downstream consumes TAU.
+
+    The request sends `prompt` as a JSON array of integer token IDs — vLLM's
+    OpenAI-compatible /v1/completions accepts token-ID arrays in `prompt` (a
+    vLLM extension of the OpenAI API), bypassing tokenization so the prefill is
+    exactly CHUNK_SIZE tokens. Each request uses a fresh random token-ID prompt
+    so the prefix cache misses on every call — the measurement reflects actual
+    prefill time, not cache-hit re-use of a prior prompt.
+
+    Read the peak prefill throughput from the Job logs:
+      kubectl logs job/calibrate-peak-throughput | grep '^PEAK_PREFILL_THROUGHPUT=' | cut -d= -f2
+
+    Uses stdlib only — no pip install, runs on stock python:3.11-slim.
+    """
+    import json
+    import os
+    import random
+    import statistics
+    import time
+    import urllib.error
+    import urllib.request
+
+    VLLM_ENDPOINT    = os.environ["VLLM_ENDPOINT"].rstrip("/")
+    MODEL_NAME       = os.environ["MODEL_NAME"]
+    CHUNK_SIZE       = int(os.environ["CHUNK_SIZE"])
+    T_MAX_SECONDS    = float(os.environ["T_MAX_SECONDS"])
+    NUM_WARMUP       = int(os.environ.get("NUM_WARMUP", "5"))
+    NUM_MEASUREMENTS = int(os.environ.get("NUM_MEASUREMENTS", "20"))
+    # Range chosen to stay inside the standard vocab of common tokenizers
+    # (Qwen3 vocab is ~150k, Llama is ~128k; 100..10000 is safe for all).
+    TOKEN_MIN        = int(os.environ.get("TOKEN_MIN", "100"))
+    TOKEN_MAX        = int(os.environ.get("TOKEN_MAX", "10000"))
+    # Always use a fresh per-run seed (intentionally not configurable). A fixed
+    # seed would reproduce the same prompts run-to-run and, against a persistent
+    # KV-offload cache, cache-hit on later runs and measure cache latency instead
+    # of prefill. The seed is printed below for traceability.
+    SEED = time.time_ns()
+    rng = random.Random(SEED)
+    print(f"using seed={SEED}", flush=True)
+
+    def fresh_prompt():
+        """Generate a CHUNK_SIZE-length array of random token IDs. Each call
+        returns a different prompt so vLLM can't cache-hit across requests."""
+        return [rng.randint(TOKEN_MIN, TOKEN_MAX) for _ in range(CHUNK_SIZE)]
+
+    def send_one(prompt_ids):
+        # `prompt` carries integer token IDs directly — vLLM accepts token-ID
+        # arrays on /v1/completions, which avoids a tokenizer dependency and
+        # pins the prefill length to exactly CHUNK_SIZE tokens.
+        body = json.dumps({
+            "model": MODEL_NAME,
+            "prompt": prompt_ids,
+            "max_tokens": 1,
+            "stream": True,
+            "temperature": 0,
+        }).encode()
+        req = urllib.request.Request(
+            f"{VLLM_ENDPOINT}/v1/completions",
+            data=body,
+            headers={"Content-Type": "application/json"},
+        )
+        start = time.monotonic()
+        try:
+            with urllib.request.urlopen(req, timeout=120) as resp:
+                for line in resp:
+                    if line.strip().startswith(b"data:") and b"[DONE]" not in line:
+                        return time.monotonic() - start
+        except urllib.error.HTTPError as e:
+            detail = e.read().decode(errors="replace")[:500]
+            raise RuntimeError(
+                f"completions request failed (HTTP {e.code}): {detail}\n"
+                "If the server rejected the integer token-ID prompt, this vLLM "
+                "build may not accept token-ID arrays in `prompt`; substitute a "
+                "deterministic text prompt of exactly CHUNK_SIZE tokens instead."
+            ) from e
+        raise RuntimeError("no streamed chunk received")
+
+    print(f"endpoint={VLLM_ENDPOINT} model={MODEL_NAME} chunk={CHUNK_SIZE}", flush=True)
+    print(f"warmup={NUM_WARMUP} measurements={NUM_MEASUREMENTS}", flush=True)
+
+    for i in range(NUM_WARMUP):
+        print(f"  warmup {i+1}: TTFT={send_one(fresh_prompt()):.4f}s", flush=True)
+
+    samples = []
+    for i in range(NUM_MEASUREMENTS):
+        t = send_one(fresh_prompt())
+        samples.append(t)
+        print(f"  measure {i+1}: TTFT={t:.4f}s", flush=True)
+
+    # statistics.median averages the two middle values for an even sample count.
+    median_ttft = statistics.median(samples)
+    r_peak = CHUNK_SIZE / median_ttft
+    tau = int(r_peak * T_MAX_SECONDS)
+
+    print(f"\nT(B)    = {median_ttft:.4f}s", flush=True)
+    print(f"R_peak  = {int(r_peak)} tokens/sec", flush=True)
+    print(f"PEAK_PREFILL_THROUGHPUT={int(r_peak)}", flush=True)
+    print(f"TAU={tau}", flush=True)
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: calibrate-peak-throughput
+spec:
+  backoffLimit: 2
+  ttlSecondsAfterFinished: 3600
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+      - name: calibrate
+        image: python:3.11-slim
+        command: ["python3", "/scripts/calibrate.py"]
+        env:
+        - name: VLLM_ENDPOINT
+          value: "${VLLM_ENDPOINT}"
+        - name: MODEL_NAME
+          value: "${MODEL_NAME}"
+        - name: CHUNK_SIZE
+          value: "${CHUNK_SIZE}"
+        - name: T_MAX_SECONDS
+          value: "${T_MAX_SECONDS}"
+        - name: NUM_WARMUP
+          value: "${NUM_WARMUP}"
+        - name: NUM_MEASUREMENTS
+          value: "${NUM_MEASUREMENTS}"
+        volumeMounts:
+        - name: script
+          mountPath: /scripts
+          readOnly: true
+        resources:
+          requests:
+            cpu: "100m"
+            memory: "128Mi"
+          limits:
+            cpu: "500m"
+            memory: "256Mi"
+      volumes:
+      - name: script
+        configMap:
+          name: calibrate-script
+          defaultMode: 0555

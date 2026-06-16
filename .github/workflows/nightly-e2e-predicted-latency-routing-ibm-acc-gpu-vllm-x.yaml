@@ -99,3 +99,4 @@ jobs:
       badge_name: predicted-latency-routing-ocp
       badge_label: "VLLM GPU"
       result: ${{ needs.nightly.result }}
+      dry_run: ${{ inputs.dry_run || 'false' }}

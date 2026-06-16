@@ -1,5 +1,10 @@
 # KV Cache Offloading
 
+[![E2E (GKE GPU Native)](https://github.com/llm-d/llm-d/actions/workflows/consolidate-status-tiered-prefix-cache-gke-cpu-gpu-vllm-native.yaml/badge.svg)](https://github.com/llm-d/llm-d/actions/workflows/consolidate-status-tiered-prefix-cache-gke-cpu-gpu-vllm-native.yaml)
+[![E2E (GKE GPU LMcache)](https://github.com/llm-d/llm-d/actions/workflows/consolidate-status-tiered-prefix-cache-gke-cpu-gpu-vllm-lmcache.yaml/badge.svg)](https://github.com/llm-d/llm-d/actions/workflows/consolidate-status-tiered-prefix-cache-gke-cpu-gpu-vllm-lmcache.yaml)
+[![E2E (GKE TPU)](https://github.com/llm-d/llm-d/actions/workflows/consolidate-status-tiered-prefix-cache-gke-cpu-tpu-vllm-native.yaml/badge.svg)](https://github.com/llm-d/llm-d/actions/workflows/consolidate-status-tiered-prefix-cache-gke-cpu-tpu-vllm-native.yaml)
+[![E2E (OCP GPU)](https://github.com/llm-d/llm-d/actions/workflows/consolidate-status-tiered-prefix-cache-ibm-cpu-gpu-vllm-native.yaml/badge.svg)](https://github.com/llm-d/llm-d/actions/workflows/consolidate-status-tiered-prefix-cache-ibm-cpu-gpu-vllm-native.yaml)
+
 ## Overview
 
 Efficient caching of prefix computation states to avoid recomputation is crucial for boosting Large Language Model (LLM) inference performance such as Time to First Token (TTFT) and overall throughput, as well as reducing the cost.
@@ -68,7 +73,8 @@ Generally multiple cache tiers can be applied ordered by their cache read/write 
 | vLLM Native OffloadingConnector | CPU RAM + Filesystem (shared storage) | `modelserver/gpu/vllm/native/fs/` |
 | LMCache Connector | CPU RAM | `modelserver/gpu/vllm/lmcache-connector/cpu/` |
 | LMCache Connector | Filesystem (shared storage) | `modelserver/gpu/vllm/lmcache-connector/fs/` |
-| TPU KVCache Connector | CPU RAM | `modelserver/tpu-v7/vllm/tpu-offloading-connector/` |
+| TPU KVCache Connector | CPU RAM | `modelserver/tpu/v6/vllm/native/tpu-offloading-connector/` and `modelserver/tpu/v7/vllm/native/tpu-offloading-connector/` |
+| SGLang HiCache | CPU RAM | `modelserver/gpu/sglang/native/cpu/` |
 
 <details>
 <summary><h4>About vLLM Native OffloadingConnector</h4></summary>
@@ -96,6 +102,13 @@ For advanced configuration options and implementation details, see the [llm-d FS
 
 </details>
 
+<details>
+<summary><h4>About SGLang HiCache</h4></summary>
+
+[HiCache](https://github.com/sgl-project/sglang) is the implementation of CPU prefix cache offloading in SGLang. It enables large-scale prefix caching by offloading KV cache blocks to CPU RAM, significantly increasing the effective cache capacity beyond available GPU HBM.
+
+</details>
+
 ---
 
 ## Default Configuration
@@ -119,21 +132,33 @@ For advanced configuration options and implementation details, see the [llm-d FS
 | HBM Staging Buffer Size   | 1000 Blocks (~34 GB)                                    |
 | CPU Cache Offload Size    | 25000 Chunks (~780 GB)                                  |
 
-This guide supports both GPU and TPU. The Kustomize overlays are available in `modelserver/gpu/vllm/` and `modelserver/tpu-v7/vllm/`.
+
+## Additional Configuration
+
+### GPU 
+
+| Parameter                 | Value                                                   |
+| ------------------------- | ------------------------------------------------------- |
+| Model                     | [openai/gpt-oss-120b](https://huggingface.co/openai/gpt-oss-120b) |
+| GPUs per replica (TP)     | 1                                                       |
+| GPU Accelerator           | NVIDIA H100                                             |
+| CPU Cache Offload Size    | 100 GB          
+
+This guide supports both GPU and TPU. The Kustomize overlays are available in `modelserver/gpu/vllm/` and `modelserver/tpu/` (supporting both v6 and v7).
 
 ---
 
 ## Prerequisites
 
-- Have the [proper client tools installed on your local system](../../helpers/client-setup/README.md) to use this guide.
-- Checkout llm-d repo:
+* Have the [proper client tools installed on your local system](../../helpers/client-setup/README.md) to use this guide.
+* Checkout llm-d repo:
 
   ```bash
   export branch="main" # branch, tag, or commit hash
   git clone https://github.com/llm-d/llm-d.git && cd llm-d && git checkout ${branch}
   ```
 
-- Set the following environment variables:
+* Set the following environment variables:
 
   ```bash
   export GAIE_VERSION=v1.5.0
@@ -142,19 +167,19 @@ This guide supports both GPU and TPU. The Kustomize overlays are available in `m
   export REPO_ROOT=$(realpath $(git rev-parse --show-toplevel))
   ```
 
-- Install the Gateway API Inference Extension CRDs:
+* Install the Gateway API Inference Extension CRDs:
 
   ```bash
-  kubectl apply -k "https://github.com/kubernetes-sigs/gateway-api-inference-extension/config/crd?ref=${GAIE_VERSION}"
+  kubectl apply -f "https://github.com/kubernetes-sigs/gateway-api-inference-extension/releases/download/${GAIE_VERSION}/v1-manifests.yaml"
   ```
 
-- Create a target namespace for the installation:
+* Create a target namespace for the installation:
 
   ```bash
   kubectl create namespace ${NAMESPACE}
   ```
 
-- [Create the `llm-d-hf-token` secret in your target namespace with the key `HF_TOKEN` matching a valid HuggingFace token](../../helpers/hf-token.md) to pull models.
+* [Create the `llm-d-hf-token` secret in your target namespace with the key `HF_TOKEN` matching a valid HuggingFace token](../../helpers/hf-token.md) to pull models.
 <!-- llm-d-cicd:skip start -->
   ```bash
   export HF_TOKEN=<your HuggingFace token>
@@ -210,10 +235,11 @@ Select the connector and infrastructure provider matching your environment:
 **For NVIDIA GPU — CPU offloading only:**
 
 ```bash
+export MODEL_SERVER=vllm # vllm | sglang
 export CONNECTOR=native  # native | lmcache-connector
-export VARIANT=cpu       # cpu 
+export VARIANT=cpu       # cpu
 export INFRA_PROVIDER=base  # base | gke
-kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/tiered-prefix-cache/modelserver/gpu/vllm/${CONNECTOR}/${VARIANT}/${INFRA_PROVIDER}/
+kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/tiered-prefix-cache/modelserver/gpu/${MODEL_SERVER}/${CONNECTOR}/${VARIANT}/${INFRA_PROVIDER}/
 ```
 
 **For NVIDIA GPU — filesystem (shared storage) tier:**
@@ -225,21 +251,16 @@ To provision a managed GCP Lustre instance on GKE and configure the correspondin
 To provision AWS EFS and configure the corresponding `StorageClass`, follow the [EFS guide](./manifests/backends/aws/README.md).
 
 ```bash
-export STORAGE_CLASS="" # set your prefered storage class or leave empty to use cluster default; or set "lustre" / "efs-sc"
+export STORAGE_CLASS="" # set your preferred storage class or leave empty to use cluster default; or set "lustre" / "efs-sc"
 envsubst < ${REPO_ROOT}/guides/tiered-prefix-cache/manifests/pvc.yaml | kubectl apply -n ${NAMESPACE} -f -
 ```
 
 ```bash
 export CONNECTOR=native  # native | lmcache-connector
-export VARIANT=fs        # fs 
+export VARIANT=cpu        # cpu | fs
 export INFRA_PROVIDER=base  # base | gke
-kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/tiered-prefix-cache/modelserver/gpu/vllm/${CONNECTOR}/${VARIANT}/${INFRA_PROVIDER}/
-```
-
-**For Google TPU v7:**
-
-```bash
-kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/tiered-prefix-cache/modelserver/tpu-v7/vllm/tpu-offloading-connector/
+export ACCELERATOR=gpu # gpu | tpu/v6 | tpu/v7
+kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/tiered-prefix-cache/modelserver/${ACCELERATOR}/vllm/${CONNECTOR}/${VARIANT}/${INFRA_PROVIDER}/
 ```
 
 > [!NOTE]
@@ -250,8 +271,8 @@ kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/tiered-prefix-cache/modelse
 
 ### 3. (Optional) Enable monitoring
 
-- Install the [Monitoring stack](../../docs/resources/observability/setup.md).
-- Deploy the monitoring resources for this guide:
+* Install the [Monitoring stack](../../docs/resources/observability/setup.md).
+* Deploy the monitoring resources for this guide:
 
 ```bash
 kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/recipes/modelserver/components/monitoring
@@ -339,6 +360,7 @@ If you have monitoring set up, confirm via `vllm:kv_offload_total_bytes` (native
 ```bash
 helm uninstall tiered-prefix-cache -n ${NAMESPACE}
 kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/tiered-prefix-cache/modelserver/gpu/vllm/${CONNECTOR}/${VARIANT}/${INFRA_PROVIDER}
+kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/tiered-prefix-cache/modelserver/gpu/sglang/${CONNECTOR}/${VARIANT}/${INFRA_PROVIDER} --ignore-not-found
 kubectl delete -f ${REPO_ROOT}/guides/tiered-prefix-cache/manifests/pvc.yaml -n ${NAMESPACE}  # if PVC was created
 kubectl delete namespace ${NAMESPACE}
 ```
@@ -347,30 +369,83 @@ kubectl delete namespace ${NAMESPACE}
 
 ## Benchmarking
 
-The benchmark launches a pod (`llmdbench-harness-launcher`) that uses `inference-perf` with a shared prefix workload. For more details, refer to the [benchmark instructions doc](../../helpers/benchmark.md).
+This guide uses [`llmdbenchmark`](https://github.com/llm-d/llm-d-benchmark) — the supported standard CLI for llm-d performance benchmarking.
 
-### 1. Prepare the Benchmarking Suite
+In this example we will demonstrate how to run [`inference-perf`](https://github.com/kubernetes-sigs/inference-perf) with a shared-prefix synthetic workload designed to exercise tiered cache eviction behavior against the stack you just deployed above (standalone or gateway mode). When orchestrating benchmarks via `llmdbenchmark`, the CLI automatically and transparently deploys a harness pod (`llmdbench-harness-launcher`) into your namespace. This pod is central to driving the workload, collecting the results, and tearing itself down when it's finished.
+
+> [!IMPORTANT]
+> **For more in-depth explanation and features for benchmarking llm-d guides, see [`helpers/benchmark.md`](../../helpers/benchmark.md).**
+>
+> The Benchmarking section below contains only the **tiered-prefix-cache-specific commands** needed to drive the stack you just deployed — for everything else (and especially when something goes wrong), start at [`helpers/benchmark.md`](../../helpers/benchmark.md).
+>
+> For even more details about benchmarking, see the actual repository: [`llm-d-benchmark` on GitHub](https://github.com/llm-d/llm-d-benchmark).
+
+> [!TIP]
+> The command below runs this guide's **dedicated** benchmark profile, which is intentionally shaped to exercise tiered cache eviction across HBM and CPU RAM — and accordingly takes longer to complete. To run a simpler workload with fewer execution cycles first (useful for validating the path, image pulls, PVC binding, etc. before committing to a real run), pick a generic sample profile such as `shared_prefix_synthetic.yaml` from the catalog in [`helpers/benchmark.md` → Available workload profiles](../../helpers/benchmark.md#available-workload-profiles) and substitute it for the `--workload` flag in the command below.
+
+### 1. Install the `llmdbenchmark` CLI
+
+Automatically clone the benchmark repository into `./llm-d-benchmark/` and create a virtualenv at `./llm-d-benchmark/.venv/` containing dependencies and its installation:
 
 ```bash
-curl -L -O https://raw.githubusercontent.com/llm-d/llm-d-benchmark/main/existing_stack/run_only.sh
-chmod u+x run_only.sh
+curl -sSL https://raw.githubusercontent.com/llm-d/llm-d-benchmark/main/install.sh | bash
 ```
 
-Ensure a HuggingFace token secret `llm-d-hf-token` is created inside the namespace.
-
-### 2. Download the Workload Template
+Activate the `venv` and enter the repository directory - both are required: the `venv` puts `llmdbenchmark` on your PATH, and the repository directory contains the `workload/profiles/` and `config/specification/` files that orchestrate the benchmark:
 
 ```bash
-curl -LJO "https://raw.githubusercontent.com/llm-d/llm-d/main/guides/tiered-prefix-cache/benchmark-templates/guide.yaml"
+cd llm-d-benchmark
+source .venv/bin/activate
+llmdbenchmark --version
 ```
 
-### 3. Execute Benchmark
+> [!NOTE]
+> Subsequent `llmdbenchmark` commands in this section assume you are inside the `llm-d-benchmark` repo directory with the `venv` activated. If you open a new shell, re-run the two commands above.
+
+### 2. Resolve the endpoint of the stack you just deployed
+
+Set two variables so the rest of the section is topology-agnostic: the endpoint URL and the gateway class. The gateway class tells the CLI which deployment topology the cluster is actually running, without this, the CLI re-renders against the benchmark scenario's default values.
+
+**Standalone Mode** (the default in this guide — no Kubernetes Gateway, EPP pod with an Envoy sidecar):
 
 ```bash
-export IP=$(kubectl get service tiered-prefix-cache-epp -n ${NAMESPACE} -o jsonpath='{.spec.clusterIP}')
-envsubst < guide.yaml > config.yaml
-./run_only.sh -c config.yaml -o ./results
+export ENDPOINT_URL="http://$(kubectl get service tiered-prefix-cache-epp -n ${NAMESPACE} -o jsonpath='{.spec.clusterIP}')"
+export GATEWAY_CLASS=epponly # standalone mode
 ```
+
+<details>
+<summary> <b>Gateway Mode</b> </summary>
+
+```bash
+export ENDPOINT_URL="http://$(kubectl get gateway llm-d-inference-gateway -n ${NAMESPACE} -o jsonpath='{.status.addresses[0].value}')"
+
+# Match whichever provider you used when deploying the gateway (e.g. istio, agentgateway, gke).
+export GATEWAY_CLASS=istio
+```
+
+</details>
+
+### 3. Run the benchmark profile for Tiered Prefix Cache
+
+`guide_tiered-prefix-cache_1.yaml` is a **dedicated workload profile** shipped with `llm-d-benchmark` specifically for this guide — it reproduces the load profile used to generate the [results below](#cpu-offloading-benchmarking-results) (250 prefix groups × 5 prompts each on a 60-second Poisson interval) and is shaped to highlight the strengths of tiered prefix-cache offloading by exercising eviction across HBM and CPU RAM.
+
+Benchmark results are copied to the `workspace` directory that is specified by _you_ (or that is automatically generated when omitted from the cli) on the machine running the CLI. The workspace location is optional — by default the CLI auto-generates a timestamped workspace and prints its full path in the logs during the run. If you'd rather choose where results land, pass `--workspace <YOUR_DIR_HERE>` as a top-level argument of `llmdbenchmark` (before the `run` subcommand):
+
+```bash
+llmdbenchmark \
+    --spec           guides/tiered-prefix-cache \
+    run \
+    --endpoint-url   "${ENDPOINT_URL}" \
+    --gateway-class  "${GATEWAY_CLASS}" \
+    --model          "Qwen/Qwen3-32B" \
+    --namespace      "${NAMESPACE}" \
+    --harness        inference-perf \
+    --workload       guide_tiered-prefix-cache_1.yaml \
+    --analyze
+```
+
+> [!NOTE]
+> Depending on your `cluster` you may need to extend the default `timeout` values to longer duration, as `bind`, `access` and `wait-timeout` times of `pvcs` and `pods` can be arbitrarily slower on other systems, please utilize `llmdbenchmark run --help` to view the knobs needed to increase those values.
 
 ---
 
@@ -448,3 +523,11 @@ LMCache configuration: `LMCACHE_MAX_LOCAL_CPU_SIZE=20GB`, `LMCACHE_MAX_LOCAL_DIS
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
 | **Baseline vLLM + CPU offloading** | 27.11 | 41.71 | 57.06 | 72.28 | 18333 | 350 | 18682 | 0.029 |
 | **vLLM + CPU offloading + Lustre** | 15.25 (-43.7%) | 24.71 (-40.8%) | 38.55 (-32.4%) | 48.01 (-33.6%) | 27091 (+47.8%) | 517 (+47.7%) | 27609 (+47.8%) | 0.022 (-24.1%) |
+
+
+
+### gpt-oss-120B Benchmarking Results  
+
+The benchmark runs on 16 × H100 GPUs, distributed across 16 model servers (1 H100s per server with TP=1) using gpt-oss-120B and the same workload as in [default configuration benchmark results](#cpu-offloading-benchmarking-results). The benchmark compares to optimized baseline configuration.
+
+For detailed results see [gpt-oss-120B benchmarking results](benchmark-results-gpt-oss-120b.md).

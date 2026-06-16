@@ -4,6 +4,8 @@ ARG RIXL_BRANCH="39be1de"
 ARG RIXL_REPO="https://github.com/ROCm/RIXL.git"
 ARG UCX_BRANCH="da3fac2a"
 ARG UCX_REPO="https://github.com/ROCm/ucx.git"
+ARG UCCL_VERSION="v0.0.1.post6"
+ARG UCCL_REPO="https://github.com/uccl-project/uccl.git"
 ARG ETCD_BRANCH="7c6e714"
 ARG ETCD_REPO="https://github.com/etcd-cpp-apiv3/etcd-cpp-apiv3.git"
 
@@ -27,6 +29,7 @@ ENV PATH=${ROCM_PATH}/llvm/bin:${ROCM_PATH}/bin:/usr/local/sbin:/usr/local/bin:/
 ENV LD_LIBRARY_PATH=${ROCM_PATH}/lib:/usr/local/lib:
 
 ENV UCX_PATH=/usr/local/ucx
+ENV UCCL_PREFIX=/usr/local/uccl
 ENV RIXL_PATH=/usr/local/rixl
 ENV RIXL_BENCH_PATH=/usr/local/rixl_bench
 
@@ -50,6 +53,8 @@ FROM base AS build_rixl
 
 ARG UCX_BRANCH
 ARG UCX_REPO
+ARG UCCL_VERSION
+ARG UCCL_REPO
 ARG RIXL_BRANCH
 ARG RIXL_REPO
 ARG ETCD_BRANCH
@@ -105,6 +110,13 @@ RUN --mount=type=cache,target=/root/.cache/ccache \
 ENV PATH=/usr/local/ucx/bin:$PATH
 ENV LD_LIBRARY_PATH=${UCX_PATH}/lib:${LD_LIBRARY_PATH}
 
+# Build UCCL
+COPY docker/scripts/common/build-uccl.sh /tmp/build-uccl.sh
+RUN TARGETOS=ubuntu UCCL_DEVICE=rocm /tmp/build-uccl.sh && \
+    rm -f /tmp/build-uccl.sh
+
+ENV LD_LIBRARY_PATH=${UCCL_PREFIX}/lib:${LD_LIBRARY_PATH}
+
 RUN --mount=type=cache,target=/root/.cache/ccache \
     git clone ${RIXL_REPO} /opt/rixl && \
     cd /opt/rixl && \
@@ -148,6 +160,8 @@ RUN mkdir -p /export/wheels && \
 ###
 
 FROM base AS final
+
+COPY --from=build_rixl ${UCCL_PREFIX} ${UCCL_PREFIX}
 
 RUN --mount=type=bind,from=build_rixl,src=/export/wheels,target=/export/wheels \
     --mount=type=bind,from=build_rixl,src=/export/packages,target=/export/packages \

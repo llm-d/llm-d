@@ -22,9 +22,10 @@ These schemas define the internal configuration for project components and are t
 
 * [EPP HTTP Headers Reference](epp-http-headers.md): The EPP inspects specific HTTP headers to manage flow control and observability for inference requests.
 
-## Supported HTTP APIs
+## Supported Request APIs
 
-* [EPP HTTP APIs Reference](epp-http-apis.md): HTTP APIs (OpenAI, Anthropic, vLLM) whose request bodies the EPP parses for scheduling, prefix-cache aware routing, and plugin decisions.
+* [EPP HTTP APIs Reference](epp-http-apis.md): HTTP APIs such as OpenAI's Chat, Anthropic's Message and vLLM's Generate APIs.
+* [EPP gRPC APIs Reference](epp-grpc-apis.md): gRPC APIs such as vLLM's gRPC Generate API.
 
 ## See Also
 

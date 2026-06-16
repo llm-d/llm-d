@@ -100,4 +100,5 @@ jobs:
       badge_name: flow-control-gke
       badge_label: "VLLM GPU"
       result: ${{ needs.nightly.result }}
+      dry_run: ${{ inputs.dry_run || 'false' }}
 

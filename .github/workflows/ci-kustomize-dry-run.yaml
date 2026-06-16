@@ -174,7 +174,7 @@ jobs:
       - name: Create kind cluster
         uses: helm/kind-action@ef37e7f390d99f746eb8b610417061a60e82a6cc  # v1.14.0
         with:
-          cluster_name: helmfile-dry-run
+          cluster_name: kustomize-dry-run
           node_image: kindest/node:v1.35.0  # 1.35+ required for stable DRA (resource.k8s.io/v1)
           version: v0.31.0
           wait: 120s
@@ -304,30 +304,32 @@ jobs:
       - name: Kustomize build and dry-run all model server overlays
         run: |
           failed=0
-          for overlay_dir in guides/precise-prefix-cache-routing/modelserver/*/; do
-            for kust_dir in "${overlay_dir}"*/; do
-              [ -f "${kust_dir}kustomization.yaml" ] || continue
-              name="${kust_dir#guides/precise-prefix-cache-routing/modelserver/}"
-              name="${name%/}"
-              echo ""
-              echo "========================================"
-              echo "precise-prefix-cache-routing: ${name}"
-              echo "========================================"
-              echo "--- kustomize build ---"
-              if ! kustomize build "${kust_dir}" > /tmp/rendered.yaml; then
-                echo "FAIL: kustomize build failed for ${name}"
-                failed=1
-                continue
-              fi
-              echo "--- kubectl apply --dry-run=server ---"
-              if kubectl apply --dry-run=server -f /tmp/rendered.yaml; then
-                echo "PASS: precise-prefix-cache-routing / ${name}"
-              else
-                echo "FAIL: precise-prefix-cache-routing / ${name}"
-                failed=1
-              fi
-            done
-          done
+          base=guides/precise-prefix-cache-routing/modelserver
+          # Recurse to any depth: overlays nest unevenly (e.g. amd/vllm/ but
+          # gpu/vllm/base/, gpu/vllm/gke/, gpu/sglang/). Find every
+          # kustomization.yaml so each backend/server overlay is covered.
+          while IFS= read -r -d '' kustfile; do
+            kust_dir="${kustfile%kustomization.yaml}"
+            name="${kust_dir#"${base}"/}"
+            name="${name%/}"
+            echo ""
+            echo "========================================"
+            echo "precise-prefix-cache-routing: ${name}"
+            echo "========================================"
+            echo "--- kustomize build ---"
+            if ! kustomize build "${kust_dir}" > /tmp/rendered.yaml; then
+              echo "FAIL: kustomize build failed for ${name}"
+              failed=1
+              continue
+            fi
+            echo "--- kubectl apply --dry-run=server ---"
+            if kubectl apply --dry-run=server -f /tmp/rendered.yaml; then
+              echo "PASS: precise-prefix-cache-routing / ${name}"
+            else
+              echo "FAIL: precise-prefix-cache-routing / ${name}"
+              failed=1
+            fi
+          done < <(find "${base}" -name kustomization.yaml -print0 | sort -z)
           exit $failed
 
   dry-run-workload-autoscaling:

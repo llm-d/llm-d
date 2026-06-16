@@ -44,8 +44,8 @@ UCCL currently supports:
 - TCP
 - EFA (AWS)
 
-Currently, UCCL needs to be built for a specific transport option with the `USE_TCPX`/`USE_TCP`/`USE_EFA` flag (refer to [build instructions](https://github.com/uccl-project/uccl/tree/main/p2p)). In the future, this will be enhanced to provide runtime selection.
-UCCL automatically discovers network interface cards (NICs) based on PCIe proximity during memory registration, removing the need for manual NIC-to-GPU mapping in most cases.
+UCCL uses RDMA transport by default. To switch to other transport types set `UCCL_P2P_TRANSPORT=ib|efa|nccl|tcp|tcpx` at runtime. 
+UCCL automatically discovers network interface cards (NICs) based on PCIe proximity during memory registration, removing the need for manual NIC-to-GPU mapping in most cases. UCCL also supports intra-node transfers using IPC mechanisms.
 
 ### libfabric
 
@@ -65,7 +65,7 @@ The core tradeoff:
 
 - **UCX** offloads transport to NIC hardware — works best when the network fabric has dedicated, uncongested paths, typical in on-premise High-Performance Computing (HPC) clusters with InfiniBand.
 - **UCCL** manages transport in software on the CPU — it splits traffic across up to 256 network paths with adaptive congestion control. This matters in cloud environments where network paths are shared and individual paths may be congested.
-- **libfabric** is the default option for AWS EFA. UCCL also supports EFA but requires compilation with the `USE_EFA` flag. UCX does not support EFA.
+- **libfabric** is the default option for AWS EFA. UCCL also supports EFA by setting `UCCL_P2P_TRANSPORT=efa` during runtime. UCX does not support EFA.
 
 NIXL selects the backend based on what is available and the memory types involved. You control which backends are loaded at agent creation time.
 

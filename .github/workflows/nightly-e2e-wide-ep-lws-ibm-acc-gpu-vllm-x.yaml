@@ -25,7 +25,7 @@ on:
       dry_run:
         description: 'Execute workflow in "dry-run" mode ("true", "false")'
         required: false
-        default: 'false'
+        default: 'true'
       verbose:
         description: 'Execute workflow in "verbose" mode ("true", "false")'
         required: false
@@ -99,3 +99,4 @@ jobs:
       badge_name: wide-ep-lws-ocp
       badge_label: "VLLM GPU"
       result: ${{ needs.nightly.result }}
+      dry_run: ${{ inputs.dry_run || 'true' }}

@@ -100,3 +100,4 @@ jobs:
       badge_name: predicted-latency-routing-cks
       badge_label: "VLLM GPU"
       result: ${{ needs.nightly.result }}
+      dry_run: ${{ inputs.dry_run || 'false' }}
