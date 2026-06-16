@@ -31,7 +31,4 @@ Workload guides provide the recommended, cohesive deployment for serving a produ
 
 - **[Flow Control](flow-control.md)**: Intelligent request queuing for multi-tenant deployments and managing traffic spikes.
 - **[Workload Autoscaling](workload-autoscaling.md)**: From simple Kubernetes autoscaling supplemented by EPP load metrics to advanced, SLO-aware capacity optimization for heterogeneous pools via the Workload Variant Autoscaler.
-
-### Experimental
-
 - **[No-Kubernetes Deployment](no-kubernetes-deployment.md)**: Running the llm-d routing stack on bare metal, HPC schedulers, or Ray — workers are discovered from a YAML file on disk via the `file-discovery` plugin instead of an `InferencePool`.
