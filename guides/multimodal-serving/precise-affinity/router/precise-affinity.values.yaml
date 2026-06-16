@@ -3,11 +3,7 @@
 
 router:
   tokenizer:
-    enabled: true
-    modelName: Qwen/Qwen3-VL-32B-Instruct
-    env:
-      - name: HF_HOME
-        value: /tmp/hf/hub
+    enabled: false   # render is a standalone Service (see render/), not a sidecar
 
   epp:
     pluginsConfigFile: "precise-affinity-plugins.yaml"
@@ -20,14 +16,13 @@ router:
             parameters:
               modelName: Qwen/Qwen3-VL-32B-Instruct
               vllm:
-                url: http://localhost:8000
+                url: http://mm-render:8000   # the render Service (same namespace)
           - type: mm-embeddings-cache-producer
             parameters:
               cacheSizeInMBPerServer: 2048
           - type: mm-embeddings-cache-scorer
           - type: kv-cache-utilization-scorer
           - type: queue-scorer
-          - type: no-hit-lru-scorer
           - type: decode-filter
           - type: max-score-picker
           - type: single-profile-handler
@@ -35,14 +30,13 @@ router:
           - name: default
             plugins:
               - pluginRef: decode-filter
-              - pluginRef: queue-scorer
-                weight: 2.0
-              - pluginRef: kv-cache-utilization-scorer
-                weight: 2.0
+              # affinity-first: cache scorer outweighs load scorers, which still break ties
               - pluginRef: mm-embeddings-cache-scorer
                 weight: 10.0
-              - pluginRef: no-hit-lru-scorer
-                weight: 1.0
+              - pluginRef: kv-cache-utilization-scorer
+                weight: 2.0
+              - pluginRef: queue-scorer
+                weight: 2.0
               - pluginRef: max-score-picker
 
   extraServicePorts:

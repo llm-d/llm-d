@@ -1,0 +1,38 @@
+# Standalone render Service the EPP token-producer calls. CPU-only; pin to CPU nodes in
+# production and size replicas so the render knee stays above peak multimodal QPS.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mm-render
+  labels: { app: mm-render }
+spec:
+  replicas: 8
+  selector:
+    matchLabels: { app: mm-render }
+  template:
+    metadata:
+      labels: { app: mm-render }
+    spec:
+      containers:
+        - name: vllm-render
+          image: vllm/vllm-openai-cpu:v0.23.0
+          command: ["vllm", "launch", "render"]
+          args: ["Qwen/Qwen3-VL-32B-Instruct", "--port=8000"]
+          ports:
+            - { containerPort: 8000, name: render-http, protocol: TCP }
+          resources:
+            requests: { cpu: "4", memory: 8Gi }
+            limits: { cpu: "8", memory: 16Gi }
+          readinessProbe:
+            httpGet: { path: /health, port: render-http }
+            periodSeconds: 10
+            failureThreshold: 30
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mm-render
+spec:
+  selector: { app: mm-render }
+  ports:
+    - { name: http, port: 8000, targetPort: render-http, protocol: TCP }

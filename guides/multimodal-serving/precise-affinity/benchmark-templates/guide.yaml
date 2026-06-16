@@ -1,8 +1,8 @@
 endpoint:
-  stack_name: &stack_name mm-precise-affinity-Qwen3-VL-32B-Instruct  # results prefix
-  model: &model Qwen/Qwen3-VL-32B-Instruct        # Exact HuggingFace model name. Must match stack deployed.
-  namespace: &namespace ${NAMESPACE}  # Namespace where stack is deployed
-  base_url: &url http://${IP}  # Set per arm: round-robin Service IP (A0) or EPP IP (A1)
+  stack_name: &stack_name mm-precise-affinity-Qwen3-VL-32B-Instruct
+  model: &model Qwen/Qwen3-VL-32B-Instruct
+  namespace: &namespace ${NAMESPACE}
+  base_url: &url http://${IP}   # EPP IP (precise affinity) or round-robin Service IP (baseline)
   hf_token_secret: llm-d-hf-token
 
 control:
@@ -15,38 +15,28 @@ harness:
   namespace: *namespace
   parallelism: 1
   wait_timeout: 6000
-  # multimodal needs llm-d-benchmark v0.7.0+ (inference-perf multimodal datagen)
-  image: ghcr.io/llm-d/llm-d-benchmark:v0.7.0
+  image: ghcr.io/llm-d/llm-d-benchmark:v0.7.0   # multimodal datagen needs v0.7.0+
 
 env:
   - name: RAYON_NUM_THREADS
     value: "4"
 
-# shared-prefix multimodal: cached prefix image (prefix-cache hits) + fresh per-request image
+# Decode-bound: 512-token outputs saturate the 2 decode pods well below the render knee.
 workload:
-  shared_prefix_mm:
+  decodebound_mm:
     load:
       type: constant
-      num_workers: 16   # enough load-gen concurrency to saturate the render fleet
+      num_workers: 16
       stages:
-        - rate: 20
-          duration: 120   # warmup, seat the cached prefixes
-        - rate: 20
-          duration: 100
-        - rate: 40
-          duration: 100
-        - rate: 60
-          duration: 100
-        - rate: 80
-          duration: 100
-        - rate: 100
-          duration: 100
-        - rate: 120
-          duration: 100
-        - rate: 140
-          duration: 100
-        - rate: 160
-          duration: 100
+        - { rate: 5, duration: 120 }   # warmup, seat caches
+        - { rate: 5, duration: 120 }
+        - { rate: 10, duration: 120 }
+        - { rate: 15, duration: 120 }
+        - { rate: 20, duration: 120 }
+        - { rate: 25, duration: 120 }
+        - { rate: 30, duration: 120 }
+        - { rate: 40, duration: 120 }
+        - { rate: 50, duration: 120 }
     api:
       type: chat
       streaming: true
@@ -59,33 +49,28 @@ workload:
       pretrained_model_name_or_path: *model
     data:
       type: shared_prefix
-      # fresh per-request image (the "new" content each request)
-      multimodal:
+      multimodal:                      # fresh per-request image
         image:
           count: { type: fixed, min: 1, max: 1, mean: 1 }
           insertion_point: 1.0
           resolutions:
-            - resolution: "720p"
-              weight: 1.0
+            - { resolution: "720p", weight: 1.0 }
       shared_prefix:
-        num_groups: 60
-        num_prompts_per_group: 10
-        system_prompt_len: { type: fixed, min: 200, max: 200, mean: 200 }
-        question_len: { type: fixed, min: 50, max: 50, mean: 50 }
-        output_len: { type: fixed, min: 64, max: 64, mean: 64 }
-        # cached prefix image (same bytes across a group -> prefix-cache hits)
-        multimodal:
+        num_groups: 16
+        num_prompts_per_group: 16
+        system_prompt_len: { type: fixed, min: 800, max: 800, mean: 800 }
+        question_len: { type: fixed, min: 200, max: 200, mean: 200 }
+        output_len: { type: fixed, min: 512, max: 512, mean: 512 }
+        multimodal:                    # cached per-group image (affinity target)
           image:
             count: { type: fixed, min: 1, max: 1, mean: 1 }
             insertion_point: 0.0
             resolutions:
-              - resolution: "1080p"
-                weight: 1.0
+              - { resolution: "720p", weight: 1.0 }
     report:
       request_lifecycle:
         summary: true
         per_stage: true
-        per_request: true
     storage:
       local_storage:
         path: /workspace
