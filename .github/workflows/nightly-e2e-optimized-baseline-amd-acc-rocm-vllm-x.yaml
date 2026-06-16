@@ -87,8 +87,8 @@ jobs:
       dry_run: ${{ inputs.dry_run || 'false' }}
       verbose: ${{ inputs.verbose || 'false' }}
       harness: ${{ inputs.harness || 'inference-perf' }}
-      workload: ${{ inputs.workload || 'sanity_random.yaml' }}
-#      workload: ${{ inputs.workload || 'guide_optimized-baseline_1.yaml' }}
+#      workload: ${{ inputs.workload || 'sanity_random.yaml' }}
+      workload: ${{ inputs.workload || 'guide_optimized-baseline_1.yaml' }}
       cleanup: ${{ inputs.cleanup || 'true' }}
     secrets: inherit
 
