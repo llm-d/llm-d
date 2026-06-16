@@ -35,7 +35,7 @@ This guide demonstrates how to deploy DeepSeek-R1-0528 using vLLM's P/D disaggre
 - a 32xH200 cluster with InfiniBand networking (CoreWeave)
 - a 32xB200 cluster with InfiniBand networking (CoreWeave)
 - a 32xH200 cluster with RoCE networking (GKE)
-- Istio 1.29.2 (required for multi-port support in gateway mode) or standalone router mode
+- Istio 1.29.2 (required for multi-port support in gateway mode)
 
 In this example, we will demonstrate a deployment of `DeepSeek-R1-0528` with:
 
@@ -57,8 +57,6 @@ This guide requires 32 Nvidia H200 or B200 GPUs and InfiniBand or RoCE RDMA netw
 
 - Have the [proper client tools installed on your local system](../../../helpers/client-setup/README.md) to use this guide.
 - You have deployed the [LeaderWorkerSet controller](https://lws.sigs.k8s.io/docs/installation/)
-- Configure and deploy your [Gateway control plane](../../../docs/resources/gateway/README.md). Note that the Gateway must support multi-port (e.g. Istio 1.29.2)
-- Have the [Monitoring stack](../../../docs/resources/observability/setup.md) installed on your system.
 - Create a namespace for installation.
 
   ```bash
@@ -121,7 +119,7 @@ export INFRA_PROVIDER=gke # options: gke, coreweave
 kubectl apply -n ${NAMESPACE} -k ./manifests/modelserver/${INFRA_PROVIDER}
 ```
 
-### 3. (Optional) Enable monitoring
+### 3. (Optional) Enable Monitoring
 
 Deploy the monitoring resources for this guide:
 
@@ -132,58 +130,38 @@ kubectl apply -n ${NAMESPACE} -f ./manifests/modelserver/base/pod-monitors.yaml
 > [!NOTE]
 > This requires the Prometheus Operator CRDs (`PodMonitor`) to be installed on the cluster.
 
-## Verifying the installation
+## Verification
 
-- Firstly, you should be able to list all helm releases installed into your chosen namespace:
+Verify the router helm release:
 
 ```bash
 helm list -n ${NAMESPACE}
-NAME            NAMESPACE       REVISION    UPDATED                                 STATUS      CHART                       APP VERSION
-llm-d-infpool   llm-d-wide-ep   1           2025-08-24 13:14:53.355639 -0700 PDT    deployed    inferencepool-v1.5.0   v0.3.0
 ```
 
-- Out of the box with this example you should have the following resources (if using Istio):
+Check that all pods are running and ready:
 
 ```bash
-kubectl get all -n ${NAMESPACE}
-NAME                                                         READY   STATUS    RESTARTS   AGE
-pod/infra-wide-ep-inference-gateway-istio-74d5c66c86-h5mfn   1/1     Running   0          2m22s
-pod/wide-ep-llm-d-decode-0                                   2/2     Running   0          2m13s
-pod/wide-ep-llm-d-decode-0-1                                 2/2     Running   0          2m13s
-pod/llm-d-infpool-epp-84dd98f75b-r6lvh                       1/1     Running   0          2m14s
-pod/wide-ep-llm-d-prefill-0                                  1/1     Running   0          2m13s
-pod/wide-ep-llm-d-prefill-0-1                                1/1     Running   0          2m13s
-
-
-NAME                                            TYPE           CLUSTER-IP    EXTERNAL-IP   PORT(S)                        AGE
-service/infra-wide-ep-inference-gateway-istio   ClusterIP      10.16.1.34    10.16.4.2     15021:30312/TCP,80:33662/TCP   2m22s
-service/wide-ep-ip-1e480070                     ClusterIP      None          <none>        54321/TCP                      2d4h
-service/wide-ep-llm-d-decode                    ClusterIP      None          <none>        <none>                         2m13s
-service/llm-d-infpool-epp                       ClusterIP      10.16.1.137   <none>        9002/TCP                       2d4h
-service/wide-ep-llm-d-prefill                   ClusterIP      None          <none>        <none>                         2m13s
-
-NAME                                                    READY   UP-TO-DATE   AVAILABLE   AGE
-deployment.apps/infra-wide-ep-inference-gateway-istio   1/1     1            1           2m22s
-deployment.apps/llm-d-infpool-epp                       1/1     1            1           2m14s
-
-NAME                                                               DESIRED   CURRENT   READY   AGE
-replicaset.apps/infra-wide-ep-inference-gateway-istio-74d5c66c86   1         1         1       2m22s
-replicaset.apps/llm-d-infpool-epp-55bb9857cf                       1         1         1       2m14s
-
-NAME                                                      READY   AGE
-statefulset.apps/wide-ep-llm-d-decode     1/1     2m13s
-statefulset.apps/wide-ep-llm-d-decode-0   1/1     2m13s
-statefulset.apps/wide-ep-llm-d-prefill    1/1     2m13s
-statefulset.apps/wide-ep-llm-d-prefill-1  1/1     2m13s
+kubectl get pods -n ${NAMESPACE}
 ```
 
-**_NOTE:_** This assumes no other guide deployments in your given `${NAMESPACE}` and you have not changed the default release names via the `${RELEASE_NAME}` environment variable.
+Expected output (startup takes 7-10 minutes for model loading):
 
-## Using the stack
+```
+NAME                                          READY   STATUS    RESTARTS   AGE
+wide-ep-lws-epp-79dfb894f7-fjn8n              2/2     Running   0          5m
+wide-ep-llm-d-decode-0                        2/2     Running   0          10m
+wide-ep-llm-d-decode-0-1                      2/2     Running   0          10m
+wide-ep-llm-d-prefill-0                       1/1     Running   0          10m
+wide-ep-llm-d-prefill-1                       1/1     Running   0          10m
+```
 
-For instructions on getting started making inference requests see [our docs](../../02_verifying_a_guide.md)
+Decode pods show `2/2` (vLLM + routing proxy sidecar), prefill pods show `1/1`.
 
-**_NOTE:_** This example particularly benefits from utilizing stern as described in the [getting-started-inferencing docs](../../02_verifying_a_guide.md#following-logs-for-requests), because while we only have 3 inferencing pods, it has 16 vllm servers or ranks.
+## Using the Stack
+
+For instructions on getting started making inference requests see [our docs](../../02_verifying_a_guide.md).
+
+**_NOTE:_** This example particularly benefits from utilizing stern as described in the [Getting Started guide](../../02_verifying_a_guide.md#following-logs-for-requests), because while we only have 3 inferencing pods, it has 16 vllm servers or ranks.
 
 **_NOTE:_** Compared to the other examples, this one takes anywhere between 7-10 minutes for the vllm API servers to startup so this might take longer before you can interact with this example.
 
