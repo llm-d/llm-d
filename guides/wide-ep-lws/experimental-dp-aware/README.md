@@ -75,72 +75,62 @@ This guide requires 32 Nvidia H200 or B200 GPUs and InfiniBand or RoCE RDMA netw
 cd ${REPO_ROOT}/guides/wide-ep-lws/experimental-dp-aware
 ```
 
-### Deploy Gateway and HTTPRoute
+### 1. Deploy the llm-d Router
 
-Deploy the Gateway and HTTPRoute using the [gateway recipe](../../recipes/gateway/README.md).
-
-#### Gateway options
-
-To see what gateway options are supported refer to our [gateway provider docs](../../../docs/resources/gateway/README.md). Gateway configurations per provider are tracked in the [gateway recipes directory](../../recipes/gateway/).
-
-You can also customize your gateway, for more information on how to do that see our [gateway customization docs](../../04_customizing_a_guide.md).
-
-### Deploy Model Servers
-
-CoreWeave and GKE are tested Kubernetes providers for this well-lit path. You can customize the manifests if you run on other Kubernetes providers.
-
-<!-- TABS:START -->
-
-<!-- TAB:CoreWeave -->
-#### CoreWeave
-
-```bash
-kubectl apply -k ./manifests/modelserver/coreweave  -n ${NAMESPACE}
-```
-
-<!-- TAB:GKE -->
-#### GKE
-
-```bash
-kubectl apply -k ./manifests/modelserver/gke  -n ${NAMESPACE}
-```
-
-<!-- TABS:END -->
-
-### Deploy Router
-
-<!-- TABS:START -->
-
-<!-- TAB:Standalone (recommended) -->
 #### Standalone Mode
 
-Deploys the llm-d Router with an Envoy sidecar. Works on all clusters without requiring a gateway controller.
+This deploys the llm-d Router with an Envoy sidecar, it doesn't set up a Kubernetes Gateway.
 
 ```bash
+export GUIDE_NAME="wide-ep-lws"
 export ROUTER_CHART_VERSION=v0
-helm install wide-ep-lws \
-  oci://ghcr.io/llm-d/charts/llm-d-router-standalone-dev \
-  -f ${REPO_ROOT}/guides/recipes/router/base.values.yaml \
-  -f ${REPO_ROOT}/guides/wide-ep-lws/router/wide-ep-lws.values.yaml \
-  -n ${NAMESPACE} --version ${ROUTER_CHART_VERSION}
+helm install ${GUIDE_NAME} \
+    oci://ghcr.io/llm-d/charts/llm-d-router-standalone-dev \
+    -f ${REPO_ROOT}/guides/recipes/router/base.values.yaml \
+    -f ${REPO_ROOT}/guides/${GUIDE_NAME}/router/${GUIDE_NAME}.values.yaml \
+    -n ${NAMESPACE} --version ${ROUTER_CHART_VERSION}
 ```
 
-<!-- TAB:Gateway (Istio) -->
-#### Gateway Mode (Istio)
+<details>
+<summary><h4>Gateway Mode</h4></summary>
 
-Requires Istio 1.29.2+ for multi-port support.
+To use a Kubernetes Gateway managed proxy rather than the standalone version, follow these steps instead of applying the previous Helm chart:
+
+1. *Deploy a Kubernetes Gateway* by following one of [the gateway guides](../../prereq/gateway-provider/README.md).
+2. *Deploy the llm-d Router and an HTTPRoute* that connects it to the Gateway as follows:
 
 ```bash
-export ROUTER_CHART_VERSION=v0
-helm install llm-d-infpool \
-  -n ${NAMESPACE} \
-  -f ./manifests/inferencepool.values.yaml \
-  --set "provider.name=istio" \
-  oci://ghcr.io/llm-d/charts/llm-d-router-gateway-dev \
-  --version ${ROUTER_CHART_VERSION}
+export PROVIDER_NAME=gke # options: none, gke, agentgateway, istio
+helm install ${GUIDE_NAME} \
+    oci://ghcr.io/llm-d/charts/llm-d-router-gateway-dev \
+    -f ${REPO_ROOT}/guides/recipes/router/base.values.yaml \
+    -f ${REPO_ROOT}/guides/recipes/router/features/httproute-flags.yaml \
+    -f ${REPO_ROOT}/guides/${GUIDE_NAME}/router/${GUIDE_NAME}.values.yaml \
+    --set provider.name=${PROVIDER_NAME} \
+    -n ${NAMESPACE} --version ${ROUTER_CHART_VERSION}
 ```
 
-<!-- TABS:END -->
+</details>
+
+### 2. Deploy the Model Server
+
+Apply the Kustomize overlays for your specific backend:
+
+```bash
+export INFRA_PROVIDER=gke # options: gke, coreweave
+kubectl apply -n ${NAMESPACE} -k ./manifests/modelserver/${INFRA_PROVIDER}
+```
+
+### 3. (Optional) Enable monitoring
+
+Deploy the monitoring resources for this guide:
+
+```bash
+kubectl apply -n ${NAMESPACE} -f ./manifests/modelserver/base/pod-monitors.yaml
+```
+
+> [!NOTE]
+> This requires the Prometheus Operator CRDs (`PodMonitor`) to be installed on the cluster.
 
 ## Verifying the installation
 
@@ -196,6 +186,21 @@ For instructions on getting started making inference requests see [our docs](../
 **_NOTE:_** This example particularly benefits from utilizing stern as described in the [getting-started-inferencing docs](../../02_verifying_a_guide.md#following-logs-for-requests), because while we only have 3 inferencing pods, it has 16 vllm servers or ranks.
 
 **_NOTE:_** Compared to the other examples, this one takes anywhere between 7-10 minutes for the vllm API servers to startup so this might take longer before you can interact with this example.
+
+## Troubleshooting
+
+### Pod Startup Ordering
+
+With 4 pods (2 decode, 2 prefill) requiring inter-node DP coordination, staggered startup can cause cascade failures. If one pod starts significantly before the others, it may timeout waiting for peers and exit cleanly (exit code 0), which triggers the DPSupervisor to shut down all children, causing the other pods to also exit.
+
+If pods are stuck in a restart loop, delete all model server pods at once so they restart simultaneously:
+```bash
+kubectl delete pods -l llm-d.ai/guide=wide-ep-lws
+```
+
+### NCCL Shared Memory
+
+With 8 DP rank processes per pod sharing the `/dev/shm` volume (default 2Gi), NCCL may report "No available shared memory broadcast block" during initialization. This is typically a warning — NCCL falls back to a slower communication path. If pods hang during startup, increase `dshm` `sizeLimit` in the base manifests (e.g., to 16Gi).
 
 ## Benchmarking Results
 
