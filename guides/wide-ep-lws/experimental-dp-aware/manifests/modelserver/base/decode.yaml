@@ -196,28 +196,28 @@ spec:
 
             ports:
               - containerPort: 8200
-                name: rank0
+                name: vllm-rank0
                 protocol: TCP
               - containerPort: 8201
-                name: rank1
+                name: vllm-rank1
                 protocol: TCP
               - containerPort: 8202
-                name: rank2
+                name: vllm-rank2
                 protocol: TCP
               - containerPort: 8203
-                name: rank3
+                name: vllm-rank3
                 protocol: TCP
               - containerPort: 8204
-                name: rank4
+                name: vllm-rank4
                 protocol: TCP
               - containerPort: 8205
-                name: rank5
+                name: vllm-rank5
                 protocol: TCP
               - containerPort: 8206
-                name: rank6
+                name: vllm-rank6
                 protocol: TCP
               - containerPort: 8207
-                name: rank7
+                name: vllm-rank7
                 protocol: TCP
               - containerPort: 8208
                 name: supervisor
