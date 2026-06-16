@@ -42,6 +42,8 @@ router:
             weight: 3
 
   modelServers:
+    # targetPorts must list all 8 DP rank ports so the EPP routes requests
+    # to all ranks. Without this, only rank 0 receives traffic.
     targetPorts:
       - number: 8000
       - number: 8001
