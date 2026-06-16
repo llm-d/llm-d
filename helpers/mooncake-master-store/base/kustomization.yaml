@@ -10,8 +10,8 @@ resources:
 
 labels:
   - pairs:
-      app.kubernetes.io/name: mooncake-master
-      app.kubernetes.io/component: master
+      app.kubernetes.io/name: mooncake-master-store
+      app.kubernetes.io/component: master-store
       app.kubernetes.io/part-of: mooncake
     includeTemplates: true
     includeSelectors: true

@@ -143,9 +143,148 @@ Out-of-tree engines coexist with the native path through a common integration co
 - **Scheduling side** — connectors integrate with llm-d through **KV-Events**: cache mutation notifications that the [KV-Cache Indexer](./kv-indexer.md) consumes to maintain a global view of cache distribution, enabling prefix-aware routing regardless of which backend is in use.
 
 > [!NOTE]
-> llm-d's deployment guides formally cover LMCache today. The integration pattern is the same for Mooncake, KVBM, and other connector-compatible engines — they work out-of-the-box on the serving-stack side — but first-class llm-d recipes for each are not yet in the repo.
+> llm-d's deployment guides cover LMCache and [Mooncake Store](#mooncakestoreconnector) today. The integration pattern is the same for KVBM and other connector-compatible engines — they work out-of-the-box on the serving-stack side.
 
-For existing deployment recipes, see the [Tiered Prefix Cache Guide](../../../../guides/tiered-prefix-cache).
+For deployment recipes, see the [Tiered Prefix Cache Guide](../../../../guides/tiered-prefix-cache).
+
+### MooncakeStoreConnector
+
+[Mooncake Store](https://github.com/kvcache-ai/Mooncake) is a distributed KV cache system built on the Mooncake Transfer Engine. A centralized Mooncake Master manages object metadata, replica placement, leases, and eviction, while the Transfer Engine moves the underlying bytes between registered memory regions using RDMA or TCP. Together, they pool CPU DRAM across nodes—and optionally SSD/NVMe—into a shared cache tier without requiring a shared filesystem or PVC for the cache data path.
+
+The `MooncakeStoreConnector` integrates this store with vLLM's V1 Connector API. It converts vLLM's content-addressed KV cache chunks into Mooncake object keys and maps their tensor data to the byte ranges stored and transferred by Mooncake. This allows multiple vLLM instances to retrieve and reuse cached prefixes, reducing redundant prefill computation.
+
+  - At the vLLM boundary, cache data is identified as content-addressed KV-cache blocks or chunks derived from vLLM block hashes.
+  - At the Mooncake boundary, each content-addressed key identifies a variable-length byte object. The connector maps that object to one or more registered memory ranges containing the corresponding K/V tensor data.
+
+> [!NOTE]
+> `MooncakeStoreConnector` (distributed cache offloading) is distinct from `MooncakeConnector` (point-to-point KV transfer for P/D disaggregation). They share the same Transfer Engine for RDMA data movement but serve different purposes and are configured independently. They can be composed via vLLM's `MultiConnector` when both P/D disaggregation and shared cache are needed.
+
+#### Architecture
+
+The system consists of three components:
+
+- **Mooncake Master** — Centralized metadata service managing keyed objects, their replicas and placement, leases, and eviction. It is unaware of vLLM's KV-cache block semantics. Deployment manifests are provided in [`helpers/mooncake-master-store/`](../../../../helpers/mooncake-master-store/).
+- **Mooncake Transfer Engine** — Byte-oriented data mover that transfers data between registered GPU or CPU memory regions and the distributed DRAM/SSD pool using RDMA or TCP.
+- **MooncakeStoreConnector** (in each vLLM process) — Converts vLLM content-addressed cache chunks into Mooncake object keys and maps each object to one or more physical memory address-and-size ranges.
+
+Two deployment modes are available:
+
+| Mode | Description | `global_segment_size` | External process |
+| :--- | :--- | :--- | :--- |
+| **Embedded** | Each vLLM rank contributes CPU DRAM to the distributed pool in-process | > 0 (e.g., `"80GB"`) | No |
+| **Standalone-store** | External `mooncake_client` process owns the CPU + SSD pool; vLLM ranks are pure requesters | `0` | Yes |
+
+Embedded mode is simpler to deploy — the DRAM pool scales automatically with the number of vLLM instances. Standalone-store mode decouples storage from compute and enables the SSD/NVMe tier.
+
+```
+Embedded mode data flow:
+
+vLLM KV cache manager
+  → MooncakeStoreConnector (block hash → content key)
+    → Mooncake Transfer Engine (RDMA)
+      → Distributed DRAM pool (across all nodes contributing memory)
+
+Standalone-store mode:
+
+vLLM KV cache manager
+  → MooncakeStoreConnector (requester mode)
+    → Mooncake Transfer Engine (RDMA)
+      → mooncake_client (owner of DRAM + SSD pool)
+```
+
+#### Mooncake Master
+
+The Mooncake Master handles block metadata, eviction, and snapshots. Key configuration parameters (set in `master.yaml`):
+
+| Parameter | Default | Description |
+| :--- | :--- | :--- |
+| `eviction_high_watermark_ratio` | `0.95` | Trigger eviction when pool is 95% full |
+| `eviction_ratio` | `0.05` | Evict 5% of pool capacity per cycle |
+| `default_kv_lease_ttl` | `5000` | Lease TTL in ms |
+| `default_kv_soft_pin_ttl` | `1800000` | Soft pin TTL in ms (30 min) |
+| `enable_snapshot` | `true` | Periodic snapshots to PVC for recovery |
+| `snapshot_interval_seconds` | `60` | Snapshot frequency |
+
+The Master exposes gRPC (port 50051), HTTP metadata (port 8080), and Prometheus metrics (port 9003). See [`helpers/mooncake-master-store/`](../../../../helpers/mooncake-master-store/) for deployment manifests.
+
+#### Content-Addressable Storage and PYTHONHASHSEED
+
+KV cache blocks are stored with content-addressable keys derived from vLLM's block hash mechanism. Python randomizes its `hash()` seed per process by default — if two vLLM instances compute different hashes for the same input tokens, they can never share cached blocks.
+
+All vLLM instances sharing a Mooncake Store **must** set `PYTHONHASHSEED` to the same fixed value:
+
+```bash
+PYTHONHASHSEED=0 vllm serve ...
+```
+
+#### mooncake_config.json Reference
+
+Each vLLM instance requires a Mooncake configuration file, pointed to by the `MOONCAKE_CONFIG_PATH` environment variable.
+
+**Embedded mode:**
+
+```json
+{
+  "mode": "embedded",
+  "metadata_server": "P2PHANDSHAKE",
+  "master_server_address": "mooncake-master.mooncake.svc.cluster.local:50051",
+  "global_segment_size": "80GB",
+  "local_buffer_size": "4GB",
+  "protocol": "rdma",
+  "device_name": "",
+  "enable_offload": false
+}
+```
+
+**Standalone-store mode:**
+
+```json
+{
+  "mode": "standalone-store",
+  "metadata_server": "P2PHANDSHAKE",
+  "master_server_address": "mooncake-master.mooncake.svc.cluster.local:50051",
+  "global_segment_size": 0,
+  "local_buffer_size": "4GB",
+  "protocol": "rdma",
+  "device_name": "",
+  "enable_offload": true
+}
+```
+
+| Field | Description |
+| :--- | :--- |
+| `mode` | `"embedded"` (in-process DRAM pool) or `"standalone-store"` (external client) |
+| `metadata_server` | `"P2PHANDSHAKE"` for direct peer-to-peer metadata exchange |
+| `master_server_address` | Mooncake Master gRPC endpoint (host:port) |
+| `global_segment_size` | CPU memory per GPU contributed to pool. Must be > 0 in embedded, 0 in standalone-store |
+| `local_buffer_size` | Private buffer per GPU for its own operations |
+| `protocol` | `"rdma"` (production) or `"tcp"` (fallback) |
+| `device_name` | RDMA device name (e.g., `"mlx5_0"`). Empty string for auto-discovery |
+| `enable_offload` | Enable SSD/NVMe staging. Must match `mooncake_master` and `mooncake_client` flags |
+
+#### Environment Variables
+
+| Variable | Default | Description |
+| :--- | :--- | :--- |
+| `MOONCAKE_CONFIG_PATH` | (required) | Path to `mooncake_config.json` |
+| `PYTHONHASHSEED` | (random) | Must be set to same fixed value across all instances sharing the store |
+| `MOONCAKE_PREFERRED_SEGMENT` | — | Pin rank's replicas to a specific owner segment (standalone-store mode) |
+| `VLLM_MOONCAKE_STORE_TIER_LOG` | disabled | Set to `1` to log per-batch tier summary (memory vs disk hits) |
+| `VLLM_MOONCAKE_DISK_STAGING_USABLE_RATIO` | `0.9` | Fraction of DirectIO staging buffer filled per batch call |
+
+#### Connector Comparison
+
+| Aspect | OffloadingConnector (native) | LMCacheConnector | MooncakeStoreConnector |
+| :--- | :--- | :--- | :--- |
+| Storage backend | Local CPU RAM + POSIX filesystem | Local CPU RAM + POSIX filesystem | Distributed DRAM pool (+ optional SSD) |
+| Cross-instance sharing | Via shared filesystem only | Via shared filesystem only | Built-in via distributed store |
+| Transport | CPU memcpy + filesystem I/O | CPU memcpy + filesystem I/O | RDMA (or TCP fallback) |
+| Shared filesystem needed | Yes (for fs tier) | Yes (for fs tier) | No |
+| Eviction | External ([PVC evictor](https://github.com/llm-d/llm-d-kv-cache)) | LMCache internal | Mooncake Master (built-in) |
+| Cold start benefit | Only if shared fs has cached data | Only if shared fs has cached data | Immediate (pool retains data) |
+| Additional infrastructure | None (CPU) / PVC (fs) | None (CPU) / PVC (fs) | Mooncake Master + RDMA |
+
+For deployment recipes, see the [Tiered Prefix Cache Guide — Mooncake Store](../../../../guides/tiered-prefix-cache#for-nvidia-gpu--mooncake-store-distributed-cache).
 
 ## Configuration
 
@@ -167,6 +306,17 @@ For advanced use and older vLLM releases, the equivalent `--kv-transfer-config` 
 | `threads_per_gpu` | integer | `64` | I/O worker threads per GPU |
 
 For the full configuration reference including GDS modes and environment variables, see the [llm-d FS backend README](https://github.com/llm-d/llm-d-kv-cache/tree/main/kv_connectors/llmd_fs_backend).
+
+### Distributed Offloading (MooncakeStoreConnector)
+
+| Field | Type | Default | Description |
+| :--- | :--- | :--- | :--- |
+| `kv_connector` | string | - | Set to `"MooncakeStoreConnector"` |
+| `kv_role` | string | - | Set to `"kv_both"` for standalone cache offloading |
+| `load_async` | bool | `true` | Async loading for compute-I/O overlap |
+| `enable_cross_layers_blocks` | bool | `false` | Cross-layer block packing to reduce store operations |
+
+For the full `mooncake_config.json` reference, see [MooncakeStoreConnector — mooncake_config.json Reference](#mooncake_configjson-reference) above.
 
 ## Examples
 
@@ -206,6 +356,21 @@ volumeMounts:
     mountPath: /mnt/kv-cache
 ```
 
+### Distributed Offloading with MooncakeStoreConnector
+
+```yaml
+args:
+  - "--model=Qwen/Qwen3-32B"
+  - "--tensor-parallel-size=2"
+  - "--kv-transfer-config"
+  - '{"kv_connector":"MooncakeStoreConnector","kv_role":"kv_both"}'
+env:
+  - name: MOONCAKE_CONFIG_PATH
+    value: /etc/mooncake/mooncake_config.json
+  - name: PYTHONHASHSEED
+    value: "0"
+```
+
 ## Metrics
 
 The FS backend populates vLLM's built-in offloading metrics (`vllm:kv_offload_*`) for transfer bytes, time, and size distribution. See the [llm-d FS backend documentation](https://github.com/llm-d/llm-d-kv-cache/tree/main/kv_connectors/llmd_fs_backend#metrics) for the full metrics reference.
@@ -225,9 +390,13 @@ Any POSIX filesystem is a candidate; the best choice for a given deployment depe
 
 **Block size tuning:** Larger `block_size` values (256-512 tokens) improve I/O efficiency but require longer matching prefixes for a cache hit. Match to your typical prefix lengths.
 
+**Distributed offloading (MooncakeStoreConnector):** Best when cross-instance cache sharing is critical and RDMA networking is available. Eliminates the shared filesystem dependency and provides built-in eviction via the Mooncake Master. Embedded mode is recommended for most deployments; standalone-store mode adds complexity but enables the SSD tier and decouples storage from compute. Requires RDMA for production performance — TCP fallback is available but significantly slower.
+
 ## Further Reading
 
 - [Tiered Prefix Cache Guide](../../../../guides/tiered-prefix-cache) — Step-by-step deployment guides
 - [llm-d KV-Disaggregation Roadmaps](https://github.com/llm-d/llm-d-kv-cache/issues?q=is%3Aissue%20state%3Aopen%20label%3Aroadmap) — Planned features and improvements across offloading and KV-cache management
 - [llm-d FS Backend](https://github.com/llm-d/llm-d-kv-cache/tree/main/kv_connectors/llmd_fs_backend) — Implementation details, configuration, and metrics
 - [vLLM KV Offloading Connector](https://vllm.ai/blog/kv-offloading-connector) — Deep dive into vLLM's native offloading
+- [Mooncake Store](https://github.com/kvcache-ai/Mooncake) — Upstream Mooncake project and documentation
+- [vLLM MooncakeStoreConnector Usage Guide](https://docs.vllm.ai/en/v0.22.1/features/mooncake_store_connector_usage/) — vLLM-side configuration reference

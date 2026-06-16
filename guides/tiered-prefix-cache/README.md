@@ -62,21 +62,6 @@ Integration between the storage system and llm-d is achieved through vLLM connec
 
 A P2P network can be formed between the inference engine instances to share caches in HBMs or CPU memory. It enables more cache sharing without needing additional storage resources. However this strategy adds operational overhead, and potential contention between model parallelism traffic such as tensor parallelism. We will add more recommendations in the following releases.
 
-### Mooncake Store
-
-[Mooncake Store](https://github.com/kvcache-ai/Mooncake) is a distributed KV cache system built on the Mooncake Transfer Engine. It pools CPU DRAM across nodes (and optionally SSD/NVMe) into a shared cache tier, providing cross-instance KV cache reuse without a traditional shared filesystem.
-
-Mooncake Store integrates with vLLM through the `MooncakeStoreConnector`, which plugs into vLLM's KV-cache connector API. The Transfer Engine handles high-throughput data movement (typically over RDMA), while the Store layer manages indexing, memory pooling, and eviction across the participating nodes.
-
-Key characteristics:
-
-* **Distributed memory pool** - Aggregates CPU DRAM across multiple nodes into a shared cache, scaling capacity with the number of hosts.
-* **No shared filesystem required** - Unlike file-based offloading connectors, Mooncake Store manages its own distributed storage; no PVC or POSIX mount is needed.
-* **RDMA transport** - Uses the Mooncake Transfer Engine for low-latency, high-throughput data movement between nodes.
-* **Optional SSD/NVMe tier** - Can extend the cache beyond DRAM to local storage for additional capacity.
-
-Deployment manifests for Mooncake Store are available in `modelserver/gpu/vllm/mooncake-store/`. See [Mooncake Store deployment](#for-nvidia-gpu--mooncake-store-distributed-cache) below.
-
 ## Cache Tiering
 
 Generally multiple cache tiers can be applied ordered by their cache read/write latencies, allowing frequently accessed caches to stay as close as possible to the accelerator, and large or less frequently accessed caches to be offloaded to slower tiers. We recommend always setting up HBM and CPU RAM tiers, and consider a third or fourth tier when your cache needs goes beyond HBM + CPU RAM.
@@ -132,26 +117,14 @@ For advanced configuration options and implementation details, see the [llm-d FS
 <details>
 <summary><h4>About MooncakeStoreConnector</h4></summary>
 
-[Mooncake Store](https://github.com/kvcache-ai/Mooncake) is a distributed KV cache system built on the Mooncake Transfer Engine. It pools CPU DRAM across nodes (and optionally SSD/NVMe) into a shared cache tier, providing cross-instance KV cache reuse without a traditional shared filesystem.
+[Mooncake Store](https://github.com/kvcache-ai/Mooncake) pools CPU DRAM (and optionally SSD) across nodes into a shared distributed cache using RDMA or TCP — no shared filesystem or PVC needed for the data path. A centralized [Mooncake Master](../../helpers/mooncake-master-store/) handles metadata, replica placement, and eviction.
 
-The `MooncakeStoreConnector` integrates with vLLM's KV-cache connector API. Multiple vLLM instances store, retrieve, and reuse KV cache blocks based on content-addressable keys (block hashes), reducing redundant prefill computation for workloads with repeated prefixes.
+Two deployment modes are available:
 
-**Key advantages:**
+* **Embedded** (`mooncake-store/cpu/`) — Each vLLM rank contributes CPU DRAM to the pool in-process. Simpler to deploy; pool scales with the number of replicas.
+* **Standalone-store** (`mooncake-store/both/`) — An external `mooncake_client` process owns the CPU + SSD pool. Decouples storage from compute and enables the SSD tier.
 
-* **Distributed memory pool** - Aggregates CPU DRAM across multiple nodes into a shared cache, scaling capacity with the number of hosts.
-* **No shared filesystem required** - Unlike file-based offloading connectors, Mooncake Store manages its own distributed storage; no PVC or POSIX mount is needed.
-* **RDMA transport** - Uses the Mooncake Transfer Engine for low-latency, high-throughput data movement between nodes.
-* **Cross-instance reuse** - New or restarted instances can immediately reuse KV blocks computed by other instances without warming the cache from scratch.
-* **Optional SSD/NVMe tier** - In standalone-store mode, the cache can extend beyond DRAM to local storage for additional capacity.
-
-**Deployment modes:**
-
-* **Embedded** (`mooncake-store/cpu/`) - Each vLLM rank contributes CPU DRAM to the distributed pool in-process. Simpler to deploy, no external process needed.
-* **Standalone-store** (`mooncake-store/both/`) - An external `mooncake_client` process owns the CPU + SSD pool. vLLM ranks are pure requesters. Enables SSD tier and decouples storage from compute.
-
-**Important:** `PYTHONHASHSEED` must be set to the same fixed value (for example `0`) on all vLLM instances sharing the store. Python randomizes its hash seed per process by default, which would cause identical prompts to produce different block hashes, preventing cross-process prefix cache hits.
-
-For more information, visit the [Mooncake documentation](https://kvcache-ai.github.io/Mooncake/).
+See [deployment instructions below](#for-nvidia-gpu--mooncake-store-distributed-cache) and the [KV Offloader architecture doc](../../docs/architecture/advanced/kv-management/kv-offloader.md#mooncakestoreconnector) for configuration reference, environment variables, and a detailed comparison with other connectors.
 
 </details>
 
@@ -273,6 +246,9 @@ Deploy **one** of the paths below. Each `kubectl apply -k` targets an overlay di
 #### vLLM native — CPU RAM
 
 ```bash
+export MODEL_SERVER=vllm # vllm | sglang
+export CONNECTOR=native  # native | lmcache-connector | mooncake-store
+export VARIANT=cpu       # cpu
 export INFRA_PROVIDER=base  # base | gke
 kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/tiered-prefix-cache/modelserver/gpu/vllm/native/cpu/${INFRA_PROVIDER}/
 ```
@@ -333,10 +309,12 @@ The connector does not evict data from the shared tier. Capacity is managed by t
 
 **For NVIDIA GPU — Mooncake Store (distributed cache):**
 
-Mooncake Store uses `MooncakeStoreConnector` to pool CPU DRAM across nodes into a shared distributed cache. No shared filesystem or PVC is needed. Two modes are available:
+> See [About MooncakeStoreConnector](#about-mooncakestoreconnector) above for background on how this connector works and when to choose it.
 
-* **Embedded** (`cpu/`) — Each vLLM rank contributes CPU DRAM to the pool in-process. Simpler deployment.
-* **Standalone-store** (`both/`) — An external `mooncake_client` process owns the CPU + SSD pool. Enables SSD tier.
+Select a deployment mode:
+
+* **Embedded** (`cpu/`) — Each vLLM rank contributes CPU DRAM to the pool in-process. Recommended for most deployments.
+* **Standalone-store** (`both/`) — An external `mooncake_client` process owns the CPU + SSD pool. Use when you need the SSD tier or want to decouple storage from compute.
 
 **Prerequisites:**
 
@@ -592,3 +570,7 @@ Empirical benchmark reports demonstrating the impact of multi-tier prefix-cache 
 - **[Qwen/Qwen3-32B on vLLM (TPU v6e/v7 CPU Offload)](./benchmark-results/vllm-qwen3-32b-tpuv7.md)**: Headline throughput and latency effect of CPU RAM prefix offloading on Google TPU architectures.
 - **[Qwen/Qwen3-32B on vLLM (16×H100 Lustre Offload)](./benchmark-results/vllm-qwen3-32b-h100-lustre.md)**: Benchmark comparisons for shared POSIX filesystem offloading using LMCache and llm-d filesystem connectors.
 
+<<<<<<< HEAD
+=======
+For detailed results see [gpt-oss-120B benchmarking results](benchmark-results-gpt-oss-120b.md).
+>>>>>>> 983acc4d (updating documentaiton)
