@@ -157,6 +157,47 @@ wide-ep-llm-d-prefill-1                       1/1     Running   0          10m
 
 Decode pods show `2/2` (vLLM + routing proxy sidecar), prefill pods show `1/1`.
 
+### Get the IP of the Proxy
+
+**Standalone Mode**
+
+```bash
+export IP=$(kubectl get service ${GUIDE_NAME}-epp -n ${NAMESPACE} -o jsonpath='{.spec.clusterIP}')
+```
+
+<details>
+<summary><b>Gateway Mode</b></summary>
+
+```bash
+export IP=$(kubectl get gateway llm-d-inference-gateway -n ${NAMESPACE} -o jsonpath='{.status.addresses[0].value}')
+```
+
+</details>
+
+### Send Test Requests
+
+**Open a temporary interactive shell inside the cluster:**
+
+```bash
+kubectl run curl-debug --rm -it \
+    --image=cfmanteiga/alpine-bash-curl-jq \
+    --namespace="$NAMESPACE" \
+    --env="IP=$IP" \
+    --env="NAMESPACE=$NAMESPACE" \
+    -- /bin/bash
+```
+
+**Send a completion request:**
+
+```bash
+curl -X POST http://${IP}/v1/completions \
+    -H 'Content-Type: application/json' \
+    -d '{
+        "model": "deepseek-ai/DeepSeek-R1-0528",
+        "prompt": "How are you today?"
+    }' | jq
+```
+
 ## Using the Stack
 
 For instructions on getting started making inference requests see [our docs](../../02_verifying_a_guide.md).
