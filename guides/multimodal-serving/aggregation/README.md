@@ -119,6 +119,9 @@ kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/multimodal-serving/${GUIDE_
 kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/multimodal-serving/${GUIDE_NAME}/modelserver/xpu/vllm/
 ```
 
+> [!NOTE]
+> Intel XPU deployments use Kubernetes Dynamic Resource Allocation (DRA) with `resource.k8s.io/v1` `ResourceClaimTemplate` resources and per-container `resources.claims`. Ensure your cluster supports DRA, has the Intel device plugin/DRA components installed, and exposes the `gpu.intel.com` `DeviceClass` before applying this overlay.
+
 </details>
 
 ### 3. (Optional) Enable monitoring
