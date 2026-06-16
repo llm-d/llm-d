@@ -30,7 +30,7 @@ See the [multimodal e-disaggregation guide](../../guides/multimodal-serving/e-di
 The llm-d-router schedules multimodal requests using prefix cache affinity and server load metrics.
 
 > [!NOTE]
-> For the high-level scheduling architecture flow and EPP load-balancing diagrams, see the [Optimized Baseline guide](../well-lit-paths/optimized-baseline.md#architecture).
+> For the high-level scheduling architecture flow and EPP load-balancing diagrams, see the [Optimized Baseline guide](../well-lit-paths/capabilities/optimized-baseline.md#architecture).
 
 ### Prefix-Aware Scheduling
 
@@ -86,6 +86,6 @@ EPP continuously probes each endpoints' metrics by scraping `/metrics` at a regu
 
 ## Further Reading
 
-* See [Optimized Baseline](../well-lit-paths/optimized-baseline.md) for details on text-based scheduling and general load-balancing.
+* See [Optimized Baseline](../well-lit-paths/capabilities/optimized-baseline.md) for details on text-based scheduling and general load-balancing.
 * See [EPP Architecture](../architecture/core/router/epp/README.md) for more details.
 * See [KV-Cache Indexer](../advanced/kv-management/kv-indexer.md) for details on precise event-driven indexing.

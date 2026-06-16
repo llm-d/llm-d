@@ -8,7 +8,7 @@ an `InferencePool`.
 
 For motivation, architecture, and parity caveats vs. the Kubernetes-based
 optimized-baseline, see the
-[No-Kubernetes Deployment well-lit path](../../docs/well-lit-paths/no-kubernetes-deployment.md).
+[No-Kubernetes Deployment well-lit path](../../docs/well-lit-paths/operations/no-kubernetes-deployment.md).
 
 The configs in this directory are plain YAML — there is no Helm chart and
 no Kustomize overlay. Drop them on a host, point your services at them,
