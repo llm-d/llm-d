@@ -1,0 +1,14 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: llm-d-optimized-baseline
+
+resources:
+  - github.com/llm-d/llm-d-workload-variant-autoscaler/config/overlays/namespace-scoped/kubernetes?ref=main
+  - ../../base
+
+patches:
+  - path: controller-deployment-patch.yaml
+    target:
+      kind: Deployment
+      name: wva-controller-manager

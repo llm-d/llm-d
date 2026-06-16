@@ -28,6 +28,10 @@ Follow the [optimized-baseline](../optimized-baseline/README.md) well-lit path t
 | `inference_extension_flow_control_queue_size` | The number of requests currently buffered in the gateway waiting for an available backend. | Scale-out signal: High queue size indicates that the existing replicas are saturated. |
 | `inference_objective_running_requests` | The number of concurrent requests being processed by the model pool. | Capacity signal: Useful for tracking total throughput. |
 
+## Prerequisites
+
+Make sure to enable monitoring as described in the [autoscaling prerequisites](README.md#prerequisites) section.
+
 ## Configuration Guide
 
 ### 1. Enable Flow Control in EPP
@@ -78,7 +82,7 @@ Apply the rules by upgrading the adapter:
 
 ```bash
 helm upgrade prometheus-adapter prometheus-community/prometheus-adapter \
-  --namespace monitoring \
+  --namespace ${MONITORING_NAMESPACE} \
   --reuse-values \
   --values epp-adapter-values.yaml
 ```

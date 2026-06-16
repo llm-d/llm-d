@@ -11,9 +11,13 @@ This guide covers the autoscaling strategies available in llm-d. Both use the Ku
 
 ## Prerequisites
 
-### Kubernetes Metrics Adapter
+Before choosing an autoscaling path, you must have a monitoring stack with a metrics adapter configured to expose the necessary signals to the HPA or KEDA.
 
-Before choosing an autoscaling path, you must have a metrics adapter configured to expose the necessary signals to the HPA or KEDA.
+### Prometheus
+
+You must have a Prometheus instance running in your cluster. See [Prometheus Setup Guide](../../docs/resources/observability/setup.md) for guidance on setting up Prometheus. Make sure to enable TLS as WVA requires it to securely access the Prometheus API.
+
+### Kubernetes Metrics Adapter
 
 #### Installing KEDA (Recommended)
 
@@ -24,41 +28,7 @@ Follow the [Install KEDA](https://keda.sh/docs/2.20/deploy/) guide. KEDA include
 
 #### Installing Prometheus Adapter (Deprecated)
 
-> [!WARNING]
-> The Prometheus Adapter project is planned for deprecation ([kubernetes-sigs/prometheus-adapter#701](https://github.com/kubernetes-sigs/prometheus-adapter/issues/701)).
-
-The Prometheus Adapter bridges Prometheus metrics to the Kubernetes External Metrics API, which the HPA uses to read EPP and WVA signals.
-
-1. Add the Helm repository and install the adapter:
-
-```bash
-export MON_NS=monitoring
-
-helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
-helm repo update
-helm install prometheus-adapter prometheus-community/prometheus-adapter \
-  --namespace $MON_NS \
-  --create-namespace
-```
-
-> [!NOTE]
-> You must set `prometheus.url` to point to your Prometheus instance. If you are
-using `kube-prometheus-stack`, the default service is `http://prometheus-operated.monitoring.svc:9090`.
-Pass it at install time or in a values file:
-
-```bash
-helm install prometheus-adapter prometheus-community/prometheus-adapter \
-  --namespace monitoring \
-  --create-namespace \
-  --set prometheus.url=http://prometheus-operated.monitoring.svc \
-  --set prometheus.port=9090
-```
-
-2. Verify the adapter is running and can access Prometheus:
-
-```bash
-kubectl get --raw "/apis/external.metrics.k8s.io/v1beta1"
-```
+See the [Prometheus Adapter guide](./promadapter.md) for installation instructions. Note that the Prometheus Adapter is planned for deprecation, and it is recommended to use KEDA instead for autoscaling needs.
 
 ## Paths
 
