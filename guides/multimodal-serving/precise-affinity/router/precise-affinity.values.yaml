@@ -3,7 +3,9 @@
 
 router:
   tokenizer:
-    enabled: false   # render is a standalone Service (see render/), not a sidecar
+    # render is a standalone Service (see render/), not a sidecar; modelName lives on the
+    # token-producer plugin below, so the chart needs no tokenizer.modelName when disabled.
+    enabled: false
 
   epp:
     pluginsConfigFile: "precise-affinity-plugins.yaml"

@@ -157,7 +157,7 @@ curl -i -X POST http://${IP}/v1/chat/completions \
     }'
 ```
 
-On repeated content, `llm_d_router_epp_encoder_cache_hits_total{pod=...}` increments for the pod that served the cached item.
+On repeated content, `llm_d_router_epp_encoder_cache_hits_total{pod=...}` increments for each pod estimated to hold the item (it is counted at scoring time, before the pick).
 
 ## How It Works
 
