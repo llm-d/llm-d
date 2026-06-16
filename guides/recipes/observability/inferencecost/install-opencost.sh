@@ -14,8 +14,9 @@ YES=false
 ACTION="install"
 KUBERNETES_CONTEXT=""
 
-# Minimum OpenCost version that includes the inference cost module
-MINIMUM_INFERENCE_COST_VERSION="1.113.0"
+# Fork image override (set to non-empty to deploy a custom OpenCost image instead of the upstream release)
+OPENCOST_IMAGE_REPO=""
+OPENCOST_IMAGE_TAG=""
 
 ### HELP & LOGGING ###
 print_help() {
@@ -35,6 +36,7 @@ Options:
   -g, --context FILE            Path to a specific kubeconfig context
   -y, --yes                     Accept default prices without interactive confirmation
   -u, --uninstall               Uninstall OpenCost
+      --image REPO:TAG          Use a custom OpenCost image (e.g. ghcr.io/simanadler/opencost:inference-v1)
   -h, --help                    Show this help and exit
 
 Examples:
@@ -91,6 +93,7 @@ parse_args() {
       -g|--context)             KUBERNETES_CONTEXT="$2"; shift 2 ;;
       -y|--yes)                 YES=true; shift ;;
       -u|--uninstall)           ACTION="uninstall"; shift ;;
+      --image)                  OPENCOST_IMAGE_REPO="${2%%:*}"; OPENCOST_IMAGE_TAG="${2#*:}"; shift 2 ;;
       -h|--help)                print_help; exit 0 ;;
       *)                        die "Unknown option: $1" ;;
     esac
@@ -106,13 +109,6 @@ setup_env() {
     KCMD="kubectl"
     HCMD="helm"
   fi
-}
-
-### VERSION COMPARISON ###
-# Returns 0 if $1 >= $2 (semver)
-version_ge() {
-  local a="$1" b="$2"
-  printf '%s\n%s\n' "$b" "$a" | sort -C -V
 }
 
 ### OPENCOST DETECTION ###
@@ -135,14 +131,6 @@ detect_opencost() {
   log_info "Found OpenCost release '$OPENCOST_RNAME' in namespace '$OPENCOST_NS' (version: $OPENCOST_VERSION)."
 }
 
-check_opencost_version() {
-  if ! version_ge "$OPENCOST_VERSION" "$MINIMUM_INFERENCE_COST_VERSION"; then
-    log_error "OpenCost $OPENCOST_VERSION does not support inference cost tracking."
-    log_error "Upgrade to >= $MINIMUM_INFERENCE_COST_VERSION and re-run this script."
-    exit 1
-  fi
-  log_success "OpenCost version $OPENCOST_VERSION supports inference cost tracking."
-}
 
 ### PROMETHEUS DETECTION ###
 detect_prometheus() {
@@ -498,10 +486,19 @@ opencost:
 EOF
 
   log_info "Installing OpenCost in namespace ${OPENCOST_NAMESPACE}..."
+  local image_sets=()
+  if [[ -n "$OPENCOST_IMAGE_REPO" ]]; then
+    log_info "Using custom OpenCost image: ${OPENCOST_IMAGE_REPO}:${OPENCOST_IMAGE_TAG}"
+    image_sets=(
+      --set "opencost.exporter.image.repository=${OPENCOST_IMAGE_REPO}"
+      --set "opencost.exporter.image.tag=${OPENCOST_IMAGE_TAG}"
+    )
+  fi
   $HCMD install opencost opencost/opencost \
     --namespace "${OPENCOST_NAMESPACE}" \
     --create-namespace \
-    -f /tmp/opencost-values.yaml
+    -f /tmp/opencost-values.yaml \
+    "${image_sets[@]}"
 
   rm -f /tmp/opencost-values.yaml /tmp/opencost-pricing.json
 
@@ -550,7 +547,6 @@ main() {
   detect_opencost
 
   if [[ "$OPENCOST_EXISTS" == "true" ]]; then
-    check_opencost_version
     detect_prometheus || true
     if [[ -n "$PROMETHEUS_ENDPOINT" ]]; then
       check_llmd_config

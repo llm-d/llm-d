@@ -43,13 +43,20 @@ If your cluster already has a shared Prometheus (such as OpenShift's user worklo
 
 ## Installation
 
+> **Note:** Inference cost support has not yet been merged into upstream OpenCost. Until it is, use the
+> fork image via the `--image` flag:
+>
+> ```bash
+> ./install-opencost.sh --image ghcr.io/simanadler/opencost-inference:latest
+> ```
+
 ```bash
-./guides/recipes/observability/inferencecost/install-opencost.sh
+./guides/recipes/observability/inferencecost/install-opencost.sh --image ghcr.io/simanadler/opencost-inference:latest
 ```
 
 The installer:
 
-1. Checks for an existing OpenCost installation — if found, validates the version and llm-d configuration, then exits
+1. Checks for an existing OpenCost installation — if found, validates the llm-d configuration, then exits
 2. Detects Prometheus; if not found, offers to install `kube-prometheus-stack` alongside OpenCost
 3. Prompts for infrastructure pricing (defaults to GCP us-central1 baseline — update GPU price for on-prem accuracy)
 4. Deploys OpenCost with inference cost enabled, using the pricing you confirmed
@@ -67,18 +74,19 @@ The installer:
 | `-g`, `--context FILE` | `$KUBECONFIG` | Path to a specific kubeconfig file |
 | `-y`, `--yes` | false | Accept default GCP prices without interactive confirmation |
 | `-u`, `--uninstall` | — | Uninstall OpenCost and remove its ConfigMaps |
+| `--image REPO:TAG` | upstream release | Deploy a custom OpenCost image (required until inference support is merged upstream) |
 
 ### Non-interactive install
 
 ```bash
 # Accept GCP default prices
-./install-opencost.sh -y
+./install-opencost.sh --image ghcr.io/simanadler/opencost-inference:latest -y
 
 # Supply your own pricing file
-./install-opencost.sh --pricing-config /path/to/prices.json
+./install-opencost.sh --image ghcr.io/simanadler/opencost-inference:latest --pricing-config /path/to/prices.json
 
 # Install Prometheus and OpenCost together in one namespace
-./install-opencost.sh --install-prometheus -n llm-d-monitoring
+./install-opencost.sh --image ghcr.io/simanadler/opencost-inference:latest --install-prometheus -n llm-d-monitoring
 ```
 
 ### Pricing config format
