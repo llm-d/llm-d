@@ -15,7 +15,7 @@ spec:
             - "--tensor-parallel-size=4"
             - "--block-size=128"
             - "--kv-transfer-config"
-            - '{"kv_connector":"NixlConnector", "kv_role":"kv_both"}'
+            - '{"kv_connector":"NixlConnector", "kv_role":"kv_consumer"}'
             - "--no-disable-hybrid-kv-cache-manager"
             - "--port=8200"
           env:

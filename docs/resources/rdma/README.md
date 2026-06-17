@@ -76,16 +76,21 @@ NIXL selects the backend based on what is available and the memory types involve
 Enable NIXL-based KV Cache transfer via the `--kv-transfer-config` flag:
 
 ```bash
+# Prefill pods
 vllm serve <model> \
-  --kv-transfer-config '{"kv_connector":"NixlConnector","kv_role":"kv_both"}'
+  --kv-transfer-config '{"kv_connector":"NixlConnector","kv_role":"kv_producer"}'
+
+# Decode pods
+vllm serve <model> \
+  --kv-transfer-config '{"kv_connector":"NixlConnector","kv_role":"kv_consumer"}'
 ```
 
-The `kv_role` is `kv_both` for both prefill and decode pods — each pod can both send and receive KV Cache.
+Set `kv_role` to `kv_producer` on prefill pods and `kv_consumer` on decode pods.
 
 For XPU and HPU devices where KV transfer happens via CPU memory, add:
 
 ```bash
---kv-transfer-config '{"kv_connector":"NixlConnector","kv_role":"kv_both","kv_buffer_device":"cpu"}'
+--kv-transfer-config '{"kv_connector":"NixlConnector","kv_role":"kv_producer","kv_buffer_device":"cpu"}'
 ```
 
 #### Backend Selection
@@ -97,7 +102,7 @@ To configure NIXL with UCCL backend:
 ```bash
 vllm serve <model> \
   --kv-transfer-config '{"kv_connector":"NixlConnector",
-  "kv_role":"kv_both",
+  "kv_role":"kv_producer",
   "kv_connector_extra_config":
   {"backends":["UCCL"]}}'
 ```
