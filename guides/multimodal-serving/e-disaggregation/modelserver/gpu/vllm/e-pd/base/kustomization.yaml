@@ -43,16 +43,4 @@ labels:
 
 patches:
   - path: patch-decode.yaml
-  - target:
-      kind: Deployment
-      name: decode
-    patch: |
-      - op: replace
-        path: /spec/template/spec/containers/0/ports
-        value:
-          - name: modelserver
-            containerPort: 8200
-            protocol: TCP
-          - name: nixl
-            containerPort: 5600
-            protocol: TCP
+
