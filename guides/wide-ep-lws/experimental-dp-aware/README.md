@@ -198,14 +198,6 @@ curl -X POST http://${IP}/v1/completions \
     }' | jq
 ```
 
-## Using the Stack
-
-For instructions on getting started making inference requests see [our docs](../../02_verifying_a_guide.md).
-
-**_NOTE:_** This example particularly benefits from utilizing stern as described in the [Getting Started guide](../../02_verifying_a_guide.md#following-logs-for-requests), because while we only have 3 inferencing pods, it has 16 vllm servers or ranks.
-
-**_NOTE:_** Compared to the other examples, this one takes anywhere between 7-10 minutes for the vllm API servers to startup so this might take longer before you can interact with this example.
-
 ## Troubleshooting
 
 ### Pod Startup Ordering
