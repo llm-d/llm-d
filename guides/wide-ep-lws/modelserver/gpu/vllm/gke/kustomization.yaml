@@ -73,9 +73,12 @@ patches:
       - op: add
         path: /spec/leaderWorkerTemplate/workerTemplate/spec/containers/0/securityContext/privileged
         value: true
-      # Workaround for GKE scheduling bug on H200 nodes (which only advertise the .IP variant).
-      # Setting the legacy non-.IP resource limit to 0 bypasses the request while GKE Warden
-      # still injects the .IP variant.
+      # GKE Warden (mutating webhook) injects resource requests for both
+      # networking.gke.io.networks/rdma-X and networking.gke.io.networks/rdma-X.IP
+      # from the networking.gke.io/interfaces annotation. Modern GKE H200 (A3 Ultra)
+      # nodes only advertise the .IP variant, causing pods to stay Pending.
+      # Setting the legacy non-.IP resource limit to 0 bypasses the request while
+      # GKE Warden still injects the .IP variant.
       - op: add
         path: /spec/leaderWorkerTemplate/workerTemplate/spec/containers/0/resources/limits/networking.gke.io.networks~1rdma-0
         value: "0"
@@ -157,6 +160,12 @@ patches:
         value:
           name: NVSHMEM_DISABLED_GDRCOPY
           value: "true"
+      # Since we are loading model in from a host storage, disable HF_XET
+      - op: add
+        path: /spec/leaderWorkerTemplate/workerTemplate/spec/containers/0/env/-
+        value:
+          name: HF_HUB_DISABLE_XET
+          value: "1"
       # We add the volume for different providers since the hostPath can be different.
       - op: replace
         path: /spec/leaderWorkerTemplate/workerTemplate/spec/volumes/1

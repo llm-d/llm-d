@@ -2,6 +2,10 @@ apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 resources:
   - ../base
+images:
+  - name: ghcr.io/llm-d/llm-d-cuda
+    newName: docker.io/vllm/vllm-openai
+    newTag: v0.22.1-x86_64-cu129-ubuntu2404
 
 patches:
   - target:
@@ -22,6 +26,12 @@ patches:
           hostPath:
             path: /mnt/local/jit-cache
             type: DirectoryOrCreate
+      # Since we are loading model in from a host storage, disable HF_XET
+      - op: add
+        path: /spec/leaderWorkerTemplate/workerTemplate/spec/containers/0/env/-
+        value:
+          name: HF_HUB_DISABLE_XET
+          value: "1"
       - op: add
         path: /spec/leaderWorkerTemplate/workerTemplate/spec/containers/0/env/-
         value:
@@ -39,3 +49,15 @@ patches:
       - op: add
         path: /spec/leaderWorkerTemplate/workerTemplate/spec/containers/0/resources/requests/rdma~1ib
         value: "1"
+      # Add GPU affinity. We do this because the sizing of this deployment won't fit on our H100s in terms of memory.
+      - op: add
+        path: /spec/leaderWorkerTemplate/workerTemplate/spec/affinity
+        value:
+          nodeAffinity:
+            requiredDuringSchedulingIgnoredDuringExecution:
+              nodeSelectorTerms:
+                - matchExpressions:
+                  - key: gpu.nvidia.com/model
+                    operator: In
+                    values:
+                      - H200
