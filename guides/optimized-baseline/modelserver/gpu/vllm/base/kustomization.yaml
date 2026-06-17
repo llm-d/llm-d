@@ -5,10 +5,8 @@ resources:
 
 namePrefix: optimized-baseline-nvidia-gpu-vllm-
 
-images:
-  - name: REPLACE_MODEL_SERVER_IMAGE
-    newName: vllm/vllm-openai
-    newTag: v0.19.1
+components:
+  - ../../../../../recipes/modelserver/components/images/gpu-vllm
 
 labels:
   - pairs:

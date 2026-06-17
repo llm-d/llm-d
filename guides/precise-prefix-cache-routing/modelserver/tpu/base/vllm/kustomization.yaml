@@ -3,9 +3,5 @@ kind: Kustomization
 resources:
   - ../../../../../recipes/modelserver/base/single-host/default
 
-images:
-  - name: REPLACE_MODEL_SERVER_IMAGE
-    newName: vllm/vllm-tpu
-
 patches:
   - path: patch-vllm.yaml

@@ -5,10 +5,8 @@ resources:
 
 namePrefix: optimized-baseline-tpu-v6-vllm-
 
-images:
-  - name: REPLACE_MODEL_SERVER_IMAGE
-    newName: vllm/vllm-tpu
-    newTag: v0.18.0
+components:
+  - ../../../../recipes/modelserver/components/images/tpu-vllm
 
 labels:
   - pairs:

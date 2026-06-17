@@ -6,10 +6,8 @@ resources:
 
 namePrefix: precise-prefix-cache-routing-amd-vllm-
 
-images:
-  - name: REPLACE_MODEL_SERVER_IMAGE
-    newName: ghcr.io/llm-d/llm-d-rocm
-    newTag: v0.7.0
+components:
+  - ../../../../recipes/modelserver/components/images/amd-vllm
 
 labels:
   - pairs:

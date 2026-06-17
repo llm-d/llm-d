@@ -5,10 +5,8 @@ resources:
 
 namePrefix: tiered-prefix-cache-gpu-sglang-
 
-images:
-  - name: REPLACE_MODEL_SERVER_IMAGE
-    newName: docker.io/lmsysorg/sglang
-    newTag: v0.5.12.post1
+components:
+  - ../../../../../recipes/modelserver/components/images/gpu-sglang
 
 labels:
   - pairs:

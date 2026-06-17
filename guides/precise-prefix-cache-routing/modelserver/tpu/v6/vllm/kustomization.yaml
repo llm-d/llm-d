@@ -7,6 +7,7 @@ namePrefix: precise-prefix-cache-routing-tpu-v6-vllm-
 
 images:
   - name: REPLACE_MODEL_SERVER_IMAGE
+    newName: vllm/vllm-tpu
     newTag: v0.11.1
 
 labels:

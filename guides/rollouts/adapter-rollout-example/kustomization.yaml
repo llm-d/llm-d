@@ -6,10 +6,8 @@ resources:
 
 namePrefix: lora-adapter-rollout-
 
-images:
-  - name: REPLACE_MODEL_SERVER_IMAGE
-    newName: vllm/vllm-openai
-    newTag: v0.19.1
+components:
+  - ../../recipes/modelserver/components/images/gpu-vllm
 
 patches:
   - path: patch-lora-config.yaml

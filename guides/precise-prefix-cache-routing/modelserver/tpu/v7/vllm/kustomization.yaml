@@ -7,6 +7,7 @@ namePrefix: precise-prefix-cache-routing-tpu-v7-vllm-
 
 images:
   - name: REPLACE_MODEL_SERVER_IMAGE
+    newName: vllm/vllm-tpu
     newTag: v0.13.2-ironwood
 
 labels:

@@ -9,11 +9,8 @@ namePrefix: pd-disaggregation-hpu-vllm-
 configurations:
   - namereference.yaml
 
-images:
-  - name: REPLACE_MODEL_SERVER_IMAGE
-    newName: ghcr.io/llm-d/llm-d-hpu
-    newTag: v0.7.0
-
+components:
+  - ../../../../recipes/modelserver/components/images/hpu-vllm
 
 labels:
   - pairs:
