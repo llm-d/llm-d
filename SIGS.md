@@ -226,8 +226,8 @@ SIGs operate within the broader llm-d project governance framework defined in [P
 
 ### SIG Inference Payload Processor
 
-> **👥 Leadership:** [Nir Rozenbaum](https://github.com/nirrozenbaum)
-> North Star Design Document TODO
+> **👥 Leadership:** [Nir Rozenbaum](https://github.com/nirrozenbaum), [Maroon Ayoub](https://github.com/vMaroon)
+
 
 **Charter**: TODO
 
