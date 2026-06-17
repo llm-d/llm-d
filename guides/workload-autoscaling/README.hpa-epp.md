@@ -63,7 +63,7 @@ rules:
           namespaced: false
       name:
         as: "epp_queue_size"
-      metricsQuery: 'sum(inference_extension_flow_control_queue_size{inference_pool="vllm-llama3-8b-instruct"})'
+      metricsQuery: 'sum(inference_extension_flow_control_queue_size{inference_pool="qwen/qwen3-32b"})'
     - seriesQuery: 'inference_objective_running_requests'
       resources:
         overrides:
@@ -72,11 +72,11 @@ rules:
           namespaced: false
       name:
         as: "epp_running_requests"
-      metricsQuery: 'sum(inference_objective_running_requests{top_level_controller_name="vllm-llama3-8b-instruct-epp"})'
+      metricsQuery: 'sum(inference_objective_running_requests{top_level_controller_name="qwen/qwen3-32b-epp"})'
 ```
 
 > [!NOTE]
-> Replace `vllm-llama3-8b-instruct` and `vllm-llama3-8b-instruct-epp` with your own deployment names.
+> Replace `qwen/qwen3-32b` and `qwen/qwen3-32b-epp` with your own deployment names.
 
 Apply the rules by upgrading the adapter:
 
@@ -106,13 +106,13 @@ Below is a sample HPA configuration `hpa.yaml` that uses the dual-metric setup t
 apiVersion: autoscaling/v2
 kind: HorizontalPodAutoscaler
 metadata:
-  name: vllm-llama3-8b-instruct-hpa
+  name: qwen-qwen3-32b-hpa
   namespace: default
 spec:
   scaleTargetRef:
     apiVersion: apps/v1
     kind: Deployment
-    name: vllm-llama3-8b-instruct
+    name: qwen-qwen3-32b
   minReplicas: 1
   maxReplicas: 3
   metrics:
@@ -157,14 +157,14 @@ Apply the manifest and confirm the HPA is reading metrics:
 
 ```bash
 kubectl apply -f hpa.yaml
-kubectl get hpa vllm-llama3-8b-instruct-hpa -n default
+kubectl get hpa qwen-qwen3-32b-hpa -n default
 ```
 
 A successful deployment would look like this:
 
 ```
 NAME                          REFERENCE                            TARGETS              MINPODS   MAXPODS   REPLICAS   AGE
-vllm-llama3-8b-instruct-hpa   Deployment/vllm-llama3-8b-instruct   0/250, 0/250 (avg)   1         3         1          5m
+qwen-qwen3-32b-hpa   Deployment/qwen-qwen3-32b   0/250, 0/250 (avg)   1         3         1          5m
 ```
 
 ## Scale to Zero
