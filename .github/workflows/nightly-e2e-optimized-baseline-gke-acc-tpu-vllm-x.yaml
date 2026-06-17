@@ -81,7 +81,7 @@ jobs:
       standup_scenario: ${{ inputs.standup_scenario || 'optimized-baseline' }}
       decode_pods: ${{ inputs.decode_pods || 'auto' }}
       prefill_pods: ${{ inputs.prefill_pods || 'auto' }}
-      accelerator_type: ${{ inputs.accelerator_type || 'tpu-v6' }}
+      accelerator_type: ${{ inputs.accelerator_type || 'tpu/v6' }}
       backend_type: ${{ inputs.backend_type || 'vllm' }}
       infra_provider: ${{ inputs.infra_provider || '' }}
       connector: ${{ inputs.connector || '' }}
