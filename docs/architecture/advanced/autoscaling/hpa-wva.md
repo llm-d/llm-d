@@ -1,4 +1,7 @@
-# Workload Variant Autoscaling
+# HPA/KEDA with WVA Metrics
+
+> [!WARNING]
+> **Deprecation Notice:** The `VariantAutoscaling` (VA) CRD-based approach described in this document is deprecated. The recommended path is the [HPA + WVA guide](../../../../guides/workload-autoscaling/README.wva.md), which configures HPA directly with WVA-published metrics without requiring the `VariantAutoscaling` CRD. If you are currently using VA objects, see the [Migration from VA to HPA + WVA](#migration-from-va-to-hpa--wva) section below.
 
 ## Functionality
 
@@ -399,3 +402,77 @@ Key controller flags:
 | `--leader-election-lease-duration` | `60s` | Leader election lease duration |
 | `--leader-election-renew-deadline` | `50s` | Leader election renew deadline |
 | `--rest-client-timeout` | `60s` | Kubernetes API client timeout |
+
+## Migration from VA to HPA + WVA
+
+The new [HPA + WVA](../../../../guides/workload-autoscaling/README.wva.md) approach replaces the `VariantAutoscaling` (VA) CRD with standard Kubernetes HPA objects that consume the `wva_desired_replicas` external metric published by WVA. This removes the need to manage VA resources and makes scaling intent visible through the standard `kubectl get hpa` surface.
+
+### Key Differences
+
+| | VA (Deprecated) | HPA + WVA (Recommended) |
+|---|---|---|
+| **Scaling object** | `VariantAutoscaling` CRD | Standard `HorizontalPodAutoscaler` |
+| **Scale target** | Managed by WVA via `scaleTargetRef` in VA spec | Managed by HPA via standard `scaleTargetRef` |
+| **WVA discovery** | WVA watches `VariantAutoscaling` resources | WVA discovers HPA via `llm-d.ai/managed: "true"` annotation |
+| **Scaling metric** | WVA directly sets replica counts | WVA publishes `wva_desired_replicas`; HPA acts on it |
+| **CRD requirement** | Requires `llmd.ai/v1alpha1` `VariantAutoscaling` CRD | No custom CRDs required |
+| **Observability** | `kubectl get va` | `kubectl get hpa` |
+
+### Migration Steps
+
+1. **Delete existing VA objects** for each deployment you are migrating:
+
+   ```bash
+   kubectl delete va <va-name> -n <namespace>
+   ```
+
+   > [!NOTE]
+   > Deleting a VA object stops WVA from managing that deployment's replica count. Scale the deployment to its desired replica count manually before deleting the VA if you need to avoid disruption.
+
+2. **Create HPA objects** with the `llm-d.ai/managed: "true"` annotation. WVA discovers these and publishes `wva_desired_replicas` labeled with `variant_name` and `exported_namespace`:
+
+   ```yaml
+   apiVersion: autoscaling/v2
+   kind: HorizontalPodAutoscaler
+   metadata:
+     name: <deployment-name>
+     namespace: <namespace>
+     annotations:
+       llm-d.ai/managed: "true"
+   spec:
+     scaleTargetRef:
+       apiVersion: apps/v1
+       kind: Deployment
+       name: <deployment-name>
+     minReplicas: 1
+     maxReplicas: <max>
+     metrics:
+       - type: External
+         external:
+           metric:
+             name: wva_desired_replicas
+             selector:
+               matchLabels:
+                 variant_name: <deployment-name>
+                 exported_namespace: <namespace>
+           target:
+             type: AverageValue
+             averageValue: "1"
+   ```
+
+   The `variantCost` previously set on the VA can be carried over as an annotation: `llm-d.ai/variant-cost: "<cost>"`. WVA reads this annotation to preserve cost-aware optimization across variants.
+
+3. **Verify** that WVA is discovering the HPA and publishing the metric:
+
+   ```bash
+   kubectl get hpa <deployment-name> -n <namespace>
+   kubectl get --raw "/apis/external.metrics.k8s.io/v1beta1/namespaces/<namespace>/wva_desired_replicas" | jq .
+   ```
+
+4. **Remove the VA CRD** once all VAs have been migrated and the HPAs are healthy:
+
+   ```bash
+   kubectl delete crd variantautoscalings.llmd.ai
+   ```
+
+See the [HPA + WVA guide](../../../../guides/workload-autoscaling/README.wva.md) for a complete end-to-end setup walkthrough including Prometheus Adapter and WVA controller installation.
