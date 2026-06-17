@@ -88,12 +88,63 @@ def deploy_simulators(ns, sim_deploy_path, sim_svc_path, replicas=10):
     print("Waiting for llm-d-sim deployment to roll out...")
     run_cmd(f"kubectl rollout status deployment/llm-d-sim -n {ns} --timeout=10m")
 
-def deploy_epp(ns, chart_path, values_path):
+def double_cpu(cpu_str):
+    if cpu_str.endswith('m'):
+        val = int(cpu_str[:-1])
+        return f"{val * 2}m"
+    val = float(cpu_str)
+    if val.is_integer():
+        return str(int(val * 2))
+    return str(val * 2)
+
+def double_memory(mem_str):
+    import re
+    match = re.match(r'^(\d+)([a-zA-Z]+)$', mem_str.strip())
+    if match:
+        val = int(match.group(1))
+        unit = match.group(2)
+        return f"{val * 2}{unit}"
+    val = int(mem_str)
+    return str(val * 2)
+
+def deploy_epp(ns, chart_path, values_path, epp_cpu="2", epp_memory="4Gi", machine_family=None):
     print(f"Deploying EPP standalone using Helm chart from: {chart_path}")
-    cmd = (
-        f"helm install optimized-baseline-sim-standalone {chart_path} "
-        f"-f {values_path} --set router.proxy.enabled=true -n {ns}"
-    )
+    
+    cpu_limit = double_cpu(epp_cpu)
+    mem_limit = double_memory(epp_memory)
+    
+    cmd = [
+        "helm", "install", "optimized-baseline-sim-standalone", chart_path,
+        "-f", values_path,
+        "--set", "router.proxy.enabled=true",
+        "--set", f"router.epp.resources.requests.cpu={epp_cpu}",
+        "--set", f"router.epp.resources.limits.cpu={cpu_limit}",
+        "--set", f"router.epp.resources.requests.memory={epp_memory}",
+        "--set", f"router.epp.resources.limits.memory={mem_limit}",
+        "-n", ns
+    ]
+    
+    if machine_family:
+        import json
+        affinity = {
+            "nodeAffinity": {
+                "requiredDuringSchedulingIgnoredDuringExecution": {
+                    "nodeSelectorTerms": [
+                        {
+                            "matchExpressions": [
+                                {
+                                    "key": "cloud.google.com/machine-family",
+                                    "operator": "In",
+                                    "values": [machine_family]
+                                }
+                            ]
+                        }
+                    ]
+                }
+            }
+        }
+        cmd.extend(["--set-json", f"router.epp.affinity={json.dumps(affinity)}"])
+        
     run_cmd(cmd)
     
     print("Waiting for EPP deployment to become ready...")
@@ -390,6 +441,9 @@ def main():
     parser.add_argument("--no-cleanup", action="store_true", help="Skip namespace deletion on completion")
     parser.add_argument("--enable-workload-identity", action="store_true", help="Annotate service account with Workload Identity configuration")
     parser.add_argument("--gcp-project", default=None, help="Google Cloud project ID (inferred from active gcloud config if omitted)")
+    parser.add_argument("--epp-cpu", default="2", help="EPP CPU request (limit will be 2x this amount)")
+    parser.add_argument("--epp-memory", default="4Gi", help="EPP memory request (limit will be 2x this amount)")
+    parser.add_argument("--router-machine-family", default=None, help="Add node affinity for specific Google Cloud machine-family (e.g. c3)")
     args = parser.parse_args()
 
 
@@ -430,7 +484,14 @@ def main():
         deploy_simulators(ns, args.sim_deploy, args.sim_svc, args.sim_replicas)
 
         # Step 4: Deploy EPP Standalone Router
-        deploy_epp(ns, args.router_chart, args.router_values)
+        deploy_epp(
+            ns, 
+            args.router_chart, 
+            args.router_values, 
+            epp_cpu=args.epp_cpu, 
+            epp_memory=args.epp_memory, 
+            machine_family=args.router_machine_family
+        )
 
         # Get EPP pod details
         pod_name = get_epp_pod_name(ns)
