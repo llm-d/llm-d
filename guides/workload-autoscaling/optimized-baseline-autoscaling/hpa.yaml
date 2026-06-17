@@ -8,7 +8,7 @@ metadata:
     llm-d.ai/guide: "optimized-baseline"
   annotations:
     llm-d.ai/managed: "true"
-    llm-d.ai/model: "Qwen3-32B"
+    llm-d.ai/model-id: "Qwen3-32B"
     llm-d.ai/variant-cost: "30.0"
 spec:
   scaleTargetRef:

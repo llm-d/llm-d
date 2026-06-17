@@ -38,7 +38,7 @@ The [HPA + EPP Metrics](./README.hpa-epp.md) path integrates the Kubernetes Hori
 
 The guide demonstrates autoscaling using queue depth and running request count from EPP, but other metrics emitted by the EPP can be used depending on your scaling requirements. These signals reflect the actual state of the inference queue, enabling the HPA to scale out before users experience high latency and scale in when capacity is genuinely idle. This path requires only the standard Kubernetes HPA and the Prometheus Adapter, with no additional controllers. KEDA can be used in place of the native HPA if scale-to-zero is required and your cluster does not support the HPA scale to zero feature gate (alpha in Kubernetes 1.36).
 
-### HPA + WVA Metric
+### HPA + WVA Metrics
 
 The [Workload Variant Autoscaler (WVA)](./README.wva.md) path integrates the Kubernetes Horizontal Pod Autoscaler (HPA) with the aggregated signal emitted by WVA: `wva_desired_replicas`.
 
