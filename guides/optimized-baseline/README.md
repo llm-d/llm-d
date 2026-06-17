@@ -95,7 +95,7 @@ This guide includes configurations for the following accelerators:
 
 #### Standalone Mode
 
-This deploys the llm-d Router in [Standalone Mode](placeholder-link):
+This deploys the llm-d Router in [Standalone Mode](../../docs/architecture/core/router/proxy.md):
 
 ```bash
 # Assuming base-directory is the root of the llm-d repo

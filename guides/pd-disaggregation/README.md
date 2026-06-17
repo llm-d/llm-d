@@ -596,7 +596,7 @@ For this workload (20:1 ISL:OSL, 45 QPS), llm-d disaggregation improved mean and
 | TTFT (Mean)              | 532ms      | 1400ms       | +170%    |
 | TTFT (P95)               | 1574ms     | 2471ms       | +57%     |
 
-> ![NOTE]
+> [!NOTE]
 > In aggregated setup, vLLM allocates all GPU resources to
 > processing prefills as they arrive. TTFT is elevated in the
 > disaggregated setup because less resources are allocated to

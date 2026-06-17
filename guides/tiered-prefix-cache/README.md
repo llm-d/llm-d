@@ -73,7 +73,7 @@ Generally multiple cache tiers can be applied ordered by their cache read/write 
 | vLLM Native OffloadingConnector | CPU RAM + Filesystem (shared storage) | `modelserver/gpu/vllm/native/fs/` |
 | LMCache Connector | CPU RAM | `modelserver/gpu/vllm/lmcache-connector/cpu/` |
 | LMCache Connector | Filesystem (shared storage) | `modelserver/gpu/vllm/lmcache-connector/fs/` |
-| TPU KVCache Connector | CPU RAM | `modelserver/tpu/v6/vllm/native/tpu-offloading-connector/` and `modelserver/tpu/v7/vllm/native/tpu-offloading-connector/` |
+| TPU KVCache Connector | CPU RAM | `modelserver/tpu/v6/vllm/native/cpu/` and `modelserver/tpu/v7/vllm/native/cpu/` |
 | SGLang HiCache | CPU RAM | `modelserver/gpu/sglang/native/cpu/` |
 
 <details>
@@ -209,7 +209,7 @@ helm install tiered-prefix-cache \
 <details>
 <summary><h4>Gateway Mode</h4></summary>
 
-1. _Deploy a Kubernetes Gateway_ by following one of [the gateway guides](../prereq/gateways).
+1. _Deploy a Kubernetes Gateway_ by following one of [the gateway guides](../../docs/infrastructure/gateway).
 2. _Deploy the llm-d Router and an HTTPRoute_:
 
 ```bash
