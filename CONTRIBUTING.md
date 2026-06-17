@@ -45,8 +45,8 @@ All features involving public APIs, behavior between core components, or new cor
 
 **Process:**
 
-1. Create a pull request adding a markdown file under `./docs/proposals` with a descriptive name (e.g., `docs/proposals/disaggregated_serving.md`)
-2. Use the template at `./docs/proposals/PROPOSAL_TEMPLATE.md` with these sections:
+1. Create a pull request adding a markdown file under `./proposals` with a descriptive name (e.g., `proposals/disaggregated_serving.md`)
+2. Use the template at `./proposals/PROPOSAL_TEMPLATE.md` with these sections:
    * **Summary**: A sentence or two suitable for any contributor or any user to understand the change proposed and the outcome
    * **Motivation**: Problem to be solved, including Goals/Non-Goals, and any necessary background
    * **Proposal**: Can include User Stories ("As a User I want to X"), should have enough detail that reviewers can understand exactly what you're proposing, but should not include things like API designs or implementation. What is the desired outcome and how do we measure success?
