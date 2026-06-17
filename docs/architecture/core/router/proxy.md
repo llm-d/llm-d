@@ -167,7 +167,4 @@ llm-d provides [Gateway Mode deployment guides](../../../infrastructure/gateway/
 - [Istio](../../../infrastructure/gateway/istio.md)
 - [GKE Gateway](../../../infrastructure/gateway/gke.md)
 - [agentgateway](../../../infrastructure/gateway/agentgateway.md)
-- [Istio](../../../resources/gateway/istio.md)
-- [GKE Gateway](../../../resources/gateway/gke.md)
-- [agentgateway](../../../resources/gateway/agentgateway.md)
-- [Envoy AI Gateway](../../../resources/gateway/envoy-ai-gateway.md)
+- [Envoy AI Gateway](../../../infrastructure/gateway/envoy-ai-gateway.md)

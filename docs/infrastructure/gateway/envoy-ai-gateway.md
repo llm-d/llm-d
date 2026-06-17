@@ -15,21 +15,9 @@ your model servers via the llm-d EPP.
 3. [Helm](https://helm.sh/docs/intro/install/)
 4. [jq](https://jqlang.org/download/)
 
-## Step 1: Install Gateway API Inference Extension CRDs
+## Step 1: Install Gateway API and Gateway API Inference Extension CRDs
 
-Envoy Gateway's Helm chart installs Gateway API CRDs automatically. Install only the Gateway API Inference Extension CRDs:
-
-```bash
-GAIE_VERSION=v1.5.0
-
-kubectl apply -f https://github.com/kubernetes-sigs/gateway-api-inference-extension/releases/download/${GAIE_VERSION}/v1-manifests.yaml
-```
-
-Verify the APIs are available:
-
-```bash
-kubectl api-resources --api-group=inference.networking.k8s.io
-```
+Install the required CRDs by following the [CRD installation guide](./install-crds.md).
 
 ## Step 2: Install Envoy AI Gateway
 
@@ -38,10 +26,23 @@ Install Envoy Gateway with the AI Gateway integration values, token rate limitin
 ```bash
 ENVOY_GATEWAY_VERSION=v1.8.1
 
+# Install the CRDs first, skipping the Gateway API CRDs installed in the previous step.
+# 
+# Note 1: We’re using helm template piped into kubectl apply instead of helm install due to aknown Helm limitation related
+# to large CRDs in the templates/ directory: https://github.com/helm/helm/pull/12277
+# Note 2: We filter the output of the Helm template to remove offending lines until this is fixed: https://github.com/helm/helm/pull/32217
+helm template eg-crds oci://docker.io/envoyproxy/gateway-crds-helm \
+  --version ${ENVOY_GATEWAY_VERSION} \
+  --set crds.gatewayAPI.enabled=false \
+  --set crds.envoyGateway.enabled=true \
+  | grep -v '^Pulled:' | grep -v '^Digest:' | kubectl apply --server-side -f -
+
+# Install Envoy gateway
 helm upgrade -i eg oci://docker.io/envoyproxy/gateway-helm \
   --version ${ENVOY_GATEWAY_VERSION} \
   --namespace envoy-gateway-system \
   --create-namespace \
+  --skip-crds \
   -f https://raw.githubusercontent.com/envoyproxy/ai-gateway/main/manifests/envoy-gateway-values.yaml \
   -f https://raw.githubusercontent.com/envoyproxy/ai-gateway/main/examples/inference-pool/envoy-gateway-values-addon.yaml
 
@@ -126,10 +127,16 @@ envoy-ai-gateway   gateway.envoyproxy.io/gatewayclass-controller   True       30
 
 ## Step 3: Deploy the Gateway
 
-This deploys a gateway using the `envoy-ai-gateway` GatewayClass provided by Envoy Gateway:
+Set the llm-d version to match your deployment:
 
 ```bash
-kubectl apply -k ./guides/recipes/gateway/envoy-ai-gateway -n ${NAMESPACE}
+LLM_D_VERSION=main  # Use 'main' for latest, or a release tag like 'v0.7.0'
+```
+
+This deploys a gateway suitable for `envoy-ai-gateway`, using the `envoy-ai-gateway` gateway class. This is the preferred self-installed inference gateway recipe in llm-d.
+
+```bash
+kubectl apply -k "https://github.com/llm-d/llm-d/guides/recipes/gateway/envoy-ai-gateway?ref=${LLM_D_VERSION}" -n ${NAMESPACE}
 ```
 
 Verify the `Gateway` is programmed:
@@ -180,10 +187,15 @@ helm uninstall envoy-ai-gateway-crd -n envoy-ai-gateway-system
 kubectl delete namespace envoy-ai-gateway-system
 helm uninstall eg -n envoy-gateway-system
 kubectl delete namespace envoy-gateway-system
+helm template eg-crds oci://docker.io/envoyproxy/gateway-crds-helm \
+  --version ${ENVOY_GATEWAY_VERSION} \
+  --set crds.gatewayAPI.enabled=false \
+  --set crds.envoyGateway.enabled=true \
+  | grep -v '^Pulled:' | grep -v '^Digest:' | kubectl delete -f -
 kubectl delete gatewayclass envoy-ai-gateway
-kubectl delete -f https://github.com/kubernetes-sigs/gateway-api-inference-extension/releases/download/${GAIE_VERSION}/v1-manifests.yaml
-helm template eg oci://docker.io/envoyproxy/gateway-helm --version ${ENVOY_GATEWAY_VERSION} --include-crds | yq 'select(.kind == "CustomResourceDefinition")' | kubectl delete -f -
 ```
+
+To uninstall the Gateway API and Gateway API Inference Extension CRDs, see the [CRD installation guide](./install-crds.md#uninstalling-gateway-api-crds).
 
 ## Troubleshooting
 
