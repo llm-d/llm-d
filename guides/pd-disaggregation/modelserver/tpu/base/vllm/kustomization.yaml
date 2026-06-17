@@ -3,6 +3,9 @@ kind: Kustomization
 resources:
   - ../../../../../recipes/modelserver/base/single-host/pd/vllm
 
+components:
+  - ../../../../../recipes/modelserver/components/images/routing-sidecar
+
 patches:
   - path: patch-decode.yaml
   - path: patch-prefill.yaml
