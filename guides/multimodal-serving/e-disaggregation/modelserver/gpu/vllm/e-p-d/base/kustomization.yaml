@@ -23,27 +23,6 @@ labels:
       llm-d.ai/engine-type: vllm
     includeSelectors: true
     includeTemplates: true
-    fields:
-      - version: v1
-        kind: ServiceAccount
-        path: metadata/labels
-        create: true
-      - group: apps
-        version: v1
-        kind: Deployment
-        path: metadata/labels
-        create: true
-      - group: apps
-        version: v1
-        kind: Deployment
-        path: spec/selector/matchLabels
-        create: true
-      - group: apps
-        version: v1
-        kind: Deployment
-        path: spec/template/metadata/labels
-        create: true
-
 patches:
   - path: patch-prefill.yaml
   - path: patch-decode.yaml
