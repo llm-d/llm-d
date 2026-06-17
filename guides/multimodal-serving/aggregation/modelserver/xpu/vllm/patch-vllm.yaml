@@ -14,7 +14,7 @@ spec:
         - name: modelserver
           command: ["vllm", "serve"]
           args:
-            - "Qwen/Qwen3-VL-2B-Instruct"
+            - "Qwen/Qwen3-VL-32B-Instruct"
             - "--disable-access-log-for-endpoints=/health,/metrics,/v1/models"
             - "--port=8000"
             - "--tensor-parallel-size=2"
