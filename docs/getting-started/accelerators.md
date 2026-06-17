@@ -10,7 +10,7 @@ Maintainers for each accelerator type are listed below. See our well-lit path gu
 | --- | --- | --- |
 | AMD | ROCm | Kenny Roche (Kenny.Roche@amd.com), Vincent Cave (Vincent.Cave@amd.com) |
 | CPU | x86_64 | Hongming Zheng (@ZhengHongming888, hongming.zheng@intel.com) |
-| Google | [TPU](../infra-providers/gke/README.md#llm-d-on-google-kubernetes-engine-gke) | Edwin Hernandez (@Edwinhr716), Cong Liu (@liu-cong, congliu.thu@gmail.com) |
+| Google | [TPU](../infrastructure/providers/gke/README.md#llm-d-on-google-kubernetes-engine-gke) | Edwin Hernandez (@Edwinhr716), Cong Liu (@liu-cong, congliu.thu@gmail.com) |
 | Intel | XPU | Yuan Wu (@yuanwu2017, yuan.wu@intel.com) |
 | Intel | HPU | Sakari Poussa (@poussa, sakari.poussa@intel.com) |
 | NVIDIA | GPU | Will Eaton (weaton@redhat.com), Greg (grpereir@redhat.com) |
@@ -54,7 +54,7 @@ For the full CUDA/driver compatibility matrix, see the [CUDA Toolkit Release Not
 
 ## Google TPU
 
-Google Cloud TPUs (v6e, v7) are supported when running on GKE. See the [GKE infrastructure provider docs](../infra-providers/gke/README.md) for cluster setup.
+Google Cloud TPUs (v6e, v7) are supported when running on GKE. See the [GKE infrastructure provider docs](../infrastructure/providers/gke/README.md) for cluster setup.
 
 ## AMD ROCm
 
@@ -84,33 +84,3 @@ Intel Gaudi 1, Gaudi 2, and Gaudi 3 accelerators are supported via DRA. Ensure y
 
 CPU-only inference is supported for deployments without GPU accelerators. This expects 4th Gen Intel Xeon processors (Sapphire Rapids) or later, or equivalent AMD processors. Each replica requires a minimum of 64 CPU cores and 64GB RAM.
 
-## Accelerator Resource Management
-
-To enable llm-d accelerators to access hardware devices, the devices must be exposed to containers. Kubernetes provides two mechanisms to accomplish this:
-
-1. [Device Plugins](https://kubernetes.io/docs/concepts/extend-kubernetes/compute-storage-net/device-plugins/)
-2. [Dynamic Resource Allocation (DRA)](https://kubernetes.io/docs/concepts/scheduling-eviction/dynamic-resource-allocation/)
-
-Typically, clusters use one mechanism or the other to expose accelerator devices. While it's possible to use both mechanisms simultaneously, this requires special configuration not covered in this document.
-
-### Device Plugins
-
-Each vendor provides Device Plugins for their accelerators. The following plugins are available by vendor:
-
-- [AMD ROCm Device Plugin](https://github.com/ROCm/k8s-device-plugin)
-- Google TPU Device Plugin (automatically enabled for TPU instances)
-- [Intel XPU Device Plugin](https://github.com/intel/intel-device-plugins-for-kubernetes/blob/main/cmd/gpu_plugin.md)
-- [Intel Gaudi Device Plugin](https://docs.habana.ai/en/latest/Installation_Guide/Additional_Installation/Kubernetes_Installation/Intel_Gaudi_Kubernetes_Device_Plugin.html)
-- [NVIDIA GPU Device Plugin](https://github.com/NVIDIA/k8s-device-plugin)
-- [Rebellions NPU Operator](https://docs.rbln.ai/latest/software/system_management/kubernetes/about_npu_operator.html)
-
-### Dynamic Resource Allocation
-
-Each vendor provides DRA resource drivers for their accelerators. The following drivers and setup documentation are available by vendor:
-
-- [AMD ROCm Resource Driver](https://github.com/ROCm/k8s-gpu-dra-driver)
-- [Prepare GKE for DRA workloads](https://docs.cloud.google.com/kubernetes-engine/docs/how-to/set-up-dra)
-- [Intel XPU and Gaudi Resource Driver](https://github.com/intel/intel-resource-drivers-for-kubernetes)
-- [NVIDIA GPU Resource Driver](https://github.com/NVIDIA/k8s-dra-driver-gpu)
-
-Since DRA is a newer Kubernetes feature, some feature gates may be required. Consult your vendor and cluster provider documentation for specific requirements.

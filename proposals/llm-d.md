@@ -2,12 +2,12 @@
 
 > **Note.** This is the founding proposal for llm-d. For the current
 > architecture, components, and well-lit-path deployment guides, see the
-> [Architecture overview](../architecture/README.md), the
-> [Getting Started introduction](../getting-started/README.md), and the
-> [Well-Lit Paths](../well-lit-paths/README.md). Some terminology has evolved
+> [Architecture overview](../docs/architecture/README.md), the
+> [Getting Started introduction](../docs/getting-started/README.md), and the
+> [Well-Lit Paths](../docs/well-lit-paths/README.md). Some terminology has evolved
 > since this proposal — most notably, the "inference scheduler" component is
 > now referred to as the **llm-d Router**, comprising a Proxy and an Endpoint
-> Picker (EPP); see [Router](../architecture/core/router/README.md).
+> Picker (EPP); see [Router](../docs/architecture/core/router/README.md).
 
 ## Summary
 
@@ -97,7 +97,7 @@ The [unified architecture diagram](https://docs.google.com/drawings/d/1PNGNsicSF
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)">
-    <img src="../assets/images/llm-d-arch-initial-large.svg" alt="Architecture diagram">
+    <img src="../docs/assets/images/llm-d-arch-initial-large.svg" alt="Architecture diagram">
   </picture>
 </p>
 

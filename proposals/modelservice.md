@@ -8,7 +8,7 @@
 > well-lit-path guide composes with guide-specific overlays. The
 > `llm-d-modelservice` Helm chart is deprecated and only retained for legacy
 > helmfile-based guides prior to v0.7. See the
-> [Artifacts page](../getting-started/artifacts.md) and tracking issue
+> [Artifacts page](../docs/getting-started/artifacts.md) and tracking issue
 > [#850](https://github.com/llm-d/llm-d/issues/850) for the kustomize-first
 > migration. The remainder of this proposal is preserved for historical
 > context.
@@ -80,7 +80,7 @@ ModelService Kubernetes operator (CRD + controller). Our plan is to migrate from
 `llm-d-incubation/llm-d-modelservice` Helm chart is deprecated and now only
 exists to support legacy helmfile-based guides. New well-lit-path guides
 deploy model servers, schedulers, and gateways via reusable Kustomize base
-layers under [`guides/recipes/`](../../guides/recipes/),
+layers under [`guides/recipes/`](../guides/recipes/),
 composed with guide-specific overlays for the target accelerator and
 infrastructure provider. See tracking issue
 [llm-d/llm-d#850](https://github.com/llm-d/llm-d/issues/850).

@@ -1,6 +1,21 @@
-# Infrastructure Reference
+# Infrastructure & Environments
 
-This document covers the fundamental hardware and software requirements for llm-d, cluster configuration, as well as configuration specific to infrastructure providers (clouds, specific distributions).
+This section covers the hardware and software requirements for llm-d, cluster configuration, accelerator specs, and platform adaptations across diverse physical execution environments.
+
+### [Kubernetes Infrastructure Providers](providers/README.md)
+Provider-specific cluster setup notes (GKE, AKS, OpenShift, Minikube, DigitalOcean).
+
+### [Non-Kubernetes & Bare-Metal Deployments](no-kubernetes-deployment.md)
+Running the llm-d routing stack on bare metal, HPC Slurm schedulers, or Ray via file-based worker discovery.
+
+### [Fast Internode Networking & RDMA](rdma/README.md)
+Orchestrating multi-host replica topologies and RDMA networking fabrics.
+
+### [Gateway & Ingress Resources](gateway/README.md)
+Configuring ingress controllers, Gateway API, and service meshes.
+
+---
+
 
 ## llm-d infrastructure
 

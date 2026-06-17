@@ -101,7 +101,7 @@ For SLO-aware scheduling, swap the values file: `-f guides/${GUIDE_NAME}/router/
 
 To use a Kubernetes Gateway managed proxy rather than the standalone version, follow these steps instead of applying the previous Helm chart:
 
-1. *Deploy a Kubernetes Gateway* by following one of [the gateway guides](../../docs/resources/gateway).
+1. *Deploy a Kubernetes Gateway* by following one of [the gateway guides](../../docs/infrastructure/gateway).
 2. *Deploy the llm-d Router and an HTTPRoute* that connects it to the Gateway as follows:
 
 ```bash

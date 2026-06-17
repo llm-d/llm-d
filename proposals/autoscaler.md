@@ -11,10 +11,10 @@ Variant AutoScaler Proposal
 > [llm-d/llm-d-workload-variant-autoscaler](https://github.com/llm-d/llm-d-workload-variant-autoscaler).
 > For current architecture, scaling analyzers (saturation and SLO/queueing-model),
 > and operational details, see
-> [Workload Variant Autoscaling](../architecture/advanced/autoscaling/wva.md)
-> and the [Autoscaling overview](../architecture/advanced/autoscaling/README.md).
+> [Workload Variant Autoscaling](../docs/architecture/advanced/autoscaling/wva.md)
+> and the [Autoscaling overview](../docs/architecture/advanced/autoscaling/README.md).
 > The HPA/KEDA companion path is documented in
-> [HPA + KEDA](../architecture/advanced/autoscaling/hpa-keda.md). The text below
+> [HPA + KEDA](../docs/architecture/advanced/autoscaling/hpa-keda.md). The text below
 > is preserved as the original design proposal.
 
 ## Summary

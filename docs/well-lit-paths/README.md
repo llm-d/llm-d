@@ -1,8 +1,8 @@
 # Well-Lit Paths
 
-Well-lit paths are curated, end-to-end guides for common LLM inference patterns, platform operations, and workload-specific optimizations.
+Well-lit paths are curated, end-to-end guides for llm-d's native inference patterns, intelligent routing algorithms, and runtime traffic regulation engines.
 
-These guides are organized into three foundational architectural groupings:
+These guides are organized into three native architectural groupings:
 
 ### [Core Capability Building Blocks](capabilities/README.md)
 Individual functional features, sophisticated routing algorithms, and physical inference execution paths.
@@ -10,5 +10,5 @@ Individual functional features, sophisticated routing algorithms, and physical i
 ### [Workloads](workloads/README.md)
 Cohesive, production-grade deployment guides that compose our capability building blocks into one horizontal stack tuned for a use case.
 
-### [Operational Excellence](operations/README.md)
-Platform governance traits, capacity optimization, traffic control, and non-Kubernetes environmental adaptations.
+### [Traffic Control & Autoscaling](traffic-control/README.md)
+Native runtime request queuing, traffic surge gating, and dynamic inference pool replica capacity elasticity.

@@ -37,7 +37,7 @@ env:
 **Quick Start:** You can deploy a vLLM instance with these configurations using kustomize:
 ```bash
 export REPO_ROOT=$(realpath $(git rev-parse --show-toplevel))
-kubectl apply -k ${REPO_ROOT}/guides/rollouts/adapter-rollout-example/
+kubectl apply -k ${REPO_ROOT}/docs/operations/rollouts/adapter-rollout-example/
 ```
 
 This will create a deployment with the LoRA adapter environment variables pre-configured. See [`kustomization.yaml`](adapter-rollout-example/kustomization.yaml) and [`patch-lora-config.yaml`](adapter-rollout-example/patch-lora-config.yaml) for the full configuration.

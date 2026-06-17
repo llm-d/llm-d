@@ -271,7 +271,7 @@ kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/tiered-prefix-cache/modelse
 
 ### 3. (Optional) Enable monitoring
 
-* Install the [Monitoring stack](../../docs/resources/observability/setup.md).
+* Install the [Monitoring stack](../../docs/operations/observability/setup.md).
 * Deploy the monitoring resources for this guide:
 
 ```bash

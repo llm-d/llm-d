@@ -17,7 +17,7 @@ Before installing WVA, ensure you have:
 1. Installed the [optimized-baseline well-lit path guide](../optimized-baseline/README.md).
 
     > [!NOTE]
-    > WVA requires HTTPS connections to Prometheus for metric collection. When installing the [monitoring stack](../../docs/resources/observability/setup.md), ensure to enable HTTPS/TLS support.
+    > WVA requires HTTPS connections to Prometheus for metric collection. When installing the [monitoring stack](../../docs/operations/observability/setup.md), ensure to enable HTTPS/TLS support.
 
     > [!NOTE]
     > Make sure to enable monitoring as described in the [optimized-baseline well-lit path guide](../optimized-baseline/README.md#3-optional-enable-monitoring).

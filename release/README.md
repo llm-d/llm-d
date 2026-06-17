@@ -48,7 +48,7 @@ This document describes the release process for llm-d. The release dates should 
 - **GitHub issue:** A clearly described issue linked to the milestone, with acceptance criteria.
 - **Production-ready example:** The feature must include a realistic, production-ready example (e.g., a guide under `guides/`). Toy examples or placeholder demonstrations are not acceptable.
 - **Proposal (if applicable):** Features involving public APIs, new components, or cross-SIG changes must have an approved [project
-  proposal](docs/proposals/PROPOSAL_TEMPLATE.md) as described in the [contributing guidelines](CONTRIBUTING.md).
+  proposal](proposals/PROPOSAL_TEMPLATE.md) as described in the [contributing guidelines](CONTRIBUTING.md).
 - **Test coverage:** Appropriate unit, integration, or e2e test coverage as defined in the [testing requirements](CONTRIBUTING.md#testing-requirements).
 
 #### Coordination
