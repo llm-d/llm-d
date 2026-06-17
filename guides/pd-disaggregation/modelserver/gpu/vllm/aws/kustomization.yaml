@@ -6,7 +6,7 @@ resources:
 images:
   - name: docker.io/vllm/vllm-openai
     newName: 763104351884.dkr.ecr.us-east-1.amazonaws.com/vllm
-    newTag: 0.21.0-gpu-py312-cu130-ubuntu22.04-ec2
+    newTag: 0.23.0-gpu-py312-cu130-ubuntu22.04-ec2
 
 patches:
   - path: patch-decode.yaml
