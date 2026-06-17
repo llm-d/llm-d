@@ -11,7 +11,7 @@ patches:
       name: prefill
     patch: |-
       # Prefer the same block and subblock.
-      # https://github.com/llm-d/llm-d/tree/main/docs/infra-providers/gke#configuring-support-for-rdma-on-gke-workload-pods
+      # https://github.com/llm-d/llm-d/tree/main/docs/infrastructure/providers/gke#configuring-support-for-rdma-on-gke-workload-pods
       - op: add
         path: /spec/leaderWorkerTemplate/workerTemplate/spec/affinity
         value:
@@ -40,7 +40,7 @@ patches:
       name: decode
     patch: |-
       # Prefer the same block and subblock.
-      # https://github.com/llm-d/llm-d/tree/main/docs/infra-providers/gke#configuring-support-for-rdma-on-gke-workload-pods
+      # https://github.com/llm-d/llm-d/tree/main/docs/infrastructure/providers/gke#configuring-support-for-rdma-on-gke-workload-pods
       - op: add
         path: /spec/leaderWorkerTemplate/workerTemplate/spec/affinity
         value:
@@ -69,7 +69,7 @@ patches:
       kind: LeaderWorkerSet
     patch: |-
       # Enable privileged container on GKE to perform GPU initiated RDMA.
-      # See https://github.com/llm-d/llm-d/tree/main/docs/infra-providers/gke#configuring-support-for-rdma-on-gke-workload-pods.
+      # See https://github.com/llm-d/llm-d/tree/main/docs/infrastructure/providers/gke#configuring-support-for-rdma-on-gke-workload-pods.
       - op: add
         path: /spec/leaderWorkerTemplate/workerTemplate/spec/containers/0/securityContext/privileged
         value: true
@@ -154,7 +154,7 @@ patches:
           name: DEEP_EP_DEVICE_TO_HCA_MAPPING
           value: "0:mlx5_0:1,1:mlx5_1:1,2:mlx5_2:1,3:mlx5_3:1,4:mlx5_4:1,5:mlx5_5:1,6:mlx5_6:1,7:mlx5_7:1"
       # This is recommended on gke.
-      # https://github.com/llm-d/llm-d/tree/main/docs/infra-providers/gke#configuring-support-for-rdma-on-gke-workload-pods
+      # https://github.com/llm-d/llm-d/tree/main/docs/infrastructure/providers/gke#configuring-support-for-rdma-on-gke-workload-pods
       - op: add
         path: /spec/leaderWorkerTemplate/workerTemplate/spec/containers/0/env/-
         value:

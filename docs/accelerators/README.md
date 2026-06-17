@@ -10,7 +10,7 @@ Maintainers for each accelerator type are listed below. See our well-lit path gu
 | --- | --- | --- |
 | AMD | ROCm | Kenny Roche (Kenny.Roche@amd.com), Vincent Cave (Vincent.Cave@amd.com) |
 | CPU | x86_64 | Hongming Zheng (@ZhengHongming888, hongming.zheng@intel.com) |
-| Google | [TPU](../infra-providers/gke/README.md#llm-d-on-google-kubernetes-engine-gke) | Edwin Hernandez (@Edwinhr716), Cong Liu (@liu-cong, congliu.thu@gmail.com) |
+| Google | [TPU](../infrastructure/providers/gke/README.md#llm-d-on-google-kubernetes-engine-gke) | Edwin Hernandez (@Edwinhr716), Cong Liu (@liu-cong, congliu.thu@gmail.com) |
 | Intel | XPU | Yuan Wu (@yuanwu2017, yuan.wu@intel.com) |
 | Intel | HPU | Sakari Poussa (@poussa, sakari.poussa@intel.com) |
 | NVIDIA | GPU | Will Eaton (weaton@redhat.com), Greg (grpereir@redhat.com) |
@@ -54,7 +54,7 @@ For the full CUDA/driver compatibility matrix, see the [CUDA Toolkit Release Not
 
 ## Google TPU
 
-Google Cloud TPUs (v6e, v7) are supported when running on GKE. See the [GKE infrastructure provider docs](../infra-providers/gke/README.md) for cluster setup.
+Google Cloud TPUs (v6e, v7) are supported when running on GKE. See the [GKE infrastructure provider docs](../infrastructure/providers/gke/README.md) for cluster setup.
 
 ## AMD ROCm
 
