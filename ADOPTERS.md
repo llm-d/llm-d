@@ -26,6 +26,8 @@
 | User | JetBrains | 2026 | [JetBrains](https://www.jetbrains.com/) | The JetBrains model serving team are users of llm-d. |
 | User | Stelia | 2026 | [Stelia.ai](https://stelia.ai/) | Stelia.ai's managed inference service is powered by llm-d. |
 | User | Reflection | 2026 | [Reflection.ai](https://reflection.ai/) | Reflection uses llm-d's async processing for our internal inference platform. |
+| User | Prime Intellect | 2026 | [Prime Intellect](https://www.primeintellect.ai/) | Prime Intellect uses llm-d in PrimeRL for multi-node WideEP for RL rollouts. |
+
 ## Adopter Types
 
 **Founding Contributor**: The organization is a founding contributor to the llm-d project, actively contributing from the project's inception.
