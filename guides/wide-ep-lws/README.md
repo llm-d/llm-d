@@ -4,13 +4,42 @@
 [![E2E (GKE GPU)](https://github.com/llm-d/llm-d/actions/workflows/consolidate-status-wide-ep-lws-gke-acc-gpu-vllm-x.yaml/badge.svg)](https://github.com/llm-d/llm-d/actions/workflows/consolidate-status-wide-ep-lws-gke-acc-gpu-vllm-x.yaml)
 [![E2E (OCP GPU)](https://github.com/llm-d/llm-d/actions/workflows/consolidate-status-wide-ep-lws-ibm-acc-gpu-vllm-x.yaml/badge.svg)](https://github.com/llm-d/llm-d/actions/workflows/consolidate-status-wide-ep-lws-ibm-acc-gpu-vllm-x.yaml)
 
+This deployment uses **DP-aware scheduling**, where instead of letting vLLM automatically handle data parallelism internally, we explicitly launch separate vLLM server instances for each data parallel rank with a separate port for each rank. This enables the EPP to schedule requests directly to specific DP ranks, improving KV cache routing efficiency.
+
+## Discussion
+
+vLLM supports multiple "modes" for DP load balancing, including:
+
+- **internal**, where vLLM manages DP-balancedness across all ranks. vLLM exposes a single API server endpoint and spreads load between ranks
+
+![alt text](images/internal-lb.png)
+
+- **external**, where an external router manages DP-balancedness. Each DP-rank exposes an API server endpoint and the external LB balances between these endpoints
+
+![alt text](images/external-lb.png)
+
+vLLM also has a **hybrid** mode, where a single API server is exposed PER-NODE. An external LB balances BETWEEN nodes and vLLM balances WITHIN a node.
+
+In the context of `llm-d`, we want to use **external** load-balancing, so that the `llm-d` EPP is able to properly schedule requests with prefix-cache awareness, which requires targeting a specific DP-rank rather than a particular node. However, WideEP leverages **DeepEP** for the sparse dispatch/combine operations needed for WideEP. DeepEP uses `cuda_ipc` for intra-node traffic, which cannot cross pod-boundaries so using **one-pod-per-dp-rank** is not an option for WideEP deployments - we need to use **one-pod-per-node**. As a result, we have primarily been using vLLM's **hybrid** DP-load balancing mode - meaning `llm-d`'s EPP is unable to schedule onto specific ranks (only can schedule at the node level), meaning that prefix-cache aware routing features from EPP have been incompatible with WideEP deployments.
+
+### Multi-Port Solution
+
+To overcome this challenge, we instead launch 8 vLLM DP instances (each with a separate API endpoint) within a pod that has 8 visible GPUs (all the GPUs on a node). As a result, **DeepEP** is able to communicate over `cuda_ipc` within the node. Then, we configure the Gateway and InferencePool with **multi-port** support. The Gateway and EPP view each vLLM pod as a collection of 8 separate API endpoints and schedules onto each one of these endpoints directly.
+
+We can, therefore, compose the WideEP deployment with the existing scorers (for example, `prefix-cache-scorer` and `active-request-scorer`) to balance load across the ranks and handle complex multi-turn request patterns.
+
+### Process Management
+
+This deployment uses vLLM's built-in DP Supervisor (`--data-parallel-multi-port-external-lb`), which manages the lifecycle of all DP rank processes within a pod. The supervisor automatically assigns `CUDA_VISIBLE_DEVICES` and `--data-parallel-rank` to each child process, aggregates health checks across all children via a single supervisor endpoint, and handles graceful shutdown.
+
 ## Overview
 
-This guide demonstrates how to deploy DeepSeek-R1-0528 using vLLM's P/D disaggregation support with NIXL in a wide expert parallel pattern with LeaderWorkerSets. This guide has been validated on:
+This guide demonstrates how to deploy DeepSeek-R1-0528 using vLLM's P/D disaggregation support with NIXL in a wide expert parallel pattern with LeaderWorkerSets with DP-aware scheduling. This guide has been validated on:
 
-* a 32xH200 cluster with InfiniBand networking
+* a 32xH200 cluster with InfiniBand networking (CoreWeave)
+* a 32xB200 cluster with InfiniBand networking (CoreWeave)
 * a 32xH200 cluster on GKE with RoCE networking
-* a 32xB200 cluster on GKE with RoCE networking
+* Istio 1.29.2 (required for multi-port support in gateway mode)
 
 ## Default Configuration
 
@@ -27,9 +56,9 @@ This guide includes configurations for the following accelerators:
 
 | Backend             | Directory                  | Notes                                      |
 | ------------------- | -------------------------- | ------------------------------------------ |
-| NVIDIA GPU (GKE)    | `modelserver/gke/`         | GKE deployment (H200)                      |
-| NVIDIA GPU (GKE A4) | `modelserver/gke-a4/`      | GKE deployment (B200)                      |
-| NVIDIA GPU (CoreWeave)| `modelserver/coreweave/`   | CoreWeave deployment                     |
+| NVIDIA GPU (GKE)    | `modelserver/gpu/vllm/gke/`         | GKE deployment (H200)                      |
+| NVIDIA GPU (CoreWeave)| `modelserver/gpu/vllm/coreweave/`   | CoreWeave deployment                     |
+| NVIDIA GPU (DGX Cloud GB200)| `modelserver/gpu/vllm/dgx-cloud-gb200/` | DGX Cloud deployment             |
 
 > [!NOTE]
 > The pods leveraging inter-node EP must be deployed in a cluster environment with full mesh
@@ -37,6 +66,10 @@ This guide includes configurations for the following accelerators:
 > connectivity. Every NIC on a host must be able to communicate with every NIC on all other
 > hosts. Networks restricted to communicating only between matching NIC IDs (rail-only
 > connectivity) will fail.
+
+## Hardware Requirements
+
+This guide requires 32 Nvidia H200 or B200 GPUs and InfiniBand or RoCE RDMA networking. Check `modelserver/gpu/vllm/base/decode.yaml` and `modelserver/gpu/vllm/base/prefill.yaml` for detailed resource requirements.
 
 ## Prerequisites
 
@@ -116,7 +149,7 @@ export INFRA_PROVIDER=gke # options: gke, coreweave, dgx-cloud-gb200
 kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/gpu/vllm/${INFRA_PROVIDER}
 ```
 
-### 3. (Optional) Enable monitoring
+### 3. (Optional) Enable Monitoring
 
 > [!NOTE]
 > GKE provides [automatic application monitoring](https://docs.cloud.google.com/kubernetes-engine/docs/how-to/configure-automatic-application-monitoring) out of the box. The llm-d [Monitoring stack](../../docs/operations/observability/setup.md) is not required for GKE, but it is available if you prefer to use it.
@@ -182,6 +215,21 @@ curl -X POST http://${IP}/v1/completions \
     }' | jq
 ```
 
+## Troubleshooting
+
+### Pod Startup Ordering
+
+With 4 pods (2 decode, 2 prefill) requiring inter-node DP coordination, staggered startup can cause cascade failures. If one pod starts significantly before the others, it may timeout waiting for peers and exit cleanly (exit code 0), which triggers the DPSupervisor to shut down all children, causing the other pods to also exit.
+
+If pods are stuck in a restart loop, delete all model server pods at once so they restart simultaneously:
+```bash
+kubectl delete pods -l llm-d.ai/guide=wide-ep-lws
+```
+
+### NCCL Shared Memory
+
+With 8 DP rank processes per pod sharing the `/dev/shm` volume (default 2Gi), NCCL may report "No available shared memory broadcast block" during initialization. This is typically a warning — NCCL falls back to a slower communication path. If pods hang during startup, increase `dshm` `sizeLimit` in the base manifests (e.g., to 16Gi).
+
 ## Benchmarking
 
 This guide uses [`llmdbenchmark`](https://github.com/llm-d/llm-d-benchmark) — the supported standard CLI for llm-d performance benchmarking.
@@ -242,7 +290,7 @@ export GATEWAY_CLASS=istio
 
 ### 3. Run the benchmark profile for Wide Expert Parallelism
 
-`guide_wide-ep-lws_1.yaml` is a **dedicated workload profile** shipped with `llm-d-benchmark` specifically for this guide — it reproduces the saturation load used to generate the [graphs at the bottom of this guide](#benchmarking-report) (concurrent load with `concurrency_level=2048` and `num_requests=8192`) and is shaped to highlight the strengths of wide expert parallelism by fully saturating the topology.
+`guide_wide-ep-lws_1.yaml` is a **dedicated workload profile** shipped with `llm-d-benchmark` specifically for this guide — it reproduces the saturation load used to generate the [graphs at the bottom of this guide](#benchmarking-results) (concurrent load with `concurrency_level=2048` and `num_requests=8192`) and is shaped to highlight the strengths of wide expert parallelism by fully saturating the topology.
 
 Benchmark results are copied to the `workspace` directory that is specified by _you_ (or that is automatically generated when omitted from the cli) on the machine running the CLI. The workspace location is optional — by default the CLI auto-generates a timestamped workspace and prints its full path in the logs during the run. If you'd rather choose where results land, pass `--workspace <YOUR_DIR_HERE>` as a top-level argument of `llmdbenchmark` (before the `run` subcommand):
 
@@ -268,198 +316,33 @@ To remove the deployed components:
 
 ```bash
 helm uninstall ${GUIDE_NAME} -n ${NAMESPACE}
-kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/<gke|coreweave>
+kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/gpu/vllm/<gke|coreweave>
 ```
 
-## Benchmarking Report
+## Benchmarking Results
 
-The benchmark is running on:
+### CKS (4x H200, 32 GPUs, InfiniBand)
 
-* Provider: CKS
-* Prefill: 1 instance with EP=16
-* Decode: 1 instance with EP=16
-* 4 H200 VMs, 32 GPUs, Infiniband
+Benchmark: `2048_concurrent_2k_isl_2k_osl` (2048 concurrent requests, 2K input / 2K output tokens)
 
-<details>
-<summary><b><i>Click</i></b> here to view the report from the above example</summary>
+| Metric | Hybrid-LB | DP Supervisor | Change |
+|---|---|---|---|
+| Output tokens/s | 22,125 | 27,853 | +26% |
+| Input tokens/s | 22,586 | 29,329 | +30% |
+| Total tokens/s | 44,711 | 57,183 | +28% |
+| Requests/s | 11.03 | 14.33 | +30% |
 
-```yaml
-results:
-  request_performance:
-    aggregate:
-      latency:
-        inter_token_latency:
-          max: 30.34121842868626
-          mean: 0.07969590251979176
-          min: 3.8053840398788452e-06
-          p0p1: 3.975816071033478e-06
-          p1: 4.106201231479645e-06
-          p10: 4.507601261138916e-06
-          p25: 5.077570676803589e-06
-          p5: 4.325993359088898e-06
-          p50: 6.389804184436798e-06
-          p75: 1.0115094482898712e-05
-          p90: 3.565475344657898e-05
-          p95: 0.8909534962382163
-          p99: 1.2793979200161996
-          p99p9: 1.598953516515907
-          units: s/token
-        normalized_time_per_output_token:
-          max: 22.36453324875661
-          mean: 0.11380224349675808
-          min: 0.03750446231926297
-          p0p1: 0.03859267860123989
-          p1: 0.07242633368539624
-          p10: 0.07806590183948588
-          p25: 0.0794990241915988
-          p5: 0.07746114374645986
-          p50: 0.08341223422272201
-          p75: 0.09037681113958496
-          p90: 0.11040518531155001
-          p95: 0.11893183671153963
-          p99: 0.1280457219757267
-          p99p9: 8.673798847227339
-          units: s/token
-        request_latency:
-          max: 259.90107879415154
-          mean: 175.831311636725
-          min: 137.61615218035877
-          p0p1: 144.07184547862877
-          p1: 152.20689211042597
-          p10: 156.15101961996407
-          p25: 158.87230786448345
-          p5: 155.0747766970657
-          p50: 166.57856354676187
-          p75: 180.30430065304972
-          p90: 218.8493181052618
-          p95: 235.833738672873
-          p99: 248.89307169288398
-          p99p9: 258.52759975225854
-          units: s
-        time_per_output_token:
-          max: 0.09971424710837197
-          mean: 0.07970394011720383
-          min: 0.06714119758317436
-          p0p1: 0.07046533771248802
-          p1: 0.07419887348744633
-          p10: 0.07714715711461388
-          p25: 0.07882438320307489
-          p5: 0.07614581276124897
-          p50: 0.07990098050042406
-          p75: 0.08073974602562461
-          p90: 0.08199862981275519
-          p95: 0.08245319460844246
-          p99: 0.08341267507742763
-          p99p9: 0.0902886399074444
-          units: s/token
-        time_to_first_token:
-          max: 98.8584302579984
-          mean: 21.29069098684954
-          min: 2.6285605849698186
-          p0p1: 2.884328710737638
-          p1: 3.419430093830451
-          p10: 5.03398488946259
-          p25: 6.517769109224901
-          p5: 4.3494329891167585
-          p50: 11.075260647572577
-          p75: 25.52732751844451
-          p90: 58.6893984858878
-          p95: 73.95478512016125
-          p99: 86.97312242283486
-          p99p9: 97.31417823833262
-          units: s
-      requests:
-        failures: 0
-        input_length:
-          max: 2081.0
-          mean: 2046.793701171875
-          min: 2016.0
-          p0p1: 2024.0
-          p1: 2028.0
-          p10: 2036.0
-          p25: 2041.0
-          p5: 2033.0
-          p50: 2046.0
-          p75: 2052.0
-          p90: 2058.0
-          p95: 2061.0
-          p99: 2068.0
-          p99p9: 2075.0
-          units: count
-        output_length:
-          max: 4065.0
-          mean: 2004.9931640625
-          min: 7.0
-          p0p1: 23.573
-          p1: 1914.82
-          p10: 1994.0
-          p25: 1999.0
-          p5: 1987.0
-          p50: 2001.0
-          p75: 2001.0
-          p90: 2001.0
-          p95: 2001.0
-          p99: 2003.0
-          p99p9: 4056.809000000001
-          units: count
-        total: 8192
-      throughput:
-        output_token_rate:
-          mean: 22124.879416240507
-          units: tokens/s
-        request_rate:
-          mean: 11.034890199531286
-          units: queries/s
-        total_token_rate:
-          mean: 44711.0231697644
-          units: tokens/s
-run:
-  cid: 84d64299-c166-584e-b27f-d7951cca928b
-  eid: 1b4db7eb-4057-5ddf-91e0-36dec72071f5
-  time: {}
-  uid: 2c9ada2e-362f-4e90-9eba-453b9e0c200d
-  user: namespace=rob-dev
-scenario:
-  load:
-    metadata:
-      cfg_id: 74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b
-      schema_version: 0.0.1
-    native:
-      args: {}
-    standardized:
-      concurrency: 2048
-      input_seq_len:
-        distribution: gaussian
-        max: 2081
-        min: 2016
-        value: 2046.793701171875
-      output_seq_len:
-        distribution: gaussian
-        max: 4065
-        min: 7
-        value: 2004.9931640625
-      parallelism: 1
-      rate_qps: 8192.0
-      source: unknown
-      stage: 0
-      tool: inference-perf
-      tool_version: ''
-version: '0.2'
-```
+~1,741 output tokens/s per decode GPU (16 decode GPUs), compared to ~1,383 with hybrid-lb.
 
-</details>
+### GKE (4x H200, 32 GPUs, RoCE)
 
-At concurrency 2048 (~128 per decode rank), we observe:
+Benchmark: `2048_concurrent_2k_isl_2k_osl` (2048 concurrent requests, 2K input / 2K output tokens)
 
-```json
-"throughput": {
-  "input_tokens_per_sec": 22586.143753523895,
-  "output_tokens_per_sec": 22124.879416240507,
-  "total_tokens_per_sec": 44711.0231697644,
-  "requests_per_sec": 11.034890199531286
-}
-```
+| Metric | DP Supervisor |
+|---|---|
+| Output tokens/s | 23,246 |
+| Input tokens/s | 25,106 |
+| Total tokens/s | 48,352 |
+| Requests/s | 12.27 |
 
-This is ~1350 token/second/decode GPU, peaking at 1600 tokens per second per GPU.
-
-At around 200 requests per decode rank, you can achieve ~2000 TPSG.
+~1,453 output tokens/s per decode GPU (16 decode GPUs). ~17% lower than CKS due to RoCE vs InfiniBand latency.
