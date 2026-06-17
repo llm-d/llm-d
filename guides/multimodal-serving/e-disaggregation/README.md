@@ -154,9 +154,9 @@ kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_PATH}/modelserver/g
 ### 3. Enable Monitoring (optional)
 
 > [!NOTE]
-> GKE provides [automatic application monitoring](https://docs.cloud.google.com/kubernetes-engine/docs/how-to/configure-automatic-application-monitoring) out of the box. The llm-d [Monitoring stack](../../../docs/resources/observability) is not required for GKE, but it is available if you prefer to use it.
+> GKE provides [automatic application monitoring](https://docs.cloud.google.com/kubernetes-engine/docs/how-to/configure-automatic-application-monitoring) out of the box. The llm-d [Monitoring stack](../../../docs/operations/observability) is not required for GKE, but it is available if you prefer to use it.
 
-- Install the [Monitoring stack](../../../docs/resources/observability).
+- Install the [Monitoring stack](../../../docs/operations/observability).
 - Deploy the monitoring resources for this guide.
 
 ```bash
@@ -247,7 +247,7 @@ helm uninstall ${RELEASE_NAME} -n ${NAMESPACE}
 kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_PATH}/modelserver/gpu/vllm/${TOPOLOGY}/${INFRA_PROVIDER}/
 ```
 
-If you deployed in Gateway Mode, also remove the Gateway by following [the gateway cleanup guide](../../../docs/infrastructure/gateway).
+If you deployed in Gateway Mode, also remove the Gateway by following [the gateway cleanup guide](../../../docs/infrastructure/gateway/gke.md#cleanup).
 
 ## Architecture
 
