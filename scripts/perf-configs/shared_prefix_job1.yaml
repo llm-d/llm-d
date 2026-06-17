@@ -1,0 +1,54 @@
+job:
+  image:
+    repository: quay.io/inference-perf/inference-perf
+    tag: main
+  serviceAccountName: inference-perf-sa
+
+  resources:
+     requests:
+       cpu: "10"
+       memory: "50Gi"
+
+logLevel: INFO
+
+token:
+  hfSecret:
+    name: hf-secret
+    key: token
+
+config:
+  load:
+    type: constant
+    stages:
+      - rate: 1
+        duration: 15
+      - rate: 10
+        duration: 300
+    num_workers: 10                  # Concurrent worker threads (default: CPU_cores)
+    worker_max_concurrency: 100      # Max concurrent requests per worker
+    worker_max_tcp_connections: 2500 # Max TCP connections per worker
+  api:
+    type: completion
+    streaming: true
+  server:
+    type: vllm
+    model_name: Qwen/Qwen3-8B
+    base_url: http://optimized-baseline-sim-standalone-epp:80
+  data:
+    type: shared_prefix
+    shared_prefix:
+      num_groups: 150               # Number of distinct prefix, Note: the number of users is num_groups * num_prompts_per_group
+      num_prompts_per_group: 5      # Number of unique questions per group (prefix)
+      system_prompt_len: 9500       # Length of the first prefix (in tokens), simulate initialization of a system prompt
+      question_len: 500             # Length of the unique question part (in tokens)
+      output_len: 1000              # Target length for the model's generated output (in tokens)
+      enable_multi_turn_chat: false # If enabled, the chat context will be appended for the each request.
+  report:
+    request_lifecycle:
+      summary: true
+      per_stage: true
+      per_request: false
+
+  storage:
+    local:
+      path: "./reports"

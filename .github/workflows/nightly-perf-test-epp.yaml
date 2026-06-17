@@ -1,0 +1,118 @@
+name: Nightly - EPP Router Performance Test
+
+on:
+  schedule:
+    - cron: '0 9 * * *'  # Run daily at 09:00 UTC
+  workflow_dispatch:      # Enable manual triggering from UI
+    inputs:
+      gcp_project_id:
+        description: 'GCP Project ID'
+        default: 'llm-d-scale'
+        required: true
+        type: string
+      gke_cluster_name:
+        description: 'GKE Cluster Name'
+        default: 'llm-d-e2e-us-east5'
+        required: true
+        type: string
+      gke_cluster_zone:
+        description: 'GKE Cluster Zone/Region'
+        default: 'us-east5'
+        required: true
+        type: string
+      sim_replicas:
+        description: 'Number of simulator replicas'
+        default: '10'
+        required: true
+        type: string
+      llm_d_ref:
+        description: 'Git ref for llm-d/llm-d checkout (default: main)'
+        default: 'main'
+        required: false
+        type: string
+
+permissions:
+  contents: write
+  actions: read
+
+jobs:
+  run-perf-benchmark:
+    runs-on: ubuntu-latest
+    env:
+      GCP_PROJECT_ID: ${{ inputs.gcp_project_id || 'llm-d-scale' }}
+      GKE_CLUSTER_NAME: ${{ inputs.gke_cluster_name || 'llm-d-e2e-us-east5' }}
+      GKE_CLUSTER_ZONE: ${{ inputs.gke_cluster_zone || 'us-east5' }}
+      HF_TOKEN: ${{ secrets.HF_TOKEN }}
+    steps:
+      - name: Checkout llm-d/llm-d
+        uses: actions/checkout@v6
+        with:
+          path: llm-d
+          ref: ${{ inputs.llm_d_ref || 'main' }}
+
+      - name: Checkout llm-d/llm-d-router
+        uses: actions/checkout@v6
+        with:
+          repository: llm-d/llm-d-router
+          path: llm-d-router
+
+      - name: Checkout llm-d/inference-perf
+        uses: actions/checkout@v6
+        with:
+          repository: llm-d/inference-perf
+          path: inference-perf
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GKE_SA_KEY }}
+
+      - name: Set up gcloud CLI and kubectl
+        uses: google-github-actions/setup-gcloud@v2
+        with:
+          project_id: ${{ env.GCP_PROJECT_ID }}
+          install_components: 'kubectl,gke-gcloud-auth-plugin'
+
+      - name: Get GKE credentials
+        run: |
+          gcloud container clusters get-credentials "${{ env.GKE_CLUSTER_NAME }}" \
+            --zone "${{ env.GKE_CLUSTER_ZONE }}" \
+            --project "${{ env.GCP_PROJECT_ID }}"
+
+      - name: Install helm
+        run: |
+          curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+
+      - name: Install Python dependencies
+        run: |
+          python3 -m pip install --upgrade pip
+          python3 -m pip install pyyaml
+
+      - name: Run Performance Test Script
+        run: |
+          python3 llm-d/scripts/run_nightly_perf.py \
+            --sim-replicas ${{ inputs.sim_replicas || 10 }} \
+            --results-file llm-d/perf_results.md \
+            --gcp-project ${{ env.GCP_PROJECT_ID }}
+
+      - name: Upload Performance Results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: epp-perf-results
+          path: llm-d/perf_results.md
+
+      - name: Commit and push updated results
+        if: success() && github.ref == 'refs/heads/main'
+        run: |
+          cd llm-d
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add perf_results.md
+          git commit -m "Auto-update EPP nightly performance results [skip ci]" || exit 0
+          git push
