@@ -15,7 +15,7 @@ For this quickstart, we will use the **Standalone Mode** deployment, which is th
 Clone the llm-d repository and set up the necessary environment variables:
 
 ```bash
-git clone https://github.com/llm-d/llm-d.git && cd llm-d
+git clone --branch release-0.7 https://github.com/llm-d/llm-d.git && cd llm-d
 
 export GAIE_VERSION=v1.5.0
 export GUIDE_NAME="quickstart"
