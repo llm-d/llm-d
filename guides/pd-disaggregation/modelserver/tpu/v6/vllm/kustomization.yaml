@@ -8,7 +8,7 @@ namePrefix: pd-disaggregation-tpu-vllm-
 images:
   - name: REPLACE_MODEL_SERVER_IMAGE
     newName: docker.io/vllm/vllm-tpu
-    newTag: v0.18.0
+    newTag: v0.19.0
 
 labels:
   - pairs:
