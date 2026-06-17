@@ -101,3 +101,4 @@ jobs:
       badge_label: "VLLM ROCM"
       result: ${{ needs.nightly.result }}
       dry_run: ${{ inputs.dry_run || 'false' }}
+      failure_category: ${{ needs.nightly.outputs.failure_category }}
