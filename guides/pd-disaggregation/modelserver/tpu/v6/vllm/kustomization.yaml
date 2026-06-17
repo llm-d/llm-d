@@ -16,7 +16,7 @@ labels:
       llm-d.ai/guide: pd-disaggregation
       llm-d.ai/accelerator-variant: tpu-v6e
       llm-d.ai/accelerator-vendor: google
-      inference.networking.k8s.io/engine-type: vllm
+      llm-d.ai/engine-type: vllm
     includeSelectors: true
     includeTemplates: true
     fields:
