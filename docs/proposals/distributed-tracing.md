@@ -3,8 +3,8 @@
 > **Status: Implemented.** Distributed tracing is now part of llm-d's monitoring
 > stack. For the current operator-facing tracing guide (configuration, OTLP
 > endpoints, sampling, and the spans emitted across components), see
-> [Distributed Tracing](../production-operations/observability/tracing.md). See also
-> [Metrics](../production-operations/observability/metrics.md) for the companion metrics
+> [Distributed Tracing](../operations/observability/tracing.md). See also
+> [Metrics](../operations/observability/metrics.md) for the companion metrics
 > reference. The text below is preserved as the original design proposal.
 
 ## Summary
