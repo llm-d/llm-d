@@ -43,6 +43,8 @@ export REPO_ROOT=$(realpath $(git rev-parse --show-toplevel))
 > [!NOTE]
 > **Namespaced-Scoped Installation**: this guide installs WVA in namespaced-scoped mode in the `llm-d-optimized-baseline` namespace and configure to watch resources only in that namespace (`--watch-namespace=llm-d-optimized-baseline`). For cluster-wide autoscaling, set `--watch-namespace=""` in the controller deployment.
 
+### Installation Steps
+
 1. Choose your platform:
 
     ```bash
@@ -90,10 +92,12 @@ export REPO_ROOT=$(realpath $(git rev-parse --show-toplevel))
     kubectl apply -k guides/workload-autoscaling/wva-config/platform/${PLATFORM} -n ${NAMESPACE}
     ```
 
-7. Enable WVA v2 saturation engine. This will be the default in the next release (0.9.0), but for now it must be enabled manually. The v1 saturation engine will be deprecated in 0.9.0 and removed in 0.10.0.
+### Enabling Saturation Engine V2 (Recommended)
 
-    > [!CAUTION]
-    > Enabling the v2 saturation engine may change the output of the scaling decisions (i.e. `wva_desired_replicas`) for *all* deployments. This may cause a temporary burst of scaling activity.
+Saturation engine v2 will be the default in the next release (0.9.0), but for now it must be enabled manually. The v1 saturation engine will be deprecated in 0.9.0 and removed in 0.10.0.
+
+> [!CAUTION]
+> Enabling the v2 saturation engine may change the output of the scaling decisions (i.e. `wva_desired_replicas`) for *all* deployments. This may cause a temporary burst of scaling activity.
 
     ```bash
     kubectl edit configmap wva-saturation-scaling-config -n ${WVA_NAMESPACE}
