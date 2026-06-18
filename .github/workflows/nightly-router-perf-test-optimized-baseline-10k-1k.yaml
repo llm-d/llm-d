@@ -1,4 +1,4 @@
-name: Nightly - EPP Router Performance Test
+name: Nightly - Router Perf Test (Optimized Baseline 10k-1k)
 
 on:
   schedule:
@@ -96,8 +96,11 @@ jobs:
       - name: Run Performance Test Script
         run: |
           python3 llm-d/scripts/run_nightly_perf.py \
+            --guide-name optimized-baseline \
+            --test-name optimized-baseline-job1 \
+            --perf-job scripts/perf-configs/shared_prefix_job1.yaml \
             --sim-replicas ${{ inputs.sim_replicas || 10 }} \
-            --results-file llm-d/perf_results.md \
+            --results-dir llm-d/llm-d-router-resource-tests \
             --gcp-project ${{ env.GCP_PROJECT_ID }}
 
       - name: Upload Performance Results
@@ -105,7 +108,7 @@ jobs:
         if: always()
         with:
           name: epp-perf-results
-          path: llm-d/perf_results.md
+          path: llm-d/llm-d-router-resource-tests/
 
       - name: Commit and push updated results
         if: success() && github.ref == 'refs/heads/main'
@@ -113,6 +116,6 @@ jobs:
           cd llm-d
           git config --global user.name "github-actions[bot]"
           git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add perf_results.md
+          git add llm-d-router-resource-tests/
           git commit -m "Auto-update EPP nightly performance results [skip ci]" || exit 0
           git push

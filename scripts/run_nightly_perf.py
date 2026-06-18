@@ -107,26 +107,84 @@ def double_memory(mem_str):
     val = int(mem_str)
     return str(val * 2)
 
-def deploy_epp(ns, chart_path, values_path, epp_cpu="2", epp_memory="4Gi", machine_family=None):
-    print(f"Deploying EPP standalone using Helm chart from: {chart_path}")
+def deploy_epp(ns, chart_path, chart_version, guide_name, epp_cpu="2", epp_memory="4Gi", machine_family=None):
+    print(f"Deploying EPP standalone using Helm chart from: {chart_path} (version: {chart_version})")
+    
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    repo_root = os.path.abspath(os.path.join(script_dir, ".."))
+    
+    base_values_path = os.path.join(repo_root, "guides", "recipes", "router", "base.values.yaml")
+    guide_values_path = os.path.join(repo_root, "guides", guide_name, "router", f"{guide_name}.values.yaml")
+    
+    if not os.path.exists(base_values_path):
+        raise FileNotFoundError(f"Base values file not found at: {base_values_path}")
+    if not os.path.exists(guide_values_path):
+        raise FileNotFoundError(f"Guide values file not found at: {guide_values_path}")
+        
+    epp_registry = os.environ.get("EPP_REGISTRY", "ghcr.io/llm-d")
+    epp_repository = os.environ.get("EPP_REPOSITORY", "llm-d-router-endpoint-picker-dev")
+    epp_tag = os.environ.get("EPP_TAG", "main")
     
     cpu_limit = double_cpu(epp_cpu)
     mem_limit = double_memory(epp_memory)
     
-    cmd = [
-        "helm", "install", "optimized-baseline-sim-standalone", chart_path,
-        "-f", values_path,
-        "--set", "router.proxy.enabled=true",
-        "--set", f"router.epp.resources.requests.cpu={epp_cpu}",
-        "--set", f"router.epp.resources.limits.cpu={cpu_limit}",
-        "--set", f"router.epp.resources.requests.memory={epp_memory}",
-        "--set", f"router.epp.resources.limits.memory={mem_limit}",
-        "-n", ns
-    ]
+    overrides = {
+        "router": {
+            "epp": {
+                "image": {
+                    "registry": epp_registry,
+                    "repository": epp_repository,
+                    "tag": epp_tag
+                },
+                "flags": {
+                    "v": 1,
+                    "enable-pprof": "true",
+                    "tracing": "false"
+                },
+                "resources": {
+                    "requests": {
+                        "cpu": epp_cpu,
+                        "memory": epp_memory
+                    },
+                    "limits": {
+                        "cpu": cpu_limit,
+                        "memory": mem_limit
+                    }
+                }
+            },
+            "monitoring": {
+                "prometheus": {
+                    "auth": {
+                        "enabled": False
+                    }
+                }
+            },
+            "modelServers": {
+                "matchLabels": {
+                    "app": "llm-d-sim"
+                }
+            },
+            "proxy": {
+                "enabled": True
+            }
+        }
+    }
+
+    # Extract guide specific model server labels and nullify them in overrides to avoid helm deep merge keeping them
+    try:
+        with open(guide_values_path, "r") as f:
+            guide_data = yaml.safe_load(f)
+            if (guide_data and "router" in guide_data 
+                    and "modelServers" in guide_data["router"] 
+                    and "matchLabels" in guide_data["router"]["modelServers"]):
+                for key in guide_data["router"]["modelServers"]["matchLabels"].keys():
+                    if key != "app":
+                        overrides["router"]["modelServers"]["matchLabels"][key] = None
+    except Exception as e:
+        print(f"Warning: Could not parse guide values to extract modelServers labels for nullification: {e}")
     
     if machine_family:
-        import json
-        affinity = {
+        overrides["router"]["epp"]["affinity"] = {
             "nodeAffinity": {
                 "requiredDuringSchedulingIgnoredDuringExecution": {
                     "nodeSelectorTerms": [
@@ -143,20 +201,35 @@ def deploy_epp(ns, chart_path, values_path, epp_cpu="2", epp_memory="4Gi", machi
                 }
             }
         }
-        cmd.extend(["--set-json", f"router.epp.affinity={json.dumps(affinity)}"])
         
+    temp_overrides_path = f"/tmp/test-overrides-{ns}.yaml"
+    with open(temp_overrides_path, "w") as f:
+        yaml.safe_dump(overrides, f)
+        
+    print(f"Generated test-overrides values at: {temp_overrides_path}")
+    
+    cmd = [
+        "helm", "install", guide_name, chart_path,
+        "-f", base_values_path,
+        "-f", guide_values_path,
+        "-f", temp_overrides_path,
+        "-n", ns,
+        "--version", chart_version
+    ]
+    
     run_cmd(cmd)
     
     print("Waiting for EPP deployment to become ready...")
-    run_cmd(f"kubectl rollout status deployment/optimized-baseline-sim-standalone-epp -n {ns} --timeout=10m")
+    run_cmd(f"kubectl rollout status deployment/{guide_name}-epp -n {ns} --timeout=10m")
 
-def get_epp_pod_name(ns):
+def get_epp_pod_name(ns, guide_name):
     res = run_cmd(f"kubectl get pods -n {ns} -o jsonpath='{{.items[*].metadata.name}}'")
     pods = res.stdout.strip().split()
+    prefix = f"{guide_name}-epp"
     for pod in pods:
-        if pod.startswith("optimized-baseline-sim-standalone-epp"):
+        if pod.startswith(prefix):
             return pod
-    raise Exception(f"EPP pod not found in namespace {ns}. Available pods: {pods}")
+    raise Exception(f"EPP pod not found in namespace {ns} starting with prefix: {prefix}. Available pods: {pods}")
 
 def get_pod_containers(ns, pod_name):
     res = run_cmd(
@@ -355,7 +428,7 @@ def calculate_percentiles(before, after):
     
     return p50 * 1000, p95 * 1000  # Convert to milliseconds
 
-def run_benchmark(ns, job_values_path, chart_path):
+def run_benchmark(ns, job_values_path, chart_path, guide_name):
     print(f"Deploying benchmark job in namespace: {ns}")
     
     # Process job values file to point to EPP local Service URL
@@ -363,7 +436,7 @@ def run_benchmark(ns, job_values_path, chart_path):
         job_docs = yaml.safe_load(f)
         
     # Override server url to local namespace service
-    job_docs["config"]["server"]["base_url"] = "http://optimized-baseline-sim-standalone-epp:80"
+    job_docs["config"]["server"]["base_url"] = f"http://{guide_name}-epp:80"
     job_docs["token"]["hfSecret"]["name"] = "hf-secret"
     job_docs["token"]["hfSecret"]["key"] = "token"
     job_docs["job"]["serviceAccountName"] = "inference-perf-sa"
@@ -395,16 +468,22 @@ def cleanup_namespace(ns):
     print(f"Cleaning up namespace: {ns}")
     run_cmd(f"kubectl delete namespace {ns} --wait=false")
 
-def write_results_to_markdown(results_file, run_time, ns, images, idle_metrics, peak_metrics, p50, p95, status):
+def write_results_to_markdown_folder(results_dir, test_name, run_time, ns, guide_name, perf_job, machine_family, sim_replicas, images, idle_metrics, peak_metrics, p50, p95, status):
+    os.makedirs(results_dir, exist_ok=True)
+    results_file = os.path.join(results_dir, f"{test_name}.md")
     file_exists = os.path.exists(results_file)
     
     with open(results_file, "a") as f:
         if not file_exists:
             # Write header
-            f.write("# EPP Router Performance Benchmarking Results\n\n")
-            f.write("| Timestamp | Namespace | EPP Images | Container | Idle CPU (m) | Idle Mem (MiB) | Peak CPU (m) | Peak Mem (MiB) | P50 Latency (ms) | P95 Latency (ms) | Status |\n")
-            f.write("|---|---|---|---|---|---|---|---|---|---|---|\n")
+            f.write(f"# EPP Router Performance Benchmarking Results: {test_name}\n\n")
+            f.write("| Timestamp | Namespace | Guide Name | Perf Job | Machine Family | Sim Replicas | EPP Images | Container | Idle CPU (m) | Idle Mem (MiB) | Peak CPU (m) | Peak Mem (MiB) | P50 Latency (ms) | P95 Latency (ms) | Status |\n")
+            f.write("|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|\n")
             
+        epp_images = "<br>".join(images)
+        mf_str = machine_family if machine_family else "-"
+        job_basename = os.path.basename(perf_job)
+        
         # Write rows for each container
         for container in sorted(peak_metrics.keys()):
             idle_cpu = idle_metrics.get(container, {}).get('cpu', '-')
@@ -412,31 +491,32 @@ def write_results_to_markdown(results_file, run_time, ns, images, idle_metrics, 
             peak_cpu = peak_metrics.get(container, {}).get('cpu', '-')
             peak_mem = peak_metrics.get(container, {}).get('mem', '-')
             
-            epp_images = "<br>".join(images)
-            f.write(f"| {run_time} | {ns} | {epp_images} | {container} | {idle_cpu} | {idle_mem} | {peak_cpu} | {peak_mem} | {p50:.2f} | {p95:.2f} | {status} |\n")
+            f.write(f"| {run_time} | {ns} | {guide_name} | {job_basename} | {mf_str} | {sim_replicas} | {epp_images} | {container} | {idle_cpu} | {idle_mem} | {peak_cpu} | {peak_mem} | {p50:.2f} | {p95:.2f} | {status} |\n")
 
 
 def main():
     script_dir = os.path.dirname(os.path.abspath(__file__))
+    repo_root = os.path.abspath(os.path.join(script_dir, ".."))
     
     # Resolve relative defaults
     default_sim_deploy = os.path.join(script_dir, "perf-configs", "llm-d-sim-deployment.yaml")
     default_sim_svc = os.path.join(script_dir, "perf-configs", "llm-d-sim-service.yaml")
-    default_router_chart = os.path.abspath(os.path.join(script_dir, "..", "..", "llm-d-router", "config/charts/llm-d-router-standalone"))
-    default_router_values = os.path.join(script_dir, "perf-configs", "router-optimized-baseline.values.yaml")
+    default_router_chart = "oci://ghcr.io/llm-d/charts/llm-d-router-standalone-dev"
     default_perf_chart = os.path.abspath(os.path.join(script_dir, "..", "..", "..", "inference-perf", "deploy", "inference-perf"))
     default_perf_job = os.path.join(script_dir, "perf-configs", "shared_prefix_job1.yaml")
-    default_results_file = os.path.abspath(os.path.join(script_dir, "..", "..", "..", "loadtesting", "perf_results.md"))
-
+    default_results_dir = os.path.abspath(os.path.join(script_dir, "..", "llm-d-router-resource-tests"))
+ 
     parser = argparse.ArgumentParser(description="Nightly EPP Performance Benchmarking")
     parser.add_argument("--namespace", default=None, help="Dedicated namespace name (auto-generated if omitted)")
     parser.add_argument("--sim-deploy", default=default_sim_deploy, help="Path to simulator deployment yaml")
     parser.add_argument("--sim-svc", default=default_sim_svc, help="Path to simulator service yaml")
     parser.add_argument("--router-chart", default=default_router_chart, help="Path to EPP Helm chart")
-    parser.add_argument("--router-values", default=default_router_values, help="Path to EPP Helm values")
+    parser.add_argument("--router-chart-version", default="v0", help="EPP Helm chart version")
+    parser.add_argument("--guide-name", default="optimized-baseline", help="EPP Guide configuration name")
+    parser.add_argument("--test-name", default="optimized-baseline-job1", help="Name of the performance test")
     parser.add_argument("--perf-chart", default=default_perf_chart, help="Path to inference-perf Helm chart")
     parser.add_argument("--perf-job", default=default_perf_job, help="Path to inference-perf job configuration")
-    parser.add_argument("--results-file", default=default_results_file, help="Path to output markdown results file")
+    parser.add_argument("--results-dir", default=default_results_dir, help="Directory to output markdown results")
     parser.add_argument("--sim-replicas", type=int, default=10, help="Number of simulator replicas")
     parser.add_argument("--no-cleanup", action="store_true", help="Skip namespace deletion on completion")
     parser.add_argument("--enable-workload-identity", action="store_true", help="Annotate service account with Workload Identity configuration")
@@ -487,14 +567,15 @@ def main():
         deploy_epp(
             ns, 
             args.router_chart, 
-            args.router_values, 
+            args.router_chart_version,
+            args.guide_name,
             epp_cpu=args.epp_cpu, 
             epp_memory=args.epp_memory, 
             machine_family=args.router_machine_family
         )
 
         # Get EPP pod details
-        pod_name = get_epp_pod_name(ns)
+        pod_name = get_epp_pod_name(ns, args.guide_name)
         print(f"EPP Pod name: {pod_name}")
         images = get_container_images(ns, pod_name)
         print(f"EPP Container images: {images}")
@@ -544,7 +625,7 @@ def main():
         monitoring_thread.start()
 
         try:
-            run_benchmark(ns, args.perf_job, args.perf_chart)
+            run_benchmark(ns, args.perf_job, args.perf_chart, args.guide_name)
         finally:
             stop_monitoring = True
             monitoring_thread.join()
@@ -569,8 +650,23 @@ def main():
 
         # Step 10: Log Results to Markdown File
         if idle_metrics or peak_metrics:
-            write_results_to_markdown(args.results_file, run_time, ns, images, idle_metrics, peak_metrics, p50, p95, status)
-            print(f"Performance results successfully written to {args.results_file}")
+            write_results_to_markdown_folder(
+                args.results_dir, 
+                args.test_name,
+                run_time, 
+                ns, 
+                args.guide_name,
+                args.perf_job,
+                args.router_machine_family,
+                args.sim_replicas,
+                images, 
+                idle_metrics, 
+                peak_metrics, 
+                p50, 
+                p95, 
+                status
+            )
+            print(f"Performance results successfully written to {args.results_dir}/{args.test_name}.md")
 
 if __name__ == "__main__":
     main()
