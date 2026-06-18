@@ -349,12 +349,12 @@ curl -s http://${IP}/v1/completions \
 ```bash
 # Check the shared PVC for written blocks
 POD=$(kubectl get pod -n ${NAMESPACE} -l llm-d.ai/role=decode -o jsonpath='{.items[0].metadata.name}')
-kubectl exec -n ${NAMESPACE} ${POD} -- du -sh /mnt/files-storage/kv-cache
-kubectl exec -n ${NAMESPACE} ${POD} -- find /mnt/files-storage/kv-cache -maxdepth 5
+kubectl exec -n ${NAMESPACE} ${POD} -- du -sh /mnt/files-storage
+kubectl exec -n ${NAMESPACE} ${POD} -- find /mnt/files-storage -maxdepth 5
 ```
 
 Expected output: `du -sh` shows hundreds of MB to several GB, and `find` lists a path like
-`/mnt/files-storage/kv-cache/<model>/<block-config>/<tp-config>/...` (native fs connector) or `/mnt/files-storage/kv-cache/<model>-xxx.pt` (lmcache connector).
+`/mnt/files-storage/<model>_<hash>_r0/<block-config>/<tp-config>/...` (native fs connector) or `/mnt/files-storage/kv-cache/<model>-xxx.pt` (lmcache connector).
 
 If you have monitoring set up, confirm via `vllm:kv_offload_total_bytes` (native) or `lmcache:local_storage_usage` (lmcache) in the metrics explorer.
 
