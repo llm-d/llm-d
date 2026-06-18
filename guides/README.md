@@ -52,12 +52,7 @@ export REPO_ROOT=$(realpath $(git rev-parse --show-toplevel))
 source ${REPO_ROOT}/guides/env.sh
 ```
 
-| Variable | Description |
-|----------|-------------|
-| `GAIE_VERSION` | Gateway API Inference Extension CRD version |
-| `ROUTER_CHART_VERSION` | llm-d Router Helm chart version |
-| `ROUTER_STANDALONE_CHART` | OCI URL for the standalone router chart |
-| `ROUTER_GATEWAY_CHART` | OCI URL for the gateway router chart |
+See [`env.sh`](./env.sh) for the full list of variables it provides (Helm chart versions, chart OCI URLs, etc.).
 
 ### Default Container Images
 
@@ -66,6 +61,7 @@ Default model server and sidecar images are defined as [Kustomize Components](./
 ```yaml
 components:
   - ../../../../../recipes/modelserver/components/images/gpu-vllm
+  - ../../../../../recipes/modelserver/components/images/routing-sidecar
 ```
 
 To change a default image for testing or a version bump, edit the component file — all guides using it pick up the change automatically.
