@@ -105,7 +105,7 @@ The chart auto-injects the `vllm-render` sidecar when `router.tokenizer.enabled:
 
 ```bash
 helm install ${GUIDE_NAME} \
-  oci://ghcr.io/llm-d/charts/llm-d-router-standalone-dev \
+  ${ROUTER_STANDALONE_CHART} \
   -f ${REPO_ROOT}/guides/recipes/router/base.values.yaml \
   -f ${REPO_ROOT}/guides/${GUIDE_NAME}/router/${GUIDE_NAME}.values.yaml \
   -n ${NAMESPACE} --version ${ROUTER_CHART_VERSION}
@@ -126,7 +126,7 @@ To use a Kubernetes Gateway managed proxy instead of the standalone Envoy sideca
 export PROVIDER_NAME=istio   # options: none, gke, agentgateway, istio
 
 helm install ${GUIDE_NAME} \
-  oci://ghcr.io/llm-d/charts/llm-d-router-gateway-dev \
+  ${ROUTER_GATEWAY_CHART} \
   -f ${REPO_ROOT}/guides/recipes/router/base.values.yaml \
   -f ${REPO_ROOT}/guides/recipes/router/features/httproute-flags.yaml \
   -f ${REPO_ROOT}/guides/${GUIDE_NAME}/router/${GUIDE_NAME}.values.yaml \

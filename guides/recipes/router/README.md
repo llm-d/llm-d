@@ -6,11 +6,11 @@ llm-d uses the **llm-d Router** to make intelligent request routing decisions fo
 
 Use this when you **do not** want to deploy a proxy via Kubernetes Gateway APIs. The standalone chart deploys the **llm-d Router** with an Envoy sidecar to proxy the traffic directly.
 
-**Chart:** `oci://ghcr.io/llm-d/charts/llm-d-router-standalone-dev`
+**Chart:** `${ROUTER_STANDALONE_CHART}` (set by [`guides/env.sh`](../../env.sh))
 
 ```bash
 helm install <release-name> \
-  oci://ghcr.io/llm-d/charts/llm-d-router-standalone-dev \
+  ${ROUTER_STANDALONE_CHART} \
   -f ${REPO_ROOT}/guides/recipes/router/base.values.yaml \
   -f ${REPO_ROOT}/guides/recipes/router/features/monitoring.values.yaml \
   -f ${REPO_ROOT}/guides/<your-guide>/router/<your-guide>.values.yaml \
@@ -27,11 +27,11 @@ Use this when you want to route traffic through a proxy managed by the Kubernete
 2. Creating a Gateway resource (see [recipes/gateway](../gateway/))
 3. Deploying the inferencepool chart (below)
 
-**Chart:** `oci://ghcr.io/llm-d/charts/llm-d-router-gateway-dev`
+**Chart:** `${ROUTER_GATEWAY_CHART}` (set by [`guides/env.sh`](../../env.sh))
 
 ```bash
 helm install <release-name> \
-  oci://ghcr.io/llm-d/charts/llm-d-router-gateway-dev \
+  ${ROUTER_GATEWAY_CHART} \
   -f ${REPO_ROOT}/guides/recipes/router/base.values.yaml \
   -f ${REPO_ROOT}/guides/recipes/router/features/monitoring.values.yaml \
   -f ${REPO_ROOT}/guides/<your-guide>/router/<your-guide>.values.yaml \

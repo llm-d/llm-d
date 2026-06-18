@@ -199,7 +199,7 @@ This guide supports both GPU and TPU. The Kustomize overlays are available in `m
 
 ```bash
 helm install tiered-prefix-cache \
-    oci://ghcr.io/llm-d/charts/llm-d-router-standalone-dev \
+    ${ROUTER_STANDALONE_CHART} \
     -f ${REPO_ROOT}/guides/recipes/router/base.values.yaml \
     -f ${REPO_ROOT}/guides/tiered-prefix-cache/router/tiered-prefix-cache-cpu.values.yaml \
     -n ${NAMESPACE} --version ${ROUTER_CHART_VERSION}
@@ -214,7 +214,7 @@ helm install tiered-prefix-cache \
 ```bash
 export PROVIDER_NAME=gke # options: none, gke, agentgateway, istio
 helm install tiered-prefix-cache \
-    oci://ghcr.io/llm-d/charts/llm-d-router-gateway-dev \
+    ${ROUTER_GATEWAY_CHART} \
     -f ${REPO_ROOT}/guides/recipes/router/base.values.yaml \
     -f ${REPO_ROOT}/guides/tiered-prefix-cache/router/tiered-prefix-cache-cpu.values.yaml \
     --set provider.name=${PROVIDER_NAME} \
