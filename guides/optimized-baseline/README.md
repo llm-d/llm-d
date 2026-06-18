@@ -31,7 +31,7 @@ The optimized-baseline defaults to two main routing criteria:
 
 This guide includes configurations for the following accelerators:
 
-| Backend             | `ACCELERATOR_TYPE` | Notes                                      |
+| Backend             | Directory          | Notes                                      |
 | ------------------- | ------------------ | ------------------------------------------ |
 | NVIDIA GPU          | `gpu`              | Default configuration (`INFRA_PROVIDER` options: `base`, `gke`) |
 | AMD GPU             | `amd`              | AMD GPU                                    |
