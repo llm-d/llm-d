@@ -28,11 +28,10 @@ This guide deploys the optimal llm-d configuration for agentic code-generation w
 - Installed proper client tools (kubectl, helm).
 - Set the following environment variables:
   ```bash
-  export GAIE_VERSION=v1.5.0
-  export ROUTER_CHART_VERSION=v0
+  export REPO_ROOT=$(realpath $(git rev-parse --show-toplevel))
+  source ${REPO_ROOT}/guides/env.sh
   export GUIDE_NAME="agentic-serving"
   export NAMESPACE=llm-d-agentic-serving
-  export REPO_ROOT=$(realpath $(git rev-parse --show-toplevel))
   ```
 
 - Install the Gateway API Inference Extension CRDs:

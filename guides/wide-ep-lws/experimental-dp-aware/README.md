@@ -61,6 +61,7 @@ This guide requires 32 Nvidia H200 or B200 GPUs and InfiniBand or RoCE RDMA netw
 
   ```bash
   export REPO_ROOT=$(realpath $(git rev-parse --show-toplevel))
+  source ${REPO_ROOT}/guides/env.sh
   export NAMESPACE=llm-d-wide-ep # or any other namespace (shorter names recommended)
   kubectl create namespace ${NAMESPACE}
   ```

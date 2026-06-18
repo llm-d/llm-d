@@ -63,20 +63,19 @@ git clone https://github.com/llm-d/llm-d.git && cd llm-d && git checkout ${branc
 
 **For E/PD:**
 ```bash
-export GAIE_VERSION=v1.5.0
-export ROUTER_CHART_VERSION=v0
+export REPO_ROOT=$(realpath $(git rev-parse --show-toplevel))
+source ${REPO_ROOT}/guides/env.sh
 export RELEASE_NAME="e-disaggregation"
 export GUIDE_PATH="multimodal-serving/e-disaggregation"
 export TOPOLOGY="e-pd"
 export NAMESPACE="llm-d-e-pd-disaggregation"
 export MODEL_NAME="Qwen/Qwen3-VL-32B-Instruct"
-export REPO_ROOT=$(realpath $(git rev-parse --show-toplevel))
 ```
 
 **For E/P/D:**
 ```bash
-export GAIE_VERSION=v1.5.0
-export ROUTER_CHART_VERSION=v0
+export REPO_ROOT=$(realpath $(git rev-parse --show-toplevel))
+source ${REPO_ROOT}/guides/env.sh
 export RELEASE_NAME="e-disaggregation"
 export GUIDE_PATH="multimodal-serving/e-disaggregation"
 export TOPOLOGY="e-p-d"
