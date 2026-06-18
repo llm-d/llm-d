@@ -40,10 +40,6 @@ This guide includes configurations for the following accelerators:
 > hosts. Networks restricted to communicating only between matching NIC IDs (rail-only
 > connectivity) will fail.
 
-## Hardware Requirements
-
-This guide requires 32 Nvidia H200 or B200 GPUs and InfiniBand or RoCE RDMA networking. Check `modelserver/gpu/vllm/base/decode.yaml` and `modelserver/gpu/vllm/base/prefill.yaml` for detailed resource requirements.
-
 ## Prerequisites
 
 * Have the [proper client tools installed on your local system](../../helpers/client-setup/README.md) to use this guide.
