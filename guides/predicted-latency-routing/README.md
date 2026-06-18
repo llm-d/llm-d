@@ -320,7 +320,7 @@ envsubst < ${REPO_ROOT}/guides/agentic-serving/benchmark-templates/guide.yaml > 
 
 ### Code Generation (GPU · Qwen3-32B)
 
-10 vLLM decode pods, tensor parallelism 2 (20 × H100 total), `Qwen/Qwen3-32B`, shared-prefix code-generation load (concurrency 10 → 100). Three configurations: a plain Kubernetes Service (round-robin, no EPP), the **token scorer** (token-load + prefix-affinity), and **predicted-latency** routing.
+10 vLLM decode servers, tensor parallelism 2 (20 × H100 total), `Qwen/Qwen3-32B`, shared-prefix code-generation load (concurrency 10 → 100). Three configurations: a plain Kubernetes Service (round-robin, no EPP), the **token scorer** (token-load + prefix-affinity), and **predicted-latency** routing.
 
 <img src="./benchmark-results/code_generation_gpu_qwen32.png" width="900" alt="Code Generation GPU: k8 vs token scorer vs latency predictor">
 
