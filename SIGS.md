@@ -228,7 +228,6 @@ SIGs operate within the broader llm-d project governance framework defined in [P
 
 > **👥 Leadership:** [Nir Rozenbaum](https://github.com/nirrozenbaum), [Maroon Ayoub](https://github.com/vMaroon)
 
-
 **Charter**: Develop and maintain a pluggable framework for request/response payload processing that enables intelligent model selection, seamless integration with both in-cluster and out-of-cluster models (external models), and extensible request/response transformations.
 
 **Key Areas**:
@@ -244,7 +243,6 @@ SIGs operate within the broader llm-d project governance framework defined in [P
 
 - **Slack Channel**: [#sig-inference-payload-processor](https://llm-d.slack.com/archives/C0B3H230X9T)
 - **Meeting Recordings and Docs**: [Public Google Drive](https://drive.google.com/drive/folders/1r2yEYMoBxBbs4KNsk5gdZztRO4npAGEH)
-
 
 ## Getting Involved
 
