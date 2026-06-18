@@ -46,7 +46,7 @@ WVA is designed for operators running multiple variants of the same model across
 
 ## Choosing a Path
 
-| | [HPA + EPP Metrics](./README.hpa-epp.md) | [HPA + WVA Metric](./README.wva.md) |
+| | [HPA + EPP Metrics](./README.hpa-epp.md) | [HPA + WVA Metrics](./README.wva.md) |
 |---|---|---|
 | **Best for** | Deployments on homogeneous hardware where each model scales independently | Multi-variant deployments where cost-aware capacity allocation across heterogeneous shared hardware is required |
 | **Scaling signal** | EPP metrics such as queue depth and running request count | KV cache utilization, queue depth, performance budgets |
