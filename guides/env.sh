@@ -5,4 +5,3 @@
 
 export GAIE_VERSION=v1.5.0
 export ROUTER_CHART_VERSION=v0
-export REPO_ROOT=${REPO_ROOT:-$(realpath $(git rev-parse --show-toplevel))}
