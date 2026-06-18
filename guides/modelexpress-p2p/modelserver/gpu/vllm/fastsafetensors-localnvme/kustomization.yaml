@@ -1,8 +1,8 @@
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
-# fastsafetensors + GDS off warm local NVMe (OPTIONAL test). Beats network
-# storage on the GDS hop but loses dedup (every node re-primes) and the GDS
-# path is fragile; prefer the NFS test unless you want a local-NVMe number.
+# Optional fastsafetensors + GDS off warm local NVMe measurement workload.
+# Every node re-primes from the warm NFS source, and the GDS path depends on
+# node support; use this only when you specifically want a local-NVMe number.
 # Requires the `fst-model-cache` PVC from prewarm-job.yaml (applied
 # standalone, as in the NFS test).
 resources:

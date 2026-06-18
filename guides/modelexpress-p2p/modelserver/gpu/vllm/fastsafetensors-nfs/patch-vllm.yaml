@@ -3,7 +3,7 @@ kind: Deployment
 metadata:
   name: decode
 spec:
-  # Mirrors the P2P test's replica count so the comparison is fair.
+  # Matches the P2P guide's replica count for local timing measurements.
   replicas: 2
   template:
     spec:
