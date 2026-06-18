@@ -294,14 +294,14 @@ kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/
 
 Benchmark: `2048_concurrent_2k_isl_2k_osl` (2048 concurrent requests, 2K input / 2K output tokens)
 
-| Metric | Hybrid-LB | DP Supervisor | Change |
-|---|---|---|---|
-| Output tokens/s | 22,125 | 27,853 | +26% |
-| Input tokens/s | 22,586 | 29,329 | +30% |
-| Total tokens/s | 44,711 | 57,183 | +28% |
-| Requests/s | 11.03 | 14.33 | +30% |
+| Metric | DP Supervisor |
+|---|---|
+| Output tokens/s | 27,853 |
+| Input tokens/s | 29,329 |
+| Total tokens/s | 57,183 |
+| Requests/s | 14.33 |
 
-~1,741 output tokens/s per decode GPU (16 decode GPUs), compared to ~1,383 with hybrid-lb.
+~1,741 output tokens/s per decode GPU (16 decode GPUs).
 
 ### GKE (4x H200, 32 GPUs, RoCE)
 
