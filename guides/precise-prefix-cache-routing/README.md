@@ -100,7 +100,7 @@ kubectl create secret generic llm-d-hf-token \
 
 This deploys the llm-d Router in the simple [Standalone Mode](../../docs/architecture/core/router/proxy.md). The release name `${GUIDE_NAME}` is mandatory — the inference pool selector matches a guide label that pairs with this release.
 
-The chart auto-injects the `vllm-render` sidecar when `router.tokenizer.enabled: true` is set in the values file.
+Tokenization is served by a standalone render Service, not a chart-injected EPP sidecar — the values set `router.tokenizer.enabled: false` and point the `token-producer` plugin at that Service.
 
 ```bash
 helm install ${GUIDE_NAME} \
@@ -111,6 +111,17 @@ helm install ${GUIDE_NAME} \
 ```
 
 The release name `${GUIDE_NAME}` is mandatory for standard deployments — the inference pool selector matches a guide label that pairs with this release.
+
+#### Deploy the Render (Tokenizer) Service
+
+The EPP `token-producer` plugin tokenizes prompts by calling vLLM's `/v1/completions/render` endpoint. This guide serves that endpoint from a dedicated, horizontally-scalable `vllm launch render` Service (3 replicas) instead of a per-EPP-pod sidecar, so render capacity scales independently of the EPP replica count and is shared across all EPP replicas. Deploy it with:
+
+```bash
+kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/render/
+```
+
+> [!NOTE]
+> The render pods deliberately do **not** carry the `llm-d.ai/guide` label — that label is the InferencePool / model-server selector, and the EPP would otherwise treat render pods as routable model servers (and try to subscribe to their nonexistent KV-event socket). Scale the pool with `kubectl scale -n ${NAMESPACE} deploy/${GUIDE_NAME}-render --replicas=<N>`.
 
 <details>
 <summary><b>Gateway Mode</b></summary>
@@ -289,6 +300,8 @@ llmdbenchmark \
 
 ```bash
 helm uninstall ${GUIDE_NAME} -n ${NAMESPACE}
+# Render (tokenizer) Service:
+kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/render/
 # For vLLM (default):
 kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/gpu/vllm/${INFRA_PROVIDER}/
 # For SGLang:
