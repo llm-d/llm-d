@@ -71,6 +71,7 @@ export NAMESPACE="llm-d-${GUIDE_NAME}"
 - Install the Gateway API Inference Extension CRDs:
 
 ```bash
+source ${REPO_ROOT}/guides/env.sh
 kubectl apply -f https://github.com/kubernetes-sigs/gateway-api-inference-extension/releases/download/${GAIE_VERSION}/v1-manifests.yaml
 ```
 
@@ -104,6 +105,7 @@ This deploys the llm-d Router in the simple [Standalone Mode](../../docs/archite
 The chart auto-injects the `vllm-render` sidecar when `router.tokenizer.enabled: true` is set in the values file.
 
 ```bash
+source ${REPO_ROOT}/guides/env.sh
 helm install ${GUIDE_NAME} \
   ${ROUTER_STANDALONE_CHART} \
   -f ${REPO_ROOT}/guides/recipes/router/base.values.yaml \
@@ -123,6 +125,7 @@ To use a Kubernetes Gateway managed proxy instead of the standalone Envoy sideca
 2. **Deploy the llm-d Router and HTTPRoute** via the `llm-d-router-gateway` chart with `httpRoute.create=true`:
 
 ```bash
+source ${REPO_ROOT}/guides/env.sh
 export PROVIDER_NAME=istio   # options: none, gke, agentgateway, istio
 
 helm install ${GUIDE_NAME} \

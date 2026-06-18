@@ -70,6 +70,7 @@ export MODEL_NAME="openai/gpt-oss-120b"
 * Install the Gateway API Inference Extension CRDs:
 
 ```bash
+source ${REPO_ROOT}/guides/env.sh
 kubectl apply -f https://github.com/kubernetes-sigs/gateway-api-inference-extension/releases/download/${GAIE_VERSION}/v1-manifests.yaml
 ```
 * Create a target namespace for the installation
@@ -98,6 +99,7 @@ kubectl create namespace ${NAMESPACE} --dry-run=client -o yaml | kubectl apply -
 This deploys the llm-d Router with an Envoy sidecar, it doesn't set up a Kubernetes Gateway.
 
 ```bash
+source ${REPO_ROOT}/guides/env.sh
 helm install ${GUIDE_NAME} \
     ${ROUTER_STANDALONE_CHART} \
     -f ${REPO_ROOT}/guides/recipes/router/base.values.yaml \
@@ -114,6 +116,7 @@ To employ a Kubernetes Gateway managed proxy instead of the standalone one, then
 2. *Deploy the llm-d Router and an HTTPRoute*. The following deploys the llm-d Router with an HttpRoute that connects it to the Gateway created in the previous step (set `provider.name` to the gateway provider you deployed):
 
 ```bash
+source ${REPO_ROOT}/guides/env.sh
 export PROVIDER_NAME=gke # other na, agentgateway or istio
 helm install ${GUIDE_NAME} \
     ${ROUTER_GATEWAY_CHART}  \

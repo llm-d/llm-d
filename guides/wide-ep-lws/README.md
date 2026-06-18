@@ -59,6 +59,7 @@ This guide includes configurations for the following accelerators:
 * Install the Gateway API Inference Extension CRDs:
 
   ```bash
+source ${REPO_ROOT}/guides/env.sh
   kubectl apply -f https://github.com/kubernetes-sigs/gateway-api-inference-extension/releases/download/${GAIE_VERSION}/v1-manifests.yaml
   ```
 * You have deployed the [LeaderWorkerSet controller](https://lws.sigs.k8s.io/docs/installation/)
@@ -78,6 +79,7 @@ This guide includes configurations for the following accelerators:
 This deploys the llm-d Router with an Envoy sidecar, it doesn't set up a Kubernetes Gateway.
 
 ```bash
+source ${REPO_ROOT}/guides/env.sh
 helm install ${GUIDE_NAME} \
     ${ROUTER_STANDALONE_CHART} \
     -f ${REPO_ROOT}/guides/recipes/router/base.values.yaml \
@@ -94,6 +96,7 @@ To use a Kubernetes Gateway managed proxy rather than the standalone version, fo
 2. *Deploy the llm-d Router and an HTTPRoute* that connects it to the Gateway as follows:
 
 ```bash
+source ${REPO_ROOT}/guides/env.sh
 export PROVIDER_NAME=gke # options: none, gke, agentgateway, istio
 helm install ${GUIDE_NAME} \
     ${ROUTER_GATEWAY_CHART}  \

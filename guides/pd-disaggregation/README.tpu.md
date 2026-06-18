@@ -28,6 +28,7 @@ Set your environment variables, overriding the model name for your architecture:
 
 **For Cloud TPU v6e:**
 ```bash
+source ${REPO_ROOT}/guides/env.sh
 export GAIE_VERSION=v1.5.0
 export GUIDE_NAME="pd-disaggregation"
 export NAMESPACE="llm-d-pd-disaggregation"
@@ -37,6 +38,7 @@ export STACK_NAME="tpu-v6-qwen3-32b-pd"
 
 **For Cloud TPU v7x:**
 ```bash
+source ${REPO_ROOT}/guides/env.sh
 export REPO_ROOT=$(realpath $(git rev-parse --show-toplevel))
 export GAIE_VERSION=v1.5.0
 export GUIDE_NAME="pd-disaggregation"
