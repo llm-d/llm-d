@@ -1,6 +1,6 @@
 # Model Servers
 
-The model server is the component that runs inference on a model. llm-d supports vLLM and SGLang as model server backends.
+The model server is the component that runs inference on a model. llm-d supports vLLM, SGLang, and TensorRT-LLM (`trtllm-serve`) as model server backends.
 
 ## Functionality
 
@@ -52,6 +52,20 @@ metadata:
 
 ```
 
+> [!NOTE]
+> **TensorRT-LLM (`trtllm-serve`) requirements.** Unlike vLLM/SGLang, `trtllm-serve` exposes
+> the metrics above at **`/prometheus/metrics`**. The plain `/metrics` route returns JSON
+> iteration-stats the EPP cannot parse, so point the EPP's metrics data source at
+> `path: /prometheus/metrics`. The gauges are emitted only when the server is started with
+> **both** `return_perf_metrics: true` **and** `enable_iter_perf_stats: true` (both default
+> `false`, passed via `--extra_llm_api_options`). The first mounts the Prometheus endpoint,
+> and the second starts the iteration-stats loop that populates the dynamic gauges
+> (`trtllm_num_requests_waiting`, `trtllm_num_requests_running`, `trtllm_kv_cache_utilization`).
+> They require **TensorRT-LLM v1.3.0rc12 or newer** (added in [PR #12545](https://github.com/NVIDIA/TensorRT-LLM/pull/12545)). Earlier releases
+> (including 1.2.1 GA) expose only request-lifecycle histograms. See the
+> [optimized-baseline TensorRT-LLM recipe](../../../guides/optimized-baseline/README.md) for a
+> working configuration.
+
 ### LoRA Adapter Serving
 
 Model servers that support dynamic LoRA serving can benefit from the LoRA affinity algorithm. Note
@@ -89,5 +103,6 @@ Model servers are expected to expose health endpoints that Kubernetes uses for l
 
 - [vLLM Documentation](https://docs.vllm.ai/)
 - [SGLang Documentation](https://github.com/sgl-project/sglang)
+- [TensorRT-LLM Documentation](https://nvidia.github.io/TensorRT-LLM/)
 - [InferencePool](inferencepool.md) -- how model servers are discovered and managed
 - [EPP](router/epp) -- how the router routes requests to model servers informed by model servers metrics
