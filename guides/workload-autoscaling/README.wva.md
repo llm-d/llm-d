@@ -99,24 +99,26 @@ Saturation engine v2 will be the default in the next release (0.9.0), but for no
 > [!CAUTION]
 > Enabling the v2 saturation engine may change the output of the scaling decisions (i.e. `wva_desired_replicas`) for *all* deployments. This may cause a temporary burst of scaling activity.
 
-    ```bash
-    kubectl edit configmap wva-saturation-scaling-config -n ${WVA_NAMESPACE}
-    ```
+Edit the WVA configmap to enable the v2 saturation engine:
 
-    Under the `default:` key, append:
+  ```bash
+  kubectl edit configmap wva-saturation-scaling-config -n ${WVA_NAMESPACE}
+  ```
 
-    ```yaml
-    apiVersion: v1
-    data:
-      default: |
-        # Select the V2 token-based saturation analyzer.
-        # Remove this list to fall back to the V1
-        # percentage-based analyzer.
-        analyzers:
-          - name: saturation
-        kvCacheThreshold: 0.80
-        ...
-    ```
+  Under the `default:` key, append `analyzers: - name: saturation` to enable the token-based saturation analyzer. The full config should look like this:
+
+  ```yaml
+  apiVersion: v1
+  data:
+    default: |
+      # Select the V2 token-based saturation analyzer.
+      # Remove this list to fall back to the V1
+      # percentage-based analyzer.
+      analyzers:
+        - name: saturation
+      kvCacheThreshold: 0.80
+      ...
+  ```
 
 ## Verify Installation
 
