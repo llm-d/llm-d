@@ -62,7 +62,7 @@ Offloaded KV caches can live on several tiers, ordered by read/write latency: fr
 
 ## Deploy
 
-See the [KV Cache Management guide](../../../guides/tiered-prefix-cache) for manifests and step-by-step deployment.
+See the [Tiered Prefix Cache guide](../../../guides/tiered-prefix-cache) for manifests and step-by-step deployment.
 
 ## Architecture
 
@@ -70,7 +70,7 @@ llm-d leverages the following architectures for offloading.
 
 ### CPU KV Cache Offloading
 
-vLLM pods are configured with `OffloadingConnector` and increased CPU memory requests (e.g., 400 GB). Evicted KV-cache blocks move to host CPU memory instead of being discarded, extending the effective cache size with negligible overhead. The EPP maintains a global index of which blocks exist on which pods and tiers, adding a second `prefix-cache-scorer` plugin for CPU-tier blocks.
+Each model server offloads to host CPU memory through its own native mechanism: vLLM uses the `OffloadingConnector`, and SGLang uses HiCache. Pods are configured with the connector enabled and increased CPU memory requests (e.g., 400 GB). Evicted KV-cache blocks move to host CPU memory instead of being discarded, extending the effective cache size with negligible overhead. The EPP maintains a global index of which blocks exist on which pods and tiers, adding a second `prefix-cache-scorer` plugin for CPU-tier blocks.
 
 <p align="center">
   <picture>
