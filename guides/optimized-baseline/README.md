@@ -9,7 +9,7 @@
 
 ## Overview
 
-This guide deploys the recommended out of the box [configuration](https://github.com/llm-d/llm-d-router/blob/main/docs/architecture.md) for most vLLM and SGLang deployments, reducing tail latency and increasing throughput through load-aware and prefix-cache aware balancing.
+This guide deploys the recommended out of the box [configuration](https://github.com/llm-d/llm-d-router/blob/main/docs/architecture.md) for most vLLM, SGLang, and TensorRT-LLM deployments, reducing tail latency and increasing throughput through load-aware and prefix-cache aware balancing.
 
 The optimized-baseline defaults to two main routing criteria:
 
@@ -102,6 +102,10 @@ helm install ${GUIDE_NAME} \
     -n ${NAMESPACE} --version ${ROUTER_CHART_VERSION}
 ```
 
+> [!NOTE]
+> For **TensorRT-LLM** (`trtllm-serve`), replace the last `-f` flag with the TensorRT-LLM
+> values file: `-f ${REPO_ROOT}/guides/${GUIDE_NAME}/router/${GUIDE_NAME}-trtllm.values.yaml`
+
 <details>
 <summary><h4>Gateway Mode</h4></summary>
 
@@ -130,8 +134,7 @@ Apply the Kustomize overlays for your specific backend:
 
 ```bash
 export ACCELERATOR_TYPE=gpu # options: gpu, amd, xpu, hpu, tpu/v6, tpu/v7, cpu
-export INFRA_PROVIDER=base # base | gke
-export MODEL_SERVER=vllm # options: vllm, sglang
+export MODEL_SERVER=vllm # options: vllm, sglang, trtllm
 export INFRA_PROVIDER=base # base | gke (GPU only, omit for other accelerators)
 kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/${ACCELERATOR_TYPE}/${MODEL_SERVER}/${INFRA_PROVIDER}/
 ```

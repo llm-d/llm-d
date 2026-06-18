@@ -1,0 +1,50 @@
+## optimized-baseline guide overrides for the llm-d router (TensorRT-LLM variant).
+## Layer on top of: recipes/router/base.values.yaml
+##
+## Use this file INSTEAD of optimized-baseline.values.yaml when the model servers
+## are trtllm-serve. It is identical to the vLLM/SGLang variant except for the two
+## TensorRT-LLM-specific knobs below (modelServers.type and the metrics path).
+
+router:
+  extraServicePorts:
+    - name: http
+      port: 80
+      protocol: TCP
+      targetPort: 8081
+
+  epp:
+    pluginsConfigFile: "optimized-baseline-plugins.yaml"
+    pluginsCustomConfig:
+      optimized-baseline-plugins.yaml: |
+        apiVersion: llm-d.ai/v1alpha1
+        kind: EndpointPickerConfig
+        plugins:
+        - type: queue-scorer
+        - type: kv-cache-utilization-scorer
+        - type: prefix-cache-scorer
+        - type: no-hit-lru-scorer
+        schedulingProfiles:
+        - name: default
+          plugins:
+          - pluginRef: queue-scorer
+            weight: 2
+          - pluginRef: kv-cache-utilization-scorer
+            weight: 2
+          - pluginRef: prefix-cache-scorer
+            weight: 3
+          - pluginRef: no-hit-lru-scorer
+            weight: 2
+
+    # TensorRT-LLM exposes its Prometheus metrics at /prometheus/metrics, not the
+    # default /metrics (which serves JSON iteration-stats the extractor cannot
+    # parse). The model server must be started with return_perf_metrics: true and
+    # enable_iter_perf_stats: true (see the trtllm modelserver overlay).
+    metricsDataSource:
+      path: /prometheus/metrics
+
+  modelServers:
+    # Drives core-metrics-extractor's defaultEngine: trtllm-serve, mapping the
+    # router's load/kv scorers onto the trtllm_* metric names.
+    type: trtllm-serve
+    matchLabels:
+      llm-d.ai/guide: "optimized-baseline"
