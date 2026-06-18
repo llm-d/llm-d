@@ -331,7 +331,7 @@ envsubst < ${REPO_ROOT}/guides/agentic-serving/benchmark-templates/guide.yaml > 
 
 ### Agentic Serving (TPU · Qwen3-Coder-480B-A35B-Instruct-FP8 with KV-cache offloading)
 
-8 vLLM pods on Google TPU v7x (2x2x1), `Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8` with KV-cache offloading, long-context agentic code-generation (dynamic prompts up to ~256K tokens). Three configurations: a plain Kubernetes Service (round-robin, no EPP), the [agentic-serving](../agentic-serving) **token scorer** (token-load + prefix-affinity), and **predicted-latency** routing.
+8 vLLM servers each running on a 2x2x1 Google TPU v7x host, `Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8` with KV-cache offloading, long-context agentic code-generation (dynamic prompts up to ~256K tokens). Three configurations: a plain Kubernetes Service (round-robin, no EPP), the [agentic-serving](../agentic-serving) **token scorer** (token-load + prefix-affinity), and **predicted-latency** routing.
 
 <img src="./benchmark-results/agentic_serving_tpu_qwen480.png" width="900" alt="Agentic Serving TPU: k8 vs token scorer vs latency predictor">
 
