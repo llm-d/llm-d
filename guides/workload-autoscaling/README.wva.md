@@ -43,8 +43,6 @@ export REPO_ROOT=$(realpath $(git rev-parse --show-toplevel))
 > [!NOTE]
 > **Namespaced-Scoped Installation**: this guide installs WVA in namespaced-scoped mode in the `llm-d-optimized-baseline` namespace and configure to watch resources only in that namespace (`--watch-namespace=llm-d-optimized-baseline`). For cluster-wide autoscaling, set `--watch-namespace=""` in the controller deployment.
 
-### Installation Steps
-
 1. Choose your platform:
 
     ```bash
@@ -92,7 +90,19 @@ export REPO_ROOT=$(realpath $(git rev-parse --show-toplevel))
     kubectl apply -k guides/workload-autoscaling/wva-config/platform/${PLATFORM} -n ${NAMESPACE}
     ```
 
-### Enabling Saturation Engine V2 (Recommended)
+## Verify Installation
+
+Check that the WVA controller is running:
+
+```bash
+kubectl get deployment -n ${WVA_NAMESPACE}
+NAME                     READY   UP-TO-DATE   AVAILABLE   AGE
+wva-controller-manager   2/2     2            2           10m
+```
+
+This guide configures the controller deployment with `replicas: 2` and leader election enabled for HA (one active leader plus one standby).
+
+## Enabling Saturation Engine V2 (Recommended)
 
 Saturation engine v2 will be the default in the next release (0.9.0), but for now it must be enabled manually. The v1 saturation engine will be deprecated in 0.9.0 and removed in 0.10.0.
 
@@ -120,17 +130,8 @@ Edit the WVA configmap to enable the v2 saturation engine:
       ...
   ```
 
-## Verify Installation
+The WVA controller will automatically pick up the config change and start using the new saturation engine for scaling decisions. You can verify this by checking the controller logs for messages indicating the active saturation engine. Look for a log line like `V2 saturation analysis completed ` to confirm that the v2 engine is active.
 
-Check that the WVA controller is running:
-
-```bash
-kubectl get deployment -n ${WVA_NAMESPACE}
-NAME                     READY   UP-TO-DATE   AVAILABLE   AGE
-wva-controller-manager   2/2     2            2           10m
-```
-
-This guide configures the controller deployment with `replicas: 2` and leader election enabled for HA (one active leader plus one standby).
 
 ## Enabling Autoscaling for an Inference Deployment
 
