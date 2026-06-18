@@ -9,7 +9,7 @@ namePrefix: optimized-baseline-
 images:
   - name: REPLACE_MODEL_SERVER_IMAGE
     newName: vllm/vllm-openai
-    newTag: v0.22.0
+    newTag: v0.23.0
 
 labels:
   - pairs:
