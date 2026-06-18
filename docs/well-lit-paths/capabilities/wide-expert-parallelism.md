@@ -12,7 +12,7 @@ The following visualizes the forward pass in a DP/EP deployment in vLLM:
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)">
-    <img src="../assets/dp-ep-deployment.svg" alt="DP/EP deployment">
+    <img src="../../assets/dp-ep-deployment.svg" alt="DP/EP deployment">
   </picture>
 </p>
 
@@ -47,7 +47,7 @@ As a result, we leverage the following design for the deployment:
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)">
-    <img src="../assets/wide-ep.svg" alt="Multi-Node Wide Expert Parallelism">
+    <img src="../../assets/wide-ep.svg" alt="Multi-Node Wide Expert Parallelism">
   </picture>
 </p>
 

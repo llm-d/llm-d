@@ -53,7 +53,7 @@ For detailed step-by-step instructions on how to deploy and configure Flow Contr
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)">
-    <img src="../assets/flow-control.svg" alt="Flow Control">
+    <img src="../../assets/flow-control.svg" alt="Flow Control">
   </picture>
 </p>
 

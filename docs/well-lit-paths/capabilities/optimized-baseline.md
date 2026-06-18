@@ -26,7 +26,7 @@ EPP maintains a view of each endpoints' prefix-cache state in memory. When a req
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)">
-    <img src="../assets/prefix-aware-routing.svg" alt="Prefix-Aware Routing">
+    <img src="../../assets/prefix-aware-routing.svg" alt="Prefix-Aware Routing">
   </picture>
 </p>
 
@@ -37,7 +37,7 @@ EPP continuously probes each endpoints' metrics by scraping `/metrics` at a regu
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)">
-    <img src="../assets/load-aware-routing.svg" alt="Load-Aware Routing">
+    <img src="../../assets/load-aware-routing.svg" alt="Load-Aware Routing">
   </picture>
 </p>
 

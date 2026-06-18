@@ -20,7 +20,7 @@ See the [Predicted Latency guide](../../../guides/predicted-latency-routing) for
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)">
-    <img src="../assets/latency-predictor.svg" alt="Latency Predictor">
+    <img src="../../assets/latency-predictor.svg" alt="Latency Predictor">
   </picture>
 </p>
 

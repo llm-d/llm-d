@@ -25,7 +25,7 @@ See the [P/D Disaggregation guide](../../../guides/pd-disaggregation) for manife
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)">
-    <img src="../assets/pd-disaggregation.svg" alt="P/D Disaggregation">
+    <img src="../../assets/pd-disaggregation.svg" alt="P/D Disaggregation">
   </picture>
 </p>
 

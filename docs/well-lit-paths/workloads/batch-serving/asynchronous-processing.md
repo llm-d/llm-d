@@ -21,7 +21,7 @@ To prevent background tasks from impacting real-time traffic, the Async Processo
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)">
-    <img src="../assets/async-processor.svg" alt="Async Processor Architecture">
+    <img src="../../../assets/async-processor.svg" alt="Async Processor Architecture">
   </picture>
 </p>
 
