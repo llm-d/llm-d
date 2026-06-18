@@ -65,7 +65,7 @@ source ${REPO_ROOT}/guides/env.sh
 ```bash
 source ${REPO_ROOT}/guides/env.sh
 helm install ${GUIDE_NAME} \
-    ${ROUTER_STANDALONE_CHART} \
+    oci://ghcr.io/llm-d/charts/llm-d-router-standalone-dev \
     -f ${REPO_ROOT}/guides/recipes/router/base.values.yaml \
     -f ${REPO_ROOT}/guides/${GUIDE_NAME}/router/${GUIDE_NAME}.values.yaml \
     -n ${NAMESPACE} --version ${ROUTER_CHART_VERSION}

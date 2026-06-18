@@ -201,7 +201,7 @@ source ${REPO_ROOT}/guides/env.sh
 ```bash
 source ${REPO_ROOT}/guides/env.sh
 helm install tiered-prefix-cache \
-    ${ROUTER_STANDALONE_CHART} \
+    oci://ghcr.io/llm-d/charts/llm-d-router-standalone-dev \
     -f ${REPO_ROOT}/guides/recipes/router/base.values.yaml \
     -f ${REPO_ROOT}/guides/tiered-prefix-cache/router/tiered-prefix-cache-cpu.values.yaml \
     -n ${NAMESPACE} --version ${ROUTER_CHART_VERSION}
@@ -217,7 +217,7 @@ helm install tiered-prefix-cache \
 source ${REPO_ROOT}/guides/env.sh
 export PROVIDER_NAME=gke # options: none, gke, agentgateway, istio
 helm install tiered-prefix-cache \
-    ${ROUTER_GATEWAY_CHART} \
+    oci://ghcr.io/llm-d/charts/llm-d-router-gateway-dev \
     -f ${REPO_ROOT}/guides/recipes/router/base.values.yaml \
     -f ${REPO_ROOT}/guides/tiered-prefix-cache/router/tiered-prefix-cache-cpu.values.yaml \
     --set provider.name=${PROVIDER_NAME} \

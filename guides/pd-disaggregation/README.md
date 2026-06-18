@@ -101,7 +101,7 @@ This deploys the llm-d Router with an Envoy sidecar, it doesn't set up a Kuberne
 ```bash
 source ${REPO_ROOT}/guides/env.sh
 helm install ${GUIDE_NAME} \
-    ${ROUTER_STANDALONE_CHART} \
+    oci://ghcr.io/llm-d/charts/llm-d-router-standalone-dev \
     -f ${REPO_ROOT}/guides/recipes/router/base.values.yaml \
     -f ${REPO_ROOT}/guides/${GUIDE_NAME}/router/${GUIDE_NAME}.values.yaml \
     -n ${NAMESPACE} --version ${ROUTER_CHART_VERSION}
@@ -119,7 +119,7 @@ To employ a Kubernetes Gateway managed proxy instead of the standalone one, then
 source ${REPO_ROOT}/guides/env.sh
 export PROVIDER_NAME=gke # other na, agentgateway or istio
 helm install ${GUIDE_NAME} \
-    ${ROUTER_GATEWAY_CHART}  \
+    oci://ghcr.io/llm-d/charts/llm-d-router-gateway-dev  \
     -f ${REPO_ROOT}/guides/recipes/router/base.values.yaml \
     -f ${REPO_ROOT}/guides/recipes/router/features/httproute-flags.yaml \
     -f ${REPO_ROOT}/guides/${GUIDE_NAME}/router/${GUIDE_NAME}.values.yaml \
