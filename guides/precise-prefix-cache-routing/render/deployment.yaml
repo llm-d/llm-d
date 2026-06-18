@@ -11,16 +11,23 @@ spec:
   selector:
     matchLabels:
       app.kubernetes.io/component: vllm-render
+      app.kubernetes.io/part-of: precise-prefix-cache-routing
   template:
     metadata:
       labels:
         app.kubernetes.io/component: vllm-render
+        # Guide-scoped (but NOT `llm-d.ai/guide`, which is the InferencePool /
+        # model-server selector) so the Service below cannot cross-select a
+        # `vllm-render` pod from another guide in a shared namespace.
+        app.kubernetes.io/part-of: precise-prefix-cache-routing
     spec:
+      # The renderer only tokenizes over HTTP; it needs no Kubernetes API access.
+      automountServiceAccountToken: false
       containers:
         - name: vllm-render
           # GPU-less vLLM image — `vllm launch render` only tokenizes, no model
           # weights are loaded. Mirrors the chart's sidecar image/command.
-          image: vllm/vllm-openai-cpu:v0.23.0
+          image: docker.io/vllm/vllm-openai-cpu:v0.23.0
           imagePullPolicy: IfNotPresent
           command: ["vllm", "launch", "render"]
           args:
@@ -30,15 +37,24 @@ spec:
             - name: render-http
               containerPort: 8000
           env:
+            # HF_HOME points at the mounted emptyDir below so tokenizer files
+            # are cached for the pod's lifetime (mountPath == HF_HOME).
             - name: HF_HOME
-              value: /tmp/hf/hub
+              value: /tmp/hf
             - name: HF_TOKEN
               valueFrom:
                 secretKeyRef:
                   name: llm-d-hf-token
                   key: HF_TOKEN
+            # Disable vLLM usage telemetry — its writes to /.config fail under
+            # restricted SecurityContexts (matches the model server patch).
+            - name: DO_NOT_TRACK
+              value: "1"
           resources:
             requests:
+              cpu: "4"
+              memory: 8Gi
+            limits:
               cpu: "4"
               memory: 8Gi
           readinessProbe:
@@ -50,8 +66,8 @@ spec:
             timeoutSeconds: 5
             failureThreshold: 60
           volumeMounts:
-            - mountPath: /root/.cache/huggingface
-              name: model-cache
+            - mountPath: /tmp/hf
+              name: hf-cache
       volumes:
-        - name: model-cache
+        - name: hf-cache
           emptyDir: {}

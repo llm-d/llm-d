@@ -8,6 +8,7 @@ spec:
   # any render pod.
   selector:
     app.kubernetes.io/component: vllm-render
+    app.kubernetes.io/part-of: precise-prefix-cache-routing
   ports:
     - name: render-http
       port: 8000
