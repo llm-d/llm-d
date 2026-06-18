@@ -131,7 +131,7 @@ helm install ${GUIDE_NAME} \
 Apply the Kustomize overlays for your specific backend:
 
 ```bash
-export ACCELERATOR_TYPE=gpu # see "Supported Hardware Backends" table for options
+export ACCELERATOR_TYPE=gpu # options: gpu, amd, xpu, hpu, tpu/v6, tpu/v7, cpu
 export INFRA_PROVIDER=base # base | gke
 export MODEL_SERVER=vllm # options: vllm, sglang
 kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/${ACCELERATOR_TYPE}/${MODEL_SERVER}/${INFRA_PROVIDER}/
