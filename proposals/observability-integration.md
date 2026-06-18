@@ -45,7 +45,7 @@ There are two homes, split by audience — **user-facing vs. source/definition**
 * **If a user deploys it or follows it, it lives in `llm-d/llm-d`.** Component `deploy/` folders are dev/CI scaffolding, not manifests we point users to.
 * **All Grafana dashboards live in `llm-d/llm-d`** under [guides/recipes/observability/grafana/dashboards](../guides/recipes/observability/grafana/dashboards) — single-component and cross-component alike. A component repo may keep a working copy for its own development, but the llm-d copy is the one users import and the one rendered on llm-d.ai.
 * **All deployable monitoring manifests live in `llm-d/llm-d`** — `PodMonitor`/`ServiceMonitor` and `PrometheusRule` alerts that users apply ship from llm-d recipes, regardless of which component they target.
-* **Observability docs and runbooks live in `llm-d/llm-d`** — enable scrape, import dashboards, TLS, "no data" troubleshooting — under `guides/` and `docs/resources/observability/`, so they render on llm-d.ai.
+* **Observability docs and runbooks live in `llm-d/llm-d`** — enable scrape, import dashboards, TLS, "no data" troubleshooting — under `guides/` and `docs/operations/observability/`, so they render on llm-d.ai.
 * **Metric definitions stay with the code, the reference renders in llm-d.** Each component defines the metrics it emits (e.g. router/EPP → [llm-d-router docs/metrics.md](https://github.com/llm-d/llm-d-router/blob/main/docs/metrics.md)), updated in the **same PR** that adds or renames a metric. `llm-d/llm-d` carries the user-facing metric reference (so it shows on llm-d.ai) and is kept in sync with the component definition (see [llm-d-router#1636 discussion](https://github.com/llm-d/llm-d-router/pull/1636#issuecomment-4696133599)).
 
 ```text
@@ -53,7 +53,7 @@ llm-d/llm-d (user-facing home)
   guides/*/README.md ............. "enable monitoring" sections (the one place users follow)
   guides/recipes/observability/ .. stack scripts, grafana/ dashboards, tracing yamls
   guides/recipes/.../monitoring/ . PodMonitor / ServiceMonitor / PrometheusRule users apply
-  docs/resources/observability/ .. metric reference + runbooks rendered on llm-d.ai
+  docs/operations/observability/ .. metric reference + runbooks rendered on llm-d.ai
         ↑ defines / syncs metric names, dashboards
 llm-d-router, WVA, llm-d-kv-cache, … (source / definition only)
   code emits metrics; docs/metrics.md is the definitional source; dev/CI manifests stay local
@@ -85,7 +85,7 @@ As a contributor building Grafana panels — for one component or several — I 
 | Tracing (OTel + Jaeger) | [guides/recipes/observability/tracing/](../guides/recipes/observability/tracing) |
 | Model server `PodMonitor` | [guides/recipes/modelserver/components/monitoring/](../guides/recipes/modelserver/components/monitoring), [monitoring-pd/](../guides/recipes/modelserver/components/monitoring-pd) |
 | Router/EPP scrape, alerts, Helm values | [guides/recipes/router/features/monitoring.values.yaml](../guides/recipes/router/features/monitoring.values.yaml), [tracing.values.yaml](../guides/recipes/router/features/tracing.values.yaml) + scrape/`PrometheusRule` recipes |
-| Metric reference + runbooks (llm-d.ai) | [docs/resources/observability/](../docs/operations/observability/README.md) |
+| Metric reference + runbooks (llm-d.ai) | [docs/operations/observability/](../docs/operations/observability/README.md) |
 
 **Why model server scrape sets the precedent:** well-lit paths deploy model servers from llm-d recipes, so their `PodMonitor` manifests already live in `llm-d/llm-d` rather than in a separate engine repo. Router, WVA, and KV-cache user-facing manifests follow the same rule.
 
@@ -95,7 +95,7 @@ Update this table when adding components or moving assets. "User-facing assets" 
 
 | Component | Metric source (definition) | User-facing assets (deploy / dashboards / docs) — all in `llm-d/llm-d` |
 |-----------|----------------------------|------------------------------------------------------------------------|
-| Model servers (well-lit paths) | vLLM/SGLang upstream | `PodMonitor` under modelserver `components/monitoring`; dashboards under observability `grafana/dashboards/`; docs under [docs/resources/observability/](../docs/operations/observability/README.md) |
+| Model servers (well-lit paths) | vLLM/SGLang upstream | `PodMonitor` under modelserver `components/monitoring`; dashboards under observability `grafana/dashboards/`; docs under [docs/operations/observability/](../docs/operations/observability/README.md) |
 | llm-d Router / EPP | [llm-d-router docs/metrics.md](https://github.com/llm-d/llm-d-router/blob/main/docs/metrics.md) | scrape, `PrometheusRule` alerts, dashboards, and runbook in `llm-d/llm-d` recipes/docs |
 | WVA | [llm-d-workload-variant-autoscaler docs](https://github.com/llm-d/llm-d-workload-variant-autoscaler/blob/main/docs/developer-guide/monitoring.md) | scrape, dashboards, and enable-monitoring docs in `llm-d/llm-d` |
 | KV cache | metric definitions in llm-d-kv-cache | scrape, dashboards, and docs in `llm-d/llm-d` |
@@ -115,7 +115,7 @@ When a component's metrics, alerts, or dashboards change, land the user-facing s
 
 * Scrape manifests (`PodMonitor`/`ServiceMonitor`) and `PrometheusRule` alerts under the relevant recipe.
 * Dashboard JSON under [guides/recipes/observability/grafana/dashboards/](../guides/recipes/observability/grafana/dashboards) — versioned, with a documented import path and datasource convention.
-* The metric reference and runbook under [docs/resources/observability/](../docs/operations/observability/README.md), kept in sync with the component's `docs/metrics.md`.
+* The metric reference and runbook under [docs/operations/observability/](../docs/operations/observability/README.md), kept in sync with the component's `docs/metrics.md`.
 * The guide's "enable monitoring" section (below).
 
 ### llm-d guide checklist (monitoring section in the guide README)
@@ -142,7 +142,7 @@ Use these **four subsections in this order** (same flow as [optimized-baseline �
 ### Follow-up
 
 * **Move component user-facing assets into `llm-d/llm-d`.** Migrate user-deployable scrape manifests, `PrometheusRule` alerts, and dashboards currently in component `deploy/` folders (e.g. [llm-d-router#1668](https://github.com/llm-d/llm-d-router/pull/1668)) into llm-d recipes; leave only definitional/dev-CI artifacts behind.
-* **Render metric references on llm-d.ai.** Ensure each component's metric reference is present under `docs/resources/observability/` and kept in sync with the component's `docs/metrics.md` (per [llm-d-router#1636](https://github.com/llm-d/llm-d-router/pull/1636#issuecomment-4696434898)).
+* **Render metric references on llm-d.ai.** Ensure each component's metric reference is present under `docs/operations/observability/` and kept in sync with the component's `docs/metrics.md` (per [llm-d-router#1636](https://github.com/llm-d/llm-d-router/pull/1636#issuecomment-4696434898)).
 * **Optional automation (non-blocking):** a CI sync job that pulls released `docs/metrics.md` / dashboards from component repos into `llm-d/llm-d` so the reference stays current without manual copying.
 
 ### Review expectations
