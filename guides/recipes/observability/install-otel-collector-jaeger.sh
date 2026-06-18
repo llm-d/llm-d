@@ -69,7 +69,7 @@ install() {
   log_info "Deploying OTel Collector + Jaeger into namespace '${NAMESPACE}'..."
 
   SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-  TRACING_DIR="${SCRIPT_DIR}/../tracing"
+  TRACING_DIR="${SCRIPT_DIR}/tracing"
   JAEGER_MANIFEST="${TRACING_DIR}/jaeger-all-in-one.yaml"
 
   if [[ ! -f "$JAEGER_MANIFEST" ]]; then
@@ -122,7 +122,7 @@ uninstall() {
   log_info "Removing OTel Collector + Jaeger from namespace '${NAMESPACE}'..."
 
   SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-  TRACING_DIR="${SCRIPT_DIR}/../tracing"
+  TRACING_DIR="${SCRIPT_DIR}/tracing"
 
   # Remove OTel Collector (try both variants)
   if otel_operator_available; then
