@@ -229,7 +229,7 @@ SIGs operate within the broader llm-d project governance framework defined in [P
 > **👥 Leadership:** [Nir Rozenbaum](https://github.com/nirrozenbaum), [Maroon Ayoub](https://github.com/vMaroon)
 
 
-**Charter**: TODO
+**Charter**: Develop and maintain a pluggable framework for request/response payload processing that enables intelligent model selection, seamless integration with both in-cluster and out-of-cluster models (external models), and extensible request/response transformations.
 
 **Key Areas**:
 
