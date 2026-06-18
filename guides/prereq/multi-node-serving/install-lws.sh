@@ -7,7 +7,7 @@
 
 set -euo pipefail
 
-LWS_VERSION="${LWS_VERSION:-0.7.0}"
+LWS_VERSION="${LWS_VERSION:-0.9.0}"
 LWS_NAMESPACE="${LWS_NAMESPACE:-lws-system}"
 
 if [[ "${1:-}" == "delete" ]]; then

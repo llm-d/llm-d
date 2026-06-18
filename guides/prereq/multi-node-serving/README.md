@@ -4,14 +4,17 @@
 
 The LeaderWorkerSet (LWS) Kubernetes workload controller specializes in deploying serving workloads where each replica is composed of multiple pods spread across hosts, specifically accelerator nodes. llm-d defaults to LWS for deployment of multi-host inference for rank to pod mappings, topology aware placement to ensure optimal accelerator network performance, and all-or-nothing failure and restart semantics to recover in the event of a bad node or accelerator.
 
-Use the [LWS installation guide](https://lws.sigs.k8s.io/docs/installation/) to install 0.7.0 or newer when deploying an llm-d guide using LWS. We provide an [`install-lws.sh`](./install-lws.sh) script:
+Use the [LWS installation guide](https://lws.sigs.k8s.io/docs/installation/) to install the recommended 0.9.0 release when deploying an llm-d guide using LWS. We provide an [`install-lws.sh`](./install-lws.sh) script:
 
     ./install-lws.sh          # install
     ./install-lws.sh delete   # uninstall
 
+> [!WARNING]
+> If you installed LWS 0.7.0 or earlier with Helm, do not upgrade directly to 0.9.0. Helm may delete the LWS CRD and cascade-delete existing `LeaderWorkerSet` resources during upgrade; see [kubernetes-sigs/lws#880](https://github.com/kubernetes-sigs/lws/issues/880).
+
 You may override the version and namespace:
 
-    export LWS_VERSION="0.7.0"
+    export LWS_VERSION="0.9.0"
     export LWS_NAMESPACE="lws-system"
     ./install-lws.sh
 
