@@ -31,17 +31,15 @@ The optimized-baseline defaults to two main routing criteria:
 
 This guide includes configurations for the following accelerators:
 
-| Backend             | `ACCELERATOR_TYPE`     | Notes                                      |
-| ------------------- | ---------------------- | ------------------------------------------ |
-| NVIDIA GPU          | `gpu/vllm/base`        | Default configuration (use `gpu/vllm/gke` for GKE) |
-| NVIDIA GPU (SGLang) | `gpu/sglang/base`      | SGLang inference server (use `gpu/sglang/gke` for GKE) |
-| AMD GPU             | `amd/vllm`             | AMD GPU                                    |
-| AMD GPU (SGLang)    | `amd/sglang`           | AMD GPU                                    |
-| Intel XPU           | `xpu/vllm`             | Intel Data Center GPU Max 1550+            |
-| Intel Gaudi (HPU)   | `hpu/vllm`             | Gaudi 1/2/3 with DRA support               |
-| Google TPU v6e      | `tpu/v6/vllm`          | GKE TPU                                    |
-| Google TPU v7       | `tpu/v7/vllm`          | GKE TPU                                    |
-| CPU                 | `cpu/vllm`             | Intel/AMD, 64 cores + 64GB RAM per replica |
+| Backend             | `ACCELERATOR_TYPE` | Notes                                      |
+| ------------------- | ------------------ | ------------------------------------------ |
+| NVIDIA GPU          | `gpu`              | Default configuration (`INFRA_PROVIDER` options: `base`, `gke`) |
+| AMD GPU             | `amd`              | AMD GPU                                    |
+| Intel XPU           | `xpu`              | Intel Data Center GPU Max 1550+            |
+| Intel Gaudi (HPU)   | `hpu`              | Gaudi 1/2/3 with DRA support               |
+| Google TPU v6e      | `tpu/v6`           | GKE TPU                                    |
+| Google TPU v7       | `tpu/v7`           | GKE TPU                                    |
+| CPU                 | `cpu`              | Intel/AMD, 64 cores + 64GB RAM per replica |
 
 > [!NOTE]
 > Some hardware variants use reduced configurations (fewer replicas, smaller models) to enable CI testing for compatibility and regression checks. These configurations are maintained by their respective hardware vendors and are not guaranteed as production-ready examples. Users deploying on non-default hardware should review and adjust the configurations for their environment.
@@ -133,8 +131,10 @@ helm install ${GUIDE_NAME} \
 Apply the Kustomize overlays for your specific backend:
 
 ```bash
-export ACCELERATOR_TYPE=gpu/vllm/base # see "Supported Hardware Backends" table for options
-kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/${ACCELERATOR_TYPE}/
+export ACCELERATOR_TYPE=gpu # see "Supported Hardware Backends" table for options
+export INFRA_PROVIDER=base # base | gke
+export MODEL_SERVER=vllm # options: vllm, sglang
+kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/${ACCELERATOR_TYPE}/${MODEL_SERVER}/${INFRA_PROVIDER}/
 ```
 
 ### 3. (Optional) Enable monitoring
@@ -278,7 +278,7 @@ To remove the deployed components:
 
 ```bash
 helm uninstall ${GUIDE_NAME} -n ${NAMESPACE}
-kubectl delete  -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/${ACCELERATOR_TYPE}
+kubectl delete  -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/${ACCELERATOR_TYPE}/${MODEL_SERVER}/${INFRA_PROVIDER}
 kubectl delete namespace ${NAMESPACE}
 ```
 
