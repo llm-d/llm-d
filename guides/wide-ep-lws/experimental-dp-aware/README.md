@@ -81,7 +81,6 @@ This deploys the llm-d Router with an Envoy sidecar, it doesn't set up a Kuberne
 
 ```bash
 export GUIDE_NAME="wide-ep-lws"
-export ROUTER_CHART_VERSION=v0
 helm install ${GUIDE_NAME} \
     oci://ghcr.io/llm-d/charts/llm-d-router-standalone-dev \
     -f ${REPO_ROOT}/guides/recipes/router/base.values.yaml \

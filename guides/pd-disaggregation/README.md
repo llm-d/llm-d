@@ -61,12 +61,11 @@ git clone https://github.com/llm-d/llm-d.git && cd llm-d && git checkout ${branc
 * Set the following environment variables:
 
 ```bash
-export GAIE_VERSION=v1.5.0
-export ROUTER_CHART_VERSION=v0
+export REPO_ROOT=$(realpath $(git rev-parse --show-toplevel))
+source ${REPO_ROOT}/guides/env.sh
 export GUIDE_NAME="pd-disaggregation"
 export NAMESPACE="llm-d-pd-disaggregation"
 export MODEL_NAME="openai/gpt-oss-120b"
-export REPO_ROOT=$(realpath $(git rev-parse --show-toplevel))
 ```
 * Install the Gateway API Inference Extension CRDs:
 

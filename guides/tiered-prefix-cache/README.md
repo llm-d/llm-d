@@ -161,10 +161,9 @@ This guide supports both GPU and TPU. The Kustomize overlays are available in `m
 * Set the following environment variables:
 
   ```bash
-  export GAIE_VERSION=v1.5.0
-  export ROUTER_CHART_VERSION=v0
-  export NAMESPACE=llm-d-tiered-prefix-cache
   export REPO_ROOT=$(realpath $(git rev-parse --show-toplevel))
+  source ${REPO_ROOT}/guides/env.sh
+  export NAMESPACE=llm-d-tiered-prefix-cache
   ```
 
 * Install the Gateway API Inference Extension CRDs:
