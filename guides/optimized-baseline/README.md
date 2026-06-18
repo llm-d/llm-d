@@ -66,7 +66,6 @@ This guide includes configurations for the following accelerators:
 - Install the Gateway API Inference Extension CRDs:
 
   ```bash
-source ${REPO_ROOT}/guides/env.sh
     kubectl apply -f https://github.com/kubernetes-sigs/gateway-api-inference-extension/releases/download/${GAIE_VERSION}/v1-manifests.yaml
   ```
 
@@ -96,7 +95,6 @@ source ${REPO_ROOT}/guides/env.sh
 This deploys the llm-d Router in [Standalone Mode](../../docs/architecture/core/router/proxy.md):
 
 ```bash
-source ${REPO_ROOT}/guides/env.sh
 # Assuming base-directory is the root of the llm-d repo
 helm install ${GUIDE_NAME} \
     oci://ghcr.io/llm-d/charts/llm-d-router-standalone-dev \
@@ -114,7 +112,6 @@ To use a Kubernetes Gateway managed proxy rather than the standalone version, fo
 2. _Deploy the llm-d router and an HTTPRoute_ that connects it to the Gateway as follows:
 
 ```bash
-source ${REPO_ROOT}/guides/env.sh
 export PROVIDER_NAME=gke # options: none, gke, agentgateway, istio
 helm install ${GUIDE_NAME} \
     oci://ghcr.io/llm-d/charts/llm-d-router-gateway-dev  \

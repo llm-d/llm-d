@@ -169,7 +169,6 @@ This guide supports both GPU and TPU. The Kustomize overlays are available in `m
 * Install the Gateway API Inference Extension CRDs:
 
   ```bash
-source ${REPO_ROOT}/guides/env.sh
   kubectl apply -f "https://github.com/kubernetes-sigs/gateway-api-inference-extension/releases/download/${GAIE_VERSION}/v1-manifests.yaml"
   ```
 
@@ -199,7 +198,6 @@ source ${REPO_ROOT}/guides/env.sh
 #### Standalone Mode
 
 ```bash
-source ${REPO_ROOT}/guides/env.sh
 helm install tiered-prefix-cache \
     oci://ghcr.io/llm-d/charts/llm-d-router-standalone-dev \
     -f ${REPO_ROOT}/guides/recipes/router/base.values.yaml \
@@ -214,7 +212,6 @@ helm install tiered-prefix-cache \
 2. _Deploy the llm-d Router and an HTTPRoute_:
 
 ```bash
-source ${REPO_ROOT}/guides/env.sh
 export PROVIDER_NAME=gke # options: none, gke, agentgateway, istio
 helm install tiered-prefix-cache \
     oci://ghcr.io/llm-d/charts/llm-d-router-gateway-dev \

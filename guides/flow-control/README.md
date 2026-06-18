@@ -88,7 +88,6 @@ Flow Control is a software-level scheduling feature at the EPP layer and is enti
 * Install the required CRDs (GAIE InferencePool + llm-d.ai InferenceObjective):
 
   ```bash
-source ${REPO_ROOT}/guides/env.sh
   kubectl apply -f https://github.com/kubernetes-sigs/gateway-api-inference-extension/releases/download/${GAIE_VERSION}/v1-manifests.yaml
   kubectl apply -k "https://github.com/llm-d/llm-d-router/config/crd?ref=${ROUTER_CHART_VERSION}"
   ```
@@ -119,7 +118,6 @@ source ${REPO_ROOT}/guides/env.sh
 This deploys the router with an Envoy sidecar, it doesn't set up a Kubernetes Gateway.
 
 ```bash
-source ${REPO_ROOT}/guides/env.sh
 helm install ${GUIDE_NAME} \
     oci://ghcr.io/llm-d/charts/llm-d-router-standalone-dev \
     -f ${REPO_ROOT}/guides/recipes/router/base.values.yaml \
@@ -136,7 +134,6 @@ To use a Kubernetes Gateway managed proxy rather than the standalone version, fo
 2. *Deploy the router and an HTTPRoute* that connects it to the Gateway as follows:
 
 ```bash
-source ${REPO_ROOT}/guides/env.sh
 export PROVIDER_NAME=gke # options: none, gke, agentgateway, istio
 helm install ${GUIDE_NAME} \
     oci://ghcr.io/llm-d/charts/llm-d-router-gateway-dev  \

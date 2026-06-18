@@ -49,7 +49,6 @@ Workload-centric guides — each provides the recommended, cohesive deployment f
 
 ```bash
 export REPO_ROOT=$(realpath $(git rev-parse --show-toplevel))
-source ${REPO_ROOT}/guides/env.sh
 ```
 
 See [`env.sh`](./env.sh) for the full list of variables it provides (Helm chart versions, chart OCI URLs, etc.).

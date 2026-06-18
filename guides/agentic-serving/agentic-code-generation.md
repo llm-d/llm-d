@@ -37,7 +37,6 @@ This guide deploys the optimal llm-d configuration for agentic code-generation w
 - Install the Gateway API Inference Extension CRDs:
 
   ```bash
-source ${REPO_ROOT}/guides/env.sh
   kubectl apply -f https://github.com/kubernetes-sigs/gateway-api-inference-extension/releases/download/${GAIE_VERSION}/v1-manifests.yaml
   ```
 
@@ -63,7 +62,6 @@ source ${REPO_ROOT}/guides/env.sh
 ### 1. Deploy the llm-d Router
 
 ```bash
-source ${REPO_ROOT}/guides/env.sh
 helm install ${GUIDE_NAME} \
     oci://ghcr.io/llm-d/charts/llm-d-router-standalone-dev \
     -f ${REPO_ROOT}/guides/recipes/router/base.values.yaml \
