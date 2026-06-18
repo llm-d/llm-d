@@ -29,7 +29,7 @@ The following steps occurs:
 
 ## Deploy
 
-See the [Wide Expert Parallelism guide](../../guides/wide-ep-lws) for manifests and step-by-step deployment.
+See the [Wide Expert Parallelism guide](../../../guides/wide-ep-lws) for manifests and step-by-step deployment.
 
 ## Architecture
 
@@ -63,7 +63,7 @@ The request flow works as follows:
 
 See:
 
-* [PD Architecture](../architecture/advanced/disaggregation/README.md) for more details on disaggregation in llm-d
+* [PD Architecture](../../architecture/advanced/disaggregation/README.md) for more details on disaggregation in llm-d
 * [vLLM docs on DP deployment](https://docs.vllm.ai/en/latest/serving/data_parallel_deployment/)
 * [vLLM docs on EP deployment](https://docs.vllm.ai/en/latest/serving/expert_parallel_deployment/)
 * [vLLM docs on DeepEP and DeepGEMM](https://docs.vllm.ai/en/latest/design/fused_moe_modular_kernel/)

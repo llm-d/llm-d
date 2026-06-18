@@ -35,7 +35,7 @@ client -> Envoy listener :8081
        -> <address>:<port> of the vLLM worker chosen by the EPP
 ```
 
-The EPP's datastore is populated entirely from `endpoints.yaml`. With `watchFile: true` the file is hot-reloaded on every atomic rewrite — adding, removing, or relabelling a worker takes effect without restarting the EPP. The plugin set, weights, and scheduling profile match the [Optimized Baseline](optimized-baseline.md), so routing behaviour is identical to the Kubernetes-based deployment.
+The EPP's datastore is populated entirely from `endpoints.yaml`. With `watchFile: true` the file is hot-reloaded on every atomic rewrite — adding, removing, or relabelling a worker takes effect without restarting the EPP. The plugin set, weights, and scheduling profile match the [Optimized Baseline](../well-lit-paths/capabilities/optimized-baseline.md), so routing behaviour is identical to the Kubernetes-based deployment.
 
 ## Further Reading
 

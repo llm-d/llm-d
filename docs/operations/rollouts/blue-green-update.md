@@ -46,8 +46,8 @@ This is an example of InferencePool rollout with node(compute, accelerator) upda
 ### Prerequisites
 
 To deploy llm-d Router in Gateway Mode follow the below instructions:
-1. Deploy a Kubernetes Gateway (see [gateway guides](../../docs/infrastructure/gateway))
-2. Install llm-d router with HTTPRoute enabled (see [optimized-baseline guide](../optimized-baseline/README.md#gateway-mode))
+1. Deploy a Kubernetes Gateway (see [gateway guides](../../infrastructure/gateway))
+2. Install llm-d router with HTTPRoute enabled (see [optimized-baseline guide](../../well-lit-paths/capabilities/optimized-baseline.md#gateway-mode))
 
 ### Deploy new infrastructure
 You start with an existing InferencePool named vllm-qwen3-32b.

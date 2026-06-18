@@ -11,11 +11,11 @@ LLM requests break all three assumptions. They are:
 The llm-d Router injects awareness of the LLM-workload into the load-balancing layer considering **prefix-cache affinity** and **server load metrics**.
 
 > [!NOTE]
-> This guide demonstrates one approach to prefix- and load-aware routing. The llm-d Router supports other options as well, including session affinity and active request based routing, which make no assumptions about the router's ability to parse the request or probe the servers. See [configuration](../architecture/core/router/epp/configuration.md) for more details on the available scorers, or [precise prefix cache routing](precise-prefix-cache-routing.md) for KV-event-driven scoring.
+> This guide demonstrates one approach to prefix- and load-aware routing. The llm-d Router supports other options as well, including session affinity and active request based routing, which make no assumptions about the router's ability to parse the request or probe the servers. See [configuration](../../architecture/core/router/epp/configuration.md) for more details on the available scorers, or [precise prefix cache routing](precise-prefix-cache-routing.md) for KV-event-driven scoring.
 
 ## Deploy
 
-See the [optimized baseline guide](../../guides/optimized-baseline) for manifests and step-by-step deployment.
+See the [optimized baseline guide](../../../guides/optimized-baseline) for manifests and step-by-step deployment.
 
 ## Architecture
 
@@ -43,4 +43,4 @@ EPP continuously probes each endpoints' metrics by scraping `/metrics` at a regu
 
 ## Further Reading
 
-See [EPP Architecture](../architecture/core/router/epp/README.md) for more details.
+See [EPP Architecture](../../architecture/core/router/epp/README.md) for more details.

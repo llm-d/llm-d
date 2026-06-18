@@ -2,7 +2,7 @@
 
 This document covers configuring OpenShift clusters for running high performance LLM inference with llm-d.
 
-For deployment instructions, see the [well-lit path guides](../../../guides/).
+For deployment instructions, see the [well-lit path guides](../../../../guides/).
 
 ## Prerequisites
 
@@ -48,6 +48,6 @@ oc patch deployment <deployment-name> \
 
 ## Deploying llm-d
 
-Follow the [well-lit path guides](../../../guides/) to deploy llm-d workloads. Each guide includes OpenShift-specific steps where applicable.
+Follow the [well-lit path guides](../../../../guides/) to deploy llm-d workloads. Each guide includes OpenShift-specific steps where applicable.
 
 Use `oc` in place of `kubectl` for OpenShift CLI commands, or configure `kubectl` to use your OpenShift cluster credentials via `oc login`.
