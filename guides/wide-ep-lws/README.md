@@ -11,7 +11,6 @@ This deployment uses **DP-aware scheduling** with vLLM's `--data-parallel-multi-
 This guide demonstrates how to deploy DeepSeek-R1-0528 using vLLM's P/D disaggregation support with NIXL in a wide expert parallel pattern with LeaderWorkerSets with DP-aware scheduling. This guide has been validated on:
 
 * a 32xH200 cluster with InfiniBand networking (CoreWeave)
-* a 32xB200 cluster with InfiniBand networking (CoreWeave)
 * a 32xH200 cluster on GKE with RoCE networking
 * Istio 1.29.2 (required for multi-port support in gateway mode)
 
