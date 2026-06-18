@@ -3,11 +3,6 @@ kind: Kustomization
 resources:
   - ../base
 
-images:
-  - name: REPLACE_ROUTING_SIDECAR_IMAGE
-    newName: ghcr.io/llm-d/llm-d-routing-sidecar
-    newTag: v0.8.0
-
 patches:
   # Add routing sidecar to the decode deployment
   - path: patch-sidecar.yaml
