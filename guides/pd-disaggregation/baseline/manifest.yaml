@@ -16,7 +16,7 @@ spec:
     spec:
       containers:
         - name: vllm
-          image: docker.io/vllm/vllm-openai:v0.19.1
+          image: docker.io/vllm/vllm-openai:v0.23.0
           imagePullPolicy: IfNotPresent
           command: ["vllm", "serve"]
           args:

@@ -6,6 +6,9 @@ resources:
 
 namePrefix: e-p-d-disaggregation-nvidia-gpu-vllm-
 
+components:
+  - ../../../../../../../recipes/modelserver/components/images/routing-sidecar
+
 images:
   - name: REPLACE_MODEL_SERVER_IMAGE
     newName: ghcr.io/revit13/vllm-openai
@@ -17,30 +20,9 @@ labels:
       llm-d.ai/guide: e-disaggregation
       llm-d.ai/accelerator-variant: gpu
       llm-d.ai/accelerator-vendor: nvidia
-      inference.networking.k8s.io/engine-type: vllm
+      llm-d.ai/engine-type: vllm
     includeSelectors: true
     includeTemplates: true
-    fields:
-      - version: v1
-        kind: ServiceAccount
-        path: metadata/labels
-        create: true
-      - group: apps
-        version: v1
-        kind: Deployment
-        path: metadata/labels
-        create: true
-      - group: apps
-        version: v1
-        kind: Deployment
-        path: spec/selector/matchLabels
-        create: true
-      - group: apps
-        version: v1
-        kind: Deployment
-        path: spec/template/metadata/labels
-        create: true
-
 patches:
   - path: patch-prefill.yaml
   - path: patch-decode.yaml

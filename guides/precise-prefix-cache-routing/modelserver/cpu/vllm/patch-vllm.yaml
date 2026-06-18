@@ -9,7 +9,6 @@ spec:
       containers:
         - name: modelserver
           command: ["vllm", "serve"]
-          image: ghcr.io/llm-d/llm-d-cpu:v0.6.0
           # CI-sized default: smaller model chosen for CPU smoke tests.
           # For precise prefix cache scoring to be meaningful, update
           # `modelName` in router/precise-prefix-cache-routing.values.yaml

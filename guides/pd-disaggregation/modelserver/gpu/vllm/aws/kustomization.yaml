@@ -4,7 +4,7 @@ resources:
   - ../base
 
 images:
-  - name: docker.io/vllm/vllm-openai
+  - name: vllm/vllm-openai
     newName: 763104351884.dkr.ecr.us-east-1.amazonaws.com/vllm
     newTag: 0.23.0-gpu-py312-cu130-ubuntu22.04-ec2
 
