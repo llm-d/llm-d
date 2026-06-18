@@ -17,27 +17,15 @@ The optimized-baseline defaults to two main routing criteria:
 
 - **Load-aware** using both the [kv-cache utilization](https://github.com/llm-d/llm-d-router/tree/main/pkg/epp/framework/plugins/scheduling/scorer/kvcacheutilization) and the [queue size](https://github.com/llm-d/llm-d-router/tree/main/pkg/epp/framework/plugins/scheduling/scorer/queuedepth) scorers.
 
-## Default Configuration
+## Configuration
 
-| Parameter          | Value                                                   |
-| ------------------ | ------------------------------------------------------- |
-| Model              | [Qwen/Qwen3-32B](https://huggingface.co/Qwen/Qwen3-32B) |
-| Replicas           | 8                                                       |
-| Tensor Parallelism | 2                                                       |
-| GPUs per replica   | 2                                                       |
-| Total GPUs         | 16                                                      |
-
-## Additional Configuration
-
-| Parameter          | Value                                                             |
-| ------------------ | ----------------------------------------------------------------- |
-| Model              | [openai/gpt-oss-120b](https://huggingface.co/openai/gpt-oss-120b) |
-| Replicas           | 16                                                                |
-| Tensor Parallelism | 1                                                                 |
-| GPUs per replica   | 1                                                                 |
-| Total GPUs         | 16                                                                |
-| Output_len         | 500                                                               |
-| Question_len       | 500                                                               |
+| Parameter          | Default                                                 | Example                                                 |
+| ------------------ | ------------------------------------------------------- | --------------------------------------------------------- |
+| Model              | [Qwen/Qwen3-32B](https://huggingface.co/Qwen/Qwen3-32B) | [openai/gpt-oss-120b](https://huggingface.co/openai/gpt-oss-120b) |
+| Replicas           | 8                                                       | 16                                                        |
+| Tensor Parallelism | 2                                                       | 1                                                         |
+| GPUs per replica   | 2                                                       | 1                                                         |
+| Total GPUs         | 16                                                      | 16                                                        |
 
 ### Supported Hardware Backends
 
@@ -148,6 +136,16 @@ export INFRA_PROVIDER=base # base | gke
 export MODEL_SERVER=vllm # options: vllm, sglang
 kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/${ACCELERATOR_TYPE}/${MODEL_SERVER}/${INFRA_PROVIDER}/
 ```
+
+<details>
+<summary><h4>Other Models</h4></summary>
+
+```bash
+# NVIDIA GPU / vLLM — openai/gpt-oss-120b
+kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/gpu/vllm/gpt-oss/
+```
+
+</details>
 
 ### 3. (Optional) Enable monitoring
 
