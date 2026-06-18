@@ -7,7 +7,6 @@ namePrefix: pd-disaggregation-rocm-vllm-
 
 components:
   - ../../../../../recipes/modelserver/components/images/amd-vllm
-  - ../../../../../recipes/modelserver/components/images/routing-sidecar
 
 labels:
   - pairs:
