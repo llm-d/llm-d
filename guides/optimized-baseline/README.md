@@ -131,10 +131,14 @@ Apply the Kustomize overlays for your specific backend:
 
 ```bash
 export ACCELERATOR_TYPE=gpu # options: gpu, amd, xpu, hpu, tpu/v6, tpu/v7, cpu
-export INFRA_PROVIDER=base # base | gke
 export MODEL_SERVER=vllm # options: vllm, sglang
+export INFRA_PROVIDER=base # base | gke (GPU only, omit for other accelerators)
 kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/${ACCELERATOR_TYPE}/${MODEL_SERVER}/${INFRA_PROVIDER}/
 ```
+
+> [!NOTE]
+> The `INFRA_PROVIDER` suffix (`base` or `gke`) only applies to GPU backends. For other accelerators, use the path directly:
+> `kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/${ACCELERATOR_TYPE}/${MODEL_SERVER}/`
 
 ### 3. (Optional) Enable monitoring
 
