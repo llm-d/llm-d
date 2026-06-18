@@ -6,13 +6,8 @@ resources:
 namePrefix: pd-disaggregation-nvidia-gpu-vllm-
 
 components:
+  - ../../../../../recipes/modelserver/components/images/gpu-vllm
   - ../../../../../recipes/modelserver/components/images/routing-sidecar
-
-images:
-  - name: REPLACE_MODEL_SERVER_IMAGE
-    newName: docker.io/vllm/vllm-openai
-    newTag: v0.19.1-x86_64-cu130
-
 
 labels:
   - pairs:

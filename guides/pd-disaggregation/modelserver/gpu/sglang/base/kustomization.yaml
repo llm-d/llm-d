@@ -6,13 +6,8 @@ resources:
 namePrefix: pd-disaggregation-nvidia-gpu-sglang-
 
 components:
+  - ../../../../../recipes/modelserver/components/images/gpu-sglang
   - ../../../../../recipes/modelserver/components/images/routing-sidecar
-
-images:
-  - name: REPLACE_MODEL_SERVER_IMAGE
-    newName: docker.io/lmsysorg/sglang
-    newTag: v0.5.8.post1-cu130
-
 
 labels:
   - pairs:
