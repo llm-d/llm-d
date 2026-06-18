@@ -187,7 +187,7 @@ helm uninstall prometheus-adapter -n ${MONITORING_NAMESPACE}
 
 ## Advanced Configuration, Updates, and Troubleshooting
 
-Please refer to the [Workload Variant Autoscaler documentation](https://github.com/llm-d/workload-variant-autoscaler) for advanced configuration options, updating WVA versions, and troubleshooting tips.
+Please refer to the [Workload Variant Autoscaler documentation](https://github.com/llm-d/llm-d-workload-variant-autoscaler) for advanced configuration options, updating WVA versions, and troubleshooting tips.
 
 ## Benchmark Results
 
