@@ -31,17 +31,17 @@ The optimized-baseline defaults to two main routing criteria:
 
 This guide includes configurations for the following accelerators:
 
-| Backend             | Directory                  | Notes                                      |
-| ------------------- | -------------------------- | ------------------------------------------ |
-| NVIDIA GPU          | `modelserver/gpu/vllm/${INFRA_PROVIDER}/`    | Default configuration (`INFRA_PROVIDER` options: `base`, `gke`)                      |
-| NVIDIA GPU (SGLang) | `modelserver/gpu/sglang/${INFRA_PROVIDER}/`  | SGLang inference server (`INFRA_PROVIDER` options: `base`, `gke`)                    |
-| AMD GPU             | `modelserver/amd/vllm/`    | AMD GPU                                    |
-| AMD GPU (SGLang)    | `modelserver/amd/sglang`   | AMD GPU                                    |
-| Intel XPU           | `modelserver/xpu/vllm/`    | Intel Data Center GPU Max 1550+            |
-| Intel Gaudi (HPU)   | `modelserver/hpu/vllm/`    | Gaudi 1/2/3 with DRA support               |
-| Google TPU v6e      | `modelserver/tpu/v6/vllm/` | GKE TPU                                    |
-| Google TPU v7       | `modelserver/tpu/v7/vllm/` | GKE TPU                                    |
-| CPU                 | `modelserver/cpu/vllm/`    | Intel/AMD, 64 cores + 64GB RAM per replica |
+| Backend             | `ACCELERATOR_TYPE`     | Notes                                      |
+| ------------------- | ---------------------- | ------------------------------------------ |
+| NVIDIA GPU          | `gpu/vllm/base`        | Default configuration (use `gpu/vllm/gke` for GKE) |
+| NVIDIA GPU (SGLang) | `gpu/sglang/base`      | SGLang inference server (use `gpu/sglang/gke` for GKE) |
+| AMD GPU             | `amd/vllm`             | AMD GPU                                    |
+| AMD GPU (SGLang)    | `amd/sglang`           | AMD GPU                                    |
+| Intel XPU           | `xpu/vllm`             | Intel Data Center GPU Max 1550+            |
+| Intel Gaudi (HPU)   | `hpu/vllm`             | Gaudi 1/2/3 with DRA support               |
+| Google TPU v6e      | `tpu/v6/vllm`          | GKE TPU                                    |
+| Google TPU v7       | `tpu/v7/vllm`          | GKE TPU                                    |
+| CPU                 | `cpu/vllm`             | Intel/AMD, 64 cores + 64GB RAM per replica |
 
 > [!NOTE]
 > Some hardware variants use reduced configurations (fewer replicas, smaller models) to enable CI testing for compatibility and regression checks. These configurations are maintained by their respective hardware vendors and are not guaranteed as production-ready examples. Users deploying on non-default hardware should review and adjust the configurations for their environment.
@@ -130,38 +130,12 @@ helm install ${GUIDE_NAME} \
 
 ### 2. Deploy the Model Server
 
-Apply the Kustomize overlays for your specific backend (defaulting to NVIDIA GPU / vLLM):
+Apply the Kustomize overlays for your specific backend:
 
 ```bash
-export INFRA_PROVIDER=base # base | gke
-export MODEL_SERVER=vllm # options: vllm, sglang
-kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/gpu/${MODEL_SERVER}/${INFRA_PROVIDER}/
+export ACCELERATOR_TYPE=gpu/vllm/base # see "Supported Hardware Backends" table for options
+kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/${ACCELERATOR_TYPE}/
 ```
-
-<details>
-<summary><h4>Other Accelerators</h4></summary>
-
-```bash
-# AMD GPU
-kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/amd/${MODEL_SERVER}/
-
-# Intel XPU
-kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/xpu/vllm/
-
-# Intel Gaudi (HPU)
-kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/hpu/vllm/
-
-# Google TPU v6e
-kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/tpu/v6/vllm/
-
-# Google TPU v7
-kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/tpu/v7/vllm/
-
-# CPU
-kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/cpu/vllm/
-```
-
-</details>
 
 ### 3. (Optional) Enable monitoring
 
@@ -304,7 +278,7 @@ To remove the deployed components:
 
 ```bash
 helm uninstall ${GUIDE_NAME} -n ${NAMESPACE}
-kubectl delete  -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/gpu/${MODEL_SERVER}/${INFRA_PROVIDER}
+kubectl delete  -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/${ACCELERATOR_TYPE}
 kubectl delete namespace ${NAMESPACE}
 ```
 
