@@ -54,6 +54,8 @@ WVA is designed for operators running multiple variants of the same model across
 | **Additional components** | None — standard Kubernetes HPA only | Requires the WVA controller |
 | **Scale to zero** | Supported | Supported |
 
+> For deployments with multiple models sharing a fixed GPU budget across separate InferencePools, see [Autoscaling Across Multiple InferencePools](#wva-across-multiple-inferencepools) below, which builds on the WVA path.
+
 ## WVA Across Multiple InferencePools
 
 The [WVA Multi-InferencePool guide](./multi-inferencepool/README.wva-multi-pool.md) demonstrates how a single WVA controller can make optimization decisions across multiple InferencePools in the same namespace using the `GreedyByScoreOptimizer`. This is useful when multiple models share a fixed GPU budget and independent per-pool autoscaling would lead to imbalanced resource allocation.
