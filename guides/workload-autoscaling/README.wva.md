@@ -24,7 +24,7 @@ Before installing WVA, ensure you have:
 1. Installed the [optimized-baseline well-lit path guide](../optimized-baseline/README.md).
 
 > [!NOTE]
-> Make sure to enable deploy the monitoring resources as described in the [optimized-baseline well-lit path guide](../optimized-baseline/README.md#3-optional-enable-monitoring).
+> Make sure to deploy the monitoring resources as described in the [optimized-baseline well-lit path guide](../optimized-baseline/README.md#3-optional-enable-monitoring).
 
 ## Set Namespaces
 
@@ -35,13 +35,16 @@ export NAMESPACE=llm-d-optimized-baseline
 # Namespace for WVA controller - default to the same namespace as the inference deployment for simplicity, but can be different for cluster-wide autoscaling
 export WVA_NAMESPACE=${NAMESPACE}
 
+# Namespace where the monitoring stack (Prometheus) was installed by the prerequisites
+export MONITORING_NAMESPACE=llm-d-monitoring
+
 export REPO_ROOT=$(realpath $(git rev-parse --show-toplevel))
 ```
 
 ## Installation
 
 > [!NOTE]
-> **Namespaced-Scoped Installation**: this guide installs WVA in namespaced-scoped mode in the `llm-d-optimized-baseline` namespace and configure to watch resources only in that namespace (`--watch-namespace=llm-d-optimized-baseline`). For cluster-wide autoscaling, set `--watch-namespace=""` in the controller deployment.
+> **Namespace-Scoped Installation**: this guide installs WVA in namespace-scoped mode in the `llm-d-optimized-baseline` namespace and configures it to watch resources only in that namespace (`--watch-namespace=llm-d-optimized-baseline`). For cluster-wide autoscaling, set `--watch-namespace=""` in the controller deployment.
 
 1. Choose your platform:
 

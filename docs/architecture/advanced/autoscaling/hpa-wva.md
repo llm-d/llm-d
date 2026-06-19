@@ -7,7 +7,7 @@
 
 The Workload Variant Autoscaler (WVA) is an optimizer and a Kubernetes controller that automatically scales LLM inference workloads based on real-time resource utilization and performance metrics. As an optimizer, it analyzes supply and demand signals across all InferencePool variants to produce globally cost-efficient scaling decisions. As a controller, it reconciles those decisions by managing the replica count of model-serving deployments (Deployments, StatefulSets, or LeaderWorkerSets), observing vLLM metrics scraped via Prometheus.
 
-WVA introduces the concept of **variants** -- multiple model servers in an InferencePool that all serve the same base model but differ in hardware configuration (e.g., GPU type), serving configuration (e.g., tensor parallelism, max batch size, quantization), or both, each with an associated cost. The autoscaler optimizes across variants to minimize total cost while meeting capacity or latency requirements.
+WVA is **variant-aware**. A **variant** is one of multiple model servers in an InferencePool that all serve the same base model but differ in hardware configuration (e.g., GPU type), serving configuration (e.g., tensor parallelism, max batch size, quantization), or both, each with an associated cost. WVA optimizes across these variants to minimize total cost while meeting capacity or latency requirements.
 
 > [!NOTE]
 > WVA assumes a 1:1:1 relationship between InferencePool, Endpoint Picker (EPP), and base model. All variants within an InferencePool share the same EPP and therefore the same EPP metrics (e.g., request queue size).
@@ -15,6 +15,9 @@ WVA introduces the concept of **variants** -- multiple model servers in an Infer
 WVA provides two main scaling analyzers:
 
 - **Saturation Analyzer** -- Scales based on resource saturation signals (KV cache utilization, request queue depth, and token-level capacity). When the system detects that model servers are saturated (running out of KV cache space or building up queues), it triggers scale-up on the cheapest available variant. When spare capacity is detected, it scales down the most expensive variant. This is the default analyzer. It has two sub-variants: `saturation-percentage-based` (default) and `saturation-token-based` (experimental).
+
+  > [!NOTE]
+  > These two sub-variants are also referred to as the **V1** (`saturation-percentage-based`) and **V2** (`saturation-token-based`) saturation engines. The [HPA + WVA guide](../../../../guides/workload-autoscaling/README.wva.md), the WVA configuration keys, and the controller logs (e.g. `V2 saturation analysis completed`) use the V1/V2 names; this document uses the descriptive `saturation-percentage-based` / `saturation-token-based` names for the same engines.
 
 - **SLO Analyzer (Queueing Model)** *(Experimental)* -- Scales based on latency SLO targets using queueing theory. It uses a Kalman filter to learn hardware-specific performance parameters online, then applies a state-dependent Markovian queueing model to determine the maximum sustainable request rate per replica that meets target TTFT (Time To First Token) and ITL (Inter-Token Latency). The desired replica count is computed as the ratio of observed arrival rate to this capacity.
 
@@ -30,24 +33,28 @@ The following diagram shows how WVA fits into the overall llm-d architecture:
 
 ### Scaling Engine Architecture
 
-The WVA scaling engine runs as a background goroutine alongside the Kubernetes controller, communicating scaling decisions through an in-memory decision cache and a trigger channel.
+The WVA scaling engine runs as a background goroutine alongside the Kubernetes controller. Each cycle it groups the active WVA-managed HPAs by `modelID`, scrapes per-replica metrics, and runs them through the pipeline below. Decisions land in an in-memory decision cache, from which an actuator emits the `wva_desired_replicas` external metric that the HPAs consume.
 
 > [!NOTE]
 > The engine supports both a `saturation-percentage-based` and `saturation-token-based` analysis path. `saturation-percentage-based` is the default. `saturation-token-based` is an experimental token-based approach that is not yet production-ready. The architecture described here covers both pipelines.
 
-The engine follows a three-stage pipeline pattern:
+The main loop runs every 30 seconds and follows a four-stage pipeline pattern:
 
 ![Scaling Engine Pipeline](scaling-engine-pipeline.svg)
 
 **Pipeline stages:**
 
-1. **Analyzer** -- Each analyzer produces capacity signals (required capacity, spare capacity) and a priority score per InferencePool. The analyzer does not make scaling decisions directly; it quantifies how much capacity is needed or can be freed.
+1. **Collect** -- Groups the active WVA-managed HPAs by `modelID` and scrapes per-replica metrics (from Prometheus and, for the EPP flow-control queue, directly from EPP) for each resulting InferencePool.
 
-2. **Optimizer** -- The optimizer receives scaling requests (one per InferencePool) and produces variant decisions specifying the target replica count per variant. Two modes exist:
+2. **Analyzer** -- Each analyzer produces capacity signals (required capacity, spare capacity) and a priority score per InferencePool. The analyzer does not make scaling decisions directly; it quantifies how much capacity is needed or can be freed.
+
+3. **Optimizer** -- The optimizer receives scaling requests (one per InferencePool) and produces variant decisions specifying the target replica count per variant. Two modes exist:
    - **Cost-aware** (default, unlimited mode): Processes each InferencePool independently. Scales up the most cost-efficient variant; scales down the most expensive variant.
    - **Greedy-by-score** (limited mode, `enableLimiter: true`): Fair-shares available GPU resources across all InferencePools based on priority scores.
 
-3. **Enforcer** -- Applies post-optimization policies: scale-to-zero when an InferencePool is idle (no requests in the retention period), or minimum replica enforcement (at least 1 replica on the cheapest variant) when scale-to-zero is disabled.
+4. **Enforcer** -- Applies post-optimization policies: scale-to-zero when an InferencePool is idle (no requests in the retention period), or minimum replica enforcement (at least 1 replica on the cheapest variant) when scale-to-zero is disabled.
+
+The resulting variant decisions are written to the in-memory **decision cache**, and an **actuator** publishes them as the `wva_desired_replicas` external metric. A separate **scale-from-zero engine** polls the EPP flow-control queue every 100 ms and writes directly to the same decision cache, so idle InferencePools can scale up without waiting for the 30-second main loop.
 
 ### Saturation Analyzer
 
@@ -81,7 +88,7 @@ Each replica's capacity is modeled with two bounds:
 
 The **effective capacity** per replica is the minimum of k1 and k2. Per-variant capacity is aggregated using the median across ready replicas.
 
-**Demand** per replica is the sum of tokens currently in use and the queued requests multiplied by the average input token length. The EPP queue demand (from `inference_extension_flow_control_queue_size` and `inference_extension_flow_control_queue_bytes`metrics) is added to the InferencePool-level totals.
+**Demand** per replica is the sum of tokens currently in use and the queued requests multiplied by the average input token length. The EPP queue demand (from `inference_extension_flow_control_queue_size` and `inference_extension_flow_control_queue_bytes` metrics) is added to the InferencePool-level totals.
 
 Scaling signals:
 
@@ -300,7 +307,8 @@ metadata:
     app.kubernetes.io/name: workload-variant-autoscaler
 data:
   default: |
-    # Analyzer selection: "" or omit for saturation-percentage-based (default), "saturation" for saturation-token-based (experimental)
+    # Analyzer selection: "" or omit for saturation-percentage-based / V1 (default),
+    # "saturation" for saturation-token-based / V2 (experimental).
     analyzerName: "saturation"
 
     # saturation-percentage-based thresholds (used when analyzerName is "" or omitted)
@@ -324,6 +332,19 @@ data:
     scaleUpThreshold: 0.90
     scaleDownBoundary: 0.75
 ```
+
+> [!NOTE]
+> There are two equivalent ways to select the token-based (V2) saturation engine.
+> The scalar `analyzerName: "saturation"` shown above is the backward-compatible
+> form. The newer list form, used in the [HPA + WVA guide](../../../../guides/workload-autoscaling/README.wva.md#enabling-saturation-engine-v2-recommended), is equivalent:
+>
+> ```yaml
+> analyzers:
+>   - name: saturation
+> ```
+>
+> Populating the `analyzers` list also enables per-analyzer score and threshold
+> overrides. Omit both to fall back to the percentage-based (V1) engine.
 
 #### SLO Analyzer (Queueing Model) Configuration -- Experimental
 
