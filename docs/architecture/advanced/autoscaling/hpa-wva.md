@@ -81,7 +81,7 @@ Each replica's capacity is modeled with two bounds:
 
 The **effective capacity** per replica is the minimum of k1 and k2. Per-variant capacity is aggregated using the median across ready replicas.
 
-**Demand** per replica is the sum of tokens currently in use and the queued requests multiplied by the average input token length. The EPP queue demand (from `inference_extension_flow_control_queue_size` and `inference_extension_flow_control_queue_bytes`metrics) is added to the InferencePool-level totals.
+**Demand** per replica is the sum of tokens currently in use and the queued requests multiplied by the average input token length. The EPP queue demand (from `llm_d_epp_flow_control_queue_size` and `llm_d_epp_flow_control_queue_bytes`metrics) is added to the InferencePool-level totals.
 
 Scaling signals:
 
@@ -121,7 +121,7 @@ The analyzer operates in three phases:
 
 Metrics used by the SLO analyzer:
 
-- `inference_extension_scheduler_attempts_total{status="success"}` -- per-pod arrival rate (requests/sec)
+- `llm_d_epp_scheduler_attempts_total{status="success"}` -- per-pod arrival rate (requests/sec)
 - `vllm:time_to_first_token_seconds` -- TTFT histogram (sum/count for average)
 - `vllm:time_per_output_token_seconds` -- ITL histogram (sum/count for average)
 - `vllm:request_generation_tokens` -- average output tokens (sum/count)
@@ -149,7 +149,7 @@ Scale-from-zero runs as a separate engine with a fast 100ms polling interval, in
 For each VA with 0 replicas:
 
 1. Find the matching InferencePool from the datastore.
-2. Query the EPP (Endpoint Picker) metrics source for `inference_extension_flow_control_queue_size{target_model_name=<modelID>}`.
+2. Query the EPP (Endpoint Picker) metrics source for `llm_d_epp_flow_control_queue_size{target_model_name=<modelID>}`.
 3. If queue size > 0 (pending requests exist), scale the deployment directly to 1 replica.
 4. Record the scaling decision and trigger controller reconciliation.
 
@@ -180,14 +180,14 @@ Each metrics source provides three main capabilities:
 | `avg_output_tokens` | `rate(vllm:request_generation_tokens_sum[5m]) / rate(..._count[5m])` | Average output token count |
 | `avg_input_tokens` | `rate(vllm:request_prompt_tokens_sum[5m]) / rate(..._count[5m])` | Average input token count |
 | `prefix_cache_hit_rate` | `rate(vllm:prefix_cache_hits[5m]) / rate(vllm:prefix_cache_queries[5m])` | Prefix cache hit ratio |
-| `scheduler_queue_size` | `sum(inference_extension_flow_control_queue_size{...})` | Upstream EPP queue depth |
-| `scheduler_queue_bytes` | `sum(inference_extension_flow_control_queue_bytes{...})` | Upstream EPP queue bytes |
+| `scheduler_queue_size` | `sum(llm_d_epp_flow_control_queue_size{...})` | Upstream EPP queue depth |
+| `scheduler_queue_bytes` | `sum(llm_d_epp_flow_control_queue_bytes{...})` | Upstream EPP queue bytes |
 
 **Queueing model queries** (per-pod, 1-minute windows):
 
 | Query Name | PromQL | Purpose |
 |---|---|---|
-| `scheduler_dispatch_rate` | `sum by (pod_name) (rate(inference_extension_scheduler_attempts_total{status="success",...}[1m]))` | Per-pod arrival rate |
+| `scheduler_dispatch_rate` | `sum by (pod_name) (rate(llm_d_epp_scheduler_attempts_total{status="success",...}[1m]))` | Per-pod arrival rate |
 | `avg_ttft` | `rate(vllm:time_to_first_token_seconds_sum[1m]) / rate(..._count[1m])` | Average time to first token |
 | `avg_itl` | `rate(vllm:time_per_output_token_seconds_sum[1m]) / rate(..._count[1m])` | Average inter-token latency |
 
@@ -201,7 +201,7 @@ Each metrics source provides three main capabilities:
 
 | Metric | Purpose |
 |---|---|
-| `inference_extension_flow_control_queue_size` | Pending requests in the EPP flow control queue |
+| `llm_d_epp_flow_control_queue_size` | Pending requests in the EPP flow control queue |
 
 The replica metrics collector orchestrates query execution and populates per-pod metric data for consumption by the analyzers.
 

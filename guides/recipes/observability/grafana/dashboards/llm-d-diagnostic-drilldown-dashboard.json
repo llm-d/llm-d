@@ -968,7 +968,7 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.99, sum by(le, plugin_type) (rate(inference_extension_plugin_duration_seconds_bucket{namespace=~\"$namespace\"}[5m])))",
+          "expr": "histogram_quantile(0.99, sum by(le, plugin_type) (rate(llm_d_epp_plugin_duration_seconds_bucket{namespace=~\"$namespace\"}[5m])))",
           "instant": false,
           "legendFormat": "{{plugin_type}}",
           "range": true,

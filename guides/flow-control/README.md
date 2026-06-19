@@ -218,7 +218,7 @@ kubectl run curl-debug --rm -it \
 **From inside the debug pod, check the metrics:**
 
 ```bash
-curl http://${GUIDE_NAME}-epp:9090/metrics | grep inference_extension_flow_control_queue_size
+curl http://${GUIDE_NAME}-epp:9090/metrics | grep llm_d_epp_flow_control_queue_size
 ```
 
 ## Use Cases
@@ -301,7 +301,7 @@ To verify backpressure management, you must overwhelm the pool's capacity. Becau
 3. **Observe Behavior**: While the load is running (or immediately after), these requests should be buffered in the `best-effort` priority band. Open a second terminal or check the metrics quickly to verify:
 
     ```bash
-    curl -s http://${GUIDE_NAME}-epp:9090/metrics | grep 'inference_extension_flow_control_queue_size{priority="-10"}'
+    curl -s http://${GUIDE_NAME}-epp:9090/metrics | grep 'llm_d_epp_flow_control_queue_size{priority="-10"}'
     ```
 
     *You should see a value greater than 0, proving the requests were safely queued.*

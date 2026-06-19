@@ -25,7 +25,7 @@ Follow the [optimized-baseline](../optimized-baseline/README.md) well-lit path t
 
 | Metric Name | Description | Recommended Usage |
 |---|---|---|
-| `inference_extension_flow_control_queue_size` | The number of requests currently buffered in the gateway waiting for an available backend. | Scale-out signal: High queue size indicates that the existing replicas are saturated. |
+| `llm_d_epp_flow_control_queue_size` | The number of requests currently buffered in the gateway waiting for an available backend. | Scale-out signal: High queue size indicates that the existing replicas are saturated. |
 | `inference_objective_running_requests` | The number of concurrent requests being processed by the model pool. | Capacity signal: Useful for tracking total throughput. |
 
 ## Prerequisites
@@ -55,7 +55,7 @@ Create a values file `epp-adapter-values.yaml` with the following rules:
 ```yaml
 rules:
   external:
-    - seriesQuery: 'inference_extension_flow_control_queue_size'
+    - seriesQuery: 'llm_d_epp_flow_control_queue_size'
       resources:
         overrides:
           namespace:
@@ -63,7 +63,7 @@ rules:
           namespaced: false
       name:
         as: "epp_queue_size"
-      metricsQuery: 'sum(inference_extension_flow_control_queue_size{inference_pool="qwen/qwen3-32b"})'
+      metricsQuery: 'sum(llm_d_epp_flow_control_queue_size{inference_pool="qwen/qwen3-32b"})'
     - seriesQuery: 'inference_objective_running_requests'
       resources:
         overrides:

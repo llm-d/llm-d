@@ -21,7 +21,7 @@ Without a better signal, the autoscaler has three bad options:
 - **React too early**: Scale out preemptively but wastefully, because utilization spikes even on a lightly-loaded GPU during a single large request.
 - **Never scale in**: Keep excess replicas running indefinitely because utilization never drops to zero as long as a single request is in flight.
 
-EPP Flow Control addresses this by shifting queuing to the gateway. The EPP's `inference_extension_flow_control_queue_size` metric directly counts requests that the current pool cannot absorb — a precise, actionable signal for scale-out.
+EPP Flow Control addresses this by shifting queuing to the gateway. The EPP's `llm_d_epp_flow_control_queue_size` metric directly counts requests that the current pool cannot absorb — a precise, actionable signal for scale-out.
 
 ### Architecture Overview
 
@@ -31,7 +31,7 @@ The scaling pipeline connects EPP metrics to the Kubernetes HPA through a standa
 
 The steps are:
 
-1. **Metric Emission**: The EPP exposes `inference_extension_flow_control_queue_size` (requests buffered in Flow Control) and `inference_objective_running_requests` (active in-flight requests) on its `/metrics` endpoint.
+1. **Metric Emission**: The EPP exposes `llm_d_epp_flow_control_queue_size` (requests buffered in Flow Control) and `inference_objective_running_requests` (active in-flight requests) on its `/metrics` endpoint.
 2. **Metric Collection**: Prometheus scrapes these metrics via the `ServiceMonitor` deployed with each llm-d inference stack.
 3. **Metric Translation**: The Prometheus Adapter translates the Prometheus series into Kubernetes External Metrics, exposing them as `igw_queue_depth` and `igw_running_requests` through the `external.metrics.k8s.io` API.
 4. **Scaling Decision**: The HPA polls external metrics on each evaluation interval. When a metric exceeds its configured target, the HPA computes a desired replica count and reconciles the model server `Deployment`.
