@@ -25,16 +25,11 @@ router:
         # emits PrefixCacheMatchInfo (required by the filter). They must be listed
         # explicitly — the EPP fails to start otherwise.
         plugins:
-        - type: token-load-scorer
-        - type: inflight-load-producer
+        # Producers first, then the consumers (filter, scorer) that read their data.
         - type: approx-prefix-cache-producer
-          parameters:
-              maxPrefixTokensToMatch: 40960 # Must match vLLM --max-model-len (can be found via /v1/models endpoint)
+        - type: inflight-load-producer
         - type: prefix-cache-affinity-filter
-          parameters:
-            affinityThreshold: 0.80
-            maxTokensInFlightPenalty: 286720
-            maxTTFTPenaltyMs: 0
+        - type: token-load-scorer
         schedulingProfiles:
         - name: default
           plugins:
