@@ -53,3 +53,7 @@ WVA is designed for operators running multiple variants of the same model across
 | **Cost optimization** | None — scales based on load signals only | Optimizes across variants by preferring lower-cost hardware |
 | **Additional components** | None — standard Kubernetes HPA only | Requires the WVA controller |
 | **Scale to zero** | Supported | Supported |
+
+## Multi-Inference Pool Setup
+
+To deploy multiple InferencePools in the same namespace, see the [Multi-Inference Pool Setup](./README.multi-inference-pool.md) guide. This setup works with either scaling path above.
