@@ -14,8 +14,19 @@ router:
       optimized-baseline-plugins.yaml: |
         apiVersion: llm-d.ai/v1alpha1
         kind: EndpointPickerConfig
+        # Plugins run with their built-in defaults: the prefix-cache-affinity-filter's
+        # peakPrefillThroughput default (15928) is calibrated for this guide's reference
+        # setup (Qwen3-32B on H100 80 GB, TP=2). For other hardware/models, measure your
+        # own value with guides/recipes/router/calibration and set it on the filter.
+        #
+        # The two producers supply the data the scorer and filter consume:
+        # inflight-load-producer emits InFlightLoad + UncachedRequestTokens (required by
+        # token-load-scorer and the filter's TTFT load gate); approx-prefix-cache-producer
+        # emits PrefixCacheMatchInfo (required by the filter). They must be listed
+        # explicitly — the EPP fails to start otherwise.
         plugins:
         - type: token-load-scorer
+        - type: inflight-load-producer
         - type: approx-prefix-cache-producer
           parameters:
               maxPrefixTokensToMatch: 40960 # Must match vLLM --max-model-len (can be found via /v1/models endpoint)
