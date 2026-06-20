@@ -81,7 +81,7 @@ kubectl run curl-debug --rm -it \
 Inside the shell, send a completion request:
 
 ```bash
-curl -X POST http://${IP}/v1/completions \
+curl -X POST http://${IP}:8081/v1/completions \
     -H 'Content-Type: application/json' \
     -d '{
         "model": "Qwen/Qwen3-32B",
