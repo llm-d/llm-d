@@ -10,7 +10,7 @@ spec:
           args:
             - --port=8000
             - --vllm-port=8200
-            - --connector=sglang
+            - --kv-connector=sglang
             - --zap-log-level=1
             - --secure-proxy=false
           image: REPLACE_ROUTING_SIDECAR_IMAGE
