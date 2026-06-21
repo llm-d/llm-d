@@ -18,6 +18,7 @@ Clone the llm-d repository and set up the necessary environment variables:
 git clone https://github.com/llm-d/llm-d.git && cd llm-d
 
 export GAIE_VERSION=v1.5.0
+export ROUTER_CHART_VERSION=v0
 export GUIDE_NAME="quickstart"
 export NAMESPACE=llm-d-quickstart
 ```
@@ -39,10 +40,10 @@ The llm-d Router provides the intelligent load balancing. In Standalone Mode, it
 
 ```bash
 helm install ${GUIDE_NAME} \
-    oci://registry.k8s.io/gateway-api-inference-extension/charts/standalone \
+    oci://ghcr.io/llm-d/charts/llm-d-router-standalone-dev \
     -f guides/recipes/router/base.values.yaml \
     -f guides/optimized-baseline/router/optimized-baseline.values.yaml \
-    -n ${NAMESPACE} --version ${GAIE_VERSION}
+    -n ${NAMESPACE} --version ${ROUTER_CHART_VERSION}
 ```
 
 ### 2. Deploy the Model Server

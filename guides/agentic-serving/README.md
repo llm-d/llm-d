@@ -35,19 +35,24 @@ direction and further reading.
 
 The layers above compose into deployments spanning a range of capabilities and operational
 costs - from a routing-and-offloading baseline up to disaggregated serving, added incrementally
-as a workload's scale and latency targets grow. Concrete workloads with benchmarked options are
-provided as sub-guides below.
+as a workload's scale and latency targets grow.
 
-- [Agentic Code Generation](agentic-code-generation.md)
+The reference workload is the same across deployments — agentic code generation (see above) — so
+the sub-guides below differ along one axis: the **accelerator** they target (and the model and
+serving topology that fit it). Each is listed as *model on accelerator*. Pick the one matching
+your hardware:
+
+- [NVIDIA-Nemotron-3-Ultra-550B on H200](nemotron-3-ultra-550b-h200.md) — P/D-disaggregated serving on 8× H200, with CPU KV-offloading and ready-to-use coding-agent client configs.
+- [Qwen3-Coder-480B on TPU v7](qwen3-coder-480b-tpu.md) — routing + CPU KV-offloading on 8× TPU v7x (2x2x1).
 
 ## Benchmarking
 
-Deployments are compared against the same realistic agentic workload — large reused
-contexts, deep multi-turn sessions, and tool-call stalls — replayed with
+Each deployment is benchmarked against a realistic agentic workload — large reused contexts
+and bursty, locality-heavy traffic — replayed with
 [`inference-perf`](https://github.com/kubernetes-sigs/inference-perf) via the
-[`llm-d-benchmark`](https://github.com/llm-d/llm-d-benchmark) harness rather than a single-turn
-shared-prefix stream, so cross-turn reuse, session persistence, and bursty resumption are
-actually exercised. They are compared on program-level metrics — whole-session completion
-time and task throughput alongside TTFT and ITL. Replaying real agentic traces (program
-structure and tool-call timing from OpenTelemetry) is the direction for program-level
-evaluation.
+[`llm-d-benchmark`](https://github.com/llm-d/llm-d-benchmark) harness, so cross-request and
+cross-turn prefix reuse is actually exercised rather than assumed. The exact preset is tuned per
+deployment (model, accelerator, and serving topology) rather than forced to be identical — see
+each sub-guide for its workload. Deployments are compared on program-level metrics — whole-session
+completion time and task throughput alongside TTFT and ITL. Replaying real agentic traces (program
+structure and tool-call timing from OpenTelemetry) is the direction for program-level evaluation.

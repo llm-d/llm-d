@@ -104,7 +104,6 @@ jobs:
       data_access_timeout: '3600'
       wait_timeout: '3600'
       job_timeout: '3600s'
-      kustomize_standup_timeout: '1800'
     secrets: inherit
 
   update-badge:

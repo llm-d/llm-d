@@ -3,4 +3,4 @@ kind: Component
 images:
   - name: REPLACE_MODEL_SERVER_IMAGE
     newName: vllm/vllm-tpu
-    newTag: v0.18.0
+    newTag: v0.22.0

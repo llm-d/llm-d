@@ -77,7 +77,7 @@ We recommend using the upstream images for most guides:
 | Engine        | Image             | Tag       |
 |--------       |----------------   |--------   |
 | **vLLM**      | `vllm/vllm-openai`| `v0.19.1` |
-| **vLLM TPU**  | `vllm/vllm-tpu`   | `v0.18.0` |
+| **vLLM TPU**  | `vllm/vllm-tpu`   | `v0.22.0` |
 | **SGLang**    | `lmsysorg/sglang` | `v0.5.10.post1` |
 
 ### Custom Images
