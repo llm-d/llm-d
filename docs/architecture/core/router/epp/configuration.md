@@ -73,7 +73,7 @@ spec:
       ...
       containers:
       - name: epp
-        image: ghcr.io/llm-d/llm-d-router-endpoint-picker-dev:main
+        image: ghcr.io/llm-d/llm-d-router-endpoint-picker:v0.9.0
         imagePullPolicy: IfNotPresent
         args:
         - --pool-name
@@ -99,7 +99,7 @@ spec:
       ...
       containers:
       - name: epp
-        image: ghcr.io/llm-d/llm-d-router-endpoint-picker-dev:main
+        image: ghcr.io/llm-d/llm-d-router-endpoint-picker:v0.9.0
         imagePullPolicy: IfNotPresent
         args:
         - --pool-name
