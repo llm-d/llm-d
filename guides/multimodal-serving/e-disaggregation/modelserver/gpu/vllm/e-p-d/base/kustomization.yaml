@@ -7,6 +7,7 @@ resources:
 namePrefix: e-p-d-disaggregation-nvidia-gpu-vllm-
 
 components:
+  - ../../../../../../../recipes/modelserver/components/images/gpu-vllm-omni
   - ../../../../../../../recipes/modelserver/components/images/routing-sidecar
 
 # TODO(#1891): Remove override once upstream vLLM includes encode-disaggregation support.

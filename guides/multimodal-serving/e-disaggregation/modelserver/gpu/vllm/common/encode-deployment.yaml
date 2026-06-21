@@ -35,6 +35,9 @@ spec:
                 secretKeyRef:
                   name: llm-d-hf-token
                   key: HF_TOKEN
+            # Workaround for https://github.com/vllm-project/vllm/issues/44548, required with vLLM v0.20.0+ due to torch 2.11
+            - name: USER
+              value: llm-d
           ports:
             - name: modelserver
               containerPort: 8000
