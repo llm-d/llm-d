@@ -7,7 +7,7 @@ router:
     image:
       registry: ghcr.io/llm-d
       repository: llm-d-router-endpoint-picker  # TODO: drop -dev for release
-      tag: v0.9.0-rc.2  # TODO: pin to a released tag (e.g. v0.9.0)
+      tag: v0.9.1
       pullPolicy: Always  # TODO : change to IfNotPresent once we release a version
     flags:
       v: 2

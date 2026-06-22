@@ -6,12 +6,6 @@ router:
       targetPort: 8081
 
   epp:
-    image:
-      registry: ghcr.io/llm-d
-      repository: llm-d-router-endpoint-picker
-      v0.9.0-rc.2
-      pullPolicy: Always
-
     pluginsConfigFile: "e-pd-config.yaml"
     pluginsCustomConfig:
       e-pd-config.yaml: |
