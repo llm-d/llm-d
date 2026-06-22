@@ -17,11 +17,11 @@ Whether operating in a unified topology or a decoupled pencode-prefill-decode la
 
 ### Multimodal Aggregated Guide
 
-See the [multimodal optimized baseline guide](../../guides/multimodal-serving/optimized-baseline) for aggregated guide manifests and step-by-step deployment.
+See the [multimodal optimized baseline guide](../../../guides/multimodal-serving/optimized-baseline) for aggregated guide manifests and step-by-step deployment.
 
 ### Multimodal Disaggregated Guide
 
-See the [multimodal e-disaggregation guide](../../guides/multimodal-serving/e-disaggregation) for disaggregated guide manifests and step-by-step deployment.
+See the [multimodal e-disaggregation guide](../../../guides/multimodal-serving/e-disaggregation) for disaggregated guide manifests and step-by-step deployment.
 
 ---
 
@@ -30,7 +30,7 @@ See the [multimodal e-disaggregation guide](../../guides/multimodal-serving/e-di
 The llm-d-router schedules multimodal requests using prefix cache affinity and server load metrics.
 
 > [!NOTE]
-> For the high-level scheduling architecture flow and EPP load-balancing diagrams, see the [Optimized Baseline guide](../well-lit-paths/capabilities/optimized-baseline.md#architecture).
+> For the high-level scheduling architecture flow and EPP load-balancing diagrams, see the [Optimized Baseline guide](../capabilities/optimized-baseline.md#architecture).
 
 ### Prefix-Aware Scheduling
 
@@ -39,7 +39,7 @@ EPP maintains a view of each endpoints' prefix-cache state. When a request arriv
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)">
-    <img src="../assets/prefix-aware-routing.svg" alt="Prefix-Aware Routing">
+    <img src="../../assets/prefix-aware-routing.svg" alt="Prefix-Aware Routing">
   </picture>
 </p>
 
@@ -78,7 +78,7 @@ EPP continuously probes each endpoints' metrics by scraping `/metrics` at a regu
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)">
-    <img src="../assets/load-aware-routing.svg" alt="Load-Aware Routing">
+    <img src="../../assets/load-aware-routing.svg" alt="Load-Aware Routing">
   </picture>
 </p>
 
@@ -86,6 +86,6 @@ EPP continuously probes each endpoints' metrics by scraping `/metrics` at a regu
 
 ## Further Reading
 
-* See [Optimized Baseline](../well-lit-paths/capabilities/optimized-baseline.md) for details on text-based scheduling and general load-balancing.
-* See [EPP Architecture](../architecture/core/router/epp/README.md) for more details.
-* See [KV-Cache Indexer](../advanced/kv-management/kv-indexer.md) for details on precise event-driven indexing.
+* See [Optimized Baseline](../capabilities/optimized-baseline.md) for details on text-based scheduling and general load-balancing.
+* See [EPP Architecture](../../architecture/core/router/epp/README.md) for more details.
+* See [KV-Cache Indexer](../../architecture/advanced/kv-management/kv-indexer.md) for details on precise event-driven indexing.

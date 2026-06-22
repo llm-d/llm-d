@@ -84,7 +84,7 @@ All rollout guides follow a similar pattern:
 
 Before following these guides, ensure you have:
 
-* A working llm-d deployment (see [getting started guide](../../docs/getting-started/README.md))
+* A working llm-d deployment (see [getting started guide](../../getting-started/README.md))
 * Access to kubectl and the Kubernetes cluster
 * Understanding of Kubernetes Gateway API concepts (for gateway mode)
 * Familiarity with your model serving infrastructure (vLLM, etc.)

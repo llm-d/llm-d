@@ -1,0 +1,7 @@
+## Model B overrides for the llm-d router.
+## Layer on top of: recipes/router/base.values.yaml
+
+router:
+  modelServers:
+    matchLabels:
+      llm-d.ai/model: "model-b"

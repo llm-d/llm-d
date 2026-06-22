@@ -93,7 +93,7 @@ jobs:
       - name: Install LWS CRDs
         run: |
           kubectl apply --server-side -f \
-            https://raw.githubusercontent.com/kubernetes-sigs/lws/v0.7.0/config/crd/bases/leaderworkerset.x-k8s.io_leaderworkersets.yaml
+            https://raw.githubusercontent.com/kubernetes-sigs/lws/v0.9.0/config/crd/bases/leaderworkerset.x-k8s.io_leaderworkersets.yaml
 
       - name: Install GKE CRDs
         run: .github/scripts/install-gke-crds.sh

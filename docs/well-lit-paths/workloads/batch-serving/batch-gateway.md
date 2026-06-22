@@ -11,14 +11,14 @@ Process large-scale batch inference jobs via an OpenAI-compatible API, enabling 
 
 ## Prerequisites
 
-- A working llm-d Router, inference pool, and at least one model server. If you don't have this, start with [getting-started/quickstart.md](../../getting-started/quickstart.md).
+- A working llm-d Router, inference pool, and at least one model server. If you don't have this, start with [getting-started/quickstart.md](../../../getting-started/quickstart.md).
 - PostgreSQL (12+) and Redis (6+) or Valkey (8+) accessible from the cluster.
 - S3-compatible storage or a shared PVC with `ReadWriteMany` (RWX) access mode for batch input/output files.
 - Helm 3.0+.
 
 ## Related
 
-- [Batch Gateway Deployment Guide](../../../guides/batch-gateway) — full deployment instructions, configuration options, and troubleshooting.
-- [Batch Gateway Architecture](../../architecture/advanced/batch/batch-gateway.md) — components, data flow, and processing pipeline.
+- [Batch Gateway Deployment Guide](../../../../guides/batch-gateway) — full deployment instructions, configuration options, and troubleshooting.
+- [Batch Gateway Architecture](../../../architecture/advanced/batch/batch-gateway.md) — components, data flow, and processing pipeline.
 - [Batch Gateway Repository](https://github.com/llm-d/llm-d-batch-gateway) — source code, Helm chart, platform-specific deployment guides, and demo scripts.
-- [Asynchronous Processing](../../../guides/asynchronous-processing) — complementary queue-based async inference for individual requests.
+- [Asynchronous Processing](../../../../guides/asynchronous-processing) — complementary queue-based async inference for individual requests.

@@ -4,11 +4,12 @@ metadata:
   name: optimized-baseline-nvidia-gpu-vllm-decode
   labels:
     inference.optimization/acceleratorName: "H100"
-    llm-d.ai/model: "Qwen3-32B"
     llm-d.ai/inference-serving: "true"
     llm-d.ai/guide: "optimized-baseline"
   annotations:
     llm-d.ai/managed: "true"
+    llm-d.ai/model-id: "Qwen3-32B"
+    llm-d.ai/variant-cost: "30.0"
 spec:
   scaleTargetRef:
     apiVersion: apps/v1

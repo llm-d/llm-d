@@ -11,11 +11,11 @@ LLM requests break all three assumptions. They are:
 The llm-d Router injects awareness of the LLM-workload into the load-balancing layer considering **prefix-cache affinity** and **server load metrics**.
 
 > [!NOTE]
-> This guide demonstrates one approach to prefix- and load-aware routing. The llm-d Router supports other options as well, including session affinity and active request based routing, which make no assumptions about the router's ability to parse the request or probe the servers. See [configuration](../architecture/core/router/epp/configuration.md) for more details on the available scorers, or [precise prefix cache routing](precise-prefix-cache-routing.md) for KV-event-driven scoring.
+> This guide demonstrates one approach to prefix- and load-aware routing. The llm-d Router supports other options as well, including session affinity and active request based routing, which make no assumptions about the router's ability to parse the request or probe the servers. See [configuration](../../architecture/core/router/epp/configuration.md) for more details on the available scorers, or [precise prefix cache routing](precise-prefix-cache-routing.md) for KV-event-driven scoring.
 
 ## Deploy
 
-See the [optimized baseline guide](../../guides/optimized-baseline) for manifests and step-by-step deployment.
+See the [optimized baseline guide](../../../guides/optimized-baseline) for manifests and step-by-step deployment.
 
 ## Architecture
 
@@ -26,7 +26,7 @@ EPP maintains a view of each endpoints' prefix-cache state in memory. When a req
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)">
-    <img src="../assets/prefix-aware-routing.svg" alt="Prefix-Aware Routing">
+    <img src="../../assets/prefix-aware-routing.svg" alt="Prefix-Aware Routing">
   </picture>
 </p>
 
@@ -37,10 +37,10 @@ EPP continuously probes each endpoints' metrics by scraping `/metrics` at a regu
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)">
-    <img src="../assets/load-aware-routing.svg" alt="Load-Aware Routing">
+    <img src="../../assets/load-aware-routing.svg" alt="Load-Aware Routing">
   </picture>
 </p>
 
 ## Further Reading
 
-See [EPP Architecture](../architecture/core/router/epp/README.md) for more details.
+See [EPP Architecture](../../architecture/core/router/epp/README.md) for more details.

@@ -10,17 +10,17 @@ Start here when something looks wrong.
 
 | Metric Need | PromQL Query |
 | ----------- | ------------ |
-| **Overall Error Rate** | `sum(rate(llm_d_router_epp_request_error_total[5m])) / sum(rate(llm_d_router_epp_request_total[5m]))` |
-| **Per-Model Error Rate** | `sum by(model_name) (rate(llm_d_router_epp_request_error_total[5m])) / sum by(model_name) (rate(llm_d_router_epp_request_total[5m]))` |
+| **Overall Error Rate** | `sum(rate(llm_d_epp_request_error_total[5m])) / sum(rate(llm_d_epp_request_total[5m]))` |
+| **Per-Model Error Rate** | `sum by(model_name) (rate(llm_d_epp_request_error_total[5m])) / sum by(model_name) (rate(llm_d_epp_request_total[5m]))` |
 | **Request Preemptions** | `sum by(pod, instance) (rate(vllm:num_preemptions[5m]))` |
-| **Overall Latency P90** | `histogram_quantile(0.90, sum by(le) (rate(llm_d_router_epp_request_duration_seconds_bucket[5m])))` |
-| **Overall Latency P99** | `histogram_quantile(0.99, sum by(le) (rate(llm_d_router_epp_request_duration_seconds_bucket[5m])))` |
+| **Overall Latency P90** | `histogram_quantile(0.90, sum by(le) (rate(llm_d_epp_request_duration_seconds_bucket[5m])))` |
+| **Overall Latency P99** | `histogram_quantile(0.99, sum by(le) (rate(llm_d_epp_request_duration_seconds_bucket[5m])))` |
 | **TTFT P99 per model** | `histogram_quantile(0.99, sum by(le, model_name) (rate(vllm:time_to_first_token_seconds_bucket[5m])))` |
 | **Inter-Token Latency P99** | `histogram_quantile(0.99, sum by(le, model_name) (rate(vllm:inter_token_latency_seconds_bucket[5m])))` |
-| **Request Rate** | `sum by(model_name) (rate(llm_d_router_epp_request_total[5m]))` |
+| **Request Rate** | `sum by(model_name) (rate(llm_d_epp_request_total[5m]))` |
 | **GPU Utilization** | `avg by(gpu, node) (DCGM_FI_DEV_GPU_UTIL or nvidia_gpu_duty_cycle)` |
-| **EPP E2E Latency P99** | `histogram_quantile(0.99, sum by(le) (rate(llm_d_router_epp_scheduler_e2e_duration_seconds_bucket[5m])))` |
-| **EPP Plugin Latency P99** | `histogram_quantile(0.99, sum by(le, plugin_type) (rate(llm_d_router_epp_plugin_duration_seconds_bucket[5m])))` |
+| **EPP E2E Latency P99** | `histogram_quantile(0.99, sum by(le) (rate(llm_d_epp_scheduler_e2e_duration_seconds_bucket[5m])))` |
+| **EPP Plugin Latency P99** | `histogram_quantile(0.99, sum by(le, plugin_type) (rate(llm_d_epp_plugin_duration_seconds_bucket[5m])))` |
 
 ## Tier 2: Diagnostic Drill-Down
 
@@ -38,9 +38,9 @@ Start here when something looks wrong.
 
 | Metric Need | PromQL Query |
 | ----------- | ------------ |
-| **QPS per pod** | `sum by(pod) (rate(llm_d_router_epp_request_total[5m]))` |
+| **QPS per pod** | `sum by(pod) (rate(llm_d_epp_request_total[5m]))` |
 | **Token distribution per pod** | `sum by(pod) (rate(vllm:prompt_tokens_total[5m]) + rate(vllm:generation_tokens_total[5m]))` |
-| **Routing decision latency P99** | `histogram_quantile(0.99, sum by(le) (rate(llm_d_router_epp_plugin_duration_seconds_bucket[5m])))` |
+| **Routing decision latency P99** | `histogram_quantile(0.99, sum by(le) (rate(llm_d_epp_plugin_duration_seconds_bucket[5m])))` |
 
 ### Prefix Caching
 
@@ -48,8 +48,8 @@ Start here when something looks wrong.
 | ----------- | ------------ |
 | **Cache hit rate** | `sum(rate(vllm:prefix_cache_hits_total[5m])) / sum(rate(vllm:prefix_cache_queries_total[5m]))` |
 | **Per-pod hit rate** | `sum by(pod) (rate(vllm:prefix_cache_hits_total[5m])) / sum by(pod) (rate(vllm:prefix_cache_queries_total[5m]))` |
-| **EPP prefix indexer size** | `llm_d_router_epp_prefix_indexer_size` |
-| **EPP prefix hit ratio P90** | `histogram_quantile(0.90, sum by(le) (rate(llm_d_router_epp_prefix_indexer_hit_ratio_bucket[5m])))` |
+| **EPP prefix indexer size** | `llm_d_epp_prefix_indexer_size` |
+| **EPP prefix hit ratio P90** | `histogram_quantile(0.90, sum by(le) (rate(llm_d_epp_prefix_indexer_hit_ratio_bucket[5m])))` |
 
 ### Prefill/Decode Disaggregation
 
@@ -57,7 +57,7 @@ Start here when something looks wrong.
 | ----------- | ------------ |
 | **Prefill worker utilization** | `avg by(pod) (vllm:num_requests_running{pod=~".*prefill.*"})` |
 | **Decode KV cache utilization** | `avg by(pod) (vllm:kv_cache_usage_perc{pod=~".*decode.*"})` |
-| **P/D decision ratio** | `sum(rate(llm_d_router_epp_pd_decision_total{decision_type="prefill-decode"}[5m])) / sum(rate(llm_d_router_epp_pd_decision_total[5m]))` |
+| **P/D decision ratio** | `sum(rate(llm_d_epp_pd_decision_total{decision_type="prefill-decode"}[5m])) / sum(rate(llm_d_epp_pd_decision_total[5m]))` |
 
 ### Flow Control
 
@@ -65,14 +65,14 @@ Requires the `flowControl` feature gate enabled on the EPP.
 
 | Metric Need | PromQL Query |
 | ----------- | ------------ |
-| **Queue size** | `sum(llm_d_router_epp_flow_control_queue_size)` |
-| **Queue size by priority** | `sum by(priority) (llm_d_router_epp_flow_control_queue_size)` |
-| **Queue wait time P99** | `histogram_quantile(0.99, sum by(le) (rate(llm_d_router_epp_flow_control_request_queue_duration_seconds_bucket[5m])))` |
-| **Pool saturation** | `llm_d_router_epp_flow_control_pool_saturation` |
+| **Queue size** | `sum(llm_d_epp_flow_control_queue_size)` |
+| **Queue size by priority** | `sum by(priority) (llm_d_epp_flow_control_queue_size)` |
+| **Queue wait time P99** | `histogram_quantile(0.99, sum by(le) (rate(llm_d_epp_flow_control_request_queue_duration_seconds_bucket[5m])))` |
+| **Pool saturation** | `llm_d_epp_flow_control_pool_saturation` |
 
 ## Notes
 
-**Metric name prefixes:** Current deployments use `llm_d_router_epp_*`. Older deployments may use `inference_objective_*` or `inference_extension_*` — update accordingly if panels show "No data".
+**Metric name prefixes:** Current deployments use `llm_d_epp_*`. Older deployments may use `llm_d_router_epp_*`, `inference_objective_*` or `inference_extension_*` — update accordingly if panels show "No data".
 
 **Histograms:** Always include `by(le)` when using `histogram_quantile()`:
 ```promql

@@ -4,7 +4,7 @@ The Asynchronous Processing path enables queue-based inference for latency-insen
 
 ## Deploy
 
-See the [asynchronous processing guide](../../guides/asynchronous-processing) for deployment instructions using Helm and supported queue implementations (Redis or GCP Pub/Sub).
+See the [asynchronous processing guide](../../../../guides/asynchronous-processing) for deployment instructions using Helm and supported queue implementations (Redis or GCP Pub/Sub).
 
 ## Architecture
 
@@ -21,7 +21,7 @@ To prevent background tasks from impacting real-time traffic, the Async Processo
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)">
-    <img src="../assets/async-processor.svg" alt="Async Processor Architecture">
+    <img src="../../../assets/async-processor.svg" alt="Async Processor Architecture">
   </picture>
 </p>
 
@@ -38,4 +38,4 @@ To prevent background tasks from impacting real-time traffic, the Async Processo
 
 ## Further Reading
 
-See the [Async Processor Architecture](../architecture/advanced/batch/async-processor.md) for more details on the internal mechanics.
+See the [Async Processor Architecture](../../../architecture/advanced/batch/async-processor.md) for more details on the internal mechanics.

@@ -12,3 +12,6 @@ Production rollout strategies including Blue-Green updates and live LoRA adapter
 
 ### [Model-Aware Readiness Probes](readiness-probes.md)
 Kubernetes HTTP probe configurations using vLLM API endpoints to ensure pods are only marked Ready when models are fully loaded.
+
+### [llm-d Router Operations Guide](router.md)
+Operational best practices, high availability scaling modes, standalone proxy architectures, and container resource sizing for llm-d Router deployments.

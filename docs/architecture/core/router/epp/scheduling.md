@@ -162,30 +162,30 @@ The following metrics provide visibility into the InferencePool health and sched
 
 | Metric | Type | Labels | Description |
 |--------|------|--------|-------------|
-| `inference_pool_ready_pods` | Gauge | `name` | Number of ready pods in the pool |
-| `inference_pool_average_kv_cache_utilization` | Gauge | `name` | Average KV cache utilization across the pool |
-| `inference_pool_average_queue_size` | Gauge | `name` | Average number of pending requests across the pool |
-| `inference_pool_per_pod_queue_size` | Gauge | `model_server_pod`, `name` | Queue size for each individual pod |
-| `inference_pool_average_running_requests` | Gauge | `name` | Average number of running requests across the pool |
+| `llm_d_epp_ready_endpoints` | Gauge | `name` | Number of ready pods in the pool |
+| `llm_d_epp_average_kv_cache_utilization` | Gauge | `name` | Average KV cache utilization across the pool |
+| `llm_d_epp_average_queue_size` | Gauge | `name` | Average number of pending requests across the pool |
+| `llm_d_epp_per_endpoint_queue_size` | Gauge | `model_server_pod`, `name` | Queue size for each individual pod |
+| `llm_d_epp_request_running` | Gauge | `name` | Average number of running requests across the pool |
 
 #### Scheduler Performance Metrics
 
 | Metric | Type | Labels | Description |
 |--------|------|--------|-------------|
-| `inference_extension_scheduler_attempts_total` | Counter | `status`, `target_model_name`, `pod_name`, `namespace`, `port` | Number of scheduling attempts and their outcomes |
-| `inference_extension_scheduler_e2e_duration_seconds` | Distribution | *None* | End-to-end scheduling latency |
-| `inference_extension_plugin_duration_seconds` | Distribution | `extension_point`, `plugin_type`, `plugin_name` | Processing latency for each plugin |
+| `llm_d_epp_scheduler_attempts_total` | Counter | `status`, `target_model_name`, `pod_name`, `namespace`, `port` | Number of scheduling attempts and their outcomes |
+| `llm_d_epp_scheduler_e2e_duration_seconds` | Distribution | *None* | End-to-end scheduling latency |
+| `llm_d_epp_plugin_duration_seconds` | Distribution | `extension_point`, `plugin_type`, `plugin_name` | Processing latency for each plugin |
 
 #### Prefix Cache Metrics
 
 | Metric | Type | Labels | Description |
 |--------|------|--------|-------------|
-| `inference_extension_prefix_indexer_size` | Gauge | *None* | Size of the prefix indexer |
-| `inference_extension_prefix_indexer_hit_ratio` | Distribution | *None* | Hit ratio for prefix matches |
-| `inference_extension_prefix_indexer_hit_bytes` | Distribution | *None* | Bytes matched in prefix cache lookup |
+| `llm_d_epp_prefix_indexer_size` | Gauge | *None* | Size of the prefix indexer |
+| `llm_d_epp_prefix_indexer_hit_ratio` | Distribution | *None* | Hit ratio for prefix matches |
+| `llm_d_epp_prefix_indexer_hit_bytes` | Distribution | *None* | Bytes matched in prefix cache lookup |
 
 #### System Info
 
 | Metric | Type | Labels | Description |
 |--------|------|--------|-------------|
-| `inference_extension_info` | Gauge | `commit`, `build_ref` | EPP build information |
+| `llm_d_epp_info` | Gauge | `commit`, `build_ref` | EPP build information |

@@ -8,7 +8,7 @@
 > well-lit-path guide composes with guide-specific overlays. The
 > `llm-d-modelservice` Helm chart is deprecated and only retained for legacy
 > helmfile-based guides prior to v0.7. See the
-> [Artifacts page](../docs/getting-started/artifacts.md) and tracking issue
+> [Artifacts page](../docs/api-reference/artifacts.md) and tracking issue
 > [#850](https://github.com/llm-d/llm-d/issues/850) for the kustomize-first
 > migration. The remainder of this proposal is preserved for historical
 > context.

@@ -1,10 +1,13 @@
-# Workload Variant Autoscaling
+# HPA/KEDA with WVA Metrics
+
+> [!WARNING]
+> **Deprecation Notice:** The `VariantAutoscaling` (VA) CRD-based approach described in this document is deprecated. The recommended path is the [HPA + WVA guide](../../../../guides/workload-autoscaling/README.wva.md), which configures HPA directly with WVA-published metrics without requiring the `VariantAutoscaling` CRD. If you are currently using VA objects, see the [Migration from VA to HPA + WVA](#migration-from-va-to-hpa--wva) section below.
 
 ## Functionality
 
 The Workload Variant Autoscaler (WVA) is an optimizer and a Kubernetes controller that automatically scales LLM inference workloads based on real-time resource utilization and performance metrics. As an optimizer, it analyzes supply and demand signals across all InferencePool variants to produce globally cost-efficient scaling decisions. As a controller, it reconciles those decisions by managing the replica count of model-serving deployments (Deployments, StatefulSets, or LeaderWorkerSets), observing vLLM metrics scraped via Prometheus.
 
-WVA introduces the concept of **variants** -- multiple model servers in an InferencePool that all serve the same base model but differ in hardware configuration (e.g., GPU type), serving configuration (e.g., tensor parallelism, max batch size, quantization), or both, each with an associated cost. The autoscaler optimizes across variants to minimize total cost while meeting capacity or latency requirements.
+WVA is **variant-aware**. A **variant** is one of multiple model servers in an InferencePool that all serve the same base model but differ in hardware configuration (e.g., GPU type), serving configuration (e.g., tensor parallelism, max batch size, quantization), or both, each with an associated cost. WVA optimizes across these variants to minimize total cost while meeting capacity or latency requirements.
 
 > [!NOTE]
 > WVA assumes a 1:1:1 relationship between InferencePool, Endpoint Picker (EPP), and base model. All variants within an InferencePool share the same EPP and therefore the same EPP metrics (e.g., request queue size).
@@ -12,6 +15,9 @@ WVA introduces the concept of **variants** -- multiple model servers in an Infer
 WVA provides two main scaling analyzers:
 
 - **Saturation Analyzer** -- Scales based on resource saturation signals (KV cache utilization, request queue depth, and token-level capacity). When the system detects that model servers are saturated (running out of KV cache space or building up queues), it triggers scale-up on the cheapest available variant. When spare capacity is detected, it scales down the most expensive variant. This is the default analyzer. It has two sub-variants: `saturation-percentage-based` (default) and `saturation-token-based` (experimental).
+
+  > [!NOTE]
+  > These two sub-variants are also referred to as the **V1** (`saturation-percentage-based`) and **V2** (`saturation-token-based`) saturation engines. The [HPA + WVA guide](../../../../guides/workload-autoscaling/README.wva.md), the WVA configuration keys, and the controller logs (e.g. `V2 saturation analysis completed`) use the V1/V2 names; this document uses the descriptive `saturation-percentage-based` / `saturation-token-based` names for the same engines.
 
 - **SLO Analyzer (Queueing Model)** *(Experimental)* -- Scales based on latency SLO targets using queueing theory. It uses a Kalman filter to learn hardware-specific performance parameters online, then applies a state-dependent Markovian queueing model to determine the maximum sustainable request rate per replica that meets target TTFT (Time To First Token) and ITL (Inter-Token Latency). The desired replica count is computed as the ratio of observed arrival rate to this capacity.
 
@@ -27,24 +33,28 @@ The following diagram shows how WVA fits into the overall llm-d architecture:
 
 ### Scaling Engine Architecture
 
-The WVA scaling engine runs as a background goroutine alongside the Kubernetes controller, communicating scaling decisions through an in-memory decision cache and a trigger channel.
+The WVA scaling engine runs as a background goroutine alongside the Kubernetes controller. Each cycle it groups the active WVA-managed HPAs by `modelID`, scrapes per-replica metrics, and runs them through the pipeline below. Decisions land in an in-memory decision cache, from which an actuator emits the `wva_desired_replicas` external metric that the HPAs consume.
 
 > [!NOTE]
 > The engine supports both a `saturation-percentage-based` and `saturation-token-based` analysis path. `saturation-percentage-based` is the default. `saturation-token-based` is an experimental token-based approach that is not yet production-ready. The architecture described here covers both pipelines.
 
-The engine follows a three-stage pipeline pattern:
+The main loop runs every 30 seconds and follows a four-stage pipeline pattern:
 
 ![Scaling Engine Pipeline](scaling-engine-pipeline.svg)
 
 **Pipeline stages:**
 
-1. **Analyzer** -- Each analyzer produces capacity signals (required capacity, spare capacity) and a priority score per InferencePool. The analyzer does not make scaling decisions directly; it quantifies how much capacity is needed or can be freed.
+1. **Collect** -- Groups the active WVA-managed HPAs by `modelID` and scrapes per-replica metrics (from Prometheus and, for the EPP flow-control queue, directly from EPP) for each resulting InferencePool.
 
-2. **Optimizer** -- The optimizer receives scaling requests (one per InferencePool) and produces variant decisions specifying the target replica count per variant. Two modes exist:
+2. **Analyzer** -- Each analyzer produces capacity signals (required capacity, spare capacity) and a priority score per InferencePool. The analyzer does not make scaling decisions directly; it quantifies how much capacity is needed or can be freed.
+
+3. **Optimizer** -- The optimizer receives scaling requests (one per InferencePool) and produces variant decisions specifying the target replica count per variant. Two modes exist:
    - **Cost-aware** (default, unlimited mode): Processes each InferencePool independently. Scales up the most cost-efficient variant; scales down the most expensive variant.
    - **Greedy-by-score** (limited mode, `enableLimiter: true`): Fair-shares available GPU resources across all InferencePools based on priority scores.
 
-3. **Enforcer** -- Applies post-optimization policies: scale-to-zero when an InferencePool is idle (no requests in the retention period), or minimum replica enforcement (at least 1 replica on the cheapest variant) when scale-to-zero is disabled.
+4. **Enforcer** -- Applies post-optimization policies: scale-to-zero when an InferencePool is idle (no requests in the retention period), or minimum replica enforcement (at least 1 replica on the cheapest variant) when scale-to-zero is disabled.
+
+The resulting variant decisions are written to the in-memory **decision cache**, and an **actuator** publishes them as the `wva_desired_replicas` external metric. A separate **scale-from-zero engine** polls the EPP flow-control queue every 100 ms and writes directly to the same decision cache, so idle InferencePools can scale up without waiting for the 30-second main loop.
 
 ### Saturation Analyzer
 
@@ -78,7 +88,7 @@ Each replica's capacity is modeled with two bounds:
 
 The **effective capacity** per replica is the minimum of k1 and k2. Per-variant capacity is aggregated using the median across ready replicas.
 
-**Demand** per replica is the sum of tokens currently in use and the queued requests multiplied by the average input token length. The EPP queue demand (from `inference_extension_flow_control_queue_size` and `inference_extension_flow_control_queue_bytes`metrics) is added to the InferencePool-level totals.
+**Demand** per replica is the sum of tokens currently in use and the queued requests multiplied by the average input token length. The EPP queue demand (from `llm_d_epp_flow_control_queue_size` and `llm_d_epp_flow_control_queue_bytes`metrics) is added to the InferencePool-level totals.
 
 Scaling signals:
 
@@ -118,7 +128,7 @@ The analyzer operates in three phases:
 
 Metrics used by the SLO analyzer:
 
-- `inference_extension_scheduler_attempts_total{status="success"}` -- per-pod arrival rate (requests/sec)
+- `llm_d_epp_scheduler_attempts_total{status="success"}` -- per-pod arrival rate (requests/sec)
 - `vllm:time_to_first_token_seconds` -- TTFT histogram (sum/count for average)
 - `vllm:time_per_output_token_seconds` -- ITL histogram (sum/count for average)
 - `vllm:request_generation_tokens` -- average output tokens (sum/count)
@@ -146,7 +156,7 @@ Scale-from-zero runs as a separate engine with a fast 100ms polling interval, in
 For each VA with 0 replicas:
 
 1. Find the matching InferencePool from the datastore.
-2. Query the EPP (Endpoint Picker) metrics source for `inference_extension_flow_control_queue_size{target_model_name=<modelID>}`.
+2. Query the EPP (Endpoint Picker) metrics source for `llm_d_epp_flow_control_queue_size{target_model_name=<modelID>}`.
 3. If queue size > 0 (pending requests exist), scale the deployment directly to 1 replica.
 4. Record the scaling decision and trigger controller reconciliation.
 
@@ -177,14 +187,14 @@ Each metrics source provides three main capabilities:
 | `avg_output_tokens` | `rate(vllm:request_generation_tokens_sum[5m]) / rate(..._count[5m])` | Average output token count |
 | `avg_input_tokens` | `rate(vllm:request_prompt_tokens_sum[5m]) / rate(..._count[5m])` | Average input token count |
 | `prefix_cache_hit_rate` | `rate(vllm:prefix_cache_hits[5m]) / rate(vllm:prefix_cache_queries[5m])` | Prefix cache hit ratio |
-| `scheduler_queue_size` | `sum(inference_extension_flow_control_queue_size{...})` | Upstream EPP queue depth |
-| `scheduler_queue_bytes` | `sum(inference_extension_flow_control_queue_bytes{...})` | Upstream EPP queue bytes |
+| `scheduler_queue_size` | `sum(llm_d_epp_flow_control_queue_size{...})` | Upstream EPP queue depth |
+| `scheduler_queue_bytes` | `sum(llm_d_epp_flow_control_queue_bytes{...})` | Upstream EPP queue bytes |
 
 **Queueing model queries** (per-pod, 1-minute windows):
 
 | Query Name | PromQL | Purpose |
 |---|---|---|
-| `scheduler_dispatch_rate` | `sum by (pod_name) (rate(inference_extension_scheduler_attempts_total{status="success",...}[1m]))` | Per-pod arrival rate |
+| `scheduler_dispatch_rate` | `sum by (pod_name) (rate(llm_d_epp_scheduler_attempts_total{status="success",...}[1m]))` | Per-pod arrival rate |
 | `avg_ttft` | `rate(vllm:time_to_first_token_seconds_sum[1m]) / rate(..._count[1m])` | Average time to first token |
 | `avg_itl` | `rate(vllm:time_per_output_token_seconds_sum[1m]) / rate(..._count[1m])` | Average inter-token latency |
 
@@ -198,7 +208,7 @@ Each metrics source provides three main capabilities:
 
 | Metric | Purpose |
 |---|---|
-| `inference_extension_flow_control_queue_size` | Pending requests in the EPP flow control queue |
+| `llm_d_epp_flow_control_queue_size` | Pending requests in the EPP flow control queue |
 
 The replica metrics collector orchestrates query execution and populates per-pod metric data for consumption by the analyzers.
 
@@ -297,7 +307,8 @@ metadata:
     app.kubernetes.io/name: workload-variant-autoscaler
 data:
   default: |
-    # Analyzer selection: "" or omit for saturation-percentage-based (default), "saturation" for saturation-token-based (experimental)
+    # Analyzer selection: "" or omit for saturation-percentage-based / V1 (default),
+    # "saturation" for saturation-token-based / V2 (experimental).
     analyzerName: "saturation"
 
     # saturation-percentage-based thresholds (used when analyzerName is "" or omitted)
@@ -321,6 +332,19 @@ data:
     scaleUpThreshold: 0.90
     scaleDownBoundary: 0.75
 ```
+
+> [!NOTE]
+> There are two equivalent ways to select the token-based (V2) saturation engine.
+> The scalar `analyzerName: "saturation"` shown above is the backward-compatible
+> form. The newer list form, used in the [HPA + WVA guide](../../../../guides/workload-autoscaling/README.wva.md#enabling-saturation-engine-v2-recommended), is equivalent:
+>
+> ```yaml
+> analyzers:
+>   - name: saturation
+> ```
+>
+> Populating the `analyzers` list also enables per-analyzer score and threshold
+> overrides. Omit both to fall back to the percentage-based (V1) engine.
 
 #### SLO Analyzer (Queueing Model) Configuration -- Experimental
 
@@ -399,3 +423,77 @@ Key controller flags:
 | `--leader-election-lease-duration` | `60s` | Leader election lease duration |
 | `--leader-election-renew-deadline` | `50s` | Leader election renew deadline |
 | `--rest-client-timeout` | `60s` | Kubernetes API client timeout |
+
+## Migration from VA to HPA + WVA
+
+The new [HPA + WVA](../../../../guides/workload-autoscaling/README.wva.md) approach replaces the `VariantAutoscaling` (VA) CRD with standard Kubernetes HPA objects that consume the `wva_desired_replicas` external metric published by WVA. This removes the need to manage VA resources and makes scaling intent visible through the standard `kubectl get hpa` surface.
+
+### Key Differences
+
+| | VA (Deprecated) | HPA + WVA (Recommended) |
+|---|---|---|
+| **Scaling object** | `VariantAutoscaling` CRD | Standard `HorizontalPodAutoscaler` |
+| **Scale target** | Managed by WVA via `scaleTargetRef` in VA spec | Managed by HPA via standard `scaleTargetRef` |
+| **WVA discovery** | WVA watches `VariantAutoscaling` resources | WVA discovers HPA via `llm-d.ai/managed: "true"` annotation |
+| **Scaling metric** | WVA directly sets replica counts | WVA publishes `wva_desired_replicas`; HPA acts on it |
+| **CRD requirement** | Requires `llmd.ai/v1alpha1` `VariantAutoscaling` CRD | No custom CRDs required |
+| **Observability** | `kubectl get va` | `kubectl get hpa` |
+
+### Migration Steps
+
+1. **Delete existing VA objects** for each deployment you are migrating:
+
+   ```bash
+   kubectl delete va <va-name> -n <namespace>
+   ```
+
+   > [!NOTE]
+   > Deleting a VA object stops WVA from managing that deployment's replica count. Scale the deployment to its desired replica count manually before deleting the VA if you need to avoid disruption.
+
+2. **Create HPA objects** with the `llm-d.ai/managed: "true"` annotation. WVA discovers these and publishes `wva_desired_replicas` labeled with `variant_name` and `exported_namespace`:
+
+   ```yaml
+   apiVersion: autoscaling/v2
+   kind: HorizontalPodAutoscaler
+   metadata:
+     name: <deployment-name>
+     namespace: <namespace>
+     annotations:
+       llm-d.ai/managed: "true"
+   spec:
+     scaleTargetRef:
+       apiVersion: apps/v1
+       kind: Deployment
+       name: <deployment-name>
+     minReplicas: 1
+     maxReplicas: <max>
+     metrics:
+       - type: External
+         external:
+           metric:
+             name: wva_desired_replicas
+             selector:
+               matchLabels:
+                 variant_name: <deployment-name>
+                 exported_namespace: <namespace>
+           target:
+             type: AverageValue
+             averageValue: "1"
+   ```
+
+   The `variantCost` previously set on the VA can be carried over as an annotation: `llm-d.ai/variant-cost: "<cost>"`. WVA reads this annotation to preserve cost-aware optimization across variants.
+
+3. **Verify** that WVA is discovering the HPA and publishing the metric:
+
+   ```bash
+   kubectl get hpa <deployment-name> -n <namespace>
+   kubectl get --raw "/apis/external.metrics.k8s.io/v1beta1/namespaces/<namespace>/wva_desired_replicas" | jq .
+   ```
+
+4. **Remove the VA CRD** once all VAs have been migrated and the HPAs are healthy:
+
+   ```bash
+   kubectl delete crd variantautoscalings.llmd.ai
+   ```
+
+See the [HPA + WVA guide](../../../../guides/workload-autoscaling/README.wva.md) for a complete end-to-end setup walkthrough including Prometheus Adapter and WVA controller installation.

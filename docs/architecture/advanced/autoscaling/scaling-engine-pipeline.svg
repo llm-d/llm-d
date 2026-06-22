@@ -25,12 +25,12 @@
   <text x="175" y="95" text-anchor="middle" font-weight="600" fill="#000000">Prometheus</text>
   <text x="175" y="110" text-anchor="middle" font-size="11" fill="#666666">vLLM &amp; EPP metrics</text>
 
-  <!-- VA Watch -->
-  <rect x="355" y="72" width="170" height="52" rx="3" fill="#f3f3f3" stroke="#d9d2e9" stroke-width="1"/>
-  <circle r="12" cx="383" cy="98" fill="#ffffff" stroke="#d9d2e9" stroke-width="1"/>
-  <text x="383" y="98" text-anchor="middle" dominant-baseline="central" font-size="15" fill="#000000">&#9670;</text>
-  <text x="452" y="95" text-anchor="middle" font-weight="600" fill="#000000">VA Watch</text>
-  <text x="452" y="110" text-anchor="middle" font-size="11" fill="#666666">Active VA resources</text>
+  <!-- HPA Watch -->
+  <rect x="330" y="72" width="220" height="52" rx="3" fill="#f3f3f3" stroke="#d9d2e9" stroke-width="1"/>
+  <circle r="12" cx="358" cy="98" fill="#ffffff" stroke="#d9d2e9" stroke-width="1"/>
+  <text x="358" y="98" text-anchor="middle" dominant-baseline="central" font-size="15" fill="#000000">&#9670;</text>
+  <text x="460" y="95" text-anchor="middle" font-weight="600" fill="#000000">HPA/KEDA Watch</text>
+  <text x="460" y="110" text-anchor="middle" font-size="11" fill="#666666">Active HPA/KEDA resources</text>
 
   <!-- EPP Metrics -->
   <rect x="630" y="72" width="170" height="52" rx="3" fill="#f3f3f3" stroke="#d9d2e9" stroke-width="1"/>
@@ -58,7 +58,7 @@
   <circle cx="88" cy="236" r="9" fill="#eeeeee" stroke="#d9d2e9" stroke-width="1.2"/>
   <text x="88" y="236" text-anchor="middle" dominant-baseline="central" font-weight="700" font-size="11" fill="#000000">1</text>
   <text x="108" y="233" font-size="12" font-weight="600" fill="#000000">Collect</text>
-  <text x="108" y="248" font-size="11" fill="#666666">Group active VAs by modelID, scrape per-replica metrics</text>
+  <text x="108" y="248" font-size="11" fill="#666666">Group active HPAs by modelID, scrape per-replica metrics</text>
 
   <!-- Arrow 1 → 2 -->
   <line x1="320" y1="256" x2="320" y2="313" stroke="#000000" stroke-width="1.5" marker-end="url(#arr)"/>
@@ -83,9 +83,6 @@
   <text x="478" y="374" text-anchor="middle" font-size="10" fill="#666666">latency-driven</text>
 
   <!-- Experimental badges -->
-  <rect x="240" y="336" width="60" height="14" rx="7" fill="#f59e0b" stroke="#d97706" stroke-width="0.8"/>
-  <text x="270" y="340" text-anchor="middle" dominant-baseline="hanging" font-weight="600" font-size="8" fill="#ffffff">experimental</text>
-
   <rect x="398.5" y="336" width="60" height="14" rx="7" fill="#f59e0b" stroke="#d97706" stroke-width="0.8"/>
   <text x="428.5" y="340" text-anchor="middle" dominant-baseline="hanging" font-weight="600" font-size="8" fill="#ffffff">experimental</text>
 
@@ -140,26 +137,16 @@
   <text x="746" y="694" text-anchor="middle" font-size="11" fill="#666666">100ms polling, EPP queue check</text>
 
   <!-- Arrow from Scale-from-Zero to Cache (dashed) -->
-  <line x1="630" y1="676" x2="452" y2="676" stroke="#000000" stroke-width="1.5" stroke-dasharray="6 4" marker-end="url(#arr)"/>
+  <line x1="630" y1="676" x2="440" y2="676" stroke="#000000" stroke-width="1.5" stroke-dasharray="6 4" marker-end="url(#arr)"/>
 
-  <!-- T-fork: DecisionCache → VA Reconciler (DecisionTrigger) + Actuator -->
-  <line x1="320" y1="698" x2="320" y2="720" stroke="#000000" stroke-width="1.5"/>
-  <line x1="188" y1="720" x2="465" y2="720" stroke="#000000" stroke-width="1.5"/>
-  <line x1="188" y1="720" x2="188" y2="734" stroke="#000000" stroke-width="1.5" marker-end="url(#arr)"/>
-  <line x1="465" y1="720" x2="465" y2="734" stroke="#000000" stroke-width="1.5" marker-end="url(#arr)"/>
-  <text x="245" y="714" text-anchor="middle" font-style="italic" font-size="10" fill="#888888">DecisionTrigger</text>
-
-  <!-- VA Reconciler -->
-  <rect x="55" y="734" width="265" height="60" rx="4" fill="#f3f3f3" stroke="#d9d2e9" stroke-width="1.5"/>
-  <rect x="55" y="734" width="6" height="60" rx="3" fill="#6366f1"/>
-  <text x="188" y="758" text-anchor="middle" font-weight="600" fill="#000000">VA Reconciler</text>
-  <text x="188" y="774" text-anchor="middle" font-size="11" fill="#666666">Update VA status</text>
+  <!-- DecisionCache → Actuator -->
+  <line x1="320" y1="698" x2="320" y2="734" stroke="#000000" stroke-width="1.5" marker-end="url(#arr)"/>
 
   <!-- Actuator -->
-  <rect x="345" y="734" width="240" height="60" rx="4" fill="#f3f3f3" stroke="#d9d2e9" stroke-width="1.5"/>
-  <rect x="345" y="734" width="6" height="60" rx="3" fill="#22c55e"/>
-  <text x="465" y="758" text-anchor="middle" font-weight="600" fill="#000000">Actuator</text>
-  <text x="465" y="772" text-anchor="middle" font-size="10" fill="#666666">emit WVA metrics (wva_desired_replicas, ...)</text>
+  <rect x="200" y="734" width="240" height="60" rx="4" fill="#f3f3f3" stroke="#d9d2e9" stroke-width="1.5"/>
+  <rect x="200" y="734" width="6" height="60" rx="3" fill="#22c55e"/>
+  <text x="320" y="758" text-anchor="middle" font-weight="600" fill="#000000">Actuator</text>
+  <text x="320" y="772" text-anchor="middle" font-size="10" fill="#666666">emit WVA metrics (wva_desired_replicas, ...)</text>
 
   <!-- Legend -->
   <rect x="620" y="744" width="230" height="50" rx="4" fill="#f3f3f3" stroke="#d9d2e9" stroke-width="1"/>

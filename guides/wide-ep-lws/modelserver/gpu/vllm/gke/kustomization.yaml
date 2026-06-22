@@ -8,7 +8,7 @@ components:
 patches:
   - target:
       kind: LeaderWorkerSet
-      name: prefill
+      name: wide-ep-lws-nvidia-gpu-vllm-prefill
     patch: |-
       # Prefer the same block and subblock.
       # https://github.com/llm-d/llm-d/tree/main/docs/infrastructure/providers/gke#configuring-support-for-rdma-on-gke-workload-pods
@@ -37,7 +37,7 @@ patches:
                 topologyKey: cloud.google.com/gce-topology-subblock
   - target:
       kind: LeaderWorkerSet
-      name: decode
+      name: wide-ep-lws-nvidia-gpu-vllm-decode
     patch: |-
       # Prefer the same block and subblock.
       # https://github.com/llm-d/llm-d/tree/main/docs/infrastructure/providers/gke#configuring-support-for-rdma-on-gke-workload-pods

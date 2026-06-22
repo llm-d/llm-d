@@ -5,6 +5,9 @@ This section covers the hardware and software requirements for llm-d, cluster co
 ### [Kubernetes Infrastructure Providers](providers/README.md)
 Provider-specific cluster setup notes (GKE, AKS, OpenShift, Minikube, DigitalOcean).
 
+### [Multi-Node Serving Orchestration](multi-node.md)
+Deploying multi-host inference workloads with LeaderWorkerSet (LWS) and Topology Aware Scheduling.
+
 ### [Non-Kubernetes & Bare-Metal Deployments](no-kubernetes-deployment.md)
 Running the llm-d routing stack on bare metal, HPC Slurm schedulers, or Ray via file-based worker discovery.
 
@@ -81,11 +84,11 @@ llm-d guides expect a series of conventions to be followed in the vLLM image:
 
 The following documentation describes llm-d tested setup for cluster infrastructure providers as well as specific deployment settings that will impact how model servers is expected to access accelerators.
 
-* [Azure Kubernetes Service (AKS)](./infra-providers/aks/README.md)
-* [DigitalOcean Kubernetes (DOKS)](./infra-providers/digitalocean/README.md)
-* [Google Kubernetes Engine (GKE)](./infra-providers/gke/README.md)
-* [OpenShift (OCP)](./infra-providers/openshift/README.md), [OpenShift on AWS](./infra-providers/openshift-aws/README.md)
-* [minikube](./infra-providers/minikube/README.md) for single-host development
+* [Azure Kubernetes Service (AKS)](providers/aks/README.md)
+* [DigitalOcean Kubernetes (DOKS)](providers/digitalocean/README.md)
+* [Google Kubernetes Engine (GKE)](providers/gke/README.md)
+* [OpenShift (OCP)](providers/openshift/README.md), [OpenShift on AWS](providers/openshift-aws/README.md)
+* [minikube](providers/minikube/README.md) for single-host development
 
 These provider configurations are tested regularly.
 
@@ -95,7 +98,7 @@ Please follow the provider-specific documentation to ensure your Kubernetes clus
 
 To add a new infrastructure provider to our well-lit paths, we request the following support:
 
-* Documentation on configuring the platform to support one or more [well-lit path guides](../guides/README.md#well-lit-path-guides)
+* Documentation on configuring the platform to support one or more [well-lit path guides](../../guides/README.md#well-lit-path-guides)
 * The appropriate configuration contributed to the guide to deal with provider specific variation
 * An automated test environment that validates the supported guides
 * At least one documented platform maintainer who responds to GitHub issues and is available for regular discussion in the llm-d slack channel `#sig-installation`.

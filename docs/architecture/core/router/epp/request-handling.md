@@ -124,4 +124,4 @@ The Request Handling subsystem exposes metrics tracking request volume, success,
 | Metric | Type | Description | Labels |
 |--------|------|-------------|--------|
 | `inference_objective_inference_request_metric` | Gauge | Consolidated gauge for request metrics | `model_name`, `target_model_name`, `type` |
-| `inference_extension_model_rewrite_decisions_total` | Counter | Total number of model rewrite decisions | `model_rewrite_name`, `model_name`, `target_model` |
+| `llm_d_epp_model_rewrite_decisions_total` | Counter | Total number of model rewrite decisions | `model_rewrite_name`, `model_name`, `target_model` |
