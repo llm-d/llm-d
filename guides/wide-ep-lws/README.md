@@ -4,7 +4,6 @@
 [![E2E (GKE GPU)](https://github.com/llm-d/llm-d/actions/workflows/consolidate-status-wide-ep-lws-gke-acc-gpu-vllm-x.yaml/badge.svg)](https://github.com/llm-d/llm-d/actions/workflows/consolidate-status-wide-ep-lws-gke-acc-gpu-vllm-x.yaml)
 [![E2E (OCP GPU)](https://github.com/llm-d/llm-d/actions/workflows/consolidate-status-wide-ep-lws-ibm-acc-gpu-vllm-x.yaml/badge.svg)](https://github.com/llm-d/llm-d/actions/workflows/consolidate-status-wide-ep-lws-ibm-acc-gpu-vllm-x.yaml)
 
-This deployment uses **DP-aware scheduling** with vLLM's `--data-parallel-multi-port-external-lb` mode. Each pod launches 8 separate vLLM server instances (one per GPU), each with its own API endpoint. This enables the EPP to schedule requests directly to specific DP ranks, enabling prefix-cache-aware routing across the WideEP topology.
 
 ## Overview
 
