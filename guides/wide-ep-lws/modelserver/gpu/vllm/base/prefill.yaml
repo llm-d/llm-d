@@ -10,9 +10,9 @@ metadata:
     llm-d.ai/model: DeepSeek-R1-0528
     llm-d.ai/role: prefill
 spec:
-  replicas: 2
+  replicas: 1
   leaderWorkerTemplate:
-    size: 1
+    size: 2
     workerTemplate:
       metadata:
         labels:
@@ -73,7 +73,6 @@ spec:
                   --data-parallel-address ${LWS_LEADER_ADDRESS} \
                   --data-parallel-rpc-port 5555 \
                   --data-parallel-start-rank $START_RANK \
-                  --enable-expert-parallel \
                   --kv_transfer_config '{"kv_connector":"NixlConnector",
                                           "kv_role":"kv_both",
                                           "kv_load_failure_policy":"fail"}' \

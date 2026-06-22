@@ -123,9 +123,15 @@ kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/g
 * Install the [Monitoring stack](../../docs/operations/observability/setup.md).
 * Deploy the monitoring resources for this guide.
 
-```bash
-kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/recipes/modelserver/components/monitoring-pd
-```
+  Wide expert parallelism runs data-parallel ranks behind a routing sidecar, so
+  each pod exposes one metrics port per rank (`rank0`–`rank7`) rather than a
+  single `modelserver` port. This guide therefore ships a DP-aware monitoring
+  overlay (a Kustomize component) that scrapes all 8 ranks for both prefill and
+  decode:
+
+  ```bash
+  kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/gpu/vllm/components/monitoring-pd
+  ```
 
 ### 4. (Optional) Topology Aware Scheduling (TAS)
 
@@ -267,7 +273,9 @@ To remove the deployed components:
 
 ```bash
 helm uninstall ${GUIDE_NAME} -n ${NAMESPACE}
-kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/gpu/vllm/<gke|coreweave>
+# If you enabled monitoring (Step 3), remove the monitoring overlay first.
+kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/gpu/vllm/components/monitoring-pd
+kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/gpu/vllm/${INFRA_PROVIDER}
 ```
 
 ## Benchmarking Results
