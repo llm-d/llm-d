@@ -57,10 +57,6 @@ rows because the serving engine changes prefill throughput.
 `peakPrefillThroughput=16444` for Qwen3-Coder-480B-FP8 on TPU v7x (TP=8) — same accelerator
 family, different model, so it is not an optimized-baseline path but is a useful second data point.
 
-**Larger models you may want to support** (not shipped as overlays): gpt-oss-120B and
-Llama-3-70B were benchmarked on H100 (TP=2) during the PR #1651 review; deploy them on the
-`gpu/vllm` path and run `calibrate.sh` when adopting them.
-
 ## Filling a cell
 
 Deploy that (model, accelerator) per its guide, then run the calibration Job against the
