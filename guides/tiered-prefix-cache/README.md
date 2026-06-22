@@ -48,7 +48,7 @@ The tiers each path supports differ — see the table above. For example, the vL
 | CPU Cache Offload Size  | 25000 Chunks (~780 GB)                                  |
 
 > [!NOTE]
-> A `gpt-oss-120b` variant (TP=1 on NVIDIA H100, 100 GB CPU offload) is also benchmarked — see [gpt-oss-120B benchmarking results](./benchmark-results/vllm-gpt-oss-120b-h100/README.md).
+> A `gpt-oss-120b` variant (TP=1 on NVIDIA H100, 100 GB CPU offload) is also benchmarked — see [gpt-oss-120B benchmarking results](./benchmark-results/vllm-gpt-oss-120b-h100.md).
 
 ---
 
@@ -405,15 +405,15 @@ llmdbenchmark \
 
 Empirical benchmark reports demonstrating the impact of multi-tier prefix-cache offloading relative to HBM-only serving configurations under high-cache workloads:
 
-### [Qwen/Qwen3-32B on vLLM (16×H100 CPU Offload)](./benchmark-results/vllm-qwen3-32b-h100/README.md)
+### [Qwen/Qwen3-32B on vLLM (16×H100 CPU Offload)](./benchmark-results/vllm-qwen3-32b-h100.md)
 Headline throughput and latency comparisons for Qwen/Qwen3-32B serving across 16×H100 GPUs with CPU RAM offloading.
 
-### [openai/gpt-oss-120b on vLLM (16×H100 CPU Offload)](./benchmark-results/vllm-gpt-oss-120b-h100/README.md)
+### [openai/gpt-oss-120b on vLLM (16×H100 CPU Offload)](./benchmark-results/vllm-gpt-oss-120b-h100.md)
 Comprehensive stage-by-stage throughput, latency, TPOT, and fleet cache hit rate breakdown across 5–40 QPS.
 
-### [Google TPU v6e/v7 on vLLM (CPU Offload)](./benchmark-results/vllm-tpu-cpu/README.md)
+### [Google TPU v6e/v7 on vLLM (CPU Offload)](./benchmark-results/vllm-tpu-cpu.md)
 Headline throughput and latency effect of CPU RAM prefix offloading on Google TPU architectures.
 
-### [Lustre Filesystem Offloading (LMCache & Native FS)](./benchmark-results/filesystem-lustre/README.md)
+### [Lustre Filesystem Offloading (LMCache & Native FS)](./benchmark-results/filesystem-lustre.md)
 Benchmark comparisons for shared POSIX filesystem offloading using LMCache and llm-d filesystem connectors.
 
