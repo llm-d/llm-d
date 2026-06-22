@@ -73,7 +73,7 @@ Deploy the llm-d Router in **Standalone Mode** overlaying router custom configur
 ```bash
 # Run from the root of the llm-d repo
 helm install ${GUIDE_NAME} \
-    oci://ghcr.io/llm-d/charts/llm-d-router-standalone-dev \
+    ${ROUTER_STANDALONE_CHART} \
     -f ${REPO_ROOT}/guides/recipes/router/base.values.yaml \
     -f ${REPO_ROOT}/guides/multimodal-serving/${GUIDE_NAME}/router/${GUIDE_NAME}.values.yaml \
     -n ${NAMESPACE} --version ${ROUTER_CHART_VERSION}
@@ -90,7 +90,7 @@ To use a Kubernetes Gateway managed proxy rather than the standalone version, fo
 ```bash
 export PROVIDER_NAME=gke # options: none, gke, agentgateway, istio
 helm install ${GUIDE_NAME} \
-    oci://ghcr.io/llm-d/charts/llm-d-router-gateway-dev  \
+    ${ROUTER_GATEWAY_CHART}  \
     -f ${REPO_ROOT}/guides/recipes/router/base.values.yaml \
     -f ${REPO_ROOT}/guides/multimodal-serving/${GUIDE_NAME}/router/${GUIDE_NAME}.values.yaml \
     --set provider.name=${PROVIDER_NAME} \

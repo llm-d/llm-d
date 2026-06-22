@@ -84,7 +84,7 @@ separate `prefill` and `decode` scheduling profiles:
 
 ```bash
 helm install ${GUIDE_NAME} \
-    oci://ghcr.io/llm-d/charts/llm-d-router-standalone-dev \
+    ${ROUTER_STANDALONE_CHART} \
     -f ${REPO_ROOT}/guides/recipes/router/base.values.yaml \
     -f ${REPO_ROOT}/guides/${GUIDE_NAME}/router/agentic-serving-gpu.values.yaml \
     -n ${NAMESPACE} --version ${ROUTER_CHART_VERSION}

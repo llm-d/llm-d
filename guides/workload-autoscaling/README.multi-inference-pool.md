@@ -19,7 +19,7 @@ export REPO_ROOT=$(realpath $(git rev-parse --show-toplevel))
 export ROUTER_CHART_VERSION=v0
 
 helm install model-b \
-    oci://ghcr.io/llm-d/charts/llm-d-router-standalone-dev \
+    ${ROUTER_STANDALONE_CHART} \
     -f ${REPO_ROOT}/guides/recipes/router/base.values.yaml \
     -f ${REPO_ROOT}/guides/workload-autoscaling/multi-inference-pool/model-b.values.yaml \
     -n ${NAMESPACE} --version ${ROUTER_CHART_VERSION}
