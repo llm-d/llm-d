@@ -126,12 +126,12 @@ spec:
                   --max-num-seqs ${MAX_TOKENS} \
                   --data-parallel-size $((LWS_GROUP_SIZE * DP_SIZE_LOCAL)) \
                   --data-parallel-size-local $DP_SIZE_LOCAL \
-                  --data-parallel-address="${LWS_LEADER_ADDRESS}" \
-                  --data-parallel-rpc-port=5555 \
+                  --data-parallel-address ${LWS_LEADER_ADDRESS} \
+                  --data-parallel-rpc-port 5555 \
                   --data-parallel-start-rank $START_RANK \
                   --kv_transfer_config '{"kv_connector":"NixlConnector",
-                                         "kv_role":"kv_both",
-                                         "kv_load_failure_policy":"fail"}' \
+                                          "kv_role":"kv_both",
+                                          "kv_load_failure_policy":"fail"}' \
                   --enable-dbo \
                   --dbo-decode-token-threshold 32 \
                   --enable-eplb \
