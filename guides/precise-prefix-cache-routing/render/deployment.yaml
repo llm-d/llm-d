@@ -4,9 +4,9 @@ metadata:
   name: render
 spec:
   # Run the tokenizer renderer as a horizontally-scalable Service instead of an
-  # EPP sidecar (router.tokenizer.enabled: false). EPP replicas share this pool
-  # via the token-producer `vllm.url`, decoupling render capacity from EPP
-  # replica count.
+  # EPP sidecar (the chart's tokenizer sidecar is off by default). EPP replicas
+  # share this pool via the token-producer `vllm.url`, decoupling render
+  # capacity from EPP replica count.
   replicas: 3
   selector:
     matchLabels:
@@ -51,12 +51,14 @@ spec:
             - name: DO_NOT_TRACK
               value: "1"
           resources:
+            # Tokenization is light and bursty; reserve modestly and allow
+            # headroom. 3 replicas request 3 cores / 12Gi total.
             requests:
-              cpu: "4"
-              memory: 8Gi
+              cpu: "1"
+              memory: 4Gi
             limits:
               cpu: "4"
-              memory: 8Gi
+              memory: 12Gi
           readinessProbe:
             httpGet:
               path: /health

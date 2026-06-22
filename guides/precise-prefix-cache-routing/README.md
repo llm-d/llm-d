@@ -100,7 +100,7 @@ kubectl create secret generic llm-d-hf-token \
 
 This deploys the llm-d Router in the simple [Standalone Mode](../../docs/architecture/core/router/proxy.md). The release name `${GUIDE_NAME}` is mandatory — the inference pool selector matches a guide label that pairs with this release.
 
-Tokenization is served by a standalone render Service, not a chart-injected EPP sidecar — the values set `router.tokenizer.enabled: false` and point the `token-producer` plugin at that Service.
+Tokenization is served by a standalone render Service, not a chart-injected EPP sidecar — the chart's `router.tokenizer` sidecar is off by default, and the `token-producer` plugin points at that Service.
 
 ```bash
 helm install ${GUIDE_NAME} \

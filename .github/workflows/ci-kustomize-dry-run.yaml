@@ -277,7 +277,7 @@ jobs:
 
       - name: Dry-run router (active-active default)
         # Tokenization runs as a standalone render Service (../render/), not a
-        # chart-injected sidecar (`router.tokenizer.enabled: false`).
+        # chart-injected sidecar (the chart's tokenizer sidecar is off by default).
         run: |
           CHART_VERSION=v0
           echo ""
