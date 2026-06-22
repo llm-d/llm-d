@@ -181,21 +181,6 @@ curl -X POST http://${IP}/v1/completions \
     }' | jq
 ```
 
-## Troubleshooting
-
-### Pod Startup Ordering
-
-With 4 pods (2 decode, 2 prefill) requiring inter-node DP coordination, staggered startup can cause cascade failures. If one pod starts significantly before the others, it may timeout waiting for peers and exit cleanly (exit code 0), which triggers the DPSupervisor to shut down all children, causing the other pods to also exit.
-
-If pods are stuck in a restart loop, delete all model server pods at once so they restart simultaneously:
-```bash
-kubectl delete pods -l llm-d.ai/guide=wide-ep-lws
-```
-
-### NCCL Shared Memory
-
-With 8 DP rank processes per pod sharing the `/dev/shm` volume (default 2Gi), NCCL may report "No available shared memory broadcast block" during initialization. This is typically a warning — NCCL falls back to a slower communication path. If pods hang during startup, increase `dshm` `sizeLimit` in the base manifests (e.g., to 16Gi).
-
 ## Benchmarking
 
 This guide uses [`llmdbenchmark`](https://github.com/llm-d/llm-d-benchmark) — the supported standard CLI for llm-d performance benchmarking.
