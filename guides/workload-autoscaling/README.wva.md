@@ -90,7 +90,7 @@ export REPO_ROOT=$(realpath $(git rev-parse --show-toplevel))
 6. Install WVA controller with Kustomize:
 
     ```bash
-    kubectl apply -k wva-config/platform/${PLATFORM} -n ${NAMESPACE}
+    kubectl apply -k  ${REPO_ROOT}/guides/workload-autoscaling/wva-config/platform/${PLATFORM} -n ${NAMESPACE}
     ```
 
 ## Verify Installation
@@ -186,7 +186,7 @@ kubectl delete -k optimized-baseline-autoscaling/ -n ${NAMESPACE}
 Remove the WVA controller with Kustomize:
 
 ```bash
-kubectl delete -k guides/workload-autoscaling/wva-config/platform/${PLATFORM} -n ${WVA_NAMESPACE}
+kubectl delete -k ${REPO_ROOT}/guides/workload-autoscaling/wva-config/platform/${PLATFORM} -n ${WVA_NAMESPACE}
 ```
 
 If you installed Prometheus Adapter for WVA, you can uninstall it as well:
