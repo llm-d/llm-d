@@ -44,7 +44,7 @@ The [Workload Variant Autoscaler (WVA)](./README.wva.md) path integrates the Kub
 
 WVA is designed for operators running multiple variants of the same model across different GPU hardware types (A100s, H100s, L4s), each with different cost and performance characteristics. WVA continuously monitors KV cache utilization, queue depth, and performance budgets to determine optimal replica counts across variants. Rather than scaling all variants equally, WVA preferentially adds capacity on the cheapest available variant and removes it from the most expensive — optimizing infrastructure cost without violating latency SLOs.
 
-## Choosing a Path
+## Choosing a Scaling Signal
 
 | | [HPA + EPP Metrics](./README.hpa-epp.md) | [HPA + WVA Metrics](./README.wva.md) |
 |---|---|---|
@@ -53,3 +53,9 @@ WVA is designed for operators running multiple variants of the same model across
 | **Cost optimization** | None — scales based on load signals only | Optimizes across variants by preferring lower-cost hardware |
 | **Additional components** | None — standard Kubernetes HPA only | Requires the WVA controller |
 | **Scale to zero** | Supported | Supported |
+
+## Features
+
+### Replica Rebalancing (Experimental)
+
+The [Replica Rebalancing guide](./README.replica-rebalancing.md) describes an experimental feature that prevents any single model from consuming all available GPU capacity when multiple models share the same GPU budget. As demand shifts across models, capacity is automatically redistributed so that every model can scale within its fair share — without manual intervention or breaching the overall GPU limit. This feature can be layered on top of either scaling signal path. It is a proof of concept and is not production-ready — use it only in test or development environments.

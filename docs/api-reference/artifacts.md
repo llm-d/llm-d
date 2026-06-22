@@ -96,7 +96,6 @@ In addition to the upstream images, llm-d also builds and releases vLLM images w
 | `ghcr.io/llm-d/llm-d-aws`       | `v0.7.0` | NVIDIA GPU + EFA | RHEL UBI9 | amd64, arm64 |
 | `ghcr.io/llm-d/llm-d-rocm`      | `v0.7.0` | AMD ROCm | RHEL UBI9 | amd64 |
 | `ghcr.io/llm-d/llm-d-xpu`       | `v0.7.0` | Intel XPU | Ubuntu 24.04 | amd64 |
-| `ghcr.io/llm-d/llm-d-hpu`       | `v0.7.0` | Intel Gaudi HPU | Ubuntu 22.04 | amd64 |
 | `ghcr.io/llm-d/llm-d-cpu`       | `v0.7.0` | CPU | RHEL UBI9 | amd64 |
 
 ### FS Offloading Extension

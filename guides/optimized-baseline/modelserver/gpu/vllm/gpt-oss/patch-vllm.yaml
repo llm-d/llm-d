@@ -1,0 +1,88 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: decode
+spec:
+  replicas: 16
+  template:
+    spec:
+      containers:
+        - name: modelserver
+          command: ["vllm", "serve"]
+          # Include all args in overlay patch for consistency
+          args:
+            - "openai/gpt-oss-120b"
+            - "--disable-access-log-for-endpoints=/health,/metrics,/v1/models"
+            - "--tensor-parallel-size=1"
+            - "--gpu-memory-utilization=0.95"
+            - "--served-model-name=openai/gpt-oss-120b"
+            - "--block-size=128"
+            - "--enable-auto-tool-choice"
+            - "--tool-call-parser=openai"
+            - "--reasoning-parser=openai_gptoss"
+            # Uncomment for distributed tracing
+            # - "--otlp-traces-endpoint=http://otel-collector:4317"
+            # - "--collect-detailed-traces=all"
+          # env:
+          #   # Uncomment for distributed tracing env vars
+          #   - name: OTEL_SERVICE_NAME
+          #     value: "vllm-decode"
+          #   - name: OTEL_EXPORTER_OTLP_ENDPOINT
+          #     value: "http://otel-collector:4317"
+          #   - name: OTEL_TRACES_EXPORTER
+          #     value: "otlp"
+          #   - name: OTEL_TRACES_SAMPLER
+          #     value: "parentbased_traceidratio"
+          #   - name: OTEL_TRACES_SAMPLER_ARG
+          #     value: "0.1"
+          resources:
+            limits:
+              nvidia.com/gpu: 1
+            requests:
+              nvidia.com/gpu: 1
+          env:
+            - name: HF_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: llm-d-hf-token
+                  key: HF_TOKEN
+            - name: PYTORCH_ALLOC_CONF
+              value: "expandable_segments:True"
+            - name: LOGNAME
+              value: "vllm"
+          volumeMounts:
+            - mountPath: /dev/shm
+              name: shm
+            - mountPath: /.cache
+              name: torch-compile-cache
+            - mountPath: /.triton
+              name: triton-cache
+            - mountPath: /.config
+              name: vllm-config
+            - mountPath: /model-cache
+              name: model-storage
+              readOnly: true
+          startupProbe:
+            initialDelaySeconds: 15
+            periodSeconds: 30
+            timeoutSeconds: 5
+            failureThreshold: 120
+          livenessProbe:
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            periodSeconds: 5
+            timeoutSeconds: 2
+            failureThreshold: 3
+      volumes:
+        - name: shm
+          emptyDir:
+            medium: Memory
+            sizeLimit: 20Gi
+        - name: torch-compile-cache
+          emptyDir: {}
+        - name: triton-cache
+          emptyDir: {}
+        - name: vllm-config
+          emptyDir: {}

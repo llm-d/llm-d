@@ -177,7 +177,7 @@ merge_package_manifests() {
 # load and merge packages from common + accelerator-specific locations
 # usage: load_layered_packages <os> <package_type> <accelerator>
 # package_type: "builder-packages.json" or "runtime-packages.json"
-# accelerator: "cuda", "xpu", "hpu", etc.
+# accelerator: "cuda", "xpu", etc.
 # returns: package names (one per line) for the target os
 # if no accelerator is passed only the common manifests will be used
 # supports three scenarios:

@@ -41,7 +41,6 @@ ACCELERATOR_LABELS = {
     "tpu": "TPU",
     "rocm": "ROCm",
     "xpu": "XPU",
-    "hpu": "HPU",
 }
 
 # (display_name, guide_path, workflow_slugs, connector_filter)

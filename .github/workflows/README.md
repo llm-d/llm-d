@@ -15,7 +15,7 @@ The list of templates for the workloads can be located at the [`workloads`](http
    * `<guide>`:  list provided by $(`find guides/ -maxdepth 2 -name README.md -print | grep -Ev "rollouts|prereqs|recipes|guides/README.md"`)
    * `<provider>`: indicates which companies/members (and teams) are providing hardware resources for testing (currently, `amd`, `cks`, `gke`, `ibm`, and `intel`)
    * `<offload destination>`: possible values are `acc` (indicating that no offloading is done, as all blocks are retained within the accelerator),   `gpu`, `storage`
-   * `<accelerator>`: `gpu`, `tpu`, `rocm`, `xpu` and `hpu`
+   * `<accelerator>`: `gpu`, `tpu`, `rocm` and `xpu`
    * `<cache connector>`: `x` (for "don't care"/"not defined"), `native` (for vllm) and `lmcache`
 
 ## Status Reporting

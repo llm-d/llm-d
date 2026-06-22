@@ -17,13 +17,10 @@ on:
       xpu:
         description: 'Whether XPU image was built'
         value: ${{ jobs.detect-changes.outputs.xpu }}
-      hpu:
-        description: 'Whether HPU image was built'
-        value: ${{ jobs.detect-changes.outputs.hpu }}
   workflow_dispatch:
     inputs:
       platforms:
-        description: "Platforms to build (comma-separated: cuda,aws,gb200,xpu,cpu,hpu)"
+        description: "Platforms to build (comma-separated: cuda,aws,gb200,xpu,cpu)"
         required: false
         default: "cuda"
         type: string
@@ -67,7 +64,6 @@ jobs:
       rocm: ${{ steps.force.outputs.rocm || steps.filter.outputs.rocm || steps.dispatch.outputs.rocm }}
       xpu: ${{ steps.force.outputs.xpu || steps.filter.outputs.xpu || steps.dispatch.outputs.xpu }}
       cpu: ${{ steps.force.outputs.cpu || steps.filter.outputs.cpu || steps.dispatch.outputs.cpu }}
-      hpu: ${{ steps.force.outputs.hpu || steps.filter.outputs.hpu || steps.dispatch.outputs.hpu }}
       rdma-tools: ${{ steps.filter.outputs.rdma-tools }}
     steps:
       - name: Force all platforms
@@ -80,7 +76,6 @@ jobs:
           echo "rocm=true" >> $GITHUB_OUTPUT
           echo "xpu=true" >> $GITHUB_OUTPUT
           echo "cpu=true" >> $GITHUB_OUTPUT
-          echo "hpu=true" >> $GITHUB_OUTPUT
       - uses: actions/checkout@v6
         with:
           ref: ${{ inputs.ref || '' }}
@@ -129,8 +124,6 @@ jobs:
               - 'docker/Dockerfile.cpu'
               - 'docker/common-versions'
               - 'docker/scripts/cpu/**'
-            hpu:
-              - 'docker/Dockerfile.hpu'
             rdma-tools:
               - 'docker/Dockerfile.rdma-tools'
               - 'docker/common-versions'
@@ -146,7 +139,6 @@ jobs:
           echo "rocm=$(echo $platforms | grep -q rocm && echo true || echo false)" >> $GITHUB_OUTPUT
           echo "xpu=$(echo $platforms | grep -q xpu && echo true || echo false)" >> $GITHUB_OUTPUT
           echo "cpu=$(echo $platforms | grep -q cpu && echo true || echo false)" >> $GITHUB_OUTPUT
-          echo "hpu=$(echo $platforms | grep -q hpu && echo true || echo false)" >> $GITHUB_OUTPUT
 
   cuda-build-llm-d-debug:
     needs: [detect-changes]
@@ -1438,83 +1430,6 @@ jobs:
           skip-dirs: /root/.cache/uv
         env:
           TRIVY_USERNAME: ${{ github.actor }}
-          TRIVY_PASSWORD: ${{ secrets.GHCR_TOKEN }}
-
-      - name: Upload Trivy scan results to GitHub Security tab
-        uses: github/codeql-action/upload-sarif@v4
-        with:
-          sarif_file: 'trivy-results.sarif'
-
-      - name: Display vulnerability summary
-        run: |
-          echo "=== Vulnerability Scan Summary ==="
-          if [ -f trivy-results.sarif ]; then
-            echo "Scan completed. Check the Security tab for detailed results."
-          else
-            echo "No vulnerabilities found or scan failed."
-          fi
-
-  hpu-build-llm-d:
-    needs: [detect-changes]
-    if: ${{ needs.detect-changes.outputs.hpu == 'true' }}
-    strategy:
-      fail-fast: false
-    runs-on: vllm-runner
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v6
-        with:
-          ref: ${{ inputs.ref || '' }}
-
-      - name: Log in to Container Registry
-        uses: docker/login-action@v4
-        with:
-          registry: ${{ env.REGISTRY }}
-          username: ${{ secrets.GHCR_USER }}
-          password: ${{ secrets.GHCR_TOKEN }}
-
-      - name: Build and push the image
-        id: build-and-push
-        run: |
-          TAG="sha-$(git rev-parse --short HEAD)"
-          PR_TAG="${{ github.event.pull_request.number }}"
-          export DEVICE=hpu
-          export DOCKERFILE=Dockerfile.hpu
-          export VERSION="${TAG}"
-          make image-build
-          make image-push
-          echo "tag=${TAG}" >> $GITHUB_OUTPUT
-          if [ -n "${PR_TAG}" ]; then
-            export NEW_TAG="pr-${PR_TAG}"
-            make image-retag
-            VERSION="${NEW_TAG}" make image-push
-            echo "pr_tag=pr-${PR_TAG}"  >> $GITHUB_OUTPUT
-          fi;
-
-      - name: Tag latest on default branch
-        if: |
-          github.ref == format('refs/heads/{0}', github.event.repository.default_branch) &&
-          github.event_name != 'pull_request_target'
-        run: |
-          export DEVICE=hpu
-          export DOCKERFILE=Dockerfile.hpu
-          export VERSION="sha-$(git rev-parse --short HEAD)"
-          export NEW_TAG="latest"
-          make image-retag
-          VERSION="${NEW_TAG}" make image-push
-
-      - name: Run Trivy vulnerability scanner
-        uses: aquasecurity/trivy-action@v0.36.0
-        with:
-          image-ref: ${{ env.REGISTRY }}/${{ github.repository }}-hpu-dev:${{ steps.build-and-push.outputs.tag }}
-          format: 'sarif'
-          output: 'trivy-results.sarif'
-          severity: 'CRITICAL,HIGH,MEDIUM'
-          scanners: vuln              # skip secrets/config/license analyzers
-          timeout: 30m
-          skip-dirs: /root/.cache/uv
-        env:
-          TRIVY_USERNAME: ${{ secrets.GHCR_USER }}
           TRIVY_PASSWORD: ${{ secrets.GHCR_TOKEN }}
 
       - name: Upload Trivy scan results to GitHub Security tab

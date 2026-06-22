@@ -90,7 +90,7 @@ The following are NOT typos — do not flag them:
 - autoscaler, autoscaling
 - CRD, CRDs, CustomResourceDefinition
 - OCI, GHCR, ghcr
-- Gaudi, HPU, XPU, TPU, ROCm
+- XPU, TPU, ROCm
 - InfiniStore, infinistore
 - pplx, perplexity
 - kubectl, kubeconfig, kubecontext

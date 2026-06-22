@@ -136,7 +136,7 @@ kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/predicted-latency-routing/m
 > [!NOTE]
 > Set `MODEL_NAME="Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8"` for the TPU path — the verification and benchmark steps below use it.
 
-For other backends (AMD GPU, Intel XPU, Gaudi, CPU), see [optimized-baseline → Deploy the Model Server](../optimized-baseline/README.md#2-deploy-the-model-server). For example, for sglang deployments:
+For other backends (AMD GPU, Intel XPU, CPU), see [optimized-baseline → Deploy the Model Server](../optimized-baseline/README.md#2-deploy-the-model-server). For example, for sglang deployments:
 
 ```bash
 kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/optimized-baseline/modelserver/gpu/sglang/${INFRA_PROVIDER}/
