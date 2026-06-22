@@ -6,7 +6,7 @@ This guide explains how to provision an AWS EFS-backed shared storage for llm-d 
 
 ## Prerequisites
 
-* Ensure your cluster infrastructure is sufficient to [deploy high scale inference](../../../../../prereq/infrastructure/README.md).
+* Ensure your cluster infrastructure is sufficient to [deploy high scale inference](../../../../../docs/infrastructure/README.md).
 * An AWS account.
 * An EKS cluster.
 * An existing EFS filesystem.
