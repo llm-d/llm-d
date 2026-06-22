@@ -47,11 +47,10 @@ rows because the serving engine changes prefill throughput.
 - The GPU/TPU paths run at the vLLM default `--max-num-batched-tokens=8192`, so calibrate those
   with `CHUNK_SIZE=8192`. **Re-measure** if you change TP, chunk size, quantization, or
   `--max-model-len` — those move the number more than the model identity does.
-- **‡ proxy, not measured** — these paths have no GCP hardware to calibrate on, so they borrow the
-  closest measured value as a starting point: the **AMD** paths use the same-engine H100 values
-  (`amd/vllm` ← `gpu/vllm` 15928, `amd/sglang` ← `gpu/sglang` 30720), and **HPU / XPU** use the
-  `cpu/vllm` value (1970), since they serve the same small models on lower-throughput accelerators.
-  Replace each with a real `calibrate.sh` run on that hardware when available.
+- **‡ proxy, not measured** — these paths are not yet calibrated, so they borrow the closest
+  measured value as a starting point: the **AMD** paths use the same-engine H100 values
+  (`amd/vllm` ← `gpu/vllm` 15928, `amd/sglang` ← `gpu/sglang` 30720), and **XPU** uses the
+  `cpu/vllm` value (1970). Replace each with a real `calibrate.sh` run on that hardware when available.
 
 **Related (other guides):** the [agentic-serving](../../../agentic-serving) guide ships
 `peakPrefillThroughput=16444` for Qwen3-Coder-480B-FP8 on TPU v7x (TP=8) — same accelerator
