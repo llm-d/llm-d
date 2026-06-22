@@ -102,8 +102,6 @@ spec:
                 value: /usr/lib64
               - name: VLLM_SKIP_P2P_CHECK
                 value: "1"
-              - name: VLLM_USE_DEEP_GEMM
-                value: "1"
               - name: NVIDIA_GDRCOPY
                 value: enabled
               - name: NVSHMEM_REMOTE_TRANSPORT

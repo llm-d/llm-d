@@ -135,8 +135,6 @@ spec:
                 value: "1"
               - name: VLLM_RANDOMIZE_DP_DUMMY_INPUTS
                 value: "1"
-              - name: VLLM_USE_DEEP_GEMM
-                value: "1"
               - name: NVIDIA_GDRCOPY
                 value: enabled
               - name: NCCL_MNNVL_ENABLE

@@ -172,10 +172,12 @@ spec:
                 value: /usr/lib64
               - name: VLLM_SKIP_P2P_CHECK
                 value: "1"
-              - name: VLLM_USE_DEEP_GEMM
+              - name: VLLM_RANDOMIZE_DP_DUMMY_INPUTS
                 value: "1"
               - name: NVIDIA_GDRCOPY
                 value: enabled
+              - name: NVSHMEM_SYMMETRIC_SIZE # Prevent NVSHMEM OOM.
+                value: "16G"
               - name: NVSHMEM_REMOTE_TRANSPORT
                 value: ibgda
               - name: NVSHMEM_IB_ENABLE_IBGDA
@@ -188,12 +190,12 @@ spec:
                 value: eth0
               - name: VLLM_LOGGING_LEVEL
                 value: INFO
-              - name: NVSHMEM_DISABLE_CUDA_VMM
-                value: "0"
               - name: VLLM_NIXL_SIDE_CHANNEL_HOST
                 valueFrom:
                   fieldRef:
                     fieldPath: status.podIP
+              # Use cache directories from the mounted volume under one easy to mount
+              # root directory
               - name: CUDA_CACHE_PATH
                 value: /var/cache/vllm/cuda
               - name: CCACHE_DIR
