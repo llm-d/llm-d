@@ -30,6 +30,21 @@ on:
         default: 'main'
         required: false
         type: string
+      guide_name:
+        description: 'Guide name/configuration to use'
+        default: 'optimized-baseline'
+        required: true
+        type: string
+      test_name:
+        description: 'Test identifier name'
+        default: 'optimized-baseline-job1'
+        required: true
+        type: string
+      perf_job:
+        description: 'Performance job configuration path'
+        default: 'scripts/perf-configs/shared_prefix_job1.yaml'
+        required: true
+        type: string
 
 permissions:
   contents: write
@@ -42,13 +57,18 @@ jobs:
       GCP_PROJECT_ID: ${{ inputs.gcp_project_id || 'llm-d-scale' }}
       GKE_CLUSTER_NAME: ${{ inputs.gke_cluster_name || 'llm-d-e2e-us-east5' }}
       GKE_CLUSTER_ZONE: ${{ inputs.gke_cluster_zone || 'us-east5' }}
+      SIM_REPLICAS: ${{ inputs.sim_replicas || '10' }}
+      LLM_D_REF: ${{ inputs.llm_d_ref || 'main' }}
+      GUIDE_NAME: ${{ inputs.guide_name || 'optimized-baseline' }}
+      TEST_NAME: ${{ inputs.test_name || 'optimized-baseline-job1' }}
+      PERF_JOB: ${{ inputs.perf_job || 'scripts/perf-configs/shared_prefix_job1.yaml' }}
       HF_TOKEN: ${{ secrets.HF_TOKEN }}
     steps:
       - name: Checkout llm-d/llm-d
         uses: actions/checkout@v6
         with:
           path: llm-d
-          ref: ${{ inputs.llm_d_ref || 'main' }}
+          ref: ${{ env.LLM_D_REF }}
 
       - name: Checkout llm-d/llm-d-router
         uses: actions/checkout@v6
@@ -96,10 +116,10 @@ jobs:
       - name: Run Performance Test Script
         run: |
           python3 llm-d/scripts/run_nightly_perf.py \
-            --guide-name optimized-baseline \
-            --test-name optimized-baseline-job1 \
-            --perf-job scripts/perf-configs/shared_prefix_job1.yaml \
-            --sim-replicas ${{ inputs.sim_replicas || 10 }} \
+            --guide-name ${{ env.GUIDE_NAME }} \
+            --test-name ${{ env.TEST_NAME }} \
+            --perf-job ${{ env.PERF_JOB }} \
+            --sim-replicas ${{ env.SIM_REPLICAS }} \
             --results-dir llm-d/llm-d-router-resource-tests \
             --gcp-project ${{ env.GCP_PROJECT_ID }}
 
