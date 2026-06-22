@@ -10,6 +10,9 @@ own with this tool and set it on the `prefix-cache-affinity-filter` plugin in yo
 guide's router values file. (The agentic-serving guide ships `16444`, measured for
 Qwen3-Coder-480B-FP8 on TPU v7x.)
 
+See the [**configuration matrix**](./configuration-matrix.md) for the reference values by
+(model, accelerator) shipped under `guides/`, and which combinations still need a calibration run.
+
 ## What it measures
 
 `calibrate.sh` runs a short Kubernetes Job ([`calibration-peak-throughput.yaml`](calibration-peak-throughput.yaml))

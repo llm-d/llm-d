@@ -40,7 +40,7 @@ This guide includes configurations for the following accelerators:
 | Intel XPU           | `xpu`              | Intel Data Center GPU Max 1550+            |
 | Google TPU v6e      | `tpu/v6`           | GKE TPU                                    |
 | Google TPU v7       | `tpu/v7`           | GKE TPU                                    |
-| CPU                 | `cpu`              | Intel/AMD, 64 cores + 64GB RAM per replica |
+| CPU                 | `cpu`              | x86 with bf16 acceleration — AMX or AVX512-BF16 (Intel Sapphire Rapids+ / GCP C3, AMD Zen 4+); 64 cores + 64GB RAM per replica. Older CPUs without AMX/AVX512-BF16 (e.g. Cascade/Ice Lake) crash on the bf16 model unless run with `--dtype=float32`. |
 
 > [!NOTE]
 > Some hardware variants use reduced configurations (fewer replicas, smaller models) to enable CI testing for compatibility and regression checks. These configurations are maintained by their respective hardware vendors and are not guaranteed as production-ready examples. Users deploying on non-default hardware should review and adjust the configurations for their environment.
@@ -249,6 +249,8 @@ The calibration assets live in `guides/${GUIDE_NAME}/calibration/`:
 | `calibrate-tau.yaml` | Standalone K8s manifest: ConfigMap with the calibration Python script + Job that runs it |
 | `calibration.values.template.yaml` | Helm values overlay template with `${TAU}` placeholder |
 | `calibrate.sh` | Wrapper script that runs the Job, measures τ, and writes the rendered overlay file (does not apply) |
+
+For reference values across the (model, accelerator) combinations shipped under `guides/` — and which ones still need a calibration run — see the [**configuration matrix**](../recipes/router/calibration/configuration-matrix.md).
 
 ## Verification
 
