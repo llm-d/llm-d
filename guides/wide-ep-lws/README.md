@@ -10,9 +10,9 @@ This deployment uses **DP-aware scheduling** with vLLM's `--data-parallel-multi-
 
 This guide demonstrates how to deploy DeepSeek-R1-0528 using vLLM's P/D disaggregation support with NIXL in a wide expert parallel pattern with LeaderWorkerSets with DP-aware scheduling. This guide has been validated on:
 
-* a 32xH200 cluster with InfiniBand networking (CoreWeave)
+* a 32xH200 cluster with InfiniBand networking
 * a 32xH200 cluster on GKE with RoCE networking
-* Istio 1.29.2 (required for multi-port support in gateway mode)
+* a 32xB200 cluster on GKE with RoCE networking
 
 ## Default Configuration
 
@@ -29,7 +29,7 @@ This guide includes configurations for the following accelerators:
 
 | Backend             | Directory                  | Notes                                      |
 | ------------------- | -------------------------- | ------------------------------------------ |
-| NVIDIA GPU (GKE)    | `modelserver/gpu/vllm/gke/`         | GKE deployment (H200)                      |
+| NVIDIA GPU (GKE)    | `modelserver/gpu/vllm/gke/`         | GKE deployment                      |
 | NVIDIA GPU (CoreWeave)| `modelserver/gpu/vllm/coreweave/`   | CoreWeave deployment                     |
 | NVIDIA GPU (DGX Cloud GB200)| `modelserver/gpu/vllm/dgx-cloud-gb200/` | DGX Cloud deployment             |
 
@@ -302,16 +302,3 @@ Benchmark: `2048_concurrent_2k_isl_2k_osl` (2048 concurrent requests, 2K input /
 | Requests/s | 14.33 |
 
 ~1,741 output tokens/s per decode GPU (16 decode GPUs).
-
-### GKE (4x H200, 32 GPUs, RoCE)
-
-Benchmark: `2048_concurrent_2k_isl_2k_osl` (2048 concurrent requests, 2K input / 2K output tokens)
-
-| Metric | DP Supervisor |
-|---|---|
-| Output tokens/s | 23,246 |
-| Input tokens/s | 25,106 |
-| Total tokens/s | 48,352 |
-| Requests/s | 12.27 |
-
-~1,453 output tokens/s per decode GPU (16 decode GPUs). ~17% lower than CKS due to RoCE vs InfiniBand latency.
