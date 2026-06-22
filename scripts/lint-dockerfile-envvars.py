@@ -13,7 +13,7 @@ def parse_script_requirements(script_path: Path) -> Set[str]:
     """extract required env vars from script header block"""
     try:
         content = script_path.read_text()
-    except:
+    except Exception:
         return set()
 
     pattern = r'^#\s+-\s+([A-Z_][A-Z0-9_]*):.*$'

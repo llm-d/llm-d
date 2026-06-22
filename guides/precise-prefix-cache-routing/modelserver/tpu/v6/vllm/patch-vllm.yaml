@@ -1,0 +1,25 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: decode
+spec:
+  template:
+    spec:
+      nodeSelector:
+        cloud.google.com/gke-tpu-topology: "2x4"
+        cloud.google.com/gke-tpu-accelerator: "tpu-v6e-slice"
+      containers:
+        - name: modelserver
+          args:
+            - "Qwen/Qwen3-32B"
+            - "--port=$(POD_PORT)"
+            - "--max-model-len=4096"
+            - "--tensor-parallel-size=8"
+            - "--block-size=64"
+            - "--kv-events-config"
+            - '{"enable_kv_cache_events":true,"publisher":"zmq","endpoint":"$(KV_EVENTS_ENDPOINT)","topic":"kv@$(POD_IP):$(POD_PORT)@Qwen/Qwen3-32B"}'
+          resources:
+            limits:
+              google.com/tpu: "8"
+            requests:
+              google.com/tpu: "8"

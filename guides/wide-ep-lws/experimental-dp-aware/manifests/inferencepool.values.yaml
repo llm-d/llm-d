@@ -1,73 +1,65 @@
-inferenceExtension:
-  replicas: 1
-  flags:
-    v: 1
-  image:
-    name: llm-d-inference-scheduler
-    hub: ghcr.io/llm-d
-    tag: v0.7.0
-  extProcPort: 9002
-  # Distributed tracing configuration (OpenTelemetry)
-  tracing:
-    enabled: false
-    # otelExporterEndpoint: "http://otel-collector:4317"
-    # sampling:
-    #   sampler: "parentbased_traceidratio"
-    #   samplerArg: "0.1"
+router:
+  epp:
+    replicas: 1
+    flags:
+      v: 1
+    image:
+      registry: ghcr.io/llm-d
+      repository: llm-d-router-endpoint-picker-dev
+      tag: main
+    extProcPort: 9002
+    pluginsConfigFile: "custom-plugins.yaml"
+    pluginsCustomConfig:
+      custom-plugins.yaml: |
+        apiVersion: llm-d.ai/v1alpha1
+        kind: EndpointPickerConfig
+        plugins:
+        - type: disagg-headers-handler
+        - type: always-disagg-pd-decider
+        - type: disagg-profile-handler
+          parameters:
+            deciderPluginName: always-disagg-pd-decider
+        - type: prefill-filter
+        - type: decode-filter
+        - type: prefix-cache-scorer
+        - type: queue-scorer
+        - type: kv-cache-utilization-scorer
+        - type: active-request-scorer
+        schedulingProfiles:
+        - name: prefill
+          plugins:
+          - pluginRef: prefill-filter
+          - pluginRef: prefix-cache-scorer
+            weight: 3
+          - pluginRef: queue-scorer
+            weight: 2
+          - pluginRef: kv-cache-utilization-scorer
+            weight: 2
+        - name: decode
+          plugins:
+          - pluginRef: decode-filter
+          - pluginRef: active-request-scorer
+            weight: 2
+          - pluginRef: prefix-cache-scorer
+            weight: 3
+
   monitoring:
     interval: "10s"
     prometheus:
       enabled: true
       auth:
         secretName: wide-ep-gateway-sa-metrics-reader-secret
-  pluginsConfigFile: "custom-plugins.yaml"
-  pluginsCustomConfig:
-    custom-plugins.yaml: |
-      # ALWAYS DO PD IN THIS EXAMPLE (THRESHOLD 0)
-      # This example uses random routing
-      # since it's not yet possible to route to individual DP ranks
-      apiVersion: inference.networking.x-k8s.io/v1alpha1
-      kind: EndpointPickerConfig
-      plugins:
-      - type: prefill-header-handler
-      - type: prefill-filter
-      - type: decode-filter
-      - type: prefix-cache-scorer
-      - type: active-request-scorer
-      - type: queue-scorer
-      - type: pd-profile-handler
-        parameters:
-          threshold: 0
-          hashBlockSize: 5
-      schedulingProfiles:
-      - name: prefill
-        plugins:
-        - pluginRef: prefill-filter
-        - pluginRef: prefix-cache-scorer
-          weight: 3
-        - pluginRef: active-request-scorer
-          weight: 2
-        - pluginRef: queue-scorer
-          weight: 2
-      - name: decode
-        plugins:
-        - pluginRef: decode-filter
-        - pluginRef: active-request-scorer
-          weight: 1
-        - pluginRef: queue-scorer
-          weight: 1
 
-inferencePool:
-  targetPorts:
-    - number: 8000
-    - number: 8001
-    - number: 8002
-    - number: 8003
-    - number: 8004
-    - number: 8005
-    - number: 8006
-    - number: 8007
   modelServers:
+    targetPorts:
+      - number: 8000
+      - number: 8001
+      - number: 8002
+      - number: 8003
+      - number: 8004
+      - number: 8005
+      - number: 8006
+      - number: 8007
     matchLabels:
       llm-d.ai/inference-serving: "true"
       llm-d.ai/guide: "wide-ep-lws"

@@ -1,6 +1,6 @@
 # [Experimental] Batch Gateway
 
-[Batch Gateway](https://github.com/llm-d-incubation/batch-gateway) provides an OpenAI-compatible Batch API for submitting, tracking, and managing large-scale batch inference jobs. It is designed to efficiently process batch workloads alongside interactive workloads on shared infrastructure.
+[Batch Gateway](https://github.com/llm-d/llm-d-batch-gateway) provides an OpenAI-compatible Batch API for submitting, tracking, and managing large-scale batch inference jobs. It is designed to efficiently process batch workloads alongside interactive workloads on shared infrastructure.
 
 ## Overview
 
@@ -70,7 +70,7 @@ The Batch Processor needs to know where to send inference requests. This is conf
 export INFERENCE_GW_URL="http://infra-inference-scheduling-inference-gateway-istio.llm-d-inference-scheduler.svc.cluster.local:80"
 ```
 
-**Per-model gateways** (different endpoints per model): see the [Helm chart README](https://github.com/llm-d-incubation/batch-gateway/blob/main/charts/batch-gateway/README.md) for `modelGateways` configuration.
+**Per-model gateways** (different endpoints per model): see the [Helm chart README](https://github.com/llm-d/llm-d-batch-gateway/blob/main/charts/batch-gateway/README.md) for `modelGateways` configuration.
 
 ### Step 4: Deploy
 
@@ -98,7 +98,7 @@ helm install batch-gateway ./charts/batch-gateway \
 
 ## Detailed Deployment Guide
 
-For a production deployment with authentication, authorization, and TLS on Kubernetes, see the [Kubernetes deployment guide](https://github.com/llm-d-incubation/batch-gateway/blob/main/docs/guides/deploy-k8s.md) (Istio + Kuadrant + cert-manager).
+For a production deployment with authentication, authorization, and TLS on Kubernetes, see the [Kubernetes deployment guide](https://github.com/llm-d/llm-d-batch-gateway/blob/main/docs/guides/deploy-k8s.md) (Istio + Kuadrant + cert-manager).
 
 ## Verification
 
@@ -176,5 +176,5 @@ kubectl delete namespace ${NAMESPACE}
 
 ## Related
 
-- [Batch Gateway Repository](https://github.com/llm-d-incubation/batch-gateway) — source code, Helm chart, and detailed documentation.
+- [Batch Gateway Repository](https://github.com/llm-d/llm-d-batch-gateway) — source code, Helm chart, and detailed documentation.
 - [Asynchronous Processing](../asynchronous-processing/README.md) — queue-based asynchronous inference for individual requests (complementary to Batch Gateway's job-oriented API).

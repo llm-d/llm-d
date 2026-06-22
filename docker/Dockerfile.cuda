@@ -39,6 +39,9 @@ ARG GDRCOPY_VERSION="v2.5.2"
 ARG UCX_REPO="https://github.com/openucx/ucx.git"
 ARG UCX_VERSION="v1.20.0"
 
+ARG UCCL_REPO="https://github.com/uccl-project/uccl.git"
+ARG UCCL_VERSION="v0.1.1"
+
 ARG NVSHMEM_USE_GIT="true"
 ARG NVSHMEM_REPO="https://github.com/NVIDIA/nvshmem.git"
 ARG NVSHMEM_VERSION="v3.4.5-0"
@@ -47,13 +50,13 @@ ARG NVSHMEM_CUDA_ARCHITECTURES="90a;100"
 
 ARG BUILD_NIXL_FROM_SOURCE="false"
 ARG NIXL_REPO="https://github.com/ai-dynamo/nixl.git"
-ARG NIXL_VERSION="v1.0.0"
+ARG NIXL_VERSION="v1.2.0"
 
 ARG INFINISTORE_REPO="https://github.com/bytedance/InfiniStore.git"
 ARG INFINISTORE_VERSION="0.2.33"
 
 ARG LMCACHE_REPO="https://github.com/LMCache/LMCache.git"
-ARG LMCACHE_VERSION="v0.4.4-cu13"
+ARG LMCACHE_VERSION="v0.4.6"
 
 # Kernels
 ARG DEEPEP_REPO="https://github.com/neuralmagic/DeepEP"
@@ -65,8 +68,7 @@ ARG DEEPEP_GB200_VERSION="sgl-gb200-blog-pt2"
 ARG DEEPGEMM_REPO="https://github.com/deepseek-ai/DeepGEMM"
 ARG DEEPGEMM_VERSION="477618cd51baffca09c4b0b87e97c03fe827ef03"
 ARG FLASHINFER_REPO="https://github.com/flashinfer-ai/flashinfer.git"
-# May need to be dropped to v0.6.4
-ARG FLASHINFER_VERSION="v0.6.6"
+ARG FLASHINFER_VERSION="v0.6.12"
 
 # vLLM build settings - provided via build args from docker/common-versions file
 # Override here for platform-specific testing or via build args
@@ -171,6 +173,7 @@ RUN export UV_INSTALL_DIR=/usr/local/bin && \
 # Set up build environment paths
 ENV NVSHMEM_DIR="/opt/nvshmem-${NVSHMEM_VERSION}" \
     UCX_PREFIX="/opt/ucx" \
+    UCCL_PREFIX="/opt/uccl" \
     NIXL_PREFIX="/opt/nixl" \
     EFA_PREFIX="/opt/amazon/efa"
 
@@ -179,11 +182,13 @@ ENV PATH="${NVSHMEM_DIR}/bin:${VIRTUAL_ENV}/bin:${PATH}" \
     LIBRARY_PATH="\
 ${EFA_PREFIX}/lib:${EFA_PREFIX}/lib64:\
 ${UCX_PREFIX}/lib:${UCX_PREFIX}/lib64:\
+${UCCL_PREFIX}/lib:\
 ${NVSHMEM_DIR}/lib:${NVSHMEM_DIR}/lib64:\
 ${CUDA_HOME}/lib64:\
 /usr/local/lib:/usr/local/lib64:\
 ${LIBRARY_PATH}" \
     CPATH="${NVSHMEM_DIR}/include:\
+${UCCL_PREFIX}/include:\
 ${CUDA_HOME}/include:${CUDA_HOME}/include/cccl:\
 /usr/local/include:\
 /usr/include:\
@@ -218,6 +223,14 @@ RUN --mount=type=cache,target=/var/cache/git \
     --mount=type=secret,id=aws_secret_access_key \
     /tmp/build-ucx.sh && \
     rm -f /tmp/build-ucx.sh
+
+# Build UCCL
+ARG UCCL_REPO
+ARG UCCL_VERSION
+COPY docker/scripts/common/build-uccl.sh /tmp/build-uccl.sh
+RUN --mount=type=cache,target=/var/cache/git \
+    /tmp/build-uccl.sh && \
+    rm -f /tmp/build-uccl.sh
 
 # Build NVSHMEM from source (skipped for GB200 - uses pip instead)
 ARG NVSHMEM_USE_GIT
@@ -343,6 +356,7 @@ ENV LANG="C.UTF-8" \
     VIRTUAL_ENV="/opt/vllm" \
     NVSHMEM_DIR="/opt/nvshmem-${NVSHMEM_VERSION}" \
     UCX_PREFIX="/opt/ucx" \
+    UCCL_PREFIX="/opt/uccl" \
     EFA_PREFIX="/opt/amazon/efa" \
     CUDA_HOME="/usr/local/cuda"
 
@@ -355,6 +369,7 @@ ${NVSHMEM_DIR}/lib:${NVSHMEM_DIR}/lib64:\
 ${CUDA_HOME}/lib64:${CUDA_HOME}/compat:\
 ${EFA_PREFIX}/lib:${EFA_PREFIX}/lib64:\
 ${UCX_PREFIX}/lib:${UCX_PREFIX}/lib64:\
+${UCCL_PREFIX}/lib:\
 /usr/local/lib:/usr/local/lib64:\
 /usr/lib/x86_64-linux-gnu:/usr/lib/aarch64-linux-gnu:\
 ${LD_LIBRARY_PATH}" \
@@ -422,6 +437,9 @@ COPY --from=builder /tmp/gdrcopy_libs /tmp/
 
 # Copy UCX libraries from builder
 COPY --from=builder /opt/ucx /opt/ucx
+
+# Copy UCCL libraries from builder
+COPY --from=builder /opt/uccl /opt/uccl
 
 RUN if [ -d /tmp/gdrcopy_libs ]; then \
         if [ "${TARGETOS:-rhel}" = "ubuntu" ]; then \

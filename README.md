@@ -75,7 +75,7 @@ llm-d accelerates distributed inference by integrating industry-standard open te
 
 Our [guides](./guides/README.md) are living docs and kept current. For details about the Helm charts and component releases, visit our [GitHub Releases page](https://github.com/llm-d/llm-d/releases) to review release notes.
 
-See the [accelerator docs](./docs/accelerators/README.md) for points of contact and more details about the accelerators, networks, and configurations tested.
+See the [accelerator docs](./docs/getting-started/accelerators.md) for points of contact and more details about the accelerators, networks, and configurations tested.
 
 ## Contribute
 

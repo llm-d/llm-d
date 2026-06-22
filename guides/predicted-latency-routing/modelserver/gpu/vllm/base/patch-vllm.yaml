@@ -1,0 +1,16 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: decode
+spec:
+  replicas: 10
+  template:
+    spec:
+      containers:
+        - name: modelserver
+          args:
+            - "Qwen/Qwen3-32B"
+            - "--disable-access-log-for-endpoints=/health,/metrics,/v1/models"
+            - "--tensor-parallel-size=2"
+            - "--max-model-len=131072"
+            - "--hf-overrides={\"rope_scaling\":{\"rope_type\":\"yarn\",\"factor\":3.2,\"original_max_position_embeddings\":40960}}"

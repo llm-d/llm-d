@@ -5,11 +5,9 @@ resources:
 
 namePrefix: pd-disaggregation-rocm-vllm-
 
-images:
-  - name: REPLACE_MODEL_SERVER_IMAGE
-    newName: ghcr.io/llm-d/llm-d-rocm
-    newTag: v0.7.0
-
+components:
+  - ../../../../../recipes/modelserver/components/images/amd-vllm
+  - ../../../../../recipes/modelserver/components/images/routing-sidecar
 
 labels:
   - pairs:
@@ -17,39 +15,9 @@ labels:
       llm-d.ai/guide: pd-disaggregation
       llm-d.ai/accelerator-variant: gpu
       llm-d.ai/accelerator-vendor: amd
-      inference.networking.k8s.io/engine-type: vllm
+      llm-d.ai/engine-type: vllm
     includeSelectors: true
     includeTemplates: true
-    fields:
-      - version: v1
-        kind: ServiceAccount
-        path: metadata/labels
-        create: true
-      - group: apps
-        version: v1
-        kind: Deployment
-        path: metadata/labels
-        create: true
-      - group: apps
-        version: v1
-        kind: Deployment
-        path: spec/selector/matchLabels
-        create: true
-      - group: apps
-        version: v1
-        kind: Deployment
-        path: spec/template/metadata/labels
-        create: true
-      - group: monitoring.coreos.com
-        version: v1
-        kind: PodMonitor
-        path: metadata/labels
-        create: true
-      - group: monitoring.coreos.com
-        version: v1
-        kind: PodMonitor
-        path: spec/selector/matchLabels
-        create: true
 patches:
   - path: patch-decode.yaml
   - path: patch-prefill.yaml

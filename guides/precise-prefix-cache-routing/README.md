@@ -1,6 +1,8 @@
 # Precise Prefix Cache Routing
 
-[![Nightly - Precise Prefix Cache E2E (OpenShift)](https://github.com/llm-d/llm-d/actions/workflows/nightly-e2e-precise-prefix-cache-ocp.yaml/badge.svg)](https://github.com/llm-d/llm-d/actions/workflows/nightly-e2e-precise-prefix-cache-ocp.yaml) [![Nightly - Precise Prefix Cache E2E (CKS)](https://github.com/llm-d/llm-d/actions/workflows/nightly-e2e-precise-prefix-cache-cks.yaml/badge.svg)](https://github.com/llm-d/llm-d/actions/workflows/nightly-e2e-precise-prefix-cache-cks.yaml) [![Nightly - Precise Prefix Cache E2E (GKE)](https://github.com/llm-d/llm-d/actions/workflows/nightly-e2e-precise-prefix-cache-gke.yaml/badge.svg)](https://github.com/llm-d/llm-d/actions/workflows/nightly-e2e-precise-prefix-cache-gke.yaml)
+[![E2E (CKS GPU)](https://github.com/llm-d/llm-d/actions/workflows/consolidate-status-precise-prefix-cache-routing-cks-acc-gpu-vllm-x.yaml/badge.svg)](https://github.com/llm-d/llm-d/actions/workflows/consolidate-status-precise-prefix-cache-routing-cks-acc-gpu-vllm-x.yaml)
+[![E2E (GKE GPU)](https://github.com/llm-d/llm-d/actions/workflows/consolidate-status-precise-prefix-cache-routing-gke-acc-gpu-vllm-x.yaml/badge.svg)](https://github.com/llm-d/llm-d/actions/workflows/consolidate-status-precise-prefix-cache-routing-gke-acc-gpu-vllm-x.yaml)
+[![E2E (OCP GPU)](https://github.com/llm-d/llm-d/actions/workflows/consolidate-status-precise-prefix-cache-routing-ibm-acc-gpu-vllm-x.yaml/badge.svg)](https://github.com/llm-d/llm-d/actions/workflows/consolidate-status-precise-prefix-cache-routing-ibm-acc-gpu-vllm-x.yaml)
 
 ## Overview
 
@@ -8,7 +10,7 @@ This guide routes requests on precise per-pod KV-cache state rather than request
 
 Two scorers make up the routing decision alongside the load-aware stack:
 
-- **Precise prefix-cache aware** — the [precise-prefix-cache-scorer](https://github.com/llm-d/llm-d-router/tree/main/pkg/epp/framework/plugins/scheduling/scorer/preciseprefixcache) indexes real KV-block events from vLLM and returns the exact resident-block fraction. Indexer internals (event ingestion, block hashing, dual-key design) are documented in [llm-d-kv-cache architecture](https://github.com/llm-d/llm-d-kv-cache/blob/main/docs/architecture.md).
+- **Precise prefix-cache aware** — the [precise-prefix-cache-producer](https://github.com/llm-d/llm-d-router/tree/main/pkg/epp/framework/plugins/requestcontrol/dataproducer/preciseprefixcache) indexes real KV-block events from vLLM and publishes the exact resident-block fraction. The generic [prefix-cache-scorer](https://github.com/llm-d/llm-d-router/tree/main/pkg/epp/framework/plugins/scheduling/scorer/prefix) then reads `prefixMatchInfoProducerName`. Indexer internals (event ingestion, block hashing, dual-key design) are documented in [llm-d-kv-cache architecture](https://github.com/llm-d/llm-d-kv-cache/blob/main/docs/architecture.md).
 - **Load-aware** — such as the [kv-cache utilization](https://github.com/llm-d/llm-d-router/tree/main/pkg/epp/framework/plugins/scheduling/scorer/kvcacheutilization) and [queue size](https://github.com/llm-d/llm-d-router/tree/main/pkg/epp/framework/plugins/scheduling/scorer/queuedepth) scorers balance against pod pressure.
 
 ## Default Configuration
@@ -24,27 +26,27 @@ Two scorers make up the routing decision alongside the load-aware stack:
 
 ### Supported Hardware Backends
 
-| Backend              | Directory                  | Default model                           | Notes                                      |
-| -------------------- | -------------------------- | --------------------------------------- | ------------------------------------------ |
-| NVIDIA GPU           | `modelserver/gpu/vllm/`    | Qwen/Qwen3-32B                          | Default configuration                      |
-| AMD GPU              | `modelserver/amd/vllm/`    | Qwen/Qwen3-32B                          | AMD GPU                                    |
-| Intel XPU            | `modelserver/xpu/vllm/`    | Qwen/Qwen3-0.6B                         | CI-sized; update router `modelName` for real use |
-| Intel Gaudi (HPU)    | `modelserver/hpu/vllm/`    | Qwen/Qwen3-8B                           | `--block-size=128`; update scorer `blockSize` to match |
-| Google TPU v6e       | `modelserver/tpu-v6/vllm/` | Llama-3.1-70B-Instruct                  | GKE TPU                                    |
-| Google TPU v7        | `modelserver/tpu-v7/vllm/` | Qwen3-Coder-480B-FP8                    | GKE TPU                                    |
-| CPU                  | `modelserver/cpu/vllm/`    | Llama-3.2-3B-Instruct                   | CI-sized                                   |
+| Backend              | Directory                  | Default model                           | Notes                                                    |
+| -------------------- | -------------------------- | --------------------------------------- | -------------------------------------------------------- |
+| NVIDIA GPU           | `modelserver/gpu/vllm/`    | Qwen/Qwen3-32B                          | Default configuration                                    |
+| NVIDIA GPU (SGLang)  | `modelserver/gpu/sglang/`  | Qwen/Qwen3-32B                          | SGLang; `--page-size=64` matches scorer `blockSize`      |
+| AMD GPU              | `modelserver/amd/vllm/`    | Qwen/Qwen3-32B                          | AMD GPU                                                  |
+| Intel XPU            | `modelserver/xpu/vllm/`    | Qwen/Qwen3-0.6B                         | CI-sized; update router `modelName` for real use         |
+| Google TPU v6e       | `modelserver/tpu/v6/vllm/` | Qwen/Qwen3-32B                          | GKE TPU                                                  |
+| Google TPU v7        | `modelserver/tpu/v7/vllm/` | Qwen3-Coder-480B-FP8                    | GKE TPU                                                  |
+| CPU                  | `modelserver/cpu/vllm/`    | Llama-3.2-3B-Instruct                   | CI-sized                                                 |
 
 > [!NOTE]
 > Some hardware variants use reduced configurations (fewer replicas, smaller models) to enable CI testing for compatibility and regression checks.
-
+>
 > [!NOTE]
-> For precise prefix cache scoring to match reality, the `tokenizer` `modelName` and the scorer's `indexerConfig.tokenizersPoolConfig.modelName` in [`router/precise-prefix-cache-routing.values.yaml`](router/precise-prefix-cache-routing.values.yaml) must match the model the overlay deploys. HPU and anything that tunes `--block-size` also requires updating `tokenProcessorConfig.blockSize` on the router side.
-
+> For precise prefix cache scoring to match reality, the `token-producer` `modelName` in [`router/precise-prefix-cache-routing.values.yaml`](router/precise-prefix-cache-routing.values.yaml) must match the model the overlay deploys.
+>
 > [!NOTE]
 > The `gpu/vllm/` overlay defaults to 8 replicas to match the canonical 16×H100 benchmark. For smaller fleets (or quick smoke tests), reduce `replicas` in the deployment patch (`modelserver/gpu/vllm/patch-vllm.yaml`) before applying.
-
+>
 > [!NOTE]
-> The router runs in **active-active HA** by default — two replicas behind one Service, each subscribing to every vLLM pod via pod-discovery so both indexes converge. Scale to a single replica with `--set inferenceExtension.replicas=1` if HA isn't needed (small fleets, smoke tests).
+> The router runs in **active-active HA** by default — two replicas behind one Service, each subscribing to every vLLM pod via pod-discovery so both indexes converge. Scale to a single replica with `--set router.epp.replicas=1` if HA isn't needed (small fleets, smoke tests).
 
 ## Prerequisites
 
@@ -59,7 +61,8 @@ Two scorers make up the routing decision alongside the load-aware stack:
 - Set the following environment variables:
 
 ```bash
-export GAIE_VERSION=v1.5.0
+export REPO_ROOT=$(realpath $(git rev-parse --show-toplevel))
+source ${REPO_ROOT}/guides/env.sh
 export GUIDE_NAME="precise-prefix-cache-routing"
 export NAMESPACE="llm-d-${GUIDE_NAME}"
 ```
@@ -67,84 +70,67 @@ export NAMESPACE="llm-d-${GUIDE_NAME}"
 - Install the Gateway API Inference Extension CRDs:
 
 ```bash
-kubectl apply -k "https://github.com/kubernetes-sigs/gateway-api-inference-extension/config/crd?ref=${GAIE_VERSION}"
+kubectl apply -f https://github.com/kubernetes-sigs/gateway-api-inference-extension/releases/download/${GAIE_VERSION}/v1-manifests.yaml
 ```
 
 - Create a target namespace for the installation
 
 ```bash
-kubectl create namespace ${NAMESPACE}
+kubectl create namespace ${NAMESPACE} --dry-run=client -o yaml | kubectl apply -f -
 ```
 
-  
 ## Installation Instructions
 
 ### 1. Prepare HF Token
 
-Create the `llm-d-hf-token` secret in the namespace. The UDS tokenizer sidecar reads `HF_TOKEN` to reach gated tokenizers — Qwen/Qwen3-32B is public but the secret makes swapping in a gated model a no-op. See [helpers/hf-token.md](../../helpers/hf-token.md) for the full helper.
-
+Create the `llm-d-hf-token` secret in the namespace. The router reads `HF_TOKEN` to reach gated tokenizers — Qwen/Qwen3-32B is public but the secret makes swapping in a gated model a no-op. See [helpers/hf-token.md](../../helpers/hf-token.md) for the full helper.
+<!-- llm-d-cicd:skip start -->
 ```bash
-kubectl -n ${NAMESPACE} create secret generic llm-d-hf-token --from-literal=HF_TOKEN="${HF_TOKEN}"
+export HF_TOKEN=<your HuggingFace token>
+kubectl create secret generic llm-d-hf-token \
+  --from-literal="HF_TOKEN=${HF_TOKEN}" \
+  --namespace "${NAMESPACE}" \
+  --dry-run=client -o yaml | kubectl apply -f -
 ```
+<!-- llm-d-cicd:skip end -->
 
 ### 2. Deploy the llm-d Router
 
 #### Standalone Mode
 
-This deploys the llm-d Router in the simple [Standalone Mode](placeholder-link):
+This deploys the llm-d Router in the simple [Standalone Mode](../../docs/architecture/core/router/proxy.md). The release name `${GUIDE_NAME}` is mandatory — the inference pool selector matches a guide label that pairs with this release.
+
+The chart auto-injects the `vllm-render` sidecar when `router.tokenizer.enabled: true` is set in the values file.
 
 ```bash
-export REPO_ROOT=$(realpath $(git rev-parse --show-toplevel))
 helm install ${GUIDE_NAME} \
-  oci://registry.k8s.io/gateway-api-inference-extension/charts/standalone \
+  ${ROUTER_STANDALONE_CHART} \
   -f ${REPO_ROOT}/guides/recipes/router/base.values.yaml \
   -f ${REPO_ROOT}/guides/${GUIDE_NAME}/router/${GUIDE_NAME}.values.yaml \
-  --post-renderer ${REPO_ROOT}/guides/${GUIDE_NAME}/router/patches/uds-tokenizer/post-renderer.sh \
-  -n ${NAMESPACE} --version ${GAIE_VERSION}
+  -n ${NAMESPACE} --version ${ROUTER_CHART_VERSION}
 ```
-
-<details>
-<summary><b>Helm v4</b></summary>
-
-Helm v4's `--post-renderer` only accepts a registered plugin name, not a path. Install once, then swap the flag value:
-
-```bash
-helm plugin install guides/${GUIDE_NAME}/router/patches/uds-tokenizer
-# in the helm install above, replace the --post-renderer line with:
-#   --post-renderer uds-tokenizer
-```
-
-</details>
 
 The release name `${GUIDE_NAME}` is mandatory for standard deployments — the inference pool selector matches a guide label that pairs with this release.
 
 <details>
-<summary><b>Why a helm post-renderer is required (chart limitation)</b></summary>
-
-The standalone chart's `sidecar.*` slot is occupied by its Envoy proxy — overriding it would lose HTTP serving — so the UDS tokenizer container is appended via a helm post-render hook instead. The post-renderer runs `kustomize build` on the chart's rendered manifests with a strategic merge patch that adds the `tokenizer-uds` container (image `ghcr.io/llm-d/llm-d-uds-tokenizer:vllm-v0.19.1`), two `emptyDir` volumes (`tokenizers`, `tokenizer-uds`), and a `/tmp/tokenizer` volumeMount on the existing `epp` container so the `tokenizer` plugin can reach the UDS socket. Tracking removal of this workaround upstream — once the chart supports multiple sidecars natively, the post-renderer goes away.
-
-</details>
-
-<details>
-<summary><h4>Gateway Mode</h4></summary>
+<summary><b>Gateway Mode</b></summary>
 
 To use a Kubernetes Gateway managed proxy instead of the standalone Envoy sidecar, do **not** apply the standalone chart above. Instead:
 
-1. **Deploy a Kubernetes Gateway**. See [the gateway guides](../prereq/gateways) for step-by-step deployment of a Gateway named `llm-d-inference-gateway`.
+1. **Deploy a Kubernetes Gateway**. See [the gateway guides](../../docs/infrastructure/gateway) for step-by-step deployment of a Gateway named `llm-d-inference-gateway`.
 
-2. **Deploy the llm-d Router and HTTPRoute** via the `inferencepool` chart with `experimentalHttpRoute.enabled=true`. Same UDS post-renderer applies:
+2. **Deploy the llm-d Router and HTTPRoute** via the `llm-d-router-gateway` chart with `httpRoute.create=true`:
 
 ```bash
-export REPO_ROOT=$(realpath $(git rev-parse --show-toplevel))
 export PROVIDER_NAME=istio   # options: none, gke, agentgateway, istio
-helm install precise-prefix-cache-routing \
-  oci://registry.k8s.io/gateway-api-inference-extension/charts/inferencepool \
+
+helm install ${GUIDE_NAME} \
+  ${ROUTER_GATEWAY_CHART} \
   -f ${REPO_ROOT}/guides/recipes/router/base.values.yaml \
   -f ${REPO_ROOT}/guides/recipes/router/features/httproute-flags.yaml \
   -f ${REPO_ROOT}/guides/${GUIDE_NAME}/router/${GUIDE_NAME}.values.yaml \
   --set provider.name=${PROVIDER_NAME} \
-  --post-renderer ${REPO_ROOT}/guides/${GUIDE_NAME}/router/patches/uds-tokenizer/post-renderer.sh
-  -n ${NAMESPACE} --version ${GAIE_VERSION}
+  -n ${NAMESPACE} --version ${ROUTER_CHART_VERSION}
 ```
 
 </details>
@@ -154,16 +140,17 @@ helm install precise-prefix-cache-routing \
 Apply the Kustomize overlay for your backend (defaulting to NVIDIA GPU / vLLM):
 
 ```bash
+export MODEL_SERVER=vllm # vllm | sglang
 export INFRA_PROVIDER=base # base | gke
-kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/gpu/vllm/${INFRA_PROVIDER}/
+kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/gpu/${MODEL_SERVER}/${INFRA_PROVIDER}/
 ```
 
 ### 4. (Optional) Enable Monitoring
 
 > [!NOTE]
-> GKE provides [automatic application monitoring](https://docs.cloud.google.com/kubernetes-engine/docs/how-to/configure-automatic-application-monitoring) out of the box. The llm-d [Monitoring stack](../../docs/monitoring/README.md) is not required for GKE, but it is available if you prefer to use it.
+> GKE provides [automatic application monitoring](https://docs.cloud.google.com/kubernetes-engine/docs/how-to/configure-automatic-application-monitoring) out of the box. The llm-d [Monitoring stack](../../docs/operations/observability/setup.md) is not required for GKE, but it is available if you prefer to use it.
 
-- Install the [Monitoring stack](../../docs/monitoring/README.md).
+- Install the [Monitoring stack](../../docs/operations/observability/setup.md).
 - Deploy the monitoring resources for this guide:
 
   ```bash
@@ -176,7 +163,7 @@ kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/g
 
 ### 1. Get the IP of the Proxy
 
-**Standalone Mode**
+#### Standalone Mode
 
 ```bash
 export IP=$(kubectl get service ${GUIDE_NAME}-epp -n ${NAMESPACE} -o jsonpath='{.spec.clusterIP}')
@@ -198,6 +185,7 @@ export IP=$(kubectl get gateway llm-d-inference-gateway -n ${NAMESPACE} -o jsonp
 ```bash
 kubectl run curl-debug --rm -it \
     --image=cfmanteiga/alpine-bash-curl-jq \
+    --namespace="$NAMESPACE" \
     --env="IP=$IP" \
     --env="NAMESPACE=$NAMESPACE" \
     -- /bin/bash
@@ -216,53 +204,110 @@ curl -X POST http://${IP}/v1/completions \
 
 ## Benchmarking
 
-The benchmark launches a pod (`llmdbench-harness-launcher`) that uses `inference-perf` with a shared-prefix synthetic workload. Each experiment is saved under the specified output folder, e.g. `./results/<experiment ID>/inference-perf_<experiment ID>_precise-guide-<model name>`. See the [benchmark instructions doc](../../helpers/benchmark.md) for details.
+This guide uses [`llmdbenchmark`](https://github.com/llm-d/llm-d-benchmark) — the supported standard CLI for llm-d performance benchmarking.
 
-### 1. Prepare the Benchmarking Suite
+In this example we will demonstrate how to run [`inference-perf`](https://github.com/kubernetes-sigs/inference-perf) with a shared-prefix synthetic workload against the stack you just deployed above (standalone or gateway mode). When orchestrating benchmarks via `llmdbenchmark`, the CLI automatically and transparently deploys a harness pod (`llmdbench-harness-launcher`) into your namespace. This pod is central to driving the workload, collecting the results, and tearing itself down when it's finished.
 
-- Download the benchmark script:
+> [!IMPORTANT]
+> **For more in-depth explanation and features for benchmarking llm-d guides, see [`helpers/benchmark.md`](../../helpers/benchmark.md).**
+>
+> The Benchmarking section below contains only the **precise-prefix-cache-routing-specific commands** needed to drive the stack you just deployed — for everything else (and especially when something goes wrong), start at [`helpers/benchmark.md`](../../helpers/benchmark.md).
+>
+> For even more details about benchmarking, see the actual repository: [`llm-d-benchmark` on GitHub](https://github.com/llm-d/llm-d-benchmark).
 
-  ```bash
-  curl -L -O https://raw.githubusercontent.com/llm-d/llm-d-benchmark/main/existing_stack/run_only.sh
-  chmod u+x run_only.sh
-  ```
+> [!TIP]
+> The command below runs this guide's **dedicated** benchmark profile, which is intentionally shaped to stress the prefix-cache routing decision under contention — and accordingly takes longer to complete. To run a simpler workload with fewer execution cycles first (useful for validating the path, image pulls, PVC binding, etc. before committing to a real run), pick a generic sample profile such as `shared_prefix_synthetic.yaml` from the catalog in [`helpers/benchmark.md` → Available workload profiles](../../helpers/benchmark.md#available-workload-profiles) and substitute it for the `--workload` flag in the command below.
 
-- [Create HuggingFace token](../../helpers/hf-token.md)
+### 1. Install the `llmdbenchmark` CLI
 
-### 2. Download the Workload Template
-
-```bash
-curl -LJO "https://raw.githubusercontent.com/llm-d/llm-d/main/guides/precise-prefix-cache-routing/benchmark-templates/guide.yaml"
-```
-
-### 3. Execute Benchmark
+Automatically clone the benchmark repository into `./llm-d-benchmark/` and create a virtualenv at `./llm-d-benchmark/.venv/` containing dependencies and its installation:
 
 ```bash
-export IP=$(kubectl get service ${GUIDE_NAME}-epp -n ${NAMESPACE} -o jsonpath='{.spec.clusterIP}')
-envsubst < guide.yaml > config.yaml
-./run_only.sh -c config.yaml -o ./results
+curl -sSL https://raw.githubusercontent.com/llm-d/llm-d-benchmark/main/install.sh | bash
 ```
+
+Activate the `venv` and enter the repository directory - both are required: the `venv` puts `llmdbenchmark` on your PATH, and the repository directory contains the `workload/profiles/` and `config/specification/` files that orchestrate the benchmark:
+
+```bash
+cd llm-d-benchmark
+source .venv/bin/activate
+llmdbenchmark --version
+```
+
+> [!NOTE]
+> Subsequent `llmdbenchmark` commands in this section assume you are inside the `llm-d-benchmark` repo directory with the `venv` activated. If you open a new shell, re-run the two commands above.
+
+### 2. Resolve the endpoint of the stack you just deployed
+
+Set two variables so the rest of the section is topology-agnostic: the endpoint URL and the gateway class. The gateway class tells the CLI which deployment topology the cluster is actually running, without this, the CLI re-renders against the benchmark scenario's default values.
+
+**Standalone Mode** (the default in this guide — no Kubernetes Gateway, EPP pod with an Envoy sidecar):
+
+```bash
+export ENDPOINT_URL="http://$(kubectl get service ${GUIDE_NAME}-epp -n ${NAMESPACE} -o jsonpath='{.spec.clusterIP}')"
+export GATEWAY_CLASS=epponly # standalone mode
+```
+
+<details>
+<summary> <b>Gateway Mode</b> </summary>
+
+```bash
+export ENDPOINT_URL="http://$(kubectl get gateway llm-d-inference-gateway -n ${NAMESPACE} -o jsonpath='{.status.addresses[0].value}')"
+
+# Match whichever provider you used when deploying the gateway (e.g. istio, agentgateway, gke).
+export GATEWAY_CLASS=istio
+```
+
+</details>
+
+### 3. Run the benchmark profile for Precise Prefix Cache Routing
+
+`guide_precise-prefix-cache-routing_1.yaml` is a **dedicated workload profile** shipped with `llm-d-benchmark` specifically for this guide — it reproduces the load ladder used to generate the [graphs at the bottom of this guide](#benchmarking-report) (rates 3 to 60 across 150 distinct prefix groups) and is shaped to highlight the strengths of precise prefix-cache routing by stressing the routing decision under contention.
+
+Benchmark results are copied to the `workspace` directory that is specified by _you_ (or that is automatically generated when omitted from the cli) on the machine running the CLI. The workspace location is optional — by default the CLI auto-generates a timestamped workspace and prints its full path in the logs during the run. If you'd rather choose where results land, pass `--workspace <YOUR_DIR_HERE>` as a top-level argument of `llmdbenchmark` (before the `run` subcommand):
+
+```bash
+llmdbenchmark \
+    --spec           guides/precise-prefix-cache-routing \
+    run \
+    --endpoint-url   "${ENDPOINT_URL}" \
+    --gateway-class  "${GATEWAY_CLASS}" \
+    --model          "Qwen/Qwen3-32B" \
+    --namespace      "${NAMESPACE}" \
+    --harness        inference-perf \
+    --workload       guide_precise-prefix-cache-routing_1.yaml \
+    --analyze
+```
+
+> [!NOTE]
+> Depending on your `cluster` you may need to extend the default `timeout` values to longer duration, as `bind`, `access` and `wait-timeout` times of `pvcs` and `pods` can be arbitrarily slower on other systems, please utilize `llmdbenchmark run --help` to view the knobs needed to increase those values.
+> [!IMPORTANT]
+> When benchmarking TPU v6e or configurations with strict context length limits (e.g., `--max-model-len=4096` as in the default `patch-vllm.yaml` for TPU v6e), you **must** update the workload parameters inside `guide.yaml` before running.
+> Specifically, decrease `system_prompt_len` (e.g. to `2000`), `question_len` (e.g. to `500`), and `output_len` (e.g. to `500`) so that the total request context size (`3000` tokens) stays well below the model's `4096` max token length limit. Leaving the default `6000`/`1200` values will cause the vLLM engine to reject all benchmark requests with `400 Bad Request`.
 
 ## Cleanup
 
 ```bash
 helm uninstall ${GUIDE_NAME} -n ${NAMESPACE}
-kubectl delete -n ${NAMESPACE} -k guides/${GUIDE_NAME}/modelserver/gpu/vllm/${INFRA_PROVIDER}/
+# For vLLM (default):
+kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/gpu/vllm/${INFRA_PROVIDER}/
+# For SGLang:
+kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/gpu/sglang/
 ```
 
 ## How It Works
 
-1. **vLLM pods publish KV-cache events** — each pod runs `vllm serve ... --kv-events-config '{...,"publisher":"zmq","endpoint":"$(KV_EVENTS_ENDPOINT)","topic":"kv@$(POD_IP):$(POD_PORT)@<model>"}'` with `KV_EVENTS_ENDPOINT=tcp://*:5556`, binding its own ZMQ socket. On every KV block allocation/eviction, vLLM emits a ZMQ message.
-2. **Router subscribes per pod** — pod-discovery (`kvEventsConfig.discoverPods: true`) wires the data-layer `endpoint-notification-source` into the scorer's `ExtractEndpoint`, so each router replica installs a ZMQ subscriber per vLLM pod independently. All replicas converge to the same index.
-3. **Scoring** — the `precise-prefix-cache-scorer` returns the fraction of the request's prefix blocks that are resident on each candidate pod. The `max-score-picker` routes to the highest-scoring pod.
-
-The `tokenizer` plugin and the scorer's internal `tokenizersPoolConfig` both point at `/tmp/tokenizer/tokenizer-uds.socket` — a UDS tokenizer sidecar (`ghcr.io/llm-d/llm-d-uds-tokenizer`) owns tokenizer model downloads and caching, keeping tokenization out of the EPP main container.
+1. **Model server pods publish KV-cache events** — each pod (vLLM or SGLang) runs with `--kv-events-config '{...,"publisher":"zmq","endpoint":"$(KV_EVENTS_ENDPOINT)","topic":"kv@$(POD_IP):$(POD_PORT)@<model>"}'` and `KV_EVENTS_ENDPOINT=tcp://*:5556`, binding its own ZMQ socket. On every KV block allocation/eviction, the server emits a ZMQ message.
+2. **Router subscribes per pod** — pod-discovery (`kvEventsConfig.discoverPods: true`) registers the `precise-prefix-cache-producer` as an extractor on the data-layer `endpoint-notification-source`, so each router replica installs a ZMQ subscriber per model server pod independently. All replicas converge to the same index.
+3. **Scoring** — the `prefix-cache-scorer` returns the fraction of the request's prefix blocks that are resident on each candidate pod. The `max-score-picker` routes to the highest-scoring pod.
 
 ## Benchmarking Report
 
+### vLLM
+
 The benchmark runs on 16× H100 GPUs, distributed across 8 model servers (2 H100s per server with TP=2).
 
-### Comparing llm-d Scheduling to a Simple Kubernetes Service
+#### Comparing llm-d Scheduling to a Simple Kubernetes Service
 
 Graphs below compare the precise path to a stock Kubernetes Service that round-robins requests across the same 8 vLLM pods (no EPP, no scoring).
 
@@ -305,3 +350,47 @@ Output tokens/sec — higher is better; TTFT in seconds — lower is better.
 | 60   | 6,551      | 15,733       | 75.586        | 0.214           | 138.663      | 0.300          |
 
 </details>
+
+### SGLang
+
+The benchmark runs on 16× H100 GPUs, distributed across 8 model servers (2 H100s per server with TP=2).
+
+#### Comparing llm-d Scheduling to a Simple Kubernetes Service
+
+Summary across the full ladder (rates 3 → 60):
+
+| Metric              | k8s service (RR) | llm-d Precise | Δ% vs k8s |
+| :------------------ | :--------------- | :------------ | :-------- |
+| Output tokens/sec   | 4,667            | 9,808         | +110.2%   |
+| Requests/sec        | 4.71             | 9.87          | +109.6%   |
+| TTFT mean (s)       | 69.76            | 0.466         | −99.33%   |
+| TTFT p90 (s)        | 157.64           | 0.672         | −99.57%   |
+| ITL mean (ms)       | 37.9             | 47.4          | +25.1%    |
+
+<details>
+<summary><b><i>Click</i></b> to view the per-rate breakdown across the full ladder</summary>
+
+Output tokens/sec — higher is better; TTFT in seconds — lower is better.
+
+| Rate | k8s Output | llm-d Output | k8s TTFT mean | llm-d TTFT mean | k8s TTFT p90 | llm-d TTFT p90 |
+| ---: | ---------: | -----------: | ------------: | --------------: | -----------: | -------------: |
+|  3   | 1,698      | 1,556        | 0.511         | 0.160           | 0.824        | 0.194          |
+| 10   | 4,359      | 5,049        | 0.849         | 0.178           | 1.459        | 0.218          |
+| 15   | 4,608      | 7,188        | 2.734         | 0.179           | 3.696        | 0.245          |
+| 20   | 5,035      | 11,268       | 27.104        | 0.250           | 62.562       | 0.436          |
+| 22   | 4,684      | 11,945       | 31.012        | 0.202           | 68.263       | 0.328          |
+| 25   | 5,056      | 12,797       | 31.411        | 0.195           | 69.237       | 0.255          |
+| 30   | 4,953      | 13,412       | 34.123        | 0.217           | 72.725       | 0.415          |
+| 35   | 5,601      | 13,707       | 33.340        | 0.215           | 74.115       | 0.310          |
+| 40   | 5,773      | 15,914       | 85.332        | 1.171           | 152.247      | 0.754          |
+| 43   | 5,395      | 16,485       | 87.314        | 0.999           | 157.234      | 0.762          |
+| 46   | 5,794      | 16,376       | 88.325        | 0.514           | 160.052      | 0.716          |
+| 49   | 5,622      | 16,576       | 86.050        | 0.320           | 161.950      | 0.631          |
+| 52   | 5,905      | 16,627       | 89.924        | 0.328           | 162.860      | 0.692          |
+| 55   | 5,714      | 16,534       | 88.526        | 0.367           | 162.728      | 0.802          |
+| 57   | 5,744      | 16,459       | 88.682        | 0.374           | 163.161      | 0.781          |
+| 60   | 5,833      | 16,481       | 88.046        | 0.375           | 161.321      | 0.749          |
+
+</details>
+
+> Benchmark contributed by @liu-cong.

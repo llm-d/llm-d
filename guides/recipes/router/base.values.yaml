@@ -1,47 +1,31 @@
 ## Base values shared by both standalone and llm-d Router charts.
 ## Layer chart-specific or guide-specific overrides on top with additional -f flags.
 
-inferenceExtension:
-  replicas: 1
-  image:
-    # Image override for helm chart version 1.4 below
-    hub: ghcr.io/llm-d
-    name: llm-d-inference-scheduler
-    # Image override for helm chart version 1.5 and above
-    registry: ghcr.io
-    repository: llm-d/llm-d-inference-scheduler
-    tag: v0.8.0
+router:
+  epp:
+    replicas: 1
+    image:
+      registry: ghcr.io/llm-d
+      repository: llm-d-router-endpoint-picker-dev  # TODO: drop -dev for release
+      tag: main  # TODO: pin to a released tag (e.g. v0.9.0)
+      pullPolicy: Always  # TODO : change to IfNotPresent once we release a version
+    flags:
+      v: 2
+    pluginsConfigFile: "default-plugins.yaml"
+    resources:
+      requests:
+        cpu: "4"
+        memory: 8Gi
+      limits:
+        memory: 16Gi
 
-  flags:
-    v: 2
+  inferencePool:
+    failureMode: "FailOpen"
 
-  failureMode: "FailOpen"
+  modelServers:
+    protocol: http # http, grpc
 
-  pluginsConfigFile: "default-plugins.yaml"
-
-  # Resource requests and limits for the EPP container.
-  # These defaults are sized for a standard EPP deployment with built-in
-  # scheduling plugins. CPU limits are intentionally unset to allow bursting
-  # to all available node CPUs during scheduling spikes. Memory limit is set
-  # to 16Gi to avoid putting the node under memory pressure in case of a
-  # memory leak.
-  #
-  # These values were validated with scale testing at high QPS, achieving
-  # p90 scheduler latency within 100ms.
-  #
-  # If you add computationally intensive plugins or sidecars (e.g., latency
-  # prediction, custom scorers), you may need to increase these values.
-  # Use pprof (https://pkg.go.dev/net/http/pprof) to profile your deployment
-  # and right-size resources for your workload.
-  resources:
-    requests:
-      cpu: "4"
-      memory: 8Gi
-    limits:
-      memory: 16Gi
-
-  # Sidecar configuration for EPP
-  sidecar:
+  proxy:
     # CLI args for the Envoy sidecar. Override the chart's defaults of
     # `--log-level trace` (very expensive under load) and no `--concurrency`
     # (Envoy spawns ~hardware_concurrency() worker threads, oversubscribing
@@ -74,6 +58,3 @@ inferenceExtension:
     sampling:
       sampler: "parentbased_traceidratio"
       samplerArg: "0.1"
-
-inferencePool:
-  modelServerProtocol: http # http, grpc

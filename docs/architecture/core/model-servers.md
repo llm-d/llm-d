@@ -48,7 +48,7 @@ To correctly map metrics names, model server Pods should be labeled with the mod
 ```yaml
 metadata:
   labels:
-    inference.networking.k8s.io/engine-type: vllm # other options: sglang, trtllm-serve, triton-tensorrt-llm
+    llm-d.ai/engine-type: vllm # other options: sglang, trtllm-serve, triton-tensorrt-llm
 
 ```
 

@@ -93,6 +93,11 @@ spec:
                   # --otlp-traces-endpoint http://otel-collector:4317 \
                   # --collect-detailed-traces all
             env:
+              - name: HF_TOKEN
+                valueFrom:
+                  secretKeyRef:
+                    name: llm-d-hf-token
+                    key: HF_TOKEN
               # To enable tracing, uncomment:
               # - name: OTEL_SERVICE_NAME
               #   value: "vllm-prefill"
@@ -135,6 +140,10 @@ spec:
                 value: eth0
               - name: VLLM_LOGGING_LEVEL
                 value: INFO
+              # Default keep-alive timeout of 5s is shorter than the sidecar's 90s idle conn timeout,
+              # causing TCP RSTs.
+              - name: VLLM_HTTP_TIMEOUT_KEEP_ALIVE
+                value: "120"
               - name: VLLM_NIXL_SIDE_CHANNEL_HOST
                 valueFrom:
                   fieldRef:

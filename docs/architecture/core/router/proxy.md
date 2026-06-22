@@ -1,10 +1,10 @@
 # Proxy
 
-The proxy is the entry point for inference requests in llm-d Router, receiving client traffic and routing it to the optimal model server via the EPP. Supported implementations range from self-managed application load balancers (e.g., Istio, AgentGateway) to compliant cloud-managed services, such as Google Cloud's Application Load Balancer. It supports two primary deployment modes: **Standalone Mode**, where a self-managed Envoy proxy runs alongside the EPP in the same pod, and **Gateway Mode**, which integrates with L7 load balancers via the Kubernetes Gateway API.
+The proxy is the entry point for inference requests in llm-d Router, receiving client traffic and routing it to the optimal model server via the EPP. Supported implementations range from self-managed application load balancers (e.g., Istio, agentgateway) to compliant cloud-managed services, such as Google Cloud's Application Load Balancer. It supports two primary deployment modes: **Standalone Mode**, where a self-managed proxy runs alongside the EPP in the same pod, and **Gateway Mode**, which integrates with L7 load balancers via the Kubernetes Gateway API.
 
 ## Functionality
 
-llm-d leverages [External Processing](https://www.envoyproxy.io/docs/envoy/latest/configuration/http/http_filters/ext_proc_filter) to extend production-grade proxies such as Envoy with the "LLM inference-aware" request routing implemented in the llm-d EPP. In this way, llm-d re-uses the rich existing ecosystem of high-performance, production-quality proxy technologies in the Kubernetes ecosystem.
+llm-d leverages [External Processing](https://www.envoyproxy.io/docs/envoy/latest/configuration/http/http_filters/ext_proc_filter) to extend production-grade proxies with the "LLM inference-aware" request routing implemented in the llm-d EPP. In this way, llm-d re-uses the rich existing ecosystem of high-performance, production-quality proxy technologies in the Kubernetes ecosystem.
 
 The proxy's job is to:
 
@@ -41,7 +41,7 @@ Standalone deployments are intended for workloads where the machinery of Gateway
 
 ### Architecture
 
-In standalone mode, the conformant proxy (e.g., Envoy) runs alongside the EPP in the same pod.
+In standalone mode, the conformant proxy runs alongside the EPP in the same pod.
 
 - **Communication**: `ext-proc` communication happens over `localhost`.
 - **Simplification**: No `Gateway`, `HTTPRoute`, or gateway controller is needed.
@@ -65,14 +65,14 @@ Gateway Mode, also known as the **Inference Gateway**, leverages the official Ku
 Gateway Mode is targeted at production environments that require:
 
 - **Shared Infrastructure**: A single, shared Gateway can host multiple HTTP/gRPC routes for both inference workloads (represented as `InferencePool`) and traditional applications (standard Kubernetes `Service` objects).
-- Integration with cloud-native L7 networking solutions (Istio, GKE Gateway, Agentgateway).
+- Integration with cloud-native L7 networking solutions (Istio, GKE Gateway, agentgateway).
 - Multi-cluster load balancing.
 - Advanced traffic management (weighted splitting, mirroring).
 - Exposure of endpoints to external workloads with robust control.
 
 ### Architecture
 
-The [Gateway API Inference Extension (GAIE)](https://gateway-api-inference-extension.sigs.k8s.io/) extends Gateway API by leveraging Envoy's External Processing to inject LLM-aware load balancing into the production-grade networking provided by the Gateway provider.
+The [Gateway API Inference Extension (GAIE)](https://gateway-api-inference-extension.sigs.k8s.io/) extends Gateway API by leveraging [External Processing](https://www.envoyproxy.io/docs/envoy/latest/configuration/http/http_filters/ext_proc_filter) to inject LLM-aware load balancing into the production-grade networking provided by the Gateway provider.
 
 <p align="center">
   <picture>
@@ -162,8 +162,8 @@ spec:
 
 ### Deployment Guides
 
-llm-d provides [Gateway Mode deployment guides](../../../../guides/prereq/gateways/README.md) for the following Gateways:
+llm-d provides [Gateway Mode deployment guides](../../../infrastructure/gateway/README.md) for the following Gateways:
 
-- [Istio](../../../../guides/prereq/gateways/istio.md)
-- [GKE Gateway](../../../../guides/prereq/gateways/gke.md)
-- [Agentgateway](../../../../guides/prereq/gateways/agentgateway.md)
+- [Istio](../../../infrastructure/gateway/istio.md)
+- [GKE Gateway](../../../infrastructure/gateway/gke.md)
+- [agentgateway](../../../infrastructure/gateway/agentgateway.md)

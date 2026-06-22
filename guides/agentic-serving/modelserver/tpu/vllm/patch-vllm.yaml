@@ -1,0 +1,83 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: decode
+spec:
+  replicas: 8
+  template:
+    spec:
+      initContainers:
+      - name: tpu-node-setup
+        image: busybox
+        command: ["/bin/sh", "-c"]
+        args:
+        - |
+          # WARNING: This changes the HOST memory settings, not just the container.
+          # Required to prevent vLLM crashes due to memory mapping limits.
+          sysctl -w vm.max_map_count=33554432
+
+          # Check if the VFIO IOMMU module parameter exists, and if so, increase the
+          # limit on DMA mappings. This allows the TPU driver to pin and map a
+          # larger number of memory pages for direct hardware access.
+          if [ -f /sys/module/vfio_iommu_type1/parameters/dma_entry_limit ]; then
+            echo 8000000 > /sys/module/vfio_iommu_type1/parameters/dma_entry_limit
+            echo "Successfully increased dma_entry_limit to 8000000"
+          else
+            echo "Warning: vfio_iommu_type1 module parameter not found. Ensure the module is loaded."
+          fi
+
+          echo "Final vm.max_map_count: $(cat /proc/sys/vm.max_map_count)"
+        securityContext:
+          privileged: true
+      containers:
+        - name: modelserver
+          command:
+          - /bin/bash
+          - -c
+          - --
+          args:
+          - vllm serve --seed=42 --model=Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8 --served-model-name=Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8 --max-model-len=262144 --max-num-batched-tokens=8192 --max-num-seqs=64 --tensor-parallel-size=8 --kv-cache-dtype=fp8 --gpu-memory-utilization=0.8 --async-scheduling --enable-expert-parallel --data-parallel-size=1 --block-size=256 --kv-transfer-config '{"kv_connector":"TPUOffloadConnector","kv_connector_module_path":"tpu_inference.offload.tpu_offload_connector","kv_role":"kv_both"}'
+          env:
+          - name: VLLM_LOGGING_LEVEL
+            value: DEBUG
+          - name: MODEL_IMPL_TYPE
+            value: vllm
+          - name: USE_BATCHED_RPA_KERNEL
+            value: "1"
+          - name: TPU_OFFLOAD_NUM_CPU_CHUNKS
+            value: "10000"
+          - name: TPU_OFFLOAD_NUM_STAGING_BLOCKS
+            value: "1000"
+          - name: HF_TOKEN
+            valueFrom:
+              secretKeyRef:
+                key: HF_TOKEN
+                name: llm-d-hf-token
+          resources:
+            limits:
+              google.com/tpu: "4"
+            requests:
+              google.com/tpu: "4"
+          volumeMounts:
+          - mountPath: /dev/shm
+            name: dshm
+          startupProbe:
+            initialDelaySeconds: 15
+            periodSeconds: 30
+            timeoutSeconds: 5
+            failureThreshold: 120
+          livenessProbe:
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            periodSeconds: 5
+            timeoutSeconds: 2
+            failureThreshold: 3
+      nodeSelector:
+        cloud.google.com/gke-tpu-accelerator: tpu7x
+        cloud.google.com/gke-tpu-topology: 2x2x1
+      volumes:
+      - emptyDir:
+          medium: Memory
+        name: dshm

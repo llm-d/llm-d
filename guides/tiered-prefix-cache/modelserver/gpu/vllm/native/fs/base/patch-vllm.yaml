@@ -1,0 +1,58 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: decode
+spec:
+  replicas: 2
+  template:
+    spec:
+      containers:
+        - name: modelserver
+          securityContext:
+            runAsUser: 0
+          command: ["/bin/bash", "-c"]
+          args:
+            - |
+              exec vllm serve \
+                Qwen/Qwen3-32B \
+                --tensor-parallel-size=2 \
+                --kv-transfer-config '{"kv_connector":"OffloadingConnector","kv_role":"kv_both","kv_connector_extra_config":{"spec_name":"TieringOffloadingSpec","cpu_bytes_to_use":107374182400,"block_size":256,"secondary_tiers":[{"type":"fs","root_dir":"/mnt/files-storage","n_read_threads":16,"n_write_threads":16}]}}'
+          env:
+            - name: PYTHONHASHSEED
+              value: "42"
+          resources:
+            limits:
+              cpu: "4"
+              memory: 300Gi
+            requests:
+              cpu: "4"
+              memory: 300Gi
+          volumeMounts:
+            - name: workspace
+              mountPath: /workspace
+            - name: dshm
+              mountPath: /dev/shm
+            - name: files-storage
+              mountPath: /mnt/files-storage
+            - name: torch-compile-cache
+              mountPath: /.cache
+            - name: triton-cache
+              mountPath: /.triton
+            - name: pip-user-site
+              mountPath: /.local
+      volumes:
+        - name: workspace
+          emptyDir: {}
+        - name: dshm
+          emptyDir:
+            medium: Memory
+            sizeLimit: 250Gi
+        - name: files-storage
+          persistentVolumeClaim:
+            claimName: llm-d-kv-cache-storage
+        - name: torch-compile-cache
+          emptyDir: {}
+        - name: triton-cache
+          emptyDir: {}
+        - name: pip-user-site
+          emptyDir: {}

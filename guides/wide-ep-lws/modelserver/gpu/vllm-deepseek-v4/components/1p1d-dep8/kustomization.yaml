@@ -1,0 +1,12 @@
+apiVersion: kustomize.config.k8s.io/v1alpha1
+kind: Component
+# 1 prefill worker + 1 decode worker, 8 GPUs / 2 nodes each -> 4 nodes / 16 GPUs total.
+# Each worker: TP=1, DP=8, EP=8 (DEP8).
+patches:
+  - target:
+      kind: LeaderWorkerSet
+      name: ".*-prefill"
+    patch: |-
+      - op: replace
+        path: /spec/replicas
+        value: 1

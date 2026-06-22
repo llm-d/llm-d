@@ -2,7 +2,7 @@
 
 The Latency Predictor is the llm-d component behind predicted latency-based scheduling. Instead of scoring pods by coarse utilization signals alone, the EPP asks an online-trained ML model to predict **Time To First Token (TTFT)** and **Time Per Output Token (TPOT)** for each candidate pod, then routes on those predictions — optionally gated by per-request Service Level Objectives (SLOs).
 
-This page is a reference for the component: its design, EPP plugins, ML model, failure modes, and scaling characteristics. For step-by-step adoption — Helm enablement, SLO header usage, verification, troubleshooting — see the [Predicted Latency well-lit path](../../well-lit-paths/predicted-latency.md). Design rationale and benchmarks are in the blog [Predicted Latency-Based Scheduling for LLMs](https://llm-d.ai/blog/predicted-latency-based-scheduling-for-llms).
+This page is a reference for the component: its design, EPP plugins, ML model, failure modes, and scaling characteristics. For step-by-step adoption — Helm enablement, SLO header usage, verification, troubleshooting — see the [Predicted Latency well-lit path](../../well-lit-paths/capabilities/predicted-latency.md). Design rationale and benchmarks are in the blog [Predicted Latency-Based Scheduling for LLMs](https://llm-d.ai/blog/predicted-latency-based-scheduling-for-llms).
 
 ## Why Predicted Latency?
 
@@ -97,7 +97,7 @@ Each prediction sidecar sustains roughly 300 QPS of prediction work on a `c4-sta
 The `predicted-latency-producer` plugin has two training modes, exposed via a `streamingMode` parameter:
 
 - **`streamingMode: false`** (default) — Trains on end-to-end request latency. TTFT is recorded at response completion (effectively e2e latency); TPOT is not trained. **Use this mode if** your workload mixes streaming and non-streaming responses, or if you only need latency-aware routing without per-request SLO enforcement.
-- **`streamingMode: true`** — Trains separate TTFT and TPOT models. TTFT is recorded on the first streamed chunk; TPOT is sampled across subsequent tokens. **Use this mode if** your workload is fully streaming and you need meaningful `x-slo-ttft-ms` / `x-slo-tpot-ms` enforcement — a mixed workload in this mode will produce incorrect measurements for the non-streamed responses.
+- **`streamingMode: true`** — Trains separate TTFT and TPOT models. TTFT is recorded on the first streamed chunk; TPOT is sampled across subsequent tokens. **Use this mode if** your workload is fully streaming and you need meaningful `x-llm-d-slo-ttft-ms` / `x-llm-d-slo-tpot-ms` enforcement — a mixed workload in this mode will produce incorrect measurements for the non-streamed responses.
 
 ## Scheduling Strategy
 
@@ -152,6 +152,6 @@ All latency and prediction-duration series are Prometheus **histograms**, so das
 
 ## Further Reading
 
-- [Predicted Latency Well-Lit Path](../../well-lit-paths/predicted-latency.md) — how to adopt this path: Helm enablement, request headers, verification, troubleshooting.
+- [Predicted Latency Well-Lit Path](../../well-lit-paths/capabilities/predicted-latency.md) — how to adopt this path: Helm enablement, request headers, verification, troubleshooting.
 - [Predicted Latency-Based Scheduling for LLMs](https://llm-d.ai/blog/predicted-latency-based-scheduling-for-llms) — design rationale and benchmark results.
 - [EPP Scheduling](../core/router/epp/scheduling.md) — how the plugins fits into EPP request handling.

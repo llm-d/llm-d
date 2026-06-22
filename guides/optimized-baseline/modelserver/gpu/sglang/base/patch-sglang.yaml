@@ -14,21 +14,28 @@ spec:
             - "--host=0.0.0.0"
             - "--port=8000"
             - "--enable-metrics"
+            - "--tensor-parallel-size=2"
+            - "--mem-fraction-static=0.9"
             # Uncomment for distributed tracing
             # - "--enable-trace"
             # - "--otlp-traces-endpoint=http://otel-collector:4317"
-          # env:
-          #   # Uncomment for distributed tracing env vars
-          #   - name: OTEL_SERVICE_NAME
-          #     value: "sglang-decode"
-          #   - name: OTEL_EXPORTER_OTLP_ENDPOINT
-          #     value: "http://otel-collector:4317"
-          #   - name: OTEL_TRACES_EXPORTER
-          #     value: "otlp"
-          #   - name: OTEL_TRACES_SAMPLER
-          #     value: "parentbased_traceidratio"
-          #   - name: OTEL_TRACES_SAMPLER_ARG
-          #     value: "0.1"
+          env:
+            - name: HF_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: llm-d-hf-token
+                  key: HF_TOKEN
+            # # Uncomment for distributed tracing env vars
+            # - name: OTEL_SERVICE_NAME
+            #   value: "sglang-decode"
+            # - name: OTEL_EXPORTER_OTLP_ENDPOINT
+            #   value: "http://otel-collector:4317"
+            # - name: OTEL_TRACES_EXPORTER
+            #   value: "otlp"
+            # - name: OTEL_TRACES_SAMPLER
+            #   value: "parentbased_traceidratio"
+            # - name: OTEL_TRACES_SAMPLER_ARG
+            #   value: "0.1"
           resources:
             limits:
               nvidia.com/gpu: "2"

@@ -1,0 +1,49 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ../../base
+  - compute-domain.yaml
+
+# OCI GB200 (BM.GPU.GB200.4) overlay: OCI-specific storage + MNNVL wiring.
+patches:
+  - target:
+      kind: LeaderWorkerSet
+    patch: |-
+      # 1. Model + JIT caches on the node's local NVMe (hostPath) instead of emptyDir.
+      #    The ~850 GB model then persists per-node across pod restarts and is NOT counted
+      #    against the pod's ephemeral-storage budget. /mnt/numa0 is the local NVMe path
+      #    base volumes order: [dshm, hf-cache, jit-cache].
+      - op: replace
+        path: /spec/leaderWorkerTemplate/workerTemplate/spec/volumes/1
+        value:
+          name: hf-cache
+          hostPath:
+            path: /mnt/numa0/hf-cache
+            type: DirectoryOrCreate
+      - op: replace
+        path: /spec/leaderWorkerTemplate/workerTemplate/spec/volumes/2
+        value:
+          name: jit-cache
+          hostPath:
+            path: /mnt/numa0/jit-cache
+            type: DirectoryOrCreate
+      # 2. Shrink the ephemeral-storage down to 128GB. The base asks for 1TB because it keeps
+      #    the ~850 GB model in an emptyDir (which counts against ephemeral storage).
+      #    Step #1 moved the model/caches to hostPath, so that emptyDir is gone and the
+      #    pod only needs a small amount of scratch space.
+      - op: replace
+        path: /spec/leaderWorkerTemplate/workerTemplate/spec/containers/0/resources/limits/ephemeral-storage
+        value: 128Gi
+      - op: replace
+        path: /spec/leaderWorkerTemplate/workerTemplate/spec/containers/0/resources/requests/ephemeral-storage
+        value: 128Gi
+      # 3. Join the GB200 cross-node NVLink (MNNVL) fabric.
+      - op: add
+        path: /spec/leaderWorkerTemplate/workerTemplate/spec/resourceClaims
+        value:
+          - name: compute-domain-channel
+            resourceClaimTemplateName: wide-ep-compute-domain
+      - op: add
+        path: /spec/leaderWorkerTemplate/workerTemplate/spec/containers/0/resources/claims
+        value:
+          - name: compute-domain-channel

@@ -1,95 +1,54 @@
-# Triggering E2E Nightly Regression Tests on GitHub
+# Nightly Benchmark Regression tests
 
-The `llm-d` repository maintains a suite of nightly End-to-End (E2E) regression tests across different Kubernetes environments (GKE, CKS, OpenShift). While these workflows run automatically every day, you can trigger them on-demand to validate PR changes before merging.
+Each one of the [guides](../guides) in `llm-d` (also known as "well-lit paths", undergoes a nightly test cycle. This test aims to check not only the basic functionality of a given guide, but in addition to it, track performance regressions by running a "representative" (as defined by the "guide owners", e.g., [optimized-baseline](../guides/optimized-baseline/OWNERS)) workload against it.
 
-This guide explains how to trigger these tests using **PR Slash Commands** or manually via the **GitHub Actions UI**.
+## Components
 
----
+The main component of this arrangement are the following.
 
-## 1. Triggering via PR Slash Commands
+1. Clusters: several members of the `llm-d` project have contributed generously with signifcant computational and human resources to allow for the nightly benchmark testing to take place: AMD, Coreweave, Google, IBM, Intel. Each one of these clusters house a (GitHub) "Actions Runner Controller" (ARC) which will be tasked with executing a particular guide with a combination of parameters.
+2. Automation: the `llm-d` stack on each guide, described via a combination of `Kubernetes` manifests patched with `kustomize` files, it stood up by our benchmark tooling [`llm-d-benchmark`](https://github.com/llm-d/llm-d-benchmark).
+This tool can automatically parse a guide's README (e.g., [optimized-baseline](../guides/optimized-baseline/README.md)) and automatically execute the commands described there. Furthermore, it is `llm-d-benchmark`'s responsibility, once a new stack is fully stood up, to test for its basically functionality (i.e., does it respond to a small set of inference queries?) and then proceed to executed the representative workload defined by the guide owner.
+The list of templates for the workloads can be located at the [`workloads`](https://github.com/llm-d/llm-d-benchmark) directory, in the format `<harness name>/guide_<guide name>_<sequential number>.yaml.in` (the "sequential number" allows for multiple representative workloads for each guide).
+3. Jobs: while, for technical reasons (e.g., lack of hardware resources), not every guide is stood up against each cluster, the job names on this directory are normalized following the convention `<workflow>-<guide>-<provider>-<offload destination>-<accelerator>-<inference engine>-<cache connector>.yaml`. Each component of a job name can assume the following values:
+   * `<workflow>`: kept as `nightly-e2e` for historical reasons
+   * `<guide>`:  list provided by $(`find guides/ -maxdepth 2 -name README.md -print | grep -Ev "rollouts|prereqs|recipes|guides/README.md"`)
+   * `<provider>`: indicates which companies/members (and teams) are providing hardware resources for testing (currently, `amd`, `cks`, `gke`, `ibm`, and `intel`)
+   * `<offload destination>`: possible values are `acc` (indicating that no offloading is done, as all blocks are retained within the accelerator),   `gpu`, `storage`
+   * `<accelerator>`: `gpu`, `tpu`, `rocm` and `xpu`
+   * `<cache connector>`: `x` (for "don't care"/"not defined"), `native` (for vllm) and `lmcache`
 
-If you are working on a Pull Request, you can trigger one or more nightly E2E tests directly by writing a comment on the PR page.
+## Status Reporting
 
-### Command Format
+The result of each run is displayed on "status badges" on the [release matrix](https://github.com/llm-d/llm-d/blob/main/release/README.md). This matrix presents results in a color-code format specified at [this workflow](https://github.com/llm-d/llm-d-infra/blob/main/.github/workflows/reusable-update-badge.yaml).
 
-```text
-/test-nightly <nightly-name-or-pattern>
+Given the fact that, due to the complex nature of `llm-d` stack standup across multiple cluster from different providers can result in **transient** errors not directly related to a particular guide (i.e., not related to `llm-d`), each individual guide has its own set of status badges on its README (e.g, look at the top of [optimized-baseline](../guides/optimized-baseline/README.md)), according to the following rule: a guide is considered to be "passing" (i.e., `green`) if there was at least ONE job which managed to successfully stand it up in the past 5 days.
+
+While the aforementioned [release matrix](https://github.com/llm-d/llm-d/blob/main/release/README.md) is of interest for mantainers and developers, all users/deployers/customers are encouraged to focus on the status presented at the top of guide's README.
+
+## Adding a new guide
+
+All nightly benchmark workflows rely heavily on these two "reusable" workflows on [`llm-d-infra`](https://github.com/llm-d/llm-d-infra):
+
+* [`reusable-ci-nightly-benchmark.yaml`](https://github.com/llm-d/llm-d-infra/blob/main/.github/workflows/reusable-ci-nightly-benchmark.yaml)
+* [`reusable-query-success-past-runs.yaml`](https://github.com/llm-d/llm-d-infra/blob/main/.github/workflows/reusable-query-success-past-runs.yaml).
+
+Developers aiming to add a new guide or testing an existing guide on a new cluster or with a new set of parameters should open a PR with **two** new workflows: one for the "nightly benchmark", and one for "consolidated status". Again, an illustratibe example using `optimized-baseline`:
+
+```bash
+[llm-d]$ ls .github/workflows/*optimized-baseline*
+.github/workflows/consolidate-status-optimized-baseline-amd-acc-rocm-vllm-x.yaml   .github/workflows/nightly-e2e-optimized-baseline-amd-acc-rocm-vllm-x.yaml
+.github/workflows/consolidate-status-optimized-baseline-cks-acc-gpu-vllm-x.yaml    .github/workflows/nightly-e2e-optimized-baseline-cks-acc-gpu-vllm-x.yaml
+.github/workflows/consolidate-status-optimized-baseline-gke-acc-gpu-vllm-x.yaml    .github/workflows/nightly-e2e-optimized-baseline-gke-acc-gpu-vllm-x.yaml
+.github/workflows/consolidate-status-optimized-baseline-gke-acc-tpu-vllm-x.yaml    .github/workflows/nightly-e2e-optimized-baseline-gke-acc-tpu-vllm-x.yaml
+.github/workflows/consolidate-status-optimized-baseline-ibm-acc-gpu-vllm-x.yaml    .github/workflows/nightly-e2e-optimized-baseline-ibm-acc-gpu-vllm-x.yaml
+.github/workflows/consolidate-status-optimized-baseline-intel-acc-xpu-vllm-x.yaml  .github/workflows/nightly-e2e-optimized-baseline-intel-acc-xpu-vllm-x.yaml
 ```
 
-### Examples
+## Triggering a nightly benchmark regression test
 
-* **Trigger a single test:**
+There are two main possibilities to trigger a nightly test job.
 
-  ```text
-  /test-nightly optimized-baseline-gke
-  ```
+* The first is to go `Actions` on **GitHub Actions UI** and select a praticular workflow to be executed (look for the ones prefixed by `Nightly -`). This is useful if the goal is to quickly re-test a guide using nightly built images, or after a cluster-specific issue was fixed.
 
-* **Trigger all GKE tests:**
-
-  ```text
-  /test-nightly *-gke
-  ```
-
-* **Trigger all OpenShift (OCP) tests:**
-
-  ```text
-  /test-nightly *-ocp
-  ```
-
-* **Trigger all disaggregation tests:**
-
-  ```text
-  /test-nightly pd-disaggregation-*
-  ```
-
-### Available Nightly Names
-
-You can use any of the following exact names or glob patterns matching them:
-
-| Name | Environment | Guide / Path |
-| :--- | :--- | :--- |
-| `optimized-baseline-cks` | CoreWeave Kubernetes Service (CKS) | [optimized-baseline](../guides/optimized-baseline) |
-| `optimized-baseline-gke` | Google Kubernetes Engine (GKE) | [optimized-baseline](../guides/optimized-baseline) |
-| `optimized-baseline-ocp` | OpenShift (OCP) | [optimized-baseline](../guides/optimized-baseline) |
-| `pd-disaggregation-cks` | CKS | [pd-disaggregation](../guides/pd-disaggregation) |
-| `pd-disaggregation-gke` | GKE | [pd-disaggregation](../guides/pd-disaggregation) |
-| `pd-disaggregation-ocp` | OCP | [pd-disaggregation](../guides/pd-disaggregation) |
-| `precise-prefix-cache-cks` | CKS | [precise-prefix-cache-routing](../guides/precise-prefix-cache-routing) |
-| `precise-prefix-cache-gke` | GKE | [precise-prefix-cache-routing](../guides/precise-prefix-cache-routing) |
-| `precise-prefix-cache-ocp` | OCP | [precise-prefix-cache-routing](../guides/precise-prefix-cache-routing) |
-| `predicted-latency-cks` | CKS | [predicted-latency-routing](../guides/predicted-latency-routing) |
-| `predicted-latency-gke` | GKE | [predicted-latency-routing](../guides/predicted-latency-routing) |
-| `tiered-prefix-cache-cpu-offloading-gke` | GKE | [tiered-prefix-cache](../guides/tiered-prefix-cache) |
-| `tiered-prefix-cache-cpu-offloading-lmcache-gke` | GKE | [tiered-prefix-cache](../guides/tiered-prefix-cache) |
-| `tiered-prefix-cache-cpu-offloading-ocp` | OCP | [tiered-prefix-cache](../guides/tiered-prefix-cache) |
-| `wide-ep-lws-cks` | CKS | [wide-ep-lws](../guides/wide-ep-lws) |
-| `wide-ep-lws-gke` | GKE | [wide-ep-lws](../guides/wide-ep-lws) |
-| `wide-ep-lws-ocp` | OCP | [wide-ep-lws](../guides/wide-ep-lws) |
-| `wva-cks` | CKS | [wva](../guides/workload-autoscaling/README.wva.md) |
-| `wva-ocp` | OCP | [wva](../guides/workload-autoscaling/README.wva.md) |
-
----
-
-## 2. Triggering Manually via GitHub Actions UI
-
-You can trigger any nightly workflow manually using the **Run workflow** button in the GitHub repository UI.
-
-### Steps
-
-1. Navigate to the main page of the GitHub repository.
-2. Click on the **Actions** tab at the top of the page.
-3. In the left sidebar, find the workflow under the **Workflows** list (e.g., `Nightly - Tiered Prefix Cache CPU Offloading E2E (GKE)`).
-4. Click on the workflow name.
-5. Click the **Run workflow** dropdown on the right side of the workflow runs list.
-6. Select the branch you want to run the workflow on.
-7. Set optional parameters:
-   * **Skip cleanup after tests (for debugging):** Set to `true` if you want the test namespace, cluster resources, and nodes to persist for debugging post-run.
-8. Click the green **Run workflow** button.
-
----
-
-## 3. Viewing Test Status and Logs
-
-1. **PR Comments:** When you trigger a test via a slash command, a GitHub Actions bot will add a comment on your PR reacting with a 🚀 (rocket) and linking directly to the running workflow.
-2. **Actions Log:** Click the provided link or go to the **Actions** tab to watch the test progression.
-3. **Artifacts:** Test artifacts (such as test validation reports, logs, and performance metrics) are uploaded and available at the bottom of the workflow run page once completed.
+* The second is to comment directly in an open PR, using **PR Slash Commands**. Here, the author of the PR, **provided he or she has the right permissions**, can simply comment with `/test-nightly <name of the workflow>` and new CI/CD job will be created **using the code from the PR**. For instance, `/test-nightly nightly-e2e-pd-disaggregation-gke-acc-gpu-vllm-x` will start a test against the `GKE` cluster available for `llm-d`, with the parameters specified on the name.

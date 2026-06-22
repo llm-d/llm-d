@@ -250,7 +250,7 @@ def main():
 
     print_header("CONFIGURATION SNIPPETS")
     print("1. Gateway Configuration (EndpointPickerConfig YAML):")
-    print(f"""apiVersion: inference.networking.x-k8s.io/v1alpha1
+    print(f"""apiVersion: llm-d.ai/v1alpha1
 kind: EndpointPickerConfig
 featureGates:
 - flowControl

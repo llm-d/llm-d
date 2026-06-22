@@ -1,0 +1,14 @@
+# Endpoints file consumed by the file-discovery plugin.
+#
+# Each entry must use a literal IPv4 address (the plugin does not resolve
+# hostnames). Replace the addresses below with your vLLM workers.
+#
+# With watchFile: true in epp/config.yaml the EPP reloads this file
+# automatically on every atomic rewrite (e.g. `mv endpoints.yaml.tmp
+# endpoints.yaml`), so the worker pool can change at runtime.
+endpoints:
+  - name: vllm-0
+    address: 127.0.0.1
+    port: "8000"
+    labels:
+      model: Qwen/Qwen3-32B

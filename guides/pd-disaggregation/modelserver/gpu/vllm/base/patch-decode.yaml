@@ -19,6 +19,11 @@ spec:
             - "--no-disable-hybrid-kv-cache-manager"
             - "--port=8200"
           env:
+            - name: HF_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: llm-d-hf-token
+                  key: HF_TOKEN
             - name: VLLM_NIXL_SIDE_CHANNEL_HOST
               valueFrom:
                 fieldRef:
@@ -42,6 +47,10 @@ spec:
               name: shm
             - mountPath: /.cache
               name: torch-compile-cache
+            - mountPath: /.config
+              name: vllm-config
+            - mountPath: /.triton
+              name: triton-cache
           startupProbe:
             initialDelaySeconds: 15
             periodSeconds: 30
@@ -61,4 +70,8 @@ spec:
             medium: Memory
             sizeLimit: 20Gi
         - name: torch-compile-cache
+          emptyDir: {}
+        - name: vllm-config
+          emptyDir: {}
+        - name: triton-cache
           emptyDir: {}

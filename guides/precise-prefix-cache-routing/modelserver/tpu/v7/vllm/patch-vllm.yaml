@@ -1,0 +1,36 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: decode
+spec:
+  template:
+    spec:
+      nodeSelector:
+        cloud.google.com/gke-tpu-topology: "2x2x1"
+        cloud.google.com/gke-tpu-accelerator: "tpu7x"
+      containers:
+        - name: modelserver
+          args:
+            - "Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8"
+            - "--port=$(POD_PORT)"
+            - "--data-parallel-size=1"
+            - "--max-model-len=9216"
+            - "--max-num-batched-tokens=1028"
+            - "--max-num-seqs=128"
+            - "--kv-cache-dtype=fp8"
+            - "--async-scheduling"
+            - "--gpu-memory-utilization=0.93"
+            - "--disable-access-log-for-endpoints=/health,/metrics,/v1/models"
+            - "--tensor-parallel-size=8"
+            - "--block-size=64"
+            - "--kv-events-config"
+            - '{"enable_kv_cache_events":true,"publisher":"zmq","endpoint":"$(KV_EVENTS_ENDPOINT)","topic":"kv@$(POD_IP):$(POD_PORT)@Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8"}'
+          resources:
+            limits:
+              memory: 64Gi
+              cpu: "16"
+              google.com/tpu: 8
+            requests:
+              memory: 64Gi
+              cpu: "16"
+              google.com/tpu: 8

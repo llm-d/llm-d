@@ -1,0 +1,23 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ../../base/vllm
+
+namePrefix: precise-prefix-cache-routing-tpu-v6-vllm-
+
+# TODO(#1893): Replace with tpu-vllm component once validated with centralized v0.22.0.
+images:
+  - name: REPLACE_MODEL_SERVER_IMAGE
+    newName: vllm/vllm-tpu
+    newTag: v0.11.1
+
+labels:
+  - pairs:
+      llm-d.ai/guide: precise-prefix-cache-routing
+      llm-d.ai/model: Qwen3-32B
+      llm-d.ai/accelerator-variant: tpu
+      llm-d.ai/accelerator-vendor: google
+    includeSelectors: true
+    includeTemplates: true
+patches:
+  - path: patch-vllm.yaml

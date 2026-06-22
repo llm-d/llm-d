@@ -28,7 +28,7 @@ if [ "$TARGETOS" = "ubuntu" ]; then
     apt-get update -qq
     apt-get install -y jq
 elif [ "$TARGETOS" = "rhel" ]; then
-    dnf -q update -y
+    dnf -q update -y --nobest
     dnf -q install -y jq
 fi
 

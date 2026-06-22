@@ -16,7 +16,7 @@ spec:
     spec:
       containers:
         - name: vllm
-          image: docker.io/vllm/vllm-openai:v0.19.1
+          image: docker.io/vllm/vllm-openai:v0.23.0
           imagePullPolicy: IfNotPresent
           command: ["vllm", "serve"]
           args:
@@ -26,6 +26,12 @@ spec:
             - name: http
               containerPort: 8000
               protocol: TCP
+          env:
+            - name: HF_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: llm-d-hf-token
+                  key: HF_TOKEN
           resources:
             limits:
               cpu: "8"

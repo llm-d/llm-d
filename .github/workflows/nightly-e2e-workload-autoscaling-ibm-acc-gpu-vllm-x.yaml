@@ -1,0 +1,171 @@
+name: Nightly - Workload Autoscaling E2E (OCP GPU)
+
+# Nightly regression test for WVA (Workload Variant Autoscaler) on OpenShift.
+# Deploys the workload-autoscaling guide stack via the consolidated kustomize
+# reusable workflow and runs the WVA e2e test suite from the WVA repo.
+#
+# Builds the WVA controller image from main before testing, since the helm
+# chart on main may require features not yet in a tagged release image.
+
+on:
+  schedule:
+    - cron: '0 3 * * *'  # 03:00 UTC daily (staggered from tiered-prefix-cache)
+  workflow_dispatch:
+    inputs:
+      image_tag:
+        description: 'WVA image tag (leave empty to build from main)'
+        required: false
+        default: ''
+      caller_ref:
+        description: 'WVA repo ref to checkout for tests and image build (branch, tag, or SHA)'
+        required: false
+        default: 'main'
+      skip_cleanup:
+        description: 'Skip cleanup after tests (for debugging)'
+        required: false
+        default: 'false'
+      pr_number:
+        description: 'PR number for comment-back (set by /test-nightly)'
+        required: false
+        default: ''
+      pr_repo:
+        description: 'Repo for PR comment-back'
+        required: false
+        default: 'llm-d/llm-d'
+      decode_pods:
+        description: 'Number of decode (vllm "standalone") pods (default "auto", means what was configured on the scenario)'
+        required: false
+        type: 'string'
+        default: 'auto'
+      prefill_pods:
+        description: 'Number of prefill pods (default "auto", means what was configured on the scenario)'
+        required: false
+        type: 'string'
+        default: 'auto'
+      gateway_class:
+        description: 'Class of gateway used ("istio", "agentgateway", "epponly" (i.e., "standalone"), "none")'
+        required: false
+        default: 'epponly'
+      monitoring_enabled:
+        description: 'Enabled monitoring ("true", "false")'
+        required: true
+        type: 'string'
+        default: 'false'
+      dry_run:
+        description: 'Execute workflow in "dry-run" mode ("true", "false")'
+        required: false
+        default: 'true'
+      verbose:
+        description: 'Execute workflow in "verbose" mode ("true", "false")'
+        required: false
+        default: 'false'
+        type: 'string'
+      harness:
+        description: 'Harness to be used during "run" operation ("inference-perf", "guidellm", "inferencemax", "vllm-benchmark", "nop")'
+        required: false
+        default: 'inference-perf'
+        type: 'string'
+      workload:
+        description: 'Workload profile to be used during "run" operation (check list under "workload/profiles")'
+        required: false
+        default: 'sanity_random.yaml'
+#        default: 'guide_wide-ep-lws_1.yaml'
+        type: 'string'
+      cleanup:
+        description: 'Cleanup the llm-d stack stood up by this workflow'
+        required: false
+        default: 'true'
+        type: string
+
+permissions:
+  contents: write
+  actions: read
+  packages: write
+
+concurrency:
+  group: nightly-e2e-wva-ocp
+  cancel-in-progress: true
+
+jobs:
+  # Build the WVA controller image from main so the chart and binary match.
+  # The chart on main may include flags (e.g. --config-file) that only exist
+  # in the latest code, not in the last tagged release.
+  build-wva-image:
+    if: github.repository == 'llm-d/llm-d' && github.event.inputs.image_tag == ''
+    runs-on: ubuntu-latest
+    outputs:
+      image_tag: ${{ steps.build.outputs.image_tag }}
+    steps:
+      - name: Checkout WVA source
+        uses: actions/checkout@v6
+        with:
+          repository: llm-d/llm-d-workload-variant-autoscaler
+          ref: ${{ github.event.inputs.caller_ref || 'main' }}
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ secrets.GHCR_USER }}
+          password: ${{ secrets.GHCR_TOKEN }}
+
+      - name: Build and push image
+        id: build
+        run: |
+          SHA=$(git rev-parse --short=8 HEAD)
+          IMAGE_TAG="nightly-${SHA}"
+          FULL_IMAGE="ghcr.io/llm-d/llm-d-workload-variant-autoscaler:${IMAGE_TAG}"
+          echo "Building WVA controller from main: $FULL_IMAGE"
+          for attempt in 1 2 3; do
+            echo "Build attempt $attempt/3"
+            if make docker-build IMG="$FULL_IMAGE"; then
+              break
+            fi
+            if [ "$attempt" -eq 3 ]; then
+              echo "Build failed after 3 attempts"
+              exit 1
+            fi
+            echo "Build failed (likely transient registry error), retrying in 30s..."
+            sleep 30
+          done
+          make docker-push IMG="$FULL_IMAGE"
+          echo "image_tag=${IMAGE_TAG}" >> "$GITHUB_OUTPUT"
+
+  nightly:
+    needs: build-wva-image
+    if: github.repository == 'llm-d/llm-d' && always() && (needs.build-wva-image.result == 'success' || needs.build-wva-image.result == 'skipped')
+    uses: llm-d/llm-d-infra/.github/workflows/reusable-nightly-e2e-openshift.yaml@main
+    with:
+      guide_name: workload-autoscaling
+      namespace: llm-d-nightly-wva
+      # Service name is truncated to 63 chars: ...-inferencepoo-epp (not ...-inferencepool-epp)
+      gateway_host: 'workload-variant-autoscaler-inferencepoo-epp'
+      custom_deploy_script: |
+        export WVA_TAG="${{ needs.build-wva-image.outputs.image_tag || github.event.inputs.image_tag }}"
+        bash guides/workload-autoscaling/scripts/nightly-deploy-ocp.sh
+      required_gpus: 2
+      recommended_gpus: 4
+      pod_wait_timeout: '30m'
+      pod_readiness_delay: 180
+      image_override: 'ghcr.io/llm-d/llm-d-cuda-dev:latest'
+      allow_gpu_preemption: true
+      skip_cleanup: ${{ github.event.inputs.skip_cleanup == 'true' }}
+      pr_number: ${{ github.event.inputs.pr_number }}
+      pr_repo: ${{ github.event.inputs.pr_repo }}
+    secrets: inherit
+
+  update-badge:
+    needs: [nightly]
+    if: always()
+    uses: llm-d/llm-d-infra/.github/workflows/reusable-update-badge.yaml@main
+    with:
+      badge_name: wva-ocp
+      badge_label: "VLLM GPU"
+      result: ${{ needs.nightly.result }}
+      dry_run: ${{ inputs.dry_run || 'false' }}
+      failure_category: ${{ needs.nightly.outputs.failure_category }}

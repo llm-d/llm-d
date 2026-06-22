@@ -7,7 +7,7 @@ The **KV-Cache Indexer** is a component of the **llm-d Router** (residing within
 
 ## Functionality
 
-The kv-cache indexer subscribes to `KVEvents` emitted from model servers to maintain a near-realtime view of the KV cache state. The `precise-prefix-cache-scorer` uses this information during the EPP filter → score → pick flow.
+The kv-cache indexer subscribes to `KVEvents` emitted from model servers to maintain a near-realtime view of the KV cache state. The `precise-prefix-cache-producer` (consumed by the `prefix-cache-scorer`) uses this information during the EPP filter → score → pick flow.
 
 The precise view offers improved precision for harder-to-approximate scenarios:
 
@@ -105,13 +105,12 @@ The Index is the hot data structure of the system: every scoring call queries it
 
 The Data Producer runs early in the scheduling cycle: it renders chat templates and tokenizes the prompt once per request (and extracts any multimodal features), writing the result onto the request so downstream components — the Scorer included — read from it rather than re-tokenizing.
 
-Today this role is implemented by the `tokenizer` plugin (being renamed `token-producer` to align with plugin naming conventions).
+Today this role is implemented by the `token-producer` plugin.
 
-Tokenizers can be sourced three ways:
+The plugin tokenizes by calling vLLM's render endpoints — `/v1/completions/render` and `/v1/chat/completions/render` over HTTP. This is the default backend, pointed at `http://localhost:8000`. Those endpoints are served by `vllm serve <model>` or by the GPU-less `vllm launch render <model>`, deployed either as a sidecar in the EPP pod (loopback) or as a dedicated render Service shared across EPP replicas.
 
-1. **UDS sidecar** (recommended for production) — a tokenizer sidecar container serves tokenization requests over a Unix domain socket. The sidecar resolves the model identifier as a local path if the path exists on disk, and otherwise downloads and caches from HuggingFace (or ModelScope) on first use.
-2. **In-process local files** — the indexer's embedded tokenizer scans a directory (default `/mnt/models`) for `tokenizer.json`.
-3. **In-process HuggingFace Hub** — the indexer's embedded tokenizer downloads on demand. Convenient for development; adds startup latency.
+> [!NOTE]
+> The earlier gRPC-over-UDS tokenizer sidecar (the `udsTokenizerConfig` backend) is **deprecated** and will be removed in a future release. Existing configs keep working but emit a deprecation warning at startup; migrate to the `vllm` HTTP backend.
 
 ### Scorer
 
@@ -154,4 +153,4 @@ Many deployment patterns cache KV blocks based on more than text. The indexer su
 ## Further Reading
 
 - [**llm-d-kv-cache**](https://github.com/llm-d/llm-d-kv-cache) — the indexer library. See [architecture.md](https://github.com/llm-d/llm-d-kv-cache/blob/main/docs/architecture.md) for the in-depth technical architecture (block-key hashing, dual-key design, event adapters, module breakdown) and [configuration.md](https://github.com/llm-d/llm-d-kv-cache/blob/main/docs/configuration.md) for the full configuration reference.
-- [**llm-d Router**](https://github.com/llm-d/llm-d-router) — source for the `precise-prefix-cache-scorer` and `tokenizer` plugins. Plugin lifecycle, EPP extension-point wiring, and request scheduling profile examples.
+- [**llm-d Router**](https://github.com/llm-d/llm-d-router) — source for the `precise-prefix-cache-producer`, `prefix-cache-scorer`, and `token-producer` plugins. Plugin lifecycle, EPP extension-point wiring, and request scheduling profile examples.

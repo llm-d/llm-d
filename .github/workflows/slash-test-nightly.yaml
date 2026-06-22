@@ -3,13 +3,20 @@ name: /test-nightly Slash Command
 # Allows running any nightly E2E workflow against a fork PR's code.
 #
 # Usage: Comment on a PR with:
-#   /test-nightly <nightly-name>       # exact match
-#   /test-nightly <glob-pattern>       # glob pattern (* and ? supported)
+#   /test-nightly <nightly-name> [key=value ...]   # exact match
+#   /test-nightly <glob-pattern> [key=value ...]   # glob pattern (* and ? supported)
+#
+# Optional parameters (passed to E2E benchmark nightlies, ignored for others):
+#   workload=<profile>    Workload profile (default: sanity_random.yaml)
+#   decode_pods=<number>  Number of decode pods (default: 1)
+#   prefill_pods=<number> Number of prefill pods (default: 1)
+#   harness=<name>        Benchmark harness (default: inference-perf)
 #
 # Examples:
 #   /test-nightly pd-disaggregation-ocp
 #   /test-nightly *-ocp
 #   /test-nightly optimized-baseline-*
+#   /test-nightly optimized-baseline-cks workload=sanity_random.yaml decode_pods=1
 #   /test-nightly wva-*
 #
 # The command checks out the PR head, pushes a temp branch
@@ -17,19 +24,9 @@ name: /test-nightly Slash Command
 # triggers the matching nightly workflow(s) on that branch.
 # Temp branches are cleaned up by slash-test-nightly-cleanup.yaml.
 #
-# Available nightlies (the part after /test-nightly):
-#   benchmark-cks, build-image,
-#   optimized-baseline-cks, optimized-baseline-gke, optimized-baseline-gke-tpu,
-#   optimized-baseline-ocp, optimized-baseline-xpu,
-#   pd-disaggregation-cks, pd-disaggregation-gke, pd-disaggregation-gke-tpu,
-#   pd-disaggregation-ocp, pd-disaggregation-xpu,
-#   precise-prefix-cache-cks, precise-prefix-cache-gke, precise-prefix-cache-ocp,
-#   precise-prefix-cache-xpu,
-#   predicted-latency-cks, predicted-latency-gke, predicted-latency-ocp,
-#   tiered-prefix-cache-cpu-offloading-gke, tiered-prefix-cache-cpu-offloading-lmcache-gke,
-#   tiered-prefix-cache-cpu-offloading-ocp, tiered-prefix-cache-gke-tpu,
-#   wide-ep-lws-cks, wide-ep-lws-gke, wide-ep-lws-ocp,
-#   wva-cks, wva-ocp
+# Available nightlies are detected dynamically from workflow files
+# matching nightly-e2e-<name>.yaml or nightly-<name>.yaml at the PR head,
+# so new nightlies added in a PR can be tested immediately.
 
 on:
   issue_comment:
@@ -61,91 +58,138 @@ jobs:
           script: |
             const comment = context.payload.comment.body.trim();
             const match = comment.match(/^\/test-nightly\s+(\S+)/);
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
 
-            // Map name to workflow filename
-            const E2E_NIGHTLIES = [
-              'optimized-baseline-cks', 'optimized-baseline-gke', 'optimized-baseline-gke-tpu',
-              'optimized-baseline-ocp', 'optimized-baseline-xpu',
-              'pd-disaggregation-cks', 'pd-disaggregation-gke', 'pd-disaggregation-gke-tpu',
-              'pd-disaggregation-ocp', 'pd-disaggregation-xpu',
-              'precise-prefix-cache-cks', 'precise-prefix-cache-gke', 'precise-prefix-cache-ocp',
-              'precise-prefix-cache-xpu',
-              'predicted-latency-cks', 'predicted-latency-gke', 'predicted-latency-ocp',
-              'tiered-prefix-cache-cpu-offloading-gke', 'tiered-prefix-cache-cpu-offloading-lmcache-gke',
-              'tiered-prefix-cache-cpu-offloading-ocp', 'tiered-prefix-cache-gke-tpu',
-              'wide-ep-lws-cks', 'wide-ep-lws-gke', 'wide-ep-lws-ocp',
-              'wva-cks', 'wva-ocp',
-            ];
-            const OTHER_NIGHTLIES = ['benchmark-cks'];
-            const ALL_NIGHTLIES = [...E2E_NIGHTLIES, ...OTHER_NIGHTLIES].sort();
+            // Get the PR head SHA so we can detect workflows added in the PR itself
+            const { data: pr } = await github.rest.pulls.get({
+              owner, repo,
+              pull_number: context.issue.number,
+            });
+            const prHeadSha = pr.head.sha;
 
-            function toWorkflowFile(name) {
-              if (E2E_NIGHTLIES.includes(name)) return `nightly-e2e-${name}.yaml`;
-              if (OTHER_NIGHTLIES.includes(name)) return `nightly-${name}.yaml`;
+            // Dynamically list all nightly workflows from the repo at the PR head
+            async function listAllNightlies() {
+              const { data: files } = await github.rest.repos.getContent({
+                owner, repo,
+                path: '.github/workflows',
+                ref: prHeadSha,
+              });
+              const nightlies = [];
+              for (const f of files) {
+                let m;
+                if ((m = f.name.match(/^nightly-e2e-(.+)\.yaml$/))) {
+                  nightlies.push({ name: m[1], workflowFile: f.name });
+                } else if ((m = f.name.match(/^nightly-(.+)\.yaml$/))) {
+                  nightlies.push({ name: m[1], workflowFile: f.name });
+                }
+              }
+              return nightlies.sort((a, b) => a.name.localeCompare(b.name));
+            }
+
+            // Check if a specific nightly exists by probing workflow files
+            async function resolveWorkflowFile(name) {
+              const candidates = [
+                `nightly-e2e-${name}.yaml`,
+                `nightly-${name}.yaml`,
+              ];
+              for (const filename of candidates) {
+                try {
+                  await github.rest.repos.getContent({
+                    owner, repo,
+                    path: `.github/workflows/${filename}`,
+                    ref: prHeadSha,
+                  });
+                  return filename;
+                } catch (e) {
+                  if (e.status !== 404) throw e;
+                }
+              }
               return null;
             }
 
             if (!match) {
+              const all = await listAllNightlies();
               await github.rest.issues.createComment({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
+                owner, repo,
                 issue_number: context.issue.number,
                 body: [
-                  '❌ **Usage**: `/test-nightly <name-or-pattern>`',
+                  '❌ **Usage**: `/test-nightly <name-or-pattern> [key=value ...]`',
                   '',
                   'Supports exact names or glob patterns (`*` and `?`):',
                   '```',
                   '/test-nightly pd-disaggregation-ocp',
                   '/test-nightly *-ocp',
                   '/test-nightly optimized-baseline-*',
+                  '/test-nightly optimized-baseline-cks workload=sanity_random.yaml decode_pods=1',
                   '```',
                   '',
+                  'Optional parameters (applied to E2E benchmark nightlies only):',
+                  '- `workload=<profile>` — workload profile (default: `sanity_random.yaml`)',
+                  '- `decode_pods=<number>` — number of decode pods (default: `1`)',
+                  '- `prefill_pods=<number>` — number of prefill pods (default: `1`)',
+                  '- `harness=<name>` — benchmark harness (default: `inference-perf`)',
+                  '',
                   'Available nightlies:',
-                  ALL_NIGHTLIES.map(n => '`' + n + '`').join(', '),
+                  all.map(n => '`' + n.name + '`').join(', '),
                 ].join('\n')
               });
               return 'error';
             }
 
             const input = match[1];
+
+            // Parse optional key=value parameters (with defaults for quick PR validation)
+            const SUPPORTED_PARAMS = ['workload', 'decode_pods', 'prefill_pods', 'harness'];
+            const DEFAULT_PARAMS = {
+              workload: 'sanity_random.yaml',
+              decode_pods: '1',
+              prefill_pods: '1',
+              harness: 'inference-perf',
+            };
+            const params = { ...DEFAULT_PARAMS };
+            const tokens = comment.split(/\s+/).slice(2);
+            for (const token of tokens) {
+              const kv = token.match(/^(\w+)=(\S+)$/);
+              if (kv && SUPPORTED_PARAMS.includes(kv[1])) {
+                params[kv[1]] = kv[2];
+              }
+            }
+            core.setOutput('params', JSON.stringify(params));
+
             const isGlob = input.includes('*') || input.includes('?');
 
-            let matched;
+            let matches;
             if (isGlob) {
-              // Convert glob pattern to regex: escape regex chars, then * → .* and ? → .
               const regexStr = '^' + input
                 .replace(/[.+^${}()|[\]\\]/g, '\\$&')
                 .replace(/\*/g, '.*')
                 .replace(/\?/g, '.')
                 + '$';
               const regex = new RegExp(regexStr);
-              matched = ALL_NIGHTLIES.filter(n => regex.test(n));
+              const all = await listAllNightlies();
+              matches = all.filter(n => regex.test(n.name));
             } else {
-              matched = ALL_NIGHTLIES.includes(input) ? [input] : [];
+              const workflowFile = await resolveWorkflowFile(input);
+              matches = workflowFile ? [{ name: input, workflowFile }] : [];
             }
 
-            if (matched.length === 0) {
+            if (matches.length === 0) {
+              const all = await listAllNightlies();
               const hint = isGlob
                 ? `No nightlies match pattern: \`${input}\``
                 : `Unknown nightly: \`${input}\``;
               await github.rest.issues.createComment({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
+                owner, repo,
                 issue_number: context.issue.number,
-                body: `❌ ${hint}\n\nAvailable: ${ALL_NIGHTLIES.map(n => '\`' + n + '\`').join(', ')}`
+                body: `❌ ${hint}\n\nAvailable: ${all.map(n => '\`' + n.name + '\`').join(', ')}`
               });
               return 'error';
             }
 
-            // Build array of {name, workflowFile} for each match
-            const matches = matched.map(name => ({
-              name,
-              workflowFile: toWorkflowFile(name),
-            }));
-
             core.setOutput('matches', JSON.stringify(matches));
-            core.setOutput('match_names', matched.join(', '));
-            core.setOutput('match_count', matched.length.toString());
+            core.setOutput('match_names', matches.map(m => m.name).join(', '));
+            core.setOutput('match_count', matches.length.toString());
             return 'ok';
 
       - name: Check commenter permission
@@ -260,9 +304,11 @@ jobs:
         env:
           MATCHES_JSON: ${{ steps.parse.outputs.matches }}
           BRANCH_REF: ${{ steps.branch.outputs.ref }}
+          PARAMS_JSON: ${{ steps.parse.outputs.params }}
         with:
           script: |
             const matches = JSON.parse(process.env.MATCHES_JSON);
+            const params = JSON.parse(process.env.PARAMS_JSON || '{}');
             const ref = process.env.BRANCH_REF;
             const owner = context.repo.owner;
             const repo = context.repo.repo;
@@ -283,16 +329,38 @@ jobs:
 
             // Dispatch all workflows
             for (const m of matches) {
-              console.log(`Dispatching ${m.workflowFile} on ref ${ref}`);
-              await github.rest.actions.createWorkflowDispatch({
-                owner, repo,
-                workflow_id: m.workflowFile,
-                ref,
-                inputs: {
-                  pr_number: context.issue.number.toString(),
-                  pr_repo: `${context.repo.owner}/${context.repo.repo}`,
-                },
-              });
+              // Only send benchmark params to E2E benchmark nightlies (not WVA or utility nightlies)
+              const isE2eBenchmark = m.workflowFile.startsWith('nightly-e2e-') && !m.workflowFile.includes('-wva-');
+              const benchmarkParams = isE2eBenchmark ? params : {};
+
+              console.log(`Dispatching ${m.workflowFile} on ref ${ref}` +
+                (isE2eBenchmark ? ` with params: ${JSON.stringify(benchmarkParams)}` : ''));
+              try {
+                await github.rest.actions.createWorkflowDispatch({
+                  owner, repo,
+                  workflow_id: m.workflowFile,
+                  ref,
+                  inputs: {
+                    pr_number: context.issue.number.toString(),
+                    pr_repo: `${context.repo.owner}/${context.repo.repo}`,
+                    ...benchmarkParams,
+                  },
+                });
+              } catch (e) {
+                if (e.status === 422) {
+                  // Workflow doesn't declare pr_number/pr_repo inputs — retry without them
+                  await github.rest.actions.createWorkflowDispatch({
+                    owner, repo,
+                    workflow_id: m.workflowFile,
+                    ref,
+                    inputs: {
+                      ...benchmarkParams,
+                    },
+                  });
+                } else {
+                  throw e;
+                }
+              }
               m.runUrl = null;
             }
 
@@ -346,9 +414,11 @@ jobs:
           HEAD_SHA: ${{ steps.pr.outputs.head_sha }}
           IS_TEMP: ${{ steps.branch.outputs.is_temp }}
           PR_NUMBER: ${{ steps.pr.outputs.pr_number }}
+          PARAMS_JSON: ${{ steps.parse.outputs.params }}
         with:
           script: |
             const results = JSON.parse(process.env.TRIGGER_RESULTS);
+            const params = JSON.parse(process.env.PARAMS_JSON || '{}');
             const ref = process.env.BRANCH_REF;
             const sha = process.env.HEAD_SHA.substring(0, 7);
             const isTemp = process.env.IS_TEMP === 'true';
@@ -363,6 +433,14 @@ jobs:
 
             const lines = [];
 
+            // Show overrides only for E2E benchmark nightlies (those that received params)
+            const hasE2eBenchmark = results.some(r =>
+              r.workflowFile.startsWith('nightly-e2e-') && !r.workflowFile.includes('-wva-'));
+            const paramEntries = Object.entries(params);
+            const overridesRow = hasE2eBenchmark && paramEntries.length > 0
+              ? `| Overrides | ${paramEntries.map(([k, v]) => `\`${k}=${v}\``).join(', ')} |`
+              : null;
+
             if (results.length === 1) {
               const r = results[0];
               lines.push(
@@ -375,6 +453,7 @@ jobs:
                 `| Branch | \`${ref}\` |`,
                 `| PR HEAD | \`${sha}\` |`,
               );
+              if (overridesRow) lines.push(overridesRow);
             } else {
               lines.push(
                 `🚀 **${results.length} nightlies triggered**`,
@@ -392,6 +471,7 @@ jobs:
                 `| Branch | \`${ref}\` |`,
                 `| PR HEAD | \`${sha}\` |`,
               );
+              if (overridesRow) lines.push(overridesRow);
             }
 
             if (isTemp) {

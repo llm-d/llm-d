@@ -1,0 +1,234 @@
+apiVersion: leaderworkerset.x-k8s.io/v1
+kind: LeaderWorkerSet
+metadata:
+  name: wide-ep-lws-nvidia-gpu-vllm-deepseek-v4-decode
+  labels:
+    llm-d.ai/model: DeepSeek-V4-Pro
+    llm-d.ai/role: decode
+spec:
+  replicas: 1
+  leaderWorkerTemplate:
+    size: 2
+    workerTemplate:
+      metadata:
+        labels:
+          llm-d.ai/inference-serving: "true"
+          llm-d.ai/guide: "wide-ep-lws"
+          llm-d.ai/accelerator-variant: "gpu"
+          llm-d.ai/accelerator-vendor: "nvidia"
+          llm-d.ai/model: DeepSeek-V4-Pro
+          llm-d.ai/role: decode
+      spec:
+        serviceAccountName: deepseek-v4
+        initContainers:
+          - name: routing-proxy
+            args:
+              - --port=8000
+              - --vllm-port=8200
+              - --connector=nixlv2
+              - --zap-log-level=1
+              - --secure-proxy=false
+              - --enable-prefiller-sampling
+            image: ghcr.io/llm-d/llm-d-routing-sidecar:v0.7.1
+            imagePullPolicy: Always
+            ports:
+              - containerPort: 8000
+                name: sidecar
+                protocol: TCP
+            resources: {}
+            restartPolicy: Always
+            securityContext:
+              allowPrivilegeEscalation: false
+              runAsNonRoot: true
+        volumes:
+          - name: dshm
+            emptyDir:
+              medium: Memory
+              sizeLimit: 2Gi  # roughly 32MB per local DP plus scratch space
+          - name: hf-cache
+            emptyDir: {}
+          - name: jit-cache
+            emptyDir: {}
+        containers:
+          - name: vllm
+            image: vllm/vllm-openai:v0.23.0
+            securityContext:
+              capabilities:
+                add:
+                  - IPC_LOCK
+                  - SYS_RAWIO
+              runAsGroup: 0
+              runAsUser: 0
+            imagePullPolicy: Always
+            command:
+              - /bin/bash
+              - -c
+            args:
+              - |-
+                # Clear /dev/shm on start to prevent running out of space when crashes occur
+                # https://github.com/llm-d/llm-d/issues/352
+                find /dev/shm -type f -delete
+
+                #################
+                # RUN vLLM DeepSeek-V4 decode worker (MegaMoE)
+                #################
+                START_RANK=$(( ${LWS_WORKER_INDEX:-0} * DP_SIZE_LOCAL ))
+
+                # MoE backend (default: MegaMoE) and optional all2all backend are
+                # overridable via env, so alternative-backend components can swap them
+                # without rewriting this launch script. Unset => unchanged MegaMoE path.
+                MOE_BACKEND="${MOE_BACKEND:-deep_gemm_mega_moe}"
+                ALL2ALL_FLAG=""
+                if [ -n "${ALL2ALL_BACKEND:-}" ]; then ALL2ALL_FLAG="--all2all-backend ${ALL2ALL_BACKEND}"; fi
+
+                exec vllm serve \
+                  deepseek-ai/DeepSeek-V4-Pro \
+                  --port 8200 \
+                  --tokenizer-mode deepseek_v4 \
+                  --gpu-memory-utilization 0.85 \
+                  --trust-remote-code \
+                  --api-server-count 4 \
+                  --disable-access-log-for-endpoints=/health,/metrics \
+                  --data-parallel-hybrid-lb \
+                  --enable-expert-parallel \
+                  --enable-ep-weight-filter \
+                  --tensor-parallel-size $TP_SIZE \
+                  --data-parallel-size $((LWS_GROUP_SIZE * DP_SIZE_LOCAL)) \
+                  --data-parallel-size-local $DP_SIZE_LOCAL \
+                  --data-parallel-address ${LWS_LEADER_ADDRESS} \
+                  --data-parallel-rpc-port 5555 \
+                  --data-parallel-start-rank $START_RANK \
+                  --kv_transfer_config '{"kv_connector":"NixlConnector",
+                                          "kv_role":"kv_consumer",
+                                          "kv_load_failure_policy":"fail"}' \
+                  --moe-backend "${MOE_BACKEND}" \
+                  ${ALL2ALL_FLAG} \
+                  --max-num-batched-tokens ${MAX_TOKENS} \
+                  --max-num-seqs ${MAX_TOKENS} \
+                  --max-cudagraph-capture-size ${MAX_TOKENS} \
+                  --block-size 256 \
+                  --no-disable-hybrid-kv-cache-manager \
+                  --enable-cumem-allocator \
+                  --stream-interval 50 \
+                  --kv-cache-dtype fp8 \
+                  --compilation-config '{"cudagraph_mode":"FULL_DECODE_ONLY","mode":0}' \
+                  --kv-cache-memory-bytes=${KV_CACHE_MEMORY_BYTES-}
+            env:
+              - name: HF_TOKEN
+                valueFrom:
+                  secretKeyRef:
+                    name: llm-d-hf-token
+                    key: HF_TOKEN
+              # MAX_TOKENS controls the maximum number sequences, the maximum batch
+              # size, and the maximum cuda graph capture size. To run with MTP, the
+              # maximum batch size and the maximum cuda graph capture size will need to
+              # be multiplied by the number of speculated tokens.
+              - name: MAX_TOKENS
+                value: "512"
+              - name: DP_SIZE_LOCAL
+                value: "4"
+              - name: TP_SIZE
+                value: "1"
+              - name: TRITON_LIBCUDA_PATH
+                value: /usr/lib64
+              - name: VLLM_SKIP_P2P_CHECK
+                value: "1"
+              - name: VLLM_RANDOMIZE_DP_DUMMY_INPUTS
+                value: "1"
+              - name: VLLM_USE_DEEP_GEMM
+                value: "1"
+              - name: NVIDIA_GDRCOPY
+                value: enabled
+              - name: NCCL_MNNVL_ENABLE
+                value: "1"
+              - name: NCCL_NVLS_ENABLE
+                value: "1"
+              - name: NCCL_CUMEM_ENABLE
+                value: "1"
+              - name: NCCL_P2P_LEVEL
+                value: NVL
+              - name: VLLM_USE_NCCL_SYMM_MEM
+                value: "1"
+              - name: TORCH_SYMMMEM
+                value: NVSHMEM
+              - name: UCX_CUDA_IPC_ENABLE_MNNVL
+                value: "y"
+              - name: UCX_TLS
+                value: cuda_copy,cuda_ipc,tcp
+              - name: UCX_MEMTYPE_CACHE
+                value: "n"
+              - name: UCX_MEMTYPE_REG_WHOLE
+                value: "n"
+              - name: TILELANG_CLEANUP_TEMP_FILES
+                value: "1"
+              - name: GLOO_SOCKET_IFNAME
+                value: eth0
+              - name: NCCL_SOCKET_IFNAME
+                value: eth0
+              - name: VLLM_LOGGING_LEVEL
+                value: INFO
+              - name: VLLM_NIXL_SIDE_CHANNEL_HOST
+                valueFrom:
+                  fieldRef:
+                    fieldPath: status.podIP
+
+              # Use cache directories from the mounted volume under one easy to mount
+              # root directory.
+              - name: CUDA_CACHE_PATH
+                value: /var/cache/vllm/cuda
+              - name: CCACHE_DIR
+                value: /var/cache/vllm/ccache
+              - name: VLLM_CACHE_ROOT
+                value: /var/cache/vllm/vllm
+              - name: FLASHINFER_WORKSPACE_BASE
+                value: /var/cache/vllm/flashinfer
+              # HuggingFace is likely to be quite a bit larger, give it its own cache
+              - name: HF_HUB_CACHE
+                value: /var/cache/huggingface
+
+            ports:
+              - containerPort: 8200
+                name: modelserver
+                protocol: TCP
+              - containerPort: 5600
+                name: nixl
+                protocol: TCP
+            startupProbe:
+              httpGet:
+                path: /health
+                port: modelserver
+              initialDelaySeconds: 0
+              periodSeconds: 1
+              timeoutSeconds: 5
+              failureThreshold: 2700
+            livenessProbe:
+              httpGet:
+                path: /health
+                port: modelserver
+              periodSeconds: 30
+              timeoutSeconds: 5
+              failureThreshold: 3
+            readinessProbe:
+              httpGet:
+                path: /v1/models
+                port: modelserver
+              periodSeconds: 10
+              timeoutSeconds: 5
+              failureThreshold: 3
+            resources:
+              limits:
+                ephemeral-storage: 1Ti
+                memory: 512Gi
+                nvidia.com/gpu: "4"
+              requests:
+                cpu: 32
+                ephemeral-storage: 1Ti
+                memory: 512Gi
+                nvidia.com/gpu: "4"
+            volumeMounts:
+              - name: dshm
+                mountPath: /dev/shm
+              - name: hf-cache
+                mountPath: /var/cache/huggingface
+              - name: jit-cache
+                mountPath: /var/cache/vllm

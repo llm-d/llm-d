@@ -26,6 +26,11 @@ spec:
               name: kv-events
               protocol: TCP
           env:
+            - name: HF_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: llm-d-hf-token
+                  key: HF_TOKEN
             - name: NAMESPACE
               valueFrom:
                 fieldRef:

@@ -1,0 +1,7 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+# OCI GB200, DeepSeek-V4 MegaMoE, 3 prefill workers : 1 decode worker (max-tpt) -> 8 nodes / 32 GPUs.
+resources:
+  - ../../providers/oci
+components:
+  - ../../components/3p1d-dep8

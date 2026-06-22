@@ -86,10 +86,10 @@ echo "DEBUG: Architecture: $(uname -m), Python: $(python3 --version)"
 # determine platform tag from architecture
 MACHINE=$(uname -m)
 case "${MACHINE}" in
-  x86_64) PLATFORM_TAG="manylinux_2_35_x86_64" ;;
-  amd64) PLATFORM_TAG="manylinux_2_35_x86_64" ;;
-  aarch64) PLATFORM_TAG="manylinux_2_35_aarch64" ;;
-  arm64) PLATFORM_TAG="manylinux_2_35_aarch64" ;;
+  x86_64) PLATFORM_TAG="manylinux_2_28_x86_64" ;;
+  amd64) PLATFORM_TAG="manylinux_2_28_x86_64" ;;
+  aarch64) PLATFORM_TAG="manylinux_2_28_aarch64" ;;
+  arm64) PLATFORM_TAG="manylinux_2_28_aarch64" ;;
   *) echo "unsupported architecture: ${MACHINE}"; exit 1 ;;
 esac
 
@@ -156,6 +156,12 @@ uv pip install ${VERBOSE_FLAG} "${INSTALL_PACKAGES[@]}" \
 # uninstall the pip NVSHMEM package if NVSHMEM was built from source
 if [[ "${NVSHMEM_BUILD_FROM_SOURCE-}" == "true" ]] ; then
   uv pip uninstall nvidia-nvshmem-cu${CUDA_MAJOR}
+fi
+
+# Force-reinstall the matching CUDA wheel so the correct nixl_ep_cpp.so is installed.
+# Without this, the wrong CUDA variant's nixl_ep_cpp.so may be active (e.g., cu12 on cu13).
+if [ "${BUILD_NIXL_FROM_SOURCE}" = "false" ]; then
+  uv pip install --force-reinstall --no-deps nixl-cu${CUDA_MAJOR}
 fi
 
 # cleanup

@@ -2,10 +2,8 @@
 # vLLM Version Configuration
 # ============================================================================
 # Used by CUDA and CPU platforms
-VLLM_REPO=https://github.com/neuralmagic/vllm.git
-VLLM_COMMIT_SHA=693c2d11ece54ace6bfaa670998f58707339e82f # maps to elvir + matejs's cherrypicks on top of v0.19.1,
-# see: https://github.com/elvircrn/vllm/commits/llmd-0.19.1-nan-fixes/
-# see: https://github.com/vllm-project/vllm/pull/39213
+VLLM_REPO=https://github.com/vllm-project/vllm.git
+VLLM_COMMIT_SHA=0fc695fc6d1d82e9a5ac6835ac8e4e1c83703665 # maps to vLLM official v0.23.0 release
 
 # ============================================================================
 # Cuda specific configs
@@ -18,12 +16,14 @@ VLLM_PREBUILT=0                # 0=editable install, 1=use full prebuilt wheel
 VLLM_USE_PRECOMPILED=1         # 1=use precompiled binaries either from VLLM_COMMIT_SHA or VLLM_PRECOMPILED_WHEEL_COMMIT, 0=compile from source
 # If building vLLM from a precompiled commit in the vLLM wheel index (only commits off main),
 # which commit to use as the base for the compiled bits.
-VLLM_PRECOMPILED_WHEEL_COMMIT=b1388b1fbf5aaef47937fabe98931211684666a6 # maps to vLLM official 0.19.1 release
+VLLM_PRECOMPILED_WHEEL_COMMIT=0fc695fc6d1d82e9a5ac6835ac8e4e1c83703665 # maps to vLLM official v0.23.0 release
 
 
 
-# Used by XPU, commit from vllm, maps to v0.19.1 tag
-VLLM_XPU_COMMIT_SHA=b1388b1fbf5aaef47937fabe98931211684666a6
+# Used by XPU: prebuilt vLLM image from upstream CI (vllm-ci-test-repo).
+# The XPU image is a thin pass-through over this base; switch tags here to upgrade.
+# Tag corresponds to vLLM v0.19.1 release (commit b1388b1fbf5aaef47937fabe98931211684666a6).
+VLLM_XPU_BASE_IMAGE=public.ecr.aws/q9t5s3a7/vllm-ci-test-repo:b1388b1fbf5aaef47937fabe98931211684666a6-xpu
 
 # ============================================================================
 # CUDA Version Configuration
@@ -40,5 +40,5 @@ GB200_DEEPEP_VERSION=gb200_blog_part_2
 GB200_INSTALL_OFFLOADING_CONNECTOR=false
 
 ### Offloading connector
-LLM_D_OFFLOADING_CONNECTOR_VERSION=0.19
+LLM_D_OFFLOADING_CONNECTOR_VERSION=0.23
 INSTALL_OFFLOADING_CONNECTOR=true

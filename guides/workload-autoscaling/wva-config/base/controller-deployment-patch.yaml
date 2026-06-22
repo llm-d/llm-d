@@ -1,7 +1,7 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: workload-variant-autoscaler-controller-manager
+  name: wva-controller-manager
 spec:
   replicas: 2
   template:

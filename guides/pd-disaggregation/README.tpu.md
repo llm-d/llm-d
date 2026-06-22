@@ -1,24 +1,50 @@
-# Prefill/Decode Disaggregation on Google TPU 7x
+# Prefill/Decode Disaggregation on Google TPU (v6e & v7x)
 
-This guide demonstrates how to deploy `Qwen/Qwen3.5-397B-A17B-FP8` using prefill-decode (P/D) disaggregation on Google TPU 7x clusters.
+This guide demonstrates how to deploy either `Qwen/Qwen3-32B` (on TPU v6e) or `Qwen/Qwen3.5-397B-A17B-FP8` (on TPU v7x) using prefill-decode (P/D) disaggregation on Google TPU clusters.
 
 For a comprehensive overview of P/D disaggregation architecture, best practices, and benchmarking, please refer to the **[Unified P/D Disaggregation Guide](./README.md)**.
 
 ## Prerequisites
 
-Before starting, ensure your cluster and environment are properly configured:
+Before starting, ensure your cluster and environment are properly configured for your specific TPU accelerator version:
 
-1. **TPU Topology:** Your GKE cluster must have TPU 7x nodes provisioned with a `2x2x1` topology (4 chips per node) to accommodate the model requirements.
-   > [!NOTE]
-   > **TPU7x Cores and Parallelism:** TPU7x has 2 cores per chip. You need to consider this when setting parallelism. For example, in `guides/pd-disaggregation/modelserver/tpu/vllm/patch-decode.yaml`, with 4 chips per pod, the tensor parallel size (`--tensor-parallel-size`) is set to `8`.
-2. Complete the **[Prerequisites](./README.md#prerequisites)** section in the main guide to clone the repository and install the Gateway API Inference Extension CRDs.
-3. Set your environment variables, overriding the model name for Qwen 3.5:
+### 1. TPU Topology
 
+* **TPU v6e:** Your GKE cluster must have TPU v6e nodes provisioned with a `2x4` topology (8 chips per node) to accommodate the model requirements.
+  > [!NOTE]
+  > **TPU Cores and Parallelism:** TPU v6e has 1 core per chip. With 8 chips per pod, the tensor parallel size (`--tensor-parallel-size`) is set to `8` in `guides/pd-disaggregation/modelserver/tpu/v6/vllm/patch-decode.yaml`.
+
+* **TPU v7x:** Your GKE cluster must have TPU 7x nodes provisioned with a `2x2x1` topology (4 chips per node) to accommodate the model requirements.
+  > [!NOTE]
+  > **TPU Cores and Parallelism:** TPU7x has 2 cores per chip. With 4 chips per pod, the tensor parallel size (`--tensor-parallel-size`) is set to `8` in `guides/pd-disaggregation/modelserver/tpu/v7/vllm/patch-decode.yaml`.
+
+### 2. Gateway API Inference Extension CRDs
+
+Complete the **[Prerequisites](./README.md#prerequisites)** section in the main guide to clone the repository and install the Gateway API Inference Extension CRDs.
+
+### 3. Environment Variables
+
+Set your environment variables, overriding the model name for your architecture:
+
+**For Cloud TPU v6e:**
 ```bash
+source ${REPO_ROOT}/guides/env.sh
+export GAIE_VERSION=v1.5.0
+export GUIDE_NAME="pd-disaggregation"
+export NAMESPACE="llm-d-pd-disaggregation"
+export MODEL_NAME="Qwen/Qwen3-32B"
+export STACK_NAME="tpu-v6-qwen3-32b-pd"
+```
+
+**For Cloud TPU v7x:**
+```bash
+source ${REPO_ROOT}/guides/env.sh
+export REPO_ROOT=$(realpath $(git rev-parse --show-toplevel))
 export GAIE_VERSION=v1.5.0
 export GUIDE_NAME="pd-disaggregation"
 export NAMESPACE="llm-d-pd-disaggregation"
 export MODEL_NAME="Qwen/Qwen3.5-397B-A17B-FP8"
+export STACK_NAME="tpu-v7-qwen3-5-pd"
 ```
 
 ## Installation Instructions
@@ -29,10 +55,16 @@ Deploy the router in either Standalone or Gateway mode by following the exact in
 
 ### 2. Deploy the TPU Model Server
 
-Once the router is deployed, apply the Kustomize overlays specifically configured for TPU 7x and vLLM. This configuration sets up heterogeneous KV caches (HMA) and configures the TPU workers.
+Once the router is deployed, apply the Kustomize overlays specifically configured for your TPU architecture:
 
+**For TPU v6e:**
 ```bash
-kubectl apply -n ${NAMESPACE} -k guides/${GUIDE_NAME}/modelserver/tpu/vllm/
+kubectl apply -n ${NAMESPACE} -k guides/${GUIDE_NAME}/modelserver/tpu/v6/vllm/
+```
+
+**For TPU v7x:**
+```bash
+kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/tpu/v7/vllm/
 ```
 
 *(Note: If you have monitoring enabled, you can optionally apply the monitoring components as described in the [main guide](./README.md#3-enable-monitoring-optional)).*
@@ -43,8 +75,20 @@ Follow the **[Verification steps in the main guide](./README.md#verification)** 
 
 When sending your test request, ensure you use the correct TPU model name:
 
+**For TPU v6e:**
 ```bash
-# Send a completion request to the TPU deployment
+# Send a completion request to the TPU v6e deployment
+curl -X POST http://${IP}/v1/completions \
+    -H 'Content-Type: application/json' \
+    -d '{
+    "model": "Qwen/Qwen3-32B",
+    "prompt": "How are you today?"
+    }' | jq
+```
+
+**For TPU v7x:**
+```bash
+# Send a completion request to the TPU v7x deployment
 curl -X POST http://${IP}/v1/completions \
     -H 'Content-Type: application/json' \
     -d '{
@@ -55,7 +99,7 @@ curl -X POST http://${IP}/v1/completions \
 
 ## Benchmarking
 
-The benchmark launches a pod (`llmdbench-harness-launcher`) that, in this case, uses `inference-perf` with a workload tailored for TPU 7x. For more details, refer to the [benchmark instructions doc](../../helpers/benchmark.md).
+The benchmark launches a pod (`llmdbench-harness-launcher`) that uses `inference-perf` with a workload tailored for the specific TPU version. For more details, refer to the [benchmark instructions doc](../../helpers/benchmark.md).
 
 ### 1. Prepare the Benchmarking Suite
 
@@ -64,13 +108,13 @@ Follow the **[Prepare the Benchmarking Suite](./README.md#1-prepare-the-benchmar
 ### 2. Download the Workload Template
 
 ```bash
-curl -LJO "https://raw.githubusercontent.com/llm-d/llm-d/main/guides/pd-disaggregation/benchmark-templates/tpu_v7_qwen3_5.yaml"
+curl -LJO "https://raw.githubusercontent.com/llm-d/llm-d/main/guides/pd-disaggregation/benchmark-templates/tpu.yaml"
 ```
 
 ### 3. Execute Benchmark
 
 ```bash
-envsubst < tpu_v7_qwen3_5.yaml > config.yaml
+envsubst < tpu.yaml > config.yaml
 ./run_only.sh -c config.yaml -o ./results
 ```
 
@@ -78,12 +122,12 @@ envsubst < tpu_v7_qwen3_5.yaml > config.yaml
 
 To clean up your cluster, return to the **[Cleanup](./README.md#cleanup)** section of the unified guide.
 
-## Benchmarking Report
+## Benchmarking Report (TPU v7x Example)
 
 The benchmark is running on 8 TPU 7x chips (2 pods with 2x2x1 topology).
 
 <details>
-<summary><b><i>Click</i></b> here to view the report from the above example</summary>
+<summary><b><i>Click</i></b> here to view the report from the TPU v7x example</summary>
 
 ```yaml
 metrics:

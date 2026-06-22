@@ -1,0 +1,47 @@
+## tiered-prefix-cache guide overrides for the router.
+## Layer on top of: recipes/router/base.values.yaml
+
+router:
+  extraServicePorts:
+    - name: http
+      port: 80
+      protocol: TCP
+      targetPort: 8081
+
+  epp:
+    pluginsConfigFile: "tiered-prefix-cache-plugins.yaml"
+    pluginsCustomConfig:
+      tiered-prefix-cache-plugins.yaml: |
+        apiVersion: llm-d.ai/v1alpha1
+        kind: EndpointPickerConfig
+        plugins:
+        - type: no-hit-lru-scorer
+        - type: approx-prefix-cache-producer
+          name: gpu-prefix-cache-producer
+        - type: approx-prefix-cache-producer
+          name: cpu-prefix-cache-producer
+          parameters:
+            autoTune: false
+            lruCapacityPerServer: 82000  # Allocating ~200GB for Qwen-32B: 82,000 blocks * 2.5MB/block (based on 160KB/token * 16 block size).
+        - type: queue-scorer
+        - type: kv-cache-utilization-scorer
+        - type: prefix-cache-scorer
+          name: gpu-prefix-cache-scorer
+          parameters:
+            prefixMatchInfoProducerName: gpu-prefix-cache-producer
+        - type: prefix-cache-scorer
+          name: cpu-prefix-cache-scorer
+          parameters:
+            prefixMatchInfoProducerName: cpu-prefix-cache-producer
+        schedulingProfiles:
+        - name: default
+          plugins:
+          - pluginRef: queue-scorer
+          - pluginRef: kv-cache-utilization-scorer
+          - pluginRef: gpu-prefix-cache-scorer
+          - pluginRef: cpu-prefix-cache-scorer
+          - pluginRef: no-hit-lru-scorer
+
+  modelServers:
+    matchLabels:
+      llm-d.ai/guide: "tiered-prefix-cache"

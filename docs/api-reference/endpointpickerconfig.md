@@ -2,7 +2,8 @@
 
 `EndpointPickerConfig` defines the internal configuration for the **Endpoint Picker (EPP)**. Unlike Kubernetes resources (like `InferencePool`), this is a configuration schema used to initialize the EPP binary, typically provided via a ConfigMap or a local file.
 
-**Version:** `config.apix.gateway-api-inference-extension.sigs.k8s.io/v1alpha1`
+**Group:** `llm-d.ai`
+**Version:** `v1alpha1`
 
 ---
 

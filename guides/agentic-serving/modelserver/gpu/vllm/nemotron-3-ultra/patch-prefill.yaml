@@ -1,0 +1,80 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: prefill
+spec:
+  replicas: 6
+  template:
+    spec:
+      containers:
+        - name: modelserver
+          command: ["vllm", "serve"]
+          args:
+            - "RedHatAI/NVIDIA-Nemotron-3-Ultra-550B-A55B-FP8-block"
+            - "--trust-remote-code"
+            - "--tensor-parallel-size=8"
+            - "--enable-expert-parallel"
+            - "--kv-cache-dtype=fp8"
+            - "--enable-auto-tool-choice"
+            - "--tool-call-parser=qwen3_coder"
+            - "--reasoning-parser=nemotron_v3"
+            - "--model-loader-extra-config"
+            - '{"enable_multithread_load": true, "num_threads": 96}'
+            - "--kv-transfer-config"
+            - '{"kv_connector":"MultiConnector","kv_role":"kv_both","kv_load_failure_policy":"fail","kv_connector_extra_config":{"connectors":[{"kv_connector":"NixlConnector","kv_role":"kv_producer","kv_connector_extra_config":{"bidirectional_kv_xfer":true}},{"kv_connector":"OffloadingConnector","kv_role":"kv_both","kv_connector_extra_config":{"cpu_bytes_to_use":214748364800,"lazy_offload":true}}]}}'
+          env:
+            - name: HF_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: llm-d-hf-token
+                  key: HF_TOKEN
+            - name: VLLM_SSM_CONV_STATE_LAYOUT
+              value: "DS"
+            - name: VLLM_NIXL_SIDE_CHANNEL_HOST
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.podIP
+            - name: VLLM_HTTP_TIMEOUT_KEEP_ALIVE
+              value: "120"
+          resources:
+            limits:
+              cpu: "48"
+              memory: 600Gi
+              nvidia.com/gpu: "8"
+            requests:
+              cpu: "32"
+              memory: 300Gi
+              nvidia.com/gpu: "8"
+          volumeMounts:
+            - mountPath: /dev/shm
+              name: shm
+            - mountPath: /.cache
+              name: torch-compile-cache
+            - mountPath: /.config
+              name: vllm-config
+            - mountPath: /.triton
+              name: triton-cache
+          startupProbe:
+            initialDelaySeconds: 30
+            periodSeconds: 30
+            timeoutSeconds: 5
+            failureThreshold: 120
+          livenessProbe:
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            periodSeconds: 5
+            timeoutSeconds: 2
+            failureThreshold: 3
+      volumes:
+        - name: shm
+          emptyDir:
+            medium: Memory
+            sizeLimit: 40Gi
+        - name: torch-compile-cache
+          emptyDir: {}
+        - name: vllm-config
+          emptyDir: {}
+        - name: triton-cache
+          emptyDir: {}

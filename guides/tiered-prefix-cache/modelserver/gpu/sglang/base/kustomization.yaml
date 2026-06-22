@@ -1,0 +1,21 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ../../../../../recipes/modelserver/base/single-host/default
+
+namePrefix: tiered-prefix-cache-gpu-sglang-
+
+components:
+  - ../../../../../recipes/modelserver/components/images/gpu-sglang
+
+labels:
+  - pairs:
+      llm-d.ai/guide: tiered-prefix-cache
+      llm-d.ai/model: Qwen3-32B
+      llm-d.ai/accelerator-variant: gpu
+      llm-d.ai/accelerator-vendor: nvidia
+      llm-d.ai/engine-type: sglang
+    includeSelectors: true
+    includeTemplates: true
+patches:
+  - path: patch-sglang.yaml

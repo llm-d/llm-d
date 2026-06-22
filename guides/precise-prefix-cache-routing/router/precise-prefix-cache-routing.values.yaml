@@ -1,26 +1,90 @@
 ## precise-prefix-cache-routing guide overrides for the router.
 ## Layer on top of: recipes/router/base.values.yaml
 ##
+## A `vllm launch render` sidecar exposes /v1/completions/render on
+## localhost:8000; the EPP `token-producer` plugin tokenizes prompts via
+## that HTTP endpoint.
+##
 ## Pod-discovery mode with active-active HA (replicas: 2). Each replica dials
 ## every vLLM pod's per-pod ZMQ socket; both indexes converge identically.
-## Scale to a single replica with --set inferenceExtension.replicas=1.
+## Scale to a single replica with --set router.epp.replicas=1.
 
-inferenceExtension:
-  image:
-    name: llm-d-inference-scheduler
-    hub: ghcr.io/llm-d
-    tag: v0.8.0
-    pullPolicy: IfNotPresent
+router:
+  tokenizer:
+    enabled: true
+    # Required by llm-d-router chart v0 when tokenizer is enabled;
+    # must match the deployed model server and the token-producer modelName below
+    modelName: Qwen/Qwen3-32B
+    env:
+      - name: HF_HOME
+        value: /tmp/hf/hub
 
-  replicas: 2
+  epp:
+    replicas: 2
+    flags:
+      # The chart auto-adds `--ha-enable-leader-election` when replicas > 1,
+      # which makes only the leader's readiness probe pass — collapsing to
+      # active-passive. Embedding `=false` into the key forces the single-arg
+      # form (pflag won't parse `--key value` as a bool); pflag honors
+      # last-occurrence wins. No-op when replicas=1.
+      ha-enable-leader-election: false
+    env:
+      - name: HF_TOKEN
+        valueFrom:
+          secretKeyRef:
+            name: llm-d-hf-token
+            key: HF_TOKEN
 
-  flags:
-    # The chart auto-adds `--ha-enable-leader-election` when replicas > 1,
-    # which makes only the leader's readiness probe pass — collapsing to
-    # active-passive. Embedding `=false` into the key forces the single-arg
-    # form (pflag won't parse `--key value` as a bool); pflag honors
-    # last-occurrence wins. No-op when replicas=1.
-    ha-enable-leader-election=false: ""
+    pluginsConfigFile: "precise-prefix-cache-routing-plugins.yaml"
+    pluginsCustomConfig:
+      precise-prefix-cache-routing-plugins.yaml: |
+        apiVersion: llm-d.ai/v1alpha1
+        kind: EndpointPickerConfig
+        plugins:
+          - type: token-producer
+            parameters:
+              modelName: Qwen/Qwen3-32B # Must match router.tokenizer.modelName above
+              vllm:
+                url: "http://localhost:8000"
+          - type: endpoint-notification-source
+          - type: precise-prefix-cache-producer # `precise-prefix-cache-scorer` is deprecated
+            parameters:
+              tokenProcessorConfig:
+                blockSize: 64
+              speculativeIndexing: true
+              indexerConfig:
+                kvBlockIndexConfig:
+                  enableMetrics: true
+              kvEventsConfig:
+                topicFilter: "kv@"
+                concurrency: 8
+                discoverPods: true
+                podDiscoveryConfig:
+                  socketPort: 5556
+          - type: prefix-cache-scorer
+            parameters:
+              prefixMatchInfoProducerName: precise-prefix-cache-producer
+          - type: kv-cache-utilization-scorer
+          - type: queue-scorer
+          - type: no-hit-lru-scorer
+            parameters:
+              prefixMatchInfoProducerName: precise-prefix-cache-producer
+        dataLayer: # metrics-data-source + core-metrics-extractor injected by default
+          sources:
+            - pluginRef: endpoint-notification-source
+              extractors:
+                - pluginRef: precise-prefix-cache-producer
+        schedulingProfiles:
+          - name: default
+            plugins:
+              - pluginRef: kv-cache-utilization-scorer
+                weight: 2.0
+              - pluginRef: queue-scorer
+                weight: 2.0
+              - pluginRef: prefix-cache-scorer
+                weight: 3.0
+              - pluginRef: no-hit-lru-scorer
+                weight: 2.0
 
   extraServicePorts:
     - name: http
@@ -28,81 +92,9 @@ inferenceExtension:
       protocol: TCP
       targetPort: 8081
 
-  env:
-    - name: HF_TOKEN
-      valueFrom:
-        secretKeyRef:
-          name: llm-d-hf-token
-          key: HF_TOKEN
-
-  # UDS tokenizer sidecar is appended via patches/uds-tokenizer
-  # post-renderer (chart's sidecar.* slot is owned by Envoy).
-
-  pluginsConfigFile: "precise-prefix-cache-routing-plugins.yaml"
-  pluginsCustomConfig:
-    precise-prefix-cache-routing-plugins.yaml: |
-      apiVersion: inference.networking.x-k8s.io/v1alpha1
-      kind: EndpointPickerConfig
-      plugins:
-        - type: tokenizer
-          parameters:
-            modelName: Qwen/Qwen3-32B
-            udsTokenizerConfig:
-              socketFile: /tmp/tokenizer/tokenizer-uds.socket
-        - type: endpoint-notification-source
-        - type: metrics-data-source
-        - type: core-metrics-extractor
-        - type: single-profile-handler
-        - type: decode-filter
-        - type: precise-prefix-cache-scorer
-          parameters:
-            tokenProcessorConfig:
-              blockSize: 64           # must match vLLM --block-size
-            speculativeIndexing: true
-            indexerConfig:
-              tokenizersPoolConfig:
-                modelName: Qwen/Qwen3-32B
-                workersCount: 24
-                uds:
-                  socketFile: /tmp/tokenizer/tokenizer-uds.socket
-              kvBlockIndexConfig:
-                enableMetrics: true
-            kvEventsConfig:
-              topicFilter: "kv@"
-              concurrency: 8
-              discoverPods: true
-              podDiscoveryConfig:
-                socketPort: 5556
-        - type: kv-cache-utilization-scorer
-        - type: queue-scorer
-        - type: no-hit-lru-scorer
-        - type: max-score-picker
-      dataLayer:
-        sources:
-          - pluginRef: metrics-data-source
-            extractors:
-              - pluginRef: core-metrics-extractor
-          - pluginRef: endpoint-notification-source
-            extractors:
-              - pluginRef: precise-prefix-cache-scorer
-      schedulingProfiles:
-        - name: default
-          plugins:
-            - pluginRef: decode-filter
-            - pluginRef: kv-cache-utilization-scorer
-              weight: 2.0
-            - pluginRef: queue-scorer
-              weight: 2.0
-            - pluginRef: precise-prefix-cache-scorer
-              weight: 3.0
-            - pluginRef: no-hit-lru-scorer
-              weight: 2.0
-            - pluginRef: max-score-picker
-
-inferencePool:
-  targetPorts:
-    - number: 8000
-  modelServerType: vllm
   modelServers:
+    type: vllm
+    targetPorts:
+      - number: 8000
     matchLabels:
       llm-d.ai/guide: "precise-prefix-cache-routing"

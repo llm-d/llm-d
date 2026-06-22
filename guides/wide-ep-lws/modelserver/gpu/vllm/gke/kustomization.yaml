@@ -8,10 +8,10 @@ components:
 patches:
   - target:
       kind: LeaderWorkerSet
-      name: prefill
+      name: wide-ep-lws-nvidia-gpu-vllm-prefill
     patch: |-
       # Prefer the same block and subblock.
-      # https://github.com/llm-d/llm-d/tree/main/docs/infra-providers/gke#configuring-support-for-rdma-on-gke-workload-pods
+      # https://github.com/llm-d/llm-d/tree/main/docs/infrastructure/providers/gke#configuring-support-for-rdma-on-gke-workload-pods
       - op: add
         path: /spec/leaderWorkerTemplate/workerTemplate/spec/affinity
         value:
@@ -37,10 +37,10 @@ patches:
                 topologyKey: cloud.google.com/gce-topology-subblock
   - target:
       kind: LeaderWorkerSet
-      name: decode
+      name: wide-ep-lws-nvidia-gpu-vllm-decode
     patch: |-
       # Prefer the same block and subblock.
-      # https://github.com/llm-d/llm-d/tree/main/docs/infra-providers/gke#configuring-support-for-rdma-on-gke-workload-pods
+      # https://github.com/llm-d/llm-d/tree/main/docs/infrastructure/providers/gke#configuring-support-for-rdma-on-gke-workload-pods
       - op: add
         path: /spec/leaderWorkerTemplate/workerTemplate/spec/affinity
         value:
@@ -69,10 +69,61 @@ patches:
       kind: LeaderWorkerSet
     patch: |-
       # Enable privileged container on GKE to perform GPU initiated RDMA.
-      # See https://github.com/llm-d/llm-d/tree/main/docs/infra-providers/gke#configuring-support-for-rdma-on-gke-workload-pods.
+      # See https://github.com/llm-d/llm-d/tree/main/docs/infrastructure/providers/gke#configuring-support-for-rdma-on-gke-workload-pods.
       - op: add
         path: /spec/leaderWorkerTemplate/workerTemplate/spec/containers/0/securityContext/privileged
         value: true
+      # Workaround for GKE scheduling bug on H200 nodes (which only advertise the .IP variant).
+      # Setting the legacy non-.IP resource limit to 0 bypasses the request while GKE Warden
+      # still injects the .IP variant.
+      - op: add
+        path: /spec/leaderWorkerTemplate/workerTemplate/spec/containers/0/resources/limits/networking.gke.io.networks~1rdma-0
+        value: "0"
+      - op: add
+        path: /spec/leaderWorkerTemplate/workerTemplate/spec/containers/0/resources/requests/networking.gke.io.networks~1rdma-0
+        value: "0"
+      - op: add
+        path: /spec/leaderWorkerTemplate/workerTemplate/spec/containers/0/resources/limits/networking.gke.io.networks~1rdma-1
+        value: "0"
+      - op: add
+        path: /spec/leaderWorkerTemplate/workerTemplate/spec/containers/0/resources/requests/networking.gke.io.networks~1rdma-1
+        value: "0"
+      - op: add
+        path: /spec/leaderWorkerTemplate/workerTemplate/spec/containers/0/resources/limits/networking.gke.io.networks~1rdma-2
+        value: "0"
+      - op: add
+        path: /spec/leaderWorkerTemplate/workerTemplate/spec/containers/0/resources/requests/networking.gke.io.networks~1rdma-2
+        value: "0"
+      - op: add
+        path: /spec/leaderWorkerTemplate/workerTemplate/spec/containers/0/resources/limits/networking.gke.io.networks~1rdma-3
+        value: "0"
+      - op: add
+        path: /spec/leaderWorkerTemplate/workerTemplate/spec/containers/0/resources/requests/networking.gke.io.networks~1rdma-3
+        value: "0"
+      - op: add
+        path: /spec/leaderWorkerTemplate/workerTemplate/spec/containers/0/resources/limits/networking.gke.io.networks~1rdma-4
+        value: "0"
+      - op: add
+        path: /spec/leaderWorkerTemplate/workerTemplate/spec/containers/0/resources/requests/networking.gke.io.networks~1rdma-4
+        value: "0"
+      - op: add
+        path: /spec/leaderWorkerTemplate/workerTemplate/spec/containers/0/resources/limits/networking.gke.io.networks~1rdma-5
+        value: "0"
+      - op: add
+        path: /spec/leaderWorkerTemplate/workerTemplate/spec/containers/0/resources/requests/networking.gke.io.networks~1rdma-5
+        value: "0"
+      - op: add
+        path: /spec/leaderWorkerTemplate/workerTemplate/spec/containers/0/resources/limits/networking.gke.io.networks~1rdma-6
+        value: "0"
+      - op: add
+        path: /spec/leaderWorkerTemplate/workerTemplate/spec/containers/0/resources/requests/networking.gke.io.networks~1rdma-6
+        value: "0"
+      - op: add
+        path: /spec/leaderWorkerTemplate/workerTemplate/spec/containers/0/resources/limits/networking.gke.io.networks~1rdma-7
+        value: "0"
+      - op: add
+        path: /spec/leaderWorkerTemplate/workerTemplate/spec/containers/0/resources/requests/networking.gke.io.networks~1rdma-7
+        value: "0"
       # Add GKE specific RDMA configuration.
       - op: add
         path: /spec/leaderWorkerTemplate/workerTemplate/metadata/annotations
@@ -100,7 +151,7 @@ patches:
           name: DEEP_EP_DEVICE_TO_HCA_MAPPING
           value: "0:mlx5_0:1,1:mlx5_1:1,2:mlx5_2:1,3:mlx5_3:1,4:mlx5_4:1,5:mlx5_5:1,6:mlx5_6:1,7:mlx5_7:1"
       # This is recommended on gke.
-      # https://github.com/llm-d/llm-d/tree/main/docs/infra-providers/gke#configuring-support-for-rdma-on-gke-workload-pods
+      # https://github.com/llm-d/llm-d/tree/main/docs/infrastructure/providers/gke#configuring-support-for-rdma-on-gke-workload-pods
       - op: add
         path: /spec/leaderWorkerTemplate/workerTemplate/spec/containers/0/env/-
         value:

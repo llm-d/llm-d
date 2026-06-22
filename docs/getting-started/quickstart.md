@@ -18,6 +18,7 @@ Clone the llm-d repository and set up the necessary environment variables:
 git clone https://github.com/llm-d/llm-d.git && cd llm-d
 
 export GAIE_VERSION=v1.5.0
+export ROUTER_CHART_VERSION=v0
 export GUIDE_NAME="quickstart"
 export NAMESPACE=llm-d-quickstart
 ```
@@ -27,7 +28,7 @@ export NAMESPACE=llm-d-quickstart
 Install the Gateway API Inference Extension CRDs and create the namespace:
 
 ```bash
-kubectl apply -k "https://github.com/kubernetes-sigs/gateway-api-inference-extension/config/crd?ref=${GAIE_VERSION}"
+kubectl apply -f https://github.com/kubernetes-sigs/gateway-api-inference-extension/releases/download/${GAIE_VERSION}/v1-manifests.yaml
 kubectl create namespace ${NAMESPACE}
 ```
 
@@ -39,10 +40,10 @@ The llm-d Router provides the intelligent load balancing. In Standalone Mode, it
 
 ```bash
 helm install ${GUIDE_NAME} \
-    oci://registry.k8s.io/gateway-api-inference-extension/charts/standalone \
+    oci://ghcr.io/llm-d/charts/llm-d-router-standalone-dev \
     -f guides/recipes/router/base.values.yaml \
     -f guides/optimized-baseline/router/optimized-baseline.values.yaml \
-    -n ${NAMESPACE} --version ${GAIE_VERSION}
+    -n ${NAMESPACE} --version ${ROUTER_CHART_VERSION}
 ```
 
 ### 2. Deploy the Model Server
@@ -71,8 +72,9 @@ export IP=$(kubectl get service ${GUIDE_NAME}-epp -n ${NAMESPACE} -o jsonpath='{
 Open a temporary interactive shell inside the cluster to send a request:
 
 ```bash
-kubectl run curl-debug --rm -it -n ${NAMESPACE} \
+kubectl run curl-debug --rm -it \
     --image=cfmanteiga/alpine-bash-curl-jq \
+    --namespace="$NAMESPACE" \
     --env="IP=$IP" \
     -- /bin/bash
 ```

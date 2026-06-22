@@ -9,11 +9,9 @@ namePrefix: pd-disaggregation-xpu-vllm-
 configurations:
   - namereference.yaml
 
-images:
-  - name: REPLACE_MODEL_SERVER_IMAGE
-    newName: ghcr.io/llm-d/llm-d-xpu
-    newTag: v0.7.0
-
+components:
+  - ../../../../recipes/modelserver/components/images/xpu-vllm
+  - ../../../../recipes/modelserver/components/images/routing-sidecar
 
 labels:
   - pairs:
@@ -21,7 +19,7 @@ labels:
       llm-d.ai/guide: pd-disaggregation
       llm-d.ai/accelerator-variant: xpu
       llm-d.ai/accelerator-vendor: intel
-      inference.networking.k8s.io/engine-type: vllm
+      llm-d.ai/engine-type: vllm
     includeSelectors: true
     includeTemplates: true
     fields:

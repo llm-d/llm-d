@@ -1,9 +1,8 @@
 # Wide Expert Parallelism
 
-<!--
-[![Nightly - Wide EP LWS E2E (OpenShift)](https://github.com/llm-d/llm-d/actions/workflows/nightly-e2e-wide-ep-lws-ocp.yaml/badge.svg)](https://github.com/llm-d/llm-d/actions/workflows/nightly-e2e-wide-ep-lws-ocp.yaml)
--->
-[![Nightly - Wide EP LWS E2E (CKS)](https://github.com/llm-d/llm-d/actions/workflows/nightly-e2e-wide-ep-lws-cks.yaml/badge.svg)](https://github.com/llm-d/llm-d/actions/workflows/nightly-e2e-wide-ep-lws-cks.yaml) [![Nightly - Wide EP LWS E2E (GKE)](https://github.com/llm-d/llm-d/actions/workflows/nightly-e2e-wide-ep-lws-gke.yaml/badge.svg)](https://github.com/llm-d/llm-d/actions/workflows/nightly-e2e-wide-ep-lws-gke.yaml)
+[![E2E (CKS GPU)](https://github.com/llm-d/llm-d/actions/workflows/consolidate-status-wide-ep-lws-cks-acc-gpu-vllm-x.yaml/badge.svg)](https://github.com/llm-d/llm-d/actions/workflows/consolidate-status-wide-ep-lws-cks-acc-gpu-vllm-x.yaml)
+[![E2E (GKE GPU)](https://github.com/llm-d/llm-d/actions/workflows/consolidate-status-wide-ep-lws-gke-acc-gpu-vllm-x.yaml/badge.svg)](https://github.com/llm-d/llm-d/actions/workflows/consolidate-status-wide-ep-lws-gke-acc-gpu-vllm-x.yaml)
+[![E2E (OCP GPU)](https://github.com/llm-d/llm-d/actions/workflows/consolidate-status-wide-ep-lws-ibm-acc-gpu-vllm-x.yaml/badge.svg)](https://github.com/llm-d/llm-d/actions/workflows/consolidate-status-wide-ep-lws-ibm-acc-gpu-vllm-x.yaml)
 
 ## Overview
 
@@ -51,7 +50,8 @@ This guide includes configurations for the following accelerators:
 * Set the following environment variables:
 
   ```bash
-  export GAIE_VERSION=v1.5.0
+  export REPO_ROOT=$(realpath $(git rev-parse --show-toplevel))
+  source ${REPO_ROOT}/guides/env.sh
   export GUIDE_NAME="wide-ep-lws"
   export NAMESPACE=llm-d-wide-ep
   export MODEL=deepseek-ai/DeepSeek-R1-0528
@@ -59,13 +59,13 @@ This guide includes configurations for the following accelerators:
 * Install the Gateway API Inference Extension CRDs:
 
   ```bash
-  kubectl apply -k "https://github.com/kubernetes-sigs/gateway-api-inference-extension/config/crd?ref=${GAIE_VERSION}"
+  kubectl apply -f https://github.com/kubernetes-sigs/gateway-api-inference-extension/releases/download/${GAIE_VERSION}/v1-manifests.yaml
   ```
 * You have deployed the [LeaderWorkerSet controller](https://lws.sigs.k8s.io/docs/installation/)
 * Create a target namespace for the installation:
 
   ```bash
-  kubectl create namespace ${NAMESPACE}
+  kubectl create namespace ${NAMESPACE} --dry-run=client -o yaml | kubectl apply -f -
   ```
 * [Create the `llm-d-hf-token` secret in your target namespace with the key `HF_TOKEN` matching a valid HuggingFace token](../../helpers/hf-token.md) to pull models.
 
@@ -78,12 +78,11 @@ This guide includes configurations for the following accelerators:
 This deploys the llm-d Router with an Envoy sidecar, it doesn't set up a Kubernetes Gateway.
 
 ```bash
-export REPO_ROOT=$(realpath $(git rev-parse --show-toplevel))
 helm install ${GUIDE_NAME} \
-    oci://registry.k8s.io/gateway-api-inference-extension/charts/standalone \
+    ${ROUTER_STANDALONE_CHART} \
     -f ${REPO_ROOT}/guides/recipes/router/base.values.yaml \
     -f ${REPO_ROOT}/guides/${GUIDE_NAME}/router/${GUIDE_NAME}.values.yaml \
-    -n ${NAMESPACE} --version ${GAIE_VERSION}
+    -n ${NAMESPACE} --version ${ROUTER_CHART_VERSION}
 ```
 
 <details>
@@ -91,20 +90,18 @@ helm install ${GUIDE_NAME} \
 
 To use a Kubernetes Gateway managed proxy rather than the standalone version, follow these steps instead of applying the previous Helm chart:
 
-1. *Deploy a Kubernetes Gateway* by following one of [the gateway guides](../prereq/gateways).
+1. *Deploy a Kubernetes Gateway* by following one of [the gateway guides](../../docs/infrastructure/gateway).
 2. *Deploy the llm-d Router and an HTTPRoute* that connects it to the Gateway as follows:
 
 ```bash
-export REPO_ROOT=$(realpath $(git rev-parse --show-toplevel))
-
 export PROVIDER_NAME=gke # options: none, gke, agentgateway, istio
 helm install ${GUIDE_NAME} \
-    oci://registry.k8s.io/gateway-api-inference-extension/charts/inferencepool  \
+    ${ROUTER_GATEWAY_CHART}  \
     -f ${REPO_ROOT}/guides/recipes/router/base.values.yaml \
     -f ${REPO_ROOT}/guides/recipes/router/features/httproute-flags.yaml \
     -f ${REPO_ROOT}/guides/${GUIDE_NAME}/router/${GUIDE_NAME}.values.yaml \
     --set provider.name=${PROVIDER_NAME} \
-    -n ${NAMESPACE} --version ${GAIE_VERSION}
+    -n ${NAMESPACE} --version ${ROUTER_CHART_VERSION}
 ```
 
 </details>
@@ -115,19 +112,19 @@ Apply the Kustomize overlays for your specific backend:
 
 ```bash
 export INFRA_PROVIDER=gke # options: gke, coreweave, dgx-cloud-gb200
-kubectl apply -n ${NAMESPACE} -k guides/${GUIDE_NAME}/modelserver/gpu/vllm/${INFRA_PROVIDER}
+kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/gpu/vllm/${INFRA_PROVIDER}
 ```
 
 ### 3. (Optional) Enable monitoring
 
 > [!NOTE]
-> GKE provides [automatic application monitoring](https://docs.cloud.google.com/kubernetes-engine/docs/how-to/configure-automatic-application-monitoring) out of the box. The llm-d [Monitoring stack](../../docs/monitoring/README.md) is not required for GKE, but it is available if you prefer to use it.
+> GKE provides [automatic application monitoring](https://docs.cloud.google.com/kubernetes-engine/docs/how-to/configure-automatic-application-monitoring) out of the box. The llm-d [Monitoring stack](../../docs/operations/observability/setup.md) is not required for GKE, but it is available if you prefer to use it.
 
-* Install the [Monitoring stack](../../docs/monitoring/README.md).
+* Install the [Monitoring stack](../../docs/operations/observability/setup.md).
 * Deploy the monitoring resources for this guide.
 
 ```bash
-kubectl apply -n ${NAMESPACE} -k guides/recipes/modelserver/components/monitoring-pd
+kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/recipes/modelserver/components/monitoring-pd
 ```
 
 ### 4. (Optional) Topology Aware Scheduling (TAS)
@@ -136,9 +133,9 @@ For information on how to use topology aware scheduling using Kueue, see [LWS + 
 
 ```bash
 # H200 on GKE
-kubectl apply -n ${NAMESPACE} -k guides/${GUIDE_NAME}/modelserver/gpu/vllm/topology-aware/gke
+kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/gpu/vllm/topology-aware/gke
 # B200 on GKE
-kubectl apply -n ${NAMESPACE} -k guides/${GUIDE_NAME}/modelserver/gpu/vllm/topology-aware/gke-a4
+kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/gpu/vllm/topology-aware/gke-a4
 ```
 
 ## Verification
@@ -167,6 +164,7 @@ export IP=$(kubectl get gateway llm-d-inference-gateway -n ${NAMESPACE} -o jsonp
 ```bash
 kubectl run curl-debug --rm -it \
     --image=cfmanteiga/alpine-bash-curl-jq \
+    --namespace="$NAMESPACE" \
     --env="IP=$IP" \
     --env="NAMESPACE=$NAMESPACE" \
     -- /bin/bash
@@ -185,31 +183,83 @@ curl -X POST http://${IP}/v1/completions \
 
 ## Benchmarking
 
-The benchmark launches a pod (`llmdbench-harness-launcher`) that, in this case, uses `inference-perf` with a synthetic random batch workload workload named `2048_concurrent_2k_isl_2k_osl`. For more details, refer to the [benchmark instructions doc](../../helpers/benchmark.md).
+This guide uses [`llmdbenchmark`](https://github.com/llm-d/llm-d-benchmark) — the supported standard CLI for llm-d performance benchmarking.
 
-### 1. Prepare the Benchmarking Suite
+In this example we will demonstrate how to run [`inference-perf`](https://github.com/kubernetes-sigs/inference-perf) with a high-concurrency random-data workload designed to saturate the wide-expert-parallel topology, against the stack you just deployed above (standalone or gateway mode). When orchestrating benchmarks via `llmdbenchmark`, the CLI automatically and transparently deploys a harness pod (`llmdbench-harness-launcher`) into your namespace. This pod is central to driving the workload, collecting the results, and tearing itself down when it's finished.
 
-* Download the benchmark script:
+> [!IMPORTANT]
+> **For more in-depth explanation and features for benchmarking llm-d guides, see [`helpers/benchmark.md`](../../helpers/benchmark.md).**
+>
+> The Benchmarking section below contains only the **wide-ep-lws-specific commands** needed to drive the stack you just deployed — for everything else (and especially when something goes wrong), start at [`helpers/benchmark.md`](../../helpers/benchmark.md).
+>
+> For even more details about benchmarking, see the actual repository: [`llm-d-benchmark` on GitHub](https://github.com/llm-d/llm-d-benchmark).
 
-```bash
-curl -L -O https://raw.githubusercontent.com/llm-d/llm-d-benchmark/main/existing_stack/run_only.sh
-chmod u+x run_only.sh
-```
+> [!TIP]
+> The command below runs this guide's **dedicated** benchmark profile, which is intentionally shaped to fully saturate the wide-expert-parallel topology — and accordingly takes longer to complete. To run a simpler workload with fewer execution cycles first (useful for validating the path, image pulls, PVC binding, etc. before committing to a real run), pick a generic sample profile such as `shared_prefix_synthetic.yaml` from the catalog in [`helpers/benchmark.md` → Available workload profiles](../../helpers/benchmark.md#available-workload-profiles) and substitute it for the `--workload` flag in the command below.
 
-### 2. Download the Workload Template
+### 1. Install the `llmdbenchmark` CLI
 
-The template is located at `guides/wide-ep-lws/benchmark-templates/guide.yaml`. You can also download it if needed:
-
-```bash
-curl -LJO "https://raw.githubusercontent.com/llm-d/llm-d/main/guides/${GUIDE_NAME}/benchmark-templates/2048_concurrent_2k_isl_2k_osl.yaml"
-```
-
-### 3. Execute Benchmark
+Automatically clone the benchmark repository into `./llm-d-benchmark/` and create a virtualenv at `./llm-d-benchmark/.venv/` containing dependencies and its installation:
 
 ```bash
-envsubst < 2048_concurrent_2k_isl_2k_osl.yaml > config.yaml
-./run_only.sh -c config.yaml -o ./results
+curl -sSL https://raw.githubusercontent.com/llm-d/llm-d-benchmark/main/install.sh | bash
 ```
+
+Activate the `venv` and enter the repository directory - both are required: the `venv` puts `llmdbenchmark` on your PATH, and the repository directory contains the `workload/profiles/` and `config/specification/` files that orchestrate the benchmark:
+
+```bash
+cd llm-d-benchmark
+source .venv/bin/activate
+llmdbenchmark --version
+```
+
+> [!NOTE]
+> Subsequent `llmdbenchmark` commands in this section assume you are inside the `llm-d-benchmark` repo directory with the `venv` activated. If you open a new shell, re-run the two commands above.
+
+### 2. Resolve the endpoint of the stack you just deployed
+
+Set two variables so the rest of the section is topology-agnostic: the endpoint URL and the gateway class. The gateway class tells the CLI which deployment topology the cluster is actually running, without this, the CLI re-renders against the benchmark scenario's default values.
+
+**Standalone Mode** (the default in this guide — no Kubernetes Gateway, EPP pod with an Envoy sidecar):
+
+```bash
+export ENDPOINT_URL="http://$(kubectl get service ${GUIDE_NAME}-epp -n ${NAMESPACE} -o jsonpath='{.spec.clusterIP}')"
+export GATEWAY_CLASS=epponly # standalone mode
+```
+
+<details>
+<summary> <b>Gateway Mode</b> </summary>
+
+```bash
+export ENDPOINT_URL="http://$(kubectl get gateway llm-d-inference-gateway -n ${NAMESPACE} -o jsonpath='{.status.addresses[0].value}')"
+
+# Match whichever provider you used when deploying the gateway (e.g. istio, agentgateway, gke).
+export GATEWAY_CLASS=istio
+```
+
+</details>
+
+### 3. Run the benchmark profile for Wide Expert Parallelism
+
+`guide_wide-ep-lws_1.yaml` is a **dedicated workload profile** shipped with `llm-d-benchmark` specifically for this guide — it reproduces the saturation load used to generate the [graphs at the bottom of this guide](#benchmarking-report) (concurrent load with `concurrency_level=2048` and `num_requests=8192`) and is shaped to highlight the strengths of wide expert parallelism by fully saturating the topology.
+
+Benchmark results are copied to the `workspace` directory that is specified by _you_ (or that is automatically generated when omitted from the cli) on the machine running the CLI. The workspace location is optional — by default the CLI auto-generates a timestamped workspace and prints its full path in the logs during the run. If you'd rather choose where results land, pass `--workspace <YOUR_DIR_HERE>` as a top-level argument of `llmdbenchmark` (before the `run` subcommand):
+
+```bash
+llmdbenchmark \
+    --spec           guides/wide-ep-lws \
+    run \
+    --endpoint-url   "${ENDPOINT_URL}" \
+    --gateway-class  "${GATEWAY_CLASS}" \
+    --model          "deepseek-ai/DeepSeek-R1-0528" \
+    --namespace      "${NAMESPACE}" \
+    --harness        inference-perf \
+    --workload       guide_wide-ep-lws_1.yaml \
+    --analyze
+```
+
+> [!NOTE]
+> Depending on your `cluster` you may need to extend the default `timeout` values to longer duration, as `bind`, `access` and `wait-timeout` times of `pvcs` and `pods` can be arbitrarily slower on other systems, please utilize `llmdbenchmark run --help` to view the knobs needed to increase those values.
 
 ## Cleanup
 
@@ -217,7 +267,7 @@ To remove the deployed components:
 
 ```bash
 helm uninstall ${GUIDE_NAME} -n ${NAMESPACE}
-kubectl delete -n ${NAMESPACE} -k guides/${GUIDE_NAME}/modelserver/<gke|coreweave>
+kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/<gke|coreweave>
 ```
 
 ## Benchmarking Report

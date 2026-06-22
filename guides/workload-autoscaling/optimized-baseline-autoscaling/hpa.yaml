@@ -2,24 +2,21 @@ apiVersion: autoscaling/v2
 kind: HorizontalPodAutoscaler
 metadata:
   name: optimized-baseline-nvidia-gpu-vllm-decode
+  labels:
+    inference.optimization/acceleratorName: "H100"
+    llm-d.ai/inference-serving: "true"
+    llm-d.ai/guide: "optimized-baseline"
+  annotations:
+    llm-d.ai/managed: "true"
+    llm-d.ai/model-id: "Qwen3-32B"
+    llm-d.ai/variant-cost: "30.0"
 spec:
   scaleTargetRef:
     apiVersion: apps/v1
     kind: Deployment
     name: optimized-baseline-nvidia-gpu-vllm-decode
   minReplicas: 1
-  maxReplicas: 16
-  metrics:
-    - type: External
-      external:
-        metric:
-          name: wva_desired_replicas
-          selector:
-            matchLabels:
-              variant_name: optimized-baseline-nvidia-gpu-vllm-decode
-        target:
-          type: AverageValue
-          averageValue: "1"
+  maxReplicas: 2
   behavior:
     scaleUp:
       stabilizationWindowSeconds: 120
@@ -33,3 +30,15 @@ spec:
         - type: Percent
           value: 100
           periodSeconds: 15
+  metrics:
+    - type: External
+      external:
+        metric:
+          name: wva_desired_replicas
+          selector:
+            matchLabels:
+              variant_name: optimized-baseline-nvidia-gpu-vllm-decode
+              exported_namespace: llm-d-optimized-baseline
+        target:
+          type: AverageValue
+          averageValue: "1"

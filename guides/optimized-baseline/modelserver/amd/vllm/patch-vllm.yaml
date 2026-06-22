@@ -28,6 +28,12 @@ spec:
           #     value: "parentbased_traceidratio"
           #   - name: OTEL_TRACES_SAMPLER_ARG
           #     value: "0.1"
+          env:
+            - name: HF_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: llm-d-hf-token
+                  key: HF_TOKEN
           resources:
             limits:
               cpu: "16"
@@ -42,6 +48,10 @@ spec:
               name: shm
             - mountPath: /.cache
               name: torch-compile-cache
+            - mountPath: /.triton
+              name: triton-cache
+            - mountPath: /.config
+              name: vllm-config
           startupProbe:
             initialDelaySeconds: 15
             periodSeconds: 30
@@ -61,4 +71,8 @@ spec:
             medium: Memory
             sizeLimit: 20Gi
         - name: torch-compile-cache
+          emptyDir: {}
+        - name: triton-cache
+          emptyDir: {}
+        - name: vllm-config
           emptyDir: {}

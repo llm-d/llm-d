@@ -1,0 +1,42 @@
+router:
+  extraServicePorts:
+    - name: http
+      port: 80
+      protocol: TCP
+      targetPort: 8081
+
+  epp:
+    pluginsConfigFile: agentic-serving-plugins.yaml
+    pluginsCustomConfig:
+      agentic-serving-plugins.yaml: |
+        apiVersion: llm-d.ai/v1alpha1
+        kind: EndpointPickerConfig
+        plugins:
+        - type: token-load-scorer
+        - type: inflight-load-producer
+        - type: approx-prefix-cache-producer
+          parameters:
+            maxPrefixTokensToMatch: 262144
+            # WORKAROUND: autoTune is disabled and the LRU is sized manually.
+            # autoTune derives lruCapacityPerServer from on-device (HBM) blocks
+            # only (num_gpu_blocks) and ignores the KV-cache offload tier. With
+            # offloading enabled this under-counts cached prefixes. 
+            # We size the LRU for the offload-extended cache
+            # (~num_gpu_blocks x 1000). Remove once autoTune is made offload-aware
+            # upstream — tracked by the llm-d-router offload-aware-LRU issue. 
+            # https://github.com/llm-d/llm-d-router/issues/1650
+            autoTune: false
+            lruCapacityPerServer: 1570000
+            blockSizeTokens: 256
+        - type: prefix-cache-affinity-filter
+          parameters:
+            peakPrefillThroughput: 16444
+        schedulingProfiles:
+        - name: default
+          plugins:
+          - pluginRef: prefix-cache-affinity-filter
+          - pluginRef: token-load-scorer
+
+  modelServers:
+    matchLabels:
+      llm-d.ai/guide: "agentic-serving"

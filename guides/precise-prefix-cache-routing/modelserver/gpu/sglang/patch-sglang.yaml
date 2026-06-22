@@ -1,0 +1,99 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: decode
+spec:
+  replicas: 8
+  template:
+    spec:
+      containers:
+        - name: modelserver
+          command: ["python3", "-m", "sglang.launch_server"]
+          args:
+            - "--model-path=Qwen/Qwen3-32B"
+            - "--host=0.0.0.0"
+            - "--port=8000"
+            - "--tensor-parallel-size=2"
+            - "--mem-fraction-static=0.9"
+            # KV-block granularity. Must match the router scorer's
+            # tokenProcessorConfig.blockSize (default 64); SGLang's knob is
+            # --page-size, where vLLM uses --block-size.
+            - "--page-size=64"
+            - "--enable-metrics"
+            - "--kv-events-config"
+            # unlike vLLM, do NOT add {"enable_kv_cache_events":true};
+            - '{"publisher":"zmq","endpoint":"$(KV_EVENTS_ENDPOINT)","topic":"kv@$(POD_IP):$(POD_PORT)@Qwen/Qwen3-32B"}'
+          ports:
+            # Exposed so each router replica can dial the per-pod ZMQ socket
+            # bound by SGLang (KV_EVENTS_ENDPOINT=tcp://*:5556). Only
+            # attn_tp_rank==0 publishes, so each pod binds exactly one socket.
+            - containerPort: 5556
+              name: kv-events
+              protocol: TCP
+          env:
+            - name: HF_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: llm-d-hf-token
+                  key: HF_TOKEN
+            - name: NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+            - name: POD_IP
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.podIP
+            # Matches the `modelserver` container port (--port=8000). Used in
+            # the kv-events topic (kv@$(POD_IP):$(POD_PORT)@<model>) so pods are
+            # identified by their inference endpoint.
+            - name: POD_PORT
+              value: "8000"
+            # Pod-discovery mode: SGLang PUBs bind per-pod so every router
+            # replica can dial each pod's socket independently (required for
+            # active-active HA across routers).
+            - name: KV_EVENTS_ENDPOINT
+              value: "tcp://*:5556"
+          resources:
+            limits:
+              cpu: '16'
+              memory: 128Gi
+              nvidia.com/gpu: 2
+            requests:
+              cpu: '8'
+              memory: 96Gi
+              nvidia.com/gpu: 2
+          volumeMounts:
+            - mountPath: /dev/shm
+              name: shm
+            # SGLang image did not set $HOME, so under a restricted SecurityContext
+            # (random non-root UID, e.g. OpenShift) ~/ resolves to the non-writable
+            # "/". Back the cache dirs SGLang writes at startup with emptyDirs:
+            #   /.cache  — HF model downloads, FlashInfer JIT, Torch compile cache
+            #   /.triton — Triton kernel autotune cache
+            - mountPath: /.cache
+              name: sglang-cache
+            - mountPath: /.triton
+              name: triton-cache
+          startupProbe:
+            initialDelaySeconds: 15
+            periodSeconds: 30
+            timeoutSeconds: 5
+            failureThreshold: 120
+          livenessProbe:
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            periodSeconds: 5
+            timeoutSeconds: 2
+            failureThreshold: 3
+      volumes:
+        - name: shm
+          emptyDir:
+            medium: Memory
+            sizeLimit: 20Gi
+        - name: sglang-cache
+          emptyDir: {}
+        - name: triton-cache
+          emptyDir: {}
