@@ -23,7 +23,13 @@ router:
         plugins:
         - type: approx-prefix-cache-producer
           parameters:
-            maxPrefixTokensToMatch: 131072
+            # Sized for the 256K-context TPU agentic case (Qwen3-Coder-480B): matching longer
+            # prefixes raises the cache-hit rate on long, shared agentic prompts. Tradeoff: it
+            # increases per-request prefix-matching work and EPP memory/CPU, most noticeably at
+            # high concurrency with very long contexts. For shorter-context GPU/default
+            # workloads a smaller value (e.g. 131072, or the chart default) is cheaper and
+            # sufficient — lower it to match your max prompt length.
+            maxPrefixTokensToMatch: 262144
         - type: predicted-latency-producer
         - type: prefix-cache-affinity-filter
           name: loose-affinity-filter

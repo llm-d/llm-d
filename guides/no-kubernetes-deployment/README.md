@@ -17,7 +17,7 @@ and run.
 > [!NOTE]
 > This guide targets **vLLM on NVIDIA GPUs** — the model-server image,
 > CLI flags, and `--gpus` invocation are NVIDIA + vLLM specific. The EPP
-> and Envoy configs are accelerator-agnostic; for AMD, Intel XPU, Gaudi,
+> and Envoy configs are accelerator-agnostic; for AMD, Intel XPU,
 > TPU, or CPU substitute the model-server step with the corresponding
 > backend from the
 > [optimized-baseline modelserver overlays](../optimized-baseline/modelserver/).

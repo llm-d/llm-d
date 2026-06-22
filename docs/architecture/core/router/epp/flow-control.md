@@ -405,12 +405,12 @@ The Flow Control layer exposes detailed metrics to track queuing dynamics and sy
 
 | Metric Name | Metric Type | Description | Labels |
 |:---|:---|:---|:---|
-| `inference_extension_flow_control_request_queue_duration_seconds` | Distribution | Time requests spend in the Flow Control layer. | `fairness_id`, `priority`, `outcome`, `inference_pool`, `model_name`, `target_model_name` |
-| `inference_extension_flow_control_queue_size` | Gauge | Current number of requests in Flow Control. | `fairness_id`, `priority`, `inference_pool`, `model_name`, `target_model_name` |
-| `inference_extension_flow_control_queue_bytes` | Gauge | Current size in bytes of requests in Flow Control. | `fairness_id`, `priority`, `inference_pool`, `model_name`, `target_model_name` |
-| `inference_extension_flow_control_dispatch_cycle_duration_seconds` | Distribution | Time taken for each dispatch cycle. | None |
-| `inference_extension_flow_control_request_enqueue_duration_seconds` | Distribution | Time taken to enqueue requests. | `fairness_id`, `priority`, `outcome` |
-| `inference_extension_flow_control_pool_saturation` | Gauge | Current saturation level of the pool. | `inference_pool` |
+| `llm_d_epp_flow_control_request_queue_duration_seconds` | Distribution | Time requests spend in the Flow Control layer. | `fairness_id`, `priority`, `outcome`, `inference_pool`, `model_name`, `target_model_name` |
+| `llm_d_epp_flow_control_queue_size` | Gauge | Current number of requests in Flow Control. | `fairness_id`, `priority`, `inference_pool`, `model_name`, `target_model_name` |
+| `llm_d_epp_flow_control_queue_bytes` | Gauge | Current size in bytes of requests in Flow Control. | `fairness_id`, `priority`, `inference_pool`, `model_name`, `target_model_name` |
+| `llm_d_epp_flow_control_dispatch_cycle_duration_seconds` | Distribution | Time taken for each dispatch cycle. | None |
+| `llm_d_epp_flow_control_request_enqueue_duration_seconds` | Distribution | Time taken to enqueue requests. | `fairness_id`, `priority`, `outcome` |
+| `llm_d_epp_flow_control_pool_saturation` | Gauge | Current saturation level of the pool. | `inference_pool` |
 
 #### Grafana Dashboard
 

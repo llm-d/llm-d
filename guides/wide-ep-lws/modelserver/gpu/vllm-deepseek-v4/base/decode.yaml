@@ -87,7 +87,7 @@ spec:
                   --tokenizer-mode deepseek_v4 \
                   --gpu-memory-utilization 0.85 \
                   --trust-remote-code \
-                  --api-server-count 1 \
+                  --api-server-count 4 \
                   --disable-access-log-for-endpoints=/health,/metrics \
                   --data-parallel-hybrid-lb \
                   --enable-expert-parallel \
@@ -134,6 +134,8 @@ spec:
               - name: VLLM_SKIP_P2P_CHECK
                 value: "1"
               - name: VLLM_RANDOMIZE_DP_DUMMY_INPUTS
+                value: "1"
+              - name: VLLM_USE_DEEP_GEMM
                 value: "1"
               - name: NVIDIA_GDRCOPY
                 value: enabled

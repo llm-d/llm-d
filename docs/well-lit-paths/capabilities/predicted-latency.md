@@ -13,14 +13,14 @@ This path is for operators who want to adopt predicted latency-based scheduling 
 
 ## Deploy
 
-See the [Predicted Latency guide](../../guides/predicted-latency-routing) for manifests and step-by-step deployment.
+See the [Predicted Latency guide](../../../guides/predicted-latency-routing) for manifests and step-by-step deployment.
 
 ## Architecture
 
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)">
-    <img src="../assets/latency-predictor.svg" alt="Latency Predictor">
+    <img src="../../assets/latency-predictor.svg" alt="Latency Predictor">
   </picture>
 </p>
 
@@ -39,6 +39,6 @@ During the standard request flow:
 
 ## Further Reading
 
-- [Latency Predictor Architecture](../architecture/advanced/latency-predictor.md) — plugin pipeline, ML model, scaling characteristics, metric reference.
+- [Latency Predictor Architecture](../../architecture/advanced/latency-predictor.md) — plugin pipeline, ML model, scaling characteristics, metric reference.
 - [llm-d/llm-d-latency-predictor](https://github.com/llm-d/llm-d-latency-predictor) — source for the training and prediction server Python code.
 - [Predicted Latency-Based Scheduling for LLMs - Blog](https://llm-d.ai/blog/predicted-latency-based-scheduling-for-llms) — design rationale and benchmark results.

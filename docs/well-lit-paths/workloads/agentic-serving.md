@@ -52,11 +52,11 @@ stack differently:
 
 ## Deploy
 
-The [agentic-serving guide](../../guides/agentic-serving) is the operational counterpart. It
+The [agentic-serving guide](../../../guides/agentic-serving) is the operational counterpart. It
 composes llm-d's existing well-lit paths into a deployment stack — the
-[optimized baseline](../well-lit-paths/capabilities/optimized-baseline.md) for prefix- and load-aware routing,
-[tiered KV-cache offloading](../well-lit-paths/capabilities/tiered-prefix-cache.md) to keep idle sessions resident,
-[precise prefix-cache routing](../well-lit-paths/capabilities/precise-prefix-cache-routing.md) for exact KV-state visibility, and [P/D disaggregation](../well-lit-paths/capabilities/pd-disaggregation.md) for interactivity under load — into
+[optimized baseline](../capabilities/optimized-baseline.md) for prefix- and load-aware routing,
+[tiered KV-cache offloading](../capabilities/tiered-prefix-cache.md) to keep idle sessions resident,
+[precise prefix-cache routing](../capabilities/precise-prefix-cache-routing.md) for exact KV-state visibility, and [P/D disaggregation](../capabilities/pd-disaggregation.md) for interactivity under load — into
 the recommended deployment, realized per accelerator and benchmarked against a shared, realistic
 agentic workload. See the guide for how each layer maps to the workload.
 

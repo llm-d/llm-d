@@ -25,8 +25,12 @@ Follow the [optimized-baseline](../optimized-baseline/README.md) well-lit path t
 
 | Metric Name | Description | Recommended Usage |
 |---|---|---|
-| `inference_extension_flow_control_queue_size` | The number of requests currently buffered in the gateway waiting for an available backend. | Scale-out signal: High queue size indicates that the existing replicas are saturated. |
+| `llm_d_epp_flow_control_queue_size` | The number of requests currently buffered in the gateway waiting for an available backend. | Scale-out signal: High queue size indicates that the existing replicas are saturated. |
 | `inference_objective_running_requests` | The number of concurrent requests being processed by the model pool. | Capacity signal: Useful for tracking total throughput. |
+
+## Prerequisites
+
+Make sure to enable monitoring as described in the [autoscaling prerequisites](README.md#prerequisites) section.
 
 ## Configuration Guide
 
@@ -44,43 +48,14 @@ featureGates:
 
 Follow the [flow control configuration guide](https://gateway-api-inference-extension.sigs.k8s.io/guides/flow-control/#1-enabling-the-layer) to tune the saturation detector in your EPP deployment as needed.
 
-### 2. Install the Prometheus Adapter
-
-> **⚠️ Deprecation Notice:** The Prometheus Adapter project is planned for deprecation ([kubernetes-sigs/prometheus-adapter#701](https://github.com/kubernetes-sigs/prometheus-adapter/issues/701)). **KEDA** is the recommended alternative and is actively maintained. See [Option 2: KEDA](#option-2-keda) below for the recommended approach using KEDA's built-in metrics adapter.
-
-The Prometheus Adapter bridges Prometheus metrics to the Kubernetes External Metrics API,
-which the HPA uses to read EPP signals.
-
-Add the Helm repository and install the adapter into your `monitoring` namespace:
-
-```bash
-helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
-helm repo update
-helm install prometheus-adapter prometheus-community/prometheus-adapter \
-  --namespace monitoring \
-  --create-namespace
-```
-
-> **Note:** You must set `prometheus.url` to point to your Prometheus instance. If you are
-using `kube-prometheus-stack`, the default service is `http://prometheus-operated.monitoring.svc:9090`.
-Pass it at install time or in a values file:
-
-```bash
-helm install prometheus-adapter prometheus-community/prometheus-adapter \
-  --namespace monitoring \
-  --create-namespace \
-  --set prometheus.url=http://prometheus-operated.monitoring.svc \
-  --set prometheus.port=9090
-```
-
-### 3. Configure Prometheus Adapter Rules
+### 2. Configure Prometheus Adapter Rules
 
 Create a values file `epp-adapter-values.yaml` with the following rules:
 
 ```yaml
 rules:
   external:
-    - seriesQuery: 'inference_extension_flow_control_queue_size'
+    - seriesQuery: 'llm_d_epp_flow_control_queue_size'
       resources:
         overrides:
           namespace:
@@ -88,7 +63,7 @@ rules:
           namespaced: false
       name:
         as: "epp_queue_size"
-      metricsQuery: 'sum(inference_extension_flow_control_queue_size{inference_pool="vllm-llama3-8b-instruct"})'
+      metricsQuery: 'sum(llm_d_epp_flow_control_queue_size{inference_pool="qwen/qwen3-32b"})'
     - seriesQuery: 'inference_objective_running_requests'
       resources:
         overrides:
@@ -97,17 +72,17 @@ rules:
           namespaced: false
       name:
         as: "epp_running_requests"
-      metricsQuery: 'sum(inference_objective_running_requests{top_level_controller_name="vllm-llama3-8b-instruct-epp"})'
+      metricsQuery: 'sum(inference_objective_running_requests{top_level_controller_name="qwen/qwen3-32b-epp"})'
 ```
 
-> **Note:** Replace `vllm-llama3-8b-instruct` and `vllm-llama3-8b-instruct-epp` with your
-own deployment names.
+> [!NOTE]
+> Replace `qwen/qwen3-32b` and `qwen/qwen3-32b-epp` with your own deployment names.
 
 Apply the rules by upgrading the adapter:
 
 ```bash
 helm upgrade prometheus-adapter prometheus-community/prometheus-adapter \
-  --namespace monitoring \
+  --namespace ${MONITORING_NAMESPACE} \
   --reuse-values \
   --values epp-adapter-values.yaml
 ```
@@ -123,7 +98,7 @@ A successful response returns a JSON object with the current metric value. A `40
 the adapter rules are not applied correctly or the Prometheus series does not exist yet —
 re-check the `metricsQuery` label values against your live Prometheus data.
 
-### 4. Create the HPA Resource
+### 3. Create the HPA Resource
 
 Below is a sample HPA configuration `hpa.yaml` that uses the dual-metric setup to scale your model server based on both the queue size and current request load.
 
@@ -131,13 +106,13 @@ Below is a sample HPA configuration `hpa.yaml` that uses the dual-metric setup t
 apiVersion: autoscaling/v2
 kind: HorizontalPodAutoscaler
 metadata:
-  name: vllm-llama3-8b-instruct-hpa
+  name: qwen-qwen3-32b-hpa
   namespace: default
 spec:
   scaleTargetRef:
     apiVersion: apps/v1
     kind: Deployment
-    name: vllm-llama3-8b-instruct
+    name: qwen-qwen3-32b
   minReplicas: 1
   maxReplicas: 3
   metrics:
@@ -170,24 +145,26 @@ spec:
         periodSeconds: 15
 ```
 
-> **Note 1:** The target values (`250`) used here are examples and must be tuned to your model and hardware. A good starting point is to run your model server at a known concurrency level, observe the actual metric values using `kubectl describe hpa`, and set the target below the concurrency at which your model's latency begins to degrade.
+> [!NOTE]
+> The target values (`250`) used here are examples and must be tuned to your model and hardware. A good starting point is to run your model server at a known concurrency level, observe the actual metric values using `kubectl describe hpa`, and set the target below the concurrency at which your model's latency begins to degrade.
 
-> **Note 2:** Although `epp_queue_size` and `epp_running_requests` originate from the EPP pod, we use `type: External` rather than `type: Pods`. This is because `type: Pods` requires metrics to come from the pods being scaled — in this case the model server pods. Since the EPP is a separate deployment acting as a gateway and emitting metrics on behalf of the model server pool, we treat its metrics as external signals.
+> [!NOTE]
+> Although `epp_queue_size` and `epp_running_requests` originate from the EPP pod, we use `type: External` rather than `type: Pods`. This is because `type: Pods` requires metrics to come from the pods being scaled — in this case the model server pods. Since the EPP is a separate deployment acting as a gateway and emitting metrics on behalf of the model server pool, we treat its metrics as external signals.
 
-### 5. Verify the HPA
+### 4. Verify the HPA
 
 Apply the manifest and confirm the HPA is reading metrics:
 
 ```bash
 kubectl apply -f hpa.yaml
-kubectl get hpa vllm-llama3-8b-instruct-hpa -n default
+kubectl get hpa qwen-qwen3-32b-hpa -n default
 ```
 
 A successful deployment would look like this:
 
 ```
 NAME                          REFERENCE                            TARGETS              MINPODS   MAXPODS   REPLICAS   AGE
-vllm-llama3-8b-instruct-hpa   Deployment/vllm-llama3-8b-instruct   0/250, 0/250 (avg)   1         3         1          5m
+qwen-qwen3-32b-hpa   Deployment/qwen-qwen3-32b   0/250, 0/250 (avg)   1         3         1          5m
 ```
 
 ## Scale to Zero

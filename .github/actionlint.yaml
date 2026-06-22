@@ -1,7 +1,5 @@
 self-hosted-runner:
   labels:
     - xpu
-    - hpu
-    - hpu-dispatch-runner
     - vllm-runner
     - vllm-runner-arm

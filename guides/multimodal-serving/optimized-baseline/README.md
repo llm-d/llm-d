@@ -39,8 +39,7 @@ This guide includes configurations for the following accelerators and inference 
    ```
 3. Set up environment variables:
    ```bash
-   export GAIE_VERSION=v1.5.0
-   export ROUTER_CHART_VERSION=v0
+   source ${REPO_ROOT}/guides/env.sh
    export GUIDE_NAME="optimized-baseline"
    export NAMESPACE=llm-d-multimodal-optimized-baseline
    ```
@@ -74,7 +73,7 @@ Deploy the llm-d Router in **Standalone Mode** overlaying router custom configur
 ```bash
 # Run from the root of the llm-d repo
 helm install ${GUIDE_NAME} \
-    oci://ghcr.io/llm-d/charts/llm-d-router-standalone-dev \
+    ${ROUTER_STANDALONE_CHART} \
     -f ${REPO_ROOT}/guides/recipes/router/base.values.yaml \
     -f ${REPO_ROOT}/guides/multimodal-serving/${GUIDE_NAME}/router/${GUIDE_NAME}.values.yaml \
     -n ${NAMESPACE} --version ${ROUTER_CHART_VERSION}
@@ -91,7 +90,7 @@ To use a Kubernetes Gateway managed proxy rather than the standalone version, fo
 ```bash
 export PROVIDER_NAME=gke # options: none, gke, agentgateway, istio
 helm install ${GUIDE_NAME} \
-    oci://ghcr.io/llm-d/charts/llm-d-router-gateway-dev  \
+    ${ROUTER_GATEWAY_CHART}  \
     -f ${REPO_ROOT}/guides/recipes/router/base.values.yaml \
     -f ${REPO_ROOT}/guides/multimodal-serving/${GUIDE_NAME}/router/${GUIDE_NAME}.values.yaml \
     --set provider.name=${PROVIDER_NAME} \

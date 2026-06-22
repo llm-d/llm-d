@@ -1,0 +1,16 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+# Reuse the agentic-serving guide's TPU model server: Qwen3-Coder-480B-A35B-Instruct-FP8
+# on TPU v7x (2x2x1) with KV-cache offloading. The latency predictor is EPP-side only, so
+# the model server needs no predictor-specific changes.
+resources:
+  - ../../../../agentic-serving/modelserver/tpu/vllm
+
+# Re-label the pool as llm-d.ai/guide=optimized-baseline so the router values shipped with
+# this guide (which select that label) match without any override — same as the GPU path.
+labels:
+  - pairs:
+      llm-d.ai/guide: optimized-baseline
+    includeSelectors: true
+    includeTemplates: true

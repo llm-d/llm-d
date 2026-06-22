@@ -908,7 +908,7 @@
             "type": "prometheus",
             "uid": "${DS_PROMETHEUS}"
           },
-          "expr": "inference_pool_ready_pods{namespace=~\"$namespace\"}",
+          "expr": "llm_d_epp_ready_endpoints{namespace=~\"$namespace\"}",
           "legendFormat": "{{name}} Ready Pods",
           "refId": "A"
         },
@@ -917,7 +917,7 @@
             "type": "prometheus",
             "uid": "${DS_PROMETHEUS}"
           },
-          "expr": "inference_pool_average_queue_size{namespace=~\"$namespace\"}",
+          "expr": "llm_d_epp_average_queue_size{namespace=~\"$namespace\"}",
           "legendFormat": "{{name}} Average Queue Size",
           "refId": "B"
         }
@@ -987,7 +987,7 @@
             "type": "prometheus",
             "uid": "${DS_PROMETHEUS}"
           },
-          "expr": "inference_pool_average_kv_cache_utilization{namespace=~\"$namespace\"}",
+          "expr": "llm_d_epp_average_kv_cache_utilization{namespace=~\"$namespace\"}",
           "legendFormat": "{{name}} Pool KV Cache Utilization",
           "refId": "A"
         }

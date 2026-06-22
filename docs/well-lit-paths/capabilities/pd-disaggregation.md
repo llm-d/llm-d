@@ -18,14 +18,14 @@ llm-d's EPP natively supports the concept of disaggregation, enabling compositio
 
 ## Deploy
 
-See the [P/D Disaggregation guide](../../guides/pd-disaggregation) for manifests and step-by-step deployment.
+See the [P/D Disaggregation guide](../../../guides/pd-disaggregation) for manifests and step-by-step deployment.
 
 ## Architecture
 
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)">
-    <img src="../assets/pd-disaggregation.svg" alt="P/D Disaggregation">
+    <img src="../../assets/pd-disaggregation.svg" alt="P/D Disaggregation">
   </picture>
 </p>
 
@@ -43,4 +43,4 @@ During the standard request flow:
 
 ## Further Reading
 
-See [PD Architecture](../architecture/advanced/disaggregation/README.md) for more details.
+See [PD Architecture](../../architecture/advanced/disaggregation/README.md) for more details.

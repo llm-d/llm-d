@@ -13,7 +13,7 @@ As KV-cache orchestration grows more sophisticated and agentic workloads stretch
 
 ## Deploy
 
-See the [precise prefix cache routing guide](../../guides/precise-prefix-cache-routing) for manifests and step-by-step deployment.
+See the [precise prefix cache routing guide](../../../guides/precise-prefix-cache-routing) for manifests and step-by-step deployment.
 
 ## Architecture
 
@@ -28,4 +28,4 @@ Events flow from model-server pods to the llm-d Router over ZMQ via **pod discov
 
 ## Further Reading
 
-See [KV-Cache Indexer](../architecture/advanced/kv-management/kv-indexer.md) for the full architecture
+See [KV-Cache Indexer](../../architecture/advanced/kv-management/kv-indexer.md) for the full architecture

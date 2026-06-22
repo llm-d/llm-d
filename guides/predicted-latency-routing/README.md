@@ -36,12 +36,11 @@ Skip it when your pool is **heterogeneous** — mixed GPU types, model variants,
 - Set the following environment variables:
 
   ```bash
-    export GAIE_VERSION=v1.5.0
-    export ROUTER_CHART_VERSION=v0
+    export REPO_ROOT=$(realpath $(git rev-parse --show-toplevel))
+    source ${REPO_ROOT}/guides/env.sh
     export GUIDE_NAME="predicted-latency-routing"
     export NAMESPACE=llm-d-predicted-latency
     export MODEL_NAME="Qwen/Qwen3-32B"
-    export REPO_ROOT=$(realpath $(git rev-parse --show-toplevel))
   ```
 
 - Install the Gateway API Inference Extension CRDs:
@@ -86,7 +85,7 @@ This deploys the llm-d Router with an Envoy sidecar, it doesn't set up a Kuberne
 
 ```bash
 helm install ${GUIDE_NAME} \
-    oci://ghcr.io/llm-d/charts/llm-d-router-standalone-dev \
+    ${ROUTER_STANDALONE_CHART} \
     -f ${REPO_ROOT}/guides/recipes/router/base.values.yaml \
     -f ${REPO_ROOT}/guides/${GUIDE_NAME}/router/predicted-latency.values.yaml \
     -n ${NAMESPACE} --version ${ROUTER_CHART_VERSION}
@@ -107,7 +106,7 @@ To use a Kubernetes Gateway managed proxy rather than the standalone version, fo
 ```bash
 export PROVIDER_NAME=gke # options: none, gke, agentgateway, istio
 helm install ${GUIDE_NAME} \
-    oci://ghcr.io/llm-d/charts/llm-d-router-gateway-dev \
+    ${ROUTER_GATEWAY_CHART} \
     -f ${REPO_ROOT}/guides/recipes/router/base.values.yaml \
     -f ${REPO_ROOT}/guides/recipes/router/features/httproute-flags.yaml \
     -f ${REPO_ROOT}/guides/${GUIDE_NAME}/router/predicted-latency.values.yaml \
@@ -126,7 +125,18 @@ export INFRA_PROVIDER=base # base | gke
 kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/predicted-latency-routing/modelserver/gpu/vllm/${INFRA_PROVIDER}/
 ```
 
-For other backends (AMD GPU, Intel XPU, Gaudi, TPU, CPU), see [optimized-baseline → Deploy the Model Server](../optimized-baseline/README.md#2-deploy-the-model-server). For example, for sglang deployments:
+#### TPU — Qwen3-Coder-480B-A35B-Instruct-FP8 with KV-cache offloading
+
+For the long-context agentic case on Google TPU v7x (2x2x1), reuse the [agentic-serving guide's](../agentic-serving) model server. It is re-labeled `llm-d.ai/guide=optimized-baseline` so the router values above select it with no changes (same as the GPU path), and the latency predictor is EPP-side only, so the model server needs no predictor-specific changes:
+
+```bash
+kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/predicted-latency-routing/modelserver/tpu/vllm/
+```
+
+> [!NOTE]
+> Set `MODEL_NAME="Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8"` for the TPU path — the verification and benchmark steps below use it.
+
+For other backends (AMD GPU, Intel XPU, CPU), see [optimized-baseline → Deploy the Model Server](../optimized-baseline/README.md#2-deploy-the-model-server). For example, for sglang deployments:
 
 ```bash
 kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/optimized-baseline/modelserver/gpu/sglang/${INFRA_PROVIDER}/
@@ -216,9 +226,6 @@ In this example we will demonstrate how to run [`inference-perf`](https://github
 >
 > For even more details about benchmarking, see the actual repository: [`llm-d-benchmark` on GitHub](https://github.com/llm-d/llm-d-benchmark).
 
-> [!TIP]
-> The command below runs a workload shaped to exercise latency-routing decisions under contention, and accordingly takes longer to complete. To run a simpler workload with fewer execution cycles first (useful for validating the path, image pulls, PVC binding, etc. before committing to a real run), pick a generic sample profile such as `shared_prefix_synthetic.yaml` from the catalog in [`helpers/benchmark.md` → Available workload profiles](../../helpers/benchmark.md#available-workload-profiles) and substitute it for the `--workload` flag in the command below.
-
 ### 1. Install the `llmdbenchmark` CLI
 
 Automatically clone the benchmark repository into `./llm-d-benchmark/` and create a virtualenv at `./llm-d-benchmark/.venv/` containing dependencies and its installation:
@@ -261,14 +268,21 @@ export GATEWAY_CLASS=istio
 
 </details>
 
-### 3. Run the benchmark profile for Predicted Latency Routing
+### 3. Run a benchmark
 
-> [!NOTE]
-> A **dedicated** `guide_predicted-latency-routing_1.yaml` profile shaped specifically for this guide's strengths is not yet shipped in `llm-d-benchmark`. The command below uses `guide_precise-prefix-cache-routing_1.yaml` as a stand-in because it has the same model (Qwen3-32B) and a representative shared-prefix Poisson load ladder (rates 3 → 60) — useful for comparing latency-routing decisions against prefix-cache-aware routing. Once a tailored profile is upstreamed, substitute it here.
+Two agentic code-generation workloads are provided, matched to the model server you deployed. Both have **high variance in prompt and completion length** — the regime where predicted-latency routing is designed to help.
 
-Benchmark results are copied to the `workspace` directory that is specified by _you_ (or that is automatically generated when omitted from the cli) on the machine running the CLI. The workspace location is optional — by default the CLI auto-generates a timestamped workspace and prints its full path in the logs during the run. If you'd rather choose where results land, pass `--workspace <YOUR_DIR_HERE>` as a top-level argument of `llmdbenchmark` (before the `run` subcommand):
+Benchmark results are copied to a `workspace` directory on the machine running the CLI (auto-generated and printed in the logs if you don't pass `--workspace <YOUR_DIR_HERE>`).
+
+#### Case 1 — GPU · Qwen3-32B
+
+Uses the dedicated [`guide_predicted-latency-routing_1.yaml`](https://github.com/llm-d/llm-d-benchmark/blob/main/workload/profiles/inference-perf/guide_predicted-latency-routing_1.yaml) `inference-perf` profile from `llm-d-benchmark`, parameterized on `CONCURRENCY_LEVEL` / `NUM_REQUESTS` / `SEED` — re-run per concurrency to build the ladder:
 
 ```bash
+export CONCURRENCY_LEVEL=40
+export NUM_REQUESTS=$((6 * CONCURRENCY_LEVEL))
+export SEED=$((CONCURRENCY_LEVEL))   # distinct per concurrency so prompt sets don't overlap across runs
+
 llmdbenchmark \
     --spec           guides/predicted-latency-routing \
     run \
@@ -277,8 +291,25 @@ llmdbenchmark \
     --model          "Qwen/Qwen3-32B" \
     --namespace      "${NAMESPACE}" \
     --harness        inference-perf \
-    --workload       guide_precise-prefix-cache-routing_1.yaml \
+    --workload       guide_predicted-latency-routing_1.yaml \
     --analyze
+```
+
+#### Case 2 — TPU · Qwen3-Coder-480B-A35B-Instruct-FP8 with KV-cache offloading
+
+Uses the agentic-serving guide's `inference-perf` workload, tuned for the 480B model and very long (up to 256K-token) contexts: [`guides/agentic-serving/benchmark-templates/guide.yaml`](../agentic-serving/benchmark-templates/guide.yaml). It is parameterized on `CONCURRENCY_LEVEL` / `NUM_REQUESTS` / `SEED`; render it with `envsubst` and drive it against **this guide's** EPP via the `run_only.sh` runner from [`llm-d-benchmark`](https://github.com/llm-d/llm-d-benchmark), exactly as in the [agentic-serving Benchmarking steps](../agentic-serving/agentic-code-generation.md#benchmarking):
+
+```bash
+# Fetch the existing-stack benchmark runner from llm-d-benchmark (the script the agentic-serving guide uses).
+curl -L -O https://raw.githubusercontent.com/llm-d/llm-d-benchmark/main/existing_stack/run_only.sh
+chmod u+x run_only.sh
+
+export IP=$(kubectl get service ${GUIDE_NAME}-epp -n ${NAMESPACE} -o jsonpath='{.spec.clusterIP}')
+export CONCURRENCY_LEVEL=40
+export NUM_REQUESTS=$((20 * CONCURRENCY_LEVEL))
+export SEED=$((7 + CONCURRENCY_LEVEL))   # distinct per concurrency so prompt sets don't overlap across runs
+envsubst < ${REPO_ROOT}/guides/agentic-serving/benchmark-templates/guide.yaml > config.yaml
+./run_only.sh -c config.yaml -o ./results
 ```
 
 > [!NOTE]
@@ -286,26 +317,27 @@ llmdbenchmark \
 
 ## Benchmarking Report
 
-The benchmark runs on 10 vLLM decode pods, each with tensor parallelism of 2 (20 × H100 GPUs total), using the `Qwen/Qwen3-32B` model. Results compare predicted-latency routing against a plain Kubernetes Service (round-robin, no EPP).
+### Code Generation (GPU · Qwen3-32B)
 
-### Code Generation
+10 vLLM decode servers, tensor parallelism 2 (20 × H100 total), `Qwen/Qwen3-32B`, shared-prefix code-generation load (concurrency 10 → 100). Three configurations: a plain Kubernetes Service (round-robin, no EPP), the **token scorer** (token-load + prefix-affinity), and **predicted-latency** routing.
 
-<img src="./benchmark-results/code_generation_k8_vs_latency_predictor.png" width="900" alt="Code Generation: k8 vs latency-predictor">
+<img src="./benchmark-results/code_generation_gpu_qwen32.png" width="900" alt="Code Generation GPU: k8 vs token scorer vs latency predictor">
 
-| Concurrency | k8 in tok/s | LP in tok/s | k8 out tok/s | LP out tok/s | k8 TTFT p50 (s) | LP TTFT p50 (s) | k8 TTFT p90 (s) | LP TTFT p90 (s) |
-| :---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| 10  | 15,168 | 23,511 |  118 |  180 |  1.7 |  3.8 |  25.7 |  18.2 |
-| 20  | 29,451 | 29,568 |  300 |  315 |  1.4 |  6.7 |  14.2 |  15.6 |
-| 30  | 16,269 | 32,335 |  353 |  696 |  5.6 |  6.8 |  74.4 |  21.2 |
-| 40  | 26,357 | 41,627 |  293 |  459 | 10.0 | 11.2 |  70.4 |  26.7 |
-| 50  | 34,552 | 42,329 |  395 |  481 | 27.3 | 15.3 |  63.6 |  36.4 |
-| 60  | 22,125 | 46,165 |  402 |  843 | 54.7 | 23.2 | 148.5 |  48.1 |
-| 70  | 32,786 | 43,878 |  716 |  964 | 48.9 | 41.3 | 136.2 |  74.7 |
-| 80  | 40,560 | 46,032 |  862 |  972 | 49.6 | 42.7 | 108.3 |  73.9 |
-| 90  | 34,526 | 47,618 |  615 |  851 | 64.3 | 55.8 | 162.0 |  83.7 |
-| 100 | 37,699 | 47,309 |  548 |  691 | 66.8 | 80.1 | 175.1 | 121.5 |
-| **avg** | **28,949** | **40,037** | **460** | **645** | **33.0** | **28.7** | **97.8** | **52.0** |
-| **Δ% vs k8** | | **+38.3%** | | **+40.2%** | | **−13.0%** | | **−46.8%** |
+**Summary.** Averaged over the ladder, predicted-latency routing delivered **+38% input** / **+40% output** throughput and cut **TTFT p50 by 13%** / **p90 by 47%** versus the plain Service. The gains concentrate in the tail (p90) and at mid-to-high concurrency, where queue depth alone is a poor proxy for true load — exactly the regime the predictor targets.
+
+> [!NOTE]
+> **Predicted-latency is comparable to the token scorer.** The two EPP routers land within ~1% on input throughput and ~2% on median TTFT across the ladder, both well ahead of the plain Service. They trade tails: the token scorer holds TTFT p90 slightly better (~13%), while predicted-latency holds TPOT far better — its p90 inter-token latency stays ~100ms versus the token scorer's ~950ms (**−89%**). So predicted-latency matches a well-tuned load/affinity router with no hand-tuned scoring weights, and keeps token generation smoother under load.
+
+### Agentic Serving (TPU · Qwen3-Coder-480B-A35B-Instruct-FP8 with KV-cache offloading)
+
+8 vLLM servers each running on a 2x2x1 Google TPU v7x host, `Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8` with KV-cache offloading, long-context agentic code-generation (dynamic prompts up to ~256K tokens). Three configurations: a plain Kubernetes Service (round-robin, no EPP), the [agentic-serving](../agentic-serving) **token scorer** (token-load + prefix-affinity), and **predicted-latency** routing.
+
+<img src="./benchmark-results/agentic_serving_tpu_qwen480.png" width="900" alt="Agentic Serving TPU: k8 vs token scorer vs latency predictor">
+
+**Summary.** Predicted-latency routing sustains higher throughput at far lower latency as load climbs, while the unrouted Service degrades quickly under the highly variable, long-context load. At concurrency 40 it delivers **~2.3× the input throughput** (87K vs 37K tok/s) and **~1.4× output throughput**, with **median TTFT 1.8s vs 17.4s** (~9.5× lower), **p90 TTFT 34s vs 69s**, and **median / p90 TPOT 30 / 45 ms vs 48 / 372 ms**. Averaged across concurrency 5 → 40 that is about **−88% median TTFT**. Predicted-latency keeps scaling to concurrency 80 (peak ~114K input tok/s), well past where the plain Service saturates.
+
+> [!NOTE]
+> **Predicted-latency is comparable to the token scorer.** Across the ladder the two EPP routers track each other closely — median TTFT and input/output throughput within a few percent through ~concurrency 60 (e.g. at concurrency 40, median TTFT 1.8s vs 2.5s and input throughput 87K vs 93K tok/s), both far ahead of the plain Service. They diverge only near saturation (concurrency 70–80), where the token scorer's queue-aware placement holds the tail better. So on this long-context agentic workload, predicted-latency routing matches a well-tuned load/affinity router without any hand-tuned scoring weights — the predictor learns the latency surface directly.
 
 ## Cleanup
 
@@ -314,6 +346,8 @@ To remove the deployed components:
 ```bash
 helm uninstall ${GUIDE_NAME} -n ${NAMESPACE}
 kubectl delete  -n ${NAMESPACE} -k ${REPO_ROOT}/guides/predicted-latency-routing/modelserver/gpu/vllm/${INFRA_PROVIDER}
+# for the TPU model server
+kubectl delete  -n ${NAMESPACE} -k ${REPO_ROOT}/guides/predicted-latency-routing/modelserver/tpu/vllm --ignore-not-found
 # for sglang deployments
 kubectl delete  -n ${NAMESPACE} -k ${REPO_ROOT}/guides/optimized-baseline/modelserver/gpu/sglang/${INFRA_PROVIDER} --ignore-not-found
 kubectl delete namespace ${NAMESPACE}

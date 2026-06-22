@@ -32,7 +32,6 @@ Two scorers make up the routing decision alongside the load-aware stack:
 | NVIDIA GPU (SGLang)  | `modelserver/gpu/sglang/`  | Qwen/Qwen3-32B                          | SGLang; `--page-size=64` matches scorer `blockSize`      |
 | AMD GPU              | `modelserver/amd/vllm/`    | Qwen/Qwen3-32B                          | AMD GPU                                                  |
 | Intel XPU            | `modelserver/xpu/vllm/`    | Qwen/Qwen3-0.6B                         | CI-sized; update router `modelName` for real use         |
-| Intel Gaudi (HPU)    | `modelserver/hpu/vllm/`    | Qwen/Qwen3-8B                           | `--block-size=128`; update scorer `blockSize` to match   |
 | Google TPU v6e       | `modelserver/tpu/v6/vllm/` | Qwen/Qwen3-32B                          | GKE TPU                                                  |
 | Google TPU v7        | `modelserver/tpu/v7/vllm/` | Qwen3-Coder-480B-FP8                    | GKE TPU                                                  |
 | CPU                  | `modelserver/cpu/vllm/`    | Llama-3.2-3B-Instruct                   | CI-sized                                                 |
@@ -62,11 +61,10 @@ Two scorers make up the routing decision alongside the load-aware stack:
 - Set the following environment variables:
 
 ```bash
-export GAIE_VERSION=v1.5.0
-export ROUTER_CHART_VERSION=v0
+export REPO_ROOT=$(realpath $(git rev-parse --show-toplevel))
+source ${REPO_ROOT}/guides/env.sh
 export GUIDE_NAME="precise-prefix-cache-routing"
 export NAMESPACE="llm-d-${GUIDE_NAME}"
-export REPO_ROOT=$(realpath $(git rev-parse --show-toplevel))
 ```
 
 - Install the Gateway API Inference Extension CRDs:
@@ -106,7 +104,7 @@ The chart auto-injects the `vllm-render` sidecar when `router.tokenizer.enabled:
 
 ```bash
 helm install ${GUIDE_NAME} \
-  oci://ghcr.io/llm-d/charts/llm-d-router-standalone-dev \
+  ${ROUTER_STANDALONE_CHART} \
   -f ${REPO_ROOT}/guides/recipes/router/base.values.yaml \
   -f ${REPO_ROOT}/guides/${GUIDE_NAME}/router/${GUIDE_NAME}.values.yaml \
   -n ${NAMESPACE} --version ${ROUTER_CHART_VERSION}
@@ -127,7 +125,7 @@ To use a Kubernetes Gateway managed proxy instead of the standalone Envoy sideca
 export PROVIDER_NAME=istio   # options: none, gke, agentgateway, istio
 
 helm install ${GUIDE_NAME} \
-  oci://ghcr.io/llm-d/charts/llm-d-router-gateway-dev \
+  ${ROUTER_GATEWAY_CHART} \
   -f ${REPO_ROOT}/guides/recipes/router/base.values.yaml \
   -f ${REPO_ROOT}/guides/recipes/router/features/httproute-flags.yaml \
   -f ${REPO_ROOT}/guides/${GUIDE_NAME}/router/${GUIDE_NAME}.values.yaml \
@@ -355,9 +353,19 @@ Output tokens/sec — higher is better; TTFT in seconds — lower is better.
 
 ### SGLang
 
+The benchmark runs on 16× H100 GPUs, distributed across 8 model servers (2 H100s per server with TP=2).
+
 #### Comparing llm-d Scheduling to a Simple Kubernetes Service
 
-Benchmark run with the canonical shared-prefix workload from this guide, comparing the precise path against a plain Kubernetes Service (round-robin, no EPP, no scoring) across the same SGLang pods. llm-d Precise shows a large improvement over the k8s baseline — roughly 2× output throughput with TTFT held near constant while the baseline degrades sharply under load.
+Summary across the full ladder (rates 3 → 60):
+
+| Metric              | k8s service (RR) | llm-d Precise | Δ% vs k8s |
+| :------------------ | :--------------- | :------------ | :-------- |
+| Output tokens/sec   | 4,667            | 9,808         | +110.2%   |
+| Requests/sec        | 4.71             | 9.87          | +109.6%   |
+| TTFT mean (s)       | 69.76            | 0.466         | −99.33%   |
+| TTFT p90 (s)        | 157.64           | 0.672         | −99.57%   |
+| ITL mean (ms)       | 37.9             | 47.4          | +25.1%    |
 
 <details>
 <summary><b><i>Click</i></b> to view the per-rate breakdown across the full ladder</summary>
@@ -366,19 +374,22 @@ Output tokens/sec — higher is better; TTFT in seconds — lower is better.
 
 | Rate | k8s Output | llm-d Output | k8s TTFT mean | llm-d TTFT mean | k8s TTFT p90 | llm-d TTFT p90 |
 | ---: | ---------: | -----------: | ------------: | --------------: | -----------: | -------------: |
-|  3   | 1,752      | 1,690        | 0.629         | 0.213           | 1.014        | 0.243          |
-| 10   | 4,377      | 5,013        | 0.926         | 0.213           | 1.655        | 0.295          |
-| 15   | 4,528      | 6,983        | 3.593         | 0.202           | 5.630        | 0.323          |
-| 20   | 5,799      | 9,439        | 26.500        | 0.529           | 60.170       | 0.511          |
-| 22   | 4,803      | 9,671        | 29.185        | 1.050           | 63.806       | 0.567          |
-| 25   | 5,559      | 9,772        | 29.125        | 0.985           | 63.950       | 0.650          |
-| 30   | 4,967      | 9,976        | 34.295        | 0.759           | 73.831       | 0.573          |
-| 35   | 5,816      | 9,962        | 34.191        | 0.972           | 73.837       | 0.596          |
-| 40   | 5,548      | 11,964       | 84.999        | 15.505          | 152.473      | 44.448         |
-| 43   | 5,374      | 12,049       | 87.271        | 17.201          | 157.532      | 52.145         |
-| 46   | 5,374      | 11,989       | 87.138        | 19.652          | 156.928      | 56.452         |
-| 49   | 5,692      | 11,744       | 85.618        | 18.361          | 157.622      | 52.982         |
-| 52   | 5,326      | 11,933       | 87.259        | 20.287          | 160.448      | 56.957         |
+|  3   | 1,698      | 1,556        | 0.511         | 0.160           | 0.824        | 0.194          |
+| 10   | 4,359      | 5,049        | 0.849         | 0.178           | 1.459        | 0.218          |
+| 15   | 4,608      | 7,188        | 2.734         | 0.179           | 3.696        | 0.245          |
+| 20   | 5,035      | 11,268       | 27.104        | 0.250           | 62.562       | 0.436          |
+| 22   | 4,684      | 11,945       | 31.012        | 0.202           | 68.263       | 0.328          |
+| 25   | 5,056      | 12,797       | 31.411        | 0.195           | 69.237       | 0.255          |
+| 30   | 4,953      | 13,412       | 34.123        | 0.217           | 72.725       | 0.415          |
+| 35   | 5,601      | 13,707       | 33.340        | 0.215           | 74.115       | 0.310          |
+| 40   | 5,773      | 15,914       | 85.332        | 1.171           | 152.247      | 0.754          |
+| 43   | 5,395      | 16,485       | 87.314        | 0.999           | 157.234      | 0.762          |
+| 46   | 5,794      | 16,376       | 88.325        | 0.514           | 160.052      | 0.716          |
+| 49   | 5,622      | 16,576       | 86.050        | 0.320           | 161.950      | 0.631          |
+| 52   | 5,905      | 16,627       | 89.924        | 0.328           | 162.860      | 0.692          |
+| 55   | 5,714      | 16,534       | 88.526        | 0.367           | 162.728      | 0.802          |
+| 57   | 5,744      | 16,459       | 88.682        | 0.374           | 163.161      | 0.781          |
+| 60   | 5,833      | 16,481       | 88.046        | 0.375           | 161.321      | 0.749          |
 
 </details>
 

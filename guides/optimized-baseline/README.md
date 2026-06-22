@@ -17,15 +17,15 @@ The optimized-baseline defaults to two main routing criteria:
 
 - **Load-aware** using both the [kv-cache utilization](https://github.com/llm-d/llm-d-router/tree/main/pkg/epp/framework/plugins/scheduling/scorer/kvcacheutilization) and the [queue size](https://github.com/llm-d/llm-d-router/tree/main/pkg/epp/framework/plugins/scheduling/scorer/queuedepth) scorers.
 
-## Default Configuration
+## Configuration
 
-| Parameter          | Value                                                   |
-| ------------------ | ------------------------------------------------------- |
-| Model              | [Qwen/Qwen3-32B](https://huggingface.co/Qwen/Qwen3-32B) |
-| Replicas           | 8                                                       |
-| Tensor Parallelism | 2                                                       |
-| GPUs per replica   | 2                                                       |
-| Total GPUs         | 16                                                      |
+| Parameter          | Default                                                 | Example                                                 |
+| ------------------ | ------------------------------------------------------- | --------------------------------------------------------- |
+| Model              | [Qwen/Qwen3-32B](https://huggingface.co/Qwen/Qwen3-32B) | [openai/gpt-oss-120b](https://huggingface.co/openai/gpt-oss-120b) |
+| Replicas           | 8                                                       | 16                                                        |
+| Tensor Parallelism | 2                                                       | 1                                                         |
+| GPUs per replica   | 2                                                       | 1                                                         |
+| Total GPUs         | 16                                                      | 16                                                        |
 
 ### Supported Hardware Backends
 
@@ -36,7 +36,6 @@ This guide includes configurations for the following accelerators:
 | NVIDIA GPU          | `gpu`              | Default configuration (`INFRA_PROVIDER` options: `base`, `gke`) |
 | AMD GPU             | `amd`              | AMD GPU                                    |
 | Intel XPU           | `xpu`              | Intel Data Center GPU Max 1550+            |
-| Intel Gaudi (HPU)   | `hpu`              | Gaudi 1/2/3 with DRA support               |
 | Google TPU v6e      | `tpu/v6`           | GKE TPU                                    |
 | Google TPU v7       | `tpu/v7`           | GKE TPU                                    |
 | CPU                 | `cpu`              | Intel/AMD, 64 cores + 64GB RAM per replica |
@@ -57,11 +56,10 @@ This guide includes configurations for the following accelerators:
 - Set the following environment variables:
 
   ```bash
-    export GAIE_VERSION=v1.5.0
-    export ROUTER_CHART_VERSION=v0
+    export REPO_ROOT=$(realpath $(git rev-parse --show-toplevel))
+    source ${REPO_ROOT}/guides/env.sh
     export GUIDE_NAME="optimized-baseline"
     export NAMESPACE=llm-d-optimized-baseline
-    export REPO_ROOT=$(realpath $(git rev-parse --show-toplevel))
   ```
 
 - Install the Gateway API Inference Extension CRDs:
@@ -98,7 +96,7 @@ This deploys the llm-d Router in [Standalone Mode](../../docs/architecture/core/
 ```bash
 # Assuming base-directory is the root of the llm-d repo
 helm install ${GUIDE_NAME} \
-    oci://ghcr.io/llm-d/charts/llm-d-router-standalone-dev \
+    ${ROUTER_STANDALONE_CHART} \
     -f ${REPO_ROOT}/guides/recipes/router/base.values.yaml \
     -f ${REPO_ROOT}/guides/${GUIDE_NAME}/router/${GUIDE_NAME}.values.yaml \
     -n ${NAMESPACE} --version ${ROUTER_CHART_VERSION}
@@ -115,7 +113,7 @@ To use a Kubernetes Gateway managed proxy rather than the standalone version, fo
 ```bash
 export PROVIDER_NAME=gke # options: none, gke, agentgateway, istio
 helm install ${GUIDE_NAME} \
-    oci://ghcr.io/llm-d/charts/llm-d-router-gateway-dev  \
+    ${ROUTER_GATEWAY_CHART}  \
     -f ${REPO_ROOT}/guides/recipes/router/base.values.yaml \
     -f ${REPO_ROOT}/guides/${GUIDE_NAME}/router/${GUIDE_NAME}.values.yaml \
     --set provider.name=${PROVIDER_NAME} \
@@ -134,8 +132,23 @@ Apply the Kustomize overlays for your specific backend:
 export ACCELERATOR_TYPE=gpu # options: gpu, amd, xpu, hpu, tpu/v6, tpu/v7, cpu
 export INFRA_PROVIDER=base # base | gke
 export MODEL_SERVER=vllm # options: vllm, sglang
+export INFRA_PROVIDER=base # base | gke (GPU only, omit for other accelerators)
 kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/${ACCELERATOR_TYPE}/${MODEL_SERVER}/${INFRA_PROVIDER}/
 ```
+
+> [!NOTE]
+> The `INFRA_PROVIDER` suffix (`base` or `gke`) only applies to GPU. For other accelerators, use the path directly:
+> `kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/${ACCELERATOR_TYPE}/${MODEL_SERVER}/`
+
+<details>
+<summary><h4>Other Models</h4></summary>
+
+```bash
+# NVIDIA GPU / vLLM — openai/gpt-oss-120b
+kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/gpu/vllm/gpt-oss/
+```
+
+</details>
 
 ### 3. (Optional) Enable monitoring
 
@@ -181,7 +194,7 @@ kubectl run curl-debug --rm -it \
     -- /bin/bash
 ```
 
-**Send a completion request:**
+**Send a completion request (model-aware; set `model` to the name you want to query, e.g. `Qwen/Qwen3-32B` or `openai/gpt-oss-120b`):**
 
 ```bash
 curl -X POST http://${IP}/v1/completions \
@@ -271,6 +284,7 @@ llmdbenchmark \
 
 > [!NOTE]
 > Depending on your `cluster` you may need to extend the default `timeout` values to longer duration, as `bind`, `access` and `wait-timeout` times of `pvcs` and `pods` can be arbitrarily slower on other systems, please utilize `llmdbenchmark run --help` to view the knobs needed to increase those values.
+> Model-aware; set `model` to the name you want to query, e.g. `Qwen/Qwen3-32B` or `openai/gpt-oss-120b`
 
 ## Cleanup
 
@@ -282,90 +296,10 @@ kubectl delete  -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver
 kubectl delete namespace ${NAMESPACE}
 ```
 
-## Benchmarking Report
+## Benchmarking Reports
 
-The benchmark runs on 16 × H100 GPUs, distributed across 8 model servers (2 H100s per server with TP=2).
+Empirical benchmark reports comparing llm-d routing performance against a standard Kubernetes Service under identical hardware configurations:
 
-### Comparing llm-d Routing to a Simple Kubernetes Service (vLLM)
-
-Graphs below compare optimized-baseline routing to a stock Kubernetes Service that round-robins requests across the same 8 vLLM pods (no EPP, no scoring).
-
-<img src="./benchmark-results/throughput_vs_qps.png" width="900" alt="Throughput vs QPS">
-<img src="./benchmark-results/latency_vs_qps.png" width="900" alt="Latency vs QPS">
-<img src="./benchmark-results/ttft_p90_vs_qps.png" width="900" alt="TTFT p90 vs QPS">
-
-Summary across the full ladder (rates 3 → 60):
-
-| Metric              | k8s service (RR) | llm-d Optimized | Δ% vs k8s |
-| :------------------ | :--------------- | :-------------- | :-------- |
-| Output tokens/sec   | 5,722            | 13,163          | +130.0%   |
-| Requests/sec        | 35.87            | 36.38           | +1.4%     |
-| TTFT mean (s)       | 58.10            | 0.156           | −99.73%   |
-| TTFT p90 (s)        | 107.43           | 0.206           | −99.81%   |
-| ITL mean (ms)       | 44.0             | 47.0            | +6.8%     |
-
-<details>
-<summary><b><i>Click</i></b> to view the per-rate breakdown across the full ladder</summary>
-
-Output tokens/sec — higher is better; TTFT in seconds — lower is better.
-
-| Rate | k8s Output | llm-d Output | k8s TTFT mean | llm-d TTFT mean | k8s TTFT p90 | llm-d TTFT p90 |
-| ---: | ---------: | -----------: | ------------: | --------------: | -----------: | -------------: |
-|  3   | 1,797      | 1,777        | 0.415         | 0.133           | 0.522        | 0.162          |
-| 10   | 4,215      | 5,066        | 0.630         | 0.125           | 1.014        | 0.172          |
-| 15   | 5,381      | 7,053        | 0.881         | 0.122           | 1.593        | 0.187          |
-| 20   | 6,205      | 11,688       | 18.103        | 0.174           | 35.344       | 0.283          |
-| 22   | 5,517      | 12,436       | 20.171        | 0.116           | 39.436       | 0.148          |
-| 25   | 5,965      | 12,501       | 21.842        | 0.116           | 42.813       | 0.146          |
-| 30   | 5,702      | 13,862       | 24.597        | 0.117           | 46.036       | 0.148          |
-| 35   | 5,890      | 14,026       | 24.162        | 0.117           | 45.190       | 0.150          |
-| 40   | 6,336      | 16,041       | 68.673        | 0.153           | 126.238      | 0.216          |
-| 43   | 6,588      | 16,339       | 72.429        | 0.254           | 130.275      | 0.218          |
-| 46   | 6,459      | 16,665       | 70.084        | 0.154           | 129.810      | 0.220          |
-| 49   | 6,265      | 16,126       | 70.659        | 0.151           | 133.718      | 0.209          |
-| 52   | 6,303      | 16,474       | 74.326        | 0.152           | 134.981      | 0.219          |
-| 55   | 6,290      | 16,854       | 72.564        | 0.153           | 134.034      | 0.215          |
-| 57   | 6,089      | 16,641       | 72.329        | 0.153           | 135.023      | 0.217          |
-| 60   | 6,551      | 17,064       | 75.586        | 0.154           | 138.663      | 0.217          |
-
-</details>
-
-### Comparing llm-d Routing to a Simple Kubernetes Service (SGLang)
-
-The following results compare SGLang performance using a standard Kubernetes Service vs. the llm-d router on identical 16 × H100 hardware.
-
-Summary across the full ladder (rates 3 → 60):
-
-| Metric              | k8s service (RR) | llm-d Optimized | Δ% vs k8s |
-| :------------------ | :--------------- | :-------------- | :-------- |
-| Output tokens/sec   | 4,667            | 9,910           | +112.3%   |
-| Requests/sec        | 4.71             | 10.00           | +112.3%   |
-| TTFT mean (s)       | 69.76            | 0.30            | −99.57%   |
-| TTFT p90 (s)        | 157.64           | 0.21            | −99.87%   |
-| ITL mean (ms)       | 37.9             | 46.1            | +21.6%    |
-
-<details>
-<summary><b><i>Click</i></b> to view the per-rate breakdown across the full ladder</summary>
-
-Output tokens/sec — higher is better; TTFT in seconds — lower is better.
-
-| Rate | k8s Output | llm-d Output | k8s TTFT mean | llm-d TTFT mean | k8s TTFT p90 | llm-d TTFT p90 |
-| ---: | ---------: | -----------: | ------------: | --------------: | -----------: | -------------: |
-|  3   | 1,698      | 1,540        | 0.511         | 0.132           | 0.824        | 0.157          |
-| 10   | 4,359      | 4,928        | 0.849         | 0.118           | 1.459        | 0.163          |
-| 15   | 4,608      | 7,204        | 2.734         | 0.115           | 3.696        | 0.174          |
-| 20   | 5,035      | 11,336       | 27.104        | 0.169           | 62.562       | 0.252          |
-| 22   | 4,684      | 11,933       | 31.012        | 0.112           | 68.263       | 0.151          |
-| 25   | 5,056      | 12,763       | 31.411        | 0.116           | 69.237       | 0.152          |
-| 30   | 4,953      | 13,553       | 34.123        | 0.113           | 72.725       | 0.147          |
-| 35   | 5,601      | 13,289       | 33.340        | 0.109           | 74.115       | 0.147          |
-| 40   | 5,773      | 15,704       | 85.332        | 0.962           | 152.247      | 0.256          |
-| 43   | 5,395      | 16,481       | 87.314        | 1.073           | 157.234      | 0.204          |
-| 46   | 5,794      | 16,878       | 88.325        | 0.133           | 160.052      | 0.167          |
-| 49   | 5,622      | 16,629       | 86.050        | 0.136           | 161.950      | 0.171          |
-| 52   | 5,905      | 16,996       | 89.924        | 0.146           | 162.860      | 0.198          |
-| 55   | 5,714      | 17,155       | 88.526        | 0.143           | 162.728      | 0.183          |
-| 57   | 5,744      | 17,021       | 88.682        | 0.142           | 163.161      | 0.191          |
-| 60   | 5,833      | 17,156       | 88.046        | 0.145           | 161.321      | 0.208          |
-
-</details>
+- [Qwen/Qwen3-32B on H100 and SGLang](./benchmark-results/sglang-qwen3-32b-h100/README.md)
+- [Qwen/Qwen3-32B on H100 and vLLM](./benchmark-results/vllm-qwen3-32b-h100/README.md)
+- [openai/gpt-oss-120b on H100 and vLLM](./benchmark-results/vllm-gpt-oss-120b-h100/README.md)

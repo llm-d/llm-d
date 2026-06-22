@@ -40,7 +40,6 @@ jobs:
             "${{ env.REGISTRY }}/llm-d/llm-d-cpu:${TAG}"
             "${{ env.REGISTRY }}/llm-d/llm-d-rocm:${TAG}"
             "${{ env.REGISTRY }}/llm-d/llm-d-xpu:${TAG}"
-            "${{ env.REGISTRY }}/llm-d/llm-d-hpu:${TAG}"
           )
 
           echo "## Release Image Verification for ${TAG}" >> $GITHUB_STEP_SUMMARY

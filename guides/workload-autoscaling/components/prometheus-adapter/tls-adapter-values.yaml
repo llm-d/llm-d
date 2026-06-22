@@ -1,0 +1,19 @@
+# Note: If your Prometheus instance is using a self-signed certificate,
+# you may need to configure the adapter to trust it.
+# You can do this by mounting the CA certificate into the adapter and setting the appropriate flags.
+# Refer to the Prometheus Adapter documentation for details on how to configure TLS settings.
+extraVolumes:
+  - name: prometheus-ca
+    secret:
+      secretName: prometheus-web-tls
+      items:
+        - key: ca.crt
+          path: ca.crt
+
+extraVolumeMounts:
+  - name: prometheus-ca
+    mountPath: /etc/prometheus-ca
+    readOnly: true
+
+extraArguments:
+  - --prometheus-ca-file=/etc/prometheus-ca/ca.crt
