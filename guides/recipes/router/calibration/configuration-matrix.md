@@ -19,23 +19,26 @@ There is **one row per model-server overlay** shipped by the
 that overlay actually serves and its tensor-parallel size. vLLM **and** SGLang are separate
 rows because the serving engine changes prefill throughput.
 
-| Overlay path | Accelerator · engine | TP | Model (as shipped) | `peakPrefillThroughput` (tok/s) |
-|---|---|---|---|---|
-| `gpu/vllm`    | NVIDIA H100 80 GB · vLLM   | 2 | Qwen3-32B               | **15928** |
-| `gpu/sglang`  | NVIDIA H100 80 GB · SGLang | 2 | Qwen3-32B               | **30720** |
-| `amd/vllm`    | AMD GPU · vLLM             | 2 | Qwen3-32B               | 15928 ‡ |
-| `amd/sglang`  | AMD GPU · SGLang          | 2 | Qwen3-32B               | 30720 ‡ |
-| `tpu-v6/vllm` | Google TPU v6e · vLLM     | 8 | Qwen3-32B               | **26290** |
-| `tpu-v7/vllm` | Google TPU v7x · vLLM     | 8 | Qwen3-32B               | **27336** |
-| `hpu/vllm`    | Intel Gaudi / HPU · vLLM  | 1 | Qwen3-8B                | 1970 ‡ |
-| `xpu/vllm`    | Intel XPU · vLLM          | 1 | Qwen3-0.6B              | 1970 ‡ |
-| `cpu/vllm`    | CPU · vLLM (AMX)          | 1 | Llama-3.2-3B-Instruct   | **1970** |
+| Overlay path | Accelerator · engine | Version | TP | Model (as shipped) | `peakPrefillThroughput` (tok/s) |
+|---|---|---|---|---|---|
+| `gpu/vllm`         | NVIDIA H100 80 GB · vLLM   | v0.23.0              | 2 | Qwen3-32B               | **15928** |
+| `gpu/vllm/gpt-oss` | NVIDIA H100 80 GB · vLLM   | v0.22.0              | 1 | gpt-oss-120B            | **39065** |
+| `gpu/sglang`       | NVIDIA H100 80 GB · SGLang | v0.5.13.post1        | 2 | Qwen3-32B               | **30720** |
+| `amd/vllm`    | AMD GPU · vLLM             | rocm v0.7.0          | 2 | Qwen3-32B               | 15928 ‡ |
+| `amd/sglang`  | AMD GPU · SGLang          | v0.5.13.post1 (rocm) | 2 | Qwen3-32B               | 30720 ‡ |
+| `tpu/v6/vllm` | Google TPU v6e · vLLM     | tpu v0.22.0          | 8 | Qwen3-32B               | **26290** |
+| `tpu/v7/vllm` | Google TPU v7x · vLLM     | tpu v0.22.0          | 8 | Qwen3-32B               | **27336** |
+| `xpu/vllm`    | Intel XPU · vLLM          | xpu v0.7.0           | 1 | Qwen3-0.6B              | 1970 ‡ |
+| `cpu/vllm`    | CPU · vLLM (AMX)          | cpu v0.6.0           | 1 | Llama-3.2-3B-Instruct   | **1970** |
 
 - **15928** — the plugin default; measured for the reference path (`gpu/vllm`, Qwen3-32B on
   H100 80 GB, TP=2).
 - **30720** — measured for `gpu/sglang` (Qwen3-32B, same H100 80 GB / TP=2): SGLang reaches
   ~1.9× the vLLM prefill throughput on identical hardware, which is exactly why the serving
   engine is its own row.
+- **39065** — measured for `gpu/vllm/gpt-oss` (gpt-oss-120B, H100 TP=1): the highest in the table
+  despite the largest model, because gpt-oss is a sparse MoE (~5B active params) in MXFP4, so a
+  prefill step touches few weights.
 - **1970** — measured for `cpu/vllm` (Llama-3.2-3B) on **GCP C3 (Intel Sapphire Rapids, AMX)**,
   bf16. The `llm-d-cpu` image runs the model in bf16, which **requires AMX or AVX512-BF16**.
   Calibrated at `CHUNK_SIZE=2048` (the CPU vLLM chunked-prefill default), not 8192.
