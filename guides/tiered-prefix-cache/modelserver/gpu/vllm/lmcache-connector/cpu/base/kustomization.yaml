@@ -3,11 +3,11 @@ kind: Kustomization
 resources:
   - ../../../base
 
-# TODO(#1897): Track llm-d-cuda image variant; consider centralized component.
-images:
-  - name: vllm/vllm-openai
-    newName: ghcr.io/llm-d/llm-d-cuda
-    newTag: v0.7.0
+# # TODO(#1897): Track llm-d-cuda image variant; consider centralized component.
+# images:
+#   - name: vllm/vllm-openai
+#     newName: ghcr.io/llm-d/llm-d-cuda
+#     newTag: v0.7.0
 
 labels:
   - pairs:
