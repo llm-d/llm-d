@@ -7,7 +7,7 @@ spec:
     spec:
       containers:
         - name: modelserver
-          # TODO: Update to latest image.
+          # TODO(#1897): Update to centralized gpu-vllm image; avoid hardcoding in patch.
           image: ghcr.io/llm-d/llm-d-cuda:v0.5.1
           args:
             - "Qwen/Qwen3-32B"
