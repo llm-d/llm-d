@@ -19,7 +19,6 @@ spec:
             - "--max-num-seqs=128"
             - "--kv-cache-dtype=fp8"
             - "--async-scheduling"
-            - "--gpu-memory-utilization=0.93"
             - "--disable-access-log-for-endpoints=/health,/metrics,/v1/models"
             - "--tensor-parallel-size=8"
             - "--block-size=64"

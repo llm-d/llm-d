@@ -17,7 +17,6 @@ spec:
             - "--kv-transfer-config"
             - '{"kv_connector":"NixlConnector", "kv_role":"kv_both"}'
             - "--no-disable-hybrid-kv-cache-manager"
-            - "--gpu-memory-utilization=0.9"
           env:
             - name: HF_TOKEN
               valueFrom:

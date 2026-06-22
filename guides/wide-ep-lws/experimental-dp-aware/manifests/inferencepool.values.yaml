@@ -3,10 +3,6 @@ router:
     replicas: 1
     flags:
       v: 1
-    image:
-      registry: ghcr.io/llm-d
-      repository: llm-d-router-endpoint-picker-dev
-      tag: main
     extProcPort: 9002
     pluginsConfigFile: "custom-plugins.yaml"
     pluginsCustomConfig:

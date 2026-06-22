@@ -222,6 +222,9 @@ jobs:
         run: |
           failed=0
           for overlay_dir in guides/pd-disaggregation/modelserver/*/; do
+            overlay_name="$(basename "${overlay_dir%/}")"
+            # skip the components directory
+            [ "${overlay_name}" = "components" ] && continue
             # Each accelerator dir may have one or more server subdirs (vllm, sglang)
             for kust_dir in "${overlay_dir}"*/; do
               [ -f "${kust_dir}kustomization.yaml" ] || continue

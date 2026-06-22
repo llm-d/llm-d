@@ -1,8 +1,8 @@
-## High Cache Scenario (HBM < KVCache < HBM + CPU RAM)
+# openai/gpt-oss-120b CPU Offloading Benchmark (16×H100)
 
-The benchmark runs on 16 × H100 GPUs, distributed across 16 model servers (1 H100 per server with TP=1) using gpt-oss-120B and the same workload as the [GPU benchmarking report](README.md#gpu--cpu-ram-offloading). The results below show the effect of enabling prefix-cache offloading relative to an HBM-only configuration.
+The benchmark runs on 16 × H100 GPUs, distributed across 16 model servers (1 H100 per server with TP=1) using gpt-oss-120B and the same workload as the [GPU benchmarking report](./vllm-qwen3-32b-h100.md). The results below show the effect of enabling prefix-cache offloading relative to an HBM-only configuration.
 
-### Throughput
+## Throughput
 
 | Metric | llm-d baseline | KV cache offload | Delta |
 | --- | --- | --- | --- |
@@ -11,7 +11,7 @@ The benchmark runs on 16 × H100 GPUs, distributed across 16 model servers (1 H1
 | Total tokens/sec | 166,056 | 196,332 | **+30276 (+18.2%)** |
 | Input tokens/sec | 162,353 | 192,212 | **+29859 (+18.4%)** |
 
-### Latency (successful requests only)
+## Latency (successful requests only)
 
 | Metric | llm-d baseline | KV cache offload | Delta |
 | --- | --- | --- | --- |
@@ -26,7 +26,7 @@ The benchmark runs on 16 × H100 GPUs, distributed across 16 model servers (1 H1
 | P90 TPOT | 36.4ms | 25.4ms | **-11.0 (-30.3%)** |
 | ITL mean | 26.1ms | 15.7ms | **-10.4 (-39.8%)** |
 
-### vLLM Server Metrics (fleet aggregate)
+## vLLM Server Metrics (fleet aggregate)
 
 | Metric | llm-d baseline | KV cache offload |
 | --- | --- | --- |
@@ -38,7 +38,7 @@ The benchmark runs on 16 × H100 GPUs, distributed across 16 model servers (1 H1
 | External cache queries (tokens) | N/A | 135.3M |
 
 
-### Per-Stage Breakdown (5–40 QPS)
+## Per-Stage Breakdown (5–40 QPS)
 
 | Target Rate | Configuration | Mean TTFT | P90 TTFT | Mean E2E Latency | P90 E2E Latency | Throughput (tok/s) |
 | :---: | :--- | :---: | :---: | :---: | :---: | :---: |

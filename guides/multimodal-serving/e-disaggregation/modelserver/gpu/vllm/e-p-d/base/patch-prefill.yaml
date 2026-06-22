@@ -18,7 +18,6 @@ spec:
             - "--kv-transfer-config"
             - '{"kv_connector":"NixlConnector", "kv_role":"kv_both"}'
             - "--no-disable-hybrid-kv-cache-manager"
-            - "--gpu-memory-utilization=0.9"
             - "--ec-transfer-config"
             - '{"ec_connector": "ECCPUConnector", "ec_role": "ec_consumer"}'
           env:
@@ -31,6 +30,9 @@ spec:
                 secretKeyRef:
                   name: llm-d-hf-token
                   key: HF_TOKEN
+            # Workaround for https://github.com/vllm-project/vllm/issues/44548, required with vLLM v0.20.0+ due to torch 2.11
+            - name: USER
+              value: llm-d
           resources:
             limits:
               cpu: "8"

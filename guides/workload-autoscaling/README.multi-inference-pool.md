@@ -16,7 +16,7 @@ Install an additional Helm release in the same namespace as the optimized-baseli
 ```bash
 export NAMESPACE=llm-d-optimized-baseline
 export REPO_ROOT=$(realpath $(git rev-parse --show-toplevel))
-export ROUTER_CHART_VERSION=v0
+export ROUTER_CHART_VERSION=v0.9.1
 
 helm install model-b \
     ${ROUTER_STANDALONE_CHART} \
