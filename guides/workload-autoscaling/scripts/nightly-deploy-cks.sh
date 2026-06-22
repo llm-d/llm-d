@@ -8,7 +8,7 @@ yq '.spec.template.spec.volumes += {"name": "triton-cache", "emptyDir": {}}' -i 
 yq '.spec.template.spec.containers[0].volumeMounts += {"mountPath": "/.triton", "name": "triton-cache"}' -i guides/optimized-baseline/modelserver/gpu/vllm/base/patch-vllm.yaml
 yq '.spec.replicas=2' -i guides/optimized-baseline/modelserver/gpu/vllm/base/patch-vllm.yaml
 kubectl apply -k guides/optimized-baseline/modelserver/gpu/vllm/base -n ${NAMESPACE}
-export ROUTER_CHART_VERSION=v0
+export ROUTER_CHART_VERSION=v0.9.1
 helm install workload-variant-autoscaler-inferencepool-standalone \
   oci://ghcr.io/llm-d/charts/llm-d-router-standalone-dev \
   -f guides/recipes/router/base.values.yaml \
