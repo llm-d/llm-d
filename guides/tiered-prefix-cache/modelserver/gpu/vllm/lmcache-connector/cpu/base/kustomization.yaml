@@ -3,6 +3,9 @@ kind: Kustomization
 resources:
   - ../../../base
 
+components:
+  - ../../../../../../../recipes/modelserver/components/images/gpu-vllm
+
 labels:
   - pairs:
       llm-d.ai/guide: tiered-prefix-cache

@@ -38,7 +38,6 @@ spec:
             - "--kv-transfer-config"
             - '{"kv_connector":"NixlConnector","kv_role":"kv_both","kv_connector_extra_config":{"backends":["LIBFABRIC"]}}'
             - "--no-disable-hybrid-kv-cache-manager"
-            - "--gpu-memory-utilization=0.9"
           securityContext:
             capabilities:
               add:

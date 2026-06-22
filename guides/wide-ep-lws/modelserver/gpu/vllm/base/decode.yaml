@@ -92,7 +92,6 @@ spec:
                 exec vllm serve \
                   deepseek-ai/DeepSeek-R1-0528 \
                   --port 8200 \
-                  --gpu-memory-utilization 0.9 \
                   --trust-remote-code \
                   --api-server-count 1 \
                   --disable-access-log-for-endpoints=/health,/metrics \

@@ -106,8 +106,7 @@ docker run -d --name vllm-0 --gpus '"device=0,1"' \
     "${VLLM_IMAGE}" \
     serve "${MODEL}" \
     --disable-access-log-for-endpoints=/health,/metrics,/v1/models \
-    --tensor-parallel-size=2 \
-    --gpu-memory-utilization=0.95
+    --tensor-parallel-size=2
 ```
 
 The optimized-baseline pod also sets resource requests/limits
