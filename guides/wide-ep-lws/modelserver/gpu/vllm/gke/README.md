@@ -12,5 +12,6 @@ This overlay configures GKE-specific settings for DP-aware WideEP scheduling on 
 | RDMA network annotations | Configures multi-NIC RDMA interfaces (eth2-eth9 → rdma-0 through rdma-7). |
 | `DEEP_EP_DEVICE_TO_HCA_MAPPING` | Maps GPUs to NICs for efficient NVSHMEM NIC selection. |
 | `NVSHMEM_DISABLED_GDRCOPY` | Recommended on GKE. |
+| `HF_HUB_DISABLE_XET` | Disables HF XET when loading model from host storage. |
 | Host volumes | GKE-specific hostPath for model and JIT caches. |
 | `disable-gke-nccl-tuner-patch` | Disables GKE's built-in NCCL tuner. |
