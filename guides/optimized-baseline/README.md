@@ -293,10 +293,10 @@ kubectl delete  -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver
 kubectl delete namespace ${NAMESPACE}
 ```
 
-## Benchmarking Report
+## Benchmarking Reports
 
-### [Comparing llm-d Routing to a Simple Kubernetes Service (SGLang)](./benchmark-results/sglang-qwen3-32b-h100/README.md)
+Empirical benchmark reports comparing llm-d routing performance against a standard Kubernetes Service under identical hardware configurations:
 
-### [Comparing llm-d Routing to a Simple Kubernetes Service (vLLM)](./benchmark-results/vllm-qwen3-32b-h100/README.md)
-
-### [Comparing llm-d Routing to a Simple Kubernetes Service (vLLM gpt-oss-120b)](./benchmark-results/vllm-gpt-oss-120b-h100/README.md)
+- [Qwen/Qwen3-32B on H100 and SGLang](./benchmark-results/sglang-qwen3-32b-h100/README.md)
+- [Qwen/Qwen3-32B on H100 and vLLM](./benchmark-results/vllm-qwen3-32b-h100/README.md)
+- [openai/gpt-oss-120b on H100 and vLLM](./benchmark-results/vllm-gpt-oss-120b-h100/README.md)
