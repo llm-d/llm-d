@@ -295,8 +295,8 @@ kubectl delete namespace ${NAMESPACE}
 
 ## Benchmarking Report
 
-### [Comparing llm-d Routing to a Simple Kubernetes Service (SGLang)](./benchmark-results/sglang-qwen3-32b-h100/benchmark-report.md)
+### [Comparing llm-d Routing to a Simple Kubernetes Service (SGLang)](./benchmark-results/sglang-qwen3-32b-h100/README.md)
 
-### [Comparing llm-d Routing to a Simple Kubernetes Service (vLLM)](./benchmark-results/qwen3-32b-h100/benchmark-report.md)
+### [Comparing llm-d Routing to a Simple Kubernetes Service (vLLM)](./benchmark-results/qwen3-32b-h100/README.md)
 
-### [Comparing llm-d Routing to a Simple Kubernetes Service (vLLM gpt-oss-120b)](./benchmark-results/gpt-oss-120b-h100/benchmark-report.md)
+### [Comparing llm-d Routing to a Simple Kubernetes Service (vLLM gpt-oss-120b)](./benchmark-results/gpt-oss-120b-h100/README.md)
