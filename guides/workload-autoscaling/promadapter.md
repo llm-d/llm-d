@@ -7,7 +7,7 @@ The Prometheus Adapter bridges Prometheus metrics to the Kubernetes External Met
 
 ## Prerequisites
 
-You must have a Prometheus instance running in your cluster. See [Prometheus Setup Guide](../../docs/resources/observability/setup.md) for guidance on setting up Prometheus. Make sure to enable TLS as WVA requires it to securely access the Prometheus API.
+You must have a Prometheus instance running in your cluster. See [Prometheus Setup Guide](../../docs/operations/observability/setup.md) for guidance on setting up Prometheus. Make sure to enable TLS as WVA requires it to securely access the Prometheus API.
 
 ```bash
 export MONITORING_NAMESPACE=llm-d-monitoring
