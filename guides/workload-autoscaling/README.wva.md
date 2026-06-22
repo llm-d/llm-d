@@ -90,7 +90,7 @@ export REPO_ROOT=$(realpath $(git rev-parse --show-toplevel))
 6. Install WVA controller with Kustomize:
 
     ```bash
-    kubectl apply -k  ${REPO_ROOT}/guides/workload-autoscaling/wva-config/platform/${PLATFORM} -n ${NAMESPACE}
+    kubectl apply -k ${REPO_ROOT}/guides/workload-autoscaling/wva-config/platform/${PLATFORM} -n ${WVA_NAMESPACE}
     ```
 
 ## Verify Installation
