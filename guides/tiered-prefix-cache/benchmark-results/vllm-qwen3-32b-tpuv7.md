@@ -1,6 +1,6 @@
-# Google TPU CPU Offloading Benchmark
+# Qwen/Qwen3-32B CPU Offloading Benchmark (Google TPU v7)
 
-Headline throughput and latency comparison showing the impact of prefix-cache offloading on Google TPU v6e/v7 architectures.
+Headline throughput and latency comparison showing the impact of prefix-cache offloading on Google TPU v7.
 
 | Configuration | Mean TTFT (s) | P90 TTFT (s) | Mean E2E Latency (s) | P90 E2E Latency (s) | Overall Throughput (tok/s) |
 | :--- | :--- | :--- | :--- | :--- | :--- |
