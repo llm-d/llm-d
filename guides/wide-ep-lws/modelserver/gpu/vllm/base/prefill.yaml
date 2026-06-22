@@ -62,20 +62,30 @@ spec:
 
                 exec vllm serve \
                   deepseek-ai/DeepSeek-R1-0528 \
-                  --host=0.0.0.0 \
-                  --port=8000 \
+                  --port 8000 \
                   --disable-access-log-for-endpoints=/health,/metrics,/v1/models,/readyz \
                   --data-parallel-multi-port-external-lb \
-                  --data-parallel-supervisor-port=8008 \
+                  --data-parallel-supervisor-port 8008 \
+                  --enable-expert-parallel \
+                  --tensor-parallel-size $TP_SIZE \
                   --data-parallel-size $((LWS_GROUP_SIZE * DP_SIZE_LOCAL)) \
                   --data-parallel-size-local $DP_SIZE_LOCAL \
+                  --data-parallel-address ${LWS_LEADER_ADDRESS} \
+                  --data-parallel-rpc-port 5555 \
                   --data-parallel-start-rank $START_RANK \
-                  --data-parallel-address="${LWS_LEADER_ADDRESS}" \
-                  --data-parallel-rpc-port=5555 \
                   --enable-expert-parallel \
-                  --kv_transfer_config '{"kv_connector":"NixlConnector","kv_role":"kv_both","kv_load_failure_policy":"fail"}' \
-                  --all2all-backend deepep_high_throughput \
-                  --max-model-len 65536
+                  --kv_transfer_config '{"kv_connector":"NixlConnector",
+                                          "kv_role":"kv_both",
+                                          "kv_load_failure_policy":"fail"}' \
+                  --enable-dbo \
+                  --dbo-prefill-token-threshold 32 \
+                  --enable-eplb \
+                  --eplb-config '{"window_size":"1000",
+                                  "step_interval":"3000",
+                                  "num_redundant_experts":"32",
+                                  "log_balancedness":"False"}' \
+                  --moe-backend deep_gemm \
+                  --all2all-backend deepep_high_throughput
                   # To enable tracing, add:
                   # --otlp-traces-endpoint http://otel-collector:4317 \
                   # --collect-detailed-traces all
@@ -94,6 +104,10 @@ spec:
               #   value: "parentbased_traceidratio"
               # - name: OTEL_TRACES_SAMPLER_ARG
               #   value: "0.1"
+              - name: VLLM_MEMORY_PROFILER_ESTIMATE_CUDAGRAPHS
+                value: "1"
+              - name: VLLM_RANDOMIZE_DP_DUMMY_INPUTS
+                value: "1"
               - name: DP_SIZE_LOCAL
                 value: "8"
               - name: TP_SIZE
@@ -120,8 +134,6 @@ spec:
               # causing TCP RSTs.
               - name: VLLM_HTTP_TIMEOUT_KEEP_ALIVE
                 value: "120"
-              - name: NVSHMEM_DISABLE_CUDA_VMM
-                value: "0"
               - name: VLLM_NIXL_SIDE_CHANNEL_HOST
                 valueFrom:
                   fieldRef:
