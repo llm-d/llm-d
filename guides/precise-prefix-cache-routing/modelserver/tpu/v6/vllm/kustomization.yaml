@@ -5,6 +5,7 @@ resources:
 
 namePrefix: precise-prefix-cache-routing-tpu-v6-vllm-
 
+# TODO(#1893): Replace with tpu-vllm component once validated with centralized v0.22.0.
 images:
   - name: REPLACE_MODEL_SERVER_IMAGE
     newName: vllm/vllm-tpu

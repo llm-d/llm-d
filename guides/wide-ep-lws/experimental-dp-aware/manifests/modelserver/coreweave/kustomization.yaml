@@ -2,6 +2,7 @@ apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 resources:
   - ../base
+# TODO(#1895): Evaluate replacing CoreWeave-specific image with centralized gpu-vllm.
 images:
   - name: ghcr.io/llm-d/llm-d-cuda
     newName: docker.io/vllm/vllm-openai

@@ -5,6 +5,7 @@ resources:
 
 namePrefix: precise-prefix-cache-routing-tpu-v7-vllm-
 
+# TODO(#1893): Replace with tpu-vllm component once Ironwood variant is in centralized tpu-vllm.
 images:
   - name: REPLACE_MODEL_SERVER_IMAGE
     newName: vllm/vllm-tpu

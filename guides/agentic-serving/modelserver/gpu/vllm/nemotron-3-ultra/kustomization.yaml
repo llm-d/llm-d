@@ -5,10 +5,8 @@ resources:
 
 namePrefix: agentic-serving-gpu-vllm-
 
-images:
-  - name: REPLACE_MODEL_SERVER_IMAGE
-    newName: vllm/vllm-openai
-    newTag: v0.23.0
+components:
+  - ../../../../../recipes/modelserver/components/images/gpu-vllm
 
 labels:
   - pairs:

@@ -5,6 +5,7 @@ resources:
 
 namePrefix: agentic-serving-tpu-vllm-
 
+# TODO(#1893): Replace with tpu-vllm component once nightly features are in a stable release.
 images:
   - name: REPLACE_MODEL_SERVER_IMAGE
     newName: vllm/vllm-tpu
