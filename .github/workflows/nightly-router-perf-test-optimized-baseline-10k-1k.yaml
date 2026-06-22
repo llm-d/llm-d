@@ -12,12 +12,12 @@ on:
         type: string
       gke_cluster_name:
         description: 'GKE Cluster Name'
-        default: 'llm-d-e2e-us-east5'
+        default: 'llm-d-ap-usc1-router-perf'
         required: true
         type: string
       gke_cluster_zone:
         description: 'GKE Cluster Zone/Region'
-        default: 'us-east5'
+        default: 'us-central1'
         required: true
         type: string
       sim_replicas:
@@ -54,9 +54,11 @@ jobs:
   run-perf-benchmark:
     runs-on: ubuntu-latest
     env:
+      # This cluster must have the Gateway API Inference Extension CRDs
+      # already installed in it.
       GCP_PROJECT_ID: ${{ inputs.gcp_project_id || 'llm-d-scale' }}
-      GKE_CLUSTER_NAME: ${{ inputs.gke_cluster_name || 'llm-d-e2e-us-east5' }}
-      GKE_CLUSTER_ZONE: ${{ inputs.gke_cluster_zone || 'us-east5' }}
+      GKE_CLUSTER_NAME: ${{ inputs.gke_cluster_name || 'llm-d-ap-usc1-router-perf' }}
+      GKE_CLUSTER_ZONE: ${{ inputs.gke_cluster_zone || 'us-central1' }}
       SIM_REPLICAS: ${{ inputs.sim_replicas || '10' }}
       LLM_D_REF: ${{ inputs.llm_d_ref || 'main' }}
       GUIDE_NAME: ${{ inputs.guide_name || 'optimized-baseline' }}
