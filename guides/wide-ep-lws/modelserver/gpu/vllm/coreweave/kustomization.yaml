@@ -43,15 +43,3 @@ patches:
       - op: add
         path: /spec/leaderWorkerTemplate/workerTemplate/spec/containers/0/resources/requests/rdma~1ib
         value: "1"
-      # Add GPU affinity. We do this because the sizing of this deployment won't fit on our H100s in terms of memory.
-      - op: add
-        path: /spec/leaderWorkerTemplate/workerTemplate/spec/affinity
-        value:
-          nodeAffinity:
-            requiredDuringSchedulingIgnoredDuringExecution:
-              nodeSelectorTerms:
-                - matchExpressions:
-                  - key: gpu.nvidia.com/model
-                    operator: In
-                    values:
-                      - H200
