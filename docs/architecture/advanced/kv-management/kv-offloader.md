@@ -276,16 +276,6 @@ For advanced use and older vLLM releases, the equivalent `--kv-transfer-config` 
 
 For the full configuration reference including GDS modes and environment variables, see the [llm-d FS backend README](https://github.com/llm-d/llm-d-kv-cache/tree/main/kv_connectors/llmd_fs_backend).
 
-### Distributed Offloading (MooncakeStoreConnector)
-
-| Field | Type | Default | Description |
-| :--- | :--- | :--- | :--- |
-| `kv_connector` | string | - | Set to `"MooncakeStoreConnector"` |
-| `kv_role` | string | - | Set to `"kv_both"` for standalone cache offloading |
-| `load_async` | bool | `true` | Async loading for compute-I/O overlap |
-| `enable_cross_layers_blocks` | bool | `false` | Cross-layer block packing to reduce store operations |
-
-For the full `mooncake_config.json` reference, see [MooncakeStoreConnector — mooncake_config.json Reference](#mooncake_configjson-reference) above.
 
 ## Examples
 
@@ -327,6 +317,8 @@ volumeMounts:
 
 ### Distributed Offloading with MooncakeStoreConnector
 
+At the vLLM server layer you might serve with the following configurations:
+
 ```yaml
 args:
   - "--model=Qwen/Qwen3-32B"
@@ -339,6 +331,8 @@ env:
   - name: PYTHONHASHSEED
     value: "0"
 ```
+
+For the full `mooncake_config.json` reference, see [MooncakeStoreConnector — mooncake_config.json Reference](#mooncake_configjson-reference) above.
 
 ## Metrics
 
@@ -368,4 +362,4 @@ Any POSIX filesystem is a candidate; the best choice for a given deployment depe
 - [llm-d FS Backend](https://github.com/llm-d/llm-d-kv-cache/tree/main/kv_connectors/llmd_fs_backend) — Implementation details, configuration, and metrics
 - [vLLM KV Offloading Connector](https://vllm.ai/blog/kv-offloading-connector) — Deep dive into vLLM's native offloading
 - [Mooncake Store](https://github.com/kvcache-ai/Mooncake) — Upstream Mooncake project and documentation
-- [vLLM MooncakeStoreConnector Usage Guide](https://docs.vllm.ai/en/v0.22.1/features/mooncake_store_connector_usage/) — vLLM-side configuration reference
+- [vLLM MooncakeStoreConnector Usage Guide](https://docs.vllm.ai/en/v0.23.0/features/mooncake_store_connector_usage/) — vLLM-side configuration reference
