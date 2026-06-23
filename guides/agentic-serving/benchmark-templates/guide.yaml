@@ -1,7 +1,7 @@
 # ---------------------------------------------------------------------------
 # inference-perf workload template for the agentic-serving guide.
 #
-# Render with `envsubst < agentic-code-gen.yaml > config.yaml` AFTER exporting the
+# Render with `envsubst < guide.yaml > config.yaml` AFTER exporting the
 # variables below. Any unset variable renders as an empty string, producing
 # invalid or semantically wrong YAML — so set all of them first.
 #

@@ -297,7 +297,7 @@ llmdbenchmark \
 
 #### Case 2 — TPU · Qwen3-Coder-480B-A35B-Instruct-FP8 with KV-cache offloading
 
-Uses the agentic-serving guide's `inference-perf` workload, tuned for the 480B model and very long (up to 256K-token) contexts: [`guides/agentic-serving/benchmark-templates/agentic-code-gen.yaml`](../agentic-serving/benchmark-templates/agentic-code-gen.yaml). It is parameterized on `CONCURRENCY_LEVEL` / `NUM_REQUESTS` / `SEED`; render it with `envsubst` and drive it against **this guide's** EPP via the `run_only.sh` runner from [`llm-d-benchmark`](https://github.com/llm-d/llm-d-benchmark), exactly as in the [agentic-serving Benchmarking steps](../agentic-serving/agentic-code-generation.md#benchmarking):
+Uses the agentic-serving guide's `inference-perf` workload, tuned for the 480B model and very long (up to 256K-token) contexts: [`guides/agentic-serving/benchmark-templates/guide.yaml`](../agentic-serving/benchmark-templates/guide.yaml). It is parameterized on `CONCURRENCY_LEVEL` / `NUM_REQUESTS` / `SEED`; render it with `envsubst` and drive it against **this guide's** EPP via the `run_only.sh` runner from [`llm-d-benchmark`](https://github.com/llm-d/llm-d-benchmark), exactly as in the [agentic-serving Benchmarking steps](../agentic-serving/agentic-code-generation.md#benchmarking):
 
 ```bash
 # Fetch the existing-stack benchmark runner from llm-d-benchmark (the script the agentic-serving guide uses).
@@ -308,7 +308,7 @@ export IP=$(kubectl get service ${GUIDE_NAME}-epp -n ${NAMESPACE} -o jsonpath='{
 export CONCURRENCY_LEVEL=40
 export NUM_REQUESTS=$((20 * CONCURRENCY_LEVEL))
 export SEED=$((7 + CONCURRENCY_LEVEL))   # distinct per concurrency so prompt sets don't overlap across runs
-envsubst < ${REPO_ROOT}/guides/agentic-serving/benchmark-templates/agentic-code-gen.yaml > config.yaml
+envsubst < ${REPO_ROOT}/guides/agentic-serving/benchmark-templates/guide.yaml > config.yaml
 ./run_only.sh -c config.yaml -o ./results
 ```
 
