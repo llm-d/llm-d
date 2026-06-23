@@ -161,7 +161,7 @@ spec:
               # - name: OTEL_TRACES_SAMPLER_ARG
               #   value: "0.1"
               - name: VLLM_MEMORY_PROFILER_ESTIMATE_CUDAGRAPHS
-                value: "1"
+                value: "0"
               - name: MAX_TOKENS
                 value: "256"
               - name: DP_SIZE_LOCAL
