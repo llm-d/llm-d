@@ -117,6 +117,7 @@ spec:
                 exec vllm serve \
                   deepseek-ai/DeepSeek-R1-0528 \
                   --port 8200 \
+                  --enable-log-requests \
                   --disable-access-log-for-endpoints=/health,/metrics,/v1/models,/readyz \
                   --data-parallel-multi-port-external-lb \
                   --data-parallel-supervisor-port=8208 \

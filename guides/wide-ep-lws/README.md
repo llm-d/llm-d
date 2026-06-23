@@ -262,6 +262,8 @@ llmdbenchmark \
     --analyze
 ```
 
+lm_eval --model local-completions --model_args model=deepseek-ai/DeepSeek-R1-0528,base_url=http://10.16.2.104:80/v1/completions,num_concurrent=64,tokenized_requests=False --tasks gsm8k
+
 > [!NOTE]
 > Depending on your `cluster` you may need to extend the default `timeout` values to longer duration, as `bind`, `access` and `wait-timeout` times of `pvcs` and `pods` can be arbitrarily slower on other systems, please utilize `llmdbenchmark run --help` to view the knobs needed to increase those values.
 
