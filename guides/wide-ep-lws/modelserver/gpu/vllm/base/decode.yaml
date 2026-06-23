@@ -162,6 +162,8 @@ spec:
                 value: /usr/lib64
               - name: VLLM_SKIP_P2P_CHECK
                 value: "1"
+              - name: VLLM_WORKER_MULTIPROC_METHOD
+                value: "spawn"
               - name: VLLM_RANDOMIZE_DP_DUMMY_INPUTS
                 value: "1"
               - name: VLLM_USE_DEEP_GEMM
