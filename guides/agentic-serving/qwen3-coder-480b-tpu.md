@@ -87,10 +87,10 @@ For the default unified serving configuration (with KV offloading), apply the Ku
 kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/tpu/vllm/
 ```
 
-For the experimental P/D disaggregated configuration, apply the [reference manifests](./modelserver/tpu/disagg-reference.yaml) instead:
+For the experimental P/D disaggregated configuration, apply the Kustomize overlays:
 
 ```bash
-kubectl apply -f ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/tpu/disagg-reference.yaml -n ${NAMESPACE}
+kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/tpu/vllm-disagg/
 ```
 
 ## Verification
@@ -133,7 +133,7 @@ curl -X POST http://${IP}/v1/completions \
 
 ## Benchmarking
 
-This guide comes with an `inference-perf` benchmark preset (defined in [guide.yaml](benchmark-templates/guide.yaml)) designed for agentic code-generation workloads with multi-turn interactions and tool usage. The configuration parameters include:
+This guide comes with an `inference-perf` benchmark preset (defined in [agentic-code-gen.yaml](benchmark-templates/agentic-code-gen.yaml)) designed for agentic code-generation workloads with multi-turn interactions and tool usage. The configuration parameters include:
 
 | Workload Characteristic | Metric / Distribution Type | Min | Max | Mean / Constant | Std Dev | Description |
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
@@ -159,12 +159,12 @@ This guide comes with an `inference-perf` benchmark preset (defined in [guide.ya
 
 For the default unified configuration:
 ```bash
-curl -LJO "https://raw.githubusercontent.com/llm-d/llm-d/main/guides/${GUIDE_NAME}/benchmark-templates/guide.yaml"
+curl -LJO "https://raw.githubusercontent.com/llm-d/llm-d/main/guides/${GUIDE_NAME}/benchmark-templates/agentic-code-gen.yaml"
 ```
 
-For the experimental disaggregated configuration, download [guide-disagg.yaml](./benchmark-templates/guide-disagg.yaml):
+For the experimental disaggregated configuration, download [agentic-code-gen-capped-55k-disagg.yaml](./benchmark-templates/agentic-code-gen-capped-55k-disagg.yaml):
 ```bash
-curl -LJO "https://raw.githubusercontent.com/llm-d/llm-d/main/guides/${GUIDE_NAME}/benchmark-templates/guide-disagg.yaml"
+curl -LJO "https://raw.githubusercontent.com/llm-d/llm-d/main/guides/${GUIDE_NAME}/benchmark-templates/agentic-code-gen-capped-55k-disagg.yaml"
 ```
 
 ### 3. Execute Benchmark
@@ -180,14 +180,14 @@ export SEED=$((7 + CONCURRENCY_LEVEL))
 # For unified:
 export IP=$(kubectl get service ${GUIDE_NAME}-epp -n ${NAMESPACE} -o jsonpath='{.spec.clusterIP}')
 # For disaggregated:
-# export PROXY_IP=$(kubectl get service vllm-proxy-service -n ${NAMESPACE} -o jsonpath='{.spec.clusterIP}')
+# export PROXY_IP=$(kubectl get service agentic-serving-tpu-vllm-disagg-proxy -n ${NAMESPACE} -o jsonpath='{.spec.clusterIP}')
 # export IP="${PROXY_IP}:10000"
 
 # Render the configuration using the appropriate template:
 # For unified:
-envsubst < guide.yaml > config.yaml
+envsubst < agentic-code-gen.yaml > config.yaml
 # For disaggregated:
-# envsubst < guide-disagg.yaml > config.yaml
+# envsubst < agentic-code-gen-capped-55k-disagg.yaml > config.yaml
 
 ./run_only.sh -c config.yaml -o ./results
 ```
@@ -253,7 +253,7 @@ helm uninstall ${GUIDE_NAME} -n ${NAMESPACE}
 kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/tpu/vllm/
 
 # For disaggregated setup:
-# kubectl delete -f ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/tpu/disagg-reference.yaml -n ${NAMESPACE}
+# kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/tpu/vllm-disagg/
 
 kubectl delete namespace ${NAMESPACE}
 ```

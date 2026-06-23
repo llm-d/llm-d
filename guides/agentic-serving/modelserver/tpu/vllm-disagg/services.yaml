@@ -1,0 +1,35 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: prefill
+spec:
+  type: ClusterIP
+  selector:
+    llm-d.ai/role: prefill
+  ports:
+  - port: 8000
+    targetPort: 8000
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: decode
+spec:
+  type: ClusterIP
+  selector:
+    llm-d.ai/role: decode
+  ports:
+  - port: 8000
+    targetPort: 8000
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: proxy
+spec:
+  type: ClusterIP
+  selector:
+    llm-d.ai/role: proxy
+  ports:
+  - port: 10000
+    targetPort: 10000

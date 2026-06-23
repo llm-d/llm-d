@@ -1,0 +1,66 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: decode
+spec:
+  replicas: 3
+  strategy:
+    type: Recreate
+  template:
+    spec:
+      nodeSelector:
+        cloud.google.com/gke-tpu-accelerator: tpu7x
+        cloud.google.com/gke-tpu-topology: 2x2x1
+      containers:
+      - name: modelserver
+        command: [ "/bin/bash", "-c", "--" ]
+        args: 
+        - vllm serve --seed=42 --model=gs://vllm-tpu7x-gcsfuse-test/Qwen3-Coder-480B-A35B-Instruct-FP8 --served-model-name=Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8 --load-format=runai_streamer --max-model-len=65536 --max-num-batched-tokens=8192 --max-num-seqs=64 --no-enable-prefix-caching --tensor-parallel-size=8 --kv-cache-dtype=fp8 --gpu-memory-utilization=0.80 --async-scheduling --enable-expert-parallel --block-size=256 --kv-transfer-config '{"kv_connector":"TPUConnector","kv_connector_module_path":"tpu_inference.distributed.tpu_connector","kv_role":"kv_consumer"}'
+        env:
+        - name: VLLM_LOGGING_LEVEL
+          value: DEBUG
+        - name: MODEL_IMPL_TYPE
+          value: vllm
+        - name: USE_BATCHED_RPA_KERNEL
+          value: "1"
+        - name: JAX_PLATFORMS
+          value: tpu,cpu
+        - name: TPU_BACKEND_TYPE
+          value: jax
+        - name: PJRT_DEVICE
+          value: TPU
+        - name: USE_MOE_EP_KERNEL
+          value: "0"
+        - name: HF_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: llm-d-hf-token
+              key: HF_TOKEN
+        - name: HF_HOME
+          value: /usr/vllm
+        - name: TPU_MAX_HOST_KV_BUFFER_SIZE
+          value: "4"
+        resources:
+          limits:
+            google.com/tpu: "4"
+            memory: "900Gi"
+            cpu: "220"
+            ephemeral-storage: "40Gi"
+          requests:
+            google.com/tpu: "4"
+            memory: "900Gi"
+            cpu: "220"
+            ephemeral-storage: "40Gi"
+        volumeMounts:
+        - mountPath: /dev/shm
+          name: dshm
+        - mountPath: /usr/vllm
+          name: pvc-vllm-vol
+        - mountPath: /root/.cache
+          name: pvc-vllm-vol
+      volumes:
+      - name: dshm
+        emptyDir:
+          medium: Memory
+      - name: pvc-vllm-vol
+        emptyDir: {}
