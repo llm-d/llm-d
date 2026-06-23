@@ -20,7 +20,7 @@ patches:
         value:
           name: jit-cache
           hostPath:
-            path: /mnt/local/jit-cache-2
+            path: /mnt/local/jit-cache
             type: DirectoryOrCreate
       - op: add
         path: /spec/leaderWorkerTemplate/workerTemplate/spec/containers/0/env/-
