@@ -1,7 +1,7 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: mooncake-master
+  name: mooncake-master-store
 spec:
   replicas: 1
   strategy:
