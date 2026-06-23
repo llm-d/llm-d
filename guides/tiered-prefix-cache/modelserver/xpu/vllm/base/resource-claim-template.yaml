@@ -1,7 +1,9 @@
 apiVersion: resource.k8s.io/v1
 kind: ResourceClaimTemplate
 metadata:
-  name: gpu
+  name: tiered-prefix-cache-intel-claim-template-decode
+  labels:
+    llm-d.ai/role: decode
 spec:
   spec:
     devices:
@@ -9,3 +11,5 @@ spec:
         - name: gpu
           exactly:
             deviceClassName: gpu.intel.com
+            allocationMode: ExactCount
+            count: 4
