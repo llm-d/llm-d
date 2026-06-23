@@ -12,6 +12,13 @@ This guide demonstrates how to deploy DeepSeek-R1-0528 using vLLM's P/D disaggre
 * a 32xH200 cluster on GKE with RoCE networking
 * a 32xB200 cluster on GKE with RoCE networking
 
+> [!NOTE]
+> This guide uses a custom vLLM image built by llm-d to solve two issues:
+> A) NVSHMEM bug on RoCE impacting DeepEP HT - llm-d vendors a custom patch
+> B) vLLM v0.23.0-v0.24.0 bug with DP supervisor - llm-d builds a custom image
+>
+> We plan to migrate to the upstream vLLM images in an upcoming release
+
 ## Default Configuration
 
 | Parameter                | Value                                                   |
