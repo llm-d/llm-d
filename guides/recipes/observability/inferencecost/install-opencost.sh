@@ -15,8 +15,14 @@ ACTION="install"
 KUBERNETES_CONTEXT=""
 
 # Fork image override (set to non-empty to deploy a custom OpenCost image instead of the upstream release)
+OPENCOST_IMAGE_REGISTRY=""
 OPENCOST_IMAGE_REPO=""
 OPENCOST_IMAGE_TAG=""
+
+# Helm release name for OpenCost — derived from namespace after parse_args so it is
+# unique per install and avoids ClusterRole name collisions when multiple OpenCost
+# instances exist on the same cluster.
+OPENCOST_RELEASE_NAME=""
 
 ### HELP & LOGGING ###
 print_help() {
@@ -74,6 +80,10 @@ check_dependencies() {
   done
 }
 
+is_openshift() {
+  $KCMD api-resources --api-group=security.openshift.io 2>/dev/null | grep -q "SecurityContextConstraints"
+}
+
 check_cluster_reachability() {
   if ! $KCMD cluster-info &>/dev/null; then
     die "kubectl cannot reach a running Kubernetes cluster. Ensure your kubeconfig is set up correctly."
@@ -93,7 +103,16 @@ parse_args() {
       -g|--context)             KUBERNETES_CONTEXT="$2"; shift 2 ;;
       -y|--yes)                 YES=true; shift ;;
       -u|--uninstall)           ACTION="uninstall"; shift ;;
-      --image)                  OPENCOST_IMAGE_REPO="${2%%:*}"; OPENCOST_IMAGE_TAG="${2#*:}"; shift 2 ;;
+      --image)
+        # Split REPO:TAG, then split registry/repository on the first slash-delimited component
+        # e.g. ghcr.io/simanadler/opencost-inference:latest
+        #   -> registry=ghcr.io  repository=simanadler/opencost-inference  tag=latest
+        local _img="${2}"
+        OPENCOST_IMAGE_TAG="${_img##*:}"
+        local _repopath="${_img%%:*}"
+        OPENCOST_IMAGE_REGISTRY="${_repopath%%/*}"
+        OPENCOST_IMAGE_REPO="${_repopath#*/}"
+        shift 2 ;;
       -h|--help)                print_help; exit 0 ;;
       *)                        die "Unknown option: $1" ;;
     esac
@@ -109,17 +128,21 @@ setup_env() {
     KCMD="kubectl"
     HCMD="helm"
   fi
+  # Derive a unique Helm release name from the namespace so that cluster-scoped
+  # resources (ClusterRole, ClusterRoleBinding) don't collide when multiple
+  # OpenCost instances are installed on the same cluster.
+  OPENCOST_RELEASE_NAME="opencost-${OPENCOST_NAMESPACE}"
 }
 
 ### OPENCOST DETECTION ###
 detect_opencost() {
-  log_info "Checking for existing OpenCost installation..."
-  OPENCOST_RELEASE=$($HCMD list --all-namespaces -o json 2>/dev/null \
+  log_info "Checking for existing OpenCost installation in namespace ${OPENCOST_NAMESPACE}..."
+  OPENCOST_RELEASE=$($HCMD list -n "${OPENCOST_NAMESPACE}" -o json 2>/dev/null \
     | jq -r '.[] | select(.chart | startswith("opencost")) | "\(.namespace)/\(.name)/\(.app_version)"' \
     | head -1)
 
   if [[ -z "$OPENCOST_RELEASE" ]]; then
-    log_info "OpenCost not found — proceeding with install."
+    log_info "OpenCost not found in namespace ${OPENCOST_NAMESPACE} — proceeding with install."
     OPENCOST_EXISTS=false
     return
   fi
@@ -229,12 +252,78 @@ install_prometheus() {
 }
 
 ### LLM-D CONFIG CHECK ###
+
+# Local port used for the temporary Prometheus port-forward during checks.
+PROM_LOCAL_PORT=19090
+PROM_PF_PID=""
+
+start_prometheus_portforward() {
+  local prom_svc prom_ns
+  prom_svc=$(echo "$PROMETHEUS_ENDPOINT" | sed 's|http[s]*://||' | cut -d. -f1)
+  prom_ns=$(echo "$PROMETHEUS_ENDPOINT" | sed 's|http[s]*://||' | cut -d. -f2)
+
+  # Kill any leftover port-forward on this port from a previous run
+  local stale
+  stale=$(lsof -ti tcp:"${PROM_LOCAL_PORT}" 2>/dev/null || true)
+  [[ -n "$stale" ]] && kill $stale 2>/dev/null || true
+
+  # Check if the endpoint is already reachable (e.g. running inside the cluster)
+  if curl -sf --max-time 3 "${PROMETHEUS_ENDPOINT}/api/v1/query?query=up" &>/dev/null; then
+    return 0
+  fi
+
+  log_info "Starting temporary port-forward to Prometheus for config checks..."
+  $KCMD port-forward -n "${prom_ns}" "svc/${prom_svc}" "${PROM_LOCAL_PORT}:80" &
+  PROM_PF_PID=$!
+  # Wait for the port-forward to be ready
+  local i=0
+  while [[ $i -lt 15 ]]; do
+    if curl -sf --max-time 2 "http://localhost:${PROM_LOCAL_PORT}/api/v1/query?query=up" &>/dev/null; then
+      log_success "Port-forward to Prometheus established on localhost:${PROM_LOCAL_PORT}"
+      return 0
+    fi
+    sleep 1
+    (( i++ ))
+  done
+  log_warn "Could not establish port-forward to Prometheus — config checks may fail."
+}
+
+stop_prometheus_portforward() {
+  if [[ -n "$PROM_PF_PID" ]]; then
+    kill "$PROM_PF_PID" 2>/dev/null || true
+    wait "$PROM_PF_PID" 2>/dev/null || true
+    PROM_PF_PID=""
+  fi
+}
+
+# Returns the first scalar value from a Prometheus instant query, or empty string on no data/error.
 query_prometheus() {
   local query="$1"
+  local endpoint
+  if curl -sf --max-time 2 "http://localhost:${PROM_LOCAL_PORT}/api/v1/query?query=up" &>/dev/null; then
+    endpoint="http://localhost:${PROM_LOCAL_PORT}"
+  else
+    endpoint="$PROMETHEUS_ENDPOINT"
+  fi
   curl -sf --max-time 10 \
-    "${PROMETHEUS_ENDPOINT}/api/v1/query" \
+    "${endpoint}/api/v1/query" \
     --data-urlencode "query=${query}" \
-    | jq -r '.data.result'
+    | jq -r '.data.result[0].value[1] // empty' 2>/dev/null || true
+}
+
+# Returns all label values for a given label from a Prometheus instant query.
+query_prometheus_labels() {
+  local query="$1" label="$2"
+  local endpoint
+  if curl -sf --max-time 2 "http://localhost:${PROM_LOCAL_PORT}/api/v1/query?query=up" &>/dev/null; then
+    endpoint="http://localhost:${PROM_LOCAL_PORT}"
+  else
+    endpoint="$PROMETHEUS_ENDPOINT"
+  fi
+  curl -sf --max-time 10 \
+    "${endpoint}/api/v1/query" \
+    --data-urlencode "query=${query}" \
+    | jq -r --arg l "$label" '.data.result[].metric[$l] // empty' 2>/dev/null | sort -u || true
 }
 
 check_llmd_config() {
@@ -245,41 +334,40 @@ check_llmd_config() {
   # 1. kube-state-metrics exposes llm-d.ai/model in kube_pod_labels
   local ksm_result
   ksm_result=$(query_prometheus 'count(kube_pod_labels{label_llm_d_ai_model!=""})' 2>/dev/null || echo "")
-  if echo "$ksm_result" | grep -qE '"value":\["[0-9]+","[1-9]'; then
-    pass "kube-state-metrics exposes llm-d.ai/model in kube_pod_labels"
+  if [[ -n "$ksm_result" && "$ksm_result" != "0" ]]; then
+    pass "kube-state-metrics exposes llm-d.ai/model in kube_pod_labels ($ksm_result pod(s))"
   else
     fail "kube-state-metrics does not expose llm-d.ai/model in kube_pod_labels"
     log_error "  Fix: add metricLabelsAllowlist to kube-prometheus-stack values and run: helm upgrade ${PROMETHEUS_RELEASE_NAME}"
     ((errors++))
   fi
 
-  # 2. vLLM pods carry llm-d.ai/inference-serving=true
+  # 2. Shared infrastructure pods (router/EPP/gateway) carry llm-d.ai/inference-shared=true
   local serving_pods
-  serving_pods=$($KCMD get pods --all-namespaces -l "llm-d.ai/inference-serving=true" \
+  serving_pods=$($KCMD get pods --all-namespaces -l "llm-d.ai/inference-shared=true" \
     --no-headers 2>/dev/null | wc -l)
   if [[ "$serving_pods" -gt 0 ]]; then
-    pass "Found $serving_pods pod(s) with llm-d.ai/inference-serving=true"
+    pass "Found $serving_pods shared infrastructure pod(s) with llm-d.ai/inference-shared=true"
   else
-    fail "No pods found with llm-d.ai/inference-serving=true"
-    log_error "  Fix: ensure vLLM pod templates carry the label llm-d.ai/inference-serving=true"
-    ((errors++))
+    log_warn "  [WARN] No pods found with llm-d.ai/inference-shared=true"
+    log_warn "  This is expected if llm-d router/EPP/gateway are not yet deployed."
+    log_warn "  Fix: ensure shared infrastructure pod templates carry the label llm-d.ai/inference-shared=true"
   fi
 
   # 3. vLLM token metrics present in Prometheus
   local token_result
   token_result=$(query_prometheus 'count(vllm:prompt_tokens_total)' 2>/dev/null || echo "")
-  if echo "$token_result" | grep -qE '"value":\["[0-9]+","[1-9]'; then
-    pass "vLLM token metrics (vllm:prompt_tokens_total) present in Prometheus"
+  if [[ -n "$token_result" && "$token_result" != "0" ]]; then
+    pass "vLLM token metrics (vllm:prompt_tokens_total) present in Prometheus ($token_result series)"
   else
-    fail "No vllm:prompt_tokens_total metrics found in Prometheus"
-    log_error "  Fix: ensure PodMonitors are deployed and vLLM pods are running and being scraped"
-    ((errors++))
+    log_warn "  [WARN] No vllm:prompt_tokens_total metrics found in Prometheus"
+    log_warn "  If Prometheus was just installed, wait ~2 minutes for the first scrape window and re-run."
+    log_warn "  Fix: ensure PodMonitors are deployed and vLLM pods are running and being scraped"
   fi
 
   # 4. model_name in vLLM metrics matches llm-d.ai/model pod labels
   local metric_models pod_models mismatches
-  metric_models=$(query_prometheus 'group by(model_name)(vllm:prompt_tokens_total)' 2>/dev/null \
-    | jq -r '.[].metric.model_name // empty' | sort -u || echo "")
+  metric_models=$(query_prometheus_labels 'group by(model_name)(vllm:prompt_tokens_total)' 'model_name' 2>/dev/null || echo "")
   pod_models=$($KCMD get pods --all-namespaces -l "llm-d.ai/inference-serving=true" \
     -o jsonpath='{.items[*].metadata.labels.llm-d\.ai/model}' 2>/dev/null \
     | tr ' ' '\n' | sort -u || echo "")
@@ -413,6 +501,48 @@ EOF
   log_info "Pricing config written to /tmp/opencost-pricing.json"
 }
 
+### OPENSHIFT SCC ###
+apply_openshift_sccs() {
+  local prom_release="$1"   # e.g. llm-d-test-prom
+  local oc_release="$2"     # e.g. opencost-llm-d-cost-test
+  local ns="$3"
+
+  if ! command -v oc &>/dev/null; then
+    log_warn "oc not found — cannot apply OpenShift SCCs automatically."
+    log_warn "Apply them manually before pods will schedule:"
+    log_warn "  oc adm policy add-scc-to-user privileged -z ${prom_release}-prometheus-server -n ${ns}"
+    log_warn "  oc adm policy add-scc-to-user privileged -z ${prom_release}-kube-state-metrics -n ${ns}"
+    log_warn "  oc adm policy add-scc-to-user privileged -z ${prom_release}-prometheus-node-exporter -n ${ns}"
+    log_warn "  oc adm policy add-scc-to-user anyuid -z ${oc_release} -n ${ns}"
+    return
+  fi
+
+  log_info "OpenShift detected — applying required SCCs in namespace ${ns}..."
+
+  # prometheus-server and kube-state-metrics set seccompProfile=RuntimeDefault, which anyuid
+  # forbids on some clusters — use privileged to allow any seccomp profile and any UID.
+  oc adm policy add-scc-to-user privileged \
+    -z "${prom_release}-prometheus-server" -n "${ns}" 2>/dev/null || true
+  oc adm policy add-scc-to-user privileged \
+    -z "${prom_release}-kube-state-metrics" -n "${ns}" 2>/dev/null || true
+  oc adm policy add-scc-to-user privileged \
+    -z "${prom_release}-prometheus-node-exporter" -n "${ns}" 2>/dev/null || true
+  oc adm policy add-scc-to-user anyuid \
+    -z "${oc_release}" -n "${ns}" 2>/dev/null || true
+
+  log_info "Restarting workloads to pick up new SCCs..."
+  $KCMD rollout restart \
+    deployment/"${prom_release}-prometheus-server" \
+    deployment/"${prom_release}-kube-state-metrics" \
+    deployment/"${oc_release}" \
+    -n "${ns}" 2>/dev/null || true
+  $KCMD rollout restart \
+    daemonset/"${prom_release}-prometheus-node-exporter" \
+    -n "${ns}" 2>/dev/null || true
+
+  log_success "OpenShift SCCs applied and workloads restarted."
+}
+
 ### INSTALL ###
 install_opencost() {
   local script_dir
@@ -424,30 +554,48 @@ install_opencost() {
     $KCMD create namespace "${OPENCOST_NAMESPACE}"
   fi
 
-  # Deploy pricing ConfigMap
+  # Deploy pricing ConfigMap with Helm adoption annotations so the opencost
+  # Helm release can manage it without ownership conflicts.
   log_info "Deploying pricing ConfigMap..."
   $KCMD create configmap opencost-custom-pricing \
     --from-file=default.json=/tmp/opencost-pricing.json \
     --namespace "${OPENCOST_NAMESPACE}" \
-    --dry-run=client -o yaml | $KCMD apply -f -
+    --dry-run=client -o yaml \
+  | $KCMD annotate --local -f - \
+      meta.helm.sh/release-name="${OPENCOST_RELEASE_NAME}" \
+      meta.helm.sh/release-namespace="${OPENCOST_NAMESPACE}" \
+      -o yaml \
+  | $KCMD label --local -f - \
+      app.kubernetes.io/managed-by=Helm \
+      -o yaml \
+  | $KCMD apply -f -
 
-  # Deploy metrics-config ConfigMap (label whitelist)
+  # Deploy metrics-config ConfigMap with Helm adoption annotations.
   log_info "Deploying metrics-config ConfigMap..."
   $KCMD apply -n "${OPENCOST_NAMESPACE}" \
     -f "${script_dir}/manifests/metrics-config.yaml"
+  $KCMD annotate configmap metrics-config -n "${OPENCOST_NAMESPACE}" \
+    meta.helm.sh/release-name="${OPENCOST_RELEASE_NAME}" \
+    meta.helm.sh/release-namespace="${OPENCOST_NAMESPACE}" \
+    --overwrite
+  $KCMD label configmap metrics-config -n "${OPENCOST_NAMESPACE}" \
+    app.kubernetes.io/managed-by=Helm \
+    --overwrite
 
   # Add Helm repo
-  if ! $HCMD repo list 2>/dev/null | grep -q "opencost"; then
+  if ! $HCMD repo list 2>/dev/null | grep -q "https://opencost.github.io/opencost-helm-chart"; then
     log_info "Adding opencost Helm repo..."
-    $HCMD repo add opencost https://opencost.github.io/opencost-helm-chart
+    $HCMD repo add opencost-charts https://opencost.github.io/opencost-helm-chart
     $HCMD repo update
   fi
 
-  # Build Prometheus service name from endpoint (strip protocol/port for Helm)
-  local prom_svc prom_ns
-  # Extract svc name from endpoint URL e.g. http://llmd-kube-...-prometheus.ns.svc.cluster.local:9090
+  # Build Prometheus service name/namespace/port from endpoint URL for Helm values
+  # e.g. http://llmd-kube-prometheus-stack-prometheus.ns.svc.cluster.local:9090
+  local prom_svc prom_ns prom_port
   prom_svc=$(echo "$PROMETHEUS_ENDPOINT" | sed 's|http[s]*://||' | cut -d. -f1)
   prom_ns=$(echo "$PROMETHEUS_ENDPOINT" | sed 's|http[s]*://||' | cut -d. -f2)
+  prom_port=$(echo "$PROMETHEUS_ENDPOINT" | grep -oE ':[0-9]+$' | tr -d ':')
+  prom_port="${prom_port:-9090}"
 
   # Generate merged values
   cat > /tmp/opencost-values.yaml <<EOF
@@ -455,22 +603,16 @@ opencost:
   exporter:
     defaultClusterId: "${CLUSTER_ID}"
     extraEnv:
-      - name: INFERENCE_COST_ENABLED
-        value: "true"
-      - name: INFERENCE_MODEL_LABEL
-        value: "llm-d.ai/model"
-      - name: INFERENCE_SHARED_INFRA_LABEL
-        value: "llm-d.ai/inference-serving"
-      - name: INFERENCE_SHARED_INFRA_LABEL_VALUE
-        value: "true"
-      - name: INFERENCE_KV_CACHE_BLOCK_SIZE
-        value: "16"
+      INFERENCE_COST_ENABLED: "true"
+      INFERENCE_MODEL_LABEL: "llm-d.ai/model"
+      INFERENCE_SHARED_INFRA_LABEL: "llm-d.ai/inference-shared"
+      INFERENCE_SHARED_INFRA_LABEL_VALUE: "true"
   prometheus:
     internal:
       enabled: true
       serviceName: "${prom_svc}"
       namespaceName: "${prom_ns}"
-      port: 9090
+      port: ${prom_port}
   metrics:
     serviceMonitor:
       enabled: true
@@ -490,11 +632,12 @@ EOF
   if [[ -n "$OPENCOST_IMAGE_REPO" ]]; then
     log_info "Using custom OpenCost image: ${OPENCOST_IMAGE_REPO}:${OPENCOST_IMAGE_TAG}"
     image_sets=(
+      --set "opencost.exporter.image.registry=${OPENCOST_IMAGE_REGISTRY}"
       --set "opencost.exporter.image.repository=${OPENCOST_IMAGE_REPO}"
       --set "opencost.exporter.image.tag=${OPENCOST_IMAGE_TAG}"
     )
   fi
-  $HCMD install opencost opencost/opencost \
+  $HCMD install "${OPENCOST_RELEASE_NAME}" opencost-charts/opencost \
     --namespace "${OPENCOST_NAMESPACE}" \
     --create-namespace \
     -f /tmp/opencost-values.yaml \
@@ -503,24 +646,61 @@ EOF
   rm -f /tmp/opencost-values.yaml /tmp/opencost-pricing.json
 
   log_success "OpenCost installed."
+
+  if is_openshift; then
+    apply_openshift_sccs \
+      "${PROMETHEUS_RELEASE_NAME}" \
+      "${OPENCOST_RELEASE_NAME}" \
+      "${OPENCOST_NAMESPACE}"
+  fi
   echo ""
   log_info "Access the OpenCost UI:"
-  log_info "  kubectl port-forward -n ${OPENCOST_NAMESPACE} svc/opencost 9090:9090"
+  log_info "  kubectl port-forward -n ${OPENCOST_NAMESPACE} svc/${OPENCOST_RELEASE_NAME} 9090:9090"
   log_info "  Open: http://localhost:9090"
   echo ""
-  log_info "Verify inference cost metrics after vLLM pods generate traffic:"
-  log_info "  kubectl port-forward -n ${OPENCOST_NAMESPACE} svc/opencost 9003:9003"
-  log_info "  curl http://localhost:9003/metrics | grep llm_"
+  local prom_svc_name
+  prom_svc_name=$(echo "$PROMETHEUS_ENDPOINT" | sed 's|http[s]*://||' | cut -d. -f1)
+  log_info "Access the Prometheus UI:"
+  log_info "  kubectl port-forward -n ${OPENCOST_NAMESPACE} svc/${prom_svc_name} 9092:80"
+  log_info "  Open: http://localhost:9092"
+  echo ""
+  log_info "Query inference cost metrics (start a port-forward first):"
+  log_info "  kubectl port-forward -n ${OPENCOST_NAMESPACE} svc/${OPENCOST_RELEASE_NAME} 9003:9003"
+  echo ""
+  log_info "  # Raw Prometheus gauges:"
+  log_info "  curl -s http://localhost:9003/metrics | grep llm_"
+  echo ""
+  log_info "  # Cost time series for the last 5 hours, broken down by model:"
+  log_info "  curl 'http://localhost:9003/inferenceCost/timeseries?window=5h&aggregate=model_name&accumulate=hour'"
+}
+
+wait_for_prometheus_scrape() {
+  local timeout=120
+  local interval=5
+  local elapsed=0
+  log_info "Waiting for Prometheus to complete its first scrape (up to ${timeout}s)..."
+  while [[ $elapsed -lt $timeout ]]; do
+    local result
+    result=$(query_prometheus 'count(kube_state_metrics_build_info)' 2>/dev/null || echo "")
+    if [[ -n "$result" && "$result" != "0" ]]; then
+      log_success "Prometheus has scraped kube-state-metrics."
+      return 0
+    fi
+    sleep "$interval"
+    elapsed=$(( elapsed + interval ))
+    log_info "  Still waiting... (${elapsed}s)"
+  done
+  log_warn "Timed out waiting for Prometheus scrape — running checks anyway."
 }
 
 ### UNINSTALL ###
 uninstall_opencost() {
   log_info "Uninstalling OpenCost..."
-  if $HCMD list -n "${OPENCOST_NAMESPACE}" | grep -q "opencost"; then
-    $HCMD uninstall opencost -n "${OPENCOST_NAMESPACE}"
+  if $HCMD list -n "${OPENCOST_NAMESPACE}" | grep -q "${OPENCOST_RELEASE_NAME}"; then
+    $HCMD uninstall "${OPENCOST_RELEASE_NAME}" -n "${OPENCOST_NAMESPACE}"
     log_success "OpenCost uninstalled."
   else
-    log_warn "OpenCost not found in namespace ${OPENCOST_NAMESPACE}."
+    log_warn "OpenCost release '${OPENCOST_RELEASE_NAME}' not found in namespace ${OPENCOST_NAMESPACE}."
   fi
 
   if $KCMD get configmap opencost-custom-pricing -n "${OPENCOST_NAMESPACE}" &>/dev/null; then
@@ -549,7 +729,9 @@ main() {
   if [[ "$OPENCOST_EXISTS" == "true" ]]; then
     detect_prometheus || true
     if [[ -n "$PROMETHEUS_ENDPOINT" ]]; then
+      start_prometheus_portforward
       check_llmd_config
+      stop_prometheus_portforward
     else
       log_warn "Could not determine Prometheus endpoint — skipping llm-d config checks."
       log_warn "Re-run with --prometheus-endpoint to enable full validation."
@@ -571,10 +753,13 @@ main() {
   # Step 4: Install
   install_opencost
 
-  # Step 5: Check llm-d config
+  # Step 5: Wait for Prometheus to scrape, then check llm-d config
   echo ""
+  start_prometheus_portforward
+  wait_for_prometheus_scrape
   log_info "Running llm-d configuration checks..."
   check_llmd_config || true
+  stop_prometheus_portforward
 }
 
 main "$@"

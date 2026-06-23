@@ -2,22 +2,16 @@ opencost:
   exporter:
     defaultClusterId: "${CLUSTER_ID}"   # filled by installer
     extraEnv:
-      - name: INFERENCE_COST_ENABLED
-        value: "true"
-      - name: INFERENCE_MODEL_LABEL
-        value: "llm-d.ai/model"
-      - name: INFERENCE_SHARED_INFRA_LABEL
-        value: "llm-d.ai/inference-serving"
-      - name: INFERENCE_SHARED_INFRA_LABEL_VALUE
-        value: "true"
-      - name: INFERENCE_KV_CACHE_BLOCK_SIZE
-        value: "16"   # match vLLM --block-size; set to 0 to disable KV cache correction
+      INFERENCE_COST_ENABLED: "true"
+      INFERENCE_MODEL_LABEL: "llm-d.ai/model"
+      INFERENCE_SHARED_INFRA_LABEL: "llm-d.ai/inference-shared"
+      INFERENCE_SHARED_INFRA_LABEL_VALUE: "true"
   prometheus:
     internal:
       enabled: true
       serviceName: "${PROMETHEUS_SVC}"  # filled by installer
       namespaceName: "${PROMETHEUS_NS}" # filled by installer
-      port: 9090
+      port: 80        # 80 for standalone prometheus chart; 9090 for kube-prometheus-stack
   metrics:
     serviceMonitor:
       enabled: true                     # requires Prometheus Operator CRDs

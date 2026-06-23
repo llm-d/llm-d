@@ -1,6 +1,6 @@
 # Inference Cost Tracking
 
-This recipe installs [OpenCost](https://www.opencost.io/) with its inference cost module, enabling per-model cost attribution for llm-d workloads. Once deployed, OpenCost correlates vLLM token throughput metrics with Kubernetes allocation costs and exposes cost-per-million-tokens broken down by model and namespace.
+This recipe installs [OpenCost](https://www.opencost.io/) with its [inference cost module](https://github.com/simanadler/opencost/blob/inference-v1/docs/inference-cost-tracking.md), enabling per-model cost attribution for llm-d workloads. Once deployed, OpenCost correlates vLLM token throughput metrics with Kubernetes allocation costs and exposes overall costs and cost-per-million-tokens.
 
 ## How it works
 
@@ -13,14 +13,13 @@ The join key is `model_name:namespace`. llm-d guides set `--served-model-name=<s
 
 The following Prometheus metrics are produced by OpenCost after install:
 
-| Metric | Description |
-|---|---|
-| `llm_total_cost` | Total infrastructure cost attributed to the model |
-| `llm_cost_per_million_tokens` | Cost per million tokens (prompt + generation) |
-| `llm_prompt_tokens_total` | Cumulative prompt tokens by model |
-| `llm_generation_tokens_total` | Cumulative generation tokens by model |
+| Metric | Labels | Description |
+|---|---|---|
+| `llm_total_cost` | `model_name`, `model_version`, `namespace`, `cost_basis` | Instantaneous hourly infrastructure cost rate ($/hour) attributed to the model — not a cumulative counter. `cost_basis` is `allocation` (max(request,usage) × price + idle/shared share; use for chargeback) or `usage` (actual consumption only, excludes idle and shared infra; use for efficiency analysis) |
+| `llm_cost_per_million_tokens` | `model_name`, `model_version`, `namespace`, `cost_basis`, `phase`, `allocation_method` | Cost per 1M tokens. `phase` is empty for blended (input+output combined), `prompt` for input-only, or `generation` for output-only. `allocation_method` is `compute_time` (split by vLLM prefill/decode time), `prefix_caching_off` (time-based split, prefix caching disabled), `multiplier` (fixed 2.5× ratio, timing metrics unavailable), or empty (no tokens processed or join failed) |
+| `llm_cache_savings_fraction` | `model_name`, `model_version`, `namespace` | Fraction of prompt tokens served from the KV cache (0–1); zero when prefix caching is disabled, no cache hits occurred, or `vllm:prefix_cache_hits_total` is missing |
 
-All metrics carry `model_name`, `namespace`, and `cost_basis` labels. They are available on OpenCost's `/metrics` endpoint (port 9003) and, if a ServiceMonitor is deployed, in Prometheus.
+All metrics are available on OpenCost's `/metrics` endpoint (port 9003) and, if a ServiceMonitor is deployed, in Prometheus.
 
 ## Deployment topology
 
@@ -30,14 +29,15 @@ Install OpenCost and Prometheus **once per cluster**, not once per llm-d instanc
 - A single Prometheus with cluster-wide scraping (`serviceMonitorNamespaceSelector: {}`) collects vLLM metrics from all namespaces — no per-namespace configuration needed
 - The OpenCost UI and `/inferenceCost` API give you cross-namespace cost aggregation out of the box, which is not possible if each llm-d instance has its own OpenCost
 
-The installer deploys into a dedicated monitoring namespace (default: `llm-d-monitoring`) that is separate from your llm-d workload namespaces. When using `install-prometheus-grafana.sh` to install Prometheus, pass `--central` to configure it for cluster-wide scraping.
+The installer deploys into a dedicated monitoring namespace (default: `llm-d-monitoring`) that is separate from your llm-d workload namespaces. `install-prometheus-grafana.sh` installs Prometheus with cluster-wide scraping enabled by default, so no extra flags are needed when using it alongside this installer.
 
 If your cluster already has a shared Prometheus (such as OpenShift's user workload monitoring or an existing kube-prometheus-stack), point the installer at it with `--prometheus-endpoint` instead of installing a new one.
 
 ## Prerequisites
 
 - Prometheus is installed and scraping vLLM pods (see [install-prometheus-grafana.sh](../install-prometheus-grafana.sh))
-- vLLM pods carry the `llm-d.ai/inference-serving: "true"` and `llm-d.ai/model: <short-name>` labels
+- Model-serving pods carry the `llm-d.ai/model: <short-name>` label
+- Shared infrastructure pods (router/EPP/gateway) carry the `llm-d.ai/inference-shared: "true"` label
 - `helm`, `kubectl`, and `jq` are available on your PATH
 - Access to a running Kubernetes cluster
 
@@ -129,8 +129,8 @@ curl -s http://localhost:9003/metrics | grep llm_
 Expected output includes lines like:
 
 ```
-llm_cost_per_million_tokens{model_name="Qwen3-32B",namespace="llm-d",cost_basis="allocation"} 4.21
-llm_total_cost{model_name="Qwen3-32B",namespace="llm-d",cost_basis="allocation"} 0.037
+llm_cost_per_million_tokens{model_name="Qwen3-32B",model_version="unknown",namespace="llm-d",cost_basis="allocation",phase="",allocation_method=""} 4.21
+llm_total_cost{model_name="Qwen3-32B",model_version="unknown",namespace="llm-d",cost_basis="allocation"} 0.037
 ```
 
 If the metrics are empty, generate some traffic first (the module requires at least one completed request window).
@@ -151,11 +151,11 @@ With the port-forward above active, two on-demand cost query endpoints are avail
 # Total cost by model for the last hour
 curl "http://localhost:9003/inferenceCost/total?window=1h"
 
-# Cost time series, aggregated by model, for the last 24 hours
-curl "http://localhost:9003/inferenceCost/timeseries?window=24h&aggregate=model_name"
+# Cost time series, aggregated by model, for the last 24 hours (accumulate is required)
+curl "http://localhost:9003/inferenceCost/timeseries?window=24h&aggregate=model_name&accumulate=hour" | jq .
 ```
 
-For the full API reference — available query parameters, filtering, aggregation options, and response schema — see the [OpenCost REST API Endpoints documentation](https://github.com/opencost/opencost/blob/main/docs/inference-cost-tracking.md#rest-api-endpoints).
+For the full API reference — available query parameters, filtering, aggregation options, and response schema — see the [OpenCost REST API Endpoints documentation](https://github.com/simanadler/opencost/blob/inference-v1/docs/inference-cost-tracking.md#rest-api-endpoints) in the fork (the link will move to upstream once the feature is merged).
 
 ### Run the llm-d config checks
 
@@ -168,7 +168,7 @@ Re-run the installer against an existing OpenCost deployment to validate the llm
 The script checks:
 
 1. kube-state-metrics exposes `llm-d.ai/model` in `kube_pod_labels`
-2. vLLM pods carry `llm-d.ai/inference-serving=true`
+2. Shared infrastructure pods carry `llm-d.ai/inference-shared=true`
 3. `vllm:prompt_tokens_total` metrics are present in Prometheus
 4. The `model_name` label in vLLM metrics matches `llm-d.ai/model` pod labels
 5. `INFERENCE_COST_ENABLED=true` is set in the OpenCost pod
@@ -182,10 +182,27 @@ The installer configures OpenCost's exporter with the following environment vari
 | Variable | Value | Description |
 |---|---|---|
 | `INFERENCE_COST_ENABLED` | `true` | Activates the inference cost module |
-| `INFERENCE_MODEL_LABEL` | `llm-d.ai/model` | Pod label used to group allocation costs by model |
-| `INFERENCE_SHARED_INFRA_LABEL` | `llm-d.ai/inference-serving` | Pod label that identifies inference workloads |
+| `INFERENCE_MODEL_LABEL` | `llm-d.ai/model` | Pod label whose value must exactly match vLLM's `model_name` metric label — used as the join key for cost attribution |
+| `INFERENCE_SHARED_INFRA_LABEL` | `llm-d.ai/inference-shared` | Pod label that identifies shared infrastructure pods |
 | `INFERENCE_SHARED_INFRA_LABEL_VALUE` | `true` | Expected value of the shared infra label |
-| `INFERENCE_KV_CACHE_BLOCK_SIZE` | `16` | Must match vLLM `--block-size`; set to `0` to disable KV cache correction |
+| `INFERENCE_COLLECTION_INTERVAL` | `2m` | How often the background collector runs and refreshes the `llm_*` Prometheus gauges |
+
+#### Label usage clarification
+
+OpenCost uses two different labels to track inference costs:
+
+1. **`llm-d.ai/model: <model-name>`** — Applied to model-serving pods (vLLM decode/prefill deployments)
+   - Used to attribute costs directly to specific models
+   - Example: `llm-d.ai/model: Qwen3-32B`
+   - These pods serve specific models and their costs are tracked per-model
+
+2. **`llm-d.ai/inference-shared: "true"`** — Applied to shared infrastructure pods (router/EPP/gateway)
+   - Used to identify pods that provide shared services across multiple models
+   - These pods don't serve a specific model but support the inference pipeline
+   - Their costs are distributed proportionally across the models they serve
+   - Example components: llm-d router (EPP), Envoy gateway, request preprocessing services
+
+**Important:** Model-serving pods should have the `model` label, NOT the `inference-shared` label. The `inference-shared` label is only for shared infrastructure components.
 
 ### kube-state-metrics label allowlist
 
@@ -194,7 +211,7 @@ The `install-prometheus-grafana.sh` script (when used to install Prometheus for 
 ```yaml
 kube-state-metrics:
   metricLabelsAllowlist:
-    - pods=[llm-d.ai/role,llm-d.ai/model,llm-d.ai/accelerator-vendor,llm-d.ai/accelerator-variant,llm-d.ai/engine-type,llm-d.ai/inference-serving,llm-d.ai/managed]
+    - pods=[llm-d.ai/role,llm-d.ai/model,llm-d.ai/accelerator-vendor,llm-d.ai/accelerator-variant,llm-d.ai/engine-type,llm-d.ai/inference-serving,llm-d.ai/managed, llm-d.ai/inference-shared]
     - nodes=[llm-d.ai/accelerator-vendor,llm-d.ai/accelerator-variant]
 ```
 
