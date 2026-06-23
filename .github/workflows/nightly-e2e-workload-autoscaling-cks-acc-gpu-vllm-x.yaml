@@ -97,7 +97,7 @@ jobs:
       image_tag: ${{ steps.build.outputs.image_tag }}
     steps:
       - name: Checkout WVA source
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           repository: llm-d/llm-d-workload-variant-autoscaler
           ref: ${{ github.event.inputs.caller_ref || 'main' }}
