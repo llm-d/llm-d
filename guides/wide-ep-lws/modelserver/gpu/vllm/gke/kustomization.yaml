@@ -8,7 +8,7 @@ components:
 images:
   - name: docker.io/vllm/vllm-openai
     newName: ghcr.io/llm-d/llm-d-cuda-dev
-    newTag: sha-6a1446a
+    newTag: sha-2105874
 
 patches:
   - target:
