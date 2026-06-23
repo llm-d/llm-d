@@ -27,110 +27,6 @@ The tiers each path supports differ — see the table above. For example, the vL
 
 We recommend each model server's **native** offloading path: the `OffloadingConnector` on vLLM, and HiCache — its equivalent — on SGLang. Native offloading is low-overhead, requires no extra components, and enabling the CPU tier is appropriate in almost all deployments. Reach for a non-native connector (for example LMCache) only when you need a capability the native path does not yet provide.
 
-* Little operational overhead.
-* There are usually more CPU RAM storage available than accelerator HBM on the host offering much larger cache capacity.
-* CPU - accelerator transfer is faster than recomputation for most cases.
-* (WIP) Prefix cache storage tier aware optimized baseline makes smart decisions based on cache tier (accelerator HBM vs. CPU RAM).
-
-In low cache size scenario where HBM is primarily used, async CPU offloading should incur little overhead. In high cache size scenario loading cache from CPU RAM offers significantly higher cache hit and thus better performance than HBM only.
-
-### Local Disk
-
-Utilizing local disk storage can significantly increase the cache capacity. However disks are typically significantly slower than CPU RAM.
-
-Consider this when:
-
-* your workload can tolerate the latency overhead.
-* the cache capacity of local disks is sufficient for your use case.
-
-Otherwise we recommend a shared storage because it offers cache sharing between instances, has more options to choose from to get a good tradeoff between cost and performance, and offers significantly larger capacity.
-
-### Shared Storage
-
-Offloading prefix cache to a shared (remote) storage tier provides several important benefits beyond local CPU or disk caching:
-
-* **Extended cache capacity** - Offers massive storage capacity that is independent of the inference engine deployment size.
-* **Shared KV-cache across nodes** - Multiple inference replicas can access and reuse the same prefix cache.
-* **Fast scale-up** - New nodes can immediately reuse existing KV-cache data without warming the cache from scratch.
-* **Persistence across restarts or failures** - KV-cache data survives pod restarts, rescheduling, and node failures.
-* **Enterprise storage integration** - Can leverage mature enterprise storage systems (for example CephFS, GCP Lustre, IBM Storage Scale) with built-in durability, monitoring, and access control.
-
-However, shared storage introduces additional operational and performance considerations. Latency and throughput depend on the characteristics of the underlying storage system, so careful evaluation is required to ensure that cache transfer overhead does not negatively impact inference performance.
-
-Integration between the storage system and llm-d is achieved through vLLM connectors. The specific connector and data path depend on the storage system type and the underlying transport mechanism. Any storage connector that is compatible with vLLM can be used **transparently within the llm-d project**.
-
-### P2P Cache Sharing
-
-A P2P network can be formed between the inference engine instances to share caches in HBMs or CPU memory. It enables more cache sharing without needing additional storage resources. However this strategy adds operational overhead, and potential contention between model parallelism traffic such as tensor parallelism. We will add more recommendations in the following releases.
-
-## Cache Tiering
-
-Generally multiple cache tiers can be applied ordered by their cache read/write latencies, allowing frequently accessed caches to stay as close as possible to the accelerator, and large or less frequently accessed caches to be offloaded to slower tiers. We recommend always setting up HBM and CPU RAM tiers, and consider a third or fourth tier when your cache needs goes beyond HBM + CPU RAM.
-
----
-
-## Supported Connectors
-
-| Connector | Storage Tier | Directory |
-| --------- | ------------ | --------- |
-| vLLM Native OffloadingConnector | CPU RAM | `modelserver/gpu/vllm/native/cpu/` |
-| vLLM Native OffloadingConnector | CPU RAM + Filesystem (shared storage) | `modelserver/gpu/vllm/native/fs/` |
-| LMCache Connector | CPU RAM | `modelserver/gpu/vllm/lmcache-connector/cpu/` |
-| LMCache Connector | Filesystem (shared storage) | `modelserver/gpu/vllm/lmcache-connector/fs/` |
-| TPU KVCache Connector | CPU RAM | `modelserver/tpu-v7/vllm/tpu-offloading-connector/` |
-| SGLang HiCache | CPU RAM | `modelserver/gpu/sglang/native/cpu/` |
-| MooncakeStoreConnector (embedded) | Distributed CPU DRAM pool | `modelserver/gpu/vllm/mooncake-store/cpu/` |
-| MooncakeStoreConnector (standalone-store) | Distributed CPU DRAM + SSD pool | `modelserver/gpu/vllm/mooncake-store/fs/` |
-
-<details>
-<summary><h4>About vLLM Native OffloadingConnector</h4></summary>
-
-The vLLM native OffloadingConnector offloads KV blocks to CPU RAM and optionally to a POSIX filesystem (for example IBM Storage Scale, CephFS, GCP Lustre, AWS EFS), enabling a multi-tier cache hierarchy: HBM → CPU RAM → shared storage.
-
-**Key advantages:**
-
-* **Fully asynchronous I/O** - Uses vLLM's native offloading pipeline, enabling non-blocking KV cache reads and writes.
-* **File system agnostic** - Works with any storage backend that supports standard POSIX file operations.
-* **KV sharing across instances and nodes** - Multiple vLLM servers can reuse cached prefixes by accessing the same shared storage path.
-* **High throughput via parallelism** - I/O operations are parallelized across multiple threads to increase bandwidth and reduce tail latency.
-* **Minimal GPU compute interference** - Uses GPU DMA for data transfers, reducing interference with GPU compute kernels during load and store operations.
-
-**Note:** The storage connector does not handle cleanup or eviction of data on the shared storage. Storage capacity management must be handled by the underlying storage system or by an external controller. A simple reference implementation of a PVC-based evictor is available in the [kv-cache repository (PVC Evictor)](https://github.com/llm-d/llm-d-kv-cache).
-
-For advanced configuration options and implementation details, see the [llm-d FS backend documentation](https://github.com/llm-d/llm-d-kv-cache/tree/main/kv_connectors/llmd_fs_backend).
-
-</details>
-
-<details>
-<summary><h4>About LMCache Connector</h4></summary>
-
-[LMCache](https://lmcache.ai) is an extension for LLM serving engines that enhances performance by reducing "Time to First Token" (TTFT) and increasing throughput, particularly for long-context scenarios. It provides integration to various storage backends including CPU RAM and shared filesystems. For more information, visit the [LMCache website](https://lmcache.ai).
-
-</details>
-
-<details>
-<summary><h4>About SGLang HiCache</h4></summary>
-
-[HiCache](https://github.com/sgl-project/sglang) is the implementation of CPU prefix cache offloading in SGLang. It enables large-scale prefix caching by offloading KV cache blocks to CPU RAM, significantly increasing the effective cache capacity beyond available GPU HBM.
-
-</details>
-
-<details>
-<summary><h4>About MooncakeStoreConnector</h4></summary>
-
-[Mooncake Store](https://github.com/kvcache-ai/Mooncake) pools CPU DRAM (and optionally SSD) across nodes into a shared distributed cache using RDMA or TCP — no shared filesystem or PVC needed for the data path. A centralized [Mooncake Master](../../helpers/mooncake-master-store/) handles metadata, replica placement, and eviction.
-
-Two deployment modes are available:
-
-* **Embedded** (`mooncake-store/cpu/`) — Each vLLM rank contributes CPU DRAM to the pool in-process. Simpler to deploy; pool scales with the number of replicas.
-* **Standalone-store** (`mooncake-store/both/`) — An external `mooncake_client` process owns the CPU + SSD pool. Decouples storage from compute and enables the SSD tier.
-
-See [deployment instructions below](#for-nvidia-gpu--mooncake-store-distributed-cache) and the [KV Offloader architecture doc](../../docs/architecture/advanced/kv-management/kv-offloader.md#mooncakestoreconnector) for configuration reference, environment variables, and a detailed comparison with other connectors.
-
-</details>
-
----
-
 ## Default Configuration
 
 ### GPU
@@ -247,9 +143,9 @@ Deploy **one** of the paths below. Each `kubectl apply -k` targets an overlay di
 #### vLLM native — CPU RAM
 
 ```bash
-export MODEL_SERVER=vllm # vllm | sglang
-export CONNECTOR=native  # native | lmcache-connector | mooncake-store
-export VARIANT=cpu       # cpu
+export MODEL_SERVER=vllm # vllm 
+export CONNECTOR=native  # native
+export VARIANT=cpu       # cpu | fs
 export INFRA_PROVIDER=base  # base | gke
 kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/tiered-prefix-cache/modelserver/gpu/vllm/native/cpu/${INFRA_PROVIDER}/
 ```
@@ -534,7 +430,4 @@ Empirical benchmark reports demonstrating the impact of multi-tier prefix-cache 
 - **[Qwen/Qwen3-32B on vLLM (TPU v6e/v7 CPU Offload)](./benchmark-results/vllm-qwen3-32b-tpuv7.md)**: Headline throughput and latency effect of CPU RAM prefix offloading on Google TPU architectures.
 - **[Qwen/Qwen3-32B on vLLM (16×H100 Lustre Offload)](./benchmark-results/vllm-qwen3-32b-h100-lustre.md)**: Benchmark comparisons for shared POSIX filesystem offloading using LMCache and llm-d filesystem connectors.
 
-<<<<<<< HEAD
-=======
 For detailed results see [gpt-oss-120B benchmarking results](benchmark-results-gpt-oss-120b.md).
->>>>>>> 983acc4d (updating documentaiton)
