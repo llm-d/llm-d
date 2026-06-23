@@ -185,14 +185,35 @@ export INFRA_PROVIDER=base  # base | gke
 kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/tiered-prefix-cache/modelserver/gpu/sglang/native/cpu/${INFRA_PROVIDER}/
 ```
 
-#### MooncakeStore
+#### MooncakeStore - CPU DRAM
 
-MooncakeStore supports a CPU RAM tier and a filesystem tier. As a pre-requisite make sure the mooncake-store component is deployed, you can see [manifests for doing this]
+MooncakeStore supports a CPU RAM tier and a filesystem tier. As a pre-requisite make sure the `mooncake-master-store` component is deployed (for without monitoring, use the `base` overlay, but otherwise use the `monitoring` overlay):
 
 ```bash
+k apply -k ${REPO_ROOT}/helpers/mooncake-master-store/monitoring
+```
+
+After that you can deploy the modelserver manfiestsL
+
+```bash
+export MODEL_SERVER=vllm    # vllm 
 export VARIANT=cpu          # cpu | fs
 export INFRA_PROVIDER=base  # base
-kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/tiered-prefix-cache/modelserver/gpu/vllm/mooncake-store/${VARIANT}/${INFRA_PROVIDER}
+kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/tiered-prefix-cache/modelserver/gpu/${MODEL_SERVER}/mooncake-store/${VARIANT}/${INFRA_PROVIDER}
+```
+
+#### MooncakeStore - fs (CPU DRAM + SSD offloading)
+
+As with the CPU mooncake offloading example, start by making sure the `mooncake-master-store` is deployed (for without monitoring, use the `base` overlay, but otherwise use the `monitoring` overlay):
+
+```bash
+k apply -k ${REPO_ROOT}/helpers/mooncake-master-store/monitoring
+```
+
+Then ensure the `mooncake-client` is also deployed:
+
+```bash
+k apply -k ${REPO_ROOT}/helpers/mooncake-master-store/base
 ```
 
 #### TPU (Google TPU v6 / v7)
