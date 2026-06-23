@@ -2,8 +2,8 @@
 # vLLM Version Configuration
 # ============================================================================
 # Used by CUDA and CPU platforms
-VLLM_REPO=https://github.com/vllm-project/vllm.git
-VLLM_COMMIT_SHA=0fc695fc6d1d82e9a5ac6835ac8e4e1c83703665 # maps to vLLM official v0.23.0 release
+VLLM_REPO=https://github.com/neuralmagic/vllm.git
+VLLM_COMMIT_SHA=51f799c1a0c8a0476faf7e17eeb6a77983cdd778 # v0.23.0 + fix DP supervisor engine_id collision
 
 # ============================================================================
 # Cuda specific configs
