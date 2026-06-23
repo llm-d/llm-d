@@ -29,7 +29,7 @@ In E/PD, dedicated encode workers handle multimodal processing while a single wo
 E/P/D extends P/D disaggregation by adding a dedicated encode stage. This provides maximum specialization, with multiple encode workers processing multimodal content in parallel:
 
 * 2 Encode Workers (multimodal encoding, parallelized across entries)
-* 4 TP=4 Prefill Workers
+* 2 TP=4 Prefill Workers
 * 2 TP=4 Decode Workers
 
 ### Best Practices

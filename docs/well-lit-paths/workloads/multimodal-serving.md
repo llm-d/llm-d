@@ -1,10 +1,11 @@
 # Multimodal Workload Serving
 
+Multimodal inputs are fundamentally changing the shape of production LLM traffic. 
+A single prompt expands beyond text to include dense, non-text modalities—high-resolution images, video frames, or audio clips. 
 Traditional HTTP requests are fast, uniform, and cheap. Standard round-robin request scheduling strategies balance this load well.
-
 LLM requests break all three assumptions. Multimodal LLM requests (containing images, video, or audio) break them even further:
 
-* **Context Inflation** — A single high-resolution image, audio clip, or video file drastically inflates the context window (often by thousands of tokens).
+* **Massive Context Inflation** — A single high-resolution image, audio clip, or video file drastically inflates the context window (often by thousands of tokens).
 * **Heavy Prefill Cost** — Running vision/auditory encoders and prefilling thousands of tokens is highly resource-intensive.
 
 The **llm-d Router** extends text-based prefix scheduling across both aggregated and disaggregated inference architectures by tracking, hashing, and matching complex multimodal payloads across a distributed cluster.
@@ -17,7 +18,7 @@ Whether operating in a unified topology or a decoupled pencode-prefill-decode la
 
 ### Multimodal Aggregated Guide
 
-See the [multimodal optimized baseline guide](../../../guides/multimodal-serving/optimized-baseline) for aggregated guide manifests and step-by-step deployment.
+See the [multimodal aggregation guide](../../../guides/multimodal-serving/aggregation) for aggregated guide manifests and step-by-step deployment.
 
 ### Multimodal Disaggregated Guide
 
@@ -33,15 +34,6 @@ The llm-d-router schedules multimodal requests using prefix cache affinity and s
 > For the high-level scheduling architecture flow and EPP load-balancing diagrams, see the [Optimized Baseline guide](../capabilities/optimized-baseline.md#architecture).
 
 ### Prefix-Aware Scheduling
-
-EPP maintains a view of each endpoints' prefix-cache state. When a request arrives, it identifies which pod already holds the matching prefix in KV-cache and routes the request there.
-
-<p align="center">
-  <picture>
-    <source media="(prefers-color-scheme: dark)">
-    <img src="../../assets/prefix-aware-routing.svg" alt="Prefix-Aware Routing">
-  </picture>
-</p>
 
 #### Approximate Prefix-Cache Aware Routing
 
@@ -74,13 +66,6 @@ For incoming requests the router breaks the tokenized input into blocks and matc
 ### Load-Aware Routing
 
 EPP continuously probes each endpoints' metrics by scraping `/metrics` at a regular interval (50ms default). It scores endpoints on queue depth, running requests, and KV-cache utilization to schedule requests to the endpoint with the lowest load, avoiding hotspots caused by heterogeneous request patterns.
-
-<p align="center">
-  <picture>
-    <source media="(prefers-color-scheme: dark)">
-    <img src="../../assets/load-aware-routing.svg" alt="Load-Aware Routing">
-  </picture>
-</p>
 
 ---
 

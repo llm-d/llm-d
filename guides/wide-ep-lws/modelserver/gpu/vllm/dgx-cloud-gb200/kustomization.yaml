@@ -3,6 +3,7 @@ kind: Kustomization
 resources:
   - ../base
 
+# TODO(#1895): Track GB200-specific image variant; consider centralized component.
 images:
   - name: ghcr.io/llm-d/llm-d-cuda
     newName: ghcr.io/llm-d/llm-d-cuda-gb200

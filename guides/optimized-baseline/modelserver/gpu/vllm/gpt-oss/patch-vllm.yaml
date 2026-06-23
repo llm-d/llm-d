@@ -14,7 +14,6 @@ spec:
             - "openai/gpt-oss-120b"
             - "--disable-access-log-for-endpoints=/health,/metrics,/v1/models"
             - "--tensor-parallel-size=1"
-            - "--gpu-memory-utilization=0.95"
             - "--served-model-name=openai/gpt-oss-120b"
             - "--block-size=128"
             - "--enable-auto-tool-choice"

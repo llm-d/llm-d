@@ -784,12 +784,11 @@ jobs:
           # fetch tags for docker/metadata semver handling (if you use git describe etc.)
           fetch-depth: 0
 
-      - name: Load vLLM version from file
+      - name: Load vLLM XPU base image from file
         id: common-versions
         run: |
           source docker/common-versions
-          echo "repo=${VLLM_REPO}" >> $GITHUB_OUTPUT
-          echo "commit_sha=${VLLM_XPU_COMMIT_SHA}" >> $GITHUB_OUTPUT
+          echo "base_image=${VLLM_XPU_BASE_IMAGE}" >> $GITHUB_OUTPUT
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v4
@@ -803,24 +802,17 @@ jobs:
           username: ${{ secrets.GHCR_USER }}
           password: ${{ secrets.GHCR_TOKEN }}
 
-      - name: Checkout vLLM source
-        uses: actions/checkout@v6
-        with:
-          repository: vllm-project/vllm
-          ref: ${{ steps.common-versions.outputs.commit_sha }}
-          path: .cache/vllm-src
-
       - name: Build and push the image
         id: build-and-push
         uses: docker/build-push-action@v7
         with:
-          context: ./.cache/vllm-src
-          file: ./.cache/vllm-src/docker/Dockerfile.xpu
+          context: .
+          file: ./docker/Dockerfile.xpu
           platforms: linux/amd64
           push: true
           provenance: true
-          # cache-from: type=gha,scope=xpu
-          # cache-to: type=gha,mode=max,scope=xpu,oci-mediatypes=true,compression=zstd
+          build-args: |
+            BASE_IMAGE=${{ steps.common-versions.outputs.base_image }}
           tags: |
             ${{ env.REGISTRY }}/${{ github.repository }}-xpu:${{ env.TAG }}
             ${{ env.IS_STABLE == 'true' && format('{0}/{1}-xpu:latest', env.REGISTRY, github.repository) || '' }}

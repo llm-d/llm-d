@@ -3,6 +3,7 @@ kind: Kustomization
 resources:
   - ../base
 
+# TODO(#1892): Remove override once gpt-oss-120b is validated with centralized gpu-vllm (v0.23.0).
 images:
   - name: vllm/vllm-openai
     newName: vllm/vllm-openai

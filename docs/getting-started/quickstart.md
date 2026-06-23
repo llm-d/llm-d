@@ -6,33 +6,39 @@ For this quickstart, we will use the **Standalone Mode** deployment, which is th
 
 ## Prerequisites
 
-- Ensure you have a Kubernetes cluster and `kubectl` configured.
-- Install [Helm](https://helm.sh/docs/intro/install/).
-- Install [jq](https://jqlang.org/download/).
+- Installed proper client tools (kubectl, helm).
+- Set the following environment variables:
+  ```bash
+  export REPO_ROOT=$(realpath $(git rev-parse --show-toplevel))
+  source ${REPO_ROOT}/guides/env.sh
+  export GUIDE_NAME="quickstart"
+  export NAMESPACE=llm-d-quickstart
+  ```
 
-### 1. Setup Environment
+- Install the Gateway API Inference Extension CRDs:
 
-Clone the llm-d repository and set up the necessary environment variables:
+  ```bash
+  kubectl apply -f https://github.com/kubernetes-sigs/gateway-api-inference-extension/releases/download/${GAIE_VERSION}/v1-manifests.yaml
+  ```
 
-```bash
-git clone https://github.com/llm-d/llm-d.git && cd llm-d
+- Create a target namespace for the installation:
 
-export GAIE_VERSION=v1.5.0
-export ROUTER_CHART_VERSION=v0
-export GUIDE_NAME="quickstart"
-export NAMESPACE=llm-d-quickstart
-```
+  ```bash
+  kubectl create namespace ${NAMESPACE} --dry-run=client -o yaml | kubectl apply -f -
+  ```
 
-### 2. Install CRDs and Namespace
+- [Create the `llm-d-hf-token` secret in your target namespace with the key `HF_TOKEN` matching a valid HuggingFace token](../../helpers/hf-token.md) to pull models.
+<!-- llm-d-cicd:skip start -->
+  ```bash
+  export HF_TOKEN=<your HuggingFace token>
+  kubectl create secret generic llm-d-hf-token \
+    --from-literal="HF_TOKEN=${HF_TOKEN}" \
+    --namespace "${NAMESPACE}" \
+    --dry-run=client -o yaml | kubectl apply -f -
+  ```
+<!-- llm-d-cicd:skip end -->
 
-Install the Gateway API Inference Extension CRDs and create the namespace:
-
-```bash
-kubectl apply -f https://github.com/kubernetes-sigs/gateway-api-inference-extension/releases/download/${GAIE_VERSION}/v1-manifests.yaml
-kubectl create namespace ${NAMESPACE}
-```
-
-## Installation
+## Installation Instructions
 
 ### 1. Deploy the llm-d Router (Standalone Mode)
 

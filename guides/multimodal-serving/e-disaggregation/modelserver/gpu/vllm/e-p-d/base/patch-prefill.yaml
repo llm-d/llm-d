@@ -3,7 +3,7 @@ kind: Deployment
 metadata:
   name: prefill
 spec:
-  replicas: 4
+  replicas: 3
   template:
     spec:
       containers:
@@ -12,15 +12,19 @@ spec:
           args:
             - "Qwen/Qwen3-VL-32B-Instruct"
             - "--disable-access-log-for-endpoints=/health,/metrics,/v1/models"
-            - "--tensor-parallel-size=4"
-            - "--block-size=128"
-            - "--trust-remote-code"
+            - "--tensor-parallel-size=2"
+            - "--mm-processor-cache-gb"
+            - "20"
             - "--kv-transfer-config"
-            - '{"kv_connector":"NixlConnector", "kv_role":"kv_both"}'
+            - '{"kv_connector":"NixlConnector", "kv_role":"kv_both", "kv_connector_extra_config": {"kv_lease_duration": 300}}'
             - "--no-disable-hybrid-kv-cache-manager"
-            - "--gpu-memory-utilization=0.9"
+            - "--gpu-memory-utilization=0.75"
             - "--ec-transfer-config"
-            - '{"ec_connector": "ECCPUConnector", "ec_role": "ec_consumer"}'
+            # num_ec_blocks (Default: 100,000) defines the capacity of the shared encoder
+            # cache for multimodal items. Increase this value for workloads with large or
+            # numerous images to prevent cache evictions and costly re-encodings that
+            # degrade system performance.
+            - '{"ec_connector": "ECCPUConnector", "ec_role": "ec_consumer", "ec_connector_extra_config": {"num_ec_blocks": 1000000}}'
           env:
             - name: VLLM_NIXL_SIDE_CHANNEL_HOST
               valueFrom:
@@ -31,15 +35,20 @@ spec:
                 secretKeyRef:
                   name: llm-d-hf-token
                   key: HF_TOKEN
+            # Workaround for https://github.com/vllm-project/vllm/issues/44548, required with vLLM v0.20.0+ due to torch 2.11
+            - name: USER
+              value: llm-d
           resources:
             limits:
               cpu: "8"
               memory: 256Gi
-              nvidia.com/gpu: "4"
+              nvidia.com/gpu: "2"
+              rdma/ib: "1"
             requests:
               cpu: "8"
-              memory: 128Gi
-              nvidia.com/gpu: "4"
+              memory: 256Gi
+              nvidia.com/gpu: "2"
+              rdma/ib: "1"
           volumeMounts:
             - mountPath: /dev/shm
               name: shm
@@ -66,7 +75,7 @@ spec:
         - name: shm
           emptyDir:
             medium: Memory
-            sizeLimit: 20Gi
+            sizeLimit: 90Gi
         - name: torch-compile-cache
           emptyDir: {}
         - name: triton-cache

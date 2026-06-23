@@ -1,0 +1,14 @@
+# Default to the prebuilt vLLM XPU image from upstream CI.
+# Override at build time via --build-arg BASE_IMAGE=...
+# The default value here is informational only; the workflow always passes
+# BASE_IMAGE explicitly from docker/common-versions (VLLM_XPU_BASE_IMAGE).
+ARG BASE_IMAGE=public.ecr.aws/q9t5s3a7/vllm-ci-test-repo:b1388b1fbf5aaef47937fabe98931211684666a6-xpu
+
+FROM ${BASE_IMAGE}
+
+ARG CACHE_BUSTER
+RUN if [ -n "${CACHE_BUSTER}" ]; then \
+        echo "$CACHE_BUSTER" > /tmp/builder-buster; \
+    fi;
+
+ENTRYPOINT ["python", "-m", "vllm.entrypoints.openai.api_server"]

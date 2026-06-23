@@ -3,6 +3,7 @@ kind: Kustomization
 resources:
   - ../base
 
+# TODO(#1894): Align AWS ECR sglang version with centralized gpu-sglang (v0.5.13.post1).
 images:
   - name: docker.io/lmsysorg/sglang
     newName: 763104351884.dkr.ecr.us-east-1.amazonaws.com/sglang

@@ -20,8 +20,10 @@ VLLM_PRECOMPILED_WHEEL_COMMIT=0fc695fc6d1d82e9a5ac6835ac8e4e1c83703665 # maps to
 
 
 
-# Used by XPU, commit from vllm, maps to v0.19.1 tag
-VLLM_XPU_COMMIT_SHA=b1388b1fbf5aaef47937fabe98931211684666a6
+# Used by XPU: prebuilt vLLM image from upstream CI (vllm-ci-test-repo).
+# The XPU image is a thin pass-through over this base; switch tags here to upgrade.
+# Tag corresponds to vLLM v0.19.1 release (commit b1388b1fbf5aaef47937fabe98931211684666a6).
+VLLM_XPU_BASE_IMAGE=public.ecr.aws/q9t5s3a7/vllm-ci-test-repo:b1388b1fbf5aaef47937fabe98931211684666a6-xpu
 
 # ============================================================================
 # CUDA Version Configuration

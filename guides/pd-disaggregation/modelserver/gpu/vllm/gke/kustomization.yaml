@@ -1,6 +1,81 @@
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
+
 resources:
   - ../base
+
 components:
-  - ../../../../../recipes/modelserver/components/disable-gke-nccl-tuner-patch
+  - ../../../components/gke-rdma
+
+patches:
+  - patch: |-
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: prefill
+      spec:
+        template:
+          spec:
+            tolerations:
+              - key: nvidia.com/gpu
+                operator: Exists
+                effect: NoSchedule
+            resourceClaims:
+              - name: gke-rdma-claim
+                resourceClaimTemplateName: gke-rdma-template
+            containers:
+              - name: modelserver
+                env:
+                  - name: UCX_IB_ROCE_REACHABILITY_MODE
+                    value: "all"
+                resources:
+                  claims:
+                    - name: gke-rdma-claim
+  - target:
+      kind: Deployment
+      name: prefill
+    patch: |-
+      - op: remove
+        path: /spec/template/spec/containers/0/resources/limits/nvidia.com~1gpu
+      - op: remove
+        path: /spec/template/spec/containers/0/resources/requests/nvidia.com~1gpu
+  - patch: |-
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: decode
+      spec:
+        template:
+          spec:
+            tolerations:
+              - key: nvidia.com/gpu
+                operator: Exists
+                effect: NoSchedule
+            resourceClaims:
+              - name: gke-rdma-claim-0
+                resourceClaimTemplateName: gke-rdma-template
+              - name: gke-rdma-claim-1
+                resourceClaimTemplateName: gke-rdma-template
+              - name: gke-rdma-claim-2
+                resourceClaimTemplateName: gke-rdma-template
+              - name: gke-rdma-claim-3
+                resourceClaimTemplateName: gke-rdma-template
+            containers:
+              - name: modelserver
+                env:
+                  - name: UCX_IB_ROCE_REACHABILITY_MODE
+                    value: "all"
+                resources:
+                  claims:
+                    - name: gke-rdma-claim-0
+                    - name: gke-rdma-claim-1
+                    - name: gke-rdma-claim-2
+                    - name: gke-rdma-claim-3
+  - target:
+      kind: Deployment
+      name: decode
+    patch: |-
+      - op: remove
+        path: /spec/template/spec/containers/0/resources/limits/nvidia.com~1gpu
+      - op: remove
+        path: /spec/template/spec/containers/0/resources/requests/nvidia.com~1gpu

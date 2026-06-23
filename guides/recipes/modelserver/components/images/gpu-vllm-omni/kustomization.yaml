@@ -1,0 +1,29 @@
+apiVersion: kustomize.config.k8s.io/v1alpha1
+kind: Component
+images:
+  # Requires: https://github.com/vllm-project/vllm/pull/42998 for EC CPU Connector
+  - name: REPLACE_MODEL_SERVER_IMAGE
+    newName: ghcr.io/revit13/vllm-openai
+    newTag: 14d40dc7d
+  # - name: REPLACE_MODEL_SERVER_IMAGE
+  #   newName: vllm/vllm-omni
+  #   newTag: v0.22.0
+
+# Workaround for https://github.com/vllm-project/vllm/issues/44548, required with vLLM v0.20.0+ due to torch 2.11
+patches:
+  - target:
+      kind: Deployment
+    patch: |-
+      - op: add
+        path: /spec/template/spec/containers/0/env/-
+        value:
+          name: USER
+          value: llm-d
+  - target:
+      kind: LeaderWorkerSet
+    patch: |-
+      - op: add
+        path: /spec/template/spec/containers/0/env/-
+        value:
+          name: USER
+          value: llm-d

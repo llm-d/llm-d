@@ -7,17 +7,13 @@ spec:
     spec:
       containers:
         - name: modelserver
-          # TODO: Update to latest image.
-          image: ghcr.io/llm-d/llm-d-cuda:v0.5.1
+          # TODO(#1897): Update to centralized gpu-vllm image; avoid hardcoding in patch.
           args:
             - "Qwen/Qwen3-32B"
             - "--tensor-parallel-size=2"
             - "--kv-transfer-config"
             - '{"kv_connector":"LMCacheConnectorV1","kv_role":"kv_both"}'
-            - "--max-num-seq"
-            - "1024"
-            - "--gpu-memory-utilization"
-            - "0.8"
+            - "--max-num-seq=1024"
           env:
             - name: HF_TOKEN
               valueFrom:

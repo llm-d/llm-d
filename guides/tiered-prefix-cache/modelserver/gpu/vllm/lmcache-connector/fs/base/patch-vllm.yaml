@@ -17,8 +17,6 @@ spec:
             - "1024"
             - "--kv-transfer-config"
             - '{"kv_connector":"LMCacheConnectorV1","kv_role":"kv_both"}'
-            - "--gpu-memory-utilization"
-            - "0.8"
           env:
             - name: HF_TOKEN
               valueFrom:

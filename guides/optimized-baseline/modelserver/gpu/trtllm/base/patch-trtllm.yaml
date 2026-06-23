@@ -1,0 +1,73 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: decode
+spec:
+  # Mirrors the vLLM/SGLang variants: 8 replicas × TP=2 = 16 GPUs total.
+  replicas: 8
+  template:
+    spec:
+      containers:
+        - name: modelserver
+          command: ["trtllm-serve", "serve"]
+          # Include all args in overlay patch for consistency.
+          args:
+            - "Qwen/Qwen3-32B"
+            - "--tp_size=2"
+            - "--host=0.0.0.0"
+            - "--port=8000"
+            - "--backend=pytorch"
+            - "--kv_cache_free_gpu_memory_fraction=0.9"
+            # Enables /prometheus/metrics + the iteration-stats loop the router
+            # reads. See extra-llm-api-options-configmap.yaml for the contents.
+            - "--extra_llm_api_options=/etc/trtllm/llm_api_options.yaml"
+          env:
+            - name: HF_HOME
+              value: /hf-cache
+            # Overriding the container command (above) bypasses the image entrypoint
+            # that normally sets up the dynamic linker path, so set it explicitly:
+            #   tensorrt/lib  -> libnvonnxparser.so.10 etc. (tensorrt is imported even
+            #                    on the PyTorch backend)
+            #   nvidia/lib64  -> libcuda.so.1 + NVML (GKE-injected driver)
+            #   cuda/lib64    -> libcudart at runtime
+            - name: LD_LIBRARY_PATH
+              value: "/usr/local/tensorrt/lib:/usr/local/cuda/lib64:/usr/local/nvidia/lib64"
+          resources:
+            limits:
+              cpu: '16'
+              memory: 128Gi
+              nvidia.com/gpu: 2
+            requests:
+              cpu: '8'
+              memory: 96Gi
+              nvidia.com/gpu: 2
+          volumeMounts:
+            - mountPath: /dev/shm
+              name: shm
+            - mountPath: /hf-cache
+              name: hf-cache
+            - mountPath: /etc/trtllm
+              name: extra-llm-api-options
+          startupProbe:
+            initialDelaySeconds: 15
+            periodSeconds: 30
+            timeoutSeconds: 5
+            failureThreshold: 120
+          livenessProbe:
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            periodSeconds: 5
+            timeoutSeconds: 2
+            failureThreshold: 3
+      volumes:
+        - name: shm
+          emptyDir:
+            medium: Memory
+            sizeLimit: 20Gi
+        - name: hf-cache
+          emptyDir: {}
+        - name: extra-llm-api-options
+          configMap:
+            name: extra-llm-api-options

@@ -38,7 +38,7 @@ This guide includes configuration for the following accelerators:
 
 | Backend             | Directory                  | Notes                                                    |
 | ------------------- | -------------------------- | -------------------------------------------------------- |
-| NVIDIA GPU (vLLM)   | `modelserver/gpu/vllm/`    | vLLM, tested nightly                                     |
+| NVIDIA GPU (vLLM)   | `modelserver/gpu/vllm/`    | vLLM, tested nightly on GKE (see [Cluster Pre-provisioning](#gke-cluster-pre-provisioning-with-dra--rdmaroce)) |
 | NVIDIA GPU (SGLang) | `modelserver/gpu/sglang/`  | SGLang, validated each release                           |
 | Google TPU          | `modelserver/tpu/v6/vllm/` & `modelserver/tpu/v7/vllm/` | GKE TPU (v6e & v7x), see [TPU Guide](./README.tpu.md) |
 | AMD GPU             | `modelserver/amd/vllm/`    | AMD GPU, community contributed                           |
@@ -48,7 +48,21 @@ This guide includes configuration for the following accelerators:
 > [!NOTE]
 > Some hardware variants use reduced configurations (fewer replicas, smaller models) to enable CI testing for compatibility and regression checks. These configurations are maintained by their respective hardware vendors and are not guaranteed as production-ready examples. Users deploying on non-default hardware should review and adjust the configurations for their environment.
 
+
 ## Prerequisites
+
+### GKE: Cluster Pre-provisioning (with DRA & RDMA/RoCE)
+
+Before running this guide, make sure your cluster is configured correctly.
+
+GPU DRA is not yet fully managed by GKE and requires manual node label configuration and driver installation. In addition, you must enable managed **DRANET** (network DRA) for high-performance RoCE networking.
+
+> [!IMPORTANT]
+> The current recipe targets the **GKE A3/A4** platform. The **DRANet** (network DRA) setup requires support for both **Hairpin** (direct loopback transfer on the same node) and **Cross-rail** (inter-node multi-rail transfers) routing to ensure proper KV cache exchange between Prefill and Decode nodes.
+
+To create the cluster, node pool, and install the required GPU DRA / network DRA drivers, follow the step-by-step instructions in the [GKE Infrastructure Guide](../../docs/infra-providers/gke/README.md#gpu-dynamic-resource-allocation-dra-and-dranet-roce-on-gke).
+
+### Checkout Repo & Setups
 
 * Have the [proper client tools installed on your local system](../../helpers/client-setup/README.md) to use this guide.
 * Checkout llm-d repo:
@@ -129,12 +143,11 @@ helm install ${GUIDE_NAME} \
 
 Apply the Kustomize overlays for your specific backend (defaulting to NVIDIA GPU / vLLM):
 
-> [!NOTE]
-> The Kubernetes ecosystem has not yet standardized on how to expose
-> NICs to pods. We provide some pre-configured setups for certain
-> Kubernetes providers. You may need to adapt the guides for the
-> specifics of your infrastructure provider. The provider specific
-> overlays deal with the specifics of each cloud's setup.
+#### GPU
+
+Choose the overlay matching your infrastructure provider:
+- **GKE**: Deploys on GKE using Dynamic Resource Allocation (DRA) and DRANet (RoCE) as the default high-performance path. Ensure the cluster is configured accordingly (see [Cluster Pre-provisioning](#nvidia-gpu-on-gke-with-dra-rdmaroce)).
+- **CoreWeave**: Deploys on CoreWeave.
 
 ```bash
 export INFRA_PROVIDER=base # base | coreweave | gke | aws
@@ -155,7 +168,7 @@ kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/g
 
 SGLang-specific notes:
 
-* **Engine flags**: prefill and decode pods launch with `--disaggregation-mode={prefill,decode}` and `--disaggregation-transfer-backend=nixl`. The decode pod's routing-proxy sidecar is configured with `--connector=sglang`.
+* **Engine flags**: prefill and decode pods launch with `--disaggregation-mode={prefill,decode}` and `--disaggregation-transfer-backend=nixl`. The decode pod's routing-proxy sidecar is configured with `--kv-connector=sglang`.
 * **Bootstrap server**: each prefill instance runs a bootstrap server on port `8998` (the default). To use a different port, set `SGLANG_BOOTSTRAP_PORT` on the sidecar and `--disaggregation-bootstrap-port` on the SGLang engine so the two match. P/D peers discover each other through this server rather than vLLM's peer-to-peer negotiation; the KV transfer itself still runs directly over NIXL/RDMA.
 * **Operations**: scale up/down, request cancellation, fault tolerance, and rollout behavior differ from vLLM. See [Disaggregated Serving: Operations (SGLang)](../../docs/architecture/advanced/disaggregation/operations-sglang.md).
 
@@ -312,6 +325,9 @@ To remove the deployed components:
 
 ```bash
 helm uninstall ${GUIDE_NAME} -n ${NAMESPACE}
+```
+
+```bash
 kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/gpu/vllm/${INFRA_PROVIDER}
 ```
 

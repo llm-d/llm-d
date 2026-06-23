@@ -21,7 +21,7 @@ SGLang coordinates this through a bootstrap server that is started on each prefi
 
 New P and D replicas connect lazily, with no pre-warming step: the first request routed across a given P/D pair triggers a one-time connection setup, and subsequent requests reuse it, so a newly added replica starts serving without restarts.
 
-For each request, the Routing Proxy Sidecar (configured with `--connector=sglang`) generates a unique `bootstrap_room` ID, injects `bootstrap_host`, `bootstrap_port`, and `bootstrap_room` into both the prefill and decode request bodies, and fires the prefill request asynchronously (in a background goroutine) while sending the decode request synchronously. As a result, the decode worker does not wait for prefill to complete before beginning coordination.
+For each request, the Routing Proxy Sidecar (configured with `--kv-connector=sglang`) generates a unique `bootstrap_room` ID, injects `bootstrap_host`, `bootstrap_port`, and `bootstrap_room` into both the prefill and decode request bodies, and fires the prefill request asynchronously (in a background goroutine) while sending the decode request synchronously. As a result, the decode worker does not wait for prefill to complete before beginning coordination.
 
 On the engine side:
 
