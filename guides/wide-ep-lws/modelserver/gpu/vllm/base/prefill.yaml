@@ -35,7 +35,7 @@ spec:
             emptyDir: {}
         containers:
           - name: vllm
-            image: ghcr.io/llm-d/llm-d-cuda:v0.8.0
+            image: docker.io/vllm/vllm-openai:v0.23.0-ubuntu2404
             securityContext:
               capabilities:
                 add:
@@ -63,6 +63,7 @@ spec:
                 exec vllm serve \
                   deepseek-ai/DeepSeek-R1-0528 \
                   --port 8000 \
+                  --gpu-memory-utilization 0.75 \
                   --disable-access-log-for-endpoints=/health,/metrics,/v1/models,/readyz \
                   --data-parallel-multi-port-external-lb \
                   --data-parallel-supervisor-port 8008 \
@@ -76,15 +77,16 @@ spec:
                   --kv_transfer_config '{"kv_connector":"NixlConnector",
                                           "kv_role":"kv_both",
                                           "kv_load_failure_policy":"fail"}' \
-                  --enable-dbo \
-                  --dbo-prefill-token-threshold 32 \
-                  --enable-eplb \
-                  --eplb-config '{"window_size":"1000",
-                                  "step_interval":"3000",
-                                  "num_redundant_experts":"32",
-                                  "log_balancedness":"False"}' \
                   --moe-backend deep_gemm \
                   --all2all-backend deepep_high_throughput
+                  # --enable-dbo \
+                  # --dbo-prefill-token-threshold 32 \
+                  # --enable-eplb \
+                  # --eplb-config '{"window_size":"1000",
+                  #                 "step_interval":"3000",
+                  #                 "num_redundant_experts":"32",
+                  #                 "log_balancedness":"False"}' \
+                
                   # To enable tracing, add:
                   # --otlp-traces-endpoint http://otel-collector:4317 \
                   # --collect-detailed-traces all
@@ -128,7 +130,7 @@ spec:
               - name: NCCL_SOCKET_IFNAME
                 value: eth0
               - name: VLLM_LOGGING_LEVEL
-                value: INFO
+                value: DEBUG
               # Default keep-alive timeout of 5s is shorter than the sidecar's 90s idle conn timeout,
               # causing TCP RSTs.
               - name: VLLM_HTTP_TIMEOUT_KEEP_ALIVE

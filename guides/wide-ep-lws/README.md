@@ -123,15 +123,13 @@ kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/g
 * Install the [Monitoring stack](../../docs/operations/observability/setup.md).
 * Deploy the monitoring resources for this guide.
 
-  Wide expert parallelism runs data-parallel ranks behind a routing sidecar, so
-  each pod exposes one metrics port per rank (`rank0`–`rank7`) rather than a
-  single `modelserver` port. This guide therefore ships a DP-aware monitoring
-  overlay (a Kustomize component) that scrapes all 8 ranks for both prefill and
-  decode:
+> With DP-aware scheduling, each DP rank is availble at podip:port, where each
+> port is `rank0`-`rank7`. This guide ships an overlay for the monitoring
+> that scapes each rank's port.
 
-  ```bash
-  kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/monitoring
-  ```
+```bash
+kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/monitoring
+```
 
 ### 4. (Optional) Topology Aware Scheduling (TAS)
 
