@@ -15,6 +15,13 @@ For this quickstart, we will use the **Standalone Mode** deployment, which is th
   export NAMESPACE=llm-d-quickstart
   ```
 
+- Checkout llm-d repo:
+
+  ```bash
+    export branch="main"
+    git clone https://github.com/llm-d/llm-d.git && cd llm-d && git checkout ${branch}
+  ```
+
 - Install the Gateway API Inference Extension CRDs:
 
   ```bash
