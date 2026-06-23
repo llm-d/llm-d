@@ -121,7 +121,8 @@ kubectl apply -n ${NAMESPACE} -k ./manifests/modelserver/${INFRA_PROVIDER}
 
 ### 3. (Optional) Enable Monitoring
 
-Deploy the monitoring resources for this guide:
+* To enable Prometheus monitoring on the llm-d router, add `-f ${REPO_ROOT}/guides/recipes/router/features/monitoring.values.yaml` during the [router installation step](#1-deploy-the-llm-d-router).
+* Deploy the monitoring resources for model servers:
 
 ```bash
 kubectl apply -n ${NAMESPACE} -f ./manifests/modelserver/base/pod-monitors.yaml

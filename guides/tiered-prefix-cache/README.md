@@ -204,7 +204,8 @@ The connector does not evict data from the shared tier. Capacity is managed by t
 ### 3. (Optional) Enable monitoring
 
 * Install the [Monitoring stack](../../docs/operations/observability/setup.md).
-* Deploy the monitoring resources for this guide:
+* To enable Prometheus monitoring on the llm-d router, add `-f ${REPO_ROOT}/guides/recipes/router/features/monitoring.values.yaml` during the [router installation step](#1-deploy-the-llm-d-router).
+* Deploy the monitoring resources for model servers:
 
 ```bash
 kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/recipes/modelserver/components/monitoring
