@@ -15,8 +15,3 @@ labels:
       app.kubernetes.io/part-of: mooncake
     includeTemplates: true
     includeSelectors: true
-
-images:
-  - name: mooncake-master
-    newName: ghcr.io/llm-d/mooncake-master-store
-    newTag: v0.8.0

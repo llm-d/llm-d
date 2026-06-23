@@ -13,3 +13,9 @@ labels:
       app.kubernetes.io/part-of: mooncake
     includeTemplates: true
     includeSelectors: true
+    fields:
+      - group: monitoring.coreos.com
+        version: v1
+        kind: ServiceMonitor
+        path: spec/selector/matchLabels
+        create: true

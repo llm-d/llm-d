@@ -14,8 +14,8 @@ spec:
         prometheus.io/path: "/metrics"
     spec:
       containers:
-        - name: mooncake-master
-          image: mooncake-master
+        - name: mooncake-master-store
+          image: ghcr.io/llm-d/mooncake-master-store:v0.8.0
           command: ["mooncake_master"]
           args:
             - "--config_path=/etc/mooncake/master.yaml"
@@ -58,7 +58,7 @@ spec:
       volumes:
         - name: config
           configMap:
-            name: mooncake-master-config
+            name: mooncake-master-store-config
         - name: snapshots
           persistentVolumeClaim:
-            claimName: mooncake-master-snapshots
+            claimName: mooncake-master-storage-snapshots
