@@ -11,6 +11,7 @@ name: /test-nightly Slash Command
 #   decode_pods=<number>  Number of decode pods (default: 1)
 #   prefill_pods=<number> Number of prefill pods (default: 1)
 #   harness=<name>        Benchmark harness (default: inference-perf)
+#   dry_run=<bool>        Run in dry-run mode, no benchmark executed (default: false)
 #
 # Examples:
 #   /test-nightly pd-disaggregation-ocp
@@ -129,6 +130,7 @@ jobs:
                   '- `decode_pods=<number>` — number of decode pods (default: `1`)',
                   '- `prefill_pods=<number>` — number of prefill pods (default: `1`)',
                   '- `harness=<name>` — benchmark harness (default: `inference-perf`)',
+                  '- `dry_run=true` — validate setup without running the benchmark',
                   '',
                   'Available nightlies:',
                   all.map(n => '`' + n.name + '`').join(', '),
@@ -140,7 +142,7 @@ jobs:
             const input = match[1];
 
             // Parse optional key=value parameters (with defaults for quick PR validation)
-            const SUPPORTED_PARAMS = ['workload', 'decode_pods', 'prefill_pods', 'harness'];
+            const SUPPORTED_PARAMS = ['workload', 'decode_pods', 'prefill_pods', 'harness', 'dry_run'];
             const DEFAULT_PARAMS = {
               workload: 'sanity_random.yaml',
               decode_pods: '1',
