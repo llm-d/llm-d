@@ -48,9 +48,11 @@ on:
         default: 'true'
         type: string
 
-#  push:
-#    branches:
-#      - main
+  pull_request:
+    branches: [main]
+    paths:
+      - .github/workflows/nightly-e2e-tiered-prefix-cache-gke-cpu-gpu-vllm-lmcache.yaml
+      - guides/tiered-prefix-cache/**
 
   schedule:
     - cron: '0 12 * * *'
@@ -95,7 +97,8 @@ jobs:
 
   update-badge:
     needs: [nightly]
-    if: always()
+    # PR runs execute the e2e test but must not overwrite the dashboard badge.
+    if: always() && github.event_name != 'pull_request'
     uses: llm-d/llm-d-infra/.github/workflows/reusable-update-badge.yaml@main
     with:
       badge_name: tiered-prefix-cache-gke-cpu-llmcache
