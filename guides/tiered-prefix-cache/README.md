@@ -193,7 +193,7 @@ MooncakeStore supports a CPU RAM tier and a filesystem tier. As a pre-requisite 
 k apply -k ${REPO_ROOT}/helpers/mooncake-master-store/monitoring
 ```
 
-After that you can deploy the modelserver manfiestsL
+After that you can deploy the modelserver manfiests:
 
 ```bash
 export MODEL_SERVER=vllm    # vllm 
@@ -213,7 +213,7 @@ k apply -k ${REPO_ROOT}/helpers/mooncake-master-store/monitoring
 Then ensure the `mooncake-client` is also deployed:
 
 ```bash
-k apply -k ${REPO_ROOT}/helpers/mooncake-master-store/base
+k apply -k ${REPO_ROOT}/helpers/mooncake-client/base
 ```
 
 #### TPU (Google TPU v6 / v7)
