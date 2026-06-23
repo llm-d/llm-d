@@ -19,10 +19,12 @@
 #   NAMESPACE      namespace where the stack is deployed
 #   IP             EPP service ClusterIP (base_url = http://${IP})
 #   BENCHMARK_PVC  PVC name where benchmark results are stored
+#   STACK_NAME     user defined name for the stack
+#   MODEL_NAME     Exact HuggingFace model name
 # ---------------------------------------------------------------------------
 endpoint:
-  stack_name: &stack_name agentic-serving-Qwen3-Coder-480B-disagg
-  model: &model Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8
+  stack_name: &stack_name ${STACK_NAME}
+  model: &model ${MODEL_NAME}
   namespace: &namespace ${NAMESPACE}
   base_url: &url http://${IP}
   hf_token_secret: llm-d-hf-token

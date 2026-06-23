@@ -107,14 +107,43 @@ Follow the **[Prepare the Benchmarking Suite](./README.md#1-prepare-the-benchmar
 
 ### 2. Download the Workload Template
 
+Choose the benchmark workload that matches your testing goals:
+
+#### Option A: Standard Random Workload (TPU v6e & v7x)
+This template runs a standard benchmark with constant load and random inputs/outputs.
+
 ```bash
 curl -LJO "https://raw.githubusercontent.com/llm-d/llm-d/main/guides/pd-disaggregation/benchmark-templates/tpu.yaml"
 ```
 
+#### Option B: Agentic Code Generation Workload (TPU v7x only)
+This template mimics a multi-turn agentic code generation workload, but with the context length capped at 55K tokens due to TPU disaggregation limits. 
+
+1. Export the per-run variables (adjust `CONCURRENCY_LEVEL` as needed):
+   ```bash
+   export CONCURRENCY_LEVEL=40
+   export NUM_REQUESTS=$((20 * CONCURRENCY_LEVEL))
+   export SEED=$((7 + CONCURRENCY_LEVEL))
+   ```
+
+2. Download the agentic workload template:
+   ```bash
+   curl -LJO "https://raw.githubusercontent.com/llm-d/llm-d/main/guides/pd-disaggregation/benchmark-templates/agentic-code-gen-capped-55k-disagg.yaml"
+   ```
+
 ### 3. Execute Benchmark
 
+Render the configuration using the downloaded template and run the benchmark:
+
+**For Option A (Standard):**
 ```bash
 envsubst < tpu.yaml > config.yaml
+./run_only.sh -c config.yaml -o ./results
+```
+
+**For Option B (Agentic):**
+```bash
+envsubst < agentic-code-gen-capped-55k-disagg.yaml > config.yaml
 ./run_only.sh -c config.yaml -o ./results
 ```
 
@@ -343,3 +372,25 @@ scenario:
 version: '0.1'
 
 ```
+</details>
+
+## Benchmarking Report (Agentic Workload TPU v7x Example)
+
+We also evaluated P/D disaggregation on TPU v7x with different prefill-to-decode ratios (6:2 vs. 5:3) under the same agentic workload framework, but with context length capped at 55K tokens (`max_model_len`).
+
+For prefill-bottlenecked workloads (average prompt size ~51.5K tokens, output ~410 tokens), allocating more TPU nodes to the prefill phase (6:2 ratio) significantly reduces prefill queuing delays and scheduling bottlenecks under high concurrency, resulting in **Mean TTFT being 22.7% faster** (and **P90 TTFT being 12.9% faster**) at concurrency 40:
+
+| Metric | 6:2 (6 Prefill, 2 Decode) | 5:3 (5 Prefill, 3 Decode) | Difference (6:2 vs 5:3) |
+| :--- | :---: | :---: | :--- |
+| **Mean TTFT (ms)** | **20,609** | 25,296 | **22.7% Speedup** |
+| **P90 TTFT (ms)** | **39,505** | 44,620 | **12.9% Speedup** |
+| **ITL Mean (ms)** | 24.8 | **24.6** | +0.8% (Slower) |
+| **Input Throughput (tok/s)** | **25,470** | 24,440 | **+4.2% (Higher)** |
+| **Output Throughput (tok/s)** | **203** | 196 | **+3.5% (Higher)** |
+| **Overall Throughput (tok/s)** | **25,674** | 24,637 | **+4.2% (Higher)** |
+
+**Key Takeaways:**
+1. **Prefill Capacity is Critical:** In this prefill-heavy workload, the extra prefill capacity in the 6:2 setup dramatically reduces TTFT.
+2. **Decoder Saturation:** The faster prefill phase keeps the decoders saturated, allowing the 6:2 configuration to deliver higher overall throughput despite having fewer decoder nodes.
+3. **Current Limitations:** Without prefix-aware routing and CPU offloading optimizations, this disaggregated TPU configuration currently performs below the unified `llm-d-optimized` baseline. Integrating these optimizations into TPU disaggregated deployments is an active area of development.
+
