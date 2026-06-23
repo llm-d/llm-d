@@ -39,7 +39,7 @@ router:
           - pluginRef: active-request-scorer
             weight: 2
           - pluginRef: prefix-cache-scorer
-            weight: 3
+            weight: 1
 
   modelServers:
     # targetPorts must list all 8 DP rank ports so the EPP routes requests
