@@ -18,5 +18,5 @@ labels:
 
 images:
   - name: mooncake-master
-    newName: quay.io/grpereir/mooncake-master
-    newTag: test
+    newName: ghcr.io/llm-d/mooncake-master-store
+    newTag: v0.8.0
