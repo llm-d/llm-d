@@ -4,12 +4,5 @@ resources:
   - ../../../base
   - configmap.yaml
 
-labels:
-  - pairs:
-      llm-d.ai/guide: tiered-prefix-cache
-      llm-d.ai/offloading-connector: mooncake-store-connector
-    includeSelectors: true
-    includeTemplates: true
-
 patches:
   - path: patch-vllm.yaml
