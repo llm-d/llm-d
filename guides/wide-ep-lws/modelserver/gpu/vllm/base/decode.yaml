@@ -143,8 +143,7 @@ spec:
                   --moe-backend deep_gemm
                   # To enable tracing, add:
                   # --otlp-traces-endpoint http://otel-collector:4317 \
-                  # --collect-detailed-traces all
-
+                  # --collect-detailed-traces all=
             env:
               - name: HF_TOKEN
                 valueFrom:
@@ -174,6 +173,8 @@ spec:
                 value: "1"
               - name: VLLM_RANDOMIZE_DP_DUMMY_INPUTS
                 value: "1"
+              - name: VLLM_USE_DEEP_GEMM
+                value: "1"
               - name: NVIDIA_GDRCOPY
                 value: enabled
               - name: NVSHMEM_SYMMETRIC_SIZE # Prevent NVSHMEM OOM.
@@ -194,8 +195,9 @@ spec:
                 valueFrom:
                   fieldRef:
                     fieldPath: status.podIP
+
               # Use cache directories from the mounted volume under one easy to mount
-              # root directory
+              # root directory.
               - name: CUDA_CACHE_PATH
                 value: /var/cache/vllm/cuda
               - name: CCACHE_DIR
@@ -261,9 +263,11 @@ spec:
               failureThreshold: 3
             resources:
               limits:
+                ephemeral-storage: 1Ti
                 memory: 512Gi
                 nvidia.com/gpu: "8"
               requests:
+                ephemeral-storage: 1Ti
                 cpu: 32
                 memory: 512Gi
                 nvidia.com/gpu: "8"
