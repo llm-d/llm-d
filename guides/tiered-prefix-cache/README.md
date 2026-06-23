@@ -19,6 +19,7 @@ Each path is a self-contained deployment using a specific offloading implementat
 | ---- | -------------- | ----- | --------- |
 | **vLLM native** | vLLM `OffloadingConnector` | CPU RAM, CPU RAM + Filesystem | `modelserver/gpu/vllm/native/` |
 | **LMCache** | [LMCache](https://lmcache.ai) connector | CPU RAM, Filesystem | `modelserver/gpu/vllm/lmcache-connector/` |
+| **MooncakeStore** | MooncakeStore connector | CPU RAM, Filesystem | `modelserver/gpu/vllm/mooncake-store/` |
 | **SGLang HiCache** | SGLang native HiCache | CPU RAM | `modelserver/gpu/sglang/native/cpu/` |
 | **TPU** | vLLM TPU KVCache connector | CPU RAM | `modelserver/tpu/v6/vllm/native/cpu/`, `modelserver/tpu/v7/vllm/native/cpu/` |
 
@@ -79,7 +80,7 @@ Generally multiple cache tiers can be applied ordered by their cache read/write 
 | TPU KVCache Connector | CPU RAM | `modelserver/tpu-v7/vllm/tpu-offloading-connector/` |
 | SGLang HiCache | CPU RAM | `modelserver/gpu/sglang/native/cpu/` |
 | MooncakeStoreConnector (embedded) | Distributed CPU DRAM pool | `modelserver/gpu/vllm/mooncake-store/cpu/` |
-| MooncakeStoreConnector (standalone-store) | Distributed CPU DRAM + SSD pool | `modelserver/gpu/vllm/mooncake-store/both/` |
+| MooncakeStoreConnector (standalone-store) | Distributed CPU DRAM + SSD pool | `modelserver/gpu/vllm/mooncake-store/fs/` |
 
 <details>
 <summary><h4>About vLLM Native OffloadingConnector</h4></summary>
@@ -288,6 +289,16 @@ export INFRA_PROVIDER=base  # base | gke
 kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/tiered-prefix-cache/modelserver/gpu/sglang/native/cpu/${INFRA_PROVIDER}/
 ```
 
+#### MooncakeStore
+
+MooncakeStore supports a CPU RAM tier and a filesystem tier. As a pre-requisite make sure the mooncake-store component is deployed, you can see [manifests for doing this]
+
+```bash
+export VARIANT=cpu          # cpu | fs
+export INFRA_PROVIDER=base  # base
+kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/tiered-prefix-cache/modelserver/gpu/vllm/mooncake-store/${VARIANT}/${INFRA_PROVIDER}
+```
+
 #### TPU (Google TPU v6 / v7)
 
 ```bash
@@ -305,53 +316,6 @@ The filesystem tier works with any storage system that exposes a ReadWriteMany P
 | AWS EFS | `efs-sc` | [EFS guide](./manifests/backends/aws/README.md) |
 
 The connector does not evict data from the shared tier. Capacity is managed by the storage system or by an external controller — a reference PVC evictor is available in the [llm-d-kv-cache repository](https://github.com/llm-d/llm-d-kv-cache).
-<a id="for-nvidia-gpu--mooncake-store-distributed-cache"></a>
-
-**For NVIDIA GPU — Mooncake Store (distributed cache):**
-
-> See [About MooncakeStoreConnector](#about-mooncakestoreconnector) above for background on how this connector works and when to choose it.
-
-Select a deployment mode:
-
-* **Embedded** (`cpu/`) — Each vLLM rank contributes CPU DRAM to the pool in-process. Recommended for most deployments.
-* **Standalone-store** (`both/`) — An external `mooncake_client` process owns the CPU + SSD pool. Use when you need the SSD tier or want to decouple storage from compute.
-
-**Prerequisites:**
-
-1. RDMA / InfiniBand devices must be available on worker nodes and exposed inside pods (for example via `rdma/ib` resources from the NVIDIA Network Operator or SR-IOV device plugin).
-
-2. Deploy the Mooncake Master service:
-
-```bash
-kubectl apply -k ${REPO_ROOT}/helpers/mooncake-master-store/base/
-```
-
-Verify the master is running:
-
-```bash
-kubectl get pods -n mooncake
-```
-
-3. (Standalone-store mode only) Deploy an external `mooncake_client` process on each node that will contribute CPU + SSD storage. See the [Mooncake documentation](https://kvcache-ai.github.io/Mooncake/) for setup details.
-
-**Deploy the model server:**
-
-```bash
-export CONNECTOR=mooncake-store
-export VARIANT=cpu       # cpu (embedded) | both (standalone-store)
-export INFRA_PROVIDER=base
-kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/tiered-prefix-cache/modelserver/gpu/vllm/${CONNECTOR}/${VARIANT}/${INFRA_PROVIDER}/
-```
-
-> [!NOTE]
-> The Mooncake Store ConfigMap (`mooncake-store-config`) is deployed alongside the model server overlay. To customize the Mooncake configuration (for example, adjusting `global_segment_size` or switching from `rdma` to `tcp` protocol), edit the `configmap.yaml` in the overlay directory before applying.
-
-> [!IMPORTANT]
-> All vLLM instances sharing the same Mooncake Store must use the same `PYTHONHASHSEED` value. The overlays set `PYTHONHASHSEED=0` by default. Changing this value is fine, but it must be consistent across all instances.
-
-> [!NOTE]
-> To enable tiered prefix caching, we customize the llm-d EPP configuration. We configure two prefix cache scorers: one for the GPU/TPU cache and another for the CPU cache.
-> LRU capacity for the CPU cache must be manually configured (`lruCapacityPerServer`) because vLLM currently does not emit CPU block metrics.
 
 ---
 

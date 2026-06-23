@@ -7,7 +7,7 @@ data:
     {
       "mode": "standalone-store",
       "metadata_server": "P2PHANDSHAKE",
-      "master_server_address": "mooncake-master.mooncake.svc.cluster.local:50051",
+      "master_server_address": "mooncake-master-store.mooncake.svc.cluster.local:50051",
       "global_segment_size": 0,
       "local_buffer_size": "4GB",
       "protocol": "rdma",

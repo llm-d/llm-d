@@ -61,4 +61,4 @@ spec:
             name: mooncake-master-store-config
         - name: snapshots
           persistentVolumeClaim:
-            claimName: mooncake-master-storage-snapshots
+            claimName: mooncake-master-store-snapshots
