@@ -46,7 +46,7 @@ The llm-d Router provides the intelligent load balancing. In Standalone Mode, it
 
 ```bash
 helm install ${GUIDE_NAME} \
-    oci://ghcr.io/llm-d/charts/llm-d-router-standalone-dev \
+    ${ROUTER_STANDALONE_CHART} \
     -f guides/recipes/router/base.values.yaml \
     -f guides/optimized-baseline/router/optimized-baseline.values.yaml \
     -n ${NAMESPACE} --version ${ROUTER_CHART_VERSION}
