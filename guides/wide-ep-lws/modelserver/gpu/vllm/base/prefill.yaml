@@ -118,8 +118,6 @@ spec:
                 value: /usr/lib64
               - name: VLLM_SKIP_P2P_CHECK
                 value: "1"
-              - name: VLLM_WORKER_MULTIPROC_METHOD
-                value: "spawn"
               - name: NVIDIA_GDRCOPY
                 value: enabled
               - name: NVSHMEM_REMOTE_TRANSPORT
