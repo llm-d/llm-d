@@ -1,0 +1,11 @@
+apiVersion: kustomize.config.k8s.io/v1alpha1
+kind: Component
+images:
+  - name: REPLACE_MODEL_SERVER_IMAGE
+    newName: nvcr.io/nvidia/tensorrt-llm/release
+    # Iteration-state gauges the router's load-aware scorers consume
+    # (trtllm_num_requests_waiting/_running, trtllm_kv_cache_utilization) were
+    # added in PR https://github.com/NVIDIA/TensorRT-LLM/pull/12545, first
+    # available in v1.3.0rc12. Stock 1.2.1 GA lacks
+    # them. There is no v1.3.0 GA yet, so pin a release candidate.
+    newTag: 1.3.0rc18
