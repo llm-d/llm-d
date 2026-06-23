@@ -77,7 +77,7 @@ spec:
                   --kv_transfer_config '{"kv_connector":"NixlConnector",
                                           "kv_role":"kv_both",
                                           "kv_load_failure_policy":"fail"}' \
-                                    # --enable-dbo \
+                  --enable-dbo \
                   --dbo-prefill-token-threshold 32 \
                   --enable-eplb \
                   --eplb-config '{"window_size":"1000",
@@ -130,7 +130,7 @@ spec:
               - name: NCCL_SOCKET_IFNAME
                 value: eth0
               - name: VLLM_LOGGING_LEVEL
-                value: DEBUG
+                value: INFO
               # Default keep-alive timeout of 5s is shorter than the sidecar's 90s idle conn timeout,
               # causing TCP RSTs.
               - name: VLLM_HTTP_TIMEOUT_KEEP_ALIVE
