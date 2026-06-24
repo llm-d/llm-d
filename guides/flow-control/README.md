@@ -89,7 +89,7 @@ Flow Control is a software-level scheduling feature at the EPP layer and is enti
 
   ```bash
   kubectl apply -f https://github.com/kubernetes-sigs/gateway-api-inference-extension/releases/download/${GAIE_VERSION}/v1-manifests.yaml
-  kubectl apply -f https://github.com/llm-d/llm-d-router/releases/download/v0.9.0/manifests.yaml
+  kubectl apply -f https://github.com/llm-d/llm-d-router/releases/download/${ROUTER_CHART_VERSION}/manifests.yaml
   ```
 
 * Create a target namespace for the installation:

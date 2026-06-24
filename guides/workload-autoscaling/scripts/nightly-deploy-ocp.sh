@@ -6,7 +6,7 @@
 #   NAMESPACE             target namespace for ALL resources (default: llm-d-optimized-baseline)
 #   WVA_TAG               WVA controller image tag override (default: unset = upstream default)
 #   OUTPUT_DIR            where to write the generated overlay (default: mktemp -d)
-#   ROUTER_CHART_VERSION  EPP router chart version (default: v0)
+#   ROUTER_CHART_VERSION  EPP router chart version (default: set by guides/env.sh)
 
 set -euo pipefail
 
@@ -21,13 +21,14 @@ fi
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/../../.." && pwd)"
+source "${REPO_ROOT}/guides/env.sh"
 
 NAMESPACE="${NAMESPACE:-wva-nightly-optimized-baseline-$(printf '%04x' $RANDOM)}"
 # Short hash used as a suffix on ClusterRoleBindings to make them unique per namespace.
 NS_HASH="$(printf '%s' "${NAMESPACE}" | sha256sum | cut -c1-8)"
 WVA_TAG="${WVA_TAG:-}"
 OUTPUT_DIR="${OUTPUT_DIR:-$(mktemp -d -t nightly-deploy-ocp.XXXXXX)}"
-ROUTER_CHART_VERSION="${ROUTER_CHART_VERSION:-v0}"
+ROUTER_CHART_VERSION="${ROUTER_CHART_VERSION}"
 
 mkdir -p "${OUTPUT_DIR}"
 
@@ -115,7 +116,7 @@ kubectl create namespace "${NAMESPACE}" --dry-run=client -o yaml | kubectl apply
 
 echo "==> Installing EPP router via Helm"
 helm install workload-variant-autoscaler-inferencepool-standalone \
-  oci://ghcr.io/llm-d/charts/llm-d-router-standalone-dev \
+  "${ROUTER_STANDALONE_CHART}" \
   -f "${REPO_ROOT}/guides/recipes/router/base.values.yaml" \
   -f "${REPO_ROOT}/guides/optimized-baseline/router/optimized-baseline.values.yaml" \
   -n "${NAMESPACE}" --version "${ROUTER_CHART_VERSION}"

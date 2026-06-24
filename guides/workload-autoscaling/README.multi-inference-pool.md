@@ -14,9 +14,9 @@ Complete the [optimized-baseline](../optimized-baseline/README.md) guide. At the
 Install an additional Helm release in the same namespace as the optimized-baseline. Each release must use a **unique `matchLabels`** selector so its InferencePool discovers only the correct model's pods. The example below adds a pool called `model-b`; repeat with a different release name and values file for every additional pool.
 
 ```bash
-export NAMESPACE=llm-d-optimized-baseline
 export REPO_ROOT=$(realpath $(git rev-parse --show-toplevel))
-export ROUTER_CHART_VERSION=v0.9.1
+source ${REPO_ROOT}/guides/env.sh
+export NAMESPACE=llm-d-optimized-baseline
 
 helm install model-b \
     ${ROUTER_STANDALONE_CHART} \
