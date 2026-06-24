@@ -1,0 +1,745 @@
+
+# with compute domain (not via auto-mnnvl)
+# with tas -- commented out
+
+# TODO before commit to repo
+# 
+# decode worker replicas = 7
+#
+#
+# add tas
+# remove compute domain
+# remove pvc, remove model-cache volume
+# aws vs gcp, see dynamo docs "GCP GPU nodes have taints." and add for llm-d as well?
+# -- important dynamo doc! /Users/sasoolin/code/dynamo/recipes/deepseek-v4/deepseek-v4-pro/sglang/disagg-gb200/README.md
+# with --enable-cumem-allocator and image vllm/vllm-openai:v0.23.0; when possible replace with ghcr.io/llm-d/llm-d-cuda-gb200:v0.8.0 (or -rc.1)
+# with --no-enable-prefix-caching as chauncey jiang suggested
+
+# current grove install:
+# k -n grove get cm grove-operator-cm-3044e879 -oyaml
+    # topologyAwareScheduling:
+    #   enabled: false
+    # network:
+    #   autoMNNVLEnabled: false
+
+apiVersion: resource.nvidia.com/v1beta1
+kind: ComputeDomain
+metadata:
+  name: llm-d-wide-ep-compute-domain
+spec:
+  numNodes: 0
+  channel:
+    resourceClaimTemplate:
+      name: llm-d-wide-ep-compute-domain-channel
+---
+apiVersion: grove.io/v1alpha1
+kind: PodCliqueSet
+metadata:
+  name: dsr1
+spec:
+  replicas: 1
+  template:
+    # topologyConstraint:
+    #   packDomain: rack
+    cliques:
+    - name: prefill
+      labels:
+        kai.scheduler/queue: default-queue
+        llm-d.ai/inference-serving: "true"
+        llm-d.ai/guide: "wide-ep"
+        llm-d.ai/accelerator-variant: "gpu"
+        llm-d.ai/accelerator-vendor: "nvidia"
+        llm-d.ai/model: DeepSeek-R1-0528
+        llm-d.ai/role: prefill
+      annotations:
+        networking.gke.io/default-interface: eth0
+        networking.gke.io/interfaces: |
+          [
+            {"interfaceName":"eth0","network":"default"},
+            {"interfaceName":"rdma0","network":"rdma-0"},
+            {"interfaceName":"rdma1","network":"rdma-1"},
+            {"interfaceName":"rdma2","network":"rdma-2"},
+            {"interfaceName":"rdma3","network":"rdma-3"}
+          ]
+      spec:
+        replicas: 1
+        minAvailable: 1
+        roleName: prefill
+        podSpec:
+          serviceAccountName: deepseek-r1
+          schedulerName: kai-scheduler
+          tolerations:
+            - key: kubernetes.io/arch
+              operator: Equal
+              value: arm64
+              effect: NoSchedule
+          resourceClaims:
+            - name: compute-domain-channel
+              resourceClaimTemplateName: llm-d-wide-ep-compute-domain-channel
+          volumes:
+            - name: dshm
+              emptyDir:
+                medium: Memory
+                sizeLimit: 200Gi
+            - name: hf-cache
+              emptyDir: {}
+            - name: jit-cache
+              emptyDir: {}
+            - name: model-cache
+              persistentVolumeClaim:
+                claimName: shared-model-cache
+          containers:
+          - name: vllm
+            image: vllm/vllm-openai:v0.23.0
+            securityContext:
+              capabilities:
+                add:
+                - IPC_LOCK
+                - SYS_RAWIO
+              runAsGroup: 0
+              runAsUser: 0
+            imagePullPolicy: Always
+            command:
+              - /bin/bash
+              - -c
+            args:
+              - |-
+                # Clear /dev/shm on start to prevent running out of space when crashes occur
+                # https://github.com/llm-d/llm-d/issues/352
+                find /dev/shm -type f -delete
+
+                LEADER_PCLQ_NAME="${GROVE_PCLQ_NAME/worker/leader}"
+                LEADER_ADDRESS="${LEADER_PCLQ_NAME}-0.${GROVE_HEADLESS_SERVICE}"
+
+                exec vllm serve \
+                  /models/deepseek-r1-fp4 \
+                  --served-model-name deepseek-ai/DeepSeek-R1 \
+                  --port 8000 \
+                  --trust-remote-code \
+                  --kv-cache-dtype fp8 \
+                  --block-size 256 \
+                  --disable-uvicorn-access-log \
+                  --enable-expert-parallel \
+                  --tensor-parallel-size $TP_SIZE \
+                  --data-parallel-size $DP_SIZE_LOCAL \
+                  --data-parallel-size-local $DP_SIZE_LOCAL \
+                  --data-parallel-address ${LEADER_ADDRESS} \
+                  --data-parallel-rpc-port 5555 \
+                  --max-num-seqs 64 \
+                  --max-num-batched-tokens 16384 \
+                  --kv_transfer_config '{"kv_connector":"NixlConnector",
+                                          "kv_role":"kv_both",
+                                          "kv_buffer_device":"cuda"}' \
+                  --no-disable-hybrid-kv-cache-manager \
+                  --kv-cache-memory-bytes=${KV_CACHE_MEMORY_BYTES-} \
+                  --all2all-backend allgather_reducescatter \
+                  --gpu-memory-utilization 0.9 \
+                  --max-model-len 10000 \
+                  --no-enable-prefix-caching \
+                  --enable-cumem-allocator
+            env:
+            - name: DP_SIZE_LOCAL
+              value: "4"
+            - name: TP_SIZE
+              value: "1"
+            - name: VLLM_SKIP_P2P_CHECK
+              value: "1"
+            - name: VLLM_RANDOMIZE_DP_DUMMY_INPUTS
+              value: "1"
+            - name: VLLM_USE_DEEP_GEMM
+              value: "1"
+            - name: VLLM_USE_FLASHINFER_MOE_FP4
+              value: "1"
+            - name: VLLM_FLASHINFER_MOE_BACKEND
+              value: throughput
+            - name: UCX_MEMTYPE_CACHE
+              value: "n"
+            - name: UCX_TLS
+              value: cuda_copy,cuda_ipc,tcp
+            - name: UCX_CUDA_IPC_ENABLE_MNNVL
+              value: "y"
+            - name: NCCL_MNNVL_ENABLE
+              value: "1"
+            - name: NCCL_CUMEM_ENABLE
+              value: "1"
+            - name: NCCL_NVLS_ENABLE
+              value: "1"
+            - name: VLLM_USE_NCCL_SYMM_MEM
+              value: "1"
+            - name: GLOO_SOCKET_IFNAME
+              value: eth0
+            - name: NCCL_SOCKET_IFNAME
+              value: eth0
+            - name: NVIDIA_GDRCOPY
+              value: "1"
+            - name: NCCL_P2P_LEVEL
+              value: NVL
+            - name: TORCH_DISTRIBUTED_TIMEOUT
+              value: "7200"
+            - name: NCCL_STORE_TIMEOUT
+              value: "7200"
+            - name: TORCH_DIST_INIT_BARRIER_TIMEOUT
+              value: "7200"
+            - name: VLLM_ENGINE_READY_TIMEOUT_S
+              value: "1800"
+            - name: VLLM_NIXL_SIDE_CHANNEL_HOST
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.podIP
+            - name: VLLM_NIXL_SIDE_CHANNEL_PORT
+              value: "5700"
+            - name: NIXL_LOG_LEVEL
+              value: INFO
+
+            - name: CUDA_CACHE_PATH
+              value: /var/cache/vllm/cuda
+            - name: CCACHE_DIR
+              value: /var/cache/vllm/ccache
+            - name: VLLM_CACHE_ROOT
+              value: /var/cache/vllm/vllm
+            - name: FLASHINFER_WORKSPACE_BASE
+              value: /var/cache/vllm/flashinfer
+            - name: HF_HUB_CACHE
+              value: /var/cache/huggingface
+
+            ports:
+            - containerPort: 8000
+              name: metrics
+              protocol: TCP
+            startupProbe:
+              httpGet:
+                path: /health
+                port: metrics
+              initialDelaySeconds: 0
+              periodSeconds: 10
+              timeoutSeconds: 5
+              failureThreshold: 1800
+            livenessProbe:
+              httpGet:
+                path: /health
+                port: metrics
+              periodSeconds: 30
+              timeoutSeconds: 5
+              failureThreshold: 3
+            readinessProbe:
+              httpGet:
+                path: /v1/models
+                port: metrics
+              periodSeconds: 10
+              timeoutSeconds: 5
+              failureThreshold: 3
+            resources:
+              claims:
+                - name: compute-domain-channel
+              limits:
+                ephemeral-storage: 1Ti
+                memory: 850Gi
+                nvidia.com/gpu: "4"
+                networking.gke.io.networks/rdma-0: "1"
+                networking.gke.io.networks/rdma-1: "1"
+                networking.gke.io.networks/rdma-2: "1"
+                networking.gke.io.networks/rdma-3: "1"
+              requests:
+                cpu: "120"
+                ephemeral-storage: 1Ti
+                memory: 850Gi
+                nvidia.com/gpu: "4"
+            volumeMounts:
+              - name: dshm
+                mountPath: /dev/shm
+              - name: hf-cache
+                mountPath: /var/cache/huggingface
+              - name: jit-cache
+                mountPath: /var/cache/vllm
+              - name: model-cache
+                mountPath: /models
+
+    - name: decode-leader
+      labels:
+        kai.scheduler/queue: default-queue
+        llm-d.ai/inference-serving: "true"
+        llm-d.ai/guide: "wide-ep"
+        llm-d.ai/accelerator-variant: "gpu"
+        llm-d.ai/accelerator-vendor: "nvidia"
+        llm-d.ai/model: DeepSeek-R1-0528
+        llm-d.ai/role: decode
+      annotations:
+        networking.gke.io/default-interface: eth0
+        networking.gke.io/interfaces: |
+          [
+            {"interfaceName":"eth0","network":"default"},
+            {"interfaceName":"rdma0","network":"rdma-0"},
+            {"interfaceName":"rdma1","network":"rdma-1"},
+            {"interfaceName":"rdma2","network":"rdma-2"},
+            {"interfaceName":"rdma3","network":"rdma-3"}
+          ]
+      spec:
+        replicas: 1
+        minAvailable: 1
+        roleName: decode-leader
+        podSpec:
+          serviceAccountName: deepseek-r1
+          schedulerName: kai-scheduler
+          tolerations:
+            - key: kubernetes.io/arch
+              operator: Equal
+              value: arm64
+              effect: NoSchedule
+          resourceClaims:
+            - name: compute-domain-channel
+              resourceClaimTemplateName: llm-d-wide-ep-compute-domain-channel
+          initContainers:
+            - name: routing-proxy
+              args:
+                - --port=8000
+                - --vllm-port=8200
+                - --connector=nixlv2
+                - --zap-log-level=1
+                - --secure-proxy=false
+                - --enable-prefiller-sampling
+              image: ghcr.io/llm-d/llm-d-routing-sidecar:v0.8.0
+              imagePullPolicy: Always
+              ports:
+                - containerPort: 8000
+                  name: sidecar
+                  protocol: TCP
+              resources:
+                requests:
+                  cpu: "1"
+                  memory: 1Gi
+              restartPolicy: Always
+              securityContext:
+                allowPrivilegeEscalation: false
+                runAsNonRoot: true
+          volumes:
+            - name: dshm
+              emptyDir:
+                medium: Memory
+                sizeLimit: 200Gi
+            - name: hf-cache
+              emptyDir: {}
+            - name: jit-cache
+              emptyDir: {}
+            - name: model-cache
+              persistentVolumeClaim:
+                claimName: shared-model-cache
+          containers:
+          - name: vllm
+            image: vllm/vllm-openai:v0.23.0
+            securityContext:
+              capabilities:
+                add:
+                - IPC_LOCK
+                - SYS_RAWIO
+              runAsGroup: 0
+              runAsUser: 0
+            imagePullPolicy: Always
+            command:
+              - /bin/bash
+              - -c
+            args:
+              - |-
+                # Clear /dev/shm on start to prevent running out of space when crashes occur
+                # https://github.com/llm-d/llm-d/issues/352
+                find /dev/shm -type f -delete
+
+                START_RANK=0
+                LEADER_PCLQ_NAME="${GROVE_PCLQ_NAME/worker/leader}"
+                LEADER_ADDRESS="${LEADER_PCLQ_NAME}-0.${GROVE_HEADLESS_SERVICE}"
+
+                exec vllm serve \
+                  /models/deepseek-r1-fp4 \
+                  --served-model-name deepseek-ai/DeepSeek-R1 \
+                  --port 8200 \
+                  --trust-remote-code \
+                  --kv-cache-dtype fp8 \
+                  --block-size 256 \
+                  --disable-uvicorn-access-log \
+                  --data-parallel-hybrid-lb \
+                  --enable-expert-parallel \
+                  --tensor-parallel-size $TP_SIZE \
+                  --data-parallel-size $((GROVE_PCSG_TEMPLATE_NUM_PODS * DP_SIZE_LOCAL)) \
+                  --data-parallel-size-local $DP_SIZE_LOCAL \
+                  --data-parallel-address ${LEADER_ADDRESS} \
+                  --data-parallel-rpc-port 5555 \
+                  --data-parallel-start-rank $START_RANK \
+                  --max-num-seqs 128 \
+                  --max-cudagraph-capture-size 128 \
+                  --max-num-batched-tokens 128 \
+                  --kv_transfer_config '{"kv_connector":"NixlConnector",
+                                          "kv_role":"kv_both",
+                                          "kv_buffer_device":"cuda"}' \
+                  --no-disable-hybrid-kv-cache-manager \
+                  --async-scheduling \
+                  --compilation_config '{"cudagraph_mode": "FULL_DECODE_ONLY"}' \
+                  --gpu-memory-utilization 0.9 \
+                  --kv-cache-memory-bytes=${KV_CACHE_MEMORY_BYTES-} \
+                  --all2all-backend flashinfer_nvlink_two_sided \
+                  --no-enable-prefix-caching \
+                  --enable-cumem-allocator
+            env:
+            - name: DP_SIZE_LOCAL
+              value: "4"
+            - name: TP_SIZE
+              value: "1"
+            - name: VLLM_SKIP_P2P_CHECK
+              value: "1"
+            - name: VLLM_RANDOMIZE_DP_DUMMY_INPUTS
+              value: "1"
+            - name: VLLM_USE_DEEP_GEMM
+              value: "1"
+            - name: VLLM_USE_FLASHINFER_MOE_FP4
+              value: "1"
+            - name: VLLM_FLASHINFER_MOE_BACKEND
+              value: throughput
+            - name: UCX_MEMTYPE_CACHE
+              value: "n"
+            - name: UCX_TLS
+              value: cuda_copy,cuda_ipc,tcp
+            - name: UCX_CUDA_IPC_ENABLE_MNNVL
+              value: "y"
+            - name: NCCL_MNNVL_ENABLE
+              value: "1"
+            - name: NCCL_CUMEM_ENABLE
+              value: "1"
+            - name: NCCL_NVLS_ENABLE
+              value: "1"
+            - name: VLLM_USE_NCCL_SYMM_MEM
+              value: "1"
+            - name: GLOO_SOCKET_IFNAME
+              value: eth0
+            - name: NCCL_SOCKET_IFNAME
+              value: eth0
+            - name: NVIDIA_GDRCOPY
+              value: "1"
+            - name: NCCL_P2P_LEVEL
+              value: NVL
+            - name: TORCH_DISTRIBUTED_TIMEOUT
+              value: "7200"
+            - name: NCCL_STORE_TIMEOUT
+              value: "7200"
+            - name: TORCH_DIST_INIT_BARRIER_TIMEOUT
+              value: "7200"
+            - name: VLLM_NIXL_SIDE_CHANNEL_HOST
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.podIP
+            - name: VLLM_NIXL_SIDE_CHANNEL_PORT
+              value: "5700"
+            - name: VLLM_NIXL_ABORT_REQUEST_TIMEOUT
+              value: "600"
+            - name: VLLM_ENGINE_READY_TIMEOUT_S
+              value: "1800"
+            - name: NIXL_LOG_LEVEL
+              value: INFO
+
+            - name: CUDA_CACHE_PATH
+              value: /var/cache/vllm/cuda
+            - name: CCACHE_DIR
+              value: /var/cache/vllm/ccache
+            - name: VLLM_CACHE_ROOT
+              value: /var/cache/vllm/vllm
+            - name: FLASHINFER_WORKSPACE_BASE
+              value: /var/cache/vllm/flashinfer
+            - name: HF_HUB_CACHE
+              value: /var/cache/huggingface
+
+            ports:
+            - containerPort: 8200
+              name: metrics
+              protocol: TCP
+            startupProbe:
+              httpGet:
+                path: /health
+                port: metrics
+              initialDelaySeconds: 0
+              periodSeconds: 10
+              timeoutSeconds: 5
+              failureThreshold: 1800
+            livenessProbe:
+              httpGet:
+                path: /health
+                port: metrics
+              periodSeconds: 30
+              timeoutSeconds: 5
+              failureThreshold: 3
+            readinessProbe:
+              httpGet:
+                path: /v1/models
+                port: metrics
+              periodSeconds: 10
+              timeoutSeconds: 5
+              failureThreshold: 3
+            resources:
+              claims:
+                - name: compute-domain-channel
+              limits:
+                ephemeral-storage: 1Ti
+                memory: 850Gi
+                nvidia.com/gpu: "4"
+                networking.gke.io.networks/rdma-0: "1"
+                networking.gke.io.networks/rdma-1: "1"
+                networking.gke.io.networks/rdma-2: "1"
+                networking.gke.io.networks/rdma-3: "1"
+              requests:
+                cpu: "120"
+                ephemeral-storage: 1Ti
+                memory: 850Gi
+                nvidia.com/gpu: "4"
+            volumeMounts:
+              - name: dshm
+                mountPath: /dev/shm
+              - name: hf-cache
+                mountPath: /var/cache/huggingface
+              - name: jit-cache
+                mountPath: /var/cache/vllm
+              - name: model-cache
+                mountPath: /models
+
+    - name: decode-worker
+      labels:
+        kai.scheduler/queue: default-queue
+        llm-d.ai/inference-serving: "true"
+        llm-d.ai/guide: "wide-ep"
+        llm-d.ai/accelerator-variant: "gpu"
+        llm-d.ai/accelerator-vendor: "nvidia"
+        llm-d.ai/model: DeepSeek-R1-0528
+        llm-d.ai/role: decode
+      annotations:
+        networking.gke.io/default-interface: eth0
+        networking.gke.io/interfaces: |
+          [
+            {"interfaceName":"eth0","network":"default"},
+            {"interfaceName":"rdma0","network":"rdma-0"},
+            {"interfaceName":"rdma1","network":"rdma-1"},
+            {"interfaceName":"rdma2","network":"rdma-2"},
+            {"interfaceName":"rdma3","network":"rdma-3"}
+          ]
+      spec:
+        replicas: 1 # todo 7
+        minAvailable: 1 # todo 7
+        roleName: decode-worker
+        podSpec:
+          serviceAccountName: deepseek-r1
+          schedulerName: kai-scheduler
+          tolerations:
+            - key: kubernetes.io/arch
+              operator: Equal
+              value: arm64
+              effect: NoSchedule
+          resourceClaims:
+            - name: compute-domain-channel
+              resourceClaimTemplateName: llm-d-wide-ep-compute-domain-channel
+          initContainers:
+            - name: routing-proxy
+              args:
+                - --port=8000
+                - --vllm-port=8200
+                - --connector=nixlv2
+                - --zap-log-level=1
+                - --secure-proxy=false
+                - --enable-prefiller-sampling
+              image: ghcr.io/llm-d/llm-d-routing-sidecar:v0.8.0
+              imagePullPolicy: Always
+              ports:
+                - containerPort: 8000
+                  name: sidecar
+                  protocol: TCP
+              resources:
+                requests:
+                  cpu: "1"
+                  memory: 1Gi
+              restartPolicy: Always
+              securityContext:
+                allowPrivilegeEscalation: false
+                runAsNonRoot: true
+          volumes:
+            - name: dshm
+              emptyDir:
+                medium: Memory
+                sizeLimit: 200Gi
+            - name: hf-cache
+              emptyDir: {}
+            - name: jit-cache
+              emptyDir: {}
+            - name: model-cache
+              persistentVolumeClaim:
+                claimName: shared-model-cache
+          containers:
+          - name: vllm
+            image: vllm/vllm-openai:v0.23.0
+            securityContext:
+              capabilities:
+                add:
+                - IPC_LOCK
+                - SYS_RAWIO
+              runAsGroup: 0
+              runAsUser: 0
+            imagePullPolicy: Always
+            command:
+              - /bin/bash
+              - -c
+            args:
+              - |-
+                # Clear /dev/shm on start to prevent running out of space when crashes occur
+                # https://github.com/llm-d/llm-d/issues/352
+                find /dev/shm -type f -delete
+
+                START_RANK=$(( ( ${GROVE_PCLQ_POD_INDEX:-0} + 1 ) * DP_SIZE_LOCAL ))
+                LEADER_PCLQ_NAME="${GROVE_PCLQ_NAME/worker/leader}"
+                LEADER_ADDRESS="${LEADER_PCLQ_NAME}-0.${GROVE_HEADLESS_SERVICE}"
+              
+                exec vllm serve \
+                  /models/deepseek-r1-fp4 \
+                  --served-model-name deepseek-ai/DeepSeek-R1 \
+                  --port 8200 \
+                  --trust-remote-code \
+                  --kv-cache-dtype fp8 \
+                  --block-size 256 \
+                  --disable-uvicorn-access-log \
+                  --data-parallel-hybrid-lb \
+                  --enable-expert-parallel \
+                  --tensor-parallel-size $TP_SIZE \
+                  --data-parallel-size $((GROVE_PCSG_TEMPLATE_NUM_PODS * DP_SIZE_LOCAL)) \
+                  --data-parallel-size-local $DP_SIZE_LOCAL \
+                  --data-parallel-address ${LEADER_ADDRESS} \
+                  --data-parallel-rpc-port 5555 \
+                  --data-parallel-start-rank $START_RANK \
+                  --max-num-seqs 128 \
+                  --max-cudagraph-capture-size 128 \
+                  --max-num-batched-tokens 128 \
+                  --kv_transfer_config '{"kv_connector":"NixlConnector",
+                                          "kv_role":"kv_both",
+                                          "kv_buffer_device":"cuda"}' \
+                  --no-disable-hybrid-kv-cache-manager \
+                  --async-scheduling \
+                  --compilation_config '{"cudagraph_mode": "FULL_DECODE_ONLY"}' \
+                  --gpu-memory-utilization 0.9 \
+                  --kv-cache-memory-bytes=${KV_CACHE_MEMORY_BYTES-} \
+                  --all2all-backend flashinfer_nvlink_two_sided \
+                  --no-enable-prefix-caching \
+                  --enable-cumem-allocator
+            env:
+            - name: DP_SIZE_LOCAL
+              value: "4"
+            - name: TP_SIZE
+              value: "1"
+            - name: VLLM_SKIP_P2P_CHECK
+              value: "1"
+            - name: VLLM_RANDOMIZE_DP_DUMMY_INPUTS
+              value: "1"
+            - name: VLLM_USE_DEEP_GEMM
+              value: "1"
+            - name: VLLM_USE_FLASHINFER_MOE_FP4
+              value: "1"
+            - name: VLLM_FLASHINFER_MOE_BACKEND
+              value: throughput
+            - name: UCX_MEMTYPE_CACHE
+              value: "n"
+            - name: UCX_TLS
+              value: cuda_copy,cuda_ipc,tcp
+            - name: UCX_CUDA_IPC_ENABLE_MNNVL
+              value: "y"
+            - name: NCCL_MNNVL_ENABLE
+              value: "1"
+            - name: NCCL_CUMEM_ENABLE
+              value: "1"
+            - name: NCCL_NVLS_ENABLE
+              value: "1"
+            - name: VLLM_USE_NCCL_SYMM_MEM
+              value: "1"
+            - name: GLOO_SOCKET_IFNAME
+              value: eth0
+            - name: NCCL_SOCKET_IFNAME
+              value: eth0
+            - name: NVIDIA_GDRCOPY
+              value: "1"
+            - name: NCCL_P2P_LEVEL
+              value: NVL
+            - name: TORCH_DISTRIBUTED_TIMEOUT
+              value: "7200"
+            - name: NCCL_STORE_TIMEOUT
+              value: "7200"
+            - name: TORCH_DIST_INIT_BARRIER_TIMEOUT
+              value: "7200"
+            - name: VLLM_NIXL_SIDE_CHANNEL_HOST
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.podIP
+            - name: VLLM_NIXL_SIDE_CHANNEL_PORT
+              value: "5700"
+            - name: VLLM_NIXL_ABORT_REQUEST_TIMEOUT
+              value: "600"
+            - name: VLLM_ENGINE_READY_TIMEOUT_S
+              value: "1800"
+            - name: NIXL_LOG_LEVEL
+              value: INFO
+
+            - name: CUDA_CACHE_PATH
+              value: /var/cache/vllm/cuda
+            - name: CCACHE_DIR
+              value: /var/cache/vllm/ccache
+            - name: VLLM_CACHE_ROOT
+              value: /var/cache/vllm/vllm
+            - name: FLASHINFER_WORKSPACE_BASE
+              value: /var/cache/vllm/flashinfer
+            - name: HF_HUB_CACHE
+              value: /var/cache/huggingface
+
+            ports:
+            - containerPort: 8200
+              name: metrics
+              protocol: TCP
+            startupProbe:
+              httpGet:
+                path: /health
+                port: metrics
+              initialDelaySeconds: 0
+              periodSeconds: 10
+              timeoutSeconds: 5
+              failureThreshold: 1800
+            livenessProbe:
+              httpGet:
+                path: /health
+                port: metrics
+              periodSeconds: 30
+              timeoutSeconds: 5
+              failureThreshold: 3
+            readinessProbe:
+              httpGet:
+                path: /v1/models
+                port: metrics
+              periodSeconds: 10
+              timeoutSeconds: 5
+              failureThreshold: 3
+            resources:
+              claims:
+                - name: compute-domain-channel
+              limits:
+                ephemeral-storage: 1Ti
+                memory: 850Gi
+                nvidia.com/gpu: "4"
+                networking.gke.io.networks/rdma-0: "1"
+                networking.gke.io.networks/rdma-1: "1"
+                networking.gke.io.networks/rdma-2: "1"
+                networking.gke.io.networks/rdma-3: "1"
+              requests:
+                cpu: "120"
+                ephemeral-storage: 1Ti
+                memory: 850Gi
+                nvidia.com/gpu: "4"
+            volumeMounts:
+              - name: dshm
+                mountPath: /dev/shm
+              - name: hf-cache
+                mountPath: /var/cache/huggingface
+              - name: jit-cache
+                mountPath: /var/cache/vllm
+              - name: model-cache
+                mountPath: /models
+
+    podCliqueScalingGroups:
+    - name: decode-sg
+      cliqueNames: [decode-leader, decode-worker]
+      replicas: 1
+      minAvailable: 1

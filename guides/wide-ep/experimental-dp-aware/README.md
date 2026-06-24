@@ -2,6 +2,9 @@
 
 This deployment uses **DP-aware scheduling**, where instead of letting vLLM automatically handle data parallelism internally, we explicitly launch separate vLLM server instances for each data parallel rank with a separate port for each rank. This enables the EPP to schedule requests directly to specific DP ranks, improving KV cache routing efficiency.
 
+> [!IMPORTANT]
+> This is an experimental **LeaderWorkerSet-only** Wide EP variant. It does not provide a Grove deployment path. For the main LWS guide, see [Wide EP with LeaderWorkerSet](../README-lws.md). For the GB200 Grove variant, see [Wide EP with Grove](../README-grove.md).
+
 ## Discussion
 
 vLLM supports multiple "modes" for DP load balancing, including:
@@ -30,7 +33,7 @@ This deployment uses vLLM's built-in DP Supervisor (`--data-parallel-multi-port-
 
 ## Overview
 
-This guide demonstrates how to deploy DeepSeek-R1-0528 using vLLM's P/D disaggregation support with NIXL in a wide expert parallel pattern with LeaderWorkerSets with DP-aware scheduling. This guide has been validated on:
+This guide demonstrates how to deploy DeepSeek-R1-0528 using vLLM's P/D disaggregation support with NIXL in a wide expert parallel pattern with LeaderWorkerSets and DP-aware scheduling. The llm-d Router, GAIE, and EPP still handle traffic routing and P/D scheduling; LeaderWorkerSet deploys the model-server pods. This guide has been validated on:
 
 - a 32xH200 cluster with InfiniBand networking (CoreWeave)
 - a 32xB200 cluster with InfiniBand networking (CoreWeave)
@@ -44,7 +47,7 @@ In this example, we will demonstrate a deployment of `DeepSeek-R1-0528` with:
 
 ## Hardware Requirements
 
-This guide requires 32 Nvidia H200 or B200 GPUs and InfiniBand or RoCE RDMA networking. Check `modelserver/base/decode.yaml` and `modelserver/base/prefill.yaml` for detailed resource requirements.
+This guide requires 32 Nvidia H200 or B200 GPUs and InfiniBand or RoCE RDMA networking. Check `manifests/modelserver/base/decode.yaml` and `manifests/modelserver/base/prefill.yaml` for detailed resource requirements.
 
 > [!NOTE]
 > The pods leveraging inter-node EP must be deployed in a cluster environment with full mesh
@@ -71,7 +74,7 @@ This guide requires 32 Nvidia H200 or B200 GPUs and InfiniBand or RoCE RDMA netw
 ## Installation
 
 ```bash
-cd ${REPO_ROOT}/guides/wide-ep-lws/experimental-dp-aware
+cd ${REPO_ROOT}/guides/wide-ep/experimental-dp-aware
 ```
 
 ### 1. Deploy the llm-d Router
@@ -81,7 +84,7 @@ cd ${REPO_ROOT}/guides/wide-ep-lws/experimental-dp-aware
 This deploys the llm-d Router with an Envoy sidecar, it doesn't set up a Kubernetes Gateway.
 
 ```bash
-export GUIDE_NAME="wide-ep-lws"
+export GUIDE_NAME="wide-ep"
 helm install ${GUIDE_NAME} \
     ${ROUTER_STANDALONE_CHART} \
     -f ${REPO_ROOT}/guides/recipes/router/base.values.yaml \
@@ -94,7 +97,7 @@ helm install ${GUIDE_NAME} \
 
 To use a Kubernetes Gateway managed proxy rather than the standalone version, follow these steps instead of applying the previous Helm chart:
 
-1. *Deploy a Kubernetes Gateway* by following one of [the gateway guides](../../prereq/gateway-provider/README.md).
+1. *Deploy a Kubernetes Gateway* by following one of [the gateway guides](../../../docs/infrastructure/gateway).
 2. *Deploy the llm-d Router and an HTTPRoute* that connects it to the Gateway as follows:
 
 ```bash
@@ -112,11 +115,11 @@ helm install ${GUIDE_NAME} \
 
 ### 2. Deploy the Model Server
 
-Apply the Kustomize overlays for your specific backend:
+Apply the Kustomize overlays for your specific LWS backend. These manifests are local to the experimental DP-aware guide and are separate from the main `modelserver/gpu/lws` and `modelserver/gpu/grove` directories.
 
 ```bash
 export INFRA_PROVIDER=gke # options: gke, coreweave
-kubectl apply -n ${NAMESPACE} -k ./manifests/modelserver/${INFRA_PROVIDER}
+kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/wide-ep/experimental-dp-aware/manifests/modelserver/${INFRA_PROVIDER}
 ```
 
 ### 3. (Optional) Enable Monitoring
@@ -125,7 +128,7 @@ kubectl apply -n ${NAMESPACE} -k ./manifests/modelserver/${INFRA_PROVIDER}
 * Deploy the monitoring resources for model servers:
 
 ```bash
-kubectl apply -n ${NAMESPACE} -f ./manifests/modelserver/base/pod-monitors.yaml
+kubectl apply -n ${NAMESPACE} -f ${REPO_ROOT}/guides/wide-ep/experimental-dp-aware/manifests/modelserver/base/pod-monitors.yaml
 ```
 
 > [!NOTE]
@@ -149,7 +152,7 @@ Expected output (startup takes 7-10 minutes for model loading):
 
 ```
 NAME                                          READY   STATUS    RESTARTS   AGE
-wide-ep-lws-epp-79dfb894f7-fjn8n              2/2     Running   0          5m
+wide-ep-epp-79dfb894f7-fjn8n                  2/2     Running   0          5m
 wide-ep-llm-d-decode-0                        2/2     Running   0          10m
 wide-ep-llm-d-decode-0-1                      2/2     Running   0          10m
 wide-ep-llm-d-prefill-0                       1/1     Running   0          10m
@@ -207,7 +210,7 @@ With 4 pods (2 decode, 2 prefill) requiring inter-node DP coordination, staggere
 
 If pods are stuck in a restart loop, delete all model server pods at once so they restart simultaneously:
 ```bash
-kubectl delete pods -l llm-d.ai/guide=wide-ep-lws
+kubectl delete pods -l llm-d.ai/guide=wide-ep
 ```
 
 ### NCCL Shared Memory

@@ -1,4 +1,4 @@
-# Wide Expert Parallelism
+# Well-Lit Path: Wide Expert Parallelism (EP/DP) with LeaderWorkerSet
 
 [![E2E (CKS GPU)](https://github.com/llm-d/llm-d/actions/workflows/consolidate-status-wide-ep-lws-cks-acc-gpu-vllm-x.yaml/badge.svg)](https://github.com/llm-d/llm-d/actions/workflows/consolidate-status-wide-ep-lws-cks-acc-gpu-vllm-x.yaml)
 [![E2E (GKE GPU)](https://github.com/llm-d/llm-d/actions/workflows/consolidate-status-wide-ep-lws-gke-acc-gpu-vllm-x.yaml/badge.svg)](https://github.com/llm-d/llm-d/actions/workflows/consolidate-status-wide-ep-lws-gke-acc-gpu-vllm-x.yaml)
@@ -6,7 +6,7 @@
 
 ## Overview
 
-This guide demonstrates how to deploy DeepSeek-R1-0528 using vLLM's P/D disaggregation support with NIXL in a wide expert parallel pattern with LeaderWorkerSets. This guide has been validated on:
+This guide demonstrates how to deploy DeepSeek-R1-0528 using vLLM's P/D disaggregation support with NIXL in a wide expert parallel pattern with LeaderWorkerSets. The llm-d Router, GAIE, and EPP still handle traffic routing and P/D scheduling; LWS is responsible for deploying the multi-pod model-server groups. This guide has been validated on:
 
 * a 32xH200 cluster with InfiniBand networking
 * a 32xH200 cluster on GKE with RoCE networking
@@ -27,9 +27,9 @@ This guide includes configurations for the following accelerators:
 
 | Backend             | Directory                  | Notes                                      |
 | ------------------- | -------------------------- | ------------------------------------------ |
-| NVIDIA GPU (GKE)    | `modelserver/gke/`         | GKE deployment (H200)                      |
-| NVIDIA GPU (GKE A4) | `modelserver/gke-a4/`      | GKE deployment (B200)                      |
-| NVIDIA GPU (CoreWeave)| `modelserver/coreweave/`   | CoreWeave deployment                     |
+| NVIDIA GPU (GKE)    | `modelserver/gpu/lws/vllm/gke/`         | GKE deployment (H200)                      |
+| NVIDIA GPU (GKE A4) | `modelserver/gpu/lws/vllm/topology-aware/gke-a4/`      | GKE deployment (B200)                      |
+| NVIDIA GPU (CoreWeave)| `modelserver/gpu/lws/vllm/coreweave/`   | CoreWeave deployment                     |
 
 > [!NOTE]
 > The pods leveraging inter-node EP must be deployed in a cluster environment with full mesh
@@ -52,7 +52,7 @@ This guide includes configurations for the following accelerators:
   ```bash
   export REPO_ROOT=$(realpath $(git rev-parse --show-toplevel))
   source ${REPO_ROOT}/guides/env.sh
-  export GUIDE_NAME="wide-ep-lws"
+  export GUIDE_NAME="wide-ep"
   export NAMESPACE=llm-d-wide-ep
   export MODEL=deepseek-ai/DeepSeek-R1-0528
   ```
@@ -112,7 +112,7 @@ Apply the Kustomize overlays for your specific backend:
 
 ```bash
 export INFRA_PROVIDER=gke # options: gke, coreweave, dgx-cloud-gb200
-kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/gpu/vllm/${INFRA_PROVIDER}
+kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/gpu/lws/vllm/${INFRA_PROVIDER}
 ```
 
 ### 3. (Optional) Enable monitoring
@@ -131,9 +131,9 @@ For information on how to use topology aware scheduling using Kueue, see [LWS + 
 
 ```bash
 # H200 on GKE
-kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/gpu/vllm/topology-aware/gke
+kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/gpu/lws/vllm/topology-aware/gke
 # B200 on GKE
-kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/gpu/vllm/topology-aware/gke-a4
+kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/gpu/lws/vllm/topology-aware/gke-a4
 ```
 
 ## Verification
@@ -188,7 +188,7 @@ In this example we will demonstrate how to run [`inference-perf`](https://github
 > [!IMPORTANT]
 > **For more in-depth explanation and features for benchmarking llm-d guides, see [`helpers/benchmark.md`](../../helpers/benchmark.md).**
 >
-> The Benchmarking section below contains only the **wide-ep-lws-specific commands** needed to drive the stack you just deployed — for everything else (and especially when something goes wrong), start at [`helpers/benchmark.md`](../../helpers/benchmark.md).
+> The Benchmarking section below contains only the **Wide EP LWS-specific commands** needed to drive the stack you just deployed — for everything else (and especially when something goes wrong), start at [`helpers/benchmark.md`](../../helpers/benchmark.md).
 >
 > For even more details about benchmarking, see the actual repository: [`llm-d-benchmark` on GitHub](https://github.com/llm-d/llm-d-benchmark).
 
@@ -245,7 +245,7 @@ Benchmark results are copied to the `workspace` directory that is specified by _
 
 ```bash
 llmdbenchmark \
-    --spec           guides/wide-ep-lws \
+    --spec           guides/wide-ep \
     run \
     --endpoint-url   "${ENDPOINT_URL}" \
     --gateway-class  "${GATEWAY_CLASS}" \
@@ -265,7 +265,7 @@ To remove the deployed components:
 
 ```bash
 helm uninstall ${GUIDE_NAME} -n ${NAMESPACE}
-kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/<gke|coreweave>
+kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/gpu/lws/vllm/<gke|coreweave|dgx-cloud-gb200>
 ```
 
 ## Benchmarking Report

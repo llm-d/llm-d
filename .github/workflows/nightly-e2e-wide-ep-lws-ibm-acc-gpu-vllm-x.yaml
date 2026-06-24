@@ -68,19 +68,19 @@ jobs:
     with:
       scenario_dir: ${{ inputs.scenario_dir || 'guides' }}
       standup_method: ${{ inputs.standup_method || 'kustomize' }}
-      standup_scenario: ${{ inputs.standup_scenario || 'wide-ep-lws' }}
+      standup_scenario: ${{ inputs.standup_scenario || 'wide-ep' }}
       decode_pods: ${{ inputs.decode_pods || 'auto' }}
       prefill_pods: ${{ inputs.prefill_pods || 'auto' }}
       accelerator_type: ${{ inputs.accelerator_type || 'gpu' }}
-      backend_type: ${{ inputs.backend_type || 'vllm' }}
+      backend_type: ${{ inputs.backend_type || 'lws/vllm' }}
       infra_provider: ${{ inputs.infra_provider || 'base' }}
       connector: ${{ inputs.connector || '' }}
-      cluster_namespace: ${{ inputs.cluster_namespace || 'llm-d-nightly-wide-ep-lws-ibm-gpu' }}
+      cluster_namespace: ${{ inputs.cluster_namespace || 'llm-d-nightly-wide-ep-ibm-gpu' }}
       helm_release: ${{ inputs.helm_release || 'llmdbenchcicdr-ibm' }}
       workspace_dir: ${{ inputs.workspace_dir || '/tmp/llmdbenchcicdk-ibm' }}
       bucket_project: ${{ inputs.bucket_project || 'llm-d-scale' }}
       bucket_provider: ${{ inputs.bucket_provider || 'gcs' }}
-      bucket_path: ${{ inputs.bucket_path || 'llm-d-benchmarks/regressions/wide-ep-lws' }}
+      bucket_path: ${{ inputs.bucket_path || 'llm-d-benchmarks/regressions/wide-ep' }}
       gateway_class: ${{ inputs.gateway_class || 'epponly' }}
       monitoring_enabled: ${{ inputs.monitoring_enabled || 'false' }}
       dry_run: ${{ inputs.dry_run || 'true' }}

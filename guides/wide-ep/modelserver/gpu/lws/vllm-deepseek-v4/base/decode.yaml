@@ -1,25 +1,45 @@
 apiVersion: leaderworkerset.x-k8s.io/v1
 kind: LeaderWorkerSet
 metadata:
-  name: wide-ep-lws-nvidia-gpu-vllm-deepseek-v4-prefill
+  name: wide-ep-lws-nvidia-gpu-vllm-deepseek-v4-decode
   labels:
     llm-d.ai/model: DeepSeek-V4-Pro
-    llm-d.ai/role: prefill
+    llm-d.ai/role: decode
 spec:
-  replicas: 2
+  replicas: 1
   leaderWorkerTemplate:
     size: 2
     workerTemplate:
       metadata:
         labels:
           llm-d.ai/inference-serving: "true"
-          llm-d.ai/guide: "wide-ep-lws"
+          llm-d.ai/guide: "wide-ep"
           llm-d.ai/accelerator-variant: "gpu"
           llm-d.ai/accelerator-vendor: "nvidia"
           llm-d.ai/model: DeepSeek-V4-Pro
-          llm-d.ai/role: prefill
+          llm-d.ai/role: decode
       spec:
         serviceAccountName: deepseek-v4
+        initContainers:
+          - name: routing-proxy
+            args:
+              - --port=8000
+              - --vllm-port=8200
+              - --kv-connector=nixlv2
+              - --zap-log-level=1
+              - --secure-proxy=false
+              - --enable-prefiller-sampling
+            image: ghcr.io/llm-d/llm-d-router-disagg-sidecar:v0.9.0
+            imagePullPolicy: Always
+            ports:
+              - containerPort: 8000
+                name: sidecar
+                protocol: TCP
+            resources: {}
+            restartPolicy: Always
+            securityContext:
+              allowPrivilegeEscalation: false
+              runAsNonRoot: true
         volumes:
           - name: dshm
             emptyDir:
@@ -45,19 +65,27 @@ spec:
               - -c
             args:
               - |-
-                # Clear /dev/shm on start to prevent running out of space when crashes 
-                # occur https://github.com/llm-d/llm-d/issues/352
+                # Clear /dev/shm on start to prevent running out of space when crashes occur
+                # https://github.com/llm-d/llm-d/issues/352
                 find /dev/shm -type f -delete
 
                 #################
-                # RUN vLLM DeepSeek-V4 prefill worker (MegaMoE)
+                # RUN vLLM DeepSeek-V4 decode worker (MegaMoE)
                 #################
                 START_RANK=$(( ${LWS_WORKER_INDEX:-0} * DP_SIZE_LOCAL ))
 
+                # MoE backend (default: MegaMoE) and optional all2all backend are
+                # overridable via env, so alternative-backend components can swap them
+                # without rewriting this launch script. Unset => unchanged MegaMoE path.
+                MOE_BACKEND="${MOE_BACKEND:-deep_gemm_mega_moe}"
+                ALL2ALL_FLAG=""
+                if [ -n "${ALL2ALL_BACKEND:-}" ]; then ALL2ALL_FLAG="--all2all-backend ${ALL2ALL_BACKEND}"; fi
+
                 exec vllm serve \
                   deepseek-ai/DeepSeek-V4-Pro \
-                  --port 8000 \
+                  --port 8200 \
                   --tokenizer-mode deepseek_v4 \
+                  --gpu-memory-utilization 0.85 \
                   --trust-remote-code \
                   --api-server-count 4 \
                   --disable-access-log-for-endpoints=/health,/metrics \
@@ -71,22 +99,32 @@ spec:
                   --data-parallel-rpc-port 5555 \
                   --data-parallel-start-rank $START_RANK \
                   --kv_transfer_config '{"kv_connector":"NixlConnector",
-                                          "kv_role":"kv_producer",
+                                          "kv_role":"kv_consumer",
                                           "kv_load_failure_policy":"fail"}' \
-                  --moe-backend deep_gemm_mega_moe \
-                  --enforce-eager \
+                  --moe-backend "${MOE_BACKEND}" \
+                  ${ALL2ALL_FLAG} \
+                  --max-num-batched-tokens ${MAX_TOKENS} \
+                  --max-num-seqs ${MAX_TOKENS} \
+                  --max-cudagraph-capture-size ${MAX_TOKENS} \
                   --block-size 256 \
-                  --no-async-scheduling \
                   --no-disable-hybrid-kv-cache-manager \
                   --enable-cumem-allocator \
-                  --numa-bind \
-                  --kv-cache-dtype fp8
+                  --stream-interval 50 \
+                  --kv-cache-dtype fp8 \
+                  --compilation-config '{"cudagraph_mode":"FULL_DECODE_ONLY","mode":0}' \
+                  --kv-cache-memory-bytes=${KV_CACHE_MEMORY_BYTES-}
             env:
               - name: HF_TOKEN
                 valueFrom:
                   secretKeyRef:
                     name: llm-d-hf-token
                     key: HF_TOKEN
+              # MAX_TOKENS controls the maximum number sequences, the maximum batch
+              # size, and the maximum cuda graph capture size. To run with MTP, the
+              # maximum batch size and the maximum cuda graph capture size will need to
+              # be multiplied by the number of speculated tokens.
+              - name: MAX_TOKENS
+                value: "512"
               - name: DP_SIZE_LOCAL
                 value: "4"
               - name: TP_SIZE
@@ -101,10 +139,6 @@ spec:
                 value: "1"
               - name: NVIDIA_GDRCOPY
                 value: enabled
-              - name: VLLM_SPARSE_INDEXER_MAX_LOGITS_MB
-                value: "1024"
-              - name: VLLM_MAX_TOKENS_PER_EXPERT_FP4_MOE
-                value: "2048"
               - name: NCCL_MNNVL_ENABLE
                 value: "1"
               - name: NCCL_NVLS_ENABLE
@@ -133,8 +167,6 @@ spec:
                 value: eth0
               - name: VLLM_LOGGING_LEVEL
                 value: INFO
-              - name: VLLM_HTTP_TIMEOUT_KEEP_ALIVE
-                value: "120"
               - name: VLLM_NIXL_SIDE_CHANNEL_HOST
                 valueFrom:
                   fieldRef:
@@ -155,7 +187,7 @@ spec:
                 value: /var/cache/huggingface
 
             ports:
-              - containerPort: 8000
+              - containerPort: 8200
                 name: modelserver
                 protocol: TCP
               - containerPort: 5600

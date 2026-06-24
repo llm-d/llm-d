@@ -25,11 +25,14 @@ The following steps occurs:
 * Tokens are "combined" backed to the original attention rank
 
 > [!IMPORTANT]
-> Dispatch/combine uses the **DeepEP** backend over NVSHMEM with GPU-initiated RDMA (`ibgda` transport), requiring full-mesh InfiniBand/RoCE connectivity.
+> Dispatch/combine is on the critical path for every generated token. The LWS guide uses the **DeepEP** backend over NVSHMEM with GPU-initiated RDMA (`ibgda` transport), requiring full-mesh InfiniBand/RoCE connectivity. The Grove variant is validated on GB200 with MNNVL-specific backend configuration.
 
 ## Deploy
 
-See the [Wide Expert Parallelism guide](../../../guides/wide-ep-lws) for manifests and step-by-step deployment.
+See the [Wide Expert Parallelism guide](../../../guides/wide-ep) for manifests and step-by-step deployment. The guide includes two deployment variants:
+
+* [LeaderWorkerSet](../../../guides/wide-ep/README-lws.md), validated on H200 and B200 configurations with InfiniBand or RoCE networking.
+* [Grove](../../../guides/wide-ep/README-grove.md), validated on NVIDIA GB200 hardware with Multi-Node NVLink (MNNVL).
 
 ## Architecture
 
@@ -41,7 +44,7 @@ Multi-node "WideEP" deployments are typically combined with disaggregated servin
 As a result, we leverage the following design for the deployment:
 
 * Disaggregated prefill and decode via llm-d's EPP
-* `LeaderWorkerSet` to manage multi-node pod group deployment of vLLM
+* A multi-node workload controller, either LeaderWorkerSet or Grove, to manage vLLM pod groups
 * DP/EP deployment configuration in vLLM
 
 <p align="center">
@@ -53,11 +56,17 @@ As a result, we leverage the following design for the deployment:
 
 The request flow works as follows:
 * Request arrives at the proxy, which forwards the request to the EPP
-* EPP schedules the request with P/D disaggregation, using the labels to detect the decode and prefill variants. The EPP schedules to specific pods within the LWS
+* EPP schedules the request with P/D disaggregation, using labels to detect the decode and prefill variants. The EPP schedules to specific pods created by the selected workload controller
 * Request is routed to the sidecar, which forwards the request to the prefill pods
-* Prefill instance processes the prompt, executing the forward pass with DP/EP. DeepEP executes the cross-node dispatch/combine collectives. vLLM returns metadata about how to retrieve the KV blocks
+* Prefill instance processes the prompt, executing the forward pass with DP/EP. The configured all-to-all backend executes the cross-node dispatch/combine collectives. vLLM returns metadata about how to retrieve the KV blocks
 * Decode instance pulls the KVs over RDMA (IB, RoCE, EFA) with NIXL
-* Decode instances processes the decodes, executing the forward passes with DP/EP. DeepEP executes the cross-node dispatch/combine collectives
+* Decode instances process the decodes, executing the forward passes with DP/EP. The configured all-to-all backend executes the cross-node dispatch/combine collectives
+
+## Deployment Variants
+
+The LWS and Grove variants use the same llm-d traffic architecture. The difference is the model-server orchestration layer.
+
+LeaderWorkerSet is the current Kubernetes-native path for H200 and B200 clusters. Grove is the GB200/MNNVL path and adds topology-aware placement, hierarchical gang scheduling, coordinated scaling and recovery, MNNVL-aware orchestration, and coherent rolling updates for multi-component AI workloads.
 
 ## Further Reading
 

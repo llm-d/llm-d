@@ -6,13 +6,13 @@ pattern on NVIDIA GB200 NVL72, using LeaderWorkerSets.
 These manifests were tested on Oracle Cloud Infrastructure (OCI). Storage and DRA may need
 to be adapted to your environment.
 
-This recipe reuses the [wide-ep-lws guide](../../../README.md) for the router/gateway and
+This recipe reuses the [Wide EP LWS guide](../../../../README-lws.md) for the router/gateway and
 shared prerequisites (namespace, HF token secret, LeaderWorkerSet controller). The notes
 below cover only what is specific to this deployment.
 
 ## Prerequisites
 
-In addition to the [wide-ep-lws prerequisites](../../../README.md#prerequisites):
+In addition to the [Wide EP LWS prerequisites](../../../../README-lws.md#prerequisites):
 
 * **NVIDIA DRA driver for GPUs.** Wide-EP spans multiple nodes over GB200's cross-node
   NVLink (MNNVL) fabric, which is provisioned through a [`ComputeDomain`](https://docs.nvidia.com/datacenter/cloud-native/gpu-operator/latest/dra-cds.html#computedomains-multi-node-nvlink-simplified)
@@ -45,7 +45,7 @@ kubectl apply -n ${NAMESPACE} -k deployments/${DEPLOYMENT}
 
 ## Verification
 
-Follow the [Verification steps in the wide-ep-lws guide](../../../README.md#verification),
+Follow the [Verification steps in the Wide EP LWS guide](../../../../README-lws.md#verification),
 using model `deepseek-ai/DeepSeek-V4-Pro` in the request body.
 
 ## Cleanup

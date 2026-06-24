@@ -1,19 +1,23 @@
 apiVersion: leaderworkerset.x-k8s.io/v1
 kind: LeaderWorkerSet
 metadata:
-  name: wide-ep-lws-nvidia-gpu-vllm-prefill
+  name: wide-ep-llm-d-prefill
   labels:
+    llm-d.ai/inference-serving: "true"
+    llm-d.ai/guide: "wide-ep"
+    llm-d.ai/accelerator-variant: "gpu"
+    llm-d.ai/accelerator-vendor: "nvidia"
     llm-d.ai/model: DeepSeek-R1-0528
     llm-d.ai/role: prefill
 spec:
-  replicas: 1
+  replicas: 2
   leaderWorkerTemplate:
-    size: 2
+    size: 1
     workerTemplate:
       metadata:
         labels:
           llm-d.ai/inference-serving: "true"
-          llm-d.ai/guide: "wide-ep-lws"
+          llm-d.ai/guide: "wide-ep"
           llm-d.ai/accelerator-variant: "gpu"
           llm-d.ai/accelerator-vendor: "nvidia"
           llm-d.ai/model: DeepSeek-R1-0528
@@ -31,7 +35,7 @@ spec:
             emptyDir: {}
         containers:
           - name: vllm
-            image: ghcr.io/llm-d/llm-d-cuda:v0.7.0
+            image: ghcr.io/llm-d/llm-d-cuda:v0.8.0
             securityContext:
               capabilities:
                 add:
@@ -50,45 +54,28 @@ spec:
                 find /dev/shm -type f -delete
 
                 #################
-                # RUN vLLM prefill worker
+                # RUN vLLM prefill workers via DP Supervisor
+                # The supervisor automatically assigns CUDA_VISIBLE_DEVICES and
+                # --data-parallel-rank to each child process based on local_rank.
                 #################
                 START_RANK=$(( ${LWS_WORKER_INDEX:-0} * DP_SIZE_LOCAL ))
 
-                # --data-parallel-hybrid-lb: Use external load balancing across nodes, and internal load balancing within a node
-                # --enable-expert-parallel: Use TPxDP in attention, EP in MoE layers
-                # --async-scheduling: Reduce white space between engine steps
-                # --enable-dbo: Dual batch overlap (DBO) overlaps compute with collective communication.
-                # --enable-eplb:  Expert-parallel load balancing reduces EP load imbalance by replicating heavily-used experts
-                #   Performance-memory tradeoff: on DeepSeekV3 eplb uses an extra 2GB per redundant expert per GPU
-                #   Divisibility constraint: num_routed_experts (256 for DSv3) + num_redundant_experts must be divisible by the number of GPUs.
-
                 exec vllm serve \
                   deepseek-ai/DeepSeek-R1-0528 \
-                  --port 8000 \
-                  --trust-remote-code \
-                  --gpu-memory-utilization 0.80 \
-                  --api-server-count 1 \
-                  --disable-access-log-for-endpoints=/health,/metrics \
-                  --data-parallel-hybrid-lb \
-                  --enable-expert-parallel \
-                  --tensor-parallel-size $TP_SIZE \
+                  --host=0.0.0.0 \
+                  --port=8000 \
+                  --disable-access-log-for-endpoints=/health,/metrics,/v1/models,/readyz \
+                  --data-parallel-multi-port-external-lb \
+                  --data-parallel-supervisor-port=8008 \
                   --data-parallel-size $((LWS_GROUP_SIZE * DP_SIZE_LOCAL)) \
                   --data-parallel-size-local $DP_SIZE_LOCAL \
-                  --data-parallel-address ${LWS_LEADER_ADDRESS} \
-                  --data-parallel-rpc-port 5555 \
                   --data-parallel-start-rank $START_RANK \
-                  --kv_transfer_config '{"kv_connector":"NixlConnector",
-                                          "kv_role":"kv_both",
-                                          "kv_load_failure_policy":"fail"}' \
-                  --enable-dbo \
-                  --dbo-prefill-token-threshold 32 \
-                  --enable-eplb \
-                  --eplb-config '{"window_size":"1000",
-                                  "step_interval":"3000",
-                                  "num_redundant_experts":"32",
-                                  "log_balancedness":"False"}' \
-                  --moe-backend deep_gemm \
+                  --data-parallel-address="${LWS_LEADER_ADDRESS}" \
+                  --data-parallel-rpc-port=5555 \
+                  --enable-expert-parallel \
+                  --kv_transfer_config '{"kv_connector":"NixlConnector","kv_role":"kv_both","kv_load_failure_policy":"fail"}' \
                   --all2all-backend deepep_high_throughput \
+                  --max-model-len 65536
                   # To enable tracing, add:
                   # --otlp-traces-endpoint http://otel-collector:4317 \
                   # --collect-detailed-traces all
@@ -107,17 +94,6 @@ spec:
               #   value: "parentbased_traceidratio"
               # - name: OTEL_TRACES_SAMPLER_ARG
               #   value: "0.1"
-              # NOTE: vllm/vllm-openai:v0.19.1 is a cu129 image but has
-              # nixl-cu13 and nixl-cu12 installed, which causes NIXL to
-              # to pick up the wrong UCX library. If you are deploying
-              # a cu13 (e.g. vllm/vllm-openai:v0.19.1-x86_64-cu130),
-              # comment out this path.
-              # - name: UCX_MODULE_DIR
-              #   value: /usr/local/lib/python3.12/dist-packages/nixl_cu12.libs/ucx
-              - name: VLLM_MEMORY_PROFILER_ESTIMATE_CUDAGRAPHS
-                value: "1"
-              - name: VLLM_RANDOMIZE_DP_DUMMY_INPUTS
-                value: "1"
               - name: DP_SIZE_LOCAL
                 value: "8"
               - name: TP_SIZE
@@ -125,6 +101,8 @@ spec:
               - name: TRITON_LIBCUDA_PATH
                 value: /usr/lib64
               - name: VLLM_SKIP_P2P_CHECK
+                value: "1"
+              - name: VLLM_USE_DEEP_GEMM
                 value: "1"
               - name: NVIDIA_GDRCOPY
                 value: enabled
@@ -144,6 +122,8 @@ spec:
               # causing TCP RSTs.
               - name: VLLM_HTTP_TIMEOUT_KEEP_ALIVE
                 value: "120"
+              - name: NVSHMEM_DISABLE_CUDA_VMM
+                value: "0"
               - name: VLLM_NIXL_SIDE_CHANNEL_HOST
                 valueFrom:
                   fieldRef:
@@ -162,18 +142,38 @@ spec:
               # HuggingFace is likely to be quite a bit larger, give it its own cache
               - name: HF_HUB_CACHE
                 value: /var/cache/huggingface
-
             ports:
               - containerPort: 8000
-                name: modelserver
+                name: rank0
                 protocol: TCP
-              - containerPort: 5600
-                name: nixl
+              - containerPort: 8001
+                name: rank1
+                protocol: TCP
+              - containerPort: 8002
+                name: rank2
+                protocol: TCP
+              - containerPort: 8003
+                name: rank3
+                protocol: TCP
+              - containerPort: 8004
+                name: rank4
+                protocol: TCP
+              - containerPort: 8005
+                name: rank5
+                protocol: TCP
+              - containerPort: 8006
+                name: rank6
+                protocol: TCP
+              - containerPort: 8007
+                name: rank7
+                protocol: TCP
+              - containerPort: 8008
+                name: supervisor
                 protocol: TCP
             startupProbe:
               httpGet:
                 path: /health
-                port: modelserver
+                port: supervisor
               initialDelaySeconds: 0
               periodSeconds: 1
               timeoutSeconds: 5
@@ -181,14 +181,14 @@ spec:
             livenessProbe:
               httpGet:
                 path: /health
-                port: modelserver
+                port: supervisor
               periodSeconds: 30
               timeoutSeconds: 5
               failureThreshold: 3
             readinessProbe:
               httpGet:
-                path: /v1/models
-                port: modelserver
+                path: /readyz
+                port: supervisor
               periodSeconds: 10
               timeoutSeconds: 5
               failureThreshold: 3

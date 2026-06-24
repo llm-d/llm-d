@@ -6,9 +6,9 @@ router:
       targetPort: 8081
 
   epp:
-    pluginsConfigFile: "wide-ep-lws-config.yaml"
+    pluginsConfigFile: "wide-ep-config.yaml"
     pluginsCustomConfig:
-      wide-ep-lws-config.yaml: |
+      wide-ep-config.yaml: |
         apiVersion: llm-d.ai/v1alpha1
         kind: EndpointPickerConfig
         plugins:
@@ -54,4 +54,4 @@ router:
       - number: 8006
       - number: 8007
     matchLabels:
-      llm-d.ai/guide: "wide-ep-lws"
+      llm-d.ai/guide: "wide-ep"

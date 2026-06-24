@@ -1,10 +1,10 @@
 apiVersion: leaderworkerset.x-k8s.io/v1
 kind: LeaderWorkerSet
 metadata:
-  name: wide-ep-lws-nvidia-gpu-vllm-deepseek-v4-decode
+  name: wide-ep-lws-nvidia-gpu-vllm-prefill
   labels:
-    llm-d.ai/model: DeepSeek-V4-Pro
-    llm-d.ai/role: decode
+    llm-d.ai/model: DeepSeek-R1-0528
+    llm-d.ai/role: prefill
 spec:
   replicas: 1
   leaderWorkerTemplate:
@@ -13,33 +13,13 @@ spec:
       metadata:
         labels:
           llm-d.ai/inference-serving: "true"
-          llm-d.ai/guide: "wide-ep-lws"
+          llm-d.ai/guide: "wide-ep"
           llm-d.ai/accelerator-variant: "gpu"
           llm-d.ai/accelerator-vendor: "nvidia"
-          llm-d.ai/model: DeepSeek-V4-Pro
-          llm-d.ai/role: decode
+          llm-d.ai/model: DeepSeek-R1-0528
+          llm-d.ai/role: prefill
       spec:
-        serviceAccountName: deepseek-v4
-        initContainers:
-          - name: routing-proxy
-            args:
-              - --port=8000
-              - --vllm-port=8200
-              - --kv-connector=nixlv2
-              - --zap-log-level=1
-              - --secure-proxy=false
-              - --enable-prefiller-sampling
-            image: ghcr.io/llm-d/llm-d-router-disagg-sidecar:v0.9.0
-            imagePullPolicy: Always
-            ports:
-              - containerPort: 8000
-                name: sidecar
-                protocol: TCP
-            resources: {}
-            restartPolicy: Always
-            securityContext:
-              allowPrivilegeEscalation: false
-              runAsNonRoot: true
+        serviceAccountName: deepseek-r1
         volumes:
           - name: dshm
             emptyDir:
@@ -51,7 +31,7 @@ spec:
             emptyDir: {}
         containers:
           - name: vllm
-            image: vllm/vllm-openai:v0.23.0
+            image: ghcr.io/llm-d/llm-d-cuda:v0.7.0
             securityContext:
               capabilities:
                 add:
@@ -70,28 +50,27 @@ spec:
                 find /dev/shm -type f -delete
 
                 #################
-                # RUN vLLM DeepSeek-V4 decode worker (MegaMoE)
+                # RUN vLLM prefill worker
                 #################
                 START_RANK=$(( ${LWS_WORKER_INDEX:-0} * DP_SIZE_LOCAL ))
 
-                # MoE backend (default: MegaMoE) and optional all2all backend are
-                # overridable via env, so alternative-backend components can swap them
-                # without rewriting this launch script. Unset => unchanged MegaMoE path.
-                MOE_BACKEND="${MOE_BACKEND:-deep_gemm_mega_moe}"
-                ALL2ALL_FLAG=""
-                if [ -n "${ALL2ALL_BACKEND:-}" ]; then ALL2ALL_FLAG="--all2all-backend ${ALL2ALL_BACKEND}"; fi
+                # --data-parallel-hybrid-lb: Use external load balancing across nodes, and internal load balancing within a node
+                # --enable-expert-parallel: Use TPxDP in attention, EP in MoE layers
+                # --async-scheduling: Reduce white space between engine steps
+                # --enable-dbo: Dual batch overlap (DBO) overlaps compute with collective communication.
+                # --enable-eplb:  Expert-parallel load balancing reduces EP load imbalance by replicating heavily-used experts
+                #   Performance-memory tradeoff: on DeepSeekV3 eplb uses an extra 2GB per redundant expert per GPU
+                #   Divisibility constraint: num_routed_experts (256 for DSv3) + num_redundant_experts must be divisible by the number of GPUs.
 
                 exec vllm serve \
-                  deepseek-ai/DeepSeek-V4-Pro \
-                  --port 8200 \
-                  --tokenizer-mode deepseek_v4 \
-                  --gpu-memory-utilization 0.85 \
+                  deepseek-ai/DeepSeek-R1-0528 \
+                  --port 8000 \
                   --trust-remote-code \
-                  --api-server-count 4 \
+                  --gpu-memory-utilization 0.80 \
+                  --api-server-count 1 \
                   --disable-access-log-for-endpoints=/health,/metrics \
                   --data-parallel-hybrid-lb \
                   --enable-expert-parallel \
-                  --enable-ep-weight-filter \
                   --tensor-parallel-size $TP_SIZE \
                   --data-parallel-size $((LWS_GROUP_SIZE * DP_SIZE_LOCAL)) \
                   --data-parallel-size-local $DP_SIZE_LOCAL \
@@ -99,74 +78,72 @@ spec:
                   --data-parallel-rpc-port 5555 \
                   --data-parallel-start-rank $START_RANK \
                   --kv_transfer_config '{"kv_connector":"NixlConnector",
-                                          "kv_role":"kv_consumer",
+                                          "kv_role":"kv_both",
                                           "kv_load_failure_policy":"fail"}' \
-                  --moe-backend "${MOE_BACKEND}" \
-                  ${ALL2ALL_FLAG} \
-                  --max-num-batched-tokens ${MAX_TOKENS} \
-                  --max-num-seqs ${MAX_TOKENS} \
-                  --max-cudagraph-capture-size ${MAX_TOKENS} \
-                  --block-size 256 \
-                  --no-disable-hybrid-kv-cache-manager \
-                  --enable-cumem-allocator \
-                  --stream-interval 50 \
-                  --kv-cache-dtype fp8 \
-                  --compilation-config '{"cudagraph_mode":"FULL_DECODE_ONLY","mode":0}' \
-                  --kv-cache-memory-bytes=${KV_CACHE_MEMORY_BYTES-}
+                  --enable-dbo \
+                  --dbo-prefill-token-threshold 32 \
+                  --enable-eplb \
+                  --eplb-config '{"window_size":"1000",
+                                  "step_interval":"3000",
+                                  "num_redundant_experts":"32",
+                                  "log_balancedness":"False"}' \
+                  --moe-backend deep_gemm \
+                  --all2all-backend deepep_high_throughput \
+                  # To enable tracing, add:
+                  # --otlp-traces-endpoint http://otel-collector:4317 \
+                  # --collect-detailed-traces all
             env:
               - name: HF_TOKEN
                 valueFrom:
                   secretKeyRef:
                     name: llm-d-hf-token
                     key: HF_TOKEN
-              # MAX_TOKENS controls the maximum number sequences, the maximum batch
-              # size, and the maximum cuda graph capture size. To run with MTP, the
-              # maximum batch size and the maximum cuda graph capture size will need to
-              # be multiplied by the number of speculated tokens.
-              - name: MAX_TOKENS
-                value: "512"
+              # To enable tracing, uncomment:
+              # - name: OTEL_SERVICE_NAME
+              #   value: "vllm-prefill"
+              # - name: OTEL_EXPORTER_OTLP_ENDPOINT
+              #   value: "http://otel-collector:4317"
+              # - name: OTEL_TRACES_SAMPLER
+              #   value: "parentbased_traceidratio"
+              # - name: OTEL_TRACES_SAMPLER_ARG
+              #   value: "0.1"
+              # NOTE: vllm/vllm-openai:v0.19.1 is a cu129 image but has
+              # nixl-cu13 and nixl-cu12 installed, which causes NIXL to
+              # to pick up the wrong UCX library. If you are deploying
+              # a cu13 (e.g. vllm/vllm-openai:v0.19.1-x86_64-cu130),
+              # comment out this path.
+              # - name: UCX_MODULE_DIR
+              #   value: /usr/local/lib/python3.12/dist-packages/nixl_cu12.libs/ucx
+              - name: VLLM_MEMORY_PROFILER_ESTIMATE_CUDAGRAPHS
+                value: "1"
+              - name: VLLM_RANDOMIZE_DP_DUMMY_INPUTS
+                value: "1"
               - name: DP_SIZE_LOCAL
-                value: "4"
+                value: "8"
               - name: TP_SIZE
                 value: "1"
               - name: TRITON_LIBCUDA_PATH
                 value: /usr/lib64
               - name: VLLM_SKIP_P2P_CHECK
                 value: "1"
-              - name: VLLM_RANDOMIZE_DP_DUMMY_INPUTS
-                value: "1"
-              - name: VLLM_USE_DEEP_GEMM
-                value: "1"
               - name: NVIDIA_GDRCOPY
                 value: enabled
-              - name: NCCL_MNNVL_ENABLE
-                value: "1"
-              - name: NCCL_NVLS_ENABLE
-                value: "1"
-              - name: NCCL_CUMEM_ENABLE
-                value: "1"
-              - name: NCCL_P2P_LEVEL
-                value: NVL
-              - name: VLLM_USE_NCCL_SYMM_MEM
-                value: "1"
-              - name: TORCH_SYMMMEM
-                value: NVSHMEM
-              - name: UCX_CUDA_IPC_ENABLE_MNNVL
-                value: "y"
-              - name: UCX_TLS
-                value: cuda_copy,cuda_ipc,tcp
-              - name: UCX_MEMTYPE_CACHE
-                value: "n"
-              - name: UCX_MEMTYPE_REG_WHOLE
-                value: "n"
-              - name: TILELANG_CLEANUP_TEMP_FILES
-                value: "1"
+              - name: NVSHMEM_REMOTE_TRANSPORT
+                value: ibgda
+              - name: NVSHMEM_IB_ENABLE_IBGDA
+                value: "true"
+              - name: NVSHMEM_BOOTSTRAP_UID_SOCK_IFNAME
+                value: eth0
               - name: GLOO_SOCKET_IFNAME
                 value: eth0
               - name: NCCL_SOCKET_IFNAME
                 value: eth0
               - name: VLLM_LOGGING_LEVEL
                 value: INFO
+              # Default keep-alive timeout of 5s is shorter than the sidecar's 90s idle conn timeout,
+              # causing TCP RSTs.
+              - name: VLLM_HTTP_TIMEOUT_KEEP_ALIVE
+                value: "120"
               - name: VLLM_NIXL_SIDE_CHANNEL_HOST
                 valueFrom:
                   fieldRef:
@@ -187,7 +164,7 @@ spec:
                 value: /var/cache/huggingface
 
             ports:
-              - containerPort: 8200
+              - containerPort: 8000
                 name: modelserver
                 protocol: TCP
               - containerPort: 5600
@@ -219,12 +196,12 @@ spec:
               limits:
                 ephemeral-storage: 1Ti
                 memory: 512Gi
-                nvidia.com/gpu: "4"
+                nvidia.com/gpu: "8"
               requests:
                 cpu: 32
                 ephemeral-storage: 1Ti
                 memory: 512Gi
-                nvidia.com/gpu: "4"
+                nvidia.com/gpu: "8"
             volumeMounts:
               - name: dshm
                 mountPath: /dev/shm

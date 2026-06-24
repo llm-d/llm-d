@@ -4,14 +4,14 @@ metadata:
   name: ms-wide-ep-llm-d-modelservice-decode-podmonitor
   labels:
     llm-d.ai/inference-serving: "true"
-    llm-d.ai/guide: "wide-ep-lws"
+    llm-d.ai/guide: "wide-ep"
     llm-d.ai/model: DeepSeek-R1-0528
     llm-d.ai/role: decode
 spec:
   selector:
     matchLabels:
       llm-d.ai/inference-serving: "true"
-      llm-d.ai/guide: "wide-ep-lws"
+      llm-d.ai/guide: "wide-ep"
       llm-d.ai/model: DeepSeek-R1-0528
       llm-d.ai/role: decode
   podMetricsEndpoints:
@@ -48,14 +48,14 @@ metadata:
   name: ms-wide-ep-llm-d-modelservice-prefill-podmonitor
   labels:
     llm-d.ai/inference-serving: "true"
-    llm-d.ai/guide: "wide-ep-lws"
+    llm-d.ai/guide: "wide-ep"
     llm-d.ai/model: DeepSeek-R1-0528
     llm-d.ai/role: prefill
 spec:
   selector:
     matchLabels:
       llm-d.ai/inference-serving: "true"
-      llm-d.ai/guide: "wide-ep-lws"
+      llm-d.ai/guide: "wide-ep"
       llm-d.ai/model: DeepSeek-R1-0528
       llm-d.ai/role: prefill
   podMetricsEndpoints:

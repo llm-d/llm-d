@@ -58,7 +58,7 @@ router:
       - number: 8007
     matchLabels:
       llm-d.ai/inference-serving: "true"
-      llm-d.ai/guide: "wide-ep-lws"
+      llm-d.ai/guide: "wide-ep"
       llm-d.ai/model: DeepSeek-R1-0528
 
 provider:

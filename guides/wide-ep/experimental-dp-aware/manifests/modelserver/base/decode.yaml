@@ -4,7 +4,7 @@ metadata:
   name: wide-ep-llm-d-decode
   labels:
     llm-d.ai/inference-serving: "true"
-    llm-d.ai/guide: "wide-ep-lws"
+    llm-d.ai/guide: "wide-ep"
     llm-d.ai/accelerator-variant: "gpu"
     llm-d.ai/accelerator-vendor: "nvidia"
     llm-d.ai/model: DeepSeek-R1-0528
@@ -17,7 +17,7 @@ spec:
       metadata:
         labels:
           llm-d.ai/inference-serving: "true"
-          llm-d.ai/guide: "wide-ep-lws"
+          llm-d.ai/guide: "wide-ep"
           llm-d.ai/accelerator-variant: "gpu"
           llm-d.ai/accelerator-vendor: "nvidia"
           llm-d.ai/model: DeepSeek-R1-0528
