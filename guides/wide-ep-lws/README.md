@@ -194,85 +194,13 @@ curl -X POST http://${IP}/v1/completions \
 
 ## Benchmarking
 
-This guide uses [`llmdbenchmark`](https://github.com/llm-d/llm-d-benchmark) — the supported standard CLI for llm-d performance benchmarking.
+This guide uses [`inference-perf`](https://github.com/kubernetes-sigs/inference-perf).
 
-In this example we will demonstrate how to run [`inference-perf`](https://github.com/kubernetes-sigs/inference-perf) with a high-concurrency random-data workload designed to saturate the wide-expert-parallel topology, against the stack you just deployed above (standalone or gateway mode). When orchestrating benchmarks via `llmdbenchmark`, the CLI automatically and transparently deploys a harness pod (`llmdbench-harness-launcher`) into your namespace. This pod is central to driving the workload, collecting the results, and tearing itself down when it's finished.
-
-> [!IMPORTANT]
-> **For more in-depth explanation and features for benchmarking llm-d guides, see [`helpers/benchmark.md`](../../helpers/benchmark.md).**
->
-> The Benchmarking section below contains only the **wide-ep-lws-specific commands** needed to drive the stack you just deployed — for everything else (and especially when something goes wrong), start at [`helpers/benchmark.md`](../../helpers/benchmark.md).
->
-> For even more details about benchmarking, see the actual repository: [`llm-d-benchmark` on GitHub](https://github.com/llm-d/llm-d-benchmark).
-
-> [!TIP]
-> The command below runs this guide's **dedicated** benchmark profile, which is intentionally shaped to fully saturate the wide-expert-parallel topology — and accordingly takes longer to complete. To run a simpler workload with fewer execution cycles first (useful for validating the path, image pulls, PVC binding, etc. before committing to a real run), pick a generic sample profile such as `shared_prefix_synthetic.yaml` from the catalog in [`helpers/benchmark.md` → Available workload profiles](../../helpers/benchmark.md#available-workload-profiles) and substitute it for the `--workload` flag in the command below.
-
-### 1. Install the `llmdbenchmark` CLI
-
-Automatically clone the benchmark repository into `./llm-d-benchmark/` and create a virtualenv at `./llm-d-benchmark/.venv/` containing dependencies and its installation:
+`inference-perf.yaml` runs concurrent load with `concurrency_level=2048` and `num_requests=8192` and is shaped to highlight the strengths of wide expert parallelism for throughput oriented workloads. The following creates a job to run against the standalone mode stack:
 
 ```bash
-curl -sSL https://raw.githubusercontent.com/llm-d/llm-d-benchmark/main/install.sh | bash
+kubectl apply -f inference-perf.yaml
 ```
-
-Activate the `venv` and enter the repository directory - both are required: the `venv` puts `llmdbenchmark` on your PATH, and the repository directory contains the `workload/profiles/` and `config/specification/` files that orchestrate the benchmark:
-
-```bash
-cd llm-d-benchmark
-source .venv/bin/activate
-llmdbenchmark --version
-```
-
-> [!NOTE]
-> Subsequent `llmdbenchmark` commands in this section assume you are inside the `llm-d-benchmark` repo directory with the `venv` activated. If you open a new shell, re-run the two commands above.
-
-### 2. Resolve the endpoint of the stack you just deployed
-
-Set two variables so the rest of the section is topology-agnostic: the endpoint URL and the gateway class. The gateway class tells the CLI which deployment topology the cluster is actually running, without this, the CLI re-renders against the benchmark scenario's default values.
-
-**Standalone Mode** (the default in this guide — no Kubernetes Gateway, EPP pod with an Envoy sidecar):
-
-```bash
-export ENDPOINT_URL="http://$(kubectl get service ${GUIDE_NAME}-epp -n ${NAMESPACE} -o jsonpath='{.spec.clusterIP}')"
-export GATEWAY_CLASS=epponly # standalone mode
-```
-
-<details>
-<summary> <b>Gateway Mode</b> </summary>
-
-```bash
-export ENDPOINT_URL="http://$(kubectl get gateway llm-d-inference-gateway -n ${NAMESPACE} -o jsonpath='{.status.addresses[0].value}')"
-
-# Match whichever provider you used when deploying the gateway (e.g. istio, agentgateway, gke).
-export GATEWAY_CLASS=istio
-```
-
-</details>
-
-### 3. Run the benchmark profile for Wide Expert Parallelism
-
-`guide_wide-ep-lws_1.yaml` is a **dedicated workload profile** shipped with `llm-d-benchmark` specifically for this guide — it reproduces the saturation load used to generate the [graphs at the bottom of this guide](#benchmarking-results) (concurrent load with `concurrency_level=2048` and `num_requests=8192`) and is shaped to highlight the strengths of wide expert parallelism by fully saturating the topology.
-
-Benchmark results are copied to the `workspace` directory that is specified by _you_ (or that is automatically generated when omitted from the cli) on the machine running the CLI. The workspace location is optional — by default the CLI auto-generates a timestamped workspace and prints its full path in the logs during the run. If you'd rather choose where results land, pass `--workspace <YOUR_DIR_HERE>` as a top-level argument of `llmdbenchmark` (before the `run` subcommand):
-
-```bash
-llmdbenchmark \
-    --spec           guides/wide-ep-lws \
-    run \
-    --endpoint-url   "${ENDPOINT_URL}" \
-    --gateway-class  "${GATEWAY_CLASS}" \
-    --model          "deepseek-ai/DeepSeek-R1-0528" \
-    --namespace      "${NAMESPACE}" \
-    --harness        inference-perf \
-    --workload       guide_wide-ep-lws_1.yaml \
-    --analyze
-```
-
-lm_eval --model local-completions --model_args model=deepseek-ai/DeepSeek-R1-0528,base_url=http://10.16.2.104:80/v1/completions,num_concurrent=64,tokenized_requests=False --tasks gsm8k
-
-> [!NOTE]
-> Depending on your `cluster` you may need to extend the default `timeout` values to longer duration, as `bind`, `access` and `wait-timeout` times of `pvcs` and `pods` can be arbitrarily slower on other systems, please utilize `llmdbenchmark run --help` to view the knobs needed to increase those values.
 
 ## Cleanup
 

@@ -1,0 +1,91 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: inference-perf-config
+  labels:
+    app: inference-perf
+data:
+  config.yaml: |
+    # 2000 ISL / 2000 OSL, random data, 2048 concurrency, 8192 total requests
+    load:
+      type: concurrent          # closed-loop: holds `concurrency_level` in flight until `num_requests` complete
+      stages:
+        - num_requests: 8192
+          concurrency_level: 2048
+      # num_workers defaults to cpu_count(); per-worker concurrency = 2048 // num_workers.
+      # worker_max_concurrency is ignored for the concurrent load type (auto-set to 0).
+      # num_workers: 32
+
+    api:
+      type: completion          # random datagen only supports the completion API
+      streaming: false          # needed for TTFT / ITL / TPOT metrics
+
+    server:
+      type: vllm
+      model_name: deepseek-ai/DeepSeek-R1-0528    # e.g. deepseek-ai/DeepSeek-V3 — must match what vLLM is serving
+      base_url: http://wide-ep-lws-epp # in-cluster Service/route for the decode/gateway endpoint
+      ignore_eos: true          # required so the server emits the full 2000 output tokens
+
+    tokenizer:
+      pretrained_model_name_or_path: deepseek-ai/DeepSeek-R1-0528   # same model; HF_TOKEN env is used if gated
+
+    data:
+      type: random
+      input_distribution:
+        type: fixed             # every request is exactly `mean` tokens
+        mean: 2000
+        min: 2000
+        max: 2000
+        std_dev: 0
+        total_count: 8192       # must be >= num_requests, or the datagen index runs out
+      output_distribution:
+        type: fixed
+        mean: 2000
+        min: 2000
+        max: 2000
+        std_dev: 0
+        total_count: 8192
+
+    report:
+      request_lifecycle:
+        summary: true
+        per_stage: true
+        per_request: false      # 8192 rows is a lot; flip to true for raw per-request data
+      prometheus:
+        summary: true
+        per_stage: true
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: inference-perf
+  labels:
+    app: inference-perf
+spec:
+  template:
+    metadata:
+      labels:
+        app: inference-perf
+    spec:
+      containers:
+        - name: inference-perf
+          image: quay.io/inference-perf/inference-perf:latest
+          imagePullPolicy: Always
+          command: ["inference-perf"]
+          args: ["--config_file", "/etc/config/config.yaml"]
+          env:
+            - name: HF_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: hf-secret
+                  key: hf_api_token
+                  optional: true
+          volumeMounts:
+            - name: config-volume
+              mountPath: /etc/config
+              readOnly: true
+      restartPolicy: Never
+      volumes:
+        - name: config-volume
+          configMap:
+            name: inference-perf-config
