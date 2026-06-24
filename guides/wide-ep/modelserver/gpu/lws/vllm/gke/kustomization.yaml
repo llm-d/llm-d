@@ -8,7 +8,7 @@ components:
 patches:
   - target:
       kind: LeaderWorkerSet
-      name: wide-ep-lws-nvidia-gpu-vllm-prefill
+      name: wide-ep-llm-d-prefill
     patch: |-
       # Prefer the same block and subblock.
       # https://github.com/llm-d/llm-d/tree/main/docs/infrastructure/providers/gke#configuring-support-for-rdma-on-gke-workload-pods
@@ -37,7 +37,7 @@ patches:
                 topologyKey: cloud.google.com/gce-topology-subblock
   - target:
       kind: LeaderWorkerSet
-      name: wide-ep-lws-nvidia-gpu-vllm-decode
+      name: wide-ep-llm-d-decode
     patch: |-
       # Prefer the same block and subblock.
       # https://github.com/llm-d/llm-d/tree/main/docs/infrastructure/providers/gke#configuring-support-for-rdma-on-gke-workload-pods
@@ -73,9 +73,12 @@ patches:
       - op: add
         path: /spec/leaderWorkerTemplate/workerTemplate/spec/containers/0/securityContext/privileged
         value: true
-      # Workaround for GKE scheduling bug on H200 nodes (which only advertise the .IP variant).
-      # Setting the legacy non-.IP resource limit to 0 bypasses the request while GKE Warden
-      # still injects the .IP variant.
+      # GKE Warden (mutating webhook) injects resource requests for both
+      # networking.gke.io.networks/rdma-X and networking.gke.io.networks/rdma-X.IP
+      # from the networking.gke.io/interfaces annotation. Modern GKE H200 (A3 Ultra)
+      # nodes only advertise the .IP variant, causing pods to stay Pending.
+      # Setting the legacy non-.IP resource limit to 0 bypasses the request while
+      # GKE Warden still injects the .IP variant.
       - op: add
         path: /spec/leaderWorkerTemplate/workerTemplate/spec/containers/0/resources/limits/networking.gke.io.networks~1rdma-0
         value: "0"
