@@ -239,7 +239,7 @@ SIGs operate within the broader llm-d project governance framework defined in [P
 **💬 Communication**:
 
 - **Slack Channel**: [#sig-batch-inference](https://llm-d.slack.com/messages/sig-batch-inference)
-- **Meeting Recordings and Docs**: [Public Google Drive](https://drive.google.com/corp/drive/folders/1OCAETAcm50YkVWx-jmByRrRafRTWj0dO)
+- **Meeting Recordings and Docs**: [Public Google Drive](https://drive.google.com/drive/folders/1OCAETAcm50YkVWx-jmByRrRafRTWj0dO)
 - **GitHub Issues**: [github.com/llm-d-incubation/llm-d-async](https://github.com/llm-d-incubation/llm-d-async/issues) | [github.com/llm-d/llm-d-batch-gateway](https://github.com/llm-d/llm-d-batch-gateway/issues)
 
 ## Getting Involved
