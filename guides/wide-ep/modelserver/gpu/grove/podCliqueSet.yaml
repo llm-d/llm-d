@@ -460,8 +460,8 @@ spec:
             {"interfaceName":"rdma3","network":"rdma-3"}
           ]
       spec:
-        replicas: 1 # todo 7
-        minAvailable: 1 # todo 7
+        replicas: 7
+        minAvailable: 7
         roleName: decode-worker
         podSpec:
           serviceAccountName: deepseek-r1
