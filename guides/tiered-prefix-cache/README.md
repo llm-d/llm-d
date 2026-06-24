@@ -187,7 +187,19 @@ kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/tiered-prefix-cache/modelse
 
 #### MooncakeStore - CPU DRAM
 
-MooncakeStore supports a CPU RAM tier and a filesystem tier. As a pre-requisite make sure the `mooncake-master-store` component is deployed (for without monitoring, use the `base` overlay, but otherwise use the `monitoring` overlay):
+MooncakeStore supports two deployment modes: embedded CPU DRAM (`cpu`) and standalone CPU DRAM + SSD (`fs`). Both require the [Mooncake Master](../../helpers/mooncake-master-store/) metadata service. The `fs` variant additionally requires the [Mooncake Client](../../helpers/mooncake-client/), a standalone process that owns the CPU DRAM pool and SSD persistence tier.
+
+**Prerequisites:**
+
+```bash
+# Required for both cpu and fs variants
+kubectl apply -k ${REPO_ROOT}/helpers/mooncake-master-store/base/
+
+# Required for fs variant only — deploys a DaemonSet that owns the CPU + SSD pool (sized for Qwen3-32B)
+kubectl apply -k ${REPO_ROOT}/guides/tiered-prefix-cache/modelserver/gpu/vllm/mooncake-store/fs/mooncake-client/
+```
+
+**Deploy the model server:**
 
 ```bash
 k apply -k ${REPO_ROOT}/helpers/mooncake-master-store/monitoring
@@ -210,10 +222,10 @@ As with the CPU mooncake offloading example, start by making sure the `mooncake-
 k apply -k ${REPO_ROOT}/helpers/mooncake-master-store/monitoring
 ```
 
-Then ensure the `mooncake-client` is also deployed:
+Then deploy the Mooncake Client. The Client allocates CPU DRAM and SSD resources at startup and registers them with the Master, so sizing must be set before deployment — changes require a restart. This guide provides an overlay that patches the [base helper defaults](../../helpers/mooncake-client/) (40 GB DRAM, 500 GB SSD) up to values sized for Qwen3-32B (80 GB DRAM, 1 TB SSD per node):
 
 ```bash
-k apply -k ${REPO_ROOT}/helpers/mooncake-client/base
+kubectl apply -k ${REPO_ROOT}/guides/tiered-prefix-cache/modelserver/gpu/vllm/mooncake-store/fs/mooncake-client/
 ```
 
 #### TPU (Google TPU v6 / v7)
@@ -352,9 +364,10 @@ kubectl delete -f ${REPO_ROOT}/guides/tiered-prefix-cache/manifests/pvc.yaml -n 
 kubectl delete namespace ${NAMESPACE}
 ```
 
-If you deployed the Mooncake Master, clean it up as well:
+If you deployed Mooncake components, clean them up as well:
 
 ```bash
+kubectl delete -k ${REPO_ROOT}/guides/tiered-prefix-cache/modelserver/gpu/vllm/mooncake-store/fs/mooncake-client/  # if fs variant was used
 kubectl delete -k ${REPO_ROOT}/helpers/mooncake-master-store/base/
 ```
 

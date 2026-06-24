@@ -7,8 +7,8 @@ resources:
 
 labels:
   - pairs:
-      app.kubernetes.io/name: mooncake-client-store
-      app.kubernetes.io/component: client-store
+      app.kubernetes.io/name: mooncake-client
+      app.kubernetes.io/component: client
       app.kubernetes.io/part-of: mooncake
     includeTemplates: true
     includeSelectors: true

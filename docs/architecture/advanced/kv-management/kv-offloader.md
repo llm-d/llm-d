@@ -149,20 +149,21 @@ The `MooncakeStoreConnector` integrates this store with vLLM's V1 Connector API.
 
 #### Architecture
 
-The system consists of three components:
+The system consists of four components:
 
-- **Mooncake Master** — Centralized metadata service managing keyed objects, their replicas and placement, leases, and eviction. It is unaware of vLLM's KV-cache block semantics. Deployment manifests are provided in [`helpers/mooncake-master-store/`](../../../../helpers/mooncake-master-store/).
+- **Mooncake Master** — Centralized metadata service managing keyed objects, their replicas and placement, leases, and eviction. It is unaware of vLLM's KV-cache block semantics. Deployment manifests are provided in [`helpers/mooncake-master-store/`](../../../../helpers/mooncake-master-store/). Required by both deployment modes.
+- **Mooncake Client** — A standalone process that allocates CPU DRAM and optionally SSD storage, registers those resources with the Master, and serves RDMA read/write requests from vLLM ranks. Only used in standalone-store mode. Deployment manifests are provided in [`helpers/mooncake-client/`](../../../../helpers/mooncake-client/).
 - **Mooncake Transfer Engine** — Byte-oriented data mover that transfers data between registered GPU or CPU memory regions and the distributed DRAM/SSD pool using RDMA or TCP.
 - **MooncakeStoreConnector** (in each vLLM process) — Converts vLLM content-addressed cache chunks into Mooncake object keys and maps each object to one or more physical memory address-and-size ranges.
 
 Two deployment modes are available:
 
-| Mode | Description | `global_segment_size` | External process |
+| Mode | Description | `global_segment_size` | Components |
 | :--- | :--- | :--- | :--- |
-| **Embedded** | Each vLLM rank contributes CPU DRAM to the distributed pool in-process | > 0 (e.g., `"80GB"`) | No |
-| **Standalone-store** | External `mooncake_client` process owns the CPU + SSD pool; vLLM ranks are pure requesters | `0` | Yes |
+| **Embedded** | Each vLLM rank contributes CPU DRAM to the distributed pool in-process | > 0 (e.g., `"80GB"`) | Master + vLLM |
+| **Standalone-store** | External Mooncake Client process owns the CPU + SSD pool; vLLM ranks are pure requesters | `0` | Master + Client + vLLM |
 
-Embedded mode is simpler to deploy — the DRAM pool scales automatically with the number of vLLM instances. Standalone-store mode decouples storage from compute and enables the SSD/NVMe tier.
+Embedded mode is simpler to deploy — the DRAM pool scales automatically with the number of vLLM instances. Standalone-store mode decouples storage from compute and enables the SSD/NVMe tier by delegating resource ownership to the Mooncake Client. An example of when you might need the standalone mode as compared to the embedded mode, would be if the CPU being contributed to the distributed pool does not belong to the vLLM servers, and so you need some other process to manage the physical memory and disk.
 
 #### Mooncake Master
 
@@ -178,6 +179,20 @@ The Mooncake Master handles block metadata, eviction, and snapshots. Key configu
 | `snapshot_interval_seconds` | `60` | Snapshot frequency |
 
 The Master exposes gRPC (port 50051), HTTP metadata (port 8080), and Prometheus metrics (port 9003). See [`helpers/mooncake-master-store/`](../../../../helpers/mooncake-master-store/) for deployment manifests.
+
+#### Mooncake Client
+
+The Mooncake Client (`mooncake_client`) is the process that owns physical memory and disk in the distributed pool. It is only used in standalone-store mode.
+
+On startup, the Client allocates a CPU DRAM segment (`--global_segment_size`) and optionally opens a local SSD path for persistence (`--enable_offload=true`). It registers these resources with the Mooncake Master, making them available to the cluster. These allocations are fixed for the lifetime of the process — the Client exposes no runtime API to resize segments, change SSD paths, or toggle offloading. Any change to resource sizing requires restarting the Client. vLLM ranks never communicate with the Client directly — when a rank needs to store or load a block, it queries the Master for the block's location, and the Transfer Engine then moves the bytes peer-to-peer over RDMA between the rank and the Client's registered memory.
+
+The two-tier storage within the Client works as follows:
+
+- **Writes** land in CPU DRAM synchronously and are asynchronously persisted to SSD.
+- **Reads** check DRAM first and fall through to SSD on a DRAM miss.
+- **Eviction** is coordinated by the Master — when the DRAM pool hits the high watermark, the Master instructs the Client to spill blocks to SSD.
+
+Decoupling storage from compute means the pool survives vLLM pod restarts, storage can be placed on nodes without GPUs (e.g., CPU-only nodes with large DRAM and NVMe), and the SSD tier is managed in one place per node rather than per GPU. See [`helpers/mooncake-client/`](../../../../helpers/mooncake-client/) for deployment manifests.
 
 #### Content-Addressable Storage and PYTHONHASHSEED
 
