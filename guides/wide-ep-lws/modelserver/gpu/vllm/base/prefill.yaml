@@ -62,7 +62,6 @@ spec:
 
                 exec vllm serve \
                   deepseek-ai/DeepSeek-R1-0528 \
-                  --enable-log-requests \
                   --port 8000 \
                   --gpu-memory-utilization 0.8 \
                   --disable-access-log-for-endpoints=/health,/metrics,/v1/models,/readyz \
@@ -78,17 +77,17 @@ spec:
                   --kv_transfer_config '{"kv_connector":"NixlConnector",
                                           "kv_role":"kv_both",
                                           "kv_load_failure_policy":"fail"}' \
-                  --enable-eplb \
-                  --eplb-config '{"window_size":"1000",
-                                  "step_interval":"3000",
-                                  "num_redundant_experts":"32",
-                                  "log_balancedness":"False"}' \
                   --moe-backend deep_gemm \
                   --all2all-backend deepep_high_throughput
                 
                   # To enable tracing, add:
                   # --otlp-traces-endpoint http://otel-collector:4317 \
                   # --collect-detailed-traces all
+                  # --enable-eplb \
+                  # --eplb-config '{"window_size":"1000",
+                  #                 "step_interval":"3000",
+                  #                 "num_redundant_experts":"32",
+                  #                 "log_balancedness":"False"}' \
             env:
               - name: HF_TOKEN
                 valueFrom:

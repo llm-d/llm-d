@@ -6,7 +6,7 @@ resources:
 images:
   - name: docker.io/vllm/vllm-openai
     newName: ghcr.io/llm-d/llm-d-cuda-dev
-    newTag: sha-2105874
+    newTag: sha-a1bcf21
 
 patches:
   - target:
@@ -37,6 +37,11 @@ patches:
         value:
           name: NVSHMEM_HCA_PREFIX
           value: "ibp"
+      - op: add
+        path: /spec/leaderWorkerTemplate/workerTemplate/spec/containers/0/env/-
+        value:
+          name: LD_LIBRARY_PATH
+          value: "/opt/nvshmem-v3.4.5-0/lib:/opt/nvshmem-v3.4.5-0/lib64:/opt/vllm/lib/python3.12/site-packages/nvidia/nvshmem/lib:/opt/vllm/lib64/python3.12/site-packages/torch/lib:/usr/local/nvidia/lib:/usr/local/nvidia/lib64:/usr/local/cuda/lib64:/opt/amazon/efa/lib:/opt/amazon/efa/lib64:/opt/ucx/lib:/opt/ucx/lib64:/opt/uccl/lib:/usr/local/lib:/usr/local/lib64:/usr/lib/x86_64-linux-gnu:/usr/lib/aarch64-linux-gnu:/usr/local/nvidia/lib:/usr/local/nvidia/lib64:/usr/local/cuda/lib64"
       # Add RDMA config.
       - op: add
         path: /spec/leaderWorkerTemplate/workerTemplate/spec/containers/0/resources/limits/rdma~1ib

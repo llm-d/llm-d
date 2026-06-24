@@ -293,9 +293,9 @@ Benchmark: `2048_concurrent_2k_isl_2k_osl` (2048 concurrent requests, 2K input /
 
 | Metric | DP Supervisor |
 |---|---|
-| Output tokens/s | 27,853 |
-| Input tokens/s | 29,329 |
-| Total tokens/s | 57,183 |
-| Requests/s | 14.33 |
+| Output tokens/s | 25,176 |
+| Input tokens/s | 25,122 |
+| Total tokens/s | 50,299 |
+| Requests/s | 12.6 |
 
-~1,741 output tokens/s per decode GPU (16 decode GPUs).
+~1,600 output tokens/s per decode GPU (16 decode GPUs).
