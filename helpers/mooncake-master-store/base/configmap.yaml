@@ -26,6 +26,12 @@ data:
     memory_allocator: "offset"
     allocation_strategy: "random"
 
+    # SSD offloading: the Master sends this path to Clients via GetStorageConfig().
+    # Clients use root_fs_dir/cluster_id as the base directory for their bucket
+    # storage backend. Must match the Client's local mount path.
+    cluster_id: "mooncake_cluster"
+    root_fs_dir: "/data/mooncake-offload"
+
     enable_snapshot: true
     enable_snapshot_restore: true
     snapshot_interval_seconds: 60

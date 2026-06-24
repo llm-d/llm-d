@@ -35,7 +35,14 @@ spec:
             - mountPath: /etc/mooncake
               name: mooncake-config
               readOnly: true
+            # The Master returns root_fs_dir to all clients including vLLM ranks.
+            # In standalone-store mode vLLM doesn't use this path, but the
+            # client library still checks it exists at startup.
+            - mountPath: /data/mooncake-offload
+              name: mooncake-offload-stub
       volumes:
         - name: mooncake-config
           configMap:
             name: mooncake-store-config
+        - name: mooncake-offload-stub
+          emptyDir: {}

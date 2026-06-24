@@ -19,6 +19,10 @@ spec:
           command: ["mooncake_master"]
           args:
             - "--config_path=/etc/mooncake/master.yaml"
+            # Required for standalone-store (fs) mode — without this the Master
+            # rejects MountLocalDiskSegment RPCs from mooncake_client with UNABLE_OFFLOAD.
+            # No-op when no client attempts to mount.
+            - "--enable_offload"
           env:
             - name: MOONCAKE_SNAPSHOT_LOCAL_PATH
               value: "/data/snapshots"
