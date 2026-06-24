@@ -51,7 +51,7 @@ SIGs operate within the broader llm-d project governance framework defined in [P
 | **[SIG Autoscaling](#sig-autoscaling)** | Traffic-aware autoscaling, resource management, and capacity planning | • [Meeting Recordings and Docs](https://drive.google.com/drive/folders/1iDlTgpFPOrSQn7dWR3uCQLtqhz86HTAi)<br>• [workload-variant-autoscaler Repository](https://github.com/llm-d-incubation/workload-variant-autoscaler) |
 | **[SIG Observability](#sig-observability)** | Monitoring, logging, metrics, and operational visibility | • [Meeting Recordings and Docs](https://drive.google.com/drive/folders/1H-TVTCKYVxUn4fER7xuTPmscNttZCutN)<br>• [llm-d Observability Documentation](https://github.com/llm-d/llm-d/tree/main/docs/operations/observability) |
 | **[SIG RL](#sig-rl)** | Improve SOTA performance for RL workloads | • [Meeting Recordings and Docs](https://drive.google.com/drive/folders/1k9u56_HO5E1uGGgmp0T0y8VhMfzc1P11) |
-| **[SIG Batch Inference](#sig-batch-inference)** | Asynchronous processing, request queueing, and batch gateway management | • [Meeting Recordings and Docs](https://drive.google.com/corp/drive/folders/1OCAETAcm50YkVWx-jmByRrRafRTWj0dO)<br>• [llm-d-async Repository](https://github.com/llm-d-incubation/llm-d-async)<br>• [llm-d-batch-gateway Repository](https://github.com/llm-d/llm-d-batch-gateway) |
+| **[SIG Batch Inference](#sig-batch-inference)** | Asynchronous processing, request queueing, and batch gateway management | • [Meeting Recordings and Docs](https://drive.google.com/drive/folders/1OCAETAcm50YkVWx-jmByRrRafRTWj0dO)<br>• [llm-d-async Repository](https://github.com/llm-d-incubation/llm-d-async)<br>• [llm-d-batch-gateway Repository](https://github.com/llm-d/llm-d-batch-gateway) |
 
 ## SIG Detailed Descriptions
 
