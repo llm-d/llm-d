@@ -12,37 +12,6 @@ spec:
           - 107
       containers:
         - name: modelserver
-          command: ["vllm", "serve"]
-          args:
-            - "Qwen/Qwen3-VL-32B-Instruct"
-            - "--disable-access-log-for-endpoints=/health,/metrics,/v1/models"
-            - "--port=8000"
-            - "--tensor-parallel-size=2"
-            - "--mm-processor-cache-gb"
-            - "20"
-
-            # Uncomment for distributed tracing
-            # - "--otlp-traces-endpoint=http://otel-collector:4317"
-            # - "--collect-detailed-traces=all"
-          env:
-            - name: HF_TOKEN
-              valueFrom:
-                secretKeyRef:
-                  name: llm-d-hf-token
-                  key: HF_TOKEN
-            # - name: VLLM_LOGGING_LEVEL
-            #   value: DEBUG
-            # Uncomment for distributed tracing env vars
-            # - name: OTEL_SERVICE_NAME
-            #   value: "vllm-decode"
-            # - name: OTEL_EXPORTER_OTLP_ENDPOINT
-            #   value: "http://otel-collector:4317"
-            # - name: OTEL_TRACES_EXPORTER
-            #   value: "otlp"
-            # - name: OTEL_TRACES_SAMPLER
-            #   value: "parentbased_traceidratio"
-            # - name: OTEL_TRACES_SAMPLER_ARG
-            #   value: "0.1"
           resources:
             limits:
               cpu: "8"
@@ -77,14 +46,3 @@ spec:
       resourceClaims:
         - name: intel-decode-claim
           resourceClaimTemplateName: intel-claim-template-decode
-      volumes:
-        - name: shm
-          emptyDir:
-            medium: Memory
-            sizeLimit: 20Gi
-        - name: torch-compile-cache
-          emptyDir: {}
-        - name: triton-cache
-          emptyDir: {}
-        - name: vllm-config
-          emptyDir: {}
