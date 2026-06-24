@@ -4,10 +4,10 @@ on:
   workflow_dispatch:
     inputs:
       decode_pods:
-        description: 'Number of decode (vllm "standalone") pods (default "auto", means what was configured on the scenario)'
+        description: 'Number of decode (vllm "standalone") pods (default "1"; "auto" means what was configured on the scenario)'
         required: false
         type: 'string'
-        default: 'auto'
+        default: '1'
       prefill_pods:
         description: 'Number of prefill pods (default "auto", means what was configured on the scenario)'
         required: false
