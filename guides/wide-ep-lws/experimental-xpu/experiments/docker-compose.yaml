@@ -1,0 +1,114 @@
+services:
+  v2lite-ep-tp2:
+    image: ${VLLM_XPU_IMAGE:-ghcr.io/llm-d/llm-d-xpu:v0.7.0}
+    entrypoint:
+      - vllm
+      - serve
+    privileged: true
+    shm_size: ${SHM_SIZE:-16gb}
+    environment:
+      HF_TOKEN: ${HF_TOKEN:?set HF_TOKEN}
+      ZE_AFFINITY_MASK: ${ZE_AFFINITY_MASK:-0,1}
+      VLLM_WORKER_MULTIPROC_METHOD: spawn
+      VLLM_ENABLE_V1_MULTIPROCESSING: "1"
+      VLLM_MULTIPROC_EXECUTE_MODEL_TIMEOUT_S: "1200"
+      UCX_TLS: ${UCX_TLS:-tcp,ze_copy}
+      HF_HUB_CACHE: /var/cache/huggingface
+      VLLM_CACHE_ROOT: /var/cache/vllm
+    volumes:
+      - /dev/dri:/dev/dri
+      - ${HF_CACHE_DIR:-./hf-cache}:/var/cache/huggingface
+      - ${VLLM_CACHE_DIR:-./vllm-cache}:/var/cache/vllm
+    ports:
+      - "127.0.0.1:${PORT:-8000}:8000"
+    command:
+      - deepseek-ai/DeepSeek-V2-Lite-Chat
+      - --host=0.0.0.0
+      - --port=8000
+      - --trust-remote-code
+      - --dtype=float16
+      - --block-size=64
+      - --enforce-eager
+      - --max-model-len=512
+      - --gpu-memory-utilization=0.8
+      - --tensor-parallel-size=2
+      - --enable-expert-parallel
+      - --all2all-backend=allgather_reducescatter
+      - --disable-access-log-for-endpoints=/health,/metrics,/v1/models
+    profiles:
+      - v2lite-ep-tp2
+
+  v2lite-ep-tp4:
+    image: ${VLLM_XPU_IMAGE:-ghcr.io/llm-d/llm-d-xpu:v0.7.0}
+    entrypoint:
+      - vllm
+      - serve
+    privileged: true
+    shm_size: ${SHM_SIZE:-16gb}
+    environment:
+      HF_TOKEN: ${HF_TOKEN:?set HF_TOKEN}
+      ZE_AFFINITY_MASK: ${ZE_AFFINITY_MASK:-0,1,2,3}
+      VLLM_WORKER_MULTIPROC_METHOD: spawn
+      VLLM_ENABLE_V1_MULTIPROCESSING: "1"
+      VLLM_MULTIPROC_EXECUTE_MODEL_TIMEOUT_S: "1200"
+      UCX_TLS: ${UCX_TLS:-tcp,ze_copy}
+      HF_HUB_CACHE: /var/cache/huggingface
+      VLLM_CACHE_ROOT: /var/cache/vllm
+    volumes:
+      - /dev/dri:/dev/dri
+      - ${HF_CACHE_DIR:-./hf-cache}:/var/cache/huggingface
+      - ${VLLM_CACHE_DIR:-./vllm-cache}:/var/cache/vllm
+    ports:
+      - "127.0.0.1:${PORT:-8000}:8000"
+    command:
+      - deepseek-ai/DeepSeek-V2-Lite-Chat
+      - --host=0.0.0.0
+      - --port=8000
+      - --trust-remote-code
+      - --dtype=float16
+      - --block-size=64
+      - --enforce-eager
+      - --max-model-len=512
+      - --gpu-memory-utilization=0.8
+      - --tensor-parallel-size=4
+      - --enable-expert-parallel
+      - --all2all-backend=allgather_reducescatter
+      - --disable-access-log-for-endpoints=/health,/metrics,/v1/models
+    profiles:
+      - v2lite-ep-tp4
+
+  powermoe-ep-dp3:
+    image: ${VLLM_XPU_IMAGE:-ghcr.io/llm-d/llm-d-xpu:v0.7.0}
+    entrypoint:
+      - vllm
+      - serve
+    privileged: true
+    shm_size: ${SHM_SIZE:-16gb}
+    environment:
+      HF_TOKEN: ${HF_TOKEN:?set HF_TOKEN}
+      ZE_AFFINITY_MASK: ${ZE_AFFINITY_MASK:-0,1,2}
+      VLLM_WORKER_MULTIPROC_METHOD: spawn
+      VLLM_ENABLE_V1_MULTIPROCESSING: "1"
+      VLLM_MULTIPROC_EXECUTE_MODEL_TIMEOUT_S: "1200"
+      UCX_TLS: ${UCX_TLS:-tcp,ze_copy}
+      HF_HUB_CACHE: /var/cache/huggingface
+      VLLM_CACHE_ROOT: /var/cache/vllm
+    volumes:
+      - /dev/dri:/dev/dri
+      - ${HF_CACHE_DIR:-./hf-cache}:/var/cache/huggingface
+      - ${VLLM_CACHE_DIR:-./vllm-cache}:/var/cache/vllm
+    ports:
+      - "127.0.0.1:${PORT:-8000}:8000"
+    command:
+      - ibm-research/PowerMoE-3b
+      - --host=0.0.0.0
+      - --port=8000
+      - --trust-remote-code
+      - --max-model-len=2048
+      - --tensor-parallel-size=1
+      - --data-parallel-size=3
+      - --enable-expert-parallel
+      - --all2all-backend=allgather_reducescatter
+      - --disable-access-log-for-endpoints=/health,/metrics,/v1/models
+    profiles:
+      - powermoe-ep-dp3

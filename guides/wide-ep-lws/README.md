@@ -32,6 +32,14 @@ This guide includes configurations for the following accelerators:
 | NVIDIA GPU (CoreWeave)| `modelserver/coreweave/`   | CoreWeave deployment                     |
 
 > [!NOTE]
+> Experimental Intel XPU validation manifests and follow-up experiments are
+> available in [`experimental-xpu`](./experimental-xpu/). Current evidence
+> validates the DeepSeek-V2-Lite full `wide-ep-lws` path on XPU with NIXL XPU
+> KV buffers (`kv_buffer_device=xpu`) at TP=2+2 when `UCX_TLS` includes
+> `ze_copy` (`tcp,ze_copy` on the tested non-RDMA cluster). The host-buffer
+> fallback (`kv_buffer_device=cpu`) also passed at TP=2+2 and TP=4+4.
+
+> [!NOTE]
 > The pods leveraging inter-node EP must be deployed in a cluster environment with full mesh
 > network connectivity. The DeepEP backend used in WideEP requires All-to-All RDMA
 > connectivity. Every NIC on a host must be able to communicate with every NIC on all other

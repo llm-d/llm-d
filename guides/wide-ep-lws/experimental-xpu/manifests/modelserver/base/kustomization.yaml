@@ -1,0 +1,35 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - modelserver.yaml
+  - resource-claim-template.yaml
+  - serviceAccount.yaml
+labels:
+  - pairs:
+      llm-d.ai/model: DeepSeek-V2-Lite
+      llm-d.ai/guide: wide-ep-lws-experimental-xpu
+      llm-d.ai/accelerator-variant: xpu
+      llm-d.ai/accelerator-vendor: intel
+      llm-d.ai/engine-type: vllm
+    includeSelectors: true
+    includeTemplates: true
+    fields:
+      - version: v1
+        kind: ServiceAccount
+        path: metadata/labels
+        create: true
+      - group: resource.k8s.io
+        version: v1
+        kind: ResourceClaimTemplate
+        path: metadata/labels
+        create: true
+      - group: apps
+        version: v1
+        kind: Deployment
+        path: metadata/labels
+        create: true
+      - group: apps
+        version: v1
+        kind: Deployment
+        path: spec/template/metadata/labels
+        create: true
