@@ -151,9 +151,7 @@ Choose the overlay matching your infrastructure provider:
 - **CoreWeave** (E/P/D only): Adds `rdma/ib` resource for InfiniBand KV cache transfer between Prefill and Decode workers.
 
 ```bash
-# E/P/D: base | coreweave
-# E/PD:  base
-export INFRA_PROVIDER=base
+export INFRA_PROVIDER=base # base | coreweave
 kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_PATH}/modelserver/gpu/vllm/${TOPOLOGY}/${INFRA_PROVIDER}/
 ```
 
