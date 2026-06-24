@@ -32,7 +32,6 @@ E/P/D extends P/D disaggregation by adding a dedicated encode stage. This provid
 * 4 TP=2 Prefill Workers
 * 4 TP=2 Decode Workers
 
-
 ### Best Practices
 
 Encode disaggregation is most beneficial for workloads with:
@@ -147,8 +146,14 @@ helm install ${RELEASE_NAME} \
 
 Apply the Kustomize overlays for your chosen topology:
 
+Choose the overlay matching your infrastructure provider:
+- **base**: Platform-agnostic configuration, no accelerator-specific networking.
+- **CoreWeave** (E/P/D only): Adds `rdma/ib` resource for InfiniBand KV cache transfer between Prefill and Decode workers.
+
 ```bash
-export INFRA_PROVIDER=gke # base | gke
+# E/P/D: base | coreweave
+# E/PD:  base
+export INFRA_PROVIDER=base
 kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_PATH}/modelserver/gpu/vllm/${TOPOLOGY}/${INFRA_PROVIDER}/
 ```
 

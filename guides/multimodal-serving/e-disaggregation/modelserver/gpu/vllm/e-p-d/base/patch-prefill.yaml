@@ -43,12 +43,10 @@ spec:
               cpu: "8"
               memory: 256Gi
               nvidia.com/gpu: "2"
-              rdma/ib: "1"
             requests:
               cpu: "8"
               memory: 256Gi
               nvidia.com/gpu: "2"
-              rdma/ib: "1"
           volumeMounts:
             - mountPath: /dev/shm
               name: shm
