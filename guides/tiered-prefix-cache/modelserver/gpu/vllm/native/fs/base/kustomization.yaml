@@ -3,6 +3,7 @@ kind: Kustomization
 
 resources:
   - ../../../base
+  - ../../../../../../manifests/pvc.yaml
 
 labels:
   - pairs:

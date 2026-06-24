@@ -138,55 +138,94 @@ helm install tiered-prefix-cache \
 ### 2. Deploy the Model Server
 
 Deploy **one** of the paths below. Each `kubectl apply -k` targets an overlay directory. For the GPU paths, `INFRA_PROVIDER` selects a `base` overlay or a provider-specific one (for example `gke`); the TPU path does not use an infra-provider overlay.
+The general deploy command:
+
+<!--
+CI harvests commands from this README via the llm-d-benchmark kustomize standup step. The `kubectl apply -k` below is the ONLY MODELSERVER-phase command the parser captures.
+
+The `export ...` lines in the same block are harvested as default values for ${ACCELERATOR}, ${BACKEND}, ${CONNECTOR}, ${VARIANT}, and ${INFRA_PROVIDER}. That lets the canonical command resolve out of the box for a non-ci scenario run of llmdbenchmark.
+CI overrides each variable per-variant via the scenario YAML's `kustomize.guideVariableOverrides`, which wins over the harvested defaults (precedence in `variable_resolver.py`: README defaults < overrides).
+
+The per-path example sections further below are wrapped in `llm-d-cicd:skip` markers and exist purely for human reference.
+
+ Note that if you add another un-skipped `kubectl apply -k` block in this section. `_select_modelserver_command` in step_06_kustomize_deploy.py runs only the first match — additional blocks would be silently dropped from CI.
+-->
+```bash
+export ACCELERATOR=gpu  # gpu | tpu/v6 | tpu/v7
+export BACKEND=vllm  # vllm | sglang
+export CONNECTOR=native  # native | lmcache-connector
+export VARIANT=cpu  # cpu | fs
+export INFRA_PROVIDER=base  # base | gke
+
+kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/tiered-prefix-cache/modelserver/${ACCELERATOR}/${BACKEND}/${CONNECTOR}/${VARIANT}/${INFRA_PROVIDER}/
+```
+
+> [!NOTE]
+> Not all options work with all other options. Consult the different examples to see what is available at this time.
 
 #### vLLM native — CPU RAM
 
+<!-- llm-d-cicd:skip start -->
 ```bash
 export INFRA_PROVIDER=base  # base | gke
 kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/tiered-prefix-cache/modelserver/gpu/vllm/native/cpu/${INFRA_PROVIDER}/
 ```
+<!-- llm-d-cicd:skip end -->
 
 #### vLLM native — CPU RAM + Filesystem
 
 This path adds a shared filesystem tier using vLLM's native multi-tier offloading. It requires a ReadWriteMany PVC mounted at `/mnt/files-storage`.
 
-First, provision the PVC. See [Storage Backends](#storage-backends) to configure a `StorageClass` for your environment.
+First, provision the PVC. See [Storage Backends](#storage-backends) to configure a `StorageClass` for your environment - edit [`manifests/pvc.yaml`](./manifests/pvc.yaml) to set your storage class (or leave it blank for the cluster default), then apply:
 
+<!-- llm-d-cicd:skip start -->
 ```bash
-export STORAGE_CLASS="" # cluster default if empty; or e.g. "lustre" / "efs-sc"
-envsubst < ${REPO_ROOT}/guides/tiered-prefix-cache/manifests/pvc.yaml | kubectl apply -n ${NAMESPACE} -f -
+kubectl apply -n ${NAMESPACE} -f ${REPO_ROOT}/guides/tiered-prefix-cache/manifests/pvc.yaml
 ```
+<!-- llm-d-cicd:skip end -->
+
+> [!NOTE]
+> The FS overlay's kustomization.yaml also includes this PVC, so [`manifests/pvc.yaml`](./manifests/pvc.yaml) gets applied anyway with the `kubectl apply` below.
 
 Then deploy the model server:
 
+<!-- llm-d-cicd:skip start -->
 ```bash
 export INFRA_PROVIDER=base  # base | gke
 kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/tiered-prefix-cache/modelserver/gpu/vllm/native/fs/${INFRA_PROVIDER}/
 ```
+<!-- llm-d-cicd:skip end -->
 
 #### LMCache
 
-LMCache supports a CPU RAM tier and a filesystem tier. For the filesystem tier, first provision the PVC as shown in the [vLLM native filesystem path](#vllm-native--cpu-ram--filesystem).
+LMCache supports a CPU RAM tier and a filesystem tier. For the filesystem tier, first provision the PVC as shown in the [vLLM native filesystem path](#vllm-native--cpu-ram--filesystem) (Again, the PVC gets applied with the apply command below).
 
+<!-- llm-d-cicd:skip start -->
 ```bash
 export VARIANT=cpu          # cpu | fs
 export INFRA_PROVIDER=base  # base | gke
 kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/tiered-prefix-cache/modelserver/gpu/vllm/lmcache-connector/${VARIANT}/${INFRA_PROVIDER}/
 ```
+<!-- llm-d-cicd:skip end -->
 
 #### SGLang HiCache — CPU RAM
 
+<!-- llm-d-cicd:skip start -->
 ```bash
 export INFRA_PROVIDER=base  # base | gke
 kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/tiered-prefix-cache/modelserver/gpu/sglang/native/cpu/${INFRA_PROVIDER}/
 ```
+<!-- llm-d-cicd:skip end -->
 
 #### TPU (Google TPU v6 / v7)
 
+<!-- llm-d-cicd:skip start -->
 ```bash
+export INFRA_PROVIDER=""  # Leave empty
 export TPU_VERSION=v7  # v6 | v7
 kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/tiered-prefix-cache/modelserver/tpu/${TPU_VERSION}/vllm/native/cpu/
 ```
+<!-- llm-d-cicd:skip end -->
 
 #### Storage Backends
 
@@ -295,25 +334,44 @@ Uninstall the router, then delete the model server overlay for the path you depl
 helm uninstall tiered-prefix-cache -n ${NAMESPACE}
 ```
 
+The general command (see the different paths below):
+```bash
+kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/tiered-prefix-cache/modelserver/${ACCELERATOR}/${BACKEND}/${CONNECTOR}/${VARIANT}/${INFRA_PROVIDER} --ignore-not-found
+```
+
+
 **GPU paths:**
 
+<!-- llm-d-cicd:skip start -->
 ```bash
-export MODEL_SERVER=vllm           # vllm | sglang
+export BACKEND=vllm           # vllm | sglang
 export CONNECTOR=native            # native | lmcache-connector
 export VARIANT=cpu                 # cpu | fs
 export INFRA_PROVIDER=base         # base | gke
-kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/tiered-prefix-cache/modelserver/gpu/${MODEL_SERVER}/${CONNECTOR}/${VARIANT}/${INFRA_PROVIDER} --ignore-not-found
+kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/tiered-prefix-cache/modelserver/gpu/${BACKEND}/${CONNECTOR}/${VARIANT}/${INFRA_PROVIDER} --ignore-not-found
 ```
+<!-- llm-d-cicd:skip end -->
+
 
 **TPU path:**
 
+<!-- llm-d-cicd:skip start -->
 ```bash
 export TPU_VERSION=v7  # v6 | v7
 kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/tiered-prefix-cache/modelserver/tpu/${TPU_VERSION}/vllm/native/cpu --ignore-not-found
 ```
+<!-- llm-d-cicd:skip end -->
+
+
+**Storage offloading:**
 
 ```bash
 kubectl delete -f ${REPO_ROOT}/guides/tiered-prefix-cache/manifests/pvc.yaml -n ${NAMESPACE} --ignore-not-found  # if a PVC was created
+```
+
+**For all paths:**
+
+```bash
 kubectl delete namespace ${NAMESPACE}
 ```
 

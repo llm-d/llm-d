@@ -3,6 +3,7 @@ kind: Kustomization
 resources:
   # Use the CPU offloading base to form a tiered cache structure: HBM - CPU - storage.
   - ../../cpu/base
+  - ../../../../../../manifests/pvc.yaml
 
 labels:
   - pairs:
