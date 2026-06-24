@@ -5,11 +5,6 @@ resources:
 components:
   - ../../../../../recipes/modelserver/components/disable-gke-nccl-tuner-patch
 
-images:
-  - name: docker.io/vllm/vllm-openai
-    newName: ghcr.io/llm-d/llm-d-cuda-dev
-    newTag: sha-a1bcf21
-
 patches:
   - target:
       kind: LeaderWorkerSet
