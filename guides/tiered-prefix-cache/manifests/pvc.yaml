@@ -8,4 +8,4 @@ spec:
   resources:
     requests:
       storage: 9000Gi
-  storageClassName: "" # Specify the storage class here, or remove this line to use the default storage class.
+  storageClassName: "" # Specify the storage class here, or leave this empty to use the default storage class.
