@@ -70,7 +70,7 @@ jobs:
       scenario_dir: ${{ inputs.scenario_dir || 'guides' }}
       standup_method: ${{ inputs.standup_method || 'kustomize' }}
       standup_scenario: ${{ inputs.standup_scenario || 'tiered-prefix-cache' }}
-      decode_pods: ${{ inputs.decode_pods || 'auto' }}
+      decode_pods: ${{ inputs.decode_pods || '1' }}
       prefill_pods: ${{ inputs.prefill_pods || 'auto' }}
       accelerator_type: ${{ inputs.accelerator_type || 'gpu' }}
       backend_type: ${{ inputs.backend_type || 'vllm' }}
