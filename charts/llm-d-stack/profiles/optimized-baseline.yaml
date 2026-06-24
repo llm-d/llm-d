@@ -1,0 +1,9 @@
+profile: optimized-baseline
+
+routerStandalone:
+  enabled: true
+routerGateway:
+  enabled: false
+
+modelServers:
+  enabled: true

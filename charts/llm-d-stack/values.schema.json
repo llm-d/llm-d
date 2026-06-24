@@ -1,0 +1,88 @@
+{
+  "$schema": "https://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "properties": {
+    "profile": {
+      "type": "string",
+      "enum": [
+        "optimized-baseline",
+        "pd-disaggregation",
+        "predicted-latency-routing",
+        "precise-prefix-cache-routing",
+        "tiered-prefix-cache",
+        "custom"
+      ]
+    },
+    "hfToken": {
+      "type": "object",
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "create": { "type": "boolean" },
+        "secretName": { "type": "string", "minLength": 1 },
+        "key": { "type": "string", "minLength": 1 },
+        "value": { "type": "string" }
+      }
+    },
+    "routerStandalone": {
+      "type": "object",
+      "properties": {
+        "enabled": { "type": "boolean" }
+      }
+    },
+    "routerGateway": {
+      "type": "object",
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "provider": {
+          "type": "object",
+          "properties": {
+            "name": {
+              "type": "string",
+              "enum": ["none", "gke", "istio", "agentgateway", "envoy-ai-gateway"]
+            }
+          }
+        }
+      }
+    },
+    "modelServers": {
+      "type": "object",
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "items": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["name", "role"],
+            "properties": {
+              "enabled": { "type": "boolean" },
+              "name": {
+                "type": "string",
+                "pattern": "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$"
+              },
+              "role": { "type": "string", "minLength": 1 },
+              "replicas": { "type": "integer", "minimum": 0 },
+              "args": {
+                "type": "array",
+                "items": { "type": "string" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "monitoring": {
+      "type": "object",
+      "properties": {
+        "podMonitor": {
+          "type": "object",
+          "properties": {
+            "enabled": { "type": "boolean" }
+          }
+        }
+      }
+    },
+    "extraObjects": {
+      "type": "array"
+    }
+  }
+}

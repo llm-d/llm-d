@@ -1,0 +1,80 @@
+profile: predicted-latency-routing
+
+routerStandalone:
+  enabled: true
+  router:
+    latencyPredictor:
+      enabled: true
+    extraServicePorts:
+      - name: http
+        port: 80
+        protocol: TCP
+        targetPort: 8081
+    epp:
+      pluginsConfigFile: predicted-latency-plugins.yaml
+      pluginsCustomConfig:
+        predicted-latency-plugins.yaml: |
+          apiVersion: llm-d.ai/v1alpha1
+          kind: EndpointPickerConfig
+          plugins:
+          - type: approx-prefix-cache-producer
+            parameters:
+              maxPrefixTokensToMatch: 262144
+          - type: predicted-latency-producer
+          - type: prefix-cache-affinity-filter
+            name: loose-affinity-filter
+            parameters:
+              affinityThreshold: 0.8
+          - type: latency-scorer
+          - type: weighted-random-picker
+          schedulingProfiles:
+          - name: default
+            plugins:
+            - pluginRef: predicted-latency-producer
+            - pluginRef: loose-affinity-filter
+            - pluginRef: latency-scorer
+            - pluginRef: weighted-random-picker
+    modelServers:
+      matchLabels:
+        llm-d.ai/guide: optimized-baseline
+
+routerGateway:
+  enabled: false
+  router:
+    latencyPredictor:
+      enabled: true
+    extraServicePorts:
+      - name: http
+        port: 80
+        protocol: TCP
+        targetPort: 8081
+    epp:
+      pluginsConfigFile: predicted-latency-plugins.yaml
+      pluginsCustomConfig:
+        predicted-latency-plugins.yaml: |
+          apiVersion: llm-d.ai/v1alpha1
+          kind: EndpointPickerConfig
+          plugins:
+          - type: approx-prefix-cache-producer
+            parameters:
+              maxPrefixTokensToMatch: 262144
+          - type: predicted-latency-producer
+          - type: prefix-cache-affinity-filter
+            name: loose-affinity-filter
+            parameters:
+              affinityThreshold: 0.8
+          - type: latency-scorer
+          - type: weighted-random-picker
+          schedulingProfiles:
+          - name: default
+            plugins:
+            - pluginRef: predicted-latency-producer
+            - pluginRef: loose-affinity-filter
+            - pluginRef: latency-scorer
+            - pluginRef: weighted-random-picker
+    modelServers:
+      matchLabels:
+        llm-d.ai/guide: optimized-baseline
+
+modelServers:
+  enabled: true

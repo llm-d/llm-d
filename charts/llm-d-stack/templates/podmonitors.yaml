@@ -1,0 +1,28 @@
+{{- if and .Values.modelServers.enabled .Values.monitoring.podMonitor.enabled }}
+{{- $root := . }}
+{{- range $server := .Values.modelServers.items }}
+{{- if ne (default true $server.enabled) false }}
+{{- $role := required "modelServers.items[].role is required" $server.role }}
+{{- $name := required "modelServers.items[].name is required" $server.name }}
+{{- $selectorLabels := mergeOverwrite (dict) (include "llm-d-stack.selectorLabels" $root | fromYaml) (default dict $root.Values.modelServers.selectorLabels) (default dict $server.selectorLabels) (dict "llm-d.ai/role" $role) }}
+---
+apiVersion: monitoring.coreos.com/v1
+kind: PodMonitor
+metadata:
+  name: {{ printf "%s-%s" (include "llm-d-stack.fullname" $root) $name | trunc 63 | trimSuffix "-" }}
+  labels:
+{{ include "llm-d-stack.labels" $root | nindent 4 }}
+{{- with $root.Values.monitoring.podMonitor.labels }}
+{{ toYaml . | nindent 4 }}
+{{- end }}
+spec:
+  selector:
+    matchLabels:
+{{ toYaml $selectorLabels | nindent 6 }}
+  podMetricsEndpoints:
+    - path: {{ $root.Values.monitoring.podMonitor.path | quote }}
+      port: {{ $root.Values.monitoring.podMonitor.port | quote }}
+      interval: {{ $root.Values.monitoring.podMonitor.interval | quote }}
+{{- end }}
+{{- end }}
+{{- end }}

@@ -1,0 +1,23 @@
+llm-d stack profile: {{ .Values.profile }}
+
+Router:
+{{- if .Values.routerStandalone.enabled }}
+  standalone router dependency is enabled.
+{{- else if .Values.routerGateway.enabled }}
+  gateway router dependency is enabled.
+{{- else }}
+  router dependency is disabled.
+{{- end }}
+
+Model servers:
+{{- if .Values.modelServers.enabled }}
+  {{ len .Values.modelServers.items }} deployment item(s) configured.
+{{- else }}
+  model server rendering is disabled.
+{{- end }}
+
+Cluster prerequisites remain outside this chart:
+  - Gateway API Inference Extension CRDs
+  - accelerator drivers and device plugins or DRA drivers
+  - Gateway provider controllers when using routerGateway
+  - Prometheus Operator CRDs when monitoring.podMonitor.enabled=true

@@ -1,0 +1,17 @@
+apiVersion: v2
+name: llm-d-stack
+description: Unified Helm entrypoint for llm-d router and deployment-based model server profiles.
+type: application
+version: 0.1.0
+appVersion: v0.9.1
+dependencies:
+  - name: llm-d-router-standalone
+    alias: routerStandalone
+    repository: oci://ghcr.io/llm-d/charts
+    version: v0.9.1
+    condition: routerStandalone.enabled
+  - name: llm-d-router-gateway
+    alias: routerGateway
+    repository: oci://ghcr.io/llm-d/charts
+    version: v0.9.1
+    condition: routerGateway.enabled

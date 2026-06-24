@@ -47,7 +47,27 @@ For this quickstart, we will use the **Standalone Mode** deployment, which is th
 
 ## Installation Instructions
 
-### 1. Deploy the llm-d Router (Standalone Mode)
+### Option A. Deploy with the unified Helm chart
+
+The `llm-d-stack` chart deploys the router and deployment-based model server
+profiles from one Helm release. It still expects the prerequisites above to be
+completed, including the Gateway API Inference Extension CRDs and Hugging Face
+token secret.
+
+```bash
+helm dependency build ${REPO_ROOT}/charts/llm-d-stack
+helm install ${GUIDE_NAME} \
+    ${REPO_ROOT}/charts/llm-d-stack \
+    -n ${NAMESPACE}
+```
+
+See [`charts/llm-d-stack/README.md`](../../charts/llm-d-stack/README.md) for
+other profiles such as P/D disaggregation, precise prefix cache routing,
+predicted latency routing, and tiered prefix cache.
+
+### Option B. Deploy router and model server separately
+
+#### 1. Deploy the llm-d Router (Standalone Mode)
 
 The llm-d Router provides the intelligent load balancing. In Standalone Mode, it includes a built-in proxy (Envoy).
 
@@ -59,7 +79,7 @@ helm install ${GUIDE_NAME} \
     -n ${NAMESPACE} --version ${ROUTER_CHART_VERSION}
 ```
 
-### 2. Deploy the Model Server
+#### 2. Deploy the Model Server
 
 Deploy the default model server (vLLM running on NVIDIA GPUs). This will deploy 8 replicas of `Qwen/Qwen3-32B` by default.
 

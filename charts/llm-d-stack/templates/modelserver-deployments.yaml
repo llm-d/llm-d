@@ -1,0 +1,131 @@
+{{- if .Values.modelServers.enabled }}
+{{- $root := . }}
+{{- $defaults := .Values.modelServers.defaults }}
+{{- range $server := .Values.modelServers.items }}
+{{- if ne (default true $server.enabled) false }}
+{{- $role := required "modelServers.items[].role is required" $server.role }}
+{{- $name := required "modelServers.items[].name is required" $server.name }}
+{{- $baseLabels := include "llm-d-stack.labels" $root | fromYaml }}
+{{- $selectorLabels := mergeOverwrite (dict) (include "llm-d-stack.selectorLabels" $root | fromYaml) (default dict $root.Values.modelServers.selectorLabels) (default dict $server.selectorLabels) (dict "llm-d.ai/role" $role) }}
+{{- $podLabels := mergeOverwrite (dict) $baseLabels (default dict $root.Values.modelServers.defaultLabels) (default dict $server.labels) (dict "llm-d.ai/role" $role) }}
+{{- $imageValues := mergeOverwrite (dict) (default dict $defaults.image) (default dict $server.image) }}
+{{- $imagePullSecrets := default $defaults.imagePullSecrets $server.imagePullSecrets }}
+{{- $ports := default $defaults.ports $server.ports }}
+{{- $initContainers := concat (default list $defaults.initContainers) (default list $server.initContainers) }}
+{{- $volumeMounts := concat (default list $defaults.volumeMounts) (default list $server.volumeMounts) }}
+{{- $volumes := concat (default list $defaults.volumes) (default list $server.volumes) }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ printf "%s-%s" (include "llm-d-stack.fullname" $root) $name | trunc 63 | trimSuffix "-" }}
+  labels:
+{{ toYaml $podLabels | nindent 4 }}
+spec:
+  replicas: {{ default $defaults.replicas $server.replicas }}
+  selector:
+    matchLabels:
+{{ toYaml $selectorLabels | nindent 6 }}
+  template:
+    metadata:
+      labels:
+{{ toYaml (mergeOverwrite (dict) $podLabels $selectorLabels) | nindent 8 }}
+      {{- with (default $defaults.podAnnotations $server.podAnnotations) }}
+      annotations:
+{{ toYaml . | nindent 8 }}
+      {{- end }}
+    spec:
+      serviceAccountName: {{ include "llm-d-stack.modelServerServiceAccountName" $root }}
+      {{- with $imagePullSecrets }}
+      imagePullSecrets:
+{{ toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with (default $defaults.podSecurityContext $server.podSecurityContext) }}
+      securityContext:
+{{ toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with $initContainers }}
+      initContainers:
+{{ toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: {{ default "modelserver" $server.containerName }}
+          image: {{ include "llm-d-stack.image" (dict "image" $imageValues) }}
+          imagePullPolicy: {{ default $defaults.image.pullPolicy $imageValues.pullPolicy }}
+          {{- with (default $defaults.command $server.command) }}
+          command:
+{{ toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with $server.args }}
+          args:
+{{ toYaml . | nindent 12 }}
+          {{- end }}
+          {{- if or $root.Values.hfToken.enabled $defaults.env $server.env }}
+          env:
+            {{- if $root.Values.hfToken.enabled }}
+            - name: HF_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $root.Values.hfToken.secretName }}
+                  key: {{ $root.Values.hfToken.key }}
+            {{- end }}
+            {{- with $defaults.env }}
+{{ toYaml . | nindent 12 }}
+            {{- end }}
+            {{- with $server.env }}
+{{ toYaml . | nindent 12 }}
+            {{- end }}
+          {{- end }}
+          {{- with $ports }}
+          ports:
+{{ toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with (default $defaults.resources $server.resources) }}
+          resources:
+{{ toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with (default $defaults.startupProbe $server.startupProbe) }}
+          startupProbe:
+{{ toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with (default $defaults.livenessProbe $server.livenessProbe) }}
+          livenessProbe:
+{{ toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with (default $defaults.readinessProbe $server.readinessProbe) }}
+          readinessProbe:
+{{ toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with (default $defaults.containerSecurityContext $server.containerSecurityContext) }}
+          securityContext:
+{{ toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with $volumeMounts }}
+          volumeMounts:
+{{ toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with (default $defaults.extraContainerFields $server.extraContainerFields) }}
+{{ toYaml . | nindent 10 }}
+          {{- end }}
+      {{- with $volumes }}
+      volumes:
+{{ toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with (default $defaults.nodeSelector $server.nodeSelector) }}
+      nodeSelector:
+{{ toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with (default $defaults.affinity $server.affinity) }}
+      affinity:
+{{ toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with (default $defaults.tolerations $server.tolerations) }}
+      tolerations:
+{{ toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with (default $defaults.extraPodSpec $server.extraPodSpec) }}
+{{ toYaml . | nindent 6 }}
+      {{- end }}
+{{- end }}
+{{- end }}
+{{- end }}

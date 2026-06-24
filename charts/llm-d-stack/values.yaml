@@ -1,0 +1,250 @@
+profile: optimized-baseline
+
+commonLabels: {}
+
+hfToken:
+  enabled: true
+  create: false
+  secretName: llm-d-hf-token
+  key: HF_TOKEN
+  value: ""
+
+# The router charts are included as aliased dependencies. Enable exactly one for
+# normal installs. Profile values in profiles/ set both aliases so switching mode
+# only requires changing these two enabled flags.
+routerStandalone:
+  enabled: true
+  router:
+    extraServicePorts:
+      - name: http
+        port: 80
+        protocol: TCP
+        targetPort: 8081
+    epp:
+      replicas: 1
+      flags:
+        v: 2
+      resources:
+        requests:
+          cpu: "4"
+          memory: 8Gi
+        limits:
+          memory: 16Gi
+      pluginsConfigFile: optimized-baseline-plugins.yaml
+      pluginsCustomConfig:
+        optimized-baseline-plugins.yaml: |
+          apiVersion: llm-d.ai/v1alpha1
+          kind: EndpointPickerConfig
+          plugins:
+          - type: queue-scorer
+          - type: kv-cache-utilization-scorer
+          - type: prefix-cache-scorer
+          - type: no-hit-lru-scorer
+          schedulingProfiles:
+          - name: default
+            plugins:
+            - pluginRef: queue-scorer
+              weight: 2
+            - pluginRef: kv-cache-utilization-scorer
+              weight: 2
+            - pluginRef: prefix-cache-scorer
+              weight: 3
+            - pluginRef: no-hit-lru-scorer
+              weight: 2
+    inferencePool:
+      failureMode: FailOpen
+    modelServers:
+      protocol: http
+      matchLabels:
+        llm-d.ai/guide: optimized-baseline
+    proxy:
+      args:
+        - "--service-node"
+        - "envoy-sidecar"
+        - "--log-level"
+        - "warn"
+        - "--concurrency"
+        - "8"
+        - "--drain-strategy"
+        - "immediate"
+        - "--drain-time-s"
+        - "60"
+        - "-c"
+        - "/etc/envoy/envoy.yaml"
+      resources:
+        requests:
+          cpu: "4"
+          memory: 8Gi
+        limits:
+          memory: 16Gi
+    tracing:
+      otelExporterEndpoint: http://localhost:4317
+      sampling:
+        sampler: parentbased_traceidratio
+        samplerArg: "0.1"
+
+routerGateway:
+  enabled: false
+  provider:
+    name: none
+  httpRoute:
+    create: false
+    inferenceGatewayName: llm-d-inference-gateway
+    inferenceGatewayNamespace: ""
+    requestTimeout: 300s
+  router:
+    extraServicePorts:
+      - name: http
+        port: 80
+        protocol: TCP
+        targetPort: 8081
+    epp:
+      replicas: 1
+      flags:
+        v: 2
+      resources:
+        requests:
+          cpu: "4"
+          memory: 8Gi
+        limits:
+          memory: 16Gi
+      pluginsConfigFile: optimized-baseline-plugins.yaml
+      pluginsCustomConfig:
+        optimized-baseline-plugins.yaml: |
+          apiVersion: llm-d.ai/v1alpha1
+          kind: EndpointPickerConfig
+          plugins:
+          - type: queue-scorer
+          - type: kv-cache-utilization-scorer
+          - type: prefix-cache-scorer
+          - type: no-hit-lru-scorer
+          schedulingProfiles:
+          - name: default
+            plugins:
+            - pluginRef: queue-scorer
+              weight: 2
+            - pluginRef: kv-cache-utilization-scorer
+              weight: 2
+            - pluginRef: prefix-cache-scorer
+              weight: 3
+            - pluginRef: no-hit-lru-scorer
+              weight: 2
+    inferencePool:
+      failureMode: FailOpen
+    modelServers:
+      protocol: http
+      matchLabels:
+        llm-d.ai/guide: optimized-baseline
+
+modelServers:
+  enabled: true
+  serviceAccount:
+    create: true
+    name: ""
+    automountServiceAccountToken: false
+  selectorLabels: {}
+  defaultLabels:
+    llm-d.ai/guide: optimized-baseline
+    llm-d.ai/model: Qwen3-32B
+    llm-d.ai/accelerator-variant: gpu
+    llm-d.ai/accelerator-vendor: nvidia
+    llm-d.ai/engine-type: vllm
+  defaults:
+    replicas: 1
+    image:
+      repository: vllm/vllm-openai
+      tag: v0.23.0
+      pullPolicy: IfNotPresent
+    imagePullSecrets: []
+    command:
+      - vllm
+      - serve
+    env:
+      - name: USER
+        value: llm-d
+    ports:
+      - name: modelserver
+        containerPort: 8000
+        protocol: TCP
+    resources: {}
+    startupProbe:
+      httpGet:
+        path: /v1/models
+        port: modelserver
+      initialDelaySeconds: 15
+      periodSeconds: 30
+      timeoutSeconds: 5
+      failureThreshold: 120
+    livenessProbe:
+      httpGet:
+        path: /health
+        port: modelserver
+      periodSeconds: 10
+      timeoutSeconds: 5
+      failureThreshold: 3
+    readinessProbe:
+      httpGet:
+        path: /v1/models
+        port: modelserver
+      periodSeconds: 5
+      timeoutSeconds: 2
+      failureThreshold: 3
+    volumeMounts:
+      - mountPath: /dev/shm
+        name: shm
+      - mountPath: /.cache
+        name: torch-compile-cache
+      - mountPath: /.triton
+        name: triton-cache
+      - mountPath: /.config
+        name: vllm-config
+    volumes:
+      - name: shm
+        emptyDir:
+          medium: Memory
+          sizeLimit: 20Gi
+      - name: torch-compile-cache
+        emptyDir: {}
+      - name: triton-cache
+        emptyDir: {}
+      - name: vllm-config
+        emptyDir: {}
+    initContainers: []
+    podAnnotations: {}
+    podSecurityContext: {}
+    containerSecurityContext: {}
+    nodeSelector: {}
+    tolerations: []
+    affinity: {}
+    extraPodSpec: {}
+    extraContainerFields: {}
+  items:
+    - name: decode
+      enabled: true
+      role: decode
+      replicas: 8
+      labels: {}
+      selectorLabels: {}
+      args:
+        - Qwen/Qwen3-32B
+        - --disable-access-log-for-endpoints=/health,/metrics,/v1/models
+        - --tensor-parallel-size=2
+      resources:
+        limits:
+          cpu: "16"
+          memory: 128Gi
+          nvidia.com/gpu: 2
+        requests:
+          cpu: "8"
+          memory: 96Gi
+          nvidia.com/gpu: 2
+
+monitoring:
+  podMonitor:
+    enabled: false
+    interval: 10s
+    path: /metrics
+    port: modelserver
+    labels: {}
+
+extraObjects: []

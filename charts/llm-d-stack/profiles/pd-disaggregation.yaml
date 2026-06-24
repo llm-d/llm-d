@@ -1,0 +1,193 @@
+profile: pd-disaggregation
+
+routerStandalone:
+  enabled: true
+  router:
+    extraServicePorts:
+      - name: http
+        port: 80
+        protocol: TCP
+        targetPort: 8081
+    epp:
+      pluginsConfigFile: pd-config.yaml
+      pluginsCustomConfig:
+        pd-config.yaml: |
+          apiVersion: llm-d.ai/v1alpha1
+          kind: EndpointPickerConfig
+          plugins:
+          - type: disagg-headers-handler
+          - type: always-disagg-pd-decider
+          - type: disagg-profile-handler
+            parameters:
+              deciderPluginName: always-disagg-pd-decider
+          - type: prefill-filter
+          - type: decode-filter
+          - type: prefix-cache-scorer
+          - type: queue-scorer
+          - type: kv-cache-utilization-scorer
+          - type: active-request-scorer
+          schedulingProfiles:
+          - name: prefill
+            plugins:
+            - pluginRef: prefill-filter
+            - pluginRef: prefix-cache-scorer
+              weight: 3
+            - pluginRef: queue-scorer
+              weight: 2
+            - pluginRef: kv-cache-utilization-scorer
+              weight: 2
+          - name: decode
+            plugins:
+            - pluginRef: decode-filter
+            - pluginRef: active-request-scorer
+              weight: 2
+            - pluginRef: prefix-cache-scorer
+              weight: 3
+    modelServers:
+      matchLabels:
+        llm-d.ai/guide: pd-disaggregation
+
+routerGateway:
+  enabled: false
+  router:
+    extraServicePorts:
+      - name: http
+        port: 80
+        protocol: TCP
+        targetPort: 8081
+    epp:
+      pluginsConfigFile: pd-config.yaml
+      pluginsCustomConfig:
+        pd-config.yaml: |
+          apiVersion: llm-d.ai/v1alpha1
+          kind: EndpointPickerConfig
+          plugins:
+          - type: disagg-headers-handler
+          - type: always-disagg-pd-decider
+          - type: disagg-profile-handler
+            parameters:
+              deciderPluginName: always-disagg-pd-decider
+          - type: prefill-filter
+          - type: decode-filter
+          - type: prefix-cache-scorer
+          - type: queue-scorer
+          - type: kv-cache-utilization-scorer
+          - type: active-request-scorer
+          schedulingProfiles:
+          - name: prefill
+            plugins:
+            - pluginRef: prefill-filter
+            - pluginRef: prefix-cache-scorer
+              weight: 3
+            - pluginRef: queue-scorer
+              weight: 2
+            - pluginRef: kv-cache-utilization-scorer
+              weight: 2
+          - name: decode
+            plugins:
+            - pluginRef: decode-filter
+            - pluginRef: active-request-scorer
+              weight: 2
+            - pluginRef: prefix-cache-scorer
+              weight: 3
+    modelServers:
+      matchLabels:
+        llm-d.ai/guide: pd-disaggregation
+
+modelServers:
+  enabled: true
+  defaultLabels:
+    llm-d.ai/guide: pd-disaggregation
+    llm-d.ai/model: gpt-oss-120b
+    llm-d.ai/accelerator-variant: gpu
+    llm-d.ai/accelerator-vendor: nvidia
+    llm-d.ai/engine-type: vllm
+  items:
+    - name: prefill
+      enabled: true
+      role: prefill
+      replicas: 8
+      args:
+        - openai/gpt-oss-120b
+        - --disable-access-log-for-endpoints=/health,/metrics,/v1/models
+        - --tensor-parallel-size=1
+        - --block-size=128
+        - --kv-transfer-config
+        - '{"kv_connector":"NixlConnector", "kv_role":"kv_both"}'
+        - --no-disable-hybrid-kv-cache-manager
+      env:
+        - name: VLLM_NIXL_SIDE_CHANNEL_HOST
+          valueFrom:
+            fieldRef:
+              fieldPath: status.podIP
+        - name: VLLM_HTTP_TIMEOUT_KEEP_ALIVE
+          value: "120"
+      ports:
+        - name: modelserver
+          containerPort: 8000
+          protocol: TCP
+        - name: nixl
+          containerPort: 5600
+          protocol: TCP
+      resources:
+        limits:
+          cpu: "8"
+          memory: 16Gi
+          nvidia.com/gpu: "1"
+        requests:
+          cpu: "8"
+          memory: 16Gi
+          nvidia.com/gpu: "1"
+    - name: decode
+      enabled: true
+      role: decode
+      replicas: 2
+      args:
+        - openai/gpt-oss-120b
+        - --disable-access-log-for-endpoints=/health,/metrics,/v1/models
+        - --tensor-parallel-size=4
+        - --block-size=128
+        - --kv-transfer-config
+        - '{"kv_connector":"NixlConnector", "kv_role":"kv_both"}'
+        - --no-disable-hybrid-kv-cache-manager
+        - --port=8200
+      env:
+        - name: VLLM_NIXL_SIDE_CHANNEL_HOST
+          valueFrom:
+            fieldRef:
+              fieldPath: status.podIP
+      ports:
+        - name: modelserver
+          containerPort: 8200
+          protocol: TCP
+        - name: nixl
+          containerPort: 5600
+          protocol: TCP
+      initContainers:
+        - name: routing-proxy
+          image: ghcr.io/llm-d/llm-d-router-disagg-sidecar:v0.9.1
+          imagePullPolicy: Always
+          args:
+            - --port=8000
+            - --vllm-port=8200
+            - --kv-connector=nixlv2
+            - --zap-log-level=1
+            - --secure-proxy=false
+          ports:
+            - containerPort: 8000
+              name: sidecar
+              protocol: TCP
+          resources: {}
+          restartPolicy: Always
+          securityContext:
+            allowPrivilegeEscalation: false
+            runAsNonRoot: true
+      resources:
+        limits:
+          cpu: "16"
+          memory: 64Gi
+          nvidia.com/gpu: "4"
+        requests:
+          cpu: "16"
+          memory: 64Gi
+          nvidia.com/gpu: "4"
