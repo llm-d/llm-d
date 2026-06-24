@@ -37,7 +37,7 @@ llm-d Router is deployed via Helm. We offer a chart both Standalone and Gateway 
 | Chart | Version | OCI Registry | Description |
 |-------|---------|--------------|-------------|
 | **Standalone Mode** | v0 | `oci://ghcr.io/llm-d/charts/llm-d-router-standalone-dev` | Deploys an InferencePool and EPP with a standalone Envoy proxy as sidecar in EPP pod  |
-| **Gateway Mode** | v0 | `oci://ghcr.io/llm-d/charts/llm-d-router-gateway-dev` | Deploys an InferencePool and EPP for use with an existing Kubernetes Gateway (e.g. Istio, AgentGateway, GKE) |
+| **Gateway Mode** | v0 | `oci://ghcr.io/llm-d/charts/llm-d-router-gateway-dev` | Deploys an InferencePool and EPP for use with an existing Kubernetes Gateway (e.g. Istio, AgentGateway, Envoy AI Gateway, GKE) |
 
 The charts are currently published by the Gateway API Inference Extension (GAIE) project (see [standalone mode source](https://github.com/kubernetes-sigs/gateway-api-inference-extension/tree/main/config/charts/standalone) and [gateway mode source](https://github.com/kubernetes-sigs/gateway-api-inference-extension/tree/main/config/charts/inferencepool)). Each well-lit path guides provides values files on top of the chart defaults to enable the functionality implemented in EPP.
 

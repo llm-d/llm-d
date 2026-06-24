@@ -11,6 +11,10 @@ name: /test-nightly Slash Command
 #   decode_pods=<number>  Number of decode pods (default: 1)
 #   prefill_pods=<number> Number of prefill pods (default: 1)
 #   harness=<name>        Benchmark harness (default: inference-perf)
+#   dry_run=<bool>        Run in dry-run mode, no benchmark executed (default: false)
+#
+# Optional parameters (passed to build-image nightly):
+#   platforms=<list>      Platforms to build (comma-separated: cuda,aws,gb200,xpu,cpu,all; default: cuda)
 #
 # Examples:
 #   /test-nightly pd-disaggregation-ocp
@@ -18,6 +22,8 @@ name: /test-nightly Slash Command
 #   /test-nightly optimized-baseline-*
 #   /test-nightly optimized-baseline-cks workload=sanity_random.yaml decode_pods=1
 #   /test-nightly wva-*
+#   /test-nightly build-image
+#   /test-nightly build-image platforms=cuda,aws
 #
 # The command checks out the PR head, pushes a temp branch
 # (test-nightly/pr-<number>) into the main repo, and
@@ -129,6 +135,10 @@ jobs:
                   '- `decode_pods=<number>` — number of decode pods (default: `1`)',
                   '- `prefill_pods=<number>` — number of prefill pods (default: `1`)',
                   '- `harness=<name>` — benchmark harness (default: `inference-perf`)',
+                  '- `dry_run=true` — validate setup without running the benchmark',
+                  '',
+                  'Optional parameters (applied to `build-image` only):',
+                  '- `platforms=<list>` — platforms to build, comma-separated: cuda,aws,gb200,xpu,cpu,all (default: `cuda`)',
                   '',
                   'Available nightlies:',
                   all.map(n => '`' + n.name + '`').join(', '),
@@ -140,12 +150,13 @@ jobs:
             const input = match[1];
 
             // Parse optional key=value parameters (with defaults for quick PR validation)
-            const SUPPORTED_PARAMS = ['workload', 'decode_pods', 'prefill_pods', 'harness'];
+            const SUPPORTED_PARAMS = ['workload', 'decode_pods', 'prefill_pods', 'harness', 'platforms', 'dry_run'];
             const DEFAULT_PARAMS = {
               workload: 'sanity_random.yaml',
               decode_pods: '1',
               prefill_pods: '1',
               harness: 'inference-perf',
+              platforms: 'cuda',
             };
             const params = { ...DEFAULT_PARAMS };
             const tokens = comment.split(/\s+/).slice(2);
@@ -331,10 +342,21 @@ jobs:
             for (const m of matches) {
               // Only send benchmark params to E2E benchmark nightlies (not WVA or utility nightlies)
               const isE2eBenchmark = m.workflowFile.startsWith('nightly-e2e-') && !m.workflowFile.includes('-wva-');
-              const benchmarkParams = isE2eBenchmark ? params : {};
+              const isBuildWorkflow = m.workflowFile === 'nightly-build-image.yaml';
+
+              let workflowParams;
+              if (isBuildWorkflow) {
+                workflowParams = { platforms: params.platforms };
+              } else if (isE2eBenchmark) {
+                const { platforms, ...benchmarkOnly } = params;
+                workflowParams = benchmarkOnly;
+              } else {
+                workflowParams = {};
+              }
+              const benchmarkParams = workflowParams;
 
               console.log(`Dispatching ${m.workflowFile} on ref ${ref}` +
-                (isE2eBenchmark ? ` with params: ${JSON.stringify(benchmarkParams)}` : ''));
+                (Object.keys(workflowParams).length > 0 ? ` with params: ${JSON.stringify(workflowParams)}` : ''));
               try {
                 await github.rest.actions.createWorkflowDispatch({
                   owner, repo,
@@ -433,11 +455,18 @@ jobs:
 
             const lines = [];
 
-            // Show overrides only for E2E benchmark nightlies (those that received params)
+            // Show overrides for E2E benchmark nightlies and build workflows
             const hasE2eBenchmark = results.some(r =>
               r.workflowFile.startsWith('nightly-e2e-') && !r.workflowFile.includes('-wva-'));
-            const paramEntries = Object.entries(params);
-            const overridesRow = hasE2eBenchmark && paramEntries.length > 0
+            const hasBuildWorkflow = results.some(r =>
+              r.workflowFile === 'nightly-build-image.yaml');
+            const paramEntries = Object.entries(params)
+              .filter(([k]) => {
+                if (hasBuildWorkflow && k === 'platforms') return true;
+                if (hasE2eBenchmark && k !== 'platforms') return true;
+                return false;
+              });
+            const overridesRow = paramEntries.length > 0
               ? `| Overrides | ${paramEntries.map(([k, v]) => `\`${k}=${v}\``).join(', ')} |`
               : null;
 
