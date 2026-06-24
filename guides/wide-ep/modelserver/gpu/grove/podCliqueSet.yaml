@@ -1,37 +1,3 @@
-
-# with compute domain (not via auto-mnnvl)
-# with tas -- commented out
-
-# TODO before commit to repo
-# 
-# decode worker replicas = 7
-#
-#
-# add tas
-# remove compute domain
-# remove pvc, remove model-cache volume
-# aws vs gcp, see dynamo docs "GCP GPU nodes have taints." and add for llm-d as well?
-# -- important dynamo doc! /Users/sasoolin/code/dynamo/recipes/deepseek-v4/deepseek-v4-pro/sglang/disagg-gb200/README.md
-# with --enable-cumem-allocator and image vllm/vllm-openai:v0.23.0; when possible replace with ghcr.io/llm-d/llm-d-cuda-gb200:v0.8.0 (or -rc.1)
-# with --no-enable-prefix-caching as chauncey jiang suggested
-
-# current grove install:
-# k -n grove get cm grove-operator-cm-3044e879 -oyaml
-    # topologyAwareScheduling:
-    #   enabled: false
-    # network:
-    #   autoMNNVLEnabled: false
-
-apiVersion: resource.nvidia.com/v1beta1
-kind: ComputeDomain
-metadata:
-  name: llm-d-wide-ep-compute-domain
-spec:
-  numNodes: 0
-  channel:
-    resourceClaimTemplate:
-      name: llm-d-wide-ep-compute-domain-channel
----
 apiVersion: grove.io/v1alpha1
 kind: PodCliqueSet
 metadata:
@@ -39,8 +5,8 @@ metadata:
 spec:
   replicas: 1
   template:
-    # topologyConstraint:
-    #   packDomain: rack
+    topologyConstraint:
+      packDomain: rack
     cliques:
     - name: prefill
       labels:
@@ -73,9 +39,6 @@ spec:
               operator: Equal
               value: arm64
               effect: NoSchedule
-          resourceClaims:
-            - name: compute-domain-channel
-              resourceClaimTemplateName: llm-d-wide-ep-compute-domain-channel
           volumes:
             - name: dshm
               emptyDir:
@@ -85,12 +48,9 @@ spec:
               emptyDir: {}
             - name: jit-cache
               emptyDir: {}
-            - name: model-cache
-              persistentVolumeClaim:
-                claimName: shared-model-cache
           containers:
           - name: vllm
-            image: vllm/vllm-openai:v0.23.0
+            image: ghcr.io/llm-d/llm-d-cuda-gb200:v0.8.0
             securityContext:
               capabilities:
                 add:
@@ -112,7 +72,7 @@ spec:
                 LEADER_ADDRESS="${LEADER_PCLQ_NAME}-0.${GROVE_HEADLESS_SERVICE}"
 
                 exec vllm serve \
-                  /models/deepseek-r1-fp4 \
+                  nvidia/DeepSeek-R1-NVFP4 \
                   --served-model-name deepseek-ai/DeepSeek-R1 \
                   --port 8000 \
                   --trust-remote-code \
@@ -135,7 +95,6 @@ spec:
                   --all2all-backend allgather_reducescatter \
                   --gpu-memory-utilization 0.9 \
                   --max-model-len 10000 \
-                  --no-enable-prefix-caching \
                   --enable-cumem-allocator
             env:
             - name: DP_SIZE_LOCAL
@@ -229,8 +188,6 @@ spec:
               timeoutSeconds: 5
               failureThreshold: 3
             resources:
-              claims:
-                - name: compute-domain-channel
               limits:
                 ephemeral-storage: 1Ti
                 memory: 850Gi
@@ -251,8 +208,6 @@ spec:
                 mountPath: /var/cache/huggingface
               - name: jit-cache
                 mountPath: /var/cache/vllm
-              - name: model-cache
-                mountPath: /models
 
     - name: decode-leader
       labels:
@@ -285,9 +240,6 @@ spec:
               operator: Equal
               value: arm64
               effect: NoSchedule
-          resourceClaims:
-            - name: compute-domain-channel
-              resourceClaimTemplateName: llm-d-wide-ep-compute-domain-channel
           initContainers:
             - name: routing-proxy
               args:
@@ -320,12 +272,9 @@ spec:
               emptyDir: {}
             - name: jit-cache
               emptyDir: {}
-            - name: model-cache
-              persistentVolumeClaim:
-                claimName: shared-model-cache
           containers:
           - name: vllm
-            image: vllm/vllm-openai:v0.23.0
+            image: ghcr.io/llm-d/llm-d-cuda-gb200:v0.8.0
             securityContext:
               capabilities:
                 add:
@@ -348,7 +297,7 @@ spec:
                 LEADER_ADDRESS="${LEADER_PCLQ_NAME}-0.${GROVE_HEADLESS_SERVICE}"
 
                 exec vllm serve \
-                  /models/deepseek-r1-fp4 \
+                  nvidia/DeepSeek-R1-NVFP4 \
                   --served-model-name deepseek-ai/DeepSeek-R1 \
                   --port 8200 \
                   --trust-remote-code \
@@ -375,7 +324,6 @@ spec:
                   --gpu-memory-utilization 0.9 \
                   --kv-cache-memory-bytes=${KV_CACHE_MEMORY_BYTES-} \
                   --all2all-backend flashinfer_nvlink_two_sided \
-                  --no-enable-prefix-caching \
                   --enable-cumem-allocator
             env:
             - name: DP_SIZE_LOCAL
@@ -471,8 +419,6 @@ spec:
               timeoutSeconds: 5
               failureThreshold: 3
             resources:
-              claims:
-                - name: compute-domain-channel
               limits:
                 ephemeral-storage: 1Ti
                 memory: 850Gi
@@ -493,8 +439,6 @@ spec:
                 mountPath: /var/cache/huggingface
               - name: jit-cache
                 mountPath: /var/cache/vllm
-              - name: model-cache
-                mountPath: /models
 
     - name: decode-worker
       labels:
@@ -527,9 +471,6 @@ spec:
               operator: Equal
               value: arm64
               effect: NoSchedule
-          resourceClaims:
-            - name: compute-domain-channel
-              resourceClaimTemplateName: llm-d-wide-ep-compute-domain-channel
           initContainers:
             - name: routing-proxy
               args:
@@ -562,12 +503,9 @@ spec:
               emptyDir: {}
             - name: jit-cache
               emptyDir: {}
-            - name: model-cache
-              persistentVolumeClaim:
-                claimName: shared-model-cache
           containers:
           - name: vllm
-            image: vllm/vllm-openai:v0.23.0
+            image: ghcr.io/llm-d/llm-d-cuda-gb200:v0.8.0
             securityContext:
               capabilities:
                 add:
@@ -590,7 +528,7 @@ spec:
                 LEADER_ADDRESS="${LEADER_PCLQ_NAME}-0.${GROVE_HEADLESS_SERVICE}"
               
                 exec vllm serve \
-                  /models/deepseek-r1-fp4 \
+                  nvidia/DeepSeek-R1-NVFP4 \
                   --served-model-name deepseek-ai/DeepSeek-R1 \
                   --port 8200 \
                   --trust-remote-code \
@@ -617,7 +555,6 @@ spec:
                   --gpu-memory-utilization 0.9 \
                   --kv-cache-memory-bytes=${KV_CACHE_MEMORY_BYTES-} \
                   --all2all-backend flashinfer_nvlink_two_sided \
-                  --no-enable-prefix-caching \
                   --enable-cumem-allocator
             env:
             - name: DP_SIZE_LOCAL
@@ -713,8 +650,6 @@ spec:
               timeoutSeconds: 5
               failureThreshold: 3
             resources:
-              claims:
-                - name: compute-domain-channel
               limits:
                 ephemeral-storage: 1Ti
                 memory: 850Gi
@@ -735,8 +670,6 @@ spec:
                 mountPath: /var/cache/huggingface
               - name: jit-cache
                 mountPath: /var/cache/vllm
-              - name: model-cache
-                mountPath: /models
 
     podCliqueScalingGroups:
     - name: decode-sg

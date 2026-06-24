@@ -2,29 +2,30 @@
 
 ## Overview
 
-This guide demonstrates how to deploy a DeepSeek R1 FP4 wide-EP workload on NVIDIA GB200 hardware using Grove. The llm-d Router, GAIE, and EPP still handle request routing, prefill/decode scheduling, and endpoint selection; Grove is responsible for creating and coordinating the multi-node model-server pods.
+This guide demonstrates how to deploy a DeepSeek R1 FP4 wide-EP workload on NVIDIA GB200 hardware using [Grove](https://github.com/ai-dynamo/grove). The llm-d Router, GAIE, and EPP still handle request routing, prefill/decode scheduling, and endpoint selection; Grove is responsible for creating and coordinating the multi-node model-server pods.
 
-This variant is validated on NVIDIA GB200 hardware with Multi-Node NVLink (MNNVL). The validated target topology is:
+This variant is validated on NVIDIA GB200 hardware with Multi-Node NVLink (MNNVL), on GKE. The validated target topology is:
 
 * 1 prefill pod using 4 GPUs
 * 1 decode leader pod using 4 GPUs
 * 7 decode worker pods using 4 GPUs each
 
-The vLLM server loads `/models/deepseek-r1-fp4` and serves it as `deepseek-ai/DeepSeek-R1`.
+The vLLM server loads the [nvidia/DeepSeek-R1-NVFP4](https://huggingface.co/nvidia/DeepSeek-R1-NVFP4) model.
 
 ## How Grove Orchestrates This Deployment
 
-Grove models the deployment as a single `PodCliqueSet` with distinct prefill, decode-leader, and decode-worker roles. The decode roles are grouped in a `PodCliqueScalingGroup`, which lets Grove keep related decode components coordinated while preserving role-specific startup and runtime configuration.
+This deployment utilizes Grove's PodCliqueSet to coordinate 9 nodes as a single logical inference system. The following describes how Grove's primitives map to the requirements of a Wide-EP workload:
 
-Grove is useful for this GB200 path because it provides:
+- **Hierarchical gang scheduling**: Grove ensures the minimum viable combination of prefill and decode units are scheduled together, preventing resource deadlocks and ensuring service readiness
+- **Topology-aware placement**: Grove leverages cluster topology to place pods optimally within NVLink domains, minimizing inter-node latency for KV-cache transfers
+- **Multilevel, graceful scaling**: PodClique and PodCliqueScalingGroup primitives enable independent scaling of prefill and decode workers while maintaining correct component ratios and system integrity
+- **System-level lifecycle & recovery**: Grove treats multi-component systems as single operational units. Recovery and updates operate on complete service instances, ensuring workers properly reconnect to leaders after a restart and rolling updates preserve network topology
+- **Role-aware orchestration**: Defines explicit startup ordering (e.g., ensuring decode leaders are ready before workers) and role-specific configurations within a single declarative PodCliqueSet
+- **Native scheduler integration**: Grove automatically translates workload intent into PodGang resources for the [KAI Scheduler](https://github.com/NVIDIA/KAI-Scheduler). This enables the scheduler to execute topology-aware placement, hierarchical queuing, optimizing the entire scheduling cycle by ensuring resources are allocated according to the specific performance and availability requirements of the workload
+- **Automatic MNNVL configuration**: Grove abstracts away ComputeDomain and ResourceClaimTemplate complexity - just deploy your PodCliqueSet and Grove handles the rest
+- **Coherent updates**: Grove updates compatible prefill and decode components together, preserving version compatibility and balanced serving capacity during upgrades
 
-* Gang scheduling through PodGang resources and KAI Scheduler integration.
-* Topology-aware placement for multi-node AI workloads.
-* Coordinated lifecycle and recovery for multi-component inference deployments.
-* MNNVL-oriented orchestration for GB200 systems.
-* Active work on coherent updates to roll compatible prefill and decode components together while preserving balanced serving capacity.
-
-The checked-in manifest intentionally keeps the current validation YAML intact. It still contains TODOs for follow-up cleanup: moving from explicit `ComputeDomain` wiring to Grove Auto-MNNVL, enabling TAS, setting decode worker replicas to 7, removing local PVC/model-cache assumptions, documenting provider-specific GKE/AWS differences, and replacing the temporary vLLM image when the llm-d GB200 image is ready.
+Grove is designed from the ground up for the unique requirements of AI inference - particularly on next-generation hardware like GB200 where maximizing NVLink fabric utilization is essential for performance.
 
 ## Prerequisites
 
@@ -45,14 +46,19 @@ The checked-in manifest intentionally keeps the current validation YAML intact. 
   kubectl apply -f https://github.com/kubernetes-sigs/gateway-api-inference-extension/releases/download/${GAIE_VERSION}/v1-manifests.yaml
   ```
 
-* Install Grove with Auto-MNNVL and TAS support enabled, and install a scheduler that can schedule Grove PodGang resources. See [Multi-Node Serving Orchestration](../../docs/infrastructure/multi-node.md).
+* Install Grove with Auto-MNNVL and TAS support enabled, install the NVIDIA DRA driver for GPUs, and install a scheduler that can schedule Grove PodGang resources. See [Multi-Node Serving Orchestration](../../docs/infrastructure/multi-node.md).
+* Verify the NVIDIA DRA `ComputeDomain` CRD is available:
+
+  ```bash
+  kubectl get crd computedomains.resource.nvidia.com
+  ```
+
+* The checked-in manifest is validated on GKE GB200 and includes GKE RDMA network annotations and RDMA resource limits. For other providers, adjust the network annotations, accelerator network resources, and taints/tolerations to match the target cluster.
 * Create the target namespace:
 
   ```bash
   kubectl create namespace ${NAMESPACE} --dry-run=client -o yaml | kubectl apply -f -
   ```
-
-* Ensure the model weights are available at `/models/deepseek-r1-fp4` in the model-server pods. The current validation manifest expects a `shared-model-cache` PVC and keeps this assumption as a tracked TODO.
 
 ## Installation Instructions
 
@@ -101,7 +107,7 @@ kubectl apply -n ${NAMESPACE} -f ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/g
 Check that Grove created the expected hierarchy:
 
 ```bash
-kubectl get pcs,pclq,pcsg,pg,pod -n ${NAMESPACE}
+kubectl get pcs,pclq,pcsg,podgang,pod -n ${NAMESPACE}
 ```
 
 Resolve the router endpoint:

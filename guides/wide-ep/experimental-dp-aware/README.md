@@ -115,7 +115,7 @@ helm install ${GUIDE_NAME} \
 
 ### 2. Deploy the Model Server
 
-Apply the Kustomize overlays for your specific LWS backend. These manifests are local to the experimental DP-aware guide and are separate from the main `modelserver/gpu/lws` and `modelserver/gpu/grove` directories.
+Apply the Kustomize overlays for your specific LWS backend.
 
 ```bash
 export INFRA_PROVIDER=gke # options: gke, coreweave

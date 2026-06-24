@@ -21,15 +21,22 @@ The LWS variant deploys `deepseek-ai/DeepSeek-R1-0528` with:
 
 Use the [Grove variant](README-grove.md) when deploying wide-EP on NVIDIA GB200 hardware with Multi-Node NVLink (MNNVL). Grove is the orchestration path for multi-component inference systems where the controller needs to reason about the whole service, not independent pods.
 
-The Grove capabilities most relevant to Wide EP are:
+The Grove variant deploys `nvidia/DeepSeek-R1-NVFP4`.
 
-* Topology-aware placement for keeping workers in the right accelerator and network domains.
-* Hierarchical gang scheduling so prefill and decode units come up as functional sets.
-* Coordinated scaling, lifecycle management, and recovery across prefill/decode roles.
-* MNNVL-aware orchestration, including Auto-MNNVL support for GB200 deployments.
-* Coherent rolling updates, which roll compatible components together and preserve balanced serving capacity during upgrades.
+#### How Grove Orchestrates This Deployment
 
-The Grove guide is validated on GB200 hardware and deploys coordinated prefill and decode roles while the llm-d EPP continues to route traffic through the same P/D architecture.
+This deployment utilizes Grove's PodCliqueSet to coordinate 9 nodes as a single logical inference system. The following describes how Grove's primitives map to the requirements of a Wide-EP workload:
+
+- **Hierarchical gang scheduling**: Grove ensures the minimum viable combination of prefill and decode units are scheduled together, preventing resource deadlocks and ensuring service readiness
+- **Topology-aware placement**: Grove leverages cluster topology to place pods optimally within NVLink domains, minimizing inter-node latency for KV-cache transfers
+- **Multilevel, graceful scaling**: PodClique and PodCliqueScalingGroup primitives enable independent scaling of prefill and decode workers while maintaining correct component ratios and system integrity
+- **System-level lifecycle & recovery**: Grove treats multi-component systems as single operational units. Recovery and updates operate on complete service instances, ensuring workers properly reconnect to leaders after a restart and rolling updates preserve network topology
+- **Role-aware orchestration**: Defines explicit startup ordering (e.g., ensuring decode leaders are ready before workers) and role-specific configurations within a single declarative PodCliqueSet
+- **Native scheduler integration**: Grove automatically translates workload intent into PodGang resources for the [KAI Scheduler](https://github.com/NVIDIA/KAI-Scheduler). This enables the scheduler to execute topology-aware placement, hierarchical queuing, optimizing the entire scheduling cycle by ensuring resources are allocated according to the specific performance and availability requirements of the workload
+- **Automatic MNNVL configuration**: Grove abstracts away ComputeDomain and ResourceClaimTemplate complexity - just deploy your PodCliqueSet and Grove handles the rest
+- **Coherent updates**: Grove updates compatible prefill and decode components together, preserving version compatibility and balanced serving capacity during upgrades
+
+Grove is designed from the ground up for the unique requirements of AI inference - particularly on next-generation hardware like GB200 where maximizing NVLink fabric utilization is essential for performance.
 
 ## Next Steps
 

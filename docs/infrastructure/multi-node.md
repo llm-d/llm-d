@@ -76,7 +76,13 @@ helm upgrade -i grove \
   --set config.topologyAwareScheduling.enabled=true
 ```
 
-Auto-MNNVL is a Grove operator feature, not a separate llm-d install step. TAS support is also enabled through the Grove operator configuration and requires a scheduler backend, such as KAI Scheduler, that can place the resulting PodGang resources.
+### Install NVIDIA DRA driver for GB200/MNNVL
+
+Grove Auto-MNNVL creates the GB200 MNNVL fabric resources, including the `ComputeDomain`, but the NVIDIA DRA driver CRDs must already be installed. Install the [NVIDIA DRA driver for GPUs](https://github.com/NVIDIA/k8s-dra-driver-gpu) before applying the Grove model-server manifest, and verify the `ComputeDomain` CRD is present:
+
+```bash
+kubectl get crd computedomains.resource.nvidia.com
+```
 
 ### Verify Grove
 
