@@ -8,7 +8,9 @@ spec:
   replicas: 1
   template:
     topologyConstraint:
-      packDomain: rack
+      topologyName: cluster-topology # Assumed to be installed in the cluster.
+      pack:
+        required: rack
     cliques:
     - name: prefill
       labels:

@@ -54,7 +54,8 @@ Grove is designed from the ground up for the unique requirements of AI inference
   kubectl apply -f https://github.com/kubernetes-sigs/gateway-api-inference-extension/releases/download/${GAIE_VERSION}/v1-manifests.yaml
   ```
 
-* Install Grove with Auto-MNNVL and TAS support enabled, install the NVIDIA DRA driver for GPUs, and install a scheduler that can schedule Grove PodGang resources. See [Multi-Node Serving Orchestration](../../docs/infrastructure/multi-node.md).
+* Install Grove with Auto-MNNVL and TAS support enabled, install the NVIDIA DRA driver for GPUs, create the `cluster-topology` Grove `ClusterTopologyBinding`, and install a scheduler that can schedule Grove PodGang resources. See [Multi-Node Serving Orchestration](../../docs/infrastructure/multi-node.md).
+* The `cluster-topology` binding must include a `rack` domain mapped to the node label that identifies the GB200 rack/NVL72 locality boundary.
 * Verify the NVIDIA DRA `ComputeDomain` CRD is available:
 
   ```bash

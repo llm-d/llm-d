@@ -76,6 +76,8 @@ helm upgrade -i grove \
   --set config.topologyAwareScheduling.enabled=true
 ```
 
+For topology-aware scheduling, create a Grove `ClusterTopologyBinding` that describes the cluster's topology levels before applying workloads with topology constraints. The Wide EP Grove guide assumes a `ClusterTopologyBinding` named `cluster-topology` that includes a `rack` domain for the GB200 rack/NVL72 locality boundary. When the binding does not set `schedulerTopologyReferences`, Grove automatically creates and manages the corresponding KAI `Topology` resource.
+
 ### Install NVIDIA DRA driver for GB200/MNNVL
 
 Grove Auto-MNNVL creates the GB200 MNNVL fabric resources, including the `ComputeDomain`, but the NVIDIA DRA driver CRDs must already be installed. Install the [NVIDIA DRA driver for GPUs](https://github.com/NVIDIA/k8s-dra-driver-gpu) before applying the Grove model-server manifest, and verify the `ComputeDomain` CRD is present:
