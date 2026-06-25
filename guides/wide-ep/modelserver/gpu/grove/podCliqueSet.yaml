@@ -52,7 +52,7 @@ spec:
               emptyDir: {}
           containers:
           - name: vllm
-            image: ghcr.io/llm-d/llm-d-cuda-gb200:v0.8.0
+            image: vllm/vllm-openai:v0.23.0
             securityContext:
               capabilities:
                 add:
@@ -276,7 +276,7 @@ spec:
               emptyDir: {}
           containers:
           - name: vllm
-            image: ghcr.io/llm-d/llm-d-cuda-gb200:v0.8.0
+            image: vllm/vllm-openai:v0.23.0
             securityContext:
               capabilities:
                 add:
@@ -507,7 +507,7 @@ spec:
               emptyDir: {}
           containers:
           - name: vllm
-            image: ghcr.io/llm-d/llm-d-cuda-gb200:v0.8.0
+            image: vllm/vllm-openai:v0.23.0
             securityContext:
               capabilities:
                 add:
