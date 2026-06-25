@@ -7,7 +7,7 @@ resources:
 labels:
   - pairs:
       llm-d.ai/model: DeepSeek-V4-Pro
-      llm-d.ai/guide: wide-ep-lws
+      llm-d.ai/guide: wide-ep
       llm-d.ai/accelerator-variant: gpu
       llm-d.ai/accelerator-vendor: nvidia
     includeSelectors: true

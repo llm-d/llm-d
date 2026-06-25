@@ -23,7 +23,7 @@ data:
     server:
       type: vllm
       model_name: deepseek-ai/DeepSeek-R1-0528    # e.g. deepseek-ai/DeepSeek-V3 — must match what vLLM is serving
-      base_url: http://wide-ep-lws-epp # in-cluster Service/route for the decode/gateway endpoint
+      base_url: http://wide-ep-epp # in-cluster Service/route for the decode/gateway endpoint
       ignore_eos: true          # required so the server emits the full 2000 output tokens
 
     tokenizer:

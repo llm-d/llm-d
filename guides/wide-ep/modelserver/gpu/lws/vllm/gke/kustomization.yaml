@@ -3,7 +3,7 @@ kind: Kustomization
 resources:
   - ../base
 components:
-  - ../../../../../recipes/modelserver/components/disable-gke-nccl-tuner-patch
+  - ../../../../../../recipes/modelserver/components/disable-gke-nccl-tuner-patch
 
 patches:
   - target:

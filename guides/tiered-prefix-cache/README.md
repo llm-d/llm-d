@@ -143,7 +143,7 @@ Deploy **one** of the paths below. Each `kubectl apply -k` targets an overlay di
 #### vLLM native — CPU RAM
 
 ```bash
-export MODEL_SERVER=vllm # vllm 
+export MODEL_SERVER=vllm # vllm
 export CONNECTOR=native  # native
 export VARIANT=cpu       # cpu | fs
 export INFRA_PROVIDER=base  # base | gke
@@ -208,7 +208,7 @@ k apply -k ${REPO_ROOT}/helpers/mooncake-master-store/monitoring
 After that you can deploy the modelserver manfiests:
 
 ```bash
-export MODEL_SERVER=vllm    # vllm 
+export MODEL_SERVER=vllm    # vllm
 export VARIANT=cpu          # cpu | fs
 export INFRA_PROVIDER=base  # base
 kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/tiered-prefix-cache/modelserver/gpu/${MODEL_SERVER}/mooncake-store/${VARIANT}/${INFRA_PROVIDER}

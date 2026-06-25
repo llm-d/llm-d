@@ -133,9 +133,9 @@ The first key step in testing a feature, or bugfix is to identify what layer of 
   * To test these ensure you use the proper vLLM backend via the `--all2all-backend` vLLM CLI arg.
     * For single-node testing without extra dependencies, use `allgather_reducescatter` (the default)
     * For testing the deepseek kernels, you can set `prefill`s backend to `deepep_high_throughput` and `decode` backend to `deepep_low_latency`
-      * This needs to be tested in either `pd-disaggregation` or better yet `wide-ep-lws`
+      * This needs to be tested in either `pd-disaggregation` or better yet `wide-ep`
 * `UCX` + `NIXL` version bumps and changes
-  * This can be tested in `pd-disaggregation` or `wide-ep-lws`
+  * This can be tested in `pd-disaggregation` or `wide-ep`
   * Currently we build `UCX` from source, and then build `NIXL` against our build of `NIXL`
 * `LMCache` version bumps and changes (coming soon)
   * Currently nothing uses the `LMCache` codepath directly, this will come as a subset of the KVCache offloading epic
@@ -173,9 +173,9 @@ EOF
 * [ ] `llm-d Router` guide
 * [ ] `precise-kv-cache-aware` example
 * [ ] `pd-disaggregation` example (also covers deepseek kernels)
-* [ ] `wide-ep-lws` example (also covers deepseek kernels)
+* [ ] `wide-ep` example (also covers deepseek kernels)
 * [ ] a `guidellm` benchmark to do a load test for performance regressions (any example)
-* [ ] run `pd-disaggregation` or `wide-ep-lws` with deepseek kernels (for `prefill`s set `--all2all-backend` to `deepep_high_throughput` and set `decode` `--all2all-backend` to `deepep_low_latency`)
+* [ ] run `pd-disaggregation` or `wide-ep` with deepseek kernels (for `prefill`s set `--all2all-backend` to `deepep_high_throughput` and set `decode` `--all2all-backend` to `deepep_low_latency`)
 
 ### Code Review Requirements
 

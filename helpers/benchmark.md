@@ -1,6 +1,6 @@
 # Benchmarking llm-d Guides
 
-This helper is the **single source of truth** for benchmarking a deployed llm-d stack. Individual guides (`optimized-baseline`, `pd-disaggregation`, `precise-prefix-cache-routing`, `wide-ep-lws`, `workload-autoscaling`, etc.) reference this doc for concepts, installation, configuration, and troubleshooting — and provide only the specific `llmdbenchmark` command tailored to their topology.
+This helper is the **single source of truth** for benchmarking a deployed llm-d stack. Individual guides (`optimized-baseline`, `pd-disaggregation`, `precise-prefix-cache-routing`, `wide-ep`, `workload-autoscaling`, etc.) reference this doc for concepts, installation, configuration, and troubleshooting — and provide only the specific `llmdbenchmark` command tailored to their topology.
 
 If you arrived here from a guide and just want the short command, skip to [Quick start](#quick-start). If you're here to understand what's actually happening, read top-to-bottom.
 

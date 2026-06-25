@@ -1,4 +1,4 @@
-# Wide Expert Parallelism
+# Well-Lit Path: Wide Expert Parallelism (EP/DP) with LeaderWorkerSet
 
 [![E2E (CKS GPU)](https://github.com/llm-d/llm-d/actions/workflows/consolidate-status-wide-ep-lws-cks-acc-gpu-vllm-x.yaml/badge.svg)](https://github.com/llm-d/llm-d/actions/workflows/consolidate-status-wide-ep-lws-cks-acc-gpu-vllm-x.yaml)
 [![E2E (GKE GPU)](https://github.com/llm-d/llm-d/actions/workflows/consolidate-status-wide-ep-lws-gke-acc-gpu-vllm-x.yaml/badge.svg)](https://github.com/llm-d/llm-d/actions/workflows/consolidate-status-wide-ep-lws-gke-acc-gpu-vllm-x.yaml)
@@ -6,7 +6,7 @@
 
 ## Overview
 
-This guide demonstrates how to deploy DeepSeek-R1-0528 using vLLM's P/D disaggregation support with NIXL in a wide expert parallel pattern with LeaderWorkerSets with DP-aware scheduling. This guide has been validated on:
+This guide demonstrates how to deploy DeepSeek-R1-0528 using vLLM's P/D disaggregation support with NIXL in a wide expert parallel pattern with LeaderWorkerSets and DP-aware scheduling. The llm-d Router, GAIE, and EPP still handle traffic routing and P/D scheduling; LWS is responsible for deploying the multi-pod model-server groups. This guide has been validated on:
 
 * a 32xH200 cluster with InfiniBand networking
 * a 32xH200 cluster on GKE with RoCE networking
@@ -34,9 +34,9 @@ This guide includes configurations for the following accelerators:
 
 | Backend             | Directory                  | Notes                                      |
 | ------------------- | -------------------------- | ------------------------------------------ |
-| NVIDIA GPU (GKE)    | `modelserver/gpu/vllm/gke/`         | GKE deployment                      |
-| NVIDIA GPU (CoreWeave)| `modelserver/gpu/vllm/coreweave/`   | CoreWeave deployment                     |
-| NVIDIA GPU (DGX Cloud GB200)| `modelserver/gpu/vllm/dgx-cloud-gb200/` | DGX Cloud deployment             |
+| NVIDIA GPU (GKE) | `modelserver/gpu/lws/vllm/gke/` | GKE deployment |
+| NVIDIA GPU (CoreWeave) | `modelserver/gpu/lws/vllm/coreweave/` | CoreWeave deployment |
+| NVIDIA GPU (DGX Cloud GB200) | `modelserver/gpu/lws/vllm/dgx-cloud-gb200/` | DGX Cloud deployment |
 
 > [!NOTE]
 > The pods leveraging inter-node EP must be deployed in a cluster environment with full mesh
@@ -59,7 +59,7 @@ This guide includes configurations for the following accelerators:
   ```bash
   export REPO_ROOT=$(realpath $(git rev-parse --show-toplevel))
   source ${REPO_ROOT}/guides/env.sh
-  export GUIDE_NAME="wide-ep-lws"
+  export GUIDE_NAME="wide-ep"
   export NAMESPACE=llm-d-wide-ep
   export MODEL=deepseek-ai/DeepSeek-R1-0528
   ```
@@ -119,7 +119,7 @@ Apply the Kustomize overlays for your specific backend:
 
 ```bash
 export INFRA_PROVIDER=gke # options: gke, coreweave, dgx-cloud-gb200
-kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/gpu/vllm/${INFRA_PROVIDER}
+kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/gpu/lws/vllm/${INFRA_PROVIDER}
 ```
 
 ### 3. (Optional) Enable Monitoring
@@ -142,9 +142,9 @@ For information on how to use topology aware scheduling using Kueue, see [LWS + 
 
 ```bash
 # H200 on GKE
-kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/gpu/vllm/topology-aware/gke
+kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/gpu/lws/vllm/topology-aware/gke
 # B200 on GKE
-kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/gpu/vllm/topology-aware/gke-a4
+kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/gpu/lws/vllm/topology-aware/gke-a4
 ```
 
 ## Verification
@@ -197,7 +197,7 @@ This guide uses [`inference-perf`](https://github.com/kubernetes-sigs/inference-
 `inference-perf.yaml` runs concurrent load with `concurrency_level=2048` and `num_requests=8192` and is shaped to highlight the strengths of wide expert parallelism for throughput oriented workloads. The following creates a job to run against the standalone mode stack:
 
 ```bash
-kubectl apply -f inference-perf.yaml
+kubectl apply -n ${NAMESPACE} -f ${REPO_ROOT}/guides/${GUIDE_NAME}/inference-perf.yaml
 ```
 
 ## Cleanup
@@ -208,7 +208,7 @@ To remove the deployed components:
 helm uninstall ${GUIDE_NAME} -n ${NAMESPACE}
 # If you enabled monitoring (Step 3), remove the monitoring overlay first.
 kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/monitoring
-kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/gpu/vllm/${INFRA_PROVIDER}
+kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/gpu/lws/vllm/${INFRA_PROVIDER}
 ```
 
 ## Benchmarking Results
