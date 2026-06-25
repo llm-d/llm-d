@@ -50,6 +50,18 @@ cd llm-d-benchmark
 source .venv/bin/activate
 llmdbenchmark --version
 ```
+> [!NOTE]
+> A successful installation shows the following lines:
+>
+> ```text
+> === Done ===    
+> Reminder: Please activate the virtual environment in your shell:
+>   source ${LLMDBENCH_VENV_DIR}/bin/activate
+> To deactivate the virtual environment in your shell:
+>   deactivate
+> ```
+> 
+> An early termination of the installation could happen without clear error messages. Check if all required libraries have executable permissions (`+x`).
 
 > [!NOTE]
 > Every subsequent `llmdbenchmark` command on this page assumes you are inside the `llm-d-benchmark` repo directory with the venv activated. If you open a new shell, re-run the two commands above.
@@ -179,23 +191,23 @@ The on-disk layout after a successful run:
 └── runner-<timestamp>/
     ├── plan/                          # rendered scenario plan (YAML, manifests)
     ├── environment/                   # captured cluster context
-    └── results/
-        └── <experiment-id>/           # one directory per harness invocation
-            ├── stage_0_lifecycle_metrics.json
-            ├── stage_1_lifecycle_metrics.json
-            ├── …                      # one per workload stage (inference-perf)
-            ├── summary_lifecycle_metrics.json
-            ├── per_request_lifecycle_metrics.json
-            ├── benchmark_report,_stage_*.yaml   # standardized cross-harness reports
-            ├── config.yaml                       # resolved harness configuration
-            ├── <profile-name>.yaml                # the rendered workload profile used
-            ├── stdout.log
-            ├── stderr.log
-            └── analysis/                          # populated by --analyze
-                └── distributions/
-                    ├── dist_*.png
-                    ├── scatter_*.png
-                    └── dist_itl_all_tokens.png
+    ├── results/
+    |   └── <experiment-id>/           # one directory per harness invocation
+    |       ├── stage_0_lifecycle_metrics.json
+    |       ├── stage_1_lifecycle_metrics.json
+    |       ├── …                      # one per workload stage (inference-perf)
+    |       ├── summary_lifecycle_metrics.json
+    |       ├── per_request_lifecycle_metrics.json
+    |       ├── benchmark_report,_stage_*.yaml   # standardized cross-harness reports
+    |       ├── config.yaml                       # resolved harness configuration
+    |       ├── <profile-name>.yaml                # the rendered workload profile used
+    |       ├── stdout.log
+    |       ├── stderr.log
+    └── analysis/                      # populated by --analyze
+        └── <harness-id>/
+            ├── latency_Vs_qps.png
+            ├── throughput_vs_latency.png
+            └── throughput_vs_qps.png
 ```
 
 The `benchmark_report,_stage_*.yaml` files use a harness-agnostic schema so you can compare runs across different harnesses. See [Benchmark Report](https://github.com/llm-d/llm-d-benchmark/blob/main/docs/benchmark_report.md) for the schema.
@@ -218,14 +230,13 @@ llmdbenchmark \
     --analyze
 ```
 
-When enabled, the analyzer reads `per_request_lifecycle_metrics.json` from each collected experiment and writes `.png` distribution plots to `<results-dir>/<experiment-id>/analysis/distributions/`:
+When enabled, the analyzer reads `per_request_lifecycle_metrics.json` from each collected experiment and writes PNGs to `runner-<timestamp>/analysis/<harness-id>/`:
 
 | File | Content |
 |---|---|
-| `dist_<metric>.png` | CDF + histogram for each request-lifecycle metric (TTFT, ITL, E2E latency, etc.) |
-| `dist_itl_all_tokens.png` | Inter-token-latency distribution across all tokens (not just per-request medians) |
-| `scatter_ttft_vs_input.png` | TTFT plotted against input length — shows how prefill scales |
-| `scatter_e2e_vs_output.png` | End-to-end latency vs output length — shows decode throughput shape |
+| `latency_vs_qps.png` | Inter-token-latency vs query per second |
+| `throughput_vs_latency.png` | Throughput vs inter-token-latency |
+| `throughput_vs_qps.png` | Throughput vs query per second|
 
 For more elaborate cross-run comparisons and custom plots, see the analysis notebook in the `llm-d-benchmark` repo: [`docs/analysis/analysis.ipynb`](https://github.com/llm-d/llm-d-benchmark/blob/main/docs/analysis/analysis.ipynb).
 
