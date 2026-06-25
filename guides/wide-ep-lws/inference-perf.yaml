@@ -69,7 +69,7 @@ spec:
     spec:
       containers:
         - name: inference-perf
-          image: quay.io/inference-perf/inference-perf:latest
+          image: quay.io/inference-perf/inference-perf:v0.6.0
           imagePullPolicy: Always
           command: ["inference-perf"]
           args: ["--config_file", "/etc/config/config.yaml"]
