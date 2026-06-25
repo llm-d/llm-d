@@ -2,6 +2,8 @@ apiVersion: grove.io/v1alpha1
 kind: PodCliqueSet
 metadata:
   name: dsr1
+  annotations:
+    grove.io/mnnvl-group: "default"
 spec:
   replicas: 1
   template:
