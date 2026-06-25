@@ -47,6 +47,11 @@ on:
         required: false
         default: 'true'
         type: string
+      update_badge:
+        description: 'Update the badge on gh-pages ("true", "false")'
+        required: false
+        default: 'true'
+        type: string
 
 #  push:
 #    branches:
@@ -96,7 +101,7 @@ jobs:
 
   update-badge:
     needs: [nightly]
-    if: always()
+    if: always() && inputs.update_badge != 'false'
     uses: llm-d/llm-d-infra/.github/workflows/reusable-update-badge.yaml@main
     with:
       badge_name: wide-ep-lws-gke
