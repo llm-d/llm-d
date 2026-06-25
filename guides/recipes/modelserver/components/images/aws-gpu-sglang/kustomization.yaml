@@ -1,0 +1,8 @@
+apiVersion: kustomize.config.k8s.io/v1alpha1
+kind: Component
+# AWS ECR mirror of the centralized gpu-sglang image (docker.io/lmsysorg/sglang:v0.5.13.post1).
+# Keep newTag's version aligned with gpu-sglang when that component is bumped.
+images:
+  - name: docker.io/lmsysorg/sglang
+    newName: 763104351884.dkr.ecr.us-east-1.amazonaws.com/sglang
+    newTag: 0.5.13-gpu-py312-cu130-ubuntu24.04-ec2
