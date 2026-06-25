@@ -114,7 +114,9 @@ To use **agentgateway** as the sidecar proxy instead of Envoy, add the following
 helm install ${GUIDE_NAME} \
     ${ROUTER_STANDALONE_CHART} \
     -f ${REPO_ROOT}/guides/recipes/router/base.values.yaml \
+    -f ${REPO_ROOT}/guides/recipes/router/features/agentgateway-proxy.values.yaml \
     -f ${REPO_ROOT}/guides/${GUIDE_NAME}/router/${GUIDE_NAME}.values.yaml \
+    -f ${REPO_ROOT}/guides/${GUIDE_NAME}/router/${GUIDE_NAME}-agentgateway.values.yaml \
     --set router.proxy.proxyType=agentgateway \
     --set router.inferencePool.create=false \
     --set router.epp.flags.secure-serving=false \

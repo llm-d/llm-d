@@ -2,6 +2,15 @@
 
 llm-d uses the **llm-d Router** to make intelligent request routing decisions for inference requests. There are two deployment modes:
 
+## Prerequisites
+
+The commands below assume the following environment variables are set:
+
+```bash
+source ${REPO_ROOT}/guides/env.sh   # sets REPO_ROOT, ROUTER_CHART_VERSION, ROUTER_STANDALONE_CHART, ROUTER_GATEWAY_CHART
+export NAMESPACE=<your-namespace>   # not set by env.sh — choose a namespace for this install
+```
+
 ## Standalone (Default)
 
 Use this when you **do not** want to deploy a proxy via Kubernetes Gateway APIs. The standalone chart deploys the **llm-d Router** with a sidecar proxy — either **Envoy** (default) or **agentgateway** — to proxy the traffic directly.
@@ -36,6 +45,7 @@ helm install <release-name> \
   oci://ghcr.io/llm-d/charts/llm-d-router-standalone-dev \
   -f ${REPO_ROOT}/guides/recipes/router/base.values.yaml \
   -f ${REPO_ROOT}/guides/recipes/router/features/monitoring.values.yaml \
+  -f ${REPO_ROOT}/guides/recipes/router/features/agentgateway-proxy.values.yaml \
   -f ${REPO_ROOT}/guides/<your-guide>/router/<your-guide>.values.yaml \
   --set router.proxy.proxyType=agentgateway \
   --set router.inferencePool.create=false \
@@ -78,5 +88,6 @@ Both modes share a common `base.values.yaml` containing the router image, ports,
 ```
 base.values.yaml                              # shared defaults (this directory)
   + features/monitoring.values.yaml           # optional feature toggles
+  + features/agentgateway-proxy.values.yaml   # required when proxyType=agentgateway
   + <guide>/router/<guide>.values.yaml     # guide-specific overrides
 ```
