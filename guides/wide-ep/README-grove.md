@@ -4,13 +4,21 @@
 
 This guide demonstrates how to deploy a DeepSeek R1 FP4 wide-EP workload on NVIDIA GB200 hardware using [Grove](https://github.com/ai-dynamo/grove). The llm-d Router, GAIE, and EPP still handle request routing, prefill/decode scheduling, and endpoint selection; Grove is responsible for creating and coordinating the multi-node model-server pods.
 
-This variant is validated on NVIDIA GB200 hardware with Multi-Node NVLink (MNNVL), on GKE. The validated target topology is:
+This variant is validated on NVIDIA GB200 hardware with Multi-Node NVLink (MNNVL), on GKE.
 
-* 1 prefill pod using 4 GPUs
-* 1 decode leader pod using 4 GPUs
-* 7 decode worker pods using 4 GPUs each
+## Default Configuration
 
-The vLLM server loads the [nvidia/DeepSeek-R1-NVFP4](https://huggingface.co/nvidia/DeepSeek-R1-NVFP4) model.
+| Parameter | Value |
+| --------- | ----- |
+| Model | [nvidia/DeepSeek-R1-NVFP4](https://huggingface.co/nvidia/DeepSeek-R1-NVFP4) |
+| Prefill GPUs | 4 |
+| Decode Leader GPUs | 4 |
+| Decode Worker GPUs | 7 workers, 4 GPUs each |
+| Total GPUs | 36 |
+
+The configuration delegates topology placement to Grove, which packs all model-server pods into the same GB200 rack.
+
+The configuration also delegates MNNVL setup to Grove Auto-MNNVL, which creates the required `ComputeDomain` resource and claim so all pods can communicate over NVIDIA Multi-Node NVLink.
 
 ## How Grove Orchestrates This Deployment
 

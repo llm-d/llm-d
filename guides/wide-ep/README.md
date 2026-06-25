@@ -19,7 +19,7 @@ The LWS variant deploys `deepseek-ai/DeepSeek-R1-0528` with:
 
 ### Grove
 
-Use the [Grove variant](README-grove.md) when deploying wide-EP on NVIDIA GB200 hardware with Multi-Node NVLink (MNNVL). Grove is the orchestration path for multi-component inference systems where the controller needs to reason about the whole service, not independent pods.
+Use the [Grove variant](README-grove.md) when deploying wide-EP on NVIDIA GB200 hardware with Multi-Node NVLink (MNNVL). Grove is the orchestration path for multi-component inference systems that need coordinated placement, scheduling, lifecycle, and updates.
 
 The Grove variant deploys `nvidia/DeepSeek-R1-NVFP4`.
 
