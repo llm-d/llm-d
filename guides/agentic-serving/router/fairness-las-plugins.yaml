@@ -1,0 +1,27 @@
+apiVersion: inference.networking.x-k8s.io/v1alpha1
+kind: EndpointPickerConfig
+plugins:
+- type: agent-identity
+- type: queue-scorer
+- type: kv-cache-utilization-scorer
+- type: prefix-cache-scorer
+- type: program-aware-fairness
+  parameters:
+    strategy: "las"
+    lasWeightService: 0.8
+    lasWeightHeadWait: 0.2
+    lasDecayFactor: 0.99997
+featureGates:
+- flowControl
+flowControl:
+  defaultPriorityBand:
+    fairnessPolicyRef: program-aware-fairness
+schedulingProfiles:
+- name: default
+  plugins:
+  - pluginRef: queue-scorer
+    weight: 2
+  - pluginRef: kv-cache-utilization-scorer
+    weight: 2
+  - pluginRef: prefix-cache-scorer
+    weight: 3
