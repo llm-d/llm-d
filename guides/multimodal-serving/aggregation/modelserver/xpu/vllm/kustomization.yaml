@@ -12,7 +12,7 @@ images:
     newTag: v0.7.0
 
 components:
-  - ../../components/vllm
+  - ../../base/vllm
 
 labels:
   - pairs:
