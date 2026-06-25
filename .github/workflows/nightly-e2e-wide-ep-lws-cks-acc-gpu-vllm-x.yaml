@@ -25,7 +25,7 @@ on:
       dry_run:
         description: 'Execute workflow in "dry-run" mode ("true", "false")'
         required: false
-        default: 'true'
+        default: 'false'
       verbose:
         description: 'Execute workflow in "verbose" mode ("true", "false")'
         required: false
@@ -76,7 +76,7 @@ jobs:
       backend_type: ${{ inputs.backend_type || 'lws/vllm' }}
       infra_provider: ${{ inputs.infra_provider || 'coreweave' }}
       connector: ${{ inputs.connector || '' }}
-      cluster_namespace: ${{ inputs.cluster_namespace || 'llm-d-nightly-wide-ep-cks-gpu' }}
+      cluster_namespace: ${{ inputs.cluster_namespace || 'llm-d-nightly-wide-ep-lws-cks-gpu' }}
       helm_release: ${{ inputs.helm_release || 'llmdbenchcicdr-cks' }}
       workspace_dir: ${{ inputs.workspace_dir || '/tmp/llmdbenchcicdk-cks' }}
       bucket_project: ${{ inputs.bucket_project || 'llm-d-scale' }}
@@ -84,7 +84,7 @@ jobs:
       bucket_path: ${{ inputs.bucket_path || 'llm-d-benchmarks/regressions/wide-ep' }}
       gateway_class: ${{ inputs.gateway_class || 'epponly' }}
       monitoring_enabled: ${{ inputs.monitoring_enabled || 'false' }}
-      dry_run: ${{ inputs.dry_run || 'true' }}
+      dry_run: ${{ inputs.dry_run || 'false' }}
       verbose: ${{ inputs.verbose || 'false' }}
       harness: ${{ inputs.harness || 'inference-perf' }}
       workload: ${{ inputs.workload || 'sanity_random.yaml' }}

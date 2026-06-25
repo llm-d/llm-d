@@ -207,30 +207,86 @@ jobs:
         if: steps.parse.outputs.result == 'ok'
         id: perm
         uses: actions/github-script@v9
+        env:
+          MATCHES: ${{ steps.parse.outputs.matches }}
         with:
           result-encoding: string
           script: |
-            const { data: perm } = await github.rest.repos.getCollaboratorPermissionLevel({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              username: context.payload.comment.user.login,
-            });
-            if (!['admin', 'write'].includes(perm.permission)) {
-              await github.rest.reactions.createForIssueComment({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                comment_id: context.payload.comment.id,
-                content: '-1',
-              });
-              await github.rest.issues.createComment({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                issue_number: context.issue.number,
-                body: `❌ @${context.payload.comment.user.login} needs **write** access to trigger nightlies.`,
-              });
-              return 'denied';
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            const login = context.payload.comment.user.login;
+            const matches = JSON.parse(process.env.MATCHES || '[]');
+
+            // Maintainers (write/admin) may run any nightly.
+            async function isMaintainer() {
+              try {
+                const { data: perm } = await github.rest.repos.getCollaboratorPermissionLevel({
+                  owner, repo, username: login,
+                });
+                return ['admin', 'write'].includes(perm.permission);
+              } catch (e) {
+                if (e.status === 404) return false; // not a collaborator
+                throw e;
+              }
             }
-            return 'ok';
+
+            // Guide owners may run the nightlies for the guides they own. Each nightly
+            // maps to a guide via its `standup_scenario` (guides/<scenario>/OWNERS); the
+            // commenter must be listed in the OWNERS of *every* matched nightly's guide.
+            async function ownsAllMatchedGuides() {
+              if (matches.length === 0) return false;
+              const { data: pr } = await github.rest.pulls.get({
+                owner, repo, pull_number: context.issue.number,
+              });
+              const ref = pr.head.sha;
+
+              async function readFile(path) {
+                try {
+                  const { data } = await github.rest.repos.getContent({ owner, repo, path, ref });
+                  return Buffer.from(data.content, 'base64').toString('utf8');
+                } catch (e) {
+                  if (e.status === 404) return null;
+                  throw e;
+                }
+              }
+
+              // Every login in an OWNERS file appears as a YAML list item (`- name`).
+              // Non-login entries can never match a commenter login, so there is no
+              // need to track which section (approvers/reviewers) we are in.
+              function ownersFrom(text) {
+                const logins = new Set();
+                for (const line of text.split('\n')) {
+                  const m = line.replace(/#.*$/, '').match(/^\s*-\s*(\S+)\s*$/);
+                  if (m) logins.add(m[1].toLowerCase());
+                }
+                return logins;
+              }
+
+              for (const m of matches) {
+                const wf = await readFile(`.github/workflows/${m.workflowFile}`);
+                const scen = wf && wf.match(/standup_scenario:[^']*'([^']+)'/);
+                if (!scen) return false; // no guide mapping => maintainers only
+                const ownersText = await readFile(`guides/${scen[1]}/OWNERS`);
+                if (!ownersText || !ownersFrom(ownersText).has(login.toLowerCase())) return false;
+              }
+              return true;
+            }
+
+            if (await isMaintainer() || await ownsAllMatchedGuides()) {
+              return 'ok';
+            }
+
+            await github.rest.reactions.createForIssueComment({
+              owner, repo,
+              comment_id: context.payload.comment.id,
+              content: '-1',
+            });
+            await github.rest.issues.createComment({
+              owner, repo,
+              issue_number: context.issue.number,
+              body: `❌ @${login} needs **write** access, or to be an owner of the guide(s) you are testing (\`guides/<guide>/OWNERS\`), to trigger these nightlies.`,
+            });
+            return 'denied';
 
       - name: React with rocket
         if: steps.parse.outputs.result == 'ok' && steps.perm.outputs.result == 'ok'

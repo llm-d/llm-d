@@ -63,6 +63,12 @@ A client requests the model `small-segment-lora`. We want to ensure this maps st
 
 ### InferenceModelRewrite
 
+Install the `InferenceModelRewrite` CRD:
+
+  ```bash
+  kubectl apply -f https://github.com/llm-d/llm-d-router/releases/download/v0.9.0/manifests.yaml
+  ```
+
 Apply the following `InferenceModelRewrite` CR to map `small-segment-lora` → `small-segment-lora-v1`:
 
 ```yaml
