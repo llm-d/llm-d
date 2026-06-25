@@ -36,7 +36,7 @@ router:
     # Note: the chart passes these args verbatim to whichever sidecar container
     # is deployed — there is no separate agentgateway preset. When
     # proxyType=agentgateway, layer features/agentgateway-proxy.values.yaml on
-    # top to clear these Envoy-specific args.
+    # top to replace these with agentgateway's config-file args.
     args:
       - "--service-node"
       - "envoy-sidecar"

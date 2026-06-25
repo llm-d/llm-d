@@ -7,7 +7,8 @@ llm-d uses the **llm-d Router** to make intelligent request routing decisions fo
 The commands below assume the following environment variables are set:
 
 ```bash
-source ${REPO_ROOT}/guides/env.sh   # sets REPO_ROOT, ROUTER_CHART_VERSION, ROUTER_STANDALONE_CHART, ROUTER_GATEWAY_CHART
+export REPO_ROOT=$(realpath $(git rev-parse --show-toplevel))
+source ${REPO_ROOT}/guides/env.sh   # sets ROUTER_CHART_VERSION, ROUTER_STANDALONE_CHART, ROUTER_GATEWAY_CHART
 export NAMESPACE=<your-namespace>   # not set by env.sh — choose a namespace for this install
 ```
 
@@ -42,7 +43,7 @@ agentgateway can be used as the sidecar proxy in place of Envoy. In this mode ag
 
 ```bash
 helm install <release-name> \
-  oci://ghcr.io/llm-d/charts/llm-d-router-standalone-dev \
+  ${ROUTER_STANDALONE_CHART} \
   -f ${REPO_ROOT}/guides/recipes/router/base.values.yaml \
   -f ${REPO_ROOT}/guides/recipes/router/features/monitoring.values.yaml \
   -f ${REPO_ROOT}/guides/recipes/router/features/agentgateway-proxy.values.yaml \
@@ -88,6 +89,6 @@ Both modes share a common `base.values.yaml` containing the router image, ports,
 ```
 base.values.yaml                              # shared defaults (this directory)
   + features/monitoring.values.yaml           # optional feature toggles
-  + features/agentgateway-proxy.values.yaml   # required when proxyType=agentgateway
+  + features/agentgateway-proxy.values.yaml   # required for agentgateway config args
   + <guide>/router/<guide>.values.yaml     # guide-specific overrides
 ```
