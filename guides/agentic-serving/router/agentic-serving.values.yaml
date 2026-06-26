@@ -12,6 +12,7 @@ router:
         apiVersion: llm-d.ai/v1alpha1
         kind: EndpointPickerConfig
         plugins:
+        - type: agent-identity
         - type: token-load-scorer
         - type: inflight-load-producer
         - type: approx-prefix-cache-producer
@@ -31,6 +32,12 @@ router:
         - type: prefix-cache-affinity-filter
           parameters:
             peakPrefillThroughput: 16444
+        - type: program-aware-fairness
+        featureGates:
+        - flowControl
+        flowControl:
+          defaultPriorityBand:
+            fairnessPolicyRef: program-aware-fairness
         schedulingProfiles:
         - name: default
           plugins:

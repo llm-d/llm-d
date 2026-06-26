@@ -24,6 +24,7 @@ specific pressure of the agentic workload:
 | **[Tiered KV offloading](../tiered-prefix-cache/README.md)** | Offload KV cache beyond accelerator memory across tiers, so idle sessions restore on resume instead of recomputing prefill. |
 | **[Precise prefix-cache routing](../precise-prefix-cache-routing/README.md)** — advanced | An exact, global view of cache state, enabling session-centric orchestration and non-naive (beyond-LRU) KV-cache offloading & retention. |
 | **[P/D disaggregation](../pd-disaggregation/README.md)** — large models / interactivity | Separate prefill and decode pools so heavy prefill never stalls token generation, stabilizing ITL. |
+| **[Program-aware fairness](https://github.com/llm-d/llm-d-router/tree/main/pkg/epp/framework/plugins/flowcontrol/fairness/program-aware)** — multi-session contention | Identify each agent session and enforce per-session LAS (Least Attained Service) queuing so that bursty sessions cannot starve concurrent ones, even under uneven arrival rates. |
 
 The [Agentic Inference SIG northstar](https://docs.google.com/document/d/1DCUVHp9Z8CZUnKiP04nnD_31M3gRishW-cWZ657Cn5U)
 sets the broader direction: **session-graph orchestration**, **program-aware scheduling**,
@@ -55,4 +56,8 @@ cross-turn prefix reuse is actually exercised rather than assumed. The exact pre
 deployment (model, accelerator, and serving topology) rather than forced to be identical — see
 each sub-guide for its workload. Deployments are compared on program-level metrics — whole-session
 completion time and task throughput alongside TTFT and ITL. Replaying real agentic traces (program
-structure and tool-call timing from OpenTelemetry) is the direction for program-level evaluation.
+structure and tool-call timing from OpenTelemetry) is the direction for program-level evaluation —
+[`benchmark-templates/otel-trace-replay.yaml`](benchmark-templates/otel-trace-replay.yaml) replays
+multi-turn agent sessions from
+[`Exgentic/agent-llm-traces`](https://huggingface.co/datasets/Exgentic/agent-llm-traces), carrying
+per-session identity so that fairness scheduling is evaluated against real bursty arrival patterns.

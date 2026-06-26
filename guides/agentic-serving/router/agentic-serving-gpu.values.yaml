@@ -20,6 +20,7 @@ router:
         apiVersion: llm-d.ai/v1alpha1
         kind: EndpointPickerConfig
         plugins:
+        - type: agent-identity
         - type: disagg-headers-handler
         - type: always-disagg-pd-decider
         - type: disagg-profile-handler
@@ -46,6 +47,12 @@ router:
           name: cpu-prefix-cache-scorer
           parameters:
             prefixMatchInfoProducerName: cpu-prefix-cache-producer
+        - type: program-aware-fairness
+        featureGates:
+        - flowControl
+        flowControl:
+          defaultPriorityBand:
+            fairnessPolicyRef: program-aware-fairness
         schedulingProfiles:
         - name: prefill
           plugins:
