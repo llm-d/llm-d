@@ -151,8 +151,8 @@ The `MooncakeStoreConnector` integrates this store with vLLM's V1 Connector API.
 
 The system consists of four components:
 
-- **Mooncake Master** — Centralized metadata service managing keyed objects, their replicas and placement, leases, and eviction. It is unaware of vLLM's KV-cache block semantics. Deployment manifests are provided in [`helpers/mooncake-master-store/`](../../../../helpers/mooncake-master-store/). Required by both deployment modes.
-- **Mooncake Client** — A standalone process that allocates CPU DRAM and optionally SSD storage, registers those resources with the Master, and serves RDMA read/write requests from vLLM ranks. Only used in standalone-store mode. Deployment manifests are provided in [`helpers/mooncake-client/`](../../../../helpers/mooncake-client/).
+- **Mooncake Master** — Centralized metadata service managing keyed objects, their replicas and placement, leases, and eviction. It is unaware of vLLM's KV-cache block semantics. Deployment manifests are provided in [`helpers/mooncake-master-store/`](https://github.com/llm-d/llm-d/tree/main/helpers/mooncake-master-store). Required by both deployment modes.
+- **Mooncake Client** — A standalone process that allocates CPU DRAM and optionally SSD storage, registers those resources with the Master, and serves RDMA read/write requests from vLLM ranks. Only used in standalone-store mode. Deployment manifests are provided in [`helpers/mooncake-client/`](https://github.com/llm-d/llm-d/tree/main/helpers/mooncake-client).
 - **Mooncake Transfer Engine** — Byte-oriented data mover that transfers data between registered GPU or CPU memory regions and the distributed DRAM/SSD pool using RDMA or TCP.
 - **MooncakeStoreConnector** (in each vLLM process) — Converts vLLM content-addressed cache chunks into Mooncake object keys and maps each object to one or more physical memory address-and-size ranges.
 
@@ -167,7 +167,7 @@ Embedded mode is simpler to deploy — the DRAM pool scales automatically with t
 
 #### Mooncake Master
 
-The Mooncake Master handles block metadata, eviction, and snapshots. Key configuration parameters (set in [`configmap.yaml`](../../../../helpers/mooncake-master-store/base/configmap.yaml)):
+The Mooncake Master handles block metadata, eviction, and snapshots. Key configuration parameters (set in [`configmap.yaml`](https://github.com/llm-d/llm-d/blob/main/helpers/mooncake-master-store/base/configmap.yaml)):
 
 | Parameter | Default | Description |
 | :--- | :--- | :--- |
@@ -178,7 +178,7 @@ The Mooncake Master handles block metadata, eviction, and snapshots. Key configu
 | `enable_snapshot` | `true` | Periodic snapshots to PVC for recovery |
 | `snapshot_interval_seconds` | `60` | Snapshot frequency |
 
-The Master exposes gRPC (port 50051), HTTP metadata (port 8080), and Prometheus metrics (port 9003). See [`helpers/mooncake-master-store/`](../../../../helpers/mooncake-master-store/) for deployment manifests.
+The Master exposes gRPC (port 50051), HTTP metadata (port 8080), and Prometheus metrics (port 9003). See [`helpers/mooncake-master-store/`](https://github.com/llm-d/llm-d/tree/main/helpers/mooncake-master-store) for deployment manifests.
 
 #### Mooncake Client
 
@@ -192,7 +192,7 @@ The two-tier storage within the Client works as follows:
 - **Reads** check DRAM first and fall through to SSD on a DRAM miss.
 - **Eviction** is coordinated by the Master — when the DRAM pool hits the high watermark, the Master instructs the Client to spill blocks to SSD.
 
-Decoupling storage from compute means the pool survives vLLM pod restarts, storage can be placed on nodes without GPUs (e.g., CPU-only nodes with large DRAM and NVMe), and the SSD tier is managed in one place per node rather than per GPU. See [`helpers/mooncake-client/`](../../../../helpers/mooncake-client/) for deployment manifests.
+Decoupling storage from compute means the pool survives vLLM pod restarts, storage can be placed on nodes without GPUs (e.g., CPU-only nodes with large DRAM and NVMe), and the SSD tier is managed in one place per node rather than per GPU. See [`helpers/mooncake-client/`](https://github.com/llm-d/llm-d/tree/main/helpers/mooncake-client) for deployment manifests.
 
 #### Content-Addressable Storage and PYTHONHASHSEED
 
