@@ -77,7 +77,7 @@ export INFERENCE_GW_URL="http://infra-inference-scheduling-inference-gateway-ist
 **From OCI Registry:**
 
 ```bash
-helm install batch-gateway oci://ghcr.io/llm-d/charts/batch-gateway \
+helm install batch-gateway oci://ghcr.io/llm-d-incubation/charts/batch-gateway \
   -n ${NAMESPACE} \
   --set processor.config.globalInferenceGateway.url="${INFERENCE_GW_URL}" \
   --set "apiserver.config.batchAPI.passThroughHeaders={Authorization}" \
