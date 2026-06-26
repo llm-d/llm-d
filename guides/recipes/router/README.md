@@ -37,9 +37,9 @@ agentgateway can be used as the sidecar proxy in place of Envoy. In this mode ag
 > [!NOTE]
 > When using `proxyType=agentgateway`, set `router.inferencePool.create=false`.
 > agentgateway automatically creates a pseudo service for model workloads — no
-> explicit service name is required. TLS is disabled between EPP and agentgateway
-> automatically by the chart, but can be set explicitly via
-> `router.epp.flags.secure-serving=false`.
+> explicit service name is required. agentgateway talks to EPP over plaintext
+> gRPC on localhost, so `router.epp.flags.secure-serving=false` is required —
+> `secure-serving=true` is not supported with `proxyType=agentgateway`.
 
 ```bash
 helm install <release-name> \
