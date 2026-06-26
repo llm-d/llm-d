@@ -21,28 +21,6 @@ spec:
               memory: 12Gi
             claims:
               - name: intel-decode-claim
-          volumeMounts:
-            - mountPath: /dev/shm
-              name: shm
-            - mountPath: /.cache
-              name: torch-compile-cache
-            - mountPath: /.triton
-              name: triton-cache
-            - mountPath: /.config
-              name: vllm-config
-          startupProbe:
-            initialDelaySeconds: 15
-            periodSeconds: 30
-            timeoutSeconds: 5
-            failureThreshold: 120
-          livenessProbe:
-            periodSeconds: 10
-            timeoutSeconds: 5
-            failureThreshold: 3
-          readinessProbe:
-            periodSeconds: 5
-            timeoutSeconds: 2
-            failureThreshold: 3
       resourceClaims:
         - name: intel-decode-claim
           resourceClaimTemplateName: intel-claim-template-decode

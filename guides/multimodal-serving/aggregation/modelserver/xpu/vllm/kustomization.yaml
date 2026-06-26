@@ -6,13 +6,9 @@ resources:
 
 namePrefix: mm-baseline-xpu-vllm-
 
-images:
-  - name: REPLACE_MODEL_SERVER_IMAGE
-    newName: ghcr.io/llm-d/llm-d-xpu
-    newTag: v0.7.0
-
 components:
   - ../../base/vllm
+  - ../../../../../recipes/modelserver/components/images/xpu-vllm
 
 labels:
   - pairs:
