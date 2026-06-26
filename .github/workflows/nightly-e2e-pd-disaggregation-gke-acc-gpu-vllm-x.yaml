@@ -77,6 +77,8 @@ jobs:
       infra_provider: ${{ inputs.infra_provider || 'gke' }}
       connector: ${{ inputs.connector || '' }}
       cluster_namespace: ${{ inputs.cluster_namespace || 'llm-d-nightly-pd-disaggregation-gke-gpu' }}
+      cluster_name: ${{ inputs.cluster_name || 'llm-d-e2e-us-south1-2' }}
+      cluster_zone: ${{ inputs.cluster_zone || 'us-south1' }}
       helm_release: ${{ inputs.helm_release || 'llmdbenchcicdr-gke' }}
       workspace_dir: ${{ inputs.workspace_dir || '/tmp/llmdbenchcicdk-gke' }}
       bucket_project: ${{ inputs.bucket_project || 'llm-d-scale' }}

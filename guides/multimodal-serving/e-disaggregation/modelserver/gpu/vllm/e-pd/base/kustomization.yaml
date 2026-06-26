@@ -6,11 +6,14 @@ resources:
 
 namePrefix: e-pd-disaggregation-nvidia-gpu-vllm-
 
-# TODO(#1891): Remove override once upstream vLLM includes encode-disaggregation support.
+components:
+  - ../../../../../../../recipes/modelserver/components/images/routing-sidecar
+
 images:
+  # TODO(#1891): Remove override once upstream vLLM includes encode-disaggregation support.
   - name: REPLACE_MODEL_SERVER_IMAGE
     newName: ghcr.io/revit13/vllm-openai
-    newTag: 14d40dc7d
+    newTag: 61e53561a
 
 labels:
   - pairs:

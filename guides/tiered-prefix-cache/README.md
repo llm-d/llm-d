@@ -19,12 +19,13 @@ Each path is a self-contained deployment using a specific offloading implementat
 | ---- | -------------- | ----- | --------- |
 | **vLLM native** | vLLM `OffloadingConnector` | CPU RAM, CPU RAM + Filesystem | `modelserver/gpu/vllm/native/` |
 | **LMCache** | [LMCache](https://lmcache.ai) connector | CPU RAM, Filesystem | `modelserver/gpu/vllm/lmcache-connector/` |
+| **MooncakeStore** | MooncakeStore connector | CPU RAM, Filesystem | `modelserver/gpu/vllm/mooncake-store/` |
 | **SGLang HiCache** | SGLang native HiCache | CPU RAM | `modelserver/gpu/sglang/native/cpu/` |
 | **TPU** | vLLM TPU KVCache connector | CPU RAM | `modelserver/tpu/v6/vllm/native/cpu/`, `modelserver/tpu/v7/vllm/native/cpu/` |
 
-We recommend each model server's **native** offloading path: the `OffloadingConnector` on vLLM, and HiCache — its equivalent — on SGLang. Native offloading is low-overhead, requires no extra components, and enabling the CPU tier is appropriate in almost all deployments. Reach for a non-native connector (for example LMCache) only when you need a capability the native path does not yet provide.
-
 The tiers each path supports differ — see the table above. For example, the vLLM native path also extends to a shared filesystem via multi-tier offloading (`TieringOffloadingSpec`), spilling from CPU RAM to shared storage (HBM → CPU RAM → filesystem).
+
+We recommend each model server's **native** offloading path: the `OffloadingConnector` on vLLM, and HiCache — its equivalent — on SGLang. Native offloading is low-overhead, requires no extra components, and enabling the CPU tier is appropriate in almost all deployments. Reach for a non-native connector (for example LMCache) only when you need a capability the native path does not yet provide.
 
 ## Default Configuration
 
@@ -48,7 +49,7 @@ The tiers each path supports differ — see the table above. For example, the vL
 | CPU Cache Offload Size  | 25000 Chunks (~780 GB)                                  |
 
 > [!NOTE]
-> A `gpt-oss-120b` variant (TP=1 on NVIDIA H100, 100 GB CPU offload) is also benchmarked — see [gpt-oss-120B benchmarking results](benchmark-results-gpt-oss-120b.md).
+> A `gpt-oss-120b` variant (TP=1 on NVIDIA H100, 100 GB CPU offload) is also benchmarked — see [gpt-oss-120B benchmarking results](./benchmark-results/vllm-gpt-oss-120b-h100.md).
 
 ---
 
@@ -142,6 +143,9 @@ Deploy **one** of the paths below. Each `kubectl apply -k` targets an overlay di
 #### vLLM native — CPU RAM
 
 ```bash
+export MODEL_SERVER=vllm # vllm 
+export CONNECTOR=native  # native
+export VARIANT=cpu       # cpu | fs
 export INFRA_PROVIDER=base  # base | gke
 kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/tiered-prefix-cache/modelserver/gpu/vllm/native/cpu/${INFRA_PROVIDER}/
 ```
@@ -181,6 +185,49 @@ export INFRA_PROVIDER=base  # base | gke
 kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/tiered-prefix-cache/modelserver/gpu/sglang/native/cpu/${INFRA_PROVIDER}/
 ```
 
+#### MooncakeStore - CPU DRAM
+
+MooncakeStore supports two deployment modes: embedded CPU DRAM (`cpu`) and standalone CPU DRAM + SSD (`fs`). Both require the [Mooncake Master](../../helpers/mooncake-master-store/) metadata service. The `fs` variant additionally requires the [Mooncake Client](../../helpers/mooncake-client/), a standalone process that owns the CPU DRAM pool and SSD persistence tier.
+
+**Prerequisites:**
+
+```bash
+# Required for both cpu and fs variants
+kubectl apply -k ${REPO_ROOT}/helpers/mooncake-master-store/base/
+
+# Required for fs variant only — deploys a DaemonSet that owns the CPU + SSD pool (sized for Qwen3-32B)
+kubectl apply -k ${REPO_ROOT}/guides/tiered-prefix-cache/modelserver/gpu/vllm/mooncake-store/fs/mooncake-client/
+```
+
+**Deploy the model server:**
+
+```bash
+k apply -k ${REPO_ROOT}/helpers/mooncake-master-store/monitoring
+```
+
+After that you can deploy the modelserver manfiests:
+
+```bash
+export MODEL_SERVER=vllm    # vllm 
+export VARIANT=cpu          # cpu | fs
+export INFRA_PROVIDER=base  # base
+kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/tiered-prefix-cache/modelserver/gpu/${MODEL_SERVER}/mooncake-store/${VARIANT}/${INFRA_PROVIDER}
+```
+
+#### MooncakeStore - fs (CPU DRAM + SSD offloading)
+
+As with the CPU mooncake offloading example, start by making sure the `mooncake-master-store` is deployed (for without monitoring, use the `base` overlay, but otherwise use the `monitoring` overlay):
+
+```bash
+k apply -k ${REPO_ROOT}/helpers/mooncake-master-store/monitoring
+```
+
+Then deploy the Mooncake Client. The Client allocates CPU DRAM and SSD resources at startup and registers them with the Master, so sizing must be set before deployment — changes require a restart. This guide provides an overlay that patches the [base helper defaults](../../helpers/mooncake-client/) (40 GB DRAM, 500 GB SSD) up to values sized for Qwen3-32B (80 GB DRAM, 1 TB SSD per node):
+
+```bash
+kubectl apply -k ${REPO_ROOT}/guides/tiered-prefix-cache/modelserver/gpu/vllm/mooncake-store/fs/mooncake-client/
+```
+
 #### TPU (Google TPU v6 / v7)
 
 ```bash
@@ -205,7 +252,8 @@ The connector does not evict data from the shared tier. Capacity is managed by t
 ### 3. (Optional) Enable monitoring
 
 * Install the [Monitoring stack](../../docs/operations/observability/setup.md).
-* Deploy the monitoring resources for this guide:
+* To enable Prometheus monitoring on the llm-d router, add `-f ${REPO_ROOT}/guides/recipes/router/features/monitoring.values.yaml` during the [router installation step](#1-deploy-the-llm-d-router).
+* Deploy the monitoring resources for model servers:
 
 ```bash
 kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/recipes/modelserver/components/monitoring
@@ -318,6 +366,13 @@ kubectl delete -f ${REPO_ROOT}/guides/tiered-prefix-cache/manifests/pvc.yaml -n 
 kubectl delete namespace ${NAMESPACE}
 ```
 
+If you deployed Mooncake components, clean them up as well:
+
+```bash
+kubectl delete -k ${REPO_ROOT}/guides/tiered-prefix-cache/modelserver/gpu/vllm/mooncake-store/fs/mooncake-client/  # if fs variant was used
+kubectl delete -k ${REPO_ROOT}/helpers/mooncake-master-store/base/
+```
+
 ---
 
 ## Benchmarking
@@ -402,81 +457,14 @@ llmdbenchmark \
 
 ---
 
-## Benchmarking Report
+## Benchmarking Reports
 
-> [!TIP]
-> **Full benchmark reports:**
-> - [gpt-oss-120B — full report](benchmark-results-gpt-oss-120b.md) (TP=1 on 16 × H100): complete throughput, latency, TPOT, and GPU/CPU cache-hit breakdowns across 5–40 QPS.
->
-> These dedicated reports carry the complete data. The inline summaries below report the headline effect of enabling offloading.
+Empirical benchmark reports demonstrating the impact of multi-tier prefix-cache offloading relative to HBM-only serving configurations under high-cache workloads:
 
-All results show the effect of enabling prefix-cache offloading relative to an HBM-only configuration, under a high-cache scenario where the working set exceeds HBM but fits within HBM + CPU RAM. The weight configuration defaults to `1:1:1:1:1` (Queue Scorer : KV Cache Utilization Scorer : GPU Prefix Cache Scorer : CPU Prefix Cache Scorer : LRU Scorer).
+- **[Qwen/Qwen3-32B on vLLM (16×H100 CPU Offload)](./benchmark-results/vllm-qwen3-32b-h100.md)**: Headline throughput and latency comparisons across 16×H100 GPUs with CPU RAM offloading.
+- **[Qwen/Qwen3-32B on SGLang (16×H100 CPU Offload)](./benchmark-results/sglang-qwen3-32b-h100.md)**: Headline throughput and latency comparisons across 16×H100 GPUs with SGLang HiCache CPU RAM offloading.
+- **[openai/gpt-oss-120b on vLLM (16×H100 CPU Offload)](./benchmark-results/vllm-gpt-oss-120b-h100.md)**: Stage-by-stage throughput, latency, TPOT, and fleet cache hit rate breakdowns across 5–40 QPS.
+- **[Qwen/Qwen3-32B on vLLM (TPU v6e/v7 CPU Offload)](./benchmark-results/vllm-qwen3-32b-tpuv7.md)**: Headline throughput and latency effect of CPU RAM prefix offloading on Google TPU architectures.
+- **[Qwen/Qwen3-32B on vLLM (16×H100 Lustre Offload)](./benchmark-results/vllm-qwen3-32b-h100-lustre.md)**: Benchmark comparisons for shared POSIX filesystem offloading using LMCache and llm-d filesystem connectors.
 
-### GPU — CPU RAM Offloading
-
-The benchmark runs on 16 × H100 GPUs, distributed across 8 model servers (2 H100s per server with TP=2) using Qwen3-32B.
-
-* **Workload**: 250 prefix groups, 5 prompts per group, system prompt length of 16,000 tokens, question length of 256 tokens, output length of 256 tokens.
-* **GPU Cache Size (Total)**: 2,384,000 tokens (381 GB / 355 GiB).
-* **CPU Cache Size (Total)**: 10,496,000 tokens (~1,718 GB / 1,600 GiB) at 200 GiB/replica.
-* **Workload Unique Cache (Working Set)**: 4,640,000 tokens (~760 GB / 708 GiB).
-
-| Target Rate | Configuration | Mean TTFT (s) | P90 TTFT (s) | Mean E2E Latency (s) | P90 E2E Latency (s) | Throughput (tok/s) |
-| :---: | :--- | :---: | :---: | :---: | :---: | :---: |
-| **5.0 QPS** | HBM-only | 1.62 | 2.65 | 11.98 | 21.60 | 74,638.5 |
-| | HBM + CPU RAM | 1.17 (-27.8%) | 1.79 (-32.5%) | 11.49 (-4.1%) | 20.25 (-6.3%) | 82,880.0 (+11.0%) |
-| **10.0 QPS** | HBM-only | 8.08 | 16.61 | 26.28 | 32.60 | 122,387.7 |
-| | HBM + CPU RAM | 0.41 (-94.9%) | 1.31 (-92.1%) | 6.97 (-73.5%) | 9.23 (-71.7%) | 167,027.5 (+36.5%) |
-| **20.0 QPS** | HBM-only | 43.67 | 78.13 | 62.29 | 92.14 | 114,663.2 |
-| | HBM + CPU RAM | 0.89 (-98.0%) | 2.66 (-96.6%) | 9.03 (-85.5%) | 11.22 (-87.8%) | 300,749.2 (+162.3%) |
-| **40.0 QPS** | HBM-only | 115.57 | 206.39 | 134.78 | 223.93 | 115,645.0 |
-| | HBM + CPU RAM | 25.38 (-78.0%) | 48.14 (-76.7%) | 33.95 (-74.8%) | 56.29 (-74.9%) | 331,212.6 (+186.4%) |
-
-### TPU — CPU RAM Offloading
-
-| Configuration | Mean TTFT (s) | P90 TTFT (s) | Mean E2E Latency (s) | P90 E2E Latency (s) | Overall Throughput (tok/s) |
-| :--- | :--- | :--- | :--- | :--- | :--- |
-| HBM-only | 0.98 | 2.1 | 22.1 | 26.2 | 67262.3 |
-| HBM + CPU RAM (25000 Chunks) | 0.56 (-49%) | 0.5 (-75.7%) | 20.3 (-8.1%) | 23.6 (-9.9%) | 73178.1 (+8.9%) |
-
-### Storage (Filesystem) Offloading
-
-> [!NOTE]
-> The following benchmark results were from a previous release and do not match the deployment of the current release. A follow up benchmark will be conducted and the results will be updated accordingly. See <https://github.com/llm-d/llm-d/issues/680>.
-
-#### LMCache Connector + Lustre
-
-LMCache configuration: `LMCACHE_MAX_LOCAL_CPU_SIZE=20GB`, `LMCACHE_MAX_LOCAL_DISK_SIZE=1120Gi` per GPU (16 GPUs × 1120Gi ≤ 18000Gi Lustre PVC).
-
-##### 50K system prompt length (KVCache size 994 GiB) — KV Cache > (HBM + CPU RAM)
-
-| Configuration | Mean TTFT (s) | P90 TTFT (s) | Mean E2E Latency (s) | P90 E2E Latency (s) | Input (tok/s) | Output (tok/s) | Overall (tok/s) |
-| :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
-| **Baseline vLLM + CPU offloading** | 25.38 | 37.74 | 56.21 | 69.69 | 18607 | 354 | 18962 |
-| **vLLM + CPU offloading + Lustre** | 20.12 (-21%) | 34.02 (-9.9%) | 45.83 (-18%) | 58.73 (-16%) | 22827 (+23%) | 435 (+23%) | 23262 (+23%) |
-
-##### 70K system prompt length (KVCache size 1.3 TiB) — KV Cache >> (HBM + CPU RAM)
-
-| Configuration | Mean TTFT (s) | P90 TTFT (s) | Mean E2E Latency (s) | P90 E2E Latency (s) | Input (tok/s) | Output (tok/s) | Overall (tok/s) |
-| :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
-| **Baseline vLLM + CPU offloading** | 58.02 | 74.75 | 87.99 | 105.46 | 16598 | 226.65 | 16825 |
-| **vLLM + CPU offloading + Lustre** | 45 (-22%) | 64.79 (-13%) | 68.28 (-22%) | 87.47 (-17%) | 21364 (+28.71%) | 291 (+28.39%) | 21656 (+28.71%) |
-
-#### LLM-D FS Connector + Lustre
-
-* CPU RAM allocated: `cpu_bytes_to_use=64424509440` (~64 GB per replica, ~356 GB total for 4 replicas).
-* Lustre PVC = 18000 GiB.
-
-##### 30K system prompt length (Qwen3-32B, KVCache size 653 GiB) — KV Cache > (HBM + CPU RAM)
-
-| Configuration | Mean TTFT (s) | P90 TTFT (s) | Mean E2E Latency (s) | P90 E2E Latency (s) | Input (tok/s) | Output (tok/s) | Overall (tok/s) | ITL (s) |
-| :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
-| **Baseline vLLM + CPU offloading** | 2.24 | 5.14 | 22.21 | 26.6 | 27148 | 836 | 27984 | 0.021 |
-| **vLLM + CPU offloading + Lustre** | 1.38 (-38.4%) | 2.82 (-45.1%) | 20.45 (-7.9%) | 22.77 (-14.4%) | 28832 (+6.2%) | 828 (-1.0%) | 29661 (+6.0%) | 0.02 (-4.8%) |
-
-##### 50K system prompt length (Llama-3.3-70B, KVCache size 994 GiB) — KV Cache > (HBM + CPU RAM)
-
-| Configuration | Mean TTFT (s) | P90 TTFT (s) | Mean E2E Latency (s) | P90 E2E Latency (s) | Input (tok/s) | Output (tok/s) | Overall (tok/s) | ITL (s) |
-| :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
-| **Baseline vLLM + CPU offloading** | 27.11 | 41.71 | 57.06 | 72.28 | 18333 | 350 | 18682 | 0.029 |
-| **vLLM + CPU offloading + Lustre** | 15.25 (-43.7%) | 24.71 (-40.8%) | 38.55 (-32.4%) | 48.01 (-33.6%) | 27091 (+47.8%) | 517 (+47.7%) | 27609 (+47.8%) | 0.022 (-24.1%) |
+For detailed results see [gpt-oss-120B benchmarking results](benchmark-results-gpt-oss-120b.md).

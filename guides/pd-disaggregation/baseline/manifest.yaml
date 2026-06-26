@@ -21,7 +21,6 @@ spec:
           command: ["vllm", "serve"]
           args:
             - "openai/gpt-oss-120b"
-            - "--gpu-memory-utilization=0.90"
           ports:
             - name: http
               containerPort: 8000

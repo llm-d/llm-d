@@ -8,6 +8,20 @@ on:
   schedule:
     - cron: '0 23 * * *'  # 23:00 UTC daily (before all nightly E2Es starting at 00:00)
   workflow_dispatch:
+    inputs:
+      platforms:
+        description: 'Platforms to build (comma-separated: cuda,aws,gb200,xpu,cpu,all)'
+        required: false
+        default: 'cuda'
+        type: string
+      pr_number:
+        description: 'PR number (set automatically by /test-nightly)'
+        required: false
+        type: string
+      pr_repo:
+        description: 'PR repository (set automatically by /test-nightly)'
+        required: false
+        type: string
 
 permissions:
   contents: read
@@ -15,7 +29,7 @@ permissions:
   security-events: write
 
 concurrency:
-  group: nightly-build-image
+  group: nightly-build-image-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -23,5 +37,6 @@ jobs:
     if: github.repository == 'llm-d/llm-d'
     uses: ./.github/workflows/build-image.yaml
     with:
-      force_build: true
+      force_build: ${{ github.event_name == 'schedule' || inputs.platforms == 'all' }}
+      platforms: ${{ inputs.platforms || '' }}
     secrets: inherit

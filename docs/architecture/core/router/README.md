@@ -8,7 +8,7 @@ The llm-d Router is composed of two primary functional parts:
 
 ### Proxy
 
-Any conformant industry-grade L7 proxy. The proxy handles the data plane, including connection management, TLS termination, and request forwarding. Supported implementations range from self-managed application load balancers (e.g., Istio, agentgateway) to compliant cloud-managed services, such as Google Cloud's Application Load Balancer.
+Any conformant industry-grade L7 proxy. The proxy handles the data plane, including connection management, TLS termination, and request forwarding. Supported implementations range from self-managed application load balancers (e.g., Istio, agentgateway, Envoy AI Gateway) to compliant cloud-managed services, such as Google Cloud's Application Load Balancer.
 
 See the [**Proxy deep dive**](proxy.md) to learn about deployment modes (Standalone vs. Gateway Mode), request flow, and Gateway API integration.
 

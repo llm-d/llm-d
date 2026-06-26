@@ -27,6 +27,18 @@ router:
         - type: queue-scorer
         - type: kv-cache-utilization-scorer
         - type: active-request-scorer
+        - type: no-hit-lru-scorer
+        - type: token-producer
+          parameters:
+            estimate:
+              image:
+                mode: dynamic
+                defaultResolution:
+                  width: 1280
+                  height: 720
+                dynamic:
+                  factor: 1024
+        - type: approx-prefix-cache-producer
         - type: max-score-picker
         schedulingProfiles:
         - name: encode
@@ -44,15 +56,16 @@ router:
             weight: 2
           - pluginRef: kv-cache-utilization-scorer
             weight: 2
-          - pluginRef: max-score-picker
         - name: decode
           plugins:
           - pluginRef: decode-filter
-          - pluginRef: active-request-scorer
+          - pluginRef: queue-scorer
+            weight: 2
+          - pluginRef: kv-cache-utilization-scorer
             weight: 2
           - pluginRef: prefix-cache-scorer
             weight: 3
-          - pluginRef: kv-cache-utilization-scorer
+          - pluginRef: no-hit-lru-scorer
             weight: 2
           - pluginRef: max-score-picker
 

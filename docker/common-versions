@@ -2,8 +2,8 @@
 # vLLM Version Configuration
 # ============================================================================
 # Used by CUDA and CPU platforms
-VLLM_REPO=https://github.com/vllm-project/vllm.git
-VLLM_COMMIT_SHA=0fc695fc6d1d82e9a5ac6835ac8e4e1c83703665 # maps to vLLM official v0.23.0 release
+VLLM_REPO=https://github.com/neuralmagic/vllm.git
+VLLM_COMMIT_SHA=51f799c1a0c8a0476faf7e17eeb6a77983cdd778 # v0.23.0 + fix DP supervisor engine_id collision
 
 # ============================================================================
 # Cuda specific configs
@@ -22,8 +22,8 @@ VLLM_PRECOMPILED_WHEEL_COMMIT=0fc695fc6d1d82e9a5ac6835ac8e4e1c83703665 # maps to
 
 # Used by XPU: prebuilt vLLM image from upstream CI (vllm-ci-test-repo).
 # The XPU image is a thin pass-through over this base; switch tags here to upgrade.
-# Tag corresponds to vLLM v0.19.1 release (commit b1388b1fbf5aaef47937fabe98931211684666a6).
-VLLM_XPU_BASE_IMAGE=public.ecr.aws/q9t5s3a7/vllm-ci-test-repo:b1388b1fbf5aaef47937fabe98931211684666a6-xpu
+# Tag corresponds to vLLM v0.23.0 release (commit 0fc695fc6d1d82e9a5ac6835ac8e4e1c83703665).
+VLLM_XPU_BASE_IMAGE=public.ecr.aws/q9t5s3a7/vllm-ci-test-repo:0fc695fc6d1d82e9a5ac6835ac8e4e1c83703665-xpu
 
 # ============================================================================
 # CUDA Version Configuration

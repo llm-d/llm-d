@@ -1,0 +1,75 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: render
+spec:
+  # Run the tokenizer renderer as a horizontally-scalable Service instead of an
+  # EPP sidecar (the chart's tokenizer sidecar is off by default). EPP replicas
+  # share this pool via the token-producer `vllm.url`, decoupling render
+  # capacity from EPP replica count.
+  replicas: 3
+  selector:
+    matchLabels:
+      app.kubernetes.io/component: vllm-render
+      app.kubernetes.io/part-of: precise-prefix-cache-routing
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/component: vllm-render
+        # Guide-scoped (but NOT `llm-d.ai/guide`, which is the InferencePool /
+        # model-server selector) so the Service below cannot cross-select a
+        # `vllm-render` pod from another guide in a shared namespace.
+        app.kubernetes.io/part-of: precise-prefix-cache-routing
+    spec:
+      # The renderer only tokenizes over HTTP; it needs no Kubernetes API access.
+      automountServiceAccountToken: false
+      containers:
+        - name: vllm-render
+          # GPU-less vLLM image — `vllm launch render` only tokenizes, no model
+          # weights are loaded. Mirrors the chart's sidecar image/command.
+          image: docker.io/vllm/vllm-openai-cpu:v0.23.0
+          imagePullPolicy: IfNotPresent
+          command: ["vllm", "launch", "render"]
+          args:
+            - "Qwen/Qwen3-32B" # Must match the token-producer modelName in the router values
+            - "--port=8000"
+          ports:
+            - name: render-http
+              containerPort: 8000
+          env:
+            # HF_HOME points at the mounted emptyDir below so tokenizer files
+            # are cached for the pod's lifetime (mountPath == HF_HOME).
+            - name: HF_HOME
+              value: /tmp/hf
+            - name: HF_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: llm-d-hf-token
+                  key: HF_TOKEN
+            # Disable vLLM usage telemetry — its writes to /.config fail under
+            # restricted SecurityContexts (matches the model server patch).
+            - name: DO_NOT_TRACK
+              value: "1"
+          resources:
+            # Tokenization is light and bursty; reserve modestly and allow
+            # headroom. 3 replicas request 3 cores / 12Gi total.
+            requests:
+              cpu: "1"
+              memory: 4Gi
+            limits:
+              cpu: "4"
+              memory: 12Gi
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: render-http
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 60
+          volumeMounts:
+            - mountPath: /tmp/hf
+              name: hf-cache
+      volumes:
+        - name: hf-cache
+          emptyDir: {}

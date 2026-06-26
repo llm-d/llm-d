@@ -3,4 +3,22 @@ kind: Component
 images:
   - name: REPLACE_MODEL_SERVER_IMAGE
     newName: ghcr.io/llm-d/llm-d-cpu
-    newTag: v0.6.0
+    newTag: v0.7.0
+    
+patches:
+  - target:
+      kind: Deployment
+    patch: |-
+      - op: add
+        path: /spec/template/spec/containers/0/env/-
+        value:
+          name: USER
+          value: llm-d
+  - target:
+      kind: LeaderWorkerSet
+    patch: |-
+      - op: add
+        path: /spec/template/spec/containers/0/env/-
+        value:
+          name: USER
+          value: llm-d

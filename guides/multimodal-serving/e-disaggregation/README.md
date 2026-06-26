@@ -29,7 +29,7 @@ In E/PD, dedicated encode workers handle multimodal processing while a single wo
 E/P/D extends P/D disaggregation by adding a dedicated encode stage. This provides maximum specialization, with multiple encode workers processing multimodal content in parallel:
 
 * 2 Encode Workers (multimodal encoding, parallelized across entries)
-* 4 TP=4 Prefill Workers
+* 2 TP=4 Prefill Workers
 * 2 TP=4 Decode Workers
 
 ### Best Practices
@@ -152,11 +152,9 @@ kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_PATH}/modelserver/g
 
 ### 3. Enable Monitoring (optional)
 
-> [!NOTE]
-> GKE provides [automatic application monitoring](https://docs.cloud.google.com/kubernetes-engine/docs/how-to/configure-automatic-application-monitoring) out of the box. The llm-d [Monitoring stack](../../../docs/operations/observability) is not required for GKE, but it is available if you prefer to use it.
-
 - Install the [Monitoring stack](../../../docs/operations/observability).
-- Deploy the monitoring resources for this guide.
+- To enable Prometheus monitoring on the llm-d router, add `-f ${REPO_ROOT}/guides/recipes/router/features/monitoring.values.yaml` during the [router installation step](#1-deploy-the-llm-d-router).
+- Deploy the monitoring resources for model servers:
 
 ```bash
 kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/recipes/modelserver/components/monitoring-pd

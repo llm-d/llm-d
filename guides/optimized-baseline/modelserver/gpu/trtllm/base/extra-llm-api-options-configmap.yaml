@@ -1,0 +1,17 @@
+# Passed to trtllm-serve via --extra_llm_api_options. Both flags are required
+# (both default false) for the llm-d router to read TensorRT-LLM load metrics:
+#   * return_perf_metrics  -> mounts the Prometheus endpoint at /prometheus/metrics
+#                             (the router's metrics-data-source scrapes this path).
+#   * enable_iter_perf_stats -> starts the background iteration-stats loop that
+#                             populates the dynamic gauges the load-aware scorers
+#                             consume (trtllm_num_requests_waiting / _running,
+#                             trtllm_kv_cache_utilization, trtllm_kv_cache_hit_rate).
+# With only return_perf_metrics the endpoint serves but those gauges stay absent.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: extra-llm-api-options
+data:
+  llm_api_options.yaml: |
+    return_perf_metrics: true
+    enable_iter_perf_stats: true

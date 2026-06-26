@@ -100,7 +100,7 @@ kubectl create secret generic llm-d-hf-token \
 
 This deploys the llm-d Router in the simple [Standalone Mode](../../docs/architecture/core/router/proxy.md). The release name `${GUIDE_NAME}` is mandatory — the inference pool selector matches a guide label that pairs with this release.
 
-The chart auto-injects the `vllm-render` sidecar when `router.tokenizer.enabled: true` is set in the values file.
+Tokenization is served by a standalone render Service, not a chart-injected EPP sidecar — the chart's `router.tokenizer` sidecar is off by default, and the `token-producer` plugin points at that Service.
 
 ```bash
 helm install ${GUIDE_NAME} \
@@ -111,6 +111,17 @@ helm install ${GUIDE_NAME} \
 ```
 
 The release name `${GUIDE_NAME}` is mandatory for standard deployments — the inference pool selector matches a guide label that pairs with this release.
+
+#### Deploy the Render (Tokenizer) Service
+
+The EPP `token-producer` plugin tokenizes prompts by calling vLLM's `/v1/completions/render` endpoint. This guide serves that endpoint from a dedicated, horizontally-scalable `vllm launch render` Service (3 replicas) instead of a per-EPP-pod sidecar, so render capacity scales independently of the EPP replica count and is shared across all EPP replicas. Deploy it with:
+
+```bash
+kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/render/
+```
+
+> [!NOTE]
+> The render pods deliberately do **not** carry the `llm-d.ai/guide` label — that label is the InferencePool / model-server selector, and the EPP would otherwise treat render pods as routable model servers (and try to subscribe to their nonexistent KV-event socket). Scale the pool with `kubectl scale -n ${NAMESPACE} deploy/${GUIDE_NAME}-render --replicas=<N>`.
 
 <details>
 <summary><b>Gateway Mode</b></summary>
@@ -147,17 +158,13 @@ kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/g
 
 ### 4. (Optional) Enable Monitoring
 
-> [!NOTE]
-> GKE provides [automatic application monitoring](https://docs.cloud.google.com/kubernetes-engine/docs/how-to/configure-automatic-application-monitoring) out of the box. The llm-d [Monitoring stack](../../docs/operations/observability/setup.md) is not required for GKE, but it is available if you prefer to use it.
-
 - Install the [Monitoring stack](../../docs/operations/observability/setup.md).
-- Deploy the monitoring resources for this guide:
+- To enable Prometheus monitoring on the llm-d router, add `-f ${REPO_ROOT}/guides/recipes/router/features/monitoring.values.yaml` during the [router installation step](#2-deploy-the-llm-d-router).
+- Deploy the monitoring resources for model servers:
 
   ```bash
   kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/recipes/modelserver/components/monitoring
   ```
-
-- Enable Prometheus scrape for the router by layering `-f ${REPO_ROOT}/guides/recipes/router/features/monitoring.values.yaml` onto the helm command in step 2.
 
 ## Verification
 
@@ -289,6 +296,8 @@ llmdbenchmark \
 
 ```bash
 helm uninstall ${GUIDE_NAME} -n ${NAMESPACE}
+# Render (tokenizer) Service:
+kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/render/
 # For vLLM (default):
 kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/gpu/vllm/${INFRA_PROVIDER}/
 # For SGLang:
@@ -301,96 +310,9 @@ kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/
 2. **Router subscribes per pod** — pod-discovery (`kvEventsConfig.discoverPods: true`) registers the `precise-prefix-cache-producer` as an extractor on the data-layer `endpoint-notification-source`, so each router replica installs a ZMQ subscriber per model server pod independently. All replicas converge to the same index.
 3. **Scoring** — the `prefix-cache-scorer` returns the fraction of the request's prefix blocks that are resident on each candidate pod. The `max-score-picker` routes to the highest-scoring pod.
 
-## Benchmarking Report
+## Benchmarking Reports
 
-### vLLM
+Empirical benchmark reports comparing event-driven precise prefix-cache routing performance against a standard Kubernetes Service under identical hardware configurations:
 
-The benchmark runs on 16× H100 GPUs, distributed across 8 model servers (2 H100s per server with TP=2).
-
-#### Comparing llm-d Scheduling to a Simple Kubernetes Service
-
-Graphs below compare the precise path to a stock Kubernetes Service that round-robins requests across the same 8 vLLM pods (no EPP, no scoring).
-
-<img src="./benchmark-results/throughput_vs_qps.png" width="900" alt="Throughput vs QPS">
-<img src="./benchmark-results/latency_vs_qps.png" width="900" alt="Latency vs QPS">
-<img src="./benchmark-results/ttft_p90_vs_qps.png" width="900" alt="TTFT p90 vs QPS">
-
-Summary across the full ladder (rates 3 → 60):
-
-| Metric              | k8s service (RR) | llm-d Precise | Δ% vs k8s |
-| :------------------ | :--------------- | :------------ | :-------- |
-| Output tokens/sec   | 5,722            | 12,598        | +120.2%   |
-| Requests/sec        | 35.87            | 36.01         | +0.4%     |
-| TTFT mean (s)       | 58.10            | 0.247         | −99.57%   |
-| TTFT p90 (s)        | 107.43           | 0.262         | −99.76%   |
-| ITL mean (ms)       | 44.0             | 47.0          | +6.8%     |
-
-<details>
-<summary><b><i>Click</i></b> to view the per-rate breakdown across the full ladder</summary>
-
-Output tokens/sec — higher is better; TTFT in seconds — lower is better.
-
-| Rate | k8s Output | llm-d Output | k8s TTFT mean | llm-d TTFT mean | k8s TTFT p90 | llm-d TTFT p90 |
-| ---: | ---------: | -----------: | ------------: | --------------: | -----------: | -------------: |
-|  3   | 1,797      | 1,707        | 0.415         | 0.155           | 0.522        | 0.187          |
-| 10   | 4,215      | 4,904        | 0.630         | 0.150           | 1.014        | 0.199          |
-| 15   | 5,381      | 6,887        | 0.881         | 0.155           | 1.593        | 0.225          |
-| 20   | 6,205      | 11,224       | 18.103        | 0.206           | 35.344       | 0.320          |
-| 22   | 5,517      | 11,980       | 20.171        | 0.152           | 39.436       | 0.191          |
-| 25   | 5,965      | 12,548       | 21.842        | 0.158           | 42.813       | 0.200          |
-| 30   | 5,702      | 13,507       | 24.597        | 0.155           | 46.036       | 0.193          |
-| 35   | 5,890      | 13,803       | 24.162        | 0.157           | 45.190       | 0.202          |
-| 40   | 6,336      | 15,593       | 68.673        | 0.494           | 126.238      | 0.272          |
-| 43   | 6,588      | 15,612       | 72.429        | 0.422           | 130.275      | 0.265          |
-| 46   | 6,459      | 15,462       | 70.084        | 0.257           | 129.810      | 0.273          |
-| 49   | 6,265      | 15,607       | 70.659        | 0.200           | 133.718      | 0.267          |
-| 52   | 6,303      | 15,728       | 74.326        | 0.208           | 134.981      | 0.279          |
-| 55   | 6,290      | 15,612       | 72.564        | 0.199           | 134.034      | 0.272          |
-| 57   | 6,089      | 15,667       | 72.329        | 0.211           | 135.023      | 0.293          |
-| 60   | 6,551      | 15,733       | 75.586        | 0.214           | 138.663      | 0.300          |
-
-</details>
-
-### SGLang
-
-The benchmark runs on 16× H100 GPUs, distributed across 8 model servers (2 H100s per server with TP=2).
-
-#### Comparing llm-d Scheduling to a Simple Kubernetes Service
-
-Summary across the full ladder (rates 3 → 60):
-
-| Metric              | k8s service (RR) | llm-d Precise | Δ% vs k8s |
-| :------------------ | :--------------- | :------------ | :-------- |
-| Output tokens/sec   | 4,667            | 9,808         | +110.2%   |
-| Requests/sec        | 4.71             | 9.87          | +109.6%   |
-| TTFT mean (s)       | 69.76            | 0.466         | −99.33%   |
-| TTFT p90 (s)        | 157.64           | 0.672         | −99.57%   |
-| ITL mean (ms)       | 37.9             | 47.4          | +25.1%    |
-
-<details>
-<summary><b><i>Click</i></b> to view the per-rate breakdown across the full ladder</summary>
-
-Output tokens/sec — higher is better; TTFT in seconds — lower is better.
-
-| Rate | k8s Output | llm-d Output | k8s TTFT mean | llm-d TTFT mean | k8s TTFT p90 | llm-d TTFT p90 |
-| ---: | ---------: | -----------: | ------------: | --------------: | -----------: | -------------: |
-|  3   | 1,698      | 1,556        | 0.511         | 0.160           | 0.824        | 0.194          |
-| 10   | 4,359      | 5,049        | 0.849         | 0.178           | 1.459        | 0.218          |
-| 15   | 4,608      | 7,188        | 2.734         | 0.179           | 3.696        | 0.245          |
-| 20   | 5,035      | 11,268       | 27.104        | 0.250           | 62.562       | 0.436          |
-| 22   | 4,684      | 11,945       | 31.012        | 0.202           | 68.263       | 0.328          |
-| 25   | 5,056      | 12,797       | 31.411        | 0.195           | 69.237       | 0.255          |
-| 30   | 4,953      | 13,412       | 34.123        | 0.217           | 72.725       | 0.415          |
-| 35   | 5,601      | 13,707       | 33.340        | 0.215           | 74.115       | 0.310          |
-| 40   | 5,773      | 15,914       | 85.332        | 1.171           | 152.247      | 0.754          |
-| 43   | 5,395      | 16,485       | 87.314        | 0.999           | 157.234      | 0.762          |
-| 46   | 5,794      | 16,376       | 88.325        | 0.514           | 160.052      | 0.716          |
-| 49   | 5,622      | 16,576       | 86.050        | 0.320           | 161.950      | 0.631          |
-| 52   | 5,905      | 16,627       | 89.924        | 0.328           | 162.860      | 0.692          |
-| 55   | 5,714      | 16,534       | 88.526        | 0.367           | 162.728      | 0.802          |
-| 57   | 5,744      | 16,459       | 88.682        | 0.374           | 163.161      | 0.781          |
-| 60   | 5,833      | 16,481       | 88.046        | 0.375           | 161.321      | 0.749          |
-
-</details>
-
-> Benchmark contributed by @liu-cong.
+- **[Qwen/Qwen3-32B on vLLM (16×H100 Precise Routing)](./benchmark-results/vllm-qwen3-32b-h100.md)**: Compares precise prefix routing against round-robin Kubernetes Service load balancing on vLLM.
+- **[Qwen/Qwen3-32B on SGLang (16×H100 Precise Routing)](./benchmark-results/sglang-qwen3-32b-h100.md)**: Compares precise prefix routing against round-robin Kubernetes Service load balancing on SGLang.

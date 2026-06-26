@@ -15,7 +15,7 @@ Before choosing an autoscaling path, you must have a monitoring stack with a met
 
 ### Prometheus
 
-You must have a Prometheus instance running in your cluster. See [Prometheus Setup Guide](../../docs/resources/observability/setup.md) for guidance on setting up Prometheus. Make sure to enable TLS as WVA requires it to securely access the Prometheus API.
+You must have a Prometheus instance running in your cluster. See [Prometheus Setup Guide](../../docs/operations/observability/setup.md) for guidance on setting up Prometheus. Make sure to enable TLS as WVA requires it to securely access the Prometheus API.
 
 ### Kubernetes Metrics Adapter
 

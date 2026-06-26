@@ -1,24 +1,18 @@
 ## precise-prefix-cache-routing guide overrides for the router.
 ## Layer on top of: recipes/router/base.values.yaml
 ##
-## A `vllm launch render` sidecar exposes /v1/completions/render on
-## localhost:8000; the EPP `token-producer` plugin tokenizes prompts via
-## that HTTP endpoint.
+## Tokenization is served by a standalone `vllm launch render` Service deployed
+## from `../render/` (3 replicas), NOT the chart-injected EPP sidecar. The
+## chart's `router.tokenizer` sidecar is off by default, so no override is
+## needed here; the EPP `token-producer` plugin tokenizes prompts over HTTP
+## against that Service (see its `vllm.url` below). This decouples render
+## capacity from EPP replica count and lets the render pool scale independently.
 ##
 ## Pod-discovery mode with active-active HA (replicas: 2). Each replica dials
 ## every vLLM pod's per-pod ZMQ socket; both indexes converge identically.
 ## Scale to a single replica with --set router.epp.replicas=1.
 
 router:
-  tokenizer:
-    enabled: true
-    # Required by llm-d-router chart v0 when tokenizer is enabled;
-    # must match the deployed model server and the token-producer modelName below
-    modelName: Qwen/Qwen3-32B
-    env:
-      - name: HF_HOME
-        value: /tmp/hf/hub
-
   epp:
     replicas: 2
     flags:
@@ -43,9 +37,11 @@ router:
         plugins:
           - type: token-producer
             parameters:
-              modelName: Qwen/Qwen3-32B # Must match router.tokenizer.modelName above
+              modelName: Qwen/Qwen3-32B # Must match the render Service model (../render/) and the deployed model server
               vllm:
-                url: "http://localhost:8000"
+                # Standalone render Service (../render/), not a loopback sidecar.
+                # `precise-prefix-cache-routing-` namePrefix + Service name `render`.
+                url: "http://precise-prefix-cache-routing-render:8000"
           - type: endpoint-notification-source
           - type: precise-prefix-cache-producer # `precise-prefix-cache-scorer` is deprecated
             parameters:

@@ -16,6 +16,7 @@ spec:
             # tokenProcessorConfig.blockSize (default 64); SGLang's knob is
             # --page-size, where vLLM uses --block-size.
             - "--page-size=64"
+            - "--mem-fraction-static=0.9"
             - "--enable-metrics"
             - "--enable-hierarchical-cache"
             - "--hicache-write-policy"

@@ -1,0 +1,22 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ../../../../../recipes/modelserver/base/single-host/default
+  - extra-llm-api-options-configmap.yaml
+
+namePrefix: optimized-baseline-nvidia-gpu-trtllm-
+
+components:
+  - ../../../../../recipes/modelserver/components/images/gpu-trtllm
+
+labels:
+  - pairs:
+      llm-d.ai/model: Qwen3-32B
+      llm-d.ai/guide: optimized-baseline
+      llm-d.ai/accelerator-variant: gpu
+      llm-d.ai/accelerator-vendor: nvidia
+    includeSelectors: true
+    includeTemplates: true
+
+patches:
+  - path: patch-trtllm.yaml

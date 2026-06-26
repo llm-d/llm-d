@@ -1,6 +1,6 @@
 # Proxy
 
-The proxy is the entry point for inference requests in llm-d Router, receiving client traffic and routing it to the optimal model server via the EPP. Supported implementations range from self-managed application load balancers (e.g., Istio, agentgateway) to compliant cloud-managed services, such as Google Cloud's Application Load Balancer. It supports two primary deployment modes: **Standalone Mode**, where a self-managed proxy runs alongside the EPP in the same pod, and **Gateway Mode**, which integrates with L7 load balancers via the Kubernetes Gateway API.
+The proxy is the entry point for inference requests in llm-d Router, receiving client traffic and routing it to the optimal model server via the EPP. Supported implementations range from self-managed application load balancers (e.g., Istio, agentgateway, Envoy AI Gateway) to compliant cloud-managed services, such as Google Cloud's Application Load Balancer. It supports two primary deployment modes: **Standalone Mode**, where a self-managed proxy runs alongside the EPP in the same pod, and **Gateway Mode**, which integrates with L7 load balancers via the Kubernetes Gateway API.
 
 ## Functionality
 
@@ -65,7 +65,7 @@ Gateway Mode, also known as the **Inference Gateway**, leverages the official Ku
 Gateway Mode is targeted at production environments that require:
 
 - **Shared Infrastructure**: A single, shared Gateway can host multiple HTTP/gRPC routes for both inference workloads (represented as `InferencePool`) and traditional applications (standard Kubernetes `Service` objects).
-- Integration with cloud-native L7 networking solutions (Istio, GKE Gateway, agentgateway).
+- Integration with cloud-native L7 networking solutions (Istio, GKE Gateway, agentgateway, Envoy AI Gateway).
 - Multi-cluster load balancing.
 - Advanced traffic management (weighted splitting, mirroring).
 - Exposure of endpoints to external workloads with robust control.
@@ -167,3 +167,4 @@ llm-d provides [Gateway Mode deployment guides](../../../infrastructure/gateway/
 - [Istio](../../../infrastructure/gateway/istio.md)
 - [GKE Gateway](../../../infrastructure/gateway/gke.md)
 - [agentgateway](../../../infrastructure/gateway/agentgateway.md)
+- [Envoy AI Gateway](../../../infrastructure/gateway/envoy-ai-gateway.md)

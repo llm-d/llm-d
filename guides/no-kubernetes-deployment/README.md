@@ -58,10 +58,11 @@ and `no-hit-lru-scorer` (each weight 2), composed by `max-score-picker`.
   `Qwen/Qwen3-32B` on first start.
 
 The EPP binary is built from [`cmd/epp` of the llm-d-router repo][router-repo]
-or pulled from `ghcr.io/llm-d/llm-d-router-endpoint-picker-dev`.
+or pulled from `ghcr.io/llm-d/llm-d-router-endpoint-picker`.
 
 ```bash
-export EPP_IMAGE=ghcr.io/llm-d/llm-d-router-endpoint-picker-dev:main
+export REPO_ROOT=$(realpath $(git rev-parse --show-toplevel))
+source ${REPO_ROOT}/guides/env.sh
 export ENVOY_IMAGE=docker.io/envoyproxy/envoy:distroless-v1.33.2
 export VLLM_IMAGE=vllm/vllm-openai:v0.19.1
 export MODEL=Qwen/Qwen3-32B
@@ -106,8 +107,7 @@ docker run -d --name vllm-0 --gpus '"device=0,1"' \
     "${VLLM_IMAGE}" \
     serve "${MODEL}" \
     --disable-access-log-for-endpoints=/health,/metrics,/v1/models \
-    --tensor-parallel-size=2 \
-    --gpu-memory-utilization=0.95
+    --tensor-parallel-size=2
 ```
 
 The optimized-baseline pod also sets resource requests/limits
@@ -160,7 +160,7 @@ Pick one — the flags are identical.
 ```bash
 docker run -d --name epp --network host \
     -v /etc/epp:/etc/epp:ro \
-    "${EPP_IMAGE}" \
+    "${ROUTER_EPP_IMAGE}:${ROUTER_EPP_VERSION}" \
     --config-file=/etc/epp/config.yaml \
     --pool-name=file-discovery \
     --pool-namespace=default \

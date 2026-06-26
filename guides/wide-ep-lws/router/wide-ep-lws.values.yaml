@@ -21,7 +21,6 @@ router:
         - type: decode-filter
         - type: prefix-cache-scorer
         - type: queue-scorer
-        - type: kv-cache-utilization-scorer
         - type: active-request-scorer
         schedulingProfiles:
         - name: prefill
@@ -31,15 +30,12 @@ router:
             weight: 3
           - pluginRef: queue-scorer
             weight: 2
-          - pluginRef: kv-cache-utilization-scorer
+          - pluginRef: active-request-scorer
             weight: 2
         - name: decode
           plugins:
           - pluginRef: decode-filter
           - pluginRef: active-request-scorer
-            weight: 2
-          - pluginRef: prefix-cache-scorer
-            weight: 3
 
   modelServers:
     # targetPorts must list all 8 DP rank ports so the EPP routes requests

@@ -73,8 +73,6 @@ spec:
       ...
       containers:
       - name: epp
-        image: ghcr.io/llm-d/llm-d-router-endpoint-picker-dev:main
-        imagePullPolicy: IfNotPresent
         args:
         - --pool-name
         - "${POOL_NAME}"
@@ -99,8 +97,6 @@ spec:
       ...
       containers:
       - name: epp
-        image: ghcr.io/llm-d/llm-d-router-endpoint-picker-dev:main
-        imagePullPolicy: IfNotPresent
         args:
         - --pool-name
         - "${POOL_NAME}"

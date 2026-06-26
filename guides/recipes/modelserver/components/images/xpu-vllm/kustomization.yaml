@@ -4,3 +4,23 @@ images:
   - name: REPLACE_MODEL_SERVER_IMAGE
     newName: ghcr.io/llm-d/llm-d-xpu
     newTag: v0.7.0
+
+# Workaround for https://github.com/vllm-project/vllm/issues/44548, required with vLLM v0.20.0+ due to torch 2.11+
+# See: https://github.com/vllm-project/vllm/blob/main/requirements/xpu.txt#L15
+patches:
+  - target:
+      kind: Deployment
+    patch: |-
+      - op: add
+        path: /spec/template/spec/containers/0/env/-
+        value:
+          name: USER
+          value: llm-d
+  - target:
+      kind: LeaderWorkerSet
+    patch: |-
+      - op: add
+        path: /spec/template/spec/containers/0/env/-
+        value:
+          name: USER
+          value: llm-d
