@@ -6,6 +6,7 @@ resources:
 namePrefix: mm-baseline-nvidia-gpu-vllm-
 
 components:
+  - ../../../base/vllm
   - ../../../../../../recipes/modelserver/components/images/gpu-vllm
 
 labels:

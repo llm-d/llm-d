@@ -51,6 +51,7 @@ SIGs operate within the broader llm-d project governance framework defined in [P
 | **[SIG Autoscaling](#sig-autoscaling)** | Traffic-aware autoscaling, resource management, and capacity planning | • [Meeting Recordings and Docs](https://drive.google.com/drive/folders/1iDlTgpFPOrSQn7dWR3uCQLtqhz86HTAi)<br>• [workload-variant-autoscaler Repository](https://github.com/llm-d-incubation/workload-variant-autoscaler) |
 | **[SIG Observability](#sig-observability)** | Monitoring, logging, metrics, and operational visibility | • [Meeting Recordings and Docs](https://drive.google.com/drive/folders/1H-TVTCKYVxUn4fER7xuTPmscNttZCutN)<br>• [llm-d Observability Documentation](https://github.com/llm-d/llm-d/tree/main/docs/operations/observability) |
 | **[SIG RL](#sig-rl)** | Improve SOTA performance for RL workloads | • [Meeting Recordings and Docs](https://drive.google.com/drive/folders/1k9u56_HO5E1uGGgmp0T0y8VhMfzc1P11) |
+| **[SIG Inference Payload Processor](#sig-inference-payload-processor)** | Pluggable request/response payload processing, intelligent model selection, and external model integration | • [Meeting Recordings and Docs](https://drive.google.com/drive/folders/1r2yEYMoBxBbs4KNsk5gdZztRO4npAGEH)<br>• [llm-d-inference-payload-processor Repository](https://github.com/llm-d/llm-d-inference-payload-processor/) |
 
 ## SIG Detailed Descriptions
 
@@ -222,6 +223,26 @@ SIGs operate within the broader llm-d project governance framework defined in [P
 
 - **Slack Channel**: [#sig-rl](https://llm-d.slack.com/archives/C0AGTS0UF5L)
 - **Meeting Recordings and Docs**: [Public Google Drive](https://drive.google.com/drive/folders/1k9u56_HO5E1uGGgmp0T0y8VhMfzc1P11)
+
+### SIG Inference Payload Processor
+
+> **👥 Leadership:** [Nir Rozenbaum](https://github.com/nirrozenbaum), [Maroon Ayoub](https://github.com/vMaroon)
+
+**Charter**: Develop and maintain a pluggable framework for request/response payload processing that enables intelligent model selection, seamless integration with both in-cluster and out-of-cluster models (external models), and extensible request/response transformations.
+
+**Key Areas**:
+  
+  - Unified serving of in-cluster and out-of-cluster models through a single inference gateway
+  - Intelligent model selection via pluggable Filter/Score/Picker pipeline based on runtime signals
+  - Custom payload processing including request/response mutations, field extraction, and header transformations
+  - Circuit breaking and resilience patterns for model endpoints
+  - API key injection and credential management for out-of-cluster model providers
+  - Integration with payload-level systems such as guardrails, content filtering, metering, and usage tracking
+
+**💬 Communication**:
+
+- **Slack Channel**: [#sig-inference-payload-processor](https://llm-d.slack.com/archives/C0B3H230X9T)
+- **Meeting Recordings and Docs**: [Public Google Drive](https://drive.google.com/drive/folders/1r2yEYMoBxBbs4KNsk5gdZztRO4npAGEH)
 
 ## Getting Involved
 
