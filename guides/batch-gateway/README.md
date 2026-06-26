@@ -1,4 +1,4 @@
-# [Experimental] Batch Gateway
+# Batch Gateway
 
 [Batch Gateway](https://github.com/llm-d/llm-d-batch-gateway) provides an OpenAI-compatible Batch API for submitting, tracking, and managing large-scale batch inference jobs. It is designed to efficiently process batch workloads alongside interactive workloads on shared infrastructure.
 
@@ -77,7 +77,7 @@ export INFERENCE_GW_URL="http://infra-inference-scheduling-inference-gateway-ist
 **From OCI Registry:**
 
 ```bash
-helm install batch-gateway oci://ghcr.io/llm-d-incubation/charts/batch-gateway \
+helm install batch-gateway oci://ghcr.io/llm-d/charts/batch-gateway \
   -n ${NAMESPACE} \
   --set processor.config.globalInferenceGateway.url="${INFERENCE_GW_URL}" \
   --set "apiserver.config.batchAPI.passThroughHeaders={Authorization}" \
