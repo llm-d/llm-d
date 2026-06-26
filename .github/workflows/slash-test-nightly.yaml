@@ -12,6 +12,7 @@ name: /test-nightly Slash Command
 #   prefill_pods=<number> Number of prefill pods (default: 1)
 #   harness=<name>        Benchmark harness (default: inference-perf)
 #   dry_run=<bool>        Run in dry-run mode, no benchmark executed (default: false)
+#   cleanup=<bool>        Cleanup the llm-d stack after the run (default: true, set false for debugging)
 #
 # Optional parameters (passed to build-image nightly):
 #   platforms=<list>      Platforms to build (comma-separated: cuda,aws,gb200,xpu,cpu,all; default: cuda)
@@ -136,6 +137,7 @@ jobs:
                   '- `prefill_pods=<number>` — number of prefill pods (default: `1`)',
                   '- `harness=<name>` — benchmark harness (default: `inference-perf`)',
                   '- `dry_run=true` — validate setup without running the benchmark',
+                  '- `cleanup=false` — keep the llm-d stack alive after the run (for debugging)',
                   '',
                   'Optional parameters (applied to `build-image` only):',
                   '- `platforms=<list>` — platforms to build, comma-separated: cuda,aws,gb200,xpu,cpu,all (default: `cuda`)',
@@ -150,13 +152,14 @@ jobs:
             const input = match[1];
 
             // Parse optional key=value parameters (with defaults for quick PR validation)
-            const SUPPORTED_PARAMS = ['workload', 'decode_pods', 'prefill_pods', 'harness', 'platforms', 'dry_run'];
+            const SUPPORTED_PARAMS = ['workload', 'decode_pods', 'prefill_pods', 'harness', 'platforms', 'dry_run', 'cleanup'];
             const DEFAULT_PARAMS = {
               workload: 'sanity_random.yaml',
               decode_pods: '1',
               prefill_pods: '1',
               harness: 'inference-perf',
               platforms: 'cuda',
+              cleanup: 'true',
             };
             const params = { ...DEFAULT_PARAMS };
             const tokens = comment.split(/\s+/).slice(2);
