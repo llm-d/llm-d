@@ -19,7 +19,7 @@ spec:
           llm-d.ai/model: DeepSeek-V2-Lite-Chat
           llm-d.ai/role: prefill
       spec:
-        serviceAccountName: deepseek-v2-lite
+        serviceAccountName: sa
         securityContext:
           fsGroup: 107
           supplementalGroups:
