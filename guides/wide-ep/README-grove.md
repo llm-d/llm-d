@@ -75,11 +75,14 @@ Grove is designed from the ground up for the unique requirements of AI inference
 
 #### Standalone Mode
 
+The Grove router values expose only the Grove routing sidecar port to EPP.
+
 ```bash
 helm install ${GUIDE_NAME} \
     ${ROUTER_STANDALONE_CHART} \
     -f ${REPO_ROOT}/guides/recipes/router/base.values.yaml \
-    -f ${REPO_ROOT}/guides/${GUIDE_NAME}/router/${GUIDE_NAME}.values.yaml \
+    -f ${REPO_ROOT}/guides/${GUIDE_NAME}/router/base.values.yaml \
+    -f ${REPO_ROOT}/guides/${GUIDE_NAME}/router/grove.values.yaml \
     -n ${NAMESPACE} --version ${ROUTER_CHART_VERSION}
 ```
 
@@ -95,7 +98,8 @@ helm install ${GUIDE_NAME} \
     ${ROUTER_GATEWAY_CHART}  \
     -f ${REPO_ROOT}/guides/recipes/router/base.values.yaml \
     -f ${REPO_ROOT}/guides/recipes/router/features/httproute-flags.yaml \
-    -f ${REPO_ROOT}/guides/${GUIDE_NAME}/router/${GUIDE_NAME}.values.yaml \
+    -f ${REPO_ROOT}/guides/${GUIDE_NAME}/router/base.values.yaml \
+    -f ${REPO_ROOT}/guides/${GUIDE_NAME}/router/grove.values.yaml \
     --set provider.name=${PROVIDER_NAME} \
     -n ${NAMESPACE} --version ${ROUTER_CHART_VERSION}
 ```

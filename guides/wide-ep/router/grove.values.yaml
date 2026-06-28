@@ -1,0 +1,5 @@
+router:
+  modelServers:
+    # Grove exposes only the routing sidecar port to EPP.
+    targetPorts:
+      - number: 8000
