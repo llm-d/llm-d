@@ -446,9 +446,6 @@ jobs:
           wait: 120s
 
       - name: Install LWS and DisaggregatedSet CRDs
-        env:
-          # DisaggregatedSet is alpha and not yet available in an LWS release tag.
-          LWS_VERSION: f88b79a53a0e8d810d114387a89454d23ea299bb
         run: .github/scripts/install-disaggregatedset-crds.sh
 
       - name: Kustomize build and dry-run wide-ep-lws overlays
