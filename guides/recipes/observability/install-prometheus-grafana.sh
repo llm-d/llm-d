@@ -444,6 +444,9 @@ $(if [[ -n "$WEB_TLS_CONFIG" ]]; then echo -e "$WEB_TLS_CONFIG"; fi)
     podMonitorSelectorNilUsesHelmValues: false
     podMonitorSelector: {}
     podMonitorNamespaceSelector: {}
+    ruleSelectorNilUsesHelmValues: false
+    ruleSelector: {}
+    ruleNamespaceSelector: {}
     maximumStartupDurationSeconds: 300
     resources:
       limits:
@@ -500,6 +503,13 @@ $(if [[ -n "$WEB_TLS_CONFIG" ]]; then echo -e "$WEB_TLS_CONFIG"; fi)
       matchLabels:
         ${MONITORING_LABEL_KEY}: "${MONITORING_LABEL_VALUE}"
     podMonitorNamespaceSelector:
+      matchLabels:
+        ${MONITORING_LABEL_KEY}: "${MONITORING_LABEL_VALUE}"
+    ruleSelectorNilUsesHelmValues: false
+    ruleSelector:
+      matchLabels:
+        ${MONITORING_LABEL_KEY}: "${MONITORING_LABEL_VALUE}"
+    ruleNamespaceSelector:
       matchLabels:
         ${MONITORING_LABEL_KEY}: "${MONITORING_LABEL_VALUE}"
     maximumStartupDurationSeconds: 300
