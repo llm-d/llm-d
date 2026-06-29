@@ -128,7 +128,7 @@ kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/g
 * To enable Prometheus monitoring on the llm-d router, add `-f ${REPO_ROOT}/guides/recipes/router/features/monitoring.values.yaml` during the [router installation step](#1-deploy-the-llm-d-router).
 * Deploy the monitoring resources for model servers:
 
-> With DP-aware scheduling, each DP rank is availble at podip:port, where each
+> With DP-aware scheduling, each DP rank is available at podip:port, where each
 > port is `rank0`-`rank7`. This guide ships an overlay for the monitoring
 > that scapes each rank's port.
 

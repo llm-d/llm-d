@@ -205,7 +205,7 @@ kubectl apply -k ${REPO_ROOT}/guides/tiered-prefix-cache/modelserver/gpu/vllm/mo
 k apply -k ${REPO_ROOT}/helpers/mooncake-master-store/monitoring
 ```
 
-After that you can deploy the modelserver manfiests:
+After that you can deploy the modelserver manifests:
 
 ```bash
 export MODEL_SERVER=vllm    # vllm 

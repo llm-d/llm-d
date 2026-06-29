@@ -218,7 +218,7 @@ llmdbenchmark \
     --analyze
 ```
 
-When enabled, the analyzer reads `per_request_lifecycle_metrics.json` from each collected experiment and writes PNGs to `<results-dir>/<experiment-id>/analysis/distributions/`:
+When enabled, the analyzer reads `per_request_lifecycle_metrics.json` from each collected experiment and writes `.png` distribution plots to `<results-dir>/<experiment-id>/analysis/distributions/`:
 
 | File | Content |
 |---|---|
