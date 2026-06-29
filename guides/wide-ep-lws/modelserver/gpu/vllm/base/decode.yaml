@@ -1,8 +1,12 @@
 apiVersion: leaderworkerset.x-k8s.io/v1
 kind: LeaderWorkerSet
 metadata:
-  name: wide-ep-lws-nvidia-gpu-vllm-decode
+  name: wide-ep-llm-d-decode
   labels:
+    llm-d.ai/inference-serving: "true"
+    llm-d.ai/guide: "wide-ep-lws"
+    llm-d.ai/accelerator-variant: "gpu"
+    llm-d.ai/accelerator-vendor: "nvidia"
     llm-d.ai/model: DeepSeek-R1-0528
     llm-d.ai/role: decode
 spec:
@@ -23,29 +27,43 @@ spec:
         initContainers:
           - name: routing-proxy
             args:
+              # sidecar proxy is started with --port 8000, --vllm-port 8200, and --data-parallel-size 8,
+              # so it listens on ports in the range [port:port+data-parallel-size-1] and forwards
+              # requests each to the corresponding vllm port.
               - --port=8000
               - --vllm-port=8200
+              - --data-parallel-size=8
               - --kv-connector=nixlv2
               - --zap-log-level=1
               - --secure-proxy=false
               - --enable-prefiller-sampling
             image: ghcr.io/llm-d/llm-d-router-disagg-sidecar:v0.9.0
             imagePullPolicy: Always
-            # To enable tracing, uncomment:
-            # env:
-            #   - name: OTEL_SERVICE_NAME
-            #     value: "routing-proxy"
-            #   - name: OTEL_EXPORTER_OTLP_ENDPOINT
-            #     value: "http://otel-collector:4317"
-            #   - name: OTEL_TRACES_SAMPLER
-            #     value: "parentbased_traceidratio"
-            #   - name: OTEL_TRACES_SAMPLER_ARG
-            #     value: "0.1"
             ports:
               - containerPort: 8000
-                name: sidecar
+                name: rank0
                 protocol: TCP
-            resources: {}
+              - containerPort: 8001
+                name: rank1
+                protocol: TCP
+              - containerPort: 8002
+                name: rank2
+                protocol: TCP
+              - containerPort: 8003
+                name: rank3
+                protocol: TCP
+              - containerPort: 8004
+                name: rank4
+                protocol: TCP
+              - containerPort: 8005
+                name: rank5
+                protocol: TCP
+              - containerPort: 8006
+                name: rank6
+                protocol: TCP
+              - containerPort: 8007
+                name: rank7
+                protocol: TCP
             restartPolicy: Always
             securityContext:
               allowPrivilegeEscalation: false
@@ -61,7 +79,7 @@ spec:
             emptyDir: {}
         containers:
           - name: vllm
-            image: ghcr.io/llm-d/llm-d-cuda:v0.7.0
+            image: ghcr.io/llm-d/llm-d-cuda-dev:sha-a1bcf21
             securityContext:
               capabilities:
                 add:
@@ -80,22 +98,18 @@ spec:
                 find /dev/shm -type f -delete
 
                 #################
-                # RUN vLLM decode worker
+                # RUN vLLM decode workers via DP Supervisor
+                # The supervisor automatically assigns CUDA_VISIBLE_DEVICES and
+                # --data-parallel-rank to each child process based on local_rank.
                 #################
                 START_RANK=$(( ${LWS_WORKER_INDEX:-0} * DP_SIZE_LOCAL ))
-
-                # --data-parallel-hybrid-lb: Use external load balancing across nodes, and internal load balancing within a node
-                # --enable-expert-parallel:  Use TPxDP in attention, EP in MoE layers
-                # --async-scheduling: Reduce white space between engine steps
-                # --enable-dbo:  Dual batch overlap (DBO) overlaps compute with collective communication.
 
                 exec vllm serve \
                   deepseek-ai/DeepSeek-R1-0528 \
                   --port 8200 \
-                  --trust-remote-code \
-                  --api-server-count 1 \
                   --disable-access-log-for-endpoints=/health,/metrics \
-                  --data-parallel-hybrid-lb \
+                  --data-parallel-multi-port-external-lb \
+                  --data-parallel-supervisor-port=8208 \
                   --enable-expert-parallel \
                   --tensor-parallel-size $TP_SIZE \
                   --max-num-batched-tokens ${MAX_TOKENS} \
@@ -110,14 +124,8 @@ spec:
                                           "kv_load_failure_policy":"fail"}' \
                   --enable-dbo \
                   --dbo-decode-token-threshold 32 \
-                  --enable-eplb \
-                  --eplb-config '{"window_size":"1000",
-                                  "step_interval":"3000",
-                                  "num_redundant_experts":"32",
-                                  "log_balancedness":"False"}' \
                   --all2all-backend deepep_low_latency \
-                  --moe-backend deep_gemm \
-                  --kv-cache-memory-bytes=${KV_CACHE_MEMORY_BYTES-}
+                  --moe-backend deep_gemm
                   # To enable tracing, add:
                   # --otlp-traces-endpoint http://otel-collector:4317 \
                   # --collect-detailed-traces all
@@ -136,13 +144,6 @@ spec:
               #   value: "parentbased_traceidratio"
               # - name: OTEL_TRACES_SAMPLER_ARG
               #   value: "0.1"
-              # NOTE: vllm/vllm-openai:v0.19.1 is a cu129 image but has
-              # nixl-cu13 and nixl-cu12 installed, which causes NIXL to
-              # to pick up the wrong UCX library. If you are deploying
-              # a cu13 (e.g. vllm/vllm-openai:v0.19.1-x86_64-cu130),
-              # comment out this path.
-              # - name: UCX_MODULE_DIR
-              #   value: /usr/local/lib/python3.12/dist-packages/nixl_cu12.libs/ucx
               - name: VLLM_MEMORY_PROFILER_ESTIMATE_CUDAGRAPHS
                 value: "1"
               - name: MAX_TOKENS
@@ -196,15 +197,37 @@ spec:
 
             ports:
               - containerPort: 8200
-                name: modelserver
+                name: vllm-rank0
                 protocol: TCP
-              - containerPort: 5600
-                name: nixl
+              - containerPort: 8201
+                name: vllm-rank1
                 protocol: TCP
+              - containerPort: 8202
+                name: vllm-rank2
+                protocol: TCP
+              - containerPort: 8203
+                name: vllm-rank3
+                protocol: TCP
+              - containerPort: 8204
+                name: vllm-rank4
+                protocol: TCP
+              - containerPort: 8205
+                name: vllm-rank5
+                protocol: TCP
+              - containerPort: 8206
+                name: vllm-rank6
+                protocol: TCP
+              - containerPort: 8207
+                name: vllm-rank7
+                protocol: TCP
+              - containerPort: 8208
+                name: supervisor
+                protocol: TCP
+
             startupProbe:
               httpGet:
                 path: /health
-                port: modelserver
+                port: supervisor
               initialDelaySeconds: 0
               periodSeconds: 1
               timeoutSeconds: 5
@@ -212,14 +235,14 @@ spec:
             livenessProbe:
               httpGet:
                 path: /health
-                port: modelserver
+                port: supervisor
               periodSeconds: 30
               timeoutSeconds: 5
               failureThreshold: 3
             readinessProbe:
               httpGet:
-                path: /v1/models
-                port: modelserver
+                path: /readyz
+                port: supervisor
               periodSeconds: 10
               timeoutSeconds: 5
               failureThreshold: 3

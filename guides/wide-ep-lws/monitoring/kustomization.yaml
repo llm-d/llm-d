@@ -1,0 +1,68 @@
+apiVersion: kustomize.config.k8s.io/v1alpha1
+kind: Component
+
+# Wide-EP / DP-aware monitoring overlay.
+#
+# This is an overlay of the generic recipes/modelserver/components/monitoring-pd
+# component, which defines the decode and prefill PodMonitors. That component
+# scrapes a single "modelserver" port, but wide expert parallelism runs
+# data-parallel ranks behind a routing sidecar, exposing one metrics port per
+# rank (rank0-rank7).
+#
+# The patch below replaces the metrics endpoints on both PodMonitors so they
+# scrape all 8 ranks (at a tighter 5s interval), and the labels transformer
+# scopes the PodMonitors to this guide's pods.
+components:
+  - ../../recipes/modelserver/components/monitoring-pd
+
+labels:
+  - pairs:
+      llm-d.ai/inference-serving: "true"
+      llm-d.ai/guide: wide-ep-lws
+      llm-d.ai/model: DeepSeek-R1-0528
+    includeSelectors: true
+    fields:
+      - group: monitoring.coreos.com
+        version: v1
+        kind: PodMonitor
+        path: metadata/labels
+        create: true
+      - group: monitoring.coreos.com
+        version: v1
+        kind: PodMonitor
+        path: spec/selector/matchLabels
+        create: true
+
+patches:
+  - target:
+      group: monitoring.coreos.com
+      version: v1
+      kind: PodMonitor
+    patch: |-
+      - op: replace
+        path: /spec/podMetricsEndpoints
+        value:
+          - port: rank0
+            path: /metrics
+            interval: 5s
+          - port: rank1
+            path: /metrics
+            interval: 5s
+          - port: rank2
+            path: /metrics
+            interval: 5s
+          - port: rank3
+            path: /metrics
+            interval: 5s
+          - port: rank4
+            path: /metrics
+            interval: 5s
+          - port: rank5
+            path: /metrics
+            interval: 5s
+          - port: rank6
+            path: /metrics
+            interval: 5s
+          - port: rank7
+            path: /metrics
+            interval: 5s

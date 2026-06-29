@@ -366,7 +366,7 @@ ${NVSHMEM_DIR}/lib:${NVSHMEM_DIR}/lib64:\
 /opt/vllm/lib/python${PYTHON_VERSION}/site-packages/nvidia/nvshmem/lib:\
 /opt/vllm/lib64/python${PYTHON_VERSION}/site-packages/torch/lib:\
 /usr/local/nvidia/lib:/usr/local/nvidia/lib64:\
-${CUDA_HOME}/lib64:${CUDA_HOME}/compat:\
+${CUDA_HOME}/lib64:\
 ${EFA_PREFIX}/lib:${EFA_PREFIX}/lib64:\
 ${UCX_PREFIX}/lib:${UCX_PREFIX}/lib64:\
 ${UCCL_PREFIX}/lib:\

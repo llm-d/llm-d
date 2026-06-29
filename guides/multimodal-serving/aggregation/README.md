@@ -25,6 +25,7 @@ This guide includes configurations for the following accelerators and inference 
 | Backend            | Directory                  | Notes                                      |
 | ------------------ | -------------------------- | ------------------------------------------ |
 | NVIDIA GPU         | `modelserver/gpu/vllm/${INFRA_PROVIDER}/`    | Default configuration (`INFRA_PROVIDER` options: `base`, `gke`)                      |
+| Intel XPU          | `modelserver/xpu/vllm/`    | Intel Arc Pro B60            |
 
 ---
 
@@ -110,6 +111,19 @@ export INFRA_PROVIDER=gke # base | gke
 kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/multimodal-serving/${GUIDE_NAME}/modelserver/gpu/vllm/${INFRA_PROVIDER}/
 ```
 
+<details>
+<summary><h4>Other Accelerators</h4></summary>
+
+```bash
+# Intel XPU
+kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/multimodal-serving/${GUIDE_NAME}/modelserver/xpu/vllm/
+```
+
+> [!NOTE]
+> Intel XPU deployments use Kubernetes Dynamic Resource Allocation (DRA) with `resource.k8s.io/v1` `ResourceClaimTemplate` resources and per-container `resources.claims`. Ensure your cluster supports DRA, has the Intel device plugin/DRA components installed, and exposes the `gpu.intel.com` `DeviceClass` before applying this overlay.
+
+</details>
+
 ### 3. (Optional) Enable monitoring
 
 - Install the [Monitoring stack](../../../docs/operations/observability).
@@ -185,6 +199,8 @@ To tear down and clean up all deployed resources:
 ```bash
 helm uninstall ${GUIDE_NAME} -n ${NAMESPACE}
 kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/multimodal-serving/${GUIDE_NAME}/modelserver/gpu/vllm/${INFRA_PROVIDER}/
+# For Intel XPU:
+# kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/multimodal-serving/${GUIDE_NAME}/modelserver/xpu/vllm/
 kubectl delete namespace ${NAMESPACE}
 ```
 
