@@ -15,9 +15,11 @@ The following Prometheus metrics are produced by OpenCost after install:
 
 | Metric | Labels | Description |
 |---|---|---|
-| `llm_total_cost` | `model_name`, `model_version`, `namespace`, `cost_basis` | Instantaneous hourly infrastructure cost rate ($/hour) attributed to the model — not a cumulative counter. `cost_basis` is `allocation` (max(request,usage) × price + idle/shared share; use for chargeback) or `usage` (actual consumption only, excludes idle and shared infra; use for efficiency analysis) |
-| `llm_cost_per_million_tokens` | `model_name`, `model_version`, `namespace`, `cost_basis`, `phase`, `allocation_method` | Cost per 1M tokens. `phase` is empty for blended (input+output combined), `prompt` for input-only, or `generation` for output-only. `allocation_method` is `compute_time` (split by vLLM prefill/decode time), `prefix_caching_off` (time-based split, prefix caching disabled), `multiplier` (fixed 2.5× ratio, timing metrics unavailable), or empty (no tokens processed or join failed) |
-| `llm_cache_savings_fraction` | `model_name`, `model_version`, `namespace` | Fraction of prompt tokens served from the KV cache (0–1); zero when prefix caching is disabled, no cache hits occurred, or `vllm:prefix_cache_hits_total` is missing |
+| `llm_total_hourly_cost` | `model_name`, `model_version`, `namespace`, `cost_basis`, `workload_type` | Instantaneous hourly infrastructure cost rate ($/hour) attributed to the model — not a cumulative counter. `cost_basis` is `allocation` (max(request,usage) × price + idle/shared share; use for chargeback) or `usage` (actual consumption only, excludes idle and shared infra; use for efficiency analysis) |
+| `llm_cost_per_million_tokens` | `model_name`, `model_version`, `namespace`, `cost_basis`, `phase`, `allocation_method`, `workload_type` | Cost per 1M tokens. `phase` is empty for blended (input+output combined), `prompt` for input-only, or `generation` for output-only. `allocation_method` is `compute_time` (split by vLLM prefill/decode time), `prefix_caching_off` (time-based split, prefix caching disabled), `multiplier` (fixed 2.5× ratio, timing metrics unavailable), or empty (no tokens processed or join failed) |
+| `llm_cache_savings_fraction` | `model_name`, `model_version`, `namespace`, `workload_type` | Fraction of prompt tokens served from the KV cache (0–1); zero when prefix caching is disabled, no cache hits occurred, or `vllm:prefix_cache_hits_total` is missing |
+
+**Note:** The `workload_type` label is currently always `inference`. Future values may include `training`, `fine-tuning`, etc.
 
 All metrics are available on OpenCost's `/metrics` endpoint (port 9003) and, if a ServiceMonitor is deployed, in Prometheus.
 
@@ -130,7 +132,7 @@ Expected output includes lines like:
 
 ```
 llm_cost_per_million_tokens{model_name="Qwen3-32B",model_version="unknown",namespace="llm-d",cost_basis="allocation",phase="",allocation_method=""} 4.21
-llm_total_cost{model_name="Qwen3-32B",model_version="unknown",namespace="llm-d",cost_basis="allocation"} 0.037
+llm_total_hourly_cost{model_name="Qwen3-32B",model_version="unknown",namespace="llm-d",cost_basis="allocation"} 0.037
 ```
 
 If the metrics are empty, generate some traffic first (the module requires at least one completed request window).

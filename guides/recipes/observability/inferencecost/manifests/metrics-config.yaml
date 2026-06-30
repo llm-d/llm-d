@@ -14,6 +14,7 @@ data:
         "llm_d_ai_accelerator_variant": true,
         "llm_d_ai_engine_type": true,
         "llm_d_ai_inference_serving": true,
-        "llm_d_ai_managed": true
+        "llm_d_ai_managed": true,
+        "llm_d_ai_inference_shared": true
       }
     }
