@@ -84,7 +84,7 @@ export REPO_ROOT=$(realpath $(git rev-parse --show-toplevel))
 5. Install WVA CRDs:
 
     ```bash
-    kubectl apply -k github.com/llm-d/llm-d-workload-variant-autoscaler/config/base/crd?ref=release-0.8
+    kubectl apply -k github.com/llm-d/llm-d-workload-variant-autoscaler/config/base/crd?ref=main
     ```
 
 6. Install WVA controller with Kustomize:
