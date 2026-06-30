@@ -27,7 +27,7 @@ We currently offer the following:
 * [Flow Control](./flow-control.md): Intelligent request queuing for multi-tenant deployments and managing traffic spikes.
 * [Workload Autoscaling](./workload-autoscaling/README.md) - autoscale the LLM service via proactive, SLO-aware signals that reflect the true state of the inference system — queue depth, in-flight request counts, and KV cache pressure — so that capacity can be added before end-user latency is impacted.
 * [Rollouts](./rollouts/README.md) - perform incremental rollout operations for LoRA adapters, base models, and model server versions with minimal service disruption using traffic splitting and gradual deployment strategies.
-* [Serving Multiple Inference Pools](./multi-model/serving-multiple-inference-pools.md) - deploy multiple large language models (LLMs) in a cluster to support different workloads using body-based routing to route requests to the appropriate model based on the model name in the request.
+* [Serving Multiple Inference Pools](./multi-model/serving-multiple-inference-pools.md) - deploy multiple large language models (LLMs) in a cluster to support different workloads using inference-payload-processor (IPP) to route requests to the appropriate model based on the model name in the request.
 
 ## Experimental Guides
 

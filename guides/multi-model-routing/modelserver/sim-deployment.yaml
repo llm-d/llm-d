@@ -48,7 +48,7 @@ kind: ConfigMap
 metadata:
   name: deepseek-adapters-allowlist
   labels:
-    inference.networking.k8s.io/bbr-managed: "true"
+    inference.llm-d.ai/ipp-managed: "true"
 data:
   baseModel: deepseek/DeepSeek-r1
   adapters: |

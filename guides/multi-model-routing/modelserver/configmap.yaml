@@ -3,7 +3,7 @@ kind: ConfigMap
 metadata:
   name: vllm-qwen3-32b-adapters-allowlist
   labels:
-    inference.networking.k8s.io/bbr-managed: "true"
+    inference.llm-d.ai/ipp-managed: "true"
 data:
   baseModel: Qwen/Qwen3-32B
   adapters: |
