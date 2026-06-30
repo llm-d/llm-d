@@ -4,7 +4,10 @@ Traditional autoscaling indicators like resource utilization metrics (CPU/GPU) a
 
 Effective LLM autoscaling requires proactive, SLO-aware signals that reflect the true state of the inference system — queue depth, in-flight request counts, and KV cache pressure — so that capacity can be added before end-user latency is impacted.
 
-The llm-d stack provides two primary paths for workload autoscaling, both leveraging standard Kubernetes scaling primitives like the HPA and KEDA.
+The llm-d stack provides two primary paths for workload autoscaling. The EPP
+path uses an HPA created and managed by KEDA. The WVA path publishes
+desired-replica signals that can be consumed by an HPA or KEDA, depending on
+the deployment configuration.
 
 ## Deploy
 
@@ -12,13 +15,15 @@ See the [workload autoscaling guide](../../../guides/workload-autoscaling) for m
 
 ## Strategies
 
-### HPA + EPP Metrics
+### KEDA + EPP Metrics
 
-This path integrates the Kubernetes Horizontal Pod Autoscaler (HPA) with signals emitted directly by the Endpoint Picker (EPP). By using metrics like queue depth and running request counts, the HPA can scale out before users experience high latency and scale in when capacity is genuinely idle.
+This path configures KEDA's Prometheus scaler with signals emitted directly by
+the Endpoint Picker (EPP). By using metrics such as queue depth and running
+request counts, KEDA's generated HPA reacts to queueing and active request concurrency, then reduces replicas when demand falls.
 
-* **Best for**: Deployments on homogeneous hardware where each model scales independently.
+* **Best for**: Deployments on homogeneous hardware where each target model-server pool can be isolated by metrics and scaled independently.
 * **Signals**: EPP metrics (queue depth, running request count).
-* **Components**: Standard Kubernetes HPA and Prometheus Adapter.
+* **Components**: KEDA and Prometheus; Prometheus Adapter is not required.
 
 ### Workload Variant Autoscaler (WVA)
 
@@ -30,9 +35,9 @@ The Workload Variant Autoscaler (WVA) is designed for operators running multiple
 
 ## Choosing a Path
 
-| Feature | HPA + EPP Metrics | Workload Variant Autoscaler (WVA) |
+| Feature | KEDA + EPP Metrics | Workload Variant Autoscaler (WVA) |
 |---|---|---|
 | **Primary Goal** | Load-based scaling | Cost-optimized scaling across hardware |
 | **Heterogeneous Support** | Limited | Native |
-| **Complexity** | Low (standard K8s) | Medium (requires WVA controller) |
+| **Complexity** | Low (requires KEDA and Prometheus) | Medium (requires WVA controller) |
 | **Scale to Zero** | Supported | Supported |

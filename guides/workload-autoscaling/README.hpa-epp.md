@@ -1,194 +1,383 @@
-# Autoscaling Workloads with HPA and EPP Metrics
+# Autoscaling Workloads with KEDA and EPP Metrics
 
-This guide explains how to configure autoscaling for LLM workloads by integrating the
-Kubernetes Horizontal Pod Autoscaler (HPA) with metrics emitted by the Endpoint Picker (EPP).
-By using gateway-level signals like queue size and active request counts,
-you can achieve more responsive and model-aware scaling than with traditional
-CPU/Memory metrics.
+This guide configures [KEDA](https://keda.sh/) to scale an llm-d model server
+Deployment from demand signals emitted by the Endpoint Picker (EPP). It keeps
+the existing file name for link compatibility; KEDA is the recommended and
+user-facing autoscaling path described here.
 
 ## Overview
 
-Traditional autoscaling often relies on resource utilization (CPU/GPU). However, for LLM
-inference, resource usage is often "pegged" at 100% during active batches, making it a poor
-indicator of true load.
+CPU and GPU utilization are poor scaling signals for LLM inference because an
+active accelerator can remain highly utilized at both low and high request
+concurrency. EPP exposes signals that describe inference demand directly:
 
-The llm-d architecture solves this by using the Endpoint Picker (EPP) [flow control metrics](https://gateway-api-inference-extension.sigs.k8s.io/guides/metrics-and-observability/#flow-control-metrics). These metrics reflect the actual state of the inference queue and the health of the model pool, allowing the HPA to scale out before users experience high latency and scale in when capacity is idle.
-
-## Metric Definitions and Collection
-
-Follow the [optimized-baseline](../optimized-baseline/README.md) well-lit path to set up an LLM deployment. By default, llm-d deployments include the necessary ServiceMonitors to scrape EPP metrics.
-
-- **Metric Collection:** For details on how to ensure scraping is active, see the [EPP Metrics guide](../../docs/operations/observability/metrics.md#step-3-enable-epp-metrics).
-- **Metric Definitions:** For a list of metrics emitted by EPP refer [here](https://gateway-api-inference-extension.sigs.k8s.io/guides/metrics-and-observability/#exposed-metrics).
-
-### Recommended Metrics for Scaling
-
-| Metric Name | Description | Recommended Usage |
+| Metric | Meaning | Scaling role |
 |---|---|---|
-| `llm_d_epp_flow_control_queue_size` | The number of requests currently buffered in the gateway waiting for an available backend. | Scale-out signal: High queue size indicates that the existing replicas are saturated. |
-| `inference_objective_running_requests` | The number of concurrent requests being processed by the model pool. | Capacity signal: Useful for tracking total throughput. |
+| `llm_d_epp_flow_control_queue_size` | Requests waiting in EPP Flow Control for backend capacity | Reacts to saturation and sudden bursts |
+| `inference_objective_running_requests` | Requests currently being processed for a model | Maintains a target concurrency per replica |
+
+The scaling path is:
+
+1. EPP exposes metrics on its metrics endpoint.
+2. Prometheus scrapes the EPP through a `ServiceMonitor`.
+3. KEDA's Prometheus scaler evaluates the configured PromQL queries.
+4. KEDA exposes the evaluated values through its metrics server to the
+   Kubernetes External Metrics API.
+5. KEDA creates and manages a Kubernetes Horizontal Pod Autoscaler (HPA),
+   which consumes those external metrics and changes the target Deployment's
+   replica count.
+
+Do not create a separate HPA for a Deployment managed by a KEDA
+`ScaledObject`. Two HPAs targeting the same Deployment will make conflicting
+scaling decisions. The HPA remains visible for inspection, but KEDA owns it.
 
 ## Prerequisites
 
-Make sure to enable monitoring as described in the [autoscaling prerequisites](README.md#prerequisites) section.
+1. Complete the [optimized-baseline guide](../optimized-baseline/README.md) and
+   set the guide environment:
 
-## Configuration Guide
+   ```bash
+   export REPO_ROOT=$(realpath $(git rev-parse --show-toplevel))
+   source ${REPO_ROOT}/guides/env.sh
+   export NAMESPACE=llm-d-optimized-baseline
+   export MONITORING_NAMESPACE=llm-d-monitoring
+   export KEDA_NAMESPACE=keda
+   ```
 
-### 1. Enable Flow Control in EPP
+2. Install the bundled kube-prometheus-stack with TLS enabled. The checked-in
+   `ScaledObject` and authentication example use this installation:
 
-Enable the Flow Control layer by adding the `flowControl` FeatureGate to your `EndpointPickerConfig`:
+   ```bash
+   ${REPO_ROOT}/guides/recipes/observability/install-prometheus-grafana.sh \
+     --enable-tls
+   ```
 
-```yaml
-apiVersion: config.x-k8s.io/v1alpha1
-kind: EndpointPickerConfig
-featureGates:
-  - "flowControl"
-# ...
-```
+   See the
+   [observability setup guide](../../docs/operations/observability/setup.md)
+   for additional installation details.
 
-Follow the [flow control configuration guide](https://gateway-api-inference-extension.sigs.k8s.io/guides/flow-control/#1-enabling-the-layer) to tune the saturation detector in your EPP deployment as needed.
+3. [Install KEDA](https://keda.sh/docs/2.20/deploy/) and confirm its operator
+   and CRDs are available:
 
-### 2. Configure Prometheus Adapter Rules
+   ```bash
+   kubectl get crd scaledobjects.keda.sh
+   kubectl get pods -n ${KEDA_NAMESPACE}
+   ```
 
-Create a values file `epp-adapter-values.yaml` with the following rules:
+4. Upgrade the optimized-baseline router with the KEDA+EPP values overlay. The
+   overlay enables Flow Control and Prometheus monitoring. When monitoring is
+   enabled, the router chart exposes the EPP metrics port and creates the
+   `ServiceMonitor` that selects it:
 
-```yaml
-rules:
-  external:
-    - seriesQuery: 'llm_d_epp_flow_control_queue_size'
-      resources:
-        overrides:
-          namespace:
-            resource: "namespace"
-          namespaced: false
-      name:
-        as: "epp_queue_size"
-      metricsQuery: 'sum(llm_d_epp_flow_control_queue_size{inference_pool="qwen/qwen3-32b"})'
-    - seriesQuery: 'inference_objective_running_requests'
-      resources:
-        overrides:
-          namespace:
-            resource: "namespace"
-          namespaced: false
-      name:
-        as: "epp_running_requests"
-      metricsQuery: 'sum(inference_objective_running_requests{top_level_controller_name="qwen/qwen3-32b-epp"})'
-```
+   ```bash
+   helm upgrade optimized-baseline \
+     ${ROUTER_STANDALONE_CHART} \
+     -f ${REPO_ROOT}/guides/recipes/router/base.values.yaml \
+     -f ${REPO_ROOT}/guides/optimized-baseline/router/optimized-baseline.values.yaml \
+     -f ${REPO_ROOT}/guides/workload-autoscaling/keda-epp/router.values.yaml \
+     -n ${NAMESPACE} --version ${ROUTER_CHART_VERSION}
+   ```
 
-> [!NOTE]
-> Replace `qwen/qwen3-32b` and `qwen/qwen3-32b-epp` with your own deployment names.
+   Verify Flow Control and monitoring:
 
-Apply the rules by upgrading the adapter:
+   ```bash
+   kubectl logs deployment/optimized-baseline-epp -n ${NAMESPACE} | \
+     grep "Flow Control enabled"
+   kubectl get servicemonitor -n ${NAMESPACE}
+   ```
 
-```bash
-helm upgrade prometheus-adapter prometheus-community/prometheus-adapter \
-  --namespace ${MONITORING_NAMESPACE} \
-  --reuse-values \
-  --values epp-adapter-values.yaml
-```
+### OpenShift environments
 
-Verify the metrics are visible to the Kubernetes API:
+The main walkthrough above targets the bundled kube-prometheus-stack and an
+upstream KEDA installation in the `keda` namespace. OpenShift installations
+that use the Custom Metrics Autoscaler Operator and cluster monitoring access
+Prometheus through platform-specific KEDA/CMA and Thanos configuration.
 
-```bash
-kubectl get --raw "/apis/external.metrics.k8s.io/v1beta1/namespaces/default/epp_queue_size"
-kubectl get --raw "/apis/external.metrics.k8s.io/v1beta1/namespaces/default/epp_running_requests"
-```
+Set `KEDA_NAMESPACE` to the actual CMA/KEDA operator namespace, and replace the
+example Prometheus URL and `TriggerAuthentication` with the appropriate Thanos
+bearer-token and CA configuration for the cluster. Exact service names,
+credentials, and trust configuration are platform-specific and need to be
+confirmed with the platform administrator or maintainers; this guide does not
+provide validated OpenShift commands.
 
-A successful response returns a JSON object with the current metric value. A `404` means
-the adapter rules are not applied correctly or the Prometheus series does not exist yet —
-re-check the `metricsQuery` label values against your live Prometheus data.
+## Validate EPP Metrics in Prometheus
 
-### 3. Create the HPA Resource
+First confirm that EPP exposes the metrics directly.
 
-Below is a sample HPA configuration `hpa.yaml` that uses the dual-metric setup to scale your model server based on both the queue size and current request load.
-
-```yaml
-apiVersion: autoscaling/v2
-kind: HorizontalPodAutoscaler
-metadata:
-  name: qwen-qwen3-32b-hpa
-  namespace: default
-spec:
-  scaleTargetRef:
-    apiVersion: apps/v1
-    kind: Deployment
-    name: qwen-qwen3-32b
-  minReplicas: 1
-  maxReplicas: 3
-  metrics:
-  - type: External
-    external:
-      metric:
-        name: epp_queue_size
-      target:
-        type: Value
-        value: "250"
-  - type: External
-    external:
-      metric:
-        name: epp_running_requests
-      target:
-        type: AverageValue
-        averageValue: "250"
-  behavior:
-    scaleUp:
-      stabilizationWindowSeconds: 0
-      policies:
-      - type: Percent
-        value: 100
-        periodSeconds: 15
-    scaleDown:
-      stabilizationWindowSeconds: 300 # 5 min cooldown to prevent flapping
-      policies:
-      - type: Percent
-        value: 100
-        periodSeconds: 15
-```
-
-> [!NOTE]
-> The target values (`250`) used here are examples and must be tuned to your model and hardware. A good starting point is to run your model server at a known concurrency level, observe the actual metric values using `kubectl describe hpa`, and set the target below the concurrency at which your model's latency begins to degrade.
-
-> [!NOTE]
-> Although `epp_queue_size` and `epp_running_requests` originate from the EPP pod, we use `type: External` rather than `type: Pods`. This is because `type: Pods` requires metrics to come from the pods being scaled — in this case the model server pods. Since the EPP is a separate deployment acting as a gateway and emitting metrics on behalf of the model server pool, we treat its metrics as external signals.
-
-### 4. Verify the HPA
-
-Apply the manifest and confirm the HPA is reading metrics:
+In terminal 1, keep the port-forward running:
 
 ```bash
-kubectl apply -f hpa.yaml
-kubectl get hpa qwen-qwen3-32b-hpa -n default
+kubectl port-forward -n ${NAMESPACE} \
+  service/optimized-baseline-epp 9091:9090
 ```
 
-A successful deployment would look like this:
+In terminal 2, query the endpoint:
 
+```bash
+curl -s http://localhost:9091/metrics | \
+  grep -E 'llm_d_epp_flow_control_queue_size|inference_objective_running_requests'
 ```
-NAME                          REFERENCE                            TARGETS              MINPODS   MAXPODS   REPLICAS   AGE
-qwen-qwen3-32b-hpa   Deployment/qwen-qwen3-32b   0/250, 0/250 (avg)   1         3         1          5m
+
+Then stop the EPP port-forward. In terminal 1, open the Prometheus query UI:
+
+```bash
+kubectl port-forward -n ${MONITORING_NAMESPACE} \
+  service/llmd-kube-prometheus-stack-prometheus 9090:9090
 ```
 
-## Scale to Zero
+Open `https://localhost:9090`, then run:
 
-To unlock significant cost savings on GPU resources, you can scale your deployment to zero pods when there is no traffic. With the EPP Flow Control Layer, scale-from-zero is now seamless:
+```promql
+sum(llm_d_epp_flow_control_queue_size{namespace="llm-d-optimized-baseline", model_name="Qwen/Qwen3-32B"})
+```
 
-- **Request Queueing:** When traffic hits a deployment with 0 replicas, the EPP flow control layer automatically queues the requests in its internal buffers.
-- **Late Binding:** The EPP "holds" these requests while the autoscaler provisions the pods. Once the model server becomes ready, the EPP immediately dispatches the queued requests.
-- **User Experience:** Users will see a latency spike (corresponding to the pod's startup time) but will not receive 5xx errors during the scaling event.
+```promql
+sum(inference_objective_running_requests{namespace="llm-d-optimized-baseline", model_name="Qwen/Qwen3-32B"})
+```
 
-There are a couple of options to leverage the scale to/from zero feature.
+Each query must return a scalar or a single-element vector. Inspect the raw
+series in Prometheus before continuing and update the `namespace`,
+`model_name`, or `inference_pool` selectors for your deployment. Scrape-time
+labels vary between monitoring installations; do not copy selectors without
+checking the live series.
 
-### Option 1: Native HPA
+The metrics may remain at zero until requests are sent. If a series is absent,
+check the Prometheus target first rather than treating absence as zero.
 
-HPA supports scaling to zero through the `HPAScaleToZero` alpha feature flag. This is the recommended path for a native Kubernetes experience.
+## Configure Prometheus Authentication
 
-1. **Enable Feature Gate:** Follow the [Kubernetes Alpha Feature Guide](https://kubernetes.io/docs/reference/command-line-tools-reference/feature-gates/) to enable the `HPAScaleToZero` feature gate on your cluster.
-2. **Configure HPA:** Set `minReplicas: 0` in your HPA manifest.
-3. **Outcome:** The HPA will de-provision all pods when metrics hit zero and re-provision them as soon as `epp_queue_size > 0`.
+The sample `ScaledObject` uses the TLS-enabled Prometheus service installed by
+the llm-d observability setup. Copy its CA into the workload namespace:
 
-### Option 2: KEDA
+```bash
+kubectl create secret generic keda-prometheus-auth \
+  --namespace ${NAMESPACE} \
+  --from-literal=ca.crt="$(kubectl get configmap prometheus-web-tls-ca \
+    -n ${MONITORING_NAMESPACE} -o jsonpath='{.data.ca\.crt}')" \
+  --dry-run=client -o yaml | kubectl apply -f -
+```
 
-If your environment does not allow alpha feature gates, KEDA is a stable alternative. **Note:** KEDA is also the recommended path forward as the Prometheus Adapter is planned for deprecation.
+KEDA reads authentication Secrets from the `ScaledObject` namespace. If your
+Prometheus endpoint uses HTTP or requires a bearer token, mTLS, basic
+authentication, or cloud workload identity, update each trigger's
+`serverAddress` and replace or extend the `TriggerAuthentication` using the
+[KEDA Prometheus authentication documentation](https://keda.sh/docs/2.20/scalers/prometheus/#authentication-parameters).
+The HTTPS and CA settings in the checked-in example are specific to the
+TLS-enabled bundled kube-prometheus-stack. Do not disable TLS verification to
+adapt the example.
 
-1. **Setup KEDA:** Install KEDA and follow the [KEDA Prometheus Scaler guide](https://keda.sh/docs/scalers/prometheus/). Note that KEDA comes with its own built-in metrics adapter that is enabled by default when you install KEDA. Unlike HPA, it does not require the Prometheus adapter installation.
-2. **Configure Scaler:** Use the same `epp_queue_size` metric as a trigger.
-3. **Outcome:** KEDA scales the deployment from 0 to 1 as soon as a request is queued. Once at 1 pod, the standard HPA (configured with `minReplicas: 1`) takes over to scale up to N.
+## Apply the KEDA ScaledObject
+
+Review
+[`keda-epp/scaledobject.yaml`](./keda-epp/scaledobject.yaml) before applying it.
+At minimum, verify these deployment-specific fields:
+
+- `metadata.namespace`
+- `spec.scaleTargetRef.name`
+- Prometheus `serverAddress`
+- The PromQL label selectors
+- Queue-size and running-request thresholds
+
+The checked-in example uses test-friendly bounds and scales the optimized
+baseline Deployment between one and three replicas. These limits are not
+production defaults. Do not apply them unchanged to a Deployment that should
+run more than three replicas; choose bounds appropriate for its capacity and
+availability requirements.
+
+This walkthrough intentionally begins with one target replica so that a 1-to-N
+scale-up is observable. Scale the target Deployment down before creating the
+`ScaledObject`, then wait for it to become available:
+
+```bash
+kubectl scale deployment optimized-baseline-nvidia-gpu-vllm-decode \
+  -n ${NAMESPACE} --replicas=1
+kubectl rollout status \
+  deployment/optimized-baseline-nvidia-gpu-vllm-decode \
+  -n ${NAMESPACE} --timeout=15m
+```
+
+Both triggers use `AverageValue`, so each threshold is a per-replica target.
+For each metric, the generated HPA calculates a desired replica count from the
+total metric value and target. Roughly, the aggregate must exceed `threshold ×
+current replicas` to request more than the current replica count. When all
+configured metrics are available, the HPA uses the largest desired replica
+count.
+
+```bash
+kubectl apply -k ${REPO_ROOT}/guides/workload-autoscaling/keda-epp
+```
+
+The example thresholds are starting points, not universal capacity values.
+Measure the concurrency and queue depth at which latency begins to degrade for
+your model and hardware, then tune both thresholds.
+
+## Verify KEDA Metric Evaluation
+
+Check the `ScaledObject` status and events:
+
+```bash
+kubectl get scaledobject optimized-baseline-keda-epp -n ${NAMESPACE}
+kubectl describe scaledobject optimized-baseline-keda-epp -n ${NAMESPACE}
+```
+
+`Ready=True` confirms that the scaler configuration is valid. Because this
+example has `minReplicaCount: 1`, the `Active` condition is not the best signal
+for 1-to-N scaling. Inspect the generated HPA's current metrics and the target
+Deployment's replica count instead. `Active` becomes relevant to zero-to-one
+activation in the optional scale-to-zero configuration below.
+
+KEDA creates the HPA named in `horizontalPodAutoscalerConfig`:
+
+```bash
+kubectl get hpa keda-hpa-optimized-baseline -n ${NAMESPACE}
+kubectl get hpa keda-hpa-optimized-baseline -n ${NAMESPACE} \
+  -o jsonpath='{.status.currentMetrics}' | jq
+```
+
+A non-empty `currentMetrics` list shows that the generated HPA is receiving
+the metrics exposed by KEDA. It can take several polling intervals for the
+first values to appear.
+
+## Generate Bounded Load
+
+Run a temporary curl pod in the workload namespace:
+
+```bash
+kubectl run curl-load --rm -it \
+  --image=curlimages/curl \
+  --restart=Never \
+  --namespace=${NAMESPACE} -- sh
+```
+
+From inside the pod, send a bounded set of concurrent requests:
+
+```bash
+cat > /tmp/request.json <<'EOF'
+{
+  "model": "Qwen/Qwen3-32B",
+  "prompt": "Write a detailed explanation of how continuous batching works.",
+  "max_tokens": 256
+}
+EOF
+
+seq 1 100 | xargs -P 16 -I{} \
+  curl -sS --max-time 180 -o /dev/null -w '%{http_code}\n' \
+    -X POST http://optimized-baseline-epp/v1/completions \
+    -H 'Content-Type: application/json' \
+    --data-binary @/tmp/request.json
+```
+
+Adjust concurrency only if the reference load does not cross either configured
+threshold. Keep request counts and timeouts bounded while tuning.
+
+## Verify Scale-Up
+
+While the load is running, watch the ScaledObject, generated HPA, and target
+Deployment:
+
+```bash
+kubectl get scaledobject,hpa -n ${NAMESPACE} -w
+```
+
+```bash
+kubectl get deployment optimized-baseline-nvidia-gpu-vllm-decode \
+  -n ${NAMESPACE} -w
+```
+
+For each `AverageValue` trigger, the generated HPA compares the aggregate value
+with its per-replica target and calculates a desired replica count. Scale-up
+occurs when that calculation is above the current replica count; it is not a
+simple test of whether a total value exceeds the threshold. When both metrics
+are available, the HPA selects the largest desired count. Model startup can
+take substantially longer than the scaling decision, so distinguish an
+increased desired count from a new replica becoming Ready.
+
+After the additional replica is Ready, repeat a normal inference request and
+confirm it succeeds.
+
+## Troubleshooting
+
+### ScaledObject is not Ready
+
+```bash
+kubectl describe scaledobject optimized-baseline-keda-epp -n ${NAMESPACE}
+kubectl get events -n ${NAMESPACE} --sort-by='.lastTimestamp'
+kubectl logs -n ${KEDA_NAMESPACE} \
+  -l app.kubernetes.io/name=keda-operator --all-containers
+```
+
+Common causes are an unreachable `serverAddress`, an untrusted Prometheus CA,
+missing authentication, or a PromQL query that returns more than one element.
+
+### Generated HPA shows unknown metrics
+
+Re-run the exact query in Prometheus, verify its labels, and inspect the
+generated HPA:
+
+```bash
+kubectl describe hpa keda-hpa-optimized-baseline -n ${NAMESPACE}
+```
+
+Do not create a second HPA to work around this condition. Fix the ScaledObject
+query or Prometheus connectivity instead.
+
+### Metrics are missing
+
+```bash
+kubectl get servicemonitor -n ${NAMESPACE} -o yaml
+kubectl get endpoints optimized-baseline-epp -n ${NAMESPACE}
+kubectl logs deployment/optimized-baseline-epp -n ${NAMESPACE}
+```
+
+Confirm the Prometheus target is `UP`, Flow Control is enabled, and the live
+metric labels match the selectors in the ScaledObject.
+
+By default, the KEDA Prometheus scaler ignores an empty Prometheus result
+(`ignoreNullValues` defaults to `true`). If a scaler remains inactive
+unexpectedly, verify that the PromQL query returns a value rather than relying
+only on status conditions.
+
+### Deployment does not scale
+
+Check that no other HPA targets the same Deployment, the HPA calculates a
+desired count above the current replica count, `maxReplicaCount` is greater
+than the current count, and the generated HPA has no scaling-limited
+conditions.
+
+## Cleanup
+
+```bash
+kubectl delete -k ${REPO_ROOT}/guides/workload-autoscaling/keda-epp
+kubectl delete secret keda-prometheus-auth -n ${NAMESPACE}
+```
+
+Deleting the `ScaledObject` also removes the HPA managed by KEDA. It does not
+delete the target Deployment and can leave that Deployment at its current
+replica count. Scale the Deployment explicitly if a different post-cleanup
+count is required.
+
+## Optional: Scale to Zero
+
+KEDA supports scale-to-zero without the Kubernetes `HPAScaleToZero` feature
+gate. Set `minReplicaCount: 0` only after validating scale-up from one replica.
+When the Deployment is at zero, the Flow Control queue-size metric is the
+activation signal: EPP holds incoming requests until a model server becomes
+Ready.
+
+At zero replicas, the `Active` condition indicates whether at least one trigger
+has crossed its activation threshold. `cooldownPeriod` controls how long KEDA
+waits before scaling from one replica to zero. While one or more replicas are
+running, ordinary scale-down is controlled by the generated HPA's behavior,
+including its stabilization window and policies.
+
+Scale-to-zero introduces model cold-start latency. EPP queues are in memory, so
+queued requests are lost if EPP restarts, and clients must allow enough time
+for the model to load. Treat these as production availability considerations,
+not only autoscaler settings.
+
+## Legacy Prometheus Adapter Path
+
+Existing direct-HPA deployments can refer to the
+[Prometheus Adapter notes](./promadapter.md) while migrating. New EPP
+autoscaling deployments should use KEDA and should not install Prometheus
+Adapter solely for this guide.

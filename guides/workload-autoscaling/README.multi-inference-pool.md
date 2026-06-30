@@ -55,9 +55,20 @@ kubectl get pods -n ${NAMESPACE} --show-labels
 
 ## Configuring Autoscaling
 
-Once the additional pools are deployed, configure autoscaling by creating an HPA per model. Either scaling path can be used:
+Once the additional pools are deployed, configure one scaler per target
+Deployment. Either scaling path can be used:
 
-- **[HPA + EPP Metrics](./README.hpa-epp.md)**: Create one HPA per model using EPP metrics (`epp_queue_size`, `epp_running_requests`). Each HPA's Prometheus Adapter rules should filter by the corresponding InferencePool name.
+- **[KEDA + EPP Metrics](./README.hpa-epp.md)**: Create one KEDA
+  `ScaledObject` per target Deployment using the EPP queue-size and
+  running-request metrics. Each query must isolate the EPP/InferencePool
+  associated with that target. Queue-size series may provide an
+  `inference_pool` label, while running-request series may provide only
+  `model_name`; multiple pools serving the same model can therefore be
+  aggregated accidentally. Inspect live Prometheus series and, where needed,
+  use scrape labels such as the EPP service, job, or pod to distinguish pools
+  before constructing selectors. The checked-in single-pool example does not
+  by itself solve multi-pool metric isolation. KEDA creates the HPA for each
+  target Deployment.
 
 - **[HPA + WVA Metrics](./README.wva.md)**: Create one HPA per model using the `wva_desired_replicas` metric. Each HPA must carry the WVA discovery annotations (`llm-d.ai/managed`, `llm-d.ai/model-id`, `llm-d.ai/variant-cost`).
 
