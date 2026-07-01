@@ -1,7 +1,7 @@
 # ---------------------------------------------------------------------------
 # inference-perf workload template for the agentic-serving disaggregated guide.
 #
-# Render with `envsubst < agentic-code-gen-capped-55k-disagg.yaml > config.yaml` AFTER exporting the
+# Render with `envsubst < agentic-code-gen-disagg.yaml > config.yaml` AFTER exporting the
 # variables below. Any unset variable renders as an empty string, producing
 # invalid or semantically wrong YAML — so set all of them first.
 #
@@ -62,12 +62,12 @@ workload:
       type: vllm
       model_name: *model
       base_url: *url
-      max_model_len: 65536
+      max_model_len: 262144
     data:
       type: conversation_replay
       conversation_replay:
         seed: ${SEED}
-        max_model_len: 55000
+        max_model_len: 262144
         num_conversations: ${CONCURRENCY_LEVEL}
         shared_system_prompt_len: 3000
         dynamic_system_prompt_len:

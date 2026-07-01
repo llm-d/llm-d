@@ -93,7 +93,6 @@ For the experimental P/D disaggregated configuration, please refer to the [P/D D
 
 ### 1. Get the IP of the Proxy
 
-For the default unified serving configuration:
 ```bash
 export IP=$(kubectl get service ${GUIDE_NAME}-epp -n ${NAMESPACE} -o jsonpath='{.spec.clusterIP}')
 ```
@@ -148,7 +147,6 @@ This guide comes with an `inference-perf` benchmark preset (defined in [guide.ya
 
 ### 2. Download the Workload Template
 
-For the default unified configuration:
 ```bash
 curl -LJO "https://raw.githubusercontent.com/llm-d/llm-d/main/guides/${GUIDE_NAME}/benchmark-templates/guide.yaml"
 ```
@@ -211,7 +209,6 @@ To clean up resources:
 ```bash
 helm uninstall ${GUIDE_NAME} -n ${NAMESPACE}
 
-# For unified setup:
 kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/tpu/vllm/
 
 

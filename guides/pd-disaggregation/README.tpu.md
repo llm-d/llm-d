@@ -117,7 +117,7 @@ curl -LJO "https://raw.githubusercontent.com/llm-d/llm-d/main/guides/pd-disaggre
 ```
 
 #### Option B: Agentic Code Generation Workload (TPU v7x only)
-This template mimics a multi-turn agentic code generation workload, but with the context length capped at 55K tokens due to TPU disaggregation limits. 
+This template mimics a multi-turn agentic code generation workload. 
 
 1. Export the per-run variables (adjust `CONCURRENCY_LEVEL` as needed):
    ```bash
@@ -128,7 +128,7 @@ This template mimics a multi-turn agentic code generation workload, but with the
 
 2. Download the agentic workload template:
    ```bash
-   curl -LJO "https://raw.githubusercontent.com/llm-d/llm-d/main/guides/pd-disaggregation/benchmark-templates/agentic-code-gen-capped-55k-disagg.yaml"
+   curl -LJO "https://raw.githubusercontent.com/llm-d/llm-d/main/guides/pd-disaggregation/benchmark-templates/agentic-code-gen-disagg.yaml"
    ```
 
 ### 3. Execute Benchmark
@@ -143,7 +143,7 @@ envsubst < tpu.yaml > config.yaml
 
 **For Option B (Agentic):**
 ```bash
-envsubst < agentic-code-gen-capped-55k-disagg.yaml > config.yaml
+envsubst < agentic-code-gen-disagg.yaml > config.yaml
 ./run_only.sh -c config.yaml -o ./results
 ```
 
@@ -376,21 +376,23 @@ version: '0.1'
 
 ## Benchmarking Report (Agentic Workload TPU v7x Example)
 
-We also evaluated P/D disaggregation on TPU v7x with different prefill-to-decode ratios (6:2 vs. 5:3) under the same agentic workload framework, but with context length capped at 55K tokens (`max_model_len`).
+We evaluated P/D disaggregation on TPU v7x with different prefill-to-decode ratios under the agentic workload framework (average prompt size **~128K tokens**, output **~1.1K tokens**).
 
-For prefill-bottlenecked workloads (average prompt size ~51.5K tokens, output ~410 tokens), allocating more TPU nodes to the prefill phase (6:2 ratio) significantly reduces prefill queuing delays and scheduling bottlenecks under high concurrency, resulting in **Mean TTFT being 22.7% faster** (and **P90 TTFT being 12.9% faster**) at concurrency 40:
+At this scale, the KV cache size is extremely large (~20GB per request), shifting the bottleneck from prefill compute to **decoder HBM capacity**. Under a concurrency of 40, allocating more TPU nodes to the decode phase (**2:6** ratio) yields the best performance by providing sufficient aggregate HBM to avoid severe queueing and swapping:
 
-| Metric | 6:2 (6 Prefill, 2 Decode) | 5:3 (5 Prefill, 3 Decode) | Difference (6:2 vs 5:3) |
-| :--- | :---: | :---: | :--- |
-| **Mean TTFT (ms)** | **20,609** | 25,296 | **22.7% Speedup** |
-| **P90 TTFT (ms)** | **39,505** | 44,620 | **12.9% Speedup** |
-| **ITL Mean (ms)** | 24.8 | **24.6** | +0.8% (Slower) |
-| **Input Throughput (tok/s)** | **25,470** | 24,440 | **+4.2% (Higher)** |
-| **Output Throughput (tok/s)** | **203** | 196 | **+3.5% (Higher)** |
-| **Overall Throughput (tok/s)** | **25,674** | 24,637 | **+4.2% (Higher)** |
+| Metric | 2:6 (2 Prefill, 6 Decode) | 5:3 (5 Prefill, 3 Decode) | 6:2 (6 Prefill, 2 Decode) |
+| :--- | :---: | :---: | :---: |
+| **TTFT Median (s)** | **7.3** | 158.3 | 329.5 |
+| **TTFT Mean (s)** | **31.2** | 159.2 | 317.9 |
+| **TTFT P90 (s)** | **112.6** | 258.1 | 473.6 |
+| **TPOT Median (ms)** | **260.2** | 1,610.0 | 1,652.5 |
+| **Input Throughput (tok/s)** | **33,515.2** | 14,821.9 | 9,751.2 |
+| **Output Throughput (tok/s)** | **295.1** | 128.8 | 84.2 |
+| **Error Rate** | 2.8% | **2.6%** | 2.9% |
 
 **Key Takeaways:**
-1. **Prefill Capacity is Critical:** In this prefill-heavy workload, the extra prefill capacity in the 6:2 setup dramatically reduces TTFT.
-2. **Decoder Saturation:** The faster prefill phase keeps the decoders saturated, allowing the 6:2 configuration to deliver higher overall throughput despite having fewer decoder nodes.
-3. **Current Limitations:** Without prefix-aware routing and CPU offloading optimizations, this disaggregated TPU configuration currently performs below the unified `llm-d-optimized` baseline. Integrating these optimizations into TPU disaggregated deployments is an active area of development.
+1. **Decoder HBM Capacity is the Bottleneck:** With ~128K context, the KV cache size (~20GB) quickly saturates the decoder HBM. Having only 2 decoders (6:2) restricts the active request capacity, leading to severe queueing (TTFT Median of 329.5s).
+2. **Optimal Ratio Shift:** Expanding decode capacity to 6 nodes (2:6) increases the aggregate HBM, reducing the TTFT Median by **45x** (7.3s) and increasing output throughput by **3.5x** (295.1 tok/s).
+3. **Prefill Capacity:** Even with only 2 prefillers (2:6), they are able to sustain the required prefill throughput without becoming the primary bottleneck.
+4. **Current Limitations:** Without CPU offloading optimizations, this disaggregated TPU configuration currently performs below the unified `llm-d-optimized` baseline. Integrating these optimizations into TPU disaggregated deployments is an active area of development.
 
