@@ -26,7 +26,7 @@ Set the guide's variables (replace `HF_TOKEN_PLACEHOLDER` with a real HuggingFac
 export GUIDE_NAME=<guide-name>
 export NAMESPACE=llm-d-<guide-name>
 export REPO_ROOT=$(realpath $(git rev-parse --show-toplevel))
-export HF_MODEL=<HuggingFace/Model-Name>
+export MODEL=<HuggingFace/Model-Name>
 export HF_TOKEN=HF_TOKEN_PLACEHOLDER
 ```
 <!-- guide:env.static end -->
@@ -36,12 +36,15 @@ Create the namespace and required secrets:
 <!-- guide:prerequisites start -->
 ```bash
 kubectl create namespace ${NAMESPACE} --dry-run=client -o yaml | kubectl apply -f -
-
+```
+<!-- llm-d-cicd:skip start -->
+```bash
 kubectl create secret generic llm-d-hf-token \
   --from-literal="HF_TOKEN=${HF_TOKEN}" \
   --namespace "${NAMESPACE}" \
   --dry-run=client -o yaml | kubectl apply -f -
 ```
+<!-- llm-d-cicd:skip end -->
 <!-- guide:prerequisites end -->
 
 ## Installation
@@ -82,7 +85,7 @@ Send a test request:
 
 <!-- guide:verify.tests start -->
 ```bash
-curl -sS "http://${IP}/v1/completions" -d '{"model":"'"${HF_MODEL}"'","prompt":"hi"}'
+curl -sS "http://${IP}/v1/completions" -d '{"model":"'"${MODEL}"'","prompt":"hi"}'
 ```
 <!-- guide:verify.tests end -->
 

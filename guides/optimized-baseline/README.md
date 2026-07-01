@@ -71,9 +71,9 @@ export PROVIDER_NAME=gke # options: none, gke, agentgateway, istio
 export ACCELERATOR_TYPE=gpu # options: gpu, amd, xpu, hpu, tpu/v6, tpu/v7, cpu
 export MODEL_SERVER=vllm # options: vllm, sglang, trtllm
 export INFRA_PROVIDER=base # options: base, gke
-export HF_MODEL=Qwen/Qwen3-32B
+export MODEL=Qwen/Qwen3-32B
 export CURL_TEST_IMAGE=cfmanteiga/alpine-bash-curl-jq:latest
-export BENCHMARK_BRANCH=main
+export BENCHMARK_REF=main
 export HARNESS=inference-perf
 export WORKLOAD=guide_optimized-baseline_1.yaml
 export GATEWAY_CLASS=epponly # options: epponly, gke, agentgateway, istio
@@ -278,7 +278,7 @@ export IP=$(kubectl get gateway llm-d-inference-gateway -n ${NAMESPACE} -o jsonp
 
 ### 2. Send a Test Request
 
-**Open a temporary interactive shell inside the cluster and Send a completion request (model-aware; set `HF_MODEL` to the name you want to query, e.g. `Qwen/Qwen3-32B` or `openai/gpt-oss-120b`):**
+**Open a temporary interactive shell inside the cluster and Send a completion request (model-aware; set `MODEL` to the name you want to query, e.g. `Qwen/Qwen3-32B` or `openai/gpt-oss-120b`):**
 
 <!-- guide:verify.tests start -->
 ```bash
@@ -286,8 +286,8 @@ kubectl run curl-test --rm -i --restart=Never \
   --image=${CURL_TEST_IMAGE} \
   --namespace="${NAMESPACE}" \
   --env="IP=${IP}" \
-  --env="HF_MODEL=${HF_MODEL}" \
-  -- /bin/sh -c 'curl -sS -X POST "http://${IP}/v1/completions" -H "Content-Type: application/json" -d "{\"model\": \"${HF_MODEL}\", \"prompt\": \"How are you today?\"}"'
+  --env="MODEL=${MODEL}" \
+  -- /bin/sh -c 'curl -sS -X POST "http://${IP}/v1/completions" -H "Content-Type: application/json" -d "{\"model\": \"${MODEL}\", \"prompt\": \"How are you today?\"}"'
 ```
 <!-- guide:verify.tests end -->
 
@@ -313,7 +313,7 @@ Automatically clone the benchmark repository into `./llm-d-benchmark/` and creat
 
 <!-- guide:benchmark.setup start -->
 ```bash
-curl -sSL https://raw.githubusercontent.com/llm-d/llm-d-benchmark/${BENCHMARK_BRANCH}/install.sh | bash
+curl -sSL https://raw.githubusercontent.com/llm-d/llm-d-benchmark/${BENCHMARK_REF}/install.sh | bash
 
 cd llm-d-benchmark
 
@@ -364,7 +364,7 @@ llmdbenchmark \
   run \
   --endpoint-url   "${ENDPOINT_URL}" \
   --gateway-class  "${GATEWAY_CLASS}" \
-  --model          "${HF_MODEL}" \
+  --model          "${MODEL}" \
   --namespace      "${NAMESPACE}" \
   --harness        "${HARNESS}" \
   --workload       "${WORKLOAD}" \

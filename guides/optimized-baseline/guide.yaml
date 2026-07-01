@@ -20,13 +20,13 @@ env:
     MODEL_SERVER:     { default: vllm, values: [vllm, sglang, trtllm] }
     INFRA_PROVIDER:   { default: base, values: [base, gke] }
 
-    HF_MODEL:         { default: "Qwen/Qwen3-32B" }
+    MODEL:         { default: "Qwen/Qwen3-32B" }
 
     # VERIFICATION
     CURL_TEST_IMAGE:  { default: "cfmanteiga/alpine-bash-curl-jq:latest" }
 
     # BENCHMARK
-    BENCHMARK_BRANCH: main
+    BENCHMARK_REF: main
     HARNESS: inference-perf
     WORKLOAD: guide_optimized-baseline_1.yaml
     GATEWAY_CLASS:  { default: epponly,  values: [epponly, gke, agentgateway, istio]} # Benchmark specific epponly = standalone - TODO to fix in llmdbenchmark
@@ -123,12 +123,12 @@ verify:
           --image=${CURL_TEST_IMAGE} \
           --namespace="${NAMESPACE}" \
           --env="IP=${IP}" \
-          --env="HF_MODEL=${HF_MODEL}" \
-          -- /bin/sh -c 'curl -sS -X POST "http://${IP}/v1/completions" -H "Content-Type: application/json" -d "{\"model\": \"${HF_MODEL}\", \"prompt\": \"How are you today?\"}"'
+          --env="MODEL=${MODEL}" \
+          -- /bin/sh -c 'curl -sS -X POST "http://${IP}/v1/completions" -H "Content-Type: application/json" -d "{\"model\": \"${MODEL}\", \"prompt\": \"How are you today?\"}"'
 
 benchmark:
   setup:
-    - run: curl -sSL https://raw.githubusercontent.com/llm-d/llm-d-benchmark/${BENCHMARK_BRANCH}/install.sh | bash
+    - run: curl -sSL https://raw.githubusercontent.com/llm-d/llm-d-benchmark/${BENCHMARK_REF}/install.sh | bash
     - run: cd llm-d-benchmark
     - run: source .venv/bin/activate
     - run: llmdbenchmark --version
@@ -144,7 +144,7 @@ benchmark:
           run \
           --endpoint-url   "${ENDPOINT_URL}" \
           --gateway-class  "${GATEWAY_CLASS}" \
-          --model          "${HF_MODEL}" \
+          --model          "${MODEL}" \
           --namespace      "${NAMESPACE}" \
           --harness        "${HARNESS}" \
           --workload       "${WORKLOAD}" \
