@@ -28,6 +28,7 @@
 | User | Reflection | 2026 | [Reflection.ai](https://reflection.ai/) | Reflection uses llm-d's async processing for our internal inference platform. |
 | User | Prime Intellect | 2026 | [Prime Intellect](https://www.primeintellect.ai/) | Prime Intellect uses llm-d in prime-rl for multi-node WideEP RL rollouts. |
 | User | Snowflake | 2026 | [Snowflake](https://www.snowflake.com/en/) | The Snowflake Cortex team are users of llm-d. |
+| User | Novita AI | 2026 | [Novita](https://novita.ai/) | The Novita AI team are users of llm-d. |
 
 ## Adopter Types
 
