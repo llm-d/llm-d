@@ -170,6 +170,7 @@ Available dashboards:
 | `llm-d-diagnostic-drilldown-dashboard` | Detailed diagnostic metrics for troubleshooting |
 | `llm-d-performance-kv-cache` | KV cache utilization and performance |
 | `llm-d-pd-coordinator-metrics` | Prefill/decode disaggregation metrics |
+| `llm-d-inference-gateway` | Inference Gateway (EPP) metrics: inference pool, inference objective, and flow control |
 
 ## Step 3: Install Distributed Tracing (Optional)
 
