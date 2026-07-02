@@ -102,23 +102,25 @@ def check_pvc_is_bound(namespace: str, pod: str) -> v.Check:
 
 def check_pvc_has_data(namespace: str, pod: str) -> v.Check:
     """Assert kv-cache blocks are actually on the PVC by counting files
-    under KV_CACHE_DIR from inside the pod.
+    under KV_CACHE_DIR from inside the pod, and report their total size.
 
     Mirrors the guide's storage-offload verification step.
     """
-    count_str = v.kubectl(
+    out = v.kubectl(
         ["exec", "-n", namespace, pod, "--", "sh", "-c",
-         f"find {KV_CACHE_DIR} -type f 2>/dev/null | wc -l"],
+         f"find {KV_CACHE_DIR} -type f 2>/dev/null | wc -l; "
+         f"du -sh {KV_CACHE_DIR} 2>/dev/null | awk '{{print $1}}'"],
         timeout=30,
-    ).strip()
+    ).strip().splitlines()
     try:
-        n = int(count_str)
-    except ValueError:
+        n = int(out[0])
+    except (ValueError, IndexError):
         n = 0
+    size = out[1] if len(out) > 1 else "?"
     return v.Check(
         name="PVC has KV cache data",
         passed=n > 0,
-        detail=f"{n} files at {KV_CACHE_DIR} on {pod}",
+        detail=f"{n} files ({size}) at {KV_CACHE_DIR} on {pod}",
     )
 
 
@@ -169,12 +171,10 @@ def main() -> int:
         v.error(f"No model pods found in namespace {namespace}")
         return 1
     # PVC-side checks only apply in storage mode. The PVC is RWX and shared
-    # across every model pod, so `check_pvc_is_bound` runs once against
-    # pods[0]. 
+    # across every model pod, so we only need to check one of them. 
     if storage_mode and pods:
         checks.append(check_pvc_is_bound(namespace, pods[0]))
-        for pod in pods:
-            checks.append(check_pvc_has_data(namespace, pod))
+        checks.append(check_pvc_has_data(namespace, pods[0]))
 
     # Metric checks: both counters should have moved on at least one pod.
     vllm_version = v.get_vllm_version(namespace, pods[0])

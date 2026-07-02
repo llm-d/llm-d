@@ -285,15 +285,21 @@ def kubectl(args: list[str], timeout: int = 30) -> str:
 
 
 def get_model_pods(namespace: str) -> list[str]:
-    """Try modelservice decode/prefill labels first, then standalone."""
-    pods = [p for p in kubectl([
+    """Try modelservice decode/prefill labels first, then standalone.
+
+    Returns bare pod names ("gpu-vllm-decode-abc"), not the `pod/name`.
+    """
+    def _bare(names: list[str]) -> list[str]:
+        return [n.removeprefix("pod/") for n in names if n]
+
+    pods = _bare(kubectl([
         "get", "pod", "-n", namespace,
         "-l", "llm-d.ai/role in (decode,prefill)", "-o", "name",
-    ]).split() if p]
+    ]).split())
     if not pods:
-        pods = [p for p in kubectl([
+        pods = _bare(kubectl([
             "get", "pod", "-n", namespace,
             "-l", "llm-d.ai/inferenceServing=true", "-o", "name",
-        ]).split() if p]
+        ]).split())
     return pods
 
