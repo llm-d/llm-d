@@ -388,6 +388,9 @@ helm uninstall ${GUIDE_NAME} -n ${NAMESPACE}
 kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/${ACCELERATOR_TYPE}/${MODEL_SERVER}/${INFRA_PROVIDER}
 
 # only when ACCELERATOR_TYPE=amd or xpu or hpu or tpu/v6 or tpu/v7 or cpu:
+#
+# Comment out the above `kubectl delete` and uncomment the below to run on `NON GPU` accelerators
+#
 # kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/${ACCELERATOR_TYPE}/${MODEL_SERVER}
 
 kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/recipes/modelserver/components/monitoring --ignore-not-found=true
