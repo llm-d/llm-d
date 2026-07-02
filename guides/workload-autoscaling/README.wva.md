@@ -49,7 +49,7 @@ export REPO_ROOT=$(realpath $(git rev-parse --show-toplevel))
 ```
 
 > [!NOTE]
-> **Namespaced-Scoped Installation**: this guide installs WVA to watch resources only in the `llm-d-optimized-baseline` namespace. For cluster-wide autoscaling, set `--watch-namespace=""` in the controller deployment.
+> **Namespaced-Scoped Installation**: this guide installs WVA to watch resources only in the `${WVA_NAMESPACE}` namespace. For cluster-wide autoscaling, set `--watch-namespace=""` in the controller deployment.
 
 ## Installation
 
@@ -87,11 +87,20 @@ export REPO_ROOT=$(realpath $(git rev-parse --show-toplevel))
     kubectl apply -k github.com/llm-d/llm-d-workload-variant-autoscaler/config/base/crd?ref=main
     ```
 
-5. Install WVA controller with Kustomize:
+5. Install the WVA controller. Point the overlay at `${WVA_NAMESPACE}`, then apply it
+   (the overlay carries its own namespace, so no `-n` is needed):
 
     ```bash
-    kubectl apply -k ${REPO_ROOT}/guides/workload-autoscaling/wva-config/platform/${PLATFORM} -n ${WVA_NAMESPACE}
+    (cd ${REPO_ROOT}/guides/workload-autoscaling/wva-config/platform/${PLATFORM} \
+       && kustomize edit set namespace ${WVA_NAMESPACE})
+
+    kubectl apply -k ${REPO_ROOT}/guides/workload-autoscaling/wva-config/platform/${PLATFORM}
     ```
+
+    > [!NOTE]
+    > This requires the [`kustomize`](https://kustomize.io/) CLI and updates the
+    > `namespace:` field in `wva-config/platform/${PLATFORM}/kustomization.yaml`. To
+    > revert that local change afterwards, run `git checkout` on the file.
 
 ## Verify Installation
 
@@ -241,7 +250,10 @@ kubectl delete -k optimized-baseline-autoscaling/hpa -n ${NAMESPACE}
 Remove the WVA controller with Kustomize:
 
 ```bash
-kubectl delete -k ${REPO_ROOT}/guides/workload-autoscaling/wva-config/platform/${PLATFORM} -n ${WVA_NAMESPACE}
+(cd ${REPO_ROOT}/guides/workload-autoscaling/wva-config/platform/${PLATFORM} \
+   && kustomize edit set namespace ${WVA_NAMESPACE})
+
+kubectl delete -k ${REPO_ROOT}/guides/workload-autoscaling/wva-config/platform/${PLATFORM}
 ```
 
 If you used KEDA, delete the ScaledObject:
