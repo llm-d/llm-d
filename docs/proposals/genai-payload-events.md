@@ -6,11 +6,13 @@ Extend llm-d's existing OpenTelemetry distributed tracing to optionally capture 
 LLM prompts and completions, following the upstream
 [GenAI semantic conventions](https://opentelemetry.io/docs/specs/semconv/gen-ai/) —
 specifically the `gen_ai.input.messages`, `gen_ai.output.messages`, and
-`gen_ai.system_instructions` attributes, recorded in structured form on a span event
-(per the convention, message content is recorded on events/logs and serialised to a JSON
-string when attached to a span). These attributes are `Opt-In` and at `Development`
-stability upstream, and are flagged as likely to contain sensitive data — they are never
-captured by default. Payloads above a configurable size threshold are offloaded to an
+`gen_ai.system_instructions` attributes. The convention allows these to be recorded
+either as Opt-In span attributes (serialised to a JSON string) or on the log-based
+event `gen_ai.client.inference.operation.details`; llm-d attaches them to a dedicated
+**span event** on the LLM span (serialised to a JSON string) as an explicit design
+decision — see [Design Details](#otel-attribute-specification) for the rationale and
+migration plan. These attributes are `Opt-In` and at `Development` stability upstream,
+and are flagged as likely to contain sensitive data — they are never captured by default. Payloads above a configurable size threshold are offloaded to an
 object storage backend (GCS, S3, or local filesystem) with only a reference URI stored on
 the span. Non-text content parts (images, audio, and other binary media in multimodal
 requests) are always offloaded — they cannot be carried as OTel attributes — and are
@@ -38,20 +40,22 @@ visibility that cannot be satisfied by token counts and latency metadata alone:
   multimodal requests are increasingly common drivers of latency and quality issues,
   and cannot be reconstructed from token metadata alone.
 
-The upstream GenAI conventions record message content as **structured attributes on a
-span event or log record** (`gen_ai.input.messages` / `gen_ai.output.messages`), rather
-than as attributes on the span itself, specifically to decouple large payload data from
-the lightweight span record. Even so, these attributes are typed as
-strings/numbers/bools/arrays and cannot carry opaque bytes; non-text payloads (images,
-audio) can be carried **neither on a span nor in a log record** and must therefore be
-offloaded to object storage and referenced by URI. Implementing against the upstream spec
+The upstream GenAI conventions record message content in one of two carriers:
+Opt-In **span attributes** on the LLM span (`gen_ai.input.messages` /
+`gen_ai.output.messages`, serialised to a JSON string), or on the log-based event
+`gen_ai.client.inference.operation.details` (an OTel Log Event, not a span event). Either
+way the attribute type system permits only strings, numbers, bools, and arrays of those;
+non-text payloads (images, audio) can be carried **neither on a span nor in a log record**
+and must therefore be offloaded to object storage and referenced by URI. Implementing against the upstream spec
 makes llm-d payload data consumable by any OTel-native tooling without custom parsing.
 
 ### Goals
 
 - Record `gen_ai.input.messages`, `gen_ai.output.messages`, and
-  `gen_ai.system_instructions` on a span event for the LLM call, following the upstream
-  GenAI semantic convention.
+  `gen_ai.system_instructions` for each LLM call using the upstream GenAI attribute
+  names. Carrier is a dedicated **span event** on the LLM span — see
+  [OTel Attribute Specification](#otel-attribute-specification) for why this deviates
+  from the semconv's span-attribute / log-event carriers.
 - Inline small text payloads (≤ configurable threshold, default 4 KB) directly on the
   event attribute; offload larger text payloads to object storage and record only a
   reference URI.
@@ -92,10 +96,11 @@ When enabled, the relevant llm-d component:
    (an array of role/parts messages; system content is split out to
    `gen_ai.system_instructions`).
 2. Passes the JSON through the configured redaction pipeline.
-3. Compares the byte length against `inlineSizeThresholdBytes` (default 4 096).
+3. Compares the byte length against `inlineSizeThresholdBytes` (default 4096).
 4. If within threshold → attaches the structured messages as the `gen_ai.input.messages`
-   attribute on a span event for the active LLM span (serialised to a JSON string, per the
-   convention's rule for recording messages on spans).
+   attribute on a dedicated span event of the active LLM span, serialised to a JSON string
+   (span-event attributes share the type system of span attributes; the JSON-string
+   encoding matches the semconv rule for message content on spans).
 5. If above threshold → uploads to the configured `PayloadStore` backend and attaches
    only the returned URI as `llm_d.payload.storage_uri` (llm-d extension).
 6. Repeats steps 1–5 for the response completion (`gen_ai.output.messages`) after the full
@@ -134,10 +139,34 @@ Payload content is recorded using the current upstream
 `gen_ai.input.messages`, `gen_ai.output.messages`, and `gen_ai.system_instructions`
 ([attribute registry](https://opentelemetry.io/docs/specs/semconv/registry/attributes/gen-ai/)).
 These attributes are `Opt-In` and at `Development` stability upstream; they may still
-change, so this proposal tracks them rather than pinning a frozen copy. Per the
-convention, message content is recorded **in structured form on a span event or log
-record** attached to the LLM span; when recorded on the span itself it is serialised to a
-JSON string. Each message is `{role, parts: [...]}`, where each part has a `type`
+change, so this proposal tracks them rather than pinning a frozen copy.
+
+**Upstream carriers.** The convention allows message content to be recorded via
+(a) Opt-In **span attributes** on the LLM span, serialised to a JSON string, or
+(b) the log-based event `gen_ai.client.inference.operation.details` — an OTel
+Log-based Event, not a span event. Span-event attributes are typed identically to
+span attributes, so on either a span or a span event the content is a JSON string;
+there is no fully-structured attribute carrier at the OTel type layer.
+
+**llm-d carrier — design decision.** This proposal records payload attributes on a
+dedicated **span event** attached to the LLM span. This is an explicit llm-d choice,
+not what the convention prescribes; the convention prefers span attributes or its
+log-based event, and the OTel community is moving away from Span Events toward
+Log-based Events. We use span events because:
+
+- they give the reference OTel Collector recipe a clean event-scoped routing surface
+  (see the `spanevent`-scoped OTTL filter in
+  `guides/recipes/observability/tracing/otel-collector.yaml`) without introducing a
+  logs pipeline in llm-d's default observability stack, and
+- they let operators tail-sample or drop the payload carrier separately from the parent
+  LLM span, preserving the existing lightweight-span posture for consumers that don't
+  opt in.
+
+If the upstream convention firms up around log records or Opt-In span attributes, a
+future revision of this proposal will migrate the carrier without changing the
+attribute names.
+
+Each message is `{role, parts: [...]}`, where each part has a `type`
 (`text`, `tool_call`, `tool_call_response`, …); output messages additionally carry a
 `finish_reason`. See [Non-Text and Multimodal Payloads](#non-text-and-multimodal-payloads)
 for how media parts are represented.

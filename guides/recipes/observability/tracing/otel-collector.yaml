@@ -41,15 +41,22 @@ data:
       #     - "\\b(?:4[0-9]{12}(?:[0-9]{3})?|5[1-5][0-9]{14}|3[47][0-9]{13}|6(?:011|5[0-9]{2})[0-9]{12})\\b"
       #     - "(?i)bearer\\s+[a-z0-9._\\-]+"             # Bearer tokens
       #   summary: debug
-      # Keep only span events that carry gen_ai payload attributes. NOTE: this is
-      # an event-level filter — it drops non-payload span *events*, not whole
-      # spans or traces. Parent spans still flow through the `traces` pipeline
-      # above unchanged.
+      # Keep only span events that carry gen_ai payload attributes OR the
+      # llm-d offload/media pointers. NOTE: this is an event-level filter — it
+      # drops non-payload span *events*, not whole spans or traces. Parent
+      # spans still flow through the `traces` pipeline above unchanged.
+      #
+      # The `llm_d.payload.storage_uri` and `llm_d.payload.media_uris` clauses
+      # matter for the offload case: when a payload exceeds
+      # `inlineSizeThresholdBytes`, `gen_ai.input.messages` /
+      # `gen_ai.output.messages` are omitted and the event carries only the
+      # storage_uri (and, for multimodal payloads, media_uris). Dropping such
+      # events would silently lose the sole pointer to the offloaded object.
       # filter/payload-events-only:
       #   error_mode: ignore
       #   traces:
       #     spanevent:
-      #       - 'attributes["gen_ai.input.messages"] == nil and attributes["gen_ai.output.messages"] == nil'
+      #       - 'attributes["gen_ai.input.messages"] == nil and attributes["gen_ai.output.messages"] == nil and attributes["llm_d.payload.storage_uri"] == nil and attributes["llm_d.payload.media_uris"] == nil'
     exporters:
       otlp/jaeger:
         endpoint: "jaeger-collector:4317"
