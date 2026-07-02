@@ -105,5 +105,5 @@ jobs:
       badge_name: wide-ep-lws-cks
       badge_label: "VLLM GPU"
       result: ${{ needs.nightly.result }}
-      dry_run: ${{ inputs.dry_run || 'true' }}
+      dry_run: ${{ inputs.dry_run || 'false' }}
       failure_category: ${{ needs.nightly.outputs.failure_category }}

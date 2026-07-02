@@ -11,4 +11,8 @@ RUN if [ -n "${CACHE_BUSTER}" ]; then \
         echo "$CACHE_BUSTER" > /tmp/builder-buster; \
     fi;
 
+RUN git clone https://github.com/LMCache/LMCache.git -b v0.5.0 && \
+    cd LMCache && pip install -r requirements/build.txt && \
+    BUILD_WITH_SYCL=1 uv pip install --no-build-isolation -e .
+
 ENTRYPOINT ["python", "-m", "vllm.entrypoints.openai.api_server"]

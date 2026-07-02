@@ -1,0 +1,11 @@
+apiVersion: resource.k8s.io/v1
+kind: ResourceClaimTemplate
+metadata:
+  name: gpu
+spec:
+  spec:
+    devices:
+      requests:
+        - name: gpu
+          exactly:
+            deviceClassName: gpu.intel.com

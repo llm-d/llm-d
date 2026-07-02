@@ -1,0 +1,73 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: decode
+spec:
+  replicas: 1
+  template:
+    spec:
+      securityContext:
+        fsGroup: 107
+        supplementalGroups:
+          - 107
+      resourceClaims:
+        - name: gpu
+          resourceClaimTemplateName: xpu-vllm-gpu
+      containers:
+        - name: modelserver
+          command: ["vllm", "serve"]
+          imagePullPolicy: IfNotPresent
+          securityContext:
+            privileged: true
+          env:
+            - name: HF_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: llm-d-hf-token
+                  key: HF_TOKEN
+          resources:
+            limits:
+              cpu: '8'
+              memory: 30Gi
+            requests:
+              cpu: '8'
+              memory: 30Gi
+            claims:
+              - name: gpu
+          volumeMounts:
+            - mountPath: /dev/shm
+              name: shm
+            - mountPath: /.cache
+              name: torch-compile-cache
+            - mountPath: /.triton
+              name: triton-cache
+            - mountPath: /.config
+              name: vllm-config
+          startupProbe:
+            initialDelaySeconds: 15
+            periodSeconds: 30
+            timeoutSeconds: 5
+            failureThreshold: 120
+          livenessProbe:
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            periodSeconds: 5
+            timeoutSeconds: 2
+            failureThreshold: 3
+      restartPolicy: Always
+      enableServiceLinks: false
+      terminationGracePeriodSeconds: 130
+      volumes:
+        - name: data
+          emptyDir: {}
+        - name: shm
+          emptyDir:
+            medium: Memory
+        - name: torch-compile-cache
+          emptyDir: {}
+        - name: triton-cache
+          emptyDir: {}
+        - name: vllm-config
+          emptyDir: {}
