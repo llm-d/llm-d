@@ -84,6 +84,16 @@ def find_results_dirs(workspace: str) -> list[Path] | None:
     return None
 
 
+def get_vllm_version(namespace: str, pod: str) -> tuple[int, ...] | None:
+    out = kubectl(
+        ["exec", "-n", namespace, pod, "--", "python3", "-c",
+         "import vllm; print(vllm.__version__)"],
+        timeout=10,
+    ).strip()
+
+    version = tuple(int(x) for x in out.split(".") if x.isdigit())
+    return version if version else None   
+
 # ---------------------------------------------------------------------------
 # Metrics summary
 # ---------------------------------------------------------------------------
@@ -161,7 +171,7 @@ class MetricsSummary:
         return Check(
             name=f"{metric}.{aggregate}",
             passed=passed,
-            detail=f"{actual:.4g} {op} {float(bound):.4g} (a {op} b)",
+            detail=f"{actual:.4g} {op} {float(bound):.4g}",
         )
 
     def check_per_pod(

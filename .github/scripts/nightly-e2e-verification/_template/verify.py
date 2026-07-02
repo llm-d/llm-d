@@ -39,17 +39,21 @@ def main() -> int:
 
     # Two flavors of metric check:
     #   check_aggregated(metric, aggregate, op, bound)
-    #     → reads metrics.aggregated[metric][aggregate], threshold-checks it.
+    #     -> reads metrics.aggregated[metric][aggregate], threshold-checks it.
     #   check_per_pod(metric, aggregate, op, bound, *, reduce=max)
-    #     → pulls metrics.per_pod[pod][metric][aggregate] for every pod,
-    #       reduces across pods (default: max), threshold-checks the result.
+    #     -> pulls metrics.per_pod[pod][metric][aggregate] for every pod,
+    #       combines across pods (default: max), threshold-checks the result.
     #
     # Aggregates available: mean, stddev, min, p25, p50, p75, p90, p95, p99, max, count
     # Ops: <=, >=, <, >, ==
-    # Custom (non-metric) checks: v.Check(name, passed, detail="...")
+    # Additional checks: v.Check(name, passed, detail="...")
     checks = [
+        # Smoke check — passes on any run with monitoring enabled.
+        metrics.check_aggregated("vllm:num_requests_running", "count", ">", 0),
+
+        # Examples — uncomment and customize:
         # metrics.check_aggregated("vllm:time_to_first_token_seconds", "p99", "<=", 2.0),
-        # metrics.check_per_pod("vllm:kv_offload_store_bytes", "max", ">", 0.0),
+        # metrics.check_per_pod("vllm:kv_offload_store_bytes_total", "max", ">", 0.0),
         # v.Check("Custom assertion", passed=True, detail="..."),
     ]
 

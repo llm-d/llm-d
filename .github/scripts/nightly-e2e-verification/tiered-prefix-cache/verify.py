@@ -15,9 +15,9 @@ The mode is selected via `LLMDBENCH_CICD_OFFLOADING_TARGET` at the job level
 in reusable-ci-nightly-benchmark.yaml (`fs` / `cpu`).
 
 Metric checks (both variants):
-  - vllm:kv_offload_store_bytes.max  > 0   → GPU wrote at least once into
+  - vllm:kv_offload_store_bytes.max  > 0 : GPU wrote at least once into
     the offload tier during the run (tier is being populated).
-  - vllm:kv_offload_load_bytes.max   > 0   → the offload tier served at
+  - (not tested currently)vllm:kv_offload_load_bytes.max   > 0 : the offload tier served at
     least one read back to GPU (tier is being *used*, not just filled).
   Both are `check_per_pod` with the default `combine=max`, so "any pod hit
   it" is enough — we don't require every replica to have been exercised.
@@ -81,8 +81,7 @@ def check_pvc_is_bound(namespace: str, pod: str) -> v.Check:
     Only the offload PVC — we don't care about model-download or metrics
     PVCs that may share the namespace. Fails if:
       - No volume is mounted at OFFLOAD_MOUNT (misconfigured pod spec), or
-      - The PVC exists but isn't Bound (Pending → provisioner failed;
-        Lost → the PV was deleted underneath it).
+      - The PVC exists but isn't Bound.
     """
     claim = find_offload_pvc(namespace, pod)
     if not claim:
@@ -160,13 +159,15 @@ def main() -> int:
     storage_mode = is_storage_mode()
     target = os.environ.get("LLMDBENCH_CICD_OFFLOADING_TARGET", "<unset>")
     print(f"Offloading target (LLMDBENCH_CICD_OFFLOADING_TARGET): {target}  "
-          f"→ {'STORAGE' if storage_mode else 'CPU'} offloading")
+          f"- {'STORAGE' if storage_mode else 'CPU'} offloading")
     print()
 
     checks: list[v.Check] = []
 
     pods = v.get_model_pods(namespace)
-
+    if not pods:
+        v.error(f"No model pods found in namespace {namespace}")
+        return 1
     # PVC-side checks only apply in storage mode. The PVC is RWX and shared
     # across every model pod, so `check_pvc_is_bound` runs once against
     # pods[0]. 
@@ -176,11 +177,26 @@ def main() -> int:
             checks.append(check_pvc_has_data(namespace, pod))
 
     # Metric checks: both counters should have moved on at least one pod.
-    #   store = GPU → offload tier writes (tier was populated)
-    #   load  = offload tier → GPU reads (tier actually served a hit)
-    # combine=max (default) gives "any pod > 0", which is what we want.
-    checks.append(metrics.check_per_pod("vllm:kv_offload_store_bytes", "max", ">", 0.0))
-    checks.append(metrics.check_per_pod("vllm:kv_offload_load_bytes",  "max", ">", 0.0))
+    vllm_version = v.get_vllm_version(namespace, pods[0])
+    if vllm_version is None:
+        v.error(f"Failed to get vllm version from pod {pods[0]}")
+        return 1
+    old_metrics = vllm_version < (0, 24, 0)
+    version_str = ".".join(str(x) for x in vllm_version)
+    checks.append(v.Check(
+        name=f"vLLM version - {version_str}, kv-cache metrics (new/old)",
+        passed=True,
+        detail=f"{'old' if old_metrics else 'new'}",
+    ))
+    if old_metrics:
+        checks.append(metrics.check_per_pod("vllm:kv_offload_total_bytes_total", "max", ">", 0.0))
+    else:
+        checks.append(metrics.check_per_pod("vllm:kv_offload_store_bytes_total", "max", ">", 0.0))
+        # For now we dont reach this flow, no eviction from HBM is happening.
+        # checks.append(metrics.check_per_pod("vllm:kv_offload_load_bytes_total",  "max", ">", 0.0))
+
+    # Smoke check.
+    checks.append(metrics.check_aggregated("vllm:num_requests_running", "count", ">", 0))
 
     passed = v.verify_checks(env, metrics, checks)
     return 0 if passed else 1

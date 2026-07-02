@@ -102,15 +102,15 @@ Two check factories:
 ```python
 # Reads metrics.aggregated[metric][aggregate], threshold-checks it.
 metrics.check_aggregated("vllm:time_to_first_token_seconds", "p99", "<=", 2.0)
-# → Check(name="vllm:time_to_first_token_seconds.p99", passed=..., detail="1.85 <= 2.00")
+# -> Check(name="vllm:time_to_first_token_seconds.p99", passed=..., detail="1.85 <= 2.00")
 
 # Pulls metrics.per_pod[pod][metric][aggregate] for every pod, combines with
 # combine(values), threshold-checks the result. Default combine funciton is max
 # ("did any pod hit the bound?"). Pass any callable that consumes an iterable
 # of floats: max, min, sum, statistics.mean, or a lambda around functools.reduce.
-metrics.check_per_pod("vllm:kv_offload_store_bytes", "max", ">", 0.0)
+metrics.check_per_pod("vllm:kv_offload_store_bytes_total", "max", ">", 0.0)
 metrics.check_per_pod("vllm:kv_cache_usage_perc", "mean", "<=", 80.0, reduce=statistics.mean)
-# → Check(name="vllm:foo.max (per-pod max)", passed=..., detail="1.02e+09 > 0")
+# -> Check(name="vllm:foo.max (per-pod max)", passed=..., detail="1.02e+09 > 0")
 ```
 
 ### Adding additional checks
@@ -118,6 +118,7 @@ metrics.check_per_pod("vllm:kv_cache_usage_perc", "mean", "<=", 80.0, reduce=sta
 Construct a `v.Check` directly:
 
 ```python
+n = number_of_files_in_pvc(...)
 v.Check("PVC has KV cache data", passed=n > 0, detail=f"{n} files at /mnt/kv-cache")
 ```
 
