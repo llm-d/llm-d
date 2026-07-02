@@ -19,6 +19,49 @@ TOP_REQUIRED = {"name", "env", "deploy"}
 TOP_OPTIONAL = {"_lists", "prerequisites", "verify", "benchmark", "cleanup"}
 
 
+# ---------------------------------------------------------------------------
+# Strict loader: reject duplicate keys in every mapping.
+#
+# PyYAML's default SafeLoader silently keeps the LAST value when the same key
+# appears twice in a mapping. That masked a real bug in optimized-baseline
+# where a `cleanup:` step had two `run:` entries — the intended MONITORING-gated
+# delete was overwritten by the non_gpu-gated one. This loader raises on the
+# duplicate, and the caller turns the exception into a normal finding.
+# ---------------------------------------------------------------------------
+
+
+class _StrictLoader(yaml.SafeLoader):
+    pass
+
+
+def _no_duplicate_keys(loader: yaml.SafeLoader, node: yaml.MappingNode, deep: bool = False):
+    seen: dict[object, yaml.Node] = {}
+    for key_node, _value_node in node.value:
+        key = loader.construct_object(key_node, deep=deep)
+        if key in seen:
+            first_line = seen[key].start_mark.line + 1
+            dup_line = key_node.start_mark.line + 1
+            raise yaml.constructor.ConstructorError(
+                None,
+                None,
+                (
+                    f"duplicate key {key!r} in mapping "
+                    f"(first at line {first_line}, again at line {dup_line}) — "
+                    f"YAML silently keeps only the last value; if you meant two "
+                    f"separate steps/entries, add another list item"
+                ),
+                key_node.start_mark,
+            )
+        seen[key] = key_node
+    return loader.construct_mapping(node, deep=deep)
+
+
+_StrictLoader.add_constructor(
+    yaml.resolver.BaseResolver.DEFAULT_MAPPING_TAG,
+    _no_duplicate_keys,
+)
+
+
 class Findings:
     def __init__(self) -> None:
         self.errors: list[str] = []
@@ -267,7 +310,13 @@ def main() -> None:
 
     try:
         with args.yaml.open() as fh:
-            guide = yaml.safe_load(fh)
+            guide = yaml.load(fh, Loader=_StrictLoader)
+    except yaml.constructor.ConstructorError as e:
+        # Duplicate-key errors carry their own line info in `problem_mark`.
+        mark = e.problem_mark
+        loc = f"line {mark.line + 1}" if mark else "unknown location"
+        print(f"error: {loc}: {e.problem}", file=sys.stderr)
+        sys.exit(1)
     except yaml.YAMLError as e:
         print(f"error: could not parse YAML: {e}", file=sys.stderr)
         sys.exit(1)
