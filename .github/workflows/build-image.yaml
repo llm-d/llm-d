@@ -96,6 +96,7 @@ jobs:
         with:
           ref: ${{ inputs.ref || '' }}
           allow-unsafe-pr-checkout: true
+
       - uses: dorny/paths-filter@v4
         if: github.event_name != 'workflow_dispatch' && inputs.force_build != true && inputs.platforms == ''
         id: filter
@@ -192,6 +193,7 @@ jobs:
         uses: actions/checkout@v7
         with:
           ref: ${{ inputs.ref || '' }}
+          allow-unsafe-pr-checkout: true
 
       - name: Load version configuration from file
         id: common-version
@@ -355,6 +357,7 @@ jobs:
         uses: actions/checkout@v7
         with:
           ref: ${{ inputs.ref || '' }}
+          allow-unsafe-pr-checkout: true
 
       - name: Load version configuration from file
         id: common-version
@@ -538,6 +541,7 @@ jobs:
         uses: actions/checkout@v7
         with:
           ref: ${{ inputs.ref || '' }}
+          allow-unsafe-pr-checkout: true
 
       - name: Export Git Sha
         id: export-sha
@@ -731,6 +735,7 @@ jobs:
         uses: actions/checkout@v7
         with:
           ref: ${{ inputs.ref || '' }}
+          allow-unsafe-pr-checkout: true
 
       - name: Load version configuration from file
         id: common-version
@@ -899,6 +904,7 @@ jobs:
         uses: actions/checkout@v7
         with:
           ref: ${{ inputs.ref || '' }}
+          allow-unsafe-pr-checkout: true
 
       - name: Export Git Sha
         id: export-sha
@@ -1048,6 +1054,7 @@ jobs:
         uses: actions/checkout@v7
         with:
           ref: ${{ inputs.ref || '' }}
+          allow-unsafe-pr-checkout: true
 
       - name: Load version configuration from file
         id: common-version
@@ -1200,6 +1207,7 @@ jobs:
         uses: actions/checkout@v7
         with:
           ref: ${{ inputs.ref || '' }}
+          allow-unsafe-pr-checkout: true
 
       - name: Load version configuration from file
         id: cuda-version
@@ -1294,6 +1302,7 @@ jobs:
         uses: actions/checkout@v7
         with:
           ref: ${{ inputs.ref || '' }}
+          allow-unsafe-pr-checkout: true
 
       - name: Load vLLM XPU base image from file
         id: common-versions
@@ -1385,6 +1394,7 @@ jobs:
         uses: actions/checkout@v7
         with:
           ref: ${{ inputs.ref || '' }}
+          allow-unsafe-pr-checkout: true
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v4
@@ -1463,6 +1473,7 @@ jobs:
         uses: actions/checkout@v7
         with:
           ref: ${{ inputs.ref || '' }}
+          allow-unsafe-pr-checkout: true
 
       - name: Load vLLM version from file
         id: common-versions
