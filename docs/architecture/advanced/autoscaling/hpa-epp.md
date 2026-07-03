@@ -28,7 +28,7 @@ cannot reliably distinguish spare serving capacity from an overloaded batch.
 
 EPP Flow Control moves excess demand to the gateway. Its
 `llm_d_epp_flow_control_queue_size` metric directly counts requests waiting for
-backend capacity, while `inference_objective_running_requests` measures active
+backend capacity, while `llm_d_epp_request_running` measures active running
 requests. Together they provide reactive saturation and proactive concurrency
 signals.
 
@@ -38,7 +38,7 @@ The scaling pipeline is:
 
 1. **Metric emission**: EPP exposes
    `llm_d_epp_flow_control_queue_size` and
-   `inference_objective_running_requests` on its metrics endpoint.
+   `llm_d_epp_request_running` on its metrics endpoint.
 2. **Metric collection**: Prometheus scrapes EPP through the router's
    `ServiceMonitor`.
 3. **Metric evaluation**: KEDA's Prometheus scaler evaluates one scalar or
@@ -69,9 +69,10 @@ largest desired replica count.
 Each PromQL query aggregates to one value and must isolate the EPP/InferencePool
 associated with the target Deployment. Label values such as `namespace`,
 `model_name`, and `inference_pool` depend on the deployment and scrape
-configuration. Because multiple pools can serve the same model and not all
-metrics expose `inference_pool`, selectors may also need EPP scrape labels such
-as service, job, or pod. Verify isolation against live Prometheus series.
+configuration. The running-request metric does not expose `inference_pool`.
+Because multiple pools can serve the same model, selectors may also need EPP
+scrape labels such as `service`. Verify isolation against live Prometheus
+series.
 
 ### Ownership and Scaling Behavior
 

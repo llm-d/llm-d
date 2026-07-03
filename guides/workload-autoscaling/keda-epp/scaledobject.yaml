@@ -28,7 +28,7 @@ spec:
   # ordinary scale-down while minReplicaCount is 1 or greater.
   cooldownPeriod: 300
   minReplicaCount: 1
-  maxReplicaCount: 3
+  maxReplicaCount: 8
   advanced:
     horizontalPodAutoscalerConfig:
       name: keda-hpa-optimized-baseline
@@ -54,7 +54,7 @@ spec:
         # Prometheus service, protocol, or authentication setup differs.
         serverAddress: https://llmd-kube-prometheus-stack-prometheus.llm-d-monitoring.svc.cluster.local:9090
         query: >-
-          sum(llm_d_epp_flow_control_queue_size{namespace="llm-d-optimized-baseline",model_name="Qwen/Qwen3-32B"})
+          sum(llm_d_epp_flow_control_queue_size{namespace="llm-d-optimized-baseline",service="optimized-baseline-epp",model_name="Qwen/Qwen3-32B"})
         threshold: "1"
       authenticationRef:
         name: keda-prometheus-auth
@@ -66,7 +66,7 @@ spec:
         # Prometheus service, protocol, or authentication setup differs.
         serverAddress: https://llmd-kube-prometheus-stack-prometheus.llm-d-monitoring.svc.cluster.local:9090
         query: >-
-          sum(inference_objective_running_requests{namespace="llm-d-optimized-baseline",model_name="Qwen/Qwen3-32B"})
+          sum(llm_d_epp_request_running{namespace="llm-d-optimized-baseline",service="optimized-baseline-epp",model_name="Qwen/Qwen3-32B"})
         threshold: "16"
       authenticationRef:
         name: keda-prometheus-auth

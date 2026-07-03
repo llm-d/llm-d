@@ -59,16 +59,17 @@ Once the additional pools are deployed, configure one scaler per target
 Deployment. Either scaling path can be used:
 
 - **[KEDA + EPP Metrics](./README.hpa-epp.md)**: Create one KEDA
-  `ScaledObject` per target Deployment using the EPP queue-size and
-  running-request metrics. Each query must isolate the EPP/InferencePool
-  associated with that target. Queue-size series may provide an
-  `inference_pool` label, while running-request series may provide only
-  `model_name`; multiple pools serving the same model can therefore be
-  aggregated accidentally. Inspect live Prometheus series and, where needed,
-  use scrape labels such as the EPP service, job, or pod to distinguish pools
-  before constructing selectors. The checked-in single-pool example does not
-  by itself solve multi-pool metric isolation. KEDA creates the HPA for each
-  target Deployment.
+  `ScaledObject` per target Deployment. Each PromQL query must isolate the
+  EPP/InferencePool associated with that Deployment using the labels currently
+  exposed by EPP and by the Prometheus scrape target.
+
+  Label availability differs by metric. The Flow Control queue-size metric may
+  include InferencePool-level labels, while `llm_d_epp_request_running` is
+  labeled by model, target model, fairness ID, and priority rather than
+  `inference_pool`. When multiple EPP Services expose series for the same
+  model, include scrape labels such as `service` to isolate the intended EPP
+  deployment. Do not rely on `model_name` alone when multiple pools can serve
+  the same model. This is a current EPP metric-label limitation.
 
 - **[HPA + WVA Metrics](./README.wva.md)**: Create one HPA per model using the `wva_desired_replicas` metric. Each HPA must carry the WVA discovery annotations (`llm-d.ai/managed`, `llm-d.ai/model-id`, `llm-d.ai/variant-cost`).
 
