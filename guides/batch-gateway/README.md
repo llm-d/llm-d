@@ -176,5 +176,6 @@ kubectl delete namespace ${NAMESPACE}
 
 ## Related
 
+- [Batch Gateway Architecture](../../docs/architecture/advanced/batch/batch-gateway.md) — architecture and internal components of the Batch Gateway.
 - [Batch Gateway Repository](https://github.com/llm-d/llm-d-batch-gateway) — source code, Helm chart, and detailed documentation.
 - [Asynchronous Processing](../asynchronous-processing/README.md) — queue-based asynchronous inference for individual requests (complementary to Batch Gateway's job-oriented API).

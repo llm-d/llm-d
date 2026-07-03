@@ -77,3 +77,7 @@ Testing instructions vary depending on the chosen queue implementation. Please r
 ```bash
 helm uninstall async-processor -n ${NAMESPACE}
 ```
+
+## Further Reading
+
+- [Async Processor Architecture](../../docs/architecture/advanced/batch/async-processor.md) — details on the internal mechanics and gating of the Async Processor.
