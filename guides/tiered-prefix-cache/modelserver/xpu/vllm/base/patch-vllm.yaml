@@ -20,6 +20,8 @@ spec:
           securityContext:
             privileged: true
           env:
+            - name: USER
+              value: llm-d
             - name: HF_TOKEN
               valueFrom:
                 secretKeyRef:
