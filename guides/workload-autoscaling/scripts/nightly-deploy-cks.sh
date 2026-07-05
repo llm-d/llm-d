@@ -34,5 +34,5 @@ kubectl apply -k guides/workload-autoscaling/wva-config/platform/cks
 # Validate WVA controller is ready, then apply autoscaling resources
 kubectl wait deployment/workload-variant-autoscaler-controller-manager \
   -n "${WVA_DEPLOY_NS}" --for=condition=Available --timeout=300s
-kubectl apply -k guides/workload-autoscaling/optimized-baseline-autoscaling -n "${NAMESPACE}"
+kubectl apply -k guides/workload-autoscaling/optimized-baseline-autoscaling/hpa -n "${NAMESPACE}"
 kubectl get variantautoscaling,hpa -n "${NAMESPACE}"

@@ -1,0 +1,65 @@
+# KEDA ScaledObject with wva_desired_replica metric
+#
+# This ScaledObject replaces both Prometheus Adapter and the standard HPA.
+# KEDA creates its own HPA from this ScaledObject — do NOT apply hpa.yaml alongside it.
+#
+# Update `serverAddress` below to match your Prometheus endpoint.
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: optimized-baseline-nvidia-gpu-vllm-decode-scaler
+  labels:
+    app: optimized-baseline-nvidia-gpu-vllm-decode
+    scaler: keda-workload-variant-autoscaler
+    llm-d.ai/guide: "optimized-baseline"
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: optimized-baseline-nvidia-gpu-vllm-decode
+  minReplicaCount: 1
+  maxReplicaCount: 10
+  pollingInterval: 5
+  cooldownPeriod: 30
+  initialCooldownPeriod: 30
+  fallback:
+    failureThreshold: 3
+    replicas: 2
+    behavior: currentReplicasIfHigher
+  advanced:
+    restoreToOriginalReplicaCount: false
+    horizontalPodAutoscalerConfig:
+      name: wva-keda-hpa-optimized-baseline-nvidia-gpu-vllm-decode
+      behavior:
+        scaleUp:
+          stabilizationWindowSeconds: 0
+          policies:
+          - type: Percent
+            value: 100
+            periodSeconds: 30
+          - type: Pods
+            value: 5
+            periodSeconds: 15
+        scaleDown:
+          stabilizationWindowSeconds: 60
+          policies:
+          - type: Percent
+            value: 100
+            periodSeconds: 30
+          - type: Pods
+            value: 5
+            periodSeconds: 15
+  triggers:
+  - type: prometheus
+    name: wva-desired-replicas
+    metadata:
+      serverAddress: https://thanos-querier.openshift-monitoring.svc.cluster.local:9091
+      query: |
+        wva_desired_replicas{
+          variant_name="optimized-baseline-nvidia-gpu-vllm-decode",
+          exported_namespace="llm-d-optimized-baseline"
+        }
+      threshold: "1"
+      activationThreshold: "0"
+      metricType: AverageValue
+      unsafeSsl: "true"

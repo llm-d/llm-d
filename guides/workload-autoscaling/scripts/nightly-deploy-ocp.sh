@@ -47,7 +47,7 @@ namespace: ${NAMESPACE}
 resources:
   - ${REL}/guides/workload-autoscaling/wva-config/platform/ocp/
   - ${REL}/guides/optimized-baseline/modelserver/gpu/vllm/base/
-  - ${REL}/guides/workload-autoscaling/optimized-baseline-autoscaling/
+  - ${REL}/guides/workload-autoscaling/optimized-baseline-autoscaling/hpa/
 patches:
   - path: patch-hpa-exported-ns.yaml
     target:
