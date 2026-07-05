@@ -179,7 +179,6 @@ spec:
                   imagePullPolicy: Always
                   args:
                     - --port=8000
-                    - --vllm-port=8200
                     - --kv-connector=nixlv2
                     - --zap-log-level=1
                     - --secure-proxy=false
