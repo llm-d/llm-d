@@ -72,7 +72,7 @@ def _extract_badge_name(path: Path) -> str | None:
     return m.group(1) if m else None
 
 
-def discover_workflows() -> dict[tuple[str, str, str], list[str]]:
+def discover_workflows() -> dict[tuple[str, str, str], list[tuple[str, str, str]]]:
     """Scan the workflows directory and return a mapping.
 
     Returns:
