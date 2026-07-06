@@ -2,16 +2,20 @@
 
 ## Overview
 
-Fast Model Actuation (FMA) enables rapid model loading and switching for LLM inference on Kubernetes by exploiting vLLM sleep/wake and model swapping. It implements the "dual pods" technique:
+Fast Model Actuation (FMA) enables rapid model loading and switching for LLM inference on Kubernetes by exploiting vLLM sleep/wake and model swapping. In Kubernetes, GPUs are bound 1-to-1 to pods: a pod that requests a GPU holds it exclusively for its lifetime. FMA uses the following **dual pod** technique to circumvent this constraint:
 
 - **Server-requesting Pods** reserve GPU resources via the Kubernetes scheduler but do not run inference themselves.
 - **Launcher Pods** (server-providing) run vLLM without requesting GPUs. They gain access to GPUs via `CUDA_VISIBLE_DEVICES`, directed by the FMA controller to the specific GPU(s) reserved by the requesting pod.
 - **FMA Controllers** manage the lifecycle: binding requesting pods to launchers, starting vLLM instances, and orchestrating sleep/wake.
 
-When a requesting pod is deleted, the controller puts the corresponding vLLM instance to sleep (model stays in GPU memory). When a new requesting pod arrives and gets assigned to the same GPU, the controller wakes the sleeping instance — resuming in seconds instead of cold-starting from scratch.
+Server-requesting pods are managed through standard Kubernetes controllers such as ReplicaSets and autoscalers. The FMA controller watches these pods and translates scheduler decisions into actions on launcher pods and GPUs.
+
+When a requesting pod is deleted, the controller puts the corresponding vLLM instance to sleep (model stays in GPU memory). Although the Kubernetes GPU allocation is released when the requesting pod exits, the launcher pod retains the CUDA context and keeps the model in GPU memory. The GPU remains dedicated to that launcher until it is explicitly unbound or the launcher pod is deleted. When a new requesting pod arrives and gets assigned to the same GPU, the controller wakes the sleeping instance, resuming in seconds instead of cold-starting from scratch.
+
+FMA also supports instant model switching: if a new requesting pod references a different `InferenceServerConfig`, the FMA controller can direct the bound launcher to swap the loaded model in place, avoiding a full cold start.
 
 > [!NOTE]
-> Fast wake only occurs if the Kubernetes scheduler and device plugin assign the new requesting pod to the same GPU where the sleeping vLLM instance resides. In single-GPU-per-node configurations this is nearly guaranteed.
+> Fast wake only occurs if the Kubernetes scheduler assigns the new requesting pod to the same node (and GPU) where the sleeping vLLM instance resides. In a cluster with a single GPU per node, if the scheduler picks the same node, the GPU is necessarily the same one. In a multi-node pool the scheduler may assign the pod to a different node.
 
 ## Default Configuration
 
@@ -24,6 +28,8 @@ When a requesting pod is deleted, the controller puts the corresponding vLLM ins
 | Router                  | llm-d-router-standalone-dev                                   |
 
 ## Prerequisites
+
+This guide assumes you have a Kubernetes cluster with GPU nodes and the [llm-d router](../../guides/recipes/router/README.md) infrastructure available. If you are starting from an existing llm-d deployment, the Gateway API Inference Extension CRDs may already be installed and you can skip that step.
 
 - Have the [proper client tools installed on your local system](../../helpers/client-setup/README.md) to use this guide.
 - Checkout llm-d repo:
@@ -58,6 +64,8 @@ When a requesting pod is deleted, the controller puts the corresponding vLLM ins
   ```
 
 ## Installation Instructions
+
+At minimum, the user running these commands needs rights to create and manage CRDs, ClusterRoles, ClusterRoleBindings, and Helm releases across namespaces.
 
 ### 1. Apply FMA CRDs
 
@@ -227,7 +235,7 @@ EOF
 ```
 
 > [!NOTE]
-> The launcher pod does **not** request GPU resources. It gains access to GPUs via `CUDA_VISIBLE_DEVICES`, set by the FMA controller to match the GPU reserved by the corresponding requesting pod. The `runtimeClassName: nvidia` is required on platforms (e.g., OpenShift) where GPU driver libraries are injected via the runtime class rather than the device plugin resource request.
+> The launcher pod does **not** request GPU resources from the Kubernetes scheduler or device plugin. Instead, the FMA controller sets `CUDA_VISIBLE_DEVICES` to point to the GPU reserved by the corresponding requesting pod, giving the launcher direct access to that GPU via the CUDA runtime. The `runtimeClassName: nvidia` is required on platforms (e.g., OpenShift) where GPU driver libraries are injected via the runtime class rather than the device plugin resource request.
 
 #### LauncherPopulationPolicy
 
@@ -388,7 +396,7 @@ kubectl wait --for=condition=ready pod -l app=fma-requester -n ${NAMESPACE} --ti
 Re-run the inference request from step 2 to confirm the model is serving again.
 
 > [!NOTE]
-> Wake latency depends on the Kubernetes scheduler assigning the new requesting pod to the same GPU where the sleeping vLLM instance resides. If a different GPU is assigned, a new vLLM instance starts from scratch (cold start). In single-GPU-per-node configurations, wake is nearly guaranteed.
+> Wake latency depends on the Kubernetes scheduler assigning the new requesting pod to the same node and GPU where the sleeping vLLM instance resides. If a different GPU is assigned, a new vLLM instance starts from scratch (cold start). Sleep/wake is most valuable in multi-GPU-per-node configurations where multiple models share the same GPU pool and can be swapped in and out without cold-starting.
 
 ## Cleanup
 
