@@ -1,0 +1,27 @@
+load:
+  type: constant
+  stages:
+  - {rate: 2, duration: 330}
+  - {rate: 4, duration: 360}
+  - {rate: 6, duration: 360}
+  - {rate: 8, duration: 360}
+  - {rate: 10, duration: 360}
+  - {rate: 4, duration: 360}
+  - {rate: 1, duration: 300}
+  request_timeout: 900
+api:
+  type: completion
+  streaming: true
+  headers: {x-llm-d-slo-ttft-ms: "3000", x-llm-d-slo-tpot-ms: "100"}
+server:
+  type: vllm
+  model_name: Qwen/Qwen3-32B
+  base_url: http://optimized-baseline-epp.llm-d-optimized-baseline.svc.cluster.local:80
+  ignore_eos: true
+tokenizer: {pretrained_model_name_or_path: Qwen/Qwen3-32B}
+data:
+  type: random
+  input_distribution:  {min: 3500, max: 4500, mean: 4000, std_dev: 300, total_count: 8000}
+  output_distribution: {min: 900,  max: 1100, mean: 1000, std_dev: 80,  total_count: 8000}
+report: {request_lifecycle: {summary: true, per_stage: true, per_request: false}}
+storage: {local_storage: {path: /workspace/results}}
