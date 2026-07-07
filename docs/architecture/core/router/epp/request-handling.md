@@ -96,7 +96,7 @@ The Request Handling subsystem exposes metrics tracking request volume, success,
 |--------|------|-------------|--------|
 | `inference_objective_request_total` | Counter | Total request count per model | `model_name`, `target_model_name`, `priority` |
 | `inference_objective_request_error_total` | Counter | Total error count per model | `model_name`, `target_model_name`, `error_code` |
-| `llm_d_epp_request_running` | Gauge | Current active running requests | `model_name`, `target_model_name`, `fairness_id`, `priority` |
+| `inference_objective_running_requests` | Gauge | Currently active requests per model | `model_name` |
 
 #### Latency & SLOs
 

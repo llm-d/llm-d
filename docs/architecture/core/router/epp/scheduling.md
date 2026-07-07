@@ -165,9 +165,8 @@ The following metrics provide visibility into the InferencePool health and sched
 | `llm_d_epp_ready_endpoints` | Gauge | `name` | Number of ready pods in the pool |
 | `llm_d_epp_average_kv_cache_utilization` | Gauge | `name` | Average KV cache utilization across the pool |
 | `llm_d_epp_average_queue_size` | Gauge | `name` | Average number of pending requests across the pool |
-| `llm_d_epp_average_running_requests` | Gauge | `name` | Average number of running requests across the pool |
 | `llm_d_epp_per_endpoint_queue_size` | Gauge | `model_server_pod`, `name` | Queue size for each individual pod |
-| `llm_d_epp_request_running` | Gauge | `model_name`, `target_model_name`, `fairness_id`, `priority` | Current active running requests |
+| `llm_d_epp_request_running` | Gauge | `name` | Average number of running requests across the pool |
 
 #### Scheduler Performance Metrics
 
