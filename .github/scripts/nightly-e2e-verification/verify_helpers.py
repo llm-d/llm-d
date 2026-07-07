@@ -16,8 +16,6 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable, Iterable
 
-import yaml
-
 
 OPS = {
     "<=": lambda a, b: a <= b,
@@ -63,6 +61,25 @@ def error(msg: str) -> None:
     print(msg, file=sys.stderr)
 
 
+def _read_metadata_namespace(meta: Path) -> str | None:
+    """Extract the top-level `namespace:` field from run_metadata.yaml.
+    Returns None if the file is unreadable or the field is missing.
+    run_metadata.yaml is a flat YAML file with a single top-level mapping.
+    """
+    try:
+        text = meta.read_text()
+    except OSError:
+        return None
+    namespace_kvs = [kv for kv in text.splitlines() if kv.strip().startswith("namespace:")]
+    if not namespace_kvs:
+        return None
+    val = namespace_kvs[0].split(":", 1)[1].strip()
+    if not val:
+        return None
+    val = val.strip("'\"")  # Strip a single pair of matching surrounding quotes.
+    return val
+
+
 def find_results_dirs(workspace: str, namespace: str) -> list[Path] | None:
     """Return experiment result subdirs for the current run.
 
@@ -72,7 +89,7 @@ def find_results_dirs(workspace: str, namespace: str) -> list[Path] | None:
     are disambiguated by metadata mtime.
 
     Only candidates in the canonical `<ws>/<user>-<ts>/results/<exp>/` layout
-    are considered. 
+    are considered.
     All experiments belonging to the winning run are returned (a single
     `llmdbenchmark run` invocation can produce multiple `<exp>/` subdirs).
     """
@@ -81,12 +98,7 @@ def find_results_dirs(workspace: str, namespace: str) -> list[Path] | None:
     for meta in ws.rglob("run_metadata.yaml"):
         if meta.parent.parent.name != "results":
             continue
-        try:
-            with meta.open() as f:
-                data = yaml.safe_load(f) or {}
-        except (OSError, yaml.YAMLError):
-            continue
-        if isinstance(data, dict) and data.get("namespace") == namespace:
+        if _read_metadata_namespace(meta) == namespace:
             matches.append(meta)
     if not matches:
         error(f"No <user>-<ts>/results/<exp>/run_metadata.yaml with "
