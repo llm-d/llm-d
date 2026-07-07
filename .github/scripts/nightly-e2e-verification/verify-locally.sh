@@ -9,18 +9,18 @@
 # are still required to be set in your shell if the scenario's verify.py expects them.
 # 
 # Usage:
-#   ./run-locally.sh <scenario> [<workspace-dir>]
+#   ./verify-locally.sh <scenario> [<workspace-dir>]
 #
 # Examples:
-#   ./run-locally.sh tiered-prefix-cache
-#     → uses $LLMDBENCH_WORKSPACE from your shell
+#   ./verify-locally.sh tiered-prefix-cache
+#     -> uses $LLMDBENCH_WORKSPACE from your shell
 #
-#   ./run-locally.sh tiered-prefix-cache ~/llmdbenchmark
-#     → uses the given dir as the workspace
+#   ./verify-locally.sh tiered-prefix-cache ~/llmdbenchmark
+#     -> uses the given dir as the workspace
 #
 # Override any auto-inferred value by exporting it in your shell before
 # invoking this script:
-#   LLMDBENCH_CICD_NS=my-ns LLMDBENCH_CICD_OFFLOADING_TARGET=fs ./run-locally.sh tiered-prefix-cache
+#   LLMDBENCH_CICD_NS=my-ns LLMDBENCH_CICD_OFFLOADING_TARGET=fs ./verify-locally.sh tiered-prefix-cache
 
 set -euo pipefail
 
@@ -35,8 +35,9 @@ VERIFY_SCRIPT="$SCRIPT_DIR/$SCENARIO/verify.py"
 if [[ ! -f "$VERIFY_SCRIPT" ]]; then
   echo "error: no verify.py at $VERIFY_SCRIPT" >&2
   echo "       existing scenarios:" >&2
-  find "$SCRIPT_DIR" -mindepth 2 -maxdepth 2 -name verify.py -not -path "*/_template/*" \
-    -printf "         %h\n" | xargs -n1 basename >&2 || true
+  for f in "$SCRIPT_DIR"/*/verify.py; do
+    [[ -f "$f" && "$f" != *"/_template/"* ]] && echo "         $(basename "$(dirname "$f")")" >&2
+  done
   exit 2
 fi
 

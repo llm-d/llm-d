@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import sys
 import getpass
 import subprocess
@@ -73,7 +74,7 @@ def find_results_dirs(workspace: str) -> list[Path] | None:
         return None
     ws = Path(workspace)
     for results in sorted(ws.rglob("results"), key=lambda p: -p.stat().st_mtime):
-        if not results.is_dir() and not results.parent.name.startswith(getpass.getuser()):
+        if not results.is_dir() or not results.parent.name.startswith(getpass.getuser()):
             continue
         exp_dirs = [c for c in results.iterdir()
                     if c.is_dir() and (c / "run_metadata.yaml").exists()]
@@ -85,14 +86,23 @@ def find_results_dirs(workspace: str) -> list[Path] | None:
 
 
 def get_vllm_version(namespace: str, pod: str) -> tuple[int, ...] | None:
+    """Return vLLM's version tuple from `pod`, or None if unavailable. 
+    For example, '0.24.0rc1' or '0.24.0' will return (0, 24, 0).
+    """
     out = kubectl(
         ["exec", "-n", namespace, pod, "--", "python3", "-c",
          "import vllm; print(vllm.__version__)"],
         timeout=10,
     ).strip()
-
-    version = tuple(int(x) for x in out.split(".") if x.isdigit())
-    return version if version else None   
+    if not out:
+        return None
+    parts: list[int] = []
+    for seg in out.split("."):
+        m = re.match(r"\d+", seg)
+        if not m:
+            break
+        parts.append(int(m.group()))
+    return tuple(parts) if parts else None
 
 # ---------------------------------------------------------------------------
 # Metrics summary
@@ -118,7 +128,7 @@ class MetricsSummary:
         self.per_pod: dict = {
             pod: (data.get("metrics") or {})
             for pod, data in raw.items()
-            if not pod.startswith("_")
+            if not pod.startswith("_") and isinstance(data, dict)
         }
 
     @classmethod
@@ -131,7 +141,11 @@ class MetricsSummary:
                   f"pod's metrics_collection.log for scrape errors.")
             return None
         with path.open() as f:
-            raw = json.load(f)
+            try:
+                raw = json.load(f)
+            except json.JSONDecodeError as e:
+                error(f"{path} is not valid JSON: {e}")
+                return None
         info = raw.get("_info", {})
         if info.get("status") == "no_data":
             error(f"metrics_summary.json has no data: {info.get('message')}")
@@ -230,7 +244,7 @@ class MetricsSummary:
 
 def print_checks_table(checks: Iterable[Check]) -> None:
     """Print a fixed-width, human-readable checks table to stdout (for CI raw logs)."""
-    headers = ["STATUS", "CHECK", "DETAIL (MEAS op TRESH)"]
+    headers = ["STATUS", "CHECK", "DETAIL (MEAS op THRESH)"]
     rows = [
         ["PASS" if c.passed else "FAIL", c.name, c.detail]
         for c in checks
@@ -275,13 +289,26 @@ def verify_checks(env: dict, metrics: MetricsSummary,
 # ---------------------------------------------------------------------------
 
 def kubectl(args: list[str], timeout: int = 30) -> str:
+    """Run kubectl and return stdout, or "" if the command failed.
+
+    Failure (non-zero exit, timeout, exec error) is logged to stderr and
+    signalled by an empty return string — every caller already treats an
+    empty result as "not found / no data", so this collapses the failure
+    path uniformly instead of returning stderr text that downstream code
+    then parses as if it were pod names, PVC phases, or version strings.
+    """
     try:
         r = subprocess.run(["kubectl", *args], capture_output=True, text=True, timeout=timeout)
-        return (r.stdout or r.stderr or "").rstrip()
     except subprocess.TimeoutExpired:
-        return f"(timed out: kubectl {' '.join(args)})"
+        error(f"kubectl {' '.join(args)}: timed out after {timeout}s")
+        return ""
     except Exception as e:
-        return f"(failed: {e})"
+        error(f"kubectl {' '.join(args)}: {e}")
+        return ""
+    if r.returncode != 0:
+        error(f"kubectl {' '.join(args)}: exit={r.returncode} {r.stderr.rstrip()}")
+        return ""
+    return r.stdout.rstrip()
 
 
 def get_model_pods(namespace: str) -> list[str]:

@@ -1,6 +1,6 @@
 # Nightly E2E verification scripts
 
-Verification scripts for running in the verification step in the nightly e22 ci workflow.
+Verification scripts for running in the verification step in the nightly E2E CI workflow.
 
 Verification runs between the harness `Run` step and `Teardown` in
 `reusable-ci-nightly-benchmark.yaml` (llm-d-infra), so pods and PVCs are
@@ -11,7 +11,7 @@ still up and `kubectl` is configured against the test cluster.
 ```
 nightly-e2e-verification/
 ├── README.md
-├── run-locally.sh            ← wrapper: sets env vars, runs a verify.py on your laptop
+├── verify-locally.sh            ← wrapper: sets env vars, runs a verify.py on your laptop
 ├── verify_helpers.py         ← shared helpers (library only; not run directly)
 ├── _template/
 │   └── verify.py             ← copy this for a new scenario
@@ -33,17 +33,17 @@ If `verify_script` is empty, no verification runs.
 
 ## Running locally
 
-Use `run-locally.sh` after an `llmdbenchmark run` finishes. Point it at the
+Use `verify-locally.sh` after an `llmdbenchmark run` finishes. Point it at the
 same workspace dir you passed to llmdbenchmark — the wrapper will pick the
 newest `<user>-<timestamp>/results/<exp>` under it.
 
 ```bash
 # Pass the workspace explicitly
-./run-locally.sh tiered-prefix-cache ~/llmdbenchmark
+./verify-locally.sh tiered-prefix-cache ~/llmdbenchmark
 
 # Or export it once and skip the second arg
 export LLMDBENCH_WORKSPACE=~/llmdbenchmark
-./run-locally.sh tiered-prefix-cache
+./verify-locally.sh tiered-prefix-cache
 ```
 
 The wrapper sets the same `LLMDBENCH_*` env vars the CI job sets. Only
@@ -55,7 +55,7 @@ The wrapper sets the same `LLMDBENCH_*` env vars the CI job sets. Only
 - `LLMDBENCH_CICD_{WORKLOAD,HARNESS,DETECTED_MODEL}` ← `<local>` placeholder
 
 Any env var already exported in your shell wins over the wrapper's default,
-so overriding one is just `LLMDBENCH_CICD_NS=my-ns ./run-locally.sh …`.
+so overriding one is just `LLMDBENCH_CICD_NS=my-ns ./verify-locally.sh …`.
 
 ## Adding a new scenario
 
@@ -105,11 +105,11 @@ metrics.check_aggregated("vllm:time_to_first_token_seconds", "p99", "<=", 2.0)
 # -> Check(name="vllm:time_to_first_token_seconds.p99", passed=..., detail="1.85 <= 2.00")
 
 # Pulls metrics.per_pod[pod][metric][aggregate] for every pod, combines with
-# combine(values), threshold-checks the result. Default combine funciton is max
+# combine(values), threshold-checks the result. Default combine function is max
 # ("did any pod hit the bound?"). Pass any callable that consumes an iterable
 # of floats: max, min, sum, statistics.mean, or a lambda around functools.reduce.
 metrics.check_per_pod("vllm:kv_offload_store_bytes_total", "max", ">", 0.0)
-metrics.check_per_pod("vllm:kv_cache_usage_perc", "mean", "<=", 80.0, reduce=statistics.mean)
+metrics.check_per_pod("vllm:kv_cache_usage_perc", "mean", "<=", 80.0, combine=statistics.mean)
 # -> Check(name="vllm:foo.max (per-pod max)", passed=..., detail="1.02e+09 > 0")
 ```
 
@@ -152,7 +152,6 @@ directly from `os.environ` when needed.
 | `LLMDBENCH_CICD_DETECTED_MODEL` | `env["model"]` | Model id |
 | `GITHUB_RUN_ID` | `env["run_id"]` | For traceability |
 | `LLMDBENCH_CICD_OFFLOADING_TARGET` | _read via `os.environ`_ | `'fs'` / `'cpu'` (tiered-prefix-cache mode) |
-| `GITHUB_STEP_SUMMARY` | _read via `os.environ`_ | Markdown file to append a report to |
 | `KUBECONFIG` / `~/.kube/config` | _used by `kubectl`_ | kubectl is already configured |
 
 Exit code: `0` on success, non-zero on any failure. Read the CI logs to see

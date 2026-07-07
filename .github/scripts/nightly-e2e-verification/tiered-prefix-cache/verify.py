@@ -15,10 +15,11 @@ The mode is selected via `LLMDBENCH_CICD_OFFLOADING_TARGET` at the job level
 in reusable-ci-nightly-benchmark.yaml (`fs` / `cpu`).
 
 Metric checks (both variants):
-  - vllm:kv_offload_store_bytes.max  > 0 : GPU wrote at least once into
+  - vllm:kv_offload_store_bytes_total.max  > 0 : GPU wrote at least once into
     the offload tier during the run (tier is being populated).
-  - (not tested currently)vllm:kv_offload_load_bytes.max   > 0 : the offload tier served at
-    least one read back to GPU (tier is being *used*, not just filled).
+  - (not tested currently) vllm:kv_offload_load_bytes_total.max   > 0 : the
+    offload tier served at least one read back to GPU (tier is being *used*,
+    not just filled).
   Both are `check_per_pod` with the default `combine=max`, so "any pod hit
   it" is enough — we don't require every replica to have been exercised.
 
@@ -105,20 +106,34 @@ def check_pvc_has_data(namespace: str, pod: str) -> v.Check:
     under KV_CACHE_DIR from inside the pod, and report their total size.
 
     Mirrors the guide's storage-offload verification step.
+
+    Distinguishes three failure modes so the CI log points at the right
+    thing: kubectl exec failed, the mount is missing on the pod, or the
+    directory exists but is empty.
     """
-    out = v.kubectl(
+    name = "PVC has KV cache data"
+    lines = v.kubectl(
         ["exec", "-n", namespace, pod, "--", "sh", "-c",
+         f"[ -d {KV_CACHE_DIR} ] || {{ echo MISSING; exit 0; }}; "
          f"find {KV_CACHE_DIR} -type f 2>/dev/null | wc -l; "
          f"du -sh {KV_CACHE_DIR} 2>/dev/null | awk '{{print $1}}'"],
         timeout=30,
-    ).strip().splitlines()
+    ).splitlines()
+
+    if not lines:
+        return v.Check(name=name, passed=False,
+                       detail=f"kubectl exec failed on {pod}")
+    if lines == ["MISSING"]:
+        return v.Check(name=name, passed=False,
+                       detail=f"{KV_CACHE_DIR} does not exist on {pod}")
     try:
-        n = int(out[0])
+        n = int(lines[0])
     except (ValueError, IndexError):
-        n = 0
-    size = out[1] if len(out) > 1 else "?"
+        return v.Check(name=name, passed=False,
+                       detail=f"unparseable exec output on {pod}: {lines!r}")
+    size = lines[1] if len(lines) > 1 else "?"
     return v.Check(
-        name="PVC has KV cache data",
+        name=name,
         passed=n > 0,
         detail=f"{n} files ({size}) at {KV_CACHE_DIR} on {pod}",
     )
@@ -172,15 +187,15 @@ def main() -> int:
         return 1
     # PVC-side checks only apply in storage mode. The PVC is RWX and shared
     # across every model pod, so we only need to check one of them. 
-    if storage_mode and pods:
+    if storage_mode:
         checks.append(check_pvc_is_bound(namespace, pods[0]))
         checks.append(check_pvc_has_data(namespace, pods[0]))
 
     # Metric checks: both counters should have moved on at least one pod.
     vllm_version = v.get_vllm_version(namespace, pods[0])
     if vllm_version is None:
-        v.error(f"Failed to get vllm version from pod {pods[0]}")
-        return 1
+        v.error(f"Assuming vLLM < 0.24.0. (failed to get vllm version from pod {pods[0]})")
+        vllm_version = (0, 0, 0)
     old_metrics = vllm_version < (0, 24, 0)
     version_str = ".".join(str(x) for x in vllm_version)
     checks.append(v.Check(

@@ -40,7 +40,7 @@ def main() -> int:
     # Two flavors of metric check:
     #   check_aggregated(metric, aggregate, op, bound)
     #     -> reads metrics.aggregated[metric][aggregate], threshold-checks it.
-    #   check_per_pod(metric, aggregate, op, bound, *, reduce=max)
+    #   check_per_pod(metric, aggregate, op, bound, *, combine=max)
     #     -> pulls metrics.per_pod[pod][metric][aggregate] for every pod,
     #       combines across pods (default: max), threshold-checks the result.
     #
