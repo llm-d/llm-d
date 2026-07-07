@@ -17,7 +17,7 @@ SINGLE TENANT                    MULTI-TENANT
   ─────────────                    ────────────
 
   [A] ──▶ [ GPUs ]               [A] ╲
-                                 [B] ──▶ [ GPUs ]
+                          v       [B] ──▶ [ GPUs ]
   [B] ──▶ [ GPUs ]               [C] ╱
 
   [C] ──▶ [ GPUs ]
