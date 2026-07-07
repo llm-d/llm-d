@@ -77,6 +77,26 @@ Then in `<your-scenario>/verify.py`:
 The script is the single source of truth — grep-friendly, commentable per
 line, no separate config file to drift.
 
+## Tests
+
+Two test modules cover this directory. Both are stdlib `unittest` — no
+extra dependencies, matching the scripts themselves (nothing outside
+CPython's stdlib is imported).
+
+```bash
+# Shared helpers (find_results_dirs, MetricsSummary, check_*, kubectl, …)
+cd .github/scripts/nightly-e2e-verification
+python3 -m unittest test_verify_helpers.py -v
+
+# Scenario-specific verifier (tiered-prefix-cache mode toggle, PVC checks, main())
+cd tiered-prefix-cache
+python3 -m unittest test_verify.py -v
+```
+
+Add a scenario-specific test module alongside your new `verify.py`
+(`<your-scenario>/test_verify.py`) whenever you add non-trivial custom
+inspection logic.
+
 ## API reference
 
 ```python
