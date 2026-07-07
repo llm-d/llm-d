@@ -195,9 +195,11 @@ def main() -> int:
     vllm_version = v.get_vllm_version(namespace, pods[0])
     if vllm_version is None:
         v.error(f"Assuming vLLM < 0.24.0. (failed to get vllm version from pod {pods[0]})")
-        vllm_version = (0, 0, 0)
-    old_metrics = vllm_version < (0, 24, 0)
-    version_str = ".".join(str(x) for x in vllm_version)
+        old_metrics = True
+        version_str = "<unknown>"
+    else:
+        old_metrics = vllm_version < (0, 24, 0)
+        version_str = ".".join(str(x) for x in vllm_version)
     checks.append(v.Check(
         name=f"vLLM version - {version_str}, kv-cache metrics (new/old)",
         passed=True,
