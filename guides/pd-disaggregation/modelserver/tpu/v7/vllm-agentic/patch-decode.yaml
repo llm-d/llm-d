@@ -12,7 +12,7 @@ spec:
       containers:
         - name: modelserver
           args:
-            - "Qwen/Qwen3.5-397B-A17B-FP8"
+            - "Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8"
             - "--max-model-len=262144"
             - "--max-num-batched-tokens=8192"
             - "--max-num-seqs=512"

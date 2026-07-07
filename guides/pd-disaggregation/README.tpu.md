@@ -126,8 +126,9 @@ This template mimics a multi-turn agentic code generation workload.
 
 1. Ensure the TPU Model Server was deployed using the **Agentic Code Generation Workload** overlay (the `vllm-agentic` overlay) in step 2 of the installation instructions.
 
-2. Export the per-run variables (adjust `CONCURRENCY_LEVEL` as needed):
+2. Export the model name and per-run variables (adjust `CONCURRENCY_LEVEL` as needed):
    ```bash
+   export MODEL_NAME="Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8"
    export CONCURRENCY_LEVEL=40
    export NUM_REQUESTS=$((20 * CONCURRENCY_LEVEL))
    export SEED=$((7 + CONCURRENCY_LEVEL))
