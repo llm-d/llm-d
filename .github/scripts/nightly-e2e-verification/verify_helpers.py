@@ -11,11 +11,12 @@ import json
 import os
 import re
 import sys
-import getpass
 import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable, Iterable
+
+import yaml
 
 
 OPS = {
@@ -62,27 +63,39 @@ def error(msg: str) -> None:
     print(msg, file=sys.stderr)
 
 
-def find_results_dirs(workspace: str) -> list[Path] | None:
-    """Return experiment result subdirs from the most recent `llmdbenchmark run`.
+def find_results_dirs(workspace: str, namespace: str) -> list[Path] | None:
+    """Return experiment result subdirs for the current run.
 
-    Only `llmdbenchmark run` invocations produce a `results/` directory whose
-    parent is the timestamped `<user>-YYYYMMDD-HHMMSS-mmm` workspace subdir
-    llmdbenchmark mints per invocation. Newest by mtime wins.
+    Matches by namespace (from `run_metadata.yaml`) — concurrent CI jobs must
+    use distinct namespaces to avoid K8s collisions, so `namespace` uniquely
+    identifies a running job. Sequential runs that reuse the same namespace
+    are disambiguated by metadata mtime.
+
+    Only candidates in the canonical `<ws>/<user>-<ts>/results/<exp>/` layout
+    are considered. 
+    All experiments belonging to the winning run are returned (a single
+    `llmdbenchmark run` invocation can produce multiple `<exp>/` subdirs).
     """
-    if not workspace:
-        error("workspace not set (LLMDBENCH_WORKSPACE)")
-        return None
     ws = Path(workspace)
-    for results in sorted(ws.rglob("results"), key=lambda p: -p.stat().st_mtime):
-        if not results.is_dir() or not results.parent.name.startswith(getpass.getuser()):
+    matches: list[Path] = []
+    for meta in ws.rglob("run_metadata.yaml"):
+        if meta.parent.parent.name != "results":
             continue
-        exp_dirs = [c for c in results.iterdir()
-                    if c.is_dir() and (c / "run_metadata.yaml").exists()]
-        if exp_dirs:
-            return exp_dirs
-        break  # First time we see a results dir is the correct one; don't keep looking for older ones.
-    error(f"No <user>-<ts>/results/<exp>/run_metadata.yaml found under {workspace}")
-    return None
+        try:
+            with meta.open() as f:
+                data = yaml.safe_load(f) or {}
+        except (OSError, yaml.YAMLError):
+            continue
+        if isinstance(data, dict) and data.get("namespace") == namespace:
+            matches.append(meta)
+    if not matches:
+        error(f"No <user>-<ts>/results/<exp>/run_metadata.yaml with "
+              f"namespace={namespace!r} under {workspace}")
+        return None
+    # Newest metadata mtime wins — its parent's parent is this run's results/ dir.
+    newest = max(matches, key=lambda m: m.stat().st_mtime)
+    results_root = newest.parent.parent
+    return [m.parent for m in matches if m.parent.parent == results_root]
 
 
 def get_vllm_version(namespace: str, pod: str) -> tuple[int, ...] | None:

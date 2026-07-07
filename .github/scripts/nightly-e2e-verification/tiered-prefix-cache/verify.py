@@ -158,7 +158,7 @@ def main() -> int:
         v.error("kubectl not on PATH")
         return 1
 
-    exp_dirs = v.find_results_dirs(env["workspace"])
+    exp_dirs = v.find_results_dirs(env["workspace"], env["namespace"])
     if not exp_dirs:
         return 1
 

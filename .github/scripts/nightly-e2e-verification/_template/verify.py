@@ -24,7 +24,7 @@ import verify_helpers as v  # noqa: E402
 def main() -> int:
     env = v.workflow_env()
 
-    exp_dirs = v.find_results_dirs(env["workspace"])
+    exp_dirs = v.find_results_dirs(env["workspace"], env["namespace"])
     if not exp_dirs:
         return 1
     results_dir = exp_dirs[0]
