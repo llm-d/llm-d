@@ -62,9 +62,14 @@ Once the router is deployed, apply the Kustomize overlays specifically configure
 kubectl apply -n ${NAMESPACE} -k guides/${GUIDE_NAME}/modelserver/tpu/v6/vllm/
 ```
 
-**For TPU v7x:**
+**For TPU v7x (Standard Random Workload):**
 ```bash
 kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/tpu/v7/vllm/
+```
+
+**For TPU v7x (Agentic Code Generation Workload):**
+```bash
+kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/tpu/v7/vllm-agentic/
 ```
 
 *(Note: If you have monitoring enabled, you can optionally apply the monitoring components as described in the [main guide](./README.md#3-enable-monitoring-optional)).*
@@ -119,14 +124,16 @@ curl -LJO "https://raw.githubusercontent.com/llm-d/llm-d/main/guides/pd-disaggre
 #### Option B: Agentic Code Generation Workload (TPU v7x only)
 This template mimics a multi-turn agentic code generation workload. 
 
-1. Export the per-run variables (adjust `CONCURRENCY_LEVEL` as needed):
+1. Ensure the TPU Model Server was deployed using the **Agentic Code Generation Workload** overlay (the `vllm-agentic` overlay) in step 2 of the installation instructions.
+
+2. Export the per-run variables (adjust `CONCURRENCY_LEVEL` as needed):
    ```bash
    export CONCURRENCY_LEVEL=40
    export NUM_REQUESTS=$((20 * CONCURRENCY_LEVEL))
    export SEED=$((7 + CONCURRENCY_LEVEL))
    ```
 
-2. Download the agentic workload template:
+3. Download the agentic workload template:
    ```bash
    curl -LJO "https://raw.githubusercontent.com/llm-d/llm-d/main/guides/pd-disaggregation/benchmark-templates/agentic-code-gen-disagg.yaml"
    ```
@@ -147,9 +154,36 @@ envsubst < agentic-code-gen-disagg.yaml > config.yaml
 ./run_only.sh -c config.yaml -o ./results
 ```
 
+> [!TIP]
+> **Tuning Prefill-to-Decode Ratios:**
+> The default `vllm-agentic` overlay deploys the optimal 2:6 ratio (2 prefillers, 6 decoders). If you want to evaluate different ratios from the benchmarking report (such as 5:3 or 6:2), you can scale the active deployments directly:
+> ```bash
+> kubectl scale deployment/pd-disaggregation-tpu-vllm-prefill --replicas=5 -n ${NAMESPACE}
+> kubectl scale deployment/pd-disaggregation-tpu-vllm-decode --replicas=3 -n ${NAMESPACE}
+> ```
+
 ## Cleanup
 
-To clean up your cluster, return to the **[Cleanup](./README.md#cleanup)** section of the unified guide.
+To remove the deployed components:
+
+```bash
+helm uninstall ${GUIDE_NAME} -n ${NAMESPACE}
+```
+
+**For TPU v6e:**
+```bash
+kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/tpu/v6/vllm/
+```
+
+**For TPU v7x (Standard Random Workload):**
+```bash
+kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/tpu/v7/vllm/
+```
+
+**For TPU v7x (Agentic Code Generation Workload):**
+```bash
+kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/tpu/v7/vllm-agentic/
+```
 
 ## Benchmarking Report (TPU v7x Example)
 
