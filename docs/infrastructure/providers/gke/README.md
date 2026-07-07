@@ -49,6 +49,7 @@ GKE network DRA (**DRANET**) supports managed networking out of the box, so you 
 ```bash
 gcloud container clusters create "${CLUSTER_NAME}" \
     --enable-dataplane-v2 \
+    --managed-otel-scope=COLLECTION_AND_INSTRUMENTATION_COMPONENTS \
     --location="${LOCATION}" \
     --project="${PROJECT}"
 ```
@@ -171,7 +172,9 @@ For all TPU machines, follow the [TPUs in GKE documentation](https://cloud.googl
 
 ### Monitoring
 
-We recommend enabling Google Managed Prometheus and [automatic application monitoring](https://cloud.google.com/kubernetes-engine/docs/how-to/configure-automatic-application-monitoring) to enable automatic metrics collection and dashboards for vLLM deployed on the cluster.
+We recommend enabling Google Managed Prometheus and [automatic application monitoring](https://cloud.google.com/kubernetes-engine/docs/how-to/configure-automatic-application-monitoring) to enable automatic metrics collection and dashboards for vLLM deployed on the cluster, and [Managed OpenTelemetry](https://cloud.google.com/kubernetes-engine/docs/how-to/managed-otel-gke) to collect telemetry data in OTLP format like traces for the llm-d stack.
+
+When creating your cluster, the `--managed-otel-scope=COLLECTION_AND_INSTRUMENTATION_COMPONENTS` flag enables Managed OpenTelemetry on the cluster. Setting the scope to `COLLECTION_AND_INSTRUMENTATION_COMPONENTS` tells GKE to deploy both the OpenTelemetry Collector (in the `gke-managed-otel` namespace) and the Instrumentation Custom Resource Definition (CRD), which is used to automatically inject OpenTelemetry configurations into your workload pods.
 
 ## Workload Configuration
 
