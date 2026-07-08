@@ -156,14 +156,12 @@ spec:
                   --data-parallel-address ${LWS_LEADER_ADDRESS} \
                   --data-parallel-rpc-port 5555 \
                   --data-parallel-start-rank $START_RANK \
-                  --kv_transfer_config '{"kv_connector":"NixlConnector",
-                                          "kv_role":"kv_both",
-                                          "kv_load_failure_policy":"fail"}' \
+                  --kv_transfer_config '{"kv_connector":"MultiConnector","kv_role":"kv_both","kv_load_failure_policy":"fail","kv_connector_extra_config":{"connectors":[{"kv_connector":"NixlConnector","kv_role":"kv_both"},{"kv_connector":"OffloadingConnector","kv_role":"kv_both","kv_connector_extra_config":{"cpu_bytes_to_use":150000000000}}]}}' \
                   --moe-backend deep_gemm \
                   --all2all-backend deepep_high_throughput \
                   --kv-cache-dtype fp8 \
                   --speculative-config '{"method":"mtp","num_speculative_tokens":3}' \
-                  --max-model-len 256000
+                  --max-model-len 150000
                 
                   # To enable tracing, add:
                   # --otlp-traces-endpoint http://otel-collector:4317 \
@@ -285,13 +283,14 @@ spec:
               failureThreshold: 3
             resources:
               limits:
+                cpu: 64
                 ephemeral-storage: 1Ti
-                memory: 512Gi
+                memory: 1500Gi
                 nvidia.com/gpu: "8"
               requests:
-                cpu: 32
+                cpu: 64
                 ephemeral-storage: 1Ti
-                memory: 512Gi
+                memory: 1500Gi
                 nvidia.com/gpu: "8"
             volumeMounts:
               - name: dshm

@@ -208,7 +208,7 @@ spec:
                   --moe-backend deep_gemm \
                   --kv-cache-dtype fp8 \
                   --speculative-config '{"method":"mtp","num_speculative_tokens":3}' \
-                  --max-model-len 256000
+                  --max-model-len 150000
                   # To enable tracing, add:
                   # --otlp-traces-endpoint http://otel-collector:4317 \
                   # --collect-detailed-traces all

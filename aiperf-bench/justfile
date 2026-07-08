@@ -9,6 +9,8 @@
 #   just results           # copy artifacts out to ./results
 #   just logs / just shell # inspect the runner
 #   just clean             # delete the runner
+#   just lmeval            # run lm-eval (gsm8k) at 100 concurrency via the lm-eval pod
+#   just lmeval mmlu 50    # override tasks / concurrency
 
 namespace := "llm-d-wide-ep"
 deploy    := "aiperf-agentx"
@@ -19,7 +21,7 @@ deploy    := "aiperf-agentx"
 model     := "zai-org/GLM-5.2-FP8"
 url       := "http://wide-ep-lws-epp"
 # url       := "http://optimized-baseline-direct"
-concurrency := "128"
+concurrency := "50"
 # duration    := "10"
 duration    := "300"
 
@@ -77,6 +79,15 @@ smoke:
 results dest="./results":
     mkdir -p {{dest}}
     kubectl cp {{namespace}}/$(kubectl get pod -n {{namespace}} -l app={{deploy}} -o jsonpath='{.items[0].metadata.name}'):/workspace/artifacts {{dest}}
+
+# Run lm-evaluation-harness from the lm-eval pod against the deployment's
+# OpenAI-compatible chat endpoint. Args: [tasks] [concurrency].
+lmeval tasks="gsm8k" concurrency="100":
+    kubectl exec -n {{namespace}} lm-eval -- \
+        lm_eval \
+            --model local-completions \
+            --model_args "model={{model}},base_url={{url}}/v1/completions,num_concurrent={{concurrency}},tokenized_requests=False" \
+            --tasks {{tasks}} 
 
 logs:
     kubectl logs -n {{namespace}} deploy/{{deploy}} -f
