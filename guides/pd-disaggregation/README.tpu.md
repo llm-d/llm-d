@@ -69,7 +69,7 @@ kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/t
 
 **For TPU v7x (Agentic Code Generation Workload):**
 ```bash
-kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/tpu/v7/vllm-agentic/
+kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/agentic-serving/modelserver/tpu/vllm-disaggregated/
 ```
 
 *(Note: If you have monitoring enabled, you can optionally apply the monitoring components as described in the [main guide](./README.md#3-enable-monitoring-optional)).*
@@ -124,7 +124,7 @@ curl -LJO "https://raw.githubusercontent.com/llm-d/llm-d/main/guides/pd-disaggre
 #### Option B: Agentic Code Generation Workload (TPU v7x only)
 This template mimics a multi-turn agentic code generation workload. 
 
-1. Ensure the TPU Model Server was deployed using the **Agentic Code Generation Workload** overlay (the `vllm-agentic` overlay) in step 2 of the installation instructions.
+1. Ensure the TPU Model Server was deployed using the **Agentic Code Generation Workload** overlay (the `vllm-disaggregated` overlay under `agentic-serving`) in step 2 of the installation instructions.
 
 2. Export the model name and per-run variables (adjust `CONCURRENCY_LEVEL` as needed):
    ```bash
@@ -157,7 +157,7 @@ envsubst < agentic-code-gen-128k.yaml > config.yaml
 
 > [!TIP]
 > **Tuning Prefill-to-Decode Ratios:**
-> The default `vllm-agentic` overlay deploys the optimal 2:6 ratio (2 prefillers, 6 decoders). If you want to evaluate different ratios from the benchmarking report (such as 5:3 or 6:2), you can scale the active deployments directly:
+> The default `vllm-disaggregated` overlay deploys the optimal 2:6 ratio (2 prefillers, 6 decoders). If you want to evaluate different ratios from the benchmarking report (such as 5:3 or 6:2), you can scale the active deployments directly:
 > ```bash
 > kubectl scale deployment/pd-disaggregation-tpu-vllm-prefill --replicas=5 -n ${NAMESPACE}
 > kubectl scale deployment/pd-disaggregation-tpu-vllm-decode --replicas=3 -n ${NAMESPACE}
@@ -183,7 +183,7 @@ kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/
 
 **For TPU v7x (Agentic Code Generation Workload):**
 ```bash
-kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/tpu/v7/vllm-agentic/
+kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/agentic-serving/modelserver/tpu/vllm-disaggregated/
 ```
 
 ## Benchmarking Report (TPU v7x Example)
