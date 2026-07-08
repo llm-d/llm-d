@@ -16,6 +16,7 @@ spec:
             - "--enable-expert-parallel"
             - "--kv-cache-dtype=fp8"
             - "--enable-auto-tool-choice"
+            - "--enable-prefix-caching"
             - "--tool-call-parser=qwen3_coder"
             - "--reasoning-parser=nemotron_v3"
             - "--model-loader-extra-config"
@@ -61,7 +62,7 @@ spec:
             initialDelaySeconds: 30
             periodSeconds: 30
             timeoutSeconds: 5
-            failureThreshold: 120
+            failureThreshold: 240
           livenessProbe:
             periodSeconds: 10
             timeoutSeconds: 5
@@ -74,7 +75,7 @@ spec:
         - name: shm
           emptyDir:
             medium: Memory
-            sizeLimit: 40Gi
+            sizeLimit: 100Gi
         - name: torch-compile-cache
           emptyDir: {}
         - name: vllm-config
