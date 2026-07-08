@@ -36,27 +36,22 @@ harness:
   parallelism: 1                  # Number of parallel workload launcher pods to create.
   wait_timeout: 6000              # Time (in seconds) to wait for workload launcher pod to complete before terminating.
                                   # Set to 0 to disable timeout.
-  image: ghcr.io/llm-d/llm-d-benchmark:v0.6.0
+  image: ghcr.io/llm-d/llm-d-benchmark:v0.7.0
 
 env:
   - name: RAYON_NUM_THREADS
     value: "4"
-
-workload:
-  agentic_shared_prefix:
+    
+workload:                         # yaml configuration for harness workload(s)
+  Agentic_Workload:
     load:
-      type: constant
+      type: concurrent
+      num_workers: 8
+      worker_max_concurrency: 1000
+      request_timeout: 600
       stages:
-      - rate: 2
-        duration: 120
-      - rate: 4
-        duration: 120
-      - rate: 6
-        duration: 120
-      - rate: 8
-        duration: 120
-      - rate: 10
-        duration: 120
+      - num_requests: ${NUM_REQUESTS}
+        concurrency_level: ${CONCURRENCY_LEVEL}
     api:
       type: completion
       streaming: true
@@ -64,16 +59,43 @@ workload:
       type: vllm
       model_name: *model
       base_url: *url
-    tokenizer:
-      pretrained_model_name_or_path: RedHatAI/NVIDIA-Nemotron-3-Ultra-550B-A55B-FP8-block
     data:
-      type: shared_prefix
-      shared_prefix:
-        num_groups: 10
-        num_prompts_per_group: 50
-        system_prompt_len: 3000
-        question_len: 4000
-        output_len: 1024
+      type: conversation_replay
+      conversation_replay:
+        seed: ${SEED}
+        max_model_len: 262144
+        num_conversations: ${CONCURRENCY_LEVEL}
+        shared_system_prompt_len: 3000 
+        dynamic_system_prompt_len:
+          type: uniform
+          min: 15000
+          max: 100000
+          mean: 55000
+          std_dev: 25000
+        turns_per_conversation:
+          type: normal
+          min: 2
+          max: 20
+          mean: 6
+          std_dev: 3.5
+        input_tokens_per_turn:
+          type: lognormal
+          min: 100
+          max: 10000
+          mean: 1500
+          std_dev: 1200
+        output_tokens_per_turn:
+          type: lognormal
+          min: 50
+          max: 4000
+          mean: 800
+          std_dev: 600
+        tool_call_latency_sec:
+          type: normal
+          min: 0
+          max: 0
+          mean: 0
+          std_dev: 0
     report:
       request_lifecycle:
         summary: true
