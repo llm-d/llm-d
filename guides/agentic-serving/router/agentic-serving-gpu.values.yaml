@@ -27,49 +27,25 @@ router:
             deciderPluginName: always-disagg-pd-decider
         - type: prefill-filter
         - type: decode-filter
-        - type: no-hit-lru-scorer
-        - type: approx-prefix-cache-producer
-          name: gpu-prefix-cache-producer
         - type: approx-prefix-cache-producer
           name: cpu-prefix-cache-producer
           parameters:
             autoTune: false
             lruCapacityPerServer: 4000000
-        - type: queue-scorer
-        - type: kv-cache-utilization-scorer
-        - type: active-request-scorer
-        - type: prefix-cache-scorer
-          name: gpu-prefix-cache-scorer
+        - type: token-load-scorer
+        - type: inflight-load-producer
+        - type: prefix-cache-affinity-filter
           parameters:
-            prefixMatchInfoProducerName: gpu-prefix-cache-producer
-        - type: prefix-cache-scorer
-          name: cpu-prefix-cache-scorer
-          parameters:
-            prefixMatchInfoProducerName: cpu-prefix-cache-producer
+            peakPrefillThroughput: 9866
         schedulingProfiles:
         - name: prefill
           plugins:
           - pluginRef: prefill-filter
-          - pluginRef: gpu-prefix-cache-scorer
-            weight: 4
-          - pluginRef: cpu-prefix-cache-scorer
-            weight: 2
-          - pluginRef: queue-scorer
-            weight: 2
-          - pluginRef: kv-cache-utilization-scorer
-            weight: 2
-          - pluginRef: no-hit-lru-scorer
-            weight: 1
+          - pluginRef: token-load-scorer
+          - pluginRef: prefix-cache-affinity-filter
         - name: decode
           plugins:
           - pluginRef: decode-filter
           - pluginRef: active-request-scorer
-            weight: 2
-          - pluginRef: gpu-prefix-cache-scorer
-            weight: 3
-          - pluginRef: cpu-prefix-cache-scorer
-            weight: 1
 
   modelServers:
-    matchLabels:
-      llm-d.ai/guide: "agentic-serving-gpu"
