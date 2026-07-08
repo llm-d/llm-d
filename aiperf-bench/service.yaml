@@ -1,0 +1,13 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: optimized-baseline-direct
+  namespace: llm-d-optimized-baseline
+spec:
+  type: ClusterIP
+  selector:
+    llm-d.ai/guide: optimized-baseline
+  ports:
+    - name: http
+      port: 80
+      targetPort: 8000

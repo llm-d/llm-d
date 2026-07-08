@@ -1,0 +1,88 @@
+# AIPerf AgentX-MVP benchmark against the running llm-d optimized-baseline deployment.
+#
+# Usage:
+#   just deploy            # apply the manifest and wait for the pod
+#   just check             # confirm the runner can reach the model endpoint
+#   just run               # run the full AgentX-MVP benchmark (default 1800s)
+#   just run 16 900        # override concurrency / duration
+#   just smoke             # fast plumbing test (~60s, marks result invalid)
+#   just results           # copy artifacts out to ./results
+#   just logs / just shell # inspect the runner
+#   just clean             # delete the runner
+
+namespace := "llm-d-wide-ep"
+deploy    := "aiperf-agentx"
+# model     := "nvidia/NVIDIA-Nemotron-3-Super-120B-A12B-FP8"
+# model     := "Qwen/Qwen3-32B"
+# model     := "Qwen/Qwen3.5-122B-A10B-FP8"
+# model     := "deepseek-ai/DeepSeek-R1"
+model     := "zai-org/GLM-5.2-FP8"
+url       := "http://wide-ep-lws-epp"
+# url       := "http://optimized-baseline-direct"
+concurrency := "128"
+# duration    := "10"
+duration    := "300"
+
+default:
+    @just --list
+
+# Apply the manifest and wait for the runner pod to be ready.
+deploy:
+    kubectl apply -f manifest.yaml
+    kubectl rollout status deploy/{{deploy}} -n {{namespace}} --timeout=300s
+
+# Sanity check: list models served through the llm-d router from inside the runner.
+# (The slim image has no curl, so use python's urllib.)
+check:
+    kubectl exec -n {{namespace}} deploy/{{deploy}} -- \
+      python -c "import urllib.request as u; print(u.urlopen('{{url}}/v1/models', timeout=10).read().decode())"
+
+# Run the AgentX-MVP benchmark. Args: [concurrency] [duration-seconds].
+run concurrency=concurrency duration=duration:
+    kubectl exec -n {{namespace}} deploy/{{deploy}} -- \
+      aiperf profile \
+        --scenario inferencex-agentx-mvp \
+        --url {{url}} \
+        --model {{model}} \
+        --max-context-length 128000 \
+        --endpoint-type chat \
+        --streaming \
+        --use-server-token-count \
+        --public-dataset semianalysis_cc_traces_weka_with_subagents \
+        --concurrency {{concurrency}} \
+        --benchmark-duration {{duration}} \
+        --output-artifact-dir /workspace/artifacts \
+        --ui simple
+
+# Fast plumbing validation (~60s). Uses --unsafe-override so it runs below the
+# scenario's 900s minimum; result is marked submission_valid: false.
+smoke:
+    kubectl exec -n {{namespace}} deploy/{{deploy}} -- \
+      aiperf profile \
+        --scenario inferencex-agentx-mvp \
+        --unsafe-override \
+        --url {{url}} \
+        --model {{model}} \
+        --max-context-length 128000 \
+        --endpoint-type chat \
+        --streaming \
+        --use-server-token-count \
+        --public-dataset semianalysis_cc_traces_weka_with_subagents \
+        --concurrency {{concurrency}} \
+        --benchmark-duration {{duration}} \
+        --output-artifact-dir /workspace/artifacts \
+        --ui simple
+
+# Copy benchmark artifacts out of the runner to a local directory (default ./results).
+results dest="./results":
+    mkdir -p {{dest}}
+    kubectl cp {{namespace}}/$(kubectl get pod -n {{namespace}} -l app={{deploy}} -o jsonpath='{.items[0].metadata.name}'):/workspace/artifacts {{dest}}
+
+logs:
+    kubectl logs -n {{namespace}} deploy/{{deploy}} -f
+
+shell:
+    kubectl exec -it -n {{namespace}} deploy/{{deploy}} -- bash
+
+clean:
+    kubectl delete -f manifest.yaml --ignore-not-found
