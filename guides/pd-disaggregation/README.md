@@ -597,7 +597,7 @@ llmdbenchmark \
 
 (Drives the same `guide_pd-disaggregation_1.yaml` workload — rate=45 for 120s, 45 workers — against the aggregated baseline so the two result sets are directly comparable.)
 
-The following results were measured on **16 H200 GPUs with InfiniBand** (kermit cluster), running `openai/gpt-oss-120b` (MXFP4) at the guide workload: ISL=5000, OSL=250, rate=45 req/s, 45 workers, 120s.
+The following results were measured on **16 H200 GPUs with InfiniBand**, running `openai/gpt-oss-120b` (MXFP4) at the guide workload: ISL=5000, OSL=250, rate=45 req/s, 45 workers, 120s.
 
 Two aggregated baselines enable a precise attribution of the P/D gains:
 - **baseline-2** — vLLM aggregated serving (8×TP=2) behind a **plain Kubernetes Service**, with no llm-d routing at all; this is the reference performance for vLLM alone.
