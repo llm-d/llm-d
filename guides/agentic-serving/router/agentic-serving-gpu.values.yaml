@@ -28,15 +28,15 @@ router:
         - type: prefill-filter
         - type: decode-filter
         - type: approx-prefix-cache-producer
-          name: cpu-prefix-cache-producer
           parameters:
             autoTune: false
             lruCapacityPerServer: 4000000
+        - type: active-request-scorer
         - type: token-load-scorer
-        - type: inflight-load-producer
         - type: prefix-cache-affinity-filter
           parameters:
             peakPrefillThroughput: 9866
+        - type: inflight-load-producer
         schedulingProfiles:
         - name: prefill
           plugins:
@@ -49,3 +49,5 @@ router:
           - pluginRef: active-request-scorer
 
   modelServers:
+    matchLabels:
+      llm-d.ai/guide: "agentic-serving-gpu"
