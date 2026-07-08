@@ -7,7 +7,6 @@ metadata:
     llm-d.ai/guide: "wide-ep-lws"
     llm-d.ai/accelerator-variant: "gpu"
     llm-d.ai/accelerator-vendor: "nvidia"
-    llm-d.ai/model: DeepSeek-R1-0528
     llm-d.ai/role: prefill
 spec:
   replicas: 1
@@ -20,10 +19,9 @@ spec:
           llm-d.ai/guide: "wide-ep-lws"
           llm-d.ai/accelerator-variant: "gpu"
           llm-d.ai/accelerator-vendor: "nvidia"
-          llm-d.ai/model: DeepSeek-R1-0528
           llm-d.ai/role: prefill
       spec:
-        serviceAccountName: deepseek-r1
+        serviceAccountName: glm
         volumes:
           - name: dshm
             emptyDir:
@@ -35,7 +33,7 @@ spec:
             emptyDir: {}
         containers:
           - name: vllm
-            image: ghcr.io/llm-d/llm-d-cuda:v0.8.0
+            image: public.ecr.aws/q9t5s3a7/vllm-ci-test-repo:c1a4225326594a66a58b948ab8da7bccc4dbc214
             securityContext:
               capabilities:
                 add:
@@ -53,6 +51,88 @@ spec:
                 # https://github.com/llm-d/llm-d/issues/352
                 find /dev/shm -type f -delete
 
+                # ---------------------------------------------------------------
+                # Hotfixes for GLM-5.2-FP8 packed FP8 KV cache reshape crash, e.g.
+                #   RuntimeError: shape '[256, 64, 576]' is invalid for input of
+                #   size 10747904
+                # Resolve the vLLM install dir so the patches apply regardless of
+                # which image (dist-packages vs site-packages) is in use.
+                # ---------------------------------------------------------------
+                VLLM_DIR=$(python3 -c "import os, vllm; print(os.path.dirname(vllm.__file__))")
+
+                # 1. Hotfix: add kv_quant_mode to MLAAttention.get_kv_cache_spec (vllm#47722)
+                # PR #47716 fixed deepseek_v4 and sparse_swa but missed mla_attention.py
+                python3 -c "
+                p='$VLLM_DIR/model_executor/layers/attention/mla_attention.py'
+                s=open(p).read()
+                if 'get_kv_quant_mode' not in s:
+                  s=s.replace('    MLAAttentionSpec,\n)', '    MLAAttentionSpec,\n    get_kv_quant_mode,\n)')
+                  s=s.replace('            cache_dtype_str=vllm_config.cache_config.cache_dtype,\n        )',
+                              '            cache_dtype_str=vllm_config.cache_config.cache_dtype,\n            kv_quant_mode=get_kv_quant_mode(vllm_config.cache_config.cache_dtype),\n        )')
+                  open(p,'w').write(s); print('PATCHED mla_attention.py')
+                else: print('mla_attention.py already patched')
+                "
+
+                # 2. Hotfix: fix packed HND KV cache reshape (neuralmagic/vllm@2e10140)
+                python3 -c "
+                p='$VLLM_DIR/v1/worker/gpu/attn_utils.py'
+                s=open(p).read()
+                old='            .view(kv_cache_shape)\n        )\n    elif kv_cache_spec.page_size_padded'
+                new='            .view(permuted_kv_cache_shape)\n        )\n    elif kv_cache_spec.page_size_padded'
+                if old in s:
+                  open(p,'w').write(s.replace(old, new)); print('PATCHED attn_utils.py')
+                else: print('attn_utils.py already patched or different version')
+                "
+
+                # 3. Hotfix: offloading set_ overflow for packed non-uniform KV caches
+                # The indexer group's offset+page_size exceeds block_stride in the packed
+                # layout. Replace set_() with as_strided() to avoid bounds check failure.
+                python3 -c "
+                import re
+                p='$VLLM_DIR/distributed/kv_transfer/kv_connector/v1/offloading/worker.py'
+                s=open(p).read()
+                pat = (r'(tensors_per_block\[layer_name\] = \(\n)'
+                       r'(\s+)torch\.tensor\(\n'
+                       r'\s+\[\],\n'
+                       r'\s+dtype=torch\.int8,\n'
+                       r'\s+device=layer_kv_cache\.device,\n'
+                       r'\s+\)\.set_\(\n'
+                       r'\s+layer_kv_cache\.untyped_storage\(\),\n'
+                       r'\s+byte_offset,\n'
+                       r'\s+\(num_blocks, page\),\n'
+                       r'\s+\(block_stride_bytes, 1\),\n'
+                       r'\s+\),\n'
+                       r'(\s+)\)')
+                repl = (r'\1'
+                        r'\2torch.as_strided(\n'
+                        r'\2    torch.empty(0, dtype=torch.int8, device=layer_kv_cache.device).set_(layer_kv_cache.untyped_storage()),\n'
+                        r'\2    (num_blocks, page),\n'
+                        r'\2    (block_stride_bytes, 1),\n'
+                        r'\2    byte_offset,\n'
+                        r'\2),\n'
+                        r'\3)')
+                new_s, n = re.subn(pat, repl, s)
+                if n > 0:
+                  open(p,'w').write(new_s); print('PATCHED worker.py')
+                else:
+                  print('worker.py: no match for set_ pattern')
+                "
+
+                # 4. Hotfix: madvise out of bounds when DP>1 + TP=1
+                # Each DP rank is a separate vllm process (world_size=1) with its own mmap.
+                # TieringOffloadingSpec.create_worker uses the accelerator device index as
+                # rank, but with world_size=1 the mmap row only fits 1 worker, so GPU
+                # indices >0 overflow. Force rank=0 since each process owns its own mmap.
+                python3 -c "
+                p='$VLLM_DIR/v1/kv_offload/tiering/spec.py'
+                s=open(p).read()
+                old='        rank = torch.accelerator.current_device_index()'
+                new='        rank = 0  # each DP process has its own mmap; TP-local rank is 0'
+                if old in s:
+                  open(p,'w').write(s.replace(old, new)); print('PATCHED spec.py (rank=0)')
+                else: print('spec.py: pattern not found, may already be patched')
+                "
+
                 #################
                 # RUN vLLM prefill workers via DP Supervisor
                 # The supervisor automatically assigns CUDA_VISIBLE_DEVICES and
@@ -60,10 +140,12 @@ spec:
                 #################
                 START_RANK=$(( ${LWS_WORKER_INDEX:-0} * DP_SIZE_LOCAL ))
 
+                uv pip install --system nixl==1.3.0 nixl-cu13==1.3.0 --no-deps
+
                 exec vllm serve \
-                  deepseek-ai/DeepSeek-R1-0528 \
+                  zai-org/GLM-5.2-FP8 \
                   --port 8000 \
-                  --gpu-memory-utilization 0.80 \
+                  --gpu-memory-utilization 0.8 \
                   --disable-access-log-for-endpoints=/health,/metrics \
                   --data-parallel-multi-port-external-lb \
                   --data-parallel-supervisor-port 8008 \
@@ -78,7 +160,10 @@ spec:
                                           "kv_role":"kv_both",
                                           "kv_load_failure_policy":"fail"}' \
                   --moe-backend deep_gemm \
-                  --all2all-backend deepep_high_throughput
+                  --all2all-backend deepep_high_throughput \
+                  --kv-cache-dtype fp8 \
+                  --speculative-config '{"method":"mtp","num_speculative_tokens":3}' \
+                  --max-model-len 256000
                 
                   # To enable tracing, add:
                   # --otlp-traces-endpoint http://otel-collector:4317 \

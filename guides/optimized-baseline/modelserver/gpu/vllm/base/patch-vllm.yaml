@@ -3,7 +3,7 @@ kind: Deployment
 metadata:
   name: decode
 spec:
-  replicas: 8
+  replicas: 1
   template:
     spec:
       containers:
@@ -11,10 +11,39 @@ spec:
           command: ["vllm", "serve"]
           # Include all args in overlay patch for consistency
           args:
-            - "Qwen/Qwen3-32B"
+            - "google/gemma-4-31B-it"
+            - "--enable-auto-tool-choice"
+            - "--tool-call-parser=gemma4"
+            - "--chat-template=examples/tool_chat_template_gemma4.jinja"
+            - "--reasoning-parser=gemma4"
             - "--disable-access-log-for-endpoints=/health,/metrics,/v1/models"
-            - "--tensor-parallel-size=2"
+            # - "--enable-auto-tool-choice"
+            # - "--tool-call-parser=hermes"
+            # - "--reasoning-parser=qwen3"
             # Uncomment for distributed tracing
+            # - "Qwen/Qwen3.5-122B-A10B-FP8"
+            # - "--trust-remote-code"
+            # - "--tensor-parallel-size=2"
+            # - "--enable-auto-tool-choice"
+            # - "--tool-call-parser=qwen3_coder"
+            # - "--reasoning-parser=qwen3"
+            # - "--enable-prefix-caching"
+
+            # - "nvidia/NVIDIA-Nemotron-3-Super-120B-A12B-FP8"
+            # - "--enable-prefix-caching"
+            # - "--enable-auto-tool-choice"
+            # - "--tool-call-parser=qwen3_coder"
+            # - "--reasoning-parser=nemotron_v3"
+            # - "--tensor-parallel-size=2"
+            # - "google/gemma-4-31B-it"
+            # - "--enable-auto-tool-choice"
+            # - "--tool-call-parser=gemma4"
+            # - "--chat-template=examples/tool_chat_template_gemma4.jinja"
+            # - "--reasoning-parser=gemma4"
+            # - "openai/gpt-oss-120b"
+            # - "--tensor-parallel-size=1"
+            # - "--tool-call-parser=openai"
+            # - "--enable-auto-tool-choice"
             # - "--otlp-traces-endpoint=http://otel-collector:4317"
             # - "--collect-detailed-traces=all"
           env:
@@ -24,6 +53,10 @@ spec:
                   name: llm-d-hf-token
                   key: HF_TOKEN
             # # Uncomment for distributed tracing env vars
+            - name: VLLM_USE_DEEP_GEMM
+              value: "0"
+            - name: VLLM_PREFIX_CACHE_RETENTION_INTERVAL
+              value: "0"
             # - name: OTEL_SERVICE_NAME
             #   value: "vllm-decode"
             # - name: OTEL_EXPORTER_OTLP_ENDPOINT
@@ -36,13 +69,13 @@ spec:
             #   value: "0.1"
           resources:
             limits:
-              cpu: '16'
-              memory: 128Gi
-              nvidia.com/gpu: 2
+              cpu: '8'
+              memory: 32Gi
+              nvidia.com/gpu: 1
             requests:
               cpu: '8'
-              memory: 96Gi
-              nvidia.com/gpu: 2
+              memory: 32Gi
+              nvidia.com/gpu: 1
           volumeMounts:
             - mountPath: /dev/shm
               name: shm
