@@ -43,6 +43,12 @@ ACCELERATOR_LABELS = {
     "xpu": "XPU",
 }
 
+ENGINE_LABELS = {
+    "vllm": "vLLM",
+    "sglang": "SGLang",
+    "trtllm": "TRTLLM",
+}
+
 # (display_name, guide_path, workflow_slugs, connector_filter)
 # workflow_slugs: a string or tuple of strings to match parsed guide slugs.
 # connector_filter: None matches any connector; a string matches only that variant.
@@ -77,9 +83,9 @@ def discover_workflows() -> dict[tuple[str, str, str], list[tuple[str, str, str]
 
     Returns:
         dict keyed by (guide_slug, provider, connector) -> sorted list of
-        (accelerator, filename, badge_name) tuples.
+        (accelerator, filename, badge_name, engine) tuples.
     """
-    result: dict[tuple[str, str, str], list[tuple[str, str, str]]] = {}
+    result: dict[tuple[str, str, str], list[tuple[str, str, str, str]]] = {}
 
     for path in sorted(WORKFLOWS_DIR.glob(f"{WORKFLOW_PREFIX}*.yaml")):
         filename = path.name
@@ -93,9 +99,11 @@ def discover_workflows() -> dict[tuple[str, str, str], list[tuple[str, str, str]
         if badge_name is None:
             continue
 
-        guide_slug, provider, _offload_dest, accelerator, _engine, connector = parsed
+        guide_slug, provider, _offload_dest, accelerator, engine, connector = parsed
         key = (guide_slug, provider, connector)
-        result.setdefault(key, []).append((accelerator, filename, badge_name))
+        # engine is appended last so the existing (accelerator, filename) sort
+        # order — and thus badge order within a cell — is unaffected.
+        result.setdefault(key, []).append((accelerator, filename, badge_name, engine))
 
     for entries in result.values():
         entries.sort()
@@ -127,8 +135,10 @@ def _parse_workflow_stem(stem: str) -> tuple[str, str, str, str, str, str] | Non
     return None
 
 
-def badge(accelerator: str, filename: str, badge_name: str) -> str:
-    label = ACCELERATOR_LABELS.get(accelerator, accelerator.upper())
+def badge(accelerator: str, filename: str, badge_name: str, engine: str) -> str:
+    engine_label = ENGINE_LABELS.get(engine, engine.upper())
+    accelerator_label = ACCELERATOR_LABELS.get(accelerator, accelerator.upper())
+    label = f"{engine_label} {accelerator_label}"
     badge_img = f"{SHIELDS_ENDPOINT}/{badge_name}.json"
     link = f"{BADGE_BASE}/{filename}"
     return f"[![{label}]({badge_img})]({link})"
@@ -149,11 +159,11 @@ def generate_table(workflows: dict) -> str:
             if connector_filter is not None:
                 for slug in guide_slugs:
                     key = (slug, provider, connector_filter)
-                    badges.extend(badge(acc, fn, bn) for acc, fn, bn in workflows.get(key, []))
+                    badges.extend(badge(acc, fn, bn, eng) for acc, fn, bn, eng in workflows.get(key, []))
             else:
                 for key, entries in workflows.items():
                     if key[0] in guide_slugs and key[1] == provider:
-                        badges.extend(badge(acc, fn, bn) for acc, fn, bn in entries)
+                        badges.extend(badge(acc, fn, bn, eng) for acc, fn, bn, eng in entries)
 
             cells.append(" ".join(badges))
 
