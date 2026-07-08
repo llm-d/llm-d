@@ -61,7 +61,7 @@ This guide includes configurations for the following accelerators:
   source ${REPO_ROOT}/guides/env.sh
   export GUIDE_NAME="wide-ep-lws"
   export NAMESPACE=llm-d-wide-ep
-  export MODEL=sgl-project/DeepSeek-V4-Pro-FP8
+  export MODEL=deepseek-ai/DeepSeek-R1-0528
   ```
 * Install the Gateway API Inference Extension CRDs:
 
@@ -185,7 +185,7 @@ kubectl run curl-debug --rm -it \
 curl -X POST http://${IP}/v1/completions \
     -H 'Content-Type: application/json' \
     -d '{
-        "model": "deepseek-ai/DeepSeek-R1",
+        "model": "deepseek-ai/DeepSeek-R1-0528",
         "prompt": "How are you today?"
     }' | jq
 ```
