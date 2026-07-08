@@ -136,7 +136,7 @@ This template mimics a multi-turn agentic code generation workload.
 
 3. Download the agentic workload template:
    ```bash
-   curl -LJO "https://raw.githubusercontent.com/llm-d/llm-d/main/guides/pd-disaggregation/benchmark-templates/agentic-code-gen-disagg.yaml"
+   curl -LJO "https://raw.githubusercontent.com/llm-d/llm-d/main/guides/pd-disaggregation/benchmark-templates/agentic-code-gen-128k.yaml"
    ```
 
 ### 3. Execute Benchmark
@@ -151,7 +151,7 @@ envsubst < tpu.yaml > config.yaml
 
 **For Option B (Agentic):**
 ```bash
-envsubst < agentic-code-gen-disagg.yaml > config.yaml
+envsubst < agentic-code-gen-128k.yaml > config.yaml
 ./run_only.sh -c config.yaml -o ./results
 ```
 
