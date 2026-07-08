@@ -17,6 +17,7 @@ spec:
             - "--kv-transfer-config"
             - '{"kv_connector":"NixlConnector", "kv_role":"kv_both"}'
             - "--no-disable-hybrid-kv-cache-manager"
+            - "--max-model-len=8192"
             - "--port=8200"
           env:
             - name: HF_TOKEN
@@ -28,11 +29,18 @@ spec:
               valueFrom:
                 fieldRef:
                   fieldPath: status.podIP
+            - name: UCX_MAX_RMA_RAILS
+              value: "1"
             # NOTE: vLLM 0.19.X and 0.20.X images ship both nixl-cu13 and nixl-cu12;
             # NIXL can pick the wrong UCX libraries. Uncomment UCX_MODULE_DIR only
             # if you are running a cu129 version of vLLM.
             # - name: UCX_MODULE_DIR
             #   value: /usr/local/lib/python3.12/dist-packages/nixl_cu12.libs/ucx
+            # Default vLLM keep-alive (5s) is shorter than llm-d-routing-sidecar's default idle
+            # conn timeout (90s, from Go http.Transport), causing TCP RSTs on reuse.
+            # Server keep-alive must be >= sidecar idle timeout; configured to 120s.
+            - name: VLLM_HTTP_TIMEOUT_KEEP_ALIVE
+              value: "120"
           resources:
             limits:
               cpu: "16"

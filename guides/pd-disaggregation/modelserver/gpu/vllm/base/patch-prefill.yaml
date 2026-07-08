@@ -17,6 +17,7 @@ spec:
             - "--kv-transfer-config"
             - '{"kv_connector":"NixlConnector", "kv_role":"kv_both"}'
             - "--no-disable-hybrid-kv-cache-manager"
+            - "--max-model-len=8192"
           env:
             - name: HF_TOKEN
               valueFrom:
@@ -27,6 +28,8 @@ spec:
               valueFrom:
                 fieldRef:
                   fieldPath: status.podIP
+            - name: UCX_MAX_RMA_RAILS
+              value: "1"
             # NOTE: vLLM 0.19.X and 0.20.X images ship both nixl-cu13 and nixl-cu12;
             # NIXL can pick the wrong UCX libraries. Uncomment UCX_MODULE_DIR only
             # if you are running a cu129 version of vLLM.
@@ -37,6 +40,8 @@ spec:
             # Server keep-alive must be >= sidecar idle timeout; configured to 120s.
             - name: VLLM_HTTP_TIMEOUT_KEEP_ALIVE
               value: "120"
+            # PYTORCH_ALLOC_CONF=expandable_segments:True must NOT be set on prefill:
+            # causes NIXL RDMA memory region fragmentation, delaying peer discovery by 30+ min.
           resources:
             limits:
               cpu: "8"

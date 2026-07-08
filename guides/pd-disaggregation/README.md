@@ -342,7 +342,7 @@ kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/
 
 ## Benchmarking Report
 
-The benchmark is running on 16 H200 GPUs (with Infinband on CKS).
+The benchmark was run on 16 H200 GPUs (with InfiniBand on CKS).
 
 There is a report for each stage.
 
@@ -597,19 +597,49 @@ llmdbenchmark \
 
 (Drives the same `guide_pd-disaggregation_1.yaml` workload — rate=45 for 120s, 45 workers — against the aggregated baseline so the two result sets are directly comparable.)
 
-For this workload (20:1 ISL:OSL, 45 QPS), llm-d disaggregation improved mean and P90 request latency by ~50%!
+The following results were measured on **16 H200 GPUs with InfiniBand** (kermit cluster), running `openai/gpt-oss-120b` (MXFP4) at the guide workload: ISL=5000, OSL=250, rate=45 req/s, 45 workers, 120s.
 
-| Metric                   | aggregated | llm-d        | Δ% |
-| :----------------------- | :--------- | :----------- | :------- |
-| **E2E Latency (Mean)**   | **6.7s**   | **3.5s**     | **-47%** |
-| **E2E Latency (P95)**    | **10.2s**  | **5.08**     | **-50%** |
-| ITL (Mean)               | 25ms       | 8ms          | -67%     |
-| ITL (P95)                | 197ms      | 67ms         | -66%     |
-| TTFT (Mean)              | 532ms      | 1400ms       | +170%    |
-| TTFT (P95)               | 1574ms     | 2471ms       | +57%     |
+Two aggregated baselines enable a precise attribution of the P/D gains:
+- **baseline-2** — vLLM aggregated serving (8×TP=2) behind a **plain Kubernetes Service**, with no llm-d routing at all; this is the reference performance for vLLM alone.
+- **llm-d-baseline** — same 16 GPUs as baseline-2, with the full llm-d EPP and routing-proxy stack (prefix- and load-aware routing), but all pods running in aggregated mode; comparing llm-d p/d to llm-d-baseline cleanly attributes the remaining gains to P/D disaggregation itself.
+
+### All runs
+
+| Run | Config | Requests | Throughput | TTFT mean | TTFT p99 | TPOT mean | TPOT p99 | E2E mean | E2E p99 |
+| --- | ------ | -------- | ---------- | --------- | -------- | --------- | -------- | -------- | ------- |
+| baseline-1 | 16×TP=1, k8s Service | 3,477/5,400 ❌ | 29.0 req/s | 23,200ms | — | 184ms | — | 69.3s | — |
+| baseline-2 | 8×TP=2, k8s Service | 5,399/5,400 | 42.9 req/s | 1,333ms | 4,777ms | 68.7ms | 183ms | 18.5s | 47.5s |
+| llm-d-baseline | 8×TP=2, llm-d EPP | 5,400/5,400 | 41.3 req/s | 2,597ms | 4,812ms | 129ms | 165ms | 34.9s | 43.1s |
+| llm-d p/d | 8P(TP=1)+2D(TP=4), P/D | 5,400/5,400 | 42.9 req/s | 2,410ms | 7,990ms | 7.3ms | 9.2ms | 4.25s | 9.9s |
 
 > [!NOTE]
-> In aggregated setup, vLLM allocates all GPU resources to
-> processing prefills as they arrive. TTFT is elevated in the
-> disaggregated setup because less resources are allocated to
-> processing prefills.
+> Run baseline-1 (16×TP=1) failed to sustain the target rate: KV cache saturated quickly and only 64% of requests completed. The higher TPOT in llm-d-baseline vs baseline-2 is expected: the llm-d EPP Envoy sidecar uses a streaming ext_proc filter that intercepts every token in the response to enable token-aware routing decisions, adding per-token latency. In P/D disaggregation, the decode TPOT is so much lower that this overhead is negligible; for aggregated pods, it is more significant.
+
+### baseline-2 vs llm-d p/d — plain Kubernetes Service vs P/D disaggregation
+
+| Metric | baseline-2 (8×TP=2, k8s Service) | llm-d p/d (P/D disaggregation) | Δ% |
+| :----- | :-------------------------------- | :----------------------------- | :--- |
+| Throughput | 42.9 req/s | 42.9 req/s | ~0% |
+| TTFT mean | 1,333ms | 2,410ms | +81% |
+| TTFT p99 | 4,777ms | 7,990ms | +67% |
+| **TPOT mean** | **68.7ms** | **7.3ms** | **-89%** |
+| **TPOT p99** | **183ms** | **9.2ms** | **-95%** |
+| **E2E mean** | **18.5s** | **4.25s** | **-77%** |
+| **E2E p99** | **47.5s** | **9.9s** | **-79%** |
+
+### llm-d-baseline vs llm-d p/d — llm-d EPP (aggregated) vs P/D disaggregation
+
+Both runs route through the llm-d EPP, so this comparison isolates the P/D disaggregation gain from the routing-layer contribution.
+
+| Metric | llm-d-baseline (8×TP=2, llm-d EPP) | llm-d p/d (P/D disaggregation) | Δ% |
+| :----- | :---------------------------------- | :----------------------------- | :--- |
+| Throughput | 41.3 req/s | 42.9 req/s | +4% |
+| TTFT mean | 2,597ms | 2,410ms | -7% |
+| TTFT p99 | 4,812ms | 7,990ms | +66% |
+| **TPOT mean** | **129ms** | **7.3ms** | **-94%** |
+| **TPOT p99** | **165ms** | **9.2ms** | **-94%** |
+| **E2E mean** | **34.9s** | **4.25s** | **-88%** |
+| **E2E p99** | **43.1s** | **9.9s** | **-77%** |
+
+> [!NOTE]
+> TTFT is higher in the P/D setup because fewer GPU resources are dedicated to prefill processing at any instant; the improvement is in decode throughput (TPOT), which drives the large end-to-end latency reduction under sustained load.
