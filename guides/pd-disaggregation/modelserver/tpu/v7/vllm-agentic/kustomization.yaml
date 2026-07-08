@@ -5,11 +5,8 @@ resources:
 
 namePrefix: pd-disaggregation-tpu-vllm-
 
-# TODO(#1893): Replace with tpu-vllm component once nightly features are in a stable release.
-images:
-  - name: REPLACE_MODEL_SERVER_IMAGE
-    newName: docker.io/vllm/vllm-tpu
-    newTag: nightly-20260430-18ed615-5b39b26
+components:
+  - ../../../../../recipes/modelserver/components/images/tpu-vllm
 
 labels:
   - pairs:
