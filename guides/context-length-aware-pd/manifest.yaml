@@ -61,7 +61,6 @@ spec:
             - --disable-access-log-for-endpoints=/health,/metrics,/v1/models
             - --kv-transfer-config
             - '{"kv_connector":"NixlConnector","kv_role":"kv_consumer"}'
-            - --enable-log-requests
           env:
             - name: VLLM_NIXL_SIDE_CHANNEL_HOST
               valueFrom:
@@ -157,7 +156,6 @@ spec:
             - --disable-access-log-for-endpoints=/health,/metrics,/v1/models
             - --kv-transfer-config
             - '{"kv_connector":"NixlConnector","kv_role":"kv_producer"}'
-            - --enable-log-requests
           env:
             - name: VLLM_NIXL_SIDE_CHANNEL_HOST
               valueFrom:
@@ -253,7 +251,6 @@ spec:
             - --disable-access-log-for-endpoints=/health,/metrics,/v1/models
             - --kv-transfer-config
             - '{"kv_connector":"NixlConnector","kv_role":"kv_producer"}'
-            - --enable-log-requests
           env:
             - name: VLLM_NIXL_SIDE_CHANNEL_HOST
               valueFrom:
