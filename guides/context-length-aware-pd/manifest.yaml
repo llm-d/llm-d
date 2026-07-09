@@ -1,0 +1,332 @@
+# Qwen3-0.6B with P/D disaggregation and context-length-aware prefill routing.
+#
+# Three deployments, all selected into the same InferencePool:
+#   decode         llm-d.ai/role=decode
+#   prefill-short  llm-d.ai/role=prefill  llm-d.ai/context-length-range="0-1000"
+#   prefill-long   llm-d.ai/role=prefill  llm-d.ai/context-length-range="1000-32768"
+#
+# The EPP `prefill-filter` narrows the prefill profile to role=prefill pods, then
+# `context-length-aware` (enableFiltering: true) picks short vs long by token count.
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: decode
+  labels:
+    llm-d.ai/guide: context-length-aware
+    llm-d.ai/model: qwen3-0-6b
+    llm-d.ai/role: decode
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: decode
+  template:
+    metadata:
+      labels:
+        app: decode
+        llm-d.ai/guide: context-length-aware
+        llm-d.ai/model: qwen3-0-6b
+        llm-d.ai/role: decode
+    spec:
+      initContainers:
+        # Native sidecar: terminates client traffic on 8000, drives the NIXL
+        # prefill handshake, then proxies to the local vLLM on 8200.
+        - name: routing-proxy
+          image: ghcr.io/llm-d/llm-d-router-disagg-sidecar:v0.9.0
+          imagePullPolicy: Always
+          restartPolicy: Always
+          args:
+            - --port=8000
+            - --vllm-port=8200
+            - --kv-connector=nixlv2
+            - --zap-log-level=1
+            - --secure-proxy=false
+          ports:
+            - name: sidecar
+              containerPort: 8000
+              protocol: TCP
+          securityContext:
+            allowPrivilegeEscalation: false
+            runAsNonRoot: true
+      containers:
+        - name: modelserver
+          image: vllm/vllm-openai:v0.23.0
+          command: ["vllm", "serve"]
+          args:
+            - Qwen/Qwen3-0.6B
+            - --port=8200
+            - --max-model-len=32768
+            - --tensor-parallel-size=1
+            - --disable-access-log-for-endpoints=/health,/metrics,/v1/models
+            - --kv-transfer-config
+            - '{"kv_connector":"NixlConnector","kv_role":"kv_consumer"}'
+            - --enable-log-requests
+          env:
+            - name: VLLM_NIXL_SIDE_CHANNEL_HOST
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.podIP
+            # Workaround for vllm-project/vllm#44548, needed on vLLM v0.20.0+.
+            - name: USER
+              value: llm-d
+          ports:
+            - name: modelserver
+              containerPort: 8200
+              protocol: TCP
+            - name: nixl
+              containerPort: 5600
+              protocol: TCP
+          resources:
+            limits:
+              cpu: "4"
+              memory: 16Gi
+              nvidia.com/gpu: "1"
+            requests:
+              cpu: "4"
+              memory: 16Gi
+              nvidia.com/gpu: "1"
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: modelserver
+            periodSeconds: 10
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /v1/models
+              port: modelserver
+            periodSeconds: 5
+            failureThreshold: 3
+          startupProbe:
+            httpGet:
+              path: /v1/models
+              port: modelserver
+            initialDelaySeconds: 15
+            periodSeconds: 30
+            failureThreshold: 60
+          volumeMounts:
+            - { name: shm, mountPath: /dev/shm }
+            - { name: cache, mountPath: /.cache }
+            - { name: config, mountPath: /.config }
+            - { name: triton, mountPath: /.triton }
+      volumes:
+        - name: shm
+          emptyDir: { medium: Memory, sizeLimit: 2Gi }
+        - name: cache
+          emptyDir: {}
+        - name: config
+          emptyDir: {}
+        - name: triton
+          emptyDir: {}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: prefill-short
+  labels:
+    llm-d.ai/guide: context-length-aware
+    llm-d.ai/model: qwen3-0-6b
+    llm-d.ai/role: prefill
+    llm-d.ai/context-length-range: "0-1000"
+spec:
+  replicas: 1
+  # The range label is deliberately not part of the selector: selectors are
+  # immutable, and you want to be able to retune the boundary in place.
+  selector:
+    matchLabels:
+      app: prefill-short
+  template:
+    metadata:
+      labels:
+        app: prefill-short
+        llm-d.ai/guide: context-length-aware
+        llm-d.ai/model: qwen3-0-6b
+        llm-d.ai/role: prefill
+        llm-d.ai/context-length-range: "0-1000"
+    spec:
+      containers:
+        - name: modelserver
+          image: vllm/vllm-openai:v0.23.0
+          command: ["vllm", "serve"]
+          args:
+            - Qwen/Qwen3-0.6B
+            - --port=8000
+            - --max-model-len=32768
+            - --tensor-parallel-size=1
+            - --disable-access-log-for-endpoints=/health,/metrics,/v1/models
+            - --kv-transfer-config
+            - '{"kv_connector":"NixlConnector","kv_role":"kv_producer"}'
+            - --enable-log-requests
+          env:
+            - name: VLLM_NIXL_SIDE_CHANNEL_HOST
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.podIP
+            # vLLM's default keep-alive (5s) is shorter than the sidecar's idle
+            # conn timeout (90s), which causes TCP RSTs on connection reuse.
+            - name: VLLM_HTTP_TIMEOUT_KEEP_ALIVE
+              value: "120"
+          ports:
+            - name: modelserver
+              containerPort: 8000
+              protocol: TCP
+            - name: nixl
+              containerPort: 5600
+              protocol: TCP
+          resources:
+            limits:
+              cpu: "4"
+              memory: 16Gi
+              nvidia.com/gpu: "1"
+            requests:
+              cpu: "4"
+              memory: 16Gi
+              nvidia.com/gpu: "1"
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: modelserver
+            periodSeconds: 10
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /v1/models
+              port: modelserver
+            periodSeconds: 5
+            failureThreshold: 3
+          startupProbe:
+            httpGet:
+              path: /v1/models
+              port: modelserver
+            initialDelaySeconds: 15
+            periodSeconds: 30
+            failureThreshold: 60
+          volumeMounts:
+            - { name: shm, mountPath: /dev/shm }
+            - { name: cache, mountPath: /.cache }
+            - { name: config, mountPath: /.config }
+            - { name: triton, mountPath: /.triton }
+      volumes:
+        - name: shm
+          emptyDir: { medium: Memory, sizeLimit: 2Gi }
+        - name: cache
+          emptyDir: {}
+        - name: config
+          emptyDir: {}
+        - name: triton
+          emptyDir: {}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: prefill-long
+  labels:
+    llm-d.ai/guide: context-length-aware
+    llm-d.ai/model: qwen3-0-6b
+    llm-d.ai/role: prefill
+    llm-d.ai/context-length-range: "1000-32768"
+spec:
+  replicas: 1
+  # The range label is deliberately not part of the selector: selectors are
+  # immutable, and you want to be able to retune the boundary in place.
+  selector:
+    matchLabels:
+      app: prefill-long
+  template:
+    metadata:
+      labels:
+        app: prefill-long
+        llm-d.ai/guide: context-length-aware
+        llm-d.ai/model: qwen3-0-6b
+        llm-d.ai/role: prefill
+        llm-d.ai/context-length-range: "1000-32768"
+    spec:
+      containers:
+        - name: modelserver
+          image: vllm/vllm-openai:v0.23.0
+          command: ["vllm", "serve"]
+          args:
+            - Qwen/Qwen3-0.6B
+            - --port=8000
+            - --max-model-len=32768
+            - --disable-access-log-for-endpoints=/health,/metrics,/v1/models
+            - --kv-transfer-config
+            - '{"kv_connector":"NixlConnector","kv_role":"kv_producer"}'
+            - --enable-log-requests
+          env:
+            - name: VLLM_NIXL_SIDE_CHANNEL_HOST
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.podIP
+            - name: VLLM_HTTP_TIMEOUT_KEEP_ALIVE
+              value: "120"
+          ports:
+            - name: modelserver
+              containerPort: 8000
+              protocol: TCP
+            - name: nixl
+              containerPort: 5600
+              protocol: TCP
+          resources:
+            limits:
+              cpu: "4"
+              memory: 16Gi
+              nvidia.com/gpu: "1"
+            requests:
+              cpu: "4"
+              memory: 16Gi
+              nvidia.com/gpu: "1"
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: modelserver
+            periodSeconds: 10
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /v1/models
+              port: modelserver
+            periodSeconds: 5
+            failureThreshold: 3
+          startupProbe:
+            httpGet:
+              path: /v1/models
+              port: modelserver
+            initialDelaySeconds: 15
+            periodSeconds: 30
+            failureThreshold: 60
+          volumeMounts:
+            - { name: shm, mountPath: /dev/shm }
+            - { name: cache, mountPath: /.cache }
+            - { name: config, mountPath: /.config }
+            - { name: triton, mountPath: /.triton }
+      volumes:
+        - name: shm
+          emptyDir: { medium: Memory, sizeLimit: 2Gi }
+        - name: cache
+          emptyDir: {}
+        - name: config
+          emptyDir: {}
+        - name: triton
+          emptyDir: {}
+---
+# Not needed by default. The EPP's token-producer uses the tokenizer-free
+# `estimate` backend, which makes no network call. Uncomment this Service only if
+# you switch to exact tokenization via vLLM's /v1/*/render endpoints (see README).
+#
+# apiVersion: v1
+# kind: Service
+# metadata:
+#   name: prefill-tokenizer
+#   labels:
+#     llm-d.ai/guide: context-length-aware
+# spec:
+#   selector:
+#     llm-d.ai/guide: context-length-aware
+#     llm-d.ai/role: prefill
+#   ports:
+#     - name: http
+#       port: 8000
+#       targetPort: modelserver
+#       protocol: TCP
