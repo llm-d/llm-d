@@ -62,12 +62,10 @@ Once the router is deployed, apply the Kustomize overlays specifically configure
 kubectl apply -n ${NAMESPACE} -k guides/${GUIDE_NAME}/modelserver/tpu/v6/vllm/
 ```
 
-**For TPU v7x (Standard Random Workload):**
+**For TPU v7x:**
 ```bash
 kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/tpu/v7/vllm/
 ```
-
-
 
 *(Note: If you have monitoring enabled, you can optionally apply the monitoring components as described in the [main guide](./README.md#3-enable-monitoring-optional)).*
 
@@ -109,48 +107,20 @@ Follow the **[Prepare the Benchmarking Suite](./README.md#1-prepare-the-benchmar
 
 ### 2. Download the Workload Template
 
-Choose the benchmark workload that matches your testing goals:
-
-#### Option A: Standard Random Workload (TPU v6e & v7x)
-This template runs a standard benchmark with constant load and random inputs/outputs.
-
 ```bash
 curl -LJO "https://raw.githubusercontent.com/llm-d/llm-d/main/guides/pd-disaggregation/benchmark-templates/tpu.yaml"
 ```
 
-
-
 ### 3. Execute Benchmark
 
-Render the configuration using the downloaded template and run the benchmark:
-
-**For Option A (Standard):**
 ```bash
 envsubst < tpu.yaml > config.yaml
 ./run_only.sh -c config.yaml -o ./results
 ```
 
-
-
 ## Cleanup
 
-To remove the deployed components:
-
-```bash
-helm uninstall ${GUIDE_NAME} -n ${NAMESPACE}
-```
-
-**For TPU v6e:**
-```bash
-kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/tpu/v6/vllm/
-```
-
-**For TPU v7x (Standard Random Workload):**
-```bash
-kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/tpu/v7/vllm/
-```
-
-
+To clean up your cluster, return to the **[Cleanup](./README.md#cleanup)** section of the unified guide.
 
 ## Benchmarking Report (TPU v7x Example)
 
@@ -373,7 +343,3 @@ scenario:
 version: '0.1'
 
 ```
-</details>
-
-
-

@@ -147,7 +147,7 @@ curl -X POST http://${IP}/v1/completions \
 
 ## Benchmarking
 
-This guide comes with an `inference-perf` benchmark preset (defined in [agentic-code-gen-128k.yaml](benchmark-templates/agentic-code-gen-128k.yaml)) designed for agentic code-generation workloads with multi-turn interactions and tool usage. The configuration parameters include:
+This guide comes with an `inference-perf` benchmark preset (defined in [guide.yaml](benchmark-templates/guide.yaml)) designed for agentic code-generation workloads with multi-turn interactions and tool usage. The configuration parameters include:
 
 | Workload Characteristic | Metric / Distribution Type | Min | Max | Mean / Constant | Std Dev | Description |
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
@@ -172,7 +172,7 @@ This guide comes with an `inference-perf` benchmark preset (defined in [agentic-
 ### 2. Download the Workload Template
 
 ```bash
-curl -LJO "https://raw.githubusercontent.com/llm-d/llm-d/main/guides/${GUIDE_NAME}/benchmark-templates/agentic-code-gen-128k.yaml"
+curl -LJO "https://raw.githubusercontent.com/llm-d/llm-d/main/guides/${GUIDE_NAME}/benchmark-templates/guide.yaml"
 ```
 
 
@@ -189,7 +189,7 @@ export SEED=$((7 + CONCURRENCY_LEVEL))
 export IP=$(kubectl get service ${GUIDE_NAME}-epp -n ${NAMESPACE} -o jsonpath='{.spec.clusterIP}')
 
 # Render the configuration using the appropriate template:
-envsubst < agentic-code-gen-128k.yaml > config.yaml
+envsubst < guide.yaml > config.yaml
 
 ./run_only.sh -c config.yaml -o ./results
 ```
