@@ -67,10 +67,7 @@ kubectl apply -n ${NAMESPACE} -k guides/${GUIDE_NAME}/modelserver/tpu/v6/vllm/
 kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/tpu/v7/vllm/
 ```
 
-**For TPU v7x (Agentic Code Generation Workload):**
-```bash
-kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/agentic-serving/modelserver/tpu/vllm-disaggregated/
-```
+
 
 *(Note: If you have monitoring enabled, you can optionally apply the monitoring components as described in the [main guide](./README.md#3-enable-monitoring-optional)).*
 
@@ -121,23 +118,7 @@ This template runs a standard benchmark with constant load and random inputs/out
 curl -LJO "https://raw.githubusercontent.com/llm-d/llm-d/main/guides/pd-disaggregation/benchmark-templates/tpu.yaml"
 ```
 
-#### Option B: Agentic Code Generation Workload (TPU v7x only)
-This template mimics a multi-turn agentic code generation workload. 
 
-1. Ensure the TPU Model Server was deployed using the **Agentic Code Generation Workload** overlay (the `vllm-disaggregated` overlay under `agentic-serving`) in step 2 of the installation instructions.
-
-2. Export the model name and per-run variables (adjust `CONCURRENCY_LEVEL` as needed):
-   ```bash
-   export MODEL_NAME="Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8"
-   export CONCURRENCY_LEVEL=40
-   export NUM_REQUESTS=$((20 * CONCURRENCY_LEVEL))
-   export SEED=$((7 + CONCURRENCY_LEVEL))
-   ```
-
-3. Download the agentic workload template:
-   ```bash
-   curl -LJO "https://raw.githubusercontent.com/llm-d/llm-d/main/guides/pd-disaggregation/benchmark-templates/agentic-code-gen-128k.yaml"
-   ```
 
 ### 3. Execute Benchmark
 
@@ -149,19 +130,7 @@ envsubst < tpu.yaml > config.yaml
 ./run_only.sh -c config.yaml -o ./results
 ```
 
-**For Option B (Agentic):**
-```bash
-envsubst < agentic-code-gen-128k.yaml > config.yaml
-./run_only.sh -c config.yaml -o ./results
-```
 
-> [!TIP]
-> **Tuning Prefill-to-Decode Ratios:**
-> The default `vllm-disaggregated` overlay deploys the optimal 2:6 ratio (2 prefillers, 6 decoders). If you want to evaluate different ratios from the benchmarking report (such as 5:3 or 6:2), you can scale the active deployments directly:
-> ```bash
-> kubectl scale deployment/pd-disaggregation-tpu-vllm-prefill --replicas=5 -n ${NAMESPACE}
-> kubectl scale deployment/pd-disaggregation-tpu-vllm-decode --replicas=3 -n ${NAMESPACE}
-> ```
 
 ## Cleanup
 
@@ -181,10 +150,7 @@ kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/
 kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/tpu/v7/vllm/
 ```
 
-**For TPU v7x (Agentic Code Generation Workload):**
-```bash
-kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/agentic-serving/modelserver/tpu/vllm-disaggregated/
-```
+
 
 ## Benchmarking Report (TPU v7x Example)
 
@@ -409,25 +375,5 @@ version: '0.1'
 ```
 </details>
 
-## Benchmarking Report (Agentic Workload TPU v7x Example)
 
-We evaluated P/D disaggregation on TPU v7x with different prefill-to-decode ratios under the agentic workload framework (average prompt size **~128K tokens**, output **~1.1K tokens**).
-
-At this scale, the KV cache size is extremely large (~20GB per request), shifting the bottleneck from prefill compute to **decoder HBM capacity**. Under a concurrency of 40, allocating more TPU nodes to the decode phase (**2:6** ratio) yields the best performance by providing sufficient aggregate HBM to avoid severe queueing and swapping:
-
-| Metric | 2:6 (2 Prefill, 6 Decode) | 5:3 (5 Prefill, 3 Decode) | 6:2 (6 Prefill, 2 Decode) |
-| :--- | :---: | :---: | :---: |
-| **TTFT Median (s)** | **7.3** | 158.3 | 329.5 |
-| **TTFT Mean (s)** | **31.2** | 159.2 | 317.9 |
-| **TTFT P90 (s)** | **112.6** | 258.1 | 473.6 |
-| **TPOT Median (ms)** | **260.2** | 1,610.0 | 1,652.5 |
-| **Input Throughput (tok/s)** | **33,515.2** | 14,821.9 | 9,751.2 |
-| **Output Throughput (tok/s)** | **295.1** | 128.8 | 84.2 |
-| **Error Rate** | 2.8% | **2.6%** | 2.9% |
-
-**Key Takeaways:**
-1. **Decoder HBM Capacity is the Bottleneck:** With ~128K context, the KV cache size (~20GB) quickly saturates the decoder HBM. Having only 2 decoders (6:2) restricts the active request capacity, leading to severe queueing (TTFT Median of 329.5s).
-2. **Optimal Ratio Shift:** Expanding decode capacity to 6 nodes (2:6) increases the aggregate HBM, reducing the TTFT Median by **45x** (7.3s) and increasing output throughput by **3.5x** (295.1 tok/s).
-3. **Prefill Capacity:** Even with only 2 prefillers (2:6), they are able to sustain the required prefill throughput without becoming the primary bottleneck.
-4. **Current Limitations:** Without CPU offloading optimizations, this disaggregated TPU configuration currently performs below the unified `llm-d-optimized` baseline. Integrating these optimizations into TPU disaggregated deployments is an active area of development.
 

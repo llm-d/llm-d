@@ -3,7 +3,7 @@ kind: Kustomization
 resources:
   - ../../../../pd-disaggregation/modelserver/tpu/base/vllm
 
-namePrefix: pd-disaggregation-tpu-vllm-
+namePrefix: agentic-serving-tpu-vllm-
 
 components:
   - ../../../../recipes/modelserver/components/images/tpu-vllm
@@ -11,7 +11,7 @@ components:
 labels:
   - pairs:
       llm-d.ai/model: Qwen3-Coder-480B-A35B-Instruct-FP8
-      llm-d.ai/guide: pd-disaggregation
+      llm-d.ai/guide: agentic-serving
       llm-d.ai/accelerator-variant: tpu
       llm-d.ai/accelerator-vendor: google
       llm-d.ai/engine-type: vllm
