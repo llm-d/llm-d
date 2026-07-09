@@ -56,10 +56,10 @@ The `llm-d-simulator` architecture is described in detail in [BLIS: Evolving llm
 ### Milestones Achieved
 
 - BLIS was used to discover a new probabilistic admission control algorithm that reduced TTFT p99 by up to 97%. This algorithm was contributed to llm-d-router.
-- BLIS estimation is used as part of `llm-d-planner` for discovering Pareto-optimal configurations for platform engineers.
+- Simulated benchmark data from BLIS is used as part of `llm-d-planner` to augment cluster experiments for discovering Pareto-optimal configurations for platform engineers.
 - Multiple blog articles published:
-  - [Why Simulate Before You Scale](https://inference-sim.github.io/inference-sim/latest/blog/2026/03/05/why-simulate-before-you-scale/)
-  - [The Physics of High-Fidelity Distributed Inference Platform Simulation](https://inference-sim.github.io/inference-sim/latest/blog/2026/04/09/the-physics-of-high-fidelity-distributed-inference-platform-simulation/)
+  - [Why Simulate Before You Scale](https://medium.com/modeling-distributed-inference/why-simulate-before-you-scale-e59e0f0b1732)
+  - [The Physics of High-Fidelity Distributed Inference Platform Simulation](https://medium.com/modeling-distributed-inference/the-physics-of-high-fidelity-distributed-inference-platform-simulation-28fe27b59da2)
   - [From Simulation to Production: How an AI-Native Pipeline Discovered a Better Admission Controller for llm-d](https://ai-native-systems-research.github.io/ai-native-systems-research/blog/2026/05/13/from-simulation-to-production-how-an-ai-native-pipeline-discovered-a-better-admission-controller-for-llm-d/)
 - Research paper submitted to a top-tier systems conference covering the design, accuracy, and use cases of BLIS.
 
