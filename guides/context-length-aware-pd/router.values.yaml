@@ -6,10 +6,6 @@ router:
       targetPort: 8081
 
   epp:
-    # Override base.values.yaml's `v: 2`. At v=4 the scheduling plugins log each
-    # request's token count and the per-pod filter/score decisions.
-    flags:
-      v: 4
     pluginsConfigFile: "pd-config.yaml"
     pluginsCustomConfig:
       pd-config.yaml: |
