@@ -33,8 +33,8 @@ spec:
             emptyDir: {}
         containers:
           - name: vllm
-            # image: public.ecr.aws/q9t5s3a7/vllm-ci-test-repo:c1a4225326594a66a58b948ab8da7bccc4dbc214
-            image: ghcr.io/llm-d/llm-d-cuda-dev:sha-728dd1e
+            image: public.ecr.aws/q9t5s3a7/vllm-ci-test-repo:c1a4225326594a66a58b948ab8da7bccc4dbc214
+            # image: ghcr.io/llm-d/llm-d-cuda-dev:sha-728dd1e
             securityContext:
               capabilities:
                 add:
@@ -141,8 +141,96 @@ spec:
                 #################
                 START_RANK=$(( ${LWS_WORKER_INDEX:-0} * DP_SIZE_LOCAL ))
 
+                # declare -A NIC_PATHS
+                # for ib in /sys/class/infiniband/*; do
+                #   NIC_PATHS[$(basename "$ib")]=$(readlink -f "$ib/device")
+                # done
+
+                # lcp_len() {
+                #   local a="$1" b="$2" i=0
+                #   while [ $i -lt ${#a} ] && [ $i -lt ${#b} ] && [ "${a:$i:1}" = "${b:$i:1}" ]; do i=$((i+1)); done
+                #   echo $i
+                # }
+
+                # MAPPING=""
+                # NUM_GPUS=$(nvidia-smi --list-gpus | wc -l)
+                # for i in $(seq 0 $((NUM_GPUS-1))); do
+                #   GPU_BDF=$(nvidia-smi --query-gpu=pci.bus_id --format=csv,noheader -i "$i" | tr 'A-F' 'a-f' | sed 's/^0000//')
+                #   GPU_PATH=$(readlink -f "/sys/bus/pci/devices/${GPU_BDF}")
+
+                #   BEST_NIC=""; BEST_LEN=0
+                #   for nic in "${!NIC_PATHS[@]}"; do
+                #     L=$(lcp_len "$GPU_PATH" "${NIC_PATHS[$nic]}")
+                #     [ "$L" -gt "$BEST_LEN" ] && { BEST_LEN=$L; BEST_NIC=$nic; }
+                #   done
+                #   [ -n "$BEST_NIC" ] || { echo "FATAL: no NIC left for GPU $i ($GPU_BDF)"; exit 1; }
+
+                #   NIC_BDF=$(basename "${NIC_PATHS[$BEST_NIC]}")
+                #   unset "NIC_PATHS[$BEST_NIC]"   # each NIC assigned exactly once -> bijection
+                #   echo "GPU $i ($GPU_BDF) -> $BEST_NIC ($NIC_BDF)"
+                #   MAPPING+="${GPU_BDF}=${NIC_BDF},"
+                # done
+                # MAPPING="${MAPPING%,}"
+
+                # export VLLM_GPU_NIC_PCIE_MAPPING="$MAPPING"
+                # export VLLM_NIC_SELECTION_VARS="UCX_NET_DEVICES:1,NCCL_IB_HCA,NVSHMEM_HCA_LIST:1"
+                # echo "VLLM_GPU_NIC_PCIE_MAPPING=$VLLM_GPU_NIC_PCIE_MAPPING"
+
+                # # sanity: one distinct NIC per GPU
+                # N_UNIQUE=$(echo "$MAPPING" | tr ',' '\n' | cut -d= -f2 | sort -u | wc -l)
+                # [ "$N_UNIQUE" -eq "$NUM_GPUS" ] || { echo "FATAL: only $N_UNIQUE unique NICs for $NUM_GPUS GPUs"; exit 1; }
+
                 uv pip install --system nixl==1.3.0 nixl-cu13==1.3.0 --no-deps
                 uv pip install --system -U transformers
+
+                # --- 1. Verify all 8 RDMA rails are usable: present, ACTIVE, UP, RoCE GID with an IP ---
+                NUM_NICS=$(ls -d /sys/class/infiniband/mlx5_* 2>/dev/null | wc -l)
+                if [ "$NUM_NICS" -ne 8 ]; then
+                  echo "FATAL: expected 8 mlx5 devices, found $NUM_NICS — check GKE network attachments" >&2
+                  ls -d /sys/class/infiniband/* >&2 || true
+                  exit 1
+                fi
+
+                for d in /sys/class/infiniband/mlx5_*; do
+                  dev=$(basename "$d")
+
+                  state=$(cat "$d/ports/1/state")
+                  if [[ "$state" != *ACTIVE* ]]; then
+                    echo "FATAL: $dev port 1 not ACTIVE (state: $state)" >&2
+                    exit 1
+                  fi
+
+                  netdev=$(ls "$d/device/net" | head -n1)
+                  operstate=$(cat "/sys/class/net/$netdev/operstate")
+                  if [ "$operstate" != "up" ]; then
+                    echo "FATAL: $dev ($netdev) operstate is '$operstate', expected 'up'" >&2
+                    exit 1
+                  fi
+
+                  # RoCEv2 GID for an IPv4 addr looks like ...:0000:ffff:XXXX:YYYY.
+                  # No such GID = no IP on the netdev = UCX silently skips this rail.
+                  if ! grep -lq '0000:0000:0000:0000:0000:ffff:' "$d"/ports/1/gids/* 2>/dev/null; then
+                    echo "FATAL: $dev has no RoCEv2 IPv4 GID — netdev $netdev likely has no IP address" >&2
+                    exit 1
+                  fi
+                done
+                echo "All 8 RDMA rails ACTIVE, UP, and addressed."
+
+                # --- 2. Build GPU_BDF=NIC_BDF mapping, GPU index i -> mlx5_i ---
+                MAPPING=""
+                while IFS=', ' read -r idx gpu_bdf; do
+                  nic_bdf=$(basename "$(readlink -f /sys/class/infiniband/mlx5_${idx}/device)")
+                  MAPPING="${MAPPING:+$MAPPING,}${gpu_bdf}=${nic_bdf}"
+                done < <(nvidia-smi --query-gpu=index,pci.bus_id --format=csv,noheader | sort -t, -k1 -n)
+
+                # export VLLM_GPU_NIC_PCIE_MAPPING="$MAPPING"
+                # export VLLM_NIC_SELECTION_VARS="UCX_NET_DEVICES:1,NCCL_IB_HCA:1"
+                # echo "VLLM_GPU_NIC_PCIE_MAPPING=$VLLM_GPU_NIC_PCIE_MAPPING"
+                export UCX_IB_GPU_DIRECT_RDMA=yes
+
+                # --- 3. Make sure nothing re-widens the per-rank pinning ---
+                unset UCX_NET_DEVICES NCCL_IB_HCA || true
+
 
                 exec vllm serve \
                   nvidia/GLM-5.2-NVFP4 \
@@ -195,7 +283,7 @@ spec:
               - name: TP_SIZE
                 value: "1"
               - name: TRITON_LIBCUDA_PATH
-                value: /usr/lib64
+                value: /usr/local/nvidia/lib64
               - name: VLLM_SKIP_P2P_CHECK
                 value: "1"
               - name: NVIDIA_GDRCOPY

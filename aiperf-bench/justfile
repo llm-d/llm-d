@@ -11,6 +11,9 @@
 #   just clean             # delete the runner
 #   just lmeval            # run lm-eval (gsm8k) at 100 concurrency via the lm-eval pod
 #   just lmeval mmlu 50    # override tasks / concurrency
+#   just profile           # capture a 10-step torch profile of decode dp rank 0
+#   just profile 3 90      # profile dp rank 3, wait 90s for the trace dump
+#   just profile-fetch     # copy decode traces out to ./profiles
 
 namespace := "llm-d-wide-ep"
 deploy    := "aiperf-agentx"
@@ -18,12 +21,15 @@ deploy    := "aiperf-agentx"
 # model     := "Qwen/Qwen3-32B"
 # model     := "Qwen/Qwen3.5-122B-A10B-FP8"
 # model     := "deepseek-ai/DeepSeek-R1"
-model     := "zai-org/GLM-5.2-FP8"
+# model     := "zai-org/GLM-5.2-FP8"
+model       := "nvidia/GLM-5.2-NVFP4"
 url       := "http://wide-ep-lws-epp"
 # url       := "http://optimized-baseline-direct"
 concurrency := "50"
 # duration    := "10"
 duration    := "300"
+# Must match torch_profiler_dir in the decode manifest's --profiler-config.
+profile_dir := "/profiles"
 
 default:
     @just --list
@@ -83,11 +89,53 @@ results dest="./results":
 # Run lm-evaluation-harness from the lm-eval pod against the deployment's
 # OpenAI-compatible chat endpoint. Args: [tasks] [concurrency].
 lmeval tasks="gsm8k" concurrency="100":
-    kubectl exec -n {{namespace}} lm-eval -- \
+    kubectl exec -n {{namespace}}  deploy/{{deploy}} -- \
         lm_eval \
             --model local-completions \
             --model_args "model={{model}},base_url={{url}}/v1/completions,num_concurrent={{concurrency}},tokenized_requests=False" \
-            --tasks {{tasks}} 
+            --tasks {{tasks}} --limit 10
+
+# Capture a torch profile of one decode DP rank. The engine is started with
+# --profiler-config max_iterations=10, so the worker records exactly 10 engine
+# steps after /start_profile and then stops and dumps the trace on its own.
+#
+# The engine only steps when it has work, so run this WHILE a benchmark is in
+# flight (e.g. `just run` in another shell), otherwise the profile stays empty.
+# Args: [dp-rank] [seconds-to-wait-for-the-trace-dump].
+profile rank="0" wait="60":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    pod=$(kubectl get pod -n {{namespace}} -l llm-d.ai/role=decode \
+      -o jsonpath='{.items[0].metadata.name}')
+    port=$((8200 + {{rank}}))
+    echo "==> starting profile on $pod (dp rank {{rank}}, port $port)"
+    kubectl exec -n {{namespace}} "$pod" -c vllm -- \
+      curl -sS -f -X POST "http://localhost:$port/start_profile"
+    echo "==> recording 10 steps, waiting {{wait}}s for the trace dump"
+    sleep {{wait}}
+    # The worker already auto-stopped after 10 steps; this resets its state so
+    # the next `just profile` can start a fresh capture.
+    kubectl exec -n {{namespace}} "$pod" -c vllm -- \
+      curl -sS -f -X POST "http://localhost:$port/stop_profile"
+    kubectl exec -n {{namespace}} "$pod" -c vllm -- ls -lh {{profile_dir}}
+
+# Copy decode torch traces out of the pod (default ./profiles).
+profile-fetch dest="./profiles":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    pod=$(kubectl get pod -n {{namespace}} -l llm-d.ai/role=decode \
+      -o jsonpath='{.items[0].metadata.name}')
+    mkdir -p {{dest}}
+    kubectl cp -c vllm {{namespace}}/"$pod":{{profile_dir}} {{dest}}
+
+# Delete any traces already collected in the decode pod.
+profile-clean:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    pod=$(kubectl get pod -n {{namespace}} -l llm-d.ai/role=decode \
+      -o jsonpath='{.items[0].metadata.name}')
+    kubectl exec -n {{namespace}} "$pod" -c vllm -- \
+      bash -c 'rm -rf {{profile_dir}}/* && echo cleaned'
 
 logs:
     kubectl logs -n {{namespace}} deploy/{{deploy}} -f
