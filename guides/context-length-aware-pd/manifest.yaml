@@ -66,9 +66,6 @@ spec:
               valueFrom:
                 fieldRef:
                   fieldPath: status.podIP
-            # Workaround for vllm-project/vllm#44548, needed on vLLM v0.20.0+.
-            - name: USER
-              value: llm-d
           ports:
             - name: modelserver
               containerPort: 8200
