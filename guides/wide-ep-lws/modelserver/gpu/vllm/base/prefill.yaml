@@ -226,10 +226,11 @@ spec:
                 # export VLLM_GPU_NIC_PCIE_MAPPING="$MAPPING"
                 # export VLLM_NIC_SELECTION_VARS="UCX_NET_DEVICES:1,NCCL_IB_HCA:1"
                 # echo "VLLM_GPU_NIC_PCIE_MAPPING=$VLLM_GPU_NIC_PCIE_MAPPING"
-                export UCX_IB_GPU_DIRECT_RDMA=yes
+                # export UCX_IB_GPU_DIRECT_RDMA=yes
 
                 # --- 3. Make sure nothing re-widens the per-rank pinning ---
                 unset UCX_NET_DEVICES NCCL_IB_HCA || true
+                export UCX_LOG_LEVEL=trace
 
 
                 exec vllm serve \
