@@ -60,7 +60,7 @@ ARG LMCACHE_VERSION="v0.4.6"
 
 # Kernels
 ARG DEEPEP_REPO="https://github.com/tlrmchlsmth/DeepEP"
-ARG DEEPEP_REPO="sgl-gb200-blog-pt2"
+ARG DEEPEP_VERSION="sgl-gb200-blog-pt2"
 
 # GB200-specific DeepEP variant (built alongside standard, selected via --target runtime-gb200)
 ARG DEEPEP_GB200_REPO="https://github.com/tlrmchlsmth/DeepEP"
