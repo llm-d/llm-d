@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
   "label": "VLLM TPU",
-  "message": "failing",
-  "color": "red"
+  "message": "passing",
+  "color": "brightgreen"
 }
