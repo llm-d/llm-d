@@ -13,13 +13,13 @@ This guide deploys the recommended out of the box [configuration](https://github
 
 The optimized-baseline defaults to two main routing criteria:
 
-- **Prefix-cache aware** using the [prefix cache affinity filter](https://github.com/llm-d/llm-d-router/tree/main/pkg/epp/framework/plugins/scheduling/filter/prefixcacheaffinity/README.md), which narrows candidates to "sticky" endpoints with high estimated prompt prefix cache reuse.
+- **Prefix-cache aware** using the [prefix cache affinity filter](https://github.com/llm-d/llm-d-router/tree/main/pkg/epp/framework/plugins/scheduling/filter/prefixcacheaffinity/README.md), which narrows candidates to "sticky" endpoints with high estimated prompt prefix cache reuse, with a saturation-aware override that spreads load when endpoints get hot.
 
 - **Load-aware** using the [token load scorer](https://github.com/llm-d/llm-d-router/tree/main/pkg/epp/framework/plugins/scheduling/scorer/tokenload/README.md), which scores endpoints based on the total prefill token load handled by each model server.
 
-An optional [calibration step](#4-optional-calibrate-prefix-cache-affinity-filter) is also available to calibrate this saturation-aware override gate with a per-deployment τ value measured against the live cluster. This is useful when sticky prefix-affinity routing under heavy load could create hot-spotting if not properly tuned.
+Both plugins are used with their built-in defaults — no per-deployment tuning is required for this guide's reference setup (Qwen3-32B on H100 80&nbsp;GB, TP=2). If you deploy a **different model or accelerator**, the saturation-aware override gate keys off the `peakPrefillThroughput` of the filter, which is hardware- and model-specific; measure your own with the shared [calibration recipe](../recipes/router/calibration/README.md) and set it on the filter. See [Adapting to other hardware](#adapting-to-other-hardware) below.
 
-## Default Configuration
+## Configuration
 
 | Parameter          | Default                                                 | Example                                                 |
 | ------------------ | ------------------------------------------------------- | --------------------------------------------------------- |
@@ -165,90 +165,22 @@ kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/g
 kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/recipes/modelserver/components/monitoring
 ```
 
-### 4. (Optional) Calibrate `prefix-cache-affinity-filter`
+## Adapting to other hardware
 
-The guide ships with a static default for `maxTokensInFlightPenalty` (τ = 286720), calibrated for Qwen3-32B on H100 TP=2 at T_max=17s. This default works well for that reference setup but is not optimal for other hardware/model combinations:
+The routing plugins ship with defaults tuned for this guide's reference setup (Qwen3-32B on H100 80&nbsp;GB, TP=2), so **no calibration is needed to run the guide as written**.
 
-- **Larger model on the same hardware** (e.g., 128B on H100) — the static default is too loose; hot-spotting can still occur under heavy load.
-- **Same model on lower-end hardware** (e.g., L4 GPUs) — the default is too loose; hot-spotting risk.
-- **Smaller model on the same hardware** (e.g., Llama-3-8B on H100) — the default is too tight; you lose prefix-affinity benefits unnecessarily.
-- **Same model on faster hardware** (e.g., B200) — the default is too tight; prefix caching becomes suboptimal.
+The saturation-aware override gate in the `prefix-cache-affinity-filter` keys off the filter's `peakPrefillThroughput` parameter, which is **hardware- and model-specific** (the plugin default, `15928`, is the value measured for this guide's setup). If you deploy a different model or accelerator, measure your own value with the shared calibration recipe and set it on the filter:
 
-The calibration tool below measures τ against your live deployment and produces a Helm values overlay file with the suggested value. You inspect the result and decide whether to apply it.
-
-#### Prerequisites
-
-- Steps 1 and 2 above are complete; vLLM and EPP pods are running and ready.
-- `envsubst` is installed locally (part of `gettext-base` on Debian/Ubuntu, `gettext` on macOS via Homebrew).
-
-#### Run calibration (suggest a value)
-
-The script auto-discovers the EPP service's ClusterIP, runs a one-shot calibration Job, and writes a rendered values overlay file:
-
-```bash
-bash guides/${GUIDE_NAME}/calibration/calibrate.sh
+```yaml
+# guides/optimized-baseline/router/optimized-baseline.values.yaml
+- type: prefix-cache-affinity-filter
+  parameters:
+    peakPrefillThroughput: <measured value>
 ```
 
-When the script finishes (typically 30–60 seconds), it prints:
+The recipe (`calibrate.sh`) runs a short Kubernetes Job that measures true prefill throughput against your live deployment and prints the value — it does not modify any config. See the recipe's README for full usage:
 
-- The suggested τ value
-- The path to the rendered values overlay file (defaults to `guides/${GUIDE_NAME}/calibration/calibration.values.yaml`)
-- The exact `helm upgrade` command you would run if you decided to apply the suggested value
-
-#### Apply the suggested value
-
-Inspect the rendered file:
-
-```bash
-cat guides/${GUIDE_NAME}/calibration/calibration.values.yaml
-```
-
-If the suggested value looks reasonable, apply it by running the printed `helm upgrade` command — layering the overlay on top of the upstream guide values — then restart the EPP rollout so the new ConfigMap is loaded:
-
-```bash
-helm upgrade ${GUIDE_NAME} \
-  oci://ghcr.io/llm-d/charts/llm-d-router-standalone-dev \
-  --version ${ROUTER_CHART_VERSION} \
-  -f guides/recipes/router/base.values.yaml \
-  -f guides/${GUIDE_NAME}/router/${GUIDE_NAME}.values.yaml \
-  -f guides/${GUIDE_NAME}/calibration/calibration.values.yaml \
-  -n ${NAMESPACE}
-
-kubectl rollout restart -n ${NAMESPACE} deployment/${GUIDE_NAME}-epp
-```
-
-If you decide not to apply, no action is needed — the EPP keeps running with the static default from the guide values.
-
-#### Optional environment overrides
-
-The calibration script picks sensible defaults for the optimized-baseline reference setup. Override per-deployment as needed:
-
-```bash
-# Override SLO tolerance (default: 17 seconds)
-T_MAX_SECONDS=20 bash guides/${GUIDE_NAME}/calibration/calibrate.sh
-
-# Override calibration target (default: auto-discover EPP service)
-VLLM_ENDPOINT=http://vllm-direct:8000 \
-  bash guides/${GUIDE_NAME}/calibration/calibrate.sh
-
-# Override model and chunk size (e.g., when calibrating a different deployment)
-MODEL_NAME=meta-llama/Llama-3.1-8B CHUNK_SIZE=4096 \
-  bash guides/${GUIDE_NAME}/calibration/calibrate.sh
-```
-
-#### Re-calibration
-
-Same command. The script re-measures and writes a fresh overlay file. Inspect, then apply when ready.
-
-#### Files
-
-The calibration assets live in `guides/${GUIDE_NAME}/calibration/`:
-
-| File | Purpose |
-|---|---|
-| `calibrate-tau.yaml` | Standalone K8s manifest: ConfigMap with the calibration Python script + Job that runs it |
-| `calibration.values.template.yaml` | Helm values overlay template with `${TAU}` placeholder |
-| `calibrate.sh` | Wrapper script that runs the Job, measures τ, and writes the rendered overlay file (does not apply) |
+- [`guides/recipes/router/calibration/README.md`](../recipes/router/calibration/README.md)
 
 For reference values across the (model, accelerator) combinations shipped under `guides/` — and which ones still need a calibration run — see the [**configuration matrix**](../recipes/router/calibration/configuration-matrix.md).
 
@@ -393,4 +325,3 @@ Empirical benchmark reports comparing llm-d routing performance against a standa
 - [Qwen/Qwen3-32B on H100 and SGLang](./benchmark-results/sglang-qwen3-32b-h100/README.md)
 - [Qwen/Qwen3-32B on H100 and vLLM](./benchmark-results/vllm-qwen3-32b-h100/README.md)
 - [openai/gpt-oss-120b on H100 and vLLM](./benchmark-results/vllm-gpt-oss-120b-h100/README.md)
-
