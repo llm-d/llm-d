@@ -110,27 +110,7 @@ spec:
               - |-
                 find /dev/shm -type f -delete
 
-                # Hotfix: fix batched DeepGEMM device capability lookup (vllm#47884)
-                python3 -c "
-                p='/usr/local/lib/python3.12/dist-packages/vllm/model_executor/layers/fused_moe/experts/batched_deep_gemm_moe.py'
-                s=open(p).read()
-                old='current_platform.get_device_capability(device_id=y.device.index)'
-                new='current_platform.get_device_capability()'
-                if old in s:
-                  open(p,'w').write(s.replace(old, new)); print('PATCHED batched_deep_gemm_moe.py')
-                else: print('batched_deep_gemm_moe.py already patched or different version')
-                "
 
-                # Hotfix: fix NVML capability lookup for visible devices (vllm#47892)
-                python3 -c "
-                p='/usr/local/lib/python3.12/dist-packages/vllm/platforms/cuda.py'
-                s=open(p).read()
-                old='physical_device_id = cls.device_id_to_physical_device_id(device_id)'
-                new='physical_device_id = cls.visible_device_id_to_physical_device_id(device_id)'
-                if old in s:
-                  open(p,'w').write(s.replace(old, new)); print('PATCHED cuda.py')
-                else: print('cuda.py already patched or different version')
-                "
 
                 # Hotfix: add kv_quant_mode to MLAAttention.get_kv_cache_spec (vllm#47722)
                 # PR #47716 fixed deepseek_v4 and sparse_swa but missed mla_attention.py
@@ -203,6 +183,7 @@ spec:
 
                 # DSpark speculative decoding (multi-node only — single-node is memory-bandwidth bound)
                 SPEC_ARGS=""
+                KV_CACHE_DTYPE_ARGS="--kv-cache-dtype fp8"
                 MAX_BATCHED_TOKENS=${MAX_TOKENS}
                 MAX_SEQS=${MAX_TOKENS}
                 if [ "${ENABLE_DSPARK:-0}" = "1" ] && [ "${LWS_GROUP_SIZE:-1}" -gt 1 ]; then
@@ -210,6 +191,7 @@ spec:
                   MAX_SEQS=$(( MAX_TOKENS / 4 ))
                   MAX_BATCHED_TOKENS=$(( MAX_SEQS * (DSPARK_NUM_TOKENS + 1) ))
                   SPEC_ARGS="--speculative-config {\"model\":\"${DSPARK_MODEL}\",\"num_speculative_tokens\":${DSPARK_NUM_TOKENS},\"method\":\"dspark\"}"
+                  KV_CACHE_DTYPE_ARGS=""
                 fi
 
                 # DeepEP low-latency requires: qp_depth >= (max_dispatch_tokens + 1) * 2
@@ -223,7 +205,7 @@ spec:
                   PROFILER_ARGS="--profiler-config {\"profiler\":\"torch\",\"torch_profiler_dir\":\"/var/cache/vllm/profile\",\"torch_profiler_record_shapes\":true,\"torch_profiler_with_memory\":true,\"max_iterations\":3}"
                 fi
 
-                exec vllm serve $PROFILER_ARGS $SPEC_ARGS \
+                exec vllm serve $PROFILER_ARGS $SPEC_ARGS $KV_CACHE_DTYPE_ARGS \
                   zai-org/GLM-5.2-FP8 \
                   --port 8200 \
                   --trust-remote-code \
