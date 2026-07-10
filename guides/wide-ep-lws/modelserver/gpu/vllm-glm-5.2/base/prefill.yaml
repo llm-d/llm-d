@@ -35,13 +35,13 @@ spec:
             emptyDir:
               medium: Memory
               sizeLimit: 1500Gi
+          - name: hf-cache
+            hostPath:
+              path: /mnt/local/hf-cache
+              type: DirectoryOrCreate
           - name: jit-cache
             hostPath:
               path: /mnt/local/jit-cache
-              type: DirectoryOrCreate
-          - name: hf-cache
-            hostPath:
-              path: /mnt/local/model-cache
               type: DirectoryOrCreate
           - name: sys
             hostPath:
