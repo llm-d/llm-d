@@ -290,7 +290,7 @@ spec:
               - name: ENABLE_PROFILING
                 value: "0"
               - name: ENABLE_DSPARK
-                value: "1"
+                value: "0"
               - name: DSPARK_MODEL
                 value: "RedHatAI/GLM-5.2-speculator.dspark"
               - name: DSPARK_NUM_TOKENS
