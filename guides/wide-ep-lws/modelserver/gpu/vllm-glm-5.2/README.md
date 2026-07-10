@@ -158,24 +158,6 @@ curl -X POST http://${IP}/v1/completions \
     }' | jq
 ```
 
-## Grafana Dashboards
-
-| Topology       | Dashboard                                                        |
-| -------------- | ---------------------------------------------------------------- |
-| P/D            | [`base/grafana-wideep-overview.json`](base/grafana-wideep-overview.json) |
-| Aggregate      | [`base/grafana-aggregate.json`](base/grafana-aggregate.json)     |
-
-Load a dashboard as a ConfigMap (Grafana's sidecar picks it up automatically):
-
-```bash
-DASHBOARD=base/grafana-aggregate.json  # or: base/grafana-wideep-overview.json
-kubectl create configmap $(basename $DASHBOARD .json) \
-    --from-file=$(basename $DASHBOARD)=${DASHBOARD} \
-    -n ${NAMESPACE} --dry-run=client -o yaml | \
-  kubectl label -f - grafana_dashboard=1 --local --dry-run=client -o yaml | \
-  kubectl apply -f -
-```
-
 ## Cleanup
 
 **P/D:**
