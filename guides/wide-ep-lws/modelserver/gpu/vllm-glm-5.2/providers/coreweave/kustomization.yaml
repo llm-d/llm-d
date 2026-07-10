@@ -33,7 +33,7 @@ patches:
           value: "ibp"
       - op: add
         path: /spec/leaderWorkerTemplate/workerTemplate/spec/containers/0/resources/limits/rdma~1ib
-        value: "1"
+        value: "8"
       - op: add
         path: /spec/leaderWorkerTemplate/workerTemplate/spec/containers/0/resources/requests/rdma~1ib
-        value: "1"
+        value: "8"
