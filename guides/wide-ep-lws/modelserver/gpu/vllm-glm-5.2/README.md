@@ -12,10 +12,60 @@ below cover only what is specific to this deployment.
 
 ## Default Configuration
 
-| Parameter                | Value                  |
-| ------------------------ | ---------------------- |
-| Model                    | zai-org/GLM-5.2-FP8   |
-| KV Cache Dtype           | fp8                    |
+| Parameter                | Value                                          |
+| ------------------------ | ---------------------------------------------- |
+| Model                    | zai-org/GLM-5.2-FP8                            |
+| DP model                 | Supervisor (`--data-parallel-multi-port-external-lb`) |
+| MoE backend              | DeepGemm                                       |
+| All-to-all (prefill)     | `deepep_high_throughput`                        |
+| All-to-all (decode)      | `deepep_low_latency` (IBGDA + NVSHMEM)         |
+| KV transfer              | NixlConnector                                  |
+| Reasoning parser         | glm45                                          |
+| Tool-call parser         | glm47                                          |
+
+## Features
+
+### DSpark Speculative Decoding
+
+Enabled via `ENABLE_DSPARK=1` on both prefill and decode. Only activates on multi-node
+deployments (`LWS_GROUP_SIZE > 1`). Uses the `RedHatAI/GLM-5.2-speculator.dspark` draft
+model with 7 speculative tokens by default.
+
+When enabled, GPU memory utilization is reduced by 0.07 (decode) / 0.04 (prefill) to fit
+the draft model, and `NVSHMEM_QP_DEPTH` is scaled to match the expanded dispatch token count.
+
+Configure via env vars:
+
+| Variable            | Default                                   |
+| ------------------- | ----------------------------------------- |
+| `ENABLE_DSPARK`     | `0`                                       |
+| `DSPARK_MODEL`      | `RedHatAI/GLM-5.2-speculator.dspark`      |
+| `DSPARK_NUM_TOKENS` | `7`                                       |
+
+### EPP Routing
+
+The GLM-5.2 EPP overrides (`router/glm-5.2-overrides.values.yaml`) add dual prefix-cache
+scoring for disaggregated P/D routing:
+
+- **GPU prefix-cache scorer** (weight 5) — auto-tuned, tracks GPU-resident prefix blocks
+- **CPU prefix-cache scorer** (weight 2) — fixed LRU capacity (200k entries per server),
+  tracks CPU-offloaded prefix blocks
+- **Active-request scorer** (weight 1 prefill, 3 decode) — load balancing
+
+All 8 DP rank ports (8000–8007) are exposed as `targetPorts` for per-rank routing.
+
+### Monitoring
+
+- **Node exporter sidecar** on each pod — collects InfiniBand, CPU, memory pressure, and
+  network retransmission metrics
+- **Prometheus scrape configs** — `monitoring/apply-scrape-configs.sh` installs ServiceMonitor
+  configs for vLLM and node-exporter endpoints
+- **DCGM custom metrics** — `base/dcgm-custom-metrics.yaml` for GPU-level telemetry
+
+### KV Cache Evictor
+
+`base/kv-cache-evictor.yaml` deploys a sidecar that evicts stale KV cache data from NVMe
+when utilization exceeds 80%, targeting 55%.
 
 ## Prerequisites
 
@@ -25,7 +75,7 @@ In addition to the [wide-ep-lws prerequisites](../../../README.md#prerequisites)
 
   ```bash
   export KUBECONFIG=~/.kube/config
-  export NAMESPACE=ecrncevi-dev
+  export NAMESPACE=<your-namespace>
   export MODEL=zai-org/GLM-5.2-FP8
   ```
 
@@ -35,22 +85,28 @@ In addition to the [wide-ep-lws prerequisites](../../../README.md#prerequisites)
 
 | Deployment | Prefill                    | Decode                        | Nodes / GPUs |
 | ---------- | -------------------------- | ----------------------------- | ------------ |
-| `p1d1`     | 1 node, DEP8               | 1 node, DEP8                  | 2 / 16       |
-| `p1d2`     | 1 node, DEP8               | 2 nodes, DEP16 (wide)         | 3 / 24       |
-| `p2d1`     | 2 nodes, DEP8 (replicated) | 1 node, DEP8                  | 3 / 24       |
-| `p2d2`     | 2 nodes, DEP8 (replicated) | 2 nodes, DEP16 (wide)         | 4 / 32       |
+| `p1w1d1w1` | 1 replica, 1 node, DEP8    | 1 replica, 1 node, DEP8      | 2 / 16       |
+| `p1w1d1w2` | 1 replica, 1 node, DEP8    | 1 replica, 2 nodes, DEP16    | 3 / 24       |
+| `p2w1d1w1` | 2 replicas, 1 node, DEP8   | 1 replica, 1 node, DEP8      | 3 / 24       |
+| `p2w1d1w2` | 2 replicas, 1 node, DEP8   | 1 replica, 2 nodes, DEP16    | 4 / 32       |
 
 ```bash
 kubectl apply -n ${NAMESPACE} -k deployments/<deployment>
 ```
 
+Deploy the router with GLM-5.2 overrides:
+
+```bash
+helm install wide-ep-lws ${ROUTER_CHART} \
+    -f ../../../recipes/router/base.values.yaml \
+    -f ../../../router/wide-ep-lws.values.yaml \
+    -f ../../../router/glm-5.2-overrides.values.yaml \
+    -n ${NAMESPACE}
+```
+
 ### Aggregate
 
 Single-node TP=8 deployment with no disaggregation — suited for high-interactivity workloads.
-
-| Topology             | Nodes / GPUs |
-| -------------------- | ------------ |
-| 1 node, TP=8         | 1 / 8        |
 
 ```bash
 kubectl apply -n ${NAMESPACE} -f base/aggregate.yaml
