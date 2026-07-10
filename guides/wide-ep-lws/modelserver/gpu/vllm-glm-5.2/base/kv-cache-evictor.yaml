@@ -25,9 +25,9 @@ spec:
             - name: PVC_MOUNT_PATH
               value: /kv-cache
             - name: CLEANUP_THRESHOLD
-              value: "80"
+              value: "90"
             - name: TARGET_THRESHOLD
-              value: "55"
+              value: "70"
             - name: CACHE_DIRECTORY
               value: ""
             - name: NUM_CRAWLER_PROCESSES

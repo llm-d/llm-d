@@ -62,10 +62,41 @@ All 8 DP rank ports (8000–8007) are exposed as `targetPorts` for per-rank rout
   configs for vLLM and node-exporter endpoints
 - **DCGM custom metrics** — `base/dcgm-custom-metrics.yaml` for GPU-level telemetry
 
+### KV Cache Offloading (Prefill)
+
+Prefill pods are configured for CPU and NVMe KV cache offloading:
+
+- **CPU tier** — uses mmap in `/dev/shm`. The pod allocates 1500Gi memory and 1500Gi
+  `dshm` (shared memory) to accommodate 8 DP ranks' mmap regions. With the supervisor DP
+  model, `cpu_bytes_to_use` is per-rank — total CPU KV cache = value × 8 ranks.
+- **NVMe tier** — host-path volume at `/mnt/local/kv-cache` mounted as `/mnt/nvme-cache`.
+  Acts as a secondary eviction target when CPU tier fills up.
+
+Decode pods do not use CPU offloading (256Gi dshm, 512Gi memory) — they prioritize
+low-latency token generation over cache capacity.
+
+Hotfixes are included for madvise bounds checking with DP>1 and packed non-uniform KV
+cache layouts in the offloading worker.
+
+### InfiniBand Networking
+
+Both prefill and decode configure IB for multi-node communication:
+
+| Variable                  | Value  | Purpose                                          |
+| ------------------------- | ------ | ------------------------------------------------ |
+| `NCCL_IB_HCA`            | `ibp`  | Filter IB HCAs for NCCL collectives              |
+| `NVSHMEM_HCA_PREFIX`      | `ibp`  | Filter IB HCAs for NVSHMEM (decode low-latency)  |
+| `NVSHMEM_REMOTE_TRANSPORT` | `ibgda` | GPUDirect Async for NVSHMEM                     |
+| `rdma/ib`                 | `8`    | Request 8 RDMA/IB devices per pod                |
+
+Multi-node deployments (`LWS_GROUP_SIZE > 1`) automatically set `NVSHMEM_SYMMETRIC_SIZE=16G`
+and reduce `gpu-memory-utilization` to 0.80 to reserve VRAM for the NVSHMEM heap.
+
 ### KV Cache Evictor
 
-`base/kv-cache-evictor.yaml` deploys a sidecar that evicts stale KV cache data from NVMe
-when utilization exceeds 80%, targeting 55%.
+`base/kv-cache-evictor.yaml` deploys a DaemonSet that evicts stale KV cache data from NVMe
+when utilization exceeds 90%, targeting 70%. Runs on every node so all prefill pods get
+cache eviction regardless of replica count.
 
 ## Prerequisites
 
