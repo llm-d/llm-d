@@ -120,6 +120,7 @@ In addition to the [wide-ep-lws prerequisites](../../../README.md#prerequisites)
 | `p1w1d1w2` | 1 replica, 1 node, DEP8    | 1 replica, 2 nodes, DEP16    | 3 / 24       |
 | `p2w1d1w1` | 2 replicas, 1 node, DEP8   | 1 replica, 1 node, DEP8      | 3 / 24       |
 | `p2w1d1w2` | 2 replicas, 1 node, DEP8   | 1 replica, 2 nodes, DEP16    | 4 / 32       |
+| `p3w2d1w2` | 3 replicas, 2 nodes, DEP16 | 1 replica, 2 nodes, DEP16    | 8 / 64       |
 
 ```bash
 kubectl apply -n ${NAMESPACE} -k deployments/<deployment>
