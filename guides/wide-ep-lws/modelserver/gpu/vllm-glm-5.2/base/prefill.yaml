@@ -73,7 +73,54 @@ spec:
               - |-
                 find /dev/shm -type f -delete
 
-
+                # Hotfix: FA3 get_scheduler_metadata / mha_fwd metadata_size mismatch
+                # get_scheduler_metadata hardcodes use_prepare_varlen=true but mha_fwd
+                # derives it from is_varlen (cu_seqlens_q presence). When DSpark calls
+                # FA3 without cu_seqlens_q the sizes diverge, crashing with:
+                #   "scheduler_metadata dimension 0 must have size 5, got 9"
+                # Fix: derive use_prepare_varlen from is_varlen like mha_fwd does.
+                # See: vllm-project/flash-attention#161, vllm-project/vllm#48221
+                if [ "${ENABLE_DSPARK:-0}" = "1" ]; then
+                  FA3_SO=$(python3 -c "
+                import vllm.vllm_flash_attn._vllm_fa3_C as m; print(m.__file__)
+                  " 2>/dev/null || echo "")
+                  if [ -n "$FA3_SO" ] && [ -f "$FA3_SO" ]; then
+                    FA3_GIT_TAG=b3964b1d8b95d8e8447435668ab169a2700bab65
+                    CUTLASS_COMMIT=62750a2b75c802660e4894434dc55e839f322277
+                    mkdir -p /tmp/fa-patch
+                    echo "Downloading flash-attention source..."
+                    curl -sL "https://github.com/vllm-project/flash-attention/archive/${FA3_GIT_TAG}.tar.gz" \
+                      | tar xz -C /tmp/fa-patch --strip-components=1
+                    echo "Downloading cutlass..."
+                    mkdir -p /tmp/fa-patch/csrc/cutlass
+                    curl -sL "https://github.com/NVIDIA/cutlass/archive/${CUTLASS_COMMIT}.tar.gz" \
+                      | tar xz -C /tmp/fa-patch/csrc/cutlass --strip-components=1
+                    python3 -c "
+                p = '/tmp/fa-patch/hopper/flash_api_stable.cpp'
+                s = open(p).read()
+                s = s.replace(
+                  '    bool const use_prepare_varlen = true;',
+                  '    bool const is_varlen = is_varlen_q || is_varlen_k || seqused_q_.has_value() || leftpad_k_.has_value();\n    bool const use_prepare_varlen = is_varlen;')
+                s = s.replace('    bool is_varlen = true;\n\n    // Otherwise', '    // Otherwise')
+                open(p, 'w').write(s)
+                print('PATCHED flash_api_stable.cpp')
+                    "
+                    pip install cmake ninja 2>/dev/null
+                    mkdir -p /tmp/fa-patch/build && cd /tmp/fa-patch/build
+                    cmake .. -DCMAKE_BUILD_TYPE=Release \
+                      -DFLASHATTENTION_DISABLE_BACKWARD=ON -DFLASHATTENTION_DISABLE_DROPOUT=ON \
+                      -DFLASHATTENTION_DISABLE_APPENDKV=ON -DFLASHATTENTION_DISABLE_UNEVEN_K=ON \
+                      -DFLASHATTENTION_DISABLE_CLUSTER=ON -DFLASHATTENTION_DISABLE_SM8x=ON \
+                      -DFLASHATTENTION_DISABLE_PYBIND=ON -DFLASHATTENTION_PACKGQA_ONLY=ON \
+                      -DFLASHATTENTION_VARLEN_ONLY=ON -GNinja 2>&1 | tail -3
+                    ninja _vllm_fa3_C -j2 && \
+                      cp lib/_vllm_fa3_C*.so "$(dirname "$FA3_SO")/" && \
+                      echo "FA3 rebuild complete" || echo "FA3 rebuild FAILED"
+                    cd /; rm -rf /tmp/fa-patch
+                  else
+                    echo "SKIP FA3 hotfix: _vllm_fa3_C.so not found"
+                  fi
+                fi
 
                 # Hotfix: add kv_quant_mode to MLAAttention.get_kv_cache_spec (vllm#47722)
                 # PR #47716 fixed deepseek_v4 and sparse_swa but missed mla_attention.py
@@ -207,7 +254,7 @@ spec:
               - name: HF_HOME
                 value: /mnt/hf-cache
               - name: ENABLE_DSPARK
-                value: "0"
+                value: "1"
               - name: DSPARK_MODEL
                 value: "RedHatAI/GLM-5.2-speculator.dspark"
               - name: DSPARK_NUM_TOKENS
@@ -232,16 +279,12 @@ spec:
                 value: ibgda
               - name: NVSHMEM_IB_ENABLE_IBGDA
                 value: "true"
-              - name: NVSHMEM_HCA_PREFIX
-                value: ibp
               - name: NVSHMEM_BOOTSTRAP_UID_SOCK_IFNAME
                 value: eth0
               - name: GLOO_SOCKET_IFNAME
                 value: eth0
               - name: NCCL_SOCKET_IFNAME
                 value: eth0
-              - name: NCCL_IB_HCA
-                value: ibp
               - name: VLLM_COMPUTE_NANS_IN_LOGITS
                 value: "1"
               - name: VLLM_LOGGING_LEVEL
@@ -325,13 +368,11 @@ spec:
                 ephemeral-storage: 1Ti
                 memory: 1500Gi
                 nvidia.com/gpu: "8"
-                rdma/ib: "8"
               requests:
                 cpu: 64
                 ephemeral-storage: 1Ti
                 memory: 1500Gi
                 nvidia.com/gpu: "8"
-                rdma/ib: "8"
             volumeMounts:
               - name: dshm
                 mountPath: /dev/shm
