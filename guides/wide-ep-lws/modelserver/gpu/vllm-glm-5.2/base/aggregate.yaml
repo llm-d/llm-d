@@ -1,0 +1,142 @@
+apiVersion: leaderworkerset.x-k8s.io/v1
+kind: LeaderWorkerSet
+metadata:
+  name: wide-ep-lws-nvidia-gpu-vllm-glm-5-2-aggregate
+  labels:
+    llm-d.ai/model: GLM-5.2-FP8
+    llm-d.ai/role: aggregate
+spec:
+  replicas: 1
+  leaderWorkerTemplate:
+    size: 1
+    workerTemplate:
+      metadata:
+        labels:
+          llm-d.ai/inference-serving: "true"
+          llm-d.ai/guide: "wide-ep-lws"
+          llm-d.ai/accelerator-variant: "gpu"
+          llm-d.ai/accelerator-vendor: "nvidia"
+          llm-d.ai/model: GLM-5.2-FP8
+          llm-d.ai/role: aggregate
+      spec:
+        serviceAccountName: glm-5-2
+        volumes:
+          - name: dshm
+            emptyDir:
+              medium: Memory
+              sizeLimit: 2Gi
+          - name: jit-cache
+            hostPath:
+              path: /mnt/local/jit-cache
+              type: DirectoryOrCreate
+          - name: hf-cache
+            hostPath:
+              path: /mnt/local/model-cache
+              type: DirectoryOrCreate
+        containers:
+          - name: vllm
+            image: vllm/vllm-openai:nightly
+            securityContext:
+              capabilities:
+                add:
+                  - IPC_LOCK
+                  - SYS_RAWIO
+              runAsGroup: 0
+              runAsUser: 0
+            imagePullPolicy: Always
+            command:
+              - /bin/bash
+              - -c
+            args:
+              - |-
+                find /dev/shm -type f -delete
+
+                exec vllm serve \
+                  zai-org/GLM-5.2-FP8 \
+                  --port 8000 \
+                  --trust-remote-code \
+                  --gpu-memory-utilization 0.90 \
+                  --max-model-len 131072 \
+                  --api-server-count 1 \
+                  --disable-access-log-for-endpoints=/health,/metrics \
+                  --tensor-parallel-size 8 \
+                  --moe-backend deep_gemm \
+                  --reasoning-parser glm45 \
+                  --tool-call-parser glm47 \
+                  --enable-auto-tool-choice \
+                  --kv-cache-dtype auto
+            env:
+              - name: HF_TOKEN
+                valueFrom:
+                  secretKeyRef:
+                    name: llm-d-hf-token
+                    key: HF_TOKEN
+              - name: HF_HOME
+                value: /mnt/hf-cache
+              - name: VLLM_MEMORY_PROFILER_ESTIMATE_CUDAGRAPHS
+                value: "0"
+              - name: TRITON_LIBCUDA_PATH
+                value: /usr/lib64
+              - name: VLLM_SKIP_P2P_CHECK
+                value: "1"
+              - name: VLLM_USE_DEEP_GEMM
+                value: "1"
+              - name: VLLM_COMPUTE_NANS_IN_LOGITS
+                value: "0"
+              - name: VLLM_LOGGING_LEVEL
+                value: INFO
+              - name: VLLM_FLASHINFER_ALLREDUCE_BACKEND
+                value: trtllm
+
+              - name: CUDA_CACHE_PATH
+                value: /var/cache/vllm/cuda
+              - name: CCACHE_DIR
+                value: /var/cache/vllm/ccache
+              - name: VLLM_CACHE_ROOT
+                value: /var/cache/vllm/vllm
+              - name: FLASHINFER_WORKSPACE_BASE
+                value: /var/cache/vllm/flashinfer
+
+            ports:
+              - containerPort: 8000
+                name: modelserver
+                protocol: TCP
+            startupProbe:
+              httpGet:
+                path: /health
+                port: modelserver
+              initialDelaySeconds: 0
+              periodSeconds: 1
+              timeoutSeconds: 5
+              failureThreshold: 2700
+            livenessProbe:
+              httpGet:
+                path: /health
+                port: modelserver
+              periodSeconds: 30
+              timeoutSeconds: 5
+              failureThreshold: 3
+            readinessProbe:
+              httpGet:
+                path: /v1/models
+                port: modelserver
+              periodSeconds: 10
+              timeoutSeconds: 5
+              failureThreshold: 3
+            resources:
+              limits:
+                ephemeral-storage: 1Ti
+                memory: 512Gi
+                nvidia.com/gpu: "8"
+              requests:
+                cpu: 32
+                ephemeral-storage: 1Ti
+                memory: 512Gi
+                nvidia.com/gpu: "8"
+            volumeMounts:
+              - name: dshm
+                mountPath: /dev/shm
+              - name: jit-cache
+                mountPath: /var/cache/vllm
+              - name: hf-cache
+                mountPath: /mnt/hf-cache

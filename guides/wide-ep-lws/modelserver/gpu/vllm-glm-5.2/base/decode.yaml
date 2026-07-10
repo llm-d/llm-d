@@ -1,0 +1,425 @@
+apiVersion: leaderworkerset.x-k8s.io/v1
+kind: LeaderWorkerSet
+metadata:
+  name: wide-ep-lws-nvidia-gpu-vllm-glm-5-2-decode
+  labels:
+    llm-d.ai/model: GLM-5.2-FP8
+    llm-d.ai/role: decode
+spec:
+  replicas: ${DECODE_REPLICAS}
+  leaderWorkerTemplate:
+    size: ${DECODE_SIZE}
+    workerTemplate:
+      metadata:
+        labels:
+          llm-d.ai/inference-serving: "true"
+          llm-d.ai/guide: "wide-ep-lws"
+          llm-d.ai/accelerator-variant: "gpu"
+          llm-d.ai/accelerator-vendor: "nvidia"
+          llm-d.ai/model: GLM-5.2-FP8
+          llm-d.ai/role: decode
+      spec:
+        serviceAccountName: glm-5-2
+        affinity:
+          podAffinity:
+            preferredDuringSchedulingIgnoredDuringExecution:
+              - weight: 100
+                podAffinityTerm:
+                  labelSelector:
+                    matchLabels:
+                      llm-d.ai/role: decode
+                      llm-d.ai/model: GLM-5.2-FP8
+                  topologyKey: backend.coreweave.cloud/leafgroup-name
+        initContainers:
+          - name: routing-proxy
+            args:
+              - --port=8000
+              - --vllm-port=8200
+              - --data-parallel-size=8
+              - --kv-connector=nixlv2
+              - --zap-log-level=1
+              - --secure-proxy=false
+              - --enable-prefiller-sampling
+            image: ghcr.io/llm-d/llm-d-router-disagg-sidecar:v0.9.0
+            imagePullPolicy: Always
+            ports:
+              - containerPort: 8000
+                name: rank0
+                protocol: TCP
+              - containerPort: 8001
+                name: rank1
+                protocol: TCP
+              - containerPort: 8002
+                name: rank2
+                protocol: TCP
+              - containerPort: 8003
+                name: rank3
+                protocol: TCP
+              - containerPort: 8004
+                name: rank4
+                protocol: TCP
+              - containerPort: 8005
+                name: rank5
+                protocol: TCP
+              - containerPort: 8006
+                name: rank6
+                protocol: TCP
+              - containerPort: 8007
+                name: rank7
+                protocol: TCP
+            restartPolicy: Always
+            securityContext:
+              allowPrivilegeEscalation: false
+              runAsNonRoot: true
+        volumes:
+          - name: dshm
+            emptyDir:
+              medium: Memory
+              sizeLimit: 256Gi
+          - name: jit-cache
+            hostPath:
+              path: /mnt/local/jit-cache
+              type: DirectoryOrCreate
+          - name: hf-cache
+            hostPath:
+              path: /mnt/local/model-cache
+              type: DirectoryOrCreate
+          - name: sys
+            hostPath:
+              path: /sys
+              type: Directory
+          - name: proc
+            hostPath:
+              path: /proc
+              type: Directory
+        containers:
+          - name: vllm
+            image: vllm/vllm-openai:nightly
+            securityContext:
+              capabilities:
+                add:
+                  - IPC_LOCK
+                  - SYS_RAWIO
+              runAsGroup: 0
+              runAsUser: 0
+            imagePullPolicy: Always
+            command:
+              - /bin/bash
+              - -c
+            args:
+              - |-
+                find /dev/shm -type f -delete
+
+                # Hotfix: fix batched DeepGEMM device capability lookup (vllm#47884)
+                python3 -c "
+                p='/usr/local/lib/python3.12/dist-packages/vllm/model_executor/layers/fused_moe/experts/batched_deep_gemm_moe.py'
+                s=open(p).read()
+                old='current_platform.get_device_capability(device_id=y.device.index)'
+                new='current_platform.get_device_capability()'
+                if old in s:
+                  open(p,'w').write(s.replace(old, new)); print('PATCHED batched_deep_gemm_moe.py')
+                else: print('batched_deep_gemm_moe.py already patched or different version')
+                "
+
+                # Hotfix: fix NVML capability lookup for visible devices (vllm#47892)
+                python3 -c "
+                p='/usr/local/lib/python3.12/dist-packages/vllm/platforms/cuda.py'
+                s=open(p).read()
+                old='physical_device_id = cls.device_id_to_physical_device_id(device_id)'
+                new='physical_device_id = cls.visible_device_id_to_physical_device_id(device_id)'
+                if old in s:
+                  open(p,'w').write(s.replace(old, new)); print('PATCHED cuda.py')
+                else: print('cuda.py already patched or different version')
+                "
+
+                # Hotfix: add kv_quant_mode to MLAAttention.get_kv_cache_spec (vllm#47722)
+                # PR #47716 fixed deepseek_v4 and sparse_swa but missed mla_attention.py
+                python3 -c "
+                p='/usr/local/lib/python3.12/dist-packages/vllm/model_executor/layers/attention/mla_attention.py'
+                s=open(p).read()
+                if 'get_kv_quant_mode' not in s:
+                  s=s.replace('    MLAAttentionSpec,\n)', '    MLAAttentionSpec,\n    get_kv_quant_mode,\n)')
+                  s=s.replace('            cache_dtype_str=vllm_config.cache_config.cache_dtype,\n        )',
+                              '            cache_dtype_str=vllm_config.cache_config.cache_dtype,\n            kv_quant_mode=get_kv_quant_mode(vllm_config.cache_config.cache_dtype),\n        )')
+                  open(p,'w').write(s); print('PATCHED mla_attention.py')
+                else: print('mla_attention.py already patched')
+                "
+
+                # Hotfix: fix packed HND KV cache reshape (neuralmagic/vllm@2e10140)
+                python3 -c "
+                p='/usr/local/lib/python3.12/dist-packages/vllm/v1/worker/gpu/attn_utils.py'
+                s=open(p).read()
+                old='            .view(kv_cache_shape)\n        )\n    elif kv_cache_spec.page_size_padded'
+                new='            .view(permuted_kv_cache_shape)\n        )\n    elif kv_cache_spec.page_size_padded'
+                if old in s:
+                  open(p,'w').write(s.replace(old, new)); print('PATCHED attn_utils.py')
+                else: print('attn_utils.py already patched or different version')
+                "
+
+                # Hotfix: offloading set_ overflow for packed non-uniform KV caches
+                # The indexer group's offset+page_size exceeds block_stride in the packed
+                # layout. Replace set_() with as_strided() to avoid bounds check failure.
+                python3 -c "
+                import re
+                p='/usr/local/lib/python3.12/dist-packages/vllm/distributed/kv_transfer/kv_connector/v1/offloading/worker.py'
+                s=open(p).read()
+                pat = (r'(tensors_per_block\[layer_name\] = \(\n)'
+                       r'(\s+)torch\.tensor\(\n'
+                       r'\s+\[\],\n'
+                       r'\s+dtype=torch\.int8,\n'
+                       r'\s+device=layer_kv_cache\.device,\n'
+                       r'\s+\)\.set_\(\n'
+                       r'\s+layer_kv_cache\.untyped_storage\(\),\n'
+                       r'\s+byte_offset,\n'
+                       r'\s+\(num_blocks, page\),\n'
+                       r'\s+\(block_stride_bytes, 1\),\n'
+                       r'\s+\),\n'
+                       r'(\s+)\)')
+                repl = (r'\1'
+                        r'\2torch.as_strided(\n'
+                        r'\2    torch.empty(0, dtype=torch.int8, device=layer_kv_cache.device).set_(layer_kv_cache.untyped_storage()),\n'
+                        r'\2    (num_blocks, page),\n'
+                        r'\2    (block_stride_bytes, 1),\n'
+                        r'\2    byte_offset,\n'
+                        r'\2),\n'
+                        r'\3)')
+                new_s, n = re.subn(pat, repl, s)
+                if n > 0:
+                  open(p,'w').write(new_s); print('PATCHED worker.py')
+                else:
+                  print('worker.py: no match for set_ pattern')
+                "
+
+                # Scale MAX_TOKENS with number of decode pods
+                export MAX_TOKENS=$(( ${MAX_TOKENS_PER_NODE:-128} * LWS_GROUP_SIZE ))
+
+                # Wide-EP (multi-node): reserve VRAM for NVSHMEM symmetric heap
+                if [ "${LWS_GROUP_SIZE:-1}" -gt 1 ]; then
+                  export NVSHMEM_SYMMETRIC_SIZE=16G
+                  GPU_MEM_UTIL=0.80
+                else
+                  GPU_MEM_UTIL=0.95
+                fi
+
+                # DSpark speculative decoding (multi-node only — single-node is memory-bandwidth bound)
+                SPEC_ARGS=""
+                MAX_BATCHED_TOKENS=${MAX_TOKENS}
+                MAX_SEQS=${MAX_TOKENS}
+                if [ "${ENABLE_DSPARK:-0}" = "1" ] && [ "${LWS_GROUP_SIZE:-1}" -gt 1 ]; then
+                  GPU_MEM_UTIL=$(python3 -c "print(round($GPU_MEM_UTIL - 0.07, 2))")
+                  MAX_SEQS=$(( MAX_TOKENS / 4 ))
+                  MAX_BATCHED_TOKENS=$(( MAX_SEQS * (DSPARK_NUM_TOKENS + 1) ))
+                  SPEC_ARGS="--speculative-config {\"model\":\"${DSPARK_MODEL}\",\"num_speculative_tokens\":${DSPARK_NUM_TOKENS},\"method\":\"dspark\"}"
+                fi
+
+                # DeepEP low-latency requires: qp_depth >= (max_dispatch_tokens + 1) * 2
+                export NVSHMEM_QP_DEPTH=$(( (MAX_BATCHED_TOKENS + 1) * 2 ))
+
+                START_RANK=$(( ${LWS_WORKER_INDEX:-0} * DP_SIZE_LOCAL ))
+
+                PROFILER_ARGS=""
+                if [ "${ENABLE_PROFILING:-0}" = "1" ]; then
+                  mkdir -p /var/cache/vllm/profile
+                  PROFILER_ARGS="--profiler-config {\"profiler\":\"torch\",\"torch_profiler_dir\":\"/var/cache/vllm/profile\",\"torch_profiler_record_shapes\":true,\"torch_profiler_with_memory\":true,\"max_iterations\":3}"
+                fi
+
+                exec vllm serve $PROFILER_ARGS $SPEC_ARGS \
+                  zai-org/GLM-5.2-FP8 \
+                  --port 8200 \
+                  --trust-remote-code \
+                  --gpu-memory-utilization $GPU_MEM_UTIL \
+                  --max-model-len 131072 \
+                  --disable-access-log-for-endpoints=/health,/metrics \
+                  --data-parallel-multi-port-external-lb \
+                  --data-parallel-supervisor-port=8208 \
+                  --enable-expert-parallel \
+                  --tensor-parallel-size $TP_SIZE \
+                  --max-num-batched-tokens ${MAX_BATCHED_TOKENS} \
+                  --max-num-seqs ${MAX_SEQS} \
+                  --data-parallel-size $((LWS_GROUP_SIZE * DP_SIZE_LOCAL)) \
+                  --data-parallel-size-local $DP_SIZE_LOCAL \
+                  --data-parallel-address ${LWS_LEADER_ADDRESS} \
+                  --data-parallel-rpc-port 5555 \
+                  --data-parallel-start-rank $START_RANK \
+                  --kv_transfer_config '{"kv_connector":"NixlConnector",
+                                          "kv_role":"kv_both",
+                                          "kv_load_failure_policy":"fail"}' \
+                  --all2all-backend deepep_low_latency \
+                  --moe-backend deep_gemm \
+                  --reasoning-parser glm45 \
+                  --tool-call-parser glm47 \
+                  --enable-auto-tool-choice \
+                  ${KV_CACHE_MEMORY_BYTES:+--kv-cache-memory-bytes=$KV_CACHE_MEMORY_BYTES}
+            env:
+              - name: HF_TOKEN
+                valueFrom:
+                  secretKeyRef:
+                    name: llm-d-hf-token
+                    key: HF_TOKEN
+              - name: HF_HOME
+                value: /mnt/hf-cache
+              - name: ENABLE_PROFILING
+                value: "0"
+              - name: ENABLE_DSPARK
+                value: "0"
+              - name: DSPARK_MODEL
+                value: "RedHatAI/GLM-5.2-speculator.dspark"
+              - name: DSPARK_NUM_TOKENS
+                value: "7"
+              - name: VLLM_MEMORY_PROFILER_ESTIMATE_CUDAGRAPHS
+                value: "1"
+              - name: MAX_TOKENS_PER_NODE
+                value: "32"
+              - name: DP_SIZE_LOCAL
+                value: "8"
+              - name: TP_SIZE
+                value: "1"
+              - name: TRITON_LIBCUDA_PATH
+                value: /usr/lib64
+              - name: VLLM_SKIP_P2P_CHECK
+                value: "1"
+              - name: VLLM_RANDOMIZE_DP_DUMMY_INPUTS
+                value: "1"
+              - name: VLLM_USE_DEEP_GEMM
+                value: "1"
+              - name: NVIDIA_GDRCOPY
+                value: enabled
+              - name: NVSHMEM_REMOTE_TRANSPORT
+                value: ibgda
+              - name: NVSHMEM_IB_ENABLE_IBGDA
+                value: "true"
+              - name: NVSHMEM_HCA_PREFIX
+                value: ibp
+              - name: NVSHMEM_BOOTSTRAP_UID_SOCK_IFNAME
+                value: eth0
+              - name: GLOO_SOCKET_IFNAME
+                value: eth0
+              - name: NCCL_SOCKET_IFNAME
+                value: eth0
+              - name: NCCL_IB_HCA
+                value: ibp
+              - name: VLLM_MOE_DP_CHUNK_SIZE
+                value: "${MAX_TOKENS}"
+              - name: VLLM_COMPUTE_NANS_IN_LOGITS
+                value: "1"
+              - name: VLLM_LOGGING_LEVEL
+                value: INFO
+              - name: VLLM_NIXL_SIDE_CHANNEL_HOST
+                valueFrom:
+                  fieldRef:
+                    fieldPath: status.podIP
+
+              - name: CUDA_CACHE_PATH
+                value: /var/cache/vllm/cuda
+              - name: CCACHE_DIR
+                value: /var/cache/vllm/ccache
+              - name: VLLM_CACHE_ROOT
+                value: /var/cache/vllm/vllm
+              - name: FLASHINFER_WORKSPACE_BASE
+                value: /var/cache/vllm/flashinfer
+
+            ports:
+              - containerPort: 8200
+                name: vllm-rank0
+                protocol: TCP
+              - containerPort: 8201
+                name: vllm-rank1
+                protocol: TCP
+              - containerPort: 8202
+                name: vllm-rank2
+                protocol: TCP
+              - containerPort: 8203
+                name: vllm-rank3
+                protocol: TCP
+              - containerPort: 8204
+                name: vllm-rank4
+                protocol: TCP
+              - containerPort: 8205
+                name: vllm-rank5
+                protocol: TCP
+              - containerPort: 8206
+                name: vllm-rank6
+                protocol: TCP
+              - containerPort: 8207
+                name: vllm-rank7
+                protocol: TCP
+              - containerPort: 8208
+                name: supervisor
+                protocol: TCP
+              - containerPort: 5600
+                name: nixl
+                protocol: TCP
+            startupProbe:
+              httpGet:
+                path: /health
+                port: supervisor
+              initialDelaySeconds: 0
+              periodSeconds: 1
+              timeoutSeconds: 5
+              failureThreshold: 2700
+            livenessProbe:
+              httpGet:
+                path: /health
+                port: supervisor
+              periodSeconds: 30
+              timeoutSeconds: 5
+              failureThreshold: 3
+            readinessProbe:
+              httpGet:
+                path: /readyz
+                port: supervisor
+              periodSeconds: 10
+              timeoutSeconds: 5
+              failureThreshold: 3
+            resources:
+              limits:
+                ephemeral-storage: 1Ti
+                memory: 512Gi
+                nvidia.com/gpu: "8"
+                rdma/ib: "8"
+              requests:
+                cpu: 32
+                ephemeral-storage: 1Ti
+                memory: 512Gi
+                nvidia.com/gpu: "8"
+                rdma/ib: "8"
+            volumeMounts:
+              - name: dshm
+                mountPath: /dev/shm
+              - name: jit-cache
+                mountPath: /var/cache/vllm
+              - name: hf-cache
+                mountPath: /mnt/hf-cache
+          - name: node-exporter
+            image: quay.io/prometheus/node-exporter:v1.9.0
+            imagePullPolicy: IfNotPresent
+            args:
+              - --collector.disable-defaults
+              - --collector.infiniband
+              - --collector.netstat
+              - "--collector.netstat.fields=(.*Retrans.*|.*Timeout.*|.*LossProbe.*|.*FastRetrans.*|.*SackRecovery.*|.*Estab.*|.*Segs.*|.*Drops.*|.*Overflow.*|.*MemoryPressure.*|.*AutoCork.*|.*DSACK.*|.*Reorder.*|.*OFO.*|.*DelayedACK.*)"
+              - --collector.pressure
+              - --collector.schedstat
+              - --collector.cpu
+              - --path.sysfs=/host/sys
+              - --path.procfs=/host/proc
+            ports:
+              - containerPort: 9100
+                name: node-metrics
+                protocol: TCP
+            volumeMounts:
+              - name: sys
+                mountPath: /host/sys
+                readOnly: true
+              - name: proc
+                mountPath: /host/proc
+                readOnly: true
+            resources:
+              requests:
+                cpu: 50m
+                memory: 64Mi
+              limits:
+                memory: 64Mi
+            securityContext:
+              allowPrivilegeEscalation: false
+              readOnlyRootFilesystem: true

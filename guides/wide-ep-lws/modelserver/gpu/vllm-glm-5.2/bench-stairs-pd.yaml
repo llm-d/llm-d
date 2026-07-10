@@ -1,0 +1,40 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: glm52-nyann-stairs-pd
+spec:
+  restartPolicy: Never
+  containers:
+    - name: bench
+      image: golang:1.25-alpine
+      command: ["/bin/sh", "-c"]
+      args:
+        - |
+          set -e
+          apk add --no-cache git
+          git clone -b server-metrics-per-stage --depth 1 https://github.com/elvircrn/nyann-bench.git /src
+          cd /src
+          echo "Building nyann-bench..."
+          CGO_ENABLED=0 go build -o /nyann-bench ./cmd/nyann-bench/
+          echo "Build complete."
+
+          cat > /tmp/stairs.star << 'STAR'
+          scenario(
+              stages = [stage("600s", concurrency=1)],
+              workload = workload("synthetic", isl=99000, osl=100),
+          )
+          STAR
+
+          exec /nyann-bench generate \
+            --target http://llm-d-inference-gateway-istio:80/v1 \
+            --model zai-org/GLM-5.2-FP8 \
+            --config /tmp/stairs.star \
+            --prometheus-url http://prometheus-server:80 \
+            --deploy-name wide-ep-lws-nvidia-gpu-vllm-glm-5-2-decode
+      resources:
+        requests:
+          cpu: 4
+          memory: 4Gi
+        limits:
+          cpu: 8
+          memory: 8Gi
