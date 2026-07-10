@@ -1,12 +1,11 @@
 apiVersion: apps/v1
-kind: Deployment
+kind: DaemonSet
 metadata:
   name: wide-ep-kv-cache-evictor
   labels:
     app: kv-cache-evictor
     llm-d.ai/model: GLM-5.2-FP8
 spec:
-  replicas: 1
   selector:
     matchLabels:
       app: kv-cache-evictor
