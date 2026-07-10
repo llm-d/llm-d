@@ -113,7 +113,7 @@ spec:
                       -DFLASHATTENTION_DISABLE_CLUSTER=ON -DFLASHATTENTION_DISABLE_SM8x=ON \
                       -DFLASHATTENTION_DISABLE_PYBIND=ON -DFLASHATTENTION_PACKGQA_ONLY=ON \
                       -DFLASHATTENTION_VARLEN_ONLY=ON -GNinja 2>&1 | tail -3
-                    ninja _vllm_fa3_C -j2 && \
+                    ninja _vllm_fa3_C -j16 && \
                       cp lib/_vllm_fa3_C*.so "$(dirname "$FA3_SO")/" && \
                       echo "FA3 rebuild complete" || echo "FA3 rebuild FAILED"
                     cd /; rm -rf /tmp/fa-patch
