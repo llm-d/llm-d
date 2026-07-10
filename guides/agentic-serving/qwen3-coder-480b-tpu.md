@@ -1,4 +1,4 @@
-# Agentic Code Generation — Qwen3-Coder-480B on TPU v7
+# Agentic Code Generation — Qwen3-Coder-480B on TPU 7x
 
 This is one of two accelerator-specific deployments of the agentic code-generation workload; see the
 [agentic-serving README](README.md#deployments) for the workload framing and the
@@ -17,7 +17,7 @@ This guide deploys the optimal llm-d configuration for agentic code-generation w
 | ------------------ | ------------------------------------------------------------------------------------------ |
 | Model              | [Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8](https://huggingface.co/Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8) |
 | Replicas           | 8                                                                                          |
-| Accelerator        | Google TPU v7 (tpu7x)                                                                      |
+| Accelerator        | Google TPU 7x (tpu7x)                                                                      |
 | Topology           | 2x2x1                                                                                      |
 | TP size / EP size  | TP=8, EP enabled                                                                           |
 
@@ -25,7 +25,7 @@ This guide deploys the optimal llm-d configuration for agentic code-generation w
 
 | Backend             | Directory                      | Notes                       |
 | ------------------- | ------------------------------ | --------------------------- |
-| Google TPU (vLLM)   | `modelserver/tpu/vllm/`        | TPU v7 / tpu7x 2x2x1 (nightly) |
+| Google TPU (vLLM)   | `modelserver/tpu/vllm/`        | TPU 7x / tpu7x 2x2x1 (nightly) |
 
 ## Prerequisites
 
@@ -78,7 +78,7 @@ helm install ${GUIDE_NAME} \
 *(Note: If you are deploying the experimental P/D disaggregated configuration instead, use `router/agentic-serving-tpu-disagg.values.yaml` in place of `router/${GUIDE_NAME}.values.yaml` above).*
 
 > **Note — `peakPrefillThroughput` is hardware/model-specific.** The router values set
-> `peakPrefillThroughput: 16444`, calibrated for Qwen3-Coder-480B-FP8 on TPU v7x. If you
+> `peakPrefillThroughput: 16444`, calibrated for Qwen3-Coder-480B-FP8 on TPU 7x. If you
 > deploy a different model or hardware, measure your own value and update
 > `router/agentic-serving.values.yaml`. See the shared
 > [router calibration tool](../recipes/router/calibration/README.md).
@@ -204,7 +204,7 @@ envsubst < guide.yaml > config.yaml
 
 ## Benchmark Results
 
-The results below are with 8 replicas of TPU v7x (2x2x1) on the benchmark workload described above.
+The results below are with 8 replicas of TPU 7x (2x2x1) on the benchmark workload described above.
 
 Scaling concurrency up to 80 sessions, the optimized configuration sustains a peak total throughput of **~120K tokens/s**, versus **~40K tokens/s** for the k8s Service baseline — roughly **3× higher**.
 
@@ -226,7 +226,7 @@ Scaling concurrency up to 80 sessions, the optimized configuration sustains a pe
 
 ### Prefill/Decode Disaggregated Results
 
-We also evaluated the P/D disaggregated configuration on TPU v7x with different prefill-to-decode ratios under the same agentic workload framework (average prompt size **~128K tokens**, output **~1.1K tokens**).
+We also evaluated the P/D disaggregated configuration on TPU 7x with different prefill-to-decode ratios under the same agentic workload framework (average prompt size **~128K tokens**, output **~1.1K tokens**).
 
 At this scale, the KV cache size is extremely large (~20GB per request), shifting the bottleneck from prefill compute to **decoder HBM capacity**. Under a concurrency of 40, allocating more TPU nodes to the decode phase (**2:6** ratio) yields the best performance by providing sufficient aggregate HBM to avoid severe queueing and swapping:
 
