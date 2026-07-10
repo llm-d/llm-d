@@ -42,14 +42,29 @@ router:
           name: gpu-prefix-cache-scorer
           parameters:
             prefixMatchInfoProducerName: gpu-prefix-cache-producer
+            matchLengthWeight: 0.8
+            matchLengthScaleTokens: 16000
         - type: prefix-cache-scorer
           name: cpu-prefix-cache-scorer
           parameters:
             prefixMatchInfoProducerName: cpu-prefix-cache-producer
+            matchLengthWeight: 0.8
+            matchLengthScaleTokens: 16000
+        - type: session-affinity-scorer
+          name: session-affinity-decode
+          parameters:
+            headerName: x-session-token
+        - type: session-affinity-scorer
+          name: session-affinity-prefill
+          parameters:
+            headerName: x-session-token-prefill
+            profileName: prefill
         schedulingProfiles:
         - name: prefill
           plugins:
           - pluginRef: prefill-filter
+          - pluginRef: session-affinity-prefill
+            weight: 5
           - pluginRef: gpu-prefix-cache-scorer
             weight: 4
           - pluginRef: cpu-prefix-cache-scorer
@@ -63,6 +78,8 @@ router:
         - name: decode
           plugins:
           - pluginRef: decode-filter
+          - pluginRef: session-affinity-decode
+            weight: 5
           - pluginRef: active-request-scorer
             weight: 2
           - pluginRef: gpu-prefix-cache-scorer
