@@ -14,6 +14,7 @@ labels:
       llm-d.ai/model: Qwen3-32B
       llm-d.ai/accelerator-variant: gpu
       llm-d.ai/accelerator-vendor: amd
+      llm-d.ai/engine-type: sglang
     includeSelectors: true
     includeTemplates: true
 patches:
