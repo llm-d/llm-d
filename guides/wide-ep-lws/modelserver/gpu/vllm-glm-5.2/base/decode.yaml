@@ -170,6 +170,38 @@ spec:
                   print('worker.py: no match for set_ pattern')
                 "
 
+                # Hotfix: skip FA3 AOT scheduling for spec-decode proposer
+                # get_scheduler_metadata hardcodes is_varlen=true; mha_fwd derives it
+                # from actual tensor shapes — param divergence causes metadata_size mismatch.
+                # fast_build=True makes scheduler_metadata=None so mha_fwd allocates its own.
+                python3 -c "
+                import re
+                # 1) attn_utils.py: add fast_build param to build_attn_metadata
+                p1='/usr/local/lib/python3.12/dist-packages/vllm/v1/worker/gpu/attn_utils.py'
+                s=open(p1).read()
+                if 'fast_build' not in s:
+                  # Add fast_build parameter to function signature
+                  s=s.replace(
+                    'causal: bool | torch.Tensor | Mapping[int, bool] = True,\n    rswa_prefix_lens: torch.Tensor | None = None,\n) -> dict[str, Any]:',
+                    'causal: bool | torch.Tensor | Mapping[int, bool] = True,\n    rswa_prefix_lens: torch.Tensor | None = None,\n    fast_build: bool = False,\n) -> dict[str, Any]:')
+                  # Pass fast_build to builder.build()
+                  s=s.replace(
+                    'common_prefix_len=0,\n                    common_attn_metadata=common_attn_metadata,\n                    **attn_metadata_extra_kwargs,',
+                    'common_prefix_len=0,\n                    common_attn_metadata=common_attn_metadata,\n                    fast_build=fast_build,\n                    **attn_metadata_extra_kwargs,')
+                  open(p1,'w').write(s); print('PATCHED attn_utils.py (fast_build)')
+                else: print('attn_utils.py already has fast_build')
+
+                # 2) speculator.py: pass fast_build=True
+                p2='/usr/local/lib/python3.12/dist-packages/vllm/v1/worker/gpu/spec_decode/speculator.py'
+                s=open(p2).read()
+                if 'fast_build' not in s:
+                  s=s.replace(
+                    'kv_cache_config=self.kv_cache_config,\n            causal=causal,\n        )\n        return attn_metadata',
+                    'kv_cache_config=self.kv_cache_config,\n            causal=causal,\n            fast_build=True,\n        )\n        return attn_metadata')
+                  open(p2,'w').write(s); print('PATCHED speculator.py (fast_build=True)')
+                else: print('speculator.py already has fast_build')
+                "
+
                 # Scale MAX_TOKENS with number of decode pods
                 export MAX_TOKENS=$(( ${MAX_TOKENS_PER_NODE:-128} * LWS_GROUP_SIZE ))
 
