@@ -4,7 +4,7 @@ metadata:
   name: fa3-build-pvc
 spec:
   accessModes:
-    - ReadWriteOnce
+    - ReadWriteMany
   resources:
     requests:
       storage: 200Gi
