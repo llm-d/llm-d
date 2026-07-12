@@ -225,11 +225,6 @@ spec:
                   SPEC_ARGS="--speculative-config {\"model\":\"${DSPARK_MODEL}\",\"num_speculative_tokens\":${DSPARK_NUM_TOKENS},\"method\":\"dspark\"}"
                   KV_CACHE_DTYPE_ARGS=""
                 
-                  # Swap in patched FA3 .so from PVC (flash-attention PR #162)
-                  FA3_DIR=$(python3 -c "import vllm.vllm_flash_attn as m; print(m.__path__[0])")
-                  cp /mnt/fa3-build/_vllm_fa3_C*.so "$FA3_DIR/" \
-                    && echo "FA3 .so swapped: $(ls -lh "$FA3_DIR"/_vllm_fa3_C*.so)" \
-                    || { echo "FATAL: FA3 .so swap failed — /mnt/fa3-build not mounted or .so missing"; exit 1; } 
                 fi
 
                 # DeepEP low-latency requires: qp_depth >= (max_dispatch_tokens + 1) * 2
@@ -404,9 +399,6 @@ spec:
                 mountPath: /var/cache/vllm
               - name: hf-cache
                 mountPath: /mnt/hf-cache
-              - name: fa3-build
-                mountPath: /mnt/fa3-build
-                readOnly: true
           - name: node-exporter
             image: quay.io/prometheus/node-exporter:v1.9.0
             imagePullPolicy: IfNotPresent
