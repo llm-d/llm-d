@@ -1,0 +1,73 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: build-fa3-fix
+spec:
+  backoffLimit: 0
+  ttlSecondsAfterFinished: 600
+  template:
+    spec:
+      restartPolicy: Never
+      volumes:
+        - name: fa3-build
+          persistentVolumeClaim:
+            claimName: fa3-build-pvc
+        - name: jit-cache
+          hostPath:
+            path: /mnt/local/jit-cache
+            type: DirectoryOrCreate
+      containers:
+        - name: builder
+          image: public.ecr.aws/q9t5s3a7/vllm-ci-test-repo:0cc399fd59e4f23b7c2f97ceb74d91d1553fb645
+          command: ["/bin/bash", "-c"]
+          args:
+            - |
+              set -ex
+
+              FA_BRANCH="${FA_BRANCH:-fix/flash-api-scheduler-metadata-divergence}"
+              FA_REPO="${FA_REPO:-https://github.com/elvircrn/flash-attention.git}"
+              SRC=/mnt/fa3-build/src
+              BUILD=$SRC/build
+
+              # Install build tools
+              pip install cmake ninja
+
+              # Clone or update source
+              if [ -d "$SRC/.git" ]; then
+                cd $SRC
+                git fetch origin $FA_BRANCH
+                git checkout $FA_BRANCH
+                git reset --hard origin/$FA_BRANCH
+              else
+                git clone $FA_REPO -b $FA_BRANCH $SRC
+              fi
+
+              # Build (ninja will do incremental if build dir exists)
+              mkdir -p $BUILD && cd $BUILD
+              cmake $SRC -DCMAKE_BUILD_TYPE=Release -GNinja
+              ninja _vllm_fa3_C
+
+              # Copy the .so to a well-known location
+              BUILT_SO=$(find $BUILD -maxdepth 1 -name "_vllm_fa3_C*.so" | head -1)
+              cp "$BUILT_SO" /mnt/fa3-build/
+              echo "=== Built $(basename $BUILT_SO) ==="
+              ls -lh /mnt/fa3-build/_vllm_fa3_C*.so
+          env:
+            - name: FA_BRANCH
+              value: "fix/flash-api-scheduler-metadata-divergence"
+            - name: CUDA_CACHE_PATH
+              value: /var/cache/vllm/cuda
+          volumeMounts:
+            - name: fa3-build
+              mountPath: /mnt/fa3-build
+            - name: jit-cache
+              mountPath: /var/cache/vllm
+          resources:
+            limits:
+              nvidia.com/gpu: "1"
+              memory: 64Gi
+              cpu: 16
+            requests:
+              nvidia.com/gpu: "1"
+              memory: 64Gi
+              cpu: 16

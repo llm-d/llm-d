@@ -1,0 +1,76 @@
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: fa3-build-pvc
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 200Gi
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: build-fa3-fix
+spec:
+  backoffLimit: 0
+  template:
+    spec:
+      restartPolicy: Never
+      volumes:
+        - name: fa3-build
+          persistentVolumeClaim:
+            claimName: fa3-build-pvc
+      containers:
+        - name: builder
+          image: public.ecr.aws/q9t5s3a7/vllm-ci-test-repo:0cc399fd59e4f23b7c2f97ceb74d91d1553fb645
+          command: ["/bin/bash", "-c"]
+          args:
+            - |
+              set -ex
+
+              FA_BRANCH="fix/flash-api-scheduler-metadata-divergence"
+              FA_REPO="https://github.com/elvircrn/flash-attention.git"
+              SRC=/tmp/fa-src
+              BUILD=$SRC/build
+
+              # Install CUDA dev headers + build tools
+              apt-get update && apt-get install -y --no-install-recommends \
+                libcusparse-dev-13-0 libcublas-dev-13-0 libcusolver-dev-13-0 \
+                libcurand-dev-13-0 cuda-cudart-dev-13-0 2>/dev/null || true
+              pip install cmake ninja
+
+              # Clone and build on local disk (fast)
+              git clone --depth 1 --recursive --shallow-submodules $FA_REPO -b $FA_BRANCH $SRC
+              mkdir -p $BUILD && cd $BUILD
+              cmake $SRC -DCMAKE_BUILD_TYPE=Release -GNinja -DNVCC_THREADS=$(nproc)
+              ninja -j$(nproc) _vllm_fa3_C
+
+              # Copy only the .so and build tree to PVC for future incremental builds
+              BUILT_SO=$(find $BUILD -maxdepth 1 -name "_vllm_fa3_C*.so" | head -1)
+              cp "$BUILT_SO" /mnt/fa3-build/
+              echo "=== Built $(basename $BUILT_SO) ==="
+              ls -lh /mnt/fa3-build/_vllm_fa3_C*.so
+
+              # Copy build tree to PVC so future patches only recompile flash_api.cpp
+              cp -a $SRC /mnt/fa3-build/src
+
+              echo "=== DONE — pod will stay alive for 7 days ==="
+              sleep 604800
+          env:
+            - name: CUDA_CACHE_PATH
+              value: /var/cache/vllm/cuda
+          volumeMounts:
+            - name: fa3-build
+              mountPath: /mnt/fa3-build
+          resources:
+            limits:
+              nvidia.com/gpu: "1"
+              memory: 512Gi
+              cpu: 64
+            requests:
+              nvidia.com/gpu: "1"
+              memory: 512Gi
+              cpu: 64

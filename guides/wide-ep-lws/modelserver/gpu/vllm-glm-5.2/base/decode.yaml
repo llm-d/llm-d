@@ -92,6 +92,9 @@ spec:
             hostPath:
               path: /proc
               type: Directory
+          - name: fa3-build
+            persistentVolumeClaim:
+              claimName: fa3-build-pvc
         containers:
           - name: vllm
             image: public.ecr.aws/q9t5s3a7/vllm-ci-test-repo:0cc399fd59e4f23b7c2f97ceb74d91d1553fb645
@@ -109,6 +112,12 @@ spec:
             args:
               - |-
                 find /dev/shm -type f -delete
+
+                # Swap in patched FA3 .so from PVC (flash-attention PR #162)
+                FA3_DIR=$(python3 -c "import vllm.vllm_flash_attn as m; print(m.__path__[0])")
+                cp /mnt/fa3-build/_vllm_fa3_C*.so "$FA3_DIR/" \
+                  && echo "FA3 .so swapped: $(ls -lh "$FA3_DIR"/_vllm_fa3_C*.so)" \
+                  || { echo "FATAL: FA3 .so swap failed — /mnt/fa3-build not mounted or .so missing"; exit 1; }
 
                 uv pip install --system nixl==1.3.0 nixl-cu13==1.3.0 --no-deps
 
@@ -398,6 +407,9 @@ spec:
                 mountPath: /var/cache/vllm
               - name: hf-cache
                 mountPath: /mnt/hf-cache
+              - name: fa3-build
+                mountPath: /mnt/fa3-build
+                readOnly: true
           - name: node-exporter
             image: quay.io/prometheus/node-exporter:v1.9.0
             imagePullPolicy: IfNotPresent
