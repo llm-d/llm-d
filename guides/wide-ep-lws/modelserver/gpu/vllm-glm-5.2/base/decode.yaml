@@ -113,12 +113,6 @@ spec:
               - |-
                 find /dev/shm -type f -delete
 
-                # Swap in patched FA3 .so from PVC (flash-attention PR #162)
-                FA3_DIR=$(python3 -c "import vllm.vllm_flash_attn as m; print(m.__path__[0])")
-                cp /mnt/fa3-build/_vllm_fa3_C*.so "$FA3_DIR/" \
-                  && echo "FA3 .so swapped: $(ls -lh "$FA3_DIR"/_vllm_fa3_C*.so)" \
-                  || { echo "FATAL: FA3 .so swap failed — /mnt/fa3-build not mounted or .so missing"; exit 1; }
-
                 uv pip install --system nixl==1.3.0 nixl-cu13==1.3.0 --no-deps
 
                 # Hotfix: add kv_quant_mode to MLAAttention.get_kv_cache_spec (vllm#47722)
@@ -233,6 +227,12 @@ spec:
                   MAX_BATCHED_TOKENS=$(( MAX_SEQS * (DSPARK_NUM_TOKENS + 1) ))
                   SPEC_ARGS="--speculative-config {\"model\":\"${DSPARK_MODEL}\",\"num_speculative_tokens\":${DSPARK_NUM_TOKENS},\"method\":\"dspark\"}"
                   KV_CACHE_DTYPE_ARGS=""
+                
+                  # Swap in patched FA3 .so from PVC (flash-attention PR #162)
+                  FA3_DIR=$(python3 -c "import vllm.vllm_flash_attn as m; print(m.__path__[0])")
+                  cp /mnt/fa3-build/_vllm_fa3_C*.so "$FA3_DIR/" \
+                    && echo "FA3 .so swapped: $(ls -lh "$FA3_DIR"/_vllm_fa3_C*.so)" \
+                    || { echo "FATAL: FA3 .so swap failed — /mnt/fa3-build not mounted or .so missing"; exit 1; } 
                 fi
 
                 # DeepEP low-latency requires: qp_depth >= (max_dispatch_tokens + 1) * 2
@@ -272,7 +272,6 @@ spec:
                   --reasoning-parser glm45 \
                   --tool-call-parser glm47 \
                   --enable-auto-tool-choice \
-                  --compilation-config '{"cudagraph_mode":"piecewise"}' \
                   ${KV_CACHE_MEMORY_BYTES:+--kv-cache-memory-bytes=$KV_CACHE_MEMORY_BYTES}
             env:
               - name: HF_TOKEN
@@ -285,7 +284,7 @@ spec:
               - name: ENABLE_PROFILING
                 value: "0"
               - name: ENABLE_DSPARK
-                value: "1"
+                value: "0"
               - name: DSPARK_MODEL
                 value: "RedHatAI/GLM-5.2-speculator.dspark"
               - name: DSPARK_NUM_TOKENS
