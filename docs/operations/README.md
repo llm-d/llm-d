@@ -10,6 +10,9 @@ End-to-end telemetry setup, OpenTelemetry tracing, standard Prometheus metrics, 
 ### [Zero-Downtime Rollouts](rollouts/README.md)
 Production rollout strategies including Blue-Green updates and live LoRA adapter hot-swapping without dropping active client traffic.
 
+### [Serving Operations](serving-flows.md)
+Operational flows for general (aggregated) serving: request cancellation on client disconnect, readiness and health probing, and graceful shutdown with in-flight request draining.
+
 ### [Model-Aware Readiness Probes](readiness-probes.md)
 Kubernetes HTTP probe configurations using vLLM API endpoints to ensure pods are only marked Ready when models are fully loaded.
 

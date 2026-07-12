@@ -20,7 +20,7 @@
 
     "operations": { "label": "Operations & Monitoring", "position": 5, "collapsed": true },
     "operations/observability": { "label": "Observability", "position": 1, "collapsed": true },
-    "operations/rollouts": { "label": "Rollouts", "position": 3, "collapsed": true },
+    "operations/rollouts": { "label": "Rollouts", "position": 4, "collapsed": true },
 
     "infrastructure": { "label": "Infrastructure & Environments", "position": 6, "collapsed": true },
     "infrastructure/providers": { "label": "Kubernetes Infrastructure Providers", "position": 1, "collapsed": true },
@@ -79,10 +79,11 @@
     "operations/observability/promql": { "position": 3, "label": "PromQL" },
     "operations/observability/setup": { "position": 4 },
     "operations/observability/alerting": { "position": 5 },
-    "operations/readiness-probes": { "position": 2, "label": "Readiness Probes" },
+    "operations/serving-flows": { "position": 2, "label": "Serving Operations" },
+    "operations/readiness-probes": { "position": 3, "label": "Readiness Probes" },
     "operations/rollouts/adapter-rollout": { "position": 1 },
     "operations/rollouts/blue-green-update": { "position": 2 },
-    "operations/router": { "position": 4, "label": "Router Operations Guide" },
+    "operations/router": { "position": 5, "label": "Router Operations Guide" },
 
     "infrastructure/multi-node": { "position": 3, "label": "Kubernetes Multi-Node Orchestration" },
     "infrastructure/no-kubernetes-deployment": { "position": 4, "label": "Non-K8s & Bare-Metal Deployments" },
