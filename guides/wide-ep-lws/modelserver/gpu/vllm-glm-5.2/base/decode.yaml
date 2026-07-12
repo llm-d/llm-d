@@ -272,7 +272,7 @@ spec:
                   --reasoning-parser glm45 \
                   --tool-call-parser glm47 \
                   --enable-auto-tool-choice \
-                  --enforce-eager \
+                  --compilation-config '{"cudagraph_mode":"piecewise"}' \
                   ${KV_CACHE_MEMORY_BYTES:+--kv-cache-memory-bytes=$KV_CACHE_MEMORY_BYTES}
             env:
               - name: HF_TOKEN
