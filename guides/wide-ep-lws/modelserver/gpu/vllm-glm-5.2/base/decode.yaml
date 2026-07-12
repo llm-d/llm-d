@@ -92,9 +92,9 @@ spec:
             hostPath:
               path: /proc
               type: Directory
-          - name: fa3-build
-            persistentVolumeClaim:
-              claimName: fa3-build-pvc
+#          - name: fa3-build
+#            persistentVolumeClaim:
+#              claimName: fa3-build-pvc
         containers:
           - name: vllm
             image: public.ecr.aws/q9t5s3a7/vllm-ci-test-repo:0cc399fd59e4f23b7c2f97ceb74d91d1553fb645
