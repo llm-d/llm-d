@@ -1,6 +1,9 @@
 # Serving Operations
 
-While the [Disaggregated Serving Operations](../architecture/advanced/disaggregation/operations-vllm.md) page covers the operational flows specific to prefill/decode (P/D) deployments, this page documents the operational flows that apply to **general (aggregated) serving** — where prefill and decode run on the same model server instance.
+While the [Disaggregated Serving Operations](../architecture/advanced/disaggregation/operations-vllm.md) page covers the operational flows specific to prefill/decode (P/D) deployments, this page documents the operational flows that apply to **general ([aggregated](../api-reference/glossary.md)) serving** — where [prefill](../api-reference/glossary.md) and [decode](../api-reference/glossary.md) run on the same [model server](../api-reference/glossary.md) instance.
+
+> [!TIP]
+> New to terms like *prefill*, *decode*, *KV cache*, or *router*? See the [Glossary](../api-reference/glossary.md).
 
 These flows are what keep a deployment stable during day-2 operations and traffic churn:
 
@@ -14,7 +17,7 @@ For the distributed variants of these flows (freeing KV caches across P and D in
 
 Inference requests are compute-intensive and long-running, so it is important that a model server frees the resources associated with a request as soon as the client goes away. Otherwise a burst of clients that connect, submit a long generation, and then disconnect can pin GPU memory and scheduler slots on work whose output nobody will read.
 
-Model servers like vLLM support **request cancellation**: when the client connection for an in-flight request is closed, the server triggers its `abort` codepath, which stops generation and frees the KV cache blocks and scheduler slot held by that request.
+Model servers like vLLM support **request cancellation**: when the client connection for an in-flight request is closed, the server triggers its `abort` codepath, which stops generation and frees the KV cache blocks and scheduler slot held by that request. This behavior is built into vLLM and enabled by default — there is nothing to configure.
 
 In an aggregated deployment this is straightforward, because all of the resources for a request (the running sequence and its KV cache) live on a single instance:
 
@@ -68,7 +71,7 @@ When a pod is deleted:
 
 - **Termination Triggered** — the pod moves to the `Terminating` state.
 - **`InferencePool` Update** — the pod is removed from the endpoints of its `InferencePool`, so the router stops sending it **new** requests. (For standard Kubernetes objects this is equivalent to removal from a Service's endpoints.)
-- **PreStop Hook** — if defined, the `preStop` hook runs before SIGTERM.
+- **PreStop Hook** — if defined, the `preStop` hook runs before SIGTERM. A short `preStop` sleep is a common pattern to cover the brief window between the pod's removal from endpoints and that removal propagating fleet-wide, so no new request lands on the pod after SIGTERM.
 - **SIGTERM** — Kubernetes sends `SIGTERM` to the container's main process.
 - **Termination Grace Period** — the pod has `terminationGracePeriodSeconds` (default `30`) to exit; if it is still running when the period elapses, Kubernetes sends `SIGKILL`.
 
@@ -99,6 +102,19 @@ sequenceDiagram
 
 > [!IMPORTANT]
 > Set `terminationGracePeriodSeconds` on the pod to at least the vLLM `--shutdown-timeout`, plus headroom for the process to exit. If the grace period is shorter than the drain timeout, Kubernetes sends `SIGKILL` mid-drain and the in-flight requests you were trying to protect are killed anyway.
+
+For example, to drain for up to 120 seconds:
+
+```yaml
+spec:
+  terminationGracePeriodSeconds: 130   # >= shutdown-timeout, with headroom to exit
+  containers:
+    - name: vllm
+      args:
+        - "--shutdown-timeout=120"
+```
+
+Several guides already use a longer grace period for this reason — for instance, `guides/tiered-prefix-cache` sets `terminationGracePeriodSeconds: 130`.
 
 Choose the drain timeout to match your workload's typical generation length: long enough that most in-flight requests finish, but not so long that scale-down and rollouts stall waiting on terminating pods.
 
