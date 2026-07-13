@@ -1,6 +1,6 @@
 # Inference Cost Tracking
 
-This recipe installs [OpenCost](https://www.opencost.io/) with its [inference cost module](https://github.com/simanadler/opencost/blob/inference-v1/docs/inference-cost-tracking.md), enabling per-model cost attribution for llm-d workloads. Once deployed, OpenCost correlates vLLM token throughput metrics with Kubernetes allocation costs and exposes overall costs and cost-per-million-tokens.
+This recipe installs [OpenCost](https://www.opencost.io/) with its [inference cost module](https://github.com/opencost/opencost/blob/develop/docs/inference-cost-tracking.md), enabling per-model cost attribution for llm-d workloads. Once deployed, OpenCost correlates vLLM token throughput metrics with Kubernetes allocation costs and exposes overall costs and cost-per-million-tokens.
 
 ## How it works
 
@@ -45,15 +45,8 @@ If your cluster already has a shared Prometheus (such as OpenShift's user worklo
 
 ## Installation
 
-> **Note:** Inference cost support has not yet been merged into upstream OpenCost. Until it is, use the
-> fork image via the `--image` flag:
->
-> ```bash
-> ./install-opencost.sh --image ghcr.io/simanadler/opencost-inference:latest
-> ```
-
 ```bash
-./guides/recipes/observability/inferencecost/install-opencost.sh --image ghcr.io/simanadler/opencost-inference:latest
+./guides/recipes/observability/inferencecost/install-opencost.sh --image "ghcr.io/opencost/opencost:develop-latest@sha256:e0c09b268d8243c45323fffec8ceea1434e9f7e982905af651b1adebfc7e3135"
 ```
 
 The installer:
@@ -76,19 +69,19 @@ The installer:
 | `-g`, `--context FILE` | `$KUBECONFIG` | Path to a specific kubeconfig file |
 | `-y`, `--yes` | false | Accept default GCP prices without interactive confirmation |
 | `-u`, `--uninstall` | — | Uninstall OpenCost and remove its ConfigMaps |
-| `--image REPO:TAG` | upstream release | Deploy a custom OpenCost image (required until inference support is merged upstream) |
+| `--image REPO:TAG` | upstream release | Deploy a specific OpenCost image |
 
 ### Non-interactive install
 
 ```bash
 # Accept GCP default prices
-./install-opencost.sh --image ghcr.io/simanadler/opencost-inference:latest -y
+./install-opencost.sh --image "ghcr.io/opencost/opencost:develop-latest@sha256:e0c09b268d8243c45323fffec8ceea1434e9f7e982905af651b1adebfc7e3135" -y
 
 # Supply your own pricing file
-./install-opencost.sh --image ghcr.io/simanadler/opencost-inference:latest --pricing-config /path/to/prices.json
+./install-opencost.sh --image "ghcr.io/opencost/opencost:develop-latest@sha256:e0c09b268d8243c45323fffec8ceea1434e9f7e982905af651b1adebfc7e3135" --pricing-config /path/to/prices.json
 
 # Install Prometheus and OpenCost together in one namespace
-./install-opencost.sh --image ghcr.io/simanadler/opencost-inference:latest --install-prometheus -n llm-d-monitoring
+./install-opencost.sh --image "ghcr.io/opencost/opencost:develop-latest@sha256:e0c09b268d8243c45323fffec8ceea1434e9f7e982905af651b1adebfc7e3135" --install-prometheus -n llm-d-monitoring
 ```
 
 ### Pricing config format
@@ -157,7 +150,7 @@ curl "http://localhost:9003/inferenceCost/total?window=1h"
 curl "http://localhost:9003/inferenceCost/timeseries?window=24h&aggregate=model_name&accumulate=hour" | jq .
 ```
 
-For the full API reference — available query parameters, filtering, aggregation options, and response schema — see the [OpenCost REST API Endpoints documentation](https://github.com/simanadler/opencost/blob/inference-v1/docs/inference-cost-tracking.md#rest-api-endpoints) in the fork (the link will move to upstream once the feature is merged).
+For the full API reference — available query parameters, filtering, aggregation options, and response schema — see the [OpenCost REST API Endpoints documentation](https://github.com/opencost/opencost/blob/develop/docs/inference-cost-tracking.md#rest-api-endpoints).
 
 ### Run the llm-d config checks
 

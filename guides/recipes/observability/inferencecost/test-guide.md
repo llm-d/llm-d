@@ -7,6 +7,7 @@ metrics isolated from the production OpenCost deployment.
 ## Prerequisites
 
 - `helm`, `kubectl`, `oc`, and `jq` on your PATH
+- All commands must be run from the **repo root** (the directory containing `guides/`)
 - `prometheus-community` and `opencost-charts` Helm repos added:
 
 ```bash
@@ -21,8 +22,8 @@ helm repo update
 kubectl create namespace llm-d-cost-test
 ```
 
-On OpenShift, `install-opencost.sh` automatically applies the required SCCs and restarts
-workloads after the Helm installs complete. No manual `oc adm policy` steps are needed.
+On OpenShift, `install-opencost.sh` automatically applies the SCC for the OpenCost pod
+after Step 3. The Prometheus SCCs must be applied manually after Step 2 (see below).
 
 ## Step 2 — Install the test Prometheus
 
@@ -37,11 +38,48 @@ helm install llm-d-test-prom prometheus-community/prometheus \
   -f guides/recipes/observability/inferencecost/values/prometheus-test.yaml
 ```
 
+### OpenShift only — apply Prometheus SCCs
+
+The `prometheus-server`, `kube-state-metrics`, and `node-exporter` components require
+elevated privileges that the `restricted` PodSecurity policy blocks. Grant the SCCs and
+restart the workloads before proceeding:
+
+```bash
+oc adm policy add-scc-to-user privileged \
+  -z llm-d-test-prom-prometheus-server -n llm-d-cost-test
+oc adm policy add-scc-to-user privileged \
+  -z llm-d-test-prom-kube-state-metrics -n llm-d-cost-test
+oc adm policy add-scc-to-user privileged \
+  -z llm-d-test-prom-prometheus-node-exporter -n llm-d-cost-test
+
+kubectl rollout restart \
+  deployment/llm-d-test-prom-prometheus-server \
+  deployment/llm-d-test-prom-kube-state-metrics \
+  -n llm-d-cost-test
+kubectl rollout restart \
+  daemonset/llm-d-test-prom-prometheus-node-exporter \
+  -n llm-d-cost-test
+```
+
+Wait until all three components are running before proceeding to Step 3:
+
+```bash
+kubectl get pods -n llm-d-cost-test -w
+```
+
+Expected — every pod `Running` before you continue:
+
+```
+llm-d-test-prom-prometheus-server-<hash>         2/2     Running   0
+llm-d-test-prom-kube-state-metrics-<hash>        1/1     Running   0
+llm-d-test-prom-prometheus-node-exporter-<hash>  1/1     Running   0  (one per node)
+```
+
 ## Step 3 — Install the test OpenCost
 
 ```bash
 ./guides/recipes/observability/inferencecost/install-opencost.sh \
-  --image ghcr.io/simanadler/opencost-inference:latest \
+  --image "ghcr.io/opencost/opencost:develop-latest@sha256:e0c09b268d8243c45323fffec8ceea1434e9f7e982905af651b1adebfc7e3135" \
   --namespace llm-d-cost-test \
   --prometheus-endpoint http://llm-d-test-prom-prometheus-server.llm-d-cost-test.svc.cluster.local:80 \
   --prometheus-release-name llm-d-test-prom \
@@ -49,7 +87,7 @@ helm install llm-d-test-prom prometheus-community/prometheus \
   -y
 ```
 
-After both installs complete, check all pods reach Running:
+After the script completes, check all pods reach Running:
 
 ```bash
 kubectl get pods -n llm-d-cost-test
@@ -57,6 +95,10 @@ kubectl get pods -n llm-d-cost-test
 
 Expected: `llm-d-test-prom-prometheus-server` 2/2, `llm-d-test-prom-kube-state-metrics` 1/1,
 `llm-d-test-prom-prometheus-node-exporter-*` 1/1 on each node, `opencost-llm-d-cost-test` 2/2.
+
+> **OpenShift:** `install-opencost.sh` automatically grants `anyuid` to the OpenCost service
+> account and restarts the OpenCost deployment at the end of Step 3. The `opencost-llm-d-cost-test`
+> pod may briefly restart once — this is expected.
 
 ## Step 4 — Verify metrics and REST API
 

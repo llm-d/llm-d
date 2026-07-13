@@ -42,7 +42,7 @@ Options:
   -g, --context FILE            Path to a specific kubeconfig context
   -y, --yes                     Accept default prices without interactive confirmation
   -u, --uninstall               Uninstall OpenCost
-      --image REPO:TAG          Use a custom OpenCost image (e.g. ghcr.io/simanadler/opencost:inference-v1)
+      --image REPO:TAG          Use a specific OpenCost image (e.g. "ghcr.io/opencost/opencost:develop-latest@sha256:...")
   -h, --help                    Show this help and exit
 
 Examples:
@@ -105,10 +105,10 @@ parse_args() {
       -u|--uninstall)           ACTION="uninstall"; shift ;;
       --image)
         # Split REPO:TAG, then split registry/repository on the first slash-delimited component
-        # e.g. ghcr.io/simanadler/opencost-inference:latest
-        #   -> registry=ghcr.io  repository=simanadler/opencost-inference  tag=latest
+        # e.g. ghcr.io/opencost/opencost:develop-latest@sha256:abc...
+        #   -> registry=ghcr.io  repository=opencost/opencost  tag=develop-latest@sha256:abc...
         local _img="${2}"
-        OPENCOST_IMAGE_TAG="${_img##*:}"
+        OPENCOST_IMAGE_TAG="${_img#*:}"
         local _repopath="${_img%%:*}"
         OPENCOST_IMAGE_REGISTRY="${_repopath%%/*}"
         OPENCOST_IMAGE_REPO="${_repopath#*/}"
@@ -630,7 +630,7 @@ EOF
   log_info "Installing OpenCost in namespace ${OPENCOST_NAMESPACE}..."
   local image_sets=()
   if [[ -n "$OPENCOST_IMAGE_REPO" ]]; then
-    log_info "Using custom OpenCost image: ${OPENCOST_IMAGE_REPO}:${OPENCOST_IMAGE_TAG}"
+    log_info "OpenCost image: ${OPENCOST_IMAGE_REPO}:${OPENCOST_IMAGE_TAG}"
     image_sets=(
       --set "opencost.exporter.image.registry=${OPENCOST_IMAGE_REGISTRY}"
       --set "opencost.exporter.image.repository=${OPENCOST_IMAGE_REPO}"
