@@ -1,0 +1,160 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - ../../base
+
+components:
+  - ../../../../components/gke-rdma
+
+patches:
+  # Patch gke-rdma-template from gke-rdma component to request only DRANet (mrdma.google.com) on A4X
+  - patch: |-
+      apiVersion: resource.k8s.io/v1
+      kind: ResourceClaimTemplate
+      metadata:
+        name: gke-rdma-template
+      spec:
+        spec:
+          devices:
+            requests:
+              - name: nic
+                exactly:
+                  deviceClassName: mrdma.google.com
+                  allocationMode: ExactCount
+                  count: 1
+  # Configure prefill deployment with DRANet resourceClaims & A4X env and mounts
+  - patch: |-
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: prefill
+      spec:
+        template:
+          spec:
+            resourceClaims:
+              - name: gke-rdma-claim
+                resourceClaimTemplateName: gke-rdma-template
+            containers:
+              - name: modelserver
+                resources:
+                  claims:
+                    - name: gke-rdma-claim
+                env:
+                  - name: LD_PRELOAD
+                    value: "/usr/local/nvidia/lib64/libibverbs.so.1"
+                  - name: LD_LIBRARY_PATH
+                    value: "/usr/local/nvidia/lib64:/usr/local/gib/lib"
+                  - name: UCX_TLS
+                    value: "rc_mlx5,rc,cuda_copy,cuda_ipc,sm,shm,self"
+                  - name: UCX_IB_ROCE_LOCAL_SUBNET
+                    value: "n"
+                  - name: UCX_IB_GPU_DIRECT_RDMA
+                    value: "y"
+                  - name: UCX_IB_GDA_DMABUF_ENABLE
+                    value: "y"
+                  - name: NCCL_NET
+                    value: "gIB"
+                  - name: NCCL_PXN_C2C
+                    value: "1"
+                  - name: NCCL_IB_ADAPTIVE_ROUTING
+                    value: "1"
+                  - name: NCCL_IB_QPS_PER_CONNECTION
+                    value: "4"
+                  - name: NCCL_IB_TC
+                    value: "52"
+                  - name: NCCL_IB_FIFO_TC
+                    value: "84"
+                  - name: NCCL_NET_GDR_LEVEL
+                    value: "5"
+                  - name: NCCL_NET_GDR_READ
+                    value: "1"
+                  - name: NCCL_SOCKET_IFNAME
+                    value: "eth0"
+                securityContext:
+                  capabilities:
+                    add: ["IPC_LOCK", "NET_ADMIN"]
+                volumeMounts:
+                  - mountPath: /usr/local/gib
+                    name: gib
+                  - mountPath: /usr/local/nvidia
+                    name: library-dir-host
+            volumes:
+              - name: gib
+                hostPath:
+                  path: /home/kubernetes/bin/gib
+              - name: library-dir-host
+                hostPath:
+                  path: /home/kubernetes/bin/nvidia
+  # Configure decode deployment with DRANet resourceClaims & A4X env and mounts
+  - patch: |-
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: decode
+      spec:
+        template:
+          spec:
+            resourceClaims:
+              - name: gke-rdma-claim-0
+                resourceClaimTemplateName: gke-rdma-template
+              - name: gke-rdma-claim-1
+                resourceClaimTemplateName: gke-rdma-template
+              - name: gke-rdma-claim-2
+                resourceClaimTemplateName: gke-rdma-template
+              - name: gke-rdma-claim-3
+                resourceClaimTemplateName: gke-rdma-template
+            containers:
+              - name: modelserver
+                resources:
+                  claims:
+                    - name: gke-rdma-claim-0
+                    - name: gke-rdma-claim-1
+                    - name: gke-rdma-claim-2
+                    - name: gke-rdma-claim-3
+                env:
+                  - name: LD_PRELOAD
+                    value: "/usr/local/nvidia/lib64/libibverbs.so.1"
+                  - name: LD_LIBRARY_PATH
+                    value: "/usr/local/nvidia/lib64:/usr/local/gib/lib"
+                  - name: UCX_TLS
+                    value: "rc_mlx5,rc,cuda_copy,cuda_ipc,sm,shm,self"
+                  - name: UCX_IB_ROCE_LOCAL_SUBNET
+                    value: "n"
+                  - name: UCX_IB_GPU_DIRECT_RDMA
+                    value: "y"
+                  - name: UCX_IB_GDA_DMABUF_ENABLE
+                    value: "y"
+                  - name: NCCL_NET
+                    value: "gIB"
+                  - name: NCCL_PXN_C2C
+                    value: "1"
+                  - name: NCCL_IB_ADAPTIVE_ROUTING
+                    value: "1"
+                  - name: NCCL_IB_QPS_PER_CONNECTION
+                    value: "4"
+                  - name: NCCL_IB_TC
+                    value: "52"
+                  - name: NCCL_IB_FIFO_TC
+                    value: "84"
+                  - name: NCCL_NET_GDR_LEVEL
+                    value: "5"
+                  - name: NCCL_NET_GDR_READ
+                    value: "1"
+                  - name: NCCL_SOCKET_IFNAME
+                    value: "eth0"
+                securityContext:
+                  capabilities:
+                    add: ["IPC_LOCK", "NET_ADMIN"]
+                volumeMounts:
+                  - mountPath: /usr/local/gib
+                    name: gib
+                  - mountPath: /usr/local/nvidia
+                    name: library-dir-host
+            volumes:
+              - name: gib
+                hostPath:
+                  path: /home/kubernetes/bin/gib
+              - name: library-dir-host
+                hostPath:
+                  path: /home/kubernetes/bin/nvidia

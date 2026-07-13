@@ -146,8 +146,11 @@ Apply the Kustomize overlays for your specific backend (defaulting to NVIDIA GPU
 #### GPU
 
 Choose the overlay matching your infrastructure provider:
-- **GKE**: Deploys on GKE using Dynamic Resource Allocation (DRA) and DRANet (RoCE) as the default high-performance path. Ensure the cluster is configured accordingly (see [Cluster Pre-provisioning](#nvidia-gpu-on-gke-with-dra-rdmaroce)).
+- **GKE**: Deploys on GKE using Dynamic Resource Allocation (DRA) and DRANet (RoCE) as the default high-performance path. Ensure the cluster is configured accordingly (see [Cluster Pre-provisioning](#gke-cluster-pre-provisioning-with-dra--rdmaroce)).
 - **CoreWeave**: Deploys on CoreWeave.
+
+> [!TIP]
+> Check subdirectories under your provider folder (e.g. `modelserver/gpu/vllm/gke/a4x` for GKE A4X / GB200 platforms) for platform-specific overlays. If your target hardware has specialized driver, memory, or network interconnect requirements, default provider settings may not adapt to your platform, and you should select the corresponding platform sub-overlay (for example, `export INFRA_PROVIDER=gke/a4x`).
 
 ```bash
 export INFRA_PROVIDER=base # base | coreweave | gke | aws
