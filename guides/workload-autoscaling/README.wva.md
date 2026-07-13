@@ -71,30 +71,23 @@ export REPO_ROOT=$(realpath $(git rev-parse --show-toplevel))
       --dry-run=client -o yaml | kubectl apply -f - -n ${WVA_NAMESPACE}
     ```
 
-3. Configure Prometheus Adapter Rules (if using Prometheus Adapter as the external metrics provider for WVA):
+3. Verify KEDA is installed. WVA only watches ScaledObjects if the KEDA CRD is present **when the controller starts**, so install KEDA before WVA:
 
     ```bash
-    helm upgrade prometheus-adapter prometheus-community/prometheus-adapter \
-      --namespace ${MONITORING_NAMESPACE} \
-      --reuse-values \
-      --values ${REPO_ROOT}/guides/workload-autoscaling/components/prometheus-adapter/wva-adapter-values.yaml
+    kubectl get crd scaledobjects.keda.sh
     ```
 
-4. Verify the external metrics adapter is registered:
+    > [!NOTE]
+    > If you are still on the deprecated Prometheus Adapter, see [promadapter.md](./promadapter.md).
+    > WVA no longer installs or supports it.
 
-    ```bash
-    kubectl get --raw "/apis/external.metrics.k8s.io/v1beta1"
-
-    {"kind":"APIResourceList","apiVersion":"v1","groupVersion":"external.metrics.k8s.io/v1beta1","resources":[{"name":"wva_desired_replicas","singularName":"","namespaced":true,"kind":"ExternalMetricValueList","verbs":["get"]}]}
-    ```
-
-5. Install WVA CRDs:
+4. Install WVA CRDs:
 
     ```bash
     kubectl apply -k github.com/llm-d/llm-d-workload-variant-autoscaler/config/base/crd?ref=main
     ```
 
-6. Install WVA controller with Kustomize:
+5. Install WVA controller with Kustomize:
 
     ```bash
     kubectl apply -k ${REPO_ROOT}/guides/workload-autoscaling/wva-config/platform/${PLATFORM} -n ${WVA_NAMESPACE}

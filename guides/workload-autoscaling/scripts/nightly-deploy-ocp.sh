@@ -47,12 +47,25 @@ namespace: ${NAMESPACE}
 resources:
   - ${REL}/guides/workload-autoscaling/wva-config/platform/ocp/
   - ${REL}/guides/optimized-baseline/modelserver/gpu/vllm/base/
-  - ${REL}/guides/workload-autoscaling/optimized-baseline-autoscaling/hpa/
+  - ${REL}/guides/workload-autoscaling/optimized-baseline-autoscaling/keda/
 patches:
-  - path: patch-hpa-exported-ns.yaml
+  # The namespace lives inside a PromQL string, so the kustomize namespace transformer above
+  # cannot reach it — rewrite the query explicitly. maxReplicaCount is capped at the GPU budget
+  # the nightly reserves (2), rather than the guide's default of 10.
+  - patch: |-
+      - op: replace
+        path: /spec/triggers/0/metadata/query
+        value: |
+          wva_desired_replicas{
+            variant_name="optimized-baseline-nvidia-gpu-vllm-decode",
+            namespace="${NAMESPACE}"
+          }
+      - op: replace
+        path: /spec/maxReplicaCount
+        value: 2
     target:
-      kind: HorizontalPodAutoscaler
-      name: optimized-baseline-nvidia-gpu-vllm-decode
+      kind: ScaledObject
+      name: optimized-baseline-nvidia-gpu-vllm-decode-scaler
   - path: patch-vllm.yaml
     target:
       kind: Deployment
@@ -88,28 +101,20 @@ images:
 EOF
 fi
 
-cat > "${OUTPUT_DIR}/patch-hpa-exported-ns.yaml" <<EOF
-apiVersion: autoscaling/v2
-kind: HorizontalPodAutoscaler
-metadata:
-  name: optimized-baseline-nvidia-gpu-vllm-decode
-spec:
-  metrics:
-    - type: External
-      external:
-        metric:
-          name: wva_desired_replicas
-          selector:
-            matchLabels:
-              variant_name: optimized-baseline-nvidia-gpu-vllm-decode
-              exported_namespace: ${NAMESPACE}
-        target:
-          type: AverageValue
-          averageValue: "1"
-EOF
-
 echo "==> Validating kustomization"
 kubectl kustomize "${OUTPUT_DIR}" >/dev/null
+
+# KEDA is the external metrics provider (Prometheus Adapter was retired upstream in
+# llm-d-workload-variant-autoscaler#1399). WVA only registers its ScaledObject reconciler
+# if the KEDA CRD is present when the controller starts, so check before deploying it.
+# On OpenShift, KEDA is expected to be operator-managed and is never installed from here.
+echo "==> Checking for KEDA"
+if ! kubectl get crd scaledobjects.keda.sh >/dev/null 2>&1; then
+  echo "ERROR: CRD scaledobjects.keda.sh not found." >&2
+  echo "       KEDA must be installed on the cluster (Custom Metrics Autoscaler operator on OpenShift)" >&2
+  echo "       before the WVA controller starts, or WVA will not watch ScaledObjects." >&2
+  exit 1
+fi
 
 echo "==> Ensuring namespace ${NAMESPACE} exists"
 kubectl create namespace "${NAMESPACE}" --dry-run=client -o yaml | kubectl apply -f -
@@ -128,5 +133,12 @@ echo "==> Waiting for WVA controller to become Available"
 kubectl wait deployment/wva-controller-manager \
   -n "${NAMESPACE}" --for=condition=Available --timeout=300s
 
+echo "==> Waiting for the ScaledObject to be Ready"
+# Ready means KEDA accepted the trigger and created its HPA. It does NOT mean WVA is
+# publishing wva_desired_replicas yet — that needs a Prometheus scrape cycle.
+kubectl wait scaledobject/optimized-baseline-nvidia-gpu-vllm-decode-scaler \
+  -n "${NAMESPACE}" --for=condition=Ready --timeout=300s
+
 echo "==> Listing autoscaling resources"
-kubectl get variantautoscaling,hpa -n "${NAMESPACE}"
+# KEDA owns the HPA (wva-keda-hpa-*); we no longer create one ourselves.
+kubectl get scaledobject,hpa -n "${NAMESPACE}"

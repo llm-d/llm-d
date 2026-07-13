@@ -1,17 +1,30 @@
-# KEDA ScaledObject with wva_desired_replica metric
+# KEDA ScaledObject driven by WVA's wva_desired_replicas metric.
 #
 # This ScaledObject replaces both Prometheus Adapter and the standard HPA.
 # KEDA creates its own HPA from this ScaledObject — do NOT apply hpa.yaml alongside it.
 #
-# Update `serverAddress` below to match your Prometheus endpoint.
+# The llm-d.ai/* annotations are what make WVA aware of this variant: WVA watches
+# ScaledObjects (and HPAs) bearing llm-d.ai/managed: "true" and emits wva_desired_replicas
+# for them. Without the annotations the object is invisible to WVA, the metric is never
+# published, and KEDA sits on its fallback replica count.
+#
+# Update `serverAddress` and the namespace in the trigger query to match your cluster.
 apiVersion: keda.sh/v1alpha1
 kind: ScaledObject
 metadata:
   name: optimized-baseline-nvidia-gpu-vllm-decode-scaler
+  annotations:
+    llm-d.ai/managed: "true"
+    llm-d.ai/model-id: "Qwen3-32B"
+    llm-d.ai/variant-cost: "30.0"
   labels:
+    # WVA copies these labels onto the variant it derives from this object; the
+    # accelerator label feeds its cost/capacity optimization.
+    inference.optimization/acceleratorName: "H100"
+    llm-d.ai/inference-serving: "true"
+    llm-d.ai/guide: "optimized-baseline"
     app: optimized-baseline-nvidia-gpu-vllm-decode
     scaler: keda-workload-variant-autoscaler
-    llm-d.ai/guide: "optimized-baseline"
 spec:
   scaleTargetRef:
     apiVersion: apps/v1
@@ -54,12 +67,20 @@ spec:
     name: wva-desired-replicas
     metadata:
       serverAddress: https://thanos-querier.openshift-monitoring.svc.cluster.local:9091
+      # `namespace` is the Prometheus scrape-target label — the namespace the WVA controller
+      # runs in, which this guide installs alongside the workload. If you run WVA in a
+      # different namespace, Prometheus renames the metric's own namespace label to
+      # `exported_namespace` on collision, and this selector must use that instead.
       query: |
         wva_desired_replicas{
           variant_name="optimized-baseline-nvidia-gpu-vllm-decode",
-          exported_namespace="llm-d-optimized-baseline"
+          namespace="llm-d-optimized-baseline"
         }
       threshold: "1"
       activationThreshold: "0"
+      # AverageValue, not Value: for External metrics the HPA scales a `Value` target by the
+      # current replica count (desired = ceil(metric / target * replicas)), which turns a
+      # desired-replica metric into runaway growth. AverageValue divides that back out, making
+      # this a direct passthrough of wva_desired_replicas.
       metricType: AverageValue
       unsafeSsl: "true"

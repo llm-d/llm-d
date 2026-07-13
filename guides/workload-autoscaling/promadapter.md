@@ -2,6 +2,8 @@
 
 > [!WARNING]
 > The Prometheus Adapter project is planned for deprecation ([kubernetes-sigs/prometheus-adapter#701](https://github.com/kubernetes-sigs/prometheus-adapter/issues/701)). It is recommended to use KEDA for autoscaling.
+>
+> **For WVA, the Prometheus Adapter is no longer supported.** WVA removed it as a scaler backend in [llm-d-workload-variant-autoscaler#1399](https://github.com/llm-d/llm-d-workload-variant-autoscaler/pull/1399); KEDA is the sole backend. Note that KEDA and the Prometheus Adapter both serve the `v1beta1.external.metrics.k8s.io` APIService and cannot coexist — running both breaks metric delivery for whichever one does not own it. Migrate via [Using KEDA with WVA](./README.wva.md#using-keda-with-wva-recommended). This page remains for the HPA + EPP metrics path.
 
 The Prometheus Adapter bridges Prometheus metrics to the Kubernetes External Metrics API, which the HPA uses to read EPP and WVA signals.
 

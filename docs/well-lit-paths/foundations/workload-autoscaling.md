@@ -26,7 +26,7 @@ The Workload Variant Autoscaler (WVA) is designed for operators running multiple
 
 * **Best for**: Multi-variant deployments where cost-aware capacity allocation is required.
 * **Signals**: KV cache utilization, queue depth, energy/performance budgets.
-* **Components**: WVA controller and `VariantAutoscaling` CRD.
+* **Components**: WVA controller and KEDA. WVA publishes a `wva_desired_replicas` metric for any KEDA `ScaledObject` (or HPA) annotated with `llm-d.ai/managed: "true"`, and KEDA drives the scale from it. The `VariantAutoscaling` CRD is deprecated as of llm-d 0.8.0.
 
 ## Choosing a Path
 
