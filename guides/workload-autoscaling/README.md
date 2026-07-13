@@ -7,7 +7,7 @@ Traditional autoscaling indicators like resource utilization metrics (CPU/GPU) a
 
 Effective LLM autoscaling requires proactive, SLO-aware signals that reflect the true state of the inference system — queue depth, in-flight request counts, and KV cache pressure — so that capacity can be added before end-user latency is impacted.
 
-This guide covers the autoscaling strategies available in llm-d. Both use the Kubernetes HPA or KEDA as the scaling primitive but differ in the use cases they target, the metrics that drive them, and the operational complexity they require.
+This guide covers the autoscaling strategies available in llm-d. These paths use the Kubernetes HPA or KEDA as the scaling primitive but differ in the use cases they target, the metrics that drive them, and the operational complexity they require.
 
 ## Prerequisites
 
@@ -38,6 +38,12 @@ The [HPA + EPP Metrics](./README.hpa-epp.md) path integrates the Kubernetes Hori
 
 The guide demonstrates autoscaling using queue depth and running request count from EPP, but other metrics emitted by the EPP can be used depending on your scaling requirements. These signals reflect the actual state of the inference queue, enabling the HPA to scale out before users experience high latency and scale in when capacity is genuinely idle. This path requires only the standard Kubernetes HPA and the Prometheus Adapter, with no additional controllers. KEDA can be used in place of the native HPA if scale-to-zero is required and your cluster does not support the HPA scale to zero feature gate (alpha in Kubernetes 1.36).
 
+### KEDA + EPP Pool-Level Saturation Metrics
+
+The [KEDA + EPP Pool-Level Saturation Metrics](./README.epp-keda-saturation.md) path has KEDA query Prometheus directly for InferencePool-scoped saturation and running-request metrics, then scale the model server Deployment.
+
+This is a controller-free approach: no WVA controller, no Prometheus Adapter. KEDA consumes two EPP metrics — pool saturation level (0.0–1.0+, normalized measure of how loaded the pool is) and active in-flight request count — and drives scaling decisions. Well-suited for simple homogeneous deployments where each model scales independently and you want minimal operational overhead.
+
 ### HPA + WVA Metrics
 
 The [Workload Variant Autoscaler (WVA)](./README.wva.md) path integrates the Kubernetes Horizontal Pod Autoscaler (HPA) with the aggregated signal emitted by WVA: `wva_desired_replicas`.
@@ -46,13 +52,13 @@ WVA is designed for operators running multiple variants of the same model across
 
 ## Choosing a Scaling Signal
 
-| | [HPA + EPP Metrics](./README.hpa-epp.md) | [HPA + WVA Metrics](./README.wva.md) |
-|---|---|---|
-| **Best for** | Deployments on homogeneous hardware where each model scales independently | Multi-variant deployments where cost-aware capacity allocation across heterogeneous shared hardware is required |
-| **Scaling signal** | EPP metrics such as queue depth and running request count | KV cache utilization, queue depth, performance budgets |
-| **Cost optimization** | None — scales based on load signals only | Optimizes across variants by preferring lower-cost hardware |
-| **Additional components** | None — standard Kubernetes HPA only | Requires the WVA controller |
-| **Scale to zero** | Supported | Supported |
+| | [HPA + EPP Metrics](./README.hpa-epp.md) | [KEDA + EPP Pool-Level Saturation](./README.epp-keda-saturation.md) | [HPA + WVA Metrics](./README.wva.md) |
+|---|---|---|---|
+| **Best for** | Homogeneous single-model deployments; HPA with external metrics via Prometheus Adapter | Homogeneous single-model deployments; controller-free, minimal overhead | Multi-variant deployments with cost-aware placement across heterogeneous hardware |
+| **Scaling signal** | Queue depth and running request count (raw metrics) | Pool saturation level (0.0–1.0+) and running request count | KV cache utilization, queue depth, performance budgets |
+| **Cost optimization** | None — scales based on load signals only | None — scales based on load signals only | Optimizes across variants by preferring lower-cost hardware |
+| **Additional components** | Prometheus Adapter | None — KEDA only | WVA controller |
+| **Scale to zero** | Supported | Supported | Supported |
 
 ## Features
 
