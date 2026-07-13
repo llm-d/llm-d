@@ -65,6 +65,17 @@ patches:
       - op: replace
         path: /spec/maxReplicaCount
         value: 2
+      # The deployment starts at 2 replicas while WVA, seeing no traffic yet, asks for 1. KEDA
+      # would scale down within the 60s guide default — mid-startup, while the workflow is still
+      # waiting on the pods it listed before the scale-down, which then fails on a NotFound.
+      # vLLM needs ~6 min to become ready here, so hold scale-down off until the stack is up and
+      # the benchmark is driving load.
+      # TODO: interim. The real fix is to start the deployment at 1 replica (the floor WVA asks
+      # for when idle) and let the benchmark drive scale-up, rather than pinning 2 and delaying
+      # the scale-down that follows.
+      - op: replace
+        path: /spec/advanced/horizontalPodAutoscalerConfig/behavior/scaleDown/stabilizationWindowSeconds
+        value: 900
     target:
       kind: ScaledObject
       name: optimized-baseline-nvidia-gpu-vllm-decode-scaler
