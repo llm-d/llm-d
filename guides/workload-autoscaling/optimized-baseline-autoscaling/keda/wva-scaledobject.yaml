@@ -65,22 +65,24 @@ spec:
   triggers:
   - type: prometheus
     name: wva-desired-replicas
+    # Required: without it Thanos 401s, and KEDA suppresses the error and serves `fallback`
+    # replicas — healthy-looking, but not autoscaling. See wva-triggerauthentication.yaml.
+    authenticationRef:
+      name: wva-prometheus-auth
     metadata:
       serverAddress: https://thanos-querier.openshift-monitoring.svc.cluster.local:9091
-      # `namespace` is the Prometheus scrape-target label — the namespace the WVA controller
-      # runs in, which this guide installs alongside the workload. If you run WVA in a
-      # different namespace, Prometheus renames the metric's own namespace label to
-      # `exported_namespace` on collision, and this selector must use that instead.
+      authModes: "bearer"
+      # `variant_name` is the name of THIS ScaledObject, not of the target Deployment.
+      # `namespace` is the scrape-target label — the namespace WVA runs in, which this guide
+      # installs alongside the workload. Run WVA elsewhere and the label you want becomes
+      # `exported_namespace` (Prometheus renames the metric's own label on collision).
       query: |
         wva_desired_replicas{
-          variant_name="optimized-baseline-nvidia-gpu-vllm-decode",
+          variant_name="optimized-baseline-nvidia-gpu-vllm-decode-scaler",
           namespace="llm-d-optimized-baseline"
         }
       threshold: "1"
       activationThreshold: "0"
-      # AverageValue, not Value: for External metrics the HPA scales a `Value` target by the
-      # current replica count (desired = ceil(metric / target * replicas)), which turns a
-      # desired-replica metric into runaway growth. AverageValue divides that back out, making
-      # this a direct passthrough of wva_desired_replicas.
+      # AverageValue, not Value: for External metrics the HPA multiplies a `Value` target by the
+      # current replica count, which turns a desired-replica metric into runaway growth.
       metricType: AverageValue
-      unsafeSsl: "true"
