@@ -8,7 +8,7 @@ Fast Model Actuation (FMA) enables rapid model loading and switching for LLM inf
 - **Launcher Pods** (server-providing) run vLLM without requesting GPUs. They gain access to GPUs via `CUDA_VISIBLE_DEVICES`, directed by the FMA controller to the specific GPU(s) reserved by the requesting pod.
 - **FMA Controllers** manage the lifecycle: binding requesting pods to launchers, starting vLLM instances, and orchestrating sleep/wake.
 
-Server-requesting pods are managed through standard Kubernetes controllers such as ReplicaSets and autoscalers. The FMA controller watches these pods and translates scheduler decisions into actions on launcher pods and GPUs.
+Server-requesting pods are managed through standard Kubernetes controllers such as Deployments and autoscalers. The FMA controller watches these pods and translates scheduler decisions into actions on launcher pods and GPUs.
 
 When a requesting pod is deleted, the controller puts the corresponding vLLM instance to sleep (model stays in GPU memory). Although the Kubernetes GPU allocation is released when the requesting pod exits, the launcher pod retains the CUDA context and keeps the model in GPU memory. The GPU remains dedicated to that launcher until it is explicitly unbound or the launcher pod is deleted. When a new requesting pod arrives and gets assigned to the same GPU, the controller wakes the sleeping instance, resuming in seconds instead of cold-starting from scratch.
 
@@ -46,7 +46,7 @@ This guide assumes you have a Kubernetes cluster with GPU nodes and the [llm-d r
     export ROUTER_CHART_VERSION=v0
     export GUIDE_NAME="fast-model-actuation"
     export NAMESPACE=llm-d-fast-model-actuation
-    export FMA_VERSION="0.6.0-alpha.13"
+    export FMA_VERSION="0.6.1"
     export FMA_CHART_INSTANCE_NAME="fma"
     export REPO_ROOT=$(realpath $(git rev-parse --show-toplevel))
   ```
@@ -86,12 +86,18 @@ kubectl wait --for=condition=Established crd/launcherpopulationpolicies.fma.llm-
 helm upgrade --install ${FMA_CHART_INSTANCE_NAME} \
     oci://ghcr.io/llm-d-incubation/llm-d-fast-model-actuation/charts/fma-controllers \
     --version ${FMA_VERSION} \
+    --set global.nodeViewClusterRole=fma-node-viewer \
     -n ${NAMESPACE}
 ```
 
+> [!NOTE]
+> Passing `global.nodeViewClusterRole` tells the chart to create the `ClusterRoleBinding` that grants the controllers' ServiceAccount access to the `fma-node-viewer` ClusterRole. You only need to create the ClusterRole itself (Step 3) — the binding is managed by Helm.
+
 ### 3. Grant RBAC Permissions
 
-The FMA controllers need cluster-level access to list nodes (for the launcher-populator) and namespace-level access for launcher pods to read their own pod spec:
+The FMA controllers need cluster-level access to list nodes (for the launcher-populator) and namespace-level access for launcher pods to read their own pod spec.
+
+Create the `fma-node-viewer` ClusterRole (referenced by the `global.nodeViewClusterRole` value passed to Helm in Step 2, which binds it to the controllers' ServiceAccount) and the namespace-scoped Role/RoleBinding for the launcher pods:
 
 ```bash
 kubectl apply -f - <<EOF
@@ -103,19 +109,6 @@ rules:
   - apiGroups: [""]
     resources: ["nodes"]
     verbs: ["get", "list", "watch"]
----
-apiVersion: rbac.authorization.k8s.io/v1
-kind: ClusterRoleBinding
-metadata:
-  name: fma-node-viewer
-subjects:
-  - kind: ServiceAccount
-    name: ${FMA_CHART_INSTANCE_NAME}-fma-controllers
-    namespace: ${NAMESPACE}
-roleRef:
-  kind: ClusterRole
-  name: fma-node-viewer
-  apiGroup: rbac.authorization.k8s.io
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
@@ -179,11 +172,10 @@ metadata:
 spec:
   modelServerConfig:
     port: 8000
-    options: "--model Qwen/Qwen3-0.6B --gpu-memory-utilization 0.9"
+    options: "--model Qwen/Qwen3-0.6B --enable-sleep-mode --gpu-memory-utilization 0.9"
     env_vars:
       VLLM_LOGGING_LEVEL: "INFO"
       HF_HOME: "/tmp/hf_cache"
-      TRANSFORMERS_CACHE: "/tmp/hf_cache"
     labels:
       llm-d.ai/guide: "fast-model-actuation"
       llm-d.ai/model: "qwen3-0.6b"
@@ -193,6 +185,9 @@ EOF
 
 > [!NOTE]
 > This guide uses [Qwen/Qwen3-0.6B](https://huggingface.co/Qwen/Qwen3-0.6B) which is publicly accessible and does not require a HuggingFace token. For gated models, you would need to mount the token via a different mechanism (FMA's ISC does not support `secretKeyRef`).
+
+> [!NOTE]
+> `HF_HOME` points at `/tmp/hf_cache`, which is ephemeral node storage. This keeps the guide self-contained, but every fresh launcher re-downloads the model weights and re-runs `torch.compile`. For production — or any repeated benchmarking — back `HF_HOME` with a shared, persistent volume (a PVC, e.g. `ReadWriteMany`) so model weights and compiled graphs persist across launcher pods and are not recomputed on each start.
 
 #### LauncherConfig
 
@@ -263,12 +258,12 @@ EOF
 
 #### Requesting Pods
 
-Create the server-requesting pods that reserve GPUs and trigger model loading:
+Create the server-requesting pods that reserve GPUs and trigger model loading. A `Deployment` is used here (rather than a bare `ReplicaSet`) so the requesting pods integrate cleanly with autoscalers such as the Workload Variant Autoscaler (WVA):
 
 ```bash
 kubectl apply -n ${NAMESPACE} -f - <<EOF
 apiVersion: apps/v1
-kind: ReplicaSet
+kind: Deployment
 metadata:
   name: fma-requester
 spec:
@@ -374,7 +369,7 @@ kubectl get pods -n ${NAMESPACE} -l app=fma-requester
 **Trigger sleep by scaling down the requesting pods:**
 
 ```bash
-kubectl scale replicaset fma-requester -n ${NAMESPACE} --replicas=0
+kubectl scale deployment fma-requester -n ${NAMESPACE} --replicas=0
 ```
 
 The FMA controller detects the deletion of requesting pods, unbinds them from their launcher pods, and tells vLLM to sleep. The model remains in GPU memory but stops serving.
@@ -382,7 +377,7 @@ The FMA controller detects the deletion of requesting pods, unbinds them from th
 **Trigger wake by scaling back up:**
 
 ```bash
-kubectl scale replicaset fma-requester -n ${NAMESPACE} --replicas=2
+kubectl scale deployment fma-requester -n ${NAMESPACE} --replicas=2
 ```
 
 The FMA controller binds the new requesting pods to launcher pods. If the scheduler assigns them to the same GPUs, the controller wakes the sleeping vLLM instances — resuming in seconds rather than minutes.
@@ -403,13 +398,12 @@ Re-run the inference request from step 2 to confirm the model is serving again.
 To remove all deployed components:
 
 ```bash
-kubectl delete replicaset fma-requester -n ${NAMESPACE}
+kubectl delete deployment fma-requester -n ${NAMESPACE}
 kubectl delete inferenceserverconfig fma-isc -n ${NAMESPACE}
 kubectl delete launcherconfig fma-launcher -n ${NAMESPACE}
 kubectl delete launcherpopulationpolicy fma-lpp -n ${NAMESPACE}
 helm uninstall ${GUIDE_NAME} -n ${NAMESPACE}
 helm uninstall ${FMA_CHART_INSTANCE_NAME} -n ${NAMESPACE}
-kubectl delete clusterrolebinding fma-node-viewer
 kubectl delete clusterrole fma-node-viewer
 kubectl delete namespace ${NAMESPACE}
 kubectl delete crd inferenceserverconfigs.fma.llm-d.ai launcherconfigs.fma.llm-d.ai launcherpopulationpolicies.fma.llm-d.ai
