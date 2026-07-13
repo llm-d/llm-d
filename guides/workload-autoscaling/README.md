@@ -54,7 +54,7 @@ Adapter.
 
 The [KEDA + EPP Pool-Level Saturation Metrics](./README.epp-keda-saturation.md) path has KEDA query Prometheus directly for InferencePool-scoped saturation and running-request metrics, then scale the model server Deployment.
 
-This is a controller-free approach: no WVA controller, no Prometheus Adapter. KEDA consumes two EPP metrics — pool saturation level (0.0–1.0+, normalized measure of how loaded the pool is) and active in-flight request count — and drives scaling decisions. Well-suited for simple homogeneous deployments where each model scales independently and you want minimal operational overhead.
+KEDA consumes two EPP metrics — pool saturation level (0.0–1.0+, normalized measure of how loaded the pool is) and active in-flight request count — and drives scaling decisions. Well-suited for simple homogeneous deployments where each model scales independently and you want minimal operational overhead.
 
 ### HPA + WVA Metrics
 
