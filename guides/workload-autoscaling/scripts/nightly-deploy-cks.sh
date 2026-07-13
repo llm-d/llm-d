@@ -61,7 +61,7 @@ kind: Kustomization
 namespace: ${NAMESPACE}
 resources:
   - ${REL}/guides/workload-autoscaling/wva-config/platform/k8s/
-  - ${REL}/guides/workload-autoscaling/optimized-baseline-autoscaling/keda/
+  - ${REL}/guides/workload-autoscaling/optimized-baseline-autoscaling/keda/k8s/
 patches:
   # The namespace and Prometheus endpoint live inside KEDA trigger strings, so the kustomize
   # namespace transformer cannot reach them — rewrite them explicitly.

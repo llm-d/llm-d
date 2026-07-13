@@ -154,20 +154,25 @@ This section enables autoscaling for an existing [optimized-baseline](../optimiz
 > [!IMPORTANT]
 > When using KEDA, do **not** apply `hpa.yaml`. KEDA creates its own HPA from the ScaledObject. Applying both will cause conflicts.
 
-Before applying, update `serverAddress` in [optimized-baseline-autoscaling/keda/wva-scaledobject.yaml](optimized-baseline-autoscaling/keda/wva-scaledobject.yaml) to match your Prometheus endpoint.
+The manifests follow the same `${PLATFORM}` split as the WVA install above:
+
+- [`keda/base`](optimized-baseline-autoscaling/keda/base/wva-scaledobject.yaml) — the ScaledObject, targeting an unauthenticated in-cluster Prometheus.
+- [`keda/ocp`](optimized-baseline-autoscaling/keda/ocp/kustomization.yaml) — points the trigger at Thanos Querier and bearer-authenticates with the WVA ServiceAccount token.
+
+Before applying, update `serverAddress` and the `namespace` in the trigger query to match your cluster.
 
 ```bash
-kubectl apply -k ${REPO_ROOT}/guides/workload-autoscaling/optimized-baseline-autoscaling/keda -n ${NAMESPACE}
+kubectl apply -k ${REPO_ROOT}/guides/workload-autoscaling/optimized-baseline-autoscaling/keda/${PLATFORM} -n ${NAMESPACE}
 ```
 
 #### Key Configuration Fields
 
 | Field | Description |
 |---|---|
-| `triggers[].metadata.serverAddress` | Full HTTPS URL of the Prometheus instance |
-| `triggers[].metadata.query` | PromQL query for `wva_desired_replicas`, filtered by `variant_name` and `exported_namespace` |
+| `triggers[].metadata.serverAddress` | Full HTTPS URL of the Prometheus instance (Thanos Querier on OpenShift) |
+| `triggers[].metadata.query` | PromQL query for `wva_desired_replicas`, filtered by `variant_name` (the **ScaledObject's** name) and `namespace` |
 | `triggers[].metadata.threshold` | KEDA scales when `wva_desired_replicas >= threshold` |
-| `triggers[].metadata.unsafeSsl` | Set to `"true"` to skip TLS verification (for production, configure `authenticationRef` with a `TriggerAuthentication` resource) |
+| `triggers[].authenticationRef` | Credentials for Prometheus. Required on OpenShift — Thanos rejects unauthenticated queries with a `401`, and KEDA suppresses that error and silently serves `fallback` replicas, so autoscaling looks healthy while doing nothing |
 | `fallback` | Behavior when Prometheus is unreachable — defaults to keeping at least 2 replicas |
 | `minReplicaCount` / `maxReplicaCount` | Scaling bounds |
 
@@ -184,7 +189,7 @@ kubectl get hpa -n ${NAMESPACE}
 #### Cleanup
 
 ```bash
-kubectl delete -k ${REPO_ROOT}/guides/workload-autoscaling/optimized-baseline-autoscaling/keda -n ${NAMESPACE}
+kubectl delete -k ${REPO_ROOT}/guides/workload-autoscaling/optimized-baseline-autoscaling/keda/${PLATFORM} -n ${NAMESPACE}
 ```
 
 ### Using HPA Directly
@@ -242,7 +247,7 @@ kubectl delete -k ${REPO_ROOT}/guides/workload-autoscaling/wva-config/platform/$
 If you used KEDA, delete the ScaledObject:
 
 ```bash
-kubectl delete -k guides/workload-autoscaling/optimized-baseline-autoscaling/keda -n ${NAMESPACE}
+kubectl delete -k guides/workload-autoscaling/optimized-baseline-autoscaling/keda/${PLATFORM} -n ${NAMESPACE}
 ```
 
 ## Advanced Configuration, Updates, and Troubleshooting

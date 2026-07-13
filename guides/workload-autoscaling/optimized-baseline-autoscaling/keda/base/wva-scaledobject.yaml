@@ -8,6 +8,9 @@
 # for them. Without the annotations the object is invisible to WVA, the metric is never
 # published, and KEDA sits on its fallback replica count.
 #
+# This base targets vanilla Kubernetes: it queries an in-cluster Prometheus with no
+# authentication. OpenShift needs Thanos Querier plus a bearer token — see the ../ocp overlay.
+#
 # Update `serverAddress` and the namespace in the trigger query to match your cluster.
 apiVersion: keda.sh/v1alpha1
 kind: ScaledObject
@@ -65,13 +68,11 @@ spec:
   triggers:
   - type: prometheus
     name: wva-desired-replicas
-    # Required: without it Thanos 401s, and KEDA suppresses the error and serves `fallback`
-    # replicas — healthy-looking, but not autoscaling. See wva-triggerauthentication.yaml.
-    authenticationRef:
-      name: wva-prometheus-auth
     metadata:
-      serverAddress: https://thanos-querier.openshift-monitoring.svc.cluster.local:9091
-      authModes: "bearer"
+      # In-cluster Prometheus installed by the monitoring prerequisites. If yours requires
+      # authentication, add a TriggerAuthentication and reference it — as ../ocp does for Thanos.
+      serverAddress: https://prometheus-operated.llm-d-monitoring.svc.cluster.local:9090
+      unsafeSsl: "true"
       # `variant_name` is the name of THIS ScaledObject, not of the target Deployment.
       # `namespace` is the scrape-target label — the namespace WVA runs in, which this guide
       # installs alongside the workload. Run WVA elsewhere and the label you want becomes

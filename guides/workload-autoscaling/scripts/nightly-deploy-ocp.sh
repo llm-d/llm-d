@@ -48,7 +48,7 @@ namespace: ${NAMESPACE}
 resources:
   - ${REL}/guides/workload-autoscaling/wva-config/platform/ocp/
   - ${REL}/guides/optimized-baseline/modelserver/gpu/vllm/base/
-  - ${REL}/guides/workload-autoscaling/optimized-baseline-autoscaling/keda/
+  - ${REL}/guides/workload-autoscaling/optimized-baseline-autoscaling/keda/ocp/
 patches:
   # The namespace lives inside a PromQL string, so the kustomize namespace transformer above
   # cannot reach it — rewrite the query explicitly. maxReplicaCount is capped at the GPU budget
