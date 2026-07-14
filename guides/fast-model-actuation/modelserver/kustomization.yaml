@@ -1,0 +1,9 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+# Applied with `kubectl apply -n ${NAMESPACE} -k ...`; these are namespaced CRs
+# with no cross-namespace references, so the namespace comes from the apply flag.
+resources:
+  - inferenceserverconfig.yaml
+  - launcherconfig.yaml
+  - launcherpopulationpolicy.yaml

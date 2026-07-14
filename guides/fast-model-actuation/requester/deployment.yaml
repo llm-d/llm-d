@@ -1,0 +1,41 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: fma-requester
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: fma-requester
+  template:
+    metadata:
+      labels:
+        app: fma-requester
+      annotations:
+        dual-pods.llm-d.ai/inference-server-config: "fma-isc"
+        dual-pods.llm-d.ai/admin-port: "8081"
+    spec:
+      containers:
+        - name: requester
+          # Keep this tag in sync with FMA_VERSION in guide.yaml / the guide env.
+          image: ghcr.io/llm-d-incubation/llm-d-fast-model-actuation/requester:v0.6.1
+          ports:
+            - containerPort: 8080
+              name: probes
+            - containerPort: 8081
+              name: admin
+          readinessProbe:
+            httpGet:
+              path: /ready
+              port: 8080
+            initialDelaySeconds: 5
+            periodSeconds: 5
+          resources:
+            requests:
+              nvidia.com/gpu: "1"
+              cpu: "100m"
+              memory: "128Mi"
+            limits:
+              nvidia.com/gpu: "1"
+              cpu: "200m"
+              memory: "256Mi"
