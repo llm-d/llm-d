@@ -7,11 +7,7 @@ Traditional autoscaling indicators like resource utilization metrics (CPU/GPU) a
 
 Effective LLM autoscaling requires proactive, SLO-aware signals that reflect the true state of the inference system — queue depth, in-flight request counts, and KV cache pressure — so that capacity can be added before end-user latency is impacted.
 
-This guide covers the autoscaling strategies available in llm-d. The EPP path
-uses KEDA as its user-facing scaling primitive, while the WVA path publishes a
-desired-replica metric for an HPA or KEDA. The paths differ in the use cases
-they target, the metrics that drive them, and the operational complexity they
-require.
+This guide covers the autoscaling strategies available in llm-d. The EPP paths use KEDA as the scaling primitive, while the WVA path publishes a desired-replica metric for an HPA or KEDA. The paths differ in the use cases they target, the metrics that drive them, and the operational complexity they require.
 
 ## Prerequisites
 
@@ -54,6 +50,10 @@ before users experience sustained queueing and to remove capacity when demand
 falls. This path requires KEDA and Prometheus; it does not require Prometheus
 Adapter.
 
+- KEDA + EPP Pool-Level Saturation Metrics
+
+  The [KEDA + EPP Pool-Level Saturation Metrics](./README.epp-keda-saturation.md) path has KEDA query Prometheus directly for InferencePool-scoped saturation and running-request metrics, then scale the model server Deployment. KEDA consumes two EPP metrics — pool saturation level (0.0–1.0+, normalized measure of how loaded the pool is) and active in-flight request count — and drives scaling decisions. Well-suited for simple homogeneous deployments where each model scales independently and you want minimal operational overhead.
+
 ### HPA + WVA Metrics
 
 The [Workload Variant Autoscaler (WVA)](./README.wva.md) path integrates the Kubernetes Horizontal Pod Autoscaler (HPA) with the aggregated signal emitted by WVA: `wva_desired_replicas`.
@@ -62,13 +62,13 @@ WVA is designed for operators running multiple variants of the same model across
 
 ## Choosing a Scaling Signal
 
-| | [KEDA + EPP Metrics](./README.hpa-epp.md) | [HPA + WVA Metrics](./README.wva.md) |
-|---|---|---|
-| **Best for** | Deployments on homogeneous hardware where each target model-server pool can be isolated by metrics and scaled independently | Multi-variant deployments where cost-aware capacity allocation across heterogeneous shared hardware is required |
-| **Scaling signal** | EPP metrics such as queue depth and running request count | KV cache utilization, queue depth, performance budgets |
-| **Cost optimization** | None — scales based on load signals only | Optimizes across variants by preferring lower-cost hardware |
-| **Additional components** | Requires KEDA and Prometheus| Requires the WVA controller |
-| **Scale to zero** | Supported | Supported |
+| | [KEDA + EPP Metrics](./README.hpa-epp.md) | [KEDA + EPP Pool-Level Saturation](./README.epp-keda-saturation.md) | [HPA + WVA Metrics](./README.wva.md) |
+|---|---|---|---|
+| **Best for** | Homogeneous single-model deployments; KEDA with external metrics via Prometheus Adapter | Homogeneous single-model deployments; controller-free, minimal overhead | Multi-variant deployments with cost-aware placement across heterogeneous hardware |
+| **Scaling signal** | EPP metrics such as queue depth and running request count | Pool saturation level (0.0–1.0+) and running request count | KV cache utilization, queue depth, performance budgets |
+| **Cost optimization** | None — scales based on load signals only | None — scales based on load signals only | Optimizes across variants by preferring lower-cost hardware |
+| **Additional components** | KEDA and Prometheus Adapter | KEDA and Prometheus only | KEDA and WVA controller |
+| **Scale to zero** | Supported | Supported | Supported |
 
 ## Features
 
