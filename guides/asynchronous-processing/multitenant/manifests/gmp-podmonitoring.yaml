@@ -1,0 +1,21 @@
+# Google Managed Prometheus (GMP) managed-collection scrape config for the
+# async-processor. Ingests its Prometheus metrics (llm_d_async_async_*) into
+# Cloud Monitoring as prometheus.googleapis.com/llm_d_async_async_*/{counter,gauge},
+# so the GCP (Cloud Monitoring) dashboard can chart them per team via PromQL.
+#
+# This replaces the chart's prometheus-operator PodMonitor (which GMP does not
+# read). Apply into the demo namespace.
+apiVersion: monitoring.googleapis.com/v1
+kind: PodMonitoring
+metadata:
+  name: async-processor
+  labels:
+    app.kubernetes.io/name: async-processor
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: async-processor
+  endpoints:
+    - port: metrics
+      path: /metrics
+      interval: 15s

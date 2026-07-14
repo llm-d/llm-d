@@ -1,0 +1,142 @@
+# Values for the multi-tenant Pub/Sub demo — team × tier × MODEL (Scenarios A + B).
+#
+# Replace: PROJECT_ID, NAMESPACE, IGW_HOST (one gateway routing by payload.model to
+# two InferencePools), MODEL_A / MODEL_B, POOL_A / POOL_B (used by the saturation
+# overlay). 6 topics = 3 teams × 2 models; the publisher sends model-a traffic to
+# the *-a subscriptions (payload.model = MODEL_A) and model-b to *-b.
+#
+#   - MODEL -> its own worker pool (model-a / model-b): independent concurrency and
+#     (saturation overlay) saturation back-off.
+#   - TEAM  -> per-(team, model) reserved quota (redis-quota, classifying; per-model
+#     prefix quota:a: / quota:b:): within quota -> reserved, over -> overflow.
+#   - TIER  -> per-topic `tier` label; the tier-priority merge policy orders each
+#     pool's reserved/overflow × tier lanes and stamps x-gateway-priority.
+#
+# Pub/Sub publishes all results to the single resultTopicId (unlike Redis, which
+# uses per-model result lists).
+ap:
+
+  messageQueueImpl: "gcp-pubsub-gated"
+  igwBaseURL: "http://IGW_HOST:80"
+
+  requestMergePolicyConfig:
+    type: "tier-priority"
+    parameters:
+      priority_header: "x-gateway-priority"
+
+  gcpPubSub:
+    enabled: true
+    projectId: "PROJECT_ID"
+    resultTopicId: "projects/PROJECT_ID/topics/results"
+    topicsConfig:
+      # ---------- MODEL A (pool model-a, payload.model = MODEL_A) ----------
+      - subscriber_id: "projects/PROJECT_ID/subscriptions/team-premium-a-requests-sub"
+        worker_pool_id: "model-a"
+        inference_objective: "latency"
+        request_path_url: "/v1/completions"
+        igw_base_url: "http://IGW_HOST:80"
+        labels: { tier: "interactive" }
+        gate_type: "redis-quota"
+        gate_params:
+          address: "redis.NAMESPACE.svc.cluster.local:6379"
+          attribute: "team"
+          mode: "concurrency"
+          gating_mode: "classifying"
+          limit: "2"
+          prefix: "quota:a:"
+      - subscriber_id: "projects/PROJECT_ID/subscriptions/team-standard-a-requests-sub"
+        worker_pool_id: "model-a"
+        request_path_url: "/v1/completions"
+        igw_base_url: "http://IGW_HOST:80"
+        labels: { tier: "async" }
+        gate_type: "redis-quota"
+        gate_params:
+          address: "redis.NAMESPACE.svc.cluster.local:6379"
+          attribute: "team"
+          mode: "concurrency"
+          gating_mode: "classifying"
+          limit: "2"
+          prefix: "quota:a:"
+      - subscriber_id: "projects/PROJECT_ID/subscriptions/team-batch-a-requests-sub"
+        worker_pool_id: "model-a"
+        inference_objective: "throughput"
+        request_path_url: "/v1/completions"
+        igw_base_url: "http://IGW_HOST:80"
+        labels: { tier: "batch" }
+        gate_type: "redis-quota"
+        gate_params:
+          address: "redis.NAMESPACE.svc.cluster.local:6379"
+          attribute: "team"
+          mode: "concurrency"
+          gating_mode: "classifying"
+          limit: "1"
+          prefix: "quota:a:"
+
+      # ---------- MODEL B (pool model-b, payload.model = MODEL_B) ----------
+      - subscriber_id: "projects/PROJECT_ID/subscriptions/team-premium-b-requests-sub"
+        worker_pool_id: "model-b"
+        inference_objective: "latency"
+        request_path_url: "/v1/completions"
+        igw_base_url: "http://IGW_HOST:80"
+        labels: { tier: "interactive" }
+        gate_type: "redis-quota"
+        gate_params:
+          address: "redis.NAMESPACE.svc.cluster.local:6379"
+          attribute: "team"
+          mode: "concurrency"
+          gating_mode: "classifying"
+          limit: "2"
+          prefix: "quota:b:"
+      - subscriber_id: "projects/PROJECT_ID/subscriptions/team-standard-b-requests-sub"
+        worker_pool_id: "model-b"
+        request_path_url: "/v1/completions"
+        igw_base_url: "http://IGW_HOST:80"
+        labels: { tier: "async" }
+        gate_type: "redis-quota"
+        gate_params:
+          address: "redis.NAMESPACE.svc.cluster.local:6379"
+          attribute: "team"
+          mode: "concurrency"
+          gating_mode: "classifying"
+          limit: "2"
+          prefix: "quota:b:"
+      - subscriber_id: "projects/PROJECT_ID/subscriptions/team-batch-b-requests-sub"
+        worker_pool_id: "model-b"
+        inference_objective: "throughput"
+        request_path_url: "/v1/completions"
+        igw_base_url: "http://IGW_HOST:80"
+        labels: { tier: "batch" }
+        gate_type: "redis-quota"
+        gate_params:
+          address: "redis.NAMESPACE.svc.cluster.local:6379"
+          attribute: "team"
+          mode: "concurrency"
+          gating_mode: "classifying"
+          limit: "1"
+          prefix: "quota:b:"
+
+  workerPools:
+    - id: "model-a"
+      workers: 8
+    - id: "model-b"
+      workers: 8
+
+  resources:
+    requests:
+      cpu: "500m"
+      memory: "512Mi"
+    limits:
+      cpu: "1"
+      memory: "1Gi"
+
+  metrics:
+    enabled: true
+  podMonitor:
+    enabled: false
+  modelServerMonitor:
+    enabled: false
+  prometheusRule:
+    enabled: false
+  grafana:
+    dashboards:
+      enabled: false

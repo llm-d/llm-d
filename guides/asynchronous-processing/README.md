@@ -17,6 +17,12 @@ Async Processor integrates with llm-d to:
 1. **[GCP Pub/Sub](./gcp-pubsub/README.md)**: Cloud-native, scalable messaging service.
 2. **[Redis Sorted Set](./redis/README.md)**: High-performance, persisted, and prioritized queue implementation.
 
+### Advanced Scenarios
+
+- **[Multi-tenant quota, priority & saturation](./multitenant/README.md)**: a **team × tier × model**
+  scenario — per-team reserved/overflow quota (classifying `redis-quota`), tier-priority dispatch, and
+  per-model saturation back-off across two `InferencePool`s. Runs on either queue backend.
+
 ## Prerequisites
 
 Before installing Async Processor, ensure you have:
