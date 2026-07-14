@@ -202,7 +202,7 @@ spec:
               - name: KV_OFFLOAD_CPU_BYTES
                 value: "107374182400"
               - name: ENABLE_DSPARK
-                value: "1"
+                value: "0"
               - name: DSPARK_MODEL
                 value: "RedHatAI/GLM-5.2-speculator.dspark"
               - name: DSPARK_NUM_TOKENS
