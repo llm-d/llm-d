@@ -188,6 +188,14 @@ Remove the model server. Deleting the DisaggregatedSet cascades to all child Lea
 kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/gpu/vllm-ds
 ```
 
+## Known Issues
+
+Testing this guide surfaced the following upstream issues in the DisaggregatedSet controller (being filed against [kubernetes-sigs/lws](https://github.com/kubernetes-sigs/lws)). None affect the deploy, slice scaling, or serving paths above.
+
+1. **Rolling update can drain the old revision immediately when replicas change with the template.** If a single apply changes a role's pod template *and* its `replicas`, the planner can scale the old revision to zero before any new pod is ready, causing an outage. Until fixed, change the template and replica counts in **separate applies**.
+2. **Rolling updates can stall on fully allocated clusters.** With `maxSurge: 0`, the controller creates new pods before draining their old counterparts, then waits for them to become ready. On a cluster with no spare accelerators the new pods stay Pending and the rollout never progresses. Until fixed, ensure at least one decode's worth of free accelerators before a template change (for example by scaling `slices` down by one first), or unstick a stalled rollout by scaling the old revision's LeaderWorkerSet down manually.
+3. **`status.roleStatuses` is not yet populated.** The API defines it, but the controller does not write status today. Use the label-based LeaderWorkerSet queries shown in this guide instead.
+
 ## Further Reading
 
 * [DisaggregatedSet concepts](https://lws.sigs.k8s.io/docs/concepts/disaggregatedset/) and [API reference](https://lws.sigs.k8s.io/docs/reference/disaggregatedset.v1/)
