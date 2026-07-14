@@ -1,0 +1,57 @@
+## agentic-serving — PROGRAM-AWARE FAIRNESS (GPU, single-instance / non-disaggregated) router overrides.
+## Layer on top of: recipes/router/base.values.yaml
+##
+## A separate router config (kept out of the base configs so default deployments are unchanged) for
+## the multi-session agentic workload on a single-instance model server. Adds the `agent-identity`
+## plugin — which derives a per-session FairnessID from the client session header
+## (x-claude-code-session-id / Claude Code, x-session-affinity / opencode, session-id / Codex) — and
+## enables `program-aware-fairness` (LAS: Least-Attained-Service) flow control, so each agent session
+## gets its own queue and bursty sessions cannot starve concurrent ones.
+##
+## Fairness arm of an A/B against agentic-serving-baseline.values.yaml (identical scorers, fairness
+## off) on nvidia/NVIDIA-Nemotron-3-Super-120B-A12B-FP8 (single instance, TP=4) with the
+## Exgentic/agent-llm-traces replay (benchmark-templates/otel-trace-replay.yaml).
+## See nemotron-3-super-120b-program-aware.md for deployment and results.
+
+router:
+  extraServicePorts:
+    - name: http
+      port: 80
+      protocol: TCP
+      targetPort: 8081
+
+  epp:
+    pluginsConfigFile: "agentic-serving-program-aware-plugins.yaml"
+    pluginsCustomConfig:
+      agentic-serving-program-aware-plugins.yaml: |
+        apiVersion: llm-d.ai/v1alpha1
+        kind: EndpointPickerConfig
+        plugins:
+        - type: agent-identity
+        - type: queue-scorer
+        - type: kv-cache-utilization-scorer
+        - type: prefix-cache-scorer
+        - type: concurrency-detector
+          parameters:
+            maxConcurrency: 133
+        - type: program-aware-fairness
+        featureGates:
+        - flowControl
+        flowControl:
+          saturationDetector:
+            pluginRef: concurrency-detector
+          defaultPriorityBand:
+            fairnessPolicyRef: program-aware-fairness
+        schedulingProfiles:
+        - name: default
+          plugins:
+          - pluginRef: queue-scorer
+            weight: 2
+          - pluginRef: kv-cache-utilization-scorer
+            weight: 2
+          - pluginRef: prefix-cache-scorer
+            weight: 3
+
+  modelServers:
+    matchLabels:
+      llm-d.ai/guide: "agentic-serving-gpu"

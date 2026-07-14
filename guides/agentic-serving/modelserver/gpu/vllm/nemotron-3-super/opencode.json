@@ -1,0 +1,19 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "provider": {
+    "llm-d": {
+      "npm": "@ai-sdk/openai-compatible",
+      "name": "llm-d",
+      "options": {
+        "baseURL": "http://localhost:8000/v1",
+        "apiKey": ""
+      },
+      "models": {
+        "nvidia/NVIDIA-Nemotron-3-Super-120B-A12B-FP8": {
+          "name": "nvidia/NVIDIA-Nemotron-3-Super-120B-A12B-FP8"
+        }
+      }
+    }
+  },
+  "model": "nvidia/NVIDIA-Nemotron-3-Super-120B-A12B-FP8"
+}

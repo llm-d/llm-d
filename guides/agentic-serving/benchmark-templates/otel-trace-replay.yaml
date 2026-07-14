@@ -1,42 +1,84 @@
+# ---------------------------------------------------------------------------
+# Concurrency SWEEP variant of otel-trace-replay.yaml.
+#
+# Render with `envsubst < otel-trace-replay.yaml > config.yaml` AFTER exporting
+# the variables below. Any unset variable renders as an empty string, producing
+# invalid or semantically wrong YAML — so set all of them first.
+#
+# Runs multiple concurrency points as sequential STAGES in a single job. The
+# trace_session_replay load generator keeps a session cursor that advances per
+# stage, so each stage consumes a distinct, successive slice of the corpus —
+# and, because base_seed is fixed, the SAME config run for Fairness vs
+# No-Fairness sees the identical session slice at each concurrency point (clean
+# per-point A/B). `report.request_lifecycle.per_stage: true` emits metrics per
+# point, so one job yields a full "metric vs concurrency" curve per arm.
+#
+# Two speed levers keep each point to minutes instead of hours:
+#   1. num_sessions per stage is small (25..200, not the full corpus).
+#   2. `filter` drops the pathological long-tail sessions (huge output / very
+#      long event chains) that otherwise hit request_timeout and dominate
+#      wall-clock. This measures the TYPICAL agentic session across load; keep a
+#      separate full otel-trace-replay.yaml run for the worst-case headline.
+#
+# Environment variables (set by earlier guide steps):
+#   GUIDE_NAME   stack name; forms the EPP service host (${GUIDE_NAME}-epp)
+#   NAMESPACE    namespace where the stack is deployed
+# ---------------------------------------------------------------------------
 api:
   type: chat
   streaming: true
-  session_id_header_key: "x-claude-code-session-id"
+  session_id_header_key: "x-claude-code-session-id"  # header the EPP reads to route a session to a consistent replica
 
 data:
   type: otel_trace_replay
   otel_trace_replay:
-    hf_dataset_path: "Exgentic/agent-llm-traces"
-    use_static_model: true
-    static_model_name: "Qwen/Qwen3.6-35B-A3B"
-    default_max_tokens: 200
-    include_errors: false
-    skip_invalid_files: true
+    hf_dataset_path: "Exgentic/agent-llm-traces"                     # HuggingFace dataset of recorded agentic traces
+    use_static_model: true                                          # ignore each trace's recorded model, use static_model_name below
+    static_model_name: "nvidia/NVIDIA-Nemotron-3-Super-120B-A12B-FP8"  # model to replay against. Must match stack deployed.
+    default_max_tokens: 25000        # cap when a trace event has no recorded max_tokens
+    include_errors: false            # skip trace events that recorded an error
+    skip_invalid_files: true         # tolerate unparseable trace files instead of aborting
+    bad_tool_call_handling: use_recorded  # on malformed tool calls, replay the recorded call as-is
 
 load:
   type: trace_session_replay
-  base_seed: 42
-  num_workers: 8
-  request_timeout: 900
-  stages:
-    - concurrent_sessions: 600
-      num_sessions: 1000
+  base_seed: 42            # fixed RNG seed so every arm sees the identical session slice per point (per-point A/B)
+  num_workers: 8           # parallel replay workers
+  request_timeout: 1800    # per-request timeout (seconds)
+  worker_max_concurrency: 12000  # ceiling on in-flight requests per worker
+  stages:                  # one sequential concurrency point per entry; the session cursor advances across stages
+    - concurrent_sessions: 25
+      num_sessions: 25
+      session_rate: 2.5
+    - concurrent_sessions: 50
+      num_sessions: 50
+      session_rate: 5
+    - concurrent_sessions: 100
+      num_sessions: 100
       session_rate: 10
-  worker_max_concurrency: 12000
+    - concurrent_sessions: 150
+      num_sessions: 150
+      session_rate: 10
+    - concurrent_sessions: 200
+      num_sessions: 200
+      session_rate: 10
+    - concurrent_sessions: 200
+      num_sessions: 200
+      session_rate: 10
 
 server:
   type: vllm
-  model_name: Qwen/Qwen3.6-35B-A3B
-  base_url: http://${GUIDE_NAME}-epp.${NAMESPACE}.svc.cluster.local
+  model_name: nvidia/NVIDIA-Nemotron-3-Super-120B-A12B-FP8       # Exact HuggingFace model name. Must match stack deployed.
+  base_url: http://${GUIDE_NAME}-epp.${NAMESPACE}.svc.cluster.local  # EPP service URL for the deployed stack
 
 storage:
   local_storage:
-    path: "/data/reports"
+    path: "/data/reports"   # where benchmark results are written inside the harness pod
 
 report:
   request_lifecycle:
-    summary: true
-    per_stage: false
-    per_request: false
+    summary: true            # aggregate metrics across the whole run
+    per_stage: true          # per-concurrency-point metrics = the sweep curve
+    per_request: false       # omit per-request rows (keeps report small)
   session_lifecycle:
-    per_session: true
+    per_session: true        # per-session metrics (session-level TTFT, turns, etc.)

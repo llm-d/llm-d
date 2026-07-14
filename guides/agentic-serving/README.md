@@ -24,7 +24,7 @@ specific pressure of the agentic workload:
 | **[Tiered KV offloading](../tiered-prefix-cache/README.md)** | Offload KV cache beyond accelerator memory across tiers, so idle sessions restore on resume instead of recomputing prefill. |
 | **[Precise prefix-cache routing](../precise-prefix-cache-routing/README.md)** — advanced | An exact, global view of cache state, enabling session-centric orchestration and non-naive (beyond-LRU) KV-cache offloading & retention. |
 | **[P/D disaggregation](../pd-disaggregation/README.md)** — large models / interactivity | Separate prefill and decode pools so heavy prefill never stalls token generation, stabilizing ITL. |
-| **[Program-aware fairness](https://github.com/llm-d/llm-d-router/tree/main/pkg/epp/framework/plugins/flowcontrol/fairness/program-aware)** — multi-session contention | Identify each agent session and enforce per-session LAS (Least Attained Service) queuing so that bursty sessions cannot starve concurrent ones, even under uneven arrival rates. |
+| **[Program-aware scheduling](nemotron-3-super-120b-program-aware.md)** — multi-session contention | Identify each agent session and schedule with awareness of per-session state and service history, so bursty sessions cannot starve concurrent ones under uneven arrival rates. The guide's deployment uses per-session LAS (Least-Attained-Service) fairness as one such technique. |
 
 The [Agentic Inference SIG northstar](https://docs.google.com/document/d/1DCUVHp9Z8CZUnKiP04nnD_31M3gRishW-cWZ657Cn5U)
 sets the broader direction: **session-graph orchestration**, **program-aware scheduling**,
@@ -45,6 +45,7 @@ your hardware:
 
 - [NVIDIA-Nemotron-3-Ultra-550B on H200](nemotron-3-ultra-550b-h200.md) — P/D-disaggregated serving on 8× H200, with CPU KV-offloading and ready-to-use coding-agent client configs.
 - [Qwen3-Coder-480B on TPU v7](qwen3-coder-480b-tpu.md) — routing + CPU KV-offloading on 8× TPU v7x (2x2x1).
+- [NVIDIA-Nemotron-3-Super-120B on H100](nemotron-3-super-120b-program-aware.md) — **program-aware, per-session fairness** on a single instance (4 x H100s, TP=4): identifies each agent session and schedules on per-session service history (LAS).
 
 ## Benchmarking
 
