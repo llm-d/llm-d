@@ -54,13 +54,20 @@ kubectl create secret generic prometheus-auth \
 
 ### 2. Apply KEDA ScaledObject and TriggerAuthentication
 
+For **Kubernetes (generic)**:
 ```bash
 kubectl apply -k ${REPO_ROOT}/guides/workload-autoscaling/optimized-baseline-autoscaling/keda-epp-saturation -n ${NAMESPACE}
 ```
 
-Before applying, edit the manifests to match your deployment:
+For **OpenShift**:
+```bash
+kubectl apply -k ${REPO_ROOT}/guides/workload-autoscaling/optimized-baseline-autoscaling/keda-epp-saturation/overlays/ocp -n ${NAMESPACE}
+```
+
+Before applying, edit the base manifests to match your deployment:
 - `scaledobject.yaml`: Update `inference_pool` label in the PromQL queries, `minReplicaCount`, `maxReplicaCount`, and thresholds for each trigger.
-- `triggerauthentication.yaml`: Verify `serverAddress` points to your Prometheus instance.
+- If using the base k8s config, also update `<prometheus-url>` in `serverAddress` to point to your Prometheus instance.
+- `triggerauthentication.yaml`: Verify the bearer token Secret contains valid credentials for Prometheus access.
 
 ## Verify
 
