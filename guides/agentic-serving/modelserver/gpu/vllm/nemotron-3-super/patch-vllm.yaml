@@ -6,14 +6,6 @@ spec:
   replicas: 1
   template:
     spec:
-      affinity:
-        nodeAffinity:
-          requiredDuringSchedulingIgnoredDuringExecution:
-            nodeSelectorTerms:
-              - matchExpressions:
-                  - key: kubernetes.io/hostname
-                    operator: NotIn
-                    values: ["pokprod-b93r39s2"]
       containers:
         - name: modelserver
           command: ["vllm", "serve"]
