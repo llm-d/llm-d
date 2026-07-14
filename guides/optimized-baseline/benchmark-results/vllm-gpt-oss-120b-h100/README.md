@@ -23,9 +23,11 @@ Summary across the full ladder (rates 3 → 60), 0 failed requests on either arm
 | Metric            | k8s service (RR) | llm-d Optimized | Δ% vs k8s |
 | :---------------- | :--------------- | :-------------- | :-------- |
 | Output tokens/sec | 7,018            | 7,594           | +8.2%     |
+| Requests/sec      | 13.64            | 13.49           | −1.1%     |
 | TTFT mean (s)     | 3.368            | 1.166           | −65.4%    |
 | TTFT p90 (s)      | 10.110           | 2.508           | −75.2%    |
 | ITL mean (ms)     | 20.94            | 16.82           | −19.7%    |
+| Failed requests   | 0                | 0               | —         |
 
 The routing win is clearest in the tail: a stock Service degrades badly once the fleet saturates (TTFT p90 climbs past 8&nbsp;s from rate 40 on, reaching 15&nbsp;s at rate 60), while prefix-cache-affinity routing holds first-token latency an order of magnitude lower through the same range.
 
