@@ -209,9 +209,19 @@ spec:
 
                 START_RANK=$(( ${LWS_WORKER_INDEX:-0} * DP_SIZE_LOCAL ))
 
-                KV_OFFLOAD_ARGS=""
+                KV_TRANSFER_CONFIG='{"kv_connector":"NixlConnector",
+                                      "kv_role":"kv_both",
+                                      "kv_load_failure_policy":"fail"}'
                 if [ "${ENABLE_KV_OFFLOADING:-0}" = "1" ]; then
-                  KV_OFFLOAD_ARGS="--cpu-offload-gb ${KV_OFFLOAD_CPU_GB:-4} --kv-offloading-size ${KV_OFFLOAD_SIZE:-4GiB}"
+                  KV_TRANSFER_CONFIG='{"kv_connector":"MultiConnector",
+                                        "kv_role":"kv_both",
+                                        "kv_load_failure_policy":"fail",
+                                        "kv_connector_extra_config":{
+                                          "connectors":[
+                                            {"kv_connector":"NixlConnector","kv_role":"kv_both"},
+                                            {"kv_connector":"OffloadingConnector","kv_role":"kv_both",
+                                             "kv_connector_extra_config":{"cpu_bytes_to_use":'"${KV_OFFLOAD_CPU_BYTES:-21474836480}"'}}
+                                          ]}}'
                 fi
 
                 exec vllm serve $SPEC_ARGS $KV_CACHE_DTYPE_ARGS \
@@ -230,12 +240,10 @@ spec:
                   --data-parallel-address ${LWS_LEADER_ADDRESS} \
                   --data-parallel-rpc-port 5555 \
                   --data-parallel-start-rank $START_RANK \
-                  --kv_transfer_config '{"kv_connector":"NixlConnector",
-                                          "kv_role":"kv_both",
-                                          "kv_load_failure_policy":"fail"}' \
+                  --kv_transfer_config "$KV_TRANSFER_CONFIG" \
                   --moe-backend deep_gemm \
                   --all2all-backend deepep_high_throughput \
-                  $MAX_BATCHED_ARGS $KV_OFFLOAD_ARGS
+                  $MAX_BATCHED_ARGS
             env:
               - name: HF_TOKEN
                 valueFrom:
@@ -246,6 +254,8 @@ spec:
                 value: /mnt/hf-cache
               - name: ENABLE_KV_OFFLOADING
                 value: "0"
+              - name: KV_OFFLOAD_CPU_BYTES
+                value: "21474836480"
               - name: ENABLE_DSPARK
                 value: "0"
               - name: DSPARK_MODEL
