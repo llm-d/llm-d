@@ -6,6 +6,8 @@ on:
     paths:
       - .github/workflows/ci-kustomize-dry-run.yaml
       - .github/scripts/**
+      - scripts/render.sh
+      - guides/env.sh
       - guides/recipes/**
       - guides/optimized-baseline/**
       - guides/pd-disaggregation/**
@@ -36,6 +38,8 @@ jobs:
             optimized-baseline:
               - .github/workflows/ci-kustomize-dry-run.yaml
               - .github/scripts/install-gke-crds.sh
+              - scripts/render.sh
+              - guides/env.sh
               - guides/recipes/gateway/install-gateway-crds.sh
               - guides/recipes/observability/install-prometheus-grafana.sh
               - guides/recipes/modelserver/**
@@ -44,24 +48,24 @@ jobs:
             pd-disaggregation:
               - .github/workflows/ci-kustomize-dry-run.yaml
               - helpers/client-setup/install-deps.sh
+              - scripts/render.sh
+              - guides/env.sh
               - guides/recipes/gateway/install-gateway-crds.sh
               - guides/recipes/observability/install-prometheus-grafana.sh
               - guides/pd-disaggregation/**
             precise-prefix-cache-routing:
               - .github/workflows/ci-kustomize-dry-run.yaml
               - helpers/client-setup/install-deps.sh
+              - scripts/render.sh
+              - guides/env.sh
               - guides/recipes/gateway/install-gateway-crds.sh
               - guides/recipes/observability/install-prometheus-grafana.sh
               - guides/precise-prefix-cache-routing/**
-            simulated-accelerators:
-              - .github/workflows/ci-kustomize-dry-run.yaml
-              - helpers/client-setup/install-deps.sh
-              - guides/recipes/gateway/install-gateway-crds.sh
-              - guides/recipes/observability/install-prometheus-grafana.sh
-              - guides/simulated-accelerators/**
             workload-autoscaling:
               - .github/workflows/ci-kustomize-dry-run.yaml
               - .github/scripts/install-gke-crds.sh
+              - scripts/render.sh
+              - guides/env.sh
               - guides/recipes/gateway/install-gateway-crds.sh
               - guides/recipes/observability/install-prometheus-grafana.sh
               - guides/workload-autoscaling/**
@@ -100,29 +104,25 @@ jobs:
 
       - name: Dry-run router charts
         run: |
-          CHART_VERSION=v0
           failed=0
-          for chart in llm-d-router-standalone llm-d-router-gateway; do
+          for chart in standalone gateway; do
             echo ""
             echo "========================================"
-            echo "optimized-baseline: router (${chart})"
+            echo "optimized-baseline: router (llm-d-router-${chart})"
             echo "========================================"
-            echo "--- helm template ---"
-            if ! helm template optimized-baseline-router \
-              "oci://ghcr.io/llm-d/charts/${chart}" \
-              -f guides/recipes/router/base.values.yaml \
-              -f guides/recipes/router/features/monitoring.values.yaml \
-              -f guides/optimized-baseline/router/optimized-baseline.values.yaml \
-              --version "${CHART_VERSION}" > /tmp/rendered.yaml; then
-              echo "FAIL: helm template failed for ${chart}"
+            echo "--- helm template (scripts/render.sh) ---"
+            if ! scripts/render.sh router optimized-baseline \
+              --chart "${chart}" --monitoring \
+              --release optimized-baseline-router > /tmp/rendered.yaml; then
+              echo "FAIL: helm template failed for llm-d-router-${chart}"
               failed=1
               continue
             fi
             echo "--- kubectl apply --dry-run=server ---"
             if kubectl apply --dry-run=server -f /tmp/rendered.yaml; then
-              echo "PASS: optimized-baseline / router (${chart})"
+              echo "PASS: optimized-baseline / router (llm-d-router-${chart})"
             else
-              echo "FAIL: optimized-baseline / router (${chart})"
+              echo "FAIL: optimized-baseline / router (llm-d-router-${chart})"
               failed=1
             fi
           done
@@ -143,8 +143,8 @@ jobs:
             echo "========================================"
             echo "optimized-baseline: ${name}"
             echo "========================================"
-            echo "--- kustomize build ---"
-            if ! kustomize build "${kust_dir}" > /tmp/rendered.yaml; then
+            echo "--- kustomize build (scripts/render.sh) ---"
+            if ! scripts/render.sh overlay "${kust_dir}" > /tmp/rendered.yaml; then
               echo "FAIL: kustomize build failed for ${name}"
               failed=1
               continue
@@ -201,29 +201,25 @@ jobs:
 
       - name: Dry-run router charts
         run: |
-          CHART_VERSION=v0
           failed=0
-          for chart in llm-d-router-standalone llm-d-router-gateway; do
+          for chart in standalone gateway; do
             echo ""
             echo "========================================"
-            echo "pd-disaggregation: router (${chart})"
+            echo "pd-disaggregation: router (llm-d-router-${chart})"
             echo "========================================"
-            echo "--- helm template ---"
-            if ! helm template pd-disaggregation-router \
-              "oci://ghcr.io/llm-d/charts/${chart}" \
-              -f guides/recipes/router/base.values.yaml \
-              -f guides/recipes/router/features/monitoring.values.yaml \
-              -f guides/pd-disaggregation/router/pd-disaggregation.values.yaml \
-              --version "${CHART_VERSION}" > /tmp/rendered.yaml; then
-              echo "FAIL: helm template failed for ${chart}"
+            echo "--- helm template (scripts/render.sh) ---"
+            if ! scripts/render.sh router pd-disaggregation \
+              --chart "${chart}" --monitoring \
+              --release pd-disaggregation-router > /tmp/rendered.yaml; then
+              echo "FAIL: helm template failed for llm-d-router-${chart}"
               failed=1
               continue
             fi
             echo "--- kubectl apply --dry-run=server ---"
             if kubectl apply --dry-run=server -f /tmp/rendered.yaml; then
-              echo "PASS: pd-disaggregation / router (${chart})"
+              echo "PASS: pd-disaggregation / router (llm-d-router-${chart})"
             else
-              echo "FAIL: pd-disaggregation / router (${chart})"
+              echo "FAIL: pd-disaggregation / router (llm-d-router-${chart})"
               failed=1
             fi
           done
@@ -246,8 +242,8 @@ jobs:
             echo "========================================"
             echo "pd-disaggregation: ${name}"
             echo "========================================"
-            echo "--- kustomize build ---"
-            if ! kustomize build "${kust_dir}" > /tmp/rendered.yaml; then
+            echo "--- kustomize build (scripts/render.sh) ---"
+            if ! scripts/render.sh overlay "${kust_dir}" > /tmp/rendered.yaml; then
               echo "FAIL: kustomize build failed for ${name}"
               failed=1
               continue
@@ -293,17 +289,13 @@ jobs:
         # Tokenization runs as a standalone render Service (../render/), not a
         # chart-injected sidecar (the chart's tokenizer sidecar is off by default).
         run: |
-          CHART_VERSION=v0
           echo ""
           echo "========================================"
           echo "precise-prefix-cache-routing: router (EPP, render via Service)"
           echo "========================================"
-          echo "--- helm template ---"
-          if ! helm template precise-prefix-cache-routing \
-            "oci://ghcr.io/llm-d/charts/llm-d-router-standalone" \
-            -f guides/recipes/router/base.values.yaml \
-            -f guides/precise-prefix-cache-routing/router/precise-prefix-cache-routing.values.yaml \
-            --version "${CHART_VERSION}" > /tmp/rendered.yaml; then
+          echo "--- helm template (scripts/render.sh) ---"
+          if ! scripts/render.sh router precise-prefix-cache-routing \
+            --chart standalone > /tmp/rendered.yaml; then
             echo "FAIL: helm template failed"
             exit 1
           fi
@@ -322,8 +314,8 @@ jobs:
           echo "========================================"
           echo "precise-prefix-cache-routing: render (vllm-render Service)"
           echo "========================================"
-          echo "--- kustomize build ---"
-          if ! kustomize build guides/precise-prefix-cache-routing/render > /tmp/rendered.yaml; then
+          echo "--- kustomize build (scripts/render.sh) ---"
+          if ! scripts/render.sh overlay guides/precise-prefix-cache-routing/render > /tmp/rendered.yaml; then
             echo "FAIL: kustomize build failed for render"
             exit 1
           fi
@@ -350,8 +342,8 @@ jobs:
             echo "========================================"
             echo "precise-prefix-cache-routing: ${name}"
             echo "========================================"
-            echo "--- kustomize build ---"
-            if ! kustomize build "${kust_dir}" > /tmp/rendered.yaml; then
+            echo "--- kustomize build (scripts/render.sh) ---"
+            if ! scripts/render.sh overlay "${kust_dir}" > /tmp/rendered.yaml; then
               echo "FAIL: kustomize build failed for ${name}"
               failed=1
               continue
@@ -408,8 +400,8 @@ jobs:
             echo "========================================"
             echo "workload-autoscaling: ${name}"
             echo "========================================"
-            echo "--- kustomize build ---"
-            if ! kustomize build "${kust_dir}" > /tmp/rendered.yaml; then
+            echo "--- kustomize build (scripts/render.sh) ---"
+            if ! scripts/render.sh overlay "${kust_dir}" > /tmp/rendered.yaml; then
               echo "FAIL: kustomize build failed for ${name}"
               failed=1
               continue

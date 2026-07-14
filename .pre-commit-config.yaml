@@ -23,7 +23,7 @@ repos:
         language: system
         entry: shellcheck
         args: [-x, --severity=warning]
-        files: ^docker/scripts/.*\.sh$
+        files: ^(docker/scripts/.*\.sh|scripts/render\.sh)$
         types: [shell]
 
       - id: lint-envvars
