@@ -24,7 +24,6 @@ specific pressure of the agentic workload:
 | **[Tiered KV offloading](../tiered-prefix-cache/README.md)** | Offload KV cache beyond accelerator memory across tiers, so idle sessions restore on resume instead of recomputing prefill. |
 | **[Precise prefix-cache routing](../precise-prefix-cache-routing/README.md)** — advanced | An exact, global view of cache state, enabling session-centric orchestration and non-naive (beyond-LRU) KV-cache offloading & retention. |
 | **[P/D disaggregation](../pd-disaggregation/README.md)** — large models / interactivity | Separate prefill and decode pools so heavy prefill never stalls token generation, stabilizing ITL. |
-| **[Program-aware scheduling](nemotron-3-super-120b-program-aware.md)** — multi-session contention | Identify each agent session and schedule with awareness of per-session state and service history, so bursty sessions cannot starve concurrent ones under uneven arrival rates. The guide's deployment uses per-session LAS (Least-Attained-Service) fairness as one such technique. |
 
 The [Agentic Inference SIG northstar](https://docs.google.com/document/d/1DCUVHp9Z8CZUnKiP04nnD_31M3gRishW-cWZ657Cn5U)
 sets the broader direction: **session-graph orchestration**, **program-aware scheduling**,
