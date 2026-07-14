@@ -223,8 +223,7 @@ spec:
                   MAX_SEQS=$(( MAX_TOKENS / 4 ))
                   MAX_BATCHED_TOKENS=$(( MAX_SEQS * (DSPARK_NUM_TOKENS + 1) ))
                   SPEC_ARGS="--speculative-config {\"model\":\"${DSPARK_MODEL}\",\"num_speculative_tokens\":${DSPARK_NUM_TOKENS},\"method\":\"dspark\"}"
-                  KV_CACHE_DTYPE_ARGS=""
-                
+                  KV_CACHE_DTYPE_ARGS="" 
                 fi
 
                 # DeepEP low-latency requires: qp_depth >= (max_dispatch_tokens + 1) * 2
