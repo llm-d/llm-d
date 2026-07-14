@@ -72,17 +72,19 @@ spec:
             args:
               - |-
                 find /dev/shm -type f -delete
-                
-                python3 -c "
-                p='/usr/local/lib/python3.12/dist-packages/vllm/v1/worker/gpu/attn_utils.py'
-                s=open(p).read()
-                old='            .view(kv_cache_shape)\n        )\n    elif kv_cache_spec.page_size_padded'
-                new='            .view(permuted_kv_cache_shape)\n        )\n    elif kv_cache_spec.page_size_padded'
-                if old in s:
-                  open(p,'w').write(s.replace(old, new)); print('PATCHED attn_utils.py')
-                else: print('attn_utils.py already patched or different version')
-                "
 
+                # Hotfix: add kv_quant_mode to MLAAttention.get_kv_cache_spec (vllm#48379)
+                # PR #47716 fixed deepseek_v4 and sparse_swa but missed mla_attention.py
+                python3 -c "
+                p='/usr/local/lib/python3.12/dist-packages/vllm/model_executor/layers/attention/mla_attention.py'
+                s=open(p).read()
+                if 'get_kv_quant_mode' not in s:
+                  s=s.replace('    MLAAttentionSpec,\n)', '    MLAAttentionSpec,\n    get_kv_quant_mode,\n)')
+                  s=s.replace('            cache_dtype_str=vllm_config.cache_config.cache_dtype,\n        )',
+                              '            cache_dtype_str=vllm_config.cache_config.cache_dtype,\n            kv_quant_mode=get_kv_quant_mode(vllm_config.cache_config.cache_dtype),\n        )')
+                  open(p,'w').write(s); print('PATCHED mla_attention.py')
+                else: print('mla_attention.py already patched')
+                "
 
                 # Hotfix: offloading set_ overflow for packed non-uniform KV caches
                 # The indexer group's offset+page_size exceeds block_stride in the packed
