@@ -1,0 +1,17 @@
+# KEDA TriggerAuthentication for Prometheus bearer token access.
+#
+# References the prometheus-auth Secret (bearerToken + ca.crt) created by the guide's Configure step.
+# Both triggers reference this CR to authenticate to Prometheus securely.
+
+apiVersion: keda.sh/v1alpha1
+kind: TriggerAuthentication
+metadata:
+  name: prometheus-auth
+spec:
+  secretTargetRef:
+  - parameter: bearerToken
+    name: prometheus-auth
+    key: bearerToken
+  - parameter: ca
+    name: prometheus-auth
+    key: ca.crt

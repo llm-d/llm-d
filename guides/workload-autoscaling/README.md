@@ -7,11 +7,7 @@ Traditional autoscaling indicators like resource utilization metrics (CPU/GPU) a
 
 Effective LLM autoscaling requires proactive, SLO-aware signals that reflect the true state of the inference system — queue depth, in-flight request counts, and KV cache pressure — so that capacity can be added before end-user latency is impacted.
 
-This guide covers the autoscaling strategies available in llm-d. The EPP path
-uses KEDA as its user-facing scaling primitive, while the WVA path publishes a
-desired-replica metric for an HPA or KEDA. The paths differ in the use cases
-they target, the metrics that drive them, and the operational complexity they
-require.
+This guide covers the autoscaling strategies available in llm-d. The EPP paths use KEDA as the scaling primitive, while the WVA path publishes a desired-replica metric for an HPA or KEDA. The paths differ in the use cases they target, the metrics that drive them, and the operational complexity they require.
 
 ## Prerequisites
 
@@ -54,6 +50,10 @@ before users experience sustained queueing and to remove capacity when demand
 falls. This path requires KEDA and Prometheus; it does not require Prometheus
 Adapter.
 
+- KEDA + EPP normalized Pool-Level Saturation Metrics
+
+  The [KEDA + EPP normalized Pool-Level Saturation Metrics](./README.epp-keda-saturation.md) path has KEDA query Prometheus directly for InferencePool-scoped saturation and running-request metrics, then scale the model server Deployment. KEDA consumes two EPP metrics — pool saturation level (0.0–1.0+, normalized measure of how loaded the pool is) and active in-flight request count — and drives scaling decisions. Well-suited for simple homogeneous deployments where each model scales independently and you want minimal operational overhead.
+
 #### SLO-Aware Autoscaling (KEDA + estimated latency)
 
 A specialization of this path drives the HPA from the pool's **latency** rather than its queue depth. The [SLO-Aware Autoscaling](./README.slo-aware.md) sub-path scales directly against latency SLOs, using the EPP's **estimated** TTFT/TPOT as the signal — either its ML-predicted latency (from the online-trained predictor) or the actual measured latency aggregated in real time when the predictor isn't enabled. A Prometheus recording rule turns that estimate into a single saturation ratio (latency ÷ SLO), and a KEDA `ScaledObject` with an [expr-lang](https://expr-lang.org/) formula computes the desired replica count and drives a standard HPA — no custom controller. With the ML predictor, capacity is added as pressure builds rather than after the queue has already formed. Best when clients express per-request latency SLOs and you want scaling driven by the objective itself rather than a proxy metric.
@@ -66,13 +66,13 @@ WVA is designed for operators running multiple variants of the same model across
 
 ## Choosing a Scaling Signal
 
-| | [KEDA + EPP Metrics](./README.hpa-epp.md) | [HPA + WVA Metrics](./README.wva.md) | [SLO-Aware Autoscaling](./README.slo-aware.md) |
-|---|---|---|---|
-| **Best for** | Deployments on homogeneous hardware where each target model-server pool can be isolated by metrics and scaled independently | Multi-variant deployments where cost-aware capacity allocation across heterogeneous shared hardware is required | Single-pool deployments with per-request latency SLOs, scaled on predicted latency |
-| **Scaling signal** | EPP metrics such as queue depth and running request count | KV cache utilization, queue depth, performance budgets | EPP estimated TTFT/TPOT (ML-predicted, or measured) vs the SLO |
-| **Cost optimization** | None — scales based on load signals only | Optimizes across variants by preferring lower-cost hardware | Minimizes replicas needed to meet the SLO |
-| **Additional components** | Requires KEDA and Prometheus | Requires the WVA controller | KEDA + one Prometheus recording rule |
-| **Scale to zero** | Supported | Supported | Supported (via KEDA) |
+| | [KEDA + EPP Metrics](./README.hpa-epp.md) | [KEDA + EPP normalized Pool-Level Saturation](./README.epp-keda-saturation.md) | [HPA + WVA Metrics](./README.wva.md) | [SLO-Aware Autoscaling](./README.slo-aware.md) |
+|---|---|---|---|---|
+| **Best for** | Homogeneous deployments; scale on absolute queue depth / running requests (lagging, per-deployment thresholds, no over-provisioning) | Homogeneous deployments; scale on a normalized saturation ratio (leading, more portable thresholds, can potentially over-provision) | Multi-variant deployments with cost-aware placement across heterogeneous hardware | Single-pool deployments with per-request latency SLOs, scaled on predicted latency |
+| **Scaling signal** | EPP metrics such as queue depth and running request count | Pool saturation level (0.0–1.0+) and running request count | KV cache utilization, queue depth, performance budgets | EPP estimated TTFT/TPOT (ML-predicted, or measured) vs the SLO |
+| **Cost optimization** | None — scales based on load signals only | None — scales based on load signals only | Optimizes across variants by preferring lower-cost hardware | Minimizes replicas needed to meet the SLO |
+| **Additional components** | KEDA and Prometheus only | KEDA and Prometheus only | KEDA and WVA controller | KEDA + one Prometheus recording rule |
+| **Scale to zero** | Supported | Supported | Supported | Supported (via KEDA) |
 
 ## Features
 
