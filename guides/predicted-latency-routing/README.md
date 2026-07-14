@@ -70,14 +70,15 @@ Skip it when your pool is **heterogeneous** — mixed GPU types, model variants,
 
 ### 1. Deploy the llm-d Router
 
-Two ready-to-use values files ship with this guide:
+Three ready-to-use values files ship with this guide:
 
 | File | When to use |
 |---|---|
 | [`router/predicted-latency.values.yaml`](./router/predicted-latency.values.yaml) | Default — predictor trains on end-to-end latency. Routing-only, no SLO header support. |
-| [`router/predicted-latency-slo.values.yaml`](./router/predicted-latency-slo.values.yaml) | SLO-aware — Assumes `x-llm-d-slo-ttft-ms` / `x-llm-d-slo-tpot-ms` are set on requests. Every request must be sent with `"stream": true`. |
+| [`router/predicted-latency-slo.values.yaml`](./router/predicted-latency-slo.values.yaml) | SLO-aware — Assumes `x-llm-d-slo-ttft-ms` / `x-llm-d-slo-tpot-ms` are set on requests. Enforcing a TPOT SLO means predicting TPOT, so this sets `streamingMode: true` and every request must be sent with `"stream": true`. |
+| [`router/predicted-latency-pd.values.yaml`](./router/predicted-latency-pd.values.yaml) | Prefill/decode disaggregated — predicted-latency scheduling layered on the [pd-disaggregation](../pd-disaggregation) pipeline: prefill is picked on predicted TTFT, decode on predicted TPOT. Sets `streamingMode: true`, so every request must be sent with `"stream": true`. |
 
-Both target model server pods labeled `llm-d.ai/guide=optimized-baseline` since in the next step we will simply reuse the model server manifests from the [optimized-baseline guide](../optimized-baseline).
+The first two target model server pods labeled `llm-d.ai/guide=optimized-baseline`, since in the next step we will simply reuse the model server manifests from the [optimized-baseline guide](../optimized-baseline). The P/D file instead targets `llm-d.ai/guide=pd-disaggregation` — see [Prefill/Decode Disaggregation](#prefilldecode-disaggregation--gpt-oss-120b) below.
 
 #### Standalone Mode
 
@@ -135,6 +136,30 @@ kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/predicted-latency-routing/m
 
 > [!NOTE]
 > Set `MODEL_NAME="Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8"` for the TPU path — the verification and benchmark steps below use it.
+
+#### Prefill/Decode Disaggregation — gpt-oss-120b
+
+Predicted-latency scheduling also composes with prefill/decode disaggregation. Reuse the [pd-disaggregation guide's](../pd-disaggregation) model server (8 prefill TP=1 + 2 decode TP=4, `openai/gpt-oss-120b`) unchanged — the predictor is EPP-side only — and deploy the router with the P/D values file:
+
+```bash
+export MODEL_NAME="openai/gpt-oss-120b"
+export INFRA_PROVIDER=gke # base | coreweave | gke | aws
+
+helm install ${GUIDE_NAME} \
+    ${ROUTER_STANDALONE_CHART} \
+    -f ${REPO_ROOT}/guides/recipes/router/base.values.yaml \
+    -f ${REPO_ROOT}/guides/${GUIDE_NAME}/router/predicted-latency-pd.values.yaml \
+    -n ${NAMESPACE} --version ${ROUTER_CHART_VERSION}
+
+kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/pd-disaggregation/modelserver/gpu/vllm/${INFRA_PROVIDER}
+```
+
+The `gke` overlay carries KV transfer over RDMA/RoCE (DRA + DRANet), which is what the benchmark below measures; it requires a [pre-provisioned cluster](../pd-disaggregation/README.md#gke-cluster-pre-provisioning-with-dra--rdmaroce). The `base` overlay works anywhere but moves KV over TCP, which caps prefill throughput well below the numbers reported here.
+
+Two things differ from the aggregated path. The prefill profile is scored purely on predicted TTFT and the decode profile purely on predicted TPOT, since each stage only owns one half of the request's latency. And cache affinity runs on prefill only — in P/D the prefix cache lives on the prefill pods and decode receives KV over NIXL, so a decode-side affinity filter adds nothing while skewing balance.
+
+> [!IMPORTANT]
+> The P/D values file sets `streamingMode: true`, so clients must send `"stream": true`. TPOT training samples come from the inter-token gaps of a streamed response, and decode here is scheduled purely on predicted TPOT — so non-streaming traffic leaves the half of the predictor that places decode with nothing to learn from.
 
 For other backends (AMD GPU, Intel XPU, CPU), see [optimized-baseline → Deploy the Model Server](../optimized-baseline/README.md#2-deploy-the-model-server). For example, for sglang deployments:
 
@@ -276,23 +301,20 @@ Benchmark results are copied to a `workspace` directory on the machine running t
 
 #### Case 1 — GPU · Qwen3-32B
 
-Uses the dedicated [`guide_predicted-latency-routing_1.yaml`](https://github.com/llm-d/llm-d-benchmark/blob/main/workload/profiles/inference-perf/guide_predicted-latency-routing_1.yaml) `inference-perf` profile from `llm-d-benchmark`, parameterized on `CONCURRENCY_LEVEL` / `NUM_REQUESTS` / `SEED` — re-run per concurrency to build the ladder:
+Uses this guide's `inference-perf` workload template, [`guides/predicted-latency-routing/benchmark-templates/guide.yaml`](./benchmark-templates/guide.yaml). It is parameterized on `CONCURRENCY_LEVEL` / `NUM_REQUESTS` / `NUM_CONVERSATION` / `SEED`; render it with `envsubst` and drive it against the deployed EPP via the `run_only.sh` runner from [`llm-d-benchmark`](https://github.com/llm-d/llm-d-benchmark) — re-run per concurrency (published sweep: 10 → 100 in steps of 10) to build the ladder:
 
 ```bash
-export CONCURRENCY_LEVEL=40
-export NUM_REQUESTS=$((6 * CONCURRENCY_LEVEL))
-export SEED=$((CONCURRENCY_LEVEL))   # distinct per concurrency so prompt sets don't overlap across runs
+# Fetch the existing-stack benchmark runner from llm-d-benchmark.
+curl -L -O https://raw.githubusercontent.com/llm-d/llm-d-benchmark/main/existing_stack/run_only.sh
+chmod u+x run_only.sh
 
-llmdbenchmark \
-    --spec           guides/predicted-latency-routing \
-    run \
-    --endpoint-url   "${ENDPOINT_URL}" \
-    --gateway-class  "${GATEWAY_CLASS}" \
-    --model          "Qwen/Qwen3-32B" \
-    --namespace      "${NAMESPACE}" \
-    --harness        inference-perf \
-    --workload       guide_predicted-latency-routing_1.yaml \
-    --analyze
+export IP=$(kubectl get service ${GUIDE_NAME}-epp -n ${NAMESPACE} -o jsonpath='{.spec.clusterIP}')
+export CONCURRENCY_LEVEL=40
+export NUM_REQUESTS=$((20 * CONCURRENCY_LEVEL))
+export NUM_CONVERSATION=$((CONCURRENCY_LEVEL))
+export SEED=$((7 + CONCURRENCY_LEVEL))   # distinct per concurrency so prompt sets don't overlap across runs
+envsubst < ${REPO_ROOT}/guides/predicted-latency-routing/benchmark-templates/guide.yaml > config.yaml
+./run_only.sh -c config.yaml -o ./results
 ```
 
 #### Case 2 — TPU · Qwen3-Coder-480B-A35B-Instruct-FP8 with KV-cache offloading
@@ -311,6 +333,26 @@ export SEED=$((7 + CONCURRENCY_LEVEL))   # distinct per concurrency so prompt se
 envsubst < ${REPO_ROOT}/guides/agentic-serving/benchmark-templates/guide.yaml > config.yaml
 ./run_only.sh -c config.yaml -o ./results
 ```
+
+#### Case 3 — GPU · gpt-oss-120b, prefill/decode disaggregated
+
+If you deployed the [P/D model server](#prefilldecode-disaggregation--gpt-oss-120b), drive it with the pd-disaggregation guide's dedicated profile, which is a constant-rate random-data workload (5000-token prompts, 250-token completions) — the shape used for the report below. Re-run it per offered rate (published sweep: 10 → 45 req/s) to build the ladder:
+
+```bash
+llmdbenchmark \
+    --spec           guides/pd-disaggregation \
+    run \
+    --endpoint-url   "${ENDPOINT_URL}" \
+    --gateway-class  "${GATEWAY_CLASS}" \
+    --model          "openai/gpt-oss-120b" \
+    --namespace      "${NAMESPACE}" \
+    --harness        inference-perf \
+    --workload       guide_pd-disaggregation_1.yaml \
+    --analyze
+```
+
+> [!IMPORTANT]
+> Use an `llm-d-benchmark` harness image of **v0.7.0 or newer**. Older images bundle a pre-fix `inference-perf` that emits an identical prompt stream from every worker with `data.type: random`, so each prompt is sent `num_workers` times. The duplicates land in the prefix cache and inflate every routing result.
 
 > [!NOTE]
 > Depending on your `cluster` you may need to extend the default `timeout` values to longer duration, as `bind`, `access` and `wait-timeout` times of `pvcs` and `pods` can be arbitrarily slower on other systems, please utilize `llmdbenchmark run --help` to view the knobs needed to increase those values.
@@ -339,6 +381,20 @@ envsubst < ${REPO_ROOT}/guides/agentic-serving/benchmark-templates/guide.yaml > 
 > [!NOTE]
 > **Predicted-latency is comparable to the token scorer.** Across the ladder the two EPP routers track each other closely — median TTFT and input/output throughput within a few percent through ~concurrency 60 (e.g. at concurrency 40, median TTFT 1.8s vs 2.5s and input throughput 87K vs 93K tok/s), both far ahead of the plain Service. They diverge only near saturation (concurrency 70–80), where the token scorer's queue-aware placement holds the tail better. So on this long-context agentic workload, predicted-latency routing matches a well-tuned load/affinity router without any hand-tuned scoring weights — the predictor learns the latency surface directly.
 
+### Prefill/Decode Disaggregation (GPU · gpt-oss-120b)
+
+`openai/gpt-oss-120b` disaggregated across 8 prefill servers (TP=1) and 2 decode servers (TP=4) on 16× H200, KV transfer over RDMA/RoCE (GKE DRA + DRANet). Constant-rate random-data load, unique 5000-token prompts / 250-token completions, 120s per rate, offered rate 10 → 45 req/s. Two configurations: **load + prefix scorer** and **predicted-latency** routing.
+
+> [!NOTE]
+> **"load + prefix scorer" is the router the [pd-disaggregation](../pd-disaggregation) guide ships today** — its [`router/pd-disaggregation.values.yaml`](../pd-disaggregation/router/pd-disaggregation.values.yaml), unmodified: prefix-cache (weight 3), queue (2), and KV-cache-utilization (2) scorers on the prefill profile, active-request scorer (2) on decode, and no latency-predictor sidecars. It is the baseline a reader of that guide already has, so this comparison is "the current recommendation vs. this one," not a strawman.
+
+<img src="./benchmark-results/pd_disaggregation_gpu_gptoss120b.png" width="900" alt="P/D disaggregation GPU: load + prefix scorer vs latency predictor">
+
+**Summary.** Both routers saturate the same hardware ceiling — 44.3 req/s at ~234K total tok/s — with input/output throughput and TPOT indistinguishable at every rate (TPOT p50 4.6 → 7.3 ms as rate climbs, identical for both). The predictor's gain is entirely in time-to-first-token, and it grows with load: at the top of the ladder (45 req/s) it cuts **TTFT p50 by 20%** (320 ms vs 401 ms), **p90 by 25%** (595 ms vs 794 ms), and **p99 by 62%** (812 ms vs 2.1 s). Below ~30 req/s the two are within noise. This matches the aggregated cases above: predicted-latency tracks a well-tuned load/affinity router under light load and pulls ahead on the tails as the pool fills, here by steering prefill away from servers whose queue depth understates their real prompt-processing cost.
+
+> [!NOTE]
+> **Ramped load hides the predictor's cold start.** The predictor trains in-run, so a sweep that climbs through rates has a warm model by the time it reaches saturation — a warm-up run and a fully warm run produced the same curve. A step load onto a freshly restarted EPP does pay a cold-start penalty, since an EPP restart resets the model.
+
 ## Cleanup
 
 To remove the deployed components:
@@ -346,6 +402,8 @@ To remove the deployed components:
 ```bash
 helm uninstall ${GUIDE_NAME} -n ${NAMESPACE}
 kubectl delete  -n ${NAMESPACE} -k ${REPO_ROOT}/guides/predicted-latency-routing/modelserver/gpu/vllm/${INFRA_PROVIDER}
+# for the prefill/decode disaggregated model server
+kubectl delete  -n ${NAMESPACE} -k ${REPO_ROOT}/guides/pd-disaggregation/modelserver/gpu/vllm/${INFRA_PROVIDER} --ignore-not-found
 # for the TPU model server
 kubectl delete  -n ${NAMESPACE} -k ${REPO_ROOT}/guides/predicted-latency-routing/modelserver/tpu/vllm --ignore-not-found
 # for sglang deployments
