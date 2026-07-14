@@ -121,6 +121,40 @@ spec:
                 else: print('attn_utils.py already patched or different version')
                 "
                 
+                # Hotfix: offloading set_ overflow for packed non-uniform KV caches
+                # The indexer group's offset+page_size exceeds block_stride in the packed
+                # layout. Replace set_() with as_strided() to avoid bounds check failure.
+                python3 -c "
+                import re
+                p='/usr/local/lib/python3.12/dist-packages/vllm/distributed/kv_transfer/kv_connector/v1/offloading/worker.py'
+                s=open(p).read()
+                pat = (r'(tensors_per_block\[layer_name\] = \(\n)'
+                       r'(\s+)torch\.tensor\(\n'
+                       r'\s+\[\],\n'
+                       r'\s+dtype=torch\.int8,\n'
+                       r'\s+device=layer_kv_cache\.device,\n'
+                       r'\s+\)\.set_\(\n'
+                       r'\s+layer_kv_cache\.untyped_storage\(\),\n'
+                       r'\s+byte_offset,\n'
+                       r'\s+\(num_blocks, page\),\n'
+                       r'\s+\(block_stride_bytes, 1\),\n'
+                       r'\s+\),\n'
+                       r'(\s+)\)')
+                repl = (r'\1'
+                        r'\2torch.as_strided(\n'
+                        r'\2    torch.empty(0, dtype=torch.int8, device=layer_kv_cache.device).set_(layer_kv_cache.untyped_storage()),\n'
+                        r'\2    (num_blocks, page),\n'
+                        r'\2    (block_stride_bytes, 1),\n'
+                        r'\2    byte_offset,\n'
+                        r'\2),\n'
+                        r'\3)')
+                new_s, n = re.subn(pat, repl, s)
+                if n > 0:
+                  open(p,'w').write(new_s); print('PATCHED worker.py')
+                else:
+                  print('worker.py: no match for set_ pattern')
+                "
+                
                 # Scale MAX_TOKENS with number of decode pods
                 export MAX_TOKENS=$(( ${MAX_TOKENS_PER_NODE:-128} * LWS_GROUP_SIZE ))
 
