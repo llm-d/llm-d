@@ -3,7 +3,7 @@
 # Before applying, update:
 #   - inference_pool label in both trigger queries (model pool name)
 #   - model_name label in running-requests query
-#   - serverAddress in triggerauthentication.yaml to match your Prometheus
+#   - serverAddress to match your Prometheus endpoint (see overlays/ for platform-specific examples)
 #   - minReplicaCount, maxReplicaCount, and thresholds to suit your model
 #
 # KEDA will create its own HPA from this ScaledObject. Do NOT apply a separate hpa.yaml.
@@ -26,7 +26,7 @@ spec:
   - type: prometheus
     name: pool-saturation
     metadata:
-      serverAddress: "https://thanos-querier.openshift-monitoring.svc.cluster.local:9091"
+      serverAddress: "https://<prometheus-url>"
       query: |
         max(llm_d_epp_flow_control_pool_saturation{inference_pool="<pool-name>"})
       threshold: "<saturation-threshold>"
@@ -38,7 +38,7 @@ spec:
   - type: prometheus
     name: running-requests
     metadata:
-      serverAddress: "https://thanos-querier.openshift-monitoring.svc.cluster.local:9091"
+      serverAddress: "https://<prometheus-url>"
       query: |
         sum(inference_objective_running_requests{model_name="<model-name>"})
       threshold: "<requests-per-replica-target>"

@@ -1,0 +1,15 @@
+# OpenShift-specific patch for KEDA ScaledObject.
+# Uses OpenShift's thanos-querier service for Prometheus access.
+
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: optimized-baseline-nvidia-gpu-vllm-decode-saturation
+spec:
+  triggers:
+  - name: pool-saturation
+    metadata:
+      serverAddress: "https://thanos-querier.openshift-monitoring.svc.cluster.local:9091"
+  - name: running-requests
+    metadata:
+      serverAddress: "https://thanos-querier.openshift-monitoring.svc.cluster.local:9091"
