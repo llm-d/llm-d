@@ -94,7 +94,7 @@ spec:
               type: Directory
         containers:
           - name: vllm
-            image: vllm/vllm-openai:0cc399fd59e4f23b7c2f97ceb74d91d1553fb645
+            image: public.ecr.aws/q9t5s3a7/vllm-ci-test-repo:0cc399fd59e4f23b7c2f97ceb74d91d1553fb645
             securityContext:
               capabilities:
                 add:
