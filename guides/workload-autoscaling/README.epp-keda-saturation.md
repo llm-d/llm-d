@@ -19,16 +19,11 @@ For details on these metrics, see:
 
 Before proceeding, ensure you have:
 
-1. **Monitoring stack with Prometheus over HTTPS** — See [autoscaling prerequisites](README.md#prerequisites) and [Prometheus Setup Guide](../../docs/operations/observability/setup.md).
+1. **Monitoring stack with Prometheus over HTTPS** — See [autoscaling prerequisites](README.md#prerequisites) and [Prometheus Setup Guide](../../docs/operations/observability/setup.md). This includes KEDA installation.
 
-2. **KEDA installed in your cluster** — Follow the [KEDA deployment guide](https://keda.sh/docs/2.20/deploy/).
+2. **EPP flow control enabled** — The `llm_d_epp_flow_control_pool_saturation` metric requires the EPP flow control feature gate to be enabled in your Endpoint Picker configuration. This guide includes an `epp-endpoint-picker-config.yaml` that enables flow control and registers the optimized-baseline plugins. See [EPP Flow Control](../../docs/architecture/core/router/epp/flow-control.md) for details on flow control behavior.
 
-   > [!NOTE]
-   > On OpenShift, use the [Custom Metrics Autoscaler Operator](https://docs.redhat.com/en/documentation/openshift_container_platform/4.22/html/nodes/automatically-scaling-pods-with-the-custom-metrics-autoscaler-operator).
-
-3. **EPP flow control enabled** — The `llm_d_epp_flow_control_pool_saturation` metric requires the EPP flow control feature gate to be enabled in your Endpoint Picker configuration. This guide includes an `epp-endpoint-picker-config.yaml` that enables flow control and registers the optimized-baseline plugins. See [EPP Flow Control](../../docs/architecture/core/router/epp/flow-control.md) for details on flow control behavior.
-
-4. **Optimized-baseline deployment** — Complete the [optimized-baseline guide](../optimized-baseline/README.md).
+3. **Optimized-baseline deployment** — Complete the [optimized-baseline guide](../optimized-baseline/README.md).
 
 ## Set Namespaces
 
@@ -58,21 +53,27 @@ kubectl create secret generic prometheus-auth \
 
 ### 2. Apply EPP Config, KEDA ScaledObject, and TriggerAuthentication
 
-For **Kubernetes (generic)**:
 ```bash
 kubectl apply -k ${REPO_ROOT}/guides/workload-autoscaling/optimized-baseline-autoscaling/keda-epp-saturation -n ${NAMESPACE}
-```
-
-For **OpenShift**:
-```bash
-kubectl apply -k ${REPO_ROOT}/guides/workload-autoscaling/optimized-baseline-autoscaling/keda-epp-saturation/overlays/ocp -n ${NAMESPACE}
 ```
 
 Before applying, edit the manifests to match your deployment:
 - `epp-endpoint-picker-config.yaml`: Verify the EPP config is appropriate for your setup. Customize plugin weights if needed.
 - `scaledobject.yaml`: Update `inference_pool` label in the PromQL queries, `minReplicaCount`, `maxReplicaCount`, and thresholds for each trigger.
-- If using the base k8s config, also update `<prometheus-url>` in `serverAddress` to point to your Prometheus instance.
+- Update `<prometheus-url>` in `serverAddress` to point to your Prometheus instance.
 - `triggerauthentication.yaml`: Verify the bearer token Secret contains valid credentials for Prometheus access.
+
+### Platform-specific notes
+
+#### OpenShift
+
+On OpenShift, use the overlay that patches the ScaledObject to use the OpenShift-managed Prometheus endpoint:
+
+```bash
+kubectl apply -k ${REPO_ROOT}/guides/workload-autoscaling/optimized-baseline-autoscaling/keda-epp-saturation/overlays/ocp -n ${NAMESPACE}
+```
+
+The overlay automatically patches `scaledobject.yaml` to use `thanos-querier.openshift-monitoring.svc.cluster.local:9091` as the Prometheus endpoint, so you do not need to update `<prometheus-url>` manually.
 
 ## Verify
 
