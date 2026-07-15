@@ -291,3 +291,27 @@ Maintain appropriate security mindset for production serving. The project will e
 * Bias towards accepting experimentation with clear goals
 * Each repo must have README describing purpose and goal
 * Graduated components move to `llm-d` org
+
+## Documentation
+
+The Markdown under [`docs/`](docs/) is the source of truth for the documentation
+rendered on [llm-d.ai](https://llm-d.ai). The website ([`llm-d/llm-d.github.io`](https://github.com/llm-d/llm-d.github.io))
+syncs `docs/` from this repository on every merge to `main`, so keep pages in plain,
+portable Markdown that also reads well on GitHub.
+
+### Sidebar order and labels (`docs/menu-config.json`)
+
+The documentation sidebar is generated automatically from the `docs/` folder tree.
+Section labels, ordering, and collapse state are controlled **only** by
+[`docs/menu-config.json`](docs/menu-config.json) — **do not** add `_category_.json`
+files or `sidebar_position` / `sidebar_label` frontmatter to docs.
+
+* **`categories`** — keyed by folder path relative to `docs/` (any depth, slash-separated,
+  e.g. `well-lit-paths/foundations`). Fields: `label`, `position` (order among siblings),
+  `collapsed`.
+* **`pages`** — keyed by doc id (path under `docs/` without extension, e.g.
+  `getting-started/quickstart`). Fields: `position`, `label`.
+
+When you **add a page or folder**, add its entry to `docs/menu-config.json` so it gets a
+human-readable label and an explicit position. Items with no entry still appear, but sort
+alphabetically after positioned siblings and use an auto-generated label.

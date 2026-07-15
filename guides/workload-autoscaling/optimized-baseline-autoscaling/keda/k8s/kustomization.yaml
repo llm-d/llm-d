@@ -1,0 +1,8 @@
+# Vanilla Kubernetes: the base already targets an unauthenticated in-cluster Prometheus,
+# so there is nothing to add. This overlay exists so both platforms are applied the same way:
+#   kubectl apply -k .../optimized-baseline-autoscaling/keda/${PLATFORM}
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - ../base

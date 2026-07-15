@@ -1,0 +1,45 @@
+name: Dispatch website docs sync
+
+# When docs change on main, notify the website repo (llm-d/llm-d.github.io) to
+# re-sync the "dev" documentation from this repository and redeploy.
+#
+# Requires a repository secret `WEBSITE_SYNC_TOKEN`: a fine-grained PAT (or GitHub
+# App installation token) scoped to llm-d/llm-d.github.io with "Contents: read and
+# write" permission so it can trigger a repository_dispatch there. If the secret is
+# absent the job is skipped, and the website repo's nightly sync cron picks up the
+# change instead.
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "docs/**"
+      - "guides/**"
+      - "CONTRIBUTING.md"
+      - "CODE_OF_CONDUCT.md"
+      - "SECURITY.md"
+      - "SIGS.md"
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+jobs:
+  notify-website:
+    name: notify-website
+    runs-on: ubuntu-latest
+    if: ${{ github.repository == 'llm-d/llm-d' }}
+    steps:
+      - name: Trigger docs sync on llm-d.github.io
+        uses: peter-evans/repository-dispatch@v3
+        with:
+          token: ${{ secrets.WEBSITE_SYNC_TOKEN }}
+          repository: llm-d/llm-d.github.io
+          event-type: docs-updated
+          client-payload: |
+            {
+              "source_repo": "${{ github.repository }}",
+              "ref": "${{ github.ref_name }}",
+              "sha": "${{ github.sha }}"
+            }
