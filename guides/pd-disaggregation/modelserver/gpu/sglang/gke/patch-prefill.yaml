@@ -1,0 +1,101 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: prefill
+spec:
+  replicas: 2
+  template:
+    spec:
+      tolerations:
+        - key: nvidia.com/gpu
+          operator: Exists
+          effect: NoSchedule
+      resourceClaims:
+        - name: gke-rdma-claim-0
+          resourceClaimTemplateName: gke-rdma-template
+        - name: gke-rdma-claim-1
+          resourceClaimTemplateName: gke-rdma-template
+        - name: gke-rdma-claim-2
+          resourceClaimTemplateName: gke-rdma-template
+        - name: gke-rdma-claim-3
+          resourceClaimTemplateName: gke-rdma-template
+      containers:
+        - name: modelserver
+          command: ["python3", "-m", "sglang.launch_server"]
+          args:
+            - "--model-path=openai/gpt-oss-120b"
+            - "--port=8000"
+            - "--host=0.0.0.0"
+            - "--disaggregation-mode=prefill"
+            - "--disaggregation-transfer-backend=nixl"
+            - "--tensor-parallel-size=4"
+            - "--log-level=info"
+            - "--enable-metrics"
+            - "--uvicorn-access-log-exclude-prefixes=/metrics"
+          env:
+            - name: HF_HOME
+              value: /root/.cache/huggingface
+            - name: HF_HUB_DOWNLOAD_TIMEOUT
+              value: "60"
+            - name: HF_HUB_DISABLE_XET
+              value: "1"
+            - name: UCX_LOG_LEVEL
+              value: info
+            - name: UCX_IB_ROCE_REACHABILITY_MODE
+              value: "all"
+            - name: UCX_TLS
+              value: "rc_mlx5,tcp,cuda_copy,cma,self"
+            - name: UCX_NET_DEVICES
+              value: "mlx5_0:1,mlx5_1:1,mlx5_2:1,mlx5_3:1,mlx5_4:1,mlx5_5:1,mlx5_6:1,mlx5_7:1,eth0"
+            - name: HF_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: llm-d-hf-token
+                  key: HF_TOKEN
+          resources:
+            limits:
+              cpu: "64"
+              memory: "512Gi"
+            requests:
+              cpu: "32"
+              memory: "128Gi"
+            claims:
+              - name: gke-rdma-claim-0
+              - name: gke-rdma-claim-1
+              - name: gke-rdma-claim-2
+              - name: gke-rdma-claim-3
+          volumeMounts:
+            - mountPath: /dev/shm
+              name: shm
+            - name: metrics-volume
+              mountPath: /.config
+            # Mount a persistent volume for huggingface cache, so that the cache is shared across restarts
+            - mountPath: /root/.cache/huggingface
+              name: huggingface-cache
+          startupProbe:
+            initialDelaySeconds: 15
+            periodSeconds: 30
+            timeoutSeconds: 5
+            failureThreshold: 240
+            httpGet:
+              path: /v1/models
+              port: modelserver
+          livenessProbe:
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            periodSeconds: 5
+            timeoutSeconds: 2
+            failureThreshold: 3
+      volumes:
+        - name: metrics-volume
+          emptyDir: {}
+        - name: shm
+          emptyDir:
+            medium: Memory
+            sizeLimit: "16Gi"
+        - name: huggingface-cache
+          hostPath:
+            path: /var/cache/huggingface
+            type: DirectoryOrCreate
