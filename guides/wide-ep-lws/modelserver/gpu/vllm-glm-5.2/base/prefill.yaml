@@ -126,7 +126,6 @@ spec:
 
                 # Wide-EP (multi-node): reserve VRAM for NVSHMEM symmetric heap
                 if [ "${LWS_GROUP_SIZE:-1}" -gt 1 ]; then
-                  export NVSHMEM_SYMMETRIC_SIZE=16G
                   GPU_MEM_UTIL=0.80
                 else
                   GPU_MEM_UTIL=0.91
