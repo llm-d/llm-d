@@ -188,6 +188,16 @@ jobs:
       - name: Install GKE CRDs
         run: .github/scripts/install-gke-crds.sh
 
+      - name: Install LWS and DisaggregatedSet CRDs
+        run: |
+          kubectl apply --server-side -f \
+            https://raw.githubusercontent.com/kubernetes-sigs/lws/v0.9.0/config/crd/bases/leaderworkerset.x-k8s.io_leaderworkersets.yaml
+          # DisaggregatedSet with spec.slices is merged upstream but not yet in a
+          # tagged release; pin to the lws main commit the DS guide variant was
+          # validated against. TODO: switch to the release tag once lws v0.10.0 ships.
+          kubectl apply --server-side -f \
+            https://raw.githubusercontent.com/kubernetes-sigs/lws/7072b297f13dab0ca0e92dc45b2076ea63a35e01/config/crd/bases/disaggregatedset.x-k8s.io_disaggregatedsets.yaml
+
       - name: Dry-run router charts
         run: |
           CHART_VERSION=v0
