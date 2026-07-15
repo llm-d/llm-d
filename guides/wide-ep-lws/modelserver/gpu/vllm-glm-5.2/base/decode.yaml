@@ -213,6 +213,7 @@ spec:
                   --kv_transfer_config '{"kv_connector":"NixlConnector",
                                           "kv_role":"kv_both",
                                           "kv_load_failure_policy":"fail"}' \
+                  --uvicorn-timeout-keep-alive 120 \
                   --all2all-backend deepep_low_latency \
                   --moe-backend deep_gemm \
                   --reasoning-parser glm45 \
