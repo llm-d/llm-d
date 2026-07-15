@@ -6,7 +6,7 @@ This document covers configuring GKE clusters for running high performance LLM i
 
 llm-d on GKE is tested with the following configurations:
 
-* Machine types: A3, A4, ct5p, ct5lp, ct6e
+* Machine types: A3, A4, A4X, ct5p, ct5lp, ct6e
 * Versions: GKE 1.33.4+
 
 ## Cluster Configuration
