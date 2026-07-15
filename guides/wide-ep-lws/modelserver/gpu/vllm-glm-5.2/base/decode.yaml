@@ -94,7 +94,7 @@ spec:
               type: Directory
         containers:
           - name: vllm
-            image: vllm/vllm-openai:nightly
+            image: vllm/vllm-openai:0cc399fd59e4f23b7c2f97ceb74d91d1553fb645
             securityContext:
               capabilities:
                 add:
@@ -208,7 +208,6 @@ spec:
                   --data-parallel-size $((LWS_GROUP_SIZE * DP_SIZE_LOCAL)) \
                   --data-parallel-size-local $DP_SIZE_LOCAL \
                   --data-parallel-address ${LWS_LEADER_ADDRESS} \
-                  --speculative-config '{"method":"mtp","num_speculative_tokens":3}' \
                   --data-parallel-rpc-port 5555 \
                   --data-parallel-start-rank $START_RANK \
                   --kv_transfer_config '{"kv_connector":"NixlConnector",
