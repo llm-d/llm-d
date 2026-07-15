@@ -25,13 +25,12 @@ Summary (throughput is peak sustained; latencies at the top of the ladder, rate 
 | Requests/sec (@ rate 60)  | 56.14            | 57.03           | +1.6%     |
 | TTFT p50 (s)              | 88.1             | 0.2             | −99.8%    |
 | TTFT p90 (s)              | 154.1            | 0.9             | −99.4%    |
-| NTPOT p50 (ms/token)      | 135.5            | 43.9            | −67.6%    |
+| ITL p50 (ms)              | 37.8             | 37.5            | −0.8%     |
 
 The two arms track each other until the fleet saturates. A stock Service round-robins blindly, so every pod re-prefills the
-6,000-token shared prefix: output throughput plateaus at ~6–7k tokens/sec from ~rate 15, first-token latency climbs into the
-tens of seconds by rate 22, and normalized per-token latency degrades steadily to ~135&nbsp;ms/token. Prefix-cache-affinity
-routing keeps each prefix group resident on the same endpoints, so throughput keeps climbing to ~15k tokens/sec (~2.1× the
-Service, peaking at 14,941 near rate 49) while TTFT p90 stays under ~1&nbsp;s and NTPOT holds ~30–45&nbsp;ms/token across the ladder.
+6,000-token shared prefix: output throughput plateaus at ~6–7k tokens/sec from ~rate 15 and first-token latency climbs into the
+tens of seconds by rate 22. Prefix-cache-affinity routing keeps each prefix group resident on the same endpoints, so throughput
+keeps climbing to ~15k tokens/sec (~2.1× the Service, peaking at 14,941 near rate 49) while TTFT p90 stays under ~1&nbsp;s across the ladder.
 
 <details>
 <summary><b><i>Click</i></b> to view the per-rate breakdown across the full ladder</summary>

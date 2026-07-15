@@ -25,9 +25,9 @@ Summary across the full ladder (rates 3 → 60):
 | :---------------- | :--------------- | :-------------- | :-------- |
 | Output tokens/sec | 5,113            | 9,241           | +80.7%    |
 | Requests/sec      | 5.16             | 9.33            | +80.8%    |
-| TTFT mean (s)     | 56.729           | 0.540           | −99.0%    |
+| TTFT p50 (s)      | 43.480           | 0.111           | −99.7%    |
 | TTFT p90 (s)      | 127.168          | 0.250           | −99.8%    |
-| ITL mean (ms)     | 40.57            | 48.57           | +19.7%    |
+| ITL p50 (ms)      | 37.99            | 48.30           | +27.1%    |
 | Failed requests   | 199              | 0               | —         |
 
 The two arms diverge sharply once the fleet saturates. A stock Service spreads requests blindly, so every pod re-prefills the
@@ -36,7 +36,7 @@ The two arms diverge sharply once the fleet saturates. A stock Service spreads r
 Prefix-cache-affinity routing keeps each prefix group resident on the same endpoints, so prefill stays cheap: throughput keeps
 climbing to ~15k output tokens/sec and TTFT p90 stays **under half a second across the entire ladder**, with zero failures.
 
-The ITL regression (+19.7%) is the expected trade: affinity routing packs more concurrent work onto cache-warm pods, so
+The ITL regression (+27.1%) is the expected trade: affinity routing packs more concurrent work onto cache-warm pods, so
 per-token decode is marginally slower — a good exchange for 1.8× the throughput and a ~500× better first-token tail.
 
 <details>
