@@ -2,6 +2,8 @@
 
 KEDA queries Prometheus directly for two EPP-emitted, InferencePool-scoped signals and scales the model server `Deployment` accordingly. No WVA controller, no Prometheus Adapter — just KEDA, Prometheus, and your model servers.
 
+This guide uses the four optimized-baseline plugins provided by llm-d (queue-scorer, kv-cache-utilization-scorer, prefix-cache-scorer, and no-hit-lru-scorer) to enable load-aware and prefix-cache-aware routing alongside pool saturation metrics.
+
 ## Metrics
 
 | Metric | Type | Description | Label |
@@ -24,7 +26,9 @@ Before proceeding, ensure you have:
    > [!NOTE]
    > On OpenShift, use the [Custom Metrics Autoscaler Operator](https://docs.redhat.com/en/documentation/openshift_container_platform/4.22/html/nodes/automatically-scaling-pods-with-the-custom-metrics-autoscaler-operator).
 
-3. **Optimized-baseline deployment** — Complete the [optimized-baseline guide](../optimized-baseline/README.md).
+3. **EPP flow control enabled** — The `llm_d_epp_flow_control_pool_saturation` metric requires the EPP flow control feature gate to be enabled in your Endpoint Picker configuration. This guide includes an `epp-endpoint-picker-config.yaml` that enables flow control and registers the optimized-baseline plugins. See [EPP Flow Control](../../docs/architecture/core/router/epp/flow-control.md) for details on flow control behavior.
+
+4. **Optimized-baseline deployment** — Complete the [optimized-baseline guide](../optimized-baseline/README.md).
 
 ## Set Namespaces
 
@@ -52,7 +56,7 @@ kubectl create secret generic prometheus-auth \
   --dry-run=client -o yaml | kubectl apply -f - -n ${NAMESPACE}
 ```
 
-### 2. Apply KEDA ScaledObject and TriggerAuthentication
+### 2. Apply EPP Config, KEDA ScaledObject, and TriggerAuthentication
 
 For **Kubernetes (generic)**:
 ```bash
@@ -64,7 +68,8 @@ For **OpenShift**:
 kubectl apply -k ${REPO_ROOT}/guides/workload-autoscaling/optimized-baseline-autoscaling/keda-epp-saturation/overlays/ocp -n ${NAMESPACE}
 ```
 
-Before applying, edit the base manifests to match your deployment:
+Before applying, edit the manifests to match your deployment:
+- `epp-endpoint-picker-config.yaml`: Verify the EPP config is appropriate for your setup. Customize plugin weights if needed.
 - `scaledobject.yaml`: Update `inference_pool` label in the PromQL queries, `minReplicaCount`, `maxReplicaCount`, and thresholds for each trigger.
 - If using the base k8s config, also update `<prometheus-url>` in `serverAddress` to point to your Prometheus instance.
 - `triggerauthentication.yaml`: Verify the bearer token Secret contains valid credentials for Prometheus access.
