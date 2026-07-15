@@ -213,7 +213,6 @@ spec:
                   --kv_transfer_config '{"kv_connector":"NixlConnector",
                                           "kv_role":"kv_both",
                                           "kv_load_failure_policy":"fail"}' \
-                  --uvicorn-timeout-keep-alive 120 \
                   --all2all-backend deepep_low_latency \
                   --moe-backend deep_gemm \
                   --reasoning-parser glm45 \
@@ -268,6 +267,8 @@ spec:
                 value: "${MAX_TOKENS}"
               - name: VLLM_COMPUTE_NANS_IN_LOGITS
                 value: "1"
+              - name: VLLM_HTTP_TIMEOUT_KEEP_ALIVE
+                value: "120"
               - name: VLLM_LOGGING_LEVEL
                 value: INFO
               - name: VLLM_NIXL_SIDE_CHANNEL_HOST

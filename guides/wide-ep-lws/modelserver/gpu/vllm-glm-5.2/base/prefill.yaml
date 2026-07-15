@@ -187,7 +187,6 @@ spec:
                   --data-parallel-start-rank $START_RANK \
                   --kv_transfer_config "$KV_TRANSFER_CONFIG" \
                   --moe-backend deep_gemm \
-                  --uvicorn-timeout-keep-alive 120 \
                   --all2all-backend deepep_high_throughput \
                   $MAX_BATCHED_ARGS
             env:
