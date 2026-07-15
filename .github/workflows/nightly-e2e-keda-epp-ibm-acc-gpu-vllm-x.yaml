@@ -1,0 +1,126 @@
+name: Initial KEDA+EPP State E2E (OCP GPU)
+
+on:
+  workflow_dispatch:
+    inputs:
+      skip_cleanup:
+        description: 'Keep namespaced and cluster-scoped resources for debugging'
+        required: false
+        type: boolean
+        default: false
+      pr_number:
+        description: 'PR number for comment-back (set by /test-nightly)'
+        required: false
+        type: string
+        default: ''
+      pr_repo:
+        description: 'Repository for PR comment-back'
+        required: false
+        type: string
+        default: 'llm-d/llm-d'
+      # The slash-command dispatcher sends the inputs below to every
+      # nightly-e2e-* workflow. This initial-state test accepts them for dispatch
+      # compatibility but intentionally does not run a benchmark or publish a badge.
+      workload:
+        description: 'Accepted for /test-nightly compatibility; unused in this slice'
+        required: false
+        type: string
+        default: 'sanity_random.yaml'
+      decode_pods:
+        description: 'Accepted for /test-nightly compatibility; model replicas remain one'
+        required: false
+        type: string
+        default: '1'
+      prefill_pods:
+        description: 'Accepted for /test-nightly compatibility; no prefill deployment is created'
+        required: false
+        type: string
+        default: '1'
+      harness:
+        description: 'Accepted for /test-nightly compatibility; no load harness is run'
+        required: false
+        type: string
+        default: 'inference-perf'
+      dry_run:
+        description: 'Accepted for /test-nightly compatibility; unused in this slice'
+        required: false
+        type: string
+        default: 'false'
+      update_badge:
+        description: 'Accepted for /test-nightly compatibility; no badge job exists'
+        required: false
+        type: string
+        default: 'false'
+      cleanup:
+        description: 'Set false to retain resources; inverse compatibility form of skip_cleanup'
+        required: false
+        type: string
+        default: 'true'
+
+permissions:
+  contents: read
+  actions: read
+  pull-requests: write
+
+concurrency:
+  group: nightly-e2e-keda-epp-ocp
+  cancel-in-progress: true
+
+jobs:
+  nightly:
+    if: github.repository == 'llm-d/llm-d'
+    uses: llm-d/llm-d-infra/.github/workflows/reusable-nightly-e2e-openshift.yaml@main
+    with:
+      guide_name: workload-autoscaling
+      namespace: llm-d-nightly-keda-epp
+      gateway_host: optimized-baseline-epp
+      custom_deploy_script: |
+        bash guides/workload-autoscaling/scripts/nightly-deploy-keda-epp-ocp.sh
+      e2e_validate_args: '--extra-validate keda-epp'
+      required_gpus: 2
+      recommended_gpus: 4
+      pod_wait_timeout: '30m'
+      pod_readiness_delay: 180
+      allow_gpu_preemption: true
+      skip_cleanup: ${{ inputs.skip_cleanup || inputs.cleanup == 'false' }}
+      pr_number: ${{ inputs.pr_number }}
+      pr_repo: ${{ inputs.pr_repo }}
+    secrets: inherit
+
+  cleanup-cluster-rbac:
+    name: Cleanup direct KEDA+EPP cluster RBAC
+    needs: nightly
+    if: >-
+      ${{ always() &&
+          github.repository == 'llm-d/llm-d' &&
+          inputs.skip_cleanup != true &&
+          inputs.cleanup != 'false' }}
+    runs-on: [self-hosted, openshift, pok-prod]
+    steps:
+      - name: Checkout llm-d/llm-d
+        uses: actions/checkout@v7
+
+      - name: Ensure kubectl is available
+        run: |
+          if ! command -v kubectl >/dev/null 2>&1; then
+            ./helpers/client-setup/install-deps.sh
+          fi
+
+      - name: Delete direct KEDA+EPP authentication binding
+        env:
+          NAMESPACE: llm-d-nightly-keda-epp
+        run: |
+          set -euo pipefail
+          NS_HASH="$(printf '%s' "${NAMESPACE}" | sha256sum | cut -c1-8)"
+          AUTH_CRB="keda-epp-prometheus-cluster-monitoring-view-${NS_HASH}"
+          kubectl delete clusterrolebinding "${AUTH_CRB}" --ignore-not-found
+          if cleanup_result="$(kubectl get clusterrolebinding "${AUTH_CRB}" -o name --ignore-not-found)"; then
+            if [[ -z "${cleanup_result}" ]]; then
+              echo "ClusterRoleBinding/${AUTH_CRB} cleanup verified"
+              exit 0
+            fi
+            echo "ERROR: ClusterRoleBinding/${AUTH_CRB} still exists after cleanup" >&2
+            exit 1
+          fi
+          echo "ERROR: Could not verify ClusterRoleBinding/${AUTH_CRB} cleanup" >&2
+          exit 1
