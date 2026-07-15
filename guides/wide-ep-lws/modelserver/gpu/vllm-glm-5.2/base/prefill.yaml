@@ -184,7 +184,6 @@ spec:
                   --data-parallel-size-local $DP_SIZE_LOCAL \
                   --data-parallel-address ${LWS_LEADER_ADDRESS} \
                   --data-parallel-rpc-port 5555 \
-                  --speculative-config '{"method":"mtp","num_speculative_tokens":3}' \
                   --data-parallel-start-rank $START_RANK \
                   --kv_transfer_config "$KV_TRANSFER_CONFIG" \
                   --moe-backend deep_gemm \
