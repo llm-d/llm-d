@@ -3,7 +3,7 @@ kind: Kustomization
 # OCI GB200, DeepSeek-V4, 1P(DEP8) + 1D(TP=8) lowest latency -> 4 nodes / 16 GPUs.
 resources:
   - ../../base-low-latency
-  - ../../providers/oci/compute-domain.yaml
+  - compute-domain.yaml
 components:
   - ../../components/1p1d-tp8
 patches:

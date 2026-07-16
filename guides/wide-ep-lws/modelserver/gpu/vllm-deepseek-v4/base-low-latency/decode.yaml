@@ -20,6 +20,9 @@ spec:
           llm-d.ai/role: decode
       spec:
         serviceAccountName: deepseek-v4
+        # Required for cross-pod cuda_ipc (NIXL KV transfers over MNNVL NVLink)
+        hostIPC: true
+        hostPID: true
         initContainers:
           - name: routing-proxy
             args:
@@ -69,26 +72,38 @@ spec:
 
                 #################
                 # RUN vLLM DeepSeek-V4 decode worker (TP=8, low-latency)
+                # Pure tensor parallelism across 2 nodes (4 GPUs each) via MNNVL.
                 #################
+                API_SERVER_COUNT=1
+                if [ "${LWS_WORKER_INDEX:-0}" -gt 0 ]; then
+                  API_SERVER_COUNT=0
+                fi
+
                 exec vllm serve \
                   deepseek-ai/DeepSeek-V4-Pro \
                   --port 8200 \
                   --tokenizer-mode deepseek_v4 \
                   --gpu-memory-utilization 0.9 \
+                  --max-model-len 9280 \
                   --trust-remote-code \
-                  --api-server-count 1 \
+                  --api-server-count $API_SERVER_COUNT \
                   --disable-access-log-for-endpoints=/health,/metrics \
                   --tensor-parallel-size $TP_SIZE \
+                  --pipeline-parallel-size 1 \
+                  --nnodes $((TP_SIZE / GPUS_PER_NODE)) \
+                  --node-rank ${LWS_WORKER_INDEX:-0} \
+                  --master-addr ${LWS_LEADER_ADDRESS} \
                   --kv_transfer_config '{"kv_connector":"NixlConnector",
                                           "kv_role":"kv_consumer",
                                           "kv_load_failure_policy":"fail"}' \
-                  --block-size 256 \
-                  --no-disable-hybrid-kv-cache-manager \
-                  --enable-cumem-allocator \
-                  --stream-interval 50 \
                   --kv-cache-dtype fp8 \
-                  --enforce-eager \
-                  --kv-cache-memory-bytes=${KV_CACHE_MEMORY_BYTES-}
+                  --max-num-seqs 256 \
+                  --max-cudagraph-capture-size 256 \
+                  --max-num-batched-tokens 256 \
+                  --block-size 256 \
+                  --compilation-config '{"cudagraph_mode":"FULL_DECODE_ONLY","mode":0}' \
+                  --no-disable-hybrid-kv-cache-manager \
+                  --enable-cumem-allocator
             env:
               - name: HF_TOKEN
                 valueFrom:
@@ -97,8 +112,12 @@ spec:
                     key: HF_TOKEN
               - name: VLLM_USE_RUST_FRONTEND
                 value: "1"
+              - name: VLLM_USE_V2_MODEL_RUNNER
+                value: "1"
               - name: TP_SIZE
                 value: "8"
+              - name: GPUS_PER_NODE
+                value: "4"
               - name: TRITON_LIBCUDA_PATH
                 value: /usr/lib64
               - name: VLLM_SKIP_P2P_CHECK
@@ -116,9 +135,11 @@ spec:
               - name: NCCL_P2P_LEVEL
                 value: NVL
               - name: VLLM_USE_NCCL_SYMM_MEM
-                value: "1"
-              - name: TORCH_SYMMMEM
-                value: NVSHMEM
+                value: "0"
+              - name: NVSHMEM_CUMEM_HANDLE_TYPE
+                value: FABRIC
+              - name: NVSHMEM_DISABLE_CUDA_VMM
+                value: "0"
               - name: UCX_CUDA_IPC_ENABLE_MNNVL
                 value: "y"
               # Enable NIXL KV transfers via NVLink (cuda_ipc) and InfiniBand RDMA (rc)

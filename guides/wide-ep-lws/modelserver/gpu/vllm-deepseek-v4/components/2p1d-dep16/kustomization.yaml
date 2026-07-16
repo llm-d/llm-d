@@ -4,6 +4,13 @@ kind: Component
 patches:
   - target:
       kind: LeaderWorkerSet
+      name: ".*-prefill"
+    patch: |-
+      - op: replace
+        path: /spec/replicas
+        value: 2
+  - target:
+      kind: LeaderWorkerSet
       name: ".*-decode"
     patch: |-
       - op: replace
