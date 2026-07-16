@@ -2,6 +2,25 @@
 
 This recipe installs [OpenCost](https://www.opencost.io/) with its [inference cost module](https://github.com/opencost/opencost/blob/develop/docs/inference-cost-tracking.md), enabling per-model cost attribution for llm-d workloads. Once deployed, OpenCost correlates vLLM token throughput metrics with Kubernetes allocation costs and exposes overall costs and cost-per-million-tokens.
 
+## Why inference cost tracking?
+
+llm-d already collects rich performance metrics via vLLM (token throughput, latency, queue depth) and DCGM (GPU utilization, memory). Those metrics tell you **how fast** a model is serving but not **what it costs** — they carry no knowledge of GPU pricing, CPU/memory allocation, or how infrastructure costs should be split across models sharing the same nodes.
+
+Bridging that gap requires joining two separate data sources that have historically lived in different systems:
+
+| Data source | What it provides | What it lacks |
+|---|---|---|
+| vLLM Prometheus metrics | Token counts, latency, cache hit rate | Infrastructure cost per token |
+| Kubernetes allocation (CPU/GPU/RAM) | Infrastructure cost per pod | Which model generated the cost |
+
+OpenCost, with its new inference capabilities, provides exactly this join. It attributes Kubernetes infrastructure costs (CPU, GPU, RAM) to pods via the `llm-d.ai/model` pod label, correlates them with vLLM's `model_name` metric label, and publishes the result as `llm_*` Prometheus gauges. The outcome is metrics that neither system could produce alone:
+
+- **Cost per million tokens** — the unit economics of serving each model, broken down by prompt vs generation tokens
+- **Hourly infrastructure cost rate** — actual GPU+CPU+RAM spend attributed per model
+- **Cache savings fraction** — the cost reduction achieved by KV-cache hits, making the value of prefix caching visible in financial terms
+
+This enables use cases that raw performance metrics cannot support: chargeback across teams, cost-based routing decisions, comparing self-hosted vs commercial API costs, and right-sizing GPU allocations. For the full motivation and design rationale, see the [inference cost proposal](https://github.com/simanadler/llm-d/blob/5c5bd7c5981ea155a9059787a63ec0ec728d409e/docs/proposals/inference-costs.md).
+
 ## How it works
 
 OpenCost's inference cost module joins two data sources:
