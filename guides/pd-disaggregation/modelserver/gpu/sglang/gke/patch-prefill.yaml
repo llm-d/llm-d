@@ -1,3 +1,5 @@
+# GKE overlay patch for SGLang prefill deployment.
+# Extends base/patch-prefill.yaml with GKE-specific DRA RDMA claims, UCX networking, and persistent HuggingFace cache.
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -10,6 +12,7 @@ spec:
         - key: nvidia.com/gpu
           operator: Exists
           effect: NoSchedule
+      # Request 4 GKE DRA RDMA claims for PCIe root switch rail-aligned RoCE inter-pod transfer
       resourceClaims:
         - name: gke-rdma-claim-0
           resourceClaimTemplateName: gke-rdma-template
@@ -21,7 +24,6 @@ spec:
           resourceClaimTemplateName: gke-rdma-template
       containers:
         - name: modelserver
-          command: ["python3", "-m", "sglang.launch_server"]
           args:
             - "--model-path=openai/gpt-oss-120b"
             - "--port=8000"
@@ -39,19 +41,19 @@ spec:
               value: "60"
             - name: HF_HUB_DISABLE_XET
               value: "1"
+            # UCX multi-rail RoCE RDMA networking configuration
             - name: UCX_LOG_LEVEL
               value: info
+            # Enable RoCE reachability across all subnet interfaces
             - name: UCX_IB_ROCE_REACHABILITY_MODE
               value: "all"
+            # Prefer Reliable Connection RoCE IB transport (rc_mlx5) for zero-copy memory transfers
             - name: UCX_TLS
               value: "rc_mlx5,tcp,cuda_copy,cma,self"
+            # Explicitly bind all 8 co-located 400Gbps RoCE Mellanox NICs (mlx5_0:1..mlx5_7:1) for multi-rail KV cache payload
+            # striping across 3.2 Tbps aggregate bandwidth, while keeping eth0 registered for TCP control-plane handshakes.
             - name: UCX_NET_DEVICES
               value: "mlx5_0:1,mlx5_1:1,mlx5_2:1,mlx5_3:1,mlx5_4:1,mlx5_5:1,mlx5_6:1,mlx5_7:1,eth0"
-            - name: HF_TOKEN
-              valueFrom:
-                secretKeyRef:
-                  name: llm-d-hf-token
-                  key: HF_TOKEN
           resources:
             limits:
               cpu: "64"
@@ -59,16 +61,13 @@ spec:
             requests:
               cpu: "32"
               memory: "128Gi"
+            # Bind the 4 GKE DRA claims to the modelserver container
             claims:
               - name: gke-rdma-claim-0
               - name: gke-rdma-claim-1
               - name: gke-rdma-claim-2
               - name: gke-rdma-claim-3
           volumeMounts:
-            - mountPath: /dev/shm
-              name: shm
-            - name: metrics-volume
-              mountPath: /.config
             # Mount a persistent volume for huggingface cache, so that the cache is shared across restarts
             - mountPath: /root/.cache/huggingface
               name: huggingface-cache
@@ -80,21 +79,7 @@ spec:
             httpGet:
               path: /v1/models
               port: modelserver
-          livenessProbe:
-            periodSeconds: 10
-            timeoutSeconds: 5
-            failureThreshold: 3
-          readinessProbe:
-            periodSeconds: 5
-            timeoutSeconds: 2
-            failureThreshold: 3
       volumes:
-        - name: metrics-volume
-          emptyDir: {}
-        - name: shm
-          emptyDir:
-            medium: Memory
-            sizeLimit: "16Gi"
         - name: huggingface-cache
           hostPath:
             path: /var/cache/huggingface
