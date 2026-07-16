@@ -192,7 +192,7 @@ spec:
                   --port 8200 \
                   --trust-remote-code \
                   --gpu-memory-utilization $GPU_MEM_UTIL \
-                  --max-model-len 131072 \
+                  --max-model-len 130000 \
                   --disable-access-log-for-endpoints=/health,/metrics \
                   --data-parallel-multi-port-external-lb \
                   --data-parallel-supervisor-port=8208 \
