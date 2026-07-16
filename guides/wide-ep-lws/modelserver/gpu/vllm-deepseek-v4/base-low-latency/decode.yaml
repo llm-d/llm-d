@@ -73,6 +73,8 @@ spec:
                 #################
                 # RUN vLLM DeepSeek-V4 decode worker (TP=8, low-latency)
                 # Pure tensor parallelism across 2 nodes (4 GPUs each) via MNNVL.
+                # Only the leader (index 0) runs the API server; worker pods will
+                # show NotReady (expected — they participate in TP via NCCL only).
                 #################
                 API_SERVER_COUNT=1
                 if [ "${LWS_WORKER_INDEX:-0}" -gt 0 ]; then
