@@ -153,7 +153,7 @@ Choose the overlay matching your infrastructure provider:
 > Check subdirectories under your provider folder (e.g. `modelserver/gpu/vllm/gke/a4x` for GKE A4X / GB200 platforms) for platform-specific overlays. If your target hardware has specialized driver, memory, or network interconnect requirements, default provider settings may not adapt to your platform, and you should select the corresponding platform sub-overlay (for example, `export INFRA_PROVIDER=gke/a4x`).
 
 ```bash
-export INFRA_PROVIDER=base # base | coreweave | gke | aws
+export INFRA_PROVIDER=base # base | coreweave | gke/base | gke/a4x | aws
 
 kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/gpu/vllm/${INFRA_PROVIDER}
 ```

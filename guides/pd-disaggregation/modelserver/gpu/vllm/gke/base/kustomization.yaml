@@ -2,10 +2,10 @@ apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 
 resources:
-  - ../base
+  - ../../base
 
 components:
-  - ../../../components/gke-rdma
+  - ../../../../components/gke-rdma
 
 patches:
   - patch: |-
@@ -18,6 +18,9 @@ patches:
           spec:
             tolerations:
               - key: nvidia.com/gpu
+                operator: Exists
+                effect: NoSchedule
+              - key: kubernetes.io/arch
                 operator: Exists
                 effect: NoSchedule
             resourceClaims:
@@ -49,6 +52,9 @@ patches:
           spec:
             tolerations:
               - key: nvidia.com/gpu
+                operator: Exists
+                effect: NoSchedule
+              - key: kubernetes.io/arch
                 operator: Exists
                 effect: NoSchedule
             resourceClaims:

@@ -167,12 +167,10 @@ items:
 
 ### GKE A4X (GB200) Setup
 
-For GKE A4X (NVIDIA GB200) clusters, deploy model servers using the `gke/a4x` overlay path (`modelserver/gpu/vllm/gke/a4x`). This configuration enables native InfiniBand RDMA networking and GPUDirect Level 5 hardware acceleration:
+For GKE A4X (NVIDIA GB200) clusters, deploy model servers using the `gke/a4x` overlay path (`modelserver/gpu/vllm/gke/a4x`) which inherits from `gke/base`. This configuration enables native InfiniBand RDMA networking via DRANet (`mrdma.google.com`) and GPUDirect hardware acceleration:
 
-* **Driver Binding**: Configures `LD_PRELOAD=/usr/local/nvidia/lib64/libibverbs.so.1` to bind container processes directly to GKE's host-level gIB driver.
 * **Hardware Interconnect**: Configures `UCX_TLS=rc_mlx5,rc,cuda_copy,cuda_ipc,sm,shm,self` for hardware-accelerated InfiniBand transport.
-* **NCCL Acceleration**: Sets `NCCL_NET=gIB` (or `NCCL_ENV_PLUGIN=gcp`) and `NCCL_NET_GDR_LEVEL=5`.
-* **Host Driver Mounts**: Mounts host driver paths `/home/kubernetes/bin/gib` and `/home/kubernetes/bin/nvidia`.
+* **DRANet Resource Claims**: Uses `gke-rdma-nic-template` to request DRANet (`mrdma.google.com`) interfaces while managing GPUs via NVIDIA Device Plugin (`nvidia.com/gpu`).
 
 ## Mitigating Hugging Face Model Download Rate Limiting
 

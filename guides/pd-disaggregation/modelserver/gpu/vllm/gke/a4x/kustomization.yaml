@@ -2,29 +2,11 @@ apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 
 resources:
-  - ../../base
-
-components:
-  - ../../../../components/gke-rdma
+  - ../base
+  - gke-rdma-nic-template.yaml
 
 patches:
-  # Patch gke-rdma-template from gke-rdma component to request only DRANet (mrdma.google.com) on A4X
-  - patch: |-
-      apiVersion: resource.k8s.io/v1
-      kind: ResourceClaimTemplate
-      metadata:
-        name: gke-rdma-template
-      spec:
-        spec:
-          devices:
-            $patch: replace
-            requests:
-              - name: nic
-                exactly:
-                  deviceClassName: mrdma.google.com
-                  allocationMode: ExactCount
-                  count: 1
-  # Configure prefill deployment with DRANet resourceClaims & A4X env and mounts
+  # Configure prefill deployment with DRANet resourceClaims (gke-rdma-nic-template), A4X GPU resources, env, and capabilities
   - patch: |-
       apiVersion: apps/v1
       kind: Deployment
@@ -35,9 +17,10 @@ patches:
           spec:
             resourceClaims:
               - name: gke-rdma-claim
-                resourceClaimTemplateName: gke-rdma-template
+                resourceClaimTemplateName: gke-rdma-nic-template
             containers:
               - name: modelserver
+                # A4X requires "kv_buffer_device":"cuda" in kv-transfer-config, gpu-memory-utilization=0.9, and disabling flashinfer autotune
                 args:
                   - openai/gpt-oss-120b
                   - --disable-access-log-for-endpoints=/health,/metrics,/v1/models
@@ -48,25 +31,21 @@ patches:
                   - --no-disable-hybrid-kv-cache-manager
                   - --gpu-memory-utilization=0.9
                   - --no-enable-flashinfer-autotune
+                # Re-add GPU requests & limits (managed via NVIDIA Device Plugin on A4X)
                 resources:
                   claims:
                     - name: gke-rdma-claim
+                  limits:
+                    nvidia.com/gpu: "1"
+                  requests:
+                    nvidia.com/gpu: "1"
                 env:
                   - name: UCX_TLS
                     value: "rc_mlx5,rc,cuda_copy,cuda_ipc,sm,shm,self"
-                  - name: UCX_IB_ROCE_REACHABILITY_MODE
-                    value: "all"
                 securityContext:
                   capabilities:
                     add: ["IPC_LOCK", "NET_ADMIN"]
-            tolerations:
-              - effect: NoSchedule
-                key: nvidia.com/gpu
-                operator: Exists
-              - key: kubernetes.io/arch
-                operator: Exists
-                effect: NoSchedule
-  # Configure decode deployment with DRANet resourceClaims & A4X env and mounts
+  # Configure decode deployment with DRANet resourceClaims (gke-rdma-nic-template), A4X GPU resources, env, and capabilities
   - patch: |-
       apiVersion: apps/v1
       kind: Deployment
@@ -77,15 +56,16 @@ patches:
           spec:
             resourceClaims:
               - name: gke-rdma-claim-0
-                resourceClaimTemplateName: gke-rdma-template
+                resourceClaimTemplateName: gke-rdma-nic-template
               - name: gke-rdma-claim-1
-                resourceClaimTemplateName: gke-rdma-template
+                resourceClaimTemplateName: gke-rdma-nic-template
               - name: gke-rdma-claim-2
-                resourceClaimTemplateName: gke-rdma-template
+                resourceClaimTemplateName: gke-rdma-nic-template
               - name: gke-rdma-claim-3
-                resourceClaimTemplateName: gke-rdma-template
+                resourceClaimTemplateName: gke-rdma-nic-template
             containers:
               - name: modelserver
+                # A4X requires "kv_buffer_device":"cuda" in kv-transfer-config
                 args:
                   - openai/gpt-oss-120b
                   - --disable-access-log-for-endpoints=/health,/metrics,/v1/models
@@ -95,25 +75,20 @@ patches:
                   - '{"kv_connector":"NixlConnector", "kv_role":"kv_both", "kv_buffer_device":"cuda"}'
                   - --no-disable-hybrid-kv-cache-manager
                   - --port=8200
+                # Re-add GPU requests & limits (managed via NVIDIA Device Plugin on A4X)
                 resources:
                   claims:
                     - name: gke-rdma-claim-0
                     - name: gke-rdma-claim-1
                     - name: gke-rdma-claim-2
                     - name: gke-rdma-claim-3
+                  limits:
+                    nvidia.com/gpu: "4"
+                  requests:
+                    nvidia.com/gpu: "4"
                 env:
                   - name: UCX_TLS
                     value: "rc_mlx5,rc,cuda_copy,cuda_ipc,sm,shm,self"
-                  - name: UCX_IB_ROCE_REACHABILITY_MODE
-                    value: "all"
                 securityContext:
                   capabilities:
                     add: ["IPC_LOCK", "NET_ADMIN"]
-            tolerations:
-              - effect: NoSchedule
-                key: nvidia.com/gpu
-                operator: Exists
-              - key: kubernetes.io/arch
-                operator: Exists
-                effect: NoSchedule
-
