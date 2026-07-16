@@ -162,7 +162,7 @@ spec:
                                                "spec_name":"TieringOffloadingSpec",
                                                "cpu_bytes_to_use":'"${KV_OFFLOAD_CPU_BYTES:-107374182400}"',
                                                "eviction_policy":"lru"
-                                          }]}}}'
+                                          }}]}}'
                 fi
 
                 exec vllm serve $SPEC_ARGS $KV_CACHE_DTYPE_ARGS \
