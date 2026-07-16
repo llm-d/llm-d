@@ -4,19 +4,19 @@
 
 ## Summary
 
-llm-d is intentionally engine- and hardware-agnostic, yet no tool exists to evaluate its distributed-systems design space: how routing, flow control, autoscaling, placement, and disaggregation policies interact across multiple inference engines and hardware platforms, at a speed that makes configuration search, algorithm development, and research tractable. This document proposes a core llm-d Simulator: a simulation framework that enables rapid, reproducible performance estimation across the llm-d ecosystem. The goal of the llm-d Simulator is to predict latency and throughput by advancing a simulation clock event-to-event without running real workloads on hardware, achieving approximately 200× speedup over real-time execution.
+llm-d is intentionally engine- and hardware-agnostic, yet no tool exists to evaluate its distributed-systems design space: how routing, flow control, autoscaling, placement, and disaggregation policies interact across multiple inference engines and hardware platforms, at a speed that makes configuration search, algorithm development, and research tractable. This document proposes a core llm-d Performance Simulator: a simulation framework that enables rapid, reproducible performance estimation across the llm-d ecosystem. The goal of the llm-d Performance Simulator is to predict latency and throughput by advancing a simulation clock event-to-event without running real workloads on hardware, achieving approximately 200× speedup over real-time execution.
 
 ## Motivation
 
-The llm-d Simulator serves three primary user communities. Platform engineers can use it to perform capacity planning, evaluate deployment configurations, and understand latency and throughput tradeoffs before provisioning expensive hardware. llm-d developers can rapidly prototype, test, and validate new scheduling, routing, admission control, and serving algorithms in a deterministic environment before deploying to real clusters. Researchers gain a common, reproducible platform for studying distributed inference systems, benchmarking new ideas, and sharing results that can be independently validated by the community. All three use cases depend on evaluating large numbers of candidates quickly. This is only feasible through discrete-event simulation, which decouples simulated time from wall-clock time.
+The llm-d Performance Simulator serves three primary user communities. Platform engineers can use it to perform capacity planning, evaluate deployment configurations, and understand latency and throughput tradeoffs before provisioning expensive hardware. llm-d developers can rapidly prototype, test, and validate new scheduling, routing, admission control, and serving algorithms in a deterministic environment before deploying to real clusters. Researchers gain a common, reproducible platform for studying distributed inference systems, benchmarking new ideas, and sharing results that can be independently validated by the community. All three use cases depend on evaluating large numbers of candidates quickly. This is only feasible through discrete-event simulation, which decouples simulated time from wall-clock time.
 
 This proposal builds on the success of BLIS, which has already demonstrated the value of simulation by enabling the design and evolution of new algorithms for llm-d significantly faster than hardware-based experimentation. By elevating BLIS into an official llm-d project, we establish simulation as the standard development, benchmarking, and research platform for the ecosystem, lowering the cost of experimentation while accelerating innovation for distributed inference research.
 
 ### Goals
 
-- Contribute the `inference-sim/inference-sim` repository to `llm-d/llm-d-simulator`.
-- Establish regular pinned releases of `llm-d-simulator` along with the llm-d release cycle.
-- TBD: establish a regular community meeting for `llm-d-simulator`.
+- Contribute the `inference-sim/inference-sim` repository to `llm-d/llm-d-perf-simulator`.
+- Establish regular pinned releases of `llm-d-perf-simulator` along with the llm-d release cycle.
+- TBD: establish a regular community meeting for `llm-d-perf-simulator`.
 
 ### Non-Goals
 
@@ -41,7 +41,7 @@ llm-d's complexity (tightly coupled routing, scheduling, KV-cache management, ba
 
 ## Design Details & Scope
 
-The `llm-d-simulator` architecture is described in [BLIS: Evolving llm-d at Simulation Speed](https://llm-d.ai/blog/blis-evolving-llm-d-at-simulation-speed#what-is-blis), published on the llm-d website. This blog highlights the speed at which BLIS enables configuration search and policy development. Compared to traditional development which requires provisioning llm-d on a real cluster, BLIS gives performance numbers in a matter of seconds, and costs just CPUs.
+The `llm-d-perf-simulator` architecture is described in [BLIS: Evolving llm-d at Simulation Speed](https://llm-d.ai/blog/blis-evolving-llm-d-at-simulation-speed#what-is-blis), published on the llm-d website. This blog highlights the speed at which BLIS enables configuration search and policy development. Compared to traditional development which requires provisioning llm-d on a real cluster, BLIS gives performance numbers in a matter of seconds, and costs just CPUs.
 
 Different simulation tools answer different questions and are complementary rather than competing. BLIS occupies the cluster layer, above any single inference engine.
 
@@ -136,7 +136,8 @@ We plan to augment this in the future with an automated, AI-driven parity-discov
 ### Road Map
 
 - Arxiv release of BLIS research paper
-- Migrate `inference-sim/inference-sim` repository to `llm-d/llm-d-simulator`
+- Migrate `inference-sim/inference-sim` repository to `llm-d/llm-d-perf-simulator`
+- Update llm-d docs on when to use what type of simulators
 - Enhanced P/D accuracy
 - Improved network and communications modeling
 - Investigating a CI workflow to periodically validate the accuracy of the simulator (this will require cluster resources like llm-d-benchmark nightly runs)
