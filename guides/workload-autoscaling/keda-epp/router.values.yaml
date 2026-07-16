@@ -1,0 +1,30 @@
+## Enables EPP Flow Control for KEDA autoscaling.
+## Monitoring must be enabled separately during optimized-baseline setup.
+## Layer after recipes/router/base.values.yaml and
+## optimized-baseline/router/optimized-baseline.values.yaml.
+
+router:
+  epp:
+    pluginsConfigFile: "optimized-baseline-keda-epp-plugins.yaml"
+    pluginsCustomConfig:
+      optimized-baseline-keda-epp-plugins.yaml: |
+        apiVersion: llm-d.ai/v1alpha1
+        kind: EndpointPickerConfig
+        featureGates:
+        - flowControl
+        plugins:
+        - type: queue-scorer
+        - type: kv-cache-utilization-scorer
+        - type: prefix-cache-scorer
+        - type: no-hit-lru-scorer
+        schedulingProfiles:
+        - name: default
+          plugins:
+          - pluginRef: queue-scorer
+            weight: 2
+          - pluginRef: kv-cache-utilization-scorer
+            weight: 2
+          - pluginRef: prefix-cache-scorer
+            weight: 3
+          - pluginRef: no-hit-lru-scorer
+            weight: 2

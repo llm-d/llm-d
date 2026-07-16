@@ -1,0 +1,21 @@
+# Bearer-token auth for KEDA -> Prometheus (Thanos Querier on OpenShift).
+#
+# Thanos Querier's :9091 endpoint rejects unauthenticated queries with a 401. KEDA has no
+# credentials of its own, so it borrows the WVA controller's ServiceAccount token, which the
+# OpenShift overlay already grants `cluster-monitoring-view` — the role Thanos requires.
+#
+# The secret is the SA token secret created by wva-config/platform/ocp
+# (wva-controller-manager-token): `token` is the bearer token, and `service-ca.crt` is the CA
+# that signs the Thanos serving certificate.
+apiVersion: keda.sh/v1alpha1
+kind: TriggerAuthentication
+metadata:
+  name: wva-prometheus-auth
+spec:
+  secretTargetRef:
+    - parameter: bearerToken
+      name: wva-controller-manager-token
+      key: token
+    - parameter: ca
+      name: wva-controller-manager-token
+      key: service-ca.crt

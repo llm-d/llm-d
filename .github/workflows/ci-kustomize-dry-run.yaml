@@ -131,31 +131,32 @@ jobs:
       - name: Kustomize build and dry-run all model server overlays
         run: |
           failed=0
-          for overlay_dir in guides/optimized-baseline/modelserver/*/; do
-            # Each accelerator dir may have one or more server subdirs (vllm, sglang)
-            for kust_dir in "${overlay_dir}"*/; do
-              [ -f "${kust_dir}kustomization.yaml" ] || continue
-              name="${kust_dir#guides/optimized-baseline/modelserver/}"
-              name="${name%/}"
-              echo ""
-              echo "========================================"
-              echo "optimized-baseline: ${name}"
-              echo "========================================"
-              echo "--- kustomize build ---"
-              if ! kustomize build "${kust_dir}" > /tmp/rendered.yaml; then
-                echo "FAIL: kustomize build failed for ${name}"
-                failed=1
-                continue
-              fi
-              echo "--- kubectl apply --dry-run=server ---"
-              if kubectl apply --dry-run=server -f /tmp/rendered.yaml; then
-                echo "PASS: optimized-baseline / ${name}"
-              else
-                echo "FAIL: optimized-baseline / ${name}"
-                failed=1
-              fi
-            done
-          done
+          base=guides/optimized-baseline/modelserver
+          # Recurse to any depth: overlays nest unevenly (e.g. amd/vllm/ but
+          # gpu/vllm/base/, gpu/vllm/gke/, gpu/vllm/gpt-oss/, tpu/v6/vllm/).
+          # Find every kustomization.yaml so each backend/server overlay is covered.
+          while IFS= read -r -d '' kustfile; do
+            kust_dir="${kustfile%kustomization.yaml}"
+            name="${kust_dir#"${base}"/}"
+            name="${name%/}"
+            echo ""
+            echo "========================================"
+            echo "optimized-baseline: ${name}"
+            echo "========================================"
+            echo "--- kustomize build ---"
+            if ! kustomize build "${kust_dir}" > /tmp/rendered.yaml; then
+              echo "FAIL: kustomize build failed for ${name}"
+              failed=1
+              continue
+            fi
+            echo "--- kubectl apply --dry-run=server ---"
+            if kubectl apply --dry-run=server -f /tmp/rendered.yaml; then
+              echo "PASS: optimized-baseline / ${name}"
+            else
+              echo "FAIL: optimized-baseline / ${name}"
+              failed=1
+            fi
+          done < <(find "${base}" -name kustomization.yaml -print0 | sort -z)
           exit $failed
 
   dry-run-pd-disaggregation:
@@ -221,34 +222,34 @@ jobs:
       - name: Kustomize build and dry-run all model server overlays
         run: |
           failed=0
-          for overlay_dir in guides/pd-disaggregation/modelserver/*/; do
-            overlay_name="$(basename "${overlay_dir%/}")"
-            # skip the components directory
-            [ "${overlay_name}" = "components" ] && continue
-            # Each accelerator dir may have one or more server subdirs (vllm, sglang)
-            for kust_dir in "${overlay_dir}"*/; do
-              [ -f "${kust_dir}kustomization.yaml" ] || continue
-              name="${kust_dir#guides/pd-disaggregation/modelserver/}"
-              name="${name%/}"
-              echo ""
-              echo "========================================"
-              echo "pd-disaggregation: ${name}"
-              echo "========================================"
-              echo "--- kustomize build ---"
-              if ! kustomize build "${kust_dir}" > /tmp/rendered.yaml; then
-                echo "FAIL: kustomize build failed for ${name}"
-                failed=1
-                continue
-              fi
-              echo "--- kubectl apply --dry-run=server ---"
-              if kubectl apply --dry-run=server -f /tmp/rendered.yaml; then
-                echo "PASS: pd-disaggregation / ${name}"
-              else
-                echo "FAIL: pd-disaggregation / ${name}"
-                failed=1
-              fi
-            done
-          done
+          base=guides/pd-disaggregation/modelserver
+          # Recurse to any depth: overlays nest unevenly (e.g. xpu/vllm/ but
+          # gpu/vllm/base/, gpu/sglang/gke/, tpu/v6/vllm/). Find every
+          # kustomization.yaml so each backend/server overlay is covered.
+          # Skip the shared components directory (not a standalone overlay).
+          while IFS= read -r -d '' kustfile; do
+            kust_dir="${kustfile%kustomization.yaml}"
+            case "${kust_dir}" in */components/*) continue ;; esac
+            name="${kust_dir#"${base}"/}"
+            name="${name%/}"
+            echo ""
+            echo "========================================"
+            echo "pd-disaggregation: ${name}"
+            echo "========================================"
+            echo "--- kustomize build ---"
+            if ! kustomize build "${kust_dir}" > /tmp/rendered.yaml; then
+              echo "FAIL: kustomize build failed for ${name}"
+              failed=1
+              continue
+            fi
+            echo "--- kubectl apply --dry-run=server ---"
+            if kubectl apply --dry-run=server -f /tmp/rendered.yaml; then
+              echo "PASS: pd-disaggregation / ${name}"
+            else
+              echo "FAIL: pd-disaggregation / ${name}"
+              failed=1
+            fi
+          done < <(find "${base}" -name kustomization.yaml -print0 | sort -z)
           exit $failed
 
   dry-run-precise-prefix-cache-routing:
@@ -385,9 +386,13 @@ jobs:
       - name: Kustomize build and dry-run all WVA platform overlays
         run: |
           failed=0
-          for kust_dir in guides/workload-autoscaling/wva-config/platform/*/; do
-            [ -f "${kust_dir}kustomization.yaml" ] || continue
-            name="${kust_dir#guides/workload-autoscaling/wva-config/platform/}"
+          base=guides/workload-autoscaling/wva-config/platform
+          # Recurse to any depth so every platform overlay is covered, matching
+          # the other dry-run jobs (today only platform/k8s/ and platform/ocp/
+          # exist, but nested overlays should be validated automatically too).
+          while IFS= read -r -d '' kustfile; do
+            kust_dir="${kustfile%kustomization.yaml}"
+            name="${kust_dir#"${base}"/}"
             name="${name%/}"
             echo ""
             echo "========================================"
@@ -413,5 +418,5 @@ jobs:
               echo "FAIL: workload-autoscaling / ${name}"
               failed=1
             fi
-          done
+          done < <(find "${base}" -name kustomization.yaml -print0 | sort -z)
           exit $failed

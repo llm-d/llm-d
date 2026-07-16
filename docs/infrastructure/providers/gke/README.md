@@ -165,6 +165,66 @@ items:
 
 </details>
 
+### GKE A4X (GB200) Setup
+
+For GKE A4X (NVIDIA GB200) clusters, deploy model servers using the `gke/a4x` overlay path (`modelserver/gpu/vllm/gke/a4x`). This configuration enables native InfiniBand RDMA networking and GPUDirect Level 5 hardware acceleration:
+
+* **Driver Binding**: Configures `LD_PRELOAD=/usr/local/nvidia/lib64/libibverbs.so.1` to bind container processes directly to GKE's host-level gIB driver.
+* **Hardware Interconnect**: Configures `UCX_TLS=rc_mlx5,rc,cuda_copy,cuda_ipc,sm,shm,self` for hardware-accelerated InfiniBand transport.
+* **NCCL Acceleration**: Sets `NCCL_NET=gIB` (or `NCCL_ENV_PLUGIN=gcp`) and `NCCL_NET_GDR_LEVEL=5`.
+* **Host Driver Mounts**: Mounts host driver paths `/home/kubernetes/bin/gib` and `/home/kubernetes/bin/nvidia`.
+
+## Mitigating Hugging Face Model Download Rate Limiting
+
+When deploying large-scale model inference on GKE clusters (such as multi-replica prefill and decode deployments), concurrent model weight downloads across multiple pods can trigger Hugging Face HTTP 429 Rate Limiting errors, leading to container startup timeouts.
+
+To ensure resilient model loading across pods, consider the following strategies:
+
+### 1. Node-Level Host Caching
+
+Mount a local host directory to `/root/.cache/huggingface` inside workload pods so that multiple pods scheduled on the same node share cached weights without re-downloading across pod restarts.
+
+```yaml
+        env:
+        - name: HF_HOME
+          value: /root/.cache/huggingface
+        # ...
+        volumeMounts:
+        - mountPath: /root/.cache/huggingface
+          name: huggingface-cache
+      volumes:
+      - name: huggingface-cache
+        hostPath:
+          path: /var/cache/huggingface
+          type: DirectoryOrCreate
+```
+
+> [!NOTE]
+> The host path `/var/cache/huggingface` in the manifest snippet above serves as an illustrative reference. Users can configure any suitable host directory based on their node disk allocation and storage policies.
+
+### 2. Hub Timeouts & Startup Probe Tuning
+
+Configure download retry and timeout environment variables, and increase `startupProbe.failureThreshold` (e.g., to 240) to give pods sufficient headroom to complete initial model weight downloads under network constraints:
+
+```yaml
+        env:
+        - name: HF_HUB_DOWNLOAD_TIMEOUT
+          value: "60"
+        - name: HF_HUB_ETAG_TIMEOUT
+          value: "60"
+        - name: HF_HUB_DISABLE_XET
+          value: "1"
+        startupProbe:
+          failureThreshold: 240
+          periodSeconds: 30
+```
+
+### 3. Google Cloud Storage Integration (Recommended for Production)
+
+For large production workloads, store model weights in a Google Cloud Storage (GCS) bucket and mount the weights directly to pods. This completely eliminates external Hugging Face network dependencies during pod scaling.
+
+For step-by-step instructions, see the [GKE Hugging Face GCS Transfer Guide](https://gke-ai-labs.dev/docs/tutorials/storage/hf-gcs-transfer/).
+
 ### TPUs
 
 For all TPU machines, follow the [TPUs in GKE documentation](https://cloud.google.com/kubernetes-engine/docs/how-to/tpus).

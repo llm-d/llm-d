@@ -1,0 +1,119 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - ../../base
+
+components:
+  - ../../../../components/gke-rdma
+
+patches:
+  # Patch gke-rdma-template from gke-rdma component to request only DRANet (mrdma.google.com) on A4X
+  - patch: |-
+      apiVersion: resource.k8s.io/v1
+      kind: ResourceClaimTemplate
+      metadata:
+        name: gke-rdma-template
+      spec:
+        spec:
+          devices:
+            $patch: replace
+            requests:
+              - name: nic
+                exactly:
+                  deviceClassName: mrdma.google.com
+                  allocationMode: ExactCount
+                  count: 1
+  # Configure prefill deployment with DRANet resourceClaims & A4X env and mounts
+  - patch: |-
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: prefill
+      spec:
+        template:
+          spec:
+            resourceClaims:
+              - name: gke-rdma-claim
+                resourceClaimTemplateName: gke-rdma-template
+            containers:
+              - name: modelserver
+                args:
+                  - openai/gpt-oss-120b
+                  - --disable-access-log-for-endpoints=/health,/metrics,/v1/models
+                  - --tensor-parallel-size=1
+                  - --block-size=128
+                  - --kv-transfer-config
+                  - '{"kv_connector":"NixlConnector", "kv_role":"kv_both", "kv_buffer_device":"cuda"}'
+                  - --no-disable-hybrid-kv-cache-manager
+                  - --gpu-memory-utilization=0.9
+                  - --no-enable-flashinfer-autotune
+                resources:
+                  claims:
+                    - name: gke-rdma-claim
+                env:
+                  - name: UCX_TLS
+                    value: "rc_mlx5,rc,cuda_copy,cuda_ipc,sm,shm,self"
+                  - name: UCX_IB_ROCE_REACHABILITY_MODE
+                    value: "all"
+                securityContext:
+                  capabilities:
+                    add: ["IPC_LOCK", "NET_ADMIN"]
+            tolerations:
+              - effect: NoSchedule
+                key: nvidia.com/gpu
+                operator: Exists
+              - key: kubernetes.io/arch
+                operator: Exists
+                effect: NoSchedule
+  # Configure decode deployment with DRANet resourceClaims & A4X env and mounts
+  - patch: |-
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: decode
+      spec:
+        template:
+          spec:
+            resourceClaims:
+              - name: gke-rdma-claim-0
+                resourceClaimTemplateName: gke-rdma-template
+              - name: gke-rdma-claim-1
+                resourceClaimTemplateName: gke-rdma-template
+              - name: gke-rdma-claim-2
+                resourceClaimTemplateName: gke-rdma-template
+              - name: gke-rdma-claim-3
+                resourceClaimTemplateName: gke-rdma-template
+            containers:
+              - name: modelserver
+                args:
+                  - openai/gpt-oss-120b
+                  - --disable-access-log-for-endpoints=/health,/metrics,/v1/models
+                  - --tensor-parallel-size=4
+                  - --block-size=128
+                  - --kv-transfer-config
+                  - '{"kv_connector":"NixlConnector", "kv_role":"kv_both", "kv_buffer_device":"cuda"}'
+                  - --no-disable-hybrid-kv-cache-manager
+                  - --port=8200
+                resources:
+                  claims:
+                    - name: gke-rdma-claim-0
+                    - name: gke-rdma-claim-1
+                    - name: gke-rdma-claim-2
+                    - name: gke-rdma-claim-3
+                env:
+                  - name: UCX_TLS
+                    value: "rc_mlx5,rc,cuda_copy,cuda_ipc,sm,shm,self"
+                  - name: UCX_IB_ROCE_REACHABILITY_MODE
+                    value: "all"
+                securityContext:
+                  capabilities:
+                    add: ["IPC_LOCK", "NET_ADMIN"]
+            tolerations:
+              - effect: NoSchedule
+                key: nvidia.com/gpu
+                operator: Exists
+              - key: kubernetes.io/arch
+                operator: Exists
+                effect: NoSchedule
+
