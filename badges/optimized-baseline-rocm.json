@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
   "label": "VLLM ROCm",
-  "message": "timeout",
-  "color": "yellow"
+  "message": "cancelled",
+  "color": "lightgrey"
 }
