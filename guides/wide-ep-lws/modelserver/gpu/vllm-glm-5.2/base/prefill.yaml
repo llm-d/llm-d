@@ -181,6 +181,7 @@ spec:
                   --data-parallel-address ${LWS_LEADER_ADDRESS} \
                   --data-parallel-rpc-port 5555 \
                   --speculative-config '{"method":"mtp","num_speculative_tokens":3}' \
+                  --max-num-batched-tokens 8192 \
                   --data-parallel-start-rank $START_RANK \
                   --kv_transfer_config "$KV_TRANSFER_CONFIG" \
                   --moe-backend deep_gemm \
