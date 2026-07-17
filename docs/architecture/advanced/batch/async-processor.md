@@ -4,6 +4,65 @@ The Async Processor is a lightweight dispatch agent that pulls inference request
 
 ## How It Works
 
+```mermaid
+flowchart LR
+    subgraph Clients["Clients & Job Producers"]
+        BG[Batch Gateway]
+        DC[Direct Async Clients]
+    end
+
+    subgraph Queues["Message Queue Layer\n(Redis Sorted Set / Redis Pub-Sub / GCP Pub-Sub)"]
+        MQ[(Request Queue)]
+        RQ[(Result Queue)]
+    end
+
+    subgraph AsyncProc["Async Processor"]
+        Workers["Worker Pool\n(Default: 8 Workers)"]
+
+        subgraph Gates["Dispatch Gates (per-queue)"]
+            DG{"Dispatch Gate"}
+            G1["constant"]
+            G2["redis"]
+            G3["prometheus-saturation"]
+            G4["prometheus-budget"]
+
+            DG --- G1
+            DG --- G2
+            DG --- G3
+            DG --- G4
+        end
+    end
+
+    subgraph Downstream["llm-d Routing"]
+        Router[llm-d Router]
+    end
+
+    subgraph External["External Telemetry"]
+        Prom[(Prometheus)]
+        RedBudget[(Redis Budget Key)]
+    end
+
+    %% Producer Flows
+    BG -->|Push Requests| MQ
+    DC -->|Push Requests| MQ
+
+    %% Core Processing Loop (matches "How It Works" steps 1-4)
+    MQ -->|1. Poll| Workers
+    Workers -->|2. Gate Check| DG
+    Workers -->|3. Dispatch HTTP| Router
+    Router -->|Response| Workers
+
+    %% Result Handling
+    Workers -->|4. Write Result| RQ
+    Workers -.->|Retry with Backoff| MQ
+
+    %% Telemetry Queries
+    G2 -.->|Read Budget| RedBudget
+    G3 -.->|Query Saturation| Prom
+    G4 -.->|Query Capacity| Prom
+
+```
+
 1. **Poll** — workers pull requests from one or more message queues.
 2. **Gate** — before dispatching, each request passes through a dispatch gate that checks whether the system has capacity. If the gate is closed (budget = 0), the request waits.
 3. **Dispatch** — the worker sends an HTTP request to the llm-d Router with deadline propagation.
