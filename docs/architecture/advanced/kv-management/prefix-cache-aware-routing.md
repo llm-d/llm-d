@@ -21,7 +21,7 @@ The approximate implementation is designed to be lightweight and requires no ext
 sequenceDiagram
     autonumber
     participant Proxy as Gateway Proxy
-    box EPP (Endpoint Policy Provider)
+    box EPP (Endpoint Picker)
         participant HP as approx-prefix-cache-producer
         participant LRU as Local LRU Cache (In-Memory)
         participant Scorer as prefix-cache-scorer
@@ -71,7 +71,7 @@ The precise implementation provides 100% accuracy by leveraging actual token dat
 sequenceDiagram
     autonumber
     participant Proxy as Gateway Proxy
-    box EPP (Endpoint Policy Provider)
+    box EPP (Endpoint Picker)
         participant TP as token-producer
         participant PP as precise-prefix-cache-producer
         participant Idx as KV-Cache Index (block-key → pods)
