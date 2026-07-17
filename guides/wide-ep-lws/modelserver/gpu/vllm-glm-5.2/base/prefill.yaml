@@ -124,11 +124,7 @@ spec:
                 # RUN vLLM GLM-5.2-FP8 prefill worker
                 #################
 
-                if [ "${LWS_GROUP_SIZE:-1}" -gt 1 ]; then
-                  GPU_MEM_UTIL=0.88
-                else
-                  GPU_MEM_UTIL=0.92
-                fi
+                GPU_MEM_UTIL=${PREFILL_GPU_MEM_UTIL:-$([ "${LWS_GROUP_SIZE:-1}" -gt 1 ] && echo 0.88 || echo 0.92)}
 
                 # DSpark speculative decoding (multi-node only — must match decode for NIXL KV layer handshake)
                 SPEC_ARGS=""
@@ -194,7 +190,7 @@ spec:
                   --port 8000 \
                   --trust-remote-code \
                   --gpu-memory-utilization $GPU_MEM_UTIL \
-                  --max-model-len 120000 \
+                  --max-model-len ${MAX_MODEL_LEN:-120000} \
                   --disable-access-log-for-endpoints=/health,/metrics \
                   --data-parallel-multi-port-external-lb \
                   --data-parallel-supervisor-port=8208 \
@@ -218,6 +214,10 @@ spec:
                     key: HF_TOKEN
               - name: HF_HOME
                 value: /mnt/hf-cache
+              - name: PREFILL_GPU_MEM_UTIL
+                value: ""
+              - name: MAX_MODEL_LEN
+                value: "120000"
               - name: OFFLOADING_MODE
                 value: "off"
               - name: KV_OFFLOAD_CPU_BYTES

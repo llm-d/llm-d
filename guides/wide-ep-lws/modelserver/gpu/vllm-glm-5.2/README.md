@@ -20,10 +20,83 @@ below cover only what is specific to this deployment.
 | All-to-all (prefill)     | `deepep_high_throughput`                        |
 | All-to-all (decode)      | `deepep_low_latency` (IBGDA + NVSHMEM)         |
 | KV transfer              | NixlConnector                                  |
+| KV cache offloading      | Off (opt-in via components)                    |
+| MTP speculative decoding | On (3 tokens; opt-out via `no-mtp` component)  |
+| Prefill `gpu-memory-utilization` | 0.92 (single-node) / 0.88 (multi-node) |
+| Decode `gpu-memory-utilization`  | 0.95                                   |
 | Reasoning parser         | glm45                                          |
 | Tool-call parser         | glm47                                          |
 
+## Components
+
+Add [kustomize Components](https://kubectl.docs.kubernetes.io/guides/config_management/components/)
+to a deployment's `kustomization.yaml` under `components:`.
+
+| Component | Targets | Effect |
+| --------- | ------- | ------ |
+| `no-mtp` | prefill + decode | Disables MTP speculative decoding (`ENABLE_MTP=0`) |
+| `offloading-cpu` | prefill only | Enables CPU-only KV cache offloading (`OFFLOADING_MODE=cpu`) |
+| `offloading-tiered` | prefill only | Enables CPU + NVMe tiered KV cache offloading (`OFFLOADING_MODE=tiered`) |
+| `gpu-mem-prefill-0905` | prefill only | Sets prefill `gpu-memory-utilization` to 0.905 |
+| `gpu-mem-prefill-091` | prefill only | Sets prefill `gpu-memory-utilization` to 0.91 |
+| `max-model-len-130k` | prefill + decode | Sets `max-model-len` to 130000 |
+| `max-model-len-131k` | prefill + decode | Sets `max-model-len` to 131072 |
+
+K8s takes the last duplicate env var, so appended values override the base defaults.
+
+### Example: Tiered Offloading + MTP
+
+```yaml
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ../../providers/coreweave
+components:
+  - ../../components/offloading-tiered
+  - ../../components/gpu-mem-prefill-0905
+  - ../../components/max-model-len-130k
+patches:
+  - target:
+      kind: LeaderWorkerSet
+      name: ".*-prefill"
+    patch: |-
+      - op: replace
+        path: /spec/replicas
+        value: 1
+      - op: replace
+        path: /spec/leaderWorkerTemplate/size
+        value: 1
+  - target:
+      kind: LeaderWorkerSet
+      name: ".*-decode"
+    patch: |-
+      - op: replace
+        path: /spec/replicas
+        value: 1
+      - op: replace
+        path: /spec/leaderWorkerTemplate/size
+        value: 1
+```
+
+### Benchmark Configurations
+
+Tested combinations (all on CoreWeave H200):
+
+| Configuration | Components | GPU Mem (prefill) | max-model-len |
+| ------------- | ---------- | ----------------- | ------------- |
+| Baseline | `no-mtp` | 0.92 (default) | 120000 (default) |
+| CPU Offloading | `offloading-cpu` + `no-mtp` | 0.92 (default) | 120000 (default) |
+| Tiered Offloading | `offloading-tiered` + `no-mtp` + `gpu-mem-prefill-091` + `max-model-len-131k` | 0.91 | 131072 |
+| Tiered Offloading + MTP | `offloading-tiered` + `gpu-mem-prefill-0905` + `max-model-len-130k` | 0.905 | 130000 |
+
+P/D count is set by the deployment directory (`p1w1d1w1`, `p2w1d1w2`, etc.).
+
 ## Features
+
+### MTP Speculative Decoding
+
+On by default (3 tokens) for both prefill and decode. Disable with the `no-mtp`
+component or `ENABLE_MTP=0`. Token count: `MTP_NUM_TOKENS` (default `3`).
 
 ### DSpark Speculative Decoding
 
@@ -64,19 +137,23 @@ All 8 DP rank ports (8000–8007) are exposed as `targetPorts` for per-rank rout
 
 ### KV Cache Offloading (Prefill)
 
-Prefill pods are configured for CPU and NVMe KV cache offloading:
+Off by default. Enable via the `offloading-cpu` or `offloading-tiered` component.
 
-- **CPU tier** — uses mmap in `/dev/shm`. The pod allocates 1500Gi memory and 1500Gi
-  `dshm` (shared memory) to accommodate 8 DP ranks' mmap regions. With the supervisor DP
-  model, `cpu_bytes_to_use` is per-rank — total CPU KV cache = value × 8 ranks.
-- **NVMe tier** — host-path volume at `/mnt/local/kv-cache` mounted as `/mnt/nvme-cache`.
-  Acts as a secondary eviction target when CPU tier fills up.
+- **`offloading-cpu`** — CPU-only offloading via `OffloadingConnector`. Uses mmap in
+  `/dev/shm`. The pod allocates 1500Gi memory and 1500Gi `dshm` (shared memory) to
+  accommodate 8 DP ranks' mmap regions. With the supervisor DP model, `cpu_bytes_to_use`
+  is per-rank — total CPU KV cache = value × 8 ranks.
+- **`offloading-tiered`** — CPU + NVMe tiered offloading via `TieringOffloadingSpec`.
+  Same CPU tier as above, plus NVMe as a secondary eviction target. Host-path volume at
+  `/mnt/local/kv-cache` mounted as `/mnt/nvme-cache`.
 
-Decode pods do not use CPU offloading (256Gi dshm, 512Gi memory) — they prioritize
-low-latency token generation over cache capacity.
+Without offloading, `max-model-len` caps at ~108K on H200 (model weights ~122 GiB +
+KV cache + DeepGemm warmup + CUDA overhead must fit in 139.80 GiB).
 
-Hotfixes are included for madvise bounds checking with DP>1 and packed non-uniform KV
-cache layouts in the offloading worker.
+Decode pods do not use offloading (256Gi dshm, 512Gi memory).
+
+Hotfixes: `kv_quant_mode` in `MLAAttention.get_kv_cache_spec` (vllm#48379),
+`set_` overflow for packed KV caches in the offloading worker.
 
 ### InfiniBand Networking
 
