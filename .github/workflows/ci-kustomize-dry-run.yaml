@@ -102,7 +102,7 @@ jobs:
         run: |
           CHART_VERSION=v0
           failed=0
-          for chart in llm-d-router-standalone-dev llm-d-router-gateway-dev; do
+          for chart in llm-d-router-standalone llm-d-router-gateway; do
             echo ""
             echo "========================================"
             echo "optimized-baseline: router (${chart})"
@@ -193,7 +193,7 @@ jobs:
         run: |
           CHART_VERSION=v0
           failed=0
-          for chart in llm-d-router-standalone-dev llm-d-router-gateway-dev; do
+          for chart in llm-d-router-standalone llm-d-router-gateway; do
             echo ""
             echo "========================================"
             echo "pd-disaggregation: router (${chart})"
@@ -290,7 +290,7 @@ jobs:
           echo "========================================"
           echo "--- helm template ---"
           if ! helm template precise-prefix-cache-routing \
-            "oci://ghcr.io/llm-d/charts/llm-d-router-standalone-dev" \
+            "oci://ghcr.io/llm-d/charts/llm-d-router-standalone" \
             -f guides/recipes/router/base.values.yaml \
             -f guides/precise-prefix-cache-routing/router/precise-prefix-cache-routing.values.yaml \
             --version "${CHART_VERSION}" > /tmp/rendered.yaml; then
