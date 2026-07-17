@@ -179,6 +179,11 @@ spec:
                 # DeepEP low-latency requires: qp_depth >= (max_dispatch_tokens + 1) * 2
                 export NVSHMEM_QP_DEPTH=$(( (MAX_BATCHED_TOKENS + 1) * 2 ))
 
+                MTP_ARGS=""
+                if [ "${ENABLE_MTP:-1}" = "1" ]; then
+                  MTP_ARGS="--speculative-config {\"method\":\"mtp\",\"num_speculative_tokens\":${MTP_NUM_TOKENS:-3}}"
+                fi
+
                 START_RANK=$(( ${LWS_WORKER_INDEX:-0} * DP_SIZE_LOCAL ))
 
                 PROFILER_ARGS=""
@@ -187,7 +192,7 @@ spec:
                   PROFILER_ARGS="--profiler-config {\"profiler\":\"torch\",\"torch_profiler_dir\":\"/var/cache/vllm/profile\",\"torch_profiler_record_shapes\":true,\"torch_profiler_with_memory\":true,\"max_iterations\":3}"
                 fi
 
-                exec vllm serve $PROFILER_ARGS $SPEC_ARGS $KV_CACHE_DTYPE_ARGS \
+                exec vllm serve $PROFILER_ARGS $SPEC_ARGS $MTP_ARGS $KV_CACHE_DTYPE_ARGS \
                   zai-org/GLM-5.2-FP8 \
                   --port 8200 \
                   --trust-remote-code \
@@ -224,6 +229,10 @@ spec:
                 value: /mnt/hf-cache
               - name: ENABLE_PROFILING
                 value: "0"
+              - name: ENABLE_MTP
+                value: "1"
+              - name: MTP_NUM_TOKENS
+                value: "3"
               - name: ENABLE_DSPARK
                 value: "0"
               - name: DSPARK_MODEL

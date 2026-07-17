@@ -145,27 +145,51 @@ spec:
                 
                 fi
 
-                START_RANK=$(( ${LWS_WORKER_INDEX:-0} * DP_SIZE_LOCAL ))
-
-                KV_TRANSFER_CONFIG='{"kv_connector":"NixlConnector",
-                                      "kv_role":"kv_both",
-                                      "kv_load_failure_policy":"fail"}'
-                if [ "${ENABLE_KV_OFFLOADING:-0}" = "1" ]; then
-                  KV_TRANSFER_CONFIG='{"kv_connector":"MultiConnector",
-                                        "kv_role":"kv_both",
-                                        "kv_load_failure_policy":"fail",
-                                        "kv_connector_extra_config":{
-                                          "connectors":[
-                                            {"kv_connector":"NixlConnector","kv_role":"kv_both"},
-                                            {"kv_connector":"OffloadingConnector","kv_role":"kv_both",
-                                             "kv_connector_extra_config":{
-                                               "spec_name":"TieringOffloadingSpec",
-                                               "cpu_bytes_to_use":'"${KV_OFFLOAD_CPU_BYTES:-107374182400}"',
-                                               "eviction_policy":"lru"
-                                          }}]}}'
+                MTP_ARGS=""
+                if [ "${ENABLE_MTP:-1}" = "1" ]; then
+                  MTP_ARGS="--speculative-config {\"method\":\"mtp\",\"num_speculative_tokens\":${MTP_NUM_TOKENS:-3}}"
                 fi
 
-                exec vllm serve $SPEC_ARGS $KV_CACHE_DTYPE_ARGS \
+                START_RANK=$(( ${LWS_WORKER_INDEX:-0} * DP_SIZE_LOCAL ))
+
+                case "${OFFLOADING_MODE:-off}" in
+                  cpu)
+                    KV_TRANSFER_CONFIG='{"kv_connector":"MultiConnector",
+                                          "kv_role":"kv_both",
+                                          "kv_load_failure_policy":"fail",
+                                          "kv_connector_extra_config":{
+                                            "connectors":[
+                                              {"kv_connector":"NixlConnector","kv_role":"kv_both"},
+                                              {"kv_connector":"OffloadingConnector","kv_role":"kv_both",
+                                               "kv_connector_extra_config":{
+                                                 "cpu_bytes_to_use":'"${KV_OFFLOAD_CPU_BYTES:-107374182400}"',
+                                                 "eviction_policy":"lru"
+                                            }}]}}'
+                    ;;
+                  tiered)
+                    KV_TRANSFER_CONFIG='{"kv_connector":"MultiConnector",
+                                          "kv_role":"kv_both",
+                                          "kv_load_failure_policy":"fail",
+                                          "kv_connector_extra_config":{
+                                            "connectors":[
+                                              {"kv_connector":"NixlConnector","kv_role":"kv_both"},
+                                              {"kv_connector":"OffloadingConnector","kv_role":"kv_both",
+                                               "kv_connector_extra_config":{
+                                                 "spec_name":"TieringOffloadingSpec",
+                                                 "cpu_bytes_to_use":'"${KV_OFFLOAD_CPU_BYTES:-107374182400}"',
+                                                 "eviction_policy":"lru",
+                                                 "secondary_tiers":[{"type":"fs","root_dir":"/mnt/nvme-cache",
+                                                   "n_read_threads":16,"n_write_threads":16}]
+                                            }}]}}'
+                    ;;
+                  *)
+                    KV_TRANSFER_CONFIG='{"kv_connector":"NixlConnector",
+                                          "kv_role":"kv_both",
+                                          "kv_load_failure_policy":"fail"}'
+                    ;;
+                esac
+
+                exec vllm serve $SPEC_ARGS $MTP_ARGS $KV_CACHE_DTYPE_ARGS \
                   zai-org/GLM-5.2-FP8 \
                   --port 8000 \
                   --trust-remote-code \
@@ -194,10 +218,14 @@ spec:
                     key: HF_TOKEN
               - name: HF_HOME
                 value: /mnt/hf-cache
-              - name: ENABLE_KV_OFFLOADING
-                value: "1"
+              - name: OFFLOADING_MODE
+                value: "off"
               - name: KV_OFFLOAD_CPU_BYTES
                 value: "107374182400"
+              - name: ENABLE_MTP
+                value: "1"
+              - name: MTP_NUM_TOKENS
+                value: "3"
               - name: ENABLE_DSPARK
                 value: "0"
               - name: DSPARK_MODEL
