@@ -193,6 +193,42 @@ kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/g
 16 replicas, TP=1, `--block-size=64`, KV events on, the offloading connector
 with a P2P tier on port 7777.
 
+#### Interim: P2P tier from the development branch (temporary, will be replaced)
+
+No vLLM release ships the `OffloadingConnector` P2P secondary tier yet; it
+lives on the development branch
+[`liranschour/vllm@generic_p2p`](https://github.com/liranschour/vllm/tree/generic_p2p).
+Until a release includes it, overlay that branch's implementation onto the
+image by mounting its source files over the installed package. This whole
+subsection - the ConfigMap, `patch-p2p-src.yaml`, and the image pin - is
+removed once the tier is released.
+
+1. Clone the branch and create the source ConfigMap (keys are flattened;
+   they must match the `subPath` names in `patch-p2p-src.yaml`):
+
+   ```bash
+   git clone -b generic_p2p https://github.com/liranschour/vllm.git /tmp/vllm-p2p
+   cd /tmp/vllm-p2p
+   kubectl create configmap generic-p2p-src -n ${NAMESPACE} \
+     --from-file=envs.py=vllm/envs.py \
+     --from-file=spec.py=vllm/v1/kv_offload/tiering/spec.py \
+     --from-file=manager.py=vllm/v1/kv_offload/tiering/p2p/manager.py \
+     --from-file=data_base.py=vllm/v1/kv_offload/tiering/p2p/data/base.py \
+     --from-file=data_nixl.py=vllm/v1/kv_offload/tiering/p2p/data/nixl.py \
+     --from-file=session_client.py=vllm/v1/kv_offload/tiering/p2p/session/client.py \
+     --from-file=session_protocol.py=vllm/v1/kv_offload/tiering/p2p/session/protocol.py \
+     --from-file=session_server.py=vllm/v1/kv_offload/tiering/p2p/session/server.py \
+     --from-file=session_session.py=vllm/v1/kv_offload/tiering/p2p/session/session.py
+   ```
+
+2. Uncomment the `patches:` entry for `patch-p2p-src.yaml` in
+   `modelserver/gpu/vllm/kustomization.yaml` and re-apply.
+
+3. Pin the modelserver image to the vLLM nightly the branch is rebased on.
+   The mounted files import symbols from the rest of the installed package,
+   so image and branch must move together - a drifted pair crashes
+   EngineCore at startup (the failure is loud, not silent).
+
 ### 4. (Optional) Enable Monitoring
 
 - Install the [Monitoring stack](../../docs/operations/observability/setup.md).
@@ -303,15 +339,53 @@ kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/render
    NIXL - hits load as normal cache hits, misses recompute, so a failed
    transfer degrades to baseline behavior instead of failing the request.
 
-## P/D variant
+## P/D variant: P2P over NIXL disaggregation
 
-Apply the same three scheduling profiles to the prefill profile of the
-[P/D disaggregation guide](../pd-disaggregation/README.md) and run the
-routing sidecar with `--enable-p2p-pull` (NIXL PD path): the sidecar then
-injects the pull into the prefill leg, and prefill workers pull prefixes
-from peers. Size the decode pool for its NIXL intake - each request ships
-its full KV from prefill to decode, and that intake, not prefill placement,
-is typically the topology's ceiling.
+Under P/D disaggregation the pull applies to the **prefill leg only**: the
+prefill worker computes the prompt KV and streams it to the decoder, so
+that is the leg where recomputing a cached prefix is wasted work. The EPP
+evaluates the source header against the prefill profile's target, and the
+sidecar injects `kv_transfer_params.p2p` onto the prefill leg; the decode
+leg already receives the full KV over NIXL and has nothing to pull.
+
+Start from the [P/D disaggregation guide](../pd-disaggregation/README.md)
+topology and change three things:
+
+1. **Engines run `MultiConnector`** - NIXL carries the P/D transfer, the
+   OffloadingConnector provides the CPU tier and the P2P listener. Same
+   config on both legs (a pod serves pulls regardless of role):
+
+   ```json
+   {"kv_connector":"MultiConnector","kv_role":"kv_both",
+    "kv_connector_extra_config":{"connectors":[
+      {"kv_connector":"NixlConnector","kv_role":"kv_both"},
+      {"kv_connector":"OffloadingConnector","kv_role":"kv_both",
+       "kv_connector_extra_config":{"spec_name":"TieringOffloadingSpec",
+        "cpu_bytes_to_use":94489280512,"offload_prompt_only":false,
+        "secondary_tiers":[{"type":"p2p","host":"$(POD_IP)","port":7777}]}}]}}
+   ```
+
+   Both side channels must bind the pod IP via the downward API:
+   `VLLM_NIXL_SIDE_CHANNEL_HOST` and `VLLM_P2P_SIDE_CHANNEL_HOST`. All
+   other prerequisites from [Best Practices](#best-practices) (block size,
+   `PYTHONHASHSEED`, `offload_prompt_only: false`, CPU-tier sizing) apply
+   unchanged.
+
+2. **The routing sidecar declares the tier** with
+   `--kv-connector=nixlv2 --enable-p2p-pull` (plus
+   `--p2p-connector-port=7777` if not the default). `--enable-p2p-pull` is
+   accepted only with `--kv-connector=nixlv2`; the sidecar rejects it with
+   any other connector at startup (with `--kv-connector=offloading` the
+   tier is native and the flag is unnecessary).
+
+3. **The EPP scheduling config targets the prefill profile**: set the
+   `p2p-source-producer`'s `prefillProfileName` to the disaggregation
+   prefill profile name (default `prefill`), so the source comparison runs
+   against the pod that will actually compute the prefix.
+
+Size the decode pool for its NIXL intake - each request ships its full KV
+from prefill to decode, and that intake, not prefill placement, is
+typically the topology's ceiling.
 
 ## Troubleshooting
 

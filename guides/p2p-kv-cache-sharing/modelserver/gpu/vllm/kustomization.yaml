@@ -11,6 +11,13 @@ resources:
   - deployment.yaml
   - service.yaml
 
+# TEMPORARY (will be replaced): until a vLLM release ships the
+# OffloadingConnector P2P secondary tier, uncomment to overlay the
+# development-branch implementation via the `generic-p2p-src` ConfigMap.
+# See the guide README, "Interim: P2P tier from the development branch".
+# patches:
+#   - path: patch-p2p-src.yaml
+
 # NOTE on RDMA: the manifest works over TCP (NIXL/UCX fall back). For
 # NIXL-over-RDMA transfer rates on an RDMA-capable fabric (e.g. InfiniBand),
 # add to the modelserver container: resources rdma/ib, securityContext
