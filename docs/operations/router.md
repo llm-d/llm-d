@@ -42,7 +42,7 @@ router:
 
 #### CPU Allocation
 - **Rule of Thumb**: Allocate **0.5 to 1.0 CPU cores per request/second** of expected throughput for large agentic workloads (~100k input / 1k output tokens).
-- **Prefix Matching Overhead**: Increasing `maxPrefixTokensToMatch` increases CPU consumption. At lower throughputs, a limit of 6250 blocks can increase CPU consumption by over 100% compared to 256 blocks due to block search overhead.
+- **Prefix Matching Overhead**: Increasing `maxPrefixTokensToMatch` increases CPU consumption. At lower throughputs, a large prefix limit (such as 100,000 tokens / 6,250 blocks with `blockSizeTokens: 16`) can increase CPU consumption by over 100% compared to a small limit (4,096 tokens / 256 blocks) due to block search overhead.
 - **Idle Scraping Overhead**: Idle CPU consumption scales with total model-serving pods due to background Prometheus scraping. In a cluster with 100 pods, EPP idle consumption reaches approximately **7.5 cores**.
 
 #### Memory Allocation
