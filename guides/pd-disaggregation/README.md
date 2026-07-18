@@ -345,7 +345,7 @@ kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/
 
 ## Benchmarking Report
 
-The benchmark is running on 16 H200 GPUs (with Infinband on CKS).
+The benchmark runs on 16 H200 GPUs on GKE A3 Ultra (`a3-ultragpu-8g`, DRANet RoCE via DRA), with the router's token-based P/D scheduling profiles (`prefix-cache-affinity-filter` + `token-load-scorer` on prefill, `active-request-scorer` on decode) and the calibrated `peakPrefillThroughput: 33821`.
 
 There is a report for each stage.
 
@@ -356,213 +356,110 @@ There is a report for each stage.
 metrics:
   latency:
     inter_token_latency:
-      max: 0.3643897734582424
-      mean: 0.008325434739626478
-      min: 3.7653371691703796e-06
-      p0p1: 3.975816071033478e-06
-      p1: 4.145316779613495e-06
-      p10: 4.616566002368927e-06
-      p25: 5.087815225124359e-06
-      p5: 4.416331648826599e-06
-      p50: 6.280839443206787e-06
-      p75: 1.2137927114963531e-05
-      p90: 0.03592400047928101
-      p95: 0.06747404355555772
-      p99: 0.12114070571027777
-      p99p9: 0.18705207404308383
+      max: 2.2948232810012996
+      mean: 0.0048874225546436485
+      min: 0.0
+      p0p1: 0.0
+      p1: 0.0
+      p10: 0.0
+      p25: 8.458038792014122e-06
+      p5: 0.0
+      p50: 1.2325122952461243e-05
+      p75: 1.4679040759801865e-05
+      p90: 1.8372898921370506e-05
+      p95: 3.048051148653026e-05
+      p99: 0.010211549471132394
+      p99p9: 0.9875524381587752
       units: s/token
     normalized_time_per_output_token:
-      max: 0.04898325727620708
-      mean: 0.014364489551937707
-      min: 0.0004188831798717112
-      p0p1: 0.0004855348222305054
-      p1: 0.008621003280209023
-      p10: 0.01086499850006588
-      p25: 0.011933319070146827
-      p5: 0.010361602989319029
-      p50: 0.013688608406590488
-      p75: 0.015965917295299104
-      p90: 0.018797610009301274
-      p95: 0.020827560955696416
-      p99: 0.02667838998102462
-      p99p9: 0.04062934044765229
+      max: 0.0720405302838319
+      mean: 0.011272806548055027
+      min: 0.00045122518049730886
+      p0p1: 0.0005145006946235203
+      p1: 0.00799626310609281
+      p10: 0.009567618076965599
+      p25: 0.010268639817630359
+      p5: 0.009101943364366889
+      p50: 0.011208222057435203
+      p75: 0.012235897581742029
+      p90: 0.013212064575388663
+      p95: 0.013746295733422583
+      p99: 0.015525384459981965
+      p99p9: 0.02169257163775991
       units: s/token
     request_latency:
-      max: 11.119199401699007
-      mean: 3.5384947839587997
-      min: 1.5062068477272987
-      p0p1: 1.9175463474858552
-      p1: 2.3823377661034466
-      p10: 2.6774717193096875
-      p25: 2.9338933038525283
-      p5: 2.5588959713466464
-      p50: 3.356982336845249
-      p75: 3.916417645290494
-      p90: 4.574965833220631
-      p95: 5.0852895775344225
-      p99: 6.531727972868838
-      p99p9: 9.935308576508453
+      max: 5.500042774016038
+      mean: 2.775478398489283
+      min: 1.6934288579504937
+      p0p1: 1.9034744882385712
+      p1: 2.0955666662193835
+      p10: 2.3753150632372124
+      p25: 2.506768883089535
+      p5: 2.270708685088903
+      p50: 2.727781204506755
+      p75: 3.000033031741623
+      p90: 3.205472262110561
+      p95: 3.378960671555251
+      p99: 3.700869863124099
+      p99p9: 5.063714611682857
       units: s
     time_per_output_token:
-      max: 0.010571206539869309
-      mean: 0.008325349373725296
-      min: 0.004886588230729103
-      p0p1: 0.005544693316236138
-      p1: 0.006968683542534709
-      p10: 0.007752664919942617
-      p25: 0.008032276449785117
-      p5: 0.007547358138114214
-      p50: 0.008331082850694657
-      p75: 0.008618501575663686
-      p90: 0.008902709059789777
-      p95: 0.009100843822024763
-      p99: 0.009630139790810646
-      p99p9: 0.010342120162323167
+      max: 0.0315695862618408
+      mean: 0.005698083638427052
+      min: 1.776400782472017e-05
+      p0p1: 2.3671881866074022e-05
+      p1: 0.0003802231368589049
+      p10: 0.0036351872850322593
+      p25: 0.004326083754862285
+      p5: 0.0032494267610573917
+      p50: 0.00569766377949618
+      p75: 0.006938906643558673
+      p90: 0.007838766581131792
+      p95: 0.00852698527638066
+      p99: 0.010109478284085944
+      p99p9: 0.012536769559875672
       units: s/token
     time_to_first_token:
-      max: 9.166204158216715
-      mean: 1.4439210383442265
-      min: 0.21261637564748526
-      p0p1: 0.25461369096953423
-      p1: 0.35444720844738187
-      p10: 0.5667089101858437
-      p25: 0.8372100500855595
-      p5: 0.4620446518063545
-      p50: 1.264039859175682
-      p75: 1.8248309704940766
-      p90: 2.4776970406062904
-      p95: 2.9816138751804835
-      p99: 4.4258010189700965
-      p99p9: 7.718557042311907
+      max: 4.202539925929159
+      mean: 1.1568768169119075
+      min: 0.20732805598527193
+      p0p1: 0.22617485262500123
+      p1: 0.37198703180765735
+      p10: 0.7970825189258903
+      p25: 0.927698435029015
+      p5: 0.6972236932837405
+      p50: 1.1084336100611836
+      p75: 1.3245190941961482
+      p90: 1.5871762204682462
+      p95: 1.7029315309715458
+      p99: 2.0101042066374815
+      p99p9: 2.972206295224074
       units: s
   requests:
     failures: 0
-    input_length:
-      max: 5209.0
-      mean: 5151.397962962963
-      min: 5104.0
-      p0p1: 5110.0
-      p1: 5118.0
-      p10: 5132.0
-      p25: 5141.0
-      p5: 5126.0
-      p50: 5151.0
-      p75: 5162.0
-      p90: 5171.0
-      p95: 5177.0
-      p99: 5187.0
-      p99p9: 5200.601000000001
-      units: count
-    output_length:
-      max: 5430.0
-      mean: 281.0096296296296
-      min: 76.0
-      p0p1: 190.798
-      p1: 224.0
-      p10: 240.0
-      p25: 243.0
-      p5: 237.0
-      p50: 246.0
-      p75: 248.0
-      p90: 249.0
-      p95: 250.0
-      p99: 253.0
-      p99p9: 5415.601000000001
-      units: count
+    # input_length / output_length histograms omitted for brevity
     total: 5400
   throughput:
-    output_tokens_per_sec: 12236.597879353767
-    requests_per_sec: 43.54511941630466
-    total_tokens_per_sec: 236554.83733748455
+    output_tokens_per_sec: 12035.852482673554
+    requests_per_sec: 42.58097793003138
+    total_tokens_per_sec: 224940.74213283046
   time:
-    duration: 119.97667319700122
+    duration: 126.81719073886052
 scenario:
   load:
-    args:
-      api:
-        headers: null
-        streaming: true
-        type: completion
-      circuit_breakers: null
-      data:
-        input_distribution:
-          max: 5000
-          mean: 5000.0
-          min: 5000
-          std_dev: 0.0
-          total_count: 5401
-        output_distribution:
-          max: 250
-          mean: 250.0
-          min: 250
-          std_dev: 0.0
-          total_count: 5401
-        path: null
-        shared_prefix: null
-        trace: null
-        type: random
-      load:
-        circuit_breakers: []
-        interval: 1.0
-        lora_traffic_split: null
-        num_workers: 45
-        request_timeout: null
-        stages:
-        - concurrency_level: null
-          duration: 120
-          num_requests: null
-          rate: 45.0
-        sweep: null
-        trace: null
-        type: constant
-        worker_max_concurrency: 100
-        worker_max_tcp_connections: 2500
-      metrics: null
-      report:
-        prometheus:
-          per_stage: false
-          summary: true
-        request_lifecycle:
-          per_adapter: true
-          per_adapter_stage: false
-          per_request: false
-          per_stage: true
-          percentiles:
-          - 0.1
-          - 1.0
-          - 5.0
-          - 10.0
-          - 25.0
-          - 50.0
-          - 75.0
-          - 90.0
-          - 95.0
-          - 99.0
-          - 99.9
-          summary: true
-      server:
-        api_key: null
-        base_url: http://10.16.2.220
-        cert_path: null
-        ignore_eos: true
-        key_path: null
-        model_name: openai/gpt-oss-120b
-        type: vllm
-      storage:
-        google_cloud_storage: null
-        local_storage:
-          path: /requests/inference-perf_1777579326_random_20_1_isl_osl_pd-gpt-oss-120b
-          report_file_prefix: null
-        simple_storage_service: null
-      tokenizer:
-        pretrained_model_name_or_path: openai/gpt-oss-120b
-        token: null
-        trust_remote_code: null
-    metadata:
-      stage: 0
-    name: inference-perf
-  model:
-    name: unknown
+    stages:
+    - duration: 120
+      rate: 45.0
+    num_workers: 45
+    type: constant
+    worker_max_concurrency: 100
+  data:
+    type: random
+    input_distribution: {mean: 5000, min: 5000, max: 5000}
+    output_distribution: {mean: 250, min: 250, max: 250}
+  server:
+    model_name: openai/gpt-oss-120b
+    type: vllm
 version: '0.1'
 ```
 
@@ -600,16 +497,22 @@ llmdbenchmark \
 
 (Drives the same `guide_pd-disaggregation_1.yaml` workload — rate=45 for 120s, 45 workers — against the aggregated baseline so the two result sets are directly comparable.)
 
-For this workload (20:1 ISL:OSL, 45 QPS), llm-d disaggregation improved mean and P90 request latency by ~50%!
+For this workload (20:1 ISL:OSL, 45 QPS), llm-d disaggregation improved mean E2E latency by ~59% and P95 by ~67%!
 
 | Metric                   | aggregated | llm-d        | Δ% |
 | :----------------------- | :--------- | :----------- | :------- |
-| **E2E Latency (Mean)**   | **6.7s**   | **3.5s**     | **-47%** |
-| **E2E Latency (P95)**    | **10.2s**  | **5.08**     | **-50%** |
-| ITL (Mean)               | 25ms       | 8ms          | -67%     |
-| ITL (P95)                | 197ms      | 67ms         | -66%     |
-| TTFT (Mean)              | 532ms      | 1400ms       | +170%    |
-| TTFT (P95)               | 1574ms     | 2471ms       | +57%     |
+| **E2E Latency (Mean)**   | **6.7s**   | **2.78s**    | **-59%** |
+| **E2E Latency (P95)**    | **10.2s**  | **3.38s**    | **-67%** |
+| ITL (Mean)               | 25ms       | 4.9ms        | -80%     |
+| ITL (P95)                | 197ms      | <1ms         | -99%     |
+| TTFT (Mean)              | 532ms      | 1157ms       | +117%    |
+| TTFT (P95)               | 1574ms     | 1703ms       | +8%      |
+
+> [!NOTE]
+> The llm-d column is measured with the token-based routing configuration this guide now
+> ships (16 × H200, GKE A3 Ultra — the `rate=45` report above). The aggregated column is
+> carried over from the original baseline measurement. Chunked streaming delivers several
+> tokens per event, so 95% of inter-token gaps measure below 1 ms.
 
 > [!NOTE]
 > In aggregated setup, vLLM allocates all GPU resources to
