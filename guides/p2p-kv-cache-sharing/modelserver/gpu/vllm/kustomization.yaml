@@ -1,0 +1,18 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+# Aggregated gpt-oss-120b model servers with the OffloadingConnector P2P tier.
+# Self-contained (not layered on the shared recipes/ base) so the P2P-specific
+# engine + sidecar configuration is visible in one place; can be refactored
+# onto recipes/modelserver later to match the sibling guides.
+
+resources:
+  - serviceaccount.yaml
+  - deployment.yaml
+  - service.yaml
+
+# NOTE on RDMA: the manifest works over TCP (NIXL/UCX fall back). For
+# NIXL-over-RDMA transfer rates on an RDMA-capable fabric (e.g. InfiniBand),
+# add to the modelserver container: resources rdma/ib, securityContext
+# capabilities IPC_LOCK + SYS_RAWIO, and the NCCL_IB_HCA / *_SOCKET_IFNAME env
+# for your cluster. See the guide's Supported Hardware Backends.

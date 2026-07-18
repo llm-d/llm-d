@@ -1,0 +1,18 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+# Standalone render (tokenizer) Service for p2p-kv-cache-sharing. Pairs with
+# the token-producer `vllm.url` in router/p2p-kv-cache-sharing.values.yaml.
+namePrefix: p2p-kv-cache-sharing-
+
+resources:
+  - deployment.yaml
+  - service.yaml
+
+# The guide label lands on resource metadata ONLY (kustomize `labels` defaults
+# to includeSelectors:false / includeTemplates:false). `llm-d.ai/guide` is the
+# InferencePool / model-server selector; render pods must not carry it on the
+# pod template or the EPP would treat them as routable model servers.
+labels:
+  - pairs:
+      llm-d.ai/guide: p2p-kv-cache-sharing

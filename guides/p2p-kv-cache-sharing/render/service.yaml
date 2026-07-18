@@ -1,0 +1,16 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: render
+spec:
+  # ClusterIP fronting the render replicas. The EPP token-producer dials this
+  # name; kube-proxy load-balances across pods so any EPP replica tokenizes via
+  # any render pod.
+  selector:
+    app.kubernetes.io/component: vllm-render
+    app.kubernetes.io/part-of: p2p-kv-cache-sharing
+  ports:
+    - name: render-http
+      port: 8000
+      targetPort: render-http
+      protocol: TCP

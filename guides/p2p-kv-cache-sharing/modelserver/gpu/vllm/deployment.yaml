@@ -1,0 +1,188 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: p2p-kv-cache-sharing-vllm
+  labels:
+    app: p2p-kv-cache-sharing
+spec:
+  # 16 aggregated replicas, one GPU each. Every pod is both a puller and a
+  # source: it serves its own requests and answers peer pulls from its CPU tier.
+  replicas: 16
+  selector:
+    matchLabels:
+      app: p2p-kv-cache-sharing
+  template:
+    metadata:
+      labels:
+        app: p2p-kv-cache-sharing
+        # Required: the InferencePool / EPP selects model servers by these
+        # labels, and subscribes to each pod's KV-event socket for the precise
+        # prefix index that drives source selection.
+        llm-d.ai/inferenceServing: "true"
+        llm-d.ai/engine-type: vllm
+        llm-d.ai/model: gpt-oss-120b
+    spec:
+      serviceAccountName: p2p-kv-cache-sharing-sa
+      containers:
+        # --- vLLM engine: OffloadingConnector with a P2P secondary tier ---
+        - name: modelserver
+          # Requires a vLLM build carrying the OffloadingConnector P2P secondary
+          # tier (the `type: p2p` secondary_tier below). Pin to a specific digest
+          # for reproducibility once a release ships it; tracked under the v0.9
+          # "Multi-tier offloading: NIXL P/D + P2P backends" goal.
+          image: vllm/vllm-openai:nightly
+          imagePullPolicy: IfNotPresent
+          # Clear any stale offload-tier mmaps left by a previous pod on the node
+          # before starting, then exec vLLM.
+          command: ["sh", "-c", "rm -f /dev/shm/vllm_offload_*.mmap 2>/dev/null; exec vllm serve \"$@\"", "sh"]
+          args:
+            - openai/gpt-oss-120b
+            - --port=8200
+            - --disable-access-log-for-endpoints=/health,/metrics,/v1/models
+            - --tensor-parallel-size=1
+            # block-size MUST match the router's precise-prefix-cache-producer
+            # tokenProcessorConfig.blockSize, or the prefix index stays empty.
+            - --block-size=64
+            - --max-model-len=65536
+            # Tuning knob: raise for more GPU cache, lower to leave headroom.
+            - --gpu-memory-utilization=0.85
+            # OffloadingConnector with a CPU tier and a P2P secondary tier on
+            # :7777. offload_prompt_only:false so sources offload generated
+            # (decode-phase) blocks too, which peers can then pull. Size
+            # cpu_bytes_to_use at least as large as the per-pod GPU KV cache
+            # (below /dev/shm; this is 88 GiB).
+            - --kv-transfer-config
+            - '{"kv_connector":"OffloadingConnector","kv_role":"kv_both","kv_connector_extra_config":{"spec_name":"TieringOffloadingSpec","cpu_bytes_to_use":94489280512,"offload_prompt_only":false,"secondary_tiers":[{"type":"p2p","host":"$(POD_IP)","port":7777}]}}'
+            # KV events feed the router's precise prefix index (per-pod ZMQ PUB).
+            - --kv-events-config
+            - '{"enable_kv_cache_events":true,"publisher":"zmq","endpoint":"$(KV_EVENTS_ENDPOINT)","topic":"kv@$(POD_IP):$(POD_PORT)@openai/gpt-oss-120b"}'
+          env:
+            - name: HF_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: llm-d-hf-token
+                  key: HF_TOKEN
+            - name: POD_IP
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.podIP
+            # NIXL and the P2P tier bind their side channels to the pod IP so
+            # peers can reach them (defaults are localhost).
+            - name: VLLM_P2P_SIDE_CHANNEL_HOST
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.podIP
+            - name: VLLM_NIXL_SIDE_CHANNEL_HOST
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.podIP
+            # vLLM seeds KV block hashes per process; all peers MUST share the
+            # same value or no block hash ever matches across pods and every
+            # lookup misses.
+            - name: PYTHONHASHSEED
+              value: "0"
+            - name: KV_EVENTS_ENDPOINT
+              value: "tcp://*:5556"
+            # Used in the kv-events topic so pods are identified by their
+            # inference endpoint; matches the sidecar proxy port below.
+            - name: POD_PORT
+              value: "8000"
+            - name: DO_NOT_TRACK
+              value: "1"
+          ports:
+            - name: modelserver
+              containerPort: 8200
+              protocol: TCP
+            # P2P tier listener: peers open their bidirectional session here.
+            - name: p2p
+              containerPort: 7777
+              protocol: TCP
+            # Per-pod KV-event socket the router subscribes to.
+            - name: kv-events
+              containerPort: 5556
+              protocol: TCP
+          resources:
+            limits:
+              cpu: "8"
+              # Above cpu_bytes_to_use (the CPU tier is an shm mmap) plus model
+              # and runtime headroom.
+              memory: 160Gi
+              nvidia.com/gpu: "1"
+            requests:
+              cpu: "8"
+              memory: 160Gi
+              nvidia.com/gpu: "1"
+          startupProbe:
+            httpGet:
+              path: /v1/models
+              port: 8200
+            initialDelaySeconds: 15
+            periodSeconds: 30
+            timeoutSeconds: 5
+            failureThreshold: 60
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8200
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /v1/models
+              port: 8200
+            periodSeconds: 5
+            timeoutSeconds: 2
+            failureThreshold: 3
+          volumeMounts:
+            - mountPath: /dev/shm
+              name: shm
+            - mountPath: /.cache
+              name: torch-compile-cache
+            - mountPath: /.triton
+              name: triton-cache
+            - mountPath: /.config
+              name: vllm-config
+        # --- llm-d routing sidecar: injects kv_transfer_params.p2p ---
+        - name: routing-proxy
+          # Needs the KV-cache-source header -> kv_transfer_params.p2p injection
+          # (merged in llm-d-router #1937). Pin a specific tag/digest.
+          image: ghcr.io/llm-d/llm-d-routing-sidecar:latest
+          imagePullPolicy: IfNotPresent
+          args:
+            - --port=8000
+            - --vllm-port=8200
+            # Declares the OffloadingConnector P2P tier present so the sidecar
+            # consumes the source header and injects the pull.
+            - --kv-connector=offloading
+            - --p2p-connector-port=7777
+            - --secure-proxy=false
+          env:
+            - name: POD_IP
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.podIP
+          ports:
+            - name: proxy
+              containerPort: 8000
+              protocol: TCP
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 20
+            periodSeconds: 5
+            timeoutSeconds: 1
+            failureThreshold: 6
+      volumes:
+        # The CPU offload tier is an shm mmap; size >= cpu_bytes_to_use.
+        - name: shm
+          emptyDir:
+            medium: Memory
+            sizeLimit: 96Gi
+        - name: torch-compile-cache
+          emptyDir: {}
+        - name: triton-cache
+          emptyDir: {}
+        - name: vllm-config
+          emptyDir: {}

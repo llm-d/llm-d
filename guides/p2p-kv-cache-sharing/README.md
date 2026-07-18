@@ -159,16 +159,28 @@ kubectl create secret generic llm-d-hf-token \
 
 ### 2. Deploy the llm-d Router
 
-Standard router install, then apply one of the scheduling configurations
-from [Configuration](#router-scheduling-configurations) - the P2P path is
-`epp-load-p2p.yaml`.
+Install the router with this guide's values, which deploy the EPP with the
+load-aware + P2P scheduling configuration (`epp-load-p2p.yaml`) as the
+default. To run a comparison arm instead, swap the `pluginsCustomConfig` in
+the values for `epp-affinity.yaml` or `epp-load.yaml` from
+[benchmarking/](benchmarking/).
+
+```bash
+helm upgrade -i ${GUIDE_NAME} llm-d-router \
+  -n ${NAMESPACE} \
+  -f ${REPO_ROOT}/guides/${GUIDE_NAME}/router/${GUIDE_NAME}.values.yaml
+```
 
 #### Deploy the Render (Tokenizer) Service
 
 The EPP `token-producer` tokenizes prompts by calling vLLM's
 `/v1/completions/render` endpoint, served from a dedicated horizontally
-scalable Service exactly as in the
-[precise prefix cache routing guide](../precise-prefix-cache-routing/README.md#deploy-the-render-tokenizer-service).
+scalable Service:
+
+```bash
+kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/render
+```
+
 Size it per the [Best Practices](#best-practices) render bullet - long-prompt
 workloads need more replicas than the default.
 
@@ -272,6 +284,7 @@ in [benchmarking/README.md](benchmarking/README.md).
 ```bash
 helm uninstall ${GUIDE_NAME} -n ${NAMESPACE}
 kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/gpu/vllm
+kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/render
 ```
 
 ## How It Works

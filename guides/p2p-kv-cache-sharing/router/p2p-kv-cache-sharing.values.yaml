@@ -1,0 +1,82 @@
+## p2p-kv-cache-sharing guide overrides for the router.
+## Layer on top of: recipes/router/base.values.yaml
+##
+## Tokenization is served by a standalone `vllm launch render` Service deployed
+## from `../render/`. The EPP `token-producer` plugin tokenizes prompts over
+## HTTP against that Service (see its `vllm.url` below). Size the render pool
+## for the peak request rate (long-prompt workloads saturate a single replica
+## near ~10 req/s) - see the guide's Best Practices.
+##
+## The deployed EPP config is the load-aware + P2P arm (`epp-load-p2p.yaml` in
+## ../benchmarking/): placement by load, and the p2p-source-producer emits the
+## KV cache source header when a peer out-caches the scheduled pod by at least
+## minCachedTokenDelta tokens. To reproduce the guide's comparison arms, swap
+## this pluginsCustomConfig for epp-affinity.yaml or epp-load.yaml.
+##
+## Pod-discovery mode with active-active HA (replicas: 2). Each replica dials
+## every vLLM pod's per-pod ZMQ socket; both indexes converge identically.
+
+router:
+  epp:
+    replicas: 2
+    flags:
+      ha-enable-leader-election: false
+    env:
+      - name: HF_TOKEN
+        valueFrom:
+          secretKeyRef:
+            name: llm-d-hf-token
+            key: HF_TOKEN
+    pluginsConfigFile: "p2p-kv-cache-sharing-plugins.yaml"
+    pluginsCustomConfig:
+      p2p-kv-cache-sharing-plugins.yaml: |
+        apiVersion: llm-d.ai/v1alpha1
+        kind: EndpointPickerConfig
+        plugins:
+          - type: token-producer
+            parameters:
+              modelName: openai/gpt-oss-120b # Must match the render Service model (../render/) and the deployed model server
+              vllm:
+                # Standalone render Service (../render/): `p2p-kv-cache-sharing-`
+                # namePrefix + Service name `render`.
+                url: "http://p2p-kv-cache-sharing-render:8000"
+          - type: endpoint-notification-source
+          - type: precise-prefix-cache-producer
+            parameters:
+              tokenProcessorConfig:
+                # MUST match the model server `--block-size`.
+                blockSize: 64
+              kvEventsConfig:
+                topicFilter: "kv@"
+                discoverPods: true
+                podDiscoveryConfig:
+                  socketPort: 5556
+          - type: p2p-source-producer
+            parameters:
+              prefixMatchInfoProducerName: precise-prefix-cache-producer
+              prefillProfileName: default
+              # Minimum extra cached-prefix tokens a peer must hold beyond the
+              # scheduled pod before a pull is requested; set from the measured
+              # pull-versus-recompute crossover (see ../benchmarking/README.md).
+              minCachedTokenDelta: 2048
+          - type: queue-scorer
+          - type: kv-cache-utilization-scorer
+          - type: weighted-random-picker
+          - type: single-profile-handler
+        dataLayer:
+          sources:
+            - pluginRef: endpoint-notification-source
+              extractors:
+                - pluginRef: precise-prefix-cache-producer
+        schedulingProfiles:
+          - name: default
+            plugins:
+              - pluginRef: weighted-random-picker
+              - pluginRef: queue-scorer
+                weight: 3
+              - pluginRef: kv-cache-utilization-scorer
+                weight: 2
+
+  modelServers:
+    matchLabels:
+      llm-d.ai/guide: "p2p-kv-cache-sharing"
