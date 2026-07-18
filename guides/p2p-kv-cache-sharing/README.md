@@ -84,11 +84,25 @@ Each of these was learned the hard way:
   pods and every lookup misses.
 * `offload_prompt_only: false` - sources must offload computed prefixes,
   not only prompts, for peers to pull them.
-* CPU tier (`cpu_bytes_to_use`) at least as large as the per-pod GPU KV
-  cache, ideally 2x. Peers pull from the CPU tier: if it is smaller than
-  the GPU cache, the router's view of "who has this prefix" outruns what
-  sources can actually serve. Size `/dev/shm` above `cpu_bytes_to_use`
-  (the tier is an shm mmap).
+* CPU tier (`cpu_bytes_to_use`) considerably larger than the per-pod GPU
+  KV cache - 2x as the working default. The tier's value is the KV that
+  GPU evicts and CPU *retains* (the
+  [tiered path's](../../docs/well-lit-paths/foundations/tiered-prefix-cache.md)
+  receptive field): a tier smaller than the GPU cache mostly duplicates
+  blocks that are still GPU-resident, and the router's view of "who has
+  this prefix" outruns what sources can actually serve.
+  * **Compute the ratio from measured KV capacity, not per-GPU
+    intuition - TP changes it drastically.** Model weights are paid once
+    per pod while KV memory scales with the TP degree, so per-pod KV
+    capacity grows superlinearly with TP. gpt-oss-120b on H200 at
+    `--gpu-memory-utilization=0.85`: TP=1 leaves ~55 GB of KV (~1.4M
+    tokens), but TP=4 leaves ~414 GB (~10M tokens). A 128 GiB tier is
+    2.3x the GPU cache at TP=1 and 0.33x at TP=4 - large-looking, yet
+    unable to hold even the GPU's own evictions. Read the KV capacity
+    from the engine startup log and size the tier from it, per role.
+  * Size `/dev/shm` above `cpu_bytes_to_use` (the tier is an shm mmap)
+    and the pod memory limit above both - the memory-backed emptyDir
+    counts against the pod's limit.
 * Size the render service for the request rate. The router's
   `token-producer` calls the render endpoint
   (`/v1/completions/render`) once per request to tokenize the full
@@ -369,7 +383,11 @@ topology and change three things:
    `VLLM_NIXL_SIDE_CHANNEL_HOST` and `VLLM_P2P_SIDE_CHANNEL_HOST`. All
    other prerequisites from [Best Practices](#best-practices) (block size,
    `PYTHONHASHSEED`, `offload_prompt_only: false`, CPU-tier sizing) apply
-   unchanged.
+   unchanged - and size `cpu_bytes_to_use` **per role**: decode legs
+   typically run higher TP, so their per-pod GPU KV (and therefore the
+   tier that must exceed it) is several times a prefill pod's. The value
+   in the example above is a prefill-leg (TP=1) size; see the CPU-tier
+   bullet in Best Practices for the TP arithmetic.
 
 2. **The routing sidecar declares the tier** with
    `--kv-connector=nixlv2 --enable-p2p-pull` (plus
