@@ -22,14 +22,14 @@ Two scorers make up the routing decision alongside the load-aware stack:
 | Tensor Parallelism  | 2                                                       |
 | GPUs per replica    | 2                                                       |
 | Total GPUs          | 16                                                      |
-| vLLM `--block-size` | 64 (must match scorer `tokenProcessorConfig.blockSize`) |
+| vLLM `--block-size` | 64 (must match scorer `tokenProcessorConfig.blockSizeTokens`) |
 
 ### Supported Hardware Backends
 
 | Backend              | Directory                  | Default model                           | Notes                                                    |
 | -------------------- | -------------------------- | --------------------------------------- | -------------------------------------------------------- |
 | NVIDIA GPU           | `modelserver/gpu/vllm/`    | Qwen/Qwen3-32B                          | Default configuration                                    |
-| NVIDIA GPU (SGLang)  | `modelserver/gpu/sglang/`  | Qwen/Qwen3-32B                          | SGLang; `--page-size=64` matches scorer `blockSize`      |
+| NVIDIA GPU (SGLang)  | `modelserver/gpu/sglang/`  | Qwen/Qwen3-32B                          | SGLang; `--page-size=64` matches scorer `blockSizeTokens`      |
 | AMD GPU              | `modelserver/amd/vllm/`    | Qwen/Qwen3-32B                          | AMD GPU                                                  |
 | Intel XPU            | `modelserver/xpu/vllm/`    | Qwen/Qwen3-0.6B                         | CI-sized; update router `modelName` for real use         |
 | Google TPU v6e       | `modelserver/tpu/v6/vllm/` | Qwen/Qwen3-32B                          | GKE TPU                                                  |

@@ -110,7 +110,7 @@ spec:
           - type: approx-prefix-cache-producer
             parameters:
               blockSizeTokens: 5
-              maxPrefixBlocksToMatch: 256
+              maxPrefixTokensToMatch: 131072
               lruCapacityPerServer: 31250
           schedulingProfiles:
           - name: default
@@ -379,7 +379,7 @@ plugins:
 - type: approx-prefix-cache-producer
   parameters:
     blockSizeTokens: 64
-    maxPrefixBlocksToMatch: 256 # Default
+    maxPrefixTokensToMatch: 131072 # Default
     lruCapacityPerServer: 31250 # Default
 
 # ...

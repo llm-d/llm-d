@@ -46,7 +46,7 @@ router:
           - type: precise-prefix-cache-producer # `precise-prefix-cache-scorer` is deprecated
             parameters:
               tokenProcessorConfig:
-                blockSize: 64
+                blockSizeTokens: 64
               speculativeIndexing: true
               indexerConfig:
                 kvBlockIndexConfig:
