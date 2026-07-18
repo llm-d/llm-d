@@ -64,7 +64,11 @@ so serving a pull costs the source no prefill capacity.
 > paid once while KV memory scales with it), so a tier that is 2x the GPU
 > cache at TP=1 can be a fraction of it at TP=4. Block hashes must agree
 > across pods (identical `--block-size` and `PYTHONHASHSEED` fleet-wide)
-> or every lookup silently misses.
+> or every lookup silently misses. With data parallelism each DP replica
+> gets its own tier region and P2P port (`/dev/shm` above N x
+> `cpu_bytes_to_use`, port + rank), on vLLM with per-DP-rank P2P support
+> ([vllm#47636](https://github.com/vllm-project/vllm/pull/47636),
+> [vllm#47987](https://github.com/vllm-project/vllm/pull/47987)).
 
 ## When It Pays
 

@@ -103,6 +103,13 @@ Each of these was learned the hard way:
   * Size `/dev/shm` above `cpu_bytes_to_use` (the tier is an shm mmap)
     and the pod memory limit above both - the memory-backed emptyDir
     counts against the pod's limit.
+  * With data parallelism (`--data-parallel-size` N > 1), each DP
+    replica gets its own tier region and P2P port: `/dev/shm` must
+    exceed N x `cpu_bytes_to_use`, and rank `r`'s P2P tier listens on
+    the configured port + `r`. Requires vLLM with per-DP-rank P2P
+    ports and per-replica offload regions
+    ([vllm#47636](https://github.com/vllm-project/vllm/pull/47636),
+    [vllm#47987](https://github.com/vllm-project/vllm/pull/47987)).
 * Size the render service for the request rate. The router's
   `token-producer` calls the render endpoint
   (`/v1/completions/render`) once per request to tokenize the full
