@@ -57,9 +57,14 @@ so serving a pull costs the source no prefill capacity.
 > [!IMPORTANT]
 > P2P reuse builds on the [Tiered Prefix Cache](tiered-prefix-cache.md)
 > path: peers serve pulls from their CPU offload tier, so the tier must be
-> enabled and sized at least as large as the per-pod GPU KV cache. Block
-> hashes must agree across pods (identical `--block-size` and
-> `PYTHONHASHSEED` fleet-wide) or every lookup silently misses.
+> enabled and sized considerably larger than the per-pod GPU KV cache (2x
+> as the working default) - the tier's value is the KV that GPU evicts and
+> CPU retains. Compute the ratio from the engine's measured KV capacity,
+> per role: per-pod KV grows superlinearly with the TP degree (weights are
+> paid once while KV memory scales with it), so a tier that is 2x the GPU
+> cache at TP=1 can be a fraction of it at TP=4. Block hashes must agree
+> across pods (identical `--block-size` and `PYTHONHASHSEED` fleet-wide)
+> or every lookup silently misses.
 
 ## When It Pays
 
@@ -80,6 +85,12 @@ The regime rule from the benchmarks:
   owner** - placement by cache location pays in queues and recomputes;
   load-aware placement plus the pull serves the same content from the whole
   fleet.
+- **The binding constraint must be prefill compute or latency, with KV
+  available to receive the pull.** When GPU KV capacity itself is the
+  bottleneck, cache co-location wins structurally - concurrent same-prefix
+  requests on one pod share a single copy of the prefix blocks, while
+  spreading (with or without a pull) pays a per-pod copy, and a pulled
+  prefix occupies KV for exactly as long as a recomputed one.
 
 ## Deploy
 
@@ -104,9 +115,13 @@ for manifests, verification gates, and step-by-step deployment.
    partial or failed transfer degrades to baseline behavior instead of
    failing the request.
 
-Under P/D disaggregation the same mechanism applies to the prefill leg:
-the sidecar runs with `--enable-p2p-pull` and prefill workers pull cached
-prefixes from peers before computing the remainder.
+Under P/D disaggregation the pull applies to the **prefill leg only**: the
+prefill worker computes the prompt KV and streams it to the decoder, so
+that is the leg where recomputing a cached prefix is wasted work. The
+sidecar runs with `--enable-p2p-pull` and injects the pull onto the
+prefill leg; prefill workers pull cached prefixes from peers and compute
+only the remainder, while the decode leg already receives the full KV over
+NIXL and has nothing to pull.
 
 ## Further Reading
 
