@@ -93,6 +93,14 @@ Each of these was learned the hard way:
 * `PYTHONHASHSEED` pinned to the same value fleet-wide. vLLM seeds block
   hashes per process; unpinned seeds mean no block hash ever matches across
   pods and every lookup misses.
+* Matched TP between peers that serve each other. The peer session
+  fingerprint embeds the parallel layout, so a TP-mismatched pair rejects
+  the session and requests silently recompute. Hetero-TP is supported only
+  for non-hybrid-attention models on the V1 model runner
+  (`VLLM_USE_V2_MODEL_RUNNER=0` where V2 is the default); in-review
+  upstream work stores offloaded KV in a canonical parallelism-free layout
+  ([vllm#48414](https://github.com/vllm-project/vllm/pull/48414)),
+  removing the TP coupling.
 * `offload_prompt_only: false` - sources must offload computed prefixes,
   not only prompts, for peers to pull them.
 * CPU tier (`cpu_bytes_to_use`) considerably larger than the per-pod GPU
@@ -429,6 +437,7 @@ typically the topology's ceiling.
 |---|---|---|
 | No pulls, everything serves | index empty (block-size mismatch, missing kv-events) or hashes disagree (`PYTHONHASHSEED`) | verification gates 1 and 4 |
 | `rejecting peer connect: block_len mismatch` | `--block-size` differs between pods | align it everywhere |
+| No pulls from a TP-mismatched source, index and hashes fine | peer session fingerprint is TP-locked | matched TP; hetero-TP only for non-hybrid models on the V1 runner (Best Practices) |
 | Pulls fire but hit rate ~0 | CPU tier too small vs GPU cache; prefixes evicted before peers ask | grow `cpu_bytes_to_use` (and `/dev/shm`) |
 | Sidecar exits with `unknown flag: --enable-p2p-pull` | sidecar image predates the NIXL PD pull path | use a sidecar build that includes it |
 | TTFT pins flat at ~the token-producer timeout (default 5s) at every rate above some cliff, engines report near-zero queue/prefill time, both arms identical | render service saturated; every EPP render call times out and requests proceed late without token IDs | scale render replicas to `peak_req_per_s x tokenize seconds per request`; verify with a direct load test against `/v1/completions/render` |

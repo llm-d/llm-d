@@ -41,7 +41,12 @@ sequenceDiagram
 > paid once while KV memory scales with it), so a tier that is 2x the GPU
 > cache at TP=1 can be a fraction of it at TP=4. Block hashes must agree
 > across pods (identical `--block-size` and `PYTHONHASHSEED` fleet-wide)
-> or every lookup silently misses. With data parallelism each DP replica
+> or every lookup silently misses. Peers that serve each other must also
+> run matched TP - the peer session fingerprint is TP-locked except for
+> non-hybrid-attention models on the V1 model runner; in-review upstream
+> work stores offloaded KV in a canonical parallelism-free layout
+> ([vllm#48414](https://github.com/vllm-project/vllm/pull/48414)),
+> removing the TP coupling. With data parallelism each DP replica
 > gets its own tier region and P2P port (`/dev/shm` above N x
 > `cpu_bytes_to_use`, port + rank), on vLLM with per-DP-rank P2P support
 > ([vllm#47636](https://github.com/vllm-project/vllm/pull/47636),
