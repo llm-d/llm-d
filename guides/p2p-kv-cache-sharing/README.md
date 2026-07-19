@@ -39,23 +39,34 @@ to the pod that already caches its prefix:
   recompute grows with length. Measure the crossover for your model (the
   benchmark below does); route pulls only above it.
 
-Cache-affinity routing remains optimal when the prefix distribution is
-uniform and per-pod caches hold their shares - the benchmark's affinity arm
-makes that regime visible rather than hiding it.
+The placement rule that falls out of every measurement in this guide: the
+pull is a recovery path, not a placement strategy. Keep prefix-affinity
+placement primary - a local hit is free, and a pod's cache mass compounds
+turn over turn - and let the pull cover divergence: queue-pressure spills,
+evictions across idle gaps, cold replicas, session migration. Reach for
+load-aware placement plus the pull only when the working set oversubscribes
+the fleet's GPU caches (wide prefix pools, large-document corpora), where
+placing by cache location pays in queues and recomputes. Inverting the rule
+- placing purely by load and pulling everywhere - scatters cache mass so no
+peer accumulates enough to serve from, and turns the transfer path into
+sustained bandwidth paid on every request; it loses to affinity at every
+load in our measurements and in an independent wide-EP deployment.
 
 ## Configuration
 
 ### Router scheduling configurations
 
-Three EPP scheduling configurations ship with the guide (under
-[benchmarking/](benchmarking/)); the P2P path is the third, and the other
-two are the comparison arms every measurement in this guide uses:
+Four EPP scheduling configurations ship with the guide (under
+[benchmarking/](benchmarking/)). The recommended deployment is
+`epp-affinity-p2p.yaml`; the others are the comparison arms the guide's
+measurements use:
 
 | Config | Placement | Pull |
 |---|---|---|
+| [`epp-affinity-p2p.yaml`](benchmarking/epp-affinity-p2p.yaml) | precise prefix-cache affinity | `p2p-source-producer`, `minCachedTokenDelta: 2048` (recommended) |
 | [`epp-affinity.yaml`](benchmarking/epp-affinity.yaml) | precise prefix-cache affinity | none (baseline) |
 | [`epp-load.yaml`](benchmarking/epp-load.yaml) | load-balanced | none (recompute control) |
-| [`epp-load-p2p.yaml`](benchmarking/epp-load-p2p.yaml) | load-balanced | `p2p-source-producer`, `minCachedTokenDelta: 2048` |
+| [`epp-load-p2p.yaml`](benchmarking/epp-load-p2p.yaml) | load-balanced | `p2p-source-producer` (oversubscribed working sets) |
 
 `minCachedTokenDelta` is set from the measured pull-versus-recompute
 crossover (see [Benchmarking](#benchmarking)): a pull is requested only when
@@ -181,7 +192,7 @@ kubectl create secret generic llm-d-hf-token \
 ### 2. Deploy the llm-d Router
 
 Install the router with this guide's values, which deploy the EPP with the
-load-aware + P2P scheduling configuration (`epp-load-p2p.yaml`) as the
+affinity + P2P scheduling configuration (`epp-affinity-p2p.yaml`) as the
 default. To run a comparison arm instead, swap the `pluginsCustomConfig` in
 the values for `epp-affinity.yaml` or `epp-load.yaml` from
 [benchmarking/](benchmarking/).

@@ -7,11 +7,17 @@
 ## for the peak request rate (long-prompt workloads saturate a single replica
 ## near ~10 req/s) - see the guide's Best Practices.
 ##
-## The deployed EPP config is the load-aware + P2P arm (`epp-load-p2p.yaml` in
-## ../benchmarking/): placement by load, and the p2p-source-producer emits the
-## KV cache source header when a peer out-caches the scheduled pod by at least
-## minCachedTokenDelta tokens. To reproduce the guide's comparison arms, swap
-## this pluginsCustomConfig for epp-affinity.yaml or epp-load.yaml.
+## The deployed EPP config is the affinity + P2P arm (`epp-affinity-p2p.yaml`
+## in ../benchmarking/): placement follows the cache (prefix-affinity scoring
+## unchanged from the precise-prefix-cache-routing guide), and the
+## p2p-source-producer emits the KV cache source header when a peer
+## out-caches the scheduled pod by at least minCachedTokenDelta tokens - so
+## the pull covers divergence (queue spills, evictions, cold replicas,
+## migration) rather than acting as the placement strategy. For workloads
+## whose working set oversubscribes the fleet's GPU caches, the load-aware +
+## P2P arm (`epp-load-p2p.yaml`) trades affinity for balance; the guide's
+## benchmarks measure both. To reproduce the comparison arms, swap this
+## pluginsCustomConfig for any file under ../benchmarking/.
 ##
 ## Pod-discovery mode with active-active HA (replicas: 2). Each replica dials
 ## every vLLM pod's per-pod ZMQ socket; both indexes converge identically.
@@ -59,9 +65,15 @@ router:
               # scheduled pod before a pull is requested; set from the measured
               # pull-versus-recompute crossover (see ../benchmarking/README.md).
               minCachedTokenDelta: 2048
+          - type: prefix-cache-scorer
+            parameters:
+              prefixMatchInfoProducerName: precise-prefix-cache-producer
+          - type: no-hit-lru-scorer
+            parameters:
+              prefixMatchInfoProducerName: precise-prefix-cache-producer
           - type: queue-scorer
           - type: kv-cache-utilization-scorer
-          - type: weighted-random-picker
+          - type: max-score-picker
           - type: single-profile-handler
         dataLayer:
           sources:
@@ -71,10 +83,14 @@ router:
         schedulingProfiles:
           - name: default
             plugins:
-              - pluginRef: weighted-random-picker
-              - pluginRef: queue-scorer
+              - pluginRef: max-score-picker
+              - pluginRef: prefix-cache-scorer
                 weight: 3
+              - pluginRef: queue-scorer
+                weight: 2
               - pluginRef: kv-cache-utilization-scorer
+                weight: 2
+              - pluginRef: no-hit-lru-scorer
                 weight: 2
 
   modelServers:
