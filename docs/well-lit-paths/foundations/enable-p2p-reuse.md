@@ -12,46 +12,23 @@ directly from a peer's CPU offload tier instead of recomputing them. The
 transfer is CPU-to-CPU over NIXL - the source pod's GPU is never touched,
 so serving a pull costs the source no prefill capacity.
 
-- Without P2P reuse, a request placed off the caching pod recomputes:
+The moment P2P reuse changes is the follow-on request that lands off the
+caching pod:
 
-```
-   ┌───────┐            ┌─────────┐            ┌───────────┐
-   │user A │            │ pod 1   │            │  user A   │
-   │  req  │            │ caches  │            │ follow-on │
-   │ pod 1 │            │ prefix  │            │ req→pod 2 │
-   └───┬───┘            └────┬────┘            └─────┬─────┘
-       │                     │                       │
-───────●─────────────────────●───────────────────────●───────▶ time
-       │                     │                       │
-       t                    t+a                     t+b
-       │                     │                       │
-       │◄─ KV live on pod 1 ─┼──────────────────────►│ ✗ (wrong pod)
-                                                     ▼
-                                               ┌────────────┐
-                                               │ RECOMPUTE  │
-                                               │  PREFILL   │
-                                               └────────────┘
-```
-
-- With P2P reuse, the request pulls the prefix from its peer:
-
-```
-   ┌───────┐            ┌─────────┐            ┌───────────┐
-   │user A │            │ pod 1   │            │  user A   │
-   │  req  │            │ caches  │            │ follow-on │
-   │ pod 1 │            │ prefix  │            │ req→pod 2 │
-   └───┬───┘            └────┬────┘            └─────┬─────┘
-       │                     │                       │
-───────●─────────────────────●───────────────────────●───────▶ time
-       │                     │                       │
-       t                    t+a                     t+b
-       │                     │                       │
-       │◄─ KV live on pod 1 ─┼──────────────────────►│ ✓
-                                                     ▼
-                                               ┌────────────┐
-                                               │ PULL FROM  │
-                                               │ POD 1 CPU  │
-                                               └────────────┘
+```mermaid
+sequenceDiagram
+    participant A as user A
+    participant P1 as pod 1
+    participant P2 as pod 2
+    A->>P1: request
+    Note over P1: computes the prefix KV and caches it
+    A->>P2: follow-on request, rebalanced off pod 1
+    alt without P2P reuse
+        Note over P2: recomputes the full prefix
+    else with P2P reuse
+        P2->>P1: pulls the prefix from pod 1's CPU tier
+        Note over P2: computes only the remainder
+    end
 ```
 
 > [!IMPORTANT]
