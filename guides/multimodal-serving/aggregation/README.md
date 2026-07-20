@@ -2,9 +2,9 @@
 
 This guide deploys the recommended [configuration](https://github.com/llm-d/llm-d-router/blob/main/docs/architecture.md) for multimodal vLLM deployments, reducing tail latency and increasing throughput through load-aware and prefix-cache aware balancing.
 
-The multimodal-optimized-baseline defaults to two main routing criteria:
-* **Prefix-cache aware:** Scores candidate endpoints by estimating multimodal prompt prefix cache reuse (e.g., matching text + image hashes) on each model server.
-* **Load-aware:** Scores candidate endpoints based on queue depth and kv-cache utilization to prevent server bottlenecks.
+The multimodal-optimized-baseline routes with the same token-based stack as the [optimized-baseline](../../optimized-baseline) reference:
+* **Prefix-cache aware:** The `prefix-cache-affinity-filter` selects the endpoint set by estimating multimodal prompt prefix cache reuse (matching text + image content hashes) on each model server.
+* **Token-load aware:** The `token-load-scorer` picks within the set on queued prefill token load. The multimodal `token-producer` feeds it per-request token counts, estimating each image's contribution from its resolution — image inputs have no text length to read.
 
 ---
 
@@ -206,29 +206,45 @@ kubectl delete namespace ${NAMESPACE}
 
 ## Benchmarking Report
 
-The benchmark runs on 16 × H200 GPUs, distributed across 8 model servers (2 H200s per server with TP=2).
+The benchmark runs on 16 × H200 GPUs, distributed across 8 model servers (2 H200s per server with TP=2), driven by the shared-prefix multimodal workload (3 × 720p images + ~1.3K text tokens per request, 300-token completions, 600 prefix groups of 5 prompts, constant-rate ladder 5 → 40 req/s, `llm-d-benchmark` harness v0.7.0). Numbers below were measured with the token-based routing stack this guide now ships; both configurations ran back-to-back on the identical fleet.
 
 ### Comparing llm-d Routing to a Simple Kubernetes Service
 
-Graphs below compare optimized-baseline routing to a stock Kubernetes Service that round-robins requests across the same 8 vLLM pods (no EPP, no scoring).
+Graphs below compare multimodal-optimized-baseline routing to a stock Kubernetes Service that round-robins requests across the same 8 vLLM pods (no EPP, no scoring).
 
 <img src="benchmark-results/throughput_vs_qps.png" width="900" alt="Throughput vs QPS">
 <img src="benchmark-results/latency_vs_qps.png" width="900" alt="Latency vs QPS">
 <img src="benchmark-results/ttft_p90_vs_qps.png" width="900" alt="TTFT p90 vs QPS">
+
+llm-d holds **sub-second TTFT p90 across the entire ladder** (0.15–0.40 s) while the plain Service climbs into unbounded queueing from ~25 req/s (p90 2.3 s → 39.8 s). The affinity filter pins each prefix group's text+image blocks to the pod that already holds them, so repeat traffic prefills almost nothing: throughput keeps scaling with offered load to **11,128 tok/s at rate 40 (+44% over the Service's 7,712)**, median TTFT stays ≤155 ms at every rate (**~125× lower** at the top of the ladder), and the whole run completed with **2 failed requests versus 27**.
+
+> [!IMPORTANT]
+> Two `prefix-cache-affinity-filter` parameters are tuned for multimodal traffic, with the rationale in the
+> values file (the `token-producer` image `factor: 1024` is count-correct for Qwen3-VL — one visual token per
+> 32×32-pixel region, measured against the served model):
+> - `affinityThreshold: 0.6` — a multimodal request's *cacheable* fraction is structurally lower than text:
+>   the unique question is never a cache hit, so this workload's best possible prefix match is ~70% of the
+>   prompt — below the plugin's 0.8 default, which would leave affinity permanently disengaged. Set the
+>   threshold below your traffic's maximum cacheable fraction.
+> - `maxTTFTPenaltyMs: 36000` (2× default) — token counts price an image token like a text token, but
+>   vision-encoder time makes image-heavy prefill slower per token than the text-calibrated
+>   `peakPrefillThroughput` implies, so the filter's predicted-TTFT runs light of wall-clock; doubling the
+>   gate restores the intended pinning depth. Reduce toward the default for text-dominant traffic.
 
 <details>
 <summary><b><i>Click</i></b> to view the per-rate breakdown across the full ladder</summary>
 
 Output tokens/sec — higher is better; TTFT in seconds — lower is better.
 
-| Rate | k8s Output | llm-d Output | k8s TTFT mean | llm-d TTFT mean | k8s TTFT p90 | llm-d TTFT p90 |
-|-----:|-----------:| -----------: | ------------: | --------------: | -----------: | -------------: |
-|    5 |  1,405.16  |   1,425.62   |     0.532     |      0.194      |   777.100    |    201.200     |
-|   10 |  2,792.99  |   2,844.20   |     0.678     |      0.164      | 1,154.900    |    204.700     |
-|   15 |  4,094.10  |   4,256.97   |     0.962     |      0.158      | 1,874.800    |    207.400     |
-|   20 |  5,275.50  |   5,636.65   |     1.962     |      0.158      | 4,136.900    |    212.800     |
-|   25 |  5,730.53  |   7,014.95   |     4.924     |      0.168      |12,305.800    |    239.500     |
-|   30 |  6,045.01  |   8,367.86   |    14.448     |      0.229      |32,267.500    |    394.000     |
-|   35 |  6,024.66  |   7,577.50   |    24.970     |      0.899      |50,178.200    |    618.900     |
+| Rate | k8s Output | llm-d Output | k8s TTFT p50 | llm-d TTFT p50 | k8s TTFT p90 | llm-d TTFT p90 |
+|-----:|-----------:| -----------: | -----------: | -------------: | -----------: | -------------: |
+|    5 |   1,408    |    1,421     |    0.401     |     0.133      |    0.487     |     0.148      |
+|   10 |   2,794    |    2,836     |    0.425     |     0.078      |    0.676     |     0.147      |
+|   15 |   4,241    |    4,259     |    0.420     |     0.079      |    0.788     |     0.153      |
+|   20 |   5,535    |    5,634     |    0.501     |     0.080      |    1.358     |     0.158      |
+|   25 |   6,782    |    7,046     |    0.849     |     0.081      |    2.330     |     0.157      |
+|   30 |   7,307    |    8,444     |    1.777     |     0.083      |    7.792     |     0.225      |
+|   35 |   7,272    |    9,782     |   11.060     |     0.153      |   21.192     |     0.350      |
+|   40 |   7,712    |   11,128     |   19.245     |     0.155      |   39.813     |     0.399      |
 
 </details>
