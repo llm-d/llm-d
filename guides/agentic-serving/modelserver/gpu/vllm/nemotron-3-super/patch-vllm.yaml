@@ -11,7 +11,6 @@ spec:
           command: ["vllm", "serve"]
           args:
             - "nvidia/NVIDIA-Nemotron-3-Super-120B-A12B-FP8"
-            - "--disable-access-log-for-endpoints=/health,/metrics,/v1/models"
             - "--tensor-parallel-size=4"
             - "--max-model-len=262144"
             - "--max-num-seqs=128"

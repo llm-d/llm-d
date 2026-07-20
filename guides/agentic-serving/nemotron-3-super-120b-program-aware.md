@@ -3,8 +3,8 @@
 This guide deploys the agentic code-generation workload with **program-aware, per-session fairness
 scheduling** and benchmarks it, across a concurrency sweep, against the *same* optimized deployment
 with fairness turned off. The result: when the model server saturates, program-aware scheduling stops
-short agent sessions from being starved behind long, greedy ones — with no cost to throughput or
-completion.
+short agent sessions from being starved behind long, greedy ones — and actually *raises* aggregate
+throughput under overload.
 
 ## Overview
 
@@ -12,7 +12,9 @@ Agentic coding clients (Claude Code, opencode, Codex) open **many concurrent, bu
 issuing many requests. When the server saturates, a few heavy sessions monopolize it and starve the
 rest — a short 3-request session ends up waiting behind a 100-request one in the engine's FIFO. This
 guide deploys [nvidia/NVIDIA-Nemotron-3-Super-120B-A12B-FP8](https://huggingface.co/nvidia/NVIDIA-Nemotron-3-Super-120B-A12B-FP8)
-as a **single instance (TP=4)** and adds three llm-d scheduler plugins on top of the standard router:
+as **4 instances (TP=4 each)** on top of an optimized routing base — a two-tier prefix cache
+(on-GPU + CPU KV-offload) with load-aware scorers — and adds three llm-d scheduler plugins for
+per-session fairness:
 
 - **`agent-identity`** — derives a per-session `FairnessID` from the client's session header
   (`x-claude-code-session-id` / Claude Code, `x-session-affinity` / opencode, `session-id` / Codex),
@@ -22,8 +24,10 @@ as a **single instance (TP=4)** and adds three llm-d scheduler plugins on top of
   session its own queue and prioritizes sessions that have received *less* cumulative service, so
   bursty sessions cannot starve concurrent ones.
   ([plugin README](https://github.com/llm-d/llm-d-inference-scheduler/blob/main/pkg/epp/framework/plugins/flowcontrol/fairness/program-aware/README.md))
-- **`concurrency-detector`** — the flow-control **saturation detector** (`maxConcurrency: 133`, just
-  above the model's `--max-num-seqs=128`). It tells the flow controller when the pool is full so LAS
+- **`concurrency-detector`** — the flow-control **saturation detector**. `maxConcurrency` is
+  **per-endpoint** and the detector sums it across the pool, so it is set to `133` (just above one
+  instance's `--max-num-seqs=128`); with 4 instances the pool capacity is 4 × 133 = 532. It tells the
+  flow controller when the pool is full so LAS
   admits requests only while there is a real backlog to arbitrate; without it the default
   utilization-detector throttles dispatch to zero under this load.
 
@@ -31,9 +35,9 @@ The deployment is evaluated as an **A/B on identical topology and workload** —
 differs: the [program-aware router](router/agentic-serving-gpu-program-aware.values.yaml) (fairness
 on) vs a **No-Fairness baseline** — the same router with the `agent-identity`,
 `program-aware-fairness`, and `flowControl` plugins removed, applied as a deploy-time override (§1). Both replay real multi-turn agent sessions from
-[`Exgentic/agent-llm-traces`](https://huggingface.co/datasets/Exgentic/agent-llm-traces) via
+[`Exgentic/agent-llm-traces-v2`](https://huggingface.co/datasets/Exgentic/agent-llm-traces-v2) via
 [`benchmark-templates/otel-trace-replay.yaml`](benchmark-templates/otel-trace-replay.yaml),
-which sweeps concurrency from 25 → 250.
+which sweeps concurrency from 200 → 1000.
 
 > This deployment uses the **released** endpoint-picker image
 > `ghcr.io/llm-d/llm-d-router-endpoint-picker:v0.9.0` (pulled by the `llm-d-router-standalone` v0.9.0
@@ -44,20 +48,21 @@ which sweeps concurrency from 25 → 250.
 | Parameter          | Value                                                                                                    |
 | ------------------ | -------------------------------------------------------------------------------------------------------- |
 | Model              | [nvidia/NVIDIA-Nemotron-3-Super-120B-A12B-FP8](https://huggingface.co/nvidia/NVIDIA-Nemotron-3-Super-120B-A12B-FP8) |
-| Accelerator        | NVIDIA GPU (4 GPUs total)                                                                                 |
-| Serving topology   | Single instance                                                                                          |
+| Accelerator        | NVIDIA GPU (16 GPUs total — 4 instances × 4)                                                             |
+| Serving topology   | 4 instances (replicas), TP=4 each                                                                        |
 | TP size            | TP=4, expert-parallel (MoE, ~12B active)                                                                 |
 | Max context        | 262,144 tokens                                                                                           |
-| Max batch          | `--max-num-seqs=128`                                                                                     |
-| KV cache           | FP8-quantized                                                                                            |
-| Fairness           | `agent-identity` + `program-aware-fairness` (LAS) + `concurrency-detector` (maxConcurrency 133)          |
-| Workload           | Exgentic agent traces — concurrency sweep 25 → 250 sessions                                              |
+| Max batch          | `--max-num-seqs=128` per instance                                                                        |
+| KV cache           | FP8-quantized, with CPU offload tier (vLLM `OffloadingConnector`, ~100 GiB/server)                       |
+| Routing            | Two-tier prefix cache (on-GPU + CPU-offload) + queue / kv-cache-util / active-request scorers            |
+| Fairness           | `agent-identity` + `program-aware-fairness` (LAS) + `concurrency-detector` (maxConcurrency 133/endpoint) |
+| Workload           | Exgentic agent traces (v2) — concurrency sweep 200 → 1000 sessions                                       |
 
 ### Supported Hardware Backends
 
 | Backend           | Directory                              | Notes                       |
 | ----------------- | -------------------------------------- | --------------------------- |
-| NVIDIA GPU (vLLM) | `modelserver/gpu/vllm/nemotron-3-super/` | 1× GPU, single instance TP=4 |
+| NVIDIA GPU (vLLM) | `modelserver/gpu/vllm/nemotron-3-super/` | 16 GPUs (4×4), 4 instances TP=4 |
 
 ## Prerequisites
 
@@ -126,8 +131,8 @@ Apply the Kustomize overlay for the Nemotron-3-Super-120B deployment:
 kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/gpu/vllm/nemotron-3-super/
 ```
 
-This deploys a single instance (TP=4, `--max-num-seqs=128`). Model load is large; the startup probe
-allows up to an hour:
+This deploys 4 instances (TP=4 each, `--max-num-seqs=128`), pinned one-per-node to 4 GPU nodes. Model
+load is large; the startup probe allows up to an hour:
 
 ```bash
 kubectl rollout status deployment/agentic-serving-gpu-vllm-decode -n ${NAMESPACE}
@@ -210,17 +215,17 @@ session is scheduled on its own fairness queue.
 This deployment ships its own `inference-perf` preset (defined in
 [`benchmark-templates/otel-trace-replay.yaml`](benchmark-templates/otel-trace-replay.yaml)).
 Unlike a synthetic load, it **replays real multi-turn agent traces** (program structure + tool-call
-timing) from [`Exgentic/agent-llm-traces`](https://huggingface.co/datasets/Exgentic/agent-llm-traces),
+timing) from [`Exgentic/agent-llm-traces-v2`](https://huggingface.co/datasets/Exgentic/agent-llm-traces-v2),
 carrying per-session identity headers so the fairness stack is exercised end-to-end. It runs a
 **concurrency sweep** — each stage is one point on the curve, using the same deterministic session
 slice for both arms:
 
 | Workload Characteristic | Value | Description |
 | :--- | :--- | :--- |
-| **Dataset** | `Exgentic/agent-llm-traces` | Real multi-turn agentic coding sessions. |
-| **Concurrency sweep** | 25 / 50 / 100 / 150 / 200 / 250 | One stage per point; `num_sessions = concurrency`. |
+| **Dataset** | `Exgentic/agent-llm-traces-v2` | Real multi-turn agentic coding sessions (~10k). |
+| **Concurrency sweep** | 200 / 400 / 600 / 800 / 1000 | One stage per point; `num_sessions = 3× concurrency` (holds steady-state). |
 | **Seed** | `base_seed=42` | Deterministic — each arm sees the identical session slice per point. |
-| **Session rate** | 2.5 – 10 sessions/s | Gentle ramp-in to each stage's concurrency. |
+| **Session rate** | `concurrent/10` (20–100/s) | Ramp-in to each stage's concurrency. |
 | **Max output tokens** | 25,000 (per request) | With `max_sequence_length` 262,144. |
 | **Request timeout** | 1800 s | Long, to accommodate large agentic turns. |
 | **Session id header** | `x-claude-code-session-id` | Per-session identity the `agent-identity` plugin reads. |
@@ -264,56 +269,79 @@ the plain program-aware install), let the model server flush, and re-run.
 
 ## Benchmark Results
 
-Concurrency sweep of **llm-d + program-aware** vs **llm-d** (fairness off) on the identical
-single-instance TP=4 deployment (`--max-num-seqs=128`, `concurrency-detector maxConcurrency: 133`),
-replaying `Exgentic/agent-llm-traces`. Only the router config differs between the two curves.
+Concurrency sweep (200 → 1000 concurrent sessions) of **llm-d + program-aware** vs **llm-d**
+(fairness off) on the identical **4-instance TP=4** deployment (`--max-num-seqs=128` per instance,
+`concurrency-detector maxConcurrency: 133`/endpoint → **pool ≈ 532**), replaying real multi-turn
+agent traces from `Exgentic/agent-llm-traces-v2`. Each stage holds steady-state concurrency
+(`num_sessions = 3×`); only the router config differs between the two curves.
 
-### Fairness engages only once the server saturates
+### Fairness engages only once the pool saturates
 
-The EPP flow-control queue stays **empty until in-flight requests exceed the ~133 admission
-threshold**. Below that, program-aware is a pass-through and the two arms are identical; the queue —
-and the fairness benefit — grow with concurrency:
-
-| Concurrent sessions | Peak EPP queue depth | Regime |
-| ---: | ---: | :--- |
-| 25 / 50 / 100 | 0 | below threshold — no queuing, arms identical |
-| 150 | ~30 | intermittent saturation |
-| 200 | 128 | steady saturation |
-| 250 | 224 | deep saturation — largest fairness effect |
-
-At the deepest point (c=250), **completion, throughput, mean session time, and the request tail all
-favor program-aware**, with the only cost being a slightly higher *median* TTFT:
-
-| Metric @ c=250 | llm-d + program-aware | llm-d | Δ |
-| :--- | ---: | ---: | :--- |
-| Throughput (req/s) | 1.17 | 1.12 | +4% |
-| Program (session) duration — mean | 1738 s | 2207 s | **−21%** |
-| **TTFT p99** | 486 s | 1352 s | **2.8× faster** |
-| **E2E p99** | 748 s | 1352 s | **1.8× faster** |
+The `concurrency-detector` sums per-endpoint in-flight across the pool, so program-aware is a
+**pass-through until aggregate in-flight approaches ~532** (4 × 133). Below that the two arms are
+identical; above it the fairness effect grows monotonically with concurrency — short sessions get
+progressively faster relative to baseline.
 
 ### Who benefits: short sessions stop waiting behind long ones
 
-Splitting session duration by session size (request count) reveals the mechanism — this is textbook Least-Attained-Service:
+Splitting by session size (request count) reveals the mechanism — textbook Least-Attained-Service. LAS
+protects the many short/mid sessions and yields the few long "whales":
 
 ![Program duration by session size vs concurrency](benchmark-results/program_duration_by_bucket_vs_concurrency.png)
 
-At saturation, **short sessions (2–6 requests) finish up to 6.7× faster** under program-aware — their
-median stays ~240 s at c=250 while under baseline llm-d they wait **~1600 s**, stuck behind the elephant sessions in the engine FIFO. **Long sessions (28+ requests) pay a negligible price** (they have already consumed the most service, so LAS de-prioritizes them). The aggregate "−21% mean session time" is almost
-entirely short sessions being rescued from starvation — not a uniform speedup.
+**Short sessions (2–6 requests)** — median session duration, program-aware vs baseline:
 
-The same effect, normalized per request (whole-session time ÷ request count):
+| Concurrent sessions | median: program-aware | median: llm-d (baseline) | speedup |
+| ---: | ---: | ---: | ---: |
+| 400 | 251 s | 297 s | 1.2× |
+| 600 | 403 s | 579 s | 1.4× |
+| 800 | 391 s | 787 s | **2.0×** |
+| 1000 | 439 s | 1125 s | **2.6×** |
+
+The effect strengthens with load: at **1000 concurrent sessions**, program-aware keeps short sessions
+**2.6× faster** (439 s vs 1125 s); mid-size sessions (7–12 req) see the same shape — **2.1× faster**
+(699 s vs 1493 s). Baseline llm-d runs with `flowControl` **off**: contention collapses into each
+engine's FIFO, so short agentic sessions get stuck behind the 100-request "whales."
+
+**The tradeoff is by design:** LAS de-prioritizes high-attained-service (long) sessions, so 28+-request
+sessions run *slower* under program-aware — the cost of rescuing the far more numerous short ones.
+
+### Per-request latency and time-to-first-token
+
+Normalizing whole-session time by request count shows the same rescue on a per-request basis:
 
 ![Average per-request completion vs concurrency](benchmark-results/avg_request_completion_vs_concurrency.png)
 
-### The request-tail tradeoff
+Time-to-first-token is where program-aware shines under overload:
 
 ![TTFT p50/p99 vs concurrency](benchmark-results/ttft_vs_concurrency_program_aware.png)
 
-Program-aware makes the **median TTFT slightly worse** (head-of-line sessions wait a touch) in exchange for a **far better tail** — TTFT p99 is ~2.3× lower at c=200 and ~2.8× lower at c=250. Baseline llm-d runs with `flowControl` **off**: there are no EPP queues, so contention collapses into vLLM's single FIFO, letting a few sessions monopolize the server and dragging out everyone else's tail.
+At low/moderate load the two arms are comparable (program-aware a hair higher). Under overload they
+diverge sharply — at **c=1000, median TTFT is 62 s (program-aware) vs 867 s (baseline) — ~14× faster —
+and p99 is 241 s vs 1733 s (~7× faster)**. With `flowControl` off, new sessions pile into each
+engine's FIFO behind the backlog, so first-token latency collapses; LAS admits short sessions promptly.
+
+### Throughput and inter-token latency
+
+Fairness doesn't cost throughput here — it *improves* it under overload. By clearing short sessions
+quickly instead of letting a few 100-request whales monopolize each engine's FIFO, the pool sustains
+higher goodput:
+
+![Throughput vs concurrency](benchmark-results/throughput_vs_concurrency.png)
+
+At **c=1000, program-aware delivers 2847 output tok/s and 9.11 req/s vs baseline's 1852 / 5.09 — +54%
+output tokens and +79% requests**. Below saturation the two are equal.
+
+![Inter-token latency vs concurrency](benchmark-results/itl_vs_concurrency.png)
 
 ### Caveats
 
-- **No effect below saturation.** At c ≤ 100 the EPP queue is empty, so the two arms are statistically identical — program-aware neither helps nor hurts. It activates only under real contention.
+- **No effect below saturation.** Until aggregate in-flight approaches the ~532 pool, the EPP queue is
+  empty and the two arms are statistically identical — program-aware neither helps nor hurts. It
+  activates only under real contention.
+- **Detector choice matters.** The `concurrency-detector` engages LAS only at genuine pool overload,
+  giving the clean effect above. A queue-depth-based `utilization-detector` (`queueDepthThreshold`)
+  engages far earlier (per-endpoint vLLM queue), which keeps the engine queue shallow but sometimes acts delayed based on outdated snapshot.
 
 ## Cleanup
 
