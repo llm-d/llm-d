@@ -1,6 +1,6 @@
 # Multi-Tenant Async Processing — Quota, Priority & Saturation
 
-An advanced [Async Processor](https://github.com/llm-d-incubation/llm-d-async) scenario built on the
+An advanced [Async Processor](https://github.com/llm-d/llm-d-async) scenario built on the
 [asynchronous-processing](../README.md) guide, across three dimensions — **team × tier × model**. Each
 **team** gets a per-team quota (reserved vs. overflow) and a priority **tier**; each **model** gets its
 own worker pool with independent **saturation-aware back-off**, observed through self-hosted
@@ -42,7 +42,7 @@ The three dimensions:
   deprioritized, **not** nacked).
 - **Tier → priority.** A per-queue `tier` label: `interactive` (premium) > `async` (standard) > `batch`.
 
-The [**tier-priority merge policy**](https://github.com/llm-d-incubation/llm-d-async/pull/294) runs
+The [**tier-priority merge policy**](https://github.com/llm-d/llm-d-async/pull/294) runs
 **per pool independently**: within each model it buckets requests into **6 strict lanes** by
 `(classification, tier)`, dispatches them in order, and stamps **`x-gateway-priority`** (0 = highest …
 5 = lowest):
@@ -91,7 +91,7 @@ This guide layers on the base [asynchronous-processing](../README.md) guide — 
   export MT=${REPO_ROOT}/guides/asynchronous-processing/multitenant
 
   export NAMESPACE=llm-d-async
-  export ASYNC_VERSION=0.7.2          # a release with the tier-priority merge policy + classifying quota (v0.7.2+)
+  export ASYNC_VERSION=0.7.4          # a release with the tier-priority merge policy + classifying quota (v0.7.4+)
 
   # The shared inference gateway (EPP) address, and the two InferencePool + model names:
   export IP=$(kubectl get service optimized-baseline-epp -n llm-d-optimized-baseline -o jsonpath='{.spec.clusterIP}')
@@ -123,7 +123,7 @@ kubectl apply -n ${NAMESPACE} -f ${MT}/manifests/redis.yaml
 
 render ${MT}/values/redis/quota-only.yaml > /tmp/mt-redis.yaml
 helm install async-processor \
-    oci://ghcr.io/llm-d-incubation/charts/async-processor \
+    oci://ghcr.io/llm-d/charts/async-processor \
     -f /tmp/mt-redis.yaml \
     -n ${NAMESPACE} --create-namespace --version ${ASYNC_VERSION}
 
@@ -149,7 +149,7 @@ kubectl apply -n ${NAMESPACE} -f ${MT}/manifests/redis.yaml   # still needed for
 sed -e "s/NAMESPACE/${NAMESPACE}/g" -e "s#IGW_HOST#${IP}#g" -e "s/PROJECT_ID/${PROJECT_ID}/g" \
     ${MT}/values/pubsub/quota-only.yaml > /tmp/mt-pubsub.yaml
 helm install async-processor \
-    oci://ghcr.io/llm-d-incubation/charts/async-processor \
+    oci://ghcr.io/llm-d/charts/async-processor \
     -f /tmp/mt-pubsub.yaml \
     -n ${NAMESPACE} --create-namespace --version ${ASYNC_VERSION}
 ```
@@ -252,7 +252,7 @@ bringing up [self-hosted Prometheus](#observability), then drive sustained load:
 ```bash
 render ${MT}/values/redis/saturation-prometheus.yaml > /tmp/mt-redis-sat.yaml
 helm upgrade async-processor \
-    oci://ghcr.io/llm-d-incubation/charts/async-processor \
+    oci://ghcr.io/llm-d/charts/async-processor \
     -f /tmp/mt-redis-sat.yaml -n ${NAMESPACE} --version ${ASYNC_VERSION}
 
 publish premium a 200 & publish batch a 200 &   # heavy on model A; keep model B light
@@ -308,7 +308,7 @@ kubectl apply -n ${NAMESPACE} -f ${MT}/manifests/gmp-frontend.yaml
 sed -e "s/NAMESPACE/${NAMESPACE}/g" -e "s#IGW_HOST#${IP}#g" -e "s/POOL_A/${POOL_A}/g" \
     -e "s/POOL_B/${POOL_B}/g" -e "s/PROJECT_ID/${PROJECT_ID}/g" \
     ${MT}/values/pubsub/saturation-gmp.yaml > /tmp/mt-pubsub-sat.yaml
-helm upgrade async-processor oci://ghcr.io/llm-d-incubation/charts/async-processor \
+helm upgrade async-processor oci://ghcr.io/llm-d/charts/async-processor \
   -f /tmp/mt-pubsub-sat.yaml -n ${NAMESPACE} --version ${ASYNC_VERSION}
 ```
 <!-- llm-d-cicd:skip end -->
@@ -323,7 +323,7 @@ Prometheus path reacts within one scrape.
 
 - **Image / version.** The overlays no longer pin an image tag — the image tracks the chart's
   `appVersion`, selected by `--version ${ASYNC_VERSION}`. Use a release whose app image actually exists
-  (v0.7.2+).
+  (v0.7.4+).
 - **Reserved quota vs. pool size (per model).** Each team's quota is its *reserved* capacity (priority
   lane) in `classifying` mode, not a hard cap — over-quota flows as `overflow`. Within each model pool,
   keep the **sum** of that model's reserved quotas at or below the pool's worker count.
