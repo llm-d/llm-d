@@ -20,6 +20,10 @@ These guides teach single architectural capabilities that you can configure inde
 - **[Prefill/Decode Disaggregation](pd-disaggregation.md)**: Separating prefill (compute-bound) and decode (memory-bandwidth-bound) phases for optimized performance.
 - **[Wide Expert-Parallelism](wide-expert-parallelism.md)**: Scaling KV cache space for massive MoE models like DeepSeek-R1 using DP/EP deployment patterns.
 
+### Inference Acceleration
+
+- **[Speculative Decoding](spec-decoding.md)**: Pairing a target model with a speculators-trained drafter to cut inter-token latency in the low-QPS, memory-bound regime — losslessly.
+
 ### Traffic Control & Autoscaling
 
 - **[Flow Control](flow-control.md)**: Intelligent request queuing for multi-tenant deployments and managing traffic spikes.

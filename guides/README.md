@@ -22,6 +22,10 @@ We currently offer the following:
 * [Prefill/Decode Disaggregation](./pd-disaggregation/README.md) - Split inference into specialized prefill and decode instances, improving throughput and quality of service stability for medium and large models like `openai/gpt-oss-120b`.
 * [Wide Expert-Parallelism](./wide-ep-lws/README.md) - Deploy large Mixture-of-Experts (MoE) models like `deepseek-ai/DeepSeek-R1` over multiple nodes via DP/EP configuration, increasing available KV cache space and throughput.
 
+### Inference Acceleration
+
+* [Speculative Decoding](./spec-decoding/README.md) - Pair a target model with a [speculators](https://github.com/vllm-project/speculators)-trained drafter to cut inter-token latency in the low-QPS, memory-bound regime, losslessly. Reuses the optimized-baseline router unchanged.
+
 ### Operational Excellence
 
 * [Flow Control](./flow-control/README.md) - Intelligent request queuing for multi-tenant deployments and managing traffic spikes.

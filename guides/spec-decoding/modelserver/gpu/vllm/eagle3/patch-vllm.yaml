@@ -1,0 +1,81 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: decode
+spec:
+  # Single replica: this is a latency-focused Foundation. Speculative decoding is orthogonal to
+  # routing (the EPP config is inherited from optimized-baseline), so one replica keeps the
+  # two-arm benchmark clean. Scale replicas up to compose with load-aware routing — the drafter
+  # behaves identically per replica.
+  replicas: 1
+  template:
+    spec:
+      containers:
+        - name: modelserver
+          command: ["vllm", "serve"]
+          # Include all args in overlay patch for consistency.
+          # Speculative decoding is enabled by the --speculative-config flag below.
+          # The rest matches a normal vLLM launch except PYTORCH_ALLOC_CONF (see env).
+          args:
+            - "Qwen/Qwen3-32B"
+            - "--served-model-name=Qwen/Qwen3-32B"
+            - "--disable-access-log-for-endpoints=/health,/metrics,/v1/models"
+            - "--tensor-parallel-size=2"
+            - "--speculative-config"
+            - '{"model": "RedHatAI/Qwen3-32B-speculator.eagle3", "method": "eagle3", "num_speculative_tokens": 3}'
+            # Uncomment for distributed tracing
+            # - "--otlp-traces-endpoint=http://otel-collector:4317"
+            # - "--collect-detailed-traces=all"
+          env:
+            - name: HF_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: llm-d-hf-token
+                  key: HF_TOKEN
+            # Drafter weights share the target's GPU memory; expandable segments
+            # reduces fragmentation from the two-model allocation pattern.
+            - name: PYTORCH_ALLOC_CONF
+              value: "expandable_segments:True"
+          resources:
+            limits:
+              cpu: '16'
+              memory: 128Gi
+              nvidia.com/gpu: 2
+            requests:
+              cpu: '8'
+              memory: 96Gi
+              nvidia.com/gpu: 2
+          volumeMounts:
+            - mountPath: /dev/shm
+              name: shm
+            - mountPath: /.cache
+              name: torch-compile-cache
+            - mountPath: /.triton
+              name: triton-cache
+            - mountPath: /.config
+              name: vllm-config
+          startupProbe:
+            # Loading target + drafter and compiling can take a while on first boot.
+            initialDelaySeconds: 15
+            periodSeconds: 30
+            timeoutSeconds: 5
+            failureThreshold: 120
+          livenessProbe:
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            periodSeconds: 5
+            timeoutSeconds: 2
+            failureThreshold: 3
+      volumes:
+        - name: shm
+          emptyDir:
+            medium: Memory
+            sizeLimit: 20Gi
+        - name: torch-compile-cache
+          emptyDir: {}
+        - name: triton-cache
+          emptyDir: {}
+        - name: vllm-config
+          emptyDir: {}
