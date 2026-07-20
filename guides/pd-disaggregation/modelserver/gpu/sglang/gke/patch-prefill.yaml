@@ -5,7 +5,6 @@ kind: Deployment
 metadata:
   name: prefill
 spec:
-  replicas: 2
   template:
     spec:
       tolerations:
@@ -24,16 +23,6 @@ spec:
           resourceClaimTemplateName: gke-rdma-template
       containers:
         - name: modelserver
-          args:
-            - "--model-path=openai/gpt-oss-120b"
-            - "--port=8000"
-            - "--host=0.0.0.0"
-            - "--disaggregation-mode=prefill"
-            - "--disaggregation-transfer-backend=nixl"
-            - "--tensor-parallel-size=4"
-            - "--log-level=info"
-            - "--enable-metrics"
-            - "--uvicorn-access-log-exclude-prefixes=/metrics"
           env:
             - name: HF_HOME
               value: /root/.cache/huggingface
