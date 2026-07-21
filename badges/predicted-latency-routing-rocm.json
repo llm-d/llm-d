@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
   "label": "VLLM ROCm",
-  "message": "prereqs-error",
-  "color": "black"
+  "message": "cancelled",
+  "color": "lightgrey"
 }
