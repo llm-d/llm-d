@@ -3,76 +3,79 @@ kind: Deployment
 metadata:
   name: decode
 spec:
-  replicas: 8
+  replicas: 2
   template:
     spec:
       containers:
         - name: modelserver
-          command: ["vllm", "serve"]
-          # Include all args in overlay patch for consistency
+          image: quay.io/ramalama/ramalama:latest
+          command: ["llama-server"]
           args:
-            - "Qwen/Qwen3-32B"
-            - "--disable-access-log-for-endpoints=/health,/metrics,/v1/models"
-            - "--tensor-parallel-size=2"
-            # Uncomment for distributed tracing
-            # - "--otlp-traces-endpoint=http://otel-collector:4317"
-            # - "--collect-detailed-traces=all"
+            - "--host"
+            - "0.0.0.0"
+            - "--port"
+            - "8000"
+            - "--hf-repo"
+            - "Qwen/Qwen2.5-0.5B-Instruct-GGUF"
+            - "--hf-file"
+            - "qwen2.5-0.5b-instruct-q4_k_m.gguf"
+            - "--alias"
+            - "Qwen3-32B"
+            - "--ctx-size"
+            - "2048"
+            - "--temp"
+            - "0.8"
+            - "--cache-reuse"
+            - "256"
+            - "-ngl"
+            - "999"
+            - "--threads"
+            - "4"
+            - "--no-warmup"
+            - "--log-colors"
+            - "auto"
           env:
-            - name: HF_TOKEN
-              valueFrom:
-                secretKeyRef:
-                  name: llm-d-hf-token
-                  key: HF_TOKEN
-            # # Uncomment for distributed tracing env vars
-            # - name: OTEL_SERVICE_NAME
-            #   value: "vllm-decode"
-            # - name: OTEL_EXPORTER_OTLP_ENDPOINT
-            #   value: "http://otel-collector:4317"
-            # - name: OTEL_TRACES_EXPORTER
-            #   value: "otlp"
-            # - name: OTEL_TRACES_SAMPLER
-            #   value: "parentbased_traceidratio"
-            # - name: OTEL_TRACES_SAMPLER_ARG
-            #   value: "0.1"
+            - name: LLAMA_CACHE
+              value: "/.cache/llama.cpp"
+          securityContext:
+            seccompProfile:
+              type: Unconfined
+            capabilities:
+              add:
+                - SYS_NICE
           resources:
             limits:
-              cpu: '16'
-              memory: 128Gi
-              nvidia.com/gpu: 2
+              memory: 4Gi
+              cpu: "4"
+              devic.es/dri: "1"
             requests:
-              cpu: '8'
-              memory: 96Gi
-              nvidia.com/gpu: 2
+              cpu: "2"
+              memory: 2Gi
           volumeMounts:
-            - mountPath: /dev/shm
-              name: shm
             - mountPath: /.cache
               name: torch-compile-cache
-            - mountPath: /.triton
-              name: triton-cache
-            - mountPath: /.config
-              name: vllm-config
           startupProbe:
-            initialDelaySeconds: 15
-            periodSeconds: 30
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 10
+            periodSeconds: 10
             timeoutSeconds: 5
-            failureThreshold: 120
+            failureThreshold: 30
           livenessProbe:
+            httpGet:
+              path: /health
+              port: 8000
             periodSeconds: 10
             timeoutSeconds: 5
             failureThreshold: 3
           readinessProbe:
+            httpGet:
+              path: /health
+              port: 8000
             periodSeconds: 5
             timeoutSeconds: 2
             failureThreshold: 3
       volumes:
-        - name: shm
-          emptyDir:
-            medium: Memory
-            sizeLimit: 20Gi
         - name: torch-compile-cache
-          emptyDir: {}
-        - name: triton-cache
-          emptyDir: {}
-        - name: vllm-config
           emptyDir: {}

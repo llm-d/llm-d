@@ -9,10 +9,10 @@ router:
     pluginsConfigFile: "default-plugins.yaml"
     resources:
       requests:
-        cpu: "4"
-        memory: 8Gi
+        cpu: 100m
+        memory: 256Mi
       limits:
-        memory: 16Gi
+        memory: 1Gi
 
   inferencePool:
     failureMode: "FailOpen"
@@ -33,7 +33,7 @@ router:
       - "--log-level"
       - "warn"
       - "--concurrency"
-      - "8"
+      - "2"
       - "--drain-strategy"
       - "immediate"
       - "--drain-time-s"
@@ -43,10 +43,10 @@ router:
     # Resource requests and limits for the Envoy sidecar.
     resources:
       requests:
-        cpu: "4"
-        memory: 8Gi
+        cpu: 100m
+        memory: 256Mi
       limits:
-        memory: 16Gi
+        memory: 1Gi
 
   tracing:
     otelExporterEndpoint: "http://localhost:4317"
