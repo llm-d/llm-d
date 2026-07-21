@@ -64,7 +64,7 @@ helm install ${GUIDE_NAME} \
 Deploy the default model server (vLLM running on NVIDIA GPUs). This will deploy 8 replicas of `Qwen/Qwen3-32B` by default.
 
 ```bash
-kubectl apply -n ${NAMESPACE} -k guides/optimized-baseline/modelserver/gpu/vllm/
+kubectl apply -n ${NAMESPACE} -k guides/optimized-baseline/modelserver/gpu/vllm/base
 ```
 
 > [!TIP]
