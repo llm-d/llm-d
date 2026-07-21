@@ -21,7 +21,7 @@ The Async Processor is a lightweight dispatch agent that pulls inference request
 ## How It Works
 
 1. **Queue Gate & Poll** — Before pulling messages from queues, requests pass through queue-level **Dispatch Gates** to regulate message flow and ingestion based on system metrics and capacity.
-2. **Merge** — Polled messages from multiple input queues or topic subscriptions are combined according to the configured **Request Merge Policy** for the target worker pool.
+2. **Merge** — Polled messages from multiple input queues or topic subscriptions are grouped by target worker pool and combined into per-pool merged channels according to the globally configured **Request Merge Policy**.
 3. **Worker Pool Admission Gate** — Merged requests pass through a **Worker Pool Admission Gate** (e.g., local max concurrency, pool-level saturation or budget gates) that verifies whether the worker pool has capacity and budget to accept new work.
 4. **Transform** — Admitted requests pass through **Request Body Transforms** to normalize payload schemas or inject routing headers and parameters.
 5. **Dispatch** — Concurrent workers in the designated **Worker Pool** dispatch HTTP requests to the llm-d Router with deadline propagation.
@@ -33,7 +33,7 @@ Dispatch gates regulate the flow of requests by controlling message ingestion ra
 
 Gates can be configured at two distinct levels:
 - **Queue / Subscription Level**: Controls flow and ingestion before messages are polled and merged.
-- **Worker Pool Admission Level**: Controls entry into the worker pool execution pipeline (regulating per-pool concurrency, budget, and saturation).
+- **Worker Pool Admission Level**: Controls entry into the worker pool execution pipeline. Multiple gates can be combined for a pool using a **composite gate**.
 
 | Gate type | Behavior |
 |-----------|----------|
@@ -47,30 +47,37 @@ Gates can be configured at two distinct levels:
 
 ### Worker Pools
 
-The Async Processor uses a multi-tenant pipeline model based on **Worker Pools**. Instead of relying on a single global worker pool, requests are assigned to designated worker pools, each operating with an independent set of concurrent workers.
+The Async Processor uses a multi-tenant pipeline model based on **Worker Pools**. 
 
+> [!NOTE]
+> An `llm-d-async` worker pool is **not** an inference pool (such as a downstream model server pool). It is an internal dispatch pipeline construct within `llm-d-async` that configures the **pool name**, **number of workers**, and **admission gate**. The worker pool configuration is fully user-configurable.
+
+- **Configurable Pipeline**: Defines the pool name, number of concurrent workers, and admission gate settings.
+- **Composite Gates**: Multiple gates (e.g., local max concurrency combined with Prometheus saturation) can be configured for a single pool using a **composite gate**.
+- **Backend Isolation**: It is recommended to use different worker pools for different `llm-d-router` endpoints so that saturation or backpressure on one backend model server does not block processing for other endpoints.
 - **Isolation**: Saturated or blocked worker pools do not affect the processing or throughput of other worker pools.
-- **Dedicated Concurrency**: Each pool defines its own worker count, concurrency limits, and admission gates.
 - **Queue-to-Pool Mapping**: Multiple queue configurations can route requests to the same worker pool, but a single queue configuration can only route to a single worker pool.
 
 ### Request Merge Policies
 
-When multiple queue configurations route requests to the same worker pool, a **Request Merge Policy** controls how incoming requests from those separate queue channels are combined into the pool's single processing pipeline after passing queue-level dispatch gates.
+A single **Request Merge Policy** is configured globally at the pipeline level for the entire `llm-d-async` instance (not per pool). Rather than configuring different policy types on individual pools, `llm-d-async` groups input queue channels by their assigned `worker_pool_id` and executes the global merge policy independently across each pool's merging lanes.
 
-The two supported merge policies are:
+The two supported global merge policies are:
 
 | Policy | Description |
 |--------|-------------|
-| `random-robin` | Default policy. Randomly picks messages from all queues configured for a given pool. |
+| `random-robin` | Default policy. Randomly picks messages from all queues configured for a each pool. |
 | `tier-priority` | Buckets requests into 6 strict priority lanes using routing tags (`(classification, tier)`). Within each bucket, it round-robins across different client channels and stamps the chosen priority header (`x-gateway-priority` by default). |
 
-Per-worker-pool merging ensures backpressure from one merged channel only impacts its associated worker pool, maintaining multi-tenant isolation.
+Because merging lanes are grouped and evaluated independently per worker pool, backpressure from one pool's merged channel only impacts its associated worker pool, maintaining multi-tenant isolation.
 
 ## Request Body Transforms
 
 Request body-transform plugins handle rewriting the outgoing body and `Content-Type` based on per-message metadata. The default JSON path is preserved byte-for-byte when no plugin applies.
 
 ## Message Queue Integrations
+
+Queue configurations define the input message queue source parameters (such as Redis keys or Pub/Sub subscription IDs) and specify the target **`llm-d-router` endpoint information** (such as URL path and target model endpoint) for dispatched requests.
 
 | Implementation | Characteristics |
 |---------------|-----------------|
