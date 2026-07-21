@@ -15,3 +15,6 @@ Kubernetes HTTP probe configurations using vLLM API endpoints to ensure pods are
 
 ### [llm-d Router Operations Guide](router.md)
 Operational best practices, high availability scaling modes, standalone proxy architectures, and container resource sizing for llm-d Router deployments.
+
+### [Async Processor Operations Guide](async-processor.md)
+Throughput modeling, concurrency sizing (backed by a measured sweep), container resource sizing, and horizontal scaling for the Async Processor batch-dispatch agent.

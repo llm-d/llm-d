@@ -1,6 +1,8 @@
-# [Experimental] Asynchronous Processing with Async Processor
+# Asynchronous Processing with Async Processor
 
 The [Async Processor](https://github.com/llm-d/llm-d-async) provides a way to process inference requests asynchronously using a queue-based architecture. This is ideal for latency-insensitive workloads or for filling "slack" capacity in your inference pool.
+
+> For production sizing, scaling, and container-resource guidance, see the [Async Processor Operations Guide](../../docs/operations/async-processor.md).
 
 ## Overview
 
