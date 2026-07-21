@@ -12,6 +12,7 @@ walkthroughs are identical across both; only the queue wiring and how you publis
 
 ![Animated architecture: two models each with their own worker pool and vLLM; within each, three team/tier lanes flow through a reserved/overflow quota gate and the tier-priority merge; model A saturates and its pool parks while model B keeps flowing](diagram/architecture.gif)
 
+> [!NOTE]
 > Source + regeneration for the diagram: [`diagram/`](diagram/) (`architecture.html` is the editable
 > animated SVG).
 
@@ -78,10 +79,10 @@ This guide layers on the base [asynchronous-processing](../README.md) guide — 
   twice with two different models / pool names, or point the guide at your existing multi-model
   gateway.
 
-  > [!NOTE]
-  > **Single-model variant.** If you only have one model/pool, point both `model-a` and `model-b` at
-  > the same model and `InferencePool` (use the same value for `POOL_A`/`POOL_B` and `MODEL_A`/`MODEL_B`
-  > below). You lose the model-isolation demonstration, but the quota and tier behavior is unchanged.
+> [!NOTE]
+> **Single-model variant.** If you only have one model/pool, point both `model-a` and `model-b` at
+> the same model and `InferencePool` (use the same value for `POOL_A`/`POOL_B` and `MODEL_A`/`MODEL_B`
+> below). You lose the model-isolation demonstration, but the quota and tier behavior is unchanged.
 
 - **Environment.** In addition to the base guide's variables:
 
