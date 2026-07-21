@@ -95,13 +95,13 @@
 
   <!-- ============================== MODEL A band (saturates) ============================== -->
   <rect class="band" x="168" y="96" width="700" height="300" rx="16"/>
-  <text class="modeltag" x="186" y="122" style="fill:var(--ink)">MODEL A  →  pool model-a  ·  InferencePool POOL_A</text>
+  <text class="modeltag" x="186" y="122" style="fill:var(--ink)">MODEL A · pool model-a · POOL_A</text>
 
   <!-- queues (team × model A) -->
   <rect class="node" x="188" y="150" width="118" height="36"/><text class="small" x="200" y="172" style="fill:var(--premium)">team-premium-a</text>
   <rect class="node" x="188" y="232" width="118" height="36"/><text class="small" x="200" y="254" style="fill:var(--standard)">team-standard-a</text>
   <rect class="node" x="188" y="314" width="118" height="36"/><text class="small" x="200" y="336" style="fill:var(--batch)">team-batch-a</text>
-  <text class="gl" x="188" y="368">tier: interactive · async · batch</text>
+  <text class="gl" x="188" y="390">tiers: interactive · async · batch   ·   quota gate: reserved / overflow</text>
 
   <!-- quota gates (classifying: reserved/overflow) -->
   <path class="wire" d="M306,168 H332" marker-end="url(#ah)"/>
@@ -111,7 +111,7 @@
     <rect x="336" y="160" width="16" height="16" rx="3" fill="var(--ok)"/>
     <rect x="336" y="242" width="16" height="16" rx="3" fill="var(--ok)"/>
     <rect x="336" y="324" width="16" height="16" rx="3" fill="var(--ok)"/>
-    <text class="gl" x="330" y="392">quota gate · reserved / overflow</text>
+    <text class="gl" x="330" y="392"></text>
   </g>
 
   <!-- tier-priority merge into the pool -->
@@ -146,12 +146,12 @@
 
   <!-- ============================== MODEL B band (stays healthy) ============================== -->
   <rect class="band" x="168" y="506" width="700" height="300" rx="16"/>
-  <text class="modeltag" x="186" y="532" style="fill:var(--ink)">MODEL B  →  pool model-b  ·  InferencePool POOL_B</text>
+  <text class="modeltag" x="186" y="532" style="fill:var(--ink)">MODEL B · pool model-b · POOL_B</text>
 
   <rect class="node" x="188" y="560" width="118" height="36"/><text class="small" x="200" y="582" style="fill:var(--premium)">team-premium-b</text>
   <rect class="node" x="188" y="642" width="118" height="36"/><text class="small" x="200" y="664" style="fill:var(--standard)">team-standard-b</text>
   <rect class="node" x="188" y="724" width="118" height="36"/><text class="small" x="200" y="746" style="fill:var(--batch)">team-batch-b</text>
-  <text class="gl" x="188" y="778">tier: interactive · async · batch</text>
+  <text class="gl" x="188" y="800">tiers: interactive · async · batch   ·   quota gate: reserved / overflow</text>
 
   <path class="wire" d="M306,578 H332" marker-end="url(#ah)"/>
   <path class="wire" d="M306,660 H332" marker-end="url(#ah)"/>
@@ -160,7 +160,7 @@
     <rect x="336" y="570" width="16" height="16" rx="3" fill="var(--ok)"/>
     <rect x="336" y="652" width="16" height="16" rx="3" fill="var(--ok)"/>
     <rect x="336" y="734" width="16" height="16" rx="3" fill="var(--ok)"/>
-    <text class="gl" x="330" y="802">quota gate · reserved / overflow</text>
+    <text class="gl" x="330" y="802"></text>
   </g>
 
   <path class="wire" d="M352,578 C420,578 430,660 452,660" marker-end="url(#ah)"/>
@@ -208,14 +208,14 @@
   <text class="gl" x="1110" y="678" style="fill:var(--muted)">saturation (low)</text>
 
   <!-- Prometheus (per-model saturation feeds each pool gate) -->
-  <rect class="node" x="900" y="196" width="150" height="44"/><text class="small" x="914" y="216">Prometheus</text><text class="small" x="914" y="232" style="fill:var(--muted)">vllm:...{inference_pool}</text>
+  <rect class="node" x="900" y="196" width="172" height="44"/><text class="small" x="914" y="216">Prometheus</text><text class="small" x="914" y="232" style="fill:var(--muted)">vllm:...{inference_pool}</text>
   <path class="wire dim flowline" d="M960,240 C900,260 800,250 722,250" marker-end="url(#ahd)"/>
-  <path class="wire dim flowline" d="M1050,224 C1130,240 1160,240 1180,244"/>
+  <path class="wire dim flowline" d="M1072,224 C1130,240 1160,240 1180,244"/>
 
   <!-- Redis (per-model quota counters) -->
   <rect class="node" x="470" y="430" width="120" height="44"/><text class="small" x="482" y="450">Redis</text><text class="small" x="482" y="466" style="fill:var(--muted)">quota:a: / quota:b:</text>
-  <path class="wire dim flowline" d="M500,430 V344" marker-end="url(#ahd)"/>
-  <path class="wire dim flowline" d="M560,474 V652 H352" marker-end="url(#ahd)"/>
+  <path class="wire dim flowline" d="M540,430 V376 H344 V342" marker-end="url(#ahd)"/>
+  <path class="wire dim flowline" d="M540,474 V790 H344 V754" marker-end="url(#ahd)"/>
 
   <!-- legend -->
   <g transform="translate(40,872)">
