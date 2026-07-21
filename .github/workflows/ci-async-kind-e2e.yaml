@@ -1,0 +1,49 @@
+name: CI Async Processing E2E (kind)
+
+# Installs the asynchronous-processing guide from zero on a self-contained kind
+# cluster (optimized-baseline backing stack on a CPU model server + Redis +
+# Async Processor) and runs the guide's smoke test: publish a request to the
+# queue and assert a completion lands back on the result queue.
+#
+# This is a GPU-free, single-runner check intended to gate the guide on PRs. The
+# real per-provider/per-accelerator nightly e2e is driven separately via
+# llm-d-benchmark (see llm-d/llm-d#1360).
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - .github/workflows/ci-async-kind-e2e.yaml
+      - guides/asynchronous-processing/**
+      - guides/recipes/router/**
+      - guides/optimized-baseline/router/**
+      - guides/optimized-baseline/modelserver/cpu/**
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  async-kind-e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: Install kind
+        run: |
+          curl -sSLo ./kind https://kind.sigs.k8s.io/dl/v0.31.0/kind-linux-amd64
+          sudo install -m 0755 ./kind /usr/local/bin/kind
+          rm -f ./kind
+          kind version
+
+      - name: Run asynchronous-processing guide end-to-end on kind
+        # helm, kubectl and docker are preinstalled on ubuntu-latest. The script
+        # creates and tears down its own isolated kind cluster.
+        run: ./guides/asynchronous-processing/test/kind-e2e.sh
