@@ -18,7 +18,7 @@ into that model's pool. The loop tells the **model-isolation + priority** story 
 | :-- | :-- |
 | `architecture.html` | The source — self-contained animated SVG (CSS keyframes + SMIL). Open in a browser; animates live. Edit this. |
 | `architecture.gif` | Looping GIF for embedding in a README (GitHub strips inline-SVG animation, so use the GIF). |
-| `capture.sh` | Regenerates the GIF from the HTML (and an `architecture.mp4` for slides/web, which is not committed). |
+| `capture.sh` | Regenerates the GIF from the HTML. |
 
 ## View it live
 

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Regenerate architecture.gif / architecture.mp4 from architecture.html.
+# Regenerate architecture.gif from architecture.html.
 # Requires: google-chrome (headless) and ffmpeg.
 #
 # Captures one full loop by advancing Chrome's virtual clock per frame.
@@ -29,8 +29,5 @@ ffmpeg -y -framerate "$FPS" -i "$FRAMES/%04d.png" \
   -vf "fps=$GIF_FPS,scale=$GIF_W:-1:flags=lanczos,split[a][b];[a]palettegen=max_colors=256:stats_mode=full[p];[b][p]paletteuse=dither=sierra2_4a" \
   -loop 0 "$DIR/architecture.gif"
 
-ffmpeg -y -framerate "$FPS" -i "$FRAMES/%04d.png" -c:v libx264 -pix_fmt yuv420p \
-  -vf "scale=1280:-2" -movflags +faststart "$DIR/architecture.mp4"
-
 rm -rf "$FRAMES"
-echo "wrote $DIR/architecture.{gif,mp4} ($i frames @ ${FPS}fps; gif ${GIF_FPS}fps/${GIF_W}px)"
+echo "wrote $DIR/architecture.gif ($i frames @ ${FPS}fps; gif ${GIF_FPS}fps/${GIF_W}px)"
