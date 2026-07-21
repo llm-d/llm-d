@@ -3,7 +3,7 @@ kind: Deployment
 metadata:
   name: decode
 spec:
-  replicas: 8
+  replicas: 2
   template:
     spec:
       containers:
@@ -11,9 +11,9 @@ spec:
           command: ["vllm", "serve"]
           # Include all args in overlay patch for consistency
           args:
-            - "Qwen/Qwen3-32B"
+            - "Qwen/Qwen3.5-4B"
             - "--disable-access-log-for-endpoints=/health,/metrics,/v1/models"
-            - "--tensor-parallel-size=2"
+            - "--tensor-parallel-size=1"
             # Uncomment for distributed tracing
             # - "--otlp-traces-endpoint=http://otel-collector:4317"
             # - "--collect-detailed-traces=all"
@@ -36,13 +36,13 @@ spec:
             #   value: "0.1"
           resources:
             limits:
-              cpu: '16'
-              memory: 128Gi
-              nvidia.com/gpu: 2
+              cpu: '20'
+              memory: 40Gi
+              nvidia.com/gpu: 1
             requests:
-              cpu: '8'
-              memory: 96Gi
-              nvidia.com/gpu: 2
+              cpu: '10'
+              memory: 20Gi
+              nvidia.com/gpu: 1
           volumeMounts:
             - mountPath: /dev/shm
               name: shm

@@ -10,7 +10,7 @@ components:
 
 labels:
   - pairs:
-      llm-d.ai/model: Qwen3-32B
+      llm-d.ai/model: Qwen3.5-4B
       llm-d.ai/guide: optimized-baseline
       llm-d.ai/accelerator-variant: gpu
       llm-d.ai/accelerator-vendor: nvidia
