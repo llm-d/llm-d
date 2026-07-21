@@ -30,19 +30,9 @@ spec:
               value: "60"
             - name: HF_HUB_DISABLE_XET
               value: "1"
-            # UCX multi-rail RoCE RDMA networking configuration
-            - name: UCX_LOG_LEVEL
-              value: info
             # Enable RoCE reachability across all subnet interfaces
             - name: UCX_IB_ROCE_REACHABILITY_MODE
               value: "all"
-            # Prefer Reliable Connection RoCE IB transport (rc_mlx5) for zero-copy memory transfers
-            - name: UCX_TLS
-              value: "rc_mlx5,tcp,cuda_copy,cma,self"
-            # Explicitly bind all 8 co-located 400Gbps RoCE Mellanox NICs (mlx5_0:1..mlx5_7:1) for multi-rail KV cache payload
-            # striping across 3.2 Tbps aggregate bandwidth, while keeping eth0 registered for TCP control-plane handshakes.
-            - name: UCX_NET_DEVICES
-              value: "mlx5_0:1,mlx5_1:1,mlx5_2:1,mlx5_3:1,mlx5_4:1,mlx5_5:1,mlx5_6:1,mlx5_7:1,eth0"
           resources:
             limits:
               cpu: "64"
