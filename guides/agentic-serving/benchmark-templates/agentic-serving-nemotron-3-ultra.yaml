@@ -1,7 +1,7 @@
 # ---------------------------------------------------------------------------
 # inference-perf workload template for the agentic-serving guide.
 #
-# Render with `envsubst < guide.yaml > config.yaml` AFTER exporting the
+# Render with `envsubst < agentic-serving-nemotron-3-ultra.yaml > config.yaml` AFTER exporting the
 # variables below. Any unset variable renders as an empty string, producing
 # invalid or semantically wrong YAML — so set all of them first.
 #
@@ -18,7 +18,6 @@
 # Environment variables (set by earlier guide steps):
 #   NAMESPACE      namespace where the stack is deployed
 #   IP             EPP service ClusterIP (base_url = http://${IP})
-#   BENCHMARK_PVC  PVC name where benchmark results are stored
 # ---------------------------------------------------------------------------
 endpoint:
   stack_name: &stack_name agentic-serving-Nemotron-3-Ultra-550B  # user defined name for the stack (results prefix)
