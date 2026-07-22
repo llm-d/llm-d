@@ -10,6 +10,8 @@ spec:
         - name: modelserver
           command: ["vllm", "serve"]
           args:
+            - "/models/RedHatAI/NVIDIA-Nemotron-3-Ultra-550B-A55B-FP8-block"
+            - "--served-model-name"
             - "RedHatAI/NVIDIA-Nemotron-3-Ultra-550B-A55B-FP8-block"
             - "--trust-remote-code"
             - "--tensor-parallel-size=8"
@@ -40,6 +42,8 @@ spec:
                   fieldPath: status.podIP
             - name: VLLM_HTTP_TIMEOUT_KEEP_ALIVE
               value: "120"
+            - name: HF_HOME
+              value: "/huggingface"
           resources:
             limits:
               cpu: "48"
@@ -58,6 +62,9 @@ spec:
               name: vllm-config
             - mountPath: /.triton
               name: triton-cache
+            - mountPath: /models    # Map the storage bucket volume inside the container
+              name: gcs-model-volume
+              readOnly: true
           startupProbe:
             initialDelaySeconds: 30
             periodSeconds: 30
@@ -82,3 +89,10 @@ spec:
           emptyDir: {}
         - name: triton-cache
           emptyDir: {}
+        # Define the GCS FUSE volume specifications
+        - name: gcs-model-volume
+          csi:
+            driver: gcsfuse.csi.storage.gke.io
+            volumeAttributes:
+              bucketName: llm-models  # Specify the bucket name
+              mountOptions: "implicit-dirs,file-cache:enable-parallel-downloads:true,file-cache:parallel-downloads-per-file:100,file-cache:max-parallel-downloads:-1,    file-cache:download-chunk-size-mb:10,file-cache:max-size-mb:-1"

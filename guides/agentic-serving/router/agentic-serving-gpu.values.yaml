@@ -3,7 +3,8 @@
 ##
 ## This deployment serves the agentic code-generation workload on NVIDIA GPUs with
 ## prefill/decode disaggregation, so the router runs disagg-aware scheduling profiles
-## (separate prefill and decode profiles) rather than the single default profile used
+## (separate prefill and decode profiles with toke-load awareness)
+## rather than the single default profile used
 ## by the non-disaggregated TPU deployment in agentic-serving.values.yaml.
 
 router:

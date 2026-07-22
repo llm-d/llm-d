@@ -1,20 +1,24 @@
 # ---------------------------------------------------------------------------
-# inference-perf workload template for the agentic-serving guide
-# (NVIDIA-Nemotron-3-Ultra-550B on H200, P/D-disaggregated).
+# inference-perf workload template for the agentic-serving guide.
 #
-# This deployment carries its own realistic preset, tuned for it — a
-# shared-prefix workload with large, highly cacheable system prompts and a
-# ramped request rate that exercises cross-request prefix reuse and the
-# CPU-offload tier under sustained load. It is not required to match the TPU
-# deployment's preset; each deployment is benchmarked on what is realistic for
-# its model and serving topology.
+# Render with `envsubst < guide.yaml > config.yaml` AFTER exporting the
+# variables below. Any unset variable renders as an empty string, producing
+# invalid or semantically wrong YAML — so set all of them first.
 #
-# Render with `envsubst < agentic-serving-nemotron-3-ultra.yaml > config.yaml`
-# AFTER exporting the variables below. Any unset variable renders as an empty
-# string, producing invalid or semantically wrong YAML — so set them first.
+# Per-run variables (see the guide's "Execute Benchmark" step):
+#   CONCURRENCY_LEVEL  int  concurrent coding sessions to drive; also sets
+#                           num_conversations. Published sweep: 5..80.
+#   NUM_REQUESTS       int  total requests for the stage.
+#                           Convention: 20 * CONCURRENCY_LEVEL.
+#   SEED               int  RNG seed for prompt generation. Use a DISTINCT seed
+#                           per concurrency (convention: 7 + CONCURRENCY_LEVEL)
+#                           so prompt sets don't overlap across runs and warm
+#                           each other's prefix cache.
 #
-#   NAMESPACE  namespace where the stack is deployed
-#   IP         EPP service ClusterIP (base_url = http://${IP})
+# Environment variables (set by earlier guide steps):
+#   NAMESPACE      namespace where the stack is deployed
+#   IP             EPP service ClusterIP (base_url = http://${IP})
+#   BENCHMARK_PVC  PVC name where benchmark results are stored
 # ---------------------------------------------------------------------------
 endpoint:
   stack_name: &stack_name agentic-serving-Nemotron-3-Ultra-550B  # user defined name for the stack (results prefix)
@@ -37,11 +41,12 @@ harness:
   wait_timeout: 6000              # Time (in seconds) to wait for workload launcher pod to complete before terminating.
                                   # Set to 0 to disable timeout.
   image: ghcr.io/llm-d/llm-d-benchmark:v0.7.0
+  image: ghcr.io/llm-d/llm-d-benchmark:v0.7.0
 
 env:
   - name: RAYON_NUM_THREADS
     value: "4"
-    
+
 workload:                         # yaml configuration for harness workload(s)
   Agentic_Workload:
     load:
@@ -49,7 +54,13 @@ workload:                         # yaml configuration for harness workload(s)
       num_workers: 8
       worker_max_concurrency: 1000
       request_timeout: 600
+      type: concurrent
+      num_workers: 8
+      worker_max_concurrency: 1000
+      request_timeout: 600
       stages:
+      - num_requests: ${NUM_REQUESTS}
+        concurrency_level: ${CONCURRENCY_LEVEL}
       - num_requests: ${NUM_REQUESTS}
         concurrency_level: ${CONCURRENCY_LEVEL}
     api:
@@ -67,17 +78,17 @@ workload:                         # yaml configuration for harness workload(s)
         num_conversations: ${CONCURRENCY_LEVEL}
         shared_system_prompt_len: 3000 
         dynamic_system_prompt_len:
-          type: uniform
-          min: 15000
-          max: 100000
-          mean: 55000
-          std_dev: 25000
+          type: lognormal
+          min: 10000
+          max: 990000
+          mean: 160000
+          std_dev: 233600
         turns_per_conversation:
-          type: normal
-          min: 2
-          max: 20
-          mean: 6
-          std_dev: 3.5
+          type: lognormal
+          min: 1
+          max: 3000
+          mean: 540
+          std_dev: 48600
         input_tokens_per_turn:
           type: lognormal
           min: 100
@@ -87,15 +98,15 @@ workload:                         # yaml configuration for harness workload(s)
         output_tokens_per_turn:
           type: lognormal
           min: 50
-          max: 4000
-          mean: 800
-          std_dev: 600
+          max: 10000
+          mean: 425
+          std_dev: 825
         tool_call_latency_sec:
-          type: normal
-          min: 0
-          max: 0
-          mean: 0
-          std_dev: 0
+          type: lognormal
+          min: 1
+          max: 100
+          mean: 15
+          std_dev: 55
     report:
       request_lifecycle:
         summary: true

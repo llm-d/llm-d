@@ -62,6 +62,18 @@ llmdbenchmark --version
 > ```
 > 
 > An early termination of the installation could happen without clear error messages. Check if all required libraries have executable permissions (`+x`).
+> [!NOTE]
+> A successful installation shows the following lines:
+>
+> ```text
+> === Done ===    
+> Reminder: Please activate the virtual environment in your shell:
+>   source ${LLMDBENCH_VENV_DIR}/bin/activate
+> To deactivate the virtual environment in your shell:
+>   deactivate
+> ```
+> 
+> An early termination of the installation could happen without clear error messages. Check if all required libraries have executable permissions (`+x`).
 
 > [!NOTE]
 > Every subsequent `llmdbenchmark` command on this page assumes you are inside the `llm-d-benchmark` repo directory with the venv activated. If you open a new shell, re-run the two commands above.
@@ -208,6 +220,23 @@ The on-disk layout after a successful run:
             ├── latency_Vs_qps.png
             ├── throughput_vs_latency.png
             └── throughput_vs_qps.png
+    ├── results/
+    |   └── <experiment-id>/           # one directory per harness invocation
+    |       ├── stage_0_lifecycle_metrics.json
+    |       ├── stage_1_lifecycle_metrics.json
+    |       ├── …                      # one per workload stage (inference-perf)
+    |       ├── summary_lifecycle_metrics.json
+    |       ├── per_request_lifecycle_metrics.json
+    |       ├── benchmark_report,_stage_*.yaml   # standardized cross-harness reports
+    |       ├── config.yaml                       # resolved harness configuration
+    |       ├── <profile-name>.yaml                # the rendered workload profile used
+    |       ├── stdout.log
+    |       ├── stderr.log
+    └── analysis/                      # populated by --analyze
+        └── <harness-id>/
+            ├── latency_Vs_qps.png
+            ├── throughput_vs_latency.png
+            └── throughput_vs_qps.png
 ```
 
 The `benchmark_report,_stage_*.yaml` files use a harness-agnostic schema so you can compare runs across different harnesses. See [Benchmark Report](https://github.com/llm-d/llm-d-benchmark/blob/main/docs/benchmark_report.md) for the schema.
@@ -230,10 +259,13 @@ llmdbenchmark \
     --analyze
 ```
 
-When enabled, the analyzer reads `per_request_lifecycle_metrics.json` from each collected experiment and writes PNGs to `runner-<timestamp>/analysis/<harness-id>/`:
+When enabled, the analyzer reads `per_request_lifecycle_metrics.json` from each collected experiment and writes `.png` distribution plots to `runner-<timestamp>/analysis/<harness-id>/`:
 
 | File | Content |
 |---|---|
+| `latency_vs_qps.png` | Inter-token-latency vs query per second |
+| `throughput_vs_latency.png` | Throughput vs inter-token-latency |
+| `throughput_vs_qps.png` | Throughput vs query per second|
 | `latency_vs_qps.png` | Inter-token-latency vs query per second |
 | `throughput_vs_latency.png` | Throughput vs inter-token-latency |
 | `throughput_vs_qps.png` | Throughput vs query per second|
