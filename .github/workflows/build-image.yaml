@@ -33,6 +33,11 @@ on:
         required: false
         type: string
         default: ''
+      sglang_xpu_buildkit_driver_opts:
+        description: 'Optional BuildKit driver options for the SGLang XPU builder'
+        required: false
+        type: string
+        default: ''
     outputs:
       xpu:
         description: 'Whether XPU image was built'
@@ -74,6 +79,10 @@ on:
         type: string
       sglang_xpu_ref:
         description: "SGLang branch or tag passed to the upstream XPU Dockerfile"
+        required: false
+        type: string
+      sglang_xpu_buildkit_driver_opts:
+        description: "Optional BuildKit driver options for the SGLang XPU builder"
         required: false
         type: string
 
@@ -1480,6 +1489,8 @@ jobs:
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v4
+        with:
+          driver-opts: ${{ inputs.sglang_xpu_buildkit_driver_opts }}
 
       - name: Log in to Container Registry
         uses: docker/login-action@v4
