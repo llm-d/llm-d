@@ -1,0 +1,100 @@
+name: CI KEDA EPP Kind Contract
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - .github/workflows/ci-keda-epp-kind.yaml
+      - guides/env.sh
+      - guides/recipes/observability/**
+      - guides/recipes/modelserver/**
+      - guides/recipes/router/**
+      - guides/optimized-baseline/modelserver/**
+      - guides/optimized-baseline/router/**
+      - guides/workload-autoscaling/keda-epp/**
+      - guides/workload-autoscaling/scripts/test-keda-epp-kind.sh
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  kind-contract:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    env:
+      KIND_VERSION: v0.31.0
+      KUBECTL_VERSION: v1.35.0
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.x'
+
+      - name: Install and verify Kind and kubectl
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          curl --fail --location --silent --show-error \
+            --output /tmp/kind \
+            "https://github.com/kubernetes-sigs/kind/releases/download/${KIND_VERSION}/kind-linux-amd64"
+          curl --fail --location --silent --show-error \
+            --output /tmp/kind.sha256 \
+            "https://github.com/kubernetes-sigs/kind/releases/download/${KIND_VERSION}/kind-linux-amd64.sha256"
+          printf '%s  %s\n' "$(tr -d '[:space:]' < /tmp/kind.sha256)" /tmp/kind \
+            | sha256sum --check
+          sudo install -m 0755 /tmp/kind /usr/local/bin/kind
+
+          curl --fail --location --silent --show-error \
+            --output /tmp/kubectl \
+            "https://dl.k8s.io/release/${KUBECTL_VERSION}/bin/linux/amd64/kubectl"
+          curl --fail --location --silent --show-error \
+            --output /tmp/kubectl.sha256 \
+            "https://dl.k8s.io/release/${KUBECTL_VERSION}/bin/linux/amd64/kubectl.sha256"
+          printf '%s  %s\n' "$(tr -d '[:space:]' < /tmp/kubectl.sha256)" /tmp/kubectl \
+            | sha256sum --check
+          sudo install -m 0755 /tmp/kubectl /usr/local/bin/kubectl
+
+          python3 -m pip install --disable-pip-version-check PyYAML==6.0.2
+          test "$(kind version | awk '{print $2}')" = "${KIND_VERSION}"
+          test "$(kubectl version --client -o json | jq -r '.clientVersion.gitVersion')" = "${KUBECTL_VERSION}"
+
+      - name: Run the guide-local contract
+        timeout-minutes: 105
+        run: guides/workload-autoscaling/scripts/test-keda-epp-kind.sh
+
+      - name: Safeguard unique-cluster cleanup
+        if: ${{ always() }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          for identity_file in /tmp/llmd-keda-epp-kind-artifacts.*/cluster-name.txt; do
+            test -e "${identity_file}" || continue
+            cluster_name="$(cat "${identity_file}")"
+            if [[ ! ${cluster_name} =~ ^llmd-keda-epp-contract-[0-9]+-[0-9]+$ ]]; then
+              echo "Refusing unsafe cluster identity from ${identity_file}" >&2
+              exit 1
+            fi
+            kind delete cluster --name "${cluster_name}"
+          done
+
+      - name: Verify artifact safety
+        id: artifact-safety
+        if: ${{ always() }}
+        run: >-
+          guides/workload-autoscaling/scripts/test-keda-epp-kind.sh
+          --verify-artifacts /tmp/llmd-keda-epp-kind-artifacts.*
+
+      - name: Upload sanitized contract artifacts
+        if: ${{ always() && steps.artifact-safety.outcome == 'success' }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: keda-epp-kind-contract-${{ github.run_id }}
+          path: /tmp/llmd-keda-epp-kind-artifacts.*
+          if-no-files-found: error
+          retention-days: 7
