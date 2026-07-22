@@ -12,22 +12,33 @@ directly from a peer's CPU offload tier instead of recomputing them. The
 transfer is CPU-to-CPU over NIXL - the source pod's GPU is never touched,
 so serving a pull costs the source no prefill capacity.
 
-The moment P2P reuse changes is the follow-on request that lands off the
-caching pod:
+The moment P2P reuse changes is the second request that shares a prefix
+with an earlier one but is scheduled to a different pod. Two requests share
+a prefix whenever they begin with the same tokens: the next turn of a
+conversation (the history is the prefix), another question against the same
+document, another session on a shared system prompt. The first request's
+pod becomes the **KV cache source** - it computed the prefix and its CPU
+offload tier holds a copy. When the router then schedules a prefix-sharing
+request to a *different* pod (the source is busy, or load balancing moved
+the session), its prefix index still knows who holds the blocks, and it
+names that source pod on the request; the scheduled pod - the **consumer**
+- pulls the prefix instead of recomputing it:
 
 ```mermaid
 sequenceDiagram
-    participant A as user A
-    participant P1 as pod 1
-    participant P2 as pod 2
-    A->>P1: request
-    Note over P1: computes the prefix KV and caches it
-    A->>P2: follow-on request, rebalanced off pod 1
+    participant R as llm-d router
+    participant S as KV cache source pod<br/>(serves request 1, caches the prefix)
+    participant C as consumer pod<br/>(serves request 2, prefix missing)
+    R->>S: request 1
+    Note over S: computes the prefix KV, caches it,<br/>offloads a copy to its CPU tier
+    Note over R: request 2 arrives sharing request 1's prefix,<br/>but placement picks a different pod
+    R->>C: request 2 + header naming the source pod
     alt without P2P reuse
-        Note over P2: recomputes the full prefix
+        Note over C: recomputes the full shared prefix
     else with P2P reuse
-        P2->>P1: pulls the prefix from pod 1's CPU tier
-        Note over P2: computes only the remainder
+        C->>S: request the prefix blocks
+        S-->>C: prefix KV blocks, CPU tier to CPU tier over NIXL
+        Note over C: computes only the remainder<br/>(request 2's unshared tokens)
     end
 ```
 
@@ -104,8 +115,8 @@ for manifests, verification gates, and step-by-step deployment.
 3. **The `p2p-source-producer` compares** the best-cached peer against the
    pod scheduling picked; when the peer leads by at least
    `minCachedTokenDelta` tokens it sets the KV cache source header.
-4. **The routing sidecar injects `kv_transfer_params.p2p`** from the
-   header, and the engine pulls the prefix blocks from the peer's CPU tier
+4. **The routing sidecar injects `kv_transfer_params.remote_kv_source`**
+   from the header, and the engine pulls the prefix blocks from the peer's CPU tier
    over NIXL. Hits load as normal cache hits; misses recompute, so a
    partial or failed transfer degrades to baseline behavior instead of
    failing the request.

@@ -38,7 +38,8 @@ bound. `minCachedTokenDelta: 16384` sits just above the measured tie, so
 fired pulls are always in the win region.
 
 Two measurement controls worth repeating on any rig: the identical sweep
-*without* the injected `kv_transfer_params.p2p` block never pulls (pull time
+*without* the sidecar's injected source-pull `kv_transfer_params` block
+never pulls (pull time
 equals recompute time, zero bytes loaded) - the engine does not fetch from
 peers on its own; the router/sidecar directive is the trigger. And the
 *first* pull between a fresh pod pair pays a one-time ~6 s
