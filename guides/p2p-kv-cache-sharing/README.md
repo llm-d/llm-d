@@ -267,15 +267,18 @@ removed once the tier is released.
    git clone -b generic_p2p https://github.com/liranschour/vllm.git /tmp/vllm-p2p
    cd /tmp/vllm-p2p
    kubectl create configmap generic-p2p-src -n ${NAMESPACE} \
-     --from-file=envs.py=vllm/envs.py \
-     --from-file=spec.py=vllm/v1/kv_offload/tiering/spec.py \
+     --from-file=kv_offload_base.py=vllm/v1/kv_offload/base.py \
      --from-file=manager.py=vllm/v1/kv_offload/tiering/p2p/manager.py \
-     --from-file=data_base.py=vllm/v1/kv_offload/tiering/p2p/data/base.py \
-     --from-file=data_nixl.py=vllm/v1/kv_offload/tiering/p2p/data/nixl.py \
+     --from-file=session_init.py=vllm/v1/kv_offload/tiering/p2p/session/__init__.py \
      --from-file=session_client.py=vllm/v1/kv_offload/tiering/p2p/session/client.py \
      --from-file=session_protocol.py=vllm/v1/kv_offload/tiering/p2p/session/protocol.py \
      --from-file=session_server.py=vllm/v1/kv_offload/tiering/p2p/session/server.py \
      --from-file=session_session.py=vllm/v1/kv_offload/tiering/p2p/session/session.py
+
+   The file set is the branch's changed-files list against its vLLM
+   merge-base (`gh api repos/liranschour/vllm/compare/<base>...generic_p2p`)
+   - re-derive it whenever the branch moves; a missing file (for example
+   `vllm/v1/kv_offload/base.py`) fails imports at EngineCore startup.
    ```
 
 2. Uncomment the `patches:` entry for `patch-p2p-src.yaml` in

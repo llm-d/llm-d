@@ -20,21 +20,15 @@ spec:
       containers:
         - name: modelserver
           volumeMounts:
-            - mountPath: /usr/local/lib/python3.12/dist-packages/vllm/envs.py
+            - mountPath: /usr/local/lib/python3.12/dist-packages/vllm/v1/kv_offload/base.py
               name: gp2p
-              subPath: envs.py
-            - mountPath: /usr/local/lib/python3.12/dist-packages/vllm/v1/kv_offload/tiering/spec.py
-              name: gp2p
-              subPath: spec.py
+              subPath: kv_offload_base.py
             - mountPath: /usr/local/lib/python3.12/dist-packages/vllm/v1/kv_offload/tiering/p2p/manager.py
               name: gp2p
               subPath: manager.py
-            - mountPath: /usr/local/lib/python3.12/dist-packages/vllm/v1/kv_offload/tiering/p2p/data/base.py
+            - mountPath: /usr/local/lib/python3.12/dist-packages/vllm/v1/kv_offload/tiering/p2p/session/__init__.py
               name: gp2p
-              subPath: data_base.py
-            - mountPath: /usr/local/lib/python3.12/dist-packages/vllm/v1/kv_offload/tiering/p2p/data/nixl.py
-              name: gp2p
-              subPath: data_nixl.py
+              subPath: session_init.py
             - mountPath: /usr/local/lib/python3.12/dist-packages/vllm/v1/kv_offload/tiering/p2p/session/client.py
               name: gp2p
               subPath: session_client.py
