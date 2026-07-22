@@ -5,11 +5,23 @@ metadata:
 spec:
   replicas: 6
   template:
+    metadata:
+      labels:
+        app: prefill
+      annotations:
+        # Inject GKE Cloud Storage FUSE CSI sidecar container
+        gke-gcsfuse/volumes: "true"
+        gke-gcsfuse/memory-limit: "0"
+        gke-gcsfuse/cpu-limit: "0"
+        gke-gcsfuse/ephemeral-storage-limit: "0"
     spec:
+      # Attach GKE service account linked to GCP IAM storage permissions
+      serviceAccountName: agentic-serving-gpu-vllm-sa
       containers:
         - name: modelserver
           command: ["vllm", "serve"]
           args:
+            # Change model path to point to the FUSE local mount directory
             - "/models/RedHatAI/NVIDIA-Nemotron-3-Ultra-550B-A55B-FP8-block"
             - "--served-model-name"
             - "RedHatAI/NVIDIA-Nemotron-3-Ultra-550B-A55B-FP8-block"
