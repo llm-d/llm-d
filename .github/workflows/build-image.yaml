@@ -14,7 +14,22 @@ on:
         type: string
         default: ''
       platforms:
-        description: 'Platforms to build (comma-separated: cuda,aws,gb200,xpu,cpu). Overrides change detection when non-empty.'
+        description: 'Platforms to build (comma-separated: cuda,aws,gb200,xpu,sglang-xpu,cpu). Overrides change detection when non-empty.'
+        required: false
+        type: string
+        default: ''
+      sglang_xpu_repository:
+        description: 'GitHub repository containing the SGLang XPU source (owner/repo)'
+        required: false
+        type: string
+        default: ''
+      sglang_xpu_repo:
+        description: 'SGLang Git clone URL passed to the upstream XPU Dockerfile'
+        required: false
+        type: string
+        default: ''
+      sglang_xpu_ref:
+        description: 'SGLang branch or tag passed to the upstream XPU Dockerfile'
         required: false
         type: string
         default: ''
@@ -22,10 +37,13 @@ on:
       xpu:
         description: 'Whether XPU image was built'
         value: ${{ jobs.detect-changes.outputs.xpu }}
+      sglang-xpu:
+        description: 'Whether the SGLang XPU image was built'
+        value: ${{ jobs.detect-changes.outputs.sglang-xpu }}
   workflow_dispatch:
     inputs:
       platforms:
-        description: "Platforms to build (comma-separated: cuda,aws,gb200,xpu,cpu)"
+        description: "Platforms to build (comma-separated: cuda,aws,gb200,xpu,sglang-xpu,cpu)"
         required: false
         default: "cuda"
         type: string
@@ -44,6 +62,18 @@ on:
         type: string
       vllm_precompiled_wheel_commit:
         description: "vLLM commit SHA for precompiled wheel lookup (defaults to vllm_commit_sha)"
+        required: false
+        type: string
+      sglang_xpu_repository:
+        description: "GitHub repository containing the SGLang XPU source (owner/repo)"
+        required: false
+        type: string
+      sglang_xpu_repo:
+        description: "SGLang Git clone URL passed to the upstream XPU Dockerfile"
+        required: false
+        type: string
+      sglang_xpu_ref:
+        description: "SGLang branch or tag passed to the upstream XPU Dockerfile"
         required: false
         type: string
 
@@ -68,6 +98,7 @@ jobs:
       gb200: ${{ steps.force.outputs.gb200 || steps.platforms-input.outputs.gb200 || steps.filter.outputs.gb200 || steps.dispatch.outputs.gb200 }}
       rocm: ${{ steps.force.outputs.rocm || steps.platforms-input.outputs.rocm || steps.filter.outputs.rocm || steps.dispatch.outputs.rocm }}
       xpu: ${{ steps.force.outputs.xpu || steps.platforms-input.outputs.xpu || steps.filter.outputs.xpu || steps.dispatch.outputs.xpu }}
+      sglang-xpu: ${{ steps.force.outputs.sglang-xpu || steps.platforms-input.outputs.sglang-xpu || steps.filter.outputs.sglang-xpu || steps.dispatch.outputs.sglang-xpu }}
       cpu: ${{ steps.force.outputs.cpu || steps.platforms-input.outputs.cpu || steps.filter.outputs.cpu || steps.dispatch.outputs.cpu }}
       rdma-tools: ${{ steps.filter.outputs.rdma-tools }}
     steps:
@@ -80,18 +111,28 @@ jobs:
           echo "gb200=true" >> $GITHUB_OUTPUT
           echo "rocm=true" >> $GITHUB_OUTPUT
           echo "xpu=true" >> $GITHUB_OUTPUT
+          echo "sglang-xpu=true" >> $GITHUB_OUTPUT
           echo "cpu=true" >> $GITHUB_OUTPUT
       - name: Parse platforms input (from workflow_call)
         if: inputs.force_build != true && inputs.platforms != ''
         id: platforms-input
+        env:
+          PLATFORMS: ${{ inputs.platforms }}
         run: |
-          platforms="${{ inputs.platforms }}"
-          echo "cuda=$(echo $platforms | grep -q cuda && echo true || echo false)" >> $GITHUB_OUTPUT
-          echo "aws=$(echo $platforms | grep -q aws && echo true || echo false)" >> $GITHUB_OUTPUT
-          echo "gb200=$(echo $platforms | grep -q gb200 && echo true || echo false)" >> $GITHUB_OUTPUT
-          echo "rocm=$(echo $platforms | grep -q rocm && echo true || echo false)" >> $GITHUB_OUTPUT
-          echo "xpu=$(echo $platforms | grep -q xpu && echo true || echo false)" >> $GITHUB_OUTPUT
-          echo "cpu=$(echo $platforms | grep -q cpu && echo true || echo false)" >> $GITHUB_OUTPUT
+          platforms=",${PLATFORMS//[[:space:]]/},"
+          has_platform() {
+            case "$platforms" in
+              *,"$1",*) printf 'true' ;;
+              *) printf 'false' ;;
+            esac
+          }
+          echo "cuda=$(has_platform cuda)" >> $GITHUB_OUTPUT
+          echo "aws=$(has_platform aws)" >> $GITHUB_OUTPUT
+          echo "gb200=$(has_platform gb200)" >> $GITHUB_OUTPUT
+          echo "rocm=$(has_platform rocm)" >> $GITHUB_OUTPUT
+          echo "xpu=$(has_platform xpu)" >> $GITHUB_OUTPUT
+          echo "sglang-xpu=$(has_platform sglang-xpu)" >> $GITHUB_OUTPUT
+          echo "cpu=$(has_platform cpu)" >> $GITHUB_OUTPUT
       - uses: actions/checkout@v7
         with:
           ref: ${{ inputs.ref || '' }}
@@ -139,6 +180,9 @@ jobs:
             xpu:
               - 'docker/Dockerfile.xpu'
               - 'docker/common-versions'
+            sglang-xpu:
+              - 'docker/common-versions'
+              - 'patches/sglang_xpu_source_pins.patch'
             cpu:
               - 'docker/Dockerfile.cpu'
               - 'docker/common-versions'
@@ -150,14 +194,23 @@ jobs:
       - name: Parse dispatch platforms
         if: github.event_name == 'workflow_dispatch'
         id: dispatch
+        env:
+          PLATFORMS: ${{ inputs.platforms }}
         run: |
-          platforms="${{ inputs.platforms }}"
-          echo "cuda=$(echo $platforms | grep -q cuda && echo true || echo false)" >> $GITHUB_OUTPUT
-          echo "aws=$(echo $platforms | grep -q aws && echo true || echo false)" >> $GITHUB_OUTPUT
-          echo "gb200=$(echo $platforms | grep -q gb200 && echo true || echo false)" >> $GITHUB_OUTPUT
-          echo "rocm=$(echo $platforms | grep -q rocm && echo true || echo false)" >> $GITHUB_OUTPUT
-          echo "xpu=$(echo $platforms | grep -q xpu && echo true || echo false)" >> $GITHUB_OUTPUT
-          echo "cpu=$(echo $platforms | grep -q cpu && echo true || echo false)" >> $GITHUB_OUTPUT
+          platforms=",${PLATFORMS//[[:space:]]/},"
+          has_platform() {
+            case "$platforms" in
+              *,"$1",*) printf 'true' ;;
+              *) printf 'false' ;;
+            esac
+          }
+          echo "cuda=$(has_platform cuda)" >> $GITHUB_OUTPUT
+          echo "aws=$(has_platform aws)" >> $GITHUB_OUTPUT
+          echo "gb200=$(has_platform gb200)" >> $GITHUB_OUTPUT
+          echo "rocm=$(has_platform rocm)" >> $GITHUB_OUTPUT
+          echo "xpu=$(has_platform xpu)" >> $GITHUB_OUTPUT
+          echo "sglang-xpu=$(has_platform sglang-xpu)" >> $GITHUB_OUTPUT
+          echo "cpu=$(has_platform cpu)" >> $GITHUB_OUTPUT
 
   cuda-build-llm-d-debug:
     needs: [detect-changes]
@@ -1375,6 +1428,147 @@ jobs:
         uses: github/codeql-action/upload-sarif@v4
         with:
           sarif_file: "trivy-results.sarif"
+
+      - name: Display vulnerability summary
+        run: |
+          echo "=== Vulnerability Scan Summary ==="
+          if [ -f trivy-results.sarif ]; then
+            echo "Scan completed. Check the Security tab for detailed results."
+          else
+            echo "No vulnerabilities found or scan failed."
+          fi
+
+  xpu-sglang-build-llm-d:
+    needs: [detect-changes]
+    if: ${{ needs.detect-changes.outputs.sglang-xpu == 'true' }}
+    runs-on: xpu
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.ref || '' }}
+          allow-unsafe-pr-checkout: true
+
+      - name: Load SGLang XPU source configuration
+        id: common-versions
+        run: |
+          source docker/common-versions
+          echo "repository=${SGLANG_XPU_REPOSITORY}" >> $GITHUB_OUTPUT
+          echo "repo=${SGLANG_XPU_REPO}" >> $GITHUB_OUTPUT
+          echo "ref=${SGLANG_XPU_REF}" >> $GITHUB_OUTPUT
+          echo "kernel_repo=${SGLANG_XPU_KERNEL_REPO}" >> $GITHUB_OUTPUT
+          echo "kernel_ref=${SGLANG_XPU_KERNEL_REF}" >> $GITHUB_OUTPUT
+
+      - name: Checkout SGLang source
+        uses: actions/checkout@v7
+        with:
+          repository: ${{ inputs.sglang_xpu_repository || steps.common-versions.outputs.repository }}
+          ref: ${{ inputs.sglang_xpu_ref || steps.common-versions.outputs.ref }}
+          path: .cache/sglang-src
+          allow-unsafe-pr-checkout: true
+          persist-credentials: false
+
+      - name: Pin SGLang and XPU kernel revisions
+        run: git -C .cache/sglang-src apply "$GITHUB_WORKSPACE/patches/sglang_xpu_source_pins.patch"
+
+      - name: Resolve source revisions
+        id: source
+        run: |
+          echo "llmd_sha=$(git rev-parse HEAD)" >> $GITHUB_OUTPUT
+          echo "llmd_short_sha=$(git rev-parse --short=7 HEAD)" >> $GITHUB_OUTPUT
+          echo "sglang_sha=$(git -C .cache/sglang-src rev-parse HEAD)" >> $GITHUB_OUTPUT
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Log in to Container Registry
+        uses: docker/login-action@v4
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ secrets.GHCR_USER }}
+          password: ${{ secrets.GHCR_TOKEN }}
+
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v6
+        with:
+          images: ${{ env.REGISTRY }}/${{ github.repository }}-xpu-sglang
+          tags: |
+            type=ref,event=branch
+            type=ref,event=pr
+            type=raw,value=sha-${{ steps.source.outputs.llmd_short_sha }}
+            type=raw,value=latest,enable={{is_default_branch}}
+          labels: |
+            org.opencontainers.image.revision=${{ steps.source.outputs.llmd_sha }}
+            io.llm-d.sglang.repository=${{ inputs.sglang_xpu_repo || steps.common-versions.outputs.repo }}
+            io.llm-d.sglang.ref=${{ inputs.sglang_xpu_ref || steps.common-versions.outputs.ref }}
+            io.llm-d.sglang.revision=${{ steps.source.outputs.sglang_sha }}
+            io.llm-d.sglang-xpu-kernel.repository=${{ steps.common-versions.outputs.kernel_repo }}
+            io.llm-d.sglang-xpu-kernel.revision=${{ steps.common-versions.outputs.kernel_ref }}
+
+      - name: Build and push the image
+        id: build-and-push
+        uses: docker/build-push-action@v7
+        with:
+          context: ./.cache/sglang-src
+          file: ./.cache/sglang-src/docker/xpu.Dockerfile
+          platforms: linux/amd64
+          push: true
+          provenance: true
+          no-cache: true
+          build-args: |
+            SG_LANG_REPO=${{ inputs.sglang_xpu_repo || steps.common-versions.outputs.repo }}
+            SG_LANG_BRANCH=${{ inputs.sglang_xpu_ref || steps.common-versions.outputs.ref }}
+            SG_LANG_COMMIT=${{ steps.source.outputs.sglang_sha }}
+            SG_LANG_KERNEL_REPO=${{ steps.common-versions.outputs.kernel_repo }}
+            SG_LANG_KERNEL_BRANCH=${{ steps.common-versions.outputs.kernel_ref }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          github-token: ${{ secrets.GHCR_TOKEN }}
+        env:
+          DOCKER_BUILDKIT: "1"
+          BUILDKIT_PROGRESS: "plain"
+
+      - name: Record image provenance
+        env:
+          IMAGE: ${{ env.REGISTRY }}/${{ github.repository }}-xpu-sglang
+          IMAGE_DIGEST: ${{ steps.build-and-push.outputs.digest }}
+          SGLANG_REPOSITORY: ${{ inputs.sglang_xpu_repo || steps.common-versions.outputs.repo }}
+          SGLANG_REF: ${{ inputs.sglang_xpu_ref || steps.common-versions.outputs.ref }}
+          SGLANG_SHA: ${{ steps.source.outputs.sglang_sha }}
+          SGLANG_XPU_KERNEL_REPOSITORY: ${{ steps.common-versions.outputs.kernel_repo }}
+          SGLANG_XPU_KERNEL_REF: ${{ steps.common-versions.outputs.kernel_ref }}
+        run: |
+          {
+            echo "## SGLang XPU image"
+            echo
+            echo "- Image: \`${IMAGE}@${IMAGE_DIGEST}\`"
+            echo "- SGLang repository: \`${SGLANG_REPOSITORY}\`"
+            echo "- Requested ref: \`${SGLANG_REF}\`"
+            echo "- Resolved revision: \`${SGLANG_SHA}\`"
+            echo "- XPU kernel repository: \`${SGLANG_XPU_KERNEL_REPOSITORY}\`"
+            echo "- XPU kernel revision: \`${SGLANG_XPU_KERNEL_REF}\`"
+          } >> $GITHUB_STEP_SUMMARY
+
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          image-ref: ${{ env.REGISTRY }}/${{ github.repository }}-xpu-sglang@${{ steps.build-and-push.outputs.digest }}
+          format: "sarif"
+          output: "trivy-results.sarif"
+          severity: "CRITICAL,HIGH,MEDIUM"
+          scanners: vuln
+          timeout: 30m
+          skip-dirs: /root/.cache/uv
+        env:
+          TRIVY_USERNAME: ${{ secrets.GHCR_USER }}
+          TRIVY_PASSWORD: ${{ secrets.GHCR_TOKEN }}
+
+      - name: Upload Trivy scan results to GitHub Security tab
+        uses: github/codeql-action/upload-sarif@v4
+        with:
+          sarif_file: "trivy-results.sarif"
+          category: trivy-xpu-sglang
 
       - name: Display vulnerability summary
         run: |

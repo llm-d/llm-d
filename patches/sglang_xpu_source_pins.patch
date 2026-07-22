@@ -1,0 +1,32 @@
+diff --git a/docker/xpu.Dockerfile b/docker/xpu.Dockerfile
+--- a/docker/xpu.Dockerfile
++++ b/docker/xpu.Dockerfile
+@@ -10,7 +10,8 @@
+ ARG PYTHON_VERSION=3.12
+-
++
+ ARG SG_LANG_REPO=https://github.com/sgl-project/sglang.git
+ ARG SG_LANG_BRANCH=main
+-
++ARG SG_LANG_COMMIT=
++
+ ARG SG_LANG_KERNEL_REPO=https://github.com/sgl-project/sgl-kernel-xpu.git
+ ARG SG_LANG_KERNEL_BRANCH=main
+@@ -45,9 +46,15 @@
+ RUN  pip install --no-cache-dir msgspec blake3 py-cpuinfo compressed_tensors gguf partial_json_parser einops tabulate --root-user-action=ignore && \
+      pip install --no-cache-dir torch==2.12.0+xpu torchao==0.17.0+xpu torchvision==0.27.0+xpu torchaudio==2.11.0+xpu --index-url https://download.pytorch.org/whl/xpu
+-
++
+ RUN echo "Cloning ${SG_LANG_BRANCH} from ${SG_LANG_REPO}" && \
+     git clone --branch ${SG_LANG_BRANCH} --single-branch ${SG_LANG_REPO} sglang && \
+-    cd sglang && cd python && \
++    cd sglang && \
++    if [ -n "${SG_LANG_COMMIT}" ]; then \
++        test "$(git rev-parse HEAD)" = "${SG_LANG_COMMIT}"; \
++    fi && \
++    cd python && \
++    sed -i "s|git+https://github.com/sgl-project/sgl-kernel-xpu.git|git+${SG_LANG_KERNEL_REPO}@${SG_LANG_KERNEL_BRANCH}|" pyproject_xpu.toml && \
++    grep -Fq "git+${SG_LANG_KERNEL_REPO}@${SG_LANG_KERNEL_BRANCH}" pyproject_xpu.toml && \
+     cp pyproject_xpu.toml pyproject.toml && \
+     pip install --no-cache-dir . --extra-index-url https://download.pytorch.org/whl/xpu && \
+     pip install --no-cache-dir --no-deps xgrammar==0.1.33

@@ -26,6 +26,18 @@ VLLM_PRECOMPILED_WHEEL_COMMIT=0fc695fc6d1d82e9a5ac6835ac8e4e1c83703665 # maps to
 VLLM_XPU_BASE_IMAGE=public.ecr.aws/q9t5s3a7/vllm-ci-test-repo:0fc695fc6d1d82e9a5ac6835ac8e4e1c83703665-xpu
 
 # ============================================================================
+# SGLang XPU Version Configuration
+# ============================================================================
+# SGLang's XPU Dockerfile clones this repository and ref during the image build.
+# SGLANG_XPU_REPOSITORY is the owner/repo form required by actions/checkout.
+SGLANG_XPU_REPOSITORY=xiaojun-zhang/sglang
+SGLANG_XPU_REPO=https://github.com/xiaojun-zhang/sglang.git
+SGLANG_XPU_REF=fix-kimi-vl-epd-grid-metadata
+# Matches the sgl-kernel-xpu revision used by the validated Dynamo XPU image.
+SGLANG_XPU_KERNEL_REPO=https://github.com/sgl-project/sgl-kernel-xpu.git
+SGLANG_XPU_KERNEL_REF=a246742797279015f51d135063ed00f879496896
+
+# ============================================================================
 # CUDA Version Configuration
 # ============================================================================
 # Used by CUDA builds (Dockerfile.cuda, Dockerfile.rdma-tools)
