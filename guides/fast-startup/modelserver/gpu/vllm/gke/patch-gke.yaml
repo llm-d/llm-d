@@ -1,0 +1,37 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: decode
+spec:
+  template:
+    spec:
+      runtimeClassName: gvisor
+      containers:
+        - name: modelserver
+          command: ["/bin/sh", "-c"]
+          args:
+            - |
+              (
+                if [ ! -e /proc/gvisor/checkpoint ]; then
+                  echo "Checkpoint trigger not available."
+                  exit 0
+                fi
+                while true; do
+                  if curl -s -f http://localhost:8000/health; then
+                    echo "Model server is ready. Triggering checkpoint immediately..."
+                    rm -rf /root/.cache/huggingface/*
+                    if echo 1 > /proc/gvisor/checkpoint; then
+                      echo "Checkpoint triggered successfully."
+                    else
+                      echo "Checkpoint trigger failed (Operation not permitted)."
+                    fi
+                    break
+                  fi
+                  sleep 1
+                done
+              ) &
+              exec python3 -m vllm.entrypoints.openai.api_server --model=meta-llama/Llama-3.1-8B-Instruct --gpu-memory-utilization=0.90 --max-model-len=8192 --safetensors-load-strategy eager
+          env:
+            - name: VLLM_HOST_IP
+              value: "127.0.0.1"
+
