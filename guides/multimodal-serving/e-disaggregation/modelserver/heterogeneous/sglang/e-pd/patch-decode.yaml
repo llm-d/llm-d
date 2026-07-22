@@ -1,0 +1,149 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: decode
+  labels:
+    app.kubernetes.io/component: pd
+    llm-d.ai/accelerator-variant: gpu
+    llm-d.ai/accelerator-vendor: nvidia
+    llm-d.ai/role: decode
+spec:
+  progressDeadlineSeconds: 7200
+  replicas: 1
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/component: pd
+        llm-d.ai/accelerator-variant: gpu
+        llm-d.ai/accelerator-vendor: nvidia
+        llm-d.ai/role: decode
+    spec:
+      terminationGracePeriodSeconds: 120
+      initContainers:
+        - name: wait-for-encoders
+          image: REPLACE_MODEL_SERVER_IMAGE
+          imagePullPolicy: IfNotPresent
+          command: ["python3", "-c"]
+          args:
+            - |
+              import socket
+              import time
+
+              pending = {
+                  "encode-0.encode",
+                  "encode-1.encode",
+                  "encode-2.encode",
+                  "encode-3.encode",
+              }
+              deadline = time.monotonic() + 1800
+              while pending and time.monotonic() < deadline:
+                  for host in list(pending):
+                      try:
+                          with socket.create_connection((host, 8000), timeout=5):
+                              pending.remove(host)
+                              print(f"{host}:8000 is ready", flush=True)
+                      except OSError:
+                          pass
+                  if pending:
+                      time.sleep(5)
+              if pending:
+                  raise SystemExit(
+                      "timed out waiting for encoder endpoints: "
+                      + ", ".join(sorted(pending))
+                  )
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: "1"
+              memory: 512Mi
+      containers:
+        - name: modelserver
+          imagePullPolicy: IfNotPresent
+          command: ["/opt/nvidia/nvidia_entrypoint.sh"]
+          args:
+            - python3
+            - -m
+            - sglang.launch_server
+            - --model-path=moonshotai/Kimi-VL-A3B-Instruct
+            - --served-model-name=moonshotai/Kimi-VL-A3B-Instruct
+            - --host=0.0.0.0
+            - --port=8000
+            - --trust-remote-code
+            - --enable-multimodal
+            - --skip-server-warmup
+            - --language-only
+            - --encoder-transfer-backend=zmq_to_scheduler
+            - --encoder-urls
+            - http://encode-0.encode:8000
+            - http://encode-1.encode:8000
+            - http://encode-2.encode:8000
+            - http://encode-3.encode:8000
+            - --dtype=auto
+            - --kv-cache-dtype=fp8_e4m3
+            - --tensor-parallel-size=1
+            - --mem-fraction-static=0.80
+            - --prefill-max-requests=4
+            - --max-running-requests=32
+            - --chunked-prefill-size=65536
+            - --max-prefill-tokens=65536
+            - --max-total-tokens=250000
+            - --disable-cuda-graph
+            - --page-size=16
+            - --disable-radix-cache
+            - --log-level=info
+            - --enable-metrics
+            - --uvicorn-access-log-exclude-prefixes=/metrics
+          env:
+            - name: HF_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: llm-d-hf-token
+                  key: HF_TOKEN
+            - name: SGLANG_ENCODER_BOOTSTRAP_HEALTH_CHECK_INTERVAL
+              value: "0"
+            - name: PYTHONUNBUFFERED
+              value: "1"
+          resources:
+            requests:
+              cpu: "16"
+              memory: 96Gi
+              nvidia.com/gpu: "1"
+            limits:
+              cpu: "32"
+              memory: 160Gi
+              nvidia.com/gpu: "1"
+          volumeMounts:
+            - name: shm
+              mountPath: /dev/shm
+          startupProbe:
+            httpGet:
+              path: /v1/models
+              port: modelserver
+            initialDelaySeconds: 15
+            periodSeconds: 10
+            timeoutSeconds: 30
+            failureThreshold: 180
+          readinessProbe:
+            httpGet:
+              path: /v1/models
+              port: modelserver
+            periodSeconds: 10
+            timeoutSeconds: 30
+            failureThreshold: 6
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: modelserver
+            initialDelaySeconds: 1800
+            periodSeconds: 30
+            timeoutSeconds: 30
+            failureThreshold: 10
+      volumes:
+        - name: shm
+          emptyDir:
+            medium: Memory
+            sizeLimit: 64Gi

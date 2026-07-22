@@ -1,0 +1,118 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: encode
+  labels:
+    app.kubernetes.io/component: encode
+    llm-d.ai/accelerator-variant: xpu
+    llm-d.ai/accelerator-vendor: intel
+    llm-d.ai/role: encode
+spec:
+  serviceName: encode
+  replicas: 4
+  podManagementPolicy: Parallel
+  selector:
+    matchLabels:
+      app.kubernetes.io/component: encode
+      llm-d.ai/role: encode
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/component: encode
+        llm-d.ai/accelerator-variant: xpu
+        llm-d.ai/accelerator-vendor: intel
+        llm-d.ai/role: encode
+    spec:
+      serviceAccountName: sa
+      resourceClaims:
+        - name: xpu
+          resourceClaimTemplateName: xpu-encoder
+      securityContext:
+        fsGroup: 107
+        supplementalGroups:
+          - 107
+      terminationGracePeriodSeconds: 120
+      containers:
+        - name: modelserver
+          image: REPLACE_XPU_MODEL_SERVER_IMAGE
+          imagePullPolicy: IfNotPresent
+          command: ["/bin/bash", "-lc"]
+          args:
+            - |
+              set -euo pipefail
+              source /opt/intel/oneapi/setvars.sh --force
+              exec python3 -m sglang.launch_server \
+                --model-path=moonshotai/Kimi-VL-A3B-Instruct \
+                --served-model-name=moonshotai/Kimi-VL-A3B-Instruct \
+                --host=0.0.0.0 \
+                --port=8000 \
+                --trust-remote-code \
+                --enable-multimodal \
+                --encoder-only \
+                --encoder-transfer-backend=zmq_to_scheduler \
+                --skip-tokenizer-init \
+                --device=xpu \
+                --tensor-parallel-size=1 \
+                --mem-fraction-static=0.70 \
+                --page-size=16 \
+                --mm-attention-backend=xpu_attn \
+                --log-level=info \
+                --enable-metrics \
+                --uvicorn-access-log-exclude-prefixes=/metrics
+          env:
+            - name: HF_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: llm-d-hf-token
+                  key: HF_TOKEN
+            - name: SGLANG_USE_SGL_XPU
+              value: "1"
+            - name: ONEAPI_DEVICE_SELECTOR
+              value: level_zero:0
+            - name: ZE_AFFINITY_MASK
+              value: "0"
+            - name: SYCL_CACHE_PERSISTENT
+              value: "1"
+            - name: PYTHONUNBUFFERED
+              value: "1"
+          ports:
+            - name: modelserver
+              containerPort: 8000
+              protocol: TCP
+          resources:
+            claims:
+              - name: xpu
+            requests:
+              cpu: "8"
+              memory: 96Gi
+            limits:
+              cpu: "32"
+              memory: 160Gi
+          volumeMounts:
+            - name: shm
+              mountPath: /dev/shm
+          startupProbe:
+            tcpSocket:
+              port: modelserver
+            initialDelaySeconds: 15
+            periodSeconds: 10
+            timeoutSeconds: 30
+            failureThreshold: 180
+          readinessProbe:
+            tcpSocket:
+              port: modelserver
+            periodSeconds: 10
+            timeoutSeconds: 30
+            failureThreshold: 6
+          livenessProbe:
+            tcpSocket:
+              port: modelserver
+            initialDelaySeconds: 1800
+            periodSeconds: 30
+            timeoutSeconds: 30
+            failureThreshold: 10
+      volumes:
+        - name: shm
+          emptyDir:
+            medium: Memory
+            sizeLimit: 32Gi

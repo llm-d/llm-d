@@ -1,0 +1,33 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - ../../../../../../recipes/modelserver/base/single-host/default
+  - encode-service.yaml
+  - encode-statefulset.yaml
+  - xpu-resource-claim-template.yaml
+
+images:
+  - name: REPLACE_MODEL_SERVER_IMAGE
+    newName: docker.io/lmsysorg/sglang
+    newTag: v0.5.15.post1-cu130-runtime
+    digest: sha256:247fd6bfcdeabe3e382da5c557537440148d08fd30f2b482f01fa09e242fe185
+  - name: REPLACE_XPU_MODEL_SERVER_IMAGE
+    newName: ghcr.io/xiaojun-zhang/llm-d-xpu-sglang
+    newTag: sglang-heterogeneous-e-pd
+    digest: sha256:56ed840fe2890671a894fda14da1ead719ce18e5a94d3095a58ba5b54c41e55d
+
+labels:
+  - pairs:
+      app.kubernetes.io/name: heterogeneous-sglang-e-pd
+      llm-d.ai/engine-type: sglang
+      llm-d.ai/guide: e-disaggregation-sglang-heterogeneous
+      llm-d.ai/model: Kimi-VL-A3B-Instruct
+    includeSelectors: true
+    includeTemplates: true
+
+patches:
+  - path: patch-decode.yaml
+    target:
+      kind: Deployment
+      name: decode
