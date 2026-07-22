@@ -41,7 +41,6 @@ harness:
   wait_timeout: 6000              # Time (in seconds) to wait for workload launcher pod to complete before terminating.
                                   # Set to 0 to disable timeout.
   image: ghcr.io/llm-d/llm-d-benchmark:v0.7.0
-  image: ghcr.io/llm-d/llm-d-benchmark:v0.7.0
 
 env:
   - name: RAYON_NUM_THREADS
@@ -54,13 +53,7 @@ workload:                         # yaml configuration for harness workload(s)
       num_workers: 8
       worker_max_concurrency: 1000
       request_timeout: 600
-      type: concurrent
-      num_workers: 8
-      worker_max_concurrency: 1000
-      request_timeout: 600
       stages:
-      - num_requests: ${NUM_REQUESTS}
-        concurrency_level: ${CONCURRENCY_LEVEL}
       - num_requests: ${NUM_REQUESTS}
         concurrency_level: ${CONCURRENCY_LEVEL}
     api:
