@@ -227,14 +227,14 @@ envsubst < agentic-serving-nemotron-3-ultra.yaml > config.yaml
 
 The results below are with 8 replicas of H200 GPU on the benchmark workload described above. Scaling concurrency up to 80 sessions.
 
-### Summary with 40 concurrent  sessions:
+### Summary with 60 concurrent coding sessions:
 
 | Metric                  | k8s Service | llm-d-optimized  | Δ Improvement | 
 | :---                    | :---        | :---             | :---          | 
-| **TTFT P50 (ms)**       | 28416       | 15078            | ⬇️  47%        | 
-| **Total tokens / sec**  | 58724       | 60578            | ⬆️  3%         | 
-| **Input tokens / sec**  | 58417       | 60261            | ⬆️  3%         | 
-| **Output tokens / sec** |   307       |   317            | ⬆️  3%         | 
+| **TTFT P50 (ms)**       | 49462       | 20543            | ⬇️  58%        | 
+| **Total tokens / sec**  | 64958       | 67645            | ⬆️  4%         | 
+| **Input tokens / sec**  | 64474       | 66716            | ⬆️  3%         | 
+| **Output tokens / sec** |   484       |   929            | ⬆️  92%        | 
 
 ### Latency Profiles:
 
