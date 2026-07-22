@@ -108,7 +108,7 @@ helm install ${GUIDE_NAME} \
 Apply the Kustomize overlay for the Nemotron-3-Ultra H200 deployment:
 
 ```bash
-kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/gpu/vllm/nemotron-3-ultra/${INFRA_PROVIDER}
+kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/gpu/vllm/nemotron-3-ultra/${INFRA_PROVIDER}/
 ```
 
 This deploys the 6 prefill and 2 decode replicas. Wait for them to become ready (model load is
@@ -250,6 +250,6 @@ To clean up resources:
 
 ```bash
 helm uninstall ${GUIDE_NAME} -n ${NAMESPACE}
-kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/gpu/vllm/nemotron-3-ultra/
+kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/gpu/vllm/nemotron-3-ultra/${INFRA_PROVIDER}/
 kubectl delete namespace ${NAMESPACE}
 ```
