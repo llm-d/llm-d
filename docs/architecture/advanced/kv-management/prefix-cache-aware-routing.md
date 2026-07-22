@@ -17,6 +17,30 @@ The approximate implementation is designed to be lightweight and requires no ext
 
 ### How it Works
 
+```mermaid
+sequenceDiagram
+    autonumber
+    participant Proxy as Gateway Proxy
+    box EPP (Endpoint Picker)
+        participant HP as approx-prefix-cache-producer
+        participant LRU as Local LRU Cache (In-Memory)
+        participant Scorer as prefix-cache-scorer
+    end
+    participant ModelServer as Model Servers (No Connection)
+
+    Proxy->>HP: Request with raw text prompt
+    Note over HP: Heuristic: Character-to-Token approximation
+    HP->>HP: Split prompt into 16-token text blocks
+    HP->>HP: Build rolling hash chain of blocks
+    HP->>LRU: Query hashes to find matched Pods
+    LRU-->>HP: Match ratios per Pod
+    HP->>Scorer: Pass match statistics
+    Scorer->>Scorer: Score candidates based on match ratio
+    Scorer-->>Proxy: Return picked Pod
+    Proxy->>ModelServer: Route request
+    Proxy-->>LRU: Speculative update: Associate hashes with selected Pod
+```
+
 1. **Approximation**: Since the EPP does not natively contain a tokenizer, it approximates tokens using character-to-token ratios.
 2. **Hashing**: The `approx-prefix-cache-producer` splits the incoming prompt into fixed-size blocks (e.g., 16 tokens approximated as characters) and builds a rolling hash chain.
 3. **Local Index**: The EPP maintains an in-memory LRU index of which prefix hashes were recently sent to which Pods.
@@ -42,6 +66,39 @@ The precise implementation provides 100% accuracy by leveraging actual token dat
 - **KV-Cache Indexer** (EPP Data Layer component)
 
 ### How it Works
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant Proxy as Gateway Proxy
+    box EPP (Endpoint Picker)
+        participant TP as token-producer
+        participant PP as precise-prefix-cache-producer
+        participant Idx as KV-Cache Index (block-key → pods)
+        participant Scorer as prefix-cache-scorer
+    end
+    participant Render as vLLM Render Sidecar (localhost:8000)
+    participant Pod as Selected Model Server Pod
+
+    Proxy->>TP: Request (raw prompt)
+    TP->>Render: POST /v1/chat/completions/render
+    Render-->>TP: Exact Token IDs + multimodal features
+
+    TP->>PP: Token IDs + features
+    PP->>Idx: Lookup block-key chain for Token IDs
+    Idx-->>PP: Per-Pod longest consecutive prefix match
+
+    Note over PP: Example: prompt has blocks [B0 B1 B2 B3 B4]<br/>Pod A: B0✓ B1✓ B2✓ B3✓ B4✗ → score=4<br/>Pod B: B0✓ B1✓ B2✗ → score=2 (chain breaks)<br/>Pod C: B0✗ → score=0
+
+    PP->>Scorer: Match counts per Pod
+    Scorer->>Scorer: Score candidates based on match ratio
+    Scorer-->>Proxy: Selected Pod IP
+
+    Proxy->>Pod: Forward original request
+
+    Note over PP,Idx: Speculative Indexing (TTL=2s)
+    PP-->>Idx: Insert predicted blocks for selected Pod
+```
 
 1. **Exact Tokenization**: The `token-producer` plugin sends the prompt to vLLM's HTTP render endpoint (`/v1/completions/render`) — typically a `vllm launch render` sidecar in the EPP pod (loopback) or a shared render Service — to get exact Token IDs. (The legacy gRPC-over-UDS tokenizer backend is deprecated.)
 2. **Real-time Events**: Model servers (like vLLM) are configured to emit `KVEvents` over ZeroMQ (ZMQ) whenever their internal KV cache changes (blocks added or evicted).
