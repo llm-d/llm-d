@@ -1,0 +1,22 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - ../base
+
+patches:
+  - path: patch-amd-ci.yaml
+
+# Synthetic kernel config so the bundled NIXL UCX dmabuf probe
+# (uct_rocm_base_is_dmabuf_supported reads /boot/config-$(uname -r)) passes on
+# these stripped nodes where no /boot/config exists. dmabuf itself works. The
+# generated file name here and both mountPath/subPath values in patch-amd-ci.yaml
+# must match the CI nodes' `uname -r`; rename all three when the node kernel
+# version changes.
+configMapGenerator:
+  - name: ucx-kernel-config
+    files:
+      - config-6.8.0-124-generic
+
+generatorOptions:
+  disableNameSuffixHash: true

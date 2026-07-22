@@ -32,12 +32,12 @@ patches:
         path: /spec/template/spec/containers/0/resources/requests/nvidia.com~1sriov-rdma-vf
         value: "4"
       # UCX transport for OCI RoCE via SR-IOV VFs.
-      # rc/ud = RDMA reliable/unreliable connected over RoCE, sm = shared memory, cuda_copy = fallback.
+      # rc/ud = RDMA reliable/unreliable connected over RoCE, sm = shared memory, rocm = ROCm memory transport.
       - op: add
         path: /spec/template/spec/containers/0/env/-
         value:
           name: UCX_TLS
-          value: "rc,ud,sm,self,cuda_copy"
+          value: "rc,ud,sm,self,rocm"
       # RoCE v2 GID index — verify with `show_gids` on the host; typically 3 on OCI.
       - op: add
         path: /spec/template/spec/containers/0/env/-
@@ -86,7 +86,7 @@ patches:
         path: /spec/template/spec/containers/0/env/-
         value:
           name: UCX_TLS
-          value: "rc,ud,sm,self,cuda_copy"
+          value: "rc,ud,sm,self,rocm"
       - op: add
         path: /spec/template/spec/containers/0/env/-
         value:

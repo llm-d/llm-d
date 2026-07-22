@@ -26,12 +26,12 @@ support:
       engines: {vllm: validated, sglang: validated}
     amd:
       label: AMD GPU
-      notes: "AMD Instinct · 1P (TP=1) + 1D (TP=4) · NIXL"
-      model: amd/Llama-3.3-70B-Instruct-FP8-KV
+      notes: "AMD Instinct · 1P (TP=1) + 1D (TP=4), 5 GPUs · NIXL"
+      model: openai/gpt-oss-120b
       providers:
-        - {name: base, label: "Kubernetes (base)"}
-        - {name: oci, label: "OCI"}
-        - {name: tensorwave, label: "TensorWave"}
+        - {name: nixl/base, label: "NIXL (Kubernetes base)"}
+        - {name: nixl/oci, label: "NIXL (OCI)"}
+        - {name: nixl/tensorwave, label: "NIXL (TensorWave)"}
         - {name: moriio/base, label: "MoRI-IO (base)"}
       engines: {vllm: validated}
     xpu:
@@ -102,12 +102,12 @@ env:
     ACCELERATOR_TYPE: {default: gpu, values: [gpu, amd, xpu, "tpu/v6", "tpu/v7", "tpu/v7-dynamic-slice", iluvatar, metax, npu]}
     MODEL_SERVER: {default: vllm, values: [vllm, sglang]}
     # The overlay is modelserver/<ACCELERATOR_TYPE>/<MODEL_SERVER>/<INFRA_PROVIDER>/.
-    # The leaf selects the platform and, where an accelerator offers more than
-    # one, the KV transfer connector (cks-mooncake: MooncakeConnector on GPU;
-    # moriio/*: MoRIIOConnector on AMD; rdma: NIXL over RDMA on Intel XPU).
+    # The leaf selects the platform and, where an accelerator offers multiple
+    # connectors, includes it in the value (cks-mooncake: MooncakeConnector on
+    # GPU; nixl/* or moriio/* on AMD; rdma: NIXL over RDMA on Intel XPU).
     INFRA_PROVIDER:
       default: base
-      values: [base, gke, gke/a4x, gke/a4xmax, coreweave, aws, cks-mooncake, amd-ci, oci, tensorwave, moriio/base, moriio/amd-ci, moriio/amd-ci-1p1d-tp8, rdma]
+      values: [base, gke, gke/a4x, gke/a4xmax, coreweave, aws, cks-mooncake, nixl/base, nixl/amd-ci, nixl/oci, nixl/tensorwave, moriio/base, moriio/amd-ci, moriio/amd-ci-1p1d-tp8, rdma]
       comment: "valid values per accelerator: table above"
 
     MODEL: {default: "openai/gpt-oss-120b", comment: "set to the model your accelerator serves (Supported Accelerators and Model Servers table); the AMD MoRIIO overlays (INFRA_PROVIDER=moriio/*) serve Qwen/Qwen3-32B"}
