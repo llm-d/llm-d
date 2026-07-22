@@ -15,7 +15,9 @@ The deployment composes three llm-d capabilities:
 
 * the vLLM `OffloadingConnector` with a P2P secondary tier (each pod is both
   a puller and a source),
-* the llm-d Router's precise (KV-event-fed) prefix index, and
+* the llm-d Router's prefix index - this guide deploys the precise
+  (KV-event-fed) one; the approximate (prompt-hash) index drives the source
+  decision equally well (measured on the wide-EP testbed), and
 * the `p2p-source-producer`, which stamps each request with the peer that
   holds the most cached prefix so the routing sidecar can inject
   `kv_transfer_params.p2p` and the engine pulls instead of recomputing.
@@ -71,7 +73,11 @@ measurements use:
 `minCachedTokenDelta` is set from the measured pull-versus-recompute
 crossover (see [Benchmarking](#benchmarking)): a pull is requested only when
 a peer holds at least that many more cached prefix tokens than the scheduled
-pod.
+pod. The crossover is per model - 2,048 on this testbed (gpt-oss-120b and
+Llama-8B both cross near or below 2K), 16,384 on the wide-EP GLM-5.2
+testbed (753B; tie measured at 13.6K tokens) - so re-measure it when
+changing models, on a warmed pod pair (the first pull between two peers
+pays a one-time session-establishment transient).
 
 ### Supported Hardware Backends
 
@@ -89,7 +95,8 @@ Each of these was learned the hard way:
   requests still serve, nothing pulls.
 * `--kv-events-config` on every serving pod, topic
   `kv@<POD_IP>:<PORT>@<model>`. No events, no precise index, no source
-  selection.
+  selection from it. (Deployments on the approximate index skip this
+  prerequisite - the source decision then runs on prompt-hash estimates.)
 * `PYTHONHASHSEED` pinned to the same value fleet-wide. vLLM seeds block
   hashes per process; unpinned seeds mean no block hash ever matches across
   pods and every lookup misses.
@@ -101,8 +108,14 @@ Each of these was learned the hard way:
   upstream work stores offloaded KV in a canonical parallelism-free layout
   ([vllm#48414](https://github.com/vllm-project/vllm/pull/48414)),
   removing the TP coupling.
-* `offload_prompt_only: false` - sources must offload computed prefixes,
-  not only prompts, for peers to pull them.
+* `offload_prompt_only` set to match what peers can use. Prompt-side
+  prefix pulls work under either setting; `false` additionally offloads
+  *generated* KV (session answers) so a conversation's full history is
+  pullable - pair it with an index that covers decode blocks (the precise
+  one) and a chat template that re-renders answers verbatim. This guide's
+  deployment runs `false`; the wide-EP testbed runs `true` because its
+  model drops reasoning on re-render, so generated KV is unreachable for
+  reuse regardless.
 * CPU tier (`cpu_bytes_to_use`) considerably larger than the per-pod GPU
   KV cache - 2x as the working default. The tier's value is the KV that
   GPU evicts and CPU *retains* (the
@@ -369,8 +382,9 @@ kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/render
    `OffloadingConnector` with a CPU tier plus a P2P secondary tier: every
    pod both offloads its computed KV to CPU and serves it to peers on the
    P2P port.
-2. **The router builds the precise prefix index** from the KV events, so it
-   knows per request which pods hold which prefix blocks.
+2. **The router builds its prefix index** - in this deployment the precise
+   one from the KV events - so it knows per request which pods hold which
+   prefix blocks.
 3. **The `p2p-source-producer` compares** the best-cached peer against the
    pod scheduling actually picked; when the peer leads by at least
    `minCachedTokenDelta` tokens it sets the KV cache source header.
@@ -444,10 +458,15 @@ typically the topology's ceiling.
 
 ## Benchmarking Reports
 
-Empirical benchmark reports comparing the three routing arms under
-identical hardware configurations:
+Empirical benchmark reports comparing the routing arms under identical
+hardware configurations:
 
 - **[openai/gpt-oss-120b on vLLM (H200, aggregated)](./benchmark-results/gpt-oss-120b-h200.md)**:
   pull-versus-recompute crossover, shared-prefix pools, and the document
   Q&A headline - load-aware placement plus the pull against precise
   prefix-cache routing.
+- **[zai-org/GLM-5.2-FP8 on vLLM (H200, wide-EP P/D)](./benchmark-results/glm-5.2-h200.md)**:
+  the mechanism at 753B - crossover swept to its measured tie (13.6K
+  tokens), a four-arm placement-x-pull grid on recorded agentic traces,
+  and the pull firing from the approximate index as well as the precise
+  one.

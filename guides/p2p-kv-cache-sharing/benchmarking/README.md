@@ -24,8 +24,8 @@ llmdbenchmark \
 ```
 
 Run the profile once per routing arm, switching only the EPP configuration
-between runs. The three arm configs used for every table below ship next to
-this file:
+between runs. The three arm configs used for the gpt-oss tables below ship
+next to this file:
 
 * [`epp-affinity.yaml`](epp-affinity.yaml) - precise prefix-cache routing
   (the precise guide's configuration, complete).
@@ -33,6 +33,11 @@ this file:
   recompute control).
 * [`epp-load-p2p.yaml`](epp-load-p2p.yaml) - load-balanced placement + the
   P2P pull (`minCachedTokenDelta: 2048`, from the crossover below).
+
+A second arm set, `epp-glm-*.yaml`, is the wide-EP testbed's
+(`GLM-5.2-FP8`, 753B): the same placement-x-pull cross at
+`minCachedTokenDelta: 16384`, measured in the
+[wide-EP section](#wide-ep-testbed-glm-52-fp8) below.
 
 For a defensible A/B, run arm pairs twice with the order alternated:
 whichever arm runs second inherits warm CPU tiers, and the alternation both
@@ -54,7 +59,10 @@ same false plateau; this rig runs 6 replicas (measured: 30 req/s at p50
 Seed a fresh prefix on one pod; measure single-request prefill latency on a
 cold pod with and without the pull, at prefix lengths 2K/8K/16K/32K/48K.
 The crossover sets the router's `minCachedTokenDelta`: below it a pull costs
-more than recomputing.
+more than recomputing. Calibrate on a *warmed* pod pair - the first pull
+between two peers pays a one-time session-establishment cost (~6 s measured
+on the wide-EP testbed) that steady-state pulls never see, so a single cold
+probe reads the transient, not the pull.
 
 gpt-oss-120b note: with ~5.1B active parameters recompute is fast
 (~29K tokens/s prefill on H200), but the compact hybrid-attention KV
@@ -196,6 +204,26 @@ up to +17% throughput, and 10% run-to-run spread versus 28%. Pull evidence:
 23-31M local CPU-tier restores instead. Prefix-first placement queues
 displaced questions behind a concentrated owner's 48K prefills; load-aware
 placement plus the pull converts each displacement into a ~0.6s transfer.
+
+## Wide-EP testbed (GLM-5.2-FP8)
+
+The mechanism at the other end of the scale: `zai-org/GLM-5.2-FP8` (753B
+MoE), one prefill + one decode instance, each 16-way data/expert-parallel
+across 2 pods (32x H200). The workload replays recorded agentic traces (the
+SemiAnalysis Weka corpus) with aiperf at concurrencies 32/64/128; the four
+`epp-glm-*.yaml` arms cross the prefix-affinity index (precise vs
+approximate) with the pull on or off at `minCachedTokenDelta: 16384` - the
+measured crossover for this model (dead tie at 13,648 tokens; the pull is
+~1.7-2.3 s nearly flat while recompute pays ~130-144 us/token, reaching
+-83% at 98K).
+
+Headline cell (concurrency 32): adding the pull to precise affinity takes
+TTFT p50 -27% and p90 -45%, tying the best load-balanced arm - the pull
+erases affinity's concentration penalty. The approximate arm drove pulls
+from the prompt-hash index alone (no KV events), confirming the source
+decision works with either index. Full grid, crossover sweep, and
+per-cell pull evidence:
+[../benchmark-results/glm-5.2-h200.md](../benchmark-results/glm-5.2-h200.md).
 
 ## Run hygiene
 
