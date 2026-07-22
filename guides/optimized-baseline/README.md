@@ -83,9 +83,9 @@ export HF_TOKEN=HF_TOKEN_PLACEHOLDER
 ```bash
 export MONITORING_VALUES=
 export PROVIDER_NAME=none # options: none, gke, agentgateway, istio
-export ACCELERATOR_TYPE=gpu # options: gpu, amd, xpu, hpu, tpu/v6, tpu/v7, cpu
+export ACCELERATOR_TYPE=gpu # options: gpu, amd, xpu, hpu, tpu/v6, tpu/v7, cpu, flagos-cuda
 export MODEL_SERVER=vllm # options: vllm, sglang, trtllm
-export INFRA_PROVIDER=base # options: base, gke
+export INFRA_PROVIDER=base # options: base, gke(GPU only, omit for other accelerators)
 export MODEL=Qwen/Qwen3-32B
 export CURL_TEST_IMAGE=cfmanteiga/alpine-bash-curl-jq:latest
 export BENCHMARK_REF=main
@@ -266,7 +266,6 @@ kubectl apply -n ${NAMESPACE} \
 #
 # kubectl apply -n ${NAMESPACE} \
 #  -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/${ACCELERATOR_TYPE}/${MODEL_SERVER}/
-#
 ```
 <!-- guide:deploy.modelserver end -->
 
