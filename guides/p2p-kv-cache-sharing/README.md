@@ -20,7 +20,7 @@ The deployment composes three llm-d capabilities:
   decision equally well (measured on the wide-EP testbed), and
 * the `p2p-source-producer`, which stamps each request with the peer that
   holds the most cached prefix so the routing sidecar can inject
-  `kv_transfer_params.remote_kv_peer` and the engine pulls instead of
+  `kv_transfer_params.remote_kv_source` and the engine pulls instead of
   recomputing.
 
 In this example we deploy 16 TP=1 replicas on 16 GPUs (aggregated). A P/D
@@ -192,7 +192,7 @@ kubectl create namespace ${NAMESPACE} --dry-run=client -o yaml | kubectl apply -
 Additional requirements specific to this path:
 
 * A vLLM image with the `OffloadingConnector` P2P secondary tier.
-* llm-d routing sidecar with `kv_transfer_params.remote_kv_peer` injection
+* llm-d routing sidecar with `kv_transfer_params.remote_kv_source` injection
   (the branch renamed the sub-dict keys on 2026-07-20; a sidecar emitting the
   old `p2p`/`prefill`/`decode` keys against the current branch is silently
   inert - see Troubleshooting).
@@ -289,7 +289,7 @@ removed once the tier is released.
    so image and branch must move together - a drifted pair crashes
    EngineCore at startup (the failure is loud, not silent). The routing
    sidecar moves with them: the branch renamed the `kv_transfer_params`
-   sub-dict keys (`p2p`/`prefill`/`decode` -> `remote_kv_peer`/
+   sub-dict keys (`p2p`/`prefill`/`decode` -> `remote_kv_source`/
    `remote_prefiller`/`remote_decoder`), and a sidecar emitting the old
    names against a renamed engine fails silently - requests serve, nothing
    pulls.
@@ -400,7 +400,7 @@ kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/render
 3. **The `p2p-source-producer` compares** the best-cached peer against the
    pod scheduling actually picked; when the peer leads by at least
    `minCachedTokenDelta` tokens it sets the KV cache source header.
-4. **The routing sidecar injects `kv_transfer_params.remote_kv_peer`** from the header
+4. **The routing sidecar injects `kv_transfer_params.remote_kv_source`** from the header
    and the engine pulls the prefix blocks from the peer's CPU tier over
    NIXL - hits load as normal cache hits, misses recompute, so a failed
    transfer degrades to baseline behavior instead of failing the request.
@@ -411,7 +411,7 @@ Under P/D disaggregation the pull applies to the **prefill leg only**: the
 prefill worker computes the prompt KV and streams it to the decoder, so
 that is the leg where recomputing a cached prefix is wasted work. The EPP
 evaluates the source header against the prefill profile's target, and the
-sidecar injects `kv_transfer_params.remote_kv_peer` onto the prefill leg; the decode
+sidecar injects `kv_transfer_params.remote_kv_source` onto the prefill leg; the decode
 leg already receives the full KV over NIXL and has nothing to pull.
 
 Start from the [P/D disaggregation guide](../pd-disaggregation/README.md)
@@ -466,7 +466,7 @@ typically the topology's ceiling.
 | No pulls from a TP-mismatched source, index and hashes fine | peer session fingerprint is TP-locked | matched TP; hetero-TP only for non-hybrid models on the V1 runner (Best Practices) |
 | Pulls fire but hit rate ~0 | CPU tier too small vs GPU cache; prefixes evicted before peers ask | grow `cpu_bytes_to_use` (and `/dev/shm`) |
 | Sidecar exits with `unknown flag: --enable-p2p-pull` | sidecar image predates the NIXL PD pull path | use a sidecar build that includes it |
-| Zero pulls after moving to the current connector branch, gates 1-2 pass | sidecar emits the old sub-dict keys (`p2p`/`prefill`/`decode`); the renamed engine ignores them | use a sidecar built with the renamed keys (`remote_kv_peer`/`remote_prefiller`/`remote_decoder`) |
+| Zero pulls after moving to the current connector branch, gates 1-2 pass | sidecar emits the old sub-dict keys (`p2p`/`prefill`/`decode`); the renamed engine ignores them | use a sidecar built with the renamed keys (`remote_kv_source`/`remote_prefiller`/`remote_decoder`) |
 | TTFT pins flat at ~the token-producer timeout (default 5s) at every rate above some cliff, engines report near-zero queue/prefill time, both arms identical | render service saturated; every EPP render call times out and requests proceed late without token IDs | scale render replicas to `peak_req_per_s x tokenize seconds per request`; verify with a direct load test against `/v1/completions/render` |
 
 ## Benchmarking Reports

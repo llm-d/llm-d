@@ -143,9 +143,9 @@ spec:
               name: triton-cache
             - mountPath: /.config
               name: vllm-config
-        # --- llm-d routing sidecar: injects kv_transfer_params.remote_kv_peer ---
+        # --- llm-d routing sidecar: injects kv_transfer_params.remote_kv_source ---
         - name: routing-proxy
-          # Needs the KV-cache-source header -> kv_transfer_params.remote_kv_peer injection
+          # Needs the KV-cache-source header -> kv_transfer_params.remote_kv_source injection
           # (merged in llm-d-router #1937). Pin a specific tag/digest.
           image: ghcr.io/llm-d/llm-d-routing-sidecar:latest
           imagePullPolicy: IfNotPresent
