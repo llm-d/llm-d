@@ -38,7 +38,7 @@ prerequisites:
 deploy:
   fma_crds:
     - run: |
-        FMA_CRD_BASE="https://raw.githubusercontent.com/llm-d-incubation/llm-d-fast-model-actuation/v${FMA_VERSION}/config/crd"
+        export FMA_CRD_BASE="https://raw.githubusercontent.com/llm-d-incubation/llm-d-fast-model-actuation/v${FMA_VERSION}/config/crd"
         kubectl apply --server-side \
           -f ${FMA_CRD_BASE}/fma.llm-d.ai_inferenceserverconfigs.yaml \
           -f ${FMA_CRD_BASE}/fma.llm-d.ai_launcherconfigs.yaml \
@@ -48,7 +48,20 @@ deploy:
         kubectl wait --for=condition=Established crd/launcherpopulationpolicies.fma.llm-d.ai --timeout=120s
 
   rbac:
-    - run: kubectl apply -k ${REPO_ROOT}/guides/${GUIDE_NAME}/rbac/
+    - run: |
+        # ClusterRole (cluster-scoped): the FMA controllers list nodes for the launcher-populator
+        kubectl apply -f ${REPO_ROOT}/guides/${GUIDE_NAME}/rbac/clusterrole.yaml
+
+        # Role (namespaced): launcher pods read their own pod spec
+        kubectl apply -n ${NAMESPACE} -f ${REPO_ROOT}/guides/${GUIDE_NAME}/rbac/role.yaml
+
+        # RoleBinding (namespaced): bind the Role to ${NAMESPACE}'s default ServiceAccount.
+        # Created imperatively (not from a static manifest) so ${NAMESPACE} drives both the
+        # binding's namespace and the subject ServiceAccount's namespace.
+        kubectl create rolebinding fma-launcher-pod-reader \
+          --role=fma-launcher-pod-reader \
+          --serviceaccount=${NAMESPACE}:default \
+          -n ${NAMESPACE}
 
   fma_controllers:
     - run: |
@@ -71,12 +84,13 @@ deploy:
           -f ${REPO_ROOT}/guides/${GUIDE_NAME}/router/${GUIDE_NAME}.values.yaml \
           -n ${NAMESPACE} --version ${ROUTER_CHART_VERSION}
 
-  fma_resources:
-    - run: kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/
+  # Deploys the FMA custom resources (ISC/LauncherConfig/LauncherPopulationPolicy)
+  # AND the server-requesting pods together
+  modelserver:
+    - run: |
+        kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/
 
-  requester:
-    - run: kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/requester/
-    - run: kubectl wait --for=condition=ready pod -l app=fma-requester -n ${NAMESPACE} --timeout=300s
+        kubectl wait --for=condition=ready pod -l app=fma-requester -n ${NAMESPACE} --timeout=300s
 
 verify:
   endpoint:
@@ -120,10 +134,10 @@ benchmark:
           --analyze
 
 cleanup:
-  - run: kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/requester/ --ignore-not-found=true
+  # Removes the model-server CRs AND the requester Deployment (both are part of modelserver/).
   - run: kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/ --ignore-not-found=true
   - run: helm uninstall ${GUIDE_NAME} -n ${NAMESPACE}
   - run: helm uninstall ${FMA_CHART_INSTANCE_NAME} -n ${NAMESPACE}
-  - run: kubectl delete -k ${REPO_ROOT}/guides/${GUIDE_NAME}/rbac/ --ignore-not-found=true
+  - run: kubectl delete -f ${REPO_ROOT}/guides/${GUIDE_NAME}/rbac/clusterrole.yaml --ignore-not-found=true
   - run: kubectl delete namespace ${NAMESPACE}
   - run: kubectl delete crd inferenceserverconfigs.fma.llm-d.ai launcherconfigs.fma.llm-d.ai launcherpopulationpolicies.fma.llm-d.ai

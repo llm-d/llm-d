@@ -48,6 +48,7 @@
     "well-lit-paths/foundations/flow-control": { "position": 7, "label": "Apply Flow Control and Fairness" },
     "well-lit-paths/foundations/workload-autoscaling": { "position": 8, "label": "Autoscale your Inference Pool" },
     "well-lit-paths/foundations/multi-model-routing": { "position": 9 },
+    "well-lit-paths/foundations/fast-model-actuation": { "position": 10, "label": "Speed Up Scale-Up with Fast Model Actuation" },
 
     "well-lit-paths/workloads/agentic-serving": { "position": 1, "label": "Serve Agentic Workloads" },
     "well-lit-paths/workloads/multimodal-serving": { "position": 2, "label": "Serve Multimodal Workloads" },

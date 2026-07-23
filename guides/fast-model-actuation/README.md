@@ -1,5 +1,7 @@
 # Fast Model Actuation
 
+[![E2E (OCP GPU)](https://github.com/llm-d/llm-d/actions/workflows/consolidate-status-fast-model-actuation-ibm-acc-gpu-vllm-x.yaml/badge.svg)](https://github.com/llm-d/llm-d/actions/workflows/consolidate-status-fast-model-actuation-ibm-acc-gpu-vllm-x.yaml)
+
 ## Overview
 
 Fast Model Actuation (FMA) addresses vLLM startup time using two technologies. One is vLLM sleep and wake, which can entirely avoid model loading and CUDA graph compilation in applicable scenarios. The other is running multiple vLLM processes as children of a launcher process that has already done the Python module loading. FMA can manage multiple vLLM instances bound to one GPU, with one instance awake at a time, to accomplish fast switching of which model that GPU is used for; this generalizes to multiple GPUs of one node.
@@ -101,7 +103,7 @@ At minimum, the user running these commands needs rights to create and manage CR
 
 <!-- guide:deploy.fma_crds start -->
 ```bash
-FMA_CRD_BASE="https://raw.githubusercontent.com/llm-d-incubation/llm-d-fast-model-actuation/v${FMA_VERSION}/config/crd"
+export FMA_CRD_BASE="https://raw.githubusercontent.com/llm-d-incubation/llm-d-fast-model-actuation/v${FMA_VERSION}/config/crd"
 kubectl apply --server-side \
   -f ${FMA_CRD_BASE}/fma.llm-d.ai_inferenceserverconfigs.yaml \
   -f ${FMA_CRD_BASE}/fma.llm-d.ai_launcherconfigs.yaml \
@@ -118,7 +120,19 @@ The FMA controllers need cluster-level access to list nodes (for the launcher-po
 
 <!-- guide:deploy.rbac start -->
 ```bash
-kubectl apply -k ${REPO_ROOT}/guides/${GUIDE_NAME}/rbac/
+# ClusterRole (cluster-scoped): the FMA controllers list nodes for the launcher-populator
+kubectl apply -f ${REPO_ROOT}/guides/${GUIDE_NAME}/rbac/clusterrole.yaml
+
+# Role (namespaced): launcher pods read their own pod spec
+kubectl apply -n ${NAMESPACE} -f ${REPO_ROOT}/guides/${GUIDE_NAME}/rbac/role.yaml
+
+# RoleBinding (namespaced): bind the Role to ${NAMESPACE}'s default ServiceAccount.
+# Created imperatively (not from a static manifest) so ${NAMESPACE} drives both the
+# binding's namespace and the subject ServiceAccount's namespace.
+kubectl create rolebinding fma-launcher-pod-reader \
+  --role=fma-launcher-pod-reader \
+  --serviceaccount=${NAMESPACE}:default \
+  -n ${NAMESPACE}
 ```
 <!-- guide:deploy.rbac end -->
 
@@ -154,15 +168,17 @@ helm install ${GUIDE_NAME} \
 ```
 <!-- guide:deploy.standalone end -->
 
-### 5. Create FMA Resources
+### 5. Deploy the Model Server (Dual Pods)
 
-Apply the `InferenceServerConfig`, `LauncherConfig`, and `LauncherPopulationPolicy` that define the model to serve, the launcher pod template, and how many launchers to place:
+Apply the FMA custom resources — `InferenceServerConfig`, `LauncherConfig`, and `LauncherPopulationPolicy` (which define the model to serve, the launcher pod template, and how many launchers to place) — **together with** the server-requesting pods that reserve GPUs and trigger model loading. The requester `Deployment` is included as a resource of `modelserver/kustomization.yaml` (via `../requester`), so a single apply stands up both halves of the dual-pods design. A `Deployment` is used for the requesters (rather than a bare `ReplicaSet`) so they integrate cleanly with autoscalers such as the Workload Variant Autoscaler (WVA):
 
-<!-- guide:deploy.fma_resources start -->
+<!-- guide:deploy.modelserver start -->
 ```bash
 kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/
+
+kubectl wait --for=condition=ready pod -l app=fma-requester -n ${NAMESPACE} --timeout=300s
 ```
-<!-- guide:deploy.fma_resources end -->
+<!-- guide:deploy.modelserver end -->
 
 > [!NOTE]
 > This guide uses [Qwen/Qwen3-0.6B](https://huggingface.co/Qwen/Qwen3-0.6B) which is publicly accessible and does not require a HuggingFace token. For gated models, you would need to mount the token via a different mechanism (FMA's ISC does not support `secretKeyRef`).
@@ -175,18 +191,6 @@ kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/
 
 > [!NOTE]
 > `launcherCount` is **per matching node**. Setting `launcherCount: 1` creates one launcher pod on each node that has `nvidia.com/gpu.present: "true"`. Only launchers that get bound to a requesting pod will actually start a vLLM instance.
-
-### 6. Create Requesting Pods
-
-Create the server-requesting pods that reserve GPUs and trigger model loading. A `Deployment` is used here (rather than a bare `ReplicaSet`) so the requesting pods integrate cleanly with autoscalers such as the Workload Variant Autoscaler (WVA):
-
-<!-- guide:deploy.requester start -->
-```bash
-kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/requester/
-
-kubectl wait --for=condition=ready pod -l app=fma-requester -n ${NAMESPACE} --timeout=300s
-```
-<!-- guide:deploy.requester end -->
 
 You should see:
 - 2 requesting pods (`fma-requester-*`) in `Ready` state
@@ -290,15 +294,13 @@ To remove all deployed components:
 
 <!-- guide:cleanup start -->
 ```bash
-kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/requester/ --ignore-not-found=true
-
 kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/ --ignore-not-found=true
 
 helm uninstall ${GUIDE_NAME} -n ${NAMESPACE}
 
 helm uninstall ${FMA_CHART_INSTANCE_NAME} -n ${NAMESPACE}
 
-kubectl delete -k ${REPO_ROOT}/guides/${GUIDE_NAME}/rbac/ --ignore-not-found=true
+kubectl delete -f ${REPO_ROOT}/guides/${GUIDE_NAME}/rbac/clusterrole.yaml --ignore-not-found=true
 
 kubectl delete namespace ${NAMESPACE}
 
