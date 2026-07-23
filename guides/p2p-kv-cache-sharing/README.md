@@ -223,9 +223,11 @@ the values for `epp-affinity.yaml` or `epp-load.yaml` from
 [benchmarking/](benchmarking/).
 
 ```bash
-helm upgrade -i ${GUIDE_NAME} llm-d-router \
-  -n ${NAMESPACE} \
-  -f ${REPO_ROOT}/guides/${GUIDE_NAME}/router/${GUIDE_NAME}.values.yaml
+helm upgrade -i ${GUIDE_NAME} \
+  ${ROUTER_STANDALONE_CHART} \
+  -f ${REPO_ROOT}/guides/recipes/router/base.values.yaml \
+  -f ${REPO_ROOT}/guides/${GUIDE_NAME}/router/${GUIDE_NAME}.values.yaml \
+  -n ${NAMESPACE} --version ${ROUTER_CHART_VERSION}
 ```
 
 #### Deploy the Render (Tokenizer) Service
@@ -319,7 +321,7 @@ kubectl run curl-debug --rm -it \
     --image=cfmanteiga/alpine-bash-curl-jq \
     --namespace="$NAMESPACE" \
     --env="IP=$IP" \
-    -- curl -X POST http://${IP}/v1/completions \
+    -- curl -X POST http://${IP}:8081/v1/completions \
     -H 'Content-Type: application/json' \
     -d '{"model": "openai/gpt-oss-120b", "prompt": "How are you today?"}'
 ```
@@ -356,7 +358,7 @@ llmdbenchmark --version
 ### 2. Resolve the endpoint of the stack you just deployed
 
 ```bash
-export ENDPOINT_URL="http://$(kubectl get service ${GUIDE_NAME}-epp -n ${NAMESPACE} -o jsonpath='{.spec.clusterIP}')"
+export ENDPOINT_URL="http://$(kubectl get service ${GUIDE_NAME}-epp -n ${NAMESPACE} -o jsonpath='{.spec.clusterIP}'):8081"
 export GATEWAY_CLASS=epponly # standalone mode
 ```
 

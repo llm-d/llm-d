@@ -25,6 +25,14 @@
 router:
   epp:
     replicas: 2
+    # TEMPORARY pin, tracked under the v0.9 "Multi-tier offloading: NIXL P/D +
+    # P2P backends" goal: the chart's default EPP image (the chart version's
+    # tag) predates the `p2p-source-producer` plugin and rejects this config
+    # with "plugin type 'p2p-source-producer' is not registered". Pin the next
+    # release once it ships the plugin.
+    image:
+      tag: main
+      pullPolicy: Always
     flags:
       ha-enable-leader-election: false
     env:
