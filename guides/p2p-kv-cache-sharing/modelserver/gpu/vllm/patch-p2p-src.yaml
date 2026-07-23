@@ -13,7 +13,7 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: p2p-kv-cache-sharing-vllm
+  name: decode
 spec:
   template:
     spec:

@@ -1,22 +1,79 @@
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 
-# Aggregated gpt-oss-120b model servers with the OffloadingConnector P2P tier.
-# Self-contained (not layered on the shared recipes/ base) so the P2P-specific
-# engine + sidecar configuration is visible in one place; can be refactored
-# onto recipes/modelserver later to match the sibling guides.
+# Aggregated gpt-oss-120b model servers with the OffloadingConnector P2P
+# tier, layered on the shared recipes/ modelserver base. The engine listens
+# on 8200 behind the routing sidecar on 8000 (the pd base port layout); the
+# P2P tier and KV-events sockets are pod-IP listeners.
 
 resources:
-  - serviceaccount.yaml
-  - deployment.yaml
-  - service.yaml
+  - ../../../../recipes/modelserver/base/single-host/default
+
+namePrefix: p2p-kv-cache-sharing-
+
+# The sidecar container is added by patch-sidecar.yaml at this level, after
+# the recipes/ images components would run, so its image is resolved here
+# rather than by recipes/modelserver/components/images/routing-sidecar.
+# TEMPORARY pins, tracked under the v0.9 "Multi-tier offloading: NIXL P/D +
+# P2P backends" goal:
+# - engine: nightly until a vLLM release ships the OffloadingConnector P2P
+#   secondary tier; then pin that release.
+# - sidecar: main because v0.9.0 predates the offloading P2P pull support
+#   (llm-d-router#1937); then pin the next release.
+images:
+  - name: REPLACE_MODEL_SERVER_IMAGE
+    newName: vllm/vllm-openai
+    newTag: nightly
+  - name: REPLACE_ROUTING_SIDECAR_IMAGE
+    newName: ghcr.io/llm-d/llm-d-router-disagg-sidecar
+    newTag: main
+
+labels:
+  - pairs:
+      llm-d.ai/model: gpt-oss-120b
+      llm-d.ai/guide: p2p-kv-cache-sharing
+      llm-d.ai/accelerator-variant: gpu
+      llm-d.ai/accelerator-vendor: nvidia
+      llm-d.ai/engine-type: vllm
+    includeSelectors: true
+    includeTemplates: true
+
+patches:
+  # Engine port 8200 behind the sidecar, plus the P2P tier listener and the
+  # per-pod KV-event socket the router subscribes to.
+  - target:
+      kind: Deployment
+      name: decode
+    patch: |
+      - op: replace
+        path: /spec/template/spec/containers/0/ports/0/containerPort
+        value: 8200
+      - op: add
+        path: /spec/template/spec/containers/0/ports/-
+        value:
+          name: p2p
+          containerPort: 7777
+          protocol: TCP
+      - op: add
+        path: /spec/template/spec/containers/0/ports/-
+        value:
+          name: kv-events
+          containerPort: 5556
+          protocol: TCP
+  - path: patch-sidecar.yaml
+    target:
+      kind: Deployment
+      name: decode
+  - path: patch-vllm.yaml
 
 # TEMPORARY (will be replaced): until a vLLM release ships the
 # OffloadingConnector P2P secondary tier, uncomment to overlay the
 # development-branch implementation via the `generic-p2p-src` ConfigMap.
 # See the guide README, "Interim: P2P tier from the development branch".
-# patches:
-#   - path: patch-p2p-src.yaml
+#  - path: patch-p2p-src.yaml
+#    target:
+#      kind: Deployment
+#      name: decode
 
 # NOTE on RDMA: the manifest works over TCP (NIXL/UCX fall back). For
 # NIXL-over-RDMA transfer rates on an RDMA-capable fabric (e.g. InfiniBand),
