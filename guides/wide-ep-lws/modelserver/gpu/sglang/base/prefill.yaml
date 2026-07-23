@@ -1,0 +1,147 @@
+apiVersion: leaderworkerset.x-k8s.io/v1
+kind: LeaderWorkerSet
+metadata:
+  name: wide-ep-llm-d-prefill
+  labels:
+    llm-d.ai/inference-serving: "true"
+    llm-d.ai/guide: "wide-ep-lws"
+    llm-d.ai/accelerator-variant: "gpu"
+    llm-d.ai/accelerator-vendor: "nvidia"
+    llm-d.ai/engine-type: sglang
+    llm-d.ai/model: DeepSeek-R1-0528
+    llm-d.ai/role: prefill
+spec:
+  replicas: 1
+  leaderWorkerTemplate:
+    size: 2
+    workerTemplate:
+      metadata:
+        labels:
+          llm-d.ai/inference-serving: "true"
+          llm-d.ai/guide: "wide-ep-lws"
+          llm-d.ai/accelerator-variant: "gpu"
+          llm-d.ai/accelerator-vendor: "nvidia"
+          llm-d.ai/engine-type: sglang
+          llm-d.ai/model: DeepSeek-R1-0528
+          llm-d.ai/role: prefill
+      spec:
+        serviceAccountName: sglang-lws
+        tolerations:
+        - key: nvidia.com/gpu
+          operator: Exists
+          effect: NoSchedule
+        volumes:
+          - name: dshm
+            emptyDir:
+              medium: Memory
+              sizeLimit: 64Gi
+          - name: hf-cache
+            emptyDir: {}
+          - name: sglang-cache
+            emptyDir: {}
+        containers:
+          - name: sglang
+            image: docker.io/lmsysorg/sglang:latest
+            securityContext:
+              capabilities:
+                add:
+                  - IPC_LOCK
+                  - SYS_RAWIO
+              runAsGroup: 0
+              runAsUser: 0
+            imagePullPolicy: Always
+            command:
+              - /bin/bash
+              - -c
+            args:
+              - |-
+                find /dev/shm -type f -delete
+
+                #################
+                # RUN SGLang Prefill Workers via LeaderWorkerSet (LWS)
+                # LWS injects LWS_LEADER_ADDRESS, LWS_GROUP_SIZE, and LWS_WORKER_INDEX.
+                #################
+                exec python3 -m sglang.launch_server \
+                  --model-path deepseek-ai/DeepSeek-R1-0528 \
+                  --port 8000 \
+                  --host 0.0.0.0 \
+                  --nnodes ${LWS_GROUP_SIZE:-2} \
+                  --node-rank ${LWS_WORKER_INDEX:-0} \
+                  --dist-init-addr ${LWS_LEADER_ADDRESS}:20000 \
+                  --tensor-parallel-size 8 \
+                  --pipeline-parallel-size 2 \
+                  --trust-remote-code \
+                  --disaggregation-mode prefill \
+                  --disaggregation-transfer-backend nixl \
+                  --disaggregation-bootstrap-port 8998 \
+                  --page-size 64 \
+                  --log-level info \
+                  --enable-metrics \
+                  --uvicorn-access-log-exclude-prefixes /metrics
+            env:
+              - name: HF_TOKEN
+                valueFrom:
+                  secretKeyRef:
+                    name: llm-d-hf-token
+                    key: HF_TOKEN
+              - name: TRITON_LIBCUDA_PATH
+                value: /usr/local/nvidia/lib64
+              - name: NVIDIA_GDRCOPY
+                value: enabled
+              - name: NVSHMEM_SYMMETRIC_SIZE
+                value: "16G"
+              - name: NVSHMEM_REMOTE_TRANSPORT
+                value: ibgda
+              - name: NVSHMEM_IB_ENABLE_IBGDA
+                value: "true"
+              - name: NVSHMEM_BOOTSTRAP_UID_SOCK_IFNAME
+                value: eth0
+              - name: GLOO_SOCKET_IFNAME
+                value: eth0
+              - name: NCCL_SOCKET_IFNAME
+                value: eth0
+              - name: SGLANG_NIXL_SIDE_CHANNEL_HOST
+                valueFrom:
+                  fieldRef:
+                    fieldPath: status.podIP
+              - name: CUDA_CACHE_PATH
+                value: /var/cache/sglang/cuda
+              - name: CCACHE_DIR
+                value: /var/cache/sglang/ccache
+              - name: HF_HUB_CACHE
+                value: /var/cache/huggingface
+            ports:
+              - containerPort: 8000
+                name: sglang-port
+                protocol: TCP
+              - containerPort: 8998
+                name: bootstrap
+                protocol: TCP
+              - containerPort: 20000
+                name: dist-init
+                protocol: TCP
+            readinessProbe:
+              httpGet:
+                path: /health
+                port: sglang-port
+              initialDelaySeconds: 15
+              periodSeconds: 10
+              timeoutSeconds: 5
+              failureThreshold: 120
+            resources:
+              limits:
+                ephemeral-storage: 1Ti
+                memory: 512Gi
+                nvidia.com/gpu: "8"
+              requests:
+                cpu: 32
+                ephemeral-storage: 1Ti
+                memory: 512Gi
+                nvidia.com/gpu: "8"
+            volumeMounts:
+              - name: dshm
+                mountPath: /dev/shm
+              - name: hf-cache
+                mountPath: /var/cache/huggingface
+              - name: sglang-cache
+                mountPath: /var/cache/sglang

@@ -1,0 +1,147 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ../base
+components:
+  - ../../../../../recipes/modelserver/components/disable-gke-nccl-tuner-patch
+
+patches:
+  - target:
+      kind: LeaderWorkerSet
+      name: wide-ep-llm-d-prefill
+    patch: |-
+      - op: add
+        path: /spec/leaderWorkerTemplate/workerTemplate/spec/affinity
+        value:
+          podAffinity:
+            preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 2
+              podAffinityTerm:
+                labelSelector:
+                  matchLabels:
+                    llm-d.ai/role: prefill
+                matchLabelKeys:
+                - component
+                topologyKey: cloud.google.com/gce-topology-block
+            - weight: 1
+              podAffinityTerm:
+                labelSelector:
+                  matchLabels:
+                    llm-d.ai/role: prefill
+                matchLabelKeys:
+                - component
+                topologyKey: cloud.google.com/gce-topology-subblock
+  - target:
+      kind: LeaderWorkerSet
+      name: wide-ep-llm-d-decode
+    patch: |-
+      - op: add
+        path: /spec/leaderWorkerTemplate/workerTemplate/spec/affinity
+        value:
+          podAffinity:
+            preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 2
+              podAffinityTerm:
+                labelSelector:
+                  matchLabels:
+                    llm-d.ai/role: decode
+                matchLabelKeys:
+                - component
+                topologyKey: cloud.google.com/gce-topology-block
+            - weight: 1
+              podAffinityTerm:
+                labelSelector:
+                  matchLabels:
+                    llm-d.ai/role: decode
+                matchLabelKeys:
+                - component
+                topologyKey: cloud.google.com/gce-topology-subblock
+  - target:
+      kind: LeaderWorkerSet
+    patch: |-
+      - op: add
+        path: /spec/leaderWorkerTemplate/workerTemplate/spec/containers/0/securityContext/privileged
+        value: true
+      - op: add
+        path: /spec/leaderWorkerTemplate/workerTemplate/spec/containers/0/resources/limits/networking.gke.io.networks~1rdma-0
+        value: "0"
+      - op: add
+        path: /spec/leaderWorkerTemplate/workerTemplate/spec/containers/0/resources/requests/networking.gke.io.networks~1rdma-0
+        value: "0"
+      - op: add
+        path: /spec/leaderWorkerTemplate/workerTemplate/spec/containers/0/resources/limits/networking.gke.io.networks~1rdma-1
+        value: "0"
+      - op: add
+        path: /spec/leaderWorkerTemplate/workerTemplate/spec/containers/0/resources/requests/networking.gke.io.networks~1rdma-1
+        value: "0"
+      - op: add
+        path: /spec/leaderWorkerTemplate/workerTemplate/spec/containers/0/resources/limits/networking.gke.io.networks~1rdma-2
+        value: "0"
+      - op: add
+        path: /spec/leaderWorkerTemplate/workerTemplate/spec/containers/0/resources/requests/networking.gke.io.networks~1rdma-2
+        value: "0"
+      - op: add
+        path: /spec/leaderWorkerTemplate/workerTemplate/spec/containers/0/resources/limits/networking.gke.io.networks~1rdma-3
+        value: "0"
+      - op: add
+        path: /spec/leaderWorkerTemplate/workerTemplate/spec/containers/0/resources/requests/networking.gke.io.networks~1rdma-3
+        value: "0"
+      - op: add
+        path: /spec/leaderWorkerTemplate/workerTemplate/spec/containers/0/resources/limits/networking.gke.io.networks~1rdma-4
+        value: "0"
+      - op: add
+        path: /spec/leaderWorkerTemplate/workerTemplate/spec/containers/0/resources/requests/networking.gke.io.networks~1rdma-4
+        value: "0"
+      - op: add
+        path: /spec/leaderWorkerTemplate/workerTemplate/spec/containers/0/resources/limits/networking.gke.io.networks~1rdma-5
+        value: "0"
+      - op: add
+        path: /spec/leaderWorkerTemplate/workerTemplate/spec/containers/0/resources/requests/networking.gke.io.networks~1rdma-5
+        value: "0"
+      - op: add
+        path: /spec/leaderWorkerTemplate/workerTemplate/spec/containers/0/resources/limits/networking.gke.io.networks~1rdma-6
+        value: "0"
+      - op: add
+        path: /spec/leaderWorkerTemplate/workerTemplate/spec/containers/0/resources/requests/networking.gke.io.networks~1rdma-6
+        value: "0"
+      - op: add
+        path: /spec/leaderWorkerTemplate/workerTemplate/spec/containers/0/resources/limits/networking.gke.io.networks~1rdma-7
+        value: "0"
+      - op: add
+        path: /spec/leaderWorkerTemplate/workerTemplate/spec/containers/0/resources/requests/networking.gke.io.networks~1rdma-7
+        value: "0"
+      - op: add
+        path: /spec/leaderWorkerTemplate/workerTemplate/metadata/annotations
+        value:
+          networking.gke.io/default-interface: 'eth0'
+          networking.gke.io/interfaces: |
+            [
+              {"interfaceName":"eth0","network":"default"},
+              {"interfaceName":"eth2","network":"rdma-0"},
+              {"interfaceName":"eth3","network":"rdma-1"},
+              {"interfaceName":"eth4","network":"rdma-2"},
+              {"interfaceName":"eth5","network":"rdma-3"},
+              {"interfaceName":"eth6","network":"rdma-4"},
+              {"interfaceName":"eth7","network":"rdma-5"},
+              {"interfaceName":"eth8","network":"rdma-6"},
+              {"interfaceName":"eth9","network":"rdma-7"}
+            ]
+      - op: add
+        path: /spec/leaderWorkerTemplate/workerTemplate/spec/containers/0/env/-
+        value:
+          name: NVSHMEM_DISABLED_GDRCOPY
+          value: "true"
+      - op: replace
+        path: /spec/leaderWorkerTemplate/workerTemplate/spec/volumes/1
+        value:
+          name: hf-cache
+          hostPath:
+            path: /mnt/stateful_partition/kube-ephemeral-ssd/shared_disk/sglang-hf-cache/
+            type: DirectoryOrCreate
+      - op: replace
+        path: /spec/leaderWorkerTemplate/workerTemplate/spec/volumes/2
+        value:
+          name: sglang-cache
+          hostPath:
+            path: /mnt/stateful_partition/kube-ephemeral-ssd/shared_disk/sglang-cache/
+            type: DirectoryOrCreate
