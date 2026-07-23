@@ -65,7 +65,7 @@ For incoming requests the router breaks the tokenized input into blocks and matc
 
 ### Load-Aware Routing
 
-EPP continuously probes each endpoints' metrics by scraping `/metrics` at a regular interval (50ms default). It scores endpoints on queue depth, running requests, and KV-cache utilization to schedule requests to the endpoint with the lowest load, avoiding hotspots caused by heterogeneous request patterns.
+EPP continuously probes each endpoints' metrics by scraping `/metrics` at a regular interval (60s default). It scores endpoints on queue depth, running requests, and KV-cache utilization to schedule requests to the endpoint with the lowest load, avoiding hotspots caused by heterogeneous request patterns.
 
 ---
 

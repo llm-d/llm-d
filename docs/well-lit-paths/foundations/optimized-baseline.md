@@ -32,7 +32,7 @@ EPP maintains a view of each endpoints' prefix-cache state in memory. When a req
 
 ### Load-Aware Scheduling
 
-EPP continuously probes each endpoints' metrics by scraping `/metrics` at a regular interval (50ms default). It scores endpoints on queue depth, running requests, and KV-cache utilization to schedule requests to the endpoint with the lowest load, avoiding hotspots caused by heterogeneous request patterns.
+EPP continuously probes each endpoints' metrics by scraping `/metrics` at a regular interval (60s default). It scores endpoints on queue depth, running requests, and KV-cache utilization to schedule requests to the endpoint with the lowest load, avoiding hotspots caused by heterogeneous request patterns.
 
 <p align="center">
   <picture>

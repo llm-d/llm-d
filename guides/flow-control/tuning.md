@@ -151,7 +151,7 @@ The `headroom` parameter allows the scheduler to temporarily bypass the strict c
 
 The EPP provides two saturation detectors, each optimized for different traffic profiles.
 
-* **`utilization-detector` (Default / Closed-Loop):** Reacts to the true physical state of the hardware (KV cache utilization, engine queue depth). Because it measures actual memory footprint rather than just request counts, it is highly accurate and the best choice for heterogeneous hardware pools or workloads with highly variable context lengths. It relies on a periodic (50ms) telemetry scrape interval and is optimized for sustained, organic traffic.
+* **`utilization-detector` (Default / Closed-Loop):** Reacts to the true physical state of the hardware (KV cache utilization, engine queue depth). Because it measures actual memory footprint rather than just request counts, it is highly accurate and the best choice for heterogeneous hardware pools or workloads with highly variable context lengths. It relies on a periodic (60s) telemetry scrape interval and is optimized for sustained, organic traffic.
 * **`concurrency-detector` (Open-Loop):** Evaluates capacity using zero-latency optimistic accounting of in-flight requests. Because it does not wait for engine telemetry, its instantaneous reaction time makes it a great choice for workloads that experience sudden, massive traffic bursts.
 
 ## ⚠️ Operational Notes
