@@ -1,87 +1,89 @@
 # Multimodal Serving in llm-d
 
-Multimodal models process text together with images, video, or audio. Serving
-these models introduces a distinct encoding stage that can consume substantial
-compute before language-model prefill and decode begin.
+Multimodal models (such as `Qwen/Qwen3-VL-32B-Instruct`) process combinations of text and media (images, video, or audio). Serving these models introduces unique computational bottlenecks because extracting feature embeddings from high-resolution images or videos is extremely compute-intensive compared to standard text token processing.
 
-llm-d supports two serving patterns:
+`llm-d` supports two distinct architectural patterns for serving multimodal models:
 
-1. **Aggregated serving** runs encode, prefill, and decode in each model-server
-   replica.
-2. **Encode-disaggregated serving** moves multimodal encoding to a dedicated
-   worker pool.
+1. **Aggregated Serving (Aggregation)**: Standard deployments where the entire inference lifecycle (multimodal encode, prefill, and decode) is executed on the same model server replica.
+2. **Encode-Disaggregated Serving (E-Disaggregation)**: Advanced topologies where the heavy multimodal encoding phase is offloaded to specialized, dedicated worker pools.
+
+---
 
 ## Guide Index
 
-* [Aggregated Serving Guide](./aggregation/README.md): deploy unified
-  model-server replicas with multimodal prefix-cache-aware and load-aware
-  routing.
-* [Encode-Disaggregated Serving Guide](./e-disaggregation/README.md): deploy
-  E/PD or E/P/D, including heterogeneous SGLang E/PD with Intel XPU Encode
-  workers and an NVIDIA GPU PD worker.
+* **[Aggregated Serving (Aggregation) Guide](./aggregation/README.md)**: Deploy a unified serving topology with prefix-cache and load-aware routing that tracks and matches multimodal payloads across model servers.
+* **[NVIDIA GPU vLLM E-Disaggregation Guide](./e-disaggregation/README.md)**: Deploy vLLM E/PD or E/P/D and transfer embeddings with the EC Connector.
+* **[Heterogeneous SGLang E/PD Guide](./e-disaggregation/heterogeneous/sglang/README.md)**: Deploy four Intel XPU Encode workers with one NVIDIA GPU PD worker.
 
-## Aggregated Serving
+---
 
-Each model-server replica executes the full request:
+## Understanding the Difference
 
-1. **Encode** converts media into feature embeddings.
-2. **Prefill** processes the embeddings and prompt tokens and builds KV cache.
-3. **Decode** generates output tokens.
+The comparison below describes the aggregated and NVIDIA GPU vLLM
+configurations. SGLang uses a different routing and embedding-transfer path;
+see the dedicated [heterogeneous SGLang E/PD guide](./e-disaggregation/heterogeneous/sglang/README.md).
 
-The llm-d Router can combine multimodal prefix-cache and load signals when
-selecting a replica. Keeping all stages together avoids cross-pod embedding
-transfer, but encoder and language-model capacity cannot be scaled or placed
-independently.
+### 1. Aggregated Serving (Aggregation)
 
-## Encode-Disaggregated Serving
+In an **aggregated** setup, every model server instance (or replica) is homogeneous and runs the full model engine. When a request arrives with an image, the same GPU replica processes:
 
-Dedicated Encode workers process media, while downstream PD or P/D workers
-consume the resulting embeddings. This permits independent scaling and
-hardware specialization, but introduces network transfer and coordination
-overhead.
+1. **Encode**: Converts the image into visual embeddings using the model's Vision Transformer (ViT) component.
+2. **Prefill**: Processes the visual embeddings and user prompt text tokens to compute KV caches.
+3. **Decode**: Generates output text tokens sequentially.
 
-The control and data paths depend on the inference backend.
+To optimize this path, the `llm-d Router` (EPP) performs **Prefix-Cache Aware** and **Load-Aware Routing**. By hashing both the text prompt and the visual assets (images), the EPP directs requests to the specific replicas that are likely to already have cached KV tensors or processed inputs, minimizing redundant compute.
 
-### vLLM
+### 2. NVIDIA GPU vLLM Encode-Disaggregated Serving
 
-For the vLLM configurations, the llm-d Router chooses Encode and downstream
-workers. Routing metadata passes through the llm-d disaggregation sidecar, and
-the vLLM EC Connector transfers embeddings with a NIXL data plane and ZMQ
-control plane.
+**Encode Disaggregation** physically decouples the heavy encoder (e.g., Vision Transformer) from the rest of the text generation pipeline.
 
-### SGLang
+It introduces dedicated **Encode (E) Workers** that only run the encoder part of the model. The downstream workers (**PD** or separated **P** and **D** workers) only process the text tokens and the pre-computed embeddings.
 
-For the heterogeneous SGLang configuration, the llm-d Router chooses only a PD
-worker. That PD worker owns encoder dispatch using SGLang `--encoder-urls`.
-SGLang transfers embeddings directly from the Encode workers to the PD
-scheduler with the `zmq_to_scheduler` backend. This path does not use the
-llm-d disaggregation sidecar, vLLM EC Connector, or NIXL for E-to-PD embedding
-transfer.
+* **How it works**:
+  1. The client sends a multimodal request.
+  2. The llm-d Router (EPP) intercepts the request and assigns an **Encode Worker** to handle the media processing.
+  3. The request metadata is routed to the selected downstream worker (e.g., Prefill or Decode).
+  4. The downstream worker pulls the computed embeddings directly from the Encode Worker via the **EC Connector** (utilizing a high-performance **NIXL** data plane for direct memory transfer and **ZMQ** for control signals).
+  5. The downstream worker performs text generation without needing to process the visual inputs locally.
 
-## Supported Topologies
+#### Supported Topologies
 
-* **E/PD**: dedicated Encode workers and combined Prefill/Decode workers.
-* **E/P/D**: dedicated Encode, Prefill, and Decode workers.
+* **E/PD**: Simple disaggregation. It has dedicated Encode workers and combined Prefill/Decode workers.
+* **E/P/D**: Full three-stage pipeline. Dedicated Encode workers, dedicated Prefill workers, and dedicated Decode workers. It inherits the benefits of [Prefill/Decode Disaggregation](../pd-disaggregation/README.md) while scaling vision encoding separately.
 
-## Comparison
+---
 
-| Dimension | Aggregated | Encode-disaggregated |
+## Comparative Analysis
+
+The table below compares Aggregated Serving with the NVIDIA GPU vLLM
+E-disaggregated configuration:
+
+| Dimension | Aggregated | NVIDIA GPU vLLM E-disaggregated |
 | --- | --- | --- |
-| Worker roles | Every replica runs Encode + Prefill + Decode | Encode is a dedicated tier; Prefill and Decode may be combined or separate |
-| Encoder scaling | Coupled to language-model replicas | Independent |
-| Hardware placement | One accelerator type per replica | Encode and language stages can use different hardware |
-| Embedding transfer | Local to the model server | Cross-pod; mechanism depends on the backend |
-| Multi-item parallelism | Limited to one replica's local execution | Items can be distributed across Encode workers |
-| Operational complexity | Lower | Higher |
+| Worker roles | Every pod runs Encode + Prefill + Decode | Dedicated Encode pods + downstream PD or P/D pods |
+| Vision encoding | Local to the assigned model-server pod | Offloaded to an Encode worker pool |
+| Embedding transfer | None | EC Connector over ZMQ and NIXL |
+| Multi-media parallelism | Limited to one replica | Items can be distributed across Encode workers |
+| Scaling | Encode and language stages scale together | Encode workers scale independently |
+| Deployment complexity | Lower | Higher |
 
-## Choosing a Pattern
+---
 
-Use aggregated serving when media inputs are light, the encoder is not a
-bottleneck, or minimizing deployment and network complexity matters most.
+## When to Choose Which?
 
-Evaluate encode disaggregation when requests frequently contain multiple or
-high-resolution media items, encoder work dominates time to first token, or
-separate accelerator pools improve utilization or cost. Performance gains are
-not universal: model architecture, media shape, arrival rate, output length,
-network behavior, and the Encode-to-PD ratio all affect the result. Compare
-both patterns with a representative workload before production use.
+### Choose Aggregated Serving
+
+* Your multimodal inputs are relatively small (e.g., low-resolution images).
+* Your model is small.
+* You prefer lower deployment complexity and do not want to configure multi-tier networking (NIXL/ZMQ) across different pods.
+* You already have a strong prefix-cache hit rate, which mitigates redundant encoding.
+
+### Choose NVIDIA GPU vLLM E-Disaggregated Serving
+
+* Your requests frequently contain **large or multiple media assets** (e.g., document parsing with dozens of images, high-definition videos, or long audio tracks).
+* Your model is large.
+* The Vision Encoder is extremely heavy, and running it on standard text generation pods stalls the sequential decoding phase.
+* You want to scale the encoding tier independently (e.g., using GPUs optimized for vision tasks and separate GPUs/TPUs specialized for text generation).
+* You want to process multiple media inputs within a single request **concurrently** across different nodes.
+
+---
