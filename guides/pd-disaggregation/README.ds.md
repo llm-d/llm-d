@@ -136,8 +136,8 @@ A stuck slice degrades only itself; the other slices keep serving and finish the
 
 ### Pin slices to accelerator domains (placement policy)
 
-> [!WARNING]
-> `spec.placementPolicy` is **not yet merged or released** in LWS — it is under development (tracked in [lws#848](https://github.com/kubernetes-sigs/lws/issues/848)). Unlike `slices`, which is merged upstream and ships in the next LWS release, the example below only works with a controller built from the in-progress placement-policy branch. On released controllers the field is rejected by the CRD schema.
+> [!NOTE]
+> `spec.placementPolicy` is merged upstream ([lws#916](https://github.com/kubernetes-sigs/lws/pull/916), [KEP-848](https://github.com/kubernetes-sigs/lws/tree/main/keps/848-disaggregatedset-placement-policy)) and, like `slices`, ships in the next LWS release after `v0.9.0`. Controllers at `v0.9.0` or older reject the field.
 
 To confine each slice to one topology domain and spread slices across domains, set `placementPolicy` (a commented example ships in `modelserver/gpu/vllm-ds/disaggregatedset.yaml`):
 
