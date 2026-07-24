@@ -61,98 +61,25 @@ done
 
 [[ "${VERBOSE}" == "true" ]] && set -x
 
+# ── Shared functions ───────────────────────────────────────────────────────
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 CURL_POD_NAME="curl-pl-${RANDOM}-$$"
-CURL_POD_TIMEOUT_SECONDS="${CURL_POD_TIMEOUT_SECONDS:-120}"
-
-setup_curl_pod() {
-  kubectl delete pod -n "$NAMESPACE" "$CURL_POD_NAME" --ignore-not-found >/dev/null 2>&1 || true
-  echo "Creating curl pod ${CURL_POD_NAME}..."
-  kubectl run "$CURL_POD_NAME" --namespace "$NAMESPACE" \
-    --image=curlimages/curl --restart=Never -- sleep 3600 >/dev/null
-  if ! kubectl wait --for=condition=Ready pod/"$CURL_POD_NAME" \
-       -n "$NAMESPACE" --timeout="${CURL_POD_TIMEOUT_SECONDS}s"; then
-    echo "Error: curl pod failed to become ready" >&2
-    kubectl describe pod -n "$NAMESPACE" "$CURL_POD_NAME" >&2 || true
-    exit 1
-  fi
-}
-
-cleanup_curl_pod() {
-  kubectl delete pod -n "$NAMESPACE" "$CURL_POD_NAME" --ignore-not-found >/dev/null 2>&1 || true
-}
+# shellcheck source=lib-e2e-common.sh
+source "${SCRIPT_DIR}/lib-e2e-common.sh"
 trap cleanup_curl_pod EXIT
 
-run_curl() {
-  CURL_OUTPUT=""; CURL_EXIT=0
-  CURL_OUTPUT=$(kubectl exec -n "$NAMESPACE" "$CURL_POD_NAME" -- "$@" 2>&1) || CURL_EXIT=$?
-}
-
-# ── Discover EPP service ────────────────────────────────────────────────────
-# The predicted-latency guide deploys the llm-d Router in standalone mode —
-# there is no Gateway resource. Both the request flow (port 80, Envoy sidecar)
-# and the metrics endpoint (port 9090) are served by the EPP service itself,
-# so we resolve directly to the EPP service's ClusterIP.
-#
-# Multi-replica caveat: when more than one EPP pod is running, /metrics is
-# forwarded to one pod at random per scrape, so the histogram counts reflect
-# only that pod's view. base.values.yaml currently sets replicas: 1 so this
-# is fine; future scale-out will need per-pod scraping (port-forward or
-# headless service).
-HOST="${GATEWAY_HOST:-}"
-if [[ -z "$HOST" ]]; then
-  EPP_SVC_NAME=$(kubectl get svc -n "$NAMESPACE" \
-      -o jsonpath='{.items[*].metadata.name}' 2>/dev/null \
-      | tr ' ' '\n' | grep -E -- '-epp$' | head -1 || true)
-  if [[ -n "$EPP_SVC_NAME" ]]; then
-    HOST=$(kubectl get svc "$EPP_SVC_NAME" -n "$NAMESPACE" \
-      -o jsonpath='{.spec.clusterIP}' 2>/dev/null || true)
-  fi
-fi
-if [[ -z "$HOST" ]]; then
-  echo "Error: could not discover EPP service in namespace '$NAMESPACE'." >&2
-  echo "       Set GATEWAY_HOST env var to the EPP service name or ClusterIP." >&2
-  exit 1
-fi
-SVC_HOST="${HOST}:80"
-EPP_HOST="${EPP_HOST_OVERRIDE:-$HOST}"
-EPP_METRICS_URL="http://${EPP_HOST}:${EPP_METRICS_PORT}/metrics"
-
+# ── Discover EPP service and model ─────────────────────────────────────────
+discover_epp_service
 setup_curl_pod
-
-# ── Discover model ──────────────────────────────────────────────────────────
-if [[ -n "$CLI_MODEL_ID" ]]; then
-  MODEL_ID="$CLI_MODEL_ID"
-elif [[ -n "${MODEL_ID-}" ]]; then
-  : # already set in env
-else
-  echo "Auto-discovering model from ${SVC_HOST}/v1/models..."
-  MODEL_ID=""
-  for _ in $(seq 1 10); do
-    run_curl curl -sS --max-time 15 "http://${SVC_HOST}/v1/models" || true
-    MODEL_ID=$(echo "${CURL_OUTPUT}" | grep -o '"id":"[^"]*"' | head -n 1 | cut -d '"' -f 4) || true
-    [[ -n "$MODEL_ID" ]] && break
-    sleep 10
-  done
-  if [[ -z "$MODEL_ID" ]]; then
-    echo "Error: could not auto-discover model after 10 attempts." >&2
-    exit 1
-  fi
-fi
+discover_model
 
 echo "Namespace=$NAMESPACE Gateway=${SVC_HOST} EPP=${EPP_METRICS_URL} Model=${MODEL_ID} Iterations=${ITERATIONS} Concurrency=${CONCURRENCY}"
 
 # ── Warmup loop: feed the predictor's training window ───────────────────────
 PAYLOAD=$(printf '{"model":"%s","prompt":"Tell me a short story.","max_tokens":32}' "$MODEL_ID")
-# Pipe via tee so the payload actually lands in the file. `kubectl exec` +
-# `sh -c "cat > file"` silently produces a 0-byte file (cat's stdin never gets
-# the data through sh -c, even with -i), which would make every warmup curl
-# send an empty body and report ok=0 fail=N.
 printf '%s' "$PAYLOAD" | kubectl exec -i -n "$NAMESPACE" "$CURL_POD_NAME" -- tee /tmp/payload.json >/dev/null
 
 echo "Sending $ITERATIONS requests with concurrency $CONCURRENCY..."
-# Tolerate partial failures: a single curl that fails to connect would otherwise
-# propagate up through xargs/kubectl exec under `set -e` and abort the script
-# before we get to the ok/fail accounting and the metrics check below.
 status_log=$(kubectl exec -n "$NAMESPACE" "$CURL_POD_NAME" -- sh -c "
   seq 1 $ITERATIONS | xargs -I{} -P $CONCURRENCY \
     curl -sS --max-time 60 -o /dev/null -w '%{http_code}\n' \
@@ -179,7 +106,6 @@ if [[ "$CURL_EXIT" -ne 0 || -z "$metrics" ]]; then
   exit 1
 fi
 
-# Sum *_count samples across all label combinations for a histogram series.
 sum_histogram_count() {
   echo "$metrics" \
     | awk -v series="${1}_count" '
