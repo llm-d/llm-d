@@ -47,14 +47,13 @@ def role_from_lws(lws: dict, role_name: str, common_labels: dict) -> dict:
     return {
         "name": role_name,
         "metadata": {"labels": metadata_labels},
-        "replicas": lws["spec"]["replicas"],
-        "leaderWorkerTemplate": copy.deepcopy(lws["spec"]["leaderWorkerTemplate"]),
+        "spec": copy.deepcopy(lws["spec"]),
     }
 
 
 def build_disaggregatedset(decode_lws: dict, prefill_lws: dict) -> dict:
     return {
-        "apiVersion": "disaggregatedset.x-k8s.io/v1alpha1",
+        "apiVersion": "disaggregatedset.x-k8s.io/v1",
         "kind": "DisaggregatedSet",
         "metadata": {
             "name": "wide-ep-lws-nvidia-gpu-vllm",

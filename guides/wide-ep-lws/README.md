@@ -87,7 +87,7 @@ This guide includes configurations for the following accelerators:
   kubectl apply -f https://github.com/kubernetes-sigs/gateway-api-inference-extension/releases/download/${GAIE_VERSION}/v1-manifests.yaml
   ```
 * You have deployed the [LeaderWorkerSet controller](https://lws.sigs.k8s.io/docs/installation/).
-* To use the `DisaggregatedSet` path, install LWS `v0.9.0` or newer so the `DisaggregatedSet` CRD and controller are available.
+* To use the `DisaggregatedSet` path, install LWS `v0.9.0` or newer. When installing with Helm, pass `--set enableDisaggregatedSet=true` to enable the `DisaggregatedSet` validating webhook and RBAC.
 * For Intel XPU, install the [Intel Resource Drivers for Kubernetes](https://github.com/intel/intel-resource-drivers-for-kubernetes) and verify that the `gpu.intel.com` DRA DeviceClass is available.
 * Create a target namespace for the installation:
 
