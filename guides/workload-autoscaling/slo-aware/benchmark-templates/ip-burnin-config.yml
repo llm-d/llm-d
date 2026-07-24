@@ -18,11 +18,11 @@ api:
     x-llm-d-slo-tpot-ms: '100'
 server:
   type: vllm
-  model_name: Qwen/Qwen3-32B
-  base_url: http://optimized-baseline-epp.llm-d-optimized-baseline.svc.cluster.local:80
+  model_name: REPLACE_ENV_LLMDBENCH_DEPLOY_CURRENT_MODEL
+  base_url: REPLACE_ENV_LLMDBENCH_HARNESS_STACK_ENDPOINT_URL
   ignore_eos: true
 tokenizer:
-  pretrained_model_name_or_path: Qwen/Qwen3-32B
+  pretrained_model_name_or_path: REPLACE_ENV_LLMDBENCH_DEPLOY_CURRENT_MODEL
 data:
   type: random
   input_distribution:
@@ -44,4 +44,4 @@ report:
     per_request: false
 storage:
   local_storage:
-    path: /workspace/results
+    path: /workspace

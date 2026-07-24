@@ -259,7 +259,7 @@ plotted caught one such crossing. Full methodology and breakdown:
 |---|---|
 | `slo-aware/` | the autoscaler: kube-state-metrics, recording rules (signal, step 1), ScaledObject (control law + HPA behavior, steps 2–3), and the recommended `decode-warmup-patch.yaml`. KEDA itself installs from its upstream release (see step 4). |
 | `slo-aware/epp-plugins-configmap.yaml` | the EPP plugin config we ran, incl. `predicted-latency-producer` |
-| `slo-aware/benchmark-templates/` | reusable benchmark harness: methodology (`BENCHMARK.md`), load profiles, and the plot+score script |
+| `slo-aware/benchmark-templates/` | reusable benchmark harness: methodology (`BENCHMARK.md`), [llm-d-benchmark](https://github.com/llm-d/llm-d-benchmark) workload profiles for the burn-in and scored episodes, and the plot+score script |
 | `slo-aware/benchmark-results/` | our run's output: episode plots and the scored numbers |
 
 ## Revert

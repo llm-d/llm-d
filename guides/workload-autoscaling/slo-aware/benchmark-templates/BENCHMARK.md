@@ -40,21 +40,91 @@ random data, streaming completions, staged constant-rate ramp:
 ```
 
 Requests carry `x-llm-d-slo-ttft-ms: 3000` / `x-llm-d-slo-tpot-ms: 100`
-headers. These are **not** needed for scaling — they make the EPP emit
-per-request SLO-violation counters, which is how attainment is scored
-server-side. (Scoring client-side from the inference-perf report works too.)
+headers (the `api.headers` block in the profiles). These are **not** needed
+for scaling — they make the EPP emit per-request SLO-violation counters,
+which is how attainment is scored server-side. (Scoring client-side from
+the inference-perf report works too.)
+
+## Running the workload
+
+The load is driven by [`llmdbenchmark`](https://github.com/llm-d/llm-d-benchmark)
+— the supported standard CLI for llm-d performance benchmarking — using its
+`inference-perf` harness. The two profiles in this folder are ordinary
+inference-perf configs; they live here (not in the upstream profile catalog)
+because they are specific to this episode protocol, and are passed to the CLI
+via `--workload-file-path`. For CLI installation details, flag reference, and
+troubleshooting, see [`helpers/benchmark.md`](../../../helpers/benchmark.md).
+
+Install the CLI (clones the repo into `./llm-d-benchmark/` with a venv):
+
+```bash
+curl -sSL https://raw.githubusercontent.com/llm-d/llm-d-benchmark/main/install.sh | bash
+cd llm-d-benchmark
+source .venv/bin/activate
+```
+
+Resolve the endpoint of the deployed optimized-baseline stack and point at
+this folder:
+
+```bash
+export NAMESPACE=llm-d-optimized-baseline
+export ENDPOINT_URL="http://$(kubectl get service optimized-baseline-epp -n ${NAMESPACE} -o jsonpath='{.spec.clusterIP}')"
+export GATEWAY_CLASS=epponly   # standalone mode; see helpers/benchmark.md for gateway mode
+export TEMPLATES_DIR=<path-to-llm-d-repo>/guides/workload-autoscaling/slo-aware/benchmark-templates
+```
+
+Burn-in pass (unscored — see the protocol below):
+
+```bash
+llmdbenchmark \
+    --spec               guides/optimized-baseline \
+    run \
+    --endpoint-url       "${ENDPOINT_URL}" \
+    --gateway-class      "${GATEWAY_CLASS}" \
+    --model              Qwen/Qwen3-32B \
+    --namespace          "${NAMESPACE}" \
+    --harness            inference-perf \
+    --workload-file-path "${TEMPLATES_DIR}/ip-burnin-config.yml"
+```
+
+Scored episode (same invocation, scored profile, plus `--analyze` for the
+client-side report):
+
+```bash
+llmdbenchmark \
+    --spec               guides/optimized-baseline \
+    run \
+    --endpoint-url       "${ENDPOINT_URL}" \
+    --gateway-class      "${GATEWAY_CLASS}" \
+    --model              Qwen/Qwen3-32B \
+    --namespace          "${NAMESPACE}" \
+    --harness            inference-perf \
+    --workload-file-path "${TEMPLATES_DIR}/scored-config.yml" \
+    --analyze
+```
+
+The `REPLACE_ENV_LLMDBENCH_*` tokens in the profiles are substituted at run
+time from the `--model` / `--endpoint-url` flags — no `envsubst` step needed.
+
+> [!NOTE]
+> Use a harness image ≥ `v0.7.0` (the CLI default). Older images bundle a
+> pre-fix inference-perf whose workers share one RNG stream, so random-data
+> prompts are duplicated across workers — the resulting prefix-cache hits
+> flatter TTFT and invalidate the episode.
 
 ## Protocol
 
 1. **Settle**: pool drained to the 3-replica floor, signal reading 0.
 2. **Burn-in (unscored)**: the EPP's latency predictor trains *online* and
    its calibration resets on every EPP restart. After any restart, run one
-   throwaway pass across the load range (we use 2→6→9→3 rps, ~19 min).
+   throwaway pass across the load range (the burn-in command above:
+   2→6→9→3 rps, ~19 min).
    Skipping this costs real accuracy: on the identical configuration we
    measured 85.6 % attainment with a cold predictor vs 95.8 % calibrated.
-3. **Scored episode**: launch the profile above as a Job; record the start
-   timestamp. The episode window runs from job start until the pool has
-   drained back to the floor after the load ends.
+3. **Scored episode**: launch the scored profile via `llmdbenchmark` (the
+   second command above); record the start timestamp. The episode window runs
+   from launch until the pool has drained back to the floor after the load
+   ends.
 4. **Score**:
    - *Attainment* — from the EPP violation counters over the exact window:
      `1 − (increase(ttft_violations) + increase(tpot_violations)) / increase(requests)`
