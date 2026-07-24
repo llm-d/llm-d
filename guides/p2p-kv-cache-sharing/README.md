@@ -375,7 +375,12 @@ llmdbenchmark \
     --spec           guides/p2p-kv-cache-sharing \
     run \
     --endpoint-url   "${ENDPOINT_URL}" \
-    --workload workload/profiles/inference-perf/guide_p2p-kv-cache-sharing_1.yaml
+    --gateway-class  "${GATEWAY_CLASS}" \
+    --model          "openai/gpt-oss-120b" \
+    --namespace      "${NAMESPACE}" \
+    --harness        inference-perf \
+    --workload       guide_p2p-kv-cache-sharing_1.yaml \
+    --analyze
 ```
 
 The full scenario matrix (crossover micro-benchmark, shared-prefix pools,
