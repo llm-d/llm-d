@@ -7,12 +7,19 @@ where the mechanism is not provably engaged measures nothing.
 ## Running the benchmark
 
 The headline scenario ships as a dedicated `llmdbenchmark` workload profile,
-the same way the other guides' benchmarks do. Install the CLI, resolve your
-endpoint, and run:
+the same way the other guides' benchmarks do. As of this writing the
+profile lands via
+[llm-d-benchmark#1656](https://github.com/llm-d/llm-d-benchmark/pull/1656),
+not yet merged - check out that PR's branch until it lands, and pin the
+merging commit SHA once it does, so a later run of this command reproduces
+the same workload the tables below were measured against, not whatever
+`main` happens to be. Install the CLI, resolve your endpoint, and run:
 
 ```bash
 curl -sSL https://raw.githubusercontent.com/llm-d/llm-d-benchmark/main/install.sh | bash
 cd llm-d-benchmark && source .venv/bin/activate
+# Until llm-d-benchmark#1656 merges:
+git fetch origin feat/p2p-guide-profile && git checkout feat/p2p-guide-profile
 
 export ENDPOINT_URL="http://$(kubectl get service <your-epp-service> -n ${NAMESPACE} -o jsonpath='{.spec.clusterIP}')"
 
@@ -169,25 +176,27 @@ every request is a local hit. TTFT stays under 1s p50 in both arms; the
 collapse is pure decode concentration on the owners, which is the
 pathology the pull relieves.
 
-## Scenario C - P/D prefill placement
+## Scenario C - P/D prefill placement (not yet run)
 
-The three arms applied to the prefill profile of the P/D guide topology,
-with `--enable-p2p-pull` on the routing sidecar. Report the decode pool's
-NIXL intake ceiling alongside: on P/D it, not prefill placement, typically
-binds first.
-
-<!-- RESULTS: three-arm table -->
+Not yet measured on this rig - listed here as future work, not a
+published result. The three arms applied to the prefill profile of the
+P/D guide topology, with `--enable-p2p-pull` on the routing sidecar.
+Report the decode pool's NIXL intake ceiling alongside: on P/D it, not
+prefill placement, typically binds first.
 
 ## Scenario D - document Q&A (the headline; shipped as the profile above)
 
 The user-facing regime: each of 192 conversations carries a private
 48K-token document prefix and asks 6 short questions (256-token answers),
 128 conversations concurrent. Per-turn decode is small, so TTFT dominates
-the experience, and the ~9.5M-token corpus oversubscribes the fleet's
-aggregate GPU KV - placement decides whether a question is a cache hit, a
-48K recompute, or a wait behind someone else's document. This is the
-scenario `guide_p2p-kv-cache-sharing_1.yaml` reproduces; scale
-`num_conversations` so the corpus exceeds your fleet's aggregate GPU KV.
+the experience. With ~9.2M tokens of document prefix spread across the
+fleet and 128 sessions concurrently active against a fixed
+per-document ownership rule, request placement - not aggregate GPU
+capacity - decides whether a question is a cache hit, a 48K recompute, or
+a wait behind someone else's document. This is the scenario
+`guide_p2p-kv-cache-sharing_1.yaml` reproduces; scale `num_conversations`
+and `concurrency` relative to your fleet's pod count so enough sessions
+contend for a limited set of owner pods.
 
 Two arms, two full runs with arm order alternated. All four runs completed
 1,152/1,152 turns with zero errors and zero restarts. TTFT p50/p95/p99 (s)

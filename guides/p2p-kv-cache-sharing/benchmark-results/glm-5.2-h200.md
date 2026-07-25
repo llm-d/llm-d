@@ -74,14 +74,19 @@ Reading the arms:
   where placement diverges from cache.
 * **Arm parity notes.** TTFT p99 is within single-run noise across arms at
   every concurrency (the worst case everywhere is the cold first prefill of
-  a long context). The approx + P2P arm ran the engine with
+  a long context). The smaller precise+P2P p50 deltas at c64/c128 (-8%,
+  -16%) sit closer to single-run noise than the c32 result (-27%) too -
+  treat the concentration-penalty finding as strongest at c32 until
+  repeated runs confirm the higher-concurrency deltas. The approx + P2P
+  arm ran the engine with
   `offload_prompt_only: true` - the matched setting for a placement whose
   index never covers decode blocks, and for models whose reasoning decode
   is not reused as a next-turn prefix (GLM re-renders without it).
 
 At every concurrency the approximate arms lead or tie the precise arms on
-this workload - the exact index concentrates the corpus's oversubscribing
+this workload - the exact index concentrates the corpus's contending
 sessions onto their cache holders and pays in queues, while the fuzzier
-estimates spread them - the same regime boundary the aggregated document
-Q&A testbed measured. The value the pull adds here is making the precise
-affinity policy competitive again where it is deployed as the default.
+estimates spread them - the same placement-under-contention regime the
+aggregated document Q&A testbed measured. The value the pull adds here is
+making the precise affinity policy competitive again where it is deployed
+as the default.
