@@ -45,15 +45,23 @@ prefix tokens per run - more than 3x the corpus - implying repeated
 cross-pod placement rather than one-time cold misses. Load-aware placement
 plus the pull removes the tradeoff: every question goes to whichever pod
 is least loaded, and that pod pulls the prefix instead of recomputing or
-queueing for it. Two full runs with arm order alternated; all four runs
-completed 1,152/1,152 turns with zero errors and zero restarts.
+queueing for it. Adding the pull to precise placement instead only
+partially closes the gap - it recovers the cache-locality cost of a
+cross-pod placement but not the queueing cost of a decision that still
+prefers a busy owner. All six runs across the three arms completed
+1,152/1,152 turns with zero errors and zero restarts.
 
 TTFT p50 / p95 / p99 (s); throughput (turns/s):
 
-| run | Precise prefix routing | Load-aware + P2P |
-|---|---|---|
-| 1 | 4.1 / 41.0 / 80.5; 5.98 | 4.5 / 13.0 / 20.9; 7.02 |
-| 2 (order reversed) | 4.2 / 17.3 / 37.2; 7.66 | 3.9 / 12.5 / 26.7; 7.76 |
+| run | Precise prefix routing | Precise + P2P | Load-aware + P2P (recommended) |
+|---|---|---|---|
+| 1 | 4.1 / 41.0 / 80.5; 5.98 | 4.0 / 27.7 / 48.8; 5.6 | 4.5 / 13.0 / 20.9; 7.02 |
+| 2 (order reversed / 2nd run) | 4.2 / 17.3 / 37.2; 7.66 | 2.6 / 33.6 / 67.2; 5.7 | 3.9 / 12.5 / 26.7; 7.76 |
+
+Precise + P2P sits between the other two arms on tail latency in both
+runs: it improves on precise-only's worst case but its p95/p99 never
+reach load-aware + P2P's range. This is why the guide ships
+load-aware + P2P as the default.
 
 <img src="./gptoss-docqa.png" width="900" alt="Document Q&A TTFT percentiles and throughput across two order-alternated runs">
 

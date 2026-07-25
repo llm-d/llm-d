@@ -7,17 +7,20 @@
 ## for the peak request rate (long-prompt workloads saturate a single replica
 ## near ~10 req/s) - see the guide's Best Practices.
 ##
-## The deployed EPP config is the affinity + P2P arm (`epp-affinity-p2p.yaml`
-## in ../benchmarking/): placement follows the cache (prefix-affinity scoring
-## unchanged from the precise-prefix-cache-routing guide), and the
-## p2p-source-producer emits the KV cache source header when a peer
-## out-caches the scheduled pod by at least minCachedTokenDelta tokens - so
-## the pull covers divergence (queue spills, evictions, cold replicas,
-## migration) rather than acting as the placement strategy. For workloads
-## whose working set oversubscribes the fleet's GPU caches, the load-aware +
-## P2P arm (`epp-load-p2p.yaml`) trades affinity for balance; the guide's
-## benchmarks measure both. To reproduce the comparison arms, swap this
-## pluginsCustomConfig for any file under ../benchmarking/.
+## The deployed EPP config is the load-aware + P2P arm (`epp-load-p2p.yaml`
+## in ../benchmarking/): placement follows queue depth and KV utilization,
+## and the p2p-source-producer emits the KV cache source header when a peer
+## out-caches the scheduled pod by at least minCachedTokenDelta tokens, so
+## a placement chosen for load still gets the cached prefix via a pull. The
+## affinity + P2P arm (`epp-affinity-p2p.yaml`) was the earlier default;
+## measured on this guide's own document-Q&A headline (128 concurrent
+## sessions against a fixed per-document ownership rule), it still queues
+## behind a busy owner pod when the scorer's affinity term wins the
+## tradeoff, so its p95/p99 TTFT sit between the recompute-only affinity
+## arm and this one rather than matching it - see
+## [benchmark-results/gpt-oss-120b-h200.md](../benchmark-results/gpt-oss-120b-h200.md).
+## To reproduce the comparison arms, swap this pluginsCustomConfig for any
+## file under ../benchmarking/.
 ##
 ## Pod-discovery mode with active-active HA (replicas: 2). Each replica dials
 ## every vLLM pod's per-pod ZMQ socket; both indexes converge identically.
@@ -55,6 +58,12 @@ router:
                 # namePrefix + Service name `render`.
                 url: "http://p2p-kv-cache-sharing-render:8000"
           - type: endpoint-notification-source
+          - type: metrics-data-source
+            parameters:
+              scheme: "http"
+              path: "/metrics"
+              insecureSkipVerify: true
+          - type: core-metrics-extractor
           - type: precise-prefix-cache-producer
             parameters:
               tokenProcessorConfig:
@@ -73,32 +82,25 @@ router:
               # scheduled pod before a pull is requested; set from the measured
               # pull-versus-recompute crossover (see ../benchmarking/README.md).
               minCachedTokenDelta: 2048
-          - type: prefix-cache-scorer
-            parameters:
-              prefixMatchInfoProducerName: precise-prefix-cache-producer
-          - type: no-hit-lru-scorer
-            parameters:
-              prefixMatchInfoProducerName: precise-prefix-cache-producer
           - type: queue-scorer
           - type: kv-cache-utilization-scorer
-          - type: max-score-picker
+          - type: weighted-random-picker
           - type: single-profile-handler
         dataLayer:
           sources:
+            - pluginRef: metrics-data-source
+              extractors:
+                - pluginRef: core-metrics-extractor
             - pluginRef: endpoint-notification-source
               extractors:
                 - pluginRef: precise-prefix-cache-producer
         schedulingProfiles:
           - name: default
             plugins:
-              - pluginRef: max-score-picker
-              - pluginRef: prefix-cache-scorer
-                weight: 3
+              - pluginRef: weighted-random-picker
               - pluginRef: queue-scorer
-                weight: 2
+                weight: 3
               - pluginRef: kv-cache-utilization-scorer
-                weight: 2
-              - pluginRef: no-hit-lru-scorer
                 weight: 2
 
   modelServers:

@@ -198,14 +198,36 @@ a wait behind someone else's document. This is the scenario
 and `concurrency` relative to your fleet's pod count so enough sessions
 contend for a limited set of owner pods.
 
-Two arms, two full runs with arm order alternated. All four runs completed
-1,152/1,152 turns with zero errors and zero restarts. TTFT p50/p95/p99 (s)
-and throughput (turns/s):
+Three arms measured; `epp-affinity` and `epp-load-p2p` as two full runs
+with order alternated, `epp-affinity-p2p` as two independent runs (order
+alternation does not apply with only one non-baseline arm running). All
+six runs completed 1,152/1,152 turns with zero errors and zero restarts.
+TTFT p50/p95/p99 (s) and throughput (turns/s):
 
-| run | `epp-affinity` (precise routing) | `epp-load-p2p` |
-|---|---|---|
-| 1 | 4.1 / 41.0 / 80.5; 5.98 | 4.5 / 13.0 / 20.9; 7.02 |
-| 2 (order reversed) | 4.2 / 17.3 / 37.2; 7.66 | 3.9 / 12.5 / 26.7; 7.76 |
+| run | `epp-affinity` (precise routing) | `epp-affinity-p2p` | `epp-load-p2p` (recommended) |
+|---|---|---|---|
+| 1 | 4.1 / 41.0 / 80.5; 5.98 | 4.0 / 27.7 / 48.8; 5.6 | 4.5 / 13.0 / 20.9; 7.02 |
+| 2 (order reversed / 2nd run) | 4.2 / 17.3 / 37.2; 7.66 | 2.6 / 33.6 / 67.2; 5.7 | 3.9 / 12.5 / 26.7; 7.76 |
+
+`epp-affinity-p2p`'s throughput figures (5.6-5.7 turns/s) undercount
+slightly: a sub-1% tail of requests generated unusually long reasoning
+output under `ignore_eos: true` (median/p90/p95 output length all land on
+the intended 256-token target - only `p99.9` blows out), stretching wall
+time. TTFT is unaffected, since it is measured at first token, before that
+generation happens.
+
+`epp-affinity-p2p` sits between the other two arms on tail latency in both
+runs, not just one: its p95/p99 (27.7-33.6s / 48.8-67.2s) improve on
+`epp-affinity`'s worst case (80.5s p99) but do not reach `epp-load-p2p`'s
+range (12.5-13.0s p95 / 20.9-26.7s p99) in either run. The likely reason:
+`epp-affinity-p2p` still queues a request behind a busy owner pod whenever
+the scorer's affinity term outweighs load, and only pulls once a peer
+already out-caches the scheduled pod - it recovers the *cache-locality*
+cost of a cross-pod placement but not the *queueing* cost of a placement
+decision that still prefers a busy owner. `epp-load-p2p` never makes that
+tradeoff: placement always goes to the least-loaded pod, so there is no
+owner-pod queue to build in the first place. This is why the guide ships
+`epp-load-p2p` as the default (see the [README](../README.md#when-to-use-this-path)).
 
 Medians are equal - a home session answers from warm cache either way. The
 arms separate on tails and stability: p99 TTFT 21-27s versus 37-81s (2-4x),
