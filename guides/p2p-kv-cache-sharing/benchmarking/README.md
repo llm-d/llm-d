@@ -45,9 +45,10 @@ cancels that advantage and measures each arm's sensitivity to inherited
 cache state.
 
 Model: `openai/gpt-oss-120b`, 16x TP=1 H200 (aggregated). Sizing inputs
-measured on this rig: ~41.5 KB KV per token, ~1.38M tokens of GPU KV per pod
-at `--gpu-memory-utilization=0.85`, CPU tier sized to 64 GiB (~1.55M tokens)
-so sources can serve everything their GPU view advertises. Render service
+measured on this rig: ~41.5 KB KV per token, ~1.22M tokens of GPU KV per pod
+at `--gpu-memory-utilization=0.85` (from the engine startup log), CPU tier
+sized to 88 GiB (~2.22M tokens, ~1.8x the GPU KV cache) so sources can
+serve everything their GPU view advertises. Render service
 sized for the peak stage rate (see the guide's best practices): one replica
 saturates near 10 req/s on ~50K-token prompts and a saturated render stalls
 every request for the token-producer timeout, flattening all arms to the
@@ -86,7 +87,7 @@ makes the transfer cheap enough to beat even this model's fast MoE prefill.
 
 ## Scenario A - uniform shared-prefix pool (three routing arms)
 
-128 shared prefixes x 48K tokens (~6M-token working set, ~4.4x one pod's GPU
+128 shared prefixes x 48K tokens (~6M-token working set, ~5x one pod's GPU
 cache), 256-token questions, 64 output tokens, streaming, constant-rate
 stages ramped past saturation. `load.request_timeout` set explicitly.
 
@@ -141,7 +142,7 @@ copying it:
 * Cache capacity does not differentiate the arms at this model size: a
   hot set small enough for affinity to concentrate (prefix count well
   below pod count) always fits in one pod's GPU KV (8 x 48K = 384K tokens
-  vs ~1.38M per pod), so every arm serves GPU hits once warm. The
+  vs ~1.22M per pod), so every arm serves GPU hits once warm. The
   differentiator is decode-load concentration on the owners, which is why
   outputs are long and rates high.
 * At short outputs and moderate rates (up to 24 req/s measured), the

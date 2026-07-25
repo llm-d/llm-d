@@ -1,8 +1,10 @@
 # openai/gpt-oss-120b P2P KV Cache Sharing Benchmark on vLLM (H200)
 
 The benchmark runs `openai/gpt-oss-120b` (MXFP4) aggregated, one H200 per
-pod (TP=1), ~0.48M tokens of GPU KV per pod, an 88 GiB CPU offload tier per
-pod, vLLM block size 64, KV transfers over NIXL. Routing uses the llm-d
+pod (TP=1), ~1.22M tokens of GPU KV per pod (measured from the engine
+startup log at `--gpu-memory-utilization=0.85`, `--max-model-len=65536`),
+an 88 GiB CPU offload tier per pod (~1.8x the GPU KV cache), vLLM block
+size 64, KV transfers over NIXL. Routing uses the llm-d
 inference gateway with the precise (KV-event-fed) prefix index; the P2P arm
 adds the `p2p-source-producer` with `minCachedTokenDelta: 2048`. The
 document Q&A scenario ran on 14 pods; the pool scenarios on 16. Workload
@@ -30,11 +32,21 @@ the smallest winning length sets the router's `minCachedTokenDelta: 2048`.
 ## Document Q&A (the headline)
 
 192 conversations, each with a private 48K-token document prefix, 6 short
-questions (256-token answers), 128 conversations concurrent - the corpus
-oversubscribes the fleet's aggregate GPU KV, so placement decides whether a
-question is a cache hit, a 48K recompute, or a wait behind another
-document. Two full runs with arm order alternated; all four runs completed
-1,152/1,152 turns with zero errors and zero restarts.
+questions (256-token answers), 128 conversations concurrent. The
+~9.2M-token corpus fits inside the fleet's aggregate GPU KV (14 pods x
+~1.22M tokens/pod ~= 17M) with room to spare - so the displacement here is
+not capacity scarcity. The likelier driver: the baseline's composite
+scorer (prefix-cache weight 3, queue weight 2, kv-util weight 2,
+no-hit-lru weight 2) trades a document's cache locality for load-balancing
+under 128 concurrent sessions spread across only 14 owner pods, so a burst
+of turns can still queue behind an overloaded owner or land on a colder
+pod that recomputes. This is consistent with the P2P arm moving 30-32M
+prefix tokens per run - more than 3x the corpus - implying repeated
+cross-pod placement rather than one-time cold misses. Load-aware placement
+plus the pull removes the tradeoff: every question goes to whichever pod
+is least loaded, and that pod pulls the prefix instead of recomputing or
+queueing for it. Two full runs with arm order alternated; all four runs
+completed 1,152/1,152 turns with zero errors and zero restarts.
 
 TTFT p50 / p95 / p99 (s); throughput (turns/s):
 
@@ -51,7 +63,7 @@ versus 28%. The P2P arm moved 30-32M prefix tokens between pods per run.
 
 ## Uniform shared-prefix pool (three arms)
 
-128 shared prefixes x 48K tokens (~4.4x one pod's GPU cache), 256-token
+128 shared prefixes x 48K tokens (~5x one pod's GPU cache), 256-token
 questions, 64-token outputs, constant-rate stages. Achieved rate (req/s) /
 request latency p50 (s):
 
