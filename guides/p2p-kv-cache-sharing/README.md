@@ -114,6 +114,14 @@ Each of these was learned the hard way:
   `kv@<POD_IP>:<PORT>@<model>`. No events, no precise index, no source
   selection from it. (Deployments on the approximate index skip this
   prerequisite - the source decision then runs on prompt-hash estimates.)
+  `<PORT>` must be the port the router identifies the endpoint by - the
+  routing sidecar's port (`8000` in this guide), not the engine port
+  (`8200`). The EPP attributes each event's cached blocks to an endpoint
+  by matching the topic's `<POD_IP>:<PORT>` against the InferencePool
+  endpoint; a mismatch (e.g. tagging the engine port) leaves the index
+  empty for every real endpoint, so `bestCachedTokens` is always 0 and no
+  pull ever fires - silently, exactly like "no effect". This bites when
+  adapting the manifest to a different port layout, not the shipped one.
 * `PYTHONHASHSEED` pinned to the same value fleet-wide. vLLM seeds block
   hashes per process; unpinned seeds mean no block hash ever matches across
   pods and every lookup misses.
@@ -484,7 +492,7 @@ typically the topology's ceiling.
 
 | Symptom | Cause | Fix |
 |---|---|---|
-| No pulls, everything serves | index empty (block-size mismatch, missing kv-events) or hashes disagree (`PYTHONHASHSEED`) | verification gates 1 and 4 |
+| No pulls, everything serves; EPP logs `bestCachedTokens:0` for every request | index empty: block-size mismatch, missing kv-events, or the kv-events topic port does not match the router's endpoint port (Best Practices, kv-events bullet) - or hashes disagree (`PYTHONHASHSEED`) | verification gates 1 and 4 |
 | `rejecting peer connect: block_len mismatch` | `--block-size` differs between pods | align it everywhere |
 | No pulls from a TP-mismatched source, index and hashes fine | peer session fingerprint is TP-locked | matched TP; hetero-TP only for non-hybrid models on the V1 runner (Best Practices) |
 | Pulls fire but hit rate ~0 | CPU tier too small vs GPU cache; prefixes evicted before peers ask | grow `cpu_bytes_to_use` (and `/dev/shm`) |
