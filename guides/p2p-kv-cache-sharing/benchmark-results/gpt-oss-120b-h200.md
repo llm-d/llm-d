@@ -53,15 +53,18 @@ prefers a busy owner. All six runs across the three arms completed
 
 TTFT p50 / p95 / p99 (s); throughput (turns/s):
 
-| run | Precise prefix routing | Precise + P2P | Load-aware + P2P (recommended) |
+| run | Precise prefix routing | Precise + P2P (recommended default) | Load-aware + P2P (wins this scenario) |
 |---|---|---|---|
 | 1 | 4.1 / 41.0 / 80.5; 5.98 | 4.0 / 27.7 / 48.8; 5.6 | 4.5 / 13.0 / 20.9; 7.02 |
 | 2 (order reversed / 2nd run) | 4.2 / 17.3 / 37.2; 7.66 | 2.6 / 33.6 / 67.2; 5.7 | 3.9 / 12.5 / 26.7; 7.76 |
 
 Precise + P2P sits between the other two arms on tail latency in both
 runs: it improves on precise-only's worst case but its p95/p99 never
-reach load-aware + P2P's range. This is why the guide ships
-load-aware + P2P as the default.
+reach load-aware + P2P's range here. On the uniform pool below, the
+result reverses - load-aware + P2P is the one that degrades. The guide
+ships precise + P2P as the default because it is the safer general-purpose
+choice across both regimes; reach for load-aware + P2P specifically for
+workloads shaped like this one.
 
 <img src="./gptoss-docqa.png" width="900" alt="Document Q&A TTFT percentiles and throughput across two order-alternated runs">
 
@@ -75,16 +78,21 @@ versus 28%. The P2P arm moved 30-32M prefix tokens between pods per run.
 questions, 64-token outputs, constant-rate stages. Achieved rate (req/s) /
 request latency p50 (s):
 
-| offered | Affinity | Load, no P2P | Load + P2P |
-|---|---|---|---|
-| 8 req/s | 7.9 / 0.7 | 6.7 / 6.5 | 7.7 / 1.6 |
-| 12 req/s | 11.9 / 0.7 | 9.0 / 24.9 | 11.4 / 2.3 |
-| 16 req/s | 15.8 / 0.7 | 8.8 / 37.3 | 15.1 / 3.6 |
-| 24 req/s | 23.7 / 0.8 | 9.4 / 63.5 | 16.7 / 30.0 |
+| offered | Affinity | Affinity + P2P (recommended) | Load, no P2P | Load + P2P |
+|---|---|---|---|---|
+| 8 req/s | 7.9 / 0.7 | 7.9 / 0.73 | 6.7 / 6.5 | 7.7 / 1.6 |
+| 12 req/s | 11.9 / 0.7 | 11.9 / 0.75 | 9.0 / 24.9 | 11.4 / 2.3 |
+| 16 req/s | 15.8 / 0.7 | 15.8 / 0.76 | 8.8 / 37.3 | 15.1 / 3.6 |
+| 24 req/s | 23.7 / 0.8 | 23.6 / 0.82 | 9.4 / 63.5 | 16.7 / 30.0 |
 
-A uniform pool is affinity's best case and it is near-ideal here. The
-recompute control saturates near 9.4 req/s; the pull recovers most of the
-spread penalty (+78% over recompute at saturation, on ~139M pulled tokens).
+A uniform pool is affinity's best case and it is near-ideal here. Affinity
++ P2P matches it within noise at every rate, tracking offered to
+saturation at 24 req/s. The recompute control saturates near 9.4 req/s;
+Load + P2P recovers most of that penalty at moderate rates but degrades
+sharply at the top of the ladder (30.0s p50 at 24 req/s, achieving only
+16.7 of 24 offered) - spreading a prefix's traffic across more pods costs
+more in transfer contention at saturation than affinity + P2P ever pays,
+since it never scatters that traffic in the first place.
 
 ## Hot set (the payoff case)
 

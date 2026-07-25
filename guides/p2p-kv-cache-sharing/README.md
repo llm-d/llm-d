@@ -48,27 +48,28 @@ to the pod that already caches its prefix:
   recompute grows with length. Measure the crossover for your model (the
   benchmark below does); route pulls only above it.
 
-The placement rule this guide's measurements support has two triggers, not
-one. Reach for load-aware placement plus the pull when the working set
-oversubscribes the fleet's GPU caches (wide prefix pools, large-document
-corpora) - concentrating placement by cache location then pays in queues
-and recomputes, which Scenario A's pool and Scenario B's hot set both
-demonstrate. It also wins under high-concurrency session ownership even
-when aggregate capacity has room to spare: this guide's document-Q&A
-headline pins each of 128 concurrent conversations to a fixed owner pod
-under affinity, and a burst of turns can still queue behind a busy owner
-or land on a colder pod that recomputes - load-aware placement avoids the
-queue by never preferring a busy owner in the first place, which is why it
-beats affinity plus the pull on tail latency there too (see
-[benchmark-results/gpt-oss-120b-h200.md](benchmark-results/gpt-oss-120b-h200.md)).
-Affinity remains the better default at low concurrency and when sessions
-are short-lived enough that ownership contention never builds - a local
-hit is free, and nothing beats it while the queue behind it stays empty.
-This guide ships `epp-load-p2p.yaml` as the default because its target
-workload - many concurrent, multi-turn sessions - sits in the regime where
-load-aware placement wins; measure your own concurrency and corpus size
-against your fleet before assuming either arm generalizes to your
-workload.
+The placement rule this guide's measurements support is more textured than
+a single trigger, and the two scenarios where this guide measured
+affinity + P2P against load-aware + P2P point opposite ways. On the
+uniform shared-prefix pool (Scenario A: a working set spread wider than
+any one pod's cache) affinity + P2P tracks offered rate to saturation and
+matches affinity's near-ideal latency, while load-aware + P2P degrades at
+the top of the offered-rate ladder (p50 30s at 24 req/s versus 0.82s) -
+precise placement concentrates each prefix's traffic tightly enough that
+pulls stay cheap and local, and scattering that placement by load costs
+more in transfer contention than it saves in balance. On the document-Q&A
+headline (128 concurrent multi-turn sessions, each pinned by affinity to
+the pod that computed its prefix) the result flips: load-aware + P2P
+avoids the owner-pod queueing that affinity + P2P still pays, and its
+p95/p99 tail beats affinity + P2P by 2x or more in both measured runs (see
+[benchmark-results/gpt-oss-120b-h200.md](benchmark-results/gpt-oss-120b-h200.md)
+for both). Affinity + P2P is the safer general-purpose default - close to
+affinity's ceiling in the capacity-driven regime and still a clear
+improvement over affinity alone in the concurrency-driven one - which is
+why the guide ships it. Reach for load-aware + P2P specifically when your
+workload looks like many concurrent, multi-turn sessions each pinned to an
+owner pod; re-measure both arms against your own workload shape before
+assuming either generalizes.
 
 ## Configuration
 
@@ -76,13 +77,13 @@ workload.
 
 Four EPP scheduling configurations ship with the guide (under
 [benchmarking/](benchmarking/)). The recommended deployment is
-`epp-load-p2p.yaml`; the others are the comparison arms the guide's
+`epp-affinity-p2p.yaml`; the others are the comparison arms the guide's
 measurements use:
 
 | Config | Placement | Pull |
 |---|---|---|
-| [`epp-load-p2p.yaml`](benchmarking/epp-load-p2p.yaml) | load-balanced | `p2p-source-producer` (recommended - see the placement rule above) |
-| [`epp-affinity-p2p.yaml`](benchmarking/epp-affinity-p2p.yaml) | precise prefix-cache affinity | `p2p-source-producer`, `minCachedTokenDelta: 2048` |
+| [`epp-affinity-p2p.yaml`](benchmarking/epp-affinity-p2p.yaml) | precise prefix-cache affinity | `p2p-source-producer`, `minCachedTokenDelta: 2048` (recommended - see the placement rule above) |
+| [`epp-load-p2p.yaml`](benchmarking/epp-load-p2p.yaml) | load-balanced | `p2p-source-producer` (for high-concurrency, session-ownership-bound workloads) |
 | [`epp-affinity.yaml`](benchmarking/epp-affinity.yaml) | precise prefix-cache affinity | none (baseline) |
 | [`epp-load.yaml`](benchmarking/epp-load.yaml) | load-balanced | none (recompute control) |
 
@@ -232,9 +233,9 @@ kubectl create secret generic llm-d-hf-token \
 ### 2. Deploy the llm-d Router
 
 Install the router with this guide's values, which deploy the EPP with the
-load-aware + P2P scheduling configuration (`epp-load-p2p.yaml`) as the
+affinity + P2P scheduling configuration (`epp-affinity-p2p.yaml`) as the
 default. To run a comparison arm instead, swap the `pluginsCustomConfig` in
-the values for `epp-affinity.yaml`, `epp-load.yaml`, or `epp-affinity-p2p.yaml`
+the values for `epp-affinity.yaml`, `epp-load.yaml`, or `epp-load-p2p.yaml`
 from [benchmarking/](benchmarking/).
 
 ```bash

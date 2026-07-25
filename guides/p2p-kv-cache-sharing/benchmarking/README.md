@@ -112,26 +112,35 @@ per-pod served counts (placement evidence), restarts (must be 0).
 
 Measured (16x gpt-oss-120b, H200, achieved req/s and latency p50 per stage):
 
-| offered | affinity | load, no P2P | load + P2P |
-|---|---|---|---|
-| 4 req/s | 3.8 / 2.4s | 3.8 / 4.2s | 3.9 / 2.4s |
-| 8 req/s | 7.9 / 0.7s | 6.7 / 6.5s | 7.7 / 1.6s |
-| 12 req/s | 11.9 / 0.7s | 9.0 / 24.9s | 11.4 / 2.3s |
-| 16 req/s | 15.8 / 0.7s | 8.8 / 37.3s | 15.1 / 3.6s |
-| 20 req/s | 19.8 / 0.7s | 9.4 / 48.8s | 15.4 / 15.6s |
-| 24 req/s | 23.7 / 0.8s | 9.4 / 63.5s | 16.7 / 30.0s |
+| offered | affinity | affinity + P2P (recommended) | load, no P2P | load + P2P |
+|---|---|---|---|---|
+| 4 req/s | 3.8 / 2.4s | 3.9 / 2.4s | 3.8 / 4.2s | 3.9 / 2.4s |
+| 8 req/s | 7.9 / 0.7s | 7.9 / 0.73s | 6.7 / 6.5s | 7.7 / 1.6s |
+| 12 req/s | 11.9 / 0.7s | 11.9 / 0.75s | 9.0 / 24.9s | 11.4 / 2.3s |
+| 16 req/s | 15.8 / 0.7s | 15.8 / 0.76s | 8.8 / 37.3s | 15.1 / 3.6s |
+| 20 req/s | 19.8 / 0.7s | 19.8 / 0.77s | 9.4 / 48.8s | 15.4 / 15.6s |
+| 24 req/s | 23.7 / 0.8s | 23.6 / 0.82s | 9.4 / 63.5s | 16.7 / 30.0s |
 
 Reading the arms: affinity is near-ideal on a uniform pool - each pod owns
 ~8 of the 128 prefixes (384K tokens, comfortably GPU-resident), so with a
 working prefix index every request is a local hit; zero failures, flat
-sub-second p50. The recompute control saturates near 9.4 req/s: every
-cross-pod placement re-prefills 48K tokens. The pull recovers most of that
-penalty: load+P2P tracks offered to 16 req/s and saturates at 16.7 (+78%
-over recompute) with an order-of-magnitude latency win in the 12-16 req/s
-band (2.3s vs 24.9s p50 at 12), on ~139M pulled prefix tokens (~58% of
-requests pulled instead of recomputing). Zero failures and zero restarts
-in all three arms. Uniform pools are affinity's best case; the hot-set
-scenario below is where load-aware placement plus the pull wins outright.
+sub-second p50. Affinity + P2P matches this ceiling within measurement
+noise at every offered rate, tracking offered to saturation at 24 req/s -
+the pull mostly sits idle here (placement rarely diverges from cache), so
+it costs nothing to have it available for whichever requests do miss. The
+recompute control saturates near 9.4 req/s: every cross-pod placement
+re-prefills 48K tokens. Load + P2P recovers most of that penalty at
+moderate rates (2.3s vs 24.9s p50 at 12 req/s) but degrades sharply at the
+top of the ladder - p50 30.0s at 24 req/s, achieving only 16.7 of the 24
+offered - load-aware placement scatters each prefix's traffic across more
+pods than affinity does, so at saturation there is more pull/transfer
+contention to pay than there is queueing to save; affinity + P2P has no
+such penalty because it never scatters a prefix's traffic in the first
+place. Zero failures and zero restarts in all four arms. Uniform pools are
+where affinity + P2P wins outright; the hot-set scenario below and the
+document-Q&A headline are where load-aware + P2P's spreading matters
+more - see the [placement rule](../README.md#when-to-use-this-path) for
+when each applies.
 
 ## Scenario B - hot set (the payoff case)
 
@@ -204,7 +213,7 @@ alternation does not apply with only one non-baseline arm running). All
 six runs completed 1,152/1,152 turns with zero errors and zero restarts.
 TTFT p50/p95/p99 (s) and throughput (turns/s):
 
-| run | `epp-affinity` (precise routing) | `epp-affinity-p2p` | `epp-load-p2p` (recommended) |
+| run | `epp-affinity` (precise routing) | `epp-affinity-p2p` (recommended default) | `epp-load-p2p` (wins this scenario) |
 |---|---|---|---|
 | 1 | 4.1 / 41.0 / 80.5; 5.98 | 4.0 / 27.7 / 48.8; 5.6 | 4.5 / 13.0 / 20.9; 7.02 |
 | 2 (order reversed / 2nd run) | 4.2 / 17.3 / 37.2; 7.66 | 2.6 / 33.6 / 67.2; 5.7 | 3.9 / 12.5 / 26.7; 7.76 |
@@ -226,8 +235,14 @@ already out-caches the scheduled pod - it recovers the *cache-locality*
 cost of a cross-pod placement but not the *queueing* cost of a placement
 decision that still prefers a busy owner. `epp-load-p2p` never makes that
 tradeoff: placement always goes to the least-loaded pod, so there is no
-owner-pod queue to build in the first place. This is why the guide ships
-`epp-load-p2p` as the default (see the [README](../README.md#when-to-use-this-path)).
+owner-pod queue to build in the first place. On this scenario alone,
+`epp-load-p2p` is the better arm - but see
+[Scenario A](#scenario-a---uniform-shared-prefix-pool-three-arms), where
+the result is reversed. The guide ships `epp-affinity-p2p` as the default
+because it is the safer general-purpose choice across both regimes (see
+the [README](../README.md#when-to-use-this-path)); reach for
+`epp-load-p2p` specifically when your workload looks like this one -
+many concurrent, multi-turn sessions each pinned to an owner pod.
 
 Medians are equal - a home session answers from warm cache either way. The
 arms separate on tails and stability: p99 TTFT 21-27s versus 37-81s (2-4x),
