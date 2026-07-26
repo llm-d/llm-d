@@ -1,0 +1,42 @@
+## Coordinator EPD guide overrides for the single EPP / InferencePool that
+## covers all three roles (encode, prefill, decode).
+## Layer on top of: recipes/router/base.values.yaml
+##
+## One EPP instance runs one scheduling profile per call, selected by the
+## coordinator's `EPP-Phase` header via the `header-phase-profile-handler`
+## plugin (llm-d-router PR #2134). Each profile filters the shared pool down
+## to its own role with a `*-filter` by-label plugin, so the InferencePool
+## selector below matches on the guide label only, not `llm-d.ai/role`.
+
+router:
+  extraServicePorts:
+    - name: http
+      port: 80
+      protocol: TCP
+      targetPort: 8081
+
+  epp:
+    pluginsConfigFile: "epd-plugins.yaml"
+    pluginsCustomConfig:
+      epd-plugins.yaml: |
+        apiVersion: llm-d.ai/v1alpha1
+        kind: EndpointPickerConfig
+        plugins:
+        - type: encode-filter
+        - type: prefill-filter
+        - type: decode-filter
+        - type: header-phase-profile-handler
+        schedulingProfiles:
+        - name: encode
+          plugins:
+          - pluginRef: encode-filter
+        - name: prefill
+          plugins:
+          - pluginRef: prefill-filter
+        - name: decode
+          plugins:
+          - pluginRef: decode-filter
+
+  modelServers:
+    matchLabels:
+      llm-d.ai/guide: "coordinator-epd"

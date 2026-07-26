@@ -1,0 +1,39 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: llm-d-coordinator-config
+data:
+  coordinator.yaml: |
+    log_level: 2
+    server:
+      listen_addr: ":8080"
+      read_timeout: 30s
+      write_timeout: 120s
+
+    gateway:
+      address: "http://llm-d-inference-gateway-${PROVIDER_NAME}.${NAMESPACE}.svc:80"
+      max_idle_conns_per_host: 100
+      idle_conn_timeout: 90s
+      timeout: 60s
+
+    # The pipeline is a plain list of steps: add, remove, or reorder them here to
+    # change what happens to a request without touching any code. See the guide's
+    # "Overview" and the PD-only note in "Installation Instructions" for examples.
+    pipeline:
+      kv_connector: kv-nixl
+      ec_connector: ec-nixl
+      steps:
+        - type: replace-media-urls
+          params:
+            download_timeout: 10s
+            max_concurrent_downloads: 10
+        - type: render
+          params:
+            address: "http://localhost:8000"
+            timeout: 30s
+        - type: conditional-decode
+        - type: encode
+          params:
+            max_parallel: 8
+        - type: prefill
+        - type: decode

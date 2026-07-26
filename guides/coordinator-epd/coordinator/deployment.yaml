@@ -1,0 +1,136 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: llm-d-coordinator
+  labels:
+    app: llm-d-coordinator
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: llm-d-coordinator
+  template:
+    metadata:
+      labels:
+        app: llm-d-coordinator
+    spec:
+      terminationGracePeriodSeconds: 30
+      containers:
+      - name: coordinator
+        image: ghcr.io/roytman/coordinator:dev
+        imagePullPolicy: IfNotPresent
+        args:
+        - --config
+        - /etc/coordinator/coordinator.yaml
+        env:
+        - name: GOMAXPROCS
+          value: "4"
+        - name: GOMEMLIMIT
+          value: "7200MiB"
+        resources:
+          requests:
+            cpu: "4"
+            memory: 8Gi
+          limits:
+            cpu: "4"
+            memory: 8Gi
+        ports:
+        - name: http
+          containerPort: 8080
+        livenessProbe:
+          httpGet:
+            path: /healthz
+            port: 8080
+          initialDelaySeconds: 5
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /readyz
+            port: 8080
+          initialDelaySeconds: 5
+          periodSeconds: 10
+        volumeMounts:
+        - name: config
+          mountPath: /etc/coordinator
+      # Runs the pipeline's "render" step (multimodal input normalization) as a
+      # local CPU vLLM instance the coordinator container talks to over localhost.
+      - name: vllm-render
+        image: vllm/vllm-openai-cpu:v0.21.0
+        imagePullPolicy: IfNotPresent
+        command: ["vllm", "serve"]
+        args: ["Qwen/Qwen3-VL-2B-Instruct", "--port=8000"]
+        env:
+        - name: HF_HOME
+          value: /model-cache
+        - name: HF_TOKEN
+          valueFrom:
+            secretKeyRef:
+              key: HF_TOKEN
+              name: llm-d-hf-token
+              optional: true
+        resources:
+          requests:
+            cpu: "2"
+            memory: 8Gi
+          limits:
+            cpu: "4"
+            memory: 16Gi
+        ports:
+        - name: render-http
+          containerPort: 8000
+        startupProbe:
+          httpGet:
+            path: /health
+            port: 8000
+          initialDelaySeconds: 2
+          periodSeconds: 1
+          failureThreshold: 600
+          timeoutSeconds: 1
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8000
+          periodSeconds: 10
+          failureThreshold: 5
+          timeoutSeconds: 1
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8000
+          periodSeconds: 5
+          failureThreshold: 1
+          timeoutSeconds: 1
+        volumeMounts:
+        - name: model-cache
+          mountPath: /model-cache
+        - name: torch-compile-cache
+          mountPath: /.cache
+        - name: vllm-config
+          mountPath: /.config
+      volumes:
+      - name: config
+        configMap:
+          name: llm-d-coordinator-config
+      - name: model-cache
+        persistentVolumeClaim:
+          claimName: llm-d-model-cache
+      - name: torch-compile-cache
+        emptyDir: {}
+      - name: vllm-config
+        emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: llm-d-coordinator
+  labels:
+    app: llm-d-coordinator
+spec:
+  selector:
+    app: llm-d-coordinator
+  type: ClusterIP
+  ports:
+  - name: http
+    protocol: TCP
+    port: 8080
+    targetPort: 8080
