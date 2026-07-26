@@ -164,21 +164,14 @@ The result of this guide:
 One llm-d Router release, EPP, and InferencePool cover all three roles — see the
 [Overview](#overview) for why this is a single deployment rather than one per role.
 
-```bash
-helm install ${GUIDE_NAME} \
-    ${ROUTER_STANDALONE_CHART} \
-    -f ${REPO_ROOT}/guides/recipes/router/base.values.yaml \
-    -f ${REPO_ROOT}/guides/${GUIDE_NAME}/router/${GUIDE_NAME}.values.yaml \
-    -n ${NAMESPACE} --version ${ROUTER_CHART_VERSION}
-```
-
-<details>
-<summary><h4>Gateway Mode</h4></summary>
-
-To employ a Kubernetes Gateway managed proxy instead of the standalone one:
+The Coordinator's own ingress (`coordinator/httproute.yaml`) and its outbound
+`gateway.address` ([`coordinator/configmap.yaml`](coordinator/configmap.yaml)) both
+always route through a real Kubernetes Gateway — there is no standalone-proxy path for
+this guide, unlike other guides in this repo. Deploy one first if your cluster doesn't
+already have one:
 
 1. *Deploy a Kubernetes Gateway*. Follow [the gateway guides](../../docs/infrastructure/gateway) for step by step deployment for a Gateway named `llm-d-inference-gateway`. You only need to create one Gateway for your cluster.
-2. *Deploy the llm-d Router and an HTTPRoute* that connects it to the Gateway:
+2. *Deploy the llm-d Router*:
 
 ```bash
 export PROVIDER_NAME=gke # other: na, agentgateway, or istio
@@ -191,7 +184,37 @@ helm install ${GUIDE_NAME} \
     -n ${NAMESPACE} --version ${ROUTER_CHART_VERSION}
 ```
 
-</details>
+3. *Deploy the Router's HTTPRoute*. The chart's own auto-created HTTPRoute is disabled
+   (`httpRoute.create: false` in [`router/coordinator-epd.values.yaml`](router/coordinator-epd.values.yaml))
+   because it would be an unconditional catch-all on `/`, colliding with the
+   Coordinator's own route on the same Gateway. Instead, the two hand-authored
+   HTTPRoutes on this Gateway (`coordinator/httproute.yaml` and
+   [`router/httproute.yaml`](router/httproute.yaml)) split traffic three ways:
+   - `/v1/completions`, `/v1/chat/completions`, `/inference/v1/decode` **without**
+     `EPP-Phase` → the Coordinator (client-facing inference calls).
+   - The same three paths **with** `EPP-Phase` → this router's EPP (the Coordinator's
+     own internal per-phase calls reuse those same paths, so both HTTPRoutes match
+     them at the same exact-path specificity; the header match then breaks the tie in
+     the router's favor — see the comments in both files for why path specificity
+     must match for this to work).
+   - Everything else without `EPP-Phase` (e.g. `/v1/models`, `/health`) → this
+     router's EPP too, which already falls back to its `decode` scheduling profile
+     when the header is absent.
+
+> [!WARNING]
+> `EPP-Phase` is a plain client-controllable HTTP header, not a trust boundary. A
+> client that forges it on its own request bypasses the Coordinator's pipeline
+> entirely, matching the router's HTTPRoute directly instead. There is no portable
+> Gateway API mechanism to strip or verify it before routing decisions are made —
+> route filters like `RequestHeaderModifier` only apply *after* a rule has already
+> matched, so they can't close this. Acceptable for this guide's experimental,
+> small-scale scope; don't expose this Gateway to untrusted clients without adding
+> network-level isolation (mTLS peer identity, `NetworkPolicy`) or a provider-specific
+> ingress-level header strip (e.g. an Istio `EnvoyFilter`) first.
+
+```bash
+envsubst < ${REPO_ROOT}/guides/${GUIDE_NAME}/router/httproute.yaml | kubectl apply -n ${NAMESPACE} -f -
+```
 
 ### 2. Provision the shared model cache
 
@@ -266,33 +289,19 @@ instead of through a cache.
 
 ### 1. Get the IP of the Entrypoint
 
-Clients always send requests to the **Coordinator**, which orchestrates the
-`encode → prefill → decode` pipeline. The EPP is internal — the Coordinator selects
-which of its scheduling profiles runs by setting the `EPP-Phase` header on its
-outbound calls.
-
-**Standalone Mode**
-
-Hit the Coordinator's ClusterIP directly:
-
-```bash
-export IP=$(kubectl get service llm-d-coordinator -n ${NAMESPACE} -o jsonpath='{.spec.clusterIP}')
-export PORT=8080
-```
-
-<details>
-<summary> <b>Gateway Mode</b> </summary>
-
-The Gateway forwards client traffic (no `EPP-Phase` header) to the Coordinator via the
-`coordinator` HTTPRoute deployed alongside the coordinator overlay. Per-phase routes
-still match Coordinator-issued internal calls.
+Clients always send requests through the **Gateway**, never directly to the
+Coordinator's Service. The Coordinator's own `coordinator` HTTPRoute (deployed
+alongside the coordinator overlay in step 4) attaches to the `llm-d-inference-gateway`
+Gateway and forwards client traffic (no `EPP-Phase` header) to the Coordinator, which
+then orchestrates the `encode → prefill → decode` pipeline. The EPP is internal — the
+Coordinator selects which of its scheduling profiles runs by setting the `EPP-Phase`
+header on its own outbound calls, which route back through that same Gateway to
+`router/httproute.yaml` (step 1.3) instead of the Coordinator's route.
 
 ```bash
 export IP=$(kubectl get gateway llm-d-inference-gateway -n ${NAMESPACE} -o jsonpath='{.status.addresses[0].value}')
 export PORT=80
 ```
-
-</details>
 
 ### 2. Send Test Requests
 
@@ -324,6 +333,7 @@ curl -X POST http://${IP}:${PORT}/v1/completions \
 To remove the deployed components:
 
 ```bash
+envsubst < ${REPO_ROOT}/guides/${GUIDE_NAME}/router/httproute.yaml | kubectl delete -n ${NAMESPACE} -f -
 helm uninstall ${GUIDE_NAME} -n ${NAMESPACE}
 kustomize build ${REPO_ROOT}/guides/${GUIDE_NAME}/coordinator/ | envsubst | kubectl delete -n ${NAMESPACE} -f -
 kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/gpu/vllm/${INFRA_PROVIDER}
@@ -331,7 +341,7 @@ kubectl delete -n ${NAMESPACE} -f ${REPO_ROOT}/guides/${GUIDE_NAME}/model-cache-
 kubectl delete namespace ${NAMESPACE}
 ```
 
-If you deployed in Gateway Mode, also remove the Gateway by following [the gateway cleanup guide](../../docs/infrastructure/gateway/gke.md#cleanup).
+If nothing else in your cluster still uses it, also remove the `llm-d-inference-gateway` Gateway by following [the gateway cleanup guide](../../docs/infrastructure/gateway/gke.md#cleanup).
 
 ## Architecture
 

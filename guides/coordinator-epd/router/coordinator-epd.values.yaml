@@ -8,6 +8,18 @@
 ## to its own role with a `*-filter` by-label plugin, so the InferencePool
 ## selector below matches on the guide label only, not `llm-d.ai/role`.
 
+# The chart's own HTTPRoute (from features/httproute-flags.yaml) would be an
+# unconditional catch-all on `/` with no header match, tying in specificity
+# with the Coordinator's own catch-all `/` HTTPRoute on the same Gateway — and
+# (by creation-order tiebreak) winning, sending every client request straight
+# to this router/EPP instead of through the Coordinator. The single combined
+# router needs to match EPP-Phase being encode OR prefill OR decode, which the
+# chart's headerMatches (a single exact-match map) can't express, so we
+# disable it here and hand-author router/httproute.yaml instead (see there
+# for the OR'd header matches).
+httpRoute:
+  create: false
+
 router:
   extraServicePorts:
     - name: http
