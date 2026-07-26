@@ -57,7 +57,12 @@ spec:
       - name: vllm-render
         image: vllm/vllm-openai-cpu:v0.21.0
         imagePullPolicy: IfNotPresent
-        command: ["vllm", "serve"]
+        # "vllm launch render" runs only the preprocessing/postprocessing HTTP layer
+        # (no GPU/engine warmup, no encoder-cache profiling) -- "vllm serve" boots
+        # the full inference engine, which for this model hangs for 10+ minutes on
+        # a CPU-backend warmup pass profiling a synthetic max-resolution image,
+        # blowing well past the startup probe below.
+        command: ["vllm", "launch", "render"]
         args: ["Qwen/Qwen3-VL-2B-Instruct", "--port=8000"]
         env:
         - name: HF_HOME

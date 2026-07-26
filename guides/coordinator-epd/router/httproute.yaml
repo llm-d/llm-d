@@ -1,0 +1,93 @@
+# SECURITY NOTE: EPP-Phase is a plain client-controllable HTTP header, not a trust
+# boundary. Any client that can reach the Gateway can forge EPP-Phase on its own
+# request and match this route directly, bypassing the Coordinator's pipeline
+# (conditional-decode, media handling, orchestration) entirely -- there is no portable
+# Gateway API mechanism to strip/verify it before routing decisions are made (route
+# filters like RequestHeaderModifier only apply after a rule has already matched, so
+# they can't prevent this). Acceptable for this guide's experimental, small-scale
+# scope; do not expose this Gateway to untrusted clients without adding network-level
+# isolation (mTLS peer identity, NetworkPolicy) or a provider-specific ingress-level
+# header strip (e.g. an Istio EnvoyFilter) first.
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: ${GUIDE_NAME}
+spec:
+  parentRefs:
+  - group: gateway.networking.k8s.io
+    kind: Gateway
+    name: llm-d-inference-gateway
+  rules:
+  - backendRefs:
+    - group: inference.networking.k8s.io
+      kind: InferencePool
+      name: ${GUIDE_NAME}
+    # Match alternatives (OR'd) all sharing the same InferencePool backend:
+    #
+    # - Exact path + EPP-Phase pairs: these mirror coordinator/httproute.yaml's
+    #   exact-path matches on the SAME literal paths (the coordinator's own
+    #   internal calls reuse the client-facing paths). Gateway API precedence
+    #   ranks path specificity before header count, so ties require matching
+    #   path specificity here too -- an exact match here ties with the
+    #   Coordinator's exact match on the same path, and the header match then
+    #   breaks that tie in this rule's favor. A prefix match here would lose
+    #   to the Coordinator's exact match even when EPP-Phase is present.
+    # - The trailing PathPrefix `/` alternative has no header condition: it
+    #   catches everything else without EPP-Phase (e.g. /v1/models, /health) --
+    #   header-phase-profile-handler already runs its defaultProfile (decode)
+    #   for calls with no EPP-Phase header, so this needs no extra EPP config.
+    matches:
+    - path:
+        type: Exact
+        value: /v1/completions
+      headers:
+      - type: Exact
+        name: EPP-Phase
+        value: encode
+    - path:
+        type: Exact
+        value: /v1/completions
+      headers:
+      - type: Exact
+        name: EPP-Phase
+        value: prefill
+    - path:
+        type: Exact
+        value: /v1/completions
+      headers:
+      - type: Exact
+        name: EPP-Phase
+        value: decode
+    - path:
+        type: Exact
+        value: /v1/chat/completions
+      headers:
+      - type: Exact
+        name: EPP-Phase
+        value: encode
+    - path:
+        type: Exact
+        value: /v1/chat/completions
+      headers:
+      - type: Exact
+        name: EPP-Phase
+        value: prefill
+    - path:
+        type: Exact
+        value: /v1/chat/completions
+      headers:
+      - type: Exact
+        name: EPP-Phase
+        value: decode
+    - path:
+        type: Exact
+        value: /inference/v1/decode
+      headers:
+      - type: Exact
+        name: EPP-Phase
+        value: decode
+    - path:
+        type: PathPrefix
+        value: /
+    timeouts:
+      request: 300s
