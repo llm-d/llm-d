@@ -16,6 +16,13 @@ router:
       targetPort: 8081
 
   epp:
+    # PR #2134 (single EPP for encode/prefill/decode) isn't merged/released yet;
+    # this is a build of llm-d-router containing it. Swap back to the chart
+    # default once the PR lands in an official image.
+    image:
+      registry: ghcr.io/roytman
+      repository: llm-d-router-endpoint-picker
+      tag: "1-epp"
     pluginsConfigFile: "epd-plugins.yaml"
     pluginsCustomConfig:
       epd-plugins.yaml: |

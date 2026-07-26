@@ -69,8 +69,10 @@ The result of this guide:
 > The single-EPP setup below depends on
 > [llm-d-router#2134](https://github.com/llm-d/llm-d-router/pull/2134)
 > (`header-phase-profile-handler` plus the `encode-filter`/`prefill-filter`/`decode-filter`
-> plugins), which is open and not yet merged at the time of writing. Make sure
-> `router.epp.image` resolves to a build that includes it before following this guide.
+> plugins), which is open and not yet merged at the time of writing. Until it lands in
+> an official image, [`router/coordinator-epd.values.yaml`](router/coordinator-epd.values.yaml)
+> pins `router.epp.image` to `ghcr.io/roytman/llm-d-router-endpoint-picker:1-epp`, a
+> build that contains it. Swap it back to the chart default once the PR is released.
 
 ## Default Configuration
 
@@ -148,14 +150,14 @@ The result of this guide:
 >
 > * Step 1: no change needed — the same single Router/EPP deployment serves whichever
 >   roles you actually run; an `encode` scheduling profile with no `encode`-labeled pods
->   behind it is simply never called, since the Coordinator's pipeline (step 5) is what
+>   behind it is simply never called, since the Coordinator's pipeline (step 4) is what
 >   decides whether an `encode` phase call happens at all.
-> * Step 3: skip entirely — the multimedia downloader is only used by the `replace-media-urls` pipeline step.
-> * Step 4: skip the encode model server overlay, or scale it to 0 replicas.
-> * Step 5: after deploying the Coordinator, edit the `llm-d-coordinator-config`
+> * Step 3: skip the encode model server overlay, or scale it to 0 replicas.
+> * Step 4: after deploying the Coordinator, edit the `llm-d-coordinator-config`
 >   ConfigMap to drop the `replace-media-urls`, `render`, and `encode` steps from
 >   `pipeline.steps`, keeping only `conditional-decode`, `prefill`, and `decode`, then
 >   restart the coordinator Deployment.
+> * Step 5: skip entirely — the multimedia downloader is only used by the `replace-media-urls` pipeline step.
 
 ### 1. Deploy the llm-d Router
 
@@ -211,28 +213,7 @@ kubectl apply -n ${NAMESPACE} -f ${REPO_ROOT}/guides/${GUIDE_NAME}/model-cache-p
 > The first model server pod to start will populate the cache via the HuggingFace
 > Hub; the others reuse it. Expect the first cold start to be longer than the rest.
 
-### 3. (Optional) Deploy the multimedia downloader (caching proxy)
-
-The Coordinator's `replace-media-urls` step can route outbound media fetches through
-an in-cluster forward proxy (e.g. Squid) that caches origin images/video, eliminating
-redundant fetches across requests. Caching HTTPS origins requires the proxy to
-terminate TLS and re-sign responses with its own CA (SSL-Bump), which means the
-Coordinator needs to trust that CA.
-
-This repo doesn't ship a caching proxy of its own — deploy one for your cluster (e.g.
-an SSL-Bump-configured Squid), then trust its CA in the Coordinator with
-[`multimedia-downloader/patch-coordinator-ca.yaml`](multimedia-downloader/patch-coordinator-ca.yaml):
-
-```bash
-kubectl patch deployment llm-d-coordinator -n ${NAMESPACE} \
-    --type=strategic --patch-file ${REPO_ROOT}/guides/${GUIDE_NAME}/multimedia-downloader/patch-coordinator-ca.yaml
-kubectl rollout restart deployment/llm-d-coordinator -n ${NAMESPACE}
-```
-
-Without this step, `replace-media-urls` still works — it just fetches media directly
-instead of through a cache.
-
-### 4. Deploy the Model Servers
+### 3. Deploy the Model Servers
 
 Apply the Kustomize overlay for your infrastructure provider. One overlay deploys all
 three role-specific model servers (encode, prefill, decode), each as a single
@@ -243,7 +224,7 @@ export INFRA_PROVIDER=base # base | gke
 kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/gpu/vllm/${INFRA_PROVIDER}/
 ```
 
-### 5. Deploy the Coordinator
+### 4. Deploy the Coordinator
 
 Drives the `replace-media-urls → render → conditional-decode → encode → prefill →
 decode` pipeline. The ConfigMap references `${NAMESPACE}` and `${PROVIDER_NAME}`, so
@@ -253,6 +234,28 @@ build with `kustomize` and pipe through `envsubst` before applying:
 export PROVIDER_NAME=${PROVIDER_NAME:-istio} # match whatever provider you used for the routers, or your standalone proxy
 kustomize build ${REPO_ROOT}/guides/${GUIDE_NAME}/coordinator/ | envsubst | kubectl apply -n ${NAMESPACE} -f -
 ```
+
+### 5. (Optional) Deploy the multimedia downloader (caching proxy)
+
+The Coordinator's `replace-media-urls` step can route outbound media fetches through
+an in-cluster forward proxy (e.g. Squid) that caches origin images/video, eliminating
+redundant fetches across requests. Caching HTTPS origins requires the proxy to
+terminate TLS and re-sign responses with its own CA (SSL-Bump), which means the
+Coordinator needs to trust that CA.
+
+This repo doesn't ship a caching proxy of its own — deploy one for your cluster (e.g.
+an SSL-Bump-configured Squid), then trust its CA in the Coordinator with
+[`multimedia-downloader/patch-coordinator-ca.yaml`](multimedia-downloader/patch-coordinator-ca.yaml).
+This requires the Coordinator from step 4 to already be deployed:
+
+```bash
+kubectl patch deployment llm-d-coordinator -n ${NAMESPACE} \
+    --type=strategic --patch-file ${REPO_ROOT}/guides/${GUIDE_NAME}/multimedia-downloader/patch-coordinator-ca.yaml
+kubectl rollout restart deployment/llm-d-coordinator -n ${NAMESPACE}
+```
+
+Without this step, `replace-media-urls` still works — it just fetches media directly
+instead of through a cache.
 
 ### 6. (Optional) Enable monitoring
 
