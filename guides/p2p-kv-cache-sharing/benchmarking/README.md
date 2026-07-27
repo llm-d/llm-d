@@ -64,6 +64,14 @@ same false plateau; this rig runs 6 replicas (measured: 30 req/s at p50
 
 ## Step 0 - pull-versus-recompute crossover (single request)
 
+Requires `rdma/ib` on the model-server pods. Without the IB device exposed
+to the container, NIXL/UCX falls back to TCP, the pull leg inflates 2-3x
+while recompute is unchanged, and this measurement reports the pull *losing*
+at 2K-32K - the opposite conclusion, from the same image and configuration.
+Confirm `/dev/infiniband` is present in the container before trusting any
+number here. See
+[Supported Hardware Backends](../README.md#supported-hardware-backends).
+
 Seed a fresh prefix on one pod; measure single-request prefill latency on a
 cold pod with and without the pull, at prefix lengths 2K/8K/16K/32K/48K.
 The crossover sets the router's `minCachedTokenDelta`: below it a pull costs

@@ -99,8 +99,14 @@ pays a one-time session-establishment transient).
 ### Supported Hardware Backends
 
 * NVIDIA GPU / vLLM (measured on H200; any CUDA GPU with enough HBM for the
-  model works). RDMA between pods (`rdma/ib` resources) gives NIXL/UCX
-  transfer rates; TCP works functionally at reduced rates.
+  model works). RDMA between pods (`rdma/ib` resources) is a prerequisite
+  for the pull to pay, not a tuning option. Without the IB device exposed to
+  the container, NIXL/UCX falls back to TCP and the pull *loses* to
+  recompute from 2K to 32K tokens, breaking even only near 48K. Measured on
+  gpt-oss-120b, same image and configuration, `rdma/ib` the only difference:
+  +29% / +58% / +39% / +18% / -17% TTFT at 2K/8K/16K/32K/48K without it,
+  against -49% / -76% / -83% / -86% / -88% with it. TCP is functional, but
+  it inverts the economics rather than merely slowing them.
 
 ## Best Practices
 
