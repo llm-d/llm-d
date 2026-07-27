@@ -9,9 +9,9 @@ metadata:
     llm-d.ai/accelerator-vendor: "nvidia"
     llm-d.ai/role: prefill
 spec:
-  replicas: 1
+  replicas: 3
   leaderWorkerTemplate:
-    size: 2
+    size: 1
     workerTemplate:
       metadata:
         labels:
@@ -49,11 +49,9 @@ spec:
               - |-
                 START_RANK=$(( ${LWS_WORKER_INDEX:-0} * DP_SIZE_LOCAL ))
                 export UCX_IB_ROCE_REACHABILITY_MODE=all
-                export VLLM_SSM_CONV_STATE_LAYOUT=DS
-                export VLLM_ENABLE_K3_LATENT_MOE_TAIL_FUSION=1
 
                 exec vllm serve \
-                  moonshotai/Kimi-K3 \
+                  RedHatAI/GLM-5.2-NVFP4-FP8 \
                   --port 8000 \
                   --trust-remote-code \
                   --gpu-memory-utilization 0.8 \
@@ -72,7 +70,10 @@ spec:
                   --data-parallel-start-rank $START_RANK \
                   --kv_transfer_config '{"kv_connector":"NixlConnector",
                                           "kv_role":"kv_both",
-                                          "kv_load_failure_policy":"fail"}'
+                                          "kv_load_failure_policy":"fail"}' \
+                  --all2all-backend flashinfer_nvlink_one_sided \
+                  --kv-cache-dtype fp8 \
+                  --speculative-config '{"method":"mtp","num_speculative_tokens":3}' \
                 
                   # To enable tracing, add:
                   # --otlp-traces-endpoint http://otel-collector:4317 \

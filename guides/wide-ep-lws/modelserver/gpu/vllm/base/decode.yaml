@@ -11,7 +11,7 @@ metadata:
 spec:
   replicas: 1
   leaderWorkerTemplate:
-    size: 2
+    size: 1
     workerTemplate:
       metadata:
         labels:
@@ -95,46 +95,32 @@ spec:
               - |-
                 START_RANK=$(( ${LWS_WORKER_INDEX:-0} * DP_SIZE_LOCAL ))
                 export UCX_IB_ROCE_REACHABILITY_MODE=all
-                export VLLM_USE_V2_MODEL_RUNNER=1
-                export VLLM_SSM_CONV_STATE_LAYOUT=DS
-                export VLLM_ENABLE_K3_LATENT_MOE_TAIL_FUSION=1
-
+                
                 exec vllm serve \
-                  moonshotai/Kimi-K3 \
+                  nvidia/GLM-5.2-NVFP4 \
                   --port 8200 \
-                  --trust-remote-code \
                   --disable-access-log-for-endpoints=/health,/metrics \
-                  --no-enable-prefix-caching \
+                  --data-parallel-multi-port-external-lb \
+                  --data-parallel-supervisor-port=8208 \
                   --enable-expert-parallel \
                   --tensor-parallel-size $TP_SIZE \
                   --max-num-batched-tokens ${MAX_TOKENS} \
                   --max-num-seqs ${MAX_TOKENS} \
                   --data-parallel-size $((LWS_GROUP_SIZE * DP_SIZE_LOCAL)) \
-                  --data-parallel-start-rank $((LWS_WORKER_INDEX * DP_SIZE_LOCAL))
-                  --data-parallel-size-local $((DP_SIZE_LOCAL)) \
+                  --data-parallel-size-local $DP_SIZE_LOCAL \
                   --data-parallel-address ${LWS_LEADER_ADDRESS} \
                   --data-parallel-rpc-port 5555 \
                   --data-parallel-start-rank $START_RANK \
-                  --data-parallel-hybrid-lb \
                   --kv_transfer_config '{"kv_connector":"NixlConnector",
                                           "kv_role":"kv_both",
                                           "kv_load_failure_policy":"fail"}' \
-                  --moe-backend deep_gemm_mega_moe \
-                  --no-disable-hybrid-kv-cache-manager \
-                  --compilation-config '{"cudagraph_mode":"FULL_DECODE_ONLY"}' \
                   --all2all-backend flashinfer_nvlink_one_sided \
-                  --profiler-config '{"profiler":"torch",
-                                      "torch_profiler_dir":"/profiles",
-                                      "max_iterations":10,
-                                      "ignore_frontend":true}'
+                  --kv-cache-dtype fp8 \
+                  --speculative-config '{"method":"mtp","num_speculative_tokens":3}'
 
                   # To enable tracing, add:
                   # --otlp-traces-endpoint http://otel-collector:4317 \
                   # --collect-detailed-traces all
-                  # --speculative-config '{"model":"Inferact/Kimi-K3-DSpark","method":"dspark","num_speculative_tokens":7,"attention_backend":"FLASHINFER_MLA","draft_sample_method":"probabilistic","rejection_sample_method":"block"}'
-                  # --data-parallel-multi-port-external-lb \
-                  # --data-parallel-size-local $DP_SIZE_LOCAL \
-                  # --data-parallel-supervisor-port=8208 \
             env:
               - name: HF_TOKEN
                 valueFrom:
