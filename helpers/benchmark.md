@@ -64,19 +64,6 @@ llmdbenchmark --version
 > An early termination of the installation could happen without clear error messages. Check if all required libraries have executable permissions (`+x`).
 > [!NOTE]
 > A successful installation shows the following lines:
->
-> ```text
-> === Done ===    
-> Reminder: Please activate the virtual environment in your shell:
->   source ${LLMDBENCH_VENV_DIR}/bin/activate
-> To deactivate the virtual environment in your shell:
->   deactivate
-> ```
-> 
-> An early termination of the installation could happen without clear error messages. Check if all required libraries have executable permissions (`+x`).
-
-> [!NOTE]
-> Every subsequent `llmdbenchmark` command on this page assumes you are inside the `llm-d-benchmark` repo directory with the venv activated. If you open a new shell, re-run the two commands above.
 
 ## Quick start
 
