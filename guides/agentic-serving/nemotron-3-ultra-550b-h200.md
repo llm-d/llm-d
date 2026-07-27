@@ -101,7 +101,7 @@ helm install ${GUIDE_NAME} \
 ### 2. Deploy the Model Server (GPUs)
 
 > [!NOTE]
-> This guide provides two ways to deploy the model server. The default one (`INFRA\_PROVIDER` = `base`) is to download the `RedHatAI/NVIDIA-Nemotron-3-Ultra-550B-A55B-FP8-block` model from HuggingFace every time. However, the model is ~560GB in size. Downloading a model of this scale directly from HuggingFace can take over an hour, and because every deployment triggers a new download, it creates a significant bottleneck. To save time and accelerate the deployment process, we highly recommend saving the model to a Google Cloud Storage (GCS) bucket and accessing it directly from there. Please check the [Readme](modelserver/gpu/vllm/nemotron-3-ultra/gke/README.md) for this deployment.
+> This guide provides two ways to deploy the model server. The default one (`INFRA_PROVIDER` = `base`) is to download the `RedHatAI/NVIDIA-Nemotron-3-Ultra-550B-A55B-FP8-block` model from HuggingFace every time. However, the model is ~560GB in size. Downloading a model of this scale directly from HuggingFace can take over an hour, and because every deployment triggers a new download, it creates a significant bottleneck. To save time and accelerate the deployment process, we highly recommend saving the model to a Google Cloud Storage (GCS) bucket and accessing it directly from there. Please check the [Readme](modelserver/gpu/vllm/nemotron-3-ultra/gke/README.md) for this suggested deployment.
 
 Apply the Kustomize overlay for the Nemotron-3-Ultra H200 deployment:
 
