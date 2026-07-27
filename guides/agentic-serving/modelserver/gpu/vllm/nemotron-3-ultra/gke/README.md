@@ -24,7 +24,7 @@ For Autopilot clusters, please skip this step as Cloud Storage FUSE CSI driver i
 
 For Standard clusters, run the command:
 ```
-gcloud container clusters create llm-models \
+gcloud container clusters create <CLUSTER_NAME> \
     --addons GcsFuseCsiDriver \
     --cluster-version=<VERSION> \
     --location=<LOCATION> \
@@ -32,7 +32,7 @@ gcloud container clusters create llm-models \
 ```
 To verify that the Cloud Storage FUSE CSI driver is enabled on the cluster, run the command:
 ```
-gcloud container clusters describe llm-models \
+gcloud container clusters describe <CLUSTER_NAME> \
     --location=<LOCATION> \
     --project=<PROJECT_ID> \
     --format="value(addonsConfig.gcsFuseCsiDriverConfig.enabled)"
@@ -41,11 +41,54 @@ For more detailed information, check https://docs.cloud.google.com/kubernetes-en
 
 
 ## Configure Access to Cloud Storage Buckets
+To make your Cloud Storage buckets accessible by your GKE cluster, authenticate using Workload Identity Federation for GKE with the Cloud Storage bucket that you want to mount in your Pod specification:
+1. Make sure you have Workload Identity Federation for GKE enabled, if not, follow [these steps](
+"https://docs.cloud.google.com/kubernetes-engine/docs/how-to/workload-identity#enable_on_clusters_and_node_pools
+) to enable it
+
+2. Get credentials for your cluster:
+```
+gcloud container clusters get-credentials <CLUSTER_NAME> \
+    --location=<LOCATION>
+```
+3. Create a namespace to use for the [Kubernetes ServiceAccount](https://kubernetes.io/docs/concepts/security/service-accounts/). You can also use the default namespace or any existing namespace.
+```
+kubectl create namespace <NAMESPACE>
+```
+4. Create a Kubernetes ServiceAccount for your application to use. You can also use any existing Kubernetes ServiceAccount in any namespace.
+```
+kubectl create serviceaccount <KSA_NAME> \
+    --namespace <NAMESPACE>
+```
+5. Grant one of the IAM roles for Cloud Storage to the Kubernetes ServiceAccount
+```
+gcloud storage buckets add-iam-policy-binding gs://llm-models \
+    --member "principal://iam.googleapis.com/projects/<PROJECT_NUMBER>/locations/global/workloadIdentityPools/<PROJECT_ID>.svc.id.goog/subject/ns/<NAMESPACE>/sa/<KSA_NAME>" \
+    --role "<ROLE_NAME>"
+```
+For more detailed information, check https://docs.cloud.google.com/kubernetes-engine/docs/how-to/cloud-storage-fuse-csi-driver-setup#authentication
 
 
+## Download the Model
+1. Make sure you have `Hugging Face CLI` installed. Otherwise, install it
+```
+curl -LsSf https://hf.co/cli/install.sh | bash
+```
+2. Download the model from HuggingFace to your local disk first
+```
+hf download RedHatAI/NVIDIA-Nemotron-3-Ultra-550B-A55B-FP8-block \
+  --local-dir ./NVIDIA-Nemotron-3-Ultra-550B-A55B-FP8-block \
+  --token <YOUR_HF_TOKEN>
+```
+3. Upload to GCS
+```
+gcloud storage cp -r ./NVIDIA-Nemotron-3-Ultra-550B-A55B-FP8-block gs://llm-models/NVIDIA-Nemotron-3-Ultra-550B-A55B-FP8-block
+```
+
+## Deploy the Model Server 
+Once the model is stored in your GCS, please refer back to https://github.com/llm-d/llm-d/blob/main/guides/agentic-serving/nemotron-3-ultra-550b-h200.md#2-deploy-the-model-server-gpus to continue the deployment.
+
+> [!NOTE]
+> Please set `INFRA\_PROVIDER` = `gke` to leverage this deploment.
 
 
-
-For instructions on creating the GCS bucket and enabling the FUSE CSI Driver, please refer to the [page](https://docs.cloud.google.com/kubernetes-engine/docs/how-to/cloud-storage-fuse-csi-driver-setup#authentication).
-> The following installation and configuration steps assume that the `RedHatAI/NVIDIA-Nemotron-3-Ultra-550B-A55B-FP8-block` model has already been stored in your GCS bucket in the folder structure `llm-models/RedHatAI/NVIDIA-Nemotron-3-Ultra-550B-A55B-FP8-block` (`llm-models` is the bucket name).
-> ${INFRA\_PROVIDER} is defaulted to `gke`.
