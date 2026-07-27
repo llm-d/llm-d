@@ -64,12 +64,15 @@ same false plateau; this rig runs 6 replicas (measured: 30 req/s at p50
 
 ## Step 0 - pull-versus-recompute crossover (single request)
 
-Requires `rdma/ib` on the model-server pods. Without the IB device exposed
-to the container, NIXL/UCX falls back to TCP, the pull leg inflates 2-3x
-while recompute is unchanged, and this measurement reports the pull *losing*
-at 2K-32K - the opposite conclusion, from the same image and configuration.
-Confirm `/dev/infiniband` is present in the container before trusting any
-number here. See
+This ladder was measured with `rdma/ib` on the model-server pods, and the
+ladder is transport-dependent - so record which transport yours is on
+before comparing against it. Without the IB device exposed to the container
+NIXL/UCX falls back to TCP, the pull leg inflates while recompute is
+unchanged, and the crossover moves from below 2K out to ~29K (measured:
++26.7% / +20.2% / +10.9% / +6.7% / -4.9% / -15.3% at
+2K/8K/16K/24K/32K/48K). That is a different `minCachedTokenDelta`, not a
+broken feature, but reading this table while running on TCP will mis-set it.
+`ls /dev/infiniband` in the container tells you which case you are in. See
 [Supported Hardware Backends](../README.md#supported-hardware-backends).
 
 Seed a fresh prefix on one pod; measure single-request prefill latency on a
@@ -198,8 +201,12 @@ pathology the pull relieves.
 Not yet measured on this rig - listed here as future work, not a
 published result. The three arms applied to the prefill profile of the
 P/D guide topology, with `--enable-p2p-pull` on the routing sidecar.
-Report the decode pool's NIXL intake ceiling alongside: on P/D it, not
-prefill placement, typically binds first.
+
+Identify what actually binds before attributing anything to placement, and
+do it from counter deltas rather than `vllm:num_requests_running` - that
+gauge read 0 on prefill pods that were in fact processing 271K tokens/s,
+which reads as an idle prefill fleet waiting on decode intake when the
+opposite is true.
 
 ## Scenario D - document Q&A (the headline; shipped as the profile above)
 

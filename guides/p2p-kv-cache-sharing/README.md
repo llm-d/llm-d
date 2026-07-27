@@ -99,14 +99,32 @@ pays a one-time session-establishment transient).
 ### Supported Hardware Backends
 
 * NVIDIA GPU / vLLM (measured on H200; any CUDA GPU with enough HBM for the
-  model works). RDMA between pods (`rdma/ib` resources) is a prerequisite
-  for the pull to pay, not a tuning option. Without the IB device exposed to
-  the container, NIXL/UCX falls back to TCP and the pull *loses* to
-  recompute from 2K to 32K tokens, breaking even only near 48K. Measured on
-  gpt-oss-120b, same image and configuration, `rdma/ib` the only difference:
-  +29% / +58% / +39% / +18% / -17% TTFT at 2K/8K/16K/32K/48K without it,
-  against -49% / -76% / -83% / -86% / -88% with it. TCP is functional, but
-  it inverts the economics rather than merely slowing them.
+  model works). **Every benchmark in this guide was measured with `rdma/ib`
+  exposed to the model-server containers**, and that is the recommended
+  configuration. RDMA is not required for the feature to work - NIXL/UCX
+  falls back to TCP - but the transport sets the pull-versus-recompute
+  crossover, so it changes `minCachedTokenDelta` rather than whether the
+  pull functions. On TCP the pull leg inflates while recompute is unchanged,
+  moving the crossover from below 2K out to **~29K tokens**. Measured on
+  gpt-oss-120b, same image and configuration, `rdma/ib` the only difference -
+  TTFT delta, negative means the pull wins:
+
+  | prefix tokens | with `rdma/ib` (this guide) | without |
+  |---:|---:|---:|
+  | 2,048 | -49% | +26.7% |
+  | 8,192 | -76% | +20.2% |
+  | 16,384 | -83% | +10.9% |
+  | 24,576 | - | +6.7% |
+  | 32,768 | -86% | -4.9% |
+  | 49,152 | -88% | -15.3% |
+
+  With RDMA the pull wins at every length measured, so `minCachedTokenDelta:
+  2048` follows. Without it the pull loses below ~29K and wins above, so the
+  same deployment needs a `minCachedTokenDelta` an order of magnitude larger
+  and only benefits workloads whose reused prefixes are that long. Check
+  whether `rdma/ib` is present on your pods before reading the Step 0 ladder
+  across, and derive the value from a crossover measured on your own
+  transport.
 
 ## Best Practices
 
