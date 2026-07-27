@@ -66,14 +66,13 @@ jobs:
         run: |
           set -Eeuo pipefail
           curl --fail --location --silent --show-error \
-            --output /tmp/kind \
+            --output /tmp/kind-linux-amd64 \
             "https://github.com/kubernetes-sigs/kind/releases/download/${KIND_VERSION}/kind-linux-amd64"
           curl --fail --location --silent --show-error \
-            --output /tmp/kind.sha256 \
-            "https://github.com/kubernetes-sigs/kind/releases/download/${KIND_VERSION}/kind-linux-amd64.sha256"
-          printf '%s  %s\n' "$(tr -d '[:space:]' < /tmp/kind.sha256)" /tmp/kind \
-            | sha256sum --check
-          sudo install -m 0755 /tmp/kind /usr/local/bin/kind
+            --output /tmp/kind-linux-amd64.sha256sum \
+            "https://github.com/kubernetes-sigs/kind/releases/download/${KIND_VERSION}/kind-linux-amd64.sha256sum"
+          (cd /tmp && sha256sum --check kind-linux-amd64.sha256sum)
+          sudo install -m 0755 /tmp/kind-linux-amd64 /usr/local/bin/kind
 
           curl --fail --location --silent --show-error \
             --output /tmp/kubectl \
