@@ -328,6 +328,38 @@ curl -X POST http://${IP}:${PORT}/v1/completions \
     }' | jq
 ```
 
+This text-only prompt takes the fast path described in [Deferred decoding](#overview):
+`conditional-decode` serves it directly, so `encode` and `prefill` never get called.
+
+**Send a multimodal completion request** to exercise the full `encode → prefill →
+decode` pipeline:
+
+```bash
+curl -X POST http://${IP}:${PORT}/v1/chat/completions \
+    -H 'Content-Type: application/json' \
+    -d '{
+        "model": "Qwen/Qwen3-VL-2B-Instruct",
+        "messages": [
+            {
+                "role": "user",
+                "content": [
+                    {
+                        "type": "image_url",
+                        "image_url": {
+                            "url": "https://images.dog.ceo/breeds/retriever-golden/n02099601_3004.jpg"
+                        }
+                    },
+                    {
+                        "type": "text",
+                        "text": "What is in this image?"
+                    }
+                ]
+            }
+        ],
+        "max_tokens": 128
+    }' | jq
+```
+
 ## Cleanup
 
 To remove the deployed components:
