@@ -54,7 +54,7 @@ configuration layers the agentic optimizations onto disaggregated serving:
   source ${REPO_ROOT}/guides/env.sh
   export GUIDE_NAME="agentic-serving"
   export NAMESPACE=llm-d-agentic-serving
-  export INFRA_PROVIDER=gke # gke (GPU only)
+  export INFRA_PROVIDER=base # base | gke
   ```
 
 - Install the Gateway API Inference Extension CRDs:
@@ -101,9 +101,7 @@ helm install ${GUIDE_NAME} \
 ### 2. Deploy the Model Server (GPUs)
 
 > [!NOTE]
-> The `RedHatAI/NVIDIA-Nemotron-3-Ultra-550B-A55B-FP8-block` model is ~560GB in size. Downloading a model of this scale directly from HuggingFace can take over an hour, and because every deployment triggers a new download, it creates a significant bottleneck. To save time and accelerate the deployment process, we highly recommend saving the model to a Google Cloud Storage (GCS) bucket and accessing it directly from there. For instructions on creating the GCS bucket and enabling the FUSE CSI Driver, please refer to the [page](https://docs.cloud.google.com/kubernetes-engine/docs/how-to/cloud-storage-fuse-csi-driver-setup#authentication).
-> The following installation and configuration steps assume that the `RedHatAI/NVIDIA-Nemotron-3-Ultra-550B-A55B-FP8-block` model has already been stored in your GCS bucket in the folder structure `llm-models/RedHatAI/NVIDIA-Nemotron-3-Ultra-550B-A55B-FP8-block` (`llm-models` is the bucket name).
-> ${INFRA\_PROVIDER} is defaulted to `gke`.
+> This guide provides two ways to deploy the model server. The default one (`INFRA\_PROVIDER` = `base`) is to download the `RedHatAI/NVIDIA-Nemotron-3-Ultra-550B-A55B-FP8-block` model from HuggingFace every time. However, the model is ~560GB in size. Downloading a model of this scale directly from HuggingFace can take over an hour, and because every deployment triggers a new download, it creates a significant bottleneck. To save time and accelerate the deployment process, we highly recommend saving the model to a Google Cloud Storage (GCS) bucket and accessing it directly from there. Please check the [Readme](modelserver/gpu/vllm/nemotron-3-ultra/gke/README.md) for this deployment.
 
 Apply the Kustomize overlay for the Nemotron-3-Ultra H200 deployment:
 
