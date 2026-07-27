@@ -93,6 +93,16 @@ spec:
               - -c
             args:
               - |-
+                # Clear /dev/shm on start to prevent running out of space when crashes occur
+                # https://github.com/llm-d/llm-d/issues/352
+                find /dev/shm -type f -delete
+
+                #################
+                # RUN vLLM prefill workers via DP Supervisor
+                # The supervisor automatically assigns CUDA_VISIBLE_DEVICES and
+                # --data-parallel-rank to each child process based on local_rank.
+                #################
+
                 START_RANK=$(( ${LWS_WORKER_INDEX:-0} * DP_SIZE_LOCAL ))
                 export UCX_IB_ROCE_REACHABILITY_MODE=all
                 
