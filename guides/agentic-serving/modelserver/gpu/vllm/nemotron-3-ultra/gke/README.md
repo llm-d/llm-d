@@ -1,4 +1,4 @@
-# Deploy
+# Downloading the Model to Your GCS Bucket for Deployment
 
 
 The `RedHatAI/NVIDIA-Nemotron-3-Ultra-550B-A55B-FP8-block` model is ~560GB in size and downloading a model of this scale directly from HuggingFace can take over an hour, and because every deployment triggers a new download, it creates a significant bottleneck.
