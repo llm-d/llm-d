@@ -53,14 +53,12 @@ spec:
                 exec vllm serve \
                   RedHatAI/GLM-5.2-NVFP4-FP8 \
                   --port 8000 \
-                  --trust-remote-code \
-                  --gpu-memory-utilization 0.8 \
+                  --gpu-memory-utilization 0.80 \
                   --disable-access-log-for-endpoints=/health,/metrics \
                   --max-num-batched-tokens 8192 \
                   --long-prefill-token-threshold 2048 \
                   --data-parallel-multi-port-external-lb \
                   --data-parallel-supervisor-port 8008 \
-                  --enable-prefix-caching \
                   --enable-expert-parallel \
                   --tensor-parallel-size $TP_SIZE \
                   --data-parallel-size $((LWS_GROUP_SIZE * DP_SIZE_LOCAL)) \
