@@ -16,17 +16,20 @@ router:
         kind: EndpointPickerConfig
         plugins:
         - type: queue-scorer
-        - type: active-request-scorer
+        - type: kv-cache-utilization-scorer
         - type: prefix-cache-scorer
+        - type: no-hit-lru-scorer
         schedulingProfiles:
         - name: default
           plugins:
           - pluginRef: queue-scorer
             weight: 2
-          - pluginRef: active-request-scorer
+          - pluginRef: kv-cache-utilization-scorer
             weight: 2
           - pluginRef: prefix-cache-scorer
             weight: 3
+          - pluginRef: no-hit-lru-scorer
+            weight: 2
 
   modelServers:
     matchLabels:

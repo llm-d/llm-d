@@ -59,8 +59,8 @@ ARG LMCACHE_REPO="https://github.com/LMCache/LMCache.git"
 ARG LMCACHE_VERSION="v0.4.6"
 
 # Kernels
-ARG DEEPEP_REPO="https://github.com/tlrmchlsmth/DeepEP"
-ARG DEEPEP_VERSION="sgl-gb200-blog-pt2"
+ARG DEEPEP_REPO="https://github.com/neuralmagic/DeepEP"
+ARG DEEPEP_VERSION="38d21b7f9bb6f3b102b1819d09439686eaa87ce8"
 
 # GB200-specific DeepEP variant (built alongside standard, selected via --target runtime-gb200)
 ARG DEEPEP_GB200_REPO="https://github.com/tlrmchlsmth/DeepEP"
@@ -68,7 +68,7 @@ ARG DEEPEP_GB200_VERSION="sgl-gb200-blog-pt2"
 ARG DEEPGEMM_REPO="https://github.com/deepseek-ai/DeepGEMM"
 ARG DEEPGEMM_VERSION="477618cd51baffca09c4b0b87e97c03fe827ef03"
 ARG FLASHINFER_REPO="https://github.com/flashinfer-ai/flashinfer.git"
-ARG FLASHINFER_VERSION="v0.6.13"
+ARG FLASHINFER_VERSION="v0.6.12"
 
 # vLLM build settings - provided via build args from docker/common-versions file
 # Override here for platform-specific testing or via build args
