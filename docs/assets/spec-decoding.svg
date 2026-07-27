@@ -1,0 +1,54 @@
+<svg version="1.1" viewBox="0 0 576 260" fill="none" stroke="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Outer border -->
+  <rect x="2" y="2" width="572" height="256" rx="4" fill="#ffffff" stroke="#9f659f" stroke-width="3"/>
+
+  <!-- Title -->
+  <text x="288" y="28" text-anchor="middle" font-family="sans-serif" font-size="14" font-weight="bold" fill="#000000">Single vLLM Process</text>
+
+  <!-- Drafter box -->
+  <rect x="30" y="60" width="150" height="80" rx="4" fill="#f3f3f3" stroke="#9f659f" stroke-width="1"/>
+  <text x="105" y="95" text-anchor="middle" font-family="sans-serif" font-size="13" font-weight="bold" fill="#000000">Drafter</text>
+  <text x="105" y="115" text-anchor="middle" font-family="sans-serif" font-size="11" fill="#666666">(small speculator)</text>
+
+  <!-- Arrow: Drafter -> Verifier -->
+  <line x1="180" y1="100" x2="246" y2="100" stroke="#000000" stroke-width="1.5"/>
+  <polygon points="246,96 254,100 246,104" fill="#000000"/>
+  <text x="218" y="88" text-anchor="middle" font-family="sans-serif" font-size="10" fill="#666666">k candidate</text>
+  <text x="218" y="78" text-anchor="middle" font-family="sans-serif" font-size="10" fill="#666666">tokens</text>
+
+  <!-- Verifier box -->
+  <rect x="256" y="48" width="170" height="104" rx="4" fill="#f3f3f3" stroke="#9f659f" stroke-width="1"/>
+  <text x="341" y="88" text-anchor="middle" font-family="sans-serif" font-size="13" font-weight="bold" fill="#000000">Verifier</text>
+  <text x="341" y="108" text-anchor="middle" font-family="sans-serif" font-size="11" fill="#666666">(target model)</text>
+  <text x="341" y="126" text-anchor="middle" font-family="sans-serif" font-size="10" fill="#666666">single forward pass</text>
+  <text x="341" y="140" text-anchor="middle" font-family="sans-serif" font-size="10" fill="#666666">over all k candidates</text>
+
+  <!-- Arrow: Verifier -> Accept/Reject -->
+  <line x1="426" y1="100" x2="446" y2="100" stroke="#000000" stroke-width="1.5"/>
+  <polygon points="446,96 454,100 446,104" fill="#000000"/>
+
+  <!-- Accept/Reject box -->
+  <rect x="456" y="60" width="100" height="80" rx="4" fill="#f3f3f3" stroke="#9f659f" stroke-width="1"/>
+  <text x="506" y="92" text-anchor="middle" font-family="sans-serif" font-size="12" font-weight="bold" fill="#000000">Accept</text>
+  <text x="506" y="108" text-anchor="middle" font-family="sans-serif" font-size="10" fill="#666666">up to first</text>
+  <text x="506" y="120" text-anchor="middle" font-family="sans-serif" font-size="10" fill="#666666">mismatch</text>
+
+  <!-- Loop arrow: Accept -> Drafter (curved, below boxes) -->
+  <path d="M 506 140 L 506 200 Q 506 216 490 216 L 120 216 Q 105 216 105 200 L 105 140" stroke="#9f659f" stroke-width="1.5" fill="none" stroke-dasharray="6,3"/>
+  <polygon points="101,144 105,136 109,144" fill="#9f659f"/>
+  <text x="305" y="232" text-anchor="middle" font-family="sans-serif" font-size="11" fill="#9f659f">resume from last accepted token</text>
+
+  <!-- Output arrow from Accept -->
+  <line x1="506" y1="60" x2="506" y2="44" stroke="#000000" stroke-width="1.5"/>
+  <polygon points="502,44 506,36 510,44" fill="#000000"/>
+  <text x="506" y="28" text-anchor="middle" font-family="sans-serif" font-size="11" font-weight="bold" fill="#000000">Output tokens</text>
+
+  <!-- Input arrow to Drafter -->
+  <line x1="30" y1="100" x2="14" y2="100" stroke="#000000" stroke-width="1.5"/>
+  <polygon points="30,96 22,100 30,104" fill="#000000"/>
+  <text x="10" y="85" text-anchor="end" font-family="sans-serif" font-size="10" fill="#666666"> </text>
+
+  <!-- Lossless badge -->
+  <rect x="210" y="170" width="190" height="28" rx="12" fill="#9f659f" fill-opacity="0.12" stroke="#9f659f" stroke-width="1"/>
+  <text x="305" y="189" text-anchor="middle" font-family="sans-serif" font-size="11" font-weight="bold" fill="#9f659f">Lossless: output = target-only output</text>
+</svg>

@@ -1,0 +1,40 @@
+## spec-decoding guide overrides for the llm-d router.
+## Layer on top of: recipes/router/base.values.yaml
+##
+## Speculative decoding is a model-server property, NOT a routing property — the EPP does not
+## change. These values are intentionally the optimized-baseline EPP config, with the guide
+## label switched to `spec-decoding` so the router selects this guide's model servers.
+
+router:
+  extraServicePorts:
+    - name: http
+      port: 80
+      protocol: TCP
+      targetPort: 8081
+
+  epp:
+    pluginsConfigFile: "spec-decoding-plugins.yaml"
+    pluginsCustomConfig:
+      spec-decoding-plugins.yaml: |
+        apiVersion: llm-d.ai/v1alpha1
+        kind: EndpointPickerConfig
+        plugins:
+        - type: queue-scorer
+        - type: kv-cache-utilization-scorer
+        - type: prefix-cache-scorer
+        - type: no-hit-lru-scorer
+        schedulingProfiles:
+        - name: default
+          plugins:
+          - pluginRef: queue-scorer
+            weight: 2
+          - pluginRef: kv-cache-utilization-scorer
+            weight: 2
+          - pluginRef: prefix-cache-scorer
+            weight: 3
+          - pluginRef: no-hit-lru-scorer
+            weight: 2
+
+  modelServers:
+    matchLabels:
+      llm-d.ai/guide: "spec-decoding"
