@@ -29,7 +29,7 @@ BASELINE_NAMESPACE="${BASELINE_NAMESPACE:-llm-d-optimized-baseline}"
 BASELINE_GUIDE="${BASELINE_GUIDE:-optimized-baseline}"
 
 MODEL="${MODEL:-facebook/opt-125m}"        # tiny, ungated, CPU-friendly
-ASYNC_VERSION="${ASYNC_VERSION:-0.8.0}"     # chart + image are public under ghcr.io/llm-d (set to the release that first publishes charts/llm-d-async)
+ASYNC_VERSION="${ASYNC_VERSION:-v0.8.0}"     # chart + image are public under ghcr.io/llm-d (first release published under charts/llm-d-async)
 
 BASELINE_TIMEOUT="${BASELINE_TIMEOUT:-1800}"  # seconds to wait for vLLM ready
 ASYNC_POLL_TRIES="${ASYNC_POLL_TRIES:-120}"   # smoke-test result polls
