@@ -33,7 +33,7 @@ spec:
             emptyDir: {}
         containers:
           - name: vllm
-            image: docker.io/vllm/vllm-openai:kimi-k3
+            image: docker.io/vllm/vllm-openai:v0.26.0
             securityContext:
               capabilities:
                 add:
