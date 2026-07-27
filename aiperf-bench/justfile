@@ -19,20 +19,11 @@
 
 namespace := "llm-d-wide-ep"
 deploy    := "aiperf-agentx"
-# model     := "nvidia/NVIDIA-Nemotron-3-Super-120B-A12B-FP8"
-# model     := "Qwen/Qwen3-32B"
-# model     := "Qwen/Qwen3.5-122B-A10B-FP8"
-# model     := "deepseek-ai/DeepSeek-R1"
-tokenizer     := "zai-org/GLM-5.2-FP8"
 model     := "RedHatAI/GLM-5.2-NVFP4-FP8"
-
-# model       := "nvidia/GLM-5.2-NVFP4"
 url       := "http://wide-ep-lws-epp"
 # url       := "http://optimized-baseline-direct"
 concurrency := "100"
-# duration    := "10"
 duration    := "300"
-# concurrencies := "25 50 100 150 200"
 concurrencies := "20 40 60 80 100"
 artifacts   := "/workspace/artifacts"
 # Must match torch_profiler_dir in the decode manifest's --profiler-config.
@@ -148,7 +139,7 @@ lmeval tasks="gsm8k" concurrency="100":
     kubectl exec -n {{namespace}}  deploy/{{deploy}} -- \
         lm_eval \
             --model local-completions \
-            --model_args "model={{model}},tokenizer={{tokenizer}},base_url={{url}}/v1/completions,num_concurrent={{concurrency}},tokenized_requests=False" \
+            --model_args "model={{model}},base_url={{url}}/v1/completions,num_concurrent={{concurrency}},tokenized_requests=False" \
             --tasks {{tasks}} # --limit 10
 
 # Capture a torch profile of one decode DP rank. The engine is started with
