@@ -67,7 +67,13 @@ export BRANCH=main
 export REPO_ROOT=$(realpath $(git rev-parse --show-toplevel))
 export GUIDE_NAME=optimized-baseline
 export NAMESPACE=llm-d-optimized-baseline
+```
+<!-- llm-d-cicd:skip start -->
+```bash
 export HF_TOKEN=HF_TOKEN_PLACEHOLDER
+```
+<!-- llm-d-cicd:skip end -->
+```bash
 export MONITORING_VALUES=
 export PROVIDER_NAME=gke # options: none, gke, agentgateway, istio
 export ACCELERATOR_TYPE=gpu # options: gpu, amd, xpu, hpu, tpu/v6, tpu/v7, cpu
@@ -165,7 +171,7 @@ export ROUTER_VALUES="-f ${REPO_ROOT}/guides/${GUIDE_NAME}/router/${GUIDE_NAME}.
 > [!NOTE]
 > When following the guide from top to bottom, we already have `export MONITORING_VALUES=""` by default. This means that `monitoring` is disabled by default.
 
-### Standalone Mode
+#### Standalone Mode
 
 This deploys the llm-d Router in [Standalone Mode](../../docs/architecture/core/router/proxy.md):
 
@@ -235,8 +241,7 @@ For example to deploy other models:
 
 ```bash
 # NVIDIA GPU / vLLM — openai/gpt-oss-120b
-#
-# kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/gpu/vllm/gpt-oss/
+kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/gpu/vllm/gpt-oss/
 ```
 
 </details>
@@ -297,9 +302,9 @@ export IP=$(kubectl get gateway llm-d-inference-gateway -n ${NAMESPACE} -o jsonp
 
 </details>
 
-### 2. Send a Test Request
+### 2. Send Test Requests
 
-**Open a temporary interactive shell inside the cluster and Send a completion request (model-aware; set `MODEL` to the name you want to query, e.g. `Qwen/Qwen3-32B` or `openai/gpt-oss-120b`):**
+**Send a completion request from a temporary pod inside the cluster (model-aware; set `MODEL` to the name you want to query, e.g. `Qwen/Qwen3-32B` or `openai/gpt-oss-120b`):**
 
 <!-- guide:verify.tests start -->
 ```bash
@@ -328,7 +333,7 @@ In this example we will demonstrate how to run [`inference-perf`](https://github
 > [!TIP]
 > The command below runs this guide's **dedicated** benchmark profile, which is intentionally shaped to exercise the optimized-baseline routing under realistic load — and accordingly takes longer to complete. To run a simpler workload with fewer execution cycles first (useful for validating the path, image pulls, PVC binding, etc. before committing to a real run), pick a generic sample profile such as `shared_prefix_synthetic.yaml` from the catalog in [`helpers/benchmark.md` → Available workload profiles](../../helpers/benchmark.md#available-workload-profiles) and substitute it for the `--workload` flag in the command below.
 
-### 1. Install the CLI
+### 1. Install the `llmdbenchmark` CLI
 
 Automatically clone the benchmark repository into `./llm-d-benchmark/` and create a virtualenv at `./llm-d-benchmark/.venv/` containing dependencies and it's installation:
 
@@ -351,9 +356,7 @@ llmdbenchmark --version
 
 Set two variables so the rest of the section is topology-agnostic: the endpoint URL and the gateway class. The gateway class tells the CLI which deployment topology the cluster is actually running, without this, the CLI re-renders against the benchmark scenario's default values.
 
-**Standalone Mode** (the default in this guide — no Kubernetes Gateway, EPP pod with an Envoy sidecar):
-
-**Standalone Mode** — `GATEWAY_CLASS=epponly` is the default:
+**Standalone Mode** (the default in this guide — no Kubernetes Gateway, EPP pod with an Envoy sidecar). `GATEWAY_CLASS=epponly` is the default:
 
 <!-- guide:benchmark.endpoint.standalone start -->
 ```bash
@@ -363,6 +366,8 @@ export ENDPOINT_URL="http://$(kubectl get service ${GUIDE_NAME}-epp -n ${NAMESPA
 
 <details>
 <summary><b>Gateway Mode</b></summary>
+
+Set `GATEWAY_CLASS` to match whichever provider you used when deploying the gateway (e.g. `istio`, `agentgateway`, `gke`) — see the `GATEWAY_CLASS` options in the [environment section](#prerequisites) above.
 
 <!-- guide:benchmark.endpoint.gateway start -->
 ```bash

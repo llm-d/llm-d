@@ -1,5 +1,5 @@
 <!--
-    Prose is free-form; scripts/guide-render.py only touches the bash code
+    Prose is free-form; scripts/guide.py only touches the bash code
     blocks between paired HTML-comment markers naming YAML paths.
 -->
 

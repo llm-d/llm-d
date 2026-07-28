@@ -78,18 +78,11 @@ images:
 
 ## Authoring a Guide
 
-Guides are two files — a machine-readable `guide.yaml` and a human-readable `README.md` whose bash code blocks are filled from the YAML by `scripts/guide-render.py`. Templates and full authoring docs live in [`guides/templates/`](./templates/README.md).
+Guides are two files — a machine-readable `guide.yaml` and a human-readable `README.md` whose bash code blocks are filled from the YAML by `scripts/guide.py`.
 
-TL;DR:
-
-```bash
-cp guides/templates/guide.template.yaml   guides/<your-guide>/guide.yaml
-cp guides/templates/README.template.md    guides/<your-guide>/README.md
-# edit both, then:
-scripts/guide-check-yaml.py    guides/<your-guide>/guide.yaml
-scripts/guide-render.py        --yaml guides/<your-guide>/guide.yaml --readme guides/<your-guide>/README.md
-scripts/guide-check-readme.py  --yaml guides/<your-guide>/guide.yaml --readme guides/<your-guide>/README.md
-```
+See **[`guides/templates/README.md`](./templates/README.md)** for the templates, the
+quickstart, and the full authoring reference. It is the single source for those
+instructions — deliberately not repeated here, so the two cannot drift apart.
 
 ## Supporting Guides
 
