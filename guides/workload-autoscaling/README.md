@@ -70,6 +70,29 @@ WVA is designed for operators running multiple variants of the same model across
 | **Additional components** | Requires KEDA and Prometheus| Requires the WVA controller |
 | **Scale to zero** | Supported | Supported |
 
+## Observability & Troubleshooting
+
+Autoscaling is a closed loop, so the useful view is not a single metric but the **composed signal** across the model servers, the autoscaler, and the resulting pool. Watch the loop end to end: a demand signal rises, the autoscaler raises a replica target, new replicas become ready, and the demand signal comes back down. When scaling misbehaves, the break is almost always at one of those handoffs. Full definitions for the model-server and EPP signals live in the [metric reference](../../docs/operations/observability/metrics.md) and [PromQL reference](../../docs/operations/observability/promql.md); WVA's own metrics are defined in the [WVA Prometheus reference](https://github.com/llm-d/llm-d-workload-variant-autoscaler/blob/main/docs/developer-guide/prometheus.md).
+
+#### Key metrics for this path
+
+| Stage in the loop | Signal | Why it matters |
+|-------------------|--------|----------------|
+| Demand | `vllm:num_requests_waiting`, `vllm:kv_cache_usage_perc` ([PromQL → Basic Model Serving](../../docs/operations/observability/promql.md#basic-model-serving)) | The leading indicators autoscaling exists to react to. Queue depth and KV pressure rise before latency does |
+| Demand (EPP view) | `llm_d_epp_request_running` ([Metrics → EPP](../../docs/operations/observability/metrics.md#key-llm-d-router-epp-metrics)) | On the KEDA + EPP path this is the scaling signal itself. Compare it against replica count to see whether scaling is tracking demand |
+| Decision (WVA) | `wva_desired_replicas`, `wva_current_replicas`, `wva_saturation_utilization` | WVA's replica target vs. what is running. A gap that persists means the decision is made but not being actuated |
+| Input health (WVA) | `wva_metrics_freshness_status` | WVA scales on scraped Prometheus data. Stale inputs produce stale decisions, so a bad-freshness signal explains "why isn't it scaling" before you touch thresholds |
+| Convergence | `llm_d_epp_ready_endpoints` ([Metrics → EPP](../../docs/operations/observability/metrics.md#key-llm-d-router-epp-metrics)) | The pool the router can actually route to. If desired replicas climb but ready endpoints do not follow, new pods are not becoming Ready |
+| Outcome | `vllm:time_to_first_token_seconds`, `vllm:num_requests_waiting` ([Metrics → vLLM](../../docs/operations/observability/metrics.md#key-vllm-metrics)) | Confirms the loop closed: after capacity lands, queue depth and TTFT should recover. If they do not, you scaled on the wrong signal |
+
+#### Common failure modes
+
+* **Demand signal saturated but replicas flat** — the autoscaler is not reacting. On the WVA path check `wva_metrics_freshness_status` and `wva_desired_replicas` for the variant; on the KEDA + EPP path check that the `ScaledObject` is Ready and the external metric is resolving. See the metric-plumbing steps in the [KEDA + EPP troubleshooting](./README.hpa-epp.md#troubleshooting) section.
+* **Replica target climbs but the pool does not grow** — `wva_desired_replicas` (or the HPA desired count) rises while `wva_current_replicas` / `llm_d_epp_ready_endpoints` lag. New pods are not scheduling or not passing readiness, usually GPU quota or image pull. See [Desired replicas increase but new replicas are not Ready](./README.hpa-epp.md#desired-replicas-increase-but-new-replicas-are-not-ready).
+* **Replicas flapping** — the target oscillates and pods churn. Thresholds are too tight for the demand pattern; widen the stabilization window or the scaling band. See [Choosing Scaling Thresholds](./README.hpa-epp.md#choosing-scaling-thresholds).
+
+For alert rules covering the model-server and EPP signals, see [Alerting](../../docs/operations/observability/alerting.md).
+
 ## Features
 
 ### Replica Rebalancing (Experimental)
