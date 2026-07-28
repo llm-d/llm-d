@@ -17,7 +17,7 @@ spec:
       terminationGracePeriodSeconds: 30
       containers:
       - name: coordinator
-        image: ghcr.io/roytman/coordinator:dev
+        image: ghcr.io/roytman/coordinator:07657e922
         imagePullPolicy: IfNotPresent
         args:
         - --config

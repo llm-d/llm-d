@@ -34,7 +34,7 @@ router:
     image:
       registry: ghcr.io/roytman
       repository: llm-d-router-endpoint-picker
-      tag: "1-epp"
+      tag: "07657e922"
     pluginsConfigFile: "epd-plugins.yaml"
     pluginsCustomConfig:
       epd-plugins.yaml: |
