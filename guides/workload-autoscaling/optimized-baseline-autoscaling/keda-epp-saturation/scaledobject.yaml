@@ -31,7 +31,7 @@ spec:
       # For OpenShift: use overlays/ocp which automatically patches this to thanos-querier.
       # For other Prometheus deployments: replace with your endpoint.
       query: |
-        max(llm_d_epp_flow_control_pool_saturation{inference_pool="<pool-name>"})
+        max(llm_d_epp_flow_control_pool_saturation{inference_pool="default"})
       threshold: "<saturation-threshold>"
       activationThreshold: "0"
       metricType: AverageValue
