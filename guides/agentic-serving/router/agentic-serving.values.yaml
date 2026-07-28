@@ -31,9 +31,14 @@ router:
         - type: prefix-cache-affinity-filter
           parameters:
             peakPrefillThroughput: 16444
+        - type: session-affinity-scorer
+          parameters:
+            headerName: x-session-token
         schedulingProfiles:
         - name: default
           plugins:
+          - pluginRef: session-affinity-scorer
+            weight: 5
           - pluginRef: prefix-cache-affinity-filter
           - pluginRef: token-load-scorer
 

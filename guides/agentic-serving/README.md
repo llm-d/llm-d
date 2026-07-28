@@ -31,6 +31,23 @@ sets the broader direction: **session-graph orchestration**, **program-aware sch
 fan-out. See the [workload page](../../docs/well-lit-paths/workloads/agentic-serving.md#direction) for the full
 direction and further reading.
 
+## Routing Configuration
+
+For agentic workloads, sessions typically consist of long-running, multi-turn interactions where the system prompt is shared but session-specific context diverges rapidly. To optimize routing for these workloads, configure both the `prefix-cache-scorer` (with length awareness enabled) and the `session-affinity-scorer`. 
+
+Length awareness allows shorter sessions to migrate freely when pods are overloaded, while session affinity keeps the rapidly diverging chat history sticky to the original pod. Here is the recommended configuration snippet:
+
+```yaml
+- type: prefix-cache-scorer
+  parameters:
+    matchLengthWeight: 0.8
+    matchLengthScaleTokens: 16000
+
+- type: session-affinity-scorer
+  parameters:
+    headerName: x-session-token
+```
+
 ## Deployments
 
 The layers above compose into deployments spanning a range of capabilities and operational
