@@ -132,7 +132,8 @@ kubectl apply -n ${NAMESPACE} -f ${REPO_ROOT}/guides/${GUIDE_NAME}/rbac/role.yam
 kubectl create rolebinding fma-launcher-pod-reader \
   --role=fma-launcher-pod-reader \
   --serviceaccount=${NAMESPACE}:default \
-  -n ${NAMESPACE}
+  -n ${NAMESPACE} \
+  --dry-run=client -o yaml | kubectl apply -f -
 ```
 <!-- guide:deploy.rbac end -->
 
@@ -176,7 +177,7 @@ Apply the FMA custom resources — `InferenceServerConfig`, `LauncherConfig`, an
 ```bash
 kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/
 
-kubectl wait --for=condition=ready pod -l app=fma-requester -n ${NAMESPACE} --timeout=300s
+kubectl rollout status deployment/fma-requester -n ${NAMESPACE} --timeout=300s
 ```
 <!-- guide:deploy.modelserver end -->
 
@@ -233,7 +234,7 @@ kubectl scale deployment fma-requester -n ${NAMESPACE} --replicas=0
 
 kubectl scale deployment fma-requester -n ${NAMESPACE} --replicas=2
 
-kubectl wait --for=condition=ready pod -l app=fma-requester -n ${NAMESPACE} --timeout=120s
+kubectl rollout status deployment/fma-requester -n ${NAMESPACE} --timeout=120s
 ```
 <!-- guide:verify.tests.sleep_wake end -->
 
@@ -290,20 +291,31 @@ llmdbenchmark \
 
 ## Cleanup
 
-To remove all deployed components:
+To remove all deployed components. **Order matters:** delete the model-server
+CRs and the requester Deployment first, then wait for the requester and launcher
+pods to drain while the dual-pods controller is still running to strip their
+finalizers, and only then remove the controllers. Removing the controller before
+the pods drain leaves finalizer-bound pods stuck in `Terminating` forever.
 
 <!-- guide:cleanup start -->
 ```bash
 kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/ --ignore-not-found=true
 
-helm uninstall ${GUIDE_NAME} -n ${NAMESPACE}
+kubectl wait --for=delete pod -l app=fma-requester -n ${NAMESPACE} --timeout=120s
+
+kubectl wait --for=delete pod -l app.kubernetes.io/component=launcher -n ${NAMESPACE} --timeout=120s
 
 helm uninstall ${FMA_CHART_INSTANCE_NAME} -n ${NAMESPACE}
 
-kubectl delete -f ${REPO_ROOT}/guides/${GUIDE_NAME}/rbac/clusterrole.yaml --ignore-not-found=true
+helm uninstall ${GUIDE_NAME} -n ${NAMESPACE}
 
+kubectl delete -f ${REPO_ROOT}/guides/${GUIDE_NAME}/rbac/clusterrole.yaml --ignore-not-found=true
+```
+<!-- llm-d-cicd:skip start -->
+```bash
 kubectl delete namespace ${NAMESPACE}
 
 kubectl delete crd inferenceserverconfigs.fma.llm-d.ai launcherconfigs.fma.llm-d.ai launcherpopulationpolicies.fma.llm-d.ai
 ```
+<!-- llm-d-cicd:skip end -->
 <!-- guide:cleanup end -->

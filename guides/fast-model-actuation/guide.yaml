@@ -61,7 +61,8 @@ deploy:
         kubectl create rolebinding fma-launcher-pod-reader \
           --role=fma-launcher-pod-reader \
           --serviceaccount=${NAMESPACE}:default \
-          -n ${NAMESPACE}
+          -n ${NAMESPACE} \
+          --dry-run=client -o yaml | kubectl apply -f -
 
   fma_controllers:
     - run: |
@@ -90,7 +91,7 @@ deploy:
     - run: |
         kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/
 
-        kubectl wait --for=condition=ready pod -l app=fma-requester -n ${NAMESPACE} --timeout=300s
+        kubectl rollout status deployment/fma-requester -n ${NAMESPACE} --timeout=300s
 
 verify:
   endpoint:
@@ -108,7 +109,7 @@ verify:
     sleep_wake:
       - run: kubectl scale deployment fma-requester -n ${NAMESPACE} --replicas=0
       - run: kubectl scale deployment fma-requester -n ${NAMESPACE} --replicas=2
-      - run: kubectl wait --for=condition=ready pod -l app=fma-requester -n ${NAMESPACE} --timeout=120s
+      - run: kubectl rollout status deployment/fma-requester -n ${NAMESPACE} --timeout=120s
 
 benchmark:
   setup:
@@ -134,10 +135,23 @@ benchmark:
           --analyze
 
 cleanup:
-  # Removes the model-server CRs AND the requester Deployment (both are part of modelserver/).
+  # Order matters. Delete the model-server CRs and the requester Deployment
+  # FIRST (both live in modelserver/): this unbinds the requester/provider
+  # pairs and tells the dual-pods controller to tear down the launcher pods.
   - run: kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/ --ignore-not-found=true
-  - run: helm uninstall ${GUIDE_NAME} -n ${NAMESPACE}
+  # Then wait for the requester and launcher pods to fully drain while the
+  # controller is still running to strip their finalizers. If the controller
+  # is removed first, finalizer-bound pods get stuck in Terminating forever.
+  - run: kubectl wait --for=delete pod -l app=fma-requester -n ${NAMESPACE} --timeout=120s
+  - run: kubectl wait --for=delete pod -l app.kubernetes.io/component=launcher -n ${NAMESPACE} --timeout=120s
+  # Only after the pods have drained, remove the controllers (dual-pods
+  # controller + launcher populator), then the router and the cluster-scoped RBAC.
   - run: helm uninstall ${FMA_CHART_INSTANCE_NAME} -n ${NAMESPACE}
+  - run: helm uninstall ${GUIDE_NAME} -n ${NAMESPACE}
   - run: kubectl delete -f ${REPO_ROOT}/guides/${GUIDE_NAME}/rbac/clusterrole.yaml --ignore-not-found=true
-  - run: kubectl delete namespace ${NAMESPACE}
-  - run: kubectl delete crd inferenceserverconfigs.fma.llm-d.ai launcherconfigs.fma.llm-d.ai launcherpopulationpolicies.fma.llm-d.ai
+  # Destructive / cluster-wide -- skipped in CI, where the namespace is reused
+  # and the FMA CRDs are shared across deployments. Run only on a cluster you own.
+  - skip_in: [ci]
+    run: kubectl delete namespace ${NAMESPACE}
+  - skip_in: [ci]
+    run: kubectl delete crd inferenceserverconfigs.fma.llm-d.ai launcherconfigs.fma.llm-d.ai launcherpopulationpolicies.fma.llm-d.ai
