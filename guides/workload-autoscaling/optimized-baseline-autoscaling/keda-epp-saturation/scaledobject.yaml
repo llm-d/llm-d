@@ -46,7 +46,7 @@ spec:
       # For OpenShift: use overlays/ocp which automatically patches this to thanos-querier.
       # For other Prometheus deployments: replace with your endpoint.
       query: |
-        sum(inference_objective_running_requests{model_name="<model-name>"})
+        sum(llm_d_epp_request_running{model_name="Qwen/Qwen3-32B"})
       threshold: "<requests-per-replica-target>"
       activationThreshold: "0"
       metricType: AverageValue
