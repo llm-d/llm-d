@@ -62,6 +62,34 @@ every request for the token-producer timeout, flattening all arms to the
 same false plateau; this rig runs 6 replicas (measured: 30 req/s at p50
 82 ms direct).
 
+## What each scenario isolates
+
+Two of the scenarios below change placement and the pull together, so their
+headline margin is not a P2P margin. Read them for what they are:
+
+| Scenario | Compares | Isolates the pull? |
+|---|---|---|
+| Step 0 | recompute vs pull, same pod pair, no routing | **yes** |
+| Wide-EP (GLM) | `precise` vs `precise + pull`, placement fixed | **yes** |
+| Scenario B | `affinity` vs `load + P2P` | no - placement and pull move together |
+| Scenario D | `affinity` / `affinity + P2P` / `load + P2P` | partly - the affinity pair isolates it, the winning arm does not |
+
+The two that isolate it are where the feature's value is established:
+Step 0 (-49% to -88% TTFT with RDMA) and the wide-EP arm pair (-16% p50 /
+-15% p90 at c128, -27% / -45% at c32). Scenarios B and D show what the
+resulting *deployment* does, which is the number an operator cares about,
+but attribute their wins to the placement change as much as to the pull.
+
+One result worth stating plainly because it recurs: **under affinity
+placement the pull is close to inert.** Measured on the Scenario D rig,
+`affinity + P2P` established 2 P2P sessions across 16 pods over a full run
+while `load + P2P` established 65 on the same rig - affinity keeps the KV
+local, so `minCachedTokenDelta` is rarely met and there is nothing to fetch.
+That is the pull behaving correctly as a recovery path, not a defect, but it
+does mean `affinity + P2P` should be chosen for its placement behaviour and
+treated as insurance against cache/placement divergence, not as a throughput
+feature. See [When to use this path](../README.md#when-to-use-this-path).
+
 ## Step 0 - pull-versus-recompute crossover (single request)
 
 This ladder was measured with `rdma/ib` on the model-server pods, and the
@@ -196,18 +224,6 @@ every request is a local hit. TTFT stays under 1s p50 in both arms; the
 collapse is pure decode concentration on the owners, which is the
 pathology the pull relieves.
 
-## Scenario C - P/D prefill placement (not yet run)
-
-Not yet measured on this rig - listed here as future work, not a
-published result. The three arms applied to the prefill profile of the
-P/D guide topology, with `--enable-p2p-pull` on the routing sidecar.
-
-Identify what actually binds before attributing anything to placement, and
-do it from counter deltas rather than `vllm:num_requests_running` - that
-gauge read 0 on prefill pods that were in fact processing 271K tokens/s,
-which reads as an idle prefill fleet waiting on decode intake when the
-opposite is true.
-
 ## Scenario D - document Q&A (the headline; shipped as the profile above)
 
 The user-facing regime: each of 192 conversations carries a private
@@ -252,7 +268,7 @@ decision that still prefers a busy owner. `epp-load-p2p` never makes that
 tradeoff: placement always goes to the least-loaded pod, so there is no
 owner-pod queue to build in the first place. On this scenario alone,
 `epp-load-p2p` is the better arm - but see
-[Scenario A](#scenario-a---uniform-shared-prefix-pool-three-arms), where
+[Scenario A](#scenario-a---uniform-shared-prefix-pool-three-routing-arms), where
 the result is reversed. The guide ships `epp-affinity-p2p` as the default
 because it is the safer general-purpose choice across both regimes (see
 the [README](../README.md#when-to-use-this-path)); reach for
