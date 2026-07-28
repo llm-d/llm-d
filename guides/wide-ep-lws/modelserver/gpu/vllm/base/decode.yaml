@@ -107,7 +107,7 @@ spec:
                 export UCX_IB_ROCE_REACHABILITY_MODE=all
                 
                 exec vllm serve \
-                  nvidia/GLM-5.2-NVFP4 \
+                  RedHatAI/GLM-5.2-NVFP4-FP8 \
                   --port 8200 \
                   --disable-access-log-for-endpoints=/health,/metrics \
                   --data-parallel-multi-port-external-lb \
@@ -126,7 +126,8 @@ spec:
                                           "kv_load_failure_policy":"fail"}' \
                   --all2all-backend flashinfer_nvlink_one_sided \
                   --kv-cache-dtype fp8 \
-                  --speculative-config '{"method":"mtp","num_speculative_tokens":3}'
+                  --speculative-config '{"method":"mtp","num_speculative_tokens":3}' \
+                  --max-model-len 300000
 
                   # To enable tracing, add:
                   # --otlp-traces-endpoint http://otel-collector:4317 \

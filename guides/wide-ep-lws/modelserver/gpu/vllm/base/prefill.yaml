@@ -72,6 +72,7 @@ spec:
                   --all2all-backend flashinfer_nvlink_one_sided \
                   --kv-cache-dtype fp8 \
                   --speculative-config '{"method":"mtp","num_speculative_tokens":3}' \
+                  --max-model-len 300000
                 
                   # To enable tracing, add:
                   # --otlp-traces-endpoint http://otel-collector:4317 \

@@ -22,7 +22,7 @@ deploy    := "aiperf-agentx"
 model     := "RedHatAI/GLM-5.2-NVFP4-FP8"
 url       := "http://wide-ep-lws-epp"
 # url       := "http://optimized-baseline-direct"
-concurrency := "100"
+concurrency := "60"
 duration    := "300"
 concurrencies := "20 40 60 80 100"
 artifacts   := "/workspace/artifacts"
@@ -87,7 +87,7 @@ run concurrency=concurrency duration=duration artifacts=artifacts:
         --scenario inferencex-agentx-mvp \
         --url {{url}} \
         --model {{model}} \
-        --max-context-length 128000 \
+        --max-context-length 256000 \
         --endpoint-type chat \
         --streaming \
         --use-server-token-count \
