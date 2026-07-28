@@ -62,8 +62,6 @@ llmdbenchmark --version
 > ```
 > 
 > An early termination of the installation could happen without clear error messages. Check if all required libraries have executable permissions (`+x`).
-> [!NOTE]
-> A successful installation shows the following lines:
 
 ## Quick start
 
