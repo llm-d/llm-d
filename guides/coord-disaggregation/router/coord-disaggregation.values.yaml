@@ -3,9 +3,9 @@
 ## Layer on top of: recipes/router/base.values.yaml
 ##
 ## One EPP instance runs one scheduling profile per call, selected by the
-## coordinator's `EPP-Phase` header via the `header-phase-profile-handler`
-## plugin (llm-d-router PR #2134). Each profile filters the shared pool down
-## to its own role with a `*-filter` by-label plugin, so the InferencePool
+## coordinator's `EPP-Profile` header via the `header-profile-handler`
+## plugin (merged in llm-d-router#2134). Each profile filters the shared pool
+## down to its own role with a `*-filter` by-label plugin, so the InferencePool
 ## selector below matches on the guide label only, not `llm-d.ai/role`.
 
 # The chart's own HTTPRoute (from features/httproute-flags.yaml) would be an
@@ -13,7 +13,7 @@
 # with the Coordinator's own catch-all `/` HTTPRoute on the same Gateway — and
 # (by creation-order tiebreak) winning, sending every client request straight
 # to this router/EPP instead of through the Coordinator. The single combined
-# router needs to match EPP-Phase being encode OR prefill OR decode, which the
+# router needs to match EPP-Profile being encode OR prefill OR decode, which the
 # chart's headerMatches (a single exact-match map) can't express, so we
 # disable it here and hand-author router/httproute.yaml instead (see there
 # for the OR'd header matches).
@@ -28,9 +28,9 @@ router:
       targetPort: 8081
 
   epp:
-    # PR #2134 (single EPP for encode/prefill/decode) isn't merged/released yet;
-    # this is a build of llm-d-router containing it. Swap back to the chart
-    # default once the PR lands in an official image.
+    # llm-d-router#2134 (single EPP for encode/prefill/decode) is merged but may
+    # not be in an official release image yet; this is a build of llm-d-router
+    # containing it. Swap back to the chart default once it is.
     image:
       registry: ghcr.io/roytman
       repository: llm-d-router-endpoint-picker
@@ -44,7 +44,7 @@ router:
         - type: encode-filter
         - type: prefill-filter
         - type: decode-filter
-        - type: header-phase-profile-handler
+        - type: header-profile-handler
         schedulingProfiles:
         - name: encode
           plugins:

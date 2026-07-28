@@ -58,8 +58,8 @@ The result of this guide:
 * **1 Coordinator**, terminating client traffic and driving the pipeline.
 * **1 Endpoint Picker (EPP)** covering all three roles, and **1 InferencePool**
   spanning them. The EPP runs one scheduling profile per call — `encode`, `prefill`,
-  or `decode` — selected by the Coordinator's `EPP-Phase` header via the
-  `header-phase-profile-handler` plugin
+  or `decode` — selected by the Coordinator's `EPP-Profile` header via the
+  `header-profile-handler` plugin
   ([llm-d-router#2134](https://github.com/llm-d/llm-d-router/pull/2134)); each profile
   filters the shared pool down to its own role with a by-label filter.
 * **1 vLLM replica per role** — three model servers in total, distinguished only by
@@ -68,11 +68,11 @@ The result of this guide:
 > [!IMPORTANT]
 > The single-EPP setup below depends on
 > [llm-d-router#2134](https://github.com/llm-d/llm-d-router/pull/2134)
-> (`header-phase-profile-handler` plus the `encode-filter`/`prefill-filter`/`decode-filter`
-> plugins), which is open and not yet merged at the time of writing. Until it lands in
-> an official image, [`router/coord-disaggregation.values.yaml`](router/coord-disaggregation.values.yaml)
+> (`header-profile-handler` plus the `encode-filter`/`prefill-filter`/`decode-filter`
+> plugins), which is merged but may not be in an official release image yet. Until it
+> is, [`router/coord-disaggregation.values.yaml`](router/coord-disaggregation.values.yaml)
 > pins `router.epp.image` to `ghcr.io/roytman/llm-d-router-endpoint-picker:1-epp`, a
-> build that contains it. Swap it back to the chart default once the PR is released.
+> build that contains it. Swap it back to the chart default once an official image does.
 
 ## Default Configuration
 
@@ -190,19 +190,19 @@ helm install ${GUIDE_NAME} \
    Coordinator's own route on the same Gateway. Instead, the two hand-authored
    HTTPRoutes on this Gateway (`coordinator/httproute.yaml` and
    [`router/httproute.yaml`](router/httproute.yaml)) split traffic three ways:
-   - `/v1/completions`, `/v1/chat/completions`, `/inference/v1/decode` **without**
-     `EPP-Phase` → the Coordinator (client-facing inference calls).
-   - The same three paths **with** `EPP-Phase` → this router's EPP (the Coordinator's
+   - `/v1/completions`, `/v1/chat/completions`, `/inference/v1/generate` **without**
+     `EPP-Profile` → the Coordinator (client-facing inference calls).
+   - The same three paths **with** `EPP-Profile` → this router's EPP (the Coordinator's
      own internal per-phase calls reuse those same paths, so both HTTPRoutes match
      them at the same exact-path specificity; the header match then breaks the tie in
      the router's favor — see the comments in both files for why path specificity
      must match for this to work).
-   - Everything else without `EPP-Phase` (e.g. `/v1/models`, `/health`) → this
+   - Everything else without `EPP-Profile` (e.g. `/v1/models`, `/health`) → this
      router's EPP too, which already falls back to its `decode` scheduling profile
      when the header is absent.
 
 > [!WARNING]
-> `EPP-Phase` is a plain client-controllable HTTP header, not a trust boundary. A
+> `EPP-Profile` is a plain client-controllable HTTP header, not a trust boundary. A
 > client that forges it on its own request bypasses the Coordinator's pipeline
 > entirely, matching the router's HTTPRoute directly instead. There is no portable
 > Gateway API mechanism to strip or verify it before routing decisions are made —
@@ -292,9 +292,9 @@ instead of through a cache.
 Clients always send requests through the **Gateway**, never directly to the
 Coordinator's Service. The Coordinator's own `coordinator` HTTPRoute (deployed
 alongside the coordinator overlay in step 4) attaches to the `llm-d-inference-gateway`
-Gateway and forwards client traffic (no `EPP-Phase` header) to the Coordinator, which
+Gateway and forwards client traffic (no `EPP-Profile` header) to the Coordinator, which
 then orchestrates the `encode → prefill → decode` pipeline. The EPP is internal — the
-Coordinator selects which of its scheduling profiles runs by setting the `EPP-Phase`
+Coordinator selects which of its scheduling profiles runs by setting the `EPP-Profile`
 header on its own outbound calls, which route back through that same Gateway to
 `router/httproute.yaml` (step 1.3) instead of the Coordinator's route.
 

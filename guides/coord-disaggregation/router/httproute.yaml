@@ -1,5 +1,5 @@
-# SECURITY NOTE: EPP-Phase is a plain client-controllable HTTP header, not a trust
-# boundary. Any client that can reach the Gateway can forge EPP-Phase on its own
+# SECURITY NOTE: EPP-Profile is a plain client-controllable HTTP header, not a trust
+# boundary. Any client that can reach the Gateway can forge EPP-Profile on its own
 # request and match this route directly, bypassing the Coordinator's pipeline
 # (conditional-decode, media handling, orchestration) entirely -- there is no portable
 # Gateway API mechanism to strip/verify it before routing decisions are made (route
@@ -24,67 +24,67 @@ spec:
       name: ${GUIDE_NAME}
     # Match alternatives (OR'd) all sharing the same InferencePool backend:
     #
-    # - Exact path + EPP-Phase pairs: these mirror coordinator/httproute.yaml's
+    # - Exact path + EPP-Profile pairs: these mirror coordinator/httproute.yaml's
     #   exact-path matches on the SAME literal paths (the coordinator's own
     #   internal calls reuse the client-facing paths). Gateway API precedence
     #   ranks path specificity before header count, so ties require matching
     #   path specificity here too -- an exact match here ties with the
     #   Coordinator's exact match on the same path, and the header match then
     #   breaks that tie in this rule's favor. A prefix match here would lose
-    #   to the Coordinator's exact match even when EPP-Phase is present.
+    #   to the Coordinator's exact match even when EPP-Profile is present.
     # - The trailing PathPrefix `/` alternative has no header condition: it
-    #   catches everything else without EPP-Phase (e.g. /v1/models, /health) --
-    #   header-phase-profile-handler already runs its defaultProfile (decode)
-    #   for calls with no EPP-Phase header, so this needs no extra EPP config.
+    #   catches everything else without EPP-Profile (e.g. /v1/models, /health) --
+    #   header-profile-handler already runs its defaultProfile (decode)
+    #   for calls with no EPP-Profile header, so this needs no extra EPP config.
     matches:
     - path:
         type: Exact
         value: /v1/completions
       headers:
       - type: Exact
-        name: EPP-Phase
+        name: EPP-Profile
         value: encode
     - path:
         type: Exact
         value: /v1/completions
       headers:
       - type: Exact
-        name: EPP-Phase
+        name: EPP-Profile
         value: prefill
     - path:
         type: Exact
         value: /v1/completions
       headers:
       - type: Exact
-        name: EPP-Phase
+        name: EPP-Profile
         value: decode
     - path:
         type: Exact
         value: /v1/chat/completions
       headers:
       - type: Exact
-        name: EPP-Phase
+        name: EPP-Profile
         value: encode
     - path:
         type: Exact
         value: /v1/chat/completions
       headers:
       - type: Exact
-        name: EPP-Phase
+        name: EPP-Profile
         value: prefill
     - path:
         type: Exact
         value: /v1/chat/completions
       headers:
       - type: Exact
-        name: EPP-Phase
+        name: EPP-Profile
         value: decode
     - path:
         type: Exact
-        value: /inference/v1/decode
+        value: /inference/v1/generate
       headers:
       - type: Exact
-        name: EPP-Phase
+        name: EPP-Profile
         value: decode
     - path:
         type: PathPrefix
