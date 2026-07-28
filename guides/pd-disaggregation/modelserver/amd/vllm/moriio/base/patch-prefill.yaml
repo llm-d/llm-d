@@ -1,0 +1,160 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: prefill
+spec:
+  replicas: 1
+  template:
+    metadata:
+      annotations:
+        # Multus: attach the 8 host RDMA netdevs (Pensando/Ionic) into the pod
+        # netns via the amd-host-device NAD, one per amd.com/vnic. REQUIRED for
+        # inter-node MoRI-IO RoCE: without it the RDMA device has no netdev/GID
+        # in the pod and ibv_modify_qp(RTR) fails with "No such device". This is
+        # the exact config proven by the mori-io-0/1 inter-node bring-up.
+        k8s.v1.cni.cncf.io/networks: >-
+          default/amd-host-device-nad,
+          default/amd-host-device-nad,
+          default/amd-host-device-nad,
+          default/amd-host-device-nad,
+          default/amd-host-device-nad,
+          default/amd-host-device-nad,
+          default/amd-host-device-nad,
+          default/amd-host-device-nad
+    spec:
+      # Pod networking (Calico). This cluster exposes the Pensando/Ionic RDMA
+      # NICs via the `amd.com/vnic` device plugin (NOT `rdma/ib` + hostNetwork),
+      # exactly like the proven mori-io-0/1 bring-up. The KV handshake/notify
+      # control channels ride pod IPs; the KV data path rides the vnic RDMA.
+      containers:
+        - name: modelserver
+          command: ["vllm", "serve"]
+          args:
+            # Weights are pre-staged on the deepseek-v3-weights PVC, mounted at
+            # /models. Serve locally (no HF Hub); keep the advertised model id.
+            - "/models/DeepSeek-V3"
+            - "--served-model-name=deepseek-ai/DeepSeek-V3"
+            - "--disable-uvicorn-access-log"
+            - "--tensor-parallel-size=1"
+            # Wide-EP: 8 DP ranks all local to this single pod, one OAI
+            # front-end per rank.
+            - "--data-parallel-size=8"
+            - "--data-parallel-size-local=8"
+            - "--api-server-count=8"
+            - "--enable-expert-parallel"
+            # Prefill is throughput-bound: MoRI high-throughput InterNodeV1.
+            - "--all2all-backend=mori_high_throughput"
+            - "--block-size=16"
+            - "--gpu-memory-utilization=0.75"
+            - "--kv-cache-memory-bytes=20000000000"
+            - "--no-enable-prefix-caching"
+            - "--max-model-len=32768"
+            - "--compilation-config"
+            # cudagraph enabled. Prefill has variable seqlens -> PIECEWISE
+            # (captures around attention); decode uses FULL_DECODE_ONLY.
+            - '{"cudagraph_mode":"PIECEWISE"}'
+            - "--kv-transfer-config"
+            # WRITE-mode producer. proxy_ip intentionally omitted (no ZMQ proxy);
+            # peer discovery is via the routing sidecar on the request path.
+            - '{"kv_connector":"MoRIIOConnector","kv_role":"kv_producer","kv_connector_extra_config":{"http_port":"8000","handshake_port":"6301","notify_port":"61005"}}'
+          env:
+            - name: POD_IP
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.podIP
+            # Fully offline: weights are local, no HF Hub calls, no token needed.
+            - name: HF_HUB_OFFLINE
+              value: "1"
+            - name: TRANSFORMERS_OFFLINE
+              value: "1"
+            # MoRIIOConnector WRITE mode ("0" == not READ).
+            - name: VLLM_MORIIO_CONNECTOR_READ_MODE
+              value: "0"
+            # DP=8 AITER JIT warm-up + weight load headroom.
+            - name: VLLM_ENGINE_READY_TIMEOUT_S
+              value: "7200"
+            - name: VLLM_ROCM_USE_AITER
+              value: "1"
+            - name: VLLM_ROCM_USE_AITER_MOE
+              value: "1"
+            - name: VLLM_ROCM_USE_AITER_PAGED_ATTN
+              value: "0"
+            - name: VLLM_ROCM_USE_AITER_RMSNORM
+              value: "1"
+            # AITER MLA enabled (faster DeepSeek MLA attention kernel).
+            - name: VLLM_ROCM_USE_AITER_MLA
+              value: "1"
+            # Disable the ROCm skinny-GEMM custom ops (wvSplitK/wvSplitKrc).
+            # Our vLLM image overlays PR#45043 Python source on top of the base
+            # image's compiled _rocm_C.abi3.so, which does NOT export wvSplitK.
+            # Skinny-GEMM off => rocm_unquantized_gemm falls back to torch
+            # F.linear (unquantized layers only; FP8 block-scale MoE still uses
+            # the JIT-compiled AITER a8w8 blockscale path).
+            - name: VLLM_ROCM_USE_SKINNY_GEMM
+              value: "0"
+            - name: HSA_ENABLE_SDMA
+              value: "1"
+            - name: HSA_FORCE_FINE_GRAIN_PCIE
+              value: "1"
+            # MoRI symmetric shmem heap (16 GiB) for the EP all2all path.
+            - name: MORI_SHMEM_HEAP_SIZE
+              value: "17179869184"
+          ports:
+            - containerPort: 8000
+              name: vllm
+              protocol: TCP
+            - containerPort: 6301
+              name: mori-handshake
+              protocol: TCP
+            - containerPort: 61005
+              name: mori-notify
+              protocol: TCP
+          resources:
+            limits:
+              cpu: "200"
+              memory: 1500Gi
+              amd.com/gpu: "8"
+              amd.com/vnic: "8"
+            requests:
+              cpu: "200"
+              memory: 1500Gi
+              amd.com/gpu: "8"
+              amd.com/vnic: "8"
+          securityContext:
+            privileged: true
+            capabilities:
+              add: ["IPC_LOCK", "SYS_PTRACE", "NET_RAW"]
+          volumeMounts:
+            - mountPath: /dev/shm
+              name: shm
+            - mountPath: /.cache
+              name: torch-compile-cache
+            - mountPath: /models
+              name: weights
+              readOnly: true
+          startupProbe:
+            httpGet: { path: /v1/models, port: 8000 }
+            initialDelaySeconds: 60
+            periodSeconds: 30
+            timeoutSeconds: 5
+            failureThreshold: 240
+          livenessProbe:
+            httpGet: { path: /health, port: 8000 }
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            httpGet: { path: /v1/models, port: 8000 }
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 12
+      volumes:
+        - name: shm
+          emptyDir:
+            medium: Memory
+            sizeLimit: 64Gi
+        - name: torch-compile-cache
+          emptyDir: {}
+        - name: weights
+          persistentVolumeClaim:
+            claimName: deepseek-v3-weights

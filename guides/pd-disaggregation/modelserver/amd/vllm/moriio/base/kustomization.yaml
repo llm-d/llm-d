@@ -1,0 +1,104 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+# MoRI-IO + Wide-EP base overlay for the AMD/vLLM P/D disaggregation guide.
+#
+# Single-pod 1P1D DeepSeek-V3 deployment, validated on AMD Instinct
+# MI355X (ROCm 7.2.3) with:
+#   - Tensor-parallel  = 1
+#   - Data-parallel    = 8        (intra-pod, "Wide-EP")
+#   - Expert-parallel  = enabled  (DP * TP = 8)
+#   - vLLM kv_connector = MoRIIOConnector  (RDMA WRITE of KV blocks
+#     between prefill and decode pods, instead of NIXL).
+#   - Routing sidecar  = llm-d-router with the --moriio-* flags so the
+#     proxy emits MoRI-IO-shaped kv_transfer_params and pins both legs
+#     of every disagg pair to the same DP rank H = blake2s(uuid).
+#
+# Networking: pod networking (Calico), NOT hostNetwork. The Pensando/
+# Ionic RDMA NICs are exposed via the `amd.com/vnic` device plugin and
+# the host RDMA netdevs are injected into the pod netns via Multus
+# (default/amd-host-device-nad, one per vnic). This is the exact config
+# proven by the inter-node MoRI-IO RoCE bring-up; hostNetwork + rdma/ib
+# is NOT required.
+#
+# This is the connector-specific "real" config, analogous to the sibling
+# ../../base/ (NIXL). Cluster/CI-specific concerns (pull secrets, runner
+# pins, storage class) can layer on top via ../amd-ci/.
+
+resources:
+  - ../../../../../../recipes/modelserver/base/single-host/pd/vllm
+  # NOTE: no ZMQ registration proxy. The MoRIIOConnector only starts its
+  # heartbeat thread when `proxy_ip` is set (moriio_connector.py:
+  # `if self._rank==0 and proxy_ip`). In the llm-d P/D path, peer
+  # discovery is done by the routing sidecar (remote_host = decode POD_IP
+  # injected into kv_transfer_params), so `proxy_ip` is left unset and the
+  # proxy is not deployed.
+
+namePrefix: pd-disaggregation-rocm-moriio-vllm-
+
+# Image references come from the shared components (same pattern as the
+# sibling NIXL ../../base). These pin PUBLIC placeholder defaults:
+#   - amd-vllm       -> ghcr.io/llm-d/llm-d-rocm
+#   - routing-sidecar -> ghcr.io/llm-d/llm-d-router-disagg-sidecar
+# MoRI-IO requires a vLLM ROCm image with MoRI-IO + MoRI-EP compiled in and a
+# llm-d-router sidecar build that supports the --moriio-* / --kv-connector
+# flags, which the public defaults do NOT provide. Override both in a
+# per-cluster overlay or via `kustomize edit set image` before deploying
+# (see README "Required overrides").
+components:
+  - ../../../../../../recipes/modelserver/components/images/amd-vllm
+  - ../../../../../../recipes/modelserver/components/images/routing-sidecar
+
+labels:
+  - pairs:
+      llm-d.ai/model: DeepSeek-V3
+      llm-d.ai/guide: pd-disaggregation
+      llm-d.ai/accelerator-variant: gpu
+      llm-d.ai/accelerator-vendor: amd
+      llm-d.ai/kv-connector: moriio
+      inference.networking.k8s.io/engine-type: vllm
+    includeSelectors: true
+    includeTemplates: true
+    fields:
+      - version: v1
+        kind: ServiceAccount
+        path: metadata/labels
+        create: true
+      - group: apps
+        version: v1
+        kind: Deployment
+        path: metadata/labels
+        create: true
+      - group: apps
+        version: v1
+        kind: Deployment
+        path: spec/selector/matchLabels
+        create: true
+      - group: apps
+        version: v1
+        kind: Deployment
+        path: spec/template/metadata/labels
+        create: true
+      - group: monitoring.coreos.com
+        version: v1
+        kind: PodMonitor
+        path: metadata/labels
+        create: true
+      - group: monitoring.coreos.com
+        version: v1
+        kind: PodMonitor
+        path: spec/selector/matchLabels
+        create: true
+
+patches:
+  - path: patch-prefill.yaml
+  - path: patch-decode.yaml
+  # patch-sidecar overrides the recipe-default routing-proxy patch
+  # (recipes/.../vllm/patch-sidecar.yaml) with the MoRI-IO sidecar
+  # image and the additional --moriio-* CLI flags. Targets the decode
+  # Deployment by name (only decode runs the routing sidecar in P/D
+  # disagg).
+  - path: patch-sidecar.yaml
+    target:
+      kind: Deployment
+      name: decode
