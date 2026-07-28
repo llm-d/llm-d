@@ -94,7 +94,10 @@ pod. The crossover is per model - 2,048 on this testbed (gpt-oss-120b and
 Llama-8B both cross near or below 2K), 16,384 on the wide-EP GLM-5.2
 testbed (753B; tie measured at 13.6K tokens) - so re-measure it when
 changing models, on a warmed pod pair (the first pull between two peers
-pays a one-time session-establishment transient).
+pays a one-time session-establishment transient). The measurement is
+automated as a calibration recipe:
+[guides/recipes/router/calibration/calibrate-min-cached-token-delta.sh](../recipes/router/calibration/calibrate-min-cached-token-delta.sh)
+runs it against two live pods and prints the recommended value.
 
 ### Supported Hardware Backends
 

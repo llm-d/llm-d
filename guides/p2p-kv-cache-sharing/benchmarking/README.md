@@ -106,7 +106,9 @@ broken feature, but reading this table while running on TCP will mis-set it.
 Seed a fresh prefix on one pod; measure single-request prefill latency on a
 cold pod with and without the pull, at prefix lengths 2K/8K/16K/32K/48K.
 The crossover sets the router's `minCachedTokenDelta`: below it a pull costs
-more than recomputing. Calibrate on a *warmed* pod pair - the first pull
+more than recomputing. This measurement is automated as a
+[calibration recipe](../../recipes/router/calibration/README.md#calibrating-mincachedtokendelta)
+that runs against two live pods and prints the recommended value. Calibrate on a *warmed* pod pair - the first pull
 between two peers pays a one-time session-establishment cost (~6 s measured
 on the wide-EP testbed) that steady-state pulls never see, so a single cold
 probe reads the transient, not the pull.

@@ -1,0 +1,112 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: calibrate-min-cached-token-delta
+  labels:
+    app: calibrate-min-cached-token-delta
+spec:
+  backoffLimit: 0
+  ttlSecondsAfterFinished: 3600
+  template:
+    metadata:
+      labels:
+        app: calibrate-min-cached-token-delta
+    spec:
+      restartPolicy: Never
+      containers:
+      - name: calibrate
+        image: python:3.11-slim
+        env:
+        - name: SRC_URL
+          value: "${SRC_URL}"
+        - name: DST_URL
+          value: "${DST_URL}"
+        - name: SRC_IP
+          value: "${SRC_IP}"
+        - name: P2P_PORT
+          value: "${P2P_PORT}"
+        - name: MODEL_NAME
+          value: "${MODEL_NAME}"
+        - name: LENGTHS
+          value: "${LENGTHS}"
+        - name: REPS
+          value: "${REPS}"
+        command: ["python3", "-u", "-c"]
+        args:
+        - |
+          # Measures the pull-versus-recompute crossover between two live model
+          # server pods and prints the recommended minCachedTokenDelta.
+          #
+          # Method (the p2p-kv-cache-sharing guide's Step 0, automated):
+          # per (length, rep) two independent prompts are used, because the
+          # consumer caches whatever it just served:
+          #   recompute: seed prompt_r on the source, send it to the consumer
+          #              with no kv_transfer_params -> the consumer prefills
+          #   pull:      seed prompt_p on the source, send it to the consumer
+          #              with kv_transfer_params.remote_kv_source -> it pulls
+          #
+          # Prompts are arrays of random token IDs, so lengths are exact and
+          # the method is model-agnostic (no text-to-token ratio to guess).
+          # The mesh is warmed first: the first pull between two peers pays a
+          # one-time session-establishment cost that steady-state pulls never
+          # see, so an unwarmed probe reads the transient, not the pull.
+          #
+          # The recommendation is the smallest tested length at which the pull
+          # beats recompute. Lengths must be multiples of the vLLM block size
+          # (a partial final block is structurally uncacheable).
+          import json, os, random, statistics, time, urllib.request, uuid
+
+          SRC_URL = os.environ["SRC_URL"]
+          DST_URL = os.environ["DST_URL"]
+          SRC_IP  = os.environ["SRC_IP"]
+          P2P_PORT = int(os.environ.get("P2P_PORT", "7777"))
+          MODEL = os.environ["MODEL_NAME"]
+          LENGTHS = [int(x) for x in os.environ.get("LENGTHS", "2048,4096,8192,16384,32768").split(",")]
+          REPS = int(os.environ.get("REPS", "5"))
+          TOKEN_MIN, TOKEN_MAX = 1000, 30000
+          rng = random.SystemRandom()
+
+          def fresh_ids(n):
+              return [rng.randint(TOKEN_MIN, TOKEN_MAX) for _ in range(n)]
+
+          def post(url, ids, pull=False):
+              body = {"model": MODEL, "prompt": ids, "max_tokens": 1, "temperature": 0}
+              if pull:
+                  body["kv_transfer_params"] = {"remote_kv_source": {
+                      "kv_request_id": str(uuid.uuid4()),
+                      "remote_host": SRC_IP,
+                      "remote_port": P2P_PORT,
+                  }}
+              req = urllib.request.Request(url + "/v1/completions",
+                                           data=json.dumps(body).encode(),
+                                           headers={"Content-Type": "application/json"})
+              t0 = time.monotonic()
+              urllib.request.urlopen(req, timeout=300).read()
+              return (time.monotonic() - t0) * 1000.0
+
+          print(f"src={SRC_URL} dst={DST_URL} pull_source={SRC_IP}:{P2P_PORT} "
+                f"model={MODEL} lengths={LENGTHS} reps={REPS}", flush=True)
+          ids = fresh_ids(4096)
+          post(SRC_URL, ids); time.sleep(3)
+          dt = post(DST_URL, ids, pull=True)
+          print(f"mesh warm: first pull {dt:.0f} ms (one-time session cost, discarded)", flush=True)
+
+          crossover = None
+          print(f"{'tokens':>8} {'recompute_ms':>13} {'pull_ms':>10} {'delta':>8}", flush=True)
+          for n in LENGTHS:
+              rec, pul = [], []
+              for _ in range(REPS):
+                  a = fresh_ids(n); post(SRC_URL, a); time.sleep(2); rec.append(post(DST_URL, a))
+                  b = fresh_ids(n); post(SRC_URL, b); time.sleep(2); pul.append(post(DST_URL, b, pull=True))
+              mr, mp = statistics.median(rec), statistics.median(pul)
+              d = 100.0 * (mp - mr) / mr
+              print(f"{n:>8} {mr:>13.1f} {mp:>10.1f} {d:>+7.1f}%", flush=True)
+              if crossover is None and mp < mr:
+                  crossover = n
+          if crossover is None:
+              print("NO CROSSOVER in the tested range: the pull never beat "
+                    "recompute. Check the transport (an IB device missing from "
+                    "the container moves the crossover out by an order of "
+                    "magnitude) or extend LENGTHS upward.", flush=True)
+              raise SystemExit(1)
+          print(f"MIN_CACHED_TOKEN_DELTA={crossover}", flush=True)
