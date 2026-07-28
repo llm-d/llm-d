@@ -120,13 +120,7 @@ spec:
                                           "kv_role":"kv_both",
                                           "kv_load_failure_policy":"fail"}' \
                   --moe-backend deep_gemm_mega_moe \
-                  --no-disable-hybrid-kv-cache-manager \
-                  --compilation-config '{"cudagraph_mode":"FULL_DECODE_ONLY"}' \
-                  --all2all-backend flashinfer_nvlink_one_sided \
-                  --profiler-config '{"profiler":"torch",
-                                      "torch_profiler_dir":"/profiles",
-                                      "max_iterations":10,
-                                      "ignore_frontend":true}'
+                  --no-disable-hybrid-kv-cache-manager
 
                   # To enable tracing, add:
                   # --otlp-traces-endpoint http://otel-collector:4317 \
@@ -250,6 +244,7 @@ spec:
               failureThreshold: 3
             resources:
               limits:
+                cpu: 32
                 ephemeral-storage: 1Ti
                 memory: 512Gi
                 nvidia.com/gpu: "8"
