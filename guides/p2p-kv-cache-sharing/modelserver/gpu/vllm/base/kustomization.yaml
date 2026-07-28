@@ -7,7 +7,7 @@ kind: Kustomization
 # P2P tier and KV-events sockets are pod-IP listeners.
 
 resources:
-  - ../../../../recipes/modelserver/base/single-host/default
+  - ../../../../../recipes/modelserver/base/single-host/default
 
 namePrefix: p2p-kv-cache-sharing-
 
@@ -74,9 +74,3 @@ patches:
 #    target:
 #      kind: Deployment
 #      name: decode
-
-# NOTE on RDMA: the manifest works over TCP (NIXL/UCX fall back). For
-# NIXL-over-RDMA transfer rates on an RDMA-capable fabric (e.g. InfiniBand),
-# add to the modelserver container: resources rdma/ib, securityContext
-# capabilities IPC_LOCK + SYS_RAWIO, and the NCCL_IB_HCA / *_SOCKET_IFNAME env
-# for your cluster. See the guide's Supported Hardware Backends.

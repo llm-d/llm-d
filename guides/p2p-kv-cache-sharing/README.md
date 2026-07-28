@@ -293,12 +293,42 @@ workloads need more replicas than the default.
 
 ### 3. Deploy the Model Server
 
+Apply the Kustomize overlay for your transport:
+
 ```bash
-kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/gpu/vllm
+export ACCELERATOR_TYPE=gpu   # options: gpu
+export MODEL_SERVER=vllm      # options: vllm
+export TRANSPORT=rdma         # options: rdma (recommended), base
+kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/${ACCELERATOR_TYPE}/${MODEL_SERVER}/${TRANSPORT}/
 ```
 
 16 replicas, TP=1, `--block-size=64`, KV events on, the offloading connector
 with a P2P tier on port 7777.
+
+- **`rdma`** adds an `rdma/ib` device and `IPC_LOCK` to every model server.
+  This is what every benchmark in this guide was measured on, and it is the
+  recommended overlay.
+- **`base`** is the same deployment without the IB device. NIXL/UCX falls
+  back to TCP, which does not stop the pull working - it moves the
+  pull-versus-recompute crossover from below 2K tokens out to ~29K, so
+  `minCachedTokenDelta` has to move with it. See
+  [Supported Hardware Backends](#supported-hardware-backends).
+
+The `rdma/ib` resource name is what the clusters this was measured on expose;
+yours may differ (`rdma/hca`, `nvidia.com/rdma`, ...). Check before applying,
+and edit `modelserver/gpu/vllm/rdma/patch-rdma.yaml` to match:
+
+```bash
+kubectl get nodes -o jsonpath='{.items[0].status.allocatable}' | tr ',' '\n' | grep -i rdma
+```
+
+Confirm the device actually reached the container - a pod that schedules
+without it serves requests normally and just pulls slowly, so this failure
+looks like a performance result rather than a misconfiguration:
+
+```bash
+kubectl exec -n ${NAMESPACE} deploy/p2p-kv-cache-sharing-decode -c modelserver -- ls /dev/infiniband
+```
 
 #### Interim: P2P tier from the development branch (temporary, will be replaced)
 
@@ -332,7 +362,7 @@ removed once the tier is released.
    ```
 
 2. Uncomment the `patches:` entry for `patch-p2p-src.yaml` in
-   `modelserver/gpu/vllm/kustomization.yaml` and re-apply.
+   `modelserver/gpu/vllm/base/kustomization.yaml` and re-apply.
 
 3. Pin the modelserver image to the vLLM nightly the branch is rebased on.
    The mounted files import symbols from the rest of the installed package,
@@ -439,7 +469,7 @@ in [benchmarking/README.md](benchmarking/README.md).
 
 ```bash
 helm uninstall ${GUIDE_NAME} -n ${NAMESPACE}
-kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/gpu/vllm
+kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/${ACCELERATOR_TYPE}/${MODEL_SERVER}/${TRANSPORT}/
 kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/render
 ```
 
