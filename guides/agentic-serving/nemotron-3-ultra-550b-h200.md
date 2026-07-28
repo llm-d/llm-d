@@ -18,6 +18,11 @@ configuration layers the agentic optimizations onto disaggregated serving:
   replicas) — to extend the cacheable working set far beyond HBM for long, resumable sessions.
 - **FP8 block weights + FP8 KV cache** to fit the `~563 GB` of weights at `TP=8` and leave KV
   headroom; the MoE is served with Expert Parallelism.
+- **`VLLM_PREFIX_CACHE_RETENTION_INTERVAL=0`** to raise multi-turn prefix-cache hit rates. This is
+  enabled here because `RedHatAI/NVIDIA-Nemotron-3-Ultra-550B-A55B-FP8-block` is a
+  [Mamba-hybrid model](https://huggingface.co/RedHatAI/NVIDIA-Nemotron-3-Ultra-550B-A55B-FP8-block/blob/main/config.json)
+  (`NemotronHForCausalLM`); vLLM rejects the flag on full-attention models, so it is set
+  per-deployment rather than in the baseline manifests.
 
 > 🚧 This deployment uses development images (the endpoint-picker and the disaggregation routing
 > sidecar) for the P/D-disaggregation scheduling plugins. Pin them to a release before relying on
@@ -35,14 +40,15 @@ configuration layers the agentic optimizations onto disaggregated serving:
 
 ### Supported Hardware Backends
 
-| Backend             | Directory                                       | Notes                                            |
-| ------------------- | ----------------------------------------------- | ------------------------------------------------ |
-| NVIDIA GPU (vLLM)   | `modelserver/gpu/vllm/nemotron-3-ultra/`        | 8× H200, P/D disaggregated (6 prefill / 2 decode) |
+| Backend           | Directory                                | Notes                                             |
+| ----------------- | ---------------------------------------- | ------------------------------------------------- |
+| NVIDIA GPU (vLLM) | `modelserver/gpu/vllm/nemotron-3-ultra/` | 8× H200, P/D disaggregated (6 prefill / 2 decode) |
 
 ## Prerequisites
 
 - Installed proper client tools (kubectl, helm).
 - Set the following environment variables:
+
   ```bash
   export REPO_ROOT=$(realpath $(git rev-parse --show-toplevel))
   source ${REPO_ROOT}/guides/env.sh

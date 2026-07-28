@@ -1,0 +1,79 @@
+## Predicted Latency-Based Scheduling — multimodal aggregated setup.
+## Layer on top of: recipes/router/base.values.yaml
+##
+## Targets the model servers deployed by the multimodal-serving/aggregation
+## guide (llm-d.ai/guide: multimodal-optimized-baseline) — deploy that guide's
+## modelserver kustomize first, then install the router with this values file
+## instead of aggregation.values.yaml.
+
+router:
+  latencyPredictor:
+    enabled: true
+
+  extraServicePorts:
+    - name: http
+      port: 80
+      protocol: TCP
+      targetPort: 8081
+
+  epp:
+    pluginsConfigFile: "multimodal-latency-predictor-plugins.yaml"
+    pluginsCustomConfig:
+      multimodal-latency-predictor-plugins.yaml: |
+        apiVersion: llm-d.ai/v1alpha1
+        kind: EndpointPickerConfig
+        plugins:
+        # Multimodal image→token estimation: the predictor features and the
+        # affinity filter need per-request token counts, and image inputs have
+        # no text length to read. Params match aggregation.values.yaml.
+        - type: token-producer
+          parameters:
+            estimate:
+              image:
+                mode: dynamic
+                defaultResolution:
+                  width: 1280
+                  height: 720
+                dynamic:
+                  factor: 1024
+        - type: approx-prefix-cache-producer
+          parameters:
+            # The guide's benchmark workload peaks around ~5K tokens per request
+            # (3×720p images + ~1.3K text), so this window is ample. Raise it to
+            # match your longest prompts.
+            maxPrefixTokensToMatch: 131072
+        - type: predicted-latency-producer
+        - type: prefix-cache-affinity-filter
+          name: loose-affinity-filter
+          parameters:
+            # A multimodal request's cacheable fraction is structurally lower than
+            # text (the unique question is never a cache hit; this workload caps at
+            # ~0.70), so the plugin's 0.8 default would never engage affinity. Set
+            # the threshold below your traffic's maximum cacheable fraction.
+            affinityThreshold: 0.6
+            # Take the filter's TTFT load-gate from the predictor rather than the
+            # heuristic estimate, so affinity and scheduling agree on what "slow"
+            # means, and release affinity once a cache hit would cost more than
+            # 5s of predicted TTFT.
+            ttftSource: latencyPredictor
+            # Scaled to the predictor's training target: this pipeline trains on
+            # end-to-end latency (streamingMode false), so the "TTFT" the gate
+            # compares includes decode time and runs far above true TTFT under
+            # load. A TTFT-scale gate (the 5s used by the P/D variant) releases
+            # affinity almost immediately; 30s is commensurate with E2E-scale
+            # predictions for ~300-token completions. If you switch to
+            # streamingMode: true (real TTFT training), lower this accordingly.
+            maxTTFTPenaltyMs: 30000
+        - type: latency-scorer
+        - type: weighted-random-picker
+        schedulingProfiles:
+        - name: default
+          plugins:
+          - pluginRef: predicted-latency-producer
+          - pluginRef: loose-affinity-filter
+          - pluginRef: latency-scorer
+          - pluginRef: weighted-random-picker
+
+  modelServers:
+    matchLabels:
+      llm-d.ai/guide: "multimodal-optimized-baseline"

@@ -13,9 +13,11 @@ This guide deploys the recommended out of the box [configuration](https://github
 
 The optimized-baseline defaults to two main routing criteria:
 
-- **Prefix-cache aware** using the [prefix cache scorer](https://github.com/llm-d/llm-d-router/tree/main/pkg/epp/framework/plugins/scheduling/scorer/prefix), which scores candidate endpoints by estimating prompt prefix cache reuse on each model server, complemented by the [`no-hit-lru-scorer`](https://github.com/llm-d/llm-d-router/tree/main/pkg/epp/framework/plugins/scheduling/scorer/nohitlru) that spreads cold requests (zero cache hits) evenly across endpoints to balance the "prefill" workload.
+- **Prefix-cache aware** using the [prefix cache affinity filter](https://github.com/llm-d/llm-d-router/tree/main/pkg/epp/framework/plugins/scheduling/filter/prefixcacheaffinity/README.md), which narrows candidates to "sticky" endpoints with high estimated prompt prefix cache reuse, with a saturation-aware override that spreads load when endpoints get hot.
 
-- **Load-aware** using both the [kv-cache utilization](https://github.com/llm-d/llm-d-router/tree/main/pkg/epp/framework/plugins/scheduling/scorer/kvcacheutilization) and the [queue size](https://github.com/llm-d/llm-d-router/tree/main/pkg/epp/framework/plugins/scheduling/scorer/queuedepth) scorers.
+- **Load-aware** using the [token load scorer](https://github.com/llm-d/llm-d-router/tree/main/pkg/epp/framework/plugins/scheduling/scorer/tokenload/README.md), which scores endpoints based on the total prefill token load handled by each model server.
+
+Both plugins are used with their built-in defaults — no per-deployment tuning is required for this guide's reference setup (Qwen3-32B on H100 80&nbsp;GB, TP=2). If you deploy a **different model or accelerator**, the saturation-aware override gate keys off the `peakPrefillThroughput` of the filter, which is hardware- and model-specific; measure your own with the shared [calibration recipe](../recipes/router/calibration/README.md) and set it on the filter. See [Adapting to other hardware](#adapting-to-other-hardware) below.
 
 ## Configuration
 
@@ -38,7 +40,7 @@ This guide includes configurations for the following accelerators:
 | Intel XPU           | `xpu`              | Intel Data Center GPU Max 1550+            |
 | Google TPU v6e      | `tpu/v6`           | GKE TPU                                    |
 | Google TPU v7       | `tpu/v7`           | GKE TPU                                    |
-| CPU                 | `cpu`              | Intel/AMD, 64 cores + 64GB RAM per replica |
+| CPU                 | `cpu`              | x86 with bf16 acceleration — AMX or AVX512-BF16 (Intel Sapphire Rapids+ / GCP C3, AMD Zen 4+); 64 cores + 64GB RAM per replica. Older CPUs without AMX/AVX512-BF16 (e.g. Cascade/Ice Lake) crash on the bf16 model unless run with `--dtype=float32`. |
 
 > [!NOTE]
 > Some hardware variants use reduced configurations (fewer replicas, smaller models) to enable CI testing for compatibility and regression checks. These configurations are maintained by their respective hardware vendors and are not guaranteed as production-ready examples. Users deploying on non-default hardware should review and adjust the configurations for their environment.
@@ -252,6 +254,25 @@ For example to deploy other models:
 kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/recipes/modelserver/components/monitoring
 ```
 <!-- guide:deploy.monitoring end -->
+
+## Adapting to other hardware
+
+The routing plugins ship with defaults tuned for this guide's reference setup (Qwen3-32B on H100 80&nbsp;GB, TP=2), so **no calibration is needed to run the guide as written**.
+
+The saturation-aware override gate in the `prefix-cache-affinity-filter` keys off the filter's `peakPrefillThroughput` parameter, which is **hardware- and model-specific** (the plugin default, `15928`, is the value measured for this guide's setup). If you deploy a different model or accelerator, measure your own value with the shared calibration recipe and set it on the filter:
+
+```yaml
+# guides/optimized-baseline/router/optimized-baseline.values.yaml
+- type: prefix-cache-affinity-filter
+  parameters:
+    peakPrefillThroughput: <measured value>
+```
+
+The recipe (`calibrate.sh`) runs a short Kubernetes Job that measures true prefill throughput against your live deployment and prints the value — it does not modify any config. See the recipe's README for full usage:
+
+- [`guides/recipes/router/calibration/README.md`](../recipes/router/calibration/README.md)
+
+For reference values across the (model, accelerator) combinations shipped under `guides/` — and which ones still need a calibration run — see the [**configuration matrix**](../recipes/router/calibration/configuration-matrix.md).
 
 ## Verification
 

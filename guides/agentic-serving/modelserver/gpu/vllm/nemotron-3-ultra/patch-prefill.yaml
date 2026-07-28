@@ -23,6 +23,9 @@ spec:
             - "--kv-transfer-config"
             - '{"kv_connector":"MultiConnector","kv_role":"kv_both","kv_load_failure_policy":"fail","kv_connector_extra_config":{"connectors":[{"kv_connector":"NixlConnector","kv_role":"kv_producer","kv_connector_extra_config":{"bidirectional_kv_xfer":true}},{"kv_connector":"OffloadingConnector","kv_role":"kv_both","kv_connector_extra_config":{"cpu_bytes_to_use":214748364800,"lazy_offload":true}}]}}'
           env:
+            # Set on Mamba-hybrid model only; improves multi-turn prefix caching.
+            - name: VLLM_PREFIX_CACHE_RETENTION_INTERVAL
+              value: "0"
             - name: HF_TOKEN
               valueFrom:
                 secretKeyRef:

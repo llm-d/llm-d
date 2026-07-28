@@ -65,6 +65,7 @@ Edit the `values.yaml` file with your specific GCP project and resources:
 ```yaml
 ap:
   gcpPubSub:
+    projectId: "<your-project>"
     requestSubscriberId: "projects/<your-project>/subscriptions/async-proc-requests-sub"
     resultTopicId: "projects/<your-project>/topics/async-proc-results"
 ```

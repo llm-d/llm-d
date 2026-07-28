@@ -7,19 +7,20 @@ For this quickstart, we will use the **Standalone Mode** deployment, which is th
 ## Prerequisites
 
 - Installed proper client tools (kubectl, helm).
+
+- Checkout llm-d repo:
+
+  ```bash
+  export branch="main"
+  git clone https://github.com/llm-d/llm-d.git && cd llm-d && git checkout ${branch}
+  ```
+
 - Set the following environment variables:
   ```bash
   export REPO_ROOT=$(realpath $(git rev-parse --show-toplevel))
   source ${REPO_ROOT}/guides/env.sh
   export GUIDE_NAME="quickstart"
   export NAMESPACE=llm-d-quickstart
-  ```
-
-- Checkout llm-d repo:
-
-  ```bash
-    export branch="main"
-    git clone https://github.com/llm-d/llm-d.git && cd llm-d && git checkout ${branch}
   ```
 
 - Install the Gateway API Inference Extension CRDs:
@@ -64,11 +65,20 @@ helm install ${GUIDE_NAME} \
 Deploy the default model server (vLLM running on NVIDIA GPUs). This will deploy 8 replicas of `Qwen/Qwen3-32B` by default.
 
 ```bash
-kubectl apply -n ${NAMESPACE} -k guides/optimized-baseline/modelserver/gpu/vllm/
+kubectl apply -n ${NAMESPACE} -k guides/optimized-baseline/modelserver/gpu/vllm/base/
 ```
 
 > [!TIP]
 > If you are using different hardware (AMD, Intel, TPU, or CPU), you can find alternative configurations in the `guides/optimized-baseline/modelserver/` directory.
+
+Wait for all model server pods to be running and ready before proceeding:
+
+```bash
+bash ${REPO_ROOT}/guides/scripts/wait-for-pods-ready.sh -l llm-d.ai/guide=optimized-baseline -n ${NAMESPACE}
+```
+
+> [!NOTE]
+> Model server pods may take several minutes to start as they need to download the model weights.
 
 ## Verification
 

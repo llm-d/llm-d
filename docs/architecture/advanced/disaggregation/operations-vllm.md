@@ -55,6 +55,7 @@ As a result, new replicas can be added to a running disaggregated deployment wit
 ### Scale-Down
 
 In Kubernetes, there is a well-defined [pod termination process](https://kubernetes.io/docs/concepts/workloads/pods/pod-lifecycle/#pod-termination):
+
 - **Termination Triggered**: The pod's state is changed to **Terminating**.
 - **`InferencePool` Update**: The pod is removed from the list of endpoints for associated the `InferencePool`, preventing new traffic from being routed to it. (note: for standard Kubernetes objects, this is equivalent to removal from a Service)
 - **PreStop Hook**: If defined, the preStop hook executes.
@@ -64,6 +65,7 @@ In Kubernetes, there is a well-defined [pod termination process](https://kuberne
 For **new requests**, instances are automatically removed from the `InferencePool` so no new traffic is routed to terminating pods.
 
 For **running requests**, we can configure how vLLM handles the `SIGTERM`:
+
 - By default, vLLM immediately `aborts` existing requests and terminates. This fails the running requests with an error status code.
 - vLLM can be configured with a `--shutdown-timeout N`. When this is set, vLLM catches the `SIGTERM` and drains the currently running requests for `N` seconds. After this timeout, it `aborts` any running requests still in flight, returning an error code.
 
@@ -154,7 +156,7 @@ In this way, `llm-d` isolates Prefill instance failure.
 
 While D instance failures are unlikely to result in P instance crashes (since P instance never initiates RDMA operations), there is a challenge around ensuring that KV cache memory on the P instance is not stranded (since the P instance holds onto the KV cache until it has been explicitly pulled from the D instance).
 
-vLLM addresses this with a **lease-based KV block management** system. When a prefill completes, P holds the KV blocks with an initial lease of `kv_lease_duration` (default `30s`). While the request is queued or running on the D instance, D's scheduler periodically sends heartbeat notifications to P, each extending the lease by `lease_extentions=kv_lease_duration * 2/3` (default `20s`). If D crashes (or becomes unresponsive), heartbeats stop, and P automatically frees the KV blocks when the last lease extension expires — at most `lease_extension` seconds after the last heartbeat.
+vLLM addresses this with a **lease-based KV block management** system. When a prefill completes, P holds the KV blocks with an initial lease of `kv_lease_duration` (default `30s`). While the request is queued or running on the D instance, D's scheduler periodically sends heartbeat notifications to P, each extending the lease by `lease_extension = kv_lease_duration * 2 // 3` (default `20s`). If D crashes (or becomes unresponsive), heartbeats stop, and P automatically frees the KV blocks when the last lease extension expires — at most `lease_extension` seconds after the last heartbeat.
 
 This approach keeps the worst-case block hold time short without risking premature block eviction when D instances are heavily loaded — as long as D is alive, the heartbeats keep the lease active indefinitely.
 
@@ -184,8 +186,8 @@ The `kv_lease_duration` is configurable via `kv_connector_extra_config`:
 ```
 
 > [!NOTE]
-> Lease-based KV block TTL requires **vLLM v0.22.0** or later. 
-> In earlier versions, vLLM used a fixed-timeout approach via `VLLM_NIXL_ABORT_REQUEST_TIMEOUT` (default `480s`): 
+> Lease-based KV block TTL requires **vLLM v0.22.0** or later.
+> In earlier versions, vLLM used a fixed-timeout approach via `VLLM_NIXL_ABORT_REQUEST_TIMEOUT` (default `480s`):
 > the P instance would free stranded KV blocks only after that timeout elapsed, regardless of whether the D
 > instance was still alive. This made the worst-case hold time very long, and reducing the
 > timeout risked premature eviction when D instances were heavily loaded.

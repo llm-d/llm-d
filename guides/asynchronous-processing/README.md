@@ -1,6 +1,14 @@
-# [Experimental] Asynchronous Processing with Async Processor
+# Asynchronous Processing with Async Processor
 
-The [Async Processor](https://github.com/llm-d-incubation/llm-d-async) provides a way to process inference requests asynchronously using a queue-based architecture. This is ideal for latency-insensitive workloads or for filling "slack" capacity in your inference pool.
+The [Async Processor](https://github.com/llm-d/llm-d-async) provides a way to process inference requests asynchronously using a queue-based architecture. This is ideal for latency-insensitive workloads or for filling "slack" capacity in your inference pool.
+
+Two guides are available:
+
+- **This guide** — the standard **single-model** setup (choose a queue backend below and deploy).
+- **[Multi-tenant guide](./multitenant/README.md)** — the **advanced** setup: **team × tier × model** with per-team reserved/overflow quota (classifying `redis-quota`), tier-priority dispatch, and per-model saturation back-off across two `InferencePool`s. Runs on either queue backend.
+
+> [!NOTE]
+> For production sizing, scaling, and container-resource guidance, see the [Async Processor Operations Guide](../../docs/operations/async-processor.md).
 
 ## Overview
 
@@ -56,10 +64,10 @@ Deploy the Async Processor using the selected queue implementation's configurati
 ```bash
 export NAMESPACE=llm-d-async
 export MQ_PROVIDER=gcp-pubsub # options are gcp-pubsub or redis
-export ASYNC_VERSION=0.6.1
+export ASYNC_VERSION=0.7.4
 
 helm install async-processor \
-    oci://ghcr.io/llm-d-incubation/charts/async-processor \
+    oci://ghcr.io/llm-d/charts/async-processor \
     -f ${REPO_ROOT}/guides/asynchronous-processing/${MQ_PROVIDER}/values.yaml \
     --set ap.igwBaseURL=http://${IP}:80 \
     -n ${NAMESPACE} --create-namespace --version ${ASYNC_VERSION}

@@ -418,4 +418,4 @@ kubectl kustomize ${REPO_ROOT}/guides/optimized-baseline/modelserver/gpu/vllm/ \
 
 ## Further Reading
 
-See [Flow Control architecture](../../docs/architecture/core/epp/flow-control.md) for full details of the design.
+See [Flow Control architecture](../../docs/architecture/core/router/epp/flow-control.md) for full details of the design.

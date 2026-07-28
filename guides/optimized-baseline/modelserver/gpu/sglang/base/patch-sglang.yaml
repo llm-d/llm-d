@@ -38,18 +38,20 @@ spec:
             #   value: "0.1"
           resources:
             limits:
-              nvidia.com/gpu: "2"
-              cpu: "8"
-              memory: 64Gi
+              cpu: '16'
+              memory: 128Gi
+              nvidia.com/gpu: 2
             requests:
-              nvidia.com/gpu: "2"
-              cpu: "2"
-              memory: 32Gi
+              cpu: '8'
+              memory: 96Gi
+              nvidia.com/gpu: 2
           volumeMounts:
-            - mountPath: /.config
-              name: metrics-volume
             - mountPath: /dev/shm
               name: dshm
+            - mountPath: /.cache
+              name: sglang-cache
+            - mountPath: /.triton
+              name: triton-cache
           startupProbe:
             initialDelaySeconds: 15
             periodSeconds: 30
@@ -64,9 +66,12 @@ spec:
             timeoutSeconds: 2
             failureThreshold: 3
       volumes:
-        - name: metrics-volume
-          emptyDir: {}
         - name: dshm
           emptyDir:
             medium: Memory
             sizeLimit: 20Gi
+        - name: sglang-cache
+          emptyDir: {}
+        - name: triton-cache
+          emptyDir: {}
+

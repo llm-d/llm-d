@@ -29,6 +29,23 @@ router:
                   height: 720
                 dynamic:
                   factor: 1024
+              video:
+                defaultResolution:          
+                  width: 1280
+                  height: 720
+                defaultDuration: 10
+                maxVideoTokens: 12288
+                tokensPerFrame:
+                  mode: dynamic
+                  dynamic:
+                    factor: 1024
+                frames:
+                  mode: sampled
+                  maxFrames: 768
+                  minFrames: 4
+                  sampled:
+                    sampleFPS: 2
+                    temporalPatchSize: 2      
         - type: approx-prefix-cache-producer
         schedulingProfiles:
         - name: default

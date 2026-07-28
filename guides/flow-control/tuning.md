@@ -67,7 +67,7 @@ To find the physical VRAM limit, you must know the shape of your actual producti
 Pass all gathered parameters to the tuning wizard. The script applies queueing theory and statistical variance to output the exact limits you should configure.
 
 ```bash
-python3 scripts/tuning_wizard.py \
+python3 guides/flow-control/scripts/tuning_wizard.py \
   --throughput 12.5 \
   --latency-sec 3.45 \
   --gpu-blocks 21875 \

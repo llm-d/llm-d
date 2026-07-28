@@ -20,7 +20,7 @@ Each path is a self-contained deployment using a specific offloading implementat
 | **vLLM native** | vLLM `OffloadingConnector` | CPU RAM, CPU RAM + Filesystem | `modelserver/gpu/vllm/native/` |
 | **LMCache** | [LMCache](https://lmcache.ai) connector | CPU RAM, Filesystem | `modelserver/gpu/vllm/lmcache-connector/` |
 | **MooncakeStore** | MooncakeStore connector | CPU RAM, Filesystem | `modelserver/gpu/vllm/mooncake-store/` |
-| **SGLang HiCache** | SGLang native HiCache | CPU RAM | `modelserver/gpu/sglang/native/cpu/` |
+| **SGLang HiCache** | SGLang native HiCache | CPU RAM, CPU RAM + Filesystem | `modelserver/gpu/sglang/native/cpu/`, `modelserver/gpu/sglang/native/fs/` |
 | **TPU** | vLLM TPU KVCache connector | CPU RAM | `modelserver/tpu/v6/vllm/native/cpu/`, `modelserver/tpu/v7/vllm/native/cpu/` |
 
 The tiers each path supports differ — see the table above. For example, the vLLM native path also extends to a shared filesystem via multi-tier offloading (`TieringOffloadingSpec`), spilling from CPU RAM to shared storage (HBM → CPU RAM → filesystem).
@@ -178,11 +178,12 @@ export INFRA_PROVIDER=base  # base | gke
 kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/tiered-prefix-cache/modelserver/gpu/vllm/lmcache-connector/${VARIANT}/${INFRA_PROVIDER}/
 ```
 
-#### SGLang HiCache — CPU RAM
+#### SGLang HiCache — CPU RAM and Filesystem (Lustre)
 
 ```bash
+export VARIANT=cpu          # cpu | fs
 export INFRA_PROVIDER=base  # base | gke
-kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/tiered-prefix-cache/modelserver/gpu/sglang/native/cpu/${INFRA_PROVIDER}/
+kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/tiered-prefix-cache/modelserver/gpu/sglang/native/${VARIANT}/${INFRA_PROVIDER}/
 ```
 
 #### MooncakeStore - CPU DRAM
@@ -462,6 +463,7 @@ Empirical benchmark reports demonstrating the impact of multi-tier prefix-cache 
 
 - **[Qwen/Qwen3-32B on vLLM (16×H100 CPU Offload)](./benchmark-results/vllm-qwen3-32b-h100.md)**: Headline throughput and latency comparisons across 16×H100 GPUs with CPU RAM offloading.
 - **[Qwen/Qwen3-32B on SGLang (16×H100 CPU Offload)](./benchmark-results/sglang-qwen3-32b-h100.md)**: Headline throughput and latency comparisons across 16×H100 GPUs with SGLang HiCache CPU RAM offloading.
+- **[Qwen/Qwen3-32B on SGLang (16×H100 Lustre Offload)](./benchmark-results/sglang-qwen3-32b-h100-lustre.md)**: Benchmark comparisons for shared POSIX filesystem offloading using SGLang HiCache native file backend.
 - **[openai/gpt-oss-120b on vLLM (16×H100 CPU Offload)](./benchmark-results/vllm-gpt-oss-120b-h100.md)**: Stage-by-stage throughput, latency, TPOT, and fleet cache hit rate breakdowns across 5–40 QPS.
 - **[Qwen/Qwen3-32B on vLLM (TPU v6e/v7 CPU Offload)](./benchmark-results/vllm-qwen3-32b-tpuv7.md)**: Headline throughput and latency effect of CPU RAM prefix offloading on Google TPU architectures.
 - **[Qwen/Qwen3-32B on vLLM (16×H100 Lustre Offload)](./benchmark-results/vllm-qwen3-32b-h100-lustre.md)**: Benchmark comparisons for shared POSIX filesystem offloading using LMCache and llm-d filesystem connectors.
