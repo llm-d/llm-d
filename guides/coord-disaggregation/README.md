@@ -1,4 +1,4 @@
-# Coordinator EPD (Encode / Prefill / Decode)
+# Coordinator Disaggregation (Encode / Prefill / Decode)
 
 ## Overview
 
@@ -70,7 +70,7 @@ The result of this guide:
 > [llm-d-router#2134](https://github.com/llm-d/llm-d-router/pull/2134)
 > (`header-phase-profile-handler` plus the `encode-filter`/`prefill-filter`/`decode-filter`
 > plugins), which is open and not yet merged at the time of writing. Until it lands in
-> an official image, [`router/coordinator-epd.values.yaml`](router/coordinator-epd.values.yaml)
+> an official image, [`router/coord-disaggregation.values.yaml`](router/coord-disaggregation.values.yaml)
 > pins `router.epp.image` to `ghcr.io/roytman/llm-d-router-endpoint-picker:1-epp`, a
 > build that contains it. Swap it back to the chart default once the PR is released.
 
@@ -113,8 +113,8 @@ The result of this guide:
   ```bash
   export REPO_ROOT=$(realpath $(git rev-parse --show-toplevel))
   source ${REPO_ROOT}/guides/env.sh
-  export GUIDE_NAME="coordinator-epd"
-  export NAMESPACE="llm-d-coordinator-epd"
+  export GUIDE_NAME="coord-disaggregation"
+  export NAMESPACE="llm-d-coord-disaggregation"
   export MODEL_NAME="Qwen/Qwen3-VL-2B-Instruct"
   ```
 
@@ -185,7 +185,7 @@ helm install ${GUIDE_NAME} \
 ```
 
 3. *Deploy the Router's HTTPRoute*. The chart's own auto-created HTTPRoute is disabled
-   (`httpRoute.create: false` in [`router/coordinator-epd.values.yaml`](router/coordinator-epd.values.yaml))
+   (`httpRoute.create: false` in [`router/coord-disaggregation.values.yaml`](router/coord-disaggregation.values.yaml))
    because it would be an unconditional catch-all on `/`, colliding with the
    Coordinator's own route on the same Gateway. Instead, the two hand-authored
    HTTPRoutes on this Gateway (`coordinator/httproute.yaml` and

@@ -3,7 +3,7 @@ kind: PersistentVolumeClaim
 metadata:
   name: llm-d-model-cache
   labels:
-    llm-d.ai/guide: coordinator-epd
+    llm-d.ai/guide: coord-disaggregation
 spec:
   accessModes:
     - ReadWriteMany
