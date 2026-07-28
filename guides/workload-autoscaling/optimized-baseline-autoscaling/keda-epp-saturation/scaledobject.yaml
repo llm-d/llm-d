@@ -26,7 +26,10 @@ spec:
   - type: prometheus
     name: pool-saturation
     metadata:
-      serverAddress: "https://<prometheus-url>"
+      serverAddress: "https://llmd-kube-prometheus-stack-prometheus.llm-d-monitoring.svc.cluster.local:9090"
+      # For generic k8s with bundled llm-d Prometheus stack (installed via observability setup guide).
+      # For OpenShift: use overlays/ocp which automatically patches this to thanos-querier.
+      # For other Prometheus deployments: replace with your endpoint.
       query: |
         max(llm_d_epp_flow_control_pool_saturation{inference_pool="<pool-name>"})
       threshold: "<saturation-threshold>"
@@ -38,7 +41,10 @@ spec:
   - type: prometheus
     name: running-requests
     metadata:
-      serverAddress: "https://<prometheus-url>"
+      serverAddress: "https://llmd-kube-prometheus-stack-prometheus.llm-d-monitoring.svc.cluster.local:9090"
+      # For generic k8s with bundled llm-d Prometheus stack (installed via observability setup guide).
+      # For OpenShift: use overlays/ocp which automatically patches this to thanos-querier.
+      # For other Prometheus deployments: replace with your endpoint.
       query: |
         sum(inference_objective_running_requests{model_name="<model-name>"})
       threshold: "<requests-per-replica-target>"
