@@ -9,7 +9,7 @@ This guide uses the four optimized-baseline plugins provided by llm-d (queue-sco
 | Metric | Type | Description | Label |
 |---|---|---|---|
 | `llm_d_epp_flow_control_pool_saturation` | Gauge | Pool saturation level (0.0 to 1.0+). Values above 1.0 indicate the pool is overloaded and throttling requests. | `inference_pool` |
-| `inference_objective_running_requests` | Gauge | Current number of active in-flight requests across the pool. | `model_name` |
+| `llm_d_epp_request_running` | Gauge | Current number of active in-flight requests across the pool. | `model_name` |
 
 For details on these metrics, see:
 - [EPP Flow Control Metrics](../../docs/architecture/core/router/epp/flow-control.md#metrics--observability)
