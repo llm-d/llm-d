@@ -47,6 +47,18 @@ to the pod that already caches its prefix:
 * **Long prefixes.** The pull is a near-constant-time CPU-to-CPU copy while
   recompute grows with length. Measure the crossover for your model (the
   benchmark below does); route pulls only above it.
+* **Multi-turn sessions on P/D disaggregation.** Decode generates the
+  session history, so on every subsequent turn the prefill worker faces KV
+  it never computed and no routing decision can make local - without a pull
+  it re-prefills the whole accumulated history each turn. The pull lets the
+  prefill leg fetch decode's generated KV directly (see the
+  [P/D variant](#pd-variant-p2p-over-nixl-disaggregation)). This is the
+  regime with the largest measured gains, growing with history length and
+  turn count - agentic sessions with 10K-100K-token contexts most of all.
+  Requires `offload_prompt_only: false` on decode and a chat template that
+  re-renders generated answers verbatim (see Best Practices); models that
+  drop reasoning content on re-render cannot reuse generated KV regardless
+  of the serving stack.
 
 The placement rule this guide's measurements support is more textured than
 a single trigger, and the two scenarios where this guide measured
