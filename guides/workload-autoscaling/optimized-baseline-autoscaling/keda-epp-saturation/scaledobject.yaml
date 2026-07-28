@@ -32,7 +32,9 @@ spec:
       # For other Prometheus deployments: replace with your endpoint.
       query: |
         max(llm_d_epp_flow_control_pool_saturation{inference_pool="default"})
-      threshold: "<saturation-threshold>"
+      # Saturation threshold at which to scale out. Adjust based on your target pool utilization.
+      # Recommended: 0.7-0.8 to scale before reaching full saturation.
+      threshold: "0.7"
       activationThreshold: "0"
       metricType: AverageValue
       authenticationRef:
