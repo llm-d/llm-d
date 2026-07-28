@@ -377,7 +377,27 @@ removed once the tier is released.
    names against a renamed engine fails silently - requests serve, nothing
    pulls.
 
-### 4. (Optional) Enable Monitoring
+### 4. Calibrate `minCachedTokenDelta` for your model and transport
+
+The shipped EPP configs set `minCachedTokenDelta: 2048`, the crossover
+measured for this guide's reference setup (gpt-oss-120b on H200 with
+`rdma/ib`). The crossover is model-, hardware- and transport-specific, so on
+any other combination measure your own against the pods you just deployed
+and set it on the `p2p-source-producer` in the router values:
+
+```bash
+NAMESPACE=${NAMESPACE} \
+POD_SELECTOR=llm-d.ai/guide=p2p-kv-cache-sharing \
+MODEL_NAME=openai/gpt-oss-120b \
+${REPO_ROOT}/guides/recipes/router/calibration/calibrate-min-cached-token-delta.sh
+```
+
+The recipe prints the recommended value; re-apply the router release with it
+and restart the EPP. See
+[Calibrating `minCachedTokenDelta`](../recipes/router/calibration/README.md#calibrating-mincachedtokendelta)
+for what it measures and its prerequisites.
+
+### 5. (Optional) Enable Monitoring
 
 - Install the [Monitoring stack](../../docs/operations/observability/setup.md).
 - To enable Prometheus monitoring on the llm-d router, add `-f ${REPO_ROOT}/guides/recipes/router/features/monitoring.values.yaml` during the [router installation step](#2-deploy-the-llm-d-router).
