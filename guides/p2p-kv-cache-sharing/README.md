@@ -54,7 +54,10 @@ to the pod that already caches its prefix:
   prefill leg fetch decode's generated KV directly (see the
   [P/D variant](#pd-variant-p2p-over-nixl-disaggregation)). This is the
   regime with the largest measured gains, growing with history length and
-  turn count - agentic sessions with 10K-100K-token contexts most of all.
+  turn count - agentic sessions with 10K-100K-token contexts most of all:
+  **6.3x median TTFT and +50% throughput** on a 2P+4D Qwen3-30B rig
+  ([report](benchmark-results/qwen3-30b-h200-pd-agentic.md); the gains are
+  median and throughput, not the extreme tail).
   Requires `offload_prompt_only: false` on decode and a chat template that
   re-renders generated answers verbatim (see Best Practices); models that
   drop reasoning content on re-render cannot reuse generated KV regardless
@@ -498,6 +501,10 @@ kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/render
 
 ## P/D variant: P2P over NIXL disaggregation
 
+Measured on this topology: **6.3x median TTFT and +50% throughput** against
+plain NIXL P/D on a multi-turn agentic workload -
+[full report](benchmark-results/qwen3-30b-h200-pd-agentic.md).
+
 Under P/D disaggregation the pull applies to the **prefill leg only**: the
 prefill worker computes the prompt KV and streams it to the decoder, so
 that is the leg where recomputing a cached prefix is wasted work. The EPP
@@ -569,6 +576,10 @@ hardware configurations:
   pull-versus-recompute crossover, shared-prefix pools, and the document
   Q&A headline - load-aware placement plus the pull against precise
   prefix-cache routing.
+- **[Qwen/Qwen3-30B-A3B-Thinking on vLLM (H200, P/D agentic)](./benchmark-results/qwen3-30b-h200-pd-agentic.md)**:
+  prefill pulling decode's generated session history on a disaggregated
+  deployment - 6.3x median TTFT and +50% throughput against plain NIXL P/D
+  on the agentic-serving workload shape.
 - **[zai-org/GLM-5.2-FP8 on vLLM (H200, wide-EP P/D)](./benchmark-results/glm-5.2-h200.md)**:
   the mechanism at 753B - crossover swept to its measured tie (13.6K
   tokens), a four-arm placement-x-pull grid on recorded agentic traces,
