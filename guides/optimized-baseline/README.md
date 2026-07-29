@@ -49,16 +49,14 @@ This guide includes configurations for the following accelerators:
 
 - Have the [proper client tools installed on your local system](../../helpers/client-setup/README.md) to use this guide.
 
-- Set the branch and clone the llm-d repo:
+- Ensure your cluster has enough accelerators to satisfy the [Configuration](#configuration) table above (default: 16 GPUs). If your cluster has fewer resources, adjust `replicas` and `--tensor-parallel-size` in the [model server patch](./modelserver/gpu/vllm/base/patch-vllm.yaml) for your environment.
 
-<!-- guide:env.static start -->
-```bash
-export BRANCH=main
-```
+- Set the branch and clone the llm-d repo:
 
 <!-- guide:prerequisites.clone start -->
 <!-- llm-d-cicd:skip start -->
 ```bash
+export BRANCH=main
 git clone https://github.com/llm-d/llm-d.git && cd llm-d && git checkout ${BRANCH}
 ```
 <!-- llm-d-cicd:skip end -->
@@ -66,7 +64,9 @@ git clone https://github.com/llm-d/llm-d.git && cd llm-d && git checkout ${BRANC
 
 - Set the guide specific environment variables:
 
+<!-- guide:env.static start -->
 ```bash
+export BRANCH=main
 export REPO_ROOT=$(realpath $(git rev-parse --show-toplevel))
 export GUIDE_NAME=optimized-baseline
 export NAMESPACE=llm-d-optimized-baseline
@@ -104,7 +104,10 @@ source ${REPO_ROOT}/guides/env.sh
 <!-- guide:env.source end -->
 
 > [!NOTE]
-> Some environment variables are common amongst guides, to view these, please inspect the above file sourced so the rest of the guide makes sense.
+> This file defines shared variables required by subsequent steps, including
+> `GAIE_VERSION`, `ROUTER_CHART_VERSION`, `ROUTER_STANDALONE_CHART`, and
+> `ROUTER_GATEWAY_CHART`. If you skip this step, later commands will fail with
+> unresolved variable references.
 
 - Install the Gateway API Inference Extension CRDs:
 
