@@ -61,7 +61,7 @@ A specialization of this path drives the HPA from the pool's **latency** rather 
 
 ### KEDA + WVA Metrics
 
-The [Workload Variant Autoscaler (WVA)](./README.wva.md) path integrates the Kubernetes Horizontal Pod Autoscaler (HPA) with the aggregated signal emitted by WVA: `wva_desired_replicas`.
+The [Workload Variant Autoscaler (WVA)](./README.wva.md) path integrates KEDA with the aggregated signal emitted by WVA: `wva_desired_replicas`.
 
 WVA is designed for operators running multiple variants of the same model across different GPU hardware types (A100s, H100s, L4s), each with different cost and performance characteristics. WVA continuously monitors KV cache utilization, queue depth, and performance budgets to determine optimal replica counts across variants. Rather than scaling all variants equally, WVA preferentially adds capacity on the cheapest available variant and removes it from the most expensive — optimizing infrastructure cost without violating latency SLOs.
 
