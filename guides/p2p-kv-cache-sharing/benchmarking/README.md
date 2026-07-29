@@ -151,37 +151,39 @@ Metrics per arm: achieved vs offered rate, TTFT and request latency
 p50/p95, `vllm:external_prefix_cache_hits_total` deltas (pull evidence),
 per-pod served counts (placement evidence), restarts (must be 0).
 
-Measured (16x gpt-oss-120b, H200, achieved req/s and latency p50 per stage):
+Measured (16x gpt-oss-120b, H200, `rdma/ib` on every pod; achieved req/s /
+TTFT p50 / request latency p50 per stage):
 
-| offered | affinity | affinity + P2P (recommended) | load, no P2P | load + P2P |
-|---|---|---|---|---|
-| 4 req/s | 3.8 / 2.4s | 3.9 / 2.4s | 3.8 / 4.2s | 3.9 / 2.4s |
-| 8 req/s | 7.9 / 0.7s | 7.9 / 0.73s | 6.7 / 6.5s | 7.7 / 1.6s |
-| 12 req/s | 11.9 / 0.7s | 11.9 / 0.75s | 9.0 / 24.9s | 11.4 / 2.3s |
-| 16 req/s | 15.8 / 0.7s | 15.8 / 0.76s | 8.8 / 37.3s | 15.1 / 3.6s |
-| 20 req/s | 19.8 / 0.7s | 19.8 / 0.77s | 9.4 / 48.8s | 15.4 / 15.6s |
-| 24 req/s | 23.7 / 0.8s | 23.6 / 0.82s | 9.4 / 63.5s | 16.7 / 30.0s |
+| offered | affinity | load, no P2P | load + P2P |
+|---|---|---|---|
+| 6 req/s | 5.97 / 207 ms / 0.50 s | 5.59 / 2.5 s / 5.6 s | 5.96 / 342 ms / 0.64 s |
+| 12 req/s | 11.92 / 200 ms / 0.49 s | 9.02 / 8.6 s / 26.2 s | 11.49 / 460 ms / 0.98 s |
+| 18 req/s | 17.87 / 192 ms / 0.48 s | 8.58 / 26.0 s / 45.7 s | 17.46 / 341 ms / 0.67 s |
+| 24 req/s | 23.82 / 191 ms / 0.48 s | 9.01 / 43.8 s / 63.4 s | 21.93 / 344 ms / 0.70 s |
+| 30 req/s | 29.76 / 184 ms / 0.48 s | 9.21 / 61.3 s / 81.2 s | 29.19 / 342 ms / 0.73 s |
+
+Zero failures and zero restarts in all arms (16,200 requests). Pull
+evidence in the `load + P2P` arm: 120 P2P sessions, 210M external-hit
+tokens, 7.8 TB served from the offload tier (GPU hit rate 17.3% - scattered
+placement misses locally and the tier covers it).
 
 Reading the arms: affinity is near-ideal on a uniform pool - each pod owns
 ~8 of the 128 prefixes (384K tokens, comfortably GPU-resident), so with a
-working prefix index every request is a local hit; zero failures, flat
-sub-second p50. Affinity + P2P matches this ceiling within measurement
-noise at every offered rate, tracking offered to saturation at 24 req/s -
-the pull mostly sits idle here (placement rarely diverges from cache), so
-it costs nothing to have it available for whichever requests do miss. The
-recompute control saturates near 9.4 req/s: every cross-pod placement
-re-prefills 48K tokens. Load + P2P recovers most of that penalty at
-moderate rates (2.3s vs 24.9s p50 at 12 req/s) but degrades sharply at the
-top of the ladder - p50 30.0s at 24 req/s, achieving only 16.7 of the 24
-offered - load-aware placement scatters each prefix's traffic across more
-pods than affinity does, so at saturation there is more pull/transfer
-contention to pay than there is queueing to save; affinity + P2P has no
-such penalty because it never scatters a prefix's traffic in the first
-place. Zero failures and zero restarts in all four arms. Uniform pools are
-where affinity + P2P wins outright; the hot-set scenario below and the
-document-Q&A headline are where load-aware + P2P's spreading matters
-more - see the [placement rule](../README.md#when-to-use-this-path) for
-when each applies.
+working prefix index every request is a local hit; flat sub-half-second p50
+through 30 req/s. `affinity + P2P` matches this ceiling within noise (the
+pull is idle under affinity placement - see
+[What each scenario isolates](#what-each-scenario-isolates)). The recompute
+control saturates near 9 req/s: every cross-pod placement re-prefills 48K
+tokens. **The pull sets load placement's floor**: `load + P2P` tracks
+offered rate through 30 req/s at sub-second p50 - against the recompute
+floor at rate 24 that is 9.01 -> 21.93 req/s (+143%) and 63.4 s -> 0.70 s
+p50; at rate 30, +217%. Affinity remains the better arm on this workload
+(0.48 s vs 0.73 s p50, slightly higher achieved) because scattering pays
+transfer work affinity never pays - but the gap is a constant factor, not a
+collapse. Uniform pools are where affinity-style placement wins; the
+document-Q&A headline is where load-aware + P2P's spreading matters more -
+see the [placement rule](../README.md#when-to-use-this-path) for when each
+applies.
 
 ## Scenario B - hot set (the payoff case)
 

@@ -75,24 +75,27 @@ versus 28%. The P2P arm moved 30-32M prefix tokens between pods per run.
 ## Uniform shared-prefix pool (three arms)
 
 128 shared prefixes x 48K tokens (~5x one pod's GPU cache), 256-token
-questions, 64-token outputs, constant-rate stages. Achieved rate (req/s) /
-request latency p50 (s):
+questions, 64-token outputs, constant-rate stages, `rdma/ib` on every pod.
+Achieved rate (req/s) / request latency p50:
 
-| offered | Affinity | Affinity + P2P (recommended) | Load, no P2P | Load + P2P |
-|---|---|---|---|---|
-| 8 req/s | 7.9 / 0.7 | 7.9 / 0.73 | 6.7 / 6.5 | 7.7 / 1.6 |
-| 12 req/s | 11.9 / 0.7 | 11.9 / 0.75 | 9.0 / 24.9 | 11.4 / 2.3 |
-| 16 req/s | 15.8 / 0.7 | 15.8 / 0.76 | 8.8 / 37.3 | 15.1 / 3.6 |
-| 24 req/s | 23.7 / 0.8 | 23.6 / 0.82 | 9.4 / 63.5 | 16.7 / 30.0 |
+| offered | Affinity | Load, no P2P | Load + P2P |
+|---|---|---|---|
+| 6 req/s | 5.97 / 0.50 s | 5.59 / 5.6 s | 5.96 / 0.64 s |
+| 12 req/s | 11.92 / 0.49 s | 9.02 / 26.2 s | 11.49 / 0.98 s |
+| 18 req/s | 17.87 / 0.48 s | 8.58 / 45.7 s | 17.46 / 0.67 s |
+| 24 req/s | 23.82 / 0.48 s | 9.01 / 63.4 s | 21.93 / 0.70 s |
+| 30 req/s | 29.76 / 0.48 s | 9.21 / 81.2 s | 29.19 / 0.73 s |
 
-A uniform pool is affinity's best case and it is near-ideal here. Affinity
-+ P2P matches it within noise at every rate, tracking offered to
-saturation at 24 req/s. The recompute control saturates near 9.4 req/s;
-Load + P2P recovers most of that penalty at moderate rates but degrades
-sharply at the top of the ladder (30.0s p50 at 24 req/s, achieving only
-16.7 of 24 offered) - spreading a prefix's traffic across more pods costs
-more in transfer contention at saturation than affinity + P2P ever pays,
-since it never scatters that traffic in the first place.
+A uniform pool is affinity's best case and it is near-ideal here: flat
+sub-half-second p50 through 30 req/s (affinity + P2P matches it within
+noise; the pull idles under affinity placement). The recompute control
+saturates near 9 req/s - every cross-pod placement re-prefills 48K tokens.
+The pull sets load placement's floor: load + P2P tracks offered rate
+through 30 req/s at sub-second p50, +143% over the recompute floor at rate
+24 (21.93 vs 9.01 req/s; 0.70 s vs 63.4 s p50) and +217% at rate 30, on
+120 P2P sessions moving 210M prefix tokens. Affinity stays ahead by a
+constant factor (0.48 vs 0.73 s) because scattering pays transfer work
+affinity never pays; zero failures and zero restarts in all arms.
 
 ## Hot set (the payoff case)
 

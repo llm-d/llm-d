@@ -65,11 +65,12 @@ a single trigger, and the two scenarios where this guide measured
 affinity + P2P against load-aware + P2P point opposite ways. On the
 uniform shared-prefix pool (Scenario A: a working set spread wider than
 any one pod's cache) affinity + P2P tracks offered rate to saturation and
-matches affinity's near-ideal latency, while load-aware + P2P degrades at
-the top of the offered-rate ladder (p50 30s at 24 req/s versus 0.82s) -
-precise placement concentrates each prefix's traffic tightly enough that
-pulls stay cheap and local, and scattering that placement by load costs
-more in transfer contention than it saves in balance. On the document-Q&A
+matches affinity's near-ideal latency (p50 0.48 s at 30 req/s), while
+load-aware + P2P runs a constant factor behind (p50 0.73 s, ~2% lower
+achieved) - precise placement concentrates each prefix's traffic tightly
+enough that requests hit locally, while scattering pays a pull on every
+displaced request; the pull keeps that price sub-second (against a 63 s p50
+recompute floor without it), but affinity never pays it at all. On the document-Q&A
 headline (128 concurrent multi-turn sessions, each pinned by affinity to
 the pod that computed its prefix) the result flips: load-aware + P2P
 avoids the owner-pod queueing that affinity + P2P still pays, and its
@@ -345,49 +346,25 @@ looks like a performance result rather than a misconfiguration:
 kubectl exec -n ${NAMESPACE} deploy/p2p-kv-cache-sharing-decode -c modelserver -- ls /dev/infiniband
 ```
 
-#### Interim: P2P tier from the development branch (temporary, will be replaced)
+#### Engine image: upstream nightly pins
 
-No vLLM release ships the `OffloadingConnector` P2P secondary tier yet; it
-lives on the development branch
-[`liranschour/vllm@generic_p2p`](https://github.com/liranschour/vllm/tree/generic_p2p).
-Until a release includes it, overlay that branch's implementation onto the
-image by mounting its source files over the installed package. This whole
-subsection - the ConfigMap, `patch-p2p-src.yaml`, and the image pin - is
-removed once the tier is released.
+The `OffloadingConnector` P2P secondary tier is upstream in vLLM
+([vllm#48021](https://github.com/vllm-project/vllm/pull/48021)), first
+published in `nightly-49f31d7cee425a6d38f8c5bc76877986daf832ed`; no source
+overlay is required. The kustomization pins
+`nightly-d223c900d85224c02f2162ee2c757a769e99f519`, which also carries the
+two crash fixes
+([vllm#49671](https://github.com/vllm-project/vllm/pull/49671),
+[vllm#49823](https://github.com/vllm-project/vllm/pull/49823)).
 
-1. Clone the branch and create the source ConfigMap (keys are flattened;
-   they must match the `subPath` names in `patch-p2p-src.yaml`):
-
-   ```bash
-   git clone -b generic_p2p https://github.com/liranschour/vllm.git /tmp/vllm-p2p
-   cd /tmp/vllm-p2p
-   kubectl create configmap generic-p2p-src -n ${NAMESPACE} \
-     --from-file=kv_offload_base.py=vllm/v1/kv_offload/base.py \
-     --from-file=manager.py=vllm/v1/kv_offload/tiering/p2p/manager.py \
-     --from-file=session_init.py=vllm/v1/kv_offload/tiering/p2p/session/__init__.py \
-     --from-file=session_client.py=vllm/v1/kv_offload/tiering/p2p/session/client.py \
-     --from-file=session_protocol.py=vllm/v1/kv_offload/tiering/p2p/session/protocol.py \
-     --from-file=session_server.py=vllm/v1/kv_offload/tiering/p2p/session/server.py \
-     --from-file=session_session.py=vllm/v1/kv_offload/tiering/p2p/session/session.py
-
-   The file set is the branch's changed-files list against its vLLM
-   merge-base (`gh api repos/liranschour/vllm/compare/<base>...generic_p2p`)
-   - re-derive it whenever the branch moves; a missing file (for example
-   `vllm/v1/kv_offload/base.py`) fails imports at EngineCore startup.
-   ```
-
-2. Uncomment the `patches:` entry for `patch-p2p-src.yaml` in
-   `modelserver/gpu/vllm/base/kustomization.yaml` and re-apply.
-
-3. Pin the modelserver image to the vLLM nightly the branch is rebased on.
-   The mounted files import symbols from the rest of the installed package,
-   so image and branch must move together - a drifted pair crashes
-   EngineCore at startup (the failure is loud, not silent). The routing
-   sidecar moves with them: the branch renamed the `kv_transfer_params`
-   sub-dict keys (`p2p`/`prefill`/`decode` -> `remote_kv_source`/
-   `remote_prefiller`/`remote_decoder`), and a sidecar emitting the old
-   names against a renamed engine fails silently - requests serve, nothing
-   pulls.
+One robustness fix is merged upstream but not yet in that build: the
+symmetric-fetch stall under load
+([vllm#49877](https://github.com/vllm-project/vllm/pull/49877), merged
+2026-07-28 after the pinned nightly's cut). Under sustained many-to-many
+pull load without it, sessions can hit a duplicate-fetch disconnect that
+defers requests. Move the pin to the first nightly containing that commit
+when one is published, and prefer a tagged vLLM release over any nightly
+once the tier ships in one.
 
 ### 4. Calibrate `minCachedTokenDelta` for your model and transport
 
