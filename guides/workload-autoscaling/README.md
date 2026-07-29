@@ -50,9 +50,9 @@ before users experience sustained queueing and to remove capacity when demand
 falls. This path requires KEDA and Prometheus; it does not require Prometheus
 Adapter.
 
-- KEDA + EPP normalized Pool-Level Saturation Metrics
+#### KEDA + EPP normalized Pool-Level Saturation Metrics
 
-  The [KEDA + EPP normalized Pool-Level Saturation Metrics](./README.epp-keda-saturation.md) path has KEDA query Prometheus directly for InferencePool-scoped saturation and running-request metrics, then scale the model server Deployment. KEDA consumes two EPP metrics — pool saturation level (0.0–1.0+, normalized measure of how loaded the pool is) and active in-flight request count — and drives scaling decisions. Well-suited for simple homogeneous deployments where each model scales independently and you want minimal operational overhead.
+The [KEDA + EPP normalized Pool-Level Saturation Metrics](./README.epp-keda-saturation.md) path has KEDA query Prometheus directly for InferencePool-scoped saturation and running-request metrics, then scale the model server Deployment. KEDA consumes two EPP metrics — pool saturation level (0.0–1.0+, normalized measure of how loaded the pool is) and active in-flight request count — and drives scaling decisions. Well-suited for simple homogeneous deployments where each model scales independently and you want minimal operational overhead.
 
 #### SLO-Aware Autoscaling (KEDA + estimated latency)
 
