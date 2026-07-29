@@ -68,11 +68,14 @@ The result of this guide, in either of two EPP topologies (pick one — see
     ([llm-d-router#2134](https://github.com/llm-d/llm-d-router/pull/2134)); each profile
     filters the shared pool down to its own role with a by-label filter. **or**
   * **3 EPPs**, one per role, each with its own **InferencePool** scoped to that
-    role's pods via `modelServers.matchLabels`. Each EPP uses the router chart's
-    *default* plugin config (`single-profile-handler`, one `default` scheduling
-    profile) — no custom image or plugin config needed, since a role-scoped EPP
-    never has to choose between profiles. The Gateway's `HTTPRoute` (not the EPP)
-    is what dispatches each `EPP-Profile` value to the right EPP's InferencePool.
+    role's pods via `modelServers.matchLabels`. Each EPP runs a single `default`
+    scheduling profile picked implicitly by the chart's `single-profile-handler`
+    (no profile-selection plugin needed, since a role-scoped EPP never has to
+    choose between profiles) — no custom image either. Each role's file does
+    configure its own scorer plugins (see below); that's just picking which
+    endpoint within the role, not which profile to run. The Gateway's `HTTPRoute`
+    (not the EPP) is what dispatches each `EPP-Profile` value to the right EPP's
+    InferencePool.
 * **1 vLLM replica per role** — three model servers in total, distinguished only by
   their `llm-d.ai/role` label. Same either way.
 
@@ -242,8 +245,7 @@ InferencePool scoped to that role's pods. No profile-selection plugin needed: ea
 EPP only ever sees one role, so the chart's default `single-profile-handler` picks its
 one configured profile automatically (see the [Overview](#overview)).
 
-`router/coord-disaggregation-encode.values.yaml` has no scorer override (nothing to
-borrow — see below). `router/coord-disaggregation-prefill.values.yaml` and
+`router/coord-disaggregation-prefill.values.yaml` and
 `router/coord-disaggregation-decode.values.yaml` configure the same scorers as the
 `prefill`/`decode` profiles in
 [`guides/pd-disaggregation/router/pd-disaggregation.values.yaml`](../pd-disaggregation/router/pd-disaggregation.values.yaml):
@@ -251,7 +253,10 @@ borrow — see below). `router/coord-disaggregation-prefill.values.yaml` and
 pods, then pick by queued token load), `active-request-scorer` for decode (pick the
 least-busy endpoint) — minus the `prefill-filter`/`decode-filter`/`disagg-*` plugins
 that guide needs to split one shared pool, which this guide's `modelServers.matchLabels`
-already does per-release.
+already does per-release. `router/coord-disaggregation-encode.values.yaml` has no
+`prefill`/`decode` profile to borrow from in pd-disaggregation, so it reuses
+`active-request-scorer` too (pick the least-busy encode pod) — encode has no
+prefix-cache affinity to speak of, just queue/load balancing.
 
 2. *Deploy the llm-d Routers*:
 

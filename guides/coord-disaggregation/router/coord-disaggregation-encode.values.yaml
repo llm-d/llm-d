@@ -3,11 +3,11 @@
 ## router/coord-disaggregation.values.yaml).
 ## Layer on top of: recipes/router/base.values.yaml
 ##
-## This EPP only ever sees encode-labeled pods (modelServers.matchLabels below), so the
-## chart's default plugins config (single-profile-handler, one "default" scheduling
-## profile) is enough -- no header-based profile routing, and no scorer override:
-## pd-disaggregation (whose prefill/decode scorers the sibling files here mirror) has no
-## encode role to borrow one from.
+## This EPP only ever sees encode-labeled pods (modelServers.matchLabels below), so no
+## by-label filter is needed -- just the scorer. pd-disaggregation has no encode role
+## to borrow a scorer from, so this reuses active-request-scorer (pick the least-busy
+## encode pod) -- same reasoning as the decode profile: encode has no prefix-cache
+## affinity to speak of, just queue/load balancing.
 
 # See router/httproute-3-epp.yaml for why this guide hand-authors the HTTPRoute
 # instead of using the chart's own (same reason as the single-EPP variant: it
@@ -22,6 +22,22 @@ router:
       port: 80
       protocol: TCP
       targetPort: 8081
+
+  epp:
+    pluginsConfigFile: "coordinator-plugins.yaml"
+    pluginsCustomConfig:
+      coordinator-plugins.yaml: |
+        apiVersion: llm-d.ai/v1alpha1
+        kind: EndpointPickerConfig
+        plugins:
+        - type: inflight-load-producer
+        - type: active-request-scorer
+        - type: max-score-picker
+        schedulingProfiles:
+        - name: default
+          plugins:
+          - pluginRef: active-request-scorer
+          - pluginRef: max-score-picker
 
   modelServers:
     matchLabels:

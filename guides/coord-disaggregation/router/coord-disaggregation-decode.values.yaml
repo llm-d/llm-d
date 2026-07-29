@@ -24,9 +24,9 @@ router:
       targetPort: 8081
 
   epp:
-    pluginsConfigFile: "epd-plugins.yaml"
+    pluginsConfigFile: "coordinator-plugins.yaml"
     pluginsCustomConfig:
-      epd-plugins.yaml: |
+      coordinator-plugins.yaml: |
         apiVersion: llm-d.ai/v1alpha1
         kind: EndpointPickerConfig
         plugins:
