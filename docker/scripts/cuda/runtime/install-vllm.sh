@@ -29,7 +29,6 @@ INSTALL_PACKAGES=(
   cuda-python
   'huggingface_hub[hf_xet]'
   flashinfer-cubin=="${FLASHINFER_WHEEL_VERSION}"
-  flashinfer-jit-cache=="${FLASHINFER_WHEEL_VERSION}"
   /tmp/wheels/*.whl
 )
 if [ "${BUILD_NIXL_FROM_SOURCE}" = "false" ]; then
