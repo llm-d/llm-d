@@ -124,7 +124,8 @@ runs it against two live pods and prints the recommended value.
   falls back to TCP - but the transport sets the pull-versus-recompute
   crossover, so it changes `minCachedTokenDelta` rather than whether the
   pull functions. On TCP the pull leg inflates while recompute is unchanged,
-  moving the crossover from below 2K out to **~29K tokens**. Measured on
+  moving the crossover from below 2K out to **between 16K and 32K tokens**
+  (~29K on a finer sweep). Measured on
   gpt-oss-120b, same image and configuration, `rdma/ib` the only difference -
   TTFT delta, negative means the pull wins:
 
@@ -133,12 +134,12 @@ runs it against two live pods and prints the recommended value.
   | 2,048 | -49% | +26.7% |
   | 8,192 | -76% | +20.2% |
   | 16,384 | -83% | +10.9% |
-  | 24,576 | - | +6.7% |
   | 32,768 | -86% | -4.9% |
   | 49,152 | -88% | -15.3% |
 
   With RDMA the pull wins at every length measured, so `minCachedTokenDelta:
-  2048` follows. Without it the pull loses below ~29K and wins above, so the
+  2048` follows. Without it the pull loses below that crossover and wins
+  above it, so the
   same deployment needs a `minCachedTokenDelta` an order of magnitude larger
   and only benefits workloads whose reused prefixes are that long. Check
   whether `rdma/ib` is present on your pods before reading the Step 0 ladder
