@@ -85,6 +85,20 @@ spec:
       headers:
       - type: Exact
         name: EPP-Profile
+        value: encode
+    - path:
+        type: Exact
+        value: /inference/v1/generate
+      headers:
+      - type: Exact
+        name: EPP-Profile
+        value: prefill
+    - path:
+        type: Exact
+        value: /inference/v1/generate
+      headers:
+      - type: Exact
+        name: EPP-Profile
         value: decode
     - path:
         type: PathPrefix
