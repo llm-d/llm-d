@@ -4,7 +4,10 @@ kind: Kustomization
 resources:
   - ../../
 
-patches:
-  - path: scaledobject-patch.yaml
-    target:
+patchesJson6902:
+  - target:
+      group: keda.sh
+      version: v1alpha1
       kind: ScaledObject
+      name: optimized-baseline-nvidia-gpu-vllm-decode-saturation
+    patch: scaledobject-patch.yaml

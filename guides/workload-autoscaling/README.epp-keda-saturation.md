@@ -44,19 +44,27 @@ export REPO_ROOT=$(realpath $(git rev-parse --show-toplevel))
 
 ### 1. Create TriggerAuthentication Secret
 
-KEDA needs both a bearer token and CA certificate to authenticate with Prometheus. Use the Prometheus ServiceAccount's auto-generated token secret, which contains both:
+KEDA needs both a bearer token and CA certificate to authenticate with Prometheus. Extract these from the Prometheus ServiceAccount's auto-generated token secret and create a new `prometheus-token` secret in the workload namespace:
 
 ```bash
-# Copy the Prometheus ServiceAccount token secret to the workload namespace
-kubectl get secret -n ${MONITORING_NAMESPACE} \
-  $(kubectl get serviceaccount prometheus -n ${MONITORING_NAMESPACE} -o jsonpath='{.secrets[0].name}') \
-  -o yaml | sed "s/namespace: ${MONITORING_NAMESPACE}/namespace: ${NAMESPACE}/" | kubectl apply -f -
+# Get the ServiceAccount's token secret (has a random suffix like prometheus-token-abc123)
+SERVICEACCOUNT_SECRET=$(kubectl get serviceaccount prometheus -n ${MONITORING_NAMESPACE} -o jsonpath='{.secrets[0].name}')
+
+# Extract token and CA cert from the ServiceAccount secret
+TOKEN=$(kubectl get secret ${SERVICEACCOUNT_SECRET} -n ${MONITORING_NAMESPACE} -o jsonpath='{.data.token}' | base64 -d)
+CA_CRT=$(kubectl get secret ${SERVICEACCOUNT_SECRET} -n ${MONITORING_NAMESPACE} -o jsonpath='{.data.ca\.crt}' | base64 -d)
+
+# Create prometheus-token secret in the workload namespace with the extracted credentials
+kubectl create secret generic prometheus-token \
+  --from-literal=token="${TOKEN}" \
+  --from-literal=ca.crt="${CA_CRT}" \
+  --dry-run=client -o yaml | kubectl apply -f - -n ${NAMESPACE}
 
 # Verify the secret was created
-kubectl get secret prometheus-token-* -n ${NAMESPACE}
+kubectl get secret prometheus-token -n ${NAMESPACE}
 ```
 
-This secret contains:
+This creates a secret named `prometheus-token` containing:
 - `token`: bearer token for Prometheus authentication
 - `ca.crt`: CA certificate for TLS verification
 
@@ -114,5 +122,5 @@ keda-hpa-optimized-baseline-nvidia-gpu  Deployment/optimized-baseline-nvidia-gpu
 
 ```bash
 kubectl delete -k ${REPO_ROOT}/guides/workload-autoscaling/optimized-baseline-autoscaling/keda-epp-saturation -n ${NAMESPACE}
-kubectl delete secret prometheus-token-* -n ${NAMESPACE}
+kubectl delete secret prometheus-token -n ${NAMESPACE}
 ```
