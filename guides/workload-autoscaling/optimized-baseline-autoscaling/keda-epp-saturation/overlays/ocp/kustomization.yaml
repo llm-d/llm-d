@@ -1,13 +1,22 @@
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 
-resources:
-  - ../../
+# OpenShift overlay: patches the base ScaledObject to use thanos-querier
+# Build from parent directory: cd .. && kubectl kustomize . -k overlays/ocp
 
-patchesJson6902:
+bases:
+  - ..
+
+patches:
   - target:
       group: keda.sh
       version: v1alpha1
       kind: ScaledObject
       name: optimized-baseline-nvidia-gpu-vllm-decode-saturation
-    patch: scaledobject-patch.yaml
+    patch: |-
+      - op: replace
+        path: /spec/triggers/0/metadata/serverAddress
+        value: "https://thanos-querier.openshift-monitoring.svc.cluster.local:9091"
+      - op: replace
+        path: /spec/triggers/1/metadata/serverAddress
+        value: "https://thanos-querier.openshift-monitoring.svc.cluster.local:9091"

@@ -1,4 +1,4 @@
-# [Experimental] KEDA + EPP normalized Pool-Level Saturation Metrics
+# [Experimental] Saturation-based Autoscaling
 
 KEDA queries Prometheus directly for two EPP-emitted, InferencePool-scoped signals and scales the model server `Deployment` accordingly. No WVA controller, no Prometheus Adapter — just KEDA, Prometheus, and your model servers.
 
