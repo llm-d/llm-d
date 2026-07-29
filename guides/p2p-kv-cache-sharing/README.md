@@ -148,8 +148,6 @@ runs it against two live pods and prints the recommended value.
 
 ## Best Practices
 
-Each of these was learned the hard way:
-
 * `--block-size` identical on every pod AND in the router's
   `precise-prefix-cache-producer` (`tokenProcessorConfig.blockSize`). A
   mismatch leaves the prefix index empty and the whole path silently inert -
