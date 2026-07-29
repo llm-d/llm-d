@@ -90,11 +90,11 @@ a different question - which deployment to run - and should not be read as
 P2P deltas.
 
 The isolating pairs are where the feature's value is established: Step 0
-(-56% to -88% TTFT with RDMA), the wide-EP pair (equal medians with the
-tail compressed - TTFT p90 -9% / p95 -14% / p99 -28% at c128 on the
-fully-fixed stack; -27% p50 / -45% p90 at c32 on the overlay stack), the uniform pool (+143% sustained rate at 24
+(-56% to -88% TTFT with RDMA), the uniform pool (+143% sustained rate at 24
 req/s) and the hot set (+224% and 274 client-timeout failures eliminated at
-48 req/s). The cross-placement comparisons show what the resulting
+48 req/s). The wide-EP precise pair is a mechanism-verified null on the
+fully-fixed stack - every sampled source evaluation ties at delta 0, the
+placement rule holding exactly (see the wide-EP section). The cross-placement comparisons show what the resulting
 *deployment* does - the number an operator ultimately cares about - but
 attribute their margin to the placement change as much as to the pull.
 
@@ -336,20 +336,18 @@ paired no-pull control (0.0 MB moved without the parameter, 1,138.2 MB with
 it at 12K) is what makes the measurement trustworthy.
 
 Measured on the fully-fixed stack (upstream vLLM tier, rank-aware source
-addressing, `podCacheSize` sized to the rank-endpoint count - see Best
-Practices), same fleet for both arms, c128, 900 s agentic traces:
-
-| metric | precise, no pull | precise + pull | delta |
-|---|---:|---:|---:|
-| TTFT p50 | 3,132 ms | 3,107 ms | -0.8% |
-| TTFT p90 | 9,600 ms | 8,716 ms | **-9.2%** |
-| TTFT p95 | 14,127 ms | 12,158 ms | **-13.9%** |
-| TTFT p99 | 24,638 ms | 17,668 ms | **-28.3%** |
-| Throughput | 3.7 req/s | 3.7 req/s | - |
-
-Medians equal, tail compressed: under precise affinity the median request
-is already local, and the pull rescues the displaced and queued cases at
-the tail - the same shape at 753B that the placement rule predicts.
+addressing, the router's prefix index sized to the rank-endpoint count),
+the precise pair is a **mechanism-verified null**: live sampling captured
+115 source evaluations and every one ties at a cached-token delta of
+exactly 0 (52 are self-matches), so no `minCachedTokenDelta` fires and the
+arms behave identically - medians agree within 1% and the TTFT tail
+spread across three runs (p99 17.7-24.6 s) is run-to-run variance. That is
+the placement rule holding exactly at 753B: a consistent index under
+precise affinity leaves the pull nothing to repair. The overlay-era wins
+below were real transfers triggered by index-eviction divergence that the
+index sizing fix has since removed; divergence-by-construction regimes
+(load-first placement, restarts, the approximate index) remain the pull's
+territory.
 
 Headline cell on the overlay-era stack (concurrency 32): adding the pull to
 precise affinity takes TTFT p50 -27% and p90 -45%, tying the best
