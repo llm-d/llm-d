@@ -1,14 +1,14 @@
 apiVersion: monitoring.coreos.com/v1
 kind: PodMonitor
 metadata:
-  name: decode
+  name: vllm
   labels:
-    llm-d.ai/role: decode
+    llm-d.ai/role: both
 spec:
   selector:
     matchLabels:
-      llm-d.ai/role: decode
+      llm-d.ai/role: both
   podMetricsEndpoints:
-    - port: "modelserver"
+    - port: "8000"
       path: /metrics
-      interval: 30s
+      interval: 15s
