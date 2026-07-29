@@ -4,6 +4,7 @@
 # This secret contains both the bearer token and CA certificate needed for secure
 # authentication to Prometheus. The secret is copied from the monitoring namespace
 # to the workload namespace by the guide's Configure step.
+#
 
 apiVersion: keda.sh/v1alpha1
 kind: TriggerAuthentication
