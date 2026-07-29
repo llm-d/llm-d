@@ -117,9 +117,17 @@ for manifests, verification gates, and step-by-step deployment.
    `minCachedTokenDelta` tokens it sets the KV cache source header.
 4. **The routing sidecar injects `kv_transfer_params.remote_kv_source`**
    from the header, and the engine pulls the prefix blocks from the peer's CPU tier
-   over NIXL. Hits load as normal cache hits; misses recompute, so a
-   partial or failed transfer degrades to baseline behavior instead of
-   failing the request.
+   over NIXL. Hits load as normal cache hits; ordinary misses recompute, so a
+   request whose peer does not have the blocks degrades to baseline behavior
+   instead of failing.
+
+   > [!WARNING]
+   > This covers ordinary misses, not a write that never lands. A block left
+   > in `HIT_PENDING` has no deadline on the currently pinned engine, so a
+   > request waiting on one can stay deferred until the client times out.
+   > [vllm#49850](https://github.com/vllm-project/vllm/pull/49850) supplies
+   > the bound and is open; until it merges, treat a stalled `HIT_PENDING`
+   > as a known limitation.
 
 Under P/D disaggregation the pull applies to the **prefill leg only**: the
 prefill worker computes the prompt KV and streams it to the decoder, so

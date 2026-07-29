@@ -17,6 +17,9 @@
 #   NAMESPACE=llm-d-p2p POD_SELECTOR=llm-d.ai/guide=p2p-kv-cache-sharing \
 #   MODEL_NAME=openai/gpt-oss-120b ./calibrate-min-cached-token-delta.sh
 #
+#   On a data-parallel engine, pass its --data-parallel-size as well:
+#   ... DP_RANKS=16 ./calibrate-min-cached-token-delta.sh
+#
 # Required environment:
 #   NAMESPACE     — the K8s namespace the stack runs in
 #   POD_SELECTOR  — label selector matching the model-server pods
@@ -30,6 +33,16 @@
 #   LENGTHS       — comma-separated prefix lengths to test; multiples of the
 #                   vLLM block size (default: 2048,4096,8192,16384,32768)
 #   REPS          — repetitions per length, medians reported (default: 5)
+#   DP_RANKS      — engine's --data-parallel-size (default: 1). vLLM offsets
+#                   the P2P listener port by GLOBAL DP rank, so P2P_PORT
+#                   addresses rank 0 only. On an idle engine the balancer
+#                   sends each sequential seed to the least-loaded rank, which
+#                   is rank 0, so the default seeds the right listener and a
+#                   DP>1 fleet calibrates correctly without this. Set it to
+#                   the DP size when the engine is not idle: the seed is then
+#                   issued as that many CONCURRENT identical requests so every
+#                   rank holds the prefix regardless of which one the balancer
+#                   picks.
 #
 # Prerequisites:
 #   - The model servers run the OffloadingConnector with a P2P secondary tier
@@ -49,6 +62,7 @@ ENGINE_PORT="${ENGINE_PORT:-8200}"
 export P2P_PORT="${P2P_PORT:-7777}"
 export LENGTHS="${LENGTHS:-2048,4096,8192,16384,32768}"
 export REPS="${REPS:-5}"
+export DP_RANKS="${DP_RANKS:-1}"
 
 CAL_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 JOB_TEMPLATE="${CAL_DIR}/calibration-min-cached-token-delta.yaml"
@@ -59,12 +73,25 @@ command -v envsubst >/dev/null \
 [[ -f "$JOB_TEMPLATE" ]] || { echo "ERROR: Job template not found at $JOB_TEMPLATE"; exit 1; }
 
 # Discover two Ready model-server pods; first = source, second = consumer.
-mapfile -t PODS < <(kubectl get pods -n "$NAMESPACE" -l "$POD_SELECTOR" \
-  --field-selector=status.phase=Running \
-  -o jsonpath='{range .items[*]}{.metadata.name} {.status.podIP}{"\n"}{end}' | head -2)
-[[ ${#PODS[@]} -ge 2 ]] || { echo "ERROR: need at least 2 Running pods matching '$POD_SELECTOR'"; exit 1; }
-SRC_POD=$(cut -d' ' -f1 <<<"${PODS[0]}"); export SRC_IP=$(cut -d' ' -f2 <<<"${PODS[0]}")
-DST_POD=$(cut -d' ' -f1 <<<"${PODS[1]}"); DST_IP=$(cut -d' ' -f2 <<<"${PODS[1]}")
+# Ready is the condition that matters - a pod can be phase=Running while its
+# engine is still loading weights and serving nothing. Plain `while read`
+# rather than `mapfile`, which is bash 4+ and absent from the bash 3.2 that
+# ships with macOS.
+PODS=""
+while IFS= read -r line; do
+  [[ -n "$line" ]] && PODS="${PODS}${line% True}"$'\n'
+done < <(kubectl get pods -n "$NAMESPACE" -l "$POD_SELECTOR" \
+  -o jsonpath='{range .items[*]}{.metadata.name} {.status.podIP} {range .status.conditions[?(@.type=="Ready")]}{.status}{end}{"\n"}{end}' \
+  | grep ' True$' | head -2)
+
+POD_COUNT=$(printf '%s' "$PODS" | grep -c . || true)
+[[ "$POD_COUNT" -ge 2 ]] || {
+  echo "ERROR: need at least 2 Ready pods matching '$POD_SELECTOR' (found ${POD_COUNT})"; exit 1; }
+
+SRC_LINE=$(printf '%s' "$PODS" | sed -n '1p')
+DST_LINE=$(printf '%s' "$PODS" | sed -n '2p')
+SRC_POD=${SRC_LINE%% *}; export SRC_IP=${SRC_LINE##* }
+DST_POD=${DST_LINE%% *}; DST_IP=${DST_LINE##* }
 export SRC_URL="http://${SRC_IP}:${ENGINE_PORT}"
 export DST_URL="http://${DST_IP}:${ENGINE_PORT}"
 
@@ -74,6 +101,7 @@ echo "  consumer pod  = ${DST_POD} (${DST_URL})"
 echo "  MODEL_NAME    = ${MODEL_NAME}"
 echo "  LENGTHS       = ${LENGTHS}"
 echo "  REPS          = ${REPS}"
+echo "  DP_RANKS      = ${DP_RANKS}"
 echo ""
 
 envsubst < "$JOB_TEMPLATE" > "$RENDERED_JOB"

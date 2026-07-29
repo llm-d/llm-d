@@ -7,27 +7,35 @@ where the mechanism is not provably engaged measures nothing.
 ## Running the benchmark
 
 The headline scenario ships as a dedicated `llmdbenchmark` workload profile,
-the same way the other guides' benchmarks do. As of this writing the
-profile lands via
+the same way the other guides' benchmarks do. The profile lands via
 [llm-d-benchmark#1656](https://github.com/llm-d/llm-d-benchmark/pull/1656),
-not yet merged - check out that PR's branch until it lands, and pin the
-merging commit SHA once it does, so a later run of this command reproduces
-the same workload the tables below were measured against, not whatever
-`main` happens to be. Install the CLI, resolve your endpoint, and run:
+which is open, so `guide_p2p-kv-cache-sharing_1.yaml` is absent from `main`
+and the PR branch lives on a fork rather than on `origin`. Until it merges,
+check out the commit the tables below were measured against; replace the
+fetch with the merge commit on `main` once it lands, so a later run
+reproduces this workload rather than whatever `main` happens to be. Install
+the CLI, resolve your endpoint, and run:
 
 ```bash
 curl -sSL https://raw.githubusercontent.com/llm-d/llm-d-benchmark/main/install.sh | bash
 cd llm-d-benchmark && source .venv/bin/activate
-# Until llm-d-benchmark#1656 merges:
-git fetch origin feat/p2p-guide-profile && git checkout feat/p2p-guide-profile
+# Until llm-d-benchmark#1656 merges the profile comes from the PR fork at the
+# pinned commit - `origin` has neither the branch nor the file.
+git fetch https://github.com/nilig/llm-d-benchmark.git \
+    20ef7570809c9f4935e2015a73537bd77cdafbe3
+git checkout 20ef7570809c9f4935e2015a73537bd77cdafbe3
 
 export ENDPOINT_URL="http://$(kubectl get service <your-epp-service> -n ${NAMESPACE} -o jsonpath='{.spec.clusterIP}')"
 
 llmdbenchmark \
-    --spec guides/p2p-kv-cache-sharing \
+    --spec           guides/p2p-kv-cache-sharing \
     run \
-    --endpoint-url "${ENDPOINT_URL}" \
-    --workload workload/profiles/inference-perf/guide_p2p-kv-cache-sharing_1.yaml
+    --endpoint-url   "${ENDPOINT_URL}" \
+    --model          "openai/gpt-oss-120b" \
+    --namespace      "${NAMESPACE}" \
+    --harness        inference-perf \
+    --workload       guide_p2p-kv-cache-sharing_1.yaml \
+    --analyze
 ```
 
 Run the profile once per routing arm, switching only the EPP configuration
@@ -82,8 +90,9 @@ a different question - which deployment to run - and should not be read as
 P2P deltas.
 
 The isolating pairs are where the feature's value is established: Step 0
-(-49% to -88% TTFT with RDMA), the wide-EP pair (-16% p50 / -15% p90 at
-c128, -27% / -45% at c32), the uniform pool (+143% sustained rate at 24
+(-56% to -88% TTFT with RDMA), the wide-EP pair (equal medians with the
+tail compressed - TTFT p90 -9% / p95 -14% / p99 -28% at c128 on the
+fully-fixed stack; -27% p50 / -45% p90 at c32 on the overlay stack), the uniform pool (+143% sustained rate at 24
 req/s) and the hot set (+224% and 274 client-timeout failures eliminated at
 48 req/s). The cross-placement comparisons show what the resulting
 *deployment* does - the number an operator ultimately cares about - but
@@ -157,8 +166,10 @@ Arms (identical workload, identical pods; only the router config changes):
 3. `epp-load-p2p.yaml` - load-balanced placement + pull.
 
 Metrics per arm: achieved vs offered rate, TTFT and request latency
-p50/p95, `vllm:external_prefix_cache_hits_total` deltas (pull evidence),
-per-pod served counts (placement evidence), restarts (must be 0).
+p50/p95, established P2P session counts (pull evidence),
+`vllm:external_prefix_cache_hits_total` deltas (offload-tier activity, which
+is not the same thing - see below), per-pod served counts (placement
+evidence), restarts (must be 0).
 
 Measured (16x gpt-oss-120b, H200, `rdma/ib` on every pod; achieved req/s /
 TTFT p50 / request latency p50 per stage):
@@ -171,10 +182,23 @@ TTFT p50 / request latency p50 per stage):
 | 24 req/s | 23.82 / 191 ms / 0.48 s | 9.01 / 43.8 s / 63.4 s | 21.93 / 344 ms / 0.70 s |
 | 30 req/s | 29.76 / 184 ms / 0.48 s | 9.21 / 61.3 s / 81.2 s | 29.19 / 342 ms / 0.73 s |
 
-Zero failures and zero restarts in all arms (16,200 requests). Pull
-evidence in the `load + P2P` arm: 120 P2P sessions, 210M external-hit
-tokens, 7.8 TB served from the offload tier (GPU hit rate 17.3% - scattered
-placement misses locally and the tier covers it).
+Zero failures and zero restarts in all arms (16,200 requests). Pull evidence
+in the `load + P2P` arm: **120 established P2P sessions**, against 0 in the
+arms without the producer - that is what shows the path engaged.
+
+Alongside it the tier served 210M external-hit tokens and 7.8 TB (GPU hit
+rate 17.3% - scattered placement misses locally and the tier covers it).
+Read those two as **offload-tier activity, not pull volume**:
+`vllm:external_prefix_cache_hits_total` and `kv_offload_load_bytes_total`
+count every restore into GPU, including a pod reloading from its own CPU
+tier, so they cannot be attributed to peer transfers on a workload with
+repeated prefixes. Session counts prove the path engaged but are reusable
+peer connections and do not measure request or byte volume either. To
+attribute bytes to a peer the consumer must hold no local copy - which is
+what the [calibration
+recipe](../../recipes/router/calibration/calibrate-min-cached-token-delta.sh)
+arranges with fresh token IDs and a no-pull control, and why its byte column
+is trustworthy where these fleet-level counters are not.
 
 Reading the arms: affinity is near-ideal on a uniform pool - each pod owns
 ~8 of the 128 prefixes (384K tokens, comfortably GPU-resident), so with a
@@ -304,14 +328,32 @@ MoE), one prefill + one decode instance, each 16-way data/expert-parallel
 across 2 pods (32x H200). The workload replays recorded agentic traces (the
 SemiAnalysis Weka corpus) with aiperf at concurrencies 32/64/128; the four
 `epp-glm-*.yaml` arms cross the prefix-affinity index (precise vs
-approximate) with the pull on or off at `minCachedTokenDelta: 16384` - the
-measured crossover for this model (dead tie at 13,648 tokens; the pull is
-~1.7-2.3 s nearly flat while recompute pays ~130-144 us/token, reaching
--83% at 98K).
+approximate) with the pull on or off. `minCachedTokenDelta: 16384` was the
+overlay-era crossover (dead tie at 13,648 tokens); on the upstream tier the
+pull floor fell to ~1.25 s and the tie moved to ~8.7K tokens, so new
+deployments should set 12,288 - the calibration recipe measures it, and its
+paired no-pull control (0.0 MB moved without the parameter, 1,138.2 MB with
+it at 12K) is what makes the measurement trustworthy.
 
-Headline cell (concurrency 32): adding the pull to precise affinity takes
-TTFT p50 -27% and p90 -45%, tying the best load-balanced arm - the pull
-erases affinity's concentration penalty. The approximate arm drove pulls
+Measured on the fully-fixed stack (upstream vLLM tier, rank-aware source
+addressing, `podCacheSize` sized to the rank-endpoint count - see Best
+Practices), same fleet for both arms, c128, 900 s agentic traces:
+
+| metric | precise, no pull | precise + pull | delta |
+|---|---:|---:|---:|
+| TTFT p50 | 3,132 ms | 3,107 ms | -0.8% |
+| TTFT p90 | 9,600 ms | 8,716 ms | **-9.2%** |
+| TTFT p95 | 14,127 ms | 12,158 ms | **-13.9%** |
+| TTFT p99 | 24,638 ms | 17,668 ms | **-28.3%** |
+| Throughput | 3.7 req/s | 3.7 req/s | - |
+
+Medians equal, tail compressed: under precise affinity the median request
+is already local, and the pull rescues the displaced and queued cases at
+the tail - the same shape at 753B that the placement rule predicts.
+
+Headline cell on the overlay-era stack (concurrency 32): adding the pull to
+precise affinity takes TTFT p50 -27% and p90 -45%, tying the best
+load-balanced arm - the pull erases affinity's concentration penalty. The approximate arm drove pulls
 from the prompt-hash index alone (no KV events), confirming the source
 decision works with either index. Full grid, crossover sweep, and
 per-cell pull evidence:

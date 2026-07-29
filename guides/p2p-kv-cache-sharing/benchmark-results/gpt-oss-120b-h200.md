@@ -7,70 +7,96 @@ an 88 GiB CPU offload tier per pod (~1.8x the GPU KV cache), vLLM block
 size 64, KV transfers over NIXL. Routing uses the llm-d
 inference gateway with the precise (KV-event-fed) prefix index; the P2P arm
 adds the `p2p-source-producer` with `minCachedTokenDelta: 2048`. The
-document Q&A scenario ran on 14 pods; the pool scenarios on 16. Workload
+document Q&A and the pool scenarios both ran on 16 pods. Workload
 profiles, EPP arm configurations, and the run protocol are in
 [../benchmarking/README.md](../benchmarking/README.md).
 
 ## Pull versus recompute (single request)
 
-Single source-consumer pod pair, fresh prefix seeded on the source,
-prefill latency measured on a cold consumer, 5-rep medians:
+Single source-consumer pod pair, fresh prefix seeded on the source, prefill
+latency measured on a cold consumer, 5-rep medians. Two pods only, with no
+sidecar and no EPP - the driver injects the pull parameters directly, so an
+inert configuration cannot be mistaken for a measurement.
 
-| prefix tokens | recompute | P2P pull | delta |
-|---|---|---|---|
-| 2,048 | 70.6 ms | 49.0 ms | -31% |
-| 8,192 | 205.4 ms | 120.1 ms | -42% |
-| 16,384 | 426.3 ms | 196.2 ms | -54% |
-| 32,768 | 983.0 ms | 376.3 ms | -62% |
-| 49,152 | 1,695 ms | 550.5 ms | -68% |
+The canonical numbers are from the run on the fixed stack (engine
+`nightly-1240c74c`, P2P code `#48021` as merged plus `#49877` and `#49850`).
+The `superseded` column is an earlier run of the same method on the
+pre-fix stack and is kept only so the two are not confused where the older
+figures are still quoted elsewhere.
+
+| prefix tokens | recompute | P2P pull | delta | superseded (2026-07-17) |
+|---:|---:|---:|---:|---:|
+| 2,048 | 75 ms | 38 ms | **-55.8%** | -31% |
+| 8,192 | 243 ms | 59 ms | **-77.4%** | -42% |
+| 16,384 | 490 ms | 86 ms | **-83.2%** | -54% |
+| 32,768 | 1,154 ms | 165 ms | **-85.9%** | -62% |
+| 49,152 | 1,952 ms | 244 ms | **-88.2%** | -68% |
 
 <img src="./gptoss-crossover.png" width="900" alt="Prefill latency versus prefix length, recompute versus P2P pull">
 
-The pull wins at every measured length and the gap grows with the prefix;
-the smallest winning length sets the router's `minCachedTokenDelta: 2048`.
+The pull wins at every measured length and the gap grows with the prefix,
+because pull time is nearly flat in prefix size (38 / 59 / 86 / 165 / 244 ms)
+while recompute is linear (75 / 243 / 490 / 1,154 / 1,952 ms). The smallest
+winning length sets the router's `minCachedTokenDelta: 2048`.
+
+The same method run against the pre-fix stack agreed with the fixed one
+within ~6% at 2K and within 1% from 8K up, so this ladder is a property of
+the transport and the model, not of the engine build.
 
 ## Document Q&A (the headline)
 
 192 conversations, each with a private 48K-token document prefix, 6 short
-questions (256-token answers), 128 conversations concurrent. The
-~9.2M-token corpus fits inside the fleet's aggregate GPU KV (14 pods x
-~1.22M tokens/pod ~= 17M) with room to spare - so the displacement here is
-not capacity scarcity. The likelier driver: the baseline's composite
-scorer (prefix-cache weight 3, queue weight 2, kv-util weight 2,
-no-hit-lru weight 2) trades a document's cache locality for load-balancing
-under 128 concurrent sessions spread across only 14 owner pods, so a burst
-of turns can still queue behind an overloaded owner or land on a colder
-pod that recomputes. This is consistent with the P2P arm moving 30-32M
-prefix tokens per run - more than 3x the corpus - implying repeated
-cross-pod placement rather than one-time cold misses. Load-aware placement
-plus the pull removes the tradeoff: every question goes to whichever pod
-is least loaded, and that pod pulls the prefix instead of recomputing or
-queueing for it. Adding the pull to precise placement instead only
-partially closes the gap - it recovers the cache-locality cost of a
-cross-pod placement but not the queueing cost of a decision that still
-prefers a busy owner. All six runs across the three arms completed
-1,152/1,152 turns with zero errors and zero restarts.
+questions (256-token answers), 128 conversations concurrent, 1,152 turns per
+run. The ~9.2M-token corpus fits inside the fleet's aggregate GPU KV
+(16 pods x ~1.22M tokens/pod ~= 19.5M) with room to spare, so the
+displacement here is not capacity scarcity.
 
-TTFT p50 / p95 / p99 (s); throughput (turns/s):
+Measured on 16 pods, each arm cold-rolling the fleet before its first run so
+arms cannot contaminate each other, then run twice. TTFT p50 / p95 / p99
+(s); throughput (turns/s):
 
-| run | Precise prefix routing | Precise + P2P (recommended default) | Load-aware + P2P (wins this scenario) |
-|---|---|---|---|
-| 1 | 4.1 / 41.0 / 80.5; 5.98 | 4.0 / 27.7 / 48.8; 5.6 | 4.5 / 13.0 / 20.9; 7.02 |
-| 2 (order reversed / 2nd run) | 4.2 / 17.3 / 37.2; 7.66 | 2.6 / 33.6 / 67.2; 5.7 | 3.9 / 12.5 / 26.7; 7.76 |
+| arm | run | ok/fail | p50 | p95 | p99 | turns/s |
+|---|---|---|---:|---:|---:|---:|
+| Precise prefix routing | 1 (cold) | 870/47 | 3.2 | 85.8 | 164.9 | 3.23 |
+| Precise prefix routing | 2 (warm) | 1152/0 | 4.0 | 75.0 | 132.6 | 4.65 |
+| Precise + P2P | 1 (cold) | 864/48 | 4.0 | 84.0 | 164.5 | 3.18 |
+| Precise + P2P | 2 (warm) | 1152/0 | 3.7 | 69.6 | 126.7 | 5.06 |
+| **Load-aware + P2P** | 1 (cold) | 1152/0 | 3.4 | **12.9** | **20.7** | **6.86** |
+| **Load-aware + P2P** | 2 (warm) | 1152/0 | 3.2 | **11.7** | **18.2** | **7.54** |
 
-Precise + P2P sits between the other two arms on tail latency in both
-runs: it improves on precise-only's worst case but its p95/p99 never
-reach load-aware + P2P's range here. On the uniform pool below, the
-result reverses - load-aware + P2P is the one that degrades. The guide
-ships precise + P2P as the default because it is the safer general-purpose
-choice across both regimes; reach for load-aware + P2P specifically for
-workloads shaped like this one.
+Zero pod restarts across all six runs.
+
+**Load-aware + P2P wins this scenario decisively**: +62% throughput and 7.3x
+better p99 TTFT than precise routing warm (18.2 s vs 132.6 s), +112% and
+8.0x cold. Every question goes to whichever pod is least loaded and that pod
+pulls the prefix instead of recomputing or queueing for it.
+
+**Precise + P2P is not distinguishable from precise alone here.** Its warm
++8.8% throughput and -4.5% p99 sit inside this workload's run-to-run spread,
+and the mechanism evidence rules out a pull effect: the arm established
+**2 P2P sessions across all 16 pods** for the entire run, against **65** for
+load-aware + P2P on the identical rig. Fleet prefix hit rate says the same -
+~27% under affinity versus 9.9% under load placement. Affinity keeps the KV
+local, so `minCachedTokenDelta` is essentially never met and there is
+nothing to fetch.
+
+**The affinity arms are cold-start fragile, and that is what the cold rows
+show.** On a cold fleet every endpoint scores identically, so precise
+affinity has no signal to separate candidates and the pick collapses onto
+one pod: sampling in-flight depth during a cold affinity run found 122/128
+requests in flight with one pod holding 78.7% of them and six pods idle. It
+disperses within a minute as the prefix index fills, but the tail damage is
+done - that is the 165 s p99 and the 47-48 client timeouts. Load placement
+spreads by construction and never sees it.
 
 <img src="./gptoss-docqa.png" width="900" alt="Document Q&A TTFT percentiles and throughput across two order-alternated runs">
 
-Medians are equal; the arms separate on tails and stability: p99 TTFT
-21-27 s versus 37-81 s, up to +17% throughput, and 10% run-to-run spread
-versus 28%. The P2P arm moved 30-32M prefix tokens between pods per run.
+An earlier run of this scenario on a 14-pod fleet, without the per-arm cold
+roll, reported a narrower separation (precise 4.1 / 41.0 / 80.5 s at 5.98
+turns/s; load-aware + P2P 4.5 / 13.0 / 20.9 s at 7.02). The load-aware + P2P
+arm reproduces that closely here - p95 within 0.1-0.8 s and p99 within 0.2 s
+- which is what validates this harness. The affinity arms do not, because
+those runs did not start cold.
 
 ## Uniform shared-prefix pool (three arms)
 

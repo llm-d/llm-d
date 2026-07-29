@@ -20,7 +20,10 @@ namePrefix: p2p-kv-cache-sharing-
 #   (vllm#49877) are all upstream; this nightly is the first containing
 #   all four. Pin a tagged vLLM release once the tier ships in one.
 # - sidecar: main because v0.9.0 predates the offloading P2P pull support
-#   (llm-d-router#1937); pin the next release when cut.
+#   (llm-d-router#1937); pin the next release when cut. This tag floats, so
+#   the guide's benchmark tables cannot be reproduced exactly against it -
+#   resolve it to a digest and re-measure to reproduce a run. See the
+#   REPRODUCIBILITY note in ../../../../router/p2p-kv-cache-sharing.values.yaml.
 images:
   - name: REPLACE_MODEL_SERVER_IMAGE
     newName: vllm/vllm-openai

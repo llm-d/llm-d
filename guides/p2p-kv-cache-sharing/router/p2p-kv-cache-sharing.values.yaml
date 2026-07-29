@@ -11,20 +11,18 @@
 ## in ../benchmarking/): placement follows the cache (prefix-affinity
 ## scoring), and the p2p-source-producer emits the KV cache source header
 ## when a peer out-caches the scheduled pod by at least minCachedTokenDelta
-## tokens, so the pull covers what affinity alone misses. This guide
-## measured two regimes on its own testbed and they point different ways:
-## on the uniform shared-prefix pool this arm tracks offered rate to
-## saturation and matches affinity's near-ideal latency, while the
-## load-aware + P2P arm (`epp-load-p2p.yaml`) degrades badly at the top of
-## the ladder (p50 30s at 24 req/s vs this arm's 0.82s); on the
-## document-Q&A headline (128 concurrent sessions against a fixed
-## per-document ownership rule) it is the other way - load-aware + P2P
-## avoids the owner-pod queueing this arm still pays. This arm is the
-## safer general-purpose default: close to affinity's ceiling in the
-## capacity-driven regime, and still a clear improvement over affinity
-## alone in the concurrency-driven one. Reach for `epp-load-p2p.yaml`
-## specifically when your workload looks like many concurrent, multi-turn
-## sessions each pinned to an owner pod - see
+## tokens. Under precise affinity a peer rarely leads by that margin - this
+## arm established 2 P2P sessions across a full 16-pod document-Q&A run,
+## against 65 for the load-aware + P2P arm on the same rig - so the pull
+## here is recovery insurance for what affinity cannot cover (a restarted
+## router, a cold replica, an evicted owner), not a throughput feature. The
+## arm is the default because affinity is the safer placement in the
+## capacity-driven regime, not because the pull improves it.
+##
+## Reach for `epp-load-p2p.yaml` when your workload looks like many
+## concurrent, multi-turn sessions each pinned to an owner pod: on the
+## document-Q&A headline it avoids the owner-pod queueing this arm pays -
+## see
 ## [benchmark-results/gpt-oss-120b-h200.md](../benchmark-results/gpt-oss-120b-h200.md)
 ## for both measurements. To reproduce the comparison arms, swap this
 ## pluginsCustomConfig for any file under ../benchmarking/.
@@ -35,11 +33,17 @@
 router:
   epp:
     replicas: 2
-    # TEMPORARY pin, tracked under the v0.9 "Multi-tier offloading: NIXL P/D +
+    # TEMPORARY, tracked under the v0.9 "Multi-tier offloading: NIXL P/D +
     # P2P backends" goal: the chart's default EPP image (the chart version's
     # tag) predates the `p2p-source-producer` plugin and rejects this config
-    # with "plugin type 'p2p-source-producer' is not registered". Pin the next
-    # release once it ships the plugin.
+    # with "plugin type 'p2p-source-producer' is not registered". Switch to
+    # the next release once it ships the plugin.
+    #
+    # REPRODUCIBILITY: `main` floats. The guide's aggregated benchmark tables
+    # were measured against digests of this tag that were not recorded, so
+    # they cannot be reproduced exactly against whatever `main` resolves to
+    # today. To reproduce a run, resolve this tag to a digest, pin it here and
+    # in ../modelserver/gpu/vllm/base/kustomization.yaml, and re-measure.
     image:
       tag: main
       pullPolicy: Always
@@ -67,9 +71,28 @@ router:
           - type: endpoint-notification-source
           - type: precise-prefix-cache-producer
             parameters:
+              indexerConfig:
+                kvBlockIndexConfig:
+                  inMemoryConfig:
+                    # Per-key LRU of (endpoint, tier) holders. The default of
+                    # 10 is smaller than the number of legitimate holders a
+                    # hot shared-prefix block has on any fleet above five
+                    # pods, so real holders are evicted, affinity scores
+                    # collapse toward zero, and p2p-source-producer stops
+                    # finding a peer to pull from. Size it at
+                    # (discovered endpoints x tiers); 32 covers this guide's
+                    # 16-pod fleet with a GPU and a CPU tier per pod.
+                    podCacheSize: 32
               tokenProcessorConfig:
                 # MUST match the model server `--block-size`.
                 blockSize: 64
+              # Seeds predicted cache entries for the selected endpoint right
+              # after the routing decision, so the next same-prefix request
+              # hits without waiting for engine confirmation. The chart default
+              # is false; every measurement in this guide was taken with it on,
+              # so it is set here to keep the deployed config identical to the
+              # benchmarked arm (../benchmarking/epp-affinity-p2p.yaml).
+              speculativeIndexing: true
               kvEventsConfig:
                 topicFilter: "kv@"
                 discoverPods: true

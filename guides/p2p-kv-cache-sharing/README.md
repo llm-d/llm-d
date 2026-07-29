@@ -63,29 +63,45 @@ to the pod that already caches its prefix:
   drop reasoning content on re-render cannot reuse generated KV regardless
   of the serving stack.
 
-The placement rule this guide's measurements support is more textured than
-a single trigger, and the two scenarios where this guide measured
-affinity + P2P against load-aware + P2P point opposite ways. On the
-uniform shared-prefix pool (a working set spread wider than
-any one pod's cache) affinity + P2P tracks offered rate to saturation and
-matches affinity's near-ideal latency (p50 0.48 s at 30 req/s), while
-load-aware + P2P runs a constant factor behind (p50 0.73 s, ~2% lower
-achieved) - precise placement concentrates each prefix's traffic tightly
-enough that requests hit locally, while scattering pays a pull on every
-displaced request; the pull keeps that price sub-second (against a 63 s p50
-recompute floor without it), but affinity never pays it at all. On the document-Q&A
+What the pull is worth depends on the placement it sits behind, and the
+three combinations this guide measures are not the same kind of thing:
+
+* **Affinity + P2P - recovery insurance, usually inert.** Precise affinity
+  sends each request to the pod that already holds its prefix, so a peer
+  rarely leads by `minCachedTokenDelta` and there is rarely anything to
+  fetch: on the document-Q&A rig this arm established 2 P2P sessions across
+  a full 16-pod run, against 65 for load-aware + P2P on the same rig. That
+  is the pull behaving correctly as a fallback, not a defect. Its value is
+  covering the cases affinity cannot - a restarted router, a cold replica,
+  an evicted owner - at close to no cost when those do not occur. Do not
+  deploy it expecting a throughput gain over affinity alone.
+* **Load-aware + P2P - a measured performance feature.** When placement
+  deliberately scatters, the pull is what makes scattering affordable, and
+  the gain is directly attributable to it.
+* **P/D + P2P - a measured performance feature.** Decode generates the
+  history, so the prefill leg faces KV no placement decision could have made
+  local. This is the largest measured effect in the guide.
+
+Between the two aggregated arms the ordering depends on the regime. On the
+uniform shared-prefix pool (a working set spread wider than any one pod's
+cache) affinity + P2P tracks offered rate to saturation and matches
+affinity's near-ideal latency (p50 0.48 s at 30 req/s), while load-aware +
+P2P runs a constant factor behind (p50 0.73 s, ~2% lower achieved) -
+precise placement concentrates each prefix's traffic tightly enough that
+requests hit locally, while scattering pays a pull on every displaced
+request; the pull keeps that price sub-second (against a 63 s p50 recompute
+floor without it), but affinity never pays it at all. On the document-Q&A
 headline (128 concurrent multi-turn sessions, each pinned by affinity to
-the pod that computed its prefix) the result flips: load-aware + P2P
-avoids the owner-pod queueing that affinity + P2P still pays, and its
-p95/p99 tail beats affinity + P2P by 2x or more in both measured runs (see
-[benchmark-results/gpt-oss-120b-h200.md](benchmark-results/gpt-oss-120b-h200.md)
-for both). Affinity + P2P is the safer general-purpose default - close to
-affinity's ceiling in the capacity-driven regime and still a clear
-improvement over affinity alone in the concurrency-driven one - which is
-why the guide ships it. Reach for load-aware + P2P specifically when your
-workload looks like many concurrent, multi-turn sessions each pinned to an
-owner pod; re-measure both arms against your own workload shape before
-assuming either generalizes.
+the pod that computed its prefix) the result flips: load-aware + P2P avoids
+the owner-pod queueing that affinity + P2P still pays, giving +62%
+throughput and a 7.3x better p99 TTFT than precise routing (see
+[benchmark-results/gpt-oss-120b-h200.md](benchmark-results/gpt-oss-120b-h200.md)).
+
+The guide ships affinity + P2P as the default because it is the safer
+placement in the capacity-driven regime, not because the pull improves it.
+Reach for load-aware + P2P when your workload looks like many concurrent,
+multi-turn sessions each pinned to an owner pod; re-measure both arms
+against your own workload shape before assuming either generalizes.
 
 ## Configuration
 
@@ -107,8 +123,10 @@ measurements use:
 crossover (see [Benchmarking](#benchmarking)): a pull is requested only when
 a peer holds at least that many more cached prefix tokens than the scheduled
 pod. The crossover is per model - 2,048 on this testbed (gpt-oss-120b and
-Llama-8B both cross near or below 2K), 16,384 on the wide-EP GLM-5.2
-testbed (753B; tie measured at 13.6K tokens) - so re-measure it when
+Llama-8B both cross near or below 2K), 12,288 on the wide-EP GLM-5.2
+testbed (753B; tie measured at ~8.7K tokens on the upstream tier, where the
+pull floor is ~1.25 s flat against ~130-147 us/token of recompute) - so
+re-measure it when
 changing models, on a warmed pod pair (the first pull between two peers
 pays a one-time session-establishment transient). The measurement is
 automated as a calibration recipe:
@@ -125,9 +143,13 @@ runs it against two live pods and prints the recommended value.
   crossover, so it changes `minCachedTokenDelta` rather than whether the
   pull functions. On TCP the pull leg inflates while recompute is unchanged,
   moving the crossover from below 2K out to **between 16K and 32K tokens**
-  (~29K on a finer sweep). Measured on
-  gpt-oss-120b, same image and configuration, `rdma/ib` the only difference -
-  TTFT delta, negative means the pull wins:
+  (~29K on a finer sweep). Measured on gpt-oss-120b, same image and
+  configuration, `rdma/ib` the only difference - TTFT delta, negative means
+  the pull wins. Both columns come from one paired run on a single build, so
+  the contrast between them is the measurement; its RDMA column sits within
+  1-6% of the canonical Step 0 ladder in
+  [benchmark-results/gpt-oss-120b-h200.md](benchmark-results/gpt-oss-120b-h200.md),
+  which was measured on a later build:
 
   | prefix tokens | with `rdma/ib` (this guide) | without |
   |---:|---:|---:|
@@ -152,6 +174,17 @@ runs it against two live pods and prints the recommended value.
   `precise-prefix-cache-producer` (`tokenProcessorConfig.blockSize`). A
   mismatch leaves the prefix index empty and the whole path silently inert -
   requests still serve, nothing pulls.
+* **Multi-pod data-parallel groups (LWS wide-EP) need rank-aware source
+  addressing.** vLLM binds the P2P tier listener at `p2p-connector-port`
+  plus the engine's global DP rank, and the sidecar's fallback derives only the
+  pod-local rank from the serving port - correct when each pod is its own
+  DP group (every topology in this guide), wrong for worker pods of a
+  multi-pod group, where a mis-addressed pull does not fall back to
+  recompute but stalls the request until the client times out. The EPP
+  supplies the global rank per request via `x-kv-cache-source-rank`
+  ([llm-d-router `fix/p2p-source-global-rank`](https://github.com/nilig/llm-d-router/compare/main...fix/p2p-source-global-rank));
+  deploy an EPP and sidecar that carry it before enabling the pull on such
+  a topology.
 * `--kv-events-config` on every serving pod, topic
   `kv@<POD_IP>:<PORT>@<model>`. No events, no precise index, no source
   selection from it. (Deployments on the approximate index skip this
@@ -434,9 +467,21 @@ This guide uses [`llmdbenchmark`](https://github.com/llm-d/llm-d-benchmark) - th
 
 ### 1. Install the `llmdbenchmark` CLI
 
+This guide's workload profile lands via
+[llm-d-benchmark#1656](https://github.com/llm-d/llm-d-benchmark/pull/1656),
+which is open, so `guide_p2p-kv-cache-sharing_1.yaml` is absent from `main`
+and the PR branch lives on a fork rather than on `origin`. Check out the
+commit this guide's tables were measured against; replace the fetch with the
+merge commit on `main` once the PR lands.
+
 ```bash
 curl -sSL https://raw.githubusercontent.com/llm-d/llm-d-benchmark/main/install.sh | bash
 cd llm-d-benchmark
+# Until llm-d-benchmark#1656 merges the profile comes from the PR fork at the
+# pinned commit - `origin` has neither the branch nor the file.
+git fetch https://github.com/nilig/llm-d-benchmark.git \
+    20ef7570809c9f4935e2015a73537bd77cdafbe3
+git checkout 20ef7570809c9f4935e2015a73537bd77cdafbe3
 source .venv/bin/activate
 llmdbenchmark --version
 ```
@@ -495,8 +540,18 @@ kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/render
    `minCachedTokenDelta` tokens it sets the KV cache source header.
 4. **The routing sidecar injects `kv_transfer_params.remote_kv_source`** from the header
    and the engine pulls the prefix blocks from the peer's CPU tier over
-   NIXL - hits load as normal cache hits, misses recompute, so a failed
-   transfer degrades to baseline behavior instead of failing the request.
+   NIXL - hits load as normal cache hits and ordinary misses recompute, so a
+   request whose peer simply does not have the blocks degrades to baseline
+   behavior rather than failing.
+
+   > [!WARNING]
+   > That fallback covers ordinary misses, not a write that never lands. On
+   > the engine pinned by this guide a block left in `HIT_PENDING` has no
+   > deadline, so a request waiting on it can stay deferred until the client
+   > times out rather than recomputing.
+   > [vllm#49850](https://github.com/vllm-project/vllm/pull/49850) adds the
+   > bound and is open; until it merges and is pinned here, treat a stalled
+   > `HIT_PENDING` as a known limitation of this path.
 
 ## P/D variant: P2P over NIXL disaggregation
 
@@ -580,7 +635,7 @@ hardware configurations:
   deployment - 6.3x median TTFT and +50% throughput against plain NIXL P/D
   on the agentic-serving workload shape.
 - **[zai-org/GLM-5.2-FP8 on vLLM (H200, wide-EP P/D)](./benchmark-results/glm-5.2-h200.md)**:
-  the mechanism at 753B - crossover swept to its measured tie (13.6K
-  tokens), a four-arm placement-x-pull grid on recorded agentic traces,
-  and the pull firing from the approximate index as well as the precise
-  one.
+  the mechanism at 753B - crossover swept to its measured tie (~8.7K
+  tokens on the upstream tier), a four-arm placement-x-pull grid on
+  recorded agentic traces, and the pull firing from the approximate index
+  as well as the precise one.
