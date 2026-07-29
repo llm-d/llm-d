@@ -12,7 +12,6 @@ Use this when you **do not** want to deploy a proxy via Kubernetes Gateway APIs.
 helm install <release-name> \
   ${ROUTER_STANDALONE_CHART} \
   -f ${REPO_ROOT}/guides/recipes/router/base.values.yaml \
-  -f ${REPO_ROOT}/guides/recipes/router/features/monitoring.values.yaml \
   -f ${REPO_ROOT}/guides/<your-guide>/router/<your-guide>.values.yaml \
   --set provider.name=<gke|istio|none> \
   -n ${NAMESPACE} \
@@ -33,12 +32,37 @@ Use this when you want to route traffic through a proxy managed by the Kubernete
 helm install <release-name> \
   ${ROUTER_GATEWAY_CHART} \
   -f ${REPO_ROOT}/guides/recipes/router/base.values.yaml \
+  -f ${REPO_ROOT}/guides/<your-guide>/router/<your-guide>.values.yaml \
+  --set provider.name=<gke|istio|none> \
+  -n ${NAMESPACE} \
+  --version ${ROUTER_CHART_VERSION}
+```
+
+## Enable Prometheus Monitoring (Optional)
+
+The Router's monitoring values file (`features/monitoring.values.yaml`) renders a
+`ServiceMonitor` CR, which requires the **Prometheus Operator** CRDs to be present in the
+cluster. On a fresh cluster without those CRDs, layering this file onto the initial install
+will fail Helm validation.
+
+To enable monitoring, deploy the monitoring stack first (see the
+[Observability guide](../../../docs/operations/observability/setup.md)) and then layer the
+monitoring values file on top of an existing release:
+
+```bash
+helm upgrade <release-name> \
+  ${ROUTER_STANDALONE_CHART} \
+  -f ${REPO_ROOT}/guides/recipes/router/base.values.yaml \
   -f ${REPO_ROOT}/guides/recipes/router/features/monitoring.values.yaml \
   -f ${REPO_ROOT}/guides/<your-guide>/router/<your-guide>.values.yaml \
   --set provider.name=<gke|istio|none> \
   -n ${NAMESPACE} \
   --version ${ROUTER_CHART_VERSION}
 ```
+
+If your cluster already has the Prometheus Operator CRDs installed, you can also add
+`-f ${REPO_ROOT}/guides/recipes/router/features/monitoring.values.yaml` to the initial
+`helm install` command above instead.
 
 ## Calibration
 
