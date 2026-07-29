@@ -37,6 +37,16 @@ router:
       tag: "07657e922"
     pluginsConfigFile: "epd-plugins.yaml"
     pluginsCustomConfig:
+      # prefill/decode scorers below match guides/pd-disaggregation/router/pd-disaggregation.values.yaml:
+      # prefix-cache-affinity-filter + token-load-scorer for prefill (keep prefix groups
+      # on cache-warm pods, then pick by queued token load), active-request-scorer for
+      # decode (pick the least-busy endpoint). encode is untouched -- pd-disaggregation
+      # has no encode role to borrow a scorer from.
+      #
+      # peakPrefillThroughput is left at the plugin's own default (not pd-disaggregation's
+      # 33821, which is calibrated for gpt-oss-120b on 8x H200 prefill -- meaningless for
+      # this guide's Qwen3-VL-2B-Instruct/TP=1 model servers). Recalibrate for your
+      # hardware with guides/recipes/router/calibration/calibrate.sh.
       epd-plugins.yaml: |
         apiVersion: llm-d.ai/v1alpha1
         kind: EndpointPickerConfig
@@ -45,6 +55,12 @@ router:
         - type: prefill-filter
         - type: decode-filter
         - type: header-profile-handler
+        - type: approx-prefix-cache-producer
+        - type: inflight-load-producer
+        - type: prefix-cache-affinity-filter
+        - type: token-load-scorer
+        - type: active-request-scorer
+        - type: max-score-picker
         schedulingProfiles:
         - name: encode
           plugins:
@@ -52,9 +68,14 @@ router:
         - name: prefill
           plugins:
           - pluginRef: prefill-filter
+          - pluginRef: prefix-cache-affinity-filter
+          - pluginRef: token-load-scorer
+          - pluginRef: max-score-picker
         - name: decode
           plugins:
           - pluginRef: decode-filter
+          - pluginRef: active-request-scorer
+          - pluginRef: max-score-picker
 
   modelServers:
     matchLabels:

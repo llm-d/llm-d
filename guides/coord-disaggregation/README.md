@@ -238,12 +238,20 @@ envsubst < ${REPO_ROOT}/guides/${GUIDE_NAME}/router/httproute.yaml | kubectl app
 <summary><h4>3 separate EPPs (one per role)</h4></summary>
 
 Three independent llm-d Router releases — one per role — each with its own EPP and
-InferencePool scoped to that role's pods. No custom EPP image or plugin config: each
-EPP only ever sees one role, so the chart's default `single-profile-handler` is enough
-(see the [Overview](#overview)). All three releases share the same values file
-([`router/coord-disaggregation-per-role.values.yaml`](router/coord-disaggregation-per-role.values.yaml))
-— only the `llm-d.ai/role` model-server label differs between them, so it's passed with
-`--set` per iteration instead of forking the file three times.
+InferencePool scoped to that role's pods. No profile-selection plugin needed: each
+EPP only ever sees one role, so the chart's default `single-profile-handler` picks its
+one configured profile automatically (see the [Overview](#overview)).
+
+`router/coord-disaggregation-encode.values.yaml` has no scorer override (nothing to
+borrow — see below). `router/coord-disaggregation-prefill.values.yaml` and
+`router/coord-disaggregation-decode.values.yaml` configure the same scorers as the
+`prefill`/`decode` profiles in
+[`guides/pd-disaggregation/router/pd-disaggregation.values.yaml`](../pd-disaggregation/router/pd-disaggregation.values.yaml):
+`prefix-cache-affinity-filter` + `token-load-scorer` for prefill (stay on cache-warm
+pods, then pick by queued token load), `active-request-scorer` for decode (pick the
+least-busy endpoint) — minus the `prefill-filter`/`decode-filter`/`disagg-*` plugins
+that guide needs to split one shared pool, which this guide's `modelServers.matchLabels`
+already does per-release.
 
 2. *Deploy the llm-d Routers*:
 
@@ -254,9 +262,8 @@ for ROLE in encode prefill decode; do
       ${ROUTER_GATEWAY_CHART} \
       -f ${REPO_ROOT}/guides/recipes/router/base.values.yaml \
       -f ${REPO_ROOT}/guides/recipes/router/features/httproute-flags.yaml \
-      -f ${REPO_ROOT}/guides/${GUIDE_NAME}/router/coord-disaggregation-per-role.values.yaml \
+      -f ${REPO_ROOT}/guides/${GUIDE_NAME}/router/${GUIDE_NAME}-${ROLE}.values.yaml \
       --set provider.name=${PROVIDER_NAME} \
-      --set router.modelServers.matchLabels."llm-d\.ai/role"=${ROLE} \
       -n ${NAMESPACE} --version ${ROUTER_CHART_VERSION}
 done
 ```

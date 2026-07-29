@@ -1,0 +1,53 @@
+## Coordinator Disaggregation guide overrides for the prefill-only EPP / InferencePool,
+## part of the "3 separate EPPs" alternative to the single combined EPP (see
+## router/coord-disaggregation.values.yaml).
+## Layer on top of: recipes/router/base.values.yaml
+##
+## This EPP only ever sees prefill-labeled pods (modelServers.matchLabels below), so no
+## by-label filter is needed -- just the scorers. These match the prefill profile in
+## guides/pd-disaggregation/router/pd-disaggregation.values.yaml: keep prefix groups on
+## cache-warm pods (prefix-cache-affinity-filter), then pick by queued prefill token
+## load (token-load-scorer).
+##
+## peakPrefillThroughput is left at the plugin's own default (not pd-disaggregation's
+## calibrated 33821, which is tuned for gpt-oss-120b on 8x H200 prefill -- meaningless
+## for this guide's Qwen3-VL-2B-Instruct/TP=1 model servers). Recalibrate for your
+## hardware with guides/recipes/router/calibration/calibrate.sh.
+
+# See router/httproute-3-epp.yaml for why this guide hand-authors the HTTPRoute
+# instead of using the chart's own (same reason as the single-EPP variant: it
+# needs Exact path matches to tie in specificity with the Coordinator's own
+# Exact-path HTTPRoute).
+httpRoute:
+  create: false
+
+router:
+  extraServicePorts:
+    - name: http
+      port: 80
+      protocol: TCP
+      targetPort: 8081
+
+  epp:
+    pluginsConfigFile: "epd-plugins.yaml"
+    pluginsCustomConfig:
+      epd-plugins.yaml: |
+        apiVersion: llm-d.ai/v1alpha1
+        kind: EndpointPickerConfig
+        plugins:
+        - type: approx-prefix-cache-producer
+        - type: inflight-load-producer
+        - type: prefix-cache-affinity-filter
+        - type: token-load-scorer
+        - type: max-score-picker
+        schedulingProfiles:
+        - name: default
+          plugins:
+          - pluginRef: prefix-cache-affinity-filter
+          - pluginRef: token-load-scorer
+          - pluginRef: max-score-picker
+
+  modelServers:
+    matchLabels:
+      llm-d.ai/guide: "coord-disaggregation"
+      llm-d.ai/role: "prefill"
