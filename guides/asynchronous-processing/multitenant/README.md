@@ -173,16 +173,23 @@ to the **`(team, model)`** queue; the helper takes a team and a model (`a`|`b`).
 
 ```bash
 publish() {                                   # publish <team> <a|b> [count]
-  local team=$1 model=$2 n=${3:-1} now dl member name
+  local team=$1 model=$2 n=${3:-1} ttl=${PUBLISH_TTL:-300} now dl run name i pairs=()
   [ "$model" = a ] && name="$MODEL_A" || name="$MODEL_B"
+  now=$(date +%s); dl=$((now+ttl)); run="${now}-${RANDOM}"
+  # The whole batch goes in one exec — ZADD takes any number of score/member pairs. One exec
+  # per request trickled `publish batch a 100` in over minutes, and the workers drained it as
+  # fast as it arrived: no backlog to classify as overflow. The batch shares a score, so
+  # ZPopMin breaks ties on the member string — the zero-padded index makes that publish order.
   for i in $(seq 1 "$n"); do
-    now=$(date +%s); dl=$((now+300))
-    member=$(printf '{"internal":{},"request_kind":"plain","data":{"id":"%s-%s-%s-%s","created":%s,"deadline":%s,"payload":{"model":"%s","prompt":"summarize this","max_tokens":64},"metadata":{"team":"%s"}}}' \
-      "$team" "$model" "$now" "$i" "$now" "$dl" "$name" "$team")
-    kubectl -n ${NAMESPACE} exec -i deploy/redis -- redis-cli ZADD "team-${team}-${model}" "$dl" "$member" >/dev/null
+    pairs+=("$dl" "$(printf '{"internal":{},"request_kind":"plain","data":{"id":"%s-%s-%s-%04d","created":%s,"deadline":%s,"payload":{"model":"%s","prompt":"summarize this","max_tokens":64},"metadata":{"team":"%s"}}}' \
+      "$team" "$model" "$run" "$i" "$now" "$dl" "$name" "$team")")
   done
+  kubectl -n ${NAMESPACE} exec -i deploy/redis -- redis-cli ZADD "team-${team}-${model}" "${pairs[@]}"
 }
-# e.g.  publish premium a 5    # premium team, model A
+# e.g.  publish premium a 5    # premium team, model A; prints the number enqueued.
+#   PUBLISH_TTL=900 publish batch a 400   # one deadline covers the batch — raise it if a
+#                                         # saturated pool will not drain within 300s.
+# Keep the count in the low thousands: every pair travels in the one exec's argv.
 ```
 
 <details>
@@ -191,15 +198,20 @@ publish() {                                   # publish <team> <a|b> [count]
 <!-- llm-d-cicd:skip start -->
 ```bash
 publish() {                                   # publish <team> <a|b> [count]
-  local team=$1 model=$2 n=${3:-1} now name
+  local team=$1 model=$2 n=${3:-1} ttl=${PUBLISH_TTL:-300} par=${PUBLISH_PAR:-8} now dl run name i
   [ "$model" = a ] && name="$MODEL_A" || name="$MODEL_B"
+  now=$(date +%s); dl=$((now+ttl)); run="${now}-${RANDOM}"
+  # gcloud publishes one message per invocation, so keep `par` of them in flight: serially,
+  # `publish batch a 100` takes minutes and never builds the backlog the scenarios need.
+  # Each invocation is a fresh Python process — lower PUBLISH_PAR if memory is tight.
   for i in $(seq 1 "$n"); do
-    now=$(date +%s)
     gcloud pubsub topics publish "team-${team}-${model}-requests" --project "$PROJECT_ID" \
       --attribute "team=${team}" \
-      --message "$(printf '{"id":"%s-%s-%s-%s","created":%s,"deadline":%s,"payload":{"model":"%s","prompt":"summarize this","max_tokens":64},"metadata":{"team":"%s"}}' \
-        "$team" "$model" "$now" "$i" "$now" "$((now+300))" "$name" "$team")"
+      --message "$(printf '{"id":"%s-%s-%s-%04d","created":%s,"deadline":%s,"payload":{"model":"%s","prompt":"summarize this","max_tokens":64},"metadata":{"team":"%s"}}' \
+        "$team" "$model" "$run" "$i" "$now" "$dl" "$name" "$team")" >/dev/null &
+    (( i % par )) || wait
   done
+  wait
 }
 ```
 <!-- llm-d-cicd:skip end -->
