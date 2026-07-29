@@ -66,7 +66,7 @@ to the pod that already caches its prefix:
 The placement rule this guide's measurements support is more textured than
 a single trigger, and the two scenarios where this guide measured
 affinity + P2P against load-aware + P2P point opposite ways. On the
-uniform shared-prefix pool (Scenario A: a working set spread wider than
+uniform shared-prefix pool (a working set spread wider than
 any one pod's cache) affinity + P2P tracks offered rate to saturation and
 matches affinity's near-ideal latency (p50 0.48 s at 30 req/s), while
 load-aware + P2P runs a constant factor behind (p50 0.73 s, ~2% lower

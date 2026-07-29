@@ -67,21 +67,30 @@ same false plateau; this rig runs 6 replicas (measured: 30 req/s at p50
 Two of the scenarios below change placement and the pull together, so their
 headline margin is not a P2P margin. Read them for what they are:
 
-| Scenario | Compares | Isolates the pull? |
+| Scenario | The pull-isolating pair | Isolates the pull? |
 |---|---|---|
 | Step 0 | recompute vs pull, same pod pair, no routing | **yes** |
-| Wide-EP (GLM) | `precise` vs `precise + pull`, placement fixed | **yes** |
-| Scenario B | `affinity` vs `load + P2P` | no - placement and pull move together |
-| Scenario D | `affinity` / `affinity + P2P` / `load + P2P` | partly - the affinity pair isolates it, the winning arm does not |
+| Wide-EP (GLM) | `precise` vs `precise + pull` | **yes** |
+| Uniform pool | `load` vs `load + P2P` | **yes** |
+| Hot set | `load` vs `load + P2P` | **yes** |
+| Document Q&A | `affinity` vs `affinity + P2P` | partly - that pair isolates it, but the winning arm (`load + P2P`) also changes placement |
 
-The two that isolate it are where the feature's value is established:
-Step 0 (-49% to -88% TTFT with RDMA) and the wide-EP arm pair (-16% p50 /
--15% p90 at c128, -27% / -45% at c32). Scenarios B and D show what the
-resulting *deployment* does, which is the number an operator cares about,
-but attribute their wins to the placement change as much as to the pull.
+Every scenario except the document-Q&A headline now carries a control arm
+with identical placement and no pull, so its margin is the pull's alone.
+Comparisons *across* placement policies (`affinity` vs `load + P2P`) answer
+a different question - which deployment to run - and should not be read as
+P2P deltas.
+
+The isolating pairs are where the feature's value is established: Step 0
+(-49% to -88% TTFT with RDMA), the wide-EP pair (-16% p50 / -15% p90 at
+c128, -27% / -45% at c32), the uniform pool (+143% sustained rate at 24
+req/s) and the hot set (+224% and 274 client-timeout failures eliminated at
+48 req/s). The cross-placement comparisons show what the resulting
+*deployment* does - the number an operator ultimately cares about - but
+attribute their margin to the placement change as much as to the pull.
 
 One result worth stating plainly because it recurs: **under affinity
-placement the pull is close to inert.** Measured on the Scenario D rig,
+placement the pull is close to inert.** Measured on the document-Q&A rig,
 `affinity + P2P` established 2 P2P sessions across 16 pods over a full run
 while `load + P2P` established 65 on the same rig - affinity keeps the KV
 local, so `minCachedTokenDelta` is rarely met and there is nothing to fetch.
@@ -133,7 +142,7 @@ The pull wins at every measured length - gpt-oss's compact KV (41.5 KB/token)
 makes the transfer cheap enough to beat even this model's fast MoE prefill.
 `minCachedTokenDelta: 2048` (the smallest measured winning length).
 
-## Scenario A - uniform shared-prefix pool (three routing arms)
+## Uniform shared-prefix pool (three routing arms)
 
 128 shared prefixes x 48K tokens (~6M-token working set, ~5x one pod's GPU
 cache), 256-token questions, 64 output tokens, streaming, constant-rate
@@ -185,7 +194,7 @@ document-Q&A headline is where load-aware + P2P's spreading matters more -
 see the [placement rule](../README.md#when-to-use-this-path) for when each
 applies.
 
-## Scenario B - hot set (the payoff case)
+## Hot set larger than one pod's cache
 
 A small hot set takes all traffic, decode-heavy requests (512 output
 tokens), rates ramped past what the prefix owners alone can absorb.
@@ -229,7 +238,7 @@ needs a prefix count well below the pod count; at that count the set also
 fits everywhere, so the two effects are hard to exhibit in one workload.
 Choose which one you are testing and size accordingly.
 
-## Scenario D - document Q&A (the headline; shipped as the profile above)
+## Document Q&A at session scale (the headline; shipped as the profile above)
 
 The user-facing regime: each of 192 conversations carries a private
 48K-token document prefix and asks 6 short questions (256-token answers),
@@ -273,7 +282,7 @@ decision that still prefers a busy owner. `epp-load-p2p` never makes that
 tradeoff: placement always goes to the least-loaded pod, so there is no
 owner-pod queue to build in the first place. On this scenario alone,
 `epp-load-p2p` is the better arm - but see
-[Scenario A](#scenario-a---uniform-shared-prefix-pool-three-routing-arms), where
+[the uniform pool](#uniform-shared-prefix-pool-three-routing-arms), where
 the result is reversed. The guide ships `epp-affinity-p2p` as the default
 because it is the safer general-purpose choice across both regimes (see
 the [README](../README.md#when-to-use-this-path)); reach for
