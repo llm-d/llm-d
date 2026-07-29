@@ -65,8 +65,6 @@ spec:
         command: ["vllm", "launch", "render"]
         args: ["Qwen/Qwen3-VL-2B-Instruct", "--port=8000"]
         env:
-        - name: HF_HOME
-          value: /model-cache
         - name: HF_TOKEN
           valueFrom:
             secretKeyRef:
@@ -106,8 +104,6 @@ spec:
           failureThreshold: 1
           timeoutSeconds: 1
         volumeMounts:
-        - name: model-cache
-          mountPath: /model-cache
         - name: torch-compile-cache
           mountPath: /.cache
         - name: vllm-config
@@ -116,9 +112,6 @@ spec:
       - name: config
         configMap:
           name: llm-d-coordinator-config
-      - name: model-cache
-        persistentVolumeClaim:
-          claimName: llm-d-model-cache
       - name: torch-compile-cache
         emptyDir: {}
       - name: vllm-config

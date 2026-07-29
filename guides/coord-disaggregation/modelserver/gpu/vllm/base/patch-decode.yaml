@@ -21,8 +21,6 @@ spec:
               valueFrom:
                 fieldRef:
                   fieldPath: status.podIP
-            - name: HF_HOME
-              value: /model-cache
             - name: HF_TOKEN
               valueFrom:
                 secretKeyRef:
@@ -54,8 +52,6 @@ spec:
               name: torch-compile-cache
             - mountPath: /.config
               name: config-cache
-            - mountPath: /model-cache
-              name: model-cache
           startupProbe:
             initialDelaySeconds: 15
             periodSeconds: 30
@@ -78,6 +74,3 @@ spec:
           emptyDir: {}
         - name: config-cache
           emptyDir: {}
-        - name: model-cache
-          persistentVolumeClaim:
-            claimName: llm-d-model-cache

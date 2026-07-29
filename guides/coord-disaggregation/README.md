@@ -78,9 +78,8 @@ The result of this guide, in either of two EPP topologies (pick one — see
 
 > [!IMPORTANT]
 > The **single-EPP** topology depends on
-> [llm-d-router#2134](https://github.com/llm-d/llm-d-router/pull/2134)
 > (`header-profile-handler` plus the `encode-filter`/`prefill-filter`/`decode-filter`
-> plugins), which is merged but may not be in an official release image yet. Until it
+> plugins). Until it
 > is, [`router/coord-disaggregation.values.yaml`](router/coord-disaggregation.values.yaml)
 > pins `router.epp.image` to `ghcr.io/roytman/llm-d-router-endpoint-picker:1-epp`, a
 > build that contains it. Swap it back to the chart default once an official image does.
@@ -163,14 +162,14 @@ The result of this guide, in either of two EPP topologies (pick one — see
 >
 > * Step 1: no change needed — the same single Router/EPP deployment serves whichever
 >   roles you actually run; an `encode` scheduling profile with no `encode`-labeled pods
->   behind it is simply never called, since the Coordinator's pipeline (step 4) is what
+>   behind it is simply never called, since the Coordinator's pipeline (step 3) is what
 >   decides whether an `encode` phase call happens at all.
-> * Step 3: skip the encode model server overlay, or scale it to 0 replicas.
-> * Step 4: after deploying the Coordinator, edit the `llm-d-coordinator-config`
+> * Step 2: skip the encode model server overlay, or scale it to 0 replicas.
+> * Step 3: after deploying the Coordinator, edit the `llm-d-coordinator-config`
 >   ConfigMap to drop the `replace-media-urls`, `render`, and `encode` steps from
 >   `pipeline.steps`, keeping only `conditional-decode`, `prefill`, and `decode`, then
 >   restart the coordinator Deployment.
-> * Step 5: skip entirely — the multimedia downloader is only used by the `replace-media-urls` pipeline step.
+> * Step 4: skip entirely — the multimedia downloader is only used by the `replace-media-urls` pipeline step.
 
 ### 1. Deploy the llm-d Router
 
@@ -278,27 +277,7 @@ envsubst < ${REPO_ROOT}/guides/${GUIDE_NAME}/router/httproute-3-epp.yaml | kubec
 
 </details>
 
-### 2. Provision the shared model cache
-
-The three model server pods and the Coordinator's render container share a single
-`PersistentVolumeClaim` (`llm-d-model-cache`) for the HuggingFace model files, so the
-model is downloaded once and reused. The claim is `ReadWriteMany` and 250Gi.
-
-> [!IMPORTANT]
-> Edit [`model-cache-pvc.yaml`](model-cache-pvc.yaml) to set `storageClassName` to an
-> RWX-capable StorageClass available in your cluster (e.g. NFS, CephFS, EFS, GCP
-> Filestore). If your cluster's default StorageClass is already RWX-capable, leave the
-> field commented out.
-
-```bash
-kubectl apply -n ${NAMESPACE} -f ${REPO_ROOT}/guides/${GUIDE_NAME}/model-cache-pvc.yaml
-```
-
-> [!NOTE]
-> The first model server pod to start will populate the cache via the HuggingFace
-> Hub; the others reuse it. Expect the first cold start to be longer than the rest.
-
-### 3. Deploy the Model Servers
+### 2. Deploy the Model Servers
 
 Apply the Kustomize overlay for your infrastructure provider. One overlay deploys all
 three role-specific model servers (encode, prefill, decode), each as a single
@@ -309,7 +288,17 @@ export INFRA_PROVIDER=base # base | gke
 kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/gpu/vllm/${INFRA_PROVIDER}/
 ```
 
-### 4. Deploy the Coordinator
+> [!NOTE]
+> Each model server pod (and the Coordinator's render container, deployed next) pulls
+> its own copy of the model from the HuggingFace Hub independently — there's no shared
+> model cache between them, matching the default convention used by other guides in
+> this repo (e.g. [P/D Disaggregation](../pd-disaggregation/README.md)). Expect the
+> first cold start to take a while on every pod, not just one; if that's a problem in
+> your cluster (slow/metered egress, many replicas), add an RWX-backed
+> `PersistentVolumeClaim` mounted at a shared `HF_HOME` path across these manifests and
+> the Coordinator's `vllm-render` container instead.
+
+### 3. Deploy the Coordinator
 
 Drives the `replace-media-urls → render → conditional-decode → encode → prefill →
 decode` pipeline. The ConfigMap references `${NAMESPACE}` and `${PROVIDER_NAME}`, so
@@ -320,7 +309,7 @@ export PROVIDER_NAME=${PROVIDER_NAME:-istio} # match whatever provider you used 
 kustomize build ${REPO_ROOT}/guides/${GUIDE_NAME}/coordinator/ | envsubst | kubectl apply -n ${NAMESPACE} -f -
 ```
 
-### 5. (Optional) Deploy the multimedia downloader (caching proxy)
+### 4. (Optional) Deploy the multimedia downloader (caching proxy)
 
 The Coordinator's `replace-media-urls` step can route outbound media fetches through
 an in-cluster forward proxy (e.g. Squid) that caches origin images/video, eliminating
@@ -331,7 +320,7 @@ Coordinator needs to trust that CA.
 This repo doesn't ship a caching proxy of its own — deploy one for your cluster (e.g.
 an SSL-Bump-configured Squid), then trust its CA in the Coordinator with
 [`multimedia-downloader/patch-coordinator-ca.yaml`](multimedia-downloader/patch-coordinator-ca.yaml).
-This requires the Coordinator from step 4 to already be deployed:
+This requires the Coordinator from step 3 to already be deployed:
 
 ```bash
 kubectl patch deployment llm-d-coordinator -n ${NAMESPACE} \
@@ -342,7 +331,7 @@ kubectl rollout restart deployment/llm-d-coordinator -n ${NAMESPACE}
 Without this step, `replace-media-urls` still works — it just fetches media directly
 instead of through a cache.
 
-### 6. (Optional) Enable monitoring
+### 5. (Optional) Enable monitoring
 
 * Install the [Monitoring stack](../../docs/operations/observability/setup.md).
 * To enable Prometheus monitoring on the llm-d router, add `-f ${REPO_ROOT}/guides/recipes/router/features/monitoring.values.yaml` during the [router installation step](#1-deploy-the-llm-d-router).
@@ -353,7 +342,7 @@ instead of through a cache.
 
 Clients always send requests through the **Gateway**, never directly to the
 Coordinator's Service. The Coordinator's own `coordinator` HTTPRoute (deployed
-alongside the coordinator overlay in step 4) attaches to the `llm-d-inference-gateway`
+alongside the coordinator overlay in step 3) attaches to the `llm-d-inference-gateway`
 Gateway and forwards client traffic (no `EPP-Profile` header) to the Coordinator, which
 then orchestrates the `encode → prefill → decode` pipeline. The EPP is internal — the
 Coordinator selects which of its scheduling profiles runs by setting the `EPP-Profile`
@@ -431,7 +420,6 @@ envsubst < ${REPO_ROOT}/guides/${GUIDE_NAME}/router/httproute.yaml | kubectl del
 helm uninstall ${GUIDE_NAME} -n ${NAMESPACE}
 kustomize build ${REPO_ROOT}/guides/${GUIDE_NAME}/coordinator/ | envsubst | kubectl delete -n ${NAMESPACE} -f -
 kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/gpu/vllm/${INFRA_PROVIDER}
-kubectl delete -n ${NAMESPACE} -f ${REPO_ROOT}/guides/${GUIDE_NAME}/model-cache-pvc.yaml
 kubectl delete namespace ${NAMESPACE}
 ```
 
@@ -445,7 +433,6 @@ for ROLE in encode prefill decode; do
 done
 kustomize build ${REPO_ROOT}/guides/${GUIDE_NAME}/coordinator/ | envsubst | kubectl delete -n ${NAMESPACE} -f -
 kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/gpu/vllm/${INFRA_PROVIDER}
-kubectl delete -n ${NAMESPACE} -f ${REPO_ROOT}/guides/${GUIDE_NAME}/model-cache-pvc.yaml
 kubectl delete namespace ${NAMESPACE}
 ```
 
