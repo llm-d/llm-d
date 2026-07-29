@@ -1,6 +1,9 @@
-# KEDA + EPP normalized Pool-Level Saturation Metrics
+# [Experimental] KEDA + EPP normalized Pool-Level Saturation Metrics
 
 KEDA queries Prometheus directly for two EPP-emitted, InferencePool-scoped signals and scales the model server `Deployment` accordingly. No WVA controller, no Prometheus Adapter — just KEDA, Prometheus, and your model servers.
+
+> [!WARNING]
+> This guide is experimental and subject to change. The metrics, configurations, and APIs may evolve as the feature matures. Use in development and test environments only.
 
 This guide uses the four optimized-baseline plugins provided by llm-d (queue-scorer, kv-cache-utilization-scorer, prefix-cache-scorer, and no-hit-lru-scorer) to enable load-aware and prefix-cache-aware routing alongside pool saturation metrics.
 
@@ -39,17 +42,23 @@ export REPO_ROOT=$(realpath $(git rev-parse --show-toplevel))
 
 ## Configure
 
-### 1. Extract Prometheus CA Certificate and Create Secret
+### 1. Create TriggerAuthentication Secret
+
+KEDA needs both a bearer token and CA certificate to authenticate with Prometheus. Use the Prometheus ServiceAccount's auto-generated token secret, which contains both:
 
 ```bash
-# Extract Prometheus CA cert
-PROMETHEUS_CA_CERT=$(kubectl get secret prometheus-web-tls -n ${MONITORING_NAMESPACE} -o jsonpath='{.data.tls\.crt}' | base64 -d)
+# Copy the Prometheus ServiceAccount token secret to the workload namespace
+kubectl get secret -n ${MONITORING_NAMESPACE} \
+  $(kubectl get serviceaccount prometheus -n ${MONITORING_NAMESPACE} -o jsonpath='{.secrets[0].name}') \
+  -o yaml | sed "s/namespace: ${MONITORING_NAMESPACE}/namespace: ${NAMESPACE}/" | kubectl apply -f -
 
-# Create generic secret with the CA cert for KEDA to access Prometheus API securely
-kubectl create secret generic prometheus-auth \
-  --from-literal=ca.crt="${PROMETHEUS_CA_CERT}" \
-  --dry-run=client -o yaml | kubectl apply -f - -n ${NAMESPACE}
+# Verify the secret was created
+kubectl get secret prometheus-token-* -n ${NAMESPACE}
 ```
+
+This secret contains:
+- `token`: bearer token for Prometheus authentication
+- `ca.crt`: CA certificate for TLS verification
 
 ### 2. Apply EPP Config, KEDA ScaledObject, and TriggerAuthentication
 
@@ -59,9 +68,11 @@ kubectl apply -k ${REPO_ROOT}/guides/workload-autoscaling/optimized-baseline-aut
 
 Before applying, edit the manifests to match your deployment:
 - `epp-endpoint-picker-config.yaml`: Verify the EPP config is appropriate for your setup. Customize plugin weights if needed.
-- `scaledobject.yaml`: Update `inference_pool` label in the PromQL queries, `minReplicaCount`, `maxReplicaCount`, and thresholds for each trigger.
-- Update `<prometheus-url>` in `serverAddress` to point to your Prometheus instance.
-- `triggerauthentication.yaml`: Verify the bearer token Secret contains valid credentials for Prometheus access.
+- `scaledobject.yaml`: 
+  - Update `inference_pool` label in the pool-saturation query (currently: `"default"`)
+  - Update `model_name` label in the running-requests query (currently: `"Qwen/Qwen3-32B"`)
+  - Update `minReplicaCount`, `maxReplicaCount`, and thresholds for each trigger
+  - If your Prometheus instance is not the bundled llm-d stack, update `serverAddress` in both triggers
 
 ### Platform-specific notes
 
@@ -73,7 +84,9 @@ On OpenShift, use the overlay that patches the ScaledObject to use the OpenShift
 kubectl apply -k ${REPO_ROOT}/guides/workload-autoscaling/optimized-baseline-autoscaling/keda-epp-saturation/overlays/ocp -n ${NAMESPACE}
 ```
 
-The overlay automatically patches `scaledobject.yaml` to use `thanos-querier.openshift-monitoring.svc.cluster.local:9091` as the Prometheus endpoint, so you do not need to update `<prometheus-url>` manually.
+The overlay automatically patches `scaledobject.yaml` to use `thanos-querier.openshift-monitoring.svc.cluster.local:9091` as the Prometheus endpoint. 
+
+The Prometheus ServiceAccount token secret (copied in Configure Step 1) automatically includes the correct CA certificate (`service-ca.crt`) for validating Thanos Querier's serving certificate, so no additional configuration is needed.
 
 ## Verify
 
@@ -101,5 +114,5 @@ keda-hpa-optimized-baseline-nvidia-gpu  Deployment/optimized-baseline-nvidia-gpu
 
 ```bash
 kubectl delete -k ${REPO_ROOT}/guides/workload-autoscaling/optimized-baseline-autoscaling/keda-epp-saturation -n ${NAMESPACE}
-kubectl delete secret prometheus-auth -n ${NAMESPACE}
+kubectl delete secret prometheus-token-* -n ${NAMESPACE}
 ```

@@ -49,7 +49,9 @@ spec:
       # For other Prometheus deployments: replace with your endpoint.
       query: |
         sum(llm_d_epp_request_running{model_name="Qwen/Qwen3-32B"})
-      threshold: "<requests-per-replica-target>"
+      # Target requests per replica. Adjust based on your model size and GPU memory.
+      # Recommended: 16-32 (lower = more replicas, higher cost but lower latency; higher = fewer replicas, lower cost but higher latency).
+      threshold: "16"
       activationThreshold: "0"
       metricType: AverageValue
       authenticationRef:
