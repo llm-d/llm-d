@@ -3,11 +3,8 @@ kind: Deployment
 metadata:
   name: decode
 spec:
-  replicas: 2
   template:
     metadata:
-      labels:
-        app: decode
       annotations:
         # Enable the GKE Cloud Storage FUSE CSI driver sidecar injection
         gke-gcsfuse/volumes: "true"
@@ -17,18 +14,6 @@ spec:
     spec:
       # Assign your GKE Workload Identity Service Account
       serviceAccountName: agentic-serving-gpu-vllm-sa
-      initContainers:
-        - name: routing-proxy
-          image: ghcr.io/llm-d/llm-d-router-disagg-sidecar:main
-          args:
-            - --port=8000
-            - --vllm-port=8200
-            - --kv-connector=nixlv2
-            - --zap-log-level=4
-            - --secure-proxy=false
-          env:
-            - name: OTEL_SDK_DISABLED
-              value: "true"
       containers:
         - name: modelserver
           command: ["vllm", "serve"]
@@ -51,73 +36,17 @@ spec:
             - '{"kv_connector":"MultiConnector","kv_role":"kv_both","kv_load_failure_policy":"fail","kv_connector_extra_config":{"connectors":[{"kv_connector":"NixlConnector","kv_role":"kv_consumer","kv_connector_extra_config":{"bidirectional_kv_xfer":true}},{"kv_connector":"OffloadingConnector","kv_role":"kv_both","kv_connector_extra_config":{"cpu_bytes_to_use":214748364800,"lazy_offload":true}}]}}'
             - "--port=8200"
           env:
-            # Set for Mamba-hybrid model only; improves multi-turn prefix caching.
-            - name: VLLM_PREFIX_CACHE_RETENTION_INTERVAL
-              value: "0"
-            - name: HF_TOKEN
-              valueFrom:
-                secretKeyRef:
-                  name: llm-d-hf-token
-                  key: HF_TOKEN
-            - name: VLLM_SSM_CONV_STATE_LAYOUT
-              value: "DS"
-            - name: VLLM_NIXL_SIDE_CHANNEL_HOST
-              valueFrom:
-                fieldRef:
-                  fieldPath: status.podIP
-            - name: VLLM_HTTP_TIMEOUT_KEEP_ALIVE
-              value: "120"
             - name: HF_HOME
               value: "/huggingface"
-          resources:
-            limits:
-              cpu: "48"
-              memory: 600Gi
-              nvidia.com/gpu: "8"
-            requests:
-              cpu: "32"
-              memory: 300Gi
-              nvidia.com/gpu: "8"
           volumeMounts:
-            - mountPath: /dev/shm
-              name: shm
-            - mountPath: /.cache
-              name: torch-compile-cache
-            - mountPath: /.config
-              name: vllm-config
-            - mountPath: /.triton
-              name: triton-cache
             - mountPath: /models    # Map the storage bucket volume inside the container
               name: gcs-model-volume
               readOnly: true
-          startupProbe:
-            initialDelaySeconds: 30
-            periodSeconds: 30
-            timeoutSeconds: 5
-            failureThreshold: 240
-          livenessProbe:
-            periodSeconds: 10
-            timeoutSeconds: 5
-            failureThreshold: 3
-          readinessProbe:
-            periodSeconds: 5
-            timeoutSeconds: 2
-            failureThreshold: 3
       volumes:
-        - name: shm
-          emptyDir:
-            medium: Memory
-            sizeLimit: 100Gi
-        - name: torch-compile-cache
-          emptyDir: {}
-        - name: vllm-config
-          emptyDir: {}
-        - name: triton-cache
-          emptyDir: {}
         # Define the GCS FUSE volume specifications
         - name: gcs-model-volume
           csi:
             driver: gcsfuse.csi.storage.gke.io
             volumeAttributes:
               bucketName: llm-models  # Specify the bucket name
-              mountOptions: "implicit-dirs,file-cache:enable-parallel-downloads:true,file-cache:parallel-downloads-per-file:100,file-cache:max-parallel-downloads:-1,    file-cache:download-chunk-size-mb:10,file-cache:max-size-mb:-1"
+              mountOptions: "implicit-dirs,file-cache:enable-parallel-downloads:true,file-cache:parallel-downloads-per-file:100,file-cache:max-parallel-downloads:-1,file-cache:download-chunk-size-mb:10,file-cache:max-size-mb:-1"
