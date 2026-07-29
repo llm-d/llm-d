@@ -77,107 +77,22 @@ matters.
 
 4. **KEDA** ≥ 2.15 (we ran 2.20.1): `kubectl apply --server-side -f https://github.com/kedacore/keda/releases/download/v2.20.1/keda-2.20.1.yaml`.
 
-## How it works — the control law
+## How it works
 
-Five steps, evaluated continuously. Steps 1–2 are the parts you deploy
-(recording rules + formula); 3–4 are standard HPA/Kubernetes mechanics that
-shape the response; 5 is why it converges.
+The recording rules reduce the EPP's latency histograms to a single
+**saturation signal** `s` — the pool's P90 TTFT/TPOT as a fraction of your SLO
+targets (worst of the two; clamped and smoothed against spikes). The KEDA
+formula turns `s` into a desired replica count: **scale up** when `s` crosses
+the upper threshold, **scale down** when it falls below the lower one, and hold
+steady in the **dead band** between them so the pool doesn't flap. While new
+pods are still warming, an **in-flight credit** discounts the ask so one load
+step doesn't over-scale to the cap, and the HPA behavior block shapes the
+response: burst up fast, drain down slowly. More ready replicas lower per-pod
+load, `s` falls back into the band, and the loop settles.
 
-### 1. Signal chain (recording rules, every 15 s)
-
-The saturation signal is the pool's P90 latency measured against your SLOs —
-the worst of the two targets:
-
-```math
-s_{raw} = \max\!\left(\frac{\text{P90 TTFT}}{S_{ttft}},\ \frac{\text{P90 TPOT}}{S_{tpot}}\right), \qquad \text{NaN/no traffic} \mapsto 0
-```
-
-Each P90 is `histogram_quantile(0.9, ...)` over 1-minute bucket rates,
-preferring the predicted histogram and falling back to the actual one (the
-`>= 0` filter drops a present-but-dead predicted series, whose quantile is
-NaN). `s_raw < 1` means the tail is within SLO; `> 1` means the SLO is
-breached; an idle pool reads 0.
-
-Then clamp and smooth:
-
-```math
-s = \text{avg\_over\_time}\big(\min(s_{raw},\ C)\big)[45s], \qquad C = 2.0
-```
-
-Don't skip the clamp: at the queueing knee, predicted latency
-can spike to 10–90× SLO in one sample. Anything above the cap already means
-"add capacity at the maximum rate" — letting the raw magnitude through only
-poisons the moving average so it stays inflated long after the pool recovers.
-
-### 2. Desired replicas (the KEDA formula)
-
-With `s` = smoothed saturation, `n` = provisioned replicas, `r` = ready
-replicas, and thresholds `θ_up = 0.55`, `θ_dn = 0.40` (in the ScaledObject these
-are the `saturation`, `replicas`, and `readyReplicas` triggers):
-
-```math
-d = \begin{cases} n + \left\lceil n \left( \frac{s \cdot c}{\theta_{up}} - 1 \right) \right\rceil & s > \theta_{up} \quad\text{(scale up, credited)} \\ n - \left\lfloor n \left( 1 - \frac{s}{\theta_{dn}} \right) \right\rfloor & s < \theta_{dn} \quad\text{(scale down, uncredited)} \\ n & \text{otherwise} \quad\text{(hysteresis band)} \end{cases}
-```
-
-where the **in-flight credit** `c = r/n` (when `0 < r < n`, else 1) is applied
-on the scale-up branch only. Three deliberate asymmetries, each worth its
-weight:
-
-- **Hysteresis band (0.40–0.55):** the pool holds steady between the
-  boundaries instead of flapping around a single set-point.
-- **Credit:** the signal is measured on ready pods only. While a scale-up is
-  in flight the ready pods over-report the post-warmup load; scaling the
-  demand by `r/n` makes the ask cover only the deficit beyond pods already
-  warming, instead of racing to `maxReplicas` every cycle.
-- **Scale-down uses the uncredited signal:** the credit discounts demand, so
-  during warmup it could push an over-threshold signal below the scale-down
-  boundary and shed replicas mid-scale-up. A pool may only shed when the
-  measured signal itself has headroom.
-
-**Why the thresholds sit low:** under healthy load the P90-of-predicted-latency
-signal sits around 0.2–0.45 of the SLO and then goes *vertical* at the
-queueing knee. A threshold near 1.0 fires only after the SLO budget is nearly
-burned; 0.55 fires on the pre-knee rise. If your SLO is close to your base
-latency, raise the band.
-
-In the ScaledObject, `d` is the `scalingModifiers` formula output, and the
-composite target is `1` (AverageValue) — a pass-through: the formula output
-*is* the desired replica count.
-
-### 3. HPA layer (rate limiting and stabilization)
-
-The KEDA-generated HPA clips `d` to `[minReplicaCount, maxReplicaCount]` and
-applies the `behavior` block: scale-up bursts at `max(100 %, 4 pods)` per
-60 s with a 30 s stabilization window (min over window); scale-down walks 1
-pod per 120 s with a 180 s window (max over window). Fast up, deliberate
-down.
-
-### 4. Ready replicas (pod warmup)
-
-Additions take a warmup time $`T_w`$ to become ready (model load +
-torch-compile); removals are immediate:
-
-```math
-R(t) = \min_{\tau \in [t - T_w,\ t]} N_{spec}(\tau)
-```
-
-$`T_w`$ is why the credit in step 2 exists, and it is the knob most worth
-engineering: pod warmup is roughly *half* the scale-up transient, so cutting it
-directly shrinks the violations paid at every scale-up. A torch-compile cache
-volume + a fast startupProbe took our pod-ready time from ~2 m 15 s to ~100 s;
-that patch ships as
-[`slo-aware/decode-warmup-patch.yaml`](slo-aware/decode-warmup-patch.yaml)
-(recommended — apply it to the decode Deployment, see Deploy below). This is the
-patch used to produce the benchmark results below.
-
-### 5. Closing the loop
-
-More ready replicas → lower per-pod load → the predicted P90 falls → `s`
-re-enters the band and the ask stops. Under-provisioning raises `s` and the
-loop adds capacity; over-provisioning drops `s` below 0.40 and the slow
-drain begins. The system settles wherever `s` lands inside the band —
-empirically ~1.4–1.5 rps per H100 TP=2 replica for a 4000-token-prefill
-workload at these SLOs.
+The full control law — the signal chain, the piecewise formula, and why each
+asymmetry exists — is derived in
+[SLO-Aware Autoscaling with KEDA — the control law](../../docs/architecture/advanced/autoscaling/slo-aware-keda.md).
 
 ## Deploy
 
@@ -225,15 +140,20 @@ kubectl -n <serving-namespace> patch deploy <decode-deployment> \
 
 ## Tunables
 
-| Parameter | Where | Benchmarked value | Meaning |
+Start from the benchmarked values and adjust by symptom:
+
+| Symptom | Knob (where) | Benchmarked value | Direction |
 |---|---|---|---|
-| $`S_{ttft}, S_{tpot}`$ | recording rules | 3000 ms / 100 ms | the SLOs; the signal is latency ÷ SLO |
-| latency quantile | recording rules | P90 (`histogram_quantile(0.9, …)`) | which tail of the TTFT/TPOT distribution drives the signal |
-| $`C`$ (clamp) | recording rules | 2.0 | max signal per sample; must exceed θ_up |
-| smoothing window | recording rules | 45 s | absorbs single-sample noise |
-| $`\theta_{up}, \theta_{dn}`$ | formula | 0.55 / 0.40 | scale-up trigger / scale-down boundary |
-| min/max replicas | ScaledObject | 3 / 8 | pool bounds |
-| HPA behavior | ScaledObject | up max(100 %, 4)/60 s; down 1/120 s | burst up, drain slow |
+| Wrong latency targets for your workload | $`S_{ttft}, S_{tpot}`$ SLO targets (recording rules) | 3000 ms / 100 ms | Set to your SLOs — the signal is latency ÷ SLO, so everything else scales with these |
+| SLO is on a different tail (e.g. median vs P99) than the signal | latency quantile (recording rules) | P90 (`histogram_quantile(0.9, …)`) | Match the quantile in your SLO; higher = more sensitive to outliers |
+| Pool stays scaled up long after a brief spike passes | $`C`$ clamp (recording rules) | 2.0 | Lower it (must stay above θ_up) so one spike can't inflate the moving average |
+| Replica count jitters on noisy samples / reacts too slowly to real load steps | smoothing window (recording rules) | 45 s | Lengthen to calm jitter; shorten to react faster |
+| Scale-up fires only after the SLO is already breached | $`\theta_{up}`$ scale-up threshold (formula) | 0.55 | Lower it to fire earlier on the pre-knee rise |
+| Pool over-provisions under healthy load (SLO close to base latency) | $`\theta_{up}, \theta_{dn}`$ band (formula) | 0.55 / 0.40 | Raise both — healthy saturation sits higher when there's little headroom |
+| Pool flaps between scale-up and scale-down | $`\theta_{up} - \theta_{dn}`$ gap (formula) | 0.15 | Widen the dead band |
+| Floor too low for your traffic base / cap hit at peak | min/max replicas (ScaledObject) | 3 / 8 | Raise to fit your traffic floor and budget ceiling |
+| Big load steps outrun the scale-up / drain sheds so fast it re-triggers | HPA behavior (ScaledObject) | up max(100 %, 4)/60 s; down 1/120 s | Raise the up burst; slow the down rate |
+| SLO violations concentrated during pod warmup | pod-ready time (Deployment) | ~100 s with [`decode-warmup-patch.yaml`](slo-aware/decode-warmup-patch.yaml) | Shorten warmup — highest-leverage fix; see **Deploy** above |
 
 ## What it looks like
 
@@ -257,7 +177,7 @@ plotted caught one such crossing. Full methodology and breakdown:
 
 | File | What |
 |---|---|
-| `slo-aware/` | the autoscaler: kube-state-metrics, recording rules (signal, step 1), ScaledObject (control law + HPA behavior, steps 2–3), and the recommended `decode-warmup-patch.yaml`. KEDA itself installs from its upstream release (see step 4). |
+| `slo-aware/` | the autoscaler: kube-state-metrics, recording rules (the saturation signal), ScaledObject (control law + HPA behavior), and the recommended `decode-warmup-patch.yaml`. KEDA itself installs from its upstream release (see Prerequisites). |
 | `slo-aware/epp-plugins-configmap.yaml` | the EPP plugin config we ran, incl. `predicted-latency-producer` |
 | `slo-aware/benchmark-templates/` | reusable benchmark harness: methodology (`BENCHMARK.md`), [llm-d-benchmark](https://github.com/llm-d/llm-d-benchmark) workload profiles for the burn-in and scored episodes, and the plot+score script |
 | `slo-aware/benchmark-results/` | our run's output: episode plots and the scored numbers |
