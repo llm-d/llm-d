@@ -1,0 +1,100 @@
+# SECURITY NOTE: EPP-Profile is a plain client-controllable HTTP header, not a trust
+# boundary. Any client that can reach the Gateway can forge EPP-Profile on its own
+# request and match one of the rules below directly, bypassing the Coordinator's
+# pipeline (conditional-decode, media handling, orchestration) entirely -- there is
+# no portable Gateway API mechanism to strip/verify it before routing decisions are
+# made (route filters like RequestHeaderModifier only apply after a rule has already
+# matched, so they can't prevent this). Acceptable for this guide's experimental,
+# small-scale scope; do not expose this Gateway to untrusted clients without adding
+# network-level isolation (mTLS peer identity, NetworkPolicy) or a provider-specific
+# ingress-level header strip (e.g. an Istio EnvoyFilter) first.
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: ${GUIDE_NAME}
+spec:
+  parentRefs:
+  - group: gateway.networking.k8s.io
+    kind: Gateway
+    name: llm-d-inference-gateway
+  rules:
+  # Exact path + EPP-Profile: encode -- mirrors coordinator/httproute.yaml's exact-path
+  # matches on the SAME literal paths (see the comment there for why path specificity
+  # must match for the header match to break the tie in this rule's favor).
+  - backendRefs:
+    - group: inference.networking.k8s.io
+      kind: InferencePool
+      name: ${GUIDE_NAME}-encode
+    matches:
+    - path:
+        type: Exact
+        value: /v1/completions
+      headers:
+      - type: Exact
+        name: EPP-Profile
+        value: encode
+    - path:
+        type: Exact
+        value: /v1/chat/completions
+      headers:
+      - type: Exact
+        name: EPP-Profile
+        value: encode
+    timeouts:
+      request: 300s
+  # Exact path + EPP-Profile: prefill
+  - backendRefs:
+    - group: inference.networking.k8s.io
+      kind: InferencePool
+      name: ${GUIDE_NAME}-prefill
+    matches:
+    - path:
+        type: Exact
+        value: /v1/completions
+      headers:
+      - type: Exact
+        name: EPP-Profile
+        value: prefill
+    - path:
+        type: Exact
+        value: /v1/chat/completions
+      headers:
+      - type: Exact
+        name: EPP-Profile
+        value: prefill
+    timeouts:
+      request: 300s
+  # Exact path + EPP-Profile: decode, plus the trailing headerless PathPrefix `/`
+  # catch-all: everything else without EPP-Profile (e.g. /v1/models, /health) also
+  # lands on decode, same fallback behavior as the single-EPP variant.
+  - backendRefs:
+    - group: inference.networking.k8s.io
+      kind: InferencePool
+      name: ${GUIDE_NAME}-decode
+    matches:
+    - path:
+        type: Exact
+        value: /v1/completions
+      headers:
+      - type: Exact
+        name: EPP-Profile
+        value: decode
+    - path:
+        type: Exact
+        value: /v1/chat/completions
+      headers:
+      - type: Exact
+        name: EPP-Profile
+        value: decode
+    - path:
+        type: Exact
+        value: /inference/v1/generate
+      headers:
+      - type: Exact
+        name: EPP-Profile
+        value: decode
+    - path:
+        type: PathPrefix
+        value: /
+    timeouts:
+      request: 300s

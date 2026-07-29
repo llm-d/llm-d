@@ -1,0 +1,31 @@
+## Coordinator Disaggregation guide overrides for a role-scoped EPP / InferencePool,
+## part of the "3 separate EPPs" alternative to the single combined EPP (see
+## router/coord-disaggregation.values.yaml).
+## Layer on top of: recipes/router/base.values.yaml
+##
+## Shared by all three roles -- only `router.modelServers.matchLabels."llm-d.ai/role"`
+## differs between them, so that one label is set with `--set` per install (see the
+## `for ROLE in ...` loop in the README) instead of forking this file three times.
+##
+## Each EPP only ever sees pods for the role passed via --set, so the chart's default
+## plugins config (single-profile-handler, one "default" scheduling profile) is
+## enough -- no header-based profile routing needed.
+
+# See router/httproute-3-epp.yaml for why this guide hand-authors the HTTPRoute
+# instead of using the chart's own (same reason as the single-EPP variant: it
+# needs Exact path matches to tie in specificity with the Coordinator's own
+# Exact-path HTTPRoute).
+httpRoute:
+  create: false
+
+router:
+  extraServicePorts:
+    - name: http
+      port: 80
+      protocol: TCP
+      targetPort: 8081
+
+  modelServers:
+    matchLabels:
+      llm-d.ai/guide: "coord-disaggregation"
+      # llm-d.ai/role is set via --set per install, one of: encode, prefill, decode

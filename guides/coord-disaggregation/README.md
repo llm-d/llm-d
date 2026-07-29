@@ -53,26 +53,39 @@ disaggregated serving (NIXL, `kv-transfer-config` / `ec-transfer-config`) — on
 *orchestration* of when each phase runs moves out of the per-pod sidecar and into the
 Coordinator.
 
-The result of this guide:
+The result of this guide, in either of two EPP topologies (pick one — see
+[Installation Instructions](#installation-instructions)):
 
-* **1 Coordinator**, terminating client traffic and driving the pipeline.
-* **1 Endpoint Picker (EPP)** covering all three roles, and **1 InferencePool**
-  spanning them. The EPP runs one scheduling profile per call — `encode`, `prefill`,
-  or `decode` — selected by the Coordinator's `EPP-Profile` header via the
-  `header-profile-handler` plugin
-  ([llm-d-router#2134](https://github.com/llm-d/llm-d-router/pull/2134)); each profile
-  filters the shared pool down to its own role with a by-label filter.
+* **1 Coordinator**, terminating client traffic and driving the pipeline. Unchanged
+  either way — the Coordinator only ever talks to the Gateway and tags its own
+  outbound calls with an `EPP-Profile` header; it has no idea how many EPPs sit
+  behind that Gateway.
+* Either:
+  * **1 Endpoint Picker (EPP)** covering all three roles, and **1 InferencePool**
+    spanning them. The EPP runs one scheduling profile per call — `encode`, `prefill`,
+    or `decode` — selected by the Coordinator's `EPP-Profile` header via the
+    `header-profile-handler` plugin
+    ([llm-d-router#2134](https://github.com/llm-d/llm-d-router/pull/2134)); each profile
+    filters the shared pool down to its own role with a by-label filter. **or**
+  * **3 EPPs**, one per role, each with its own **InferencePool** scoped to that
+    role's pods via `modelServers.matchLabels`. Each EPP uses the router chart's
+    *default* plugin config (`single-profile-handler`, one `default` scheduling
+    profile) — no custom image or plugin config needed, since a role-scoped EPP
+    never has to choose between profiles. The Gateway's `HTTPRoute` (not the EPP)
+    is what dispatches each `EPP-Profile` value to the right EPP's InferencePool.
 * **1 vLLM replica per role** — three model servers in total, distinguished only by
-  their `llm-d.ai/role` label.
+  their `llm-d.ai/role` label. Same either way.
 
 > [!IMPORTANT]
-> The single-EPP setup below depends on
+> The **single-EPP** topology depends on
 > [llm-d-router#2134](https://github.com/llm-d/llm-d-router/pull/2134)
 > (`header-profile-handler` plus the `encode-filter`/`prefill-filter`/`decode-filter`
 > plugins), which is merged but may not be in an official release image yet. Until it
 > is, [`router/coord-disaggregation.values.yaml`](router/coord-disaggregation.values.yaml)
 > pins `router.epp.image` to `ghcr.io/roytman/llm-d-router-endpoint-picker:1-epp`, a
 > build that contains it. Swap it back to the chart default once an official image does.
+> The **3-EPP** topology doesn't need this — see
+> [Installation Instructions](#installation-instructions).
 
 ## Default Configuration
 
@@ -161,8 +174,9 @@ The result of this guide:
 
 ### 1. Deploy the llm-d Router
 
-One llm-d Router release, EPP, and InferencePool cover all three roles — see the
-[Overview](#overview) for why this is a single deployment rather than one per role.
+Pick **one** of the two topologies from the [Overview](#overview) — single EPP
+(default below) or 3 separate EPPs (in the collapsed section further down). Don't do
+both; they install into the same namespace and would conflict.
 
 The Coordinator's own ingress (`coordinator/httproute.yaml`) and its outbound
 `gateway.address` ([`coordinator/configmap.yaml`](coordinator/configmap.yaml)) both
@@ -171,6 +185,11 @@ this guide, unlike other guides in this repo. Deploy one first if your cluster d
 already have one:
 
 1. *Deploy a Kubernetes Gateway*. Follow [the gateway guides](../../docs/infrastructure/gateway) for step by step deployment for a Gateway named `llm-d-inference-gateway`. You only need to create one Gateway for your cluster.
+
+#### Single EPP (default)
+
+One llm-d Router release, EPP, and InferencePool cover all three roles.
+
 2. *Deploy the llm-d Router*:
 
 ```bash
@@ -215,6 +234,49 @@ helm install ${GUIDE_NAME} \
 ```bash
 envsubst < ${REPO_ROOT}/guides/${GUIDE_NAME}/router/httproute.yaml | kubectl apply -n ${NAMESPACE} -f -
 ```
+
+<details>
+<summary><h4>3 separate EPPs (one per role)</h4></summary>
+
+Three independent llm-d Router releases — one per role — each with its own EPP and
+InferencePool scoped to that role's pods. No custom EPP image or plugin config: each
+EPP only ever sees one role, so the chart's default `single-profile-handler` is enough
+(see the [Overview](#overview)). All three releases share the same values file
+([`router/coord-disaggregation-per-role.values.yaml`](router/coord-disaggregation-per-role.values.yaml))
+— only the `llm-d.ai/role` model-server label differs between them, so it's passed with
+`--set` per iteration instead of forking the file three times.
+
+2. *Deploy the llm-d Routers*:
+
+```bash
+export PROVIDER_NAME=gke # other: na, agentgateway, or istio
+for ROLE in encode prefill decode; do
+  helm install ${GUIDE_NAME}-${ROLE} \
+      ${ROUTER_GATEWAY_CHART} \
+      -f ${REPO_ROOT}/guides/recipes/router/base.values.yaml \
+      -f ${REPO_ROOT}/guides/recipes/router/features/httproute-flags.yaml \
+      -f ${REPO_ROOT}/guides/${GUIDE_NAME}/router/coord-disaggregation-per-role.values.yaml \
+      --set provider.name=${PROVIDER_NAME} \
+      --set router.modelServers.matchLabels."llm-d\.ai/role"=${ROLE} \
+      -n ${NAMESPACE} --version ${ROUTER_CHART_VERSION}
+done
+```
+
+3. *Deploy the shared HTTPRoute*. Same reasoning as the single-EPP variant's
+   `httpRoute.create: false` (each release disables its own auto-created HTTPRoute for
+   the same specificity-tie reason — see the comment in
+   [`router/httproute-3-epp.yaml`](router/httproute-3-epp.yaml)), but instead of one
+   shared backend, [`router/httproute-3-epp.yaml`](router/httproute-3-epp.yaml) routes
+   each `EPP-Profile` value to its own role's InferencePool (`${GUIDE_NAME}-encode`,
+   `${GUIDE_NAME}-prefill`, `${GUIDE_NAME}-decode` — the InferencePool name matches the
+   Helm release name). The same [!WARNING] about `EPP-Profile` not being a trust
+   boundary applies here too.
+
+```bash
+envsubst < ${REPO_ROOT}/guides/${GUIDE_NAME}/router/httproute-3-epp.yaml | kubectl apply -n ${NAMESPACE} -f -
+```
+
+</details>
 
 ### 2. Provision the shared model cache
 
@@ -362,7 +424,7 @@ curl -X POST http://${IP}:${PORT}/v1/chat/completions \
 
 ## Cleanup
 
-To remove the deployed components:
+To remove the deployed components (single-EPP topology):
 
 ```bash
 envsubst < ${REPO_ROOT}/guides/${GUIDE_NAME}/router/httproute.yaml | kubectl delete -n ${NAMESPACE} -f -
@@ -372,6 +434,22 @@ kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/
 kubectl delete -n ${NAMESPACE} -f ${REPO_ROOT}/guides/${GUIDE_NAME}/model-cache-pvc.yaml
 kubectl delete namespace ${NAMESPACE}
 ```
+
+<details>
+<summary><h4>3-EPP topology cleanup</h4></summary>
+
+```bash
+envsubst < ${REPO_ROOT}/guides/${GUIDE_NAME}/router/httproute-3-epp.yaml | kubectl delete -n ${NAMESPACE} -f -
+for ROLE in encode prefill decode; do
+  helm uninstall ${GUIDE_NAME}-${ROLE} -n ${NAMESPACE}
+done
+kustomize build ${REPO_ROOT}/guides/${GUIDE_NAME}/coordinator/ | envsubst | kubectl delete -n ${NAMESPACE} -f -
+kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/gpu/vllm/${INFRA_PROVIDER}
+kubectl delete -n ${NAMESPACE} -f ${REPO_ROOT}/guides/${GUIDE_NAME}/model-cache-pvc.yaml
+kubectl delete namespace ${NAMESPACE}
+```
+
+</details>
 
 If nothing else in your cluster still uses it, also remove the `llm-d-inference-gateway` Gateway by following [the gateway cleanup guide](../../docs/infrastructure/gateway/gke.md#cleanup).
 
@@ -388,9 +466,13 @@ for the full sequence.
 
 The Coordinator generalizes that fixed protocol into a **pipeline of named steps**
 declared in its `ConfigMap`. Each role (encode, prefill, decode) is still just an
-independent vLLM replica, now behind a single shared EPP/InferencePool rather than one
-per role — the same NIXL `kv-transfer-config` / `ec-transfer-config` connectors do the
-actual KV and encoder-cache transfer. What changes is *where the dispatch logic
+independent vLLM replica, now behind either a single shared EPP/InferencePool or three
+independent ones (see [Installation Instructions](#installation-instructions)) rather
+than one sidecar per decode pod — the same NIXL `kv-transfer-config` /
+`ec-transfer-config` connectors do the actual KV and encoder-cache transfer either way.
+The Coordinator itself doesn't know or care which topology is behind the Gateway; it
+just tags each outbound call with `EPP-Profile` and lets the Gateway's `HTTPRoute`
+sort out where that lands. What changes is *where the dispatch logic
 lives*: instead of being hardcoded in a sidecar binary running in every decode pod,
 it's centralized in one Coordinator service and expressed as data (the `steps:` list
 and the EPP's `schedulingProfiles`), which is what makes it possible to add, remove,
