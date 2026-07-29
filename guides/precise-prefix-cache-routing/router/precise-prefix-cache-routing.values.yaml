@@ -61,6 +61,8 @@ router:
                 podDiscoveryConfig:
                   socketPort: 5556
           - type: inflight-load-producer
+            parameters:
+              prefixMatchInfoProducerName: precise-prefix-cache-producer
           - type: prefix-cache-affinity-filter
             parameters:
               # Exact resident-block fractions from KV-cache events, not the
