@@ -187,46 +187,47 @@ applies.
 
 ## Scenario B - hot set (the payoff case)
 
-A small hot set takes all traffic: 8 shared prefixes x 48K tokens,
-decode-heavy requests (512 output tokens), rates ramped well past what the
-prefix owners alone can absorb. Affinity concentrates each hot prefix's
-work on its owner pod; load-aware placement plus the pull serves the same
-hot content from the whole fleet - each pod pulls the prefix once, then
-everything is a local hit. This is the regime the feature exists for:
-horizontal scaling of hot content without recomputing it anywhere.
+A small hot set takes all traffic, decode-heavy requests (512 output
+tokens), rates ramped past what the prefix owners alone can absorb.
+Affinity concentrates each hot prefix's work on its owner pod; load-aware
+placement plus the pull serves the same hot content from the whole fleet.
 
-Two capacity facts shape the design; check both on your own rig before
-copying it:
+**Size the hot set against one pod's GPU KV capacity before running this -
+that ratio decides the result, and nothing else about the scenario
+matters if it is wrong.** Measured on 16x gpt-oss-120b (~1.22M tokens of
+GPU KV per pod), walking 48K-token prefixes:
 
-* Cache capacity does not differentiate the arms at this model size: a
-  hot set small enough for affinity to concentrate (prefix count well
-  below pod count) always fits in one pod's GPU KV (8 x 48K = 384K tokens
-  vs ~1.22M per pod), so every arm serves GPU hits once warm. The
-  differentiator is decode-load concentration on the owners, which is why
-  outputs are long and rates high.
-* At short outputs and moderate rates (up to 24 req/s measured), the
-  owners are nowhere near saturation and the arms are equivalent:
-  affinity holds ~0.33s TTFT p50 flat with zero failures. A hot-set
-  scenario that shows no difference at low load is measuring headroom,
-  not a pathology.
-
-Measured (16x gpt-oss-120b, H200; 8 x 48K prefixes, 512-token outputs,
-achieved req/s, latency p50, failures per stage):
-
-| offered | affinity (8 owner pods) | load + P2P (16 pods) |
+| hot set | vs one pod's cache | what happens |
 |---|---|---|
-| 12 req/s | 9.9 / 11.8s / 0 | 11.3 / 5.6s / 0 |
-| 24 req/s | 14.7 / 27.0s / 0 | 20.9 / 9.6s / 0 |
-| 36 req/s | 15.3 / 53.8s / 0 | 29.1 / 15.9s / 0 |
-| 48 req/s | 13.1 / 75.3s / 672 | 34.3 / 26.0s / 0 |
+| 8 prefixes (384K tok) | 0.31x | fits in every pod - after warmup every arm serves GPU hits, nothing is recomputed and the pull never fires. Measures headroom, not a pathology. |
+| 32 prefixes (1.54M tok) | 1.26x | one stage of churn while placement redistributes, then replication absorbs it and the arms converge |
+| **64 prefixes (3.07M tok)** | **2.5x** | **misses are permanent; this is the regime the scenario is about** |
 
-The owner pods cap near 15 req/s aggregate and shed 672 requests to the
-120s client timeout at offered 48; load+P2P takes 2.6x the throughput at
-roughly one-third the latency with zero failures. Pull evidence: ~5.9M
-external prefix-hit tokens - each pod pulls each hot prefix once, then
-every request is a local hit. TTFT stays under 1s p50 in both arms; the
-collapse is pure decode concentration on the owners, which is the
-pathology the pull relieves.
+Measured at 64 x 48K (achieved req/s / TTFT p50 / request latency p50):
+
+| offered | `affinity` | `load` - no P2P | `load + P2P` |
+|---|---|---|---|
+| 12 req/s | 11.94 / 188 ms / 0.30 s | 9.31 / 7.9 s / 16.6 s | 11.84 / 310 ms / 0.42 s |
+| 24 req/s | 23.04 / 183 ms / 0.31 s | 11.47 / 24.3 s / 34.5 s | 22.83 / 271 ms / 0.42 s |
+| 36 req/s | 34.03 / 190 ms / 0.36 s | 11.77 / 47.0 s / 61.6 s | 34.34 / 249 ms / 0.45 s |
+| 48 req/s | 46.03 / 196 ms / 0.38 s | 13.85 / 58.2 s / 72.5 s, **274 failures** | 44.93 / 254 ms / 0.48 s, **0 failures** |
+
+Pull evidence: 120 P2P sessions, 204M external-hit tokens, 7.5 TB served
+from the offload tier, GPU hit rate 43.2% (the set genuinely does not fit).
+
+**The pull is the difference between a serving fleet and a shedding one.**
+Same placement, pull as the only variable, at offered 48: 13.85 -> 44.93
+req/s (+224%), TTFT p50 58.2 s -> 254 ms, and 274 client-timeout failures
+-> zero. The recompute floor caps near 12-14 req/s at every rate above 24 -
+each displaced request re-prefills 48K tokens - while the pull arm tracks
+offered rate to 48 within 2% of affinity's throughput.
+
+Affinity is not the arm that suffers here: with 64 prefixes over 16 pods
+ownership spreads ~4 per pod, no owner is overloaded, and affinity holds
+46 req/s at 196 ms. Owner concentration is a *separate* pathology that
+needs a prefix count well below the pod count; at that count the set also
+fits everywhere, so the two effects are hard to exhibit in one workload.
+Choose which one you are testing and size accordingly.
 
 ## Scenario D - document Q&A (the headline; shipped as the profile above)
 

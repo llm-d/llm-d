@@ -99,15 +99,25 @@ affinity never pays; zero failures and zero restarts in all arms.
 
 ## Hot set (the payoff case)
 
-8 shared prefixes x 48K tokens, 512-token outputs, rates past what the 8
-owner pods can absorb. Achieved rate (req/s) / latency p50 (s) / failures:
+48K-token prefixes, 512-token outputs, rates past what the fleet can
+absorb on recompute. The hot set must exceed one pod's GPU KV (~1.22M
+tokens here) for this scenario to measure anything: at 8 prefixes (0.31x)
+the set fits in every pod and no arm ever recomputes. Measured at 64
+prefixes (3.07M tokens, 2.5x a pod's cache). Achieved rate (req/s) / TTFT
+p50 / request latency p50:
 
-| offered | Affinity (8 owners) | Load + P2P (16 pods) |
-|---|---|---|
-| 24 req/s | 14.7 / 27.0 / 0 | 20.9 / 9.6 / 0 |
-| 36 req/s | 15.3 / 53.8 / 0 | 29.1 / 15.9 / 0 |
-| 48 req/s | 13.1 / 75.3 / 672 | 34.3 / 26.0 / 0 |
+| offered | Affinity | Load, no P2P | Load + P2P |
+|---|---|---|---|
+| 12 req/s | 11.94 / 188 ms / 0.30 s | 9.31 / 7.9 s / 16.6 s | 11.84 / 310 ms / 0.42 s |
+| 24 req/s | 23.04 / 183 ms / 0.31 s | 11.47 / 24.3 s / 34.5 s | 22.83 / 271 ms / 0.42 s |
+| 36 req/s | 34.03 / 190 ms / 0.36 s | 11.77 / 47.0 s / 61.6 s | 34.34 / 249 ms / 0.45 s |
+| 48 req/s | 46.03 / 196 ms / 0.38 s | 13.85 / 58.2 s / 72.5 s, 274 failures | 44.93 / 254 ms / 0.48 s, 0 failures |
 
-The owners cap near 15 req/s and shed 672 requests to the client timeout;
-load-aware placement plus the pull serves the same hot content from the
-whole fleet at 2.6x the throughput with zero failures.
+Same placement, the pull as the only variable: at offered 48 the recompute
+floor caps at 13.85 req/s and sheds 274 requests to the client timeout,
+while the pull arm holds 44.93 req/s at 254 ms with none - +224%
+throughput on 120 P2P sessions and 7.5 TB served from the offload tier.
+Affinity is not the arm that suffers at this prefix count (64 prefixes
+over 16 pods spreads ownership ~4 per pod); owner concentration needs a
+prefix count below the pod count, which is also a set small enough to fit
+everywhere, so the two pathologies do not co-exist in one workload.
