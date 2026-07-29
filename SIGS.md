@@ -169,7 +169,7 @@ SIGs operate within the broader llm-d project governance framework defined in [P
 
 ### SIG Autoscaling
 
-> **👥 Leadership:** [Tamar Eilam](https://github.com/eilamt), [Abhishek Malvankar](https://github.com/asm582)
+> **👥 Leadership:** [Abhishek Malvankar](https://github.com/asm582), [Lionel Villard](https://github.com/lionelvillard)
 >
 > [**⭐️ North Star Design Document** ↗️](https://docs.google.com/document/d/1inTneLEZTv3rDEBB9KLOB9K6oMq8c3jkogARJqdt_58) *(Google Docs)*
 
@@ -180,14 +180,17 @@ SIGs operate within the broader llm-d project governance framework defined in [P
 - Traffic-aware autoscaling algorithms
 - Hardware-specific scaling policies
 - Workload-based capacity planning
-- Integration with Kubernetes HPA/VPA
+- Integration with Kubernetes HPA/VPA/KEDA
 - Cost-optimized scaling strategies
 
 **💬 Communication**:
 
 - **Slack Channel**: [#sig-autoscaling](https://llm-d.slack.com/archives/C08T899332A)
 - **Meeting Recordings and Docs**: [Public Google Drive](https://drive.google.com/drive/folders/1iDlTgpFPOrSQn7dWR3uCQLtqhz86HTAi)
-- **GitHub Issues**: [github.com/llm-d-incubation/workload-variant-autoscaler](https://github.com/llm-d-incubation/workload-variant-autoscaler/issues)
+- **GitHub Issues**: [github.com/llm-d/llm-d-workload-variant-autoscaler](https://github.com/llm-d/llm-d-workload-variant-autoscaler/issues)
+
+**👥 Emeritus Leadership:**
+- [Tamar Eilam](https://github.com/eilamt)
 
 ### SIG Observability
 
@@ -233,7 +236,7 @@ SIGs operate within the broader llm-d project governance framework defined in [P
 **Charter**: Develop and maintain a pluggable framework for request/response payload processing that enables intelligent model selection, seamless integration with both in-cluster and out-of-cluster models (external models), and extensible request/response transformations.
 
 **Key Areas**:
-  
+
   - Unified serving of in-cluster and out-of-cluster models through a single inference gateway
   - Intelligent model selection via pluggable Filter/Score/Picker pipeline based on runtime signals
   - Custom payload processing including request/response mutations, field extraction, and header transformations
