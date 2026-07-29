@@ -349,22 +349,16 @@ kubectl exec -n ${NAMESPACE} deploy/p2p-kv-cache-sharing-decode -c modelserver -
 #### Engine image: upstream nightly pins
 
 The `OffloadingConnector` P2P secondary tier is upstream in vLLM
-([vllm#48021](https://github.com/vllm-project/vllm/pull/48021)), first
-published in `nightly-49f31d7cee425a6d38f8c5bc76877986daf832ed`; no source
+([vllm#48021](https://github.com/vllm-project/vllm/pull/48021)); no source
 overlay is required. The kustomization pins
-`nightly-d223c900d85224c02f2162ee2c757a769e99f519`, which also carries the
-two crash fixes
+`nightly-6f91edf96d3f3272945809c04702380053bff4de`, the first nightly
+containing the tier together with all three robustness fixes: the
+finalization and reconnect crash fixes
 ([vllm#49671](https://github.com/vllm-project/vllm/pull/49671),
-[vllm#49823](https://github.com/vllm-project/vllm/pull/49823)).
-
-One robustness fix is merged upstream but not yet in that build: the
-symmetric-fetch stall under load
-([vllm#49877](https://github.com/vllm-project/vllm/pull/49877), merged
-2026-07-28 after the pinned nightly's cut). Under sustained many-to-many
-pull load without it, sessions can hit a duplicate-fetch disconnect that
-defers requests. Move the pin to the first nightly containing that commit
-when one is published, and prefer a tagged vLLM release over any nightly
-once the tier ships in one.
+[vllm#49823](https://github.com/vllm-project/vllm/pull/49823)) and the
+symmetric-fetch stall fix under sustained many-to-many pull load
+([vllm#49877](https://github.com/vllm-project/vllm/pull/49877)). Prefer a
+tagged vLLM release over any nightly once the tier ships in one.
 
 ### 4. Calibrate `minCachedTokenDelta` for your model and transport
 

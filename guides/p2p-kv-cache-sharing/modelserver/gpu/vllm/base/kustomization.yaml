@@ -15,17 +15,16 @@ namePrefix: p2p-kv-cache-sharing-
 # the recipes/ images components would run, so its image is resolved here
 # rather than by recipes/modelserver/components/images/routing-sidecar.
 # Pins:
-# - engine: the P2P secondary tier (vllm#48021) and its crash fixes
-#   (vllm#49671, vllm#49823) are upstream; this nightly is the first
-#   containing all three. vllm#49877 (symmetric-fetch stall) merged after
-#   this build's cut - move the pin forward when a newer nightly publishes,
-#   and to a tagged release once the tier ships in one.
+# - engine: the P2P secondary tier (vllm#48021), its crash fixes
+#   (vllm#49671, vllm#49823) and the symmetric-fetch stall fix
+#   (vllm#49877) are all upstream; this nightly is the first containing
+#   all four. Pin a tagged vLLM release once the tier ships in one.
 # - sidecar: main because v0.9.0 predates the offloading P2P pull support
 #   (llm-d-router#1937); pin the next release when cut.
 images:
   - name: REPLACE_MODEL_SERVER_IMAGE
     newName: vllm/vllm-openai
-    newTag: nightly-d223c900d85224c02f2162ee2c757a769e99f519
+    newTag: nightly-6f91edf96d3f3272945809c04702380053bff4de
   - name: REPLACE_ROUTING_SIDECAR_IMAGE
     newName: ghcr.io/llm-d/llm-d-router-disagg-sidecar
     newTag: main
