@@ -98,18 +98,23 @@ This guide layers on the base [asynchronous-processing](../README.md) guide — 
   export IP=$(kubectl get service optimized-baseline-epp -n llm-d-optimized-baseline -o jsonpath='{.spec.clusterIP}')
   export POOL_A=<pool-a> POOL_B=<pool-b>       # InferencePool names (saturation-gate scope)
   export MODEL_A=<model-a> MODEL_B=<model-b>   # served model names (go in payload.model)
+
+  # Scenario C only: concurrent requests per model at which that model's pool counts as
+  # saturated. Must be BELOW the pool's worker count (8 in the overlays) — see Scenario C.
+  export SAT_CAP=4
   ```
 
 ## Configuration and Deployment
 
 The value overlays live in [`values/`](values/) with literal placeholders (`NAMESPACE`, `IGW_HOST`,
-`POOL_A`, `POOL_B`, and — Pub/Sub only — `PROJECT_ID`). Render one for your environment before
-installing:
+`POOL_A`, `POOL_B`, plus `SAT_CAP` in the saturation overlays and `PROJECT_ID` on Pub/Sub). Render
+one for your environment before installing:
 
 ```bash
 render() {   # render <overlay-path> -> stdout
   sed -e "s/NAMESPACE/${NAMESPACE}/g" -e "s#IGW_HOST#${IP}#g" \
-      -e "s/POOL_A/${POOL_A}/g" -e "s/POOL_B/${POOL_B}/g" "$1"
+      -e "s/POOL_A/${POOL_A}/g" -e "s/POOL_B/${POOL_B}/g" \
+      -e "s/SAT_CAP/${SAT_CAP}/g" "$1"
 }
 ```
 
@@ -268,10 +273,35 @@ merge policy drains the highest lanes first. Query each model's budget independe
 ```bash
 kubectl port-forward -n monitoring svc/kps-kube-prometheus-stack-prometheus 9090:9090 &
 curl -s localhost:9090/api/v1/query --data-urlencode \
-  "query=clamp(1 - sum(vllm:num_requests_running{inference_pool=\"${POOL_A}\"})/20, 0, 1)"   # model-a budget
+  "query=clamp(1 - sum(vllm:num_requests_running{inference_pool=\"${POOL_A}\"})/${SAT_CAP}, 0, 1)"  # model-a budget -> 0
 curl -s localhost:9090/api/v1/query --data-urlencode \
-  "query=clamp(1 - sum(vllm:num_requests_running{inference_pool=\"${POOL_B}\"})/20, 0, 1)"   # model-b budget (~1)
+  "query=clamp(1 - sum(vllm:num_requests_running{inference_pool=\"${POOL_B}\"})/${SAT_CAP}, 0, 1)"  # model-b budget (~1)
+
+# Parked workers hold their message instead of dispatching, so model-a's in-flight count
+# hovers near ${SAT_CAP} while model-b's climbs to its 8 workers:
+curl -s localhost:9090/api/v1/query --data-urlencode \
+  "query=sum by (pool_name) (llm_d_async_async_inflight_requests)"
 ```
+
+**What "saturated" should look like:** under this load `model-a`'s budget reaches **exactly `0`** and
+stays there in stretches, while `model-b` sits at `~1`. If `model-a` never reaches 0, the scenario is
+not actually happening — nothing parks, and the run still completes and looks healthy. Check `SAT_CAP`
+against the sizing rule below before concluding the gate worked.
+
+> [!IMPORTANT]
+> **`SAT_CAP` must be smaller than the pool's `workers`.** `prometheus-query` closes its gate at
+> budget `<= 0`, and `clamp(..., 0, 1)` floors the budget at 0 — so the gate closes only once
+> `SAT_CAP` requests are running on that model. Scenario C's load is entirely async, so the only
+> thing driving that count is the pool's own workers (`8` per model in the overlays), and a worker
+> evaluates the gate while holding a message it has not dispatched yet: at most `workers - 1` of the
+> pool's requests are running at that moment. Set `SAT_CAP` at or above `workers` and the budget can
+> never reach 0. The default `SAT_CAP=4` leaves margin, because `vllm:num_requests_running` counts
+> only requests the model server is actively running, not ones waiting in its queue.
+>
+> In production the divisor is a capacity number, not a demo knob: size it to the pool's real
+> concurrent-request capacity (`ready pods × per-pod concurrency`) and give the pool enough workers
+> to reach it. The gate is back-pressure against **all** traffic on the pool — including synchronous
+> clients — so there the count is not bounded by this processor's workers.
 
 ## Observability
 
@@ -293,6 +323,9 @@ Open Grafana (`admin`/`admin` in the demo values) and run the Scenario-C load; t
 dashboard shows `async_dispatch_budget`, `async_inflight_requests`, `async_gate_decisions_total`, and
 `async_broker_backlog{queue_name,pool_name}`. Break panels down by **`pool_name`** (`model-a` /
 `model-b`) for the per-model view and by **`queue_name`** for the per-team-per-model view.
+`async_dispatch_budget` is the **queue** gates' budget (the per-team quota gates); the per-pool
+saturation gate's budget is the PromQL expression itself — query it directly, as in
+[Scenario C](#scenario-c--priority-under-saturation).
 
 <details>
 <summary><b>GCP Cloud Monitoring (Pub/Sub on GKE)</b></summary>
@@ -333,6 +366,10 @@ Prometheus path reacts within one scrape.
 - **Saturation gate.** These overlays use `prometheus-query` over `vllm:num_requests_running`. The
   `prometheus-saturation` gate instead expects the EPP metric
   `inference_extension_flow_control_pool_saturation`.
+- **Saturation divisor vs. pool size.** `SAT_CAP` is the concurrency at which a model counts as
+  saturated, and the gate closes only when the budget hits 0 — i.e. only once `SAT_CAP` requests are
+  running. Keep it **below** that pool's `workers`, or async load alone can never close the gate; see
+  [Scenario C](#scenario-c--priority-under-saturation).
 
 ## Cleanup
 
