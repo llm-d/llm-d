@@ -49,7 +49,12 @@ This guide includes configurations for the following accelerators:
 
 - Have the [proper client tools installed on your local system](../../helpers/client-setup/README.md) to use this guide.
 
-- Checkout llm-d repo:
+- Set the branch and clone the llm-d repo:
+
+<!-- guide:env.static start -->
+```bash
+export BRANCH=main
+```
 
 <!-- guide:prerequisites.clone start -->
 <!-- llm-d-cicd:skip start -->
@@ -61,9 +66,7 @@ git clone https://github.com/llm-d/llm-d.git && cd llm-d && git checkout ${BRANC
 
 - Set the guide specific environment variables:
 
-<!-- guide:env.static start -->
 ```bash
-export BRANCH=main
 export REPO_ROOT=$(realpath $(git rev-parse --show-toplevel))
 export GUIDE_NAME=optimized-baseline
 export NAMESPACE=llm-d-optimized-baseline
