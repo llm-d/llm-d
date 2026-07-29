@@ -108,20 +108,7 @@ helm install ${GUIDE_NAME} \
 > For **TensorRT-LLM** (`trtllm-serve`), replace the last `-f` flag with the TensorRT-LLM
 > values file: `-f ${REPO_ROOT}/guides/${GUIDE_NAME}/router/${GUIDE_NAME}-trtllm.values.yaml`
 
-To use **agentgateway** as the sidecar proxy instead of Envoy, add the following flags. See [router recipes](../recipes/router/README.md) for full details.
-
-```bash
-helm install ${GUIDE_NAME} \
-    ${ROUTER_STANDALONE_CHART} \
-    -f ${REPO_ROOT}/guides/recipes/router/base.values.yaml \
-    -f ${REPO_ROOT}/guides/recipes/router/features/agentgateway-proxy.values.yaml \
-    -f ${REPO_ROOT}/guides/${GUIDE_NAME}/router/${GUIDE_NAME}.values.yaml \
-    -f ${REPO_ROOT}/guides/${GUIDE_NAME}/router/${GUIDE_NAME}-agentgateway.values.yaml \
-    --set router.proxy.proxyType=agentgateway \
-    --set router.inferencePool.create=false \
-    --set router.epp.flags.secure-serving=false \
-    -n ${NAMESPACE} --version ${ROUTER_CHART_VERSION}
-```
+To use **agentgateway** as the sidecar proxy instead of Envoy, see [router recipes](../recipes/router/README.md).
 
 <details>
 <summary><h4>Gateway Mode</h4></summary>

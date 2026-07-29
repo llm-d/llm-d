@@ -9,12 +9,12 @@ The commands below assume the following environment variables are set:
 ```bash
 export REPO_ROOT=$(realpath $(git rev-parse --show-toplevel))
 source ${REPO_ROOT}/guides/env.sh   # sets ROUTER_CHART_VERSION, ROUTER_STANDALONE_CHART, ROUTER_GATEWAY_CHART
-export NAMESPACE=<your-namespace>   # not set by env.sh — choose a namespace for this install
+export NAMESPACE=<your-namespace>   # not set by env.sh, pick one for this install
 ```
 
 ## Standalone (Default)
 
-Use this when you **do not** want to deploy a proxy via Kubernetes Gateway APIs. The standalone chart deploys the **llm-d Router** with a sidecar proxy — either **Envoy** (default) or **agentgateway** — to proxy the traffic directly.
+Use this when you **do not** want to deploy a proxy via Kubernetes Gateway APIs. The standalone chart deploys the **llm-d Router** with a sidecar proxy, either **Envoy** (default) or **agentgateway**, to proxy the traffic directly.
 
 **Chart:** `${ROUTER_STANDALONE_CHART}` (set by [`guides/env.sh`](../../env.sh))
 
@@ -32,13 +32,13 @@ helm install <release-name> \
 
 ### Standalone with agentgateway
 
-agentgateway can be used as the sidecar proxy in place of Envoy. In this mode agentgateway runs alongside the EPP in the same pod and communicates with it over localhost via ext-proc — no Kubernetes Gateway API infrastructure required.
+agentgateway can be used as the sidecar proxy in place of Envoy. In this mode agentgateway runs alongside the EPP in the same pod and talks to it over localhost via ext-proc, so no Kubernetes Gateway API infrastructure is needed.
 
 > [!NOTE]
 > When using `proxyType=agentgateway`, set `router.inferencePool.create=false`.
-> agentgateway automatically creates a pseudo service for model workloads — no
-> explicit service name is required. agentgateway talks to EPP over plaintext
-> gRPC on localhost, so `router.epp.flags.secure-serving=false` is required —
+> agentgateway creates a pseudo service for model workloads on its own, so no
+> explicit service name is required. It also talks to EPP over plaintext gRPC
+> on localhost, so `router.epp.flags.secure-serving=false` is required.
 > `secure-serving=true` is not supported with `proxyType=agentgateway`.
 
 ```bash
