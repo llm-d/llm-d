@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: mooncake-master-store
+spec:
+  type: ClusterIP
+  ports:
+    - name: rpc
+      port: 50051
+      targetPort: rpc
+      protocol: TCP
+    - name: metrics
+      port: 9003
+      targetPort: metrics
+      protocol: TCP

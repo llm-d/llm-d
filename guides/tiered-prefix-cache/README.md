@@ -20,7 +20,7 @@ Each path is a self-contained deployment using a specific offloading implementat
 | **vLLM native** | vLLM `OffloadingConnector` | CPU RAM, CPU RAM + Filesystem | `modelserver/gpu/vllm/native/` |
 | **LMCache** | [LMCache](https://lmcache.ai) connector | CPU RAM, Filesystem | `modelserver/gpu/vllm/lmcache-connector/` |
 | **MooncakeStore** | MooncakeStore connector | CPU RAM, Filesystem | `modelserver/gpu/vllm/mooncake-store/` |
-| **SGLang HiCache** | SGLang native HiCache | CPU RAM, CPU RAM + Filesystem | `modelserver/gpu/sglang/native/cpu/`, `modelserver/gpu/sglang/native/fs/` |
+| **SGLang HiCache** | SGLang native HiCache | CPU RAM, CPU RAM + Filesystem, CPU RAM + Mooncake | `modelserver/gpu/sglang/native/cpu/`, `modelserver/gpu/sglang/native/fs/`, `modelserver/gpu/sglang/mooncake-store/cpu/` |
 | **TPU** | vLLM TPU KVCache connector | CPU RAM | `modelserver/tpu/v6/vllm/native/cpu/`, `modelserver/tpu/v7/vllm/native/cpu/` |
 
 The tiers each path supports differ — see the table above. For example, the vLLM native path also extends to a shared filesystem via multi-tier offloading (`TieringOffloadingSpec`), spilling from CPU RAM to shared storage (HBM → CPU RAM → filesystem).
@@ -31,12 +31,12 @@ We recommend each model server's **native** offloading path: the `OffloadingConn
 
 ### GPU
 
-| Parameter              | Value                                                   |
-| ---------------------- | ------------------------------------------------------- |
-| Model                  | [Qwen/Qwen3-32B](https://huggingface.co/Qwen/Qwen3-32B) |
-| GPUs per replica (TP)  | 2                                                       |
-| GPU Accelerator        | NVIDIA H100                                             |
-| CPU Cache Offload Size  | 100 GB                                                 |
+| Parameter               | Value                                                   |
+| ----------------------- | ------------------------------------------------------- |
+| Model                   | [Qwen/Qwen3-32B](https://huggingface.co/Qwen/Qwen3-32B) |
+| GPUs per replica (TP)   | 2                                                       |
+| GPU Accelerator         | NVIDIA H100                                             |
+| CPU Cache Offload Size  | 100 GB                                                  |
 
 ### TPU
 
@@ -111,7 +111,7 @@ helm install tiered-prefix-cache \
 ```
 
 <details>
-<summary><h4>Gateway Mode</h4></summary>
+<summary><b>Gateway Mode</b></summary>
 
 1. _Deploy a Kubernetes Gateway_ by following one of [the gateway guides](../../docs/infrastructure/gateway).
 2. _Deploy the llm-d Router and an HTTPRoute_:
@@ -143,7 +143,7 @@ Deploy **one** of the paths below. Each `kubectl apply -k` targets an overlay di
 #### vLLM native — CPU RAM
 
 ```bash
-export MODEL_SERVER=vllm # vllm 
+export MODEL_SERVER=vllm # vllm
 export CONNECTOR=native  # native
 export VARIANT=cpu       # cpu | fs
 export INFRA_PROVIDER=base  # base | gke
@@ -186,7 +186,62 @@ export INFRA_PROVIDER=base  # base | gke
 kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/tiered-prefix-cache/modelserver/gpu/sglang/native/${VARIANT}/${INFRA_PROVIDER}/
 ```
 
-#### MooncakeStore - CPU DRAM
+#### SGLang HiCache — Mooncake CPU DRAM
+
+This path adds an embedded Mooncake L3 tier to SGLang HiCache. Each model-server
+pod contributes a 16 GB RDMA-registered CPU-memory segment to the shared pool.
+The Mooncake Master stores metadata; the KV data remains in the contributing
+model-server pods and is lost when those pods terminate. The cross-replica
+benefit therefore requires at least two live replicas.
+
+> [!IMPORTANT]
+> Mooncake's `coro_rpc` wire format is not backward compatible. The default
+> `helpers/mooncake-master-store/base` image contains Mooncake 0.3.10 for the
+> vLLM client, while the pinned SGLang image contains Mooncake 0.3.11. Mixing
+> them allows `Ping` to succeed but causes every `PutStart` to fail with
+> `-900 RPC_FAIL`. Deploy the SGLang-specific Master below; it derives its image
+> from the same pin as the model server.
+
+```bash
+# Version-matched metadata Master. This creates the mooncake namespace and
+# supports embedded CPU DRAM only; it does not enable the SSD/fs helper.
+kubectl apply -k ${REPO_ROOT}/helpers/mooncake-master-store/sglang/
+
+# Deploy the model servers into the guide namespace.
+export INFRA_PROVIDER=base  # base
+kubectl apply -n ${NAMESPACE} -k \
+  ${REPO_ROOT}/guides/tiered-prefix-cache/modelserver/gpu/sglang/mooncake-store/cpu/${INFRA_PROVIDER}/
+```
+
+The reusable base requests the conventional `rdma/ib` extended resource and
+adds `IPC_LOCK`, which is required to register the host-memory segment. It does
+not install RDMA operators, network attachments, SCCs, CRDs, or other
+cluster-wide resources. Use a provider overlay to replace `rdma/ib`, attach the
+pod network, or add platform-specific security settings.
+
+On multi-NIC or RoCE hosts, a provider overlay should also pin the HCA and
+routable GID rather than relying on auto-discovery:
+
+```yaml
+env:
+  - name: MOONCAKE_DEVICE
+    value: mlx5_2
+  - name: MC_GID_INDEX
+    value: "3"
+  - name: MC_MS_AUTO_DISC
+    value: "0"
+```
+
+The GID index may vary by pod. Discover it at startup when the network provider
+does not guarantee a stable index. The base populates
+`MOONCAKE_LOCAL_HOSTNAME` from the primary pod IP so it is never empty; an empty
+value makes SGLang store setup fail with `-600 INVALID_PARAMS`. If RDMA uses a
+secondary Multus interface, override both `MOONCAKE_LOCAL_HOSTNAME` and
+`MC_TCP_BIND_ADDRESS` at startup with that interface's routable fabric IP.
+Other common customizations are `MOONCAKE_GLOBAL_SEGMENT_SIZE`,
+`MOONCAKE_MASTER`, `--hicache-size`, and the Deployment replica count.
+
+#### vLLM MooncakeStore - CPU DRAM
 
 MooncakeStore supports two deployment modes: embedded CPU DRAM (`cpu`) and standalone CPU DRAM + SSD (`fs`). Both require the [Mooncake Master](../../helpers/mooncake-master-store/) metadata service. The `fs` variant additionally requires the [Mooncake Client](../../helpers/mooncake-client/), a standalone process that owns the CPU DRAM pool and SSD persistence tier.
 
@@ -209,7 +264,7 @@ k apply -k ${REPO_ROOT}/helpers/mooncake-master-store/monitoring
 After that you can deploy the modelserver manifests:
 
 ```bash
-export MODEL_SERVER=vllm    # vllm 
+export MODEL_SERVER=vllm    # vllm
 export VARIANT=cpu          # cpu | fs
 export INFRA_PROVIDER=base  # base
 kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/tiered-prefix-cache/modelserver/gpu/${MODEL_SERVER}/mooncake-store/${VARIANT}/${INFRA_PROVIDER}
@@ -273,7 +328,7 @@ Output should show the PVC as `Bound`.
 
 ### 2. Get the IP of the Proxy
 
-**Standalone Mode**
+#### Standalone Mode
 
 ```bash
 export IP=$(kubectl get service tiered-prefix-cache-epp -n ${NAMESPACE} -o jsonpath='{.spec.clusterIP}')
@@ -388,8 +443,11 @@ In this example we will demonstrate how to run [`inference-perf`](https://github
 >
 > For even more details about benchmarking, see the actual repository: [`llm-d-benchmark` on GitHub](https://github.com/llm-d/llm-d-benchmark).
 
+<!-- Separate the two admonitions for Markdown renderers and linters. -->
+
 > [!TIP]
-> The command below runs this guide's **dedicated** benchmark profile, which is intentionally shaped to exercise tiered cache eviction across HBM and CPU RAM — and accordingly takes longer to complete. To run a simpler workload with fewer execution cycles first (useful for validating the path, image pulls, PVC binding, etc. before committing to a real run), pick a generic sample profile such as `shared_prefix_synthetic.yaml` from the catalog in [`helpers/benchmark.md` → Available workload profiles](../../helpers/benchmark.md#available-workload-profiles) and substitute it for the `--workload` flag in the command below.
+> The command below runs this guide's **dedicated** benchmark profile, which is intentionally shaped to exercise tiered cache eviction across HBM and CPU RAM — and accordingly takes longer to complete.
+> To run a simpler workload with fewer execution cycles first (useful for validating the path, image pulls, PVC binding, etc. before committing to a real run), pick a generic sample profile such as `shared_prefix_synthetic.yaml` from the catalog in [`helpers/benchmark.md` → Available workload profiles](../../helpers/benchmark.md#available-workload-profiles) and substitute it for the `--workload` flag in the command below.
 
 ### 1. Install the `llmdbenchmark` CLI
 
@@ -435,7 +493,7 @@ export GATEWAY_CLASS=istio
 
 ### 3. Run the benchmark profile for Tiered Prefix Cache
 
-`guide_tiered-prefix-cache_1.yaml` is a **dedicated workload profile** shipped with `llm-d-benchmark` specifically for this guide — it reproduces the load profile used to generate the [results below](#benchmarking-report) (250 prefix groups × 5 prompts each on a 60-second Poisson interval) and is shaped to exercise eviction across HBM and CPU RAM.
+`guide_tiered-prefix-cache_1.yaml` is a **dedicated workload profile** shipped with `llm-d-benchmark` specifically for this guide — it reproduces the load profile used to generate the [results below](#benchmarking-reports) (250 prefix groups × 5 prompts each on a 60-second Poisson interval) and is shaped to exercise eviction across HBM and CPU RAM.
 
 Benchmark results are copied to the `workspace` directory that is specified by _you_ (or that is automatically generated when omitted from the cli) on the machine running the CLI. The workspace location is optional — by default the CLI auto-generates a timestamped workspace and prints its full path in the logs during the run. If you'd rather choose where results land, pass `--workspace <YOUR_DIR_HERE>` as a top-level argument of `llmdbenchmark` (before the `run` subcommand):
 
@@ -461,11 +519,11 @@ llmdbenchmark \
 
 Empirical benchmark reports demonstrating the impact of multi-tier prefix-cache offloading relative to HBM-only serving configurations under high-cache workloads:
 
-- **[Qwen/Qwen3-32B on vLLM (16×H100 CPU Offload)](./benchmark-results/vllm-qwen3-32b-h100.md)**: Headline throughput and latency comparisons across 16×H100 GPUs with CPU RAM offloading.
-- **[Qwen/Qwen3-32B on SGLang (16×H100 CPU Offload)](./benchmark-results/sglang-qwen3-32b-h100.md)**: Headline throughput and latency comparisons across 16×H100 GPUs with SGLang HiCache CPU RAM offloading.
-- **[Qwen/Qwen3-32B on SGLang (16×H100 Lustre Offload)](./benchmark-results/sglang-qwen3-32b-h100-lustre.md)**: Benchmark comparisons for shared POSIX filesystem offloading using SGLang HiCache native file backend.
-- **[openai/gpt-oss-120b on vLLM (16×H100 CPU Offload)](./benchmark-results/vllm-gpt-oss-120b-h100.md)**: Stage-by-stage throughput, latency, TPOT, and fleet cache hit rate breakdowns across 5–40 QPS.
-- **[Qwen/Qwen3-32B on vLLM (TPU v6e/v7 CPU Offload)](./benchmark-results/vllm-qwen3-32b-tpuv7.md)**: Headline throughput and latency effect of CPU RAM prefix offloading on Google TPU architectures.
-- **[Qwen/Qwen3-32B on vLLM (16×H100 Lustre Offload)](./benchmark-results/vllm-qwen3-32b-h100-lustre.md)**: Benchmark comparisons for shared POSIX filesystem offloading using LMCache and llm-d filesystem connectors.
+* **[Qwen/Qwen3-32B on vLLM (16×H100 CPU Offload)](./benchmark-results/vllm-qwen3-32b-h100.md)**: Headline throughput and latency comparisons across 16×H100 GPUs with CPU RAM offloading.
+* **[Qwen/Qwen3-32B on SGLang (16×H100 CPU Offload)](./benchmark-results/sglang-qwen3-32b-h100.md)**: Headline throughput and latency comparisons across 16×H100 GPUs with SGLang HiCache CPU RAM offloading.
+* **[Qwen/Qwen3-32B on SGLang (16×H100 Lustre Offload)](./benchmark-results/sglang-qwen3-32b-h100-lustre.md)**: Benchmark comparisons for shared POSIX filesystem offloading using SGLang HiCache native file backend.
+* **[openai/gpt-oss-120b on vLLM (16×H100 CPU Offload)](./benchmark-results/vllm-gpt-oss-120b-h100.md)**: Stage-by-stage throughput, latency, TPOT, and fleet cache hit rate breakdowns across 5–40 QPS.
+* **[Qwen/Qwen3-32B on vLLM (TPU v6e/v7 CPU Offload)](./benchmark-results/vllm-qwen3-32b-tpuv7.md)**: Headline throughput and latency effect of CPU RAM prefix offloading on Google TPU architectures.
+* **[Qwen/Qwen3-32B on vLLM (16×H100 Lustre Offload)](./benchmark-results/vllm-qwen3-32b-h100-lustre.md)**: Benchmark comparisons for shared POSIX filesystem offloading using LMCache and llm-d filesystem connectors.
 
 For detailed results see [gpt-oss-120B benchmarking results](benchmark-results-gpt-oss-120b.md).

@@ -1,0 +1,62 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mooncake-master-store
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "9003"
+        prometheus.io/path: /metrics
+    spec:
+      containers:
+        - name: mooncake-master-store
+          # The shared helper image contains Mooncake 0.3.10, whose coro_rpc
+          # wire format cannot deserialize the SGLang 0.3.11 client's PutStart
+          # request. The image component below resolves this placeholder to the
+          # same centrally pinned SGLang image used by the model server.
+          image: REPLACE_MODEL_SERVER_IMAGE
+          command:
+            - /bin/bash
+            - -lc
+          args:
+            # This variant is an embedded-DRAM metadata Master. Do not pass
+            # -enable_offload: the SGLang image is not the standalone SSD helper.
+            - |
+              BIN=$(python3 -c 'import mooncake, os; print(os.path.join(os.path.dirname(mooncake.__file__), "mooncake_master"))')
+              echo "mooncake_master: ${BIN}"
+              exec "${BIN}" \
+                -rpc_port=50051 \
+                -metrics_port=9003 \
+                -enable_metric_reporting \
+                -logtostderr \
+                -default_kv_lease_ttl=3600000 \
+                -default_kv_soft_pin_ttl=3600000
+          ports:
+            - name: rpc
+              containerPort: 50051
+              protocol: TCP
+            - name: metrics
+              containerPort: 9003
+              protocol: TCP
+          readinessProbe:
+            tcpSocket:
+              port: rpc
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            tcpSocket:
+              port: rpc
+            initialDelaySeconds: 10
+            periodSeconds: 15
+          resources:
+            requests:
+              cpu: "1"
+              memory: 1Gi
+            limits:
+              cpu: "4"
+              memory: 4Gi
