@@ -26,8 +26,9 @@ encode or prefill at all: if the chosen decode pod already has what it needs (e.
 prompt is already cached), it serves the request directly and the full pipeline never
 runs. Only if decode responds `412 Precondition Failed` does the Coordinator fall back
 to the full `encode → prefill → decode` cascade — which is also how a request with
-multiple multimedia entries fans encode out in parallel, one call per entry. See the
-[Coordinator architecture doc](https://github.com/llm-d/llm-d-router/blob/main/docs/coordinator_architecture.md)
+multiple multimedia entries fans encode out in parallel, one call per entry.
+
+See the [Coordinator architecture doc](https://github.com/llm-d/llm-d-router/blob/main/docs/coordinator_architecture.md)
 for the full request-flow sequence diagram and design rationale.
 
 This is the experimental part of the architecture: the Coordinator is a candidate to
@@ -49,36 +50,24 @@ orchestrated:
   after encode/prefill have already completed — on the pool's current state, not a
   snapshot taken one or more phases earlier.
 
-The vLLM-level mechanics of KV and encoder-cache transfer are unchanged from standard
-disaggregated serving (NIXL, `kv-transfer-config` / `ec-transfer-config`) — only the
-*orchestration* of when each phase runs moves out of the per-pod sidecar and into the
-Coordinator.
 
 The result of this guide, in either of two EPP topologies (pick one — see
 [Installation Instructions](#installation-instructions)):
 
-* **1 Coordinator**, terminating client traffic and driving the pipeline. Unchanged
-  either way — the Coordinator only ever talks to the Gateway and tags its own
-  outbound calls with an `EPP-Profile` header; it has no idea how many EPPs sit
-  behind that Gateway.
-* Either:
-  * **1 Endpoint Picker (EPP)** covering all three roles, and **1 InferencePool**
-    spanning them. The EPP runs one scheduling profile per call — `encode`, `prefill`,
-    or `decode` — selected by the Coordinator's `EPP-Profile` header via the
-    `header-profile-handler` plugin
-    ([llm-d-router#2134](https://github.com/llm-d/llm-d-router/pull/2134)); each profile
-    filters the shared pool down to its own role with a by-label filter. **or**
-  * **3 EPPs**, one per role, each with its own **InferencePool** scoped to that
-    role's pods via `modelServers.matchLabels`. Each EPP runs a single `default`
-    scheduling profile picked implicitly by the chart's `single-profile-handler`
-    (no profile-selection plugin needed, since a role-scoped EPP never has to
-    choose between profiles) — no custom image either. Each role's file does
-    configure its own scorer plugins (see below); that's just picking which
-    endpoint within the role, not which profile to run. The Gateway's `HTTPRoute`
-    (not the EPP) is what dispatches each `EPP-Profile` value to the right EPP's
-    InferencePool.
-* **1 vLLM replica per role** — three model servers in total, distinguished only by
-  their `llm-d.ai/role` label. Same either way.
+* **Either: 1 Endpoint Picker (EPP)** covering all three roles, and **1 InferencePool**
+  spanning them. The EPP runs one scheduling profile per call — `encode`, `prefill`,
+  or `decode` — selected by the Coordinator's `EPP-Profile` header via the
+  [header-profile-handler](https://github.com/llm-d/llm-d-router/blob/main/pkg/epp/framework/plugins/scheduling/profilehandler/headerprofile/README.md)
+  plugin. Each profile filters the shared pool down to its own role with a by-label filter.
+* **Or: 3 EPPs**, one per role, each with its own **InferencePool** scoped to that
+  role's pods via `modelServers.matchLabels`. Each EPP runs a single `default`
+  scheduling profile picked implicitly by the chart's `single-profile-handler`
+  (no profile-selection plugin needed, since a role-scoped EPP never has to
+  choose between profiles) — no custom image either. Each role's file does
+  configure its own scorer plugins (see below); that's just picking which
+  endpoint within the role, not which profile to run. The Gateway's `HTTPRoute`
+  (not the EPP) is what dispatches each `EPP-Profile` value to the right EPP's
+  InferencePool.
 
 > [!IMPORTANT]
 > The **single-EPP** topology depends on
@@ -90,13 +79,13 @@ The result of this guide, in either of two EPP topologies (pick one — see
 > The **3-EPP** topology doesn't need this — see
 > [Installation Instructions](#installation-instructions).
 
-## Default Configuration
+## Default Configuration (will be updated after finalizeng the guide)
 
 | Parameter          | Value                                                              |
 | ------------------ | ------------------------------------------------------------------ |
 | Model              | [Qwen/Qwen3-VL-2B-Instruct](https://huggingface.co/Qwen/Qwen3-VL-2B-Instruct) |
 | Roles              | encode, prefill, decode                                            |
-| Replicas per role  | 1                                                                   |
+| Replicas per role  | 1 (encode: 0 in the PD-only deployment)                                                                  |
 | Tensor Parallelism | 1                                                                   |
 | GPUs per replica   | 1                                                                   |
 | Total GPUs         | 3                                                                   |

@@ -1,7 +1,8 @@
 # PD-only pipeline: drops replace-media-urls, render, and encode -- see the
 # PD-only note in ../README.md's Installation Instructions for why (no encode
 # role means no multimedia handling; the render step normalizes multimodal
-# input for the encode/prefill phases, so it goes too).
+# input for the encode/prefill phases, so it goes too). ec_connector is dropped
+# too -- encoder-cache transfer only matters with an encode role in the pipeline.
 #
 # Unlike multimedia-downloader/patch-coordinator-ca.yaml, this file still has
 # ${PROVIDER_NAME}/${NAMESPACE} placeholders (the gateway.address line below is
@@ -30,7 +31,6 @@ data:
 
     pipeline:
       kv_connector: kv-nixl
-      ec_connector: ec-nixl
       steps:
         - type: conditional-decode
         - type: prefill
