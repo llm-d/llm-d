@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
   "label": "VLLM XPU",
-  "message": "timeout",
-  "color": "yellow"
+  "message": "guide-error",
+  "color": "red"
 }
