@@ -11,6 +11,16 @@ document Q&A and the pool scenarios both ran on 16 pods. Workload
 profiles, EPP arm configurations, and the run protocol are in
 [../benchmarking/README.md](../benchmarking/README.md).
 
+Provenance note on index sizing: these tables were measured with the
+precise index at its default `podCacheSize` (10), which on a 16-pod
+GPU+CPU fleet holds fewer entries than there are legitimate
+(endpoint, tier) holders per hot block. The shipped arm configurations
+and the deployed router values now set 32. Undersizing biases affinity
+scoring and source selection toward divergence, so arm-versus-arm
+comparisons here should be read with that caveat until re-measured at 32;
+the pull-versus-recompute ladder is unaffected (it bypasses the index
+entirely).
+
 ## Pull versus recompute (single request)
 
 Single source-consumer pod pair, fresh prefix seeded on the source, prefill

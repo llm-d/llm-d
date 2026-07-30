@@ -88,15 +88,18 @@ The regime rule from the benchmarks:
   requests on one pod share a single copy of the prefix blocks, while
   spreading (with or without a pull) pays a per-pod copy, and a pulled
   prefix occupies KV for exactly as long as a recomputed one.
-- **The pull is a recovery path, not a placement strategy.** Keep
-  prefix-affinity placement primary and let the pull cover divergence
-  (queue spills, evictions across idle gaps, cold replicas, migration).
-  Placing purely by load and pulling everywhere scatters cache mass so no
-  peer accumulates enough to serve from, and converts the transfer path
-  into sustained per-request bandwidth - it loses to affinity at every
-  measured load. The guide's `epp-affinity-p2p.yaml` is this
-  configuration; reach for load-aware placement plus the pull only in the
-  oversubscribed regime above.
+- **Which placement wins is regime-dependent; the pull is what makes
+  load-first placement affordable.** In the uniform-pool regime (many
+  prefixes, stable spread) load-first placement plus the pull trails
+  affinity modestly at matched rates - cache co-location is structurally
+  cheaper when nothing contends. In owner-pinned contention regimes
+  (document Q&A: many concurrent sessions each bound to an owner pod)
+  load-first placement plus the pull wins outright - 7.3x better p99 TTFT
+  than affinity - because affinity pays for co-location in owner-pod
+  queues. The guide's `epp-affinity-p2p.yaml` is the safer general-purpose
+  default across both regimes; reach for load-aware placement plus the
+  pull when your workload contends on owners or oversubscribes the caches
+  as above.
 
 ## Deploy
 

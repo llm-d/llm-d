@@ -79,15 +79,35 @@ spill tail (recompute of a 70K-token prefix on a non-holder), and the
 pull collapses it to ~5 s - the flat pull cost from the crossover table
 above, paid instead of the linear recompute.
 
-Read this result together with the four-arm ladder below: under
-holder-affinity policies (affinity weight 5) the pull rarely fires on
+The boundary on the other side: under holder-affinity policies (affinity
+weight 5) with a correctly sized index, the pull rarely fires on
 recurring-prefix traffic and arms tie - placement already lands requests
-on the cache. **The pull converts load-spill recompute into a flat-cost
-transfer; where routing trades affinity for load balance, it recovers the
-cache reuse that placement gives up.** It is a property of the
-policy-workload pair, not a general model speedup.
+on the cache, and live sampling shows every source evaluation at a
+cached-token delta of zero. **The pull converts load-spill recompute
+into a flat-cost transfer; where routing trades affinity for load
+balance, it recovers the cache reuse that placement gives up.** It is a
+property of the policy-workload pair, not a general model speedup.
 
-## Agentic traces across the concurrency ladder (four arms)
+Attribution note: the six repetitions above are a producer-only A/B (the
+two profiles differ by `p2p-source-producer` alone) and did not record
+per-repetition transfer counters; pull-path liveness on this build is
+established separately by the correlated single-request proof (per-rank
+attribution, source accept on the rank-offset port, consumer load equal
+to tokens x ~93 KB, HTTP 200).
+
+## Historical: the overlay-era four-arm ladder (superseded)
+
+The ladder below was measured on the overlay-era stack with the
+producer's default `podCacheSize: 10`. That default evicts legitimate
+(endpoint, tier) holders on a 32-rank fleet, so the scheduled pod and
+the best peer read different cached-token counts for the same
+physically-replicated prefix - the pull then "rescued" a divergence the
+index itself manufactured. On the fixed stack with `podCacheSize: 64`
+the same precise-affinity pair is a mechanism-verified null (zero
+source-delta evaluations), so the precise-affinity improvements and the
+approximate-index pull volumes below do not reproduce and should not be
+cited as feature results. The tables are retained as a reproduction
+record of the index-sizing failure mode.
 
 TTFT p50 / p90 (ms) per cell; the pull's delta against the same placement
 without it in parentheses:

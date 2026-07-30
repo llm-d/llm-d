@@ -109,8 +109,9 @@ while `load + P2P` established 65 on the same rig - affinity keeps the KV
 local, so `minCachedTokenDelta` is rarely met and there is nothing to fetch.
 That is the pull behaving correctly as a recovery path, not a defect, but it
 does mean `affinity + P2P` should be chosen for its placement behaviour and
-treated as insurance against cache/placement divergence, not as a throughput
-feature. See [When to use this path](../README.md#when-to-use-this-path).
+treated as a fallback for externally inherited divergence (a cold engine
+replica behind an intact router - plausible and unmeasured), not as a
+throughput feature or router-restart insurance. See [When to use this path](../README.md#when-to-use-this-path).
 
 ## Step 0 - pull-versus-recompute crossover (single request)
 
@@ -280,50 +281,26 @@ a wait behind someone else's document. This is the scenario
 and `concurrency` relative to your fleet's pod count so enough sessions
 contend for a limited set of owner pods.
 
-Three arms measured; `epp-affinity` and `epp-load-p2p` as two full runs
-with order alternated, `epp-affinity-p2p` as two independent runs (order
-alternation does not apply with only one non-baseline arm running). All
-six runs completed 1,152/1,152 turns with zero errors and zero restarts.
-TTFT p50/p95/p99 (s) and throughput (turns/s):
+Results are canonical in
+[the gpt-oss results page](../benchmark-results/gpt-oss-120b-h200.md#document-qa-the-headline),
+measured on the fixed stack with a per-arm cold roll so arms cannot
+contaminate each other. Headline: load-aware + P2P wins this scenario
+decisively (7.3x better p99 TTFT and +62% throughput than precise routing
+warm; 8.0x cold), while precise + P2P is not distinguishable from precise
+alone (2 P2P sessions across 16 pods for the whole run versus 65 under
+load-aware placement - affinity keeps KV local, so the source delta is
+essentially never met), and the affinity arms are cold-start fragile
+(47-48 client timeouts on a cold fleet as placement collapses onto one
+pod). An earlier 14-pod run without the per-arm cold roll reported a
+narrower separation; the fixed-stack rerun supersedes it.
 
-| run | `epp-affinity` (precise routing) | `epp-affinity-p2p` (recommended default) | `epp-load-p2p` (wins this scenario) |
-|---|---|---|---|
-| 1 | 4.1 / 41.0 / 80.5; 5.98 | 4.0 / 27.7 / 48.8; 5.6 | 4.5 / 13.0 / 20.9; 7.02 |
-| 2 (order reversed / 2nd run) | 4.2 / 17.3 / 37.2; 7.66 | 2.6 / 33.6 / 67.2; 5.7 | 3.9 / 12.5 / 26.7; 7.76 |
-
-`epp-affinity-p2p`'s throughput figures (5.6-5.7 turns/s) undercount
-slightly: a sub-1% tail of requests generated unusually long reasoning
-output under `ignore_eos: true` (median/p90/p95 output length all land on
-the intended 256-token target - only `p99.9` blows out), stretching wall
-time. TTFT is unaffected, since it is measured at first token, before that
-generation happens.
-
-`epp-affinity-p2p` sits between the other two arms on tail latency in both
-runs, not just one: its p95/p99 (27.7-33.6s / 48.8-67.2s) improve on
-`epp-affinity`'s worst case (80.5s p99) but do not reach `epp-load-p2p`'s
-range (12.5-13.0s p95 / 20.9-26.7s p99) in either run. The likely reason:
-`epp-affinity-p2p` still queues a request behind a busy owner pod whenever
-the scorer's affinity term outweighs load, and only pulls once a peer
-already out-caches the scheduled pod - it recovers the *cache-locality*
-cost of a cross-pod placement but not the *queueing* cost of a placement
-decision that still prefers a busy owner. `epp-load-p2p` never makes that
-tradeoff: placement always goes to the least-loaded pod, so there is no
-owner-pod queue to build in the first place. On this scenario alone,
-`epp-load-p2p` is the better arm - but see
+On this scenario alone, `epp-load-p2p` is the better arm - but see
 [the uniform pool](#uniform-shared-prefix-pool-three-routing-arms), where
 the result is reversed. The guide ships `epp-affinity-p2p` as the default
 because it is the safer general-purpose choice across both regimes (see
 the [README](../README.md#when-to-use-this-path)); reach for
 `epp-load-p2p` specifically when your workload looks like this one -
 many concurrent, multi-turn sessions each pinned to an owner pod.
-
-Medians are equal - a home session answers from warm cache either way. The
-arms separate on tails and stability: p99 TTFT 21-27s versus 37-81s (2-4x),
-up to +17% throughput, and 10% run-to-run spread versus 28%. Pull evidence:
-30-32M tokens moved between pods per P2P-arm run; the affinity arm did
-23-31M local CPU-tier restores instead. Prefix-first placement queues
-displaced questions behind a concentrated owner's 48K prefills; load-aware
-placement plus the pull converts each displacement into a ~0.6s transfer.
 
 ## Wide-EP testbed (GLM-5.2-FP8)
 
@@ -348,17 +325,16 @@ arms behave identically - medians agree within 1% and the TTFT tail
 spread across three runs (p99 17.7-24.6 s) is run-to-run variance. That is
 the placement rule holding exactly at 753B: a consistent index under
 precise affinity leaves the pull nothing to repair. The overlay-era wins
-below were real transfers triggered by index-eviction divergence that the
-index sizing fix has since removed; divergence-by-construction regimes
-(load-first placement, restarts, the approximate index) remain the pull's
-territory.
-
-Headline cell on the overlay-era stack (concurrency 32): adding the pull to
-precise affinity takes TTFT p50 -27% and p90 -45%, tying the best
-load-balanced arm - the pull erases affinity's concentration penalty. The approximate arm drove pulls
-from the prompt-hash index alone (no KV events), confirming the source
-decision works with either index. Full grid, crossover sweep, and
-per-cell pull evidence:
+were real transfers triggered by index-eviction divergence that the
+index sizing fix has since removed; that ladder is quarantined as a
+historical reproduction record in the results page. The pull's measured
+territory on this testbed is load-first placement - the matched
+`epp-glm-loadfirst{,-p2p}` pair (-67% mean TTFT, 2.7x throughput).
+A cold engine replica behind an intact router is a plausible further
+case and is unmeasured; a restarted ROUTER is not one (both index modes
+lose the pre-restart cache map, and measured restart-recovery runs
+produced zero pulls). Full tables, crossover sweep, and the quarantined
+overlay-era grid:
 [../benchmark-results/glm-5.2-h200.md](../benchmark-results/glm-5.2-h200.md).
 
 ## Run hygiene

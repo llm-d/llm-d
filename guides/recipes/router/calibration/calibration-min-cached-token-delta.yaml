@@ -142,6 +142,7 @@ spec:
 
           crossover = None
           engaged = 0
+          contaminated = False
           print(f"{'tokens':>8} {'recompute_ms':>13} {'pull_ms':>10} {'delta':>8} {'pulled_MB':>10}", flush=True)
           for n in LENGTHS:
               rec, pul, mbs = [], [], []
@@ -157,7 +158,8 @@ spec:
                   time.sleep(2)
                   c1 = loaded_bytes()
                   if c0 is not None and c1 is not None and (c1 - c0) > 0:
-                      print(f"WARNING: control moved {(c1 - c0) / 1e6:.1f} MB without a "
+                      contaminated = True
+                      print(f"CONTROL CONTAMINATED: moved {(c1 - c0) / 1e6:.1f} MB without a "
                             f"pull request at {n} tokens - byte attribution is unreliable",
                             flush=True)
 
@@ -175,7 +177,9 @@ spec:
                   engaged += 1
               d = 100.0 * (mp - mr) / mr
               print(f"{n:>8} {mr:>13.1f} {mp:>10.1f} {d:>+7.1f}% {mb:>10.1f}", flush=True)
-              if crossover is None and mp < mr:
+              # A length only qualifies when its own pulls moved bytes -
+              # a faster median with zero bytes is recompute vs recompute.
+              if crossover is None and mp < mr and mb > 0:
                   crossover = n
 
           if engaged == 0:
@@ -187,6 +191,13 @@ spec:
                     "PYTHONHASHSEED is pinned fleet-wide. If the engine is "
                     "serving other traffic, set DP_RANKS to its "
                     "--data-parallel-size so every rank is seeded.", flush=True)
+              raise SystemExit(1)
+          if contaminated:
+              print("RUN DISCARDED: the no-pull control moved bytes, so the "
+                    "pulled_MB column is not peer-attributable and no threshold "
+                    "can be derived. Use a consumer with an empty CPU tier "
+                    "(fresh pod) and fresh prefixes per probe, then rerun.",
+                    flush=True)
               raise SystemExit(1)
           if crossover is None:
               print("NO CROSSOVER in the tested range: the pull fired but never "

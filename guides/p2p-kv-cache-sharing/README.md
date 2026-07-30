@@ -66,15 +66,21 @@ to the pod that already caches its prefix:
 What the pull is worth depends on the placement it sits behind, and the
 three combinations this guide measures are not the same kind of thing:
 
-* **Affinity + P2P - recovery insurance, usually inert.** Precise affinity
-  sends each request to the pod that already holds its prefix, so a peer
-  rarely leads by `minCachedTokenDelta` and there is rarely anything to
-  fetch: on the document-Q&A rig this arm established 2 P2P sessions across
-  a full 16-pod run, against 65 for load-aware + P2P on the same rig. That
-  is the pull behaving correctly as a fallback, not a defect. Its value is
-  covering the cases affinity cannot - a restarted router, a cold replica,
-  an evicted owner - at close to no cost when those do not occur. Do not
-  deploy it expecting a throughput gain over affinity alone.
+* **Affinity + P2P - usually inert, and not restart insurance.** Precise
+  affinity sends each request to the pod that already holds its prefix, so
+  a peer rarely leads by `minCachedTokenDelta` and there is rarely
+  anything to fetch: on the document-Q&A rig this arm established 2 P2P
+  sessions across a full 16-pod run, against 65 for load-aware + P2P on
+  the same rig (sessions are reusable connections, an engagement signal
+  rather than a pull count). That is the pull behaving correctly as a
+  fallback, not a defect. A restarted ROUTER is explicitly not a case it
+  covers: both indexes lose the pre-restart cache map - the approximate
+  index learns only its own placements from birth, and the precise index
+  consumes KV events delta-only with no replay - and both measured
+  restart-recovery experiments produced zero pulls. A cold ENGINE replica
+  behind an intact router is the plausible recovery case, and it is
+  unmeasured. Do not deploy this arm expecting a throughput gain over
+  affinity alone.
 * **Load-aware + P2P - a measured performance feature.** When placement
   deliberately scatters, the pull is what makes scattering affordable, and
   the gain is directly attributable to it.
@@ -174,17 +180,30 @@ runs it against two live pods and prints the recommended value.
   `precise-prefix-cache-producer` (`tokenProcessorConfig.blockSize`). A
   mismatch leaves the prefix index empty and the whole path silently inert -
   requests still serve, nothing pulls.
-* **Multi-pod data-parallel groups (LWS wide-EP) need rank-aware source
-  addressing.** vLLM binds the P2P tier listener at `p2p-connector-port`
-  plus the engine's global DP rank, and the sidecar's fallback derives only the
-  pod-local rank from the serving port - correct when each pod is its own
-  DP group (every topology in this guide), wrong for worker pods of a
-  multi-pod group, where a mis-addressed pull does not fall back to
-  recompute but stalls the request until the client times out. The EPP
-  supplies the global rank per request via `x-kv-cache-source-rank`
-  ([llm-d-router `fix/p2p-source-global-rank`](https://github.com/nilig/llm-d-router/compare/main...fix/p2p-source-global-rank));
-  deploy an EPP and sidecar that carry it before enabling the pull on such
-  a topology.
+* **Multi-pod data-parallel groups (LWS wide-EP) must compensate the
+  socket base ports per pod.** vLLM binds the P2P tier and KV-events
+  listeners at `configured base + global data_parallel_index`, while the
+  router addresses `pod IP + pod-local rank` - correct when each pod is
+  its own DP group (every topology in this guide), wrong for worker pods
+  of a multi-pod group, where a mis-addressed pull does not fall back to
+  recompute but stalls the request until the client times out. Each pod
+  subtracts its global start rank from both configured bases so every
+  pod binds the same pod-local ranges:
+
+  ```bash
+  START_RANK=$(( ${LWS_WORKER_INDEX:-0} * DP_SIZE_LOCAL ))
+  P2P_BASE=$((7777 - START_RANK))        # P2P secondary tier port
+  KV_EVENTS_BASE=$((5557 - START_RANK))  # KV-events publisher endpoint
+  ```
+
+  Router-side, per-rank source selection additionally requires the EPP to
+  attribute KV events to the publishing rank's serving endpoint
+  ([llm-d-router#2233](https://github.com/llm-d/llm-d-router/pull/2233),
+  merged) and the sidecar to compare full endpoints in its self-pull
+  guard ([llm-d-router#2234](https://github.com/llm-d/llm-d-router/pull/2234),
+  in review) - run a router release or build that carries both before
+  enabling the pull on such a topology. The wide-EP measurements in this
+  guide's GLM results page ran images built from those two changes.
 * `--kv-events-config` on every serving pod, topic
   `kv@<POD_IP>:<PORT>@<model>`. No events, no precise index, no source
   selection from it. (Deployments on the approximate index skip this
