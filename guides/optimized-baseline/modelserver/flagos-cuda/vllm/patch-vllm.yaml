@@ -34,11 +34,11 @@ spec:
           volumeMounts:
             - mountPath: /dev/shm
               name: shm
-            - mountPath: /.cache
+            - mountPath: /home/vllm/.cache
               name: torch-compile-cache
-            - mountPath: /.triton
+            - mountPath: /home/vllm/.triton
               name: triton-cache
-            - mountPath: /.config
+            - mountPath: /home/vllm/.config
               name: vllm-config
           startupProbe:
             initialDelaySeconds: 15
