@@ -6,15 +6,19 @@ where the mechanism is not provably engaged measures nothing.
 
 ## Running the benchmark
 
-The headline scenario ships as a dedicated `llmdbenchmark` workload profile,
-the same way the other guides' benchmarks do. The profile lands via
+A document-Q&A workload profile for `llmdbenchmark` ships via
 [llm-d-benchmark#1656](https://github.com/llm-d/llm-d-benchmark/pull/1656),
 which is open, so `guide_p2p-kv-cache-sharing_1.yaml` is absent from `main`
-and the PR branch lives on a fork rather than on `origin`. Until it merges,
-check out the commit the tables below were measured against; replace the
-fetch with the merge commit on `main` once it lands, so a later run
-reproduces this workload rather than whatever `main` happens to be. Install
-the CLI, resolve your endpoint, and run:
+and the PR branch lives on a fork rather than on `origin`. The profile is
+an analogous synthetic workload, not the driver behind the canonical
+tables: it holds 128 requests in flight rotated across 192 sessions with
+1-2 s tool delays over the completions API, while the canonical
+document-Q&A tables were measured with a custom driver that admits 128
+whole six-turn conversations at once over chat completions with no tool
+delay (archived with the measurement record). Expect the same regime, not
+the same numbers, until the profile is measured on the fixed stack and
+its results published. To run the profile, install the CLI, resolve your
+endpoint, and run:
 
 ```bash
 curl -sSL https://raw.githubusercontent.com/llm-d/llm-d-benchmark/main/install.sh | bash
@@ -22,8 +26,8 @@ cd llm-d-benchmark && source .venv/bin/activate
 # Until llm-d-benchmark#1656 merges the profile comes from the PR fork at the
 # pinned commit - `origin` has neither the branch nor the file.
 git fetch https://github.com/nilig/llm-d-benchmark.git \
-    20ef7570809c9f4935e2015a73537bd77cdafbe3
-git checkout 20ef7570809c9f4935e2015a73537bd77cdafbe3
+    51f967019adb4dc1926c9eb6204030abac14eb67
+git checkout 51f967019adb4dc1926c9eb6204030abac14eb67
 
 export ENDPOINT_URL="http://$(kubectl get service <your-epp-service> -n ${NAMESPACE} -o jsonpath='{.spec.clusterIP}')"
 
