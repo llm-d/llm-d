@@ -15,9 +15,8 @@ The deployment composes three llm-d capabilities:
 
 * the vLLM `OffloadingConnector` with a P2P secondary tier (each pod is both
   a puller and a source),
-* the llm-d Router's prefix index - this guide deploys the precise
-  (KV-event-fed) one; the approximate (prompt-hash) index drives the source
-  decision equally well (measured on the wide-EP testbed), and
+* the llm-d Router's precise (KV-event-fed) prefix index, which the
+  source decision consumes, and
 * the `p2p-source-producer`, which stamps each request with the peer that
   holds the most cached prefix so the routing sidecar can inject
   `kv_transfer_params.remote_kv_source` and the engine pulls instead of
@@ -206,8 +205,7 @@ runs it against two live pods and prints the recommended value.
   guide's GLM results page ran images built from those two changes.
 * `--kv-events-config` on every serving pod, topic
   `kv@<POD_IP>:<PORT>@<model>`. No events, no precise index, no source
-  selection from it. (Deployments on the approximate index skip this
-  prerequisite - the source decision then runs on prompt-hash estimates.)
+  selection.
   `<PORT>` must be the port the router identifies the endpoint by - the
   routing sidecar's port (`8000` in this guide), not the engine port
   (`8200`). The EPP attributes each event's cached blocks to an endpoint
@@ -656,6 +654,5 @@ hardware configurations:
   the mechanism at 753B - the load-spill payoff (a load-first policy with
   the pull cuts mean TTFT -67% and lifts throughput 2.7x over the same
   policy without it, reproduced twice on independent builds), crossover
-  swept to its measured tie, a four-arm placement-x-pull grid on recorded
-  agentic traces, and the pull firing from the approximate index as well
-  as the precise one.
+  swept to its measured tie, and the quarantined overlay-era grid kept as
+  an index-sizing failure-mode record.

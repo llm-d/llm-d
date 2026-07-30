@@ -49,13 +49,12 @@ next to this file:
 * [`epp-load-p2p.yaml`](epp-load-p2p.yaml) - load-balanced placement + the
   P2P pull (`minCachedTokenDelta: 2048`, from the crossover below).
 
-A second arm set, `epp-glm-*.yaml`, is the wide-EP testbed's
-(`GLM-5.2-FP8`, 753B): the same placement-x-pull cross at
-`minCachedTokenDelta: 16384`, measured in the
-[wide-EP section](#wide-ep-testbed-glm-52-fp8) below. The
-`epp-glm-loadfirst{,-p2p}.yaml` pair is the testbed's load-spill payoff
+A second arm set is the wide-EP testbed's (`GLM-5.2-FP8`, 753B):
+`epp-glm-precise{,-p2p}.yaml` at `minCachedTokenDelta: 16384`, measured
+in the [wide-EP section](#wide-ep-testbed-glm-52-fp8) below, and the
+`epp-glm-loadfirst{,-p2p}.yaml` pair - the testbed's load-spill payoff
 benchmark (queue weight 3 over affinity weight 1, with and without
-`p2p-source-producer`) - the matched pair behind the -67% TTFT / 2.7x
+`p2p-source-producer`), the matched pair behind the -67% TTFT / 2.7x
 result in the GLM results page.
 
 For a defensible A/B, run arm pairs twice with the order alternated:
@@ -307,9 +306,11 @@ many concurrent, multi-turn sessions each pinned to an owner pod.
 The mechanism at the other end of the scale: `zai-org/GLM-5.2-FP8` (753B
 MoE), one prefill + one decode instance, each 16-way data/expert-parallel
 across 2 pods (32x H200). The workload replays recorded agentic traces (the
-SemiAnalysis Weka corpus) with aiperf at concurrencies 32/64/128; the four
-`epp-glm-*.yaml` arms cross the prefix-affinity index (precise vs
-approximate) with the pull on or off. `minCachedTokenDelta: 16384` was the
+SemiAnalysis Weka corpus) with aiperf at concurrencies 32/64/128; the shipped
+`epp-glm-*.yaml` arms are the precise pair (pull on or off) and the
+load-first pair; the historical grid additionally crossed in an
+approximate-index pair, retained only in the quarantined results-page
+record and not shipped. `minCachedTokenDelta: 16384` was the
 overlay-era crossover (dead tie at 13,648 tokens); on the upstream tier the
 pull floor fell to ~1.25 s and the tie moved to ~8.7K tokens, so new
 deployments should set 12,288 - the calibration recipe measures it, and its

@@ -4,14 +4,14 @@ The benchmark runs `zai-org/GLM-5.2-FP8` (753B MoE) prefill/decode
 disaggregated, one prefill and one decode instance, each 16-way
 data/expert-parallel across 2 pods (32x H200 total), ~520K tokens of GPU KV
 and a 100 GiB CPU offload tier per rank, vLLM block size 64, KV transfers
-over NIXL. Routing uses the llm-d inference gateway; the four arms cross the
-prefix-affinity index (precise KV-event-fed vs approximate prompt-hash)
-with the pull on or off, `minCachedTokenDelta: 16384` (from the
-crossover below). The workload replays recorded agentic traces (the
-SemiAnalysis Weka corpus, agent chains included) with aiperf at
-concurrencies 32/64/128, ~15 minutes per cell, single run per cell, zero
-request errors in every completed cell. Arm configurations are the
-`epp-glm-*.yaml` files in [../benchmarking/](../benchmarking/README.md).
+over NIXL. Routing uses the llm-d inference gateway with the precise
+(KV-event-fed) prefix index, `minCachedTokenDelta: 16384` (from the
+crossover below). The page carries the pull-versus-recompute crossover,
+the load-spill payoff pair, and - quarantined at the end - the
+overlay-era four-arm grid on recorded agentic traces (the SemiAnalysis
+Weka corpus, aiperf at concurrencies 32/64/128). The precise and load-first arm configurations ship as the
+`epp-glm-*.yaml` files in [../benchmarking/](../benchmarking/README.md);
+the historical grid's approximate-index arms are not shipped.
 
 ## Pull versus recompute (single request)
 
