@@ -168,10 +168,16 @@ The result of this guide, in either of two EPP topologies (pick one — see
 >   behind it is simply never called, since the Coordinator's pipeline (step 3) is what
 >   decides whether an `encode` phase call happens at all.
 > * Step 2: skip the encode model server overlay, or scale it to 0 replicas.
-> * Step 3: after deploying the Coordinator, edit the `llm-d-coordinator-config`
->   ConfigMap to drop the `replace-media-urls`, `render`, and `encode` steps from
->   `pipeline.steps`, keeping only `conditional-decode`, `prefill`, and `decode`, then
->   restart the coordinator Deployment.
+> * Step 3: after deploying the Coordinator, apply
+>   [`coordinator/patch-pd-only.yaml`](coordinator/patch-pd-only.yaml) to drop the
+>   `replace-media-urls`, `render`, and `encode` steps from `pipeline.steps` (keeping
+>   only `conditional-decode`, `prefill`, and `decode`), then restart the coordinator
+>   Deployment:
+>   ```bash
+>   kubectl patch configmap llm-d-coordinator-config -n ${NAMESPACE} --type=strategic \
+>       --patch="$(envsubst < ${REPO_ROOT}/guides/${GUIDE_NAME}/coordinator/patch-pd-only.yaml)"
+>   kubectl rollout restart deployment/llm-d-coordinator -n ${NAMESPACE}
+>   ```
 > * Step 4: skip entirely — the multimedia downloader is only used by the `replace-media-urls` pipeline step.
 
 ### 1. Deploy the llm-d Router
