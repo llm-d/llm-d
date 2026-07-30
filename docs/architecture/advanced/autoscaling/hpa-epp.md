@@ -108,6 +108,6 @@ the model to load.
 ## Deployment Guide
 
 See the
-[KEDA + EPP workload-autoscaling guide](../../../../guides/workload-autoscaling/README.hpa-epp.md)
+[KEDA + EPP workload-autoscaling guide](../../../../guides/workload-autoscaling/README.keda-epp.md)
 for the reusable router values, `ScaledObject`, authentication notes, and
 verification steps.

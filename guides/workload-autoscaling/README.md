@@ -41,7 +41,7 @@ See the [Prometheus Adapter guide](./promadapter.md) for installation instructio
 
 #### Queue-based Autoscaling
 
-The [KEDA + EPP Metrics](./README.hpa-epp.md) path uses KEDA's Prometheus
+The [KEDA + EPP Metrics](./README.keda-epp.md) path uses KEDA's Prometheus
 scaler with signals emitted directly by the Endpoint Picker (EPP). KEDA creates
 and owns the HPA that scales the model server Deployment.
 
@@ -68,7 +68,7 @@ WVA is designed for operators running multiple variants of the same model across
 
 ## Choosing a Scaling Signal
 
-| | [Queue-based Autoscaling](./README.hpa-epp.md) | [Saturation-based Autoscaling](./README.epp-keda-saturation.md) | [SLO-Aware Autoscaling](./README.slo-aware.md) | [KEDA + WVA Metrics](./README.wva.md) |
+| | [Queue-based Autoscaling](./README.keda-epp.md) | [Saturation-based Autoscaling](./README.epp-keda-saturation.md) | [SLO-Aware Autoscaling](./README.slo-aware.md) | [KEDA + WVA Metrics](./README.wva.md) |
 |---|---|---|---|---|
 | **Best for** | Homogeneous deployments; scale on absolute queue depth / running requests (lagging, per-deployment thresholds, no over-provisioning) | Homogeneous deployments; scale on a normalized saturation ratio (leading, more portable thresholds, can potentially over-provision) | Single-pool deployments with per-request latency SLOs, scaled on predicted latency | Multi-variant deployments with cost-aware placement across heterogeneous hardware |
 | **Scaling signal** | EPP metrics such as queue depth and running request count | normalized pool saturation level (0.0–1.0+) and running request count | EPP estimated TTFT/TPOT (ML-predicted, or measured) vs the SLO | KV cache utilization, queue depth, performance budgets |

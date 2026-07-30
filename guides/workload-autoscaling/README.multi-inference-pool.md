@@ -58,7 +58,7 @@ kubectl get pods -n ${NAMESPACE} --show-labels
 Once the additional pools are deployed, configure one scaler per target
 Deployment. Either scaling path can be used:
 
-- **[KEDA + EPP Metrics](./README.hpa-epp.md)**: Create one KEDA
+- **[KEDA + EPP Metrics](./README.keda-epp.md)**: Create one KEDA
   `ScaledObject` per target Deployment. Each PromQL query must isolate the
   EPP/InferencePool associated with that Deployment using the labels currently
   exposed by EPP and by the Prometheus scrape target.
