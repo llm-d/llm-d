@@ -66,8 +66,6 @@ to a deployment's `kustomization.yaml` under `components:`.
 | `compute-nan-decode` | decode only | Sets `VLLM_COMPUTE_NANS_IN_LOGITS=1` on decode |
 | `compute-nan-prefill` | prefill only | Sets `VLLM_COMPUTE_NANS_IN_LOGITS=1` on prefill |
 | `mrv1` | decode only | Sets `VLLM_USE_V2_MODEL_RUNNER=0` on decode |
-| `gpu-mem-prefill-0905` | prefill only | Sets prefill `gpu-memory-utilization` to 0.905 |
-| `gpu-mem-prefill-091` | prefill only | Sets prefill `gpu-memory-utilization` to 0.91 |
 | `max-model-len-130k` | prefill + decode | Sets `max-model-len` to 130000 |
 
 K8s takes the last duplicate env var, so appended values override the base defaults.
@@ -104,7 +102,6 @@ resources:
   - ../../providers/coreweave
 components:
   - ../../components/offloading-tiered
-  - ../../components/gpu-mem-prefill-0905
   - ../../components/max-model-len-130k
 patches:
   - target:
