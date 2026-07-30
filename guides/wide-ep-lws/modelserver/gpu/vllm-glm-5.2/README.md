@@ -124,55 +124,15 @@ curl -X POST http://${IP}/v1/completions \
     }' | jq
 ```
 
-## Benchmark Results
+## Benchmarking
 
-Agentic code-generation workload (avg ISL ~55K tokens, bursty arrivals) on CoreWeave H200 with
-InfiniBand (inter-node) and NVLink (intra-node). Benchmarked with [aiperf](https://github.com/ai-dynamo/aiperf). Full interactive
-dashboard and analysis in the accompanying blog post.
+These manifests back the [agentic-serving GLM-5.2 guide](../../../../agentic-serving/glm-5-2-h200.md);
+benchmark results, the workload description, and key takeaways are in its
+[Benchmark Results](../../../../agentic-serving/glm-5-2-h200.md#benchmark-results) section, with
+the full analysis and figures in the
+[blog post](https://llm-d.ai/blog/serving-glm-5-2-agentic-workloads-on-llm-d).
 
-### CPU Offloading + MTP (recommended)
-
-| Topology | Concurrency | TTFT p50 (s) | TTFT p99 (s) | ITL p50 (ms) | ITL p99 (ms) | Tok/s/user | Throughput (tok/s) |
-| -------- | ----------- | ------------ | ------------ | ------------ | ------------ | ---------- | ------------------ |
-| `p1w1d1w1` (2 nodes) | 16 | 2.16 | 17.44 | 16.0 | 40.1 | 62.1 | 729 |
-| `p1w1d1w1` (2 nodes) | 64 | 19.05 | 101.65 | 18.1 | 27.6 | 55.6 | 1,336 |
-| `p1w1d1w1` (2 nodes) | 128 | 48.12 | 173.69 | 18.5 | 29.1 | 54.3 | 1,418 |
-| `p1w2d1w2` (4 nodes) | 16 | 2.10 | 14.59 | 14.7 | 47.2 | 67.1 | 784 |
-| `p1w2d1w2` (4 nodes) | 64 | 4.96 | 22.02 | 16.5 | 25.6 | 60.8 | 2,529 |
-| `p1w2d1w2` (4 nodes) | 256 | 24.87 | 79.61 | 19.7 | 31.9 | 50.9 | 4,356 |
-| `p2w2d1w2` (6 nodes) | 64 | 3.62 | 16.04 | 17.2 | 27.1 | 58.4 | 2,953 |
-| `p2w2d1w2` (6 nodes) | 256 | 9.28 | 43.27 | 24.4 | 48.1 | 41.1 | 6,155 |
-| `p2w2d1w2` (6 nodes) | 512 | 22.44 | 85.05 | 24.9 | 60.0 | 39.9 | 7,046 |
-| `p3w2d1w2` (8 nodes) | 64 | 2.91 | 14.01 | 17.7 | 27.1 | 57.5 | 2,898 |
-| `p3w2d1w2` (8 nodes) | 256 | 7.51 | 33.41 | 25.4 | 62.2 | 39.4 | 6,476 |
-| `p3w2d1w2` (8 nodes) | 512 | 30.10 | 80.31 | 28.8 | 53.4 | 35.1 | 7,057 |
-
-### Baseline (no MTP, no offloading)
-
-| Topology | Concurrency | TTFT p50 (s) | TTFT p99 (s) | ITL p50 (ms) | ITL p99 (ms) | Tok/s/user | Throughput (tok/s) |
-| -------- | ----------- | ------------ | ------------ | ------------ | ------------ | ---------- | ------------------ |
-| `p1w1d1w1` (2 nodes) | 16 | 1.15 | 14.68 | 34.0 | 36.1 | 30.2 | 439 |
-| `p1w1d1w1` (2 nodes) | 64 | 23.85 | 84.43 | 39.9 | 42.9 | 24.9 | 851 |
-| `p1w1d1w1` (2 nodes) | 256 | 122.49 | 256.35 | 43.1 | 45.6 | 23.5 | 1,080 |
-| `p1w2d1w2` (4 nodes) | 16 | 1.23 | 13.64 | 33.2 | 40.7 | 29.9 | 454 |
-| `p1w2d1w2` (4 nodes) | 64 | 2.32 | 13.89 | 38.1 | 39.3 | 26.4 | 1,492 |
-| `p1w2d1w2` (4 nodes) | 256 | 17.13 | 193.81 | 41.4 | 45.6 | 24.3 | 2,714 |
-| `p2w2d1w2` (6 nodes) | 64 | 1.68 | 12.57 | 38.5 | 41.4 | 26.0 | 1,532 |
-| `p2w2d1w2` (6 nodes) | 256 | 3.74 | 36.33 | 46.4 | 48.7 | 22.2 | 3,549 |
-
-### Key Takeaways
-
-- **MTP doubles per-user decode speed**: ~60 tok/s/user with MTP vs ~26 tok/s/user baseline
-  (ITL drops from ~35–45 ms to ~15–20 ms).
-- **CPU offloading preserves throughput**: adding CPU offloading to enable longer
-  contexts does not meaningfully degrade ITL or per-user throughput.
-- **Scaling prefill replicas controls TTFT at load**: `p2w2d1w2` (6 nodes) keeps TTFT p99
-  under 20s at c64 vs 100s+ for `p1w1d1w1` — prefill replication absorbs burst arrivals.
-- **Aggregate throughput scales with nodes**: 7,000+ tok/s at c512 on 8 nodes
-  (`p3w2d1w2`) vs ~1,300 tok/s on 2 nodes.
-
-<details>
-<summary>Benchmark overlay configurations</summary>
+### Benchmark Overlays
 
 Pre-built overlays under `deployments/benchmark/<config>/<topology>/` combine components with
 topology patches. Each matches a tested configuration on CoreWeave H200:
@@ -181,7 +141,6 @@ topology patches. Each matches a tested configuration on CoreWeave H200:
 | ------------- | --------- | ---------- |
 | Baseline | `benchmark/baseline/` | `no-mtp` |
 | MTP + Offloading | `benchmark/mtp-offloading/` | `offloading-tiered` |
-| MTP + Offloading (new nightly) | `benchmark/mtp-offloading-newnightly/` | `offloading-tiered` |
 | Offloading | `benchmark/offloading/` | `no-mtp` + `offloading-tiered` |
 | Full ISL + MTP + Offloading | `benchmark/full-isl-mtp-offloading/` | `offloading-tiered` |
 
@@ -223,8 +182,6 @@ patches:
         value: 1
 ```
 
-</details>
-
 ## Optional Features
 
 ### MTP Speculative Decoding
@@ -234,8 +191,9 @@ component or `ENABLE_MTP=0`. Token count: `MTP_NUM_TOKENS` (default `3`).
 
 ### EPP Routing
 
-The GLM-5.2 EPP overrides (`router/glm-5.2-overrides.values.yaml`) add dual prefix-cache
-scoring for P/D routing:
+The GLM-5.2 EPP overrides (`router/glm-5.2-overrides.values.yaml`) replace the wide-ep-lws
+prefix-cache scorer with dual prefix-cache scoring for P/D routing — include the file after
+`wide-ep-lws.values.yaml` when installing the router:
 
 - **GPU prefix-cache scorer** (weight 5) — auto-tuned, tracks GPU-resident prefix blocks
 - **CPU prefix-cache scorer** (weight 2) — fixed LRU capacity (200k entries per server),
@@ -285,7 +243,7 @@ Node-exporter sidecars on each pod collect InfiniBand, CPU, memory pressure, and
 retransmission metrics. Apply Prometheus scrape configs:
 
 ```bash
-bash guides/wide-ep-lws/monitoring/apply-scrape-configs.sh ${NAMESPACE}
+NAMESPACE=${NAMESPACE} bash guides/wide-ep-lws/monitoring/apply-scrape-configs.sh
 ```
 
 DCGM custom metrics: `base/dcgm-custom-metrics.yaml`.
