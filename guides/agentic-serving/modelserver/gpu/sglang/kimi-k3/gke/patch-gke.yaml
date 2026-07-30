@@ -1,0 +1,111 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: distributed-sglang-k3
+  namespace: default
+spec:
+  template:
+    metadata:
+      annotations:
+        gke-gcsfuse/volumes: "true"
+        networking.gke.io/default-interface: eth0
+        networking.gke.io/interfaces: |
+          [
+            {"interfaceName":"eth0","network":"default"},
+            {"interfaceName":"eth1","network":"gvnic-1"},
+            {"interfaceName":"eth2","network":"rdma-0"},
+            {"interfaceName":"eth3","network":"rdma-1"},
+            {"interfaceName":"eth4","network":"rdma-2"},
+            {"interfaceName":"eth5","network":"rdma-3"},
+            {"interfaceName":"eth6","network":"rdma-4"},
+            {"interfaceName":"eth7","network":"rdma-5"},
+            {"interfaceName":"eth8","network":"rdma-6"},
+            {"interfaceName":"eth9","network":"rdma-7"}
+          ]
+    spec:
+      serviceAccountName: workload-identity-k8s-sa
+      nodeSelector:
+        cloud.google.com/gke-accelerator: nvidia-b200
+        cloud.google.com/gke-nodepool: a4-highgpu-8g-a4-pool
+      containers:
+      - name: sglang-container
+        args:
+        - |
+          cat << 'EOF' > /tmp/shim_dev.c
+          extern int ncclCommInitRank(void** comm, int nranks, void* commId, int myrank);
+          int ncclDevCommCreate(void** comm, int nranks, void* commId, int myrank, int config) {
+              return ncclCommInitRank(comm, nranks, commId, myrank);
+          }
+          int ncclDevCommDestroy(void* comm, void* devComm) { return 0; }
+          int ncclAlltoAll(const void* sendbuff, void* recvbuff, unsigned long count, int datatype, void* comm, void* stream) { return 0; }
+          EOF
+          gcc -shared -fPIC -o /usr/local/gib/lib64/libnccl_dev_shim.so /tmp/shim_dev.c
+          for f in $(find /usr/ /lib/ /root/ -name "libnccl.so*" 2>/dev/null | grep -v "/usr/local/gib"); do
+            ln -sf /usr/local/gib/lib64/libnccl.so.2 "$f"
+          done
+          /sbin/ldconfig || true
+          export NCCL_NET=gIB
+          source /usr/local/gib/scripts/set_nccl_env.sh
+          echo "source /usr/local/gib/scripts/set_nccl_env.sh" >> /root/.bashrc
+          MY_IP=$(hostname -I | awk '{print $1}')
+          export SGLANG_HOST_IP="${MY_IP}"
+          echo "=========================================================="
+          echo "Launching SGLang multi-node for moonshotai/Kimi-K3..."
+          echo "Node Rank: $POD_INDEX | dist-init-addr: sglang-master-pod-k3:20000"
+          echo "=========================================================="
+
+          sglang serve \
+              --trust-remote-code \
+              --model-path /bucket/Kimi-K3 \
+              --served-model-name moonshotai/Kimi-K3 \
+              --load-format runai_streamer \
+              --enable-metrics \
+              --tp-size 16 \
+              --nnodes 2 \
+              --node-rank $POD_INDEX \
+              --dist-init-addr sglang-master-pod-k3:20000 \
+              --mem-fraction-static 0.85 \
+              --disable-flashinfer-autotune \
+              --watchdog-timeout 3600 \
+              --reasoning-parser kimi_k3 \
+              --tool-call-parser kimi_k3 \
+              --model-loader-extra-config '{"memory_limit": 34359738368}' \
+              --mamba-full-memory-ratio 0.43 \
+              --host 0.0.0.0 \
+              --port 30000 \
+              --speculative-algorithm DSPARK \
+              --speculative-draft-model-path /bucket/Kimi-K3-DSpark \
+              --speculative-dspark-block-size 7 \
+              --enable-linear-replayssm-spec \
+              --max-running-requests 512 \
+              --cuda-graph-max-bs 512
+        env:
+        - name: LD_LIBRARY_PATH
+          value: /usr/local/nvidia/lib64
+        - name: LD_PRELOAD
+          value: /usr/local/gib/lib64/libnccl_dev_shim.so
+        volumeMounts:
+        - mountPath: /usr/local/nvidia
+          name: library-dir-host
+        - mountPath: /usr/local/gib
+          name: gib
+        - mountPath: /bucket
+          name: gcs-fuse-csi-eph
+      volumes:
+      - name: library-dir-host
+        hostPath:
+          path: /home/kubernetes/bin/nvidia
+      - name: gib
+        hostPath:
+          path: /home/kubernetes/bin/gib
+      - name: hf-cache
+        hostPath:
+          path: /mnt/stateful_partition/kube-ephemeral-ssd/huggingface_cache
+          type: DirectoryOrCreate
+      - name: gcs-fuse-csi-eph
+        csi:
+          driver: gcsfuse.csi.storage.gke.io
+          volumeAttributes:
+            bucketName: ikwak-models-gpu-launchpad-playground
+            gcsfuseMetadataPrefetchOnMount: "true"
+            mountOptions: implicit-dirs,file-mode=777,dir-mode=777,file-cache:enable-parallel-downloads:true,file-cache:cache-file-for-range-read:true,file-cache:max-size-mb:-1,write:enable-streaming-writes:true,read_ahead_kb=1024,file-system:kernel-list-cache-ttl-secs:-1

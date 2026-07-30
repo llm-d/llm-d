@@ -1,0 +1,122 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: distributed-sglang-k3
+  namespace: default
+  labels:
+    app: distributed-sglang-k3
+    llm-d.ai/guide: optimized-baseline
+spec:
+  replicas: 2
+  serviceName: sglang-master-pod-k3
+  podManagementPolicy: Parallel
+  selector:
+    matchLabels:
+      app: distributed-sglang-k3
+  template:
+    metadata:
+      annotations:
+        prometheus.io/path: "/metrics"
+        prometheus.io/port: "30000"
+        prometheus.io/scrape: "true"
+      labels:
+        app: distributed-sglang-k3
+        llm-d.ai/guide: optimized-baseline
+    spec:
+      tolerations:
+      - operator: Exists
+      containers:
+      - name: sglang-container
+        image: docker.io/lmsysorg/sglang:kimi-k3
+        imagePullPolicy: Always
+        command:
+        - /bin/bash
+        - -c
+        args:
+        - |
+          MY_IP=$(hostname -I | awk '{print $1}')
+          export SGLANG_HOST_IP="${MY_IP}"
+          echo "=========================================================="
+          echo "Launching SGLang multi-node for moonshotai/Kimi-K3..."
+          echo "Node Rank: $POD_INDEX | dist-init-addr: sglang-master-pod-k3:20000"
+          echo "=========================================================="
+
+          sglang serve \
+              --trust-remote-code \
+              --model-path moonshotai/Kimi-K3 \
+              --served-model-name moonshotai/Kimi-K3 \
+              --load-format runai_streamer \
+              --enable-metrics \
+              --tp-size 16 \
+              --nnodes 2 \
+              --node-rank $POD_INDEX \
+              --dist-init-addr sglang-master-pod-k3:20000 \
+              --mem-fraction-static 0.85 \
+              --disable-flashinfer-autotune \
+              --watchdog-timeout 3600 \
+              --reasoning-parser kimi_k3 \
+              --tool-call-parser kimi_k3 \
+              --model-loader-extra-config '{"memory_limit": 34359738368}' \
+              --mamba-full-memory-ratio 0.43 \
+              --host 0.0.0.0 \
+              --port 30000 \
+              --speculative-algorithm DSPARK \
+              --speculative-draft-model-path moonshotai/Kimi-K3-DSpark \
+              --speculative-dspark-block-size 7 \
+              --enable-linear-replayssm-spec \
+              --max-running-requests 512 \
+              --cuda-graph-max-bs 512
+        env:
+        - name: POD_INDEX
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.labels['apps.kubernetes.io/pod-index']
+        - name: HF_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: hf-secret
+              key: HF_TOKEN
+              optional: true
+        - name: GLOO_SOCKET_IFNAME
+          value: eth0
+        - name: NCCL_DEBUG
+          value: WARN
+        - name: SGLANG_REQUEST_STATE_WAIT_TIMEOUT
+          value: "18000"
+        - name: OMP_NUM_THREADS
+          value: "24"
+        - name: SGLANG_SET_CPU_AFFINITY
+          value: "0"
+        - name: SAFETENSORS_FAST_GPU
+          value: "1"
+        - name: PYTORCH_CUDA_ALLOC_CONF
+          value: expandable_segments:True
+        - name: RUNAI_STREAMER_MEMORY_LIMIT
+          value: "34359738368"
+        - name: RUNAI_STREAMER_CONCURRENCY
+          value: "16"
+        - name: SGLANG_USE_RUNAI_MODEL_STREAMER
+          value: "true"
+        resources:
+          requests:
+            cpu: "206"
+            memory: "1500Gi"
+            nvidia.com/gpu: "8"
+          limits:
+            cpu: "206"
+            memory: "1500Gi"
+            nvidia.com/gpu: "8"
+        volumeMounts:
+        - mountPath: /dev/shm
+          name: dshm
+        - mountPath: /root/.cache/huggingface
+          name: hf-cache
+      volumes:
+      - name: dshm
+        emptyDir:
+          medium: Memory
+          sizeLimit: 250Gi
+      - name: hf-cache
+        hostPath:
+          path: /root/.cache/huggingface
+          type: DirectoryOrCreate
