@@ -1,3 +1,7 @@
+# GLM-5.2 overrides for wide-ep-lws.values.yaml: replaces the single prefix-cache
+# scorer with dual GPU+CPU prefix-cache scoring, so P/D routing accounts for
+# CPU-offloaded KV when picking an endpoint. Apply after wide-ep-lws.values.yaml;
+# targetPorts and matchLabels are inherited from it.
 router:
   epp:
     pluginsCustomConfig:
@@ -44,13 +48,3 @@ router:
           - pluginRef: decode-filter
           - pluginRef: active-request-scorer
             weight: 3
-  modelServers:
-    targetPorts:
-      - number: 8000
-      - number: 8001
-      - number: 8002
-      - number: 8003
-      - number: 8004
-      - number: 8005
-      - number: 8006
-      - number: 8007
