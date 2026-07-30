@@ -69,60 +69,6 @@ to a deployment's `kustomization.yaml` under `components:`.
 
 K8s takes the last duplicate env var, so appended values override the base defaults.
 
-### Benchmark Configurations
-
-Pre-built overlays under `deployments/benchmark/<config>/<topology>/` combine components with
-topology patches. Each matches a tested configuration on CoreWeave H200:
-
-| Configuration | Directory | Components |
-| ------------- | --------- | ---------- |
-| Baseline | `benchmark/baseline/` | `no-mtp` |
-| Baseline + Compute NaN Decode | `benchmark/baseline-computenan-decode/` | `no-mtp` + `compute-nan-decode` |
-| Baseline + Compute NaN Decode Prefill | `benchmark/baseline-computenan-decode-prefill/` | `no-mtp` + `compute-nan-decode` + `compute-nan-prefill` |
-| MTP + Offloading | `benchmark/mtp-offloading/` | `offloading-tiered` |
-| MTP + Offloading (new nightly) | `benchmark/mtp-offloading-newnightly/` | `offloading-tiered` |
-| Offloading | `benchmark/offloading/` | `no-mtp` + `offloading-tiered` |
-| Full ISL + MTP + Offloading | `benchmark/full-isl-mtp-offloading/` | `offloading-tiered` |
-
-Deploy a benchmark config:
-
-```bash
-kubectl apply -n ${NAMESPACE} -k deployments/benchmark/<config>/<topology>
-```
-
-### Example: Tiered Offloading + MTP
-
-```yaml
-apiVersion: kustomize.config.k8s.io/v1beta1
-kind: Kustomization
-resources:
-  - ../../providers/coreweave
-components:
-  - ../../components/offloading-tiered
-  - ../../components/max-model-len-130k
-patches:
-  - target:
-      kind: LeaderWorkerSet
-      name: ".*-prefill"
-    patch: |-
-      - op: replace
-        path: /spec/replicas
-        value: 1
-      - op: replace
-        path: /spec/leaderWorkerTemplate/size
-        value: 1
-  - target:
-      kind: LeaderWorkerSet
-      name: ".*-decode"
-    patch: |-
-      - op: replace
-        path: /spec/replicas
-        value: 1
-      - op: replace
-        path: /spec/leaderWorkerTemplate/size
-        value: 1
-```
-
 ## Prerequisites
 
 In addition to the [wide-ep-lws prerequisites](../../../README.md#prerequisites):
@@ -226,6 +172,62 @@ dashboard and analysis in the accompanying blog post (link TBD).
   under 20s at c64 vs 100s+ for `p1w1d1w1` — prefill replication absorbs burst arrivals.
 - **Aggregate throughput scales with nodes**: 7,000+ tok/s at c512 on 8 nodes
   (`p3w2d1w2`) vs ~1,300 tok/s on 2 nodes.
+
+<details>
+<summary>Benchmark overlay configurations</summary>
+
+Pre-built overlays under `deployments/benchmark/<config>/<topology>/` combine components with
+topology patches. Each matches a tested configuration on CoreWeave H200:
+
+| Configuration | Directory | Components |
+| ------------- | --------- | ---------- |
+| Baseline | `benchmark/baseline/` | `no-mtp` |
+| Baseline + Compute NaN Decode | `benchmark/baseline-computenan-decode/` | `no-mtp` + `compute-nan-decode` |
+| Baseline + Compute NaN Decode Prefill | `benchmark/baseline-computenan-decode-prefill/` | `no-mtp` + `compute-nan-decode` + `compute-nan-prefill` |
+| MTP + Offloading | `benchmark/mtp-offloading/` | `offloading-tiered` |
+| MTP + Offloading (new nightly) | `benchmark/mtp-offloading-newnightly/` | `offloading-tiered` |
+| Offloading | `benchmark/offloading/` | `no-mtp` + `offloading-tiered` |
+| Full ISL + MTP + Offloading | `benchmark/full-isl-mtp-offloading/` | `offloading-tiered` |
+
+Deploy a benchmark config:
+
+```bash
+kubectl apply -n ${NAMESPACE} -k deployments/benchmark/<config>/<topology>
+```
+
+Example overlay (`mtp-offloading/p1w1d1w1`):
+
+```yaml
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ../../../../providers/coreweave
+components:
+  - ../../../../components/offloading-tiered
+patches:
+  - target:
+      kind: LeaderWorkerSet
+      name: ".*-prefill"
+    patch: |-
+      - op: replace
+        path: /spec/replicas
+        value: 1
+      - op: replace
+        path: /spec/leaderWorkerTemplate/size
+        value: 1
+  - target:
+      kind: LeaderWorkerSet
+      name: ".*-decode"
+    patch: |-
+      - op: replace
+        path: /spec/replicas
+        value: 1
+      - op: replace
+        path: /spec/leaderWorkerTemplate/size
+        value: 1
+```
+
+</details>
 
 ## Optional Features
 
