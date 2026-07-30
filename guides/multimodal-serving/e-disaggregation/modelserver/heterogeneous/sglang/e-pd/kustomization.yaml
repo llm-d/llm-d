@@ -10,8 +10,8 @@ resources:
 images:
   - name: REPLACE_MODEL_SERVER_IMAGE
     newName: docker.io/lmsysorg/sglang
-    newTag: v0.5.15.post1-cu130-runtime
-    digest: sha256:247fd6bfcdeabe3e382da5c557537440148d08fd30f2b482f01fa09e242fe185
+    newTag: v0.5.15.post1-cu130
+    digest: sha256:00c53fe4c31bf22d7b37537f28bbdfd924c02de13cdfb4bff7378c9c34d75ab2
   - name: REPLACE_XPU_MODEL_SERVER_IMAGE
     newName: ghcr.io/xiaojun-zhang/llm-d-xpu-sglang
     newTag: sglang-heterogeneous-e-pd

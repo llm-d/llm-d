@@ -139,7 +139,7 @@ The overlay pins both images by digest:
 
 | Role | Image |
 | --- | --- |
-| NVIDIA GPU PD | `docker.io/lmsysorg/sglang:v0.5.15.post1-cu130-runtime@sha256:247fd6bfcdeabe3e382da5c557537440148d08fd30f2b482f01fa09e242fe185` |
+| NVIDIA GPU PD | `docker.io/lmsysorg/sglang:v0.5.15.post1-cu130@sha256:00c53fe4c31bf22d7b37537f28bbdfd924c02de13cdfb4bff7378c9c34d75ab2` |
 | Intel XPU Encode | `ghcr.io/xiaojun-zhang/llm-d-xpu-sglang:sglang-heterogeneous-e-pd@sha256:56ed840fe2890671a894fda14da1ead719ce18e5a94d3095a58ba5b54c41e55d` |
 
 The official GPU image identifies SGLang source revision

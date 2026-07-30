@@ -39,8 +39,9 @@ spec:
           command: ["/bin/bash", "-lc"]
           args:
             - |
-              set -euo pipefail
+              set -eo pipefail
               source /opt/intel/oneapi/setvars.sh --force
+              set -u
               exec python3 -m sglang.launch_server \
                 --model-path=moonshotai/Kimi-VL-A3B-Instruct \
                 --served-model-name=moonshotai/Kimi-VL-A3B-Instruct \
