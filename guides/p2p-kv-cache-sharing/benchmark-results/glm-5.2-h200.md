@@ -32,7 +32,7 @@ byte-exact against the consumer's `vllm:kv_offload_load_bytes_total`
 | 24,576 | 3,338.0 ms | 1,315.3 ms | -60.6% | 2,276.4 MB |
 
 Recompute is linear at ~130-147 us/token while the pull is flat at
-~1.21-1.32 s, so the **crossover is ~8,650 tokens**. The recommended
+about 1.25 s, so the **crossover is ~8,650 tokens**. The recommended
 setting is `minCachedTokenDelta: 12288`: 8,192 is a dead tie whose sign
 flips between runs, and 12,288 is the lowest length the sweeps call
 decisively. The benchmark campaigns on this page ran `16384` - set from
