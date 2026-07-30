@@ -170,13 +170,15 @@ Pick **one** of the two topologies from the [Overview](#overview) — single EPP
 (default below) or 3 separate EPPs (in the collapsed section further down). Don't do
 both; they install into the same namespace and would conflict.
 
-The Coordinator's own ingress (`coordinator/httproute.yaml`) and its outbound
-`gateway.address` ([`coordinator/configmap.yaml`](coordinator/configmap.yaml)) both
-always route through a real Kubernetes Gateway — there is no standalone-proxy path for
-this guide, unlike other guides in this repo. Deploy one first if your cluster doesn't
+Both topologies default to routing the Coordinator's own ingress
+(`coordinator/httproute.yaml`) and its outbound `gateway.address`
+([`coordinator/configmap.yaml`](coordinator/configmap.yaml)) through a real
+Kubernetes Gateway. The single-EPP topology also has a Standalone Mode (further
+down, no Gateway API `Gateway`/`HTTPRoute` at all) — see that section for why only
+single-EPP supports it. For Gateway mode, deploy one first if your cluster doesn't
 already have one:
 
-1. *Deploy a Kubernetes Gateway*. Follow [the gateway guides](../../docs/infrastructure/gateway) for step by step deployment for a Gateway named `llm-d-inference-gateway`. You only need to create one Gateway for your cluster.
+1. *Deploy a Kubernetes Gateway*. Follow [the gateway guides](../../docs/infrastructure/gateway) for step by step deployment for a Gateway named `llm-d-inference-gateway`. You only need to create one Gateway for your cluster. Skip this step if you're using the single-EPP topology's Standalone Mode instead.
 
 #### Single EPP (default)
 
@@ -186,6 +188,7 @@ One llm-d Router release, EPP, and InferencePool cover all three roles.
 
 ```bash
 export PROVIDER_NAME=gke # other: na, agentgateway, or istio
+export GATEWAY_SERVICE=llm-d-inference-gateway-${PROVIDER_NAME}
 helm install ${GUIDE_NAME} \
     ${ROUTER_GATEWAY_CHART} \
     -f ${REPO_ROOT}/guides/recipes/router/base.values.yaml \
@@ -228,6 +231,43 @@ envsubst < ${REPO_ROOT}/guides/${GUIDE_NAME}/router/httproute.yaml | kubectl app
 ```
 
 <details>
+<summary><h4>Standalone Mode (single EPP only, no Kubernetes Gateway)</h4></summary>
+
+Deploys the llm-d Router with its own Envoy sidecar and Service — no Gateway API
+`Gateway`/`HTTPRoute` involved at all. This works for the single-EPP topology because
+the Coordinator's Service and the router-EPP's Service become two independent
+ClusterIPs instead of both being routed through one shared Gateway listener: the
+`Exact`-path + `EPP-Profile` header tie-break that Gateway mode's two hand-authored
+HTTPRoutes rely on (see above) exists only to disambiguate two things sharing that one
+listener. With no shared listener, there's nothing left to disambiguate — the
+Coordinator's outbound calls just go straight to the router-EPP's own Service.
+
+**Not available for the 3-EPP topology**: the Coordinator has a single
+`gateway.address` ([`coordinator/configmap.yaml`](coordinator/configmap.yaml)), not one
+per role. In Gateway mode, [`router/httproute-3-epp.yaml`](router/httproute-3-epp.yaml)
+is what fans that one address out to the right one of three InferencePools by
+`EPP-Profile` header. There's no standalone equivalent of that fan-out, so 3-EPP still
+needs a real Gateway.
+
+2. *Deploy the llm-d Router*:
+
+```bash
+export GATEWAY_SERVICE=${GUIDE_NAME}-epp
+helm install ${GUIDE_NAME} \
+    ${ROUTER_STANDALONE_CHART} \
+    -f ${REPO_ROOT}/guides/recipes/router/base.values.yaml \
+    -f ${REPO_ROOT}/guides/${GUIDE_NAME}/router/${GUIDE_NAME}.values.yaml \
+    -n ${NAMESPACE} --version ${ROUTER_CHART_VERSION}
+```
+
+No HTTPRoute to apply here, and no Gateway to deploy beforehand (skip step 1.1 above
+entirely) — the router-EPP's own Service, named `${GATEWAY_SERVICE}` (the chart derives
+it from the Helm release name), is what the Coordinator's `gateway.address` points at
+directly once you deploy it in step 3.
+
+</details>
+
+<details>
 <summary><h4>3 separate EPPs (one per role)</h4></summary>
 
 Three independent llm-d Router releases — one per role — each with its own EPP and
@@ -252,6 +292,7 @@ prefix-cache affinity to speak of, just queue/load balancing.
 
 ```bash
 export PROVIDER_NAME=gke # other: na, agentgateway, or istio
+export GATEWAY_SERVICE=llm-d-inference-gateway-${PROVIDER_NAME}
 for ROLE in encode prefill decode; do
   helm install ${GUIDE_NAME}-${ROLE} \
       ${ROUTER_GATEWAY_CHART} \
@@ -303,13 +344,23 @@ kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/g
 ### 3. Deploy the Coordinator
 
 Drives the `replace-media-urls → render → conditional-decode → encode → prefill →
-decode` pipeline. The ConfigMap references `${NAMESPACE}` and `${PROVIDER_NAME}`, so
+decode` pipeline. The ConfigMap references `${NAMESPACE}` and `${GATEWAY_SERVICE}`
+(exported in step 1's Gateway mode or Standalone Mode block — whichever you used), so
 build with `kustomize` and pipe through `envsubst` before applying:
 
 ```bash
-export PROVIDER_NAME=${PROVIDER_NAME:-istio} # match whatever provider you used for the routers, or your standalone proxy
 kustomize build ${REPO_ROOT}/guides/${GUIDE_NAME}/coordinator/ | envsubst | kubectl apply -n ${NAMESPACE} -f -
 ```
+
+> [!NOTE]
+> Using Standalone Mode from step 1? `coordinator/kustomization.yaml` bundles
+> [`coordinator/httproute.yaml`](coordinator/httproute.yaml) unconditionally, but
+> Standalone Mode has no Gateway for it to attach to. Apply the ConfigMap and
+> Deployment directly instead, skipping that one resource:
+> ```bash
+> envsubst < ${REPO_ROOT}/guides/${GUIDE_NAME}/coordinator/configmap.yaml | kubectl apply -n ${NAMESPACE} -f -
+> kubectl apply -n ${NAMESPACE} -f ${REPO_ROOT}/guides/${GUIDE_NAME}/coordinator/deployment.yaml
+> ```
 
 ### 4. (Optional) Deploy the multimedia downloader (caching proxy)
 
@@ -342,8 +393,8 @@ instead of through a cache.
 
 ### 1. Get the IP of the Entrypoint
 
-Clients always send requests through the **Gateway**, never directly to the
-Coordinator's Service. The Coordinator's own `coordinator` HTTPRoute (deployed
+In Gateway mode, clients always send requests through the **Gateway**, never directly
+to the Coordinator's Service. The Coordinator's own `coordinator` HTTPRoute (deployed
 alongside the coordinator overlay in step 3) attaches to the `llm-d-inference-gateway`
 Gateway and forwards client traffic (no `EPP-Profile` header) to the Coordinator, which
 then orchestrates the `encode → prefill → decode` pipeline. The EPP is internal — the
@@ -355,6 +406,20 @@ header on its own outbound calls, which route back through that same Gateway to
 export IP=$(kubectl get gateway llm-d-inference-gateway -n ${NAMESPACE} -o jsonpath='{.status.addresses[0].value}')
 export PORT=80
 ```
+
+<details>
+<summary><h4>Standalone Mode</h4></summary>
+
+There's no Gateway at all, so clients hit the Coordinator's own ClusterIP Service
+directly — the mirror image of how the Coordinator's own outbound calls reach the
+router-EPP's Service (`${GATEWAY_SERVICE}`).
+
+```bash
+export IP=$(kubectl get service llm-d-coordinator -n ${NAMESPACE} -o jsonpath='{.spec.clusterIP}')
+export PORT=8080
+```
+
+</details>
 
 ### 2. Send Test Requests
 
@@ -424,6 +489,23 @@ kustomize build ${REPO_ROOT}/guides/${GUIDE_NAME}/coordinator/ | envsubst | kube
 kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/gpu/vllm/${INFRA_PROVIDER}
 kubectl delete namespace ${NAMESPACE}
 ```
+
+<details>
+<summary><h4>Standalone Mode cleanup</h4></summary>
+
+No HTTPRoutes were created in Standalone Mode, and the Coordinator's own resources
+were applied directly rather than via `coordinator/kustomization.yaml` (step 3's
+note) — delete them the same way:
+
+```bash
+helm uninstall ${GUIDE_NAME} -n ${NAMESPACE}
+kubectl delete -n ${NAMESPACE} -f ${REPO_ROOT}/guides/${GUIDE_NAME}/coordinator/deployment.yaml
+envsubst < ${REPO_ROOT}/guides/${GUIDE_NAME}/coordinator/configmap.yaml | kubectl delete -n ${NAMESPACE} -f -
+kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/gpu/vllm/${INFRA_PROVIDER}
+kubectl delete namespace ${NAMESPACE}
+```
+
+</details>
 
 <details>
 <summary><h4>3-EPP topology cleanup</h4></summary>
