@@ -107,6 +107,12 @@ placement in the capacity-driven regime, not because the pull improves it.
 Reach for load-aware + P2P when your workload looks like many concurrent,
 multi-turn sessions each pinned to an owner pod; re-measure both arms
 against your own workload shape before assuming either generalizes.
+Provenance caveat on the aggregated arm comparisons: they were measured
+with the prefix index at its default `podCacheSize` (10), while the
+shipped configurations set 32; index size is known to change affinity
+and source selection, so treat the arm-versus-arm numbers as pending a
+re-measurement at 32 (the pull-versus-recompute crossover bypasses the
+index and is unaffected).
 
 ## Configuration
 

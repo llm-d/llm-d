@@ -67,12 +67,13 @@ and probed on every profile swap. The two profiles are
 | precise + P2P | **2.56** | **5.00** | **10.10** | 9.5 |
 | change | **-67%** | **-77%** | **2.7x** | -63% |
 
-All 576 requests returned 200 in both modes; per-repetition spread is
+All 576 requests across both modes returned 200; per-repetition spread is
 tight (precise 7.53-8.44 s mean, pull 2.45-2.64 s). The result has been
 measured twice independently - once on the original fix build (-70% mean
 TTFT, 2.80x) and once on separately built images of the same code with a
 freshly booted fleet and fresh salts (-67%, 2.66x); every repetition of
-the second run lands within the first run's per-repetition bands.
+the second run lands in or adjacent to the first run's per-repetition
+bands.
 
 The mechanism is visible in the tail: the no-pull mode's ~21 s p90 is the
 spill tail (recompute of a 70K-token prefix on a non-holder), and the
@@ -118,7 +119,8 @@ without it in parentheses:
 | 64 | 2,234 / 4,897 | 2,276 / 5,449 | 2,801 / 9,823 | 2,581 (-8%) / 7,139 (-27%) |
 | 128 | 2,963 / 9,226 | 2,953 / 8,833 | 3,802 / 11,755 | 3,177 (-16%) / 9,970 (-15%) |
 
-Reading the arms:
+Invalidated historical interpretation (do not quote without the
+quarantine above):
 
 * **The pull is precise affinity's safety net.** On agentic traces affinity
   concentrates sessions on the ranks that hold their cache; the pull lets

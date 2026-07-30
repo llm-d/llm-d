@@ -75,9 +75,12 @@ it from the measured crossover.
 
 The regime rule from the benchmarks:
 
-- **Working set fits the fleet's GPU caches** - prefix-aware routing alone
-  is optimal; a local hit is free. The P2P producer stays quiet and costs
-  nothing.
+- **Working set fits the fleet's GPU caches, and ownership is stable and
+  uncontended** - prefix-aware routing alone is optimal; a local hit is
+  free. The P2P producer stays quiet and costs nothing. Capacity fit
+  alone is not enough: document Q&A fits aggregate GPU KV with room to
+  spare and still favors load-aware placement, because concurrent
+  sessions contend on their owner pods.
 - **Long prefixes oversubscribe the caches, or a hot prefix saturates its
   owner** - placement by cache location pays in queues and recomputes;
   load-aware placement plus the pull serves the same content from the whole

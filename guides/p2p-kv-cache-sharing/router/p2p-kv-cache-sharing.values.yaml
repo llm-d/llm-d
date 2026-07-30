@@ -13,9 +13,12 @@
 ## when a peer out-caches the scheduled pod by at least minCachedTokenDelta
 ## tokens. Under precise affinity a peer rarely leads by that margin - this
 ## arm established 2 P2P sessions across a full 16-pod document-Q&A run,
-## against 65 for the load-aware + P2P arm on the same rig - so the pull
-## here is recovery insurance for what affinity cannot cover (a restarted
-## router, a cold replica, an evicted owner), not a throughput feature. The
+## against 65 for the load-aware + P2P arm on the same rig (sessions are
+## reusable connections, an engagement signal) - the pull here is usually
+## inert, not a throughput feature, and NOT insurance for a restarted
+## router (both index modes lose the pre-restart cache map; measured
+## restart runs produced zero pulls). A cold engine replica behind an
+## intact router is the plausible fallback case and is unmeasured. The
 ## arm is the default because affinity is the safer placement in the
 ## capacity-driven regime, not because the pull improves it.
 ##

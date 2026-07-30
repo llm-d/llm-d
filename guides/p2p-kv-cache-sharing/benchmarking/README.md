@@ -344,8 +344,12 @@ overlay-era grid:
   with fast successes means hung requests, not slow serving.
 * `report.request_lifecycle.per_request: true` - per-request records make
   hangs and tails attributable.
-* Record pull evidence per arm; a p2p arm with zero external hits is a
-  misconfigured control, not a result.
+* Record pull evidence per arm. For a scenario preregistered to pull
+  (load-first placement, fresh-source seeding), zero engagement means a
+  misconfigured run; for an affinity arm a mechanism-verified zero is a
+  legitimate null (the fixed GLM precise pair is exactly that). External-
+  hit counters include local CPU restores, so they cannot prove peer
+  transfers on their own.
 * Diff engine-side timing sums (`vllm:request_queue_time_seconds`,
   `vllm:request_prefill_time_seconds`, `vllm:time_to_first_token_seconds`)
   across each stage and reconcile them with client-observed TTFT. Client

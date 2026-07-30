@@ -84,9 +84,11 @@ pulls the prefix instead of recomputing or queueing for it.
 
 **Precise + P2P is not distinguishable from precise alone here.** Its warm
 +8.8% throughput and -4.5% p99 sit inside this workload's run-to-run spread,
-and the mechanism evidence rules out a pull effect: the arm established
-**2 P2P sessions across all 16 pods** for the entire run, against **65** for
-load-aware + P2P on the identical rig. Fleet prefix hit rate says the same -
+and the mechanism evidence is consistent with limited engagement: the arm
+established **2 P2P sessions across all 16 pods** for the entire run,
+against **65** for load-aware + P2P on the identical rig (sessions are
+reusable connections, an engagement signal rather than a pull count) -
+the performance pair is a null. Fleet prefix hit rate says the same -
 ~27% under affinity versus 9.9% under load placement. Affinity keeps the KV
 local, so `minCachedTokenDelta` is essentially never met and there is
 nothing to fetch.
@@ -130,7 +132,9 @@ saturates near 9 req/s - every cross-pod placement re-prefills 48K tokens.
 The pull sets load placement's floor: load + P2P tracks offered rate
 through 30 req/s at sub-second p50, +143% over the recompute floor at rate
 24 (21.93 vs 9.01 req/s; 0.70 s vs 63.4 s p50) and +217% at rate 30, on
-120 P2P sessions moving 210M prefix tokens. Affinity stays ahead by a
+120 reusable P2P sessions established, with 210M external-hit tokens
+served from the offload tier (a figure that includes local CPU restores
+alongside peer transfers). Affinity stays ahead by a
 constant factor (0.48 vs 0.73 s) because scattering pays transfer work
 affinity never pays; zero failures and zero restarts in all arms.
 
