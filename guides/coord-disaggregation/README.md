@@ -191,6 +191,8 @@ export PROVIDER_NAME=gke # other: na, agentgateway, or istio
 export GATEWAY_SERVICE=llm-d-inference-gateway-${PROVIDER_NAME}
 export CLIENT_SERVICE=${GATEWAY_SERVICE} # client-facing entrypoint: the Gateway's own Service
 export CLIENT_PORT=80
+export ROUTER_RELEASES=${GUIDE_NAME} # Helm release name(s), for Cleanup
+export ROUTER_HTTPROUTE_FILE=router/httproute.yaml # for Cleanup
 helm install ${GUIDE_NAME} \
     ${ROUTER_GATEWAY_CHART} \
     -f ${REPO_ROOT}/guides/recipes/router/base.values.yaml \
@@ -257,6 +259,8 @@ needs a real Gateway.
 export GATEWAY_SERVICE=${GUIDE_NAME}-epp
 export CLIENT_SERVICE=llm-d-coordinator # client-facing entrypoint: the Coordinator's own Service
 export CLIENT_PORT=8080
+export ROUTER_RELEASES=${GUIDE_NAME} # Helm release name(s), for Cleanup
+export ROUTER_HTTPROUTE_FILE= # no HTTPRoute in Standalone Mode, for Cleanup
 helm install ${GUIDE_NAME} \
     ${ROUTER_STANDALONE_CHART} \
     -f ${REPO_ROOT}/guides/recipes/router/base.values.yaml \
@@ -299,6 +303,8 @@ export PROVIDER_NAME=gke # other: na, agentgateway, or istio
 export GATEWAY_SERVICE=llm-d-inference-gateway-${PROVIDER_NAME}
 export CLIENT_SERVICE=${GATEWAY_SERVICE} # client-facing entrypoint: the Gateway's own Service
 export CLIENT_PORT=80
+export ROUTER_RELEASES="${GUIDE_NAME}-encode ${GUIDE_NAME}-prefill ${GUIDE_NAME}-decode" # for Cleanup
+export ROUTER_HTTPROUTE_FILE=router/httproute-3-epp.yaml # for Cleanup
 for ROLE in encode prefill decode; do
   helm install ${GUIDE_NAME}-${ROLE} \
       ${ROUTER_GATEWAY_CHART} \
@@ -479,49 +485,35 @@ curl -X POST http://${IP}:${PORT}/v1/chat/completions \
 
 ## Cleanup
 
-To remove the deployed components (single-EPP topology):
+Same commands regardless of topology or mode — `${ROUTER_RELEASES}` and
+`${ROUTER_HTTPROUTE_FILE}` were exported in step 1 (empty in Standalone Mode, since no
+HTTPRoute was created there). The Coordinator's resources are deleted directly rather
+than via `coordinator/kustomization.yaml`'s bundling (same reasoning as step 3's
+apply-side note) — `--ignore-not-found` makes that safe regardless of whether
+`coordinator/httproute.yaml` was ever applied:
 
 ```bash
-envsubst < ${REPO_ROOT}/guides/${GUIDE_NAME}/router/httproute.yaml | kubectl delete -n ${NAMESPACE} -f -
-helm uninstall ${GUIDE_NAME} -n ${NAMESPACE}
-kustomize build ${REPO_ROOT}/guides/${GUIDE_NAME}/coordinator/ | envsubst | kubectl delete -n ${NAMESPACE} -f -
-kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/gpu/vllm/${INFRA_PROVIDER}
-kubectl delete namespace ${NAMESPACE}
-```
-
-<details>
-<summary><h4>Standalone Mode cleanup</h4></summary>
-
-No HTTPRoutes were created in Standalone Mode, and the Coordinator's own resources
-were applied directly rather than via `coordinator/kustomization.yaml` (step 3's
-note) — delete them the same way:
-
-```bash
-helm uninstall ${GUIDE_NAME} -n ${NAMESPACE}
-kubectl delete -n ${NAMESPACE} -f ${REPO_ROOT}/guides/${GUIDE_NAME}/coordinator/deployment.yaml
-envsubst < ${REPO_ROOT}/guides/${GUIDE_NAME}/coordinator/configmap.yaml | kubectl delete -n ${NAMESPACE} -f -
-kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/gpu/vllm/${INFRA_PROVIDER}
-kubectl delete namespace ${NAMESPACE}
-```
-
-</details>
-
-<details>
-<summary><h4>3-EPP topology cleanup</h4></summary>
-
-```bash
-envsubst < ${REPO_ROOT}/guides/${GUIDE_NAME}/router/httproute-3-epp.yaml | kubectl delete -n ${NAMESPACE} -f -
-for ROLE in encode prefill decode; do
-  helm uninstall ${GUIDE_NAME}-${ROLE} -n ${NAMESPACE}
+for RELEASE in $(echo ${ROUTER_RELEASES}); do
+  helm uninstall ${RELEASE} -n ${NAMESPACE}
 done
-kustomize build ${REPO_ROOT}/guides/${GUIDE_NAME}/coordinator/ | envsubst | kubectl delete -n ${NAMESPACE} -f -
+if [ -n "${ROUTER_HTTPROUTE_FILE}" ]; then
+  envsubst < ${REPO_ROOT}/guides/${GUIDE_NAME}/${ROUTER_HTTPROUTE_FILE} | kubectl delete -n ${NAMESPACE} -f -
+fi
+
+kubectl delete -n ${NAMESPACE} --ignore-not-found -f ${REPO_ROOT}/guides/${GUIDE_NAME}/coordinator/httproute.yaml
+kubectl delete -n ${NAMESPACE} --ignore-not-found -f ${REPO_ROOT}/guides/${GUIDE_NAME}/coordinator/deployment.yaml
+envsubst < ${REPO_ROOT}/guides/${GUIDE_NAME}/coordinator/configmap.yaml | kubectl delete -n ${NAMESPACE} --ignore-not-found -f -
+
 kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/gpu/vllm/${INFRA_PROVIDER}
-kubectl delete namespace ${NAMESPACE}
 ```
 
-</details>
+This deletes every resource the guide created, but leaves the namespace itself (and
+anything else in it, like the `llm-d-hf-token` secret) alone — `kubectl delete
+namespace ${NAMESPACE}` if you want it gone entirely.
 
-If nothing else in your cluster still uses it, also remove the `llm-d-inference-gateway` Gateway by following [the gateway cleanup guide](../../docs/infrastructure/gateway/gke.md#cleanup).
+If you used Gateway mode and nothing else in your cluster still uses it, also remove
+the `llm-d-inference-gateway` Gateway by following [the gateway cleanup guide](../../docs/infrastructure/gateway/gke.md#cleanup).
+Standalone Mode never created one.
 
 ## Architecture
 
