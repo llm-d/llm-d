@@ -79,8 +79,6 @@ topology patches. Each matches a tested configuration on CoreWeave H200:
 | Baseline | `benchmark/baseline/` | `no-mtp` |
 | Baseline + Compute NaN Decode | `benchmark/baseline-computenan-decode/` | `no-mtp` + `compute-nan-decode` |
 | Baseline + Compute NaN Decode Prefill | `benchmark/baseline-computenan-decode-prefill/` | `no-mtp` + `compute-nan-decode` + `compute-nan-prefill` |
-| Baseline + Compute NaN Decode Prefill + MRV1 | `benchmark/baseline-computenan-decode-prefill-mrv1/` | `no-mtp` + `compute-nan-decode` + `compute-nan-prefill` |
-| Baseline + Compute NaN Prefill + MRV1 | `benchmark/baseline-computenan-prefill-mrv1/` | `no-mtp` + `compute-nan-prefill` |
 | MTP + Offloading | `benchmark/mtp-offloading/` | `offloading-tiered` |
 | MTP + Offloading (new nightly) | `benchmark/mtp-offloading-newnightly/` | `offloading-tiered` |
 | Offloading | `benchmark/offloading/` | `no-mtp` + `offloading-tiered` |
