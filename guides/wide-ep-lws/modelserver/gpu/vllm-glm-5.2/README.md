@@ -69,7 +69,6 @@ to a deployment's `kustomization.yaml` under `components:`.
 | `gpu-mem-prefill-0905` | prefill only | Sets prefill `gpu-memory-utilization` to 0.905 |
 | `gpu-mem-prefill-091` | prefill only | Sets prefill `gpu-memory-utilization` to 0.91 |
 | `max-model-len-130k` | prefill + decode | Sets `max-model-len` to 130000 |
-| `max-model-len-131k` | prefill + decode | Sets `max-model-len` to 131072 |
 
 K8s takes the last duplicate env var, so appended values override the base defaults.
 
