@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
   "label": "TRTLLM GPU",
-  "message": "benchmark-error",
-  "color": "yellow"
+  "message": "passing",
+  "color": "brightgreen"
 }
