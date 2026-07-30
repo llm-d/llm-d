@@ -193,7 +193,7 @@ Agentic code-generation workload (avg ISL ~55K tokens, bursty arrivals) on CoreW
 InfiniBand (inter-node) and NVLink (intra-node). Benchmarked with [aiperf](https://github.com/ai-dynamo/aiperf). Full interactive
 dashboard and analysis in the accompanying blog post (link TBD).
 
-### Tiered Offloading + MTP (recommended)
+### CPU Offloading + MTP (recommended)
 
 | Topology | Concurrency | TTFT p50 (s) | TTFT p99 (s) | ITL p50 (ms) | ITL p99 (ms) | Tok/s/user | Throughput (tok/s) |
 | -------- | ----------- | ------------ | ------------ | ------------ | ------------ | ---------- | ------------------ |
@@ -227,7 +227,7 @@ dashboard and analysis in the accompanying blog post (link TBD).
 
 - **MTP doubles per-user decode speed**: ~60 tok/s/user with MTP vs ~26 tok/s/user baseline
   (ITL drops from ~35–45 ms to ~15–20 ms).
-- **Tiered offloading preserves throughput**: adding CPU+NVMe offloading to enable longer
+- **CPU offloading preserves throughput**: adding CPU offloading to enable longer
   contexts does not meaningfully degrade ITL or per-user throughput.
 - **Scaling prefill replicas controls TTFT at load**: `p2w2d1w2` (6 nodes) keeps TTFT p99
   under 20s at c64 vs 100s+ for `p1w1d1w1` — prefill replication absorbs burst arrivals.
