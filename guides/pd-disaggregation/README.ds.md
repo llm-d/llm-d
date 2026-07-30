@@ -102,53 +102,15 @@ Follow the [monitoring section of the main guide](./README.md#3-enable-monitorin
 
 ## Operating the DisaggregatedSet
 
-### Scale the number of slices
+Day-to-day mechanics (scaling slices, scaling role replicas, rolling updates, placement policy) are DisaggregatedSet features rather than anything llm-d specific, and are documented in the [LWS DisaggregatedSet docs](https://lws.sigs.k8s.io/docs/examples/disaggregatedset/). The notes that matter for this guide:
 
-Add a third complete P/D copy (4 more prefill, 1 more decode). Because `slices` is excluded from the revision hash, this stands up slice 2 at the current revision **without touching slices 0 and 1**:
-
-```bash
-kubectl patch disaggregatedset pd-disagg -n ${NAMESPACE} --type merge -p '{"spec":{"slices":3}}'
-```
-
-Scaling down deletes the highest-indexed slices' resources directly; lower slices are untouched.
-
-### Scale replicas within a role
-
-Per-role `replicas` applies **per slice**. With 2 slices, raising prefill replicas from 4 to 6 yields 12 prefill instances in total:
-
-```bash
-kubectl patch disaggregatedset pd-disagg -n ${NAMESPACE} --type json \
-  -p '[{"op": "replace", "path": "/spec/roles/0/spec/replicas", "value": 6}]'
-```
-
-This is how you tune your xPyD ratio (see [P/D Best Practices](./README.md#pd-best-practices)) — the ratio is defined once and holds in every slice.
-
-### Rolling updates
-
-Any change to a role's pod template (image, flags, resources) creates a new revision, and each slice rolls to it **independently**, always keeping a complete same-version P/D set serving per slice. While a slice is mid-rollout you will see two revisions of its LWS at once (old draining, new filling). Watch a single slice with:
-
-```bash
-kubectl get leaderworkerset -n ${NAMESPACE} \
-  -l disaggregatedset.x-k8s.io/name=pd-disagg,disaggregatedset.x-k8s.io/slice=0 -w
-```
-
-A stuck slice degrades only itself; the other slices keep serving and finish their own rollouts.
-
-### Pin slices to accelerator domains (placement policy)
+* **Scaling `slices` adds or removes complete P/D copies** (4 prefill + 1 decode each) at the current revision, without touching existing slices.
+* **Per-role `replicas` applies per slice**, so your xPyD ratio (see [P/D Best Practices](./README.md#pd-best-practices)) is defined once and holds in every slice. With 2 slices, raising prefill replicas from 4 to 6 yields 12 prefill instances in total.
+* **Rolling updates proceed independently per slice**, always keeping a complete same-version P/D set serving in each slice. A stuck slice degrades only itself.
+* **Placement policy pins each complete P/D copy to one topology domain.** Use the node-label key that identifies your low-latency domain (for example a rack or NVLink-domain label on NVL72-class systems) so prefill-to-decode KV-cache transfer stays inside the domain. A commented example ships in `modelserver/gpu/vllm-ds/disaggregatedset.yaml`.
 
 > [!NOTE]
 > `spec.placementPolicy` is merged upstream ([lws#916](https://github.com/kubernetes-sigs/lws/pull/916), [KEP-848](https://github.com/kubernetes-sigs/lws/tree/main/keps/848-disaggregatedset-placement-policy)) and, like `slices`, ships in the next LWS release after `v0.9.0`. Controllers at `v0.9.0` or older reject the field.
-
-To confine each slice to one topology domain and spread slices across domains, set `placementPolicy` (a commented example ships in `modelserver/gpu/vllm-ds/disaggregatedset.yaml`):
-
-```yaml
-spec:
-  placementPolicy:
-    type: ExclusiveSlice # or ExclusiveTopology for a 1:1 domain-to-slice mapping across all DisaggregatedSets
-    topology: topology.kubernetes.io/zone # any node-label key: zone, rack, NVLink-domain, ...
-```
-
-Use the node-label key that identifies your low-latency domain — for example a rack or NVLink-domain label on NVL72-class systems — so prefill-to-decode KV-cache transfer stays inside the domain. The controller injects the affinity when it creates a LeaderWorkerSet, so changing the policy takes effect on each slice's next rollout.
 
 ## Verification
 
