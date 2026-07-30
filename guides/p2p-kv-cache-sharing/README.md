@@ -636,7 +636,9 @@ hardware configurations:
   deployment - 6.3x median TTFT and +50% throughput against plain NIXL P/D
   on the agentic-serving workload shape.
 - **[zai-org/GLM-5.2-FP8 on vLLM (H200, wide-EP P/D)](./benchmark-results/glm-5.2-h200.md)**:
-  the mechanism at 753B - crossover swept to its measured tie (~8.7K
-  tokens on the upstream tier), a four-arm placement-x-pull grid on
-  recorded agentic traces, and the pull firing from the approximate index
-  as well as the precise one.
+  the mechanism at 753B - the load-spill payoff (a load-first policy with
+  the pull cuts mean TTFT -67% and lifts throughput 2.7x over the same
+  policy without it, reproduced twice on independent builds), crossover
+  swept to its measured tie, a four-arm placement-x-pull grid on recorded
+  agentic traces, and the pull firing from the approximate index as well
+  as the precise one.

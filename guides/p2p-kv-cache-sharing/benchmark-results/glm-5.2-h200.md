@@ -46,6 +46,45 @@ peers on its own; the router/sidecar directive is the trigger. And the
 session-establishment cost that steady-state pulls never see - calibrate on
 a warmed pair or the transient reads as the pull's cost.
 
+## Load spill and the pull's payoff (matched c32 benchmark)
+
+The system-level payoff measurement: a load-first prefill policy
+(`precise-prefix-cache-scorer` weight 1 + `queue-scorer` weight 3 +
+`active-request-scorer` weight 1) with and without `p2p-source-producer`
+(`minCachedTokenDelta: 16384`) as the only difference. Under this policy
+the picker spills requests off the cache holder whenever queues build, so
+without the pull a spilled ~70K-token prompt recomputes its prefix; with
+it, the prefix follows the request. Per repetition: a fresh salted
+~70K-token prefix, 3 warmups, 96 measured requests at concurrency 32.
+Three repetitions per mode in counterbalanced order, the EPP restarted
+and probed on every profile swap.
+
+| mode | TTFT mean (s) | TTFT p90 (s) | req/s | wall per rep (s) |
+|---|---:|---:|---:|---:|
+| precise, no pull | 7.85 | 21.3 | 3.80 | 25.4 |
+| precise + P2P | **2.56** | **5.00** | **10.10** | 9.5 |
+| change | **-67%** | **-77%** | **2.7x** | -63% |
+
+All 576 requests returned 200 in both modes; per-repetition spread is
+tight (precise 7.53-8.44 s mean, pull 2.45-2.64 s). The result has been
+measured twice independently - once on the original fix build (-70% mean
+TTFT, 2.80x) and once on separately built images of the same code with a
+freshly booted fleet and fresh salts (-67%, 2.66x); every repetition of
+the second run lands within the first run's per-repetition bands.
+
+The mechanism is visible in the tail: the no-pull mode's ~21 s p90 is the
+spill tail (recompute of a 70K-token prefix on a non-holder), and the
+pull collapses it to ~5 s - the flat pull cost from the crossover table
+above, paid instead of the linear recompute.
+
+Read this result together with the four-arm ladder below: under
+holder-affinity policies (affinity weight 5) the pull rarely fires on
+recurring-prefix traffic and arms tie - placement already lands requests
+on the cache. **The pull converts load-spill recompute into a flat-cost
+transfer; where routing trades affinity for load balance, it recovers the
+cache reuse that placement gives up.** It is a property of the
+policy-workload pair, not a general model speedup.
+
 ## Agentic traces across the concurrency ladder (four arms)
 
 TTFT p50 / p90 (ms) per cell; the pull's delta against the same placement
