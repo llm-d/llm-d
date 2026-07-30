@@ -51,8 +51,12 @@ orchestrated:
   snapshot taken one or more phases earlier.
 
 
-The result of this guide, in either of two EPP topologies (pick one — see
-[Installation Instructions](#installation-instructions)):
+The result of this guide is a combination of two independent choices you make in
+[Installation Instructions](#installation-instructions): which of two **EPP
+topologies** to run, and whether to run the full **EPD** pipeline or drop the
+`encode` role for a **PD-only** deployment (see the PD-only note there). The two
+choices don't interact — any EPP topology works with either pipeline scope. The EPP
+topology choice:
 
 * **Either: 1 Endpoint Picker (EPP)** covering all three roles, and **1 InferencePool**
   spanning them. The EPP runs one scheduling profile per call — `encode`, `prefill`,
