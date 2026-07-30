@@ -568,10 +568,8 @@ kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/render
    > That fallback covers ordinary misses, not a write that never lands. On
    > the engine pinned by this guide a block left in `HIT_PENDING` has no
    > deadline, so a request waiting on it can stay deferred until the client
-   > times out rather than recomputing.
-   > [vllm#49850](https://github.com/vllm-project/vllm/pull/49850) adds the
-   > bound and is open; until it merges and is pinned here, treat a stalled
-   > `HIT_PENDING` as a known limitation of this path.
+   > times out rather than recomputing. Treat a stalled `HIT_PENDING` as a
+   > known limitation of this path on current engines.
 
 ## P/D variant: P2P over NIXL disaggregation
 

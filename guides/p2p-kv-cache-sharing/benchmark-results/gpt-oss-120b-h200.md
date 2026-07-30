@@ -29,7 +29,8 @@ sidecar and no EPP - the driver injects the pull parameters directly, so an
 inert configuration cannot be mistaken for a measurement.
 
 The canonical numbers are from the run on the fixed stack (engine
-`nightly-1240c74c`, P2P code `#48021` as merged plus `#49877` and `#49850`).
+`nightly-1240c74c`, P2P code `#48021` as merged plus in-review robustness
+patches).
 The `superseded` column is an earlier run of the same method on the
 pre-fix stack and is kept only so the two are not confused where the older
 figures are still quoted elsewhere.

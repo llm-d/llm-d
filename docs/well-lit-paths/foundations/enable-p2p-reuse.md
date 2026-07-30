@@ -128,9 +128,8 @@ for manifests, verification gates, and step-by-step deployment.
    > This covers ordinary misses, not a write that never lands. A block left
    > in `HIT_PENDING` has no deadline on the currently pinned engine, so a
    > request waiting on one can stay deferred until the client times out.
-   > [vllm#49850](https://github.com/vllm-project/vllm/pull/49850) supplies
-   > the bound and is open; until it merges, treat a stalled `HIT_PENDING`
-   > as a known limitation.
+   > Treat a stalled `HIT_PENDING` as a known limitation on current
+   > engines.
 
 Under P/D disaggregation the pull applies to the **prefill leg only**: the
 prefill worker computes the prompt KV and streams it to the decoder, so
