@@ -23,13 +23,8 @@ on:
         required: false
         type: string
         default: ''
-      sglang_xpu_repo:
-        description: 'SGLang Git clone URL passed to the upstream XPU Dockerfile'
-        required: false
-        type: string
-        default: ''
       sglang_xpu_ref:
-        description: 'SGLang branch or tag passed to the upstream XPU Dockerfile'
+        description: 'SGLang commit, tag, or branch to build'
         required: false
         type: string
         default: ''
@@ -73,12 +68,8 @@ on:
         description: "GitHub repository containing the SGLang XPU source (owner/repo)"
         required: false
         type: string
-      sglang_xpu_repo:
-        description: "SGLang Git clone URL passed to the upstream XPU Dockerfile"
-        required: false
-        type: string
       sglang_xpu_ref:
-        description: "SGLang branch or tag passed to the upstream XPU Dockerfile"
+        description: "SGLang commit, tag, or branch to build"
         required: false
         type: string
       sglang_xpu_buildkit_driver_opts:
@@ -1463,7 +1454,6 @@ jobs:
         run: |
           source docker/common-versions
           echo "repository=${SGLANG_XPU_REPOSITORY}" >> $GITHUB_OUTPUT
-          echo "repo=${SGLANG_XPU_REPO}" >> $GITHUB_OUTPUT
           echo "ref=${SGLANG_XPU_REF}" >> $GITHUB_OUTPUT
           echo "kernel_repo=${SGLANG_XPU_KERNEL_REPO}" >> $GITHUB_OUTPUT
           echo "kernel_ref=${SGLANG_XPU_KERNEL_REF}" >> $GITHUB_OUTPUT
@@ -1482,9 +1472,12 @@ jobs:
 
       - name: Resolve source revisions
         id: source
+        env:
+          SGLANG_REPOSITORY: ${{ inputs.sglang_xpu_repository || steps.common-versions.outputs.repository }}
         run: |
           echo "llmd_sha=$(git rev-parse HEAD)" >> $GITHUB_OUTPUT
           echo "llmd_short_sha=$(git rev-parse --short=7 HEAD)" >> $GITHUB_OUTPUT
+          echo "sglang_repo=https://github.com/${SGLANG_REPOSITORY}.git" >> $GITHUB_OUTPUT
           echo "sglang_sha=$(git -C .cache/sglang-src rev-parse HEAD)" >> $GITHUB_OUTPUT
 
       - name: Set up Docker Buildx
@@ -1511,7 +1504,7 @@ jobs:
             type=raw,value=latest,enable={{is_default_branch}}
           labels: |
             org.opencontainers.image.revision=${{ steps.source.outputs.llmd_sha }}
-            io.llm-d.sglang.repository=${{ inputs.sglang_xpu_repo || steps.common-versions.outputs.repo }}
+            io.llm-d.sglang.repository=${{ steps.source.outputs.sglang_repo }}
             io.llm-d.sglang.ref=${{ inputs.sglang_xpu_ref || steps.common-versions.outputs.ref }}
             io.llm-d.sglang.revision=${{ steps.source.outputs.sglang_sha }}
             io.llm-d.sglang-xpu-kernel.repository=${{ steps.common-versions.outputs.kernel_repo }}
@@ -1528,7 +1521,7 @@ jobs:
           provenance: true
           no-cache: true
           build-args: |
-            SG_LANG_REPO=${{ inputs.sglang_xpu_repo || steps.common-versions.outputs.repo }}
+            SG_LANG_REPO=${{ steps.source.outputs.sglang_repo }}
             SG_LANG_BRANCH=${{ inputs.sglang_xpu_ref || steps.common-versions.outputs.ref }}
             SG_LANG_COMMIT=${{ steps.source.outputs.sglang_sha }}
             SG_LANG_KERNEL_REPO=${{ steps.common-versions.outputs.kernel_repo }}
@@ -1544,7 +1537,7 @@ jobs:
         env:
           IMAGE: ${{ env.REGISTRY }}/${{ github.repository }}-xpu-sglang
           IMAGE_DIGEST: ${{ steps.build-and-push.outputs.digest }}
-          SGLANG_REPOSITORY: ${{ inputs.sglang_xpu_repo || steps.common-versions.outputs.repo }}
+          SGLANG_REPOSITORY: ${{ steps.source.outputs.sglang_repo }}
           SGLANG_REF: ${{ inputs.sglang_xpu_ref || steps.common-versions.outputs.ref }}
           SGLANG_SHA: ${{ steps.source.outputs.sglang_sha }}
           SGLANG_XPU_KERNEL_REPOSITORY: ${{ steps.common-versions.outputs.kernel_repo }}
