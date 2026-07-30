@@ -11,7 +11,6 @@ components:
 labels:
   - pairs:
       llm-d.ai/guide: agentic-serving-gpu
-      llm-d.ai/model: NVIDIA-Nemotron-3-Ultra-550B-A55B-FP8-block
       llm-d.ai/accelerator-variant: gpu
       llm-d.ai/accelerator-vendor: nvidia
       llm-d.ai/engine-type: vllm

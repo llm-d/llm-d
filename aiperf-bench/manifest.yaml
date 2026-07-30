@@ -23,6 +23,12 @@ spec:
         app: aiperf-agentx
     spec:
       restartPolicy: Always
+      # GPU nodes carry `nvidia.com/gpu=present:NoSchedule`; tolerate it so the
+      # load generator can be co-located with the model servers.
+      tolerations:
+        - key: nvidia.com/gpu
+          operator: Exists
+          effect: NoSchedule
       containers:
         - name: aiperf
           image: quay.io/rh-ee-robshaw/aiperf:agentx-v0

@@ -35,6 +35,8 @@ This guide includes configurations for the following accelerators:
 | Backend             | Directory                  | Notes                                      |
 | ------------------- | -------------------------- | ------------------------------------------ |
 | NVIDIA GPU (GKE)    | `modelserver/gpu/vllm/gke/`         | GKE deployment                      |
+| NVIDIA GPU (GKE, DRANET)| `modelserver/gpu/vllm/gke-dranet/` | GKE deployment where RDMA NICs are allocated via DRA (`mrdma.google.com`) and GPUs via the device plugin |
+| NVIDIA GPU (GKE, full DRA)| `modelserver/gpu/vllm/gke-dra/`  | GKE deployment where both GPUs and RDMA NICs are allocated via [DRA/DRANET](../../docs/infrastructure/providers/gke/README.md#gpu-dynamic-resource-allocation-dra-and-dranet-roce-on-gke) |
 | NVIDIA GPU (CoreWeave)| `modelserver/gpu/vllm/coreweave/`   | CoreWeave deployment                     |
 | NVIDIA GPU (DGX Cloud GB200)| `modelserver/gpu/vllm/dgx-cloud-gb200/` | DGX Cloud deployment             |
 
@@ -89,6 +91,9 @@ helm install ${GUIDE_NAME} \
     ${ROUTER_STANDALONE_CHART} \
     -f ${REPO_ROOT}/guides/recipes/router/base.values.yaml \
     -f ${REPO_ROOT}/guides/${GUIDE_NAME}/router/${GUIDE_NAME}.values.yaml \
+    --set 'router.epp.tolerations[0].key=nvidia.com/gpu' \
+    --set 'router.epp.tolerations[0].operator=Exists' \
+    --set 'router.epp.tolerations[0].effect=NoSchedule' \
     -n ${NAMESPACE} --version ${ROUTER_CHART_VERSION}
 ```
 
@@ -118,7 +123,7 @@ helm install ${GUIDE_NAME} \
 Apply the Kustomize overlays for your specific backend:
 
 ```bash
-export INFRA_PROVIDER=gke # options: gke, coreweave, dgx-cloud-gb200
+export INFRA_PROVIDER=gke # options: gke, gke-dranet, gke-dra, coreweave, dgx-cloud-gb200
 kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/gpu/vllm/${INFRA_PROVIDER}
 ```
 

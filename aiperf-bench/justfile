@@ -17,20 +17,18 @@
 #   just profile 3 90      # profile dp rank 3, wait 90s for the trace dump
 #   just profile-fetch     # copy decode traces out to ./profiles
 
-namespace := "llm-d-wide-ep"
+namespace := "default"
 deploy    := "aiperf-agentx"
 # model     := "nvidia/NVIDIA-Nemotron-3-Super-120B-A12B-FP8"
 # model     := "Qwen/Qwen3-32B"
 # model     := "Qwen/Qwen3.5-122B-A10B-FP8"
 # model     := "deepseek-ai/DeepSeek-R1"
-tokenizer     := "zai-org/GLM-5.2-FP8"
-model     := "RedHatAI/GLM-5.2-NVFP4-FP8"
+model     := "moonshotai/Kimi-K3"
+tokenizer := "moonshotai/Kimi-K3"
 
-# model       := "nvidia/GLM-5.2-NVFP4"
 url       := "http://wide-ep-lws-epp"
-# url       := "http://optimized-baseline-direct"
+# url := "http://10.84.1.63:8000"
 concurrency := "100"
-# duration    := "10"
 duration    := "300"
 # concurrencies := "25 50 100 150 200"
 concurrencies := "20 40 60 80 100"
@@ -144,12 +142,16 @@ results dest="./results":
 
 # Run lm-evaluation-harness from the lm-eval pod against the deployment's
 # OpenAI-compatible chat endpoint. Args: [tasks] [concurrency].
-lmeval tasks="gsm8k" concurrency="100":
+lmeval tasks="gsm8k" concurrency="200":
     kubectl exec -n {{namespace}}  deploy/{{deploy}} -- \
         lm_eval \
             --model local-completions \
-            --model_args "model={{model}},tokenizer={{tokenizer}},base_url={{url}}/v1/completions,num_concurrent={{concurrency}},tokenized_requests=False" \
+            --model_args "model={{model}},tokenizer={{tokenizer}},base_url={{url}}/v1/completions,num_concurrent={{concurrency}},tokenized_requests=False,trust_remote_code=True" \
             --tasks {{tasks}} # --limit 10
+
+install-lmeval:
+  kubectl exec -n {{namespace}}  deploy/{{deploy}} -- pip install lm_eval[api] transformers
+
 
 # Capture a torch profile of one decode DP rank. The engine is started with
 # --profiler-config max_iterations=10, so the worker records exactly 10 engine

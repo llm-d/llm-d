@@ -56,15 +56,14 @@ spec:
                   moonshotai/Kimi-K3 \
                   --port 8000 \
                   --trust-remote-code \
-                  --gpu-memory-utilization 0.8 \
+                  --gpu-memory-utilization 0.85 \
                   --disable-access-log-for-endpoints=/health,/metrics \
                   --max-num-batched-tokens 8192 \
                   --long-prefill-token-threshold 2048 \
-                  --data-parallel-multi-port-external-lb \
-                  --data-parallel-supervisor-port 8008 \
                   --enable-prefix-caching \
                   --enable-expert-parallel \
                   --tensor-parallel-size $TP_SIZE \
+                  --data-parallel-hybrid-lb \
                   --data-parallel-size $((LWS_GROUP_SIZE * DP_SIZE_LOCAL)) \
                   --data-parallel-size-local $DP_SIZE_LOCAL \
                   --data-parallel-address ${LWS_LEADER_ADDRESS} \
@@ -72,7 +71,11 @@ spec:
                   --data-parallel-start-rank $START_RANK \
                   --kv_transfer_config '{"kv_connector":"NixlConnector",
                                           "kv_role":"kv_both",
-                                          "kv_load_failure_policy":"fail"}'
+                                          "kv_load_failure_policy":"fail"}' \
+                  --no-disable-hybrid-kv-cache-manager \
+                  --all2all-backend deepep-v2 \
+                  --max-num-seqs 128 \
+                  --max-model-len 300000
                 
                   # To enable tracing, add:
                   # --otlp-traces-endpoint http://otel-collector:4317 \
@@ -99,9 +102,9 @@ spec:
               - name: VLLM_RANDOMIZE_DP_DUMMY_INPUTS
                 value: "1"
               - name: DP_SIZE_LOCAL
-                value: "8"
-              - name: TP_SIZE
                 value: "1"
+              - name: TP_SIZE
+                value: "8"
               - name: TRITON_LIBCUDA_PATH
                 value: /usr/local/nvidia/lib64
               - name: VLLM_SKIP_P2P_CHECK
@@ -144,36 +147,12 @@ spec:
                 value: /var/cache/huggingface
             ports:
               - containerPort: 8000
-                name: rank0
-                protocol: TCP
-              - containerPort: 8001
-                name: rank1
-                protocol: TCP
-              - containerPort: 8002
-                name: rank2
-                protocol: TCP
-              - containerPort: 8003
-                name: rank3
-                protocol: TCP
-              - containerPort: 8004
-                name: rank4
-                protocol: TCP
-              - containerPort: 8005
-                name: rank5
-                protocol: TCP
-              - containerPort: 8006
-                name: rank6
-                protocol: TCP
-              - containerPort: 8007
-                name: rank7
-                protocol: TCP
-              - containerPort: 8008
-                name: supervisor
+                name: modelserver
                 protocol: TCP
             startupProbe:
               httpGet:
                 path: /health
-                port: supervisor
+                port: modelserver
               initialDelaySeconds: 0
               periodSeconds: 1
               timeoutSeconds: 5
@@ -181,14 +160,14 @@ spec:
             livenessProbe:
               httpGet:
                 path: /health
-                port: supervisor
+                port: modelserver
               periodSeconds: 30
               timeoutSeconds: 5
               failureThreshold: 3
             readinessProbe:
               httpGet:
-                path: /readyz
-                port: supervisor
+                path: /health
+                port: modelserver
               periodSeconds: 10
               timeoutSeconds: 5
               failureThreshold: 3
