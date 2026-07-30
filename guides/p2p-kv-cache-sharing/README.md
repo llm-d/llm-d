@@ -495,8 +495,8 @@ This guide's workload profile lands via
 [llm-d-benchmark#1656](https://github.com/llm-d/llm-d-benchmark/pull/1656),
 which is open, so `guide_p2p-kv-cache-sharing_1.yaml` is absent from `main`
 and the PR branch lives on a fork rather than on `origin`. Check out the
-commit this guide's tables were measured against; replace the fetch with the
-merge commit on `main` once the PR lands.
+pinned PR commit; replace the fetch with the merge commit on `main` once
+the PR lands.
 
 ```bash
 curl -sSL https://raw.githubusercontent.com/llm-d/llm-d-benchmark/main/install.sh | bash
@@ -504,8 +504,8 @@ cd llm-d-benchmark
 # Until llm-d-benchmark#1656 merges the profile comes from the PR fork at the
 # pinned commit - `origin` has neither the branch nor the file.
 git fetch https://github.com/nilig/llm-d-benchmark.git \
-    20ef7570809c9f4935e2015a73537bd77cdafbe3
-git checkout 20ef7570809c9f4935e2015a73537bd77cdafbe3
+    960f55a910fc4c049428b820b54462227dfda510
+git checkout 960f55a910fc4c049428b820b54462227dfda510
 source .venv/bin/activate
 llmdbenchmark --version
 ```
@@ -519,11 +519,11 @@ export GATEWAY_CLASS=epponly # standalone mode
 
 ### 3. Run the benchmark profile for P2P KV Cache Sharing
 
-`guide_p2p-kv-cache-sharing_1.yaml` is the dedicated workload profile
-shipped with `llm-d-benchmark` for this guide - the document Q&A scenario
-behind the headline numbers in the
-[benchmarking report](#benchmarking-reports). Run it once per routing arm,
-switching only the EPP configuration between runs:
+`guide_p2p-kv-cache-sharing_1.yaml` is the workload profile shipped with
+`llm-d-benchmark` for this guide - an analogous document-Q&A workload;
+the canonical tables were measured with a custom driver (see
+[benchmarking/README.md](benchmarking/README.md)). Run it once per
+routing arm, switching only the EPP configuration between runs:
 
 ```bash
 llmdbenchmark \

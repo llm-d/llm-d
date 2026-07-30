@@ -1,7 +1,9 @@
 # Benchmarking P2P KV cache sharing
 
-All runs use the llm-d benchmarking framework (inference-perf) against the
-gateway. Every scenario is preceded by the guide's verification gates; a run
+The runnable workflow below uses the llm-d benchmarking framework
+(inference-perf) against the gateway; the canonical document-Q&A tables
+were measured with the custom driver described under Running the
+benchmark. Every scenario is preceded by the guide's verification gates; a run
 where the mechanism is not provably engaged measures nothing.
 
 ## Running the benchmark
@@ -26,8 +28,8 @@ cd llm-d-benchmark && source .venv/bin/activate
 # Until llm-d-benchmark#1656 merges the profile comes from the PR fork at the
 # pinned commit - `origin` has neither the branch nor the file.
 git fetch https://github.com/nilig/llm-d-benchmark.git \
-    51f967019adb4dc1926c9eb6204030abac14eb67
-git checkout 51f967019adb4dc1926c9eb6204030abac14eb67
+    960f55a910fc4c049428b820b54462227dfda510
+git checkout 960f55a910fc4c049428b820b54462227dfda510
 
 export ENDPOINT_URL="http://$(kubectl get service <your-epp-service> -n ${NAMESPACE} -o jsonpath='{.spec.clusterIP}')"
 
@@ -274,10 +276,11 @@ the experience. With ~9.2M tokens of document prefix spread across the
 fleet and 128 sessions concurrently active against a fixed
 per-document ownership rule, request placement - not aggregate GPU
 capacity - decides whether a question is a cache hit, a 48K recompute, or
-a wait behind someone else's document. This is the scenario
-`guide_p2p-kv-cache-sharing_1.yaml` reproduces; scale `num_conversations`
-and `concurrency` relative to your fleet's pod count so enough sessions
-contend for a limited set of owner pods.
+a wait behind someone else's document. This is the regime
+`guide_p2p-kv-cache-sharing_1.yaml` approximates (an analogous profile,
+not the canonical driver - see Running the benchmark); scale
+`num_conversations` and `concurrency` relative to your fleet's pod count
+so enough sessions contend for a limited set of owner pods.
 
 Results are canonical in
 [the gpt-oss results page](../benchmark-results/gpt-oss-120b-h200.md#document-qa-the-headline),
