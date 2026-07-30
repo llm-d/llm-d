@@ -385,15 +385,16 @@ kubectl exec -n ${NAMESPACE} deploy/p2p-kv-cache-sharing-decode -c modelserver -
 
 The `OffloadingConnector` P2P secondary tier is upstream in vLLM
 ([vllm#48021](https://github.com/vllm-project/vllm/pull/48021)); no source
-overlay is required. The kustomization pins
-`nightly-6f91edf96d3f3272945809c04702380053bff4de`, the first nightly
-containing the tier together with all three robustness fixes: the
+overlay is required. All three robustness fixes are upstream as well: the
 finalization and reconnect crash fixes
 ([vllm#49671](https://github.com/vllm-project/vllm/pull/49671),
 [vllm#49823](https://github.com/vllm-project/vllm/pull/49823)) and the
 symmetric-fetch stall fix under sustained many-to-many pull load
-([vllm#49877](https://github.com/vllm-project/vllm/pull/49877)). Prefer a
-tagged vLLM release over any nightly once the tier ships in one.
+([vllm#49877](https://github.com/vllm-project/vllm/pull/49877)). Any
+nightly at or after `nightly-6f91edf96d3f3272945809c04702380053bff4de`
+(2026-07-29, the first containing all four) works; the kustomization pins
+that one so the guide's numbers stay reproducible. Prefer a tagged vLLM
+release over any nightly once the tier ships in one.
 
 ### 4. Calibrate `minCachedTokenDelta` for your model and transport
 
