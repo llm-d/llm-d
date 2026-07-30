@@ -43,7 +43,7 @@ serving topology that fit it). Each is listed as *model on accelerator*. Pick th
 your hardware:
 
 - [NVIDIA-Nemotron-3-Ultra-550B on H200](nemotron-3-ultra-550b-h200.md) — P/D-disaggregated serving on 8× H200, with CPU KV-offloading and ready-to-use coding-agent client configs.
-- [GLM-5.2-FP8 on H200](glm-5-2-h200.md) — wide expert-parallel P/D-disaggregated and aggregate serving on H200, with configurable P:D ratios (1:1, 2:1, 3:1).
+- [GLM-5.2-FP8 on H200](glm-5-2-h200.md) — wide expert-parallel P/D-disaggregated serving on H200.
 - [Qwen3-Coder-480B on TPU v7](qwen3-coder-480b-tpu.md) — routing + CPU KV-offloading on 8× TPU v7x (2x2x1).
 
 ## Benchmarking

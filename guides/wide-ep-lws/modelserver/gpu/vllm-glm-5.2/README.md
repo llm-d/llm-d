@@ -3,16 +3,12 @@
 ## Overview
 
 This guide deploys [GLM-5.2-FP8](https://huggingface.co/zai-org/GLM-5.2-FP8) (753B MoE) on H200
-GPUs using LeaderWorkerSets, with two serving topologies:
+GPUs using P/D-disaggregated LeaderWorkerSets with NIXL for KV transfer. Prefill runs
+DEP8 (TP=1, DP=8) on 1 node; decode runs DEP16 (TP=1, DP=16) across 2 nodes (wide EP).
+DeepEP high-throughput all-to-all for prefill, low-latency for decode.
 
-- **P/D disaggregated** — separate prefill and decode LeaderWorkerSets using NIXL for KV
-  transfer. Prefill runs DEP8 (TP=1, DP=8) on 1 node; decode runs DEP16 (TP=1, DP=16) across
-  2 nodes (wide EP). DeepEP high-throughput all-to-all for prefill, low-latency for decode.
-- **Aggregate** — a single LeaderWorkerSet with TP=8, no disaggregation. Suited for
-  high-interactivity workloads.
-
-Both topologies use DeepGemm MoE backend and enable tool calling (`glm47`) and
-reasoning (`glm45`) parsers. MTP speculative decoding is on by default (3 tokens).
+DeepGemm MoE backend, tool calling (`glm47`) and reasoning (`glm45`) parsers.
+MTP speculative decoding is on by default (3 tokens).
 
 Tested on CoreWeave (CKS) with InfiniBand networking. This recipe reuses the
 [wide-ep-lws guide](../../../README.md) for the router/gateway and shared prerequisites
@@ -27,7 +23,6 @@ Tested on CoreWeave (CKS) with InfiniBand networking. This recipe reuses the
 | DP model                | Supervisor (`--data-parallel-multi-port-external-lb`)                              |
 | Prefill parallelism     | TP=1, DP=8, EP=8 (DEP8) — 1 node                                                  |
 | Decode parallelism      | TP=1, DP=16, EP=16 (DEP16, wide) — 2 nodes                                        |
-| Parallelism (aggregate) | TP=8                                                                               |
 | All-to-all (prefill)    | `deepep_high_throughput`                                                           |
 | All-to-all (decode)     | `deepep_low_latency` (IBGDA + NVSHMEM)                                            |
 | MoE backend             | DeepGemm                                                                           |
@@ -44,15 +39,19 @@ Tested on CoreWeave (CKS) with InfiniBand networking. This recipe reuses the
 | ---------- | -------------------------- | ----------------------------- | ------------ |
 | `p1w1d1w1` | 1 replica, 1 node, DEP8    | 1 replica, 1 node, DEP8      | 2 / 16       |
 | `p1w1d1w2` | 1 replica, 1 node, DEP8    | 1 replica, 2 nodes, DEP16    | 3 / 24       |
+| `p1w2d1w2` | 1 replica, 2 nodes, DEP16  | 1 replica, 2 nodes, DEP16    | 4 / 32       |
 | `p2w1d1w1` | 2 replicas, 1 node, DEP8   | 1 replica, 1 node, DEP8      | 3 / 24       |
 | `p2w1d1w2` | 2 replicas, 1 node, DEP8   | 1 replica, 2 nodes, DEP16    | 4 / 32       |
+| `p2w2d1w2` | 2 replicas, 2 nodes, DEP16 | 1 replica, 2 nodes, DEP16    | 6 / 48       |
+| `p2w2d2w2` | 2 replicas, 2 nodes, DEP16 | 2 replicas, 2 nodes, DEP16   | 8 / 64       |
 | `p3w2d1w2` | 3 replicas, 2 nodes, DEP16 | 1 replica, 2 nodes, DEP16    | 8 / 64       |
+| `p3w2d2w2` | 3 replicas, 2 nodes, DEP16 | 2 replicas, 2 nodes, DEP16   | 10 / 80      |
 
 ### Supported Hardware Backends
 
 | Backend             | Directory                                                      | Notes                                    |
 | ------------------- | -------------------------------------------------------------- | ---------------------------------------- |
-| NVIDIA GPU (vLLM)   | `wide-ep-lws/modelserver/gpu/vllm-glm-5.2/`                   | H200, P/D disaggregated + aggregate      |
+| NVIDIA GPU (vLLM)   | `wide-ep-lws/modelserver/gpu/vllm-glm-5.2/`                   | H200, P/D disaggregated                  |
 
 ## Components
 
@@ -64,6 +63,9 @@ to a deployment's `kustomization.yaml` under `components:`.
 | `no-mtp` | prefill + decode | Disables MTP speculative decoding (`ENABLE_MTP=0`) |
 | `offloading-cpu` | prefill only | CPU-only KV cache offloading (`OFFLOADING_MODE=cpu`) |
 | `offloading-tiered` | prefill only | CPU + NVMe tiered KV cache offloading (`OFFLOADING_MODE=tiered`) |
+| `compute-nan-decode` | decode only | Sets `VLLM_COMPUTE_NANS_IN_LOGITS=1` on decode |
+| `compute-nan-prefill` | prefill only | Sets `VLLM_COMPUTE_NANS_IN_LOGITS=1` on prefill |
+| `mrv1` | decode only | Sets `VLLM_USE_V2_MODEL_RUNNER=0` on decode |
 | `gpu-mem-prefill-0905` | prefill only | Sets prefill `gpu-memory-utilization` to 0.905 |
 | `gpu-mem-prefill-091` | prefill only | Sets prefill `gpu-memory-utilization` to 0.91 |
 | `max-model-len-130k` | prefill + decode | Sets `max-model-len` to 130000 |
@@ -73,14 +75,26 @@ K8s takes the last duplicate env var, so appended values override the base defau
 
 ### Benchmark Configurations
 
-Tested combinations (all on CoreWeave H200):
+Pre-built overlays under `deployments/benchmark/<config>/<topology>/` combine components with
+topology patches. Each matches a tested configuration on CoreWeave H200:
 
-| Configuration | Components | GPU Mem (prefill) | max-model-len |
-| ------------- | ---------- | ----------------- | ------------- |
-| Baseline | `no-mtp` | 0.92 (default) | 120000 (default) |
-| CPU Offloading | `offloading-cpu` + `no-mtp` | 0.92 (default) | 120000 (default) |
-| Tiered Offloading | `offloading-tiered` + `no-mtp` + `gpu-mem-prefill-091` + `max-model-len-131k` | 0.91 | 131072 |
-| Tiered Offloading + MTP | `offloading-tiered` + `gpu-mem-prefill-0905` + `max-model-len-130k` | 0.905 | 130000 |
+| Configuration | Directory | Components |
+| ------------- | --------- | ---------- |
+| Baseline | `benchmark/baseline/` | `no-mtp` |
+| Baseline + Compute NaN Decode | `benchmark/baseline-computenan-decode/` | `no-mtp` + `compute-nan-decode` |
+| Baseline + Compute NaN Decode Prefill | `benchmark/baseline-computenan-decode-prefill/` | `no-mtp` + `compute-nan-decode` + `compute-nan-prefill` |
+| Baseline + Compute NaN Decode Prefill + MRV1 | `benchmark/baseline-computenan-decode-prefill-mrv1/` | `no-mtp` + `compute-nan-decode` + `compute-nan-prefill` + `mrv1` |
+| Baseline + Compute NaN Prefill + MRV1 | `benchmark/baseline-computenan-prefill-mrv1/` | `no-mtp` + `compute-nan-prefill` + `mrv1` |
+| MTP + Offloading | `benchmark/mtp-offloading/` | `offloading-tiered` |
+| MTP + Offloading (new nightly) | `benchmark/mtp-offloading-newnightly/` | `offloading-tiered` |
+| Offloading | `benchmark/offloading/` | `no-mtp` + `offloading-tiered` |
+| Full ISL + MTP + Offloading | `benchmark/full-isl-mtp-offloading/` | `offloading-tiered` |
+
+Deploy a benchmark config:
+
+```bash
+kubectl apply -n ${NAMESPACE} -k deployments/benchmark/<config>/<topology>
+```
 
 ### Example: Tiered Offloading + MTP
 
@@ -136,12 +150,6 @@ Pick a deployment from the [P/D Deployment Options](#pd-deployment-options) tabl
 kubectl apply -n ${NAMESPACE} -k deployments/<deployment>
 ```
 
-### Aggregate
-
-```bash
-kubectl apply -n ${NAMESPACE} -f base/aggregate.yaml
-```
-
 Wait for pods to become ready (model load takes time; the startup probe allows up to 45 minutes):
 
 ```bash
@@ -181,17 +189,59 @@ curl -X POST http://${IP}/v1/completions \
 
 ## Benchmarking
 
-Staircase workload profiles for P/D and aggregate topologies are included:
+Staircase workload profile:
 
 - `bench-stairs-pd.yaml` — ramps request rate across P/D disaggregated deployments
-- `bench-stairs-aggregate.yaml` — ramps request rate on the aggregate deployment
 
 See the [agentic-serving guide](../../../../agentic-serving/glm-5-2-h200.md) for the full
 benchmarking workflow.
 
 ## Benchmark Results
 
-> Under construction — benchmark results will be published here as runs complete.
+Agentic code-generation workload (avg ISL ~55K tokens, bursty arrivals) on CoreWeave H200 with
+InfiniBand (inter-node) and NVLink (intra-node). Benchmarked with [aiperf](https://github.com/ai-dynamo/aiperf). Full interactive
+dashboard and analysis in the accompanying blog post (link TBD).
+
+### Tiered Offloading + MTP (recommended)
+
+| Topology | Concurrency | TTFT p50 (s) | TTFT p99 (s) | ITL p50 (ms) | ITL p99 (ms) | Tok/s/user | Throughput (tok/s) |
+| -------- | ----------- | ------------ | ------------ | ------------ | ------------ | ---------- | ------------------ |
+| `p1w1d1w1` (2 nodes) | 16 | 2.16 | 17.44 | 16.0 | 40.1 | 62.1 | 729 |
+| `p1w1d1w1` (2 nodes) | 64 | 19.05 | 101.65 | 18.1 | 27.6 | 55.6 | 1,336 |
+| `p1w1d1w1` (2 nodes) | 128 | 48.12 | 173.69 | 18.5 | 29.1 | 54.3 | 1,418 |
+| `p1w2d1w2` (4 nodes) | 16 | 2.10 | 14.59 | 14.7 | 47.2 | 67.1 | 784 |
+| `p1w2d1w2` (4 nodes) | 64 | 4.96 | 22.02 | 16.5 | 25.6 | 60.8 | 2,529 |
+| `p1w2d1w2` (4 nodes) | 256 | 24.87 | 79.61 | 19.7 | 31.9 | 50.9 | 4,356 |
+| `p2w2d1w2` (6 nodes) | 64 | 3.62 | 16.04 | 17.2 | 27.1 | 58.4 | 2,953 |
+| `p2w2d1w2` (6 nodes) | 256 | 9.28 | 43.27 | 24.4 | 48.1 | 41.1 | 6,155 |
+| `p2w2d1w2` (6 nodes) | 512 | 22.44 | 85.05 | 24.9 | 60.0 | 39.9 | 7,046 |
+| `p3w2d1w2` (8 nodes) | 64 | 2.91 | 14.01 | 17.7 | 27.1 | 57.5 | 2,898 |
+| `p3w2d1w2` (8 nodes) | 256 | 7.51 | 33.41 | 25.4 | 62.2 | 39.4 | 6,476 |
+| `p3w2d1w2` (8 nodes) | 512 | 30.10 | 80.31 | 28.8 | 53.4 | 35.1 | 7,057 |
+
+### Baseline (no MTP, no offloading)
+
+| Topology | Concurrency | TTFT p50 (s) | TTFT p99 (s) | ITL p50 (ms) | ITL p99 (ms) | Tok/s/user | Throughput (tok/s) |
+| -------- | ----------- | ------------ | ------------ | ------------ | ------------ | ---------- | ------------------ |
+| `p1w1d1w1` (2 nodes) | 16 | 1.15 | 14.68 | 34.0 | 36.1 | 30.2 | 439 |
+| `p1w1d1w1` (2 nodes) | 64 | 23.85 | 84.43 | 39.9 | 42.9 | 24.9 | 851 |
+| `p1w1d1w1` (2 nodes) | 256 | 122.49 | 256.35 | 43.1 | 45.6 | 23.5 | 1,080 |
+| `p1w2d1w2` (4 nodes) | 16 | 1.23 | 13.64 | 33.2 | 40.7 | 29.9 | 454 |
+| `p1w2d1w2` (4 nodes) | 64 | 2.32 | 13.89 | 38.1 | 39.3 | 26.4 | 1,492 |
+| `p1w2d1w2` (4 nodes) | 256 | 17.13 | 193.81 | 41.4 | 45.6 | 24.3 | 2,714 |
+| `p2w2d1w2` (6 nodes) | 64 | 1.68 | 12.57 | 38.5 | 41.4 | 26.0 | 1,532 |
+| `p2w2d1w2` (6 nodes) | 256 | 3.74 | 36.33 | 46.4 | 48.7 | 22.2 | 3,549 |
+
+### Key Takeaways
+
+- **MTP doubles per-user decode speed**: ~60 tok/s/user with MTP vs ~26 tok/s/user baseline
+  (ITL drops from ~35–45 ms to ~15–20 ms).
+- **Tiered offloading preserves throughput**: adding CPU+NVMe offloading to enable longer
+  contexts does not meaningfully degrade ITL or per-user throughput.
+- **Scaling prefill replicas controls TTFT at load**: `p2w2d1w2` (6 nodes) keeps TTFT p99
+  under 20s at c64 vs 100s+ for `p1w1d1w1` — prefill replication absorbs burst arrivals.
+- **Aggregate throughput scales with nodes**: 7,000+ tok/s at c512 on 8 nodes
+  (`p3w2d1w2`) vs ~1,300 tok/s on 2 nodes.
 
 ## Optional Features
 
@@ -278,14 +328,6 @@ DCGM custom metrics: `base/dcgm-custom-metrics.yaml`.
 
 ## Cleanup
 
-**P/D:**
-
 ```bash
 kubectl delete -n ${NAMESPACE} -k deployments/<deployment>
-```
-
-**Aggregate:**
-
-```bash
-kubectl delete -n ${NAMESPACE} -f base/aggregate.yaml
 ```
