@@ -43,10 +43,7 @@ figures are still quoted elsewhere.
 | 32,768 | 1,173.2 ms | 165.2 ms | **-85.9%** | -62% |
 | 49,152 | 1,987.7 ms | 235.0 ms | **-88.2%** | -68% |
 
-<img src="./gptoss-crossover.png" width="900" alt="Prefill latency versus prefix length, recompute versus P2P pull">
-
-*The figure plots the superseded 2026-07-17 sweep and is retained until
-re-rendered; the table above is canonical.*
+<img src="./gptoss-crossover.png" width="900" alt="Prefill latency versus prefix length, recompute versus P2P pull; the pull is lower at every measured length, reaching -88% at 48K tokens">
 
 The pull wins at every measured length and the gap grows with the prefix,
 because pull time is nearly flat in prefix size (34.6 / 56.5 / 85.9 /
@@ -106,10 +103,7 @@ disperses within a minute as the prefix index fills, but the tail damage is
 done - that is the 165 s p99 and the 47-48 client timeouts. Load placement
 spreads by construction and never sees it.
 
-<img src="./gptoss-docqa.png" width="900" alt="Document Q&A TTFT percentiles and throughput across two order-alternated runs">
-
-*The figure shows the earlier 14-pod run without per-arm cold rolls and is
-retained until re-rendered; the table above is canonical.*
+<img src="./gptoss-docqa.png" width="900" alt="Document Q&A across precise routing and load-aware plus P2P, cold and warm: medians stay near 3-4 s, p99 collapses from 164.9/132.6 s to 20.7/18.2 s, throughput rises to 6.86/7.54 turns/s">
 
 An earlier run of this scenario on a 14-pod fleet, without the per-arm cold
 roll, reported a narrower separation (precise 4.1 / 41.0 / 80.5 s at 5.98
