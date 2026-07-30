@@ -187,15 +187,6 @@ curl -X POST http://${IP}/v1/completions \
     }' | jq
 ```
 
-## Benchmarking
-
-Staircase workload profile:
-
-- `bench-stairs-pd.yaml` — ramps request rate across P/D disaggregated deployments
-
-See the [agentic-serving guide](../../../../agentic-serving/glm-5-2-h200.md) for the full
-benchmarking workflow.
-
 ## Benchmark Results
 
 Agentic code-generation workload (avg ISL ~55K tokens, bursty arrivals) on CoreWeave H200 with

@@ -69,20 +69,3 @@ scrape_configs:
     scrape_interval: 1s
     metrics_path: /metrics
 
-  - job_name: 'nyann-bench'
-    kubernetes_sd_configs:
-      - role: pod
-        namespaces:
-          names:
-            - ${NAMESPACE}
-    relabel_configs:
-      - source_labels: [__meta_kubernetes_pod_name]
-        regex: '.*nyann.*'
-        action: keep
-      - source_labels: [__meta_kubernetes_pod_ip, __meta_kubernetes_pod_annotation_prometheus_io_port]
-        separator: ':'
-        target_label: __address__
-      - source_labels: [__meta_kubernetes_pod_name]
-        target_label: pod
-    scrape_interval: 5s
-    metrics_path: /metrics
