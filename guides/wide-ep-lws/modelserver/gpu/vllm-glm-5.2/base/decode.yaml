@@ -205,8 +205,6 @@ spec:
                 value: eth0
               - name: NCCL_SOCKET_IFNAME
                 value: eth0
-              - name: VLLM_MOE_DP_CHUNK_SIZE
-                value: "${MAX_TOKENS}"
               - name: VLLM_HTTP_TIMEOUT_KEEP_ALIVE
                 value: "120"
               - name: VLLM_LOGGING_LEVEL
