@@ -515,29 +515,3 @@ If you used Gateway mode and nothing else in your cluster still uses it, also re
 the `llm-d-inference-gateway` Gateway by following [the gateway cleanup guide](../../docs/infrastructure/gateway/gke.md#cleanup).
 Standalone Mode never created one.
 
-## Architecture
-
-### Coordinator vs. Routing Sidecar
-
-Standard [P/D Disaggregation](../pd-disaggregation/README.md) dispatches requests via
-a **Routing Sidecar** co-located with the decode worker: the EPP picks a P/D pair, and
-the sidecar runs a fixed protocol (`max_tokens=1, do_remote_decode=True` to prefill,
-then hand the `KVTransferParams` to decode). See
-[Disaggregated Serving: Request Flow Orchestration](../../docs/architecture/advanced/disaggregation/README.md#request-flow-orchestration)
-for the full sequence.
-
-The Coordinator generalizes that fixed protocol into a **pipeline of named steps**
-declared in its `ConfigMap`. Each role (encode, prefill, decode) is still just an
-independent vLLM replica, now behind either a single shared EPP/InferencePool or three
-independent ones (see [Installation Instructions](#installation-instructions)) rather
-than one sidecar per decode pod — the same NIXL `kv-transfer-config` /
-`ec-transfer-config` connectors do the actual KV and encoder-cache transfer either way.
-The Coordinator itself doesn't know or care which topology is behind the Gateway; it
-just tags each outbound call with `EPP-Profile` and lets the Gateway's `HTTPRoute`
-sort out where that lands. What changes is *where the dispatch logic
-lives*: instead of being hardcoded in a sidecar binary running in every decode pod,
-it's centralized in one Coordinator service and expressed as data (the `steps:` list
-and the EPP's `schedulingProfiles`), which is what makes it possible to add, remove,
-or reorder phases without shipping new code, and to pick each phase's pod only when
-that phase is about to run instead of all of them up front (see
-[Deferred decoding](#overview)).
