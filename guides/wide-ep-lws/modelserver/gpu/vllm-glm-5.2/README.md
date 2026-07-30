@@ -128,7 +128,7 @@ curl -X POST http://${IP}/v1/completions \
 
 Agentic code-generation workload (avg ISL ~55K tokens, bursty arrivals) on CoreWeave H200 with
 InfiniBand (inter-node) and NVLink (intra-node). Benchmarked with [aiperf](https://github.com/ai-dynamo/aiperf). Full interactive
-dashboard and analysis in the accompanying blog post (link TBD).
+dashboard and analysis in the accompanying blog post.
 
 ### CPU Offloading + MTP (recommended)
 

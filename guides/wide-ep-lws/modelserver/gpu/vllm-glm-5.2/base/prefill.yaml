@@ -195,10 +195,6 @@ spec:
                 value: "120"
               - name: VLLM_LOGGING_LEVEL
                 value: INFO
-              - name: PYTHONHASHSEED
-                value: "0"
-              - name: VLLM_SERVER_DEV_MODE
-                value: "1"
               - name: VLLM_NIXL_SIDE_CHANNEL_HOST
                 valueFrom:
                   fieldRef:

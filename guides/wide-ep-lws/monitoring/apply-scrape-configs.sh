@@ -2,8 +2,8 @@
 # Merge wide-ep-lws scrape configs into an existing prometheus-server configmap.
 #
 # Usage:
-#   NAMESPACE=ecrncevi-dev ./apply-scrape-configs.sh
-#   NAMESPACE=ecrncevi-dev KUBECONFIG=~/.kube/config.kermit ./apply-scrape-configs.sh
+#   NAMESPACE=<your-namespace> ./apply-scrape-configs.sh
+#   NAMESPACE=<your-namespace> KUBECONFIG=~/.kube/config ./apply-scrape-configs.sh
 #
 # Prerequisites:
 #   - A prometheus-server configmap must already exist in NAMESPACE
