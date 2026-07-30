@@ -5,8 +5,9 @@ disaggregated, one prefill and one decode instance, each 16-way
 data/expert-parallel across 2 pods (32x H200 total), ~520K tokens of GPU KV
 and a 100 GiB CPU offload tier per rank, vLLM block size 64, KV transfers
 over NIXL. Routing uses the llm-d inference gateway with the precise
-(KV-event-fed) prefix index, `minCachedTokenDelta: 16384` (from the
-crossover below). The page carries the pull-versus-recompute crossover,
+(KV-event-fed) prefix index, `minCachedTokenDelta: 16384` (set from the
+overlay-era crossover; the current upstream-tier crossover recommends
+`12288` - see below). The page carries the pull-versus-recompute crossover,
 the load-spill payoff pair, and - quarantined at the end - the
 overlay-era four-arm grid on recorded agentic traces (the SemiAnalysis
 Weka corpus, aiperf at concurrencies 32/64/128). The precise and load-first arm configurations ship as the
@@ -15,11 +16,46 @@ the historical grid's approximate-index arms are not shipped.
 
 ## Pull versus recompute (single request)
 
-Single source-consumer engine pair on different pods, fresh prefix seeded on
-the source, TTFT measured on the consumer with and without the pull, warmed
-transfer mesh, single rep per point. Every pull verified byte-exact against
-the consumer's `kv_offload_load_bytes_total` (loaded bytes = tokens x ~93 KB
-within 1%):
+Consumer = the prefill leader (the P/D-relevant direction), source = the
+decode leader, direct `kv_transfer_params` injection with no EPP or
+sidecar in the path, fresh random token IDs per probe, warmed transfer
+mesh, medians of 3 with the first pull discarded. Every pull verified
+byte-exact against the consumer's `vllm:kv_offload_load_bytes_total`
+(92.6 KB/token, constant across every length):
+
+| prefix tokens | recompute | P2P pull | delta | pulled in |
+|---:|---:|---:|---:|---:|
+| 4,096 | 672.2 ms | 1,262.2 ms | +87.8% | 379.4 MB |
+| 8,192 | 1,067.8 ms | 1,170.6 ms | +9.6% | 758.8 MB |
+| 12,288 | 1,708.5 ms | 1,241.0 ms | **-27.4%** | 1,138.2 MB |
+| 16,384 | 2,148.3 ms | 1,268.9 ms | -40.9% | 1,517.6 MB |
+| 24,576 | 3,338.0 ms | 1,315.3 ms | -60.6% | 2,276.4 MB |
+
+Recompute is linear at ~130-147 us/token while the pull is flat at
+~1.21-1.32 s, so the **crossover is ~8,650 tokens**. The recommended
+setting is `minCachedTokenDelta: 12288`: 8,192 is a dead tie whose sign
+flips between runs, and 12,288 is the lowest length the sweeps call
+decisively. The benchmark campaigns on this page ran `16384` - set from
+the earlier sweep quarantined below - which sits above either measured
+tie, so their fired pulls are always in the win region.
+
+Two measurement controls worth repeating on any rig: at 12,288 the
+identical seeded probe *without* the injected source-pull
+`kv_transfer_params` block never pulls (0.0 MB loaded against 1,138.2 MB
+with it, three reps) - the engine does not fetch from peers on its own;
+the router/sidecar directive is the trigger, and the loaded-bytes counter
+is peer-attributable here because the consumer has never seen the token
+IDs. And the *first* pull between a fresh pod pair pays a one-time ~6 s
+session-establishment cost that steady-state pulls never see - calibrate
+on a warmed pair or the transient reads as the pull's cost.
+
+### Historical: the overlay-era sweep (superseded)
+
+The same method on the overlay-era stack measured a higher pull floor
+(~1.7-2.3 s: session floor plus ~4.5 GB/s effective transfer) and a
+correspondingly later tie at 13,648 tokens; the campaigns' `16384`
+setting dates from this sweep. Retained for provenance only - the
+upstream-tier table above is the current calibration:
 
 | prefix tokens | recompute | P2P pull | delta |
 |---|---|---|---|
@@ -30,21 +66,6 @@ within 1%):
 | 48,109 | 6.38 s | 1.98 s | -69% |
 | 65,111 | 8.78 s | 1.98 s | -78% |
 | 98,220 | 13.75 s | 2.29 s | -83% |
-
-The pull's latency is nearly flat (~1.7-2.3 s: session floor plus ~4.5 GB/s
-effective transfer) while recompute pays ~130-144 us per token, so the
-crossover is a dead tie at 13,648 tokens and the gap past it widens without
-bound. `minCachedTokenDelta: 16384` sits just above the measured tie, so
-fired pulls are always in the win region.
-
-Two measurement controls worth repeating on any rig: the identical sweep
-*without* the sidecar's injected source-pull `kv_transfer_params` block
-never pulls (pull time
-equals recompute time, zero bytes loaded) - the engine does not fetch from
-peers on its own; the router/sidecar directive is the trigger. And the
-*first* pull between a fresh pod pair pays a one-time ~6 s
-session-establishment cost that steady-state pulls never see - calibrate on
-a warmed pair or the transient reads as the pull's cost.
 
 ## Load spill and the pull's payoff (matched c32 benchmark)
 
@@ -77,8 +98,8 @@ bands.
 
 The mechanism is visible in the tail: the no-pull mode's ~21 s p90 is the
 spill tail (recompute of a 70K-token prefix on a non-holder), and the
-pull collapses it to ~5 s - the flat pull cost from the crossover table
-above, paid instead of the linear recompute.
+pull collapses it to ~5 s - a flat transfer cost (the crossover floor
+plus concurrency-32 queueing) paid instead of the linear recompute.
 
 The boundary on the other side: under holder-affinity policies (affinity
 weight 5) with a correctly sized index, the pull rarely fires on

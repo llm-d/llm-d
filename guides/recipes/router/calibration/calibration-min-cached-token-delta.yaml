@@ -117,21 +117,36 @@ spec:
               # counter also serves local CPU-tier restores, so it is only
               # peer-attributable because every probe below uses token IDs the
               # consumer has never seen - there is no local copy to restore.
+              # vllm:kv_offload_load_bytes_total is the current flat counter;
+              # vllm:kv_offload_total_bytes_total{transfer_type="CPU_to_GPU"}
+              # is its deprecated predecessor on older engine pins. Exactly one
+              # family is summed - adding both would double-count on engines
+              # that emit the deprecated counter alongside the current one.
               try:
                   txt = urllib.request.urlopen(DST_METRICS, timeout=30).read().decode()
               except Exception:
                   return None
-              total = 0.0
-              for line in txt.splitlines():
-                  if line.startswith("#") or "kv_offload_total_bytes_total" not in line:
-                      continue
-                  if "CPU_to_GPU" not in line:
-                      continue
-                  try:
-                      total += float(line.rsplit(" ", 1)[1])
-                  except (IndexError, ValueError):
-                      pass
-              return total
+
+              def family_total(match):
+                  total, seen = 0.0, False
+                  for line in txt.splitlines():
+                      if line.startswith("#") or not match(line):
+                          continue
+                      try:
+                          total += float(line.rsplit(" ", 1)[1])
+                          seen = True
+                      except (IndexError, ValueError):
+                          pass
+                  return total, seen
+
+              total, seen = family_total(
+                  lambda ln: "kv_offload_load_bytes_total" in ln)
+              if seen:
+                  return total
+              total, seen = family_total(
+                  lambda ln: "kv_offload_total_bytes_total" in ln
+                  and "CPU_to_GPU" in ln)
+              return total if seen else None
 
           print(f"src={SRC_URL} dst={DST_URL} pull_source={SRC_IP}:{P2P_PORT} "
                 f"model={MODEL} lengths={LENGTHS} reps={REPS} dp_ranks={DP_RANKS}", flush=True)

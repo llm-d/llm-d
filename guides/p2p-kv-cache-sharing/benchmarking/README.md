@@ -194,7 +194,7 @@ arms without the producer - that is what shows the path engaged.
 Alongside it the tier served 210M external-hit tokens and 7.8 TB (GPU hit
 rate 17.3% - scattered placement misses locally and the tier covers it).
 Read those two as **offload-tier activity, not pull volume**:
-`vllm:external_prefix_cache_hits_total` and `kv_offload_load_bytes_total`
+`vllm:external_prefix_cache_hits_total` and `vllm:kv_offload_load_bytes_total`
 count every restore into GPU, including a pod reloading from its own CPU
 tier, so they cannot be attributed to peer transfers on a workload with
 repeated prefixes. Session counts prove the path engaged but are reusable
