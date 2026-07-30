@@ -97,9 +97,10 @@ The regime rule from the benchmarks:
   affinity modestly at matched rates - cache co-location is structurally
   cheaper when nothing contends. In owner-pinned contention regimes
   (document Q&A: many concurrent sessions each bound to an owner pod)
-  load-first placement plus the pull wins outright - 7.3x better p99 TTFT
-  than affinity - because affinity pays for co-location in owner-pod
-  queues. The guide's `epp-affinity-p2p.yaml` is the safer general-purpose
+  load-first placement plus the pull wins outright - 1.5x better p99 TTFT
+  and +35% throughput than affinity warm, with zero cold-start client
+  timeouts against affinity's 47-48 - because affinity pays for
+  co-location in owner-pod queues. The guide's `epp-affinity-p2p.yaml` is the safer general-purpose
   default across both regimes; reach for load-aware placement plus the
   pull when your workload contends on owners or oversubscribes the caches
   as above.

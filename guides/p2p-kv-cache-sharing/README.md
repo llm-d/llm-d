@@ -65,21 +65,21 @@ to the pod that already caches its prefix:
 What the pull is worth depends on the placement it sits behind, and the
 three combinations this guide measures are not the same kind of thing:
 
-* **Affinity + P2P - usually inert, and not restart insurance.** Precise
-  affinity sends each request to the pod that already holds its prefix, so
-  a peer rarely leads by `minCachedTokenDelta` and there is rarely
-  anything to fetch: on the document-Q&A rig this arm established 2 P2P
-  sessions across a full 16-pod run, against 65 for load-aware + P2P on
-  the same rig (sessions are reusable connections, an engagement signal
-  rather than a pull count). That is the pull behaving correctly as a
-  fallback, not a defect. A restarted ROUTER is explicitly not a case it
-  covers: both indexes lose the pre-restart cache map - the approximate
-  index learns only its own placements from birth, and the precise index
-  consumes KV events delta-only with no replay - and both measured
-  restart-recovery experiments produced zero pulls. A cold ENGINE replica
-  behind an intact router is the plausible recovery case, and it is
-  unmeasured. Do not deploy this arm expecting a throughput gain over
-  affinity alone.
+* **Affinity + P2P - a fallback, not an established throughput feature,
+  and not restart insurance.** Precise affinity sends each request to the
+  pod that already holds its prefix, so a peer rarely leads by
+  `minCachedTokenDelta` and there is rarely anything to fetch; the pull
+  behaves as a fallback for the requests placement displaces. On the
+  document-Q&A rig this arm reads +17% throughput and -26% p99 TTFT over
+  affinity alone warm - inside that workload's 10-28% run-to-run spread
+  with a single run per arm, so the guide does not credit the pull with a
+  throughput role under affinity placement. A restarted ROUTER is
+  explicitly not a case it covers: both indexes lose the pre-restart
+  cache map - the approximate index learns only its own placements from
+  birth, and the precise index consumes KV events delta-only with no
+  replay - and both measured restart-recovery experiments produced zero
+  pulls. A cold ENGINE replica behind an intact router is the plausible
+  recovery case, and it is unmeasured.
 * **Load-aware + P2P - a measured performance feature.** When placement
   deliberately scatters, the pull is what makes scattering affordable, and
   the gain is directly attributable to it.
@@ -98,21 +98,21 @@ request; the pull keeps that price sub-second (against a 63 s p50 recompute
 floor without it), but affinity never pays it at all. On the document-Q&A
 headline (128 concurrent multi-turn sessions, each pinned by affinity to
 the pod that computed its prefix) the result flips: load-aware + P2P avoids
-the owner-pod queueing that affinity + P2P still pays, giving +62%
-throughput and a 7.3x better p99 TTFT than precise routing (see
+the owner-pod queueing that affinity + P2P still pays, giving +35%
+throughput and a 1.5x better p99 TTFT than precise routing warm - and on a
+cold fleet, zero client timeouts against 47-48 as affinity placement
+collapses onto one pod (see
 [benchmark-results/gpt-oss-120b-h200.md](benchmark-results/gpt-oss-120b-h200.md)).
 
 The guide ships affinity + P2P as the default because it is the safer
 placement in the capacity-driven regime, not because the pull improves it.
 Reach for load-aware + P2P when your workload looks like many concurrent,
 multi-turn sessions each pinned to an owner pod; re-measure both arms
-against your own workload shape before assuming either generalizes.
-Provenance caveat on the aggregated arm comparisons: they were measured
-with the prefix index at its default `podCacheSize`, while the
-shipped configurations set 32; index size is known to change affinity
-and source selection, so treat the arm-versus-arm numbers as pending a
-re-measurement at 32 (the pull-versus-recompute crossover bypasses the
-index and is unaffected).
+against your own workload shape before assuming either generalizes. The
+document-Q&A comparison is measured at the shipped `podCacheSize: 32`;
+the uniform-pool comparison predates that setting, and correct sizing
+improves affinity placement most, so its ordering (affinity ahead)
+stands.
 
 ## Configuration
 

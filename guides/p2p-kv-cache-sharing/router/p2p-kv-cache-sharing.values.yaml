@@ -11,11 +11,10 @@
 ## in ../benchmarking/): placement follows the cache (prefix-affinity
 ## scoring), and the p2p-source-producer emits the KV cache source header
 ## when a peer out-caches the scheduled pod by at least minCachedTokenDelta
-## tokens. Under precise affinity a peer rarely leads by that margin - this
-## arm established 2 P2P sessions across a full 16-pod document-Q&A run,
-## against 65 for the load-aware + P2P arm on the same rig (sessions are
-## reusable connections, an engagement signal) - the pull here is usually
-## inert, not a throughput feature, and NOT insurance for a restarted
+## tokens. Under precise affinity a peer rarely leads by that margin, so
+## the pull here is a fallback for displaced requests (its measured
+## throughput delta over affinity alone sits inside run-to-run spread),
+## not an established throughput feature, and NOT insurance for a restarted
 ## router (both index modes lose the pre-restart cache map; measured
 ## restart runs produced zero pulls). A cold engine replica behind an
 ## intact router is the plausible fallback case and is unmeasured. The

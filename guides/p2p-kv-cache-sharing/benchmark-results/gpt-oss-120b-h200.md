@@ -11,15 +11,14 @@ document Q&A and the pool scenarios both ran on 16 pods. Workload
 profiles, EPP arm configurations, and the run protocol are in
 [../benchmarking/README.md](../benchmarking/README.md).
 
-Provenance note on index sizing: these tables were measured with the
-precise index at its default `podCacheSize`, which on a 16-pod
-GPU+CPU fleet holds fewer entries than there are legitimate
-(endpoint, tier) holders per hot block. The shipped arm configurations
-and the deployed router values now set 32. Undersizing biases affinity
-scoring and source selection toward divergence, so arm-versus-arm
-comparisons here should be read with that caveat until re-measured at 32;
-the pull-versus-recompute ladder is unaffected (it bypasses the index
-entirely).
+Provenance note on index sizing: the precise index's `podCacheSize` must
+cover every legitimate (endpoint, tier) holder per hot block - the
+shipped configurations set 32 for this 16-pod GPU+CPU fleet. The document
+Q&A table is measured at 32. The uniform-pool and hot-set tables predate
+that setting; correct sizing improves affinity placement most, so their
+arm ordering (affinity ahead) is the direction sizing favors and stands.
+The pull-versus-recompute ladder bypasses the index entirely and is
+unaffected.
 
 ## Pull versus recompute (single request)
 
@@ -63,36 +62,40 @@ run. The ~9.2M-token corpus fits inside the fleet's aggregate GPU KV
 (16 pods x ~1.22M tokens/pod ~= 19.5M) with room to spare, so the
 displacement here is not capacity scarcity.
 
-Measured on 16 pods, each arm cold-rolling the fleet before its first run so
-arms cannot contaminate each other, then run twice. TTFT p50 / p95 / p99
-(s); throughput (turns/s):
+Measured on 16 pods with the shipped `podCacheSize: 32`, each arm
+cold-rolling the fleet before its first run so arms cannot contaminate
+each other, then run twice. TTFT p50 / p95 / p99 (s); throughput
+(turns/s):
 
 | arm | run | ok/fail | p50 | p95 | p99 | turns/s |
 |---|---|---|---:|---:|---:|---:|
-| Precise prefix routing | 1 (cold) | 870/47 | 3.2 | 85.8 | 164.9 | 3.23 |
-| Precise prefix routing | 2 (warm) | 1152/0 | 4.0 | 75.0 | 132.6 | 4.65 |
-| Precise + P2P | 1 (cold) | 864/48 | 4.0 | 84.0 | 164.5 | 3.18 |
-| Precise + P2P | 2 (warm) | 1152/0 | 3.7 | 69.6 | 126.7 | 5.06 |
-| **Load-aware + P2P** | 1 (cold) | 1152/0 | 3.4 | **12.9** | **20.7** | **6.86** |
-| **Load-aware + P2P** | 2 (warm) | 1152/0 | 3.2 | **11.7** | **18.2** | **7.54** |
+| Precise prefix routing | 1 (cold) | 864/48 | 0.2 | 83.3 | 162.8 | 3.93 |
+| Precise prefix routing | 2 (warm) | 1152/0 | 0.3 | 14.0 | 25.2 | 10.15 |
+| Precise + P2P | 1 (cold) | 870/47 | 0.2 | 85.7 | 165.4 | 3.90 |
+| Precise + P2P | 2 (warm) | 1152/0 | 0.3 | 10.1 | 18.6 | 11.90 |
+| **Load-aware + P2P** | 1 (cold) | 1152/0 | 1.7 | **11.4** | **20.7** | **11.34** |
+| **Load-aware + P2P** | 2 (warm) | 1152/0 | 0.6 | **9.0** | **16.6** | **13.66** |
 
-Zero pod restarts across all six runs.
+Zero pod restarts during the runs (one pod hung at NIXL/UCX backend init
+during an arm's cold roll and was replaced before the run started).
 
-**Load-aware + P2P wins this scenario decisively**: +62% throughput and 7.3x
-better p99 TTFT than precise routing warm (18.2 s vs 132.6 s), +112% and
-8.0x cold. Every question goes to whichever pod is least loaded and that pod
-pulls the prefix instead of recomputing or queueing for it.
+**Load-aware + P2P wins this scenario**: +35% throughput and 1.5x better
+p99 TTFT than precise routing warm (16.6 s vs 25.2 s), and on a cold fleet
+the separation is stark - 1152/1152 with zero failures at 2.9x the
+throughput and 7.9x better p99, while both affinity arms shed 47-48
+requests to the client timeout. The trade is visible in the medians:
+affinity's warm p50 is 0.3 s (a local cache hit) against load-aware +
+P2P's 0.6 s (every displaced question pays a pull); load-aware + P2P
+buys the tail and the throughput with it.
 
-**Precise + P2P is not distinguishable from precise alone here.** Its warm
-+8.8% throughput and -4.5% p99 sit inside this workload's run-to-run spread,
-and the mechanism evidence is consistent with limited engagement: the arm
-established **2 P2P sessions across all 16 pods** for the entire run,
-against **65** for load-aware + P2P on the identical rig (sessions are
-reusable connections, an engagement signal rather than a pull count) -
-the performance pair is a null. Fleet prefix hit rate says the same -
-~27% under affinity versus 9.9% under load placement. Affinity keeps the KV
-local, so `minCachedTokenDelta` is essentially never met and there is
-nothing to fetch.
+**Precise + P2P versus precise alone reads +17% throughput and -26% p99
+warm - suggestive, not established.** One warm run per arm, and the
+throughput delta sits inside this workload's 10-28% run-to-run spread.
+The structural expectation is limited engagement: affinity keeps the KV
+local, so `minCachedTokenDelta` is rarely met and there is little to
+fetch. Per-arm session counters do not survive the per-arm cold roll, so
+this pair needs repeated runs with mechanism counters before the pull is
+credited with a throughput role under affinity placement.
 
 **The affinity arms are cold-start fragile, and that is what the cold rows
 show.** On a cold fleet every endpoint scores identically, so precise
@@ -103,14 +106,17 @@ disperses within a minute as the prefix index fills, but the tail damage is
 done - that is the 165 s p99 and the 47-48 client timeouts. Load placement
 spreads by construction and never sees it.
 
-<img src="./gptoss-docqa.png" width="900" alt="Document Q&A across precise routing and load-aware plus P2P, cold and warm: medians stay near 3-4 s, p99 collapses from 164.9/132.6 s to 20.7/18.2 s, throughput rises to 6.86/7.54 turns/s">
+<img src="./gptoss-docqa.png" width="900" alt="Document Q&A across three routing arms, cold and warm: affinity arms collapse to 162.8-165.4 s p99 cold with client timeouts, load-aware plus P2P holds 20.7 s cold and 16.6 s warm at 13.66 turns/s">
 
-An earlier run of this scenario on a 14-pod fleet, without the per-arm cold
-roll, reported a narrower separation (precise 4.1 / 41.0 / 80.5 s at 5.98
-turns/s; load-aware + P2P 4.5 / 13.0 / 20.9 s at 7.02). The load-aware + P2P
-arm reproduces that closely here - p95 within 0.1-0.8 s and p99 within 0.2 s
-- which is what validates this harness. The affinity arms do not, because
-those runs did not start cold.
+Index sizing dominates every arm that consults the index. The same
+campaign with the precise index at its default `podCacheSize` (undersized
+for a 16-pod GPU+CPU fleet) reads warm 4.65 / 5.06 / 7.54 turns/s across
+the three arms and a 7.3x p99 separation: undersizing cripples affinity
+placement most (it evicts the very holders placement routes on, p99
+132.6 s against 25.2 s here) and degrades load-aware + P2P through P2P
+source selection (7.54 against 13.66). Undersizing therefore exaggerates
+the arm separation without changing the ordering - size the index before
+comparing arms.
 
 ## Uniform shared-prefix pool (three arms)
 

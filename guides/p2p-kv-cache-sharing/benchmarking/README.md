@@ -106,14 +106,15 @@ placement rule holding exactly (see the wide-EP section). The cross-placement co
 attribute their margin to the placement change as much as to the pull.
 
 One result worth stating plainly because it recurs: **under affinity
-placement the pull is close to inert.** Measured on the document-Q&A rig,
-`affinity + P2P` established 2 P2P sessions across 16 pods over a full run
-while `load + P2P` established 65 on the same rig - affinity keeps the KV
-local, so `minCachedTokenDelta` is rarely met and there is nothing to fetch.
-That is the pull behaving correctly as a recovery path, not a defect, but it
-does mean `affinity + P2P` should be chosen for its placement behaviour and
-treated as a fallback for externally inherited divergence (a cold engine
-replica behind an intact router - plausible and unmeasured), not as a
+placement the pull is a fallback, not an established throughput
+feature.** Affinity keeps the KV local, so `minCachedTokenDelta` is
+rarely met and there is little to fetch; on the document-Q&A rig the
+`affinity + P2P` versus `affinity` throughput delta sits inside the
+workload's run-to-run spread. That is the pull behaving correctly as a
+recovery path, not a defect, but it does mean `affinity + P2P` should be
+chosen for its placement behaviour and treated as a fallback for
+externally inherited divergence (a cold engine replica behind an intact
+router - plausible and unmeasured), not as a
 throughput feature or router-restart insurance. See [When to use this path](../README.md#when-to-use-this-path).
 
 ## Step 0 - pull-versus-recompute crossover (single request)
@@ -280,16 +281,17 @@ contend for a limited set of owner pods.
 
 Results are canonical in
 [the gpt-oss results page](../benchmark-results/gpt-oss-120b-h200.md#document-qa-the-headline),
-measured on the fixed stack with a per-arm cold roll so arms cannot
-contaminate each other. Headline: load-aware + P2P wins this scenario
-decisively (7.3x better p99 TTFT and +62% throughput than precise routing
-warm; 8.0x cold), while precise + P2P is not distinguishable from precise
-alone (2 P2P sessions across 16 pods for the whole run versus 65 under
-load-aware placement - affinity keeps KV local, so the source delta is
-essentially never met), and the affinity arms are cold-start fragile
-(47-48 client timeouts on a cold fleet as placement collapses onto one
-pod). An earlier 14-pod run without the per-arm cold roll reported a
-narrower separation; the fixed-stack rerun supersedes it.
+measured on the fixed stack at the shipped `podCacheSize: 32` with a
+per-arm cold roll so arms cannot contaminate each other. Headline:
+load-aware + P2P wins this scenario (1.5x better p99 TTFT and +35%
+throughput than precise routing warm; cold, zero failures at 2.9x
+throughput and 7.9x p99), the affinity arms are cold-start fragile (47-48
+client timeouts on a cold fleet as placement collapses onto one pod), and
+precise + P2P versus precise alone reads +17% throughput warm - inside
+the workload's run-to-run spread, so not credited to the pull (affinity
+keeps KV local, so the source delta is rarely met). Undersizing the
+index exaggerates the arm separation without changing the ordering; the
+results page records the default-`podCacheSize` figures alongside.
 
 On this scenario alone, `epp-load-p2p` is the better arm - but see
 [the uniform pool](#uniform-shared-prefix-pool-three-routing-arms), where
