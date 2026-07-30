@@ -73,16 +73,6 @@ topology choice:
   (not the EPP) is what dispatches each `EPP-Profile` value to the right EPP's
   InferencePool.
 
-> [!IMPORTANT]
-> The **single-EPP** topology depends on
-> (`header-profile-handler` plus the `encode-filter`/`prefill-filter`/`decode-filter`
-> plugins). Until it
-> is, [`router/coord-disaggregation.values.yaml`](router/coord-disaggregation.values.yaml)
-> pins `router.epp.image` to `ghcr.io/roytman/llm-d-router-endpoint-picker:1-epp`, a
-> build that contains it. Swap it back to the chart default once an official image does.
-> The **3-EPP** topology doesn't need this — see
-> [Installation Instructions](#installation-instructions).
-
 ## Default Configuration (will be updated after finalizeng the guide)
 
 | Parameter          | Value                                                              |
@@ -98,7 +88,7 @@ topology choice:
 
 | Backend           | Directory                | Notes                                            |
 | ------------------ | ------------------------- | ------------------------------------------------- |
-| NVIDIA GPU (vLLM) | `modelserver/gpu/vllm/`  | Default configuration (`base` and `gke` providers) |
+| NVIDIA GPU (vLLM) | `modelserver/gpu/vllm/`  | Default configuration (`base`, `coreweave`, and `gke` providers) |
 
 > [!NOTE]
 > Encoder-cache transfer (`--ec-transfer-config`) is not yet in an official vLLM
@@ -296,7 +286,7 @@ three role-specific model servers (encode, prefill, decode), each as a single
 replica:
 
 ```bash
-export INFRA_PROVIDER=base # base | gke
+export INFRA_PROVIDER=base # base | coreweave | gke
 kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/gpu/vllm/${INFRA_PROVIDER}/
 ```
 
