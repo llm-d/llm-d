@@ -36,7 +36,6 @@ plugins:
     prefixMatchInfoProducerName: cpu-prefix-cache-producer   # approx CPU-tier index, not precise
     prefillProfileName: prefill
     minCachedTokenDelta: 16384
-    p2pPortBase: 7777
 schedulingProfiles:
 - name: prefill
   plugins:

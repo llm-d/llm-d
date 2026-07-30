@@ -28,11 +28,8 @@ plugins:
     kvEventsConfig:
       topicFilter: "kv@"
       discoverPods: true
-      dataParallelSizeLocal: 8
-      servingPortBase: 8000
       podDiscoveryConfig:
         socketPort: 5557
-        dataParallelSizeTotal: 16
 - type: prefix-cache-scorer
   name: precise-prefix-cache-scorer
   parameters:

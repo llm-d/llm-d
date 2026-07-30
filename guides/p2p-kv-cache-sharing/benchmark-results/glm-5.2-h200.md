@@ -57,7 +57,9 @@ without the pull a spilled ~70K-token prompt recomputes its prefix; with
 it, the prefix follows the request. Per repetition: a fresh salted
 ~70K-token prefix, 3 warmups, 96 measured requests at concurrency 32.
 Three repetitions per mode in counterbalanced order, the EPP restarted
-and probed on every profile swap.
+and probed on every profile swap. The two profiles are
+`epp-glm-loadfirst.yaml` and `epp-glm-loadfirst-p2p.yaml` in
+[../benchmarking/](../benchmarking/README.md).
 
 | mode | TTFT mean (s) | TTFT p90 (s) | req/s | wall per rep (s) |
 |---|---:|---:|---:|---:|

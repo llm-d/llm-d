@@ -1,8 +1,3 @@
-# GLM wide-EP arm: precise prefix-cache affinity + P2P pull.
-# Identical placement to epp-glm-precise.yaml plus the p2p-source-producer
-# fed by the same precise index, minCachedTokenDelta 16384 (the measured
-# crossover for this model - see benchmark-results/glm-5.2-h200.md).
-# Service endpoints (token-producer url) are the testbed's; adjust for your deployment.
 apiVersion: llm-d.ai/v1alpha1
 kind: EndpointPickerConfig
 plugins:
@@ -20,10 +15,17 @@ plugins:
       url: http://render:8000
 - type: endpoint-notification-source
 - type: metrics-data-source
-  parameters: {scheme: "http", path: "/metrics", insecureSkipVerify: true}
+  parameters:
+    scheme: http
+    path: /metrics
+    insecureSkipVerify: true
 - type: core-metrics-extractor
 - type: precise-prefix-cache-producer
   parameters:
+    indexerConfig:
+      kvBlockIndexConfig:
+        inMemoryConfig:
+          podCacheSize: 64
     tokenProcessorConfig:
       blockSize: 64
     kvEventsConfig:
@@ -35,11 +37,6 @@ plugins:
   name: precise-prefix-cache-scorer
   parameters:
     prefixMatchInfoProducerName: precise-prefix-cache-producer
-- type: p2p-source-producer
-  parameters:
-    prefixMatchInfoProducerName: precise-prefix-cache-producer
-    prefillProfileName: prefill
-    minCachedTokenDelta: 16384
 - type: queue-scorer
 - type: active-request-scorer
 dataLayer:
@@ -55,7 +52,7 @@ schedulingProfiles:
   plugins:
   - pluginRef: prefill-filter
   - pluginRef: precise-prefix-cache-scorer
-    weight: 5
+    weight: 1
   - pluginRef: queue-scorer
     weight: 3
   - pluginRef: active-request-scorer

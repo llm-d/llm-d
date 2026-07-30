@@ -52,7 +52,11 @@ next to this file:
 A second arm set, `epp-glm-*.yaml`, is the wide-EP testbed's
 (`GLM-5.2-FP8`, 753B): the same placement-x-pull cross at
 `minCachedTokenDelta: 16384`, measured in the
-[wide-EP section](#wide-ep-testbed-glm-52-fp8) below.
+[wide-EP section](#wide-ep-testbed-glm-52-fp8) below. The
+`epp-glm-loadfirst{,-p2p}.yaml` pair is the testbed's load-spill payoff
+benchmark (queue weight 3 over affinity weight 1, with and without
+`p2p-source-producer`) - the matched pair behind the -67% TTFT / 2.7x
+result in the GLM results page.
 
 For a defensible A/B, run arm pairs twice with the order alternated:
 whichever arm runs second inherits warm CPU tiers, and the alternation both
