@@ -25,7 +25,7 @@ spec:
             claimName: fa3-build-pvc
       containers:
         - name: builder
-          image: public.ecr.aws/q9t5s3a7/vllm-ci-test-repo:0cc399fd59e4f23b7c2f97ceb74d91d1553fb645
+          image: vllm/vllm-openai:nightly
           command: ["/bin/bash", "-c"]
           args:
             - |

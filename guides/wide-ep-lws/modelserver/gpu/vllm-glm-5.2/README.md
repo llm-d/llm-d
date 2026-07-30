@@ -250,21 +250,6 @@ dashboard and analysis in the accompanying blog post (link TBD).
 On by default (3 tokens) for both prefill and decode. Disable with the `no-mtp`
 component or `ENABLE_MTP=0`. Token count: `MTP_NUM_TOKENS` (default `3`).
 
-### DSpark Speculative Decoding
-
-Set `ENABLE_DSPARK=1` on both prefill and decode. Only activates on multi-node
-deployments (`LWS_GROUP_SIZE > 1`). Uses `RedHatAI/GLM-5.2-speculator.dspark` with
-7 speculative tokens by default.
-
-When enabled, GPU memory utilization is reduced by 0.07 (decode) / 0.04 (prefill) to fit
-the draft model, and `NVSHMEM_QP_DEPTH` is scaled for the expanded dispatch token count.
-
-| Variable            | Default                                   |
-| ------------------- | ----------------------------------------- |
-| `ENABLE_DSPARK`     | `0`                                       |
-| `DSPARK_MODEL`      | `RedHatAI/GLM-5.2-speculator.dspark`      |
-| `DSPARK_NUM_TOKENS` | `7`                                       |
-
 ### EPP Routing
 
 The GLM-5.2 EPP overrides (`router/glm-5.2-overrides.values.yaml`) add dual prefix-cache
@@ -292,9 +277,6 @@ Without offloading, `max-model-len` caps at ~108K on H200 (model weights ~122 Gi
 KV cache + DeepGemm warmup + CUDA overhead must fit in 139.80 GiB).
 
 Decode pods do not use offloading (256Gi dshm, 512Gi memory).
-
-Hotfixes: `kv_quant_mode` in `MLAAttention.get_kv_cache_spec` (vllm#48379),
-`set_` overflow for packed KV caches in the offloading worker.
 
 ### InfiniBand Networking
 

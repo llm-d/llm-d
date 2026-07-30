@@ -57,7 +57,7 @@ spec:
               type: DirectoryOrCreate
         containers:
           - name: vllm
-            image: vllm/vllm-openai:nightly-94c0ef300180f8fd1071d9cbe7270a8348155f94
+            image: vllm/vllm-openai:nightly
             securityContext:
               capabilities:
                 add:
@@ -73,73 +73,11 @@ spec:
               - |-
                 find /dev/shm -type f -delete
 
-                # Hotfix: add kv_quant_mode to MLAAttention.get_kv_cache_spec (vllm#48379)
-                # PR #47716 fixed deepseek_v4 and sparse_swa but missed mla_attention.py
-                python3 -c "
-                p='/usr/local/lib/python3.12/dist-packages/vllm/model_executor/layers/attention/mla_attention.py'
-                s=open(p).read()
-                if 'get_kv_quant_mode' not in s:
-                  s=s.replace('    MLAAttentionSpec,\n)', '    MLAAttentionSpec,\n    get_kv_quant_mode,\n)')
-                  s=s.replace('            cache_dtype_str=vllm_config.cache_config.cache_dtype,\n        )',
-                              '            cache_dtype_str=vllm_config.cache_config.cache_dtype,\n            kv_quant_mode=get_kv_quant_mode(vllm_config.cache_config.cache_dtype),\n        )')
-                  open(p,'w').write(s); print('PATCHED mla_attention.py')
-                else: print('mla_attention.py already patched')
-                "
-
-                # Hotfix: offloading set_ overflow for packed non-uniform KV caches
-                # The indexer group's offset+page_size exceeds block_stride in the packed
-                # layout. Replace set_() with as_strided() to avoid bounds check failure.
-                python3 -c "
-                import re
-                p='/usr/local/lib/python3.12/dist-packages/vllm/distributed/kv_transfer/kv_connector/v1/offloading/worker.py'
-                s=open(p).read()
-                pat = (r'(tensors_per_block\[layer_name\] = \(\n)'
-                       r'(\s+)torch\.tensor\(\n'
-                       r'\s+\[\],\n'
-                       r'\s+dtype=torch\.int8,\n'
-                       r'\s+device=layer_kv_cache\.device,\n'
-                       r'\s+\)\.set_\(\n'
-                       r'\s+layer_kv_cache\.untyped_storage\(\),\n'
-                       r'\s+byte_offset,\n'
-                       r'\s+\(num_blocks, page\),\n'
-                       r'\s+\(block_stride_bytes, 1\),\n'
-                       r'\s+\),\n'
-                       r'(\s+)\)')
-                repl = (r'\1'
-                        r'\2torch.as_strided(\n'
-                        r'\2    torch.empty(0, dtype=torch.int8, device=layer_kv_cache.device).set_(layer_kv_cache.untyped_storage()),\n'
-                        r'\2    (num_blocks, page),\n'
-                        r'\2    (block_stride_bytes, 1),\n'
-                        r'\2    byte_offset,\n'
-                        r'\2),\n'
-                        r'\3)')
-                new_s, n = re.subn(pat, repl, s)
-                if n > 0:
-                  open(p,'w').write(new_s); print('PATCHED worker.py')
-                else:
-                  print('worker.py: no match for set_ pattern')
-                "
-
                 #################
                 # RUN vLLM GLM-5.2-FP8 prefill worker
                 #################
 
                 GPU_MEM_UTIL=${PREFILL_GPU_MEM_UTIL:-$([ "${LWS_GROUP_SIZE:-1}" -gt 1 ] && echo 0.88 || echo 0.92)}
-
-                # DSpark speculative decoding (multi-node only — must match decode for NIXL KV layer handshake)
-                SPEC_ARGS=""
-                KV_CACHE_DTYPE_ARGS="--kv-cache-dtype fp8"
-                MAX_BATCHED_ARGS=""
-                if [ "${ENABLE_DSPARK:-0}" = "1" ] && [ "${LWS_GROUP_SIZE:-1}" -gt 1 ]; then
-                  GPU_MEM_UTIL=$(python3 -c "print(round($GPU_MEM_UTIL - 0.04, 2))")
-                  MAX_BATCHED_TOKENS=1024
-                  MAX_SEQS=$(( MAX_BATCHED_TOKENS / (DSPARK_NUM_TOKENS + 1) ))
-                  export NVSHMEM_QP_DEPTH=$(( (MAX_BATCHED_TOKENS + 1) * 2 ))
-                  MAX_BATCHED_ARGS="--max-num-batched-tokens ${MAX_BATCHED_TOKENS} --max-num-seqs ${MAX_SEQS}"
-                  SPEC_ARGS="--speculative-config {\"model\":\"${DSPARK_MODEL}\",\"num_speculative_tokens\":${DSPARK_NUM_TOKENS},\"method\":\"dspark\"}"
-                  KV_CACHE_DTYPE_ARGS=""
-                
-                fi
 
                 MTP_ARGS=""
                 if [ "${ENABLE_MTP:-1}" = "1" ]; then
@@ -185,7 +123,7 @@ spec:
                     ;;
                 esac
 
-                exec vllm serve $SPEC_ARGS $MTP_ARGS $KV_CACHE_DTYPE_ARGS \
+                exec vllm serve $MTP_ARGS --kv-cache-dtype fp8 \
                   zai-org/GLM-5.2-FP8 \
                   --port 8000 \
                   --trust-remote-code \
@@ -204,8 +142,7 @@ spec:
                   --data-parallel-start-rank $START_RANK \
                   --kv_transfer_config "$KV_TRANSFER_CONFIG" \
                   --moe-backend deep_gemm \
-                  --all2all-backend deepep_high_throughput \
-                  $MAX_BATCHED_ARGS
+                  --all2all-backend deepep_high_throughput
             env:
               - name: HF_TOKEN
                 valueFrom:
@@ -226,12 +163,6 @@ spec:
                 value: "1"
               - name: MTP_NUM_TOKENS
                 value: "3"
-              - name: ENABLE_DSPARK
-                value: "0"
-              - name: DSPARK_MODEL
-                value: "RedHatAI/GLM-5.2-speculator.dspark"
-              - name: DSPARK_NUM_TOKENS
-                value: "7"
               - name: VLLM_MEMORY_PROFILER_ESTIMATE_CUDAGRAPHS
                 value: "1"
               - name: VLLM_RANDOMIZE_DP_DUMMY_INPUTS
