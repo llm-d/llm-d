@@ -189,6 +189,8 @@ One llm-d Router release, EPP, and InferencePool cover all three roles.
 ```bash
 export PROVIDER_NAME=gke # other: na, agentgateway, or istio
 export GATEWAY_SERVICE=llm-d-inference-gateway-${PROVIDER_NAME}
+export CLIENT_SERVICE=${GATEWAY_SERVICE} # client-facing entrypoint: the Gateway's own Service
+export CLIENT_PORT=80
 helm install ${GUIDE_NAME} \
     ${ROUTER_GATEWAY_CHART} \
     -f ${REPO_ROOT}/guides/recipes/router/base.values.yaml \
@@ -253,6 +255,8 @@ needs a real Gateway.
 
 ```bash
 export GATEWAY_SERVICE=${GUIDE_NAME}-epp
+export CLIENT_SERVICE=llm-d-coordinator # client-facing entrypoint: the Coordinator's own Service
+export CLIENT_PORT=8080
 helm install ${GUIDE_NAME} \
     ${ROUTER_STANDALONE_CHART} \
     -f ${REPO_ROOT}/guides/recipes/router/base.values.yaml \
@@ -293,6 +297,8 @@ prefix-cache affinity to speak of, just queue/load balancing.
 ```bash
 export PROVIDER_NAME=gke # other: na, agentgateway, or istio
 export GATEWAY_SERVICE=llm-d-inference-gateway-${PROVIDER_NAME}
+export CLIENT_SERVICE=${GATEWAY_SERVICE} # client-facing entrypoint: the Gateway's own Service
+export CLIENT_PORT=80
 for ROLE in encode prefill decode; do
   helm install ${GUIDE_NAME}-${ROLE} \
       ${ROUTER_GATEWAY_CHART} \
@@ -393,33 +399,26 @@ instead of through a cache.
 
 ### 1. Get the IP of the Entrypoint
 
-In Gateway mode, clients always send requests through the **Gateway**, never directly
-to the Coordinator's Service. The Coordinator's own `coordinator` HTTPRoute (deployed
-alongside the coordinator overlay in step 3) attaches to the `llm-d-inference-gateway`
-Gateway and forwards client traffic (no `EPP-Profile` header) to the Coordinator, which
-then orchestrates the `encode → prefill → decode` pipeline. The EPP is internal — the
+Same command either way — query the ClusterIP of whichever Service is client-facing.
+`${CLIENT_SERVICE}`/`${CLIENT_PORT}` were exported in step 1: the Gateway's own Service
+in Gateway mode (test clients only ever run in-cluster anyway, so there's no need to
+resolve the Gateway resource's external address specifically — its own Service's
+ClusterIP gets you there just as well), or the Coordinator's own Service in Standalone
+Mode (there's no Gateway at all, so clients hit the Coordinator directly instead of the
+router-EPP's Service, which in that mode is Coordinator-internal only — see step 1).
+
+```bash
+export IP=$(kubectl get service ${CLIENT_SERVICE} -n ${NAMESPACE} -o jsonpath='{.spec.clusterIP}')
+export PORT=${CLIENT_PORT}
+```
+
+In Gateway mode, the Coordinator's own `coordinator` HTTPRoute (deployed alongside the
+coordinator overlay in step 3) attaches to the `llm-d-inference-gateway` Gateway and
+forwards client traffic (no `EPP-Profile` header) to the Coordinator, which then
+orchestrates the `encode → prefill → decode` pipeline. The EPP is internal — the
 Coordinator selects which of its scheduling profiles runs by setting the `EPP-Profile`
-header on its own outbound calls, which route back through that same Gateway to
+header on its own outbound calls, which route back through that same Gateway Service to
 `router/httproute.yaml` (step 1.3) instead of the Coordinator's route.
-
-```bash
-export IP=$(kubectl get gateway llm-d-inference-gateway -n ${NAMESPACE} -o jsonpath='{.status.addresses[0].value}')
-export PORT=80
-```
-
-<details>
-<summary><h4>Standalone Mode</h4></summary>
-
-There's no Gateway at all, so clients hit the Coordinator's own ClusterIP Service
-directly — the mirror image of how the Coordinator's own outbound calls reach the
-router-EPP's Service (`${GATEWAY_SERVICE}`).
-
-```bash
-export IP=$(kubectl get service llm-d-coordinator -n ${NAMESPACE} -o jsonpath='{.spec.clusterIP}')
-export PORT=8080
-```
-
-</details>
 
 ### 2. Send Test Requests
 
