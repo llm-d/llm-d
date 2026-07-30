@@ -154,21 +154,21 @@ runs it against two live pods and prints the recommended value.
   crossover, so it changes `minCachedTokenDelta` rather than whether the
   pull functions. On TCP the pull leg inflates while recompute is unchanged,
   moving the crossover from below 2K out to **between 16K and 32K tokens**
-  (~29K on a finer sweep). Measured on gpt-oss-120b, same image and
-  configuration, `rdma/ib` the only difference - TTFT delta, negative means
-  the pull wins. Both columns come from one paired run on a single build, so
-  the contrast between them is the measurement; its RDMA column sits within
-  1-6% of the canonical Step 0 ladder in
-  [benchmark-results/gpt-oss-120b-h200.md](benchmark-results/gpt-oss-120b-h200.md),
-  which was measured on a later build:
+  (~29K on a finer sweep). Measured on gpt-oss-120b - TTFT delta,
+  negative means the pull wins. The two columns are separate matched-build
+  runs of the same method (each column internally consistent; the RDMA
+  column is the canonical fixed-stack ladder in
+  [benchmark-results/gpt-oss-120b-h200.md](benchmark-results/gpt-oss-120b-h200.md)),
+  and the transport contrast between them is far larger than any
+  build-to-build difference measured for this method:
 
-  | prefix tokens | with `rdma/ib` (this guide) | without |
+  | prefix tokens | with `rdma/ib` (canonical) | without |
   |---:|---:|---:|
-  | 2,048 | -49% | +26.7% |
-  | 8,192 | -76% | +20.2% |
-  | 16,384 | -83% | +10.9% |
-  | 32,768 | -86% | -4.9% |
-  | 49,152 | -88% | -15.3% |
+  | 2,048 | -55.8% | +26.7% |
+  | 8,192 | -77.4% | +20.2% |
+  | 16,384 | -83.2% | +10.9% |
+  | 32,768 | -85.9% | -4.9% |
+  | 49,152 | -88.2% | -15.3% |
 
   With RDMA the pull wins at every length measured, so `minCachedTokenDelta:
   2048` follows. Without it the pull loses below that crossover and wins

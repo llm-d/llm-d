@@ -141,18 +141,12 @@ gpt-oss-120b note: with ~5.1B active parameters recompute is fast
 at every measured length, and additionally removes the prefill work from
 the fleet, which the pool scenarios measure directly.
 
-Measured (5-rep medians, warm mesh, unique prefixes per repetition):
-
-| prefix tokens | recompute | P2P pull | TTFT delta |
-|---|---|---|---|
-| 2,048 | 70.6 ms | 49.0 ms | -31% |
-| 8,192 | 205.4 ms | 120.1 ms | -42% |
-| 16,384 | 426.3 ms | 196.2 ms | -54% |
-| 32,768 | 983.0 ms | 376.3 ms | -62% |
-| 49,152 | 1,695 ms | 550.5 ms | -68% |
-
-The pull wins at every measured length - gpt-oss's compact KV (41.5 KB/token)
-makes the transfer cheap enough to beat even this model's fast MoE prefill.
+The measured ladder is canonical in
+[the gpt-oss results page](../benchmark-results/gpt-oss-120b-h200.md#pull-versus-recompute-single-request)
+(fixed stack, 5-rep medians, warm mesh, unique prefixes per repetition):
+the pull wins at every measured length, -55.8% at 2K widening to -88.2%
+at 48K - gpt-oss's compact KV (41.5 KB/token) makes the transfer cheap
+enough to beat even this model's fast MoE prefill.
 `minCachedTokenDelta: 2048` (the smallest measured winning length).
 
 ## Uniform shared-prefix pool (three routing arms)
