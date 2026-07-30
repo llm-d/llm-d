@@ -7,6 +7,7 @@ This page lists the llm-d release artifacts and dependencies:
 3. [**Model Servers and Extensions**](#3-model-servers-and-extensions) — the inference engine images and extensions for advanced functionality
 4. [**Well-Lit Path Guides**](#4-well-lit-path-guides) — deployment manifests and benchmark scripts for key user stories
 5. [**Gateway Recipes**](#5-gateway-recipes) — optional recipes for installing Gateways and integrating them with llm-d
+6. [**Async Processor**](#6-async-processor) — the Helm chart and container image for asynchronous, queue-based request processing
 
 > [!IMPORTANT]
 > llm-d follows a modular deployment pattern, enabling gradual feature
@@ -130,6 +131,27 @@ llm-d Router supports optional integration with Kubernetes Gateways. These are t
 
 Install instructions live under [`guides/recipes/gateway/`](https://github.com/llm-d/llm-d/tree/main/guides/recipes/gateway).
 
+## 6. Async Processor
+
+The [Async Processor](https://github.com/llm-d/llm-d-async) is an optional component that pulls inference requests from a message queue, gates dispatch on pool capacity, and forwards them to llm-d Router. It is deployed via Helm — see the [asynchronous processing guide](../../guides/asynchronous-processing/README.md) and the [operations guide](../operations/async-processor.md).
+
+| Chart | Version | OCI Registry | Description |
+|-------|---------|--------------|-------------|
+| **Async Processor** | v0.9.0 | `oci://ghcr.io/llm-d/charts/llm-d-async` | Deploys the async processor with its queue backend (GCP Pub/Sub or Redis), worker pools, and dispatch gates |
+
+### Images
+
+| Image | Description | Version |
+|-------|-------------|---------|
+| `ghcr.io/llm-d/llm-d-async` | Asynchronous dispatch processor for latency-insensitive traffic | v0.9.0 |
+
+Clients that publish requests or consume results can import the Go modules released alongside the image — `github.com/llm-d/llm-d-async/api`, `/pipeline`, and `/producer`, each tagged `v0.9.0`.
+
+> [!NOTE]
+> The chart was renamed from `async-processor` to `llm-d-async` in v0.8.0, and chart versions now
+> carry a leading `v`. A Deployment's selector is immutable, so moving from an existing
+> `async-processor` install requires uninstall and reinstall rather than `helm upgrade`.
+
 ## Source Repositories
 
 ### Core Libraries
@@ -141,7 +163,7 @@ Install instructions live under [`guides/recipes/gateway/`](https://github.com/l
 | [llm-d/llm-d-latency-predictor](https://github.com/llm-d/llm-d-latency-predictor) | Python | XGBoost training and prediction server |
 | [llm-d/llm-d-kv-cache](https://github.com/llm-d/llm-d-kv-cache) | Go, Python, CPP | KV-cache block locality indexer, FS offloading |
 | [llm-d/llm-d-workload-variant-autoscaler](https://github.com/llm-d/llm-d-workload-variant-autoscaler) | Go | SLO-aware workload autoscaler |
-| [llm-d-incubation/llm-d-async](https://github.com/llm-d-incubation/llm-d-async) | Go | Asynchronous request processor for latency insensitive traffic |
+| [llm-d/llm-d-async](https://github.com/llm-d/llm-d-async) | Go | Asynchronous request processor for latency insensitive traffic |
 | [llm-d/llm-d-batch-gateway](https://github.com/llm-d/llm-d-batch-gateway) | Go | OpenAI-compatible API for submitting, tracking, and managing batch inference jobs.
 
 ### Supporting Libraries
