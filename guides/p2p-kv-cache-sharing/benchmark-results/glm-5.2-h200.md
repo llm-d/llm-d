@@ -99,7 +99,7 @@ to tokens x ~93 KB, HTTP 200).
 ## Historical: the overlay-era four-arm ladder (superseded)
 
 The ladder below was measured on the overlay-era stack with the
-producer's default `podCacheSize: 10`. That default evicts legitimate
+producer's `podCacheSize` left at its default. That default evicts legitimate
 (endpoint, tier) holders on a 32-rank fleet, so the scheduled pod and
 the best peer read different cached-token counts for the same
 physically-replicated prefix - the pull then "rescued" a divergence the
