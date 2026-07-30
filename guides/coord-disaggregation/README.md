@@ -3,8 +3,9 @@
 ## Overview
 
 > [!WARNING]
-> This is an **experimental architecture**. It is validated at small scale and is not
-> yet part of the nightly E2E CI that covers guides like [P/D Disaggregation](../pd-disaggregation/README.md).
+> This is an **experimental architecture**. It is less mature and less tested than
+> [P/D Disaggregation](../pd-disaggregation/README.md), and may change in upcoming
+> releases.
 
 This guide deploys a standalone **Coordinator** service in front of an Encode /
 Prefill / Decode (EPD) topology. Instead of the per decode pod [Routing
