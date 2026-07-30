@@ -44,4 +44,4 @@ echo "Restarting prometheus-server..."
 kubectl rollout restart deployment prometheus-server -n "$NAMESPACE"
 kubectl rollout status deployment prometheus-server -n "$NAMESPACE" --timeout=60s
 
-echo "Done. Scrape jobs added: vllm-decode, vllm-prefill, epp, nyann-bench"
+echo "Done. Scrape jobs added: vllm-decode, vllm-prefill, epp"

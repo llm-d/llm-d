@@ -163,6 +163,8 @@ spec:
                 value: "1"
               - name: MTP_NUM_TOKENS
                 value: "3"
+              - name: VLLM_USE_V2_MODEL_RUNNER
+                value: "0"
               - name: VLLM_MEMORY_PROFILER_ESTIMATE_CUDAGRAPHS
                 value: "1"
               - name: VLLM_RANDOMIZE_DP_DUMMY_INPUTS

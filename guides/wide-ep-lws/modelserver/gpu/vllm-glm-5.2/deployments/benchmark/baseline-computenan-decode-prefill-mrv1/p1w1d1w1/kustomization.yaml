@@ -7,7 +7,6 @@ components:
   - ../../../../components/no-mtp
   - ../../../../components/compute-nan-decode
   - ../../../../components/compute-nan-prefill
-  - ../../../../components/mrv1
 patches:
   - target:
       kind: LeaderWorkerSet

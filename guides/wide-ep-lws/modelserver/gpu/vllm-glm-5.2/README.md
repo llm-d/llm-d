@@ -65,7 +65,6 @@ to a deployment's `kustomization.yaml` under `components:`.
 | `offloading-tiered` | prefill only | CPU + NVMe tiered KV cache offloading (`OFFLOADING_MODE=tiered`) |
 | `compute-nan-decode` | decode only | Sets `VLLM_COMPUTE_NANS_IN_LOGITS=1` on decode |
 | `compute-nan-prefill` | prefill only | Sets `VLLM_COMPUTE_NANS_IN_LOGITS=1` on prefill |
-| `mrv1` | decode only | Sets `VLLM_USE_V2_MODEL_RUNNER=0` on decode |
 | `max-model-len-130k` | prefill + decode | Sets `max-model-len` to 130000 |
 
 K8s takes the last duplicate env var, so appended values override the base defaults.
@@ -80,8 +79,8 @@ topology patches. Each matches a tested configuration on CoreWeave H200:
 | Baseline | `benchmark/baseline/` | `no-mtp` |
 | Baseline + Compute NaN Decode | `benchmark/baseline-computenan-decode/` | `no-mtp` + `compute-nan-decode` |
 | Baseline + Compute NaN Decode Prefill | `benchmark/baseline-computenan-decode-prefill/` | `no-mtp` + `compute-nan-decode` + `compute-nan-prefill` |
-| Baseline + Compute NaN Decode Prefill + MRV1 | `benchmark/baseline-computenan-decode-prefill-mrv1/` | `no-mtp` + `compute-nan-decode` + `compute-nan-prefill` + `mrv1` |
-| Baseline + Compute NaN Prefill + MRV1 | `benchmark/baseline-computenan-prefill-mrv1/` | `no-mtp` + `compute-nan-prefill` + `mrv1` |
+| Baseline + Compute NaN Decode Prefill + MRV1 | `benchmark/baseline-computenan-decode-prefill-mrv1/` | `no-mtp` + `compute-nan-decode` + `compute-nan-prefill` |
+| Baseline + Compute NaN Prefill + MRV1 | `benchmark/baseline-computenan-prefill-mrv1/` | `no-mtp` + `compute-nan-prefill` |
 | MTP + Offloading | `benchmark/mtp-offloading/` | `offloading-tiered` |
 | MTP + Offloading (new nightly) | `benchmark/mtp-offloading-newnightly/` | `offloading-tiered` |
 | Offloading | `benchmark/offloading/` | `no-mtp` + `offloading-tiered` |
