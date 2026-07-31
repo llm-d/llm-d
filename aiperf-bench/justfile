@@ -14,8 +14,10 @@
 #   just lmeval            # run lm-eval (gsm8k) at 100 concurrency via the lm-eval pod
 #   just lmeval mmlu 50    # override tasks / concurrency
 #   just profile           # capture a 10-step torch profile of decode dp rank 0
-#   just profile 3 90      # profile dp rank 3, wait 90s for the trace dump
-#   just profile-fetch     # copy decode traces out to ./profiles
+#   just profile p         # same, but against the prefill worker
+#   just profile d 3 90    # profile decode dp rank 3, wait 90s for the trace dump
+#   just profile-fetch     # copy decode traces out to ./profiles/decode
+#   just profile-fetch p   # copy prefill traces out to ./profiles/prefill
 
 namespace := "default"
 deploy    := "aiperf-agentx"
@@ -147,26 +149,33 @@ lmeval tasks="gsm8k" concurrency="200":
         lm_eval \
             --model local-completions \
             --model_args "model={{model}},tokenizer={{tokenizer}},base_url={{url}}/v1/completions,num_concurrent={{concurrency}},tokenized_requests=False,trust_remote_code=True" \
-            --tasks {{tasks}} # --limit 10
+            --tasks {{tasks}} --limit 500
 
 install-lmeval:
   kubectl exec -n {{namespace}}  deploy/{{deploy}} -- pip install lm_eval[api] transformers
 
 
-# Capture a torch profile of one decode DP rank. The engine is started with
-# --profiler-config max_iterations=10, so the worker records exactly 10 engine
-# steps after /start_profile and then stops and dumps the trace on its own.
+# Capture a torch profile of one decode or prefill DP rank. Both engines are
+# started with --profiler-config max_iterations=10, so the worker records exactly
+# 10 engine steps after /start_profile and then stops and dumps the trace itself.
 #
 # The engine only steps when it has work, so run this WHILE a benchmark is in
 # flight (e.g. `just run` in another shell), otherwise the profile stays empty.
-# Args: [dp-rank] [seconds-to-wait-for-the-trace-dump].
-profile rank="0" wait="60":
+# Args: [role: d|decode|p|prefill] [dp-rank] [seconds-to-wait-for-the-trace-dump].
+profile role="decode" rank="0" wait="60":
     #!/usr/bin/env bash
     set -euo pipefail
-    pod=$(kubectl get pod -n {{namespace}} -l llm-d.ai/role=decode \
+    # Decode fronts its engines with the routing-proxy sidecar on 8000 and moves
+    # vllm to 8200+local-dp-rank; prefill has no sidecar, so vllm owns 8000+rank.
+    case "{{role}}" in
+      p|prefill) role=prefill; base=8000 ;;
+      d|decode)  role=decode;  base=8200 ;;
+      *) echo "unknown role {{role}} -- use p/prefill or d/decode" >&2; exit 1 ;;
+    esac
+    pod=$(kubectl get pod -n {{namespace}} -l llm-d.ai/role=$role \
       -o jsonpath='{.items[0].metadata.name}')
-    port=$((8200 + {{rank}}))
-    echo "==> starting profile on $pod (dp rank {{rank}}, port $port)"
+    port=$((base + {{rank}}))
+    echo "==> starting $role profile on $pod (dp rank {{rank}}, port $port)"
     kubectl exec -n {{namespace}} "$pod" -c vllm -- \
       curl -sS -f -X POST "http://localhost:$port/start_profile"
     echo "==> recording 10 steps, waiting {{wait}}s for the trace dump"
@@ -177,20 +186,33 @@ profile rank="0" wait="60":
       curl -sS -f -X POST "http://localhost:$port/stop_profile"
     kubectl exec -n {{namespace}} "$pod" -c vllm -- ls -lh {{profile_dir}}
 
-# Copy decode torch traces out of the pod (default ./profiles).
-profile-fetch dest="./profiles":
+# Copy torch traces out of the pod (default ./profiles/<role>).
+# Args: [role: d|decode|p|prefill] [dest].
+profile-fetch role="decode" dest="":
     #!/usr/bin/env bash
     set -euo pipefail
-    pod=$(kubectl get pod -n {{namespace}} -l llm-d.ai/role=decode \
+    case "{{role}}" in
+      p|prefill) role=prefill ;;
+      d|decode)  role=decode ;;
+      *) echo "unknown role {{role}} -- use p/prefill or d/decode" >&2; exit 1 ;;
+    esac
+    pod=$(kubectl get pod -n {{namespace}} -l llm-d.ai/role=$role \
       -o jsonpath='{.items[0].metadata.name}')
-    mkdir -p {{dest}}
-    kubectl cp -c vllm {{namespace}}/"$pod":{{profile_dir}} {{dest}}
+    dest="{{dest}}"; dest="${dest:-./profiles/$role}"
+    mkdir -p "$dest"
+    kubectl cp -c vllm {{namespace}}/"$pod":{{profile_dir}} "$dest"
 
-# Delete any traces already collected in the decode pod.
-profile-clean:
+# Delete any traces already collected in the pod.
+# Args: [role: d|decode|p|prefill].
+profile-clean role="decode":
     #!/usr/bin/env bash
     set -euo pipefail
-    pod=$(kubectl get pod -n {{namespace}} -l llm-d.ai/role=decode \
+    case "{{role}}" in
+      p|prefill) role=prefill ;;
+      d|decode)  role=decode ;;
+      *) echo "unknown role {{role}} -- use p/prefill or d/decode" >&2; exit 1 ;;
+    esac
+    pod=$(kubectl get pod -n {{namespace}} -l llm-d.ai/role=$role \
       -o jsonpath='{.items[0].metadata.name}')
     kubectl exec -n {{namespace}} "$pod" -c vllm -- \
       bash -c 'rm -rf {{profile_dir}}/* && echo cleaned'

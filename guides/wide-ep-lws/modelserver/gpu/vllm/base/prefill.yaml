@@ -31,6 +31,8 @@ spec:
             emptyDir: {}
           - name: jit-cache
             emptyDir: {}
+          - name: profiles
+            emptyDir: {}
         containers:
           - name: vllm
             # image: docker.io/vllm/vllm-openai:kimi-k3
@@ -56,6 +58,12 @@ spec:
 
                 # --- BEGIN TEMP: install NIXL ----------------------------------------
                 uv pip install --system nixl nixl-cu13
+                uv pip install --system flashinfer-python==0.6.16 nvidia-nccl-cu13==2.30.7
+                uv pip install --system flashinfer-jit-cache==0.6.16 --index-url https://flashinfer.ai/whl/cu130
+                uv pip install --system flashinfer-cubin==0.6.16 --index-url https://flashinfer.ai/whl
+                uv pip install --system "apache-tvm-ffi==0.1.13" --force-reinstall
+                uv pip uninstall --system tilelang
+
                 # --- END TEMP: install NIXL ------------------------------------------
 
                 # --- BEGIN TEMP PATCH: neuralmagic/vllm@469882a ----------------------
@@ -132,11 +140,15 @@ spec:
                   --data-parallel-start-rank $START_RANK \
                   --no-disable-hybrid-kv-cache-manager \
                   --all2all-backend deepep_v2 \
-                  --moe-backend deep_gemm \
+                  --moe-backend auto \
                   --enforce-eager \
                   --max-model-len 300000 \
+                  --profiler-config.profiler=torch \
+                  --profiler-config.torch_profiler_dir=/profiles \
+                  --profiler-config.max_iterations=10 \
+                  --profiler-config.ignore_frontend=true \
                   --kv_transfer_config '{"kv_connector":"NixlConnector",
-                        "kv_role":"kv_both",
+                        "kv_role":"kv_producer",
                         "kv_load_failure_policy":"fail"}'
 
             env:
@@ -247,3 +259,5 @@ spec:
                 mountPath: /var/cache/huggingface
               - name: jit-cache
                 mountPath: /var/cache/vllm
+              - name: profiles
+                mountPath: /profiles

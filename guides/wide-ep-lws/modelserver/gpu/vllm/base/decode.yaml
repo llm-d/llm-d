@@ -82,6 +82,15 @@ spec:
 
                 # --- BEGIN TEMP: install NIXL ----------------------------------------
                 uv pip install --system nixl nixl-cu13
+                uv pip install --system flashinfer-python==0.6.16 nvidia-nccl-cu13==2.30.7
+                uv pip install --system flashinfer-jit-cache==0.6.16 --index-url https://flashinfer.ai/whl/cu130
+                uv pip install --system flashinfer-cubin==0.6.16 --index-url https://flashinfer.ai/whl
+                uv pip install --system "apache-tvm-ffi==0.1.13" --force-reinstall
+                uv pip uninstall --system tilelang
+
+                uv pip show nvidia-nccl-cu13
+                python3 -c "import tvm_ffi; import flashinfer; print(tvm_ffi.__version__)"
+                nm -D /usr/local/lib/python3.12/dist-packages/tvm_ffi/lib/libtvm_ffi.so | grep -q TVMFFIGetCustomAllocator
                 # --- END TEMP: install NIXL ------------------------------------------
 
                 # --- BEGIN TEMP PATCH: vllm-project/vllm#50478 ------------------------
@@ -221,7 +230,7 @@ spec:
                   --data-parallel-start-rank $START_RANK \
                   --no-disable-hybrid-kv-cache-manager \
                   --all2all-backend deepep_v2 \
-                  --moe-backend deep_gemm \
+                  --moe-backend auto \
                   --max-cudagraph-capture-size ${MAX_TOKENS} \
                   --max-model-len 300000 \
                   --profiler-config.profiler=torch \
@@ -229,7 +238,7 @@ spec:
                   --profiler-config.max_iterations=10 \
                   --profiler-config.ignore_frontend=true \
                   --kv_transfer_config '{"kv_connector":"NixlConnector",
-                        "kv_role":"kv_both",
+                        "kv_role":"kv_consumer",
                         "kv_load_failure_policy":"fail"}'
 
             env:
@@ -250,7 +259,7 @@ spec:
               - name: VLLM_MEMORY_PROFILER_ESTIMATE_CUDAGRAPHS
                 value: "1"
               - name: MAX_TOKENS
-                value: "256"
+                value: "32"
               - name: DP_SIZE_LOCAL
                 value: "1"
               - name: TP_SIZE
