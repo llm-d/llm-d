@@ -67,12 +67,6 @@ to a deployment's `kustomization.yaml` under `components:`.
 
 K8s takes the last duplicate env var, so appended values override the base defaults.
 
-The `hotfix-50302` component (block-table width alignment,
-[vllm#50302](https://github.com/vllm-project/vllm/pull/50302)) is not opt-in: it is
-wired into `providers/coreweave`, so **every** deployment inherits it on top of the
-pinned nightly image. Remove it from `providers/coreweave/kustomization.yaml` once the
-PR merges into the image.
-
 ## Prerequisites
 
 In addition to the [wide-ep-lws prerequisites](../../../README.md#prerequisites):
