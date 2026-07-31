@@ -1,0 +1,164 @@
+name: optimized-baseline
+
+_lists:
+  non_gpu: &non_gpu [amd, xpu, hpu, "tpu/v6", "tpu/v7", cpu]
+
+env:
+  static:
+    BRANCH: main
+    REPO_ROOT:   $(realpath $(git rev-parse --show-toplevel))
+
+    GUIDE_NAME:       optimized-baseline
+    NAMESPACE:        llm-d-optimized-baseline
+
+    HF_TOKEN:         { default: HF_TOKEN_PLACEHOLDER, sensitive: true }
+
+    MONITORING_VALUES: { default: "" }
+
+    PROVIDER_NAME:    { default: gke,  values: [none, gke, agentgateway, istio]}
+    ACCELERATOR_TYPE: { default: gpu,  values: [gpu, amd, xpu, hpu, "tpu/v6", "tpu/v7", cpu] }
+    MODEL_SERVER:     { default: vllm, values: [vllm, sglang, trtllm] }
+    INFRA_PROVIDER:   { default: base, values: [base, gke] }
+
+    MODEL:         { default: "Qwen/Qwen3-32B" }
+
+    # VERIFICATION
+    CURL_TEST_IMAGE:  { default: "cfmanteiga/alpine-bash-curl-jq:latest" }
+
+    # BENCHMARK
+    BENCHMARK_REF: main
+    HARNESS: inference-perf
+    WORKLOAD: guide_optimized-baseline_1.yaml
+    GATEWAY_CLASS:  { default: epponly,  values: [epponly, gke, agentgateway, istio]} # Benchmark specific epponly = standalone - TODO to fix in llmdbenchmark
+    
+  source: ["${REPO_ROOT}/guides/env.sh"]
+
+prerequisites:
+  clone:
+    - skip_in: [ci]
+      run: git clone https://github.com/llm-d/llm-d.git && cd llm-d && git checkout ${BRANCH}
+
+  gaie:
+    - run: kubectl apply -f https://github.com/kubernetes-sigs/gateway-api-inference-extension/releases/download/${GAIE_VERSION}/v1-manifests.yaml 
+  namespace:
+    - run: kubectl create namespace ${NAMESPACE} --dry-run=client -o yaml | kubectl apply -f -
+  secrets:  
+    - skip_in: [ci]
+      run: |
+        kubectl create secret generic llm-d-hf-token \
+          --from-literal="HF_TOKEN=${HF_TOKEN}" \
+          --namespace "${NAMESPACE}" \
+          --dry-run=client -o yaml | kubectl apply -f -
+deploy:
+
+  router_values:
+    - run: export ROUTER_BASE_VALUES="-f ${REPO_ROOT}/guides/recipes/router/base.values.yaml"
+
+    - when: { MODEL_SERVER: [vllm, sglang] }
+      run: export ROUTER_VALUES="-f ${REPO_ROOT}/guides/${GUIDE_NAME}/router/${GUIDE_NAME}.values.yaml"
+    
+    - when: { MODEL_SERVER: [trtllm] }
+      run: |
+        #
+        # Comment out the above `ROUTER_VALUES` and uncomment the below for TensorRT-LLM (trtllm-serve)
+        #
+        # export ROUTER_VALUES="-f ${REPO_ROOT}/guides/${GUIDE_NAME}/router/${GUIDE_NAME}-trtllm.values.yaml"
+
+  monitoring_values:
+    - run: |
+        # 
+        # Uncomment the below to enable Prometheus monitoring on the llm-d router
+        # 
+        # export MONITORING_VALUES="-f ${REPO_ROOT}/guides/recipes/router/features/monitoring.values.yaml"
+
+  standalone:
+    - run: |
+        # Assuming base-directory is the root of the llm-d repo
+        helm install ${GUIDE_NAME} \
+          ${ROUTER_STANDALONE_CHART} \
+          ${ROUTER_BASE_VALUES} \
+          ${MONITORING_VALUES} \
+          ${ROUTER_VALUES} \
+          -n ${NAMESPACE} --version ${ROUTER_CHART_VERSION}
+
+  gateway:
+    - run: |
+        helm install ${GUIDE_NAME} \
+          ${ROUTER_GATEWAY_CHART} \
+          ${ROUTER_BASE_VALUES} \
+          ${MONITORING_VALUES} \
+          ${ROUTER_VALUES} \
+          --set provider.name=${PROVIDER_NAME} \
+          --set httpRoute.create=true \
+          --set httpRoute.inferenceGatewayName=llm-d-inference-gateway \
+          -n ${NAMESPACE} --version ${ROUTER_CHART_VERSION}
+
+  modelserver:
+    - when: { ACCELERATOR_TYPE: [gpu] }
+      run: |
+        kubectl apply -n ${NAMESPACE} \
+          -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/${ACCELERATOR_TYPE}/${MODEL_SERVER}/${INFRA_PROVIDER}/
+    
+    - when: { ACCELERATOR_TYPE: *non_gpu }
+      run: |
+        # 
+        # Comment out the above `kubectl apply` and uncomment the below to run on `NON GPU` accelerators
+        # 
+        # kubectl apply -n ${NAMESPACE} \
+        #  -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/${ACCELERATOR_TYPE}/${MODEL_SERVER}/
+        # 
+
+  monitoring:
+      - run: kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/recipes/modelserver/components/monitoring
+
+verify:
+  endpoint:
+    standalone:
+      - run: export IP=$(kubectl get service ${GUIDE_NAME}-epp -n ${NAMESPACE} -o jsonpath='{.spec.clusterIP}')
+    gateway:
+      - run: export IP=$(kubectl get gateway llm-d-inference-gateway -n ${NAMESPACE} -o jsonpath='{.status.addresses[0].value}')
+  tests:
+    - run: |
+        kubectl run curl-test --rm -i --restart=Never \
+          --image=${CURL_TEST_IMAGE} \
+          --namespace="${NAMESPACE}" \
+          --env="IP=${IP}" \
+          --env="MODEL=${MODEL}" \
+          -- /bin/sh -c 'curl -sS -X POST "http://${IP}/v1/completions" -H "Content-Type: application/json" -d "{\"model\": \"${MODEL}\", \"prompt\": \"How are you today?\"}"'
+
+benchmark:
+  setup:
+    - run: curl -sSL https://raw.githubusercontent.com/llm-d/llm-d-benchmark/${BENCHMARK_REF}/install.sh | bash
+    - run: cd llm-d-benchmark
+    - run: source .venv/bin/activate
+    - run: llmdbenchmark --version
+  endpoint:
+    standalone:
+      - run: export ENDPOINT_URL="http://$(kubectl get service ${GUIDE_NAME}-epp -n ${NAMESPACE} -o jsonpath='{.spec.clusterIP}')"
+    gateway:
+      - run: export ENDPOINT_URL="http://$(kubectl get gateway llm-d-inference-gateway -n ${NAMESPACE} -o jsonpath='{.status.addresses[0].value}')"
+  execute:
+    - run: |
+        llmdbenchmark \
+          --spec           guides/${GUIDE_NAME} \
+          run \
+          --endpoint-url   "${ENDPOINT_URL}" \
+          --gateway-class  "${GATEWAY_CLASS}" \
+          --model          "${MODEL}" \
+          --namespace      "${NAMESPACE}" \
+          --harness        "${HARNESS}" \
+          --workload       "${WORKLOAD}" \
+          --analyze
+
+cleanup:
+  - run: helm uninstall ${GUIDE_NAME} -n ${NAMESPACE}
+  - when: { ACCELERATOR_TYPE: [gpu] }
+    run: kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/${ACCELERATOR_TYPE}/${MODEL_SERVER}/${INFRA_PROVIDER}
+  - when: { ACCELERATOR_TYPE: *non_gpu }
+    run: |
+      #
+      # Comment out the above `kubectl delete` and uncomment the below to run on `NON GPU` accelerators
+      #
+      # kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/${ACCELERATOR_TYPE}/${MODEL_SERVER}
+  - run: kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/recipes/modelserver/components/monitoring --ignore-not-found=true
+  - run: kubectl delete namespace ${NAMESPACE}

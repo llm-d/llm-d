@@ -78,8 +78,9 @@ Three ready-to-use values files ship with this guide:
 | [`router/predicted-latency.values.yaml`](./router/predicted-latency.values.yaml) | Default — predictor trains on end-to-end latency. Routing-only, no SLO header support. |
 | [`router/predicted-latency-slo.values.yaml`](./router/predicted-latency-slo.values.yaml) | SLO-aware — Assumes `x-llm-d-slo-ttft-ms` / `x-llm-d-slo-tpot-ms` are set on requests. Enforcing a TPOT SLO means predicting TPOT, so this sets `streamingMode: true` and every request must be sent with `"stream": true`. |
 | [`router/predicted-latency-pd.values.yaml`](./router/predicted-latency-pd.values.yaml) | Prefill/decode disaggregated — predicted-latency scheduling layered on the [pd-disaggregation](../pd-disaggregation) pipeline: prefill is picked on predicted TTFT, decode on predicted TPOT. Sets `streamingMode: true`, so every request must be sent with `"stream": true`. |
+| [`router/predicted-latency-multimodal.values.yaml`](./router/predicted-latency-multimodal.values.yaml) | Multimodal — predicted-latency scheduling for the [multimodal-serving](../multimodal-serving) aggregated pool. Keeps the multimodal `token-producer` (image → token-count estimation) and trains on end-to-end latency, so it works for streaming and non-streaming clients. |
 
-The first two target model server pods labeled `llm-d.ai/guide=optimized-baseline`, since in the next step we will simply reuse the model server manifests from the [optimized-baseline guide](../optimized-baseline). The P/D file instead targets `llm-d.ai/guide=pd-disaggregation` — see [Prefill/Decode Disaggregation](#prefilldecode-disaggregation--gpt-oss-120b) below.
+The first two target model server pods labeled `llm-d.ai/guide=optimized-baseline`, since in the next step we will simply reuse the model server manifests from the [optimized-baseline guide](../optimized-baseline). The P/D file instead targets `llm-d.ai/guide=pd-disaggregation` — see [Prefill/Decode Disaggregation](#prefilldecode-disaggregation--gpt-oss-120b) below — and the multimodal file targets `llm-d.ai/guide=multimodal-optimized-baseline` — see [Multimodal](#multimodal--qwen3-vl-32b-instruct) below.
 
 #### Standalone Mode
 
@@ -161,6 +162,25 @@ Two things differ from the aggregated path. The prefill profile is scored purely
 
 > [!IMPORTANT]
 > The P/D values file sets `streamingMode: true`, so clients must send `"stream": true`. TPOT training samples come from the inter-token gaps of a streamed response, and decode here is scheduled purely on predicted TPOT — so non-streaming traffic leaves the half of the predictor that places decode with nothing to learn from.
+
+#### Multimodal — Qwen3-VL-32B-Instruct
+
+Predicted-latency scheduling also composes with multimodal serving. Reuse the [multimodal-serving guide's](../multimodal-serving) aggregated model server (8 × vLLM, TP=2, `Qwen/Qwen3-VL-32B-Instruct`) unchanged — the predictor is EPP-side only — and deploy the router with the multimodal values file:
+
+```bash
+export MODEL_NAME="Qwen/Qwen3-VL-32B-Instruct"
+export INFRA_PROVIDER=gke # base | gke
+
+helm install ${GUIDE_NAME} \
+    ${ROUTER_STANDALONE_CHART} \
+    -f ${REPO_ROOT}/guides/recipes/router/base.values.yaml \
+    -f ${REPO_ROOT}/guides/${GUIDE_NAME}/router/predicted-latency-multimodal.values.yaml \
+    -n ${NAMESPACE} --version ${ROUTER_CHART_VERSION}
+
+kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/multimodal-serving/aggregation/modelserver/gpu/vllm/${INFRA_PROVIDER}/
+```
+
+Two things differ from the text-only aggregated path. The `token-producer` (image → token-count estimation) stays in the pipeline: the predictor's features and the affinity filter need per-request token counts, and image inputs have no text length to read — each image is folded into the prefix-cache signal as a content hash weighted by its estimated token count. And the predictor trains on **end-to-end request latency** (`streamingMode` left at its default `false`), which works for both streaming and non-streaming clients.
 
 For other backends (AMD GPU, Intel XPU, CPU), see [optimized-baseline → Deploy the Model Server](../optimized-baseline/README.md#2-deploy-the-model-server). For example, for sglang deployments:
 
@@ -355,6 +375,18 @@ llmdbenchmark \
 > [!IMPORTANT]
 > Use an `llm-d-benchmark` harness image of **v0.7.0 or newer**. Older images bundle a pre-fix `inference-perf` that emits an identical prompt stream from every worker with `data.type: random`, so each prompt is sent `num_workers` times. The duplicates land in the prefix cache and inflate every routing result.
 
+#### Case 4 — GPU · Qwen3-VL-32B-Instruct, multimodal
+
+If you deployed the [multimodal model server](#multimodal--qwen3-vl-32b-instruct), drive it with this guide's multimodal template, [`guides/predicted-latency-routing/benchmark-templates/multimodal.yaml`](./benchmark-templates/multimodal.yaml) — the multimodal-serving aggregation workload (3 × 720p images + ~1.3K text tokens per request, 600 prefix groups × 5 prompts, constant-rate ladder 5 → 40 req/s):
+
+```bash
+export IP=$(kubectl get service ${GUIDE_NAME}-epp -n ${NAMESPACE} -o jsonpath='{.spec.clusterIP}')
+envsubst < ${REPO_ROOT}/guides/predicted-latency-routing/benchmark-templates/multimodal.yaml > config.yaml
+./run_only.sh -c config.yaml -o ./results
+```
+
+Run the ladder **twice back-to-back** and report the second run: the predictor trains in-run, and an EPP restart resets its model, so the first pass doubles as predictor warmup (see the cold-start note in the report below).
+
 > [!NOTE]
 > Depending on your `cluster` you may need to extend the default `timeout` values to longer duration, as `bind`, `access` and `wait-timeout` times of `pvcs` and `pods` can be arbitrarily slower on other systems, please utilize `llmdbenchmark run --help` to view the knobs needed to increase those values.
 
@@ -396,6 +428,25 @@ llmdbenchmark \
 > [!NOTE]
 > **Ramped load hides the predictor's cold start.** The predictor trains in-run, so a sweep that climbs through rates has a warm model by the time it reaches saturation — a warm-up run and a fully warm run produced the same curve. A step load onto a freshly restarted EPP does pay a cold-start penalty, since an EPP restart resets the model.
 
+### Multimodal Serving (GPU · Qwen3-VL-32B-Instruct)
+
+`Qwen/Qwen3-VL-32B-Instruct` on 8 vLLM servers, tensor parallelism 2 (16 × H200 total), driven by the multimodal-serving aggregation workload: 3 × 720p images plus ~1.3K text tokens per request (~4.9K tokens total with visual tokens), 300-token completions, 600 prefix groups of 5 prompts sharing byte-identical text + images, constant-rate ladder 5 → 40 req/s. Two configurations on the identical fleet: a plain Kubernetes Service (round-robin, no EPP) and **predicted-latency** routing (warm predictor — second ladder pass, per the cold-start note above).
+
+<img src="./benchmark-results/multimodal_gpu_qwen3vl32b.png" width="900" alt="Multimodal GPU: plain k8s Service vs latency predictor">
+
+**Summary.** With the multimodal affinity parameters set correctly (see the values-file comments: `affinityThreshold: 0.6` below the workload's ~0.70 cacheable-fraction ceiling, and a `maxTTFTPenaltyMs` scaled to the E2E-trained predictor's output), predicted-latency routing pins each prefix group's text+image blocks to its cache-warm pod and steers the remainder by expected latency. The result holds TTFT p90 at or under ~1 s through 35 req/s and sustains **+30% throughput at rate 35** (9,449 vs 7,272 tok/s) and **+19% at rate 40** (9,204 vs 7,712) over the plain Service, with **median TTFT ~29× lower at the top of the ladder** (0.66 s vs 19.2 s) and **1 failed request versus 27**. TPOT is routing-independent until deep saturation, where the predictor's placement also holds the p90 inter-token tail better (317 ms vs 565 ms at rate 40).
+
+| rate (req/s) | LP out tok/s | k8s out tok/s | LP TTFT p50 / p90 | k8s TTFT p50 / p90 |
+|---:|---:|---:|---:|---:|
+| 5 | 1,409 | 1,408 | 0.16 / 0.34 s | 0.40 / 0.49 s |
+| 10 | 2,842 | 2,794 | 0.15 / 0.35 s | 0.43 / 0.68 s |
+| 15 | 4,235 | 4,241 | 0.11 / 0.35 s | 0.42 / 0.79 s |
+| 20 | 5,654 | 5,535 | 0.10 / 0.33 s | 0.50 / 1.36 s |
+| 25 | 6,994 | 6,782 | 0.26 / 0.60 s | 0.85 / 2.33 s |
+| 30 | 8,316 | 7,307 | 0.36 / 0.81 s | 1.78 / 7.8 s |
+| 35 | 9,449 | 7,272 | 0.49 / 1.05 s | 11.1 / 21.2 s |
+| 40 | 9,204 | 7,712 | 0.66 / 2.78 s | 19.3 / 39.8 s |
+
 ## Cleanup
 
 To remove the deployed components:
@@ -407,6 +458,8 @@ kubectl delete  -n ${NAMESPACE} -k ${REPO_ROOT}/guides/predicted-latency-routing
 kubectl delete  -n ${NAMESPACE} -k ${REPO_ROOT}/guides/pd-disaggregation/modelserver/gpu/vllm/${INFRA_PROVIDER} --ignore-not-found
 # for the TPU model server
 kubectl delete  -n ${NAMESPACE} -k ${REPO_ROOT}/guides/predicted-latency-routing/modelserver/tpu/vllm --ignore-not-found
+# for the multimodal model server
+kubectl delete  -n ${NAMESPACE} -k ${REPO_ROOT}/guides/multimodal-serving/aggregation/modelserver/gpu/vllm/${INFRA_PROVIDER} --ignore-not-found
 # for sglang deployments
 kubectl delete  -n ${NAMESPACE} -k ${REPO_ROOT}/guides/optimized-baseline/modelserver/gpu/sglang/${INFRA_PROVIDER} --ignore-not-found
 kubectl delete namespace ${NAMESPACE}

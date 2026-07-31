@@ -1,0 +1,161 @@
+# Redis SortedSet backend + self-hosted Prometheus + Grafana — team × tier × MODEL
+# with per-model saturation back-off.
+#
+#  - MODEL isolation: one worker pool per model (model-a / model-b), each with its
+#    OWN saturation gate scoped to that model's InferencePool (POOL_A / POOL_B).
+#    Saturating one model parks only its pool; the other keeps flowing.
+#  - TEAM quota (redis-quota, classifying): within quota -> reserved, over ->
+#    overflow. Per-model prefix (quota:a: / quota:b:).
+#  - TIER: per-queue label; the tier-priority merge policy orders each pool's
+#    reserved/overflow × tier lanes and stamps x-gateway-priority.
+#
+# Replace: NAMESPACE, IGW_HOST, MODEL_A/MODEL_B, POOL_A/POOL_B (InferencePool names).
+# prometheusURL points at the in-cluster kube-prometheus-stack Prometheus; vLLM is
+# scraped by manifests/prometheus-vllm-podmonitor.yaml.
+ap:
+
+  messageQueueImpl: "redis-sortedset"
+  igwBaseURL: "http://IGW_HOST:80"
+
+  prometheusURL: "http://kps-kube-prometheus-stack-prometheus.monitoring.svc.cluster.local:9090"
+  prometheusCacheTTL: "5s"
+
+  requestMergePolicyConfig:
+    type: "tier-priority"
+    parameters:
+      priority_header: "x-gateway-priority"
+
+  redis:
+    enabled: true
+    url: "redis://redis.NAMESPACE.svc.cluster.local:6379"
+    resultQueueName: "results-a-list"
+    pollIntervalMs: 500
+    batchSize: 10
+    queuesConfig:
+      # ---------- MODEL A ----------
+      - queue_name: "team-premium-a"
+        worker_pool_id: "model-a"
+        inference_objective: "latency"
+        request_path_url: "/v1/completions"
+        igw_base_url: "http://IGW_HOST:80"
+        result_queue_name: "results-a-list"
+        labels: { tier: "interactive" }
+        gate_type: "redis-quota"
+        gate_params:
+          address: "redis.NAMESPACE.svc.cluster.local:6379"
+          attribute: "team"
+          mode: "concurrency"
+          gating_mode: "classifying"
+          limit: "2"
+          prefix: "quota:a:"
+      - queue_name: "team-standard-a"
+        worker_pool_id: "model-a"
+        request_path_url: "/v1/completions"
+        igw_base_url: "http://IGW_HOST:80"
+        result_queue_name: "results-a-list"
+        labels: { tier: "async" }
+        gate_type: "redis-quota"
+        gate_params:
+          address: "redis.NAMESPACE.svc.cluster.local:6379"
+          attribute: "team"
+          mode: "concurrency"
+          gating_mode: "classifying"
+          limit: "2"
+          prefix: "quota:a:"
+      - queue_name: "team-batch-a"
+        worker_pool_id: "model-a"
+        inference_objective: "throughput"
+        request_path_url: "/v1/completions"
+        igw_base_url: "http://IGW_HOST:80"
+        result_queue_name: "results-a-list"
+        labels: { tier: "batch" }
+        gate_type: "redis-quota"
+        gate_params:
+          address: "redis.NAMESPACE.svc.cluster.local:6379"
+          attribute: "team"
+          mode: "concurrency"
+          gating_mode: "classifying"
+          limit: "1"
+          prefix: "quota:a:"
+
+      # ---------- MODEL B ----------
+      - queue_name: "team-premium-b"
+        worker_pool_id: "model-b"
+        inference_objective: "latency"
+        request_path_url: "/v1/completions"
+        igw_base_url: "http://IGW_HOST:80"
+        result_queue_name: "results-b-list"
+        labels: { tier: "interactive" }
+        gate_type: "redis-quota"
+        gate_params:
+          address: "redis.NAMESPACE.svc.cluster.local:6379"
+          attribute: "team"
+          mode: "concurrency"
+          gating_mode: "classifying"
+          limit: "2"
+          prefix: "quota:b:"
+      - queue_name: "team-standard-b"
+        worker_pool_id: "model-b"
+        request_path_url: "/v1/completions"
+        igw_base_url: "http://IGW_HOST:80"
+        result_queue_name: "results-b-list"
+        labels: { tier: "async" }
+        gate_type: "redis-quota"
+        gate_params:
+          address: "redis.NAMESPACE.svc.cluster.local:6379"
+          attribute: "team"
+          mode: "concurrency"
+          gating_mode: "classifying"
+          limit: "2"
+          prefix: "quota:b:"
+      - queue_name: "team-batch-b"
+        worker_pool_id: "model-b"
+        inference_objective: "throughput"
+        request_path_url: "/v1/completions"
+        igw_base_url: "http://IGW_HOST:80"
+        result_queue_name: "results-b-list"
+        labels: { tier: "batch" }
+        gate_type: "redis-quota"
+        gate_params:
+          address: "redis.NAMESPACE.svc.cluster.local:6379"
+          attribute: "team"
+          mode: "concurrency"
+          gating_mode: "classifying"
+          limit: "1"
+          prefix: "quota:b:"
+
+  # One pool per model, each parking on ITS model's saturation (independent).
+  workerPools:
+    - id: "model-a"
+      workers: 8
+      gate_type: "wait-on-refuse"
+      gate_params:
+        gate: |
+          {"gate_type":"prometheus-query","gate_params":{"query":"clamp(1 - sum(vllm:num_requests_running{inference_pool=\"POOL_A\"})/20, 0, 1)","fallback":"1"}}
+    - id: "model-b"
+      workers: 8
+      gate_type: "wait-on-refuse"
+      gate_params:
+        gate: |
+          {"gate_type":"prometheus-query","gate_params":{"query":"clamp(1 - sum(vllm:num_requests_running{inference_pool=\"POOL_B\"})/20, 0, 1)","fallback":"1"}}
+
+  resources:
+    requests:
+      cpu: "500m"
+      memory: "512Mi"
+    limits:
+      cpu: "1"
+      memory: "1Gi"
+
+  metrics:
+    enabled: true
+  podMonitor:
+    enabled: true
+    interval: "15s"
+  modelServerMonitor:
+    enabled: false
+  prometheusRule:
+    enabled: true
+  grafana:
+    dashboards:
+      enabled: true

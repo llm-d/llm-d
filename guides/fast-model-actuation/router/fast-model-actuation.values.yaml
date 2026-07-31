@@ -1,0 +1,30 @@
+## fast-model-actuation guide overrides for the llm-d router.
+## Layer on top of: recipes/router/base.values.yaml
+
+router:
+  extraServicePorts:
+    - name: http
+      port: 80
+      protocol: TCP
+      targetPort: 8081
+
+  epp:
+    pluginsConfigFile: "fast-model-actuation-plugins.yaml"
+    pluginsCustomConfig:
+      fast-model-actuation-plugins.yaml: |
+        apiVersion: llm-d.ai/v1alpha1
+        kind: EndpointPickerConfig
+        plugins:
+        - type: queue-scorer
+        - type: kv-cache-utilization-scorer
+        schedulingProfiles:
+        - name: default
+          plugins:
+          - pluginRef: queue-scorer
+            weight: 1
+          - pluginRef: kv-cache-utilization-scorer
+            weight: 1
+
+  modelServers:
+    matchLabels:
+      llm-d.ai/guide: "fast-model-actuation"

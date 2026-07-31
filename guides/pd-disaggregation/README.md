@@ -12,6 +12,11 @@ This guide deploys `openai/gpt-oss-120b` with prefill-decode disaggregation, imp
 * 8 TP=1 Prefill Instances
 * 2 TP=4 Decode Instances
 
+This guide also has two alternate variants:
+
+* **[Google TPU](./README.tpu.md)** — the same P/D pattern on GKE TPU (v6e & v7x).
+* **[DisaggregatedSet](./README.ds.md)** — the same deployment managed as a single LWS `DisaggregatedSet` resource, with coordinated P/D rollouts, `slices` for replicating the whole topology into independent copies, and per-domain placement policy.
+
 ### P/D Best Practices
 
 P/D disaggregation provides more flexibility in navigating the trade-off between throughput and interactivity([ref](https://arxiv.org/html/2506.05508v1)).
@@ -39,6 +44,7 @@ This guide includes configuration for the following accelerators:
 | Backend             | Directory                  | Notes                                                    |
 | ------------------- | -------------------------- | -------------------------------------------------------- |
 | NVIDIA GPU (vLLM)   | `modelserver/gpu/vllm/`    | vLLM, tested nightly on GKE (see [Cluster Pre-provisioning](#gke-cluster-pre-provisioning-with-dra--rdmaroce)) |
+| NVIDIA GPU (vLLM + DisaggregatedSet) | `modelserver/gpu/vllm-ds/` | Manages the whole P/D topology as one LWS `DisaggregatedSet` with `slices`, see [DisaggregatedSet Guide](./README.ds.md) |
 | NVIDIA GPU (SGLang) | `modelserver/gpu/sglang/`  | SGLang, validated each release                           |
 | Google TPU          | `modelserver/tpu/v6/vllm/` & `modelserver/tpu/v7/vllm/` | GKE TPU (v6e & v7x), see [TPU Guide](./README.tpu.md) |
 | AMD GPU             | `modelserver/amd/vllm/`    | AMD GPU, community contributed                           |

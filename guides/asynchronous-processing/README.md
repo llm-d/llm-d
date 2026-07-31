@@ -2,6 +2,12 @@
 
 The [Async Processor](https://github.com/llm-d/llm-d-async) provides a way to process inference requests asynchronously using a queue-based architecture. This is ideal for latency-insensitive workloads or for filling "slack" capacity in your inference pool.
 
+Two guides are available:
+
+- **This guide** — the standard **single-model** setup (choose a queue backend below and deploy).
+- **[Multi-tenant guide](./multitenant/README.md)** — the **advanced** setup: **team × tier × model** with per-team reserved/overflow quota (classifying `redis-quota`), tier-priority dispatch, and per-model saturation back-off across two `InferencePool`s. Runs on either queue backend.
+
+> [!NOTE]
 > For production sizing, scaling, and container-resource guidance, see the [Async Processor Operations Guide](../../docs/operations/async-processor.md).
 
 ## Overview
