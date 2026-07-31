@@ -1,0 +1,34 @@
+# TODO: Remove this component when https://github.com/vllm-project/vllm/pull/50302 is merged.
+apiVersion: kustomize.config.k8s.io/v1alpha1
+kind: Component
+configMapGenerator:
+  - name: hotfix-50302
+    files:
+      - hotfix-50302.sh
+    options:
+      disableNameSuffixHash: true
+patches:
+  - target:
+      kind: LeaderWorkerSet
+      name: ".*"
+    patch: |-
+      - op: add
+        path: /spec/leaderWorkerTemplate/workerTemplate/spec/volumes/-
+        value:
+          name: hotfix-50302
+          configMap:
+            name: hotfix-50302
+            defaultMode: 0755
+      - op: add
+        path: /spec/leaderWorkerTemplate/workerTemplate/spec/containers/0/volumeMounts/-
+        value:
+          name: hotfix-50302
+          mountPath: /opt/hotfix
+      - op: replace
+        path: /spec/leaderWorkerTemplate/workerTemplate/spec/containers/0/command
+        value:
+          - /bin/bash
+          - -c
+          - |-
+            bash /opt/hotfix/hotfix-50302.sh
+            exec /bin/bash -c "$0"

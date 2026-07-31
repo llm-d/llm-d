@@ -5,6 +5,7 @@ resources:
   - ../../../../providers/coreweave
 components:
   - ../../../../components/offloading-tiered
+  - ../../../../components/hotfix-50302
 patches:
   - target:
       kind: LeaderWorkerSet
