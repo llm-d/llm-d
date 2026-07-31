@@ -3,6 +3,12 @@ kind: Kustomization
 resources:
   - ../../base
 
+# Applied to every deployment (all overlays build on this provider).
+# TODO: Remove when https://github.com/vllm-project/vllm/pull/50302 is merged
+# into the pinned nightly image.
+components:
+  - ../../components/hotfix-50302
+
 patches:
   - target:
       kind: LeaderWorkerSet
