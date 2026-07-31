@@ -64,7 +64,6 @@ to a deployment's `kustomization.yaml` under `components:`.
 | `offloading-cpu` | prefill only | CPU-only KV cache offloading (`OFFLOADING_MODE=cpu`) |
 | `offloading-tiered` | prefill only | CPU + NVMe tiered KV cache offloading (`OFFLOADING_MODE=tiered`) |
 | `max-model-len-130k` | prefill + decode | Sets `max-model-len` to 130000 |
-| `hotfix-50302` | prefill + decode | Block-table width alignment fix ([vllm#50302](https://github.com/vllm-project/vllm/pull/50302)); remove when merged |
 
 K8s takes the last duplicate env var, so appended values override the base defaults.
 
