@@ -29,7 +29,7 @@ Tested on CoreWeave (CKS) with InfiniBand networking. This recipe reuses the
 | KV transfer             | NixlConnector                                                                      |
 | KV cache offloading     | Off (opt-in via components)                                                        |
 | MTP speculative decoding | On (3 tokens; opt-out via `no-mtp` component)                                     |
-| Prefill `gpu-memory-utilization` | 0.92 (single-node) / 0.88 (multi-node)                                   |
+| Prefill `gpu-memory-utilization` | 0.935                                                                    |
 | Decode `gpu-memory-utilization`  | 0.95                                                                     |
 | Reasoning / tool-call   | glm45 / glm47                                                                     |
 
