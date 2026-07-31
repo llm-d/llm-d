@@ -58,7 +58,8 @@ spec:
             emptyDir: {}
         containers:
           - name: vllm
-            image: docker.io/vllm/vllm-openai:kimi-k3
+            # image: docker.io/vllm/vllm-openai:kimi-k3
+            image: public.ecr.aws/q9t5s3a7/vllm-ci-test-repo:f8bb1b136dc3dcdd11a984a72bbc0860378b14ec
             securityContext:
               capabilities:
                 add:
@@ -77,6 +78,130 @@ spec:
                 export VLLM_USE_V2_MODEL_RUNNER=1
                 export VLLM_SSM_CONV_STATE_LAYOUT=DS
                 export VLLM_ENABLE_K3_LATENT_MOE_TAIL_FUSION=1
+                export NCCL_GIN_TYPE=2
+
+                # --- BEGIN TEMP: install NIXL ----------------------------------------
+                uv pip install --system nixl nixl-cu13
+                # --- END TEMP: install NIXL ------------------------------------------
+
+                # --- BEGIN TEMP PATCH: vllm-project/vllm#50478 ------------------------
+                # Backport of the deepep_v2 prepare_finalize hunk only; the image already
+                # carries the BLOCK_D=512 half of that PR.
+                # Never blocks startup: if the anchor is absent (already fixed upstream,
+                # or the code moved) or the rewrite would not compile, it logs and leaves
+                # the file untouched. Delete this block once the image includes the fix.
+                python3 - <<'PATCH_EOF'
+                import re, sys
+                from pathlib import Path
+
+                REL = "vllm/model_executor/layers/fused_moe/prepare_finalize/deepep_v2.py"
+                MARKER = "PATCH#50478"
+                ANCHOR = re.compile(
+                    r"^([ \t]*)expert_tokens_meta = mk\.ExpertTokensMetadata\.make_from_list\([ \t]*\n"
+                    r"[ \t]*recv_expert_num_tokens,[ \t]*\n"
+                    r"[ \t]*device=expert_x\.device,[ \t]*\n"
+                    r"[ \t]*\)[ \t]*$",
+                    re.M)
+
+                REPLACEMENT = """\
+                # PATCH#50478: do_cpu_sync=False (decode/cudagraph mode) skips the
+                # device->host sync, so DeepEP returns an empty per-expert count list.
+                # Leave the metadata unset rather than wrapping the empty list: a
+                # non-None metadata holding zero-element tensors suppresses the
+                # consumers' fallback to count_expert_num_tokens(recv_topk_idx) and
+                # makes them size their workspaces to zero rows.
+                expert_tokens_meta = None
+                if recv_expert_num_tokens:
+                    expert_tokens_meta = mk.ExpertTokensMetadata.make_from_list(
+                        recv_expert_num_tokens,
+                        device=expert_x.device,
+                    )
+                """
+
+                path = next((p for p in (Path(e) / REL for e in sys.path if e) if p.is_file()), None)
+                if path is None:
+                    print("[PATCH#50478] SKIPPED: %s not found on sys.path" % REL)
+                    sys.exit(0)
+
+                src = path.read_text()
+                if MARKER in src:
+                    print("[PATCH#50478] already patched: %s" % path)
+                    sys.exit(0)
+
+                m = ANCHOR.search(src)
+                if m is None:
+                    print("[PATCH#50478] SKIPPED: anchor not found in %s" % path)
+                    sys.exit(0)
+
+                indent = m.group(1)
+                block = "\n".join(indent + ln if ln else "" for ln in REPLACEMENT.splitlines())
+                patched = src[:m.start()] + block + src[m.end():]
+                try:
+                    compile(patched, str(path), "exec")
+                except SyntaxError as exc:
+                    print("[PATCH#50478] SKIPPED: result does not compile: %r" % exc)
+                    sys.exit(0)
+
+                path.write_text(patched)
+                print("[PATCH#50478] patched %s at line %d"
+                      % (path, src[:m.start()].count("\n") + 1))
+                PATCH_EOF
+                # --- END TEMP PATCH ---------------------------------------------------
+
+                # --- BEGIN TEMP PATCH: neuralmagic/vllm@469882a ----------------------
+                # "enable deepep_v2 for sp": deepep_v2 is missing from the all2all
+                # backends that opt into sequence-parallel MoE, so --all2all-backend
+                # deepep_v2 silently runs the experts on replicated tokens.
+                # Never blocks startup: if the anchor is absent (already fixed upstream,
+                # or the code moved) or the rewrite would not compile, it logs and leaves
+                # the file untouched. Delete this block once the image includes the fix.
+                python3 - <<'PATCH_EOF'
+                import sys
+                from pathlib import Path
+
+                REL = "vllm/config/parallel.py"
+                TAG = "PATCH#deepep_v2_sp"
+                PROP = "def use_sequence_parallel_moe"
+                ANCHOR = '"deepep_low_latency",\n'
+                NEW = '"deepep_v2",\n'
+
+                path = next((p for p in (Path(e) / REL for e in sys.path if e) if p.is_file()), None)
+                if path is None:
+                    print("[%s] SKIPPED: %s not found on sys.path" % (TAG, REL))
+                    sys.exit(0)
+
+                src = path.read_text()
+                start = src.find(PROP)
+                if start < 0:
+                    print("[%s] SKIPPED: %s not found in %s" % (TAG, PROP, path))
+                    sys.exit(0)
+
+                i = src.find(ANCHOR, start)
+                if i < 0:
+                    print("[%s] SKIPPED: anchor not found in %s" % (TAG, path))
+                    sys.exit(0)
+
+                end = i + len(ANCHOR)
+                indent = src[src.rfind("\n", 0, i) + 1:i]
+                if indent.strip():
+                    print("[%s] SKIPPED: anchor is not at the start of a line" % TAG)
+                    sys.exit(0)
+                if src[end:].lstrip().startswith('"deepep_v2"'):
+                    print("[%s] already patched: %s" % (TAG, path))
+                    sys.exit(0)
+
+                patched = src[:end] + indent + NEW + src[end:]
+                try:
+                    compile(patched, str(path), "exec")
+                except SyntaxError as exc:
+                    print("[%s] SKIPPED: result does not compile: %r" % (TAG, exc))
+                    sys.exit(0)
+
+                path.write_text(patched)
+                print("[%s] patched %s at line %d"
+                      % (TAG, path, src[:end].count("\n") + 1))
+                PATCH_EOF
+                # --- END TEMP PATCH ---------------------------------------------------
 
                 exec vllm serve \
                   moonshotai/Kimi-K3 \
@@ -94,20 +219,19 @@ spec:
                   --data-parallel-address ${LWS_LEADER_ADDRESS} \
                   --data-parallel-rpc-port 5555 \
                   --data-parallel-start-rank $START_RANK \
-                  --kv_transfer_config '{"kv_connector":"NixlConnector",
-                                          "kv_role":"kv_both",
-                                          "kv_load_failure_policy":"fail"}' \
                   --no-disable-hybrid-kv-cache-manager \
-                  --all2all-backend deepep-v2 \
-                  --max-model-len 300000
+                  --all2all-backend deepep_v2 \
+                  --moe-backend deep_gemm \
+                  --max-cudagraph-capture-size ${MAX_TOKENS} \
+                  --max-model-len 300000 \
+                  --profiler-config.profiler=torch \
+                  --profiler-config.torch_profiler_dir=/profiles \
+                  --profiler-config.max_iterations=10 \
+                  --profiler-config.ignore_frontend=true \
+                  --kv_transfer_config '{"kv_connector":"NixlConnector",
+                        "kv_role":"kv_both",
+                        "kv_load_failure_policy":"fail"}'
 
-                  # To enable tracing, add:
-                  # --otlp-traces-endpoint http://otel-collector:4317 \
-                  # --collect-detailed-traces all
-                  # --speculative-config '{"model":"Inferact/Kimi-K3-DSpark","method":"dspark","num_speculative_tokens":7,"attention_backend":"FLASHINFER_MLA","draft_sample_method":"probabilistic","rejection_sample_method":"block"}'
-                  # --data-parallel-multi-port-external-lb \
-                  # --data-parallel-size-local $DP_SIZE_LOCAL \
-                  # --data-parallel-supervisor-port=8208 \
             env:
               - name: HF_TOKEN
                 valueFrom:
@@ -199,7 +323,6 @@ spec:
               failureThreshold: 3
             resources:
               limits:
-                cpu: 32
                 ephemeral-storage: 1Ti
                 memory: 512Gi
                 nvidia.com/gpu: "8"

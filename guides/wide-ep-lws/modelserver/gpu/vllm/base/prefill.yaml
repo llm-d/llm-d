@@ -33,7 +33,8 @@ spec:
             emptyDir: {}
         containers:
           - name: vllm
-            image: docker.io/vllm/vllm-openai:kimi-k3
+            # image: docker.io/vllm/vllm-openai:kimi-k3
+            image: public.ecr.aws/q9t5s3a7/vllm-ci-test-repo:f8bb1b136dc3dcdd11a984a72bbc0860378b14ec
             securityContext:
               capabilities:
                 add:
@@ -51,15 +52,75 @@ spec:
                 export UCX_IB_ROCE_REACHABILITY_MODE=all
                 export VLLM_SSM_CONV_STATE_LAYOUT=DS
                 export VLLM_ENABLE_K3_LATENT_MOE_TAIL_FUSION=1
+                export NCCL_GIN_TYPE=2
+
+                # --- BEGIN TEMP: install NIXL ----------------------------------------
+                uv pip install --system nixl nixl-cu13
+                # --- END TEMP: install NIXL ------------------------------------------
+
+                # --- BEGIN TEMP PATCH: neuralmagic/vllm@469882a ----------------------
+                # "enable deepep_v2 for sp": deepep_v2 is missing from the all2all
+                # backends that opt into sequence-parallel MoE, so --all2all-backend
+                # deepep_v2 silently runs the experts on replicated tokens.
+                # Never blocks startup: if the anchor is absent (already fixed upstream,
+                # or the code moved) or the rewrite would not compile, it logs and leaves
+                # the file untouched. Delete this block once the image includes the fix.
+                python3 - <<'PATCH_EOF'
+                import sys
+                from pathlib import Path
+
+                REL = "vllm/config/parallel.py"
+                TAG = "PATCH#deepep_v2_sp"
+                PROP = "def use_sequence_parallel_moe"
+                ANCHOR = '"deepep_low_latency",\n'
+                NEW = '"deepep_v2",\n'
+
+                path = next((p for p in (Path(e) / REL for e in sys.path if e) if p.is_file()), None)
+                if path is None:
+                    print("[%s] SKIPPED: %s not found on sys.path" % (TAG, REL))
+                    sys.exit(0)
+
+                src = path.read_text()
+                start = src.find(PROP)
+                if start < 0:
+                    print("[%s] SKIPPED: %s not found in %s" % (TAG, PROP, path))
+                    sys.exit(0)
+
+                i = src.find(ANCHOR, start)
+                if i < 0:
+                    print("[%s] SKIPPED: anchor not found in %s" % (TAG, path))
+                    sys.exit(0)
+
+                end = i + len(ANCHOR)
+                indent = src[src.rfind("\n", 0, i) + 1:i]
+                if indent.strip():
+                    print("[%s] SKIPPED: anchor is not at the start of a line" % TAG)
+                    sys.exit(0)
+                if src[end:].lstrip().startswith('"deepep_v2"'):
+                    print("[%s] already patched: %s" % (TAG, path))
+                    sys.exit(0)
+
+                patched = src[:end] + indent + NEW + src[end:]
+                try:
+                    compile(patched, str(path), "exec")
+                except SyntaxError as exc:
+                    print("[%s] SKIPPED: result does not compile: %r" % (TAG, exc))
+                    sys.exit(0)
+
+                path.write_text(patched)
+                print("[%s] patched %s at line %d"
+                      % (TAG, path, src[:end].count("\n") + 1))
+                PATCH_EOF
+                # --- END TEMP PATCH ---------------------------------------------------
 
                 exec vllm serve \
                   moonshotai/Kimi-K3 \
                   --port 8000 \
                   --trust-remote-code \
-                  --gpu-memory-utilization 0.85 \
+                  --gpu-memory-utilization 0.9 \
                   --disable-access-log-for-endpoints=/health,/metrics \
-                  --max-num-batched-tokens 8192 \
-                  --long-prefill-token-threshold 2048 \
+                  --max-num-batched-tokens 1024 \
+                  --max-num-seqs 8 \
                   --enable-prefix-caching \
                   --enable-expert-parallel \
                   --tensor-parallel-size $TP_SIZE \
@@ -69,17 +130,15 @@ spec:
                   --data-parallel-address ${LWS_LEADER_ADDRESS} \
                   --data-parallel-rpc-port 5555 \
                   --data-parallel-start-rank $START_RANK \
-                  --kv_transfer_config '{"kv_connector":"NixlConnector",
-                                          "kv_role":"kv_both",
-                                          "kv_load_failure_policy":"fail"}' \
                   --no-disable-hybrid-kv-cache-manager \
-                  --all2all-backend deepep-v2 \
-                  --max-num-seqs 128 \
-                  --max-model-len 300000
-                
-                  # To enable tracing, add:
-                  # --otlp-traces-endpoint http://otel-collector:4317 \
-                  # --collect-detailed-traces all
+                  --all2all-backend deepep_v2 \
+                  --moe-backend deep_gemm \
+                  --enforce-eager \
+                  --max-model-len 300000 \
+                  --kv_transfer_config '{"kv_connector":"NixlConnector",
+                        "kv_role":"kv_both",
+                        "kv_load_failure_policy":"fail"}'
+
             env:
               - name: HF_TOKEN
                 valueFrom:
@@ -173,7 +232,6 @@ spec:
               failureThreshold: 3
             resources:
               limits:
-                cpu: 64
                 ephemeral-storage: 1Ti
                 memory: 256Gi
                 nvidia.com/gpu: "8"
