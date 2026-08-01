@@ -44,6 +44,7 @@ your hardware:
 
 - [NVIDIA-Nemotron-3-Ultra-550B on H200](nemotron-3-ultra-550b-h200.md) — P/D-disaggregated serving on 8× H200, with CPU KV-offloading and ready-to-use coding-agent client configs.
 - [Qwen3-Coder-480B on TPU v7](qwen3-coder-480b-tpu.md) — routing + CPU KV-offloading on 8× TPU v7x (2x2x1).
+- [NVIDIA-Nemotron-3-Super-120B on H100](nemotron-3-super-120b-program-aware.md) — **program-aware, per-session fairness** on a single instance (4 x H100s, TP=4): identifies each agent session and schedules on per-session service history (LAS).
 
 ## Benchmarking
 
@@ -55,4 +56,8 @@ cross-turn prefix reuse is actually exercised rather than assumed. The exact pre
 deployment (model, accelerator, and serving topology) rather than forced to be identical — see
 each sub-guide for its workload. Deployments are compared on program-level metrics — whole-session
 completion time and task throughput alongside TTFT and ITL. Replaying real agentic traces (program
-structure and tool-call timing from OpenTelemetry) is the direction for program-level evaluation.
+structure and tool-call timing from OpenTelemetry) is the direction for program-level evaluation —
+[`benchmark-templates/otel-trace-replay.yaml`](benchmark-templates/otel-trace-replay.yaml) replays
+multi-turn agent sessions from
+[`Exgentic/agent-llm-traces`](https://huggingface.co/datasets/Exgentic/agent-llm-traces), carrying
+per-session identity so that fairness scheduling is evaluated against real bursty arrival patterns.

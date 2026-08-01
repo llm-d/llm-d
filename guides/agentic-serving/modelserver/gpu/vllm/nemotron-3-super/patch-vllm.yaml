@@ -1,0 +1,77 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: decode
+spec:
+  replicas: 4
+  template:
+    spec:
+      containers:
+        - name: modelserver
+          command: ["vllm", "serve"]
+          args:
+            - "nvidia/NVIDIA-Nemotron-3-Super-120B-A12B-FP8"
+            - "--tensor-parallel-size=4"
+            - "--max-model-len=262144"
+            - "--max-num-seqs=128"
+            - "--enable-chunked-prefill"
+            - "--enable-auto-tool-choice"
+            - "--tool-call-parser=qwen3_coder"
+            - "--reasoning-parser=nemotron_v3"
+            - "--kv-cache-dtype=fp8"
+            - "--trust-remote-code"
+            - "--seed=42"
+          env:
+            - name: HF_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: llm-d-hf-token
+                  key: HF_TOKEN
+            - name: VLLM_HTTP_TIMEOUT_KEEP_ALIVE
+              value: "120"
+            - name: HF_HOME
+              value: /tmp/hf-cache
+            - name: HOME
+              value: /tmp
+          resources:
+            limits:
+              cpu: "64"
+              memory: 512Gi
+              nvidia.com/gpu: "4"
+            requests:
+              cpu: "32"
+              memory: 256Gi
+              nvidia.com/gpu: "4"
+          volumeMounts:
+            - mountPath: /dev/shm
+              name: shm
+            - mountPath: /.cache
+              name: torch-compile-cache
+            - mountPath: /.config
+              name: vllm-config
+            - mountPath: /.triton
+              name: triton-cache
+            - mountPath: /tmp/hf-cache
+              name: hf-cache
+          startupProbe:
+            httpGet:
+              path: /v1/models
+              port: modelserver
+            initialDelaySeconds: 30
+            periodSeconds: 30
+            timeoutSeconds: 5
+            failureThreshold: 120
+      volumes:
+        - name: shm
+          emptyDir:
+            medium: Memory
+            sizeLimit: 64Gi
+        - name: torch-compile-cache
+          emptyDir: {}
+        - name: vllm-config
+          emptyDir: {}
+        - name: triton-cache
+          emptyDir: {}
+        - name: hf-cache
+          emptyDir:
+            sizeLimit: 300Gi
