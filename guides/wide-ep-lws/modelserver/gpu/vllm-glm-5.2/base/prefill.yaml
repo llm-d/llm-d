@@ -57,7 +57,7 @@ spec:
               type: DirectoryOrCreate
         containers:
           - name: vllm
-            image: vllm/vllm-openai:nightly-124154a8843d1f8e4d4e2d5d466e2d3ebc3716da
+            image: vllm/vllm-openai:nightly
             securityContext:
               capabilities:
                 add:
