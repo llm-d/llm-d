@@ -94,7 +94,7 @@ spec:
               type: Directory
         containers:
           - name: vllm
-            image: public.ecr.aws/q9t5s3a7/vllm-ci-postmerge-repo:a0cd2b69b3dac2b43be02fc16ff940b856d6791b
+            image: vllm/vllm-openai:nightly-124154a8843d1f8e4d4e2d5d466e2d3ebc3716da
             securityContext:
               capabilities:
                 add:
@@ -132,7 +132,6 @@ spec:
                   PROFILER_ARGS="--profiler-config {\"profiler\":\"torch\",\"torch_profiler_dir\":\"/var/cache/vllm/profile\",\"torch_profiler_record_shapes\":true,\"torch_profiler_with_memory\":true,\"max_iterations\":3}"
                 fi
 
-                uv pip install --system nixl
                 exec vllm serve $PROFILER_ARGS $MTP_ARGS --kv-cache-dtype fp8 \
                   zai-org/GLM-5.2-FP8 \
                   --port 8200 \
