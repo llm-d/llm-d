@@ -416,8 +416,18 @@ symmetric-fetch stall fix under sustained many-to-many pull load
 ([vllm#49877](https://github.com/vllm-project/vllm/pull/49877)). Any
 nightly at or after `nightly-6f91edf96d3f3272945809c04702380053bff4de`
 (2026-07-29, the first containing all four) works; the kustomization pins
-that one so the guide's numbers stay reproducible. Prefer a tagged vLLM
-release over any nightly once the tier ships in one.
+that one so the guide's numbers stay reproducible. No tagged vLLM release
+up to `v0.26.0` contains these merges, so a nightly is currently the only
+option; once a later release ships, verify the four merge commits are in
+the tag and prefer it over any nightly.
+
+Wide-EP `GLM-5.2` deployments (the
+[GLM results](./benchmark-results/glm-5.2-h200.md) testbed) additionally
+need the block-table width alignment fix its attention indexer requires
+([vllm#50302](https://github.com/vllm-project/vllm/pull/50302)); the
+first nightly containing it is
+`nightly-124154a8843d1f8e4d4e2d5d466e2d3ebc3716da` (2026-08-01), so that
+is the floor for GLM.
 
 ### 4. Calibrate `minCachedTokenDelta` for your model and transport
 

@@ -18,8 +18,9 @@ namePrefix: p2p-kv-cache-sharing-
 # - engine: the P2P secondary tier (vllm#48021), its crash fixes
 #   (vllm#49671, vllm#49823) and the symmetric-fetch stall fix
 #   (vllm#49877) are all upstream. Any nightly at or after this one
-#   (2026-07-29) works; it is pinned for reproducibility. Pin a tagged
-#   vLLM release once the tier ships in one.
+#   (2026-07-29) works; it is pinned for reproducibility. No release up
+#   to v0.26.0 contains these merges; pin a tagged vLLM release once one
+#   does (verify the merge commits are in the tag).
 # - sidecar: main because v0.9.0 predates the offloading P2P pull support
 #   (llm-d-router#1937); pin the next release when cut. This tag floats, so
 #   the guide's benchmark tables cannot be reproduced exactly against it -
