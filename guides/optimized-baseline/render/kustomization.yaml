@@ -1,0 +1,7 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+# The optimized-baseline uses approx-prefix-cache-producer which does not
+# require an external tokenizer (render) service. This directory exists so
+# that `just deploy-render` (which calls `kustomize build ./render`) succeeds
+# without deploying any resources.
+resources: []
