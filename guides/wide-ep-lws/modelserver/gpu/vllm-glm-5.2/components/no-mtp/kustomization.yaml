@@ -4,8 +4,8 @@ patches:
   - target:
       kind: LeaderWorkerSet
     patch: |-
-      - op: add
-        path: /spec/leaderWorkerTemplate/workerTemplate/spec/containers/0/env/-
+      - op: replace
+        path: /spec/leaderWorkerTemplate/workerTemplate/spec/containers/0/env/5
         value:
           name: ENABLE_MTP
           value: "0"
