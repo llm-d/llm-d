@@ -1,0 +1,6 @@
+apiVersion: kustomize.config.k8s.io/v1alpha1
+kind: Component
+images:
+  - name: REPLACE_MODEL_SERVER_IMAGE
+    newName: rocm/atom-dev
+    newTag: "nightly_202608241610_4e0848dcdf94f3d4be0c1e3ce51db99bc93f8b8c"
