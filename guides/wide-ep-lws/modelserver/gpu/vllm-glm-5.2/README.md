@@ -63,7 +63,7 @@ to a deployment's `kustomization.yaml` under `components:`.
 | `no-mtp` | prefill + decode | Disables MTP speculative decoding (`ENABLE_MTP=0`) |
 | `offloading-cpu` | prefill only | CPU-only KV cache offloading (`OFFLOADING_MODE=cpu`) |
 | `offloading-tiered` | prefill only | CPU + NVMe tiered KV cache offloading (`OFFLOADING_MODE=tiered`) |
-| `max-model-len-130k` | prefill + decode | Sets `max-model-len` to 130000 |
+
 
 K8s takes the last duplicate env var, so appended values override the base defaults.
 
@@ -212,9 +212,6 @@ Off by default. Enable via the `offloading-cpu` or `offloading-tiered` component
 - **`offloading-tiered`** — CPU + NVMe tiered offloading via `TieringOffloadingSpec`.
   Same CPU tier as above, plus NVMe as a secondary eviction target. Host-path volume at
   `/mnt/local/kv-cache` mounted as `/mnt/nvme-cache`.
-
-Without offloading, `max-model-len` caps at ~108K on H200 (model weights ~122 GiB +
-KV cache + DeepGemm warmup + CUDA overhead must fit in 139.80 GiB).
 
 Decode pods do not use offloading (256Gi dshm, 512Gi memory).
 

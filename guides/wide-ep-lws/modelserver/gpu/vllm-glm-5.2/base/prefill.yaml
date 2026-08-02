@@ -128,7 +128,7 @@ spec:
                   --port 8000 \
                   --trust-remote-code \
                   --gpu-memory-utilization $GPU_MEM_UTIL \
-                  --max-model-len ${MAX_MODEL_LEN:-120000} \
+                  --max-model-len ${MAX_MODEL_LEN:-auto} \
                   --disable-access-log-for-endpoints=/health,/metrics \
                   --data-parallel-multi-port-external-lb \
                   --data-parallel-supervisor-port=8208 \
@@ -154,7 +154,7 @@ spec:
               - name: PREFILL_GPU_MEM_UTIL
                 value: ""
               - name: MAX_MODEL_LEN
-                value: "120000"
+                value: "auto"
               - name: KV_OFFLOAD_CPU_BYTES
                 value: "107374182400"
               - name: ENABLE_MTP
