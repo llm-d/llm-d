@@ -1,8 +1,9 @@
 # Agentic Code Generation — NVIDIA-Nemotron-3-Ultra-550B on H200
 
-This is one of two accelerator-specific deployments of the agentic code-generation workload; see the
-[agentic-serving README](README.md#deployments) for the workload framing and the
-[Qwen3-Coder-480B on TPU v7](qwen3-coder-480b-tpu.md) alternative.
+This is one of the accelerator-specific deployments of the agentic code-generation workload; see the
+[agentic-serving README](README.md#deployments) for the workload framing and the alternatives:
+[GLM-5.2-FP8 on H200](glm-5-2-h200.md),
+[Qwen3-Coder-480B on TPU v7](qwen3-coder-480b-tpu.md).
 
 ## Overview
 
