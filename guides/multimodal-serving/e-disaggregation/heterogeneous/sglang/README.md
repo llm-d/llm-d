@@ -144,7 +144,7 @@ The overlay pins both images by digest:
 
 The official GPU image identifies SGLang source revision
 `0b3bb0cbe31873994c9f989fddfe2f87ca839fdd`. The XPU image is built from
-SGLang source revision `79dea0630ea909c15888984568eb9dbc8821f4dd`,
+SGLang source revision `1af01674938f68266d5f8a0e5635ea1434af7801`,
 including the Kimi-VL 2-D image-grid fix, and `sgl-kernel-xpu` revision
 `a246742797279015f51d135063ed00f879496896`. No runtime source patch or
 ConfigMap is required.
