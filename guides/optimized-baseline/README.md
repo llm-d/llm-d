@@ -136,20 +136,21 @@ kubectl create secret generic llm-d-hf-token \
 
 ### 1. Deploy the llm-d Router
 
-- Define the `helm` values files for `llm-d` router:
+- Prepare the paths to the `helm` values files for `llm-d` router (used in the deployment commands below):
 
 <!-- guide:deploy.router_values start -->
 ```bash
-export ROUTER_BASE_VALUES="-f ${REPO_ROOT}/guides/recipes/router/base.values.yaml"
+# Paths to values files
+export ROUTER_BASE_VALUES="${REPO_ROOT}/guides/recipes/router/base.values.yaml"
 
 # only when MODEL_SERVER=vllm or sglang:
-export ROUTER_VALUES="-f ${REPO_ROOT}/guides/${GUIDE_NAME}/router/${GUIDE_NAME}.values.yaml"
+export ROUTER_VALUES="${REPO_ROOT}/guides/${GUIDE_NAME}/router/${GUIDE_NAME}.values.yaml"
 
 # only when MODEL_SERVER=trtllm:
 #
 # Comment out the above `ROUTER_VALUES` and uncomment the below for TensorRT-LLM (trtllm-serve)
 #
-# export ROUTER_VALUES="-f ${REPO_ROOT}/guides/${GUIDE_NAME}/router/${GUIDE_NAME}-trtllm.values.yaml"
+# export ROUTER_VALUES="${REPO_ROOT}/guides/${GUIDE_NAME}/router/${GUIDE_NAME}-trtllm.values.yaml"
 ```
 <!-- guide:deploy.router_values end -->
 
@@ -175,14 +176,17 @@ export ROUTER_VALUES="-f ${REPO_ROOT}/guides/${GUIDE_NAME}/router/${GUIDE_NAME}.
 
 This deploys the llm-d Router in [Standalone Mode](../../docs/architecture/core/router/proxy.md):
 
+> [!IMPORTANT]
+> Before running the command below, execute the path setup commands from the previous section: the `export ROUTER_BASE_VALUES=...` and `export ROUTER_VALUES=...` commands above (without the `-f` prefix).
+
 <!-- guide:deploy.standalone start -->
 ```bash
 # Assuming base-directory is the root of the llm-d repo
 helm install ${GUIDE_NAME} \
   ${ROUTER_STANDALONE_CHART} \
-  ${ROUTER_BASE_VALUES} \
+  -f ${ROUTER_BASE_VALUES} \
   ${MONITORING_VALUES} \
-  ${ROUTER_VALUES} \
+  -f ${ROUTER_VALUES} \
   -n ${NAMESPACE} --version ${ROUTER_CHART_VERSION}
 ```
 <!-- guide:deploy.standalone end -->
@@ -195,13 +199,16 @@ To use a Kubernetes Gateway managed proxy rather than the standalone version, fo
 1. _Deploy a Kubernetes Gateway_ named by following one of [the gateway guides](../../docs/infrastructure/gateway).
 2. _Deploy the llm-d router and an HTTPRoute_ that connects it to the Gateway as follows:
 
+> [!IMPORTANT]
+> Before running the command below, execute the path setup commands from the previous section: the `export ROUTER_BASE_VALUES=...` and `export ROUTER_VALUES=...` commands above (without the `-f` prefix).
+
 <!-- guide:deploy.gateway start -->
 ```bash
 helm install ${GUIDE_NAME} \
   ${ROUTER_GATEWAY_CHART} \
-  ${ROUTER_BASE_VALUES} \
+  -f ${ROUTER_BASE_VALUES} \
   ${MONITORING_VALUES} \
-  ${ROUTER_VALUES} \
+  -f ${ROUTER_VALUES} \
   --set provider.name=${PROVIDER_NAME} \
   --set httpRoute.create=true \
   --set httpRoute.inferenceGatewayName=llm-d-inference-gateway \
