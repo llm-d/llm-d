@@ -11,7 +11,7 @@ For an `N`-replica deployment of `meta-llama/Llama-3.3-70B-Instruct` (~140 GB of
 * Without ModelExpress, every vLLM pod pulls ~140 GB from HuggingFace at startup: N times the cluster egress, N times the slow path, plus disk-to-GPU load time on every pod.
 * With this guide, the first pod to come up does the HuggingFace download, registers its tensors with NIXL, and publishes itself as a P2P source. Every other pod finds that source through the ModelExpress server and pulls weights straight into GPU HBM over RDMA.
 
-> This guide ships a default of **2 replicas (1 seed + 1 receiver)** to keep the GPU footprint small (4 GPUs at TP2), and it still runs a real HBM-to-HBM transfer. The amount of weight data moved over P2P grows with `(bytes per replica) x (number of receivers)`. Scale the pool wider to see a production fan-out. The optional measurement sections below show how to record P2P and storage-backed load times in your own environment.
+> This guide ships a default of **2 replicas (1 seed + 1 receiver)** to keep the GPU footprint small (4 GPUs at TP2), and it still runs a real HBM-to-HBM transfer. The amount of weight data moved over P2P grows with `(bytes per replica) x (number of receivers)`. Scale the pool wider to see a production fan-out. See [measuring-storage-paths](./measuring-storage-paths.md) to record P2P and storage-backed load times in your own environment.
 
 ```mermaid
 graph LR
@@ -41,20 +41,7 @@ Use P2P weight transfer when:
 * You have an InfiniBand, RoCE, or EFA fabric exposed to pods as the `rdma/ib` extended resource (or the equivalent for your CNI and device plugin; the request lives in the `coreweave` overlay, see Step 3).
 * You care about cold-start tail latency on scale-outs, rolling restarts, or live-refit workloads where many pods come up close together.
 
-### Notes for specific workloads
-
-**RL training rollouts.** Frameworks like [veRL](https://github.com/volcengine/verl),
-[OpenRLHF](https://github.com/OpenRLHF/OpenRLHF),
-[TRL's GRPO trainer](https://huggingface.co/docs/trl/main/en/grpo_trainer),
-and [NeMo-RL](https://github.com/NVIDIA-NeMo/RL) run vLLM rollout workers with
-`enforce_eager=True`. Every policy weight update invalidates cudagraphs, and
-re-capturing them between training steps costs too much time. For this
-audience, the cudagraph capture caveat (see "Optional: Reuse JIT compile
-caches across pods" below) does not apply. Add `--enforce-eager` to the args
-in `patch-vllm.yaml` (or omit `--load-format=mx`'s cudagraph-related
-compilation entirely) to put receiver pod-Ready time in the 30-40 second range.
-
-**Elastic / bin-packed inference on dense racks** (for example, NVL72 hosting multiple model deployments that share a GPU budget). An operator may want to reshape the GPU budget across model deployments in response to realtime load: tear down replicas of one model to start replicas of another. In this case the primary cold-start cost may be weight movement rather than cudagraph capture. This guide moves that path to P2P RDMA. The remaining tradeoff between scale-up latency and steady-state TPOT (cudagraphs vs `--enforce-eager`) is workload-specific and outside the scope of this guide.
+For workload-specific guidance (RL training rollouts, elastic bin-packed racks), see the [workload notes](./compile-cache.md#workload-notes).
 
 ## Default Configuration
 
@@ -159,7 +146,7 @@ kubectl create secret generic llm-d-hf-token \
 
 ### Image: building a ModelExpress-enabled model server image
 
-The `mx` load-format plugin lives in the [`modelexpress` Python client](https://github.com/ai-dynamo/modelexpress/tree/main/modelexpress_client/python), a pure-Python vLLM plugin. Build a thin derived image on top of the shared GPU vLLM image from `guides/recipes/modelserver/components/images/gpu-vllm`. This way, the guide tracks the project default when that component changes.
+The `mx` load-format plugin lives in the [`modelexpress` Python client](https://github.com/ai-dynamo/modelexpress/tree/main/modelexpress_client/python), the vLLM plugin that provides the `mx` load format. Build a thin derived image on top of the shared GPU vLLM image from `guides/recipes/modelserver/components/images/gpu-vllm`. This way, the guide tracks the project default when that component changes.
 
 > [!WARNING]
 > The shared GPU vLLM image does not ship the ModelExpress client. You need an image with the client baked in. This Dockerfile follows the pattern of the upstream [ModelExpress client Dockerfile](https://github.com/ai-dynamo/modelexpress/blob/v0.5.0/examples/p2p_transfer_k8s/client/vllm/Dockerfile), but takes its base image from the central llm-d image component:
@@ -302,7 +289,7 @@ kubectl get modelmetadata -n ${NAMESPACE} \
 
 ### 4. (Optional) Enable monitoring
 
-The monitoring kustomize is a `kind: Component`, so you cannot apply it standalone with `kubectl apply -k`. Layer it into your overlay's `kustomization.yaml` instead (same pattern as `shared-compile-cache`):
+The monitoring kustomize is a `kind: Component`, so you cannot apply it standalone with `kubectl apply -k`. Layer it into your overlay's `kustomization.yaml` instead (same pattern as the [shared-compile-cache component](./compile-cache.md#option-b-shared-rwx-pvc)):
 
 ```yaml
 # guides/modelexpress-p2p/modelserver/gpu/vllm/coreweave/kustomization.yaml
@@ -417,132 +404,24 @@ kubectl logs -n ${NAMESPACE} ${RECEIVER} -c modelserver | grep -i -E "mx|nixl|so
 
 Look for lines like `discovered READY source` followed by NIXL transfer progress. If you see `falling back to disk load`, RDMA is not reaching the pod. Check the fabric resource request in your `INFRA_PROVIDER` overlay.
 
-## Optional: Measure Storage-Backed Loading Paths
+## Example Results
 
-Run the fastsafetensors tests the same way you ran the P2P test: prewarm once, then scale 1→N and record `Loading weights took` plus the scale-out wall clock. Keep cudagraph/compile constant across every path you measure (set `--enforce-eager` on all, or layer `shared-compile-cache` on all) so the weight path stays the main variable.
+Example observation from one CoreWeave environment (8×H200 + InfiniBand, `meta-llama/Llama-3.3-70B-Instruct`, TP2, ~70.6 GB of weights per TP worker, warm storage), 2026-05:
 
-These measurement workloads sit outside the router on purpose. The router's `modelServers.matchLabels` selects `llm-d.ai/guide: modelexpress-p2p`, so the fastsafetensors pods never receive routed traffic. Measure them by port-forwarding or by hitting the pods directly.
+| Path | Weight-load time | Effective rate |
+| --- | --- | --- |
+| Default loader ← prewarmed NFS | 22.6 s | ~3.1 GB/s |
+| fastsafetensors ← prewarmed NFS | 11.6 s | ~6.1 GB/s |
+| fastsafetensors ← warm local NVMe | 30.2 s | ~2.3 GB/s |
+| ModelExpress P2P | 2.7 s | ~210 Gbps (~26 GB/s) |
 
-### 1. Prewarm the checkpoint onto NFS (once)
+These are environment-specific observations, not official NVIDIA benchmark results. The full methodology, the storage-path caveats (GDS did not engage on this cluster), and an MoE observation are in [benchmark-results](./benchmark-results/coreweave-h200-llama-3.3-70b.md); reproduce them with [measuring-storage-paths](./measuring-storage-paths.md).
 
-The prewarm Job and RWX PVC use their own kustomize overlay without a `namePrefix`, so the PVC keeps the literal name `fst-model-cache`, and both fastsafetensors tests share the single download. The PVC requests the `shared-vast` StorageClass (CoreWeave's VAST-backed NFS, the cluster this guide was validated on). Edit `fastsafetensors-prewarm/prewarm-job.yaml` if your cluster's RWX-capable class has a different name:
+## Going Further
 
-```bash
-kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/gpu/vllm/fastsafetensors-prewarm/
-kubectl wait --for=condition=complete job/fst-prewarm-llama33-70b -n ${NAMESPACE} --timeout=60m
-```
-
-This is the **one** HuggingFace download for all storage paths. It is idempotent: re-running the experiment reuses the warm PVC.
-
-### 2. fastsafetensors off prewarmed NFS (primary)
-
-```bash
-DECODE=fastsafetensors-nfs-nvidia-gpu-vllm-decode
-kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/gpu/vllm/fastsafetensors-nfs/
-
-# Seed: scale to 1 and wait Ready (reads the warm NFS PVC, not HuggingFace)
-kubectl scale deploy/${DECODE} -n ${NAMESPACE} --replicas=1
-kubectl rollout status deploy/${DECODE} -n ${NAMESPACE} --timeout=30m
-
-# Scale-out: time 1 -> 2
-T0=$(date +%s)
-kubectl scale deploy/${DECODE} -n ${NAMESPACE} --replicas=2
-kubectl rollout status deploy/${DECODE} -n ${NAMESPACE} --timeout=10m
-T1=$(date +%s); echo "fastsafetensors-nfs pool reached Ready in $((T1 - T0))s"
-
-# Per-pod weight-load time
-for p in $(kubectl get pod -n ${NAMESPACE} -l llm-d.ai/guide=fastsafetensors-nfs -o name); do
-    kubectl logs -n ${NAMESPACE} $p -c modelserver | grep -iE 'Loading weights took'
-done
-```
-
-Check whether GDS engaged. It needs an RDMA-capable mount, so on a TCP NFS mount (like CoreWeave's, where this guide was validated) expect the POSIX-pread path instead:
-
-```bash
-kubectl logs -n ${NAMESPACE} <pod> -c modelserver | grep -iE 'cuFile|GDS is not supported|nogds'
-# If "GDS is not supported in this platform but nogds is False" appears, add
-# --model-loader-extra-config={"nogds": true} to patch-vllm.yaml and re-run
-# (the test still works on the POSIX-pread path; note it when recording results).
-```
-
-### 3. fastsafetensors off warm local NVMe (optional)
-
-```bash
-kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/gpu/vllm/fastsafetensors-localnvme/
-# Same scale-1-then-1->2 timing on deploy fastsafetensors-localnvme-nvidia-gpu-vllm-decode.
-# Confirm P2PDMA engaged vs nogds compat with the same grep as the NFS test.
-```
-
-This test pins to NVMe nodes (`nodeSelector: local-persistent-storage=true`). An init container copies the warm NFS checkpoint to a node-local NVMe `emptyDir` (the untimed prime) before the timed serve.
-
-### 4. Per-pod timing data (all tests)
-
-```bash
-kubectl get pod -n ${NAMESPACE} -l llm-d.ai/guide=<test> \
-    -o jsonpath='{range .items[*]}{.metadata.name}{"\t"}{.metadata.creationTimestamp}{"\t"}{.status.conditions[?(@.type=="Ready")].lastTransitionTime}{"\n"}{end}'
-# Diff creationTimestamp vs Ready lastTransitionTime per pod; report median + max.
-```
-
-Tear each test down before the next so they do not compete for GPUs (each is 4 GPUs at the default `replicas: 2`):
-
-```bash
-kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/gpu/vllm/<test>/
-kubectl wait --for=delete pod -l llm-d.ai/guide=<test> -n ${NAMESPACE} --timeout=10m
-```
-
-Keep the `fst-model-cache` PVC between runs (the download is the expensive part). Delete it only when you are fully done.
-
-## Optional: Reuse JIT compile caches across pods
-
-Once weight transfer is sub-second, vLLM's `torch.compile` becomes the bottleneck for receiver pod-Ready time. The bootstrap pod compiles the model graph and fills its JIT caches. Receivers can reuse those caches instead of recompiling per pod. There are two ways to move them.
-
-### Option A: P2P cache artifact transfer (ModelExpress 0.5.0+)
-
-The 0.5.0 artifact transfer protocol extends the NIXL path beyond weights to file-backed cache artifacts. Set `MX_ARTIFACT_TRANSFER=1` on the decode pods (it applies to both source and target roles). Before model initialization, receivers install compatible torch.compile (TorchInductor), Triton, DeepGEMM, TileLang, CuTe DSL, and FlashInfer caches, including persistent autotune files, from a ready source. No shared storage is needed.
-
-```yaml
-# add to the modelserver container env in base/patch-vllm.yaml
-- name: MX_ARTIFACT_TRANSFER
-  value: "1"
-```
-
-Notes on this path:
-
-* It needs the P2P metadata path (`MX_P2P_METADATA=1`, the default) and a central-coordinator backend. This guide's `kubernetes` backend qualifies; the decentralized `k8s-service` backend does not publish artifact discovery metadata yet.
-* The source seals and publishes cache bundles only after the engine reports healthy (`MX_ARTIFACT_READY_URL`, default `http://127.0.0.1:8000/health` for vLLM). Receivers that start after the seed is Ready get the caches; a cold N-replica apply where all pods race up may not.
-* Bundles stage as tars under `MX_ARTIFACT_BUNDLE_ROOT` (default `$TMPDIR/modelexpress-artifacts`), then install into the runtime cache directories. The guide's `/.cache` and `/.triton` emptyDir mounts are writable, so no manifest change is needed.
-* Compatibility is digest-gated (compile config, accelerator family). An incompatible artifact is skipped and the receiver recompiles; it does not fail the load.
-* Cudagraph capture is not a file-backed artifact. It still costs per pod on this path and on the PVC path below.
-* `MX_ARTIFACT_TRANSFER_CHUNK_SIZE` (default 64 MiB) trades RPC overhead against registered DRAM buffer memory on both ends.
-
-### Option B: Shared RWX PVC
-
-vLLM stores the AOT compile artifacts under `/.cache/vllm` (the container's `/.cache` mount; `VLLM_CACHE_ROOT=/.cache/vllm`). If you back that path with a `ReadWriteMany` PVC, receivers reuse the cached graphs from shared storage instead.
-
-Layer the `shared-compile-cache` kustomize component on top of your provider overlay:
-
-```yaml
-# guides/modelexpress-p2p/modelserver/gpu/vllm/coreweave/kustomization.yaml (or your overlay)
-components:
-  - ../components/shared-compile-cache
-```
-
-Or build an inline overlay that pulls in both:
-
-```yaml
-apiVersion: kustomize.config.k8s.io/v1beta1
-kind: Kustomization
-resources:
-  - guides/modelexpress-p2p/modelserver/gpu/vllm/coreweave
-components:
-  - guides/modelexpress-p2p/modelserver/gpu/vllm/components/shared-compile-cache
-```
-
-The component:
-
-* Adds a `vllm-compile-cache` PVC (50 GiB, RWX, uses cluster-default StorageClass; edit `compile-cache-pvc.yaml` if you need a specific class like `shared-vast` on CoreWeave or `efs-sc` on EKS).
-* Swaps the per-pod `torch-compile-cache` emptyDir for the PVC.
-* Exports `VLLM_CACHE_ROOT=/.cache/vllm` and `TORCHINDUCTOR_CACHE_DIR=/.cache/torch_inductor` so vLLM and Inductor land on the shared mount.
+* [Measuring storage-backed loading paths](./measuring-storage-paths.md): time fastsafetensors from NFS and local NVMe against P2P in your own cluster.
+* [Reusing JIT compile caches across pods](./compile-cache.md): once weight transfer is sub-second, cut the `torch.compile` cost with P2P artifact transfer (0.5.0+) or a shared RWX PVC.
+* [Locking down the metadata broker](./security.md): Istio mTLS plus an AuthorizationPolicy for shared clusters.
 
 ## Cleanup
 
@@ -578,129 +457,6 @@ Only do this if no other namespace in the cluster is running ModelExpress. Delet
 ```bash
 kubectl delete -f https://raw.githubusercontent.com/ai-dynamo/modelexpress/${MX_VERSION}/examples/crds.yaml
 ```
-
-## How It Works
-
-### Observed Weight-Loading Behavior
-
-This section shows how to collect local timing data for the weight-loading path used by this guide. The example measurements below are observations from one CoreWeave H200 + InfiniBand environment, included to help operators understand what to measure. They are not official NVIDIA benchmark results. NVIDIA plans to follow up with official benchmark data.
-
-**Why this model** The example measurement uses a checkpoint that loads through both the P2P and storage-backed paths. MXFP4 models (for example, `gpt-oss-120b`) were not used because `--load-format=fastsafetensors` hangs at 0% on MXFP4 in this validation setup. Llama-3.3-70B is dense bf16 (the fastsafetensors paper's own reference model), and at TP2 it costs only 2 GPUs per replica. This lets you run the procedure on a modest GPU budget and scale the fan-out when you want a larger local measurement.
-
-Measurement paths:
-
-* Plain HuggingFace cold download: every pod pulls ~140 GB from HuggingFace and runs the default safetensors deserializer. This path exercises per-pod egress plus disk-to-HBM loading.
-* fastsafetensors off prewarmed NFS: a one-shot Job downloads the checkpoint once into an NFS RWX PVC. Every pod mounts it read-only and serves `--load-format=fastsafetensors`. This path measures one shared download with N storage readers.
-  In theory it can use cuFile/GDS to DMA from storage straight into HBM. In practice GDS needs an RDMA-capable mount, and on the test cluster (CoreWeave's VAST-backed NFS) the PVC mounts as TCP NFS. So it ran on the `nogds` POSIX-pread path. See the GDS note under the results table.
-* fastsafetensors off warm local NVMe (optional): each pod's init copies the warm NFS checkpoint onto node-local NVMe (untimed prime), then loads from there. GDS-via-CUDA-P2PDMA needs `nvidia-fs` or a P2PDMA-capable node. Neither bound on the test cluster, so the timed read used a plain non-GDS pread. This path also re-primes each node. Skip it unless your nodes have working local-NVMe GDS or you specifically want a local-NVMe measurement.
-* ModelExpress P2P: the seed pod downloads once and publishes its HBM as a NIXL source. Every other pod pulls weights HBM→HBM over RDMA, and none of them touch disk. No shared storage, no GDS, no cuFile, just the fabric.
-
-**Measurement controls:** (1) Every "warm" path does its download/prime in a Job or initContainer that is _not_ part of the timed `vllm serve`, just as the P2P path excludes the seed pod's HuggingFace download. (2) Hold cudagraph/compile constant across paths (either layer `shared-compile-cache` on all of them, or set `--enforce-eager` on all) so the weight path stays the main variable. (3) Report `Loading weights took` median and max, plus the 1→N scale-out wall clock, and note whether GDS actually engaged.
-
-Example observation from CoreWeave (8×H200 + InfiniBand nodes, `meta-llama/Llama-3.3-70B-Instruct`, TP2, ~70.6 GB of weights per TP worker, warm storage; the NFS path ran on CoreWeave's VAST-backed `shared-vast` StorageClass), 2026-05:
-
-| Path | Weight-load time | Effective rate | Total pod-Ready (1→2) | Transport | Egress | Shared storage |
-| --- | --- | --- | --- | --- | --- | --- |
-| Plain HF cold download | download-bound (~140 GB/pod) | HF bandwidth | — | HF → disk → HBM, default | **Nx** | no |
-| Default loader ← prewarmed NFS | 22.6 s | ~3.1 GB/s | — | NFS → HBM, default | 1x | yes (RWX PVC) |
-| fastsafetensors ← prewarmed NFS | 11.6 s | ~6.1 GB/s | ~157 s | NFS → HBM, fastsafetensors (no GDS) | 1x | yes (RWX PVC) |
-| fastsafetensors ← warm local NVMe | 30.2 s | ~2.3 GB/s | — | NVMe → HBM, fastsafetensors (no GDS) | 1x | NFS source + per-node copy |
-| ModelExpress P2P | 2.7 s | ~210 Gbps (~26 GB/s) | 152 s | peer HBM → HBM, RDMA (NIXL) | 1x | no |
-
-The leading column is per-TP-worker weight-load time (vLLM's `Loading weights took` for the storage-backed paths; the NIXL `Transfer complete` line for P2P). Total pod-Ready is the end-to-end 1→2 scale-out wall clock, and it also includes engine init and `torch.compile`/cudagraph capture.
-
-> **About GDS on these numbers (important):** none of the storage tests above actually engaged GPUDirect Storage, even though the cluster has an IB fabric. On the CoreWeave test cluster the NFS PVC (VAST-backed) mounts as **NFSv3 over TCP** (`proto=tcp,nconnect=32`), and cuFile/GDS cannot bind a TCP-NFS mount. So fastsafetensors ran on its `nogds` POSIX-pread path.
-> We tried forcing it: a custom StorageClass with `proto=rdma` **provisions and binds, but the mount itself times out** (`MountVolume.SetUp ... DeadlineExceeded`). NFSoRDMA is not serviceable on this export unless the cloud provider enables it, so GDS-over-NFS is **not** achievable purely self-serve here. Local NVMe did not help either: `nvidia-fs` is not loaded, and CUDA P2PDMA did not bind, so the local-NVMe test was _slower_ (30.2 s) than NFS. A single-threaded pread off NVMe loses to the NFS mount's `nconnect=32` parallel TCP read.
-> In this environment, the storage-backed measurements used the available POSIX read paths. With GDS enabled, storage-backed results may change a lot. The P2P path does not need cuFile, GDS, or a special mount, because receivers pull from peer HBM over RDMA.
-
-In this environment, the P2P transfer moved a 70.6 GB TP shard HBM→HBM in 2.7 s at about 210 Gbps. The measured storage-backed paths ranged from 11.6 s to 30.2 s for the same shard size, with the GDS limitations noted above. Treat these as environment-specific observations. Storage configuration, GDS availability, filesystem behavior, model format, and vLLM settings can change results a lot.
-
-> **Why the scale-out wall clock can move less than weight-transfer time:** for a 70B model, end-to-end pod-Ready time includes vLLM engine init and `torch.compile`/cudagraph capture. This stays the same across paths when you hold measurement controls constant. Weight loading is one slice of total Ready time, and that slice becomes more visible for larger models, wider fan-outs, and `--enforce-eager` workloads (RL rollouts) where there is no cudagraph capture cost. To also reduce compile cost, [reuse JIT caches across pods](#optional-reuse-jit-compile-caches-across-pods).
->
-> The optional LOTA / object-cache test was not run (it needs a provisioned object bucket and S3 credentials). Its path is documented as a stretch row above.
-
-#### Additional MoE observation
-
-MoE checkpoints stress storage-deserialize paths differently from dense checkpoints, because they contain many small per-expert tensors. The same validation environment also ran `meta-llama/Llama-4-Scout-17B-16E-Instruct` (108.6B total / 17B active, bf16, TP4, ~57 GB of weights per TP worker, `--enforce-eager`):
-
-| Path | Weight-load time | Notes |
-| --- | --- | --- |
-| Default loader ← prewarmed NFS | 211 s | 1047 small expert tensors on the storage-deserialize path |
-| fastsafetensors + GDS ← prewarmed NFS | failed to load | crashes at ~4/13 shards, CUDA OOM from the fastsafetensors TP VRAM spike ([vllm#29403](https://github.com/vllm-project/vllm/issues/29403)), even at `--gpu-memory-utilization=0.80` |
-| ModelExpress P2P ← peer HBM | ~2.0–2.5 s (57 GB/worker, ~180–232 Gbps) | similar transfer range to the dense case |
-
-Two operational notes:
-
-* The observed P2P transfer time tracked bytes rather than tensor count. Receivers pulled already-materialized tensors from the seed.
-* P2P avoids storage-loader-specific behavior on receiver pods. In this run, fastsafetensors could not load the MoE at TP4. `--load-format=fastsafetensors` is also known to hang on MXFP4 in this setup (that is why `gpt-oss` is not used here). If the seed can load the model, receivers get the materialized tensors over RDMA.
-
-### Security: lock down the ModelExpress metadata broker
-
-> [!NOTE]
-> The broker's gRPC API (`:8001`) does not authenticate callers in the `0.5.0` release, so on a shared cluster restrict who can talk to it. This section does that with Istio mTLS plus an AuthorizationPolicy. (Optional, requires Istio; skip it on a single-tenant cluster.)
-
-**Scope.** These policies protect only the broker's gRPC API. The weight transfers themselves ride the RDMA fabric, which the mesh never sees; this guide assumes that fabric is trusted. The decode pods join the mesh with the NIXL/worker ports excluded from the sidecar, so weight transfer keeps working.
-
-> **Pre-stage weights when the mesh is on.** With a sidecar injected, the seed pod's large HuggingFace download can stall behind the sidecar proxy (the gRPC control plane and small API calls are fine; the multi-GB transfer is the problem). Point the seed at a pre-staged checkpoint (for example, the prewarmed `fst-model-cache` NFS PVC, mounted at the model path) instead of downloading from HF in-mesh. Receivers are unaffected, because they pull over RDMA, which bypasses the sidecar.
-
-What gets applied:
-
-* A `PeerAuthentication` (STRICT) scoped to the `modelexpress-server` workload. The broker only accepts mutually-authenticated callers. It is workload-scoped, not namespace-wide, so model-serving traffic (EPP → decode `:8000`) and other workloads are unaffected.
-* An `AuthorizationPolicy` on the broker that allows only this guide's decode ServiceAccount (`modelexpress-p2p-nvidia-gpu-vllm-sa`) to reach `:8001`. An ALLOW policy that selects a workload implicitly denies everyone else.
-
-#### 1. Enable sidecar injection and put decode in the mesh
-
-```bash
-# Requires Istio. Inject sidecars into the broker (and the namespace generally):
-kubectl label namespace ${NAMESPACE} istio-injection=enabled --overwrite
-```
-
-Layer the `istio-mesh` component onto your model-server overlay so the decode pods get a sidecar **with the RDMA/NIXL ports excluded** (the prewarm Job already opts out of injection, so it can complete):
-
-```yaml
-# guides/modelexpress-p2p/modelserver/gpu/vllm/coreweave/kustomization.yaml
-components:
-  - ../components/istio-mesh
-```
-
-Re-apply the model-server overlay (Step 3) and re-roll the broker so both pick up sidecars:
-
-```bash
-kubectl rollout restart deploy/modelexpress-server -n ${NAMESPACE}
-```
-
-The decode pods should now show a second container (`istio-proxy`). Confirm the NIXL ports are excluded:
-
-```bash
-kubectl get pod -n ${NAMESPACE} -l llm-d.ai/guide=modelexpress-p2p \
-    -o jsonpath='{.items[0].metadata.annotations.traffic\.sidecar\.istio\.io/excludeOutboundPorts}{"\n"}'
-# -> 5555,5556,6555,6556
-```
-
-#### 2. Apply mTLS + the AuthorizationPolicy
-
-`${NAMESPACE}` is expanded into the AuthorizationPolicy principal (the SPIFFE ID embeds the namespace):
-
-```bash
-: "${NAMESPACE:?export NAMESPACE first}" # an empty namespace would render a principal that matches nothing
-envsubst '$NAMESPACE' < ${REPO_ROOT}/guides/${GUIDE_NAME}/security/istio-mtls-authz.yaml \
-    | kubectl apply -n ${NAMESPACE} -f -
-```
-
-#### 3. Verify it's enforced
-
-```bash
-# P2P still works: scale out and confirm receivers reach Ready (sidecars + mTLS
-# in place, RDMA ports excluded). Then prove an unauthorized caller is denied.
-# A bare TCP connect (nc -z) is not a valid test: the handshake completes at the
-# broker's sidecar before RBAC resets it. Use a client that actually sends data:
-kubectl run mx-probe --rm -it -n ${NAMESPACE} --image=nicolaka/netshoot --restart=Never \
-    -- grpcurl -plaintext -max-time 5 modelexpress-server:8001 list
-# A pod NOT running as the decode ServiceAccount should get a connection reset
-# or PermissionDenied here, while the decode pods keep working.
-```
-
-If P2P breaks after enabling this, the usual cause is the NIXL port exclusion not matching your TP size. Widen `excludeInbound/OutboundPorts` in `components/istio-mesh/patch-istio.yaml` to cover `MX_METADATA_PORT..+TP-1` and `MX_WORKER_GRPC_PORT..+TP-1`.
 
 ## Notes & Trade-offs
 
