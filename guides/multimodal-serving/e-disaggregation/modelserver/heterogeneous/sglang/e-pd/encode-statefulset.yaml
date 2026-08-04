@@ -54,8 +54,6 @@ spec:
                 --skip-tokenizer-init \
                 --device=xpu \
                 --tensor-parallel-size=1 \
-                --mem-fraction-static=0.70 \
-                --page-size=16 \
                 --mm-attention-backend=xpu_attn \
                 --log-level=info \
                 --enable-metrics \

@@ -86,13 +86,13 @@ spec:
             - --kv-cache-dtype=fp8_e4m3
             - --tensor-parallel-size=1
             - --mem-fraction-static=0.80
-            - --prefill-max-requests=4
+            - --prefill-max-requests=8
             - --max-running-requests=32
             - --chunked-prefill-size=65536
             - --max-prefill-tokens=65536
-            - --max-total-tokens=250000
+            - --max-total-tokens=262144
             - --disable-cuda-graph
-            - --page-size=16
+            - --page-size=64
             - --disable-radix-cache
             - --log-level=info
             - --enable-metrics
