@@ -11,6 +11,8 @@
 
 This guide deploys the recommended out of the box [configuration](https://github.com/llm-d/llm-d-router/blob/main/docs/architecture.md) for most vLLM, SGLang, and TensorRT-LLM deployments, reducing tail latency and increasing throughput through load-aware and prefix-cache aware balancing.
 
+The default path uses **Standalone Mode + NVIDIA GPU + vLLM**. Alternative configurations (Gateway mode, other accelerators, TensorRT-LLM) are documented in collapsible sections — follow the default path end-to-end first, then swap in alternatives as needed.
+
 The optimized-baseline defaults to two main routing criteria:
 
 - **Prefix-cache aware** using the [prefix cache affinity filter](https://github.com/llm-d/llm-d-router/tree/main/pkg/epp/framework/plugins/scheduling/filter/prefixcacheaffinity/README.md), which narrows candidates to "sticky" endpoints with high estimated prompt prefix cache reuse, with a saturation-aware override that spreads load when endpoints get hot.
@@ -28,6 +30,23 @@ Both plugins are used with their built-in defaults — no per-deployment tuning 
 | Tensor Parallelism | 2                                                       | 1                                                         |
 | GPUs per replica   | 2                                                       | 1                                                         |
 | Total GPUs         | 16                                                      | 16                                                        |
+
+> [!WARNING]
+> **Resource requirements:** The default configuration requires **16 GPUs** (8 replicas × 2 GPUs each). If your cluster has fewer GPUs, pods will remain in `Pending` state. See [Minimal setup (smoke-test)](#minimal-setup-smoke-test) below for a reduced configuration that validates the deployment path with fewer resources.
+
+### Minimal setup (smoke-test)
+
+A dedicated kustomize overlay is provided at `modelserver/gpu/vllm/base-minimal/` that deploys **2 replicas with TP=1**, requiring only **2 GPUs**. Use it in place of the default overlay in [Step 2](#2-deploy-the-model-server):
+
+```bash
+kubectl apply -n ${NAMESPACE} \
+  -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/gpu/vllm/base-minimal/
+```
+
+This overlay sets `replicas: 2`, `--tensor-parallel-size=1`, and `nvidia.com/gpu: 1` in the deployment spec — no manual patching or scaling is required. Two replicas are the minimum needed to exercise the EPP's load-aware and prefix-cache-aware routing between endpoints.
+
+> [!NOTE]
+> The minimal setup is intended for validating the deployment path only. For performance benchmarking, use the full default configuration (8 replicas, TP=2, 16 GPUs total).
 
 ### Supported Hardware Backends
 
@@ -48,6 +67,8 @@ This guide includes configurations for the following accelerators:
 ## Prerequisites
 
 - Have the [proper client tools installed on your local system](../../helpers/client-setup/README.md) to use this guide.
+
+- **Hardware:** A Kubernetes cluster with at least **16 NVIDIA GPUs** (for the default configuration) or **2 GPUs** (for [minimal setup](#minimal-setup-smoke-test)). See the [Configuration table](#configuration) for details.
 
 - Checkout llm-d repo:
 
@@ -90,7 +111,7 @@ export GATEWAY_CLASS=epponly # options: epponly, gke, agentgateway, istio
 
 > [!NOTE]
 > `HF_TOKEN` must be a [valid HuggingFace token](../../helpers/hf-token.md); replace
-`HF_TOKEN_PLACEHOLDER` with your real token:
+`HF_TOKEN_PLACEHOLDER` with your real token.
 
 - Source the common guide environment variables:
 
@@ -100,8 +121,18 @@ source ${REPO_ROOT}/guides/env.sh
 ```
 <!-- guide:env.source end -->
 
-> [!NOTE]
-> Some environment variables are common amongst guides, to view these, please inspect the above file sourced so the rest of the guide makes sense.
+> [!IMPORTANT]
+> **Source `env.sh` before running any subsequent commands.** This file provides shared variables used throughout this guide:
+>
+> | Variable | Value | Purpose |
+> |----------|-------|---------|
+> | `GAIE_VERSION` | `v1.5.0` | Gateway API Inference Extension CRD version |
+> | `ROUTER_CHART_VERSION` | `v0` | Helm chart version for the llm-d router |
+> | `ROUTER_STANDALONE_CHART` | `oci://ghcr.io/llm-d/charts/llm-d-router-standalone` | OCI chart reference (Standalone) |
+> | `ROUTER_GATEWAY_CHART` | `oci://ghcr.io/llm-d/charts/llm-d-router-gateway` | OCI chart reference (Gateway) |
+> | `ROUTER_EPP_IMAGE` | `ghcr.io/llm-d/llm-d-router-endpoint-picker` | EPP container image |
+>
+> If a later command fails with an unresolved `${VARIABLE}`, re-source this file.
 
 - Install the Gateway API Inference Extension CRDs:
 
@@ -136,7 +167,7 @@ kubectl create secret generic llm-d-hf-token \
 
 ### 1. Deploy the llm-d Router
 
-- Define the `helm` values files for `llm-d` router:
+Deploy the llm-d Router in [Standalone Mode](../../docs/architecture/core/router/proxy.md):
 
 <!-- guide:deploy.router_values start -->
 ```bash
@@ -153,12 +184,6 @@ export ROUTER_VALUES="-f ${REPO_ROOT}/guides/${GUIDE_NAME}/router/${GUIDE_NAME}.
 ```
 <!-- guide:deploy.router_values end -->
 
-> [!NOTE]
-> As denoted above, **vllm, sglang** share a values file, while  
-> **TensorRT-LLM** (`trtllm-serve`) has it's own values file.
-
-- Optionally, to enable `Prometheus Monitoring` on the `llm-d` router define the `helm` values file:
-
 <!-- guide:deploy.monitoring_values start -->
 ```bash
 # 
@@ -168,16 +193,8 @@ export ROUTER_VALUES="-f ${REPO_ROOT}/guides/${GUIDE_NAME}/router/${GUIDE_NAME}.
 ```
 <!-- guide:deploy.monitoring_values end -->
 
-> [!NOTE]
-> When following the guide from top to bottom, we already have `export MONITORING_VALUES=""` by default. This means that `monitoring` is disabled by default.
-
-#### Standalone Mode
-
-This deploys the llm-d Router in [Standalone Mode](../../docs/architecture/core/router/proxy.md):
-
 <!-- guide:deploy.standalone start -->
 ```bash
-# Assuming base-directory is the root of the llm-d repo
 helm install ${GUIDE_NAME} \
   ${ROUTER_STANDALONE_CHART} \
   ${ROUTER_BASE_VALUES} \
@@ -187,8 +204,29 @@ helm install ${GUIDE_NAME} \
 ```
 <!-- guide:deploy.standalone end -->
 
+> [!NOTE]
+> **Shell expansion caveat:** `ROUTER_BASE_VALUES` and `ROUTER_VALUES` embed the `-f` flag inside the variable (e.g. `"-f /path/to/file.yaml"`). This works in bash/zsh but may behave unexpectedly in other shells or when variables are empty. If you encounter Helm argument parsing errors, pass the `-f` flags directly:
+> ```bash
+> helm install ${GUIDE_NAME} \
+>   ${ROUTER_STANDALONE_CHART} \
+>   -f ${REPO_ROOT}/guides/recipes/router/base.values.yaml \
+>   -f ${REPO_ROOT}/guides/${GUIDE_NAME}/router/${GUIDE_NAME}.values.yaml \
+>   -n ${NAMESPACE} --version ${ROUTER_CHART_VERSION}
+> ```
+
 <details>
-<summary><h4>Gateway Mode</h4></summary>
+<summary><h4>Alternative: TensorRT-LLM model server</h4></summary>
+
+**vLLM and SGLang** share the same router values file, while **TensorRT-LLM** (`trtllm-serve`) has its own values file. If using TensorRT-LLM, set:
+
+```bash
+export ROUTER_VALUES="-f ${REPO_ROOT}/guides/${GUIDE_NAME}/router/${GUIDE_NAME}-trtllm.values.yaml"
+```
+
+</details>
+
+<details>
+<summary><h4>Alternative: Gateway Mode</h4></summary>
 
 To use a Kubernetes Gateway managed proxy rather than the standalone version, follow these steps instead of applying the previous Helm chart:
 
@@ -211,9 +249,22 @@ helm install ${GUIDE_NAME} \
 
 </details>
 
+<details>
+<summary><h4>Optional: Enable Prometheus Monitoring on the router</h4></summary>
+
+To enable Prometheus monitoring on the router, set the following **before** running `helm install`:
+
+```bash
+export MONITORING_VALUES="-f ${REPO_ROOT}/guides/recipes/router/features/monitoring.values.yaml"
+```
+
+When `MONITORING_VALUES` is left empty (the default), monitoring is disabled.
+
+</details>
+
 ### 2. Deploy the Model Server
 
-Apply the Kustomize overlays for your specific backend:
+Apply the Kustomize overlays for the default backend (NVIDIA GPU + vLLM):
 
 <!-- guide:deploy.modelserver start -->
 ```bash
@@ -231,11 +282,35 @@ kubectl apply -n ${NAMESPACE} \
 ```
 <!-- guide:deploy.modelserver end -->
 
-> [!NOTE]
-> Ensure `INFRA_PROVIDER`, `ACCELERATOR_TYPE` and `MODEL_SERVER` are set appropriately, see above environment section for options.
+For the default path (GPU + vLLM + base infra provider), this resolves to:
+
+```bash
+kubectl apply -n ${NAMESPACE} \
+  -k ${REPO_ROOT}/guides/optimized-baseline/modelserver/gpu/vllm/base/
+```
 
 <details>
-<summary><h4>Other Models</h4></summary>
+<summary><h4>Alternative: Non-GPU accelerators (AMD, XPU, TPU, CPU)</h4></summary>
+
+For non-GPU accelerators, the path does not include `INFRA_PROVIDER`:
+
+```bash
+# Set ACCELERATOR_TYPE to one of: amd, xpu, hpu, tpu/v6, tpu/v7, cpu
+kubectl apply -n ${NAMESPACE} \
+  -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/${ACCELERATOR_TYPE}/${MODEL_SERVER}/
+```
+
+For example, to deploy on AMD GPUs with vLLM:
+
+```bash
+kubectl apply -n ${NAMESPACE} \
+  -k ${REPO_ROOT}/guides/optimized-baseline/modelserver/amd/vllm/base/
+```
+
+</details>
+
+<details>
+<summary><h4>Alternative: Other Models</h4></summary>
 
 For example to deploy other models:
 
@@ -283,8 +358,6 @@ For reference values across the (model, accelerator) combinations shipped under 
 
 ### 1. Get the IP of the Proxy
 
-**Standalone Mode**
-
 <!-- guide:verify.endpoint.standalone start -->
 ```bash
 export IP=$(kubectl get service ${GUIDE_NAME}-epp -n ${NAMESPACE} -o jsonpath='{.spec.clusterIP}')
@@ -304,7 +377,7 @@ export IP=$(kubectl get gateway llm-d-inference-gateway -n ${NAMESPACE} -o jsonp
 
 ### 2. Send Test Requests
 
-**Send a completion request from a temporary pod inside the cluster (model-aware; set `MODEL` to the name you want to query, e.g. `Qwen/Qwen3-32B` or `openai/gpt-oss-120b`):**
+Send a completion request from a temporary pod inside the cluster:
 
 <!-- guide:verify.tests start -->
 ```bash
@@ -335,7 +408,7 @@ In this example we will demonstrate how to run [`inference-perf`](https://github
 
 ### 1. Install the `llmdbenchmark` CLI
 
-Automatically clone the benchmark repository into `./llm-d-benchmark/` and create a virtualenv at `./llm-d-benchmark/.venv/` containing dependencies and it's installation:
+Automatically clone the benchmark repository into `./llm-d-benchmark/` and create a virtualenv at `./llm-d-benchmark/.venv/` containing dependencies and its installation:
 
 <!-- guide:benchmark.setup start -->
 ```bash
