@@ -202,9 +202,9 @@ kustomize edit set image REPLACE_MODEL_SERVER_IMAGE=${MODELSERVER_IMAGE}
 cd -
 ```
 
-With `VLLM_PLUGINS=modelexpress` set (already in `patch-vllm.yaml`), vLLM logs `Registered model loader ... with load format mx` at startup.
+vLLM 0.23.0 and newer recognize `--load-format modelexpress` natively once the client package is installed. The `VLLM_PLUGINS=modelexpress` env in `patch-vllm.yaml` is only needed for older vLLM bases and is harmless on newer ones.
 
-> The 0.5.0 client registers two load-format names: the canonical `modelexpress` and the `mx` alias. This guide uses `--load-format=mx`. Both work.
+> The 0.5.0 client keeps `mx` as a backward-compatible alias for the canonical `modelexpress` load format. This guide uses `--load-format=mx`. Both work.
 
 ## Installation Instructions
 
@@ -638,11 +638,14 @@ Two operational notes:
 ### Security: lock down the ModelExpress metadata broker
 
 > [!NOTE]
-> The broker's gRPC API (`:8001`) accepts any caller by default. On a shared cluster, apply both controls in this section: **broker-native ServiceAccount authentication** (ModelExpress 0.5.0+) to authenticate and authorize callers, and **Istio mTLS** to encrypt the transport. They work together. Enforce mode needs an encrypted transport (per the upstream auth docs), because the bearer token otherwise crosses the wire in cleartext. On a single-tenant cluster you can skip both.
+> The broker's gRPC API (`:8001`) accepts any caller by default. On a shared cluster, apply both controls in this section: **broker-native ServiceAccount authentication** to authenticate and authorize callers, and **Istio mTLS** to encrypt the transport. They work together. Enforce mode needs an encrypted transport (per the upstream auth docs), because the bearer token otherwise crosses the wire in cleartext. On a single-tenant cluster you can skip both.
 
 **Scope.** Both controls cover the gRPC **control plane**. The weight transfers themselves go over **RDMA, which bypasses the mesh**. Restrict that path with `NetworkPolicy` or at the fabric layer if you need to. The decode pods join the mesh but **exclude the NIXL/worker ports from interception**, so the P2P data path stays untouched.
 
 #### ServiceAccount authentication (broker-native)
+
+> [!WARNING]
+> ServiceAccount auth is merged upstream but **not in the `0.5.0` release this guide pins**. It needs server and client builds from ModelExpress `main` (or the next release; update the pins when it tags). A `0.5.0` server ignores the `MODEL_EXPRESS_SECURITY_*` env vars and stays open, and the verification step below will show the probe succeeding. On the `0.5.0` pins, use the Istio controls for both encryption and authorization.
 
 The server authenticates every RPC (except health checks) by verifying the caller's projected ServiceAccount token through the Kubernetes `TokenReview` API in-process; no sidecar is needed. It then authorizes the extracted `<namespace>:<serviceaccount>` against an exact-match allowlist.
 
