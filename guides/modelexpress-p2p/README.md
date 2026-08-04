@@ -637,7 +637,7 @@ Two operational notes:
 > [!NOTE]
 > The broker's gRPC API (`:8001`) does not authenticate callers in the `0.5.0` release, so on a shared cluster restrict who can talk to it. This section does that with Istio mTLS plus an AuthorizationPolicy. (Optional, requires Istio; skip it on a single-tenant cluster.)
 
-**Scope.** This covers the gRPC **control plane**. The weight transfers themselves go over **RDMA, which bypasses the mesh**. Restrict that path with `NetworkPolicy` or at the fabric layer if you need to. The decode pods join the mesh but **exclude the NIXL/worker ports from interception**, so the P2P data path stays untouched.
+**Scope.** These policies protect only the broker's gRPC API. The weight transfers themselves ride the RDMA fabric, which the mesh never sees; this guide assumes that fabric is trusted. The decode pods join the mesh with the NIXL/worker ports excluded from the sidecar, so weight transfer keeps working.
 
 > **Pre-stage weights when the mesh is on.** With a sidecar injected, the seed pod's large HuggingFace download can stall behind the sidecar proxy (the gRPC control plane and small API calls are fine; the multi-GB transfer is the problem). Point the seed at a pre-staged checkpoint (for example, the prewarmed `fst-model-cache` NFS PVC, mounted at the model path) instead of downloading from HF in-mesh. Receivers are unaffected, because they pull over RDMA, which bypasses the sidecar.
 
