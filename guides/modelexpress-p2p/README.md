@@ -49,8 +49,8 @@ Use P2P weight transfer when:
 and [NeMo-RL](https://github.com/NVIDIA-NeMo/RL) run vLLM rollout workers with
 `enforce_eager=True`. Every policy weight update invalidates cudagraphs, and
 re-capturing them between training steps costs too much time. For this
-audience, the cudagraph capture caveat (see "Optional: Share torch.compile
-cache across pods" below) does not apply. Add `--enforce-eager` to the args
+audience, the cudagraph capture caveat (see "Optional: Reuse JIT compile
+caches across pods" below) does not apply. Add `--enforce-eager` to the args
 in `patch-vllm.yaml` (or omit `--load-format=mx`'s cudagraph-related
 compilation entirely) to put receiver pod-Ready time in the 30-40 second range.
 
@@ -489,9 +489,32 @@ kubectl wait --for=delete pod -l llm-d.ai/guide=<test> -n ${NAMESPACE} --timeout
 
 Keep the `fst-model-cache` PVC between runs (the download is the expensive part). Delete it only when you are fully done.
 
-## Optional: Share torch.compile cache across pods
+## Optional: Reuse JIT compile caches across pods
 
-Once weight transfer is sub-second, vLLM's `torch.compile` becomes the bottleneck for receiver pod-Ready time. The bootstrap pod compiles the model graph and stores the AOT artifacts under `/.cache/vllm` (the container's `/.cache` mount; `VLLM_CACHE_ROOT=/.cache/vllm`). If you back that path with a `ReadWriteMany` PVC, receivers reuse the cached graphs instead of recompiling per pod.
+Once weight transfer is sub-second, vLLM's `torch.compile` becomes the bottleneck for receiver pod-Ready time. The bootstrap pod compiles the model graph and fills its JIT caches. Receivers can reuse those caches instead of recompiling per pod. There are two ways to move them.
+
+### Option A: P2P cache artifact transfer (ModelExpress 0.5.0+)
+
+The 0.5.0 artifact transfer protocol extends the NIXL path beyond weights to file-backed cache artifacts. Set `MX_ARTIFACT_TRANSFER=1` on the decode pods (it applies to both source and target roles). Before model initialization, receivers install compatible torch.compile (TorchInductor), Triton, DeepGEMM, TileLang, CuTe DSL, and FlashInfer caches, including persistent autotune files, from a ready source. No shared storage is needed.
+
+```yaml
+# add to the modelserver container env in base/patch-vllm.yaml
+- name: MX_ARTIFACT_TRANSFER
+  value: "1"
+```
+
+Notes on this path:
+
+* It needs the P2P metadata path (`MX_P2P_METADATA=1`, the default) and a central-coordinator backend. This guide's `kubernetes` backend qualifies; the decentralized `k8s-service` backend does not publish artifact discovery metadata yet.
+* The source seals and publishes cache bundles only after the engine reports healthy (`MX_ARTIFACT_READY_URL`, default `http://127.0.0.1:8000/health` for vLLM). Receivers that start after the seed is Ready get the caches; a cold N-replica apply where all pods race up may not.
+* Bundles stage as tars under `MX_ARTIFACT_BUNDLE_ROOT` (default `$TMPDIR/modelexpress-artifacts`), then install into the runtime cache directories. The guide's `/.cache` and `/.triton` emptyDir mounts are writable, so no manifest change is needed.
+* Compatibility is digest-gated (compile config, accelerator family). An incompatible artifact is skipped and the receiver recompiles; it does not fail the load.
+* Cudagraph capture is not a file-backed artifact. It still costs per pod on this path and on the PVC path below.
+* `MX_ARTIFACT_TRANSFER_CHUNK_SIZE` (default 64 MiB) trades RPC overhead against registered DRAM buffer memory on both ends.
+
+### Option B: Shared RWX PVC
+
+vLLM stores the AOT compile artifacts under `/.cache/vllm` (the container's `/.cache` mount; `VLLM_CACHE_ROOT=/.cache/vllm`). If you back that path with a `ReadWriteMany` PVC, receivers reuse the cached graphs from shared storage instead.
 
 Layer the `shared-compile-cache` kustomize component on top of your provider overlay:
 
@@ -592,7 +615,7 @@ The leading column is per-TP-worker weight-load time (vLLM's `Loading weights to
 
 In this environment, the P2P transfer moved a 70.6 GB TP shard HBM→HBM in 2.7 s at about 210 Gbps. The measured storage-backed paths ranged from 11.6 s to 30.2 s for the same shard size, with the GDS limitations noted above. Treat these as environment-specific observations. Storage configuration, GDS availability, filesystem behavior, model format, and vLLM settings can change results a lot.
 
-> **Why the scale-out wall clock can move less than weight-transfer time:** for a 70B model, end-to-end pod-Ready time includes vLLM engine init and `torch.compile`/cudagraph capture. This stays the same across paths when you hold measurement controls constant. Weight loading is one slice of total Ready time, and that slice becomes more visible for larger models, wider fan-outs, and `--enforce-eager` workloads (RL rollouts) where there is no cudagraph capture cost. Layer [shared-compile-cache](#optional-share-torchcompile-cache-across-pods) if you also want to reduce compile cost.
+> **Why the scale-out wall clock can move less than weight-transfer time:** for a 70B model, end-to-end pod-Ready time includes vLLM engine init and `torch.compile`/cudagraph capture. This stays the same across paths when you hold measurement controls constant. Weight loading is one slice of total Ready time, and that slice becomes more visible for larger models, wider fan-outs, and `--enforce-eager` workloads (RL rollouts) where there is no cudagraph capture cost. To also reduce compile cost, [reuse JIT caches across pods](#optional-reuse-jit-compile-caches-across-pods).
 >
 > The optional LOTA / object-cache test was not run (it needs a provisioned object bucket and S3 credentials). Its path is documented as a stretch row above.
 
