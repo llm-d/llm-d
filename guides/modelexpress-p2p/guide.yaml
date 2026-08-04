@@ -102,9 +102,6 @@ cleanup:
         # If you applied the Istio hardening, remove the policies (and the ns label):
         kubectl delete -n ${NAMESPACE} -f ${REPO_ROOT}/guides/${GUIDE_NAME}/security/istio-mtls-authz.yaml --ignore-not-found
         kubectl label namespace ${NAMESPACE} istio-injection- 2>/dev/null || true
-        # If you enabled ServiceAccount auth, the ClusterRoleBinding is cluster-scoped
-        # and survives namespace deletion — remove it explicitly:
-        kubectl delete clusterrolebinding modelexpress-tokenreview-${NAMESPACE} --ignore-not-found
   measurement:
     - run: |
         # If you ran the storage-backed measurement workloads, delete those overlays and the prewarm Job:

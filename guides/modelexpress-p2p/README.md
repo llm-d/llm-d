@@ -555,9 +555,6 @@ kubectl delete -n ${NAMESPACE} -f ${REPO_ROOT}/guides/${GUIDE_NAME}/modelexpress
 # If you applied the Istio hardening, remove the policies (and the ns label):
 kubectl delete -n ${NAMESPACE} -f ${REPO_ROOT}/guides/${GUIDE_NAME}/security/istio-mtls-authz.yaml --ignore-not-found
 kubectl label namespace ${NAMESPACE} istio-injection- 2>/dev/null || true
-# If you enabled ServiceAccount auth, the ClusterRoleBinding is cluster-scoped
-# and survives namespace deletion — remove it explicitly:
-kubectl delete clusterrolebinding modelexpress-tokenreview-${NAMESPACE} --ignore-not-found
 
 # If you ran the storage-backed measurement workloads, delete those overlays and the prewarm Job:
 kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/gpu/vllm/fastsafetensors-nfs/ --ignore-not-found
@@ -638,63 +635,18 @@ Two operational notes:
 ### Security: lock down the ModelExpress metadata broker
 
 > [!NOTE]
-> The broker's gRPC API (`:8001`) accepts any caller by default. On a shared cluster, apply both controls in this section: **broker-native ServiceAccount authentication** to authenticate and authorize callers, and **Istio mTLS** to encrypt the transport. They work together. Enforce mode needs an encrypted transport (per the upstream auth docs), because the bearer token otherwise crosses the wire in cleartext. On a single-tenant cluster you can skip both.
+> The broker's gRPC API (`:8001`) does not authenticate callers in the `0.5.0` release, so on a shared cluster restrict who can talk to it. This section does that with Istio mTLS plus an AuthorizationPolicy. (Optional, requires Istio; skip it on a single-tenant cluster.)
 
-**Scope.** Both controls cover the gRPC **control plane**. The weight transfers themselves go over **RDMA, which bypasses the mesh**. Restrict that path with `NetworkPolicy` or at the fabric layer if you need to. The decode pods join the mesh but **exclude the NIXL/worker ports from interception**, so the P2P data path stays untouched.
-
-#### ServiceAccount authentication (broker-native)
-
-> [!WARNING]
-> ServiceAccount auth is merged upstream but **not in the `0.5.0` release this guide pins**. It needs server and client builds from ModelExpress `main` (or the next release; update the pins when it tags). A `0.5.0` server ignores the `MODEL_EXPRESS_SECURITY_*` env vars and stays open, and the verification step below will show the probe succeeding. On the `0.5.0` pins, use the Istio controls for both encryption and authorization.
-
-The server authenticates every RPC (except health checks) by verifying the caller's projected ServiceAccount token through the Kubernetes `TokenReview` API in-process; no sidecar is needed. It then authorizes the extracted `<namespace>:<serviceaccount>` against an exact-match allowlist.
-
-**1. Grant the broker TokenReview access and enable enforce mode.** `TokenReview` is a cluster-scoped create, so the broker's ServiceAccount needs a `ClusterRoleBinding` to the built-in `system:auth-delegator` role (cluster-admin action). The env patch pins the audience to `modelexpress` and allowlists this guide's decode ServiceAccount:
-
-```bash
-: "${NAMESPACE:?export NAMESPACE first}"
-envsubst '$NAMESPACE' < ${REPO_ROOT}/guides/${GUIDE_NAME}/security/serviceaccount-auth.yaml \
-    | kubectl apply -f -
-kubectl patch deploy modelexpress-server -n ${NAMESPACE} \
-    --patch "$(envsubst '$NAMESPACE' < ${REPO_ROOT}/guides/${GUIDE_NAME}/security/patch-server-auth.yaml)"
-kubectl rollout status -n ${NAMESPACE} deploy/modelexpress-server --timeout=5m
-```
-
-`enforce` refuses to start if the audience list or the allowlist is empty, so a mistyped env name fails loudly instead of accepting everything.
-
-**2. Mount the projected token into the decode pods.** Layer the `serviceaccount-auth` component onto your model-server overlay. It projects a ServiceAccount token with the matching `modelexpress` audience at the client's default `MX_AUTH_TOKEN_PATH` (`/var/run/secrets/tokens/modelexpress`). The client attaches the token automatically when the file exists, and sends nothing when it does not, so the same image works against an auth-off broker:
-
-```yaml
-# guides/modelexpress-p2p/modelserver/gpu/vllm/coreweave/kustomization.yaml (or your overlay)
-components:
-  - ../components/serviceaccount-auth
-```
-
-Re-apply the model-server overlay (Step 3) to roll the pods with the token mount.
-
-**3. Verify enforcement.** A caller without a valid allowlisted token must be rejected while the decode pods keep publishing and discovering sources:
-
-```bash
-kubectl run mx-authprobe --rm -it -n ${NAMESPACE} --image=nicolaka/netshoot --restart=Never \
-    -- grpcurl -plaintext -max-time 5 modelexpress-server:8001 list
-# Expect Unauthenticated / PermissionDenied — this pod runs as the default
-# ServiceAccount and presents no token. Then confirm the pool still scales:
-kubectl get modelmetadata -n ${NAMESPACE} \
-    -o jsonpath='{range .items[*]}{.metadata.name}{"\t"}{.status.conditions[?(@.type=="Ready")].status}{"\n"}{end}'
-```
-
-Two operational notes from the upstream docs: enforcement happens at RPC start (an accepted long-lived stream keeps flowing until the next RPC after revocation, bounded by `MODEL_EXPRESS_SECURITY_CACHE_TTL_SECS`, default 60s), and backend `TokenReview` errors return `UNAVAILABLE` without being cached. Keep the gRPC port off untrusted networks.
-
-#### Istio mTLS (transport encryption)
+**Scope.** This covers the gRPC **control plane**. The weight transfers themselves go over **RDMA, which bypasses the mesh**. Restrict that path with `NetworkPolicy` or at the fabric layer if you need to. The decode pods join the mesh but **exclude the NIXL/worker ports from interception**, so the P2P data path stays untouched.
 
 > **Pre-stage weights when the mesh is on.** With a sidecar injected, the seed pod's large HuggingFace download can stall behind the sidecar proxy (the gRPC control plane and small API calls are fine; the multi-GB transfer is the problem). Point the seed at a pre-staged checkpoint (for example, the prewarmed `fst-model-cache` NFS PVC, mounted at the model path) instead of downloading from HF in-mesh. Receivers are unaffected, because they pull over RDMA, which bypasses the sidecar.
 
 What gets applied:
 
-* A `PeerAuthentication` (STRICT) scoped to the `modelexpress-server` workload. The broker only accepts mutually-authenticated callers, which also gives the ServiceAccount auth above the encrypted transport it needs. It is workload-scoped, not namespace-wide, so model-serving traffic (EPP → decode `:8000`) and other workloads are unaffected.
-* An `AuthorizationPolicy` on the broker that allows only this guide's decode ServiceAccount (`modelexpress-p2p-nvidia-gpu-vllm-sa`) to reach `:8001`. An ALLOW policy that selects a workload implicitly denies everyone else. With broker-native auth enforced, this is a second, mesh-level allowlist. Keeping both means a misconfiguration in either layer still leaves the broker closed.
+* A `PeerAuthentication` (STRICT) scoped to the `modelexpress-server` workload. The broker only accepts mutually-authenticated callers. It is workload-scoped, not namespace-wide, so model-serving traffic (EPP → decode `:8000`) and other workloads are unaffected.
+* An `AuthorizationPolicy` on the broker that allows only this guide's decode ServiceAccount (`modelexpress-p2p-nvidia-gpu-vllm-sa`) to reach `:8001`. An ALLOW policy that selects a workload implicitly denies everyone else.
 
-##### 1. Enable sidecar injection and put decode in the mesh
+#### 1. Enable sidecar injection and put decode in the mesh
 
 ```bash
 # Requires Istio. Inject sidecars into the broker (and the namespace generally):
@@ -723,7 +675,7 @@ kubectl get pod -n ${NAMESPACE} -l llm-d.ai/guide=modelexpress-p2p \
 # -> 5555,5556,6555,6556
 ```
 
-##### 2. Apply mTLS + the AuthorizationPolicy
+#### 2. Apply mTLS + the AuthorizationPolicy
 
 `${NAMESPACE}` is expanded into the AuthorizationPolicy principal (the SPIFFE ID embeds the namespace):
 
@@ -733,7 +685,7 @@ envsubst '$NAMESPACE' < ${REPO_ROOT}/guides/${GUIDE_NAME}/security/istio-mtls-au
     | kubectl apply -n ${NAMESPACE} -f -
 ```
 
-##### 3. Verify it's enforced
+#### 3. Verify it's enforced
 
 ```bash
 # P2P still works: scale out and confirm receivers reach Ready (sidecars + mTLS
