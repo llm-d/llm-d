@@ -51,6 +51,16 @@ We recommend each model server's **native** offloading path: the `OffloadingConn
 > [!NOTE]
 > A `gpt-oss-120b` variant (TP=1 on NVIDIA H100, 100 GB CPU offload) is also benchmarked — see [gpt-oss-120B benchmarking results](./benchmark-results/vllm-gpt-oss-120b-h100.md).
 
+> [!IMPORTANT]
+> **Serving models with mismatched attention head dimensions (e.g. Gemma 4) under KV offloading:**
+> enabling the vLLM native `OffloadingConnector` disables vLLM's Hybrid KV Cache Manager (HMA). Most
+> models still run fine because their attention layers share one KV spec and collapse into a single
+> unified group — this includes sliding-window + full-attention models (e.g `gpt-oss-120b`) and Mamba +
+> attention hybrids ( e.g `Nemotron, whose attention layers are uniform and whose SSM state uses a separate
+> cache). **Gemma 4 does not:** its sliding-window and full-attention layers use *different* head
+> dimensions, so their KV specs cannot be unified and the server fails to start. To serve
+> such a model, add`--no-disable-hybrid-kv-cache-manager` to the vLLM args to keep HMA enabled.
+
 ---
 
 ## Prerequisites
@@ -143,7 +153,7 @@ Deploy **one** of the paths below. Each `kubectl apply -k` targets an overlay di
 #### vLLM native — CPU RAM
 
 ```bash
-export MODEL_SERVER=vllm # vllm 
+export MODEL_SERVER=vllm # vllm
 export CONNECTOR=native  # native
 export VARIANT=cpu       # cpu | fs
 export INFRA_PROVIDER=base  # base | gke
@@ -209,7 +219,7 @@ k apply -k ${REPO_ROOT}/helpers/mooncake-master-store/monitoring
 After that you can deploy the modelserver manifests:
 
 ```bash
-export MODEL_SERVER=vllm    # vllm 
+export MODEL_SERVER=vllm    # vllm
 export VARIANT=cpu          # cpu | fs
 export INFRA_PROVIDER=base  # base
 kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/tiered-prefix-cache/modelserver/gpu/${MODEL_SERVER}/mooncake-store/${VARIANT}/${INFRA_PROVIDER}
@@ -461,9 +471,9 @@ llmdbenchmark \
 
 Empirical benchmark reports demonstrating the impact of multi-tier prefix-cache offloading relative to HBM-only serving configurations under high-cache workloads:
 
-- **[Qwen/Qwen3-32B on vLLM (16×H100 CPU Offload)](./benchmark-results/vllm-qwen3-32b-h100.md)**: Headline throughput and latency comparisons across 16×H100 GPUs with CPU RAM offloading.
-- **[Qwen/Qwen3-32B on SGLang (16×H100 CPU Offload)](./benchmark-results/sglang-qwen3-32b-h100.md)**: Headline throughput and latency comparisons across 16×H100 GPUs with SGLang HiCache CPU RAM offloading.
-- **[Qwen/Qwen3-32B on SGLang (16×H100 Lustre Offload)](./benchmark-results/sglang-qwen3-32b-h100-lustre.md)**: Benchmark comparisons for shared POSIX filesystem offloading using SGLang HiCache native file backend.
-- **[openai/gpt-oss-120b on vLLM (16×H100 CPU Offload)](./benchmark-results/vllm-gpt-oss-120b-h100.md)**: Stage-by-stage throughput, latency, TPOT, and fleet cache hit rate breakdowns across 5–40 QPS.
-- **[Qwen/Qwen3-32B on vLLM (TPU v6e/v7 CPU Offload)](./benchmark-results/vllm-qwen3-32b-tpuv7.md)**: Headline throughput and latency effect of CPU RAM prefix offloading on Google TPU architectures.
-- **[Qwen/Qwen3-32B on vLLM (16×H100 Lustre Offload)](./benchmark-results/vllm-qwen3-32b-h100-lustre.md)**: Benchmark comparisons for shared POSIX filesystem offloading using LMCache and llm-d filesystem connectors.
+* **[Qwen/Qwen3-32B on vLLM (16×H100 CPU Offload)](./benchmark-results/vllm-qwen3-32b-h100.md)**: Headline throughput and latency comparisons across 16×H100 GPUs with CPU RAM offloading.
+* **[Qwen/Qwen3-32B on SGLang (16×H100 CPU Offload)](./benchmark-results/sglang-qwen3-32b-h100.md)**: Headline throughput and latency comparisons across 16×H100 GPUs with SGLang HiCache CPU RAM offloading.
+* **[Qwen/Qwen3-32B on SGLang (16×H100 Lustre Offload)](./benchmark-results/sglang-qwen3-32b-h100-lustre.md)**: Benchmark comparisons for shared POSIX filesystem offloading using SGLang HiCache native file backend.
+* **[openai/gpt-oss-120b on vLLM (16×H100 CPU Offload)](./benchmark-results/vllm-gpt-oss-120b-h100.md)**: Stage-by-stage throughput, latency, TPOT, and fleet cache hit rate breakdowns across 5–40 QPS.
+* **[Qwen/Qwen3-32B on vLLM (TPU v6e/v7 CPU Offload)](./benchmark-results/vllm-qwen3-32b-tpuv7.md)**: Headline throughput and latency effect of CPU RAM prefix offloading on Google TPU architectures.
+* **[Qwen/Qwen3-32B on vLLM (16×H100 Lustre Offload)](./benchmark-results/vllm-qwen3-32b-h100-lustre.md)**: Benchmark comparisons for shared POSIX filesystem offloading using LMCache and llm-d filesystem connectors.
