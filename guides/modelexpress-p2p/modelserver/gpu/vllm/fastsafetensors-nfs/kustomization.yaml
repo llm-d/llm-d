@@ -5,15 +5,12 @@ kind: Kustomization
 resources:
   - ../../../../../recipes/modelserver/base/single-host/default
 
-# prewarm-job.yaml is deliberately NOT a resource here: listing it would
-# namePrefix the PVC per-overlay and force a separate 140GB download per
-# test. Apply it standalone so both tests share the literal `fst-model-cache`.
+# The prewarm Job is deliberately in a separate overlay without namePrefix, so
+# both storage tests share the literal `fst-model-cache` PVC.
 namePrefix: fastsafetensors-nfs-nvidia-gpu-vllm-
 
-images:
-  - name: REPLACE_MODEL_SERVER_IMAGE
-    newName: ghcr.io/llm-d/llm-d-cuda
-    newTag: v0.7.0
+components:
+  - ../../../../../recipes/modelserver/components/images/gpu-vllm
 
 labels:
   - pairs:
@@ -55,3 +52,15 @@ labels:
         create: true
 patches:
   - path: patch-vllm.yaml
+
+replacements:
+  - source:
+      kind: Deployment
+      name: decode
+      fieldPath: spec.template.spec.containers.[name=modelserver].image
+    targets:
+      - select:
+          kind: Deployment
+          name: decode
+        fieldPaths:
+          - spec.template.spec.initContainers.[name=install-fastsafetensors].image

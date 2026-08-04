@@ -65,7 +65,7 @@ compilation entirely) puts receiver pod-Ready time in the 30–40 second range.
 | Tensor Parallelism | 2 |
 | Total GPUs | 4 |
 | Fabric resource | `rdma/ib` (2 per pod, via the `coreweave` overlay) |
-| Image | `llm-d-cuda:v0.7.0` + ModelExpress client baked in (build it yourself, see [Image](#image-building-an-llm-d-cuda--modelexpress-image)) |
+| Image | Shared GPU vLLM image + ModelExpress client baked in (build it yourself, see [Image](#image-building-a-modelexpress-enabled-model-server-image)) |
 | MX backend | `kubernetes` (CRDs, no Redis) |
 | Weight transport | NIXL/RDMA, GPU HBM -> GPU HBM |
 
@@ -85,56 +85,64 @@ compilation entirely) puts receiver pod-Ready time in the 30–40 second range.
   ```bash
   export GAIE_VERSION=v1.5.0
   export ROUTER_CHART_VERSION=v0
+  export ROUTER_STANDALONE_CHART=oci://ghcr.io/llm-d/charts/llm-d-router-standalone-dev
+  export ROUTER_GATEWAY_CHART=oci://ghcr.io/llm-d/charts/llm-d-router-gateway-dev
   export GUIDE_NAME="modelexpress-p2p"
   # Override by exporting NAMESPACE before running these commands; the default
   # is used only if it's unset. Every command below is namespace-parameterized.
   export NAMESPACE=${NAMESPACE:-llm-d-modelexpress-p2p}
+  export REPO_ROOT=$(realpath $(git rev-parse --show-toplevel))
   ```
 
 * Install the Gateway API Inference Extension CRDs:
 
   ```bash
-  kubectl apply -k "https://github.com/kubernetes-sigs/gateway-api-inference-extension/config/crd?ref=${GAIE_VERSION}"
+  kubectl apply -f https://github.com/kubernetes-sigs/gateway-api-inference-extension/releases/download/${GAIE_VERSION}/v1-manifests.yaml
   ```
 
 * Create the target namespace:
 
   ```bash
-  kubectl create namespace ${NAMESPACE}
+  kubectl create namespace ${NAMESPACE} --dry-run=client -o yaml | kubectl apply -f -
   ```
 
 * The ModelExpress CRDs installed cluster-wide (one-time, by a cluster admin). This guide vendors the two CRDs (pinned to the upstream `v0.4.0` tag) so the shape stays locked against the `modelexpress-server:0.4.0` pin instead of drifting with upstream `main`:
 
   ```bash
-  kubectl apply -f guides/${GUIDE_NAME}/modelexpress/crds.yaml
+  kubectl apply -f ${REPO_ROOT}/guides/${GUIDE_NAME}/modelexpress/crds.yaml
   ```
 
 * An `nvcr-imagepullsecret` in the target namespace granting access to `nvcr.io/nvidia/ai-dynamo/modelexpress-server`. See the [ModelExpress Helm README](https://github.com/ai-dynamo/modelexpress/blob/main/helm/README.md#1-create-nvidia-container-registry-secret) for the secret recipe. Alternatively, you can build this image yourself and push to a local registry of your choice.
-* A HuggingFace token secret. **Llama-3.3-70B is gated, so this is required** (the seed pod and the fastsafetensors prewarm Job both need it):
+* [Create the `llm-d-hf-token` secret in your target namespace with the key `HF_TOKEN` matching a valid HuggingFace token](../../helpers/hf-token.md). **Llama-3.3-70B is gated, so this is required** (the seed pod and the fastsafetensors prewarm Job both need it):
 
+<!-- llm-d-cicd:skip start -->
   ```bash
+  export HF_TOKEN=<your HuggingFace token>
   kubectl create secret generic llm-d-hf-token \
-      --from-literal=HF_TOKEN=<your-token> -n ${NAMESPACE}
+    --from-literal="HF_TOKEN=${HF_TOKEN}" \
+    --namespace "${NAMESPACE}" \
+    --dry-run=client -o yaml | kubectl apply -f -
   ```
+<!-- llm-d-cicd:skip end -->
 
-### Image: building an llm-d-cuda + ModelExpress image
+### Image: building a ModelExpress-enabled model server image
 
-The `mx` load-format plugin lives in the [`modelexpress` Python client](https://github.com/ai-dynamo/modelexpress/tree/main/modelexpress_client/python), a pure-Python vLLM plugin (it imports vLLM, NIXL, and gRPC, all already present in `llm-d-cuda`).
+The `mx` load-format plugin lives in the [`modelexpress` Python client](https://github.com/ai-dynamo/modelexpress/tree/main/modelexpress_client/python), a pure-Python vLLM plugin. Build a thin derived image on top of the shared GPU vLLM image from `guides/recipes/modelserver/components/images/gpu-vllm` so this guide tracks the project default when that component is updated.
 
 > [!WARNING]
-> **`ghcr.io/llm-d/llm-d-cuda:v0.7.0` does not ship the client** (verified: no `modelexpress` package, `mx` load-format unregistered). You need an image with the client baked in. Build a thin one on top of the base — this is the upstream [ModelExpress client Dockerfile](https://github.com/ai-dynamo/modelexpress/blob/main/examples/p2p_transfer_k8s/client/vllm/Dockerfile) recipe adapted to an `llm-d-cuda` base:
+> The shared GPU vLLM image does not ship the ModelExpress client. You need an image with the client baked in. This Dockerfile follows the upstream [ModelExpress client Dockerfile](https://github.com/ai-dynamo/modelexpress/blob/main/examples/p2p_transfer_k8s/client/vllm/Dockerfile) pattern while taking its base image from the central llm-d image component:
 
 ```dockerfile
 # guides/modelexpress-p2p/image/Dockerfile
-FROM ghcr.io/llm-d/llm-d-cuda:v0.7.0
+ARG BASE_IMAGE
+FROM ${BASE_IMAGE}
 
 # The ModelExpress vLLM client plugin (registers the `mx` / `modelexpress`
 # load-format). Pure Python, so no native build step. `--no-deps` keeps it
-# from shadowing the image's pinned vllm / torch / nixl. The llm-d-cuda
-# image ships `uv`, not `pip`, so install into a dedicated prefix and put it
-# on PYTHONPATH (the image's venv stays untouched).
+# from shadowing the image's pinned vllm / torch / nixl. Install into a
+# dedicated prefix and put it on PYTHONPATH so the base image stays untouched.
 ARG MODELEXPRESS_VERSION=0.4.0
-RUN uv pip install --target=/opt/modelexpress --no-deps --no-cache \
+RUN python3 -m pip install --target=/opt/modelexpress --no-deps --no-cache-dir \
         "modelexpress==${MODELEXPRESS_VERSION}"
 ENV PYTHONPATH=/opt/modelexpress
 ```
@@ -142,15 +150,22 @@ ENV PYTHONPATH=/opt/modelexpress
 Build it and push to a registry your cluster can pull from:
 
 ```bash
-export MODELSERVER_IMAGE=<your-registry>/llm-d-cuda-modelexpress:v0.7.0
-docker build -t ${MODELSERVER_IMAGE} guides/${GUIDE_NAME}/image/
-docker push ${MODELSERVER_IMAGE}
+export BASE_MODELSERVER_IMAGE=$(
+  yq -r '.images[] | select(.name == "REPLACE_MODEL_SERVER_IMAGE") | "\(.newName):\(.newTag)"' \
+    ${REPO_ROOT}/guides/recipes/modelserver/components/images/gpu-vllm/kustomization.yaml
+)
+export MODELSERVER_IMAGE=<your-registry>/modelexpress-p2p-vllm:latest
+docker build \
+  --build-arg "BASE_IMAGE=${BASE_MODELSERVER_IMAGE}" \
+  -t "${MODELSERVER_IMAGE}" \
+  ${REPO_ROOT}/guides/${GUIDE_NAME}/image/
+docker push "${MODELSERVER_IMAGE}"
 ```
 
-Then point the model-server overlay at it (the `images:` entry in `base/kustomization.yaml` ships a `<your-registry>/...` placeholder):
+Then point the model-server overlay at it (the overlay ships a `<your-registry>/...` placeholder):
 
 ```bash
-cd guides/${GUIDE_NAME}/modelserver/gpu/vllm/base
+cd ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/gpu/vllm/base
 kustomize edit set image REPLACE_MODEL_SERVER_IMAGE=${MODELSERVER_IMAGE}
 cd -
 ```
@@ -166,7 +181,7 @@ With `VLLM_PLUGINS=modelexpress` set (already in `patch-vllm.yaml`), vLLM logs `
 This step provisions the `kubernetes`-backend ModelExpress server, RBAC for the `ModelMetadata` / `ModelCacheEntry` CRDs, and a `modelexpress-server` Service that the inference pods will discover via DNS.
 
 ```bash
-kubectl apply -n ${NAMESPACE} -f guides/${GUIDE_NAME}/modelexpress/modelexpress-server.yaml
+kubectl apply -n ${NAMESPACE} -f ${REPO_ROOT}/guides/${GUIDE_NAME}/modelexpress/modelexpress-server.yaml
 kubectl rollout status -n ${NAMESPACE} deploy/modelexpress-server --timeout=5m
 ```
 
@@ -176,9 +191,9 @@ kubectl rollout status -n ${NAMESPACE} deploy/modelexpress-server --timeout=5m
 
 ```bash
 helm install ${GUIDE_NAME} \
-    oci://ghcr.io/llm-d/charts/llm-d-router-standalone-dev \
-    -f guides/recipes/router/base.values.yaml \
-    -f guides/${GUIDE_NAME}/router/${GUIDE_NAME}.values.yaml \
+    ${ROUTER_STANDALONE_CHART} \
+    -f ${REPO_ROOT}/guides/recipes/router/base.values.yaml \
+    -f ${REPO_ROOT}/guides/${GUIDE_NAME}/router/${GUIDE_NAME}.values.yaml \
     -n ${NAMESPACE} --version ${ROUTER_CHART_VERSION}
 ```
 
@@ -187,15 +202,15 @@ helm install ${GUIDE_NAME} \
 
 To use a Kubernetes Gateway managed proxy rather than the standalone version, follow these steps instead of applying the previous Helm chart:
 
-1. _Deploy a Kubernetes Gateway_ by following one of [the gateway guides](../prereq/gateways).
+1. _Deploy a Kubernetes Gateway_ by following one of [the gateway guides](../../docs/infrastructure/gateway).
 2. _Deploy the llm-d router and an HTTPRoute_ that connects it to the Gateway as follows:
 
 ```bash
 export PROVIDER_NAME=gke # options: none, gke, agentgateway, istio
 helm install ${GUIDE_NAME} \
-    oci://ghcr.io/llm-d/charts/llm-d-router-gateway-dev \
-    -f guides/recipes/router/base.values.yaml \
-    -f guides/${GUIDE_NAME}/router/${GUIDE_NAME}.values.yaml \
+    ${ROUTER_GATEWAY_CHART} \
+    -f ${REPO_ROOT}/guides/recipes/router/base.values.yaml \
+    -f ${REPO_ROOT}/guides/${GUIDE_NAME}/router/${GUIDE_NAME}.values.yaml \
     --set provider.name=${PROVIDER_NAME} \
     --set httpRoute.create=true \
     --set httpRoute.inferenceGatewayName=llm-d-inference-gateway \
@@ -207,13 +222,13 @@ helm install ${GUIDE_NAME} \
 ### 3. Deploy the Model Server
 
 > [!IMPORTANT]
-> This step needs the image you built in [the prerequisites](#image-building-an-llm-d-cuda--modelexpress-image); the base `images:` entry ships a `<your-registry>/...` placeholder that will not pull as-is.
+> This step needs the image you built in [the prerequisites](#image-building-a-modelexpress-enabled-model-server-image); the overlay ships a `<your-registry>/...` placeholder that will not pull as-is.
 
 The base overlay leaves fabric resources unset. Pick the provider overlay that matches how your cluster exposes RDMA NICs to pods:
 
 ```bash
 export INFRA_PROVIDER=coreweave # base | coreweave
-kubectl apply -n ${NAMESPACE} -k guides/${GUIDE_NAME}/modelserver/gpu/vllm/${INFRA_PROVIDER}/
+kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/gpu/vllm/${INFRA_PROVIDER}/
 ```
 
 | Overlay | What it adds |
@@ -281,7 +296,9 @@ export IP=$(kubectl get gateway llm-d-inference-gateway -n ${NAMESPACE} -o jsonp
 ```bash
 kubectl run curl-debug --rm -it \
     --image=cfmanteiga/alpine-bash-curl-jq \
+    --namespace="$NAMESPACE" \
     --env="IP=$IP" \
+    --env="NAMESPACE=$NAMESPACE" \
     -- /bin/bash
 ```
 
@@ -371,10 +388,10 @@ These measurement workloads sit outside the router on purpose: the router's `mod
 
 ### 1. Prewarm the checkpoint onto NFS (once)
 
-The prewarm Job + RWX PVC are applied standalone (not through a kustomize overlay) so the PVC keeps the literal name `fst-model-cache` and both fastsafetensors tests share the single download. The PVC requests the `shared-vast` StorageClass (CoreWeave's VAST-backed NFS, the cluster this guide was validated on); edit `prewarm-job.yaml` if your cluster's RWX-capable class is named differently:
+The prewarm Job + RWX PVC use their own kustomize overlay without a `namePrefix`, so the PVC keeps the literal name `fst-model-cache` and both fastsafetensors tests share the single download. The PVC requests the `shared-vast` StorageClass (CoreWeave's VAST-backed NFS, the cluster this guide was validated on); edit `fastsafetensors-prewarm/prewarm-job.yaml` if your cluster's RWX-capable class is named differently:
 
 ```bash
-kubectl apply -n ${NAMESPACE} -f guides/${GUIDE_NAME}/modelserver/gpu/vllm/fastsafetensors-nfs/prewarm-job.yaml
+kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/gpu/vllm/fastsafetensors-prewarm/
 kubectl wait --for=condition=complete job/fst-prewarm-llama33-70b -n ${NAMESPACE} --timeout=60m
 ```
 
@@ -384,7 +401,7 @@ This is the **one** HuggingFace download for all storage paths. It's idempotent:
 
 ```bash
 DECODE=fastsafetensors-nfs-nvidia-gpu-vllm-decode
-kubectl apply -n ${NAMESPACE} -k guides/${GUIDE_NAME}/modelserver/gpu/vllm/fastsafetensors-nfs/
+kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/gpu/vllm/fastsafetensors-nfs/
 
 # Seed: scale to 1 and wait Ready (reads the warm NFS PVC, not HuggingFace)
 kubectl scale deploy/${DECODE} -n ${NAMESPACE} --replicas=1
@@ -414,7 +431,7 @@ kubectl logs -n ${NAMESPACE} <pod> -c modelserver | grep -iE 'cuFile|GDS is not 
 ### 3. fastsafetensors off warm local NVMe (optional)
 
 ```bash
-kubectl apply -n ${NAMESPACE} -k guides/${GUIDE_NAME}/modelserver/gpu/vllm/fastsafetensors-localnvme/
+kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/gpu/vllm/fastsafetensors-localnvme/
 # Same scale-1-then-1->2 timing on deploy fastsafetensors-localnvme-nvidia-gpu-vllm-decode.
 # Confirm P2PDMA engaged vs nogds compat with the same grep as the NFS test.
 ```
@@ -432,7 +449,7 @@ kubectl get pod -n ${NAMESPACE} -l llm-d.ai/guide=<test> \
 Tear each test down before the next so they don't contend for GPUs (each is 4 GPUs at the default `replicas: 2`):
 
 ```bash
-kubectl delete -n ${NAMESPACE} -k guides/${GUIDE_NAME}/modelserver/gpu/vllm/<test>/
+kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/gpu/vllm/<test>/
 kubectl wait --for=delete pod -l llm-d.ai/guide=<test> -n ${NAMESPACE} --timeout=10m
 ```
 
@@ -471,17 +488,17 @@ The component:
 
 ```bash
 helm uninstall ${GUIDE_NAME} -n ${NAMESPACE}
-kubectl delete -n ${NAMESPACE} -k guides/${GUIDE_NAME}/modelserver/gpu/vllm/${INFRA_PROVIDER}/
-kubectl delete -n ${NAMESPACE} -f guides/${GUIDE_NAME}/modelexpress/modelexpress-server.yaml
+kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/gpu/vllm/${INFRA_PROVIDER}/
+kubectl delete -n ${NAMESPACE} -f ${REPO_ROOT}/guides/${GUIDE_NAME}/modelexpress/modelexpress-server.yaml
 
 # If you applied the Istio hardening, remove the policies (and the ns label):
-kubectl delete -n ${NAMESPACE} -f guides/${GUIDE_NAME}/security/istio-mtls-authz.yaml --ignore-not-found
+kubectl delete -n ${NAMESPACE} -f ${REPO_ROOT}/guides/${GUIDE_NAME}/security/istio-mtls-authz.yaml --ignore-not-found
 kubectl label namespace ${NAMESPACE} istio-injection- 2>/dev/null || true
 
 # If you ran the storage-backed measurement workloads, delete those overlays and the prewarm Job:
-kubectl delete -n ${NAMESPACE} -k guides/${GUIDE_NAME}/modelserver/gpu/vllm/fastsafetensors-nfs/ --ignore-not-found
-kubectl delete -n ${NAMESPACE} -k guides/${GUIDE_NAME}/modelserver/gpu/vllm/fastsafetensors-localnvme/ --ignore-not-found
-kubectl delete -n ${NAMESPACE} -f guides/${GUIDE_NAME}/modelserver/gpu/vllm/fastsafetensors-nfs/prewarm-job.yaml --ignore-not-found
+kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/gpu/vllm/fastsafetensors-nfs/ --ignore-not-found
+kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/gpu/vllm/fastsafetensors-localnvme/ --ignore-not-found
+kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/gpu/vllm/fastsafetensors-prewarm/ --ignore-not-found
 
 # Deleting the namespace removes the PVC objects too, but on a Retain-policy
 # StorageClass the backing volume is NOT reclaimed. Delete PVCs first if you
@@ -495,7 +512,7 @@ kubectl delete namespace ${NAMESPACE}
 Only do this if no other namespace in the cluster is running ModelExpress. Deleting the CRDs will cascade-delete every `ModelMetadata` and `ModelCacheEntry` object across all namespaces.
 
 ```bash
-kubectl delete -f guides/${GUIDE_NAME}/modelexpress/crds.yaml
+kubectl delete -f ${REPO_ROOT}/guides/${GUIDE_NAME}/modelexpress/crds.yaml
 ```
 
 ## How It Works
@@ -602,7 +619,7 @@ kubectl get pod -n ${NAMESPACE} -l llm-d.ai/guide=modelexpress-p2p \
 
 ```bash
 : "${NAMESPACE:?export NAMESPACE first}" # an empty namespace would render a principal that matches nothing
-envsubst '$NAMESPACE' < guides/${GUIDE_NAME}/security/istio-mtls-authz.yaml \
+envsubst '$NAMESPACE' < ${REPO_ROOT}/guides/${GUIDE_NAME}/security/istio-mtls-authz.yaml \
     | kubectl apply -n ${NAMESPACE} -f -
 ```
 

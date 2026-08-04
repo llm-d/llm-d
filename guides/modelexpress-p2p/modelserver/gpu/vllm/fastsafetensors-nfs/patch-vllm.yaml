@@ -7,17 +7,17 @@ spec:
   replicas: 2
   template:
     spec:
-      # fastsafetensors is NOT in llm-d-cuda; install it in an untimed init so
-      # the timed `vllm serve` never does a network install. --no-deps avoids
-      # shadowing the image's torch/vllm.
+      # Install fastsafetensors in an untimed init so the timed `vllm serve`
+      # never does a network install. --no-deps avoids shadowing the image's
+      # torch/vllm.
       initContainers:
         - name: install-fastsafetensors
-          # Placeholder so the images: transformer retags this with the main
-          # container.
+          # Placeholder; kustomize replacements copy the resolved modelserver
+          # image here after patches are applied.
           image: REPLACE_MODEL_SERVER_IMAGE
           command: ["/bin/sh", "-c"]
           args:
-            - "uv pip install --target=/pylibs --no-deps fastsafetensors"
+            - "python3 -m pip install --target=/pylibs --no-deps --no-cache-dir fastsafetensors"
           volumeMounts:
             - mountPath: /pylibs
               name: pylibs

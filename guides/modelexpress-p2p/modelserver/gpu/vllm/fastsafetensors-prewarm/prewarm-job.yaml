@@ -34,7 +34,7 @@ spec:
       restartPolicy: OnFailure
       containers:
         - name: hf-download
-          image: ghcr.io/llm-d/llm-d-cuda:v0.7.0
+          image: REPLACE_MODEL_SERVER_IMAGE
           command: ["/bin/sh", "-c"]
           args:
             - |

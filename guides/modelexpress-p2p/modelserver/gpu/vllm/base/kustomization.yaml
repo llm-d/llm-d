@@ -5,12 +5,13 @@ resources:
 
 namePrefix: modelexpress-p2p-nvidia-gpu-vllm-
 
-# Stock llm-d-cuda does NOT ship the ModelExpress client; build the image
-# from the README's Image section and point newName/newTag at it.
+# User-built derivative of the shared gpu-vllm image. The README reads the
+# central gpu-vllm component to set Dockerfile BASE_IMAGE, then this placeholder
+# is retagged to the derived image.
 images:
   - name: REPLACE_MODEL_SERVER_IMAGE
-    newName: <your-registry>/llm-d-cuda-modelexpress
-    newTag: v0.7.0
+    newName: <your-registry>/modelexpress-p2p-vllm
+    newTag: latest
 
 labels:
   - pairs:
