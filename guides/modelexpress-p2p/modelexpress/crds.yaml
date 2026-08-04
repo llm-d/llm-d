@@ -1,8 +1,7 @@
-# VENDORED from ai-dynamo/modelexpress @ refs/tags/v0.4.0 (examples/crds.yaml).
+# VENDORED from ai-dynamo/modelexpress @ refs/tags/v0.5.0 (examples/crds.yaml).
 # Pinned to the release tag so the CRD shape stays locked against the
-# modelexpress-server:0.4.0 pin instead of drifting with a moving `main`.
+# modelexpress-server:0.5.0 pin instead of drifting with a moving `main`.
 # Re-vendor when bumping the server image.
-#
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -46,7 +45,10 @@ spec:
               properties:
                 modelName:
                   type: string
-                  description: Full model name (e.g., meta-llama/Llama-3.1-405B-Instruct)
+                  description: Full model name (e.g., deepseek-ai/DeepSeek-V4-Pro)
+                sourceType:
+                  type: string
+                  description: Source type from SourceIdentity (for example, weights or a JIT cache type)
             status:
               type: object
               properties:
@@ -87,6 +89,33 @@ spec:
                     workerGrpcEndpoint:
                       type: string
                       description: P2P worker gRPC endpoint for tensor manifest (host:port)
+                    accelerator:
+                      type: string
+                      description: Runtime accelerator family for compatibility filtering
+                    artifactSource:
+                      type: object
+                      description: Small discovery summary for file-backed artifact sources
+                      properties:
+                        artifactId:
+                          type: string
+                          description: Digest of the canonical sealed artifact manifest
+                        totalSize:
+                          type: integer
+                          format: int64
+                          minimum: 0
+                          description: Total artifact bytes across all manifest files
+                        fileCount:
+                          type: integer
+                          minimum: 0
+                          description: Number of files in the sealed artifact manifest
+                        chunkCount:
+                          type: integer
+                          minimum: 0
+                          description: Number of transfer chunks in the sealed artifact manifest
+                        nodeRank:
+                          type: integer
+                          minimum: 0
+                          description: Distributed node rank that owns this node-scoped artifact
                     status:
                       type: string
                       description: Worker lifecycle status
@@ -142,6 +171,10 @@ spec:
           type: string
           description: Model name
           jsonPath: .spec.modelName
+        - name: Type
+          type: string
+          description: Source type
+          jsonPath: .spec.sourceType
         - name: Age
           type: date
           jsonPath: .metadata.creationTimestamp
@@ -208,6 +241,15 @@ spec:
                 message:
                   type: string
                   description: Optional human-readable progress or error message
+                claimId:
+                  type: string
+                  nullable: true
+                  description: Opaque identity of the current download owner
+                leaseExpiresAt:
+                  type: string
+                  nullable: true
+                  format: date-time
+                  description: Owner heartbeat marker used by observers to measure lease liveness
       additionalPrinterColumns:
         - name: Model
           type: string
@@ -218,6 +260,14 @@ spec:
         - name: LastUsed
           type: date
           jsonPath: .status.lastUsedAt
+        - name: Claim
+          type: string
+          jsonPath: .status.claimId
+          priority: 1
+        - name: Lease
+          type: date
+          jsonPath: .status.leaseExpiresAt
+          priority: 1
         - name: Age
           type: date
           jsonPath: .metadata.creationTimestamp

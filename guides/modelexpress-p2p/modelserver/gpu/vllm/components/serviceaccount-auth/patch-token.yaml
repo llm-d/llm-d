@@ -1,0 +1,17 @@
+# Audience must match the server's MODEL_EXPRESS_SECURITY_TOKEN_AUDIENCES.
+- op: add
+  path: /spec/template/spec/volumes/-
+  value:
+    name: mx-auth-token
+    projected:
+      sources:
+        - serviceAccountToken:
+            path: modelexpress
+            audience: modelexpress
+            expirationSeconds: 3600
+- op: add
+  path: /spec/template/spec/containers/0/volumeMounts/-
+  value:
+    name: mx-auth-token
+    mountPath: /var/run/secrets/tokens
+    readOnly: true

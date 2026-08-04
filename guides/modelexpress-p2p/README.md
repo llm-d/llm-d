@@ -73,57 +73,88 @@ compilation entirely) puts receiver pod-Ready time in the 30–40 second range.
 
 * Have the [proper client tools installed on your local system](../../helpers/client-setup/README.md) to use this guide.
 * A Kubernetes cluster with RDMA-capable GPU nodes (H100/H200 with InfiniBand recommended) and a device plugin exposing `rdma/ib` (or your fabric's equivalent; adjust the resource name in the `coreweave` overlay, see Step 3).
+
 * Checkout llm-d repo:
 
-  ```bash
-  export branch="main" # branch, tag, or commit hash
-  git clone https://github.com/llm-d/llm-d.git && cd llm-d && git checkout ${branch}
-  ```
+<!-- guide:prerequisites.clone start -->
+<!-- llm-d-cicd:skip start -->
+```bash
+git clone https://github.com/llm-d/llm-d.git && cd llm-d && git checkout ${BRANCH}
+```
+<!-- llm-d-cicd:skip end -->
+<!-- guide:prerequisites.clone end -->
 
-* Environment variables:
+* Set the guide specific environment variables:
 
-  ```bash
-  export GAIE_VERSION=v1.5.0
-  export ROUTER_CHART_VERSION=v0
-  export ROUTER_STANDALONE_CHART=oci://ghcr.io/llm-d/charts/llm-d-router-standalone-dev
-  export ROUTER_GATEWAY_CHART=oci://ghcr.io/llm-d/charts/llm-d-router-gateway-dev
-  export GUIDE_NAME="modelexpress-p2p"
-  # Override by exporting NAMESPACE before running these commands; the default
-  # is used only if it's unset. Every command below is namespace-parameterized.
-  export NAMESPACE=${NAMESPACE:-llm-d-modelexpress-p2p}
-  export REPO_ROOT=$(realpath $(git rev-parse --show-toplevel))
-  ```
+<!-- guide:env.static start -->
+```bash
+export BRANCH=main
+export REPO_ROOT=$(realpath $(git rev-parse --show-toplevel))
+export GUIDE_NAME=modelexpress-p2p
+export NAMESPACE=llm-d-modelexpress-p2p
+```
+<!-- llm-d-cicd:skip start -->
+```bash
+export HF_TOKEN=HF_TOKEN_PLACEHOLDER
+```
+<!-- llm-d-cicd:skip end -->
+```bash
+export MODEL=meta-llama/Llama-3.3-70B-Instruct
+export PROVIDER_NAME=gke # options: none, gke, agentgateway, istio
+export INFRA_PROVIDER=coreweave # options: base, coreweave
+export CURL_TEST_IMAGE=cfmanteiga/alpine-bash-curl-jq:latest
+```
+<!-- guide:env.static end -->
+
+> [!NOTE]
+> `HF_TOKEN` must be a [valid HuggingFace token](../../helpers/hf-token.md); replace
+`HF_TOKEN_PLACEHOLDER` with your real token.
+
+* Source the common guide environment variables:
+
+<!-- guide:env.source start -->
+```bash
+source ${REPO_ROOT}/guides/env.sh
+```
+<!-- guide:env.source end -->
 
 * Install the Gateway API Inference Extension CRDs:
 
-  ```bash
-  kubectl apply -f https://github.com/kubernetes-sigs/gateway-api-inference-extension/releases/download/${GAIE_VERSION}/v1-manifests.yaml
-  ```
+<!-- guide:prerequisites.gaie start -->
+```bash
+kubectl apply -f https://github.com/kubernetes-sigs/gateway-api-inference-extension/releases/download/${GAIE_VERSION}/v1-manifests.yaml
+```
+<!-- guide:prerequisites.gaie end -->
 
 * Create the target namespace:
 
-  ```bash
-  kubectl create namespace ${NAMESPACE} --dry-run=client -o yaml | kubectl apply -f -
-  ```
+<!-- guide:prerequisites.namespace start -->
+```bash
+kubectl create namespace ${NAMESPACE} --dry-run=client -o yaml | kubectl apply -f -
+```
+<!-- guide:prerequisites.namespace end -->
 
-* The ModelExpress CRDs installed cluster-wide (one-time, by a cluster admin). This guide vendors the two CRDs (pinned to the upstream `v0.4.0` tag) so the shape stays locked against the `modelexpress-server:0.4.0` pin instead of drifting with upstream `main`:
+* The ModelExpress CRDs installed cluster-wide (one-time, by a cluster admin). This guide vendors the two CRDs (pinned to the upstream `v0.5.0` tag) so the shape stays locked against the `modelexpress-server:0.5.0` pin instead of drifting with upstream `main`:
 
-  ```bash
-  kubectl apply -f ${REPO_ROOT}/guides/${GUIDE_NAME}/modelexpress/crds.yaml
-  ```
+<!-- guide:prerequisites.crds start -->
+```bash
+kubectl apply -f ${REPO_ROOT}/guides/${GUIDE_NAME}/modelexpress/crds.yaml
+```
+<!-- guide:prerequisites.crds end -->
 
 * An `nvcr-imagepullsecret` in the target namespace granting access to `nvcr.io/nvidia/ai-dynamo/modelexpress-server`. See the [ModelExpress Helm README](https://github.com/ai-dynamo/modelexpress/blob/main/helm/README.md#1-create-nvidia-container-registry-secret) for the secret recipe. Alternatively, you can build this image yourself and push to a local registry of your choice.
 * [Create the `llm-d-hf-token` secret in your target namespace with the key `HF_TOKEN` matching a valid HuggingFace token](../../helpers/hf-token.md). **Llama-3.3-70B is gated, so this is required** (the seed pod and the fastsafetensors prewarm Job both need it):
 
+<!-- guide:prerequisites.secrets start -->
 <!-- llm-d-cicd:skip start -->
-  ```bash
-  export HF_TOKEN=<your HuggingFace token>
-  kubectl create secret generic llm-d-hf-token \
-    --from-literal="HF_TOKEN=${HF_TOKEN}" \
-    --namespace "${NAMESPACE}" \
-    --dry-run=client -o yaml | kubectl apply -f -
-  ```
+```bash
+kubectl create secret generic llm-d-hf-token \
+  --from-literal="HF_TOKEN=${HF_TOKEN}" \
+  --namespace "${NAMESPACE}" \
+  --dry-run=client -o yaml | kubectl apply -f -
+```
 <!-- llm-d-cicd:skip end -->
+<!-- guide:prerequisites.secrets end -->
 
 ### Image: building a ModelExpress-enabled model server image
 
@@ -141,7 +172,7 @@ FROM ${BASE_IMAGE}
 # load-format). Pure Python, so no native build step. `--no-deps` keeps it
 # from shadowing the image's pinned vllm / torch / nixl. Install into a
 # dedicated prefix and put it on PYTHONPATH so the base image stays untouched.
-ARG MODELEXPRESS_VERSION=0.4.0
+ARG MODELEXPRESS_VERSION=0.5.0
 RUN python3 -m pip install --target=/opt/modelexpress --no-deps --no-cache-dir \
         "modelexpress==${MODELEXPRESS_VERSION}"
 ENV PYTHONPATH=/opt/modelexpress
@@ -172,7 +203,7 @@ cd -
 
 With `VLLM_PLUGINS=modelexpress` set (already in `patch-vllm.yaml`), vLLM logs `Registered model loader ... with load format mx` at startup.
 
-> The 0.4.0 client registers two load-format names: the canonical `modelexpress` and the `mx` alias. This guide uses `--load-format=mx`; both work.
+> The 0.5.0 client registers two load-format names: the canonical `modelexpress` and the `mx` alias. This guide uses `--load-format=mx`; both work.
 
 ## Installation Instructions
 
@@ -180,22 +211,26 @@ With `VLLM_PLUGINS=modelexpress` set (already in `patch-vllm.yaml`), vLLM logs `
 
 This step provisions the `kubernetes`-backend ModelExpress server, RBAC for the `ModelMetadata` / `ModelCacheEntry` CRDs, and a `modelexpress-server` Service that the inference pods will discover via DNS.
 
+<!-- guide:deploy.mx_server start -->
 ```bash
 kubectl apply -n ${NAMESPACE} -f ${REPO_ROOT}/guides/${GUIDE_NAME}/modelexpress/modelexpress-server.yaml
 kubectl rollout status -n ${NAMESPACE} deploy/modelexpress-server --timeout=5m
 ```
+<!-- guide:deploy.mx_server end -->
 
 ### 2. Deploy the llm-d Router
 
 #### Standalone Mode
 
+<!-- guide:deploy.standalone start -->
 ```bash
 helm install ${GUIDE_NAME} \
-    ${ROUTER_STANDALONE_CHART} \
-    -f ${REPO_ROOT}/guides/recipes/router/base.values.yaml \
-    -f ${REPO_ROOT}/guides/${GUIDE_NAME}/router/${GUIDE_NAME}.values.yaml \
-    -n ${NAMESPACE} --version ${ROUTER_CHART_VERSION}
+  ${ROUTER_STANDALONE_CHART} \
+  -f ${REPO_ROOT}/guides/recipes/router/base.values.yaml \
+  -f ${REPO_ROOT}/guides/${GUIDE_NAME}/router/${GUIDE_NAME}.values.yaml \
+  -n ${NAMESPACE} --version ${ROUTER_CHART_VERSION}
 ```
+<!-- guide:deploy.standalone end -->
 
 <details>
 <summary><b>Gateway Mode</b></summary>
@@ -205,17 +240,18 @@ To use a Kubernetes Gateway managed proxy rather than the standalone version, fo
 1. _Deploy a Kubernetes Gateway_ by following one of [the gateway guides](../../docs/infrastructure/gateway).
 2. _Deploy the llm-d router and an HTTPRoute_ that connects it to the Gateway as follows:
 
+<!-- guide:deploy.gateway start -->
 ```bash
-export PROVIDER_NAME=gke # options: none, gke, agentgateway, istio
 helm install ${GUIDE_NAME} \
-    ${ROUTER_GATEWAY_CHART} \
-    -f ${REPO_ROOT}/guides/recipes/router/base.values.yaml \
-    -f ${REPO_ROOT}/guides/${GUIDE_NAME}/router/${GUIDE_NAME}.values.yaml \
-    --set provider.name=${PROVIDER_NAME} \
-    --set httpRoute.create=true \
-    --set httpRoute.inferenceGatewayName=llm-d-inference-gateway \
-    -n ${NAMESPACE} --version ${ROUTER_CHART_VERSION}
+  ${ROUTER_GATEWAY_CHART} \
+  -f ${REPO_ROOT}/guides/recipes/router/base.values.yaml \
+  -f ${REPO_ROOT}/guides/${GUIDE_NAME}/router/${GUIDE_NAME}.values.yaml \
+  --set provider.name=${PROVIDER_NAME} \
+  --set httpRoute.create=true \
+  --set httpRoute.inferenceGatewayName=llm-d-inference-gateway \
+  -n ${NAMESPACE} --version ${ROUTER_CHART_VERSION}
 ```
+<!-- guide:deploy.gateway end -->
 
 </details>
 
@@ -224,12 +260,13 @@ helm install ${GUIDE_NAME} \
 > [!IMPORTANT]
 > This step needs the image you built in [the prerequisites](#image-building-a-modelexpress-enabled-model-server-image); the overlay ships a `<your-registry>/...` placeholder that will not pull as-is.
 
-The base overlay leaves fabric resources unset. Pick the provider overlay that matches how your cluster exposes RDMA NICs to pods:
+The base overlay leaves fabric resources unset. `INFRA_PROVIDER` (set in the environment variables above) picks the provider overlay that matches how your cluster exposes RDMA NICs to pods:
 
+<!-- guide:deploy.modelserver start -->
 ```bash
-export INFRA_PROVIDER=coreweave # base | coreweave
 kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/gpu/vllm/${INFRA_PROVIDER}/
 ```
+<!-- guide:deploy.modelserver end -->
 
 | Overlay | What it adds |
 | --- | --- |
@@ -278,38 +315,35 @@ Then re-apply the overlay (Step 3).
 
 #### Standalone Mode
 
+<!-- guide:verify.endpoint.standalone start -->
 ```bash
 export IP=$(kubectl get service ${GUIDE_NAME}-epp -n ${NAMESPACE} -o jsonpath='{.spec.clusterIP}')
 ```
+<!-- guide:verify.endpoint.standalone end -->
 
 <details>
 <summary><b>Gateway Mode</b></summary>
 
+<!-- guide:verify.endpoint.gateway start -->
 ```bash
 export IP=$(kubectl get gateway llm-d-inference-gateway -n ${NAMESPACE} -o jsonpath='{.status.addresses[0].value}')
 ```
+<!-- guide:verify.endpoint.gateway end -->
 
 </details>
 
 ### 2. Send Test Requests
 
+<!-- guide:verify.tests start -->
 ```bash
-kubectl run curl-debug --rm -it \
-    --image=cfmanteiga/alpine-bash-curl-jq \
-    --namespace="$NAMESPACE" \
-    --env="IP=$IP" \
-    --env="NAMESPACE=$NAMESPACE" \
-    -- /bin/bash
+kubectl run curl-test --rm -i --restart=Never \
+  --image=${CURL_TEST_IMAGE} \
+  --namespace="${NAMESPACE}" \
+  --env="IP=${IP}" \
+  --env="MODEL=${MODEL}" \
+  -- /bin/sh -c 'curl -sS -X POST "http://${IP}/v1/completions" -H "Content-Type: application/json" -d "{\"model\": \"${MODEL}\", \"prompt\": \"How are you today?\"}"'
 ```
-
-```bash
-curl -X POST http://${IP}/v1/completions \
-    -H 'Content-Type: application/json' \
-    -d '{
-        "model": "meta-llama/Llama-3.3-70B-Instruct",
-        "prompt": "How are you today?"
-    }' | jq
-```
+<!-- guide:verify.tests end -->
 
 ## Verify P2P Weight Transfer During Scale-Out
 
@@ -486,14 +520,20 @@ The component:
 
 ## Cleanup
 
+<!-- guide:cleanup start -->
 ```bash
 helm uninstall ${GUIDE_NAME} -n ${NAMESPACE}
+
 kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/gpu/vllm/${INFRA_PROVIDER}/
+
 kubectl delete -n ${NAMESPACE} -f ${REPO_ROOT}/guides/${GUIDE_NAME}/modelexpress/modelexpress-server.yaml
 
 # If you applied the Istio hardening, remove the policies (and the ns label):
 kubectl delete -n ${NAMESPACE} -f ${REPO_ROOT}/guides/${GUIDE_NAME}/security/istio-mtls-authz.yaml --ignore-not-found
 kubectl label namespace ${NAMESPACE} istio-injection- 2>/dev/null || true
+# If you enabled ServiceAccount auth, the ClusterRoleBinding is cluster-scoped
+# and survives namespace deletion — remove it explicitly:
+kubectl delete clusterrolebinding modelexpress-tokenreview-${NAMESPACE} --ignore-not-found
 
 # If you ran the storage-backed measurement workloads, delete those overlays and the prewarm Job:
 kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/gpu/vllm/fastsafetensors-nfs/ --ignore-not-found
@@ -506,6 +546,7 @@ kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/
 kubectl delete pvc vllm-compile-cache fst-model-cache -n ${NAMESPACE} --ignore-not-found
 kubectl delete namespace ${NAMESPACE}
 ```
+<!-- guide:cleanup end -->
 
 ### Optional cleanup: remove the shared CRDs
 
@@ -573,18 +614,60 @@ Two operational notes:
 ### Security: lock down the ModelExpress metadata broker
 
 > [!NOTE]
-> The broker's gRPC API (`:8001`) does not authenticate callers on its own, so on a shared cluster you'll want to restrict who can talk to it. This section does that with Istio mTLS plus an AuthorizationPolicy. (Optional, requires Istio; skip it on a single-tenant cluster.)
+> The broker's gRPC API (`:8001`) accepts any caller by default. On a shared cluster, apply both controls in this section: **broker-native ServiceAccount authentication** (ModelExpress 0.5.0+) to authenticate and authorize callers, and **Istio mTLS** to encrypt the transport. They are complementary — the upstream auth docs require an encrypted transport for enforce mode because the bearer token otherwise crosses the wire in cleartext. On a single-tenant cluster you can skip both.
 
-**Scope.** This covers the gRPC **control plane**. The weight transfers themselves go over **RDMA, which bypasses the mesh** — restrict that path with `NetworkPolicy` or at the fabric layer if you need to. Accordingly, the decode pods join the mesh but **exclude the NIXL/worker ports from interception** so the P2P data path is untouched.
+**Scope.** Both controls cover the gRPC **control plane**. The weight transfers themselves go over **RDMA, which bypasses the mesh** — restrict that path with `NetworkPolicy` or at the fabric layer if you need to. Accordingly, the decode pods join the mesh but **exclude the NIXL/worker ports from interception** so the P2P data path is untouched.
+
+#### ServiceAccount authentication (broker-native)
+
+The server authenticates every RPC (health checks excepted) by verifying the caller's projected ServiceAccount token via the Kubernetes `TokenReview` API in-process — no sidecar required — then authorizes the extracted `<namespace>:<serviceaccount>` against an exact-match allowlist.
+
+**1. Grant the broker TokenReview access and enable enforce mode.** `TokenReview` is a cluster-scoped create, so the broker's ServiceAccount needs a `ClusterRoleBinding` to the built-in `system:auth-delegator` role (cluster-admin action). The env patch pins the audience to `modelexpress` and allowlists this guide's decode ServiceAccount:
+
+```bash
+: "${NAMESPACE:?export NAMESPACE first}"
+envsubst '$NAMESPACE' < ${REPO_ROOT}/guides/${GUIDE_NAME}/security/serviceaccount-auth.yaml \
+    | kubectl apply -f -
+kubectl patch deploy modelexpress-server -n ${NAMESPACE} \
+    --patch "$(envsubst '$NAMESPACE' < ${REPO_ROOT}/guides/${GUIDE_NAME}/security/patch-server-auth.yaml)"
+kubectl rollout status -n ${NAMESPACE} deploy/modelexpress-server --timeout=5m
+```
+
+`enforce` refuses to start if the audience list or the allowlist is empty, so a typo'd env name fails loudly instead of accepting everything.
+
+**2. Mount the projected token into the decode pods.** Layer the `serviceaccount-auth` component onto your model-server overlay — it projects a ServiceAccount token with the matching `modelexpress` audience at the client's default `MX_AUTH_TOKEN_PATH` (`/var/run/secrets/tokens/modelexpress`). The client attaches the token automatically when the file exists and sends nothing when it doesn't, so the same image works against an auth-off broker:
+
+```yaml
+# guides/modelexpress-p2p/modelserver/gpu/vllm/coreweave/kustomization.yaml (or your overlay)
+components:
+  - ../components/serviceaccount-auth
+```
+
+Re-apply the model-server overlay (Step 3) to roll the pods with the token mount.
+
+**3. Verify enforcement.** A caller without a valid allowlisted token must be rejected while the decode pods keep publishing and discovering sources:
+
+```bash
+kubectl run mx-authprobe --rm -it -n ${NAMESPACE} --image=nicolaka/netshoot --restart=Never \
+    -- grpcurl -plaintext -max-time 5 modelexpress-server:8001 list
+# Expect Unauthenticated / PermissionDenied — this pod runs as the default
+# ServiceAccount and presents no token. Then confirm the pool still scales:
+kubectl get modelmetadata -n ${NAMESPACE} \
+    -o jsonpath='{range .items[*]}{.metadata.name}{"\t"}{.status.conditions[?(@.type=="Ready")].status}{"\n"}{end}'
+```
+
+Two operational notes from the upstream docs: enforcement happens at RPC start (an accepted long-lived stream keeps flowing until the next RPC after revocation, bounded by `MODEL_EXPRESS_SECURITY_CACHE_TTL_SECS`, default 60s), and backend `TokenReview` errors return `UNAVAILABLE` without being cached — keep the gRPC port off untrusted networks.
+
+#### Istio mTLS (transport encryption)
 
 > **Pre-stage weights when the mesh is on.** With a sidecar injected, the seed pod's large HuggingFace download can stall behind the sidecar proxy (the gRPC control plane and small API calls are fine; the multi-GB transfer is the problem). Point the seed at a pre-staged checkpoint (e.g. the prewarmed `fst-model-cache` NFS PVC, mount it at the model path) instead of downloading from HF in-mesh. Receivers are unaffected — they pull over RDMA, which bypasses the sidecar.
 
 What gets applied:
 
-* A `PeerAuthentication` (STRICT) scoped to the `modelexpress-server` workload — the broker only accepts mutually-authenticated callers. It is workload-scoped, not namespace-wide, so model-serving traffic (EPP → decode `:8000`) and other workloads are unaffected.
-* An `AuthorizationPolicy` on the broker allowing only this guide's decode ServiceAccount (`modelexpress-p2p-nvidia-gpu-vllm-sa`) to reach `:8001`. An ALLOW policy that selects a workload implicitly denies everyone else.
+* A `PeerAuthentication` (STRICT) scoped to the `modelexpress-server` workload — the broker only accepts mutually-authenticated callers, which also gives the ServiceAccount auth above the encrypted transport it requires. It is workload-scoped, not namespace-wide, so model-serving traffic (EPP → decode `:8000`) and other workloads are unaffected.
+* An `AuthorizationPolicy` on the broker allowing only this guide's decode ServiceAccount (`modelexpress-p2p-nvidia-gpu-vllm-sa`) to reach `:8001`. An ALLOW policy that selects a workload implicitly denies everyone else. With broker-native auth enforced this is a second, mesh-level allowlist; keeping both means a misconfiguration in either layer still leaves the broker closed.
 
-#### 1. Enable sidecar injection and put decode in the mesh
+##### 1. Enable sidecar injection and put decode in the mesh
 
 ```bash
 # Requires Istio. Inject sidecars into the broker (and the namespace generally):
@@ -613,7 +696,7 @@ kubectl get pod -n ${NAMESPACE} -l llm-d.ai/guide=modelexpress-p2p \
 # -> 5555,5556,6555,6556
 ```
 
-#### 2. Apply mTLS + the AuthorizationPolicy
+##### 2. Apply mTLS + the AuthorizationPolicy
 
 `${NAMESPACE}` is expanded into the AuthorizationPolicy principal (the SPIFFE ID embeds the namespace):
 
@@ -623,7 +706,7 @@ envsubst '$NAMESPACE' < ${REPO_ROOT}/guides/${GUIDE_NAME}/security/istio-mtls-au
     | kubectl apply -n ${NAMESPACE} -f -
 ```
 
-#### 3. Verify it's enforced
+##### 3. Verify it's enforced
 
 ```bash
 # P2P still works: scale out and confirm receivers reach Ready (sidecars + mTLS

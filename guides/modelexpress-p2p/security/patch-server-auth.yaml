@@ -1,0 +1,18 @@
+# Strategic-merge patch: turns on enforce-mode ServiceAccount auth on the
+# broker. Applied with kubectl patch (envsubst expands ${NAMESPACE} into the
+# allowlist); see the README's Security section.
+#
+# enforce fails config validation if the audience list or the allowlist is
+# empty, so a typo'd env name can't silently accept-any or deny-all.
+spec:
+  template:
+    spec:
+      containers:
+        - name: modelexpress-server
+          env:
+            - name: MODEL_EXPRESS_SECURITY_MODE
+              value: "enforce"
+            - name: MODEL_EXPRESS_SECURITY_TOKEN_AUDIENCES
+              value: "modelexpress"
+            - name: MODEL_EXPRESS_SECURITY_ALLOWED_SERVICE_ACCOUNTS
+              value: "${NAMESPACE}:modelexpress-p2p-nvidia-gpu-vllm-sa"

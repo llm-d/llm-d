@@ -21,7 +21,6 @@ We currently offer the following:
 
 * [Prefill/Decode Disaggregation](./pd-disaggregation/README.md) - Split inference into specialized prefill and decode instances, improving throughput and quality of service stability for medium and large models like `openai/gpt-oss-120b`.
 * [Wide Expert-Parallelism](./wide-ep-lws/README.md) - Deploy large Mixture-of-Experts (MoE) models like `deepseek-ai/DeepSeek-R1` over multiple nodes via DP/EP configuration, increasing available KV cache space and throughput.
-* [ModelExpress P2P Weight Transfer](./modelexpress-p2p/README.md) - Load one model replica from storage and transfer weights to peer replicas over GPU-to-GPU RDMA for faster cold scale-outs.
 
 ## Operational Excellence
 
@@ -35,7 +34,7 @@ We currently offer the following:
 Workload-centric guides — each provides the recommended, cohesive deployment for serving a workload, composing the capability guides above. See the [workload narratives](../docs/well-lit-paths/workloads/README.md) for overviews.
 
 * [Agentic Serving](./agentic-serving/README.md) - serve long, multi-turn, tool-using agentic workloads (e.g. coding agents) by composing prefix-aware routing, KV-cache offloading, and P/D disaggregation.
-* [Multimodal Serving](./multimodal-serving/optimized-baseline/README.md) - serve image/audio/video workloads with prefix- and load-aware routing that tracks and matches multimodal payloads across the cluster.
+* [Multimodal Serving](./multimodal-serving/README.md) - Deploy multimodal model serving (e.g., image/audio/video) using either aggregated routing or dedicated encode disaggregation topologies.
 
 ## Experimental Guides
 
@@ -84,8 +83,10 @@ Guides are two files — a machine-readable `guide.yaml` and a human-readable `R
 See **[`guides/templates/README.md`](./templates/README.md)** for the templates, the
 quickstart, and the full authoring reference. It is the single source for those
 instructions — deliberately not repeated here, so the two cannot drift apart.
+
 ## Supporting Guides
 
 Our supporting guides address common operational challenges with model serving at scale:
 
 * [Benchmark](../helpers/benchmark.md) demonstrates how to use automation for running benchmarks against the llm-d stack.
+* [ModelExpress P2P Weight Transfer](./modelexpress-p2p/README.md) loads one model replica from storage and transfers weights to peer replicas over GPU-to-GPU RDMA for faster cold scale-outs.
