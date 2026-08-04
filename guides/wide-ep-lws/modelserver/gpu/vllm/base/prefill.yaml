@@ -44,6 +44,7 @@ spec:
                   - SYS_RAWIO
               runAsGroup: 0
               runAsUser: 0
+              privileged: true
             imagePullPolicy: Always
             command:
               - /bin/bash
@@ -54,7 +55,9 @@ spec:
                 export UCX_IB_ROCE_REACHABILITY_MODE=all
                 export VLLM_SSM_CONV_STATE_LAYOUT=DS
                 export VLLM_ENABLE_K3_LATENT_MOE_TAIL_FUSION=1
-                export NCCL_GIN_TYPE=2
+                export NCCL_GIN_TYPE=3
+                # export NCCL_DEBUG=INFO
+                # export NCCL_DEBUG_SUBSYS=ALL
 
                 # --- BEGIN TEMP: install NIXL ----------------------------------------
                 uv pip install --system nixl nixl-cu13
@@ -65,6 +68,301 @@ spec:
                 uv pip uninstall --system tilelang
 
                 # --- END TEMP: install NIXL ------------------------------------------
+
+                apt-get update && apt-get install -y \
+                  git \
+                  build-essential \
+                  cmake \
+                  ninja-build \
+                  pkg-config \
+                  libudev-dev \
+                  libnl-3-dev \
+                  libnl-route-3-dev
+                
+                rm -rf /tmp/rdma-core-44
+
+                git clone \
+                  --depth 1 \
+                  --branch v44.0 \
+                  https://github.com/linux-rdma/rdma-core.git \
+                  /tmp/rdma-core-44
+
+                git -C /tmp/rdma-core-44 describe --tags --always
+
+                cd /tmp/rdma-core-44
+
+                rm -rf build-install
+
+                cmake -S . -B build-install -GNinja \
+                  -DCMAKE_BUILD_TYPE=Release \
+                  -DCMAKE_INSTALL_PREFIX=/opt/rdma-core-44 \
+                  -DCMAKE_INSTALL_LIBDIR=lib \
+                  -DNO_MAN_PAGES=1
+
+                cmake --build /tmp/rdma-core-44/build-install \
+                  --parallel "$(nproc)"
+
+                cmake --install /tmp/rdma-core-44/build-install
+                
+                find /opt/rdma-core-44 \
+                  \( -name 'libibverbs.so*' -o -name 'libmlx5.so*' \) \
+                  -print
+
+                export LD_LIBRARY_PATH=/opt/rdma-core-44/lib:$LD_LIBRARY_PATH
+                echo "$LD_LIBRARY_PATH"
+
+                # --- BEGIN TEMP: RoCE-capable NVSHMEM + DeepEP rebuild ----------------
+                # deepep_high_throughput drives its internode all-to-all through NVSHMEM
+                # IBGDA, unlike deepep_v2 which goes over NCCL GIN. The image ships
+                # deep_ep 2.0.0 linked against the stock nvidia-nvshmem-cu13 wheel, and
+                # stock NVSHMEM leaves `ibv_ah_attr` uninitialized before creating the
+                # DCT address handle. On RoCE (link_layer: Ethernet) the garbage
+                # static_rate is passed straight to the device and ibv_create_ah fails
+                # with "Unable to create ah", so DeepEP never finishes initializing.
+                #
+                # llm-d carries the fix as patches/nvshmem_zero_ibv_ah_attr_v3.4.5-0.patch;
+                # it is reproduced inline below so the pod needs no repo checkout. We
+                # build NVSHMEM v3.4.5-0 (matching the wheel the image linked against)
+                # with the patch, then rebuild DeepEP against it at the same commit the
+                # image used (vllm-project/vllm docker/Dockerfile: DEEPEP_COMMIT_HASH).
+                # Costs roughly 10 minutes of pod startup.
+                # Delete this block once the image ships a RoCE-safe NVSHMEM.
+                #
+                # Scoped `set -e`: the rest of this script deliberately tolerates
+                # failures, but here a half-finished rebuild would surface much later as
+                # an opaque import error, long after the logs that explain it.
+                set -e
+                export NVSHMEM_DIR=/opt/nvshmem
+
+                # sm_100a (B200). Use 90a / 9.0a on H100/H200.
+                CUDA_ARCH=100a
+                TORCH_ARCH=10.0a
+                DEEPEP_COMMIT=38d21b7f9bb6f3b102b1819d09439686eaa87ce8
+
+                # /usr/bin/cmake is 3.22, which predates the sm_100a architecture name.
+                # Pinned to 3.31.x rather than 4.x, which drops compatibility with
+                # project files declaring cmake_minimum_required below 3.5.
+                uv pip install --system "cmake==3.31.6" ninja
+                hash -r
+                cmake --version
+
+                # This image has a slim CUDA install missing three headers that the
+                # builds below need: NVSHMEM's host library includes nvml.h and
+                # nvtx3/nvToolsExt.h, and DeepEP's csrc/jit/compiler.hpp includes
+                # nvrtc.h. All three are made visible through the single CUDA include
+                # directory both builds already search, rather than through injected
+                # compiler flags -- NVSHMEM sets per-target include paths itself, so
+                # -DCMAKE_CXX_FLAGS does not reliably reach every translation unit
+                # (notably the .cu targets).
+                #
+                # nvml.h comes from a standalone, dependency-free CUDA package that
+                # installs straight into that directory. The NVTX tree and nvrtc.h
+                # already ship in the nvidia-cu13 wheel at the matching CUDA version, so
+                # they are just symlinked in. Only the nvrtc header is needed: no nvrtc
+                # symbol is referenced anywhere in DeepEP at this commit, so there is
+                # nothing to link against.
+                CUDA_INCLUDE=/usr/local/cuda/targets/x86_64-linux/include
+                CU13_INCLUDE=/usr/local/lib/python3.12/dist-packages/nvidia/cu13/include
+
+                apt-get install -y cuda-nvml-dev-13-0
+                ln -sfn "${CU13_INCLUDE}/nvtx3" "${CUDA_INCLUDE}/nvtx3"
+                ln -sfn "${CU13_INCLUDE}/nvrtc.h" "${CUDA_INCLUDE}/nvrtc.h"
+
+                ls "${CUDA_INCLUDE}/nvml.h" \
+                   "${CUDA_INCLUDE}/nvrtc.h" \
+                   "${CUDA_INCLUDE}/nvtx3/nvToolsExt.h" \
+                   "${CUDA_INCLUDE}/nvtx3/nvtxDetail/nvtxInit.h"
+
+                rm -rf /tmp/nvshmem-src
+                git clone --depth 1 --branch v3.4.5-0 \
+                  https://github.com/NVIDIA/nvshmem.git /tmp/nvshmem-src
+
+                # Unlike the vLLM source patches below, this one hard-fails: an
+                # unpatched NVSHMEM builds fine and then dies at DeepEP init, which is
+                # a much worse failure to debug than a refusal to start.
+                python3 - <<'PATCH_EOF'
+                import sys
+                from pathlib import Path
+
+                TAG = "PATCH#nvshmem_zero_ibv_ah_attr"
+                path = Path("/tmp/nvshmem-src/src/modules/transport/ibgda/ibgda.cpp")
+                FUNC = "static int ibgda_create_dct_shared_objects("
+                ANCHOR = "    struct ibv_ah_attr ah_attr;\n    struct mlx5dv_obj dv;\n"
+                NEW = (
+                    "\n"
+                    "    // static_rate must be a known value and is passed directly to the device - and is not\n"
+                    "    // validated prior to https://github.com/torvalds/linux/commit/c534ffda781f44a1c6ac25ef6e0e444da38ca8af\n"
+                    "    // which leads to different behavior depending on kernel version.\n"
+                    "    // Always clear the memory.\n"
+                    "    memset(&ah_attr, 0, sizeof(ah_attr));\n"
+                    "    NVSHMEMI_WARN_PRINT(\"Zeroing ah_attr to avoid 'Unable to create ah' error on RoCE devices\\n\");\n"
+                )
+
+                src = path.read_text()
+                start = src.find(FUNC)
+                if start < 0:
+                    sys.exit("[%s] FAILED: %s not found in %s" % (TAG, FUNC, path))
+
+                i = src.find(ANCHOR, start)
+                if i < 0:
+                    sys.exit("[%s] FAILED: anchor not found in %s" % (TAG, path))
+
+                end = i + len(ANCHOR)
+                if "memset(&ah_attr" in src[start:end + len(NEW)]:
+                    print("[%s] already patched: %s" % (TAG, path))
+                    sys.exit(0)
+
+                path.write_text(src[:end] + NEW + src[end:])
+                print("[%s] patched %s at line %d"
+                      % (TAG, path, src[:end].count("\n") + 1))
+                PATCH_EOF
+
+                # UCX/SHMEM/MPI/PMIx/NCCL transports are not used by DeepEP, and
+                # gdrcopy headers are absent from this image (NVSHMEM_DISABLED_GDRCOPY
+                # is already set in env for GKE anyway).
+                cmake -S /tmp/nvshmem-src -B /tmp/nvshmem-src/build -GNinja \
+                  -DCMAKE_BUILD_TYPE=Release \
+                  -DNVSHMEM_PREFIX="${NVSHMEM_DIR}" \
+                  -DCMAKE_CUDA_ARCHITECTURES="${CUDA_ARCH}" \
+                  -DCMAKE_CUDA_COMPILER=/usr/local/cuda/bin/nvcc \
+                  -DCMAKE_POSITION_INDEPENDENT_CODE=ON \
+                  -DNVSHMEM_IBRC_SUPPORT=1 \
+                  -DNVSHMEM_IBGDA_SUPPORT=1 \
+                  -DNVSHMEM_IBDEVX_SUPPORT=1 \
+                  -DNVSHMEM_UCX_SUPPORT=0 \
+                  -DNVSHMEM_SHMEM_SUPPORT=0 \
+                  -DNVSHMEM_MPI_SUPPORT=0 \
+                  -DNVSHMEM_PMIX_SUPPORT=0 \
+                  -DNVSHMEM_USE_NCCL=0 \
+                  -DNVSHMEM_USE_GDRCOPY=0 \
+                  -DNVSHMEM_BUILD_TESTS=0 \
+                  -DNVSHMEM_BUILD_EXAMPLES=0 \
+                  -DNVSHMEM_BUILD_PYTHON_LIB=OFF
+
+                cmake --build /tmp/nvshmem-src/build --parallel "$(nproc)"
+                cmake --install /tmp/nvshmem-src/build
+                rm -rf /tmp/nvshmem-src
+
+                # DeepEP's setup.py looks for the host library under
+                # ${NVSHMEM_DIR}/lib specifically, so fail here rather than at link time.
+                ls "${NVSHMEM_DIR}/lib/libnvshmem_host.so"* \
+                   "${NVSHMEM_DIR}/lib/libnvshmem_device.a" \
+                   "${NVSHMEM_DIR}/lib/nvshmem_transport_ibgda.so"*
+
+                # Prove the patch survived into the binary that actually contains
+                # ibgda_create_dct_shared_objects. This is the transport *plugin*, not
+                # the host library -- the host lib dlopens it at init.
+                strings "${NVSHMEM_DIR}/lib/nvshmem_transport_ibgda.so" \
+                  | grep -q "Zeroing ah_attr"
+
+                export LD_LIBRARY_PATH=${NVSHMEM_DIR}/lib:$LD_LIBRARY_PATH
+
+                # Register with ldconfig as well, not just LD_LIBRARY_PATH: the NVIDIA
+                # container runtime rewrites LD_LIBRARY_PATH in k8s, so a search path
+                # exported here is not guaranteed to survive into the worker processes.
+                # llm-d's Dockerfile.cuda does the same for this reason.
+                echo "${NVSHMEM_DIR}/lib" > /etc/ld.so.conf.d/nvidia-nvshmem.conf
+                echo "${NVSHMEM_DIR}/lib64" >> /etc/ld.so.conf.d/nvidia-nvshmem.conf
+                ldconfig
+
+                # Drop the wheel before building DeepEP against the patched tree, so
+                # nothing downstream can link or dlopen an unpatched NVSHMEM. It ships
+                # its own copies of exactly the libraries just installed above.
+                #
+                # Before, rather than after the build, so the whole build runs in a
+                # single-NVSHMEM world and the `ldd` assertion below can demand
+                # ${NVSHMEM_DIR}/lib outright instead of tolerating whichever copy the
+                # loader happened to reach.
+                #
+                # Safe to remove at this DEEPEP_COMMIT: deep_ep/__init__.py imports only
+                # torch and deep_ep_cpp (no nvshmem4py), setup.py declares no dependency
+                # on the wheel, and with NVSHMEM_DIR set it never consults
+                # `nvidia.nvshmem` -- it bakes -Wl,-rpath,${NVSHMEM_DIR}/lib into the
+                # extension instead. Re-check all three before bumping to a DeepEP 2.x
+                # commit, which does use nvshmem4py.
+                uv pip uninstall --system nvidia-nvshmem-cu13 nvidia-nvshmem-cu12 || true
+
+                uv pip uninstall --system deep_ep || true
+
+                rm -rf /tmp/DeepEP
+                git clone https://github.com/neuralmagic/DeepEP /tmp/DeepEP
+                git -C /tmp/DeepEP checkout -q "${DEEPEP_COMMIT}"
+                # No-op on DeepEP 1.x; 2.x vendors fmt as a submodule.
+                git -C /tmp/DeepEP submodule update --init --recursive
+
+                # NOTE: when building DeepEP 2.x, vLLM's
+                # tools/ep_kernels/install_python_libraries.sh also prepends a
+                # SYS_pidfd_open/SYS_pidfd_getfd shim to
+                # csrc/kernels/backend/symmetric.hpp for manylinux build images. This
+                # image is Ubuntu 22.04, whose headers already define both (434/438),
+                # so the shim is omitted -- adding it would redefine the macros.
+
+                # CPATH covers the two gaps the host C++ translation unit hits. nvcc
+                # papers over both implicitly, which is why only the plain c++ source
+                # (csrc/deep_ep.cpp) fails without them:
+                #
+                #   cccl/     CUDA 13 moved libcu++ (cuda/std/*) here, and NVSHMEM's
+                #             device_host/nvshmem_tensor.h includes <cuda/std/tuple>.
+                #             vLLM's install_python_libraries.sh instead patches DeepEP's
+                #             setup.py for this; CPATH does the same job without
+                #             depending on a setup.py layout that differs between 1.x
+                #             and 2.x.
+                #   cu13/     the math-library headers (cusparse.h, cublas.h, ...) that
+                #             torch's ATen/cuda/CUDAContext.h pulls in and this image's
+                #             slim CUDA install omits.
+                #
+                # CPATH is searched after every -I, so these only fill gaps and cannot
+                # shadow the toolkit or torch headers.
+                #
+                # LIBRARY_PATH: DeepEP links -lcuda, and only the stub is present here.
+                # __NVSHMEM_NUMBA_SUPPORT__ forces the IBGDA device-state constant to
+                # be `extern` in host-compiled translation units. Without it each TU
+                # that includes the NVSHMEM device header emits its own definition, so
+                # the copy the host transport initializes need not be the copy the
+                # DeepEP kernels read. Mirrors llm-d's
+                # docker/scripts/cuda/builder/build-compiled-wheels.sh.
+                TORCH_CUDA_ARCH_LIST="${TORCH_ARCH}" \
+                  CXXFLAGS="${CXXFLAGS:-} -D__NVSHMEM_NUMBA_SUPPORT__" \
+                  CPATH="/usr/local/cuda/include/cccl:${CU13_INCLUDE}:${CPATH:-}" \
+                  LIBRARY_PATH="/usr/local/cuda/lib64/stubs:${LIBRARY_PATH:-}" \
+                  uv pip install --system --no-build-isolation /tmp/DeepEP
+                rm -rf /tmp/DeepEP
+
+                # Confirm DeepEP resolves NVSHMEM to the patched build, not the wheel.
+                # The extension module differs across DeepEP versions -- deep_ep._C in
+                # 2.x, a top-level deep_ep_cpp in 1.x -- so locate it rather than
+                # hardcoding, and use find_spec so nothing is imported or initialized.
+                DEEP_EP_SO=$(python3 -c "import glob,importlib.util,os;p=os.path.dirname(importlib.util.find_spec('deep_ep').origin);c=sorted(glob.glob(p+'/*.so'))+sorted(glob.glob(os.path.dirname(p)+'/deep_ep_cpp*.so'));print(c[0] if c else '')")
+                test -n "${DEEP_EP_SO}"
+                echo "deep_ep extension: ${DEEP_EP_SO}"
+                ldd "${DEEP_EP_SO}" | grep nvshmem
+                # Assert the resolved path, not just that the string `nvshmem` appears:
+                # ldd renders an unresolved entry as `libnvshmem_host.so.3 => not found`,
+                # which a bare `grep nvshmem` matches just as happily as a real hit.
+                ldd "${DEEP_EP_SO}" | grep -q "libnvshmem_host\.so.* => ${NVSHMEM_DIR}/lib/"
+
+                # The wheel was uninstalled before the build, but `uv pip install` above
+                # is free to pull it back in if a future DEEPEP_COMMIT declares it as a
+                # dependency. Re-check after the last step that can write libraries.
+                #
+                # This is the check that matters, not the `ldd` line above: `ldd` covers
+                # only the DeepEP extension's own DT_NEEDED, and `ibgda.cpp` -- the file
+                # in the traceback -- is not in libnvshmem_host at all. It lives in this
+                # plugin, which the host library dlopens at init. Scoped to the library
+                # roots rather than / so it does not walk the model cache.
+                found_ibgda=0
+                for so in $(find /usr /opt /lib /lib64 \
+                              -name 'nvshmem_transport_ibgda.so*' 2>/dev/null); do
+                  if ! strings "$so" | grep -q "Zeroing ah_attr"; then
+                    echo "UNPATCHED NVSHMEM ibgda transport still present: $so" >&2
+                    exit 1
+                  fi
+                  echo "patched ibgda transport: $so"
+                  found_ibgda=1
+                done
+                test "${found_ibgda}" = 1
+                set +e
+                # --- END TEMP ---------------------------------------------------------
 
                 # --- BEGIN TEMP PATCH: neuralmagic/vllm@469882a ----------------------
                 # "enable deepep_v2 for sp": deepep_v2 is missing from the all2all
@@ -127,7 +425,7 @@ spec:
                   --trust-remote-code \
                   --gpu-memory-utilization 0.9 \
                   --disable-access-log-for-endpoints=/health,/metrics \
-                  --max-num-batched-tokens 1024 \
+                  --max-num-batched-tokens 8192 \
                   --max-num-seqs 8 \
                   --enable-prefix-caching \
                   --enable-expert-parallel \
@@ -139,10 +437,10 @@ spec:
                   --data-parallel-rpc-port 5555 \
                   --data-parallel-start-rank $START_RANK \
                   --no-disable-hybrid-kv-cache-manager \
-                  --all2all-backend deepep_v2 \
+                  --all2all-backend deepep_high_throughput \
                   --moe-backend auto \
                   --enforce-eager \
-                  --max-model-len 300000 \
+                  --max-model-len 256000 \
                   --profiler-config.profiler=torch \
                   --profiler-config.torch_profiler_dir=/profiles \
                   --profiler-config.max_iterations=10 \
@@ -182,6 +480,12 @@ spec:
                 value: "1"
               - name: NVIDIA_GDRCOPY
                 value: enabled
+              # `init failed for transport: IBGDA` is only the summary line; the
+              # reason it failed (device open, DEVX, GPU memory registration, ...)
+              # is logged one level down. Subsys deliberately unset so this covers
+              # every subsystem at INFO.
+              - name: NVSHMEM_DEBUG
+                value: INFO
               - name: NVSHMEM_REMOTE_TRANSPORT
                 value: ibgda
               - name: NVSHMEM_IB_ENABLE_IBGDA

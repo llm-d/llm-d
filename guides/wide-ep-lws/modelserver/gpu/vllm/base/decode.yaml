@@ -67,6 +67,7 @@ spec:
                   - SYS_RAWIO
               runAsGroup: 0
               runAsUser: 0
+              privileged: true
             imagePullPolicy: Always
             command:
               - /bin/bash
@@ -78,7 +79,11 @@ spec:
                 export VLLM_USE_V2_MODEL_RUNNER=1
                 export VLLM_SSM_CONV_STATE_LAYOUT=DS
                 export VLLM_ENABLE_K3_LATENT_MOE_TAIL_FUSION=1
-                export NCCL_GIN_TYPE=2
+                export NCCL_GIN_TYPE=3
+                # export NCCL_DEBUG=INFO
+                # export NCCL_DEBUG_SUBSYS=ALL
+                # export DOCA_GPUNETIO_LOG=7
+                # export NCCL_GDAKI_USE_RELIABLE_DB=2
 
                 # --- BEGIN TEMP: install NIXL ----------------------------------------
                 uv pip install --system nixl nixl-cu13
@@ -92,6 +97,50 @@ spec:
                 python3 -c "import tvm_ffi; import flashinfer; print(tvm_ffi.__version__)"
                 nm -D /usr/local/lib/python3.12/dist-packages/tvm_ffi/lib/libtvm_ffi.so | grep -q TVMFFIGetCustomAllocator
                 # --- END TEMP: install NIXL ------------------------------------------
+
+                apt-get update && apt-get install -y \
+                  git \
+                  build-essential \
+                  cmake \
+                  ninja-build \
+                  pkg-config \
+                  libudev-dev \
+                  libnl-3-dev \
+                  libnl-route-3-dev
+                
+                rm -rf /tmp/rdma-core-44
+
+                git clone \
+                  --depth 1 \
+                  --branch v44.0 \
+                  https://github.com/linux-rdma/rdma-core.git \
+                  /tmp/rdma-core-44
+
+                git -C /tmp/rdma-core-44 describe --tags --always
+
+                cd /tmp/rdma-core-44
+
+                rm -rf build-install
+
+                cmake -S . -B build-install -GNinja \
+                  -DCMAKE_BUILD_TYPE=Release \
+                  -DCMAKE_INSTALL_PREFIX=/opt/rdma-core-44 \
+                  -DCMAKE_INSTALL_LIBDIR=lib \
+                  -DNO_MAN_PAGES=1
+
+                cmake --build /tmp/rdma-core-44/build-install \
+                  --parallel "$(nproc)"
+
+                cmake --install /tmp/rdma-core-44/build-install
+                
+                find /opt/rdma-core-44 \
+                  \( -name 'libibverbs.so*' -o -name 'libmlx5.so*' \) \
+                  -print
+
+                LD_LIBRARY_PATH=/opt/rdma-core-44/lib \
+                  /opt/rdma-core-44/bin/ibv_devices
+
+                export LD_LIBRARY_PATH=/opt/rdma-core-44/lib:$LD_LIBRARY_PATH
 
                 # --- BEGIN TEMP PATCH: vllm-project/vllm#50478 ------------------------
                 # Backport of the deepep_v2 prepare_finalize hunk only; the image already

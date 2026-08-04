@@ -30,7 +30,7 @@ tokenizer := "moonshotai/Kimi-K3"
 
 url       := "http://wide-ep-lws-epp"
 # url := "http://10.84.1.63:8000"
-concurrency := "100"
+concurrency := "16"
 duration    := "300"
 # concurrencies := "25 50 100 150 200"
 concurrencies := "20 40 60 80 100"
@@ -135,6 +135,7 @@ smoke concurrency=concurrency duration=duration:
         --benchmark-duration {{duration}} \
         --output-artifact-dir /workspace/artifacts \
         --no-server-metrics \
+        --tokenizer-trust-remote-code \
         --ui simple
 
 # Copy benchmark artifacts out of the runner to a local directory (default ./results).
@@ -144,7 +145,7 @@ results dest="./results":
 
 # Run lm-evaluation-harness from the lm-eval pod against the deployment's
 # OpenAI-compatible chat endpoint. Args: [tasks] [concurrency].
-lmeval tasks="gsm8k" concurrency="200":
+lmeval tasks="gsm8k" concurrency="100":
     kubectl exec -n {{namespace}}  deploy/{{deploy}} -- \
         lm_eval \
             --model local-completions \
