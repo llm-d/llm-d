@@ -56,7 +56,6 @@ spec:
                 export VLLM_SSM_CONV_STATE_LAYOUT=DS
                 export VLLM_ENABLE_K3_LATENT_MOE_TAIL_FUSION=1
                 export NCCL_GIN_TYPE=3
-                export NVSHMEM_IBGDA_FORCE_NIC_BUF_MEMTYPE=hostmem
 
                 # --- BEGIN TEMP: install NIXL ----------------------------------------
                 uv pip install --system nixl nixl-cu13
@@ -79,23 +78,28 @@ spec:
                   libnl-3-dev \
                   libnl-route-3-dev
                 
-                rm -rf /tmp/rdma-core-44
+                # NVSHMEM 3.4.5's IBGDA control-buffer DMA-BUF path is compiled
+                # conditionally from rdma-core headers. Installing newer runtime
+                # libraries alone is insufficient: the v44 headers must be visible when
+                # NVSHMEM is configured and compiled.
+                RDMA_CORE_VERSION=v44.0
+                export RDMA_CORE_PREFIX=/opt/rdma-core-44
+
+                rm -rf /tmp/rdma-core-44 "${RDMA_CORE_PREFIX}"
 
                 git clone \
                   --depth 1 \
-                  --branch v44.0 \
+                  --branch "${RDMA_CORE_VERSION}" \
                   https://github.com/linux-rdma/rdma-core.git \
                   /tmp/rdma-core-44
 
                 git -C /tmp/rdma-core-44 describe --tags --always
 
-                cd /tmp/rdma-core-44
-
-                rm -rf build-install
-
-                cmake -S . -B build-install -GNinja \
+                cmake -S /tmp/rdma-core-44 \
+                  -B /tmp/rdma-core-44/build-install \
+                  -GNinja \
                   -DCMAKE_BUILD_TYPE=Release \
-                  -DCMAKE_INSTALL_PREFIX=/opt/rdma-core-44 \
+                  -DCMAKE_INSTALL_PREFIX="${RDMA_CORE_PREFIX}" \
                   -DCMAKE_INSTALL_LIBDIR=lib \
                   -DNO_MAN_PAGES=1
 
@@ -103,15 +107,36 @@ spec:
                   --parallel "$(nproc)"
 
                 cmake --install /tmp/rdma-core-44/build-install
-                
-                find /opt/rdma-core-44 \
+
+                # Make one coherent rdma-core v44 stack visible to both the NVSHMEM
+                # compiler and the runtime loader. CPATH is the critical piece for
+                # MLX5DV_UMEM_MASK_DMABUF; LD_LIBRARY_PATH alone only changes runtime
+                # resolution after the feature has already been compiled in or out.
+                export CMAKE_PREFIX_PATH="${RDMA_CORE_PREFIX}${CMAKE_PREFIX_PATH:+:${CMAKE_PREFIX_PATH}}"
+                export CMAKE_INCLUDE_PATH="${RDMA_CORE_PREFIX}/include${CMAKE_INCLUDE_PATH:+:${CMAKE_INCLUDE_PATH}}"
+                export CMAKE_LIBRARY_PATH="${RDMA_CORE_PREFIX}/lib${CMAKE_LIBRARY_PATH:+:${CMAKE_LIBRARY_PATH}}"
+                export CPATH="${RDMA_CORE_PREFIX}/include${CPATH:+:${CPATH}}"
+                export CPLUS_INCLUDE_PATH="${RDMA_CORE_PREFIX}/include${CPLUS_INCLUDE_PATH:+:${CPLUS_INCLUDE_PATH}}"
+                export LIBRARY_PATH="${RDMA_CORE_PREFIX}/lib${LIBRARY_PATH:+:${LIBRARY_PATH}}"
+                export LD_LIBRARY_PATH="${RDMA_CORE_PREFIX}/lib${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}"
+                export PKG_CONFIG_PATH="${RDMA_CORE_PREFIX}/lib/pkgconfig${PKG_CONFIG_PATH:+:${PKG_CONFIG_PATH}}"
+
+                # Also register v44 with ldconfig so spawned workers and dlopened
+                # transport plugins do not fall back to the image's rdma-core v39.
+                echo "${RDMA_CORE_PREFIX}/lib" > /etc/ld.so.conf.d/rdma-core-44.conf
+                ldconfig
+
+                find "${RDMA_CORE_PREFIX}" \
                   \( -name 'libibverbs.so*' -o -name 'libmlx5.so*' \) \
                   -print
 
-                LD_LIBRARY_PATH=/opt/rdma-core-44/lib \
-                  /opt/rdma-core-44/bin/ibv_devices
+                # This feature macro was absent from the image's v39 headers and is
+                # required for NVSHMEM to compile the GPU control-buffer DMA-BUF path.
+                grep -n 'MLX5DV_UMEM_MASK_DMABUF' \
+                  "${RDMA_CORE_PREFIX}/include/infiniband/mlx5dv.h"
 
-                export LD_LIBRARY_PATH=/opt/rdma-core-44/lib:$LD_LIBRARY_PATH
+                ldd "${RDMA_CORE_PREFIX}/bin/ibv_devices" | grep libibverbs
+                "${RDMA_CORE_PREFIX}/bin/ibv_devices"
 
                 # --- BEGIN TEMP: RoCE-capable NVSHMEM + DeepEP rebuild ----------------
                 # deepep_high_throughput drives its internode all-to-all through NVSHMEM
@@ -284,6 +309,9 @@ spec:
                 # ships.
                 cmake -S /tmp/nvshmem_src -B /tmp/nvshmem_src/build -G Ninja \
                   -DNVSHMEM_PREFIX="${NVSHMEM_DIR}" \
+                  -DCMAKE_PREFIX_PATH="${RDMA_CORE_PREFIX}" \
+                  -DCMAKE_INCLUDE_PATH="${RDMA_CORE_PREFIX}/include" \
+                  -DCMAKE_LIBRARY_PATH="${RDMA_CORE_PREFIX}/lib" \
                   -DCMAKE_CUDA_ARCHITECTURES="${NVSHMEM_CUDA_ARCHITECTURES}" \
                   -DCMAKE_CUDA_COMPILER="${CUDA_HOME}/bin/nvcc" \
                   -DCMAKE_POSITION_INDEPENDENT_CODE=ON \
@@ -305,6 +333,25 @@ spec:
                 # this pod requests 64 CPUs and 256Gi to itself.
                 ninja -C /tmp/nvshmem_src/build -j"$(nproc)"
                 cmake --install /tmp/nvshmem_src/build
+
+                # Hard proof that NVSHMEM was compiled with the rdma-core v44
+                # DMA-BUF DEVX path. The old build omitted this undefined symbol
+                # entirely because MLX5DV_UMEM_MASK_DMABUF was absent at configure time.
+                NVSHMEM_IBGDA_PLUGIN="${NVSHMEM_DIR}/lib/nvshmem_transport_ibgda.so"
+                readelf -Ws "${NVSHMEM_IBGDA_PLUGIN}" \
+                  | grep -q 'mlx5dv_devx_umem_reg_ex' || {
+                    echo "NVSHMEM IBGDA was built without DMA-BUF DEVX support" >&2
+                    exit 1
+                  }
+
+                # Verify that the installed transport resolves the same v44 verbs and
+                # mlx5 libraries it was compiled against.
+                ldd "${NVSHMEM_IBGDA_PLUGIN}" | tee /tmp/nvshmem-ibgda-ldd.txt
+                grep -q "libibverbs\.so.*=> ${RDMA_CORE_PREFIX}/lib/" \
+                  /tmp/nvshmem-ibgda-ldd.txt
+                grep -q "libmlx5\.so.*=> ${RDMA_CORE_PREFIX}/lib/" \
+                  /tmp/nvshmem-ibgda-ldd.txt
+
                 rm -rf /tmp/nvshmem_src
 
                 # DeepEP's setup.py looks for the host library under
@@ -529,6 +576,14 @@ spec:
                 value: ibgda
               - name: NVSHMEM_IB_ENABLE_IBGDA
                 value: "true"
+              # Keep the modern CUDA DMA-BUF registration path enabled. The NVSHMEM
+              # build above hard-fails if its IBGDA plugin was compiled without it.
+              - name: NVSHMEM_DISABLE_DMABUF
+                value: "0"
+              # Diagnostic fallback only. Enabling this masks a build without the
+              # GPU-resident NIC-buffer DMA-BUF path:
+              # - name: NVSHMEM_IBGDA_FORCE_NIC_BUF_MEMTYPE
+              #   value: hostmem
               - name: NVSHMEM_BOOTSTRAP_UID_SOCK_IFNAME
                 value: eth0
               - name: GLOO_SOCKET_IFNAME
