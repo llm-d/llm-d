@@ -42,7 +42,6 @@ spec:
                 secretKeyRef:
                   name: llm-d-hf-token
                   key: HF_TOKEN
-                  optional: true
           resources:
             limits:
               cpu: '16'

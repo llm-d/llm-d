@@ -143,7 +143,7 @@ kubectl apply -f https://raw.githubusercontent.com/ai-dynamo/modelexpress/${MX_V
 ```
 <!-- guide:prerequisites.crds end -->
 
-* Create an `nvcr-imagepullsecret` in the target namespace to grant access to `nvcr.io/nvidia/ai-dynamo/modelexpress-server`. See the [ModelExpress Helm README](https://github.com/ai-dynamo/modelexpress/blob/main/helm/README.md#1-create-nvidia-container-registry-secret) for the secret recipe. Or build this image yourself and push it to a local registry of your choice.
+* Create an `nvcr-imagepullsecret` in the target namespace to grant access to `nvcr.io/nvidia/ai-dynamo/modelexpress-server`. See the [ModelExpress Helm README](https://github.com/ai-dynamo/modelexpress/blob/v0.5.0/helm/README.md#1-create-nvidia-container-registry-secret) for the secret recipe. Or build this image yourself and push it to a local registry of your choice.
 * [Create the `llm-d-hf-token` secret in your target namespace with the key `HF_TOKEN` matching a valid HuggingFace token](../../helpers/hf-token.md). **Llama-3.3-70B is gated, so you need this secret** (the seed pod and the fastsafetensors prewarm Job both need it):
 
 <!-- guide:prerequisites.secrets start -->
@@ -162,7 +162,7 @@ kubectl create secret generic llm-d-hf-token \
 The `mx` load-format plugin lives in the [`modelexpress` Python client](https://github.com/ai-dynamo/modelexpress/tree/main/modelexpress_client/python), a pure-Python vLLM plugin. Build a thin derived image on top of the shared GPU vLLM image from `guides/recipes/modelserver/components/images/gpu-vllm`. This way, the guide tracks the project default when that component changes.
 
 > [!WARNING]
-> The shared GPU vLLM image does not ship the ModelExpress client. You need an image with the client baked in. This Dockerfile follows the pattern of the upstream [ModelExpress client Dockerfile](https://github.com/ai-dynamo/modelexpress/blob/main/examples/p2p_transfer_k8s/client/vllm/Dockerfile), but takes its base image from the central llm-d image component:
+> The shared GPU vLLM image does not ship the ModelExpress client. You need an image with the client baked in. This Dockerfile follows the pattern of the upstream [ModelExpress client Dockerfile](https://github.com/ai-dynamo/modelexpress/blob/v0.5.0/examples/p2p_transfer_k8s/client/vllm/Dockerfile), but takes its base image from the central llm-d image component:
 
 ```dockerfile
 # guides/modelexpress-p2p/image/Dockerfile
@@ -174,8 +174,10 @@ FROM ${BASE_IMAGE}
 # google-crc32c (artifact chunk checksums) is not in the vLLM base image.
 # The 0.5.x wheels ship a prebuilt VMM allocator extension; no build step.
 ARG MODELEXPRESS_VERSION=0.5.0
+ARG GOOGLE_CRC32C_VERSION=1.8.0
 RUN python3 -m pip install --target=/opt/modelexpress --no-deps --no-cache-dir \
-        "modelexpress==${MODELEXPRESS_VERSION}" google-crc32c
+        "modelexpress==${MODELEXPRESS_VERSION}" \
+        "google-crc32c==${GOOGLE_CRC32C_VERSION}"
 ENV PYTHONPATH=/opt/modelexpress
 ```
 
