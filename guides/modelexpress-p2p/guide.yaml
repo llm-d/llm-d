@@ -13,8 +13,6 @@ env:
     MODEL: {default: "meta-llama/Llama-3.3-70B-Instruct"}
 
     PROVIDER_NAME: {default: gke, values: [none, gke, agentgateway, istio]}
-    # base = no fabric request (CNI auto-inject or non-RDMA dry run);
-    # coreweave = rdma/ib extended-resource request per pod.
     INFRA_PROVIDER: {default: coreweave, values: [base, coreweave]}
 
     # VERIFICATION

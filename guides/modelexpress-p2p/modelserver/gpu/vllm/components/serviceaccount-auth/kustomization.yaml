@@ -1,11 +1,9 @@
 apiVersion: kustomize.config.k8s.io/v1alpha1
 kind: Component
 
-# Mounts a projected ServiceAccount token (audience "modelexpress") into the
-# decode pods. The ModelExpress client attaches it to every broker RPC when
-# the file is present at the default MX_AUTH_TOKEN_PATH
-# (/var/run/secrets/tokens/modelexpress), so no env change is needed here.
-# Pair with security/serviceaccount-auth.yaml on the server side.
+# Pairs with security/serviceaccount-auth.yaml on the server side. The client
+# only sends a token when one exists at MX_AUTH_TOKEN_PATH, so this component
+# is safe to layer against an auth-off broker.
 patches:
   - target:
       kind: Deployment

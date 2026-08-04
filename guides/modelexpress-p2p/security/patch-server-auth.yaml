@@ -1,9 +1,6 @@
-# Strategic-merge patch: turns on enforce-mode ServiceAccount auth on the
-# broker. Applied with kubectl patch (envsubst expands ${NAMESPACE} into the
-# allowlist); see the README's Security section.
-#
-# enforce fails config validation if the audience list or the allowlist is
-# empty, so a typo'd env name can't silently accept-any or deny-all.
+# enforce fails server config validation if either list is empty, so a
+# mistyped env name fails loudly instead of accepting every caller.
+# ${NAMESPACE} is expanded via envsubst before kubectl patch.
 spec:
   template:
     spec:
