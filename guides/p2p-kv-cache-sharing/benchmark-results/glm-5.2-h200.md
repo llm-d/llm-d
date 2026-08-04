@@ -117,6 +117,63 @@ established separately by the correlated single-request proof (per-rank
 attribution, source accept on the rank-offset port, consumer load equal
 to tokens x ~93 KB, HTTP 200).
 
+## Recorded fork replay: the spill pair on a real agentic trace
+
+The load-spill result reproduced on a recorded workload instead of salted
+prefixes: Claude Code sessions from `semianalysisai/cc-traces-weka-062126`
+that fork tens of subagents over one exact shared prefix, replayed with
+AIPerf (`weka_trace`, fixed schedule, `ignore_eos`). Cell: 2 prefill + 2
+decode DP8 instances (32x H200), fp8 KV (~54.7 KB/token on this build),
+`epp-glm-tokenload{,-p2p}.yaml` as the only per-arm difference,
+`minCachedTokenDelta: 12288`. Protocol and preconditions:
+[../benchmarking/README.md](../benchmarking/README.md) (fork-replay
+section); raw artifacts, pre-registered windows, and tooling live on the
+`p2p-findings` branch (`test/p2p-findings/configs/agentx-fork-sweep/`).
+
+**Per-pull value, verified at three layers.** On the W=8 group (75,520-token
+prefix), one spilled branch start pulled 77,312 tokens and returned in
+**790 ms** against the 13.8-13.9 s cold price both arms pay at the seed -
+within 6% of the value pre-registered from earlier runs' recompute rate
+(implied 5,861 tok/s avoided prefill vs 6,069/6,273 measured on a second
+cell). Evidence chain: the router directive (`delta=77,376 -> set KV cache
+source header`), the source engine's transfer session (decode DP3,
+`accepting incoming connection ... created connected session`), and the
+destination counter (`external_prefix_cache_hits += 77,312`, frozen through
+the zero-pull control).
+
+**Fork-level effect: the straggler band is removed.** Matched twin windows
+(43 and 44 children, ~40K prefixes within 0.8%) run as each other's control
+with cold engines between pairs, then swapped:
+
+| comparison | without P2P | with P2P |
+|---|---:|---:|
+| same window (W=43), both cold | p90 11.2 s (6 stragglers, 11-12.5 s) | **p90 1.6 s** |
+| matched twins, forward | p90 4.7 s | p90 1.6 s |
+| reversed twins | p90 11.2 s | p90 7.2 s (wider burst head) |
+| median, every arm | ~1.2-1.3 s | ~1.2-1.3 s |
+
+Simultaneous cold recomputes compound: 6.6 s alone becomes 11-12.5 s when
+six run at once. The pull's residual tail is the burst head - siblings
+arriving before any copy of the prefix exists, which no mechanism serves.
+The median never moves; on a fork the pull is tail repair, consistent with
+the load-first result's shape and with independent runs on a second cell
+(aggregate flat, p99 -43/-37%).
+
+**Negative result, single prefill pod.** With one prefill instance, pulls
+fired (5, engine-confirmed, 352,000 tokens) but lost to a faster same-pod
+path (~1-1.8 s baseline vs 3.5-4.2 s pulled); the fast path is not yet
+attributed. Router-level P2P pays across pod boundaries; within one pod the
+engine stack already rescues spills more cheaply.
+
+**Decode sizing bound.** 44 children x 40K tokens (~1.76M live decode KV)
+against a single DP8 decode instance (~1.68M) crashed the engine mid-run,
+and the dead-fleet run still emitted a complete-looking export with zero
+TTFTs. Size decode so `width x context <= decode KV`; with flow control
+(`utilization-detector` + `flowControl`) enabled, the identical
+single-decode configuration completed 163/164 with zero engine errors
+(causal isolation of the flow-control contribution pending a deliberate
+control).
+
 ## Historical: the overlay-era four-arm ladder (superseded)
 
 The ladder below was measured on the overlay-era stack with the

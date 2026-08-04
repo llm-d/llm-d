@@ -332,14 +332,64 @@ precise affinity leaves the pull nothing to repair. The overlay-era wins
 were real transfers triggered by index-eviction divergence that the
 index sizing fix has since removed; that ladder is quarantined as a
 historical reproduction record in the results page. The pull's measured
-territory on this testbed is load-first placement - the matched
-`epp-glm-loadfirst{,-p2p}` pair (-67% mean TTFT, 2.7x throughput).
+territory on this testbed is placement that trades affinity for load: the
+matched `epp-glm-loadfirst{,-p2p}` pair (-67% mean TTFT, 2.7x throughput)
+and the recorded-fork spill pair `epp-glm-tokenload{,-p2p}` (p90
+branch-start TTFT -66% to -86%, median flat - see the fork-replay
+section above).
 A cold engine replica behind an intact router is a plausible further
 case and is unmeasured; a restarted ROUTER is not one (both index modes
 lose the pre-restart cache map, and measured restart-recovery runs
 produced zero pulls). Full tables, crossover sweep, and the quarantined
 overlay-era grid:
 [../benchmark-results/glm-5.2-h200.md](../benchmark-results/glm-5.2-h200.md).
+
+## Recorded agentic fork replay (AIPerf, wide-EP GLM)
+
+The scenario that produces pulls without manufacturing load: a recorded
+Claude Code session forks tens of subagents that share one exact prefix, and
+the burst arrives faster than any single worker absorbs. Replayed from the
+public `semianalysisai/cc-traces-weka-062126` corpus with AIPerf, which
+reconstructs the recorded token counts, KV-block sharing structure, and
+subagent spawn timing:
+
+```bash
+aiperf profile --model zai-org/GLM-5.2-FP8 --tokenizer zai-org/GLM-5.2-FP8   --url http://<epp>:8081 --endpoint-type chat --streaming   --input-file <window>/trace.json --custom-dataset-type weka_trace   --fixed-schedule --extra-inputs ignore_eos:true   --use-server-token-count --output-artifact-dir <out>
+```
+
+The arms are `epp-glm-tokenload{,-p2p}.yaml`: load-modeled prefix-cache
+affinity (`prefix-cache-affinity-filter` + `token-load-scorer`), differing
+only by the `p2p-source-producer`. The load model is what generates spills -
+score-based affinity against an actual (empty) queue never leaves the
+holder at low load and produces zero pulls by construction.
+
+A replayable fork window is one burst of sibling subagents cut from a trace
+at the last child's first request. Selection and extraction tooling, the
+pre-registered windows, and every raw artifact live with the measurement
+record on the `p2p-findings` branch
+(`test/p2p-findings/configs/agentx-fork-sweep/`). Preconditions the workload
+must satisfy, each learned from a run that silently failed without it:
+
+* **Spawn gaps versus prefix compute.** The index learns a holder only after
+  the seed's blocks publish (~prefix-tokens / prefill-rate seconds). Bursts
+  tighter than that scatter cold and recompute in both arms; the burst head
+  is unrescuable by any mechanism and is reported as the floor.
+* **Prefix above the calibrated delta.** Every window here clears
+  `minCachedTokenDelta: 12288` with at least 3x margin.
+* **Decode KV must fit the fork.** Live decode KV is roughly
+  width x context; 44 x 40K tokens (1.76M) against a single DP8 decode pod
+  (1.68M) crashed the engine - and the dead-fleet run still produced a
+  complete-looking export with zero TTFTs. Size decode pods so
+  `W x context <= decode KV`, and validate TTFT coverage, never record
+  counts.
+* **Cold state is part of the protocol.** Matched twin windows (43 and 44
+  children, prefixes within 0.8%) serve as each other's control, with engine
+  restarts between pairs and the EPP restarted per arm; the comparison is
+  then repeated with the windows swapped. A warm rerun of the same window
+  correctly produces zero pulls - the fleet already holds the prefix.
+
+Results: [../benchmark-results/glm-5.2-h200.md](../benchmark-results/glm-5.2-h200.md)
+(fork-replay section).
 
 ## Run hygiene
 
@@ -358,6 +408,19 @@ overlay-era grid:
   across each stage and reconcile them with client-observed TTFT. Client
   latency the engines never saw lives in the gateway path (router, render,
   sidecar), not the serving fleet.
+* Fleet stability is an arm-validity gate: record engine pod ages before and
+  after every arm and discard any arm whose fleet changed mid-flight. An idle
+  gap between arms is enough for a cluster reclaimer to take a role; a
+  keep-warm must ping every engine pod directly, not just the gateway path.
+* Switching arms by restarting the EPP empties the precise index; declare a
+  cold-or-warm protocol and apply it to both arms. Re-verify per-rank
+  KV-event subscriptions after every EPP restart (they establish seconds
+  after Ready, so poll rather than sample once) - a live socket check, not a
+  log grep.
+* Verify the instrument can detect absence before trusting a zero:
+  `kubectl logs --tail=N` returns the last N lines, which at high verbosity
+  contain no startup lines at all; assert the capture holds lines that must
+  exist (config load, plugin instantiation) before believing "plugin absent".
 * Run a low-rate independent probe through the gateway during stages. A
   latency plateau that is flat across offered rates and identical across
   arms is a fixed timeout somewhere in the path, not saturation - queueing
