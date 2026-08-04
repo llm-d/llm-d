@@ -73,7 +73,7 @@ WVA is designed for operators running multiple variants of the same model across
 | **Scaling signal** | EPP metrics such as queue depth and running request count | normalized pool saturation level (0.0–1.0+) and running request count | EPP estimated TTFT/TPOT (ML-predicted, or measured) vs the SLO | KV cache utilization, queue depth, performance budgets |
 | **Cost optimization** | None — scales based on load signals only | None — scales based on load signals only | Minimizes replicas needed to meet the SLO | Optimizes across variants by preferring lower-cost hardware |
 | **Additional components** | KEDA and Prometheus only | KEDA and Prometheus only | KEDA + one Prometheus recording rule | KEDA and WVA controller |
-| **Scale to zero** | Supported | Supported | Supported (via KEDA) | Supported |
+| **Scale to zero** | Supported | Supported (Needs Validation) | Supported (via KEDA) | Supported |
 
 ## Observability & Troubleshooting
 
