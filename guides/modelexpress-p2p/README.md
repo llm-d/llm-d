@@ -92,6 +92,7 @@ export BRANCH=main
 export REPO_ROOT=$(realpath $(git rev-parse --show-toplevel))
 export GUIDE_NAME=modelexpress-p2p
 export NAMESPACE=llm-d-modelexpress-p2p
+export MX_VERSION=v0.5.0
 ```
 <!-- llm-d-cicd:skip start -->
 ```bash
@@ -134,11 +135,11 @@ kubectl create namespace ${NAMESPACE} --dry-run=client -o yaml | kubectl apply -
 ```
 <!-- guide:prerequisites.namespace end -->
 
-* A cluster admin installs the ModelExpress CRDs cluster-wide (one-time step). This guide vendors the two CRDs (pinned to the upstream `v0.5.0` tag) so the shape stays locked to the `modelexpress-server:0.5.0` pin instead of drifting with upstream `main`:
+* A cluster admin installs the ModelExpress CRDs cluster-wide (one-time step). The apply pins the upstream `v0.5.0` tag so the CRD shape stays locked to the `modelexpress-server:0.5.0` pin instead of drifting with upstream `main`:
 
 <!-- guide:prerequisites.crds start -->
 ```bash
-kubectl apply -f ${REPO_ROOT}/guides/${GUIDE_NAME}/modelexpress/crds.yaml
+kubectl apply -f https://raw.githubusercontent.com/ai-dynamo/modelexpress/${MX_VERSION}/examples/crds.yaml
 ```
 <!-- guide:prerequisites.crds end -->
 
@@ -576,7 +577,7 @@ kubectl delete namespace ${NAMESPACE}
 Only do this if no other namespace in the cluster is running ModelExpress. Deleting the CRDs cascade-deletes every `ModelMetadata` and `ModelCacheEntry` object across all namespaces.
 
 ```bash
-kubectl delete -f ${REPO_ROOT}/guides/${GUIDE_NAME}/modelexpress/crds.yaml
+kubectl delete -f https://raw.githubusercontent.com/ai-dynamo/modelexpress/${MX_VERSION}/examples/crds.yaml
 ```
 
 ## How It Works

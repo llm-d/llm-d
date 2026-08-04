@@ -8,6 +8,10 @@ env:
     GUIDE_NAME: modelexpress-p2p
     NAMESPACE: llm-d-modelexpress-p2p
 
+    # Keep in sync with the modelexpress-server image tag and the client
+    # version in image/Dockerfile.
+    MX_VERSION: v0.5.0
+
     HF_TOKEN: {default: HF_TOKEN_PLACEHOLDER, sensitive: true}
 
     MODEL: {default: "meta-llama/Llama-3.3-70B-Instruct"}
@@ -32,7 +36,7 @@ prerequisites:
     - run: kubectl create namespace ${NAMESPACE} --dry-run=client -o yaml | kubectl apply -f -
 
   crds:
-    - run: kubectl apply -f ${REPO_ROOT}/guides/${GUIDE_NAME}/modelexpress/crds.yaml
+    - run: kubectl apply -f https://raw.githubusercontent.com/ai-dynamo/modelexpress/${MX_VERSION}/examples/crds.yaml
 
   secrets:
     - skip_in: [ci]
