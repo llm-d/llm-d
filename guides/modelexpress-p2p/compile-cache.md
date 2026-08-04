@@ -8,6 +8,8 @@ Once weight transfer is sub-second, vLLM's `torch.compile` becomes the bottlenec
 
 The 0.5.0 artifact transfer protocol extends the NIXL path beyond weights to file-backed cache artifacts. Set `MX_ARTIFACT_TRANSFER=1` on the decode pods (it applies to both source and target roles). Before model initialization, receivers install compatible torch.compile (TorchInductor), Triton, DeepGEMM, TileLang, CuTe DSL, and FlashInfer caches, including persistent autotune files, from a ready source. No shared storage is needed.
 
+Measured with the guide's default configuration (see [benchmark-results](./benchmark-results/h200-ib-gpt-oss-120b.md)): the receiver installs the seed's 148 MiB torch.compile bundle in 0.9 s, `torch.compile` drops from 20.1 s to 3.4 s (direct AOT cache load), and receiver pod-Ready time drops from 181 s to 156 s.
+
 ```yaml
 # add to the modelserver container env in base/patch-vllm.yaml
 - name: MX_ARTIFACT_TRANSFER
@@ -18,14 +20,14 @@ Notes on this path:
 
 * It needs the P2P metadata path (`MX_P2P_METADATA=1`, the default) and a central-coordinator backend. This guide's `kubernetes` backend qualifies; the decentralized `k8s-service` backend does not publish artifact discovery metadata yet.
 * The source seals and publishes cache bundles only after the engine reports healthy (`MX_ARTIFACT_READY_URL`, default `http://127.0.0.1:8000/health` for vLLM). Receivers that start after the seed is Ready get the caches; a cold N-replica apply where all pods race up may not.
-* Bundles stage as tars under `MX_ARTIFACT_BUNDLE_ROOT` (default `$TMPDIR/modelexpress-artifacts`), then install into the runtime cache directories. The guide's `/.cache` and `/.triton` emptyDir mounts are writable, so no manifest change is needed.
+* Bundles stage as tars under `MX_ARTIFACT_BUNDLE_ROOT` (default `$TMPDIR/modelexpress-artifacts`), then install into the runtime cache directories. The guide's `/root/.cache` and `/root/.triton` emptyDir mounts are writable, so no manifest change is needed.
 * Compatibility is digest-gated (compile config, accelerator family). An incompatible artifact is skipped and the receiver recompiles; it does not fail the load.
 * Cudagraph capture is not a file-backed artifact. It still costs per pod on this path and on the PVC path below.
 * `MX_ARTIFACT_TRANSFER_CHUNK_SIZE` (default 64 MiB) trades RPC overhead against registered DRAM buffer memory on both ends.
 
 ## Option B: Shared RWX PVC
 
-vLLM stores the AOT compile artifacts under `/.cache/vllm` (the container's `/.cache` mount; `VLLM_CACHE_ROOT=/.cache/vllm`). If you back that path with a `ReadWriteMany` PVC, receivers reuse the cached graphs from shared storage instead.
+vLLM stores the AOT compile artifacts under `/root/.cache/vllm` (the container's `/root/.cache` mount; the image runs as root, so `VLLM_CACHE_ROOT` resolves under `/root`). If you back that path with a `ReadWriteMany` PVC, receivers reuse the cached graphs from shared storage instead.
 
 Layer the `shared-compile-cache` kustomize component on top of your provider overlay:
 
@@ -50,7 +52,7 @@ The component:
 
 * Adds a `vllm-compile-cache` PVC (50 GiB, RWX, uses cluster-default StorageClass; edit `compile-cache-pvc.yaml` if you need a specific class like `shared-vast` on CoreWeave or `efs-sc` on EKS).
 * Swaps the per-pod `torch-compile-cache` emptyDir for the PVC.
-* Exports `VLLM_CACHE_ROOT=/.cache/vllm` and `TORCHINDUCTOR_CACHE_DIR=/.cache/torch_inductor` so vLLM and Inductor land on the shared mount.
+* Exports `VLLM_CACHE_ROOT=/root/.cache/vllm` and `TORCHINDUCTOR_CACHE_DIR=/root/.cache/torch_inductor` so vLLM and Inductor land on the shared mount.
 
 ## Workload notes
 

@@ -14,9 +14,9 @@
   path: /spec/template/spec/containers/0/env/-
   value:
     name: VLLM_CACHE_ROOT
-    value: /.cache/vllm
+    value: /root/.cache/vllm
 - op: add
   path: /spec/template/spec/containers/0/env/-
   value:
     name: TORCHINDUCTOR_CACHE_DIR
-    value: /.cache/torch_inductor
+    value: /root/.cache/torch_inductor

@@ -61,11 +61,11 @@ spec:
           volumeMounts:
             - mountPath: /dev/shm
               name: shm
-            - mountPath: /.cache
+            - mountPath: /root/.cache
               name: torch-compile-cache
-            - mountPath: /.triton
+            - mountPath: /root/.triton
               name: triton-cache
-            - mountPath: /.config
+            - mountPath: /root/.config
               name: vllm-config
             - mountPath: /pylibs
               name: pylibs

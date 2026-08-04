@@ -15,7 +15,7 @@ images:
 
 labels:
   - pairs:
-      llm-d.ai/model: Llama-3.3-70B-Instruct
+      llm-d.ai/model: gpt-oss-120b
       llm-d.ai/guide: modelexpress-p2p
       llm-d.ai/accelerator-variant: gpu
       llm-d.ai/accelerator-vendor: nvidia

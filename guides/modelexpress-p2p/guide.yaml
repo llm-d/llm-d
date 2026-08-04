@@ -14,7 +14,7 @@ env:
 
     HF_TOKEN: {default: HF_TOKEN_PLACEHOLDER, sensitive: true}
 
-    MODEL: {default: "meta-llama/Llama-3.3-70B-Instruct"}
+    MODEL: {default: "openai/gpt-oss-120b"}
 
     PROVIDER_NAME: {default: gke, values: [none, gke, agentgateway, istio]}
     INFRA_PROVIDER: {default: coreweave, values: [base, coreweave]}

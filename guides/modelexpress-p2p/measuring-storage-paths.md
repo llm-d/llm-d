@@ -2,6 +2,8 @@
 
 Assumes the [main guide](./README.md) is deployed and its environment variables are set. Example observations collected with this procedure are in [benchmark-results](./benchmark-results/coreweave-h200-llama-3.3-70b.md).
 
+These tests use `meta-llama/Llama-3.3-70B-Instruct` (gated; needs the HF token secret), not the guide's default `gpt-oss-120b`: `--load-format=fastsafetensors` cannot load MXFP4 checkpoints, so a dense bf16 model is required to compare the storage paths.
+
 Run the fastsafetensors tests the same way you ran the P2P test: prewarm once, then scale 1→N and record `Loading weights took` plus the scale-out wall clock. Keep cudagraph/compile constant across every path you measure (set `--enforce-eager` on all, or layer `shared-compile-cache` on all) so the weight path stays the main variable.
 
 These measurement workloads sit outside the router on purpose. The router's `modelServers.matchLabels` selects `llm-d.ai/guide: modelexpress-p2p`, so the fastsafetensors pods never receive routed traffic. Measure them by port-forwarding or by hitting the pods directly.

@@ -6,9 +6,9 @@ This guide adds [NVIDIA ModelExpress](https://github.com/ai-dynamo/modelexpress)
 
 A central-coordinator ModelExpress server (it runs with the `kubernetes` metadata backend) brokers the metadata exchange. It tracks which pods are READY sources for which `mx_source_id`, and gives target pods the NIXL agent and tensor-manifest endpoints they need to start an RDMA pull. The server itself never touches weight bytes.
 
-For an `N`-replica deployment of `meta-llama/Llama-3.3-70B-Instruct` (~140 GB of bf16 weights):
+For an `N`-replica deployment of `openai/gpt-oss-120b` (~61 GB of MXFP4 weights):
 
-* Without ModelExpress, every vLLM pod pulls ~140 GB from HuggingFace at startup: N times the cluster egress, N times the slow path, plus disk-to-GPU load time on every pod.
+* Without ModelExpress, every vLLM pod pulls ~61 GB from HuggingFace at startup: N times the cluster egress, N times the slow path, plus disk-to-GPU load time on every pod.
 * With this guide, the first pod to come up does the HuggingFace download, registers its tensors with NIXL, and publishes itself as a P2P source. Every other pod finds that source through the ModelExpress server and pulls weights straight into GPU HBM over RDMA.
 
 > This guide ships a default of **2 replicas (1 seed + 1 receiver)** to keep the GPU footprint small (4 GPUs at TP2), and it still runs a real HBM-to-HBM transfer. The amount of weight data moved over P2P grows with `(bytes per replica) x (number of receivers)`. Scale the pool wider to see a production fan-out. See [measuring-storage-paths](./measuring-storage-paths.md) to record P2P and storage-backed load times in your own environment.
@@ -47,7 +47,7 @@ For workload-specific guidance (RL training rollouts, elastic bin-packed racks),
 
 | Component | Value |
 | --- | --- |
-| Model | [meta-llama/Llama-3.3-70B-Instruct](https://huggingface.co/meta-llama/Llama-3.3-70B-Instruct) (~140 GB, bf16, gated) |
+| Model | [openai/gpt-oss-120b](https://huggingface.co/openai/gpt-oss-120b) (~61 GB, MXFP4, ungated) |
 | Replicas | 2 (1 seed + 1 receiver; scale wider for a real fan-out) |
 | Tensor Parallelism | 2 |
 | Total GPUs | 4 |
@@ -87,7 +87,7 @@ export HF_TOKEN=HF_TOKEN_PLACEHOLDER
 ```
 <!-- llm-d-cicd:skip end -->
 ```bash
-export MODEL=meta-llama/Llama-3.3-70B-Instruct
+export MODEL=openai/gpt-oss-120b
 export PROVIDER_NAME=gke # options: none, gke, agentgateway, istio
 export INFRA_PROVIDER=coreweave # options: base, coreweave
 export CURL_TEST_IMAGE=cfmanteiga/alpine-bash-curl-jq:latest
@@ -131,7 +131,7 @@ kubectl apply -f https://raw.githubusercontent.com/ai-dynamo/modelexpress/${MX_V
 <!-- guide:prerequisites.crds end -->
 
 * Create an `nvcr-imagepullsecret` in the target namespace to grant access to `nvcr.io/nvidia/ai-dynamo/modelexpress-server`. See the [ModelExpress Helm README](https://github.com/ai-dynamo/modelexpress/blob/v0.5.0/helm/README.md#1-create-nvidia-container-registry-secret) for the secret recipe. Or build this image yourself and push it to a local registry of your choice.
-* [Create the `llm-d-hf-token` secret in your target namespace with the key `HF_TOKEN` matching a valid HuggingFace token](../../helpers/hf-token.md). **Llama-3.3-70B is gated, so you need this secret** (the seed pod and the fastsafetensors prewarm Job both need it):
+* [Create the `llm-d-hf-token` secret in your target namespace with the key `HF_TOKEN` matching a valid HuggingFace token](../../helpers/hf-token.md). `gpt-oss-120b` is ungated, but the token avoids HF rate limits on the seed download, and the gated Llama checkpoint in [measuring-storage-paths](./measuring-storage-paths.md) needs it:
 
 <!-- guide:prerequisites.secrets start -->
 <!-- llm-d-cicd:skip start -->
@@ -146,7 +146,7 @@ kubectl create secret generic llm-d-hf-token \
 
 ### Image: building a ModelExpress-enabled model server image
 
-The `mx` load-format plugin lives in the [`modelexpress` Python client](https://github.com/ai-dynamo/modelexpress/tree/main/modelexpress_client/python), the vLLM plugin that provides the `mx` load format. Build a thin derived image on top of the shared GPU vLLM image from `guides/recipes/modelserver/components/images/gpu-vllm`. This way, the guide tracks the project default when that component changes.
+The `mx` load format comes from the [`modelexpress` Python client](https://github.com/ai-dynamo/modelexpress/tree/main/modelexpress_client/python), a vLLM plugin. Build a thin derived image on top of the shared GPU vLLM image from `guides/recipes/modelserver/components/images/gpu-vllm`. This way, the guide tracks the project default when that component changes.
 
 > [!WARNING]
 > The shared GPU vLLM image does not ship the ModelExpress client. You need an image with the client baked in. This Dockerfile follows the pattern of the upstream [ModelExpress client Dockerfile](https://github.com/ai-dynamo/modelexpress/blob/v0.5.0/examples/p2p_transfer_k8s/client/vllm/Dockerfile), but takes its base image from the central llm-d image component:
@@ -365,7 +365,7 @@ kubectl get modelmetadata -n ${NAMESPACE} \
 # expect one row per TP rank, status column reading "True"
 ```
 
-For Llama-3.3-70B (~140 GB) on a typical cluster, expect this step to take **several minutes**, bounded by HuggingFace bandwidth and disk write throughput.
+For gpt-oss-120b (~61 GB) on a typical cluster, expect this step to take **several minutes**, bounded by HuggingFace bandwidth and disk write throughput.
 
 ### 2. Scale up and watch the rest of the pool come up via RDMA
 
@@ -406,21 +406,22 @@ Look for lines like `discovered READY source` followed by NIXL transfer progress
 
 ## Example Results
 
-Example observation from one CoreWeave environment (8×H200 + InfiniBand, `meta-llama/Llama-3.3-70B-Instruct`, TP2, ~70.6 GB of weights per TP worker, warm storage), 2026-05:
+Example observation with the guide's default configuration (`openai/gpt-oss-120b`, TP2, 33.51 GB of materialized MXFP4 weights per TP rank, 8×H200 nodes with per-GPU InfiniBand NICs, seed and receiver on separate nodes), 2026-08:
 
-| Path | Weight-load time | Effective rate |
+| Path | Weight-load time per rank | Effective rate |
 | --- | --- | --- |
-| Default loader ← prewarmed NFS | 22.6 s | ~3.1 GB/s |
-| fastsafetensors ← prewarmed NFS | 11.6 s | ~6.1 GB/s |
-| fastsafetensors ← warm local NVMe | 30.2 s | ~2.3 GB/s |
-| ModelExpress P2P | 2.7 s | ~210 Gbps (~26 GB/s) |
+| Default loader ← warm NFS RWX PVC | 30.3 s | ~1.1 GB/s |
+| ModelExpress P2P | **0.93 s** | ~287 Gbps (~36 GB/s) |
+| fastsafetensors | n/a | cannot load MXFP4 |
 
-These are environment-specific observations, not official NVIDIA benchmark results. The full methodology, the storage-path caveats (GDS did not engage on this cluster), and an MoE observation are in [benchmark-results](./benchmark-results/coreweave-h200-llama-3.3-70b.md); reproduce them with [measuring-storage-paths](./measuring-storage-paths.md).
+With [P2P cache artifact transfer](./compile-cache.md) also enabled, the receiver reuses the seed's 148 MiB torch.compile bundle (installed in 0.9 s): `torch.compile` drops from 20.1 s to 3.4 s and receiver pod-Ready time from 181 s to 156 s. Cudagraph capture is per-pod and remains the largest fixed cost.
+
+These are environment-specific observations, not official NVIDIA benchmark results. Full methodology and tables are in [benchmark-results](./benchmark-results/h200-ib-gpt-oss-120b.md); an earlier dense + MoE comparison (Llama-3.3-70B, Llama-4-Scout, including storage-path caveats) is in [this report](./benchmark-results/coreweave-h200-llama-3.3-70b.md). Reproduce the storage rows with [measuring-storage-paths](./measuring-storage-paths.md).
 
 ## Going Further
 
 * [Measuring storage-backed loading paths](./measuring-storage-paths.md): time fastsafetensors from NFS and local NVMe against P2P in your own cluster.
-* [Reusing JIT compile caches across pods](./compile-cache.md): once weight transfer is sub-second, cut the `torch.compile` cost with P2P artifact transfer (0.5.0+) or a shared RWX PVC.
+* [Reusing JIT compile caches across pods](./compile-cache.md): once weight transfer is sub-second, cut the `torch.compile` cost with P2P artifact transfer (0.5.0+, measured 20.1 s → 3.4 s) or a shared RWX PVC.
 * [Locking down the metadata broker](./security.md): Istio mTLS plus an AuthorizationPolicy for shared clusters.
 
 ## Cleanup

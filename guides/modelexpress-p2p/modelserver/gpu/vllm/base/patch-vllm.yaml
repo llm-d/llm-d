@@ -12,7 +12,7 @@ spec:
         - name: modelserver
           command: ["vllm", "serve"]
           args:
-            - "meta-llama/Llama-3.3-70B-Instruct"
+            - "openai/gpt-oss-120b"
             - "--disable-access-log-for-endpoints=/health,/metrics,/v1/models"
             - "--tensor-parallel-size=2"
             - "--gpu-memory-utilization=0.95"
@@ -54,11 +54,11 @@ spec:
           volumeMounts:
             - mountPath: /dev/shm
               name: shm
-            - mountPath: /.cache
+            - mountPath: /root/.cache
               name: torch-compile-cache
-            - mountPath: /.triton
+            - mountPath: /root/.triton
               name: triton-cache
-            - mountPath: /.config
+            - mountPath: /root/.config
               name: vllm-config
             - mountPath: /models
               name: model-cache
