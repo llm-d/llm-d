@@ -25,6 +25,7 @@ spec:
   triggers:
   - type: prometheus
     name: pool-saturation
+    metricType: AverageValue
     metadata:
       serverAddress: "https://llmd-kube-prometheus-stack-prometheus.llm-d-monitoring.svc.cluster.local:9090"
       # For generic k8s with bundled llm-d Prometheus stack (installed via observability setup guide).
@@ -36,12 +37,12 @@ spec:
       # Recommended: 0.7-0.8 to scale before reaching full saturation.
       threshold: "0.7"
       activationThreshold: "0"
-      metricType: AverageValue
-      authenticationRef:
-        name: prometheus-auth
       unsafeSsl: "false"
+    authenticationRef:
+      name: prometheus-auth
   - type: prometheus
     name: running-requests
+    metricType: AverageValue
     metadata:
       serverAddress: "https://llmd-kube-prometheus-stack-prometheus.llm-d-monitoring.svc.cluster.local:9090"
       # For generic k8s with bundled llm-d Prometheus stack (installed via observability setup guide).
@@ -53,7 +54,6 @@ spec:
       # Recommended: 16-32 (lower = more replicas, higher cost but lower latency; higher = fewer replicas, lower cost but higher latency).
       threshold: "16"
       activationThreshold: "0"
-      metricType: AverageValue
-      authenticationRef:
-        name: prometheus-auth
       unsafeSsl: "false"
+    authenticationRef:
+      name: prometheus-auth
