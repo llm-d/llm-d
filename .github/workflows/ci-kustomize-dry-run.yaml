@@ -10,7 +10,9 @@ on:
       - guides/optimized-baseline/**
       - guides/pd-disaggregation/**
       - guides/precise-prefix-cache-routing/**
+      - guides/tiered-prefix-cache/**
       - guides/workload-autoscaling/**
+      - helpers/mooncake-master-store/**
       - guides/prereq/**
       - helpers/client-setup/**
       - guides/recipes/observability/install-prometheus-grafana.sh
@@ -26,6 +28,7 @@ jobs:
       optimized-baseline: ${{ steps.filter.outputs.optimized-baseline }}
       pd-disaggregation: ${{ steps.filter.outputs.pd-disaggregation }}
       precise-prefix-cache-routing: ${{ steps.filter.outputs.precise-prefix-cache-routing }}
+      tiered-prefix-cache: ${{ steps.filter.outputs.tiered-prefix-cache }}
       workload-autoscaling: ${{ steps.filter.outputs.workload-autoscaling }}
     steps:
       - uses: actions/checkout@v7
@@ -53,6 +56,12 @@ jobs:
               - guides/recipes/gateway/install-gateway-crds.sh
               - guides/recipes/observability/install-prometheus-grafana.sh
               - guides/precise-prefix-cache-routing/**
+            tiered-prefix-cache:
+              - .github/workflows/ci-kustomize-dry-run.yaml
+              - guides/recipes/modelserver/**
+              - guides/tiered-prefix-cache/**
+              - helpers/mooncake-client/**
+              - helpers/mooncake-master-store/**
             simulated-accelerators:
               - .github/workflows/ci-kustomize-dry-run.yaml
               - helpers/client-setup/install-deps.sh
@@ -364,6 +373,80 @@ jobs:
               failed=1
             fi
           done < <(find "${base}" -name kustomization.yaml -print0 | sort -z)
+          exit $failed
+
+  dry-run-tiered-prefix-cache:
+    needs: detect-changes
+    if: needs.detect-changes.outputs.tiered-prefix-cache == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Create kind cluster
+        uses: helm/kind-action@ef37e7f390d99f746eb8b610417061a60e82a6cc  # v1.14.0
+        with:
+          cluster_name: kustomize-dry-run
+          node_image: kindest/node:v1.35.0
+          version: v0.31.0
+          wait: 120s
+
+      - name: Install monitoring CRDs
+        run: guides/recipes/observability/install-prometheus-grafana.sh --crds-only
+
+      - name: Create Mooncake namespace
+        run: kubectl create namespace mooncake
+
+      - name: Kustomize build and dry-run all model server overlays
+        run: |
+          failed=0
+          base=guides/tiered-prefix-cache/modelserver
+          while IFS= read -r -d '' kustfile; do
+            kust_dir="${kustfile%kustomization.yaml}"
+            name="${kust_dir#"${base}"/}"
+            name="${name%/}"
+            echo ""
+            echo "========================================"
+            echo "tiered-prefix-cache: ${name}"
+            echo "========================================"
+            if ! kustomize build "${kust_dir}" > /tmp/rendered.yaml; then
+              echo "FAIL: kustomize build failed for ${name}"
+              failed=1
+              continue
+            fi
+            if kubectl apply --dry-run=server -f /tmp/rendered.yaml; then
+              echo "PASS: tiered-prefix-cache / ${name}"
+            else
+              echo "FAIL: tiered-prefix-cache / ${name}"
+              failed=1
+            fi
+          done < <(find "${base}" -name kustomization.yaml -print0 | sort -z)
+          exit $failed
+
+      - name: Kustomize build and dry-run Mooncake helpers
+        run: |
+          failed=0
+          for helper in helpers/mooncake-master-store/base \
+                        helpers/mooncake-master-store/monitoring \
+                        helpers/mooncake-master-store/sglang; do
+            echo ""
+            echo "========================================"
+            echo "${helper}"
+            echo "========================================"
+            if ! kustomize build "${helper}" > /tmp/rendered.yaml; then
+              echo "FAIL: kustomize build failed for ${helper}"
+              failed=1
+              continue
+            fi
+            if kubectl apply --dry-run=server -f /tmp/rendered.yaml; then
+              echo "PASS: ${helper}"
+            else
+              echo "FAIL: ${helper}"
+              failed=1
+            fi
+          done
           exit $failed
 
   dry-run-workload-autoscaling:

@@ -1,0 +1,72 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: decode
+spec:
+  template:
+    spec:
+      containers:
+        - name: modelserver
+          securityContext:
+            capabilities:
+              add:
+                - IPC_LOCK
+          args:
+            - "--model-path=Qwen/Qwen3-32B"
+            - "--host=0.0.0.0"
+            - "--port=8000"
+            - "--tensor-parallel-size=2"
+            # KV-block granularity. Must match the router scorer's
+            # tokenProcessorConfig.blockSizeTokens (default 64).
+            - "--page-size=64"
+            - "--mem-fraction-static=0.9"
+            - "--enable-metrics"
+            # L1 HBM -> L2 CPU DRAM.
+            - "--enable-hierarchical-cache"
+            - "--hicache-write-policy"
+            - "write_through"
+            # Mooncake requires page_first rather than layer_first host layout.
+            - "--hicache-io-backend"
+            - "kernel"
+            - "--hicache-size"
+            - "200"
+            # L3 shared CPU DRAM, registered with the Mooncake Master below.
+            - "--hicache-storage-backend"
+            - "mooncake"
+            - "--hicache-storage-prefetch-policy"
+            - "timeout"
+          env:
+            # Use SGLang's environment schema instead of an extra-config JSON.
+            # local_hostname cannot be empty; doing so fails setup with -600.
+            - name: MOONCAKE_MASTER
+              value: "mooncake-master-store.mooncake.svc.cluster.local:50051"
+            - name: MOONCAKE_TE_META_DATA_SERVER
+              value: "P2PHANDSHAKE"
+            - name: MOONCAKE_PROTOCOL
+              value: "rdma"
+            - name: MOONCAKE_GLOBAL_SEGMENT_SIZE
+              value: "16gb"
+            - name: MOONCAKE_LOCAL_HOSTNAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.podIP
+            # Cross-replica cache keys must be deterministic.
+            - name: PYTHONHASHSEED
+              value: "0"
+            # OpenShift may assign an arbitrary UID with HOME=/; keep runtime
+            # caches in a writable location without requiring a root container.
+            - name: HOME
+              value: "/tmp"
+            - name: TRITON_CACHE_DIR
+              value: "/tmp/triton"
+          resources:
+            limits:
+              nvidia.com/gpu: "2"
+              cpu: "16"
+              memory: 512Gi
+              rdma/ib: "1"
+            requests:
+              nvidia.com/gpu: "2"
+              cpu: "8"
+              memory: 300Gi
+              rdma/ib: "1"
