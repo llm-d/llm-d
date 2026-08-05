@@ -68,7 +68,7 @@ scaling decisions. The HPA remains visible for inspection, but KEDA owns it.
      -f ${REPO_ROOT}/guides/recipes/router/base.values.yaml \
      -f ${REPO_ROOT}/guides/optimized-baseline/router/optimized-baseline.values.yaml \
      -f ${REPO_ROOT}/guides/recipes/router/features/monitoring.values.yaml \
-     -f ${REPO_ROOT}/guides/workload-autoscaling/keda-epp/router.values.yaml \
+     -f ${REPO_ROOT}/guides/workload-autoscaling/optimized-baseline-autoscaling/keda-epp-queue/router.values.yaml \
      -n ${NAMESPACE} --version ${ROUTER_CHART_VERSION}
    ```
 
@@ -217,7 +217,7 @@ model and hardware combinations.
 ## Apply the KEDA ScaledObject
 
 Review
-[`keda-epp/scaledobject.yaml`](./keda-epp/scaledobject.yaml) before applying it.
+[`keda-epp-queue/scaledobject.yaml`](./optimized-baseline-autoscaling/keda-epp-queue/scaledobject.yaml) before applying it.
 At minimum, verify these deployment-specific fields:
 
 - `metadata.namespace`
@@ -239,7 +239,7 @@ kubectl rollout status \
 ```
 
 ```bash
-kubectl apply -k ${REPO_ROOT}/guides/workload-autoscaling/keda-epp
+kubectl apply -k ${REPO_ROOT}/guides/workload-autoscaling/optimized-baseline-autoscaling/keda-epp-queue
 ```
 
 ## Verify KEDA Metric Evaluation
@@ -389,7 +389,7 @@ available, and the generated HPA has no scaling-limited conditions.
 ## Cleanup
 
 ```bash
-kubectl delete -k ${REPO_ROOT}/guides/workload-autoscaling/keda-epp
+kubectl delete -k ${REPO_ROOT}/guides/workload-autoscaling/optimized-baseline-autoscaling/keda-epp-queue
 kubectl delete secret keda-prometheus-auth -n ${NAMESPACE}
 ```
 
