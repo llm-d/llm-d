@@ -54,6 +54,73 @@ This guide includes configuration for the following accelerators:
 > [!NOTE]
 > Some hardware variants use reduced configurations (fewer replicas, smaller models) to enable CI testing for compatibility and regression checks. These configurations are maintained by their respective hardware vendors and are not guaranteed as production-ready examples. Users deploying on non-default hardware should review and adjust the configurations for their environment.
 
+### Supported KV Transfer Backends
+
+P/D disaggregation requires a KV transfer backend to move KV cache blocks from prefill workers to decode workers. The transfer backend is configured via vLLM's `--kv-transfer-config` flag.
+
+> [!NOTE]
+> The following table represents vLLM's KVTransfer compatability. SGLang also supports these KVTransfer backends but its implementation will look different and is coming soon.
+
+| Connector | Overlay | Transport | Notes |
+| --------- | ------- | --------- | ----- |
+| NixlConnector | `base`, `coreweave`, `gke` | UCX (RDMA / TCP) | Default. Supports heterogeneous TP across P/D. |
+| MooncakeConnector | `cks-mooncake` | RDMA via Mooncake Transfer Engine | Requires same TP on prefill and decode. CKS with InfiniBand. |
+
+The `base` overlay uses NixlConnector and works on most clusters. Alternative overlays swap the connector and add infrastructure-specific configuration (e.g., RDMA device requests).
+
+<details>
+<summary><b>MooncakeConnector details</b></summary>
+
+The `cks-mooncake` overlay uses [Mooncake Transfer Engine](https://github.com/kvcache-ai/Mooncake) as the KV transfer backend. Mooncake provides point-to-point RDMA-based transfer of KV cache blocks between prefill and decode workers. It is used here as a transport layer — llm-d remains responsible for routing, orchestration, and scheduling.
+
+> [!IMPORTANT]
+> This overlay configures `MooncakeConnector` for P/D KV transfer only. It does **not** configure Mooncake Store (`MooncakeStoreConnector`), which provides distributed KV storage for tiered cache offloading and is a separate integration.
+
+**Constraints:**
+- MooncakeConnector requires the **same `tensor-parallel-size`** on both prefill and decode instances. The `cks-mooncake` overlay uses TP=1 for both. If your model requires higher TP, set both sides to the same value and adjust GPU resource requests.
+- `mooncake-transfer-engine` must be installed in the vLLM container image. The standard `vllm/vllm-openai` image may not include it — you may need a custom image. See the [Mooncake installation docs](https://kvcache-ai.github.io/Mooncake/).
+
+**CKS / RDMA prerequisites:**
+- NVIDIA GPU Operator (or equivalent) with GPUs visible to pods via `nvidia.com/gpu`.
+- InfiniBand / RDMA devices available on worker nodes and exposed **inside pods** (host-level RDMA alone is not sufficient).
+- RDMA device plugin exposing `rdma/ib` resources. Typically provided by the NVIDIA Network Operator, Multus with SR-IOV, or your CKS provider's equivalent.
+
+Validate RDMA from inside a test pod before deploying:
+
+```bash
+kubectl run rdma-test --rm -it \
+    --image=mellanox/rping-test \
+    --overrides='{"spec":{"containers":[{"name":"rdma-test","image":"mellanox/rping-test","command":["ibv_devinfo"],"resources":{"limits":{"rdma/ib":"1"}}}]}}' \
+    -- ibv_devinfo
+```
+
+**Request flow:**
+
+```
+client request → llm-d routing → vLLM prefill (kv_producer) → MooncakeConnector (RDMA) → vLLM decode (kv_consumer) → response
+```
+
+**kv-transfer-config reference:**
+
+| Field | Prefill | Decode | Description |
+| :---- | :------ | :----- | :---------- |
+| `kv_connector` | `MooncakeConnector` | `MooncakeConnector` | Selects Mooncake Transfer Engine |
+| `kv_role` | `kv_producer` | `kv_consumer` | Prefill produces KV blocks, decode consumes |
+| `kv_connector_extra_config.mooncake_protocol` | `rdma` | `rdma` | Transport protocol |
+
+**Environment variables:**
+
+| Variable | Default | Description |
+| :------- | :------ | :---------- |
+| `VLLM_MOONCAKE_BOOTSTRAP_PORT` | `8998` | Mooncake bootstrap server port. Must be unique per instance if co-located. |
+| `VLLM_MOONCAKE_ABORT_REQUEST_TIMEOUT` | `480` | Seconds before a prefiller releases KV cache if the decoder does not acknowledge. |
+
+**Troubleshooting:**
+- **No RDMA in pod**: Check that `rdma/ib` appears in `kubectl describe node` allocatable resources and that the RDMA device plugin is running.
+- **MooncakeConnector fails to init**: Verify `mooncake-transfer-engine` is installed (`pip show mooncake-transfer-engine` inside the pod) and the bootstrap port is free.
+- **KV transfer failures**: Confirm prefill and decode use the same TP size and can reach each other over the RDMA network.
+
+</details>
 
 ## Prerequisites
 
@@ -164,13 +231,16 @@ export INFRA_PROVIDER=base # base | coreweave | gke/base | gke/a4x | gke/a4xmax 
 kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/gpu/vllm/${INFRA_PROVIDER}
 ```
 
+> [!TIP]
+> The `cks-mooncake` overlay uses MooncakeConnector instead of NixlConnector for KV transfer. It targets CKS clusters with InfiniBand / RDMA and has additional prerequisites — see [KV Transfer Backends](#kv-transfer-backends) above.
+
 <details>
 <summary><h4>Deploying with SGLang</h4></summary>
 
 To run the disaggregated deployment with SGLang instead of vLLM, apply the SGLang overlay (available for NVIDIA GPU with `base`, `coreweave`, and `gke` infra providers):
 
 ```bash
-export INFRA_PROVIDER=base # base | coreweave | gke
+export INFRA_PROVIDER=base # base | coreweave | gke | cks-mooncake
 
 kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/gpu/sglang/${INFRA_PROVIDER}
 ```
