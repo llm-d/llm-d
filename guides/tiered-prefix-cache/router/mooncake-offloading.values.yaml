@@ -1,0 +1,75 @@
+## Mooncake Store tiered-offload router overrides (non-PD mode).
+## Layer on top of:
+##   guides/recipes/router/base.values.yaml
+##
+## Mooncake Store manages the shared CPU DRAM and SSD/NVMe tiers.
+## The router treats every prefix match the Mooncake transfer engine
+## reports as a single signal and trusts Mooncake to decide which tier
+## to pull from. The router owns the load-based routing signals (queue
+## depth, KV-cache utilization) and mixes them with prefix affinity.
+##
+## A single approximate prefix-cache producer and scorer are used
+## because MooncakeStoreConnector hardcodes medium="cpu" on all
+## BlockStored events regardless of actual backing tier (memory vs
+## disk). The EPP cannot distinguish offload tiers until vLLM exposes
+## the real storage medium:
+##   https://github.com/vllm-project/vllm/blob/8f158d0e/vllm/distributed/kv_transfer/kv_connector/v1/mooncake/store/worker.py#L896
+## When per-tier mediums are available, switch to
+## precise-prefix-cache-producer with per-tier kvCacheBackendConfigs
+## weights to score memory and disk hits differently.
+
+router:
+  extraServicePorts:
+    - name: http
+      port: 80
+      protocol: TCP
+      targetPort: 8081
+
+  epp:
+    pluginsConfigFile: tiered-prefix-cache-mooncake-plugins.yaml
+
+    pluginsCustomConfig:
+      tiered-prefix-cache-mooncake-plugins.yaml: |
+        apiVersion: llm-d.ai/v1alpha1
+        kind: EndpointPickerConfig
+
+        plugins:
+          # Prefix affinity from Mooncake engine cache matches.
+          # All tiers are scored equally since Mooncake reports a
+          # single medium today.
+          - type: approx-prefix-cache-producer
+            name: mooncake-prefix-cache-producer
+
+          - type: prefix-cache-scorer
+            name: mooncake-prefix-cache-scorer
+            parameters:
+              prefixMatchInfoProducerName: mooncake-prefix-cache-producer
+
+          # Prefer endpoints with less queued work.
+          - type: queue-scorer
+
+          # Prefer endpoints with lower local GPU KV-cache pressure.
+          - type: kv-cache-utilization-scorer
+
+          # Spread cold requests across endpoints so new cache entries
+          # are not concentrated on one model server.
+          - type: no-hit-lru-scorer
+            name: mooncake-no-hit-lru-scorer
+            parameters:
+              prefixPluginType: prefix-cache-scorer
+              prefixPluginName: mooncake-prefix-cache-scorer
+
+        schedulingProfiles:
+          - name: default
+            plugins:
+              - pluginRef: queue-scorer
+              - pluginRef: kv-cache-utilization-scorer
+              - pluginRef: mooncake-prefix-cache-scorer
+              - pluginRef: mooncake-no-hit-lru-scorer
+
+  modelServers:
+    type: vllm
+    targetPorts:
+      - number: 8000
+    matchLabels:
+      llm-d.ai/guide: tiered-prefix-cache
