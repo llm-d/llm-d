@@ -40,32 +40,25 @@ router:
           - type: approx-prefix-cache-producer
             name: mooncake-prefix-cache-producer
 
-          - type: prefix-cache-scorer
-            name: mooncake-prefix-cache-scorer
+          # In-flight load feeds the affinity filter's TTFT estimation.
+          - type: inflight-load-producer
+
+          # Narrow to endpoints with high prefix cache scores, but
+          # break stickiness when sticky endpoints are too loaded.
+          # peakPrefillThroughput default (15928) is calibrated for
+          # Qwen3-32B on H100 80GB TP=2; adjust for your hardware.
+          - type: prefix-cache-affinity-filter
             parameters:
               prefixMatchInfoProducerName: mooncake-prefix-cache-producer
 
-          # Prefer endpoints with less queued work.
-          - type: queue-scorer
-
-          # Prefer endpoints with lower local GPU KV-cache pressure.
-          - type: kv-cache-utilization-scorer
-
-          # Spread cold requests across endpoints so new cache entries
-          # are not concentrated on one model server.
-          - type: no-hit-lru-scorer
-            name: mooncake-no-hit-lru-scorer
-            parameters:
-              prefixPluginType: prefix-cache-scorer
-              prefixPluginName: mooncake-prefix-cache-scorer
+          # Load-balanced scoring across remaining candidates.
+          - type: token-load-scorer
 
         schedulingProfiles:
           - name: default
             plugins:
-              - pluginRef: queue-scorer
-              - pluginRef: kv-cache-utilization-scorer
-              - pluginRef: mooncake-prefix-cache-scorer
-              - pluginRef: mooncake-no-hit-lru-scorer
+              - pluginRef: prefix-cache-affinity-filter
+              - pluginRef: token-load-scorer
 
   modelServers:
     type: vllm
