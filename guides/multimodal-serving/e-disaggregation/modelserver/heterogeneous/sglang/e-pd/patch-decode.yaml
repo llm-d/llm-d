@@ -91,7 +91,6 @@ spec:
             - --chunked-prefill-size=65536
             - --max-prefill-tokens=65536
             - --max-total-tokens=262144
-            - --disable-cuda-graph
             - --page-size=64
             - --disable-radix-cache
             - --log-level=info

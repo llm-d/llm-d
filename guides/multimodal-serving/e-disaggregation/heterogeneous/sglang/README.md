@@ -33,6 +33,13 @@ Text-only requests skip the Encode workers.
 | Embedding transfer | SGLang `zmq_to_scheduler` |
 | llm-d Router ownership | PD selection only |
 
+> [!NOTE]
+> The reference configuration was evaluated with SGLang's random multimodal
+> dataset. Because this workload does not intentionally reuse prefixes, the PD
+> worker uses `--disable-radix-cache` to avoid cache effects in the comparison.
+> Remove this option when evaluating or serving workloads that benefit from
+> prefix reuse.
+
 The Encode replicas use a StatefulSet and headless Service with these stable
 endpoints:
 
