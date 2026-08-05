@@ -42,9 +42,12 @@ export REPO_ROOT=$(realpath $(git rev-parse --show-toplevel))
 
 ## Configure
 
-### 1. Create TriggerAuthentication Secret
+### 1. Create TriggerAuthentication Secret (generic Kubernetes only)
 
-KEDA needs both a bearer token and CA certificate to authenticate with Prometheus. Extract these from the Prometheus ServiceAccount's auto-generated token secret and create a new `prometheus-token` secret in the workload namespace:
+> On **OpenShift**, skip this step — the `ocp` overlay provisions a dedicated
+> ServiceAccount and token Secret automatically (see [OpenShift](#openshift) below).
+
+For the bundled kube-prometheus-stack on generic Kubernetes, KEDA needs a bearer token and CA certificate to authenticate with Prometheus. Extract these from the Prometheus ServiceAccount's auto-generated token secret and create a new `prometheus-token` secret in the workload namespace:
 
 ```bash
 # Get the ServiceAccount's token secret (has a random suffix like prometheus-token-abc123)
@@ -70,8 +73,16 @@ This creates a secret named `prometheus-token` containing:
 
 ### 2. Apply EPP Config, KEDA ScaledObject, and TriggerAuthentication
 
+On generic Kubernetes with the bundled kube-prometheus-stack, apply the `k8s` overlay:
+
 ```bash
-kubectl apply -k ${REPO_ROOT}/guides/workload-autoscaling/optimized-baseline-autoscaling/keda-epp-saturation -n ${NAMESPACE}
+kubectl apply -k ${REPO_ROOT}/guides/workload-autoscaling/optimized-baseline-autoscaling/keda-epp-saturation/k8s -n ${NAMESPACE}
+```
+
+On OpenShift, apply the `ocp` overlay instead (see [OpenShift](#openshift) — it handles authentication for you):
+
+```bash
+kubectl apply -k ${REPO_ROOT}/guides/workload-autoscaling/optimized-baseline-autoscaling/keda-epp-saturation/ocp -n ${NAMESPACE}
 ```
 
 Before applying, edit the manifests to match your deployment:
@@ -86,15 +97,18 @@ Before applying, edit the manifests to match your deployment:
 
 #### OpenShift
 
-On OpenShift, use the overlay that patches the ScaledObject to use the OpenShift-managed Prometheus endpoint:
+On OpenShift, apply the `ocp` overlay (skip Configure Step 1 — this overlay handles authentication for you):
 
 ```bash
-kubectl apply -k ${REPO_ROOT}/guides/workload-autoscaling/optimized-baseline-autoscaling/keda-epp-saturation/overlays/ocp -n ${NAMESPACE}
+kubectl apply -k ${REPO_ROOT}/guides/workload-autoscaling/optimized-baseline-autoscaling/keda-epp-saturation/ocp -n ${NAMESPACE}
 ```
 
-The overlay automatically patches `scaledobject.yaml` to use `thanos-querier.openshift-monitoring.svc.cluster.local:9091` as the Prometheus endpoint. 
+The overlay:
 
-The Prometheus ServiceAccount token secret (copied in Configure Step 1) automatically includes the correct CA certificate (`service-ca.crt`) for validating Thanos Querier's serving certificate, so no additional configuration is needed.
+- Points both triggers at `thanos-querier.openshift-monitoring.svc.cluster.local:9091` and enables `authModes: bearer`. Thanos rejects unauthenticated queries with a 401, and KEDA silently serves `fallback` replicas when a trigger errors, so unauthenticated autoscaling looks healthy while doing nothing.
+- Provisions a dedicated `keda-epp-metrics-reader` ServiceAccount granted the `cluster-monitoring-view` ClusterRole, and repoints the `TriggerAuthentication` at that SA's token Secret. On OpenShift the service-ca operator injects `service-ca.crt` (the CA that signs Thanos's serving certificate) into the token Secret automatically, so no `prometheus-token` copy is required.
+
+When deploying this guide to multiple namespaces on a shared cluster, give the `keda-epp-metrics-reader-monitoring-view` ClusterRoleBinding a namespace-unique name so the bindings do not collide.
 
 ## Verify
 
@@ -121,6 +135,8 @@ keda-hpa-optimized-baseline-nvidia-gpu  Deployment/optimized-baseline-nvidia-gpu
 ## Cleanup
 
 ```bash
-kubectl delete -k ${REPO_ROOT}/guides/workload-autoscaling/optimized-baseline-autoscaling/keda-epp-saturation -n ${NAMESPACE}
+# Use the overlay you applied: k8s (generic) or ocp (OpenShift).
+kubectl delete -k ${REPO_ROOT}/guides/workload-autoscaling/optimized-baseline-autoscaling/keda-epp-saturation/k8s -n ${NAMESPACE}
+# On the generic Kubernetes path only (the ocp overlay provisions no such secret):
 kubectl delete secret prometheus-token -n ${NAMESPACE}
 ```
