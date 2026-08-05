@@ -1,0 +1,49 @@
+## fast-model-actuation-keda guide overrides for the llm-d router.
+## Layer on top of: recipes/router/base.values.yaml
+##
+## Same as the fast-model-actuation router values, but the EPP has the
+## `flowControl` feature gate enabled so it emits the pool-saturation metric
+## (`llm_d_epp_flow_control_pool_saturation`) that KEDA scales on.
+
+router:
+  extraServicePorts:
+    - name: http
+      port: 80
+      protocol: TCP
+      targetPort: 8081
+
+  epp:
+    pluginsConfigFile: "fast-model-actuation-keda-plugins.yaml"
+    pluginsCustomConfig:
+      fast-model-actuation-keda-plugins.yaml: |
+        apiVersion: llm-d.ai/v1alpha1
+        kind: EndpointPickerConfig
+        # Required for the pool-saturation metric KEDA reads. Without this gate
+        # the EPP does not run flow control and llm_d_epp_flow_control_pool_saturation
+        # is never emitted, so the ScaledObject's saturation trigger stays at 0.
+        featureGates:
+          - flowControl
+        plugins:
+          - type: queue-scorer
+          - type: kv-cache-utilization-scorer
+          - type: prefix-cache-scorer
+          - type: no-hit-lru-scorer
+        schedulingProfiles:
+          - name: default
+            plugins:
+              - pluginRef: queue-scorer
+                weight: 2
+              - pluginRef: kv-cache-utilization-scorer
+                weight: 2
+              - pluginRef: prefix-cache-scorer
+                weight: 3
+              - pluginRef: no-hit-lru-scorer
+                weight: 2
+
+  modelServers:
+    # Selects bound launchers only; requesters carry the guide label but never serve :8000.
+    # Keep llm-d.ai/model in sync with the InferenceServerConfig patch in
+    # modelserver/kustomization.yaml.
+    matchLabels:
+      llm-d.ai/guide: "fast-model-actuation-keda"
+      llm-d.ai/model: "qwen3-32b"

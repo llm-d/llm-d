@@ -1,0 +1,37 @@
+# ServiceMonitor so OpenShift user-workload-monitoring scrapes the EPP's
+# /metrics (llm_d_epp_flow_control_pool_saturation) into Thanos, which the KEDA
+# saturation trigger then queries. The llm-d-router-standalone chart (unlike the
+# gateway chart) does not create one, so this guide ships it for the OCP path.
+# Without it the pool-saturation series never reaches Thanos and KEDA's query
+# silently coerces the missing value to 0 (ScaledObject looks Ready while
+# autoscaling can never fire).
+#
+# Auth has two halves, and both are required or the scrape returns empty:
+#   - Authorization: the scrape token's ServiceAccount must hold `get` on the
+#     /metrics nonResourceURL (epp-metrics-reader-clusterrolebinding.yaml). We
+#     hand that SA's token (epp-metrics-reader-token.yaml) to the scraper below.
+#   - Authentication: the EPP validates the token via a TokenReview, which needs
+#     the EPP's OWN ServiceAccount bound to system:auth-delegator. The standalone
+#     router chart does not create that binding, so the guide adds it imperatively
+#     in the `keda` deploy phase (see guide.yaml). Without it the EPP rejects
+#     every scrape before authorization is ever checked.
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: fast-model-actuation-keda-epp-monitor
+spec:
+  # No namespaceSelector: it defaults to this ServiceMonitor's own namespace, so
+  # the scrape target follows the deployment namespace set by the overlay's
+  # namespace transformer.
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: fast-model-actuation-keda-epp
+  jobLabel: fast-model-actuation-keda-epp
+  endpoints:
+    - port: http-metrics
+      path: /metrics
+      interval: 10s
+      authorization:
+        credentials:
+          name: fast-model-actuation-keda-epp-metrics-token
+          key: token

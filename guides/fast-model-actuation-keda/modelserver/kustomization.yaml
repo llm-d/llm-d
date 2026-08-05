@@ -1,0 +1,101 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+# Applied with `kubectl apply -n ${NAMESPACE} -k ...`. This guide reuses the base
+# fast-model-actuation guide's model-server manifests instead of duplicating them:
+# the base modelserver kustomization (../../fast-model-actuation/modelserver)
+# contributes the InferenceServerConfig, LauncherConfig, LauncherPopulationPolicy
+# and the requester Deployment, and the patches below apply only the KEDA-specific
+# deltas -- so a change to the shared FMA plumbing is made once, in the base guide.
+#
+# Deltas patched here:
+#   - InferenceServerConfig: serve Qwen3-32B in dev mode (the admin endpoints FMA
+#     hot start needs) with this guide's labels;
+#   - LauncherConfig: raise the launcher container's memory limit so 32B sleep
+#     (which offloads model weights to host RAM) does not OOM-kill the container;
+#   - requester Deployment: start at the KEDA floor (replicas: 1) with this
+#     guide's label.
+#
+# The KEDA autoscaler layer is pulled in via ../keda/overlays/ocp so a single
+# `apply -k modelserver/` brings up the model server AND its autoscaler together
+# (this is what the benchmark's kustomize standup applies).
+#
+# The OCP overlay pins `namespace: llm-d-fast-model-actuation-keda`, so deploy
+# this guide into that namespace (the guide default) to keep the requester and
+# the KEDA resources aligned. On generic Kubernetes, remove the
+# `../keda/overlays/ocp` line below and follow the "generic Kubernetes" note in
+# the guide README (copy the prometheus-token and apply keda/base separately).
+resources:
+  - ../../fast-model-actuation/modelserver
+  - ../keda/overlays/ocp
+
+patches:
+  # InferenceServerConfig: this guide serves Qwen3-32B (32B saturates one H100 so
+  # the KEDA saturation trigger does real work) and must run vLLM in dev mode so
+  # FMA hot start can wake a sleeping instance via /wake_up.
+  - target:
+      kind: InferenceServerConfig
+      name: fma-isc
+    patch: |-
+      apiVersion: fma.llm-d.ai/v1alpha1
+      kind: InferenceServerConfig
+      metadata:
+        name: fma-isc
+      spec:
+        modelServerConfig:
+          # --no-enable-prefix-caching: the heavy shared-prefix workload is
+          #   calibrated with caching off, so the saturation gauge fires as tuned.
+          # --kv-cache-memory: cap KV cache so sleep-mode's sampler warmup has GPU
+          #   headroom (avoids the 32B warmup OOM at util 0.95).
+          options: "--model Qwen/Qwen3-32B --enable-sleep-mode --no-enable-prefix-caching --load-format auto --gpu-memory-utilization 0.95 --max-model-len 16000 --kv-cache-memory 11259300148 --tensor-parallel-size 1"
+          env_vars:
+            # FMA hot start wakes a sleeping vLLM via /wake_up (and sleeps it via
+            # /sleep). Those admin endpoints only exist when vLLM runs in dev mode,
+            # so without VLLM_SERVER_DEV_MODE=1 the requester cannot hot-start and
+            # every actuation falls back to a warm/cold start.
+            VLLM_SERVER_DEV_MODE: "1"
+            # --enable-sleep-mode requires the v1 engine; pin it so sleep/wake work
+            # regardless of the image's default engine selection.
+            VLLM_USE_V1: "1"
+          labels:
+            llm-d.ai/guide: "fast-model-actuation-keda"
+            llm-d.ai/model: "qwen3-32b"
+  # LauncherConfig: the base guide sizes the launcher's inference-server container
+  # for Qwen3-0.6B (memory limit 16Gi). But the FMA controller sleeps a vacated
+  # instance with vLLM sleep level 1, which offloads the model WEIGHTS from GPU to
+  # CPU host memory -- so on scale-down the container must be able to hold the
+  # whole model in RAM. Qwen3-32B is ~65GB in bf16; with the 16Gi limit the /sleep
+  # OOM-kills the container (exit 137) instead of sleeping it, and the controller
+  # then tears the instance down. Remove the memory limit here (the benchmark CI
+  # FMA launcher template sets no memory limit at all, so sleep offload uses node
+  # RAM freely) so scale-down sleep -- and the subsequent hot wake -- work for 32B.
+  # JSON6902 so the removal targets the (only) inference-server container
+  # unambiguously; index 0 in the base LauncherConfig podTemplate.
+  - target:
+      group: fma.llm-d.ai
+      version: v1alpha1
+      kind: LauncherConfig
+      name: fma-launcher
+    patch: |-
+      - op: remove
+        path: /spec/podTemplate/spec/containers/0/resources/limits/memory
+  # requester Deployment: start at the KEDA floor (the ScaledObject's
+  # minReplicaCount). KEDA/HPA scales this up on EPP saturation; each replica
+  # reserves a GPU and triggers a hot-wake (of a sleeping vLLM) or warm-create (a
+  # new vLLM on an existing launcher).
+  - target:
+      kind: Deployment
+      name: fma-requester
+    patch: |-
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: fma-requester
+        labels:
+          llm-d.ai/guide: fast-model-actuation-keda
+      spec:
+        replicas: 1
+        template:
+          metadata:
+            labels:
+              llm-d.ai/guide: fast-model-actuation-keda

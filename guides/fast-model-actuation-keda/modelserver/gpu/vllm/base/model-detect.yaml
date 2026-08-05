@@ -1,0 +1,20 @@
+# DETECTION-ONLY stub -- see kustomization.yaml.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: fma-model-detect
+spec:
+  replicas: 0
+  selector:
+    matchLabels:
+      app: fma-model-detect
+  template:
+    metadata:
+      labels:
+        app: fma-model-detect
+    spec:
+      containers:
+        - name: model-detect
+          image: registry.k8s.io/pause:3.10
+          args:
+            - Qwen/Qwen3-32B
