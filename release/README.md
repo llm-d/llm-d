@@ -18,6 +18,18 @@ This document describes the release process for llm-d. The release dates should 
 | [Fast Model Actuation (FMA)](../guides/fast-model-actuation/README.md) | [![vLLM GPU](https://img.shields.io/endpoint?url=https://llm-d.github.io/llm-d/badges/fast-model-actuation-ocp.json)](https://github.com/llm-d/llm-d/actions/workflows/nightly-e2e-fast-model-actuation-ibm-acc-gpu-vllm-x.yaml) |  |  |  |  |
 <!-- NIGHTLY-MATRIX-END -->
 
+## Release Testing
+
+> Snapshot of guide validation captured at each release. Unlike the nightly
+> matrix above (a live mirror of `main`), this matrix is frozen at release time
+> and updated automatically by the [release matrix
+> workflow](../.github/workflows/release-matrix.yaml) whenever a `v*` tag is
+> pushed (including pre-releases such as `v0.9.0-rc1`).
+
+<!-- RELEASE-MATRIX-START -->
+_No release captured yet._
+<!-- RELEASE-MATRIX-END -->
+
 ## Phases
 
 ### 1. Feature freeze
@@ -94,6 +106,13 @@ The final release work involves creating a tag in the llm-d repo, which triggers
    the complete list.
 
 The process involves creating a Release Candidate (RC) tag for a dry run of the release workflow, which is a method to test the process and identify necessary updates (such as removing the deprecated images build from the CI). We typically delete RC tags after testing, while the final release is drafted from a new tag using the collected release notes.
+
+> [!NOTE]
+> Pushing any `v*` tag (RCs included) also triggers the [release matrix
+> workflow](https://github.com/llm-d/llm-d/blob/main/.github/workflows/release-matrix.yaml),
+> which snapshots the current guide testing badges and opens a PR against `main`
+> updating the [Release Testing](#release-testing) matrix above. The matrix is a
+> frozen record of the tag that produced it, so each RC/release refreshes it.
 
 It is important to fetch the tags from the upstream repo to avoid any conflicts using:
 
