@@ -1,0 +1,10 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+# Base KEDA bundle: the ScaledObject (saturation autoscaling of fma-requester)
+# and its Prometheus TriggerAuthentication. Applied with
+# `kubectl apply -n ${NAMESPACE} -k ...` on generic k8s (bundled Prometheus).
+# OpenShift users apply overlays/ocp instead, which patches the serverAddress.
+resources:
+  - scaledobject.yaml
+  - triggerauthentication.yaml

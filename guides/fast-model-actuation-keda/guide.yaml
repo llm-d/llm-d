@@ -1,0 +1,259 @@
+name: fast-model-actuation-keda
+
+env:
+  static:
+    BRANCH: main
+    REPO_ROOT: $(realpath $(git rev-parse --show-toplevel))
+
+    GUIDE_NAME: fast-model-actuation-keda
+    NAMESPACE:  llm-d-fast-model-actuation-keda
+
+    # Namespace where Prometheus/monitoring runs and scrapes the EPP. The `keda`
+    # step copies the prometheus-token secret from here into ${NAMESPACE}.
+    MONITORING_NAMESPACE: { default: "llm-d-monitoring" }
+
+    # FMA controller/CRD/image version. This guide reuses the base
+    # fast-model-actuation guide's manifests, so the pinned launcher/requester
+    # image tags live in guides/fast-model-actuation/{modelserver/launcherconfig.yaml,
+    # requester/deployment.yaml}; bump them there alongside this on upgrade.
+    FMA_VERSION:             { default: "0.6.4" }
+    FMA_CHART_INSTANCE_NAME: fma
+
+    MODEL:           { default: "Qwen/Qwen3-32B" }
+
+    # VERIFICATION
+    CURL_TEST_IMAGE: { default: "cfmanteiga/alpine-bash-curl-jq:latest" }
+
+    # BENCHMARK
+    BENCHMARK_REF: main
+    HARNESS:       inference-perf
+    WORKLOAD:      shared_prefix_synthetic_heavy.yaml
+    GATEWAY_CLASS: { default: epponly, values: [epponly, gke, agentgateway, istio] }
+
+  source: ["${REPO_ROOT}/guides/env.sh"]
+
+prerequisites:
+  clone:
+    - skip_in: [ci]
+      run: git clone https://github.com/llm-d/llm-d.git && cd llm-d && git checkout ${BRANCH}
+  gaie:
+    - run: kubectl apply -f https://github.com/kubernetes-sigs/gateway-api-inference-extension/releases/download/${GAIE_VERSION}/v1-manifests.yaml
+  keda:
+    - run: |
+        # KEDA (or, on OpenShift, the Custom Metrics Autoscaler Operator) must be
+        # installed cluster-wide before this guide runs.
+        kubectl get crd scaledobjects.keda.sh >/dev/null 2>&1 \
+          || { echo "KEDA not installed -- see https://keda.sh/docs/latest/deploy/"; exit 1; }
+  namespace:
+    - run: kubectl create namespace ${NAMESPACE} --dry-run=client -o yaml | kubectl apply -f -
+
+deploy:
+  fma_crds:
+    - run: |
+        export FMA_CRD_BASE="https://raw.githubusercontent.com/llm-d-incubation/llm-d-fast-model-actuation/v${FMA_VERSION}/config/crd"
+        kubectl apply --server-side \
+          -f ${FMA_CRD_BASE}/fma.llm-d.ai_inferenceserverconfigs.yaml \
+          -f ${FMA_CRD_BASE}/fma.llm-d.ai_launcherconfigs.yaml \
+          -f ${FMA_CRD_BASE}/fma.llm-d.ai_launcherpopulationpolicies.yaml
+        kubectl wait --for=condition=Established crd/inferenceserverconfigs.fma.llm-d.ai --timeout=120s
+        kubectl wait --for=condition=Established crd/launcherconfigs.fma.llm-d.ai --timeout=120s
+        kubectl wait --for=condition=Established crd/launcherpopulationpolicies.fma.llm-d.ai --timeout=120s
+
+  rbac:
+    - run: |
+        # ClusterRole (cluster-scoped): the FMA controllers list nodes for the launcher-populator.
+        # Reused verbatim from the base fast-model-actuation guide (identical RBAC).
+        kubectl apply -f ${REPO_ROOT}/guides/fast-model-actuation/rbac/clusterrole.yaml
+
+        # ServiceAccount + Role (namespaced): the launcher pods run as the
+        # fma-launcher ServiceAccount so the state-change-reflector sidecar can
+        # patch its own pod (the dual-pods.llm-d.ai/vllm-instance-signature
+        # annotation). Reused verbatim from the base fast-model-actuation guide.
+        kubectl apply -n ${NAMESPACE} -f ${REPO_ROOT}/guides/fast-model-actuation/rbac/role.yaml
+
+        # RoleBinding (namespaced): bind the Role to the fma-launcher ServiceAccount.
+        # Created imperatively (not from a static manifest) so ${NAMESPACE} drives both the
+        # binding's namespace and the subject ServiceAccount's namespace.
+        kubectl create rolebinding fma-launcher-pod-state-writer \
+          --role=fma-launcher-pod-state-writer \
+          --serviceaccount=${NAMESPACE}:fma-launcher \
+          -n ${NAMESPACE} \
+          --dry-run=client -o yaml | kubectl apply -f -
+
+        # ClusterRoleBinding (cluster-scoped): grant the EPP's ServiceAccount
+        # system:auth-delegator.
+        kubectl create clusterrolebinding "${GUIDE_NAME}-epp-auth-delegator-${NAMESPACE}" \
+          --clusterrole=system:auth-delegator \
+          --serviceaccount=${NAMESPACE}:${GUIDE_NAME}-epp \
+          --dry-run=client -o yaml | kubectl apply -f -
+
+        # ClusterRoleBinding (cluster-scoped): grant the EPP metrics-reader
+        # ServiceAccount `get` on the EPP's /metrics nonResourceURL, so the token
+        # user-workload-monitoring uses to scrape the EPP is authorized.
+        kubectl create clusterrolebinding "${GUIDE_NAME}-epp-metrics-reader-${NAMESPACE}" \
+          --clusterrole=inference-gateway-metrics-reader \
+          --serviceaccount=${NAMESPACE}:fast-model-actuation-keda-epp-metrics-reader \
+          --dry-run=client -o yaml | kubectl apply -f -
+
+        # ClusterRoleBinding (cluster-scoped): grant the KEDA metrics-reader
+        # ServiceAccount cluster-monitoring-view, the role Thanos Querier requires
+        # to answer KEDA's trigger queries.
+        kubectl create clusterrolebinding "keda-epp-metrics-reader-monitoring-view-${NAMESPACE}" \
+          --clusterrole=cluster-monitoring-view \
+          --serviceaccount=${NAMESPACE}:keda-epp-metrics-reader \
+          --dry-run=client -o yaml | kubectl apply -f -
+
+  fma_controllers:
+    - run: |
+        helm upgrade --install ${FMA_CHART_INSTANCE_NAME} \
+          oci://ghcr.io/llm-d-incubation/llm-d-fast-model-actuation/charts/fma-controllers \
+          --version ${FMA_VERSION} \
+          --set global.nodeViewClusterRole=fma-node-viewer \
+          -n ${NAMESPACE}
+    - run: |
+        kubectl wait --for=condition=available --timeout=180s \
+          deployment "${FMA_CHART_INSTANCE_NAME}-dual-pods-controller" -n ${NAMESPACE}
+        kubectl wait --for=condition=available --timeout=120s \
+          deployment "${FMA_CHART_INSTANCE_NAME}-launcher-populator" -n ${NAMESPACE}
+
+  standalone:
+    - run: |
+        helm install ${GUIDE_NAME} \
+          ${ROUTER_STANDALONE_CHART} \
+          -f ${REPO_ROOT}/guides/recipes/router/base.values.yaml \
+          -f ${REPO_ROOT}/guides/${GUIDE_NAME}/router/${GUIDE_NAME}.values.yaml \
+          -n ${NAMESPACE} --version ${ROUTER_CHART_VERSION}
+
+  # Deploys the FMA custom resources (ISC/LauncherConfig/LauncherPopulationPolicy)
+  # AND the server-requesting pods together. The requester Deployment starts at
+  # replicas: 1 (the KEDA floor); KEDA scales it from there.
+  modelserver:
+    - run: |
+        kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/
+
+        kubectl rollout status deployment/fma-requester -n ${NAMESPACE} --timeout=300s
+
+  # KEDA saturation autoscaling of the requester Deployment. On OpenShift the
+  # ScaledObject/TriggerAuthentication, the EPP ServiceMonitor, and the
+  # metrics-reader RBAC (keda/overlays/ocp) are deployed together with the model
+  # server -- ../keda/overlays/ocp is a resource of modelserver/ -- so there is
+  # nothing to apply in this step; it just confirms the ScaledObject reconciled
+  # Ready.
+  keda:
+    - run: |
+        kubectl wait --for=condition=Ready --timeout=120s \
+          scaledobject/fast-model-actuation-keda-saturation -n ${NAMESPACE}
+
+verify:
+  endpoint:
+    standalone:
+      - run: export IP=$(kubectl get service ${GUIDE_NAME}-epp -n ${NAMESPACE} -o jsonpath='{.spec.clusterIP}')
+  tests:
+    request:
+      - run: |
+          kubectl run curl-test --rm -i --restart=Never \
+            --image=${CURL_TEST_IMAGE} \
+            --namespace="${NAMESPACE}" \
+            --env="IP=${IP}" \
+            --env="MODEL=${MODEL}" \
+            -- /bin/sh -c 'curl -sS -X POST "http://${IP}/v1/completions" -H "Content-Type: application/json" -d "{\"model\": \"${MODEL}\", \"prompt\": \"How are you today?\"}"'
+    warm_start:
+      # WARM start: with launchers up but no sleeping vLLM to wake, scaling the
+      # requester creates a NEW vLLM instance on an existing launcher, reusing the
+      # launcher's already-loaded Python modules (faster than a cold launcher).
+      # KEDA is paused first so the HPA does not immediately reconcile the manual
+      # scale; it is resumed at the end of the hot-start demo.
+      - run: kubectl annotate scaledobject fast-model-actuation-keda-saturation -n ${NAMESPACE} autoscaling.keda.sh/paused="true" --overwrite
+      - run: kubectl scale deployment fma-requester -n ${NAMESPACE} --replicas=2
+      - run: time kubectl rollout status deployment/fma-requester -n ${NAMESPACE} --timeout=300s
+      - run: kubectl logs -n ${NAMESPACE} -l app.kubernetes.io/component=dual-pods-controller --tail=500 | grep -i "create_instance" || true
+    hot_start:
+      # HOT start: scaling to 0 puts the vLLM instances to SLEEP (tensors stay in
+      # GPU memory); scaling back up WAKES them, resuming in seconds -- no model
+      # load, no CUDA graph recompile. Then resume KEDA autoscaling.
+      #
+      # KEDA is paused first so the HPA does not immediately reconcile the manual
+      # scale; it is resumed at the end.
+      - run: kubectl annotate scaledobject fast-model-actuation-keda-saturation -n ${NAMESPACE} autoscaling.keda.sh/paused="true" --overwrite
+      - run: |
+          set -eu
+          IP=$(kubectl get service ${GUIDE_NAME}-epp -n ${NAMESPACE} -o jsonpath='{.spec.clusterIP}')
+          kubectl scale deployment fma-requester -n ${NAMESPACE} --replicas=0
+          kubectl wait --for=delete pod -l app=fma-requester -n ${NAMESPACE} --timeout=120s
+          # Confirm the launcher actually went to sleep before we wake it.
+          kubectl wait pod -l app.kubernetes.io/component=launcher -n ${NAMESPACE} \
+            --for='jsonpath={.metadata.labels.dual-pods\.llm-d\.ai/sleeping}=true' \
+            --timeout=120s
+          kubectl scale deployment fma-requester -n ${NAMESPACE} --replicas=2
+          time kubectl rollout status deployment/fma-requester -n ${NAMESPACE} --timeout=120s
+          kubectl get pods -l app.kubernetes.io/component=launcher -n ${NAMESPACE} \
+            -o 'jsonpath={range .items[*]}{.metadata.name}{" sleeping="}{.metadata.labels.dual-pods\.llm-d\.ai/sleeping}{"\n"}{end}' || true
+          # Post-wake inference request THROUGH THE EPP.
+          kubectl run curl-postwake --rm -i --restart=Never --attach \
+            --image=${CURL_TEST_IMAGE} \
+            --namespace="${NAMESPACE}" \
+            --pod-running-timeout=180s \
+            --env="IP=${IP}" \
+            --env="MODEL=${MODEL}" \
+            -- /bin/sh -c 'set -e; resp=$(curl -sS -X POST "http://${IP}/v1/completions" -H "Content-Type: application/json" -d "{\"model\": \"${MODEL}\", \"prompt\": \"How are you today?\", \"max_tokens\": 5}"); echo "${resp}"; echo "${resp}" | jq -e ".choices[0].text | length > 0" >/dev/null'
+      - run: kubectl logs -n ${NAMESPACE} -l app.kubernetes.io/component=dual-pods-controller --tail=500 | grep -i "wake" || true
+      - run: kubectl annotate scaledobject fast-model-actuation-keda-saturation -n ${NAMESPACE} autoscaling.keda.sh/paused- || true
+
+benchmark:
+  setup:
+    - run: |
+        curl -sSL https://raw.githubusercontent.com/llm-d/llm-d-benchmark/${BENCHMARK_REF}/install.sh | bash
+        cd llm-d-benchmark
+        source .venv/bin/activate
+        llmdbenchmark --version
+  endpoint:
+    standalone:
+      - run: export ENDPOINT_URL="http://$(kubectl get service ${GUIDE_NAME}-epp -n ${NAMESPACE} -o jsonpath='{.spec.clusterIP}')"
+  execute:
+    - run: |
+        llmdbenchmark \
+          --spec           guides/${GUIDE_NAME} \
+          run \
+          --endpoint-url   "${ENDPOINT_URL}" \
+          --gateway-class  "${GATEWAY_CLASS}" \
+          --model          "${MODEL}" \
+          --namespace      "${NAMESPACE}" \
+          --harness        "${HARNESS}" \
+          --workload       "${WORKLOAD}" \
+          --analyze
+
+cleanup:
+  # Order matters. Delete the KEDA ScaledObject/TriggerAuth FIRST so the HPA stops
+  # scaling the requester while we tear it down.
+  - run: kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/keda/overlays/ocp --ignore-not-found=true
+  # Then the model-server CRs and the requester Deployment (both in modelserver/):
+  # this unbinds the requester/provider pairs and tells the controller to tear
+  # down the launcher pods.
+  - run: kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/ --ignore-not-found=true
+  # Wait for pods to drain while the controller is still running to strip their
+  # finalizers. If the controller is removed first, finalizer-bound pods get stuck
+  # in Terminating forever.
+  - run: kubectl wait --for=delete pod -l app=fma-requester -n ${NAMESPACE} --timeout=120s
+  - run: kubectl wait --for=delete pod -l app.kubernetes.io/component=launcher -n ${NAMESPACE} --timeout=120s
+  # Only after the pods have drained, remove the controllers, then the router and
+  # the cluster-scoped RBAC.
+  - run: helm uninstall ${FMA_CHART_INSTANCE_NAME} -n ${NAMESPACE}
+  - run: helm uninstall ${GUIDE_NAME} -n ${NAMESPACE}
+  # Namespaced RBAC for this guide (Role + ServiceAccount from rbac/role.yaml,
+  # plus the imperatively-created RoleBinding).
+  - run: kubectl delete -n ${NAMESPACE} -f ${REPO_ROOT}/guides/fast-model-actuation/rbac/role.yaml --ignore-not-found=true
+  - run: kubectl delete rolebinding fma-launcher-pod-state-writer -n ${NAMESPACE} --ignore-not-found=true
+  # The per-deployment ClusterRoleBindings are namespace-suffixed, so they are
+  # unique to this deployment and safe to delete on a shared cluster.
+  - run: kubectl delete clusterrolebinding "${GUIDE_NAME}-epp-auth-delegator-${NAMESPACE}" --ignore-not-found=true
+  - run: kubectl delete clusterrolebinding "${GUIDE_NAME}-epp-metrics-reader-${NAMESPACE}" --ignore-not-found=true
+  - run: kubectl delete clusterrolebinding "keda-epp-metrics-reader-monitoring-view-${NAMESPACE}" --ignore-not-found=true
+  # Skipped in CI, where the cluster is shared; run only on a cluster you own.
+  - skip_in: [ci]
+    run: kubectl delete -f ${REPO_ROOT}/guides/fast-model-actuation/rbac/clusterrole.yaml --ignore-not-found=true
+  # Destructive / cluster-wide -- skipped in CI, where the namespace is reused
+  # and the FMA CRDs are shared across deployments. Run only on a cluster you own.
+  - skip_in: [ci]
+    run: kubectl delete namespace ${NAMESPACE}
+  - skip_in: [ci]
+    run: kubectl delete crd inferenceserverconfigs.fma.llm-d.ai launcherconfigs.fma.llm-d.ai launcherpopulationpolicies.fma.llm-d.ai

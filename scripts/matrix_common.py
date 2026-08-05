@@ -103,6 +103,7 @@ GUIDES = [
     ("Flow Control", "../guides/flow-control/README.md", "flow-control", None),
     ("Workload Autoscaling (WVA)", "../guides/workload-autoscaling/README.md", "workload-autoscaling", None),
     ("Fast Model Actuation (FMA)", "../guides/fast-model-actuation/README.md", "fast-model-actuation", None),
+    ("Fast Model Actuation + KEDA Autoscaling", "../guides/fast-model-actuation-keda/README.md", "fast-model-actuation-keda", None),
 ]
 
 # ---------------------------------------------------------------------------

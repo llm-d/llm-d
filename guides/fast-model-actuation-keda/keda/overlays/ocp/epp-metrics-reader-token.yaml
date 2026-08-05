@@ -1,0 +1,11 @@
+# Long-lived token for the dedicated EPP metrics-reader ServiceAccount, handed
+# to user-workload-monitoring (via epp-servicemonitor.yaml) to authenticate
+# scrapes of the EPP's /metrics endpoint. The token controller populates
+# .data.token.
+apiVersion: v1
+kind: Secret
+metadata:
+  name: fast-model-actuation-keda-epp-metrics-token
+  annotations:
+    kubernetes.io/service-account.name: fast-model-actuation-keda-epp-metrics-reader
+type: kubernetes.io/service-account-token
