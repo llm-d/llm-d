@@ -10,7 +10,6 @@ spec:
         - name: routing-proxy
           args:
             - --port=8000
-            - --vllm-port=8200
             - --kv-connector=nixlv2
             - --ec-connector=ec-nixl
             - --zap-log-level=1

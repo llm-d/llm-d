@@ -27,11 +27,10 @@ spec:
         initContainers:
           - name: routing-proxy
             args:
-              # sidecar proxy is started with --port 8000, --vllm-port 8200, and --data-parallel-size 8,
+              # sidecar proxy is started with --port 8000 and --data-parallel-size 8,
               # so it listens on ports in the range [port:port+data-parallel-size-1] and forwards
               # requests each to the corresponding vllm port.
               - --port=8000
-              - --vllm-port=8200
               - --data-parallel-size=8
               - --kv-connector=nixlv2
               - --zap-log-level=1
