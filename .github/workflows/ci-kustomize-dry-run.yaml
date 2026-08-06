@@ -290,8 +290,8 @@ jobs:
         run: .github/scripts/install-gke-crds.sh
 
       - name: Dry-run router (active-active default)
-        # Tokenization runs as a standalone render Service (../render/), not a
-        # chart-injected sidecar (the chart's tokenizer sidecar is off by default).
+        # Tokenization runs as a separate render Service (guides/.../render/), not
+        # a chart-injected sidecar (the chart's tokenizer sidecar is off by default).
         run: |
           CHART_VERSION=v0
           echo ""
@@ -315,25 +315,34 @@ jobs:
             exit 1
           fi
 
-      - name: Dry-run render Service overlay
-        # Standalone `vllm launch render` Service that replaces the EPP sidecar.
+      - name: Dry-run render Service overlays
+        # Two mutually exclusive overlays, both publishing the same Service name:
+        # `render/` (default) is a Service over the model server pods, and
+        # `render/standalone/` a dedicated `vllm launch render` pool for backends
+        # without vLLM's render endpoints (SGLang).
         run: |
-          echo ""
-          echo "========================================"
-          echo "precise-prefix-cache-routing: render (vllm-render Service)"
-          echo "========================================"
-          echo "--- kustomize build ---"
-          if ! kustomize build guides/precise-prefix-cache-routing/render > /tmp/rendered.yaml; then
-            echo "FAIL: kustomize build failed for render"
-            exit 1
-          fi
-          echo "--- kubectl apply --dry-run=server ---"
-          if kubectl apply --dry-run=server -f /tmp/rendered.yaml; then
-            echo "PASS: precise-prefix-cache-routing / render (vllm-render Service)"
-          else
-            echo "FAIL: precise-prefix-cache-routing / render (vllm-render Service)"
-            exit 1
-          fi
+          failed=0
+          for overlay in render render/standalone; do
+            name="render (${overlay})"
+            echo ""
+            echo "========================================"
+            echo "precise-prefix-cache-routing: ${name}"
+            echo "========================================"
+            echo "--- kustomize build ---"
+            if ! kustomize build "guides/precise-prefix-cache-routing/${overlay}" > /tmp/rendered.yaml; then
+              echo "FAIL: kustomize build failed for ${overlay}"
+              failed=1
+              continue
+            fi
+            echo "--- kubectl apply --dry-run=server ---"
+            if kubectl apply --dry-run=server -f /tmp/rendered.yaml; then
+              echo "PASS: precise-prefix-cache-routing / ${name}"
+            else
+              echo "FAIL: precise-prefix-cache-routing / ${name}"
+              failed=1
+            fi
+          done
+          exit "${failed}"
 
       - name: Kustomize build and dry-run all model server overlays
         run: |
