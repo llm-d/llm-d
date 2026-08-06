@@ -21,16 +21,16 @@ llm-d supports two encode-disaggregated topologies:
 
 In E/PD, dedicated encode workers handle multimodal processing while a single worker type handles both prefill and decode. Multiple encode workers enable parallel processing of multimodal entries within a single request:
 
-* 2 Encode Workers (multimodal encoding, parallelized across entries)
+* 2 TP=2 Encode Workers (multimodal encoding, parallelized across entries)
 * 8 TP=2 Decode Workers (prefill + decode combined)
 
 ### E/P/D Configuration
 
 E/P/D extends P/D disaggregation by adding a dedicated encode stage. This provides maximum specialization, with multiple encode workers processing multimodal content in parallel:
 
-* 2 Encode Workers (multimodal encoding, parallelized across entries)
-* 2 TP=4 Prefill Workers
-* 2 TP=4 Decode Workers
+* 2 TP=2 Encode Workers (multimodal encoding, parallelized across entries)
+* 4 TP=2 Prefill Workers
+* 4 TP=2 Decode Workers
 
 ### Best Practices
 
