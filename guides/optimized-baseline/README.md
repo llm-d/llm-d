@@ -105,9 +105,8 @@ source ${REPO_ROOT}/guides/env.sh
 
 > [!NOTE]
 > This file defines shared variables required by subsequent steps, including
-> `GAIE_VERSION`, `ROUTER_CHART_VERSION`, `ROUTER_STANDALONE_CHART`, and
-> `ROUTER_GATEWAY_CHART`. If you skip this step, later commands will fail with
-> unresolved variable references.
+> `GAIE_VERSION`, `ROUTER_CHART_VERSION`, and the router chart reference for
+> the selected deployment mode.
 
 - Install the Gateway API Inference Extension CRDs:
 
