@@ -34,8 +34,52 @@ However, P/D disaggregation is not a target for all workloads. We suggest explor
 
 As a result, as you tune your P/D deployments, we suggest focusing on the following parameters:
 
-* **Heterogeneous Parallelism**: deploy P workers with less parallelism and more replicas and D workers with more parallelism and fewer replicas
+* **Heterogeneous Parallelism**: deploy P workers with less parallelism and more replicas and D workers with more parallelism and fewer replicas, see the warning below.
 * **xPyD Ratios**: tuning the ratio of P workers to D workers to ensure balance for your ISL|OSL ratio
+
+> [!WARNING]
+> **Prefill TP > Decode TP is not supported** for most model architectures. **NixlConnector** only supports the fan-out direction (decode TP ≥ prefill TP, e.g. prefill TP=1 → decode TP=4, as used in this guide). This is a deliberate guard in vLLM's own source, not a bug — always keep decode TP ≥ prefill TP.
+
+<details>
+<summary>Why this restriction exists, and what it looks like when you hit it</summary>
+
+The reverse direction (prefill TP > decode TP, e.g. prefill TP=8 → decode TP=4) is explicitly unsupported for any model that is neither **MLA** nor **Mamba/state-space** based:
+
+```python
+# num_kv_heads > tp_size with P_TP > D_TP not supported for non-mamba.
+# Mamba models can have replicated FA KV with tp_ratio < 0.
+# MLA models do not need to handle kv replication.
+if not self.use_mla and not self._has_mamba:
+   assert not (
+       tp_ratio < 0 and self.transfer_topo.is_kv_replicated(remote_engine_id)
+   )
+```
+
+Source: `vllm/distributed/kv_transfer/kv_connector/v1/nixl/base_worker.py`, function `_validate_remote_agent_handshake`
+- v0.26.0: [lines 1690-1696](https://github.com/vllm-project/vllm/blob/v0.26.0/vllm/distributed/kv_transfer/kv_connector/v1/nixl/base_worker.py#L1690-L1696)
+- v0.25.0: [lines 1619-1625](https://github.com/vllm-project/vllm/blob/v0.25.0/vllm/distributed/kv_transfer/kv_connector/v1/nixl/base_worker.py#L1619-L1625) (identical logic, not a version regression)
+
+Hitting this path crashes the decode engine with `AssertionError`. A related bug in vLLM's failure-cleanup handler (`_handle_failed_transfer`) often surfaces it as `IndexError: list index out of range` instead, making it look like a generic connector bug rather than an unsupported-topology guard.
+
+Total GPU count (TP × replicas) and replica counts on each side are unaffected by this constraint — only the TP ratio direction between whichever specific prefill/decode engine pair handles a given request matters.
+
+</details>
+
+> [!WARNING]
+> **Decode-side stale NIXL agent cache after a prefill pod restart** can segfault decode ([vllm-project/vllm#49238](https://github.com/vllm-project/vllm/issues/49238), open), or leave it silently serving against a dead engine for up to an hour. Until the fixes below ship in an official image, proactively restart any decode replica that was connected to a restarted prefill pod, rather than relying on TTL expiry.
+
+<details>
+<summary>Why this happens, and current fix status</summary>
+
+If a prefill pod restarts while decode holds a cached NIXL agent handle for it, decode can segfault, or (after the NIXL-side fix below) silently keep serving against the dead engine's stale cached agent/rkey entries. With a pinned/stable engine ID, decode does not detect the prefill engine is gone until `engine_ttl` expires (default up to one hour), and every request routed to that decode replica fails until then or until the decode pod is restarted.
+
+**Fix status:**
+- NIXL-level segfault fixed upstream: [ai-dynamo/nixl#1986](https://github.com/ai-dynamo/nixl/pull/1986) (merged ~2026-07-29), returns a clean disconnect error instead of crashing.
+- vLLM-side fix, [vllm-project/vllm#50047](https://github.com/vllm-project/vllm/pull/50047), invalidates decode's cached engine state as soon as the prefill peer is detected gone, instead of waiting out the TTL.
+
+Neither fix is in any published vLLM image yet, including nightly, since vLLM pins an exact NIXL version and the NIXL fix landed after the latest published NIXL release (v1.3.2, 2026-07-24).
+
+</details>
 
 ### Supported Hardware Backends
 
