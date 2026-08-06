@@ -6,113 +6,82 @@ recomputing them.
 
 ## Overview
 
-This guide deploys `openai/gpt-oss-120b` with peer-to-peer KV cache sharing.
-The transfer is CPU-to-CPU over NIXL (UCX/RDMA when available) - the source
-pod's GPU is never touched, so serving a pull costs the source no prefill
-capacity.
+This guide deploys `openai/gpt-oss-120b` with peer-to-peer KV cache
+sharing. The transfer is CPU-to-CPU over NIXL (UCX/RDMA when available).
+The source pod's GPU is never touched, so serving a pull costs the source
+no prefill capacity.
 
 The deployment composes three llm-d capabilities:
 
-* the vLLM `OffloadingConnector` with a P2P secondary tier (each pod is both
-  a puller and a source),
+* the vLLM `OffloadingConnector` with a P2P secondary tier (each pod is
+  both a puller and a source),
 * the llm-d Router's precise (KV-event-fed) prefix index, which the
   source decision consumes, and
 * the `p2p-source-producer`, which stamps each request with the peer that
-  holds the most cached prefix so the routing sidecar can inject
+  holds the most cached prefix; the routing sidecar injects
   `kv_transfer_params.remote_kv_source` and the engine pulls instead of
   recomputing.
 
-In this example we deploy 16 TP=1 replicas on 16 GPUs (aggregated). A P/D
-variant - pull on the prefill leg - is described at the end and reuses the
-[P/D disaggregation guide](../pd-disaggregation/README.md)'s topology.
+The example deploys 16 TP=1 replicas on 16 GPUs (aggregated). A P/D
+variant - pull on the prefill leg - is described at the end and reuses
+the [P/D disaggregation guide](../pd-disaggregation/README.md)'s
+topology.
 
 ### When to use this path
 
-P2P sharing pays wherever routing cannot (or should not) send every request
-to the pod that already caches its prefix:
+P2P sharing pays wherever routing cannot, or should not, send every
+request to the pod that already caches its prefix:
 
-* **Load must spread.** A hot shared prefix saturates its cache owner under
-  affinity routing; load-aware routing plus a pull spreads the work while
-  preserving cache reuse.
+* **Load must spread.** A hot shared prefix saturates its cache owner
+  under affinity routing. Load-aware routing plus the pull spreads the
+  work while preserving cache reuse.
 * **The working set exceeds any single pod's cache.** With N pods each
   caching 1/N of the prefix pool, cross-pod requests either recompute or
   pull.
-* **High session concurrency under a fixed ownership rule.** Many
-  concurrent multi-turn sessions, each pinned by affinity to the pod that
-  computed its prefix, can still queue behind a busy owner or spill to a
-  colder pod that recomputes - independent of whether aggregate GPU
-  capacity has room to spare. This guide's own document-Q&A headline is
-  this case.
-* **Long prefixes.** The pull is a near-constant-time CPU-to-CPU copy while
-  recompute grows with length. Measure the crossover for your model (the
-  benchmark below does); route pulls only above it.
+* **Many concurrent sessions pinned to owner pods.** Sessions queue
+  behind a busy owner or spill to a colder pod that recomputes, even
+  when aggregate GPU capacity has room. The guide's document Q&A
+  headline is this case.
+* **Long prefixes.** The pull is a near-constant-time copy; recompute
+  grows with length. Measure the crossover for your model (the benchmark
+  below does) and route pulls only above it.
 * **Multi-turn sessions on P/D disaggregation.** Decode generates the
-  session history, so on every subsequent turn the prefill worker faces KV
-  it never computed and no routing decision can make local - without a pull
-  it re-prefills the whole accumulated history each turn. The pull lets the
-  prefill leg fetch decode's generated KV directly (see the
-  [P/D variant](#pd-variant-p2p-over-nixl-disaggregation)). This is the
-  regime with the largest measured gains, growing with history length and
-  turn count - agentic sessions with 10K-100K-token contexts most of all:
-  **6.3x median TTFT and +50% throughput** on a 2P+4D Qwen3-30B rig
-  ([report](benchmark-results/qwen3-30b-h200-pd-agentic.md); the gains are
-  median and throughput, not the extreme tail).
-  Requires `offload_prompt_only: false` on decode and a chat template that
-  re-renders generated answers verbatim (see Best Practices); models that
-  drop reasoning content on re-render cannot reuse generated KV regardless
-  of the serving stack.
+  session history, so on every turn the prefill worker faces KV it never
+  computed and no routing decision can make local. The pull lets prefill
+  fetch decode's generated KV directly: **6.3x median TTFT and +50%
+  throughput** on a 2P+4D Qwen3-30B rig
+  ([report](benchmark-results/qwen3-30b-h200-pd-agentic.md)). This is
+  the largest measured effect in the guide, growing with history length
+  and turn count. Requires `offload_prompt_only: false` on decode and a
+  chat template that re-renders generated answers verbatim (see Best
+  Practices).
 
-What the pull is worth depends on the placement it sits behind, and the
-three combinations this guide measures are not the same kind of thing:
+What the pull is worth depends on the placement in front of it:
 
-* **Affinity + P2P - a fallback, not an established throughput feature,
-  and not restart insurance.** Precise affinity sends each request to the
-  pod that already holds its prefix, so a peer rarely leads by
-  `minCachedTokenDelta` and there is rarely anything to fetch; the pull
-  behaves as a fallback for the requests placement displaces. On the
-  document-Q&A rig this arm reads +17% throughput and -26% p99 TTFT over
-  affinity alone warm - inside that workload's 10-28% run-to-run spread
-  with a single run per arm, so the guide does not credit the pull with a
-  throughput role under affinity placement. A restarted ROUTER is
-  explicitly not a case it covers: both indexes lose the pre-restart
-  cache map - the approximate index learns only its own placements from
-  birth, and the precise index consumes KV events delta-only with no
-  replay - and both measured restart-recovery experiments produced zero
-  pulls. A cold ENGINE replica behind an intact router is the plausible
-  recovery case, and it is unmeasured.
-* **Load-aware + P2P - a measured performance feature.** When placement
-  deliberately scatters, the pull is what makes scattering affordable, and
-  the gain is directly attributable to it.
-* **P/D + P2P - a measured performance feature.** Decode generates the
-  history, so the prefill leg faces KV no placement decision could have made
-  local. This is the largest measured effect in the guide.
+* **Affinity + P2P** (the shipped default) sends each request to the pod
+  that already holds its prefix, so the pull rarely fires; it acts as a
+  fallback for the requests placement displaces. Its measured throughput
+  delta over affinity alone is within run-to-run spread, so do not
+  choose this arm expecting the pull to add throughput. It also does not
+  recover a restarted router: both prefix indexes lose the pre-restart
+  cache map, and measured restart-recovery runs produced zero pulls.
+* **Load-aware + P2P** deliberately scatters requests, and the pull is
+  what makes scattering affordable; its gains are directly attributable.
+  On the document Q&A headline (128 concurrent multi-turn sessions, each
+  pinned to an owner pod) it beats affinity warm by +35% throughput and
+  1.5x better p99 TTFT, and on a cold fleet finishes with zero client
+  timeouts against affinity's 47-48. On the uniform shared-prefix pool
+  the ordering flips: affinity stays ahead (p50 0.48 s vs 0.73 s at 30
+  req/s) because nothing contends and a local hit is free.
+* **P/D + P2P** addresses KV no placement decision could have made
+  local (see the multi-turn bullet above).
 
-Between the two aggregated arms the ordering depends on the regime. On the
-uniform shared-prefix pool (a working set spread wider than any one pod's
-cache) affinity + P2P tracks offered rate to saturation and matches
-affinity's near-ideal latency (p50 0.48 s at 30 req/s), while load-aware +
-P2P runs a constant factor behind (p50 0.73 s, ~2% lower achieved) -
-precise placement concentrates each prefix's traffic tightly enough that
-requests hit locally, while scattering pays a pull on every displaced
-request; the pull keeps that price sub-second (against a 63 s p50 recompute
-floor without it), but affinity never pays it at all. On the document-Q&A
-headline (128 concurrent multi-turn sessions, each pinned by affinity to
-the pod that computed its prefix) the result flips: load-aware + P2P avoids
-the owner-pod queueing that affinity + P2P still pays, giving +35%
-throughput and a 1.5x better p99 TTFT than precise routing warm - and on a
-cold fleet, zero client timeouts against 47-48 as affinity placement
-collapses onto one pod (see
-[benchmark-results/gpt-oss-120b-h200.md](benchmark-results/gpt-oss-120b-h200.md)).
-
-The guide ships affinity + P2P as the default because it is the safer
-placement in the capacity-driven regime, not because the pull improves it.
-Reach for load-aware + P2P when your workload looks like many concurrent,
-multi-turn sessions each pinned to an owner pod; re-measure both arms
-against your own workload shape before assuming either generalizes. The
-document-Q&A comparison is measured at the shipped `podCacheSize: 32`;
-the uniform-pool comparison predates that setting, and correct sizing
-improves affinity placement most, so its ordering (affinity ahead)
-stands.
+The guide ships affinity + P2P because it is the safer placement across
+both aggregated regimes. Reach for load-aware + P2P when your workload
+looks like many concurrent sessions pinned to owner pods, and re-measure
+both arms on your own workload before assuming either generalizes.
+Measured tables:
+[benchmark-results/gpt-oss-120b-h200.md](benchmark-results/gpt-oss-120b-h200.md).
 
 ## Configuration
 
@@ -130,70 +99,79 @@ measurements use:
 | [`epp-affinity.yaml`](benchmarking/epp-affinity.yaml) | precise prefix-cache affinity | none (baseline) |
 | [`epp-load.yaml`](benchmarking/epp-load.yaml) | load-balanced | none (recompute control) |
 
-`minCachedTokenDelta` is set from the measured pull-versus-recompute
-crossover (see [Benchmarking](#benchmarking)): a pull is requested only when
-a peer holds at least that many more cached prefix tokens than the scheduled
-pod. The crossover is per model - 2,048 on this testbed (gpt-oss-120b and
-Llama-8B both cross near or below 2K), 12,288 on the wide-EP GLM-5.2
-testbed (753B; tie measured at ~8.7K tokens on the upstream tier, where the
-pull floor is ~1.25 s flat against ~130-147 us/token of recompute) - so
-re-measure it when
-changing models, on a warmed pod pair (the first pull between two peers
-pays a one-time session-establishment transient). The measurement is
-automated as a calibration recipe:
+`minCachedTokenDelta` is the minimum lead, in cached prefix tokens, a
+peer must hold over the scheduled pod before a pull is requested. Set it
+from the measured pull-versus-recompute crossover: 2,048 on this guide's
+testbed (gpt-oss-120b and Llama-8B both cross near or below 2K), 12,288
+on the wide-EP GLM-5.2 testbed. The crossover is model-, hardware- and
+transport-specific, so re-measure it when any of those change, on a
+warmed pod pair (the first pull between two peers pays a one-time
+session-establishment cost). The measurement is automated:
 [guides/recipes/router/calibration/calibrate-min-cached-token-delta.sh](../recipes/router/calibration/calibrate-min-cached-token-delta.sh)
 runs it against two live pods and prints the recommended value.
 
 ### Supported Hardware Backends
 
-* NVIDIA GPU / vLLM (measured on H200; any CUDA GPU with enough HBM for the
-  model works). **Every benchmark in this guide was measured with `rdma/ib`
-  exposed to the model-server containers**, and that is the recommended
-  configuration. RDMA is not required for the feature to work - NIXL/UCX
-  falls back to TCP - but the transport sets the pull-versus-recompute
-  crossover, so it changes `minCachedTokenDelta` rather than whether the
-  pull functions. On TCP the pull leg inflates while recompute is unchanged,
-  moving the crossover from below 2K out to **between 16K and 32K tokens**
-  (~29K on a finer sweep). Measured on gpt-oss-120b - TTFT delta,
-  negative means the pull wins. The two columns are separate matched-build
-  runs of the same method (each column internally consistent; the RDMA
-  column is the canonical fixed-stack ladder in
-  [benchmark-results/gpt-oss-120b-h200.md](benchmark-results/gpt-oss-120b-h200.md)),
-  and the transport contrast between them is far larger than any
-  build-to-build difference measured for this method:
+* NVIDIA GPU / vLLM. Measured on H200; any CUDA GPU with enough HBM for
+  the model works.
 
-  | prefix tokens | with `rdma/ib` (canonical) | without |
-  |---:|---:|---:|
-  | 2,048 | -55.8% | +26.7% |
-  | 8,192 | -77.4% | +20.2% |
-  | 16,384 | -83.2% | +10.9% |
-  | 32,768 | -85.9% | -4.9% |
-  | 49,152 | -88.2% | -15.3% |
+Every benchmark in this guide was measured with `rdma/ib` exposed to the
+model-server containers, and that is the recommended configuration. RDMA
+is not required: NIXL/UCX falls back to TCP and the pull still works.
+But the transport sets the pull-versus-recompute crossover, so it
+changes `minCachedTokenDelta`. On TCP the pull leg inflates while
+recompute is unchanged, moving the crossover from below 2K tokens to
+roughly 29K. Measured TTFT delta on gpt-oss-120b (negative means the
+pull wins):
 
-  With RDMA the pull wins at every length measured, so `minCachedTokenDelta:
-  2048` follows. Without it the pull loses below that crossover and wins
-  above it, so the
-  same deployment needs a `minCachedTokenDelta` an order of magnitude larger
-  and only benefits workloads whose reused prefixes are that long. Check
-  whether `rdma/ib` is present on your pods before reading the Step 0 ladder
-  across, and derive the value from a crossover measured on your own
-  transport.
+| prefix tokens | with `rdma/ib` (canonical) | without |
+|---:|---:|---:|
+| 2,048 | -55.8% | +26.7% |
+| 8,192 | -77.4% | +20.2% |
+| 16,384 | -83.2% | +10.9% |
+| 32,768 | -85.9% | -4.9% |
+| 49,152 | -88.2% | -15.3% |
+
+With RDMA the pull wins at every measured length, so
+`minCachedTokenDelta: 2048` follows. Without it, the same deployment
+needs a value an order of magnitude larger and only benefits workloads
+whose reused prefixes are that long. Check whether `rdma/ib` is present
+on your pods before reading the ladder across, and derive the value from
+a crossover measured on your own transport.
 
 ## Best Practices
 
-* `--block-size` identical on every pod AND in the router's
+* `--block-size` identical on every pod and in the router's
   `precise-prefix-cache-producer` (`tokenProcessorConfig.blockSize`). A
-  mismatch leaves the prefix index empty and the whole path silently inert -
-  requests still serve, nothing pulls.
+  mismatch leaves the prefix index empty and the whole path silently
+  inert: requests still serve, nothing pulls.
+* `PYTHONHASHSEED` pinned to the same value fleet-wide. vLLM seeds block
+  hashes per process; unpinned seeds mean no block hash ever matches
+  across pods and every lookup misses.
+* `--kv-events-config` on every serving pod, topic
+  `kv@<POD_IP>:<PORT>@<model>`. No events, no precise index, no source
+  selection. `<PORT>` must be the port the router identifies the
+  endpoint by: the routing sidecar's port (`8000` in this guide), not
+  the engine port (`8200`). The EPP matches the topic against the
+  InferencePool endpoint; a mismatched port leaves the index empty, so
+  no pull ever fires. This bites when adapting the manifest to a
+  different port layout, not the shipped one.
+* Matched TP between peers that serve each other. The peer session
+  fingerprint embeds the parallel layout, so a TP-mismatched pair
+  rejects the session and requests silently recompute. Hetero-TP works
+  only for non-hybrid-attention models on the V1 model runner
+  (`VLLM_USE_V2_MODEL_RUNNER=0` where V2 is the default); in-review
+  upstream work stores offloaded KV in a parallelism-free layout
+  ([vllm#48414](https://github.com/vllm-project/vllm/pull/48414)),
+  removing the coupling.
 * **Multi-pod data-parallel groups (LWS wide-EP) must compensate the
-  socket base ports per pod.** vLLM binds the P2P tier and KV-events
-  listeners at `configured base + global data_parallel_index`, while the
-  router addresses `pod IP + pod-local rank` - correct when each pod is
-  its own DP group (every topology in this guide), wrong for worker pods
-  of a multi-pod group, where a mis-addressed pull does not fall back to
-  recompute but stalls the request until the client times out. Each pod
-  subtracts its global start rank from both configured bases so every
-  pod binds the same pod-local ranges:
+  socket base ports per pod.** vLLM binds the P2P and KV-events
+  listeners at `configured base + global data_parallel_index`; the
+  router addresses `pod IP + pod-local rank`. Those agree when each pod
+  is its own DP group (every topology in this guide). They disagree for
+  worker pods of a multi-pod group, and a mis-addressed pull does not
+  fall back to recompute - it stalls the request until the client times
+  out. Each pod subtracts its global start rank from both bases:
 
   ```bash
   START_RANK=$(( ${LWS_WORKER_INDEX:-0} * DP_SIZE_LOCAL ))
@@ -201,82 +179,58 @@ runs it against two live pods and prints the recommended value.
   KV_EVENTS_BASE=$((5557 - START_RANK))  # KV-events publisher endpoint
   ```
 
-  Router-side, per-rank source selection additionally requires the EPP to
-  attribute KV events to the publishing rank's serving endpoint
-  ([llm-d-router#2233](https://github.com/llm-d/llm-d-router/pull/2233),
-  merged) and the sidecar to compare full endpoints in its self-pull
-  guard ([llm-d-router#2234](https://github.com/llm-d/llm-d-router/pull/2234),
-  in review) - run a router release or build that carries both before
-  enabling the pull on such a topology. The wide-EP measurements in this
-  guide's GLM results page ran images built from those two changes.
-* `--kv-events-config` on every serving pod, topic
-  `kv@<POD_IP>:<PORT>@<model>`. No events, no precise index, no source
-  selection.
-  `<PORT>` must be the port the router identifies the endpoint by - the
-  routing sidecar's port (`8000` in this guide), not the engine port
-  (`8200`). The EPP attributes each event's cached blocks to an endpoint
-  by matching the topic's `<POD_IP>:<PORT>` against the InferencePool
-  endpoint; a mismatch (e.g. tagging the engine port) leaves the index
-  empty for every real endpoint, so `bestCachedTokens` is always 0 and no
-  pull ever fires - silently, exactly like "no effect". This bites when
-  adapting the manifest to a different port layout, not the shipped one.
-* `PYTHONHASHSEED` pinned to the same value fleet-wide. vLLM seeds block
-  hashes per process; unpinned seeds mean no block hash ever matches across
-  pods and every lookup misses.
-* Matched TP between peers that serve each other. The peer session
-  fingerprint embeds the parallel layout, so a TP-mismatched pair rejects
-  the session and requests silently recompute. Hetero-TP is supported only
-  for non-hybrid-attention models on the V1 model runner
-  (`VLLM_USE_V2_MODEL_RUNNER=0` where V2 is the default); in-review
-  upstream work stores offloaded KV in a canonical parallelism-free layout
-  ([vllm#48414](https://github.com/vllm-project/vllm/pull/48414)),
-  removing the TP coupling.
-* `offload_prompt_only` set to match what peers can use. Prompt-side
-  prefix pulls work under either setting; `false` additionally offloads
-  *generated* KV (session answers) so a conversation's full history is
-  pullable - pair it with an index that covers decode blocks (the precise
-  one) and a chat template that re-renders answers verbatim. This guide's
-  deployment runs `false`; the wide-EP testbed runs `true` because its
-  model drops reasoning on re-render, so generated KV is unreachable for
-  reuse regardless.
-* CPU tier (`cpu_bytes_to_use`) considerably larger than the per-pod GPU
-  KV cache - 2x as the working default. The tier's value is the KV that
-  GPU evicts and CPU *retains* (the
+  The router must also attribute KV events to the publishing rank's
+  endpoint
+  ([llm-d-router#2233](https://github.com/llm-d/llm-d-router/pull/2233))
+  and the sidecar must compare full endpoints in its self-pull guard
+  ([llm-d-router#2234](https://github.com/llm-d/llm-d-router/pull/2234));
+  run a router build that carries both before enabling the pull on such
+  a topology. The GLM results in this guide did.
+* `offload_prompt_only` set to match what peers can use. Prefix pulls
+  work under either setting; `false` additionally offloads *generated*
+  KV so a conversation's full history is pullable. Pair `false` with the
+  precise index and a chat template that re-renders answers verbatim.
+  This guide's deployment runs `false`; the wide-EP testbed runs `true`
+  because its model drops reasoning on re-render, so generated KV is
+  unreusable regardless.
+* CPU tier (`cpu_bytes_to_use`) larger than the per-pod GPU KV cache -
+  2x as the working default. The tier's value is the KV that GPU evicts
+  and CPU *retains* (the
   [tiered path's](../../docs/well-lit-paths/foundations/tiered-prefix-cache.md)
-  receptive field): a tier smaller than the GPU cache mostly duplicates
-  blocks that are still GPU-resident, and the router's view of "who has
-  this prefix" outruns what sources can actually serve.
-  * **Compute the ratio from measured KV capacity, not per-GPU
-    intuition - TP changes it drastically.** Model weights are paid once
-    per pod while KV memory scales with the TP degree, so per-pod KV
-    capacity grows superlinearly with TP. gpt-oss-120b on H200 at
-    `--gpu-memory-utilization=0.85`: TP=1 leaves ~55 GB of KV (~1.4M
-    tokens), but TP=4 leaves ~414 GB (~10M tokens). A 128 GiB tier is
-    2.3x the GPU cache at TP=1 and 0.33x at TP=4 - large-looking, yet
-    unable to hold even the GPU's own evictions. Read the KV capacity
-    from the engine startup log and size the tier from it, per role.
+  receptive field): a smaller tier mostly duplicates blocks that are
+  still GPU-resident, and the router's view of who holds a prefix
+  outruns what sources can actually serve.
+  * Compute the ratio from measured KV capacity, not per-GPU intuition.
+    Weights are paid once per pod while KV memory scales with TP, so
+    per-pod KV capacity grows superlinearly with the TP degree.
+    gpt-oss-120b on H200 at `--gpu-memory-utilization=0.85`: TP=1
+    leaves ~55 GB of KV (~1.4M tokens); TP=4 leaves ~414 GB (~10M
+    tokens), so a 128 GiB tier is 2.3x the GPU cache at TP=1 and 0.33x
+    at TP=4. Read the KV capacity from the engine startup log and size
+    the tier from it, per role.
   * Size `/dev/shm` above `cpu_bytes_to_use` (the tier is an shm mmap)
     and the pod memory limit above both - the memory-backed emptyDir
     counts against the pod's limit.
   * With data parallelism (`--data-parallel-size` N > 1), each DP
     replica gets its own tier region and P2P port: `/dev/shm` must
-    exceed N x `cpu_bytes_to_use`, and rank `r`'s P2P tier listens on
-    the configured port + `r`. Requires vLLM with per-DP-rank P2P
-    ports and per-replica offload regions
+    exceed N x `cpu_bytes_to_use`, and rank `r` listens on the
+    configured port + `r`. Requires vLLM with per-DP-rank P2P ports and
+    per-replica offload regions
     ([vllm#47636](https://github.com/vllm-project/vllm/pull/47636),
     [vllm#47987](https://github.com/vllm-project/vllm/pull/47987)).
-* The render Service fronts the model servers themselves
-  (`render/`): vLLM exposes `/v1/*/render` natively, so render capacity
-  scales with the serving fleet ([llm-d#2188](https://github.com/llm-d/llm-d/pull/2188)).
-  The Service targets the vLLM port directly - the pods' port 8000
-  belongs to the routing-proxy sidecar, which does not serve `/render`.
-  When serving CPU is contended, apply `render/standalone/` instead (a
-  dedicated GPU-less pool publishing the same Service name) and size it
-  to the request rate: one replica saturates near 10 req/s at ~50K-token
-  prompts, and past saturation every request stalls for exactly the
-  token-producer `vllm.timeout` (default 5s) before routing proceeds
-  without token IDs - prefix scoring silently disabled while engines sit
-  idle. Alert on flat TTFT plateaus at the timeout value.
+* The render Service (`render/`) fronts the model servers themselves:
+  vLLM serves `/v1/*/render` natively, so render capacity scales with
+  the serving fleet
+  ([llm-d#2188](https://github.com/llm-d/llm-d/pull/2188)). The Service
+  targets the vLLM port directly; the pods' port 8000 belongs to the
+  routing-proxy sidecar, which does not serve `/render`. When serving
+  CPU is contended, apply `render/standalone/` instead - a dedicated
+  GPU-less pool under the same Service name - and size it to the
+  request rate: one replica saturates near 10 req/s at ~50K-token
+  prompts, and past saturation every request stalls for the
+  token-producer `vllm.timeout` (default 5 s), then routes without
+  token IDs - prefix scoring silently disabled while engines sit idle.
+  Alert on flat TTFT plateaus at the timeout value.
 * Set an explicit client timeout in benchmark workloads
   (`load.request_timeout`); compare stage wall-clock to send-window +
   drain, not to the offered duration.
@@ -314,20 +268,21 @@ kubectl create namespace ${NAMESPACE} --dry-run=client -o yaml | kubectl apply -
 
 Additional requirements specific to this path:
 
-* A vLLM image with the `OffloadingConnector` P2P secondary tier.
-* llm-d routing sidecar with `kv_transfer_params.remote_kv_source` injection
-  (the branch renamed the sub-dict keys on 2026-07-20; a sidecar emitting the
-  old `p2p`/`prefill`/`decode` keys against the current branch is silently
-  inert - see Troubleshooting).
+* A vLLM image with the `OffloadingConnector` P2P secondary tier (see
+  the [nightly pins](#engine-image-upstream-nightly-pins)).
+* An llm-d routing sidecar that injects
+  `kv_transfer_params.remote_kv_source`. A sidecar emitting the older
+  `p2p`/`prefill`/`decode` keys is silently inert against current
+  engines - see Troubleshooting.
 
 ## Installation Instructions
 
 ### 1. Prepare HF Token
 
 Create the `llm-d-hf-token` secret in the namespace. The router reads
-`HF_TOKEN` to reach gated tokenizers - `openai/gpt-oss-120b` is public but
-the secret makes swapping in a gated model a no-op. See
-[helpers/hf-token.md](../../helpers/hf-token.md) for the full helper.
+`HF_TOKEN` to reach gated tokenizers; `openai/gpt-oss-120b` is public,
+but the secret makes swapping in a gated model a no-op. See
+[helpers/hf-token.md](../../helpers/hf-token.md).
 
 ```bash
 export HF_TOKEN=<your HuggingFace token>
@@ -339,11 +294,10 @@ kubectl create secret generic llm-d-hf-token \
 
 ### 2. Deploy the llm-d Router
 
-Install the router with this guide's values, which deploy the EPP with the
-affinity + P2P scheduling configuration (`epp-affinity-p2p.yaml`) as the
-default. To run a comparison arm instead, swap the `pluginsCustomConfig` in
-the values for `epp-affinity.yaml`, `epp-load.yaml`, or `epp-load-p2p.yaml`
-from [benchmarking/](benchmarking/).
+Install the router with this guide's values, which deploy the EPP with
+`epp-affinity-p2p.yaml` as the default. To run a comparison arm instead,
+swap the `pluginsCustomConfig` in the values for another config from
+[benchmarking/](benchmarking/).
 
 ```bash
 helm upgrade -i ${GUIDE_NAME} \
@@ -356,15 +310,15 @@ helm upgrade -i ${GUIDE_NAME} \
 #### Deploy the Render (Tokenizer) Service
 
 The EPP `token-producer` tokenizes prompts by calling vLLM's
-`/v1/completions/render` endpoint, served from a dedicated horizontally
-scalable Service:
+`/v1/completions/render` endpoint through the render Service:
 
 ```bash
 kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/render
 ```
 
-Size it per the [Best Practices](#best-practices) render bullet - long-prompt
-workloads need more replicas than the default.
+The default overlay fronts the model servers themselves; when serving
+CPU is contended, apply `render/standalone/` instead and size it per
+the [Best Practices](#best-practices) render bullet.
 
 ### 3. Deploy the Model Server
 
@@ -377,29 +331,28 @@ export TRANSPORT=rdma         # options: rdma (recommended), base
 kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/${ACCELERATOR_TYPE}/${MODEL_SERVER}/${TRANSPORT}/
 ```
 
-16 replicas, TP=1, `--block-size=64`, KV events on, the offloading connector
-with a P2P tier on port 7777.
+16 replicas, TP=1, `--block-size=64`, KV events on, the offloading
+connector with a P2P tier on port 7777.
 
-- **`rdma`** adds an `rdma/ib` device and `IPC_LOCK` to every model server.
-  This is what every benchmark in this guide was measured on, and it is the
-  recommended overlay.
-- **`base`** is the same deployment without the IB device. NIXL/UCX falls
-  back to TCP, which does not stop the pull working - it moves the
-  pull-versus-recompute crossover from below 2K tokens out to ~29K, so
-  `minCachedTokenDelta` has to move with it. See
+- **`rdma`** adds an `rdma/ib` device and `IPC_LOCK` to every model
+  server. Every benchmark in this guide was measured on it, and it is
+  the recommended overlay.
+- **`base`** is the same deployment without the IB device. NIXL/UCX
+  falls back to TCP; the pull still works, but the crossover moves to
+  ~29K tokens and `minCachedTokenDelta` has to move with it. See
   [Supported Hardware Backends](#supported-hardware-backends).
 
-The `rdma/ib` resource name is what the clusters this was measured on expose;
-yours may differ (`rdma/hca`, `nvidia.com/rdma`, ...). Check before applying,
+The `rdma/ib` resource name is what the measured clusters expose; yours
+may differ (`rdma/hca`, `nvidia.com/rdma`, ...). Check before applying,
 and edit `modelserver/gpu/vllm/rdma/patch-rdma.yaml` to match:
 
 ```bash
 kubectl get nodes -o jsonpath='{.items[0].status.allocatable}' | tr ',' '\n' | grep -i rdma
 ```
 
-Confirm the device actually reached the container - a pod that schedules
-without it serves requests normally and just pulls slowly, so this failure
-looks like a performance result rather than a misconfiguration:
+Confirm the device actually reached the container. A pod that schedules
+without it serves normally and just pulls slowly, so this failure looks
+like a performance result rather than a misconfiguration:
 
 ```bash
 kubectl exec -n ${NAMESPACE} deploy/p2p-kv-cache-sharing-decode -c modelserver -- ls /dev/infiniband
@@ -407,36 +360,31 @@ kubectl exec -n ${NAMESPACE} deploy/p2p-kv-cache-sharing-decode -c modelserver -
 
 #### Engine image: upstream nightly pins
 
-The `OffloadingConnector` P2P secondary tier is upstream in vLLM
-([vllm#48021](https://github.com/vllm-project/vllm/pull/48021)); no source
-overlay is required. All three robustness fixes are upstream as well: the
-finalization and reconnect crash fixes
-([vllm#49671](https://github.com/vllm-project/vllm/pull/49671),
-[vllm#49823](https://github.com/vllm-project/vllm/pull/49823)) and the
-symmetric-fetch stall fix under sustained many-to-many pull load
-([vllm#49877](https://github.com/vllm-project/vllm/pull/49877)). Any
-nightly at or after `nightly-6f91edf96d3f3272945809c04702380053bff4de`
-(2026-07-29, the first containing all four) works; the kustomization pins
-that one so the guide's numbers stay reproducible. No tagged vLLM release
-up to `v0.26.0` contains these merges, so a nightly is currently the only
-option; once a later release ships, verify the four merge commits are in
-the tag and prefer it over any nightly.
+The `OffloadingConnector` P2P secondary tier and its robustness fixes
+are upstream in vLLM
+([vllm#48021](https://github.com/vllm-project/vllm/pull/48021),
+[vllm#49671](https://github.com/vllm-project/vllm/pull/49671),
+[vllm#49823](https://github.com/vllm-project/vllm/pull/49823),
+[vllm#49877](https://github.com/vllm-project/vllm/pull/49877)); no
+source overlay is required. The first nightly containing all four is
+`nightly-6f91edf96d3f3272945809c04702380053bff4de` (2026-07-29); the
+kustomization pins it so the guide's numbers stay reproducible. No
+tagged vLLM release up to `v0.26.0` contains these merges; once a later
+release does, prefer it over any nightly.
 
 Wide-EP `GLM-5.2` deployments (the
 [GLM results](./benchmark-results/glm-5.2-h200.md) testbed) additionally
-need the block-table width alignment fix its attention indexer requires
-([vllm#50302](https://github.com/vllm-project/vllm/pull/50302)); the
-first nightly containing it is
-`nightly-124154a8843d1f8e4d4e2d5d466e2d3ebc3716da` (2026-08-01), so that
-is the floor for GLM.
+need the block-table width alignment fix
+([vllm#50302](https://github.com/vllm-project/vllm/pull/50302)); their
+floor is `nightly-124154a8843d1f8e4d4e2d5d466e2d3ebc3716da`
+(2026-08-01).
 
 ### 4. Calibrate `minCachedTokenDelta` for your model and transport
 
 The shipped EPP configs set `minCachedTokenDelta: 2048`, the crossover
 measured for this guide's reference setup (gpt-oss-120b on H200 with
-`rdma/ib`). The crossover is model-, hardware- and transport-specific, so on
-any other combination measure your own against the pods you just deployed
-and set it on the `p2p-source-producer` in the router values:
+`rdma/ib`). On any other combination, measure your own against the pods
+you just deployed:
 
 ```bash
 NAMESPACE=${NAMESPACE} \
@@ -445,8 +393,9 @@ MODEL_NAME=openai/gpt-oss-120b \
 ${REPO_ROOT}/guides/recipes/router/calibration/calibrate-min-cached-token-delta.sh
 ```
 
-The recipe prints the recommended value; re-apply the router release with it
-and restart the EPP. See
+The recipe prints the recommended value; set it on the
+`p2p-source-producer` in the router values, re-apply, and restart the
+EPP. See
 [Calibrating `minCachedTokenDelta`](../recipes/router/calibration/README.md#calibrating-mincachedtokendelta)
 for what it measures and its prerequisites.
 
@@ -482,11 +431,11 @@ kubectl run curl-debug --rm -it \
 
 ### 3. Mechanism-engaged gates
 
-An inert misconfiguration looks identical to "no effect" - requests serve
+An inert misconfiguration looks identical to "no effect": requests serve
 fine, nothing pulls. Run every gate before trusting any measurement:
 
-1. **Index populated**: the EPP logs show KV-event subscriptions for every
-   pod; a scheduling decision logs non-zero prefix scores.
+1. **Index populated**: the EPP logs show KV-event subscriptions for
+   every pod; a scheduling decision logs non-zero prefix scores.
 2. **Header firing**: the routing sidecar logs
    `running P2P source protocol` with a `source_host` on requests whose
    prefix a peer holds.
@@ -494,7 +443,7 @@ fine, nothing pulls. Run every gate before trusting any measurement:
    pulling pods; the source logs the served fetch.
 4. **Hash agreement**: seed one pod with a prefix, request it on another
    with the header; a hit of ~the full prefix length proves block hashes
-   match (if this is zero, check `PYTHONHASHSEED` and `--block-size`).
+   match (if zero, check `PYTHONHASHSEED` and `--block-size`).
 
 ## Benchmarking
 
@@ -502,18 +451,14 @@ This guide uses [`llmdbenchmark`](https://github.com/llm-d/llm-d-benchmark) - th
 
 ### 1. Install the `llmdbenchmark` CLI
 
-This guide's workload profile lands via
+The guide's workload profile ships via
 [llm-d-benchmark#1656](https://github.com/llm-d/llm-d-benchmark/pull/1656),
-which is open, so `guide_p2p-kv-cache-sharing_1.yaml` is absent from `main`
-and the PR branch lives on a fork rather than on `origin`. Check out the
-pinned PR commit; replace the fetch with the merge commit on `main` once
-the PR lands.
+which is still open, so until it merges the profile comes from the PR
+fork at a pinned commit:
 
 ```bash
 curl -sSL https://raw.githubusercontent.com/llm-d/llm-d-benchmark/main/install.sh | bash
 cd llm-d-benchmark
-# Until llm-d-benchmark#1656 merges the profile comes from the PR fork at the
-# pinned commit - `origin` has neither the branch nor the file.
 git fetch https://github.com/nilig/llm-d-benchmark.git \
     960f55a910fc4c049428b820b54462227dfda510
 git checkout 960f55a910fc4c049428b820b54462227dfda510
@@ -530,11 +475,9 @@ export GATEWAY_CLASS=epponly # standalone mode
 
 ### 3. Run the benchmark profile for P2P KV Cache Sharing
 
-`guide_p2p-kv-cache-sharing_1.yaml` is the workload profile shipped with
-`llm-d-benchmark` for this guide - an analogous document-Q&A workload;
-the canonical tables were measured with a custom driver (see
-[benchmarking/README.md](benchmarking/README.md)). Run it once per
-routing arm, switching only the EPP configuration between runs:
+`guide_p2p-kv-cache-sharing_1.yaml` is a document-Q&A workload profile
+for this guide. Run it once per routing arm, switching only the EPP
+configuration between runs:
 
 ```bash
 llmdbenchmark \
@@ -549,9 +492,9 @@ llmdbenchmark \
     --analyze
 ```
 
-The full scenario matrix (crossover micro-benchmark, shared-prefix pools,
-hot set, document Q&A) with its measured tables and the A/B protocol lives
-in [benchmarking/README.md](benchmarking/README.md).
+The full scenario matrix (crossover micro-benchmark, shared-prefix
+pools, hot set, document Q&A) with its measured tables and the A/B
+protocol lives in [benchmarking/README.md](benchmarking/README.md).
 
 ## Cleanup
 
@@ -564,40 +507,38 @@ kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/render
 ## How It Works
 
 1. **Model server pods publish KV-cache events** and run the
-   `OffloadingConnector` with a CPU tier plus a P2P secondary tier: every
-   pod both offloads its computed KV to CPU and serves it to peers on the
-   P2P port.
-2. **The router builds its prefix index** - in this deployment the precise
-   one from the KV events - so it knows per request which pods hold which
-   prefix blocks.
-3. **The `p2p-source-producer` compares** the best-cached peer against the
-   pod scheduling actually picked; when the peer leads by at least
+   `OffloadingConnector` with a CPU tier plus a P2P secondary tier:
+   every pod both offloads its computed KV to CPU and serves it to
+   peers.
+2. **The router builds its prefix index** - here the precise one from
+   the KV events - so it knows which pods hold which prefix blocks.
+3. **The `p2p-source-producer` compares** the best-cached peer against
+   the pod scheduling picked; when the peer leads by at least
    `minCachedTokenDelta` tokens it sets the KV cache source header.
-4. **The routing sidecar injects `kv_transfer_params.remote_kv_source`** from the header
-   and the engine pulls the prefix blocks from the peer's CPU tier over
-   NIXL - hits load as normal cache hits and ordinary misses recompute, so a
-   request whose peer simply does not have the blocks degrades to baseline
-   behavior rather than failing.
+4. **The routing sidecar injects `kv_transfer_params.remote_kv_source`**
+   from the header and the engine pulls the prefix blocks from the
+   peer's CPU tier over NIXL. Hits load as normal cache hits; ordinary
+   misses recompute, so a request whose peer does not have the blocks
+   degrades to baseline behavior rather than failing.
 
    > [!WARNING]
-   > That fallback covers ordinary misses, not a write that never lands. On
-   > the engine pinned by this guide a block left in `HIT_PENDING` has no
-   > deadline, so a request waiting on it can stay deferred until the client
-   > times out rather than recomputing. Treat a stalled `HIT_PENDING` as a
-   > known limitation of this path on current engines.
+   > That fallback covers ordinary misses, not a write that never
+   > lands. On the pinned engine a block left in `HIT_PENDING` has no
+   > deadline, so a request waiting on it can stay deferred until the
+   > client times out. Treat a stalled `HIT_PENDING` as a known
+   > limitation on current engines.
 
 ## P/D variant: P2P over NIXL disaggregation
 
-Measured on this topology: **6.3x median TTFT and +50% throughput** against
-plain NIXL P/D on a multi-turn agentic workload -
+Measured on this topology: **6.3x median TTFT and +50% throughput**
+against plain NIXL P/D on a multi-turn agentic workload -
 [full report](benchmark-results/qwen3-30b-h200-pd-agentic.md).
 
-Under P/D disaggregation the pull applies to the **prefill leg only**: the
+Under P/D disaggregation the pull applies to the prefill leg only: the
 prefill worker computes the prompt KV and streams it to the decoder, so
-that is the leg where recomputing a cached prefix is wasted work. The EPP
-evaluates the source header against the prefill profile's target, and the
-sidecar injects `kv_transfer_params.remote_kv_source` onto the prefill leg; the decode
-leg already receives the full KV over NIXL and has nothing to pull.
+that is the leg where recomputing a cached prefix is wasted work. The
+decode leg already receives the full KV over NIXL and has nothing to
+pull.
 
 Start from the [P/D disaggregation guide](../pd-disaggregation/README.md)
 topology and change three things:
@@ -618,58 +559,51 @@ topology and change three things:
 
    Both side channels must bind the pod IP via the downward API:
    `VLLM_NIXL_SIDE_CHANNEL_HOST` and `VLLM_P2P_SIDE_CHANNEL_HOST`. All
-   other prerequisites from [Best Practices](#best-practices) (block size,
-   `PYTHONHASHSEED`, `offload_prompt_only: false`, CPU-tier sizing) apply
-   unchanged - and size `cpu_bytes_to_use` **per role**: decode legs
-   typically run higher TP, so their per-pod GPU KV (and therefore the
-   tier that must exceed it) is several times a prefill pod's. The value
-   in the example above is a prefill-leg (TP=1) size; see the CPU-tier
-   bullet in Best Practices for the TP arithmetic.
+   prerequisites from [Best Practices](#best-practices) apply
+   unchanged. Size `cpu_bytes_to_use` **per role**: decode legs
+   typically run higher TP, so their per-pod GPU KV (and the tier that
+   must exceed it) is several times a prefill pod's; the value above is
+   a prefill-leg (TP=1) size.
 
 2. **The routing sidecar declares the tier** with
    `--kv-connector=nixlv2 --enable-p2p-pull` (plus
-   `--p2p-connector-port=7777` if not the default). `--enable-p2p-pull` is
-   accepted only with `--kv-connector=nixlv2`; the sidecar rejects it with
-   any other connector at startup (with `--kv-connector=offloading` the
-   tier is native and the flag is unnecessary).
+   `--p2p-connector-port=7777` if not the default). `--enable-p2p-pull`
+   is accepted only with `--kv-connector=nixlv2`; with
+   `--kv-connector=offloading` the tier is native and the flag is
+   unnecessary.
 
 3. **The EPP scheduling config targets the prefill profile**: set the
    `p2p-source-producer`'s `prefillProfileName` to the disaggregation
-   prefill profile name (default `prefill`), so the source comparison runs
-   against the pod that will actually compute the prefix.
+   prefill profile name (default `prefill`), so the source comparison
+   runs against the pod that will actually compute the prefix.
 
-Size the decode pool for its NIXL intake - each request ships its full KV
-from prefill to decode, and that intake, not prefill placement, is
+Size the decode pool for its NIXL intake - each request ships its full
+KV from prefill to decode, and that intake, not prefill placement, is
 typically the topology's ceiling.
 
 ## Troubleshooting
 
 | Symptom | Cause | Fix |
 |---|---|---|
-| No pulls, everything serves; EPP logs `bestCachedTokens:0` for every request | index empty: block-size mismatch, missing kv-events, or the kv-events topic port does not match the router's endpoint port (Best Practices, kv-events bullet) - or hashes disagree (`PYTHONHASHSEED`) | verification gates 1 and 4 |
+| No pulls, everything serves; EPP logs `bestCachedTokens:0` for every request | index empty: block-size mismatch, missing kv-events, kv-events topic port not matching the router's endpoint port, or hash disagreement (`PYTHONHASHSEED`) | verification gates 1 and 4 |
 | `rejecting peer connect: block_len mismatch` | `--block-size` differs between pods | align it everywhere |
 | No pulls from a TP-mismatched source, index and hashes fine | peer session fingerprint is TP-locked | matched TP; hetero-TP only for non-hybrid models on the V1 runner (Best Practices) |
 | Pulls fire but hit rate ~0 | CPU tier too small vs GPU cache; prefixes evicted before peers ask | grow `cpu_bytes_to_use` (and `/dev/shm`) |
 | Sidecar exits with `unknown flag: --enable-p2p-pull` | sidecar image predates the NIXL PD pull path | use a sidecar build that includes it |
-| Zero pulls after moving to the current connector branch, gates 1-2 pass | sidecar emits the old sub-dict keys (`p2p`/`prefill`/`decode`); the renamed engine ignores them | use a sidecar built with the renamed keys (`remote_kv_source`/`remote_prefiller`/`remote_decoder`) |
-| TTFT pins flat at ~the token-producer timeout (default 5s) at every rate above some cliff, engines report near-zero queue/prefill time, both arms identical | render service saturated; every EPP render call times out and requests proceed late without token IDs | scale render replicas to `peak_req_per_s x tokenize seconds per request`; verify with a direct load test against `/v1/completions/render` |
+| Zero pulls, gates 1-2 pass | sidecar emits the old sub-dict keys (`p2p`/`prefill`/`decode`); the engine ignores them | use a sidecar built with the renamed keys (`remote_kv_source`/`remote_prefiller`/`remote_decoder`) |
+| TTFT pins flat at ~the token-producer timeout (default 5 s) at every rate above some cliff; engines report near-zero queue/prefill time; both arms identical | render capacity saturated; every EPP render call times out and requests proceed late without token IDs | apply `render/standalone/` and scale it per Best Practices; verify with a direct load test against `/v1/completions/render` |
 
 ## Benchmarking Reports
 
-Empirical benchmark reports comparing the routing arms under identical
-hardware configurations:
+Benchmark reports comparing the routing arms under identical hardware:
 
 - **[openai/gpt-oss-120b on vLLM (H200, aggregated)](./benchmark-results/gpt-oss-120b-h200.md)**:
   pull-versus-recompute crossover, shared-prefix pools, and the document
-  Q&A headline - load-aware placement plus the pull against precise
-  prefix-cache routing.
+  Q&A headline.
 - **[Qwen/Qwen3-30B-A3B-Thinking on vLLM (H200, P/D agentic)](./benchmark-results/qwen3-30b-h200-pd-agentic.md)**:
-  prefill pulling decode's generated session history on a disaggregated
-  deployment - 6.3x median TTFT and +50% throughput against plain NIXL P/D
-  on the agentic-serving workload shape.
+  prefill pulling decode's generated session history - 6.3x median TTFT
+  and +50% throughput against plain NIXL P/D.
 - **[zai-org/GLM-5.2-FP8 on vLLM (H200, wide-EP P/D)](./benchmark-results/glm-5.2-h200.md)**:
-  the mechanism at 753B - the load-spill payoff (a load-first policy with
-  the pull cuts mean TTFT -67% and lifts throughput 2.7x over the same
-  policy without it, reproduced twice on independent builds), crossover
-  swept to its measured tie, and the quarantined overlay-era grid kept as
-  an index-sizing failure-mode record.
+  the mechanism at 753B - the load-spill payoff (-67% mean TTFT, 2.7x
+  throughput for a load-first policy with the pull versus without),
+  crossover sweep, and the index-sizing failure-mode record.
