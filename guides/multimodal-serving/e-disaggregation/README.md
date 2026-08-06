@@ -44,9 +44,9 @@ Encode disaggregation is most beneficial for workloads with:
 Choose between topologies:
 
 * **E/PD** - simpler deployment; best when prefill and decode do not need separate scaling, or when the primary bottleneck is encode
-* **E/P/D** - extends the [P/D Disaggregation](../../pd-disaggregation/README.md) guide by adding a dedicated encode stage. The reasons for separating prefill from decode (heterogeneous parallelism, xPyD ratios, workload specialization) are described in the [P/D Best Practices](../../pd-disaggregation/README.md#pd-best-practices) section, which also carries two warnings that apply equally to the P/D stage of this topology: 
-   * Prefill TP > Decode TP is not supported for most model architectures
-   * Decode-side segfault from a stale NIXL agent cache after a prefill pod restart
+* **E/P/D** - extends the [P/D Disaggregation](../../pd-disaggregation/README.md) guide by adding a dedicated encode stage. The reasons for separating prefill from decode (heterogeneous parallelism, xPyD ratios, workload specialization) are described in the [P/D Best Practices](../../pd-disaggregation/README.md#pd-best-practices) section, which also carries two warnings that apply equally to the P/D stage of this topology:
+   * [Prefill TP > Decode TP is not supported for most model architectures](../../pd-disaggregation/README.md#pd-best-practices)
+   * [Decode-side stale NIXL agent cache after a prefill pod restart](../../pd-disaggregation/README.md#pd-best-practices)
 
 ### Supported Hardware Backends
 

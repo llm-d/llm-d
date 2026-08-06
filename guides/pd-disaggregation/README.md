@@ -34,7 +34,7 @@ However, P/D disaggregation is not a target for all workloads. We suggest explor
 
 As a result, as you tune your P/D deployments, we suggest focusing on the following parameters:
 
-* **Heterogeneous Parallelism**: deploy P workers with less parallelism and more replicas and D workers with more parallelism and fewer replicas, see the warning below.
+* **Heterogeneous Parallelism**: deploy P workers with less parallelism and more replicas and D workers with more parallelism and fewer replicas, see the TP ratio warning below.
 * **xPyD Ratios**: tuning the ratio of P workers to D workers to ensure balance for your ISL|OSL ratio
 
 > [!WARNING]
