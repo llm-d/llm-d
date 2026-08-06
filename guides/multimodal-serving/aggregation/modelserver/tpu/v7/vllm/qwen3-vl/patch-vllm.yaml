@@ -1,0 +1,36 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: decode
+spec:
+  replicas: 8
+  template:
+    spec:
+      priorityClassName: medium
+      nodeSelector:
+        cloud.google.com/gke-tpu-topology: "2x2x1"
+        cloud.google.com/gke-tpu-accelerator: "tpu7x"
+      containers:
+        - name: modelserver
+          # Args are replaced wholesale, not merged, so the multimodal flags from
+          # ../../../../base/vllm are repeated here.
+          args:
+            - "Qwen/Qwen3-VL-32B-Instruct"
+            - "--disable-access-log-for-endpoints=/health,/metrics,/v1/models"
+            - "--tensor-parallel-size=4"
+            - "--mm-processor-cache-gb"
+            - "20"
+          env:
+            - name: MODEL_IMPL_TYPE # Need to add this as vllm tpu doesn't fully support qwen3-vl now, see https://github.com/vllm-project/tpu-inference/issues/3350
+              value: "vllm"
+            - name: SKIP_JAX_PRECOMPILE # Need to add this as vllm tpu doesn't fully support qwen3-vl now, see https://github.com/vllm-project/tpu-inference/issues/3350
+              value: "1"
+          resources:
+            limits:
+              cpu: "16"
+              memory: 256Gi
+              google.com/tpu: 4
+            requests:
+              cpu: "8"
+              memory: 128Gi
+              google.com/tpu: 4

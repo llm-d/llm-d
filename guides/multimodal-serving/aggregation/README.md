@@ -22,10 +22,17 @@ The multimodal-optimized-baseline routes with the same token-based stack as the 
 
 This guide includes configurations for the following accelerators and inference backends:
 
-| Backend            | Directory                  | Notes                                      |
-| ------------------ | -------------------------- | ------------------------------------------ |
-| NVIDIA GPU         | `modelserver/gpu/vllm/${INFRA_PROVIDER}/`    | Default configuration (`INFRA_PROVIDER` options: `base`, `gke`)                      |
-| Intel XPU          | `modelserver/xpu/vllm/`    | Intel Arc Pro B60            |
+| Backend            | Directory                  | Model                        | Notes                                      |
+| ------------------ | -------------------------- | ---------------------------- | ------------------------------------------ |
+| NVIDIA GPU         | `modelserver/gpu/vllm/${INFRA_PROVIDER}/`    | `Qwen/Qwen3-VL-32B-Instruct` | Default configuration (`INFRA_PROVIDER` options: `base`, `gke`)                      |
+| Intel XPU          | `modelserver/xpu/vllm/`    | `Qwen/Qwen3-VL-32B-Instruct` | Intel Arc Pro B60            |
+| Google TPU v7      | `modelserver/tpu/v7/vllm/qwen3-vl/` | `Qwen/Qwen3-VL-32B-Instruct` | GKE `tpu7x`, `2x2x1` slice, TP=4, 4 chips per replica, 8 replicas |
+| Google TPU v7      | `modelserver/tpu/v7/vllm/gemma4/`   | `google/gemma-4-31B-it`      | Same hardware; <br/>needs the Gemma 4 token estimate in the [router values](#1-deploy-the-llm-d-router) |
+
+> [!NOTE]
+> Review replica count, tensor parallelism, and the `2x2x1` topology against your own slice before
+> deploying. The TPU resource count is not freely adjustable: GKE requires a pod to request every chip
+> on the node for its topology, so a `2x2x1` `tpu7x` slice must request exactly 4.
 
 ---
 
@@ -80,6 +87,14 @@ helm install ${GUIDE_NAME} \
     -n ${NAMESPACE} --version ${ROUTER_CHART_VERSION}
 ```
 
+> [!IMPORTANT]
+> The `token-producer` estimate in the router values must match the model you deploy in step 2.
+> The shipped default estimates image tokens from resolution, which is correct for Qwen3-VL. If you
+> deploy `google/gemma-4-31B-it`, swap in the commented-out `estimate:` block in
+> [`router/aggregation.values.yaml`](router/aggregation.values.yaml) — Gemma 4 allocates a fixed token
+> budget per image, so the resolution-based estimator would mis-price every multimodal request and skew
+> routing with no error to signal it.
+
 <details>
 <summary><h4>Gateway Mode</h4></summary>
 
@@ -117,10 +132,28 @@ kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/multimodal-serving/${GUIDE_
 ```bash
 # Intel XPU
 kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/multimodal-serving/${GUIDE_NAME}/modelserver/xpu/vllm/
+
+# Google TPU v7 — Qwen3-VL-32B-Instruct
+kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/multimodal-serving/${GUIDE_NAME}/modelserver/tpu/v7/vllm/qwen3-vl/
+
+# Google TPU v7 — google/gemma-4-31B-it
+kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/multimodal-serving/${GUIDE_NAME}/modelserver/tpu/v7/vllm/gemma4/
 ```
 
 > [!NOTE]
 > Intel XPU deployments use Kubernetes Dynamic Resource Allocation (DRA) with `resource.k8s.io/v1` `ResourceClaimTemplate` resources and per-container `resources.claims`. Ensure your cluster supports DRA, has the Intel device plugin/DRA components installed, and exposes the `gpu.intel.com` `DeviceClass` before applying this overlay.
+
+> [!NOTE]
+> The TPU overlays schedule onto a GKE node pool with `cloud.google.com/gke-tpu-accelerator: tpu7x` and
+> `cloud.google.com/gke-tpu-topology: 2x2x1`, and request 4 `google.com/tpu` chips per replica. GKE Warden
+> requires a pod to request **all** the chips on the node for its topology (`2x2x1` on `tpu7x` is 4 chips),
+> so that count is fixed by the `nodeSelector` rather than freely tunable. `--tensor-parallel-size` matches
+> it at 4 so every chip is used. Adjust the `nodeSelector`, the TPU resource count, and the tensor parallel
+> size together if your slice differs.
+>
+> The TPU pods also set `priorityClassName: medium`. That `PriorityClass` is **not** created by this guide —
+> it must already exist in the cluster, or the pods are rejected at admission. Drop the field if your
+> cluster doesn't define it.
 
 </details>
 
@@ -165,7 +198,7 @@ kubectl run curl-debug --rm -it \
     -- /bin/bash
 ```
 
-Send an OpenAI-compatible Chat Completion request containing a text prompt and a target image URL:
+Send an OpenAI-compatible Chat Completion request containing a text prompt and a target image URL (set `model` to `google/gemma-4-31B-it` if you deployed the Gemma 4 overlay):
 ```bash
 curl -X POST http://${IP}/v1/chat/completions \
     -H 'Content-Type: application/json' \
@@ -201,6 +234,9 @@ helm uninstall ${GUIDE_NAME} -n ${NAMESPACE}
 kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/multimodal-serving/${GUIDE_NAME}/modelserver/gpu/vllm/${INFRA_PROVIDER}/
 # For Intel XPU:
 # kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/multimodal-serving/${GUIDE_NAME}/modelserver/xpu/vllm/
+# For Google TPU v7:
+# kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/multimodal-serving/${GUIDE_NAME}/modelserver/tpu/v7/vllm/qwen3-vl/
+# kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/multimodal-serving/${GUIDE_NAME}/modelserver/tpu/v7/vllm/gemma4/
 kubectl delete namespace ${NAMESPACE}
 ```
 
