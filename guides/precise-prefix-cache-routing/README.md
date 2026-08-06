@@ -150,7 +150,7 @@ kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/g
 
 ### 4. Deploy the Render (Tokenizer) Service
 
-The EPP `token-producer` plugin tokenizes prompts by calling vLLM's `/v1/completions/render` endpoint. This guide serves that endpoint from a Service rather than a per-EPP-pod sidecar, so a single render pool is shared across EPP replicas and render capacity is decoupled from the EPP replica count.
+The EPP `token-producer` plugin tokenizes prompts by calling vLLM's `/v1/*/render` endpoints. This guide serves that endpoint from a Service rather than a per-EPP-pod sidecar, so a single render pool is shared across EPP replicas and render capacity is decoupled from the EPP replica count.
 
 `vllm serve` already exposes `/v1/completions/render` and `/v1/chat/completions/render`, so the default overlay is a **Service with no pods of its own**: it selects the model server pods you just deployed and tokenizes on them.
 
