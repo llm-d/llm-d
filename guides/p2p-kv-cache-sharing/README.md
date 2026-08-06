@@ -265,17 +265,18 @@ runs it against two live pods and prints the recommended value.
     ports and per-replica offload regions
     ([vllm#47636](https://github.com/vllm-project/vllm/pull/47636),
     [vllm#47987](https://github.com/vllm-project/vllm/pull/47987)).
-* Size the render service for the request rate. The router's
-  `token-producer` calls the render endpoint
-  (`/v1/completions/render`) once per request to tokenize the full
-  prompt; at ~50K-token prompts one render replica is effectively
-  single-core-bound and saturates near 10 req/s. Past saturation every
-  request stalls for exactly the token-producer `vllm.timeout` (default
-  5s) before routing proceeds without token IDs - prefix scoring is
-  silently disabled while engines sit idle. Provision roughly
-  `peak_req_per_s x per-request tokenize seconds` in replicas (a 50K
-  random-text prompt costs ~0.1s) and alert on flat TTFT plateaus at
-  the timeout value.
+* The render Service fronts the model servers themselves
+  (`render/`): vLLM exposes `/v1/*/render` natively, so render capacity
+  scales with the serving fleet ([llm-d#2188](https://github.com/llm-d/llm-d/pull/2188)).
+  The Service targets the vLLM port directly - the pods' port 8000
+  belongs to the routing-proxy sidecar, which does not serve `/render`.
+  When serving CPU is contended, apply `render/standalone/` instead (a
+  dedicated GPU-less pool publishing the same Service name) and size it
+  to the request rate: one replica saturates near 10 req/s at ~50K-token
+  prompts, and past saturation every request stalls for exactly the
+  token-producer `vllm.timeout` (default 5s) before routing proceeds
+  without token IDs - prefix scoring silently disabled while engines sit
+  idle. Alert on flat TTFT plateaus at the timeout value.
 * Set an explicit client timeout in benchmark workloads
   (`load.request_timeout`); compare stage wall-clock to send-window +
   drain, not to the offered duration.

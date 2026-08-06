@@ -85,6 +85,11 @@ router:
                     # (discovered endpoints x tiers); 32 covers this guide's
                     # 16-pod fleet with a GPU and a CPU tier per pod.
                     podCacheSize: 32
+                kvCacheBackendConfigs:
+                - name: gpu
+                  weight: 1.0
+                - name: cpu
+                  weight: 0.4
               tokenProcessorConfig:
                 # MUST match the model server `--block-size`.
                 blockSize: 64

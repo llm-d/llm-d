@@ -29,6 +29,11 @@ plugins:
           # discovered rank endpoints x device tiers; the default 10 evicts
           # real holders on multi-rank fleets and corrupts source selection
           podCacheSize: 64
+      kvCacheBackendConfigs:
+      - name: gpu
+        weight: 1.0
+      - name: cpu
+        weight: 0.4
     tokenProcessorConfig:
       blockSize: 64
     kvEventsConfig:

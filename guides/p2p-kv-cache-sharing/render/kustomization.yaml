@@ -6,7 +6,6 @@ kind: Kustomization
 namePrefix: p2p-kv-cache-sharing-
 
 resources:
-  - deployment.yaml
   - service.yaml
 
 # The guide label lands on resource metadata ONLY (kustomize `labels` defaults

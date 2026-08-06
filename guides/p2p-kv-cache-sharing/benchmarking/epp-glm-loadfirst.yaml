@@ -26,6 +26,11 @@ plugins:
       kvBlockIndexConfig:
         inMemoryConfig:
           podCacheSize: 64
+      kvCacheBackendConfigs:
+      - name: gpu
+        weight: 1.0
+      - name: cpu
+        weight: 0.4
     tokenProcessorConfig:
       blockSize: 64
     kvEventsConfig:

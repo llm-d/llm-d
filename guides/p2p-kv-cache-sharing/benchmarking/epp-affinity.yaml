@@ -21,6 +21,11 @@ plugins:
           # matches the deployed router values (discovered endpoints x
           # tiers; 32 covers a 16-pod fleet with GPU and CPU tiers)
           podCacheSize: 32
+      kvCacheBackendConfigs:
+      - name: gpu
+        weight: 1.0
+      - name: cpu
+        weight: 0.4
     tokenProcessorConfig:
       blockSize: 64
     speculativeIndexing: true
