@@ -1,6 +1,7 @@
 # Workload Autoscaling
 
-[![E2E (OCP GPU)](https://github.com/llm-d/llm-d/actions/workflows/consolidate-status-workload-autoscaling-ibm-acc-gpu-vllm-x.yaml/badge.svg)](https://github.com/llm-d/llm-d/actions/workflows/consolidate-status-workload-autoscaling-ibm-acc-gpu-vllm-x.yaml)
+[![WVA E2E (OCP GPU)](https://github.com/llm-d/llm-d/actions/workflows/consolidate-status-workload-autoscaling-ibm-acc-gpu-vllm-x.yaml/badge.svg)](https://github.com/llm-d/llm-d/actions/workflows/consolidate-status-workload-autoscaling-ibm-acc-gpu-vllm-x.yaml)
+[![KEDA+EPP Queue E2E (OCP GPU)](https://github.com/llm-d/llm-d/actions/workflows/consolidate-status-workload-autoscaling-keda-epp-ibm-acc-gpu-vllm-x.yaml/badge.svg)](https://github.com/llm-d/llm-d/actions/workflows/consolidate-status-workload-autoscaling-keda-epp-ibm-acc-gpu-vllm-x.yaml)
 
 Traditional autoscaling indicators like resource utilization metrics (CPU/GPU) are often lagging indicators — they only reflect saturation after it has already occurred, by which point latency has spiked and requests may be failing. For LLM inference, this problem is compounded by the fact that GPU utilization is often pegged near 100% during active batching regardless of actual load, making it an entirely unreliable signal.
 
