@@ -3,7 +3,7 @@ kind: Kustomization
 
 # Dedicated render (tokenizer) pool for precise-prefix-cache-routing.
 #
-# Fallback for backends that do not serve vLLM's /v1/completions/render — most
+# Fallback for backends that do not serve vLLM's /v1/*/render endpoints — most
 # notably SGLang — and for anyone who would rather not spend model-server CPU on
 # tokenization. It runs a GPU-less `vllm launch render` Deployment fronted by a
 # Service, so the tokenizer is always vLLM's regardless of which engine serves

@@ -7,7 +7,7 @@
 ## over HTTP against that Service (see its `vllm.url` below).
 ##
 ## That Service has no pods of its own — it fronts the vLLM model servers, which
-## already expose `/v1/completions/render`. Render capacity therefore scales with
+## already expose `/v1/*/render`. Render capacity therefore scales with
 ## the model server fleet rather than with a separately-scheduled renderer pool,
 ## which keeps render latency more contained at higher QPS. Backends without
 ## vLLM's render endpoints (SGLang) apply `../render/standalone/` instead; it

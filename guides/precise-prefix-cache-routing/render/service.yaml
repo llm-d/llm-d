@@ -7,9 +7,8 @@ metadata:
 spec:
   # This Service owns no pods of its own: it fronts the model server pods
   # deployed by ../modelserver/, so the EPP `token-producer` tokenizes prompts
-  # on the same vLLM pods that serve inference. `vllm serve` already exposes
-  # /v1/completions/render and /v1/chat/completions/render, so no model-server
-  # flag is needed to turn them on.
+  # on the same vLLM pods that serve inference. `vllm serve` already exposes the
+  # /v1/*/render endpoints, so no model-server flag is needed to turn them on.
   #
   # Only Ready endpoints receive traffic, so render calls are never sent to a
   # pod that is still loading weights.

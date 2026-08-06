@@ -8,7 +8,7 @@ kind: Kustomization
 # router/precise-prefix-cache-routing.values.yaml).
 #
 # This overlay deploys a Service ONLY — it fronts the vLLM model server pods
-# from ../modelserver/, which already serve /v1/completions/render. Under load
+# from ../modelserver/, which already serve /v1/*/render. Under load
 # this keeps render latency lower than a separate CPU renderer pool, because the
 # EPP no longer contends for a small, independently-scheduled set of replicas.
 #
