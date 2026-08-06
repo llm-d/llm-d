@@ -15,6 +15,13 @@ When running multiple replicas of the Endpoint Picker (`router.epp.replicas > 1`
 #### Active-Passive Mode (Default)
 By default, multi-replica EPP deployments automatically enable the `--ha-enable-leader-election` flag. One leader replica actively serves routing decisions and coordinates lease status, while remaining replicas act as warm standbys.
 - **Sizing & Capacity Impact**: Scaling replica count does not increase total request throughput capacity, as only the single active leader replica handles external processing requests.
+- **Fail Open**: EPP is configured to fail open (`router.proxy.failOpen=true`) to the model server in the event of a leader election or pod restart. This ensures that client requests are not dropped and continue to be processed by the model server if EPP is unresponsive or unavailable.
+
+```yaml
+router:
+  proxy:
+    failOpen: true
+```
 
 #### Active-Active Mode
 To scale routing throughput concurrently across all EPP replicas, disable leader election by passing `ha-enable-leader-election: false` under `router.epp.flags`:
@@ -81,7 +88,7 @@ Empirical benchmark reference data for Qwen/Qwen3-8B simulation across 100 servi
 
 The following operational guidelines and proxy scaling architectures apply **exclusively to Standalone Mode** (`llm-d-router-standalone`), where a proxy (Envoy or Agentgateway) intercepts client requests and external-processes them via EPP.
 
-### Horizontally Scalable Proxy Service
+### Horizontally Scalable Proxy Service (Service Mode)
 
 By default, the standalone chart deploys the proxy as a sidecar container inside the EPP pod. To scale data plane throughput independently from control plane intelligence, deploy the proxy as a separate horizontally scalable Deployment and Service by setting `router.proxy.mode=service`.
 
@@ -94,6 +101,22 @@ helm install my-standalone-router ./config/charts/llm-d-router-standalone \
   --set router.proxy.mode=service \
   --set router.proxy.replicas=3
 ```
+
+#### High Availability with Fail-open
+By default, in service mode, fail open is enabled. To disable it, set `router.proxy.failOpen=false`.
+
+Empirical benchmark reference data for Qwen/Qwen2.5-1.5B-Instruct simulation across 2 model server replicas with forceful and graceful Leader EPP pod termination. Across various Envoy proxy replica counts, `router.proxy.failOpen=true` maintains high request availability during leader pod teardown. Residual errors occur during socket teardown at the exact moment of pod termination.
+
+| Scenario | Envoy Replicas | EPP Replicas | Total Requests | Successful Requests (Throughput) | Errors |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| **Scenario 1**<br>Leader election with standby pod, pod terminates immediately without graceful termination | 1 | 2 | 598 | 598 (100%) | 0 |
+| | 2 | 2 | 591 | 584 (98.8%) | 7 |
+| **Scenario 2**<br>Leader election with no standby pod, pod terminates immediately without graceful termination | 1 | 1 | 598 | 588 (98.3%) | 1 |
+| | 2 | 1 | 592 | 589 (99.3%) | 4 |
+| **Scenario 3**<br>Leader election with standby pod, pod terminates with graceful termination | 1 | 2 | 593 | 591 (99.7%) | 2 |
+| | 2 | 2 | 594 | 583 (98.1%) | 11 |
+| **Scenario 4**<br>Leader election with no standby pod, pod terminates with graceful termination | 1 | 1 | 591 | 591 (100%) | 0 |
+| | 2 | 1 | 593 | 589 (99.3%) | 4 |
 
 ### Proxy Container Resource Sizing
 
