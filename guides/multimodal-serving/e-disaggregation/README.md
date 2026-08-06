@@ -81,7 +81,6 @@ export GUIDE_PATH="multimodal-serving/e-disaggregation"
 export TOPOLOGY="e-p-d"
 export NAMESPACE="llm-d-e-p-d-disaggregation"
 export MODEL_NAME="Qwen/Qwen3-VL-32B-Instruct"
-export REPO_ROOT=$(realpath $(git rev-parse --show-toplevel))
 ```
 
 - Install the Gateway API Inference Extension CRDs:
