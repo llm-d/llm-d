@@ -66,18 +66,22 @@ What the pull is worth depends on the placement in front of it:
   recover a restarted router: both prefix indexes lose the pre-restart
   cache map, and measured restart-recovery runs produced zero pulls.
 * **Load-aware + P2P** deliberately scatters requests, and the pull is
-  what makes scattering affordable; its gains are directly attributable.
-  On the document Q&A headline (128 concurrent multi-turn sessions, each
-  pinned to an owner pod) it beats affinity warm by +35% throughput and
-  1.5x better p99 TTFT, and on a cold fleet finishes with zero client
-  timeouts against affinity's 47-48. On the uniform shared-prefix pool
-  the ordering flips: affinity stays ahead (p50 0.48 s vs 0.73 s at 30
-  req/s) because nothing contends and a local hit is free.
+  what makes scattering affordable. The pull's own margin is the matched
+  `load` versus `load + P2P` pair: +143% sustained rate on the uniform
+  pool, +224% with zero client timeouts on the hot set. Comparing
+  against affinity changes placement too, so it measures the deployment,
+  not the pull alone: on the document Q&A headline (128 concurrent
+  multi-turn sessions, each pinned to an owner pod) load-aware + P2P
+  beats affinity warm by +35% throughput and 1.5x better p99 TTFT, and
+  on a cold fleet finishes with zero client timeouts against affinity's
+  47-48. On the uniform shared-prefix pool the ordering flips: affinity
+  stays ahead (p50 0.48 s vs 0.73 s at 30 req/s) because nothing
+  contends and a local hit is free.
 * **P/D + P2P** addresses KV no placement decision could have made
   local (see the multi-turn bullet above).
 
-The guide ships affinity + P2P because it is the safer placement across
-both aggregated regimes. Reach for load-aware + P2P when your workload
+The guide ships affinity + P2P as the general-purpose default. Reach
+for load-aware + P2P when your workload
 looks like many concurrent sessions pinned to owner pods, and re-measure
 both arms on your own workload before assuming either generalizes.
 Measured tables:
@@ -121,8 +125,8 @@ is not required: NIXL/UCX falls back to TCP and the pull still works.
 But the transport sets the pull-versus-recompute crossover, so it
 changes `minCachedTokenDelta`. On TCP the pull leg inflates while
 recompute is unchanged, moving the crossover from below 2K tokens to
-roughly 29K. Measured TTFT delta on gpt-oss-120b (negative means the
-pull wins):
+roughly 29K. Measured single-request prefill-latency delta on
+gpt-oss-120b (negative means the pull wins):
 
 | prefix tokens | with `rdma/ib` (canonical) | without |
 |---:|---:|---:|

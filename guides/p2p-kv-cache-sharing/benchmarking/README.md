@@ -78,7 +78,7 @@ P2P margin. The pull-isolating pair in each scenario:
 | Document Q&A | `affinity` vs `affinity + P2P` | partly - the winning arm (`load + P2P`) also changes placement |
 
 The isolating pairs establish the feature's value: Step 0 (-56% to -88%
-TTFT with RDMA), the uniform pool (+143% sustained rate at 24 req/s),
+prefill latency with RDMA), the uniform pool (+143% sustained rate at 24 req/s),
 the hot set (+224% and 274 client-timeout failures eliminated at 48
 req/s). Cross-placement comparisons (`affinity` vs `load + P2P`) answer
 a different question - which deployment to run - and should not be read
@@ -112,8 +112,8 @@ the pods, and on TCP the crossover moves from below 2K out to ~29K (see
 
 The measured ladder is canonical in
 [the gpt-oss results page](../benchmark-results/gpt-oss-120b-h200.md#pull-versus-recompute-single-request):
-the pull wins at every measured length, -55.8% TTFT at 2K widening to
--88.2% at 48K. gpt-oss's compact hybrid-attention KV (41.5 KB/token)
+the pull wins at every measured length, -55.8% prefill latency at 2K
+widening to -88.2% at 48K. gpt-oss's compact hybrid-attention KV (41.5 KB/token)
 makes the transfer cheap enough to beat even its fast MoE prefill
 (~29K tokens/s on H200), and the pull additionally removes the prefill
 work from the fleet - which the pool scenarios measure.
