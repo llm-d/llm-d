@@ -77,7 +77,12 @@ In vLLM, regardless of whether `--shutdown-timeout` is set, requests are `aborte
 
 #### Scaling Down Prefill Replicas
 
-When scaling down prefill replicas, decode instances may attempt to pull KV blocks from terminated prefill instances, causing KV load failures for in-progress requests. To avoid request errors, decode instances can be configured with `kv_load_failure_policy=recompute` to recompute the prefill work locally on the decode instance.
+When scaling down prefill replicas, decode instances may attempt to pull KV blocks from terminated remote prefill instances.
+
+> [!WARNING]
+> At current, regardless of `--shutdown-timeout`, there is no way to delay shutdown of a prefill instance until after all blocks have been retrieved. This functionality is work in progress in vLLM.
+
+As a result, prefill scale down will cause KV load failure for in-progress requests on decode instances. To avoid error codes for failed KV transfers, the decode instances can be configured with `kv_load_failure_policy=recompute` to recompute the prefill on the decode instance.
 
 ## Request Cancellation
 
