@@ -1,0 +1,9 @@
+# Generic Kubernetes overlay for the KEDA + EPP queue-based autoscaling guide.
+# The base ScaledObject already targets the bundled kube-prometheus-stack with
+# CA-only TriggerAuthentication, so this is a passthrough. Apply this for
+# non-OpenShift clusters; use ../ocp on OpenShift.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - ../base
