@@ -9,7 +9,7 @@ name: Nightly - Workload Autoscaling E2E (OCP GPU)
 
 on:
   schedule:
-    - cron: '0 3 * * *'  # 03:00 UTC daily (staggered from tiered-prefix-cache)
+    - cron: '0 3 * * *'  # 03:00 UTC daily
   workflow_dispatch:
     inputs:
       image_tag:
