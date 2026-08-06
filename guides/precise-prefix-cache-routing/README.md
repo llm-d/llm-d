@@ -171,9 +171,11 @@ The trade-offs to weigh:
 
 SGLang does not implement vLLM's render endpoints, so the SGLang overlay must instead run a dedicated, GPU-less `vllm launch render` pool (3 replicas). The same applies to any deployment where you would rather not spend model server CPU on tokenization. Apply this **instead of** the default overlay above — both publish the same Service name, so the router's `vllm.url` is unchanged either way:
 
+<!-- llm-d-cicd:skip start -->
 ```bash
 kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/render/standalone/
 ```
+<!-- llm-d-cicd:skip end -->
 
 Because this pool is GPU-less and engine-agnostic, it tokenizes with vLLM's tokenizer no matter which engine serves inference. It is configured for `Qwen/Qwen3-32B`; for another model, change the model argument in [`render/standalone/deployment.yaml`](render/standalone/deployment.yaml) and the router `token-producer` `modelName` together. Scale it with `kubectl scale -n ${NAMESPACE} deploy/${GUIDE_NAME}-render --replicas=<N>`.
 
