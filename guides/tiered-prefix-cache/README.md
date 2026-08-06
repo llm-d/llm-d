@@ -56,7 +56,7 @@ We recommend each model server's **native** offloading path: the `OffloadingConn
 > enabling the vLLM native `OffloadingConnector` disables vLLM's Hybrid KV Cache Manager (HMA). Most
 > models still run fine because their attention layers share one KV spec and collapse into a single
 > unified group — this includes sliding-window + full-attention models (e.g `gpt-oss-120b`) and Mamba +
-> attention hybrids ( e.g `Nemotron, whose attention layers are uniform and whose SSM state uses a separate
+> attention hybrids ( e.g `Nemotron`, whose attention layers are uniform and whose SSM state uses a separate
 > cache). **Gemma 4 does not:** its sliding-window and full-attention layers use *different* head
 > dimensions, so their KV specs cannot be unified and the server fails to start. To serve
 > such a model, add`--no-disable-hybrid-kv-cache-manager` to the vLLM args to keep HMA enabled.
