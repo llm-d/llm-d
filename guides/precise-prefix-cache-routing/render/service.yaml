@@ -2,15 +2,26 @@ apiVersion: v1
 kind: Service
 metadata:
   name: render
-spec:
-  # ClusterIP fronting the render replicas. EPP token-producer dials this name;
-  # kube-proxy load-balances across the pods so any EPP replica can tokenize via
-  # any render pod.
-  selector:
+  labels:
     app.kubernetes.io/component: vllm-render
-    app.kubernetes.io/part-of: precise-prefix-cache-routing
+spec:
+  # This Service owns no pods of its own: it fronts the model server pods
+  # deployed by ../modelserver/, so the EPP `token-producer` tokenizes prompts
+  # on the same vLLM pods that serve inference. `vllm serve` already exposes the
+  # /v1/*/render endpoints, so no model-server flag is needed to turn them on.
+  #
+  # Only Ready endpoints receive traffic, so render calls are never sent to a
+  # pod that is still loading weights.
+  selector:
+    # Matches every decode pod of this guide, across all modelserver overlays
+    # (each one stamps `llm-d.ai/guide` onto its pod template and selector, and
+    # `llm-d.ai/role: decode` comes from the shared base deployment). Deliberately
+    # not narrowed further so a single Service works for every backend overlay.
+    llm-d.ai/guide: precise-prefix-cache-routing
+    llm-d.ai/role: decode
   ports:
     - name: render-http
       port: 8000
-      targetPort: render-http
+      # Named container port on the model server pods (containerPort 8000).
+      targetPort: modelserver
       protocol: TCP
