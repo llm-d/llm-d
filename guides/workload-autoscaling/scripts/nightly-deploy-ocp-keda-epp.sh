@@ -15,7 +15,9 @@
 #   EPP_SERVICE   override the EPP service name in the trigger queries
 #                 (default: auto-discovered from the namespace after the router install)
 #   MODEL_NAME    model_name label in the trigger queries (default: Qwen/Qwen3-32B)
-#   ROUTER_CHART_VERSION  EPP router chart version (default: set by guides/env.sh)
+#   ROUTER_CHART_VERSION_OVERRIDE  EPP router chart version. Default v0.9.0 (a
+#                 released tag), deliberately NOT env.sh's mutable `v0` — see the
+#                 note at the ROUTER_CHART_VERSION assignment below for why.
 
 set -euo pipefail
 
@@ -169,10 +171,18 @@ patches:
       name: ${SCALEDOBJECT}
   # ClusterRoleBindings are cluster-scoped; suffix a namespace hash so concurrent
   # deployments to different namespaces do not collide on the same CRB name.
+  # Also rewrite the subject namespace explicitly: kustomize's `namespace`
+  # transformer does NOT rewrite a ClusterRoleBinding subject's namespace when an
+  # inner overlay (ocp/, namespace llm-d-optimized-baseline) already set it, so the
+  # binding would grant the SA in the WRONG namespace → KEDA's Thanos queries 401/403
+  # → TriggerError (ScaledObject never Ready). Pin the subject to this deployment's ns.
   - patch: |-
       - op: replace
         path: /metadata/name
         value: keda-epp-metrics-reader-monitoring-view-${NS_HASH}
+      - op: replace
+        path: /subjects/0/namespace
+        value: ${NAMESPACE}
     target:
       kind: ClusterRoleBinding
       name: keda-epp-metrics-reader-monitoring-view
@@ -198,6 +208,24 @@ kubectl apply -k "${OUTPUT_DIR}"
 echo "==> Waiting for the decode modelserver to become ready (vLLM startup)"
 kubectl rollout status deployment/"${DECODE_DEPLOYMENT}" \
   -n "${NAMESPACE}" --timeout=20m
+
+# The v0.9.0 EPP creates the per-model `flow_control_queue_size` / `request_running`
+# series LAZILY — on the first request through flow control, not at idle (even with a
+# ready endpoint). Send a short warmup so the series exist before the Fallback gate
+# queries Thanos for them; otherwise KEDA's trigger errors on an empty series and the
+# ScaledObject never goes Ready. Best-effort (`|| true`): if the warmup can't reach the
+# EPP, the Fallback gate below still catches a dead pipeline. Runs in-cluster (a curl
+# pod) because the ClusterIP EPP Service isn't reachable from the CI runner directly.
+echo "==> Warming up the EPP to register the queue metrics (v0.9.0 lazy series)"
+kubectl run keda-epp-warmup -n "${NAMESPACE}" --image=curlimages/curl:8.10.1 \
+  --restart=Never --rm -i --quiet --command -- sh -c '
+    for i in 1 2 3 4 5; do
+      curl -sS --max-time 30 -o /dev/null -w "  warmup req $i: HTTP %{http_code}\n" \
+        -X POST "http://'"${EPP_SERVICE}"':80/v1/completions" \
+        -H "Content-Type: application/json" \
+        -d "{\"model\":\"'"${MODEL_NAME}"'\",\"prompt\":\"warmup\",\"max_tokens\":1}" || true
+      sleep 3
+    done' || echo "  (warmup pod did not complete cleanly; continuing to the gate)"
 
 echo "==> Waiting for the ScaledObject to be Ready"
 # Ready only means KEDA accepted the trigger and created its HPA. It does NOT mean
