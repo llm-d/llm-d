@@ -177,7 +177,7 @@ export ROUTER_VALUES="${REPO_ROOT}/guides/${GUIDE_NAME}/router/${GUIDE_NAME}.val
 This deploys the llm-d Router in [Standalone Mode](../../docs/architecture/core/router/proxy.md):
 
 > [!IMPORTANT]
-> Before running the command below, execute the path setup commands from the previous section: the `export ROUTER_BASE_VALUES=...` and `export ROUTER_VALUES=...` commands above (without the `-f` prefix).
+> Before running the command below, execute the path setup commands from the previous section: the `export ROUTER_BASE_VALUES=...` and `export ROUTER_VALUES=...` commands above.
 
 <!-- guide:deploy.standalone start -->
 ```bash
@@ -200,7 +200,7 @@ To use a Kubernetes Gateway managed proxy rather than the standalone version, fo
 2. _Deploy the llm-d router and an HTTPRoute_ that connects it to the Gateway as follows:
 
 > [!IMPORTANT]
-> Before running the command below, execute the path setup commands from the previous section: the `export ROUTER_BASE_VALUES=...` and `export ROUTER_VALUES=...` commands above (without the `-f` prefix).
+> Before running the command below, execute the path setup commands from the previous section: the `export ROUTER_BASE_VALUES=...` and `export ROUTER_VALUES=...` commands above.
 
 <!-- guide:deploy.gateway start -->
 ```bash
