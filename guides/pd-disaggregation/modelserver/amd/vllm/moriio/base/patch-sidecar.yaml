@@ -1,0 +1,65 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: decode
+spec:
+  template:
+    spec:
+      initContainers:
+        - name: routing-proxy
+          # The sidecar image comes from the routing-sidecar component
+          # (REPLACE_ROUTING_SIDECAR_IMAGE). MoRI-IO needs a llm-d-router
+          # build that supports the --moriio-* / --kv-connector flags below,
+          # which the public default does NOT provide - override the image in
+          # a per-cluster overlay or via `kustomize edit set image`.
+          imagePullPolicy: IfNotPresent
+          # Strategic-merge replaces (does not append to) the args
+          # list, so re-emit the recipe defaults plus the MoRI-IO
+          # flags. Keep in sync with
+          # recipes/modelserver/base/single-host/pd/vllm/patch-sidecar.yaml.
+          args:
+            - --port=8000
+            - --vllm-port=8200
+            # NOTE: our sidecar build (llm-d-router llmd_leader_worker_clean_2p2d
+            # branch) renamed --connector -> --kv-connector.
+            - --kv-connector=nixlv2
+            - --zap-log-level=1
+            - --secure-proxy=false
+            # MoRI-IO WRITE-mode toggle. When set, the prefill leg of
+            # buildKVTransferParamsForPrefill emits the full
+            # remote_host / remote_notify_port / remote_dp_rank /
+            # remote_handshake_port / "tx"-prefixed transfer_id tuple
+            # that vLLM's MoRIIOConnector WRITE branch requires.
+            - --moriio-write-mode
+            # Wide-EP shape: blake2s(uuid) -> rank in [0, dp-size) and
+            # both legs of every disagg pair pin to that rank. dp-size
+            # MUST match the vLLM --data-parallel-size on prefill and
+            # decode (8 in this overlay).
+            - --moriio-dp-size=8
+            - --moriio-tp-size=1
+            # Concurrent prefill/decode dispatch: fire both legs in
+            # parallel goroutines so decode block-allocation overlaps
+            # with prefill compute. Off-by-default in the sidecar;
+            # opt in here because WRITE-mode does not depend on
+            # prefill-supplied kv_transfer_params and is safe to
+            # parallelise.
+            - --moriio-parallel-dispatch
+            # Pod IP that prefill should RDMA-write KV blocks back
+            # to. Read at startup from the POD_IP env var below; if
+            # left empty / 127.0.0.1 the prefill engine would
+            # handshake with itself and hang.
+            - --moriio-local-pod-ip=$(POD_IP)
+          env:
+            - name: POD_IP
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.podIP
+          ports:
+            - containerPort: 8000
+              name: sidecar
+              protocol: TCP
+          resources: {}
+          restartPolicy: Always
+          securityContext:
+            allowPrivilegeEscalation: false
+            runAsNonRoot: true

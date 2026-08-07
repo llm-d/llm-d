@@ -1,0 +1,11 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+# Thin CI/cluster overlay on top of ../base, mirroring the sibling
+# ../../amd-ci convention. The MoRI-IO base already carries the full
+# tested config (pod networking + Multus amd-host-device-nad + amd.com/vnic,
+# private image tags, offline PVC weights), so this overlay is a passthrough
+# by default. Add CI-only concerns here (runner nodeSelector/labels, a
+# storageClass pin for the RWX weights PVC, or `kustomize edit set image`
+# retags) without touching the base.
+resources:
+  - ../base

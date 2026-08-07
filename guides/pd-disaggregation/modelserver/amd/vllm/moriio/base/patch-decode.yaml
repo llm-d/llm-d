@@ -1,0 +1,142 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: decode
+spec:
+  replicas: 1
+  template:
+    metadata:
+      annotations:
+        # Multus: attach 8 host RDMA netdevs into the pod netns (one per vnic).
+        # REQUIRED for inter-node MoRI-IO RoCE (see prefill patch).
+        k8s.v1.cni.cncf.io/networks: >-
+          default/amd-host-device-nad,
+          default/amd-host-device-nad,
+          default/amd-host-device-nad,
+          default/amd-host-device-nad,
+          default/amd-host-device-nad,
+          default/amd-host-device-nad,
+          default/amd-host-device-nad,
+          default/amd-host-device-nad
+    spec:
+      # Pod networking (Calico) + amd.com/vnic RDMA, as on prefill.
+      containers:
+        - name: modelserver
+          command: ["vllm", "serve"]
+          args:
+            - "/models/DeepSeek-V3"
+            - "--served-model-name=deepseek-ai/DeepSeek-V3"
+            - "--disable-uvicorn-access-log"
+            - "--tensor-parallel-size=1"
+            - "--data-parallel-size=8"
+            - "--data-parallel-size-local=8"
+            - "--api-server-count=8"
+            - "--enable-expert-parallel"
+            # Decode is latency-bound: MoRI low-latency InterNodeV1LL.
+            - "--all2all-backend=mori_low_latency"
+            - "--block-size=16"
+            - "--gpu-memory-utilization=0.75"
+            - "--kv-cache-memory-bytes=20000000000"
+            - "--no-enable-prefix-caching"
+            - "--max-model-len=32768"
+            - "--compilation-config"
+            # Full cudagraph for pure-decode batches -> biggest TPOT win.
+            - '{"cudagraph_mode":"FULL_DECODE_ONLY"}'
+            - "--kv-transfer-config"
+            # WRITE-mode consumer. proxy_ip omitted (no ZMQ proxy).
+            - '{"kv_connector":"MoRIIOConnector","kv_role":"kv_consumer","kv_connector_extra_config":{"http_port":"8200","handshake_port":"6301","notify_port":"61005"}}'
+            # vLLM listens on 8200; the routing-proxy initContainer fronts 8000.
+            - "--port=8200"
+          env:
+            - name: POD_IP
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.podIP
+            - name: HF_HUB_OFFLINE
+              value: "1"
+            - name: TRANSFORMERS_OFFLINE
+              value: "1"
+            - name: VLLM_MORIIO_CONNECTOR_READ_MODE
+              value: "0"
+            - name: VLLM_ENGINE_READY_TIMEOUT_S
+              value: "7200"
+            - name: VLLM_ROCM_USE_AITER
+              value: "1"
+            - name: VLLM_ROCM_USE_AITER_MOE
+              value: "1"
+            - name: VLLM_ROCM_USE_AITER_PAGED_ATTN
+              value: "0"
+            - name: VLLM_ROCM_USE_AITER_RMSNORM
+              value: "1"
+            # AITER MLA enabled (faster DeepSeek MLA attention kernel).
+            - name: VLLM_ROCM_USE_AITER_MLA
+              value: "1"
+            # See prefill patch: base image _rocm_C.so lacks wvSplitK; disable
+            # skinny-GEMM so unquantized layers use torch F.linear.
+            - name: VLLM_ROCM_USE_SKINNY_GEMM
+              value: "0"
+            - name: MORI_SHMEM_HEAP_SIZE
+              value: "17179869184"
+            - name: HSA_ENABLE_SDMA
+              value: "1"
+            - name: HSA_FORCE_FINE_GRAIN_PCIE
+              value: "1"
+          ports:
+            - containerPort: 8200
+              name: vllm
+              protocol: TCP
+            - containerPort: 6301
+              name: mori-handshake
+              protocol: TCP
+            - containerPort: 61005
+              name: mori-notify
+              protocol: TCP
+          resources:
+            limits:
+              cpu: "200"
+              memory: 1500Gi
+              amd.com/gpu: "8"
+              amd.com/vnic: "8"
+            requests:
+              cpu: "200"
+              memory: 1500Gi
+              amd.com/gpu: "8"
+              amd.com/vnic: "8"
+          securityContext:
+            privileged: true
+            capabilities:
+              add: ["IPC_LOCK", "SYS_PTRACE", "NET_RAW"]
+          volumeMounts:
+            - mountPath: /dev/shm
+              name: shm
+            - mountPath: /.cache
+              name: torch-compile-cache
+            - mountPath: /models
+              name: weights
+              readOnly: true
+          startupProbe:
+            httpGet: { path: /v1/models, port: 8200 }
+            initialDelaySeconds: 60
+            periodSeconds: 30
+            timeoutSeconds: 5
+            failureThreshold: 240
+          livenessProbe:
+            httpGet: { path: /health, port: 8200 }
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            httpGet: { path: /v1/models, port: 8200 }
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 12
+      volumes:
+        - name: shm
+          emptyDir:
+            medium: Memory
+            sizeLimit: 64Gi
+        - name: torch-compile-cache
+          emptyDir: {}
+        - name: weights
+          persistentVolumeClaim:
+            claimName: deepseek-v3-weights
