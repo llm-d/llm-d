@@ -73,16 +73,16 @@ topology choice:
   (not the EPP) is what dispatches each `EPP-Profile` value to the right EPP's
   InferencePool.
 
-## Default Configuration (will be updated after finalizeng the guide)
+## Default Configuration
 
 | Parameter          | Value                                                              |
 | ------------------ | ------------------------------------------------------------------ |
-| Model              | [Qwen/Qwen3-VL-2B-Instruct](https://huggingface.co/Qwen/Qwen3-VL-2B-Instruct) |
+| Model              | [Qwen/Qwen3-VL-32B-Instruct](https://huggingface.co/Qwen/Qwen3-VL-32B-Instruct) |
 | Roles              | encode, prefill, decode                                            |
-| Replicas per role  | 1 (encode: 0 in the PD-only deployment)                                                                  |
-| Tensor Parallelism | 1                                                                   |
-| GPUs per replica   | 1                                                                   |
-| Total GPUs         | 3                                                                   |
+| Replicas per role  | encode: 2, prefill: 4, decode: 4 (encode: 0 in the PD-only deployment) |
+| Tensor Parallelism | 2                                                                   |
+| GPUs per replica   | 2                                                                   |
+| Total GPUs         | 20                                                                  |
 
 ### Supported Hardware Backends
 
@@ -114,7 +114,7 @@ topology choice:
   source ${REPO_ROOT}/guides/env.sh
   export GUIDE_NAME="coord-disaggregation"
   export NAMESPACE="llm-d-coord-disaggregation"
-  export MODEL_NAME="Qwen/Qwen3-VL-2B-Instruct"
+  export MODEL_NAME="Qwen/Qwen3-VL-32B-Instruct"
   ```
 
 * Install the Gateway API Inference Extension CRDs:
@@ -146,7 +146,6 @@ topology choice:
 > The steps below deploy the full **EPD** topology. For a **PD-only** deployment (no
 > `encode` role), this is where the modularity described in the [Overview](#overview)
 > pays off:
->
 > * Step 1: no change needed — the same single Router/EPP deployment serves whichever
 >   roles you actually run; an `encode` scheduling profile with no `encode`-labeled pods
 >   behind it is simply never called, since the Coordinator's pipeline (step 3) is what
@@ -446,7 +445,7 @@ kubectl run curl-debug --rm -it \
 curl -X POST http://${IP}:${PORT}/v1/completions \
     -H 'Content-Type: application/json' \
     -d '{
-        "model": "Qwen/Qwen3-VL-2B-Instruct",
+        "model": "Qwen/Qwen3-VL-32B-Instruct",
         "prompt": "How are you today?"
     }' | jq
 ```
@@ -461,7 +460,7 @@ decode` pipeline:
 curl -X POST http://${IP}:${PORT}/v1/chat/completions \
     -H 'Content-Type: application/json' \
     -d '{
-        "model": "Qwen/Qwen3-VL-2B-Instruct",
+        "model": "Qwen/Qwen3-VL-32B-Instruct",
         "messages": [
             {
                 "role": "user",

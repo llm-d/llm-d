@@ -5,7 +5,7 @@ metadata:
   labels:
     llm-d.ai/role: prefill
 spec:
-  replicas: 1
+  replicas: 4
   selector:
     matchLabels:
       llm-d.ai/role: prefill
@@ -20,8 +20,9 @@ spec:
           image: REPLACE_MODEL_SERVER_IMAGE
           command: ["vllm", "serve"]
           args:
-            - "Qwen/Qwen3-VL-2B-Instruct"
+            - "$(MODEL_NAME)"
             - "--disable-access-log-for-endpoints=/health,/metrics,/v1/models"
+            - "--tensor-parallel-size=2"
             - "--block-size=128"
             - "--max-model-len=32000"
             - "--kv-transfer-config"
@@ -29,6 +30,8 @@ spec:
             - "--ec-transfer-config"
             - '{"ec_connector": "ECCPUConnector", "ec_role": "ec_consumer"}'
           env:
+            - name: MODEL_NAME
+              value: "Qwen/Qwen3-VL-32B-Instruct"
             - name: VLLM_NIXL_SIDE_CHANNEL_HOST
               valueFrom:
                 fieldRef:
@@ -53,11 +56,11 @@ spec:
             limits:
               cpu: "4"
               memory: 32Gi
-              nvidia.com/gpu: "1"
+              nvidia.com/gpu: "2"
             requests:
               cpu: "4"
               memory: 32Gi
-              nvidia.com/gpu: "1"
+              nvidia.com/gpu: "2"
           volumeMounts:
             - mountPath: /dev/shm
               name: shm

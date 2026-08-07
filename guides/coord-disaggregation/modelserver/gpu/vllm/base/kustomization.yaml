@@ -14,7 +14,7 @@ images:
 
 labels:
   - pairs:
-      llm-d.ai/model: Qwen3-VL-2B-Instruct
+      llm-d.ai/model: Qwen3-VL-32B-Instruct
       llm-d.ai/guide: coord-disaggregation
       llm-d.ai/accelerator-variant: gpu
       llm-d.ai/accelerator-vendor: nvidia

@@ -28,13 +28,15 @@ router:
       targetPort: 8081
 
   epp:
-    # llm-d-router#2134 (single EPP for encode/prefill/decode) is merged but may
-    # not be in an official release image yet; this is a build of llm-d-router
-    # containing it. Swap back to the chart default once it is.
+    # TODO: Remove this image override once an official release including
+    # llm-d-router#2134 (header-profile-handler) is published. v0.9.0 predates
+    # that merge; main is the earliest build that has it.
     image:
-      registry: ghcr.io/roytman
+      registry: ghcr.io/llm-d
       repository: llm-d-router-endpoint-picker
-      tag: "07657e922"
+      tag: "main"
+    flags:
+      allow-experimental-plugins: true
     pluginsConfigFile: "coordinator-plugins.yaml"
     pluginsCustomConfig:
       # prefill/decode scorers below match guides/pd-disaggregation/router/pd-disaggregation.values.yaml:
@@ -46,7 +48,7 @@ router:
       #
       # peakPrefillThroughput is left at the plugin's own default (not pd-disaggregation's
       # 33821, which is calibrated for gpt-oss-120b on 8x H200 prefill -- meaningless for
-      # this guide's Qwen3-VL-2B-Instruct/TP=1 model servers). Recalibrate for your
+      # this guide's Qwen3-VL-32B-Instruct/TP=1 model servers). Recalibrate for your
       # hardware with guides/recipes/router/calibration/calibrate.sh.
       coordinator-plugins.yaml: |
         apiVersion: llm-d.ai/v1alpha1

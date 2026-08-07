@@ -4,6 +4,7 @@ metadata:
   name: llm-d-coordinator
   labels:
     app: llm-d-coordinator
+    llm-d.ai/model: Qwen3-VL-32B-Instruct
 spec:
   replicas: 1
   selector:
@@ -13,11 +14,12 @@ spec:
     metadata:
       labels:
         app: llm-d-coordinator
+        llm-d.ai/model: Qwen3-VL-32B-Instruct
     spec:
       terminationGracePeriodSeconds: 30
       containers:
       - name: coordinator
-        image: ghcr.io/roytman/coordinator:07657e922
+        image: ghcr.io/llm-d/llm-d-router-coordinator:main
         imagePullPolicy: IfNotPresent
         args:
         - --config
@@ -55,7 +57,7 @@ spec:
       # Runs the pipeline's "render" step (multimodal input normalization) as a
       # local CPU vLLM instance the coordinator container talks to over localhost.
       - name: vllm-render
-        image: vllm/vllm-openai-cpu:v0.21.0
+        image: vllm/vllm-openai-cpu:v0.26.0
         imagePullPolicy: IfNotPresent
         # "vllm launch render" runs only the preprocessing/postprocessing HTTP layer
         # (no GPU/engine warmup, no encoder-cache profiling) -- "vllm serve" boots
@@ -63,8 +65,10 @@ spec:
         # a CPU-backend warmup pass profiling a synthetic max-resolution image,
         # blowing well past the startup probe below.
         command: ["vllm", "launch", "render"]
-        args: ["Qwen/Qwen3-VL-2B-Instruct", "--port=8000"]
+        args: ["$(MODEL_NAME)", "--port=8000"]
         env:
+        - name: MODEL_NAME
+          value: "Qwen/Qwen3-VL-32B-Instruct"
         - name: HF_TOKEN
           valueFrom:
             secretKeyRef:
