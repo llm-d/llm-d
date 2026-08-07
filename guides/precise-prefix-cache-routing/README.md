@@ -32,7 +32,7 @@ The routing decision combines precise cache knowledge with token-based load bala
 | NVIDIA GPU           | `modelserver/gpu/vllm/`    | Qwen/Qwen3-32B                          | Default configuration                                    |
 | NVIDIA GPU (SGLang)  | `modelserver/gpu/sglang/`  | Qwen/Qwen3-32B                          | SGLang; `--page-size=64` matches the producer's `blockSizeTokens`; requires `render/standalone/` |
 | AMD GPU              | `modelserver/amd/vllm/`    | Qwen/Qwen3-32B                          | AMD GPU                                                  |
-| Intel XPU            | `modelserver/xpu/vllm/`    | Qwen/Qwen3-0.6B                         | CI-sized; update router `modelName` for real use         |
+| Intel XPU            | `modelserver/xpu/vllm/`    | Qwen/Qwen3-0.6B                         | CI-sized; pair with `router/xpu.values.yaml`             |
 | Google TPU v6e       | `modelserver/tpu/v6/vllm/` | Qwen/Qwen3-32B                          | GKE TPU                                                  |
 | Google TPU v7        | `modelserver/tpu/v7/vllm/` | Qwen3-Coder-480B-FP8                    | GKE TPU                                                  |
 | CPU                  | `modelserver/cpu/vllm/`    | Llama-3.2-3B-Instruct                   | CI-sized                                                 |
@@ -108,6 +108,17 @@ helm install ${GUIDE_NAME} \
   ${ROUTER_STANDALONE_CHART} \
   -f ${REPO_ROOT}/guides/recipes/router/base.values.yaml \
   -f ${REPO_ROOT}/guides/${GUIDE_NAME}/router/${GUIDE_NAME}.values.yaml \
+  -n ${NAMESPACE} --version ${ROUTER_CHART_VERSION}
+```
+
+For Intel XPU, add the XPU router override so the `token-producer` tokenizes against the Qwen3-0.6B that `modelserver/xpu/vllm/` serves:
+
+```bash
+helm install ${GUIDE_NAME} \
+  ${ROUTER_STANDALONE_CHART} \
+  -f ${REPO_ROOT}/guides/recipes/router/base.values.yaml \
+  -f ${REPO_ROOT}/guides/${GUIDE_NAME}/router/${GUIDE_NAME}.values.yaml \
+  -f ${REPO_ROOT}/guides/${GUIDE_NAME}/router/xpu.values.yaml \
   -n ${NAMESPACE} --version ${ROUTER_CHART_VERSION}
 ```
 
