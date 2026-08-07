@@ -23,9 +23,9 @@ spec:
   # LeaderWorkerSet is created, so enabling this takes effect on the next
   # rollout. ExclusiveTopology additionally guarantees at most one slice per
   # domain across all DisaggregatedSets.
-  # NOTE: placementPolicy is merged upstream (kubernetes-sigs/lws#916) and,
-  # like slices, ships in the next LWS release after v0.9.0. Controllers at
-  # v0.9.0 or older reject this field.
+  # NOTE: placementPolicy requires LWS v0.10.0 or newer. See the "Pinning
+  # Slices to Accelerator Domains" section of README.ds.md for per-platform
+  # topology label keys.
   # placementPolicy:
   #   type: ExclusiveSlice
   #   topology: topology.kubernetes.io/zone
@@ -179,6 +179,7 @@ spec:
                   imagePullPolicy: Always
                   args:
                     - --port=8000
+                    - --vllm-port=8200
                     - --kv-connector=nixlv2
                     - --zap-log-level=1
                     - --secure-proxy=false
