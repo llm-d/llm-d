@@ -1,7 +1,7 @@
 # Global ARGs
-ARG BASE_IMAGE=vllm/vllm-openai-rocm:v0.23.0
+ARG BASE_IMAGE=vllm/vllm-openai-rocm:v0.26.0
 
-ARG MORI_BRANCH="v1.2.0"
+ARG MORI_BRANCH="v1.2.2"
 ARG MORI_REPO="https://github.com/ROCm/mori.git"
 # Temporarily use NIXL-ROCm PR until it's merged and we have wheels
 ARG NIXL_BRANCH="pr3-rocm-docker"

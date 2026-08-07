@@ -132,8 +132,6 @@ cmd=(
     --build-arg "CUDA_MAJOR=${CUDA_MAJOR}"
     --build-arg "CUDA_MINOR=${CUDA_MINOR}"
     --build-arg "CUDA_PATCH=${CUDA_PATCH}"
-    --build-arg "LLM_D_OFFLOADING_CONNECTOR_VERSION=${LLM_D_OFFLOADING_CONNECTOR_VERSION:-}"
-    --build-arg "INSTALL_OFFLOADING_CONNECTOR=${INSTALL_OFFLOADING_CONNECTOR:-true}"
 )
 
 if [[ -n "${TARGET}" ]]; then
