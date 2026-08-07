@@ -21,7 +21,8 @@ If you arrived here from a guide and just want the short command, skip to [Quick
 10. [Analysis and figures](#analysis-and-figures)
 11. [Customizing the workload](#customizing-the-workload)
 12. [Timeouts](#timeouts)
-13. [Troubleshooting](#troubleshooting)
+13. [Cleaning up harness resources](#cleaning-up-harness-resources)
+14. [Troubleshooting](#troubleshooting)
 
 ## What `llmdbenchmark` does
 
@@ -293,6 +294,21 @@ llmdbenchmark \
 
 All three are also exposed as env vars: `LLMDBENCH_WAIT_TIMEOUT`, `LLMDBENCH_DATA_ACCESS_TIMEOUT`, `LLMDBENCH_PVC_BIND_TIMEOUT`.
 
+## Cleaning up harness resources
+
+The CLI tears down the harness launcher pod after each run but leaves the workload PVC and its supporting resources in the namespace, so workload data survives between runs. The PVC is backed by shared storage (on GKE, a Filestore instance) that bills until removed. When you are done benchmarking in a namespace, delete the leftovers:
+
+```bash
+kubectl delete -n <namespace> --ignore-not-found \
+  pod/access-to-harness-data-workload-pvc \
+  service/llm-d-benchmark-harness \
+  pvc/workload-pvc \
+  configmap/llm-d-benchmark-preprocesses \
+  configmap/llm-d-benchmark-run-parameters
+```
+
+Afterward `kubectl get pvc -n <namespace>` should not list `workload-pvc`.
+
 ## Troubleshooting
 
 ### `did not return expected model 'X'. Available models: ['Y']`
@@ -314,6 +330,30 @@ You passed a local filesystem path to `--output`. `--output` only accepts `local
 ### `Timed out after 240s waiting for workload PVC`
 
 Your cluster's StorageClass takes longer than 240s to bind a fresh PVC. Pass `--pvc-bind-timeout 1200` (or longer) on the `run` subcommand. Worth verifying the StorageClass behavior with `kubectl get sc` and `kubectl describe pvc` to confirm it's not a deeper issue (no default StorageClass, quota exhausted, etc.).
+
+### `ProvisioningFailed ... multi writer with mount access type` on the workload PVC
+
+The harness's `workload-pvc` requests `ReadWriteMany`, and your cluster's default StorageClass only provisions `ReadWriteOnce` volumes. The run surfaces this as a data-access-pod timeout; the real error is in `kubectl describe pvc workload-pvc -n <namespace>`.
+
+Point the scenario at an RWX-capable StorageClass by setting `storage.workloadPvc.storageClassName` in the benchmark scenario file (`config/scenarios/guides/<guide-name>.yaml`).
+
+On GKE, the default `standard-rwo` (Persistent Disk) class is RWO-only. Enable the Filestore CSI driver and use its `standard-rwx` class:
+
+```bash
+gcloud container clusters update <cluster> --update-addons=GcpFilestoreCsiDriver=ENABLED
+```
+
+Then set `storage.workloadPvc.storageClassName: standard-rwx` in the scenario. First-time Filestore provisioning can take up to ~10 minutes (a zonal instance typically binds in 2-3 minutes), so pass `--pvc-bind-timeout 1200 --data-access-timeout 1200`.
+
+If a run already failed on the wrong class, delete the stale claim before retrying. A PVC's StorageClass is immutable, and the CLI reuses an existing claim:
+
+```bash
+kubectl delete pod/access-to-harness-data-workload-pvc pvc/workload-pvc -n <namespace>
+```
+
+### Harness pod stuck `Pending` with `Insufficient cpu`
+
+The harness pod requests 16 vCPU and 32 GiB of memory. It stays `Pending` until a node with that much allocatable capacity is available; check `kubectl describe pod -l app=llmdbench-harness-launcher` for the scheduling events.
 
 ### `Could not detect endpoint for <stack>`
 
