@@ -36,16 +36,22 @@ NAMESPACE="${NAMESPACE:-keda-epp-queue-nightly-$(printf '%04x' $RANDOM)}"
 SCALEDOBJECT=optimized-baseline-keda-epp
 DECODE_DEPLOYMENT=optimized-baseline-nvidia-gpu-vllm-decode
 MODEL_NAME="${MODEL_NAME:-Qwen/Qwen3-32B}"
-# EPP router Helm release. Matches the guide (README.hpa-epp.md step 4), which
-# installs the router as `optimized-baseline` and expects the EPP named
-# `optimized-baseline-epp` — the same `service` label the guide's checked-in
-# ScaledObject query uses. The Service name is release-derived, so we still
-# discover it at runtime rather than hardcoding it.
-ROUTER_RELEASE=optimized-baseline
+# EPP router Helm release. Must be UNIQUE on the cluster: `optimized-baseline`
+# collides with the many existing optimized-baseline InferencePools on the shared
+# nightly cluster and sends the EPP into a hot reconcile loop (NOT_SERVING). The
+# EPP Service name is release-derived, so we discover it at runtime rather than
+# hardcoding it (the ScaledObject query is templated to whatever is discovered).
+ROUTER_RELEASE=keda-epp-queue
 # Short hash used as a suffix on the ClusterRoleBinding to make it unique per namespace.
 NS_HASH="$(printf '%s' "${NAMESPACE}" | sha256sum | cut -c1-8)"
 OUTPUT_DIR="${OUTPUT_DIR:-$(mktemp -d -t nightly-deploy-ocp-keda-epp.XXXXXX)}"
-ROUTER_CHART_VERSION="${ROUTER_CHART_VERSION}"
+# Pin to the latest RELEASED router chart rather than env.sh's mutable `v0` tag.
+# `v0` currently carries llm-d-router#1681, which breaks EPP Service creation when
+# flowControl/monitoring are enabled (helm reports deployed but the -epp Service is
+# never created), leaving the queue metric unscrapeable. `v0.9.0` predates #1681 and
+# works. Tracked in llm-d#2207 (pin guides repo-wide) and llm-d-router#2323 (chart
+# fix). Override once the rolling tag is fixed.
+ROUTER_CHART_VERSION="${ROUTER_CHART_VERSION_OVERRIDE:-v0.9.0}"
 
 mkdir -p "${OUTPUT_DIR}"
 REL="$("${_realpath}" --relative-to="${OUTPUT_DIR}" "${REPO_ROOT}")"
@@ -83,19 +89,27 @@ helm install "${ROUTER_RELEASE}" \
   -n "${NAMESPACE}" --version "${ROUTER_CHART_VERSION}"
 
 # Discover the EPP Service name the chart created (release-derived; release
-# `optimized-baseline` yields Service `optimized-baseline-epp`). The queue metric is
+# `keda-epp-queue` yields Service `keda-epp-queue-epp`). The queue metric is
 # labelled by this `service` value, so the ScaledObject query must match it exactly.
 # We discover rather than hardcode so the nightly still works if the release name or
 # chart naming changes.
+#
+# The EPP Service is not present the instant `helm install` returns — the router/EPP
+# resources take a few seconds to appear — so poll rather than check once.
 if [[ -z "${EPP_SERVICE:-}" ]]; then
-  echo "==> Discovering EPP Service name"
-  EPP_SERVICE="$(kubectl get svc -n "${NAMESPACE}" -o name \
-    | sed 's#^service/##' | grep -E -- '-epp$' | head -1 || true)"
+  echo "==> Discovering EPP Service name (waiting for the router/EPP to come up)"
+  for _ in $(seq 1 30); do
+    EPP_SERVICE="$(kubectl get svc -n "${NAMESPACE}" -o name 2>/dev/null \
+      | sed 's#^service/##' | grep -E -- '-epp$' | head -1 || true)"
+    [[ -n "${EPP_SERVICE}" ]] && break
+    sleep 10
+  done
 fi
 if [[ -z "${EPP_SERVICE:-}" ]]; then
-  echo "ERROR: could not find an EPP Service (name ending in -epp) in ${NAMESPACE}." >&2
+  echo "ERROR: no EPP Service (name ending in -epp) appeared in ${NAMESPACE} after 5m." >&2
   echo "       Set EPP_SERVICE explicitly, or check the router install." >&2
-  kubectl get svc -n "${NAMESPACE}" >&2 || true
+  echo "--- resources in ${NAMESPACE} ---" >&2
+  kubectl get all,inferencepool -n "${NAMESPACE}" >&2 2>&1 || true
   exit 1
 fi
 echo "  EPP_SERVICE: ${EPP_SERVICE}"
