@@ -78,11 +78,12 @@ jobs:
     with:
       guide_name: workload-autoscaling
       namespace: llm-d-nightly-keda-epp-queue
-      # EPP Service name for helm release `optimized-baseline` (matches the guide),
-      # confirmed via `helm template`. The deploy script also discovers this at
-      # runtime for the ScaledObject queries; this input is used by the gateway
-      # smoke test.
-      gateway_host: 'optimized-baseline-epp'
+      # EPP Service name that e2e-validate.sh curls (http://<host>:80/v1/models).
+      # It is `<ROUTER_RELEASE>-epp`; the deploy script installs the router as
+      # `keda-epp-queue` (a unique release name, to avoid colliding with the
+      # optimized-baseline InferencePools on the shared cluster), so this MUST
+      # stay in sync with ROUTER_RELEASE in nightly-deploy-ocp-keda-epp.sh.
+      gateway_host: 'keda-epp-queue-epp'
       custom_deploy_script: |
         bash guides/workload-autoscaling/scripts/nightly-deploy-ocp-keda-epp.sh
       required_gpus: 2

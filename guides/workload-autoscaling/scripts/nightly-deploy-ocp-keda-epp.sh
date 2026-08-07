@@ -15,7 +15,9 @@
 #   EPP_SERVICE   override the EPP service name in the trigger queries
 #                 (default: auto-discovered from the namespace after the router install)
 #   MODEL_NAME    model_name label in the trigger queries (default: Qwen/Qwen3-32B)
-#   ROUTER_CHART_VERSION  EPP router chart version (default: set by guides/env.sh)
+#   ROUTER_CHART_VERSION_OVERRIDE  EPP router chart version. Default v0.9.0 (a
+#                 released tag), deliberately NOT env.sh's mutable `v0` — see the
+#                 note at the ROUTER_CHART_VERSION assignment below for why.
 
 set -euo pipefail
 
@@ -36,16 +38,22 @@ NAMESPACE="${NAMESPACE:-keda-epp-queue-nightly-$(printf '%04x' $RANDOM)}"
 SCALEDOBJECT=optimized-baseline-keda-epp
 DECODE_DEPLOYMENT=optimized-baseline-nvidia-gpu-vllm-decode
 MODEL_NAME="${MODEL_NAME:-Qwen/Qwen3-32B}"
-# EPP router Helm release. Matches the guide (README.hpa-epp.md step 4), which
-# installs the router as `optimized-baseline` and expects the EPP named
-# `optimized-baseline-epp` — the same `service` label the guide's checked-in
-# ScaledObject query uses. The Service name is release-derived, so we still
-# discover it at runtime rather than hardcoding it.
-ROUTER_RELEASE=optimized-baseline
+# EPP router Helm release. Must be UNIQUE on the cluster: `optimized-baseline`
+# collides with the many existing optimized-baseline InferencePools on the shared
+# nightly cluster and sends the EPP into a hot reconcile loop (NOT_SERVING). The
+# EPP Service name is release-derived, so we discover it at runtime rather than
+# hardcoding it (the ScaledObject query is templated to whatever is discovered).
+ROUTER_RELEASE=keda-epp-queue
 # Short hash used as a suffix on the ClusterRoleBinding to make it unique per namespace.
 NS_HASH="$(printf '%s' "${NAMESPACE}" | sha256sum | cut -c1-8)"
 OUTPUT_DIR="${OUTPUT_DIR:-$(mktemp -d -t nightly-deploy-ocp-keda-epp.XXXXXX)}"
-ROUTER_CHART_VERSION="${ROUTER_CHART_VERSION}"
+# Pin to the latest RELEASED router chart rather than env.sh's mutable `v0` tag.
+# `v0` currently carries llm-d-router#1681, which breaks EPP Service creation when
+# flowControl/monitoring are enabled (helm reports deployed but the -epp Service is
+# never created), leaving the queue metric unscrapeable. `v0.9.0` predates #1681 and
+# works. Tracked in llm-d#2207 (pin guides repo-wide) and llm-d-router#2323 (chart
+# fix). Override once the rolling tag is fixed.
+ROUTER_CHART_VERSION="${ROUTER_CHART_VERSION_OVERRIDE:-v0.9.0}"
 
 mkdir -p "${OUTPUT_DIR}"
 REL="$("${_realpath}" --relative-to="${OUTPUT_DIR}" "${REPO_ROOT}")"
@@ -83,19 +91,27 @@ helm install "${ROUTER_RELEASE}" \
   -n "${NAMESPACE}" --version "${ROUTER_CHART_VERSION}"
 
 # Discover the EPP Service name the chart created (release-derived; release
-# `optimized-baseline` yields Service `optimized-baseline-epp`). The queue metric is
+# `keda-epp-queue` yields Service `keda-epp-queue-epp`). The queue metric is
 # labelled by this `service` value, so the ScaledObject query must match it exactly.
 # We discover rather than hardcode so the nightly still works if the release name or
 # chart naming changes.
+#
+# The EPP Service is not present the instant `helm install` returns — the router/EPP
+# resources take a few seconds to appear — so poll rather than check once.
 if [[ -z "${EPP_SERVICE:-}" ]]; then
-  echo "==> Discovering EPP Service name"
-  EPP_SERVICE="$(kubectl get svc -n "${NAMESPACE}" -o name \
-    | sed 's#^service/##' | grep -E -- '-epp$' | head -1 || true)"
+  echo "==> Discovering EPP Service name (waiting for the router/EPP to come up)"
+  for _ in $(seq 1 30); do
+    EPP_SERVICE="$(kubectl get svc -n "${NAMESPACE}" -o name 2>/dev/null \
+      | sed 's#^service/##' | grep -E -- '-epp$' | head -1 || true)"
+    [[ -n "${EPP_SERVICE}" ]] && break
+    sleep 10
+  done
 fi
 if [[ -z "${EPP_SERVICE:-}" ]]; then
-  echo "ERROR: could not find an EPP Service (name ending in -epp) in ${NAMESPACE}." >&2
+  echo "ERROR: no EPP Service (name ending in -epp) appeared in ${NAMESPACE} after 5m." >&2
   echo "       Set EPP_SERVICE explicitly, or check the router install." >&2
-  kubectl get svc -n "${NAMESPACE}" >&2 || true
+  echo "--- resources in ${NAMESPACE} ---" >&2
+  kubectl get all,inferencepool -n "${NAMESPACE}" >&2 2>&1 || true
   exit 1
 fi
 echo "  EPP_SERVICE: ${EPP_SERVICE}"
@@ -155,10 +171,18 @@ patches:
       name: ${SCALEDOBJECT}
   # ClusterRoleBindings are cluster-scoped; suffix a namespace hash so concurrent
   # deployments to different namespaces do not collide on the same CRB name.
+  # Also rewrite the subject namespace explicitly: kustomize's `namespace`
+  # transformer does NOT rewrite a ClusterRoleBinding subject's namespace when an
+  # inner overlay (ocp/, namespace llm-d-optimized-baseline) already set it, so the
+  # binding would grant the SA in the WRONG namespace → KEDA's Thanos queries 401/403
+  # → TriggerError (ScaledObject never Ready). Pin the subject to this deployment's ns.
   - patch: |-
       - op: replace
         path: /metadata/name
         value: keda-epp-metrics-reader-monitoring-view-${NS_HASH}
+      - op: replace
+        path: /subjects/0/namespace
+        value: ${NAMESPACE}
     target:
       kind: ClusterRoleBinding
       name: keda-epp-metrics-reader-monitoring-view
@@ -184,6 +208,24 @@ kubectl apply -k "${OUTPUT_DIR}"
 echo "==> Waiting for the decode modelserver to become ready (vLLM startup)"
 kubectl rollout status deployment/"${DECODE_DEPLOYMENT}" \
   -n "${NAMESPACE}" --timeout=20m
+
+# The v0.9.0 EPP creates the per-model `flow_control_queue_size` / `request_running`
+# series LAZILY — on the first request through flow control, not at idle (even with a
+# ready endpoint). Send a short warmup so the series exist before the Fallback gate
+# queries Thanos for them; otherwise KEDA's trigger errors on an empty series and the
+# ScaledObject never goes Ready. Best-effort (`|| true`): if the warmup can't reach the
+# EPP, the Fallback gate below still catches a dead pipeline. Runs in-cluster (a curl
+# pod) because the ClusterIP EPP Service isn't reachable from the CI runner directly.
+echo "==> Warming up the EPP to register the queue metrics (v0.9.0 lazy series)"
+kubectl run keda-epp-warmup -n "${NAMESPACE}" --image=curlimages/curl:8.10.1 \
+  --restart=Never --rm -i --quiet --command -- sh -c '
+    for i in 1 2 3 4 5; do
+      curl -sS --max-time 30 -o /dev/null -w "  warmup req $i: HTTP %{http_code}\n" \
+        -X POST "http://'"${EPP_SERVICE}"':80/v1/completions" \
+        -H "Content-Type: application/json" \
+        -d "{\"model\":\"'"${MODEL_NAME}"'\",\"prompt\":\"warmup\",\"max_tokens\":1}" || true
+      sleep 3
+    done' || echo "  (warmup pod did not complete cleanly; continuing to the gate)"
 
 echo "==> Waiting for the ScaledObject to be Ready"
 # Ready only means KEDA accepted the trigger and created its HPA. It does NOT mean
