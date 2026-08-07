@@ -44,17 +44,24 @@ All nightly benchmark workflows rely heavily on these two "reusable" workflows o
 * [`reusable-ci-nightly-benchmark.yaml`](https://github.com/llm-d/llm-d-infra/blob/main/.github/workflows/reusable-ci-nightly-benchmark.yaml)
 * [`reusable-query-success-past-runs.yaml`](https://github.com/llm-d/llm-d-infra/blob/main/.github/workflows/reusable-query-success-past-runs.yaml).
 
-Developers aiming to add a new guide or testing an existing guide on a new cluster or with a new set of parameters should open a PR with **two** new workflows: one for the "nightly benchmark", and one for "consolidated status". Again, an illustratibe example using `optimized-baseline`:
+Developers aiming to add a new guide or testing an existing guide on a new cluster or with a new set of parameters should open a PR with:
+
+1. A new **nightly benchmark** workflow using an existing one (e.g., `nightly-e2e-optimized-baseline-gke-acc-gpu-vllm-x.yaml`) as a template, with scenario-specific parameters.
+2. A new entry in **`consolidate-status-all.yaml`** for status reporting — add the new workflow filename to the matrix list.
+
+For example, `optimized-baseline` has the following nightly workflows:
 
 ```bash
-[llm-d]$ ls .github/workflows/*optimized-baseline*
-.github/workflows/consolidate-status-optimized-baseline-amd-acc-rocm-vllm-x.yaml   .github/workflows/nightly-e2e-optimized-baseline-amd-acc-rocm-vllm-x.yaml
-.github/workflows/consolidate-status-optimized-baseline-cks-acc-gpu-vllm-x.yaml    .github/workflows/nightly-e2e-optimized-baseline-cks-acc-gpu-vllm-x.yaml
-.github/workflows/consolidate-status-optimized-baseline-gke-acc-gpu-vllm-x.yaml    .github/workflows/nightly-e2e-optimized-baseline-gke-acc-gpu-vllm-x.yaml
-.github/workflows/consolidate-status-optimized-baseline-gke-acc-tpu-vllm-x.yaml    .github/workflows/nightly-e2e-optimized-baseline-gke-acc-tpu-vllm-x.yaml
-.github/workflows/consolidate-status-optimized-baseline-ibm-acc-gpu-vllm-x.yaml    .github/workflows/nightly-e2e-optimized-baseline-ibm-acc-gpu-vllm-x.yaml
-.github/workflows/consolidate-status-optimized-baseline-intel-acc-xpu-vllm-x.yaml  .github/workflows/nightly-e2e-optimized-baseline-intel-acc-xpu-vllm-x.yaml
+[llm-d]$ ls .github/workflows/nightly-e2e-optimized-baseline*
+.github/workflows/nightly-e2e-optimized-baseline-amd-acc-rocm-vllm-x.yaml
+.github/workflows/nightly-e2e-optimized-baseline-cks-acc-gpu-vllm-x.yaml
+.github/workflows/nightly-e2e-optimized-baseline-gke-acc-gpu-vllm-x.yaml
+.github/workflows/nightly-e2e-optimized-baseline-gke-acc-tpu-vllm-x.yaml
+.github/workflows/nightly-e2e-optimized-baseline-ibm-acc-gpu-vllm-x.yaml
+.github/workflows/nightly-e2e-optimized-baseline-intel-acc-xpu-vllm-x.yaml
 ```
+
+Each of these is also listed in the `consolidate-status-all.yaml` matrix for consolidated status reporting.
 
 ## Triggering a nightly benchmark regression test
 
