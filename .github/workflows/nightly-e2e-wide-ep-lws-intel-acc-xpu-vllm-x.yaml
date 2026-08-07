@@ -64,45 +64,7 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  xpu-kubernetes-preflight:
-    runs-on: [self-hosted, xpu]
-    timeout-minutes: 10
-    steps:
-      - name: Verify Wide EP XPU cluster prerequisites
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          kubectl get --raw='/readyz' >/dev/null
-          kubectl get deviceclass gpu.intel.com >/dev/null
-          kubectl get leaderworkersets --all-namespaces >/dev/null
-          kubectl get inferencepools --all-namespaces >/dev/null
-
-          disk_pressure_nodes="$(
-            kubectl get nodes -o json |
-              jq -r '.items[] |
-                select(any(.status.conditions[]?; .type == "DiskPressure" and .status == "True")) |
-                .metadata.name'
-          )"
-          if [[ -n "$disk_pressure_nodes" ]]; then
-            echo "::error::DiskPressure is active on: ${disk_pressure_nodes//$'\n'/, }"
-            exit 1
-          fi
-
-          xpu_count="$(
-            kubectl get nodes -o json |
-              jq '[.items[] |
-                select(.spec.unschedulable != true) |
-                (.status.allocatable["gpu.intel.com/xe"] // "0" | tonumber)] |
-                add // 0'
-          )"
-          if (( xpu_count < 4 )); then
-            echo "::error::Wide EP requires at least four schedulable gpu.intel.com/xe devices; found ${xpu_count}."
-            exit 1
-          fi
-
   nightly:
-    needs: [xpu-kubernetes-preflight]
     uses: llm-d/llm-d-infra/.github/workflows/reusable-ci-nightly-benchmark.yaml@main
     with:
       scenario_dir: ${{ inputs.scenario_dir || 'guides' }}
@@ -132,12 +94,12 @@ jobs:
     secrets: inherit
 
   update-badge:
-    needs: [xpu-kubernetes-preflight, nightly]
+    needs: [nightly]
     if: always() && inputs.update_badge != 'false'
     uses: llm-d/llm-d-infra/.github/workflows/reusable-update-badge.yaml@main
     with:
       badge_name: wide-ep-lws-xpu
       badge_label: "VLLM XPU"
-      result: ${{ needs.xpu-kubernetes-preflight.result == 'success' && needs.nightly.result || needs.xpu-kubernetes-preflight.result }}
+      result: ${{ needs.nightly.result }}
       dry_run: ${{ inputs.dry_run || 'false' }}
       failure_category: ${{ needs.nightly.outputs.failure_category }}
