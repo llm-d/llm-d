@@ -7,7 +7,7 @@
 
 ## Overview
 
-This guide demonstrates how to deploy DeepSeek-R1-0528 using vLLM's P/D disaggregation support with NIXL in a wide expert parallel pattern with LeaderWorkerSets with DP-aware scheduling. This guide has been validated on:
+This guide demonstrates how to deploy DeepSeek-R1-0528 using vLLM's P/D disaggregation support with NIXL in a wide expert parallel pattern with DP-aware scheduling. This guide includes both `LeaderWorkerSet` and `DisaggregatedSet` deployment paths. It has been validated on:
 
 * a 32xH200 cluster with InfiniBand networking
 * a 32xH200 cluster on GKE with RoCE networking
@@ -87,7 +87,8 @@ This guide includes configurations for the following accelerators:
   ```bash
   kubectl apply -f https://github.com/kubernetes-sigs/gateway-api-inference-extension/releases/download/${GAIE_VERSION}/v1-manifests.yaml
   ```
-* You have deployed the [LeaderWorkerSet controller](https://lws.sigs.k8s.io/docs/installation/)
+* You have deployed the [LeaderWorkerSet controller](https://lws.sigs.k8s.io/docs/installation/).
+* To use the `DisaggregatedSet` path, install LWS `v0.9.0` or newer. When installing with Helm, pass `--set enableDisaggregatedSet=true` to enable the `DisaggregatedSet` validating webhook and RBAC.
 * For Intel XPU, install the [Intel Resource Drivers for Kubernetes](https://github.com/intel/intel-resource-drivers-for-kubernetes) and verify that the `gpu.intel.com` DRA DeviceClass is available.
 * Create a target namespace for the installation:
 
@@ -151,7 +152,11 @@ For Intel XPU, include
 
 ### 2. Deploy the Model Server
 
-Apply the Kustomize overlays for your specific backend:
+Choose one of the following deployment paths:
+
+#### Deploy using LeaderWorkerSet
+
+Apply the Kustomize overlay for your specific backend:
 
 ```bash
 # NVIDIA GPU
@@ -161,6 +166,14 @@ kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/g
 # Intel XPU
 export MODEL=deepseek-ai/DeepSeek-V2-Lite-Chat
 kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/xpu/vllm
+```
+
+#### Deploy using DisaggregatedSet
+
+Apply the `DisaggregatedSet` overlay:
+
+```bash
+kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/gpu/vllm/disaggregatedset
 ```
 
 ### 3. (Optional) Enable Monitoring
