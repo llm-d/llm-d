@@ -58,6 +58,37 @@ router:
                   sampled:
                     sampleFPS: 2
                     temporalPatchSize: 2
+            #
+            # Serving google/gemma-4-31B-it instead? Gemma 4 allocates a fixed
+            # token budget per image (70, 140, 280, 560, or 1120) rather than
+            # deriving it from resolution, and strides video frames rather than
+            # sampling by FPS. Leaving the Qwen3-VL estimate above in place would
+            # price a 1280x720 image at 900 tokens instead of 280 — the scorer
+            # would overweight every image request with no error to signal it.
+            # Replace the whole `estimate:` block above with:
+            #
+            # estimate:
+            #   image:
+            #     mode: static
+            #     static:
+            #       staticToken: 280
+            #   video:
+            #     defaultResolution:
+            #       width: 1280
+            #       height: 720
+            #     defaultDuration: 10
+            #     maxVideoTokens: 12288
+            #     tokensPerFrame:
+            #       mode: static
+            #       static:
+            #         numTokensPerFrame: 280
+            #     frames:
+            #       mode: strided
+            #       minFrames: 1
+            #       maxFrames: 8
+            #       strided:
+            #         frameStride: 4
+            #
         - type: approx-prefix-cache-producer
         - type: inflight-load-producer
         - type: prefix-cache-affinity-filter
