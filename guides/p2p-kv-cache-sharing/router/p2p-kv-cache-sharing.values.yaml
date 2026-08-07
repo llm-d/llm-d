@@ -1,11 +1,11 @@
 ## p2p-kv-cache-sharing guide overrides for the router.
 ## Layer on top of: recipes/router/base.values.yaml
 ##
-## Tokenization is served by a standalone `vllm launch render` Service deployed
+## Tokenization is served by the model servers through the Service deployed
 ## from `../render/`. The EPP `token-producer` plugin tokenizes prompts over
-## HTTP against that Service (see its `vllm.url` below). Size the render pool
-## for the peak request rate (long-prompt workloads saturate a single replica
-## near ~10 req/s) - see the guide's Best Practices.
+## HTTP against that Service (see its `vllm.url` below). The opt-in
+## `../render/standalone/` overlay provides a dedicated render pool when model
+## server CPU is contended; see the guide's Best Practices.
 ##
 ## The deployed EPP config is the affinity + P2P arm (`epp-affinity-p2p.yaml`
 ## in ../benchmarking/): placement follows the cache (prefix-affinity
@@ -67,8 +67,8 @@ router:
             parameters:
               modelName: openai/gpt-oss-120b # Must match the render Service model (../render/) and the deployed model server
               vllm:
-                # Standalone render Service (../render/): `p2p-kv-cache-sharing-`
-                # namePrefix + Service name `render`.
+                # Model-server render Service (../render/):
+                # `p2p-kv-cache-sharing-` namePrefix + Service name `render`.
                 url: "http://p2p-kv-cache-sharing-render:8000"
           - type: endpoint-notification-source
           - type: precise-prefix-cache-producer

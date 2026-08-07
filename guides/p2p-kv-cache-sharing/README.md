@@ -438,14 +438,32 @@ kubectl run curl-debug --rm -it \
 An inert misconfiguration looks identical to "no effect": requests serve
 fine, nothing pulls. Run every gate before trusting any measurement:
 
-1. **Index populated**: the EPP logs show KV-event subscriptions for
+1. **Render live**: the Service must return token IDs through the same DNS
+   name used by the EPP. This fails on an empty selector, a wrong
+   `targetPort`, or an unavailable render API:
+
+   ```bash
+   kubectl run render-check --rm -i --restart=Never \
+     --image=python:3.12-alpine --namespace="$NAMESPACE" -- \
+     python -c '
+   import json, urllib.request
+   data = json.dumps({"model": "openai/gpt-oss-120b", "prompt": "render check", "max_tokens": 1}).encode()
+   request = urllib.request.Request("http://p2p-kv-cache-sharing-render:8000/v1/completions/render", data=data, headers={"Content-Type": "application/json"})
+   with urllib.request.urlopen(request, timeout=10) as response:
+       body = json.load(response)
+   assert isinstance(body, list) and body and body[0].get("token_ids"), body
+   print(body[0]["token_ids"])
+   '
+   ```
+
+2. **Index populated**: the EPP logs show KV-event subscriptions for
    every pod; a scheduling decision logs non-zero prefix scores.
-2. **Header firing**: the routing sidecar logs
+3. **Header firing**: the routing sidecar logs
    `running P2P source protocol` with a `source_host` on requests whose
    prefix a peer holds.
-3. **Pulls landing**: `vllm:external_prefix_cache_hits_total` rises on
+4. **Pulls landing**: `vllm:external_prefix_cache_hits_total` rises on
    pulling pods; the source logs the served fetch.
-4. **Hash agreement**: seed one pod with a prefix, request it on another
+5. **Hash agreement**: seed one pod with a prefix, request it on another
    with the header; a hit of ~the full prefix length proves block hashes
    match (if zero, check `PYTHONHASHSEED` and `--block-size`).
 
