@@ -40,6 +40,7 @@ on:
       - "Nightly - Async Multi-Tenant Holdback E2E (GKE GPU)"
       - "Nightly - Fast Model Actuation + KEDA E2E (OCP GPU)"
       - "Nightly - Fast Model Actuation E2E (OCP GPU)"
+      - "Nightly - Flow Control E2E (AMD ROCm)"
       - "Nightly - Flow Control E2E (GKE GPU)"
       - "Nightly - Optimized Baseline E2E (AMD ROCM SGLang)"
       - "Nightly - Optimized Baseline E2E (AMD ROCM)"

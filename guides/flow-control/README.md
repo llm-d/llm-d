@@ -1,6 +1,7 @@
 # Flow Control
 
 [![E2E (GKE GPU)](https://github.com/llm-d/llm-d/actions/workflows/consolidate-status-flow-control-gke-acc-gpu-vllm-x.yaml/badge.svg)](https://github.com/llm-d/llm-d/actions/workflows/consolidate-status-flow-control-gke-acc-gpu-vllm-x.yaml)
+[![E2E (AMD ROCm)](https://github.com/llm-d/llm-d/actions/workflows/consolidate-status-flow-control-amd-ci-acc-rocm-vllm-x.yaml/badge.svg)](https://github.com/llm-d/llm-d/actions/workflows/consolidate-status-flow-control-amd-ci-acc-rocm-vllm-x.yaml)
 
 ## Overview
 
@@ -77,7 +78,7 @@ By default, the EPP uses a `global-strict` policy. Because the system is **work-
 
 Flow Control is a software-level scheduling feature at the EPP layer and is entirely hardware-agnostic. It supports all accelerators detailed in the [Optimized Baseline guide](../optimized-baseline/README.md#supported-accelerators-and-model-servers). Since this guide builds exactly on top of that baseline, we will dynamically deploy the baseline's model servers in the steps below rather than maintaining duplicate configurations.
 
-The steps below default to NVIDIA GPU. See the "Intel XPU" details under [Deploy the Model Server](#2-deploy-the-model-server) for the one other backend with a documented, dynamically-rendered path today. Other accelerators listed in the Optimized Baseline guide can be substituted the same way: swap the kustomize path in that step, then, if the target overlay's model or replica count differs from the [Default Configuration](#default-configuration) table above, adjust the benchmarking/verification steps accordingly.
+The steps below default to NVIDIA GPU. See the "AMD ROCm" and "Intel XPU" details under [Deploy the Model Server](#2-deploy-the-model-server) for other documented, dynamically-rendered paths. Other accelerators listed in the Optimized Baseline guide can be substituted the same way: swap the kustomize path in that step, then, if the target overlay's model or replica count differs from the [Default Configuration](#default-configuration) table above, adjust the benchmarking/verification steps accordingly.
 
 ## Prerequisites
 
@@ -212,6 +213,23 @@ kubectl kustomize ${REPO_ROOT}/guides/optimized-baseline/modelserver/gpu/vllm/${
 <!-- guide:deploy.modelserver end -->
 
 <details>
+<summary><h4>AMD ROCm</h4></summary>
+
+Flow Control also runs on the Optimized Baseline guide's AMD vLLM model server
+(2 replicas, TP=2, `Qwen/Qwen3-32B` on AMD Instinct MI355X). Render the AMD
+overlay and relabel it for this guide:
+
+```bash
+export INFRA_PROVIDER=base
+
+kubectl kustomize ${REPO_ROOT}/guides/optimized-baseline/modelserver/amd/vllm/${INFRA_PROVIDER}/ \
+  | sed "s/optimized-baseline/${GUIDE_NAME}/g" \
+  | kubectl apply -n ${NAMESPACE} -f -
+```
+
+</details>
+
+<details>
 <summary><h4>Intel XPU</h4></summary>
 
 Flow Control also runs on the Optimized Baseline guide's Intel XPU model server (2 × vLLM, one Intel Arc Pro B60 per pod, `Qwen/Qwen3-0.6B`). Its CI runners are single-GPU-per-pod, so it does not carry the GPU path's 8-replica / TP=2 / `Qwen3-32B` configuration — the [Default Configuration](#default-configuration) table above does not apply as-is; use `Qwen/Qwen3-0.6B` and 2 replicas for this path instead. Override `MODEL_NAME` before deploying, since every verification/benchmark command below sends its request to `${MODEL_NAME}`, and the default (`Qwen/Qwen3-32B`) is not the model this overlay loads:
@@ -223,8 +241,6 @@ kubectl kustomize ${REPO_ROOT}/guides/optimized-baseline/modelserver/xpu/vllm/ \
   | sed "s/optimized-baseline/${GUIDE_NAME}/g" \
   | kubectl apply -n ${NAMESPACE} -f -
 ```
-
-Cleanup uses the same substitution as [Cleanup](#cleanup) below, with `modelserver/xpu/vllm/` in place of `modelserver/gpu/vllm/${INFRA_PROVIDER}/` (no `INFRA_PROVIDER` split exists for this overlay).
 
 </details>
 
@@ -656,9 +672,9 @@ helm uninstall ${GUIDE_NAME} -n ${NAMESPACE}
 
 kubectl delete -f ${REPO_ROOT}/guides/${GUIDE_NAME}/objectives.yaml -n ${NAMESPACE}
 
-# INFRA_PROVIDER must match the value used at deploy time.
-# If you deployed on Intel XPU instead, replace the line below with
-# modelserver/xpu/vllm/ (no INFRA_PROVIDER for that overlay).
+# INFRA_PROVIDER must match the value used at deploy time. This command
+# cleans up the default NVIDIA GPU deployment; the AMD ROCm and Intel XPU
+# alternatives are documented immediately below this generated block.
 kubectl kustomize ${REPO_ROOT}/guides/optimized-baseline/modelserver/gpu/vllm/${INFRA_PROVIDER}/ \
   | sed "s/optimized-baseline/${GUIDE_NAME}/g" \
   | kubectl delete -n ${NAMESPACE} -f -
@@ -667,6 +683,25 @@ kubectl delete clusterrolebinding ${GUIDE_NAME}-metrics-reader ${GUIDE_NAME}-epp
 kubectl delete clusterrole ${GUIDE_NAME}-metrics-reader
 ```
 <!-- guide:cleanup end -->
+
+If you deployed on AMD ROCm, use this model-server cleanup command instead of
+the NVIDIA GPU command above (`INFRA_PROVIDER` must match the value used at
+deploy time):
+
+```bash
+kubectl kustomize ${REPO_ROOT}/guides/optimized-baseline/modelserver/amd/vllm/${INFRA_PROVIDER}/ \
+  | sed "s/optimized-baseline/${GUIDE_NAME}/g" \
+  | kubectl delete -n ${NAMESPACE} -f -
+```
+
+If you deployed on Intel XPU, use this model-server cleanup command instead
+(the XPU overlay has no `INFRA_PROVIDER` split):
+
+```bash
+kubectl kustomize ${REPO_ROOT}/guides/optimized-baseline/modelserver/xpu/vllm/ \
+  | sed "s/optimized-baseline/${GUIDE_NAME}/g" \
+  | kubectl delete -n ${NAMESPACE} -f -
+```
 
 If you ran the Benchmarking section, also delete the harness leftovers. The workload PVC
 is backed by shared storage that bills until removed. Follow
