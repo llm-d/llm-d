@@ -26,5 +26,14 @@ router:
             weight: 1
 
   modelServers:
+    # Select bound launchers ONLY. Both halves of FMA's dual-pods design carry
+    # llm-d.ai/guide, but requester pods never listen on :8000 -- they reserve the
+    # GPU and hold the pod identity while the bound launcher runs vLLM. Selecting
+    # on the guide label alone admits requesters to the pool, and the EPP then
+    # routes a share of traffic to endpoints that refuse the connection. The
+    # component label is set by the FMA chart on launcher pods; unbound launchers
+    # are already excluded because FMA stamps the ISC labels onto a launcher only
+    # once it is bound to a requester.
     matchLabels:
       llm-d.ai/guide: "fast-model-actuation"
+      app.kubernetes.io/component: "launcher"

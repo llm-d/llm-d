@@ -191,6 +191,9 @@ kubectl rollout status deployment/fma-requester -n ${NAMESPACE} --timeout=300s
 > The launcher pod does **not** request GPU resources from the Kubernetes scheduler or device plugin. Instead, the FMA controller sets `CUDA_VISIBLE_DEVICES` to point to the GPU reserved by the corresponding requesting pod, giving the launcher direct access to that GPU via the CUDA runtime. The `runtimeClassName: nvidia` is required on platforms (e.g., OpenShift) where GPU driver libraries are injected via the runtime class rather than the device plugin resource request.
 
 > [!NOTE]
+> Only **bound launcher** pods serve inference on `:8000`. Requester pods reserve the GPU and hold the pod identity, but never listen on that port. Both halves carry the `llm-d.ai/guide: fast-model-actuation` label, so the router's `InferencePool` selector in `router/fast-model-actuation.values.yaml` also matches on `app.kubernetes.io/component: launcher` (set by the FMA chart) to keep requesters out of the pool. Without that second label the EPP load-balances across endpoints that refuse the connection, and requests intermittently fail with `upstream connect error ... Connection refused`. Unbound launchers need no special handling — FMA stamps the `InferenceServerConfig` labels onto a launcher only once it is bound.
+
+> [!NOTE]
 > `launcherCount` is **per matching node**. Setting `launcherCount: 1` creates one launcher pod on each node that has `nvidia.com/gpu.present: "true"`. Only launchers that get bound to a requesting pod will actually start a vLLM instance.
 
 You should see:
