@@ -232,6 +232,95 @@ curl -X POST http://${IP}/v1/completions \
     }" | jq
 ```
 
+## Precise prefix-cache routing
+
+The router configurations above score prefixes with the approximate
+(router-side) index. The `router/precise-routing.values.yaml` overlay routes
+on the exact index instead: every rank publishes KV-cache events and the EPP
+`precise-prefix-cache-producer` tracks true block residency, gated by modeled
+prefill load (`prefix-cache-affinity-filter` + `token-load-scorer`).
+
+Additional prerequisites:
+
+* An EPP build with per-rank KV-event attribution
+  ([llm-d-router#2233](https://github.com/llm-d/llm-d-router/pull/2233)).
+* A Gateway API Inference Extension bundle >= `v1.5.0-rc.2`: the pool targets
+  all DP rank ports, and earlier CRD generations cap `targetPorts` at 1.
+* Identical `PYTHONHASHSEED` and `--block-size` on every engine pod (the
+  `kv-events` component sets both), with the block size matching the router's
+  `tokenProcessorConfig.blockSize`.
+
+Deploy:
+
+1. Add the `components/kv-events` component to your chosen modelserver
+   deployment overlay, so every rank publishes events on its compensated ZMQ
+   port (vLLM offsets the configured port by the global DP rank; the base
+   manifests compensate by the pod's start rank, see
+   [llm-d-router#2227](https://github.com/llm-d/llm-d-router/issues/2227)).
+2. Apply the render Service, which fronts the prefill pods' `/v1/*/render`
+   endpoints for the EPP token-producer:
+
+   ```bash
+   kubectl apply -k render/ -n ${NAMESPACE}
+   ```
+
+3. Deploy the router with the overlay layered after the guide values:
+
+   ```bash
+   helm install ${GUIDE_NAME} \
+       ${ROUTER_STANDALONE_CHART} \
+       -f ${REPO_ROOT}/guides/recipes/router/base.values.yaml \
+       -f ${REPO_ROOT}/guides/${GUIDE_NAME}/router/${GUIDE_NAME}.values.yaml \
+       -f ${REPO_ROOT}/guides/${GUIDE_NAME}/router/precise-routing.values.yaml \
+       -n ${NAMESPACE} --version ${ROUTER_CHART_VERSION}
+   ```
+
+Verify before trusting routing behavior - an inert misconfiguration looks
+identical to "no effect":
+
+1. **Render returns token IDs** through the Service name the EPP uses:
+
+   ```bash
+   kubectl run render-check --rm -i --restart=Never \
+     --image=python:3.12-alpine --namespace="${NAMESPACE}" -- \
+     python -c '
+   import json, urllib.request
+   data = json.dumps({"model": "zai-org/GLM-5.2-FP8", "prompt": "render check", "max_tokens": 1}).encode()
+   request = urllib.request.Request("http://wide-ep-lws-render:8000/v1/completions/render", data=data, headers={"Content-Type": "application/json"})
+   with urllib.request.urlopen(request, timeout=10) as response:
+       body = json.load(response)
+   assert isinstance(body, list) and body and body[0].get("token_ids"), body
+   print(body[0]["token_ids"])
+   '
+   ```
+
+2. **Every rank's KV-event socket is subscribed.** Count established
+   connections from the EPP pod IP on the ZMQ port range, from the engine
+   side; expect one per local rank (e.g. 8 for a DP8 pod). Restrict the count
+   to ports 5000-5999: the render Service adds EPP HTTP connections to the
+   prefill pods on port 8000, which would otherwise inflate the count.
+
+   ```bash
+   EPP_IP=$(kubectl -n ${NAMESPACE} get endpointslices \
+     -l kubernetes.io/service-name=${GUIDE_NAME}-epp \
+     -o jsonpath='{.items[0].endpoints[0].addresses[0]}')
+   kubectl -n ${NAMESPACE} exec <engine-pod> -c vllm -- python3 -c "
+   hx=''.join(f'{int(o):02X}' for o in reversed('$EPP_IP'.split('.')))
+   print(sum(1 for l in open('/proc/net/tcp')
+             if len(l.split())>3 and l.split()[3]=='01'
+             and l.split()[2].split(':')[0]==hx
+             and 5000 <= int(l.split()[1].split(':')[1],16) < 6000))"
+   ```
+
+   Poll rather than sampling once - subscriptions lag engine readiness, and a
+   single early sample reads 0. A stable count below the local rank count
+   means a pod's publishers are on the wrong ports.
+
+3. **Repeated prefixes route back to their holder.** Send the same long
+   prompt twice; the second request should land on the first request's pod
+   with a `vllm:prefix_cache_hits` delta close to the prompt length.
+
+
 ## Benchmarking
 
 This guide uses [`inference-perf`](https://github.com/kubernetes-sigs/inference-perf).

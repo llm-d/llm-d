@@ -132,6 +132,23 @@ spec:
                   PROFILER_ARGS="--profiler-config {\"profiler\":\"torch\",\"torch_profiler_dir\":\"/var/cache/vllm/profile\",\"torch_profiler_record_shapes\":true,\"torch_profiler_with_memory\":true,\"max_iterations\":3}"
                 fi
 
+                KV_EVENTS_ARGS=""
+                if [ "${ENABLE_KV_EVENTS:-0}" = "1" ]; then
+                  # vLLM offsets the configured ZMQ publisher port by the GLOBAL
+                  # data-parallel rank. On multi-pod DP groups every pod receives
+                  # the same configured base, so compensate by the pod's start
+                  # rank to land publishers on contiguous local ports
+                  # (5557..5557+DP_SIZE_LOCAL-1). See llm-d-router#2227.
+                  KV_EVENTS_BASE=$((5557 - START_RANK))
+                  KV_EVENTS_ARGS="--kv-events-config {\"enable_kv_cache_events\":true,\"publisher\":\"zmq\",\"endpoint\":\"tcp://*:${KV_EVENTS_BASE}\",\"topic\":\"kv@${POD_IP}:8000@zai-org/GLM-5.2-FP8\"}"
+                fi
+                BLOCK_SIZE_ARGS=""
+                if [ -n "${KV_BLOCK_SIZE:-}" ]; then
+                  # Must match the router's precise-prefix-cache-producer
+                  # tokenProcessorConfig.blockSize, or the index stays empty.
+                  BLOCK_SIZE_ARGS="--block-size ${KV_BLOCK_SIZE}"
+                fi
+
                 exec vllm serve $PROFILER_ARGS $MTP_ARGS --kv-cache-dtype fp8 \
                   zai-org/GLM-5.2-FP8 \
                   --port 8200 \
@@ -153,6 +170,7 @@ spec:
                   --kv_transfer_config '{"kv_connector":"NixlConnector",
                                           "kv_role":"kv_both",
                                           "kv_load_failure_policy":"fail"}' \
+                  $KV_EVENTS_ARGS $BLOCK_SIZE_ARGS \
                   --all2all-backend deepep_low_latency \
                   --moe-backend deep_gemm \
                   --reasoning-parser glm45 \
@@ -160,6 +178,10 @@ spec:
                   --enable-auto-tool-choice \
                   ${KV_CACHE_MEMORY_BYTES:+--kv-cache-memory-bytes=$KV_CACHE_MEMORY_BYTES}
             env:
+              - name: POD_IP
+                valueFrom:
+                  fieldRef:
+                    fieldPath: status.podIP
               - name: HF_TOKEN
                 valueFrom:
                   secretKeyRef:
