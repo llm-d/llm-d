@@ -12,7 +12,7 @@ components:
 labels:
   - pairs:
       llm-d.ai/model: gemma-4-31B-it
-      llm-d.ai/guide: multimodal-optimized-baseline
+      llm-d.ai/guide: multimodal-aggregation
       llm-d.ai/accelerator-variant: tpu
       llm-d.ai/accelerator-vendor: google
     includeSelectors: true
