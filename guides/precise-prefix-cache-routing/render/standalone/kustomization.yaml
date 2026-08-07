@@ -1,0 +1,32 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+# Dedicated render (tokenizer) pool for precise-prefix-cache-routing.
+#
+# Fallback for backends that do not serve vLLM's /v1/*/render endpoints — most
+# notably SGLang — and for anyone who would rather not spend model-server CPU on
+# tokenization. It runs a GPU-less `vllm launch render` Deployment fronted by a
+# Service, so the tokenizer is always vLLM's regardless of which engine serves
+# inference.
+#
+# The default (../) fronts the model server pods with a Service instead and is
+# the preferred choice for vLLM backends: at higher QPS it keeps render latency
+# more contained than this separately-scheduled pool. Both overlays produce the
+# same Service name, so `vllm.url` in
+# router/precise-prefix-cache-routing.values.yaml never changes — apply exactly
+# one of them.
+namePrefix: precise-prefix-cache-routing-
+
+resources:
+  - deployment.yaml
+  - service.yaml
+
+# NOTE: the guide label lands on resource metadata ONLY, never on the pod
+# template or selectors (kustomize `labels` defaults to includeSelectors:false /
+# includeTemplates:false). `llm-d.ai/guide: precise-prefix-cache-routing` is the
+# InferencePool / model-server selector (router modelServers.matchLabels); if
+# render pods carried it the EPP would treat them as routable model servers and
+# try to ZMQ-subscribe to their (nonexistent) :5556 KV-event socket.
+labels:
+  - pairs:
+      llm-d.ai/guide: precise-prefix-cache-routing

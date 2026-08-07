@@ -1,4 +1,4 @@
-## multimodal-optimized-baseline guide overrides for the llm-d router.
+## multimodal-aggregation guide overrides for the llm-d router.
 ## Layer on top of: recipes/router/base.values.yaml
 
 router:
@@ -9,12 +9,12 @@ router:
       targetPort: 8081
 
   epp:
-    pluginsConfigFile: "multimodal-optimized-baseline-plugins.yaml"
+    pluginsConfigFile: "multimodal-aggregation-plugins.yaml"
     pluginsCustomConfig:
-      multimodal-optimized-baseline-plugins.yaml: |
+      multimodal-aggregation-plugins.yaml: |
         apiVersion: llm-d.ai/v1alpha1
         kind: EndpointPickerConfig
-        # Token-based routing, matching the optimized-baseline reference stack:
+        # Token-based routing, matching the aggregation reference stack:
         # prefix-cache-affinity-filter selects the endpoint set, token-load-scorer
         # picks within it on queued prefill token load. The multimodal token-producer
         # stays in the pipeline — the scorer needs per-request token counts, and
@@ -120,4 +120,4 @@ router:
 
   modelServers:
     matchLabels:
-      llm-d.ai/guide: "multimodal-optimized-baseline"
+      llm-d.ai/guide: "multimodal-aggregation"

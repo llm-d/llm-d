@@ -467,5 +467,3 @@ Empirical benchmark reports demonstrating the impact of multi-tier prefix-cache 
 - **[openai/gpt-oss-120b on vLLM (16×H100 CPU Offload)](./benchmark-results/vllm-gpt-oss-120b-h100.md)**: Stage-by-stage throughput, latency, TPOT, and fleet cache hit rate breakdowns across 5–40 QPS.
 - **[Qwen/Qwen3-32B on vLLM (TPU v6e/v7 CPU Offload)](./benchmark-results/vllm-qwen3-32b-tpuv7.md)**: Headline throughput and latency effect of CPU RAM prefix offloading on Google TPU architectures.
 - **[Qwen/Qwen3-32B on vLLM (16×H100 Lustre Offload)](./benchmark-results/vllm-qwen3-32b-h100-lustre.md)**: Benchmark comparisons for shared POSIX filesystem offloading using LMCache and llm-d filesystem connectors.
-
-For detailed results see [gpt-oss-120B benchmarking results](benchmark-results-gpt-oss-120b.md).
