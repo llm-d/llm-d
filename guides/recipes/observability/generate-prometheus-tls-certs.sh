@@ -88,10 +88,10 @@ setup_env() {
       log_error "Error, the context file \"$KUBERNETES_CONTEXT\", passed via command-line option, does not exist!"
       exit 1
     fi
-    KCMD="kubectl --kubeconfig $KUBERNETES_CONTEXT"
-  else
-    KCMD="kubectl"
+    export KUBECONFIG="$KUBERNETES_CONTEXT"
   fi
+
+  KCMD="kubectl"
 }
 
 generate_certificates() {
