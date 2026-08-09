@@ -186,10 +186,9 @@ One llm-d Router release, EPP, and InferencePool cover all three roles.
 2. *Deploy the llm-d Router*:
 
 ```bash
-export PROVIDER_NAME=istio # other: agentgateway 
+export PROVIDER_NAME=istio # other: gke, na (for agentgateway, see the NOTE below instead)
 export GATEWAY_SERVICE=llm-d-inference-gateway-${PROVIDER_NAME}
-export CLIENT_SERVICE=${GATEWAY_SERVICE} # client-facing entrypoint: the Gateway's own Service
-export CLIENT_PORT=80
+export GATEWAY_ADDRESS="http://${GATEWAY_SERVICE}.${NAMESPACE}.svc:80"
 export ROUTER_RELEASES=${GUIDE_NAME} # Helm release name(s), for Cleanup
 export ROUTER_HTTPROUTE_FILE=router/httproute.yaml # for Cleanup
 helm install ${GUIDE_NAME} \
@@ -200,6 +199,17 @@ helm install ${GUIDE_NAME} \
     --set provider.name=${PROVIDER_NAME} \
     -n ${NAMESPACE} --version ${ROUTER_CHART_VERSION}
 ```
+
+> [!NOTE]
+> Using agentgateway instead? Its [generated Service takes the Gateway's own name](https://agentgateway.dev/docs/kubernetes/latest/setup/gateway/),
+> with no `-<provider>` suffix (unlike istio/gke) -- set these before the `helm
+> install` above instead of the `PROVIDER_NAME`/`GATEWAY_SERVICE`/`GATEWAY_ADDRESS`
+> lines above:
+> ```bash
+> export PROVIDER_NAME=agentgateway
+> export GATEWAY_SERVICE=llm-d-inference-gateway
+> export GATEWAY_ADDRESS="http://${GATEWAY_SERVICE}.${NAMESPACE}.svc:80"
+> ```
 
 3. *Deploy the Router's HTTPRoute*. The chart's own auto-created HTTPRoute is disabled
    (`httpRoute.create: false` in [`router/coord-disaggregation.values.yaml`](router/coord-disaggregation.values.yaml))
@@ -256,8 +266,7 @@ needs a real Gateway.
 
 ```bash
 export GATEWAY_SERVICE=${GUIDE_NAME}-epp
-export CLIENT_SERVICE=llm-d-coordinator # client-facing entrypoint: the Coordinator's own Service
-export CLIENT_PORT=8080
+export GATEWAY_ADDRESS="http://${GATEWAY_SERVICE}.${NAMESPACE}.svc:80"
 export ROUTER_RELEASES=${GUIDE_NAME} # Helm release name(s), for Cleanup
 export ROUTER_HTTPROUTE_FILE= # no HTTPRoute in Standalone Mode, for Cleanup
 helm install ${GUIDE_NAME} \
@@ -269,8 +278,8 @@ helm install ${GUIDE_NAME} \
 
 No HTTPRoute to apply here, and no Gateway to deploy beforehand (skip step 1.1 above
 entirely) — the router-EPP's own Service, named `${GATEWAY_SERVICE}` (the chart derives
-it from the Helm release name), is what the Coordinator's `gateway.address` points at
-directly once you deploy it in step 3.
+it from the Helm release name), is what `GATEWAY_ADDRESS` points at, which the
+Coordinator's `gateway.address` then points at directly once you deploy it in step 3.
 
 </details>
 
@@ -298,10 +307,9 @@ prefix-cache affinity to speak of, just queue/load balancing.
 2. *Deploy the llm-d Routers*:
 
 ```bash
-export PROVIDER_NAME=istio # other: na or agentgateway
+export PROVIDER_NAME=istio # other: na (for agentgateway, see the NOTE below instead)
 export GATEWAY_SERVICE=llm-d-inference-gateway-${PROVIDER_NAME}
-export CLIENT_SERVICE=${GATEWAY_SERVICE} # client-facing entrypoint: the Gateway's own Service
-export CLIENT_PORT=80
+export GATEWAY_ADDRESS="http://${GATEWAY_SERVICE}.${NAMESPACE}.svc:80"
 export ROUTER_RELEASES="${GUIDE_NAME}-encode ${GUIDE_NAME}-prefill ${GUIDE_NAME}-decode" # for Cleanup
 export ROUTER_HTTPROUTE_FILE=router/httproute-3-epp.yaml # for Cleanup
 for ROLE in encode prefill decode; do
@@ -314,6 +322,17 @@ for ROLE in encode prefill decode; do
       -n ${NAMESPACE} --version ${ROUTER_CHART_VERSION}
 done
 ```
+
+> [!NOTE]
+> Using agentgateway instead? Its [generated Service takes the Gateway's own name](https://agentgateway.dev/docs/kubernetes/latest/setup/gateway/),
+> with no `-<provider>` suffix (unlike istio) -- set these before the `helm install`
+> loop above instead of the `PROVIDER_NAME`/`GATEWAY_SERVICE`/`GATEWAY_ADDRESS` lines
+> above:
+> ```bash
+> export PROVIDER_NAME=agentgateway
+> export GATEWAY_SERVICE=llm-d-inference-gateway
+> export GATEWAY_ADDRESS="http://${GATEWAY_SERVICE}.${NAMESPACE}.svc:80"
+> ```
 
 3. *Deploy the shared HTTPRoute*. Same reasoning as the single-EPP variant's
    `httpRoute.create: false` (each release disables its own auto-created HTTPRoute for
@@ -355,9 +374,9 @@ kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/g
 ### 3. Deploy the Coordinator
 
 Drives the `replace-media-urls → render → conditional-decode → encode → prefill →
-decode` pipeline. The ConfigMap references `${NAMESPACE}` and `${GATEWAY_SERVICE}`
-(exported in step 1's Gateway mode or Standalone Mode block — whichever you used), so
-build with `kustomize` and pipe through `envsubst` before applying:
+decode` pipeline. The ConfigMap references `${GATEWAY_ADDRESS}` (exported in step 1's
+Gateway mode or Standalone Mode block — whichever you used), so build with
+`kustomize` and pipe through `envsubst` before applying:
 
 ```bash
 kustomize build ${REPO_ROOT}/guides/${GUIDE_NAME}/coordinator/ | envsubst | kubectl apply -n ${NAMESPACE} -f -
@@ -404,26 +423,35 @@ instead of through a cache.
 
 ### 1. Get the IP of the Entrypoint
 
-Same command either way — query the ClusterIP of whichever Service is client-facing.
-`${CLIENT_SERVICE}`/`${CLIENT_PORT}` were exported in step 1: the Gateway's own Service
-in Gateway mode (test clients only ever run in-cluster anyway, so there's no need to
-resolve the Gateway resource's external address specifically — its own Service's
-ClusterIP gets you there just as well), or the Coordinator's own Service in Standalone
-Mode (there's no Gateway at all, so clients hit the Coordinator directly instead of the
-router-EPP's Service, which in that mode is Coordinator-internal only — see step 1).
+**Standalone Mode** (single-EPP topology only — no Gateway at all, so clients hit the
+Coordinator's own Service directly instead of the router-EPP's Service, which in that
+mode is Coordinator-internal only — see step 1):
 
 ```bash
-export IP=$(kubectl get service ${CLIENT_SERVICE} -n ${NAMESPACE} -o jsonpath='{.spec.clusterIP}')
-export PORT=${CLIENT_PORT}
+export IP=$(kubectl get service llm-d-coordinator -n ${NAMESPACE} -o jsonpath='{.spec.clusterIP}')
+export PORT=8080
 ```
 
-In Gateway mode, the Coordinator's own `coordinator` HTTPRoute (deployed alongside the
-coordinator overlay in step 3) attaches to the `llm-d-inference-gateway` Gateway and
-forwards client traffic (no `EPP-Profile` header) to the Coordinator, which then
-orchestrates the `encode → prefill → decode` pipeline. The EPP is internal — the
-Coordinator selects which of its scheduling profiles runs by setting the `EPP-Profile`
-header on its own outbound calls, which route back through that same Gateway Service to
-`router/httproute.yaml` (step 1.3) instead of the Coordinator's route.
+<details>
+<summary> <b>Gateway Mode</b> (single-EPP or 3-EPP topology) </summary>
+
+The Coordinator's own `coordinator` HTTPRoute (deployed alongside the coordinator
+overlay in step 3) attaches to the `llm-d-inference-gateway` Gateway and forwards
+client traffic (no `EPP-Profile` header) to the Coordinator, which then orchestrates
+the `encode → prefill → decode` pipeline. The EPP is internal — the Coordinator
+selects which of its scheduling profiles runs by setting the `EPP-Profile` header on
+its own outbound calls, which route back through that same Gateway to
+`router/httproute.yaml` or `router/httproute-3-epp.yaml` (step 1.3) instead of the
+Coordinator's route. Querying the `Gateway` resource's own status address (rather than
+the backing Service used for `GATEWAY_ADDRESS` in step 1) sidesteps needing to know
+that Service's provider-specific name — this works the same regardless of provider:
+
+```bash
+export IP=$(kubectl get gateway llm-d-inference-gateway -n ${NAMESPACE} -o jsonpath='{.status.addresses[0].value}')
+export PORT=80
+```
+
+</details>
 
 ### 2. Send Test Requests
 

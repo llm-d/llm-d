@@ -4,10 +4,10 @@
 # input for the encode/prefill phases, so it goes too). ec_connector is dropped
 # too -- encoder-cache transfer only matters with an encode role in the pipeline.
 #
-# Unlike multimedia-downloader/patch-coordinator-ca.yaml, this file still has
-# ${GATEWAY_SERVICE}/${NAMESPACE} placeholders (the gateway.address line below is
-# copied whole from configmap.yaml), so it needs envsubst -- --patch-file reads
-# the file raw and won't expand them. Apply after the normal coordinator deploy:
+# Unlike multimedia-downloader/patch-coordinator-ca.yaml, this file still has a
+# ${GATEWAY_ADDRESS} placeholder (the gateway.address line below is copied whole
+# from configmap.yaml), so it needs envsubst -- --patch-file reads the file raw
+# and won't expand it. Apply after the normal coordinator deploy:
 #   kubectl patch configmap llm-d-coordinator-config -n ${NAMESPACE} --type=strategic \
 #       --patch="$(envsubst < coordinator/patch-pd-only.yaml)"
 #   kubectl rollout restart deployment/llm-d-coordinator -n ${NAMESPACE}
@@ -24,7 +24,7 @@ data:
       write_timeout: 300s
 
     gateway:
-      address: "http://${GATEWAY_SERVICE}.${NAMESPACE}.svc:80"
+      address: "${GATEWAY_ADDRESS}"
       max_idle_conns_per_host: 100
       idle_conn_timeout: 90s
       timeout: 60s

@@ -15,11 +15,13 @@ data:
       write_timeout: 300s
 
     gateway:
-      # GATEWAY_SERVICE is the Service the Coordinator's own outbound (EPP-Profile
+      # GATEWAY_ADDRESS is the full URL the Coordinator's own outbound (EPP-Profile
       # tagged) calls land on: the Gateway's own Service in Gateway mode, or the
       # router-EPP's own Service in Standalone Mode. Set in the README's
-      # Installation Instructions, step 1, whichever mode you used.
-      address: "http://${GATEWAY_SERVICE}.${NAMESPACE}.svc:80"
+      # Installation Instructions, step 1, whichever mode/provider you used. Not
+      # built from GATEWAY_SERVICE here -- agentgateway's generated Service name
+      # doesn't follow the same <name>-<provider> suffix convention as istio/gke.
+      address: "${GATEWAY_ADDRESS}"
       max_idle_conns_per_host: 100
       idle_conn_timeout: 90s
       timeout: 60s
