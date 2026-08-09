@@ -88,7 +88,7 @@ topology choice:
 
 | Backend           | Directory                | Notes                                            |
 | ------------------ | ------------------------- | ------------------------------------------------- |
-| NVIDIA GPU (vLLM) | `modelserver/gpu/vllm/`  | Default configuration (`base`, `coreweave`, and `gke` providers) |
+| NVIDIA GPU (vLLM) | `modelserver/gpu/vllm/`  | Default configuration (`base` and `coreweave` providers) |
 
 > [!NOTE]
 > Encoder-cache transfer (`--ec-transfer-config`) is not yet in an official vLLM
@@ -186,7 +186,7 @@ One llm-d Router release, EPP, and InferencePool cover all three roles.
 2. *Deploy the llm-d Router*:
 
 ```bash
-export PROVIDER_NAME=gke # other: na, agentgateway, or istio
+export PROVIDER_NAME=istio # other: agentgateway 
 export GATEWAY_SERVICE=llm-d-inference-gateway-${PROVIDER_NAME}
 export CLIENT_SERVICE=${GATEWAY_SERVICE} # client-facing entrypoint: the Gateway's own Service
 export CLIENT_PORT=80
@@ -298,7 +298,7 @@ prefix-cache affinity to speak of, just queue/load balancing.
 2. *Deploy the llm-d Routers*:
 
 ```bash
-export PROVIDER_NAME=gke # other: na, agentgateway, or istio
+export PROVIDER_NAME=istio # other: na or agentgateway
 export GATEWAY_SERVICE=llm-d-inference-gateway-${PROVIDER_NAME}
 export CLIENT_SERVICE=${GATEWAY_SERVICE} # client-facing entrypoint: the Gateway's own Service
 export CLIENT_PORT=80
@@ -338,7 +338,7 @@ three role-specific model servers (encode, prefill, decode), each as a single
 replica:
 
 ```bash
-export INFRA_PROVIDER=base # base | coreweave | gke
+export INFRA_PROVIDER=base # base | coreweave
 kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/gpu/vllm/${INFRA_PROVIDER}/
 ```
 
@@ -511,6 +511,7 @@ anything else in it, like the `llm-d-hf-token` secret) alone — `kubectl delete
 namespace ${NAMESPACE}` if you want it gone entirely.
 
 If you used Gateway mode and nothing else in your cluster still uses it, also remove
-the `llm-d-inference-gateway` Gateway by following [the gateway cleanup guide](../../docs/infrastructure/gateway/gke.md#cleanup).
+the `llm-d-inference-gateway` Gateway by following [the gateway istio cleanup guide](../../docs/infrastructure/gateway/istio.md#cleanup), or 
+[the agentgateway cleanup guide](../../docs/infrastructure/gateway/agentgateway.md#cleanup)
 Standalone Mode never created one.
 
