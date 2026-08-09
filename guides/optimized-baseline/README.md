@@ -180,11 +180,11 @@ This deploys the llm-d Router in [Standalone Mode](../../docs/architecture/core/
 # Assuming base-directory is the root of the llm-d repo
 helm_values=(
   -f "${ROUTER_BASE_VALUES}"
-  -f "${ROUTER_VALUES}"
 )
 if [[ -n "${MONITORING_VALUES:-}" ]]; then
   helm_values+=( -f "${MONITORING_VALUES}" )
 fi
+helm_values+=( -f "${ROUTER_VALUES}" )
 helm install ${GUIDE_NAME} \
   ${ROUTER_STANDALONE_CHART} \
   "${helm_values[@]}" \
@@ -204,11 +204,11 @@ To use a Kubernetes Gateway managed proxy rather than the standalone version, fo
 ```bash
 helm_values=(
   -f "${ROUTER_BASE_VALUES}"
-  -f "${ROUTER_VALUES}"
 )
 if [[ -n "${MONITORING_VALUES:-}" ]]; then
   helm_values+=( -f "${MONITORING_VALUES}" )
 fi
+helm_values+=( -f "${ROUTER_VALUES}" )
 helm install ${GUIDE_NAME} \
   ${ROUTER_GATEWAY_CHART} \
   "${helm_values[@]}" \
