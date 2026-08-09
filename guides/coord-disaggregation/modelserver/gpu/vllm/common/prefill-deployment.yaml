@@ -27,6 +27,7 @@ spec:
             - "--max-model-len=32000"
             - "--kv-transfer-config"
             - '{"kv_connector":"NixlConnector", "kv_role":"kv_both"}'
+            - "--no-disable-hybrid-kv-cache-manager"
             - "--ec-transfer-config"
             - '{"ec_connector": "ECCPUConnector", "ec_role": "ec_consumer"}'
           env:

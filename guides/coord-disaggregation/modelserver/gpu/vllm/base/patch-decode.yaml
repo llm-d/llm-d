@@ -17,6 +17,7 @@ spec:
             - "--max-model-len=32000"
             - "--kv-transfer-config"
             - '{"kv_connector":"NixlConnector", "kv_role":"kv_both"}'
+            - "--no-disable-hybrid-kv-cache-manager"
           env:
             - name: MODEL_NAME
               value: "Qwen/Qwen3-VL-32B-Instruct"

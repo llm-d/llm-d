@@ -26,16 +26,16 @@ spec:
         - /etc/coordinator/coordinator.yaml
         env:
         - name: GOMAXPROCS
-          value: "4"
+          value: "16"
         - name: GOMEMLIMIT
-          value: "7200MiB"
+          value: "28800MiB"
         resources:
           requests:
-            cpu: "4"
-            memory: 8Gi
+            cpu: "8"
+            memory: 16Gi
           limits:
-            cpu: "4"
-            memory: 8Gi
+            cpu: "16"
+            memory: 32Gi
         ports:
         - name: http
           containerPort: 8080
