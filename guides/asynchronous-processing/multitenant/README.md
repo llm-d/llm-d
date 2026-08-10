@@ -103,18 +103,24 @@ This guide layers on the base [asynchronous-processing](../README.md) guide — 
   # matches the kube-prometheus-stack install in Observability below; override it if
   # your Prometheus lives somewhere else.
   export PROM_URL=http://kps-kube-prometheus-stack-prometheus.monitoring.svc.cluster.local:9090
+
+  # Scenario C only: concurrent requests per model at which that model's pool counts as
+  # saturated. Must be BELOW the pool's worker count (8 in the overlays) — see Scenario C.
+  export SAT_CAP=4
   ```
 
 ## Configuration and Deployment
 
 The value overlays live in [`values/`](values/) with literal placeholders (`NAMESPACE`, `IGW_HOST`,
-`POOL_A`, `POOL_B`, `PROM_URL` on the self-hosted-Prometheus saturation overlays, and — Pub/Sub only —
-`PROJECT_ID`). Render one for your environment before installing:
+`POOL_A`, `POOL_B`, `SAT_CAP` in the saturation overlays, `PROM_URL` on the self-hosted-Prometheus
+saturation overlays, and — Pub/Sub only — `PROJECT_ID`). Render one for your environment before
+installing:
 
 ```bash
 render() {   # render <overlay-path> -> stdout
   sed -e "s/NAMESPACE/${NAMESPACE}/g" -e "s#IGW_HOST#${IP}#g" \
       -e "s/POOL_A/${POOL_A}/g" -e "s/POOL_B/${POOL_B}/g" \
+      -e "s/SAT_CAP/${SAT_CAP:-4}/g" \
       -e "s#PROM_URL#${PROM_URL:-http://kps-kube-prometheus-stack-prometheus.monitoring.svc.cluster.local:9090}#g" "$1"
 }
 ```
@@ -318,10 +324,37 @@ merge policy drains the highest lanes first. Query each model's budget independe
 # whatever ${PROM_URL} resolves to if your Prometheus lives elsewhere.
 kubectl port-forward -n monitoring svc/kps-kube-prometheus-stack-prometheus 9090:9090 &
 curl -s localhost:9090/api/v1/query --data-urlencode \
-  "query=clamp(1 - sum(vllm:num_requests_running{inference_pool=\"${POOL_A}\"})/20, 0, 1)"   # model-a budget
+  "query=clamp(1 - sum(vllm:num_requests_running{inference_pool=\"${POOL_A}\"})/${SAT_CAP}, 0, 1)"  # model-a budget -> 0
 curl -s localhost:9090/api/v1/query --data-urlencode \
-  "query=clamp(1 - sum(vllm:num_requests_running{inference_pool=\"${POOL_B}\"})/20, 0, 1)"   # model-b budget (~1)
+  "query=clamp(1 - sum(vllm:num_requests_running{inference_pool=\"${POOL_B}\"})/${SAT_CAP}, 0, 1)"  # model-b budget (~1)
+
+# Parked workers hold their message instead of dispatching, so model-a's in-flight count
+# hovers near ${SAT_CAP} while model-b's climbs to its 8 workers:
+curl -s localhost:9090/api/v1/query --data-urlencode \
+  "query=sum by (pool_name) (llm_d_async_async_inflight_requests)"
 ```
+
+**What "saturated" should look like:** under this load `model-a`'s budget reaches **exactly `0`** and
+stays there in stretches, while `model-b` sits at `~1`. If `model-a` never reaches 0, the scenario is
+not actually happening — nothing parks, and the run still completes and looks healthy. Check `SAT_CAP`
+against the sizing rule below before concluding the gate worked.
+
+> [!IMPORTANT]
+> **`SAT_CAP` must be smaller than the pool's `workers`.** `prometheus-query` closes its gate at
+> budget `<= 0`, and `clamp(..., 0, 1)` floors the budget at 0 — so the gate closes only once
+> `SAT_CAP` requests are running on that model. Scenario C's load is entirely async, so the only
+> thing driving that count is the pool's own workers (`8` per model in the overlays), and a worker
+> evaluates the gate while holding a message it has not dispatched yet: at most `workers - 1` of the
+> pool's requests are running at that moment. Set `SAT_CAP` at or above `workers` and the budget can
+> never reach 0. The default `SAT_CAP=4` leaves margin on two counts: `vllm:num_requests_running`
+> counts only requests the model server is actively running, not ones waiting in its queue, and the
+> gate reads it through a 15s `PodMonitor` scrape plus `prometheusCacheTTL: 5s`, so the count it acts
+> on is up to ~20s behind the pool.
+>
+> In production the divisor is a capacity number, not a demo knob: size it to the pool's real
+> concurrent-request capacity (`ready pods × per-pod concurrency`) and give the pool enough workers
+> to reach it. The gate is back-pressure against **all** traffic on the pool — including synchronous
+> clients — so there the count is not bounded by this processor's workers.
 
 ## Observability
 
@@ -343,6 +376,20 @@ Open Grafana (`admin`/`admin` in the demo values) and run the Scenario-C load; t
 dashboard shows `async_dispatch_budget`, `async_inflight_requests`, `async_gate_decisions_total`, and
 `async_broker_backlog{queue_name,pool_name}`. Break panels down by **`pool_name`** (`model-a` /
 `model-b`) for the per-model view and by **`queue_name`** for the per-team-per-model view.
+`async_dispatch_budget` is the **queue** gates' budget (the per-team quota gates), so it says nothing
+about the per-pool saturation gates. Those report through `async_gate_metric_value` — the value the
+gate last read, i.e. the `clamp(...)` result — against `async_gate_metric_threshold`, which the gate
+closes at (`value <= threshold`, and `prometheus-query` pins the threshold to `0`). Both are labelled
+by the owning `pool_name`:
+
+```promql
+llm_d_async_async_gate_metric_value{pool_name="model-a"}       # -> 0 while the pool is parked
+llm_d_async_async_gate_metric_threshold{pool_name="model-a"}   # -> 0
+```
+
+Their absence is itself a signal: the gauges are only written on a **successful** read, so a missing
+or frozen `async_gate_metric_value` means the gate is running on its fallback budget. Cross-check
+against Prometheus directly as in [Scenario C](#scenario-c--priority-under-saturation).
 
 <details>
 <summary><b>GCP Cloud Monitoring (Pub/Sub on GKE)</b></summary>
@@ -383,6 +430,10 @@ Prometheus path reacts within one scrape.
 - **Saturation gate.** These overlays use `prometheus-query` over `vllm:num_requests_running`. The
   `prometheus-saturation` gate instead expects the EPP metric
   `inference_extension_flow_control_pool_saturation`.
+- **Saturation divisor vs. pool size.** `SAT_CAP` is the concurrency at which a model counts as
+  saturated, and the gate closes only when the budget hits 0 — i.e. only once `SAT_CAP` requests are
+  running. Keep it **below** that pool's `workers`, or async load alone can never close the gate; see
+  [Scenario C](#scenario-c--priority-under-saturation).
 - **An unreachable Prometheus fails open, not closed.** The saturation gates set `"fallback":"1"`, and
   a budget of 1 is a fully open gate. If `PROM_URL` is wrong, or the vLLM `PodMonitor` matches nothing,
   Scenario C completes cleanly and demonstrates nothing — no error, no parked pool. Run the three
