@@ -91,12 +91,12 @@ In addition to the upstream images, llm-d also builds and releases vLLM images w
 
 | Image | Tag | Accelerator | Base OS | Architectures |
 |-------|-----|-------------|---------|---------------|
-| `ghcr.io/llm-d/llm-d-cuda`      | `v0.7.0` | NVIDIA GPU | RHEL UBI9 | amd64, arm64 |
-| `ghcr.io/llm-d/llm-d-cuda-gb200`| `v0.7.0` | NVIDIA GPU | RHEL UBI9 | amd64, arm64 |
-| `ghcr.io/llm-d/llm-d-aws`       | `v0.7.0` | NVIDIA GPU + EFA | RHEL UBI9 | amd64, arm64 |
-| `ghcr.io/llm-d/llm-d-rocm`      | `v0.7.0` | AMD ROCm | RHEL UBI9 | amd64 |
-| `ghcr.io/llm-d/llm-d-xpu`       | `v0.7.0` | Intel XPU | Ubuntu 24.04 | amd64 |
-| `ghcr.io/llm-d/llm-d-cpu`       | `v0.7.0` | CPU | RHEL UBI9 | amd64 |
+| `ghcr.io/llm-d/llm-d-cuda`      | `v0.8.1` | NVIDIA GPU | RHEL UBI9 | amd64, arm64 |
+| `ghcr.io/llm-d/llm-d-cuda-gb200`| `v0.8.1` | NVIDIA GPU | RHEL UBI9 | amd64, arm64 |
+| `ghcr.io/llm-d/llm-d-aws`       | `v0.8.1` | NVIDIA GPU + EFA | RHEL UBI9 | amd64, arm64 |
+| `ghcr.io/llm-d/llm-d-rocm`      | `v0.8.1` | AMD ROCm | RHEL UBI9 | amd64 |
+| `ghcr.io/llm-d/llm-d-xpu`       | `v0.8.1` | Intel XPU | Ubuntu 24.04 | amd64 |
+| `ghcr.io/llm-d/llm-d-cpu`       | `v0.8.1` | CPU | RHEL UBI9 | amd64 |
 
 ### FS Offloading Extension
 
@@ -119,7 +119,7 @@ See the [full list of guides](../well-lit-paths/README.md) for more details.
 
 ## 5. Gateways
 
-llm-d Router supports optional integration with Kubernetes Gateways. These are the versions we test against for the `v0.7.0` release:
+llm-d Router supports optional integration with Kubernetes Gateways. These are the versions we test against for the `v0.8.1` release:
 
 | Dependency | Tested Versions | Notes |
 |------------|-----------------|-------|
