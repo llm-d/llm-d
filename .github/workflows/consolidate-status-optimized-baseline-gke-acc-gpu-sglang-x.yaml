@@ -1,0 +1,32 @@
+name: Past Status - Optimized Baseline E2E (GKE GPU SGLang)
+
+on:
+  workflow_dispatch:
+    inputs:
+      workflow_name_query:
+        description: 'Name of the workflow to be queried'
+        required: false
+        type: 'string'
+        default: 'nightly-e2e-optimized-baseline-gke-acc-gpu-sglang-x.yaml'
+      time_window_query:
+        description: 'How many days in the past to query'
+        required: true
+        type: 'string'
+        default: '5'
+      branch_query:
+        description: 'Branch to be queried'
+        required: false
+        type: string
+        default: 'main'
+
+  schedule:
+    - cron: '0 10 * * *'  # 10:00 UTC daily
+
+jobs:
+  check_for_success:
+    uses: llm-d/llm-d-infra/.github/workflows/reusable-query-success-past-runs.yaml@main
+    with:
+      workflow_name_query: ${{ inputs.workflow_name_query || 'nightly-e2e-optimized-baseline-gke-acc-gpu-sglang-x.yaml' }}
+      time_window_query: ${{ inputs.time_window_query || '5' }}
+      branch_query: ${{ inputs.branch_query || 'main' }}
+    secrets: inherit

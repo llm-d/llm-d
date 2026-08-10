@@ -11,7 +11,8 @@ Monitor and debug llm-d deployments with Prometheus metrics, Grafana dashboards,
 * [Metrics](./metrics.md) — Enable and interpret model server and EPP metrics
 * [Distributed Tracing](./tracing.md) — Configure OpenTelemetry across vLLM, the routing proxy, and the EPP
 * [PromQL Reference](./promql.md) — Ready-to-use queries for dashboards and alerting
+* [Alerting](./alerting.md) — Apply the default EPP Prometheus alerting rules
 
 ## Runnable assets
 
-Scripts, Grafana dashboard JSON, and tracing manifests live in [`guides/recipes/observability/`](../../../guides/recipes/observability/) in the llm-d repository (not published as website pages).
+Scripts, Grafana dashboard JSON, alerting rules, and tracing manifests live in [`guides/recipes/observability/`](../../../guides/recipes/observability/) in the llm-d repository (not published as website pages).

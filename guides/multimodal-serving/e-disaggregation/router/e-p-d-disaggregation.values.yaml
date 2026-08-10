@@ -11,6 +11,14 @@ router:
       e-p-d-config.yaml: |
         apiVersion: llm-d.ai/v1alpha1
         kind: EndpointPickerConfig
+        # Token-based routing, matching the optimized-baseline reference stack.
+        # Prefill is token-load-aware: prefix-cache-affinity-filter selects the
+        # endpoint set and token-load-scorer picks on queued prefill token load,
+        # fed by the multimodal token-producer (image → token-count estimation,
+        # since image inputs have no text length to read). The pure `decode`
+        # profile scores on active-request-scorer only — decode is bound by
+        # concurrent in-flight requests, not prefill throughput. Encode is
+        # unchanged.
         plugins:
         - type: disagg-headers-handler
         - type: always-disagg-multimodal-decider
@@ -23,11 +31,6 @@ router:
         - type: encode-filter
         - type: prefill-filter
         - type: decode-filter
-        - type: prefix-cache-scorer
-        - type: queue-scorer
-        - type: kv-cache-utilization-scorer
-        - type: active-request-scorer
-        - type: no-hit-lru-scorer
         - type: token-producer
           parameters:
             estimate:
@@ -37,8 +40,36 @@ router:
                   width: 1280
                   height: 720
                 dynamic:
+                  # Count-correct for Qwen3-VL: one visual token per 32x32-pixel
+                  # region (patch 16 x spatial merge 2 — measured 880 tokens for
+                  # a 1280x720 image against the served model). Derive from your
+                  # model's preprocessor config for other architectures.
                   factor: 1024
         - type: approx-prefix-cache-producer
+        - type: inflight-load-producer
+        - type: prefix-cache-affinity-filter
+          parameters:
+            # Measured for Qwen3-VL-32B-Instruct on H200 141 GB (TP=2) with
+            # guides/recipes/router/calibration (text prefill; vision-encoder
+            # prefill is not exercised by the calibration workload).
+            peakPrefillThroughput: 15751
+            # The workload's cacheable fraction caps at ~0.70 (the unique question
+            # is never a cache hit), so the plugin's 0.8 default can never engage
+            # affinity for multimodal prompts of this shape. Set the threshold
+            # below the maximum cacheable fraction of your traffic.
+            affinityThreshold: 0.6
+            # 2x the plugin default (18000). Token counts price an image token
+            # like a text token, but vision-encoder time makes image-heavy
+            # prefill slower per token than the text-calibrated
+            # peakPrefillThroughput implies, so the filter's predicted-TTFT
+            # milliseconds run light of wall-clock on this workload. Doubling
+            # the gate restores the intended pinning depth (benchmark-validated:
+            # parity with the previous weighted-scorer stack). Reduce toward the
+            # default for text-dominant traffic.
+            maxTTFTPenaltyMs: 36000
+        - type: token-load-scorer
+        - type: active-request-scorer
+        - type: queue-scorer
         - type: max-score-picker
         schedulingProfiles:
         - name: encode
@@ -50,23 +81,13 @@ router:
         - name: prefill
           plugins:
           - pluginRef: prefill-filter
-          - pluginRef: prefix-cache-scorer
-            weight: 3
-          - pluginRef: queue-scorer
-            weight: 2
-          - pluginRef: kv-cache-utilization-scorer
-            weight: 2
+          - pluginRef: prefix-cache-affinity-filter
+          - pluginRef: token-load-scorer
+          - pluginRef: max-score-picker
         - name: decode
           plugins:
           - pluginRef: decode-filter
-          - pluginRef: queue-scorer
-            weight: 2
-          - pluginRef: kv-cache-utilization-scorer
-            weight: 2
-          - pluginRef: prefix-cache-scorer
-            weight: 3
-          - pluginRef: no-hit-lru-scorer
-            weight: 2
+          - pluginRef: active-request-scorer
           - pluginRef: max-score-picker
 
   modelServers:

@@ -1,0 +1,85 @@
+## Predicted Latency-Based Scheduling — prefill/decode disaggregated setup.
+##
+## Adds predicted-latency scheduling on top of the P/D pipeline from the
+## pd-disaggregation guide: the disagg plugins (headers handler, decider, profile
+## handler, prefill/decode filters) are unchanged, and each profile is scored by the
+## latency the predictor expects that profile to contribute — prefill on TTFT, decode
+## on TPOT. Targets the model servers deployed by the pd-disaggregation guide.
+
+router:
+  latencyPredictor:
+    enabled: true
+  extraServicePorts:
+    - name: http
+      port: 80
+      protocol: TCP
+      targetPort: 8081
+
+  epp:
+    pluginsConfigFile: "predicted-latency-pd-plugins.yaml"
+    pluginsCustomConfig:
+      predicted-latency-pd-plugins.yaml: |
+        apiVersion: llm-d.ai/v1alpha1
+        kind: EndpointPickerConfig
+        plugins:
+        - type: disagg-headers-handler
+        - type: always-disagg-pd-decider
+        - type: disagg-profile-handler
+          parameters:
+            deciderPluginName: always-disagg-pd-decider
+        - type: prefill-filter
+        - type: decode-filter
+        - type: approx-prefix-cache-producer
+          parameters:
+            # Sized for the ~5K-token gpt-oss-120b workload benchmarked below — far below
+            # the 256K agentic sizing, so a smaller match window keeps EPP prefix-matching
+            # cheap. Raise it to match your longest prompts.
+            maxPrefixTokensToMatch: 131072
+        - type: predicted-latency-producer
+          parameters:
+            # Requires clients to send "stream": true — TPOT training samples come from
+            # inter-token gaps, which only exist on a streamed response.
+            streamingMode: true
+        - type: prefix-cache-affinity-filter
+          name: loose-affinity-filter
+          parameters:
+            affinityThreshold: 0.8
+            # Take the filter's TTFT load-gate from the predictor rather than the
+            # heuristic estimate, so affinity and scheduling agree on what "slow" means,
+            # and release affinity once a cache hit would cost more than 5s of TTFT.
+            ttftSource: latencyPredictor
+            maxTTFTPenaltyMs: 5000
+        # Prefill only does the prompt pass, so pick it purely on predicted TTFT;
+        # decode owns token generation, so pick it purely on predicted TPOT.
+        - type: latency-scorer
+          name: ttft-scorer
+          parameters:
+            ttftWeight: 1
+            tpotWeight: 0
+        - type: latency-scorer
+          name: tpot-scorer
+          parameters:
+            ttftWeight: 0
+            tpotWeight: 1
+        - type: weighted-random-picker
+        schedulingProfiles:
+        # Cache affinity runs on prefill only: in P/D the prefix cache lives on the
+        # prefill pods, and decode receives KV over NIXL, so decode-side affinity adds
+        # nothing and can skew balance.
+        - name: prefill
+          plugins:
+          - pluginRef: prefill-filter
+          - pluginRef: predicted-latency-producer
+          - pluginRef: loose-affinity-filter
+          - pluginRef: ttft-scorer
+          - pluginRef: weighted-random-picker
+        - name: decode
+          plugins:
+          - pluginRef: decode-filter
+          - pluginRef: predicted-latency-producer
+          - pluginRef: tpot-scorer
+          - pluginRef: weighted-random-picker
+
+  modelServers:
+    matchLabels:
+      llm-d.ai/guide: "pd-disaggregation"

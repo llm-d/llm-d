@@ -1,0 +1,27 @@
+# Prometheus Operator PodMonitor that scrapes the vLLM model server so the
+# self-hosted Prometheus has vllm:num_requests_running for the saturation gates.
+#
+# The vLLM pod lives in the `default` namespace and is labelled
+# app=vllm-llama3-8b-instruct, exposing metrics on the `http` port (8000).
+# (The async-processor chart's modelServerMonitor selects llm-d.ai/role=decode,
+# which this stack's vLLM pod doesn't carry — hence this dedicated monitor.)
+#
+# Adjust namespaceSelector / selector / port for your own model server.
+apiVersion: monitoring.coreos.com/v1
+kind: PodMonitor
+metadata:
+  name: vllm-model-server
+  namespace: monitoring
+  labels:
+    app: vllm-model-server
+spec:
+  namespaceSelector:
+    matchNames:
+      - default
+  selector:
+    matchLabels:
+      app: vllm-llama3-8b-instruct
+  podMetricsEndpoints:
+    - port: http
+      path: /metrics
+      interval: 15s

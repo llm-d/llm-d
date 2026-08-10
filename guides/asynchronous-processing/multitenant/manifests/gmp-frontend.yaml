@@ -1,0 +1,69 @@
+# Google Managed Prometheus standalone query frontend.
+#
+# GMP stores metrics in Monarch (Cloud Monitoring); there is no in-cluster
+# Prometheus server to run PromQL against. This frontend exposes the standard
+# Prometheus query API (/api/v1/query[_range]) on :9090 and translates PromQL
+# into Monarch queries, scoped to project PROJECT_ID. The async-processor's
+# prometheus-saturation / prometheus-budget gates point --prometheus-url here.
+#
+# Auth: uses the pod's GCP credentials (the node default compute SA, which has
+# roles/monitoring.viewer). Image version matches the cluster's GMP components.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: gmp-frontend
+  labels:
+    app: gmp-frontend
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: gmp-frontend
+  template:
+    metadata:
+      labels:
+        app: gmp-frontend
+    spec:
+      automountServiceAccountToken: true
+      containers:
+        - name: frontend
+          image: us-west1-artifactregistry.gcr.io/gke-release/gke-release/prometheus-engine/frontend:v0.18.0-gke.2
+          args:
+            - "--web.listen-address=:9090"
+            - "--query.project-id=PROJECT_ID"
+          ports:
+            - name: web
+              containerPort: 9090
+          readinessProbe:
+            httpGet:
+              path: /-/ready
+              port: web
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /-/healthy
+              port: web
+            initialDelaySeconds: 10
+            periodSeconds: 20
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 250m
+              memory: 256Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: gmp-frontend
+  labels:
+    app: gmp-frontend
+spec:
+  selector:
+    app: gmp-frontend
+  ports:
+    - name: web
+      port: 9090
+      targetPort: web

@@ -1,0 +1,57 @@
+# GKE overlay patch for SGLang decode deployment.
+# Extends base/patch-decode.yaml with GKE-specific DRA RDMA claims, UCX networking, and persistent HuggingFace cache.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: decode
+spec:
+  template:
+    spec:
+      tolerations:
+        - key: nvidia.com/gpu
+          operator: Exists
+          effect: NoSchedule
+      # Request 4 GKE DRA RDMA claims for PCIe root switch rail-aligned RoCE inter-pod transfer
+      resourceClaims:
+        - name: gke-rdma-claim-0
+          resourceClaimTemplateName: gke-rdma-template
+        - name: gke-rdma-claim-1
+          resourceClaimTemplateName: gke-rdma-template
+        - name: gke-rdma-claim-2
+          resourceClaimTemplateName: gke-rdma-template
+        - name: gke-rdma-claim-3
+          resourceClaimTemplateName: gke-rdma-template
+      containers:
+        - name: modelserver
+          env:
+            - name: HF_HOME
+              value: /root/.cache/huggingface
+            - name: HF_HUB_DOWNLOAD_TIMEOUT
+              value: "60"
+            - name: HF_HUB_DISABLE_XET
+              value: "1"
+            # Enable RoCE reachability across all subnet interfaces
+            - name: UCX_IB_ROCE_REACHABILITY_MODE
+              value: "all"
+          resources:
+            limits:
+              cpu: "64"
+              memory: "512Gi"
+            requests:
+              cpu: "32"
+              memory: "128Gi"
+            # Bind the 4 GKE DRA claims to the modelserver container
+            claims:
+              - name: gke-rdma-claim-0
+              - name: gke-rdma-claim-1
+              - name: gke-rdma-claim-2
+              - name: gke-rdma-claim-3
+          volumeMounts:
+            # Mount a persistent volume for huggingface cache, so that the cache is shared across restarts
+            - mountPath: /root/.cache/huggingface
+              name: huggingface-cache
+      volumes:
+        - name: huggingface-cache
+          hostPath:
+            path: /var/cache/huggingface
+            type: DirectoryOrCreate

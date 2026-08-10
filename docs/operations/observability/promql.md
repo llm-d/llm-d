@@ -1,6 +1,6 @@
 # PromQL Query Reference
 
-Ready-to-use PromQL queries for monitoring llm-d deployments. Use these in the Prometheus UI or as the basis for Grafana panels.
+Ready-to-use PromQL queries for monitoring llm-d deployments. Use these in the Prometheus UI or as the basis for Grafana panels. For a default set of ready-to-apply alerts built on these metrics, see [Alerting](./alerting.md).
 
 To generate traffic and populate error metrics for testing, use the [traffic generation script](../../../guides/recipes/observability/generate-traffic-basic.sh).
 

@@ -1,0 +1,108 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 820 390" font-family="Arial, Helvetica, sans-serif">
+  <defs>
+    <marker id="arr" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+      <polygon points="0 0, 8 3, 0 6" fill="#000000"/>
+    </marker>
+  </defs>
+
+  <!-- White Canvas with Purple Border (llm-d branding) -->
+  <rect x="2" y="2" width="816" height="386" rx="0" fill="#ffffff" stroke="#9f659f" stroke-width="3"/>
+
+  <!-- Title -->
+  <text x="410" y="28" text-anchor="middle" font-size="13" font-weight="bold" fill="#000000">Multi-Pool Routing Architecture</text>
+
+  <!-- Client -->
+  <rect x="20" y="145" width="85" height="70" rx="3" fill="#f3f3f3" stroke="#d9d2e9" stroke-width="1"/>
+  <text x="62" y="168" text-anchor="middle" font-size="11" font-weight="bold" fill="#000000">Client</text>
+  <text x="62" y="185" text-anchor="middle" font-size="8" fill="#666666">POST /v1/</text>
+  <text x="62" y="197" text-anchor="middle" font-size="8" fill="#666666">completions</text>
+
+  <!-- Client to Proxy -->
+  <line x1="105" y1="180" x2="143" y2="180" stroke="#000000" stroke-width="1.5" marker-end="url(#arr)"/>
+
+  <!-- Proxy (central hub) -->
+  <rect x="145" y="115" width="120" height="130" rx="3" fill="#e6e6fa" stroke="#9f659f" stroke-width="2"/>
+  <text x="205" y="138" text-anchor="middle" font-size="11" font-weight="bold" fill="#000000">Proxy</text>
+  <text x="205" y="158" text-anchor="middle" font-size="8" fill="#666666">1. Receive request</text>
+  <text x="205" y="173" text-anchor="middle" font-size="8" fill="#666666">2. Call llm-d IPP</text>
+  <text x="205" y="188" text-anchor="middle" font-size="8" fill="#666666">3. Route by header</text>
+  <text x="205" y="203" text-anchor="middle" font-size="8" fill="#666666">4. Call llm-d EPP</text>
+  <text x="205" y="218" text-anchor="middle" font-size="8" fill="#666666">5. Forward request</text>
+  <text x="205" y="238" text-anchor="middle" font-size="7" fill="#888888">(HTTPRoute rules)</text>
+
+  <!-- llm-d IPP (below Proxy) -->
+  <rect x="145" y="270" width="120" height="60" rx="3" fill="#e8f4e8" stroke="#82b366" stroke-width="1.5"/>
+  <text x="205" y="292" text-anchor="middle" font-size="10" font-weight="bold" fill="#000000">llm-d IPP</text>
+  <text x="205" y="308" text-anchor="middle" font-size="8" fill="#666666">Process payload</text>
+  <text x="205" y="320" text-anchor="middle" font-size="7" fill="#888888">(ext-proc)</text>
+
+  <!-- Proxy to IPP (bidirectional) -->
+  <line x1="185" y1="245" x2="185" y2="268" stroke="#000000" stroke-width="1.5" marker-end="url(#arr)"/>
+  <line x1="225" y1="268" x2="225" y2="245" stroke="#666666" stroke-width="1" stroke-dasharray="3,2" marker-end="url(#arr)"/>
+
+  <!-- Routing arrows from Proxy to Pools -->
+  <!-- Proxy to Pool A -->
+  <line x1="265" y1="150" x2="343" y2="100" stroke="#000000" stroke-width="1.5" marker-end="url(#arr)"/>
+  <text x="305" y="110" text-anchor="middle" font-size="7" fill="#444444">Qwen/...</text>
+
+  <!-- Proxy to Pool B -->
+  <line x1="265" y1="210" x2="343" y2="260" stroke="#000000" stroke-width="1.5" marker-end="url(#arr)"/>
+  <text x="305" y="250" text-anchor="middle" font-size="7" fill="#444444">deepseek/...</text>
+
+  <!-- InferencePool A -->
+  <rect x="345" y="45" width="455" height="105" rx="5" fill="#e1d5e7" stroke="#9673a6" stroke-width="1.5"/>
+  <text x="572" y="63" text-anchor="middle" font-size="11" font-weight="bold" fill="#000000">InferencePool A (Qwen/Qwen3-32B)</text>
+  
+  <!-- llm-d EPP A inside Pool A -->
+  <rect x="360" y="75" width="85" height="50" rx="3" fill="#f3f3f3" stroke="#d9d2e9" stroke-width="1"/>
+  <text x="402" y="95" text-anchor="middle" font-size="9" font-weight="bold" fill="#000000">llm-d EPP</text>
+  <text x="402" y="110" text-anchor="middle" font-size="7" fill="#666666">Select endpoint</text>
+  <text x="402" y="120" text-anchor="middle" font-size="6" fill="#888888">(ext-proc)</text>
+
+  <!-- EPP A to pods -->
+  <line x1="445" y1="100" x2="483" y2="100" stroke="#000000" stroke-width="1.5" marker-end="url(#arr)"/>
+
+  <!-- Pods in Pool A -->
+  <rect x="485" y="78" width="50" height="38" rx="2" fill="#ffffff" stroke="#d9d2e9" stroke-width="1"/>
+  <text x="510" y="100" text-anchor="middle" font-size="7" fill="#666666">Model</text>
+  <rect x="545" y="78" width="50" height="38" rx="2" fill="#ffffff" stroke="#d9d2e9" stroke-width="1"/>
+  <text x="570" y="100" text-anchor="middle" font-size="7" fill="#666666">Model</text>
+  <rect x="605" y="78" width="50" height="38" rx="2" fill="#ffffff" stroke="#d9d2e9" stroke-width="1"/>
+  <text x="630" y="100" text-anchor="middle" font-size="7" fill="#666666">Model</text>
+
+  <!-- LoRA label for Pool A -->
+  <text x="720" y="100" text-anchor="middle" font-size="7" fill="#888888">+ LoRA:</text>
+  <text x="720" y="112" text-anchor="middle" font-size="7" fill="#888888">food-review-1</text>
+
+  <!-- InferencePool B -->
+  <rect x="345" y="210" width="455" height="105" rx="5" fill="#f8cecc" stroke="#b85450" stroke-width="1.5"/>
+  <text x="572" y="228" text-anchor="middle" font-size="11" font-weight="bold" fill="#000000">InferencePool B (deepseek/DeepSeek-r1)</text>
+
+  <!-- llm-d EPP B inside Pool B -->
+  <rect x="360" y="240" width="85" height="50" rx="3" fill="#f3f3f3" stroke="#d9d2e9" stroke-width="1"/>
+  <text x="402" y="260" text-anchor="middle" font-size="9" font-weight="bold" fill="#000000">llm-d EPP</text>
+  <text x="402" y="275" text-anchor="middle" font-size="7" fill="#666666">Select endpoint</text>
+  <text x="402" y="285" text-anchor="middle" font-size="6" fill="#888888">(ext-proc)</text>
+
+  <!-- EPP B to pods -->
+  <line x1="445" y1="265" x2="483" y2="265" stroke="#000000" stroke-width="1.5" marker-end="url(#arr)"/>
+
+  <!-- Pods in Pool B -->
+  <rect x="485" y="243" width="50" height="38" rx="2" fill="#ffffff" stroke="#d9d2e9" stroke-width="1"/>
+  <text x="510" y="265" text-anchor="middle" font-size="7" fill="#666666">Model</text>
+  <rect x="545" y="243" width="50" height="38" rx="2" fill="#ffffff" stroke="#d9d2e9" stroke-width="1"/>
+  <text x="570" y="265" text-anchor="middle" font-size="7" fill="#666666">Model</text>
+  <rect x="605" y="243" width="50" height="38" rx="2" fill="#ffffff" stroke="#d9d2e9" stroke-width="1"/>
+  <text x="630" y="265" text-anchor="middle" font-size="7" fill="#666666">Model</text>
+
+  <!-- LoRA label for Pool B -->
+  <text x="720" y="258" text-anchor="middle" font-size="7" fill="#888888">+ LoRA:</text>
+  <text x="720" y="270" text-anchor="middle" font-size="7" fill="#888888">ski-resorts,</text>
+  <text x="720" y="282" text-anchor="middle" font-size="7" fill="#888888">movie-critique</text>
+
+  <!-- Note -->
+  <text x="572" y="340" text-anchor="middle" font-size="8" fill="#666666" font-style="italic">1 InferencePool : 1 llm-d EPP : 1 base model</text>
+
+  <!-- Caption -->
+  <text x="410" y="375" text-anchor="middle" font-size="9" fill="#888888">Proxy routes to InferencePool based on headers from llm-d IPP; llm-d EPP selects endpoint within pool</text>
+</svg>

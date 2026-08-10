@@ -1,20 +1,23 @@
 # ---------------------------------------------------------------------------
-# inference-perf workload template for the agentic-serving guide
-# (NVIDIA-Nemotron-3-Ultra-550B on H200, P/D-disaggregated).
+# inference-perf workload template for the agentic-serving guide.
 #
-# This deployment carries its own realistic preset, tuned for it — a
-# shared-prefix workload with large, highly cacheable system prompts and a
-# ramped request rate that exercises cross-request prefix reuse and the
-# CPU-offload tier under sustained load. It is not required to match the TPU
-# deployment's preset; each deployment is benchmarked on what is realistic for
-# its model and serving topology.
+# Render with `envsubst < agentic-serving-nemotron-3-ultra.yaml > config.yaml` AFTER exporting the
+# variables below. Any unset variable renders as an empty string, producing
+# invalid or semantically wrong YAML — so set all of them first.
 #
-# Render with `envsubst < agentic-serving-nemotron-3-ultra.yaml > config.yaml`
-# AFTER exporting the variables below. Any unset variable renders as an empty
-# string, producing invalid or semantically wrong YAML — so set them first.
+# Per-run variables (see the guide's "Execute Benchmark" step):
+#   CONCURRENCY_LEVEL  int  concurrent coding sessions to drive; also sets
+#                           num_conversations. Published sweep: 5..80.
+#   NUM_REQUESTS       int  total requests for the stage.
+#                           Convention: 20 * CONCURRENCY_LEVEL.
+#   SEED               int  RNG seed for prompt generation. Use a DISTINCT seed
+#                           per concurrency (convention: 7 + CONCURRENCY_LEVEL)
+#                           so prompt sets don't overlap across runs and warm
+#                           each other's prefix cache.
 #
-#   NAMESPACE  namespace where the stack is deployed
-#   IP         EPP service ClusterIP (base_url = http://${IP})
+# Environment variables (set by earlier guide steps):
+#   NAMESPACE      namespace where the stack is deployed
+#   IP             EPP service ClusterIP (base_url = http://${IP})
 # ---------------------------------------------------------------------------
 endpoint:
   stack_name: &stack_name agentic-serving-Nemotron-3-Ultra-550B  # user defined name for the stack (results prefix)
@@ -36,27 +39,22 @@ harness:
   parallelism: 1                  # Number of parallel workload launcher pods to create.
   wait_timeout: 6000              # Time (in seconds) to wait for workload launcher pod to complete before terminating.
                                   # Set to 0 to disable timeout.
-  image: ghcr.io/llm-d/llm-d-benchmark:v0.6.0
+  image: ghcr.io/llm-d/llm-d-benchmark:v0.7.0
 
 env:
   - name: RAYON_NUM_THREADS
     value: "4"
 
-workload:
-  agentic_shared_prefix:
+workload:                         # yaml configuration for harness workload(s)
+  Agentic_Workload:
     load:
-      type: constant
+      type: concurrent
+      num_workers: 8
+      worker_max_concurrency: 1000
+      request_timeout: 600
       stages:
-      - rate: 2
-        duration: 120
-      - rate: 4
-        duration: 120
-      - rate: 6
-        duration: 120
-      - rate: 8
-        duration: 120
-      - rate: 10
-        duration: 120
+      - num_requests: ${NUM_REQUESTS}
+        concurrency_level: ${CONCURRENCY_LEVEL}
     api:
       type: completion
       streaming: true
@@ -64,16 +62,43 @@ workload:
       type: vllm
       model_name: *model
       base_url: *url
-    tokenizer:
-      pretrained_model_name_or_path: RedHatAI/NVIDIA-Nemotron-3-Ultra-550B-A55B-FP8-block
     data:
-      type: shared_prefix
-      shared_prefix:
-        num_groups: 10
-        num_prompts_per_group: 50
-        system_prompt_len: 3000
-        question_len: 4000
-        output_len: 1024
+      type: conversation_replay
+      conversation_replay:
+        seed: ${SEED}
+        max_model_len: 262144
+        num_conversations: ${CONCURRENCY_LEVEL}
+        shared_system_prompt_len: 3000 
+        dynamic_system_prompt_len:
+          type: lognormal
+          min: 10000
+          max: 990000
+          mean: 160000
+          std_dev: 233600
+        turns_per_conversation:
+          type: lognormal
+          min: 1
+          max: 3000
+          mean: 540
+          std_dev: 48600
+        input_tokens_per_turn:
+          type: lognormal
+          min: 100
+          max: 10000
+          mean: 1500
+          std_dev: 1200
+        output_tokens_per_turn:
+          type: lognormal
+          min: 50
+          max: 10000
+          mean: 425
+          std_dev: 825
+        tool_call_latency_sec:
+          type: lognormal
+          min: 1
+          max: 100
+          mean: 15
+          std_dev: 55
     report:
       request_lifecycle:
         summary: true

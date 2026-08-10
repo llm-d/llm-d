@@ -6,6 +6,11 @@ router:
       targetPort: 8081
 
   epp:
+    # Single EPP replica: the inflight-load-producer's in-flight token accounting
+    # (which the token-load-scorer and affinity filter consume) is local to each
+    # EPP process, so multiple replicas would each see only a fraction of the
+    # per-endpoint load and mis-gate the affinity filter.
+    replicas: 1
     pluginsConfigFile: "pd-config.yaml"
     pluginsCustomConfig:
       pd-config.yaml: |
@@ -19,27 +24,39 @@ router:
             deciderPluginName: always-disagg-pd-decider
         - type: prefill-filter
         - type: decode-filter
-        - type: prefix-cache-scorer
-        - type: queue-scorer
-        - type: kv-cache-utilization-scorer
+        - type: approx-prefix-cache-producer
+          parameters:
+            # 5k-ISL gpt-oss-120b reference workload; a modest match window
+            # keeps EPP prefix-matching cheap.
+            maxPrefixTokensToMatch: 131072
+        - type: inflight-load-producer
+        - type: prefix-cache-affinity-filter
+          parameters:
+            # Measured with guides/recipes/router/calibration/calibrate.sh
+            # through the full P/D path on the reference fleet (gpt-oss-120b,
+            # 8x prefill TP=1 on H200, chunk 8192). Includes the NIXL KV
+            # transfer + sidecar hop, so it is the operational ceiling the
+            # gate acts on. Re-measure for other hardware/models.
+            peakPrefillThroughput: 33821
+        - type: token-load-scorer
         - type: active-request-scorer
+        - type: max-score-picker
         schedulingProfiles:
+        # Prefill does the prompt pass: keep prefix groups on cache-warm pods
+        # (affinity filter) and pick by queued prefill token load.
         - name: prefill
           plugins:
           - pluginRef: prefill-filter
-          - pluginRef: prefix-cache-scorer
-            weight: 3
-          - pluginRef: queue-scorer
-            weight: 2
-          - pluginRef: kv-cache-utilization-scorer
-            weight: 2
+          - pluginRef: prefix-cache-affinity-filter
+          - pluginRef: token-load-scorer
+          - pluginRef: max-score-picker
+        # Pure decode is bound by concurrent in-flight requests, not prefill
+        # throughput: pick the least-busy endpoint.
         - name: decode
           plugins:
           - pluginRef: decode-filter
           - pluginRef: active-request-scorer
-            weight: 2
-          - pluginRef: prefix-cache-scorer
-            weight: 3
+          - pluginRef: max-score-picker
 
   modelServers:
     matchLabels:

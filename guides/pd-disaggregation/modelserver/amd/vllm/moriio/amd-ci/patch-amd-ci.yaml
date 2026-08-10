@@ -1,0 +1,62 @@
+
+#
+# AMD-CI test setup
+#
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: prefill
+spec:
+  template:
+    metadata:
+      annotations:
+        k8s.v1.cni.cncf.io/networks: |
+          [
+            {"name":"amd-host-device-nad","namespace":"default","interface":"net1"},
+            {"name":"amd-host-device-nad","namespace":"default","interface":"net2"}
+          ]
+    spec:
+      containers:
+        - name: modelserver
+          imagePullPolicy: Always
+          resources:
+            limits:
+              amd.com/gpu: "2"
+              amd.com/vnic: "2"
+            requests:
+              amd.com/gpu: "2"
+              amd.com/vnic: "2"
+          env:
+            # Prefer DMABUF on this cluster (optional, but avoids warnings when peermem is not available)
+            - name: MORI_ENABLE_DMABUF_REG
+              value: "1"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: decode
+spec:
+  template:
+    metadata:
+      annotations:
+        k8s.v1.cni.cncf.io/networks: |
+          [
+            {"name":"amd-host-device-nad","namespace":"default","interface":"net1"},
+            {"name":"amd-host-device-nad","namespace":"default","interface":"net2"}
+          ]
+    spec:
+      containers:
+        - name: modelserver
+          imagePullPolicy: Always
+          resources:
+            limits:
+              amd.com/gpu: "2"
+              amd.com/vnic: "2"
+            requests:
+              amd.com/gpu: "2"
+              amd.com/vnic: "2"
+          env:
+            # Prefer DMABUF on this cluster (optional, but avoids warnings when peermem is not available)
+            - name: MORI_ENABLE_DMABUF_REG
+              value: "1"

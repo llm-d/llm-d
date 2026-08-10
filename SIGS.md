@@ -51,6 +51,7 @@ SIGs operate within the broader llm-d project governance framework defined in [P
 | **[SIG Autoscaling](#sig-autoscaling)** | Traffic-aware autoscaling, resource management, and capacity planning | • [Meeting Recordings and Docs](https://drive.google.com/drive/folders/1iDlTgpFPOrSQn7dWR3uCQLtqhz86HTAi)<br>• [workload-variant-autoscaler Repository](https://github.com/llm-d-incubation/workload-variant-autoscaler) |
 | **[SIG Observability](#sig-observability)** | Monitoring, logging, metrics, and operational visibility | • [Meeting Recordings and Docs](https://drive.google.com/drive/folders/1H-TVTCKYVxUn4fER7xuTPmscNttZCutN)<br>• [llm-d Observability Documentation](https://github.com/llm-d/llm-d/tree/main/docs/operations/observability) |
 | **[SIG RL](#sig-rl)** | Improve SOTA performance for RL workloads | • [Meeting Recordings and Docs](https://drive.google.com/drive/folders/1k9u56_HO5E1uGGgmp0T0y8VhMfzc1P11) |
+| **[SIG Agentic Inference](#sig-agentic-inference)** | Optimizing inference for agentic and multi-step AI workloads | • [Meeting Recordings and Docs](https://drive.google.com/drive/folders/1f4Cg-yMgw2_lU3btyuuY_roz6N0kR7iu) |
 | **[SIG Inference Payload Processor](#sig-inference-payload-processor)** | Pluggable request/response payload processing, intelligent model selection, and external model integration | • [Meeting Recordings and Docs](https://drive.google.com/drive/folders/1r2yEYMoBxBbs4KNsk5gdZztRO4npAGEH)<br>• [llm-d-inference-payload-processor Repository](https://github.com/llm-d/llm-d-inference-payload-processor/) |
 | **[SIG Batch Inference](#sig-batch-inference)** | Asynchronous processing, request queueing, and batch gateway management | • [Meeting Recordings and Docs](https://drive.google.com/drive/folders/1OCAETAcm50YkVWx-jmByRrRafRTWj0dO)<br>• [llm-d-async Repository](https://github.com/llm-d-incubation/llm-d-async)<br>• [llm-d-batch-gateway Repository](https://github.com/llm-d/llm-d-batch-gateway) |
 
@@ -248,6 +249,7 @@ SIGs operate within the broader llm-d project governance framework defined in [P
 ### SIG Batch Inference
 
 > **👥 Leadership:** [Shimi Bandiel](https://github.com/shimib), [Jacob Murry](https://github.com/jtechapps), [Lior Aronovich](https://github.com/lioraron)
+
 > North Star Design Document TODO
 
 **Charter**: Develop solutions for efficient batch inference in Kubernetes environments.
@@ -262,6 +264,23 @@ SIGs operate within the broader llm-d project governance framework defined in [P
 - **Slack Channel**: [#sig-batch-inference](https://llm-d.slack.com/messages/sig-batch-inference)
 - **Meeting Recordings and Docs**: [Public Google Drive](https://drive.google.com/drive/folders/1OCAETAcm50YkVWx-jmByRrRafRTWj0dO)
 - **GitHub Issues**: [github.com/llm-d-incubation/llm-d-async](https://github.com/llm-d-incubation/llm-d-async/issues) | [github.com/llm-d/llm-d-batch-gateway](https://github.com/llm-d/llm-d-batch-gateway/issues)
+
+### SIG Agentic Inference
+
+> **👥 Leadership:** [Maroon Ayoub](https://github.com/vMaroon), [Sean Horgan](https://github.com/seanhorgan)
+>
+> [**⭐️ North Star Design Document** ↗️](https://docs.google.com/document/d/1DCUVHp9Z8CZUnKiP04nnD_31M3gRishW-cWZ657Cn5U/)
+
+**Charter**: TODO
+
+**Key Areas**:
+
+- TODO
+
+**💬 Communication**:
+
+- **Slack Channel**: [#sig-agentic-inference](https://llm-d.slack.com/archives/C0ALHNZJCFJ)
+- **Meeting Recordings and Docs**: [Public Google Drive](https://drive.google.com/drive/folders/1f4Cg-yMgw2_lU3btyuuY_roz6N0kR7iu)
 
 ## Getting Involved
 

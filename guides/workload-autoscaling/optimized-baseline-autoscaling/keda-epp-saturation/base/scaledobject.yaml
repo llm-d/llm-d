@@ -1,0 +1,59 @@
+# KEDA ScaledObject for direct EPP pool-level saturation autoscaling.
+#
+# Before applying, update:
+#   - inference_pool label in both trigger queries (model pool name)
+#   - model_name label in running-requests query
+#   - serverAddress to match your Prometheus endpoint (see overlays/ for platform-specific examples)
+#   - minReplicaCount, maxReplicaCount, and thresholds to suit your model
+#
+# KEDA will create its own HPA from this ScaledObject. Do NOT apply a separate hpa.yaml.
+
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: optimized-baseline-nvidia-gpu-vllm-decode-saturation
+  labels:
+    app: optimized-baseline-nvidia-gpu-vllm-decode
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: optimized-baseline-nvidia-gpu-vllm-decode
+  minReplicaCount: 1
+  maxReplicaCount: 10
+  pollingInterval: 15
+  triggers:
+  - type: prometheus
+    name: pool-saturation
+    metricType: AverageValue
+    metadata:
+      serverAddress: "https://llmd-kube-prometheus-stack-prometheus.llm-d-monitoring.svc.cluster.local:9090"
+      # For generic k8s with bundled llm-d Prometheus stack (installed via observability setup guide).
+      # For OpenShift: use overlays/ocp which automatically patches this to thanos-querier.
+      # For other Prometheus deployments: replace with your endpoint.
+      query: |
+        max(llm_d_epp_flow_control_pool_saturation{inference_pool="default"})
+      # Saturation threshold at which to scale out. Adjust based on your target pool utilization.
+      # Recommended: 0.7-0.8 to scale before reaching full saturation.
+      threshold: "0.7"
+      activationThreshold: "0"
+      unsafeSsl: "false"
+    authenticationRef:
+      name: prometheus-auth
+  - type: prometheus
+    name: running-requests
+    metricType: AverageValue
+    metadata:
+      serverAddress: "https://llmd-kube-prometheus-stack-prometheus.llm-d-monitoring.svc.cluster.local:9090"
+      # For generic k8s with bundled llm-d Prometheus stack (installed via observability setup guide).
+      # For OpenShift: use overlays/ocp which automatically patches this to thanos-querier.
+      # For other Prometheus deployments: replace with your endpoint.
+      query: |
+        sum(llm_d_epp_request_running{model_name="Qwen/Qwen3-32B"})
+      # Target requests per replica. Adjust based on your model size and GPU memory.
+      # Recommended: 16-32 (lower = more replicas, higher cost but lower latency; higher = fewer replicas, lower cost but higher latency).
+      threshold: "16"
+      activationThreshold: "0"
+      unsafeSsl: "false"
+    authenticationRef:
+      name: prometheus-auth
