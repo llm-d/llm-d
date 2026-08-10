@@ -41,6 +41,10 @@ During the standard request flow:
 * Decode instance pulls the KVs over RDMA (IB, RoCE, EFA) with NIXL
 * Decode instances processes the decodes
 
+## Observability
+
+P/D disaggregation runs prefill and decode as independently scaled pools joined by a NIXL KV transfer, so the signals that matter are pool **balance** and transfer health rather than a single aggregate latency. The [P/D guide's Observability & Troubleshooting section](../../../guides/pd-disaggregation/README.md#4-observability--troubleshooting) covers the key metrics for this path and the common failure modes, backed by the shared [PromQL](../operations/observability/promql.md#prefilldecode-disaggregation) and [metric](../operations/observability/metrics.md) references.
+
 ## Further Reading
 
 See [PD Architecture](../../architecture/advanced/disaggregation/README.md) for more details.

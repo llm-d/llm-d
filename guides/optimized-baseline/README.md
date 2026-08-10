@@ -49,11 +49,14 @@ This guide includes configurations for the following accelerators:
 
 - Have the [proper client tools installed on your local system](../../helpers/client-setup/README.md) to use this guide.
 
-- Checkout llm-d repo:
+- Ensure your cluster has enough accelerators to satisfy the [Configuration](#configuration) table above (default: 16 GPUs). If your cluster has fewer resources, adjust `replicas` and `--tensor-parallel-size` in the [model server patch](./modelserver/gpu/vllm/base/patch-vllm.yaml) for your environment.
+
+- Set the branch and clone the llm-d repo:
 
 <!-- guide:prerequisites.clone start -->
 <!-- llm-d-cicd:skip start -->
 ```bash
+export BRANCH=main
 git clone https://github.com/llm-d/llm-d.git && cd llm-d && git checkout ${BRANCH}
 ```
 <!-- llm-d-cicd:skip end -->
@@ -101,7 +104,9 @@ source ${REPO_ROOT}/guides/env.sh
 <!-- guide:env.source end -->
 
 > [!NOTE]
-> Some environment variables are common amongst guides, to view these, please inspect the above file sourced so the rest of the guide makes sense.
+> This file defines shared variables required by subsequent steps, including
+> `GAIE_VERSION`, `ROUTER_CHART_VERSION`, and the router chart reference for
+> the selected deployment mode.
 
 - Install the Gateway API Inference Extension CRDs:
 
@@ -136,20 +141,21 @@ kubectl create secret generic llm-d-hf-token \
 
 ### 1. Deploy the llm-d Router
 
-- Define the `helm` values files for `llm-d` router:
+- Prepare the paths to the `helm` values files for `llm-d` router (used in the deployment commands below):
 
 <!-- guide:deploy.router_values start -->
 ```bash
-export ROUTER_BASE_VALUES="-f ${REPO_ROOT}/guides/recipes/router/base.values.yaml"
+# Paths to values files
+export ROUTER_BASE_VALUES="${REPO_ROOT}/guides/recipes/router/base.values.yaml"
 
 # only when MODEL_SERVER=vllm or sglang:
-export ROUTER_VALUES="-f ${REPO_ROOT}/guides/${GUIDE_NAME}/router/${GUIDE_NAME}.values.yaml"
+export ROUTER_VALUES="${REPO_ROOT}/guides/${GUIDE_NAME}/router/${GUIDE_NAME}.values.yaml"
 
 # only when MODEL_SERVER=trtllm:
 #
 # Comment out the above `ROUTER_VALUES` and uncomment the below for TensorRT-LLM (trtllm-serve)
 #
-# export ROUTER_VALUES="-f ${REPO_ROOT}/guides/${GUIDE_NAME}/router/${GUIDE_NAME}-trtllm.values.yaml"
+# export ROUTER_VALUES="${REPO_ROOT}/guides/${GUIDE_NAME}/router/${GUIDE_NAME}-trtllm.values.yaml"
 ```
 <!-- guide:deploy.router_values end -->
 
@@ -173,19 +179,24 @@ export ROUTER_VALUES="-f ${REPO_ROOT}/guides/${GUIDE_NAME}/router/${GUIDE_NAME}.
 
 #### Standalone Mode
 
-This deploys the llm-d Router in [Standalone Mode](../../docs/architecture/core/router/proxy.md):
+This deploys the llm-d Router in [Standalone Mode](../../docs/architecture/core/router/proxy.md) with an Envoy sidecar (default):
+
+> [!IMPORTANT]
+> Before running the command below, execute the path setup commands from the previous section: the `export ROUTER_BASE_VALUES=...` and `export ROUTER_VALUES=...` commands above.
 
 <!-- guide:deploy.standalone start -->
 ```bash
 # Assuming base-directory is the root of the llm-d repo
 helm install ${GUIDE_NAME} \
   ${ROUTER_STANDALONE_CHART} \
-  ${ROUTER_BASE_VALUES} \
+  -f ${ROUTER_BASE_VALUES} \
   ${MONITORING_VALUES} \
-  ${ROUTER_VALUES} \
+  -f ${ROUTER_VALUES} \
   -n ${NAMESPACE} --version ${ROUTER_CHART_VERSION}
 ```
 <!-- guide:deploy.standalone end -->
+
+To use **agentgateway** as the sidecar proxy instead of Envoy, see [router recipes](../recipes/router/README.md).
 
 <details>
 <summary><h4>Gateway Mode</h4></summary>
@@ -195,13 +206,16 @@ To use a Kubernetes Gateway managed proxy rather than the standalone version, fo
 1. _Deploy a Kubernetes Gateway_ named by following one of [the gateway guides](../../docs/infrastructure/gateway).
 2. _Deploy the llm-d router and an HTTPRoute_ that connects it to the Gateway as follows:
 
+> [!IMPORTANT]
+> Before running the command below, execute the path setup commands from the previous section: the `export ROUTER_BASE_VALUES=...` and `export ROUTER_VALUES=...` commands above.
+
 <!-- guide:deploy.gateway start -->
 ```bash
 helm install ${GUIDE_NAME} \
   ${ROUTER_GATEWAY_CHART} \
-  ${ROUTER_BASE_VALUES} \
+  -f ${ROUTER_BASE_VALUES} \
   ${MONITORING_VALUES} \
-  ${ROUTER_VALUES} \
+  -f ${ROUTER_VALUES} \
   --set provider.name=${PROVIDER_NAME} \
   --set httpRoute.create=true \
   --set httpRoute.inferenceGatewayName=llm-d-inference-gateway \

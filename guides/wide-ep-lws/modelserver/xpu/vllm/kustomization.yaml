@@ -5,6 +5,9 @@ resources:
   - decode.yaml
   - prefill.yaml
   - resource-claim-templates.yaml
+
+components:
+  - ../../../../recipes/modelserver/components/images/xpu-vllm
 labels:
   - pairs:
       llm-d.ai/model: DeepSeek-V2-Lite-Chat

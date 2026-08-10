@@ -7,7 +7,7 @@ High-level guide to llm-d architecture. Start here, then dive into specific guid
 The llm-d architecture is built around three primary concepts: the [Router](core/router/README.md), the [InferencePool](core/inferencepool.md), and the [Model Server](core/model-servers.md).
 
 - **[llm-d Router](core/router/README.md)** - The intelligent entry point for inference requests. It provides LLM-aware load balancing, request queuing, and policy enforcement. It is composed of two functional parts:
-  - **[Proxy](core/router/proxy.md)**: A high-performance L7 proxy (typically Envoy) that accepts user requests and consults the EPP via the `ext-proc` protocol to determine the optimal destination.
+  - **[Proxy](core/router/proxy.md)**: A high-performance L7 proxy conformant with the [Gateway API Inference Extension (GAIE)](https://gateway-api-inference-extension.sigs.k8s.io/concepts/conformance/) that accepts user requests and consults the EPP via the `ext-proc` protocol to determine the optimal destination.
   - **[Endpoint Picker (EPP)](core/router/epp/README.md)**: The routing engine that scores and selects model server pods based on real-time metrics, KV-cache affinity, and configured policies.
 
 - **[InferencePool](core/inferencepool.md)** - The API that groups Model Server pods serving the same base model via a label selector. Conceptualized as an "LLM-optimized Service", it serves as the discovery target for the Router. Additionally:

@@ -2,11 +2,23 @@
 
 llm-d uses the **llm-d Router** to make intelligent request routing decisions for inference requests. There are two deployment modes:
 
+## Prerequisites
+
+The commands below assume the following environment variables are set:
+
+```bash
+export REPO_ROOT=$(realpath $(git rev-parse --show-toplevel))
+source ${REPO_ROOT}/guides/env.sh   # sets ROUTER_CHART_VERSION, ROUTER_STANDALONE_CHART, ROUTER_GATEWAY_CHART
+export NAMESPACE=<your-namespace>   # not set by env.sh, pick one for this install
+```
+
 ## Standalone (Default)
 
-Use this when you **do not** want to deploy a proxy via Kubernetes Gateway APIs. The standalone chart deploys the **llm-d Router** with an Envoy sidecar to proxy the traffic directly.
+Use this when you **do not** want to deploy a proxy via Kubernetes Gateway APIs. The standalone chart deploys the **llm-d Router** with a sidecar proxy, either **Envoy** (default) or **agentgateway**, to proxy the traffic directly.
 
 **Chart:** `${ROUTER_STANDALONE_CHART}` (set by [`guides/env.sh`](../../env.sh))
+
+### Standalone with Envoy (default)
 
 ```bash
 helm install <release-name> \
@@ -14,7 +26,31 @@ helm install <release-name> \
   -f ${REPO_ROOT}/guides/recipes/router/base.values.yaml \
   -f ${REPO_ROOT}/guides/recipes/router/features/monitoring.values.yaml \
   -f ${REPO_ROOT}/guides/<your-guide>/router/<your-guide>.values.yaml \
-  --set provider.name=<gke|istio|none> \
+  -n ${NAMESPACE} \
+  --version ${ROUTER_CHART_VERSION}
+```
+
+### Standalone with agentgateway
+
+agentgateway can be used as the sidecar proxy in place of Envoy. In this mode agentgateway runs alongside the EPP in the same pod and talks to it over localhost via ext-proc, so no Kubernetes Gateway API infrastructure is needed.
+
+> [!NOTE]
+> When using `proxyType=agentgateway`, set `router.inferencePool.create=false`.
+> agentgateway creates a pseudo service for model workloads on its own, so no
+> explicit service name is required. It also talks to EPP over plaintext gRPC
+> on localhost, so `router.epp.flags.secure-serving=false` is required.
+> `secure-serving=true` is not supported with `proxyType=agentgateway`.
+
+```bash
+helm install <release-name> \
+  ${ROUTER_STANDALONE_CHART} \
+  -f ${REPO_ROOT}/guides/recipes/router/base.values.yaml \
+  -f ${REPO_ROOT}/guides/recipes/router/features/monitoring.values.yaml \
+  -f ${REPO_ROOT}/guides/recipes/router/features/agentgateway-proxy.values.yaml \
+  -f ${REPO_ROOT}/guides/<your-guide>/router/<your-guide>.values.yaml \
+  --set router.proxy.proxyType=agentgateway \
+  --set router.inferencePool.create=false \
+  --set router.epp.flags.secure-serving=false \
   -n ${NAMESPACE} \
   --version ${ROUTER_CHART_VERSION}
 ```
@@ -53,5 +89,6 @@ Both modes share a common `base.values.yaml` containing the router image, ports,
 ```
 base.values.yaml                              # shared defaults (this directory)
   + features/monitoring.values.yaml           # optional feature toggles
+  + features/agentgateway-proxy.values.yaml   # required for agentgateway config args
   + <guide>/router/<guide>.values.yaml     # guide-specific overrides
 ```

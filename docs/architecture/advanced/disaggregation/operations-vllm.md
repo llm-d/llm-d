@@ -6,6 +6,7 @@ While disaggregated serving can offer superior performance, it introduces additi
 - [Request Cancellation](#request-cancellation) - how to free KV caches from the instances when requests stop in a distributed setting
 - [Fault Tolerance](#fault-tolerance) - how to ensure crashes do not create cascading failures and that resources are cleaned up
 - [Rollouts](#rollouts) - how to roll out changes to the service, such as the version of the vLLM image
+- [Known NIXL Connector Issues and Limitations](#known-nixl-connector-issues-and-limitations) - current gaps and bugs in the NIXL connector to plan around
 
 This page documents architectural considerations that impact these common operations flows.
 
@@ -204,3 +205,54 @@ By default, vLLM checks for [compatibility between instances](https://github.com
 
 > [!IMPORTANT]
 > The llm-d EPP currently assumes all P and D instances within an `InferencePool` are compatible and will therefore schedule requests to any arbitrary pair of P and D instances. As a result, it is currently recommended to create a new `InferencePool` for upgrading model servers. When deploying with a `Gateway`, traffic can be gradually shifted to the new `InferencePool` by modifying the `HTTPRoute`.
+
+## Known NIXL Connector Issues and Limitations
+
+Beyond the operational flows above, the NIXL connector has a couple of current gaps worth planning deployments around.
+
+### Prefill TP > Decode TP Is Not Supported
+
+> [!WARNING]
+> **Prefill TP > Decode TP is not supported** for most model architectures. **NixlConnector** only supports the fan-out direction (decode TP ≥ prefill TP, e.g. prefill TP=1 → decode TP=4). This is a deliberate guard in vLLM's own source, not a bug — always keep decode TP ≥ prefill TP.
+
+The reverse direction (prefill TP > decode TP, e.g. prefill TP=8 → decode TP=4) is explicitly unsupported for any model that is neither **MLA** nor **Mamba/state-space** based:
+
+```python
+# num_kv_heads > tp_size with P_TP > D_TP not supported for non-mamba.
+# Mamba models can have replicated FA KV with tp_ratio < 0.
+# MLA models do not need to handle kv replication.
+if not self.use_mla and not self._has_mamba:
+   assert not (
+       tp_ratio < 0 and self.transfer_topo.is_kv_replicated(remote_engine_id)
+   )
+```
+
+Source: `vllm/distributed/kv_transfer/kv_connector/v1/nixl/base_worker.py`, function `_validate_remote_agent_handshake`
+
+- v0.26.0: [lines 1690-1696](https://github.com/vllm-project/vllm/blob/v0.26.0/vllm/distributed/kv_transfer/kv_connector/v1/nixl/base_worker.py#L1690-L1696)
+- v0.25.0: [lines 1619-1625](https://github.com/vllm-project/vllm/blob/v0.25.0/vllm/distributed/kv_transfer/kv_connector/v1/nixl/base_worker.py#L1619-L1625) (identical logic, not a version regression)
+
+Hitting this path crashes the decode engine with `AssertionError`. A related bug in vLLM's failure-cleanup handler (`_handle_failed_transfer`) often surfaces it as `IndexError: list index out of range` instead, making it look like a generic connector bug rather than an unsupported-topology guard.
+
+Total GPU count (TP × replicas) and replica counts on each side are unaffected by this constraint — only the TP ratio direction between whichever specific prefill/decode engine pair handles a given request matters.
+
+### Stale NIXL Agent Cache After a Prefill Pod Restart
+
+> [!WARNING]
+> **Decode-side stale NIXL agent cache after a prefill pod restart** can segfault decode ([vllm-project/vllm#49238](https://github.com/vllm-project/vllm/issues/49238), open), or leave it silently serving against a dead engine for up to an hour. Until the fixes below ship in an official image, proactively restart any decode replica that was connected to a restarted prefill pod, rather than relying on TTL expiry.
+
+If a prefill pod restarts while decode holds a cached NIXL agent handle for it, decode can segfault, or (after the NIXL-side fix below) silently keep serving against the dead engine's stale cached agent/rkey entries. With a pinned/stable engine ID, decode does not detect the prefill engine is gone until `engine_ttl` expires (default up to one hour), and every request routed to that decode replica fails until then or until the decode pod is restarted.
+
+When decode does *not* segfault, it instead attempts the NIXL RDMA read against the stale agent, which fails with `NIXL_ERR_BACKEND` — the same error path described in [Prefill Instance Failure](#prefill-instance-failure). vLLM then applies `kv_load_failure_policy` ([source](https://github.com/vllm-project/vllm/pull/50047)):
+
+- **`recompute`**: decode silently falls back to running the prefill itself, logging only an error line for the failed transfer. The client never sees a failed request, so this shows up purely as a throughput/latency regression on that decode replica, not as an error — harder to notice than an outright failure.
+- **`fail` (default)**: the request fails with a 500 response, which at least surfaces the problem to the caller.
+
+Until `engine_ttl` expires, every request that lands on that decode replica repeats this failed-read-then-recompute cycle, so the performance hit persists rather than clearing up after the first failure.
+
+**Fix status:**
+
+- NIXL-level segfault fixed upstream: [ai-dynamo/nixl#1986](https://github.com/ai-dynamo/nixl/pull/1986) (merged ~2026-07-29), returns a clean disconnect error instead of crashing.
+- vLLM-side fix, [vllm-project/vllm#50047](https://github.com/vllm-project/vllm/pull/50047), invalidates decode's cached engine state as soon as the prefill peer is detected gone, instead of waiting out the TTL.
+
+Neither fix is in any published vLLM image yet, including nightly, since vLLM pins an exact NIXL version and the NIXL fix landed after the latest published NIXL release (v1.3.2, 2026-07-24).

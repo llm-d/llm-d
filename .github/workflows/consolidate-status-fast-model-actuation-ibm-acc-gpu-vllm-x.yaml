@@ -24,7 +24,7 @@ on:
 #      - main
 
   schedule:
-    - cron: '0 12 * * *'  # 12:00 UTC daily (aligned with the FMA nightly)
+    - cron: '0 3 * * *'  # 03:00 UTC daily
 
 jobs:
   check_for_success:

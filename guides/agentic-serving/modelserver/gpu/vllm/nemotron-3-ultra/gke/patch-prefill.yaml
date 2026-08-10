@@ -1,0 +1,51 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: prefill
+spec:
+  template:
+    metadata:
+      annotations:
+        # Inject GKE Cloud Storage FUSE CSI sidecar container
+        gke-gcsfuse/volumes: "true"
+        gke-gcsfuse/memory-limit: "0"
+        gke-gcsfuse/cpu-limit: "0"
+        gke-gcsfuse/ephemeral-storage-limit: "0"
+    spec:
+      # Attach GKE service account linked to GCP IAM storage permissions
+      serviceAccountName: agentic-serving-gpu-vllm-sa
+      containers:
+        - name: modelserver
+          command: ["vllm", "serve"]
+          args:
+            # Change model path to point to the FUSE local mount directory
+            - "/models/RedHatAI/NVIDIA-Nemotron-3-Ultra-550B-A55B-FP8-block"
+            - "--served-model-name"
+            - "RedHatAI/NVIDIA-Nemotron-3-Ultra-550B-A55B-FP8-block"
+            - "--trust-remote-code"
+            - "--tensor-parallel-size=8"
+            - "--enable-expert-parallel"
+            - "--kv-cache-dtype=fp8"
+            - "--enable-auto-tool-choice"
+            - "--enable-prefix-caching"
+            - "--tool-call-parser=qwen3_coder"
+            - "--reasoning-parser=nemotron_v3"
+            - "--model-loader-extra-config"
+            - '{"enable_multithread_load": true, "num_threads": 96}'
+            - "--kv-transfer-config"
+            - '{"kv_connector":"MultiConnector","kv_role":"kv_both","kv_load_failure_policy":"fail","kv_connector_extra_config":{"connectors":[{"kv_connector":"NixlConnector","kv_role":"kv_producer","kv_connector_extra_config":{"bidirectional_kv_xfer":true}},{"kv_connector":"OffloadingConnector","kv_role":"kv_both","kv_connector_extra_config":{"cpu_bytes_to_use":214748364800,"lazy_offload":true}}]}}'
+          env:
+            - name: HF_HOME
+              value: "/huggingface"
+          volumeMounts:
+            - mountPath: /models    # Map the storage bucket volume inside the container
+              name: gcs-model-volume
+              readOnly: true
+      volumes:
+        # Define the GCS FUSE volume specifications
+        - name: gcs-model-volume
+          csi:
+            driver: gcsfuse.csi.storage.gke.io
+            volumeAttributes:
+              bucketName: llm-models  # Specify the bucket name
+              mountOptions: "implicit-dirs,file-cache:enable-parallel-downloads:true,file-cache:parallel-downloads-per-file:100,file-cache:max-parallel-downloads:-1,file-cache:download-chunk-size-mb:10,file-cache:max-size-mb:-1"
