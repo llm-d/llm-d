@@ -1,32 +1,29 @@
-## Enables EPP Flow Control for KEDA saturation-based autoscaling.
-## Flow control is the source of llm_d_epp_flow_control_pool_saturation (and the
-## other flow-control metrics). Monitoring must be enabled separately during
-## optimized-baseline setup.
-## Layer after recipes/router/base.values.yaml and
-## optimized-baseline/router/optimized-baseline.values.yaml.
+## Enables EPP flow control for KEDA saturation-based autoscaling.
+## Flow control is the source of llm_d_epp_flow_control_pool_saturation. This layers
+## ONLY the `flowControl` feature gate onto the optimized-baseline EPP config, reusing
+## its existing plugins unchanged — pool saturation is a flow-control-layer metric and
+## does not depend on the scoring plugins. (The `featureGates` gate lives inside the EPP
+## config file, so it is set alongside the same plugins optimized-baseline already runs.)
+## Layer AFTER optimized-baseline/router/optimized-baseline.values.yaml.
 
 router:
   epp:
-    pluginsConfigFile: "optimized-baseline-keda-epp-saturation-plugins.yaml"
+    pluginsConfigFile: "optimized-baseline-plugins.yaml"
     pluginsCustomConfig:
-      optimized-baseline-keda-epp-saturation-plugins.yaml: |
+      optimized-baseline-plugins.yaml: |
         apiVersion: llm-d.ai/v1alpha1
         kind: EndpointPickerConfig
         featureGates:
         - flowControl
+        # Same plugins as optimized-baseline/router/optimized-baseline.values.yaml —
+        # this override only adds the flowControl feature gate above.
         plugins:
-        - type: queue-scorer
-        - type: kv-cache-utilization-scorer
-        - type: prefix-cache-scorer
-        - type: no-hit-lru-scorer
+        - type: approx-prefix-cache-producer
+        - type: inflight-load-producer
+        - type: prefix-cache-affinity-filter
+        - type: token-load-scorer
         schedulingProfiles:
         - name: default
           plugins:
-          - pluginRef: queue-scorer
-            weight: 2
-          - pluginRef: kv-cache-utilization-scorer
-            weight: 2
-          - pluginRef: prefix-cache-scorer
-            weight: 3
-          - pluginRef: no-hit-lru-scorer
-            weight: 2
+          - pluginRef: prefix-cache-affinity-filter
+          - pluginRef: token-load-scorer

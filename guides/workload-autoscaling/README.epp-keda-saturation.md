@@ -5,7 +5,7 @@ KEDA queries Prometheus directly for two EPP-emitted, InferencePool-scoped signa
 > [!WARNING]
 > This guide is experimental and subject to change. The metrics, configurations, and APIs may evolve as the feature matures. Use in development and test environments only.
 
-This guide uses the four optimized-baseline plugins provided by llm-d (queue-scorer, kv-cache-utilization-scorer, prefix-cache-scorer, and no-hit-lru-scorer) to enable load-aware and prefix-cache-aware routing alongside pool saturation metrics.
+This guide reuses the optimized-baseline EPP plugins unchanged for load-aware and prefix-cache-aware routing, and only adds the `flowControl` feature gate that the pool-saturation metric requires. (Pool saturation is a flow-control-layer signal and does not depend on which scoring plugins are configured.)
 
 ## Metrics
 
@@ -75,7 +75,7 @@ This creates a secret named `prometheus-token` containing:
 
 Flow control is what emits `llm_d_epp_flow_control_pool_saturation`. Enable it by
 layering this guide's `router.values.yaml` onto your optimized-baseline router install
-(this registers the flow-control feature gate and the four optimized-baseline plugins):
+(this adds the flow-control feature gate on top of the optimized-baseline EPP plugins, which it reuses unchanged):
 
 ```bash
 helm upgrade optimized-baseline \
