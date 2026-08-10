@@ -21,6 +21,7 @@
     "operations": { "label": "Operations & Monitoring", "position": 5, "collapsed": true },
     "operations/observability": { "label": "Observability", "position": 1, "collapsed": true },
     "operations/rollouts": { "label": "Rollouts", "position": 3, "collapsed": true },
+    "operations/serve-external-apis": { "label": "Serve External APIs", "position": 4, "collapsed": true },
 
     "infrastructure": { "label": "Infrastructure & Environments", "position": 6, "collapsed": true },
     "infrastructure/providers": { "label": "Kubernetes Infrastructure Providers", "position": 1, "collapsed": true },
@@ -83,8 +84,10 @@
     "operations/readiness-probes": { "position": 2, "label": "Readiness Probes" },
     "operations/rollouts/adapter-rollout": { "position": 1 },
     "operations/rollouts/blue-green-update": { "position": 2 },
-    "operations/router": { "position": 4, "label": "Router Operations Guide" },
-    "operations/async-processor": { "position": 5, "label": "Async Processor Operations Guide" },
+    "operations/serve-external-apis/litellm": { "position": 1, "label": "LiteLLM Integration" },
+    "operations/serve-external-apis/kong": { "position": 2, "label": "Kong AI Gateway Integration" },
+    "operations/router": { "position": 5, "label": "Router Operations Guide" },
+    "operations/async-processor": { "position": 6, "label": "Async Processor Operations Guide" },
 
     "infrastructure/multi-node": { "position": 3, "label": "Kubernetes Multi-Node Orchestration" },
     "infrastructure/no-kubernetes-deployment": { "position": 4, "label": "Non-K8s & Bare-Metal Deployments" },
