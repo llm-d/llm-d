@@ -38,6 +38,8 @@ if [ "${USE_SCCACHE}" = "true" ]; then
         # Remove sccache binary so meson/cmake can't accidentally try to use it
         rm -f /usr/local/bin/sccache || true
         unset CMAKE_C_COMPILER_LAUNCHER CMAKE_CXX_COMPILER_LAUNCHER CMAKE_CUDA_COMPILER_LAUNCHER
+        # Sourcing scripts branch on this to decide whether to put sccache in CC/CXX
+        export USE_SCCACHE="false"
         return 0
     fi
 
@@ -47,6 +49,7 @@ if [ "${USE_SCCACHE}" = "true" ]; then
         # Remove sccache binary so meson/cmake can't accidentally try to use it
         rm -f /usr/local/bin/sccache || true
         unset CMAKE_C_COMPILER_LAUNCHER CMAKE_CXX_COMPILER_LAUNCHER CMAKE_CUDA_COMPILER_LAUNCHER
+        export USE_SCCACHE="false"
         return 0
     fi
 
