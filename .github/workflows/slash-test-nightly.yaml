@@ -568,7 +568,7 @@ jobs:
             if (isTemp) {
               lines.push(
                 '',
-                '> Temp branch will be cleaned up automatically within 24 hours.',
+                '> Temp branch has been cleaned up.',
               );
             }
 
@@ -578,6 +578,25 @@ jobs:
               issue_number: prNumber,
               body: lines.join('\n'),
             });
+
+      - name: Delete temp branch
+        if: always() && steps.branch.outputs.is_temp == 'true'
+        uses: actions/github-script@v9
+        env:
+          BRANCH_REF: ${{ steps.branch.outputs.ref }}
+        with:
+          script: |
+            const ref = process.env.BRANCH_REF;
+            try {
+              await github.rest.git.deleteRef({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                ref: `heads/${ref}`,
+              });
+              console.log(`Deleted temp branch: ${ref}`);
+            } catch (e) {
+              console.log(`Warning: failed to delete temp branch ${ref}: ${e.message}`);
+            }
 
       - name: Post failure comment
         if: failure() && steps.parse.outputs.result == 'ok' && steps.perm.outputs.result == 'ok'
