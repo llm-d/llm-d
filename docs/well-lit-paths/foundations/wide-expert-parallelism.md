@@ -29,7 +29,10 @@ The following steps occurs:
 
 ## Deploy
 
-See the [Wide Expert Parallelism guide](../../../guides/wide-ep-lws) for manifests and step-by-step deployment.
+See the [Wide Expert Parallelism guide](../../../guides/wide-ep-lws/README.md) for manifests and step-by-step deployment:
+
+* [Deploy using LeaderWorkerSet](../../../guides/wide-ep-lws/README.md#deploy-using-leaderworkerset)
+* [Deploy using DisaggregatedSet](../../../guides/wide-ep-lws/README.md#deploy-using-disaggregatedset)
 
 ## Architecture
 

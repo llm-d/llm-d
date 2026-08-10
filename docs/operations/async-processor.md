@@ -170,8 +170,8 @@ ap:
 ```
 
 ```bash
-helm install async-processor \
-  oci://ghcr.io/llm-d/charts/async-processor \
+helm install llm-d-async \
+  oci://ghcr.io/llm-d/charts/llm-d-async \
   -f guides/asynchronous-processing/${MQ_PROVIDER}/values.yaml \
   -f resource_overrides.yaml \
   --set ap.igwBaseURL=http://${IP}:80 \

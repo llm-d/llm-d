@@ -15,7 +15,7 @@ spec:
           # to match `meta-llama/Llama-3.2-3B-Instruct`.
           args:
             - "meta-llama/Llama-3.2-3B-Instruct"
-            - "--disable-access-log-for-endpoints=/health,/metrics,/v1/models"
+            - "--disable-access-log-for-endpoints=/health,/metrics,/v1/models,/v1/completions/render,/v1/chat/completions/render"
             - "--disable-hybrid-kv-cache-manager"
             - "--max_model_len=8192"
             - "--block-size=64"

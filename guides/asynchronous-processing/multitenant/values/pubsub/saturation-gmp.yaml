@@ -1,0 +1,155 @@
+# Scenario C — team × tier × MODEL with per-model saturation (GCP-native, GMP).
+#
+#  - MODEL isolation: one worker pool per model (model-a / model-b), each with its
+#    own saturation gate scoped to that model's InferencePool (POOL_A / POOL_B).
+#  - TEAM quota (redis-quota, classifying, per-model prefix): reserved vs overflow.
+#  - TIER: per-topic label; tier-priority merge policy orders each pool's lanes.
+#
+# PromQL endpoint = the GMP query frontend (manifests/gmp-frontend.yaml), already
+# scoped to NAMESPACE — no PROM_URL here, unlike the self-hosted Prometheus overlays.
+# NOTE: GMP/Monarch lags real time ~1-2 min.
+# Replace: PROJECT_ID, NAMESPACE, IGW_HOST, POOL_A/POOL_B, SAT_CAP (concurrent
+# requests at which a model is considered saturated).
+ap:
+
+  messageQueueImpl: "gcp-pubsub-gated"
+  igwBaseURL: "http://IGW_HOST:80"
+
+  prometheusURL: "http://gmp-frontend.NAMESPACE.svc.cluster.local:9090"
+  prometheusCacheTTL: "5s"
+
+  requestMergePolicyConfig:
+    type: "tier-priority"
+    parameters:
+      priority_header: "x-gateway-priority"
+
+  gcpPubSub:
+    enabled: true
+    projectId: "PROJECT_ID"
+    resultTopicId: "projects/PROJECT_ID/topics/results"
+    topicsConfig:
+      # ---------- MODEL A ----------
+      - subscriber_id: "projects/PROJECT_ID/subscriptions/team-premium-a-requests-sub"
+        worker_pool_id: "model-a"
+        inference_objective: "latency"
+        request_path_url: "/v1/completions"
+        igw_base_url: "http://IGW_HOST:80"
+        labels: { tier: "interactive" }
+        gate_type: "redis-quota"
+        gate_params:
+          address: "redis.NAMESPACE.svc.cluster.local:6379"
+          attribute: "team"
+          mode: "concurrency"
+          gating_mode: "classifying"
+          limit: "2"
+          prefix: "quota:a:"
+      - subscriber_id: "projects/PROJECT_ID/subscriptions/team-standard-a-requests-sub"
+        worker_pool_id: "model-a"
+        request_path_url: "/v1/completions"
+        igw_base_url: "http://IGW_HOST:80"
+        labels: { tier: "async" }
+        gate_type: "redis-quota"
+        gate_params:
+          address: "redis.NAMESPACE.svc.cluster.local:6379"
+          attribute: "team"
+          mode: "concurrency"
+          gating_mode: "classifying"
+          limit: "2"
+          prefix: "quota:a:"
+      - subscriber_id: "projects/PROJECT_ID/subscriptions/team-batch-a-requests-sub"
+        worker_pool_id: "model-a"
+        inference_objective: "throughput"
+        request_path_url: "/v1/completions"
+        igw_base_url: "http://IGW_HOST:80"
+        labels: { tier: "batch" }
+        gate_type: "redis-quota"
+        gate_params:
+          address: "redis.NAMESPACE.svc.cluster.local:6379"
+          attribute: "team"
+          mode: "concurrency"
+          gating_mode: "classifying"
+          limit: "1"
+          prefix: "quota:a:"
+
+      # ---------- MODEL B ----------
+      - subscriber_id: "projects/PROJECT_ID/subscriptions/team-premium-b-requests-sub"
+        worker_pool_id: "model-b"
+        inference_objective: "latency"
+        request_path_url: "/v1/completions"
+        igw_base_url: "http://IGW_HOST:80"
+        labels: { tier: "interactive" }
+        gate_type: "redis-quota"
+        gate_params:
+          address: "redis.NAMESPACE.svc.cluster.local:6379"
+          attribute: "team"
+          mode: "concurrency"
+          gating_mode: "classifying"
+          limit: "2"
+          prefix: "quota:b:"
+      - subscriber_id: "projects/PROJECT_ID/subscriptions/team-standard-b-requests-sub"
+        worker_pool_id: "model-b"
+        request_path_url: "/v1/completions"
+        igw_base_url: "http://IGW_HOST:80"
+        labels: { tier: "async" }
+        gate_type: "redis-quota"
+        gate_params:
+          address: "redis.NAMESPACE.svc.cluster.local:6379"
+          attribute: "team"
+          mode: "concurrency"
+          gating_mode: "classifying"
+          limit: "2"
+          prefix: "quota:b:"
+      - subscriber_id: "projects/PROJECT_ID/subscriptions/team-batch-b-requests-sub"
+        worker_pool_id: "model-b"
+        inference_objective: "throughput"
+        request_path_url: "/v1/completions"
+        igw_base_url: "http://IGW_HOST:80"
+        labels: { tier: "batch" }
+        gate_type: "redis-quota"
+        gate_params:
+          address: "redis.NAMESPACE.svc.cluster.local:6379"
+          attribute: "team"
+          mode: "concurrency"
+          gating_mode: "classifying"
+          limit: "1"
+          prefix: "quota:b:"
+
+  # SAT_CAP is the divisor: the concurrent-request count at which a model counts as
+  # saturated. prometheus-query closes the gate at budget <= 0 and clamp() floors the
+  # budget at 0, so the gate closes only once SAT_CAP requests are running. A worker
+  # evaluates the gate while holding a message it has not dispatched yet, so at most
+  # `workers - 1` of this pool's requests are running at that moment: driven by async
+  # load alone, SAT_CAP must stay BELOW `workers` or the gate can never close.
+  workerPools:
+    - id: "model-a"
+      workers: 8
+      gate_type: "wait-on-refuse"
+      gate_params:
+        gate: |
+          {"gate_type":"prometheus-query","gate_params":{"query":"clamp(1 - sum(vllm:num_requests_running{inference_pool=\"POOL_A\"})/SAT_CAP, 0, 1)","fallback":"1"}}
+    - id: "model-b"
+      workers: 8
+      gate_type: "wait-on-refuse"
+      gate_params:
+        gate: |
+          {"gate_type":"prometheus-query","gate_params":{"query":"clamp(1 - sum(vllm:num_requests_running{inference_pool=\"POOL_B\"})/SAT_CAP, 0, 1)","fallback":"1"}}
+
+  resources:
+    requests:
+      cpu: "500m"
+      memory: "512Mi"
+    limits:
+      cpu: "1"
+      memory: "1Gi"
+
+  metrics:
+    enabled: true
+  podMonitor:
+    enabled: false
+  modelServerMonitor:
+    enabled: false
+  prometheusRule:
+    enabled: false
+  grafana:
+    dashboards:
+      enabled: false

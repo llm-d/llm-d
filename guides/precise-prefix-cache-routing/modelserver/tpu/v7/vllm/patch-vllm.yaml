@@ -19,7 +19,7 @@ spec:
             - "--max-num-seqs=128"
             - "--kv-cache-dtype=fp8"
             - "--async-scheduling"
-            - "--disable-access-log-for-endpoints=/health,/metrics,/v1/models"
+            - "--disable-access-log-for-endpoints=/health,/metrics,/v1/models,/v1/completions/render,/v1/chat/completions/render"
             - "--tensor-parallel-size=8"
             - "--block-size=64"
             - "--kv-events-config"

@@ -22,6 +22,7 @@ rows because the serving engine changes prefill throughput.
 | Overlay path | Accelerator · engine | Version | TP | Model (as shipped) | `peakPrefillThroughput` (tok/s) |
 |---|---|---|---|---|---|
 | `gpu/vllm`         | NVIDIA H100 80 GB · vLLM   | v0.23.0              | 2 | Qwen3-32B               | **15928** |
+| `gpu/vllm` (multimodal-serving) | NVIDIA H200 141 GB · vLLM | v0.23.0    | 2 | Qwen3-VL-32B-Instruct   | **15751** |
 | `gpu/vllm/gpt-oss` | NVIDIA H100 80 GB · vLLM   | v0.22.0              | 1 | gpt-oss-120B            | **39065** |
 | `gpu/sglang`       | NVIDIA H100 80 GB · SGLang | v0.5.13.post1        | 2 | Qwen3-32B               | **30720** |
 | `amd/vllm`    | AMD GPU · vLLM             | rocm v0.7.0          | 2 | Qwen3-32B               | 15928 ‡ |

@@ -1,0 +1,46 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+#TODO-MORI extend from pd/vllm/moriio instead to get the mori-io patch-sidecar.yaml?
+  - ../../../../../../recipes/modelserver/base/single-host/pd/vllm
+
+namePrefix: pd-disaggregation-rocm-moriio-vllm-
+
+components:
+  - ../../../../../../recipes/modelserver/components/images/amd-vllm
+  - ../../../../../../recipes/modelserver/components/images/routing-sidecar
+
+#TODO-MORI: will become upstream images
+images:
+  - name: ghcr.io/llm-d/llm-d-rocm
+    # vLLM PR now merged + latest MORI build @ 8a655e9
+    newName: ghcr.io/vcave/vllm
+    newTag: pr-45043
+  - name: ghcr.io/llm-d/llm-d-router-disagg-sidecar
+    # PR merged and available next release
+    newName: ghcr.io/vcave/llm-d/llm-d-router-disagg-sidecar
+    newTag: pr-2094
+
+labels:
+  - pairs:
+      llm-d.ai/model: Qwen3-32B
+      llm-d.ai/guide: pd-disaggregation
+      llm-d.ai/accelerator-variant: gpu
+      llm-d.ai/accelerator-vendor: amd
+      llm-d.ai/engine-type: vllm
+    includeSelectors: true
+    includeTemplates: true
+
+patches:
+  - path: patch-prefill.yaml
+  - path: patch-decode.yaml
+  # patch-sidecar overrides the recipe-default routing-proxy patch
+  # (recipes/.../vllm/patch-sidecar.yaml) with the MoRI-IO sidecar
+  # image and the additional --moriio-* CLI flags. Targets the decode
+  # Deployment by name (only decode runs the routing sidecar in P/D
+  # disagg).
+  - path: patch-sidecar.yaml
+    target:
+      kind: Deployment
+      name: decode

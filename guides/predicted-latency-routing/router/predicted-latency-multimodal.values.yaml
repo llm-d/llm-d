@@ -2,7 +2,7 @@
 ## Layer on top of: recipes/router/base.values.yaml
 ##
 ## Targets the model servers deployed by the multimodal-serving/aggregation
-## guide (llm-d.ai/guide: multimodal-optimized-baseline) — deploy that guide's
+## guide (llm-d.ai/guide: multimodal-aggregation) — deploy that guide's
 ## modelserver kustomize first, then install the router with this values file
 ## instead of aggregation.values.yaml.
 
@@ -76,4 +76,4 @@ router:
 
   modelServers:
     matchLabels:
-      llm-d.ai/guide: "multimodal-optimized-baseline"
+      llm-d.ai/guide: "multimodal-aggregation"

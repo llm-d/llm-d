@@ -1,0 +1,11 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+# Recommended agentic-serving deployment of GLM-5.2-FP8 on H200: the wide-ep-lws
+# p3w2d1w2 topology (3 DEP16 prefill replicas + 1 DEP16 decode replica -> 8 nodes /
+# 64 GPUs) with CPU+NVMe tiered KV cache offloading enabled on prefill. MTP
+# speculative decoding is on in the base manifests. Alternative topologies and
+# components: guides/wide-ep-lws/modelserver/gpu/vllm-glm-5.2/.
+resources:
+  - ../../../../../wide-ep-lws/modelserver/gpu/vllm-glm-5.2/deployments/p3w2d1w2
+components:
+  - ../../../../../wide-ep-lws/modelserver/gpu/vllm-glm-5.2/components/offloading-tiered
