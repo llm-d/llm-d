@@ -64,7 +64,7 @@ Deploy the Async Processor using the selected queue implementation's configurati
 ```bash
 export NAMESPACE=llm-d-async
 export MQ_PROVIDER=gcp-pubsub # options are gcp-pubsub or redis
-export ASYNC_VERSION=v0.8.0   # first release published under charts/llm-d-async
+export ASYNC_VERSION=v0.9.0   # latest llm-d-async release
 
 helm install llm-d-async \
     oci://ghcr.io/llm-d/charts/llm-d-async \

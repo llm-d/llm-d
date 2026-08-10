@@ -92,7 +92,7 @@ This guide layers on the base [asynchronous-processing](../README.md) guide — 
   export MT=${REPO_ROOT}/guides/asynchronous-processing/multitenant
 
   export NAMESPACE=llm-d-async
-  export ASYNC_VERSION=v0.8.0          # first release published under charts/llm-d-async (includes tier-priority + classifying quota)
+  export ASYNC_VERSION=v0.9.0          # latest llm-d-async release (includes tier-priority + classifying quota)
 
   # The shared inference gateway (EPP) address, and the two InferencePool + model names:
   export IP=$(kubectl get service optimized-baseline-epp -n llm-d-optimized-baseline -o jsonpath='{.spec.clusterIP}')
