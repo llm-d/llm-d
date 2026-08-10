@@ -84,6 +84,13 @@ jobs:
       # optimized-baseline InferencePools on the shared cluster), so this MUST
       # stay in sync with ROUTER_RELEASE in nightly-deploy-ocp-keda-epp.sh.
       gateway_host: 'keda-epp-queue-epp'
+      # After the gateway smoke test, e2e-validate.sh hands off to
+      # e2e-validate-scale-event.sh: fires a concurrent burst and asserts KEDA's
+      # scale-up decision (desiredReplicas -> 2) then scale-down (-> 1). Asserts the
+      # autoscaler DECISION, not the 2nd pod becoming Ready (it may stay Pending on a
+      # contended cluster). This is the Phase-2 scale-event proof on top of the
+      # deploy script's Fallback=False signal-liveness gate.
+      e2e_validate_args: '--extra-validate scale-event'
       custom_deploy_script: |
         bash guides/workload-autoscaling/scripts/nightly-deploy-ocp-keda-epp.sh
       required_gpus: 2
