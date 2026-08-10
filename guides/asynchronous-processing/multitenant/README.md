@@ -92,7 +92,7 @@ This guide layers on the base [asynchronous-processing](../README.md) guide — 
   export MT=${REPO_ROOT}/guides/asynchronous-processing/multitenant
 
   export NAMESPACE=llm-d-async
-  export ASYNC_VERSION=0.7.4          # a release with the tier-priority merge policy + classifying quota (v0.7.4+)
+  export ASYNC_VERSION=v0.9.0          # latest llm-d-async release (includes tier-priority + classifying quota)
 
   # The shared inference gateway (EPP) address, and the two InferencePool + model names:
   export IP=$(kubectl get service optimized-baseline-epp -n llm-d-optimized-baseline -o jsonpath='{.spec.clusterIP}')
@@ -139,12 +139,12 @@ kubectl create namespace ${NAMESPACE}
 kubectl apply -n ${NAMESPACE} -f ${MT}/manifests/redis.yaml
 
 render ${MT}/values/redis/quota-only.yaml > /tmp/mt-redis.yaml
-helm install async-processor \
-    oci://ghcr.io/llm-d/charts/async-processor \
+helm install llm-d-async \
+    oci://ghcr.io/llm-d/charts/llm-d-async \
     -f /tmp/mt-redis.yaml \
     -n ${NAMESPACE} --create-namespace --version ${ASYNC_VERSION}
 
-kubectl -n ${NAMESPACE} get deploy async-processor -o yaml | grep message-queue-impl
+kubectl -n ${NAMESPACE} get deploy llm-d-async -o yaml | grep message-queue-impl
 # -> --message-queue-impl=redis-sortedset
 ```
 
@@ -165,8 +165,8 @@ kubectl apply -n ${NAMESPACE} -f ${MT}/manifests/redis.yaml   # still needed for
 
 sed -e "s/NAMESPACE/${NAMESPACE}/g" -e "s#IGW_HOST#${IP}#g" -e "s/PROJECT_ID/${PROJECT_ID}/g" \
     ${MT}/values/pubsub/quota-only.yaml > /tmp/mt-pubsub.yaml
-helm install async-processor \
-    oci://ghcr.io/llm-d/charts/async-processor \
+helm install llm-d-async \
+    oci://ghcr.io/llm-d/charts/llm-d-async \
     -f /tmp/mt-pubsub.yaml \
     -n ${NAMESPACE} --create-namespace --version ${ASYNC_VERSION}
 ```
@@ -174,12 +174,12 @@ helm install async-processor \
 
 `gcp-setup.sh` binds the `async-processor` service account to `pubsub.subscriber` + `pubsub.publisher`
 + `pubsub.viewer` (the readiness probe's `GetSubscription`) + `monitoring.viewer` (broker backlog). With
-Workload Identity, follow the printed binding to map the GSA onto the chart's `async-processor` KSA.
+Workload Identity, follow the printed binding to map the GSA onto the chart's `llm-d-async` KSA.
 </details>
 
 > [!NOTE]
 > Config-only Helm changes are read once at startup — after changing the queue/quota config, run
-> `kubectl rollout restart deploy/async-processor -n ${NAMESPACE}`.
+> `kubectl rollout restart deploy/llm-d-async -n ${NAMESPACE}`.
 
 ## Publishing requests
 
@@ -281,8 +281,8 @@ bringing up [self-hosted Prometheus](#observability), then drive sustained load:
 ```bash
 render ${MT}/values/redis/saturation-prometheus.yaml > /tmp/mt-redis-sat.yaml
 grep prometheusURL /tmp/mt-redis-sat.yaml    # must be your Prometheus, not the literal PROM_URL
-helm upgrade async-processor \
-    oci://ghcr.io/llm-d/charts/async-processor \
+helm upgrade llm-d-async \
+    oci://ghcr.io/llm-d/charts/llm-d-async \
     -f /tmp/mt-redis-sat.yaml -n ${NAMESPACE} --version ${ASYNC_VERSION}
 ```
 
@@ -303,7 +303,7 @@ kubectl run --rm -i promcheck-vllm --image=curlimages/curl --restart=Never -n ${
 # -> a result with a value; an empty "result":[] means the PodMonitor is not matching
 
 # 3. The processor is not silently falling back:
-kubectl logs -n ${NAMESPACE} deploy/async-processor --tail=200 | grep -i "using fallback value" \
+kubectl logs -n ${NAMESPACE} deploy/llm-d-async --tail=200 | grep -i "using fallback value" \
     && echo ">>> gates are on the fallback budget (1 = wide open), not on live metrics"
 ```
 
@@ -406,7 +406,7 @@ kubectl apply -n ${NAMESPACE} -f ${MT}/manifests/gmp-frontend.yaml
 sed -e "s/NAMESPACE/${NAMESPACE}/g" -e "s#IGW_HOST#${IP}#g" -e "s/POOL_A/${POOL_A}/g" \
     -e "s/POOL_B/${POOL_B}/g" -e "s/PROJECT_ID/${PROJECT_ID}/g" \
     ${MT}/values/pubsub/saturation-gmp.yaml > /tmp/mt-pubsub-sat.yaml
-helm upgrade async-processor oci://ghcr.io/llm-d/charts/async-processor \
+helm upgrade llm-d-async oci://ghcr.io/llm-d/charts/llm-d-async \
   -f /tmp/mt-pubsub-sat.yaml -n ${NAMESPACE} --version ${ASYNC_VERSION}
 ```
 <!-- llm-d-cicd:skip end -->
@@ -442,7 +442,7 @@ Prometheus path reacts within one scrape.
 ## Cleanup
 
 ```bash
-helm uninstall async-processor -n ${NAMESPACE}
+helm uninstall llm-d-async -n ${NAMESPACE}
 kubectl delete -n ${NAMESPACE} -f ${MT}/manifests/redis.yaml
 # self-hosted Prometheus/Grafana:
 kubectl delete -f ${MT}/manifests/prometheus-vllm-podmonitor.yaml
