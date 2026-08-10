@@ -524,8 +524,7 @@ spec:
                   --data-parallel-start-rank $START_RANK \
                   --no-disable-hybrid-kv-cache-manager \
                   --all2all-backend deepep_high_throughput \
-                  --moe-backend auto \
-                  --enforce-eager \
+                  --moe-backend deep_gemm \
                   --max-model-len 256000 \
                   --profiler-config.profiler=torch \
                   --profiler-config.torch_profiler_dir=/profiles \

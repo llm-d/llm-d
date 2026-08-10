@@ -80,22 +80,18 @@ spec:
                 export VLLM_SSM_CONV_STATE_LAYOUT=DS
                 export VLLM_ENABLE_K3_LATENT_MOE_TAIL_FUSION=1
                 export NCCL_GIN_TYPE=3
-                # export NCCL_DEBUG=INFO
-                # export NCCL_DEBUG_SUBSYS=ALL
-                # export DOCA_GPUNETIO_LOG=7
-                # export NCCL_GDAKI_USE_RELIABLE_DB=2
 
                 # --- BEGIN TEMP: install NIXL ----------------------------------------
                 uv pip install --system nixl nixl-cu13
-                uv pip install --system flashinfer-python==0.6.16 nvidia-nccl-cu13==2.30.7
-                uv pip install --system flashinfer-jit-cache==0.6.16 --index-url https://flashinfer.ai/whl/cu130
-                uv pip install --system flashinfer-cubin==0.6.16 --index-url https://flashinfer.ai/whl
-                uv pip install --system "apache-tvm-ffi==0.1.13" --force-reinstall
-                uv pip uninstall --system tilelang
+                # uv pip install --system flashinfer-python==0.6.16 nvidia-nccl-cu13==2.30.7
+                # uv pip install --system flashinfer-jit-cache==0.6.16 --index-url https://flashinfer.ai/whl/cu130
+                # uv pip install --system flashinfer-cubin==0.6.16 --index-url https://flashinfer.ai/whl
+                # uv pip install --system "apache-tvm-ffi==0.1.13" --force-reinstall
+                # uv pip uninstall --system tilelang
 
                 uv pip show nvidia-nccl-cu13
-                python3 -c "import tvm_ffi; import flashinfer; print(tvm_ffi.__version__)"
-                nm -D /usr/local/lib/python3.12/dist-packages/tvm_ffi/lib/libtvm_ffi.so | grep -q TVMFFIGetCustomAllocator
+                # python3 -c "import tvm_ffi; import flashinfer; print(tvm_ffi.__version__)"
+                # nm -D /usr/local/lib/python3.12/dist-packages/tvm_ffi/lib/libtvm_ffi.so | grep -q TVMFFIGetCustomAllocator
                 # --- END TEMP: install NIXL ------------------------------------------
 
                 apt-get update && apt-get install -y \
