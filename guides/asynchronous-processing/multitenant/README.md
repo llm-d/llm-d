@@ -346,8 +346,10 @@ against the sizing rule below before concluding the gate worked.
 > thing driving that count is the pool's own workers (`8` per model in the overlays), and a worker
 > evaluates the gate while holding a message it has not dispatched yet: at most `workers - 1` of the
 > pool's requests are running at that moment. Set `SAT_CAP` at or above `workers` and the budget can
-> never reach 0. The default `SAT_CAP=4` leaves margin, because `vllm:num_requests_running` counts
-> only requests the model server is actively running, not ones waiting in its queue.
+> never reach 0. The default `SAT_CAP=4` leaves margin on two counts: `vllm:num_requests_running`
+> counts only requests the model server is actively running, not ones waiting in its queue, and the
+> gate reads it through a 15s `PodMonitor` scrape plus `prometheusCacheTTL: 5s`, so the count it acts
+> on is up to ~20s behind the pool.
 >
 > In production the divisor is a capacity number, not a demo knob: size it to the pool's real
 > concurrent-request capacity (`ready pods × per-pod concurrency`) and give the pool enough workers
@@ -374,9 +376,20 @@ Open Grafana (`admin`/`admin` in the demo values) and run the Scenario-C load; t
 dashboard shows `async_dispatch_budget`, `async_inflight_requests`, `async_gate_decisions_total`, and
 `async_broker_backlog{queue_name,pool_name}`. Break panels down by **`pool_name`** (`model-a` /
 `model-b`) for the per-model view and by **`queue_name`** for the per-team-per-model view.
-`async_dispatch_budget` is the **queue** gates' budget (the per-team quota gates); the per-pool
-saturation gate's budget is the PromQL expression itself — query it directly, as in
-[Scenario C](#scenario-c--priority-under-saturation).
+`async_dispatch_budget` is the **queue** gates' budget (the per-team quota gates), so it says nothing
+about the per-pool saturation gates. Those report through `async_gate_metric_value` — the value the
+gate last read, i.e. the `clamp(...)` result — against `async_gate_metric_threshold`, which the gate
+closes at (`value <= threshold`, and `prometheus-query` pins the threshold to `0`). Both are labelled
+by the owning `pool_name`:
+
+```promql
+llm_d_async_async_gate_metric_value{pool_name="model-a"}       # -> 0 while the pool is parked
+llm_d_async_async_gate_metric_threshold{pool_name="model-a"}   # -> 0
+```
+
+Their absence is itself a signal: the gauges are only written on a **successful** read, so a missing
+or frozen `async_gate_metric_value` means the gate is running on its fallback budget. Cross-check
+against Prometheus directly as in [Scenario C](#scenario-c--priority-under-saturation).
 
 <details>
 <summary><b>GCP Cloud Monitoring (Pub/Sub on GKE)</b></summary>
