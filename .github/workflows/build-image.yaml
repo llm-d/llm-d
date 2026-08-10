@@ -1477,7 +1477,7 @@ jobs:
         id: meta
         uses: docker/metadata-action@v6
         with:
-          images: ${{ env.REGISTRY }}/${{ github.repository }}-xpu-sglang-dev
+          images: ${{ env.REGISTRY }}/${{ github.repository }}-xpu-sglang
           tags: |
             type=ref,event=branch
             type=ref,event=pr
@@ -1516,7 +1516,7 @@ jobs:
 
       - name: Record image provenance
         env:
-          IMAGE: ${{ env.REGISTRY }}/${{ github.repository }}-xpu-sglang-dev
+          IMAGE: ${{ env.REGISTRY }}/${{ github.repository }}-xpu-sglang
           IMAGE_DIGEST: ${{ steps.build-and-push.outputs.digest }}
           SGLANG_REPOSITORY: ${{ steps.source.outputs.sglang_repo }}
           SGLANG_REF: ${{ inputs.sglang_xpu_ref || steps.common-versions.outputs.ref }}
@@ -1538,7 +1538,7 @@ jobs:
       - name: Run Trivy vulnerability scanner
         uses: aquasecurity/trivy-action@v0.36.0
         with:
-          image-ref: ${{ env.REGISTRY }}/${{ github.repository }}-xpu-sglang-dev@${{ steps.build-and-push.outputs.digest }}
+          image-ref: ${{ env.REGISTRY }}/${{ github.repository }}-xpu-sglang@${{ steps.build-and-push.outputs.digest }}
           format: "sarif"
           output: "trivy-results.sarif"
           severity: "CRITICAL,HIGH,MEDIUM"
