@@ -68,7 +68,7 @@ scaling decisions. The HPA remains visible for inspection, but KEDA owns it.
      -f ${REPO_ROOT}/guides/recipes/router/base.values.yaml \
      -f ${REPO_ROOT}/guides/optimized-baseline/router/optimized-baseline.values.yaml \
      -f ${REPO_ROOT}/guides/recipes/router/features/monitoring.values.yaml \
-     -f ${REPO_ROOT}/guides/workload-autoscaling/keda-epp/router.values.yaml \
+     -f ${REPO_ROOT}/guides/workload-autoscaling/optimized-baseline-autoscaling/keda-epp-queue/router.values.yaml \
      -n ${NAMESPACE} --version ${ROUTER_CHART_VERSION}
    ```
 
@@ -165,11 +165,27 @@ kubectl create secret generic keda-prometheus-auth \
 
 #### OpenShift
 
-OpenShift environments commonly use the Custom Metrics Autoscaler Operator and
-cluster monitoring through Thanos. Use the actual CMA/KEDA namespace and
-replace the example Prometheus endpoint and authentication with the
-platform-specific Thanos bearer-token and CA configuration. Exact service
-names and credentials must be confirmed for the target cluster.
+OpenShift environments use the Custom Metrics Autoscaler Operator (KEDA) and
+cluster monitoring through Thanos Querier. The `ocp` overlay
+([`keda-epp-queue/ocp`](./optimized-baseline-autoscaling/keda-epp-queue/ocp/))
+configures this for you — apply it instead of `k8s`:
+
+- Points both triggers at `thanos-querier.openshift-monitoring.svc.cluster.local:9091`
+  and enables `authModes: bearer`. Thanos rejects unauthenticated queries with a
+  401, and KEDA silently serves `fallback` replicas when a trigger errors, so
+  unauthenticated autoscaling looks healthy while doing nothing.
+- Provisions a dedicated `keda-epp-metrics-reader` ServiceAccount granted the
+  `cluster-monitoring-view` ClusterRole, and repoints the `TriggerAuthentication`
+  at that SA's token Secret. On OpenShift the service-ca operator injects
+  `service-ca.crt` (the CA that signs Thanos's serving certificate) into the
+  token Secret automatically, so **no CA copy is required** (skip the
+  `keda-prometheus-auth` Secret step above).
+
+Before applying, edit the PromQL label selectors in the triggers to match your
+EPP service, namespace, and model (the namespace transformer cannot rewrite the
+opaque query strings). When deploying this guide to multiple namespaces on a
+shared cluster, give the `keda-epp-metrics-reader-monitoring-view`
+ClusterRoleBinding a namespace-unique name so the bindings do not collide.
 
 ## Configuration
 
@@ -217,7 +233,7 @@ model and hardware combinations.
 ## Apply the KEDA ScaledObject
 
 Review
-[`keda-epp/scaledobject.yaml`](./keda-epp/scaledobject.yaml) before applying it.
+[`keda-epp-queue/base/scaledobject.yaml`](./optimized-baseline-autoscaling/keda-epp-queue/base/scaledobject.yaml) before applying it.
 At minimum, verify these deployment-specific fields:
 
 - `metadata.namespace`
@@ -238,8 +254,19 @@ kubectl rollout status \
   -n ${NAMESPACE} --timeout=15m
 ```
 
+Apply the overlay for your platform. On a generic Kubernetes cluster with the
+bundled kube-prometheus-stack (after copying the CA above), use `k8s`:
+
 ```bash
-kubectl apply -k ${REPO_ROOT}/guides/workload-autoscaling/keda-epp
+kubectl apply -k ${REPO_ROOT}/guides/workload-autoscaling/optimized-baseline-autoscaling/keda-epp-queue/k8s
+```
+
+On OpenShift, use `ocp` instead (see the [OpenShift](#openshift) note — it points
+both triggers at Thanos Querier and bearer-authenticates via a dedicated
+ServiceAccount; no CA copy is needed):
+
+```bash
+kubectl apply -k ${REPO_ROOT}/guides/workload-autoscaling/optimized-baseline-autoscaling/keda-epp-queue/ocp
 ```
 
 ## Verify KEDA Metric Evaluation
@@ -389,7 +416,9 @@ available, and the generated HPA has no scaling-limited conditions.
 ## Cleanup
 
 ```bash
-kubectl delete -k ${REPO_ROOT}/guides/workload-autoscaling/keda-epp
+# Use the same overlay you applied: k8s (generic) or ocp (OpenShift).
+kubectl delete -k ${REPO_ROOT}/guides/workload-autoscaling/optimized-baseline-autoscaling/keda-epp-queue/k8s
+# On the bundled kube-prometheus-stack path only (the ocp overlay uses no such Secret):
 kubectl delete secret keda-prometheus-auth -n ${NAMESPACE}
 ```
 

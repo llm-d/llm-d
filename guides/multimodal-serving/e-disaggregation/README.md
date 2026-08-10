@@ -21,16 +21,17 @@ llm-d supports two encode-disaggregated topologies:
 
 In E/PD, dedicated encode workers handle multimodal processing while a single worker type handles both prefill and decode. Multiple encode workers enable parallel processing of multimodal entries within a single request:
 
-* 2 Encode Workers (multimodal encoding, parallelized across entries)
+* 2 TP=2 Encode Workers (multimodal encoding, parallelized across entries)
 * 8 TP=2 Decode Workers (prefill + decode combined)
 
 ### E/P/D Configuration
 
 E/P/D extends P/D disaggregation by adding a dedicated encode stage. This provides maximum specialization, with multiple encode workers processing multimodal content in parallel:
 
-* 2 Encode Workers (multimodal encoding, parallelized across entries)
-* 2 TP=4 Prefill Workers
-* 2 TP=4 Decode Workers
+* 2 TP=2 Encode Workers (multimodal encoding, parallelized across entries)
+* 4 TP=2 Prefill Workers
+* 4 TP=2 Decode Workers
+
 
 ### Best Practices
 
@@ -43,7 +44,9 @@ Encode disaggregation is most beneficial for workloads with:
 Choose between topologies:
 
 * **E/PD** - simpler deployment; best when prefill and decode do not need separate scaling, or when the primary bottleneck is encode
-* **E/P/D** - extends the [P/D Disaggregation](../../pd-disaggregation/README.md) guide by adding a dedicated encode stage. The reasons for separating prefill from decode (heterogeneous parallelism, xPyD ratios, workload specialization) are described in the [P/D Best Practices](../../pd-disaggregation/README.md#pd-best-practices) section
+* **E/P/D** - extends the [P/D Disaggregation](../../pd-disaggregation/README.md) guide by adding a dedicated encode stage. The reasons for separating prefill from decode (heterogeneous parallelism, xPyD ratios, workload specialization) are described in the [P/D Best Practices](../../pd-disaggregation/README.md#pd-best-practices) section. That section also points to [Known NIXL Connector Issues and Limitations](../../../docs/architecture/advanced/disaggregation/operations-vllm.md#known-nixl-connector-issues-and-limitations), which applies equally to the P/D stage of this topology:
+   * [Prefill TP > Decode TP is not supported for most model architectures](../../../docs/architecture/advanced/disaggregation/operations-vllm.md#prefill-tp--decode-tp-is-not-supported)
+   * [Decode-side stale NIXL agent cache after a prefill pod restart](../../../docs/architecture/advanced/disaggregation/operations-vllm.md#stale-nixl-agent-cache-after-a-prefill-pod-restart)
 
 ### Supported Hardware Backends
 
@@ -81,7 +84,6 @@ export GUIDE_PATH="multimodal-serving/e-disaggregation"
 export TOPOLOGY="e-p-d"
 export NAMESPACE="llm-d-e-p-d-disaggregation"
 export MODEL_NAME="Qwen/Qwen3-VL-32B-Instruct"
-export REPO_ROOT=$(realpath $(git rev-parse --show-toplevel))
 ```
 
 - Install the Gateway API Inference Extension CRDs:

@@ -1,0 +1,23 @@
+# EPP EndpointPickerConfig with flow control enabled and optimized-baseline plugins.
+#
+# This config enables the flowControl feature gate required for pool saturation metrics
+# and registers the four optimized-baseline plugins (provided by llm-d) for load-aware
+# and prefix-cache-aware request routing.
+
+apiVersion: router.llm-d.ai/v1beta1
+kind: EndpointPickerConfig
+metadata:
+  name: optimized-baseline-epp-config
+spec:
+  featureGates:
+    flowControl: true
+  plugins:
+    scheduling:
+      - name: queue-scorer
+        weight: 2
+      - name: kv-cache-utilization-scorer
+        weight: 2
+      - name: prefix-cache-scorer
+        weight: 3
+      - name: no-hit-lru-scorer
+        weight: 2

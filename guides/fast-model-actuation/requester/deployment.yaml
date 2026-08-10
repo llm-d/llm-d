@@ -2,6 +2,8 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: fma-requester
+  labels:
+    llm-d.ai/guide: fast-model-actuation
 spec:
   replicas: 2
   selector:
@@ -11,6 +13,7 @@ spec:
     metadata:
       labels:
         app: fma-requester
+        llm-d.ai/guide: fast-model-actuation
       annotations:
         dual-pods.llm-d.ai/inference-server-config: "fma-isc"
         dual-pods.llm-d.ai/admin-port: "8081"

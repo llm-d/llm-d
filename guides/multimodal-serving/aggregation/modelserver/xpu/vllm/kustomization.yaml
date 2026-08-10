@@ -13,7 +13,7 @@ components:
 labels:
   - pairs:
       llm-d.ai/model: Qwen3-VL-32B-Instruct
-      llm-d.ai/guide: multimodal-optimized-baseline
+      llm-d.ai/guide: multimodal-aggregation
       llm-d.ai/accelerator-variant: xpu
       llm-d.ai/accelerator-vendor: intel
     includeSelectors: true

@@ -63,12 +63,12 @@ jobs:
   detect-changes:
     runs-on: ubuntu-latest
     outputs:
-      cuda: ${{ steps.force.outputs.cuda || steps.platforms-input.outputs.cuda || steps.filter.outputs.cuda || steps.dispatch.outputs.cuda }}
-      aws: ${{ steps.force.outputs.aws || steps.platforms-input.outputs.aws || steps.filter.outputs.aws || steps.dispatch.outputs.aws }}
-      gb200: ${{ steps.force.outputs.gb200 || steps.platforms-input.outputs.gb200 || steps.filter.outputs.gb200 || steps.dispatch.outputs.gb200 }}
-      rocm: ${{ steps.force.outputs.rocm || steps.platforms-input.outputs.rocm || steps.filter.outputs.rocm || steps.dispatch.outputs.rocm }}
-      xpu: ${{ steps.force.outputs.xpu || steps.platforms-input.outputs.xpu || steps.filter.outputs.xpu || steps.dispatch.outputs.xpu }}
-      cpu: ${{ steps.force.outputs.cpu || steps.platforms-input.outputs.cpu || steps.filter.outputs.cpu || steps.dispatch.outputs.cpu }}
+      cuda: ${{ steps.force.outputs.cuda || steps.platforms-input.outputs.cuda || steps.filter.outputs.cuda }}
+      aws: ${{ steps.force.outputs.aws || steps.platforms-input.outputs.aws || steps.filter.outputs.aws }}
+      gb200: ${{ steps.force.outputs.gb200 || steps.platforms-input.outputs.gb200 || steps.filter.outputs.gb200 }}
+      rocm: ${{ steps.force.outputs.rocm || steps.platforms-input.outputs.rocm || steps.filter.outputs.rocm }}
+      xpu: ${{ steps.force.outputs.xpu || steps.platforms-input.outputs.xpu || steps.filter.outputs.xpu }}
+      cpu: ${{ steps.force.outputs.cpu || steps.platforms-input.outputs.cpu || steps.filter.outputs.cpu }}
       rdma-tools: ${{ steps.filter.outputs.rdma-tools }}
     steps:
       - name: Force all platforms
@@ -81,8 +81,10 @@ jobs:
           echo "rocm=true" >> $GITHUB_OUTPUT
           echo "xpu=true" >> $GITHUB_OUTPUT
           echo "cpu=true" >> $GITHUB_OUTPUT
-      - name: Parse platforms input (from workflow_call)
-        if: inputs.force_build != true && inputs.platforms != ''
+      # shim to convert comma-separated platforms input into same boolean outputs as path filter
+      # covers both the workflow_call override and workflow_dispatch
+      - name: Parse platforms input
+        if: inputs.force_build != true && (inputs.platforms != '' || github.event_name == 'workflow_dispatch')
         id: platforms-input
         run: |
           platforms="${{ inputs.platforms }}"
@@ -146,18 +148,6 @@ jobs:
             rdma-tools:
               - 'docker/Dockerfile.rdma-tools'
               - 'docker/common-versions'
-      # shim to convert comma-separated platforms input into same boolean outputs as path filter
-      - name: Parse dispatch platforms
-        if: github.event_name == 'workflow_dispatch'
-        id: dispatch
-        run: |
-          platforms="${{ inputs.platforms }}"
-          echo "cuda=$(echo $platforms | grep -q cuda && echo true || echo false)" >> $GITHUB_OUTPUT
-          echo "aws=$(echo $platforms | grep -q aws && echo true || echo false)" >> $GITHUB_OUTPUT
-          echo "gb200=$(echo $platforms | grep -q gb200 && echo true || echo false)" >> $GITHUB_OUTPUT
-          echo "rocm=$(echo $platforms | grep -q rocm && echo true || echo false)" >> $GITHUB_OUTPUT
-          echo "xpu=$(echo $platforms | grep -q xpu && echo true || echo false)" >> $GITHUB_OUTPUT
-          echo "cpu=$(echo $platforms | grep -q cpu && echo true || echo false)" >> $GITHUB_OUTPUT
 
   cuda-build-llm-d-debug:
     needs: [detect-changes]
@@ -695,7 +685,7 @@ jobs:
       - name: Upload Trivy scan results to GitHub Security tab
         if: ${{ steps.should-run.outputs.os_succeeded == 'true' }}
         continue-on-error: true
-        uses: github/codeql-action/upload-sarif@v4
+        uses: github/codeql-action/upload-sarif@v4.37.4
         with:
           sarif_file: "trivy-results.sarif"
 
@@ -1031,7 +1021,7 @@ jobs:
       - name: Upload Trivy scan results to GitHub Security tab
         if: ${{ steps.should-run.outputs.rhel_ok == 'true' }}
         continue-on-error: true
-        uses: github/codeql-action/upload-sarif@v4
+        uses: github/codeql-action/upload-sarif@v4.37.4
         with:
           sarif_file: "trivy-results.sarif"
 
@@ -1183,7 +1173,7 @@ jobs:
 
       - name: Upload Trivy scan results to GitHub Security tab
         continue-on-error: true
-        uses: github/codeql-action/upload-sarif@v4
+        uses: github/codeql-action/upload-sarif@v4.37.4
         with:
           sarif_file: "trivy-results.sarif"
 
@@ -1278,7 +1268,7 @@ jobs:
           TRIVY_PASSWORD: ${{ secrets.GHCR_TOKEN }}
 
       - name: Upload Trivy scan results to GitHub Security tab
-        uses: github/codeql-action/upload-sarif@v4
+        uses: github/codeql-action/upload-sarif@v4.37.4
         with:
           sarif_file: "trivy-results.sarif"
 
@@ -1372,7 +1362,7 @@ jobs:
           TRIVY_PASSWORD: ${{ secrets.GHCR_TOKEN }}
 
       - name: Upload Trivy scan results to GitHub Security tab
-        uses: github/codeql-action/upload-sarif@v4
+        uses: github/codeql-action/upload-sarif@v4.37.4
         with:
           sarif_file: "trivy-results.sarif"
 
@@ -1451,7 +1441,7 @@ jobs:
           TRIVY_PASSWORD: ${{ secrets.GHCR_TOKEN }}
 
       - name: Upload Trivy scan results to GitHub Security tab
-        uses: github/codeql-action/upload-sarif@v4
+        uses: github/codeql-action/upload-sarif@v4.37.4
         with:
           sarif_file: 'trivy-results.sarif'
 
@@ -1548,7 +1538,7 @@ jobs:
           TRIVY_PASSWORD: ${{ secrets.GHCR_TOKEN }}
 
       - name: Upload Trivy scan results to GitHub Security tab
-        uses: github/codeql-action/upload-sarif@v4
+        uses: github/codeql-action/upload-sarif@v4.37.4
         with:
           sarif_file: "trivy-results.sarif"
 
