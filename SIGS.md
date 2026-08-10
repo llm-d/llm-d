@@ -39,7 +39,7 @@ SIGs operate within the broader llm-d project governance framework defined in [P
 
 ## Active Special Interest Groups
 
-> For up-to-date meeting times, see the [Public Meeting Calendar](https://llm-d.ai/docs/community#public-meeting-calendar).
+> For up-to-date meeting times, see the [Public Meeting Calendar](https://llm-d.ai/community#public-meeting-calendar).
 
 | SIG | Focus Area | Documentation |
 | ----- | ------------ | --------------- |
