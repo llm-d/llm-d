@@ -180,7 +180,7 @@ export ROUTER_VALUES="${REPO_ROOT}/guides/${GUIDE_NAME}/router/${GUIDE_NAME}.val
 
 #### Standalone Mode
 
-This deploys the llm-d Router in [Standalone Mode](../../docs/architecture/core/router/proxy.md):
+This deploys the llm-d Router in [Standalone Mode](../../docs/architecture/core/router/proxy.md) with an Envoy sidecar (default):
 
 > [!IMPORTANT]
 > Before running the command below, execute the path setup commands from the previous section: the `export ROUTER_BASE_VALUES=...` and `export ROUTER_VALUES=...` commands above.
@@ -196,6 +196,8 @@ helm install ${GUIDE_NAME} \
   -n ${NAMESPACE} --version ${ROUTER_CHART_VERSION}
 ```
 <!-- guide:deploy.standalone end -->
+
+To use **agentgateway** as the sidecar proxy instead of Envoy, see [router recipes](../recipes/router/README.md).
 
 <details>
 <summary><h4>Gateway Mode</h4></summary>
