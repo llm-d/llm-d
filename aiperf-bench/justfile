@@ -150,7 +150,7 @@ lmeval tasks="gsm8k" concurrency="100":
         lm_eval \
             --model local-completions \
             --model_args "model={{model}},tokenizer={{tokenizer}},base_url={{url}}/v1/completions,num_concurrent={{concurrency}},tokenized_requests=False,trust_remote_code=True" \
-            --tasks {{tasks}} --limit 500
+            --tasks {{tasks}} # --limit 500
 
 install-lmeval:
   kubectl exec -n {{namespace}}  deploy/{{deploy}} -- pip install lm_eval[api] transformers
