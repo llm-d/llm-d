@@ -5,8 +5,10 @@
 #  - TEAM quota (redis-quota, classifying, per-model prefix): reserved vs overflow.
 #  - TIER: per-topic label; tier-priority merge policy orders each pool's lanes.
 #
-# PromQL endpoint = the GMP query frontend (manifests/gmp-frontend.yaml).
-# NOTE: GMP/Monarch lags real time ~1-2 min. Replace MODEL_A/MODEL_B, POOL_A/POOL_B.
+# PromQL endpoint = the GMP query frontend (manifests/gmp-frontend.yaml), already
+# scoped to NAMESPACE — no PROM_URL here, unlike the self-hosted Prometheus overlays.
+# NOTE: GMP/Monarch lags real time ~1-2 min.
+# Replace: PROJECT_ID, NAMESPACE, IGW_HOST, POOL_A/POOL_B.
 ap:
 
   messageQueueImpl: "gcp-pubsub-gated"

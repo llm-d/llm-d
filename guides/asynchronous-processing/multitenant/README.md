@@ -98,20 +98,30 @@ This guide layers on the base [asynchronous-processing](../README.md) guide — 
   export IP=$(kubectl get service optimized-baseline-epp -n llm-d-optimized-baseline -o jsonpath='{.spec.clusterIP}')
   export POOL_A=<pool-a> POOL_B=<pool-b>       # InferencePool names (saturation-gate scope)
   export MODEL_A=<model-a> MODEL_B=<model-b>   # served model names (go in payload.model)
+
+  # Scenario C only: the base URL the saturation gates read PromQL from. The default
+  # matches the kube-prometheus-stack install in Observability below; override it if
+  # your Prometheus lives somewhere else.
+  export PROM_URL=http://kps-kube-prometheus-stack-prometheus.monitoring.svc.cluster.local:9090
   ```
 
 ## Configuration and Deployment
 
 The value overlays live in [`values/`](values/) with literal placeholders (`NAMESPACE`, `IGW_HOST`,
-`POOL_A`, `POOL_B`, and — Pub/Sub only — `PROJECT_ID`). Render one for your environment before
-installing:
+`POOL_A`, `POOL_B`, `PROM_URL` on the self-hosted-Prometheus saturation overlays, and — Pub/Sub only —
+`PROJECT_ID`). Render one for your environment before installing:
 
 ```bash
 render() {   # render <overlay-path> -> stdout
   sed -e "s/NAMESPACE/${NAMESPACE}/g" -e "s#IGW_HOST#${IP}#g" \
-      -e "s/POOL_A/${POOL_A}/g" -e "s/POOL_B/${POOL_B}/g" "$1"
+      -e "s/POOL_A/${POOL_A}/g" -e "s/POOL_B/${POOL_B}/g" \
+      -e "s#PROM_URL#${PROM_URL:-http://kps-kube-prometheus-stack-prometheus.monitoring.svc.cluster.local:9090}#g" "$1"
 }
 ```
+
+`MODEL_A` / `MODEL_B` are **not** overlay placeholders — they never appear in a value, only in
+comments. The served model names reach the system through `payload.model`, which the `publish()`
+helper below fills in from `${MODEL_A}` / `${MODEL_B}`.
 
 ### Redis SortedSet (default)
 
@@ -252,10 +262,36 @@ bringing up [self-hosted Prometheus](#observability), then drive sustained load:
 
 ```bash
 render ${MT}/values/redis/saturation-prometheus.yaml > /tmp/mt-redis-sat.yaml
+grep prometheusURL /tmp/mt-redis-sat.yaml    # must be your Prometheus, not the literal PROM_URL
 helm upgrade async-processor \
     oci://ghcr.io/llm-d/charts/async-processor \
     -f /tmp/mt-redis-sat.yaml -n ${NAMESPACE} --version ${ASYNC_VERSION}
+```
 
+**Confirm the gates can reach Prometheus before you read anything into the result.** The gates are
+`wait-on-refuse(prometheus-query)` with `"fallback":"1"` — a budget of 1 is a wide-open gate, so an
+unreachable Prometheus produces a run that looks perfect and demonstrates nothing.
+
+```bash
+# 1. The URL the gates use resolves and answers, from inside the cluster:
+kubectl run --rm -i promcheck --image=curlimages/curl --restart=Never -n ${NAMESPACE} -- \
+    curl -sS --max-time 5 "${PROM_URL}/api/v1/query?query=up" | head -c 120
+# -> {"status":"success",...}   anything else means the gates are blind
+
+# 2. vLLM is actually being scraped (the metric the gates read):
+kubectl run --rm -i promcheck-vllm --image=curlimages/curl --restart=Never -n ${NAMESPACE} -- \
+    curl -sS --max-time 5 --data-urlencode "query=sum(vllm:num_requests_running{inference_pool=\"${POOL_A}\"})" \
+    "${PROM_URL}/api/v1/query" | head -c 200
+# -> a result with a value; an empty "result":[] means the PodMonitor is not matching
+
+# 3. The processor is not silently falling back:
+kubectl logs -n ${NAMESPACE} deploy/async-processor --tail=200 | grep -i "using fallback value" \
+    && echo ">>> gates are on the fallback budget (1 = wide open), not on live metrics"
+```
+
+Then drive sustained load:
+
+```bash
 publish premium a 200 & publish batch a 200 &   # heavy on model A; keep model B light
 wait
 ```
@@ -266,6 +302,8 @@ keeps dispatching at full rate** (its own gate reads only `POOL_B`). As `model-a
 merge policy drains the highest lanes first. Query each model's budget independently:
 
 ```bash
+# Assumes the kube-prometheus-stack install from Observability below; point this at
+# whatever ${PROM_URL} resolves to if your Prometheus lives elsewhere.
 kubectl port-forward -n monitoring svc/kps-kube-prometheus-stack-prometheus 9090:9090 &
 curl -s localhost:9090/api/v1/query --data-urlencode \
   "query=clamp(1 - sum(vllm:num_requests_running{inference_pool=\"${POOL_A}\"})/20, 0, 1)"   # model-a budget
@@ -333,6 +371,10 @@ Prometheus path reacts within one scrape.
 - **Saturation gate.** These overlays use `prometheus-query` over `vllm:num_requests_running`. The
   `prometheus-saturation` gate instead expects the EPP metric
   `inference_extension_flow_control_pool_saturation`.
+- **An unreachable Prometheus fails open, not closed.** The saturation gates set `"fallback":"1"`, and
+  a budget of 1 is a fully open gate. If `PROM_URL` is wrong, or the vLLM `PodMonitor` matches nothing,
+  Scenario C completes cleanly and demonstrates nothing — no error, no parked pool. Run the three
+  checks in [Scenario C](#scenario-c--priority-under-saturation) before drawing conclusions from a run.
 
 ## Cleanup
 
