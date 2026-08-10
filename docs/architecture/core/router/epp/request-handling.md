@@ -88,40 +88,48 @@ Parser plugins understand the payloads of requests and responses. This is key fo
 
 ## Metrics & Observability
 
-The Request Handling subsystem exposes metrics tracking request volume, success, latency, and token usage. Unless otherwise noted, these metrics carry the labels `model_name` and `target_model_name`.
+The Request Handling subsystem exposes metrics tracking request volume, success, latency, and token usage. Unless otherwise noted, request and latency metrics carry the label set `{model_name, target_model_name, fairness_id, priority}`.
 
 #### Request Volume & Success
 
 | Metric | Type | Description | Labels |
 |--------|------|-------------|--------|
-| `inference_objective_request_total` | Counter | Total request count per model | `model_name`, `target_model_name`, `priority` |
-| `inference_objective_request_error_total` | Counter | Total error count per model | `model_name`, `target_model_name`, `error_code` |
+| `llm_d_epp_request_total` | Counter | Total request count | `model_name`, `target_model_name`, `fairness_id`, `priority` |
+| `llm_d_epp_request_error_total` | Counter | Total error count | `model_name`, `target_model_name`, `fairness_id`, `priority`, `error_code` |
 | `llm_d_epp_request_running` | Gauge | Current active running requests | `model_name`, `target_model_name`, `fairness_id`, `priority` |
 
 #### Latency & SLOs
 
 | Metric | Type | Description | Labels |
 |--------|------|-------------|--------|
-| `inference_objective_request_duration_seconds` | Distribution | End-to-end response latency | `model_name`, `target_model_name` |
-| `inference_objective_normalized_time_per_output_token_seconds` | Distribution | Normalized Time Per Output Token (NTPOT) | `model_name`, `target_model_name` |
-| `inference_objective_request_ttft_seconds` | Distribution | Time to first token (TTFT) | `model_name`, `target_model_name` |
-| `inference_objective_request_predicted_ttft_seconds` | Distribution | Predicted TTFT | `model_name`, `target_model_name` |
-| `inference_objective_request_ttft_prediction_duration_seconds` | Distribution | Time spent predicting TTFT | `model_name`, `target_model_name` |
-| `inference_objective_request_predicted_tpot_seconds` | Distribution | Predicted TPOT | `model_name`, `target_model_name` |
-| `inference_objective_request_tpot_prediction_duration_seconds` | Distribution | Time spent predicting TPOT | `model_name`, `target_model_name` |
-| `inference_objective_request_slo_violation_total` | Counter | Total count of requests violating SLO | `model_name`, `target_model_name`, `type` |
+| `llm_d_epp_request_duration_seconds` | Histogram | End-to-end response latency | `model_name`, `target_model_name`, `fairness_id`, `priority` |
+| `llm_d_epp_request_ntpot_seconds` | Histogram | Normalized Time Per Output Token (NTPOT) | `model_name`, `target_model_name`, `fairness_id`, `priority` |
+| `llm_d_epp_request_ttft_seconds` | Histogram | Time to first token (TTFT) | `model_name`, `target_model_name`, `fairness_id`, `priority`, `streaming` |
+| `llm_d_epp_request_streaming_tpot_seconds` | Histogram | Average time per output token (streaming) | `model_name`, `target_model_name`, `fairness_id`, `priority` |
+| `llm_d_epp_request_streaming_itl_seconds` | Histogram | Inter-token latency (streaming) | `model_name`, `target_model_name`, `fairness_id`, `priority` |
+| `llm_d_epp_request_predicted_ttft_seconds` | Histogram | Predicted TTFT | `plugin_name`, `plugin_type`, `model_name`, `target_model_name` |
+| `llm_d_epp_request_ttft_prediction_duration_seconds` | Histogram | Time spent predicting TTFT | `plugin_name`, `plugin_type`, `model_name`, `target_model_name` |
+| `llm_d_epp_request_predicted_tpot_seconds` | Histogram | Predicted TPOT | `plugin_name`, `plugin_type`, `model_name`, `target_model_name` |
+| `llm_d_epp_request_tpot_prediction_duration_seconds` | Histogram | Time spent predicting TPOT | `plugin_name`, `plugin_type`, `model_name`, `target_model_name` |
+| `llm_d_epp_request_slo_violation_total` | Counter | Total count of requests violating SLO | `plugin_name`, `plugin_type`, `model_name`, `target_model_name`, `type` |
+
+#### Payload & Token Usage
 
 | Metric | Type | Description | Labels |
 |--------|------|-------------|--------|
-| `inference_objective_request_sizes` | Distribution | Request size in bytes | `model_name`, `target_model_name` |
-| `inference_objective_response_sizes` | Distribution | Response size in bytes | `model_name`, `target_model_name` |
-| `inference_objective_input_tokens` | Distribution | Input token count per request | `model_name`, `target_model_name` |
-| `inference_objective_output_tokens` | Distribution | Output token count per request | `model_name`, `target_model_name` |
-| `inference_objective_prompt_cached_tokens` | Distribution | Number of prompt cached tokens | `model_name`, `target_model_name` |
+| `llm_d_epp_request_size_bytes` | Histogram | Incoming request body size in bytes | `model_name`, `target_model_name`, `fairness_id`, `priority` |
+| `llm_d_epp_response_size_bytes` | Histogram | Outgoing response body size in bytes | `model_name`, `target_model_name`, `fairness_id`, `priority` |
+| `llm_d_epp_request_input_tokens` | Histogram | Input token count per request | `model_name`, `target_model_name`, `fairness_id`, `priority` |
+| `llm_d_epp_request_output_tokens` | Histogram | Output token count per request | `model_name`, `target_model_name`, `fairness_id`, `priority` |
+| `llm_d_epp_request_cached_tokens` | Histogram | Distribution of prompt tokens read from cache | `model_name`, `target_model_name`, `fairness_id`, `priority` |
 
 > **Note:** Response-level metrics (response sizes, output tokens, NTPOT) require Envoy body mode to be set to `Buffered` or `Streamed`. For vLLM streaming responses with usage data, include `stream_options: {"include_usage": true}` in the request.
 
+#### Processing Overhead, Model Rewrite & Request Gauges
+
 | Metric | Type | Description | Labels |
 |--------|------|-------------|--------|
-| `inference_objective_inference_request_metric` | Gauge | Consolidated gauge for request metrics | `model_name`, `target_model_name`, `type` |
+| `llm_d_epp_request_processing_duration_seconds` | Histogram | Time from request receipt until request body has been handled | *None* |
+| `llm_d_epp_response_processing_duration_seconds` | Histogram | EPP response processing latency | *None* |
+| `llm_d_epp_inference_request_metric` | Gauge | Consolidated gauge for request metrics | `plugin_name`, `plugin_type`, `model_name`, `target_model_name`, `type` |
 | `llm_d_epp_model_rewrite_decisions_total` | Counter | Total number of model rewrite decisions | `model_rewrite_name`, `model_name`, `target_model` |
