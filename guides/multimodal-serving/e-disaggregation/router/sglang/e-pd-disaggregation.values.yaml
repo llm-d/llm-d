@@ -1,4 +1,4 @@
-## Heterogeneous SGLang E/PD router overrides.
+## SGLang E/PD router overrides.
 ##
 ## The llm-d Router selects a PD endpoint. SGLang then selects Encode workers
 ## from the --encoder-urls configured on that PD worker.
@@ -11,9 +11,9 @@ router:
       targetPort: 8081
 
   epp:
-    pluginsConfigFile: "sglang-e-pd-config.yaml"
+    pluginsConfigFile: "e-pd-config.yaml"
     pluginsCustomConfig:
-      sglang-e-pd-config.yaml: |
+      e-pd-config.yaml: |
         apiVersion: llm-d.ai/v1alpha1
         kind: EndpointPickerConfig
         plugins:
@@ -29,5 +29,6 @@ router:
 
   modelServers:
     matchLabels:
-      llm-d.ai/guide: "e-disaggregation-sglang-heterogeneous"
+      llm-d.ai/guide: "e-disaggregation"
+      llm-d.ai/engine-type: "sglang"
       llm-d.ai/role: "decode"

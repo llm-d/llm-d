@@ -10,6 +10,12 @@ metadata:
 spec:
   progressDeadlineSeconds: 7200
   replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/component: pd
+      llm-d.ai/accelerator-variant: gpu
+      llm-d.ai/accelerator-vendor: nvidia
+      llm-d.ai/role: decode
   strategy:
     type: Recreate
   template:

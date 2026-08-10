@@ -14,6 +14,8 @@ spec:
   selector:
     matchLabels:
       app.kubernetes.io/component: encode
+      llm-d.ai/accelerator-variant: xpu
+      llm-d.ai/accelerator-vendor: intel
       llm-d.ai/role: encode
   template:
     metadata:

@@ -2,11 +2,12 @@
 
 ## Overview
 
-This experimental guide deploys `Qwen/Qwen3-VL-32B-Instruct` with encode disaggregation for multimodal inference workloads. Encode disaggregation offloads the multimodal encoding stage (converting raw images, video, or audio into embeddings) to dedicated workers. The resulting embeddings are then consumed by prefill/decode workers alongside text tokens. When a request contains multiple multimodal entries, they can be processed concurrently by different Encode workers, reducing overall latency.
+This experimental guide deploys encode-disaggregated multimodal inference workloads. Encode disaggregation offloads the multimodal encoding stage (converting raw images, video, or audio into embeddings) to dedicated workers. The resulting embeddings are consumed by prefill/decode workers alongside text tokens. When a request contains multiple multimodal entries, different Encode workers can process them concurrently.
 
-For heterogeneous E/PD with Intel XPU Encode workers, an NVIDIA GPU PD worker,
-and SGLang, see the
-[Heterogeneous SGLang E/PD Guide](./heterogeneous/sglang/README.md).
+The logical worker roles are common across serving engines, but orchestration and embedding transfer are engine-specific:
+
+* **vLLM** - the llm-d Router selects Encode and downstream workers, and the routing sidecar coordinates EC Connector transfers.
+* **SGLang** - the llm-d Router selects the PD worker, which dispatches media items to statically configured Encode workers.
 
 llm-d supports two encode-disaggregated topologies:
 
@@ -19,16 +20,16 @@ llm-d supports two encode-disaggregated topologies:
 > The Encode (E) stage is only relevant for requests with multimodal content (images, video, or audio). For text-only requests, the encode stage is skipped regardless of the configured topology.
 
 > [!WARNING]
-> Encode disaggregation is under active development in both vLLM and llm-d Router.
+> Encode disaggregation is under active development in vLLM, SGLang, and the llm-d Router.
 
-### E/PD Configuration
+### vLLM E/PD Reference Configuration
 
 In E/PD, dedicated encode workers handle multimodal processing while a single worker type handles both prefill and decode. Multiple encode workers enable parallel processing of multimodal entries within a single request:
 
 * 2 Encode Workers (multimodal encoding, parallelized across entries)
 * 8 TP=2 Decode Workers (prefill + decode combined)
 
-### E/P/D Configuration
+### vLLM E/P/D Reference Configuration
 
 E/P/D extends P/D disaggregation by adding a dedicated encode stage. This provides maximum specialization, with multiple encode workers processing multimodal content in parallel:
 
@@ -49,11 +50,13 @@ Choose between topologies:
 * **E/PD** - simpler deployment; best when prefill and decode do not need separate scaling, or when the primary bottleneck is encode
 * **E/P/D** - extends the [P/D Disaggregation](../../pd-disaggregation/README.md) guide by adding a dedicated encode stage. The reasons for separating prefill from decode (heterogeneous parallelism, xPyD ratios, workload specialization) are described in the [P/D Best Practices](../../pd-disaggregation/README.md#pd-best-practices) section
 
-### Supported Hardware Backends
+### Deployment Profiles
 
-| Backend           | Directory                    | Notes                        |
-| ----------------- | ---------------------------- | ---------------------------- |
-| NVIDIA GPU (vLLM) | `modelserver/gpu/vllm/`      | vLLM with encode disagg      |
+| Engine | Topology | Accelerators | Model server | Router values | Details |
+| --- | --- | --- | --- | --- | --- |
+| vLLM | E/PD | NVIDIA GPU | `modelserver/gpu/vllm/e-pd/` | `router/vllm/e-pd-disaggregation.values.yaml` | Default vLLM profile |
+| vLLM | E/P/D | NVIDIA GPU | `modelserver/gpu/vllm/e-p-d/` | `router/vllm/e-p-d-disaggregation.values.yaml` | Default vLLM profile |
+| SGLang | E/PD | Intel XPU Encode + GPU PD | `modelserver/hetero/sglang/e-pd/xpu-encode-gpu-pd/` | `router/sglang/e-pd-disaggregation.values.yaml` | [SGLang XPU Encode + GPU PD profile](./profiles/sglang-xpu-encode-gpu-pd.md) |
 
 ## Prerequisites
 
@@ -63,30 +66,45 @@ Choose between topologies:
 export branch="main" # branch, tag, or commit hash
 git clone https://github.com/llm-d/llm-d.git && cd llm-d && git checkout ${branch}
 ```
-- Set the following environment variables (choose your topology):
+- Set the common guide environment:
 
-**For E/PD:**
 ```bash
 export REPO_ROOT=$(realpath $(git rev-parse --show-toplevel))
-source ${REPO_ROOT}/guides/env.sh
-export RELEASE_NAME="e-disaggregation"
+source "${REPO_ROOT}/guides/env.sh"
 export GUIDE_PATH="multimodal-serving/e-disaggregation"
+```
+
+### Select a Deployment Profile
+
+For the vLLM E/PD profile:
+
+```bash
+export RELEASE_NAME="e-disaggregation"
 export TOPOLOGY="e-pd"
 export NAMESPACE="llm-d-e-pd-disaggregation"
 export MODEL_NAME="Qwen/Qwen3-VL-32B-Instruct"
+export INFRA_PROVIDER="gke" # base | gke
+export ROUTER_VALUES="${REPO_ROOT}/guides/${GUIDE_PATH}/router/vllm/${TOPOLOGY}-disaggregation.values.yaml"
+export MODEL_SERVER_PATH="${REPO_ROOT}/guides/${GUIDE_PATH}/modelserver/gpu/vllm/${TOPOLOGY}/${INFRA_PROVIDER}"
+export MONITORING_COMPONENT="monitoring-pd"
 ```
 
-**For E/P/D:**
+For the vLLM E/P/D profile:
+
 ```bash
-export REPO_ROOT=$(realpath $(git rev-parse --show-toplevel))
-source ${REPO_ROOT}/guides/env.sh
 export RELEASE_NAME="e-disaggregation"
-export GUIDE_PATH="multimodal-serving/e-disaggregation"
 export TOPOLOGY="e-p-d"
 export NAMESPACE="llm-d-e-p-d-disaggregation"
 export MODEL_NAME="Qwen/Qwen3-VL-32B-Instruct"
-export REPO_ROOT=$(realpath $(git rev-parse --show-toplevel))
+export INFRA_PROVIDER="gke" # base | gke
+export ROUTER_VALUES="${REPO_ROOT}/guides/${GUIDE_PATH}/router/vllm/${TOPOLOGY}-disaggregation.values.yaml"
+export MODEL_SERVER_PATH="${REPO_ROOT}/guides/${GUIDE_PATH}/modelserver/gpu/vllm/${TOPOLOGY}/${INFRA_PROVIDER}"
+export MONITORING_COMPONENT="monitoring-pd"
 ```
+
+For SGLang E/PD, use the variables and cluster requirements in the [SGLang XPU Encode + GPU PD profile](./profiles/sglang-xpu-encode-gpu-pd.md).
+
+### Complete Common Prerequisites
 
 - Install the Gateway API Inference Extension CRDs:
 ```bash
@@ -120,7 +138,7 @@ This deploys the llm-d Router with an Envoy sidecar, it doesn't set up a Kuberne
 helm install ${RELEASE_NAME} \
     ${ROUTER_STANDALONE_CHART} \
     -f ${REPO_ROOT}/guides/recipes/router/base.values.yaml \
-    -f ${REPO_ROOT}/guides/${GUIDE_PATH}/router/${TOPOLOGY}-disaggregation.values.yaml \
+    -f ${ROUTER_VALUES} \
     -n ${NAMESPACE} --version ${ROUTER_CHART_VERSION}
 ```
 
@@ -138,7 +156,7 @@ helm install ${RELEASE_NAME} \
     ${ROUTER_GATEWAY_CHART} \
     -f ${REPO_ROOT}/guides/recipes/router/base.values.yaml \
     -f ${REPO_ROOT}/guides/recipes/router/features/httproute-flags.yaml \
-    -f ${REPO_ROOT}/guides/${GUIDE_PATH}/router/${TOPOLOGY}-disaggregation.values.yaml \
+    -f ${ROUTER_VALUES} \
     --set provider.name=${PROVIDER_NAME} \
     -n ${NAMESPACE} --version ${ROUTER_CHART_VERSION}
 ```
@@ -150,8 +168,7 @@ helm install ${RELEASE_NAME} \
 Apply the Kustomize overlays for your chosen topology:
 
 ```bash
-export INFRA_PROVIDER=gke # base | gke
-kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_PATH}/modelserver/gpu/vllm/${TOPOLOGY}/${INFRA_PROVIDER}/
+kubectl apply -n ${NAMESPACE} -k ${MODEL_SERVER_PATH}
 ```
 
 ### 3. Enable Monitoring (optional)
@@ -161,7 +178,8 @@ kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_PATH}/modelserver/g
 - Deploy the monitoring resources for model servers:
 
 ```bash
-kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/recipes/modelserver/components/monitoring-pd
+kubectl apply -n ${NAMESPACE} \
+  -k ${REPO_ROOT}/guides/recipes/modelserver/components/${MONITORING_COMPONENT}
 ```
 
 ## Verification
@@ -190,6 +208,7 @@ export IP=$(kubectl get gateway llm-d-inference-gateway -n ${NAMESPACE} -o jsonp
 kubectl run curl-debug --rm -it \
     --image=cfmanteiga/alpine-bash-curl-jq \
     --env="IP=$IP" \
+    --env="MODEL_NAME=$MODEL_NAME" \
     --env="NAMESPACE=$NAMESPACE" \
     -- /bin/bash
 ```
@@ -200,7 +219,7 @@ kubectl run curl-debug --rm -it \
 curl -X POST http://${IP}/v1/chat/completions \
     -H 'Content-Type: application/json' \
     -d '{
-        "model": "Qwen/Qwen3-VL-32B-Instruct",
+        "model": "'"${MODEL_NAME}"'",
         "messages": [
             {
                 "role": "user",
@@ -228,7 +247,7 @@ curl -X POST http://${IP}/v1/chat/completions \
 curl -X POST http://${IP}/v1/chat/completions \
     -H 'Content-Type: application/json' \
     -d '{
-        "model": "Qwen/Qwen3-VL-32B-Instruct",
+        "model": "'"${MODEL_NAME}"'",
         "messages": [
             {
                 "role": "user",
@@ -245,12 +264,14 @@ To remove the deployed components:
 
 ```bash
 helm uninstall ${RELEASE_NAME} -n ${NAMESPACE}
-kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_PATH}/modelserver/gpu/vllm/${TOPOLOGY}/${INFRA_PROVIDER}/
+kubectl delete -n ${NAMESPACE} -k ${MODEL_SERVER_PATH}
 ```
 
 If you deployed in Gateway Mode, also remove the Gateway by following [the gateway cleanup guide](../../../docs/infrastructure/gateway/gke.md#cleanup).
 
-## Architecture
+## vLLM Architecture
+
+The following request flows apply to the vLLM profiles. The SGLang control and data path is described in the [SGLang XPU Encode + GPU PD profile](./profiles/sglang-xpu-encode-gpu-pd.md#architecture).
 
 ### EC Connector
 The EC Connector is a high-level architectural interface designed to transfer encoder outputs (such as image, video, or audio embeddings) between a dedicated producer (an Encode Worker) and downstream consumers (Prefill or Decode Workers).
