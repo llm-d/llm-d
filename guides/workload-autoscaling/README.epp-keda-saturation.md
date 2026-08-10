@@ -24,7 +24,7 @@ Before proceeding, ensure you have:
 
 1. **Monitoring stack with Prometheus over HTTPS** — See [autoscaling prerequisites](README.md#prerequisites) and [Prometheus Setup Guide](../../docs/operations/observability/setup.md). This includes KEDA installation.
 
-2. **EPP flow control enabled** — The `llm_d_epp_flow_control_pool_saturation` metric requires the EPP flow control feature gate to be enabled in your Endpoint Picker configuration. This guide includes an `epp-endpoint-picker-config.yaml` that enables flow control and registers the optimized-baseline plugins. See [EPP Flow Control](../../docs/architecture/core/router/epp/flow-control.md) for details on flow control behavior.
+2. **EPP flow control enabled** — The `llm_d_epp_flow_control_pool_saturation` metric requires the EPP flow control feature gate. This guide provides a `router.values.yaml` that enables flow control and registers the optimized-baseline plugins; you layer it onto the router with a `helm upgrade` in [Configure](#configure) below. See [EPP Flow Control](../../docs/architecture/core/router/epp/flow-control.md) for details on flow control behavior.
 
 3. **Optimized-baseline deployment** — Complete the [optimized-baseline guide](../optimized-baseline/README.md).
 
@@ -71,7 +71,23 @@ This creates a secret named `prometheus-token` containing:
 - `token`: bearer token for Prometheus authentication
 - `ca.crt`: CA certificate for TLS verification
 
-### 2. Apply EPP Config, KEDA ScaledObject, and TriggerAuthentication
+### 2. Enable EPP flow control on the router
+
+Flow control is what emits `llm_d_epp_flow_control_pool_saturation`. Enable it by
+layering this guide's `router.values.yaml` onto your optimized-baseline router install
+(this registers the flow-control feature gate and the four optimized-baseline plugins):
+
+```bash
+helm upgrade optimized-baseline \
+  ${ROUTER_STANDALONE_CHART} \
+  -f ${REPO_ROOT}/guides/recipes/router/base.values.yaml \
+  -f ${REPO_ROOT}/guides/optimized-baseline/router/optimized-baseline.values.yaml \
+  -f ${REPO_ROOT}/guides/recipes/router/features/monitoring.values.yaml \
+  -f ${REPO_ROOT}/guides/workload-autoscaling/optimized-baseline-autoscaling/keda-epp-saturation/router.values.yaml \
+  -n ${NAMESPACE} --version ${ROUTER_CHART_VERSION}
+```
+
+### 3. Apply the KEDA ScaledObject and TriggerAuthentication
 
 On generic Kubernetes with the bundled kube-prometheus-stack, apply the `k8s` overlay:
 
@@ -85,9 +101,8 @@ On OpenShift, apply the `ocp` overlay instead (see [OpenShift](#openshift) — i
 kubectl apply -k ${REPO_ROOT}/guides/workload-autoscaling/optimized-baseline-autoscaling/keda-epp-saturation/ocp -n ${NAMESPACE}
 ```
 
-Before applying, edit the manifests to match your deployment:
-- `epp-endpoint-picker-config.yaml`: Verify the EPP config is appropriate for your setup. Customize plugin weights if needed.
-- `scaledobject.yaml`: 
+Before applying, edit `scaledobject.yaml` to match your deployment:
+- `scaledobject.yaml`:
   - Update `inference_pool` label in the pool-saturation query (currently: `"default"`)
   - Update `model_name` label in the running-requests query (currently: `"Qwen/Qwen3-32B"`)
   - Update `minReplicaCount`, `maxReplicaCount`, and thresholds for each trigger
