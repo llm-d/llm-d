@@ -82,6 +82,7 @@ jobs:
       infra_provider: ${{ inputs.infra_provider || 'amd-ci' }}
       connector: ${{ inputs.connector || '' }}
       cluster_namespace: ${{ inputs.cluster_namespace || 'llm-d-nightly-inference-rocm-gpu' }}
+      persistent_model: ${{ inputs.persistent_model || 'true' }}
       helm_release: ${{ inputs.helm_release || 'llmdbenchcicdr-rocm' }}
       workspace_dir: ${{ inputs.workspace_dir || '/tmp/llmdbenchcicdk-rocm' }}
       bucket_project: ${{ inputs.bucket_project || 'llm-d-scale' }}
