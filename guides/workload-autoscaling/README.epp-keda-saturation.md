@@ -5,7 +5,7 @@ KEDA queries Prometheus directly for two EPP-emitted, InferencePool-scoped signa
 > [!WARNING]
 > This guide is experimental and subject to change. The metrics, configurations, and APIs may evolve as the feature matures. Use in development and test environments only.
 
-This guide uses the four optimized-baseline plugins provided by llm-d (queue-scorer, kv-cache-utilization-scorer, prefix-cache-scorer, and no-hit-lru-scorer) to enable load-aware and prefix-cache-aware routing alongside pool saturation metrics.
+This guide keeps the [optimized-baseline](../optimized-baseline/README.md) routing plugins (`approx-prefix-cache-producer`, `inflight-load-producer`, `prefix-cache-affinity-filter`, `token-load-scorer`) and adds the `flowControl` feature gate, which is what makes the EPP export pool saturation metrics.
 
 ## Metrics
 
@@ -24,7 +24,10 @@ Before proceeding, ensure you have:
 
 1. **Monitoring stack with Prometheus over HTTPS** — See [autoscaling prerequisites](README.md#prerequisites) and [Prometheus Setup Guide](../../docs/operations/observability/setup.md). This includes KEDA installation.
 
-2. **EPP flow control enabled** — The `llm_d_epp_flow_control_pool_saturation` metric requires the EPP flow control feature gate to be enabled in your Endpoint Picker configuration. This guide includes an `epp-endpoint-picker-config.yaml` that enables flow control and registers the optimized-baseline plugins. See [EPP Flow Control](../../docs/architecture/core/router/epp/flow-control.md) for details on flow control behavior.
+2. **EPP flow control enabled** — The `llm_d_epp_flow_control_pool_saturation` metric is only exported when the `flowControl` feature gate is enabled in the EPP's [EndpointPickerConfig](../../docs/api-reference/endpointpickerconfig.md). Configure step 2 below enables it. See [EPP Flow Control](../../docs/architecture/core/router/epp/flow-control.md) for details on flow control behavior.
+
+   > [!IMPORTANT]
+   > `EndpointPickerConfig` is the EPP binary's own config schema, **not** a Kubernetes API type — there is no CRD for it. It lives as a key inside the `<release>-epp` ConfigMap, which the EPP mounts at `/config` and reads via `--config-file`. So it is changed by editing that ConfigMap, and cannot be applied as a standalone resource with `kubectl apply` or kustomize.
 
 3. **Optimized-baseline deployment** — Complete the [optimized-baseline guide](../optimized-baseline/README.md).
 
@@ -71,7 +74,79 @@ This creates a secret named `prometheus-token` containing:
 - `token`: bearer token for Prometheus authentication
 - `ca.crt`: CA certificate for TLS verification
 
-### 2. Apply EPP Config, KEDA ScaledObject, and TriggerAuthentication
+### 2. Enable EPP flow control
+
+The optimized-baseline guide installs the router **without** `flowControl`, so the
+saturation metric does not exist yet. The EPP reads its config from the
+`optimized-baseline-epp` ConfigMap, so enabling the gate is two commands.
+
+Read the current EPP plugins config:
+
+```bash
+kubectl get configmap optimized-baseline-epp -n ${NAMESPACE} \
+  -o jsonpath="{.data['optimized-baseline-plugins\.yaml']}"
+```
+
+Patch it back with `featureGates` added.
+
+> [!WARNING]
+> The patch replaces that key wholesale, so the document you send must be your own
+> config plus the gate — not a blind copy of the one below. The document below is the
+> plugin list a stock optimized-baseline install produces; if the previous command
+> printed anything extra (a `metrics-data-source` plugin, `parameters` blocks, the
+> TensorRT-LLM plugin set), carry those lines over or the patch silently drops them.
+
+```bash
+kubectl patch configmap optimized-baseline-epp -n ${NAMESPACE} --type merge --patch-file /dev/stdin <<'PATCH'
+data:
+  optimized-baseline-plugins.yaml: |
+    apiVersion: llm-d.ai/v1alpha1
+    kind: EndpointPickerConfig
+    featureGates:
+    - flowControl
+    plugins:
+    - type: approx-prefix-cache-producer
+    - type: inflight-load-producer
+    - type: prefix-cache-affinity-filter
+    - type: token-load-scorer
+    schedulingProfiles:
+    - name: default
+      plugins:
+      - pluginRef: prefix-cache-affinity-filter
+      - pluginRef: token-load-scorer
+PATCH
+
+kubectl rollout restart deployment/optimized-baseline-epp -n ${NAMESPACE}
+```
+
+Notes:
+- The EPP reads `--config-file` once at startup, so the restart is required.
+- A merge patch rewrites only this one key; the ConfigMap's other keys
+  (`default-plugins.yaml`, `payload-agnostic.yaml`, `launch-flags`) are left alone.
+- Add `--dry-run=server -o yaml` to the patch to preview the result without applying it.
+- `featureGates` must appear only once in the document. If the first command already
+  printed a `featureGates` block, flow control is on and you can skip to step 3.
+- Helm owns this ConfigMap, so a later `helm upgrade` of the router reverts the patch.
+  Re-run these two commands if that happens.
+
+#### Confirm the metric exists
+
+Once the EPP has restarted, it should be exporting saturation:
+
+```bash
+kubectl logs deployment/optimized-baseline-epp -n ${NAMESPACE} | grep "Flow Control enabled"
+
+kubectl port-forward -n ${NAMESPACE} service/optimized-baseline-epp 9091:9090 &
+curl -s http://localhost:9091/metrics | grep llm_d_epp_flow_control_pool_saturation
+```
+
+The `inference_pool` label in that output is the value the step 3 query needs:
+
+```
+llm_d_epp_flow_control_pool_saturation{inference_pool="optimized-baseline"} 0
+```
+
+### 3. Apply the KEDA ScaledObject and TriggerAuthentication
 
 On generic Kubernetes with the bundled kube-prometheus-stack, apply the `k8s` overlay:
 
@@ -85,13 +160,12 @@ On OpenShift, apply the `ocp` overlay instead (see [OpenShift](#openshift) — i
 kubectl apply -k ${REPO_ROOT}/guides/workload-autoscaling/optimized-baseline-autoscaling/keda-epp-saturation/ocp -n ${NAMESPACE}
 ```
 
-Before applying, edit the manifests to match your deployment:
-- `epp-endpoint-picker-config.yaml`: Verify the EPP config is appropriate for your setup. Customize plugin weights if needed.
-- `scaledobject.yaml`: 
-  - Update `inference_pool` label in the pool-saturation query (currently: `"default"`)
-  - Update `model_name` label in the running-requests query (currently: `"Qwen/Qwen3-32B"`)
-  - Update `minReplicaCount`, `maxReplicaCount`, and thresholds for each trigger
-  - If your Prometheus instance is not the bundled llm-d stack, update `serverAddress` in both triggers
+Before applying, edit `scaledobject.yaml` to match your deployment:
+- Update `inference_pool` in the pool-saturation query to the InferencePool name from step 2 (default: `"optimized-baseline"`)
+- Update `model_name` label in the running-requests query (currently: `"Qwen/Qwen3-32B"`)
+- Update the `namespace` label in **both** queries to `${NAMESPACE}`. Both are pinned to a namespace on purpose: against a cluster-wide store such as OpenShift's Thanos, an unpinned query aggregates every EPP on the cluster and would scale your deployment on other tenants' traffic
+- Update `minReplicaCount`, `maxReplicaCount`, and thresholds for each trigger
+- If your Prometheus instance is not the bundled llm-d stack, update `serverAddress` in both triggers
 
 ### Platform-specific notes
 
