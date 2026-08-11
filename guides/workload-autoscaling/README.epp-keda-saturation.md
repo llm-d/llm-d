@@ -5,7 +5,7 @@ KEDA queries Prometheus directly for two EPP-emitted, InferencePool-scoped signa
 > [!WARNING]
 > This guide is experimental and subject to change. The metrics, configurations, and APIs may evolve as the feature matures. Use in development and test environments only.
 
-This guide configures the EPP with flow control enabled plus the flow-control plugin set (`queue-scorer`, `kv-cache-utilization-scorer`, `prefix-cache-scorer`, `no-hit-lru-scorer`) for load-aware and prefix-cache-aware routing. The `flowControl` feature gate alone is not enough — `llm_d_epp_flow_control_pool_saturation` is only emitted when a flow-control-engaging plugin (`queue-scorer`) is present.
+This guide enables the EPP `flowControl` feature gate on top of the optimized-baseline plugins (which it reuses unchanged). Enabling the gate makes the EPP load default flow-control policies — including the `utilization-detector` saturation detector — which emit `llm_d_epp_flow_control_pool_saturation` once the pool has a ready endpoint. No custom plugin set is required.
 
 ## Metrics
 
@@ -24,7 +24,7 @@ Before proceeding, ensure you have:
 
 1. **Monitoring stack with Prometheus over HTTPS** — See [autoscaling prerequisites](README.md#prerequisites) and [Prometheus Setup Guide](../../docs/operations/observability/setup.md). This includes KEDA installation.
 
-2. **EPP flow control enabled** — The `llm_d_epp_flow_control_pool_saturation` metric requires the EPP flow control feature gate **and** a flow-control-engaging plugin (`queue-scorer`). This guide provides a `router.values.yaml` with both, which you layer onto the router with a `helm upgrade` in [Configure](#configure) below. See [EPP Flow Control](../../docs/architecture/core/router/epp/flow-control.md) for details on flow control behavior.
+2. **EPP flow control enabled** — The `llm_d_epp_flow_control_pool_saturation` metric requires the EPP `flowControl` feature gate. This guide provides a `router.values.yaml` that enables it (reusing the optimized-baseline plugins), which you layer onto the router with a `helm upgrade` in [Configure](#configure) below. Enabling the gate loads default flow-control policies; see [EPP Flow Control](../../docs/architecture/core/router/epp/flow-control.md) for details.
 
 3. **Optimized-baseline deployment** — Complete the [optimized-baseline guide](../optimized-baseline/README.md).
 
@@ -75,7 +75,7 @@ This creates a secret named `prometheus-token` containing:
 
 Flow control is what emits `llm_d_epp_flow_control_pool_saturation`. Enable it by
 layering this guide's `router.values.yaml` onto your optimized-baseline router install
-(this enables the flow-control feature gate and the flow-control plugin set that emits the pool-saturation metric):
+(this enables the flowControl feature gate on the optimized-baseline EPP plugins, which it reuses unchanged):
 
 ```bash
 helm upgrade optimized-baseline \
