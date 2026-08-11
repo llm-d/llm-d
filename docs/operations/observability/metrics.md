@@ -108,6 +108,9 @@ epp-servicemonitor      5m
 | `llm_d_epp_request_streaming_itl_seconds` | Inter-token latency (ITL) distribution per flow ID and priority; applicable to streaming requests | Measures pacing between consecutive response body chunks; spikes indicate choppy output |
 | `llm_d_epp_ready_endpoints` | Number of ready endpoints in the pool | If this drops below expected count, pods are crashing or not scheduling |
 | `llm_d_epp_scheduler_attempts_total` | Scheduling attempt counts and outcomes | Track failed scheduling attempts. High failure rate indicates filter/scorer misconfiguration |
+| `llm_d_epp_scheduler_e2e_duration_seconds` | End-to-end scheduling latency distribution | Tracks latency spent within the EPP scheduling cycle |
+| `llm_d_epp_plugin_duration_seconds` | Per-plugin processing latency distribution | Identifies slow or bottlenecked scheduling plugins |
+| `llm_d_epp_disagg_decision_total` | Routing decisions across disaggregation stages | Tracks breakdown of decode-only, prefill-decode, and encode decisions |
 
 ### Flow Control Metrics
 
@@ -121,6 +124,8 @@ When flow control is enabled, these additional metrics are exposed:
 | `llm_d_epp_flow_control_dispatch_cycle_duration_seconds` | Internal dispatch cycle duration distribution | Tracks execution speed of the flow control scheduler loop |
 | `llm_d_epp_flow_control_request_enqueue_duration_seconds` | Request enqueue duration distribution per flow ID and priority | Measures admission overhead entering the flow control queue |
 | `llm_d_epp_flow_control_pool_saturation` | Pool saturation level (0.0 to 1.0+) | Above 1.0 means demand exceeds capacity and flow control is actively throttling. Scale up or shed load |
+| `llm_d_epp_flow_control_stale_endpoints` | Number of endpoints with missing or stale telemetry | Non-zero value indicates metrics collection issues rather than genuine overload |
+| `llm_d_epp_flow_control_requests_total` | Total requests processed by flow control by outcome | Direct signal for rejection (`outcome="RejectedCapacity"`) and eviction rates |
 
 ## Step 4: View Dashboards
 

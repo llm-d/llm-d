@@ -20,10 +20,10 @@ VLLM_PRECOMPILED_WHEEL_COMMIT=0fc695fc6d1d82e9a5ac6835ac8e4e1c83703665 # maps to
 
 
 
-# Used by XPU: prebuilt vLLM image from upstream CI (vllm-ci-test-repo).
+# Used by XPU: official prebuilt vLLM XPU image from Docker Hub.
 # The XPU image is a thin pass-through over this base; switch tags here to upgrade.
-# Tag corresponds to vLLM v0.23.0 release (commit 0fc695fc6d1d82e9a5ac6835ac8e4e1c83703665).
-VLLM_XPU_BASE_IMAGE=public.ecr.aws/q9t5s3a7/vllm-ci-test-repo:0fc695fc6d1d82e9a5ac6835ac8e4e1c83703665-xpu
+# Official vLLM v0.26.0 release image.
+VLLM_XPU_BASE_IMAGE=vllm/vllm-openai-xpu:v0.26.0
 
 # ============================================================================
 # SGLang XPU Version Configuration

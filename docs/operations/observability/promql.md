@@ -68,8 +68,7 @@ Start here when something looks wrong.
 | **Prefill worker utilization** | `avg by(pod) (vllm:num_requests_running{pod=~".*prefill.*"})` |
 | **Prefill worker utilization (SGLang)** | `avg by(pod) (sglang_num_running_reqs{pod=~".*prefill.*"})` |
 | **Decode KV cache utilization** | `avg by(pod) (vllm:kv_cache_usage_perc{pod=~".*decode.*"})` |
-| **Decode KV cache utilization (SGLang)** | `avg by(pod) (sglang_token_usage{pod=~".*decode.*"})` |
-| **P/D decision ratio** | `sum(rate(llm_d_epp_pd_decision_total{decision_type="prefill-decode"}[5m])) / sum(rate(llm_d_epp_pd_decision_total[5m]))` |
+| **Disaggregation decision ratio** | `sum(rate(llm_d_epp_disagg_decision_total{decision_type="prefill-decode"}[5m])) / sum(rate(llm_d_epp_disagg_decision_total[5m]))` |
 
 ### Flow Control
 
