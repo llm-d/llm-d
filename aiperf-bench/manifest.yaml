@@ -1,0 +1,59 @@
+# AIPerf AgentX-MVP benchmark runner.
+#
+# Deploys quay.io/rh-ee-robshaw/aiperf:agentx-v0 as a long-lived "sleep infinity"
+# pod into the same namespace as the llm-d optimized-baseline deployment, so it
+# can reach the router's OpenAI-compatible endpoint over in-cluster DNS. Drive it
+# with `kubectl exec` (see the justfile).
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: aiperf-agentx
+  labels:
+    app: aiperf-agentx
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: aiperf-agentx
+  template:
+    metadata:
+      labels:
+        app: aiperf-agentx
+    spec:
+      restartPolicy: Always
+      containers:
+        - name: aiperf
+          image: quay.io/rh-ee-robshaw/aiperf:agentx-v0
+          imagePullPolicy: IfNotPresent
+          command: ["sleep", "infinity"]
+          workingDir: /workspace
+          env:
+            # Required by the AgentX-MVP scenario for live-assistant response handling.
+            - name: AIPERF_DATASET_WEKA_LIVE_ASSISTANT_RESPONSES
+              value: "1"
+            # Keep HuggingFace dataset cache on the writable emptyDir volume.
+            - name: HF_HOME
+              value: /workspace/.cache/huggingface
+          # Optional HF auth (dataset is public, so not required). If a secret
+          # named `aiperf-hf-token` with key HF_TOKEN exists, it is picked up.
+          envFrom:
+            - secretRef:
+                name: aiperf-hf-token
+                optional: true
+          resources:
+            requests:
+              cpu: "4"
+              memory: 8Gi
+            limits:
+              cpu: "16"
+              memory: 32Gi
+              ephemeral-storage: 20Gi
+          volumeMounts:
+            - name: workspace
+              mountPath: /workspace
+      volumes:
+        - name: workspace
+          emptyDir:
+            sizeLimit: 20Gi

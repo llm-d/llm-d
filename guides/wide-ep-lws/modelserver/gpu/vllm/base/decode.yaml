@@ -7,12 +7,11 @@ metadata:
     llm-d.ai/guide: "wide-ep-lws"
     llm-d.ai/accelerator-variant: "gpu"
     llm-d.ai/accelerator-vendor: "nvidia"
-    llm-d.ai/model: DeepSeek-R1-0528
     llm-d.ai/role: decode
 spec:
   replicas: 1
   leaderWorkerTemplate:
-    size: 2
+    size: 1
     workerTemplate:
       metadata:
         labels:
@@ -20,10 +19,9 @@ spec:
           llm-d.ai/guide: "wide-ep-lws"
           llm-d.ai/accelerator-variant: "gpu"
           llm-d.ai/accelerator-vendor: "nvidia"
-          llm-d.ai/model: DeepSeek-R1-0528
           llm-d.ai/role: decode
       spec:
-        serviceAccountName: deepseek-r1
+        serviceAccountName: glm
         initContainers:
           - name: routing-proxy
             args:
@@ -76,9 +74,11 @@ spec:
             emptyDir: {}
           - name: jit-cache
             emptyDir: {}
+          - name: profiles
+            emptyDir: {}
         containers:
           - name: vllm
-            image: ghcr.io/llm-d/llm-d-cuda-dev:sha-a1bcf21
+            image: docker.io/vllm/vllm-openai:v0.26.0
             securityContext:
               capabilities:
                 add:
@@ -97,14 +97,16 @@ spec:
                 find /dev/shm -type f -delete
 
                 #################
-                # RUN vLLM decode workers via DP Supervisor
+                # RUN vLLM prefill workers via DP Supervisor
                 # The supervisor automatically assigns CUDA_VISIBLE_DEVICES and
                 # --data-parallel-rank to each child process based on local_rank.
                 #################
-                START_RANK=$(( ${LWS_WORKER_INDEX:-0} * DP_SIZE_LOCAL ))
 
+                START_RANK=$(( ${LWS_WORKER_INDEX:-0} * DP_SIZE_LOCAL ))
+                export UCX_IB_ROCE_REACHABILITY_MODE=all
+                
                 exec vllm serve \
-                  deepseek-ai/DeepSeek-R1-0528 \
+                  RedHatAI/GLM-5.2-NVFP4-FP8 \
                   --port 8200 \
                   --disable-access-log-for-endpoints=/health,/metrics \
                   --data-parallel-multi-port-external-lb \
@@ -121,10 +123,11 @@ spec:
                   --kv_transfer_config '{"kv_connector":"NixlConnector",
                                           "kv_role":"kv_both",
                                           "kv_load_failure_policy":"fail"}' \
-                  --enable-dbo \
-                  --dbo-decode-token-threshold 32 \
-                  --all2all-backend deepep_low_latency \
-                  --moe-backend deep_gemm
+                  --all2all-backend flashinfer_nvlink_one_sided \
+                  --kv-cache-dtype fp8 \
+                  --speculative-config '{"method":"mtp","num_speculative_tokens":3}' \
+                  --max-model-len 300000
+
                   # To enable tracing, add:
                   # --otlp-traces-endpoint http://otel-collector:4317 \
                   # --collect-detailed-traces all
@@ -146,23 +149,19 @@ spec:
               - name: VLLM_MEMORY_PROFILER_ESTIMATE_CUDAGRAPHS
                 value: "1"
               - name: MAX_TOKENS
-                value: "256"
+                value: "32"
               - name: DP_SIZE_LOCAL
                 value: "8"
               - name: TP_SIZE
                 value: "1"
               - name: TRITON_LIBCUDA_PATH
-                value: /usr/lib64
+                value: /usr/local/nvidia/lib64
               - name: VLLM_SKIP_P2P_CHECK
                 value: "1"
               - name: VLLM_RANDOMIZE_DP_DUMMY_INPUTS
                 value: "1"
-              - name: VLLM_USE_DEEP_GEMM
-                value: "1"
               - name: NVIDIA_GDRCOPY
                 value: enabled
-              - name: NVSHMEM_SYMMETRIC_SIZE # Prevent NVSHMEM OOM.
-                value: "16G"
               - name: NVSHMEM_REMOTE_TRANSPORT
                 value: ibgda
               - name: NVSHMEM_IB_ENABLE_IBGDA
@@ -262,3 +261,5 @@ spec:
                 mountPath: /var/cache/huggingface
               - name: jit-cache
                 mountPath: /var/cache/vllm
+              - name: profiles
+                mountPath: /profiles

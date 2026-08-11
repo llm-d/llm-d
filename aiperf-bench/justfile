@@ -1,0 +1,194 @@
+# AIPerf AgentX-MVP benchmark against the running llm-d optimized-baseline deployment.
+#
+# Usage:
+#   just deploy            # apply the manifest and wait for the pod
+#   just check             # confirm the runner can reach the model endpoint
+#   just run               # run the full AgentX-MVP benchmark (default 1800s)
+#   just run 16 900        # override concurrency / duration
+#   just sweep             # run back-to-back at 25/50/100/150/200 concurrency
+#   just sweep 900 "8 16"  # override duration / concurrency list
+#   just smoke             # fast plumbing test (~60s, marks result invalid)
+#   just results           # copy artifacts out to ./results
+#   just logs / just shell # inspect the runner
+#   just clean             # delete the runner
+#   just lmeval            # run lm-eval (gsm8k) at 100 concurrency via the lm-eval pod
+#   just lmeval mmlu 50    # override tasks / concurrency
+#   just profile           # capture a 10-step torch profile of decode dp rank 0
+#   just profile 3 90      # profile dp rank 3, wait 90s for the trace dump
+#   just profile-fetch     # copy decode traces out to ./profiles
+
+namespace := "llm-d-wide-ep"
+deploy    := "aiperf-agentx"
+model     := "RedHatAI/GLM-5.2-NVFP4-FP8"
+url       := "http://wide-ep-lws-epp"
+# url       := "http://optimized-baseline-direct"
+concurrency := "60"
+duration    := "300"
+concurrencies := "20 40 60 80 100"
+artifacts   := "/workspace/artifacts"
+# Must match torch_profiler_dir in the decode manifest's --profiler-config.
+profile_dir := "/profiles"
+
+default:
+    @just --list
+
+# Apply the manifest and wait for the runner pod to be ready.
+# Runs `patch` afterwards: the pod's aiperf source is patched in place, so a
+# fresh pod always starts unpatched.
+deploy: && patch
+    kubectl apply -f manifest.yaml
+    kubectl rollout status deploy/{{deploy}} -n {{namespace}} --timeout=300s
+
+# Patch the pod's editable aiperf install so warmup can resume mid-trajectory.
+#
+# In DELTAS_WITHOUT_RESPONSES mode (which AIPERF_DATASET_WEKA_LIVE_ASSISTANT_RESPONSES=1
+# selects), advance_turn() skips the back-fill of turns 0..k-1, so a warmup resume
+# sends only the resumed turn's delta. 44 turns in the weka dataset have an *empty*
+# delta, and resuming onto one produces `"messages": []` -> EPP 400 -> the first
+# terminal warmup failure aborts the whole run. Which lane lands where is random,
+# so this fails intermittently. Back-filling for both delta modes fixes it.
+#
+# Idempotent. Lives in the container filesystem, so it is LOST on every pod restart
+# (rollout, eviction, reschedule) -- re-run this, or just `deploy`, after one.
+patch:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    kubectl exec -i -n {{namespace}} deploy/{{deploy}} -- python - <<'PYEOF'
+    import pathlib
+    p = pathlib.Path("/aiperf/src/aiperf/workers/session_manager.py")
+    src = p.read_text()
+    old = "                self.context_mode == ConversationContextMode.DELTAS_WITH_RESPONSES\n"
+    new = (
+        "                self.context_mode\n"
+        "                in (\n"
+        "                    ConversationContextMode.DELTAS_WITH_RESPONSES,\n"
+        "                    ConversationContextMode.DELTAS_WITHOUT_RESPONSES,\n"
+        "                )\n"
+    )
+    if new in src:
+        print("session_manager.py: already patched")
+    elif old in src:
+        p.write_text(src.replace(old, new, 1))
+        print("session_manager.py: patched")
+    else:
+        raise SystemExit("session_manager.py: no match -- aiperf source changed, re-check the patch")
+    PYEOF
+
+# Sanity check: list models served through the llm-d router from inside the runner.
+# (The slim image has no curl, so use python's urllib.)
+check:
+    kubectl exec -n {{namespace}} deploy/{{deploy}} -- \
+      python -c "import urllib.request as u; print(u.urlopen('{{url}}/v1/models', timeout=10).read().decode())"
+
+# Run the AgentX-MVP benchmark. Args: [concurrency] [duration-seconds] [artifact-dir].
+run concurrency=concurrency duration=duration artifacts=artifacts:
+    kubectl exec -n {{namespace}} deploy/{{deploy}} -- \
+      aiperf profile \
+        --scenario inferencex-agentx-mvp \
+        --url {{url}} \
+        --model {{model}} \
+        --max-context-length 256000 \
+        --endpoint-type chat \
+        --streaming \
+        --use-server-token-count \
+        --public-dataset semianalysis_cc_traces_weka_with_subagents \
+        --concurrency {{concurrency}} \
+        --benchmark-duration {{duration}} \
+        --output-artifact-dir {{artifacts}} \
+        --no-server-metrics \
+        --ui simple
+
+# Run the benchmark back-to-back at each concurrency, one artifact dir per point
+# (/workspace/artifacts/c25, .../c50, ...). Args: [duration-seconds] [concurrency-list].
+sweep duration=duration concurrencies=concurrencies:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    for c in {{concurrencies}}; do
+      echo "==> concurrency $c, {{duration}}s"
+      just smoke "$c" {{duration}}
+    done
+
+# Fast plumbing validation (~60s). Uses --unsafe-override so it runs below the
+# scenario's 900s minimum; result is marked submission_valid: false.
+smoke concurrency=concurrency duration=duration:
+    kubectl exec -n {{namespace}} deploy/{{deploy}} -- \
+      aiperf profile \
+        --scenario inferencex-agentx-mvp \
+        --unsafe-override \
+        --max-context-length 256000 \
+        --url {{url}} \
+        --model {{model}} \
+        --endpoint-type chat \
+        --streaming \
+        --use-server-token-count \
+        --public-dataset semianalysis_cc_traces_weka_with_subagents \
+        --concurrency {{concurrency}} \
+        --benchmark-duration {{duration}} \
+        --output-artifact-dir /workspace/artifacts \
+        --no-server-metrics \
+        --ui simple
+
+# Copy benchmark artifacts out of the runner to a local directory (default ./results).
+results dest="./results":
+    mkdir -p {{dest}}
+    kubectl cp {{namespace}}/$(kubectl get pod -n {{namespace}} -l app={{deploy}} -o jsonpath='{.items[0].metadata.name}'):/workspace/artifacts {{dest}}
+
+# Run lm-evaluation-harness from the lm-eval pod against the deployment's
+# OpenAI-compatible chat endpoint. Args: [tasks] [concurrency].
+lmeval tasks="gsm8k" concurrency="100":
+    kubectl exec -n {{namespace}}  deploy/{{deploy}} -- \
+        lm_eval \
+            --model local-completions \
+            --model_args "model={{model}},base_url={{url}}/v1/completions,num_concurrent={{concurrency}},tokenized_requests=False" \
+            --tasks {{tasks}} # --limit 10
+
+# Capture a torch profile of one decode DP rank. The engine is started with
+# --profiler-config max_iterations=10, so the worker records exactly 10 engine
+# steps after /start_profile and then stops and dumps the trace on its own.
+#
+# The engine only steps when it has work, so run this WHILE a benchmark is in
+# flight (e.g. `just run` in another shell), otherwise the profile stays empty.
+# Args: [dp-rank] [seconds-to-wait-for-the-trace-dump].
+profile rank="0" wait="60":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    pod=$(kubectl get pod -n {{namespace}} -l llm-d.ai/role=decode \
+      -o jsonpath='{.items[0].metadata.name}')
+    port=$((8200 + {{rank}}))
+    echo "==> starting profile on $pod (dp rank {{rank}}, port $port)"
+    kubectl exec -n {{namespace}} "$pod" -c vllm -- \
+      curl -sS -f -X POST "http://localhost:$port/start_profile"
+    echo "==> recording 10 steps, waiting {{wait}}s for the trace dump"
+    sleep {{wait}}
+    # The worker already auto-stopped after 10 steps; this resets its state so
+    # the next `just profile` can start a fresh capture.
+    kubectl exec -n {{namespace}} "$pod" -c vllm -- \
+      curl -sS -f -X POST "http://localhost:$port/stop_profile"
+    kubectl exec -n {{namespace}} "$pod" -c vllm -- ls -lh {{profile_dir}}
+
+# Copy decode torch traces out of the pod (default ./profiles).
+profile-fetch dest="./profiles":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    pod=$(kubectl get pod -n {{namespace}} -l llm-d.ai/role=decode \
+      -o jsonpath='{.items[0].metadata.name}')
+    mkdir -p {{dest}}
+    kubectl cp -c vllm {{namespace}}/"$pod":{{profile_dir}} {{dest}}
+
+# Delete any traces already collected in the decode pod.
+profile-clean:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    pod=$(kubectl get pod -n {{namespace}} -l llm-d.ai/role=decode \
+      -o jsonpath='{.items[0].metadata.name}')
+    kubectl exec -n {{namespace}} "$pod" -c vllm -- \
+      bash -c 'rm -rf {{profile_dir}}/* && echo cleaned'
+
+logs:
+    kubectl logs -n {{namespace}} deploy/{{deploy}} -f
+
+shell:
+    kubectl exec -it -n {{namespace}} deploy/{{deploy}} -- bash
+
+clean:
+    kubectl delete -f manifest.yaml --ignore-not-found

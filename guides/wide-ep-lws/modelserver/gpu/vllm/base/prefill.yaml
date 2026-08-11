@@ -7,12 +7,11 @@ metadata:
     llm-d.ai/guide: "wide-ep-lws"
     llm-d.ai/accelerator-variant: "gpu"
     llm-d.ai/accelerator-vendor: "nvidia"
-    llm-d.ai/model: DeepSeek-R1-0528
     llm-d.ai/role: prefill
 spec:
-  replicas: 1
+  replicas: 3
   leaderWorkerTemplate:
-    size: 2
+    size: 1
     workerTemplate:
       metadata:
         labels:
@@ -20,10 +19,9 @@ spec:
           llm-d.ai/guide: "wide-ep-lws"
           llm-d.ai/accelerator-variant: "gpu"
           llm-d.ai/accelerator-vendor: "nvidia"
-          llm-d.ai/model: DeepSeek-R1-0528
           llm-d.ai/role: prefill
       spec:
-        serviceAccountName: deepseek-r1
+        serviceAccountName: glm
         volumes:
           - name: dshm
             emptyDir:
@@ -35,7 +33,7 @@ spec:
             emptyDir: {}
         containers:
           - name: vllm
-            image: ghcr.io/llm-d/llm-d-cuda:v0.8.0
+            image: docker.io/vllm/vllm-openai:v0.26.0
             securityContext:
               capabilities:
                 add:
@@ -49,22 +47,16 @@ spec:
               - -c
             args:
               - |-
-                # Clear /dev/shm on start to prevent running out of space when crashes occur
-                # https://github.com/llm-d/llm-d/issues/352
-                find /dev/shm -type f -delete
-
-                #################
-                # RUN vLLM prefill workers via DP Supervisor
-                # The supervisor automatically assigns CUDA_VISIBLE_DEVICES and
-                # --data-parallel-rank to each child process based on local_rank.
-                #################
                 START_RANK=$(( ${LWS_WORKER_INDEX:-0} * DP_SIZE_LOCAL ))
+                export UCX_IB_ROCE_REACHABILITY_MODE=all
 
                 exec vllm serve \
-                  deepseek-ai/DeepSeek-R1-0528 \
+                  RedHatAI/GLM-5.2-NVFP4-FP8 \
                   --port 8000 \
                   --gpu-memory-utilization 0.80 \
                   --disable-access-log-for-endpoints=/health,/metrics \
+                  --max-num-batched-tokens 8192 \
+                  --long-prefill-token-threshold 2048 \
                   --data-parallel-multi-port-external-lb \
                   --data-parallel-supervisor-port 8008 \
                   --enable-expert-parallel \
@@ -77,8 +69,10 @@ spec:
                   --kv_transfer_config '{"kv_connector":"NixlConnector",
                                           "kv_role":"kv_both",
                                           "kv_load_failure_policy":"fail"}' \
-                  --moe-backend deep_gemm \
-                  --all2all-backend deepep_high_throughput
+                  --all2all-backend flashinfer_nvlink_one_sided \
+                  --kv-cache-dtype fp8 \
+                  --speculative-config '{"method":"mtp","num_speculative_tokens":3}' \
+                  --max-model-len 300000
                 
                   # To enable tracing, add:
                   # --otlp-traces-endpoint http://otel-collector:4317 \
@@ -109,7 +103,7 @@ spec:
               - name: TP_SIZE
                 value: "1"
               - name: TRITON_LIBCUDA_PATH
-                value: /usr/lib64
+                value: /usr/local/nvidia/lib64
               - name: VLLM_SKIP_P2P_CHECK
                 value: "1"
               - name: NVIDIA_GDRCOPY
@@ -200,13 +194,14 @@ spec:
               failureThreshold: 3
             resources:
               limits:
+                cpu: 64
                 ephemeral-storage: 1Ti
-                memory: 512Gi
+                memory: 256Gi
                 nvidia.com/gpu: "8"
               requests:
-                cpu: 32
+                cpu: 64
                 ephemeral-storage: 1Ti
-                memory: 512Gi
+                memory: 256Gi
                 nvidia.com/gpu: "8"
             volumeMounts:
               - name: dshm
