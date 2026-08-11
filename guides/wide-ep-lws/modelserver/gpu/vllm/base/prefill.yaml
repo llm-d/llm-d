@@ -55,21 +55,11 @@ spec:
                 export UCX_IB_ROCE_REACHABILITY_MODE=all
                 export VLLM_USE_V2_MODEL_RUNNER=1
                 export VLLM_SSM_CONV_STATE_LAYOUT=DS
-                export VLLM_ENABLE_K3_LATENT_MOE_TAIL_FUSION=1
                 export VLLM_PREFIX_CACHE_RETENTION_INTERVAL=0
-                # Inert while --all2all-backend is deepep_high_throughput (which goes
-                # over NVSHMEM IBGDA, not NCCL GIN). Kept so flipping back to deepep_v2
-                # is a one-line change.
+
                 export NCCL_GIN_TYPE=3
                 export VLLM_DEEPEP_V2_ALLOW_HYBRID_MODE=1
                 export VLLM_DEEPEP_V2_ALLOW_MULTIPLE_REDUCTION=1
-                # export EP_BUFFER_DEBUG=1
-                # export EP_GIN_GDAKI_DEBUG=1
-
-                # export NCCL_DEBUG=INFO
-                # export NCCL_DEBUG_SUBSYS=INIT
-
-                export VLLM_DEEPEP_V2_PREFER_OVERLAP=1
 
                 apt-get update
                 apt-get install -y --no-install-recommends gnupg
@@ -155,640 +145,711 @@ spec:
                 ldd "${RDMA_CORE_PREFIX}/bin/ibv_devices" | grep libibverbs
                 "${RDMA_CORE_PREFIX}/bin/ibv_devices"
 
-                # --- BEGIN TEMP: RoCE-capable NVSHMEM + DeepEP rebuild ----------------
-                # deepep_high_throughput drives its internode all-to-all through NVSHMEM
-                # IBGDA, unlike deepep_v2 which goes over NCCL GIN. The image ships
-                # deep_ep linked against the stock nvidia-nvshmem-cu13 wheel, and
-                # stock NVSHMEM leaves `ibv_ah_attr` uninitialized before creating the
-                # DCT address handle. On RoCE (link_layer: Ethernet) the garbage
-                # static_rate is passed straight to the device and ibv_create_ah fails
-                # with "Unable to create ah", so DeepEP never finishes initializing.
+                # # --- BEGIN TEMP: RoCE-capable NVSHMEM + DeepEP rebuild ----------------
+                # # deepep_high_throughput drives its internode all-to-all through NVSHMEM
+                # # IBGDA, unlike deepep_v2 which goes over NCCL GIN. The image ships
+                # # deep_ep linked against the stock nvidia-nvshmem-cu13 wheel, and
+                # # stock NVSHMEM leaves `ibv_ah_attr` uninitialized before creating the
+                # # DCT address handle. On RoCE (link_layer: Ethernet) the garbage
+                # # static_rate is passed straight to the device and ibv_create_ah fails
+                # # with "Unable to create ah", so DeepEP never finishes initializing.
+                # #
+                # # This reproduces llm-d's own image build inside the pod, so the two stay
+                # # easy to diff:
+                # #   docker/Dockerfile.cuda                        NVSHMEM_* ARGs, ldconfig
+                # #   docker/scripts/cuda/builder/build-nvshmem.sh  clone, patch, cmake
+                # #   docker/scripts/cuda/builder/build-compiled-wheels.sh   DeepEP
+                # # Every deliberate divergence from those is called out inline below; they
+                # # all come from this image being slim + driverless rather than llm-d's
+                # # nvidia/cuda devel builder. Costs roughly 10 minutes of pod startup.
+                # # Delete this block once the image ships a RoCE-safe NVSHMEM.
+                # #
+                # # Scoped `set -e`: the rest of this script deliberately tolerates
+                # # failures, but here a half-finished rebuild would surface much later as
+                # # an opaque import error, long after the logs that explain it.
+                # set -e
+
+                # # docker/Dockerfile.cuda: ARG NVSHMEM_REPO / NVSHMEM_VERSION /
+                # # NVSHMEM_CUDA_ARCHITECTURES and ENV NVSHMEM_DIR, CUDA_HOME. Keeping the
+                # # versioned install prefix means paths in the logs match the image's.
+                # NVSHMEM_REPO=https://github.com/NVIDIA/nvshmem.git
+                # NVSHMEM_VERSION=v3.4.5-0
+                # # The image builds "90a;100" to cover H100 and B200 in one wheel. This
+                # # LWS only ever lands on B200, and each extra arch is pod startup time,
+                # # so only sm_100 is built. Set to "90a;100" for full parity, or "90a" on
+                # # H100/H200.
+                # NVSHMEM_CUDA_ARCHITECTURES="100"
+                # export NVSHMEM_DIR="/opt/nvshmem-${NVSHMEM_VERSION}"
+                # export CUDA_HOME=/usr/local/cuda
+
+                # TORCH_ARCH=10.0a
+                # DEEPEP_COMMIT=38d21b7f9bb6f3b102b1819d09439686eaa87ce8
+
+                # # llm-d's builder installs cmake 3.22.0 (builder/install-cmake.sh), which
+                # # is also what /usr/bin/cmake is here -- but that predates the sm_100a
+                # # architecture name, and DeepEP below is still built as 10.0a. Pinned to
+                # # 3.31.x rather than 4.x, which drops compatibility with project files
+                # # declaring cmake_minimum_required below 3.5.
+                # uv pip install --system "cmake==3.31.6" ninja
+                # hash -r
+                # cmake --version
+
+                # # DIVERGENCE (no equivalent in build-nvshmem.sh): llm-d builds on
+                # # nvidia/cuda:*-devel, which ships the full toolkit. This image has a
+                # # slim CUDA install missing three headers that the
+                # # builds below need: NVSHMEM's host library includes nvml.h and
+                # # nvtx3/nvToolsExt.h, and DeepEP's csrc/jit/compiler.hpp includes
+                # # nvrtc.h. All three are made visible through the single CUDA include
+                # # directory both builds already search, rather than through injected
+                # # compiler flags -- NVSHMEM sets per-target include paths itself, so
+                # # -DCMAKE_CXX_FLAGS does not reliably reach every translation unit
+                # # (notably the .cu targets).
+                # #
+                # # nvml.h comes from a standalone, dependency-free CUDA package that
+                # # installs straight into that directory. The NVTX tree and nvrtc.h
+                # # already ship in the nvidia-cu13 wheel at the matching CUDA version, so
+                # # they are just symlinked in. Only the nvrtc header is needed: no nvrtc
+                # # symbol is referenced anywhere in DeepEP at this commit, so there is
+                # # nothing to link against.
+                # SITE_PACKAGES=/usr/local/lib/python3.12/dist-packages
+                # CUDA_INCLUDE="${CUDA_HOME}/targets/x86_64-linux/include"
+                # CU13_INCLUDE="${SITE_PACKAGES}/nvidia/cu13/include"
+
+                # # `update` is not optional: the image ships no apt lists, and this runs
+                # # under `set -e`, so a stale index is a startup failure rather than a
+                # # slow path.
+                # apt-get update
+                # # `make` is for the gdrcopy build below; it is not in this image.
+                # apt-get install -y cuda-nvml-dev-13-0 make
+                # ln -sfn "${CU13_INCLUDE}/nvtx3" "${CUDA_INCLUDE}/nvtx3"
+                # ln -sfn "${CU13_INCLUDE}/nvrtc.h" "${CUDA_INCLUDE}/nvrtc.h"
+
+                # ls "${CUDA_INCLUDE}/nvml.h" \
+                #    "${CUDA_INCLUDE}/nvrtc.h" \
+                #    "${CUDA_INCLUDE}/nvtx3/nvToolsExt.h" \
+                #    "${CUDA_INCLUDE}/nvtx3/nvtxDetail/nvtxInit.h"
+
+                # # gdrcopy, so NVSHMEM can be configured with GDRCopy support the way the
+                # # image is. Mirrors docker/scripts/cuda/builder/build-gdrcopy.sh, run
+                # # before NVSHMEM for the same reason Dockerfile.cuda orders it that way:
+                # # NVSHMEM's cmake probes ${GDRCOPY_HOME}/include/gdrapi.h at configure
+                # # time. `make lib_install` is the userspace half only -- the gdrdrv
+                # # kernel module belongs to the host, and NVIDIA_GDRCOPY=enabled in this
+                # # pod's env is what asks the container runtime to inject /dev/gdrdrv.
+                # # Where it is not injected, NVSHMEM logs the failed gdr_open and carries
+                # # on without it, so this stays safe on nodes without the module.
+                # # Roughly 15 seconds, dominated by the clone.
+                # GDRCOPY_REPO=https://github.com/NVIDIA/gdrcopy.git
+                # GDRCOPY_VERSION=v2.5.2
+                # export GDRCOPY_HOME=/usr/local
+
+                # rm -rf /tmp/gdrcopy
+                # git clone --depth 1 --branch "${GDRCOPY_VERSION}" \
+                #   "${GDRCOPY_REPO}" /tmp/gdrcopy
+                # make -C /tmp/gdrcopy \
+                #   ARCH=x64 PREFIX="${GDRCOPY_HOME}" DESTLIB="${GDRCOPY_HOME}/lib" \
+                #   lib_install
+
+                # # The builder also drops the shared object into the multiarch dir so the
+                # # runtime stage can pick it up from a fixed path. Kept because NVSHMEM's
+                # # transports resolve libgdrapi.so.2 through the loader, and the NVIDIA
+                # # container runtime is free to rewrite LD_LIBRARY_PATH out from under
+                # # them -- same reasoning as the ldconfig registration further down.
+                # cp /tmp/gdrcopy/src/libgdrapi.so.2.* /usr/lib/x86_64-linux-gnu/
+                # ldconfig
+                # rm -rf /tmp/gdrcopy
+
+                # ls "${GDRCOPY_HOME}/include/gdrapi.h"
+                # ldconfig -p | grep libgdrapi
+
+                # rm -rf /tmp/nvshmem_src
+                # # build-nvshmem.sh does a full clone then `git checkout -q
+                # # ${NVSHMEM_VERSION}`; shallow-cloning the tag directly is the same tree
+                # # and a good deal faster over the pod network.
+                # git clone --depth 1 --branch "${NVSHMEM_VERSION}" \
+                #   "${NVSHMEM_REPO}" /tmp/nvshmem_src
+
+                # # build-nvshmem.sh applies
+                # # patches/nvshmem_zero_ibv_ah_attr_${NVSHMEM_VERSION}.patch with
+                # # `git apply`; that file is reproduced verbatim below so the pod needs no
+                # # repo checkout. Its sibling cks_nvshmem${NVSHMEM_VERSION}.patch does not
+                # # exist at v3.4.5-0 -- the device-renaming workaround it carried was
+                # # obsoleted by NVSHMEM_HCA_PREFIX in that release -- and the builder
+                # # skips patches it cannot find, so there is nothing else to apply.
+                # #
+                # # Unlike the vLLM source patches elsewhere in this file, this one
+                # # hard-fails: an unpatched NVSHMEM builds fine and then dies at DeepEP
+                # # init, which is a much worse failure to debug than a refusal to start.
+                # #
+                # # `sed 's/^$/ /'` restores the leading space on the patch's two
+                # # whitespace-only context lines, which a YAML block scalar renders as
+                # # empty. Current git accepts an empty line as empty context, so this is
+                # # insurance rather than a fix -- but the failure it guards against is an
+                # # unpatched build 10 minutes from now, not a parse error here.
+                # sed 's/^$/ /' <<'PATCH_EOF' | git -C /tmp/nvshmem_src apply --verbose -
+                # diff --git a/src/modules/transport/ibgda/ibgda.cpp b/src/modules/transport/ibgda/ibgda.cpp
+                # index 6857d9b..314264b 100644
+                # --- a/src/modules/transport/ibgda/ibgda.cpp
+                # +++ b/src/modules/transport/ibgda/ibgda.cpp
+                # @@ -2157,6 +2157,13 @@ static int ibgda_create_dct_shared_objects(nvshmemt_ibgda_state_t *ibgda_state,
+                #      struct ibv_ah_attr ah_attr;
+                #      struct mlx5dv_obj dv;
+
+                # +    // static_rate must be a known value and is passed directly to the device - and is not
+                # +    // validated prior to https://github.com/torvalds/linux/commit/c534ffda781f44a1c6ac25ef6e0e444da38ca8af
+                # +    // which leads to different behavior depending on kernel version.
+                # +    // Always clear the memory.
+                # +    memset(&ah_attr, 0, sizeof(ah_attr));
+                # +    NVSHMEMI_WARN_PRINT("Zeroing ah_attr to avoid 'Unable to create ah' error on RoCE devices\n");
+                # +
+                #      bool support_half_av_seg;
+                #      int hca_support_compact_address_vector;
+
+                # PATCH_EOF
+
+                # # Flags and their order follow build-nvshmem.sh. One divergence:
+                # #   NVSHMEM_UCX_SUPPORT  1 -> 0
+                # # the image builds UCX into an earlier stage and points -DUCX_HOME at it;
+                # # nothing here provides one, and DeepEP's internode path does not use the
+                # # UCX transport. CMAKE_BUILD_TYPE is likewise left unset on purpose:
+                # # NVSHMEM's CMakeLists defaults it to "release", which is what the image
+                # # ships.
+                # cmake -S /tmp/nvshmem_src -B /tmp/nvshmem_src/build -G Ninja \
+                #   -DNVSHMEM_PREFIX="${NVSHMEM_DIR}" \
+                #   -DCMAKE_PREFIX_PATH="${RDMA_CORE_PREFIX}" \
+                #   -DCMAKE_INCLUDE_PATH="${RDMA_CORE_PREFIX}/include" \
+                #   -DCMAKE_LIBRARY_PATH="${RDMA_CORE_PREFIX}/lib" \
+                #   -DCMAKE_CUDA_ARCHITECTURES="${NVSHMEM_CUDA_ARCHITECTURES}" \
+                #   -DCMAKE_CUDA_COMPILER="${CUDA_HOME}/bin/nvcc" \
+                #   -DCMAKE_POSITION_INDEPENDENT_CODE=ON \
+                #   -DNVSHMEM_PMIX_SUPPORT=0 \
+                #   -DNVSHMEM_IBRC_SUPPORT=1 \
+                #   -DNVSHMEM_IBGDA_SUPPORT=1 \
+                #   -DNVSHMEM_IBDEVX_SUPPORT=1 \
+                #   -DNVSHMEM_UCX_SUPPORT=0 \
+                #   -DNVSHMEM_SHMEM_SUPPORT=0 \
+                #   -DNVSHMEM_USE_GDRCOPY=1 \
+                #   -DGDRCOPY_HOME="${GDRCOPY_HOME}" \
+                #   -DNVSHMEM_MPI_SUPPORT=0 \
+                #   -DNVSHMEM_USE_NCCL=0 \
+                #   -DNVSHMEM_BUILD_TESTS=0 \
+                #   -DNVSHMEM_BUILD_EXAMPLES=0 \
+                #   -DNVSHMEM_BUILD_PYTHON_LIB=OFF
+
+                # # The image caps this at MAX_JOBS=3 to avoid OOM on shared build runners;
+                # # this pod requests 64 CPUs and 256Gi to itself.
+                # ninja -C /tmp/nvshmem_src/build -j"$(nproc)"
+                # cmake --install /tmp/nvshmem_src/build
+
+                # # Hard proof that NVSHMEM was compiled with the rdma-core v44
+                # # DMA-BUF DEVX path. The old build omitted this undefined symbol
+                # # entirely because MLX5DV_UMEM_MASK_DMABUF was absent at configure time.
+                # NVSHMEM_IBGDA_PLUGIN="${NVSHMEM_DIR}/lib/nvshmem_transport_ibgda.so"
+                # readelf -Ws "${NVSHMEM_IBGDA_PLUGIN}" \
+                #   | grep -q 'mlx5dv_devx_umem_reg_ex' || {
+                #     echo "NVSHMEM IBGDA was built without DMA-BUF DEVX support" >&2
+                #     exit 1
+                #   }
+
+                # # Verify that the installed transport resolves the same v44 verbs and
+                # # mlx5 libraries it was compiled against.
+                # ldd "${NVSHMEM_IBGDA_PLUGIN}" | tee /tmp/nvshmem-ibgda-ldd.txt
+                # grep -q "libibverbs\.so.*=> ${RDMA_CORE_PREFIX}/lib/" \
+                #   /tmp/nvshmem-ibgda-ldd.txt
+                # grep -q "libmlx5\.so.*=> ${RDMA_CORE_PREFIX}/lib/" \
+                #   /tmp/nvshmem-ibgda-ldd.txt
+
+                # rm -rf /tmp/nvshmem_src
+
+                # # DeepEP's setup.py looks for the host library under
+                # # ${NVSHMEM_DIR}/lib specifically, so fail here rather than at link time.
+                # ls "${NVSHMEM_DIR}/lib/libnvshmem_host.so"* \
+                #    "${NVSHMEM_DIR}/lib/libnvshmem_device.a" \
+                #    "${NVSHMEM_DIR}/lib/nvshmem_transport_ibgda.so"*
+
+                # # Prove the patch survived into the binary that actually contains
+                # # ibgda_create_dct_shared_objects. This is the transport *plugin*, not
+                # # the host library -- the host lib dlopens it at init.
+                # strings "${NVSHMEM_DIR}/lib/nvshmem_transport_ibgda.so" \
+                #   | grep -q "Zeroing ah_attr"
+
+                # # Both lib and lib64, in that order, as the runtime stage's
+                # # ENV LD_LIBRARY_PATH has them.
+                # export LD_LIBRARY_PATH=${NVSHMEM_DIR}/lib:${NVSHMEM_DIR}/lib64:$LD_LIBRARY_PATH
+
+                # # Register with ldconfig as well, not just LD_LIBRARY_PATH: the NVIDIA
+                # # container runtime rewrites LD_LIBRARY_PATH in k8s, so a search path
+                # # exported here is not guaranteed to survive into the worker processes.
+                # # Same file, same three entries, same order as Dockerfile.cuda -- the
+                # # third is the NCCL wheel, which matters here because NCCL_GIN_TYPE=3
+                # # needs the nvidia-nccl-cu13 in site-packages rather than whatever torch
+                # # resolves to.
+                # {
+                #   echo "${NVSHMEM_DIR}/lib"
+                #   echo "${NVSHMEM_DIR}/lib64"
+                #   echo "${SITE_PACKAGES}/nvidia/nccl/lib"
+                # } > /etc/ld.so.conf.d/nvidia-nvshmem.conf
+                # ldconfig
+
+                # # Drop the wheel before building DeepEP against the patched tree, so
+                # # nothing downstream can link or dlopen an unpatched NVSHMEM. It ships
+                # # its own copies of exactly the libraries just installed above.
+                # #
+                # # Before, rather than after the build, so the whole build runs in a
+                # # single-NVSHMEM world and the `ldd` assertion below can demand
+                # # ${NVSHMEM_DIR}/lib outright instead of tolerating whichever copy the
+                # # loader happened to reach.
+                # #
+                # # Safe to remove at this DEEPEP_COMMIT: deep_ep/__init__.py imports only
+                # # torch and deep_ep_cpp (no nvshmem4py), setup.py declares no dependency
+                # # on the wheel, and with NVSHMEM_DIR set it never consults
+                # # `nvidia.nvshmem` -- it bakes -Wl,-rpath,${NVSHMEM_DIR}/lib into the
+                # # extension instead. Re-check all three before bumping to a DeepEP 2.x
+                # # commit, which does use nvshmem4py.
+                # uv pip uninstall --system nvidia-nvshmem-cu13 nvidia-nvshmem-cu12 || true
+
+                # uv pip uninstall --system deep_ep || true
+
+                # # Dockerfile.cuda pins DEEPEP_REPO/DEEPEP_VERSION (tlrmchlsmth/DeepEP at
+                # # sgl-gb200-blog-pt2) and the image this pod runs was built from
+                # # deepseek-ai/DeepEP@d4f41e4e93 (vLLM docker/Dockerfile
+                # # DEEPEP_COMMIT_HASH). Neither is what this guide wants, so the fork and
+                # # commit below are pinned independently -- update them here, not from
+                # # either of those.
+                # rm -rf /tmp/DeepEP
+                # git clone https://github.com/neuralmagic/DeepEP /tmp/DeepEP
+                # git -C /tmp/DeepEP checkout -q "${DEEPEP_COMMIT}"
+                # # No-op on DeepEP 1.x; 2.x vendors fmt as a submodule.
+                # git -C /tmp/DeepEP submodule update --init --recursive
+
+                # # NOTE: when building DeepEP 2.x, vLLM's
+                # # tools/ep_kernels/install_python_libraries.sh also prepends a
+                # # SYS_pidfd_open/SYS_pidfd_getfd shim to
+                # # csrc/kernels/backend/symmetric.hpp for manylinux build images. This
+                # # image is Ubuntu 22.04, whose headers already define both (434/438),
+                # # so the shim is omitted -- adding it would redefine the macros.
+
+                # # CPATH covers the two gaps the host C++ translation unit hits. nvcc
+                # # papers over both implicitly, which is why only the plain c++ source
+                # # (csrc/deep_ep.cpp) fails without them:
+                # #
+                # #   cccl/     CUDA 13 moved libcu++ (cuda/std/*) here, and NVSHMEM's
+                # #             device_host/nvshmem_tensor.h includes <cuda/std/tuple>.
+                # #             vLLM's install_python_libraries.sh instead patches DeepEP's
+                # #             setup.py for this; CPATH does the same job without
+                # #             depending on a setup.py layout that differs between 1.x
+                # #             and 2.x.
+                # #   cu13/     the math-library headers (cusparse.h, cublas.h, ...) that
+                # #             torch's ATen/cuda/CUDAContext.h pulls in and this image's
+                # #             slim CUDA install omits.
+                # #
+                # # CPATH is searched after every -I, so these only fill gaps and cannot
+                # # shadow the toolkit or torch headers.
+                # #
+                # # LIBRARY_PATH: DeepEP links -lcuda, and only the stub is present here;
+                # # build-compiled-wheels.sh exports the same ${CUDA_HOME}/lib64/stubs for
+                # # that reason. ${NVSHMEM_DIR}/include and /lib come from Dockerfile.cuda's
+                # # ENV CPATH/LIBRARY_PATH -- redundant with what DeepEP's setup.py derives
+                # # from NVSHMEM_DIR, but they keep the source-built NVSHMEM ahead of any
+                # # other copy for both stages of the build.
+                # #
+                # # __NVSHMEM_NUMBA_SUPPORT__ forces the IBGDA device-state constant to
+                # # be `extern` in host-compiled translation units. Without it each TU
+                # # that includes the NVSHMEM device header emits its own definition, so
+                # # the copy the host transport initializes need not be the copy the
+                # # DeepEP kernels read. Mirrors llm-d's
+                # # docker/scripts/cuda/builder/build-compiled-wheels.sh, which also builds
+                # # a wheel with `uv build` instead of installing straight from the tree;
+                # # nothing here needs the wheel artifact.
+                # #
+                # # TORCH_ARCH is 10.0a where the image builds "9.0a;10.0+PTX", for the
+                # # same single-target reason as NVSHMEM_CUDA_ARCHITECTURES above.
+                # TORCH_CUDA_ARCH_LIST="${TORCH_ARCH}" \
+                #   CXXFLAGS="${CXXFLAGS:-} -D__NVSHMEM_NUMBA_SUPPORT__" \
+                #   CPATH="${NVSHMEM_DIR}/include:${CUDA_HOME}/include/cccl:${CU13_INCLUDE}:${CPATH:-}" \
+                #   LIBRARY_PATH="${CUDA_HOME}/lib64/stubs:${NVSHMEM_DIR}/lib:${LIBRARY_PATH:-}" \
+                #   uv pip install --system --no-build-isolation /tmp/DeepEP
+                # rm -rf /tmp/DeepEP
+
+                # # Confirm DeepEP resolves NVSHMEM to the patched build, not the wheel.
+                # # The extension module differs across DeepEP versions -- deep_ep._C in
+                # # 2.x, a top-level deep_ep_cpp in 1.x -- so locate it rather than
+                # # hardcoding, and use find_spec so nothing is imported or initialized.
+                # DEEP_EP_SO=$(python3 -c "import glob,importlib.util,os;p=os.path.dirname(importlib.util.find_spec('deep_ep').origin);c=sorted(glob.glob(p+'/*.so'))+sorted(glob.glob(os.path.dirname(p)+'/deep_ep_cpp*.so'));print(c[0] if c else '')")
+                # test -n "${DEEP_EP_SO}"
+                # echo "deep_ep extension: ${DEEP_EP_SO}"
+                # ldd "${DEEP_EP_SO}" | grep nvshmem
+                # # Assert the resolved path, not just that the string `nvshmem` appears:
+                # # ldd renders an unresolved entry as `libnvshmem_host.so.3 => not found`,
+                # # which a bare `grep nvshmem` matches just as happily as a real hit.
+                # ldd "${DEEP_EP_SO}" | grep -q "libnvshmem_host\.so.* => ${NVSHMEM_DIR}/lib/"
+
+                # # The wheel was uninstalled before the build, but `uv pip install` above
+                # # is free to pull it back in if a future DEEPEP_COMMIT declares it as a
+                # # dependency. Re-check after the last step that can write libraries.
+                # #
+                # # This is the check that matters, not the `ldd` line above: `ldd` covers
+                # # only the DeepEP extension's own DT_NEEDED, and `ibgda.cpp` -- the file
+                # # in the traceback -- is not in libnvshmem_host at all. It lives in this
+                # # plugin, which the host library dlopens at init. Scoped to the library
+                # # roots rather than / so it does not walk the model cache.
+                # found_ibgda=0
+                # for so in $(find /usr /opt /lib /lib64 \
+                #               -name 'nvshmem_transport_ibgda.so*' 2>/dev/null); do
+                #   if ! strings "$so" | grep -q "Zeroing ah_attr"; then
+                #     echo "UNPATCHED NVSHMEM ibgda transport still present: $so" >&2
+                #     exit 1
+                #   fi
+                #   echo "patched ibgda transport: $so"
+                #   found_ibgda=1
+                # done
+                # test "${found_ibgda}" = 1
+                # set +e
+                # # --- END TEMP ---------------------------------------------------------
+
+                # # --- BEGIN TEMP PATCH: vllm-project/vllm#51687 @ a7a77b6 --------------
+                # # "add mxfp8 dispatch": gives deepep_high_throughput the same quantized
+                # # dispatch for mxfp8 that deepep_v2 already had -- scales are computed
+                # # before the dispatch so DeepEP shuffles each token's scales with it, then
+                # # re-laid out for the expert kernel in `_receiver` -- and lifts the three
+                # # helpers that do it out of deepep_v2.py into a shared deepep_utils.
+                # #
+                # # This image is built from 5619fd84, which is this PR's head minus exactly
+                # # this one commit, so the diff below is that commit verbatim and applies to
+                # # the installed tree unmodified. Re-pin both together when bumping the image.
+                # #
+                # # deepep_utils.py is written out rather than patched in: the commit imports
+                # # it but never adds it (the file is untracked in the PR), so the diff alone
+                # # would leave vLLM raising ImportError the moment a MoE layer is built. The
+                # # three functions below are the ones this same commit deletes from
+                # # deepep_v2.py, verbatim apart from dropping the leading underscore.
+                # #
+                # # Unlike the earlier soft-failing vLLM patches in this guide, this one
+                # # hard-fails: a skipped patch surfaces as an ImportError or as silently
+                # # wrong expert numerics well into the run, not at startup.
+                # # Delete this block once the image ships the merged PR.
+                # set -e
+
+                # VLLM_ROOT=$(python3 -c 'import pathlib, vllm; print(pathlib.Path(vllm.__file__).parent.parent)')
+                # PREPARE_FINALIZE="${VLLM_ROOT}/vllm/model_executor/layers/fused_moe/prepare_finalize"
+
+                # cat > "${PREPARE_FINALIZE}/deepep_utils.py" <<'UTILS_EOF'
+                # # SPDX-License-Identifier: Apache-2.0
+                # # SPDX-FileCopyrightText: Copyright contributors to the vLLM project
+                # import torch
+
+                # from vllm.model_executor.layers.fused_moe.config import FusedMoEQuantConfig
+                # from vllm.model_executor.layers.quantization.utils.mxfp8_utils import (
+                #     MXFP8_BLOCK_SIZE,
+                #     swizzle_mxfp8_scale,
+                # )
+
+
+                # def quantize_before_dispatch(
+                #     quant_config: FusedMoEQuantConfig, defer_input_quant: bool
+                # ) -> bool:
+                #     """
+                #     Do quantized dispatch for blockfp8 and mxfp8, unless the
+                #     subsequent moe kernel requires bf16 inputs.
+                #     """
+                #     if defer_input_quant:
+                #         return False
+                #     return quant_config.is_block_quantized or quant_config.quant_dtype == "mxfp8"
+
+
+                # def pack_mxfp8_scale(scale: torch.Tensor) -> torch.Tensor:
+                #     """Pack row-major [M, K/32] UE8M0 scales into [M, K/128] int32.
+
+                #     DeepEP moves scale factors as opaque 4-byte packs (`sf_pack_t` is a
+                #     float/UE8M0x4 union), so 1-byte UE8M0 scales must be packed 4-per-int32.
+                #     """
+                #     assert scale.dtype == torch.uint8 and scale.ndim == 2, (
+                #         f"expected 2D uint8 mxfp8 scales, got {scale.shape} {scale.dtype}"
+                #     )
+                #     assert scale.size(1) % 4 == 0, (
+                #         f"mxfp8 dispatch needs hidden_size % {MXFP8_BLOCK_SIZE * 4} == 0, "
+                #         f"got {scale.size(1)} scale columns"
+                #     )
+                #     return scale.contiguous().view(torch.int32)
+
+
+                # def unpack_mxfp8_scale(
+                #     scale: torch.Tensor, hidden_size: int, is_scale_swizzled: bool
+                # ) -> torch.Tensor:
+                #     """Inverse of `pack_mxfp8_scale`, restoring the expert kernel's layout.
+
+                #     TRTLLM consumes the row-major [M, K/32] scales as-is; CUTLASS wants them
+                #     swizzled into F8_128x4, which can only happen here because the swizzle
+                #     interleaves scales across a 128-row tile (i.e. across tokens).
+                #     """
+                #     scale = scale.contiguous().view(torch.uint8)
+                #     if is_scale_swizzled:
+                #         scale = swizzle_mxfp8_scale(scale, M=scale.size(0), K=hidden_size)
+                #     return scale
+                # UTILS_EOF
+
+                # # Same `sed` guard as the NVSHMEM patch above: this diff has whitespace-only
+                # # context lines, which a YAML block scalar renders as empty.
+                # sed 's/^$/ /' <<'VLLM_PATCH_EOF' | git -C "${VLLM_ROOT}" apply --verbose -
+                # diff --git a/vllm/model_executor/layers/fused_moe/prepare_finalize/deepep_ht.py b/vllm/model_executor/layers/fused_moe/prepare_finalize/deepep_ht.py
+                # index f30e0bea3c39..e28269d6c816 100644
+                # --- a/vllm/model_executor/layers/fused_moe/prepare_finalize/deepep_ht.py
+                # +++ b/vllm/model_executor/layers/fused_moe/prepare_finalize/deepep_ht.py
+                # @@ -7,6 +7,11 @@
+
+                #  import vllm.model_executor.layers.fused_moe.modular_kernel as mk
+                #  from vllm.model_executor.layers.fused_moe.config import FusedMoEQuantConfig
+                # +from vllm.model_executor.layers.fused_moe.prepare_finalize.deepep_utils import (
+                # +    pack_mxfp8_scale,
+                # +    quantize_before_dispatch,
+                # +    unpack_mxfp8_scale,
+                # +)
+                #  from vllm.model_executor.layers.fused_moe.topk_weight_and_reduce import (
+                #      TopKWeightAndReduceContiguous,
+                #      TopKWeightAndReduceDelegate,
+                # @@ -237,11 +242,19 @@ def _receiver(
+                #              expert_num_tokens_per_expert_list, device=expert_x.device
+                #          )
+
+                # -        # * For non-block quant, dispatch in b16 and quantize now as
+                # -        #   DeepEP kernels only support dispatching block scales.
+                # +        # * For blockfp8 and mxfp8, the tokens were dispatched quantized;
+                # +        #   restore the scale layout the expert kernel expects.
+                # +        # * For all other quant, dispatch is in b16 so quantize now.
+                #          # * For expert kernels that require unquantized inputs,
+                #          #   defer quantization to FusedMoEExpertsPermuteUnpermute.
+                # -        if not quant_config.is_block_quantized and not defer_input_quant:
+                # +        if quantize_before_dispatch(quant_config, defer_input_quant):
+                # +            if quant_config.quant_dtype == "mxfp8" and expert_x_scale is not None:
+                # +                expert_x_scale = unpack_mxfp8_scale(
+                # +                    expert_x_scale,
+                # +                    hidden_size=expert_x.size(-1),
+                # +                    is_scale_swizzled=quant_config.is_scale_swizzled,
+                # +                )
+                # +        elif not defer_input_quant:
+                #              # Quantize after dispatch.
+                #              expert_x_scale = None
+                #              if expert_x.numel() != 0:
+                # @@ -285,21 +298,28 @@ def prepare_async(
+                #              )
+                #              a1 = a1 * topk_weights.to(a1.dtype)
+
+                # -        # * DeepEP only supports fp8 block scales so quantize
+                # -        #   before the dispatch for these models.
+                # +        # * DeepEP dispatch moves per-token scale factors, so blockfp8 and
+                # +        #   mxfp8 are quantized before the dispatch.
+                #          # * For all other quantization, dispatch after.
+                #          # * For expert kernels that require unquantized inputs,
+                #          #   defer quantization to FusedMoEExpertsPermuteUnpermute.
+                # -        if quant_config.is_block_quantized and not defer_input_quant:
+                # +        if quantize_before_dispatch(quant_config, defer_input_quant):
+                # +            # Scales must be row-major [num_tokens, ...] here so each token's
+                # +            # scales can be shuffled with it; any swizzling the expert kernel
+                # +            # wants is applied post-dispatch in `_receiver`.
+                #              a1q, a1q_scale = moe_kernel_quantize_input(
+                #                  a1,
+                #                  quant_config.a1_scale,
+                #                  quant_dtype=quant_config.quant_dtype,
+                #                  per_act_token_quant=quant_config.per_act_token_quant,
+                #                  block_shape=quant_config.block_shape,
+                # +                is_scale_swizzled=False,
+                # +                mx_alignment=quant_config.mx_alignment,
+                #              )
+                #              if a1q_scale is not None and a1q_scale.numel() == 1:
+                #                  a1q_scale = a1q_scale.view(1, 1)
+                # +            if quant_config.quant_dtype == "mxfp8":
+                # +                a1q_scale = pack_mxfp8_scale(a1q_scale)
+                #              a1_post_scale = None
+                #          else:
+                #              a1q = a1
+                # diff --git a/vllm/model_executor/layers/fused_moe/prepare_finalize/deepep_v2.py b/vllm/model_executor/layers/fused_moe/prepare_finalize/deepep_v2.py
+                # index a6bf7ba08929..2597e8368569 100644
+                # --- a/vllm/model_executor/layers/fused_moe/prepare_finalize/deepep_v2.py
+                # +++ b/vllm/model_executor/layers/fused_moe/prepare_finalize/deepep_v2.py
+                # @@ -8,15 +8,16 @@
+                #  import vllm.model_executor.layers.fused_moe.modular_kernel as mk
+                #  from vllm.forward_context import get_forward_context
+                #  from vllm.model_executor.layers.fused_moe.config import FusedMoEQuantConfig
+                # +from vllm.model_executor.layers.fused_moe.prepare_finalize.deepep_utils import (
+                # +    pack_mxfp8_scale,
+                # +    quantize_before_dispatch,
+                # +    unpack_mxfp8_scale,
+                # +)
+                #  from vllm.model_executor.layers.fused_moe.topk_weight_and_reduce import (
+                #      TopKWeightAndReduceContiguous,
+                #      TopKWeightAndReduceDelegate,
+                #  )
+                #  from vllm.model_executor.layers.fused_moe.utils import moe_kernel_quantize_input
+                # -from vllm.model_executor.layers.quantization.utils.mxfp8_utils import (
+                # -    MXFP8_BLOCK_SIZE,
+                # -    swizzle_mxfp8_scale,
+                # -)
+                #  from vllm.triton_utils import tl, triton
+                #  from vllm.utils.math_utils import round_up
+                #  from vllm.v1.worker.ubatching import (
+                # @@ -24,49 +25,6 @@
+                #  )
+
+
+                # -def _quantize_before_dispatch(
+                # -    quant_config: FusedMoEQuantConfig, defer_input_quant: bool
+                # -) -> bool:
+                # -    """
+                # -    Do quantized dispatch for blockfp8 and mxfp8, unless the
+                # -    subsequent moe kernel requires bf16 inputs.
+                # -    """
+                # -    if defer_input_quant:
+                # -        return False
+                # -    return quant_config.is_block_quantized or quant_config.quant_dtype == "mxfp8"
+                # -
+                # -
+                # -def _pack_mxfp8_scale(scale: torch.Tensor) -> torch.Tensor:
+                # -    """Pack row-major [M, K/32] UE8M0 scales into [M, K/128] int32.
+                # -
+                # -    DeepEP moves scale factors as opaque 4-byte packs (`sf_pack_t` is a
+                # -    float/UE8M0x4 union), so 1-byte UE8M0 scales must be packed 4-per-int32.
+                # -    """
+                # -    assert scale.dtype == torch.uint8 and scale.ndim == 2, (
+                # -        f"expected 2D uint8 mxfp8 scales, got {scale.shape} {scale.dtype}"
+                # -    )
+                # -    assert scale.size(1) % 4 == 0, (
+                # -        f"mxfp8 dispatch needs hidden_size % {MXFP8_BLOCK_SIZE * 4} == 0, "
+                # -        f"got {scale.size(1)} scale columns"
+                # -    )
+                # -    return scale.contiguous().view(torch.int32)
+                # -
+                # -
+                # -def _unpack_mxfp8_scale(
+                # -    scale: torch.Tensor, hidden_size: int, is_scale_swizzled: bool
+                # -) -> torch.Tensor:
+                # -    """Inverse of `_pack_mxfp8_scale`, restoring the expert kernel's layout.
+                # -
+                # -    TRTLLM consumes the row-major [M, K/32] scales as-is; CUTLASS wants them
+                # -    swizzled into F8_128x4, which can only happen here because the swizzle
+                # -    interleaves scales across a 128-row tile (i.e. across tokens).
+                # -    """
+                # -    scale = scale.contiguous().view(torch.uint8)
+                # -    if is_scale_swizzled:
+                # -        scale = swizzle_mxfp8_scale(scale, M=scale.size(0), K=hidden_size)
+                # -    return scale
+                # -
+                # -
+                #  class DeepEPV2PrepareAndFinalize(mk.FusedMoEPrepareAndFinalizeModular):
+                #      """
+                #      Prepare/Finalize using DeepEP v2 ElasticBuffer (unified API).
+                # @@ -309,9 +267,9 @@ def _receiver(
+                #              device=expert_x.device,
+                #          )
+
+                # -        if _quantize_before_dispatch(quant_config, defer_input_quant):
+                # +        if quantize_before_dispatch(quant_config, defer_input_quant):
+                #              if quant_config.quant_dtype == "mxfp8" and expert_x_scale is not None:
+                # -                expert_x_scale = _unpack_mxfp8_scale(
+                # +                expert_x_scale = unpack_mxfp8_scale(
+                #                      expert_x_scale,
+                #                      hidden_size=expert_x.size(-1),
+                #                      is_scale_swizzled=quant_config.is_scale_swizzled,
+                # @@ -357,7 +315,7 @@ def prepare_async(
+                #              )
+                #              a1 = a1 * topk_weights.to(a1.dtype)
+
+                # -        if _quantize_before_dispatch(quant_config, defer_input_quant):
+                # +        if quantize_before_dispatch(quant_config, defer_input_quant):
+                #              # Scales must be row-major [num_tokens, ...] here so each token's
+                #              # scales can be shuffled with it; any swizzling the expert kernel
+                #              # wants is applied post-dispatch in `_receiver`.
+                # @@ -373,7 +331,7 @@ def prepare_async(
+                #              if a1q_scale is not None and a1q_scale.numel() == 1:
+                #                  a1q_scale = a1q_scale.view(1, 1)
+                #              if quant_config.quant_dtype == "mxfp8":
+                # -                a1q_scale = _pack_mxfp8_scale(a1q_scale)
+                # +                a1q_scale = pack_mxfp8_scale(a1q_scale)
+                #              a1_post_scale = None
+                #          else:
+                #              a1q = a1
+                # VLLM_PATCH_EOF
+
+                # # Proves more than the patch applying: it also confirms the image's
+                # # mxfp8_utils still exports the two names deepep_utils reaches for.
+                # python3 -c "
+                # from vllm.model_executor.layers.fused_moe.prepare_finalize.deepep_utils import (
+                #     pack_mxfp8_scale,
+                #     quantize_before_dispatch,
+                #     unpack_mxfp8_scale,
+                # )
+                # print('deepep_utils import OK')
+                # "
+                # set +e
+                # # --- END TEMP PATCH ---------------------------------------------------
+
+                # --- BEGIN TEMP PATCH: vllm-project/vllm#50478 @ 2e15ff52 -------------
+                # "[Bugfix][Kimi] Enable DeepEPv2 to work with DeepGEMM MXFp4":
+                # lets --all2all-backend deepep_v2 run against --moe-backend deep_gemm
+                # for mxfp4 and mxfp8 experts.
                 #
-                # This reproduces llm-d's own image build inside the pod, so the two stay
-                # easy to diff:
-                #   docker/Dockerfile.cuda                        NVSHMEM_* ARGs, ldconfig
-                #   docker/scripts/cuda/builder/build-nvshmem.sh  clone, patch, cmake
-                #   docker/scripts/cuda/builder/build-compiled-wheels.sh   DeepEP
-                # Every deliberate divergence from those is called out inline below; they
-                # all come from this image being slim + driverless rather than llm-d's
-                # nvidia/cuda devel builder. Costs roughly 10 minutes of pod startup.
-                # Delete this block once the image ships a RoCE-safe NVSHMEM.
+                # DeepEP's dispatch only does the device->host sync that produces the
+                # per-expert token counts when do_cpu_sync=True. In decode/cudagraph mode
+                # it does not, and returns an empty list -- which the old code still wrapped
+                # in an ExpertTokensMetadata. A non-None metadata holding zero-element
+                # tensors is worse than no metadata at all: it suppresses the consumers'
+                # fallback to count_expert_num_tokens(recv_topk_idx), so the DeepGEMM mxfp4 /
+                # mxfp8 grouped-GEMM sizes its workspace to zero rows and the experts see no
+                # tokens. Leaving it None restores the fallback.
                 #
-                # Scoped `set -e`: the rest of this script deliberately tolerates
-                # failures, but here a half-finished rebuild would surface much later as
-                # an opaque import error, long after the logs that explain it.
-                set -e
-
-                # docker/Dockerfile.cuda: ARG NVSHMEM_REPO / NVSHMEM_VERSION /
-                # NVSHMEM_CUDA_ARCHITECTURES and ENV NVSHMEM_DIR, CUDA_HOME. Keeping the
-                # versioned install prefix means paths in the logs match the image's.
-                NVSHMEM_REPO=https://github.com/NVIDIA/nvshmem.git
-                NVSHMEM_VERSION=v3.4.5-0
-                # The image builds "90a;100" to cover H100 and B200 in one wheel. This
-                # LWS only ever lands on B200, and each extra arch is pod startup time,
-                # so only sm_100 is built. Set to "90a;100" for full parity, or "90a" on
-                # H100/H200.
-                NVSHMEM_CUDA_ARCHITECTURES="100"
-                export NVSHMEM_DIR="/opt/nvshmem-${NVSHMEM_VERSION}"
-                export CUDA_HOME=/usr/local/cuda
-
-                TORCH_ARCH=10.0a
-                DEEPEP_COMMIT=38d21b7f9bb6f3b102b1819d09439686eaa87ce8
-
-                # llm-d's builder installs cmake 3.22.0 (builder/install-cmake.sh), which
-                # is also what /usr/bin/cmake is here -- but that predates the sm_100a
-                # architecture name, and DeepEP below is still built as 10.0a. Pinned to
-                # 3.31.x rather than 4.x, which drops compatibility with project files
-                # declaring cmake_minimum_required below 3.5.
-                uv pip install --system "cmake==3.31.6" ninja
-                hash -r
-                cmake --version
-
-                # DIVERGENCE (no equivalent in build-nvshmem.sh): llm-d builds on
-                # nvidia/cuda:*-devel, which ships the full toolkit. This image has a
-                # slim CUDA install missing three headers that the
-                # builds below need: NVSHMEM's host library includes nvml.h and
-                # nvtx3/nvToolsExt.h, and DeepEP's csrc/jit/compiler.hpp includes
-                # nvrtc.h. All three are made visible through the single CUDA include
-                # directory both builds already search, rather than through injected
-                # compiler flags -- NVSHMEM sets per-target include paths itself, so
-                # -DCMAKE_CXX_FLAGS does not reliably reach every translation unit
-                # (notably the .cu targets).
+                # Only the deepep_v2.py hunk is carried here. The PR's other hunk adds
+                # "deepep_v2" to ParallelConfig.use_sequence_parallel_moe's backend tuple,
+                # and this image (5619fd84) already has it -- applying it would fail.
                 #
-                # nvml.h comes from a standalone, dependency-free CUDA package that
-                # installs straight into that directory. The NVTX tree and nvrtc.h
-                # already ship in the nvidia-cu13 wheel at the matching CUDA version, so
-                # they are just symlinked in. Only the nvrtc header is needed: no nvrtc
-                # symbol is referenced anywhere in DeepEP at this commit, so there is
-                # nothing to link against.
-                SITE_PACKAGES=/usr/local/lib/python3.12/dist-packages
-                CUDA_INCLUDE="${CUDA_HOME}/targets/x86_64-linux/include"
-                CU13_INCLUDE="${SITE_PACKAGES}/nvidia/cu13/include"
-
-                # `update` is not optional: the image ships no apt lists, and this runs
-                # under `set -e`, so a stale index is a startup failure rather than a
-                # slow path.
-                apt-get update
-                # `make` is for the gdrcopy build below; it is not in this image.
-                apt-get install -y cuda-nvml-dev-13-0 make
-                ln -sfn "${CU13_INCLUDE}/nvtx3" "${CUDA_INCLUDE}/nvtx3"
-                ln -sfn "${CU13_INCLUDE}/nvrtc.h" "${CUDA_INCLUDE}/nvrtc.h"
-
-                ls "${CUDA_INCLUDE}/nvml.h" \
-                   "${CUDA_INCLUDE}/nvrtc.h" \
-                   "${CUDA_INCLUDE}/nvtx3/nvToolsExt.h" \
-                   "${CUDA_INCLUDE}/nvtx3/nvtxDetail/nvtxInit.h"
-
-                # gdrcopy, so NVSHMEM can be configured with GDRCopy support the way the
-                # image is. Mirrors docker/scripts/cuda/builder/build-gdrcopy.sh, run
-                # before NVSHMEM for the same reason Dockerfile.cuda orders it that way:
-                # NVSHMEM's cmake probes ${GDRCOPY_HOME}/include/gdrapi.h at configure
-                # time. `make lib_install` is the userspace half only -- the gdrdrv
-                # kernel module belongs to the host, and NVIDIA_GDRCOPY=enabled in this
-                # pod's env is what asks the container runtime to inject /dev/gdrdrv.
-                # Where it is not injected, NVSHMEM logs the failed gdr_open and carries
-                # on without it, so this stays safe on nodes without the module.
-                # Roughly 15 seconds, dominated by the clone.
-                GDRCOPY_REPO=https://github.com/NVIDIA/gdrcopy.git
-                GDRCOPY_VERSION=v2.5.2
-                export GDRCOPY_HOME=/usr/local
-
-                rm -rf /tmp/gdrcopy
-                git clone --depth 1 --branch "${GDRCOPY_VERSION}" \
-                  "${GDRCOPY_REPO}" /tmp/gdrcopy
-                make -C /tmp/gdrcopy \
-                  ARCH=x64 PREFIX="${GDRCOPY_HOME}" DESTLIB="${GDRCOPY_HOME}/lib" \
-                  lib_install
-
-                # The builder also drops the shared object into the multiarch dir so the
-                # runtime stage can pick it up from a fixed path. Kept because NVSHMEM's
-                # transports resolve libgdrapi.so.2 through the loader, and the NVIDIA
-                # container runtime is free to rewrite LD_LIBRARY_PATH out from under
-                # them -- same reasoning as the ldconfig registration further down.
-                cp /tmp/gdrcopy/src/libgdrapi.so.2.* /usr/lib/x86_64-linux-gnu/
-                ldconfig
-                rm -rf /tmp/gdrcopy
-
-                ls "${GDRCOPY_HOME}/include/gdrapi.h"
-                ldconfig -p | grep libgdrapi
-
-                rm -rf /tmp/nvshmem_src
-                # build-nvshmem.sh does a full clone then `git checkout -q
-                # ${NVSHMEM_VERSION}`; shallow-cloning the tag directly is the same tree
-                # and a good deal faster over the pod network.
-                git clone --depth 1 --branch "${NVSHMEM_VERSION}" \
-                  "${NVSHMEM_REPO}" /tmp/nvshmem_src
-
-                # build-nvshmem.sh applies
-                # patches/nvshmem_zero_ibv_ah_attr_${NVSHMEM_VERSION}.patch with
-                # `git apply`; that file is reproduced verbatim below so the pod needs no
-                # repo checkout. Its sibling cks_nvshmem${NVSHMEM_VERSION}.patch does not
-                # exist at v3.4.5-0 -- the device-renaming workaround it carried was
-                # obsoleted by NVSHMEM_HCA_PREFIX in that release -- and the builder
-                # skips patches it cannot find, so there is nothing else to apply.
+                # The upstream hunk does NOT apply verbatim: the PR is cut against a base
+                # without the mxfp8-dispatch work, so its trailing context is
+                # `if not quant_config.is_block_quantized and not defer_input_quant:` where
+                # this image has `if _quantize_before_dispatch(quant_config, ...)`. Rebased
+                # onto the image's context below; the added lines are the PR's verbatim.
                 #
-                # Unlike the vLLM source patches elsewhere in this file, this one
-                # hard-fails: an unpatched NVSHMEM builds fine and then dies at DeepEP
-                # init, which is a much worse failure to debug than a refusal to start.
+                # This image also assigns expert_tokens_meta a second time earlier in
+                # _receiver, for the do_expand=True (prefill) branch. That one is left alone
+                # -- it is only read under `if total_tokens > 0`, which cannot be reached
+                # with an empty count list. Only the returned assignment is guarded.
                 #
-                # `sed 's/^$/ /'` restores the leading space on the patch's two
-                # whitespace-only context lines, which a YAML block scalar renders as
-                # empty. Current git accepts an empty line as empty context, so this is
-                # insurance rather than a fix -- but the failure it guards against is an
-                # unpatched build 10 minutes from now, not a parse error here.
-                sed 's/^$/ /' <<'PATCH_EOF' | git -C /tmp/nvshmem_src apply --verbose -
-                diff --git a/src/modules/transport/ibgda/ibgda.cpp b/src/modules/transport/ibgda/ibgda.cpp
-                index 6857d9b..314264b 100644
-                --- a/src/modules/transport/ibgda/ibgda.cpp
-                +++ b/src/modules/transport/ibgda/ibgda.cpp
-                @@ -2157,6 +2157,13 @@ static int ibgda_create_dct_shared_objects(nvshmemt_ibgda_state_t *ibgda_state,
-                     struct ibv_ah_attr ah_attr;
-                     struct mlx5dv_obj dv;
-
-                +    // static_rate must be a known value and is passed directly to the device - and is not
-                +    // validated prior to https://github.com/torvalds/linux/commit/c534ffda781f44a1c6ac25ef6e0e444da38ca8af
-                +    // which leads to different behavior depending on kernel version.
-                +    // Always clear the memory.
-                +    memset(&ah_attr, 0, sizeof(ah_attr));
-                +    NVSHMEMI_WARN_PRINT("Zeroing ah_attr to avoid 'Unable to create ah' error on RoCE devices\n");
-                +
-                     bool support_half_av_seg;
-                     int hca_support_compact_address_vector;
-
-                PATCH_EOF
-
-                # Flags and their order follow build-nvshmem.sh. One divergence:
-                #   NVSHMEM_UCX_SUPPORT  1 -> 0
-                # the image builds UCX into an earlier stage and points -DUCX_HOME at it;
-                # nothing here provides one, and DeepEP's internode path does not use the
-                # UCX transport. CMAKE_BUILD_TYPE is likewise left unset on purpose:
-                # NVSHMEM's CMakeLists defaults it to "release", which is what the image
-                # ships.
-                cmake -S /tmp/nvshmem_src -B /tmp/nvshmem_src/build -G Ninja \
-                  -DNVSHMEM_PREFIX="${NVSHMEM_DIR}" \
-                  -DCMAKE_PREFIX_PATH="${RDMA_CORE_PREFIX}" \
-                  -DCMAKE_INCLUDE_PATH="${RDMA_CORE_PREFIX}/include" \
-                  -DCMAKE_LIBRARY_PATH="${RDMA_CORE_PREFIX}/lib" \
-                  -DCMAKE_CUDA_ARCHITECTURES="${NVSHMEM_CUDA_ARCHITECTURES}" \
-                  -DCMAKE_CUDA_COMPILER="${CUDA_HOME}/bin/nvcc" \
-                  -DCMAKE_POSITION_INDEPENDENT_CODE=ON \
-                  -DNVSHMEM_PMIX_SUPPORT=0 \
-                  -DNVSHMEM_IBRC_SUPPORT=1 \
-                  -DNVSHMEM_IBGDA_SUPPORT=1 \
-                  -DNVSHMEM_IBDEVX_SUPPORT=1 \
-                  -DNVSHMEM_UCX_SUPPORT=0 \
-                  -DNVSHMEM_SHMEM_SUPPORT=0 \
-                  -DNVSHMEM_USE_GDRCOPY=1 \
-                  -DGDRCOPY_HOME="${GDRCOPY_HOME}" \
-                  -DNVSHMEM_MPI_SUPPORT=0 \
-                  -DNVSHMEM_USE_NCCL=0 \
-                  -DNVSHMEM_BUILD_TESTS=0 \
-                  -DNVSHMEM_BUILD_EXAMPLES=0 \
-                  -DNVSHMEM_BUILD_PYTHON_LIB=OFF
-
-                # The image caps this at MAX_JOBS=3 to avoid OOM on shared build runners;
-                # this pod requests 64 CPUs and 256Gi to itself.
-                ninja -C /tmp/nvshmem_src/build -j"$(nproc)"
-                cmake --install /tmp/nvshmem_src/build
-
-                # Hard proof that NVSHMEM was compiled with the rdma-core v44
-                # DMA-BUF DEVX path. The old build omitted this undefined symbol
-                # entirely because MLX5DV_UMEM_MASK_DMABUF was absent at configure time.
-                NVSHMEM_IBGDA_PLUGIN="${NVSHMEM_DIR}/lib/nvshmem_transport_ibgda.so"
-                readelf -Ws "${NVSHMEM_IBGDA_PLUGIN}" \
-                  | grep -q 'mlx5dv_devx_umem_reg_ex' || {
-                    echo "NVSHMEM IBGDA was built without DMA-BUF DEVX support" >&2
-                    exit 1
-                  }
-
-                # Verify that the installed transport resolves the same v44 verbs and
-                # mlx5 libraries it was compiled against.
-                ldd "${NVSHMEM_IBGDA_PLUGIN}" | tee /tmp/nvshmem-ibgda-ldd.txt
-                grep -q "libibverbs\.so.*=> ${RDMA_CORE_PREFIX}/lib/" \
-                  /tmp/nvshmem-ibgda-ldd.txt
-                grep -q "libmlx5\.so.*=> ${RDMA_CORE_PREFIX}/lib/" \
-                  /tmp/nvshmem-ibgda-ldd.txt
-
-                rm -rf /tmp/nvshmem_src
-
-                # DeepEP's setup.py looks for the host library under
-                # ${NVSHMEM_DIR}/lib specifically, so fail here rather than at link time.
-                ls "${NVSHMEM_DIR}/lib/libnvshmem_host.so"* \
-                   "${NVSHMEM_DIR}/lib/libnvshmem_device.a" \
-                   "${NVSHMEM_DIR}/lib/nvshmem_transport_ibgda.so"*
-
-                # Prove the patch survived into the binary that actually contains
-                # ibgda_create_dct_shared_objects. This is the transport *plugin*, not
-                # the host library -- the host lib dlopens it at init.
-                strings "${NVSHMEM_DIR}/lib/nvshmem_transport_ibgda.so" \
-                  | grep -q "Zeroing ah_attr"
-
-                # Both lib and lib64, in that order, as the runtime stage's
-                # ENV LD_LIBRARY_PATH has them.
-                export LD_LIBRARY_PATH=${NVSHMEM_DIR}/lib:${NVSHMEM_DIR}/lib64:$LD_LIBRARY_PATH
-
-                # Register with ldconfig as well, not just LD_LIBRARY_PATH: the NVIDIA
-                # container runtime rewrites LD_LIBRARY_PATH in k8s, so a search path
-                # exported here is not guaranteed to survive into the worker processes.
-                # Same file, same three entries, same order as Dockerfile.cuda -- the
-                # third is the NCCL wheel, which matters here because NCCL_GIN_TYPE=3
-                # needs the nvidia-nccl-cu13 in site-packages rather than whatever torch
-                # resolves to.
-                {
-                  echo "${NVSHMEM_DIR}/lib"
-                  echo "${NVSHMEM_DIR}/lib64"
-                  echo "${SITE_PACKAGES}/nvidia/nccl/lib"
-                } > /etc/ld.so.conf.d/nvidia-nvshmem.conf
-                ldconfig
-
-                # Drop the wheel before building DeepEP against the patched tree, so
-                # nothing downstream can link or dlopen an unpatched NVSHMEM. It ships
-                # its own copies of exactly the libraries just installed above.
-                #
-                # Before, rather than after the build, so the whole build runs in a
-                # single-NVSHMEM world and the `ldd` assertion below can demand
-                # ${NVSHMEM_DIR}/lib outright instead of tolerating whichever copy the
-                # loader happened to reach.
-                #
-                # Safe to remove at this DEEPEP_COMMIT: deep_ep/__init__.py imports only
-                # torch and deep_ep_cpp (no nvshmem4py), setup.py declares no dependency
-                # on the wheel, and with NVSHMEM_DIR set it never consults
-                # `nvidia.nvshmem` -- it bakes -Wl,-rpath,${NVSHMEM_DIR}/lib into the
-                # extension instead. Re-check all three before bumping to a DeepEP 2.x
-                # commit, which does use nvshmem4py.
-                uv pip uninstall --system nvidia-nvshmem-cu13 nvidia-nvshmem-cu12 || true
-
-                uv pip uninstall --system deep_ep || true
-
-                # Dockerfile.cuda pins DEEPEP_REPO/DEEPEP_VERSION (tlrmchlsmth/DeepEP at
-                # sgl-gb200-blog-pt2) and the image this pod runs was built from
-                # deepseek-ai/DeepEP@d4f41e4e93 (vLLM docker/Dockerfile
-                # DEEPEP_COMMIT_HASH). Neither is what this guide wants, so the fork and
-                # commit below are pinned independently -- update them here, not from
-                # either of those.
-                rm -rf /tmp/DeepEP
-                git clone https://github.com/neuralmagic/DeepEP /tmp/DeepEP
-                git -C /tmp/DeepEP checkout -q "${DEEPEP_COMMIT}"
-                # No-op on DeepEP 1.x; 2.x vendors fmt as a submodule.
-                git -C /tmp/DeepEP submodule update --init --recursive
-
-                # NOTE: when building DeepEP 2.x, vLLM's
-                # tools/ep_kernels/install_python_libraries.sh also prepends a
-                # SYS_pidfd_open/SYS_pidfd_getfd shim to
-                # csrc/kernels/backend/symmetric.hpp for manylinux build images. This
-                # image is Ubuntu 22.04, whose headers already define both (434/438),
-                # so the shim is omitted -- adding it would redefine the macros.
-
-                # CPATH covers the two gaps the host C++ translation unit hits. nvcc
-                # papers over both implicitly, which is why only the plain c++ source
-                # (csrc/deep_ep.cpp) fails without them:
-                #
-                #   cccl/     CUDA 13 moved libcu++ (cuda/std/*) here, and NVSHMEM's
-                #             device_host/nvshmem_tensor.h includes <cuda/std/tuple>.
-                #             vLLM's install_python_libraries.sh instead patches DeepEP's
-                #             setup.py for this; CPATH does the same job without
-                #             depending on a setup.py layout that differs between 1.x
-                #             and 2.x.
-                #   cu13/     the math-library headers (cusparse.h, cublas.h, ...) that
-                #             torch's ATen/cuda/CUDAContext.h pulls in and this image's
-                #             slim CUDA install omits.
-                #
-                # CPATH is searched after every -I, so these only fill gaps and cannot
-                # shadow the toolkit or torch headers.
-                #
-                # LIBRARY_PATH: DeepEP links -lcuda, and only the stub is present here;
-                # build-compiled-wheels.sh exports the same ${CUDA_HOME}/lib64/stubs for
-                # that reason. ${NVSHMEM_DIR}/include and /lib come from Dockerfile.cuda's
-                # ENV CPATH/LIBRARY_PATH -- redundant with what DeepEP's setup.py derives
-                # from NVSHMEM_DIR, but they keep the source-built NVSHMEM ahead of any
-                # other copy for both stages of the build.
-                #
-                # __NVSHMEM_NUMBA_SUPPORT__ forces the IBGDA device-state constant to
-                # be `extern` in host-compiled translation units. Without it each TU
-                # that includes the NVSHMEM device header emits its own definition, so
-                # the copy the host transport initializes need not be the copy the
-                # DeepEP kernels read. Mirrors llm-d's
-                # docker/scripts/cuda/builder/build-compiled-wheels.sh, which also builds
-                # a wheel with `uv build` instead of installing straight from the tree;
-                # nothing here needs the wheel artifact.
-                #
-                # TORCH_ARCH is 10.0a where the image builds "9.0a;10.0+PTX", for the
-                # same single-target reason as NVSHMEM_CUDA_ARCHITECTURES above.
-                TORCH_CUDA_ARCH_LIST="${TORCH_ARCH}" \
-                  CXXFLAGS="${CXXFLAGS:-} -D__NVSHMEM_NUMBA_SUPPORT__" \
-                  CPATH="${NVSHMEM_DIR}/include:${CUDA_HOME}/include/cccl:${CU13_INCLUDE}:${CPATH:-}" \
-                  LIBRARY_PATH="${CUDA_HOME}/lib64/stubs:${NVSHMEM_DIR}/lib:${LIBRARY_PATH:-}" \
-                  uv pip install --system --no-build-isolation /tmp/DeepEP
-                rm -rf /tmp/DeepEP
-
-                # Confirm DeepEP resolves NVSHMEM to the patched build, not the wheel.
-                # The extension module differs across DeepEP versions -- deep_ep._C in
-                # 2.x, a top-level deep_ep_cpp in 1.x -- so locate it rather than
-                # hardcoding, and use find_spec so nothing is imported or initialized.
-                DEEP_EP_SO=$(python3 -c "import glob,importlib.util,os;p=os.path.dirname(importlib.util.find_spec('deep_ep').origin);c=sorted(glob.glob(p+'/*.so'))+sorted(glob.glob(os.path.dirname(p)+'/deep_ep_cpp*.so'));print(c[0] if c else '')")
-                test -n "${DEEP_EP_SO}"
-                echo "deep_ep extension: ${DEEP_EP_SO}"
-                ldd "${DEEP_EP_SO}" | grep nvshmem
-                # Assert the resolved path, not just that the string `nvshmem` appears:
-                # ldd renders an unresolved entry as `libnvshmem_host.so.3 => not found`,
-                # which a bare `grep nvshmem` matches just as happily as a real hit.
-                ldd "${DEEP_EP_SO}" | grep -q "libnvshmem_host\.so.* => ${NVSHMEM_DIR}/lib/"
-
-                # The wheel was uninstalled before the build, but `uv pip install` above
-                # is free to pull it back in if a future DEEPEP_COMMIT declares it as a
-                # dependency. Re-check after the last step that can write libraries.
-                #
-                # This is the check that matters, not the `ldd` line above: `ldd` covers
-                # only the DeepEP extension's own DT_NEEDED, and `ibgda.cpp` -- the file
-                # in the traceback -- is not in libnvshmem_host at all. It lives in this
-                # plugin, which the host library dlopens at init. Scoped to the library
-                # roots rather than / so it does not walk the model cache.
-                found_ibgda=0
-                for so in $(find /usr /opt /lib /lib64 \
-                              -name 'nvshmem_transport_ibgda.so*' 2>/dev/null); do
-                  if ! strings "$so" | grep -q "Zeroing ah_attr"; then
-                    echo "UNPATCHED NVSHMEM ibgda transport still present: $so" >&2
-                    exit 1
-                  fi
-                  echo "patched ibgda transport: $so"
-                  found_ibgda=1
-                done
-                test "${found_ibgda}" = 1
-                set +e
-                # --- END TEMP ---------------------------------------------------------
-
-                # --- BEGIN TEMP PATCH: vllm-project/vllm#51687 @ a7a77b6 --------------
-                # "add mxfp8 dispatch": gives deepep_high_throughput the same quantized
-                # dispatch for mxfp8 that deepep_v2 already had -- scales are computed
-                # before the dispatch so DeepEP shuffles each token's scales with it, then
-                # re-laid out for the expert kernel in `_receiver` -- and lifts the three
-                # helpers that do it out of deepep_v2.py into a shared deepep_utils.
-                #
-                # This image is built from 5619fd84, which is this PR's head minus exactly
-                # this one commit, so the diff below is that commit verbatim and applies to
-                # the installed tree unmodified. Re-pin both together when bumping the image.
-                #
-                # deepep_utils.py is written out rather than patched in: the commit imports
-                # it but never adds it (the file is untracked in the PR), so the diff alone
-                # would leave vLLM raising ImportError the moment a MoE layer is built. The
-                # three functions below are the ones this same commit deletes from
-                # deepep_v2.py, verbatim apart from dropping the leading underscore.
-                #
-                # Unlike the earlier soft-failing vLLM patches in this guide, this one
-                # hard-fails: a skipped patch surfaces as an ImportError or as silently
-                # wrong expert numerics well into the run, not at startup.
-                # Delete this block once the image ships the merged PR.
+                # Hard-fails: a skipped patch surfaces as silently empty expert output well
+                # into the run, not at startup. Delete once the image ships the merged PR.
                 set -e
 
                 VLLM_ROOT=$(python3 -c 'import pathlib, vllm; print(pathlib.Path(vllm.__file__).parent.parent)')
-                PREPARE_FINALIZE="${VLLM_ROOT}/vllm/model_executor/layers/fused_moe/prepare_finalize"
 
-                cat > "${PREPARE_FINALIZE}/deepep_utils.py" <<'UTILS_EOF'
-                # SPDX-License-Identifier: Apache-2.0
-                # SPDX-FileCopyrightText: Copyright contributors to the vLLM project
-                import torch
-
-                from vllm.model_executor.layers.fused_moe.config import FusedMoEQuantConfig
-                from vllm.model_executor.layers.quantization.utils.mxfp8_utils import (
-                    MXFP8_BLOCK_SIZE,
-                    swizzle_mxfp8_scale,
-                )
-
-
-                def quantize_before_dispatch(
-                    quant_config: FusedMoEQuantConfig, defer_input_quant: bool
-                ) -> bool:
-                    """
-                    Do quantized dispatch for blockfp8 and mxfp8, unless the
-                    subsequent moe kernel requires bf16 inputs.
-                    """
-                    if defer_input_quant:
-                        return False
-                    return quant_config.is_block_quantized or quant_config.quant_dtype == "mxfp8"
-
-
-                def pack_mxfp8_scale(scale: torch.Tensor) -> torch.Tensor:
-                    """Pack row-major [M, K/32] UE8M0 scales into [M, K/128] int32.
-
-                    DeepEP moves scale factors as opaque 4-byte packs (`sf_pack_t` is a
-                    float/UE8M0x4 union), so 1-byte UE8M0 scales must be packed 4-per-int32.
-                    """
-                    assert scale.dtype == torch.uint8 and scale.ndim == 2, (
-                        f"expected 2D uint8 mxfp8 scales, got {scale.shape} {scale.dtype}"
-                    )
-                    assert scale.size(1) % 4 == 0, (
-                        f"mxfp8 dispatch needs hidden_size % {MXFP8_BLOCK_SIZE * 4} == 0, "
-                        f"got {scale.size(1)} scale columns"
-                    )
-                    return scale.contiguous().view(torch.int32)
-
-
-                def unpack_mxfp8_scale(
-                    scale: torch.Tensor, hidden_size: int, is_scale_swizzled: bool
-                ) -> torch.Tensor:
-                    """Inverse of `pack_mxfp8_scale`, restoring the expert kernel's layout.
-
-                    TRTLLM consumes the row-major [M, K/32] scales as-is; CUTLASS wants them
-                    swizzled into F8_128x4, which can only happen here because the swizzle
-                    interleaves scales across a 128-row tile (i.e. across tokens).
-                    """
-                    scale = scale.contiguous().view(torch.uint8)
-                    if is_scale_swizzled:
-                        scale = swizzle_mxfp8_scale(scale, M=scale.size(0), K=hidden_size)
-                    return scale
-                UTILS_EOF
-
-                # Same `sed` guard as the NVSHMEM patch above: this diff has whitespace-only
-                # context lines, which a YAML block scalar renders as empty.
-                sed 's/^$/ /' <<'VLLM_PATCH_EOF' | git -C "${VLLM_ROOT}" apply --verbose -
-                diff --git a/vllm/model_executor/layers/fused_moe/prepare_finalize/deepep_ht.py b/vllm/model_executor/layers/fused_moe/prepare_finalize/deepep_ht.py
-                index f30e0bea3c39..e28269d6c816 100644
-                --- a/vllm/model_executor/layers/fused_moe/prepare_finalize/deepep_ht.py
-                +++ b/vllm/model_executor/layers/fused_moe/prepare_finalize/deepep_ht.py
-                @@ -7,6 +7,11 @@
-
-                 import vllm.model_executor.layers.fused_moe.modular_kernel as mk
-                 from vllm.model_executor.layers.fused_moe.config import FusedMoEQuantConfig
-                +from vllm.model_executor.layers.fused_moe.prepare_finalize.deepep_utils import (
-                +    pack_mxfp8_scale,
-                +    quantize_before_dispatch,
-                +    unpack_mxfp8_scale,
-                +)
-                 from vllm.model_executor.layers.fused_moe.topk_weight_and_reduce import (
-                     TopKWeightAndReduceContiguous,
-                     TopKWeightAndReduceDelegate,
-                @@ -237,11 +242,19 @@ def _receiver(
-                             expert_num_tokens_per_expert_list, device=expert_x.device
-                         )
-
-                -        # * For non-block quant, dispatch in b16 and quantize now as
-                -        #   DeepEP kernels only support dispatching block scales.
-                +        # * For blockfp8 and mxfp8, the tokens were dispatched quantized;
-                +        #   restore the scale layout the expert kernel expects.
-                +        # * For all other quant, dispatch is in b16 so quantize now.
-                         # * For expert kernels that require unquantized inputs,
-                         #   defer quantization to FusedMoEExpertsPermuteUnpermute.
-                -        if not quant_config.is_block_quantized and not defer_input_quant:
-                +        if quantize_before_dispatch(quant_config, defer_input_quant):
-                +            if quant_config.quant_dtype == "mxfp8" and expert_x_scale is not None:
-                +                expert_x_scale = unpack_mxfp8_scale(
-                +                    expert_x_scale,
-                +                    hidden_size=expert_x.size(-1),
-                +                    is_scale_swizzled=quant_config.is_scale_swizzled,
-                +                )
-                +        elif not defer_input_quant:
-                             # Quantize after dispatch.
-                             expert_x_scale = None
-                             if expert_x.numel() != 0:
-                @@ -285,21 +298,28 @@ def prepare_async(
-                             )
-                             a1 = a1 * topk_weights.to(a1.dtype)
-
-                -        # * DeepEP only supports fp8 block scales so quantize
-                -        #   before the dispatch for these models.
-                +        # * DeepEP dispatch moves per-token scale factors, so blockfp8 and
-                +        #   mxfp8 are quantized before the dispatch.
-                         # * For all other quantization, dispatch after.
-                         # * For expert kernels that require unquantized inputs,
-                         #   defer quantization to FusedMoEExpertsPermuteUnpermute.
-                -        if quant_config.is_block_quantized and not defer_input_quant:
-                +        if quantize_before_dispatch(quant_config, defer_input_quant):
-                +            # Scales must be row-major [num_tokens, ...] here so each token's
-                +            # scales can be shuffled with it; any swizzling the expert kernel
-                +            # wants is applied post-dispatch in `_receiver`.
-                             a1q, a1q_scale = moe_kernel_quantize_input(
-                                 a1,
-                                 quant_config.a1_scale,
-                                 quant_dtype=quant_config.quant_dtype,
-                                 per_act_token_quant=quant_config.per_act_token_quant,
-                                 block_shape=quant_config.block_shape,
-                +                is_scale_swizzled=False,
-                +                mx_alignment=quant_config.mx_alignment,
-                             )
-                             if a1q_scale is not None and a1q_scale.numel() == 1:
-                                 a1q_scale = a1q_scale.view(1, 1)
-                +            if quant_config.quant_dtype == "mxfp8":
-                +                a1q_scale = pack_mxfp8_scale(a1q_scale)
-                             a1_post_scale = None
-                         else:
-                             a1q = a1
+                sed 's/^$/ /' <<'DEEPEP_V2_MXFP_PATCH_EOF' | git -C "${VLLM_ROOT}" apply --verbose -
                 diff --git a/vllm/model_executor/layers/fused_moe/prepare_finalize/deepep_v2.py b/vllm/model_executor/layers/fused_moe/prepare_finalize/deepep_v2.py
-                index a6bf7ba08929..2597e8368569 100644
                 --- a/vllm/model_executor/layers/fused_moe/prepare_finalize/deepep_v2.py
                 +++ b/vllm/model_executor/layers/fused_moe/prepare_finalize/deepep_v2.py
-                @@ -8,15 +8,16 @@
-                 import vllm.model_executor.layers.fused_moe.modular_kernel as mk
-                 from vllm.forward_context import get_forward_context
-                 from vllm.model_executor.layers.fused_moe.config import FusedMoEQuantConfig
-                +from vllm.model_executor.layers.fused_moe.prepare_finalize.deepep_utils import (
-                +    pack_mxfp8_scale,
-                +    quantize_before_dispatch,
-                +    unpack_mxfp8_scale,
-                +)
-                 from vllm.model_executor.layers.fused_moe.topk_weight_and_reduce import (
-                     TopKWeightAndReduceContiguous,
-                     TopKWeightAndReduceDelegate,
-                 )
-                 from vllm.model_executor.layers.fused_moe.utils import moe_kernel_quantize_input
-                -from vllm.model_executor.layers.quantization.utils.mxfp8_utils import (
-                -    MXFP8_BLOCK_SIZE,
-                -    swizzle_mxfp8_scale,
-                -)
-                 from vllm.triton_utils import tl, triton
-                 from vllm.utils.math_utils import round_up
-                 from vllm.v1.worker.ubatching import (
-                @@ -24,49 +25,6 @@
-                 )
+                @@ -304,10 +304,18 @@
+                         if recv_topk_weights is not None and recv_topk_weights.ndim == 1:
+                             recv_topk_weights = recv_topk_weights.unsqueeze(1)
 
+                -        expert_tokens_meta = mk.ExpertTokensMetadata.make_from_list(
+                -            recv_expert_num_tokens,
+                -            device=expert_x.device,
+                -        )
+                +        # do_cpu_sync=False (decode/cudagraph mode) skips the device->host sync,
+                +        # so DeepEP returns an empty per-expert count list. Leave the metadata
+                +        # unset rather than wrapping the empty list: a non-None metadata holding
+                +        # zero-element tensors suppresses the consumers' fallback to
+                +        # count_expert_num_tokens(recv_topk_idx) and makes them size their
+                +        # workspaces to zero rows.
+                +        expert_tokens_meta = None
+                +        if recv_expert_num_tokens:
+                +            expert_tokens_meta = mk.ExpertTokensMetadata.make_from_list(
+                +                recv_expert_num_tokens,
+                +                device=expert_x.device,
+                +            )
 
-                -def _quantize_before_dispatch(
-                -    quant_config: FusedMoEQuantConfig, defer_input_quant: bool
-                -) -> bool:
-                -    """
-                -    Do quantized dispatch for blockfp8 and mxfp8, unless the
-                -    subsequent moe kernel requires bf16 inputs.
-                -    """
-                -    if defer_input_quant:
-                -        return False
-                -    return quant_config.is_block_quantized or quant_config.quant_dtype == "mxfp8"
-                -
-                -
-                -def _pack_mxfp8_scale(scale: torch.Tensor) -> torch.Tensor:
-                -    """Pack row-major [M, K/32] UE8M0 scales into [M, K/128] int32.
-                -
-                -    DeepEP moves scale factors as opaque 4-byte packs (`sf_pack_t` is a
-                -    float/UE8M0x4 union), so 1-byte UE8M0 scales must be packed 4-per-int32.
-                -    """
-                -    assert scale.dtype == torch.uint8 and scale.ndim == 2, (
-                -        f"expected 2D uint8 mxfp8 scales, got {scale.shape} {scale.dtype}"
-                -    )
-                -    assert scale.size(1) % 4 == 0, (
-                -        f"mxfp8 dispatch needs hidden_size % {MXFP8_BLOCK_SIZE * 4} == 0, "
-                -        f"got {scale.size(1)} scale columns"
-                -    )
-                -    return scale.contiguous().view(torch.int32)
-                -
-                -
-                -def _unpack_mxfp8_scale(
-                -    scale: torch.Tensor, hidden_size: int, is_scale_swizzled: bool
-                -) -> torch.Tensor:
-                -    """Inverse of `_pack_mxfp8_scale`, restoring the expert kernel's layout.
-                -
-                -    TRTLLM consumes the row-major [M, K/32] scales as-is; CUTLASS wants them
-                -    swizzled into F8_128x4, which can only happen here because the swizzle
-                -    interleaves scales across a 128-row tile (i.e. across tokens).
-                -    """
-                -    scale = scale.contiguous().view(torch.uint8)
-                -    if is_scale_swizzled:
-                -        scale = swizzle_mxfp8_scale(scale, M=scale.size(0), K=hidden_size)
-                -    return scale
-                -
-                -
-                 class DeepEPV2PrepareAndFinalize(mk.FusedMoEPrepareAndFinalizeModular):
-                     """
-                     Prepare/Finalize using DeepEP v2 ElasticBuffer (unified API).
-                @@ -309,9 +267,9 @@ def _receiver(
-                             device=expert_x.device,
-                         )
-
-                -        if _quantize_before_dispatch(quant_config, defer_input_quant):
-                +        if quantize_before_dispatch(quant_config, defer_input_quant):
+                         if _quantize_before_dispatch(quant_config, defer_input_quant):
                              if quant_config.quant_dtype == "mxfp8" and expert_x_scale is not None:
-                -                expert_x_scale = _unpack_mxfp8_scale(
-                +                expert_x_scale = unpack_mxfp8_scale(
-                                     expert_x_scale,
-                                     hidden_size=expert_x.size(-1),
-                                     is_scale_swizzled=quant_config.is_scale_swizzled,
-                @@ -357,7 +315,7 @@ def prepare_async(
-                             )
-                             a1 = a1 * topk_weights.to(a1.dtype)
+                DEEPEP_V2_MXFP_PATCH_EOF
 
-                -        if _quantize_before_dispatch(quant_config, defer_input_quant):
-                +        if quantize_before_dispatch(quant_config, defer_input_quant):
-                             # Scales must be row-major [num_tokens, ...] here so each token's
-                             # scales can be shuffled with it; any swizzling the expert kernel
-                             # wants is applied post-dispatch in `_receiver`.
-                @@ -373,7 +331,7 @@ def prepare_async(
-                             if a1q_scale is not None and a1q_scale.numel() == 1:
-                                 a1q_scale = a1q_scale.view(1, 1)
-                             if quant_config.quant_dtype == "mxfp8":
-                -                a1q_scale = _pack_mxfp8_scale(a1q_scale)
-                +                a1q_scale = pack_mxfp8_scale(a1q_scale)
-                             a1_post_scale = None
-                         else:
-                             a1q = a1
-                VLLM_PATCH_EOF
-
-                # Proves more than the patch applying: it also confirms the image's
-                # mxfp8_utils still exports the two names deepep_utils reaches for.
-                python3 -c "
-                from vllm.model_executor.layers.fused_moe.prepare_finalize.deepep_utils import (
-                    pack_mxfp8_scale,
-                    quantize_before_dispatch,
-                    unpack_mxfp8_scale,
-                )
-                print('deepep_utils import OK')
-                "
+                # Cheap proof the guard is live, without importing torch/deep_ep: the
+                # patched source must contain the conditional, not the bare assignment.
+                grep -q 'if recv_expert_num_tokens:' \
+                  "${VLLM_ROOT}/vllm/model_executor/layers/fused_moe/prepare_finalize/deepep_v2.py"
                 set +e
                 # --- END TEMP PATCH ---------------------------------------------------
 
@@ -809,7 +870,6 @@ spec:
                   --disable-access-log-for-endpoints=/health,/metrics \
                   --max-num-batched-tokens 8192 \
                   --max-num-seqs 16 \
-                  --speculative-config '{"model":"Inferact/Kimi-K3-DSpark","method":"dspark","num_speculative_tokens":1,"attention_backend":"FLASHINFER_MLA","draft_sample_method":"probabilistic","rejection_sample_method":"block"}' \
                   --enable-prefix-caching \
                   --enable-expert-parallel \
                   --tensor-parallel-size $TP_SIZE \
@@ -820,7 +880,7 @@ spec:
                   --data-parallel-rpc-port 5555 \
                   --data-parallel-start-rank $START_RANK \
                   --no-disable-hybrid-kv-cache-manager \
-                  --all2all-backend deepep_high_throughput \
+                  --all2all-backend deepep_v2 \
                   --moe-backend auto \
                   --max-model-len 300000 \
                   --profiler-config.profiler cuda \
@@ -832,11 +892,13 @@ spec:
                   --no-enable-flashinfer-autotune \
                   --kv-cache-dtype fp8 \
                   --attention-config '{"use_prefill_query_quantization":true,"mla_prefill_backend":"flashinfer"}' \
-                  -cc.cudagraph_mode=NONE
+                  -cc.cudagraph_mode=NONE \
+                  --disable-custom-all-reduce
 
                   # --enforce-eager \
                   # --profiler-config.torch_profiler_dir=/profiles \
                   # --profiler-config.torch_profiler_with_stack=False \
+                  # --speculative-config '{"model":"Inferact/Kimi-K3-DSpark","method":"dspark","num_speculative_tokens":1,"attention_backend":"FLASHINFER_MLA","draft_sample_method":"probabilistic","rejection_sample_method":"block"}' \
 
             env:
               - name: HF_TOKEN

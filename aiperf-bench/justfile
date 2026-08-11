@@ -30,7 +30,9 @@ deploy    := "aiperf-agentx"
 model     := "moonshotai/Kimi-K3"
 tokenizer := "moonshotai/Kimi-K3"
 
-url       := "http://wide-ep-lws-epp"
+# Point straight at the prefill LWS's load-balanced service, bypassing the EPP.
+# url       := "http://wide-ep-llm-d-prefill-lb:8000"
+url := "http://wide-ep-lws-epp"
 # url := "http://10.84.1.63:8000"
 concurrency := "16"
 duration    := "300"

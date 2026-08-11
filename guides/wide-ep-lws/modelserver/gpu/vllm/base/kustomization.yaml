@@ -3,4 +3,5 @@ kind: Kustomization
 resources:
   - decode.yaml
   - prefill.yaml
+  - prefill-service.yaml
   - serviceAccount.yaml
