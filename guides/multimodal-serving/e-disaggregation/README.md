@@ -90,6 +90,7 @@ export INFRA_PROVIDER="gke" # base | gke
 export ROUTER_VALUES="${REPO_ROOT}/guides/${GUIDE_PATH}/router/vllm/${TOPOLOGY}-disaggregation.values.yaml"
 export MODEL_SERVER_PATH="${REPO_ROOT}/guides/${GUIDE_PATH}/modelserver/gpu/vllm/${TOPOLOGY}/${INFRA_PROVIDER}"
 export MONITORING_COMPONENT="monitoring-pd"
+export ROUTER_INFERENCE_POOL_CREATE="true"
 ```
 
 For the vLLM E/P/D profile:
@@ -103,6 +104,7 @@ export INFRA_PROVIDER="gke" # base | gke
 export ROUTER_VALUES="${REPO_ROOT}/guides/${GUIDE_PATH}/router/vllm/${TOPOLOGY}-disaggregation.values.yaml"
 export MODEL_SERVER_PATH="${REPO_ROOT}/guides/${GUIDE_PATH}/modelserver/gpu/vllm/${TOPOLOGY}/${INFRA_PROVIDER}"
 export MONITORING_COMPONENT="monitoring-pd"
+export ROUTER_INFERENCE_POOL_CREATE="true"
 ```
 
 For SGLang E/PD, use the variables and cluster requirements in the [SGLang XPU Encode + GPU PD profile](./profiles/sglang-xpu-encode-gpu-pd.md).
@@ -137,11 +139,14 @@ kubectl create secret generic llm-d-hf-token \
 
 This deploys the llm-d Router with an Envoy sidecar, it doesn't set up a Kubernetes Gateway.
 
+The standalone chart creates an `InferencePool` by default. Profiles that use direct endpoint discovery can set `ROUTER_INFERENCE_POOL_CREATE=false`. This setting applies only to standalone mode; Gateway mode still requires an `InferencePool`.
+
 ```bash
 helm install ${RELEASE_NAME} \
     ${ROUTER_STANDALONE_CHART} \
     -f ${REPO_ROOT}/guides/recipes/router/base.values.yaml \
     -f ${ROUTER_VALUES} \
+    --set router.inferencePool.create="${ROUTER_INFERENCE_POOL_CREATE:-true}" \
     -n ${NAMESPACE} --version ${ROUTER_CHART_VERSION}
 ```
 
@@ -218,8 +223,10 @@ kubectl run curl-debug --rm -it \
 
 **Send a multimodal request (image):**
 
+This example uses an embedded PNG so the model-server pods do not require outbound network access.
+
 ```bash
-curl -X POST http://${IP}/v1/chat/completions \
+curl -sS -f -X POST http://${IP}/v1/chat/completions \
     -H 'Content-Type: application/json' \
     -d '{
         "model": "'"${MODEL_NAME}"'",
@@ -230,24 +237,24 @@ curl -X POST http://${IP}/v1/chat/completions \
                     {
                         "type": "image_url",
                         "image_url": {
-                            "url": "https://images.dog.ceo/breeds/retriever-golden/n02099601_3004.jpg"
+                            "url": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAIAAAAlC+aJAAAAS0lEQVR42u3PQQkAAAgAsetfWiP4FgYrsKZeS0BAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEDgsqnc8OJg6Ln3AAAAAElFTkSuQmCC"
                         }
                     },
                     {
                         "type": "text",
-                        "text": "What is in this image?"
+                        "text": "What color is this image?"
                     }
                 ]
             }
         ],
         "max_tokens": 128
-    }' | jq
+    }' | jq .
 ```
 
 **Send a text-only request (encode stage will be skipped):**
 
 ```bash
-curl -X POST http://${IP}/v1/chat/completions \
+curl -sS -f -X POST http://${IP}/v1/chat/completions \
     -H 'Content-Type: application/json' \
     -d '{
         "model": "'"${MODEL_NAME}"'",
@@ -258,7 +265,7 @@ curl -X POST http://${IP}/v1/chat/completions \
             }
         ],
         "max_tokens": 128
-    }' | jq
+    }' | jq .
 ```
 
 ## Cleanup
