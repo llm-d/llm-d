@@ -2,8 +2,9 @@
 # Install LeaderWorkerSet and DisaggregatedSet CRDs for guide dry-run and local dev.
 set -euo pipefail
 
-# LWS 0.9.0+ ships DisaggregatedSet CRD alongside LeaderWorkerSet in config/crd/bases.
-LWS_VERSION="${LWS_VERSION:-v0.9.0}"
+# LWS ships the DisaggregatedSet CRD alongside LeaderWorkerSet in config/crd/bases.
+# v0.10.0 is the minimum with slices, placementPolicy, and per-role scaling.
+LWS_VERSION="${LWS_VERSION:-v0.10.0}"
 
 echo "Installing LeaderWorkerSet CRDs (${LWS_VERSION})..."
 kubectl apply --server-side -f \
