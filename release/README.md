@@ -127,6 +127,16 @@ The process involves creating a Release Candidate (RC) tag for a dry run of the 
 > which snapshots the current guide testing badges and opens a PR against `main`
 > updating the [Release Testing](#release-testing) matrix above. The matrix is a
 > frozen record of the tag that produced it, so each RC/release refreshes it.
+>
+> That PR needs a human to take ownership of its commit before it can merge — CI
+> cannot produce a DCO sign-off or a signature on your behalf. The PR body spells
+> out the commands; they amount to:
+>
+> ```bash
+> gh pr checkout release-matrix/<tag>
+> git commit --amend --reset-author -s -S --no-edit
+> git push --force-with-lease
+> ```
 
 It is important to fetch the tags from the upstream repo to avoid any conflicts using:
 
