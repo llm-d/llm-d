@@ -93,6 +93,84 @@ spread. That is the pull behaving correctly as a recovery path. Choose
 router-restart insurance (measured restart-recovery runs produced zero
 pulls). See [When to use this path](../README.md#when-to-use-this-path).
 
+## Measuring pull activity
+
+No default-level signal reports both the count of successful pulls and
+the tokens transferred. Use Prometheus metrics for measured arms; DEBUG
+logs are for focused verification probes. The scenario writeups below
+report session counts and offload-tier totals as pull evidence.
+
+### Tier-labeled metrics
+
+vLLM builds that include
+[vllm#48798](https://github.com/vllm-project/vllm/pull/48798) label
+offload counters by tier; the P2P tier's label value ends in `:p2p`,
+which attributes activity to the peer tier directly:
+
+```promql
+sum(increase(vllm:kv_offload_tiering_read_bytes_total{tier=~".*:p2p"}[<stage>]))
+sum(increase(vllm:kv_offload_tiering_block_hits_total{tier=~".*:p2p"}[<stage>]))
+sum(increase(vllm:kv_offload_tiering_promotion_job_failures_total{tier=~".*:p2p"}[<stage>]))
+```
+
+`read_bytes_total` counts bytes read from the P2P tier into the CPU
+tier - completed pull volume. `block_hits_total` counts blocks found in
+the P2P tier at lookup; multiplied by `--block-size` it estimates
+tokens found, not tokens transferred (a hit's promotion can still fail;
+the failures counter reports those). The pinned `v0.27.1` engine image
+does not contain vllm#48798; use the fallback below.
+
+### Fallback: deltas against the no-pull control
+
+`vllm:external_prefix_cache_hits_total` counts tokens the connector
+reports as cached at scheduling time, before any load completes;
+`vllm:kv_offload_load_bytes_total` counts bytes actually loaded into
+GPU. Both include a pod restoring from its own CPU tier, so their
+absolute values are offload-tier activity, not pull volume. The per-stage delta
+against the matched no-pull arm (same placement, producer removed)
+estimates pull-attributable activity; it is not an exact count, because
+enabling the pull also changes later cache state. To attribute bytes to
+a peer within a single run the consumer must hold no local copy, which
+the
+[calibration recipe](../../recipes/router/calibration/README.md#calibrating-mincachedtokendelta)
+arranges with fresh token IDs and a no-pull control.
+
+### Session establishment (default log level)
+
+Source pods log `created connected session for <peer>` at INFO once a
+peer's session is constructed; `accepting incoming connection` precedes
+construction and can be followed by `rejecting peer`, so count the
+former and check for `rejecting peer` and `peer down`. A nonzero count
+is connectivity evidence, not pull evidence - one session serves many
+pulls, reconnects add lines, and sessions persist for the engine
+process lifetime, so a zero count in a later stage proves nothing and
+only a transfer proves the mesh usable.
+
+```bash
+for pod in $(kubectl get pods -n "${NAMESPACE}" \
+    -l llm-d.ai/guide=p2p-kv-cache-sharing -o name); do
+  printf '%s: ' "${pod}"
+  kubectl logs -n "${NAMESPACE}" "${pod#pod/}" -c modelserver \
+    | grep -c 'created connected session'
+done
+```
+
+Enumerate pods by name as above - with a label selector `kubectl logs`
+defaults to the last 10 lines per pod, which silently undercounts.
+
+### Per-pull accounting (requires `VLLM_LOGGING_LEVEL=DEBUG`)
+
+`fetch RECEIVED kv_request_id=... round=... blocks=N` on the source
+records a demanded fetch round; a closing lookup also emits a terminal
+fetch with `blocks=0`, and one pull can span several rounds, so unique
+`kv_request_id` values over rounds with `blocks > 0` count pull
+attempts. The round's outcome is its
+`finalize kv_request_id=... round=... success=...` line: success means
+the round's full demand was sent, so `blocks=N` summed over rounds
+that finalize `success=True`, times `--block-size`, gives tokens
+moved. DEBUG emits per-block and per-round lines - use it for probes,
+not measured arms.
+
 ## Step 0 - pull-versus-recompute crossover (single request)
 
 Seed a fresh prefix on one pod; measure single-request prefill latency
@@ -153,13 +231,8 @@ evidence in the `load + P2P` arm: **120 established P2P sessions**,
 against 0 in the arms without the producer.
 
 The tier also served 210M external-hit tokens and 7.8 TB (GPU hit rate
-17.3%). Read those as offload-tier activity, not pull volume:
-`vllm:external_prefix_cache_hits_total` and
-`vllm:kv_offload_load_bytes_total` count every restore into GPU,
-including a pod reloading from its own CPU tier. To attribute bytes to a
-peer the consumer must hold no local copy - which is what the
-[calibration recipe](../../recipes/router/calibration/calibrate-min-cached-token-delta.sh)
-arranges with fresh token IDs and a no-pull control.
+17.3%) - offload-tier activity, not pull volume; see
+[Measuring pull activity](#measuring-pull-activity).
 
 Reading the arms: affinity is near-ideal here - each pod owns ~8 of the
 128 prefixes (384K tokens, comfortably GPU-resident), so every request

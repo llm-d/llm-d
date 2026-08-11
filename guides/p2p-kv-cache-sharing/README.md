@@ -454,7 +454,9 @@ fine, nothing pulls. Run every gate before trusting any measurement:
    `running P2P source protocol` with a `source_host` on requests whose
    prefix a peer holds.
 4. **Pulls landing**: `vllm:external_prefix_cache_hits_total` rises on
-   pulling pods; the source logs the served fetch.
+   pulling pods; at `VLLM_LOGGING_LEVEL=DEBUG` the source logs each
+   served fetch. See
+   [Measuring pull activity](benchmarking/README.md#measuring-pull-activity).
 5. **Hash agreement**: seed one pod with a prefix, request it on another
    with the header; a hit of ~the full prefix length proves block hashes
    match (if zero, check `PYTHONHASHSEED` and `--block-size`).
