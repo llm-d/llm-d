@@ -151,7 +151,10 @@ topology choice:
 >   roles you actually run; an `encode` scheduling profile with no `encode`-labeled pods
 >   behind it is simply never called, since the Coordinator's pipeline (step 3) is what
 >   decides whether an `encode` phase call happens at all.
-> * Step 2: skip the encode model server overlay, or scale it to 0 replicas.
+> * Step 2: after applying the overlay, scale the encode Deployment to 0 replicas:
+>   ```bash
+>   kubectl scale deployment/coord-disaggregation-nvidia-gpu-vllm-encode -n ${NAMESPACE} --replicas=0
+>   ```
 > * Step 3: after deploying the Coordinator, apply
 >   [`coordinator/patch-pd-only.yaml`](coordinator/patch-pd-only.yaml) to drop the
 >   `replace-media-urls`, `render`, and `encode` steps from `pipeline.steps` (keeping
