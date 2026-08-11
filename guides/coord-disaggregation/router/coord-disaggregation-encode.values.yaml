@@ -24,6 +24,10 @@ router:
       targetPort: 8081
 
   epp:
+    # Single EPP replica: the inflight-load-producer's in-flight token accounting
+    # (which active-request-scorer consumes) is local to this EPP process, so multiple
+    # replicas would each see only a fraction of the per-endpoint load.
+    replicas: 1
     pluginsConfigFile: "coordinator-plugins.yaml"
     pluginsCustomConfig:
       coordinator-plugins.yaml: |

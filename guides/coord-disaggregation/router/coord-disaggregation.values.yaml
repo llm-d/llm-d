@@ -28,6 +28,12 @@ router:
       targetPort: 8081
 
   epp:
+    # Single EPP replica: the inflight-load-producer's in-flight token accounting and
+    # approx-prefix-cache-producer's cache state (which token-load-scorer,
+    # prefix-cache-affinity-filter, and active-request-scorer consume across all three
+    # profiles) are local to this EPP process, so multiple replicas would each see only
+    # a fraction of the per-endpoint load/cache picture and mis-score requests.
+    replicas: 1
     # TODO: Remove this image override once an official release including
     # llm-d-router#2134 (header-profile-handler) is published. v0.9.0 predates
     # that merge; main is the earliest build that has it.

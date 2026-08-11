@@ -29,6 +29,12 @@ router:
       targetPort: 8081
 
   epp:
+    # Single EPP replica: the inflight-load-producer's in-flight token accounting and
+    # approx-prefix-cache-producer's cache state (which token-load-scorer and
+    # prefix-cache-affinity-filter consume) are local to this EPP process, so multiple
+    # replicas would each see only a fraction of the per-endpoint load/cache picture
+    # and mis-gate the affinity filter.
+    replicas: 1
     pluginsConfigFile: "coordinator-plugins.yaml"
     pluginsCustomConfig:
       coordinator-plugins.yaml: |
