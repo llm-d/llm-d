@@ -273,7 +273,7 @@ kubectl create namespace ${NAMESPACE} --dry-run=client -o yaml | kubectl apply -
 Additional requirements specific to this path:
 
 * A vLLM image with the `OffloadingConnector` P2P secondary tier (see
-  the [nightly pins](#engine-image-upstream-nightly-pins)).
+  the [release floor](#engine-image-vllm-release-floor)).
 * An llm-d routing sidecar that injects
   `kv_transfer_params.remote_kv_source`. A sidecar emitting the older
   `p2p`/`prefill`/`decode` keys is silently inert against current
@@ -362,26 +362,18 @@ like a performance result rather than a misconfiguration:
 kubectl exec -n ${NAMESPACE} deploy/p2p-kv-cache-sharing-decode -c modelserver -- ls /dev/infiniband
 ```
 
-#### Engine image: upstream nightly pins
+#### Engine image: vLLM release floor
 
 The `OffloadingConnector` P2P secondary tier and its robustness fixes
-are upstream in vLLM
 ([vllm#48021](https://github.com/vllm-project/vllm/pull/48021),
 [vllm#49671](https://github.com/vllm-project/vllm/pull/49671),
 [vllm#49823](https://github.com/vllm-project/vllm/pull/49823),
-[vllm#49877](https://github.com/vllm-project/vllm/pull/49877)); no
-source overlay is required. The first nightly containing all four is
-`nightly-6f91edf96d3f3272945809c04702380053bff4de` (2026-07-29); the
-kustomization pins it so the guide's numbers stay reproducible. No
-tagged vLLM release up to `v0.26.0` contains these merges; once a later
-release does, prefer it over any nightly.
-
-Wide-EP `GLM-5.2` deployments (the
-[GLM results](./benchmark-results/glm-5.2-h200.md) testbed) additionally
-need the block-table width alignment fix
-([vllm#50302](https://github.com/vllm-project/vllm/pull/50302)); their
-floor is `nightly-124154a8843d1f8e4d4e2d5d466e2d3ebc3716da`
-(2026-08-01).
+[vllm#49877](https://github.com/vllm-project/vllm/pull/49877)) and the
+block-table width alignment fix that wide-EP `GLM-5.2` deployments (the
+[GLM results](./benchmark-results/glm-5.2-h200.md) testbed) need
+([vllm#50302](https://github.com/vllm-project/vllm/pull/50302)) are all
+contained in vLLM `v0.27.0`, the first tagged release with the full
+set; no source overlay is required. The kustomization pins `v0.27.1`.
 
 ### 4. Calibrate `minCachedTokenDelta` for your model and transport
 

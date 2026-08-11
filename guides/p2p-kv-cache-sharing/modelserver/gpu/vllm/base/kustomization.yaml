@@ -16,11 +16,10 @@ namePrefix: p2p-kv-cache-sharing-
 # rather than by recipes/modelserver/components/images/routing-sidecar.
 # Pins:
 # - engine: the P2P secondary tier (vllm#48021), its crash fixes
-#   (vllm#49671, vllm#49823) and the symmetric-fetch stall fix
-#   (vllm#49877) are all upstream. Any nightly at or after this one
-#   (2026-07-29) works; it is pinned for reproducibility. No release up
-#   to v0.26.0 contains these merges; pin a tagged vLLM release once one
-#   does (verify the merge commits are in the tag).
+#   (vllm#49671, vllm#49823), the symmetric-fetch stall fix (vllm#49877)
+#   and the wide-EP block-table alignment fix (vllm#50302) are all
+#   contained in v0.27.0, the first tagged release with the full set;
+#   v0.27.1 is its patch release.
 # - sidecar: main because v0.9.0 predates the offloading P2P pull support
 #   (llm-d-router#1937); pin the next release when cut. This tag floats, so
 #   the guide's benchmark tables cannot be reproduced exactly against it -
@@ -29,7 +28,7 @@ namePrefix: p2p-kv-cache-sharing-
 images:
   - name: REPLACE_MODEL_SERVER_IMAGE
     newName: vllm/vllm-openai
-    newTag: nightly-6f91edf96d3f3272945809c04702380053bff4de
+    newTag: v0.27.1
   - name: REPLACE_ROUTING_SIDECAR_IMAGE
     newName: ghcr.io/llm-d/llm-d-router-disagg-sidecar
     newTag: main
