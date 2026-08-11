@@ -13,6 +13,8 @@
 #   just clean             # delete the runner
 #   just lmeval            # run lm-eval (gsm8k) at 100 concurrency via the lm-eval pod
 #   just lmeval mmlu 50    # override tasks / concurrency
+#   just lmeval-sweep      # run gsm8k at 8/16/32/64/128/256, --limit = 5x concurrency
+#   just lmeval-sweep mmlu "8 16"  # override tasks / concurrency list
 #   just profile           # capture a 10-step torch profile of decode dp rank 0
 #   just profile p         # same, but against the prefill worker
 #   just profile d 3 90    # profile decode dp rank 3, wait 90s for the trace dump
@@ -34,6 +36,7 @@ concurrency := "16"
 duration    := "300"
 # concurrencies := "25 50 100 150 200"
 concurrencies := "20 40 60 80 100"
+lmeval_concurrencies := "8 16 32 64 128 256"
 artifacts   := "/workspace/artifacts"
 # Must match torch_profiler_dir in the decode manifest's --profiler-config.
 profile_dir := "/profiles"
@@ -144,13 +147,25 @@ results dest="./results":
     kubectl cp {{namespace}}/$(kubectl get pod -n {{namespace}} -l app={{deploy}} -o jsonpath='{.items[0].metadata.name}'):/workspace/artifacts {{dest}}
 
 # Run lm-evaluation-harness from the lm-eval pod against the deployment's
-# OpenAI-compatible chat endpoint. Args: [tasks] [concurrency].
-lmeval tasks="gsm8k" concurrency="100":
-    kubectl exec -n {{namespace}}  deploy/{{deploy}} -- \
+# OpenAI-compatible chat endpoint. Args: [tasks] [concurrency] [limit].
+# An empty limit runs the full task.
+lmeval concurrency="100" limit="1000":
+    kubectl exec -n {{namespace}} deploy/{{deploy}} -- \
         lm_eval \
             --model local-completions \
             --model_args "model={{model}},tokenizer={{tokenizer}},base_url={{url}}/v1/completions,num_concurrent={{concurrency}},tokenized_requests=False,trust_remote_code=True" \
-            --tasks {{tasks}} # --limit 500
+            --tasks gsm8k --limit {{limit}} --num_fewshot 20
+
+# Run lm-eval back-to-back at each concurrency, with --limit set to 5x the
+# concurrency so each point does the same amount of work per lane.
+# Args: [tasks] [concurrency-list].
+lmeval-sweep:
+    just lmeval 8 80
+    just lmeval 16 160
+    just lmeval 32 320
+    just lmeval 64 640
+    just lmeval 128 1280
+    just lmeval 256 1280
 
 install-lmeval:
   kubectl exec -n {{namespace}}  deploy/{{deploy}} -- pip install lm_eval[api] transformers
