@@ -12,16 +12,21 @@ WVA is **variant-aware**. A **variant** is one of multiple model servers in an I
 > [!NOTE]
 > WVA assumes a 1:1:1 relationship between InferencePool, Endpoint Picker (EPP), and base model. All variants within an InferencePool share the same EPP and therefore the same EPP metrics (e.g., request queue size).
 
-WVA provides two main scaling analyzers:
+WVA provides the following scaling analyzers:
 
 - **Saturation Analyzer** -- Scales based on resource saturation signals (KV cache utilization, request queue depth, and token-level capacity). When the system detects that model servers are saturated (running out of KV cache space or building up queues), it triggers scale-up on the cheapest available variant. When spare capacity is detected, it scales down the most expensive variant. This is the default analyzer. It has two sub-variants: `saturation-percentage-based` (default) and `saturation-token-based` (experimental).
 
   > [!NOTE]
   > These two sub-variants are also referred to as the **V1** (`saturation-percentage-based`) and **V2** (`saturation-token-based`) saturation engines. The [HPA + WVA guide](../../../../guides/workload-autoscaling/README.wva.md), the WVA configuration keys, and the controller logs (e.g. `V2 saturation analysis completed`) use the V1/V2 names; this document uses the descriptive `saturation-percentage-based` / `saturation-token-based` names for the same engines.
 
+- **Throughput Analyzer** *(Opt-in)* -- Estimates decode-token demand from model-level request arrivals and average output length, then compares that demand with observed and modeled decode-token supply. It is disabled by default and must be explicitly enabled in the `analyzers` list.
+
+  > [!IMPORTANT]
+  > Enable the Throughput Analyzer only when EPP scheduler arrival metrics are present for the model. Without those arrival metrics, a busy model can read as idle and drive spurious scale-down decisions. Adding or removing `throughput` in `wva-saturation-scaling-config` requires a `wva-controller-manager` restart because analyzer registration is read at startup.
+
 - **SLO Analyzer (Queueing Model)** *(Experimental)* -- Scales based on latency SLO targets using queueing theory. It uses a Kalman filter to learn hardware-specific performance parameters online, then applies a state-dependent Markovian queueing model to determine the maximum sustainable request rate per replica that meets target TTFT (Time To First Token) and ITL (Inter-Token Latency). The desired replica count is computed as the ratio of observed arrival rate to this capacity.
 
-Both analyzers integrate with a pipeline that includes cost-aware optimization, scale-to-zero enforcement, and optional GPU resource limiting.
+These analyzers integrate with a pipeline that includes cost-aware optimization, scale-to-zero enforcement, and optional GPU resource limiting.
 
 ## Design
 
@@ -341,6 +346,8 @@ data:
 > ```yaml
 > analyzers:
 >   - name: saturation
+>   # Optional. Requires EPP scheduler arrival metrics and a controller restart.
+>   # - name: throughput
 > ```
 >
 > Populating the `analyzers` list also enables per-analyzer score and threshold

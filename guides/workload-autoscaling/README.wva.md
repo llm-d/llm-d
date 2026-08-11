@@ -129,12 +129,22 @@ Edit the WVA configmap to enable the v2 saturation engine:
       # percentage-based analyzer.
       analyzers:
         - name: saturation
+        # Optional: enable only after confirming EPP arrival metrics are present.
+        # - name: throughput
       kvCacheThreshold: 0.80
       ...
   ```
 
-The WVA controller will automatically pick up the config change and start using the new saturation engine for scaling decisions. You can verify this by checking the controller logs for messages indicating the active saturation engine. Look for a log line like `V2 saturation analysis completed ` to confirm that the v2 engine is active.
+The WVA controller reloads saturation-only config changes dynamically and starts using the new saturation engine for scaling decisions. You can verify this by checking the controller logs for messages indicating the active saturation engine. Look for a log line like `V2 saturation analysis completed ` to confirm that the v2 engine is active.
 
+> [!IMPORTANT]
+> The `throughput` analyzer is opt-in and disabled by default. Enable it only when the EPP scheduler arrival metric is present for the model, for example `inference_extension_scheduler_attempts_total{status="success",target_model_name="<model>"}`. Without the EPP arrival metric, a busy model can appear idle to the ThroughputAnalyzer and drive spurious scale-down decisions.
+>
+> Adding or removing `throughput` in `wva-saturation-scaling-config` requires a controller restart because analyzer registration is read at startup. After editing the ConfigMap, run:
+>
+> ```bash
+> kubectl rollout restart deployment/wva-controller-manager -n ${WVA_NAMESPACE}
+> ```
 
 ## Enabling Autoscaling for an Inference Deployment
 
