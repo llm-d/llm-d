@@ -91,7 +91,6 @@ router:
                 - name: cpu
                   weight: 0.4
               tokenProcessorConfig:
-                # MUST match the model server `--block-size`.
                 blockSize: 64
               # Seeds predicted cache entries for the selected endpoint right
               # after the routing decision, so the next same-prefix request
