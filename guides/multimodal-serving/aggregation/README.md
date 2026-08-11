@@ -3,6 +3,7 @@
 This guide deploys the recommended [configuration](https://github.com/llm-d/llm-d-router/blob/main/docs/architecture.md) for multimodal vLLM deployments, reducing tail latency and increasing throughput through load-aware and prefix-cache aware balancing.
 
 The multimodal-optimized-baseline routes with the same token-based stack as the [optimized-baseline](../../optimized-baseline) reference:
+
 * **Prefix-cache aware:** The `prefix-cache-affinity-filter` selects the endpoint set by estimating multimodal prompt prefix cache reuse (matching text + image content hashes) on each model server.
 * **Token-load aware:** The `token-load-scorer` picks within the set on queued prefill token load. The multimodal `token-producer` feeds it per-request token counts, estimating each image's contribution from its resolution — image inputs have no text length to read.
 
@@ -40,25 +41,33 @@ This guide includes configurations for the following accelerators and inference 
 
 1. Install the local client tooling using the [client setup guide](../../../helpers/client-setup/README.md).
 2. Clone and check out the llm-d repository:
+
    ```bash
    export branch="main" # branch, tag, or commit hash
    git clone https://github.com/llm-d/llm-d.git && cd llm-d && git checkout ${branch}
    export REPO_ROOT=$(realpath $(git rev-parse --show-toplevel))
    ```
+
 3. Set up environment variables:
+
    ```bash
    source ${REPO_ROOT}/guides/env.sh
    export GUIDE_NAME="aggregation"
    export NAMESPACE=llm-d-multimodal-aggregation
    ```
+
 4. Install the Gateway API Inference Extension CRDs:
+
    ```bash
    kubectl apply -f https://github.com/kubernetes-sigs/gateway-api-inference-extension/releases/download/${GAIE_VERSION}/v1-manifests.yaml
    ```
+
 5. Create the namespace:
+
    ```bash
    kubectl create namespace ${NAMESPACE}
    ```
+
 6. [Create the `llm-d-hf-token` secret in your target namespace with the key `HF_TOKEN` matching a valid HuggingFace token](../../../helpers/hf-token.md) to pull models.
 <!-- llm-d-cicd:skip start -->
    ```bash
@@ -77,7 +86,9 @@ This guide includes configurations for the following accelerators and inference 
 ### 1. Deploy the llm-d Router
 
 #### Standalone Mode
+
 Deploy the llm-d Router in **Standalone Mode** overlaying router custom configurations:
+
 ```bash
 # Run from the root of the llm-d repo
 helm install ${GUIDE_NAME} \
@@ -159,9 +170,9 @@ kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/multimodal-serving/${GUIDE_
 
 ### 3. (Optional) Enable monitoring
 
-- Install the [Monitoring stack](../../../docs/operations/observability).
-- To enable Prometheus monitoring on the llm-d router, add `-f ${REPO_ROOT}/guides/recipes/router/features/monitoring.values.yaml` during the [router installation step](#1-deploy-the-llm-d-router).
-- Deploy the monitoring resources for model servers:
+* Install the [Monitoring stack](../../../docs/operations/observability).
+* To enable Prometheus monitoring on the llm-d router, add `-f ${REPO_ROOT}/guides/recipes/router/features/monitoring.values.yaml` during the [router installation step](#1-deploy-the-llm-d-router).
+* Deploy the monitoring resources for model servers:
 
 ```bash
 kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/recipes/modelserver/components/monitoring
@@ -174,6 +185,7 @@ kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/recipes/modelserver/compone
 ### 1. Retrieve the Proxy Endpoint IP
 
 **Standalone Mode:**
+
 ```bash
 export IP=$(kubectl get service ${GUIDE_NAME}-epp -n ${NAMESPACE} -o jsonpath='{.spec.clusterIP}')
 ```
@@ -190,6 +202,7 @@ export IP=$(kubectl get gateway llm-d-inference-gateway -n ${NAMESPACE} -o jsonp
 ### 2. Send a Multimodal Test Request
 
 Open a debug container within the cluster namespace:
+
 ```bash
 kubectl run curl-debug --rm -it \
     --image=cfmanteiga/alpine-bash-curl-jq \
@@ -199,6 +212,7 @@ kubectl run curl-debug --rm -it \
 ```
 
 Send an OpenAI-compatible Chat Completion request containing a text prompt and a target image URL (set `model` to `google/gemma-4-31B-it` if you deployed the Gemma 4 overlay):
+
 ```bash
 curl -X POST http://${IP}/v1/chat/completions \
     -H 'Content-Type: application/json' \
@@ -229,6 +243,7 @@ curl -X POST http://${IP}/v1/chat/completions \
 ## Cleanup
 
 To tear down and clean up all deployed resources:
+
 ```bash
 helm uninstall ${GUIDE_NAME} -n ${NAMESPACE}
 kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/multimodal-serving/${GUIDE_NAME}/modelserver/gpu/vllm/${INFRA_PROVIDER}/
@@ -237,8 +252,13 @@ kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/multimodal-serving/${GUIDE
 # For Google TPU v7:
 # kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/multimodal-serving/${GUIDE_NAME}/modelserver/tpu/v7/vllm/qwen3-vl/
 # kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/multimodal-serving/${GUIDE_NAME}/modelserver/tpu/v7/vllm/gemma4/
+```
+
+<!-- llm-d-cicd:skip start -->
+```bash
 kubectl delete namespace ${NAMESPACE}
 ```
+<!-- llm-d-cicd:skip end -->
 
 ## Benchmarking Report
 
@@ -258,11 +278,12 @@ llm-d holds **sub-second TTFT p90 across the entire ladder** (0.15–0.40 s) whi
 > Two `prefix-cache-affinity-filter` parameters are tuned for multimodal traffic, with the rationale in the
 > values file (the `token-producer` image `factor: 1024` is count-correct for Qwen3-VL — one visual token per
 > 32×32-pixel region, measured against the served model):
-> - `affinityThreshold: 0.6` — a multimodal request's *cacheable* fraction is structurally lower than text:
+>
+> * `affinityThreshold: 0.6` — a multimodal request's _cacheable_ fraction is structurally lower than text:
 >   the unique question is never a cache hit, so this workload's best possible prefix match is ~70% of the
 >   prompt — below the plugin's 0.8 default, which would leave affinity permanently disengaged. Set the
 >   threshold below your traffic's maximum cacheable fraction.
-> - `maxTTFTPenaltyMs: 36000` (2× default) — token counts price an image token like a text token, but
+> * `maxTTFTPenaltyMs: 36000` (2× default) — token counts price an image token like a text token, but
 >   vision-encoder time makes image-heavy prefill slower per token than the text-calibrated
 >   `peakPrefillThroughput` implies, so the filter's predicted-TTFT runs light of wall-clock; doubling the
 >   gate restores the intended pinning depth. Reduce toward the default for text-dominant traffic.

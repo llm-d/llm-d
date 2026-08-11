@@ -462,8 +462,12 @@ kubectl delete  -n ${NAMESPACE} -k ${REPO_ROOT}/guides/predicted-latency-routing
 kubectl delete  -n ${NAMESPACE} -k ${REPO_ROOT}/guides/multimodal-serving/aggregation/modelserver/gpu/vllm/${INFRA_PROVIDER} --ignore-not-found
 # for sglang deployments
 kubectl delete  -n ${NAMESPACE} -k ${REPO_ROOT}/guides/optimized-baseline/modelserver/gpu/sglang/${INFRA_PROVIDER} --ignore-not-found
+```
+<!-- llm-d-cicd:skip start -->
+```bash
 kubectl delete namespace ${NAMESPACE}
 ```
+<!-- llm-d-cicd:skip end -->
 
 ## Troubleshooting
 
