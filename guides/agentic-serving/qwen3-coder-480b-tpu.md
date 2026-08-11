@@ -8,6 +8,7 @@ This is one of the accelerator-specific deployments of the agentic code-generati
 ## Overview
 
 This guide deploys the optimal llm-d configuration for agentic code-generation workload. The configuration includes multiple llm-d optimizations in terms of routing and KV cache management:
+
 - **Prefix-aware routing** to optimize prefix cache reuse
 - **KV cache offloading** to CPU DRAM to handle multi-turn conversations with long contexts (via KV offloading connector)
 - **Load balancing** to increase cluster-wide accelerator utilization and prevent hot-spotting from bursty request patterns
@@ -32,6 +33,7 @@ This guide deploys the optimal llm-d configuration for agentic code-generation w
 
 - Installed proper client tools (kubectl, helm).
 - Set the following environment variables:
+
   ```bash
   export REPO_ROOT=$(realpath $(git rev-parse --show-toplevel))
   source ${REPO_ROOT}/guides/env.sh
@@ -93,6 +95,7 @@ kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/t
 ```
 
 Wait for the deployment to become ready:
+
 ```bash
 kubectl rollout status deployment/agentic-serving-tpu-vllm-decode -n ${NAMESPACE}
 ```
@@ -107,6 +110,7 @@ kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/t
 ```
 
 Wait for both the prefill and decode deployments to become ready:
+
 ```bash
 kubectl rollout status deployment/agentic-serving-tpu-vllm-prefill -n ${NAMESPACE}
 kubectl rollout status deployment/agentic-serving-tpu-vllm-decode -n ${NAMESPACE}
@@ -121,7 +125,6 @@ kubectl rollout status deployment/agentic-serving-tpu-vllm-decode -n ${NAMESPACE
 ```bash
 export IP=$(kubectl get service ${GUIDE_NAME}-epp -n ${NAMESPACE} -o jsonpath='{.spec.clusterIP}')
 ```
-
 
 ### 2. Send Test Requests
 
@@ -176,7 +179,6 @@ This guide comes with an `inference-perf` benchmark preset (defined in [guide.ya
 curl -LJO "https://raw.githubusercontent.com/llm-d/llm-d/main/guides/${GUIDE_NAME}/benchmark-templates/guide.yaml"
 ```
 
-
 ### 3. Execute Benchmark
 
 ```bash
@@ -198,6 +200,7 @@ envsubst < guide.yaml > config.yaml
 > [!TIP]
 > **Tuning Prefill-to-Decode Ratios:**
 > The default `vllm-disaggregated` overlay deploys the optimal 2:6 ratio (2 prefillers, 6 decoders). If you want to evaluate different ratios from the benchmarking report (such as 5:3 or 6:2), you can scale the active deployments directly:
+>
 > ```bash
 > kubectl scale deployment/agentic-serving-tpu-vllm-prefill --replicas=5 -n ${NAMESPACE}
 > kubectl scale deployment/agentic-serving-tpu-vllm-decode --replicas=3 -n ${NAMESPACE}
@@ -209,7 +212,8 @@ The results below are with 8 replicas of TPU 7x (2x2x1) on the benchmark workloa
 
 Scaling concurrency up to 80 sessions, the optimized configuration sustains a peak total throughput of **~120K tokens/s**, versus **~40K tokens/s** for the k8s Service baseline — roughly **3× higher**.
 
-### Summary with 40 concurrent coding sessions:
+### Summary with 40 concurrent coding sessions
+
 | Metric | k8s Service | llm-d-optimized | Δ Improvement |
 | :--- | :--- | :--- | :--- |
 | **TTFT P50 (ms)** | 17391 | 2474 | ⬇️ 85.8% |
@@ -217,7 +221,7 @@ Scaling concurrency up to 80 sessions, the optimized configuration sustains a pe
 | **Input tokens / sec** | 36987 | 92705 | ⬆️ 150.6% |
 | **Output tokens / sec** | 436.8 | 647.5 | ⬆️ 48.2% |
 
-### Latency Profiles:
+### Latency Profiles
 
 <p float="left">
   <img src="./benchmark-results/latency_vs_throughput.png" width="32%" alt="Latency vs Throughput" />
@@ -242,18 +246,19 @@ At this scale, the KV cache size is extremely large (~20GB per request), shiftin
 | **Error Rate** | 2.8% | **2.6%** | 2.9% |
 
 **Key Takeaways:**
+
 1. **Decoder HBM Capacity is the Bottleneck:** With ~128K context, the KV cache size (~20GB) quickly saturates the decoder HBM. Having only 2 decoders (6:2) restricts the active request capacity, leading to severe queueing (TTFT Median of 329.5s).
 2. **Optimal Ratio Shift:** Expanding decode capacity to 6 nodes (2:6) increases the aggregate HBM, reducing the TTFT Median by **45x** (7.3s) and increasing output throughput by **3.5x** (295.1 tok/s).
 3. **Prefill Capacity:** Even with only 2 prefillers (2:6), they are able to sustain the required prefill throughput without becoming the primary bottleneck.
 4. **Current Limitations:** Without CPU offloading optimizations, this disaggregated TPU configuration currently performs below the unified `llm-d-optimized` baseline. Integrating these optimizations into TPU disaggregated deployments is an active area of development.
 
 **Note**: As of June 2026 we are actively working on improving the following for TPU deployments:
+
 - Long context performance
 - P/D disaggregation
 - KV Cache offloading support
 
 This guide and performance numbers will be updated as further optimizations become available.
-
 
 ## Cleanup
 
@@ -268,5 +273,10 @@ kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/
 # Or if you deployed the experimental disaggregated configuration:
 # kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/tpu/vllm-disaggregated/
 
+```
+
+<!-- llm-d-cicd:skip start -->
+```bash
 kubectl delete namespace ${NAMESPACE}
 ```
+<!-- llm-d-cicd:skip end -->

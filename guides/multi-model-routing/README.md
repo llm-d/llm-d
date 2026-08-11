@@ -95,9 +95,9 @@ Each ConfigMap must have the label `inference.llm-d.ai/ipp-managed: "true"` and 
 
 Create HTTPRoutes that match on the `X-Gateway-Base-Model-Name` header injected by IPP. Review and customize [`manifests/httproutes.yaml`](manifests/httproutes.yaml) for your setup:
 
-- Update `spec.parentRefs[0].name` to match your Gateway name
-- Update `backendRefs[0].name` to match your InferencePool names
-- Ensure the header `value` matches the `baseModel` in the corresponding ConfigMap
+* Update `spec.parentRefs[0].name` to match your Gateway name
+* Update `backendRefs[0].name` to match your InferencePool names
+* Ensure the header `value` matches the `baseModel` in the corresponding ConfigMap
 
 ```bash
 kubectl apply -n ${NAMESPACE} -f ${REPO_ROOT}/guides/multi-model-routing/manifests/httproutes.yaml
@@ -159,8 +159,12 @@ helm uninstall ipp -n ${NAMESPACE}
 rm -rf /tmp/ipp
 
 # Remove namespace (if no longer needed)
+```
+<!-- llm-d-cicd:skip start -->
+```bash
 kubectl delete namespace ${NAMESPACE}
 ```
+<!-- llm-d-cicd:skip end -->
 
 ## Advanced: LoRA Adapter Routing
 
