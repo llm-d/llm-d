@@ -2,5 +2,5 @@ apiVersion: kustomize.config.k8s.io/v1alpha1
 kind: Component
 images:
   - name: REPLACE_MODEL_SERVER_IMAGE
-    newName: ghcr.io/llm-d/llm-d-rocm
-    newTag: v0.7.0
+    newName: docker.io/vllm/vllm-tpu
+    newTag: v0.26.0

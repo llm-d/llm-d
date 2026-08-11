@@ -4,17 +4,39 @@ This directory contains Kustomize Components that define the **default container
 
 ## Available Components
 
-| Component | Image | Description |
-|-----------|-------|-------------|
-| `gpu-vllm` | `vllm/vllm-openai` | NVIDIA GPU with vLLM |
-| `gpu-sglang` | `docker.io/lmsysorg/sglang` | NVIDIA GPU with SGLang |
-| `amd-vllm` | `ghcr.io/llm-d/llm-d-rocm` | AMD GPU with vLLM |
-| `amd-sglang` | `docker.io/lmsysorg/sglang` | AMD GPU with SGLang (ROCm variant) |
-| `cpu-vllm` | `ghcr.io/llm-d/llm-d-cpu` | CPU with vLLM |
-| `xpu-vllm` | `ghcr.io/llm-d/llm-d-xpu` | Intel XPU with vLLM |
-| `hpu-vllm` | `ghcr.io/llm-d/llm-d-hpu` | Intel Gaudi (HPU) with vLLM |
-| `tpu-vllm` | `vllm/vllm-tpu` | Google TPU with vLLM |
-| `routing-sidecar` | `ghcr.io/llm-d/llm-d-routing-sidecar` | Routing sidecar for PD disaggregation |
+```console
+├── amd-sglang
+│   ├── rocm700-mi30x
+│   ├── rocm700-mi35x
+│   ├── rocm720-mi30x
+│   └── rocm720-mi35x
+├── amd-vllm
+│   └── llm-d
+├── amd-vllm-omni
+├── cpu-vllm
+├── gpu-sglang
+├── gpu-trtllm
+├── gpu-vllm
+│   ├── aws-efa
+│   │   └── llm-d
+│   └── multimodal-disaggregation
+├── gpu-vllm-omni
+├── routing-sidecar
+├── tpu-vllm
+└── xpu-vllm
+    └── llm-d
+```
+
+**NOTE**: This overlay view was generated with `tree -I 'kustomization.yaml' -I 'README.md'`.
+
+### Why are there both `llm-d` and `vllm` images?
+
+llm-d is moving towards using upstream images for both `sglang` and `vLLM`. As llm-d was orrigionally only supported vllm, `llm-d` image variants were produced to account for any feature gaps in development of vLLM. Some of these feature gaps still exist today, for example the `ec-connector` work is still open in vLLM at the time of documeting this. As a stop-gap measure, the `llm-d` community will continue to host its own images as applicable, until they can be deprecated and safely migrate to upstream images.
+
+
+#### Known gap - NVSHMEM on RoCE networking
+
+Upstream vLLM currently [pins NVSHMEM to `v3.4.5`](https://github.com/vllm-project/vllm/blob/ac70ce96e0b9f69dd834bd1b0cd2d2b4c4a9db46/requirements/test/cuda.txt#L648). This version of NVSHMEM requires [a patch](../../../../../patches/nvshmem_zero_ibv_ah_attr_v3.4.5-0.patch) guarding aginst where "static_rate must be a known value and is passed directly to the device". Any image runnign on ROCE should use `llm-d` image variants.
 
 ## Usage
 
