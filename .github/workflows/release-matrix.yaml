@@ -77,7 +77,7 @@ jobs:
             --status-file release-status.json
 
       - name: Create pull request
-        uses: peter-evans/create-pull-request@v7
+        uses: peter-evans/create-pull-request@v8
         with:
           branch: release-matrix/${{ steps.tag.outputs.tag }}
           base: main
