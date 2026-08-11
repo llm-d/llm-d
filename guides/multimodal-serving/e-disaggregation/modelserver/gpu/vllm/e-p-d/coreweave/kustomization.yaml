@@ -3,6 +3,8 @@ kind: Kustomization
 resources:
   - ../base
 patches:
+  # Unscoped on purpose: encode, prefill and decode all transfer over NIXL,
+  # so every one of them needs an IB device.
   - target:
       kind: Deployment
     patch: |-
