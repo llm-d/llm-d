@@ -44,9 +44,9 @@ Encode disaggregation is most beneficial for workloads with:
 Choose between topologies:
 
 * **E/PD** - simpler deployment; best when prefill and decode do not need separate scaling, or when the primary bottleneck is encode
-* **E/P/D** - extends the [P/D Disaggregation](../../pd-disaggregation/README.md) guide by adding a dedicated encode stage. The reasons for separating prefill from decode (heterogeneous parallelism, xPyD ratios, workload specialization) are described in the [P/D Best Practices](../../pd-disaggregation/README.md#pd-best-practices) section. That section also points to [Known NIXL Connector Issues and Limitations](../../../docs/architecture/advanced/disaggregation/operations-vllm.md#known-nixl-connector-issues-and-limitations), which applies equally to the P/D stage of this topology:
-   * [Prefill TP > Decode TP is not supported for most model architectures](../../../docs/architecture/advanced/disaggregation/operations-vllm.md#prefill-tp--decode-tp-is-not-supported)
-   * [Decode-side stale NIXL agent cache after a prefill pod restart](../../../docs/architecture/advanced/disaggregation/operations-vllm.md#stale-nixl-agent-cache-after-a-prefill-pod-restart)
+* **E/P/D** - extends the [P/D Disaggregation](../../pd-disaggregation/README.md) guide by adding a dedicated encode stage. The reasons for separating prefill from decode (heterogeneous parallelism, xPyD ratios, workload specialization) are described in the [P/D Best Practices](../../pd-disaggregation/README.md#pd-best-practices) section. That section also points to [Known NIXL Connector Issues and Limitations](../../../docs/operations/disaggregation/vllm.md#known-nixl-connector-issues-and-limitations), which applies equally to the P/D stage of this topology:
+   * [Prefill TP > Decode TP is not supported for most model architectures](../../../docs/operations/disaggregation/vllm.md#prefill-tp--decode-tp-is-not-supported)
+   * [Decode-side stale NIXL agent cache after a prefill pod restart](../../../docs/operations/disaggregation/vllm.md#stale-nixl-agent-cache-after-a-prefill-pod-restart)
 
 ### Supported Hardware Backends
 
