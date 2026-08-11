@@ -433,6 +433,63 @@ curl -X POST http://${IP}:${PORT}/v1/chat/completions \
     }' | jq
 ```
 
+## Benchmark
+
+The Coordinator adds a real architectural cost per request: every pipeline phase
+(`encode`, `prefill`, `decode`) is its own round trip through the Gateway and EPP
+(`conditional-decode` → `encode` → `prefill` → `decode`, each a separate `ext_proc`
+scheduling decision), versus the [P/D Disaggregation](../pd-disaggregation/README.md)
+sidecar's decode pod calling prefill directly in one hop. That's close to double the
+local network hops for a P/D-only request.
+
+To isolate that hop-count difference instead of comparing two different decisions about
+*whether* to disaggregate a given request, both sides of the benchmark were configured
+to always take the full prefill → decode path: the sidecar ran with the routing
+sidecar's `always-disagg-pd-decider` plugin (always
+dispatching a separate prefill call), and the Coordinator ran the
+[PD-only pipeline](#installation-instructions) (`prefill` → `decode`, no
+`conditional-decode` step, so it never takes the optimistic decode-first fast path
+described in the [Overview](#overview)). With both sides guaranteed to hit prefill on
+every request, the only architectural difference left is the Coordinator's extra
+Gateway/EPP round trip per phase — and that extra hop count barely shows up in TTFT
+(time to first token) or TTOT/ITL (time per output token):
+
+- **[Varying input prompt length](https://github.com/dmitripikus/coordinator-performance/tree/main/pd-comparison-analysis/inconcurrent_var_prompt_always_disaggr_pinned)**
+  (1, 10, 100, 1,000 prompt tokens; fixed 20-token output; prefill/decode pinned to
+  identical nodes on both architectures to isolate architecture from node variance):
+
+  <p float="left">
+    <img src="https://raw.githubusercontent.com/dmitripikus/coordinator-performance/main/pd-comparison-analysis/inconcurrent_var_prompt_always_disaggr_pinned/analysis/ttft_distribution.png" width="45%" />
+    <img src="https://raw.githubusercontent.com/dmitripikus/coordinator-performance/main/pd-comparison-analysis/inconcurrent_var_prompt_always_disaggr_pinned/analysis/request_latency_distribution.png" width="45%" />
+  </p>
+
+  Median TTFT is 1.8-4.8% higher with the Coordinator across all four prompt lengths
+  (e.g. 40.36ms vs. 38.51ms at 10 tokens); median request latency is within 0.2-1.5%;
+  median ITL (time per output token) is within ±0.7%, indistinguishable from
+  measurement noise. An ITL p90-p10 spread roughly 2-3x wider with the Coordinator
+  (~2.4-3.2ms vs. sidecar's ~0.8-1.5ms) is the one open secondary finding — it doesn't
+  move the median, and isn't root-caused in the linked analysis.
+
+- **[Varying output length](https://github.com/dmitripikus/coordinator-performance/tree/main/pd-comparison-analysis/inconcurrent_var_output_always_disaggr_pinned)**
+  (100, 500, 1,000, 2,500 output tokens; fixed 250-token input; same node-pinning):
+
+  <p float="left">
+    <img src="https://raw.githubusercontent.com/dmitripikus/coordinator-performance/main/pd-comparison-analysis/inconcurrent_var_output_always_disaggr_pinned/analysis/ttft_distribution.png" width="45%" />
+    <img src="https://raw.githubusercontent.com/dmitripikus/coordinator-performance/main/pd-comparison-analysis/inconcurrent_var_output_always_disaggr_pinned/analysis/request_latency_distribution.png" width="45%" />
+  </p>
+
+  Median TTFT is 1.6-4.9% higher with the Coordinator; median request latency is
+  within ±0.9% and median ITL within ±0.35% across all four output lengths — the two
+  architectures are described as "essentially identical" here, with the Coordinator
+  showing a heavier decode-tail (occasional slow tokens raising p95/p99 ITL) that
+  doesn't move the median.
+
+**Bottom line**: the Coordinator's extra per-phase network hop is measurable in TTFT
+(a consistent few-percent, single-digit-millisecond gap) but not in ITL/TTOT or overall
+request latency, which track the sidecar architecture within about 1.5% across every
+prompt and output length tested.
+
+
 ## Cleanup
 
 Same commands regardless of topology — `${ROUTER_RELEASES}` and
