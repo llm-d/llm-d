@@ -1,9 +1,11 @@
 # Tiered Prefix Cache
 
 [![E2E (GKE GPU Native)](https://github.com/llm-d/llm-d/actions/workflows/consolidate-status-tiered-prefix-cache-gke-cpu-gpu-vllm-native.yaml/badge.svg)](https://github.com/llm-d/llm-d/actions/workflows/consolidate-status-tiered-prefix-cache-gke-cpu-gpu-vllm-native.yaml)
+[![E2E (GKE GPU Storage)](https://github.com/llm-d/llm-d/actions/workflows/consolidate-status-tiered-prefix-cache-gke-fs-gpu-vllm-native.yaml/badge.svg)](https://github.com/llm-d/llm-d/actions/workflows/consolidate-status-tiered-prefix-cache-gke-fs-gpu-vllm-native.yaml)
 [![E2E (GKE GPU LMcache)](https://github.com/llm-d/llm-d/actions/workflows/consolidate-status-tiered-prefix-cache-gke-cpu-gpu-vllm-lmcache.yaml/badge.svg)](https://github.com/llm-d/llm-d/actions/workflows/consolidate-status-tiered-prefix-cache-gke-cpu-gpu-vllm-lmcache.yaml)
 [![E2E (GKE TPU)](https://github.com/llm-d/llm-d/actions/workflows/consolidate-status-tiered-prefix-cache-gke-cpu-tpu-vllm-native.yaml/badge.svg)](https://github.com/llm-d/llm-d/actions/workflows/consolidate-status-tiered-prefix-cache-gke-cpu-tpu-vllm-native.yaml)
 [![E2E (OCP GPU)](https://github.com/llm-d/llm-d/actions/workflows/consolidate-status-tiered-prefix-cache-ibm-cpu-gpu-vllm-native.yaml/badge.svg)](https://github.com/llm-d/llm-d/actions/workflows/consolidate-status-tiered-prefix-cache-ibm-cpu-gpu-vllm-native.yaml)
+[![E2E (OCP GPU Storage)](https://github.com/llm-d/llm-d/actions/workflows/consolidate-status-tiered-prefix-cache-ibm-fs-gpu-vllm-native.yaml/badge.svg)](https://github.com/llm-d/llm-d/actions/workflows/consolidate-status-tiered-prefix-cache-ibm-fs-gpu-vllm-native.yaml)
 
 ## Overview
 
@@ -157,25 +159,31 @@ export MODEL_SERVER=vllm # vllm
 export CONNECTOR=native  # native
 export VARIANT=cpu       # cpu | fs
 export INFRA_PROVIDER=base  # base | gke
-kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/tiered-prefix-cache/modelserver/gpu/vllm/native/cpu/${INFRA_PROVIDER}/
+export VARIANT=cpu  # cpu only offloading
+kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/tiered-prefix-cache/modelserver/gpu/vllm/native/${VARIANT}/${INFRA_PROVIDER}/
 ```
 
 #### vLLM native — CPU RAM + Filesystem
 
 This path adds a shared filesystem tier using vLLM's native multi-tier offloading. It requires a ReadWriteMany PVC mounted at `/mnt/files-storage`.
 
-First, provision the PVC. See [Storage Backends](#storage-backends) to configure a `StorageClass` for your environment.
+First, provision the PVC. See [Storage Backends](#storage-backends) to configure a `StorageClass` for your environment - uncomment the `storageClassName=""` [`manifests/pvc/pvc.yaml`](./manifests/pvc/pvc.yaml) and specify a storage class (`"lustre"` / `"efs-sc"`) to set your storage class (or leave it commented out for cluster default), then apply:
 
+<!-- llm-d-cicd:skip start -->
 ```bash
-export STORAGE_CLASS="" # cluster default if empty; or e.g. "lustre" / "efs-sc"
-envsubst < ${REPO_ROOT}/guides/tiered-prefix-cache/manifests/pvc.yaml | kubectl apply -n ${NAMESPACE} -f -
+kubectl apply -n ${NAMESPACE} -f ${REPO_ROOT}/guides/tiered-prefix-cache/manifests/pvc/pvc.yaml
 ```
+<!-- llm-d-cicd:skip end -->
+
+> [!NOTE]
+> The FS overlay's kustomization.yaml also includes this PVC, so [`manifests/pvc/pvc.yaml`](./manifests/pvc/pvc.yaml) gets applied anyway with the `kubectl apply` below.
 
 Then deploy the model server:
 
 ```bash
 export INFRA_PROVIDER=base  # base | gke
-kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/tiered-prefix-cache/modelserver/gpu/vllm/native/fs/${INFRA_PROVIDER}/
+export VARIANT=fs  # cpu+storage offloading
+kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/tiered-prefix-cache/modelserver/gpu/vllm/native/${VARIANT}/${INFRA_PROVIDER}/
 ```
 
 #### LMCache
@@ -340,7 +348,7 @@ kubectl exec -n ${NAMESPACE} ${POD} -- find /mnt/files-storage/kv-cache -maxdept
 ```
 
 Expected output: `du -sh` shows hundreds of MB to several GB, and `find` lists a path like
-`/mnt/files-storage/<model>_<hash>_r0/<block-config>/<tp-config>/...` (vLLM native) or `/mnt/files-storage/kv-cache/<model>-xxx.pt` (LMCache).
+`/mnt/files-storage/kv-cache/<model>_<hash>_r0/<block-config>/<tp-config>/...` (vLLM native) or `/mnt/files-storage/kv-cache/<model>-xxx.pt` (LMCache).
 
 If you have monitoring set up, confirm via `vllm:kv_offload_total_bytes` (vLLM native) or `lmcache:local_storage_usage` (LMCache) in the metrics explorer.
 
@@ -371,8 +379,15 @@ export TPU_VERSION=v7  # v6 | v7
 kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/tiered-prefix-cache/modelserver/tpu/${TPU_VERSION}/vllm/native/cpu --ignore-not-found
 ```
 
+**Storage offloading:**
+
 ```bash
-kubectl delete -f ${REPO_ROOT}/guides/tiered-prefix-cache/manifests/pvc.yaml -n ${NAMESPACE} --ignore-not-found  # if a PVC was created
+kubectl delete -f ${REPO_ROOT}/guides/tiered-prefix-cache/manifests/pvc/pvc.yaml -n ${NAMESPACE} --ignore-not-found  # if a PVC was created
+```
+
+**For all paths:**
+
+```bash
 kubectl delete namespace ${NAMESPACE}
 ```
 
