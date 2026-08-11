@@ -173,12 +173,15 @@ both; they install into the same namespace and would conflict.
 Both topologies default to routing the Coordinator's own ingress
 (`coordinator/httproute.yaml`) and its outbound `gateway.address`
 ([`coordinator/configmap.yaml`](coordinator/configmap.yaml)) through a real
-Kubernetes Gateway. The single-EPP topology also has a Standalone Mode (further
-down, no Gateway API `Gateway`/`HTTPRoute` at all) — see that section for why only
-single-EPP supports it. For Gateway mode, deploy one first if your cluster doesn't
-already have one:
+Kubernetes Gateway. Deploy one first if your cluster doesn't already have one:
 
-1. *Deploy a Kubernetes Gateway*. Follow [the gateway guides](../../docs/infrastructure/gateway) for step by step deployment for a Gateway named `llm-d-inference-gateway`. You only need to create one Gateway for your cluster. Skip this step if you're using the single-EPP topology's Standalone Mode instead.
+> [!NOTE]
+> The llm-d Router's Standalone Mode (no Kubernetes Gateway, just the router's own
+> Envoy sidecar and Service) is **not supported by this guide** — only the Gateway
+> Mode wiring is documented and maintained.
+> Use Gateway Mode for both EPP topologies.
+
+1. *Deploy a Kubernetes Gateway*. Follow [the gateway guides](../../docs/infrastructure/gateway) for step by step deployment for a Gateway named `llm-d-inference-gateway`. You only need to create one Gateway for your cluster.
 
 #### Single EPP (default)
 
@@ -238,46 +241,6 @@ helm install ${GUIDE_NAME} \
 ```bash
 envsubst < ${REPO_ROOT}/guides/${GUIDE_NAME}/router/httproute.yaml | kubectl apply -n ${NAMESPACE} -f -
 ```
-
-<details>
-<summary><h4>Standalone Mode (single EPP only, no Kubernetes Gateway)</h4></summary>
-
-Deploys the llm-d Router with its own Envoy sidecar and Service — no Gateway API
-`Gateway`/`HTTPRoute` involved at all. This works for the single-EPP topology because
-the Coordinator's Service and the router-EPP's Service become two independent
-ClusterIPs instead of both being routed through one shared Gateway listener: the
-`Exact`-path + `EPP-Profile` header tie-break that Gateway mode's two hand-authored
-HTTPRoutes rely on (see above) exists only to disambiguate two things sharing that one
-listener. With no shared listener, there's nothing left to disambiguate — the
-Coordinator's outbound calls just go straight to the router-EPP's own Service.
-
-**Not available for the 3-EPP topology**: the Coordinator has a single
-`gateway.address` ([`coordinator/configmap.yaml`](coordinator/configmap.yaml)), not one
-per role. In Gateway mode, [`router/httproute-3-epp.yaml`](router/httproute-3-epp.yaml)
-is what fans that one address out to the right one of three InferencePools by
-`EPP-Profile` header. There's no standalone equivalent of that fan-out, so 3-EPP still
-needs a real Gateway.
-
-2. *Deploy the llm-d Router*:
-
-```bash
-export GATEWAY_SERVICE=${GUIDE_NAME}-epp
-export GATEWAY_ADDRESS="http://${GATEWAY_SERVICE}.${NAMESPACE}.svc:80"
-export ROUTER_RELEASES=${GUIDE_NAME} # Helm release name(s), for Cleanup
-export ROUTER_HTTPROUTE_FILE= # no HTTPRoute in Standalone Mode, for Cleanup
-helm install ${GUIDE_NAME} \
-    ${ROUTER_STANDALONE_CHART} \
-    -f ${REPO_ROOT}/guides/recipes/router/base.values.yaml \
-    -f ${REPO_ROOT}/guides/${GUIDE_NAME}/router/${GUIDE_NAME}.values.yaml \
-    -n ${NAMESPACE} --version ${ROUTER_CHART_VERSION}
-```
-
-No HTTPRoute to apply here, and no Gateway to deploy beforehand (skip step 1.1 above
-entirely) — the router-EPP's own Service, named `${GATEWAY_SERVICE}` (the chart derives
-it from the Helm release name), is what `GATEWAY_ADDRESS` points at, which the
-Coordinator's `gateway.address` then points at directly once you deploy it in step 3.
-
-</details>
 
 <details>
 <summary><h4>3 separate EPPs (one per role)</h4></summary>
@@ -366,28 +329,13 @@ kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/g
 
 Drives the `replace-media-urls → render → conditional-decode → encode → prefill →
 decode` pipeline. The ConfigMap references `${GATEWAY_ADDRESS}` (exported in step 1's
-Gateway mode or Standalone Mode block — whichever you used).
+Gateway mode block).
 
-**Gateway Mode** (single-EPP or 3-EPP topology): build with `kustomize` and pipe
-through `envsubst` before applying:
+Build with `kustomize` and pipe through `envsubst` before applying:
 
 ```bash
 kustomize build ${REPO_ROOT}/guides/${GUIDE_NAME}/coordinator/ | envsubst | kubectl apply -n ${NAMESPACE} -f -
 ```
-
-<details>
-<summary><b>Standalone Mode</b> (single-EPP topology only)</summary>
-
-`coordinator/kustomization.yaml` bundles [`coordinator/httproute.yaml`](coordinator/httproute.yaml)
-unconditionally, but Standalone Mode has no Gateway for it to attach to. Skip
-`kustomize` entirely and apply the ConfigMap and Deployment directly instead:
-
-```bash
-envsubst < ${REPO_ROOT}/guides/${GUIDE_NAME}/coordinator/configmap.yaml | kubectl apply -n ${NAMESPACE} -f -
-kubectl apply -n ${NAMESPACE} -f ${REPO_ROOT}/guides/${GUIDE_NAME}/coordinator/deployment.yaml
-```
-
-</details>
 
 ### 4. (Optional) Deploy the multimedia downloader (caching proxy)
 
@@ -420,25 +368,10 @@ instead of through a cache.
 
 ### 1. Get the IP of the Entrypoint
 
-**Gateway Mode** (single-EPP or 3-EPP topology):
-
 ```bash
 export IP=$(kubectl get gateway llm-d-inference-gateway -n ${NAMESPACE} -o jsonpath='{.status.addresses[0].value}')
 export PORT=80
 ```
-
-<details>
-<summary> <b>Standalone Mode</b> (single-EPP topology only) </summary>
-
-No Gateway at all, so clients hit the Coordinator's own Service directly instead of
-the router-EPP's Service, which in that mode is Coordinator-internal only — see step 1:
-
-```bash
-export IP=$(kubectl get service llm-d-coordinator -n ${NAMESPACE} -o jsonpath='{.spec.clusterIP}')
-export PORT=8080
-```
-
-</details>
 
 ### 2. Send Test Requests
 
@@ -499,9 +432,8 @@ curl -X POST http://${IP}:${PORT}/v1/chat/completions \
 
 ## Cleanup
 
-Same commands regardless of topology or mode — `${ROUTER_RELEASES}` and
-`${ROUTER_HTTPROUTE_FILE}` were exported in step 1 (empty in Standalone Mode, since no
-HTTPRoute was created there). The Coordinator's resources are deleted directly rather
+Same commands regardless of topology — `${ROUTER_RELEASES}` and
+`${ROUTER_HTTPROUTE_FILE}` were exported in step 1. The Coordinator's resources are deleted directly rather
 than via `coordinator/kustomization.yaml`'s bundling (same reasoning as step 3's
 apply-side note) — `--ignore-not-found` makes that safe regardless of whether
 `coordinator/httproute.yaml` was ever applied:
@@ -510,9 +442,7 @@ apply-side note) — `--ignore-not-found` makes that safe regardless of whether
 for RELEASE in $(echo ${ROUTER_RELEASES}); do
   helm uninstall ${RELEASE} -n ${NAMESPACE}
 done
-if [ -n "${ROUTER_HTTPROUTE_FILE}" ]; then
-  envsubst < ${REPO_ROOT}/guides/${GUIDE_NAME}/${ROUTER_HTTPROUTE_FILE} | kubectl delete -n ${NAMESPACE} -f -
-fi
+envsubst < ${REPO_ROOT}/guides/${GUIDE_NAME}/${ROUTER_HTTPROUTE_FILE} | kubectl delete -n ${NAMESPACE} -f -
 
 kubectl delete -n ${NAMESPACE} --ignore-not-found -f ${REPO_ROOT}/guides/${GUIDE_NAME}/coordinator/httproute.yaml
 kubectl delete -n ${NAMESPACE} --ignore-not-found -f ${REPO_ROOT}/guides/${GUIDE_NAME}/coordinator/deployment.yaml
@@ -525,8 +455,7 @@ This deletes every resource the guide created, but leaves the namespace itself (
 anything else in it, like the `llm-d-hf-token` secret) alone — `kubectl delete
 namespace ${NAMESPACE}` if you want it gone entirely.
 
-If you used Gateway mode and nothing else in your cluster still uses it, also remove
-the `llm-d-inference-gateway` Gateway by following [the gateway istio cleanup guide](../../docs/infrastructure/gateway/istio.md#cleanup), or 
-[the agentgateway cleanup guide](../../docs/infrastructure/gateway/agentgateway.md#cleanup)
-Standalone Mode never created one.
+If nothing else in your cluster still uses it, also remove the
+`llm-d-inference-gateway` Gateway by following [the gateway istio cleanup guide](../../docs/infrastructure/gateway/istio.md#cleanup), or
+[the agentgateway cleanup guide](../../docs/infrastructure/gateway/agentgateway.md#cleanup).
 
