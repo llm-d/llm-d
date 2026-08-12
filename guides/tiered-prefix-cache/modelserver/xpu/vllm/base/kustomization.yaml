@@ -1,23 +1,26 @@
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 resources:
-  - ../../../../../recipes/modelserver/base/single-host/default
-  - resourceclaimtemplate.yaml
+- ../../../../../recipes/modelserver/base/single-host/default
+- resource-claim-template.yaml
 
 namePrefix: xpu-vllm-
 
+components:
+- ../../../../../recipes/modelserver/components/images/xpu-vllm
+
 images:
-  - name: REPLACE_MODEL_SERVER_IMAGE
-    newName: ghcr.io/llm-d/llm-d-xpu-dev
-    newTag: pr-1731
+- name: ghcr.io/llm-d/llm-d-xpu
+  newName: ghcr.io/llm-d/llm-d-xpu-dev
+  newTag: pr-1230
 
 labels:
-  - pairs:
-      llm-d.ai/model: Qwen3-8B
-      llm-d.ai/guide: tiered-prefix-cache
-      llm-d.ai/accelerator-variant: xpu
-      llm-d.ai/accelerator-vendor: intel
-    includeSelectors: true
-    includeTemplates: true
+- includeSelectors: true
+  includeTemplates: true
+  pairs:
+    llm-d.ai/accelerator-variant: xpu
+    llm-d.ai/accelerator-vendor: intel
+    llm-d.ai/guide: tiered-prefix-cache
+    llm-d.ai/model: Qwen3-32B
 patches:
-  - path: patch-vllm.yaml
+- path: patch-vllm.yaml
