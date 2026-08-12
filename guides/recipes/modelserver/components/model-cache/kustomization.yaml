@@ -29,4 +29,4 @@ patches:
         value:
           name: model-cache
           persistentVolumeClaim:
-            claimName: model-cache
+            claimName: model-pvc
