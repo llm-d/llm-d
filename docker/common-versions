@@ -33,7 +33,7 @@ SGLANG_XPU_REPOSITORY=sgl-project/sglang
 SGLANG_XPU_REF=1af01674938f68266d5f8a0e5635ea1434af7801
 # Matches the sgl-kernel-xpu revision used by the validated Dynamo XPU image.
 SGLANG_XPU_KERNEL_REPO=https://github.com/sgl-project/sgl-kernel-xpu.git
-SGLANG_XPU_KERNEL_REF=a246742797279015f51d135063ed00f879496896
+SGLANG_XPU_KERNEL_REF=8c328fee250fcef4169c912cb7bbd13c1f637d5c
 
 # ============================================================================
 # CUDA Version Configuration
