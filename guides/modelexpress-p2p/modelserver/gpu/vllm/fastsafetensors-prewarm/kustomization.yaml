@@ -4,4 +4,4 @@ resources:
   - prewarm-job.yaml
 
 components:
-  - ../../../../../recipes/modelserver/components/images/gpu-vllm
+  - ../../../../../recipes/modelserver/components/images/gpu-vllm/release
