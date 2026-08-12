@@ -39,8 +39,7 @@ prefix-sharing sample groups that GRPO and PPO produce.
 
 Two integration modes are supported:
 
-- **EPP as the endpoint picker** - the framework calls EPP directly to pick a
-  replica, then dispatches the rollout request itself.
+- **llm-d EPP** - the framework calls the EPP directly to pick a specific model server, then dispatches the rollout request itself.
 - **llm-d Router** - the framework sends generation
   to an llm-d Router that consults EPP for request routing.
 
