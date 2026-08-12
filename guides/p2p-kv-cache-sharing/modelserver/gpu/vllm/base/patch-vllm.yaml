@@ -19,8 +19,10 @@ spec:
             - --port=8200
             - --disable-access-log-for-endpoints=/health,/metrics,/v1/models
             - --tensor-parallel-size=1
-            # block-size MUST match the router's precise-prefix-cache-producer
-            # tokenProcessorConfig.blockSize, or the prefix index stays empty.
+            # The offloading config below omits `block_size`, so it defaults to
+            # this engine block size. Keep it identical across all P2P peers.
+            # It does not need to match the router's
+            # tokenProcessorConfig.blockSize.
             - --block-size=64
             - --max-model-len=65536
             # Tuning knob: raise for more GPU cache, lower to leave headroom.
