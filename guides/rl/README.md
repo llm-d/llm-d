@@ -41,8 +41,8 @@ Two integration modes are supported:
 
 - **EPP as the endpoint picker** - the framework calls EPP directly to pick a
   replica, then dispatches the rollout request itself.
-- **llm-d as an inference backend endpoint** - the framework sends generation
-  to a single llm-d serving endpoint that consults EPP and forwards it.
+- **llm-d Router** - the framework sends generation
+  to an llm-d Router that consults EPP for request routing.
 
 See the [llm-d verl integration guide](./llm-d-verl-integration.md) for an
 overview and setup.
