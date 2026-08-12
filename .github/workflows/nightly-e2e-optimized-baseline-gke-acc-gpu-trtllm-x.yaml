@@ -77,8 +77,6 @@ jobs:
       infra_provider: ${{ inputs.infra_provider || 'gke' }}
       connector: ${{ inputs.connector || '' }}
       cluster_namespace: ${{ inputs.cluster_namespace || 'llm-d-nightly-optimized-baseline-gke-gpu-trtllm' }}
-      cluster_name: ${{ inputs.cluster_name || 'llm-d-e2e-us-east5' }}
-      cluster_zone: ${{ inputs.cluster_zone || 'us-east5' }}
       helm_release: ${{ inputs.helm_release || 'llmdbenchcicdr-gke-trtllm' }}
       workspace_dir: ${{ inputs.workspace_dir || '/tmp/llmdbenchcicdk-gke-trtllm' }}
       bucket_project: ${{ inputs.bucket_project || 'llm-d-scale' }}
