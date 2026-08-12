@@ -177,6 +177,15 @@ export ROUTER_VALUES="-f ${REPO_ROOT}/guides/${GUIDE_NAME}/router/${GUIDE_NAME}.
 > [!NOTE]
 > When following the guide from top to bottom, we already have `export MONITORING_VALUES=""` by default. This means that `monitoring` is disabled by default.
 
+> [!WARNING]
+> Enabling monitoring here requires the monitoring stack to be installed first. The
+> `monitoring.values.yaml` file creates a `ServiceMonitor`, which needs the Prometheus
+> Operator CRDs. Deploying the router with this file before the monitoring stack is ready
+> (see [Step 3: Enable monitoring](#3-optional-enable-monitoring)) will fail with a Helm
+> validation error. If you want monitoring enabled from the start, install the monitoring
+> stack before the router, or leave `MONITORING_VALUES` empty and `helm upgrade` with the
+> monitoring values after Step 3.
+
 #### Standalone Mode
 
 This deploys the llm-d Router in [Standalone Mode](../../docs/architecture/core/router/proxy.md) with an Envoy sidecar (default):
