@@ -10,7 +10,7 @@ spec:
       containers:
         - name: inference-server
           # Keep this tag in sync with FMA_VERSION in guide.yaml / the guide env.
-          image: ghcr.io/llm-d-incubation/llm-d-fast-model-actuation/launcher:v0.6.2
+          image: ghcr.io/llm-d-incubation/llm-d-fast-model-actuation/launcher:v0.6.4
           command: ["/bin/bash", "-c"]
           args:
             - |
