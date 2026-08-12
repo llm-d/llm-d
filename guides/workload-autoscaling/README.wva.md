@@ -87,20 +87,28 @@ export REPO_ROOT=$(realpath $(git rev-parse --show-toplevel))
     kubectl apply -k github.com/llm-d/llm-d-workload-variant-autoscaler/config/base/crd?ref=main
     ```
 
-5. Install the WVA controller. Point the overlay at `${WVA_NAMESPACE}`, then apply it
-   (the overlay carries its own namespace, so no `-n` is needed):
+5. Install the WVA controller. Point the overlay at `${WVA_NAMESPACE}` and set the
+   controller's `--watch-namespace` to match, then apply it (the overlay carries its
+   own namespace, so no `-n` is needed):
 
     ```bash
     (cd ${REPO_ROOT}/guides/workload-autoscaling/wva-config/platform/${PLATFORM} \
        && kustomize edit set namespace ${WVA_NAMESPACE})
+
+    sed -i.bak "s|--watch-namespace=.*|--watch-namespace=${WVA_NAMESPACE}|" \
+      ${REPO_ROOT}/guides/workload-autoscaling/wva-config/base/controller-deployment-patch.yaml \
+      && rm ${REPO_ROOT}/guides/workload-autoscaling/wva-config/base/controller-deployment-patch.yaml.bak
 
     kubectl apply -k ${REPO_ROOT}/guides/workload-autoscaling/wva-config/platform/${PLATFORM}
     ```
 
     > [!NOTE]
     > This requires the [`kustomize`](https://kustomize.io/) CLI and updates the
-    > `namespace:` field in `wva-config/platform/${PLATFORM}/kustomization.yaml`. To
-    > revert that local change afterwards, run `git checkout` on the file.
+    > `namespace:` field in `guides/workload-autoscaling/wva-config/platform/${PLATFORM}/kustomization.yaml`,
+    > plus the `--watch-namespace` arg in
+    > `guides/workload-autoscaling/wva-config/base/controller-deployment-patch.yaml`
+    > (kustomize's namespace transformer does not rewrite container args). To revert
+    > those local changes afterwards, run `git checkout` on both files.
 
 ## Verify Installation
 
