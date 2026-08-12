@@ -294,6 +294,31 @@ sequenceDiagram
 2. **Policy Evaluation**: Flow Control workers continuously evaluate the queues. They select the highest-priority band with work, apply the **Fairness Policy** to pick a flow, and use the **Ordering Policy** to select the candidate request.
 3. **Gated Dispatch**: Before releasing the request, the **Saturation Detector** is queried. If the pool has capacity, the request is dispatched to the Router. If saturated, the dispatch cycle halts (Head-of-Line blocking), holding the request safely until capacity frees up.
 
+### In-Flight Eviction
+
+The dispatch lifecycle above defends the pool *before* a request is released: higher-priority work is dispatched first, and lower-priority work waits behind the gate. This is sufficient when demand arrives together, but it cannot reclaim capacity that lower-priority work is *already* consuming. In-flight eviction closes that gap.
+
+When `enableEviction: true` (see [Flow Control configuration](configuration.md#flow-control)), Flow Control may end an already-dispatched, **negative-priority** (`priority < 0`) request to make room for blocked higher-priority demand. Eviction is demand-driven: it only occurs while higher-priority requests are blocked by pool saturation, and it only targets in-flight requests in negative-priority bands. Pacing and sizing self-configure from the selected saturation detector.
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant EPP_BW as EPP (Flow Control Worker)
+    participant Endpoint as Model Server
+    participant Proxy as Proxy (Envoy)
+    actor Client as Evicted Client
+
+    Note over EPP_BW: Higher-priority demand blocked,<br/>negative-priority requests in flight
+    EPP_BW->>Endpoint: Abort selected negative-priority stream
+    EPP_BW->>Proxy: Evict (HTTP 429)
+    Proxy->>Client: 429 + x-llm-d-request-dropped-reason: evicted
+    Note over EPP_BW: Reclaimed capacity released<br/>to blocked higher-priority request
+```
+
+Eviction reclaims capacity but does not complete the evicted request. The evicted caller — the client, gateway, or batch processor — owns retry, and must guarantee a single final result if it retries. Reserve eviction for lower-priority work whose owner can safely retry (for example, batch jobs on a negative-priority band).
+
+Evictions are observable through the `revocations_issued_total` and `revocations_total` metrics (see [Metrics & Observability](#metrics--observability)) and the `x-llm-d-request-dropped-reason: evicted` response header.
+
 ### System Capabilities & Limits
 
 Understanding the guaranteed capabilities and inherent boundaries of the Flow Control layer is essential for effective capacity planning.
@@ -332,11 +357,13 @@ stateDiagram-v2
     Queued --> Failed: Internal Error<br/>(HTTP 500)
     Queued --> Dispatched: Saturation < 1.0<br/>(Open Gate)
 
+    Dispatched --> Evicted: Reclaimed for higher priority<br/>(In-Flight Eviction - HTTP 429)
     Dispatched --> [*]: Sent to Scheduler
     Dropped --> [*]
     Expired --> [*]
     Cancelled --> [*]
     Drained --> [*]
+    Evicted --> [*]
     Failed --> [*]
 ```
 
@@ -345,6 +372,7 @@ The `Drop Reason` column lists the value emitted in the `x-llm-d-request-dropped
 | Queue Outcome | Internal Error Code | HTTP Status | Drop Reason (`x-llm-d-request-dropped-reason`) | Description |
 |---|---|---|---|---|
 | `QueueOutcomeRejectedCapacity` | `ResourceExhausted` | 429 (Too Many Requests) | `rejected-saturated` | Rejection because queue capacity limits were met (Global or Per-Band). |
+| In-flight eviction (`enableEviction: true`) | _(ImmediateResponse, no internal code)_ | 429 (Too Many Requests) | `evicted` | Post-dispatch reclamation, not a `QueueOutcome`: an already-dispatched, negative-priority request is ended to reclaim capacity for blocked higher-priority demand. Returned as an Envoy `ImmediateResponse`, so it carries no internal error code. The evicted caller owns retry. See [In-Flight Eviction](#in-flight-eviction). |
 | `QueueOutcomeEvictedTTL` | `ServiceUnavailable` | 503 (Service Unavailable) | `rejected-ttl-expired` | Eviction from queue because the request's TTL expired. |
 | `QueueOutcomeEvictedContextCancelled` | `ServiceUnavailable` | 503 (Service Unavailable) | `rejected-context-cancelled` | Eviction from queue because the client disconnected. |
 | `QueueOutcomeRejectedOther` / `EvictedOther` (graceful drain) | `ServiceUnavailable` | 503 (Service Unavailable) | `rejected-shutting-down` | The flow controller is draining queued requests during a graceful shutdown (e.g., rolling update), while the EPP is still alive and its ext_proc stream is open. Transient and retryable, **not** an internal fault. |
@@ -428,6 +456,13 @@ The Flow Control layer exposes detailed metrics to track queuing dynamics and sy
 | `llm_d_epp_flow_control_pool_saturation` | Gauge | Pool saturation signal gating dispatch (1.0 is gating set point). | `inference_pool` |
 | `llm_d_epp_flow_control_stale_endpoints` | Gauge | Number of candidate endpoints whose metrics are missing or older than staleness threshold. | `detector` |
 | `llm_d_epp_flow_control_requests_total` | Counter | Total requests processed by the Flow Control layer by outcome. | `outcome`, `priority`, `inference_pool` |
+| `llm_d_epp_flow_control_revocations_issued_total` | Counter | Total in-flight eviction revocations issued, labeled by the demand band's priority. Emitted when `enableEviction` is set. | `priority`, `inference_pool` |
+| `llm_d_epp_flow_control_revocations_total` | Counter | Total in-flight eviction revocations by terminal outcome (`confirmed`, `timed_out`). Every issued revocation eventually increments exactly one outcome. | `outcome`, `inference_pool` |
+| `llm_d_epp_flow_control_reclaim_target` | Gauge | Last computed reclamation deficit, in saturation-gauge units. | `inference_pool` |
+| `llm_d_epp_flow_control_pending_reclaim` | Gauge | Sum of outstanding and cooling pending-reclaim debits, in saturation-gauge units. | `inference_pool` |
+| `llm_d_epp_flow_control_revocation_confirmation_seconds` | Histogram | Time from revocation issue to confirmed stream termination. | `inference_pool` |
+
+The last five metrics cover in-flight eviction and are only meaningful when `enableEviction: true`.
 
 #### Grafana Dashboard
 
