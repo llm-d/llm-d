@@ -23,7 +23,7 @@ that GRPO and PPO produce, this is a meaningful throughput win and reduces the
 long-tail latency that stalls synchronous training steps.
 
 Because llm-d runs in its [no-Kubernetes mode](../no-kubernetes-deployment/README.md) -
-EPP, Envoy, and the vLLM workers deployed as plain processes rather than
+EPP, Envoy, and the model servers are deployed as plain processes rather than
 Kubernetes resources - the stack drops cleanly into a **Ray or Slurm** cluster
 without requiring a control plane. Prefill/decode (P/D) disaggregation is
 supported in both integration modes.
