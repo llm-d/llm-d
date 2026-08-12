@@ -4,7 +4,7 @@ This integration points [verl][verl] rollout generation at llm-d's Endpoint
 Picker (EPP), so each rollout request is routed by the same prefix-cache- and
 load-aware logic llm-d uses for production inference. It is wired up through
 configuration alone - no changes to verl's source - and works whether verl
-calls EPP directly or sends generation to an llm-d serving endpoint (see
+calls EPP directly or sends generation to an llm-d Router (see
 [Integration modes](#integration-modes) below).
 
 > [!NOTE]
@@ -16,11 +16,12 @@ calls EPP directly or sends generation to an llm-d serving endpoint (see
 ## How it works
 
 Instead of least-requests routing, each rollout request is scored by EPP,
-which ranks every candidate model server replica on prefix-cache hit rate, queue
-depth, and KV utilization and steers the request to the replica most likely
-to already have a warm cache. For the large, prefix-sharing sample groups
-that GRPO and PPO produce, this is a meaningful throughput win and reduces the
-long-tail latency that stalls synchronous training steps.
+which ranks every candidate model server replica on prefix-cache hit rate,
+queue depth, and KV utilization and steers the request to the model server
+replica most likely to already have a warm cache. For the large,
+prefix-sharing sample groups that GRPO and PPO produce, this is a meaningful
+throughput win and reduces the long-tail latency that stalls synchronous
+training steps.
 
 Because llm-d runs in its [no-Kubernetes mode](../no-kubernetes-deployment/README.md) -
 EPP, Envoy, and the model servers are deployed as plain processes rather than
@@ -30,48 +31,48 @@ supported in both integration modes.
 
 ## Integration modes
 
-- **EPP as the endpoint picker** - the framework calls EPP directly to pick a
-  replica, then dispatches the request itself. Fewer moving parts and lower
+- **llm-d EPP** - the framework calls the EPP directly to pick a specific model
+  server, then dispatches the request itself. Fewer moving parts and lower
   latency; the place to start.
-- **llm-d as an inference backend endpoint** - the framework sends generation
-  to a single llm-d serving endpoint (Envoy) that consults EPP and forwards.
+- **llm-d Router** - the framework sends generation to an llm-d Router that
+  consults EPP for request routing.
   Closest to a production llm-d serving deployment.
 
 ## Architecture
 
-**EPP as the endpoint picker** - verl asks EPP which replica to use, then
-dispatches the rollout to that replica itself:
+**llm-d EPP** - verl asks EPP which model server to use, then
+dispatches the rollout to that model server itself:
 
 ```mermaid
 %%{init: {'flowchart': {'curve': 'linear'}}}%%
 flowchart TD
     verl["verl rollout"]
     epp["llm-d EPP"]
-    verl -->|"1. ask which replica (gRPC)"| epp
-    epp -->|"2. replica id"| verl
-    verl -->|"3. dispatch rollout directly to chosen replica"| v0["vLLM 0"]
-    verl --> v1["vLLM 1"]
-    verl --> vN["vLLM N"]
+    verl -->|"1. ask which model server (gRPC)"| epp
+    epp -->|"2. model server id"| verl
+    verl -->|"3. dispatch rollout directly to chosen model server"| v0["Model Server 0"]
+    verl --> v1["Model Server 1"]
+    verl --> vN["Model Server N"]
 ```
 
-**llm-d as an inference backend endpoint** - verl sends the rollout to a
-single Envoy endpoint, which consults EPP and forwards to the chosen replica:
+**llm-d Router** - verl sends the rollout to a single Router endpoint, which
+consults EPP and forwards to the chosen model server:
 
 ```mermaid
 %%{init: {'flowchart': {'curve': 'linear'}}}%%
 flowchart TD
     verl["verl rollout"]
-    envoy["Envoy"]
+    envoy["llm-d Router<br/>(Envoy)"]
     epp["llm-d EPP<br/>PD disaggregation"]
     verl -->|"rollout request"| envoy
     envoy -->|"consults"| epp
-    epp -->|"chosen replica"| envoy
-    envoy -->|"forward to chosen replica"| v0["vLLM 0"]
-    envoy --> v1["vLLM 1"]
-    envoy --> vN["vLLM N"]
+    epp -->|"chosen model server"| envoy
+    envoy -->|"forward to chosen model server"| v0["Model Server 0"]
+    envoy --> v1["Model Server 1"]
+    envoy --> vN["Model Server N"]
 ```
 
-In both modes the EPP, Envoy, and vLLM workers run as plain processes in the
+In both modes the EPP, Envoy, and model servers run as plain processes in the
 Ray or Slurm cluster (no Kubernetes), and both support P/D disaggregation.
 
 ## Deploy
@@ -82,7 +83,7 @@ configuration overrides, and step-by-step setup for each integration mode.
 ## Further Reading
 
 - [llm-d-rl repository][llm-d-rl] - integration modes, configuration, and examples
-- [No-Kubernetes Deployment guide](../no-kubernetes-deployment/README.md) - deploying the EPP + Envoy + vLLM stack without Kubernetes
+- [No-Kubernetes Deployment guide](../no-kubernetes-deployment/README.md) - deploying the EPP + Envoy + model server stack without Kubernetes
 - [py-scheduler verl integration](./py-scheduler-verl-integration.md) - the alternative verl integration via the inference request scheduler
 
 [verl]: https://github.com/volcengine/verl

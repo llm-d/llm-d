@@ -26,7 +26,7 @@ training loop.
 ## [Leverage llm-d and EPP directly in your RL framework](./llm-d-verl-integration.md)
 
 llm-d's [no-Kubernetes mode](../no-kubernetes-deployment/README.md) uses
-the routing stack - EPP, Envoy, and the vLLM workers - as plain processes
+the routing stack - EPP, Envoy, and the model servers - as plain processes
 rather than Kubernetes resources, so it drops cleanly into a Ray or Slurm
 cluster without requiring a control plane. This lets an RL framework replace
 its naive rollout routing with EPP through configuration alone, with no
@@ -39,9 +39,10 @@ prefix-sharing sample groups that GRPO and PPO produce.
 
 Two integration modes are supported:
 
-- **llm-d EPP** - the framework calls the EPP directly to pick a specific model server, then dispatches the rollout request itself.
-- **llm-d Router** - the framework sends generation
-  to an llm-d Router that consults EPP for request routing.
+- **llm-d EPP** - the framework calls the EPP directly to pick a specific model
+  server, then dispatches the rollout request itself.
+- **llm-d Router** - the framework sends generation to an llm-d Router that
+  consults EPP for request routing.
 
 See the [llm-d verl integration guide](./llm-d-verl-integration.md) for an
 overview and setup.
