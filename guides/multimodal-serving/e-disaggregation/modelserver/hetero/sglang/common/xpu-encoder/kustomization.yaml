@@ -1,0 +1,12 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - encode-statefulset.yaml
+  - resource-claim-template.yaml
+
+images:
+  - name: REPLACE_XPU_MODEL_SERVER_IMAGE
+    newName: ghcr.io/llm-d/llm-d-xpu-sglang
+    newTag: sha-e119543
+    digest: sha256:53254b75d39a87b00bb6e9309acbe125dc0453d00860aea539d10fe55621a276

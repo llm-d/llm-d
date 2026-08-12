@@ -89,6 +89,6 @@ gcloud storage cp -r ./NVIDIA-Nemotron-3-Ultra-550B-A55B-FP8-block gs://llm-mode
 Once the model is stored in your GCS, please refer back to https://github.com/llm-d/llm-d/blob/main/guides/agentic-serving/nemotron-3-ultra-550b-h200.md#2-deploy-the-model-server-gpus to continue the deployment.
 
 > [!NOTE]
-> Please set `INFRA_PROVIDER` = `gke` to leverage this deploment.
+> Please set `INFRA_PROVIDER` = `gke` to leverage this deployment.
 
 

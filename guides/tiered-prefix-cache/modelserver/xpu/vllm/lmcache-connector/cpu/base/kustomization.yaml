@@ -7,7 +7,17 @@ labels:
   - pairs:
       llm-d.ai/guide: tiered-prefix-cache
       llm-d.ai/subguide: tiered-prefix-cache-xpu-lmcache
+      llm-d.ai/model: Qwen3-8B
     includeSelectors: true
     includeTemplates: true
 patches:
   - path: patch-vllm.yaml
+  # This overlay runs Qwen3-8B with tensor-parallel-size=1, so it needs a single
+  # XPU rather than the 4 requested by the shared base claim template.
+  - target:
+      kind: ResourceClaimTemplate
+      name: xpu-vllm-tiered-prefix-cache-intel-claim-template-decode
+    patch: |-
+      - op: replace
+        path: /spec/spec/devices/requests/0/exactly/count
+        value: 1

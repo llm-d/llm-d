@@ -10,7 +10,7 @@ env:
 
     # FMA controller/CRD/image version. Bump alongside the pinned image tags in
     # modelserver/launcherconfig.yaml and requester/deployment.yaml on upgrade.
-    FMA_VERSION:             { default: "0.6.2" }
+    FMA_VERSION:             { default: "0.6.4" }
     FMA_CHART_INSTANCE_NAME: fma
 
     MODEL:           { default: "Qwen/Qwen3-0.6B" }

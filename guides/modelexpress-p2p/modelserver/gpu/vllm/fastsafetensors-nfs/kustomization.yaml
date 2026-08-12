@@ -1,0 +1,66 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+# Optional fastsafetensors-off-NFS measurement workload. This records the
+# storage->HBM path with the same model and replica shape as the P2P guide.
+resources:
+  - ../../../../../recipes/modelserver/base/single-host/default
+
+# The prewarm Job is deliberately in a separate overlay without namePrefix, so
+# both storage tests share the literal `fst-model-cache` PVC.
+namePrefix: fastsafetensors-nfs-nvidia-gpu-vllm-
+
+components:
+  - ../../../../../recipes/modelserver/components/images/gpu-vllm
+
+labels:
+  - pairs:
+      llm-d.ai/model: Llama-3.3-70B-Instruct
+      llm-d.ai/guide: fastsafetensors-nfs
+      llm-d.ai/accelerator-variant: gpu
+      llm-d.ai/accelerator-vendor: nvidia
+    includeSelectors: true
+    includeTemplates: true
+    fields:
+      - version: v1
+        kind: ServiceAccount
+        path: metadata/labels
+        create: true
+      - group: apps
+        version: v1
+        kind: Deployment
+        path: metadata/labels
+        create: true
+      - group: apps
+        version: v1
+        kind: Deployment
+        path: spec/selector/matchLabels
+        create: true
+      - group: apps
+        version: v1
+        kind: Deployment
+        path: spec/template/metadata/labels
+        create: true
+      - group: monitoring.coreos.com
+        version: v1
+        kind: PodMonitor
+        path: metadata/labels
+        create: true
+      - group: monitoring.coreos.com
+        version: v1
+        kind: PodMonitor
+        path: spec/selector/matchLabels
+        create: true
+patches:
+  - path: patch-vllm.yaml
+
+replacements:
+  - source:
+      kind: Deployment
+      name: decode
+      fieldPath: spec.template.spec.containers.[name=modelserver].image
+    targets:
+      - select:
+          kind: Deployment
+          name: decode
+        fieldPaths:
+          - spec.template.spec.initContainers.[name=install-fastsafetensors].image

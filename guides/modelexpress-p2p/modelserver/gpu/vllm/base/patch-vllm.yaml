@@ -1,0 +1,91 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: decode
+spec:
+  # 1 seed + 1 receiver: the minimal pool that still exercises a real
+  # HBM->HBM transfer. Scale wider for a real fan-out.
+  replicas: 2
+  template:
+    spec:
+      containers:
+        - name: modelserver
+          command: ["vllm", "serve"]
+          args:
+            - "openai/gpt-oss-120b"
+            - "--disable-access-log-for-endpoints=/health,/metrics,/v1/models"
+            - "--tensor-parallel-size=2"
+            - "--gpu-memory-utilization=0.95"
+            - "--load-format=mx"
+          securityContext:
+            capabilities:
+              add: [IPC_LOCK]
+          env:
+            - name: VLLM_PLUGINS
+              value: "modelexpress"
+            - name: MX_SERVER_ADDRESS
+              value: "modelexpress-server:8001"
+            # Fixed ports so cross-pod advertisements resolve; each pod uses
+            # base..base+TP-1, which the istio-mesh component must exclude.
+            - name: MX_METADATA_PORT
+              value: "5555"
+            - name: MX_WORKER_GRPC_PORT
+              value: "6555"
+            - name: MX_RDMA_NIC_PIN
+              value: "auto"
+            - name: HF_HUB_CACHE
+              value: "/models"
+            - name: VLLM_RPC_TIMEOUT
+              value: "7200000"
+            - name: HF_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: llm-d-hf-token
+                  key: HF_TOKEN
+          resources:
+            limits:
+              cpu: '16'
+              memory: 192Gi
+              nvidia.com/gpu: 2
+            requests:
+              cpu: '8'
+              memory: 128Gi
+              nvidia.com/gpu: 2
+          volumeMounts:
+            - mountPath: /dev/shm
+              name: shm
+            - mountPath: /root/.cache
+              name: torch-compile-cache
+            - mountPath: /root/.triton
+              name: triton-cache
+            - mountPath: /root/.config
+              name: vllm-config
+            - mountPath: /models
+              name: model-cache
+          startupProbe:
+            initialDelaySeconds: 15
+            periodSeconds: 30
+            timeoutSeconds: 5
+            failureThreshold: 120
+          livenessProbe:
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            periodSeconds: 5
+            timeoutSeconds: 2
+            failureThreshold: 3
+      volumes:
+        - name: shm
+          emptyDir:
+            medium: Memory
+            sizeLimit: 20Gi
+        - name: torch-compile-cache
+          emptyDir: {}
+        - name: triton-cache
+          emptyDir: {}
+        - name: vllm-config
+          emptyDir: {}
+        - name: model-cache
+          emptyDir:
+            sizeLimit: 300Gi

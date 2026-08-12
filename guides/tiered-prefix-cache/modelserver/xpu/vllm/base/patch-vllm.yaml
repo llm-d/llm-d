@@ -10,15 +10,20 @@ spec:
         fsGroup: 107
         supplementalGroups:
           - 107
-      resourceClaims:
-        - name: gpu
-          resourceClaimTemplateName: xpu-vllm-gpu
       containers:
         - name: modelserver
-          command: ["vllm", "serve"]
           imagePullPolicy: IfNotPresent
-          securityContext:
-            privileged: true
+          command: ["/bin/bash", "-c"]
+          args:
+            - |
+              exec vllm serve \
+                Qwen/Qwen3-32B \
+                --dtype bfloat16 \
+                --block-size 64 \
+                --tensor-parallel-size=4 \
+                --gpu-memory-utilization 0.85 \
+                --max-num-seq 128 \
+                --uvicorn-log-level warning
           env:
             - name: HF_TOKEN
               valueFrom:
@@ -28,12 +33,12 @@ spec:
           resources:
             limits:
               cpu: '8'
-              memory: 30Gi
+              memory: 60Gi
             requests:
               cpu: '8'
-              memory: 30Gi
+              memory: 60Gi
             claims:
-              - name: gpu
+              - name: intel-decode-claim
           volumeMounts:
             - mountPath: /dev/shm
               name: shm
@@ -59,6 +64,9 @@ spec:
       restartPolicy: Always
       enableServiceLinks: false
       terminationGracePeriodSeconds: 130
+      resourceClaims:
+        - name: intel-decode-claim
+          resourceClaimTemplateName: tiered-prefix-cache-intel-claim-template-decode
       volumes:
         - name: data
           emptyDir: {}
