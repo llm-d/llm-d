@@ -15,6 +15,9 @@
 #   just lmeval mmlu 50    # override tasks / concurrency
 #   just lmeval-sweep      # run gsm8k at 8/16/32/64/128/256, --limit = 5x concurrency
 #   just lmeval-sweep mmlu "8 16"  # override tasks / concurrency list
+#   just bench             # vllm bench serve, 8000 ISL / 1 OSL, at concurrency 16
+#   just bench 64          # override concurrency
+#   just bench 64 decode 1280  # override role / total prompts
 #   just profile           # capture a 10-step torch profile of decode dp rank 0
 #   just profile p         # same, but against the prefill worker
 #   just profile d 3 90    # profile decode dp rank 3, wait 90s for the trace dump
@@ -31,8 +34,8 @@ model     := "moonshotai/Kimi-K3"
 tokenizer := "moonshotai/Kimi-K3"
 
 # Point straight at the prefill LWS's load-balanced service, bypassing the EPP.
-# url       := "http://wide-ep-llm-d-prefill-lb:8000"
-url := "http://wide-ep-lws-epp"
+url       := "http://wide-ep-llm-d-prefill-lb:8000"
+# url := "http://wide-ep-lws-epp"
 # url := "http://10.84.1.63:8000"
 concurrency := "16"
 duration    := "300"
@@ -171,6 +174,40 @@ lmeval-sweep:
 
 install-lmeval:
   kubectl exec -n {{namespace}}  deploy/{{deploy}} -- pip install lm_eval[api] transformers
+
+
+# Prefill-shaped `vllm bench serve`: 8000 input tokens, 1 output token, run at a
+# fixed concurrency. Executed from inside a vllm pod (the image already ships the
+# vllm CLI) but pointed at {{url}}, so it drives the same endpoint as the other
+# recipes -- the pod is just a client here, not necessarily the server that serves it.
+# --ignore-eos keeps every request at exactly 1 output token.
+# Args: [concurrency] [role: d|decode|p|prefill] [num-prompts, default 10x concurrency].
+bench concurrency=concurrency role="prefill" num_prompts="":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    case "{{role}}" in
+      p|prefill) role=prefill ;;
+      d|decode)  role=decode ;;
+      *) echo "unknown role {{role}} -- use p/prefill or d/decode" >&2; exit 1 ;;
+    esac
+    pod=$(kubectl get pod -n {{namespace}} -l llm-d.ai/role=$role \
+      -o jsonpath='{.items[0].metadata.name}')
+    prompts="{{num_prompts}}"; prompts="${prompts:-$(( {{concurrency}} * 10 ))}"
+    echo "==> vllm bench serve from $pod: 8000 ISL / 1 OSL, concurrency {{concurrency}}, $prompts prompts"
+    kubectl exec -n {{namespace}} "$pod" -c vllm -- \
+      vllm bench serve \
+        --backend vllm \
+        --base-url {{url}} \
+        --model {{model}} \
+        --tokenizer {{tokenizer}} \
+        --trust-remote-code \
+        --dataset-name random \
+        --random-input-len 8000 \
+        --random-output-len 1 \
+        --ignore-eos \
+        --max-concurrency {{concurrency}} \
+        --num-prompts "$prompts" \
+        --percentile-metrics ttft,e2el
 
 
 # Capture a torch profile of one decode or prefill DP rank. Both engines are
