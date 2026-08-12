@@ -8,6 +8,8 @@ This directory contains Kustomize Components that define the **default container
 |-----------|-------|-------------|
 | `gpu-vllm` | `vllm/vllm-openai` | NVIDIA GPU with vLLM |
 | `gpu-sglang` | `docker.io/lmsysorg/sglang` | NVIDIA GPU with SGLang |
+| `aws-gpu-vllm` | `763104351884.dkr.ecr.us-east-1.amazonaws.com/vllm` | NVIDIA GPU with vLLM (AWS ECR mirror) |
+| `aws-gpu-sglang` | `763104351884.dkr.ecr.us-east-1.amazonaws.com/sglang` | NVIDIA GPU with SGLang (AWS ECR mirror) |
 | `amd-vllm` | `ghcr.io/llm-d/llm-d-rocm` | AMD GPU with vLLM |
 | `amd-sglang` | `docker.io/lmsysorg/sglang` | AMD GPU with SGLang (ROCm variant) |
 | `cpu-vllm` | `ghcr.io/llm-d/llm-d-cpu` | CPU with vLLM |
