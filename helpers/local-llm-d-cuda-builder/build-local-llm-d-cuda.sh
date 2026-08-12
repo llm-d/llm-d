@@ -40,7 +40,6 @@ Options:
                       Accepted values: builder, runtime
   --platform PLAT     Target platform              (default: ${TARGETPLATFORM})
                       e.g. linux/amd64, linux/arm64
-  --debug             Build with debug symbols     (default: false)
   --efa               Enable AWS EFA support       (default: false)
   --os OS             Target OS: rhel or ubuntu    (default: ${TARGETOS})
   --sccache           Enable sccache               (default: false)
@@ -64,7 +63,6 @@ while [[ $# -gt 0 ]]; do
         --tag)        IMAGE_TAG="$2";  shift 2 ;;
         --target)     TARGET="$2";     shift 2 ;;
         --platform)   TARGETPLATFORM="$2"; shift 2 ;;
-        --debug)      BUILD_DEBUG=true; shift ;;
         --efa)        ENABLE_EFA=true;  shift ;;
         --os)         TARGETOS="$2";   shift 2 ;;
         --sccache)    USE_SCCACHE=true; shift ;;
