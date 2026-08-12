@@ -47,6 +47,11 @@ on:
         required: false
         default: 'true'
         type: string
+      update_badge:
+        description: 'Update the badge on gh-pages ("true", "false")'
+        required: false
+        default: 'true'
+        type: string
       tpu_chips:
         description: 'Total TPU chips to request (0 for simulated)'
         required: false

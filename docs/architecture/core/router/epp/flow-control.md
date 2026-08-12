@@ -309,7 +309,7 @@ Understanding the guaranteed capabilities and inherent boundaries of the Flow Co
 
 * **Absolute Capacity Shortages**: Flow Control only handles *when* and *in what order* requests are dispatched. It cannot make the pool faster or create capacity that doesn't exist.
 * **TTFT Shifts (Not Elimination)**: Flow Control cannot remove wait time when the system is over capacity. By enabling it, you make the **explicit choice to protect TPOT at the expense of queue time**. Its core function is simply controlling **where** and **for whom** TTFT (Time-To-First-Token) is accrued (accruing it safely in the EPP rather than letting it context-thrash the GPU).
-* **Non-Persistence**: Queues are stored purely in-memory. If the EPP process restarts or fails, queued requests are lost. During a graceful shutdown, the EPP will attempt to evict queued requests with an internal error (HTTP 500), whereas abrupt crashes will result in hard connection drops for the client.
+* **Non-Persistence**: Queues are stored purely in-memory. If the EPP process restarts or fails, queued requests are lost. During a graceful shutdown, the EPP evicts queued requests with a retryable HTTP 503 (Service Unavailable) — signaling transient unavailability so clients and upstream gateways retry rather than treating the drain as a hard server fault — whereas abrupt crashes will result in hard connection drops for the client.
 
 ### Failure Modes & Error Mapping
 
@@ -328,20 +328,35 @@ stateDiagram-v2
 
     Queued --> Expired: TTL Expired<br/>(HTTP 503)
     Queued --> Cancelled: Client Disconnect<br/>(HTTP 503)
+    Queued --> Drained: Controller Shutdown<br/>(HTTP 503)
+    Queued --> Failed: Internal Error<br/>(HTTP 500)
     Queued --> Dispatched: Saturation < 1.0<br/>(Open Gate)
 
     Dispatched --> [*]: Sent to Scheduler
     Dropped --> [*]
     Expired --> [*]
     Cancelled --> [*]
+    Drained --> [*]
+    Failed --> [*]
 ```
 
-| Queue Outcome | Internal Error Code | HTTP Status | Description |
-|---|---|---|---|
-| `QueueOutcomeRejectedCapacity` | `ResourceExhausted` | 429 (Too Many Requests) | Rejection because queue capacity limits were met (Global or Per-Band). |
-| `QueueOutcomeEvictedTTL` | `ServiceUnavailable` | 503 (Service Unavailable) | Eviction from queue because the request's TTL expired. |
-| `QueueOutcomeEvictedContextCancelled` | `ServiceUnavailable` | 503 (Service Unavailable) | Eviction from queue because the client disconnected. |
-| `QueueOutcomeRejectedOther` / `EvictedOther` | `Internal` | 500 (Internal Server Error) | Internal flow control error or controller shutdown. |
+The `Drop Reason` column lists the value emitted in the `x-llm-d-request-dropped-reason` response header, which lets operators distinguish the precise cause of a drop on the wire (e.g., for alerting or client-side retry logic).
+
+| Queue Outcome | Internal Error Code | HTTP Status | Drop Reason (`x-llm-d-request-dropped-reason`) | Description |
+|---|---|---|---|---|
+| `QueueOutcomeRejectedCapacity` | `ResourceExhausted` | 429 (Too Many Requests) | `rejected-saturated` | Rejection because queue capacity limits were met (Global or Per-Band). |
+| `QueueOutcomeEvictedTTL` | `ServiceUnavailable` | 503 (Service Unavailable) | `rejected-ttl-expired` | Eviction from queue because the request's TTL expired. |
+| `QueueOutcomeEvictedContextCancelled` | `ServiceUnavailable` | 503 (Service Unavailable) | `rejected-context-cancelled` | Eviction from queue because the client disconnected. |
+| `QueueOutcomeRejectedOther` / `EvictedOther` (graceful drain) | `ServiceUnavailable` | 503 (Service Unavailable) | `rejected-shutting-down` | The flow controller is draining queued requests during a graceful shutdown (e.g., rolling update), while the EPP is still alive and its ext_proc stream is open. Transient and retryable, **not** an internal fault. |
+| `QueueOutcomeRejectedOther` / `EvictedOther` (other) | `Internal` | 500 (Internal Server Error) | _(none)_ | Genuine internal flow control error. No drop-reason header is set, since this is an unexpected failure rather than a specific removal policy. |
+
+> [!IMPORTANT]
+> **These mappings only apply while the EPP is reachable.** The table above describes outcomes the EPP returns over a live ext_proc stream — including the 503 graceful-drain case, where the EPP is still running long enough to finalize its queued requests. Once the EPP process is actually gone (abrupt crash, or the tail of a shutdown after the ext_proc connection closes), none of these codes apply, because Envoy never receives a response from the extension. What happens then is governed by the `InferencePool`'s [`failureMode`](../../inferencepool.md):
+>
+> * **`FailOpen`** (set by the [llm-d router recipe](https://github.com/llm-d/llm-d/blob/main/guides/recipes/router/base.values.yaml)): Envoy **bypasses the extension and routes the request directly to a model-server endpoint**. The request is *not* rejected — but it also receives **no flow control**: no queuing, fairness, or saturation gating. This trades pool-defense guarantees for availability, so a request can land on an already-saturated backend during the window the EPP is down.
+> * **`FailClose`** (the API default): Envoy fails the request itself rather than routing around the dead EPP.
+>
+> In other words, the EPP's error contract is best-effort and contingent on the EPP being reachable; under the default llm-d (`FailOpen`) configuration, an EPP outage degrades to unprotected pass-through rather than to any status code in this table.
 
 ### Extension Points
 
@@ -405,12 +420,14 @@ The Flow Control layer exposes detailed metrics to track queuing dynamics and sy
 
 | Metric Name | Metric Type | Description | Labels |
 |:---|:---|:---|:---|
-| `llm_d_epp_flow_control_request_queue_duration_seconds` | Distribution | Time requests spend in the Flow Control layer. | `fairness_id`, `priority`, `outcome`, `inference_pool`, `model_name`, `target_model_name` |
-| `llm_d_epp_flow_control_queue_size` | Gauge | Current number of requests in Flow Control. | `fairness_id`, `priority`, `inference_pool`, `model_name`, `target_model_name` |
-| `llm_d_epp_flow_control_queue_bytes` | Gauge | Current size in bytes of requests in Flow Control. | `fairness_id`, `priority`, `inference_pool`, `model_name`, `target_model_name` |
-| `llm_d_epp_flow_control_dispatch_cycle_duration_seconds` | Distribution | Time taken for each dispatch cycle. | None |
-| `llm_d_epp_flow_control_request_enqueue_duration_seconds` | Distribution | Time taken to enqueue requests. | `fairness_id`, `priority`, `outcome` |
-| `llm_d_epp_flow_control_pool_saturation` | Gauge | Current saturation level of the pool. | `inference_pool` |
+| `llm_d_epp_flow_control_request_queue_duration_seconds` | Histogram | Time requests spend in the Flow Control layer from enqueue to final outcome. | `fairness_id`, `priority`, `outcome`, `inference_pool`, `model_name`, `target_model_name` |
+| `llm_d_epp_flow_control_queue_size` | Gauge | Current number of requests actively held in the Flow Control queue. | `fairness_id`, `priority`, `inference_pool`, `model_name`, `target_model_name` |
+| `llm_d_epp_flow_control_queue_bytes` | Gauge | Current total size in bytes of requests actively held in the Flow Control queue. | `fairness_id`, `priority`, `inference_pool`, `model_name`, `target_model_name` |
+| `llm_d_epp_flow_control_dispatch_cycle_duration_seconds` | Histogram | Time taken for each internal dispatch cycle. | None |
+| `llm_d_epp_flow_control_request_enqueue_duration_seconds` | Histogram | Time taken to enqueue requests into the Flow Control layer. | `fairness_id`, `priority`, `outcome` |
+| `llm_d_epp_flow_control_pool_saturation` | Gauge | Pool saturation signal gating dispatch (1.0 is gating set point). | `inference_pool` |
+| `llm_d_epp_flow_control_stale_endpoints` | Gauge | Number of candidate endpoints whose metrics are missing or older than staleness threshold. | `detector` |
+| `llm_d_epp_flow_control_requests_total` | Counter | Total requests processed by the Flow Control layer by outcome. | `outcome`, `priority`, `inference_pool` |
 
 #### Grafana Dashboard
 

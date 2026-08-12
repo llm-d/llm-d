@@ -1,7 +1,11 @@
-ARG BASE_IMAGE=vllm/vllm-openai-rocm:v0.20.1
+# Global ARGs
+ARG BASE_IMAGE=vllm/vllm-openai-rocm:v0.23.0
 
-ARG RIXL_BRANCH="39be1de"
-ARG RIXL_REPO="https://github.com/ROCm/RIXL.git"
+ARG MORI_BRANCH="v1.2.0"
+ARG MORI_REPO="https://github.com/ROCm/mori.git"
+# Temporarily use NIXL-ROCm PR until it's merged and we have wheels
+ARG NIXL_BRANCH="pr3-rocm-docker"
+ARG NIXL_REPO="https://github.com/andyluo7/nixl.git"
 ARG UCX_BRANCH="da3fac2a"
 ARG UCX_REPO="https://github.com/ROCm/ucx.git"
 ARG UCCL_VERSION="v0.0.1.post6"
@@ -17,6 +21,7 @@ ARG ETCD_REPO="https://github.com/etcd-cpp-apiv3/etcd-cpp-apiv3.git"
 ### Base image (uv, rdma, etc..)
 ###
 
+ARG BASE_IMAGE
 FROM ${BASE_IMAGE} AS base
 
 ARG CACHE_BUSTER
@@ -26,12 +31,11 @@ RUN if [ -n "${CACHE_BUSTER}" ]; then \
 
 ENV ROCM_PATH=/opt/rocm
 ENV PATH=${ROCM_PATH}/llvm/bin:${ROCM_PATH}/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
-ENV LD_LIBRARY_PATH=${ROCM_PATH}/lib:/usr/local/lib:
+ENV LD_LIBRARY_PATH=${ROCM_PATH}/lib:/usr/local/lib:${LD_LIBRARY_PATH}
 
 ENV UCX_PATH=/usr/local/ucx
 ENV UCCL_PREFIX=/usr/local/uccl
-ENV RIXL_PATH=/usr/local/rixl
-ENV RIXL_BENCH_PATH=/usr/local/rixl_bench
+ENV NIXL_PATH=/usr/local/nixl
 
 # RDMA libraries for build and runtime images
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
@@ -41,73 +45,73 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     libibverbs-dev \
     ibverbs-providers \
     ibverbs-utils \
+    libprotobuf-dev libgrpc-dev libgrpc++-dev protobuf-compiler-grpc \
     && rm -rf /var/lib/apt/lists/*
 
 ENV CCACHE_DIR=/root/.cache/ccache
 
+# We require mori v.1.2.0; uninstall here and rebuild in build layer
+# To be removed when upstream vLLM catches up.
+RUN pip uninstall -y amd_mori
+
+
 ###
-### RIXL + dependences build (until upstream rocm/vllm provides it in nightly or wheels become available)
+### NIXL
 ###
 
-FROM base AS build_rixl
+FROM base AS build
 
 ARG UCX_BRANCH
 ARG UCX_REPO
 ARG UCCL_VERSION
 ARG UCCL_REPO
-ARG RIXL_BRANCH
-ARG RIXL_REPO
-ARG ETCD_BRANCH
-ARG ETCD_REPO
+ARG NIXL_BRANCH
+ARG NIXL_REPO
+ARG MORI_BRANCH
+ARG MORI_REPO
 
-# ligflags-dev for nixlbench
+ENV UCX_PLUGIN_DIR=${UCX_PATH}/lib/ucx
+ENV NIXL_PLUGIN_DIR=${NIXL_PATH}/lib/x86_64-linux-gnu/plugins
+ENV BUILD_TYPE=release
+
+ARG PYTHON_VERSION="3.12"
+ENV WHEEL_NAME="nixl_rocm"
+ENV BACKEND_DIR="nixl_rocm"
+
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     --mount=type=cache,target=/var/lib/apt/lists,sharing=locked \
     apt-get -y update && apt-get -y install autoconf libtool pkg-config \
-    libgrpc-dev \
-    libgrpc++-dev \
-    libprotobuf-dev \
-    protobuf-compiler-grpc \
     libcpprest-dev \
     libaio-dev \
-    libgflags-dev \
-    libcxxopts-dev
+    libcxxopts-dev \
+    cargo rustc
 
 RUN --mount=type=cache,target=/root/.cache/uv \
-    uv pip install --system -U packaging 'cmake<4' ninja wheel 'setuptools<80' pybind11 meson auditwheel patchelf tomlkit
+    uv pip install --system -U packaging 'cmake<4' ninja wheel 'setuptools>=80.9.0' pybind11 meson auditwheel patchelf tomlkit
 
-# ETCD API For RIXL benchmarks binary interacting with ETCD
-RUN --mount=type=cache,target=/root/.cache/ccache \
-    git clone ${ETCD_REPO} && \
-    cd etcd-cpp-apiv3 && \
-    git checkout ${ETCD_BRANCH} && \
-    mkdir build && cd build && \
-    cmake .. && \
-    make -j$(nproc) && \
-    make install
-
+# Build UCX
 RUN --mount=type=cache,target=/root/.cache/ccache \
     cd /usr/local/src && \
     git clone ${UCX_REPO} &&  \
     cd ucx && \
     git checkout ${UCX_BRANCH} && \
     ./autogen.sh && \
-    mkdir build && cd build && \
-    ../configure \
+    ./contrib/configure-release-mt  \
         --prefix=${UCX_PATH} \
         --enable-shared \
         --disable-static \
         --disable-doxygen-doc \
         --enable-optimizations \
+        --enable-cma           \
         --enable-devel-headers \
         --with-rocm=${ROCM_PATH} \
         --with-verbs \
         --with-dm \
         --enable-mt && \
-    make -j && \
-    make install
+    make -j$(nproc) && \
+    make install-strip && ldconfig
 
-ENV PATH=/usr/local/ucx/bin:$PATH
+ENV PATH=${UCX_PATH}/bin:$PATH
 ENV LD_LIBRARY_PATH=${UCX_PATH}/lib:${LD_LIBRARY_PATH}
 
 # Build UCCL
@@ -117,43 +121,53 @@ RUN TARGETOS=ubuntu UCCL_DEVICE=rocm /tmp/build-uccl.sh && \
 
 ENV LD_LIBRARY_PATH=${UCCL_PREFIX}/lib:${LD_LIBRARY_PATH}
 
+# Generate NIXL wheel
 RUN --mount=type=cache,target=/root/.cache/ccache \
-    git clone ${RIXL_REPO} /opt/rixl && \
-    cd /opt/rixl && \
-    git checkout ${RIXL_BRANCH} && \
-    meson setup build --prefix=${RIXL_PATH} \
-                     -Ducx_path=${UCX_PATH} \
-                     -Drocm_path=${ROCM_PATH} && \
-    cd build && \
-    ninja && \
-    ninja install
+    git clone ${NIXL_REPO} /opt/nixl && \
+    cd /opt/nixl && mkdir -p /app/install && \
+    git checkout ${NIXL_BRANCH} && \
+    meson setup \
+        -Ducx_path=${UCX_PATH} \
+        -Ddisable_gds_backend=true \
+        -Ddisable_plugins=LIBFABRIC,GDS,GDS_MT,GPUNETIO \
+        -Dbuild_nixl_ep=false \
+        -Dpython_backend_dir=nixl_rocm \
+        -Dpython_backend_package=nixl_rocm \
+        build/ --prefix=${NIXL_PATH} --buildtype=${BUILD_TYPE} && \
+        cd build && ninja && ninja install
 
-# Generate RIXL wheel
+RUN echo "${NIXL_PATH}/lib/x86_64-linux-gnu" > /etc/ld.so.conf.d/nixl.conf && \
+    echo "${NIXL_PLUGIN_DIR}" >> /etc/ld.so.conf.d/nixl.conf && ldconfig
+
 RUN --mount=type=cache,target=/root/.cache/ccache \
-    cd /opt/rixl && mkdir -p /app/install && \
-    LD_LIBRARY_PATH=${RIXL_PATH}/lib/x86_64-linux-gnu:${LD_LIBRARY_PATH} ./contrib/build-wheel.sh \
-        --python-version ${PYTHON_VERSION} \
-        --output-dir /app/install \
-        --rocm-dir ${ROCM_PATH} \
-        --ucx-plugins-dir ${UCX_PATH}/lib/ucx \
-        --nixl-plugins-dir ${RIXL_PATH}/lib/x86_64-linux-gnu/plugins
+    cd /opt/nixl && \
+    ./contrib/build-wheel.sh \
+    --python-version ${PYTHON_VERSION} \
+    --platform manylinux_2_39_x86_64 \
+    --ucx-plugins-dir ${UCX_PLUGIN_DIR} \
+    --nixl-plugins-dir ${NIXL_PLUGIN_DIR} \
+    --output-dir /app/install \
+    --wheel-name ${WHEEL_NAME} \
+    --backend-dir ${BACKEND_DIR}
 
-# Nixl Bench; not strictly necessary but handy for KV-transfer performance validation
-RUN --mount=type=cache,target=/root/.cache/ccache \
-    cd /opt/rixl/benchmark/nixlbench &&  \
-    meson setup build                    \
-        -Dnixl_path=${RIXL_PATH}         \
-        -Drocm_path=${ROCM_PATH}         \
-        --prefix=${RIXL_BENCH_PATH} &&   \
-    cd build && \
-    ninja && \
-    ninja install
 
+###
+### MORI (reuse current build layer)
+###
+
+RUN git clone "${MORI_REPO}" /opt/mori \
+    && cd /opt/mori \
+    && git checkout "${MORI_BRANCH}" \
+    && git submodule update --init --recursive
+
+RUN cd /opt/mori \
+    && pip wheel -w /export/wheels . --no-build-isolation --no-deps
+
+
+# Gather all the wheels and export for next layer
 RUN mkdir -p /export/wheels && \
-    mkdir /export/packages && \
-    cp -r /app/install/*.whl /export/wheels && \
-    cp -r ${RIXL_BENCH_PATH} /export/packages
-
+    mkdir -p /export/packages && \
+    cp -r /app/install/*.whl /export/wheels/ || true
 
 ###
 ### Runtime image
@@ -161,12 +175,10 @@ RUN mkdir -p /export/wheels && \
 
 FROM base AS final
 
-COPY --from=build_rixl ${UCCL_PREFIX} ${UCCL_PREFIX}
+COPY --from=build ${UCCL_PREFIX} ${UCCL_PREFIX}
 
-RUN --mount=type=bind,from=build_rixl,src=/export/wheels,target=/export/wheels \
-    --mount=type=bind,from=build_rixl,src=/export/packages,target=/export/packages \
+RUN --mount=type=bind,from=build,src=/export/wheels,target=/export/wheels \
     --mount=type=cache,target=/root/.cache/uv \
-    uv pip install --system /export/wheels/*.whl && \
-    cp -r /export/packages/* /opt
+    uv pip install --system /export/wheels/*.whl
 
 ENTRYPOINT ["python", "-m", "vllm.entrypoints.openai.api_server"]

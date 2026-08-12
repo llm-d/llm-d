@@ -30,7 +30,7 @@ jobs:
   check_for_success:
     uses: llm-d/llm-d-infra/.github/workflows/reusable-query-success-past-runs.yaml@main
     with:
-      workflow_name_query: ${{ inputs.workflow_name_query || 'nightly-e2e-wide-ep-lws-gke-acc-gpu-vllm-x.yamll' }}
+      workflow_name_query: ${{ inputs.workflow_name_query || 'nightly-e2e-wide-ep-lws-gke-acc-gpu-vllm-x.yaml' }}
       time_window_query: ${{ inputs.time_window_query || '5' }}
       branch_query: ${{ inputs.branch_query || 'main' }}
     secrets: inherit

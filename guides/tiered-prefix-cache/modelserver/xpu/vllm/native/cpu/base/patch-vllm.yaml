@@ -1,0 +1,37 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: decode
+spec:
+  template:
+    spec:
+      containers:
+        - name: modelserver
+          command: ["/bin/bash", "-c"]
+          args:
+            - |
+              exec vllm serve \
+                Qwen/Qwen3-32B \
+                --dtype bfloat16 \
+                --block-size 64 \
+                --tensor-parallel-size=4 \
+                --gpu-memory-utilization 0.85 \
+                --kv-transfer-config \
+                '{"kv_connector":"OffloadingConnector","kv_role":"kv_both","kv_connector_extra_config":{"cpu_bytes_to_use":107374182400}}' \
+                --max-num-seq 128 \
+                --uvicorn-log-level warning
+          env:
+            - name: HF_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: llm-d-hf-token
+                  key: HF_TOKEN
+          resources:
+            limits:
+              cpu: '8'
+              memory: 140Gi
+            requests:
+              cpu: '8'
+              memory: 140Gi
+            claims:
+              - name: intel-decode-claim

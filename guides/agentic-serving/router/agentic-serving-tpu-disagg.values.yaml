@@ -1,0 +1,54 @@
+## agentic-serving (TPU / P/D-disaggregated) guide overrides for the llm-d router.
+## Layer on top of: recipes/router/base.values.yaml
+##
+## This deployment serves the agentic code-generation workload on Google TPUs with
+## prefill/decode disaggregation, so the router runs disagg-aware scheduling profiles
+## (separate prefill and decode profiles with token-load awareness)
+## rather than the single default profile used
+## by the non-disaggregated TPU deployment in agentic-serving.values.yaml.
+
+router:
+  extraServicePorts:
+    - name: http
+      port: 80
+      protocol: TCP
+      targetPort: 8081
+
+  epp:
+    pluginsConfigFile: "pd-config.yaml"
+    pluginsCustomConfig:
+      pd-config.yaml: |
+        apiVersion: llm-d.ai/v1alpha1
+        kind: EndpointPickerConfig
+        plugins:
+        - type: disagg-headers-handler
+        - type: always-disagg-pd-decider
+        - type: disagg-profile-handler
+          parameters:
+            deciderPluginName: always-disagg-pd-decider
+        - type: prefill-filter
+        - type: decode-filter
+        - type: approx-prefix-cache-producer
+          parameters:
+            autoTune: false
+            lruCapacityPerServer: 4000000
+        - type: active-request-scorer
+        - type: token-load-scorer
+        - type: prefix-cache-affinity-filter
+          parameters:
+            peakPrefillThroughput: 16444
+        - type: inflight-load-producer
+        schedulingProfiles:
+        - name: prefill
+          plugins:
+          - pluginRef: prefill-filter
+          - pluginRef: token-load-scorer
+          - pluginRef: prefix-cache-affinity-filter
+        - name: decode
+          plugins:
+          - pluginRef: decode-filter
+          - pluginRef: active-request-scorer
+
+  modelServers:
+    matchLabels:
+      llm-d.ai/guide: "agentic-serving"

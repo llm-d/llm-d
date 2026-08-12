@@ -1,0 +1,21 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: render
+  labels:
+    app.kubernetes.io/component: vllm-render
+spec:
+  # This Service owns no pods: it fronts the guide's model server pods, which
+  # already expose vLLM's /v1/*/render endpoints, so the EPP token-producer
+  # tokenizes on the serving fleet and render capacity scales with it
+  # (llm-d/llm-d#2188). targetPort is the vLLM serving port: the pods' port
+  # 8000 belongs to the routing-proxy sidecar, which does not serve /render.
+  # Only Ready endpoints receive traffic, so render calls never reach a pod
+  # still loading weights.
+  selector:
+    llm-d.ai/guide: p2p-kv-cache-sharing
+    llm-d.ai/engine-type: vllm
+  ports:
+    - name: render-http
+      port: 8000
+      targetPort: 8200

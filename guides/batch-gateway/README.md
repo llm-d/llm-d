@@ -22,7 +22,7 @@
 Batch Gateway uses pluggable storage backends. Each function is backed by a single plug-in, chosen at deployment time:
 
 | Function | Available plug-ins |
-|----------|-------------------|
+| -------- | ------------------ |
 | Jobs and files metadata | PostgreSQL, Redis/Valkey (development/test only) |
 | Priority queue, events, status updates | Redis/Valkey |
 | File storage (input/output) | S3, Filesystem |
@@ -56,9 +56,10 @@ Batch Gateway requires a Kubernetes Secret with database and storage credentials
 ```bash
 kubectl create secret generic batch-gateway-secrets -n ${NAMESPACE} \
   --from-literal=redis-url="redis://redis-master.redis.svc.cluster.local:6379/0" \
-  --from-literal=postgresql-url="postgresql://user:password@postgresql.postgresql.svc.cluster.local:5432/batchgateway" \
-  --from-literal=s3-secret-access-key="<your-s3-secret-key>"
+  --from-literal=postgresql-url="postgresql://user:password@postgresql.postgresql.svc.cluster.local:5432/batchgateway"
 ```
+
+> **Note**: `s3-secret-access-key` is only required when using the S3 file storage backend (`global.fileClient.type=s3`). This guide uses the filesystem backend, so it is omitted. Add `--from-literal=s3-secret-access-key="<your-s3-secret-key>"` if you deploy with S3.
 
 ### Step 3: Configure the llm-d Router URL
 
@@ -72,12 +73,33 @@ export INFERENCE_GW_URL="http://infra-inference-scheduling-inference-gateway-ist
 
 **Per-model gateways** (different endpoints per model): see the [Helm chart README](https://github.com/llm-d/llm-d-batch-gateway/blob/main/charts/batch-gateway/README.md) for `modelGateways` configuration.
 
-### Step 4: Deploy
+### Step 4: Create the File Storage PVC
+
+This guide uses the filesystem storage backend (`global.fileClient.type` defaults to `fs`). Both the API server and the processor mount the same volume, so it must support `ReadWriteMany` (RWX). Create the PVC referenced by the deploy step:
+
+```bash
+kubectl apply -n ${NAMESPACE} -f - <<EOF
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: batch-gateway-pvc
+spec:
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: 10Gi  # example size, tune to your workload
+EOF
+```
+
+> **Note**: `ReadWriteMany` requires an RWX-capable storage class (e.g. NFS, CephFS). If your cluster only provides `ReadWriteOnce`, use the S3 file storage backend instead (`global.fileClient.type=s3`).
+
+### Step 5: Deploy
 
 **From OCI Registry:**
 
 ```bash
-helm install batch-gateway oci://ghcr.io/llm-d-incubation/charts/batch-gateway \
+helm install batch-gateway oci://ghcr.io/llm-d/charts/batch-gateway \
   -n ${NAMESPACE} \
   --set processor.config.globalInferenceGateway.url="${INFERENCE_GW_URL}" \
   --set "apiserver.config.batchAPI.passThroughHeaders={Authorization}" \
@@ -118,6 +140,12 @@ For a production deployment with authentication, authorization, and TLS on Kuber
    ```
 
 ## Usage
+
+The examples below talk to the API server on port `8000`. Port-forward it first (the health check in the previous section uses a separate port, `8081`):
+
+```bash
+kubectl port-forward -n ${NAMESPACE} svc/batch-gateway-apiserver 8000:8000 &
+```
 
 ### Upload an Input File
 
@@ -171,8 +199,13 @@ curl http://localhost:8000/v1/files/${OUTPUT_FILE_ID}/content > results.jsonl
 
 ```bash
 helm uninstall batch-gateway -n ${NAMESPACE}
+```
+
+<!-- llm-d-cicd:skip start -->
+```bash
 kubectl delete namespace ${NAMESPACE}
 ```
+<!-- llm-d-cicd:skip end -->
 
 ## Related
 

@@ -20,14 +20,24 @@ VLLM_PRECOMPILED_WHEEL_COMMIT=0fc695fc6d1d82e9a5ac6835ac8e4e1c83703665 # maps to
 
 
 
-# Used by XPU: prebuilt vLLM image from upstream CI (vllm-ci-test-repo).
+# Used by XPU: official prebuilt vLLM XPU image from Docker Hub.
 # The XPU image is a thin pass-through over this base; switch tags here to upgrade.
-# Tag corresponds to vLLM v0.23.0 release (commit 0fc695fc6d1d82e9a5ac6835ac8e4e1c83703665).
-VLLM_XPU_BASE_IMAGE=public.ecr.aws/q9t5s3a7/vllm-ci-test-repo:0fc695fc6d1d82e9a5ac6835ac8e4e1c83703665-xpu
+# Official vLLM v0.26.0 release image.
+VLLM_XPU_BASE_IMAGE=vllm/vllm-openai-xpu:v0.26.0
+
+# ============================================================================
+# SGLang XPU Version Configuration
+# ============================================================================
+# GitHub owner/repo and pinned revision used for the SGLang XPU source checkout.
+SGLANG_XPU_REPOSITORY=sgl-project/sglang
+SGLANG_XPU_REF=1af01674938f68266d5f8a0e5635ea1434af7801
+# Matches the sgl-kernel-xpu revision used by the validated Dynamo XPU image.
+SGLANG_XPU_KERNEL_REPO=https://github.com/sgl-project/sgl-kernel-xpu.git
+SGLANG_XPU_KERNEL_REF=a246742797279015f51d135063ed00f879496896
 
 # Used by XPU + vLLM-Omni: GitHub repository slug and pinned ref for image builds.
 VLLM_OMNI_REPO=vllm-project/vllm-omni
-VLLM_OMNI_REF=580a0efe40d749e2803f96af1f5f3b8897d08c2d
+VLLM_OMNI_REF=bdb1d996bee26e34f59f0f7fe24f928b4bb21996
 
 # ============================================================================
 # CUDA Version Configuration

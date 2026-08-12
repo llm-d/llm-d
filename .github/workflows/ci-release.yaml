@@ -47,7 +47,7 @@ jobs:
     runs-on: ${{ matrix.runner }}
     steps:
       - name: Checkout code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           ref: ${{ env.TAG }}
           fetch-depth: 0
@@ -220,7 +220,7 @@ jobs:
           ls -la /tmp/digests/ubuntu/ || echo "No Ubuntu digests"
 
       - name: Checkout code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - id: check
         shell: bash
@@ -360,7 +360,7 @@ jobs:
           TRIVY_PASSWORD: ${{ secrets.GHCR_TOKEN }}
 
       - name: Upload Trivy scan results to GitHub Security tab
-        uses: github/codeql-action/upload-sarif@v4
+        uses: github/codeql-action/upload-sarif@v4.37.6
         with:
           sarif_file: "trivy-results.sarif"
 
@@ -377,7 +377,7 @@ jobs:
     runs-on: vllm-runner
     steps:
       - name: Checkout code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           ref: ${{ env.TAG }}
           fetch-depth: 0
@@ -482,7 +482,7 @@ jobs:
           TRIVY_PASSWORD: ${{ secrets.GHCR_TOKEN }}
 
       - name: Upload Trivy scan results to GitHub Security tab
-        uses: github/codeql-action/upload-sarif@v4
+        uses: github/codeql-action/upload-sarif@v4.37.6
         with:
           sarif_file: "trivy-results.sarif"
 
@@ -499,7 +499,7 @@ jobs:
     runs-on: vllm-runner-arm
     steps:
       - name: Checkout code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           ref: ${{ env.TAG }}
           fetch-depth: 0
@@ -613,7 +613,7 @@ jobs:
 
       - name: Upload Trivy scan results to GitHub Security tab
         continue-on-error: true
-        uses: github/codeql-action/upload-sarif@v4
+        uses: github/codeql-action/upload-sarif@v4.37.6
         with:
           sarif_file: "trivy-results.sarif"
 
@@ -630,7 +630,7 @@ jobs:
     runs-on: vllm-runner
     steps:
       - name: Checkout code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           # fetch tags for docker/metadata semver handling (if you use git describe etc.)
           fetch-depth: 0
@@ -692,7 +692,7 @@ jobs:
           TRIVY_PASSWORD: ${{ secrets.GHCR_TOKEN }}
 
       - name: Upload Trivy scan results to GitHub Security tab
-        uses: github/codeql-action/upload-sarif@v4
+        uses: github/codeql-action/upload-sarif@v4.37.6
         with:
           sarif_file: "trivy-results.sarif"
 
@@ -709,7 +709,7 @@ jobs:
     runs-on: vllm-runner
     steps:
       - name: Checkout code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           # fetch tags for docker/metadata semver handling (if you use git describe etc.)
           fetch-depth: 0
@@ -760,7 +760,7 @@ jobs:
           TRIVY_PASSWORD: ${{ secrets.GHCR_TOKEN }}
 
       - name: Upload Trivy scan results to GitHub Security tab
-        uses: github/codeql-action/upload-sarif@v4
+        uses: github/codeql-action/upload-sarif@v4.37.6
         with:
           sarif_file: 'trivy-results.sarif'
 
@@ -779,7 +779,7 @@ jobs:
     runs-on: vllm-runner
     steps:
       - name: Checkout code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           # fetch tags for docker/metadata semver handling (if you use git describe etc.)
           fetch-depth: 0
@@ -836,7 +836,7 @@ jobs:
           TRIVY_PASSWORD: ${{ secrets.GHCR_TOKEN }}
 
       - name: Upload Trivy scan results to GitHub Security tab
-        uses: github/codeql-action/upload-sarif@v4
+        uses: github/codeql-action/upload-sarif@v4.37.6
         with:
           sarif_file: "trivy-results.sarif"
 
@@ -855,7 +855,7 @@ jobs:
     runs-on: vllm-runner
     steps:
       - name: Checkout code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
@@ -867,7 +867,7 @@ jobs:
           echo "omni_ref=${VLLM_OMNI_REF}" >> $GITHUB_OUTPUT
 
       - name: Checkout vLLM-Omni source
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           repository: ${{ steps.common-versions.outputs.omni_repo }}
           ref: ${{ steps.common-versions.outputs.omni_ref }}

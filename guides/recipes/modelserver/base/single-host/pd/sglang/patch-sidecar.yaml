@@ -9,7 +9,6 @@ spec:
         - name: routing-proxy
           args:
             - --port=8000
-            - --vllm-port=8200
             - --kv-connector=sglang
             - --zap-log-level=1
             - --secure-proxy=false

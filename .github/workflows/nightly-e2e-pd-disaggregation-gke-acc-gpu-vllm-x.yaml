@@ -79,7 +79,7 @@ jobs:
       prefill_pods: ${{ inputs.prefill_pods || 'auto' }}
       accelerator_type: ${{ inputs.accelerator_type || 'gpu' }}
       backend_type: ${{ inputs.backend_type || 'vllm' }}
-      infra_provider: ${{ inputs.infra_provider || 'gke' }}
+      infra_provider: ${{ inputs.infra_provider || 'gke/base' }}
       connector: ${{ inputs.connector || '' }}
       cluster_namespace: ${{ inputs.cluster_namespace || 'llm-d-nightly-pd-disaggregation-gke-gpu' }}
       cluster_name: ${{ inputs.cluster_name || 'llm-d-e2e-us-south1-2' }}

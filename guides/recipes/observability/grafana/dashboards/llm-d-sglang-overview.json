@@ -150,7 +150,7 @@
           },
           "disableTextWrap": false,
           "editorMode": "code",
-          "expr": "sglang:num_running_reqs{model_name=~\"$model_name\",namespace=~\"$namespace\"}",
+          "expr": "sglang_num_running_reqs{model_name=~\"$model_name\",namespace=~\"$namespace\"}",
           "fullMetaSearch": false,
           "includeNullMetadata": true,
           "instant": false,
@@ -166,7 +166,7 @@
           },
           "disableTextWrap": false,
           "editorMode": "code",
-          "expr": "sglang:num_queue_reqs{model_name=~\"$model_name\",namespace=~\"$namespace\"}",
+          "expr": "sglang_num_queue_reqs{model_name=~\"$model_name\",namespace=~\"$namespace\"}",
           "fullMetaSearch": false,
           "hide": false,
           "includeNullMetadata": true,
@@ -271,7 +271,7 @@
           },
           "disableTextWrap": false,
           "editorMode": "code",
-          "expr": "rate(sglang:prompt_tokens_total{model_name=~\"$model_name\",namespace=~\"$namespace\"}[$__rate_interval])",
+          "expr": "rate(sglang_prompt_tokens_total{model_name=~\"$model_name\",namespace=~\"$namespace\"}[$__rate_interval])",
           "fullMetaSearch": false,
           "includeNullMetadata": false,
           "instant": false,
@@ -287,7 +287,7 @@
           },
           "disableTextWrap": false,
           "editorMode": "code",
-          "expr": "rate(sglang:generation_tokens_total{model_name=~\"$model_name\",namespace=~\"$namespace\"}[$__rate_interval])",
+          "expr": "rate(sglang_generation_tokens_total{model_name=~\"$model_name\",namespace=~\"$namespace\"}[$__rate_interval])",
           "fullMetaSearch": false,
           "hide": false,
           "includeNullMetadata": false,
@@ -393,7 +393,7 @@
           },
           "disableTextWrap": false,
           "editorMode": "code",
-          "expr": "histogram_quantile(0.99, sum by(le) (rate(sglang:time_to_first_token_seconds_bucket{model_name=~\"$model_name\",namespace=~\"$namespace\"}[$__rate_interval])))",
+          "expr": "histogram_quantile(0.99, sum by(le) (rate(sglang_time_to_first_token_seconds_bucket{model_name=~\"$model_name\",namespace=~\"$namespace\"}[$__rate_interval])))",
           "fullMetaSearch": false,
           "hide": false,
           "includeNullMetadata": false,
@@ -410,7 +410,7 @@
           },
           "disableTextWrap": false,
           "editorMode": "code",
-          "expr": "histogram_quantile(0.95, sum by(le) (rate(sglang:time_to_first_token_seconds_bucket{model_name=~\"$model_name\",namespace=~\"$namespace\"}[$__rate_interval])))",
+          "expr": "histogram_quantile(0.95, sum by(le) (rate(sglang_time_to_first_token_seconds_bucket{model_name=~\"$model_name\",namespace=~\"$namespace\"}[$__rate_interval])))",
           "fullMetaSearch": false,
           "includeNullMetadata": false,
           "instant": false,
@@ -426,7 +426,7 @@
           },
           "disableTextWrap": false,
           "editorMode": "code",
-          "expr": "histogram_quantile(0.9, sum by(le) (rate(sglang:time_to_first_token_seconds_bucket{model_name=~\"$model_name\",namespace=~\"$namespace\"}[$__rate_interval])))",
+          "expr": "histogram_quantile(0.9, sum by(le) (rate(sglang_time_to_first_token_seconds_bucket{model_name=~\"$model_name\",namespace=~\"$namespace\"}[$__rate_interval])))",
           "fullMetaSearch": false,
           "hide": false,
           "includeNullMetadata": false,
@@ -443,7 +443,7 @@
           },
           "disableTextWrap": false,
           "editorMode": "code",
-          "expr": "histogram_quantile(0.5, sum by(le) (rate(sglang:time_to_first_token_seconds_bucket{model_name=~\"$model_name\",namespace=~\"$namespace\"}[$__rate_interval])))",
+          "expr": "histogram_quantile(0.5, sum by(le) (rate(sglang_time_to_first_token_seconds_bucket{model_name=~\"$model_name\",namespace=~\"$namespace\"}[$__rate_interval])))",
           "fullMetaSearch": false,
           "hide": false,
           "includeNullMetadata": false,
@@ -459,7 +459,7 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "editorMode": "code",
-          "expr": "rate(sglang:time_to_first_token_seconds_sum{model_name=~\"$model_name\",namespace=~\"$namespace\"}[$__rate_interval])\n/\nrate(sglang:time_to_first_token_seconds_count{model_name=~\"$model_name\",namespace=~\"$namespace\"}[$__rate_interval])",
+          "expr": "rate(sglang_time_to_first_token_seconds_sum{model_name=~\"$model_name\",namespace=~\"$namespace\"}[$__rate_interval])\n/\nrate(sglang_time_to_first_token_seconds_count{model_name=~\"$model_name\",namespace=~\"$namespace\"}[$__rate_interval])",
           "hide": false,
           "instant": false,
           "legendFormat": "Average",
@@ -562,7 +562,7 @@
           },
           "disableTextWrap": false,
           "editorMode": "code",
-          "expr": "histogram_quantile(0.99, sum by(le) (rate(sglang:inter_token_latency_seconds_bucket{model_name=~\"$model_name\",namespace=~\"$namespace\"}[$__rate_interval])))",
+          "expr": "histogram_quantile(0.99, sum by(le) (rate(sglang_inter_token_latency_seconds_bucket{model_name=~\"$model_name\",namespace=~\"$namespace\"}[$__rate_interval])))",
           "fullMetaSearch": false,
           "includeNullMetadata": false,
           "instant": false,
@@ -578,7 +578,7 @@
           },
           "disableTextWrap": false,
           "editorMode": "code",
-          "expr": "histogram_quantile(0.95, sum by(le) (rate(sglang:inter_token_latency_seconds_bucket{model_name=~\"$model_name\",namespace=~\"$namespace\"}[$__rate_interval])))",
+          "expr": "histogram_quantile(0.95, sum by(le) (rate(sglang_inter_token_latency_seconds_bucket{model_name=~\"$model_name\",namespace=~\"$namespace\"}[$__rate_interval])))",
           "fullMetaSearch": false,
           "hide": false,
           "includeNullMetadata": false,
@@ -595,7 +595,7 @@
           },
           "disableTextWrap": false,
           "editorMode": "code",
-          "expr": "histogram_quantile(0.9, sum by(le) (rate(sglang:inter_token_latency_seconds_bucket{model_name=~\"$model_name\",namespace=~\"$namespace\"}[$__rate_interval])))",
+          "expr": "histogram_quantile(0.9, sum by(le) (rate(sglang_inter_token_latency_seconds_bucket{model_name=~\"$model_name\",namespace=~\"$namespace\"}[$__rate_interval])))",
           "fullMetaSearch": false,
           "hide": false,
           "includeNullMetadata": false,
@@ -612,7 +612,7 @@
           },
           "disableTextWrap": false,
           "editorMode": "code",
-          "expr": "histogram_quantile(0.5, sum by(le) (rate(sglang:inter_token_latency_seconds_bucket{model_name=~\"$model_name\",namespace=~\"$namespace\"}[$__rate_interval])))",
+          "expr": "histogram_quantile(0.5, sum by(le) (rate(sglang_inter_token_latency_seconds_bucket{model_name=~\"$model_name\",namespace=~\"$namespace\"}[$__rate_interval])))",
           "fullMetaSearch": false,
           "hide": false,
           "includeNullMetadata": false,
@@ -628,7 +628,7 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "editorMode": "code",
-          "expr": "rate(sglang:inter_token_latency_seconds_sum{model_name=~\"$model_name\",namespace=~\"$namespace\"}[$__rate_interval])\n/\nrate(sglang:inter_token_latency_seconds_count{model_name=~\"$model_name\",namespace=~\"$namespace\"}[$__rate_interval])",
+          "expr": "rate(sglang_inter_token_latency_seconds_sum{model_name=~\"$model_name\",namespace=~\"$namespace\"}[$__rate_interval])\n/\nrate(sglang_inter_token_latency_seconds_count{model_name=~\"$model_name\",namespace=~\"$namespace\"}[$__rate_interval])",
           "hide": false,
           "instant": false,
           "legendFormat": "Mean",
@@ -729,14 +729,114 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "editorMode": "code",
-          "expr": "sglang:token_usage{model_name=~\"$model_name\",namespace=~\"$namespace\"}",
+          "expr": "sglang_token_usage{model_name=~\"$model_name\",namespace=~\"$namespace\"}",
           "instant": false,
-          "legendFormat": "KV Cache Usage",
+          "legendFormat": "Token/KV Cache Usage",
           "range": true,
           "refId": "A"
         }
       ],
-      "title": "Token / KV Cache Usage",
+      "title": "Token/KV Cache Usage",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "description": "Prefix cache hit rate.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "barWidthFactor": 0.6,
+            "drawStyle": "line",
+            "fillOpacity": 0,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "auto",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          },
+          "unit": "percentunit"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 16
+      },
+      "id": 6,
+      "options": {
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "hideZeros": false,
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "pluginVersion": "11.3.0",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "editorMode": "code",
+          "expr": "sglang_cache_hit_rate{model_name=~\"$model_name\",namespace=~\"$namespace\"}",
+          "instant": false,
+          "legendFormat": "Cache Hit Rate",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "title": "Cache Hit Rate",
       "type": "timeseries"
     }
   ],
@@ -768,14 +868,14 @@
           "type": "prometheus",
           "uid": "${DS_PROMETHEUS}"
         },
-        "definition": "label_values(sglang:generation_tokens_total,model_name)",
+        "definition": "label_values(sglang_generation_tokens_total,model_name)",
         "includeAll": true,
         "label": "model_name",
         "name": "model_name",
         "options": [],
         "query": {
           "qryType": 1,
-          "query": "label_values(sglang:generation_tokens_total,model_name)",
+          "query": "label_values(sglang_generation_tokens_total,model_name)",
           "refId": "PrometheusVariableQueryEditor-VariableQuery"
         },
         "refresh": 2,
@@ -784,6 +884,10 @@
       },
       {
         "current": {},
+        "datasource": {
+          "type": "prometheus",
+          "uid": "${DS_PROMETHEUS}"
+        },
         "definition": "label_values(namespace)",
         "includeAll": true,
         "label": "namespace",

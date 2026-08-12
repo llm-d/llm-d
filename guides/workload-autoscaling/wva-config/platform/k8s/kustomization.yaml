@@ -4,7 +4,7 @@ kind: Kustomization
 namespace: llm-d-optimized-baseline
 
 resources:
-  - github.com/llm-d/llm-d-workload-variant-autoscaler/config/overlays/namespace-scoped/kubernetes?ref=release-0.8
+  - github.com/llm-d/llm-d-workload-variant-autoscaler/config/overlays/namespace-scoped/kubernetes?ref=main
   - ../../base
 
 patches:

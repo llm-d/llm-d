@@ -1,0 +1,72 @@
+# Copy the Prometheus CA into this namespace as the keda-prometheus-auth Secret
+# before applying this file. Extend the TriggerAuthentication for bearer, mTLS,
+# basic, or workload-identity authentication when required by your environment.
+apiVersion: keda.sh/v1alpha1
+kind: TriggerAuthentication
+metadata:
+  name: keda-prometheus-auth
+  namespace: llm-d-optimized-baseline
+spec:
+  secretTargetRef:
+    - parameter: ca
+      name: keda-prometheus-auth
+      key: ca.crt
+---
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: optimized-baseline-keda-epp
+  namespace: llm-d-optimized-baseline
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    # Optimized Baseline example; replace with the Deployment to scale.
+    name: optimized-baseline-nvidia-gpu-vllm-decode
+  pollingInterval: 15
+  # Applies to scale-to-zero. The generated HPA behavior below controls
+  # ordinary scale-down while minReplicaCount is 1 or greater.
+  cooldownPeriod: 300
+  minReplicaCount: 1
+  maxReplicaCount: 8
+  advanced:
+    horizontalPodAutoscalerConfig:
+      name: keda-hpa-optimized-baseline
+      behavior:
+        scaleUp:
+          stabilizationWindowSeconds: 0
+          policies:
+            - type: Percent
+              value: 100
+              periodSeconds: 15
+        scaleDown:
+          stabilizationWindowSeconds: 300
+          policies:
+            - type: Percent
+              value: 100
+              periodSeconds: 15
+  triggers:
+    - type: prometheus
+      name: epp-queue-size
+      metricType: AverageValue
+      metadata:
+        # TLS-enabled bundled kube-prometheus-stack example; replace when the
+        # Prometheus service, protocol, or authentication setup differs.
+        serverAddress: https://llmd-kube-prometheus-stack-prometheus.llm-d-monitoring.svc.cluster.local:9090
+        query: >-
+          sum(llm_d_epp_flow_control_queue_size{namespace="llm-d-optimized-baseline",service="optimized-baseline-epp",model_name="Qwen/Qwen3-32B"})
+        threshold: "1"
+      authenticationRef:
+        name: keda-prometheus-auth
+    - type: prometheus
+      name: epp-running-requests
+      metricType: AverageValue
+      metadata:
+        # TLS-enabled bundled kube-prometheus-stack example; replace when the
+        # Prometheus service, protocol, or authentication setup differs.
+        serverAddress: https://llmd-kube-prometheus-stack-prometheus.llm-d-monitoring.svc.cluster.local:9090
+        query: >-
+          sum(llm_d_epp_request_running{namespace="llm-d-optimized-baseline",service="optimized-baseline-epp",model_name="Qwen/Qwen3-32B"})
+        threshold: "16"
+      authenticationRef:
+        name: keda-prometheus-auth

@@ -1,0 +1,99 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: prefill
+spec:
+  replicas: 4
+  template:
+    spec:
+      containers:
+        - name: modelserver
+          imagePullPolicy: Always
+          command: ["vllm", "serve"]
+          args:
+            - "Qwen/Qwen3-32B"
+            - "--disable-access-log-for-endpoints=/health,/metrics,/v1/models"
+            - "--tensor-parallel-size=2"
+            # Pollara cannot register more than 2GB of consecutive memory.
+            # Adjust KV cache size to have layers that fit in the allowed memory.
+            - "--kv-cache-memory-bytes=100000000000"
+            - "--kv-transfer-config"
+            # WRITE-mode producer. proxy_ip intentionally omitted (no ZMQ proxy);
+            # peer discovery is via the routing sidecar on the request path.
+            - '{"kv_connector":"MoRIIOConnector","kv_role":"kv_producer","kv_connector_extra_config":{"http_port":"8000","handshake_port":"6301","notify_port":"61005"}}'
+          env:
+            - name: HF_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: llm-d-hf-token
+                  key: HF_TOKEN
+            - name: VLLM_ENGINE_READY_TIMEOUT_S
+              value: "1800"
+            - name: VLLM_ROCM_USE_AITER
+              value: "1"
+            - name: AITER_JIT_DIR
+              value: "/.aiter"
+            - name: VLLM_CACHE_ROOT
+              value: "/.cache"
+            - name: MORI_IB_GID_INDEX
+              value: "1"
+            - name: MORI_IO_LOG_LEVEL
+              value: "WARN"
+            - name: MORI_APP_LOG_LEVEL
+              value: "WARN"
+          securityContext:
+            capabilities:
+              add: ["IPC_LOCK"]
+          ports:
+            - containerPort: 6301
+              name: mori-handshake
+              protocol: TCP
+            - containerPort: 61005
+              name: mori-notify
+              protocol: TCP
+          resources:
+            limits:
+              cpu: "100"
+              memory: 200Gi
+              amd.com/gpu: "2"
+            requests:
+              cpu: "100"
+              memory: 200Gi
+              amd.com/gpu: "2"
+          volumeMounts:
+            - mountPath: /dev/shm
+              name: shm
+            - mountPath: /.cache
+              name: torch-compile-cache
+            - mountPath: /.config
+              name: vllm-config
+            - mountPath: /.triton
+              name: triton-cache
+            - mountPath: /.aiter
+              name: aiter-cache
+          startupProbe:
+            initialDelaySeconds: 60
+            periodSeconds: 30
+            timeoutSeconds: 5
+            failureThreshold: 240
+          livenessProbe:
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 12
+      volumes:
+        - name: shm
+          emptyDir:
+            medium: Memory
+            sizeLimit: 64Gi
+        - name: torch-compile-cache
+          emptyDir: {}
+        - name: vllm-config
+          emptyDir: {}
+        - name: triton-cache
+          emptyDir: {}
+        - name: aiter-cache
+          emptyDir: {}

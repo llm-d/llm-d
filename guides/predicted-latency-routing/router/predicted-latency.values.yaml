@@ -1,10 +1,11 @@
 ## Predicted Latency-Based Scheduling — routing-only setup.
 ##
-## Overrides the chart's default plugin pipeline only to raise the
+## Overrides the chart's default plugin pipeline to raise the
 ## approx-prefix-cache-producer maxPrefixTokensToMatch (the chart default leaves it
-## unset). The predictor trains on end-to-end latency; no SLO headers are
-## required. For SLO-aware scheduling (x-llm-d-slo-ttft-ms / x-llm-d-slo-tpot-ms,
-## streamingMode: true), use predicted-latency-slo.values.yaml.
+## unset) and to train the predictor on streaming TTFT/TPOT samples. Every request
+## must therefore be sent with "stream": true. No SLO headers are required — for
+## SLO-aware scheduling (x-llm-d-slo-ttft-ms / x-llm-d-slo-tpot-ms), use
+## predicted-latency-slo.values.yaml.
 
 router:
   latencyPredictor:
@@ -35,6 +36,8 @@ router:
           name: loose-affinity-filter
           parameters:
             affinityThreshold: 0.8
+            ttftSource: latencyPredictor
+            maxTTFTPenaltyMs: 5000
         - type: latency-scorer
         - type: weighted-random-picker
         schedulingProfiles:

@@ -3,15 +3,16 @@
 [![E2E (CKS GPU)](https://github.com/llm-d/llm-d/actions/workflows/consolidate-status-precise-prefix-cache-routing-cks-acc-gpu-vllm-x.yaml/badge.svg)](https://github.com/llm-d/llm-d/actions/workflows/consolidate-status-precise-prefix-cache-routing-cks-acc-gpu-vllm-x.yaml)
 [![E2E (GKE GPU)](https://github.com/llm-d/llm-d/actions/workflows/consolidate-status-precise-prefix-cache-routing-gke-acc-gpu-vllm-x.yaml/badge.svg)](https://github.com/llm-d/llm-d/actions/workflows/consolidate-status-precise-prefix-cache-routing-gke-acc-gpu-vllm-x.yaml)
 [![E2E (OCP GPU)](https://github.com/llm-d/llm-d/actions/workflows/consolidate-status-precise-prefix-cache-routing-ibm-acc-gpu-vllm-x.yaml/badge.svg)](https://github.com/llm-d/llm-d/actions/workflows/consolidate-status-precise-prefix-cache-routing-ibm-acc-gpu-vllm-x.yaml)
+[![E2E (AMD ROCm)](https://github.com/llm-d/llm-d/actions/workflows/consolidate-status-precise-prefix-cache-routing-amd-ci-acc-rocm-vllm-x.yaml/badge.svg)](https://github.com/llm-d/llm-d/actions/workflows/consolidate-status-precise-prefix-cache-routing-amd-ci-acc-rocm-vllm-x.yaml)
 
 ## Overview
 
-This guide routes requests on precise per-pod KV-cache state rather than request-traffic heuristics. Each vLLM pod publishes [KV-cache events](https://github.com/vllm-project/vllm/issues/16669) over ZMQ; the router subscribes, builds an index keyed by block hash, and scores candidate pods by the fraction of an incoming request's prefix that is already resident.
+This guide routes requests on precise per-pod KV-cache state rather than request-traffic heuristics. Each vLLM pod publishes [KV-cache events](https://github.com/vllm-project/vllm/issues/16669) over ZMQ; the router subscribes, builds an index keyed by block hash, filters candidates to the pods where an incoming request's prefix is already resident, and picks the least token-loaded pod within that set.
 
-Two scorers make up the routing decision alongside the load-aware stack:
+The routing decision combines precise cache knowledge with token-based load balancing:
 
-- **Precise prefix-cache aware** — the [precise-prefix-cache-producer](https://github.com/llm-d/llm-d-router/tree/main/pkg/epp/framework/plugins/requestcontrol/dataproducer/preciseprefixcache) indexes real KV-block events from vLLM and publishes the exact resident-block fraction. The generic [prefix-cache-scorer](https://github.com/llm-d/llm-d-router/tree/main/pkg/epp/framework/plugins/scheduling/scorer/prefix) then reads `prefixMatchInfoProducerName`. Indexer internals (event ingestion, block hashing, dual-key design) are documented in [llm-d-kv-cache architecture](https://github.com/llm-d/llm-d-kv-cache/blob/main/docs/architecture.md).
-- **Load-aware** — such as the [kv-cache utilization](https://github.com/llm-d/llm-d-router/tree/main/pkg/epp/framework/plugins/scheduling/scorer/kvcacheutilization) and [queue size](https://github.com/llm-d/llm-d-router/tree/main/pkg/epp/framework/plugins/scheduling/scorer/queuedepth) scorers balance against pod pressure.
+- **Precise prefix-cache aware** — the [precise-prefix-cache-producer](https://github.com/llm-d/llm-d-router/tree/main/pkg/epp/framework/plugins/requestcontrol/dataproducer/preciseprefixcache) indexes real KV-block events from vLLM and publishes the exact resident-block fraction. The `prefix-cache-affinity-filter` reads it via `prefixMatchInfoProducerName` to keep each prefix group on its cache-warm endpoints, gated by a calibrated `peakPrefillThroughput` so saturated endpoints are bypassed. Indexer internals (event ingestion, block hashing, dual-key design) are documented in [llm-d-kv-cache architecture](https://github.com/llm-d/llm-d-kv-cache/blob/main/docs/architecture.md).
+- **Token-load aware** — the `token-load-scorer` (fed by the `inflight-load-producer`) picks the least token-loaded endpoint within the filtered set, balancing by queued prefill work rather than request counts.
 
 ## Default Configuration
 
@@ -22,14 +23,14 @@ Two scorers make up the routing decision alongside the load-aware stack:
 | Tensor Parallelism  | 2                                                       |
 | GPUs per replica    | 2                                                       |
 | Total GPUs          | 16                                                      |
-| vLLM `--block-size` | 64 (must match scorer `tokenProcessorConfig.blockSize`) |
+| vLLM `--block-size` | 64 (must match the `precise-prefix-cache-producer`'s `tokenProcessorConfig.blockSizeTokens`) |
 
 ### Supported Hardware Backends
 
 | Backend              | Directory                  | Default model                           | Notes                                                    |
 | -------------------- | -------------------------- | --------------------------------------- | -------------------------------------------------------- |
 | NVIDIA GPU           | `modelserver/gpu/vllm/`    | Qwen/Qwen3-32B                          | Default configuration                                    |
-| NVIDIA GPU (SGLang)  | `modelserver/gpu/sglang/`  | Qwen/Qwen3-32B                          | SGLang; `--page-size=64` matches scorer `blockSize`      |
+| NVIDIA GPU (SGLang)  | `modelserver/gpu/sglang/`  | Qwen/Qwen3-32B                          | SGLang; `--page-size=64` matches the producer's `blockSizeTokens`; requires `render/standalone/` |
 | AMD GPU              | `modelserver/amd/vllm/`    | Qwen/Qwen3-32B                          | AMD GPU                                                  |
 | Intel XPU            | `modelserver/xpu/vllm/`    | Qwen/Qwen3-0.6B                         | CI-sized; update router `modelName` for real use         |
 | Google TPU v6e       | `modelserver/tpu/v6/vllm/` | Qwen/Qwen3-32B                          | GKE TPU                                                  |
@@ -40,13 +41,13 @@ Two scorers make up the routing decision alongside the load-aware stack:
 > Some hardware variants use reduced configurations (fewer replicas, smaller models) to enable CI testing for compatibility and regression checks.
 >
 > [!NOTE]
-> For precise prefix cache scoring to match reality, the `token-producer` `modelName` in [`router/precise-prefix-cache-routing.values.yaml`](router/precise-prefix-cache-routing.values.yaml) must match the model the overlay deploys.
+> The `token-producer` `modelName` in [`router/precise-prefix-cache-routing.values.yaml`](router/precise-prefix-cache-routing.values.yaml) must match the model the overlay deploys. With the default render overlay the render call lands on the model servers themselves, so a mismatch is rejected outright rather than silently scoring against the wrong tokenizer.
 >
 > [!NOTE]
 > The `gpu/vllm/` overlay defaults to 8 replicas to match the canonical 16×H100 benchmark. For smaller fleets (or quick smoke tests), reduce `replicas` in the deployment patch (`modelserver/gpu/vllm/patch-vllm.yaml`) before applying.
 >
 > [!NOTE]
-> The router runs in **active-active HA** by default — two replicas behind one Service, each subscribing to every vLLM pod via pod-discovery so both indexes converge. Scale to a single replica with `--set router.epp.replicas=1` if HA isn't needed (small fleets, smoke tests).
+> The router runs as a **single replica** by default: the `token-load-scorer`'s in-flight token accounting is local to each EPP process, so two active-active replicas would each see only half the per-endpoint load and mis-gate the affinity filter. The precise KV index itself is HA-safe (each replica converges independently via pod-discovery), so active-active HA (`--set router.epp.replicas=2`) can return if shared in-flight state lands upstream.
 
 ## Prerequisites
 
@@ -100,7 +101,7 @@ kubectl create secret generic llm-d-hf-token \
 
 This deploys the llm-d Router in the simple [Standalone Mode](../../docs/architecture/core/router/proxy.md). The release name `${GUIDE_NAME}` is mandatory — the inference pool selector matches a guide label that pairs with this release.
 
-Tokenization is served by a standalone render Service, not a chart-injected EPP sidecar — the chart's `router.tokenizer` sidecar is off by default, and the `token-producer` plugin points at that Service.
+Tokenization is served by a separate render Service, not a chart-injected EPP sidecar — the chart's `router.tokenizer` sidecar is off by default, and the `token-producer` plugin points at that Service.
 
 ```bash
 helm install ${GUIDE_NAME} \
@@ -112,16 +113,7 @@ helm install ${GUIDE_NAME} \
 
 The release name `${GUIDE_NAME}` is mandatory for standard deployments — the inference pool selector matches a guide label that pairs with this release.
 
-#### Deploy the Render (Tokenizer) Service
-
-The EPP `token-producer` plugin tokenizes prompts by calling vLLM's `/v1/completions/render` endpoint. This guide serves that endpoint from a dedicated, horizontally-scalable `vllm launch render` Service (3 replicas) instead of a per-EPP-pod sidecar, so render capacity scales independently of the EPP replica count and is shared across all EPP replicas. Deploy it with:
-
-```bash
-kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/render/
-```
-
-> [!NOTE]
-> The render pods deliberately do **not** carry the `llm-d.ai/guide` label — that label is the InferencePool / model-server selector, and the EPP would otherwise treat render pods as routable model servers (and try to subscribe to their nonexistent KV-event socket). Scale the pool with `kubectl scale -n ${NAMESPACE} deploy/${GUIDE_NAME}-render --replicas=<N>`.
+The render (tokenizer) Service the `token-producer` plugin calls is deployed separately, in [step 4](#4-deploy-the-render-tokenizer-service).
 
 <details>
 <summary><b>Gateway Mode</b></summary>
@@ -156,7 +148,43 @@ export INFRA_PROVIDER=base # base | gke
 kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/gpu/${MODEL_SERVER}/${INFRA_PROVIDER}/
 ```
 
-### 4. (Optional) Enable Monitoring
+### 4. Deploy the Render (Tokenizer) Service
+
+The EPP `token-producer` plugin tokenizes prompts by calling vLLM's `/v1/*/render` endpoints. This guide serves that endpoint from a Service rather than a per-EPP-pod sidecar, so a single render pool is shared across EPP replicas and render capacity is decoupled from the EPP replica count.
+
+`vllm serve` already exposes `/v1/*/render`, so the default overlay is a **Service with no pods of its own**: it selects the model server pods you just deployed and tokenizes on them.
+
+```bash
+kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/render/
+```
+
+Why this over a separate renderer pool: a dedicated pool is scheduled independently of the model servers, so as QPS climbs it saturates before they do and render latency — which sits inside TTFT, since every request is tokenized before it is routed — starts to dominate. Fronting the model servers instead makes render capacity scale with the fleet, which keeps latency more contained at higher QPS.
+
+The trade-offs to weigh:
+
+- Tokenization CPU competes with serving on the same pods. The GPU overlay requests 8 CPU / limits 16 per replica; raise that if render latency climbs under load.
+- The render call is a synchronous hop to a GPU serving pod on the request path.
+- Only `Ready` endpoints receive traffic, so render calls are never sent to a pod still loading weights. Until the first model server is `Ready` the Service has no endpoints and `token-producer` calls fail — apply this after [step 3](#3-deploy-the-model-server), as ordered here.
+
+<details>
+<summary><b>Dedicated renderer pool (required for SGLang)</b></summary>
+
+SGLang does not implement vLLM's render endpoints, so the SGLang overlay must instead run a dedicated, GPU-less `vllm launch render` pool (3 replicas). The same applies to any deployment where you would rather not spend model server CPU on tokenization. Apply this **instead of** the default overlay above — both publish the same Service name, so the router's `vllm.url` is unchanged either way:
+
+<!-- llm-d-cicd:skip start -->
+```bash
+kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/render/standalone/
+```
+<!-- llm-d-cicd:skip end -->
+
+Because this pool is GPU-less and engine-agnostic, it tokenizes with vLLM's tokenizer no matter which engine serves inference. It is configured for `Qwen/Qwen3-32B`; for another model, change the model argument in [`render/standalone/deployment.yaml`](render/standalone/deployment.yaml) and the router `token-producer` `modelName` together. Scale it with `kubectl scale -n ${NAMESPACE} deploy/${GUIDE_NAME}-render --replicas=<N>`.
+
+> [!NOTE]
+> These render pods deliberately do **not** carry the `llm-d.ai/guide` label — that label is the InferencePool / model-server selector, and the EPP would otherwise treat render pods as routable model servers (and try to subscribe to their nonexistent KV-event socket).
+
+</details>
+
+### 5. (Optional) Enable Monitoring
 
 - Install the [Monitoring stack](../../docs/operations/observability/setup.md).
 - To enable Prometheus monitoring on the llm-d router, add `-f ${REPO_ROOT}/guides/recipes/router/features/monitoring.values.yaml` during the [router installation step](#2-deploy-the-llm-d-router).
@@ -296,8 +324,9 @@ llmdbenchmark \
 
 ```bash
 helm uninstall ${GUIDE_NAME} -n ${NAMESPACE}
-# Render (tokenizer) Service:
-kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/render/
+# Render (tokenizer) Service. Set this to the overlay you applied:
+export RENDER_OVERLAY=render # render | render/standalone
+kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/${RENDER_OVERLAY}/
 # For vLLM (default):
 kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/gpu/vllm/${INFRA_PROVIDER}/
 # For SGLang:
@@ -306,9 +335,10 @@ kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/
 
 ## How It Works
 
-1. **Model server pods publish KV-cache events** — each pod (vLLM or SGLang) runs with `--kv-events-config '{...,"publisher":"zmq","endpoint":"$(KV_EVENTS_ENDPOINT)","topic":"kv@$(POD_IP):$(POD_PORT)@<model>"}'` and `KV_EVENTS_ENDPOINT=tcp://*:5556`, binding its own ZMQ socket. On every KV block allocation/eviction, the server emits a ZMQ message.
-2. **Router subscribes per pod** — pod-discovery (`kvEventsConfig.discoverPods: true`) registers the `precise-prefix-cache-producer` as an extractor on the data-layer `endpoint-notification-source`, so each router replica installs a ZMQ subscriber per model server pod independently. All replicas converge to the same index.
-3. **Scoring** — the `prefix-cache-scorer` returns the fraction of the request's prefix blocks that are resident on each candidate pod. The `max-score-picker` routes to the highest-scoring pod.
+1. **Model server pods publish KV-cache events** — each pod (vLLM or SGLang) runs with `--kv-events-config '{...,"publisher":"zmq","endpoint":"$(KV_EVENTS_ENDPOINT)","topic":"kv@$(POD_IP):$(POD_PORT)@<model>"}'` and `KV_EVENTS_ENDPOINT=tcp://*:5556`, binding its own ZMQ socket. On every KV block allocation/eviction, the server emits a ZMQ message. The GPU vLLM backend (v0.26.0+) additionally binds a ZMQ ROUTER socket on port 5559 and retains the last 10,000 batches in an in-memory replay buffer for index recovery.
+2. **Router subscribes per pod** — pod-discovery (`kvEventsConfig.discoverPods: true`) registers the `precise-prefix-cache-producer` as an extractor on the data-layer `endpoint-notification-source`, so each router replica installs a ZMQ subscriber per model server pod independently. All replicas converge to the same index. When a replay endpoint is available, each subscriber requests buffered events on first connect (or after an EPP restart) to rebuild its KV-block index without waiting for live traffic.
+3. **Router tokenizes the prompt** — before it can look the prefix up in that index, the `token-producer` plugin POSTs the prompt to the render Service to get exact token IDs. By default that Service fronts the model server pods themselves (`vllm serve` exposes `/v1/*/render`), so no separate renderer pool sits on the request path.
+4. **Filter + score** — the `prefix-cache-affinity-filter` narrows candidates to the pods where the request's prefix blocks are resident (falling back to the least-loaded pods when the cache-warm set is saturated past `peakPrefillThroughput`), and the `token-load-scorer` picks the endpoint with the least in-flight token load among them.
 
 ## Benchmarking Reports
 

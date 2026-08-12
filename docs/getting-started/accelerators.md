@@ -69,7 +69,7 @@ For cluster prerequisites, ensure you have the [Intel Resource Drivers for Kuber
 
 For P/D disaggregation with RDMA-accelerated KV-cache transfer on Intel XPU, the following additional prerequisites apply:
 
-- An RDMA DRA driver exposing the `rdma-dranet` device class (e.g., [rdma-dranet](https://github.com/k8snetworkplumbingwg/rdma-dra-driver)).
+- An RDMA DRA driver exposing the `dranet-rdma` device class (e.g., [Intel Network Operator for Kubernetes](https://github.com/intel/network-operator)).
 - GPU-NIC PCIe alignment for optimal transfer performance.
 - UCX transport configured with `ib,rc,ze_copy`.
 

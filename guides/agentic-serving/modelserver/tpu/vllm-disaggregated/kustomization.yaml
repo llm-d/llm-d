@@ -1,0 +1,22 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ../../../../pd-disaggregation/modelserver/tpu/base/vllm
+
+namePrefix: agentic-serving-tpu-vllm-
+
+components:
+  - ../../../../recipes/modelserver/components/images/tpu-vllm
+
+labels:
+  - pairs:
+      llm-d.ai/model: Qwen3-Coder-480B-A35B-Instruct-FP8
+      llm-d.ai/guide: agentic-serving
+      llm-d.ai/accelerator-variant: tpu
+      llm-d.ai/accelerator-vendor: google
+      llm-d.ai/engine-type: vllm
+    includeSelectors: true
+    includeTemplates: true
+patches:
+  - path: patch-decode.yaml
+  - path: patch-prefill.yaml

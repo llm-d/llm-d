@@ -1,14 +1,22 @@
-# Default to the prebuilt vLLM XPU image from upstream CI.
+# Default to the official prebuilt vLLM XPU image.
 # Override at build time via --build-arg BASE_IMAGE=...
 # The default value here is informational only; the workflow always passes
 # BASE_IMAGE explicitly from docker/common-versions (VLLM_XPU_BASE_IMAGE).
-ARG BASE_IMAGE=public.ecr.aws/q9t5s3a7/vllm-ci-test-repo:b1388b1fbf5aaef47937fabe98931211684666a6-xpu
+ARG BASE_IMAGE=vllm/vllm-openai-xpu:v0.26.0
 
 FROM ${BASE_IMAGE}
+
+# PyTorch XPU needs UMF at runtime; upstream's setvars.sh adds this path.
+ENV LD_LIBRARY_PATH=/opt/intel/oneapi/umf/latest/lib:${LD_LIBRARY_PATH}
 
 ARG CACHE_BUSTER
 RUN if [ -n "${CACHE_BUSTER}" ]; then \
         echo "$CACHE_BUSTER" > /tmp/builder-buster; \
     fi;
+
+RUN source /opt/intel/oneapi/setvars.sh --force && \
+    git clone https://github.com/LMCache/LMCache.git -b v0.5.0 && \
+    cd LMCache && pip install -r requirements/build.txt && \
+    BUILD_WITH_SYCL=1 uv pip install --no-build-isolation -e .
 
 ENTRYPOINT ["python", "-m", "vllm.entrypoints.openai.api_server"]

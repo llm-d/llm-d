@@ -1,0 +1,172 @@
+# Redis SortedSet backend + self-hosted Prometheus + Grafana — team × tier × MODEL
+# with per-model saturation back-off.
+#
+#  - MODEL isolation: one worker pool per model (model-a / model-b), each with its
+#    OWN saturation gate scoped to that model's InferencePool (POOL_A / POOL_B).
+#    Saturating one model parks only its pool; the other keeps flowing.
+#  - TEAM quota (redis-quota, classifying): within quota -> reserved, over ->
+#    overflow. Per-model prefix (quota:a: / quota:b:).
+#  - TIER: per-queue label; the tier-priority merge policy orders each pool's
+#    reserved/overflow × tier lanes and stamps x-gateway-priority.
+#
+# Replace: NAMESPACE, IGW_HOST, POOL_A/POOL_B (InferencePool names), PROM_URL,
+# SAT_CAP (concurrent requests at which a model is considered saturated).
+# PROM_URL is the base URL the gates read PromQL from — the in-cluster
+# kube-prometheus-stack Prometheus if you followed the guide's Observability
+# section. Get it wrong and the gates fall back to a budget of 1 (wide open), so
+# the demo runs clean and proves nothing: verify it after the upgrade.
+# vLLM is scraped by manifests/prometheus-vllm-podmonitor.yaml.
+ap:
+
+  messageQueueImpl: "redis-sortedset"
+  igwBaseURL: "http://IGW_HOST:80"
+
+  prometheusURL: "PROM_URL"
+  prometheusCacheTTL: "5s"
+
+  requestMergePolicyConfig:
+    type: "tier-priority"
+    parameters:
+      priority_header: "x-gateway-priority"
+
+  redis:
+    enabled: true
+    url: "redis://redis.NAMESPACE.svc.cluster.local:6379"
+    resultQueueName: "results-a-list"
+    pollIntervalMs: 500
+    batchSize: 10
+    queuesConfig:
+      # ---------- MODEL A ----------
+      - queue_name: "team-premium-a"
+        worker_pool_id: "model-a"
+        inference_objective: "latency"
+        request_path_url: "/v1/completions"
+        igw_base_url: "http://IGW_HOST:80"
+        result_queue_name: "results-a-list"
+        labels: { tier: "interactive" }
+        gate_type: "redis-quota"
+        gate_params:
+          address: "redis.NAMESPACE.svc.cluster.local:6379"
+          attribute: "team"
+          mode: "concurrency"
+          gating_mode: "classifying"
+          limit: "2"
+          prefix: "quota:a:"
+      - queue_name: "team-standard-a"
+        worker_pool_id: "model-a"
+        request_path_url: "/v1/completions"
+        igw_base_url: "http://IGW_HOST:80"
+        result_queue_name: "results-a-list"
+        labels: { tier: "async" }
+        gate_type: "redis-quota"
+        gate_params:
+          address: "redis.NAMESPACE.svc.cluster.local:6379"
+          attribute: "team"
+          mode: "concurrency"
+          gating_mode: "classifying"
+          limit: "2"
+          prefix: "quota:a:"
+      - queue_name: "team-batch-a"
+        worker_pool_id: "model-a"
+        inference_objective: "throughput"
+        request_path_url: "/v1/completions"
+        igw_base_url: "http://IGW_HOST:80"
+        result_queue_name: "results-a-list"
+        labels: { tier: "batch" }
+        gate_type: "redis-quota"
+        gate_params:
+          address: "redis.NAMESPACE.svc.cluster.local:6379"
+          attribute: "team"
+          mode: "concurrency"
+          gating_mode: "classifying"
+          limit: "1"
+          prefix: "quota:a:"
+
+      # ---------- MODEL B ----------
+      - queue_name: "team-premium-b"
+        worker_pool_id: "model-b"
+        inference_objective: "latency"
+        request_path_url: "/v1/completions"
+        igw_base_url: "http://IGW_HOST:80"
+        result_queue_name: "results-b-list"
+        labels: { tier: "interactive" }
+        gate_type: "redis-quota"
+        gate_params:
+          address: "redis.NAMESPACE.svc.cluster.local:6379"
+          attribute: "team"
+          mode: "concurrency"
+          gating_mode: "classifying"
+          limit: "2"
+          prefix: "quota:b:"
+      - queue_name: "team-standard-b"
+        worker_pool_id: "model-b"
+        request_path_url: "/v1/completions"
+        igw_base_url: "http://IGW_HOST:80"
+        result_queue_name: "results-b-list"
+        labels: { tier: "async" }
+        gate_type: "redis-quota"
+        gate_params:
+          address: "redis.NAMESPACE.svc.cluster.local:6379"
+          attribute: "team"
+          mode: "concurrency"
+          gating_mode: "classifying"
+          limit: "2"
+          prefix: "quota:b:"
+      - queue_name: "team-batch-b"
+        worker_pool_id: "model-b"
+        inference_objective: "throughput"
+        request_path_url: "/v1/completions"
+        igw_base_url: "http://IGW_HOST:80"
+        result_queue_name: "results-b-list"
+        labels: { tier: "batch" }
+        gate_type: "redis-quota"
+        gate_params:
+          address: "redis.NAMESPACE.svc.cluster.local:6379"
+          attribute: "team"
+          mode: "concurrency"
+          gating_mode: "classifying"
+          limit: "1"
+          prefix: "quota:b:"
+
+  # One pool per model, each parking on ITS model's saturation (independent).
+  #
+  # SAT_CAP is the divisor: the concurrent-request count at which a model counts as
+  # saturated. prometheus-query closes the gate at budget <= 0 and clamp() floors the
+  # budget at 0, so the gate closes only once SAT_CAP requests are running. A worker
+  # evaluates the gate while holding a message it has not dispatched yet, so at most
+  # `workers - 1` of this pool's requests are running at that moment: driven by async
+  # load alone, SAT_CAP must stay BELOW `workers` or the gate can never close.
+  workerPools:
+    - id: "model-a"
+      workers: 8
+      gate_type: "wait-on-refuse"
+      gate_params:
+        gate: |
+          {"gate_type":"prometheus-query","gate_params":{"query":"clamp(1 - sum(vllm:num_requests_running{inference_pool=\"POOL_A\"})/SAT_CAP, 0, 1)","fallback":"1"}}
+    - id: "model-b"
+      workers: 8
+      gate_type: "wait-on-refuse"
+      gate_params:
+        gate: |
+          {"gate_type":"prometheus-query","gate_params":{"query":"clamp(1 - sum(vllm:num_requests_running{inference_pool=\"POOL_B\"})/SAT_CAP, 0, 1)","fallback":"1"}}
+
+  resources:
+    requests:
+      cpu: "500m"
+      memory: "512Mi"
+    limits:
+      cpu: "1"
+      memory: "1Gi"
+
+  metrics:
+    enabled: true
+  podMonitor:
+    enabled: true
+    interval: "15s"
+  modelServerMonitor:
+    enabled: false
+  prometheusRule:
+    enabled: true
+  grafana:
+    dashboards:
+      enabled: true

@@ -82,6 +82,8 @@ jobs:
       infra_provider: ${{ inputs.infra_provider || 'gke' }}
       connector: ${{ inputs.connector || '' }}
       cluster_namespace: ${{ inputs.cluster_namespace || 'llm-d-nightly-optimized-baseline-gke-gpu' }}
+      cluster_name: ${{ inputs.cluster_name || 'llm-d-e2e-us-east5' }}
+      cluster_zone: ${{ inputs.cluster_zone || 'us-east5' }}
       helm_release: ${{ inputs.helm_release || 'llmdbenchcicdr-gke' }}
       workspace_dir: ${{ inputs.workspace_dir || '/tmp/llmdbenchcicdk-gke' }}
       bucket_project: ${{ inputs.bucket_project || 'llm-d-scale' }}
@@ -92,8 +94,8 @@ jobs:
       dry_run: ${{ inputs.dry_run || 'false' }}
       verbose: ${{ inputs.verbose || 'false' }}
       harness: ${{ inputs.harness || 'inference-perf' }}
-      workload: ${{ inputs.workload || 'sanity_random.yaml' }}
-#      workload: ${{ inputs.workload || 'guide_optimized-baseline_1.yaml' }}
+#      workload: ${{ inputs.workload || 'sanity_random.yaml' }}
+      workload: ${{ inputs.workload || 'guide_optimized-baseline_1.yaml' }}
       cleanup: ${{ inputs.cleanup || 'true' }}
     secrets: inherit
 
