@@ -1,7 +1,7 @@
 # SLO-Aware Autoscaling with KEDA — the control law
 
 This is the full derivation of the control law used by the
-[SLO-aware autoscaling guide](../../../../guides/workload-autoscaling/README.slo-aware.md):
+[SLO-aware autoscaling guide](../../../../guides/workload-autoscaling/slo-aware/README.md):
 how the EPP's latency histograms become a single saturation signal, how the
 KEDA formula maps that signal to a desired replica count, and why each
 asymmetry in the design exists. For the deployable manifests, tunables, and

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Deploy the queue-based KEDA + EPP autoscaling path (README.hpa-epp.md) on
+# Deploy the queue-based KEDA + EPP autoscaling path (keda-epp-queue/README.md) on
 # OpenShift in a single namespace. Same code path for CI nightly runs and local
 # development.
 #
