@@ -154,6 +154,10 @@ patches:
   # kustomize namespace transformer cannot reach — rewrite both trigger queries
   # explicitly to match the deployed EPP. maxReplicaCount is capped at the GPU
   # budget the nightly reserves (2), rather than the guide's default of 8.
+  # scaleDown.stabilizationWindowSeconds is lowered 300 -> 60 so the scale-event
+  # validator can observe scale-DOWN within the run instead of waiting out the
+  # production 5-min debounce. Nightly-overlay-only — the guide default stays 300
+  # (the long window guards the vLLM-startup scale-down race in production).
   - patch: |-
       - op: replace
         path: /spec/triggers/0/metadata/query
@@ -166,6 +170,9 @@ patches:
       - op: replace
         path: /spec/maxReplicaCount
         value: 2
+      - op: replace
+        path: /spec/advanced/horizontalPodAutoscalerConfig/behavior/scaleDown/stabilizationWindowSeconds
+        value: 60
     target:
       kind: ScaledObject
       name: ${SCALEDOBJECT}

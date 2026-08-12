@@ -12,6 +12,7 @@ The Deployment-based variant of this guide manages prefill and decode as two unr
 * **Coordinated rollouts** — a template change rolls prefill and decode as one version-synchronized unit, preserving your xPyD ratio throughout the update instead of letting two Deployments drift.
 * **Slices** — `spec.slices` replicates the entire role topology into N independent copies. Each slice is a complete prefill+decode set with its own rollout clock and a stable identity (`disaggregatedset.x-k8s.io/slice` label). Changing `slices` is a pure scale operation: it never re-rolls existing slices.
 * **Placement policy** — `spec.placementPolicy` builds on the slice identity to confine each complete P/D copy to a single topology domain (a rack, NVLink domain, or zone) and spread slices across domains, so KV-cache handoff stays within a low-latency domain.
+* **Per-role autoscaling** — a role can delegate its replica count to any `/scale`-aware autoscaler (HPA, KEDA) through an auto-created `DisaggregatedSetRoleScaler` resource. See [Autoscaling Roles with HPA](#autoscaling-roles-with-hpa).
 
 ### Topology in this guide
 
@@ -23,13 +24,13 @@ Instead of one flat 8-prefill/2-decode pool, this variant deploys **2 slices**, 
 Each slice can be rolled, recovered, or (with placement policy) pinned to an accelerator domain independently of the other.
 
 > [!NOTE]
-> Slices are a deployment-topology construct: they govern rollout, scale, and placement. The llm-d Router (EPP) still discovers all prefill and decode pods by label as flat pools and may pair a prefill in one slice with a decode in another. If you use placement policy to confine slices to separate network domains, make sure cross-domain NIXL transfers remain possible on your fabric.
+> Slices are a deployment-topology construct: they govern rollout, scale, and placement. The llm-d Router (EPP) still discovers all prefill and decode pods by label as flat pools and may pair a prefill in one slice with a decode in another. If you use placement policy to confine slices to separate network domains, make sure cross-domain NIXL transfers remain possible on your fabric, or configure the router to keep pairs inside a slice (see [Keeping P/D Pairs Inside a Slice](#keeping-pd-pairs-inside-a-slice-router-topology-affinity)).
 
 ## Prerequisites
 
 ### 1. LWS Controller with DisaggregatedSet
 
-This variant requires the LWS controller manager with the DisaggregatedSet API. The `slices` field used here was added after LWS `v0.9.0` — install `v0.10.0` or newer (see the [LWS installation guide](https://lws.sigs.k8s.io/docs/installation/#disaggregatedset) for the current release and options):
+This variant requires the LWS controller manager with the DisaggregatedSet API. The fields used here (`slices`, `placementPolicy`, and per-role `scaling`) were added in `v0.10.0` (see the [LWS installation guide](https://lws.sigs.k8s.io/docs/installation/#disaggregatedset) for the current release and options):
 
 ```bash
 export LWS_CHART_VERSION=0.10.0
@@ -68,11 +69,19 @@ Deploy the router in either Standalone or Gateway mode by following the exact in
 
 ### 2. Deploy the Model Server
 
-Apply the DisaggregatedSet overlay:
+Choose the overlay matching your infrastructure provider:
+
+- **GKE**: Deploys on GKE using Dynamic Resource Allocation (DRA) and DRANet (RoCE), same as the Deployment-based `gke/base` overlay. Ensure the cluster is configured accordingly (see [Cluster Pre-provisioning](./README.md#gke-cluster-pre-provisioning-with-dra--rdmaroce)).
+- **CoreWeave**: Deploys on CoreWeave.
 
 ```bash
-kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/gpu/vllm-ds
+export INFRA_PROVIDER=base # base | coreweave | gke
+
+kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/gpu/vllm-ds/${INFRA_PROVIDER}
 ```
+
+> [!TIP]
+> For providers and platforms without a DisaggregatedSet overlay yet (e.g. `aws`, `gke/a4x`, `gke/a4xmax`), port the patches from the corresponding [Deployment-based overlay](./README.md#2-deploy-the-model-server) under `modelserver/gpu/vllm/` — see `modelserver/gpu/vllm-ds/gke/kustomization.yaml` for the pattern.
 
 This creates one `DisaggregatedSet` named `pd-disagg`. The controller fans it out into one LeaderWorkerSet per `(slice, role)`, named `<ds>-<slice>-<revision>-<role>`:
 
@@ -102,15 +111,91 @@ Follow the [monitoring section of the main guide](./README.md#3-enable-monitorin
 
 ## Operating the DisaggregatedSet
 
-Day-to-day mechanics (scaling slices, scaling role replicas, rolling updates, placement policy) are DisaggregatedSet features rather than anything llm-d specific, and are documented in the [LWS DisaggregatedSet docs](https://lws.sigs.k8s.io/docs/examples/disaggregatedset/). The notes that matter for this guide:
+Day-to-day mechanics (scaling slices, scaling role replicas, rolling updates, placement policy) are DisaggregatedSet features rather than anything llm-d specific, and are documented in the [LWS DisaggregatedSet docs](https://lws.sigs.k8s.io/docs/examples/disaggregatedset/#operating-a-disaggregatedset). The notes that matter for this guide:
 
 * **Scaling `slices` adds or removes complete P/D copies** (4 prefill + 1 decode each) at the current revision, without touching existing slices.
 * **Per-role `replicas` applies per slice**, so your xPyD ratio (see [P/D Best Practices](./README.md#pd-best-practices)) is defined once and holds in every slice. With 2 slices, raising prefill replicas from 4 to 6 yields 12 prefill instances in total.
 * **Rolling updates proceed independently per slice**, always keeping a complete same-version P/D set serving in each slice. A stuck slice degrades only itself.
-* **Placement policy pins each complete P/D copy to one topology domain.** Use the node-label key that identifies your low-latency domain (for example a rack or NVLink-domain label on NVL72-class systems) so prefill-to-decode KV-cache transfer stays inside the domain. A commented example ships in `modelserver/gpu/vllm-ds/disaggregatedset.yaml`.
 
-> [!NOTE]
-> `spec.placementPolicy` is merged upstream ([lws#916](https://github.com/kubernetes-sigs/lws/pull/916), [KEP-848](https://github.com/kubernetes-sigs/lws/tree/main/keps/848-disaggregatedset-placement-policy)) and, like `slices`, ships in the next LWS release after `v0.9.0`. Controllers at `v0.9.0` or older reject the field.
+### Pinning Slices to Accelerator Domains (Placement Policy)
+
+Placement policy pins each slice to one topology domain and spreads slices across domains, keeping prefill-to-decode KV-cache transfer inside the low-latency fabric (see the [LWS DisaggregatedSet docs](https://lws.sigs.k8s.io/docs/examples/disaggregatedset/#placement-policy) for the full semantics). To enable it, uncomment `placementPolicy` in `modelserver/gpu/vllm-ds/base/disaggregatedset.yaml`:
+
+```yaml
+spec:
+  slices: 2
+  placementPolicy:
+    type: ExclusiveSlice
+    topology: cloud.google.com/gce-topology-subblock
+```
+
+Set `topology` to the **node label key** that identifies the interconnect domain on your platform:
+
+| Platform | Node label key | Domain it identifies |
+| --- | --- | --- |
+| GKE GPU (A3 Ultra, A4, A4X) | `cloud.google.com/gce-topology-subblock` | Sub-block (rack). On A4X (GB200) each sub-block is one NVL72 NVLink domain |
+| GKE TPU | `cloud.google.com/gke-nodepool` | Multi-host TPU slice (a standard node pool is exactly one slice) |
+| EKS | `topology.k8s.aws/network-node-layer-3` | Finest layer of the instance network topology |
+| EKS (GB200 UltraServers) | `topology.k8s.aws/ultraserver-id` | NVL72 NVLink domain |
+| CoreWeave | `ds.coreweave.com/nvlink.domain` | NVL72 NVLink domain |
+| Any NVIDIA + GPU Feature Discovery | `nvidia.com/gpu.clique` | NVLink domain (`<ClusterUUID>.<CliqueID>`) |
+
+Verify the key actually exists on your accelerator nodes before enabling the policy (`kubectl get nodes -L <key>`): the injected affinity is required, so pods stay Pending when their nodes lack the label. On GKE in particular, the `gce-topology-*` labels appear only on reservation-bound dense capacity (automatic on A3 Ultra, A4, and A4X). Spot and regular on-demand nodes do not carry them, so fall back to a coarser key such as `cloud.google.com/gke-nodepool` or `topology.kubernetes.io/zone`.
+
+### Keeping P/D Pairs Inside a Slice (Router Topology Affinity)
+
+Placement policy confines *pods*, but the router still pairs prefill and decode from flat pools and may send a request's KV-cache transfer across slices, and therefore across domains. To address this, use the router's [topology-affinity plugins](https://github.com/llm-d/llm-d-router/blob/main/pkg/epp/framework/plugins/datalayer/attribute/topology/README.md). Every DisaggregatedSet pod carries its slice identity in the `disaggregatedset.x-k8s.io/slice` pod label, so point the topology extractor's tightest level at that label in your EPP configuration:
+
+```yaml
+plugins:
+- type: topology-extractor
+  parameters:
+    hostname: disaggregatedset.x-k8s.io/slice # "same host" now means "same slice"
+```
+
+With `topology-affinity-scorer` (prefer) or `topology-affinity-filter` (require) added to the prefill scheduling profile, the router then picks a prefill in the same slice as the decode it already selected. See the [sample P/D topology EPP config](https://github.com/llm-d/llm-d-router/blob/main/deploy/config/pd-topology-epp-config.yaml) for the full plugin wiring. Same-slice only implies physical proximity when placement policy is enabled: without it, one slice's pods can land anywhere in the cluster.
+
+## Autoscaling Roles with HPA
+
+To autoscale a role instead of using a static `replicas` value, set its scaling mode to `External` (see the [LWS DisaggregatedSet docs](https://lws.sigs.k8s.io/docs/examples/disaggregatedset/#external-scaling-with-hpa-or-keda) for how role scaling works):
+
+```yaml
+roles:
+  - name: prefill
+    scaling:
+      mode: External # default is Static
+    spec:
+      ...
+```
+
+Then point HPA, KEDA, or any `/scale`-aware autoscaler at the auto-created `DisaggregatedSetRoleScaler` named `<ds>-<role>` (here `pd-disagg-prefill`):
+
+```yaml
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: pd-disagg-prefill
+spec:
+  scaleTargetRef:
+    apiVersion: disaggregatedset.x-k8s.io/v1
+    kind: DisaggregatedSetRoleScaler
+    name: pd-disagg-prefill
+  minReplicas: 2
+  maxReplicas: 8
+  metrics:
+    - type: Pods
+      pods:
+        metric:
+          name: vllm:num_requests_waiting
+        target:
+          type: AverageValue
+          averageValue: "10"
+```
+
+The example above uses a `Pods` metric, which requires a custom metrics pipeline such as [prometheus-adapter](https://github.com/kubernetes-sigs/prometheus-adapter) serving the vLLM metrics collected in [Enable Monitoring](#3-enable-monitoring-optional). Any metric source your autoscaler supports works.
+
+> [!IMPORTANT]
+> External scaling requires `slices: 1` today (the webhook rejects `spec.slices > 1` while any role has `scaling.mode: External`). Choose one operating model per DisaggregatedSet: multi-slice + placement policy with static per-role replicas (this guide's default manifest), or a single slice with HPA per role.
 
 ## Verification
 
@@ -147,7 +232,7 @@ helm uninstall ${GUIDE_NAME} -n ${NAMESPACE}
 Remove the model server. Deleting the DisaggregatedSet cascades to all child LeaderWorkerSets, their pods, and per-slice Services:
 
 ```bash
-kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/gpu/vllm-ds
+kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/gpu/vllm-ds/${INFRA_PROVIDER}
 ```
 
 ## Known Issues
@@ -163,3 +248,5 @@ Testing this guide surfaced the following upstream issues in the DisaggregatedSe
 * [DisaggregatedSet concepts](https://lws.sigs.k8s.io/docs/concepts/disaggregatedset/) and [API reference](https://lws.sigs.k8s.io/docs/reference/disaggregatedset.v1/)
 * [KEP-766: DisaggregatedSet](https://github.com/kubernetes-sigs/lws/tree/main/keps/766-DisaggregatedSet) — the coordinated multi-role rollout design
 * [KEP-846: DisaggregatedSet Slices](https://github.com/kubernetes-sigs/lws/tree/main/keps/846-disaggregatedset-slices) — slice semantics, naming, and scale behavior
+* [KEP-848: DisaggregatedSet Placement Policy](https://github.com/kubernetes-sigs/lws/tree/main/keps/848-disaggregatedset-placement-policy) — ExclusiveSlice and ExclusiveTopology semantics
+* [KEP-849: DisaggregatedSet HPA](https://github.com/kubernetes-sigs/lws/tree/main/keps/849-DisaggregatedSet-HPA) — per-role autoscaling through the DisaggregatedSetRoleScaler /scale subresource

@@ -64,10 +64,10 @@ Deploy the Async Processor using the selected queue implementation's configurati
 ```bash
 export NAMESPACE=llm-d-async
 export MQ_PROVIDER=gcp-pubsub # options are gcp-pubsub or redis
-export ASYNC_VERSION=0.7.4
+export ASYNC_VERSION=v0.9.0   # latest llm-d-async release
 
-helm install async-processor \
-    oci://ghcr.io/llm-d/charts/async-processor \
+helm install llm-d-async \
+    oci://ghcr.io/llm-d/charts/llm-d-async \
     -f ${REPO_ROOT}/guides/asynchronous-processing/${MQ_PROVIDER}/values.yaml \
     --set ap.igwBaseURL=http://${IP}:80 \
     -n ${NAMESPACE} --create-namespace --version ${ASYNC_VERSION}
@@ -83,5 +83,5 @@ Testing instructions vary depending on the chosen queue implementation. Please r
 ## Cleanup
 
 ```bash
-helm uninstall async-processor -n ${NAMESPACE}
+helm uninstall llm-d-async -n ${NAMESPACE}
 ```

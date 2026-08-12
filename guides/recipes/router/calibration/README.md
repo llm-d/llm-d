@@ -74,3 +74,42 @@ kubectl rollout restart -n ${NAMESPACE} deployment/${GUIDE_NAME}-epp
 | --- | --- |
 | `calibrate.sh` | orchestration: runs the Job, extracts and prints the value |
 | `calibration-peak-throughput.yaml` | the measurement Job + its Python script (ConfigMap) |
+
+## Calibrating `minCachedTokenDelta`
+
+Router configs that use the `p2p-source-producer` (the
+[p2p-kv-cache-sharing guide](../../../p2p-kv-cache-sharing/README.md)) set
+`minCachedTokenDelta` on it: a pull is requested only when a peer holds at
+least that many more cached prefix tokens than the scheduled pod. Below the
+pull-versus-recompute crossover a pull costs more than recomputing, so the
+right value is the crossover — and the crossover is **model-, hardware- and
+transport-specific** (measured on gpt-oss-120b/H200: below 2K with `rdma/ib`
+on the pods, near 29K on the TCP fallback).
+
+[`calibrate-min-cached-token-delta.sh`](calibrate-min-cached-token-delta.sh)
+runs a Job ([`calibration-min-cached-token-delta.yaml`](calibration-min-cached-token-delta.yaml))
+that measures it against two live model-server pods: per length and
+repetition it seeds a fresh random token-ID prompt on the source pod, then
+times the consumer pod serving that prompt with and without
+`kv_transfer_params.remote_kv_source` (independent prompts for each leg,
+because the consumer caches whatever it just served). The mesh is warmed
+first so the one-time session-establishment cost is excluded. It prints the
+measured ladder and the recommendation:
+
+```
+MIN_CACHED_TOKEN_DELTA=<smallest tested length where the pull won>
+```
+
+```bash
+NAMESPACE=llm-d-p2p \
+POD_SELECTOR=llm-d.ai/guide=p2p-kv-cache-sharing \
+MODEL_NAME=openai/gpt-oss-120b \
+./calibrate-min-cached-token-delta.sh
+```
+
+Unlike the peak-throughput Job this cannot go through the router — the pull
+is driven by injecting `kv_transfer_params` directly at two engine
+endpoints — so the script talks to pod IPs (`ENGINE_PORT`, default `8200`).
+Prerequisites: the OffloadingConnector P2P tier on the pods,
+`PYTHONHASHSEED` pinned fleet-wide, and the same transport you will deploy
+on. Lengths must be multiples of the vLLM block size.

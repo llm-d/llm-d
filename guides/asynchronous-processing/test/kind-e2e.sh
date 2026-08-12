@@ -29,7 +29,7 @@ BASELINE_NAMESPACE="${BASELINE_NAMESPACE:-llm-d-optimized-baseline}"
 BASELINE_GUIDE="${BASELINE_GUIDE:-optimized-baseline}"
 
 MODEL="${MODEL:-facebook/opt-125m}"        # tiny, ungated, CPU-friendly
-ASYNC_VERSION="${ASYNC_VERSION:-0.7.4}"     # chart + image are public under ghcr.io/llm-d
+ASYNC_VERSION="${ASYNC_VERSION:-v0.9.0}"     # chart + image are public under ghcr.io/llm-d (latest llm-d-async release)
 
 BASELINE_TIMEOUT="${BASELINE_TIMEOUT:-1800}"  # seconds to wait for vLLM ready
 ASYNC_POLL_TRIES="${ASYNC_POLL_TRIES:-120}"   # smoke-test result polls
@@ -196,8 +196,8 @@ IP="$(kubectl get service "${BASELINE_GUIDE}-epp" -n "${BASELINE_NAMESPACE}" -o 
 log "llm-d Router (EPP) endpoint: http://${IP}:80"
 
 log "Deploying Async Processor (${ASYNC_VERSION}, redis backend)"
-helm install async-processor \
-  oci://ghcr.io/llm-d/charts/async-processor \
+helm install llm-d-async \
+  oci://ghcr.io/llm-d/charts/llm-d-async \
   -f "${REPO_ROOT}/guides/asynchronous-processing/redis/values.yaml" \
   --set ap.igwBaseURL="http://${IP}:80" \
   -n "${NAMESPACE}" --create-namespace --version "${ASYNC_VERSION}"
@@ -228,7 +228,7 @@ if kubectl run async-smoketest --rm -i --restart=Never --image=redis -- \
 else
   fail "Smoke test FAILED — no result on result-list"
   log "Async Processor logs (tail):"
-  kubectl logs -n "${NAMESPACE}" deployment/async-processor --tail=50 2>/dev/null || true
+  kubectl logs -n "${NAMESPACE}" deployment/llm-d-async --tail=50 2>/dev/null || true
   exit 1
 fi
 

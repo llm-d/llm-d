@@ -1,4 +1,4 @@
-# Default to the official prebuilt vLLM XPU release image.
+# Default to the official prebuilt vLLM XPU image.
 # Override at build time via --build-arg BASE_IMAGE=...
 # The default value here is informational only; the workflow always passes
 # BASE_IMAGE explicitly from docker/common-versions (VLLM_XPU_BASE_IMAGE).
@@ -6,26 +6,15 @@ ARG BASE_IMAGE=vllm/vllm-openai-xpu:v0.26.0
 
 FROM ${BASE_IMAGE}
 
-# v0.26.0 still ships oneAPI under /opt/intel/oneapi but no longer exports its
-# environment (vllm-project/vllm#45973), so icpx is off PATH and torch.xpu sees
-# zero devices. The guides start the server with `bash -c`, which bypasses the
-# entrypoint and never sources setvars.sh, so the variables have to be baked in.
-# Without them LMCache silently skips its xpu_ops backend instead of failing.
-# Remove once the base image restores the environment.
-ENV ONEAPI_ROOT=/opt/intel/oneapi \
-    CMPLR_ROOT=/opt/intel/oneapi/compiler/latest \
-    CCL_ROOT=/opt/intel/oneapi/ccl/latest \
-    I_MPI_ROOT=/opt/intel/oneapi/mpi/latest \
-    TBBROOT=/opt/intel/oneapi/tbb/latest \
-    PATH=/opt/intel/oneapi/mpi/latest/bin:/opt/intel/oneapi/mkl/latest/bin:/opt/intel/oneapi/compiler/latest/bin:/opt/venv/bin:/root/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin \
-    LD_LIBRARY_PATH=/opt/intel/oneapi/tcm/latest/lib:/opt/intel/oneapi/umf/latest/lib:/opt/intel/oneapi/tbb/latest/lib/intel64/gcc4.8:/opt/intel/oneapi/mpi/latest/opt/mpi/libfabric/lib:/opt/intel/oneapi/mpi/latest/lib:/opt/intel/oneapi/mkl/latest/lib:/opt/intel/oneapi/dnnl/latest/lib:/opt/intel/oneapi/compiler/latest/opt/compiler/lib:/opt/intel/oneapi/compiler/latest/lib:/opt/intel/oneapi/ccl/latest/lib:/tmp/ucx_install/lib:/usr/local/lib
+# PyTorch XPU needs UMF at runtime; upstream's setvars.sh adds this path.
+ENV LD_LIBRARY_PATH=/opt/intel/oneapi/umf/latest/lib:${LD_LIBRARY_PATH}
 
 ARG CACHE_BUSTER
 RUN if [ -n "${CACHE_BUSTER}" ]; then \
         echo "$CACHE_BUSTER" > /tmp/builder-buster; \
     fi;
 
-RUN CPATH=/opt/intel/oneapi/umf/latest/include:/opt/intel/oneapi/mpi/latest/include:/opt/intel/oneapi/mkl/latest/include:/opt/intel/oneapi/ccl/latest/include \
+RUN source /opt/intel/oneapi/setvars.sh --force && \
     git clone https://github.com/LMCache/LMCache.git -b v0.5.0 && \
     cd LMCache && pip install -r requirements/build.txt && \
     BUILD_WITH_SYCL=1 uv pip install --no-build-isolation -e .

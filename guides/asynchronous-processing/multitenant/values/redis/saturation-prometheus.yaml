@@ -9,15 +9,19 @@
 #  - TIER: per-queue label; the tier-priority merge policy orders each pool's
 #    reserved/overflow × tier lanes and stamps x-gateway-priority.
 #
-# Replace: NAMESPACE, IGW_HOST, MODEL_A/MODEL_B, POOL_A/POOL_B (InferencePool names).
-# prometheusURL points at the in-cluster kube-prometheus-stack Prometheus; vLLM is
-# scraped by manifests/prometheus-vllm-podmonitor.yaml.
+# Replace: NAMESPACE, IGW_HOST, POOL_A/POOL_B (InferencePool names), PROM_URL,
+# SAT_CAP (concurrent requests at which a model is considered saturated).
+# PROM_URL is the base URL the gates read PromQL from — the in-cluster
+# kube-prometheus-stack Prometheus if you followed the guide's Observability
+# section. Get it wrong and the gates fall back to a budget of 1 (wide open), so
+# the demo runs clean and proves nothing: verify it after the upgrade.
+# vLLM is scraped by manifests/prometheus-vllm-podmonitor.yaml.
 ap:
 
   messageQueueImpl: "redis-sortedset"
   igwBaseURL: "http://IGW_HOST:80"
 
-  prometheusURL: "http://kps-kube-prometheus-stack-prometheus.monitoring.svc.cluster.local:9090"
+  prometheusURL: "PROM_URL"
   prometheusCacheTTL: "5s"
 
   requestMergePolicyConfig:
@@ -125,19 +129,26 @@ ap:
           prefix: "quota:b:"
 
   # One pool per model, each parking on ITS model's saturation (independent).
+  #
+  # SAT_CAP is the divisor: the concurrent-request count at which a model counts as
+  # saturated. prometheus-query closes the gate at budget <= 0 and clamp() floors the
+  # budget at 0, so the gate closes only once SAT_CAP requests are running. A worker
+  # evaluates the gate while holding a message it has not dispatched yet, so at most
+  # `workers - 1` of this pool's requests are running at that moment: driven by async
+  # load alone, SAT_CAP must stay BELOW `workers` or the gate can never close.
   workerPools:
     - id: "model-a"
       workers: 8
       gate_type: "wait-on-refuse"
       gate_params:
         gate: |
-          {"gate_type":"prometheus-query","gate_params":{"query":"clamp(1 - sum(vllm:num_requests_running{inference_pool=\"POOL_A\"})/20, 0, 1)","fallback":"1"}}
+          {"gate_type":"prometheus-query","gate_params":{"query":"clamp(1 - sum(vllm:num_requests_running{inference_pool=\"POOL_A\"})/SAT_CAP, 0, 1)","fallback":"1"}}
     - id: "model-b"
       workers: 8
       gate_type: "wait-on-refuse"
       gate_params:
         gate: |
-          {"gate_type":"prometheus-query","gate_params":{"query":"clamp(1 - sum(vllm:num_requests_running{inference_pool=\"POOL_B\"})/20, 0, 1)","fallback":"1"}}
+          {"gate_type":"prometheus-query","gate_params":{"query":"clamp(1 - sum(vllm:num_requests_running{inference_pool=\"POOL_B\"})/SAT_CAP, 0, 1)","fallback":"1"}}
 
   resources:
     requests:

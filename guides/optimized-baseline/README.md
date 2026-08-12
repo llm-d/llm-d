@@ -49,11 +49,14 @@ This guide includes configurations for the following accelerators:
 
 - Have the [proper client tools installed on your local system](../../helpers/client-setup/README.md) to use this guide.
 
-- Checkout llm-d repo:
+- Ensure your cluster has enough accelerators to satisfy the [Configuration](#configuration) table above (default: 16 GPUs). If your cluster has fewer resources, adjust `replicas` and `--tensor-parallel-size` in the [model server patch](./modelserver/gpu/vllm/base/patch-vllm.yaml) for your environment.
+
+- Set the branch and clone the llm-d repo:
 
 <!-- guide:prerequisites.clone start -->
 <!-- llm-d-cicd:skip start -->
 ```bash
+export BRANCH=main
 git clone https://github.com/llm-d/llm-d.git && cd llm-d && git checkout ${BRANCH}
 ```
 <!-- llm-d-cicd:skip end -->
@@ -101,7 +104,9 @@ source ${REPO_ROOT}/guides/env.sh
 <!-- guide:env.source end -->
 
 > [!NOTE]
-> Some environment variables are common amongst guides, to view these, please inspect the above file sourced so the rest of the guide makes sense.
+> This file defines shared variables required by subsequent steps, including
+> `GAIE_VERSION`, `ROUTER_CHART_VERSION`, and the router chart reference for
+> the selected deployment mode.
 
 - Install the Gateway API Inference Extension CRDs:
 
@@ -140,31 +145,30 @@ kubectl create secret generic llm-d-hf-token \
 
 <!-- guide:deploy.router_values start -->
 ```bash
-# Paths to values files
-export ROUTER_BASE_VALUES="${REPO_ROOT}/guides/recipes/router/base.values.yaml"
+export ROUTER_BASE_VALUES="-f ${REPO_ROOT}/guides/recipes/router/base.values.yaml"
 
 # only when MODEL_SERVER=vllm or sglang:
-export ROUTER_VALUES="${REPO_ROOT}/guides/${GUIDE_NAME}/router/${GUIDE_NAME}.values.yaml"
+export ROUTER_VALUES="-f ${REPO_ROOT}/guides/${GUIDE_NAME}/router/${GUIDE_NAME}.values.yaml"
 
 # only when MODEL_SERVER=trtllm:
 #
 # Comment out the above `ROUTER_VALUES` and uncomment the below for TensorRT-LLM (trtllm-serve)
 #
-# export ROUTER_VALUES="${REPO_ROOT}/guides/${GUIDE_NAME}/router/${GUIDE_NAME}-trtllm.values.yaml"
+# export ROUTER_VALUES="-f ${REPO_ROOT}/guides/${GUIDE_NAME}/router/${GUIDE_NAME}-trtllm.values.yaml"
 ```
 <!-- guide:deploy.router_values end -->
 
 > [!NOTE]
-> As denoted above, **vllm, sglang** share a values file, while  
+> As denoted above, **vllm, sglang** share a values file, while
 > **TensorRT-LLM** (`trtllm-serve`) has it's own values file.
 
 - Optionally, to enable `Prometheus Monitoring` on the `llm-d` router define the `helm` values file:
 
 <!-- guide:deploy.monitoring_values start -->
 ```bash
-# 
+#
 # Uncomment the below to enable Prometheus monitoring on the llm-d router
-# 
+#
 # export MONITORING_VALUES="-f ${REPO_ROOT}/guides/recipes/router/features/monitoring.values.yaml"
 ```
 <!-- guide:deploy.monitoring_values end -->
@@ -174,7 +178,7 @@ export ROUTER_VALUES="${REPO_ROOT}/guides/${GUIDE_NAME}/router/${GUIDE_NAME}.val
 
 #### Standalone Mode
 
-This deploys the llm-d Router in [Standalone Mode](../../docs/architecture/core/router/proxy.md):
+This deploys the llm-d Router in [Standalone Mode](../../docs/architecture/core/router/proxy.md) with an Envoy sidecar (default):
 
 > [!IMPORTANT]
 > Before running the command below, execute the path setup commands from the previous section: the `export ROUTER_BASE_VALUES=...` and `export ROUTER_VALUES=...` commands above.
@@ -184,12 +188,14 @@ This deploys the llm-d Router in [Standalone Mode](../../docs/architecture/core/
 # Assuming base-directory is the root of the llm-d repo
 helm install ${GUIDE_NAME} \
   ${ROUTER_STANDALONE_CHART} \
-  -f ${ROUTER_BASE_VALUES} \
+  ${ROUTER_BASE_VALUES} \
   ${MONITORING_VALUES} \
-  -f ${ROUTER_VALUES} \
+  ${ROUTER_VALUES} \
   -n ${NAMESPACE} --version ${ROUTER_CHART_VERSION}
 ```
 <!-- guide:deploy.standalone end -->
+
+To use **agentgateway** as the sidecar proxy instead of Envoy, see [router recipes](../recipes/router/README.md).
 
 <details>
 <summary><h4>Gateway Mode</h4></summary>
@@ -206,9 +212,9 @@ To use a Kubernetes Gateway managed proxy rather than the standalone version, fo
 ```bash
 helm install ${GUIDE_NAME} \
   ${ROUTER_GATEWAY_CHART} \
-  -f ${ROUTER_BASE_VALUES} \
+  ${ROUTER_BASE_VALUES} \
   ${MONITORING_VALUES} \
-  -f ${ROUTER_VALUES} \
+  ${ROUTER_VALUES} \
   --set provider.name=${PROVIDER_NAME} \
   --set httpRoute.create=true \
   --set httpRoute.inferenceGatewayName=llm-d-inference-gateway \
@@ -229,9 +235,9 @@ kubectl apply -n ${NAMESPACE} \
   -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/${ACCELERATOR_TYPE}/${MODEL_SERVER}/${INFRA_PROVIDER}/
 
 # only when ACCELERATOR_TYPE=amd or xpu or hpu or tpu/v6 or tpu/v7 or cpu:
-# 
+#
 # Comment out the above `kubectl apply` and uncomment the below to run on `NON GPU` accelerators
-# 
+#
 # kubectl apply -n ${NAMESPACE} \
 #  -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/${ACCELERATOR_TYPE}/${MODEL_SERVER}/
 #
@@ -427,9 +433,12 @@ kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/
 # kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/${ACCELERATOR_TYPE}/${MODEL_SERVER}
 
 kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/recipes/modelserver/components/monitoring --ignore-not-found=true
-
+```
+<!-- llm-d-cicd:skip start -->
+```bash
 kubectl delete namespace ${NAMESPACE}
 ```
+<!-- llm-d-cicd:skip end -->
 <!-- guide:cleanup end -->
 
 ## Benchmarking Reports

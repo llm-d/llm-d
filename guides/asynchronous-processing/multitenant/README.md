@@ -92,26 +92,42 @@ This guide layers on the base [asynchronous-processing](../README.md) guide — 
   export MT=${REPO_ROOT}/guides/asynchronous-processing/multitenant
 
   export NAMESPACE=llm-d-async
-  export ASYNC_VERSION=0.7.4          # a release with the tier-priority merge policy + classifying quota (v0.7.4+)
+  export ASYNC_VERSION=v0.9.0          # latest llm-d-async release (includes tier-priority + classifying quota)
 
   # The shared inference gateway (EPP) address, and the two InferencePool + model names:
   export IP=$(kubectl get service optimized-baseline-epp -n llm-d-optimized-baseline -o jsonpath='{.spec.clusterIP}')
   export POOL_A=<pool-a> POOL_B=<pool-b>       # InferencePool names (saturation-gate scope)
   export MODEL_A=<model-a> MODEL_B=<model-b>   # served model names (go in payload.model)
+
+  # Scenario C only: the base URL the saturation gates read PromQL from. The default
+  # matches the kube-prometheus-stack install in Observability below; override it if
+  # your Prometheus lives somewhere else.
+  export PROM_URL=http://kps-kube-prometheus-stack-prometheus.monitoring.svc.cluster.local:9090
+
+  # Scenario C only: concurrent requests per model at which that model's pool counts as
+  # saturated. Must be BELOW the pool's worker count (8 in the overlays) — see Scenario C.
+  export SAT_CAP=4
   ```
 
 ## Configuration and Deployment
 
 The value overlays live in [`values/`](values/) with literal placeholders (`NAMESPACE`, `IGW_HOST`,
-`POOL_A`, `POOL_B`, and — Pub/Sub only — `PROJECT_ID`). Render one for your environment before
+`POOL_A`, `POOL_B`, `SAT_CAP` in the saturation overlays, `PROM_URL` on the self-hosted-Prometheus
+saturation overlays, and — Pub/Sub only — `PROJECT_ID`). Render one for your environment before
 installing:
 
 ```bash
 render() {   # render <overlay-path> -> stdout
   sed -e "s/NAMESPACE/${NAMESPACE}/g" -e "s#IGW_HOST#${IP}#g" \
-      -e "s/POOL_A/${POOL_A}/g" -e "s/POOL_B/${POOL_B}/g" "$1"
+      -e "s/POOL_A/${POOL_A}/g" -e "s/POOL_B/${POOL_B}/g" \
+      -e "s/SAT_CAP/${SAT_CAP:-4}/g" \
+      -e "s#PROM_URL#${PROM_URL:-http://kps-kube-prometheus-stack-prometheus.monitoring.svc.cluster.local:9090}#g" "$1"
 }
 ```
+
+`MODEL_A` / `MODEL_B` are **not** overlay placeholders — they never appear in a value, only in
+comments. The served model names reach the system through `payload.model`, which the `publish()`
+helper below fills in from `${MODEL_A}` / `${MODEL_B}`.
 
 ### Redis SortedSet (default)
 
@@ -123,12 +139,12 @@ kubectl create namespace ${NAMESPACE}
 kubectl apply -n ${NAMESPACE} -f ${MT}/manifests/redis.yaml
 
 render ${MT}/values/redis/quota-only.yaml > /tmp/mt-redis.yaml
-helm install async-processor \
-    oci://ghcr.io/llm-d/charts/async-processor \
+helm install llm-d-async \
+    oci://ghcr.io/llm-d/charts/llm-d-async \
     -f /tmp/mt-redis.yaml \
     -n ${NAMESPACE} --create-namespace --version ${ASYNC_VERSION}
 
-kubectl -n ${NAMESPACE} get deploy async-processor -o yaml | grep message-queue-impl
+kubectl -n ${NAMESPACE} get deploy llm-d-async -o yaml | grep message-queue-impl
 # -> --message-queue-impl=redis-sortedset
 ```
 
@@ -149,8 +165,8 @@ kubectl apply -n ${NAMESPACE} -f ${MT}/manifests/redis.yaml   # still needed for
 
 sed -e "s/NAMESPACE/${NAMESPACE}/g" -e "s#IGW_HOST#${IP}#g" -e "s/PROJECT_ID/${PROJECT_ID}/g" \
     ${MT}/values/pubsub/quota-only.yaml > /tmp/mt-pubsub.yaml
-helm install async-processor \
-    oci://ghcr.io/llm-d/charts/async-processor \
+helm install llm-d-async \
+    oci://ghcr.io/llm-d/charts/llm-d-async \
     -f /tmp/mt-pubsub.yaml \
     -n ${NAMESPACE} --create-namespace --version ${ASYNC_VERSION}
 ```
@@ -158,12 +174,12 @@ helm install async-processor \
 
 `gcp-setup.sh` binds the `async-processor` service account to `pubsub.subscriber` + `pubsub.publisher`
 + `pubsub.viewer` (the readiness probe's `GetSubscription`) + `monitoring.viewer` (broker backlog). With
-Workload Identity, follow the printed binding to map the GSA onto the chart's `async-processor` KSA.
+Workload Identity, follow the printed binding to map the GSA onto the chart's `llm-d-async` KSA.
 </details>
 
 > [!NOTE]
 > Config-only Helm changes are read once at startup — after changing the queue/quota config, run
-> `kubectl rollout restart deploy/async-processor -n ${NAMESPACE}`.
+> `kubectl rollout restart deploy/llm-d-async -n ${NAMESPACE}`.
 
 ## Publishing requests
 
@@ -173,16 +189,23 @@ to the **`(team, model)`** queue; the helper takes a team and a model (`a`|`b`).
 
 ```bash
 publish() {                                   # publish <team> <a|b> [count]
-  local team=$1 model=$2 n=${3:-1} now dl member name
+  local team=$1 model=$2 n=${3:-1} ttl=${PUBLISH_TTL:-300} now dl run name i pairs=()
   [ "$model" = a ] && name="$MODEL_A" || name="$MODEL_B"
+  now=$(date +%s); dl=$((now+ttl)); run="${now}-${RANDOM}"
+  # The whole batch goes in one exec — ZADD takes any number of score/member pairs. One exec
+  # per request trickled `publish batch a 100` in over minutes, and the workers drained it as
+  # fast as it arrived: no backlog to classify as overflow. The batch shares a score, so
+  # ZPopMin breaks ties on the member string — the zero-padded index makes that publish order.
   for i in $(seq 1 "$n"); do
-    now=$(date +%s); dl=$((now+300))
-    member=$(printf '{"internal":{},"request_kind":"plain","data":{"id":"%s-%s-%s-%s","created":%s,"deadline":%s,"payload":{"model":"%s","prompt":"summarize this","max_tokens":64},"metadata":{"team":"%s"}}}' \
-      "$team" "$model" "$now" "$i" "$now" "$dl" "$name" "$team")
-    kubectl -n ${NAMESPACE} exec -i deploy/redis -- redis-cli ZADD "team-${team}-${model}" "$dl" "$member" >/dev/null
+    pairs+=("$dl" "$(printf '{"internal":{},"request_kind":"plain","data":{"id":"%s-%s-%s-%04d","created":%s,"deadline":%s,"payload":{"model":"%s","prompt":"summarize this","max_tokens":64},"metadata":{"team":"%s"}}}' \
+      "$team" "$model" "$run" "$i" "$now" "$dl" "$name" "$team")")
   done
+  kubectl -n ${NAMESPACE} exec -i deploy/redis -- redis-cli ZADD "team-${team}-${model}" "${pairs[@]}"
 }
-# e.g.  publish premium a 5    # premium team, model A
+# e.g.  publish premium a 5    # premium team, model A; prints the number enqueued.
+#   PUBLISH_TTL=900 publish batch a 400   # one deadline covers the batch — raise it if a
+#                                         # saturated pool will not drain within 300s.
+# Keep the count in the low thousands: every pair travels in the one exec's argv.
 ```
 
 <details>
@@ -191,15 +214,20 @@ publish() {                                   # publish <team> <a|b> [count]
 <!-- llm-d-cicd:skip start -->
 ```bash
 publish() {                                   # publish <team> <a|b> [count]
-  local team=$1 model=$2 n=${3:-1} now name
+  local team=$1 model=$2 n=${3:-1} ttl=${PUBLISH_TTL:-300} par=${PUBLISH_PAR:-8} now dl run name i
   [ "$model" = a ] && name="$MODEL_A" || name="$MODEL_B"
+  now=$(date +%s); dl=$((now+ttl)); run="${now}-${RANDOM}"
+  # gcloud publishes one message per invocation, so keep `par` of them in flight: serially,
+  # `publish batch a 100` takes minutes and never builds the backlog the scenarios need.
+  # Each invocation is a fresh Python process — lower PUBLISH_PAR if memory is tight.
   for i in $(seq 1 "$n"); do
-    now=$(date +%s)
     gcloud pubsub topics publish "team-${team}-${model}-requests" --project "$PROJECT_ID" \
       --attribute "team=${team}" \
-      --message "$(printf '{"id":"%s-%s-%s-%s","created":%s,"deadline":%s,"payload":{"model":"%s","prompt":"summarize this","max_tokens":64},"metadata":{"team":"%s"}}' \
-        "$team" "$model" "$now" "$i" "$now" "$((now+300))" "$name" "$team")"
+      --message "$(printf '{"id":"%s-%s-%s-%04d","created":%s,"deadline":%s,"payload":{"model":"%s","prompt":"summarize this","max_tokens":64},"metadata":{"team":"%s"}}' \
+        "$team" "$model" "$run" "$i" "$now" "$dl" "$name" "$team")" >/dev/null &
+    (( i % par )) || wait
   done
+  wait
 }
 ```
 <!-- llm-d-cicd:skip end -->
@@ -252,10 +280,36 @@ bringing up [self-hosted Prometheus](#observability), then drive sustained load:
 
 ```bash
 render ${MT}/values/redis/saturation-prometheus.yaml > /tmp/mt-redis-sat.yaml
-helm upgrade async-processor \
-    oci://ghcr.io/llm-d/charts/async-processor \
+grep prometheusURL /tmp/mt-redis-sat.yaml    # must be your Prometheus, not the literal PROM_URL
+helm upgrade llm-d-async \
+    oci://ghcr.io/llm-d/charts/llm-d-async \
     -f /tmp/mt-redis-sat.yaml -n ${NAMESPACE} --version ${ASYNC_VERSION}
+```
 
+**Confirm the gates can reach Prometheus before you read anything into the result.** The gates are
+`wait-on-refuse(prometheus-query)` with `"fallback":"1"` — a budget of 1 is a wide-open gate, so an
+unreachable Prometheus produces a run that looks perfect and demonstrates nothing.
+
+```bash
+# 1. The URL the gates use resolves and answers, from inside the cluster:
+kubectl run --rm -i promcheck --image=curlimages/curl --restart=Never -n ${NAMESPACE} -- \
+    curl -sS --max-time 5 "${PROM_URL}/api/v1/query?query=up" | head -c 120
+# -> {"status":"success",...}   anything else means the gates are blind
+
+# 2. vLLM is actually being scraped (the metric the gates read):
+kubectl run --rm -i promcheck-vllm --image=curlimages/curl --restart=Never -n ${NAMESPACE} -- \
+    curl -sS --max-time 5 --data-urlencode "query=sum(vllm:num_requests_running{inference_pool=\"${POOL_A}\"})" \
+    "${PROM_URL}/api/v1/query" | head -c 200
+# -> a result with a value; an empty "result":[] means the PodMonitor is not matching
+
+# 3. The processor is not silently falling back:
+kubectl logs -n ${NAMESPACE} deploy/llm-d-async --tail=200 | grep -i "using fallback value" \
+    && echo ">>> gates are on the fallback budget (1 = wide open), not on live metrics"
+```
+
+Then drive sustained load:
+
+```bash
 publish premium a 200 & publish batch a 200 &   # heavy on model A; keep model B light
 wait
 ```
@@ -266,12 +320,41 @@ keeps dispatching at full rate** (its own gate reads only `POOL_B`). As `model-a
 merge policy drains the highest lanes first. Query each model's budget independently:
 
 ```bash
+# Assumes the kube-prometheus-stack install from Observability below; point this at
+# whatever ${PROM_URL} resolves to if your Prometheus lives elsewhere.
 kubectl port-forward -n monitoring svc/kps-kube-prometheus-stack-prometheus 9090:9090 &
 curl -s localhost:9090/api/v1/query --data-urlencode \
-  "query=clamp(1 - sum(vllm:num_requests_running{inference_pool=\"${POOL_A}\"})/20, 0, 1)"   # model-a budget
+  "query=clamp(1 - sum(vllm:num_requests_running{inference_pool=\"${POOL_A}\"})/${SAT_CAP}, 0, 1)"  # model-a budget -> 0
 curl -s localhost:9090/api/v1/query --data-urlencode \
-  "query=clamp(1 - sum(vllm:num_requests_running{inference_pool=\"${POOL_B}\"})/20, 0, 1)"   # model-b budget (~1)
+  "query=clamp(1 - sum(vllm:num_requests_running{inference_pool=\"${POOL_B}\"})/${SAT_CAP}, 0, 1)"  # model-b budget (~1)
+
+# Parked workers hold their message instead of dispatching, so model-a's in-flight count
+# hovers near ${SAT_CAP} while model-b's climbs to its 8 workers:
+curl -s localhost:9090/api/v1/query --data-urlencode \
+  "query=sum by (pool_name) (llm_d_async_async_inflight_requests)"
 ```
+
+**What "saturated" should look like:** under this load `model-a`'s budget reaches **exactly `0`** and
+stays there in stretches, while `model-b` sits at `~1`. If `model-a` never reaches 0, the scenario is
+not actually happening — nothing parks, and the run still completes and looks healthy. Check `SAT_CAP`
+against the sizing rule below before concluding the gate worked.
+
+> [!IMPORTANT]
+> **`SAT_CAP` must be smaller than the pool's `workers`.** `prometheus-query` closes its gate at
+> budget `<= 0`, and `clamp(..., 0, 1)` floors the budget at 0 — so the gate closes only once
+> `SAT_CAP` requests are running on that model. Scenario C's load is entirely async, so the only
+> thing driving that count is the pool's own workers (`8` per model in the overlays), and a worker
+> evaluates the gate while holding a message it has not dispatched yet: at most `workers - 1` of the
+> pool's requests are running at that moment. Set `SAT_CAP` at or above `workers` and the budget can
+> never reach 0. The default `SAT_CAP=4` leaves margin on two counts: `vllm:num_requests_running`
+> counts only requests the model server is actively running, not ones waiting in its queue, and the
+> gate reads it through a 15s `PodMonitor` scrape plus `prometheusCacheTTL: 5s`, so the count it acts
+> on is up to ~20s behind the pool.
+>
+> In production the divisor is a capacity number, not a demo knob: size it to the pool's real
+> concurrent-request capacity (`ready pods × per-pod concurrency`) and give the pool enough workers
+> to reach it. The gate is back-pressure against **all** traffic on the pool — including synchronous
+> clients — so there the count is not bounded by this processor's workers.
 
 ## Observability
 
@@ -293,6 +376,20 @@ Open Grafana (`admin`/`admin` in the demo values) and run the Scenario-C load; t
 dashboard shows `async_dispatch_budget`, `async_inflight_requests`, `async_gate_decisions_total`, and
 `async_broker_backlog{queue_name,pool_name}`. Break panels down by **`pool_name`** (`model-a` /
 `model-b`) for the per-model view and by **`queue_name`** for the per-team-per-model view.
+`async_dispatch_budget` is the **queue** gates' budget (the per-team quota gates), so it says nothing
+about the per-pool saturation gates. Those report through `async_gate_metric_value` — the value the
+gate last read, i.e. the `clamp(...)` result — against `async_gate_metric_threshold`, which the gate
+closes at (`value <= threshold`, and `prometheus-query` pins the threshold to `0`). Both are labelled
+by the owning `pool_name`:
+
+```promql
+llm_d_async_async_gate_metric_value{pool_name="model-a"}       # -> 0 while the pool is parked
+llm_d_async_async_gate_metric_threshold{pool_name="model-a"}   # -> 0
+```
+
+Their absence is itself a signal: the gauges are only written on a **successful** read, so a missing
+or frozen `async_gate_metric_value` means the gate is running on its fallback budget. Cross-check
+against Prometheus directly as in [Scenario C](#scenario-c--priority-under-saturation).
 
 <details>
 <summary><b>GCP Cloud Monitoring (Pub/Sub on GKE)</b></summary>
@@ -309,7 +406,7 @@ kubectl apply -n ${NAMESPACE} -f ${MT}/manifests/gmp-frontend.yaml
 sed -e "s/NAMESPACE/${NAMESPACE}/g" -e "s#IGW_HOST#${IP}#g" -e "s/POOL_A/${POOL_A}/g" \
     -e "s/POOL_B/${POOL_B}/g" -e "s/PROJECT_ID/${PROJECT_ID}/g" \
     ${MT}/values/pubsub/saturation-gmp.yaml > /tmp/mt-pubsub-sat.yaml
-helm upgrade async-processor oci://ghcr.io/llm-d/charts/async-processor \
+helm upgrade llm-d-async oci://ghcr.io/llm-d/charts/llm-d-async \
   -f /tmp/mt-pubsub-sat.yaml -n ${NAMESPACE} --version ${ASYNC_VERSION}
 ```
 <!-- llm-d-cicd:skip end -->
@@ -333,11 +430,19 @@ Prometheus path reacts within one scrape.
 - **Saturation gate.** These overlays use `prometheus-query` over `vllm:num_requests_running`. The
   `prometheus-saturation` gate instead expects the EPP metric
   `inference_extension_flow_control_pool_saturation`.
+- **Saturation divisor vs. pool size.** `SAT_CAP` is the concurrency at which a model counts as
+  saturated, and the gate closes only when the budget hits 0 — i.e. only once `SAT_CAP` requests are
+  running. Keep it **below** that pool's `workers`, or async load alone can never close the gate; see
+  [Scenario C](#scenario-c--priority-under-saturation).
+- **An unreachable Prometheus fails open, not closed.** The saturation gates set `"fallback":"1"`, and
+  a budget of 1 is a fully open gate. If `PROM_URL` is wrong, or the vLLM `PodMonitor` matches nothing,
+  Scenario C completes cleanly and demonstrates nothing — no error, no parked pool. Run the three
+  checks in [Scenario C](#scenario-c--priority-under-saturation) before drawing conclusions from a run.
 
 ## Cleanup
 
 ```bash
-helm uninstall async-processor -n ${NAMESPACE}
+helm uninstall llm-d-async -n ${NAMESPACE}
 kubectl delete -n ${NAMESPACE} -f ${MT}/manifests/redis.yaml
 # self-hosted Prometheus/Grafana:
 kubectl delete -f ${MT}/manifests/prometheus-vllm-podmonitor.yaml

@@ -135,8 +135,8 @@ helm install tiered-prefix-cache \
 <details>
 <summary><h4>Gateway Mode</h4></summary>
 
-1. _Deploy a Kubernetes Gateway_ by following one of [the gateway guides](../../docs/infrastructure/gateway).
-2. _Deploy the llm-d Router and an HTTPRoute_:
+1. *Deploy a Kubernetes Gateway* by following one of [the gateway guides](../../docs/infrastructure/gateway).
+2. *Deploy the llm-d Router and an HTTPRoute*:
 
 ```bash
 export PROVIDER_NAME=gke # options: none, gke, agentgateway, istio
@@ -416,8 +416,12 @@ kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/tiered-prefix-cache/models
 
 ```bash
 kubectl delete -f ${REPO_ROOT}/guides/tiered-prefix-cache/manifests/pvc.yaml -n ${NAMESPACE} --ignore-not-found  # if a PVC was created
+```
+<!-- llm-d-cicd:skip start -->
+```bash
 kubectl delete namespace ${NAMESPACE}
 ```
+<!-- llm-d-cicd:skip end -->
 
 If you deployed Mooncake components, clean them up as well:
 
@@ -490,7 +494,7 @@ export GATEWAY_CLASS=istio
 
 `guide_tiered-prefix-cache_1.yaml` is a **dedicated workload profile** shipped with `llm-d-benchmark` specifically for this guide — it reproduces the load profile used to generate the [results below](#benchmarking-report) (250 prefix groups × 5 prompts each on a 60-second Poisson interval) and is shaped to exercise eviction across HBM and CPU RAM.
 
-Benchmark results are copied to the `workspace` directory that is specified by _you_ (or that is automatically generated when omitted from the cli) on the machine running the CLI. The workspace location is optional — by default the CLI auto-generates a timestamped workspace and prints its full path in the logs during the run. If you'd rather choose where results land, pass `--workspace <YOUR_DIR_HERE>` as a top-level argument of `llmdbenchmark` (before the `run` subcommand):
+Benchmark results are copied to the `workspace` directory that is specified by *you* (or that is automatically generated when omitted from the cli) on the machine running the CLI. The workspace location is optional — by default the CLI auto-generates a timestamped workspace and prints its full path in the logs during the run. If you'd rather choose where results land, pass `--workspace <YOUR_DIR_HERE>` as a top-level argument of `llmdbenchmark` (before the `run` subcommand):
 
 ```bash
 llmdbenchmark \

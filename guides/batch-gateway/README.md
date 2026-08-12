@@ -199,8 +199,13 @@ curl http://localhost:8000/v1/files/${OUTPUT_FILE_ID}/content > results.jsonl
 
 ```bash
 helm uninstall batch-gateway -n ${NAMESPACE}
+```
+
+<!-- llm-d-cicd:skip start -->
+```bash
 kubectl delete namespace ${NAMESPACE}
 ```
+<!-- llm-d-cicd:skip end -->
 
 ## Related
 

@@ -21,12 +21,21 @@ router:
     protocol: http # http, grpc
 
   proxy:
+    # Sidecar proxy type. Options: envoy (default) or agentgateway.
+    # To use agentgateway instead of Envoy, override in your guide-specific
+    # values file or pass --set router.proxy.proxyType=agentgateway on the
+    # helm install command. See guides/recipes/router/README.md for details.
+    proxyType: envoy
+
     # CLI args for the Envoy sidecar. Override the chart's defaults of
     # `--log-level trace` (very expensive under load) and no `--concurrency`
     # (Envoy spawns ~hardware_concurrency() worker threads, oversubscribing
     # the cgroup's CPU slice). `--concurrency 8` matches the resources.limits
     # equivalent below; trace-level logging would burn a meaningful share of
     # the sidecar's CPU at high QPS.
+    #
+    # For proxyType=agentgateway, layer features/agentgateway-proxy.values.yaml
+    # on top of this file. It swaps these Envoy flags for agentgateway's args.
     args:
       - "--service-node"
       - "envoy-sidecar"
@@ -40,7 +49,7 @@ router:
       - "60"
       - "-c"
       - "/etc/envoy/envoy.yaml"
-    # Resource requests and limits for the Envoy sidecar.
+    # Resource requests and limits for the sidecar proxy.
     resources:
       requests:
         cpu: "4"

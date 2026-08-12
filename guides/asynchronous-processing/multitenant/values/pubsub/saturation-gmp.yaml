@@ -5,8 +5,11 @@
 #  - TEAM quota (redis-quota, classifying, per-model prefix): reserved vs overflow.
 #  - TIER: per-topic label; tier-priority merge policy orders each pool's lanes.
 #
-# PromQL endpoint = the GMP query frontend (manifests/gmp-frontend.yaml).
-# NOTE: GMP/Monarch lags real time ~1-2 min. Replace MODEL_A/MODEL_B, POOL_A/POOL_B.
+# PromQL endpoint = the GMP query frontend (manifests/gmp-frontend.yaml), already
+# scoped to NAMESPACE — no PROM_URL here, unlike the self-hosted Prometheus overlays.
+# NOTE: GMP/Monarch lags real time ~1-2 min.
+# Replace: PROJECT_ID, NAMESPACE, IGW_HOST, POOL_A/POOL_B, SAT_CAP (concurrent
+# requests at which a model is considered saturated).
 ap:
 
   messageQueueImpl: "gcp-pubsub-gated"
@@ -111,19 +114,25 @@ ap:
           limit: "1"
           prefix: "quota:b:"
 
+  # SAT_CAP is the divisor: the concurrent-request count at which a model counts as
+  # saturated. prometheus-query closes the gate at budget <= 0 and clamp() floors the
+  # budget at 0, so the gate closes only once SAT_CAP requests are running. A worker
+  # evaluates the gate while holding a message it has not dispatched yet, so at most
+  # `workers - 1` of this pool's requests are running at that moment: driven by async
+  # load alone, SAT_CAP must stay BELOW `workers` or the gate can never close.
   workerPools:
     - id: "model-a"
       workers: 8
       gate_type: "wait-on-refuse"
       gate_params:
         gate: |
-          {"gate_type":"prometheus-query","gate_params":{"query":"clamp(1 - sum(vllm:num_requests_running{inference_pool=\"POOL_A\"})/20, 0, 1)","fallback":"1"}}
+          {"gate_type":"prometheus-query","gate_params":{"query":"clamp(1 - sum(vllm:num_requests_running{inference_pool=\"POOL_A\"})/SAT_CAP, 0, 1)","fallback":"1"}}
     - id: "model-b"
       workers: 8
       gate_type: "wait-on-refuse"
       gate_params:
         gate: |
-          {"gate_type":"prometheus-query","gate_params":{"query":"clamp(1 - sum(vllm:num_requests_running{inference_pool=\"POOL_B\"})/20, 0, 1)","fallback":"1"}}
+          {"gate_type":"prometheus-query","gate_params":{"query":"clamp(1 - sum(vllm:num_requests_running{inference_pool=\"POOL_B\"})/SAT_CAP, 0, 1)","fallback":"1"}}
 
   resources:
     requests:

@@ -7,7 +7,7 @@ While disaggregated serving can offer superior performance, it introduces additi
 - [Fault Tolerance](#fault-tolerance) - how to ensure crashes do not create cascading failures and that resources are cleaned up
 - [Rollouts](#rollouts) - how to roll out changes to the service, such as the version of the SGLang image
 
-This page documents architectural considerations that impact these common operations flows for SGLang model servers. For the vLLM counterpart see [operations-vllm.md](operations-vllm.md), and for an overview of how the EPP and Routing Proxy Sidecar coordinate P/D requests see the [Disaggregated Serving](README.md) page.
+This page documents architectural considerations that impact these common operations flows for SGLang model servers. For the vLLM counterpart see [vllm.md](vllm.md), and for an overview of how the EPP and Routing Proxy Sidecar coordinate P/D requests see the [Disaggregated Serving](../../architecture/advanced/disaggregation/README.md) page.
 
 Both engines establish a NIXL (RDMA) connection for each P/D pair and differ mainly in how a pair finds each other and which side moves the data: vLLM negotiates the connection peer-to-peer with no central coordinator and has the decode pull the KVs, while SGLang routes peer discovery through a bootstrap server that runs alongside each prefill instance and has the prefill push the KVs to the decode.
 
@@ -53,7 +53,7 @@ sequenceDiagram
 
 #### Discovery
 
-Since model server instances are added to an `InferencePool` via standard Kubernetes selectors and labels, new prefill and decode instances are discovered automatically when their pod status becomes `status: Running`. The same `llm-d.ai/role` label values (`prefill`, `decode`, `prefill-decode`) are used to filter P and D workers. See [operations-vllm.md#discovery](operations-vllm.md#discovery) for details.
+Since model server instances are added to an `InferencePool` via standard Kubernetes selectors and labels, new prefill and decode instances are discovered automatically when their pod status becomes `status: Running`. The same `llm-d.ai/role` label values (`prefill`, `decode`, `prefill-decode`) are used to filter P and D workers. See [vllm.md#discovery](vllm.md#discovery) for details.
 
 As a result, new replicas can be added to a running disaggregated deployment without restarts and without coordinating within any specialized service discovery plane.
 
@@ -151,7 +151,7 @@ SGLang validates layout compatibility at connection time. When a decode instance
 Mismatched tensor-parallel sizes between P and D are supported (the decode resolves a TP/CP/PP rank mapping), but for non-MLA models SGLang warns that performance is not guaranteed.
 
 > [!IMPORTANT]
-> As with vLLM, the llm-d EPP currently assumes all P and D instances within an `InferencePool` are compatible and will schedule requests to any arbitrary pair. Because incompatible `page_size` / `kv_cache_dtype` combinations fail at connection time, it is recommended to roll out model-server upgrades by creating a new `InferencePool` rather than mixing versions in one pool. When deploying with a `Gateway`, traffic can be gradually shifted to the new `InferencePool` by modifying the `HTTPRoute`. See [operations-vllm.md#rollouts](operations-vllm.md#rollouts).
+> As with vLLM, the llm-d EPP currently assumes all P and D instances within an `InferencePool` are compatible and will schedule requests to any arbitrary pair. Because incompatible `page_size` / `kv_cache_dtype` combinations fail at connection time, it is recommended to roll out model-server upgrades by creating a new `InferencePool` rather than mixing versions in one pool. When deploying with a `Gateway`, traffic can be gradually shifted to the new `InferencePool` by modifying the `HTTPRoute`. See [vllm.md#rollouts](vllm.md#rollouts).
 
 ## Tuning Reference
 
