@@ -1,10 +1,18 @@
 # KEDA ScaledObject for direct EPP pool-level saturation autoscaling.
 #
 # Before applying, update:
-#   - inference_pool label in both trigger queries (model pool name)
+#   - inference_pool label in the pool-saturation query (the InferencePool name,
+#     i.e. the EPP's --pool-name; NOT "default")
 #   - model_name label in running-requests query
+#   - namespace label in BOTH queries, to your deployment's namespace
 #   - serverAddress to match your Prometheus endpoint (see overlays/ for platform-specific examples)
 #   - minReplicaCount, maxReplicaCount, and thresholds to suit your model
+#
+# Both queries pin `namespace`. On a cluster-wide store (OpenShift Thanos, or any
+# Prometheus scraping several namespaces) an unpinned query silently aggregates
+# every EPP on the cluster, so a shared-cluster deployment would scale on other
+# tenants' traffic. Kustomize cannot reach inside these PromQL strings, so the
+# label must be edited by hand to match the target namespace.
 #
 # KEDA will create its own HPA from this ScaledObject. Do NOT apply a separate hpa.yaml.
 
@@ -31,8 +39,10 @@ spec:
       # For generic k8s with bundled llm-d Prometheus stack (installed via observability setup guide).
       # For OpenShift: use overlays/ocp which automatically patches this to thanos-querier.
       # For other Prometheus deployments: replace with your endpoint.
+      # inference_pool is the InferencePool name (the EPP's --pool-name), which
+      # for the optimized-baseline guide is the Helm release name.
       query: |
-        max(llm_d_epp_flow_control_pool_saturation{inference_pool="default"})
+        max(llm_d_epp_flow_control_pool_saturation{inference_pool="optimized-baseline",namespace="llm-d-optimized-baseline"})
       # Saturation threshold at which to scale out. Adjust based on your target pool utilization.
       # Recommended: 0.7-0.8 to scale before reaching full saturation.
       threshold: "0.7"
@@ -48,8 +58,11 @@ spec:
       # For generic k8s with bundled llm-d Prometheus stack (installed via observability setup guide).
       # For OpenShift: use overlays/ocp which automatically patches this to thanos-querier.
       # For other Prometheus deployments: replace with your endpoint.
+      # llm_d_epp_request_running is only created once the EPP has handled a
+      # request: before any traffic this query returns an empty result, which
+      # KEDA's default ignoreNullValues=true reads as 0 (stay at minReplicaCount).
       query: |
-        sum(llm_d_epp_request_running{model_name="Qwen/Qwen3-32B"})
+        sum(llm_d_epp_request_running{model_name="Qwen/Qwen3-32B",namespace="llm-d-optimized-baseline"})
       # Target requests per replica. Adjust based on your model size and GPU memory.
       # Recommended: 16-32 (lower = more replicas, higher cost but lower latency; higher = fewer replicas, lower cost but higher latency).
       threshold: "16"
