@@ -21,7 +21,7 @@ spec:
       containers:
         - name: requester
           # Keep this tag in sync with FMA_VERSION in guide.yaml / the guide env.
-          image: ghcr.io/llm-d-incubation/llm-d-fast-model-actuation/requester:v0.6.2
+          image: ghcr.io/llm-d-incubation/llm-d-fast-model-actuation/requester:v0.6.4
           ports:
             - containerPort: 8080
               name: probes
