@@ -55,6 +55,10 @@ IMAGE_BASE ?= ghcr.io/llm-d/$(PROJECT_NAME)-$(DEVICE)
 BUILD_CONTEXT ?= .
 DOCKERFILE_PATH = $(DOCKERFILE_DIR)/$(DOCKERFILE)
 
+# vLLM-Omni XPU build settings (used by wrapper targets below)
+VLLM_OMNI_CONTEXT ?= ../vllm-omni
+VLLM_OMNI_IMAGE_BASE ?= ghcr.io/llm-d/$(PROJECT_NAME)-xpu-omni
+
 # BUILD_TYPE, options ['dev', 'prod']
 BUILD_TYPE ?= dev
 ifeq ($(BUILD_TYPE), dev)
@@ -200,6 +204,22 @@ image-build: check-container-tool ## Build Docker image using $(CONTAINER_TOOL)
 		$(if $(DEEPEP_VERSION_OVERRIDE),--build-arg DEEPEP_VERSION=$(DEEPEP_VERSION_OVERRIDE)) \
 		$(if $(INSTALL_OFFLOADING_CONNECTOR_OVERRIDE),--build-arg INSTALL_OFFLOADING_CONNECTOR=$(INSTALL_OFFLOADING_CONNECTOR_OVERRIDE)) \
 		-t $(IMG) -f $(DOCKERFILE_PATH) $(BUILD_CONTEXT)
+
+.PHONY: image-build-xpu-omni
+image-build-xpu-omni: ## Build vLLM-Omni XPU image using llm-d build flow
+	$(MAKE) image-build \
+		DEVICE=xpu \
+		DOCKERFILE=Dockerfile.xpu-omni \
+		BUILD_CONTEXT=$(VLLM_OMNI_CONTEXT) \
+		IMAGE_BASE=$(VLLM_OMNI_IMAGE_BASE)
+
+.PHONY: image-push-xpu-omni
+image-push-xpu-omni: ## Push vLLM-Omni XPU image using llm-d build flow
+	$(MAKE) image-push \
+		DEVICE=xpu \
+		DOCKERFILE=Dockerfile.xpu-omni \
+		BUILD_CONTEXT=$(VLLM_OMNI_CONTEXT) \
+		IMAGE_BASE=$(VLLM_OMNI_IMAGE_BASE)
 
 .PHONY: image-push
 image-push: check-container-tool ## Push Docker image $(IMG) to registry

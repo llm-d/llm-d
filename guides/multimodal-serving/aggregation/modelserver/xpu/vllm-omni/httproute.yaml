@@ -1,0 +1,38 @@
+# Path-scoped HTTPRoute for the aggregated Wan text-to-video endpoint.
+#
+# This sends only /v1/videos (the OpenAI-compatible video generation path served
+# by the vLLM-Omni HTTP API) to the Wan InferencePool, so the shared
+# llm-d-inference-gateway can also host text LLM pools on /v1/chat/completions,
+# /v1/completions, etc. without a catch-all route capturing their traffic.
+#
+# Prereqs:
+#   * A Gateway named `llm-d-inference-gateway` (see guides/prereq/gateways).
+#   * The router installed with router.httpRoute.create=false
+#     (guides/multimodal-serving/aggregation/router/aggregation-video-xpu.values.yaml)
+#     and a Helm release name of `wan-video-xpu`, which is the InferencePool name
+#     referenced below. If you install under a different release name, update
+#     backendRefs[0].name to match.
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: wan-video-xpu
+  labels:
+    llm-d.ai/guide: multimodal-video
+spec:
+  parentRefs:
+    - group: gateway.networking.k8s.io
+      kind: Gateway
+      name: llm-d-inference-gateway
+  rules:
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /v1/videos
+      backendRefs:
+        - group: inference.networking.k8s.io
+          kind: InferencePool
+          name: wan-video-xpu
+          # Video generation is long-running; rely on the gateway provider's
+          # max timeout. Override per provider if a finite value is required.
+      timeouts:
+        request: "0s"

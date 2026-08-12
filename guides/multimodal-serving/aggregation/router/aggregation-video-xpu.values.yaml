@@ -1,0 +1,50 @@
+## llm-d router (EPP + gateway) overrides for the aggregated Wan text-to-video
+## model server on Intel XPU.
+##
+## Layer on top of: guides/recipes/router/base.values.yaml
+##   helm ... -f guides/recipes/router/base.values.yaml \
+##            -f guides/multimodal-serving/aggregation/router/aggregation-video-xpu.values.yaml
+##
+## Why this profile differs from the LLM PD profile:
+##   * Video diffusion has no autoregressive KV cache and no token-prefix reuse,
+##     so the prefix-cache / kv-cache-utilization scorers are irrelevant and are
+##     intentionally omitted. Scheduling is purely load-aware: pick the worker
+##     with the shallowest queue and fewest in-flight requests (each request is
+##     a long, roughly fixed-cost denoise job).
+##   * Aggregated topology = a single scheduling profile. When the upstream
+##     encode-stage split lands, this gains prefill/decode profiles (see
+##     wan-epd-xpu-design.md §4.1.2 / §4.2).
+
+router:
+  extraServicePorts:
+    - name: http
+      port: 80
+      protocol: TCP
+      targetPort: 8081
+
+  # We ship our own path-scoped HTTPRoute (httproute.yaml) that matches
+  # /v1/videos, so the gateway can be shared with text LLM pools without a
+  # catch-all route swallowing their traffic. Disable the chart's default route.
+  httpRoute:
+    create: false
+
+  epp:
+    pluginsConfigFile: "wan-video-xpu-plugins.yaml"
+    pluginsCustomConfig:
+      wan-video-xpu-plugins.yaml: |
+        apiVersion: llm-d.ai/v1alpha1
+        kind: EndpointPickerConfig
+        plugins:
+          - type: queue-scorer
+          - type: active-request-scorer
+        schedulingProfiles:
+          - name: default
+            plugins:
+              - pluginRef: queue-scorer
+                weight: 3
+              - pluginRef: active-request-scorer
+                weight: 2
+
+  modelServers:
+    matchLabels:
+      llm-d.ai/guide: "multimodal-video"

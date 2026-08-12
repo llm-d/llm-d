@@ -849,6 +849,87 @@ jobs:
             echo "No vulnerabilities found or scan failed."
           fi
 
+  release-xpu-omni-llm-d:
+    strategy:
+      fail-fast: false
+    runs-on: vllm-runner
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Load vLLM-Omni source ref from file
+        id: common-versions
+        run: |
+          source docker/common-versions
+          echo "omni_repo=${VLLM_OMNI_REPO}" >> $GITHUB_OUTPUT
+          echo "omni_ref=${VLLM_OMNI_REF}" >> $GITHUB_OUTPUT
+
+      - name: Checkout vLLM-Omni source
+        uses: actions/checkout@v7
+        with:
+          repository: ${{ steps.common-versions.outputs.omni_repo }}
+          ref: ${{ steps.common-versions.outputs.omni_ref }}
+          path: vllm-omni
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+        with:
+          buildkitd-flags: --oci-worker-gc
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v4
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ secrets.GHCR_USER }}
+          password: ${{ secrets.GHCR_TOKEN }}
+
+      - name: Build and push the image
+        id: build-and-push
+        uses: docker/build-push-action@v7
+        with:
+          context: ./vllm-omni
+          file: ./docker/Dockerfile.xpu-omni
+          platforms: linux/amd64
+          push: true
+          provenance: true
+          tags: |
+            ${{ env.REGISTRY }}/${{ github.repository }}-xpu-omni:${{ env.TAG }}
+            ${{ env.IS_STABLE == 'true' && format('{0}/{1}-xpu-omni:latest', env.REGISTRY, github.repository) || '' }}
+          github-token: ${{ secrets.GHCR_TOKEN }}
+        env:
+          DOCKER_BUILDKIT: "1"
+          BUILDKIT_PROGRESS: "plain"
+
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          image-ref: ${{ env.REGISTRY }}/${{ github.repository }}-xpu-omni:${{ env.TAG }}
+          format: "sarif"
+          output: "trivy-results.sarif"
+          severity: "CRITICAL,HIGH,MEDIUM"
+          scanners: vuln
+          timeout: 30m
+          skip-dirs: /root/.cache/uv
+        env:
+          TRIVY_USERNAME: ${{ secrets.GHCR_USER }}
+          TRIVY_PASSWORD: ${{ secrets.GHCR_TOKEN }}
+
+      - name: Upload Trivy scan results to GitHub Security tab
+        uses: github/codeql-action/upload-sarif@v4
+        with:
+          sarif_file: "trivy-results.sarif"
+
+      - name: Display vulnerability summary
+        run: |
+          echo "=== Vulnerability Scan Summary ==="
+          if [ -f trivy-results.sarif ]; then
+            echo "Scan completed. Check the Security tab for detailed results."
+          else
+            echo "No vulnerabilities found or scan failed."
+          fi
+
   verify-release-images:
     name: Verify all release images exist
     needs:
@@ -857,6 +938,7 @@ jobs:
       - release-cpu-llm-d
       - release-rocm-llm-d
       - release-xpu-llm-d
+      - release-xpu-omni-llm-d
     if: always()
     runs-on: ubuntu-latest
     steps:
@@ -880,6 +962,7 @@ jobs:
             "${{ env.REGISTRY }}/llm-d/llm-d-cpu:${TAG}"
             "${{ env.REGISTRY }}/llm-d/llm-d-rocm:${TAG}"
             "${{ env.REGISTRY }}/llm-d/llm-d-xpu:${TAG}"
+            "${{ env.REGISTRY }}/llm-d/llm-d-xpu-omni:${TAG}"
           )
 
           echo "## Release Image Verification for ${TAG}" >> $GITHUB_STEP_SUMMARY

@@ -35,6 +35,10 @@ SGLANG_XPU_REF=1af01674938f68266d5f8a0e5635ea1434af7801
 SGLANG_XPU_KERNEL_REPO=https://github.com/sgl-project/sgl-kernel-xpu.git
 SGLANG_XPU_KERNEL_REF=a246742797279015f51d135063ed00f879496896
 
+# Used by XPU + vLLM-Omni: GitHub repository slug and pinned ref for image builds.
+VLLM_OMNI_REPO=vllm-project/vllm-omni
+VLLM_OMNI_REF=bdb1d996bee26e34f59f0f7fe24f928b4bb21996
+
 # ============================================================================
 # CUDA Version Configuration
 # ============================================================================

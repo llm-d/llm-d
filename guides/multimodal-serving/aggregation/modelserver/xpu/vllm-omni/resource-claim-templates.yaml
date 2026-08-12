@@ -1,0 +1,17 @@
+apiVersion: resource.k8s.io/v1
+kind: ResourceClaimTemplate
+metadata:
+  name: xpu-video-claim
+  labels:
+    llm-d.ai/role: aggregated
+spec:
+  spec:
+    devices:
+      requests:
+        # Single Intel XPU is sufficient for Wan2.1-T2V-1.3B / Wan2.2 TI2V-5B in
+        # BF16. Bump `count` (and the worker's tensor_parallel_size) for the
+        # A14B MoE variants.
+        - name: intel
+          exactly:
+            deviceClassName: gpu.intel.com
+            count: 1

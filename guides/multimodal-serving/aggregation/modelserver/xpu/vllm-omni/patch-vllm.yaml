@@ -1,0 +1,97 @@
+# Strategic-merge overlay on the shared single-host `decode` Deployment
+# (recipes/modelserver/base/single-host/default). The base provides the Pod
+# skeleton (ServiceAccount, container `modelserver`, port 8000, probes); this
+# patch fills in the aggregated Wan video worker specifics.
+#
+# Aggregated Wan video worker: a single vLLM-Omni process that serves the
+# OpenAI-compatible HTTP API (/v1/videos) AND runs the full diffusion pipeline
+# (UMT5 + DiT + VAE) in one stage, pinned to one Intel XPU via DRA.
+# It uses vLLM-Omni's OWN OpenAI server (`vllm serve <model> --omni`).
+# No Dynamo, no etcd, no NATS — the image already ships everything needed.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: decode
+spec:
+  replicas: 1
+  template:
+    spec:
+      securityContext:
+        fsGroup: 107
+        supplementalGroups:
+          - 107
+      containers:
+        - name: modelserver
+          command: ["/bin/bash", "-c"]
+          args:
+            - |
+              set -e
+              exec vllm serve "Wan-AI/Wan2.1-T2V-1.3B-Diffusers" --omni \
+                --port 8000 \
+                --enforce-eager
+          env:
+            # Select the Intel XPU backend for both vLLM core and vLLM-Omni.
+            - name: VLLM_TARGET_DEVICE
+              value: "xpu"
+            - name: VLLM_OMNI_TARGET_DEVICE
+              value: "xpu"
+            # DRA exposes only the allocated XPU to the container, so it is index 0.
+            - name: ZE_AFFINITY_MASK
+              value: "0"
+            - name: TORCH_LLM_ALLREDUCE
+              value: "1"
+            - name: VLLM_WORKER_MULTIPROC_METHOD
+              value: "spawn"
+            - name: HF_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: llm-d-hf-token
+                  key: HF_TOKEN
+          resources:
+            limits:
+              cpu: "16"
+              memory: 64Gi
+            requests:
+              cpu: "16"
+              memory: 64Gi
+            claims:
+              - name: xpu-video-claim
+          volumeMounts:
+            - mountPath: /dev/shm
+              name: shm
+            - mountPath: /.cache
+              name: torch-compile-cache
+          # The video server exposes /health but not /v1/models, so override the
+          # base readiness/startup probes (which target /v1/models) to /health.
+          startupProbe:
+            httpGet:
+              path: /health
+              port: modelserver
+            initialDelaySeconds: 30
+            periodSeconds: 30
+            timeoutSeconds: 10
+            failureThreshold: 60
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: modelserver
+            periodSeconds: 30
+            timeoutSeconds: 10
+            failureThreshold: 20
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: modelserver
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 6
+      resourceClaims:
+        - name: xpu-video-claim
+          resourceClaimTemplateName: xpu-video-claim
+      volumes:
+        - name: shm
+          emptyDir:
+            medium: Memory
+            sizeLimit: 16Gi
+        - name: torch-compile-cache
+          emptyDir: {}

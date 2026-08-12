@@ -1,11 +1,13 @@
 # Multimodal Optimized Baseline Guide
 
-This guide deploys the recommended [configuration](https://github.com/llm-d/llm-d-router/blob/main/docs/architecture.md) for multimodal vLLM deployments, reducing tail latency and increasing throughput through load-aware and prefix-cache aware balancing.
+This guide deploys recommended multimodal routing [configurations](https://github.com/llm-d/llm-d-router/blob/main/docs/architecture.md) for different serving variants.
 
 The multimodal-optimized-baseline routes with the same token-based stack as the [optimized-baseline](../../optimized-baseline) reference:
 
 * **Prefix-cache aware:** The `prefix-cache-affinity-filter` selects the endpoint set by estimating multimodal prompt prefix cache reuse (matching text + image content hashes) on each model server.
 * **Token-load aware:** The `token-load-scorer` picks within the set on queued prefill token load. The multimodal `token-producer` feeds it per-request token counts, estimating each image's contribution from its resolution — image inputs have no text length to read.
+
+The Wan text-to-video vLLM-Omni profile uses load-aware routing only. It intentionally omits prefix/KV-cache scorers because diffusion generation is non-autoregressive.
 
 ---
 
@@ -27,6 +29,7 @@ This guide includes configurations for the following accelerators and inference 
 | ------------------ | -------------------------- | ---------------------------- | ------------------------------------------ |
 | NVIDIA GPU         | `modelserver/gpu/vllm/${INFRA_PROVIDER}/`    | `Qwen/Qwen3-VL-32B-Instruct` | Default configuration (`INFRA_PROVIDER` options: `base`, `gke`)                      |
 | Intel XPU          | `modelserver/xpu/vllm/`    | `Qwen/Qwen3-VL-32B-Instruct` | Intel Arc Pro B60            |
+| Intel XPU          | `modelserver/xpu/vllm-omni/` | `Wan-AI/Wan2.1-T2V-1.3B-Diffusers` | Aggregated deployment via vLLM-Omni |
 | Google TPU v7      | `modelserver/tpu/v7/vllm/qwen3-vl/` | `Qwen/Qwen3-VL-32B-Instruct` | GKE `tpu7x`, `2x2x1` slice, TP=4, 4 chips per replica, 8 replicas |
 | Google TPU v7      | `modelserver/tpu/v7/vllm/gemma4/`   | `google/gemma-4-31B-it`      | Same hardware; <br/>needs the Gemma 4 token estimate in the [router values](#1-deploy-the-llm-d-router) |
 
@@ -128,21 +131,37 @@ helm install ${GUIDE_NAME} \
 
 </details>
 
-### 2. Deploy the Model Server
+#### Wan Video (vLLM-Omni) Router Profile
 
-Apply the Kustomize overlays for your specific backend (defaulting to NVIDIA GPU / vLLM):
+For the Wan video backend, install a dedicated router release with
+the diffusion-focused profile and disable the chart-generated catch-all HTTPRoute.
+Then apply the path-scoped HTTPRoute from the modelserver directory.
 
 ```bash
-export INFRA_PROVIDER=gke # base | gke
-kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/multimodal-serving/${GUIDE_NAME}/modelserver/gpu/vllm/${INFRA_PROVIDER}/
+helm install wan-video-xpu \
+    ${ROUTER_STANDALONE_CHART} \
+    -f ${REPO_ROOT}/guides/recipes/router/base.values.yaml \
+    -f ${REPO_ROOT}/guides/multimodal-serving/${GUIDE_NAME}/router/aggregation-video-xpu.values.yaml \
+    -n ${NAMESPACE} --version ${ROUTER_CHART_VERSION}
+
+kubectl apply -n ${NAMESPACE} -f \
+    ${REPO_ROOT}/guides/multimodal-serving/${GUIDE_NAME}/modelserver/xpu/vllm-omni/httproute.yaml
 ```
 
-<details>
-<summary><h4>Other Accelerators</h4></summary>
+### 2. Deploy the Model Server
+
+Apply the Kustomize overlays for your specific backend:
 
 ```bash
-# Intel XPU
+# NVIDIA GPU / vLLM (Qwen3-VL text+image)
+export INFRA_PROVIDER=gke # base | gke
+kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/multimodal-serving/${GUIDE_NAME}/modelserver/gpu/vllm/${INFRA_PROVIDER}/
+
+# Intel XPU / vLLM (Qwen3-VL text+image)
 kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/multimodal-serving/${GUIDE_NAME}/modelserver/xpu/vllm/
+
+# Intel XPU / vLLM-Omni (Wan2.1 text-to-video)
+kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/multimodal-serving/${GUIDE_NAME}/modelserver/xpu/vllm-omni/
 
 # Google TPU v7 — Qwen3-VL-32B-Instruct
 kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/multimodal-serving/${GUIDE_NAME}/modelserver/tpu/v7/vllm/qwen3-vl/
@@ -152,7 +171,15 @@ kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/multimodal-serving/${GUIDE_
 ```
 
 > [!NOTE]
-> Intel XPU deployments use Kubernetes Dynamic Resource Allocation (DRA) with `resource.k8s.io/v1` `ResourceClaimTemplate` resources and per-container `resources.claims`. Ensure your cluster supports DRA, has the Intel device plugin/DRA components installed, and exposes the `gpu.intel.com` `DeviceClass` before applying this overlay.
+> Intel XPU deployments use Kubernetes Dynamic Resource Allocation (DRA) with `resource.k8s.io/v1` `ResourceClaimTemplate` resources and per-container `resources.claims`. Ensure your cluster supports DRA, has the Intel device plugin/DRA components installed, and exposes the `gpu.intel.com` `DeviceClass` before applying these overlays.
+
+### 2a. Wan Video (vLLM-Omni) Backend Notes
+
+- The Wan video backend uses a single aggregated worker with vLLM-Omni (`vllm serve --omni`).
+- The default image comes from the `xpu-vllm-omni` image component
+    (`ghcr.io/llm-d/llm-d-xpu-omni`). Override it only if you need a custom build.
+- The path-scoped route in `modelserver/xpu/vllm-omni/httproute.yaml` targets
+    only `/v1/videos` and points to the `wan-video-xpu` InferencePool.
 
 > [!NOTE]
 > The TPU overlays schedule onto a GKE node pool with `cloud.google.com/gke-tpu-accelerator: tpu7x` and
@@ -165,8 +192,6 @@ kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/multimodal-serving/${GUIDE_
 > The TPU pods also set `priorityClassName: medium`. That `PriorityClass` is **not** created by this guide —
 > it must already exist in the cluster, or the pods are rejected at admission. Drop the field if your
 > cluster doesn't define it.
-
-</details>
 
 ### 3. (Optional) Enable monitoring
 
@@ -238,6 +263,21 @@ curl -X POST http://${IP}/v1/chat/completions \
     }' | jq
 ```
 
+### 3. Send a Wan Video Test Request
+
+For the Wan backend, send a video generation request to `/v1/videos/sync`.
+
+```bash
+curl -X POST http://${IP}/v1/videos/sync \
+    -F model=Wan-AI/Wan2.1-T2V-1.3B-Diffusers \
+    -F prompt='A serene lakeside sunrise with mist over the water.' \
+    -F width=256 -F height=256 -F num_frames=17 \
+    -F num_inference_steps=8 -F guidance_scale=4.0 -F fps=16 -F seed=42 \
+    -o out.mp4
+```
+
+`/v1/videos` (without `/sync`) is the async variant that returns a job id.
+
 ---
 
 ## Cleanup
@@ -246,16 +286,17 @@ To tear down and clean up all deployed resources:
 
 ```bash
 helm uninstall ${GUIDE_NAME} -n ${NAMESPACE}
+helm uninstall wan-video-xpu -n ${NAMESPACE}
+# NVIDIA GPU / vLLM
 kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/multimodal-serving/${GUIDE_NAME}/modelserver/gpu/vllm/${INFRA_PROVIDER}/
-# For Intel XPU:
-# kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/multimodal-serving/${GUIDE_NAME}/modelserver/xpu/vllm/
-# For Google TPU v7:
-# kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/multimodal-serving/${GUIDE_NAME}/modelserver/tpu/v7/vllm/qwen3-vl/
-# kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/multimodal-serving/${GUIDE_NAME}/modelserver/tpu/v7/vllm/gemma4/
-```
-
-<!-- llm-d-cicd:skip start -->
-```bash
+# Intel XPU / vLLM
+kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/multimodal-serving/${GUIDE_NAME}/modelserver/xpu/vllm/
+# Intel XPU / vLLM-Omni (Wan video)
+kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/multimodal-serving/${GUIDE_NAME}/modelserver/xpu/vllm-omni/
+kubectl delete -n ${NAMESPACE} -f ${REPO_ROOT}/guides/multimodal-serving/${GUIDE_NAME}/modelserver/xpu/vllm-omni/httproute.yaml
+# Google TPU v7
+kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/multimodal-serving/${GUIDE_NAME}/modelserver/tpu/v7/vllm/qwen3-vl/
+kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/multimodal-serving/${GUIDE_NAME}/modelserver/tpu/v7/vllm/gemma4/
 kubectl delete namespace ${NAMESPACE}
 ```
 <!-- llm-d-cicd:skip end -->

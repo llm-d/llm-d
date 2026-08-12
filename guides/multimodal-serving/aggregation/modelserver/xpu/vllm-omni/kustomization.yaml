@@ -1,0 +1,58 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+# Aggregated (single-worker) Wan text-to-video model server on Intel XPU.
+#
+# This extends the shared single-host `default` base, which provides the Pod
+# skeleton (ServiceAccount, `decode` Deployment, container `modelserver`, port
+# 8000, probes) plus the ResourceClaimTemplate name reference. The aggregated
+# Wan worker specifics are layered on via patch-vllm.yaml.
+#
+# The Wan worker is a single vLLM-Omni process (`vllm serve <model> --omni`) that
+# serves the OpenAI HTTP API (/v1/videos) and runs the full diffusion pipeline
+# (UMT5 + DiT + VAE) in one stage. No Dynamo, no etcd, no NATS — the vllm-omni:xpu
+# image ships everything needed.
+#
+# Topology: one Pod, one Intel XPU (pinned via ZE_AFFINITY_MASK). This is the v1
+# bring-up target (Wan2.1-T2V-1.3B, BF16, enforce-eager). The disaggregated
+# Encoder/Generator (EG) two-pool counterpart lives in
+# ../../../../e-disaggregation/modelserver/xpu/vllm-omni-eg/.
+
+resources:
+  - ../../../../../recipes/modelserver/base/single-host/default
+  - resource-claim-templates.yaml
+
+components:
+  - ../../../../../recipes/modelserver/components/images/xpu-vllm-omni
+
+namePrefix: agg-video-xpu-vllm-omni-
+
+patches:
+  - path: patch-vllm.yaml
+
+labels:
+  - pairs:
+      llm-d.ai/model: Wan2.1-T2V-1.3B
+      llm-d.ai/guide: multimodal-video
+      llm-d.ai/accelerator-variant: xpu
+      llm-d.ai/accelerator-vendor: intel
+      llm-d.ai/engine-type: vllm-omni
+      llm-d.ai/role: aggregated
+    includeSelectors: true
+    includeTemplates: true
+    fields:
+      - group: apps
+        version: v1
+        kind: Deployment
+        path: metadata/labels
+        create: true
+      - group: apps
+        version: v1
+        kind: Deployment
+        path: spec/selector/matchLabels
+        create: true
+      - group: apps
+        version: v1
+        kind: Deployment
+        path: spec/template/metadata/labels
+        create: true

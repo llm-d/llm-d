@@ -14,7 +14,7 @@ on:
         type: string
         default: ''
       platforms:
-        description: 'Platforms to build (comma-separated: cuda,aws,gb200,xpu,sglang-xpu,cpu). Overrides change detection when non-empty.'
+        description: 'Platforms to build (comma-separated: cuda,aws,gb200,xpu,xpu-omni,sglang-xpu,cpu). Overrides change detection when non-empty.'
         required: false
         type: string
         default: ''
@@ -37,13 +37,16 @@ on:
       xpu:
         description: 'Whether XPU image was built'
         value: ${{ jobs.detect-changes.outputs.xpu }}
+      xpu-omni:
+        description: 'Whether XPU vLLM-Omni image was built'
+        value: ${{ jobs.detect-changes.outputs['xpu-omni'] }}
       sglang-xpu:
         description: 'Whether the SGLang XPU image was built'
         value: ${{ jobs.detect-changes.outputs.sglang-xpu }}
   workflow_dispatch:
     inputs:
       platforms:
-        description: "Platforms to build (comma-separated: cuda,aws,gb200,xpu,sglang-xpu,cpu)"
+        description: "Platforms to build (comma-separated: cuda,aws,gb200,xpu,xpu-omni,sglang-xpu,cpu)"
         required: false
         default: "cuda"
         type: string
@@ -98,6 +101,7 @@ jobs:
       gb200: ${{ steps.force.outputs.gb200 || steps.platforms-input.outputs.gb200 || steps.filter.outputs.gb200 }}
       rocm: ${{ steps.force.outputs.rocm || steps.platforms-input.outputs.rocm || steps.filter.outputs.rocm }}
       xpu: ${{ steps.force.outputs.xpu || steps.platforms-input.outputs.xpu || steps.filter.outputs.xpu }}
+      xpu-omni: ${{ steps.force.outputs['xpu-omni'] || steps.platforms-input.outputs['xpu-omni'] || steps.filter.outputs['xpu-omni'] }}
       sglang-xpu: ${{ steps.force.outputs.sglang-xpu || steps.platforms-input.outputs.sglang-xpu || steps.filter.outputs.sglang-xpu }}
       cpu: ${{ steps.force.outputs.cpu || steps.platforms-input.outputs.cpu || steps.filter.outputs.cpu }}
       rdma-tools: ${{ steps.filter.outputs.rdma-tools }}
@@ -111,6 +115,7 @@ jobs:
           echo "gb200=true" >> $GITHUB_OUTPUT
           echo "rocm=true" >> $GITHUB_OUTPUT
           echo "xpu=true" >> $GITHUB_OUTPUT
+          echo "xpu-omni=true" >> $GITHUB_OUTPUT
           echo "sglang-xpu=true" >> $GITHUB_OUTPUT
           echo "cpu=true" >> $GITHUB_OUTPUT
       # shim to convert comma-separated platforms input into same boolean outputs as path filter
@@ -133,6 +138,7 @@ jobs:
           echo "gb200=$(has_platform gb200)" >> $GITHUB_OUTPUT
           echo "rocm=$(has_platform rocm)" >> $GITHUB_OUTPUT
           echo "xpu=$(has_platform xpu)" >> $GITHUB_OUTPUT
+          echo "xpu-omni=$(has_platform xpu-omni)" >> $GITHUB_OUTPUT
           echo "sglang-xpu=$(has_platform sglang-xpu)" >> $GITHUB_OUTPUT
           echo "cpu=$(has_platform cpu)" >> $GITHUB_OUTPUT
       - uses: actions/checkout@v7
@@ -181,6 +187,9 @@ jobs:
               - 'docker/Dockerfile.rocm'
             xpu:
               - 'docker/Dockerfile.xpu'
+              - 'docker/common-versions'
+            xpu-omni:
+              - 'docker/Dockerfile.xpu-omni'
               - 'docker/common-versions'
             sglang-xpu:
               - 'docker/common-versions'
@@ -1554,6 +1563,98 @@ jobs:
         with:
           sarif_file: "trivy-results.sarif"
           category: trivy-xpu-sglang
+
+      - name: Display vulnerability summary
+        run: |
+          echo "=== Vulnerability Scan Summary ==="
+          if [ -f trivy-results.sarif ]; then
+            echo "Scan completed. Check the Security tab for detailed results."
+          else
+            echo "No vulnerabilities found or scan failed."
+          fi
+
+  xpu-omni-build-llm-d:
+    needs: [detect-changes]
+    if: ${{ needs.detect-changes.outputs['xpu-omni'] == 'true' }}
+    strategy:
+      fail-fast: false
+    runs-on: xpu
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.ref || '' }}
+
+      - name: Load vLLM-Omni source ref from file
+        id: common-versions
+        run: |
+          source docker/common-versions
+          echo "omni_repo=${VLLM_OMNI_REPO}" >> $GITHUB_OUTPUT
+          echo "omni_ref=${VLLM_OMNI_REF}" >> $GITHUB_OUTPUT
+
+      - name: Checkout vLLM-Omni source
+        uses: actions/checkout@v7
+        with:
+          repository: ${{ steps.common-versions.outputs.omni_repo }}
+          ref: ${{ steps.common-versions.outputs.omni_ref }}
+          path: vllm-omni
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Log in to Container Registry
+        uses: docker/login-action@v4
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ secrets.GHCR_USER }}
+          password: ${{ secrets.GHCR_TOKEN }}
+
+      - name: Set image tag
+        id: set-tag
+        run: |
+          TAG="sha-$(git rev-parse --short HEAD)"
+          echo "tag=${TAG}" >> $GITHUB_OUTPUT
+          PR_TAG="${{ github.event.pull_request.number }}"
+          if [ -n "${PR_TAG}" ]; then
+            echo "pr_tag=pr-${PR_TAG}" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Build and push the image
+        id: build-and-push
+        uses: docker/build-push-action@v7
+        with:
+          context: ./vllm-omni
+          file: ./docker/Dockerfile.xpu-omni
+          platforms: linux/amd64
+          push: true
+          provenance: true
+          tags: |
+            ${{ env.REGISTRY }}/${{ github.repository }}-xpu-omni-dev:${{ steps.set-tag.outputs.tag }}
+            ${{ steps.set-tag.outputs.pr_tag != '' && format('{0}/{1}-xpu-omni-dev:{2}', env.REGISTRY, github.repository, steps.set-tag.outputs.pr_tag) || '' }}
+            ${{ github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.event_name != 'pull_request_target' && format('{0}/{1}-xpu-omni-dev:latest', env.REGISTRY, github.repository) || '' }}
+          github-token: ${{ secrets.GHCR_TOKEN }}
+        env:
+          DOCKER_BUILDKIT: "1"
+          BUILDKIT_PROGRESS: "plain"
+
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          image-ref: ${{ env.REGISTRY }}/${{ github.repository }}-xpu-omni-dev:${{ steps.set-tag.outputs.tag }}
+          format: "sarif"
+          output: "trivy-results.sarif"
+          severity: "CRITICAL,HIGH,MEDIUM"
+          scanners: vuln
+          timeout: 30m
+          skip-dirs: /root/.cache/uv
+        env:
+          TRIVY_USERNAME: ${{ secrets.GHCR_USER }}
+          TRIVY_PASSWORD: ${{ secrets.GHCR_TOKEN }}
+
+      - name: Upload Trivy scan results to GitHub Security tab
+        uses: github/codeql-action/upload-sarif@v4
+        with:
+          sarif_file: 'trivy-results.sarif'
 
       - name: Display vulnerability summary
         run: |
