@@ -44,22 +44,22 @@ Include a component in your overlay's `kustomization.yaml`:
 
 ```yaml
 components:
-  - ../../../../../recipes/modelserver/components/images/gpu-vllm
+  - ../../../../../recipes/modelserver/components/images/gpu-vllm/release
 ```
 
 The component replaces the `REPLACE_MODEL_SERVER_IMAGE` placeholder (or `REPLACE_ROUTING_SIDECAR_IMAGE` for the sidecar) with the default image.
 
 ## Overriding
 
-If a guide requires a different image (e.g. a nightly build, a vendor fork, or a platform-specific variant), add an `images:` section in the overlay that takes precedence over the component:
+If a guide requires a different image (e.g. a nightly build, a vendor fork, or a platform-specific variant), add an `images:` section in the same overlay. The override's `name:` must match the image **as baked by the component** (registry-qualified, e.g. `docker.io/vllm/vllm-openai`), not the `REPLACE_*` placeholder — an inline override that names the placeholder is silently ignored when a component also replaces it:
 
 ```yaml
 components:
-  - ../../../../../recipes/modelserver/components/images/gpu-vllm
+  - ../../../../../recipes/modelserver/components/images/gpu-vllm/release
 
 # TODO(#<issue-number>): Remove override once <reason> is resolved.
 images:
-  - name: REPLACE_MODEL_SERVER_IMAGE
+  - name: docker.io/vllm/vllm-openai
     newName: ghcr.io/example/custom-vllm
     newTag: nightly-20260601
 ```

@@ -2,8 +2,8 @@ apiVersion: kustomize.config.k8s.io/v1alpha1
 kind: Component
 images:
   - name: REPLACE_MODEL_SERVER_IMAGE
-    newName: ghcr.io/llm-d/llm-d-aws
-    newTag: v0.8.1
+    newName: docker.io/vllm/vllm-openai
+    newTag: nightly
 
 # Workaround for https://github.com/vllm-project/vllm/issues/44548, required with vLLM v0.20.0+ due to torch 2.11
 patches:

@@ -6,8 +6,8 @@ resources:
 namePrefix: pd-disaggregation-nvidia-gpu-sglang-
 
 components:
-  - ../../../../../recipes/modelserver/components/images/gpu-sglang
-  - ../../../../../recipes/modelserver/components/images/routing-sidecar
+  - ../../../../../recipes/modelserver/components/images/gpu-sglang/release
+  - ../../../../../recipes/modelserver/components/images/routing-sidecar/release
 
 labels:
   - pairs:

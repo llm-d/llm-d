@@ -57,7 +57,7 @@ spec:
               type: DirectoryOrCreate
         containers:
           - name: vllm
-            image: vllm/vllm-openai:nightly
+            image: REPLACE_MODEL_SERVER_IMAGE
             securityContext:
               capabilities:
                 add:

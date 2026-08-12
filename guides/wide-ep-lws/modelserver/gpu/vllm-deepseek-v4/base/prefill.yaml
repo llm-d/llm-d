@@ -31,7 +31,7 @@ spec:
             emptyDir: {}
         containers:
           - name: vllm
-            image: vllm/vllm-openai:v0.23.0
+            image: REPLACE_MODEL_SERVER_IMAGE
             securityContext:
               capabilities:
                 add:

@@ -5,6 +5,7 @@ resources:
   - ../../base
 
 components:
+  - ../../../../../../recipes/modelserver/components/images/gpu-vllm/release
   - ../../../../components/gke-rdma
 
 patches:

@@ -20,7 +20,20 @@ patches:
       kind: LeaderWorkerSet
     patch: |-
       - op: add
-        path: /spec/template/spec/containers/0/env/-
+        path: /spec/leaderWorkerTemplate/workerTemplate/spec/containers/0/env/-
+        value:
+          name: USER
+          value: llm-d
+  - target:
+      kind: DisaggregatedSet
+    patch: |-
+      - op: add
+        path: /spec/roles/0/spec/leaderWorkerTemplate/workerTemplate/spec/containers/0/env/-
+        value:
+          name: USER
+          value: llm-d
+      - op: add
+        path: /spec/roles/1/spec/leaderWorkerTemplate/workerTemplate/spec/containers/0/env/-
         value:
           name: USER
           value: llm-d

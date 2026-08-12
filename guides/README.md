@@ -60,18 +60,42 @@ Default model server and sidecar images are defined as [Kustomize Components](./
 
 ```yaml
 components:
-  - ../../../../../recipes/modelserver/components/images/gpu-vllm
-  - ../../../../../recipes/modelserver/components/images/routing-sidecar
+  - ../../../../../recipes/modelserver/components/images/gpu-vllm/release
+  - ../../../../../recipes/modelserver/components/images/routing-sidecar/release
 ```
 
 To change a default image for testing or a version bump, edit the component file — all guides using it pick up the change automatically.
 
-**Overriding:** If a guide requires a non-default image (nightly build, vendor fork, platform variant), add an inline `images:` section in the overlay. Every override **must** include a `TODO` comment with a tracking issue for cleanup:
+**Nightlies:** Nightly builds are a special case — several components already ship a `nightly` variant that tracks the engine's moving `nightly` tag. Where one exists, include the `nightly` component instead of an inline override:
+
+```yaml
+components:
+  - ../../../../../recipes/modelserver/components/images/gpu-sglang/nightly
+```
+
+The following components provide a `nightly` variant (run from `recipes/modelserver/components/images/`):
+
+```console
+$ tree -d -L 2 --noreport | awk 'NR==1{print} /^[├└]── /{p=$0} /nightly$/{print p; print $0}'
+.
+├── amd-vllm
+│   ├── nightly
+├── gpu-sglang
+│   ├── nightly
+├── routing-sidecar
+│   ├── nightly
+├── tpu-vllm
+│   ├── nightly
+└── xpu-vllm
+    ├── nightly
+```
+
+**Overriding:** For any other non-default image — a vendor fork, platform variant, or a *specific* nightly tag that the component's moving `nightly` tag does not yet include — add an inline `images:` section in the overlay. The override's `name:` must match the image **as baked by the component** (registry-qualified, e.g. `docker.io/vllm/vllm-openai`), not the `REPLACE_*` placeholder — an override that names the placeholder is silently ignored. Every override **must** include a `TODO` comment with a tracking issue for cleanup:
 
 ```yaml
 # TODO(#123): Remove override once upstream vLLM includes NIXL support.
 images:
-  - name: REPLACE_MODEL_SERVER_IMAGE
+  - name: docker.io/vllm/vllm-openai
     newName: ghcr.io/example/custom-vllm
     newTag: nightly-20260601
 ```

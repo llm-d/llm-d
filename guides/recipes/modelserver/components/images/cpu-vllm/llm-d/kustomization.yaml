@@ -18,7 +18,7 @@ patches:
       kind: LeaderWorkerSet
     patch: |-
       - op: add
-        path: /spec/template/spec/containers/0/env/-
+        path: /spec/leaderWorkerTemplate/workerTemplate/spec/containers/0/env/-
         value:
           name: USER
           value: llm-d
