@@ -1,6 +1,6 @@
 # Benchmarking the KEDA predicted-latency autoscaler
 
-How we measure the setup in [../../README.slo-aware.md](../../README.slo-aware.md): a staged-ramp
+How we measure the setup in [../README.md](../README.md): a staged-ramp
 episode scored on **combined SLO attainment** (fraction of requests meeting
 *both* latency SLOs) against **cost** (time-averaged replicas over the full
 episode, including the final drain).
@@ -53,7 +53,7 @@ The load is driven by [`llmdbenchmark`](https://github.com/llm-d/llm-d-benchmark
 inference-perf configs; they live here (not in the upstream profile catalog)
 because they are specific to this episode protocol, and are passed to the CLI
 via `--workload-file-path`. For CLI installation details, flag reference, and
-troubleshooting, see [`helpers/benchmark.md`](../../../helpers/benchmark.md).
+troubleshooting, see [`helpers/benchmark.md`](../../../../helpers/benchmark.md).
 
 Install the CLI (clones the repo into `./llm-d-benchmark/` with a venv):
 
