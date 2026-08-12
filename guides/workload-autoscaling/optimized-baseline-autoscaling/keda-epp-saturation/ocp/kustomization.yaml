@@ -26,9 +26,10 @@ namespace: llm-d-optimized-baseline
 
 resources:
   - ../base
-  - serviceaccount.yaml
-  - clusterrolebinding.yaml
-  - token-secret.yaml
+
+# Shared OCP metrics-reader auth (SA + ClusterRoleBinding + token Secret).
+components:
+  - ../../../../recipes/autoscaling/metrics-reader
 
 patches:
   # Repoint the TriggerAuthentication from the manually-copied prometheus-token
