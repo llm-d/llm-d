@@ -168,6 +168,8 @@ jobs:
           # building blocks referenced by other guides and are not standalone overlays.
 
           failed=0
+          # results entries: "PASS <name>" or "FAIL <name>"
+          results=()
 
           for guide_dir in guides/*/; do
             guide="${guide_dir%/}"
@@ -204,6 +206,7 @@ jobs:
               echo "--- kustomize build ---"
               if ! kustomize build "${kust_dir}" > /tmp/rendered.yaml; then
                 echo "FAIL: kustomize build failed for ${name}"
+                results+=("FAIL ${name}")
                 failed=1
                 continue
               fi
@@ -222,11 +225,51 @@ jobs:
               echo "--- kubectl apply --dry-run=server ---"
               if kubectl apply --dry-run=server -f /tmp/rendered.yaml; then
                 echo "PASS: ${name}"
+                results+=("PASS ${name}")
               else
                 echo "FAIL: ${name}"
+                results+=("FAIL ${name}")
                 failed=1
               fi
             done < <(find "${guide}" -name kustomization.yaml -print0 | sort -z)
           done
+
+          # Write a tree-style summary to the GitHub job summary.
+          # Each path like "guide/sub/leaf" is rendered as an indented tree entry
+          # with ✅ or ❌ based on pass/fail, grouped under their parent guide.
+          {
+            echo "## Kustomize Dry-Run Results"
+            echo ""
+            current_guide=""
+            current_l2=""
+            for entry in "${results[@]}"; do
+              result="${entry%% *}"
+              name="${entry#* }"
+              icon=$([[ "$result" == "PASS" ]] && echo "✅" || echo "❌")
+
+              guide="${name%%/*}"
+              rest="${name#*/}"
+
+              if [[ "$guide" != "$current_guide" ]]; then
+                echo "- **${guide}**"
+                current_guide="$guide"
+                current_l2=""
+              fi
+
+              # Render up to 3 levels: guide / l2 / remainder
+              if [[ "$rest" == */* ]]; then
+                l2="${rest%%/*}"
+                leaf="${rest#*/}"
+                if [[ "$l2" != "$current_l2" ]]; then
+                  echo "  - **${l2}**"
+                  current_l2="$l2"
+                fi
+                echo "    - ${icon} \`${leaf}\`"
+              else
+                current_l2=""
+                echo "  - ${icon} \`${rest}\`"
+              fi
+            done
+          } >> "$GITHUB_STEP_SUMMARY"
 
           exit $failed
