@@ -16,7 +16,7 @@ calls EPP directly or sends generation to an llm-d serving endpoint (see
 ## How it works
 
 Instead of least-requests routing, each rollout request is scored by EPP,
-which ranks every candidate vLLM replica on prefix-cache hit rate, queue
+which ranks every candidate model server replica on prefix-cache hit rate, queue
 depth, and KV utilization and steers the request to the replica most likely
 to already have a warm cache. For the large, prefix-sharing sample groups
 that GRPO and PPO produce, this is a meaningful throughput win and reduces the
