@@ -223,6 +223,30 @@ export MAX_CONCURRENCY=$(awk '$1 == "maxConcurrency:" {print $2}' \
 echo "maxConcurrency: ${MAX_CONCURRENCY}"   # expect the integer set in the values file
 ```
 
+**Grant read access to the EPP metrics endpoint.** The EPP authenticates every metrics
+scrape against the Kubernetes API: a TokenReview on the caller's bearer token, then a
+SubjectAccessReview on the `/metrics` URL. Give the debug pod's service account
+permission to read `/metrics`, and give the EPP's service account the
+`system:auth-delegator` role it needs to run the reviews (the router chart does not
+ship this binding):
+
+```bash
+kubectl create clusterrole ${GUIDE_NAME}-metrics-reader \
+    --verb=get --non-resource-url=/metrics \
+    --dry-run=client -o yaml | kubectl apply -f -
+kubectl create clusterrolebinding ${GUIDE_NAME}-metrics-reader \
+    --clusterrole=${GUIDE_NAME}-metrics-reader \
+    --serviceaccount=${NAMESPACE}:default \
+    --dry-run=client -o yaml | kubectl apply -f -
+kubectl create clusterrolebinding ${GUIDE_NAME}-epp-auth-delegator \
+    --clusterrole=system:auth-delegator \
+    --serviceaccount=${NAMESPACE}:${GUIDE_NAME}-epp \
+    --dry-run=client -o yaml | kubectl apply -f -
+```
+
+Without these grants the metrics endpoint returns `401 Unauthorized`, and every
+metrics check in this guide reads as empty grep output.
+
 **Open a temporary interactive shell inside the cluster:**
 
 ```bash
@@ -237,14 +261,21 @@ kubectl run curl-debug --rm -it \
     -- /bin/bash
 ```
 
-**From inside the debug pod, check the metrics:**
+**From inside the debug pod, check the metrics.** The pod's automounted service account
+token authenticates the scrape:
 
 ```bash
-curl http://${GUIDE_NAME}-epp:9090/metrics | grep llm_d_epp_flow_control_queue_size
+TOKEN=$(cat /var/run/secrets/kubernetes.io/serviceaccount/token)
+curl -s -o metrics.txt -w "%{http_code}\n" -H "Authorization: Bearer ${TOKEN}" \
+  http://${GUIDE_NAME}-epp:9090/metrics   # expect: 200
+grep llm_d_epp_flow_control_queue_size metrics.txt
 ```
 
 Expected: one series per active flow (tenant × priority), all `0` on an idle pool. A
 flow's series appears after its first request queues, so a quiet pool may show none.
+A `401` means the metrics-access grants above were skipped; a `500` means the EPP's
+service account lacks the auth-delegator binding (the EPP log shows a failed
+TokenReview).
 
 ## Use Cases
 
@@ -296,7 +327,8 @@ Still inside the `curl-debug` pod, confirm the request was accounted under the p
 band:
 
 ```bash
-curl -s http://${GUIDE_NAME}-epp:9090/metrics \
+TOKEN=$(cat /var/run/secrets/kubernetes.io/serviceaccount/token)
+curl -s -H "Authorization: Bearer ${TOKEN}" http://${GUIDE_NAME}-epp:9090/metrics \
   | grep 'llm_d_epp_flow_control_request_queue_duration_seconds_count' \
   | grep 'priority="100"'
 ```
@@ -383,9 +415,10 @@ To verify backpressure management, you must overwhelm the pool's capacity. Becau
    and record the peak:
 
     ```bash
+    TOKEN=$(cat /var/run/secrets/kubernetes.io/serviceaccount/token)
     PEAK=0
     for i in $(seq 1 30); do
-      Q=$(curl -s http://${GUIDE_NAME}-epp:9090/metrics \
+      Q=$(curl -s -H "Authorization: Bearer ${TOKEN}" http://${GUIDE_NAME}-epp:9090/metrics \
         | awk '/llm_d_epp_flow_control_queue_size.*priority="-10"/ {s+=$2} END {print s+0}')
       [ "$Q" -gt "$PEAK" ] && PEAK=$Q
       sleep 1
@@ -396,16 +429,19 @@ To verify backpressure management, you must overwhelm the pool's capacity. Becau
 
     Expect a peak near `SURPLUS`: the burst minus the `MAX_CONCURRENCY` requests that
     dispatched immediately. A peak above 0 confirms the EPP queued the surplus. A peak
-    of 0 usually means the poll missed the load window (the burst finished first; raise
-    `max_tokens`) or the burst never exceeded dispatch capacity (more than one replica
-    still ready; re-check the scale-down in step 2). Rule out both causes before raising
-    the concurrency and re-running.
+    of 0 usually means the metrics scrape failed auth (re-run the metrics check from
+    [Proof of Queuing](#3-proof-of-queuing); expect 200), the poll missed the load
+    window (the burst finished first; raise `max_tokens`), or the burst never exceeded
+    dispatch capacity (more than one replica still ready; re-check the scale-down in
+    step 2). Rule out all three causes before raising the concurrency and re-running.
 
-    `wait` returns once the pool works through the burst, which takes a few minutes at
-    500 tokens per request. Requests queued longer than `defaultRequestTTL` (60s in
-    [router/flow-control.values.yaml](./router/flow-control.values.yaml)) are rejected.
-    The burst curls discard their responses, so rejections leave no output; they happen
-    after the poll records the peak and do not affect it.
+    `wait` returns once the pool works through the burst: about 30 seconds on the
+    reference workload's single replica, longer on slower pools. On a pool slow enough
+    that queued requests wait past `defaultRequestTTL` (60s in
+    [router/flow-control.values.yaml](./router/flow-control.values.yaml)), the EPP
+    rejects them. The burst curls discard their responses, so a rejection leaves no
+    output; the poll records the peak in the first seconds of the burst, before any TTL
+    can expire.
 
 4. **Exit the debug shell** once testing is complete to return to your host terminal:
 
@@ -527,6 +563,8 @@ export INFRA_PROVIDER=base # match the value used at deploy time
 kubectl kustomize ${REPO_ROOT}/guides/optimized-baseline/modelserver/gpu/vllm/${INFRA_PROVIDER}/ \
   | sed "s/optimized-baseline/${GUIDE_NAME}/g" \
   | kubectl delete -n ${NAMESPACE} -f -
+kubectl delete clusterrolebinding ${GUIDE_NAME}-metrics-reader ${GUIDE_NAME}-epp-auth-delegator
+kubectl delete clusterrole ${GUIDE_NAME}-metrics-reader
 ```
 
 If you ran the Benchmarking section, also delete the harness leftovers. The workload PVC
