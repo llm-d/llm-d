@@ -145,10 +145,14 @@ a crossover measured on your own transport.
 
 ## Best Practices
 
-* `--block-size` identical on every pod and in the router's
-  `precise-prefix-cache-producer` (`tokenProcessorConfig.blockSize`). A
-  mismatch leaves the prefix index empty and the whole path silently
-  inert: requests still serve, nothing pulls.
+* Keep the offloading block size identical across all P2P peers. This
+  guide omits `kv_connector_extra_config.block_size`, so it defaults to
+  the engine's `--block-size`; therefore `--block-size` must be
+  identical across all model-server pods in this deployment. If an
+  explicit offloading `block_size` is configured instead, use the same
+  value on every peer and ensure that it is a multiple of each peer's
+  engine block size. The router's `tokenProcessorConfig.blockSize` is
+  an independent indexing granularity and may differ.
 * `PYTHONHASHSEED` pinned to the same value fleet-wide. vLLM seeds block
   hashes per process; unpinned seeds mean no block hash ever matches
   across pods and every lookup misses.
