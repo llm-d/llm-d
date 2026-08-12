@@ -63,7 +63,7 @@ This guide includes configuration for the following accelerators:
 P/D disaggregation requires a KV transfer backend to move KV cache blocks from prefill workers to decode workers. The transfer backend is configured via vLLM's `--kv-transfer-config` flag.
 
 > [!NOTE]
-> The following table represents vLLM's KVTransfer compatability. SGLang also supports these KVTransfer backends but its implementation will look different and is coming soon.
+> The following table represents vLLM's KVTransfer compatibility. SGLang also supports these KVTransfer backends but its implementation will look different and is coming soon.
 
 | Connector | Overlay | Transport | Notes |
 | --------- | ------- | --------- | ----- |
