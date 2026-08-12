@@ -338,6 +338,16 @@ To verify backpressure management, you must overwhelm the pool's capacity. Becau
     kubectl scale deployment -l llm-d.ai/guide=${GUIDE_NAME} -n ${NAMESPACE} --replicas=1
     ```
 
+   Wait for the scale-down to settle. While more than one replica reports ready, dispatch
+   capacity stays above `MAX_CONCURRENCY` and the burst drains without queuing:
+
+    ```bash
+    until [ "$(kubectl get deployment -l llm-d.ai/guide=${GUIDE_NAME} \
+        -n ${NAMESPACE} -o jsonpath='{.items[0].status.readyReplicas}')" = "1" ]; do
+      sleep 5
+    done
+    ```
+
    Back in the debug pod, confirm a single request succeeds before bursting; a failing
    payload would read as an empty queue in step 3. The request generates 500 tokens and
    takes several seconds on an unloaded pool:
@@ -376,7 +386,7 @@ To verify backpressure management, you must overwhelm the pool's capacity. Becau
     PEAK=0
     for i in $(seq 1 30); do
       Q=$(curl -s http://${GUIDE_NAME}-epp:9090/metrics \
-        | awk '/llm_d_epp_flow_control_queue_size\{.*priority="-10"/ {s+=$2} END {print s+0}')
+        | awk '/llm_d_epp_flow_control_queue_size.*priority="-10"/ {s+=$2} END {print s+0}')
       [ "$Q" -gt "$PEAK" ] && PEAK=$Q
       sleep 1
     done
@@ -388,8 +398,14 @@ To verify backpressure management, you must overwhelm the pool's capacity. Becau
     dispatched immediately. A peak above 0 confirms the EPP queued the surplus. A peak
     of 0 usually means the poll missed the load window (the burst finished first; raise
     `max_tokens`) or the burst never exceeded dispatch capacity (more than one replica
-    still ready; re-check the scale-down in step 2). Rule those out before raising the
-    concurrency and re-running.
+    still ready; re-check the scale-down in step 2). Rule out both causes before raising
+    the concurrency and re-running.
+
+    `wait` returns once the pool works through the burst, which takes a few minutes at
+    500 tokens per request. Requests queued longer than `defaultRequestTTL` (60s in
+    [router/flow-control.values.yaml](./router/flow-control.values.yaml)) are rejected.
+    The burst curls discard their responses, so rejections leave no output; they happen
+    after the poll records the peak and do not affect it.
 
 4. **Exit the debug shell** once testing is complete to return to your host terminal:
 

@@ -353,7 +353,7 @@ kubectl delete pod/access-to-harness-data-workload-pvc pvc/workload-pvc -n <name
 
 ### Harness pod stuck `Pending` with `Insufficient cpu`
 
-The harness pod requests 16 vCPU and 32 GiB of memory. It stays `Pending` until a node with that much allocatable capacity is available; check `kubectl describe pod -l app=llmdbench-harness-launcher` for the scheduling events.
+The harness pod requests 16 vCPU and 32 GiB of memory. It stays `Pending` until a node with that much allocatable capacity is available; check `kubectl describe pod -l app=llmdbench-harness-launcher -n <namespace>` for the scheduling events.
 
 ### `Could not detect endpoint for <stack>`
 
