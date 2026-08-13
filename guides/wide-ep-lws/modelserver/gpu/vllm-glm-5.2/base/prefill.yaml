@@ -136,7 +136,7 @@ spec:
                 BLOCK_SIZE_ARGS=""
                 if [ -n "${KV_BLOCK_SIZE:-}" ]; then
                   # Must match the router's precise-prefix-cache-producer
-                  # tokenProcessorConfig.blockSize, or the index stays empty.
+                  # tokenProcessorConfig.blockSizeTokens, or the index stays empty.
                   BLOCK_SIZE_ARGS="--block-size ${KV_BLOCK_SIZE}"
                 fi
 

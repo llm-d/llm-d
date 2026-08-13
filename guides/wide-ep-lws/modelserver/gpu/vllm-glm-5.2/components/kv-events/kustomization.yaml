@@ -1,9 +1,9 @@
 apiVersion: kustomize.config.k8s.io/v1alpha1
 kind: Component
 # Emit per-rank KV-cache events for the precise prefix-cache router variant
-# (see ../../../../../README.md, "Precise prefix-cache routing"). The block
+# (see ../../../../../README.precise-prefix-cache-routing.md). The block
 # size and PYTHONHASHSEED must be identical on every engine pod, and the block
-# size must match the router's tokenProcessorConfig.blockSize.
+# size must match the router's tokenProcessorConfig.blockSizeTokens.
 patches:
   - target:
       kind: LeaderWorkerSet

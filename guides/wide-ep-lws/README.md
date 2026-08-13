@@ -1,4 +1,4 @@
-# Wide Expert Parallelism
+# [Experimental] Wide Expert Parallelism
 
 [![E2E (CKS GPU)](https://github.com/llm-d/llm-d/actions/workflows/consolidate-status-wide-ep-lws-cks-acc-gpu-vllm-x.yaml/badge.svg)](https://github.com/llm-d/llm-d/actions/workflows/consolidate-status-wide-ep-lws-cks-acc-gpu-vllm-x.yaml)
 [![E2E (GKE GPU)](https://github.com/llm-d/llm-d/actions/workflows/consolidate-status-wide-ep-lws-gke-acc-gpu-vllm-x.yaml/badge.svg)](https://github.com/llm-d/llm-d/actions/workflows/consolidate-status-wide-ep-lws-gke-acc-gpu-vllm-x.yaml)
@@ -22,12 +22,12 @@ This guide demonstrates how to deploy DeepSeek-R1-0528 using vLLM's P/D disaggre
 
 ## Default Configuration
 
-| Parameter                | Value                                                   |
-| ------------------------ | ------------------------------------------------------- |
-| Model                    | [DeepSeek-R1-0528](https://huggingface.co/deepseek-ai/DeepSeek-R1-0528) |
-| Prefill Data Parallelism | 16                                                      |
-| Decode Data Parallelism  | 16                                                      |
-| Total GPUs               | 32                                                      |
+| Parameter | Value |
+| --- | --- |
+| Model | [DeepSeek-R1-0528](https://huggingface.co/deepseek-ai/DeepSeek-R1-0528) |
+| Prefill Data Parallelism | 16 |
+| Decode Data Parallelism | 16 |
+| Total GPUs | 32 |
 
 ### Intel XPU Configuration
 
@@ -48,13 +48,13 @@ The Intel XPU configuration uses the validated DeepSeek-V2-Lite shape:
 
 This guide includes configurations for the following accelerators:
 
-| Backend               | Directory                                   | Notes                                      |
-| --------------------- | ------------------------------------------- | ------------------------------------------ |
-| NVIDIA GPU (GKE)      | `modelserver/gpu/vllm/gke/`                 | GKE deployment (H200)                      |
-| NVIDIA GPU (GKE A4)   | `modelserver/gpu/vllm/topology-aware/gke-a4/` | GKE deployment (B200)                    |
-| NVIDIA GPU (CoreWeave)| `modelserver/gpu/vllm/coreweave/`           | CoreWeave deployment                       |
-| NVIDIA GPU (GB200)    | `modelserver/gpu/vllm/dgx-cloud-gb200/`     | DGX Cloud GB200 deployment                 |
-| Intel XPU (vLLM)      | `modelserver/xpu/vllm/`                     | DeepSeek-V2-Lite-Chat, DRA `gpu.intel.com`, XCCL, NIXL XPU KV buffers |
+| Backend | Directory | Notes |
+| --- | --- | --- |
+| NVIDIA GPU (GKE) | `modelserver/gpu/vllm/gke/` | GKE deployment (H200) |
+| NVIDIA GPU (GKE A4) | `modelserver/gpu/vllm/topology-aware/gke-a4/` | GKE deployment (B200) |
+| NVIDIA GPU (CoreWeave) | `modelserver/gpu/vllm/coreweave/` | CoreWeave deployment |
+| NVIDIA GPU (GB200) | `modelserver/gpu/vllm/dgx-cloud-gb200/` | DGX Cloud GB200 deployment |
+| Intel XPU (vLLM) | `modelserver/xpu/vllm/` | DeepSeek-V2-Lite-Chat, DRA `gpu.intel.com`, XCCL, NIXL XPU KV buffers |
 
 > [!NOTE]
 > NVIDIA GPU backends that use DeepEP for inter-node EP require All-to-All RDMA
@@ -73,6 +73,7 @@ This guide includes configurations for the following accelerators:
   export branch="main" # branch, tag, or commit hash
   git clone https://github.com/llm-d/llm-d.git && cd llm-d && git checkout ${branch}
   ```
+
 * Set the following environment variables:
 
   ```bash
@@ -82,11 +83,13 @@ This guide includes configurations for the following accelerators:
   export NAMESPACE=llm-d-wide-ep
   export MODEL=deepseek-ai/DeepSeek-R1-0528
   ```
+
 * Install the Gateway API Inference Extension CRDs:
 
   ```bash
   kubectl apply -f https://github.com/kubernetes-sigs/gateway-api-inference-extension/releases/download/${GAIE_VERSION}/v1-manifests.yaml
   ```
+
 * You have deployed the [LeaderWorkerSet controller](https://lws.sigs.k8s.io/docs/installation/)
 * For Intel XPU, install the [Intel Resource Drivers for Kubernetes](https://github.com/intel/intel-resource-drivers-for-kubernetes) and verify that the `gpu.intel.com` DRA DeviceClass is available.
 * Create a target namespace for the installation:
@@ -94,6 +97,7 @@ This guide includes configurations for the following accelerators:
   ```bash
   kubectl create namespace ${NAMESPACE} --dry-run=client -o yaml | kubectl apply -f -
   ```
+
 * [Create the `llm-d-hf-token` secret in your target namespace with the key `HF_TOKEN` matching a valid HuggingFace token](../../helpers/hf-token.md) to pull models.
 
 ## Installation Instructions
@@ -125,7 +129,7 @@ helm install ${GUIDE_NAME} \
 ```
 
 <details>
-<summary><h4>Gateway Mode</h4></summary>
+<summary><b>Gateway Mode</b></summary>
 
 To use a Kubernetes Gateway managed proxy rather than the standalone version, follow these steps instead of applying the previous Helm chart:
 
@@ -192,7 +196,7 @@ kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/g
 
 ### 1. Get the IP of the Proxy
 
-**Standalone Mode**
+#### Standalone Mode
 
 ```bash
 export IP=$(kubectl get service ${GUIDE_NAME}-epp -n ${NAMESPACE} -o jsonpath='{.spec.clusterIP}')
@@ -234,92 +238,10 @@ curl -X POST http://${IP}/v1/completions \
 
 ## Precise prefix-cache routing
 
-The router configurations above score prefixes with the approximate
-(router-side) index. The `router/precise-routing.values.yaml` overlay routes
-on the exact index instead: every rank publishes KV-cache events and the EPP
-`precise-prefix-cache-producer` tracks true block residency, gated by modeled
-prefill load (`prefix-cache-affinity-filter` + `token-load-scorer`).
-
-Additional prerequisites:
-
-* An EPP build with per-rank KV-event attribution
-  ([llm-d-router#2233](https://github.com/llm-d/llm-d-router/pull/2233)).
-* A Gateway API Inference Extension bundle >= `v1.5.0-rc.2`: the pool targets
-  all DP rank ports, and earlier CRD generations cap `targetPorts` at 1.
-* Identical `PYTHONHASHSEED` and `--block-size` on every engine pod (the
-  `kv-events` component sets both), with the block size matching the router's
-  `tokenProcessorConfig.blockSize`.
-
-Deploy:
-
-1. Add the `components/kv-events` component to your chosen modelserver
-   deployment overlay, so every rank publishes events on its compensated ZMQ
-   port (vLLM offsets the configured port by the global DP rank; the base
-   manifests compensate by the pod's start rank, see
-   [llm-d-router#2227](https://github.com/llm-d/llm-d-router/issues/2227)).
-2. Apply the render Service, which fronts the prefill pods' `/v1/*/render`
-   endpoints for the EPP token-producer:
-
-   ```bash
-   kubectl apply -k render/ -n ${NAMESPACE}
-   ```
-
-3. Deploy the router with the overlay layered after the guide values:
-
-   ```bash
-   helm install ${GUIDE_NAME} \
-       ${ROUTER_STANDALONE_CHART} \
-       -f ${REPO_ROOT}/guides/recipes/router/base.values.yaml \
-       -f ${REPO_ROOT}/guides/${GUIDE_NAME}/router/${GUIDE_NAME}.values.yaml \
-       -f ${REPO_ROOT}/guides/${GUIDE_NAME}/router/precise-routing.values.yaml \
-       -n ${NAMESPACE} --version ${ROUTER_CHART_VERSION}
-   ```
-
-Verify before trusting routing behavior - an inert misconfiguration looks
-identical to "no effect":
-
-1. **Render returns token IDs** through the Service name the EPP uses:
-
-   ```bash
-   kubectl run render-check --rm -i --restart=Never \
-     --image=python:3.12-alpine --namespace="${NAMESPACE}" -- \
-     python -c '
-   import json, urllib.request
-   data = json.dumps({"model": "zai-org/GLM-5.2-FP8", "prompt": "render check", "max_tokens": 1}).encode()
-   request = urllib.request.Request("http://wide-ep-lws-render:8000/v1/completions/render", data=data, headers={"Content-Type": "application/json"})
-   with urllib.request.urlopen(request, timeout=10) as response:
-       body = json.load(response)
-   assert isinstance(body, list) and body and body[0].get("token_ids"), body
-   print(body[0]["token_ids"])
-   '
-   ```
-
-2. **Every rank's KV-event socket is subscribed.** Count established
-   connections from the EPP pod IP on the ZMQ port range, from the engine
-   side; expect one per local rank (e.g. 8 for a DP8 pod). Restrict the count
-   to ports 5000-5999: the render Service adds EPP HTTP connections to the
-   prefill pods on port 8000, which would otherwise inflate the count.
-
-   ```bash
-   EPP_IP=$(kubectl -n ${NAMESPACE} get endpointslices \
-     -l kubernetes.io/service-name=${GUIDE_NAME}-epp \
-     -o jsonpath='{.items[0].endpoints[0].addresses[0]}')
-   kubectl -n ${NAMESPACE} exec <engine-pod> -c vllm -- python3 -c "
-   hx=''.join(f'{int(o):02X}' for o in reversed('$EPP_IP'.split('.')))
-   print(sum(1 for l in open('/proc/net/tcp')
-             if len(l.split())>3 and l.split()[3]=='01'
-             and l.split()[2].split(':')[0]==hx
-             and 5000 <= int(l.split()[1].split(':')[1],16) < 6000))"
-   ```
-
-   Poll rather than sampling once - subscriptions lag engine readiness, and a
-   single early sample reads 0. A stable count below the local rank count
-   means a pod's publishers are on the wrong ports.
-
-3. **Repeated prefixes route back to their holder.** Send the same long
-   prompt twice; the second request should land on the first request's pod
-   with a `vllm:prefix_cache_hits` delta close to the prompt length.
-
+For exact KV-event-backed prefix routing with multi-port DP model servers,
+follow the [Wide Expert Parallelism with Precise Prefix-Cache Routing](README.precise-prefix-cache-routing.md)
+variant. It preserves this guide's deployment flow with ready-to-apply precise
+routing manifests.
 
 ## Benchmarking
 
@@ -352,7 +274,7 @@ kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/
 Benchmark: `2048_concurrent_2k_isl_2k_osl` (2048 concurrent requests, 2K input / 2K output tokens)
 
 | Metric | DP Supervisor |
-|---|---|
+| --- | --- |
 | Output tokens/s | 25,176 |
 | Input tokens/s | 25,122 |
 | Total tokens/s | 50,299 |

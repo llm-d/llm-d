@@ -56,7 +56,7 @@ router:
                 weight: 0.4
             tokenProcessorConfig:
               # Must equal the engines' KV_BLOCK_SIZE (kv-events component).
-              blockSize: 64
+              blockSizeTokens: 64
             kvEventsConfig:
               topicFilter: "kv@"
               discoverPods: true

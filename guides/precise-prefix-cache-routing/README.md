@@ -16,26 +16,26 @@ The routing decision combines precise cache knowledge with token-based load bala
 
 ## Default Configuration
 
-| Parameter           | Value                                                   |
-|---------------------|---------------------------------------------------------|
-| Model               | [Qwen/Qwen3-32B](https://huggingface.co/Qwen/Qwen3-32B) |
-| Replicas            | 8 (reduce for smaller fleets — see notes below)         |
-| Tensor Parallelism  | 2                                                       |
-| GPUs per replica    | 2                                                       |
-| Total GPUs          | 16                                                      |
+| Parameter | Value |
+| --- | --- |
+| Model | [Qwen/Qwen3-32B](https://huggingface.co/Qwen/Qwen3-32B) |
+| Replicas | 8 (reduce for smaller fleets — see notes below) |
+| Tensor Parallelism | 2 |
+| GPUs per replica | 2 |
+| Total GPUs | 16 |
 | vLLM `--block-size` | 64 (must match the `precise-prefix-cache-producer`'s `tokenProcessorConfig.blockSizeTokens`) |
 
 ### Supported Hardware Backends
 
-| Backend              | Directory                  | Default model                           | Notes                                                    |
-| -------------------- | -------------------------- | --------------------------------------- | -------------------------------------------------------- |
-| NVIDIA GPU           | `modelserver/gpu/vllm/`    | Qwen/Qwen3-32B                          | Default configuration                                    |
-| NVIDIA GPU (SGLang)  | `modelserver/gpu/sglang/`  | Qwen/Qwen3-32B                          | SGLang; `--page-size=64` matches the producer's `blockSizeTokens`; requires `render/standalone/` |
-| AMD GPU              | `modelserver/amd/vllm/`    | Qwen/Qwen3-32B                          | AMD GPU                                                  |
-| Intel XPU            | `modelserver/xpu/vllm/`    | Qwen/Qwen3-0.6B                         | CI-sized; update router `modelName` for real use         |
-| Google TPU v6e       | `modelserver/tpu/v6/vllm/` | Qwen/Qwen3-32B                          | GKE TPU                                                  |
-| Google TPU v7        | `modelserver/tpu/v7/vllm/` | Qwen3-Coder-480B-FP8                    | GKE TPU                                                  |
-| CPU                  | `modelserver/cpu/vllm/`    | Llama-3.2-3B-Instruct                   | CI-sized                                                 |
+| Backend | Directory | Default model | Notes |
+| --- | --- | --- | --- |
+| NVIDIA GPU | `modelserver/gpu/vllm/` | Qwen/Qwen3-32B | Default configuration |
+| NVIDIA GPU (SGLang) | `modelserver/gpu/sglang/` | Qwen/Qwen3-32B | SGLang; `--page-size=64` matches the producer's `blockSizeTokens`; requires `render/standalone/` |
+| AMD GPU | `modelserver/amd/vllm/` | Qwen/Qwen3-32B | AMD GPU |
+| Intel XPU | `modelserver/xpu/vllm/` | Qwen/Qwen3-0.6B | CI-sized; update router `modelName` for real use |
+| Google TPU v6e | `modelserver/tpu/v6/vllm/` | Qwen/Qwen3-32B | GKE TPU |
+| Google TPU v7 | `modelserver/tpu/v7/vllm/` | Qwen3-Coder-480B-FP8 | GKE TPU |
+| CPU | `modelserver/cpu/vllm/` | Llama-3.2-3B-Instruct | CI-sized |
 
 > [!NOTE]
 > Some hardware variants use reduced configurations (fewer replicas, smaller models) to enable CI testing for compatibility and regression checks.
@@ -49,9 +49,8 @@ The routing decision combines precise cache knowledge with token-based load bala
 > [!NOTE]
 > The router runs as a **single replica** by default: the `token-load-scorer`'s in-flight token accounting is local to each EPP process, so two active-active replicas would each see only half the per-endpoint load and mis-gate the affinity filter. The precise KV index itself is HA-safe (each replica converges independently via pod-discovery), so active-active HA (`--set router.epp.replicas=2`) can return if shared in-flight state lands upstream.
 
-
 For wide-EP LWS deployments (multi-port DP model servers), use the
-[`wide-ep-lws` precise routing variant](../wide-ep-lws/README.md#precise-prefix-cache-routing)
+[`wide-ep-lws` precise routing variant](../wide-ep-lws/README.precise-prefix-cache-routing.md)
 instead of the manifests here.
 
 ## Prerequisites
@@ -255,8 +254,17 @@ In this example we will demonstrate how to run [`inference-perf`](https://github
 >
 > For even more details about benchmarking, see the actual repository: [`llm-d-benchmark` on GitHub](https://github.com/llm-d/llm-d-benchmark).
 
+<!-- -->
+
 > [!TIP]
-> The command below runs this guide's **dedicated** benchmark profile, which is intentionally shaped to stress the prefix-cache routing decision under contention — and accordingly takes longer to complete. To run a simpler workload with fewer execution cycles first (useful for validating the path, image pulls, PVC binding, etc. before committing to a real run), pick a generic sample profile such as `shared_prefix_synthetic.yaml` from the catalog in [`helpers/benchmark.md` → Available workload profiles](../../helpers/benchmark.md#available-workload-profiles) and substitute it for the `--workload` flag in the command below.
+> The command below runs this guide's **dedicated** benchmark profile, which is
+> intentionally shaped to stress the prefix-cache routing decision under
+> contention — and accordingly takes longer to complete. To run a simpler
+> workload with fewer execution cycles first (useful for validating the path,
+> image pulls, PVC binding, etc. before committing to a real run), pick a
+> generic sample profile such as `shared_prefix_synthetic.yaml` from the
+> catalog in [`helpers/benchmark.md` → Available workload profiles](../../helpers/benchmark.md#available-workload-profiles)
+> and substitute it for the `--workload` flag in the command below.
 
 ### 1. Install the `llmdbenchmark` CLI
 
@@ -302,7 +310,7 @@ export GATEWAY_CLASS=istio
 
 ### 3. Run the benchmark profile for Precise Prefix Cache Routing
 
-`guide_precise-prefix-cache-routing_1.yaml` is a **dedicated workload profile** shipped with `llm-d-benchmark` specifically for this guide — it reproduces the load ladder used to generate the [graphs at the bottom of this guide](#benchmarking-report) (rates 3 to 60 across 150 distinct prefix groups) and is shaped to highlight the strengths of precise prefix-cache routing by stressing the routing decision under contention.
+`guide_precise-prefix-cache-routing_1.yaml` is a **dedicated workload profile** shipped with `llm-d-benchmark` specifically for this guide — it reproduces the load ladder used to generate the [graphs at the bottom of this guide](#benchmarking-reports) (rates 3 to 60 across 150 distinct prefix groups) and is shaped to highlight the strengths of precise prefix-cache routing by stressing the routing decision under contention.
 
 Benchmark results are copied to the `workspace` directory that is specified by _you_ (or that is automatically generated when omitted from the cli) on the machine running the CLI. The workspace location is optional — by default the CLI auto-generates a timestamped workspace and prints its full path in the logs during the run. If you'd rather choose where results land, pass `--workspace <YOUR_DIR_HERE>` as a top-level argument of `llmdbenchmark` (before the `run` subcommand):
 
