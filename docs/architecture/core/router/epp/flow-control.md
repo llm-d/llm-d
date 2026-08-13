@@ -296,7 +296,7 @@ sequenceDiagram
 
 ### In-Flight Eviction
 
-The dispatch lifecycle above defends the pool *before* a request is released: higher-priority work is dispatched first, and lower-priority work waits behind the gate. This is sufficient when demand arrives together, but it cannot reclaim capacity that lower-priority work is *already* consuming. In-flight eviction closes that gap.
+In-flight eviction terminates an already-dispatched, negative-priority (`priority < 0`) request to reclaim capacity for a higher-priority request blocked at its dispatch ceiling. Gated dispatch decides only whether to release new work, so it cannot recover capacity that lower-priority requests are already holding.
 
 When `enableEviction: true` (see [Flow Control configuration](configuration.md#flow-control)), Flow Control may end an already-dispatched, **negative-priority** (`priority < 0`) request to make room for blocked higher-priority demand. Eviction is demand-driven: it only occurs while higher-priority requests are blocked by pool saturation, and it only targets in-flight requests in negative-priority bands. Pacing and sizing self-configure from the selected saturation detector.
 
