@@ -204,21 +204,6 @@ The following metrics provide visibility into the InferencePool health and sched
 | `llm_d_epp_prefix_indexer_hit_ratio` | Histogram | `plugin_name`, `plugin_type` | Hit ratio for prefix matches |
 | `llm_d_epp_prefix_indexer_hit_bytes` | Histogram | `plugin_name`, `plugin_type` | Bytes matched in prefix cache lookup |
 
-#### Embedded KV-Cache Index Metrics
-
-Registered under subsystem `llm_d_router_epp_` when embedded kv-cache index metrics are enabled (`indexerConfig.kvBlockIndexConfig.enableMetrics: true`):
-
-| Metric | Type | Labels | Description |
-|--------|------|--------|-------------|
-| `llm_d_router_epp_kv_cache_index_admissions_total` | Counter | *None* | Blocks admitted to the index |
-| `llm_d_router_epp_kv_cache_index_evictions_total` | Counter | *None* | Blocks evicted from the index |
-| `llm_d_router_epp_kv_cache_index_lookup_requests_total` | Counter | *None* | Index lookups performed |
-| `llm_d_router_epp_kv_cache_index_lookup_hits_total` | Counter | *None* | Lookups that matched at least one block |
-| `llm_d_router_epp_kv_cache_index_max_pod_hit_count_total` | Counter | *None* | Best per-pod hit count observed per lookup |
-| `llm_d_router_epp_kv_cache_index_lookup_latency_seconds` | Histogram | *None* | Index lookup latency |
-| `llm_d_router_epp_kv_cache_events_dedup_removed_hashes_suppressed_total` | Counter | *None* | Deduplicated removal hashes suppressed |
-| `llm_d_router_epp_kv_cache_events_dedup_removed_hashes_forwarded_total` | Counter | *None* | Deduplicated removal hashes forwarded |
-
 #### Data Layer Errors
 
 | Metric | Type | Labels | Description |

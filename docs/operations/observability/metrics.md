@@ -91,7 +91,7 @@ epp-servicemonitor      5m
 
 ### Key llm-d Router EPP Metrics
 
-The EPP exposes Prometheus metrics under the `llm_d_epp_` prefix (and `llm_d_router_epp_` for embedded KV-cache index metrics).
+The EPP exposes Prometheus metrics under the `llm_d_epp_` prefix.
 
 #### Request and Latency
 
@@ -207,21 +207,6 @@ When flow control is enabled (`flowControl` feature gate), these additional metr
 | `llm_d_epp_extproc_streams_total` | Completed ext_proc gRPC streams by status code | Surfaces abnormal stream disconnects and errors |
 | `llm_d_epp_datalayer_poll_errors_total` | Data-source poll failures per source type | Signals failing telemetry scrapes from model servers |
 | `llm_d_epp_datalayer_extract_errors_total` | Extractor failures per source/extractor type | Signals parsing failures on scraped telemetry payloads |
-
-#### Embedded KV-Cache Index
-
-When embedded llm-d-kv-cache metrics are enabled (`indexerConfig.kvBlockIndexConfig.enableMetrics: true`), metrics are exposed under the `llm_d_router_epp_` prefix:
-
-| Metric | What it measures | Why it matters |
-|--------|-----------------|----------------|
-| `llm_d_router_epp_kv_cache_index_admissions_total` | Blocks admitted to the precise KV-cache index | Tracks index ingestion throughput |
-| `llm_d_router_epp_kv_cache_index_evictions_total` | Blocks evicted from the precise KV-cache index | High evictions indicate index capacity pressure |
-| `llm_d_router_epp_kv_cache_index_lookup_requests_total` | Total index lookups performed | Tracks query volume to the precise prefix cache index |
-| `llm_d_router_epp_kv_cache_index_lookup_hits_total` | Lookups matching at least one block | Quantifies precise cache hit efficiency |
-| `llm_d_router_epp_kv_cache_index_max_pod_hit_count_total` | Best per-pod hit count observed per lookup | Identifies maximal affinity candidates |
-| `llm_d_router_epp_kv_cache_index_lookup_latency_seconds` | Index lookup latency distribution | Tracks overhead of precise index queries |
-| `llm_d_router_epp_kv_cache_events_dedup_removed_hashes_suppressed_total` | Deduplicated removal hashes suppressed | Measures event deduplication efficiency |
-| `llm_d_router_epp_kv_cache_events_dedup_removed_hashes_forwarded_total` | Deduplicated removal hashes forwarded | Tracks volume of forwarded eviction events |
 
 ## Step 4: View Dashboards
 
