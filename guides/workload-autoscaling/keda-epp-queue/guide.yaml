@@ -1,0 +1,101 @@
+name: keda-epp-queue
+
+env:
+  static:
+    BRANCH: main
+    REPO_ROOT: $(realpath $(git rev-parse --show-toplevel))
+
+    NAMESPACE:            llm-d-optimized-baseline
+    MONITORING_NAMESPACE: llm-d-monitoring
+    KEDA_NAMESPACE:       keda
+
+    MODEL: { default: "Qwen/Qwen3-32B" }
+
+    # Deployment the ScaledObject targets, and the KEDA-managed objects it creates.
+    TARGET_DEPLOYMENT: { default: "optimized-baseline-nvidia-gpu-vllm-decode" }
+    SCALEDOBJECT_NAME: { default: "optimized-baseline-keda-epp" }
+    HPA_NAME:          { default: "keda-hpa-optimized-baseline" }
+
+    # Target platform. `existing` = generic Kubernetes with the bundled
+    # kube-prometheus-stack (the `k8s` overlay). `ocp` = OpenShift with Thanos
+    # Querier (the `ocp` overlay, which reuses recipes/autoscaling/metrics-reader).
+    # Rendered as an annotation only — it does not gate execution.
+    ENV: { default: existing, values: [existing, ocp] }
+
+    # Autoscaling overlays for this guide (Model A: <strategy>/<topology>).
+    OVERLAY_ROOT: ${REPO_ROOT}/guides/workload-autoscaling/keda-epp-queue/optimized-baseline
+
+  source: ["${REPO_ROOT}/guides/env.sh"]
+
+prerequisites:
+  # Prereq: complete the optimized-baseline guide (incl. enabling monitoring) and
+  # install KEDA. Then upgrade the router with the KEDA+EPP overlay, which turns on
+  # EPP Flow Control while keeping the monitoring feature values (EPP metrics port
+  # and its ServiceMonitor) enabled.
+  router:
+    - run: |
+        helm upgrade optimized-baseline \
+          ${ROUTER_STANDALONE_CHART} \
+          -f ${REPO_ROOT}/guides/recipes/router/base.values.yaml \
+          -f ${REPO_ROOT}/guides/optimized-baseline/router/optimized-baseline.values.yaml \
+          -f ${REPO_ROOT}/guides/recipes/router/features/monitoring.values.yaml \
+          -f ${OVERLAY_ROOT}/router.values.yaml \
+          -n ${NAMESPACE} --version ${ROUTER_CHART_VERSION}
+  confirm:
+    - run: |
+        kubectl logs deployment/optimized-baseline-epp -n ${NAMESPACE} | grep "Flow Control enabled"
+        kubectl get servicemonitor -n ${NAMESPACE}
+
+deploy:
+  # Generic Kubernetes only: copy the bundled Prometheus CA into the workload
+  # namespace as the keda-prometheus-auth Secret. On OpenShift the ocp overlay's
+  # ServiceAccount token already carries service-ca.crt, so this step is skipped.
+  prometheus_auth:
+    - when: { ENV: [existing] }
+      run: |
+        kubectl create secret generic keda-prometheus-auth \
+          --namespace ${NAMESPACE} \
+          --from-literal=ca.crt="$(kubectl get configmap prometheus-web-tls-ca \
+            -n ${MONITORING_NAMESPACE} -o jsonpath='{.data.ca\.crt}')" \
+          --dry-run=client -o yaml | kubectl apply -f -
+
+  # Begin at one replica so a 1-to-N scale-up is observable.
+  prepare:
+    - run: |
+        kubectl scale deployment ${TARGET_DEPLOYMENT} -n ${NAMESPACE} --replicas=1
+        kubectl rollout status deployment/${TARGET_DEPLOYMENT} -n ${NAMESPACE} --timeout=15m
+
+  # Apply the ScaledObject overlay for the platform. Generic Kubernetes (bundled
+  # kube-prometheus-stack, CA-only auth):
+  apply_k8s:
+    - when: { ENV: [existing] }
+      run: kubectl apply -k ${OVERLAY_ROOT}/k8s
+  # OpenShift (Thanos Querier + the shared recipes/autoscaling/metrics-reader auth):
+  apply_ocp:
+    - when: { ENV: [ocp] }
+      run: kubectl apply -k ${OVERLAY_ROOT}/ocp
+
+verify:
+  # ScaledObject Ready=True confirms the scaler config is valid; KEDA then creates
+  # the named HPA. A non-empty currentMetrics list shows the HPA is receiving KEDA's
+  # external metrics (it can take several polling intervals to appear). Driving load
+  # and asserting the scale event is added in a follow-up (scale-event verify).
+  tests:
+    scaledobject:
+      - run: |
+          kubectl get scaledobject ${SCALEDOBJECT_NAME} -n ${NAMESPACE}
+          kubectl wait --for=condition=Ready scaledobject/${SCALEDOBJECT_NAME} -n ${NAMESPACE} --timeout=120s
+    hpa:
+      - run: |
+          kubectl get hpa ${HPA_NAME} -n ${NAMESPACE}
+          kubectl get hpa ${HPA_NAME} -n ${NAMESPACE} -o jsonpath='{.status.currentMetrics}' | jq
+
+cleanup:
+  # Deleting the ScaledObject also removes the KEDA-managed HPA. It does not delete
+  # the target Deployment or reset its replica count.
+  - when: { ENV: [existing] }
+    run: kubectl delete -k ${OVERLAY_ROOT}/k8s --ignore-not-found=true
+  - when: { ENV: [ocp] }
+    run: kubectl delete -k ${OVERLAY_ROOT}/ocp --ignore-not-found=true
+  - when: { ENV: [existing] }
+    run: kubectl delete secret keda-prometheus-auth -n ${NAMESPACE} --ignore-not-found=true
