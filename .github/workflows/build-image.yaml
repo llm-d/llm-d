@@ -351,7 +351,7 @@ jobs:
 
       - name: Upload digest
         if: ${{ steps.build-image-final-layer.outputs.digest != '' }}
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@v8
         with:
           name: digests-cuda-dev-${{ matrix.os }}-${{ matrix.platform == 'linux/arm64' && 'arm64' || 'amd64' }}
           path: /tmp/digests/${{ matrix.os }}/*
@@ -360,7 +360,7 @@ jobs:
 
   cuda-success-check:
     needs: cuda-build-llm-d
-    if: ${{ always() }}
+    if: ${{ needs.cuda-build-llm-d.result != 'skipped' }}
     runs-on: ubuntu-latest
     outputs:
       any_succeeded: ${{ steps.check.outputs.any_succeeded }}
@@ -373,6 +373,8 @@ jobs:
         with:
           path: /tmp/digests-raw
           pattern: digests-cuda-dev-*
+          run-id: ${{ github.run_id }}
+          github-token: ${{ secrets.GHCR_TOKEN }}
         continue-on-error: true
 
       - name: Reorganize digests by OS
@@ -452,6 +454,8 @@ jobs:
         with:
           path: /tmp/digests-raw
           pattern: digests-cuda-dev-${{ matrix.os }}-*
+          run-id: ${{ github.run_id }}
+          github-token: ${{ secrets.GHCR_TOKEN }}
 
       - name: Reorganize digests for manifest
         if: ${{ steps.should-run.outputs.os_succeeded == 'true' }}
@@ -715,7 +719,7 @@ jobs:
 
       - name: Upload digest
         if: ${{ steps.build-image-final-layer.outputs.digest != '' }}
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@v8
         with:
           name: digests-aws-dev-${{ matrix.os }}-${{ matrix.platform == 'linux/arm64' && 'arm64' || 'amd64' }}
           path: /tmp/digests/${{ matrix.os }}/*
@@ -724,7 +728,7 @@ jobs:
 
   aws-success-check:
     needs: aws-build-llm-d
-    if: ${{ always() }}
+    if: ${{ needs.aws-build-llm-d.result != 'skipped' }}
     runs-on: ubuntu-latest
     outputs:
       any_succeeded: ${{ steps.check.outputs.any_succeeded }}
@@ -736,6 +740,8 @@ jobs:
         with:
           path: /tmp/digests-raw
           pattern: digests-aws-dev-*
+          run-id: ${{ github.run_id }}
+          github-token: ${{ secrets.GHCR_TOKEN }}
         continue-on-error: true
 
       - name: Reorganize digests by OS
@@ -795,6 +801,8 @@ jobs:
         with:
           path: /tmp/digests-raw
           pattern: digests-aws-dev-rhel-*
+          run-id: ${{ github.run_id }}
+          github-token: ${{ secrets.GHCR_TOKEN }}
 
       - name: Reorganize digests for manifest
         if: ${{ steps.should-run.outputs.rhel_ok == 'true' }}
