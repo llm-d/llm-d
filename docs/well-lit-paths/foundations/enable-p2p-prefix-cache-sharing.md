@@ -1,4 +1,4 @@
-# Enable P2P Reuse
+# Enable P2P Prefix Cache Sharing
 
 Prefix caches are per-pod, but their content is often fleet-wide: shared
 system prompts, common documents, session histories. Prefix-aware routing
@@ -7,7 +7,7 @@ always follow the cache: a hot prefix's owner saturates, a working set
 outgrows any single pod, a session is rebalanced. Those requests recompute
 KV tensors that already exist on a peer.
 
-P2P reuse closes that gap: a model server pulls cached prefix KV blocks
+P2P prefix cache sharing closes that gap: a model server pulls cached prefix KV blocks
 from a peer's CPU offload tier instead of recomputing them. The transfer
 is CPU-to-CPU over NIXL. The source pod's GPU is never touched, so serving
 a pull costs the source no prefill capacity.
@@ -31,9 +31,9 @@ sequenceDiagram
     Note over S: computes the prefix KV, caches it,<br/>offloads a copy to its CPU tier
     Note over R: request 2 arrives sharing request 1's prefix,<br/>but placement picks a different pod
     R->>C: request 2 + header naming the source pod
-    alt without P2P reuse
+    alt without P2P prefix cache sharing
         Note over C: recomputes the full shared prefix
-    else with P2P reuse
+    else with P2P prefix cache sharing
         C->>S: request the prefix blocks
         S-->>C: prefix KV blocks, CPU tier to CPU tier over NIXL
         Note over C: computes only the remainder<br/>(request 2's unshared tokens)
@@ -41,7 +41,7 @@ sequenceDiagram
 ```
 
 > [!IMPORTANT]
-> P2P reuse builds on the [Tiered Prefix Cache](tiered-prefix-cache.md)
+> P2P prefix cache sharing builds on the [Tiered Prefix Cache](tiered-prefix-cache.md)
 > path: peers serve pulls from their CPU offload tier. The tier must be
 > enabled and sized larger than the per-pod GPU KV cache, block hashes
 > must agree across pods (identical `--block-size` and `PYTHONHASHSEED`
