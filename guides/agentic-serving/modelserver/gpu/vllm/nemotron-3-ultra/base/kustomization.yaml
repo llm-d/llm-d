@@ -6,7 +6,8 @@ resources:
 namePrefix: agentic-serving-gpu-vllm-
 
 components:
-  - ../../../../../../recipes/modelserver/components/images/gpu-vllm
+  - ../../../../../../recipes/modelserver/components/images/gpu-vllm/release
+  - ../../../../../../recipes/modelserver/components/images/routing-sidecar/release
 
 labels:
   - pairs:

@@ -4,7 +4,7 @@ resources:
   - ../../../../../recipes/modelserver/base/single-host/pd/vllm
 
 components:
-  - ../../../../../recipes/modelserver/components/images/routing-sidecar
+  - ../../../../../recipes/modelserver/components/images/routing-sidecar/release
 
 patches:
   - path: patch-decode.yaml

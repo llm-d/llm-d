@@ -84,12 +84,6 @@ spec:
                     # Server keep-alive must be >= sidecar idle timeout; configured to 120s.
                     - name: VLLM_HTTP_TIMEOUT_KEEP_ALIVE
                       value: "120"
-                    # Workaround for https://github.com/vllm-project/vllm/issues/44548,
-                    # required with vLLM v0.20.0+ due to torch 2.11. The gpu-vllm images
-                    # component injects this into Deployments and LeaderWorkerSets, but its
-                    # patch does not target DisaggregatedSet, so it is set inline here.
-                    - name: USER
-                      value: llm-d
                   ports:
                     - name: modelserver
                       containerPort: 8000
@@ -220,12 +214,6 @@ spec:
                     # if you are running a cu129 version of vLLM.
                     # - name: UCX_MODULE_DIR
                     #   value: /usr/local/lib/python3.12/dist-packages/nixl_cu12.libs/ucx
-                    # Workaround for https://github.com/vllm-project/vllm/issues/44548,
-                    # required with vLLM v0.20.0+ due to torch 2.11. The gpu-vllm images
-                    # component injects this into Deployments and LeaderWorkerSets, but its
-                    # patch does not target DisaggregatedSet, so it is set inline here.
-                    - name: USER
-                      value: llm-d
                   ports:
                     - name: modelserver
                       containerPort: 8200

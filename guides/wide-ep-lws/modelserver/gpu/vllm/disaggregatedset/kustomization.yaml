@@ -6,6 +6,10 @@ resources:
   - disaggregatedset.yaml
   - serviceAccount.yaml
 
+components:
+  - ../../../../../recipes/modelserver/components/images/gpu-vllm/llm-d/release
+  - ../../../../../recipes/modelserver/components/images/routing-sidecar/release
+
 labels:
   - pairs:
       llm-d.ai/model: DeepSeek-R1-0528

@@ -580,7 +580,7 @@ The following scripts run the same benchmark against a standard deployment and s
 * Deploy (16 replicas of TP=1, with a standard k8s service)
 
 ```bash
-kubectl apply -n ${NAMESPACE} -f ${REPO_ROOT}/guides/pd-disaggregation/baseline/manifest.yaml
+kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/pd-disaggregation/baseline
 ```
 
 * Benchmark (using the same workload profile as the main run, but pointed at the baseline service rather than the EPP):

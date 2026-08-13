@@ -5,6 +5,10 @@ resources:
   - prefill.yaml
   - serviceAccount.yaml
   - kv-cache-evictor.yaml
+
+components:
+  - ../../../../../recipes/modelserver/components/images/gpu-vllm/nightly
+  - ../../../../../recipes/modelserver/components/images/routing-sidecar/release
 labels:
   - pairs:
       llm-d.ai/model: GLM-5.2-FP8

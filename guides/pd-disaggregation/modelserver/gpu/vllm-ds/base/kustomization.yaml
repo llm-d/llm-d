@@ -7,5 +7,5 @@ resources:
 # Resolve the REPLACE_MODEL_SERVER_IMAGE / REPLACE_ROUTING_SIDECAR_IMAGE
 # placeholders to the same pinned images used by the Deployment-based overlays.
 components:
-  - ../../../../../recipes/modelserver/components/images/gpu-vllm
-  - ../../../../../recipes/modelserver/components/images/routing-sidecar
+  - ../../../../../recipes/modelserver/components/images/gpu-vllm/release
+  - ../../../../../recipes/modelserver/components/images/routing-sidecar/release

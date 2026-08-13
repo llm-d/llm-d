@@ -10,7 +10,7 @@ resources:
 namePrefix: fastsafetensors-nfs-nvidia-gpu-vllm-
 
 components:
-  - ../../../../../recipes/modelserver/components/images/gpu-vllm
+  - ../../../../../recipes/modelserver/components/images/gpu-vllm/release
 
 labels:
   - pairs:

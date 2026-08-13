@@ -8,7 +8,7 @@ namePrefix: mm-baseline-xpu-vllm-
 
 components:
   - ../../base/vllm
-  - ../../../../../recipes/modelserver/components/images/xpu-vllm
+  - ../../../../../recipes/modelserver/components/images/xpu-vllm/release
 
 labels:
   - pairs:

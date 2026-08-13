@@ -79,7 +79,7 @@ export HF_TOKEN=HF_TOKEN_PLACEHOLDER
 <!-- llm-d-cicd:skip end -->
 ```bash
 export MONITORING_VALUES=
-export PROVIDER_NAME=gke # options: none, gke, agentgateway, istio
+export PROVIDER_NAME=none # options: none, gke, agentgateway, istio
 export ACCELERATOR_TYPE=gpu # options: gpu, amd, xpu, hpu, tpu/v6, tpu/v7, cpu
 export MODEL_SERVER=vllm # options: vllm, sglang, trtllm
 export INFRA_PROVIDER=base # options: base, gke
@@ -89,6 +89,7 @@ export BENCHMARK_REF=main
 export HARNESS=inference-perf
 export WORKLOAD=guide_optimized-baseline_1.yaml
 export GATEWAY_CLASS=epponly # options: epponly, gke, agentgateway, istio
+export ROUTER_CHART_VERSION=v0 # options are any semver llm-d-router release of v0 for latest
 ```
 <!-- guide:env.static end -->
 

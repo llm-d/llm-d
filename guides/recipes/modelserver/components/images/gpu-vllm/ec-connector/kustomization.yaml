@@ -1,0 +1,39 @@
+apiVersion: kustomize.config.k8s.io/v1alpha1
+kind: Component
+images:
+  # NOTE: llm-d does not release vLLM images, this is an exception tracking the open EC conenctor work, see: https://github.com/vllm-project/vllm/pull/42998
+  - name: REPLACE_MODEL_SERVER_IMAGE
+    newName: ghcr.io/llm-d/vllm-openai
+    newTag: ec-cpu-connector-support
+
+# Workaround for https://github.com/vllm-project/vllm/issues/44548, required with vLLM v0.20.0+ due to torch 2.11
+patches:
+  - target:
+      kind: Deployment
+    patch: |-
+      - op: add
+        path: /spec/template/spec/containers/0/env/-
+        value:
+          name: USER
+          value: llm-d
+  - target:
+      kind: LeaderWorkerSet
+    patch: |-
+      - op: add
+        path: /spec/leaderWorkerTemplate/workerTemplate/spec/containers/0/env/-
+        value:
+          name: USER
+          value: llm-d
+  - target:
+      kind: DisaggregatedSet
+    patch: |-
+      - op: add
+        path: /spec/roles/0/spec/leaderWorkerTemplate/workerTemplate/spec/containers/0/env/-
+        value:
+          name: USER
+          value: llm-d
+      - op: add
+        path: /spec/roles/1/spec/leaderWorkerTemplate/workerTemplate/spec/containers/0/env/-
+        value:
+          name: USER
+          value: llm-d
