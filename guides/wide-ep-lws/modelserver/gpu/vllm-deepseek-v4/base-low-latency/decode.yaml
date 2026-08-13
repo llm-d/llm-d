@@ -27,11 +27,12 @@ spec:
           - name: routing-proxy
             args:
               - --port=8000
+              - --vllm-port=8200
               - --kv-connector=nixlv2
               - --zap-log-level=1
               - --secure-proxy=false
               - --enable-prefiller-sampling
-            image: REPLACE_ROUTING_SIDECAR_IMAGE
+            image: ghcr.io/llm-d/llm-d-router-disagg-sidecar:v0.9.0
             imagePullPolicy: Always
             ports:
               - containerPort: 8000
@@ -46,14 +47,14 @@ spec:
           - name: dshm
             emptyDir:
               medium: Memory
-              sizeLimit: 2Gi  # roughly 32MB per local DP plus scratch space
+              sizeLimit: 2Gi
           - name: hf-cache
             emptyDir: {}
           - name: jit-cache
             emptyDir: {}
         containers:
           - name: vllm
-            image: REPLACE_MODEL_SERVER_IMAGE
+            image: vllm/vllm-openai:v0.24.0
             securityContext:
               capabilities:
                 add:
@@ -67,21 +68,18 @@ spec:
               - -c
             args:
               - |-
-                # Clear /dev/shm on start to prevent running out of space when crashes occur
-                # https://github.com/llm-d/llm-d/issues/352
                 find /dev/shm -type f -delete
 
                 #################
-                # RUN vLLM DeepSeek-V4 decode worker (MegaMoE)
+                # RUN vLLM DeepSeek-V4 decode worker (TP=8, low-latency)
+                # Pure tensor parallelism across 2 nodes (4 GPUs each) via MNNVL.
+                # Only the leader (index 0) runs the API server; worker pods will
+                # show NotReady (expected — they participate in TP via NCCL only).
                 #################
-                START_RANK=$(( ${LWS_WORKER_INDEX:-0} * DP_SIZE_LOCAL ))
-
-                # MoE backend (default: MegaMoE) and optional all2all backend are
-                # overridable via env, so alternative-backend components can swap them
-                # without rewriting this launch script. Unset => unchanged MegaMoE path.
-                MOE_BACKEND="${MOE_BACKEND:-deep_gemm_mega_moe}"
-                ALL2ALL_FLAG=""
-                if [ -n "${ALL2ALL_BACKEND:-}" ]; then ALL2ALL_FLAG="--all2all-backend ${ALL2ALL_BACKEND}"; fi
+                API_SERVER_COUNT=1
+                if [ "${LWS_WORKER_INDEX:-0}" -gt 0 ]; then
+                  API_SERVER_COUNT=0
+                fi
 
                 exec vllm serve \
                   deepseek-ai/DeepSeek-V4-Pro \
@@ -90,31 +88,24 @@ spec:
                   --gpu-memory-utilization 0.9 \
                   --max-model-len 9280 \
                   --trust-remote-code \
-                  --api-server-count 4 \
+                  --api-server-count $API_SERVER_COUNT \
                   --disable-access-log-for-endpoints=/health,/metrics \
-                  --data-parallel-hybrid-lb \
-                  --enable-expert-parallel \
-                  --enable-ep-weight-filter \
                   --tensor-parallel-size $TP_SIZE \
-                  --data-parallel-size $((LWS_GROUP_SIZE * DP_SIZE_LOCAL)) \
-                  --data-parallel-size-local $DP_SIZE_LOCAL \
-                  --data-parallel-address ${LWS_LEADER_ADDRESS} \
-                  --data-parallel-rpc-port 5555 \
-                  --data-parallel-start-rank $START_RANK \
+                  --pipeline-parallel-size 1 \
+                  --nnodes $((TP_SIZE / GPUS_PER_NODE)) \
+                  --node-rank ${LWS_WORKER_INDEX:-0} \
+                  --master-addr ${LWS_LEADER_ADDRESS} \
                   --kv_transfer_config '{"kv_connector":"NixlConnector",
                                           "kv_role":"kv_consumer",
                                           "kv_load_failure_policy":"fail"}' \
-                  --moe-backend "${MOE_BACKEND}" \
-                  ${ALL2ALL_FLAG} \
-                  --max-num-batched-tokens ${MAX_TOKENS} \
-                  --max-num-seqs ${MAX_TOKENS} \
-                  --max-cudagraph-capture-size ${MAX_TOKENS} \
-                  --block-size 256 \
-                  --no-disable-hybrid-kv-cache-manager \
-                  --enable-cumem-allocator \
-                  --stream-interval 50 \
                   --kv-cache-dtype fp8 \
-                  --compilation-config '{"cudagraph_mode":"FULL_DECODE_ONLY","mode":0}'
+                  --max-num-seqs 256 \
+                  --max-cudagraph-capture-size 256 \
+                  --max-num-batched-tokens 256 \
+                  --block-size 256 \
+                  --compilation-config '{"cudagraph_mode":"FULL_DECODE_ONLY","mode":0}' \
+                  --no-disable-hybrid-kv-cache-manager \
+                  --enable-cumem-allocator
             env:
               - name: HF_TOKEN
                 valueFrom:
@@ -123,21 +114,15 @@ spec:
                     key: HF_TOKEN
               - name: VLLM_USE_RUST_FRONTEND
                 value: "1"
-              # MAX_TOKENS controls the maximum number sequences, the maximum batch
-              # size, and the maximum cuda graph capture size. To run with MTP, the
-              # maximum batch size and the maximum cuda graph capture size will need to
-              # be multiplied by the number of speculated tokens.
-              - name: MAX_TOKENS
-                value: "512"
-              - name: DP_SIZE_LOCAL
-                value: "4"
-              - name: TP_SIZE
+              - name: VLLM_USE_V2_MODEL_RUNNER
                 value: "1"
+              - name: TP_SIZE
+                value: "8"
+              - name: GPUS_PER_NODE
+                value: "4"
               - name: TRITON_LIBCUDA_PATH
                 value: /usr/lib64
               - name: VLLM_SKIP_P2P_CHECK
-                value: "1"
-              - name: VLLM_RANDOMIZE_DP_DUMMY_INPUTS
                 value: "1"
               - name: VLLM_USE_DEEP_GEMM
                 value: "1"
@@ -182,8 +167,6 @@ spec:
                   fieldRef:
                     fieldPath: status.podIP
 
-              # Use cache directories from the mounted volume under one easy to mount
-              # root directory.
               - name: CUDA_CACHE_PATH
                 value: /var/cache/vllm/cuda
               - name: CCACHE_DIR
@@ -192,7 +175,6 @@ spec:
                 value: /var/cache/vllm/vllm
               - name: FLASHINFER_WORKSPACE_BASE
                 value: /var/cache/vllm/flashinfer
-              # HuggingFace is likely to be quite a bit larger, give it its own cache
               - name: HF_HUB_CACHE
                 value: /var/cache/huggingface
 
