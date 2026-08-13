@@ -133,3 +133,22 @@ The Request Handling subsystem exposes metrics tracking request volume, success,
 | `llm_d_epp_response_processing_duration_seconds` | Histogram | EPP response processing latency | *None* |
 | `llm_d_epp_inference_request_metric` | Gauge | Consolidated gauge for request metrics | `plugin_name`, `plugin_type`, `model_name`, `target_model_name`, `type` |
 | `llm_d_epp_model_rewrite_decisions_total` | Counter | Total number of model rewrite decisions | `model_rewrite_name`, `model_name`, `target_model` |
+
+#### In-Flight Load
+
+Emitted when an `InFlightLoadProducer` is configured:
+
+| Metric | Type | Description | Labels |
+|--------|------|-------------|--------|
+| `llm_d_epp_inflight_requests` | Gauge | Requests currently in flight on each endpoint | `endpoint_name`, `namespace`, `producer_name`, `fairness_id`, `priority` |
+| `llm_d_epp_inflight_tokens` | Gauge | Tokens currently in flight on each endpoint (uncached prompt tokens, optionally plus estimated output) | `endpoint_name`, `namespace`, `producer_name`, `fairness_id`, `priority` |
+
+#### ext_proc Streams
+
+Opt-in metrics covering the ext_proc gRPC stream lifecycle (enabled via `--enable-grpc-stream-metrics`):
+
+| Metric | Type | Description | Labels |
+|--------|------|-------------|--------|
+| `llm_d_epp_extproc_streams_inflight` | Gauge | Number of ext_proc gRPC streams currently open | *None* |
+| `llm_d_epp_extproc_stream_duration_seconds` | Histogram | Duration an ext_proc gRPC stream stays open in seconds | *None* |
+| `llm_d_epp_extproc_streams_total` | Counter | Total ext_proc gRPC streams completed by gRPC status code | `code` |
