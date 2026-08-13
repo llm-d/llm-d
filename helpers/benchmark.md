@@ -353,7 +353,7 @@ kubectl delete pod/access-to-harness-data-workload-pvc pvc/workload-pvc -n <name
 
 ### Harness pod stuck `Pending` with `Insufficient cpu`
 
-The harness pod requests 16 vCPU and 32 GiB of memory. It stays `Pending` until a node with that much allocatable capacity is available; check `kubectl describe pod -l app=llmdbench-harness-launcher -n <namespace>` for the scheduling events.
+The harness launcher pod is CPU-heavy — by default it requests 16 CPUs ([resource requirements](https://github.com/llm-d/llm-d-benchmark/blob/main/docs/resource_requirements.md), tunable via `LLMDBENCH_HARNESS_CPU_NR`). It stays `Pending` until a node has enough allocatable capacity; check the scheduling events for the exact shortfall: `kubectl describe pod -l app=llmdbench-harness-launcher -n <namespace>`.
 
 ### `Could not detect endpoint for <stack>`
 
