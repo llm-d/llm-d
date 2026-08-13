@@ -52,7 +52,7 @@ This increases the **KV-working set size**, growing the **receptive-field** (the
 > CPU KV Cache offloading is low overhead and introduces ~no additional complexity. It can be enabled in almost all deployments. Storage offloading requires additional consideration.
 
 > [!TIP]
-> **Recommended default:** vLLM's native `OffloadingConnector` (CPU RAM, optionally + filesystem). It requires no extra components and is low-overhead enough to enable in almost any deployment. Follow the [vLLM native quickstart](../../../guides/tiered-prefix-cache/vllm-native-quickstart.md) to deploy it directly.
+> **Recommended default for vLLM deployments:** vLLM's native `OffloadingConnector` (CPU RAM, optionally + filesystem). It requires no extra components and is low-overhead enough to enable in almost any vLLM deployment. Follow the [vLLM native quickstart](../../../guides/tiered-prefix-cache/vllm-native-quickstart.md) to deploy it directly.
 
 ## Storage Tiers
 

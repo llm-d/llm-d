@@ -16,7 +16,7 @@ For the concepts, tier tradeoffs, and architecture, see the [Tiered Prefix Cache
 ## Choosing a Path
 
 > [!TIP]
-> **Default recommendation:** vLLM native offloading (CPU RAM, optionally + filesystem) — low overhead, no extra components, and the default path we recommend for most deployments. Follow the [vLLM native quickstart](./vllm-native-quickstart.md) to deploy it directly. The table and paths below cover the other connectors and platforms (LMCache, MooncakeStore, SGLang HiCache, TPU, Intel XPU) for when you need a capability the native path doesn't yet provide.
+> **Default recommendation for vLLM deployments:** vLLM native offloading (CPU RAM, optionally + filesystem) — low overhead, no extra components, and the default path we recommend for most vLLM deployments. Follow the [vLLM native quickstart](./vllm-native-quickstart.md) to deploy it directly. The table and paths below cover the other connectors and platforms (LMCache, MooncakeStore, SGLang HiCache, TPU, Intel XPU) for when you need a capability the native path doesn't yet provide, or are deploying on SGLang, TPU, or Intel XPU.
 
 Each path is a self-contained deployment using a specific offloading implementation. Pick one and follow its deploy block under [Deploy the Model Server](#2-deploy-the-model-server).
 
