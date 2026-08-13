@@ -317,7 +317,7 @@ sequenceDiagram
     Note over Endpoint: Aborts generation and frees KV blocks. Capacity returns to the saturation signal.
 ```
 
-Eviction reclaims capacity but does not complete the evicted request. The evicted caller — the client, gateway, or batch processor — owns retry, and must guarantee a single final result if it retries. Reserve eviction for lower-priority work whose owner can safely retry (for example, batch jobs on a negative-priority band).
+Eviction ends the evicted request; the capacity returns only once the model server aborts generation on the upstream reset and frees its KV blocks. Flow Control assumes a bounded engine reclaim time and does not observe it directly, so verify on your engine that aborted requests free capacity promptly before enabling eviction in production. The evicted caller (the client or an upstream gateway) owns retry, and its retry path needs idempotency or request-level dedup so a retried request cannot produce two final results. Reserve eviction for lower-priority work whose owner can safely retry (for example, batch jobs on a negative-priority band).
 
 Evictions are observable through the `revocations_issued_total` and `revocations_total` metrics (see [Metrics & Observability](#metrics--observability)) and the `x-llm-d-request-dropped-reason: evicted` response header.
 
