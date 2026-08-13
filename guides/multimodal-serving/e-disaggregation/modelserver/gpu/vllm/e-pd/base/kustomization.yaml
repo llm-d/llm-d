@@ -19,6 +19,6 @@ labels:
     includeSelectors: true
     includeTemplates: true
 patches:
-
+  - path: patch-encode.yaml
   - path: patch-decode.yaml
 
