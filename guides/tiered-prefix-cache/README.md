@@ -15,6 +15,9 @@ For the concepts, tier tradeoffs, and architecture, see the [Tiered Prefix Cache
 
 ## Choosing a Path
 
+> [!TIP]
+> **Default recommendation:** vLLM native offloading (CPU RAM, optionally + filesystem) — low overhead, no extra components, and the default path we recommend for most deployments. Follow the [vLLM native quickstart](./vllm-native-quickstart.md) to deploy it directly. The table and paths below cover the other connectors and platforms (LMCache, MooncakeStore, SGLang HiCache, TPU, Intel XPU) for when you need a capability the native path doesn't yet provide.
+
 Each path is a self-contained deployment using a specific offloading implementation. Pick one and follow its deploy block under [Deploy the Model Server](#2-deploy-the-model-server).
 
 | Path | Implementation | Tiers | Directory |
@@ -164,31 +167,11 @@ Deploy **one** of the paths below. Each `kubectl apply -k` targets an overlay di
 
 #### vLLM native — CPU RAM
 
-```bash
-export MODEL_SERVER=vllm # vllm
-export CONNECTOR=native  # native
-export VARIANT=cpu       # cpu | fs
-export INFRA_PROVIDER=base  # base | gke
-kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/tiered-prefix-cache/modelserver/gpu/vllm/native/cpu/${INFRA_PROVIDER}/
-```
+This is the default recommended configuration for this guide. See the [vLLM native quickstart](./vllm-native-quickstart.md#vllm-native--cpu-ram) for the deploy command.
 
 #### vLLM native — CPU RAM + Filesystem
 
-This path adds a shared filesystem tier using vLLM's native multi-tier offloading. It requires a ReadWriteMany PVC mounted at `/mnt/files-storage`.
-
-First, provision the PVC. See [Storage Backends](#storage-backends) to configure a `StorageClass` for your environment.
-
-```bash
-export STORAGE_CLASS="" # cluster default if empty; or e.g. "lustre" / "efs-sc"
-envsubst < ${REPO_ROOT}/guides/tiered-prefix-cache/manifests/pvc.yaml | kubectl apply -n ${NAMESPACE} -f -
-```
-
-Then deploy the model server:
-
-```bash
-export INFRA_PROVIDER=base  # base | gke
-kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/tiered-prefix-cache/modelserver/gpu/vllm/native/fs/${INFRA_PROVIDER}/
-```
+See the [vLLM native quickstart](./vllm-native-quickstart.md#vllm-native--cpu-ram--filesystem) for PVC provisioning and the deploy command for this path.
 
 #### LMCache
 
