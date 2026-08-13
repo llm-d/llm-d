@@ -96,6 +96,34 @@ asymmetry exists — is derived in
 
 ## Deploy
 
+Set the guide environment variables:
+
+<!-- guide:env.static start -->
+```bash
+export BRANCH=main
+export REPO_ROOT=$(realpath $(git rev-parse --show-toplevel))
+export NAMESPACE=llm-d-optimized-baseline
+export KEDA_VERSION=v2.20.1
+export SLO_DIR=${REPO_ROOT}/guides/workload-autoscaling/slo-aware
+```
+<!-- guide:env.static end -->
+
+Source the common guide environment variables:
+
+<!-- guide:env.source start -->
+```bash
+source ${REPO_ROOT}/guides/env.sh
+```
+<!-- guide:env.source end -->
+
+Install KEDA (see the APIService caveat above):
+
+<!-- guide:prerequisites.keda start -->
+```bash
+kubectl apply --server-side -f https://github.com/kedacore/keda/releases/download/${KEDA_VERSION}/keda-${KEDA_VERSION}.yaml
+```
+<!-- guide:prerequisites.keda end -->
+
 The manifests ship with our example names — **adjust them to your cluster
 before applying:**
 
@@ -109,12 +137,22 @@ before applying:**
   `llm-d-optimized-baseline`, not `monitoring` — the rules belong to the tenant
   they scale), and the `labels` so your Prometheus's `ruleSelector` picks it up.
 
-```sh
-kubectl apply --server-side -f https://github.com/kedacore/keda/releases/download/v2.20.1/keda-2.20.1.yaml   # see APIService caveat above
-kubectl apply -f slo-aware/kube-state-metrics.yaml            # skip if you already run KSM
-kubectl apply -f slo-aware/prometheus-rule.yaml               # recording rules (match its labels to your ruleSelector)
-kubectl apply -f slo-aware/scaledobject.yaml
+<!-- guide:deploy.autoscaler start -->
+```bash
+kubectl apply -f ${SLO_DIR}/kube-state-metrics.yaml
+kubectl apply -f ${SLO_DIR}/prometheus-rule.yaml
+kubectl apply -f ${SLO_DIR}/scaledobject.yaml
 ```
+<!-- guide:deploy.autoscaler end -->
+
+Verify the ScaledObject is created and KEDA's HPA exists:
+
+<!-- guide:verify.tests.scaledobject start -->
+```bash
+kubectl get scaledobject -n ${NAMESPACE}
+kubectl get hpa -n ${NAMESPACE}
+```
+<!-- guide:verify.tests.scaledobject end -->
 
 The recording rules ship as a Prometheus Operator `PrometheusRule` in the
 workload namespace. For the operator to load it, its namespace must match your
@@ -184,10 +222,19 @@ plotted caught one such crossing. Full methodology and breakdown:
 
 ## Revert
 
+Deleting the ScaledObject hands replica control back to you immediately:
+
+<!-- guide:cleanup start -->
+```bash
+kubectl delete -f ${SLO_DIR}/scaledobject.yaml --ignore-not-found=true
+```
+<!-- guide:cleanup end -->
+
+If another external-metrics adapter (e.g. prometheus-adapter) was displaced by
+the KEDA install, re-apply its APIService, or just remove KEDA and
+kube-state-metrics:
+
 ```sh
-kubectl delete -f slo-aware/scaledobject.yaml    # hands replica control back to you immediately
-# if another external-metrics adapter (e.g. prometheus-adapter) was displaced
-# by the KEDA install, re-apply its APIService, or just remove KEDA:
 kubectl delete -f https://github.com/kedacore/keda/releases/download/v2.20.1/keda-2.20.1.yaml -f slo-aware/kube-state-metrics.yaml
 ```
 
