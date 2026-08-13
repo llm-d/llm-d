@@ -44,4 +44,3 @@ spec:
           emptyDir:
             medium: Memory
             sizeLimit: 10Gi
-
