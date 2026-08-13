@@ -31,44 +31,35 @@ ARG TORCH_CUDA_ARCH_LIST="8.0;8.6;8.9;9.0;9.0a;10.0;12.0+PTX"
 # EFA Support: Set to "true" to enable AWS Elastic Fabric Adapter support
 # When enabled, EFA installer provides RDMA packages; otherwise use CUDA base image packages
 ARG ENABLE_EFA=false
-ARG EFA_INSTALLER_VERSION="1.46.0"
+ARG EFA_INSTALLER_VERSION="1.49.0"
 
 ARG GDRCOPY_REPO="https://github.com/NVIDIA/gdrcopy.git"
-ARG GDRCOPY_VERSION="v2.5.2"
+ARG GDRCOPY_VERSION="v2.6"
 
 ARG UCX_REPO="https://github.com/openucx/ucx.git"
-ARG UCX_VERSION="v1.20.0"
+ARG UCX_VERSION="v1.22.0"
 
 ARG UCCL_REPO="https://github.com/uccl-project/uccl.git"
 ARG UCCL_VERSION="v0.1.1"
 
 ARG NVSHMEM_USE_GIT="true"
 ARG NVSHMEM_REPO="https://github.com/NVIDIA/nvshmem.git"
-ARG NVSHMEM_VERSION="v3.4.5-0"
+ARG NVSHMEM_VERSION="v3.5.21-0"
 ARG NVSHMEM_BUILD_FROM_SOURCE=true
 ARG NVSHMEM_CUDA_ARCHITECTURES="90a;100"
 
 ARG BUILD_NIXL_FROM_SOURCE="false"
 ARG NIXL_REPO="https://github.com/ai-dynamo/nixl.git"
-ARG NIXL_VERSION="v1.2.0"
-
-ARG INFINISTORE_REPO="https://github.com/bytedance/InfiniStore.git"
-ARG INFINISTORE_VERSION="0.2.33"
-
-ARG LMCACHE_REPO="https://github.com/LMCache/LMCache.git"
-ARG LMCACHE_VERSION="v0.4.6"
+ARG NIXL_VERSION="v1.3.2"
 
 # Kernels
 ARG DEEPEP_REPO="https://github.com/neuralmagic/DeepEP"
 ARG DEEPEP_VERSION="38d21b7f9bb6f3b102b1819d09439686eaa87ce8"
 
-# GB200-specific DeepEP variant (built alongside standard, selected via --target runtime-gb200)
-ARG DEEPEP_GB200_REPO="https://github.com/tlrmchlsmth/DeepEP"
-ARG DEEPEP_GB200_VERSION="sgl-gb200-blog-pt2"
 ARG DEEPGEMM_REPO="https://github.com/deepseek-ai/DeepGEMM"
 ARG DEEPGEMM_VERSION="477618cd51baffca09c4b0b87e97c03fe827ef03"
-ARG FLASHINFER_REPO="https://github.com/flashinfer-ai/flashinfer.git"
-ARG FLASHINFER_VERSION="v0.6.12"
+
+ARG FLASHINFER_VERSION="0.6.14"
 
 # vLLM build settings - provided via build args from docker/common-versions file
 # Override here for platform-specific testing or via build args
@@ -277,20 +268,6 @@ RUN echo "/usr/local/lib" > /etc/ld.so.conf.d/local.conf && \
     echo "/usr/local/lib64" >> /etc/ld.so.conf.d/local.conf && \
     ldconfig
 
-WORKDIR /workspace
-
-# Build LMCache wheel and its infinistore dependency
-ARG INFINISTORE_REPO
-ARG INFINISTORE_VERSION
-ARG LMCACHE_REPO
-ARG LMCACHE_VERSION
-COPY docker/scripts/cuda/builder/build-lmcache.sh /tmp/build-lmcache.sh
-RUN --mount=type=cache,target=/var/cache/git \
-    --mount=type=secret,id=aws_access_key_id \
-    --mount=type=secret,id=aws_secret_access_key \
-    /tmp/build-lmcache.sh && \
-    rm -f /tmp/build-lmcache.sh
-
 # Use existing virtual environment at /opt/vllm
 WORKDIR /workspace/vllm
 
@@ -300,12 +277,8 @@ WORKDIR /workspace/vllm
 # Build compiled packages as wheels (only ones that need build tools)
 ARG DEEPEP_REPO
 ARG DEEPEP_VERSION
-ARG DEEPEP_GB200_REPO
-ARG DEEPEP_GB200_VERSION
 ARG DEEPGEMM_REPO
 ARG DEEPGEMM_VERSION
-ARG FLASHINFER_REPO
-ARG FLASHINFER_VERSION
 COPY docker/scripts/cuda/builder/build-compiled-wheels.sh /tmp/build-compiled-wheels.sh
 RUN --mount=type=cache,target=/root/.cache/uv \
     --mount=type=secret,id=aws_access_key_id \
@@ -342,8 +315,6 @@ ARG USE_SCCACHE
 ARG MAX_JOBS=3
 ARG ENABLE_EFA
 ARG EFA_INSTALLER_VERSION
-ARG LLM_D_OFFLOADING_CONNECTOR_VERSION
-ARG INSTALL_OFFLOADING_CONNECTOR=true
 
 COPY docker/constraints.txt /tmp/constraints.txt
 
@@ -403,16 +374,6 @@ COPY docker/scripts/cuda/runtime/install-runtime-packages.sh /tmp/install-runtim
 RUN /tmp/install-runtime-packages.sh && \
     rm -f /tmp/install-runtime-packages.sh /tmp/package-utils.sh && \
     rm -rf /tmp/packages
-
-# Copy in storage offloading connector wheel (CUDA-aware: selects +cu130 variant when CUDA >= 13)
-# Disabled for GB200 builds until aarch64 wheels are available upstream
-COPY docker/scripts/cuda/runtime/install-offloading-connector.sh /tmp/install-offloading-connector.sh
-RUN if [ "${INSTALL_OFFLOADING_CONNECTOR}" = "true" ]; then \
-        /tmp/install-offloading-connector.sh; \
-    else \
-        echo "Skipping offloading connector installation (INSTALL_OFFLOADING_CONNECTOR=${INSTALL_OFFLOADING_CONNECTOR})"; \
-    fi && \
-    rm -f /tmp/install-offloading-connector.sh
 
 # Copy EFA installation if enabled
 # EFA libs are copied to /usr/lib64 during install-efa.sh and saved to /tmp/efa_libs
@@ -537,6 +498,7 @@ COPY scripts/warn-vllm-precompiled.sh /opt/
     # 1) install vllm from source totally editably - dev option, supports fork and commit swapping
     # 3) install vllm from source with pulling precompiled binaries (shared libraries) from the vllm wheels index - less flexible dev option, may or may not work swapping shas but faster than full editable
     # 2) install vllm from a wheel on the vllm wheels index - prod option, no flexibility
+ARG FLASHINFER_VERSION
 COPY docker/scripts/cuda/runtime/install-vllm.sh /tmp/install-vllm.sh
 RUN --mount=type=cache,target=/root/.cache/uv \
     --mount=type=cache,target=/var/cache/git \
@@ -612,24 +574,3 @@ ENV PATH="${VIRTUAL_ENV}/bin:${CUDA_HOME}/bin:/usr/local/nvidia/bin:${PATH}" \
 
 USER 2000
 WORKDIR /home/vllm
-
-# ============================================================================
-# GB200 RUNTIME STAGE - Swap in GB200-specific DeepEP wheel
-# Usage: docker build --target runtime-gb200 ...
-# ============================================================================
-FROM runtime AS runtime-gb200
-
-USER 0
-COPY --from=builder /wheels-gb200/*.whl /tmp/wheels-gb200/
-RUN . /opt/vllm/bin/activate && \
-    uv pip uninstall deep-ep && \
-    uv pip install /tmp/wheels-gb200/*.whl && \
-    rm -rf /tmp/wheels-gb200
-USER 2000
-
-ENTRYPOINT ["python", "-m", "vllm.entrypoints.openai.api_server"]
-
-# ============================================================================
-# DEFAULT - runtime is the default target when no --target is specified
-# ============================================================================
-FROM runtime
