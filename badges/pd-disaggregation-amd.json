@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
   "label": "VLLM ROCM",
-  "message": "passing",
-  "color": "brightgreen"
+  "message": "guide-error",
+  "color": "red"
 }
