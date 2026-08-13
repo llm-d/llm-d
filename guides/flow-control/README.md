@@ -125,9 +125,10 @@ helm upgrade --install ${GUIDE_NAME} \
     -n ${NAMESPACE} --version ${ROUTER_CHART_VERSION}
 ```
 
-The router pod requests 8 vCPU and 16 GiB of memory (4 vCPU / 8 GiB each for the EPP and
-Envoy containers, set in [base.values.yaml](../recipes/router/base.values.yaml)); a pod
-stuck `Pending` with `Insufficient cpu` needs a node with at least 8 allocatable vCPUs.
+The router pod's resource requests are set in
+[base.values.yaml](../recipes/router/base.values.yaml): 4 vCPU and 8 GiB of memory for
+each of the EPP and Envoy containers, so 8 vCPU and 16 GiB per pod. A pod stuck `Pending`
+with `Insufficient cpu` needs a node with the pod's full CPU request allocatable.
 
 <details>
 <summary><h4>Gateway Mode</h4></summary>
@@ -218,8 +219,10 @@ The Use Case 2 load test sizes its burst from `MAX_CONCURRENCY`; a retuned value
 changes the burst with it:
 
 ```bash
-export MAX_CONCURRENCY=$(awk '$1 == "maxConcurrency:" {print $2}' \
-    ${REPO_ROOT}/guides/${GUIDE_NAME}/router/${GUIDE_NAME}.values.yaml)
+MAX_CONCURRENCY=$(awk '$1 == "maxConcurrency:" {print $2; n++} END {exit n!=1}' \
+    ${REPO_ROOT}/guides/${GUIDE_NAME}/router/${GUIDE_NAME}.values.yaml) \
+  || echo "expected exactly one maxConcurrency: in the values file" >&2
+export MAX_CONCURRENCY
 echo "maxConcurrency: ${MAX_CONCURRENCY}"   # expect the integer set in the values file
 ```
 
@@ -227,8 +230,10 @@ echo "maxConcurrency: ${MAX_CONCURRENCY}"   # expect the integer set in the valu
 scrape against the Kubernetes API: a TokenReview on the caller's bearer token, then a
 SubjectAccessReview on the `/metrics` URL. Give the debug pod's service account
 permission to read `/metrics`, and give the EPP's service account the
-`system:auth-delegator` role it needs to run the reviews (the router chart does not
-ship this binding):
+`system:auth-delegator` role it needs to run the reviews. The chart ships an equivalent
+grant only when `router.monitoring.prometheus.enabled` is set, which also creates a
+ServiceMonitor and requires the Prometheus Operator CRDs; this guide leaves that flag
+off and creates the binding directly:
 
 ```bash
 kubectl create clusterrole ${GUIDE_NAME}-metrics-reader \
@@ -542,8 +547,9 @@ llmdbenchmark \
 ```
 
 > [!NOTE]
-> The harness pod requests 16 vCPU and 32 GiB of memory, and its `workload-pvc` requires
-> a `ReadWriteMany`-capable StorageClass. If the run stalls on a `Pending` pod or a PVC
+> The harness pod requests 16 vCPU by default
+> ([resource requirements](https://github.com/llm-d/llm-d-benchmark/blob/main/docs/resource_requirements.md)),
+> and its `workload-pvc` requires a `ReadWriteMany`-capable StorageClass. If the run stalls on a `Pending` pod or a PVC
 > timeout, see [Troubleshooting in `helpers/benchmark.md`](../../helpers/benchmark.md#troubleshooting)
 > for the StorageClass override (including a GKE Filestore walkthrough) and the
 > [timeout knobs](../../helpers/benchmark.md#timeouts).
