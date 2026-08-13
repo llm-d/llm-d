@@ -20,10 +20,6 @@ networking on CoreWeave.
 | Total GPUs | 24 |
 | KV block size | 64 tokens |
 
-The modelserver overlay enables KV events on every DP rank, fixes
-`PYTHONHASHSEED`, sets vLLM's `--block-size`, and deploys the render Service.
-It does not enable storage offloading, so the composed overlay removes the
-inherited NVMe evictor DaemonSet.
 
 ## Prerequisites
 

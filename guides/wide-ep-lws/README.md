@@ -1,4 +1,4 @@
-# [Experimental] Wide Expert Parallelism
+# Wide Expert Parallelism
 
 [![E2E (CKS GPU)](https://github.com/llm-d/llm-d/actions/workflows/consolidate-status-wide-ep-lws-cks-acc-gpu-vllm-x.yaml/badge.svg)](https://github.com/llm-d/llm-d/actions/workflows/consolidate-status-wide-ep-lws-cks-acc-gpu-vllm-x.yaml)
 [![E2E (GKE GPU)](https://github.com/llm-d/llm-d/actions/workflows/consolidate-status-wide-ep-lws-gke-acc-gpu-vllm-x.yaml/badge.svg)](https://github.com/llm-d/llm-d/actions/workflows/consolidate-status-wide-ep-lws-gke-acc-gpu-vllm-x.yaml)
@@ -251,10 +251,9 @@ curl -X POST http://${IP}/v1/completions \
 
 ## Precise prefix-cache routing
 
-For exact KV-event-backed prefix routing with multi-port DP model servers,
+For KV-event-backed prefix routing with multi-port DP model servers (useful for active-active HA routing),
 follow the [Wide Expert Parallelism with Precise Prefix-Cache Routing](README.precise-prefix-cache-routing.md)
-variant. It preserves this guide's deployment flow with ready-to-apply precise
-routing manifests.
+variant.
 
 ## Benchmarking
 
