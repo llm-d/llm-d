@@ -1,0 +1,16 @@
+# Persistent model cache PVC (RWX).
+#
+# storageClassName is intentionally omitted so the PVC binds the cluster's
+# default StorageClass. That class must support ReadWriteMany; on clusters
+# without an RWX default, do not include this component (the base overlay's
+# emptyDir cache is used instead).
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: model-pvc
+spec:
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: 200Gi

@@ -1,0 +1,147 @@
+## p2p-kv-cache-sharing guide overrides for the router.
+## Layer on top of: recipes/router/base.values.yaml
+##
+## Tokenization is served by the model servers through the Service deployed
+## from `../render/`. The EPP `token-producer` plugin tokenizes prompts over
+## HTTP against that Service (see its `vllm.url` below). The opt-in
+## `../render/standalone/` overlay provides a dedicated render pool when model
+## server CPU is contended; see the guide's Best Practices.
+##
+## The deployed EPP config is the affinity + P2P arm (`epp-affinity-p2p.yaml`
+## in ../benchmarking/): placement follows the cache (prefix-affinity
+## scoring), and the p2p-source-producer emits the KV cache source header
+## when a peer out-caches the scheduled pod by at least minCachedTokenDelta
+## tokens. Under precise affinity a peer rarely leads by that margin, so
+## the pull here is a fallback for displaced requests (its measured
+## throughput delta over affinity alone sits inside run-to-run spread),
+## not an established throughput feature, and NOT insurance for a restarted
+## router (both index modes lose the pre-restart cache map; measured
+## restart runs produced zero pulls). A cold engine replica behind an
+## intact router is the plausible fallback case and is unmeasured. The
+## arm is the default because affinity is the safer placement in the
+## capacity-driven regime, not because the pull improves it.
+##
+## Reach for `epp-load-p2p.yaml` when your workload looks like many
+## concurrent, multi-turn sessions each pinned to an owner pod: on the
+## document-Q&A headline it avoids the owner-pod queueing this arm pays -
+## see
+## [benchmark-results/gpt-oss-120b-h200.md](../benchmark-results/gpt-oss-120b-h200.md)
+## for both measurements. To reproduce the comparison arms, swap this
+## pluginsCustomConfig for any file under ../benchmarking/.
+##
+## Pod-discovery mode with active-active HA (replicas: 2). Each replica dials
+## every vLLM pod's per-pod ZMQ socket; both indexes converge identically.
+
+router:
+  epp:
+    replicas: 2
+    # TEMPORARY, tracked under the v0.9 "Multi-tier offloading: NIXL P/D +
+    # P2P backends" goal: the chart's default EPP image (the chart version's
+    # tag) predates the `p2p-source-producer` plugin and rejects this config
+    # with "plugin type 'p2p-source-producer' is not registered". Switch to
+    # the next release once it ships the plugin.
+    #
+    # REPRODUCIBILITY: `main` floats. The guide's aggregated benchmark tables
+    # were measured against digests of this tag that were not recorded, so
+    # they cannot be reproduced exactly against whatever `main` resolves to
+    # today. To reproduce a run, resolve this tag to a digest, pin it here and
+    # in ../modelserver/gpu/vllm/base/kustomization.yaml, and re-measure.
+    image:
+      tag: main
+      pullPolicy: Always
+    flags:
+      ha-enable-leader-election: false
+    env:
+      - name: HF_TOKEN
+        valueFrom:
+          secretKeyRef:
+            name: llm-d-hf-token
+            key: HF_TOKEN
+    pluginsConfigFile: "p2p-kv-cache-sharing-plugins.yaml"
+    pluginsCustomConfig:
+      p2p-kv-cache-sharing-plugins.yaml: |
+        apiVersion: llm-d.ai/v1alpha1
+        kind: EndpointPickerConfig
+        plugins:
+          - type: token-producer
+            parameters:
+              modelName: openai/gpt-oss-120b # Must match the render Service model (../render/) and the deployed model server
+              vllm:
+                # Model-server render Service (../render/):
+                # `p2p-kv-cache-sharing-` namePrefix + Service name `render`.
+                url: "http://p2p-kv-cache-sharing-render:8000"
+          - type: endpoint-notification-source
+          - type: precise-prefix-cache-producer
+            parameters:
+              indexerConfig:
+                kvBlockIndexConfig:
+                  inMemoryConfig:
+                    # Per-key LRU of (endpoint, tier) holders. The default of
+                    # 10 is smaller than the number of legitimate holders a
+                    # hot shared-prefix block has on any fleet above five
+                    # pods, so real holders are evicted, affinity scores
+                    # collapse toward zero, and p2p-source-producer stops
+                    # finding a peer to pull from. Size it at
+                    # (discovered endpoints x tiers); 32 covers this guide's
+                    # 16-pod fleet with a GPU and a CPU tier per pod.
+                    podCacheSize: 32
+                kvCacheBackendConfigs:
+                - name: gpu
+                  weight: 1.0
+                - name: cpu
+                  weight: 0.4
+              tokenProcessorConfig:
+                # Router indexing granularity. This is independent of the model
+                # server and offloading block sizes; see Best Practices.
+                blockSize: 64
+              # Seeds predicted cache entries for the selected endpoint right
+              # after the routing decision, so the next same-prefix request
+              # hits without waiting for engine confirmation. The chart default
+              # is false; every measurement in this guide was taken with it on,
+              # so it is set here to keep the deployed config identical to the
+              # benchmarked arm (../benchmarking/epp-affinity-p2p.yaml).
+              speculativeIndexing: true
+              kvEventsConfig:
+                topicFilter: "kv@"
+                discoverPods: true
+                podDiscoveryConfig:
+                  socketPort: 5556
+          - type: p2p-source-producer
+            parameters:
+              prefixMatchInfoProducerName: precise-prefix-cache-producer
+              prefillProfileName: default
+              # Minimum extra cached-prefix tokens a peer must hold beyond the
+              # scheduled pod before a pull is requested; set from the measured
+              # pull-versus-recompute crossover (see ../benchmarking/README.md).
+              minCachedTokenDelta: 2048
+          - type: prefix-cache-scorer
+            parameters:
+              prefixMatchInfoProducerName: precise-prefix-cache-producer
+          - type: no-hit-lru-scorer
+            parameters:
+              prefixMatchInfoProducerName: precise-prefix-cache-producer
+          - type: queue-scorer
+          - type: kv-cache-utilization-scorer
+          - type: max-score-picker
+          - type: single-profile-handler
+        dataLayer:
+          sources:
+            - pluginRef: endpoint-notification-source
+              extractors:
+                - pluginRef: precise-prefix-cache-producer
+        schedulingProfiles:
+          - name: default
+            plugins:
+              - pluginRef: max-score-picker
+              - pluginRef: prefix-cache-scorer
+                weight: 3
+              - pluginRef: queue-scorer
+                weight: 2
+              - pluginRef: kv-cache-utilization-scorer
+                weight: 2
+              - pluginRef: no-hit-lru-scorer
+                weight: 2
+
+  modelServers:
+    matchLabels:
+      llm-d.ai/guide: "p2p-kv-cache-sharing"

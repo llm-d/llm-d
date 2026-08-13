@@ -1,0 +1,29 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+# offloading: 1p×1w + 1d×1w -> 2 nodes / 16 GPUs.
+resources:
+  - ../../../../providers/coreweave
+components:
+  - ../../../../components/no-mtp
+  - ../../../../components/offloading-tiered
+patches:
+  - target:
+      kind: LeaderWorkerSet
+      name: ".*-prefill"
+    patch: |-
+      - op: replace
+        path: /spec/replicas
+        value: 1
+      - op: replace
+        path: /spec/leaderWorkerTemplate/size
+        value: 1
+  - target:
+      kind: LeaderWorkerSet
+      name: ".*-decode"
+    patch: |-
+      - op: replace
+        path: /spec/replicas
+        value: 1
+      - op: replace
+        path: /spec/leaderWorkerTemplate/size
+        value: 1

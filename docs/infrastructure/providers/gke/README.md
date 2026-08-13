@@ -6,7 +6,7 @@ This document covers configuring GKE clusters for running high performance LLM i
 
 llm-d on GKE is tested with the following configurations:
 
-* Machine types: A3, A4, ct5p, ct5lp, ct6e
+* Machine types: A3, A4, A4X, ct5p, ct5lp, ct6e
 * Versions: GKE 1.33.4+
 
 ## Cluster Configuration
@@ -49,6 +49,7 @@ GKE network DRA (**DRANET**) supports managed networking out of the box, so you 
 ```bash
 gcloud container clusters create "${CLUSTER_NAME}" \
     --enable-dataplane-v2 \
+    --managed-otel-scope=COLLECTION_AND_INSTRUMENTATION_COMPONENTS \
     --location="${LOCATION}" \
     --project="${PROJECT}"
 ```
@@ -165,13 +166,73 @@ items:
 
 </details>
 
+### GKE A4X (GB200) Setup
+
+For GKE A4X (NVIDIA GB200) clusters, deploy model servers using the `gke/a4x` overlay path (`modelserver/gpu/vllm/gke/a4x`) which inherits from `gke/base`. This configuration enables native InfiniBand RDMA networking via DRANet (`mrdma.google.com`) and GPUDirect hardware acceleration:
+
+* **Hardware Interconnect**: Configures `UCX_TLS=rc_mlx5,rc,cuda_copy,cuda_ipc,sm,shm,self` for hardware-accelerated InfiniBand transport.
+* **DRANet Resource Claims**: Uses `gke-rdma-nic-template` to request DRANet (`mrdma.google.com`) interfaces while managing GPUs via NVIDIA Device Plugin (`nvidia.com/gpu`).
+
+## Mitigating Hugging Face Model Download Rate Limiting
+
+When deploying large-scale model inference on GKE clusters (such as multi-replica prefill and decode deployments), concurrent model weight downloads across multiple pods can trigger Hugging Face HTTP 429 Rate Limiting errors, leading to container startup timeouts.
+
+To ensure resilient model loading across pods, consider the following strategies:
+
+### 1. Node-Level Host Caching
+
+Mount a local host directory to `/root/.cache/huggingface` inside workload pods so that multiple pods scheduled on the same node share cached weights without re-downloading across pod restarts.
+
+```yaml
+        env:
+        - name: HF_HOME
+          value: /root/.cache/huggingface
+        # ...
+        volumeMounts:
+        - mountPath: /root/.cache/huggingface
+          name: huggingface-cache
+      volumes:
+      - name: huggingface-cache
+        hostPath:
+          path: /var/cache/huggingface
+          type: DirectoryOrCreate
+```
+
+> [!NOTE]
+> The host path `/var/cache/huggingface` in the manifest snippet above serves as an illustrative reference. Users can configure any suitable host directory based on their node disk allocation and storage policies.
+
+### 2. Hub Timeouts & Startup Probe Tuning
+
+Configure download retry and timeout environment variables, and increase `startupProbe.failureThreshold` (e.g., to 240) to give pods sufficient headroom to complete initial model weight downloads under network constraints:
+
+```yaml
+        env:
+        - name: HF_HUB_DOWNLOAD_TIMEOUT
+          value: "60"
+        - name: HF_HUB_ETAG_TIMEOUT
+          value: "60"
+        - name: HF_HUB_DISABLE_XET
+          value: "1"
+        startupProbe:
+          failureThreshold: 240
+          periodSeconds: 30
+```
+
+### 3. Google Cloud Storage Integration (Recommended for Production)
+
+For large production workloads, store model weights in a Google Cloud Storage (GCS) bucket and mount the weights directly to pods. This completely eliminates external Hugging Face network dependencies during pod scaling.
+
+For step-by-step instructions, see the [GKE Hugging Face GCS Transfer Guide](https://gke-ai-labs.dev/docs/tutorials/storage/hf-gcs-transfer/).
+
 ### TPUs
 
 For all TPU machines, follow the [TPUs in GKE documentation](https://cloud.google.com/kubernetes-engine/docs/how-to/tpus).
 
 ### Monitoring
 
-We recommend enabling Google Managed Prometheus and [automatic application monitoring](https://cloud.google.com/kubernetes-engine/docs/how-to/configure-automatic-application-monitoring) to enable automatic metrics collection and dashboards for vLLM deployed on the cluster.
+We recommend enabling Google Managed Prometheus and [automatic application monitoring](https://cloud.google.com/kubernetes-engine/docs/how-to/configure-automatic-application-monitoring) to enable automatic metrics collection and dashboards for vLLM deployed on the cluster, and [Managed OpenTelemetry](https://cloud.google.com/kubernetes-engine/docs/how-to/managed-otel-gke) to collect telemetry data in OTLP format like traces for the llm-d stack.
+
+When creating your cluster, the `--managed-otel-scope=COLLECTION_AND_INSTRUMENTATION_COMPONENTS` flag enables Managed OpenTelemetry on the cluster. Setting the scope to `COLLECTION_AND_INSTRUMENTATION_COMPONENTS` tells GKE to deploy both the OpenTelemetry Collector (in the `gke-managed-otel` namespace) and the Instrumentation Custom Resource Definition (CRD), which is used to automatically inject OpenTelemetry configurations into your workload pods.
 
 ## Workload Configuration
 

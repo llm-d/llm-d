@@ -1,0 +1,26 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+# The configuration this guide's benchmarks were measured on: the base
+# overlay plus an InfiniBand device on every model server, so NIXL/UCX uses
+# RDMA instead of falling back to TCP.
+#
+# The transport does not decide whether the pull works - it decides where the
+# pull-versus-recompute crossover sits, and therefore `minCachedTokenDelta`.
+# Measured on gpt-oss-120b, same image and configuration, this overlay the
+# only difference: the pull wins from 2K tokens up with RDMA, and only above
+# ~29K without it. See the README's Supported Hardware Backends.
+#
+# `rdma/ib` is the device-plugin resource name on the clusters this was
+# measured on; yours may expose a different one (`rdma/hca`,
+# `nvidia.com/rdma`, ...). Check with:
+#   kubectl get nodes -o jsonpath='{.items[0].status.allocatable}' | tr ',' '\n' | grep -i rdma
+
+resources:
+  - ../base
+
+patches:
+  - path: patch-rdma.yaml
+    target:
+      kind: Deployment
+      name: decode

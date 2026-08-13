@@ -1,7 +1,7 @@
 # HPA/KEDA with WVA Metrics
 
 > [!WARNING]
-> **Deprecation Notice:** The `VariantAutoscaling` (VA) CRD-based approach described in this document is deprecated. The recommended path is the [HPA + WVA guide](../../../../guides/workload-autoscaling/README.wva.md), which configures HPA directly with WVA-published metrics without requiring the `VariantAutoscaling` CRD. If you are currently using VA objects, see the [Migration from VA to HPA + WVA](#migration-from-va-to-hpa--wva) section below.
+> **Deprecation Notice:** The `VariantAutoscaling` (VA) CRD-based approach described in this document is deprecated. The recommended path is the [HPA + WVA guide](../../../../guides/workload-autoscaling/wva/README.md), which configures HPA directly with WVA-published metrics without requiring the `VariantAutoscaling` CRD. If you are currently using VA objects, see the [Migration from VA to HPA + WVA](#migration-from-va-to-hpa--wva) section below.
 
 ## Functionality
 
@@ -17,7 +17,7 @@ WVA provides two main scaling analyzers:
 - **Saturation Analyzer** -- Scales based on resource saturation signals (KV cache utilization, request queue depth, and token-level capacity). When the system detects that model servers are saturated (running out of KV cache space or building up queues), it triggers scale-up on the cheapest available variant. When spare capacity is detected, it scales down the most expensive variant. This is the default analyzer. It has two sub-variants: `saturation-percentage-based` (default) and `saturation-token-based` (experimental).
 
   > [!NOTE]
-  > These two sub-variants are also referred to as the **V1** (`saturation-percentage-based`) and **V2** (`saturation-token-based`) saturation engines. The [HPA + WVA guide](../../../../guides/workload-autoscaling/README.wva.md), the WVA configuration keys, and the controller logs (e.g. `V2 saturation analysis completed`) use the V1/V2 names; this document uses the descriptive `saturation-percentage-based` / `saturation-token-based` names for the same engines.
+  > These two sub-variants are also referred to as the **V1** (`saturation-percentage-based`) and **V2** (`saturation-token-based`) saturation engines. The [HPA + WVA guide](../../../../guides/workload-autoscaling/wva/README.md), the WVA configuration keys, and the controller logs (e.g. `V2 saturation analysis completed`) use the V1/V2 names; this document uses the descriptive `saturation-percentage-based` / `saturation-token-based` names for the same engines.
 
 - **SLO Analyzer (Queueing Model)** *(Experimental)* -- Scales based on latency SLO targets using queueing theory. It uses a Kalman filter to learn hardware-specific performance parameters online, then applies a state-dependent Markovian queueing model to determine the maximum sustainable request rate per replica that meets target TTFT (Time To First Token) and ITL (Inter-Token Latency). The desired replica count is computed as the ratio of observed arrival rate to this capacity.
 
@@ -194,7 +194,7 @@ Each metrics source provides three main capabilities:
 
 | Query Name | PromQL | Purpose |
 |---|---|---|
-| `scheduler_dispatch_rate` | `sum by (pod_name) (rate(llm_d_epp_scheduler_attempts_total{status="success",...}[1m]))` | Per-pod arrival rate |
+| `scheduler_dispatch_rate` | `sum by (endpoint_name) (rate(llm_d_epp_scheduler_attempts_total{status="success",...}[1m]))` | Per-pod arrival rate |
 | `avg_ttft` | `rate(vllm:time_to_first_token_seconds_sum[1m]) / rate(..._count[1m])` | Average time to first token |
 | `avg_itl` | `rate(vllm:time_per_output_token_seconds_sum[1m]) / rate(..._count[1m])` | Average inter-token latency |
 
@@ -336,7 +336,7 @@ data:
 > [!NOTE]
 > There are two equivalent ways to select the token-based (V2) saturation engine.
 > The scalar `analyzerName: "saturation"` shown above is the backward-compatible
-> form. The newer list form, used in the [HPA + WVA guide](../../../../guides/workload-autoscaling/README.wva.md#enabling-saturation-engine-v2-recommended), is equivalent:
+> form. The newer list form, used in the [HPA + WVA guide](../../../../guides/workload-autoscaling/wva/README.md#enabling-saturation-engine-v2-recommended), is equivalent:
 >
 > ```yaml
 > analyzers:
@@ -426,7 +426,7 @@ Key controller flags:
 
 ## Migration from VA to HPA + WVA
 
-The new [HPA + WVA](../../../../guides/workload-autoscaling/README.wva.md) approach replaces the `VariantAutoscaling` (VA) CRD with standard Kubernetes HPA objects that consume the `wva_desired_replicas` external metric published by WVA. This removes the need to manage VA resources and makes scaling intent visible through the standard `kubectl get hpa` surface.
+The new [HPA + WVA](../../../../guides/workload-autoscaling/wva/README.md) approach replaces the `VariantAutoscaling` (VA) CRD with standard Kubernetes HPA objects that consume the `wva_desired_replicas` external metric published by WVA. This removes the need to manage VA resources and makes scaling intent visible through the standard `kubectl get hpa` surface.
 
 ### Key Differences
 
@@ -496,4 +496,4 @@ The new [HPA + WVA](../../../../guides/workload-autoscaling/README.wva.md) appro
    kubectl delete crd variantautoscalings.llmd.ai
    ```
 
-See the [HPA + WVA guide](../../../../guides/workload-autoscaling/README.wva.md) for a complete end-to-end setup walkthrough including Prometheus Adapter and WVA controller installation.
+See the [HPA + WVA guide](../../../../guides/workload-autoscaling/wva/README.md) for a complete end-to-end setup walkthrough including Prometheus Adapter and WVA controller installation.

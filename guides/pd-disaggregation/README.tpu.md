@@ -53,6 +53,7 @@ export STACK_NAME="tpu-v7-qwen3-5-pd"
 
 Deploy the router in either Standalone or Gateway mode by following the exact instructions in the **[Deploy the llm-d Router](./README.md#1-deploy-the-llm-d-router)** section of the main guide.
 
+
 ### 2. Deploy the TPU Model Server
 
 Once the router is deployed, apply the Kustomize overlays specifically configured for your TPU architecture:
@@ -68,6 +69,7 @@ kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/t
 ```
 
 *(Note: If you have monitoring enabled, you can optionally apply the monitoring components as described in the [main guide](./README.md#3-enable-monitoring-optional)).*
+
 
 ## Verification
 

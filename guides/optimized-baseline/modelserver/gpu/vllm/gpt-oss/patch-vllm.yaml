@@ -19,6 +19,9 @@ spec:
             - "--enable-auto-tool-choice"
             - "--tool-call-parser=openai"
             - "--reasoning-parser=openai_gptoss"
+            # gpt-oss-120b's full 128k context needs slightly more KV headroom than the
+            # 0.9 default leaves after the MXFP4 weights load on an 80GB H100 (OOMs by ~0.01 GiB).
+            - "--gpu-memory-utilization=0.95"
             # Uncomment for distributed tracing
             # - "--otlp-traces-endpoint=http://otel-collector:4317"
             # - "--collect-detailed-traces=all"
@@ -58,9 +61,6 @@ spec:
               name: triton-cache
             - mountPath: /.config
               name: vllm-config
-            - mountPath: /model-cache
-              name: model-storage
-              readOnly: true
           startupProbe:
             initialDelaySeconds: 15
             periodSeconds: 30

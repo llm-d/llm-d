@@ -4,3 +4,7 @@ resources:
   - decode.yaml
   - prefill.yaml
   - serviceAccount.yaml
+
+components:
+  - ../../../../../recipes/modelserver/components/images/gpu-vllm/llm-d/release
+  - ../../../../../recipes/modelserver/components/images/routing-sidecar/release

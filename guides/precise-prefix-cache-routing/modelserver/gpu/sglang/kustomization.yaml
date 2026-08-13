@@ -6,7 +6,7 @@ resources:
 namePrefix: precise-prefix-cache-routing-gpu-sglang-
 
 components:
-  - ../../../../recipes/modelserver/components/images/gpu-sglang
+  - ../../../../recipes/modelserver/components/images/gpu-sglang/release
 
 labels:
   - pairs:

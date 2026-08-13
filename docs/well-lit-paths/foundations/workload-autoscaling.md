@@ -41,3 +41,7 @@ The Workload Variant Autoscaler (WVA) is designed for operators running multiple
 | **Heterogeneous Support** | Limited | Native |
 | **Complexity** | Low (requires KEDA and Prometheus) | Medium (requires WVA controller) |
 | **Scale to Zero** | Supported | Supported |
+
+## Observability
+
+Autoscaling is a closed loop, so it is observed as a composed signal across the model servers, the autoscaler, and the resulting pool rather than as any single metric. The [guide's Observability & Troubleshooting section](../../../guides/workload-autoscaling/README.md#observability--troubleshooting) walks the loop end to end (demand, decision, convergence, outcome) and the common failure modes for both scaling paths, backed by the shared [PromQL](../../operations/observability/promql.md) and [metric](../../operations/observability/metrics.md) references plus the WVA metric definitions.

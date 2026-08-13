@@ -9,7 +9,7 @@ name: Nightly - Workload Autoscaling E2E (OCP GPU)
 
 on:
   schedule:
-    - cron: '0 3 * * *'  # 03:00 UTC daily (staggered from tiered-prefix-cache)
+    - cron: '0 3 * * *'  # 03:00 UTC daily
   workflow_dispatch:
     inputs:
       image_tag:
@@ -108,7 +108,7 @@ jobs:
           ref: ${{ github.event.inputs.caller_ref || 'main' }}
 
       - name: Set up Go
-        uses: actions/setup-go@v6
+        uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
 

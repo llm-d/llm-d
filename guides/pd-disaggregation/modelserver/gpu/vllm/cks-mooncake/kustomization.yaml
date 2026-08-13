@@ -1,0 +1,54 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ../../../../../recipes/modelserver/base/single-host/pd/vllm
+
+namePrefix: pd-disaggregation-nvidia-gpu-vllm-mooncake-
+
+components:
+  - ../../../../../recipes/modelserver/components/images/gpu-vllm/release
+  - ../../../../../recipes/modelserver/components/images/routing-sidecar/release
+
+labels:
+  - pairs:
+      llm-d.ai/model: gpt-oss-120b
+      llm-d.ai/guide: pd-disaggregation
+      llm-d.ai/accelerator-variant: gpu
+      llm-d.ai/accelerator-vendor: nvidia
+      inference.networking.k8s.io/engine-type: vllm
+    includeSelectors: true
+    includeTemplates: true
+    fields:
+      - version: v1
+        kind: ServiceAccount
+        path: metadata/labels
+        create: true
+      - group: apps
+        version: v1
+        kind: Deployment
+        path: metadata/labels
+        create: true
+      - group: apps
+        version: v1
+        kind: Deployment
+        path: spec/selector/matchLabels
+        create: true
+      - group: apps
+        version: v1
+        kind: Deployment
+        path: spec/template/metadata/labels
+        create: true
+      - group: monitoring.coreos.com
+        version: v1
+        kind: PodMonitor
+        path: metadata/labels
+        create: true
+      - group: monitoring.coreos.com
+        version: v1
+        kind: PodMonitor
+        path: spec/selector/matchLabels
+        create: true
+patches:
+  - path: patch-decode.yaml
+  - path: patch-prefill.yaml
+  - path: patch-sidecar.yaml

@@ -1,0 +1,68 @@
+# GLM wide-EP arm: load-modeled prefix-cache affinity, no pull (fork-replay baseline).
+# The prefix-cache-affinity-filter models the holder as busy for
+# in-flight-tokens / peakPrefillThroughput seconds; a sibling arriving inside
+# that window is placed on a cold rank ("spill"). Without the pull, a spilled
+# request recomputes its prefix. Pair: epp-glm-tokenload-p2p.yaml.
+# Service endpoints (token-producer url) are the testbed's; adjust for your deployment.
+apiVersion: llm-d.ai/v1alpha1
+kind: EndpointPickerConfig
+plugins:
+- type: disagg-headers-handler
+- type: always-disagg-pd-decider
+- type: disagg-profile-handler
+  parameters:
+    deciderPluginName: always-disagg-pd-decider
+- type: prefill-filter
+- type: decode-filter
+- type: token-producer
+  parameters:
+    modelName: zai-org/GLM-5.2-FP8
+    vllm:
+      url: http://render:8000
+- type: endpoint-notification-source
+- type: precise-prefix-cache-producer
+  parameters:
+    indexerConfig:
+      kvBlockIndexConfig:
+        inMemoryConfig:
+          podCacheSize: 128
+      kvCacheBackendConfigs:
+      - name: gpu
+        weight: 1.0
+      - name: cpu
+        weight: 0.4
+    tokenProcessorConfig:
+      blockSize: 64
+    kvEventsConfig:
+      topicFilter: "kv@"
+      discoverPods: true
+      podDiscoveryConfig:
+        socketPort: 5557
+- type: inflight-load-producer
+  parameters:
+    prefixMatchInfoProducerName: precise-prefix-cache-producer
+- type: prefix-cache-affinity-filter
+  parameters:
+    prefixMatchInfoProducerName: precise-prefix-cache-producer
+    inFlightLoadProducerName: inflight-load-producer
+    peakPrefillThroughput: 3585
+- type: token-load-scorer
+- type: active-request-scorer
+- type: max-score-picker
+dataLayer:
+  sources:
+  - pluginRef: endpoint-notification-source
+    extractors:
+    - pluginRef: precise-prefix-cache-producer
+schedulingProfiles:
+- name: prefill
+  plugins:
+  - pluginRef: prefill-filter
+  - pluginRef: prefix-cache-affinity-filter
+  - pluginRef: token-load-scorer
+  - pluginRef: max-score-picker
+- name: decode
+  plugins:
+  - pluginRef: decode-filter
+  - pluginRef: active-request-scorer
+  - pluginRef: max-score-picker

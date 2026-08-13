@@ -1,0 +1,117 @@
+name: modelexpress-p2p
+
+env:
+  static:
+    BRANCH: main
+    REPO_ROOT: $(realpath $(git rev-parse --show-toplevel))
+
+    GUIDE_NAME: modelexpress-p2p
+    NAMESPACE: llm-d-modelexpress-p2p
+
+    # Keep in sync with the modelexpress-server image tag and the client
+    # version in image/Dockerfile.
+    MX_VERSION: v0.5.0
+
+    HF_TOKEN: {default: HF_TOKEN_PLACEHOLDER, sensitive: true}
+
+    MODEL: {default: "openai/gpt-oss-120b"}
+
+    PROVIDER_NAME: {default: gke, values: [none, gke, agentgateway, istio]}
+    INFRA_PROVIDER: {default: coreweave, values: [base, coreweave]}
+
+    # VERIFICATION
+    CURL_TEST_IMAGE: {default: "cfmanteiga/alpine-bash-curl-jq:latest"}
+
+  source: ["${REPO_ROOT}/guides/env.sh"]
+
+prerequisites:
+  clone:
+    - skip_in: [ci]
+      run: git clone https://github.com/llm-d/llm-d.git && cd llm-d && git checkout ${BRANCH}
+
+  gaie:
+    - run: kubectl apply -f https://github.com/kubernetes-sigs/gateway-api-inference-extension/releases/download/${GAIE_VERSION}/v1-manifests.yaml
+
+  namespace:
+    - run: kubectl create namespace ${NAMESPACE} --dry-run=client -o yaml | kubectl apply -f -
+
+  crds:
+    - run: kubectl apply -f https://raw.githubusercontent.com/ai-dynamo/modelexpress/${MX_VERSION}/examples/crds.yaml
+
+  secrets:
+    - skip_in: [ci]
+      run: |
+        kubectl create secret generic llm-d-hf-token \
+          --from-literal="HF_TOKEN=${HF_TOKEN}" \
+          --namespace "${NAMESPACE}" \
+          --dry-run=client -o yaml | kubectl apply -f -
+
+deploy:
+  mx_server:
+    - run: |
+        kubectl apply -n ${NAMESPACE} -f ${REPO_ROOT}/guides/${GUIDE_NAME}/modelexpress/modelexpress-server.yaml
+        kubectl rollout status -n ${NAMESPACE} deploy/modelexpress-server --timeout=5m
+
+  standalone:
+    - run: |
+        helm install ${GUIDE_NAME} \
+          ${ROUTER_STANDALONE_CHART} \
+          -f ${REPO_ROOT}/guides/recipes/router/base.values.yaml \
+          -f ${REPO_ROOT}/guides/${GUIDE_NAME}/router/${GUIDE_NAME}.values.yaml \
+          -n ${NAMESPACE} --version ${ROUTER_CHART_VERSION}
+
+  gateway:
+    - run: |
+        helm install ${GUIDE_NAME} \
+          ${ROUTER_GATEWAY_CHART} \
+          -f ${REPO_ROOT}/guides/recipes/router/base.values.yaml \
+          -f ${REPO_ROOT}/guides/${GUIDE_NAME}/router/${GUIDE_NAME}.values.yaml \
+          --set provider.name=${PROVIDER_NAME} \
+          --set httpRoute.create=true \
+          --set httpRoute.inferenceGatewayName=llm-d-inference-gateway \
+          -n ${NAMESPACE} --version ${ROUTER_CHART_VERSION}
+
+  modelserver:
+    - run: |
+        kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/gpu/vllm/${INFRA_PROVIDER}/
+
+verify:
+  endpoint:
+    standalone:
+      - run: export IP=$(kubectl get service ${GUIDE_NAME}-epp -n ${NAMESPACE} -o jsonpath='{.spec.clusterIP}')
+    gateway:
+      - run: export IP=$(kubectl get gateway llm-d-inference-gateway -n ${NAMESPACE} -o jsonpath='{.status.addresses[0].value}')
+  tests:
+    - run: |
+        kubectl run curl-test --rm -i --restart=Never \
+          --image=${CURL_TEST_IMAGE} \
+          --namespace="${NAMESPACE}" \
+          --env="IP=${IP}" \
+          --env="MODEL=${MODEL}" \
+          -- /bin/sh -c 'curl -sS -X POST "http://${IP}/v1/completions" -H "Content-Type: application/json" -d "{\"model\": \"${MODEL}\", \"prompt\": \"How are you today?\"}"'
+
+cleanup:
+  router:
+    - run: helm uninstall ${GUIDE_NAME} -n ${NAMESPACE}
+  modelserver:
+    - run: kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/gpu/vllm/${INFRA_PROVIDER}/
+  mx_server:
+    - run: kubectl delete -n ${NAMESPACE} -f ${REPO_ROOT}/guides/${GUIDE_NAME}/modelexpress/modelexpress-server.yaml
+  security:
+    - run: |
+        # If you applied the Istio hardening, remove the policies (and the ns label):
+        kubectl delete -n ${NAMESPACE} -f ${REPO_ROOT}/guides/${GUIDE_NAME}/security/istio-mtls-authz.yaml --ignore-not-found
+        kubectl label namespace ${NAMESPACE} istio-injection- 2>/dev/null || true
+  measurement:
+    - run: |
+        # If you ran the storage-backed measurement workloads, delete those overlays and the prewarm Job:
+        kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/gpu/vllm/fastsafetensors-nfs/ --ignore-not-found
+        kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/gpu/vllm/fastsafetensors-localnvme/ --ignore-not-found
+        kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/gpu/vllm/fastsafetensors-prewarm/ --ignore-not-found
+  namespace:
+    - run: |
+        # Deleting the namespace removes the PVC objects too, but on a Retain-policy
+        # StorageClass the backing volume is NOT reclaimed. Delete PVCs first if you
+        # want the underlying NFS volume released:
+        kubectl delete pvc vllm-compile-cache fst-model-cache -n ${NAMESPACE} --ignore-not-found
+        kubectl delete namespace ${NAMESPACE}
