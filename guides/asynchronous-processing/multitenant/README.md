@@ -429,7 +429,7 @@ Prometheus path reacts within one scrape.
   model A is independent of its capacity on model B.
 - **Saturation gate.** These overlays use `prometheus-query` over `vllm:num_requests_running`. The
   `prometheus-saturation` gate instead expects the EPP metric
-  `inference_extension_flow_control_pool_saturation`.
+  `llm_d_epp_flow_control_pool_saturation`.
 - **Saturation divisor vs. pool size.** `SAT_CAP` is the concurrency at which a model counts as
   saturated, and the gate closes only when the budget hits 0 — i.e. only once `SAT_CAP` requests are
   running. Keep it **below** that pool's `workers`, or async load alone can never close the gate; see

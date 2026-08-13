@@ -178,6 +178,14 @@ The following metrics provide visibility into the InferencePool health and sched
 | `llm_d_epp_scheduler_attempts_total` | Counter | `status`, `target_model_name`, `endpoint_name`, `namespace`, `port` | Number of scheduling attempts and their outcomes |
 | `llm_d_epp_scheduler_e2e_duration_seconds` | Histogram | *None* | End-to-end scheduling latency |
 | `llm_d_epp_plugin_duration_seconds` | Histogram | `extension_point`, `plugin_type`, `plugin_name` | Processing latency for each plugin |
+| `llm_d_epp_plugin_data_scope_violations_total` | Counter | `extension_point`, `plugin_type`, `plugin_name`, `access` | Endpoint attribute accesses rejected due to undeclared DataKey (`read` or `write`) |
+
+#### In-Flight Load Metrics
+
+| Metric | Type | Labels | Description |
+|--------|------|--------|-------------|
+| `llm_d_epp_inflight_requests` | Gauge | `endpoint_name`, `namespace`, `producer_name`, `fairness_id`, `priority` | Requests currently in flight on each endpoint |
+| `llm_d_epp_inflight_tokens` | Gauge | `endpoint_name`, `namespace`, `producer_name`, `fairness_id`, `priority` | Tokens currently in flight on each endpoint |
 
 #### Disaggregation Metrics
 
@@ -195,6 +203,21 @@ The following metrics provide visibility into the InferencePool health and sched
 | `llm_d_epp_prefix_indexer_size` | Gauge | `plugin_name`, `plugin_type` | Size of the approximate prefix indexer |
 | `llm_d_epp_prefix_indexer_hit_ratio` | Histogram | `plugin_name`, `plugin_type` | Hit ratio for prefix matches |
 | `llm_d_epp_prefix_indexer_hit_bytes` | Histogram | `plugin_name`, `plugin_type` | Bytes matched in prefix cache lookup |
+
+#### Embedded KV-Cache Index Metrics
+
+Registered under subsystem `llm_d_router_epp_` when embedded kv-cache index metrics are enabled (`indexerConfig.kvBlockIndexConfig.enableMetrics: true`):
+
+| Metric | Type | Labels | Description |
+|--------|------|--------|-------------|
+| `llm_d_router_epp_kv_cache_index_admissions_total` | Counter | *None* | Blocks admitted to the index |
+| `llm_d_router_epp_kv_cache_index_evictions_total` | Counter | *None* | Blocks evicted from the index |
+| `llm_d_router_epp_kv_cache_index_lookup_requests_total` | Counter | *None* | Index lookups performed |
+| `llm_d_router_epp_kv_cache_index_lookup_hits_total` | Counter | *None* | Lookups that matched at least one block |
+| `llm_d_router_epp_kv_cache_index_max_pod_hit_count_total` | Counter | *None* | Best per-pod hit count observed per lookup |
+| `llm_d_router_epp_kv_cache_index_lookup_latency_seconds` | Histogram | *None* | Index lookup latency |
+| `llm_d_router_epp_kv_cache_events_dedup_removed_hashes_suppressed_total` | Counter | *None* | Deduplicated removal hashes suppressed |
+| `llm_d_router_epp_kv_cache_events_dedup_removed_hashes_forwarded_total` | Counter | *None* | Deduplicated removal hashes forwarded |
 
 #### Data Layer Errors
 
