@@ -79,7 +79,7 @@ These are not requirements, but contributions in the following categories tend t
 * **New features.** Even features that do not rise to a project proposal (no new public API or component) benefit from a brief issue describing the problem and the proposed approach before implementation.
 * **New testing methodologies.** Fuzzing, property-based testing, chaos testing, load testing, or other testing approaches that introduce a new class of ongoing maintenance (new CI jobs, curated inputs, triage, release-gating policy). See the worked example below.
 * **New external dependencies.** Require maintainer sign-off.
-  **Note**: Please check the licensing of all new dependencies. Dependencies should comply with the [CNCF Allowed License Policy](https://github.com/cncf/foundation/blob/main/policies-guidance/allowed-third-party-license-policy.md)
+  **Note:** Please check the licensing of all new dependencies. Dependencies must comply with the [CNCF Allowed License Policy](https://github.com/cncf/foundation/blob/main/policies-guidance/allowed-third-party-license-policy.md).
 * **Renames or other API-affecting changes.** See [API Changes and Deprecation](#api-changes-and-deprecation).
 
 Every contribution creates ongoing cost: review time, CI time, flake triage, and future maintenance. A good problem statement captures that cost alongside the benefit, which is what an issue or proposal makes visible before code is written.
