@@ -1,0 +1,12 @@
+apiVersion: kustomize.config.k8s.io/v1alpha1
+kind: Component
+# 1 prefill worker (DEP8) + 1 decode worker (TP=8, no EP) -> 4 nodes / 16 GPUs.
+# Decode uses pure tensor parallelism across 8 GPUs for minimum TPOT.
+patches:
+  - target:
+      kind: LeaderWorkerSet
+      name: ".*-prefill"
+    patch: |-
+      - op: replace
+        path: /spec/replicas
+        value: 1

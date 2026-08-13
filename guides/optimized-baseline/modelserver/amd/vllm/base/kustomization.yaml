@@ -6,7 +6,7 @@ resources:
 namePrefix: optimized-baseline-rocm-vllm-
 
 components:
-  - ../../../../../recipes/modelserver/components/images/amd-vllm
+  - ../../../../../recipes/modelserver/components/images/amd-vllm/release
 
 labels:
   - pairs:

@@ -1,0 +1,72 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+# Aggregated gpt-oss-120b model servers with the OffloadingConnector P2P
+# tier, layered on the shared recipes/ modelserver base. The engine listens
+# on 8200 behind the routing sidecar on 8000 (the pd base port layout); the
+# P2P tier and KV-events sockets are pod-IP listeners.
+
+resources:
+  - ../../../../../recipes/modelserver/base/single-host/default
+
+namePrefix: p2p-kv-cache-sharing-
+
+# The sidecar container is added by patch-sidecar.yaml at this level, after
+# the recipes/ images components would run, so its image is resolved here
+# rather than by recipes/modelserver/components/images/routing-sidecar.
+# Pins:
+# - engine: the P2P secondary tier (vllm#48021), its crash fixes
+#   (vllm#49671, vllm#49823), the symmetric-fetch stall fix (vllm#49877)
+#   and the wide-EP block-table alignment fix (vllm#50302) are all
+#   contained in v0.27.0, the first tagged release with the full set;
+#   v0.27.1 is its patch release.
+# - sidecar: main because v0.9.0 predates the offloading P2P pull support
+#   (llm-d-router#1937); pin the next release when cut. This tag floats, so
+#   the guide's benchmark tables cannot be reproduced exactly against it -
+#   resolve it to a digest and re-measure to reproduce a run. See the
+#   REPRODUCIBILITY note in ../../../../router/p2p-kv-cache-sharing.values.yaml.
+images:
+  - name: REPLACE_MODEL_SERVER_IMAGE
+    newName: vllm/vllm-openai
+    newTag: v0.27.1
+  - name: REPLACE_ROUTING_SIDECAR_IMAGE
+    newName: ghcr.io/llm-d/llm-d-router-disagg-sidecar
+    newTag: main
+
+labels:
+  - pairs:
+      llm-d.ai/model: gpt-oss-120b
+      llm-d.ai/guide: p2p-kv-cache-sharing
+      llm-d.ai/accelerator-variant: gpu
+      llm-d.ai/accelerator-vendor: nvidia
+      llm-d.ai/engine-type: vllm
+    includeSelectors: true
+    includeTemplates: true
+
+patches:
+  # Engine port 8200 behind the sidecar, plus the P2P tier listener and the
+  # per-pod KV-event socket the router subscribes to.
+  - target:
+      kind: Deployment
+      name: decode
+    patch: |
+      - op: replace
+        path: /spec/template/spec/containers/0/ports/0/containerPort
+        value: 8200
+      - op: add
+        path: /spec/template/spec/containers/0/ports/-
+        value:
+          name: p2p
+          containerPort: 7777
+          protocol: TCP
+      - op: add
+        path: /spec/template/spec/containers/0/ports/-
+        value:
+          name: kv-events
+          containerPort: 5556
+          protocol: TCP
+  - path: patch-sidecar.yaml
+    target:
+      kind: Deployment
+      name: decode
+  - path: patch-vllm.yaml

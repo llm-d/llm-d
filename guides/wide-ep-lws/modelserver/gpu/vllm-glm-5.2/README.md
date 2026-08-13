@@ -182,6 +182,50 @@ patches:
         value: 1
 ```
 
+### aiperf Command
+
+Every reported number comes from the same [aiperf](https://github.com/ai-dynamo/aiperf) `profile`
+invocation, run from inside the cluster against the Kubernetes Gateway Service
+(`llm-d-inference-gateway-istio`, from [Gateway Mode](../../../README.md#gateway-mode) with
+`PROVIDER_NAME=istio`) and swept across concurrency. The dataset used is the
+`semianalysis_cc_traces_weka_with_subagents` aiperf preset, backed by
+[`semianalysisai/cc-traces-weka-062126`](https://huggingface.co/datasets/semianalysisai/cc-traces-weka-062126)
+on HuggingFace.
+
+```bash
+aiperf profile \
+    --scenario 'inferencex-agentx-mvp' \
+    --url 'http://llm-d-inference-gateway-istio:80/v1' \
+    --model 'zai-org/GLM-5.2-FP8' \
+    --max-context-length <142000|10000000> \
+    --endpoint-type 'chat' \
+    --streaming \
+    --use-server-token-count \
+    --public-dataset 'semianalysis_cc_traces_weka_with_subagents' \
+    --concurrency <16|32|64|128|256|512> \
+    --random-seed 42 \
+    --benchmark-duration 900 \
+    --server-metrics 'http://llm-d-inference-gateway-istio:80/metrics' \
+    --no-gpu-telemetry \
+    --output-artifact-dir <path> \
+    --ui 'simple'
+```
+
+Only `--max-context-length` and the `--concurrency` sweep differ across the four reported
+configurations:
+
+| Configuration | `--max-context-length` | `--concurrency` sweep |
+| --------------------------- | ----------------------- | ------------------------- |
+| Baseline | `142000` | 16, 32, 64, 128 |
+| MTP + Offloading | `142000` | 16, 32, 64, 128 |
+| Offloading | `142000` | 16, 32, 64, 128 |
+| Full ISL + MTP + Offloading | `10000000` | 16, 32, 64, 128, 256, 512 |
+
+`142000` truncates the trace dataset to requests that fit an EP8 (1-node) prefill deployment.
+`10000000` is effectively unbounded and replays full traces (up to ~1M input tokens) — this is
+the "Full ISL" config. At concurrency 256/512, some Full ISL runs on smaller topologies exceeded
+server capacity (warmup failures) and are excluded from the reported results.
+
 ## Optional Features
 
 ### MTP Speculative Decoding

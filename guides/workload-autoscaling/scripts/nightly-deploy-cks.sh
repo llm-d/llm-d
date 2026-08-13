@@ -5,7 +5,7 @@
 # best-effort. Two assumptions here are unverified on the CKS nightly cluster:
 #   - KEDA is installed (checked below, fails loudly if not).
 #   - A monitoring stack serves Prometheus at prometheus-operated.llm-d-monitoring:9090 —
-#     the endpoint wva-config/platform/k8s pins PROMETHEUS_BASE_URL to. Override with
+#     the endpoint wva/controller/platform/k8s pins PROMETHEUS_BASE_URL to. Override with
 #     PROMETHEUS_ADDRESS if that is wrong.
 #
 # Environment variables:
@@ -60,8 +60,8 @@ apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 namespace: ${NAMESPACE}
 resources:
-  - ${REL}/guides/workload-autoscaling/wva-config/platform/k8s/
-  - ${REL}/guides/workload-autoscaling/optimized-baseline-autoscaling/keda/k8s/
+  - ${REL}/guides/workload-autoscaling/wva/controller/platform/k8s/
+  - ${REL}/guides/workload-autoscaling/wva/optimized-baseline/keda/k8s/
 patches:
   # The namespace and Prometheus endpoint live inside KEDA trigger strings, so the kustomize
   # namespace transformer cannot reach them — rewrite them explicitly.

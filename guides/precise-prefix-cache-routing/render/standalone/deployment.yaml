@@ -32,7 +32,7 @@ spec:
         - name: vllm-render
           # GPU-less vLLM image — `vllm launch render` only tokenizes, no model
           # weights are loaded. Mirrors the chart's sidecar image/command.
-          image: docker.io/vllm/vllm-openai-cpu:v0.23.0
+          image: REPLACE_MODEL_SERVER_IMAGE
           imagePullPolicy: IfNotPresent
           command: ["vllm", "launch", "render"]
           args:

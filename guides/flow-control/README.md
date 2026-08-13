@@ -89,7 +89,7 @@ Flow Control is a software-level scheduling feature at the EPP layer and is enti
 
   ```bash
   kubectl apply -f https://github.com/kubernetes-sigs/gateway-api-inference-extension/releases/download/${GAIE_VERSION}/v1-manifests.yaml
-  kubectl apply -f https://github.com/llm-d/llm-d-router/releases/download/${ROUTER_CHART_VERSION}/manifests.yaml
+  kubectl apply -f https://github.com/llm-d/llm-d-router/releases/download/${ROUTER_RELEASE_VERSION}/manifests.yaml
   ```
 
 * Create a target namespace for the installation:
@@ -161,8 +161,11 @@ kubectl kustomize ${REPO_ROOT}/guides/optimized-baseline/modelserver/gpu/vllm/${
 
 ### 3. Enable monitoring (optional)
 
-* Install the [Monitoring stack](../../docs/operations/observability/setup.md).
-* To enable Prometheus monitoring on the llm-d router, add `-f ${REPO_ROOT}/guides/recipes/router/features/monitoring.values.yaml` during the [router installation step](#1-deploy-the-router).
+If you want monitoring, decide before step 1: the monitoring values create a
+ServiceMonitor, whose CRD only exists after the monitoring stack is installed.
+
+* Install the [Monitoring stack](../../docs/operations/observability/setup.md) **before deploying the router**.
+* Add `-f ${REPO_ROOT}/guides/recipes/router/features/monitoring.values.yaml` to the [router installation command](#1-deploy-the-router). If you already installed without it, re-run the same `helm upgrade --install` command with the extra `-f` appended.
 * Deploy the monitoring resources for model servers:
 
 ```bash
@@ -193,8 +196,13 @@ export IP=$(kubectl get gateway llm-d-inference-gateway -n ${NAMESPACE} -o jsonp
 Check EPP logs for feature gate activation:
 
 ```bash
-kubectl logs deploy/${GUIDE_NAME}-epp -n ${NAMESPACE} | grep "Flow Control enabled"
+kubectl logs deploy/${GUIDE_NAME}-epp -n ${NAMESPACE} | grep "Initializing Flow Control layer"
 ```
+
+Expected: one line, `Initializing Flow Control layer`. No output means the gate is off for
+this deployment (the EPP then logs `Flow Control layer is disabled` instead) or the log
+format changed; the stronger check is that `llm_d_epp_flow_control_*` series exist on the
+metrics endpoint (next section).
 
 ### 3. Proof of Queuing
 
@@ -411,7 +419,8 @@ To remove the deployed components:
 ```bash
 helm uninstall ${GUIDE_NAME} -n ${NAMESPACE}
 kubectl delete -f ${REPO_ROOT}/guides/${GUIDE_NAME}/objectives.yaml -n ${NAMESPACE}
-kubectl kustomize ${REPO_ROOT}/guides/optimized-baseline/modelserver/gpu/vllm/ \
+export INFRA_PROVIDER=base # match the value used at deploy time
+kubectl kustomize ${REPO_ROOT}/guides/optimized-baseline/modelserver/gpu/vllm/${INFRA_PROVIDER}/ \
   | sed "s/optimized-baseline/${GUIDE_NAME}/g" \
   | kubectl delete -n ${NAMESPACE} -f -
 ```

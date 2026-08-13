@@ -49,11 +49,14 @@ This guide includes configurations for the following accelerators:
 
 - Have the [proper client tools installed on your local system](../../helpers/client-setup/README.md) to use this guide.
 
-- Checkout llm-d repo:
+- Ensure your cluster has enough accelerators to satisfy the [Configuration](#configuration) table above (default: 16 GPUs). If your cluster has fewer resources, adjust `replicas` and `--tensor-parallel-size` in the [model server patch](./modelserver/gpu/vllm/base/patch-vllm.yaml) for your environment.
+
+- Set the branch and clone the llm-d repo:
 
 <!-- guide:prerequisites.clone start -->
 <!-- llm-d-cicd:skip start -->
 ```bash
+export BRANCH=main
 git clone https://github.com/llm-d/llm-d.git && cd llm-d && git checkout ${BRANCH}
 ```
 <!-- llm-d-cicd:skip end -->
@@ -75,7 +78,7 @@ export HF_TOKEN=HF_TOKEN_PLACEHOLDER
 <!-- llm-d-cicd:skip end -->
 ```bash
 export MONITORING_VALUES=
-export PROVIDER_NAME=gke # options: none, gke, agentgateway, istio
+export PROVIDER_NAME=none # options: none, gke, agentgateway, istio
 export ACCELERATOR_TYPE=gpu # options: gpu, amd, xpu, hpu, tpu/v6, tpu/v7, cpu
 export MODEL_SERVER=vllm # options: vllm, sglang, trtllm
 export INFRA_PROVIDER=base # options: base, gke
@@ -85,6 +88,7 @@ export BENCHMARK_REF=main
 export HARNESS=inference-perf
 export WORKLOAD=guide_optimized-baseline_1.yaml
 export GATEWAY_CLASS=epponly # options: epponly, gke, agentgateway, istio
+export ROUTER_CHART_VERSION=v0 # options are any semver llm-d-router release of v0 for latest
 ```
 <!-- guide:env.static end -->
 
@@ -101,7 +105,9 @@ source ${REPO_ROOT}/guides/env.sh
 <!-- guide:env.source end -->
 
 > [!NOTE]
-> Some environment variables are common amongst guides, to view these, please inspect the above file sourced so the rest of the guide makes sense.
+> This file defines shared variables required by subsequent steps, including
+> `GAIE_VERSION`, `ROUTER_CHART_VERSION`, and the router chart reference for
+> the selected deployment mode.
 
 - Install the Gateway API Inference Extension CRDs:
 
@@ -136,7 +142,7 @@ kubectl create secret generic llm-d-hf-token \
 
 ### 1. Deploy the llm-d Router
 
-- Define the `helm` values files for `llm-d` router:
+- Prepare the paths to the `helm` values files for `llm-d` router (used in the deployment commands below):
 
 <!-- guide:deploy.router_values start -->
 ```bash
@@ -154,16 +160,16 @@ export ROUTER_VALUES="-f ${REPO_ROOT}/guides/${GUIDE_NAME}/router/${GUIDE_NAME}.
 <!-- guide:deploy.router_values end -->
 
 > [!NOTE]
-> As denoted above, **vllm, sglang** share a values file, while  
+> As denoted above, **vllm, sglang** share a values file, while
 > **TensorRT-LLM** (`trtllm-serve`) has it's own values file.
 
 - Optionally, to enable `Prometheus Monitoring` on the `llm-d` router define the `helm` values file:
 
 <!-- guide:deploy.monitoring_values start -->
 ```bash
-# 
+#
 # Uncomment the below to enable Prometheus monitoring on the llm-d router
-# 
+#
 # export MONITORING_VALUES="-f ${REPO_ROOT}/guides/recipes/router/features/monitoring.values.yaml"
 ```
 <!-- guide:deploy.monitoring_values end -->
@@ -171,9 +177,21 @@ export ROUTER_VALUES="-f ${REPO_ROOT}/guides/${GUIDE_NAME}/router/${GUIDE_NAME}.
 > [!NOTE]
 > When following the guide from top to bottom, we already have `export MONITORING_VALUES=""` by default. This means that `monitoring` is disabled by default.
 
+> [!WARNING]
+> Enabling monitoring here requires the monitoring stack to be installed first. The
+> `monitoring.values.yaml` file creates a `ServiceMonitor`, which needs the Prometheus
+> Operator CRDs. Deploying the router with this file before the monitoring stack is ready
+> (see [Step 3: Enable monitoring](#3-optional-enable-monitoring)) will fail with a Helm
+> validation error. If you want monitoring enabled from the start, install the monitoring
+> stack before the router, or leave `MONITORING_VALUES` empty and `helm upgrade` with the
+> monitoring values after Step 3.
+
 #### Standalone Mode
 
-This deploys the llm-d Router in [Standalone Mode](../../docs/architecture/core/router/proxy.md):
+This deploys the llm-d Router in [Standalone Mode](../../docs/architecture/core/router/proxy.md) with an Envoy sidecar (default):
+
+> [!IMPORTANT]
+> Before running the command below, execute the path setup commands from the previous section: the `export ROUTER_BASE_VALUES=...` and `export ROUTER_VALUES=...` commands above.
 
 <!-- guide:deploy.standalone start -->
 ```bash
@@ -187,6 +205,8 @@ helm install ${GUIDE_NAME} \
 ```
 <!-- guide:deploy.standalone end -->
 
+To use **agentgateway** as the sidecar proxy instead of Envoy, see [router recipes](../recipes/router/README.md).
+
 <details>
 <summary><h4>Gateway Mode</h4></summary>
 
@@ -194,6 +214,9 @@ To use a Kubernetes Gateway managed proxy rather than the standalone version, fo
 
 1. _Deploy a Kubernetes Gateway_ named by following one of [the gateway guides](../../docs/infrastructure/gateway).
 2. _Deploy the llm-d router and an HTTPRoute_ that connects it to the Gateway as follows:
+
+> [!IMPORTANT]
+> Before running the command below, execute the path setup commands from the previous section: the `export ROUTER_BASE_VALUES=...` and `export ROUTER_VALUES=...` commands above.
 
 <!-- guide:deploy.gateway start -->
 ```bash
@@ -222,9 +245,9 @@ kubectl apply -n ${NAMESPACE} \
   -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/${ACCELERATOR_TYPE}/${MODEL_SERVER}/${INFRA_PROVIDER}/
 
 # only when ACCELERATOR_TYPE=amd or xpu or hpu or tpu/v6 or tpu/v7 or cpu:
-# 
+#
 # Comment out the above `kubectl apply` and uncomment the below to run on `NON GPU` accelerators
-# 
+#
 # kubectl apply -n ${NAMESPACE} \
 #  -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/${ACCELERATOR_TYPE}/${MODEL_SERVER}/
 #
@@ -420,9 +443,12 @@ kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/
 # kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/${ACCELERATOR_TYPE}/${MODEL_SERVER}
 
 kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/recipes/modelserver/components/monitoring --ignore-not-found=true
-
+```
+<!-- llm-d-cicd:skip start -->
+```bash
 kubectl delete namespace ${NAMESPACE}
 ```
+<!-- llm-d-cicd:skip end -->
 <!-- guide:cleanup end -->
 
 ## Benchmarking Reports

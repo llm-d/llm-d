@@ -15,4 +15,4 @@ spec:
       volumes:
         - name: files-storage
           persistentVolumeClaim:
-            claimName: preprov-pvc
+            claimName: llm-d-kv-cache-storage

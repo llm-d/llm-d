@@ -81,8 +81,6 @@ configuration layers the agentic optimizations onto disaggregated serving:
   ```
 <!-- llm-d-cicd:skip end -->
 
-
-
 ## Installation Instructions
 
 ### 1. Deploy the llm-d Router
@@ -226,16 +224,16 @@ envsubst < agentic-serving-nemotron-3-ultra.yaml > config.yaml
 
 The results below are with 8 replicas of H200 GPU on the benchmark workload described above. Scaling concurrency up to 80 sessions.
 
-### Summary with 60 concurrent coding sessions:
+### Summary with 60 concurrent coding sessions
 
-| Metric                  | k8s Service | llm-d-optimized  | Δ Improvement | 
-| :---                    | :---        | :---             | :---          | 
-| **TTFT P50 (ms)**       | 49462       | 20543            | ⬇️  58%        | 
-| **Total tokens / sec**  | 64958       | 67645            | ⬆️  4%         | 
-| **Input tokens / sec**  | 64474       | 66716            | ⬆️  3%         | 
-| **Output tokens / sec** |   484       |   929            | ⬆️  92%        | 
+| Metric                  | k8s Service | llm-d-optimized  | Δ Improvement |
+| :---                    | :---        | :---             | :---          |
+| **TTFT P50 (ms)**       | 49462       | 20543            | ⬇️  58%        |
+| **Total tokens / sec**  | 64958       | 67645            | ⬆️  4%         |
+| **Input tokens / sec**  | 64474       | 66716            | ⬆️  3%         |
+| **Output tokens / sec** |   484       |   929            | ⬆️  92%        |
 
-### Latency Profiles:
+### Latency Profiles
 
 <p float="left">
   <img src="./benchmark-results/latency_vs_throughput_nemotron-3-ultra.png" width="33%" alt="Latency vs Throughput" />
@@ -250,5 +248,10 @@ To clean up resources:
 ```bash
 helm uninstall ${GUIDE_NAME} -n ${NAMESPACE}
 kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/gpu/vllm/nemotron-3-ultra/${INFRA_PROVIDER}/
+```
+
+<!-- llm-d-cicd:skip start -->
+```bash
 kubectl delete namespace ${NAMESPACE}
 ```
+<!-- llm-d-cicd:skip end -->

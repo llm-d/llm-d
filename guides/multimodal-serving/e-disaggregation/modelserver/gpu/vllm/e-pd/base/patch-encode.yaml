@@ -1,0 +1,110 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: encode
+  labels:
+    llm-d.ai/role: encode
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      llm-d.ai/role: encode
+  template:
+    metadata:
+      labels:
+        llm-d.ai/role: encode
+    spec:
+      serviceAccountName: sa
+      containers:
+        - name: modelserver
+          image: REPLACE_MODEL_SERVER_IMAGE
+          command: ["vllm", "serve"]
+          args:
+            - "Qwen/Qwen3-VL-32B-Instruct"
+            - "--disable-access-log-for-endpoints=/health,/metrics,/v1/models"
+            - "--tensor-parallel-size=2"
+            - "--trust-remote-code"
+            - "--mm-processor-cache-gb"
+            - "20"
+            - "--mm-encoder-only"
+            - "--enforce-eager"
+            - "--no-enable-prefix-caching"
+            - "--ec-transfer-config"
+            # num_ec_blocks (Default: 100,000) defines the capacity of the shared encoder
+            # cache for multimodal items. Increase this value for workloads with large or
+            # numerous images to prevent cache evictions and costly re-encodings that
+            # degrade system performance.
+            - '{"ec_connector": "ECCPUConnector", "ec_role": "ec_producer", "ec_connector_extra_config": {"num_ec_blocks": 1000000}}'
+          env:
+            - name: VLLM_EC_SIDE_CHANNEL_HOST
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.podIP
+            - name: VLLM_EC_SIDE_CHANNEL_PORT
+              value: "5610"
+            - name: HF_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: llm-d-hf-token
+                  key: HF_TOKEN
+            # Workaround for https://github.com/vllm-project/vllm/issues/44548, required with vLLM v0.20.0+ due to torch 2.11
+            - name: USER
+              value: llm-d
+          ports:
+            - name: modelserver
+              containerPort: 8000
+              protocol: TCP
+            - name: ec-nixl
+              containerPort: 5610
+              protocol: TCP
+          resources:
+            limits:
+              cpu: "8"
+              memory: 128Gi
+              nvidia.com/gpu: "2"
+            requests:
+              cpu: "8"
+              memory: 128Gi
+              nvidia.com/gpu: "2"
+          volumeMounts:
+            - mountPath: /dev/shm
+              name: shm
+            - mountPath: /.cache
+              name: torch-compile-cache
+            - mountPath: /.triton
+              name: triton-cache
+            - mountPath: /.config
+              name: config-cache
+          startupProbe:
+            httpGet:
+              path: /v1/models
+              port: modelserver
+            initialDelaySeconds: 15
+            periodSeconds: 30
+            timeoutSeconds: 5
+            failureThreshold: 120
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: modelserver
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /v1/models
+              port: modelserver
+            periodSeconds: 5
+            timeoutSeconds: 2
+            failureThreshold: 3
+      volumes:
+        - name: shm
+          emptyDir:
+            medium: Memory
+            sizeLimit: 90Gi
+        - name: torch-compile-cache
+          emptyDir: {}
+        - name: triton-cache
+          emptyDir: {}
+        - name: config-cache
+          emptyDir: {}

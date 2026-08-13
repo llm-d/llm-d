@@ -2,12 +2,14 @@ apiVersion: kustomize.config.k8s.io/v1alpha1
 kind: Component
 # Persist the model cache on an RWX PVC instead of an emptyDir, so the model
 # downloads once and is reused across runs (and across replicas that share the
-# volume). HF_HOME points at the persistent volume; the volume itself is named
-# generically (model-cache) so it is independent of the model source. Include
+# volume). HF_HOME points at the persistent volume; include
 # this component from a guide's cluster-specific overlay (e.g. amd-ci/) — only
 # where an RWX default StorageClass is available.
-resources:
-  - model-cache-pvc.yaml
+
+# Manually deploy ahead of time in the targeted namespace
+# resources:
+#   - model-cache-pvc.yaml
+
 patches:
   - target:
       kind: Deployment
@@ -27,4 +29,4 @@ patches:
         value:
           name: model-cache
           persistentVolumeClaim:
-            claimName: model-cache
+            claimName: model-pvc

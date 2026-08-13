@@ -9,7 +9,7 @@ router:
     # Single EPP replica: the inflight-load-producer's in-flight token accounting
     # (which the token-load-scorer and affinity filter consume) is local to each
     # EPP process, so multiple replicas would each see only a fraction of the
-    # per-endpoint load and mis-gate the affinity filter.
+    # per-endpoint load and incorrectly gate the affinity filter.
     replicas: 1
     pluginsConfigFile: "pd-config.yaml"
     pluginsCustomConfig:

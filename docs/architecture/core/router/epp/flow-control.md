@@ -420,15 +420,19 @@ The Flow Control layer exposes detailed metrics to track queuing dynamics and sy
 
 | Metric Name | Metric Type | Description | Labels |
 |:---|:---|:---|:---|
-| `llm_d_epp_flow_control_request_queue_duration_seconds` | Distribution | Time requests spend in the Flow Control layer. | `fairness_id`, `priority`, `outcome`, `inference_pool`, `model_name`, `target_model_name` |
-| `llm_d_epp_flow_control_queue_size` | Gauge | Current number of requests in Flow Control. | `fairness_id`, `priority`, `inference_pool`, `model_name`, `target_model_name` |
-| `llm_d_epp_flow_control_queue_bytes` | Gauge | Current size in bytes of requests in Flow Control. | `fairness_id`, `priority`, `inference_pool`, `model_name`, `target_model_name` |
-| `llm_d_epp_flow_control_dispatch_cycle_duration_seconds` | Distribution | Time taken for each dispatch cycle. | None |
-| `llm_d_epp_flow_control_request_enqueue_duration_seconds` | Distribution | Time taken to enqueue requests. | `fairness_id`, `priority`, `outcome` |
-| `llm_d_epp_flow_control_pool_saturation` | Gauge | Current saturation level of the pool. | `inference_pool` |
+| `llm_d_epp_flow_control_request_queue_duration_seconds` | Histogram | Time requests spend in the Flow Control layer from enqueue to final outcome. | `fairness_id`, `priority`, `outcome`, `inference_pool`, `model_name`, `target_model_name` |
+| `llm_d_epp_flow_control_queue_size` | Gauge | Current number of requests actively held in the Flow Control queue. | `fairness_id`, `priority`, `inference_pool`, `model_name`, `target_model_name` |
+| `llm_d_epp_flow_control_queue_bytes` | Gauge | Current total size in bytes of requests actively held in the Flow Control queue. | `fairness_id`, `priority`, `inference_pool`, `model_name`, `target_model_name` |
+| `llm_d_epp_flow_control_dispatch_cycle_duration_seconds` | Histogram | Time taken for each internal dispatch cycle. | None |
+| `llm_d_epp_flow_control_request_enqueue_duration_seconds` | Histogram | Time taken to enqueue requests into the Flow Control layer. | `fairness_id`, `priority`, `outcome` |
+| `llm_d_epp_flow_control_pool_saturation` | Gauge | Pool saturation signal gating dispatch (1.0 is gating set point). | `inference_pool` |
+| `llm_d_epp_flow_control_stale_endpoints` | Gauge | Number of candidate endpoints whose metrics are missing or older than staleness threshold. | `detector` |
+| `llm_d_epp_flow_control_requests_total` | Counter | Total requests processed by the Flow Control layer by outcome. | `outcome`, `priority`, `inference_pool` |
 
 #### Grafana Dashboard
 
 A pre-configured Grafana dashboard is available to visualize these metrics, making it easy to monitor queue depths, dispatch latency, and saturation state transitions.
+
+To load this dashboard, follow the [Observability Setup guide](../../../../operations/observability/setup.md), which installs Prometheus and Grafana and loads the llm-d dashboards.
 
 ![Flow Control Dashboard](../../images/flow_control_dashboard.png)

@@ -2,8 +2,8 @@
 # vLLM Version Configuration
 # ============================================================================
 # Used by CUDA and CPU platforms
-VLLM_REPO=https://github.com/neuralmagic/vllm.git
-VLLM_COMMIT_SHA=51f799c1a0c8a0476faf7e17eeb6a77983cdd778 # v0.23.0 + fix DP supervisor engine_id collision
+VLLM_REPO=https://github.com/vllm-project/vllm.git
+VLLM_COMMIT_SHA=568afb3a13806beb53bb2e6bd518269357b237c0 # v0.26.0 release
 
 # ============================================================================
 # Cuda specific configs
@@ -16,14 +16,24 @@ VLLM_PREBUILT=0                # 0=editable install, 1=use full prebuilt wheel
 VLLM_USE_PRECOMPILED=1         # 1=use precompiled binaries either from VLLM_COMMIT_SHA or VLLM_PRECOMPILED_WHEEL_COMMIT, 0=compile from source
 # If building vLLM from a precompiled commit in the vLLM wheel index (only commits off main),
 # which commit to use as the base for the compiled bits.
-VLLM_PRECOMPILED_WHEEL_COMMIT=0fc695fc6d1d82e9a5ac6835ac8e4e1c83703665 # maps to vLLM official v0.23.0 release
+VLLM_PRECOMPILED_WHEEL_COMMIT=568afb3a13806beb53bb2e6bd518269357b237c0 # v0.26.0 release
 
 
 
-# Used by XPU: prebuilt vLLM image from upstream CI (vllm-ci-test-repo).
+# Used by XPU: official prebuilt vLLM XPU image from Docker Hub.
 # The XPU image is a thin pass-through over this base; switch tags here to upgrade.
-# Tag corresponds to vLLM v0.23.0 release (commit 0fc695fc6d1d82e9a5ac6835ac8e4e1c83703665).
-VLLM_XPU_BASE_IMAGE=public.ecr.aws/q9t5s3a7/vllm-ci-test-repo:0fc695fc6d1d82e9a5ac6835ac8e4e1c83703665-xpu
+# Official vLLM v0.26.0 release image.
+VLLM_XPU_BASE_IMAGE=vllm/vllm-openai-xpu:v0.26.0
+
+# ============================================================================
+# SGLang XPU Version Configuration
+# ============================================================================
+# GitHub owner/repo and pinned revision used for the SGLang XPU source checkout.
+SGLANG_XPU_REPOSITORY=sgl-project/sglang
+SGLANG_XPU_REF=1af01674938f68266d5f8a0e5635ea1434af7801
+# Matches the sgl-kernel-xpu revision used by the validated Dynamo XPU image.
+SGLANG_XPU_KERNEL_REPO=https://github.com/sgl-project/sgl-kernel-xpu.git
+SGLANG_XPU_KERNEL_REF=8c328fee250fcef4169c912cb7bbd13c1f637d5c
 
 # ============================================================================
 # CUDA Version Configuration
@@ -32,13 +42,3 @@ VLLM_XPU_BASE_IMAGE=public.ecr.aws/q9t5s3a7/vllm-ci-test-repo:0fc695fc6d1d82e9a5
 CUDA_MAJOR=13
 CUDA_MINOR=0
 CUDA_PATCH=2
-
-### GB200-specific overrides
-GB200_NVSHMEM_VERSION=v3.4.5-0
-GB200_DEEPEP_REPO=https://github.com/fzyzcjy/DeepEP
-GB200_DEEPEP_VERSION=gb200_blog_part_2
-GB200_INSTALL_OFFLOADING_CONNECTOR=false
-
-### Offloading connector
-LLM_D_OFFLOADING_CONNECTOR_VERSION=0.23
-INSTALL_OFFLOADING_CONNECTOR=true

@@ -1,9 +1,13 @@
 # Values for the multi-tenant Pub/Sub demo — team × tier × MODEL (Scenarios A + B).
 #
 # Replace: PROJECT_ID, NAMESPACE, IGW_HOST (one gateway routing by payload.model to
-# two InferencePools), MODEL_A / MODEL_B, POOL_A / POOL_B (used by the saturation
-# overlay). 6 topics = 3 teams × 2 models; the publisher sends model-a traffic to
-# the *-a subscriptions (payload.model = MODEL_A) and model-b to *-b.
+# two InferencePools), POOL_A / POOL_B (used by the saturation overlay). 6 topics =
+# 3 teams × 2 models; the publisher sends model-a traffic to the *-a subscriptions
+# (payload.model = MODEL_A) and model-b to *-b.
+#
+# MODEL_A / MODEL_B below are the guide's ${MODEL_A} / ${MODEL_B} shell variables,
+# not placeholders in this file: the served model names reach the system through
+# payload.model in the publisher, never through these values.
 #
 #   - MODEL -> its own worker pool (model-a / model-b): independent concurrency and
 #     (saturation overlay) saturation back-off.

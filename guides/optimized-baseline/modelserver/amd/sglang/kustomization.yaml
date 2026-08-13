@@ -6,7 +6,7 @@ resources:
 namePrefix: optimized-baseline-rocm-sglang-
 
 components:
-  - ../../../../recipes/modelserver/components/images/amd-sglang
+  - ../../../../recipes/modelserver/components/images/amd-sglang/rocm720-mi30x
 
 labels:
   - pairs:

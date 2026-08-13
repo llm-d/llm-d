@@ -8,7 +8,7 @@ resources:
 namePrefix: precise-prefix-cache-routing-xpu-vllm-
 
 components:
-  - ../../../../recipes/modelserver/components/images/xpu-vllm
+  - ../../../../recipes/modelserver/components/images/xpu-vllm/release
 
 labels:
   - pairs:

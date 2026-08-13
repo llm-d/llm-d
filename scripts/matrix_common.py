@@ -68,13 +68,18 @@ GUIDES = [
     ("Tiered Prefix Cache (CPU Offloading)", "../guides/tiered-prefix-cache/README.md", "tiered-prefix-cache", "native"),
     ("Tiered Prefix Cache (LMCache)", "../guides/tiered-prefix-cache/README.md", "tiered-prefix-cache", "lmcache"),
     ("Predicted Latency-Based Routing", "../guides/predicted-latency-routing/README.md", "predicted-latency-routing", None),
-    ("Workload Autoscaling (WVA)", "../guides/workload-autoscaling/README.md", "wva", None),
+    ("Flow Control", "../guides/flow-control/README.md", "flow-control", None),
+    ("Workload Autoscaling (WVA)", "../guides/workload-autoscaling/README.md", "workload-autoscaling", None),
     ("Fast Model Actuation (FMA)", "../guides/fast-model-actuation/README.md", "fast-model-actuation", None),
 ]
 
 # ---------------------------------------------------------------------------
 # Workflow filename convention:
-#   nightly-e2e-{guide_slug}-{provider}-{offload_dest}-{accelerator}-{engine}-{connector}.yaml
+#   nightly-e2e-{guide_slug}-{provider}[-{env}...]-{offload_dest}-{accelerator}-{engine}-{connector}.yaml
+#
+# Some providers add extra segments between the provider and offload_dest (for
+# example the AMD ROCm runs use "-amd-ci-acc-..."), so the trailing four fields
+# are what identify the run; anything in between is environment detail.
 # ---------------------------------------------------------------------------
 
 WORKFLOW_PREFIX = "nightly-e2e-"
@@ -91,7 +96,8 @@ def _parse_workflow_stem(stem: str) -> tuple[str, str, str, str, str, str] | Non
     """Parse a workflow stem into its components.
 
     Returns (guide_slug, provider, offload_dest, accelerator, engine, connector)
-    or None if parsing fails.
+    or None if parsing fails. Extra segments between the provider and
+    offload_dest are ignored, so the trailing four fields are what matter.
     """
     for provider in PROVIDERS:
         marker = f"-{provider}-"
@@ -102,10 +108,10 @@ def _parse_workflow_stem(stem: str) -> tuple[str, str, str, str, str, str] | Non
         guide_slug = stem[:idx]
         suffix = stem[idx + len(marker):]
         parts = suffix.split("-")
-        if len(parts) != 4:
+        if len(parts) < 4:
             continue
 
-        offload_dest, accelerator, engine, connector = parts
+        offload_dest, accelerator, engine, connector = parts[-4:]
         return (guide_slug, provider, offload_dest, accelerator, engine, connector)
 
     return None

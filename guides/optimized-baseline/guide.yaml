@@ -6,43 +6,45 @@ _lists:
 env:
   static:
     BRANCH: main
-    REPO_ROOT:   $(realpath $(git rev-parse --show-toplevel))
+    REPO_ROOT: $(realpath $(git rev-parse --show-toplevel))
 
-    GUIDE_NAME:       optimized-baseline
-    NAMESPACE:        llm-d-optimized-baseline
+    GUIDE_NAME: optimized-baseline
+    NAMESPACE: llm-d-optimized-baseline
 
-    HF_TOKEN:         { default: HF_TOKEN_PLACEHOLDER, sensitive: true }
+    HF_TOKEN: {default: HF_TOKEN_PLACEHOLDER, sensitive: true}
 
-    MONITORING_VALUES: { default: "" }
+    MONITORING_VALUES: {default: ""}
 
-    PROVIDER_NAME:    { default: gke,  values: [none, gke, agentgateway, istio]}
-    ACCELERATOR_TYPE: { default: gpu,  values: [gpu, amd, xpu, hpu, "tpu/v6", "tpu/v7", cpu] }
-    MODEL_SERVER:     { default: vllm, values: [vllm, sglang, trtllm] }
-    INFRA_PROVIDER:   { default: base, values: [base, gke] }
+    PROVIDER_NAME: {default: gke, values: [none, gke, agentgateway, istio]}
+    ACCELERATOR_TYPE: {default: gpu, values: [gpu, amd, xpu, hpu, "tpu/v6", "tpu/v7", cpu]}
+    MODEL_SERVER: {default: vllm, values: [vllm, sglang, trtllm]}
+    INFRA_PROVIDER: {default: base, values: [base, gke]}
 
-    MODEL:         { default: "Qwen/Qwen3-32B" }
+    MODEL: {default: "Qwen/Qwen3-32B"}
 
     # VERIFICATION
-    CURL_TEST_IMAGE:  { default: "cfmanteiga/alpine-bash-curl-jq:latest" }
+    CURL_TEST_IMAGE: {default: "cfmanteiga/alpine-bash-curl-jq:latest"}
 
     # BENCHMARK
     BENCHMARK_REF: main
     HARNESS: inference-perf
     WORKLOAD: guide_optimized-baseline_1.yaml
-    GATEWAY_CLASS:  { default: epponly,  values: [epponly, gke, agentgateway, istio]} # Benchmark specific epponly = standalone - TODO to fix in llmdbenchmark
-    
+    GATEWAY_CLASS: {default: epponly, values: [epponly, gke, agentgateway, istio]} # Benchmark specific epponly = standalone - TODO to fix in llmdbenchmark
+
   source: ["${REPO_ROOT}/guides/env.sh"]
 
 prerequisites:
   clone:
     - skip_in: [ci]
-      run: git clone https://github.com/llm-d/llm-d.git && cd llm-d && git checkout ${BRANCH}
+      run: |
+        export BRANCH=main
+        git clone https://github.com/llm-d/llm-d.git && cd llm-d && git checkout ${BRANCH}
 
   gaie:
-    - run: kubectl apply -f https://github.com/kubernetes-sigs/gateway-api-inference-extension/releases/download/${GAIE_VERSION}/v1-manifests.yaml 
+    - run: kubectl apply -f https://github.com/kubernetes-sigs/gateway-api-inference-extension/releases/download/${GAIE_VERSION}/v1-manifests.yaml
   namespace:
     - run: kubectl create namespace ${NAMESPACE} --dry-run=client -o yaml | kubectl apply -f -
-  secrets:  
+  secrets:
     - skip_in: [ci]
       run: |
         kubectl create secret generic llm-d-hf-token \
@@ -54,10 +56,10 @@ deploy:
   router_values:
     - run: export ROUTER_BASE_VALUES="-f ${REPO_ROOT}/guides/recipes/router/base.values.yaml"
 
-    - when: { MODEL_SERVER: [vllm, sglang] }
+    - when: {MODEL_SERVER: [vllm, sglang]}
       run: export ROUTER_VALUES="-f ${REPO_ROOT}/guides/${GUIDE_NAME}/router/${GUIDE_NAME}.values.yaml"
-    
-    - when: { MODEL_SERVER: [trtllm] }
+
+    - when: {MODEL_SERVER: [trtllm]}
       run: |
         #
         # Comment out the above `ROUTER_VALUES` and uncomment the below for TensorRT-LLM (trtllm-serve)
@@ -66,9 +68,9 @@ deploy:
 
   monitoring_values:
     - run: |
-        # 
+        #
         # Uncomment the below to enable Prometheus monitoring on the llm-d router
-        # 
+        #
         # export MONITORING_VALUES="-f ${REPO_ROOT}/guides/recipes/router/features/monitoring.values.yaml"
 
   standalone:
@@ -94,22 +96,22 @@ deploy:
           -n ${NAMESPACE} --version ${ROUTER_CHART_VERSION}
 
   modelserver:
-    - when: { ACCELERATOR_TYPE: [gpu] }
+    - when: {ACCELERATOR_TYPE: [gpu]}
       run: |
         kubectl apply -n ${NAMESPACE} \
           -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/${ACCELERATOR_TYPE}/${MODEL_SERVER}/${INFRA_PROVIDER}/
-    
-    - when: { ACCELERATOR_TYPE: *non_gpu }
+
+    - when: {ACCELERATOR_TYPE: *non_gpu}
       run: |
-        # 
+        #
         # Comment out the above `kubectl apply` and uncomment the below to run on `NON GPU` accelerators
-        # 
+        #
         # kubectl apply -n ${NAMESPACE} \
         #  -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/${ACCELERATOR_TYPE}/${MODEL_SERVER}/
-        # 
+        #
 
   monitoring:
-      - run: kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/recipes/modelserver/components/monitoring
+    - run: kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/recipes/modelserver/components/monitoring
 
 verify:
   endpoint:
@@ -152,13 +154,14 @@ benchmark:
 
 cleanup:
   - run: helm uninstall ${GUIDE_NAME} -n ${NAMESPACE}
-  - when: { ACCELERATOR_TYPE: [gpu] }
+  - when: {ACCELERATOR_TYPE: [gpu]}
     run: kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/${ACCELERATOR_TYPE}/${MODEL_SERVER}/${INFRA_PROVIDER}
-  - when: { ACCELERATOR_TYPE: *non_gpu }
+  - when: {ACCELERATOR_TYPE: *non_gpu}
     run: |
       #
       # Comment out the above `kubectl delete` and uncomment the below to run on `NON GPU` accelerators
       #
       # kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/${ACCELERATOR_TYPE}/${MODEL_SERVER}
   - run: kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/recipes/modelserver/components/monitoring --ignore-not-found=true
-  - run: kubectl delete namespace ${NAMESPACE}
+  - skip_in: [ci]
+    run: kubectl delete namespace ${NAMESPACE}

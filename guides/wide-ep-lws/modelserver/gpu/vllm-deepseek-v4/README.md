@@ -32,12 +32,17 @@ In addition to the [wide-ep-lws prerequisites](../../../README.md#prerequisites)
 
 Each deployment is a different prefill : decode operating point. Pick one and apply it:
 
-| Deployment                          | Layout                                | Nodes / GPUs |
-| ----------------------------------- | ------------------------------------- | ------------ |
-| `oci-mid-curve`                     | 1 prefill : 1 decode (DEP8 each)      | 4 / 16       |
-| `oci-high-tpt`                      | 2 prefill : 1 decode (DEP8 each)      | 6 / 24       |
-| `oci-max-tpt`                       | 3 prefill : 1 decode (DEP8 each)      | 8 / 32       |
-| `oci-3p2d-dep8-dep16-flashinfer`    | 3 prefill (DEP8) : 2 decode (DEP16), flashinfer decode | 14 / 56 |
+| Deployment | Layout | Nodes / GPUs |
+|---|---|---|
+| `oci-low-latency` | 1 prefill (DEP8) : 1 decode (TP=8) | 4 / 16 |
+| `oci-low-latency-scaled` | 1 prefill (DEP8) : 4 decode (TP=8) | 10 / 40 |
+| `oci-mid-curve` | 1 prefill : 1 decode (DEP8 each) | 4 / 16 |
+| `oci-balanced` | 2 prefill (DEP8) : 1 decode (DEP16) | 8 / 32 |
+| `oci-high-tpt` | 2 prefill : 1 decode (DEP8 each) | 6 / 24 |
+| `oci-high-tpt-dep16` | 3 prefill (DEP8) : 1 decode (DEP16) | 10 / 40 |
+| `oci-max-tpt` | 3 prefill : 1 decode (DEP8 each) | 8 / 32 |
+| `oci-ultra-tpt` | 4 prefill (DEP8) : 1 decode (DEP16) | 12 / 48 |
+| `oci-3p2d-dep8-dep16-flashinfer` | 3 prefill (DEP8) : 2 decode (DEP16), flashinfer | 14 / 56 |
 
 ```bash
 kubectl apply -n ${NAMESPACE} -k deployments/${DEPLOYMENT}

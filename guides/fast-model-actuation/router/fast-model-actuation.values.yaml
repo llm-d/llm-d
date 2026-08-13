@@ -26,5 +26,8 @@ router:
             weight: 1
 
   modelServers:
+    # Selects bound launchers only; requesters carry the guide label but never serve :8000.
+    # Keep llm-d.ai/model in sync with inferenceserverconfig.yaml.
     matchLabels:
       llm-d.ai/guide: "fast-model-actuation"
+      llm-d.ai/model: "qwen3-0.6b"
