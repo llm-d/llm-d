@@ -357,7 +357,7 @@ stateDiagram-v2
     Queued --> Cancelled: Client Disconnect<br/>(HTTP 503)
     Queued --> Drained: Controller Shutdown<br/>(HTTP 503)
     Queued --> Failed: Internal Error<br/>(HTTP 500)
-    Queued --> Dispatched: Saturation < 1.0<br/>(Open Gate)
+    Queued --> Dispatched: Saturation < Band Ceiling<br/>(Open Gate)
 
     Dispatched --> Evicted: Reclaimed for higher priority<br/>(In-Flight Eviction - HTTP 429)
     Dispatched --> [*]: Sent to Scheduler
