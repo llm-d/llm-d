@@ -25,3 +25,8 @@ scripts
 
 # Contributor guide templates — not deployable overlays
 templates
+
+# Base kustomizations that are patches-only (no resources) or intentionally
+# incomplete — they require an overlay to be deployable.
+recipes/gateway/base
+workload-autoscaling/wva-config/base

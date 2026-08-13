@@ -171,11 +171,11 @@ jobs:
 
       - name: Kustomize build and dry-run all guide overlays
         run: |
-          # Exclusions are read from guides/.ci-dry-run-exclusions.
+          # Exclusions are read from guides/.ci-dry-run-guide-exclusions.
           # Each non-comment, non-blank line is a path prefix relative to guides/
           # that should be skipped. To add or remove a guide from CI coverage,
           # edit that file rather than this workflow.
-          mapfile -t exclusions < <(grep -v '^\s*#' guides/.ci-dry-run-exclusions | grep -v '^\s*$')
+          mapfile -t exclusions < <(grep -v '^\s*#' guides/.ci-dry-run-guide-exclusions | grep -v '^\s*$')
 
           failed=0
           # results entries: "PASS <name>" or "FAIL <name>"

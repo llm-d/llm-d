@@ -7,8 +7,16 @@ resources:
 namePrefix: e-pd-disaggregation-nvidia-gpu-vllm-
 
 components:
-  - ../../../../../../../recipes/modelserver/components/images/routing-sidecar/release
   - ../../../../../../../recipes/modelserver/components/images/gpu-vllm/ec-connector
+
+# The routing-sidecar/release component's image transformer cannot resolve
+# REPLACE_ROUTING_SIDECAR_IMAGE when it is introduced by a strategic merge patch
+# (kustomize component transformers run before the parent's patches). The image
+# is set inline here instead, matching the tag managed in routing-sidecar/release.
+images:
+  - name: REPLACE_ROUTING_SIDECAR_IMAGE
+    newName: ghcr.io/llm-d/llm-d-router-disagg-sidecar
+    newTag: v0.8.1
 
 labels:
   - pairs:

@@ -8,6 +8,7 @@ spec:
     spec:
       initContainers:
         - name: routing-proxy
+          image: REPLACE_ROUTING_SIDECAR_IMAGE
           imagePullPolicy: Always
           args:
             - --port=8000
