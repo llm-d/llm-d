@@ -464,7 +464,7 @@ The Flow Control layer exposes detailed metrics to track queuing dynamics and sy
 | `llm_d_epp_flow_control_pending_reclaim` | Gauge | Sum of outstanding and cooling pending-reclaim debits, in saturation-gauge units. | `inference_pool` |
 | `llm_d_epp_flow_control_revocation_confirmation_seconds` | Histogram | Time from revocation issue to confirmed stream termination. | `inference_pool` |
 
-The last five metrics cover in-flight eviction and are only meaningful when `enableEviction: true`.
+The five revocation and reclaim metrics above apply only when `enableEviction: true`. Watch `revocations_total{outcome="timed_out"}` during rollout: it counts revocations whose stream termination was never confirmed, which the controller treats as confirmed so a hung stream cannot hold the pacing gate closed. A sustained nonzero rate means reclamation is being sized against capacity that may not have come back.
 
 #### Grafana Dashboard
 
