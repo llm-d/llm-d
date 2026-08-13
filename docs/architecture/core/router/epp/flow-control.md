@@ -463,11 +463,16 @@ The Flow Control layer exposes detailed metrics to track queuing dynamics and sy
 | `llm_d_epp_flow_control_reclaim_target` | Gauge | Last computed reclamation deficit, in saturation-gauge units. | `inference_pool` |
 | `llm_d_epp_flow_control_pending_reclaim` | Gauge | Sum of outstanding and cooling pending-reclaim debits, in saturation-gauge units. | `inference_pool` |
 | `llm_d_epp_flow_control_revocation_confirmation_seconds` | Histogram | Time from revocation issue to confirmed stream termination. | `inference_pool` |
+| `llm_d_epp_program_aware_jains_fairness_index` | Gauge | Jain's fairness index over average wait time across active programs. | None |
+| `llm_d_epp_program_aware_avg_wait_time_milliseconds` | Gauge | Cumulative mean of flow-control queue wait time per program in milliseconds. | `program_id` |
+| `llm_d_epp_program_aware_attained_service_tokens` | Gauge | Time-decayed attained service (weighted tokens consumed) per program. | `program_id` |
 
 The five revocation and reclaim metrics above apply only when `enableEviction: true`. Watch `revocations_total{outcome="timed_out"}` during rollout: it counts revocations whose stream termination was never confirmed, which the controller treats as confirmed so a hung stream cannot hold the pacing gate closed. A sustained nonzero rate means reclamation is being sized against capacity that may not have come back.
 
 #### Grafana Dashboard
 
 A pre-configured Grafana dashboard is available to visualize these metrics, making it easy to monitor queue depths, dispatch latency, and saturation state transitions.
+
+To load this dashboard, follow the [Observability Setup guide](../../../../operations/observability/setup.md), which installs Prometheus and Grafana and loads the llm-d dashboards.
 
 ![Flow Control Dashboard](../../images/flow_control_dashboard.png)

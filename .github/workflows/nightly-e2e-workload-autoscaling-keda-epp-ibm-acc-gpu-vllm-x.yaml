@@ -1,7 +1,7 @@
 name: Nightly - Workload Autoscaling KEDA+EPP Queue E2E (OCP GPU)
 
 # Nightly regression test for the queue-based KEDA + EPP autoscaling path
-# (guides/workload-autoscaling/README.hpa-epp.md) on OpenShift. Deploys the
+# (guides/workload-autoscaling/keda-epp-queue/README.md) on OpenShift. Deploys the
 # optimized-baseline modelserver + EPP router and scales the decode Deployment
 # directly from EPP queue metrics via KEDA (keda-epp-queue/ocp) — there is NO
 # WVA controller on this path.

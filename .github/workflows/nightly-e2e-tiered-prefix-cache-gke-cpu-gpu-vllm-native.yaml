@@ -58,15 +58,17 @@ on:
 #      - main
 
   schedule:
-    - cron: '0 12 * * *'
+    - cron: '0 12 * * *'  # 12:00 UTC daily (the "lmcache" lane follows at 14:00, same namespace)
 
 permissions:
   contents: write
   actions: read
 
 concurrency:
+  # Shared with the "lmcache" lane: both stand up in the same namespace and helm release,
+  # so they must not overlap. Queue the second run instead of cancelling the first.
   group: nightly-e2e-tiered-prefix-cache-gke-gpu
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   nightly:
@@ -83,8 +85,6 @@ jobs:
       offloading_target: ${{ inputs.offloading_target || 'cpu' }}
       connector: ${{ inputs.connector || 'native' }}
       cluster_namespace: ${{ inputs.cluster_namespace || 'llm-d-nightly-tiered-prefix-cache-gke-gpu' }}
-      cluster_name: ${{ inputs.cluster_name || 'llm-d-e2e-us-east5' }}
-      cluster_zone: ${{ inputs.cluster_zone || 'us-east5' }}
       helm_release: ${{ inputs.helm_release || 'llmdbenchcicdr-gke' }}
       workspace_dir: ${{ inputs.workspace_dir || '/tmp/llmdbenchcicdk-gke' }}
       bucket_project: ${{ inputs.bucket_project || 'llm-d-scale' }}

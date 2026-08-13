@@ -3,11 +3,8 @@ kind: Kustomization
 resources:
   - ../base
 
-# TODO(#1894): Track AWS ECR vllm image version alignment with centralized gpu-vllm.
-images:
-  - name: vllm/vllm-openai
-    newName: 763104351884.dkr.ecr.us-east-1.amazonaws.com/vllm
-    newTag: 0.23.0-gpu-py312-cu130-ubuntu22.04-ec2
+components:
+  - ../../../../../recipes/modelserver/components/images/gpu-vllm/aws-efa
 
 patches:
   - path: patch-decode.yaml

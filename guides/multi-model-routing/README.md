@@ -46,7 +46,7 @@ For simpler single-model deployments, see the [Optimized Baseline](../optimized-
 
 * [Create the `llm-d-hf-token` secret in your target namespace](../../helpers/hf-token.md) with a valid HuggingFace token.
 
-* **Multiple InferencePools deployed**, each serving a different base model. Follow the [Optimized Baseline](../optimized-baseline/README.md) guide for each pool, or [Multi-Inference Pool Setup](../workload-autoscaling/README.multi-inference-pool.md) for adding pools to an existing deployment.
+* **Multiple InferencePools deployed**, each serving a different base model. Follow the [Optimized Baseline](../optimized-baseline/README.md) guide for each pool, or [Multi-Inference Pool Setup](../workload-autoscaling/multi-inference-pool/README.md) for adding pools to an existing deployment.
 
   > [!IMPORTANT]
   > When deploying InferencePools for this guide, do **not** use `--set httpRoute.create=true`. This guide's HTTPRoutes (Step 3) handle routing based on model name headers. Pool-level catch-all routes would conflict with header-based routing.

@@ -63,7 +63,7 @@ This guide includes configuration for the following accelerators:
 P/D disaggregation requires a KV transfer backend to move KV cache blocks from prefill workers to decode workers. The transfer backend is configured via vLLM's `--kv-transfer-config` flag.
 
 > [!NOTE]
-> The following table represents vLLM's KVTransfer compatability. SGLang also supports these KVTransfer backends but its implementation will look different and is coming soon.
+> The following table represents vLLM's KVTransfer compatibility. SGLang also supports these KVTransfer backends but its implementation will look different and is coming soon.
 
 | Connector | Overlay | Transport | Notes |
 | --------- | ------- | --------- | ----- |
@@ -580,7 +580,7 @@ The following scripts run the same benchmark against a standard deployment and s
 * Deploy (16 replicas of TP=1, with a standard k8s service)
 
 ```bash
-kubectl apply -n ${NAMESPACE} -f ${REPO_ROOT}/guides/pd-disaggregation/baseline/manifest.yaml
+kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/pd-disaggregation/baseline
 ```
 
 * Benchmark (using the same workload profile as the main run, but pointed at the baseline service rather than the EPP):

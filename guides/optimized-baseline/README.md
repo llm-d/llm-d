@@ -78,7 +78,7 @@ export HF_TOKEN=HF_TOKEN_PLACEHOLDER
 <!-- llm-d-cicd:skip end -->
 ```bash
 export MONITORING_VALUES=
-export PROVIDER_NAME=gke # options: none, gke, agentgateway, istio
+export PROVIDER_NAME=none # options: none, gke, agentgateway, istio
 export ACCELERATOR_TYPE=gpu # options: gpu, amd, xpu, hpu, tpu/v6, tpu/v7, cpu
 export MODEL_SERVER=vllm # options: vllm, sglang, trtllm
 export INFRA_PROVIDER=base # options: base, gke
@@ -88,6 +88,7 @@ export BENCHMARK_REF=main
 export HARNESS=inference-perf
 export WORKLOAD=guide_optimized-baseline_1.yaml
 export GATEWAY_CLASS=epponly # options: epponly, gke, agentgateway, istio
+export ROUTER_CHART_VERSION=v0 # options are any semver llm-d-router release of v0 for latest
 ```
 <!-- guide:env.static end -->
 
@@ -175,6 +176,15 @@ export ROUTER_VALUES="-f ${REPO_ROOT}/guides/${GUIDE_NAME}/router/${GUIDE_NAME}.
 
 > [!NOTE]
 > When following the guide from top to bottom, we already have `export MONITORING_VALUES=""` by default. This means that `monitoring` is disabled by default.
+
+> [!WARNING]
+> Enabling monitoring here requires the monitoring stack to be installed first. The
+> `monitoring.values.yaml` file creates a `ServiceMonitor`, which needs the Prometheus
+> Operator CRDs. Deploying the router with this file before the monitoring stack is ready
+> (see [Step 3: Enable monitoring](#3-optional-enable-monitoring)) will fail with a Helm
+> validation error. If you want monitoring enabled from the start, install the monitoring
+> stack before the router, or leave `MONITORING_VALUES` empty and `helm upgrade` with the
+> monitoring values after Step 3.
 
 #### Standalone Mode
 

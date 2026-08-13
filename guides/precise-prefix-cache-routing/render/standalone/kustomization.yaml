@@ -21,6 +21,9 @@ resources:
   - deployment.yaml
   - service.yaml
 
+components:
+  - ../../../recipes/modelserver/components/images/cpu-vllm/release
+
 # NOTE: the guide label lands on resource metadata ONLY, never on the pod
 # template or selectors (kustomize `labels` defaults to includeSelectors:false /
 # includeTemplates:false). `llm-d.ai/guide: precise-prefix-cache-routing` is the

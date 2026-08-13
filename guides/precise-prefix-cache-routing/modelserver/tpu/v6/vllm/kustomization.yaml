@@ -6,7 +6,7 @@ resources:
 namePrefix: precise-prefix-cache-routing-tpu-v6-vllm-
 
 components:
-  - ../../../../../recipes/modelserver/components/images/tpu-vllm
+  - ../../../../../recipes/modelserver/components/images/tpu-vllm/release
 
 labels:
   - pairs:

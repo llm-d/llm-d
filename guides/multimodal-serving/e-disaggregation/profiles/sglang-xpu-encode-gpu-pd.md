@@ -145,13 +145,11 @@ The profile pins both images by digest:
 | Role | Image |
 | --- | --- |
 | GPU PD | `docker.io/lmsysorg/sglang:v0.5.15.post1-cu130@sha256:00c53fe4c31bf22d7b37537f28bbdfd924c02de13cdfb4bff7378c9c34d75ab2` |
-| Intel XPU Encode | `ghcr.io/xiaojun-zhang/llm-d-xpu-sglang:sglang-heterogeneous-e-pd@sha256:56ed840fe2890671a894fda14da1ead719ce18e5a94d3095a58ba5b54c41e55d` |
+| Intel XPU Encode | `ghcr.io/llm-d/llm-d-xpu-sglang:sha-e119543@sha256:53254b75d39a87b00bb6e9309acbe125dc0453d00860aea539d10fe55621a276` |
 
-The GPU image identifies SGLang source revision `0b3bb0cbe31873994c9f989fddfe2f87ca839fdd`. The XPU image is built from SGLang source revision `1af01674938f68266d5f8a0e5635ea1434af7801`, including the Kimi-VL 2-D image-grid fix, and `sgl-kernel-xpu` revision `a246742797279015f51d135063ed00f879496896`.
+The GPU image identifies SGLang source revision `0b3bb0cbe31873994c9f989fddfe2f87ca839fdd`. The [llm-d XPU image](https://github.com/llm-d/llm-d/pkgs/container/llm-d-xpu-sglang/1126772494?tag=sha-e119543) is built from SGLang source revision `1af01674938f68266d5f8a0e5635ea1434af7801`, and `sgl-kernel-xpu` revision `8c328fee250fcef4169c912cb7bbd13c1f637d5c`.
 
 > [!IMPORTANT]
-> The fork-owned XPU package is private at the time this profile was authored. The image must be made public or rebuilt and published under `ghcr.io/llm-d` before publication. The source build is defined in `.github/workflows/build-image.yaml` with the `sglang-xpu` platform.
->
 > The SGLang E/PD runtime path was validated end to end with four Intel B60 Encode workers and one NVIDIA H200 PD worker. The site-local overlay supplied placement, device-allocation, model-cache, and registry-access settings; the SGLang E/PD arguments and pinned images matched the portable profile.
 
 ## Profile Verification

@@ -1,0 +1,7 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+# OCI GB200, DeepSeek-V4 MegaMoE, 2P(DEP8) : 1D(DEP16) balanced -> 8 nodes / 32 GPUs.
+resources:
+  - ../../providers/oci
+components:
+  - ../../components/2p1d-dep16

@@ -1,0 +1,11 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: vllm-compile-cache
+spec:
+  accessModes: [ReadWriteMany]
+  resources:
+    requests:
+      storage: 50Gi
+  # Leave storageClassName unset to use the cluster default. Override here
+  # if your default isn't RWX-capable (e.g. set to `shared-vast` on CoreWeave).
