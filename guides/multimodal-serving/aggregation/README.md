@@ -43,7 +43,7 @@ This guide includes configurations for the following accelerators and inference 
 2. Clone and check out the llm-d repository:
 
    ```bash
-   export branch="main" # branch, tag, or commit hash
+   export branch="release-0.9" # branch, tag, or commit hash
    git clone https://github.com/llm-d/llm-d.git && cd llm-d && git checkout ${branch}
    export REPO_ROOT=$(realpath $(git rev-parse --show-toplevel))
    ```

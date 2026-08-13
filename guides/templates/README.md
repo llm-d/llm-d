@@ -47,7 +47,7 @@ Example — from the reference guide's [`README.md`](../optimized-baseline/READM
 ````markdown
 <!-- guide:env.static start -->
 ```bash
-export BRANCH=main
+export BRANCH=release-0.9
 export REPO_ROOT=$(realpath $(git rev-parse --show-toplevel))
 export GUIDE_NAME=optimized-baseline
 export NAMESPACE=llm-d-optimized-baseline

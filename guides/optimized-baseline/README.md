@@ -56,7 +56,7 @@ This guide includes configurations for the following accelerators:
 <!-- guide:prerequisites.clone start -->
 <!-- llm-d-cicd:skip start -->
 ```bash
-export BRANCH=main
+export BRANCH=release-0.9
 git clone https://github.com/llm-d/llm-d.git && cd llm-d && git checkout ${BRANCH}
 ```
 <!-- llm-d-cicd:skip end -->
@@ -66,7 +66,7 @@ git clone https://github.com/llm-d/llm-d.git && cd llm-d && git checkout ${BRANC
 
 <!-- guide:env.static start -->
 ```bash
-export BRANCH=main
+export BRANCH=release-0.9
 export REPO_ROOT=$(realpath $(git rev-parse --show-toplevel))
 export GUIDE_NAME=optimized-baseline
 export NAMESPACE=llm-d-optimized-baseline
