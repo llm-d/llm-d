@@ -88,8 +88,19 @@ Flow Control is a software-level scheduling feature at the EPP layer and is enti
 * Install the required CRDs (GAIE InferencePool + llm-d.ai InferenceObjective):
 
   ```bash
-  kubectl apply -f https://github.com/kubernetes-sigs/gateway-api-inference-extension/releases/download/${GAIE_VERSION}/v1-manifests.yaml
-  kubectl apply -f https://github.com/llm-d/llm-d-router/releases/download/${ROUTER_RELEASE_VERSION}/manifests.yaml
+  # GAIE_VERSION provided by ${REPO_ROOT}/guides/env.sh
+  if [ "$GAIE_VERSION" = "latest" ]; then
+    kubectl apply -f https://github.com/kubernetes-sigs/gateway-api-inference-extension/releases/latest/download/v1-manifests.yaml
+  else
+    kubectl apply -f https://github.com/kubernetes-sigs/gateway-api-inference-extension/releases/download/${GAIE_VERSION}/v1-manifests.yaml
+  fi
+
+  # ROUTER_RELEASE_VERSION provided by ${REPO_ROOT}/guides/env.sh
+  if [ "$ROUTER_RELEASE_VERSION" = "latest" ]; then
+    kubectl apply -f https://github.com/llm-d/llm-d-router/releases/latest/download/manifests.yaml
+  else
+    kubectl apply -f https://github.com/llm-d/llm-d-router/releases/download/${ROUTER_RELEASE_VERSION}/manifests.yaml
+  fi
   ```
 
 * Create a target namespace for the installation:

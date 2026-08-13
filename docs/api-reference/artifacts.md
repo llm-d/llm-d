@@ -18,17 +18,28 @@ This page lists the llm-d release artifacts and dependencies:
 
 llm-d uses the APIs defined in the Gateway API Inference Extension (GAIE) project:
 
-| CRD |  Purpose |
-|-----|----------|
-| [InferencePool](../api-reference/inferencepool.md) | Defines a pool of inference endpoints (model servers) and configures the EPP and proxy for LLM-aware routing. |
-| [InferenceObjective](../api-reference/inferenceobjective.md) | Defines performance goals (priority, latency) for specific model workloads within a pool. |
-| [InferenceModelRewrite](../api-reference/inferencemodelrewrite.md) | Specifies rules for rewriting model names in request bodies, enabling traffic splitting and canary rollouts. |
+| CRD |  Purpose | Provider |
+|-----|----------|----------|
+| [InferencePool](../api-reference/inferencepool.md) | Defines a pool of inference endpoints (model servers) and configures the EPP and proxy for LLM-aware routing. | `kubernetes-sigs/gateway-api-inference-extension` |
+| [InferenceObjective](../api-reference/inferenceobjective.md) | Defines performance goals (priority, latency) for specific model workloads within a pool. | `llm-d/llm-d-router` |
+| [InferenceModelRewrite](../api-reference/inferencemodelrewrite.md) | Specifies rules for rewriting model names in request bodies, enabling traffic splitting and canary rollouts. | `llm-d/llm-d-router` |
+
+The versions for the GAIE CRDs are derived from the [env.sh file](../../guides/env.sh). This makes upgrades easy as they are stored in a common location across guides.
+
+```bash
+export REPO_ROOT=$(realpath $(git rev-parse --show-toplevel))
+source ${REPO_ROOT}/guides/env.sh
+```
 
 Manifests are published at [kubernetes-sigs/gateway-api-inference-extension/config/crd](https://github.com/kubernetes-sigs/gateway-api-inference-extension/tree/main/config/crd) and can be installed like:
 
 ```bash
-export GAIE_VERSION=v1.5.0
-kubectl apply -f https://github.com/kubernetes-sigs/gateway-api-inference-extension/releases/download/${GAIE_VERSION}/v1-manifests.yaml
+# GAIE_VERSION provided by ${REPO_ROOT}/guides/env.sh
+if [ "$GAIE_VERSION" = "latest" ]; then
+  kubectl apply -f https://github.com/kubernetes-sigs/gateway-api-inference-extension/releases/latest/download/v1-manifests.yaml
+else
+  kubectl apply -f https://github.com/kubernetes-sigs/gateway-api-inference-extension/releases/download/${GAIE_VERSION}/v1-manifests.yaml
+fi
 ```
 
 ## 2. llm-d Router

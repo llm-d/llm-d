@@ -75,7 +75,12 @@ export NAMESPACE="llm-d-${GUIDE_NAME}"
 - Install the Gateway API Inference Extension CRDs:
 
 ```bash
-kubectl apply -f https://github.com/kubernetes-sigs/gateway-api-inference-extension/releases/download/${GAIE_VERSION}/v1-manifests.yaml
+# GAIE_VERSION provided by ${REPO_ROOT}/guides/env.sh
+if [ "$GAIE_VERSION" = "latest" ]; then
+  kubectl apply -f https://github.com/kubernetes-sigs/gateway-api-inference-extension/releases/latest/download/v1-manifests.yaml
+else
+  kubectl apply -f https://github.com/kubernetes-sigs/gateway-api-inference-extension/releases/download/${GAIE_VERSION}/v1-manifests.yaml
+fi
 ```
 
 - Create a target namespace for the installation

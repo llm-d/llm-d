@@ -3,4 +3,4 @@ kind: Component
 images:
   - name: REPLACE_MODEL_SERVER_IMAGE
     newName: docker.io/lmsysorg/sglang
-    newTag: v0.5.16.0-rocm720-mi30x-20260807
+    newTag: v0.5.16-rocm720-mi30x
