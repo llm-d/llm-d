@@ -350,7 +350,7 @@ stateDiagram-v2
 
     state Queued {
         [*] --> Waiting
-        Waiting --> Waiting: Pool Saturated<br/>(Closed Gate)
+        Waiting --> Waiting: Band Ceiling Reached<br/>(Closed Gate)
     }
 
     Queued --> Expired: TTL Expired<br/>(HTTP 503)
