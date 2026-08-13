@@ -4,7 +4,7 @@ The benchmark runs `zai-org/GLM-5.2-FP8` (753B MoE) prefill/decode
 disaggregated, one prefill and one decode instance, each 16-way
 data/expert-parallel across 2 pods (32x H200 total), ~520K tokens of GPU KV
 and a 100 GiB CPU offload tier per rank, vLLM block size 64, KV transfers
-over NIXL. Routing uses the llm-d inference gateway with the precise
+over NIXL. Routing uses the llm-d router with the precise
 (KV-event-fed) prefix index, `minCachedTokenDelta: 16384` (set from the
 overlay-era crossover; the current upstream-tier crossover recommends
 `12288` - see below). The page carries the pull-versus-recompute crossover,
