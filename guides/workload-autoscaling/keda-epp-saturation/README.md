@@ -30,15 +30,27 @@ Before proceeding, ensure you have:
 
 ## Set Namespaces
 
+Set the guide environment variables:
+
+<!-- guide:env.static start -->
 ```bash
-# Namespace where your inference deployment is running
-export NAMESPACE=llm-d-optimized-baseline
-
-# Namespace where the monitoring stack (Prometheus) was installed
-export MONITORING_NAMESPACE=llm-d-monitoring
-
+export BRANCH=main
 export REPO_ROOT=$(realpath $(git rev-parse --show-toplevel))
+export NAMESPACE=llm-d-optimized-baseline
+export MONITORING_NAMESPACE=llm-d-monitoring
+export MODEL=Qwen/Qwen3-32B
+export ENV=existing # options: existing, ocp
+export OVERLAY_ROOT=${REPO_ROOT}/guides/workload-autoscaling/keda-epp-saturation/optimized-baseline
 ```
+<!-- guide:env.static end -->
+
+Source the common guide environment variables:
+
+<!-- guide:env.source start -->
+```bash
+source ${REPO_ROOT}/guides/env.sh
+```
+<!-- guide:env.source end -->
 
 ## Configure
 
@@ -49,23 +61,18 @@ export REPO_ROOT=$(realpath $(git rev-parse --show-toplevel))
 
 For the bundled kube-prometheus-stack on generic Kubernetes, KEDA needs a bearer token and CA certificate to authenticate with Prometheus. Extract these from the Prometheus ServiceAccount's auto-generated token secret and create a new `prometheus-token` secret in the workload namespace:
 
+<!-- guide:deploy.prometheus_auth start -->
 ```bash
-# Get the ServiceAccount's token secret (has a random suffix like prometheus-token-abc123)
+# only when ENV=existing:
 SERVICEACCOUNT_SECRET=$(kubectl get serviceaccount prometheus -n ${MONITORING_NAMESPACE} -o jsonpath='{.secrets[0].name}')
-
-# Extract token and CA cert from the ServiceAccount secret
 TOKEN=$(kubectl get secret ${SERVICEACCOUNT_SECRET} -n ${MONITORING_NAMESPACE} -o jsonpath='{.data.token}' | base64 -d)
 CA_CRT=$(kubectl get secret ${SERVICEACCOUNT_SECRET} -n ${MONITORING_NAMESPACE} -o jsonpath='{.data.ca\.crt}' | base64 -d)
-
-# Create prometheus-token secret in the workload namespace with the extracted credentials
 kubectl create secret generic prometheus-token \
   --from-literal=token="${TOKEN}" \
   --from-literal=ca.crt="${CA_CRT}" \
   --dry-run=client -o yaml | kubectl apply -f - -n ${NAMESPACE}
-
-# Verify the secret was created
-kubectl get secret prometheus-token -n ${NAMESPACE}
 ```
+<!-- guide:deploy.prometheus_auth end -->
 
 This creates a secret named `prometheus-token` containing:
 - `token`: bearer token for Prometheus authentication
@@ -75,15 +82,21 @@ This creates a secret named `prometheus-token` containing:
 
 On generic Kubernetes with the bundled kube-prometheus-stack, apply the `k8s` overlay:
 
+<!-- guide:deploy.apply_k8s start -->
 ```bash
-kubectl apply -k ${REPO_ROOT}/guides/workload-autoscaling/optimized-baseline-autoscaling/keda-epp-saturation/k8s -n ${NAMESPACE}
+# only when ENV=existing:
+kubectl apply -k ${OVERLAY_ROOT}/k8s -n ${NAMESPACE}
 ```
+<!-- guide:deploy.apply_k8s end -->
 
 On OpenShift, apply the `ocp` overlay instead (see [OpenShift](#openshift) — it handles authentication for you):
 
+<!-- guide:deploy.apply_ocp start -->
 ```bash
-kubectl apply -k ${REPO_ROOT}/guides/workload-autoscaling/optimized-baseline-autoscaling/keda-epp-saturation/ocp -n ${NAMESPACE}
+# only when ENV=ocp:
+kubectl apply -k ${OVERLAY_ROOT}/ocp -n ${NAMESPACE}
 ```
+<!-- guide:deploy.apply_ocp end -->
 
 Before applying, edit the manifests to match your deployment:
 - `epp-endpoint-picker-config.yaml`: Verify the EPP config is appropriate for your setup. Customize plugin weights if needed.
@@ -100,7 +113,7 @@ Before applying, edit the manifests to match your deployment:
 On OpenShift, apply the `ocp` overlay (skip Configure Step 1 — this overlay handles authentication for you):
 
 ```bash
-kubectl apply -k ${REPO_ROOT}/guides/workload-autoscaling/optimized-baseline-autoscaling/keda-epp-saturation/ocp -n ${NAMESPACE}
+kubectl apply -k ${REPO_ROOT}/guides/workload-autoscaling/keda-epp-saturation/optimized-baseline/ocp -n ${NAMESPACE}
 ```
 
 The overlay:
@@ -114,10 +127,13 @@ When deploying this guide to multiple namespaces on a shared cluster, give the `
 
 Check that the ScaledObject is ready and KEDA has created its HPA:
 
+<!-- guide:verify.tests.scaledobject_hpa start -->
 ```bash
 kubectl get scaledobject -n ${NAMESPACE}
+kubectl wait --for=condition=Ready scaledobject --all -n ${NAMESPACE} --timeout=120s
 kubectl get hpa -n ${NAMESPACE}
 ```
+<!-- guide:verify.tests.scaledobject_hpa end -->
 
 Expected output:
 
@@ -134,9 +150,15 @@ keda-hpa-optimized-baseline-nvidia-gpu  Deployment/optimized-baseline-nvidia-gpu
 
 ## Cleanup
 
+<!-- guide:cleanup start -->
 ```bash
-# Use the overlay you applied: k8s (generic) or ocp (OpenShift).
-kubectl delete -k ${REPO_ROOT}/guides/workload-autoscaling/optimized-baseline-autoscaling/keda-epp-saturation/k8s -n ${NAMESPACE}
-# On the generic Kubernetes path only (the ocp overlay provisions no such secret):
-kubectl delete secret prometheus-token -n ${NAMESPACE}
+# only when ENV=existing:
+kubectl delete -k ${OVERLAY_ROOT}/k8s -n ${NAMESPACE} --ignore-not-found=true
+
+# only when ENV=ocp:
+kubectl delete -k ${OVERLAY_ROOT}/ocp -n ${NAMESPACE} --ignore-not-found=true
+
+# only when ENV=existing:
+kubectl delete secret prometheus-token -n ${NAMESPACE} --ignore-not-found=true
 ```
+<!-- guide:cleanup end -->
