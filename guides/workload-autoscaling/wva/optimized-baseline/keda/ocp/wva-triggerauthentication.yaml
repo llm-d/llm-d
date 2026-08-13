@@ -4,7 +4,7 @@
 # credentials of its own, so it borrows the WVA controller's ServiceAccount token, which the
 # OpenShift overlay already grants `cluster-monitoring-view` — the role Thanos requires.
 #
-# The secret is the SA token secret created by wva-config/platform/ocp
+# The secret is the SA token secret created by wva/controller/platform/ocp
 # (wva-controller-manager-token): `token` is the bearer token, and `service-ca.crt` is the CA
 # that signs the Thanos serving certificate.
 apiVersion: keda.sh/v1alpha1

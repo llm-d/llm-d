@@ -33,7 +33,7 @@ ROUTER_CHART_VERSION="${ROUTER_CHART_VERSION}"
 
 mkdir -p "${OUTPUT_DIR}"
 
-cp "${SCRIPT_DIR}/../wva-config/base/patch-vllm.yaml" "${OUTPUT_DIR}/patch-vllm.yaml"
+cp "${SCRIPT_DIR}/../wva/controller/base/patch-vllm.yaml" "${OUTPUT_DIR}/patch-vllm.yaml"
 
 REL="$("${_realpath}" --relative-to="${OUTPUT_DIR}" "${REPO_ROOT}")"
 
@@ -46,9 +46,9 @@ apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 namespace: ${NAMESPACE}
 resources:
-  - ${REL}/guides/workload-autoscaling/wva-config/platform/ocp/
+  - ${REL}/guides/workload-autoscaling/wva/controller/platform/ocp/
   - ${REL}/guides/optimized-baseline/modelserver/gpu/vllm/base/
-  - ${REL}/guides/workload-autoscaling/optimized-baseline-autoscaling/keda/ocp/
+  - ${REL}/guides/workload-autoscaling/wva/optimized-baseline/keda/ocp/
 patches:
   # The namespace lives inside a PromQL string, so the kustomize namespace transformer above
   # cannot reach it — rewrite the query explicitly. maxReplicaCount is capped at the GPU budget
