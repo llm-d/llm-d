@@ -1,0 +1,42 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+# OCI GB200, DeepSeek-V4, 1P(DEP8) + 4D(TP=8) scaled low-latency -> 10 nodes / 40 GPUs.
+resources:
+  - ../../base-low-latency
+  - compute-domain.yaml
+components:
+  - ../../components/1p4d-tp8
+patches:
+  - target:
+      kind: LeaderWorkerSet
+    patch: |-
+      # OCI: hostPath for model/JIT caches, shrink ephemeral-storage, add ComputeDomain
+      - op: replace
+        path: /spec/leaderWorkerTemplate/workerTemplate/spec/volumes/1
+        value:
+          name: hf-cache
+          hostPath:
+            path: /mnt/numa0/hf-cache
+            type: DirectoryOrCreate
+      - op: replace
+        path: /spec/leaderWorkerTemplate/workerTemplate/spec/volumes/2
+        value:
+          name: jit-cache
+          hostPath:
+            path: /mnt/numa0/jit-cache
+            type: DirectoryOrCreate
+      - op: replace
+        path: /spec/leaderWorkerTemplate/workerTemplate/spec/containers/0/resources/limits/ephemeral-storage
+        value: 128Gi
+      - op: replace
+        path: /spec/leaderWorkerTemplate/workerTemplate/spec/containers/0/resources/requests/ephemeral-storage
+        value: 128Gi
+      - op: add
+        path: /spec/leaderWorkerTemplate/workerTemplate/spec/resourceClaims
+        value:
+          - name: compute-domain-channel
+            resourceClaimTemplateName: wide-ep-compute-domain
+      - op: add
+        path: /spec/leaderWorkerTemplate/workerTemplate/spec/containers/0/resources/claims
+        value:
+          - name: compute-domain-channel

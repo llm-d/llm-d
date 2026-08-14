@@ -5,7 +5,7 @@ pod (TP=1), ~1.22M tokens of GPU KV per pod (measured from the engine
 startup log at `--gpu-memory-utilization=0.85`, `--max-model-len=65536`),
 an 88 GiB CPU offload tier per pod (~1.8x the GPU KV cache), vLLM block
 size 64, KV transfers over NIXL. Routing uses the llm-d
-inference gateway with the precise (KV-event-fed) prefix index; the P2P arm
+router with the precise (KV-event-fed) prefix index; the P2P arm
 adds the `p2p-source-producer` with `minCachedTokenDelta: 2048`. The
 document Q&A and the pool scenarios both ran on 16 pods. Workload
 profiles, EPP arm configurations, and the run protocol are in

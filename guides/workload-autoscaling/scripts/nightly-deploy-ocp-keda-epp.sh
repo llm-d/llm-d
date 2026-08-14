@@ -87,7 +87,7 @@ helm install "${ROUTER_RELEASE}" \
   -f "${REPO_ROOT}/guides/recipes/router/base.values.yaml" \
   -f "${REPO_ROOT}/guides/optimized-baseline/router/optimized-baseline.values.yaml" \
   -f "${REPO_ROOT}/guides/recipes/router/features/monitoring.values.yaml" \
-  -f "${REPO_ROOT}/guides/workload-autoscaling/optimized-baseline-autoscaling/keda-epp-queue/router.values.yaml" \
+  -f "${REPO_ROOT}/guides/workload-autoscaling/keda-epp-queue/optimized-baseline/router.values.yaml" \
   -n "${NAMESPACE}" --version "${ROUTER_CHART_VERSION}"
 
 # Discover the EPP Service name the chart created (release-derived; release
@@ -148,7 +148,7 @@ kind: Kustomization
 namespace: ${NAMESPACE}
 resources:
   - ${REL}/guides/optimized-baseline/modelserver/gpu/vllm/base/
-  - ${REL}/guides/workload-autoscaling/optimized-baseline-autoscaling/keda-epp-queue/ocp/
+  - ${REL}/guides/workload-autoscaling/keda-epp-queue/optimized-baseline/ocp/
 patches:
   # The namespace/service/model_name live inside opaque PromQL strings that the
   # kustomize namespace transformer cannot reach — rewrite both trigger queries
