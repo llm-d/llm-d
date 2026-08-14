@@ -9,8 +9,9 @@
 # namespace and the llm-d-hf-token secret.
 #
 # This mirrors the guide README's install steps. Every deviation is marked
-# "CI-only" below; there are three, and none of them change what the guide
-# documents for users.
+# "CI-only" below, and none of them change what the guide documents for users.
+# Two of them (low maxConcurrency, single decode replica) exist to force the
+# queue contention that the guide's Use Case 2 produces by hand.
 
 set -euo pipefail
 
@@ -59,9 +60,24 @@ echo "=== Deploying the model servers ==="
 # Reuse optimized-baseline's model servers relabeled to flow-control, exactly as
 # the guide's "Deploy the Model Server" step does — this guide deliberately
 # keeps no modelserver/ overlay of its own.
+#
+# CI-only (4 of 4): one decode replica instead of the overlay's 8. Pool dispatch
+# capacity is maxConcurrency x ready replicas (see the README's "Proof of
+# Queuing"), so 8 replicas give 8 x 4 = 32 slots against the validate script's
+# 36-request burst. The gate barely closes and the QoS assertion has no queue
+# wait to measure. One replica leaves 4 slots and queues the remaining 32.
+# Patch before apply rather than scaling after: peak GPU demand stays at 1,
+# matching the workflow's declared required_gpus, and the 7 surplus pods never
+# exist to be caught by the reusable's `kubectl wait pod --all`.
+MS_MANIFEST="/tmp/${GUIDE_NAME}.ci.modelserver.yaml"
 kubectl kustomize "${REPO_ROOT}/guides/optimized-baseline/modelserver/gpu/vllm/${INFRA_PROVIDER}/" \
   | sed "s/optimized-baseline/${GUIDE_NAME}/g" \
-  | kubectl apply -n "${NAMESPACE}" -f -
+  | sed -E 's/^  replicas: [0-9]+$/  replicas: 1/' > "${MS_MANIFEST}"
+if ! grep -qE '^  replicas: 1$' "${MS_MANIFEST}"; then
+  echo "ERROR: failed to force a single decode replica in the modelserver overlay" >&2
+  exit 1
+fi
+kubectl apply -n "${NAMESPACE}" -f "${MS_MANIFEST}"
 
 echo "=== Applying priority-band InferenceObjectives ==="
 # These define the bands the validate script targets; without them, tagged
