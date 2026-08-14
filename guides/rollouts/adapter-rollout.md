@@ -8,7 +8,7 @@ LoRA adapter rollouts let you deploy new versions of LoRA adapters in phases,
 without altering the underlying base model or infrastructure.
 Use LoRA adapter rollouts to test improvements, bug fixes, or new features in your LoRA adapters.
 
-The [`InferenceModelRewrite`](../../api-reference/inferencemodelrewrite.md) resource allows platform administrators and model owners to control how inference requests are routed to specific models within an InferencePool.
+The [`InferenceModelRewrite`](../../docs/api-reference/inferencemodelrewrite.md) resource allows platform administrators and model owners to control how inference requests are routed to specific models within an InferencePool.
 This capability is essential for managing model/adapter lifecycles without disrupting client applications.
 
 > [!IMPORTANT]
@@ -16,7 +16,7 @@ This capability is essential for managing model/adapter lifecycles without disru
 
 ## Prerequisites & Setup
 
-Follow the [getting started guide](../../getting-started/README.md) to set up the llm-d stack.
+Follow the [getting started guide](../../docs/getting-started/README.md) to set up the llm-d stack.
 
 In this guide, we use vLLM's native `lora_filesystem_resolver` to load adapters dynamically from a local directory. To enable this, configure your vLLM deployment with the following environment variables and ensure your adapters are accessible in the cache directory (e.g., mounted via a PVC or synchronized by an initContainer).
 
@@ -37,7 +37,7 @@ env:
 **Quick Start:** You can deploy a vLLM instance with these configurations using kustomize:
 ```bash
 export REPO_ROOT=$(realpath $(git rev-parse --show-toplevel))
-kubectl apply -k ${REPO_ROOT}/docs/operations/rollouts/adapter-rollout-example/
+kubectl apply -k ${REPO_ROOT}/guides/rollouts/adapter-rollout-example/
 ```
 
 This will create a deployment with the LoRA adapter environment variables pre-configured. See [`kustomization.yaml`](adapter-rollout-example/kustomization.yaml) and [`patch-lora-config.yaml`](adapter-rollout-example/patch-lora-config.yaml) for the full configuration.
@@ -281,3 +281,4 @@ echo "------------------------------------------------"
 echo "Traffic Split Results:"
 echo "small-segment-lora-v1: $count_v1 requests"
 echo "small-segment-lora-v2: $count_v2 requests"
+```

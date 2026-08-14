@@ -31,12 +31,11 @@ This directory contains Kustomize Components that define the **default container
 
 ### Why are there both `llm-d` and `vllm` images?
 
-llm-d is moving towards using upstream images for both `sglang` and `vLLM`. As llm-d was orrigionally only supported vllm, `llm-d` image variants were produced to account for any feature gaps in development of vLLM. Some of these feature gaps still exist today, for example the `ec-connector` work is still open in vLLM at the time of documeting this. As a stop-gap measure, the `llm-d` community will continue to host its own images as applicable, until they can be deprecated and safely migrate to upstream images.
-
+llm-d is moving towards using upstream images for both `sglang` and `vLLM`. As llm-d originally supported only vLLM, `llm-d` image variants were produced to account for any feature gaps in development of vLLM. Some of these feature gaps still exist today, for example the `ec-connector` work is still open in vLLM at the time of documenting this. As a stop-gap measure, the `llm-d` community will continue to host its own images as applicable, until they can be deprecated and safely migrate to upstream images.
 
 #### Known gap - NVSHMEM on RoCE networking
 
-Upstream vLLM currently [pins NVSHMEM to `v3.4.5`](https://github.com/vllm-project/vllm/blob/ac70ce96e0b9f69dd834bd1b0cd2d2b4c4a9db46/requirements/test/cuda.txt#L648). This version of NVSHMEM requires [a patch](../../../../../patches/nvshmem_zero_ibv_ah_attr_v3.4.5-0.patch) guarding aginst where "static_rate must be a known value and is passed directly to the device". Any image runnign on ROCE should use `llm-d` image variants.
+Upstream vLLM currently [pins NVSHMEM to `v3.4.5`](https://github.com/vllm-project/vllm/blob/ac70ce96e0b9f69dd834bd1b0cd2d2b4c4a9db46/requirements/test/cuda.txt#L648). This version of NVSHMEM requires [a patch](../../../../../patches/nvshmem_zero_ibv_ah_attr_v3.4.5-0.patch) guarding against where "static_rate must be a known value and is passed directly to the device". Any image running on ROCE should use `llm-d` image variants.
 
 ## Usage
 

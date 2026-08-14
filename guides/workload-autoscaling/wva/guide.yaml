@@ -43,12 +43,18 @@ deploy:
   crds:
     - run: kubectl apply -k github.com/llm-d/llm-d-workload-variant-autoscaler/config/base/crd?ref=main
 
-  # Install the WVA controller. The overlay carries its own namespace, so point it
-  # at ${WVA_NAMESPACE} first (this edits platform/${PLATFORM}/kustomization.yaml;
-  # revert with `git checkout` afterwards), then apply it (no -n needed).
+  # Install the WVA controller. Point the overlay at ${WVA_NAMESPACE} and set the
+  # controller's --watch-namespace to match (this edits
+  # platform/${PLATFORM}/kustomization.yaml and base/controller-deployment-patch.yaml;
+  # revert both with `git checkout` afterwards), then apply it (no -n needed).
   controller:
     - run: |
         (cd ${CONTROLLER_ROOT}/platform/${PLATFORM} && kustomize edit set namespace ${WVA_NAMESPACE})
+
+        sed -i.bak "s|--watch-namespace=.*|--watch-namespace=${WVA_NAMESPACE}|" \
+          ${CONTROLLER_ROOT}/base/controller-deployment-patch.yaml \
+          && rm ${CONTROLLER_ROOT}/base/controller-deployment-patch.yaml.bak
+
         kubectl apply -k ${CONTROLLER_ROOT}/platform/${PLATFORM}
 
   # Enable autoscaling via KEDA (recommended): the ScaledObject reads

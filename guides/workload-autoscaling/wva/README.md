@@ -97,14 +97,20 @@ kubectl apply -k github.com/llm-d/llm-d-workload-variant-autoscaler/config/base/
 ```
 <!-- guide:deploy.crds end -->
 
-4. Install the WVA controller. The overlay carries its own namespace, so it is
-   pointed at `${WVA_NAMESPACE}` first (this edits
-   `wva/controller/platform/${PLATFORM}/kustomization.yaml`; revert with
-   `git checkout` afterwards), then applied (no `-n` needed):
+4. Install the WVA controller. Point the overlay at `${WVA_NAMESPACE}` and set the
+   controller's `--watch-namespace` to match (this edits
+   `wva/controller/platform/${PLATFORM}/kustomization.yaml` and
+   `wva/controller/base/controller-deployment-patch.yaml`; revert both with
+   `git checkout` afterwards), then apply it (no `-n` needed):
 
 <!-- guide:deploy.controller start -->
 ```bash
 (cd ${CONTROLLER_ROOT}/platform/${PLATFORM} && kustomize edit set namespace ${WVA_NAMESPACE})
+
+sed -i.bak "s|--watch-namespace=.*|--watch-namespace=${WVA_NAMESPACE}|" \
+  ${CONTROLLER_ROOT}/base/controller-deployment-patch.yaml \
+  && rm ${CONTROLLER_ROOT}/base/controller-deployment-patch.yaml.bak
+
 kubectl apply -k ${CONTROLLER_ROOT}/platform/${PLATFORM}
 ```
 <!-- guide:deploy.controller end -->

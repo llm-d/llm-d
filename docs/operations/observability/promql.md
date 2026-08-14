@@ -45,7 +45,7 @@ Start here when something looks wrong.
 
 | Metric Need | PromQL Query |
 | ----------- | ------------ |
-| **QPS per pod** | `sum by(pod) (rate(llm_d_epp_request_total[5m]))` |
+| **QPS per endpoint** | `sum by(endpoint_name) (rate(llm_d_epp_scheduler_attempts_total{status="success"}[5m]))` |
 | **Token distribution per pod** | `sum by(pod) (rate(vllm:prompt_tokens_total[5m]) + rate(vllm:generation_tokens_total[5m]))` |
 | **Token distribution per pod (SGLang)** | `sum by(pod) (rate(sglang_prompt_tokens_total[5m]) + rate(sglang_generation_tokens_total[5m]))` |
 | **Routing decision latency P99** | `histogram_quantile(0.99, sum by(le) (rate(llm_d_epp_plugin_duration_seconds_bucket[5m])))` |
@@ -83,7 +83,7 @@ Requires the `flowControl` feature gate enabled on the EPP.
 
 ## Notes
 
-**Metric name prefixes:** Current deployments use `llm_d_epp_*`. Older deployments may use `llm_d_router_epp_*`, `inference_objective_*` or `inference_extension_*` — update accordingly if panels show "No data".
+**Metric name prefixes:** Current deployments use `llm_d_epp_*`. Older deployments may use `llm_d_inference_scheduler_*`, `inference_objective_*`, `inference_pool_*`, or `inference_extension_*` — update accordingly if panels show "No data".
 
 **Histograms:** Always include `by(le)` when using `histogram_quantile()`:
 ```promql

@@ -20,6 +20,9 @@ spec:
           llm-d.ai/role: decode
       spec:
         serviceAccountName: deepseek-v4
+        # Required for cross-pod cuda_ipc (NIXL KV transfers over MNNVL NVLink)
+        hostIPC: true
+        hostPID: true
         initContainers:
           - name: routing-proxy
             args:
@@ -84,7 +87,8 @@ spec:
                   deepseek-ai/DeepSeek-V4-Pro \
                   --port 8200 \
                   --tokenizer-mode deepseek_v4 \
-                  --gpu-memory-utilization 0.85 \
+                  --gpu-memory-utilization 0.9 \
+                  --max-model-len 9280 \
                   --trust-remote-code \
                   --api-server-count 4 \
                   --disable-access-log-for-endpoints=/health,/metrics \
@@ -110,14 +114,15 @@ spec:
                   --enable-cumem-allocator \
                   --stream-interval 50 \
                   --kv-cache-dtype fp8 \
-                  --compilation-config '{"cudagraph_mode":"FULL_DECODE_ONLY","mode":0}' \
-                  --kv-cache-memory-bytes=${KV_CACHE_MEMORY_BYTES-}
+                  --compilation-config '{"cudagraph_mode":"FULL_DECODE_ONLY","mode":0}'
             env:
               - name: HF_TOKEN
                 valueFrom:
                   secretKeyRef:
                     name: llm-d-hf-token
                     key: HF_TOKEN
+              - name: VLLM_USE_RUST_FRONTEND
+                value: "1"
               # MAX_TOKENS controls the maximum number sequences, the maximum batch
               # size, and the maximum cuda graph capture size. To run with MTP, the
               # maximum batch size and the maximum cuda graph capture size will need to
@@ -147,13 +152,19 @@ spec:
               - name: NCCL_P2P_LEVEL
                 value: NVL
               - name: VLLM_USE_NCCL_SYMM_MEM
-                value: "1"
-              - name: TORCH_SYMMMEM
-                value: NVSHMEM
+                value: "0"
+              - name: NVSHMEM_CUMEM_HANDLE_TYPE
+                value: FABRIC
+              - name: NVSHMEM_DISABLE_CUDA_VMM
+                value: "0"
               - name: UCX_CUDA_IPC_ENABLE_MNNVL
                 value: "y"
+              # Enable NIXL KV transfers via NVLink (cuda_ipc) and InfiniBand RDMA (rc)
               - name: UCX_TLS
-                value: cuda_copy,cuda_ipc,tcp
+                value: cuda_ipc,rc,cuda_copy
+              # Environment-specific: uncomment and set to exclude non-IB ports
+              # - name: UCX_NET_DEVICES
+              #   value: "mlx5_0:1,mlx5_1:1,mlx5_3:1,mlx5_4:1"
               - name: UCX_MEMTYPE_CACHE
                 value: "n"
               - name: UCX_MEMTYPE_REG_WHOLE

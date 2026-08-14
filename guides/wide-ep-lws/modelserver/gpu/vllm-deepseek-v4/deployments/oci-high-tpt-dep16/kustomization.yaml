@@ -1,0 +1,7 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+# OCI GB200, DeepSeek-V4 MegaMoE, 3P(DEP8) : 1D(DEP16) high-throughput -> 10 nodes / 40 GPUs.
+resources:
+  - ../../providers/oci
+components:
+  - ../../components/3p1d-dep16

@@ -30,6 +30,12 @@ spec:
                 secretKeyRef:
                   name: llm-d-hf-token
                   key: HF_TOKEN
+            # oneCCL (xccl backend, tensor-parallel-size > 1) uses the OFI transport, but the
+            # bundled libfabric exposes no providers unless the Intel MPI provider path is set.
+            - name: FI_PROVIDER_PATH
+              value: /opt/intel/oneapi/mpi/latest/opt/mpi/libfabric/lib/prov
+            - name: FI_PROVIDER
+              value: tcp
           resources:
             limits:
               cpu: '8'
