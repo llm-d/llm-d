@@ -17,3 +17,4 @@ spec:
               cpu: '8'
               memory: 128Gi
               nvidia.com/gpu: 2
+
