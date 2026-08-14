@@ -166,10 +166,10 @@ Deploy **one** of the paths below. Each `kubectl apply -k` targets an overlay di
 
 ```bash
 export MODEL_SERVER=vllm # vllm
-export CONNECTOR=native  # native
+export CONNECTOR=native  # native | lmcache-connector
 export VARIANT=cpu       # cpu | fs
 export INFRA_PROVIDER=base  # base | gke
-kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/tiered-prefix-cache/modelserver/gpu/vllm/native/cpu/${INFRA_PROVIDER}/
+kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/tiered-prefix-cache/modelserver/gpu/vllm/${CONNECTOR}/${VARIANT}/${INFRA_PROVIDER}/
 ```
 
 #### vLLM native — CPU RAM + Filesystem
