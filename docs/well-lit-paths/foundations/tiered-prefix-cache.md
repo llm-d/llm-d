@@ -51,6 +51,9 @@ This increases the **KV-working set size**, growing the **receptive-field** (the
 > [!IMPORTANT]
 > CPU KV Cache offloading is low overhead and introduces ~no additional complexity. It can be enabled in almost all deployments. Storage offloading requires additional consideration.
 
+> [!TIP]
+> **Recommended default for vLLM deployments:** vLLM's native `OffloadingConnector` (CPU RAM, optionally + filesystem). It requires no extra components and is low-overhead enough to enable in almost any vLLM deployment. Follow the [vLLM native quickstart](../../../guides/tiered-prefix-cache/vllm-native-quickstart.md) to deploy it directly.
+
 ## Storage Tiers
 
 Offloaded KV caches can live on several tiers, ordered by read/write latency: frequently accessed caches stay closest to the accelerator, while larger or colder caches move to slower, higher-capacity tiers. We recommend always enabling the HBM and CPU RAM tiers, and adding a filesystem tier when the working set grows beyond HBM + CPU RAM.
@@ -62,7 +65,7 @@ Offloaded KV caches can live on several tiers, ordered by read/write latency: fr
 
 ## Deploy
 
-See the [Tiered Prefix Cache guide](../../../guides/tiered-prefix-cache) for manifests and step-by-step deployment.
+For the recommended default configuration, follow the [vLLM native quickstart](../../../guides/tiered-prefix-cache/vllm-native-quickstart.md). For other connectors (LMCache, SGLang HiCache, MooncakeStore) and platforms (TPU, Intel XPU), see the [full Tiered Prefix Cache guide](../../../guides/tiered-prefix-cache).
 
 ## Architecture
 
@@ -94,7 +97,8 @@ The connector does not evict data from the shared tier -- capacity is managed by
 
 ## Further Reading
 
-- [Tiered Prefix Cache guide](../../../guides/tiered-prefix-cache) — manifests and step-by-step deployment.
+- [vLLM native quickstart](../../../guides/tiered-prefix-cache/vllm-native-quickstart.md) — the recommended default configuration, manifests, and step-by-step deployment.
+- [Tiered Prefix Cache guide](../../../guides/tiered-prefix-cache) — all connectors and platforms (LMCache, MooncakeStore, SGLang HiCache, TPU, Intel XPU).
 - [vLLM KV offloading connector](https://vllm-project.github.io/2026/01/08/kv-offloading-connector.html) — design of the native `OffloadingConnector` and its tiering.
 - [Multi-tier KV offloading RFC](https://github.com/vllm-project/vllm/issues/38260) — the upstream tiering design.
 - [LMCache](https://lmcache.ai) and [SGLang HiCache](https://github.com/sgl-project/sglang) — alternative offloading implementations supported by this path.
