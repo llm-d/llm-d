@@ -7,7 +7,7 @@ export REPO_ROOT=${REPO_ROOT:-$(realpath "$(git rev-parse --show-toplevel 2>/dev
 
 ### Release Versions for grabbing CRDs
 # Controls which release of Gateway API Inference Extension to grab CRDs from
-export GAIE_VERSION=latest
+export GAIE_VERSION=v1.5.1
 # Controls which release of llm-d/llm-router to grab CRDs from. Used in flowcontrol guide
 export ROUTER_RELEASE_VERSION=latest
 
