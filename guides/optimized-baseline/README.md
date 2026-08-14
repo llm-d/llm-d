@@ -447,4 +447,5 @@ Empirical benchmark reports comparing llm-d routing performance against a standa
 
 - [Qwen/Qwen3-32B on H100 and SGLang](./benchmark-results/sglang-qwen3-32b-h100/README.md)
 - [Qwen/Qwen3-32B on H100 and vLLM](./benchmark-results/vllm-qwen3-32b-h100/README.md)
+- [Qwen/Qwen3.5-4B on RTX PRO 6000 and vLLM](./benchmark-results/vllm-qwen3-5-4b-rtxpro6000/README.md)
 - [openai/gpt-oss-120b on H100 and vLLM](./benchmark-results/vllm-gpt-oss-120b-h100/README.md)
