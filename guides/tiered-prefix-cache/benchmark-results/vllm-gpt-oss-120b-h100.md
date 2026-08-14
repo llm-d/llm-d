@@ -37,7 +37,6 @@ The benchmark runs on 16 × H100 GPUs, distributed across 16 model servers (1 H1
 | External cache hits (tokens) | N/A | 61.0M |
 | External cache queries (tokens) | N/A | 135.3M |
 
-
 ## Per-Stage Breakdown (5–40 QPS)
 
 | Target Rate | Configuration | Mean TTFT | P90 TTFT | Mean E2E Latency | P90 E2E Latency | Throughput (tok/s) |

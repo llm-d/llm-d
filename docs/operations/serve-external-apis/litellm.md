@@ -68,6 +68,7 @@ kubectl -n "$NAMESPACE" create secret generic litellm-env \
 ## Step 2: Set Up PostgreSQL and Redis Backends
 
 LiteLLM requires two storage tiers:
+
 1. **PostgreSQL (Durable State)**: Stores virtual keys, user spend metrics, model aliases, and audit logs. Deployed as a `StatefulSet` with a persistent volume.
 2. **Redis (Ephemeral Coordination)**: Coordinates cross-pod rate limiting (RPM/TPM), budget locking, and spend counters across proxy replicas. Deployed as a lightweight `Deployment` using the official upstream image (`redis:7.4-alpine`).
 
@@ -307,6 +308,7 @@ proxy_config:
 ```
 
 > [!NOTE]
+>
 > - **What Redis Does and Doesn't Enforce**: Model-level rate limits are checked in Redis, so they hold across all replicas. Virtual key limits (`rpm_limit` on `/key/generate`) are counted in each pod's memory and synced on a delay — with 3 replicas, a key limited to 60 RPM can briefly reach ~180. Spend and budgets are written to PostgreSQL and lag similarly. For a hard per-key ceiling, run a single replica or divide `rpm_limit` by the replica count.
 > - **Self-Hosted Model Cost Tracking (`model_info`)**: Commercial models (like `gemini-3.5-flash`) have pre-configured pricing in LiteLLM's public pricing dictionary. Self-hosted models (`hosted_vllm/*`) require explicit `model_info` with `input_cost_per_token` and `output_cost_per_token` so LiteLLM can track usage spend and deduct from virtual key budgets accurately.
 
@@ -332,6 +334,7 @@ kubectl -n "$NAMESPACE" get svc
 ```
 
 Expected output:
+
 ```text
 NAME       TYPE        CLUSTER-IP     EXTERNAL-IP   PORT(S)    AGE
 litellm    ClusterIP   <cluster-ip>   <none>        4000/TCP   12h
@@ -541,4 +544,3 @@ helm uninstall litellm -n "$NAMESPACE"
 kubectl delete -n "$NAMESPACE" -f redis.yaml -f postgres.yaml
 kubectl delete namespace "$NAMESPACE"
 ```
-

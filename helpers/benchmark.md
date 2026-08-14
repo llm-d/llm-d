@@ -51,17 +51,18 @@ cd llm-d-benchmark
 source .venv/bin/activate
 llmdbenchmark --version
 ```
+
 > [!NOTE]
 > A successful installation shows the following lines:
 >
 > ```text
-> === Done ===    
+> === Done ===
 > Reminder: Please activate the virtual environment in your shell:
 >   source ${LLMDBENCH_VENV_DIR}/bin/activate
 > To deactivate the virtual environment in your shell:
 >   deactivate
 > ```
-> 
+>
 > An early termination of the installation could happen without clear error messages. Check if all required libraries have executable permissions (`+x`).
 
 ## Quick start

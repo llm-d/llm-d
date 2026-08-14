@@ -981,4 +981,3 @@ jobs:
             exit 1
           fi
           echo "**All ${#IMAGES[@]} images verified for release ${TAG}**" >> $GITHUB_STEP_SUMMARY
-

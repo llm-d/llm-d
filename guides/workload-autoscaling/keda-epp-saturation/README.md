@@ -15,6 +15,7 @@ This guide uses the four optimized-baseline plugins provided by llm-d (queue-sco
 | `llm_d_epp_request_running` | Gauge | Current number of active in-flight requests across the pool. | `model_name` |
 
 For details on these metrics, see:
+
 - [EPP Flow Control Metrics](../../../docs/architecture/core/router/epp/flow-control.md#metrics--observability)
 - [EPP Request Handling Metrics](../../../docs/architecture/core/router/epp/request-handling.md)
 
@@ -75,6 +76,7 @@ kubectl create secret generic prometheus-token \
 <!-- guide:deploy.prometheus_auth end -->
 
 This creates a secret named `prometheus-token` containing:
+
 - `token`: bearer token for Prometheus authentication
 - `ca.crt`: CA certificate for TLS verification
 
@@ -99,8 +101,9 @@ kubectl apply -k ${OVERLAY_ROOT}/ocp -n ${NAMESPACE}
 <!-- guide:deploy.apply_ocp end -->
 
 Before applying, edit the manifests to match your deployment:
+
 - `epp-endpoint-picker-config.yaml`: Verify the EPP config is appropriate for your setup. Customize plugin weights if needed.
-- `scaledobject.yaml`: 
+- `scaledobject.yaml`:
   - Update `inference_pool` label in the pool-saturation query (currently: `"default"`)
   - Update `model_name` label in the running-requests query (currently: `"Qwen/Qwen3-32B"`)
   - Update `minReplicaCount`, `maxReplicaCount`, and thresholds for each trigger

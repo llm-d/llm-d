@@ -37,7 +37,6 @@ E/P/D extends P/D disaggregation by adding a dedicated encode stage. This provid
 * 4 TP=2 Prefill Workers
 * 4 TP=2 Decode Workers
 
-
 ### Best Practices
 
 Encode disaggregation is most beneficial for workloads with:
@@ -50,8 +49,8 @@ Choose between topologies:
 
 * **E/PD** - simpler deployment; best when prefill and decode do not need separate scaling, or when the primary bottleneck is encode
 * **E/P/D** - extends the [P/D Disaggregation](../../pd-disaggregation/README.md) guide by adding a dedicated encode stage. The reasons for separating prefill from decode (heterogeneous parallelism, xPyD ratios, workload specialization) are described in the [P/D Best Practices](../../pd-disaggregation/README.md#pd-best-practices) section. That section also points to [Known NIXL Connector Issues and Limitations](../../../docs/operations/disaggregation/vllm.md#known-nixl-connector-issues-and-limitations), which applies equally to the P/D stage of this topology:
-   * [Prefill TP > Decode TP is not supported for most model architectures](../../../docs/operations/disaggregation/vllm.md#prefill-tp--decode-tp-is-not-supported)
-   * [Decode-side stale NIXL agent cache after a prefill pod restart](../../../docs/operations/disaggregation/vllm.md#stale-nixl-agent-cache-after-a-prefill-pod-restart)
+  * [Prefill TP > Decode TP is not supported for most model architectures](../../../docs/operations/disaggregation/vllm.md#prefill-tp--decode-tp-is-not-supported)
+  * [Decode-side stale NIXL agent cache after a prefill pod restart](../../../docs/operations/disaggregation/vllm.md#stale-nixl-agent-cache-after-a-prefill-pod-restart)
 
 ### Deployment Profiles
 
@@ -63,13 +62,15 @@ Choose between topologies:
 
 ## Prerequisites
 
-- Have the [proper client tools installed on your local system](../../../helpers/client-setup/README.md) to use this guide.
-- Checkout llm-d repo:
+* Have the [proper client tools installed on your local system](../../../helpers/client-setup/README.md) to use this guide.
+* Checkout llm-d repo:
+
 ```bash
 export branch="main" # branch, tag, or commit hash
 git clone https://github.com/llm-d/llm-d.git && cd llm-d && git checkout ${branch}
 ```
-- Set the common guide environment:
+
+* Set the common guide environment:
 
 ```bash
 export REPO_ROOT=$(realpath $(git rev-parse --show-toplevel))
@@ -111,16 +112,19 @@ For SGLang E/PD, use the variables and cluster requirements in the [SGLang XPU E
 
 ### Complete Common Prerequisites
 
-- Install the Gateway API Inference Extension CRDs:
+* Install the Gateway API Inference Extension CRDs:
+
 ```bash
 kubectl apply -k "https://github.com/kubernetes-sigs/gateway-api-inference-extension/config/crd?ref=${GAIE_VERSION}"
 ```
-- Create a target namespace for the installation:
+
+* Create a target namespace for the installation:
+
 ```bash
 kubectl create namespace ${NAMESPACE}
 ```
 
-- [Create the `llm-d-hf-token` secret in your target namespace with the key `HF_TOKEN` matching a valid HuggingFace token](../../../helpers/hf-token.md) to pull models.
+* [Create the `llm-d-hf-token` secret in your target namespace with the key `HF_TOKEN` matching a valid HuggingFace token](../../../helpers/hf-token.md) to pull models.
 <!-- llm-d-cicd:skip start -->
 ```bash
 export HF_TOKEN=<your HuggingFace token>
@@ -181,9 +185,9 @@ kubectl apply -n ${NAMESPACE} -k ${MODEL_SERVER_PATH}
 
 ### 3. Enable Monitoring (optional)
 
-- Install the [Monitoring stack](../../../docs/operations/observability).
-- To enable Prometheus monitoring on the llm-d router, add `-f ${REPO_ROOT}/guides/recipes/router/features/monitoring.values.yaml` during the [router installation step](#1-deploy-the-llm-d-router).
-- Deploy the monitoring resources for model servers:
+* Install the [Monitoring stack](../../../docs/operations/observability).
+* To enable Prometheus monitoring on the llm-d router, add `-f ${REPO_ROOT}/guides/recipes/router/features/monitoring.values.yaml` during the [router installation step](#1-deploy-the-llm-d-router).
+* Deploy the monitoring resources for model servers:
 
 ```bash
 kubectl apply -n ${NAMESPACE} \
@@ -206,6 +210,7 @@ export IP=$(kubectl get service ${RELEASE_NAME}-epp -n ${NAMESPACE} -o jsonpath=
 ```bash
 export IP=$(kubectl get gateway llm-d-inference-gateway -n ${NAMESPACE} -o jsonpath='{.status.addresses[0].value}')
 ```
+
 </details>
 
 ### 2. Send Test Requests
@@ -284,12 +289,13 @@ If you deployed in Gateway Mode, also remove the Gateway by following [the gatew
 The following request flows apply to the vLLM profiles. The SGLang control and data path is described in the [SGLang XPU Encode + GPU PD profile](./profiles/sglang-xpu-encode-gpu-pd.md#architecture).
 
 ### EC Connector
+
 The EC Connector is a high-level architectural interface designed to transfer encoder outputs (such as image, video, or audio embeddings) between a dedicated producer (an Encode Worker) and downstream consumers (Prefill or Decode Workers).
-When serving multimodal models, processing the media inputs is highly compute-intensive. 
-The EC Connector allows vLLM to physically separate the "Encode" phase from other phases. 
+When serving multimodal models, processing the media inputs is highly compute-intensive.
+The EC Connector allows vLLM to physically separate the "Encode" phase from other phases.
 Once the Encode Worker processes a multimodal item, the EC Connector handles the orchestration of sharing those resulting embedding references across the network, preventing the Prefill or Decode pods from having to recompute the same visual inputs.
 
-This guide uses ECCPU connector. The ECCPU Connector is a distributed transfer mechanism that allows a consumer vLLM instance to efficiently fetch pre-computed encoder outputs from a remote producer instance 
+This guide uses ECCPU connector. The ECCPU Connector is a distributed transfer mechanism that allows a consumer vLLM instance to efficiently fetch pre-computed encoder outputs from a remote producer instance
 using a high-performance NIXL data plane and ZMQ control plane. By sharing these cached outputs across CPU memory-mapped regions, it enables consumer instances to bypass redundant encoding tasks and speed up inference.
 
 ### E/PD Request Flow
@@ -315,8 +321,9 @@ Client -> Envoy -> EPP -> Decode Worker Sidecar
 4. Encode Worker processes multimodal content and returns encoding metadata (embedding references)
 5. Decode Worker reads embeddings via EC_Connector and runs prefill + decode locally
 
-The ECCPU Connector is a distributed transfer mechanism that allows a consumer vLLM instance to efficiently fetch pre-computed encoder outputs from a remote producer instance using a high-performance NIXL data plane and ZMQ control plane. 
+The ECCPU Connector is a distributed transfer mechanism that allows a consumer vLLM instance to efficiently fetch pre-computed encoder outputs from a remote producer instance using a high-performance NIXL data plane and ZMQ control plane.
 By sharing these cached outputs across CPU memory-mapped regions, it enables consumer instances to bypass redundant encoding tasks and speed up inference.
+
 ### E/P/D Request Flow
 
 ```
@@ -347,7 +354,7 @@ Client -> Envoy -> EPP -> Decode Worker Sidecar
 
 ## References
 
-- [llm-d Router Disaggregation Docs](https://github.com/llm-d/llm-d-router/blob/main/docs/disaggregation.md)
-- [vLLM: Disaggregated Encoder](https://docs.vllm.ai/en/latest/features/disagg_encoder/)
-- [vLLM: Disaggregated Prefill](https://docs.vllm.ai/en/latest/features/disagg_prefill/)
-- [vLLM: Encoder Disaggregation for Scalable Multimodal Model Serving](https://vllm.ai/blog/vllm-epd)
+* [llm-d Router Disaggregation Docs](https://github.com/llm-d/llm-d-router/blob/main/docs/disaggregation.md)
+* [vLLM: Disaggregated Encoder](https://docs.vllm.ai/en/latest/features/disagg_encoder/)
+* [vLLM: Disaggregated Prefill](https://docs.vllm.ai/en/latest/features/disagg_prefill/)
+* [vLLM: Encoder Disaggregation for Scalable Multimodal Model Serving](https://vllm.ai/blog/vllm-epd)

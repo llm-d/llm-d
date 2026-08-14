@@ -351,6 +351,7 @@ README.md: OK  (structure only — pass --yaml to resolve marker paths)
 ```
 
 On `guide.yaml`:
+
 - All top-level keys are known (`name`, `env`, `prerequisites`, `deploy`, `verify`, `benchmark`, `cleanup`)
 - No duplicate keys in any mapping — YAML silently keeps only the last value, which has already hidden one real bug
 - Every step is a map with a `run:` string
@@ -359,6 +360,7 @@ On `guide.yaml`:
 - Categorical vars with `values:` have their `default:` in-list
 
 On `README.md`:
+
 - Markers are properly paired, nested marker pairs are rejected
 - Every `guide:<path>` resolves to a real YAML node
 - The body between each marker pair is a fenced ```` ```bash ```` block

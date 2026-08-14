@@ -81,10 +81,12 @@ The `cks-mooncake` overlay uses [Mooncake Transfer Engine](https://github.com/kv
 > This overlay configures `MooncakeConnector` for P/D KV transfer only. It does **not** configure Mooncake Store (`MooncakeStoreConnector`), which provides distributed KV storage for tiered cache offloading and is a separate integration.
 
 **Constraints:**
+
 * MooncakeConnector requires the **same `tensor-parallel-size`** on both prefill and decode instances. The `cks-mooncake` overlay uses TP=1 for both. If your model requires higher TP, set both sides to the same value and adjust GPU resource requests.
 * `mooncake-transfer-engine` must be installed in the vLLM container image. The standard `vllm/vllm-openai` image may not include it — you may need a custom image. See the [Mooncake installation docs](https://kvcache-ai.github.io/Mooncake/).
 
 **CKS / RDMA prerequisites:**
+
 * NVIDIA GPU Operator (or equivalent) with GPUs visible to pods via `nvidia.com/gpu`.
 * InfiniBand / RDMA devices available on worker nodes and exposed **inside pods** (host-level RDMA alone is not sufficient).
 * RDMA device plugin exposing `rdma/ib` resources. Typically provided by the NVIDIA Network Operator, Multus with SR-IOV, or your CKS provider's equivalent.
@@ -120,6 +122,7 @@ client request → llm-d routing → vLLM prefill (kv_producer) → MooncakeConn
 | `VLLM_MOONCAKE_ABORT_REQUEST_TIMEOUT` | `480` | Seconds before a prefiller releases KV cache if the decoder does not acknowledge. |
 
 **Troubleshooting:**
+
 * **No RDMA in pod**: Check that `rdma/ib` appears in `kubectl describe node` allocatable resources and that the RDMA device plugin is running.
 * **MooncakeConnector fails to init**: Verify `mooncake-transfer-engine` is installed (`pip show mooncake-transfer-engine` inside the pod) and the bootstrap port is free.
 * **KV transfer failures**: Confirm prefill and decode use the same TP size and can reach each other over the RDMA network.
@@ -227,6 +230,7 @@ Apply the Kustomize overlays for your specific backend (defaulting to NVIDIA GPU
 #### GPU
 
 Choose the overlay matching your infrastructure provider:
+
 * **GKE**: Deploys on GKE using Dynamic Resource Allocation (DRA) and DRANet (RoCE) as the default high-performance path. Ensure the cluster is configured accordingly (see [Cluster Pre-provisioning](#gke-cluster-pre-provisioning-with-dra--rdmaroce)).
 * **CoreWeave**: Deploys on CoreWeave.
 

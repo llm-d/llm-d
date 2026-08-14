@@ -33,7 +33,6 @@ export PROMETHEUS_PORT=9091
 
 By default Prometheus is installed in the `llm-d-monitoring` namespace and the adapter is configured to connect to it at `https://prometheus-operated.llm-d-monitoring.svc:9090`. If your Prometheus instance is running elsewhere, update the `prometheus.url` value during installation accordingly.
 
-
 1. Add the Helm repository and install the adapter:
 
     ```bash

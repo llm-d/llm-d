@@ -20,7 +20,6 @@ networking on CoreWeave.
 | Total GPUs | 24 |
 | KV block size | 64 tokens |
 
-
 ## Prerequisites
 
 * Have the [proper client tools installed on your local system](../../helpers/client-setup/README.md).

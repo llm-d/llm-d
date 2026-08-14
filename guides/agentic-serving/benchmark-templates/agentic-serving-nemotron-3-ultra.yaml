@@ -68,7 +68,7 @@ workload:                         # yaml configuration for harness workload(s)
         seed: ${SEED}
         max_model_len: 262144
         num_conversations: ${CONCURRENCY_LEVEL}
-        shared_system_prompt_len: 3000 
+        shared_system_prompt_len: 3000
         dynamic_system_prompt_len:
           type: lognormal
           min: 10000

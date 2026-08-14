@@ -27,7 +27,7 @@ Install Envoy Gateway with the AI Gateway integration values, token rate limitin
 ENVOY_GATEWAY_VERSION=v1.8.1
 
 # Install the CRDs first, skipping the Gateway API CRDs installed in the previous step.
-# 
+#
 # Note 1: We’re using helm template piped into kubectl apply instead of helm install due to aknown Helm limitation related
 # to large CRDs in the templates/ directory: https://github.com/helm/helm/pull/12277
 # Note 2: We filter the output of the Helm template to remove offending lines until this is fixed: https://github.com/helm/helm/pull/32217

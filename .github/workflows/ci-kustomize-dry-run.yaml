@@ -303,4 +303,3 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
 
           exit $failed
-

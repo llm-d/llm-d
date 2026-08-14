@@ -6,6 +6,7 @@ The rules ship as a [`PrometheusRule`](https://prometheus-operator.dev/docs/gett
 
 > [!NOTE]
 > Commands on this page use `${NAMESPACE}` for the namespace where your llm-d workload runs. Set it before following along:
+>
 > ```bash
 > export NAMESPACE=<your-llm-d-namespace>
 > ```

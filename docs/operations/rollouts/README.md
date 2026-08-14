@@ -19,11 +19,13 @@ Gradual rollouts mitigate all three by keeping the stable version fully operatio
 A Rolling Update is the standard Kubernetes deployment strategy that updates pods gradually within a single InferencePool. This approach works in both standalone and llm-d router gateway modes.
 
 **How it works:**
+
 - Updates pods incrementally (e.g., 25% at a time)
 - Old pods continue serving traffic until new pods are healthy
 - Built into Kubernetes Deployments
 
 **Use Rolling Updates for:**
+
 - General, non-critical updates where strict traffic percentages do not matter
 - Scenarios where you want to conserve compute resources
 - Development and staging environments
@@ -35,11 +37,13 @@ A Rolling Update is the standard Kubernetes deployment strategy that updates pod
 A Blue-Green Update creates a second complete InferencePool and uses HTTPRoute to control traffic distribution between the old (blue) and new (green) versions. This strategy requires llm-d router gateway mode.
 
 **How it works:**
+
 - Deploy a complete new InferencePool alongside the existing one
 - Use HTTPRoute to gradually shift traffic (e.g., 1% → 5% → 10% → 50% → 100%)
 - Instant rollback by adjusting HTTPRoute weights
 
 **Use Blue-Green Updates for:**
+
 - Critical, high-risk production deployments that require gradual canary rollouts
 - Scenarios requiring fast rollbacks
 - Header-based routing (e.g., routing beta users to new version)
@@ -52,11 +56,13 @@ A Blue-Green Update creates a second complete InferencePool and uses HTTPRoute t
 LoRA (Low-Rank Adaptation) adapter rollouts allow you to update model customizations without changing the base model or infrastructure. This works in both standalone and llm-d router gateway modes.
 
 **How it works:**
+
 - Use `InferenceModelRewrite` to map model names to specific adapter versions
 - Gradually shift traffic between adapter versions
 - No infrastructure changes required
 
 **Use LoRA Adapter Rollouts when:**
+
 - You need to deploy new versions of LoRA adapters without disrupting service
 - You want to test adapter changes with a subset of traffic
 - You need to maintain multiple adapter versions simultaneously

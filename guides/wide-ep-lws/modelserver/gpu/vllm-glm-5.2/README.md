@@ -64,7 +64,6 @@ to a deployment's `kustomization.yaml` under `components:`.
 | `offloading-cpu` | prefill only | CPU-only KV cache offloading (`OFFLOADING_MODE=cpu`) |
 | `offloading-tiered` | prefill only | CPU + NVMe tiered KV cache offloading (`OFFLOADING_MODE=tiered`) |
 
-
 K8s takes the last duplicate env var, so appended values override the base defaults.
 
 ## Prerequisites

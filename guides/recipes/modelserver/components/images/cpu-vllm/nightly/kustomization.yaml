@@ -4,7 +4,7 @@ images:
   - name: REPLACE_MODEL_SERVER_IMAGE
     newName: docker.io/vllm/vllm-openai-cpu
     newTag: latest
-    
+
 patches:
   - target:
       kind: Deployment
