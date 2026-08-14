@@ -16,6 +16,7 @@ We currently offer the following:
 
 * [Precise Prefix Cache Routing](./precise-prefix-cache-routing/README.md) - Enhance optimized baseline with precise global indexing of the vLLM KV cache state.
 * [Tiered Prefix Cache](./tiered-prefix-cache/README.md) - Offload KV caches beyond accelerator memory (e.g. to CPU or disk), increasing the "KV-working set size" for multi-turn inference request patterns.
+* [P2P KV Cache Sharing](./p2p-kv-cache-sharing/README.md) (Experimental) - Pull cached prefix KV blocks from a peer's CPU offload tier instead of recomputing them on the scheduled model server.
 
 ## Serving Large Models
 

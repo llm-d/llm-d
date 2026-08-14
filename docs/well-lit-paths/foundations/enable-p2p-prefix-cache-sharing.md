@@ -1,4 +1,4 @@
-# Enable P2P Prefix Cache Sharing
+# [Experimental] Enable P2P Prefix Cache Sharing
 
 Prefix caches are per-pod, but their content is often fleet-wide: shared
 system prompts, common documents, session histories. Prefix-aware routing
@@ -42,37 +42,40 @@ sequenceDiagram
 
 > [!IMPORTANT]
 > P2P prefix cache sharing builds on the [Tiered Prefix Cache](tiered-prefix-cache.md)
-> path: peers serve pulls from their CPU offload tier. The tier must be
-> enabled and sized larger than the per-pod GPU KV cache, block hashes
-> must agree across pods (identical `--block-size` and `PYTHONHASHSEED`
-> fleet-wide), and peers that serve each other must run matched tensor
-> parallelism. The
+> path: peers serve pulls from their CPU offload tier. The shipped
+> configuration uses the same `--block-size`, `PYTHONHASHSEED`, and tensor
+> parallel layout on every peer. Other layouts need a compatible peer
+> session fingerprint; the guide documents the tensor-parallel and
+> model-runner constraints. Size the CPU tier to retain useful blocks;
+> making it larger than the per-pod GPU KV cache is the guide's recommended
+> starting point, not a correctness requirement. The
 > [guide's Best Practices](../../../guides/p2p-kv-cache-sharing/README.md#best-practices)
 > covers each requirement, its sizing rule, and its failure mode.
 
 ## When It Pays
 
-Recompute cost grows with prefix length; the pull is a near-flat
-CPU-to-CPU copy. The two cross at a measurable prefix length. On
-`openai/gpt-oss-120b` (H200) the pull wins at every measured length from
-2K to 48K tokens; on Llama-3.1-8B the lines cross near 2K. The router
-requests a pull only when a peer holds at least `minCachedTokenDelta`
-more prefix tokens than the scheduled pod - set it from the measured
-crossover.
+Recompute cost grows with prefix length. On the measured H200/RDMA setup,
+the CPU-to-CPU pull also grows with prefix length, but much more slowly.
+For `openai/gpt-oss-120b`, the pull was faster at every measured point from
+2,048 to 49,152 tokens. The crossover is model-, hardware-, and
+transport-specific. The router requests a pull only when the selected
+source holds at least `minCachedTokenDelta` more prefix tokens than the
+scheduled pod, so calibrate that value on the target deployment.
 
 Whether the pull helps also depends on the placement policy in front of
 it:
 
-- **Ownership is stable and uncontended**: prefix-aware routing alone is
-  optimal. A local hit is free, and the pull stays quiet.
+- **Ownership is stable and uncontended**: prefix-aware routing avoids the
+  transfer. A local hit is cheaper than a pull, so the pull stays quiet.
 - **A hot prefix saturates its owner, or the working set outgrows the
   caches**: load-aware placement plus the pull serves the same content
-  from the whole fleet. On the document Q&A benchmark this wins 1.5x
-  better p99 TTFT and +35% throughput over prefix-affinity routing.
-- **GPU KV capacity itself is the bottleneck**: cache co-location wins
-  structurally. Concurrent same-prefix requests on one pod share one
-  copy of the blocks; spreading pays a per-pod copy whether the prefix
-  is pulled or recomputed.
+  from the whole fleet. On the warm 16-pod document Q&A benchmark this
+  delivered 1.5x better p99 TTFT and 35% higher throughput than
+  prefix-affinity routing.
+- **GPU KV capacity itself is the bottleneck**: cache co-location can use
+  capacity more efficiently. Concurrent same-prefix requests on one pod
+  share one copy of the blocks; spreading pays a per-pod copy whether the
+  prefix is pulled or recomputed.
 
 The guide ships prefix affinity plus the pull as the general-purpose
 default. Reach for load-aware placement plus the pull when many
@@ -93,26 +96,26 @@ for manifests, verification gates, and step-by-step deployment.
 2. **The router builds the precise prefix index** from the KV events
    (the [Precise Prefix Cache Routing](precise-prefix-cache-routing.md)
    mechanism), so it knows which pods hold which prefix blocks.
-3. **The `p2p-source-producer` compares** the best-cached peer against
-   the pod scheduling picked; when the peer leads by at least
-   `minCachedTokenDelta` tokens it sets the KV cache source header.
+3. **The `p2p-source-producer` selects a source** from the CPU-tier holders
+   within one index block of the largest cached prefix, weighted to avoid
+   concentrating pulls on a queued source. After scheduling, it sets the
+   KV cache source header only when that source leads the computing pod by
+   at least `minCachedTokenDelta` tokens.
 4. **The routing sidecar injects `kv_transfer_params.remote_kv_source`**
    from the header, and the engine pulls the prefix blocks from the
-   peer's CPU tier over NIXL. Hits load as normal cache hits; ordinary
-   misses recompute, so a request whose peer does not have the blocks
-   degrades to baseline behavior instead of failing. Exception: a block
-   left in `HIT_PENDING` has no deadline on current engines, so a
-   request waiting on one can stay deferred until the client times out.
+   peer's CPU tier over NIXL. Hits load as normal cache hits; a failed
+   lookup is reported as a miss and the scheduled pod computes the missing
+   prefix locally.
 
-Under P/D disaggregation the pull applies to the prefill leg only: the
-prefill worker computes the prompt KV and streams it to the decoder, so
-that is the leg where recomputing a cached prefix is wasted work. The
-decode leg already receives the full KV over NIXL and has nothing to
-pull.
+Under P/D disaggregation, the prefill worker is the pull consumer because
+it computes the prompt KV. A decode worker may be the source for generated
+session history retained in its CPU tier. After prefill completes, the
+normal NIXL P/D path transfers the request's KV to the selected decoder.
 
 ## Further Reading
 
 - [P2P KV Cache Sharing guide](../../../guides/p2p-kv-cache-sharing) - manifests, verification gates, benchmarking.
 - [Benchmark report: gpt-oss-120b on H200](../../../guides/p2p-kv-cache-sharing/benchmark-results/gpt-oss-120b-h200.md) - crossover, shared-prefix pools, document Q&A.
+- [Benchmark report: GLM-5.2 on H200](../../../guides/p2p-kv-cache-sharing/benchmark-results/glm-5.2-h200.md) - C64 policy comparison, four-arm observation, and pull mechanism evidence.
 - [Tiered Prefix Cache](tiered-prefix-cache.md) - the offload tiers P2P serves from.
 - [Precise Prefix Cache Routing](precise-prefix-cache-routing.md) - the index that selects the pull source.
