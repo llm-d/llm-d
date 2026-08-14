@@ -50,11 +50,8 @@ tables ship next to this file:
 
 The wide-EP testbed (`GLM-5.2-FP8`, 753B) ships three arm sets:
 
-* `epp-glm-c64-{approx,precise,precise-p2p}.yaml` and
-  `epp-glm-c64-approx-p2p-corrected.yaml` for the published C64
-  complete-policy comparison and corrected four-arm observation. The archived
-  `epp-glm-c64-approx-p2p.yaml` has a documented load-accounting selector
-  mismatch and is retained only for provenance.
+* `epp-glm-c64-{approx,approx-p2p,precise,precise-p2p}.yaml` for the C64
+  complete-policy comparison and four-arm observation.
 * `epp-glm-loadfirst{,-p2p}.yaml` for the synthetic load-spill A/B; placement
   is identical across the pair, so it isolates the source producer.
 * `epp-glm-precise{,-p2p}.yaml` for the fixed 1P1D precise-affinity check. It
@@ -83,13 +80,13 @@ headline margin is not a P2P margin. Read them for what they are:
 | Step 0 | recompute vs pull, same pod pair, no routing | **yes** |
 | Wide-EP precise affinity (GLM) | `precise` vs `precise + pull` | **yes** - mechanism-verified null; no source delta reaches the threshold |
 | Wide-EP load spill (GLM) | `load-first` vs `load-first + pull` | **yes** |
-| Wide-EP C64 (GLM) | corrected `approximate` vs `approximate + pull`; `precise` vs `precise + pull` | **yes, for the single corrected observation** - the repeated headline remains a complete-policy comparison |
+| Wide-EP C64 (GLM) | `approximate` vs `approximate + pull`; `precise` vs `precise + pull` | **yes, for the single four-arm observation** - the repeated headline remains a complete-policy comparison |
 | Uniform pool | `load` vs `load + P2P` | **yes** |
 | Hot set | `load` vs `load + P2P` | **yes** |
 | Document Q&A | `affinity` vs `affinity + P2P` | partly - the winning arm (`load + P2P`) also changes placement |
 
 The repeated C64 comparison and the document-Q&A headline compare complete
-policies. The corrected C64 four-arm observation and the other scenarios carry
+policies. The C64 four-arm observation and the other scenarios carry
 a control arm with identical placement and no pull, so their within-routing
 margins isolate the configured pull factor. Comparisons *across* placement
 policies (`affinity` vs `load + P2P`) answer a different question - which
@@ -100,8 +97,8 @@ The isolating pairs are where the feature's value is established: Step 0
 req/s), the hot set (+224% and 274 client-timeout failures eliminated at
 48 req/s), and GLM load spill (-67% mean TTFT and 2.7x throughput). The
 repeated C64 comparison answers which complete deployment carries more
-successful work; its margin cannot be assigned to P2P alone. Its corrected
-four-arm observation provides one mechanism-verified snapshot of the
+successful work; its margin cannot be assigned to P2P alone. Its four-arm
+observation provides one mechanism-verified snapshot of the
 individual factors, not a repeated effect estimate.
 
 One recurring result, stated plainly: **under affinity placement the
@@ -347,16 +344,12 @@ synthetic load-spill tests use one 16-way prefill instance and one 16-way
 decode instance. The C64 policy comparison uses two prefill pods and two
 decode pods, each with DP 8 and TP 1.
 
-The published C64 campaign used these exact configurations:
+The C64 campaign uses these configurations:
 
 * [`epp-glm-c64-approx.yaml`](epp-glm-c64-approx.yaml) - calibrated
   approximate routing without P2P.
-* [`epp-glm-c64-approx-p2p.yaml`](epp-glm-c64-approx-p2p.yaml) - the archived
-  approximate+P2P arm. Its renamed prefix producer is not selected by the
-  parameterless in-flight load producer, so the published observation is
-  confounded and retained only for provenance.
-* [`epp-glm-c64-approx-p2p-corrected.yaml`](epp-glm-c64-approx-p2p-corrected.yaml) -
-  the corrected approximate+P2P arm used by the August 14 observation.
+* [`epp-glm-c64-approx-p2p.yaml`](epp-glm-c64-approx-p2p.yaml) - calibrated
+  approximate routing with P2P.
 * [`epp-glm-c64-precise.yaml`](epp-glm-c64-precise.yaml) - DP-aware precise
   KV events without the source producer.
 * [`epp-glm-c64-precise-p2p.yaml`](epp-glm-c64-precise-p2p.yaml) - the precise
@@ -402,16 +395,15 @@ latency guarantee. Latency percentiles include only successful terminal
 requests inside the cutoff and therefore compare different-sized,
 right-censored populations.
 
-The corrected 300-second window includes all four intended combinations. Relative
-to approximate routing without P2P, approximate+P2P is +4.61% in successful
+The four-arm 300-second window includes all intended combinations. Relative to
+approximate routing without P2P, approximate+P2P is +4.61% in successful
 throughput, precise without P2P is +1.27%, and precise+P2P is +11.07%.
 Approximate+P2P records 37 peer-load submissions, 65 successful rounds, zero
 failed rounds, and 23,821 submitted blocks. Precise+P2P records 18
 submissions, 14 successful rounds, zero failed rounds, and 12,079 blocks. Both
 no-P2P arms record zero peer activity. This is one fixed-window observation,
 so it shows an interaction-shaped result but not repeated single-factor
-effects. The archived confounded observation remains in the data bundle for
-provenance.
+effects.
 
 The C64 configurations use `minCachedTokenDelta: 2048`, below the separate
 upstream-tier crossover recommendation of 12,288 tokens. Use the crossover

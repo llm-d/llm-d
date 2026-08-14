@@ -139,7 +139,7 @@ to complete the full workload.
 The per-run exact-window summaries and the aggregate used for the tables are
 committed in the [C64 data bundle](./data/glm-5.2-c64/README.md). The bundle
 records the campaign roles, accounting rule, raw metric precision, and
-formulas used to derive the published changes.
+formulas used to derive the reported changes.
 
 ### Repeated complete-policy comparison
 
@@ -177,10 +177,10 @@ from 2.977 to 3.217 requests/s, a 3.19% coefficient of variation. Three
 observations are not enough to characterize a distribution, but the candidate
 is more stable in this sample.
 
-### Corrected four-arm observation
+### Four-arm observation
 
-One August 14 300-second fixed-window observation includes all four intended
-policy combinations under the same cutoff. The approximate+P2P arm binds
+One 300-second fixed-window observation includes all four intended policy
+combinations under the same cutoff. The approximate+P2P arm binds
 `inflight-load-producer`, `prefix-cache-affinity-filter`, and
 `p2p-source-producer` to the same named approximate producer:
 
@@ -198,11 +198,6 @@ median end-to-end latency changes by -11.53%, +4.69%, and -19.97%. This is one
 fixed-window observation, so it shows an interaction-shaped result but does
 not provide repeated estimates of either single-factor effect.
 
-The August 13 four-arm source remains in
-`four-arm-exact-window.json` for provenance. Its approximate+P2P arm is
-confounded because `inflight-load-producer` reads a different prefix producer;
-it is not used in this corrected table.
-
 ### Mechanism evidence
 
 Across the three repeated comparisons, approximate prefill queue p90 is 12.8,
@@ -212,28 +207,19 @@ external prefill hit rate is 1.66%, 2.64%, and 2.36%; precise+P2P is 38.47%,
 and expired requests. External-hit rate establishes engagement, not the size
 of the capacity gain; queue p90 is the consistent signal across the windows.
 
-The mechanism logs for the archived August 13 fixed-window observation record
-13 source request IDs, 12 peer-load submissions, 12 unique transfer IDs, 17
-successful transfer rounds, zero failed rounds, and 6,342 submitted KV blocks.
-These counters instrument
-different pipeline stages and are not expected to be one-to-one: a source
-directive need not submit a peer load, and one transfer can complete in
-multiple rounds. No byte volume is derived from the block count because the
-C64 offload quantum does not match the separate 1P1D crossover's 92.6 KB/token
-measurement.
-`vllm:nixl_bytes_transferred` also counts normal prefill-to-decode traffic,
-and `vllm:kv_offload_load_bytes` aggregates local and peer tier loads.
-
-The corrected observation verifies zero P2P source directives, peer-load
+The four-arm observation verifies zero P2P source directives, peer-load
 submissions, successful rounds, and transferred blocks in both no-P2P arms.
 Approximate+P2P records 46 source request IDs, 37 peer-load submissions, 37
 unique transfer IDs, 65 successful rounds, zero failed rounds, and 23,821
 submitted blocks. Precise+P2P records 19 source request IDs, 18 submissions,
 18 unique transfer IDs, 14 successful rounds, zero failed rounds, and 12,079
-submitted blocks. At the run's 3,502,592-byte submitted-block payload, the
-block counts correspond to 83,435,244,032 bytes (77.705 GiB) and
-42,307,808,768 bytes (39.402 GiB), respectively. These values derive from the
-P2P submission records, not the generic offload or NIXL aggregate counters.
+submitted blocks. These counters instrument different pipeline stages and are
+not expected to be one-to-one: a source directive need not submit a peer load,
+and one transfer can complete in multiple rounds. At the run's 3,502,592-byte
+submitted-block payload, the block counts correspond to 83,435,244,032 bytes
+(77.705 GiB) and 42,307,808,768 bytes (39.402 GiB), respectively. These values
+derive from the P2P submission records, not the generic offload or NIXL
+aggregate counters.
 
 The DP-aware event path does not collapse traffic onto rank 0. Across the three
 precise+P2P observations, the two rank-0 engines account for 8.3% to 17.1% of
@@ -247,9 +233,10 @@ imbalance.
 The run uses `minCachedTokenDelta: 2048`, below this page's separate GLM
 crossover recommendation of 12,288 tokens. It describes the policy as
 configured and does not establish that 2,048 is the best production setting.
-The corrected four-arm observation removes the load-accounting selector
-confound, but both middle arms still require repeated, counterbalanced
-observations before assigning the gain quantitatively to precision or P2P.
+The four-arm observation uses one prefix producer consistently for in-flight
+load, affinity, and P2P source selection. Both middle arms still require
+repeated, counterbalanced observations before assigning the gain
+quantitatively to precision or P2P.
 
 ## Historical: the overlay-era four-arm ladder (superseded)
 

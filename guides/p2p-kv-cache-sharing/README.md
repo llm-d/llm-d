@@ -618,6 +618,6 @@ Benchmark reports comparing the routing arms under identical hardware:
   a repeated C64 comparison where the complete
   DP-aware precise+P2P policy improves successful throughput by a 9.97%
   paired median over calibrated approximate routing without P2P, a replicated
-  load-spill A/B that isolates P2P, a corrected single-window four-arm
+  load-spill A/B that isolates P2P, a single-window four-arm
   observation, and the pull-versus-recompute crossover used to set the
   production threshold.

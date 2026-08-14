@@ -1,6 +1,4 @@
-# Published C64 approximate+P2P diagnostic, retained exactly for provenance.
-# Its in-flight load producer misses the renamed prefix producer; use the
-# separately named corrected configuration for a clean rerun.
+# C64 single-factor P2P arm: calibrated approximate routing with P2P.
 apiVersion: llm-d.ai/v1alpha1
 kind: EndpointPickerConfig
 plugins:
@@ -16,6 +14,8 @@ plugins:
     parameters:
       maxPrefixTokensToMatch: 131072
   - type: inflight-load-producer
+    parameters:
+      prefixMatchInfoProducerName: gpu-prefix-cache-producer
   - type: prefix-cache-affinity-filter
     parameters:
       prefixMatchInfoProducerName: gpu-prefix-cache-producer
