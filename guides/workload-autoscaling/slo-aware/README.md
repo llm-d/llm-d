@@ -103,7 +103,7 @@ Set the guide environment variables:
 export BRANCH=main
 export REPO_ROOT=$(realpath $(git rev-parse --show-toplevel))
 export NAMESPACE=llm-d-optimized-baseline
-export KEDA_VERSION=v2.20.1
+export KEDA_VERSION=2.20.1
 export SLO_DIR=${REPO_ROOT}/guides/workload-autoscaling/slo-aware
 ```
 <!-- guide:env.static end -->
@@ -120,7 +120,7 @@ Install KEDA (see the APIService caveat above):
 
 <!-- guide:prerequisites.keda start -->
 ```bash
-kubectl apply --server-side -f https://github.com/kedacore/keda/releases/download/${KEDA_VERSION}/keda-${KEDA_VERSION}.yaml
+kubectl apply --server-side -f https://github.com/kedacore/keda/releases/download/v${KEDA_VERSION}/keda-${KEDA_VERSION}.yaml
 ```
 <!-- guide:prerequisites.keda end -->
 
