@@ -133,7 +133,7 @@ Install instructions live under [`guides/recipes/gateway/`](https://github.com/l
 
 ## 6. Async Processor
 
-The [Async Processor](https://github.com/llm-d/llm-d-async) is an optional component that pulls inference requests from a message queue, gates dispatch on pool capacity, and forwards them to llm-d Router. It is deployed via Helm — see the [asynchronous processing guide](../../guides/asynchronous-processing/README.md) and the [operations guide](../operations/async-processor.md).
+The [Async Processor](https://github.com/llm-d/llm-d-async) is an optional component that pulls inference requests from a message queue, gates dispatch on pool capacity, and forwards them to llm-d Router. It is deployed via Helm — see the [asynchronous processing guide](../../guides/batch-serving/asynchronous-processing/README.md) and the [operations guide](../operations/async-processor.md).
 
 | Chart | Version | OCI Registry | Description |
 |-------|---------|--------------|-------------|

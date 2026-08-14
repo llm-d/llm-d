@@ -20,6 +20,9 @@ recipes/observability
 # Reinforcement learning guide — markdown documentation only, no kustomize overlays
 rl
 
+# Batch serving guide — markdown documentation only, no kustomize overlays
+batch-serving
+
 # Helper scripts — not a guide
 scripts
 

@@ -8,7 +8,7 @@ Two guides are available:
 - **[Multi-tenant guide](./multitenant/README.md)** — the **advanced** setup: **team × tier × model** with per-team reserved/overflow quota (classifying `redis-quota`), tier-priority dispatch, and per-model saturation back-off across two `InferencePool`s. Runs on either queue backend.
 
 > [!NOTE]
-> For production sizing, scaling, and container-resource guidance, see the [Async Processor Operations Guide](../../docs/operations/async-processor.md).
+> For production sizing, scaling, and container-resource guidance, see the [Async Processor Operations Guide](../../../docs/operations/async-processor.md).
 
 ## Overview
 
@@ -30,16 +30,16 @@ Before installing Async Processor, ensure you have:
 1. **Kubernetes cluster**: A running Kubernetes cluster (v1.31+).
    - For local development, you can use **Kind** or **Minikube**.
    - For production, GKE, AKS, or OpenShift are supported.
-2. **Gateway control plane**: Configure and deploy your [Gateway control plane](../../docs/infrastructure/gateway/README.md) (e.g., Istio) before installation.
-3. **llm-d Inference Stack**: Async Processor requires an existing [optimized baseline](../optimized-baseline/README.md) stack to dispatch requests to.
+2. **Gateway control plane**: Configure and deploy your [Gateway control plane](../../../docs/infrastructure/gateway/README.md) (e.g., Istio) before installation.
+3. **llm-d Inference Stack**: Async Processor requires an existing [optimized baseline](../../optimized-baseline/README.md) stack to dispatch requests to.
 
 ## Installation
 
-Async Processor can be installed via Helm. We recommend following the pattern used in the [optimized baseline](../optimized-baseline/README.md) guide.
+Async Processor can be installed via Helm. We recommend following the pattern used in the [optimized baseline](../../optimized-baseline/README.md) guide.
 
 #### Step 1: Deploy llm-d Router
 
-Apply the [optimized baseline](../optimized-baseline/README.md) guide and get the llm-d Router's IP address:
+Apply the [optimized baseline](../../optimized-baseline/README.md) guide and get the llm-d Router's IP address:
 
 ```bash
 export REPO_ROOT=$(realpath $(git rev-parse --show-toplevel))
@@ -54,8 +54,8 @@ export IP=$(kubectl get gateway llm-d-inference-gateway -n llm-d-optimized-basel
 
 Choose your queue implementation (GCP Pub/Sub or Redis) and configure the corresponding `values.yaml` file:
 
-- `guides/asynchronous-processing/gcp-pubsub/values.yaml`
-- `guides/asynchronous-processing/redis/values.yaml`
+- `guides/batch-serving/asynchronous-processing/gcp-pubsub/values.yaml`
+- `guides/batch-serving/asynchronous-processing/redis/values.yaml`
 
 #### Step 3: Deploy Async Processor
 
@@ -68,7 +68,7 @@ export ASYNC_VERSION=v0.9.0   # latest llm-d-async release
 
 helm install llm-d-async \
     oci://ghcr.io/llm-d/charts/llm-d-async \
-    -f ${REPO_ROOT}/guides/asynchronous-processing/${MQ_PROVIDER}/values.yaml \
+    -f ${REPO_ROOT}/guides/batch-serving/asynchronous-processing/${MQ_PROVIDER}/values.yaml \
     --set ap.igwBaseURL=http://${IP}:80 \
     -n ${NAMESPACE} --create-namespace --version ${ASYNC_VERSION}
 ```
