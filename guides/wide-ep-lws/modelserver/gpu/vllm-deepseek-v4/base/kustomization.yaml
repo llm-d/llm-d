@@ -7,7 +7,7 @@ resources:
 
 components:
   - ../../../../../recipes/modelserver/components/images/gpu-vllm/release
-  - ../../../../../recipes/modelserver/components/images/routing-sidecar/release
+  - ../../../../../recipes/modelserver/components/images/routing-sidecar/nightly
 labels:
   - pairs:
       llm-d.ai/model: DeepSeek-V4-Pro

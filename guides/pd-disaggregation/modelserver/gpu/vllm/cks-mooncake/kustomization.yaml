@@ -7,7 +7,7 @@ namePrefix: pd-disaggregation-nvidia-gpu-vllm-mooncake-
 
 components:
   - ../../../../../recipes/modelserver/components/images/gpu-vllm/release
-  - ../../../../../recipes/modelserver/components/images/routing-sidecar/release
+  - ../../../../../recipes/modelserver/components/images/routing-sidecar/nightly
 
 labels:
   - pairs:
