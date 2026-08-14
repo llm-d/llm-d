@@ -70,7 +70,7 @@ Comparisons that change placement and the pull together do not measure a
 P2P margin. The pull-isolating pair in each scenario:
 
 | Scenario | The pull-isolating pair | Isolates the pull? |
-|---|---|---|
+| --- | --- | --- |
 | Step 0 | recompute vs pull, same pod pair, no routing | **yes** |
 | Wide-EP (GLM) | `precise` vs `precise + pull` | **yes** |
 | Uniform pool | `load` vs `load + P2P` | **yes** |
@@ -184,9 +184,10 @@ a one-time session-establishment cost (~6 s measured on the wide-EP
 testbed) that steady-state pulls never see.
 
 The ladder is transport-dependent: it was measured with `rdma/ib` on
-the pods, and on TCP the crossover moves from below 2K out to ~29K (see
+the pods. The published benchmark does not include a TCP comparison, so
+calibrate separately on TCP (see
 [Supported Hardware Backends](../README.md#supported-hardware-backends)).
-`ls /dev/infiniband` in the container tells you which case you are in.
+`ls /dev/infiniband` in the container shows whether RDMA is available.
 
 The measured ladder is canonical in
 [the gpt-oss results page](../benchmark-results/gpt-oss-120b-h200.md#pull-versus-recompute-single-request):
@@ -219,7 +220,7 @@ served counts, restarts (must be 0).
 Measured (achieved req/s / TTFT p50 / request latency p50 per stage):
 
 | offered | affinity | load, no P2P | load + P2P |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | 6 req/s | 5.97 / 207 ms / 0.50 s | 5.59 / 2.5 s / 5.6 s | 5.96 / 342 ms / 0.64 s |
 | 12 req/s | 11.92 / 200 ms / 0.49 s | 9.02 / 8.6 s / 26.2 s | 11.49 / 460 ms / 0.98 s |
 | 18 req/s | 17.87 / 192 ms / 0.48 s | 8.58 / 26.0 s / 45.7 s | 17.46 / 341 ms / 0.67 s |
@@ -260,7 +261,7 @@ this - that ratio decides the result.** Measured on 16x gpt-oss-120b
 (~1.22M tokens of GPU KV per pod), walking 48K-token prefixes:
 
 | hot set | vs one pod's cache | what happens |
-|---|---|---|
+| --- | --- | --- |
 | 8 prefixes (384K tok) | 0.31x | fits in every pod; every arm serves GPU hits after warmup, nothing pulls |
 | 32 prefixes (1.54M tok) | 1.26x | one stage of churn, then replication absorbs it and the arms converge |
 | **64 prefixes (3.07M tok)** | **2.5x** | **misses are permanent; the regime this scenario is about** |
@@ -268,7 +269,7 @@ this - that ratio decides the result.** Measured on 16x gpt-oss-120b
 Measured at 64 x 48K (achieved req/s / TTFT p50 / request latency p50):
 
 | offered | `affinity` | `load` - no P2P | `load + P2P` |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | 12 req/s | 11.94 / 188 ms / 0.30 s | 9.31 / 7.9 s / 16.6 s | 11.84 / 310 ms / 0.42 s |
 | 24 req/s | 23.04 / 183 ms / 0.31 s | 11.47 / 24.3 s / 34.5 s | 22.83 / 271 ms / 0.42 s |
 | 36 req/s | 34.03 / 190 ms / 0.36 s | 11.77 / 47.0 s / 61.6 s | 34.34 / 249 ms / 0.45 s |

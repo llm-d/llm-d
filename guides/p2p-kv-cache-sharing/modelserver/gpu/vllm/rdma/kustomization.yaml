@@ -7,9 +7,9 @@ kind: Kustomization
 #
 # The transport does not decide whether the pull works - it decides where the
 # pull-versus-recompute crossover sits, and therefore `minCachedTokenDelta`.
-# Measured on gpt-oss-120b, same image and configuration, this overlay the
-# only difference: the pull wins from 2K tokens up with RDMA, and only above
-# ~29K without it. See the README's Supported Hardware Backends.
+# On the measured gpt-oss-120b RDMA deployment, the pull wins from 2K tokens
+# up. Calibrate the crossover separately without RDMA. See the README's
+# Supported Hardware Backends.
 #
 # `rdma/ib` is the device-plugin resource name on the clusters this was
 # measured on; yours may expose a different one (`rdma/hca`,

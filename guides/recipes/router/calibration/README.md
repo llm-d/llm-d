@@ -19,7 +19,7 @@ See the [**configuration matrix**](./configuration-matrix.md) for the reference 
 that sends warmup + measurement requests of exactly `CHUNK_SIZE` random token IDs (so the
 prefix cache misses every time and we measure true prefill), records TTFT, and computes:
 
-```
+```text
 peakPrefillThroughput = CHUNK_SIZE / median(TTFT)   # tokens/sec
 ```
 
@@ -84,7 +84,7 @@ least that many more cached prefix tokens than the scheduled pod. Below the
 pull-versus-recompute crossover a pull costs more than recomputing, so the
 right value is the crossover — and the crossover is **model-, hardware- and
 transport-specific** (measured on gpt-oss-120b/H200: below 2K with `rdma/ib`
-on the pods, near 29K on the TCP fallback).
+on the pods; calibrate separately on the TCP fallback).
 
 [`calibrate-min-cached-token-delta.sh`](calibrate-min-cached-token-delta.sh)
 runs a Job ([`calibration-min-cached-token-delta.yaml`](calibration-min-cached-token-delta.yaml))
@@ -96,7 +96,7 @@ because the consumer caches whatever it just served). The mesh is warmed
 first so the one-time session-establishment cost is excluded. It prints the
 measured ladder and the recommendation:
 
-```
+```text
 MIN_CACHED_TOKEN_DELTA=<smallest tested length where the pull won>
 ```
 

@@ -51,7 +51,7 @@
 #     pull silently measures zero).
 #   - Run on the transport you will deploy on. The crossover is
 #     transport-dependent: measured on gpt-oss-120b/H200 it sits below 2K
-#     with RDMA and near 29K on the TCP fallback.
+#     with RDMA; calibrate it separately on the TCP fallback.
 
 set -euo pipefail
 
