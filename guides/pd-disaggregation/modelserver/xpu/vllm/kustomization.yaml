@@ -11,7 +11,7 @@ configurations:
 
 components:
   - ../../../../recipes/modelserver/components/images/xpu-vllm/llm-d
-  - ../../../../recipes/modelserver/components/images/routing-sidecar/release
+  - ../../../../recipes/modelserver/components/images/routing-sidecar/nightly
 
 labels:
   - pairs:

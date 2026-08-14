@@ -71,11 +71,11 @@ is earliest-deadline-first (the deadline is the sorted-set score).
 
 This guide layers on the base [asynchronous-processing](../README.md) guide — complete its
 [Prerequisites](../README.md#prerequisites) first (client tools, cluster, GAIE CRDs,
-[`guides/env.sh`](../../env.sh), the HF-token secret), then add the following.
+[`guides/env.sh`](../../../env.sh), the HF-token secret), then add the following.
 
 - **Two model stacks behind one gateway.** The model-isolation story needs **two `InferencePool`s**
   (`POOL_A`, `POOL_B`) behind a single inference gateway that routes by `payload.model` to the matching
-  pool. Bring these up by applying the [optimized-baseline](../../optimized-baseline/README.md) guide
+  pool. Bring these up by applying the [optimized-baseline](../../../optimized-baseline/README.md) guide
   twice with two different models / pool names, or point the guide at your existing multi-model
   gateway.
 
@@ -89,7 +89,7 @@ This guide layers on the base [asynchronous-processing](../README.md) guide — 
   ```bash
   export REPO_ROOT=$(realpath $(git rev-parse --show-toplevel))
   source ${REPO_ROOT}/guides/env.sh
-  export MT=${REPO_ROOT}/guides/asynchronous-processing/multitenant
+  export MT=${REPO_ROOT}/guides/batch-serving/asynchronous-processing/multitenant
 
   export NAMESPACE=llm-d-async
   export ASYNC_VERSION=v0.9.0          # latest llm-d-async release (includes tier-priority + classifying quota)

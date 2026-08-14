@@ -198,7 +198,7 @@ log "llm-d Router (EPP) endpoint: http://${IP}:80"
 log "Deploying Async Processor (${ASYNC_VERSION}, redis backend)"
 helm install llm-d-async \
   oci://ghcr.io/llm-d/charts/llm-d-async \
-  -f "${REPO_ROOT}/guides/asynchronous-processing/redis/values.yaml" \
+  -f "${REPO_ROOT}/guides/batch-serving/asynchronous-processing/redis/values.yaml" \
   --set ap.igwBaseURL="http://${IP}:80" \
   -n "${NAMESPACE}" --create-namespace --version "${ASYNC_VERSION}"
 

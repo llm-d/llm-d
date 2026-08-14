@@ -28,7 +28,7 @@ This implementation uses Redis Sorted Sets as the backend for the request queue.
 
 ## Configuration and Deployment
 
-We provide a `values.yaml` for this implementation in `guides/asynchronous-processing/redis/values.yaml`.
+We provide a `values.yaml` for this implementation in `guides/batch-serving/asynchronous-processing/redis/values.yaml`.
 
 Edit the `values.yaml` file with your specific Redis connection:
 

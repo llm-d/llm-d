@@ -6,7 +6,7 @@ resources:
 namePrefix: e-pd-disaggregation-nvidia-gpu-vllm-
 
 components:
-  - ../../../../../../../recipes/modelserver/components/images/routing-sidecar/release
+  - ../../../../../../../recipes/modelserver/components/images/routing-sidecar/nightly
   - ../../../../../../../recipes/modelserver/components/images/gpu-vllm/ec-connector
 
 labels:

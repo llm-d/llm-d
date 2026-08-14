@@ -16,6 +16,7 @@ For this quickstart, we will use the **Standalone Mode** deployment, which is th
   ```
 
 - Set the following environment variables:
+
   ```bash
   export REPO_ROOT=$(realpath $(git rev-parse --show-toplevel))
   source ${REPO_ROOT}/guides/env.sh
@@ -26,7 +27,8 @@ For this quickstart, we will use the **Standalone Mode** deployment, which is th
 - Install the Gateway API Inference Extension CRDs:
 
   ```bash
-  kubectl apply -f https://github.com/kubernetes-sigs/gateway-api-inference-extension/releases/download/${GAIE_VERSION}/v1-manifests.yaml
+  # GAIE_URL is automatically calculated from GAIE_VERSION at ${REPO_ROOT}/guides/env.sh
+  kubectl apply -f https://github.com/kubernetes-sigs/gateway-api-inference-extension/${GAIE_URL}/v1-manifests.yaml
   ```
 
 - Create a target namespace for the installation:

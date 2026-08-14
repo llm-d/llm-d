@@ -110,7 +110,8 @@ source ${REPO_ROOT}/guides/env.sh
 
 <!-- guide:prerequisites.gaie start -->
 ```bash
-kubectl apply -f https://github.com/kubernetes-sigs/gateway-api-inference-extension/releases/download/${GAIE_VERSION}/v1-manifests.yaml
+# GAIE_URL is automatically calculated from GAIE_VERSION at ${REPO_ROOT}/guides/env.sh
+kubectl apply -f https://github.com/kubernetes-sigs/gateway-api-inference-extension/${GAIE_URL}/v1-manifests.yaml
 ```
 <!-- guide:prerequisites.gaie end -->
 

@@ -27,7 +27,6 @@ spec:
           - name: routing-proxy
             args:
               - --port=8000
-              - --vllm-port=8200
               - --kv-connector=nixlv2
               - --zap-log-level=1
               - --secure-proxy=false
@@ -38,6 +37,7 @@ spec:
               - containerPort: 8000
                 name: sidecar
                 protocol: TCP
+            image: REPLACE_ROUTING_SIDECAR_IMAGE
             resources: {}
             restartPolicy: Always
             securityContext:
@@ -54,7 +54,7 @@ spec:
             emptyDir: {}
         containers:
           - name: vllm
-            image: vllm/vllm-openai:v0.24.0
+            image: REPLACE_MODEL_SERVER_IMAGE
             securityContext:
               capabilities:
                 add:
