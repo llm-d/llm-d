@@ -173,8 +173,10 @@ helm install llm-d-async \
 <!-- llm-d-cicd:skip end -->
 
 `gcp-setup.sh` binds the `async-processor` service account to `pubsub.subscriber` + `pubsub.publisher`
-+ `pubsub.viewer` (the readiness probe's `GetSubscription`) + `monitoring.viewer` (broker backlog). With
+
+- `pubsub.viewer` (the readiness probe's `GetSubscription`) + `monitoring.viewer` (broker backlog). With
 Workload Identity, follow the printed binding to map the GSA onto the chart's `llm-d-async` KSA.
+
 </details>
 
 > [!NOTE]
@@ -270,6 +272,7 @@ wait
   kubectl -n ${NAMESPACE} exec deploy/redis -- redis-cli GET quota:a:team:batch     # <= 1 (model A, batch)
   kubectl -n ${NAMESPACE} exec deploy/redis -- redis-cli GET quota:b:team:premium   # model B counter, independent
   ```
+
 - **Model isolation:** model B has its own pool and counters, so A's batch overload does not slow B —
   `results-b-list` keeps filling at model B's own rate.
 

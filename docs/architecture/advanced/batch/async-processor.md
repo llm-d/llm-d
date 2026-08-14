@@ -32,6 +32,7 @@ The Async Processor is a lightweight dispatch agent that pulls inference request
 Dispatch gates regulate the flow of requests by controlling message ingestion rates when polling requests from message queues, as well as worker pool admission and downstream dispatch rates. By evaluating metrics before messages are pulled and admitted into worker pipelines, gates prevent overload on downstream inference servers and maintain system stability.
 
 Gates can be configured at two distinct levels:
+
 - **Queue / Subscription Level**: Controls flow and ingestion before messages are polled and merged.
 - **Worker Pool Admission Level**: Controls entry into the worker pool execution pipeline. Multiple gates can be combined for a pool using a **composite gate**.
 
@@ -47,7 +48,7 @@ Gates can be configured at two distinct levels:
 
 ### Worker Pools
 
-The Async Processor uses a multi-tenant pipeline model based on **Worker Pools**. 
+The Async Processor uses a multi-tenant pipeline model based on **Worker Pools**.
 
 > [!NOTE]
 > An `llm-d-async` worker pool is **not** an inference pool (such as a downstream model server pool). It is an internal dispatch pipeline construct within `llm-d-async` that configures the **pool name**, **number of workers**, and **admission gate**. The worker pool configuration is fully user-configurable.
@@ -122,6 +123,7 @@ The Async Processor defines standardized JSON schemas for requests published to 
 **Example Result Messages:**
 
 *Success Result:*
+
 ```json
 {
   "id": "19933123533434",
@@ -137,6 +139,7 @@ The Async Processor defines standardized JSON schemas for requests published to 
 ```
 
 *Error Result:*
+
 ```json
 {
   "id": "19933123533434",

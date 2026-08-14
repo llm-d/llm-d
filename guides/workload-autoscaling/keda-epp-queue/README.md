@@ -65,15 +65,15 @@ source ${REPO_ROOT}/guides/env.sh
 ```
 <!-- guide:env.source end -->
 
-2. Configure observability by following the shared
+1. Configure observability by following the shared
    [observability setup guide](../../../docs/operations/observability/setup.md).
    Record the Prometheus endpoint and its TLS and authentication requirements;
    you will use them when reviewing the example `ScaledObject`.
 
-3. Install KEDA, or the platform-provided KEDA operator, as described in
+2. Install KEDA, or the platform-provided KEDA operator, as described in
    [Kubernetes Metrics Adapter](../README.md#kubernetes-metrics-adapter).
 
-4. Upgrade the optimized-baseline router with the KEDA+EPP overlay. The overlay
+3. Upgrade the optimized-baseline router with the KEDA+EPP overlay. The overlay
    enables EPP Flow Control. Reapply the monitoring feature values used during
    optimized-baseline installation so that the EPP metrics port and its
    `ServiceMonitor` remain enabled:

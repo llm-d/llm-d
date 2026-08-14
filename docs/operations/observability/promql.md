@@ -86,6 +86,7 @@ Requires the `flowControl` feature gate enabled on the EPP.
 **Metric name prefixes:** Current deployments use `llm_d_epp_*`. Older deployments may use `llm_d_inference_scheduler_*`, `inference_objective_*`, `inference_pool_*`, or `inference_extension_*` — update accordingly if panels show "No data".
 
 **Histograms:** Always include `by(le)` when using `histogram_quantile()`:
+
 ```promql
 histogram_quantile(0.99, sum by(le) (rate(metric_name_bucket[5m])))
 ```

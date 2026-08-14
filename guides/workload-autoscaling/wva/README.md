@@ -4,7 +4,6 @@
 > The VariantAutoscaling CRD has been deprecated in llm-d 0.8.0 in favor of
 HPA with the `wva_desired_replicas` external metric. This guide covers the new recommended approach using HPA + WVA Metric. The VariantAutoscaling CRD will be removed in 0.9.0.
 
-
 The [Workload Variant Autoscaler](https://github.com/llm-d/workload-variant-autoscaler) (WVA) provides dynamic autoscaling capabilities for llm-d inference deployments, automatically adjusting replica counts based on inference server saturation.
 
 ## Overview
@@ -29,9 +28,9 @@ Before installing WVA, ensure you have:
     > [!NOTE]
     > Make sure to enable monitoring as described in the [optimized-baseline well-lit path guide](../../optimized-baseline/README.md#3-optional-enable-monitoring).
 
-2. [KEDA](https://keda.sh/) installed in your cluster as the external metrics provider. HPA relies on the external metric exposed by WVA, `wva_desired_replicas`, to make scaling decisions. See [Using KEDA with WVA (Recommended)](#using-keda-with-wva-recommended) for setup instructions.
+1. [KEDA](https://keda.sh/) installed in your cluster as the external metrics provider. HPA relies on the external metric exposed by WVA, `wva_desired_replicas`, to make scaling decisions. See [Using KEDA with WVA (Recommended)](#using-keda-with-wva-recommended) for setup instructions.
 
-3. [OpenShift User Workload Monitoring](https://docs.redhat.com/en/documentation/openshift_container_platform/4.14/html/monitoring/configuring-user-workload-monitoring) enabled for the namespaces used by this guide.
+1. [OpenShift User Workload Monitoring](https://docs.redhat.com/en/documentation/openshift_container_platform/4.14/html/monitoring/configuring-user-workload-monitoring) enabled for the namespaces used by this guide.
 
 ## Set Namespaces
 
@@ -89,7 +88,7 @@ kubectl create secret generic prometheus-tls-cert \
 ```
 <!-- guide:deploy.prometheus_ca end -->
 
-3. Install the WVA controller. Point the overlay at `${WVA_NAMESPACE}` and set the
+1. Install the WVA controller. Point the overlay at `${WVA_NAMESPACE}` and set the
    controller's `--watch-namespace` to match (this edits
    `wva/controller/platform/${PLATFORM}/kustomization.yaml` and
    `wva/controller/base/controller-deployment-patch.yaml`; revert both with
@@ -153,8 +152,7 @@ Edit the WVA configmap to enable the v2 saturation engine:
       ...
   ```
 
-The WVA controller will automatically pick up the config change and start using the new saturation engine for scaling decisions. You can verify this by checking the controller logs for messages indicating the active saturation engine. Look for a log line like `V2 saturation analysis completed ` to confirm that the v2 engine is active.
-
+The WVA controller will automatically pick up the config change and start using the new saturation engine for scaling decisions. You can verify this by checking the controller logs for messages indicating the active saturation engine. Look for a log line like `V2 saturation analysis completed` to confirm that the v2 engine is active.
 
 ## Enabling Autoscaling for an Inference Deployment
 
@@ -299,6 +297,7 @@ WVA v1 Saturation (Default) drives scaling decisions; HPA acts on the `wva_desir
 ### Results
 
 #### Prefill Heavy
+>
 > 4,000 input tokens · 1,000 output tokens · 20 RPS
 
 | Model | Duration | Load Gen | P99 TTFT (ms) | P99 ITL (ms/tok) | Avg Replicas | Max Replicas | Avg KV Cache | Avg Queue Depth | Errors | Pod Startup (s) |
@@ -308,6 +307,7 @@ WVA v1 Saturation (Default) drives scaling decisions; HPA acts on the `wva_desir
 | Qwen3-0.6B | 1800 s | GuideLLM | 66,177 | 47.3 | 3.17 | 5 | 55.7% | 41.2 | 860 | 66 |
 
 #### Decode Heavy
+>
 > 1,000 input tokens · 4,000 output tokens · 20 RPS
 
 | Model | Duration | Load Gen | P99 TTFT (ms) | P99 ITL (ms/tok) | Avg Replicas | Max Replicas | Avg KV Cache | Avg Queue Depth | Errors | Pod Startup (s) |
@@ -317,6 +317,7 @@ WVA v1 Saturation (Default) drives scaling decisions; HPA acts on the `wva_desir
 | Qwen3-0.6B | 1800 s | GuideLLM | 58,934 | 44.8 | 2.59 | 4 | 57.2% | 30.8 | 2,520 | 66 |
 
 #### Bursty
+>
 > ~1,000 input tokens · ~1,000 output tokens · Multi-stage RPS (15 → 2 → 10 → 15 → 5 → 2)
 
 | Model | Duration | Load Gen | P99 TTFT (ms) | P99 ITL (ms/tok) | Avg Replicas | Max Replicas | Avg KV Cache | Avg Queue Depth | Errors | Pod Startup (s) |
@@ -326,6 +327,7 @@ WVA v1 Saturation (Default) drives scaling decisions; HPA acts on the `wva_desir
 | Qwen3-0.6B | 1800 s | inference-perf | 23,278 | 50.1 | 1.63 | 3 | 29.5% | 1.1 | 71 | 64 |
 
 #### Symmetrical
+>
 > 1,000 input tokens · 1,000 output tokens · 20 RPS
 
 | Model | Duration | Load Gen | P99 TTFT (ms) | P99 ITL (ms/tok) | Avg Replicas | Max Replicas | Avg KV Cache | Avg Queue Depth | Errors | Pod Startup (s) |

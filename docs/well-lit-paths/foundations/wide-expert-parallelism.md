@@ -55,6 +55,7 @@ As a result, we leverage the following design for the deployment:
 </p>
 
 The request flow works as follows:
+
 * Request arrives at the proxy, which forwards the request to the EPP
 * EPP schedules the request with P/D disaggregation, using the labels to detect the decode and prefill variants. The EPP schedules to specific pods within the LWS
 * Request is routed to the sidecar, which forwards the request to the prefill pods

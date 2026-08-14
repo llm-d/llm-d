@@ -186,7 +186,7 @@ def main() -> int:
         v.error(f"No model pods found in namespace {namespace}")
         return 1
     # PVC-side checks only apply in storage mode. The PVC is RWX and shared
-    # across every model pod, so we only need to check one of them. 
+    # across every model pod, so we only need to check one of them.
     if storage_mode:
         checks.append(check_pvc_is_bound(namespace, pods[0]))
         checks.append(check_pvc_has_data(namespace, pods[0]))

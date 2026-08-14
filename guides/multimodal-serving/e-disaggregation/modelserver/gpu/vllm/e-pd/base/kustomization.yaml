@@ -21,4 +21,3 @@ labels:
 patches:
   - path: patch-encode.yaml
   - path: patch-decode.yaml
-

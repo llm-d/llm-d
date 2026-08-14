@@ -71,8 +71,8 @@ Deploy the router in either Standalone or Gateway mode by following the exact in
 
 Choose the overlay matching your infrastructure provider:
 
-- **GKE**: Deploys on GKE using Dynamic Resource Allocation (DRA) and DRANet (RoCE), same as the Deployment-based `gke/base` overlay. Ensure the cluster is configured accordingly (see [Cluster Pre-provisioning](./README.md#gke-cluster-pre-provisioning-with-dra--rdmaroce)).
-- **CoreWeave**: Deploys on CoreWeave.
+* **GKE**: Deploys on GKE using Dynamic Resource Allocation (DRA) and DRANet (RoCE), same as the Deployment-based `gke/base` overlay. Ensure the cluster is configured accordingly (see [Cluster Pre-provisioning](./README.md#gke-cluster-pre-provisioning-with-dra--rdmaroce)).
+* **CoreWeave**: Deploys on CoreWeave.
 
 ```bash
 export INFRA_PROVIDER=base # base | coreweave | gke

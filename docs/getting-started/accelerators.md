@@ -8,12 +8,12 @@ Maintainers for each accelerator type are listed below. See our well-lit path gu
 
 | Vendor | Models | Maintainers |
 | --- | --- | --- |
-| AMD | ROCm | Kenny Roche (Kenny.Roche@amd.com), Vincent Cave (Vincent.Cave@amd.com) |
-| CPU | x86_64 | Hongming Zheng (@ZhengHongming888, hongming.zheng@intel.com) |
-| Google | [TPU](../infrastructure/providers/gke/README.md#llm-d-on-google-kubernetes-engine-gke) | Edwin Hernandez (@Edwinhr716), Cong Liu (@liu-cong, congliu.thu@gmail.com) |
-| Intel | XPU | Yuan Wu (@yuanwu2017, yuan.wu@intel.com) |
-| NVIDIA | GPU | Will Eaton (weaton@redhat.com), Greg (grpereir@redhat.com) |
-| Rebellions | NPU | Jinmoo Seok (@rebel-jinmoo, jinmoo_seok@rebellions.ai), Minwook Ahn (@rebel-minwook, minwook.ahn@rebellions.ai) |
+| AMD | ROCm | Kenny Roche (<Kenny.Roche@amd.com>), Vincent Cave (<Vincent.Cave@amd.com>) |
+| CPU | x86_64 | Hongming Zheng (@ZhengHongming888, <hongming.zheng@intel.com>) |
+| Google | [TPU](../infrastructure/providers/gke/README.md#llm-d-on-google-kubernetes-engine-gke) | Edwin Hernandez (@Edwinhr716), Cong Liu (@liu-cong, <congliu.thu@gmail.com>) |
+| Intel | XPU | Yuan Wu (@yuanwu2017, <yuan.wu@intel.com>) |
+| NVIDIA | GPU | Will Eaton (<weaton@redhat.com>), Greg (<grpereir@redhat.com>) |
+| Rebellions | NPU | Jinmoo Seok (@rebel-jinmoo, <jinmoo_seok@rebellions.ai>), Minwook Ahn (@rebel-minwook, <minwook.ahn@rebellions.ai>) |
 
 ## Requirements
 
@@ -78,4 +78,3 @@ The RDMA overlay (`modelserver/xpu/vllm-rdma/`) reuses the standard XPU vLLM bas
 ## CPU Inferencing
 
 CPU-only inference is supported for deployments without GPU accelerators. This expects 4th Gen Intel Xeon processors (Sapphire Rapids) or later, or equivalent AMD processors. Each replica requires a minimum of 64 CPU cores and 64GB RAM.
-

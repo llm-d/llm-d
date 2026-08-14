@@ -14,6 +14,7 @@ A single Kong AI Gateway deployment can front both:
 All Kong components (gateway, routes, plugins, secrets) live in a dedicated `kong` namespace, keeping the llm-d inference stack isolated in its own namespace.
 
 End users can:
+
 - Call external provider APIs using API keys managed centrally in Kong (the provider key is stored in Kubernetes Secrets and never exposed to client applications).
 - Call self-hosted models served by the llm-d inference stack via unified OpenAI-compatible routes.
 
@@ -103,7 +104,6 @@ Export the proxy LoadBalancer IP or hostname for verification commands:
 export PROXY_IP=$(kubectl -n "$NAMESPACE" get svc kong-gateway-proxy \
   -o jsonpath='{.status.loadBalancer.ingress[0].ip}{.status.loadBalancer.ingress[0].hostname}')
 ```
-
 
 ---
 
@@ -315,8 +315,9 @@ kubectl apply -n "$NAMESPACE" -f models.yaml
 ```
 
 > [!NOTE]
+>
 > - **Fail-Closed Placeholder Backend**: Gateway API `HTTPRoute` requires a valid `backendRef`. Because `ai-proxy` replaces the upstream request path with the target model's `upstream_url`, the `ai-placeholder` Service is not normally reached. Using a selector-less `ClusterIP` Service ensures that if an `ai-proxy` plugin fails to program or is missing, Kong fails closed with an immediate `503 Service Unavailable` rather than proxying to localhost.
-> - **Authentication Header**: Kong's `key-auth` plugin compares the full header value and does not strip a `Bearer ` prefix, so clients pass keys via the `apikey` header (`-H "apikey: $CLIENT_KEY"`). OpenAI SDK clients can send this with `default_headers={"apikey": CLIENT_KEY}`. If a client can only send `Authorization: Bearer <key>`, add a Kong `pre-function` plugin to copy the token into `apikey` and clear the original header before `key-auth` runs.
+> - **Authentication Header**: Kong's `key-auth` plugin compares the full header value and does not strip a `Bearer` prefix, so clients pass keys via the `apikey` header (`-H "apikey: $CLIENT_KEY"`). OpenAI SDK clients can send this with `default_headers={"apikey": CLIENT_KEY}`. If a client can only send `Authorization: Bearer <key>`, add a Kong `pre-function` plugin to copy the token into `apikey` and clear the original header before `key-auth` runs.
 > - **Local Rate Limiting (`policy: local`)**: Counters are stored in pod memory with zero external dependencies, meaning the 60 req/min limit applies independently per Kong data-plane replica (e.g., 60 × N req/min total across N replicas). For strict cluster-wide rate limiting across multiple replicas, configure `policy: redis` with a shared Redis instance.
 > - **Model Pinning**: `ai-proxy` pins the model per route. Clients can omit `"model"` in the request body; if provided, it must match `model.name`, otherwise Kong returns HTTP `400 Bad Request`.
 

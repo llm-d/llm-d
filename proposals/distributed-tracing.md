@@ -66,6 +66,7 @@ This instrumentation enables the following important insights for llm-d distribu
 **Enabled by**: `llm_d.epp.scorer.prefix_cache` and `llm_d.kv_cache.get_scores` spans
 
 **Insights**:
+
 * Which pods have cached blocks for incoming requests and their cache hit ratios
 * How scoring decisions route requests to pods with optimal cache locality
 * Score distributions that validate whether KV cache-aware scheduling provides measurable value
@@ -76,6 +77,7 @@ This instrumentation enables the following important insights for llm-d distribu
 **Enabled by**: `llm_d.epp.pd.profile_handler.pick` span
 
 **Insights**:
+
 * **Why** each request chose decode-only vs prefill+decode mode based on cache hit ratio and input size
 * Decision rationale showing when disaggregation provides benefit vs when it adds unnecessary overhead
 * Threshold tuning data: observe cache hit ratio vs configured P/D threshold to optimize disaggregation policy
@@ -86,6 +88,7 @@ This instrumentation enables the following important insights for llm-d distribu
 **Enabled by**: End-to-end trace across Gateway → EPP plugins → KV Cache → P/D Sidecar → vLLM
 
 **Insights**:
+
 * Component-level latency breakdown to identify whether slowness is in scheduling, cache lookup, prefill, decode, or coordination
 * End-to-end analysis showing where time is actually spent in complex multi-hop requests
 * Comparison of P/D coordination overhead vs monolithic inference for different request patterns
@@ -95,6 +98,7 @@ This instrumentation enables the following important insights for llm-d distribu
 **Enabled by**: Distributed trace context propagation with error status tracking
 
 **Insights**:
+
 * Trace errors across component boundaries with full context
 * Exact failure point identification (gateway admission, cache lookup, prefill failure, decode failure)
 * Error correlation linking downstream failures back to originating gateway requests
@@ -104,6 +108,7 @@ This instrumentation enables the following important insights for llm-d distribu
 **Enabled by**: Token usage attributes from vLLM `llm_request` spans and gateway metadata
 
 **Insights**:
+
 * Token usage per request (prompt tokens, completion tokens, cached tokens)
 * Per-model and per-application cost tracking for chargeback and optimization
 * Cache effectiveness impact on cost: measure how cached tokens reduce computational expense
@@ -156,17 +161,20 @@ The implementation uses **manual OpenTelemetry instrumentation** across llm-d co
 #### **Inference Gateway (gateway-api-inference-extension)**
 
 **Proposed Spans:**
+
 * `gateway.request`: Top-level request span wrapping entire gateway processing (SERVER span)
   * Added in: `pkg/epp/handlers/server.go` (Process method)
   * Span created at request entry, ended when processing completes
   * Provides end-to-end visibility into gateway request handling
 
 **Trace Context Propagation:**
+
 * W3C trace context (traceparent, tracestate) injected into HTTP headers in `pkg/epp/handlers/request.go` (generateHeaders function)
 * Headers propagated to downstream components (EPP plugins, P/D sidecar, vLLM)
 * Enables end-to-end distributed tracing across all llm-d components
 
 **Implementation Notes:**
+
 * Gateway provides single entry span that wraps all request processing
 * EPP plugins (from llm-d-inference-scheduler) execute within the gateway process and create child spans
 * Simplified approach compared to instrumenting individual gateway internal operations
@@ -177,6 +185,7 @@ The implementation uses **manual OpenTelemetry instrumentation** across llm-d co
 EPP plugins run within the gateway-api-inference-extension process but are provided by llm-d-inference-scheduler. These plugins create child spans under the gateway.request span:
 
 **Proposed Spans:**
+
 * Tracing initialization: `telemetry.InitTracing()` is called at startup in `cmd/epp/main.go`
   * Non-fatal: logs errors but does not prevent the EPP from starting
   * Configures OTLP exporter, W3C propagation, and parent-based sampling
@@ -197,6 +206,7 @@ EPP plugins run within the gateway-api-inference-extension process but are provi
 #### **KV Cache**
 
 **Proposed Spans:**
+
 * `llm_d.kv_cache.get_scores`: Main scoring operation (INTERNAL span)
   * Attributes: model name, pod count, block keys count, block hit ratio, blocks found
 
@@ -207,6 +217,7 @@ EPP plugins run within the gateway-api-inference-extension process but are provi
   * Attributes: scoring algorithm/strategy, key count, score distribution (max, avg), pods scored
 
 **Implementation Notes:**
+
 * All three spans form a parent-child relationship during pod scoring
 * Spans are only created when precise-prefix-cache-scorer plugin is enabled and invoked
 * Block hit ratio calculation: `blocks_found / block_keys_count` measures cache effectiveness at the block level
@@ -216,6 +227,7 @@ EPP plugins run within the gateway-api-inference-extension process but are provi
 Located in llm-d-inference-scheduler repository under `pkg/sidecar/proxy/` with entrypoint `cmd/pd-sidecar/main.go`.
 
 **Proposed Spans:**
+
 * Tracing initialization: `telemetry.InitTracing()` is called at startup in `cmd/pd-sidecar/main.go`
   * Non-fatal: logs errors but does not prevent the sidecar from starting
   * Configures OTLP exporter, W3C propagation, and parent-based sampling
@@ -234,6 +246,7 @@ Located in llm-d-inference-scheduler repository under `pkg/sidecar/proxy/` with 
   * Tracks whether data parallel routing was used
 
 **Implementation Notes:**
+
 * `llm_d.pd_proxy.request` span is created for ALL requests, even when disaggregation is not active
 * `llm_d.pd_proxy.prefill` and `llm_d.pd_proxy.decode` spans are only created when P/D disaggregation is active
 * When disaggregation is inactive, attributes explain why (e.g., "no_prefill_header")
@@ -245,12 +258,14 @@ Located in llm-d-inference-scheduler repository under `pkg/sidecar/proxy/` with 
 **Upstream Implementation:** vLLM has built-in OpenTelemetry tracing support (no changes proposed).
 
 **Existing Span:**
+
 * `llm_request`: Full request lifecycle from arrival to completion (SERVER span)
   * Upstream feature: Created at request completion in vLLM's OutputProcessor
   * Automatically extracts and continues trace context from incoming HTTP headers
   * Captures complete latency breakdown and usage metrics
 
 **Trace Context Support (upstream):**
+
 * Automatically extracts W3C trace context (traceparent, tracestate) from HTTP request headers
 * Continues traces initiated by upstream components (gateway, P/D sidecar)
 * Creates new traces for requests without incoming trace context
@@ -258,6 +273,7 @@ Located in llm-d-inference-scheduler repository under `pkg/sidecar/proxy/` with 
 ### Enabling Distributed Tracing
 
 Components initialize tracing via `telemetry.InitTracing()` in their startup code (see `pkg/telemetry/tracing.go` in each repository). This configures:
+
 * OTLP gRPC exporter for sending traces to an OpenTelemetry collector
 * W3C trace context propagation (traceparent/tracestate headers)
 * Parent-based sampling with configurable ratio (default 10%)
@@ -300,6 +316,7 @@ gateway.request (2150ms) [gateway-api-inference-extension]
 ```
 
 **Key Trace Characteristics:**
+
 * **Gateway span** wraps entire request including EPP plugin execution
 * **KV cache spans** show cache lookup and scoring for routing decisions
 * **Profile handler span** captures P/D disaggregation decision rationale
@@ -309,15 +326,18 @@ gateway.request (2150ms) [gateway-api-inference-extension]
 ### Semantic Conventions and Attributes
 
 **OpenTelemetry GenAI Conventions:**
+
 * `gen_ai.request.model`, `gen_ai.request.id`
 * `gen_ai.usage.prompt_tokens`, `gen_ai.usage.completion_tokens`
 * `gen_ai.latency.*` (TTFT, queue time, prefill/decode time)
 
 **llm-d Custom Attributes:**
+
 * Namespace: `llm_d.*` or component-specific (`vllm.*`, `kvcache.*`)
 * Avoid high-cardinality attributes
 
 **Span Status (Minimal Approach):**
+
 * **Default (Success)**: Spans default to "Unset" status, which is treated as success by observability backends
 * **Failure Only**: Only set status for errors: `span.SetStatus(codes.Error, "description")`
 * **No Explicit Success**: Do not use `span.SetStatus(codes.Ok, "")` - the default "Unset" is sufficient
@@ -327,10 +347,12 @@ gateway.request (2150ms) [gateway-api-inference-extension]
 ## Alternatives Considered
 
 **Auto-Instrumentation via Agents:**
+
 * Rejected: Provides only generic HTTP/gRPC spans without llm-d-specific decision visibility (scheduling, caching, batching)
 * Cannot expose internal operations critical for debugging LLM workloads
 
 **Third-Party APM Solutions:**
+
 * Rejected: Vendor lock-in, may lack GenAI semantic conventions, less control over security
 
 ## Security Considerations
@@ -338,11 +360,13 @@ gateway.request (2150ms) [gateway-api-inference-extension]
 ### Metadata-Only Tracing
 
 **What is Captured:**
+
 * Timing metrics (TTFT, ITL, latency), token **counts** (not actual tokens)
 * Model identifiers, routing decisions, operational metadata
 * Error states, KV cache hit ratios, component communication patterns
 
 **What is Excluded:**
+
 * Request payloads (prompts, inputs, messages)
 * Response content (generated text, completions)
 * Actual tokens or token IDs
@@ -363,6 +387,7 @@ span.SetAttributes(
 ```
 
 **Additional Measures:**
+
 * Use TLS for OTLP export
 * Treat trace data as operationally sensitive
 * Configure appropriate retention policies

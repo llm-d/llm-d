@@ -47,6 +47,7 @@ helm install ${RELEASE} \
 
 > [!WARNING]
 > The standalone chart creates a `ConfigMap` named `envoy` with a hardcoded name (not prefixed with the release name). Installing another release in the same namespace will fail with an ownership conflict on this ConfigMap. To work around this, reassign the ConfigMap's Helm ownership annotations to the new release before installing it:
+>
 > ```bash
 > kubectl annotate configmap envoy -n ${NAMESPACE} \
 >   meta.helm.sh/release-name=model-b meta.helm.sh/release-namespace=${NAMESPACE} --overwrite

@@ -35,6 +35,7 @@ env:
 ```
 
 **Quick Start:** You can deploy a vLLM instance with these configurations using kustomize:
+
 ```bash
 export REPO_ROOT=$(realpath $(git rev-parse --show-toplevel))
 kubectl apply -k ${REPO_ROOT}/guides/rollouts/adapter-rollout-example/
@@ -43,11 +44,11 @@ kubectl apply -k ${REPO_ROOT}/guides/rollouts/adapter-rollout-example/
 This will create a deployment with the LoRA adapter environment variables pre-configured. See [`kustomization.yaml`](adapter-rollout-example/kustomization.yaml) and [`patch-lora-config.yaml`](adapter-rollout-example/patch-lora-config.yaml) for the full configuration.
 
 Ensure your adapters are organized in subdirectories under the cache directory:
+
 - `/adapters/small-segment-lora-v1/`
 - `/adapters/small-segment-lora-v2/`
 
 For more details on the expected directory structure and plugins, see the [vLLM documentation](https://docs.vllm.ai/en/stable/design/lora_resolver_plugins/).
-
 
 **Verify Available Models**: You can query the `/v1/models` endpoint to confirm the adapters are loaded:
 
@@ -107,6 +108,7 @@ curl http://${IP}/v1/chat/completions \
 ```
 
 Response:
+
 ```json
 {
   "choices": [
@@ -229,7 +231,6 @@ rm -rf /adapters/small-segment-lora-v1
 
 > [!IMPORTANT]
 > While deleting the folder stops vLLM from *newly* loading the adapter, it might still remain in vLLM's internal VRAM cache until evicted. To deterministically free up VRAM immediately, use vLLM's `/v1/unload_lora_adapter` HTTP endpoint.
-
 
 With this, the old adapter is removed, and the rollout is complete.
 

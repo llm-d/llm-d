@@ -114,8 +114,9 @@ When a profile runs, it first filters the candidate endpoints. If any remain, it
 
 > [!NOTE]
 > Two older handlers are **deprecated** and kept only for backward compatibility:
-> - `pd-profile-handler` — use `disagg-profile-handler` instead.
-> - `data-parallel-profile-handler` — use `single-profile-handler` instead.
+>
+> * `pd-profile-handler` — use `disagg-profile-handler` instead.
+> * `data-parallel-profile-handler` — use `single-profile-handler` instead.
 
 ---
 

@@ -4,6 +4,7 @@ This page covers how to enable and interpret metrics from an llm-d deployment. F
 
 > [!NOTE]
 > Commands in this page use `${NAMESPACE}` for the namespace where your llm-d workload runs. Set it before following along:
+>
 > ```bash
 > export NAMESPACE=<your-llm-d-namespace>
 > ```

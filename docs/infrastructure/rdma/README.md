@@ -44,7 +44,7 @@ UCCL currently supports:
 - TCP
 - EFA (AWS)
 
-UCCL uses RDMA transport by default. To switch to other transport types set `UCCL_P2P_TRANSPORT=ib|efa|nccl|tcp|tcpx` at runtime. 
+UCCL uses RDMA transport by default. To switch to other transport types set `UCCL_P2P_TRANSPORT=ib|efa|nccl|tcp|tcpx` at runtime.
 UCCL automatically discovers network interface cards (NICs) based on PCIe proximity during memory registration, removing the need for manual NIC-to-GPU mapping in most cases. UCCL also supports intra-node transfers using IPC mechanisms.
 
 ### libfabric

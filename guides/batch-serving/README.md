@@ -3,6 +3,7 @@
 The **batch-serving** workload umbrella provides recommended, cohesive deployments for processing large-scale, offline, or latency-insensitive tasks on llm-d infrastructure.
 
 Serving batch and offline inference workloads alongside real-time, interactive traffic presents distinct operational challenges:
+
 - **Resource Utilization**: Interactive traffic is bursty and leaves GPU/TPU capacity underutilized during off-peak hours ("slack capacity").
 - **Traffic Isolation & SLAs**: Uncontrolled batch job dispatching can cause queue contention, high TTFT (Time to First Token), and degraded ITL (Inter-Token Latency) for online users.
 - **API & Protocol Compatibility**: Multi-tenant platforms often require an OpenAI-compatible Batch API (`/v1/batches`, `/v1/files`) with file management, while internal backend pipelines benefit from lightweight message queues.
@@ -18,11 +19,11 @@ For the broader architectural context and design principles, see the [Batch Serv
 
 ## Guide Index
 
-* **[Batch Gateway Guide](./batch-gateway/README.md)**: Deploy an OpenAI-compatible batch API (`/v1/batches`, `/v1/files`) with pluggable metadata storage (PostgreSQL/Redis), file storage (S3/RWX PVC), and a batch processor that dispatches requests to the llm-d Router.
-* **[Asynchronous Processing Guide](./asynchronous-processing/README.md)**: Deploy the lightweight Async Processor to consume requests from message queues with metric-based dispatch gating.
-  * **[GCP Pub/Sub Backend](./asynchronous-processing/gcp-pubsub/README.md)**: Configure Async Processor with Google Cloud Pub/Sub.
-  * **[Redis Sorted Set Backend](./asynchronous-processing/redis/README.md)**: Configure Async Processor with Redis / Valkey.
-  * **[Multi-Tenant Async Processing](./asynchronous-processing/multitenant/README.md)**: Advanced multi-tenant setup with team quotas, tier-priority dispatch, and saturation back-off across inference pools.
+- **[Batch Gateway Guide](./batch-gateway/README.md)**: Deploy an OpenAI-compatible batch API (`/v1/batches`, `/v1/files`) with pluggable metadata storage (PostgreSQL/Redis), file storage (S3/RWX PVC), and a batch processor that dispatches requests to the llm-d Router.
+- **[Asynchronous Processing Guide](./asynchronous-processing/README.md)**: Deploy the lightweight Async Processor to consume requests from message queues with metric-based dispatch gating.
+  - **[GCP Pub/Sub Backend](./asynchronous-processing/gcp-pubsub/README.md)**: Configure Async Processor with Google Cloud Pub/Sub.
+  - **[Redis Sorted Set Backend](./asynchronous-processing/redis/README.md)**: Configure Async Processor with Redis / Valkey.
+  - **[Multi-Tenant Async Processing](./asynchronous-processing/multitenant/README.md)**: Advanced multi-tenant setup with team quotas, tier-priority dispatch, and saturation back-off across inference pools.
 
 ---
 
@@ -32,11 +33,11 @@ For the broader architectural context and design principles, see the [Batch Serv
 
 The **Batch Gateway** provides a standard REST API with full schema parity for OpenAI's `/v1/batches` and `/v1/files` endpoints. It is designed for workflows where users or client applications submit batch files and poll or wait for completed results.
 
-* **Key Components**:
-  * **API Server**: Handles file uploads, validates JSONL request payloads, and tracks batch job state.
-  * **Batch Processor**: Dequeues jobs, coordinates model routing, streams individual requests to the llm-d Router, and writes output files.
-  * **Garbage Collector**: Manages retention policies and cleans up expired files and batch artifacts.
-* **Workflow**:
+- **Key Components**:
+  - **API Server**: Handles file uploads, validates JSONL request payloads, and tracks batch job state.
+  - **Batch Processor**: Dequeues jobs, coordinates model routing, streams individual requests to the llm-d Router, and writes output files.
+  - **Garbage Collector**: Manages retention policies and cleans up expired files and batch artifacts.
+- **Workflow**:
   1. Client uploads a `.jsonl` file containing batch inference requests to `/v1/files`.
   2. Client creates a batch job via `POST /v1/batches` referencing the uploaded file.
   3. Batch Processor executes the requests against the llm-d Router and writes the output file.
@@ -46,10 +47,10 @@ The **Batch Gateway** provides a standard REST API with full schema parity for O
 
 The **Async Processor** is a lightweight, high-throughput agent designed to decouple request submission from inference execution using standard message queues.
 
-* **Key Capabilities**:
-  * **Dynamic Dispatch Gating**: Evaluates downstream engine telemetry (such as KV cache utilization and request queue depth via Prometheus) to dispatch background requests only when slack capacity is available, protecting interactive traffic from latency spikes.
-  * **Quota & Priority Management**: Enforces concurrency limits, budget gates, and tier-based scheduling across multiple tenants and worker pools.
-  * **Resilience**: Automatically retries transient failures with exponential backoff and dead-letter handling.
+- **Key Capabilities**:
+  - **Dynamic Dispatch Gating**: Evaluates downstream engine telemetry (such as KV cache utilization and request queue depth via Prometheus) to dispatch background requests only when slack capacity is available, protecting interactive traffic from latency spikes.
+  - **Quota & Priority Management**: Enforces concurrency limits, budget gates, and tier-based scheduling across multiple tenants and worker pools.
+  - **Resilience**: Automatically retries transient failures with exponential backoff and dead-letter handling.
 
 ### 3. Unified Hybrid Deployment
 
@@ -74,17 +75,19 @@ Batch Gateway and Async Processor can be deployed together. In a composite deplo
 
 ## When to Choose Which?
 
-### Choose Batch Gateway if:
-* Your clients expect an **OpenAI-compatible Batch API** (`/v1/batches`, `/v1/files`) for easy integration with standard SDKs.
-* You need **job-level tracking**, status queries, progress reporting, and output file management.
-* You operate a multi-tenant platform requiring formal job submission, file storage, and authentication pass-through.
-* You are running offline model evaluations, bulk synthetic data generation, or dataset enrichment pipelines.
+### Choose Batch Gateway if
 
-### Choose Async Processor if:
-* You need lightweight asynchronous inference for **internal microservices or event-driven pipelines**.
-* You want to **harvest slack capacity** in your interactive inference pools without impacting real-time SLOs using Prometheus-driven dispatch gating.
-* Your infrastructure already uses message brokers like Redis or GCP Pub/Sub.
-* You require **fine-grained rate limiting, priority queuing, and per-tenant quota tiers** across shared model servers.
+- Your clients expect an **OpenAI-compatible Batch API** (`/v1/batches`, `/v1/files`) for easy integration with standard SDKs.
+- You need **job-level tracking**, status queries, progress reporting, and output file management.
+- You operate a multi-tenant platform requiring formal job submission, file storage, and authentication pass-through.
+- You are running offline model evaluations, bulk synthetic data generation, or dataset enrichment pipelines.
+
+### Choose Async Processor if
+
+- You need lightweight asynchronous inference for **internal microservices or event-driven pipelines**.
+- You want to **harvest slack capacity** in your interactive inference pools without impacting real-time SLOs using Prometheus-driven dispatch gating.
+- Your infrastructure already uses message brokers like Redis or GCP Pub/Sub.
+- You require **fine-grained rate limiting, priority queuing, and per-tenant quota tiers** across shared model servers.
 
 ---
 
@@ -100,10 +103,10 @@ Both batch solutions dispatch inference requests to an existing llm-d serving st
 
 ## Related Resources
 
-* [Batch Serving Workload Narrative](../../docs/well-lit-paths/workloads/batch-serving/README.md)
-* [Batch Architecture Overview](../../docs/architecture/advanced/batch/README.md)
-* [Async Processor Architecture](../../docs/architecture/advanced/batch/async-processor.md)
-* [Batch Gateway Architecture](../../docs/architecture/advanced/batch/batch-gateway.md)
-* [llm-d-async Repository](https://github.com/llm-d/llm-d-async)
-* [llm-d-batch-gateway Repository](https://github.com/llm-d/llm-d-batch-gateway)
-* [SIG Batch Inference](../../SIGS.md#sig-batch-inference)
+- [Batch Serving Workload Narrative](../../docs/well-lit-paths/workloads/batch-serving/README.md)
+- [Batch Architecture Overview](../../docs/architecture/advanced/batch/README.md)
+- [Async Processor Architecture](../../docs/architecture/advanced/batch/async-processor.md)
+- [Batch Gateway Architecture](../../docs/architecture/advanced/batch/batch-gateway.md)
+- [llm-d-async Repository](https://github.com/llm-d/llm-d-async)
+- [llm-d-batch-gateway Repository](https://github.com/llm-d/llm-d-batch-gateway)
+- [SIG Batch Inference](../../SIGS.md#sig-batch-inference)

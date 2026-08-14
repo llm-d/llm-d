@@ -50,7 +50,6 @@ orchestrated:
   after encode/prefill have already completed — on the pool's current state, not a
   snapshot taken one or more phases earlier.
 
-
 The result of this guide is a combination of two independent choices you make in
 [Installation Instructions](#installation-instructions): which of two **EPP
 topologies** to run, and whether to run the full **EPD** pipeline or drop the
@@ -147,24 +146,29 @@ topology choice:
 > The steps below deploy the full **EPD** topology. For a **PD-only** deployment (no
 > `encode` role), this is where the modularity described in the [Overview](#overview)
 > pays off:
+>
 > * Step 1: no change needed — the same single Router/EPP deployment serves whichever
 >   roles you actually run; an `encode` scheduling profile with no `encode`-labeled pods
 >   behind it is simply never called, since the Coordinator's pipeline (step 3) is what
 >   decides whether an `encode` phase call happens at all.
 > * Step 2: after applying the overlay, scale the encode Deployment to 0 replicas:
+>
 >   ```bash
 >   kubectl scale deployment/coord-disaggregation-nvidia-gpu-vllm-encode -n ${NAMESPACE} --replicas=0
 >   ```
+>
 > * Step 3: after deploying the Coordinator, apply
 >   [`coordinator/patch-pd-only.yaml`](coordinator/patch-pd-only.yaml) to drop the
 >   `replace-media-urls`, `render`, and `encode` steps from `pipeline.steps` (keeping
 >   only `conditional-decode`, `prefill`, and `decode`), then restart the coordinator
 >   Deployment:
+>
 >   ```bash
 >   kubectl patch configmap llm-d-coordinator-config -n ${NAMESPACE} --type=strategic \
 >       --patch="$(envsubst < ${REPO_ROOT}/guides/${GUIDE_NAME}/coordinator/patch-pd-only.yaml)"
 >   kubectl rollout restart deployment/llm-d-coordinator -n ${NAMESPACE}
 >   ```
+>
 > * Step 4: skip entirely — the multimedia downloader is only used by the `replace-media-urls` pipeline step.
 
 ### 1. Deploy the llm-d Router
@@ -190,7 +194,7 @@ Kubernetes Gateway. Deploy one first if your cluster doesn't already have one:
 
 One llm-d Router release, EPP, and InferencePool cover all three roles.
 
-2. *Deploy the llm-d Router*:
+1. *Deploy the llm-d Router*:
 
 ```bash
 export PROVIDER_NAME=istio # other: na, agentgateway
@@ -213,20 +217,20 @@ helm install ${GUIDE_NAME} \
     -n ${NAMESPACE} --version ${ROUTER_CHART_VERSION}
 ```
 
-3. *Deploy the Router's HTTPRoute*. The chart's own auto-created HTTPRoute is disabled
+1. *Deploy the Router's HTTPRoute*. The chart's own auto-created HTTPRoute is disabled
    (`httpRoute.create: false` in [`router/coord-disaggregation.values.yaml`](router/coord-disaggregation.values.yaml))
    because it would be an unconditional catch-all on `/`, colliding with the
    Coordinator's own route on the same Gateway. Instead, the two hand-authored
    HTTPRoutes on this Gateway (`coordinator/httproute.yaml` and
    [`router/httproute.yaml`](router/httproute.yaml)) split traffic three ways:
-   - `/v1/completions`, `/v1/chat/completions`, `/inference/v1/generate` **without**
+   * `/v1/completions`, `/v1/chat/completions`, `/inference/v1/generate` **without**
      `EPP-Profile` → the Coordinator (client-facing inference calls).
-   - The same three paths **with** `EPP-Profile` → this router's EPP (the Coordinator's
+   * The same three paths **with** `EPP-Profile` → this router's EPP (the Coordinator's
      own internal per-phase calls reuse those same paths, so both HTTPRoutes match
      them at the same exact-path specificity; the header match then breaks the tie in
      the router's favor — see the comments in both files for why path specificity
      must match for this to work).
-   - Everything else without `EPP-Profile` (e.g. `/v1/models`, `/health`) → this
+   * Everything else without `EPP-Profile` (e.g. `/v1/models`, `/health`) → this
      router's EPP too, which already falls back to its `decode` scheduling profile
      when the header is absent.
 
@@ -266,7 +270,7 @@ already does per-release. `router/coord-disaggregation-encode.values.yaml` has n
 `active-request-scorer` too (pick the least-busy encode pod) — encode has no
 prefix-cache affinity to speak of, just queue/load balancing.
 
-2. *Deploy the llm-d Routers*:
+1. *Deploy the llm-d Routers*:
 
 ```bash
 export PROVIDER_NAME=istio # other: na, agentgateway
@@ -291,7 +295,7 @@ for ROLE in encode prefill decode; do
 done
 ```
 
-3. *Deploy the shared HTTPRoute*. Same reasoning as the single-EPP variant's
+1. *Deploy the shared HTTPRoute*. Same reasoning as the single-EPP variant's
    `httpRoute.create: false` (each release disables its own auto-created HTTPRoute for
    the same specificity-tie reason — see the comment in
    [`router/httproute-3-epp.yaml`](router/httproute-3-epp.yaml)), but instead of one
@@ -454,7 +458,7 @@ every request, the only architectural difference left is the Coordinator's extra
 Gateway/EPP round trip per phase — and that extra hop count barely shows up in TTFT
 (time to first token) or TTOT/ITL (time per output token):
 
-- **[Varying input prompt length](https://github.com/dmitripikus/coordinator-performance/tree/main/pd-comparison-analysis/inconcurrent_var_prompt_always_disaggr_pinned)**
+* **[Varying input prompt length](https://github.com/dmitripikus/coordinator-performance/tree/main/pd-comparison-analysis/inconcurrent_var_prompt_always_disaggr_pinned)**
   (1, 10, 100, 1,000 prompt tokens; fixed 20-token output; prefill/decode pinned to
   identical nodes on both architectures to isolate architecture from node variance):
 
@@ -470,7 +474,7 @@ Gateway/EPP round trip per phase — and that extra hop count barely shows up in
   (~2.4-3.2ms vs. sidecar's ~0.8-1.5ms) is the one open secondary finding — it doesn't
   move the median, and isn't root-caused in the linked analysis.
 
-- **[Varying output length](https://github.com/dmitripikus/coordinator-performance/tree/main/pd-comparison-analysis/inconcurrent_var_output_always_disaggr_pinned)**
+* **[Varying output length](https://github.com/dmitripikus/coordinator-performance/tree/main/pd-comparison-analysis/inconcurrent_var_output_always_disaggr_pinned)**
   (100, 500, 1,000, 2,500 output tokens; fixed 250-token input; same node-pinning):
 
   <p float="left">
@@ -488,7 +492,6 @@ Gateway/EPP round trip per phase — and that extra hop count barely shows up in
 (a consistent few-percent, single-digit-millisecond gap) but not in ITL/TTOT or overall
 request latency, which track the sidecar architecture within about 1.5% across every
 prompt and output length tested.
-
 
 ## Cleanup
 
@@ -518,4 +521,3 @@ namespace ${NAMESPACE}` if you want it gone entirely.
 If nothing else in your cluster still uses it, also remove the
 `llm-d-inference-gateway` Gateway by following [the gateway istio cleanup guide](../../docs/infrastructure/gateway/istio.md#cleanup), or
 [the agentgateway cleanup guide](../../docs/infrastructure/gateway/agentgateway.md#cleanup).
-
