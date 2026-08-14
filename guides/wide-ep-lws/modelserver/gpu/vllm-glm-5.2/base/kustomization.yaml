@@ -8,7 +8,7 @@ resources:
 
 components:
   - ../../../../../recipes/modelserver/components/images/gpu-vllm/nightly
-  - ../../../../../recipes/modelserver/components/images/routing-sidecar/release
+  - ../../../../../recipes/modelserver/components/images/routing-sidecar/nightly
 labels:
   - pairs:
       llm-d.ai/model: GLM-5.2-FP8

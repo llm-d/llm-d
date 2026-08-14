@@ -110,6 +110,7 @@ source ${REPO_ROOT}/guides/env.sh
 
 <!-- guide:prerequisites.gaie start -->
 ```bash
+# GAIE_VERSION provided by ${REPO_ROOT}/guides/env.sh
 kubectl apply -f https://github.com/kubernetes-sigs/gateway-api-inference-extension/releases/download/${GAIE_VERSION}/v1-manifests.yaml
 ```
 <!-- guide:prerequisites.gaie end -->

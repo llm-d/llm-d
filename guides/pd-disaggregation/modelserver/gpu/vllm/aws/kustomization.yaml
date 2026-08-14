@@ -4,7 +4,7 @@ resources:
   - ../base
 
 components:
-  - ../../../../../recipes/modelserver/components/images/gpu-vllm/aws-efa
+  - ../../../../../recipes/modelserver/components/images/gpu-vllm/aws-efa/release
 
 patches:
   - path: patch-decode.yaml

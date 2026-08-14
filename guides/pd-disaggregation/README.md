@@ -160,6 +160,7 @@ export MODEL_NAME="openai/gpt-oss-120b"
 * Install the Gateway API Inference Extension CRDs:
 
 ```bash
+# GAIE_VERSION provided by ${REPO_ROOT}/guides/env.sh
 kubectl apply -f https://github.com/kubernetes-sigs/gateway-api-inference-extension/releases/download/${GAIE_VERSION}/v1-manifests.yaml
 ```
 * Create a target namespace for the installation

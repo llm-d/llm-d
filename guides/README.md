@@ -61,7 +61,7 @@ Default model server and sidecar images are defined as [Kustomize Components](./
 ```yaml
 components:
   - ../../../../../recipes/modelserver/components/images/gpu-vllm/release
-  - ../../../../../recipes/modelserver/components/images/routing-sidecar/release
+  - ../../../../../recipes/modelserver/components/images/routing-sidecar/nightly
 ```
 
 To change a default image for testing or a version bump, edit the component file — all guides using it pick up the change automatically.

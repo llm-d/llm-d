@@ -7,7 +7,7 @@ resources:
 namePrefix: optimized-baseline-nvidia-gpu-trtllm-
 
 components:
-  - ../../../../../recipes/modelserver/components/images/gpu-trtllm
+  - ../../../../../recipes/modelserver/components/images/gpu-trtllm/release
 
 labels:
   - pairs:

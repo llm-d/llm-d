@@ -10,7 +10,7 @@ namePrefix: pd-disaggregation-nvidia-gpu-vllm-
 # kustomize resolves component image transforms at the base level, preventing
 # overlays from overriding the resolved image name with a different component.
 components:
-  - ../../../../../recipes/modelserver/components/images/routing-sidecar/release
+  - ../../../../../recipes/modelserver/components/images/routing-sidecar/nightly
 
 labels:
   - pairs:
