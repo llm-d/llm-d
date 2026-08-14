@@ -22,7 +22,7 @@ byte-exact against the consumer's `vllm:kv_offload_load_bytes_total`
 (92.6 KB/token, constant across every length):
 
 | prefix tokens | recompute | P2P pull | delta | pulled in |
-|---:|---:|---:|---:|---:|
+| ---: | ---: | ---: | ---: | ---: |
 | 4,096 | 672.2 ms | 1,262.2 ms | +87.8% | 379.4 MB |
 | 8,192 | 1,067.8 ms | 1,170.6 ms | +9.6% | 758.8 MB |
 | 12,288 | 1,708.5 ms | 1,241.0 ms | **-27.4%** | 1,138.2 MB |
@@ -57,7 +57,7 @@ setting dates from this sweep. Retained for provenance only - the
 upstream-tier table above is the current calibration:
 
 | prefix tokens | recompute | P2P pull | delta |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | 8,070 | 1.00 s | 1.69 s | +69% |
 | 13,648 | 1.74 s | 1.76 s | tie |
 | 21,617 | 2.76 s | 1.80 s | -35% |
@@ -82,7 +82,7 @@ and probed on every profile swap. The two profiles are
 [../benchmarking/](../benchmarking/README.md).
 
 | mode | TTFT mean (s) | TTFT p90 (s) | req/s | wall per rep (s) |
-|---|---:|---:|---:|---:|
+| --- | ---: | ---: | ---: | ---: |
 | precise, no pull | 7.85 | 21.3 | 3.80 | 25.4 |
 | precise + P2P | **2.56** | **5.00** | **10.10** | 9.5 |
 | change | **-67%** | **-77%** | **2.7x** | -63% |
@@ -151,7 +151,7 @@ cache weights 1.0/0.4, and `p2p-source-producer` with
 policy, not to precision or P2P alone.
 
 | observation | arm order | approximate successful req/s | precise+P2P successful req/s | successful req/s change | input Ktok/s change | E2E p90 change |
-|---|---|---:|---:|---:|---:|---:|
+| --- | --- | ---: | ---: | ---: | ---: | ---: |
 | 1 | approximate then precise+P2P | 3.077 | 3.383 | +9.97% | +12.86% | -13.81% |
 | 2 | approximate then precise+P2P | 2.977 | 3.387 | +13.77% | +17.19% | -12.21% |
 | 3 | precise+P2P then approximate | 3.217 | 3.383 | +5.18% | +5.26% | +1.17% |
@@ -185,7 +185,7 @@ policy combinations under the same cutoff. The approximate+P2P arm binds
 `p2p-source-producer` to the same named approximate producer:
 
 | routing | P2P | successful req/s | input Ktok/s | TTFT p50/p90 (s) | E2E p50/p90 (s) |
-|---|---:|---:|---:|---:|---:|
+| --- | ---: | ---: | ---: | ---: | ---: |
 | approximate | no | 2.890 | 142.065 | 2.691 / 20.030 | 10.961 / 35.438 |
 | approximate | yes | 3.023 | 149.041 | 2.184 / 19.623 | 9.697 / 31.705 |
 | precise | no | 2.927 | 143.618 | 2.899 / 20.474 | 11.474 / 31.942 |
@@ -269,7 +269,7 @@ TTFT p50 / p90 (ms) per cell; the pull's delta against the same placement
 without it in parentheses:
 
 | conc | approx | approx + P2P | precise | precise + P2P |
-|---|---|---|---|---|
+| --- | --- | --- | --- | --- |
 | 32 | 1,665 / 4,095 | 1,621 / 3,917 | 2,265 / 7,557 | 1,649 (-27%) / 4,136 (-45%) |
 | 64 | 2,234 / 4,897 | 2,276 / 5,449 | 2,801 / 9,823 | 2,581 (-8%) / 7,139 (-27%) |
 | 128 | 2,963 / 9,226 | 2,953 / 8,833 | 3,802 / 11,755 | 3,177 (-16%) / 9,970 (-15%) |

@@ -36,7 +36,7 @@ precise+P2P arm comes from `glm-c64-factorial-20260814-175042`. The incomplete
 cutoff and is not part of the bundle. The copied source checksums are:
 
 | file | SHA-256 |
-|---|---|
+| --- | --- |
 | `four-arm-exact-window.json` | `501edf614aa489f9eea8eb93153b169b977a83207886e17c0f812ffbf1915625` |
 | `corrected-four-arm-exact-window.json` | `54f2a6db8fd1696c762e4a66a7fb737eb50a17bc7071bc5f241e9c733edd076a` |
 | `repeat-approx-first-exact-window.json` | `b70a2772b5e77f646c387eaf989407e5db2c0d87cd37291954cb6be15f0c0f40` |

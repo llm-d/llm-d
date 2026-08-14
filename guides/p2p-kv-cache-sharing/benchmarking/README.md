@@ -355,16 +355,17 @@ The published C64 campaign used these exact configurations:
   approximate+P2P arm. Its renamed prefix producer is not selected by the
   parameterless in-flight load producer, so the published observation is
   confounded and retained only for provenance.
-* [`epp-glm-c64-approx-p2p-corrected.yaml`](epp-glm-c64-approx-p2p-corrected.yaml)
-  - the corrected approximate+P2P arm used by the August 14 observation.
+* [`epp-glm-c64-approx-p2p-corrected.yaml`](epp-glm-c64-approx-p2p-corrected.yaml) -
+  the corrected approximate+P2P arm used by the August 14 observation.
 * [`epp-glm-c64-precise.yaml`](epp-glm-c64-precise.yaml) - DP-aware precise
   KV events without the source producer.
 * [`epp-glm-c64-precise-p2p.yaml`](epp-glm-c64-precise-p2p.yaml) - the precise
   policy with the source producer.
 
-The precise arm URLs record the benchmark testbed's `glm-5-2-render` Service.
-The runnable deployment in this guide names the equivalent Service `render`;
-replace the URL when applying a benchmark arm to that deployment.
+The precise arms use the token producer's `vllm` backend. Their URL records the
+benchmark testbed's `glm-5-2-render` Service, which selects the prefill vLLM
+APIs directly; the testbed has no separate renderer Deployment. Set `vllm.url`
+to the equivalent vLLM API endpoint when applying an arm elsewhere.
 
 Each arm starts after all four engine pods receive new UIDs. Run AIPerf with
 the same public trace, seed, admission window, and drain:
@@ -433,6 +434,9 @@ crossover sweep, and the quarantined overlay-era grid are in
 * Fleet stability gates arm validity: record engine pod ages before and
   after every arm and discard any arm whose fleet changed mid-flight. A
   keep-warm must ping every engine pod directly, not just the gateway.
+* Size the decode pool for live fan-out so `branch width x context tokens`
+  does not exceed available decode KV. Treat zero or missing TTFT alongside
+  engine exits as an invalid arm even if the benchmark export completes.
 * Restarting the EPP empties the precise index; declare a cold-or-warm
   protocol and apply it to both arms. Re-verify per-rank KV-event
   subscriptions after every EPP restart with a live socket check - they
