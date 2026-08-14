@@ -8,4 +8,4 @@ resources:
 # placeholders to the same pinned images used by the Deployment-based overlays.
 components:
   - ../../../../../recipes/modelserver/components/images/gpu-vllm/release
-  - ../../../../../recipes/modelserver/components/images/routing-sidecar/release
+  - ../../../../../recipes/modelserver/components/images/routing-sidecar/nightly

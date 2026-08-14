@@ -58,7 +58,7 @@ gcloud pubsub subscriptions create $SUBSCRIPTION_NAME \
 
 ## Configuration and Deployment
 
-We provide a `values.yaml` for this implementation in `guides/asynchronous-processing/gcp-pubsub/values.yaml`.
+We provide a `values.yaml` for this implementation in `guides/batch-serving/asynchronous-processing/gcp-pubsub/values.yaml`.
 
 Edit the `values.yaml` file with your specific GCP project and resources:
 

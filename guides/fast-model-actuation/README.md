@@ -83,7 +83,8 @@ source ${REPO_ROOT}/guides/env.sh
 
 <!-- guide:prerequisites.gaie start -->
 ```bash
-kubectl apply -f https://github.com/kubernetes-sigs/gateway-api-inference-extension/releases/download/${GAIE_VERSION}/v1-manifests.yaml
+# GAIE_URL is automatically calculated from GAIE_VERSION at ${REPO_ROOT}/guides/env.sh
+kubectl apply -f https://github.com/kubernetes-sigs/gateway-api-inference-extension/${GAIE_URL}/v1-manifests.yaml
 ```
 <!-- guide:prerequisites.gaie end -->
 
@@ -194,6 +195,7 @@ kubectl rollout status deployment/fma-requester -n ${NAMESPACE} --timeout=300s
 > `launcherCount` is **per matching node**. Setting `launcherCount: 1` creates one launcher pod on each node that has `nvidia.com/gpu.present: "true"`. Only launchers that get bound to a requesting pod will actually start a vLLM instance.
 
 You should see:
+
 - 2 requesting pods (`fma-requester-*`) in `Ready` state
 - Launcher pods in `Running` state (one per GPU node in your cluster)
 - FMA controller pods

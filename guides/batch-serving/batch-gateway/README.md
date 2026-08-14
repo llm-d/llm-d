@@ -35,7 +35,7 @@ Before installing Batch Gateway, ensure you have:
    - For local development, you can use `Kind` or `Minikube`.
    - For production, `OpenShift`, `GKE` or `AKS` are supported.
 2. **Helm**: 3.0+
-3. **llm-d Inference Stack**: Batch Gateway requires an existing [optimized baseline](../optimized-baseline/README.md) stack to dispatch requests to.
+3. **llm-d Inference Stack**: Batch Gateway requires an existing [optimized baseline](../../optimized-baseline/README.md) stack to dispatch requests to.
 4. **PostgreSQL**: 12+ for metadata storage. Redis/Valkey are available as an alternative for development/test only.
 5. **Redis/Valkey**: Redis 6+ or Valkey 8+ for priority queue, events, and status updates.
 6. **S3 or Filesystem**: For batch input and output file storage.

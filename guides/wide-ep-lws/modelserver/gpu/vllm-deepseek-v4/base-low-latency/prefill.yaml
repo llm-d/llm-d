@@ -34,7 +34,7 @@ spec:
             emptyDir: {}
         containers:
           - name: vllm
-            image: vllm/vllm-openai:v0.24.0
+            image: REPLACE_MODEL_SERVER_IMAGE
             securityContext:
               capabilities:
                 add:
@@ -48,7 +48,7 @@ spec:
               - -c
             args:
               - |-
-                # Clear /dev/shm on start to prevent running out of space when crashes 
+                # Clear /dev/shm on start to prevent running out of space when crashes
                 # occur https://github.com/llm-d/llm-d/issues/352
                 find /dev/shm -type f -delete
 

@@ -27,6 +27,7 @@ Complete the **[Prerequisites](./README.md#prerequisites)** section in the main 
 Set your environment variables, overriding the model name for your architecture:
 
 **For Cloud TPU v6e:**
+
 ```bash
 source ${REPO_ROOT}/guides/env.sh
 export GAIE_VERSION=v1.5.0
@@ -34,9 +35,11 @@ export GUIDE_NAME="pd-disaggregation"
 export NAMESPACE="llm-d-pd-disaggregation"
 export MODEL_NAME="Qwen/Qwen3-32B"
 export STACK_NAME="tpu-v6-qwen3-32b-pd"
+source ${REPO_ROOT}/guides/env.sh
 ```
 
 **For Cloud TPU v7x:**
+
 ```bash
 source ${REPO_ROOT}/guides/env.sh
 export REPO_ROOT=$(realpath $(git rev-parse --show-toplevel))
@@ -45,6 +48,7 @@ export GUIDE_NAME="pd-disaggregation"
 export NAMESPACE="llm-d-pd-disaggregation"
 export MODEL_NAME="Qwen/Qwen3.5-397B-A17B-FP8"
 export STACK_NAME="tpu-v7-qwen3-5-pd"
+source ${REPO_ROOT}/guides/env.sh
 ```
 
 ## Installation Instructions
@@ -53,23 +57,23 @@ export STACK_NAME="tpu-v7-qwen3-5-pd"
 
 Deploy the router in either Standalone or Gateway mode by following the exact instructions in the **[Deploy the llm-d Router](./README.md#1-deploy-the-llm-d-router)** section of the main guide.
 
-
 ### 2. Deploy the TPU Model Server
 
 Once the router is deployed, apply the Kustomize overlays specifically configured for your TPU architecture:
 
 **For TPU v6e:**
+
 ```bash
 kubectl apply -n ${NAMESPACE} -k guides/${GUIDE_NAME}/modelserver/tpu/v6/vllm/
 ```
 
 **For TPU v7x:**
+
 ```bash
 kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/tpu/v7/vllm/
 ```
 
 *(Note: If you have monitoring enabled, you can optionally apply the monitoring components as described in the [main guide](./README.md#3-enable-monitoring-optional)).*
-
 
 ## Verification
 
@@ -78,6 +82,7 @@ Follow the **[Verification steps in the main guide](./README.md#verification)** 
 When sending your test request, ensure you use the correct TPU model name:
 
 **For TPU v6e:**
+
 ```bash
 # Send a completion request to the TPU v6e deployment
 curl -X POST http://${IP}/v1/completions \
@@ -89,6 +94,7 @@ curl -X POST http://${IP}/v1/completions \
 ```
 
 **For TPU v7x:**
+
 ```bash
 # Send a completion request to the TPU v7x deployment
 curl -X POST http://${IP}/v1/completions \

@@ -18,17 +18,24 @@ This page lists the llm-d release artifacts and dependencies:
 
 llm-d uses the APIs defined in the Gateway API Inference Extension (GAIE) project:
 
-| CRD |  Purpose |
-|-----|----------|
-| [InferencePool](../api-reference/inferencepool.md) | Defines a pool of inference endpoints (model servers) and configures the EPP and proxy for LLM-aware routing. |
-| [InferenceObjective](../api-reference/inferenceobjective.md) | Defines performance goals (priority, latency) for specific model workloads within a pool. |
-| [InferenceModelRewrite](../api-reference/inferencemodelrewrite.md) | Specifies rules for rewriting model names in request bodies, enabling traffic splitting and canary rollouts. |
+| CRD |  Purpose | Provider |
+|-----|----------|----------|
+| [InferencePool](../api-reference/inferencepool.md) | Defines a pool of inference endpoints (model servers) and configures the EPP and proxy for LLM-aware routing. | `kubernetes-sigs/gateway-api-inference-extension` |
+| [InferenceObjective](../api-reference/inferenceobjective.md) | Defines performance goals (priority, latency) for specific model workloads within a pool. | `llm-d/llm-d-router` |
+| [InferenceModelRewrite](../api-reference/inferencemodelrewrite.md) | Specifies rules for rewriting model names in request bodies, enabling traffic splitting and canary rollouts. | `llm-d/llm-d-router` |
+
+The versions for the GAIE CRDs are derived from the [env.sh file](../../guides/env.sh). This makes upgrades easy as they are stored in a common location across guides.
+
+```bash
+export REPO_ROOT=$(realpath $(git rev-parse --show-toplevel))
+source ${REPO_ROOT}/guides/env.sh
+```
 
 Manifests are published at [kubernetes-sigs/gateway-api-inference-extension/config/crd](https://github.com/kubernetes-sigs/gateway-api-inference-extension/tree/main/config/crd) and can be installed like:
 
 ```bash
-export GAIE_VERSION=v1.5.0
-kubectl apply -f https://github.com/kubernetes-sigs/gateway-api-inference-extension/releases/download/${GAIE_VERSION}/v1-manifests.yaml
+# GAIE_URL is automatically calculated from GAIE_VERSION at ${REPO_ROOT}/guides/env.sh
+kubectl apply -f https://github.com/kubernetes-sigs/gateway-api-inference-extension/${GAIE_URL}/v1-manifests.yaml
 ```
 
 ## 2. llm-d Router
@@ -53,7 +60,7 @@ llm-d releases the core EPP image as well as additional sidecar images for advan
 | Image | Description | Version |
 |-------|-------------|---------|
 | `ghcr.io/llm-d/llm-d-router-endpoint-picker` | Core EPP image | main |
-| `ghcr.io/llm-d/llm-d-router-disagg-sidecar`     | Optional sidecar for model servers, enabling KV cache transfer for P/D | v0.8.0 |
+| `ghcr.io/llm-d/llm-d-router-disagg-sidecar`     | Optional sidecar for model servers, enabling KV cache transfer for P/D | v0.10.0 |
 | `registry.k8s.io/gateway-api-inference-extension/latency-training-server` | Optional sidecar for EPP, for predicted-latency model training | v1.5.0 |
 | `registry.k8s.io/gateway-api-inference-extension/latency-prediction-server` | Optional sidecar for EPP, for predicted-latency scheduling | v1.5.0 |
 
@@ -76,10 +83,16 @@ The llm-d stack supports vLLM and SGLang.
 We recommend using the upstream images for most guides:
 
 | Engine        | Image             | Tag       |
-|--------       |----------------   |--------   |
-| **vLLM**      | `vllm/vllm-openai`| `v0.19.1` |
-| **vLLM TPU**  | `vllm/vllm-tpu`   | `v0.25.0` |
-| **SGLang**    | `lmsysorg/sglang` | `v0.5.10.post1` |
+|---------------|-------------------|-----------|
+| **vLLM**             | `docker.io/vllm/vllm-openai`            | `v0.26.0`     |
+| **vLLM Omni**        | `docker.io/vllm/vllm-omni`              | `v0.26.0`     |
+| **vLLM TPU**         | `docker.io/vllm/vllm-tpu`               | `v0.26.0`     |
+| **vLLM XPU**         | `docker.io/vllm/vllm-openai-xpu`        | `v0.26.0`     |
+| **vLLM ROCM**        | `docker.io/vllm/vllm-openai-rocm`       | `v0.26.0`     |
+| **vLLM ROCM Omni**   | `docker.io/vllm/vllm-omni-rocm`    | `v0.24.1`     |
+| **vLLM CPU**         | `docker.io/vllm/vllm-openai-cpu`        | `v0.26.0`     |
+| **SGLang**           | `docker.io/lmsysorg/sglang`             | `v0.5.16`   |
+| **TRTLLM**           | `nvcr.io/nvidia/tensorrt-llm/release`   | `1.3.0rc23`   |
 
 ### Custom Images
 
@@ -92,16 +105,12 @@ In addition to the upstream images, llm-d also builds and releases vLLM images w
 
 | Image | Tag | Accelerator | Base OS | Architectures |
 |-------|-----|-------------|---------|---------------|
-| `ghcr.io/llm-d/llm-d-cuda`      | `v0.7.0` | NVIDIA GPU | RHEL UBI9 | amd64, arm64 |
-| `ghcr.io/llm-d/llm-d-cuda-gb200`| `v0.7.0` | NVIDIA GPU | RHEL UBI9 | amd64, arm64 |
-| `ghcr.io/llm-d/llm-d-aws`       | `v0.7.0` | NVIDIA GPU + EFA | RHEL UBI9 | amd64, arm64 |
-| `ghcr.io/llm-d/llm-d-rocm`      | `v0.7.0` | AMD ROCm | RHEL UBI9 | amd64 |
-| `ghcr.io/llm-d/llm-d-xpu`       | `v0.8.1` | Intel XPU | Ubuntu 24.04 | amd64 |
-| `ghcr.io/llm-d/llm-d-cpu`       | `v0.7.0` | CPU | RHEL UBI9 | amd64 |
-
-### FS Offloading Extension
-
-`llmd-fs-connector` adds filesystem offloading to vLLM's `OffloadingConnector`. It is released from [llm-d-kv-cache](https://github.com/llm-d/llm-d-kv-cache/releases/tag/v0.8.0) as a python wheel and hosted on the following pypi registry <https://llm-d.github.io/llm-d-kv-cache/simple/builds>.
+| `ghcr.io/llm-d/llm-d-cuda`       | `v0.9.0` | NVIDIA GPU | RHEL UBI9 | amd64, arm64 |
+| `ghcr.io/llm-d/llm-d-aws`        | `v0.9.0` | NVIDIA GPU + EFA | RHEL UBI9 | amd64, arm64 |
+| `ghcr.io/llm-d/llm-d-rocm`       | `v0.9.0` | AMD ROCm | RHEL UBI9 | amd64 |
+| `ghcr.io/llm-d/llm-d-xpu`        | `v0.9.0` | Intel XPU | Ubuntu 24.04 | amd64 |
+| `ghcr.io/llm-d/llm-d-xpu-sglang` | `v0.9.0` | Intel XPU | Ubuntu 24.04 | amd64 |
+| `ghcr.io/llm-d/llm-d-cpu`        | `v0.9.0` | CPU | RHEL UBI9 | amd64 |
 
 ## 4. Well-Lit Path Guides
 
@@ -120,20 +129,19 @@ See the [full list of guides](../well-lit-paths/README.md) for more details.
 
 ## 5. Gateways
 
-llm-d Router supports optional integration with Kubernetes Gateways. These are the versions we test against for the `v0.7.0` release:
+llm-d Router supports optional integration with Kubernetes Gateways. These are the versions we test against for the `v0.10.0` release:
 
 | Dependency | Tested Versions | Notes |
 |------------|-----------------|-------|
 | Gateway API CRDs | `v1.5.x` | Kubernetes SIG (required if using a Gateway) |
 | Istio | `1.29.x` | Default gateway provider |
-| AgentGateway | `v1.0.x` | Preferred for new deployments |
-| kgateway | `v2.2.x` | **Deprecated** — will be removed in the next release |
+| AgentGateway | `v1.4.x` | Preferred for new deployments |
 
 Install instructions live under [`guides/recipes/gateway/`](https://github.com/llm-d/llm-d/tree/main/guides/recipes/gateway).
 
 ## 6. Async Processor
 
-The [Async Processor](https://github.com/llm-d/llm-d-async) is an optional component that pulls inference requests from a message queue, gates dispatch on pool capacity, and forwards them to llm-d Router. It is deployed via Helm — see the [asynchronous processing guide](../../guides/asynchronous-processing/README.md) and the [operations guide](../operations/async-processor.md).
+The [Async Processor](https://github.com/llm-d/llm-d-async) is an optional component that pulls inference requests from a message queue, gates dispatch on pool capacity, and forwards them to llm-d Router. It is deployed via Helm — see the [asynchronous processing guide](../../guides/batch-serving/asynchronous-processing/README.md) and the [operations guide](../operations/async-processor.md).
 
 | Chart | Version | OCI Registry | Description |
 |-------|---------|--------------|-------------|

@@ -6,7 +6,7 @@ resources:
 namePrefix: pd-disaggregation-tpu-vllm-
 
 components:
-  - ../../../../../recipes/modelserver/components/images/tpu-vllm
+  - ../../../../../recipes/modelserver/components/images/tpu-vllm/release
 
 labels:
   - pairs:
