@@ -35,6 +35,7 @@ Workload-centric guides — each provides the recommended, cohesive deployment f
 * [Agentic Serving](./agentic-serving/README.md) - serve long, multi-turn, tool-using agentic workloads (e.g. coding agents) by composing prefix-aware routing, KV-cache offloading, and P/D disaggregation.
 * [Multimodal Serving](./multimodal-serving/README.md) - Deploy multimodal model serving (e.g., image/audio/video) using either aggregated routing or dedicated encode disaggregation topologies.
 * [Reinforcement Learning](./rl/README.md) - Accelerate RL rollout by delegating rollout routing to llm-d's EPP and scheduler, bringing prefix-cache-aware routing and P/D disaggregation to RLHF/GRPO/PPO training on Ray or Slurm.
+* [Batch Serving](./batch-serving/README.md) - Deploy batch and asynchronous inference processing using an OpenAI-compatible Batch API or lightweight queue-based dispatchers with dynamic metric gating.
 
 ## Experimental Guides
 
