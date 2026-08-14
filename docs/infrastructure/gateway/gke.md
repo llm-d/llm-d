@@ -16,7 +16,7 @@ export REPO_ROOT=$(realpath $(git rev-parse --show-toplevel))
 source ${REPO_ROOT}/guides/env.sh
 ```
 
-2. The following steps from the [GKE Inference Gateway deployment documentation](https://cloud.google.com/kubernetes-engine/docs/how-to/deploy-gke-inference-gateway) should be run:
+1. The following steps from the [GKE Inference Gateway deployment documentation](https://cloud.google.com/kubernetes-engine/docs/how-to/deploy-gke-inference-gateway) should be run:
 
 * [Verify your prerequisites](https://cloud.google.com/kubernetes-engine/docs/how-to/deploy-gke-inference-gateway#before-you-begin)
 * [Configure a proxy-only subnet](https://cloud.google.com/kubernetes-engine/docs/how-to/deploying-gateways#configure_a_proxy-only_subnet)
@@ -31,8 +31,8 @@ source ${REPO_ROOT}/guides/env.sh
 For GKE versions earlier than `1.34.0-gke.1626000`, install the CRDs manually:
 
 ```bash
-# GAIE_VERSION provided by ${REPO_ROOT}/guides/env.sh
-kubectl apply -f https://github.com/kubernetes-sigs/gateway-api-inference-extension/releases/download/${GAIE_VERSION}/v1-manifests.yaml
+# GAIE_URL is automatically calculated from GAIE_VERSION at ${REPO_ROOT}/guides/env.sh
+kubectl apply -f https://github.com/kubernetes-sigs/gateway-api-inference-extension/${GAIE_URL}/v1-manifests.yaml
 ```
 
 Verify the APIs are available:
