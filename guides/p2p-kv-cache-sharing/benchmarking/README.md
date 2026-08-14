@@ -364,8 +364,11 @@ The published C64 campaign used these exact configurations:
 
 The precise arms use the token producer's `vllm` backend. Their URL records the
 benchmark testbed's `glm-5-2-render` Service, which selects the prefill vLLM
-APIs directly; the testbed has no separate renderer Deployment. Set `vllm.url`
-to the equivalent vLLM API endpoint when applying an arm elsewhere.
+APIs directly; the testbed has no separate renderer Deployment. This guide's
+equivalent podless Service is `p2p-kv-cache-sharing-render`: Service port 8000
+targets the model-server vLLM port 8200 because pod port 8000 belongs to the
+routing-proxy sidecar and does not serve `/render`. Set `modelName` and
+`vllm.url` for that deployment when adapting a benchmark arm.
 
 Each arm starts after all four engine pods receive new UIDs. Run AIPerf with
 the same public trace, seed, admission window, and drain:
