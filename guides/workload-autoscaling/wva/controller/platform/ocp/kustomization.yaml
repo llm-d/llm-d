@@ -4,7 +4,7 @@ kind: Kustomization
 namespace: llm-d-optimized-baseline
 
 resources:
-  - github.com/llm-d/llm-d-workload-variant-autoscaler/config/overlays/namespace-scoped/openshift?ref=main
+  - github.com/llm-d/llm-d-workload-variant-autoscaler/config/overlays/namespace-scoped/openshift?ref=release-0.9
   - ../../base
 
 patches:
