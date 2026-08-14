@@ -60,11 +60,7 @@ This guide includes configurations for the following accelerators and inference 
 
    ```bash
    # GAIE_VERSION provided by ${REPO_ROOT}/guides/env.sh
-   if [ "$GAIE_VERSION" = "latest" ]; then
-        kubectl apply -f https://github.com/kubernetes-sigs/gateway-api-inference-extension/releases/latest/download/v1-manifests.yaml
-   else
-        kubectl apply -f https://github.com/kubernetes-sigs/gateway-api-inference-extension/releases/download/${GAIE_VERSION}/v1-manifests.yaml
-   fi
+    kubectl apply -f https://github.com/kubernetes-sigs/gateway-api-inference-extension/releases/download/${GAIE_VERSION}/v1-manifests.yaml
    ```
 
 5. Create the namespace:
