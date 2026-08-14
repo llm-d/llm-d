@@ -32,8 +32,8 @@ prerequisites:
       run: git clone https://github.com/llm-d/llm-d.git && cd llm-d && git checkout ${BRANCH}
   gaie:
     - run: |
-        # GAIE_VERSION provided by ${REPO_ROOT}/guides/env.sh
-        kubectl apply -f https://github.com/kubernetes-sigs/gateway-api-inference-extension/releases/download/${GAIE_VERSION}/v1-manifests.yaml
+        # GAIE_URL is automatically calculated from GAIE_VERSION at ${REPO_ROOT}/guides/env.sh
+        kubectl apply -f https://github.com/kubernetes-sigs/gateway-api-inference-extension/${GAIE_URL}/v1-manifests.yaml
   namespace:
     - run: kubectl create namespace ${NAMESPACE} --dry-run=client -o yaml | kubectl apply -f -
 

@@ -245,15 +245,15 @@ a crossover measured on your own transport.
 
 ## Prerequisites
 
-- Have the [proper client tools installed on your local system](../../helpers/client-setup/README.md) to use this guide.
-- Checkout llm-d repo:
+* Have the [proper client tools installed on your local system](../../helpers/client-setup/README.md) to use this guide.
+* Checkout llm-d repo:
 
 ```bash
   export branch="main" # branch, tag, or commit hash
   git clone https://github.com/llm-d/llm-d.git && cd llm-d && git checkout ${branch}
 ```
 
-- Set the following environment variables:
+* Set the following environment variables:
 
 ```bash
 export REPO_ROOT=$(realpath $(git rev-parse --show-toplevel))
@@ -262,14 +262,14 @@ export GUIDE_NAME="p2p-kv-cache-sharing"
 export NAMESPACE="llm-d-${GUIDE_NAME}"
 ```
 
-- Install the Gateway API Inference Extension CRDs:
+* Install the Gateway API Inference Extension CRDs:
 
 ```bash
-# GAIE_VERSION provided by ${REPO_ROOT}/guides/env.sh
-kubectl apply -f https://github.com/kubernetes-sigs/gateway-api-inference-extension/releases/download/${GAIE_VERSION}/v1-manifests.yaml
+# GAIE_URL is automatically calculated from GAIE_VERSION at ${REPO_ROOT}/guides/env.sh
+kubectl apply -f https://github.com/kubernetes-sigs/gateway-api-inference-extension/${GAIE_URL}/v1-manifests.yaml
 ```
 
-- Create a target namespace for the installation
+* Create a target namespace for the installation
 
 ```bash
 kubectl create namespace ${NAMESPACE} --dry-run=client -o yaml | kubectl apply -f -
@@ -343,10 +343,10 @@ kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/$
 16 replicas, TP=1, `--block-size=64`, KV events on, the offloading
 connector with a P2P tier on port 7777.
 
-- **`rdma`** adds an `rdma/ib` device and `IPC_LOCK` to every model
+* **`rdma`** adds an `rdma/ib` device and `IPC_LOCK` to every model
   server. Every benchmark in this guide was measured on it, and it is
   the recommended overlay.
-- **`base`** is the same deployment without the IB device. NIXL/UCX
+* **`base`** is the same deployment without the IB device. NIXL/UCX
   falls back to TCP; the pull still works, but the crossover moves to
   ~29K tokens and `minCachedTokenDelta` has to move with it. See
   [Supported Hardware Backends](#supported-hardware-backends).
@@ -402,9 +402,9 @@ for what it measures and its prerequisites.
 
 ### 5. (Optional) Enable Monitoring
 
-- Install the [Monitoring stack](../../docs/operations/observability/setup.md).
-- To enable Prometheus monitoring on the llm-d router, add `-f ${REPO_ROOT}/guides/recipes/router/features/monitoring.values.yaml` during the [router installation step](#2-deploy-the-llm-d-router).
-- Deploy the monitoring resources for model servers:
+* Install the [Monitoring stack](../../docs/operations/observability/setup.md).
+* To enable Prometheus monitoring on the llm-d router, add `-f ${REPO_ROOT}/guides/recipes/router/features/monitoring.values.yaml` during the [router installation step](#2-deploy-the-llm-d-router).
+* Deploy the monitoring resources for model servers:
 
   ```bash
   kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/recipes/modelserver/components/monitoring
@@ -618,13 +618,13 @@ typically the topology's ceiling.
 
 Benchmark reports comparing the routing arms under identical hardware:
 
-- **[openai/gpt-oss-120b on vLLM (H200, aggregated)](./benchmark-results/gpt-oss-120b-h200.md)**:
+* **[openai/gpt-oss-120b on vLLM (H200, aggregated)](./benchmark-results/gpt-oss-120b-h200.md)**:
   pull-versus-recompute crossover, shared-prefix pools, and the document
   Q&A headline.
-- **[Qwen/Qwen3-30B-A3B-Thinking on vLLM (H200, P/D agentic)](./benchmark-results/qwen3-30b-h200-pd-agentic.md)**:
+* **[Qwen/Qwen3-30B-A3B-Thinking on vLLM (H200, P/D agentic)](./benchmark-results/qwen3-30b-h200-pd-agentic.md)**:
   prefill pulling decode's generated session history - 6.3x median TTFT
   and +50% throughput against plain NIXL P/D.
-- **[zai-org/GLM-5.2-FP8 on vLLM (H200, wide-EP P/D)](./benchmark-results/glm-5.2-h200.md)**:
+* **[zai-org/GLM-5.2-FP8 on vLLM (H200, wide-EP P/D)](./benchmark-results/glm-5.2-h200.md)**:
   the mechanism at 753B - the load-spill payoff (-67% mean TTFT, 2.7x
   throughput for a load-first policy with the pull versus without),
   crossover sweep, and the index-sizing failure-mode record.
