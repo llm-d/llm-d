@@ -8,7 +8,7 @@ env:
     NAMESPACE: llm-d-optimized-baseline
 
     # KEDA is installed from its upstream release (>= 2.15; benchmarked on 2.20.1).
-    KEDA_VERSION: { default: "v2.20.1" }
+    KEDA_VERSION: { default: "2.20.1" }
 
     # Flat manifests for this experimental guide (kube-state-metrics, recording
     # rules, and the ScaledObject). Adjust the example names inside each file to
@@ -21,7 +21,7 @@ prerequisites:
   # KEDA provides the external-metrics API the ScaledObject drives. Note the
   # APIService caveat in the README if another external-metrics adapter is present.
   keda:
-    - run: kubectl apply --server-side -f https://github.com/kedacore/keda/releases/download/${KEDA_VERSION}/keda-${KEDA_VERSION}.yaml
+    - run: kubectl apply --server-side -f https://github.com/kedacore/keda/releases/download/v${KEDA_VERSION}/keda-${KEDA_VERSION}.yaml
 
 deploy:
   # kube-state-metrics (skip if you already run KSM), the PrometheusRule recording
