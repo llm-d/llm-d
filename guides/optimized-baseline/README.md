@@ -288,6 +288,32 @@ kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/recipes/modelserver/compone
 ```
 <!-- guide:deploy.monitoring end -->
 
+### 4. Observability & Troubleshooting
+
+Once monitoring is enabled, use the signals below to operate the optimized baseline. This section covers the metrics that matter **for this path** and how to read them; full metric definitions live in the [metric reference](../../docs/operations/observability/metrics.md) and ready-to-run queries in the [PromQL reference](../../docs/operations/observability/promql.md).
+
+This path is defined by its two routing objectives: **prefix-cache affinity** (route to endpoints that already hold the prompt prefix) and **load-aware** balancing (spread work by token load), with a saturation override that trades cache locality for spread once endpoints get hot. Most issues show up as those two objectives pulling against each other, so watch **load balance** and **cache hit rate** together rather than either one alone.
+
+#### Key metrics for this path
+
+| Signal | Why it matters for the optimized baseline | Where to look |
+|--------|-------------------------------------------|---------------|
+| Per-pod load (`llm_d_epp_request_total`, `vllm:num_requests_running`) | The load-aware scorer should keep QPS and active requests roughly even across pods. A persistently hot pod next to idle ones means balancing is not taking effect | [PromQL → Routing & Load Balancing](../../docs/operations/observability/promql.md#routing--load-balancing) |
+| Prefix cache hit rate (`vllm:prefix_cache_hits_total` / `vllm:prefix_cache_queries_total`) | The prefix-affinity filter is only helping if hit rate stays high. A falling ratio means requests are not landing on sticky endpoints | [PromQL → Prefix Caching](../../docs/operations/observability/promql.md#prefix-caching) |
+| Per-pod KV cache utilization and queue depth (`vllm:kv_cache_usage_perc`, `vllm:num_requests_waiting`) | These drive the saturation-aware override. If one pod sits near saturation while others are cold, the override is either not firing or mis-tuned | [PromQL → Basic Model Serving](../../docs/operations/observability/promql.md#basic-model-serving) |
+| Routing decision latency (`llm_d_epp_plugin_duration_seconds`) | Rising scheduler latency with healthy model servers localizes the problem to the routing layer, not the pods | [PromQL → Routing & Load Balancing](../../docs/operations/observability/promql.md#routing--load-balancing) |
+| TTFT and ITL (`vllm:time_to_first_token_seconds`, `vllm:inter_token_latency_seconds`) | The user-facing SLO signals this path is tuned to protect. Regressions here are the trigger to inspect the balance/cache split above | [Metrics → vLLM](../../docs/operations/observability/metrics.md#key-vllm-metrics) |
+
+> SGLang deployments expose the equivalent signals under `sglang_*` (`sglang_num_running_reqs`, `sglang_token_usage`, `sglang_cache_hit_rate`); the PromQL reference lists both.
+
+#### Common failure modes
+
+* **Uneven load across pods** (some hot, some idle) — the load-aware scorer or the saturation override is not spreading work. On **non-default hardware** this usually means `peakPrefillThroughput` is miscalibrated, so the override never gates in; measure it with the [calibration recipe](../recipes/router/calibration/README.md) and set it on the filter (see [Adapting to other hardware](#adapting-to-other-hardware)).
+* **Low prefix cache hit rate** — either the prompt mix is not prefix-sticky, or the saturation override is spreading so aggressively that it defeats affinity. Compare hit rate against per-pod saturation; if pods are cold but hit rate is still low, the issue is the prompt pattern, not the override.
+* **TTFT/ITL regression with balanced load and healthy cache** — look at routing decision latency and model-server queue depth before touching the routing config; the bottleneck is likely the model servers, not the scheduler.
+
+For alert rules covering these signals, see [Alerting](../../docs/operations/observability/alerting.md).
+
 ## Adapting to other hardware
 
 The routing plugins ship with defaults tuned for this guide's reference setup (Qwen3-32B on H100 80&nbsp;GB, TP=2), so **no calibration is needed to run the guide as written**.
