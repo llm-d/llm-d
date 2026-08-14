@@ -615,6 +615,9 @@ Benchmark reports comparing the routing arms under identical hardware:
   prefill pulling decode's generated session history - 6.3x median TTFT
   and +50% throughput against plain NIXL P/D.
 * **[zai-org/GLM-5.2-FP8 on vLLM (H200, wide-EP P/D)](./benchmark-results/glm-5.2-h200.md)**:
-  the mechanism at 753B - the load-spill payoff (-67% mean TTFT, 2.7x
-  throughput for a load-first policy with the pull versus without),
-  crossover sweep, and the index-sizing failure-mode record.
+  a repeated C64 comparison where the complete
+  DP-aware precise+P2P policy improves successful throughput by a 10.0%
+  paired median over calibrated approximate routing without P2P, a replicated
+  load-spill A/B that isolates P2P, a corrected single-window four-arm
+  observation, and the pull-versus-recompute crossover used to set the
+  production threshold.

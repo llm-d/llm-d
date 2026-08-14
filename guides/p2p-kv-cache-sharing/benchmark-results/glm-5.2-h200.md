@@ -1,18 +1,16 @@
 # zai-org/GLM-5.2-FP8 P2P KV Cache Sharing Benchmark on vLLM (wide-EP, H200)
 
-The benchmark runs `zai-org/GLM-5.2-FP8` (753B MoE) prefill/decode
-disaggregated, one prefill and one decode instance, each 16-way
-data/expert-parallel across 2 pods (32x H200 total), ~520K tokens of GPU KV
-and a 100 GiB CPU offload tier per rank, vLLM block size 64, KV transfers
-over NIXL. Routing uses the llm-d router with the precise
-(KV-event-fed) prefix index, `minCachedTokenDelta: 16384` (set from the
-overlay-era crossover; the current upstream-tier crossover recommends
-`12288` - see below). The page carries the pull-versus-recompute crossover,
-the load-spill payoff pair, and - quarantined at the end - the
-overlay-era four-arm grid on recorded agentic traces (the SemiAnalysis
-Weka corpus, aiperf at concurrencies 32/64/128). The precise and load-first arm configurations ship as the
-`epp-glm-*.yaml` files in [../benchmarking/](../benchmarking/README.md);
-the historical grid's approximate-index arms are not shipped.
+This page combines two 32x H200 `zai-org/GLM-5.2-FP8` (753B MoE)
+prefill/decode-disaggregated cells. The pull-versus-recompute, load-spill, and
+precise-affinity campaigns use one 16-way prefill instance and one 16-way
+decode instance with `minCachedTokenDelta: 16384`. The C64 policy comparison
+uses two 8-way prefill instances and two 8-way decode instances with
+`minCachedTokenDelta: 2048`. Both cells use vLLM block size 64, a 100 GiB CPU
+offload tier per rank, and NIXL transfers. The page also quarantines the
+overlay-era four-arm grid on recorded SemiAnalysis Weka agentic traces. The
+precise and load-first configurations ship as the `epp-glm-*.yaml` files in
+[../benchmarking/](../benchmarking/README.md); the C64 comparison ships as the
+`epp-glm-c64-*.yaml` files.
 
 ## Pull versus recompute (single request)
 
@@ -35,9 +33,10 @@ Recompute is linear at ~130-147 us/token while the pull is flat at
 about 1.25 s, so the **crossover is ~8,650 tokens**. The recommended
 setting is `minCachedTokenDelta: 12288`: 8,192 is a dead tie whose sign
 flips between runs, and 12,288 is the lowest length the sweeps call
-decisively. The benchmark campaigns on this page ran `16384` - set from
-the earlier sweep quarantined below - which sits above either measured
-tie, so their fired pulls are always in the win region.
+decisively. The 1P1D load-spill and precise-affinity campaigns ran `16384` -
+set from the earlier sweep quarantined below - which sits above either
+measured tie. The 2P2D C64 campaign instead ran `2048`, as scoped in its
+section.
 
 Two measurement controls worth repeating on any rig: at 12,288 the
 identical seeded probe *without* the injected source-pull
@@ -117,62 +116,140 @@ established separately by the correlated single-request proof (per-rank
 attribution, source accept on the rank-offset port, consumer load equal
 to tokens x ~93 KB, HTTP 200).
 
-## Recorded fork replay: the spill pair on a real agentic trace
+## 2P2D agentic C64 policy comparison
 
-The load-spill result reproduced on a recorded workload instead of salted
-prefixes: Claude Code sessions from `semianalysisai/cc-traces-weka-062126`
-that fork tens of subagents over one exact shared prefix, replayed with
-AIPerf (`weka_trace`, fixed schedule, `ignore_eos`). Cell: 2 prefill + 2
-decode DP8 instances (32x H200), fp8 KV (~54.7 KB/token on this build),
-`epp-glm-tokenload{,-p2p}.yaml` as the only per-arm difference,
-`minCachedTokenDelta: 12288`. Protocol and preconditions:
-[../benchmarking/README.md](../benchmarking/README.md) (fork-replay
-section); raw artifacts, pre-registered windows, and tooling live on the
-`p2p-findings` branch (`test/p2p-findings/configs/agentx-fork-sweep/`).
+The [GLM-5.2 agentic-serving
+study](https://llm-d.ai/blog/serving-glm-5-2-agentic-workloads-on-llm-d)
+describes the production coding-agent trace shape and wide-EP serving
+architecture. This benchmark tests how the routing policy behaves when exact
+cache-location information is paired with peer retrieval under saturation.
 
-**Per-pull value, verified at three layers.** On the W=8 group (75,520-token
-prefix), one spilled branch start pulled 77,312 tokens and returned in
-**790 ms** against the 13.8-13.9 s cold price both arms pay at the seed -
-within 6% of the value pre-registered from earlier runs' recompute rate
-(implied 5,861 tok/s avoided prefill vs 6,069/6,273 measured on a second
-cell). Evidence chain: the router directive (`delta=77,376 -> set KV cache
-source header`), the source engine's transfer session (decode DP3,
-`accepting incoming connection ... created connected session`), and the
-destination counter (`external_prefix_cache_hits += 77,312`, frozen through
-the zero-pull control).
+The cell has two 8-way data/expert-parallel prefill pods and two 8-way decode
+pods (32x H200), GLM-5.2-FP8, vLLM block size 64, and a 100 GiB CPU offload tier
+per prefill rank. AIPerf replays 48 entries from the SemiAnalysis Weka
+coding-agent trace corpus with seed 67 and no fixed root schedule at
+concurrency 64.
 
-**Fork-level effect: the straggler band is removed.** Matched twin windows
-(43 and 44 children, ~40K prefixes within 0.8%) run as each other's control
-with cold engines between pairs, then swapped:
+Each arm starts with new UIDs for all four engine pods. Requests count only if
+they reach a terminal state by `min(credit_issued_ns) + 300 seconds`;
+completions during the 120-second drain do not enter the result. The fixed
+window measures successful capacity under saturation, not the time required
+to complete the full workload.
 
-| comparison | without P2P | with P2P |
-|---|---:|---:|
-| same window (W=43), both cold | p90 11.2 s (6 stragglers, 11-12.5 s) | **p90 1.6 s** |
-| matched twins, forward | p90 4.7 s | p90 1.6 s |
-| reversed twins | p90 11.2 s | p90 7.2 s (wider burst head) |
-| median, every arm | ~1.2-1.3 s | ~1.2-1.3 s |
+The per-run exact-window summaries and the aggregate used for the tables are
+committed in the [C64 data bundle](./data/glm-5.2-c64/README.md). The bundle
+records the campaign roles, accounting rule, raw metric precision, and
+formulas used to derive the published changes.
 
-Simultaneous cold recomputes compound: 6.6 s alone becomes 11-12.5 s when
-six run at once. The pull's residual tail is the burst head - siblings
-arriving before any copy of the prefix exists, which no mechanism serves.
-The median never moves; on a fork the pull is tail repair, consistent with
-the load-first result's shape and with independent runs on a second cell
-(aggregate flat, p99 -43/-37%).
+### Repeated complete-policy comparison
 
-**Negative result, single prefill pod.** With one prefill instance, pulls
-fired (5, engine-confirmed, 352,000 tokens) but lost to a faster same-pod
-path (~1-1.8 s baseline vs 3.5-4.2 s pulled); the fast path is not yet
-attributed. Router-level P2P pays across pod boundaries; within one pod the
-engine stack already rescues spills more cheaply.
+The repeated baseline is calibrated approximate routing without P2P. The
+candidate combines DP-aware precise KV events, speculative indexing, GPU/CPU
+cache weights 1.0/0.4, and `p2p-source-producer` with
+`minCachedTokenDelta: 2048`. Both use `peakPrefillThroughput: 5541` and
+`maxTTFTPenaltyMs: 55000`. The comparison belongs to the complete routing
+policy, not to precision or P2P alone.
 
-**Decode sizing bound.** 44 children x 40K tokens (~1.76M live decode KV)
-against a single DP8 decode instance (~1.68M) crashed the engine mid-run,
-and the dead-fleet run still emitted a complete-looking export with zero
-TTFTs. Size decode so `width x context <= decode KV`; with flow control
-(`utilization-detector` + `flowControl`) enabled, the identical
-single-decode configuration completed 163/164 with zero engine errors
-(causal isolation of the flow-control contribution pending a deliberate
-control).
+| observation | arm order | approximate successful req/s | precise+P2P successful req/s | successful req/s change | input Ktok/s change | E2E p90 change |
+|---|---|---:|---:|---:|---:|---:|
+| 1 | approximate then precise+P2P | 3.077 | 3.383 | +9.97% | +12.86% | -13.81% |
+| 2 | approximate then precise+P2P | 2.977 | 3.387 | +13.77% | +17.19% | -12.21% |
+| 3 | precise+P2P then approximate | 3.217 | 3.383 | +5.18% | +5.26% | +1.17% |
+| paired mean | - | 3.090 | 3.384 | +9.64% | +11.77% | -8.28% |
+| paired median | - | 3.077 | 3.383 | +9.97% | +12.86% | -12.21% |
+
+The summary arm columns are the means or medians of the three arm values. The
+change columns are the means or medians of the three pairwise percentage
+changes, so a change cell is not expected to equal the ratio of the two
+summary arm cells.
+
+Successful throughput improves in all three observations. The latency signal
+is less stable: two observations improve p90 end-to-end latency while the
+reversed-order observation is 1.17% worse. The supported result is a repeated
+capacity improvement, not a guaranteed latency reduction in every fixed
+window. Latency percentiles include only successful requests that reached a
+terminal state before the cutoff, so they compare different-sized,
+right-censored populations and are directional evidence only.
+
+Precise+P2P successful throughput is 3.383, 3.387, and 3.383 requests/s, with
+a population coefficient of variation below 0.1%. Approximate throughput ranges
+from 2.977 to 3.217 requests/s, a 3.19% coefficient of variation. Three
+observations are not enough to characterize a distribution, but the candidate
+is more stable in this sample.
+
+### Corrected four-arm observation
+
+One August 14 300-second fixed-window observation includes all four intended
+policy combinations under the same cutoff. The approximate+P2P arm binds
+`inflight-load-producer`, `prefix-cache-affinity-filter`, and
+`p2p-source-producer` to the same named approximate producer:
+
+| routing | P2P | successful req/s | input Ktok/s | TTFT p50/p90 (s) | E2E p50/p90 (s) |
+|---|---:|---:|---:|---:|---:|
+| approximate | no | 2.890 | 142.065 | 2.691 / 20.030 | 10.961 / 35.438 |
+| approximate | yes | 3.023 | 149.041 | 2.184 / 19.623 | 9.697 / 31.705 |
+| precise | no | 2.927 | 143.618 | 2.899 / 20.474 | 11.474 / 31.942 |
+| precise | yes | 3.210 | 163.805 | 2.018 / 16.397 | 8.772 / 29.497 |
+
+Relative to approximate routing without P2P, approximate+P2P is +4.61% in
+successful throughput, precise without P2P is +1.27%, and precise+P2P is
++11.07%. Median TTFT changes by -18.85%, +7.71%, and -25.02%, respectively;
+median end-to-end latency changes by -11.53%, +4.69%, and -19.97%. This is one
+fixed-window observation, so it shows an interaction-shaped result but does
+not provide repeated estimates of either single-factor effect.
+
+The August 13 four-arm source remains in
+`four-arm-exact-window.json` for provenance. Its approximate+P2P arm is
+confounded because `inflight-load-producer` reads a different prefix producer;
+it is not used in this corrected table.
+
+### Mechanism evidence
+
+Across the three repeated comparisons, approximate prefill queue p90 is 12.8,
+13.7, and 13.5 requests; precise+P2P is 9.0, 8.0, and 8.0. Approximate
+external prefill hit rate is 1.66%, 2.64%, and 2.36%; precise+P2P is 38.47%,
+12.08%, and 39.93%. NIXL records zero failed transfers, failed notifications,
+and expired requests. External-hit rate establishes engagement, not the size
+of the capacity gain; queue p90 is the consistent signal across the windows.
+
+The mechanism logs for the archived August 13 fixed-window observation record
+13 source request IDs, 12 peer-load submissions, 12 unique transfer IDs, 17
+successful transfer rounds, zero failed rounds, and 6,342 submitted KV blocks.
+These counters instrument
+different pipeline stages and are not expected to be one-to-one: a source
+directive need not submit a peer load, and one transfer can complete in
+multiple rounds. No byte volume is derived from the block count because the
+C64 offload quantum does not match the separate 1P1D crossover's 92.6 KB/token
+measurement.
+`vllm:nixl_bytes_transferred` also counts normal prefill-to-decode traffic,
+and `vllm:kv_offload_load_bytes` aggregates local and peer tier loads.
+
+The corrected observation verifies zero P2P source directives, peer-load
+submissions, successful rounds, and transferred blocks in both no-P2P arms.
+Approximate+P2P records 46 source request IDs, 37 peer-load submissions, 37
+unique transfer IDs, 65 successful rounds, zero failed rounds, and 23,821
+submitted blocks. Precise+P2P records 19 source request IDs, 18 submissions,
+18 unique transfer IDs, 14 successful rounds, zero failed rounds, and 12,079
+submitted blocks. At the run's 3,502,592-byte submitted-block payload, the
+block counts correspond to 83,435,244,032 bytes (77.705 GiB) and
+42,307,808,768 bytes (39.402 GiB), respectively. These values derive from the
+P2P submission records, not the generic offload or NIXL aggregate counters.
+
+The DP-aware event path does not collapse traffic onto rank 0. Across the three
+precise+P2P observations, the two rank-0 engines account for 8.3% to 17.1% of
+prefill successes; 12.5% is the even two-rank share across 16 ranks. The
+largest individual rank accounts for 11.4% to 12.3%, versus a 6.25% even
+per-rank share, so the observation rules out rank-0 collapse but not rank
+imbalance.
+
+### Configuration boundary
+
+The run uses `minCachedTokenDelta: 2048`, below this page's separate GLM
+crossover recommendation of 12,288 tokens. It describes the policy as
+configured and does not establish that 2,048 is the best production setting.
+The corrected four-arm observation removes the load-accounting selector
+confound, but both middle arms still require repeated, counterbalanced
+observations before assigning the gain quantitatively to precision or P2P.
 
 ## Historical: the overlay-era four-arm ladder (superseded)
 

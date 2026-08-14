@@ -77,6 +77,11 @@ it:
   share one copy of the blocks; spreading pays a per-pod copy whether the
   prefix is pulled or recomputed.
 
+At C64 on the 2P2D GLM-5.2 cell, the complete DP-aware precise+P2P policy
+improved successful throughput by a 9.97% paired median over calibrated
+approximate routing without P2P across three 300-second windows. This compares
+complete policies; it is not a P2P-only effect.
+
 The guide ships prefix affinity plus the pull as the general-purpose
 default. Reach for load-aware placement plus the pull when many
 concurrent sessions contend on their owner pods. Both regimes are
@@ -116,5 +121,6 @@ normal NIXL P/D path transfers the request's KV to the selected decoder.
 
 - [P2P KV Cache Sharing guide](../../../guides/p2p-kv-cache-sharing) - manifests, verification gates, benchmarking.
 - [Benchmark report: gpt-oss-120b on H200](../../../guides/p2p-kv-cache-sharing/benchmark-results/gpt-oss-120b-h200.md) - crossover, shared-prefix pools, document Q&A.
+- [Benchmark report: GLM-5.2 on H200](../../../guides/p2p-kv-cache-sharing/benchmark-results/glm-5.2-h200.md) - repeated C64 complete-policy comparison, corrected four-arm observation, and pull mechanism evidence.
 - [Tiered Prefix Cache](tiered-prefix-cache.md) - the offload tiers P2P serves from.
 - [Precise Prefix Cache Routing](precise-prefix-cache-routing.md) - the index that selects the pull source.
