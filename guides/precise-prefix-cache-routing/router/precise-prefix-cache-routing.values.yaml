@@ -1,20 +1,28 @@
 ## precise-prefix-cache-routing guide overrides for the router.
 ## Layer on top of: recipes/router/base.values.yaml
 ##
-## Tokenization is served by a standalone `vllm launch render` Service deployed
-## from `../render/` (3 replicas), NOT the chart-injected EPP sidecar. The
-## chart's `router.tokenizer` sidecar is off by default, so no override is
-## needed here; the EPP `token-producer` plugin tokenizes prompts over HTTP
-## against that Service (see its `vllm.url` below). This decouples render
-## capacity from EPP replica count and lets the render pool scale independently.
+## Tokenization is served by the `../render/` Service, NOT the chart-injected
+## EPP sidecar. The chart's `router.tokenizer` sidecar is off by default, so no
+## override is needed here; the EPP `token-producer` plugin tokenizes prompts
+## over HTTP against that Service (see its `vllm.url` below).
 ##
-## Pod-discovery mode with active-active HA (replicas: 2). Each replica dials
-## every vLLM pod's per-pod ZMQ socket; both indexes converge identically.
-## Scale to a single replica with --set router.epp.replicas=1.
+## That Service has no pods of its own — it fronts the vLLM model servers, which
+## already expose `/v1/*/render`. Render capacity therefore scales with
+## the model server fleet rather than with a separately-scheduled renderer pool,
+## which keeps render latency more contained at higher QPS. Backends without
+## vLLM's render endpoints (SGLang) apply `../render/standalone/` instead; it
+## publishes the same Service name, so this `vllm.url` is unchanged either way.
+##
+## Single EPP replica: the token-load-scorer's in-flight token accounting is
+## local to each EPP process, so active-active HA (replicas: 2) would halve the
+## per-endpoint load each replica sees and mis-gate the affinity filter. Keep
+## replicas: 1 while this routing config is in use. (The precise KV index itself
+## is HA-safe — each replica converges via pod-discovery — so HA can return if
+## in-flight state becomes shared across replicas.)
 
 router:
   epp:
-    replicas: 2
+    replicas: 1
     flags:
       # The chart auto-adds `--ha-enable-leader-election` when replicas > 1,
       # which makes only the leader's readiness probe pass — collapsing to
@@ -37,9 +45,13 @@ router:
         plugins:
           - type: token-producer
             parameters:
-              modelName: Qwen/Qwen3-32B # Must match the render Service model (../render/) and the deployed model server
+              # Must match the model the overlay deploys: with the default
+              # `../render/` overlay the render call lands on the model servers
+              # themselves, so a mismatch is rejected rather than silently
+              # producing token IDs from the wrong tokenizer.
+              modelName: Qwen/Qwen3-32B
               vllm:
-                # Standalone render Service (../render/), not a loopback sidecar.
+                # Guide render Service (../render/), not a loopback sidecar.
                 # `precise-prefix-cache-routing-` namePrefix + Service name `render`.
                 url: "http://precise-prefix-cache-routing-render:8000"
           - type: endpoint-notification-source
@@ -57,14 +69,21 @@ router:
                 discoverPods: true
                 podDiscoveryConfig:
                   socketPort: 5556
-          - type: prefix-cache-scorer
+                  replaySocketPort: 5559
+          - type: inflight-load-producer
             parameters:
               prefixMatchInfoProducerName: precise-prefix-cache-producer
-          - type: kv-cache-utilization-scorer
-          - type: queue-scorer
-          - type: no-hit-lru-scorer
+          - type: prefix-cache-affinity-filter
             parameters:
+              # Exact resident-block fractions from KV-cache events, not the
+              # approximate producer.
               prefixMatchInfoProducerName: precise-prefix-cache-producer
+              # Measured with guides/recipes/router/calibration/calibrate.sh on
+              # this guide's reference setup (Qwen3-32B, H100 80 GB, TP=2,
+              # chunk 8192) — SGLang measures the same value as vLLM. Re-measure
+              # for other hardware/models.
+              peakPrefillThroughput: 15926
+          - type: token-load-scorer
         dataLayer: # metrics-data-source + core-metrics-extractor injected by default
           sources:
             - pluginRef: endpoint-notification-source
@@ -73,14 +92,8 @@ router:
         schedulingProfiles:
           - name: default
             plugins:
-              - pluginRef: kv-cache-utilization-scorer
-                weight: 2.0
-              - pluginRef: queue-scorer
-                weight: 2.0
-              - pluginRef: prefix-cache-scorer
-                weight: 3.0
-              - pluginRef: no-hit-lru-scorer
-                weight: 2.0
+              - pluginRef: prefix-cache-affinity-filter
+              - pluginRef: token-load-scorer
 
   extraServicePorts:
     - name: http

@@ -11,11 +11,11 @@ spec:
           command: ["vllm", "serve"]
           args:
             - "Qwen/Qwen3-32B"
-            - "--disable-access-log-for-endpoints=/health,/metrics,/v1/models"
+            - "--disable-access-log-for-endpoints=/health,/metrics,/v1/models,/v1/completions/render,/v1/chat/completions/render"
             - "--tensor-parallel-size=2"
             - "--block-size=64"
             - "--kv-events-config"
-            - '{"enable_kv_cache_events":true,"publisher":"zmq","endpoint":"$(KV_EVENTS_ENDPOINT)","topic":"kv@$(POD_IP):$(POD_PORT)@Qwen/Qwen3-32B"}'
+            - '{"enable_kv_cache_events":true,"publisher":"zmq","endpoint":"$(KV_EVENTS_ENDPOINT)","replay_endpoint":"$(KV_EVENTS_REPLAY_ENDPOINT)","topic":"kv@$(POD_IP):$(POD_PORT)@Qwen/Qwen3-32B"}'
             # Uncomment for distributed tracing
             # - "--otlp-traces-endpoint=http://otel-collector:4317"
             # - "--collect-detailed-traces=all"
@@ -24,6 +24,9 @@ spec:
             # socket bound by vLLM (KV_EVENTS_ENDPOINT=tcp://*:5556).
             - containerPort: 5556
               name: kv-events
+              protocol: TCP
+            - containerPort: 5559
+              name: kv-replay
               protocol: TCP
           env:
             - name: HF_TOKEN
@@ -49,6 +52,8 @@ spec:
             # active-active HA across routers).
             - name: KV_EVENTS_ENDPOINT
               value: "tcp://*:5556"
+            - name: KV_EVENTS_REPLAY_ENDPOINT
+              value: "tcp://*:5559"
             # Disable vLLM usage telemetry — its writes to /.config fail
             # under restricted SecurityContexts (e.g. OpenShift).
             - name: DO_NOT_TRACK

@@ -1,10 +1,16 @@
-# Rollout Guides
+# Rollouts
 
-Rollout guides demonstrate how to perform incremental deployment operations that gradually introduce new versions of your inference infrastructure with minimal service disruption.
+Rollouts are incremental deployment operations that gradually introduce new versions of inference infrastructure with minimal service disruption. Rather than replacing all running instances at once, a rollout shifts traffic progressively — allowing you to monitor behavior at each stage and roll back immediately if problems arise.
 
-## Overview
+## Why Rollouts Matter for LLM Inference
 
-These guides cover rollout strategies for LLM inference deployments, helping you choose the right approach based on your requirements.
+LLM inference workloads have properties that make all-at-once replacements especially risky:
+
+- **Long-running requests**: a request mid-generation cannot be migrated. Abrupt pod replacement causes visible failures.
+- **Warm-up cost**: new model server pods require time to load model weights, compile CUDA graphs, and fill KV caches. Traffic arriving before warm-up completes sees high latency.
+- **Resource intensity**: GPU memory is non-trivially expensive. Rolling back a bad deployment means waiting for a full cold-start cycle.
+
+Gradual rollouts mitigate all three by keeping the stable version fully operational while the new version is validated under real traffic.
 
 ## Rollout Strategies
 
@@ -39,20 +45,7 @@ A Blue-Green Update creates a second complete InferencePool and uses HTTPRoute t
 - Header-based routing (e.g., routing beta users to new version)
 - Updates that need precise traffic control
 
-**Guide:** [Blue-Green Update](./blue-green-update.md)
-
-**Comparison:**
-
-| Feature | Rolling Update | Blue-Green Update |
-|---------|---------------|-------------------|
-| **Routing Control** | Random/Even across all healthy pods | Precise Percentage (e.g., exactly 1% or 10%) |
-| **Blast Radius** | High (All users exposed randomly) | Low (Isolated to specified target weight) |
-| **Rollback Speed** | Slow (Requires creating new pods in reverse) | Instant (Flip HTTPRoute weight back to 0) |
-| **Resource Costs** | Low (Only temporary surge of pods) | High (Requires running two full environments) |
-| **Version Coexistence** | Simultaneously active inside one Service | Strictly separated across two distinct Services |
-| **Deployment Mode** | Standalone and Gateway | Gateway only |
-
-**Note:** Capacity management may also play a role in choosing between these strategies.
+**Guide:** [Blue-Green Update](../../../guides/rollouts/blue-green-update.md)
 
 ### LoRA Adapter Rollout
 
@@ -68,23 +61,20 @@ LoRA (Low-Rank Adaptation) adapter rollouts allow you to update model customizat
 - You want to test adapter changes with a subset of traffic
 - You need to maintain multiple adapter versions simultaneously
 
-**Guide:** [LoRA Adapter Rollout](./adapter-rollout.md)
+**Guide:** [LoRA Adapter Rollout](../../../guides/rollouts/adapter-rollout.md)
 
-## General Rollout Pattern
+## Strategy Comparison
 
-All rollout guides follow a similar pattern:
+| Feature | Rolling Update | Blue-Green Update |
+|---------|---------------|-------------------|
+| **Routing Control** | Random/Even across all healthy pods | Precise Percentage (e.g., exactly 1% or 10%) |
+| **Blast Radius** | High (All users exposed randomly) | Low (Isolated to specified target weight) |
+| **Rollback Speed** | Slow (Requires creating new pods in reverse) | Instant (Flip HTTPRoute weight back to 0) |
+| **Resource Costs** | Low (Only temporary surge of pods) | High (Requires running two full environments) |
+| **Version Coexistence** | Simultaneously active inside one Service | Strictly separated across two distinct Services |
+| **Deployment Mode** | Standalone and Gateway | Gateway only |
 
-1. **Deploy new infrastructure** - Create the new version alongside the existing one
-2. **Configure traffic splitting** - Gradually shift traffic to the new version (e.g., 10% → 50% → 100%)
-3. **Monitor and validate** - Verify the new version performs correctly at each stage
-4. **Complete rollout** - Direct 100% of traffic to the new version
-5. **Clean up** - Remove the old version once the new version is stable
+LoRA adapter rollouts have no infrastructure cost and work in either mode, but apply only when the change is limited to adapter weights — not base model or serving framework changes.
 
-## Prerequisites
-
-Before following these guides, ensure you have:
-
-* A working llm-d deployment (see [getting started guide](../../getting-started/README.md))
-* Access to kubectl and the Kubernetes cluster
-* Understanding of Kubernetes Gateway API concepts (for gateway mode)
-* Familiarity with your model serving infrastructure (vLLM, etc.)
+> [!NOTE]
+> Capacity management may also play a role in choosing between these strategies.

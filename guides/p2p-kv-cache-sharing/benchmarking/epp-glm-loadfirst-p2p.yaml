@@ -1,0 +1,74 @@
+apiVersion: llm-d.ai/v1alpha1
+kind: EndpointPickerConfig
+plugins:
+- type: disagg-headers-handler
+- type: always-disagg-pd-decider
+- type: disagg-profile-handler
+  parameters:
+    deciderPluginName: always-disagg-pd-decider
+- type: prefill-filter
+- type: decode-filter
+- type: token-producer
+  parameters:
+    modelName: zai-org/GLM-5.2-FP8
+    vllm:
+      url: http://render:8000
+- type: endpoint-notification-source
+- type: metrics-data-source
+  parameters:
+    scheme: http
+    path: /metrics
+    insecureSkipVerify: true
+- type: core-metrics-extractor
+- type: precise-prefix-cache-producer
+  parameters:
+    indexerConfig:
+      kvBlockIndexConfig:
+        inMemoryConfig:
+          podCacheSize: 64
+      kvCacheBackendConfigs:
+      - name: gpu
+        weight: 1.0
+      - name: cpu
+        weight: 0.4
+    tokenProcessorConfig:
+      blockSize: 64
+    kvEventsConfig:
+      topicFilter: "kv@"
+      discoverPods: true
+      podDiscoveryConfig:
+        socketPort: 5557
+- type: prefix-cache-scorer
+  name: precise-prefix-cache-scorer
+  parameters:
+    prefixMatchInfoProducerName: precise-prefix-cache-producer
+- type: p2p-source-producer
+  parameters:
+    prefixMatchInfoProducerName: precise-prefix-cache-producer
+    prefillProfileName: prefill
+    minCachedTokenDelta: 16384
+- type: queue-scorer
+- type: active-request-scorer
+dataLayer:
+  sources:
+  - pluginRef: metrics-data-source
+    extractors:
+    - pluginRef: core-metrics-extractor
+  - pluginRef: endpoint-notification-source
+    extractors:
+    - pluginRef: precise-prefix-cache-producer
+schedulingProfiles:
+- name: prefill
+  plugins:
+  - pluginRef: prefill-filter
+  - pluginRef: precise-prefix-cache-scorer
+    weight: 1
+  - pluginRef: queue-scorer
+    weight: 3
+  - pluginRef: active-request-scorer
+    weight: 1
+- name: decode
+  plugins:
+  - pluginRef: decode-filter
+  - pluginRef: active-request-scorer
+    weight: 3

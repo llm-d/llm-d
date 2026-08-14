@@ -1,0 +1,5 @@
+$patch: delete
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: wide-ep-kv-cache-evictor

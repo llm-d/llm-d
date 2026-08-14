@@ -7,3 +7,4 @@ resources:
   - inferenceserverconfig.yaml
   - launcherconfig.yaml
   - launcherpopulationpolicy.yaml
+  - ../requester

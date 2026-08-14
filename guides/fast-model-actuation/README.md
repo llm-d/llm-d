@@ -1,21 +1,27 @@
 # Fast Model Actuation
 
+[![E2E (OCP GPU)](https://github.com/llm-d/llm-d/actions/workflows/consolidate-status-fast-model-actuation-ibm-acc-gpu-vllm-x.yaml/badge.svg)](https://github.com/llm-d/llm-d/actions/workflows/consolidate-status-fast-model-actuation-ibm-acc-gpu-vllm-x.yaml)
+
 ## Overview
 
-Fast Model Actuation (FMA) enables rapid model loading and switching for LLM inference on Kubernetes by exploiting vLLM sleep/wake and model swapping. In Kubernetes, GPUs are bound 1-to-1 to pods: a pod that requests a GPU holds it exclusively for its lifetime. FMA uses the following **dual pod** technique to circumvent this constraint:
+Fast Model Actuation (FMA) addresses vLLM startup time using two technologies. One is vLLM sleep and wake, which can entirely avoid model loading and CUDA graph compilation in applicable scenarios. The other is running multiple vLLM processes as children of a launcher process that has already done the Python module loading. FMA can manage multiple vLLM instances bound to one GPU, with one instance awake at a time, to accomplish fast switching of which model that GPU is used for; this generalizes to multiple GPUs of one node.
 
-- **Server-requesting Pods** reserve GPU resources via the Kubernetes scheduler but do not run inference themselves.
-- **Launcher Pods** (server-providing) run vLLM without requesting GPUs. They gain access to GPUs via `CUDA_VISIBLE_DEVICES`, directed by the FMA controller to the specific GPU(s) reserved by the requesting pod.
-- **FMA Controllers** manage the lifecycle: binding requesting pods to launchers, starting vLLM instances, and orchestrating sleep/wake.
+In Kubernetes, once a Pod has been allocated some GPUs it keeps that exclusive allocation for the rest of the Pod's lifetime. FMA uses the following **dual pod** technique to circumvent that constraint.
 
-Server-requesting pods are managed through standard Kubernetes controllers such as Deployments and autoscalers. The FMA controller watches these pods and translates scheduler decisions into actions on launcher pods and GPUs.
+- **Server-requesting Pods** reserve GPU resources via the Kubernetes Pod scheduler and the kubelet but do not run inference themselves.
+- **Launcher Pods** (server-providing) run vLLM without requesting GPUs. They (a) gain access to all GPUs of their Node via special provisions that do not count this access as usage and (b) using `CUDA_VISIBLE_DEVICES`, as directed by the FMA controllers, get vLLM to use the specific GPU(s) reserved for the requesting pod.
+- **FMA Controllers** manage the lifecycle: creating/deleting launchers, binding/unbinding requesting pods to launchers and vLLM instances in them, creating/deleting those vLLM instances, and orchestrating sleep/wake.
 
-When a requesting pod is deleted, the controller puts the corresponding vLLM instance to sleep (model stays in GPU memory). Although the Kubernetes GPU allocation is released when the requesting pod exits, the launcher pod retains the CUDA context and keeps the model in GPU memory. The GPU remains dedicated to that launcher until it is explicitly unbound or the launcher pod is deleted. When a new requesting pod arrives and gets assigned to the same GPU, the controller wakes the sleeping instance, resuming in seconds instead of cold-starting from scratch.
+Server-requesting pods are managed through standard Kubernetes set objects and controllers such as Deployments and autoscalers. An FMA controller watches the server-requesting pods and translates scheduler decisions into actions on launcher pods and GPUs.
 
-FMA also supports instant model switching: if a new requesting pod references a different `InferenceServerConfig`, the FMA controller can direct the bound launcher to swap the loaded model in place, avoiding a full cold start.
+When a requesting pod is deleted, the controller puts the corresponding vLLM instance to sleep (model tensors move from GPU to main memory). Although the Kubernetes GPU allocation is released when the requesting pod is deleted, the vLLM instance retains the CUDA context in a small amount of GPU memory---until an FMA controller directs that launcher to delete that vLLM instance (which may happen, to limit memory usage). If and when a new requesting pod arrives, serving the same model with the same command-line parameters and assigned to the same GPU, the controller wakes the sleeping instance---which resumes in seconds. This is "hot start".
+
+When a new server-requesting Pod arrives and there is no sleeping vLLM instance to wake for it, but a launcher is available, an FMA controller will direct the launcher to create a corresponding new vLLM instance. This takes advantage of the Python module loading already done by the launcher. This is "warm start".
 
 > [!NOTE]
-> Fast wake only occurs if the Kubernetes scheduler assigns the new requesting pod to the same node (and GPU) where the sleeping vLLM instance resides. In a cluster with a single GPU per node, if the scheduler picks the same node, the GPU is necessarily the same one. In a multi-node pool the scheduler may assign the pod to a different node.
+> Hot start (vLLM `/wake_up`) only occurs if the Kubernetes Pod scheduler assigns the new requesting pod to the same node (and GPU) where the sleeping vLLM instance resides. In a cluster with a single GPU per node, if the scheduler picks the same node, the GPU is necessarily the same one. In a multi-node pool the scheduler may assign the pod to a different node.
+
+For more details see [the FMA repo README](https://github.com/llm-d-incubation/llm-d-fast-model-actuation/blob/main/README.md) and [the FMA repo docs](https://github.com/llm-d-incubation/llm-d-fast-model-actuation/tree/main/docs).
 
 ## Configuration
 
@@ -51,7 +57,7 @@ export BRANCH=main
 export REPO_ROOT=$(realpath $(git rev-parse --show-toplevel))
 export GUIDE_NAME=fast-model-actuation
 export NAMESPACE=llm-d-fast-model-actuation
-export FMA_VERSION=0.6.2
+export FMA_VERSION=0.6.4
 export FMA_CHART_INSTANCE_NAME=fma
 export MODEL=Qwen/Qwen3-0.6B
 export CURL_TEST_IMAGE=cfmanteiga/alpine-bash-curl-jq:latest
@@ -97,7 +103,7 @@ At minimum, the user running these commands needs rights to create and manage CR
 
 <!-- guide:deploy.fma_crds start -->
 ```bash
-FMA_CRD_BASE="https://raw.githubusercontent.com/llm-d-incubation/llm-d-fast-model-actuation/v${FMA_VERSION}/config/crd"
+export FMA_CRD_BASE="https://raw.githubusercontent.com/llm-d-incubation/llm-d-fast-model-actuation/v${FMA_VERSION}/config/crd"
 kubectl apply --server-side \
   -f ${FMA_CRD_BASE}/fma.llm-d.ai_inferenceserverconfigs.yaml \
   -f ${FMA_CRD_BASE}/fma.llm-d.ai_launcherconfigs.yaml \
@@ -114,7 +120,20 @@ The FMA controllers need cluster-level access to list nodes (for the launcher-po
 
 <!-- guide:deploy.rbac start -->
 ```bash
-kubectl apply -k ${REPO_ROOT}/guides/${GUIDE_NAME}/rbac/
+# ClusterRole (cluster-scoped): the FMA controllers list nodes for the launcher-populator
+kubectl apply -f ${REPO_ROOT}/guides/${GUIDE_NAME}/rbac/clusterrole.yaml
+
+# Role (namespaced): launcher pods read their own pod spec
+kubectl apply -n ${NAMESPACE} -f ${REPO_ROOT}/guides/${GUIDE_NAME}/rbac/role.yaml
+
+# RoleBinding (namespaced): bind the Role to ${NAMESPACE}'s default ServiceAccount.
+# Created imperatively (not from a static manifest) so ${NAMESPACE} drives both the
+# binding's namespace and the subject ServiceAccount's namespace.
+kubectl create rolebinding fma-launcher-pod-reader \
+  --role=fma-launcher-pod-reader \
+  --serviceaccount=${NAMESPACE}:default \
+  -n ${NAMESPACE} \
+  --dry-run=client -o yaml | kubectl apply -f -
 ```
 <!-- guide:deploy.rbac end -->
 
@@ -150,15 +169,17 @@ helm install ${GUIDE_NAME} \
 ```
 <!-- guide:deploy.standalone end -->
 
-### 5. Create FMA Resources
+### 5. Deploy the Model Server (Dual Pods)
 
-Apply the `InferenceServerConfig`, `LauncherConfig`, and `LauncherPopulationPolicy` that define the model to serve, the launcher pod template, and how many launchers to place:
+Apply the FMA custom resources — `InferenceServerConfig`, `LauncherConfig`, and `LauncherPopulationPolicy` (which define the model to serve, the launcher pod template, and how many launchers to place) — **together with** the server-requesting pods that reserve GPUs and trigger model loading. The requester `Deployment` is included as a resource of `modelserver/kustomization.yaml` (via `../requester`), so a single apply stands up both halves of the dual-pods design. A `Deployment` is used for the requesters (rather than a bare `ReplicaSet`) so they integrate cleanly with autoscalers such as the Workload Variant Autoscaler (WVA):
 
-<!-- guide:deploy.fma_resources start -->
+<!-- guide:deploy.modelserver start -->
 ```bash
 kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/
+
+kubectl rollout status deployment/fma-requester -n ${NAMESPACE} --timeout=300s
 ```
-<!-- guide:deploy.fma_resources end -->
+<!-- guide:deploy.modelserver end -->
 
 > [!NOTE]
 > This guide uses [Qwen/Qwen3-0.6B](https://huggingface.co/Qwen/Qwen3-0.6B) which is publicly accessible and does not require a HuggingFace token. For gated models, you would need to mount the token via a different mechanism (FMA's ISC does not support `secretKeyRef`).
@@ -171,18 +192,6 @@ kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/
 
 > [!NOTE]
 > `launcherCount` is **per matching node**. Setting `launcherCount: 1` creates one launcher pod on each node that has `nvidia.com/gpu.present: "true"`. Only launchers that get bound to a requesting pod will actually start a vLLM instance.
-
-### 6. Create Requesting Pods
-
-Create the server-requesting pods that reserve GPUs and trigger model loading. A `Deployment` is used here (rather than a bare `ReplicaSet`) so the requesting pods integrate cleanly with autoscalers such as the Workload Variant Autoscaler (WVA):
-
-<!-- guide:deploy.requester start -->
-```bash
-kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/requester/
-
-kubectl wait --for=condition=ready pod -l app=fma-requester -n ${NAMESPACE} --timeout=300s
-```
-<!-- guide:deploy.requester end -->
 
 You should see:
 - 2 requesting pods (`fma-requester-*`) in `Ready` state
@@ -225,7 +234,7 @@ kubectl scale deployment fma-requester -n ${NAMESPACE} --replicas=0
 
 kubectl scale deployment fma-requester -n ${NAMESPACE} --replicas=2
 
-kubectl wait --for=condition=ready pod -l app=fma-requester -n ${NAMESPACE} --timeout=120s
+kubectl rollout status deployment/fma-requester -n ${NAMESPACE} --timeout=120s
 ```
 <!-- guide:verify.tests.sleep_wake end -->
 
@@ -282,22 +291,31 @@ llmdbenchmark \
 
 ## Cleanup
 
-To remove all deployed components:
+To remove all deployed components. **Order matters:** delete the model-server
+CRs and the requester Deployment first, then wait for the requester and launcher
+pods to drain while the dual-pods controller is still running to strip their
+finalizers, and only then remove the controllers. Removing the controller before
+the pods drain leaves finalizer-bound pods stuck in `Terminating` forever.
 
 <!-- guide:cleanup start -->
 ```bash
-kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/requester/ --ignore-not-found=true
-
 kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/ --ignore-not-found=true
 
-helm uninstall ${GUIDE_NAME} -n ${NAMESPACE}
+kubectl wait --for=delete pod -l app=fma-requester -n ${NAMESPACE} --timeout=120s
+
+kubectl wait --for=delete pod -l app.kubernetes.io/component=launcher -n ${NAMESPACE} --timeout=120s
 
 helm uninstall ${FMA_CHART_INSTANCE_NAME} -n ${NAMESPACE}
 
-kubectl delete -k ${REPO_ROOT}/guides/${GUIDE_NAME}/rbac/ --ignore-not-found=true
+helm uninstall ${GUIDE_NAME} -n ${NAMESPACE}
 
+kubectl delete -f ${REPO_ROOT}/guides/${GUIDE_NAME}/rbac/clusterrole.yaml --ignore-not-found=true
+```
+<!-- llm-d-cicd:skip start -->
+```bash
 kubectl delete namespace ${NAMESPACE}
 
 kubectl delete crd inferenceserverconfigs.fma.llm-d.ai launcherconfigs.fma.llm-d.ai launcherpopulationpolicies.fma.llm-d.ai
 ```
+<!-- llm-d-cicd:skip end -->
 <!-- guide:cleanup end -->

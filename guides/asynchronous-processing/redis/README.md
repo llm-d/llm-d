@@ -54,12 +54,17 @@ For deployment instructions, please refer to the [main README](../README.md#inst
 
 2. **Publish a message using Redis CLI**:
 
+   Requests are consumed as an `InternalRequest` envelope: a `request_kind` tag
+   (`redis` for the sorted-set queue) wrapping the caller-visible request under
+   `data`. Note that `deadline` and `created` are Unix-seconds **numbers**, not
+   strings — a quoted `deadline` fails to decode.
+
    ```bash
    export REDIS_IP=$(kubectl get svc -n redis redis-master -o jsonpath='{.spec.clusterIP}')
    # If you used authentication, pass the password using -a
-   # kubectl run --rm -i -t publishmsgbox --image=redis --restart=Never -- /usr/local/bin/redis-cli -h $REDIS_IP -a $REDIS_PASSWORD ZADD request-sortedset 1999999999 '{"id" : "testmsg", "payload":{ "model":"your-model", "prompt":"Hi, good morning "}, "deadline" :"1999999999" }'
+   # kubectl run --rm -i -t publishmsgbox --image=redis --restart=Never -- /usr/local/bin/redis-cli -h $REDIS_IP -a $REDIS_PASSWORD ZADD request-sortedset 1999999999 '{"request_kind":"redis","internal":{},"data":{"id":"testmsg","created":1700000000,"deadline":1999999999,"payload":{"model":"your-model","prompt":"Hi, good morning"}}}'
    # Otherwise:
-   kubectl run --rm -i -t publishmsgbox --image=redis --restart=Never -- /usr/local/bin/redis-cli -h $REDIS_IP ZADD request-sortedset 1999999999 '{"id" : "testmsg", "payload":{ "model":"your-model", "prompt":"Hi, good morning "}, "deadline" :"1999999999" }'
+   kubectl run --rm -i -t publishmsgbox --image=redis --restart=Never -- /usr/local/bin/redis-cli -h $REDIS_IP ZADD request-sortedset 1999999999 '{"request_kind":"redis","internal":{},"data":{"id":"testmsg","created":1700000000,"deadline":1999999999,"payload":{"model":"your-model","prompt":"Hi, good morning"}}}'
    ```
 
 3. **Check for results**:

@@ -1,0 +1,12 @@
+# NVIDIA DRA ComputeDomain: provisions the GB200 cross-node NVLink (MNNVL/IMEX) fabric
+# and auto-creates the `wide-ep-compute-domain` ResourceClaimTemplate
+apiVersion: resource.nvidia.com/v1beta1
+kind: ComputeDomain
+metadata:
+  name: wide-ep-compute-domain
+spec:
+  numNodes: 1
+  channel:
+    allocationMode: Single
+    resourceClaimTemplate:
+      name: wide-ep-compute-domain

@@ -1,4 +1,4 @@
-## multimodal-optimized-baseline guide overrides for the llm-d router.
+## multimodal-aggregation guide overrides for the llm-d router.
 ## Layer on top of: recipes/router/base.values.yaml
 
 router:
@@ -9,16 +9,24 @@ router:
       targetPort: 8081
 
   epp:
-    pluginsConfigFile: "multimodal-optimized-baseline-plugins.yaml"
+    pluginsConfigFile: "multimodal-aggregation-plugins.yaml"
     pluginsCustomConfig:
-      multimodal-optimized-baseline-plugins.yaml: |
+      multimodal-aggregation-plugins.yaml: |
         apiVersion: llm-d.ai/v1alpha1
         kind: EndpointPickerConfig
+        # Token-based routing, matching the aggregation reference stack:
+        # prefix-cache-affinity-filter selects the endpoint set, token-load-scorer
+        # picks within it on queued prefill token load. The multimodal token-producer
+        # stays in the pipeline — the scorer needs per-request token counts, and
+        # image inputs have no text length to read, so each image is estimated
+        # from its resolution and folded in as a content-hash-weighted block.
+        #
+        # The prefix-cache-affinity-filter's peakPrefillThroughput default (15928)
+        # is calibrated for the text-only reference setup (Qwen3-32B on H100 80 GB,
+        # TP=2). Vision prefill has a different cost profile — for production use,
+        # measure your own value with guides/recipes/router/calibration and set it
+        # on the filter.
         plugins:
-        - type: queue-scorer
-        - type: kv-cache-utilization-scorer
-        - type: prefix-cache-scorer
-        - type: no-hit-lru-scorer
         - type: token-producer
           parameters:
             estimate:
@@ -28,9 +36,13 @@ router:
                   width: 1280
                   height: 720
                 dynamic:
+                  # Count-correct for Qwen3-VL: one visual token per 32x32-pixel
+                  # region (patch 16 x spatial merge 2 — measured 880 tokens for
+                  # a 1280x720 image against the served model). Derive from your
+                  # model's preprocessor config for other architectures.
                   factor: 1024
               video:
-                defaultResolution:          
+                defaultResolution:
                   width: 1280
                   height: 720
                 defaultDuration: 10
@@ -45,20 +57,67 @@ router:
                   minFrames: 4
                   sampled:
                     sampleFPS: 2
-                    temporalPatchSize: 2      
+                    temporalPatchSize: 2
+            #
+            # Serving google/gemma-4-31B-it instead? Gemma 4 allocates a fixed
+            # token budget per image (70, 140, 280, 560, or 1120) rather than
+            # deriving it from resolution, and strides video frames rather than
+            # sampling by FPS. Leaving the Qwen3-VL estimate above in place would
+            # price a 1280x720 image at 900 tokens instead of 280 — the scorer
+            # would overweight every image request with no error to signal it.
+            # Replace the whole `estimate:` block above with:
+            #
+            # estimate:
+            #   image:
+            #     mode: static
+            #     static:
+            #       staticToken: 280
+            #   video:
+            #     defaultResolution:
+            #       width: 1280
+            #       height: 720
+            #     defaultDuration: 10
+            #     maxVideoTokens: 12288
+            #     tokensPerFrame:
+            #       mode: static
+            #       static:
+            #         numTokensPerFrame: 280
+            #     frames:
+            #       mode: strided
+            #       minFrames: 1
+            #       maxFrames: 8
+            #       strided:
+            #         frameStride: 4
+            #
         - type: approx-prefix-cache-producer
+        - type: inflight-load-producer
+        - type: prefix-cache-affinity-filter
+          parameters:
+            # Measured for Qwen3-VL-32B-Instruct on H200 141 GB (TP=2) with
+            # guides/recipes/router/calibration (text prefill; vision-encoder
+            # prefill is not exercised by the calibration workload).
+            peakPrefillThroughput: 15751
+            # The workload's cacheable fraction caps at ~0.70 (the unique question
+            # is never a cache hit), so the plugin's 0.8 default can never engage
+            # affinity for multimodal prompts of this shape. Set the threshold
+            # below the maximum cacheable fraction of your traffic.
+            affinityThreshold: 0.6
+            # 2x the plugin default (18000). Token counts price an image token
+            # like a text token, but vision-encoder time makes image-heavy
+            # prefill slower per token than the text-calibrated
+            # peakPrefillThroughput implies, so the filter's predicted-TTFT
+            # milliseconds run light of wall-clock on this workload. Doubling
+            # the gate restores the intended pinning depth (benchmark-validated:
+            # parity with the previous weighted-scorer stack). Reduce toward the
+            # default for text-dominant traffic.
+            maxTTFTPenaltyMs: 36000
+        - type: token-load-scorer
         schedulingProfiles:
         - name: default
           plugins:
-          - pluginRef: queue-scorer
-            weight: 2
-          - pluginRef: kv-cache-utilization-scorer
-            weight: 2
-          - pluginRef: prefix-cache-scorer
-            weight: 3
-          - pluginRef: no-hit-lru-scorer
-            weight: 2
+          - pluginRef: prefix-cache-affinity-filter
+          - pluginRef: token-load-scorer
 
   modelServers:
     matchLabels:
-      llm-d.ai/guide: "multimodal-optimized-baseline"
+      llm-d.ai/guide: "multimodal-aggregation"

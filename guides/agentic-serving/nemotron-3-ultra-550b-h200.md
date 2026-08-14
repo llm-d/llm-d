@@ -1,8 +1,9 @@
 # Agentic Code Generation — NVIDIA-Nemotron-3-Ultra-550B on H200
 
-This is one of two accelerator-specific deployments of the agentic code-generation workload; see the
-[agentic-serving README](README.md#deployments) for the workload framing and the
-[Qwen3-Coder-480B on TPU v7](qwen3-coder-480b-tpu.md) alternative.
+This is one of the accelerator-specific deployments of the agentic code-generation workload; see the
+[agentic-serving README](README.md#deployments) for the workload framing and the alternatives:
+[GLM-5.2-FP8 on H200](glm-5-2-h200.md),
+[Qwen3-Coder-480B on TPU v7](qwen3-coder-480b-tpu.md).
 
 ## Overview
 
@@ -54,6 +55,7 @@ configuration layers the agentic optimizations onto disaggregated serving:
   source ${REPO_ROOT}/guides/env.sh
   export GUIDE_NAME="agentic-serving"
   export NAMESPACE=llm-d-agentic-serving
+  export INFRA_PROVIDER=base # base | gke
   ```
 
 - Install the Gateway API Inference Extension CRDs:
@@ -97,10 +99,13 @@ helm install ${GUIDE_NAME} \
 
 ### 2. Deploy the Model Server (GPUs)
 
+> [!NOTE]
+> This guide provides two ways to deploy the model server. The default one (`INFRA_PROVIDER` = `base`) is to download the `RedHatAI/NVIDIA-Nemotron-3-Ultra-550B-A55B-FP8-block` model from HuggingFace every time. However, the model is ~560GB in size. Downloading a model of this scale directly from HuggingFace can take over an hour, and because every deployment triggers a new download, it creates a significant bottleneck. To save time and accelerate the deployment process, we highly recommend saving the model to a Google Cloud Storage (GCS) bucket and accessing it directly from there. Please check the [Readme](modelserver/gpu/vllm/nemotron-3-ultra/gke/README.md) for this suggested deployment.
+
 Apply the Kustomize overlay for the Nemotron-3-Ultra H200 deployment:
 
 ```bash
-kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/gpu/vllm/nemotron-3-ultra/
+kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/gpu/vllm/nemotron-3-ultra/${INFRA_PROVIDER}/
 ```
 
 This deploys the 6 prefill and 2 decode replicas. Wait for them to become ready (model load is
@@ -170,18 +175,15 @@ OPENCODE_CONFIG="$(pwd)/modelserver/gpu/vllm/nemotron-3-ultra/opencode.json" ope
 
 ## Benchmarking
 
-This deployment ships its own `inference-perf` preset, tuned for it (defined in
-[`benchmark-templates/agentic-serving-nemotron-3-ultra.yaml`](benchmark-templates/agentic-serving-nemotron-3-ultra.yaml)).
-It drives a **shared-prefix** workload with large, highly cacheable system prompts and a ramped
-request rate, exercising cross-request prefix reuse and the CPU-offload tier under sustained load:
+This guide comes with an `inference-perf` benchmark preset (defined in [agentic-serving-nemotron-3-ultra.yaml](benchmark-templates/agentic-serving-nemotron-3-ultra.yaml)) designed for agentic code-generation workloads with multi-turn interactions and tool usage. The configuration parameters include:
 
-| Workload Characteristic | Value | Description |
-| :--- | :--- | :--- |
-| **Shared system prompt** | 3,000 tokens | Common, highly cacheable prefix reused across every prompt in a group. |
-| **Question length** | 4,000 tokens | Per-request unique suffix appended to the shared prefix. |
-| **Output length** | 1,024 tokens | Tokens generated per request. |
-| **Groups × prompts/group** | 10 × 50 | 500 total prompts; the 50 prompts in each group share one prefix. |
-| **Request rate** | 2 → 10 req/s | Ramped across five 120s stages (2, 4, 6, 8, 10 req/s) to sweep sustained load. |
+| Workload Characteristic | Metric / Distribution Type | Min | Max | Mean / Constant | Std Dev | Description |
+| :--- | :--- | :--- | :--- | :--- | :--- | :--- |
+| **Shared System Prompt** | Constant | - | - | 3,000 tokens | - | Common base instructions, libraries, and API schemas shared across all agent instances. Highly cacheable. |
+| **Dynamic System Prompt** | Lognormal | 10,000 | 990,000 | 160,000 tokens | 233,600 | Repository context, file indexes, and user-specific code context. Large and variable context. |
+| **Turns per Conversation** | Lognormal | 1 |3,000 | 540 turns | 48,600 | The depth of the agentic reasoning/conversational loop. Multi-turn interactivetions require sustaining long-lived sessions. |
+| **Input Tokens per Turn** | Lognormal | 100 | 10,000 | 1,500 tokens | 1,200 | Ongoing prompt extensions (e.g., test logs, user follow-ups, modified code blocks) during conversation. |
+| **Output Tokens per Turn** | Lognormal | 50 | 10,000 | 425 tokens | 825 | Model generations per turn, which are generally smaller than inputs but can spike when generating large files. |
 
 ### 1. Prepare the Benchmarking Suite
 
@@ -206,6 +208,13 @@ The request rate and workload shape are fixed in the template, so only the endpo
 resolved before rendering:
 
 ```bash
+# Benchmark parameters. CONCURRENCY_LEVEL is the number of concurrent coding sessions
+# to drive; NUM_REQUESTS is fixed at 20 per session; SEED is varied per concurrency level
+# so prompts don't overlap across runs (matches the published results below).
+export CONCURRENCY_LEVEL=40
+export NUM_REQUESTS=$((20 * CONCURRENCY_LEVEL))
+export SEED=$((7 + CONCURRENCY_LEVEL))
+
 export IP=$(kubectl get service ${GUIDE_NAME}-epp -n ${NAMESPACE} -o jsonpath='{.spec.clusterIP}')
 envsubst < agentic-serving-nemotron-3-ultra.yaml > config.yaml
 ./run_only.sh -c config.yaml -o ./results
@@ -213,8 +222,24 @@ envsubst < agentic-serving-nemotron-3-ultra.yaml > config.yaml
 
 ## Benchmark Results
 
-> 🚧 Under construction — benchmark results for the H200 P/D-disaggregated deployment will be
-> published here as runs complete.
+The results below are with 8 replicas of H200 GPU on the benchmark workload described above. Scaling concurrency up to 80 sessions.
+
+### Summary with 60 concurrent coding sessions
+
+| Metric                  | k8s Service | llm-d-optimized  | Δ Improvement |
+| :---                    | :---        | :---             | :---          |
+| **TTFT P50 (ms)**       | 49462       | 20543            | ⬇️  58%        |
+| **Total tokens / sec**  | 64958       | 67645            | ⬆️  4%         |
+| **Input tokens / sec**  | 64474       | 66716            | ⬆️  3%         |
+| **Output tokens / sec** |   484       |   929            | ⬆️  92%        |
+
+### Latency Profiles
+
+<p float="left">
+  <img src="./benchmark-results/latency_vs_throughput_nemotron-3-ultra.png" width="33%" alt="Latency vs Throughput" />
+  <img src="./benchmark-results/throughput_vs_concurrency_nemotron-3-ultra.png" width="33%" alt="Throughput vs Concurrency" />
+  <img src="./benchmark-results/ttft_vs_concurrency_nemotron-3-ultra.png" width="33%" alt="TTFT vs Concurrency" />
+</p>
 
 ## Cleanup
 
@@ -222,6 +247,11 @@ To clean up resources:
 
 ```bash
 helm uninstall ${GUIDE_NAME} -n ${NAMESPACE}
-kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/gpu/vllm/nemotron-3-ultra/
+kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/gpu/vllm/nemotron-3-ultra/${INFRA_PROVIDER}/
+```
+
+<!-- llm-d-cicd:skip start -->
+```bash
 kubectl delete namespace ${NAMESPACE}
 ```
+<!-- llm-d-cicd:skip end -->

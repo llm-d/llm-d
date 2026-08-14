@@ -191,9 +191,9 @@ scrape_metrics() {
   return 0
 }
 
-QSIZE=inference_extension_flow_control_queue_size
-SAT=inference_extension_flow_control_pool_saturation
-QD=inference_extension_flow_control_request_queue_duration_seconds
+QSIZE=llm_d_epp_flow_control_queue_size
+SAT=llm_d_epp_flow_control_pool_saturation
+QD=llm_d_epp_flow_control_request_queue_duration_seconds
 
 # Background one band's burst; FlowKey = (fairness id, objective-derived priority).
 fire_band() {

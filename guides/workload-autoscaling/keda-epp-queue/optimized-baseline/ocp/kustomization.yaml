@@ -1,0 +1,66 @@
+# OpenShift overlay for the KEDA + EPP queue-based autoscaling guide.
+#
+# On OpenShift, metrics live in Thanos Querier, whose :9091 endpoint rejects
+# unauthenticated queries with a 401 — and KEDA suppresses that error and
+# silently serves `fallback` replicas, so an unauthenticated trigger looks
+# healthy while autoscaling does nothing. This overlay makes the queue path work
+# on OpenShift by:
+#   - pointing both triggers at Thanos Querier and enabling bearer auth, and
+#   - provisioning a dedicated ServiceAccount (keda-epp-metrics-reader) granted
+#     cluster-monitoring-view, then repointing the TriggerAuthentication at that
+#     SA's token Secret. On OpenShift the service-ca operator injects
+#     `service-ca.crt` (the CA that signs Thanos's serving cert) into the token
+#     Secret automatically, so no CA copying is required.
+#
+# Build:  kubectl kustomize ocp
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+# Default namespace for the guide; override per deployment. The namespace
+# transformer also rewrites the base ScaledObject/TriggerAuthentication namespace
+# and the ServiceAccount subject in the ClusterRoleBinding, keeping them aligned.
+# NOTE: the PromQL label selectors inside the trigger queries are opaque strings
+# the transformer cannot reach — edit them (or patch at deploy time) to match your
+# EPP service/namespace/model.
+namespace: llm-d-optimized-baseline
+
+resources:
+  - ../base
+
+# Shared OCP metrics-reader auth (SA + ClusterRoleBinding + token Secret).
+components:
+  - ../../../../recipes/autoscaling/metrics-reader
+
+patches:
+  # Repoint the TriggerAuthentication from CA-only to bearer+CA, using the
+  # ServiceAccount token Secret (token + service-ca.crt).
+  - patch: |-
+      - op: replace
+        path: /spec/secretTargetRef
+        value:
+          - parameter: bearerToken
+            name: keda-epp-metrics-reader-token
+            key: token
+          - parameter: ca
+            name: keda-epp-metrics-reader-token
+            key: service-ca.crt
+    target:
+      kind: TriggerAuthentication
+      name: keda-prometheus-auth
+  # Point both triggers at Thanos Querier and enable bearer authentication.
+  - patch: |-
+      - op: replace
+        path: /spec/triggers/0/metadata/serverAddress
+        value: https://thanos-querier.openshift-monitoring.svc.cluster.local:9091
+      - op: add
+        path: /spec/triggers/0/metadata/authModes
+        value: "bearer"
+      - op: replace
+        path: /spec/triggers/1/metadata/serverAddress
+        value: https://thanos-querier.openshift-monitoring.svc.cluster.local:9091
+      - op: add
+        path: /spec/triggers/1/metadata/authModes
+        value: "bearer"
+    target:
+      kind: ScaledObject
+      name: optimized-baseline-keda-epp

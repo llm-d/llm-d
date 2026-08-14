@@ -1,4 +1,4 @@
-# [Experimental] Flow Control
+# Flow Control
 
 [![E2E (GKE GPU)](https://github.com/llm-d/llm-d/actions/workflows/consolidate-status-flow-control-gke-acc-gpu-vllm-x.yaml/badge.svg)](https://github.com/llm-d/llm-d/actions/workflows/consolidate-status-flow-control-gke-acc-gpu-vllm-x.yaml)
 
@@ -89,7 +89,7 @@ Flow Control is a software-level scheduling feature at the EPP layer and is enti
 
   ```bash
   kubectl apply -f https://github.com/kubernetes-sigs/gateway-api-inference-extension/releases/download/${GAIE_VERSION}/v1-manifests.yaml
-  kubectl apply -f https://github.com/llm-d/llm-d-router/releases/download/${ROUTER_CHART_VERSION}/manifests.yaml
+  kubectl apply -f https://github.com/llm-d/llm-d-router/releases/download/${ROUTER_RELEASE_VERSION}/manifests.yaml
   ```
 
 * Create a target namespace for the installation:
@@ -118,12 +118,17 @@ Flow Control is a software-level scheduling feature at the EPP layer and is enti
 This deploys the router with an Envoy sidecar, it doesn't set up a Kubernetes Gateway.
 
 ```bash
-helm install ${GUIDE_NAME} \
+helm upgrade --install ${GUIDE_NAME} \
     ${ROUTER_STANDALONE_CHART} \
     -f ${REPO_ROOT}/guides/recipes/router/base.values.yaml \
     -f ${REPO_ROOT}/guides/${GUIDE_NAME}/router/${GUIDE_NAME}.values.yaml \
     -n ${NAMESPACE} --version ${ROUTER_CHART_VERSION}
 ```
+
+The router pod's resource requests are set in
+[base.values.yaml](../recipes/router/base.values.yaml): 4 vCPU and 8 GiB of memory for
+each of the EPP and Envoy containers, so 8 vCPU and 16 GiB per pod. A pod stuck `Pending`
+with `Insufficient cpu` needs a node with the pod's full CPU request allocatable.
 
 <details>
 <summary><h4>Gateway Mode</h4></summary>
@@ -135,7 +140,7 @@ To use a Kubernetes Gateway managed proxy rather than the standalone version, fo
 
 ```bash
 export PROVIDER_NAME=gke # options: none, gke, agentgateway, istio
-helm install ${GUIDE_NAME} \
+helm upgrade --install ${GUIDE_NAME} \
     ${ROUTER_GATEWAY_CHART}  \
     -f ${REPO_ROOT}/guides/recipes/router/base.values.yaml \
     -f ${REPO_ROOT}/guides/recipes/router/features/httproute-flags.yaml \
@@ -161,8 +166,11 @@ kubectl kustomize ${REPO_ROOT}/guides/optimized-baseline/modelserver/gpu/vllm/${
 
 ### 3. Enable monitoring (optional)
 
-* Install the [Monitoring stack](../../docs/operations/observability/setup.md).
-* To enable Prometheus monitoring on the llm-d router, add `-f ${REPO_ROOT}/guides/recipes/router/features/monitoring.values.yaml` during the [router installation step](#1-deploy-the-router).
+If you want monitoring, decide before step 1: the monitoring values create a
+ServiceMonitor, whose CRD only exists after the monitoring stack is installed.
+
+* Install the [Monitoring stack](../../docs/operations/observability/setup.md) **before deploying the router**.
+* Add `-f ${REPO_ROOT}/guides/recipes/router/features/monitoring.values.yaml` to the [router installation command](#1-deploy-the-router). If you already installed without it, re-run the same `helm upgrade --install` command with the extra `-f` appended.
 * Deploy the monitoring resources for model servers:
 
 ```bash
@@ -193,12 +201,56 @@ export IP=$(kubectl get gateway llm-d-inference-gateway -n ${NAMESPACE} -o jsonp
 Check EPP logs for feature gate activation:
 
 ```bash
-kubectl logs deploy/${GUIDE_NAME}-epp -n ${NAMESPACE} | grep "Flow Control enabled"
+# -c epp: in standalone mode kubectl defaults to the Envoy sidecar, whose log never matches
+kubectl logs deploy/${GUIDE_NAME}-epp -c epp -n ${NAMESPACE} | grep "Initializing Flow Control layer"
 ```
+
+Expected: one line, `Initializing Flow Control layer`. No output means the gate is off for
+this deployment (the EPP then logs `Flow Control layer is disabled` instead) or the log
+format changed; the stronger check is that `llm_d_epp_flow_control_*` series exist on the
+metrics endpoint (see [Proof of Queuing](#3-proof-of-queuing)).
 
 ### 3. Proof of Queuing
 
-To fully verify that queuing and backpressure are working, you must apply concurrent load. We will demonstrate this using a load generation tool in **Use Case 2** below. For now, set up your test environment.
+To fully verify that queuing and backpressure are working, you must apply concurrent load; [Use Case 2](#use-case-2-backpressure-management) does that with a burst of concurrent requests. For now, set up the test environment.
+
+**Read `maxConcurrency` from [router/flow-control.values.yaml](./router/flow-control.values.yaml).**
+The Use Case 2 load test sizes its burst from `MAX_CONCURRENCY`; a retuned values file
+changes the burst with it:
+
+```bash
+MAX_CONCURRENCY=$(awk '$1 == "maxConcurrency:" {print $2; n++} END {exit n!=1}' \
+    ${REPO_ROOT}/guides/${GUIDE_NAME}/router/${GUIDE_NAME}.values.yaml) \
+  || echo "expected exactly one maxConcurrency: in the values file" >&2
+export MAX_CONCURRENCY
+echo "maxConcurrency: ${MAX_CONCURRENCY}"   # expect the integer set in the values file
+```
+
+**Grant read access to the EPP metrics endpoint.** The EPP authenticates every metrics
+scrape against the Kubernetes API: a TokenReview on the caller's bearer token, then a
+SubjectAccessReview on the `/metrics` URL. Give the debug pod's service account
+permission to read `/metrics`, and give the EPP's service account the
+`system:auth-delegator` role it needs to run the reviews. The chart ships an equivalent
+grant only when `router.monitoring.prometheus.enabled` is set, which also creates a
+ServiceMonitor and requires the Prometheus Operator CRDs; this guide leaves that flag
+off and creates the binding directly:
+
+```bash
+kubectl create clusterrole ${GUIDE_NAME}-metrics-reader \
+    --verb=get --non-resource-url=/metrics \
+    --dry-run=client -o yaml | kubectl apply -f -
+kubectl create clusterrolebinding ${GUIDE_NAME}-metrics-reader \
+    --clusterrole=${GUIDE_NAME}-metrics-reader \
+    --serviceaccount=${NAMESPACE}:default \
+    --dry-run=client -o yaml | kubectl apply -f -
+kubectl create clusterrolebinding ${GUIDE_NAME}-epp-auth-delegator \
+    --clusterrole=system:auth-delegator \
+    --serviceaccount=${NAMESPACE}:${GUIDE_NAME}-epp \
+    --dry-run=client -o yaml | kubectl apply -f -
+```
+
+Without these grants the metrics endpoint returns `401 Unauthorized`, and every
+metrics check in this guide reads as empty grep output.
 
 **Open a temporary interactive shell inside the cluster:**
 
@@ -209,14 +261,26 @@ kubectl run curl-debug --rm -it \
     --env="IP=$IP" \
     --env="NAMESPACE=$NAMESPACE" \
     --env="GUIDE_NAME=$GUIDE_NAME" \
+    --env="MODEL_NAME=$MODEL_NAME" \
+    --env="MAX_CONCURRENCY=$MAX_CONCURRENCY" \
     -- /bin/bash
 ```
 
-**From inside the debug pod, check the metrics:**
+**From inside the debug pod, check the metrics.** The pod's automounted service account
+token authenticates the scrape:
 
 ```bash
-curl http://${GUIDE_NAME}-epp:9090/metrics | grep llm_d_epp_flow_control_queue_size
+TOKEN=$(cat /var/run/secrets/kubernetes.io/serviceaccount/token)
+curl -s -o metrics.txt -w "%{http_code}\n" -H "Authorization: Bearer ${TOKEN}" \
+  http://${GUIDE_NAME}-epp:9090/metrics   # expect: 200
+grep llm_d_epp_flow_control_queue_size metrics.txt
 ```
+
+Expected: one series per active flow (tenant × priority), all `0` on an idle pool. A
+flow's series appears after its first request queues, so a quiet pool may show none.
+A `401` means the metrics-access grants above were skipped; a `500` means the EPP's
+service account lacks the auth-delegator binding (the EPP log shows a failed
+TokenReview).
 
 ## Use Cases
 
@@ -262,6 +326,23 @@ curl -X POST http://${IP}/v1/completions \
 >
 > **Production Pattern**: Your ingress API Gateway (or an Envoy `ext_authz` filter) should be configured to automatically strip any incoming `x-llm-d-*` headers, plus the deprecated EPP-managed aliases listed in the [EPP HTTP headers reference](../../docs/api-reference/epp-http-headers.md), from external traffic. Gateway API Inference Extension (GAIE) endpoint picker protocol headers such as `x-gateway-destination-endpoint*` are not part of this stripping rule. After stripping, validate the user's API Key or JWT, extract their tier/tenant from the token claims, and securely inject the authoritative `x-llm-d-inference-fairness-id` and `x-llm-d-inference-objective` headers before passing the request to the EPP.
 
+#### 3. Verify the Classification
+
+Still inside the `curl-debug` pod, confirm the request was accounted under the premium
+band:
+
+```bash
+TOKEN=$(cat /var/run/secrets/kubernetes.io/serviceaccount/token)
+curl -s -H "Authorization: Bearer ${TOKEN}" http://${GUIDE_NAME}-epp:9090/metrics \
+  | grep 'llm_d_epp_flow_control_request_queue_duration_seconds_count' \
+  | grep 'priority="100"'
+```
+
+Expected: a series labeled `fairness_id="tenant-a", priority="100"` with a count of at
+least 1. If it is absent while a `priority="0"` series grows, the objective headers are
+not being honored. Check that `objectives.yaml` is applied and that its `poolRef`
+matches the InferencePool in the namespace (`kubectl get inferencepools -n ${NAMESPACE}`).
+
 ### Use Case 2: Backpressure Management
 
 Backpressure management protects GPUs from context-thrashing and ensures predictable generation times by holding requests in the EPP when the pool is saturated.
@@ -270,38 +351,102 @@ Unlike legacy admission mode which immediately drops negative-priority requests 
 
 #### Verification for Use Case 2
 
-To verify backpressure management, you must overwhelm the pool's capacity. Because the system is work-conserving, a single request will dispatch immediately. We will use `hey`, a lightweight HTTP load generator, to instantly fire concurrent requests and trigger saturation.
+To verify backpressure management, you must overwhelm the pool's capacity. Because the system is work-conserving, a single request will dispatch immediately. We will fire a sustained burst of concurrent `curl` requests to trigger saturation.
 
-1. **Download `hey` and create a payload** (from inside the `curl-debug` pod):
+1. **Create a payload that sustains load** (from inside the `curl-debug` pod). A short
+   prompt with the default `max_tokens` completes in under a second and drains before any
+   queue is observable, so build one that keeps each request busy for tens of seconds:
 
     ```bash
-    wget https://hey-release.s3.us-east-2.amazonaws.com/hey_linux_amd64 -O /usr/local/bin/hey
-    chmod +x /usr/local/bin/hey
-
-    cat <<EOF > payload.json
-    {
-      "model": "${MODEL_NAME}",
-      "prompt": "Say hello"
-    }
-    EOF
+    awk 'BEGIN{s=""; for(i=0;i<1500;i++) s=s" " int(rand()*32000); print s}' \
+      | jq -Rs "{model: \"${MODEL_NAME}\", prompt: ., max_tokens: 500, ignore_eos: true}" \
+      > payload.json
     ```
 
-2. **Fire a Burst of Best-Effort Requests**:
+2. **Fire a burst of Best-Effort requests in the background.** Queuing begins only once
+   in-flight requests exceed the pool's dispatch capacity: `maxConcurrency` × ready
+   model-server replicas. Scale the pool to a single replica so a shell loop can exceed
+   that capacity, and record the current replica count for step 5 to restore. The debug
+   pod has no kubectl, so run the scale commands from your host terminal:
 
     ```bash
-    hey -c 150 -n 150 -m POST -T "application/json" \
+    export ORIG_REPLICAS=$(kubectl get deployment -l llm-d.ai/guide=${GUIDE_NAME} \
+        -n ${NAMESPACE} -o jsonpath='{.items[0].spec.replicas}')
+    kubectl scale deployment -l llm-d.ai/guide=${GUIDE_NAME} -n ${NAMESPACE} --replicas=1
+    ```
+
+   Wait for the scale-down to settle. While more than one replica reports ready, dispatch
+   capacity stays above `MAX_CONCURRENCY` and the burst drains without queuing:
+
+    ```bash
+    until [ "$(kubectl get deployment -l llm-d.ai/guide=${GUIDE_NAME} \
+        -n ${NAMESPACE} -o jsonpath='{.items[0].status.readyReplicas}')" = "1" ]; do
+      sleep 5
+    done
+    ```
+
+   Back in the debug pod, confirm a single request succeeds before bursting; a failing
+   payload would read as an empty queue in step 3. The request generates 500 tokens and
+   takes several seconds on an unloaded pool:
+
+    ```bash
+    curl -s -o /dev/null -w "%{http_code}\n" --max-time 600 -X POST \
+      -H "Content-Type: application/json" \
       -H "x-llm-d-inference-fairness-id: tenant-b" \
       -H "x-llm-d-inference-objective: best-effort-traffic" \
-      -D payload.json http://${IP}/v1/completions
+      -d @payload.json http://${IP}/v1/completions   # expect: 200
     ```
 
-3. **Observe Behavior**: While the load is running (or immediately after), these requests should be buffered in the `best-effort` priority band. Open a second terminal or check the metrics quickly to verify:
+   Then fire the burst: `MAX_CONCURRENCY` requests dispatch immediately and `SURPLUS`
+   requests queue. Keep `SURPLUS` below the best-effort band's `maxRequests` limit in
+   [router/flow-control.values.yaml](./router/flow-control.values.yaml); past that limit
+   the EPP rejects the overflow. The burst must still be running when you poll in
+   step 3, so background each request (`&`):
 
     ```bash
-    curl -s http://${GUIDE_NAME}-epp:9090/metrics | grep 'llm_d_epp_flow_control_queue_size{priority="-10"}'
+    SURPLUS=20   # requests expected to queue; stay below the band's maxRequests
+    BURST=$((MAX_CONCURRENCY + SURPLUS))
+    for i in $(seq 1 ${BURST}); do
+      curl -s -o /dev/null --max-time 600 -X POST \
+        -H "Content-Type: application/json" \
+        -H "x-llm-d-inference-fairness-id: tenant-b" \
+        -H "x-llm-d-inference-objective: best-effort-traffic" \
+        -d @payload.json http://${IP}/v1/completions &
+    done
     ```
 
-    *You should see a value greater than 0, proving the requests were safely queued.*
+3. **Observe behavior while the load runs.** The surplus requests buffer in the
+   `best-effort` priority band. Poll the queue-size metric for the duration of the load
+   and record the peak:
+
+    ```bash
+    TOKEN=$(cat /var/run/secrets/kubernetes.io/serviceaccount/token)
+    PEAK=0
+    for i in $(seq 1 30); do
+      Q=$(curl -s -H "Authorization: Bearer ${TOKEN}" http://${GUIDE_NAME}-epp:9090/metrics \
+        | awk '/llm_d_epp_flow_control_queue_size.*priority="-10"/ {s+=$2} END {print s+0}')
+      [ "$Q" -gt "$PEAK" ] && PEAK=$Q
+      sleep 1
+    done
+    echo "peak best-effort queue depth: ${PEAK} (expected ~${SURPLUS})"
+    wait   # let the burst finish before moving on
+    ```
+
+    Expect a peak near `SURPLUS`: the burst minus the `MAX_CONCURRENCY` requests that
+    dispatched immediately. A peak above 0 confirms the EPP queued the surplus. A peak
+    of 0 usually means the metrics scrape failed auth (re-run the metrics check from
+    [Proof of Queuing](#3-proof-of-queuing); expect 200), the poll missed the load
+    window (the burst finished first; raise `max_tokens`), or the burst never exceeded
+    dispatch capacity (more than one replica still ready; re-check the scale-down in
+    step 2). Rule out all three causes before raising the concurrency and re-running.
+
+    `wait` returns once the pool works through the burst: about 30 seconds on the
+    reference workload's single replica, longer on slower pools. On a pool slow enough
+    that queued requests wait past `defaultRequestTTL` (60s in
+    [router/flow-control.values.yaml](./router/flow-control.values.yaml)), the EPP
+    rejects them. The burst curls discard their responses, so a rejection leaves no
+    output; the poll records the peak in the first seconds of the burst, before any TTL
+    can expire.
 
 4. **Exit the debug shell** once testing is complete to return to your host terminal:
 
@@ -309,10 +454,17 @@ To verify backpressure management, you must overwhelm the pool's capacity. Becau
     exit
     ```
 
+5. **Restore the model server replica count** recorded in step 2 (model server pods take
+   several minutes to become ready again):
+
+    ```bash
+    kubectl scale deployment -l llm-d.ai/guide=${GUIDE_NAME} -n ${NAMESPACE} --replicas=${ORIG_REPLICAS}
+    ```
+
 ## Production Tuning: Deriving `maxConcurrency`
 
 > [!IMPORTANT]
-> The `maxConcurrency` value of `132` used in this guide is empirically tuned **only** for the default reference workload (Qwen3-32B on 16 H100s). If you use a different model, hardware, or have different prompt lengths, you **must** calculate your own `maxConcurrency` to prevent GPU starvation or OOMs.
+> The `maxConcurrency` value shipped in [router/flow-control.values.yaml](./router/flow-control.values.yaml) is empirically tuned **only** for the default reference workload (Qwen3-32B on 16 H100s). If you use a different model, hardware, or have different prompt lengths, you **must** calculate your own `maxConcurrency` to prevent GPU starvation or OOMs.
 
 For detailed instructions on how to derive the optimal `maxConcurrency` for your specific workload, see the [Tuning Guide](tuning.md).
 
@@ -379,9 +531,6 @@ export GATEWAY_CLASS=istio
 
 ### 3. Run the benchmark profile for Flow Control
 
-> [!WARNING]
-> A **dedicated** `guide_flow-control_1.yaml` profile shaped specifically to exercise QoS differentiation and fairness across multiple tenants is NOT yet shipped — the existing `inference-perf` harness does not model multi-tenant load shaping. The command below uses `random_concurrent.yaml` as a generic stand-in: it exercises the stack under concurrent contention without prefix-cache bias, but it does NOT measure flow-control's QoS slicing across priority classes. Once multi-tenant load shaping is upstreamed, substitute the tailored profile here.
-
 Benchmark results are copied to the `workspace` directory that is specified by _you_ (or that is automatically generated when omitted from the cli) on the machine running the CLI. The workspace location is optional — by default the CLI auto-generates a timestamped workspace and prints its full path in the logs during the run. If you'd rather choose where results land, pass `--workspace <YOUR_DIR_HERE>` as a top-level argument of `llmdbenchmark` (before the `run` subcommand):
 
 ```bash
@@ -390,7 +539,7 @@ llmdbenchmark \
     run \
     --endpoint-url   "${ENDPOINT_URL}" \
     --gateway-class  "${GATEWAY_CLASS}" \
-    --model          "Qwen/Qwen3-32B" \
+    --model          "${MODEL_NAME}" \
     --namespace      "${NAMESPACE}" \
     --harness        inference-perf \
     --workload       random_concurrent.yaml \
@@ -398,7 +547,12 @@ llmdbenchmark \
 ```
 
 > [!NOTE]
-> Depending on your `cluster` you may need to extend the default `timeout` values to longer duration, as `bind`, `access` and `wait-timeout` times of `pvcs` and `pods` can be arbitrarily slower on other systems, please utilize `llmdbenchmark run --help` to view the knobs needed to increase those values.
+> The harness pod requests 16 vCPU by default
+> ([resource requirements](https://github.com/llm-d/llm-d-benchmark/blob/main/docs/resource_requirements.md)),
+> and its `workload-pvc` requires a `ReadWriteMany`-capable StorageClass. If the run stalls on a `Pending` pod or a PVC
+> timeout, see [Troubleshooting in `helpers/benchmark.md`](../../helpers/benchmark.md#troubleshooting)
+> for the StorageClass override (including a GKE Filestore walkthrough) and the
+> [timeout knobs](../../helpers/benchmark.md#timeouts).
 
 ## Observability
 
@@ -411,10 +565,21 @@ To remove the deployed components:
 ```bash
 helm uninstall ${GUIDE_NAME} -n ${NAMESPACE}
 kubectl delete -f ${REPO_ROOT}/guides/${GUIDE_NAME}/objectives.yaml -n ${NAMESPACE}
-kubectl kustomize ${REPO_ROOT}/guides/optimized-baseline/modelserver/gpu/vllm/ \
+export INFRA_PROVIDER=base # match the value used at deploy time
+kubectl kustomize ${REPO_ROOT}/guides/optimized-baseline/modelserver/gpu/vllm/${INFRA_PROVIDER}/ \
   | sed "s/optimized-baseline/${GUIDE_NAME}/g" \
   | kubectl delete -n ${NAMESPACE} -f -
+kubectl delete clusterrolebinding ${GUIDE_NAME}-metrics-reader ${GUIDE_NAME}-epp-auth-delegator
+kubectl delete clusterrole ${GUIDE_NAME}-metrics-reader
 ```
+
+If you ran the Benchmarking section, also delete the harness leftovers. The workload PVC
+is backed by shared storage that bills until removed. Follow
+[Cleaning up harness resources in `helpers/benchmark.md`](../../helpers/benchmark.md#cleaning-up-harness-resources)
+with `<namespace>` set to `${NAMESPACE}`.
+
+Afterward `kubectl get all,inferenceobjectives,pvc -n ${NAMESPACE}` returns
+`No resources found` (the `llm-d-hf-token` secret remains).
 
 ## Further Reading
 

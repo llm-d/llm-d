@@ -2,9 +2,12 @@
 # Redis SortedSet queue backend.
 #
 # Replace the placeholders: NAMESPACE, IGW_HOST (one inference gateway that routes
-# by payload.model to two InferencePools), MODEL_A / MODEL_B (the two served model
-# names), POOL_A / POOL_B (their InferencePool names — used by the saturation
-# overlay).
+# by payload.model to two InferencePools), POOL_A / POOL_B (the two InferencePool
+# names — used by the saturation overlay).
+#
+# MODEL_A / MODEL_B below are the guide's ${MODEL_A} / ${MODEL_B} shell variables,
+# not placeholders in this file: the served model names reach the system through
+# payload.model in the publisher, never through these values.
 #
 # Three dimensions:
 #   - MODEL  -> its own worker pool (model-a / model-b): independent concurrency

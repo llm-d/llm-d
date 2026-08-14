@@ -3,10 +3,11 @@
 [![E2E (CKS GPU)](https://github.com/llm-d/llm-d/actions/workflows/consolidate-status-wide-ep-lws-cks-acc-gpu-vllm-x.yaml/badge.svg)](https://github.com/llm-d/llm-d/actions/workflows/consolidate-status-wide-ep-lws-cks-acc-gpu-vllm-x.yaml)
 [![E2E (GKE GPU)](https://github.com/llm-d/llm-d/actions/workflows/consolidate-status-wide-ep-lws-gke-acc-gpu-vllm-x.yaml/badge.svg)](https://github.com/llm-d/llm-d/actions/workflows/consolidate-status-wide-ep-lws-gke-acc-gpu-vllm-x.yaml)
 [![E2E (OCP GPU)](https://github.com/llm-d/llm-d/actions/workflows/consolidate-status-wide-ep-lws-ibm-acc-gpu-vllm-x.yaml/badge.svg)](https://github.com/llm-d/llm-d/actions/workflows/consolidate-status-wide-ep-lws-ibm-acc-gpu-vllm-x.yaml)
+[![E2E (Intel XPU)](https://github.com/llm-d/llm-d/actions/workflows/consolidate-status-wide-ep-lws-intel-acc-xpu-vllm-x.yaml/badge.svg)](https://github.com/llm-d/llm-d/actions/workflows/consolidate-status-wide-ep-lws-intel-acc-xpu-vllm-x.yaml)
 
 ## Overview
 
-This guide demonstrates how to deploy DeepSeek-R1-0528 using vLLM's P/D disaggregation support with NIXL in a wide expert parallel pattern with LeaderWorkerSets with DP-aware scheduling. This guide has been validated on:
+This guide demonstrates how to deploy DeepSeek-R1-0528 using vLLM's P/D disaggregation support with NIXL in a wide expert parallel pattern with DP-aware scheduling. This guide includes both `LeaderWorkerSet` and `DisaggregatedSet` deployment paths. It has been validated on:
 
 * a 32xH200 cluster with InfiniBand networking
 * a 32xH200 cluster on GKE with RoCE networking
@@ -21,12 +22,12 @@ This guide demonstrates how to deploy DeepSeek-R1-0528 using vLLM's P/D disaggre
 
 ## Default Configuration
 
-| Parameter                | Value                                                   |
-| ------------------------ | ------------------------------------------------------- |
-| Model                    | [DeepSeek-R1-0528](https://huggingface.co/deepseek-ai/DeepSeek-R1-0528) |
-| Prefill Data Parallelism | 16                                                      |
-| Decode Data Parallelism  | 16                                                      |
-| Total GPUs               | 32                                                      |
+| Parameter | Value |
+| --- | --- |
+| Model | [DeepSeek-R1-0528](https://huggingface.co/deepseek-ai/DeepSeek-R1-0528) |
+| Prefill Data Parallelism | 16 |
+| Decode Data Parallelism | 16 |
+| Total GPUs | 32 |
 
 ### Intel XPU Configuration
 
@@ -47,13 +48,13 @@ The Intel XPU configuration uses the validated DeepSeek-V2-Lite shape:
 
 This guide includes configurations for the following accelerators:
 
-| Backend               | Directory                                   | Notes                                      |
-| --------------------- | ------------------------------------------- | ------------------------------------------ |
-| NVIDIA GPU (GKE)      | `modelserver/gpu/vllm/gke/`                 | GKE deployment (H200)                      |
-| NVIDIA GPU (GKE A4)   | `modelserver/gpu/vllm/topology-aware/gke-a4/` | GKE deployment (B200)                    |
-| NVIDIA GPU (CoreWeave)| `modelserver/gpu/vllm/coreweave/`           | CoreWeave deployment                       |
-| NVIDIA GPU (GB200)    | `modelserver/gpu/vllm/dgx-cloud-gb200/`     | DGX Cloud GB200 deployment                 |
-| Intel XPU (vLLM)      | `modelserver/xpu/vllm/`                     | DeepSeek-V2-Lite-Chat, DRA `gpu.intel.com`, XCCL, NIXL XPU KV buffers |
+| Backend | Directory | Notes |
+| --- | --- | --- |
+| NVIDIA GPU (GKE) | `modelserver/gpu/vllm/gke/` | GKE deployment (H200) |
+| NVIDIA GPU (GKE A4) | `modelserver/gpu/vllm/topology-aware/gke-a4/` | GKE deployment (B200) |
+| NVIDIA GPU (CoreWeave) | `modelserver/gpu/vllm/coreweave/` | CoreWeave deployment |
+| NVIDIA GPU (GB200) | `modelserver/gpu/vllm/dgx-cloud-gb200/` | DGX Cloud GB200 deployment |
+| Intel XPU (vLLM) | `modelserver/xpu/vllm/` | DeepSeek-V2-Lite-Chat, DRA `gpu.intel.com`, XCCL, NIXL XPU KV buffers |
 
 > [!NOTE]
 > NVIDIA GPU backends that use DeepEP for inter-node EP require All-to-All RDMA
@@ -72,6 +73,7 @@ This guide includes configurations for the following accelerators:
   export branch="main" # branch, tag, or commit hash
   git clone https://github.com/llm-d/llm-d.git && cd llm-d && git checkout ${branch}
   ```
+
 * Set the following environment variables:
 
   ```bash
@@ -81,18 +83,22 @@ This guide includes configurations for the following accelerators:
   export NAMESPACE=llm-d-wide-ep
   export MODEL=deepseek-ai/DeepSeek-R1-0528
   ```
+
 * Install the Gateway API Inference Extension CRDs:
 
   ```bash
   kubectl apply -f https://github.com/kubernetes-sigs/gateway-api-inference-extension/releases/download/${GAIE_VERSION}/v1-manifests.yaml
   ```
-* You have deployed the [LeaderWorkerSet controller](https://lws.sigs.k8s.io/docs/installation/)
+
+* You have deployed the [LeaderWorkerSet controller](https://lws.sigs.k8s.io/docs/installation/).
+* To use the `DisaggregatedSet` path, install LWS `v0.9.0` or newer. When installing with Helm, pass `--set enableDisaggregatedSet=true` to enable the `DisaggregatedSet` validating webhook and RBAC.
 * For Intel XPU, install the [Intel Resource Drivers for Kubernetes](https://github.com/intel/intel-resource-drivers-for-kubernetes) and verify that the `gpu.intel.com` DRA DeviceClass is available.
 * Create a target namespace for the installation:
 
   ```bash
   kubectl create namespace ${NAMESPACE} --dry-run=client -o yaml | kubectl apply -f -
   ```
+
 * [Create the `llm-d-hf-token` secret in your target namespace with the key `HF_TOKEN` matching a valid HuggingFace token](../../helpers/hf-token.md) to pull models.
 
 ## Installation Instructions
@@ -124,7 +130,7 @@ helm install ${GUIDE_NAME} \
 ```
 
 <details>
-<summary><h4>Gateway Mode</h4></summary>
+<summary><b>Gateway Mode</b></summary>
 
 To use a Kubernetes Gateway managed proxy rather than the standalone version, follow these steps instead of applying the previous Helm chart:
 
@@ -150,7 +156,11 @@ For Intel XPU, include
 
 ### 2. Deploy the Model Server
 
-Apply the Kustomize overlays for your specific backend:
+Choose one of the following deployment paths:
+
+#### Deploy using LeaderWorkerSet
+
+Apply the Kustomize overlay for your specific backend:
 
 ```bash
 # NVIDIA GPU
@@ -160,6 +170,14 @@ kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/g
 # Intel XPU
 export MODEL=deepseek-ai/DeepSeek-V2-Lite-Chat
 kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/xpu/vllm
+```
+
+#### Deploy using DisaggregatedSet
+
+Apply the `DisaggregatedSet` overlay:
+
+```bash
+kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/gpu/vllm/disaggregatedset
 ```
 
 ### 3. (Optional) Enable Monitoring
@@ -191,7 +209,7 @@ kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/g
 
 ### 1. Get the IP of the Proxy
 
-**Standalone Mode**
+#### Standalone Mode
 
 ```bash
 export IP=$(kubectl get service ${GUIDE_NAME}-epp -n ${NAMESPACE} -o jsonpath='{.spec.clusterIP}')
@@ -231,6 +249,12 @@ curl -X POST http://${IP}/v1/completions \
     }" | jq
 ```
 
+## Precise prefix-cache routing
+
+For KV-event-backed prefix routing with multi-port DP model servers (useful for active-active HA routing),
+follow the [Wide Expert Parallelism with Precise Prefix-Cache Routing](README.precise-prefix-cache-routing.md)
+variant.
+
 ## Benchmarking
 
 This guide uses [`inference-perf`](https://github.com/kubernetes-sigs/inference-perf).
@@ -262,7 +286,7 @@ kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/
 Benchmark: `2048_concurrent_2k_isl_2k_osl` (2048 concurrent requests, 2K input / 2K output tokens)
 
 | Metric | DP Supervisor |
-|---|---|
+| --- | --- |
 | Output tokens/s | 25,176 |
 | Input tokens/s | 25,122 |
 | Total tokens/s | 50,299 |

@@ -1,0 +1,337 @@
+apiVersion: leaderworkerset.x-k8s.io/v1
+kind: LeaderWorkerSet
+metadata:
+  name: wide-ep-lws-nvidia-gpu-vllm-glm-5-2-prefill
+  labels:
+    llm-d.ai/model: GLM-5.2-FP8
+    llm-d.ai/role: prefill
+spec:
+  replicas: ${PREFILL_REPLICAS}
+  leaderWorkerTemplate:
+    size: ${PREFILL_SIZE}
+    workerTemplate:
+      metadata:
+        labels:
+          llm-d.ai/inference-serving: "true"
+          llm-d.ai/guide: "wide-ep-lws"
+          llm-d.ai/accelerator-variant: "gpu"
+          llm-d.ai/accelerator-vendor: "nvidia"
+          llm-d.ai/model: GLM-5.2-FP8
+          llm-d.ai/role: prefill
+      spec:
+        serviceAccountName: glm-5-2
+        affinity:
+          podAffinity:
+            preferredDuringSchedulingIgnoredDuringExecution:
+              - weight: 100
+                podAffinityTerm:
+                  labelSelector:
+                    matchLabels:
+                      llm-d.ai/role: prefill
+                      llm-d.ai/model: GLM-5.2-FP8
+                  topologyKey: backend.coreweave.cloud/leafgroup-name
+        volumes:
+          - name: dshm
+            emptyDir:
+              medium: Memory
+              sizeLimit: 1500Gi
+          - name: hf-cache
+            hostPath:
+              path: /mnt/local/hf-cache
+              type: DirectoryOrCreate
+          - name: jit-cache
+            hostPath:
+              path: /mnt/local/jit-cache
+              type: DirectoryOrCreate
+          - name: sys
+            hostPath:
+              path: /sys
+              type: Directory
+          - name: proc
+            hostPath:
+              path: /proc
+              type: Directory
+          - name: nvme-cache
+            hostPath:
+              path: /mnt/local/kv-cache
+              type: DirectoryOrCreate
+        containers:
+          - name: vllm
+            image: REPLACE_MODEL_SERVER_IMAGE
+            securityContext:
+              capabilities:
+                add:
+                  - IPC_LOCK
+                  - SYS_RAWIO
+              runAsGroup: 0
+              runAsUser: 0
+            imagePullPolicy: Always
+            command:
+              - /bin/bash
+              - -c
+            args:
+              - |-
+                find /dev/shm -type f -delete
+
+                #################
+                # RUN vLLM GLM-5.2-FP8 prefill worker
+                #################
+
+                GPU_MEM_UTIL=${PREFILL_GPU_MEM_UTIL:-0.935}
+
+                MTP_ARGS=""
+                if [ "${ENABLE_MTP:-1}" = "1" ]; then
+                  MTP_ARGS="--speculative-config {\"method\":\"mtp\",\"num_speculative_tokens\":${MTP_NUM_TOKENS:-3}}"
+                fi
+
+                START_RANK=$(( ${LWS_WORKER_INDEX:-0} * DP_SIZE_LOCAL ))
+
+                case "${OFFLOADING_MODE:-off}" in
+                  cpu)
+                    KV_TRANSFER_CONFIG='{"kv_connector":"MultiConnector",
+                                          "kv_role":"kv_both",
+                                          "kv_load_failure_policy":"fail",
+                                          "kv_connector_extra_config":{
+                                            "connectors":[
+                                              {"kv_connector":"NixlConnector","kv_role":"kv_both"},
+                                              {"kv_connector":"OffloadingConnector","kv_role":"kv_both",
+                                               "kv_connector_extra_config":{
+                                                 "cpu_bytes_to_use":'"${KV_OFFLOAD_CPU_BYTES:-107374182400}"',
+                                                 "eviction_policy":"lru"
+                                            }}]}}'
+                    ;;
+                  tiered)
+                    KV_TRANSFER_CONFIG='{"kv_connector":"MultiConnector",
+                                          "kv_role":"kv_both",
+                                          "kv_load_failure_policy":"fail",
+                                          "kv_connector_extra_config":{
+                                            "connectors":[
+                                              {"kv_connector":"NixlConnector","kv_role":"kv_both"},
+                                              {"kv_connector":"OffloadingConnector","kv_role":"kv_both",
+                                               "kv_connector_extra_config":{
+                                                 "spec_name":"TieringOffloadingSpec",
+                                                 "cpu_bytes_to_use":'"${KV_OFFLOAD_CPU_BYTES:-107374182400}"',
+                                                 "eviction_policy":"lru",
+                                                 "secondary_tiers":[{"type":"fs","root_dir":"/mnt/nvme-cache",
+                                                   "n_read_threads":16,"n_write_threads":16}]
+                                            }}]}}'
+                    ;;
+                  *)
+                    KV_TRANSFER_CONFIG='{"kv_connector":"NixlConnector",
+                                          "kv_role":"kv_both",
+                                          "kv_load_failure_policy":"fail"}'
+                    ;;
+                esac
+
+                KV_EVENTS_ARGS=""
+                if [ "${ENABLE_KV_EVENTS:-0}" = "1" ]; then
+                  # vLLM offsets the configured ZMQ publisher port by the GLOBAL
+                  # data-parallel rank. On multi-pod DP groups every pod receives
+                  # the same configured base, so compensate by the pod's start
+                  # rank to land publishers on contiguous local ports
+                  # (5557..5557+DP_SIZE_LOCAL-1). See llm-d-router#2227.
+                  KV_EVENTS_BASE=$((5557 - START_RANK))
+                  KV_EVENTS_ARGS="--kv-events-config {\"enable_kv_cache_events\":true,\"publisher\":\"zmq\",\"endpoint\":\"tcp://*:${KV_EVENTS_BASE}\",\"topic\":\"kv@${POD_IP}:8000@zai-org/GLM-5.2-FP8\"}"
+                fi
+                BLOCK_SIZE_ARGS=""
+                if [ -n "${KV_BLOCK_SIZE:-}" ]; then
+                  # Must match the router's precise-prefix-cache-producer
+                  # tokenProcessorConfig.blockSizeTokens, or the index stays empty.
+                  BLOCK_SIZE_ARGS="--block-size ${KV_BLOCK_SIZE}"
+                fi
+
+                exec vllm serve $MTP_ARGS --kv-cache-dtype fp8 \
+                  zai-org/GLM-5.2-FP8 \
+                  --port 8000 \
+                  --trust-remote-code \
+                  --gpu-memory-utilization $GPU_MEM_UTIL \
+                  --max-model-len ${MAX_MODEL_LEN:-auto} \
+                  --disable-access-log-for-endpoints=/health,/metrics \
+                  --data-parallel-multi-port-external-lb \
+                  --data-parallel-supervisor-port=8208 \
+                  --enable-expert-parallel \
+                  --tensor-parallel-size $TP_SIZE \
+                  --data-parallel-size $((LWS_GROUP_SIZE * DP_SIZE_LOCAL)) \
+                  --data-parallel-size-local $DP_SIZE_LOCAL \
+                  --data-parallel-address ${LWS_LEADER_ADDRESS} \
+                  --data-parallel-rpc-port 5555 \
+                  --max-num-batched-tokens 2048 \
+                  --data-parallel-start-rank $START_RANK \
+                  --kv_transfer_config "$KV_TRANSFER_CONFIG" \
+                  $KV_EVENTS_ARGS $BLOCK_SIZE_ARGS \
+                  --moe-backend deep_gemm \
+                  --all2all-backend deepep_high_throughput
+            env:
+              - name: POD_IP
+                valueFrom:
+                  fieldRef:
+                    fieldPath: status.podIP
+              - name: HF_TOKEN
+                valueFrom:
+                  secretKeyRef:
+                    name: llm-d-hf-token
+                    key: HF_TOKEN
+              - name: HF_HOME
+                value: /mnt/hf-cache
+              - name: PREFILL_GPU_MEM_UTIL
+                value: ""
+              - name: MAX_MODEL_LEN
+                value: "auto"
+              - name: KV_OFFLOAD_CPU_BYTES
+                value: "107374182400"
+              - name: ENABLE_MTP
+                value: "1"
+              - name: MTP_NUM_TOKENS
+                value: "3"
+              - name: VLLM_USE_V2_MODEL_RUNNER
+                value: "0"
+              - name: VLLM_MEMORY_PROFILER_ESTIMATE_CUDAGRAPHS
+                value: "1"
+              - name: VLLM_RANDOMIZE_DP_DUMMY_INPUTS
+                value: "1"
+              - name: DP_SIZE_LOCAL
+                value: "8"
+              - name: TP_SIZE
+                value: "1"
+              - name: TRITON_LIBCUDA_PATH
+                value: /usr/lib64
+              - name: VLLM_SKIP_P2P_CHECK
+                value: "1"
+              - name: VLLM_USE_DEEP_GEMM
+                value: "1"
+              - name: NVIDIA_GDRCOPY
+                value: enabled
+              - name: NVSHMEM_REMOTE_TRANSPORT
+                value: ibgda
+              - name: NVSHMEM_IB_ENABLE_IBGDA
+                value: "true"
+              - name: NVSHMEM_BOOTSTRAP_UID_SOCK_IFNAME
+                value: eth0
+              - name: GLOO_SOCKET_IFNAME
+                value: eth0
+              - name: NCCL_SOCKET_IFNAME
+                value: eth0
+              - name: VLLM_HTTP_TIMEOUT_KEEP_ALIVE
+                value: "120"
+              - name: VLLM_LOGGING_LEVEL
+                value: INFO
+              - name: VLLM_NIXL_SIDE_CHANNEL_HOST
+                valueFrom:
+                  fieldRef:
+                    fieldPath: status.podIP
+
+              - name: CUDA_CACHE_PATH
+                value: /var/cache/vllm/cuda
+              - name: CCACHE_DIR
+                value: /var/cache/vllm/ccache
+              - name: VLLM_CACHE_ROOT
+                value: /var/cache/vllm/vllm
+              - name: FLASHINFER_WORKSPACE_BASE
+                value: /var/cache/vllm/flashinfer
+
+            ports:
+              - containerPort: 8000
+                name: dp0
+                protocol: TCP
+              - containerPort: 8001
+                name: dp1
+                protocol: TCP
+              - containerPort: 8002
+                name: dp2
+                protocol: TCP
+              - containerPort: 8003
+                name: dp3
+                protocol: TCP
+              - containerPort: 8004
+                name: dp4
+                protocol: TCP
+              - containerPort: 8005
+                name: dp5
+                protocol: TCP
+              - containerPort: 8006
+                name: dp6
+                protocol: TCP
+              - containerPort: 8007
+                name: dp7
+                protocol: TCP
+              - containerPort: 8208
+                name: supervisor
+                protocol: TCP
+              - containerPort: 5600
+                name: nixl
+                protocol: TCP
+            startupProbe:
+              httpGet:
+                path: /health
+                port: supervisor
+              initialDelaySeconds: 0
+              periodSeconds: 1
+              timeoutSeconds: 5
+              failureThreshold: 2700
+            livenessProbe:
+              httpGet:
+                path: /health
+                port: supervisor
+              periodSeconds: 30
+              timeoutSeconds: 5
+              failureThreshold: 3
+            readinessProbe:
+              httpGet:
+                path: /readyz
+                port: supervisor
+              periodSeconds: 10
+              timeoutSeconds: 5
+              failureThreshold: 3
+            resources:
+              limits:
+                cpu: 64
+                ephemeral-storage: 1Ti
+                memory: 1500Gi
+                nvidia.com/gpu: "8"
+              requests:
+                cpu: 64
+                ephemeral-storage: 1Ti
+                memory: 1500Gi
+                nvidia.com/gpu: "8"
+            volumeMounts:
+              - name: dshm
+                mountPath: /dev/shm
+              - name: jit-cache
+                mountPath: /var/cache/vllm
+              - name: hf-cache
+                mountPath: /mnt/hf-cache
+              - name: nvme-cache
+                mountPath: /mnt/nvme-cache
+          - name: node-exporter
+            image: quay.io/prometheus/node-exporter:v1.9.0
+            imagePullPolicy: IfNotPresent
+            args:
+              - --collector.disable-defaults
+              - --collector.infiniband
+              - --collector.netstat
+              - "--collector.netstat.fields=(.*Retrans.*|.*Timeout.*|.*LossProbe.*|.*FastRetrans.*|.*SackRecovery.*|.*Estab.*|.*Segs.*|.*Drops.*|.*Overflow.*|.*MemoryPressure.*|.*AutoCork.*|.*DSACK.*|.*Reorder.*|.*OFO.*|.*DelayedACK.*)"
+              - --collector.pressure
+              - --collector.schedstat
+              - --collector.cpu
+              - --path.sysfs=/host/sys
+              - --path.procfs=/host/proc
+            ports:
+              - containerPort: 9100
+                name: node-metrics
+                protocol: TCP
+            volumeMounts:
+              - name: sys
+                mountPath: /host/sys
+                readOnly: true
+              - name: proc
+                mountPath: /host/proc
+                readOnly: true
+            resources:
+              requests:
+                cpu: 50m
+                memory: 64Mi
+              limits:
+                memory: 64Mi
+            securityContext:
+              allowPrivilegeEscalation: false
+              readOnlyRootFilesystem: true

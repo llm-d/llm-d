@@ -80,7 +80,7 @@ Three ready-to-use values files ship with this guide:
 | [`router/predicted-latency-pd.values.yaml`](./router/predicted-latency-pd.values.yaml) | Prefill/decode disaggregated — predicted-latency scheduling layered on the [pd-disaggregation](../pd-disaggregation) pipeline: prefill is picked on predicted TTFT, decode on predicted TPOT. Sets `streamingMode: true`, so every request must be sent with `"stream": true`. |
 | [`router/predicted-latency-multimodal.values.yaml`](./router/predicted-latency-multimodal.values.yaml) | Multimodal — predicted-latency scheduling for the [multimodal-serving](../multimodal-serving) aggregated pool. Keeps the multimodal `token-producer` (image → token-count estimation) and trains on end-to-end latency, so it works for streaming and non-streaming clients. |
 
-The first two target model server pods labeled `llm-d.ai/guide=optimized-baseline`, since in the next step we will simply reuse the model server manifests from the [optimized-baseline guide](../optimized-baseline). The P/D file instead targets `llm-d.ai/guide=pd-disaggregation` — see [Prefill/Decode Disaggregation](#prefilldecode-disaggregation--gpt-oss-120b) below — and the multimodal file targets `llm-d.ai/guide=multimodal-optimized-baseline` — see [Multimodal](#multimodal--qwen3-vl-32b-instruct) below.
+The first two target model server pods labeled `llm-d.ai/guide=optimized-baseline`, since in the next step we will simply reuse the model server manifests from the [optimized-baseline guide](../optimized-baseline). The P/D file instead targets `llm-d.ai/guide=pd-disaggregation` — see [Prefill/Decode Disaggregation](#prefilldecode-disaggregation--gpt-oss-120b) below — and the multimodal file targets `llm-d.ai/guide=multimodal-aggregation` — see [Multimodal](#multimodal--qwen3-vl-32b-instruct) below.
 
 #### Standalone Mode
 
@@ -255,9 +255,9 @@ Sheddable requests (priority < 0) are rejected at admission when no endpoint can
 
 Once traffic is flowing, confirm three things in Prometheus (see the [architecture doc](../../docs/architecture/advanced/latency-predictor.md#observability) for the metric reference):
 
-1. **Predictions are being produced.** `inference_objective_request_ttft_prediction_duration_seconds` has non-zero samples. If it stays empty, the predictor sidecar is not being called — tail the EPP logs for `predicted-latency-producer` errors.
-2. **Predictions track reality.** Compare `inference_objective_request_predicted_ttft_seconds` against `inference_objective_request_ttft_seconds` over a rolling window. A healthy deployment converges to within a few percent after warmup.
-3. **SLOs are being honored.** If you're sending SLO-annotated traffic, `inference_objective_request_ttft_slo_violation_total` and `..._tpot_slo_violation_total` should increment only under genuine saturation.
+1. **Predictions are being produced.** `llm_d_epp_request_ttft_prediction_duration_seconds` has non-zero samples. If it stays empty, the predictor sidecar is not being called — tail the EPP logs for `predicted-latency-producer` errors.
+2. **Predictions track reality.** Compare `llm_d_epp_request_predicted_ttft_seconds` against `llm_d_epp_request_ttft_seconds` over a rolling window. A healthy deployment converges to within a few percent after warmup.
+3. **SLOs are being honored.** If you're sending SLO-annotated traffic, `llm_d_epp_request_slo_violation_total` should increment only under genuine saturation.
 
 ## Benchmarking
 
@@ -462,8 +462,12 @@ kubectl delete  -n ${NAMESPACE} -k ${REPO_ROOT}/guides/predicted-latency-routing
 kubectl delete  -n ${NAMESPACE} -k ${REPO_ROOT}/guides/multimodal-serving/aggregation/modelserver/gpu/vllm/${INFRA_PROVIDER} --ignore-not-found
 # for sglang deployments
 kubectl delete  -n ${NAMESPACE} -k ${REPO_ROOT}/guides/optimized-baseline/modelserver/gpu/sglang/${INFRA_PROVIDER} --ignore-not-found
+```
+<!-- llm-d-cicd:skip start -->
+```bash
 kubectl delete namespace ${NAMESPACE}
 ```
+<!-- llm-d-cicd:skip end -->
 
 ## Troubleshooting
 

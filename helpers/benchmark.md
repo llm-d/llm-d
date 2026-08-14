@@ -21,7 +21,8 @@ If you arrived here from a guide and just want the short command, skip to [Quick
 10. [Analysis and figures](#analysis-and-figures)
 11. [Customizing the workload](#customizing-the-workload)
 12. [Timeouts](#timeouts)
-13. [Troubleshooting](#troubleshooting)
+13. [Cleaning up harness resources](#cleaning-up-harness-resources)
+14. [Troubleshooting](#troubleshooting)
 
 ## What `llmdbenchmark` does
 
@@ -50,9 +51,18 @@ cd llm-d-benchmark
 source .venv/bin/activate
 llmdbenchmark --version
 ```
-
 > [!NOTE]
-> Every subsequent `llmdbenchmark` command on this page assumes you are inside the `llm-d-benchmark` repo directory with the venv activated. If you open a new shell, re-run the two commands above.
+> A successful installation shows the following lines:
+>
+> ```text
+> === Done ===    
+> Reminder: Please activate the virtual environment in your shell:
+>   source ${LLMDBENCH_VENV_DIR}/bin/activate
+> To deactivate the virtual environment in your shell:
+>   deactivate
+> ```
+> 
+> An early termination of the installation could happen without clear error messages. Check if all required libraries have executable permissions (`+x`).
 
 ## Quick start
 
@@ -179,23 +189,40 @@ The on-disk layout after a successful run:
 └── runner-<timestamp>/
     ├── plan/                          # rendered scenario plan (YAML, manifests)
     ├── environment/                   # captured cluster context
-    └── results/
-        └── <experiment-id>/           # one directory per harness invocation
-            ├── stage_0_lifecycle_metrics.json
-            ├── stage_1_lifecycle_metrics.json
-            ├── …                      # one per workload stage (inference-perf)
-            ├── summary_lifecycle_metrics.json
-            ├── per_request_lifecycle_metrics.json
-            ├── benchmark_report,_stage_*.yaml   # standardized cross-harness reports
-            ├── config.yaml                       # resolved harness configuration
-            ├── <profile-name>.yaml                # the rendered workload profile used
-            ├── stdout.log
-            ├── stderr.log
-            └── analysis/                          # populated by --analyze
-                └── distributions/
-                    ├── dist_*.png
-                    ├── scatter_*.png
-                    └── dist_itl_all_tokens.png
+    ├── results/
+    |   └── <experiment-id>/           # one directory per harness invocation
+    |       ├── stage_0_lifecycle_metrics.json
+    |       ├── stage_1_lifecycle_metrics.json
+    |       ├── …                      # one per workload stage (inference-perf)
+    |       ├── summary_lifecycle_metrics.json
+    |       ├── per_request_lifecycle_metrics.json
+    |       ├── benchmark_report,_stage_*.yaml   # standardized cross-harness reports
+    |       ├── config.yaml                       # resolved harness configuration
+    |       ├── <profile-name>.yaml                # the rendered workload profile used
+    |       ├── stdout.log
+    |       ├── stderr.log
+    └── analysis/                      # populated by --analyze
+        └── <harness-id>/
+            ├── latency_Vs_qps.png
+            ├── throughput_vs_latency.png
+            └── throughput_vs_qps.png
+    ├── results/
+    |   └── <experiment-id>/           # one directory per harness invocation
+    |       ├── stage_0_lifecycle_metrics.json
+    |       ├── stage_1_lifecycle_metrics.json
+    |       ├── …                      # one per workload stage (inference-perf)
+    |       ├── summary_lifecycle_metrics.json
+    |       ├── per_request_lifecycle_metrics.json
+    |       ├── benchmark_report,_stage_*.yaml   # standardized cross-harness reports
+    |       ├── config.yaml                       # resolved harness configuration
+    |       ├── <profile-name>.yaml                # the rendered workload profile used
+    |       ├── stdout.log
+    |       ├── stderr.log
+    └── analysis/                      # populated by --analyze
+        └── <harness-id>/
+            ├── latency_Vs_qps.png
+            ├── throughput_vs_latency.png
+            └── throughput_vs_qps.png
 ```
 
 The `benchmark_report,_stage_*.yaml` files use a harness-agnostic schema so you can compare runs across different harnesses. See [Benchmark Report](https://github.com/llm-d/llm-d-benchmark/blob/main/docs/benchmark_report.md) for the schema.
@@ -218,14 +245,16 @@ llmdbenchmark \
     --analyze
 ```
 
-When enabled, the analyzer reads `per_request_lifecycle_metrics.json` from each collected experiment and writes `.png` distribution plots to `<results-dir>/<experiment-id>/analysis/distributions/`:
+When enabled, the analyzer reads `per_request_lifecycle_metrics.json` from each collected experiment and writes `.png` distribution plots to `runner-<timestamp>/analysis/<harness-id>/`:
 
 | File | Content |
 |---|---|
-| `dist_<metric>.png` | CDF + histogram for each request-lifecycle metric (TTFT, ITL, E2E latency, etc.) |
-| `dist_itl_all_tokens.png` | Inter-token-latency distribution across all tokens (not just per-request medians) |
-| `scatter_ttft_vs_input.png` | TTFT plotted against input length — shows how prefill scales |
-| `scatter_e2e_vs_output.png` | End-to-end latency vs output length — shows decode throughput shape |
+| `latency_vs_qps.png` | Inter-token-latency vs query per second |
+| `throughput_vs_latency.png` | Throughput vs inter-token-latency |
+| `throughput_vs_qps.png` | Throughput vs query per second|
+| `latency_vs_qps.png` | Inter-token-latency vs query per second |
+| `throughput_vs_latency.png` | Throughput vs inter-token-latency |
+| `throughput_vs_qps.png` | Throughput vs query per second|
 
 For more elaborate cross-run comparisons and custom plots, see the analysis notebook in the `llm-d-benchmark` repo: [`docs/analysis/analysis.ipynb`](https://github.com/llm-d/llm-d-benchmark/blob/main/docs/analysis/analysis.ipynb).
 
@@ -265,6 +294,21 @@ llmdbenchmark \
 
 All three are also exposed as env vars: `LLMDBENCH_WAIT_TIMEOUT`, `LLMDBENCH_DATA_ACCESS_TIMEOUT`, `LLMDBENCH_PVC_BIND_TIMEOUT`.
 
+## Cleaning up harness resources
+
+The CLI tears down the harness launcher pod after each run but leaves the workload PVC and its supporting resources in the namespace, so workload data survives between runs. The PVC is backed by shared storage (on GKE, a Filestore instance) that bills until removed. When you are done benchmarking in a namespace, delete the leftovers:
+
+```bash
+kubectl delete -n <namespace> --ignore-not-found \
+  pod/access-to-harness-data-workload-pvc \
+  service/llm-d-benchmark-harness \
+  pvc/workload-pvc \
+  configmap/llm-d-benchmark-preprocesses \
+  configmap/llm-d-benchmark-run-parameters
+```
+
+Afterward `kubectl get pvc -n <namespace>` should not list `workload-pvc`.
+
 ## Troubleshooting
 
 ### `did not return expected model 'X'. Available models: ['Y']`
@@ -286,6 +330,30 @@ You passed a local filesystem path to `--output`. `--output` only accepts `local
 ### `Timed out after 240s waiting for workload PVC`
 
 Your cluster's StorageClass takes longer than 240s to bind a fresh PVC. Pass `--pvc-bind-timeout 1200` (or longer) on the `run` subcommand. Worth verifying the StorageClass behavior with `kubectl get sc` and `kubectl describe pvc` to confirm it's not a deeper issue (no default StorageClass, quota exhausted, etc.).
+
+### `ProvisioningFailed ... multi writer with mount access type` on the workload PVC
+
+The harness's `workload-pvc` requests `ReadWriteMany`, and your cluster's default StorageClass only provisions `ReadWriteOnce` volumes. The run surfaces this as a data-access-pod timeout; the real error is in `kubectl describe pvc workload-pvc -n <namespace>`.
+
+Point the scenario at an RWX-capable StorageClass by setting `storage.workloadPvc.storageClassName` in the benchmark scenario file (`config/scenarios/guides/<guide-name>.yaml`).
+
+On GKE, the default `standard-rwo` (Persistent Disk) class is RWO-only. Enable the Filestore CSI driver and use its `standard-rwx` class:
+
+```bash
+gcloud container clusters update <cluster> --update-addons=GcpFilestoreCsiDriver=ENABLED
+```
+
+Then set `storage.workloadPvc.storageClassName: standard-rwx` in the scenario. First-time Filestore provisioning can take up to ~10 minutes (a zonal instance typically binds in 2-3 minutes), so pass `--pvc-bind-timeout 1200 --data-access-timeout 1200`.
+
+If a run already failed on the wrong class, delete the stale claim before retrying. A PVC's StorageClass is immutable, and the CLI reuses an existing claim:
+
+```bash
+kubectl delete pod/access-to-harness-data-workload-pvc pvc/workload-pvc -n <namespace>
+```
+
+### Harness pod stuck `Pending` with `Insufficient cpu`
+
+The harness launcher pod is CPU-heavy — by default it requests 16 CPUs ([resource requirements](https://github.com/llm-d/llm-d-benchmark/blob/main/docs/resource_requirements.md), tunable via `LLMDBENCH_HARNESS_CPU_NR`). It stays `Pending` until a node has enough allocatable capacity; check the scheduling events for the exact shortfall: `kubectl describe pod -l app=llmdbench-harness-launcher -n <namespace>`.
 
 ### `Could not detect endpoint for <stack>`
 

@@ -1,0 +1,71 @@
+scrape_configs:
+  - job_name: 'vllm-decode'
+    kubernetes_sd_configs:
+      - role: pod
+        namespaces:
+          names:
+            - ${NAMESPACE}
+    relabel_configs:
+      - source_labels: [__meta_kubernetes_pod_label_llm_d_ai_role]
+        regex: decode
+        action: keep
+      - source_labels: [__meta_kubernetes_pod_container_name]
+        regex: vllm
+        action: keep
+      - source_labels: [__meta_kubernetes_pod_container_port_number]
+        regex: '8200'
+        action: keep
+      - source_labels: [__meta_kubernetes_pod_name]
+        target_label: pod
+      - source_labels: [__meta_kubernetes_pod_node_name]
+        target_label: node
+      - source_labels: [__meta_kubernetes_pod_label_llm_d_ai_model]
+        target_label: model
+    scrape_interval: 1s
+    metrics_path: /metrics
+
+  - job_name: 'vllm-prefill'
+    kubernetes_sd_configs:
+      - role: pod
+        namespaces:
+          names:
+            - ${NAMESPACE}
+    relabel_configs:
+      - source_labels: [__meta_kubernetes_pod_label_llm_d_ai_role]
+        regex: prefill
+        action: keep
+      - source_labels: [__meta_kubernetes_pod_container_name]
+        regex: vllm
+        action: keep
+      - source_labels: [__meta_kubernetes_pod_container_port_number]
+        regex: '8000'
+        action: keep
+      - source_labels: [__meta_kubernetes_pod_name]
+        target_label: pod
+      - source_labels: [__meta_kubernetes_pod_node_name]
+        target_label: node
+      - source_labels: [__meta_kubernetes_pod_label_llm_d_ai_model]
+        target_label: model
+    scrape_interval: 1s
+    metrics_path: /metrics
+
+  - job_name: 'epp'
+    kubernetes_sd_configs:
+      - role: pod
+        namespaces:
+          names:
+            - ${NAMESPACE}
+    relabel_configs:
+      - source_labels: [__meta_kubernetes_pod_label_inferencepool]
+        regex: .+
+        action: keep
+      - source_labels: [__meta_kubernetes_pod_ip]
+        target_label: __address__
+        replacement: '${1}:9090'
+      - source_labels: [__meta_kubernetes_pod_name]
+        target_label: pod
+      - source_labels: [__meta_kubernetes_pod_label_inferencepool]
+        target_label: inferencepool
+    scrape_interval: 1s
+    metrics_path: /metrics
+

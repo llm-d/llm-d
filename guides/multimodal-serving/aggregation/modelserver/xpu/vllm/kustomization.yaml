@@ -8,12 +8,12 @@ namePrefix: mm-baseline-xpu-vllm-
 
 components:
   - ../../base/vllm
-  - ../../../../../recipes/modelserver/components/images/xpu-vllm
+  - ../../../../../recipes/modelserver/components/images/xpu-vllm/release
 
 labels:
   - pairs:
       llm-d.ai/model: Qwen3-VL-32B-Instruct
-      llm-d.ai/guide: multimodal-optimized-baseline
+      llm-d.ai/guide: multimodal-aggregation
       llm-d.ai/accelerator-variant: xpu
       llm-d.ai/accelerator-vendor: intel
     includeSelectors: true

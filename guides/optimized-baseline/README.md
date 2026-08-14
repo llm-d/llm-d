@@ -48,65 +48,164 @@ This guide includes configurations for the following accelerators:
 ## Prerequisites
 
 - Have the [proper client tools installed on your local system](../../helpers/client-setup/README.md) to use this guide.
-- Checkout llm-d repo:
 
-  ```bash
-    export branch="main" # branch, tag, or commit hash
-    git clone https://github.com/llm-d/llm-d.git && cd llm-d && git checkout ${branch}
-  ```
+- Ensure your cluster has enough accelerators to satisfy the [Configuration](#configuration) table above (default: 16 GPUs). If your cluster has fewer resources, adjust `replicas` and `--tensor-parallel-size` in the [model server patch](./modelserver/gpu/vllm/base/patch-vllm.yaml) for your environment.
 
-- Set the following environment variables:
+- Set the branch and clone the llm-d repo:
 
-  ```bash
-    export REPO_ROOT=$(realpath $(git rev-parse --show-toplevel))
-    source ${REPO_ROOT}/guides/env.sh
-    export GUIDE_NAME="optimized-baseline"
-    export NAMESPACE=llm-d-optimized-baseline
-  ```
+<!-- guide:prerequisites.clone start -->
+<!-- llm-d-cicd:skip start -->
+```bash
+export BRANCH=main
+git clone https://github.com/llm-d/llm-d.git && cd llm-d && git checkout ${BRANCH}
+```
+<!-- llm-d-cicd:skip end -->
+<!-- guide:prerequisites.clone end -->
+
+- Set the guide specific environment variables:
+
+<!-- guide:env.static start -->
+```bash
+export BRANCH=main
+export REPO_ROOT=$(realpath $(git rev-parse --show-toplevel))
+export GUIDE_NAME=optimized-baseline
+export NAMESPACE=llm-d-optimized-baseline
+```
+<!-- llm-d-cicd:skip start -->
+```bash
+export HF_TOKEN=HF_TOKEN_PLACEHOLDER
+```
+<!-- llm-d-cicd:skip end -->
+```bash
+export MONITORING_VALUES=
+export PROVIDER_NAME=none # options: none, gke, agentgateway, istio
+export ACCELERATOR_TYPE=gpu # options: gpu, amd, xpu, hpu, tpu/v6, tpu/v7, cpu
+export MODEL_SERVER=vllm # options: vllm, sglang, trtllm
+export INFRA_PROVIDER=base # options: base, gke
+export MODEL=Qwen/Qwen3-32B
+export CURL_TEST_IMAGE=cfmanteiga/alpine-bash-curl-jq:latest
+export BENCHMARK_REF=main
+export HARNESS=inference-perf
+export WORKLOAD=guide_optimized-baseline_1.yaml
+export GATEWAY_CLASS=epponly # options: epponly, gke, agentgateway, istio
+export ROUTER_CHART_VERSION=v0 # options are any semver llm-d-router release of v0 for latest
+```
+<!-- guide:env.static end -->
+
+> [!NOTE]
+> `HF_TOKEN` must be a [valid HuggingFace token](../../helpers/hf-token.md); replace
+`HF_TOKEN_PLACEHOLDER` with your real token:
+
+- Source the common guide environment variables:
+
+<!-- guide:env.source start -->
+```bash
+source ${REPO_ROOT}/guides/env.sh
+```
+<!-- guide:env.source end -->
+
+> [!NOTE]
+> This file defines shared variables required by subsequent steps, including
+> `GAIE_VERSION`, `ROUTER_CHART_VERSION`, and the router chart reference for
+> the selected deployment mode.
 
 - Install the Gateway API Inference Extension CRDs:
 
-  ```bash
-    kubectl apply -f https://github.com/kubernetes-sigs/gateway-api-inference-extension/releases/download/${GAIE_VERSION}/v1-manifests.yaml
-  ```
+<!-- guide:prerequisites.gaie start -->
+```bash
+kubectl apply -f https://github.com/kubernetes-sigs/gateway-api-inference-extension/releases/download/${GAIE_VERSION}/v1-manifests.yaml
+```
+<!-- guide:prerequisites.gaie end -->
 
-- Create a target namespace for the installation
+- Create a target namespace for the installation:
 
-  ```bash
-      kubectl create namespace ${NAMESPACE} --dry-run=client -o yaml | kubectl apply -f -
-  ```
+<!-- guide:prerequisites.namespace start -->
+```bash
+kubectl create namespace ${NAMESPACE} --dry-run=client -o yaml | kubectl apply -f -
+```
+<!-- guide:prerequisites.namespace end -->
 
-- [Create the `llm-d-hf-token` secret in your target namespace with the key `HF_TOKEN` matching a valid HuggingFace token](../../helpers/hf-token.md) to pull models.
+- [Create the `llm-d-hf-token` secret in your target namespace with the key `HF_TOKEN` matching a valid HuggingFace token](../../helpers/hf-token.md) to pull models:
+
+<!-- guide:prerequisites.secrets start -->
 <!-- llm-d-cicd:skip start -->
-  ```bash
-  export HF_TOKEN=<your HuggingFace token>
-  kubectl create secret generic llm-d-hf-token \
-    --from-literal="HF_TOKEN=${HF_TOKEN}" \
-    --namespace "${NAMESPACE}" \
-    --dry-run=client -o yaml | kubectl apply -f -
-  ```
+```bash
+kubectl create secret generic llm-d-hf-token \
+  --from-literal="HF_TOKEN=${HF_TOKEN}" \
+  --namespace "${NAMESPACE}" \
+  --dry-run=client -o yaml | kubectl apply -f -
+```
 <!-- llm-d-cicd:skip end -->
+<!-- guide:prerequisites.secrets end -->
 
 ## Installation Instructions
 
 ### 1. Deploy the llm-d Router
 
+- Prepare the paths to the `helm` values files for `llm-d` router (used in the deployment commands below):
+
+<!-- guide:deploy.router_values start -->
+```bash
+export ROUTER_BASE_VALUES="-f ${REPO_ROOT}/guides/recipes/router/base.values.yaml"
+
+# only when MODEL_SERVER=vllm or sglang:
+export ROUTER_VALUES="-f ${REPO_ROOT}/guides/${GUIDE_NAME}/router/${GUIDE_NAME}.values.yaml"
+
+# only when MODEL_SERVER=trtllm:
+#
+# Comment out the above `ROUTER_VALUES` and uncomment the below for TensorRT-LLM (trtllm-serve)
+#
+# export ROUTER_VALUES="-f ${REPO_ROOT}/guides/${GUIDE_NAME}/router/${GUIDE_NAME}-trtllm.values.yaml"
+```
+<!-- guide:deploy.router_values end -->
+
+> [!NOTE]
+> As denoted above, **vllm, sglang** share a values file, while
+> **TensorRT-LLM** (`trtllm-serve`) has it's own values file.
+
+- Optionally, to enable `Prometheus Monitoring` on the `llm-d` router define the `helm` values file:
+
+<!-- guide:deploy.monitoring_values start -->
+```bash
+#
+# Uncomment the below to enable Prometheus monitoring on the llm-d router
+#
+# export MONITORING_VALUES="-f ${REPO_ROOT}/guides/recipes/router/features/monitoring.values.yaml"
+```
+<!-- guide:deploy.monitoring_values end -->
+
+> [!NOTE]
+> When following the guide from top to bottom, we already have `export MONITORING_VALUES=""` by default. This means that `monitoring` is disabled by default.
+
+> [!WARNING]
+> Enabling monitoring here requires the monitoring stack to be installed first. The
+> `monitoring.values.yaml` file creates a `ServiceMonitor`, which needs the Prometheus
+> Operator CRDs. Deploying the router with this file before the monitoring stack is ready
+> (see [Step 3: Enable monitoring](#3-optional-enable-monitoring)) will fail with a Helm
+> validation error. If you want monitoring enabled from the start, install the monitoring
+> stack before the router, or leave `MONITORING_VALUES` empty and `helm upgrade` with the
+> monitoring values after Step 3.
+
 #### Standalone Mode
 
-This deploys the llm-d Router in [Standalone Mode](../../docs/architecture/core/router/proxy.md):
+This deploys the llm-d Router in [Standalone Mode](../../docs/architecture/core/router/proxy.md) with an Envoy sidecar (default):
 
+> [!IMPORTANT]
+> Before running the command below, execute the path setup commands from the previous section: the `export ROUTER_BASE_VALUES=...` and `export ROUTER_VALUES=...` commands above.
+
+<!-- guide:deploy.standalone start -->
 ```bash
 # Assuming base-directory is the root of the llm-d repo
 helm install ${GUIDE_NAME} \
-    ${ROUTER_STANDALONE_CHART} \
-    -f ${REPO_ROOT}/guides/recipes/router/base.values.yaml \
-    -f ${REPO_ROOT}/guides/${GUIDE_NAME}/router/${GUIDE_NAME}.values.yaml \
-    -n ${NAMESPACE} --version ${ROUTER_CHART_VERSION}
+  ${ROUTER_STANDALONE_CHART} \
+  ${ROUTER_BASE_VALUES} \
+  ${MONITORING_VALUES} \
+  ${ROUTER_VALUES} \
+  -n ${NAMESPACE} --version ${ROUTER_CHART_VERSION}
 ```
+<!-- guide:deploy.standalone end -->
 
-> [!NOTE]
-> For **TensorRT-LLM** (`trtllm-serve`), replace the last `-f` flag with the TensorRT-LLM
-> values file: `-f ${REPO_ROOT}/guides/${GUIDE_NAME}/router/${GUIDE_NAME}-trtllm.values.yaml`
+To use **agentgateway** as the sidecar proxy instead of Envoy, see [router recipes](../recipes/router/README.md).
 
 <details>
 <summary><h4>Gateway Mode</h4></summary>
@@ -116,17 +215,22 @@ To use a Kubernetes Gateway managed proxy rather than the standalone version, fo
 1. _Deploy a Kubernetes Gateway_ named by following one of [the gateway guides](../../docs/infrastructure/gateway).
 2. _Deploy the llm-d router and an HTTPRoute_ that connects it to the Gateway as follows:
 
+> [!IMPORTANT]
+> Before running the command below, execute the path setup commands from the previous section: the `export ROUTER_BASE_VALUES=...` and `export ROUTER_VALUES=...` commands above.
+
+<!-- guide:deploy.gateway start -->
 ```bash
-export PROVIDER_NAME=gke # options: none, gke, agentgateway, istio
 helm install ${GUIDE_NAME} \
-    ${ROUTER_GATEWAY_CHART}  \
-    -f ${REPO_ROOT}/guides/recipes/router/base.values.yaml \
-    -f ${REPO_ROOT}/guides/${GUIDE_NAME}/router/${GUIDE_NAME}.values.yaml \
-    --set provider.name=${PROVIDER_NAME} \
-    --set httpRoute.create=true \
-    --set httpRoute.inferenceGatewayName=llm-d-inference-gateway \
-    -n ${NAMESPACE} --version ${ROUTER_CHART_VERSION}
+  ${ROUTER_GATEWAY_CHART} \
+  ${ROUTER_BASE_VALUES} \
+  ${MONITORING_VALUES} \
+  ${ROUTER_VALUES} \
+  --set provider.name=${PROVIDER_NAME} \
+  --set httpRoute.create=true \
+  --set httpRoute.inferenceGatewayName=llm-d-inference-gateway \
+  -n ${NAMESPACE} --version ${ROUTER_CHART_VERSION}
 ```
+<!-- guide:deploy.gateway end -->
 
 </details>
 
@@ -134,19 +238,29 @@ helm install ${GUIDE_NAME} \
 
 Apply the Kustomize overlays for your specific backend:
 
+<!-- guide:deploy.modelserver start -->
 ```bash
-export ACCELERATOR_TYPE=gpu # options: gpu, amd, xpu, hpu, tpu/v6, tpu/v7, cpu
-export MODEL_SERVER=vllm # options: vllm, sglang, trtllm
-export INFRA_PROVIDER=base # base | gke (GPU only, omit for other accelerators)
-kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/${ACCELERATOR_TYPE}/${MODEL_SERVER}/${INFRA_PROVIDER}/
+# only when ACCELERATOR_TYPE=gpu:
+kubectl apply -n ${NAMESPACE} \
+  -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/${ACCELERATOR_TYPE}/${MODEL_SERVER}/${INFRA_PROVIDER}/
+
+# only when ACCELERATOR_TYPE=amd or xpu or hpu or tpu/v6 or tpu/v7 or cpu:
+#
+# Comment out the above `kubectl apply` and uncomment the below to run on `NON GPU` accelerators
+#
+# kubectl apply -n ${NAMESPACE} \
+#  -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/${ACCELERATOR_TYPE}/${MODEL_SERVER}/
+#
 ```
+<!-- guide:deploy.modelserver end -->
 
 > [!NOTE]
-> The `INFRA_PROVIDER` suffix (`base` or `gke`) only applies to GPU. For other accelerators, use the path directly:
-> `kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/${ACCELERATOR_TYPE}/${MODEL_SERVER}/`
+> Ensure `INFRA_PROVIDER`, `ACCELERATOR_TYPE` and `MODEL_SERVER` are set appropriately, see above environment section for options.
 
 <details>
 <summary><h4>Other Models</h4></summary>
+
+For example to deploy other models:
 
 ```bash
 # NVIDIA GPU / vLLM — openai/gpt-oss-120b
@@ -158,12 +272,42 @@ kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/g
 ### 3. (Optional) Enable monitoring
 
 - Install the [Monitoring stack](../../docs/operations/observability/setup.md).
-- To enable Prometheus monitoring on the llm-d router, add `-f ${REPO_ROOT}/guides/recipes/router/features/monitoring.values.yaml` during the [router installation step](#1-deploy-the-llm-d-router).
+
+- This requires `Prometheus Monitoring` to be enabled on `llm-d` router, see `Step 1 Deploy the llm-d Router` above.
+
 - Deploy the monitoring resources for model servers:
 
+<!-- guide:deploy.monitoring start -->
 ```bash
 kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/recipes/modelserver/components/monitoring
 ```
+<!-- guide:deploy.monitoring end -->
+
+### 4. Observability & Troubleshooting
+
+Once monitoring is enabled, use the signals below to operate the optimized baseline. This section covers the metrics that matter **for this path** and how to read them; full metric definitions live in the [metric reference](../../docs/operations/observability/metrics.md) and ready-to-run queries in the [PromQL reference](../../docs/operations/observability/promql.md).
+
+This path is defined by its two routing objectives: **prefix-cache affinity** (route to endpoints that already hold the prompt prefix) and **load-aware** balancing (spread work by token load), with a saturation override that trades cache locality for spread once endpoints get hot. Most issues show up as those two objectives pulling against each other, so watch **load balance** and **cache hit rate** together rather than either one alone.
+
+#### Key metrics for this path
+
+| Signal | Why it matters for the optimized baseline | Where to look |
+|--------|-------------------------------------------|---------------|
+| Per-pod load (`llm_d_epp_request_total`, `vllm:num_requests_running`) | The load-aware scorer should keep QPS and active requests roughly even across pods. A persistently hot pod next to idle ones means balancing is not taking effect | [PromQL → Routing & Load Balancing](../../docs/operations/observability/promql.md#routing--load-balancing) |
+| Prefix cache hit rate (`vllm:prefix_cache_hits_total` / `vllm:prefix_cache_queries_total`) | The prefix-affinity filter is only helping if hit rate stays high. A falling ratio means requests are not landing on sticky endpoints | [PromQL → Prefix Caching](../../docs/operations/observability/promql.md#prefix-caching) |
+| Per-pod KV cache utilization and queue depth (`vllm:kv_cache_usage_perc`, `vllm:num_requests_waiting`) | These drive the saturation-aware override. If one pod sits near saturation while others are cold, the override is either not firing or mis-tuned | [PromQL → Basic Model Serving](../../docs/operations/observability/promql.md#basic-model-serving) |
+| Routing decision latency (`llm_d_epp_plugin_duration_seconds`) | Rising scheduler latency with healthy model servers localizes the problem to the routing layer, not the pods | [PromQL → Routing & Load Balancing](../../docs/operations/observability/promql.md#routing--load-balancing) |
+| TTFT and ITL (`vllm:time_to_first_token_seconds`, `vllm:inter_token_latency_seconds`) | The user-facing SLO signals this path is tuned to protect. Regressions here are the trigger to inspect the balance/cache split above | [Metrics → vLLM](../../docs/operations/observability/metrics.md#key-vllm-metrics) |
+
+> SGLang deployments expose the equivalent signals under `sglang_*` (`sglang_num_running_reqs`, `sglang_token_usage`, `sglang_cache_hit_rate`); the PromQL reference lists both.
+
+#### Common failure modes
+
+* **Uneven load across pods** (some hot, some idle) — the load-aware scorer or the saturation override is not spreading work. On **non-default hardware** this usually means `peakPrefillThroughput` is miscalibrated, so the override never gates in; measure it with the [calibration recipe](../recipes/router/calibration/README.md) and set it on the filter (see [Adapting to other hardware](#adapting-to-other-hardware)).
+* **Low prefix cache hit rate** — either the prompt mix is not prefix-sticky, or the saturation override is spreading so aggressively that it defeats affinity. Compare hit rate against per-pod saturation; if pods are cold but hit rate is still low, the issue is the prompt pattern, not the override.
+* **TTFT/ITL regression with balanced load and healthy cache** — look at routing decision latency and model-server queue depth before touching the routing config; the bottleneck is likely the model servers, not the scheduler.
+
+For alert rules covering these signals, see [Alerting](../../docs/operations/observability/alerting.md).
 
 ## Adapting to other hardware
 
@@ -190,42 +334,37 @@ For reference values across the (model, accelerator) combinations shipped under 
 
 **Standalone Mode**
 
+<!-- guide:verify.endpoint.standalone start -->
 ```bash
 export IP=$(kubectl get service ${GUIDE_NAME}-epp -n ${NAMESPACE} -o jsonpath='{.spec.clusterIP}')
 ```
+<!-- guide:verify.endpoint.standalone end -->
 
 <details>
-<summary> <b>Gateway Mode</b> </summary>
+<summary><b>Gateway Mode</b></summary>
 
+<!-- guide:verify.endpoint.gateway start -->
 ```bash
 export IP=$(kubectl get gateway llm-d-inference-gateway -n ${NAMESPACE} -o jsonpath='{.status.addresses[0].value}')
 ```
+<!-- guide:verify.endpoint.gateway end -->
 
 </details>
 
 ### 2. Send Test Requests
 
-**Open a temporary interactive shell inside the cluster:**
+**Send a completion request from a temporary pod inside the cluster (model-aware; set `MODEL` to the name you want to query, e.g. `Qwen/Qwen3-32B` or `openai/gpt-oss-120b`):**
 
+<!-- guide:verify.tests start -->
 ```bash
-kubectl run curl-debug --rm -it \
-    --image=cfmanteiga/alpine-bash-curl-jq \
-    --namespace="$NAMESPACE" \
-    --env="IP=$IP" \
-    --env="NAMESPACE=$NAMESPACE" \
-    -- /bin/bash
+kubectl run curl-test --rm -i --restart=Never \
+  --image=${CURL_TEST_IMAGE} \
+  --namespace="${NAMESPACE}" \
+  --env="IP=${IP}" \
+  --env="MODEL=${MODEL}" \
+  -- /bin/sh -c 'curl -sS -X POST "http://${IP}/v1/completions" -H "Content-Type: application/json" -d "{\"model\": \"${MODEL}\", \"prompt\": \"How are you today?\"}"'
 ```
-
-**Send a completion request (model-aware; set `model` to the name you want to query, e.g. `Qwen/Qwen3-32B` or `openai/gpt-oss-120b`):**
-
-```bash
-curl -X POST http://${IP}/v1/completions \
-    -H 'Content-Type: application/json' \
-    -d '{
-        "model": "Qwen/Qwen3-32B",
-        "prompt": "How are you today?"
-    }' | jq
-```
+<!-- guide:verify.tests end -->
 
 ## Benchmarking
 
@@ -247,17 +386,17 @@ In this example we will demonstrate how to run [`inference-perf`](https://github
 
 Automatically clone the benchmark repository into `./llm-d-benchmark/` and create a virtualenv at `./llm-d-benchmark/.venv/` containing dependencies and it's installation:
 
+<!-- guide:benchmark.setup start -->
 ```bash
-curl -sSL https://raw.githubusercontent.com/llm-d/llm-d-benchmark/main/install.sh | bash
-```
+curl -sSL https://raw.githubusercontent.com/llm-d/llm-d-benchmark/${BENCHMARK_REF}/install.sh | bash
 
-Activate the `venv` and enter the repository directory - both are required: the `venv` puts `llmdbenchmark` on your PATH, and the repository directory contains the `workload/profiles/` and `config/specification/` files that orchestrate the benchmark:
-
-```bash
 cd llm-d-benchmark
+
 source .venv/bin/activate
+
 llmdbenchmark --version
 ```
+<!-- guide:benchmark.setup end -->
 
 > [!NOTE]
 > Subsequent `llmdbenchmark` commands in this section assume you are inside the `llm-d-benchmark` repo directory with the `venv` activated. If you open a new shell, re-run the two commands above.
@@ -266,22 +405,24 @@ llmdbenchmark --version
 
 Set two variables so the rest of the section is topology-agnostic: the endpoint URL and the gateway class. The gateway class tells the CLI which deployment topology the cluster is actually running, without this, the CLI re-renders against the benchmark scenario's default values.
 
-**Standalone Mode** (the default in this guide — no Kubernetes Gateway, EPP pod with an Envoy sidecar):
+**Standalone Mode** (the default in this guide — no Kubernetes Gateway, EPP pod with an Envoy sidecar). `GATEWAY_CLASS=epponly` is the default:
 
+<!-- guide:benchmark.endpoint.standalone start -->
 ```bash
 export ENDPOINT_URL="http://$(kubectl get service ${GUIDE_NAME}-epp -n ${NAMESPACE} -o jsonpath='{.spec.clusterIP}')"
-export GATEWAY_CLASS=epponly # standalone mode
 ```
+<!-- guide:benchmark.endpoint.standalone end -->
 
 <details>
-<summary> <b>Gateway Mode</b> </summary>
+<summary><b>Gateway Mode</b></summary>
 
+Set `GATEWAY_CLASS` to match whichever provider you used when deploying the gateway (e.g. `istio`, `agentgateway`, `gke`) — see the `GATEWAY_CLASS` options in the [environment section](#prerequisites) above.
+
+<!-- guide:benchmark.endpoint.gateway start -->
 ```bash
 export ENDPOINT_URL="http://$(kubectl get gateway llm-d-inference-gateway -n ${NAMESPACE} -o jsonpath='{.status.addresses[0].value}')"
-
-# Match whichever provider you used when deploying the gateway (e.g. istio, agentgateway, gke).
-export GATEWAY_CLASS=istio
 ```
+<!-- guide:benchmark.endpoint.gateway end -->
 
 </details>
 
@@ -291,18 +432,20 @@ export GATEWAY_CLASS=istio
 
 Benchmark results are copied to the `workspace` directory that is specified by _you_ (or that is automatically generated when omitted from the cli) on the machine running the CLI. The workspace location is optional — by default the CLI auto-generates a timestamped workspace and prints its full path in the logs during the run. If you'd rather choose where results land, pass `--workspace <YOUR_DIR_HERE>` as a top-level argument of `llmdbenchmark` (before the `run` subcommand):
 
+<!-- guide:benchmark.execute start -->
 ```bash
 llmdbenchmark \
-    --spec           guides/optimized-baseline \
-    run \
-    --endpoint-url   "${ENDPOINT_URL}" \
-    --gateway-class  "${GATEWAY_CLASS}" \
-    --model          "Qwen/Qwen3-32B" \
-    --namespace      "${NAMESPACE}" \
-    --harness        inference-perf \
-    --workload       guide_optimized-baseline_1.yaml \
-    --analyze
+  --spec           guides/${GUIDE_NAME} \
+  run \
+  --endpoint-url   "${ENDPOINT_URL}" \
+  --gateway-class  "${GATEWAY_CLASS}" \
+  --model          "${MODEL}" \
+  --namespace      "${NAMESPACE}" \
+  --harness        "${HARNESS}" \
+  --workload       "${WORKLOAD}" \
+  --analyze
 ```
+<!-- guide:benchmark.execute end -->
 
 > [!NOTE]
 > Depending on your `cluster` you may need to extend the default `timeout` values to longer duration, as `bind`, `access` and `wait-timeout` times of `pvcs` and `pods` can be arbitrarily slower on other systems, please utilize `llmdbenchmark run --help` to view the knobs needed to increase those values.
@@ -312,11 +455,27 @@ llmdbenchmark \
 
 To remove the deployed components:
 
+<!-- guide:cleanup start -->
 ```bash
 helm uninstall ${GUIDE_NAME} -n ${NAMESPACE}
-kubectl delete  -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/${ACCELERATOR_TYPE}/${MODEL_SERVER}/${INFRA_PROVIDER}
+
+# only when ACCELERATOR_TYPE=gpu:
+kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/${ACCELERATOR_TYPE}/${MODEL_SERVER}/${INFRA_PROVIDER}
+
+# only when ACCELERATOR_TYPE=amd or xpu or hpu or tpu/v6 or tpu/v7 or cpu:
+#
+# Comment out the above `kubectl delete` and uncomment the below to run on `NON GPU` accelerators
+#
+# kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/${ACCELERATOR_TYPE}/${MODEL_SERVER}
+
+kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/recipes/modelserver/components/monitoring --ignore-not-found=true
+```
+<!-- llm-d-cicd:skip start -->
+```bash
 kubectl delete namespace ${NAMESPACE}
 ```
+<!-- llm-d-cicd:skip end -->
+<!-- guide:cleanup end -->
 
 ## Benchmarking Reports
 
