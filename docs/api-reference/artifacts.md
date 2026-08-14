@@ -112,10 +112,6 @@ In addition to the upstream images, llm-d also builds and releases vLLM images w
 | `ghcr.io/llm-d/llm-d-xpu-sglang` | `v0.9.0` | Intel XPU | Ubuntu 24.04 | amd64 |
 | `ghcr.io/llm-d/llm-d-cpu`        | `v0.9.0` | CPU | RHEL UBI9 | amd64 |
 
-### FS Offloading Extension
-
-`llmd-fs-connector` adds filesystem offloading to vLLM's `OffloadingConnector`. It is released from [llm-d-kv-cache](https://github.com/llm-d/llm-d-kv-cache/releases/tag/v0.8.0) as a python wheel and hosted on the following pypi registry <https://llm-d.github.io/llm-d-kv-cache/simple/builds>.
-
 ## 4. Well-Lit Path Guides
 
 Well-Lit Paths are tested, benchmarked deployment recipes that show off llm-d's key user stories. Each guide lives under `guides/<path>/` and contains:
@@ -137,9 +133,9 @@ llm-d Router supports optional integration with Kubernetes Gateways. These are t
 
 | Dependency | Tested Versions | Notes |
 |------------|-----------------|-------|
-| Gateway API CRDs | `v1.5.1` | Kubernetes SIG (required if using a Gateway) |
+| Gateway API CRDs | `v1.5.x` | Kubernetes SIG (required if using a Gateway) |
 | Istio | `1.29.x` | Default gateway provider |
-| AgentGateway | `v1.0.x` | Preferred for new deployments |
+| AgentGateway | `v1.4.x` | Preferred for new deployments |
 
 Install instructions live under [`guides/recipes/gateway/`](https://github.com/llm-d/llm-d/tree/main/guides/recipes/gateway).
 
