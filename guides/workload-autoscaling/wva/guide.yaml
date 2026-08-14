@@ -39,10 +39,6 @@ deploy:
           --from-literal=ca.crt="${PROMETHEUS_CA_CERT}" \
           --dry-run=client -o yaml | kubectl apply -f - -n ${WVA_NAMESPACE}
 
-  # Install the WVA CRDs (from the WVA controller repo).
-  crds:
-    - run: kubectl apply -k github.com/llm-d/llm-d-workload-variant-autoscaler/config/base/crd?ref=main
-
   # Install the WVA controller. Point the overlay at ${WVA_NAMESPACE} and set the
   # controller's --watch-namespace to match (this edits
   # platform/${PLATFORM}/kustomization.yaml and base/controller-deployment-patch.yaml;

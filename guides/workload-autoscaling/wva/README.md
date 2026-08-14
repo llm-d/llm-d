@@ -89,15 +89,7 @@ kubectl create secret generic prometheus-tls-cert \
 ```
 <!-- guide:deploy.prometheus_ca end -->
 
-3. Install WVA CRDs:
-
-<!-- guide:deploy.crds start -->
-```bash
-kubectl apply -k github.com/llm-d/llm-d-workload-variant-autoscaler/config/base/crd?ref=main
-```
-<!-- guide:deploy.crds end -->
-
-4. Install the WVA controller. Point the overlay at `${WVA_NAMESPACE}` and set the
+3. Install the WVA controller. Point the overlay at `${WVA_NAMESPACE}` and set the
    controller's `--watch-namespace` to match (this edits
    `wva/controller/platform/${PLATFORM}/kustomization.yaml` and
    `wva/controller/base/controller-deployment-patch.yaml`; revert both with
