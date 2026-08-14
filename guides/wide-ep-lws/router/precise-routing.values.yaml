@@ -1,0 +1,94 @@
+# Precise prefix-cache routing overrides for wide-ep-lws.values.yaml: replaces
+# the approximate prefix-cache scorer with the exact KV-event-backed index
+# (precise-prefix-cache-producer) plus load-gated affinity. Apply after
+# wide-ep-lws.values.yaml; targetPorts and matchLabels are inherited from it.
+#
+# Prerequisites beyond the base guide (see the README section
+# "Precise prefix-cache routing"):
+# - modelserver deployed with the kv-events component, so every rank
+#   publishes KV-cache events on its compensated ZMQ port.
+# - the render Service from ../render/, which fronts the prefill pods'
+#   /v1/*/render endpoints for the token-producer.
+# - an EPP build with per-rank KV-event attribution (llm-d-router#2233).
+router:
+  epp:
+    # The token-load-scorer's in-flight token accounting is local to each EPP
+    # process; multiple active replicas would each see a fraction of the load
+    # and mis-gate the affinity filter.
+    replicas: 1
+    pluginsCustomConfig:
+      wide-ep-lws-config.yaml: |
+        apiVersion: llm-d.ai/v1alpha1
+        kind: EndpointPickerConfig
+        plugins:
+        - type: disagg-headers-handler
+        - type: always-disagg-pd-decider
+        - type: disagg-profile-handler
+          parameters:
+            deciderPluginName: always-disagg-pd-decider
+        - type: prefill-filter
+        - type: decode-filter
+        - type: token-producer
+          parameters:
+            # Must match the deployed model: render calls land on the model
+            # servers themselves, so a mismatch is rejected rather than
+            # silently producing token IDs from the wrong tokenizer.
+            modelName: zai-org/GLM-5.2-FP8
+            vllm:
+              url: http://wide-ep-lws-render:8000
+        - type: endpoint-notification-source
+        - type: precise-prefix-cache-producer
+          parameters:
+            indexerConfig:
+              kvBlockIndexConfig:
+                inMemoryConfig:
+                  # Per-key LRU of (endpoint, tier) holders. Size to at least
+                  # endpoints x tiers or real holders evict and affinity
+                  # silently zeroes.
+                  podCacheSize: 128
+              # Device-tier scoring weights, mirroring the approximate
+              # overlay's gpu:cpu prefix scorer weights of 5:2. Only relevant
+              # when an offloading component adds a CPU tier.
+              kvCacheBackendConfigs:
+              - name: gpu
+                weight: 1.0
+              - name: cpu
+                weight: 0.4
+            tokenProcessorConfig:
+              # Must equal the engines' KV_BLOCK_SIZE (kv-events component).
+              blockSizeTokens: 64
+            kvEventsConfig:
+              topicFilter: "kv@"
+              discoverPods: true
+              podDiscoveryConfig:
+                socketPort: 5557
+        - type: inflight-load-producer
+          parameters:
+            prefixMatchInfoProducerName: precise-prefix-cache-producer
+        - type: prefix-cache-affinity-filter
+          parameters:
+            prefixMatchInfoProducerName: precise-prefix-cache-producer
+            inFlightLoadProducerName: inflight-load-producer
+            # Measured on an H200 GLM-5.2-FP8 DP8 cell. Re-measure for other
+            # hardware or models (guides/recipes/router/calibration).
+            peakPrefillThroughput: 3585
+        - type: token-load-scorer
+        - type: active-request-scorer
+        - type: max-score-picker
+        dataLayer:
+          sources:
+          - pluginRef: endpoint-notification-source
+            extractors:
+            - pluginRef: precise-prefix-cache-producer
+        schedulingProfiles:
+        - name: prefill
+          plugins:
+          - pluginRef: prefill-filter
+          - pluginRef: prefix-cache-affinity-filter
+          - pluginRef: token-load-scorer
+          - pluginRef: max-score-picker
+        - name: decode
+          plugins:
+          - pluginRef: decode-filter
+          - pluginRef: active-request-scorer
+          - pluginRef: max-score-picker
