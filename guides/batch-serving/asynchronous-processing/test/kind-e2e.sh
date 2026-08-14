@@ -104,7 +104,7 @@ ok "Cluster up"
 # 2. Prerequisites (GAIE CRDs, namespaces, dummy HF token)
 # ---------------------------------------------------------------------------
 log "Installing Gateway API Inference Extension CRDs (${GAIE_VERSION})"
-kubectl apply -f "https://github.com/kubernetes-sigs/gateway-api-inference-extension/releases/download/${GAIE_VERSION}/v1-manifests.yaml"
+kubectl apply -f "https://github.com/kubernetes-sigs/gateway-api-inference-extension/${GAIE_URL}/v1-manifests.yaml"
 
 kubectl create namespace "${BASELINE_NAMESPACE}" --dry-run=client -o yaml | kubectl apply -f -
 kubectl create namespace "${NAMESPACE}" --dry-run=client -o yaml | kubectl apply -f -
