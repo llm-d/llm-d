@@ -1,46 +1,89 @@
 name: Nightly - Flow Control E2E (GKE GPU)
 
+# Nightly regression test for the flow-control guide (standalone router, vLLM).
+# Deploys via guides/flow-control/scripts/nightly-deploy-gke.sh and hands off
+# (via --extra-validate) to e2e-validate-flow-control.sh, which forces queue
+# contention and checks backpressure, per-band isolation, and priority QoS.
+#
+# Why not the shared benchmark harness? Two reasons, both still true:
+#   1. It cannot stand this guide up. The kustomize standup detects the model
+#      from guides/<scenario>/modelserver/<accel>/<backend>/<infra>/, and this
+#      guide deliberately keeps no modelserver/ overlay — it borrows
+#      optimized-baseline's, as the guide README instructs. Runs die at standup
+#      with "unable to detect model". (The harness has a flow-control special
+#      case that borrows optimized-baseline's overlay, but it runs *after* the
+#      detection step that needs the missing directory, so it never executes.)
+#   2. It would not test the feature. Flow control is work-conserving, so a
+#      sanity benchmark never queues and never exercises backpressure.
+# This lane therefore runs the bespoke e2e reusable, as workload-autoscaling
+# does for the same "no modelserver/ overlay" reason.
+#
+# Scope: proves priority ordering only. Weighted multi-tenant fairness/SLO at
+# scale needs inference-perf multi-tenant trace replay (the heavy tier; see the
+# guide's Benchmarking section).
+
 on:
+  schedule:
+    - cron: '0 17 * * *'  # 17:00 UTC daily (staggered from sibling GKE nightlies)
   workflow_dispatch:
     inputs:
+      skip_cleanup:
+        description: 'Skip cleanup after tests (for debugging)'
+        required: false
+        default: 'false'
+      pr_number:
+        description: 'PR number for comment-back (set by /test-nightly)'
+        required: false
+        default: ''
+      pr_repo:
+        description: 'Repo for PR comment-back'
+        required: false
+        default: 'llm-d/llm-d'
+      # This is a bespoke e2e, not a benchmark run, so the parameters below are
+      # accepted and ignored — except cleanup (mapped to skip_cleanup) and
+      # update_badge/dry_run (consumed by the badge job). They must stay
+      # declared: slash-test-nightly.yaml sends its DEFAULT_PARAMS to every
+      # nightly-e2e-* workflow whether or not the user passes any, and its 422
+      # fallback only retries without pr_number/pr_repo — so an undeclared
+      # parameter makes /test-nightly undispatchable for this lane. Keep this
+      # set in sync with SUPPORTED_PARAMS in slash-test-nightly.yaml.
       decode_pods:
-        description: 'Number of decode (vllm "standalone") pods (default "auto", means what was configured on the scenario)'
+        description: 'Ignored (bespoke e2e, no benchmark)'
         required: false
         type: 'string'
         default: 'auto'
       prefill_pods:
-        description: 'Number of prefill pods (default "auto", means what was configured on the scenario)'
+        description: 'Ignored (bespoke e2e, no benchmark)'
         required: false
         type: 'string'
         default: 'auto'
       gateway_class:
-        description: 'Class of gateway used ("istio", "agentgateway", "epponly" (i.e., "standalone"), "none")'
+        description: 'Ignored (guide is standalone/epponly)'
         required: false
         default: 'epponly'
       monitoring_enabled:
-        description: 'Enabled monitoring ("true", "false")'
+        description: 'Ignored (bespoke e2e, no benchmark)'
         required: true
         type: 'string'
         default: 'false'
       dry_run:
-        description: 'Execute workflow in "dry-run" mode ("true", "false")'
+        description: 'Affects the badge only; this lane has no dry-run path'
         required: false
         default: 'false'
       verbose:
-        description: 'Execute workflow in "verbose" mode ("true", "false")'
+        description: 'Ignored (bespoke e2e, no benchmark)'
         required: false
         default: 'false'
         type: 'string'
       harness:
-        description: 'Harness to be used during "run" operation ("inference-perf", "guidellm", "inferencemax", "vllm-benchmark", "nop")'
+        description: 'Ignored (bespoke e2e, no benchmark)'
         required: false
         default: 'inference-perf'
         type: 'string'
       workload:
-        description: 'Workload profile to be used during "run" operation (check list under "workload/profiles")'
+        description: 'Ignored (bespoke e2e, no benchmark)'
         required: false
         default: 'sanity_random.yaml'
-#        default: 'guide_flow-control_1.yaml'
         type: 'string'
       cleanup:
         description: 'Cleanup the llm-d stack stood up by this workflow'
@@ -53,15 +96,8 @@ on:
         default: 'true'
         type: string
 
-#  push:
-#    branches:
-#      - main
-
-  schedule:
-    - cron: '0 10 * * *'  # 10:00 UTC daily
-
 permissions:
-  contents: write
+  contents: write  # update-badge job commits the badge to the badges branch
   actions: read
 
 concurrency:
@@ -70,31 +106,30 @@ concurrency:
 
 jobs:
   nightly:
-    uses: llm-d/llm-d-infra/.github/workflows/reusable-ci-nightly-benchmark.yaml@main
+    if: github.repository == 'llm-d/llm-d'
+    uses: llm-d/llm-d-infra/.github/workflows/reusable-nightly-e2e-gke.yaml@main
     with:
-      scenario_dir: ${{ inputs.scenario_dir || 'guides' }}
-      standup_method: ${{ inputs.standup_method || 'kustomize' }}
-      standup_scenario: ${{ inputs.standup_scenario || 'flow-control' }}
-      decode_pods: ${{ inputs.decode_pods || 'auto' }}
-      prefill_pods: ${{ inputs.prefill_pods || 'auto' }}
-      accelerator_type: ${{ inputs.accelerator_type || 'gpu' }}
-      backend_type: ${{ inputs.backend_type || 'vllm' }}
-      infra_provider: ${{ inputs.infra_provider || 'gke' }}
-      connector: ${{ inputs.connector || '' }}
-      cluster_namespace: ${{ inputs.cluster_namespace || 'llm-d-nightly-flow-control-gke-gpu' }}
-      helm_release: ${{ inputs.helm_release || 'llmdbenchcicdr-gke' }}
-      workspace_dir: ${{ inputs.workspace_dir || '/tmp/llmdbenchcicdk-gke' }}
-      bucket_project: ${{ inputs.bucket_project || 'llm-d-scale' }}
-      bucket_provider: ${{ inputs.bucket_provider || 'gcs' }}
-      bucket_path: ${{ inputs.bucket_path || 'llm-d-benchmarks/regressions/flow-control' }}
-      gateway_class: ${{ inputs.gateway_class || 'epponly' }}
-      monitoring_enabled: ${{ inputs.monitoring_enabled || 'false' }}
-      dry_run: ${{ inputs.dry_run || 'false' }}
-      verbose: ${{ inputs.verbose || 'false' }}
-      harness: ${{ inputs.harness || 'inference-perf' }}
-      workload: ${{ inputs.workload || 'sanity_random.yaml' }}
-#      workload: ${{ inputs.workload || 'guide_flow-control_1.yaml' }}
-      cleanup: ${{ inputs.cleanup || 'true' }}
+      guide_name: flow-control
+      namespace: llm-d-nightly-flow-control-gke-gpu
+      gateway_host: 'flow-control-epp'
+      custom_deploy_script: |
+        bash guides/flow-control/scripts/nightly-deploy-gke.sh
+      e2e_validate_args: '--extra-validate flow-control'
+      gke_cluster_name: llm-d-e2e-us-east5
+      gke_cluster_zone: us-east5
+      required_gpus: 2
+      recommended_gpus: 4
+      accelerator_type: H100
+      pod_wait_timeout: '30m'
+      # Brief grace after pods report Ready so the EPP finishes backend
+      # discovery before the smoke loop fires. vLLM readiness already gates
+      # model load, so a small margin suffices (reusable default is 180s).
+      pod_readiness_delay: 60
+      allow_gpu_preemption: true
+      llm_d_ref: ${{ github.ref }}
+      skip_cleanup: ${{ github.event.inputs.skip_cleanup == 'true' || github.event.inputs.cleanup == 'false' }}
+      pr_number: ${{ github.event.inputs.pr_number }}
+      pr_repo: ${{ github.event.inputs.pr_repo }}
     secrets: inherit
 
   update-badge:
@@ -106,5 +141,7 @@ jobs:
       badge_label: "VLLM GPU"
       result: ${{ needs.nightly.result }}
       dry_run: ${{ inputs.dry_run || 'false' }}
+      # The e2e reusable declares no outputs, so failure_category resolves empty
+      # and the badge falls back to a plain pass/fail (no category granularity).
+      # Same as the workload-autoscaling lanes.
       failure_category: ${{ needs.nightly.outputs.failure_category }}
-
