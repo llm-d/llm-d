@@ -70,7 +70,7 @@ concurrency:
 
 jobs:
   nightly:
-    uses: llm-d/llm-d-infra/.github/workflows/reusable-ci-nightly-benchmark.yaml@f851f1cafbb3407bed238888e8f2f85f568feeaf
+    uses: xiaojun-zhang/llm-d-infra/.github/workflows/reusable-ci-nightly-benchmark.yaml@f851f1cafbb3407bed238888e8f2f85f568feeaf
     with:
       scenario_dir: ${{ inputs.scenario_dir || 'guides' }}
       standup_method: ${{ inputs.standup_method || 'kustomize' }}
@@ -95,7 +95,6 @@ jobs:
       workload: ${{ inputs.workload || 'sanity_random.yaml' }}
 #      workload: ${{ inputs.workload || 'guide_optimized-baseline_1.yaml' }}
       cleanup: ${{ inputs.cleanup || 'true' }}
-    secrets: inherit
 
   update-badge:
     needs: [nightly]
