@@ -1,0 +1,16 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ../base
+
+components:
+  - ../../../../../recipes/modelserver/components/images/gpu-vllm/release
+
+# MultiConnector is provided by this vLLM release.
+images:
+  - name: docker.io/vllm/vllm-openai
+    newTag: v0.27.1
+
+patches:
+  - path: patch-prefill.yaml
+  - path: patch-decode.yaml
