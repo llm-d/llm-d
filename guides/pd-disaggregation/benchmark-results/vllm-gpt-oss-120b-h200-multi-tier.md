@@ -81,11 +81,11 @@ block size, and precise router scorer weights. The router and all engines were
 restarted between arms to clear the precise index, HBM cache, and CPU tier.
 The controlled arms separate the engine and placement effects:
 
-| Arm | Prefill engine | Precise CPU backend weight | Isolated effect |
-| --- | --- | ---: | --- |
-| PD NIXL | `NixlConnector` | 0.0 | HBM-only baseline |
-| PD NIXL + CPU offload | `MultiConnector` with NIXL and 100 GiB CPU | 0.0 | CPU retention without CPU-aware placement |
-| PD Multi Tier | Same byte-identical engine as PD NIXL + CPU offload | 0.4 | CPU-aware placement |
+| Arm | Prefill connector configuration | Router CPU-tier behavior | Isolated effect |
+| --- | --- | --- | --- |
+| PD NIXL | `NixlConnector` only; HBM KV cache | No CPU tier | HBM-only P/D baseline |
+| PD NIXL + CPU offload | `MultiConnector`: `NixlConnector` for P/D transfer plus `OffloadingConnector` with 100 GiB CPU | Precise CPU backend weight `0.0`; CPU-tier hits do not affect placement | CPU retention without CPU-aware placement |
+| PD Multi Tier | `MultiConnector`: `NixlConnector` for P/D transfer plus `OffloadingConnector` with 100 GiB CPU | Precise CPU backend weight `0.4`; CPU-tier hits affect placement | CPU-aware placement on the Multi Tier engine |
 
 | Arm | OK/fail | Request/s | Measured time | Mean latency | P90 latency | Mean TTFT | P90 TTFT | Mean TPOT |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
