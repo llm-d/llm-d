@@ -75,47 +75,63 @@ tokens across eight prefills. The approximate unique prefill working set is
 17,280,000 tokens, 1.32 times aggregate HBM capacity. The CPU arm adds 100 GiB
 per prefiller, 800 GiB total. Neither arm uses a filesystem KV tier.
 
-Both Fozzie arms used the same model, vLLM image, 8x TP=1 prefill plus 2x TP=4
-decode topology, NIXL/RDMA P/D transport, 128-token engine and router block
-size, and corrected DP-aware precise router configuration. The only engine
-change was HBM-only NIXL versus NIXL plus the prefill CPU tier. The router was
-restarted between arms to clear the precise cache index.
+All three Fozzie arms used the same model, vLLM image, 8x TP=1 prefill plus 2x
+TP=4 decode topology, NIXL/RDMA P/D transport, 128-token engine and router
+block size, and precise router scorer weights. The router and all engines were
+restarted between arms to clear the precise index, HBM cache, and CPU tier.
+The controlled arms separate the engine and placement effects:
+
+| Arm | Prefill engine | Precise CPU backend weight | Isolated effect |
+| --- | --- | ---: | --- |
+| PD NIXL | `NixlConnector` | 0.0 | HBM-only baseline |
+| CPU offload, CPU-blind | `MultiConnector` with NIXL and 100 GiB CPU | 0.0 | CPU retention and engine-local restore |
+| PD Multi Tier, CPU-aware | Same byte-identical engine as CPU-blind | 0.4 | CPU-aware placement |
 
 | Arm | OK/fail | Request/s | Measured time | Mean latency | P90 latency | Mean TTFT | P90 TTFT | Mean TPOT |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| PD NIXL | 10,800/0 | 10.699 | 1,009.45 s | 8.120 s | 20.705 s | 6.405 s | 19.112 s | 6.677 ms |
-| PD Multi Tier | 10,799/1 | 11.650 | 926.98 s | 2.365 s | 2.869 s | 0.512 s | 0.840 s | 7.223 ms |
+| PD NIXL | 10,800/0 | 10.598 | 1,019.07 s | 9.100 s | 24.010 s | 7.404 s | 22.324 s | 6.573 ms |
+| CPU offload, CPU-blind | 10,800/0 | 11.325 | 953.68 s | 4.144 s | 8.078 s | 2.288 s | 5.950 s | 7.211 ms |
+| PD Multi Tier, CPU-aware | 10,800/0 | 11.466 | 941.90 s | 2.390 s | 2.859 s | 0.491 s | 0.846 s | 7.375 ms |
 
-| Target QPS | NIXL request/s | Multi Tier request/s | NIXL P90 latency | Multi Tier P90 latency | NIXL P90 TTFT | Multi Tier P90 TTFT |
+| Target QPS | NIXL request/s | CPU-blind request/s | CPU-aware request/s | NIXL P90 latency | CPU-blind P90 latency | CPU-aware P90 latency |
 | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| 5 | 4.60 | 5.17 | 2.163 s | 2.091 s | 1.007 s | 0.968 s |
-| 10 | 9.61 | 9.73 | 2.093 s | 2.034 s | 0.813 s | 0.818 s |
-| 15 | 15.14 | 14.72 | 2.332 s | 2.248 s | 0.908 s | 0.747 s |
-| 20 | 18.75 | 19.69 | 3.144 s | 2.143 s | 1.552 s | 0.669 s |
-| 25 | 24.33 | 24.29 | 4.631 s | 2.447 s | 2.790 s | 0.706 s |
-| 30 | 25.40 | 29.72 | 7.374 s | 2.700 s | 5.514 s | 0.776 s |
-| 35 | 24.20 | 33.43 | 17.721 s | 3.019 s | 15.988 s | 0.959 s |
-| 40 | 22.44 | 35.43 | 37.859 s | 3.448 s | 36.271 s | 1.632 s |
+| 5 | 4.81 | 5.11 | 4.59 | 2.050 s | 2.034 s | 2.061 s |
+| 10 | 9.10 | 9.84 | 9.13 | 2.149 s | 2.174 s | 2.133 s |
+| 15 | 14.01 | 14.23 | 14.41 | 2.381 s | 2.113 s | 2.121 s |
+| 20 | 18.52 | 19.22 | 19.63 | 3.217 s | 2.569 s | 2.259 s |
+| 25 | 23.18 | 22.99 | 24.01 | 4.576 s | 3.779 s | 2.580 s |
+| 30 | 26.52 | 27.88 | 29.15 | 8.491 s | 5.952 s | 2.652 s |
+| 35 | 23.91 | 29.53 | 32.94 | 23.027 s | 7.377 s | 3.173 s |
+| 40 | 22.10 | 32.62 | 36.04 | 40.267 s | 12.477 s | 3.511 s |
 
-Plain NIXL peaks at 25.40 request/s in the 30-QPS stage, then declines as
-HBM-only prefix eviction drives repeated prefill work. Multi Tier sustains
-33.43 request/s at 35 QPS and 35.43 request/s at 40 QPS. Across the full run,
-Multi Tier improves successful request rate by 8.9%, shortens measured
-completion time by 8.2%, and reduces mean TTFT by 92.0%. Its mean TPOT is 8.2%
-higher, so CPU restore overhead remains visible after the first token.
+The CPU-blind arm shows that the engine tier itself provides most of the
+capacity gain over plain NIXL. It improves full-run successful request rate by
+6.9%, reduces mean request latency by 54.5%, and reduces P90 request latency by
+66.4%. The CPU-aware arm then isolates the placement algorithm: compared with
+the byte-identical CPU-blind engine, it reduces mean request latency by 42.3%
+and P90 request latency by 64.6%. At the 40-QPS stage it increases achieved
+request rate from 32.62 to 36.04 request/s and reduces P90 latency from 12.477
+to 3.511 seconds.
 
-The CPU counters started at zero. During the measured arm, prefills restored
-3.52 TiB from CPU to GPU in 7,055 operations and wrote 1.51 TiB from GPU to CPU
-in 4,738 operations. This verifies that the result exercises CPU retention and
-restore rather than only allocating an unused tier. The one failure occurred
-in the 40-QPS stage, a 0.009% overall failure rate. One run per arm is not
-enough to claim a stable percentage; repeat the comparison before using the
-delta as a capacity target.
+The overall request/s difference understates the latency improvement because
+the profile contains a fixed 60-second gap between stages. Per-stage request
+rate and the queued-work tail expose the saturation behavior. Plain NIXL
+declines after 30 QPS, the CPU-blind engine extends the saturation knee, and
+CPU-aware placement sustains the highest rate through 40 QPS.
 
-Inference-perf flagged output-token count mismatches on 8,811 NIXL requests
-and 8,758 Multi Tier requests. Its aggregate output-token totals still matched
-256 tokens per successful request, but the mismatch makes TPOT less reliable
-than request rate, completion time, and TTFT for this comparison.
+During the CPU-aware arm, periodic vLLM counters across the eight prefills
+logged 3.58 TiB of CPU-to-GPU loads and 1.54 TiB of GPU-to-CPU stores, with
+zero CPU allocation failures. These are aggregate transfer activities, not a
+unique KV footprint. They verify that CPU-aware placement exercised retention
+and restore rather than only allocating an unused tier.
+
+Inference-perf flagged output-token count mismatches on 8,746 NIXL requests,
+8,741 CPU-blind requests, and 8,715 CPU-aware requests. Aggregate output-token
+totals still matched 256 tokens per successful request, but the mismatch makes
+TPOT less reliable than request rate, completion time, and TTFT for this
+comparison. Each arm is a single run and inference-perf generated a different
+seed for each run, so repeat the comparison before treating the percentages as
+a stable capacity estimate.
 
 ## Mechanism evidence
 
@@ -123,7 +139,7 @@ than request rate, completion time, and TTFT for this comparison.
 | --- | ---: | --- |
 | Random guide workload | 0 GiB | no reuse path engaged |
 | Document Q&A | about 201 GiB | local CPU restores occurred |
-| Eviction pressure | 3.52 TiB | sustained local CPU restores beyond HBM capacity |
+| Eviction pressure | 3.58 TiB | sustained local CPU restores beyond HBM capacity |
 
 ## Conclusion
 
@@ -134,5 +150,7 @@ the reusable working set must exceed HBM capacity, fit in CPU memory, and be
 revisited enough for CPU restore to beat recomputation. Plain NIXL has the best
 document-Q&A success count and mean latency in these single runs.
 
-Use the CPU-only overlay as the primary Multi Tier guide comparison. Repeat the
-two arms before treating any percentage as a stable performance estimate.
+Use the NIXL plus CPU overlay as the primary Multi Tier guide comparison. The
+controlled eviction test shows separate gains from the CPU tier and from
+CPU-aware placement. Repeat all three arms before treating any percentage as a
+stable performance estimate.
