@@ -84,16 +84,16 @@ The controlled arms separate the engine and placement effects:
 | Arm | Prefill engine | Precise CPU backend weight | Isolated effect |
 | --- | --- | ---: | --- |
 | PD NIXL | `NixlConnector` | 0.0 | HBM-only baseline |
-| CPU offload, CPU-blind | `MultiConnector` with NIXL and 100 GiB CPU | 0.0 | CPU retention and engine-local restore |
-| PD Multi Tier, CPU-aware | Same byte-identical engine as CPU-blind | 0.4 | CPU-aware placement |
+| PD NIXL + CPU offload | `MultiConnector` with NIXL and 100 GiB CPU | 0.0 | CPU retention without CPU-aware placement |
+| PD Multi Tier | Same byte-identical engine as PD NIXL + CPU offload | 0.4 | CPU-aware placement |
 
 | Arm | OK/fail | Request/s | Measured time | Mean latency | P90 latency | Mean TTFT | P90 TTFT | Mean TPOT |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
 | PD NIXL | 10,800/0 | 10.598 | 1,019.07 s | 9.100 s | 24.010 s | 7.404 s | 22.324 s | 6.573 ms |
-| CPU offload, CPU-blind | 10,800/0 | 11.325 | 953.68 s | 4.144 s | 8.078 s | 2.288 s | 5.950 s | 7.211 ms |
-| PD Multi Tier, CPU-aware | 10,800/0 | 11.466 | 941.90 s | 2.390 s | 2.859 s | 0.491 s | 0.846 s | 7.375 ms |
+| PD NIXL + CPU offload | 10,800/0 | 11.325 | 953.68 s | 4.144 s | 8.078 s | 2.288 s | 5.950 s | 7.211 ms |
+| PD Multi Tier | 10,800/0 | 11.466 | 941.90 s | 2.390 s | 2.859 s | 0.491 s | 0.846 s | 7.375 ms |
 
-| Target QPS | NIXL request/s | CPU-blind request/s | CPU-aware request/s | NIXL P90 latency | CPU-blind P90 latency | CPU-aware P90 latency |
+| Target QPS | PD NIXL request/s | PD NIXL + CPU offload request/s | PD Multi Tier request/s | PD NIXL P90 latency | PD NIXL + CPU offload P90 latency | PD Multi Tier P90 latency |
 | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
 | 5 | 4.81 | 5.11 | 4.59 | 2.050 s | 2.034 s | 2.061 s |
 | 10 | 9.10 | 9.84 | 9.13 | 2.149 s | 2.174 s | 2.133 s |
@@ -104,34 +104,34 @@ The controlled arms separate the engine and placement effects:
 | 35 | 23.91 | 29.53 | 32.94 | 23.027 s | 7.377 s | 3.173 s |
 | 40 | 22.10 | 32.62 | 36.04 | 40.267 s | 12.477 s | 3.511 s |
 
-The CPU-blind arm shows that the engine tier itself provides most of the
-capacity gain over plain NIXL. It improves full-run successful request rate by
-6.9%, reduces mean request latency by 54.5%, and reduces P90 request latency by
-66.4%. The CPU-aware arm then isolates the placement algorithm: compared with
-the byte-identical CPU-blind engine, it reduces mean request latency by 42.3%
-and P90 request latency by 64.6%. At the 40-QPS stage it increases achieved
-request rate from 32.62 to 36.04 request/s and reduces P90 latency from 12.477
-to 3.511 seconds.
+The PD NIXL + CPU offload arm shows that the engine tier itself provides most
+of the capacity gain over PD NIXL. It improves full-run successful request
+rate by 6.9%, reduces mean request latency by 54.5%, and reduces P90 request
+latency by 66.4%. The PD Multi Tier arm then isolates the placement algorithm:
+compared with the byte-identical offload engine, it reduces mean request
+latency by 42.3% and P90 request latency by 64.6%. At the 40-QPS stage it
+increases achieved request rate from 32.62 to 36.04 request/s and reduces P90
+latency from 12.477 to 3.511 seconds.
 
 The overall request/s difference understates the latency improvement because
 the profile contains a fixed 60-second gap between stages. Per-stage request
-rate and the queued-work tail expose the saturation behavior. Plain NIXL
-declines after 30 QPS, the CPU-blind engine extends the saturation knee, and
-CPU-aware placement sustains the highest rate through 40 QPS.
+rate and the queued-work tail expose the saturation behavior. PD NIXL declines
+after 30 QPS, PD NIXL + CPU offload extends the saturation knee, and PD Multi
+Tier sustains the highest rate through 40 QPS.
 
-During the CPU-aware arm, periodic vLLM counters across the eight prefills
+During the PD Multi Tier arm, periodic vLLM counters across the eight prefills
 logged 3.58 TiB of CPU-to-GPU loads and 1.54 TiB of GPU-to-CPU stores, with
 zero CPU allocation failures. These are aggregate transfer activities, not a
 unique KV footprint. They verify that CPU-aware placement exercised retention
 and restore rather than only allocating an unused tier.
 
-Inference-perf flagged output-token count mismatches on 8,746 NIXL requests,
-8,741 CPU-blind requests, and 8,715 CPU-aware requests. Aggregate output-token
-totals still matched 256 tokens per successful request, but the mismatch makes
-TPOT less reliable than request rate, completion time, and TTFT for this
-comparison. Each arm is a single run and inference-perf generated a different
-seed for each run, so repeat the comparison before treating the percentages as
-a stable capacity estimate.
+Inference-perf flagged output-token count mismatches on 8,746 PD NIXL
+requests, 8,741 PD NIXL + CPU offload requests, and 8,715 PD Multi Tier
+requests. Aggregate output-token totals still matched 256 tokens per successful
+request, but the mismatch makes TPOT less reliable than request rate,
+completion time, and TTFT for this comparison. Each arm is a single run and
+inference-perf generated a different seed for each run, so repeat the
+comparison before treating the percentages as a stable capacity estimate.
 
 ## Mechanism evidence
 
