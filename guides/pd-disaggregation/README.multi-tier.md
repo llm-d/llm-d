@@ -296,22 +296,22 @@ is only the harness result directory and is unrelated to model-server KV
 storage. Per-request lifecycle output is disabled to avoid a multi-gigabyte
 trace; the overall and per-stage summaries remain enabled.
 
-Use three arms to separate the engine and placement effects: plain NIXL with
-CPU backend weight `0.0`, the CPU-offload engine with CPU backend weight `0.0`,
-and the same byte-identical CPU-offload engine with CPU backend weight `0.4`.
-Restart every engine and the router between arms to clear HBM, CPU-tier, and
-precise-index state. Snapshot the CPU-to-GPU counter before and after each CPU
-arm. Compare per-stage request rate, TTFT, latency, success count, and full
-completion time. A fixed arrival window alone hides the queued-work tail after
-saturation.
+Use three arms to separate the engine and placement effects: PD NIXL, PD NIXL
++ CPU offload, and PD Multi Tier. PD NIXL + CPU offload uses CPU backend weight
+`0.0`; PD Multi Tier uses the same byte-identical offload engine with CPU
+backend weight `0.4`. Restart every engine and the router between arms to clear
+HBM, CPU-tier, and precise-index state. Snapshot the CPU-to-GPU counter before
+and after each CPU arm. Compare per-stage request rate, TTFT, latency, success
+count, and full completion time. A fixed arrival window alone hides the
+queued-work tail after saturation.
 
 On the measured Fozzie 16x H200 topology, all three arms completed all 10,800
-requests. At the 40-QPS stage, plain NIXL, CPU-blind offload, and CPU-aware
-Multi Tier sustained 22.10, 32.62, and 36.04 request/s respectively. Across the
-full run, enabling CPU offload reduced P90 request latency from 24.010 to 8.078
+requests. At the 40-QPS stage, PD NIXL, PD NIXL + CPU offload, and PD Multi
+Tier sustained 22.10, 32.62, and 36.04 request/s respectively. Across the full
+run, enabling CPU offload reduced P90 request latency from 24.010 to 8.078
 seconds. Enabling CPU-aware placement on the same engine reduced it further to
-2.859 seconds. The CPU-aware arm logged 3.58 TiB restored from CPU with zero
-allocation failures, confirming that the read path was active. These are
+2.859 seconds. The PD Multi Tier arm logged 3.58 TiB restored from CPU with
+zero allocation failures, confirming that the read path was active. These are
 single runs with generated seeds, so use the result to demonstrate the
 mechanism and repeat it before treating the percentages as a capacity estimate.
 
