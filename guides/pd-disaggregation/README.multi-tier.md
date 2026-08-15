@@ -256,15 +256,17 @@ llmdbenchmark \
   --model "openai/gpt-oss-120b" \
   --namespace "${NAMESPACE}" \
   --harness inference-perf \
-  --workload guide_p2p-kv-cache-sharing_1.yaml \
+  --workload-file-path \
+    "${REPO_ROOT}/guides/pd-disaggregation/benchmark-templates/document-qa.yaml.in" \
   --monitoring \
   --analyze
 ```
 
-This profile schedules 1,152 turns across 192 six-turn conversations. Each
-conversation has a private 49,152-token document prefix, so reuse occurs
-within a conversation rather than through one global shared prefix. Compare
-success count and the full TTFT distribution in addition to request rate; the
+The checked-in [`document-qa.yaml.in`](./benchmark-templates/document-qa.yaml.in)
+profile schedules 1,152 turns across 192 six-turn conversations. Each
+conversation has a private 49,152-token document prefix, so reuse occurs within
+a conversation rather than through one global shared prefix. Compare success
+count and the full TTFT distribution in addition to request rate; the
 180-second request timeout makes failures part of the result.
 
 ### Eviction-pressure comparison

@@ -42,11 +42,11 @@ higher and mean TTFT is 0.48% higher.
 
 ## Workload 2: document Q&A
 
-`guide_p2p-kv-cache-sharing_1.yaml` schedules 1,152 turns across 192 private
-documents. Each conversation has a 49,152-token document prefix, six turns,
-256 new input tokens per turn, requested 256-token output, concurrency 128,
-and a 180-second request timeout. Reuse is private to each conversation rather
-than one global shared prefix.
+[`document-qa.yaml.in`](../benchmark-templates/document-qa.yaml.in) schedules
+1,152 turns across 192 private documents. Each conversation has a 49,152-token
+document prefix, six turns, 256 new input tokens per turn, requested 256-token
+output, concurrency 128, and a 180-second request timeout. Reuse is private to
+each conversation rather than one global shared prefix.
 
 | Arm | OK/fail | Request/s | Mean latency | Median latency | P95 latency | P99 latency | Mean TTFT | Median TTFT | P95 TTFT |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |

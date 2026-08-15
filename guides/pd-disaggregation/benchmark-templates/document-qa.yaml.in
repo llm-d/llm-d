@@ -1,0 +1,65 @@
+load:
+  type: concurrent
+  num_workers: 8
+  worker_max_concurrency: 1000
+  request_timeout: 180
+  stages:
+    # 192 session blueprints x 6 turns; 128 requests in flight.
+    - num_requests: 1152
+      concurrency_level: 128
+api:
+  type: completion
+  streaming: true
+server:
+  type: vllm
+  model_name: REPLACE_ENV_LLMDBENCH_DEPLOY_CURRENT_MODEL
+  base_url: REPLACE_ENV_LLMDBENCH_HARNESS_STACK_ENDPOINT_URL
+  ignore_eos: true
+tokenizer:
+  pretrained_model_name_or_path: REPLACE_ENV_LLMDBENCH_DEPLOY_CURRENT_MODEL
+data:
+  type: conversation_replay
+  conversation_replay:
+    seed: 37
+    max_model_len: 65536
+    num_conversations: 192
+    shared_system_prompt_len: 256
+    # Each conversation carries a private 49,152-token document prefix.
+    dynamic_system_prompt_len:
+      type: lognormal
+      min: 49152
+      max: 49152
+      mean: 49152
+      std_dev: 1
+    turns_per_conversation:
+      type: lognormal
+      min: 6
+      max: 6
+      mean: 6
+      std_dev: 1
+    input_tokens_per_turn:
+      type: lognormal
+      min: 256
+      max: 256
+      mean: 256
+      std_dev: 1
+    output_tokens_per_turn:
+      type: lognormal
+      min: 256
+      max: 256
+      mean: 256
+      std_dev: 1
+    tool_call_latency_sec:
+      type: lognormal
+      min: 1
+      max: 2
+      mean: 1
+      std_dev: 1
+report:
+  request_lifecycle:
+    summary: true
+    per_stage: true
+    per_request: true
+storage:
+  local_storage:
+    path: /workspace
