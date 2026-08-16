@@ -6,6 +6,10 @@ spec:
   maxInstances: 2
   podTemplate:
     spec:
+      # Run launcher pods as the fma-launcher SA (rbac/role.yaml) so the
+      # state-change-reflector sidecar can patch its own pod's serving-state
+      # annotation.
+      serviceAccountName: fma-launcher
       runtimeClassName: nvidia
       containers:
         - name: inference-server
