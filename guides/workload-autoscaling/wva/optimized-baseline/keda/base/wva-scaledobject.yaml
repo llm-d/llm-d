@@ -18,7 +18,12 @@ metadata:
   name: optimized-baseline-nvidia-gpu-vllm-decode-scaler
   annotations:
     llm-d.ai/managed: "true"
-    llm-d.ai/model-id: "Qwen3-32B"
+    # Must match the name vLLM labels its metrics with, which is the served model
+    # name — the guide launches `vllm serve Qwen/Qwen3-32B` with no
+    # --served-model-name, so it is the full repo id. WVA's saturation queries
+    # match `model_name` exactly: shorten this and every query returns no series,
+    # and WVA reports "No saturation metrics available" while still looking healthy.
+    llm-d.ai/model-id: "Qwen/Qwen3-32B"
     llm-d.ai/variant-cost: "30.0"
   labels:
     # WVA copies these labels onto the variant it derives from this object; the
