@@ -101,9 +101,12 @@ generate_certificates() {
   mkdir -p "${CERT_DIR}"
   cd "${CERT_DIR}"
 
-  # Define the Prometheus service DNS names
+  # Define the Prometheus service DNS names. Both the chart's Service and the
+  # operator-managed headless Service are covered: guides address Prometheus by
+  # either name, and WVA's controller verifies the hostname against this cert.
   PROMETHEUS_SVC="${RELEASE_NAME}-kube-prometheus-stack-prometheus"
-  DNS_NAMES="DNS.1:${PROMETHEUS_SVC}.${MONITORING_NAMESPACE}.svc,DNS.2:${PROMETHEUS_SVC}.${MONITORING_NAMESPACE}.svc.cluster.local,DNS.3:localhost"
+  PROMETHEUS_OPERATED_SVC="prometheus-operated"
+  DNS_NAMES="DNS.1:${PROMETHEUS_SVC}.${MONITORING_NAMESPACE}.svc,DNS.2:${PROMETHEUS_SVC}.${MONITORING_NAMESPACE}.svc.cluster.local,DNS.3:${PROMETHEUS_OPERATED_SVC}.${MONITORING_NAMESPACE}.svc,DNS.4:${PROMETHEUS_OPERATED_SVC}.${MONITORING_NAMESPACE}.svc.cluster.local,DNS.5:localhost"
 
   log_info "📝 Certificate will be valid for: ${DNS_NAMES}"
 
@@ -130,7 +133,9 @@ subjectAltName = @alt_names
 [alt_names]
 DNS.1 = ${PROMETHEUS_SVC}.${MONITORING_NAMESPACE}.svc
 DNS.2 = ${PROMETHEUS_SVC}.${MONITORING_NAMESPACE}.svc.cluster.local
-DNS.3 = localhost
+DNS.3 = ${PROMETHEUS_OPERATED_SVC}.${MONITORING_NAMESPACE}.svc
+DNS.4 = ${PROMETHEUS_OPERATED_SVC}.${MONITORING_NAMESPACE}.svc.cluster.local
+DNS.5 = localhost
 IP.1 = 127.0.0.1
 
 [v3_ext]
