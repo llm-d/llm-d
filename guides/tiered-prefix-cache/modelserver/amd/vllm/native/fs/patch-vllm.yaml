@@ -21,8 +21,7 @@ spec:
                 Qwen/Qwen3-32B \
                 --tensor-parallel-size=2 \
                 --kv-cache-memory-bytes=26843545600 \
-                --kv-transfer-config \
-                '{"kv_connector":"OffloadingConnector","kv_role":"kv_both","kv_connector_extra_config":{"cpu_bytes_to_use":107374182400}}'
+                --kv-transfer-config '{"kv_connector":"OffloadingConnector","kv_role":"kv_both","kv_connector_extra_config":{"spec_name":"TieringOffloadingSpec","cpu_bytes_to_use":107374182400,"block_size":256,"secondary_tiers":[{"type":"fs","root_dir":"/mnt/files-storage","n_read_threads":16,"n_write_threads":16}]}}'
           env:
             - name: HF_TOKEN
               valueFrom:
@@ -30,3 +29,10 @@ spec:
                   name: llm-d-hf-token
                   key: HF_TOKEN
                   optional: true
+          volumeMounts:
+            - name: files-storage
+              mountPath: /mnt/files-storage
+      volumes:
+        - name: files-storage
+          persistentVolumeClaim:
+            claimName: llm-d-kv-cache-storage
