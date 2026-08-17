@@ -14,8 +14,8 @@ spec:
             - "--kv-transfer-config"
             - '{"kv_connector":"LMCacheConnectorV1","kv_role":"kv_both"}'
             - "--max-num-seqs=1024"
-            - "--max-model-len=8192"
-            - "--kv-cache-memory-bytes=10737418240"
+            # 25 GiB/rank x TP2 = 50 GB/pod GPU KV, matching the native cpu guide.
+            - "--kv-cache-memory-bytes=26843545600"
           resources:
             limits:
               memory: 500Gi
@@ -27,8 +27,9 @@ spec:
                 secretKeyRef:
                   name: llm-d-hf-token
                   key: HF_TOKEN
+            # 50 GB per GPU worker x TP2 = 100 GB/pod CPU tier, matching native.
             - name: LMCACHE_MAX_LOCAL_CPU_SIZE
-              value: "200.0"
+              value: "50.0"
             - name: PYTHONHASHSEED
               value: "123"
             - name: PROMETHEUS_MULTIPROC_DIR
