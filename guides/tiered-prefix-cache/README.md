@@ -24,7 +24,7 @@ Each path is a self-contained deployment using a specific offloading implementat
 | **MooncakeStore** | MooncakeStore connector | CPU RAM, Filesystem | `modelserver/gpu/vllm/mooncake-store/` |
 | **SGLang HiCache** | SGLang native HiCache | CPU RAM, CPU RAM + Filesystem | `modelserver/gpu/sglang/native/cpu/`, `modelserver/gpu/sglang/native/fs/` |
 | **TPU** | vLLM TPU KVCache connector | CPU RAM | `modelserver/tpu/v6/vllm/native/cpu/`, `modelserver/tpu/v7/vllm/native/cpu/` |
-| **Intel XPU** | vLLM `OffloadingConnector`, [LMCache](https://lmcache.ai) connector | CPU RAM | `modelserver/xpu/vllm/native/cpu/`, `modelserver/xpu/vllm/lmcache-connector/cpu/` |
+| **Intel XPU** | vLLM `OffloadingConnector`, [LMCache](https://lmcache.ai) connector | CPU RAM, CPU RAM + Filesystem | `modelserver/xpu/vllm/native/`, `modelserver/xpu/vllm/lmcache-connector/` |
 
 The tiers each path supports differ — see the table above. For example, the vLLM native path also extends to a shared filesystem via multi-tier offloading (`TieringOffloadingSpec`), spilling from CPU RAM to shared storage (HBM → CPU RAM → filesystem).
 
@@ -273,12 +273,30 @@ To deploy the VRAM-only baseline (no CPU offloading) for comparison, apply the `
 kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/tiered-prefix-cache/modelserver/xpu/vllm/base/
 ```
 
-#### Intel XPU — LMCache CPU RAM
+#### Intel XPU — vLLM native CPU RAM + Filesystem
 
-This path uses the [LMCache](https://lmcache.ai) connector to offload prefix cache to CPU RAM on Intel XPU. It runs Qwen3-8B on a single XPU (`tensor-parallel-size=1`), with the CPU offload size set via `LMCACHE_MAX_LOCAL_CPU_SIZE` (GB).
+This path adds a shared filesystem tier to the native CPU offloading path. It requires a ReadWriteMany PVC mounted at `/mnt/files-storage`.
+
+First, provision the PVC as described in [Storage Backends](#storage-backends):
 
 ```bash
-kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/tiered-prefix-cache/modelserver/xpu/vllm/lmcache-connector/cpu/base/
+export STORAGE_CLASS="" # cluster default if empty; or e.g. "lustre" / "efs-sc"
+envsubst < ${REPO_ROOT}/guides/tiered-prefix-cache/manifests/pvc.yaml | kubectl apply -n ${NAMESPACE} -f -
+```
+
+Then deploy the model server:
+
+```bash
+kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/tiered-prefix-cache/modelserver/xpu/vllm/native/fs/base/
+```
+
+#### Intel XPU — LMCache
+
+This path uses the [LMCache](https://lmcache.ai) connector to offload prefix cache to CPU RAM or CPU RAM plus a filesystem tier on Intel XPU. It runs Qwen3-8B on a single XPU (`tensor-parallel-size=1`), with the CPU offload size set via `LMCACHE_MAX_LOCAL_CPU_SIZE` (GB). The filesystem variant requires the PVC described above.
+
+```bash
+export VARIANT=cpu # cpu | fs
+kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/tiered-prefix-cache/modelserver/xpu/vllm/lmcache-connector/${VARIANT}/base/
 ```
 
 #### Storage Backends
@@ -409,10 +427,12 @@ kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/tiered-prefix-cache/models
 **Intel XPU path:**
 
 ```bash
-# native/cpu/base = offloading; base = HBM-only baseline
-kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/tiered-prefix-cache/modelserver/xpu/vllm/native/cpu/base --ignore-not-found
-# lmcache-connector/cpu/base = LMCache offloading
-kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/tiered-prefix-cache/modelserver/xpu/vllm/lmcache-connector/cpu/base --ignore-not-found
+export CONNECTOR=native # native | lmcache-connector
+export VARIANT=cpu      # cpu | fs
+kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/tiered-prefix-cache/modelserver/xpu/vllm/${CONNECTOR}/${VARIANT}/base --ignore-not-found
+
+# VRAM-only baseline
+kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/tiered-prefix-cache/modelserver/xpu/vllm/base --ignore-not-found
 ```
 
 ```bash
