@@ -194,7 +194,7 @@ kubectl run curl-debug --rm -it \
 curl -X POST http://${IP}/v1/completions \
     -H 'Content-Type: application/json' \
     -d '{
-        "model": "deepseek-ai/DeepSeek-R1-0528",
+        "model": "DeepSeek-R1-0528",
         "prompt": "How are you today?"
     }' | jq
 ```

@@ -14,6 +14,10 @@ YES=false
 ACTION="install"
 KUBERNETES_CONTEXT=""
 
+# Temporary files — created by mktemp in setup_env and cleaned up on EXIT.
+OPENCOST_PRICING_JSON=""
+OPENCOST_VALUES_YAML=""
+
 # Fork image override (set to non-empty to deploy a custom OpenCost image instead of the upstream release)
 OPENCOST_IMAGE_REGISTRY=""
 OPENCOST_IMAGE_REPO=""
@@ -124,14 +128,22 @@ setup_env() {
     [[ -f "$KUBERNETES_CONTEXT" ]] || die "Context file not found: $KUBERNETES_CONTEXT"
     KCMD="kubectl --kubeconfig $KUBERNETES_CONTEXT"
     HCMD="helm --kubeconfig $KUBERNETES_CONTEXT"
+    OCMD="oc --kubeconfig $KUBERNETES_CONTEXT"
   else
     KCMD="kubectl"
     HCMD="helm"
+    OCMD="oc"
   fi
   # Derive a unique Helm release name from the namespace so that cluster-scoped
   # resources (ClusterRole, ClusterRoleBinding) don't collide when multiple
   # OpenCost instances are installed on the same cluster.
   OPENCOST_RELEASE_NAME="opencost-${OPENCOST_NAMESPACE}"
+
+  # Create temp files and register a trap to clean them up on any exit.
+  OPENCOST_PRICING_JSON=$(mktemp)
+  OPENCOST_VALUES_YAML=$(mktemp)
+  # shellcheck disable=SC2064
+  trap "rm -f '${OPENCOST_PRICING_JSON}' '${OPENCOST_VALUES_YAML}'" EXIT
 }
 
 ### OPENCOST DETECTION ###
@@ -258,9 +270,11 @@ PROM_LOCAL_PORT=19090
 PROM_PF_PID=""
 
 start_prometheus_portforward() {
-  local prom_svc prom_ns
+  local prom_svc prom_ns prom_port
   prom_svc=$(echo "$PROMETHEUS_ENDPOINT" | sed 's|http[s]*://||' | cut -d. -f1)
   prom_ns=$(echo "$PROMETHEUS_ENDPOINT" | sed 's|http[s]*://||' | cut -d. -f2)
+  prom_port=$(echo "$PROMETHEUS_ENDPOINT" | grep -oE ':[0-9]+$' | tr -d ':')
+  prom_port="${prom_port:-9090}"
 
   # Kill any leftover port-forward on this port from a previous run
   local stale
@@ -273,7 +287,7 @@ start_prometheus_portforward() {
   fi
 
   log_info "Starting temporary port-forward to Prometheus for config checks..."
-  $KCMD port-forward -n "${prom_ns}" "svc/${prom_svc}" "${PROM_LOCAL_PORT}:80" &
+  $KCMD port-forward -n "${prom_ns}" "svc/${prom_svc}" "${PROM_LOCAL_PORT}:${prom_port}" &
   PROM_PF_PID=$!
   # Wait for the port-forward to be ready
   local i=0
@@ -339,7 +353,7 @@ check_llmd_config() {
   else
     fail "kube-state-metrics does not expose llm-d.ai/model in kube_pod_labels"
     log_error "  Fix: add metricLabelsAllowlist to kube-prometheus-stack values and run: helm upgrade ${PROMETHEUS_RELEASE_NAME}"
-    ((errors++))
+    errors=$(( errors + 1 ))
   fi
 
   # 2. Shared infrastructure pods (router/EPP/gateway) carry llm-d.ai/inference-shared=true
@@ -379,7 +393,7 @@ check_llmd_config() {
     else
       fail "model_name mismatch between vLLM metrics and pod labels: $mismatches"
       log_error "  Fix: add --served-model-name=<short-name> to vllm serve args, matching the llm-d.ai/model pod label"
-      ((errors++))
+      errors=$(( errors + 1 ))
     fi
   else
     log_warn "  Could not compare model names (no metrics or no pods found)"
@@ -398,7 +412,7 @@ check_llmd_config() {
       else
         fail "INFERENCE_COST_ENABLED is not set to true in the OpenCost pod"
         log_error "  Fix: helm upgrade opencost with INFERENCE_COST_ENABLED=true in exporter.extraEnv"
-        ((errors++))
+        errors=$(( errors + 1 ))
       fi
     fi
   fi
@@ -427,7 +441,7 @@ DEFAULT_INTERNET_EGRESS="0.12"
 confirm_pricing() {
   if [[ -n "$PRICING_CONFIG_FILE" ]]; then
     [[ -f "$PRICING_CONFIG_FILE" ]] || die "Pricing config file not found: $PRICING_CONFIG_FILE"
-    cp "$PRICING_CONFIG_FILE" /tmp/opencost-pricing.json
+    cp "$PRICING_CONFIG_FILE" "${OPENCOST_PRICING_JSON}"
     log_info "Using pricing config from $PRICING_CONFIG_FILE"
     return
   fi
@@ -483,7 +497,7 @@ confirm_pricing() {
 
   log_info "Prices: CPU=\$$CPU  RAM=\$$RAM  GPU=\$$GPU  Storage=\$$STORAGE"
 
-  cat > /tmp/opencost-pricing.json <<EOF
+  cat > "${OPENCOST_PRICING_JSON}" <<EOF
 {
   "provider": "custom",
   "description": "llm-d on-prem pricing (configured during install)",
@@ -498,7 +512,7 @@ confirm_pricing() {
   "internetNetworkEgress": "$INTERNET_EGRESS"
 }
 EOF
-  log_info "Pricing config written to /tmp/opencost-pricing.json"
+  log_info "Pricing config written to ${OPENCOST_PRICING_JSON}"
 }
 
 ### OPENSHIFT SCC ###
@@ -521,14 +535,18 @@ apply_openshift_sccs() {
 
   # prometheus-server and kube-state-metrics set seccompProfile=RuntimeDefault, which anyuid
   # forbids on some clusters — use privileged to allow any seccomp profile and any UID.
-  oc adm policy add-scc-to-user privileged \
-    -z "${prom_release}-prometheus-server" -n "${ns}" 2>/dev/null || true
-  oc adm policy add-scc-to-user privileged \
-    -z "${prom_release}-kube-state-metrics" -n "${ns}" 2>/dev/null || true
-  oc adm policy add-scc-to-user privileged \
-    -z "${prom_release}-prometheus-node-exporter" -n "${ns}" 2>/dev/null || true
-  oc adm policy add-scc-to-user anyuid \
-    -z "${oc_release}" -n "${ns}" 2>/dev/null || true
+  $OCMD adm policy add-scc-to-user privileged \
+    -z "${prom_release}-prometheus-server" -n "${ns}" \
+    || log_warn "Failed to add privileged SCC to ${prom_release}-prometheus-server"
+  $OCMD adm policy add-scc-to-user privileged \
+    -z "${prom_release}-kube-state-metrics" -n "${ns}" \
+    || log_warn "Failed to add privileged SCC to ${prom_release}-kube-state-metrics"
+  $OCMD adm policy add-scc-to-user privileged \
+    -z "${prom_release}-prometheus-node-exporter" -n "${ns}" \
+    || log_warn "Failed to add privileged SCC to ${prom_release}-prometheus-node-exporter"
+  $OCMD adm policy add-scc-to-user anyuid \
+    -z "${oc_release}" -n "${ns}" \
+    || log_warn "Failed to add anyuid SCC to ${oc_release}"
 
   log_info "Restarting workloads to pick up new SCCs..."
   $KCMD rollout restart \
@@ -558,7 +576,7 @@ install_opencost() {
   # Helm release can manage it without ownership conflicts.
   log_info "Deploying pricing ConfigMap..."
   $KCMD create configmap opencost-custom-pricing \
-    --from-file=default.json=/tmp/opencost-pricing.json \
+    --from-file=default.json="${OPENCOST_PRICING_JSON}" \
     --namespace "${OPENCOST_NAMESPACE}" \
     --dry-run=client -o yaml \
   | $KCMD annotate --local -f - \
@@ -598,7 +616,7 @@ install_opencost() {
   prom_port="${prom_port:-9090}"
 
   # Generate merged values
-  cat > /tmp/opencost-values.yaml <<EOF
+  cat > "${OPENCOST_VALUES_YAML}" <<EOF
 opencost:
   exporter:
     defaultClusterId: "${CLUSTER_ID}"
@@ -640,10 +658,8 @@ EOF
   $HCMD install "${OPENCOST_RELEASE_NAME}" opencost-charts/opencost \
     --namespace "${OPENCOST_NAMESPACE}" \
     --create-namespace \
-    -f /tmp/opencost-values.yaml \
+    -f "${OPENCOST_VALUES_YAML}" \
     "${image_sets[@]}"
-
-  rm -f /tmp/opencost-values.yaml /tmp/opencost-pricing.json
 
   log_success "OpenCost installed."
 
@@ -731,12 +747,14 @@ main() {
     if [[ -n "$PROMETHEUS_ENDPOINT" ]]; then
       start_prometheus_portforward
       check_llmd_config
+      local check_rc=$?
       stop_prometheus_portforward
     else
       log_warn "Could not determine Prometheus endpoint — skipping llm-d config checks."
       log_warn "Re-run with --prometheus-endpoint to enable full validation."
+      local check_rc=0
     fi
-    exit $?
+    exit $check_rc
   fi
 
   # Step 2: Detect or install Prometheus

@@ -156,7 +156,7 @@ Send an OpenAI-compatible Chat Completion request containing a text prompt and a
 curl -X POST http://${IP}/v1/chat/completions \
     -H 'Content-Type: application/json' \
     -d '{
-        "model": "Qwen/Qwen3-VL-32B-Instruct",
+        "model": "Qwen3-VL-32B-Instruct",
         "messages": [
             {
                 "role": "user",

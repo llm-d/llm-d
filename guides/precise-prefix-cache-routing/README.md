@@ -204,7 +204,7 @@ kubectl run curl-debug --rm -it \
 curl -X POST http://${IP}/v1/completions \
     -H 'Content-Type: application/json' \
     -d '{
-        "model": "Qwen/Qwen3-32B",
+        "model": "Qwen3-32B",
         "prompt": "How are you today?"
     }' | jq
 ```
@@ -279,7 +279,7 @@ llmdbenchmark \
     run \
     --endpoint-url   "${ENDPOINT_URL}" \
     --gateway-class  "${GATEWAY_CLASS}" \
-    --model          "Qwen/Qwen3-32B" \
+    --model          "Qwen3-32B" \
     --namespace      "${NAMESPACE}" \
     --harness        inference-perf \
     --workload       guide_precise-prefix-cache-routing_1.yaml \

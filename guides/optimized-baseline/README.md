@@ -195,13 +195,13 @@ kubectl run curl-debug --rm -it \
     -- /bin/bash
 ```
 
-**Send a completion request (model-aware; set `model` to the name you want to query, e.g. `Qwen/Qwen3-32B` or `openai/gpt-oss-120b`):**
+**Send a completion request (model-aware; set `model` to the name you want to query, e.g. `Qwen3-32B` or `gpt-oss-120b`):**
 
 ```bash
 curl -X POST http://${IP}/v1/completions \
     -H 'Content-Type: application/json' \
     -d '{
-        "model": "Qwen/Qwen3-32B",
+        "model": "Qwen3-32B",
         "prompt": "How are you today?"
     }' | jq
 ```
@@ -276,7 +276,7 @@ llmdbenchmark \
     run \
     --endpoint-url   "${ENDPOINT_URL}" \
     --gateway-class  "${GATEWAY_CLASS}" \
-    --model          "Qwen/Qwen3-32B" \
+    --model          "Qwen3-32B" \
     --namespace      "${NAMESPACE}" \
     --harness        inference-perf \
     --workload       guide_optimized-baseline_1.yaml \
@@ -285,7 +285,7 @@ llmdbenchmark \
 
 > [!NOTE]
 > Depending on your `cluster` you may need to extend the default `timeout` values to longer duration, as `bind`, `access` and `wait-timeout` times of `pvcs` and `pods` can be arbitrarily slower on other systems, please utilize `llmdbenchmark run --help` to view the knobs needed to increase those values.
-> Model-aware; set `model` to the name you want to query, e.g. `Qwen/Qwen3-32B` or `openai/gpt-oss-120b`
+> Model-aware; set `model` to the name you want to query, e.g. `Qwen3-32B` or `gpt-oss-120b`
 
 ## Cleanup
 

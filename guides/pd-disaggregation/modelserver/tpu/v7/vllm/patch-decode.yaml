@@ -12,6 +12,7 @@ spec:
         - name: modelserver
           args:
             - "Qwen/Qwen3.5-397B-A17B-FP8"
+            - "--served-model-name=Qwen3.5-397B-A17B-FP8"
             - "--max-model-len=9216"
             - "--max-num-batched-tokens=8192"
             - "--max-num-seqs=512"
